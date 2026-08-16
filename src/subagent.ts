@@ -645,7 +645,18 @@ ${indentedText(request.content ?? '')}`
         ...(operation === 'migration' ? { agentOptions: { maxTokens: 16_384 } } : operation === 'compaction' || operation === 'document-archive' ? { agentOptions: { maxTokens: 8_192 } } : {}),
         outputSchema,
         maxDepth: 1,
-        toolFilter: { allow: tools },
+        // Structured-output children answer through the `structured_output`
+        // tool that DSH registers into the child's OWN tool layer, after
+        // `applyChildComposition` has already applied `toolFilter`. A
+        // `toolFilter.allow` mask matches the child's INHERITED (global +
+        // ancestor) tools only, so it does not admit `structured_output`, and
+        // on DSH 0.1.0-rc.6 the child then completes without a captured
+        // structured result — `readResult` forces `stopReason` to
+        // `"error"`, which surfaces as "memory subagent stopped with error"
+        // (see omdsh-dev/dsh-mnemon#14). Omit the filter so the
+        // structured-output instrumentation stays reachable; isolation for
+        // these judgment subagents is already enforced by the child's fixed
+        // delegation scope and persona.
         persona,
       })
       const result = await run.result
