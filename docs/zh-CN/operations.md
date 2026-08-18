@@ -144,6 +144,7 @@ Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"
 | `memoryBodyId is required...` | active 数量不是恰好 1；显式选择目标 |
 | `memory body is not active for reading` | 在概览激活目标；写入 inactive 可以，读取不行 |
 | Provider 错误 | 普通语义任务需要完整隔离能力；后台审查另需 `fork + inheritsParentContext` |
+| `memory subagent stopped with error` | DSH 0.1.0-rc.6 下结构化输出的委派子代理（`mnemon_remember` / `mnemon_recall` / `mnemon_related` / `mnemon_forget`）会在此插件同时传入 `toolFilter` 时失败——它把结果捕获工具也过滤掉了。已在 dsh-mnemon ≥ 0.2.x 修复：改为注册动态、按次唯一的运行结果工具并纳入白名单。升级到最新版（`dsh plugin --profile web add dsh-mnemon@latest`）后重启 DSH。见 https://github.com/omdsh-dev/dsh-mnemon/issues/14 |
 | Runtime replace 超容量 | 缩短 replacement 或先显式整理；自动维护只处理 add 溢出 |
 | Document source path 被拒绝 | 路径必须在会话工作区内，且不能引用受管 Documents 目录 |
 | CLI timeout | 增大 `timeoutMs`；大 Store 的状态与图谱可能超过 10 秒 |
