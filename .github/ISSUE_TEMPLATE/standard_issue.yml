@@ -1,0 +1,100 @@
+name: 功能请求或问题 (Request or question)
+description: 请求功能、更新文档或提出项目问题。
+title: "[Issue]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请保持本模板完整并填写所有必填部分。删除必填部分的 Issue 将被自动关闭。可复现的 Bug 请使用「Bug 报告」表单。
+
+        提交前请先搜索确认没有重复：[搜索现有 Issue](https://github.com/omdsh-dev/dsh-mnemon/issues?q=is%3Aissue)
+
+        不要公开提交漏洞、token、密钥、私有记忆内容或未脱敏日志。安全问题请按 [SECURITY.md](../../SECURITY.md) 私下报告。
+  - type: checkboxes
+    id: duplicate-check
+    attributes:
+      label: 提交前查重
+      description: 提交前请搜索 open 和 closed Issue。
+      options:
+        - label: 我已搜索过 open/closed 的 Issue，确认本 Issue 没有重复。
+          required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及区域
+      description: 选择请求或问题主要涉及的组件或边界。
+      options:
+        - 安装 / 更新 / 发布
+        - Host 激活 / Headless
+        - Runtime Memory
+        - Project Documents
+        - Memory Spaces / Providers
+        - 子 Agent / Agent 工作流
+        - Web UI / 对话交互
+        - 设置 / 存储 / 安全
+        - CLI / RPC / 命令 / 工具
+        - 文档
+        - 其他 / 不确定
+    validations:
+      required: true
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: Issue 类型
+      description: 选择最接近的分类。
+      options:
+        - 功能请求
+        - 增强 / 优化
+        - 文档
+        - 问题
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: 摘要
+      description: 用一两句话描述问题或请求。
+      placeholder: 希望解决什么问题或增加什么能力？
+    validations:
+      required: true
+  - type: textarea
+    id: expected-outcome
+    attributes:
+      label: 预期结果
+      description: 描述完成后的可观察行为和验收结果。
+      placeholder: 怎样才算完成？
+    validations:
+      required: true
+  - type: textarea
+    id: details-reproduction
+    attributes:
+      label: 详情 / 复现步骤
+      description: 说明使用场景、现有行为、约束、替代方案；若涉及问题，请给出复现步骤。
+      placeholder: |
+        - 使用场景:
+        - 当前限制:
+        - 建议方案:
+        - 不在范围内的内容:
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境信息
+      description: DSH、dsh-mnemon、Mnemon、操作系统及相关配置。与环境无关时填写 N/A。
+      placeholder: |
+        - DSH 版本:
+        - dsh-mnemon 版本 / commit:
+        - Mnemon 版本:
+        - 操作系统 / 浏览器:
+        - 相关配置（已脱敏）:
+    validations:
+      required: true
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: 补充信息
+      description: 补充截图、日志、设计草图、相关 Issue/PR 或其他上下文。
+    validations:
+      required: false

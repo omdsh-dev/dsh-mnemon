@@ -1,0 +1,106 @@
+name: Enforce Issue Template
+
+on:
+  issues:
+    types: [opened, reopened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  enforce:
+    name: Close issues that skip the template
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate issue template
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const issue = context.payload.issue;
+            if (!issue || issue.pull_request) {
+              return;
+            }
+
+            const body = issue.body || '';
+            const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const readSection = (label) => {
+              const heading = escapeRegExp(label);
+              const pattern = new RegExp(`(?:^|\\n)###\\s+${heading}\\s*\\n+([\\s\\S]*?)(?=\\n###\\s+|$)`, 'i');
+              const match = body.match(pattern);
+              return match ? match[1].replace(/<!--[\s\S]*?-->/g, '').trim() : '';
+            };
+
+            const isBlank = (value) => {
+              const normalized = value.replace(/\s+/g, ' ').trim().toLowerCase();
+              return normalized === '' || normalized === 'no response' || normalized === '_no response_';
+            };
+            const hasCheckedBox = (value) => /^-\s*\[[xX]\]\s+\S+/m.test(value);
+            const hasBugEvidence = (value) => {
+              const imageOrAttachment = /!\[[^\]]*]\([^)]+\)/i.test(value)
+                || /https?:\/\/\S*(?:github\.com\/user-attachments\/assets\/|github\.com\/[^)\s]+\/assets\/|githubusercontent\.com\/|gist\.github\.com\/|[./][^)\s]+\.(?:png|jpe?g|gif|webp|mp4|mov|webm))(?:[?#]\S*)?/i.test(value);
+              const fencedLog = /```(?:text|log|console|shell|sh|bash|powershell|pwsh)?\s*\n[\s\S]{20,}?```/i.test(value);
+              return imageOrAttachment || fencedLog;
+            };
+
+            const baseRequiredSections = [
+              '提交前查重',
+              '涉及区域',
+              'Issue 类型',
+              '摘要',
+              '预期结果',
+              '详情 / 复现步骤',
+              '环境信息',
+            ];
+            const issueType = readSection('Issue 类型').trim().toLowerCase();
+            const hasBugLabel = (issue.labels || []).some((label) => String(label.name || '').toLowerCase() === 'bug');
+            const isBug = issueType === 'bug 报告' || hasBugLabel;
+            const requiredSections = isBug
+              ? [...baseRequiredSections, 'Bug 证据', '冒烟测试', '引用代码', '补丁']
+              : baseRequiredSections;
+
+            const missingSections = requiredSections.filter((label) => isBlank(readSection(label)));
+            const invalidSections = [];
+            if (!isBlank(readSection('提交前查重')) && !hasCheckedBox(readSection('提交前查重'))) {
+              invalidSections.push('必须确认已经搜索过 open/closed Issue。');
+            }
+            if (isBug && !hasBugLabel) {
+              invalidSections.push('Bug 报告必须通过「Bug 报告」表单提交并带有 `bug` 标签。');
+            }
+            const bugEvidence = readSection('Bug 证据');
+            if (isBug && !isBlank(bugEvidence) && !hasBugEvidence(bugEvidence)) {
+              invalidSections.push('Bug 证据必须包含截图、视频、GitHub 附件、Gist 或至少 20 字符的 fenced 日志代码块。');
+            }
+
+            if (missingSections.length === 0 && invalidSections.length === 0) {
+              return;
+            }
+
+            const details = [
+              ...(missingSections.length > 0 ? [`缺少或为空的必填部分：${missingSections.join(', ')}`] : []),
+              ...invalidSections,
+            ];
+            const comment = [
+              '该 Issue 因未满足仓库 Issue 规范而被自动关闭。',
+              '',
+              '请从仓库的 Issue Forms 重新提交，并保持模板完整：',
+              '',
+              ...details.map((detail) => `- ${detail}`),
+              '',
+              '补充完整后可以在评论区请求维护者重开。不要在公开 Issue 中粘贴凭据、私有记忆或未脱敏日志。',
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              body: comment,
+            });
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              state: 'closed',
+              state_reason: 'not_planned',
+            });

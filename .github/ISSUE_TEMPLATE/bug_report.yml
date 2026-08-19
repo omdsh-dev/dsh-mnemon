@@ -1,0 +1,141 @@
+name: Bug 报告 (Bug report)
+description: 提交可复现的 Bug。必须附验证证据、代码引用与补丁草案。
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请保持本模板完整并填写所有必填部分。缺少复现信息、证据、冒烟测试、代码引用或补丁草案的 Bug 报告将被自动关闭。
+
+        提交前请先搜索确认没有重复：[搜索现有 Issue](https://github.com/omdsh-dev/dsh-mnemon/issues?q=is%3Aissue)
+
+        不要粘贴 token、密钥、私有记忆内容或未脱敏日志。安全漏洞请按 [SECURITY.md](../../SECURITY.md) 私下报告。
+  - type: checkboxes
+    id: duplicate-check
+    attributes:
+      label: 提交前查重
+      description: 提交前请搜索 open 和 closed Issue。
+      options:
+        - label: 我已搜索过 open/closed 的 Issue，确认本 Issue 没有重复。
+          required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及区域
+      description: 选择问题主要涉及的组件或边界。
+      options:
+        - 安装 / 更新 / 发布
+        - Host 激活 / Headless
+        - Runtime Memory
+        - Project Documents
+        - Memory Spaces / Providers
+        - 子 Agent / Agent 工作流
+        - Web UI / 对话交互
+        - 设置 / 存储 / 安全
+        - CLI / RPC / 命令 / 工具
+        - 文档
+        - 其他 / 不确定
+    validations:
+      required: true
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: Issue 类型
+      description: 本表单仅用于可复现的 Bug；功能请求或问题请使用另一个表单。
+      options:
+        - Bug 报告
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: 摘要
+      description: 用一两句话描述实际发生的问题。
+      placeholder: 出了什么问题？影响了哪些操作？
+    validations:
+      required: true
+  - type: textarea
+    id: expected-outcome
+    attributes:
+      label: 预期结果
+      description: 描述正确行为以及可以验证的结果。
+      placeholder: 你期望发生什么？
+    validations:
+      required: true
+  - type: textarea
+    id: details-reproduction
+    attributes:
+      label: 详情 / 复现步骤
+      description: 提供从干净或已说明状态开始的最小复现步骤。
+      placeholder: |
+        1. 配置 ...
+        2. 启动 ...
+        3. 调用 / 点击 ...
+        4. 观察到 ...
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 环境信息
+      description: DSH、dsh-mnemon、Mnemon、Node.js、操作系统、浏览器以及相关 Provider/配置。请先脱敏。
+      placeholder: |
+        - DSH 版本:
+        - dsh-mnemon 版本 / commit:
+        - Mnemon 版本:
+        - Node.js / pnpm:
+        - 操作系统 / 浏览器:
+        - Provider / 相关配置（已脱敏）:
+    validations:
+      required: true
+  - type: textarea
+    id: bug-evidence
+    attributes:
+      label: Bug 证据
+      description: UI 问题请上传截图或视频；Host、CLI、Headless 问题请附脱敏日志或错误输出。没有可核验证据的报告将被自动关闭。
+      placeholder: 将截图拖到此处，或粘贴脱敏后的日志代码块 / GitHub 附件链接。
+    validations:
+      required: true
+  - type: textarea
+    id: smoke-test
+    attributes:
+      label: 冒烟测试
+      description: 说明你实际执行的验证、观察结果和对照实验；未执行的推测不算验证。
+      placeholder: |
+        - 测试环境:
+        - 执行命令 / 操作:
+        - 实际结果:
+        - 对照版本或配置:
+    validations:
+      required: true
+  - type: textarea
+    id: code-reference
+    attributes:
+      label: 引用代码
+      description: 指向仓库内相关代码的精确位置（文件路径 + 函数 / 行号，可附固定 commit 的 GitHub 链接）。
+      placeholder: |
+        src/subagent.ts:870
+        tests/subagent.spec.ts
+    validations:
+      required: true
+  - type: textarea
+    id: patch
+    attributes:
+      label: 补丁
+      description: 提供建议修复的 diff、代码片段或足够具体的实现草案，即使尚不完整。
+      placeholder: |
+        ```diff
+        --- a/src/example.ts
+        +++ b/src/example.ts
+        @@ ... @@
+        ```
+    validations:
+      required: true
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: 补充信息
+      description: 补充相关 Issue、PR、最小复现仓库或其他已脱敏上下文。
+    validations:
+      required: false

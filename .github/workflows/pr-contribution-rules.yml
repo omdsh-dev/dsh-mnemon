@@ -1,0 +1,142 @@
+name: Enforce PR Contribution Rules
+
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  enforce:
+    name: Validate PR contribution evidence
+    runs-on: ubuntu-latest
+    if: ${{ !github.event.pull_request.draft }}
+
+    steps:
+      - name: Validate pull request body
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const body = pr.body || '';
+            const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const readSection = (label) => {
+              const heading = escapeRegExp(label);
+              const pattern = new RegExp(`(?:^|\\n)##\\s+${heading}\\s*\\n+([\\s\\S]*?)(?=\\n##\\s+|$)`, 'i');
+              const match = body.match(pattern);
+              return match ? match[1].replace(/<!--[\s\S]*?-->/g, '').trim() : '';
+            };
+            const isBlank = (value) => {
+              const normalized = value.replace(/\s+/g, ' ').trim().toLowerCase();
+              return normalized === '' || normalized === 'no response' || normalized === '_no response_';
+            };
+            const checkedLines = (value) => value.match(/^-\s*\[[xX]\]\s+\S.*$/gm) || [];
+            const hasCheckedLine = (value, label) => {
+              const pattern = new RegExp(`^-\\s*\\[[xX]\\]\\s*${escapeRegExp(label)}\\s*$`, 'm');
+              return pattern.test(value);
+            };
+            const cleanText = (value) => value
+              .replace(/```[a-zA-Z0-9_-]*\s*/g, '')
+              .replace(/```/g, '')
+              .trim();
+            const readLabeledPart = (value, label, nextLabel = null) => {
+              const start = escapeRegExp(label);
+              const end = nextLabel ? `\\n\\s*${escapeRegExp(nextLabel)}\\s*[：:]` : '$';
+              const pattern = new RegExp(`${start}\\s*[：:]\\s*([\\s\\S]*?)(?=${end})`, 'i');
+              const match = value.match(pattern);
+              return match ? cleanText(match[1]) : '';
+            };
+            const hasEvidence = (value) => /!\[[^\]]*]\([^)]+\)/i.test(value)
+              || /https?:\/\/\S*(?:github\.com\/user-attachments\/assets\/|github\.com\/[^)\s]+\/assets\/|githubusercontent\.com\/|[./][^)\s]+\.(?:png|jpe?g|gif|webp|mp4|mov|webm))(?:[?#]\S*)?/i.test(value);
+
+            let isMaintainer = false;
+            try {
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: pr.user.login,
+              });
+              isMaintainer = ['admin', 'maintain', 'write'].includes(data.permission);
+            } catch (error) {
+              core.info(`Contributor permission lookup returned no write grant: ${error.message}`);
+            }
+
+            const summary = readSection('摘要（Summary）');
+            const related = readSection('关联 Issue / 背景（Related Issue / Context）');
+            const affected = readSection('涉及区域（Affected Areas）');
+            const prType = readSection('PR 类型（PR Type）');
+            const latest = readSection('最新代码确认（Latest Codebase Confirmation）');
+            const ai = readSection('AI 编码披露（AI Coding Disclosure）');
+            const repoRules = readSection('仓库规范检查（Repo Rules）');
+            const compatibility = readSection('兼容性与数据安全（Compatibility and Data Safety）');
+            const validation = readSection('本地验证（Local Validation）');
+            const evidence = readSection('用户可见变更证据（Local Feature Evidence）');
+
+            const errors = [];
+            const titlePattern = /^(feat|fix|chore|docs|test|refactor|perf|build|ci|revert)(\([^)]+\))?!?:\s+\S.+$/;
+            if (!titlePattern.test((pr.title || '').trim())) {
+              errors.push('PR 标题必须使用 Conventional Commits：`type(scope): subject`。');
+            }
+            if (isBlank(summary)) errors.push('请填写 `摘要（Summary）`。');
+            if (isBlank(related)) errors.push('请填写 `关联 Issue / 背景（Related Issue / Context）`；没有 Issue 时填写 N/A 并解释。');
+            if (checkedLines(affected).length === 0) errors.push('请在 `涉及区域（Affected Areas）` 中至少勾选一项。');
+            if (checkedLines(prType).length === 0) errors.push('请在 `PR 类型（PR Type）` 中至少勾选一项。');
+
+            const latestConfirmation = '我已基于最新 `main` 分支开发，或在提交前已 rebase / 合并最新 `main`。';
+            if (!hasCheckedLine(latest, latestConfirmation)) {
+              errors.push('请确认本 PR 基于最新 `main`。');
+            }
+            if (isBlank(readLabeledPart(latest, '同步命令'))) {
+              errors.push('请填写同步最新 `main` 时执行的命令。');
+            }
+
+            const aiChoices = checkedLines(ai).filter((line) => /AI 编码|AI 辅助/.test(line));
+            if (aiChoices.length !== 1) errors.push('`AI 编码披露` 必须且只能勾选一项。');
+            const aiModel = readLabeledPart(ai, '使用的 AI 模型', '使用的编码 Agent 工具');
+            const aiTool = readLabeledPart(ai, '使用的编码 Agent 工具');
+            if (isBlank(aiModel) || isBlank(aiTool)) {
+              errors.push('请填写使用的 AI 模型和编码 Agent 工具；未使用时两项均填 N/A。');
+            }
+
+            const requiredRuleCount = 6;
+            if (checkedLines(repoRules).length < requiredRuleCount) {
+              errors.push('请逐项确认 `仓库规范检查（Repo Rules）` 的全部六项。');
+            }
+            if (isBlank(compatibility)) {
+              errors.push('请填写 `兼容性与数据安全`；没有影响时填 N/A 并说明理由。');
+            }
+
+            const validationCommands = readLabeledPart(validation, '执行的命令', '结果摘要');
+            const validationSummary = readLabeledPart(validation, '结果摘要');
+            if (isBlank(validationCommands) || isBlank(validationSummary)) {
+              errors.push('请填写 `本地验证` 中的执行命令与结果摘要。');
+            }
+
+            const userFacing = hasCheckedLine(prType, '面向用户的功能或行为变更');
+            if (userFacing && !isMaintainer && !hasEvidence(evidence)) {
+              errors.push('外部贡献者提交用户可见变更时，必须附本地截图或短视频证据。');
+            }
+
+            if (errors.length === 0) {
+              return;
+            }
+
+            const comment = [
+              '本 PR 未满足仓库贡献规范。请更新描述并保持 PR 模板完整：',
+              '',
+              ...errors.map((error) => `- ${error}`),
+              '',
+              '修正后规则检查会在编辑 PR 描述或推送新提交时重新运行。',
+            ].join('\n');
+            if (context.payload.action !== 'synchronize') {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body: comment,
+              });
+            }
+            core.setFailed(errors.join('\n'));

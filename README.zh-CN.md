@@ -203,6 +203,8 @@ pnpm run verify
 
 `verify` 会执行 TypeScript 检查、Vitest、可复现双构建、隔离的真实 Headless profile 激活检查与发布包验证。`lib/` 是生成产物，故意不进入版本库。
 
+提交 Issue 或 Pull Request 前请阅读[贡献规范](./CONTRIBUTING.md)并使用仓库模板；缺少必填信息的报告和 PR 描述会被自动化规则拒绝。
+
 ## 许可证
 
 MIT。安全问题请通过 [SECURITY.md](./SECURITY.md) 私下报告，不要公开提交 issue。
