@@ -46,7 +46,7 @@ const MUTABLE_FIELDS = [
   'storageScope', 'cliPath', 'dataDir', 'customPackId', 'customPacks', 'store', 'timeoutMs', 'defaultRecallLimit',
   'recallQuality',
   'routingGuidance', 'lifecycleEnabled', 'recallMode', 'writebackMode', 'idleReviewMs',
-  'displayMode', 'tabEnabled', 'writeEnabled', 'taskAgentModel',
+  'displayMode', 'tabEnabled', 'writeEnabled', 'persistenceStrategy', 'taskAgentModel',
 ]
 // remoteAccess is intentionally absent: changing the transport authority
 // requires a local configuration edit and a Host restart.

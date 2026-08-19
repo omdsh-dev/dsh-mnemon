@@ -64,6 +64,35 @@ describe('Mnemon settings bridge', () => {
     expect(settings.mutate).not.toHaveBeenCalled()
   })
 
+  it('accepts the whole persistence strategy through the Mnemon namespace', async () => {
+    const persistenceStrategy = {
+      mode: 'automatic',
+      providerId: 'mnemon-native',
+      prompt: 'Prefer shared project memory.',
+      rules: {
+        allowedProviderIds: ['mnemon-native', 'openviking'],
+        dataBoundary: 'allow-remote',
+        requiredCapabilities: ['graph'],
+        preference: 'shared-first',
+      },
+      providerConnections: { openviking: { targetUri: 'viking://resources/team' } },
+    }
+    const mutate = vi.fn(async () => {})
+    const settings = {
+      writable: true,
+      register: vi.fn(),
+      mutate,
+      describe: () => [{ ns: 'mnemon', value: { persistenceStrategy }, revision: 1, applies: 'restart' as const }],
+    } as unknown as HostSettingsService
+
+    await expect(createSettingsHandler(settings)('mutate', {
+      ops: [{ op: 'set', path: ['persistenceStrategy'], value: persistenceStrategy }],
+    })).resolves.toMatchObject({ ok: true })
+    expect(mutate).toHaveBeenCalledWith('mnemon', [
+      { op: 'set', path: ['persistenceStrategy'], value: persistenceStrategy },
+    ], undefined)
+  })
+
   it('does not let a remote settings client promote its own transport authority', async () => {
     const settings = {
       writable: true,
