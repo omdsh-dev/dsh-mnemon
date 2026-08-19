@@ -1,4 +1,4 @@
-name: Enforce Issue Template
+name: Issue 模板校验 / Enforce Issue Template
 
 on:
   issues:
@@ -10,11 +10,11 @@ permissions:
 
 jobs:
   enforce:
-    name: Close issues that skip the template
+    name: 关闭未遵循模板的 Issue / Close issues that skip the template
     runs-on: ubuntu-latest
 
     steps:
-      - name: Validate issue template
+      - name: 校验 Issue 模板 / Validate issue template
         uses: actions/github-script@v8
         with:
           script: |
@@ -44,33 +44,46 @@ jobs:
               return imageOrAttachment || fencedLog;
             };
 
+            const labels = {
+              duplicate: '提交前查重 / Duplicate check',
+              area: '涉及区域 / Affected area',
+              type: 'Issue 类型 / Issue type',
+              summary: '摘要 / Summary',
+              expected: '预期结果 / Expected outcome',
+              details: '详情或复现步骤 / Details or reproduction steps',
+              environment: '环境信息 / Environment',
+              evidence: 'Bug 证据 / Bug evidence',
+              smoke: '冒烟测试 / Smoke test',
+              code: '引用代码 / Code references',
+              patch: '补丁草案 / Patch proposal',
+            };
             const baseRequiredSections = [
-              '提交前查重',
-              '涉及区域',
-              'Issue 类型',
-              '摘要',
-              '预期结果',
-              '详情 / 复现步骤',
-              '环境信息',
+              labels.duplicate,
+              labels.area,
+              labels.type,
+              labels.summary,
+              labels.expected,
+              labels.details,
+              labels.environment,
             ];
-            const issueType = readSection('Issue 类型').trim().toLowerCase();
+            const issueType = readSection(labels.type).trim().toLowerCase();
             const hasBugLabel = (issue.labels || []).some((label) => String(label.name || '').toLowerCase() === 'bug');
-            const isBug = issueType === 'bug 报告' || hasBugLabel;
+            const isBug = issueType === 'bug 报告 / bug report' || hasBugLabel;
             const requiredSections = isBug
-              ? [...baseRequiredSections, 'Bug 证据', '冒烟测试', '引用代码', '补丁']
+              ? [...baseRequiredSections, labels.evidence, labels.smoke, labels.code, labels.patch]
               : baseRequiredSections;
 
             const missingSections = requiredSections.filter((label) => isBlank(readSection(label)));
             const invalidSections = [];
-            if (!isBlank(readSection('提交前查重')) && !hasCheckedBox(readSection('提交前查重'))) {
-              invalidSections.push('必须确认已经搜索过 open/closed Issue。');
+            if (!isBlank(readSection(labels.duplicate)) && !hasCheckedBox(readSection(labels.duplicate))) {
+              invalidSections.push('必须确认已经搜索过 open/closed Issue。 / You must confirm that you searched open and closed issues.');
             }
             if (isBug && !hasBugLabel) {
-              invalidSections.push('Bug 报告必须通过「Bug 报告」表单提交并带有 `bug` 标签。');
+              invalidSections.push('Bug 报告必须通过“Bug 报告 / Bug report”表单提交并带有 `bug` 标签。 / Bug reports must use the “Bug 报告 / Bug report” form and include the `bug` label.');
             }
-            const bugEvidence = readSection('Bug 证据');
+            const bugEvidence = readSection(labels.evidence);
             if (isBug && !isBlank(bugEvidence) && !hasBugEvidence(bugEvidence)) {
-              invalidSections.push('Bug 证据必须包含截图、视频、GitHub 附件、Gist 或至少 20 字符的 fenced 日志代码块。');
+              invalidSections.push('Bug 证据必须包含截图、视频、GitHub 附件、Gist 或至少 20 个字符的 fenced 日志代码块。 / Bug evidence must include an image, video, GitHub attachment, Gist, or a fenced log block containing at least 20 characters.');
             }
 
             if (missingSections.length === 0 && invalidSections.length === 0) {
@@ -78,17 +91,20 @@ jobs:
             }
 
             const details = [
-              ...(missingSections.length > 0 ? [`缺少或为空的必填部分：${missingSections.join(', ')}`] : []),
+              ...(missingSections.length > 0 ? [`缺少或为空的必填部分 / Missing or empty required sections: ${missingSections.join(', ')}`] : []),
               ...invalidSections,
             ];
             const comment = [
               '该 Issue 因未满足仓库 Issue 规范而被自动关闭。',
+              'This issue was automatically closed because it does not meet the repository issue requirements.',
               '',
-              '请从仓库的 Issue Forms 重新提交，并保持模板完整：',
+              '请通过仓库的 Issue Forms 重新提交，并保持模板完整：',
+              'Please submit again through the repository Issue Forms and keep the template intact:',
               '',
               ...details.map((detail) => `- ${detail}`),
               '',
               '补充完整后可以在评论区请求维护者重开。不要在公开 Issue 中粘贴凭据、私有记忆或未脱敏日志。',
+              'After providing the missing information, you may ask a maintainer to reopen the issue. Do not post credentials, private memory, or unredacted logs publicly.',
             ].join('\n');
 
             await github.rest.issues.createComment({

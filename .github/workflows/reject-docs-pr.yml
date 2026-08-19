@@ -1,4 +1,4 @@
-name: Reject documentation-only PRs
+name: 拒绝仅文档 PR / Reject Documentation-only PRs
 
 on:
   pull_request_target:
@@ -11,12 +11,12 @@ permissions:
 
 jobs:
   reject:
-    name: Close external documentation-only PRs
+    name: 关闭外部仅文档 PR / Close external documentation-only PRs
     runs-on: ubuntu-latest
     if: ${{ !github.event.pull_request.draft }}
 
     steps:
-      - name: Auto-close external documentation-only PRs
+      - name: 自动关闭外部仅文档 PR / Auto-close external documentation-only PRs
         uses: actions/github-script@v8
         with:
           script: |
@@ -44,9 +44,11 @@ jobs:
 
             const comment = [
               '本仓库不直接接受外部贡献者的仅文档类 PR，此 PR 已被自动关闭。',
+              'This repository does not directly accept documentation-only PRs from external contributors, so this PR was closed automatically.',
               '',
-              `请先到 https://github.com/${context.repo.owner}/${context.repo.repo}/issues 使用 Issue Form 说明需要修正的内容。`,
+              `请先到 https://github.com/${context.repo.owner}/${context.repo.repo}/issues 使用 Issue Form 说明需要修正的内容。 / Please use an Issue Form at https://github.com/${context.repo.owner}/${context.repo.repo}/issues to describe the requested documentation change first.`,
               '若本 PR 实际包含代码修复，请使用对应的 Conventional Commits 标题并按完整 PR 模板重新提交。',
+              'If this PR contains a code fix, use the corresponding Conventional Commits title and resubmit with the complete PR template.',
             ].join('\n');
             await github.rest.issues.createComment({
               owner: context.repo.owner,
@@ -61,4 +63,4 @@ jobs:
               state: 'closed',
               state_reason: 'not_planned',
             });
-            core.setFailed(`PR #${pr.number} is an external documentation-only contribution.`);
+            core.setFailed(`PR #${pr.number} 是外部仅文档贡献，已自动关闭。 / PR #${pr.number} is an external documentation-only contribution and was closed automatically.`);

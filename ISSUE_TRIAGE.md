@@ -1,61 +1,63 @@
-# ISSUE_TRIAGE — Issue 分类标准与处理流程
+# Issue Triage
 
-本文件定义 dsh-mnemon 的 Issue 标签体系、分类、补充信息和关闭流程。目标是让每个 Open Issue 可检索、可验证、可认领、可追溯。
+[简体中文](ISSUE_TRIAGE.zh-CN.md) | **English**
 
-## 标签体系
+This document defines the dsh-mnemon Issue label system, classification, information requests, and closure process. The goal is to keep every open Issue searchable, verifiable, assignable, and traceable.
 
-| 标签 | 含义 | 何时使用 |
+## Labels
+
+| Label | Meaning | When to use it |
 | --- | --- | --- |
-| `bug` | 功能不符合预期、报错、回归或兼容性问题 | 有明确现象、复现和证据 |
-| `enhancement` | 新能力或现有能力改进 | 有清楚场景、约束和验收结果 |
-| `documentation` | README、docs 或注释缺失、过时、不一致 | 不改变运行时行为 |
-| `question` | 使用或设计疑问 | 需要回答“怎么用 / 为什么” |
-| `good first issue` | 适合新贡献者 | 范围小、验收明确、不依赖深层安全或存储上下文 |
-| `help wanted` | 已确认接受社区实现 | 维护者认可方案且暂无内部排期 |
-| `duplicate` | 与已有 Issue 重复 | 现象、根因或目标与现有 Issue 高度重叠 |
-| `invalid` | 非本仓库问题、公开安全报告或信息长期不足 | 无法按模板继续分类 |
-| `wontfix` | 经讨论不做 | 超出职责、破坏安全边界或收益不足 |
+| `bug` | Unexpected behavior, an error, regression, or compatibility problem | The report has a clear symptom, reproduction, and evidence |
+| `enhancement` | A new capability or improvement to an existing capability | The request has a clear use case, constraints, and acceptance result |
+| `documentation` | Missing, obsolete, or inconsistent README, docs, or comments | No runtime behavior changes |
+| `question` | A usage or design question | The Issue asks how something works or why it behaves that way |
+| `good first issue` | Suitable for a new contributor | Small scope, clear acceptance criteria, and no deep security or storage context required |
+| `help wanted` | Approved for community implementation | Maintainers accept the approach and have no internal schedule |
+| `duplicate` | Duplicates an existing Issue | The symptom, root cause, or objective substantially overlaps another Issue |
+| `invalid` | Not a repository problem, a public security report, or persistently missing information | The Issue cannot proceed through the template |
+| `wontfix` | Deliberately not planned | Out of scope, conflicts with a security boundary, or has insufficient benefit |
 
-标签使用 GitHub 默认命名。新增长期标签时应同步更新 Issue Forms、自动化和本文档，不创建一次性临时标签。
+Labels use GitHub's default names. When adding a long-lived label, update the Issue Forms, automation, and this document. Do not create one-off temporary labels.
 
-## 分类流程
+## Classification process
 
-新 Issue 按以下顺序处理：
+Triage new Issues in this order:
 
-1. **安全检查**：若包含漏洞、token、凭据、私有记忆或敏感日志，立即移除公开内容并引导至 `SECURITY.md`。
-2. **模板检查**：确认必填段落存在且非空；Bug 必须包含证据、冒烟测试、代码引用和补丁草案。
-3. **查重**：搜索 open/closed Issue 和已合并 PR；重复项标记 `duplicate`，评论原 Issue 后关闭。
-4. **定类型**：根据目标标记 `bug`、`enhancement`、`documentation` 或 `question`。
-5. **验证当前状态**：以当前 `main` 和最新发布版本复现；已经由其他 PR 或版本解决的 Issue 直接注明 commit / PR / 版本并关闭。
-6. **确认范围**：需要修改 DSH 核心或上游 Provider 的问题转交上游；本仓库只保留兼容层或绕过方案的明确任务。
-7. **开放认领**：范围清楚且接受外部实现时添加 `help wanted`；适合入门时再添加 `good first issue`。
+1. **Security check**: if the Issue contains a vulnerability, token, credential, private memory, or sensitive log, remove the public material and direct the reporter to `SECURITY.md`.
+2. **Template check**: confirm that required sections exist and are non-empty. Bugs require evidence, smoke tests, code references, and a patch proposal.
+3. **Duplicate check**: search open and closed Issues and merged PRs. Label duplicates with `duplicate`, link the original Issue in a comment, and close the duplicate.
+4. **Assign a type**: apply `bug`, `enhancement`, `documentation`, or `question` based on the objective.
+5. **Verify current state**: reproduce against current `main` and the latest release. If another PR or release already solved the problem, cite its commit, PR, or version and close the Issue.
+6. **Confirm scope**: route problems that require DSH core or an upstream Provider change to the upstream project. Keep only a concrete compatibility-layer or workaround task here.
+7. **Open for contribution**: add `help wanted` when the scope is clear and external implementation is accepted; add `good first issue` when it is also suitable for a new contributor.
 
-## 关闭标准
+## Closure criteria
 
-满足任一条件即可关闭，关闭时必须留下可追溯说明：
+Close an Issue when any of these conditions apply, and always leave a traceable explanation:
 
-- **已实现**：改动已进入 `main`，注明 PR / commit；发布后再注明最低修复版本；
-- **被取代**：已有更完整或更安全的实现，注明 superseding PR；
-- **重复**：链接原 Issue；
-- **已回答**：给出结论和权威文档链接；
-- **过时**：依赖、接口或设计已经变化；
-- **超范围**：需要上游 DSH、Mnemon 或 Provider 修改，说明转交位置；
-- **长期缺信息**：作者未补齐模板所需证据，标记 `invalid`。
+- **Implemented**: the change is on `main`; cite the PR or commit and add the minimum fixed release after publication;
+- **Superseded**: a more complete or safer implementation exists; cite the superseding PR;
+- **Duplicate**: link the original Issue;
+- **Answered**: provide the conclusion and an authoritative documentation link;
+- **Obsolete**: the dependency, interface, or design has changed;
+- **Out of scope**: an upstream DSH, Mnemon, or Provider change is required; identify the upstream destination;
+- **Information missing long-term**: the reporter did not supply required evidence; apply `invalid`.
 
-关闭理由使用 GitHub 的 `completed` 或 `not_planned`，不要无说明关闭。作者补充新证据后可以请求重开。
+Use GitHub's `completed` or `not_planned` closure reason. Do not close without an explanation. Reporters may request reopening after adding new evidence.
 
-## PR 关联规则
+## Pull Request linkage
 
-- 修复 PR 应使用 `Fixes #<n>` 或 `Closes #<n>` 关联已确认 Issue；
-- PR Review 必须对照当前 `main`，确认没有被历史提交或更完整方案取代；
-- 仅证明旧版本存在问题，不足以证明当前 PR 应合并；
-- Issue 在修复进入 `main` 后即可关闭，最低发布版本在 release 后补充。
+- Fix PRs should use `Fixes #<n>` or `Closes #<n>` to link an accepted Issue;
+- reviews must compare the PR with current `main` and determine whether history or a more complete solution has superseded it;
+- proving that an old version had a problem does not by itself establish that a current PR should merge;
+- an Issue may close when the fix reaches `main`; add the minimum fixed version after release.
 
-## 维护者操作速查
+## Maintainer command reference
 
 ```sh
 gh issue edit <n> -R omdsh-dev/dsh-mnemon --add-label "bug,good first issue"
-gh issue comment <n> -R omdsh-dev/dsh-mnemon --body "说明"
+gh issue comment <n> -R omdsh-dev/dsh-mnemon --body "Explanation"
 gh api -X PATCH repos/omdsh-dev/dsh-mnemon/issues/<n> \
   -f state=closed -f state_reason=completed
 
@@ -63,11 +65,11 @@ gh issue list -R omdsh-dev/dsh-mnemon --state open \
   --json number,title,labels --jq '.[] | select(.labels|length==0)'
 ```
 
-## 自动化
+## Automation
 
-- `.github/workflows/issue-template-enforcer.yml`：缺少 Issue Form 必填段落或 Bug 证据时，评论并以 `not_planned` 自动关闭；
-- `.github/workflows/issue-dedup.yml`：标题与已有 open Issue 高度相似时，标记疑似重复、附原 Issue 并关闭；
-- `.github/workflows/pr-contribution-rules.yml`：校验 PR 标题、模板、AI 披露、本地验证、兼容说明和用户可见证据；
-- `.github/workflows/reject-docs-pr.yml`：自动关闭外部贡献者的仅文档 PR；具有仓库写权限的维护者不受该规则限制。
+- `.github/workflows/issue-template-enforcer.yml` posts a bilingual explanation and closes Issues with missing required Issue Form sections or invalid Bug evidence as `not_planned`;
+- `.github/workflows/issue-dedup.yml` posts a bilingual explanation, links the original Issue, labels a highly similar open Issue as a possible duplicate, and closes it;
+- `.github/workflows/pr-contribution-rules.yml` validates PR titles, the bilingual template, AI disclosure, local verification, compatibility information, and user-visible evidence;
+- `.github/workflows/reject-docs-pr.yml` posts a bilingual explanation and closes documentation-only PRs from external contributors; repository collaborators with `write`, `maintain`, or `admin` permission are exempt.
 
-自动化只执行初筛。作者可以通过评论说明差异并请求重开，最终决定由维护者作出。
+Automation performs initial screening only. Reporters may explain differences and request reopening; maintainers make the final decision.

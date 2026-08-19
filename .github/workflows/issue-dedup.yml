@@ -1,4 +1,4 @@
-name: Detect Duplicate Issues
+name: 重复 Issue 检测 / Detect Duplicate Issues
 
 on:
   issues:
@@ -10,11 +10,11 @@ permissions:
 
 jobs:
   dedup:
-    name: Close duplicate issues
+    name: 关闭重复 Issue / Close duplicate issues
     runs-on: ubuntu-latest
 
     steps:
-      - name: Detect duplicate issue
+      - name: 检测重复 Issue / Detect duplicate issue
         uses: actions/github-script@v8
         with:
           script: |
@@ -93,11 +93,13 @@ jobs:
 
             const comment = [
               '该 Issue 疑似与已有 Issue 重复，已自动关闭。',
+              'This issue appears to duplicate an existing issue and was closed automatically.',
               '',
-              `- 原 Issue：#${duplicate.number}「${duplicate.title}」`,
-              `- 链接：${duplicate.html_url}`,
+              `- 原 Issue / Existing issue: #${duplicate.number}「${duplicate.title}」`,
+              `- 链接 / Link: ${duplicate.html_url}`,
               '',
               '如果现象、版本或根因不同，请回复说明差异并请求重开；也可以到原 Issue 下补充新证据。',
+              'If the behavior, version, or root cause differs, reply with those differences and request reopening, or add the new evidence to the existing issue.',
             ].join('\n');
             await github.rest.issues.createComment({
               owner: context.repo.owner,

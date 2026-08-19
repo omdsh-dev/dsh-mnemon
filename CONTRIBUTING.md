@@ -1,27 +1,29 @@
-# 贡献指南（Contributing）
+# Contributing
 
-欢迎为 dsh-mnemon 贡献代码。本文件定义 Issue、Pull Request、验证和维护规则；实现细节与测试场景见[开发和验证指南](docs/zh-CN/development.md)。
+[简体中文](CONTRIBUTING.zh-CN.md) | **English**
 
-## PR 范围
+Thank you for contributing to dsh-mnemon. This document defines the Issue, Pull Request, verification, and maintenance rules. See the [Development and Verification Guide](docs/en/development.md) for implementation details and test scenarios.
 
-本仓库接受以下外部 PR：
+## Pull Request scope
 
-- **修复**：可复现的 Bug、兼容性问题和安全加固；
-- **增强 / 优化**：现有能力的改进、性能、稳定性和体验优化；
-- **维护**：测试、构建、重构和依赖兼容性工作。
+The repository accepts these external Pull Requests:
 
-全新能力、新 Provider、持久化格式、RPC 权限或安全边界变更必须先提交 Issue，获得维护者确认后再实现。
+- **Fixes**: reproducible bugs, compatibility problems, and security hardening;
+- **Enhancements and optimization**: improvements to existing capabilities, performance, stability, and user experience;
+- **Maintenance**: tests, build work, refactors, and dependency compatibility.
 
-外部贡献者的仅文档类 PR 不直接接受；请先提交 Issue 讨论，由维护者确认范围。仓库维护者的发布说明、双语同步和文档维护不受此限制。
+New capabilities, Providers, persistence formats, RPC authority, or security-boundary changes require an Issue and maintainer approval before implementation begins.
 
-## 开发前置
+Documentation-only PRs from external contributors are not accepted directly. Open an Issue first so maintainers can confirm the scope. Maintainer release notes, bilingual synchronization, and documentation maintenance are exempt.
 
-- Node.js 20 或更高版本；CI 使用 Node.js 24 和 pnpm 10.13.1；
-- 仅使用正式发布的 `@deepseek-ai/*` NPM 契约，禁止修改 DSH 源码或让 tsconfig 指向 DSH 源码 checkout；
-- 不要在仓库配置、测试夹具、日志、截图或 PR 描述中提交 token、凭据、私有记忆或敏感路径；
-- `lib/` 是构建生成物，不进入版本库，也不得手工编辑。
+## Prerequisites
 
-## 快速开始
+- Node.js 20 or later; CI uses Node.js 24 and pnpm 10.13.1;
+- use only published `@deepseek-ai/*` NPM contracts; do not modify DSH source or point tsconfig at a DSH source checkout;
+- do not commit tokens, credentials, private memory, sensitive paths, or unredacted logs in repository configuration, fixtures, screenshots, or PR descriptions;
+- `lib/` is generated build output and must not be committed or edited manually.
+
+## Quick start
 
 ```sh
 git clone https://github.com/omdsh-dev/dsh-mnemon.git
@@ -30,56 +32,56 @@ pnpm install
 pnpm run verify
 ```
 
-`verify` 包含 TypeScript 检查、Vitest、可复现双构建、隔离的真实 Headless profile 激活和发布包验证。
+`verify` runs TypeScript checks, Vitest, reproducible double builds, isolated real Headless-profile activation, and published-package validation.
 
-## 提交规范
+## Commit convention
 
-提交信息和 PR 标题使用 Conventional Commits：
+Commit messages and PR titles use Conventional Commits:
 
 ```text
 type(scope): subject
 ```
 
-允许的 type 包括 `feat`、`fix`、`chore`、`docs`、`test`、`refactor`、`perf`、`build`、`ci` 和 `revert`。scope 使用模块或主题，例如：
+Allowed types are `feat`, `fix`, `chore`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, and `revert`. Use a module or topic for the scope, for example:
 
 ```text
 fix(version): run pnpm update inside the owning profile
 fix(client): honor trusted remote management grant
 ```
 
-代码、注释、文档、提交信息和 PR 标题禁止 emoji。
+Code, comments, documentation, commit messages, and PR titles must not contain emoji.
 
-## 提 PR 前检查清单
+## Checklist before opening a PR
 
-1. **基于最新 main**：提交前 rebase 或合并最新 `main`，解决冲突并重新验证。
-2. **完整验证**：默认运行 `pnpm run verify`；若无法运行某一项，在 PR 中写明原因、替代验证和剩余风险。
-3. **定向回归**：为缺陷补充失败前 / 通过后的回归测试；UI 行为同时验证授权和拒绝路径。
-4. **真实证据**：用户可见变更附本地截图或短视频；Host、CLI、Headless 变更附脱敏日志或操作结果。
-5. **双语同步**：长期文档在 `docs/en/` 和 `docs/zh-CN/` 保持同名、同职责；根 README 同步维护 `README.md` 和 `README.zh-CN.md`。
-6. **安全与数据**：持久化格式、路径、RPC authority、Provider 凭据或导入导出变更必须说明兼容、迁移 / 拒绝、回滚和数据保留行为。
-7. **边界稳定**：`src/shared/contracts.ts` 是 Client / Host wire DTO 的唯一来源；不得在浏览器半区重新引入 Host 模块。
-8. **AI 披露**：按 PR 模板如实填写使用的模型和编码工具；贡献者仍对最终代码、验证和安全负责。
-9. **不提交生成物**：确认工作区不包含 `lib/` 或临时 Provider lab 数据。
+1. **Use the latest main**: rebase onto or merge the latest `main`, resolve conflicts, and rerun verification before submitting.
+2. **Run complete verification**: run `pnpm run verify` by default. If a check cannot run, document the reason, alternative evidence, and remaining risk in the PR.
+3. **Add targeted regression coverage**: bugs need a test that fails before the fix and passes afterward. UI behavior must cover both authorized and rejected paths.
+4. **Provide real evidence**: attach a local screenshot or short video for user-visible changes. For Host, CLI, or Headless changes, attach redacted logs or command results.
+5. **Keep both languages synchronized**: long-lived documents under `docs/en/` and `docs/zh-CN/` must have matching names and responsibilities. Keep `README.md` and `README.zh-CN.md` synchronized.
+6. **Explain security and data effects**: changes to persistence formats, paths, RPC authority, Provider credentials, or import/export must explain compatibility, migration or rejection, rollback, and data retention.
+7. **Keep boundaries stable**: `src/shared/contracts.ts` is the single source of Client and Host wire DTOs. Do not reintroduce Host modules into browser code.
+8. **Disclose AI coding**: complete the PR template with the model and coding tool used. Contributors remain responsible for the final code, verification, and security.
+9. **Do not commit generated output**: ensure the worktree contains no `lib/` output or temporary Provider-lab data.
 
-## 文档和持久化约束
+## Documentation and persistence constraints
 
-- 修改用户可见行为时检查 `ui-guide.md`、`getting-started.md`、`configuration.md` 和 `operations.md` 的中英文版本；
-- 命令、配置键、路径和代码符号在两种语言中必须一致；
-- Runtime、Documents 和 Memory Space registry 的格式变更不得静默发生，必须提供旧格式处理和损坏输入测试；
-- 不得把用户偏好发送到长期 Memory Space，也不得在测试或文档示例中使用真实私有数据。
+- When user-visible behavior changes, review the English and Chinese versions of `ui-guide.md`, `getting-started.md`, `configuration.md`, and `operations.md`;
+- commands, configuration keys, paths, and code symbols must match across both languages;
+- Runtime, Documents, and Memory Space registry format changes must not happen silently; include legacy-format handling and damaged-input tests;
+- do not send user preferences into long-term Memory Spaces or use real private data in fixtures and documentation examples.
 
-## Issue 规则
+## Issue rules
 
-- 提交前搜索 open 和 closed Issue，确认没有重复；
-- Bug 使用 [Bug 报告表单](.github/ISSUE_TEMPLATE/bug_report.yml)，必须包含复现、环境、证据、冒烟测试、代码引用和补丁草案；
-- 功能、增强、文档和问题使用[标准 Issue 表单](.github/ISSUE_TEMPLATE/standard_issue.yml)；
-- 缺少模板必填信息的 Issue 会被自动关闭，补充完整后可以请求重开；
-- 标签体系、分类和关闭标准见 [ISSUE_TRIAGE.md](ISSUE_TRIAGE.md)；
-- 安全漏洞必须按 [SECURITY.md](SECURITY.md) 私下报告，不要创建公开 Issue。
+- Search open and closed Issues before submitting;
+- use the bilingual [Bug report form](.github/ISSUE_TEMPLATE/bug_report.yml) for bugs, including reproduction, environment, evidence, smoke tests, code references, and a patch proposal;
+- use the bilingual [standard Issue form](.github/ISSUE_TEMPLATE/standard_issue.yml) for features, enhancements, documentation, and questions;
+- Issues with missing required information are closed automatically; contributors may request reopening after completing the template;
+- see [Issue Triage](ISSUE_TRIAGE.md) or [Issue 分类标准](ISSUE_TRIAGE.zh-CN.md) for labels, classification, and closure criteria;
+- report security vulnerabilities privately through [SECURITY.md](SECURITY.md), not in a public Issue.
 
-## PR 规则
+## Pull Request rules
 
-- 保持 [PR 模板](.github/pull_request_template.md)完整，填写摘要、背景、涉及区域、类型、最新代码确认、AI 披露、兼容和数据安全、本地验证与用户可见证据；
-- CI 和 PR 规则检查必须通过；失败时修正 PR 描述或实现，不要删除模板段落；
-- 已被更完整方案取代、基于过时设计或无法安全升级的 PR 会被关闭并说明原因；
-- Review 结论以当前 `main`、公开契约和已发布行为为准，而不是仅以 PR 描述为准。
+- Keep the bilingual [PR template](.github/pull_request_template.md) intact and complete its summary, context, affected areas, type, latest-code confirmation, AI disclosure, compatibility and data safety, local validation, and user-visible evidence;
+- CI and PR policy checks must pass. Correct the description or implementation when a check fails; do not remove template sections;
+- PRs superseded by a more complete solution, based on an obsolete design, or unable to upgrade safely will be closed with an explanation;
+- reviews use the current `main`, public contracts, and released behavior as the source of truth, not only the PR description.

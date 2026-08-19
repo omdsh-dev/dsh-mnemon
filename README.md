@@ -203,7 +203,7 @@ pnpm run verify
 
 `verify` runs TypeScript checks, Vitest, a reproducible double build, an isolated real Headless-profile activation check, and published-package validation. `lib/` is generated and intentionally not tracked.
 
-Before opening an Issue or Pull Request, read the [contribution rules](./CONTRIBUTING.md) and use the repository templates. Incomplete reports and PR descriptions are rejected by automated policy checks.
+Before opening an Issue or Pull Request, read the [contribution rules](./CONTRIBUTING.md) ([简体中文](./CONTRIBUTING.zh-CN.md)) and use the bilingual repository templates. Incomplete reports and PR descriptions are rejected by bilingual automated policy checks.
 
 ## License
 
