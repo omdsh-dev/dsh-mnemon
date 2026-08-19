@@ -95,6 +95,46 @@ function createCoordinator(host: HostSubagentsService, runtime?: RuntimeMemoryCo
   return new MnemonSubagentCoordinator(host, runtime, documents, toolRegistry().value)
 }
 
+function observedSubagents(
+  resultTools: ReturnType<typeof toolRegistry>,
+  publish: (child: HostAgent) => void,
+  stopReason = 'completed',
+) {
+  const dispose = vi.fn(async () => {})
+  const child = parent('subagent')
+  child.id = 'child-run-1'
+  const start = vi.fn(async () => {
+    publish(child)
+    return { id: child.id, result: Promise.resolve({ output: [], stopReason }), dispose, localAgent: child }
+  })
+  const value = {
+    list: vi.fn(() => ['spawn']),
+    getProvider: vi.fn(() => ({ capabilities })),
+    start,
+  } as unknown as HostSubagentsService
+  return { value, start, dispose, child }
+}
+
+function emitSuccessfulToolResult(
+  resultTools: ReturnType<typeof toolRegistry>,
+  child: HostAgent,
+  name: string,
+  argumentsValue: unknown,
+  value: unknown,
+  parentToken?: symbol,
+) {
+  const execution = {
+    name,
+    arguments: argumentsValue,
+    token: Symbol(name),
+    ...(parentToken === undefined ? {} : { parent: parentToken }),
+    agent: child,
+    signal: new AbortController().signal,
+  }
+  resultTools.emit('tools/result', execution, { isError: false, value })
+  return execution
+}
+
 describe('Mnemon memory subagent coordinator', () => {
   it('rejects structured-output keywords outside the DSH schema subset', () => {
     expect(() => assertDshOutputSchema({
@@ -224,7 +264,105 @@ describe('Mnemon memory subagent coordinator', () => {
     for (const disposer of resultTools.disposers) expect(disposer).toHaveBeenCalledOnce()
   })
 
-  it('fails closed when a child completes without calling its result tool', async () => {
+  it('recovers recall evidence from an authoritative native tool receipt when the child omits its terminal result', async () => {
+    const resultTools = toolRegistry()
+    const host = observedSubagents(resultTools, child => {
+      emitSuccessfulToolResult(resultTools, child, 'mnemon_recall', { query: 'database', memoryBodyIds: ['project'] }, {
+        query: 'database',
+        mode: 'smart',
+        hint: 'Project memory matched.',
+        results: [{ id: 'm1', content: 'Use SQLite.', memoryBodyId: 'project', memoryBodyName: 'Project' }],
+        sources: [{ memoryBodyId: 'project' }],
+      })
+    })
+    const coordinator = new MnemonSubagentCoordinator(host.value, undefined, undefined, resultTools.value)
+
+    await expect(coordinator.recall(parent(), { query: 'database' }, new AbortController().signal)).resolves.toMatchObject({
+      results: [{ id: 'm1', content: 'Use SQLite.', memoryBodyId: 'project' }],
+      hint: 'Project memory matched.',
+      delegation: { runId: 'child-run-1', selectedMemoryBodyIds: ['project'] },
+    })
+    expect(host.start).toHaveBeenCalledOnce()
+    expect(coordinator.snapshot()).toMatchObject({ recalls: 1, failures: 0 })
+  })
+
+  it('recovers a committed write receipt without retrying the mutation', async () => {
+    const resultTools = toolRegistry()
+    const host = observedSubagents(resultTools, child => {
+      emitSuccessfulToolResult(resultTools, child, 'mnemon_remember', { content: 'Use SQLite.', memoryBodyId: 'project' }, {
+        action: 'added',
+        message: 'Stored durable project memory.',
+        memoryBodyId: 'project',
+        memoryBodyName: 'Project',
+      })
+    })
+    const coordinator = new MnemonSubagentCoordinator(host.value, undefined, undefined, resultTools.value)
+
+    await expect(coordinator.remember(parent(), { content: 'Use SQLite.', memoryBodyId: 'project' }, new AbortController().signal)).resolves.toMatchObject({
+      delegated: true,
+      action: 'added',
+      summary: 'Stored durable project memory.',
+      memoryBodyIds: ['project'],
+    })
+    expect(host.start).toHaveBeenCalledOnce()
+    expect(coordinator.snapshot()).toMatchObject({ writes: 1, failures: 0 })
+  })
+
+  it('commits a nested Code Mode receipt only after the enclosing run_code succeeds', async () => {
+    const resultTools = toolRegistry()
+    const host = observedSubagents(resultTools, child => {
+      const outerToken = Symbol('run-code')
+      emitSuccessfulToolResult(resultTools, child, 'mnemon_remember', { content: 'Use SQLite.' }, {
+        action: 'added', memoryBodyId: 'project', memoryBodyName: 'Project',
+      }, outerToken)
+      resultTools.emit('tools/result', {
+        name: 'run_code', arguments: {}, token: outerToken, agent: child, signal: new AbortController().signal,
+      }, { isError: false, value: null })
+    })
+    const coordinator = new MnemonSubagentCoordinator(host.value, undefined, undefined, resultTools.value)
+
+    await expect(coordinator.remember(parent(), { content: 'Use SQLite.' }, new AbortController().signal)).resolves.toMatchObject({
+      action: 'added', memoryBodyIds: ['project'],
+    })
+  })
+
+  it('discards a nested receipt when the enclosing Code Mode call fails', async () => {
+    const resultTools = toolRegistry()
+    const host = observedSubagents(resultTools, child => {
+      const outerToken = Symbol('run-code')
+      emitSuccessfulToolResult(resultTools, child, 'mnemon_remember', { content: 'Use SQLite.' }, {
+        action: 'added', memoryBodyId: 'project', memoryBodyName: 'Project',
+      }, outerToken)
+      resultTools.emit('tools/result', {
+        name: 'run_code', arguments: {}, token: outerToken, agent: child, signal: new AbortController().signal,
+      }, { isError: true })
+    })
+    const coordinator = new MnemonSubagentCoordinator(host.value, undefined, undefined, resultTools.value)
+
+    await expect(coordinator.remember(parent(), { content: 'Use SQLite.' }, new AbortController().signal)).rejects.toThrow('completed without recording its result')
+  })
+
+  it('does not recover partial or failed child runs from unrelated successful tools', async () => {
+    const resultTools = toolRegistry()
+    const partial = observedSubagents(resultTools, child => {
+      emitSuccessfulToolResult(resultTools, child, 'mnemon_memory_body_create', { name: 'Project', description: 'Project decisions.' }, {
+        id: 'project', name: 'Project', description: 'Project decisions.',
+      })
+    })
+    const partialCoordinator = new MnemonSubagentCoordinator(partial.value, undefined, undefined, resultTools.value)
+    await expect(partialCoordinator.remember(parent(), { content: 'Use SQLite.' }, new AbortController().signal)).rejects.toThrow('completed without recording its result')
+
+    const failedTools = toolRegistry()
+    const failed = observedSubagents(failedTools, child => {
+      emitSuccessfulToolResult(failedTools, child, 'mnemon_remember', { content: 'Use SQLite.' }, {
+        action: 'added', memoryBodyId: 'project', memoryBodyName: 'Project',
+      })
+    }, 'error')
+    const failedCoordinator = new MnemonSubagentCoordinator(failed.value, undefined, undefined, failedTools.value)
+    await expect(failedCoordinator.remember(parent(), { content: 'Use SQLite.' }, new AbortController().signal)).rejects.toThrow('stopped with error')
+  })
+
+  it('fails closed when a child completes without a terminal result or matching successful tool receipt', async () => {
     const host = subagents(undefined)
     const coordinator = createCoordinator(host.value)
     await expect(coordinator.recall(parent(), { query: 'x' }, new AbortController().signal)).rejects.toThrow('completed without recording its result')

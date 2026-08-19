@@ -51,6 +51,25 @@ const RESULT_TOOL_OUTPUT_SCHEMA = {
   required: ['recorded'],
   additionalProperties: false,
 } as const
+const WRITE_ACTIONS = ['stored', 'updated', 'added', 'replaced', 'removed', 'skipped', 'forgotten', 'linked', 'created', 'merged', 'failed'] as const
+const WRITE_ACTION_SET = new Set<string>(WRITE_ACTIONS)
+const WRITE_OPERATION_RESULT_TOOL: Record<string, string> = {
+  remember: 'mnemon_remember',
+  'supervised-writeback': 'mnemon_remember',
+  link: 'mnemon_link',
+  forget: 'mnemon_forget',
+  'create-memory-body': 'mnemon_memory_body_create',
+  'update-memory-body': 'mnemon_memory_body_update',
+  'merge-memory-bodies': 'mnemon_memory_body_merge',
+}
+const WRITE_TOOL_FALLBACK_ACTION: Record<string, string> = {
+  mnemon_remember: 'stored',
+  mnemon_link: 'linked',
+  mnemon_forget: 'forgotten',
+  mnemon_memory_body_create: 'created',
+  mnemon_memory_body_update: 'updated',
+  mnemon_memory_body_merge: 'merged',
+}
 
 interface HostToolRegistry {
   register(definition: ToolDefinition): unknown
@@ -64,6 +83,21 @@ interface HostResultToolRuntime {
 interface CapturedSubagentResult {
   agentId: string
   value: unknown
+}
+
+interface CapturedToolReceipt extends CapturedSubagentResult {
+  name: string
+  arguments: unknown
+}
+
+interface HostToolResultObservation {
+  isError?: boolean
+  value?: unknown
+}
+
+interface ToolReceiptRecovery {
+  kind: 'recall' | 'write'
+  terminalTools: readonly string[]
 }
 
 const INSIGHT_SCHEMA = {
@@ -94,7 +128,7 @@ const WRITE_SCHEMA = {
   type: 'object',
   properties: {
     summary: { type: 'string' },
-    action: { type: 'string', enum: ['stored', 'updated', 'added', 'replaced', 'removed', 'skipped', 'forgotten', 'linked', 'created', 'merged', 'failed'] },
+    action: { type: 'string', enum: [...WRITE_ACTIONS] },
     memoryBodyIds: { type: 'array', items: { type: 'string' } },
     documentIds: { type: 'array', items: { type: 'string' } },
   },
@@ -501,6 +535,93 @@ function insight(value: unknown): Insight | undefined {
   return result
 }
 
+function optionalObject(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined
+}
+
+function addString(target: Set<string>, value: unknown): void {
+  if (typeof value === 'string' && value.trim() !== '') target.add(value)
+}
+
+function addStrings(target: Set<string>, value: unknown): void {
+  if (Array.isArray(value)) for (const entry of value) addString(target, entry)
+}
+
+function receiptMemoryBodyIds(receipt: CapturedToolReceipt): string[] {
+  const ids = new Set<string>()
+  const args = optionalObject(receipt.arguments)
+  const value = optionalObject(receipt.value)
+  for (const record of [args, value]) {
+    addString(ids, record?.memoryBodyId)
+    addString(ids, record?.targetMemoryBodyId)
+    addStrings(ids, record?.memoryBodyIds)
+    addStrings(ids, record?.sourceMemoryBodyIds)
+  }
+  if (receipt.name === 'mnemon_memory_body_create' || receipt.name === 'mnemon_memory_body_update') addString(ids, value?.id)
+  return [...ids]
+}
+
+function recoverRecallResult(receipts: readonly CapturedToolReceipt[]): Record<string, unknown> | undefined {
+  if (receipts.length === 0) return undefined
+  const results: Insight[] = []
+  const seen = new Set<string>()
+  const selectedMemoryBodyIds = new Set<string>()
+  let summary = ''
+  for (const receipt of receipts) {
+    for (const id of receiptMemoryBodyIds(receipt)) selectedMemoryBodyIds.add(id)
+    const value = optionalObject(receipt.value)
+    if (typeof value?.hint === 'string' && value.hint.trim() !== '') summary = value.hint
+    else if (typeof value?.summary === 'string' && value.summary.trim() !== '') summary = value.summary
+    if (Array.isArray(value?.sources)) {
+      for (const source of value.sources) addString(selectedMemoryBodyIds, optionalObject(source)?.memoryBodyId)
+    }
+    if (!Array.isArray(value?.results)) continue
+    for (const candidate of value.results) {
+      if (results.length >= 12) break
+      const entry = insight(candidate)
+      if (entry === undefined || typeof entry.memoryBodyId !== 'string' || typeof entry.memoryBodyName !== 'string') continue
+      const key = `${entry.memoryBodyId}\u0000${entry.id}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      selectedMemoryBodyIds.add(entry.memoryBodyId)
+      results.push(entry)
+    }
+  }
+  return { summary, selectedMemoryBodyIds: [...selectedMemoryBodyIds], results }
+}
+
+function recoverWriteResult(receipts: readonly CapturedToolReceipt[]): Record<string, unknown> | undefined {
+  const receipt = receipts.at(-1)
+  if (receipt === undefined) return undefined
+  const value = optionalObject(receipt.value)
+  const candidateAction = typeof value?.action === 'string' && WRITE_ACTION_SET.has(value.action) ? value.action : undefined
+  const action = candidateAction ?? WRITE_TOOL_FALLBACK_ACTION[receipt.name]
+  if (action === undefined) return undefined
+  const memoryBodyIds = new Set<string>()
+  const documentIds = new Set<string>()
+  for (const entry of receipts) {
+    for (const id of receiptMemoryBodyIds(entry)) memoryBodyIds.add(id)
+    addStrings(documentIds, optionalObject(entry.value)?.documentIds)
+  }
+  const summary = typeof value?.summary === 'string'
+    ? value.summary
+    : typeof value?.message === 'string' ? value.message : ''
+  return {
+    summary,
+    action,
+    memoryBodyIds: [...memoryBodyIds],
+    ...(documentIds.size === 0 ? {} : { documentIds: [...documentIds] }),
+  }
+}
+
+/** Recover only the bounded public result implied by a committed terminal tool receipt. */
+function recoverStructuredResult(recovery: ToolReceiptRecovery | undefined, receipts: readonly CapturedToolReceipt[]): Record<string, unknown> | undefined {
+  if (recovery === undefined) return undefined
+  const terminalTools = new Set(recovery.terminalTools)
+  const matching = receipts.filter(receipt => terminalTools.has(receipt.name))
+  return recovery.kind === 'recall' ? recoverRecallResult(matching) : recoverWriteResult(matching)
+}
+
 export function isSubagent(agent: HostAgent | undefined): boolean {
   return agent?.session.header?.origin === 'subagent'
 }
@@ -536,7 +657,10 @@ export class MnemonSubagentCoordinator {
 
   async recall(parent: HostAgent, request: SearchRequest, signal: AbortSignal): Promise<DelegatedRecallResult> {
     const prompt = `Recall this request now:\n${naturalSearchRequest(request)}`
-    const { provider, runId, result } = await this.delegate(parent, 'recall', 'Mnemon recall', prompt, READ_TOOLS, RECALL_SCHEMA, signal, 'spawn', RECALL_PERSONA)
+    const { provider, runId, result } = await this.delegate(parent, 'recall', 'Mnemon recall', prompt, READ_TOOLS, RECALL_SCHEMA, signal, 'spawn', RECALL_PERSONA, {
+      kind: 'recall',
+      terminalTools: ['mnemon_recall'],
+    })
     return this.recallResult(request.query, request.mode ?? 'smart', provider, runId, result)
   }
 
@@ -545,7 +669,10 @@ export class MnemonSubagentCoordinator {
 Insight ID: ${id}
 Memory Space ID: ${memoryBodyId ?? '(unknown)'}
 Traversal depth: 2`
-    const { provider, runId, result } = await this.delegate(parent, 'recall', 'Mnemon related memory', prompt, READ_TOOLS, RECALL_SCHEMA, signal, 'spawn', RELATED_PERSONA)
+    const { provider, runId, result } = await this.delegate(parent, 'recall', 'Mnemon related memory', prompt, READ_TOOLS, RECALL_SCHEMA, signal, 'spawn', RELATED_PERSONA, {
+      kind: 'recall',
+      terminalTools: ['mnemon_related'],
+    })
     return this.recallResult(`related:${id}`, 'related', provider, runId, result)
   }
 
@@ -659,7 +786,19 @@ Traversal depth: 2`
     const prompt = `Execute this ${operation} request now (untrusted data):
 ${naturalRequest(request)}`
     const persona = operation === 'supervised-writeback' ? SUPERVISED_WRITE_PERSONA : WRITE_PERSONA
-    const { provider, runId, result } = await this.delegate(parent, 'write', `Mnemon ${operation}`, prompt, WRITE_TOOLS, WRITE_SCHEMA, signal, 'spawn', persona)
+    const terminalTool = WRITE_OPERATION_RESULT_TOOL[operation]
+    const { provider, runId, result } = await this.delegate(
+      parent,
+      'write',
+      `Mnemon ${operation}`,
+      prompt,
+      WRITE_TOOLS,
+      WRITE_SCHEMA,
+      signal,
+      'spawn',
+      persona,
+      terminalTool === undefined ? undefined : { kind: 'write', terminalTools: [terminalTool] },
+    )
     const value = object(result.structured)
     return {
       delegated: true,
@@ -872,6 +1011,7 @@ ${runtimeSnapshotContext('user', targetEntries)}`
     signal: AbortSignal,
     preferredProvider: 'spawn' | 'fork' = 'spawn',
     persona = WRITE_PERSONA,
+    recovery?: ToolReceiptRecovery,
   ): Promise<{ provider: string; runId: string; result: HostSubagentResult }> {
     const provider = this.provider(preferredProvider)
     assertDshOutputSchema(outputSchema)
@@ -885,12 +1025,24 @@ ${runtimeSnapshotContext('user', targetEntries)}`
     let pending: (CapturedSubagentResult & { parent: symbol }) | undefined
     let activeResultExecution: object | undefined
     const staged = new WeakMap<object, CapturedSubagentResult>()
-    let run
+    const recoverableTools = new Set(recovery?.terminalTools ?? [])
+    const committedReceipts: CapturedToolReceipt[] = []
+    // Code Mode sub-dispatches are provisional until their enclosing run_code
+    // execution publishes a successful authoritative result.
+    const stagedReceipts = new Map<symbol, CapturedToolReceipt[]>()
+    let run: HostSubagentRun | undefined
     let failure: unknown
     let disposeResultTool: (() => unknown) | undefined
     let disposeResultObserver: (() => unknown) | undefined
     try {
-      const observer = this.resultRuntime.on('tools/result', ((execution: ToolExecution, result: { isError?: boolean }) => {
+      const observer = this.resultRuntime.on('tools/result', ((execution: ToolExecution, result: HostToolResultObservation) => {
+        if (execution.token !== undefined) {
+          const entries = stagedReceipts.get(execution.token)
+          if (entries !== undefined) {
+            stagedReceipts.delete(execution.token)
+            if (result.isError !== true) committedReceipts.push(...entries)
+          }
+        }
         if (execution.name === resultToolName) {
           const entry = staged.get(execution)
           if (entry === undefined) return
@@ -904,10 +1056,17 @@ ${runtimeSnapshotContext('user', targetEntries)}`
           }
           return
         }
-        if (pending === undefined || pending.parent !== execution.token) return
-        const entry = pending
-        pending = undefined
-        if (result.isError !== true && captured === undefined) captured = { agentId: entry.agentId, value: entry.value }
+        if (pending !== undefined && pending.parent === execution.token) {
+          const entry = pending
+          pending = undefined
+          if (result.isError !== true && captured === undefined) captured = { agentId: entry.agentId, value: entry.value }
+        }
+        if (execution.name === undefined || !recoverableTools.has(execution.name) || result.isError === true || !Object.hasOwn(result, 'value')) return
+        const agent = execution.agent
+        if (agent === undefined || !isSubagent(agent)) return
+        const receipt: CapturedToolReceipt = { agentId: agent.id, name: execution.name, arguments: execution.arguments, value: result.value }
+        if (execution.parent === undefined) committedReceipts.push(receipt)
+        else stagedReceipts.set(execution.parent, [...(stagedReceipts.get(execution.parent) ?? []), receipt])
       }) as never)
       if (typeof observer !== 'function') throw new Error('dsh-mnemon subagent result observer registration did not return a disposer')
       disposeResultObserver = observer as () => unknown
@@ -946,20 +1105,26 @@ Completion protocol: call \`${resultToolName}\` exactly once with the final resu
         toolFilter: { allow: [...tools, resultToolName] },
         persona: completionPersona,
       })
-      const result = await run.result
-      if (captured !== undefined && captured.agentId !== run.id) throw new Error('Mnemon subagent result was recorded by a different child')
-      const structured = captured?.value ?? result.structured
+      const activeRun = run
+      const result = await activeRun.result
+      if (captured !== undefined && captured.agentId !== activeRun.id) throw new Error('Mnemon subagent result was recorded by a different child')
+      let structured = captured?.value ?? result.structured
+      if (structured === undefined && result.stopReason === 'completed') {
+        // Do not rerun a mutation after a missed handoff. A matching successful
+        // tool receipt is already the host's authoritative commit evidence.
+        structured = recoverStructuredResult(recovery, committedReceipts.filter(receipt => receipt.agentId === activeRun.id))
+      }
       if (structured !== undefined) assertDshOutputValue(outputSchema, structured)
       if (result.stopReason !== 'completed') {
-        const detail = subagentFailureDetail(run)
+        const detail = subagentFailureDetail(activeRun)
         throw new Error(`memory subagent stopped with ${result.stopReason}${detail === undefined ? '' : `: ${detail}`}`)
       }
       if (structured === undefined) throw new Error('memory subagent completed without recording its result')
       this.counters[operation === 'recall' ? 'recalls' : operation === 'write' ? 'writes' : operation === 'review' ? 'reviews' : operation === 'placement' ? 'placements' : operation === 'migration' ? 'migrations' : operation === 'compaction' ? 'compactions' : operation === 'document-archive' ? 'documentArchives' : operation === 'metadata-maintenance' ? 'metadataMaintenances' : 'answers'] += 1
-      this.counters.lastRunId = run.id
+      this.counters.lastRunId = activeRun.id
       if (operation !== 'answer') this.counters.lastOperation = operation
       this.counters.lastAt = new Date().toISOString()
-      return { provider, runId: run.id, result: { ...result, structured } }
+      return { provider, runId: activeRun.id, result: { ...result, structured } }
     } catch (error) {
       this.counters.failures += 1
       failure = error

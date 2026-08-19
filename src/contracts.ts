@@ -46,6 +46,8 @@ export interface ToolExecution {
   signal: AbortSignal
   agent?: HostAgent
   name?: string
+  /** Parsed tool arguments, available on the authoritative tools/result event. */
+  arguments?: unknown
   parent?: symbol
   token?: symbol
   /** End the current model turn after an authoritative terminal tool call. */
