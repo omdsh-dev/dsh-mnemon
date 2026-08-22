@@ -77,7 +77,7 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
     const model = taskAgentModel.model?.trim()
     if (provider === undefined || provider === '' || model === undefined || model === '') return undefined
     return { provider, model }
-  })
+  }, runtime)
   const lifecycle = new MnemonLifecycle(ctx, coordinator, runtime.config, runtime)
   ctx.effect(() => lifecycle.start(), 'dsh-mnemon.lifecycle-root()')
   registerTools(ctx, runtime, coordinator)

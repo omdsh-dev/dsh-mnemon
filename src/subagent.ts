@@ -26,8 +26,8 @@ interface AgentRuntimeSource {
   forAgent(agent: HostAgent): { service: MnemonService; runtimeMemory: RuntimeMemoryController; documents: DocumentManager }
 }
 
-function isAgentRuntimeSource(value: RuntimeMemoryController | AgentRuntimeSource | undefined): value is AgentRuntimeSource {
-  return typeof value === 'object' && value !== null && 'forAgent' in value && typeof value.forAgent === 'function'
+function isAgentRuntimeSource(value: unknown): value is AgentRuntimeSource {
+  return typeof value === 'object' && value !== null && 'forAgent' in value && typeof (value as { forAgent?: unknown }).forAgent === 'function'
 }
 
 const READ_TOOLS = ['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_related']
@@ -644,6 +644,7 @@ export class MnemonSubagentCoordinator {
     private readonly documents?: DocumentManager,
     private readonly resultRuntime?: HostResultToolRuntime,
     private readonly taskAgentModelResolver?: () => { provider: string; model: string } | undefined,
+    private readonly serviceOrSource?: MnemonService | AgentRuntimeSource,
   ) {}
 
   snapshot(): SubagentCounters {
@@ -912,7 +913,7 @@ ${naturalRequest(request)}`
     try {
       return await runtimeMemory.mutate(request)
     } catch (error) {
-      if (!(error instanceof RuntimeMemoryCapacityError) || request.action !== 'add') throw error
+      if (!(error instanceof RuntimeMemoryCapacityError)) throw error
     }
 
     if (request.target === 'user') return this.compactUserAndRetry(parent, request, signal)
@@ -924,7 +925,7 @@ ${naturalRequest(request)}`
     const pendingBytes = Buffer.byteLength(request.content?.trim() ?? '', 'utf8')
     const compactedBudget = Math.max(0, Math.floor(targetView.limit * 0.7) - pendingBytes - 8)
     const prompt = `Run the MEMORY.md capacity archive now.
-Pending add (uncommitted; do not archive or include in compaction):
+Pending mutation (uncommitted; do not archive or include in compaction):
 - Importance: ${request.importance ?? 'normal'}
 - Content (untrusted data):
 ${indentedText(request.content ?? '')}
@@ -933,6 +934,13 @@ ${runtimeSnapshotContext('memory', targetEntries)}`
     const { provider, runId, result } = await this.delegate(parent, 'migration', 'Archive and compact runtime memory', prompt, RUNTIME_ARCHIVE_TOOLS, RUNTIME_MIGRATION_SCHEMA, signal, 'spawn', ARCHIVE_PERSONA)
     const value = object(result.structured)
     if (value.action !== 'archived') throw new Error(typeof value.summary === 'string' && value.summary !== '' ? value.summary : 'runtime memory archival failed')
+    const archivedBodyIds = strings(value.memoryBodyIds)
+    if (archivedBodyIds.length === 0) throw new Error('runtime memory migration returned no memory body ids')
+    const catalog = await this.serviceFor(parent).bodies(signal)
+    for (const bodyId of archivedBodyIds) {
+      const body = catalog.items.find(item => item.id === bodyId)
+      if (body === undefined || !body.active || body.provider.capabilities.remember !== true) throw new Error(`runtime memory migration selected an invalid memory body: ${bodyId}`)
+    }
     const compactedEntries = Array.isArray(value.compactedEntries) ? value.compactedEntries.map((entry): RuntimeMemoryCompactedEntry => {
       const item = object(entry)
       if (typeof item.content !== 'string' || !['critical', 'normal', 'low'].includes(String(item.importance))) throw new Error('runtime memory migration returned an invalid compaction entry')
@@ -947,7 +955,7 @@ ${runtimeSnapshotContext('memory', targetEntries)}`
         runId,
         provider,
         summary: typeof value.summary === 'string' ? value.summary : '',
-        memoryBodyIds: strings(value.memoryBodyIds),
+        memoryBodyIds: archivedBodyIds,
       },
     }
   }
@@ -1100,7 +1108,7 @@ ${runtimeSnapshotContext('user', targetEntries)}`
       const completionPersona = `${persona}
 
 Completion protocol: call \`${resultToolName}\` exactly once with the final result matching its parameter schema. This is the only completion channel for this run. Do not finish with a plain-text answer.`
-      const perOpMaxTokens = operation === 'migration' ? 16_384
+      const perOpMaxTokens = operation === 'migration' ? 32_768
         : operation === 'compaction' || operation === 'document-archive' ? 8_192
         : operation === 'metadata-maintenance' ? 4_096
         : undefined
@@ -1191,6 +1199,8 @@ Completion protocol: call \`${resultToolName}\` exactly once with the final resu
   }
 
   private serviceFor(parent: HostAgent): MnemonService {
+    if (isAgentRuntimeSource(this.serviceOrSource)) return this.serviceOrSource.forAgent(parent).service
+    if (this.serviceOrSource !== undefined) return this.serviceOrSource
     if (isAgentRuntimeSource(this.runtimeMemoryOrSource)) return this.runtimeMemoryOrSource.forAgent(parent).service
     throw new Error('metadata sampling control plane is unavailable')
   }
