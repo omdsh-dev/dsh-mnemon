@@ -1702,8 +1702,13 @@ ${runtimeSnapshotContext('user', plan.entries)}`
       const completionPersona = `${persona}
 
 Completion protocol: call \`${resultToolName}\` exactly once with the final result matching its parameter schema. This is the only completion channel for this run. Do not finish with a plain-text answer.`
-      const perOpMaxTokens = operation === 'migration' || operation === 'compaction' || operation === 'document-archive' ? 8_192
-        : operation === 'metadata-maintenance' ? 4_096
+      // Maintenance delegates emit small structured results, but reasoning-style
+      // models can burn a large completion budget on analysis before emitting
+      // them. Undersized static caps abort the whole operation with
+      // stopReason=max-tokens (e.g. dense CJK capacity archives, see #70), so
+      // keep generous ceilings instead of tight ones.
+      const perOpMaxTokens = operation === 'migration' || operation === 'compaction' || operation === 'document-archive' ? 32_768
+        : operation === 'metadata-maintenance' ? 16_384
         : undefined
       const fixed = this.taskAgentModelResolver?.()
       const baseAgentOptions = perOpMaxTokens === undefined ? undefined : { maxTokens: perOpMaxTokens }

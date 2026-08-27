@@ -815,7 +815,7 @@ describe('Mnemon memory subagent coordinator', () => {
     })
     expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
       toolFilter: { allow: [expect.stringMatching(/^mnemon_subagent_result_/)] },
-      agentOptions: { maxTokens: 4_096 },
+      agentOptions: { maxTokens: 16_384 },
       persona: expect.stringContaining('fastest bounded metadata-sampling path'),
     }))
     expect(memoryService.metadataSample).toHaveBeenCalledWith('product', expect.any(AbortSignal))
@@ -1001,7 +1001,7 @@ describe('Mnemon memory subagent coordinator', () => {
     })
     expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
       toolFilter: { allow: [expect.stringMatching(/^mnemon_subagent_result_/)] },
-      agentOptions: { maxTokens: 8_192 },
+      agentOptions: { maxTokens: 32_768 },
     }))
     const migrationCall = (host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }>; persona: string; toolFilter: { allow: string[] } }])[1]
     const migrationPrompt = migrationCall.prompt[0]!.text
@@ -1244,7 +1244,7 @@ describe('Mnemon memory subagent coordinator', () => {
     })
     expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
       toolFilter: { allow: [expect.stringMatching(/^mnemon_subagent_result_/)] },
-      agentOptions: { maxTokens: 8_192 },
+      agentOptions: { maxTokens: 32_768 },
       persona: expect.stringContaining('local USER.md compactor'),
     }))
     const compactionCall = (host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }>; persona: string }])[1]
@@ -1384,7 +1384,7 @@ describe('Mnemon memory subagent coordinator', () => {
       maintenance: { kind: 'local-compaction' },
     })
     expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
-      agentOptions: { provider: 'pinned-provider', model: 'pinned-model', maxTokens: 8_192 },
+      agentOptions: { provider: 'pinned-provider', model: 'pinned-model', maxTokens: 32_768 },
     }))
   })
 })
