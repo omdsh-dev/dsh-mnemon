@@ -897,6 +897,62 @@ describe('MnemonSettingsCard', () => {
     })))
   })
 
+  it('renders and saves an unknown Provider instance entirely from its descriptor', async () => {
+    const snapshot = {
+      status: 'ready' as const,
+      value: { storageScope: 'global' as const },
+      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
+    }
+    const scope = {
+      snapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}), unset: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}),
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+    const provider = {
+      id: 'work-account', typeId: 'vector-store', label: 'Vector Store', icon: { kind: 'glyph' as const, value: 'VS' },
+      kind: 'remote' as const, origin: 'third-party' as const, workspaceBinding: 'provider-global' as const,
+      summary: 'Independent vector memory.',
+      capabilities: { search: true, browse: true, graph: false, entities: false, related: false, remember: true, link: false, forget: false, writeMode: 'exact' as const, deletionMode: 'unsupported' as const },
+      fields: [
+        { key: 'serverUrl', label: 'Vector endpoint', scope: 'service' as const, input: 'url' as const, required: true },
+        { key: 'apiToken', label: 'Vector API token', scope: 'service' as const, input: 'secret' as const, required: true },
+        { key: 'collection', label: 'Collection', scope: 'memory' as const, input: 'text' as const, required: true },
+      ],
+    }
+    const call = vi.fn(async (channel: string, endpoint: string, payload: unknown) => {
+      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-services') return {
+        ok: true as const,
+        value: {
+          providers: [provider],
+          items: [{ providerId: 'work-account', enabled: true, configured: true, settings: { serverUrl: 'https://vectors.example' }, configuredSecrets: ['apiToken'] }],
+          generatedAt: '2026-08-30T00:00:00.000Z',
+        },
+      }
+      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-service-update') {
+        const request = payload as { settings: Record<string, string> }
+        return { ok: true as const, value: { providerId: 'work-account', enabled: true, configured: true, settings: request.settings, configuredSecrets: ['apiToken'] } }
+      }
+      if (channel === '/dsh-mnemon-pack' && endpoint === 'target') return { ok: true as const, value: { root: '/active/.mnemon', scope: 'global' } }
+      throw new Error(`unexpected ${channel} ${endpoint}`)
+    })
+
+    render(<MnemonSettingsCard scope={scope} connection={{ rpc: { call } } as ClientConnectionHandle} />)
+
+    const card = await screen.findByRole('group', { name: 'Vector Store 服务配置' })
+    expect(card.querySelector('[data-provider-icon="work-account"]')?.textContent).toBe('VS')
+    expect(within(card).getByText('Independent vector memory.')).toBeTruthy()
+    fireEvent.click(within(card).getByRole('button'))
+    const endpoint = within(card).getByRole('textbox', { name: 'Vector endpoint' })
+    expect((within(card).getByLabelText('Vector API token') as HTMLInputElement).type).toBe('password')
+    fireEvent.change(endpoint, { target: { value: 'https://vectors-v2.example' } })
+    fireEvent.click(within(card).getByRole('button', { name: '保存服务配置' }))
+
+    await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'provider-service-update', expect.objectContaining({
+      providerId: 'work-account', enabled: true, settings: { serverUrl: 'https://vectors-v2.example' },
+    })))
+  })
+
   it('edits a reusable provider service and reports its Memory Space synchronization', async () => {
     const snapshot = {
       status: 'ready' as const,

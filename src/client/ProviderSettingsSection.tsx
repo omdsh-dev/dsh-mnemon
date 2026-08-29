@@ -13,6 +13,12 @@ import css from './MnemonSettingsCard.module.css'
 import { useRequestVersion } from './use-request-version.ts'
 import type { MnemonKey, MnemonTranslate } from './locales.ts'
 import { ProviderIcon } from './ProviderIcon.tsx'
+import {
+  normalizeProviderPresentation,
+  providerFieldLabel,
+  providerOptionLabel,
+  providerSummary,
+} from './provider-presentation.ts'
 
 interface ProviderSettingsSectionProps {
   connection?: ClientConnectionHandle
@@ -46,7 +52,15 @@ const PREVIEW_CAPABILITIES: MemoryProviderDescriptor['capabilities'] = {
 }
 
 function providerPreview(provider: Pick<MemoryProviderDescriptor, 'id' | 'label' | 'kind' | 'workspaceBinding'>): MemoryProviderDescriptor {
-  return { ...provider, origin: 'third-party', summary: '', capabilities: PREVIEW_CAPABILITIES, fields: [] }
+  return {
+    ...provider,
+    icon: { kind: 'brand', value: provider.id },
+    origin: 'third-party',
+    summary: '',
+    summaryI18nKey: `overview.providerSummary.${provider.id}`,
+    capabilities: PREVIEW_CAPABILITIES,
+    fields: [],
+  }
 }
 
 const PROVIDER_PREVIEWS: MemoryProviderDescriptor[] = [
@@ -64,6 +78,10 @@ const EMPTY_PROVIDER_CATALOG: MemoryProviderServiceCatalog = {
   providers: PROVIDER_PREVIEWS,
   items: PROVIDER_PREVIEWS.map(provider => ({ providerId: provider.id, enabled: false, configured: false, settings: {}, configuredSecrets: [] })),
   generatedAt: '',
+}
+
+function withProviderPresentation(catalog: MemoryProviderServiceCatalog): MemoryProviderServiceCatalog {
+  return { ...catalog, providers: catalog.providers.map(normalizeProviderPresentation) }
 }
 
 const providerCatalogCache = new WeakMap<ClientConnectionHandle, Map<string, MemoryProviderServiceCatalog>>()
@@ -136,14 +154,6 @@ function configurationComplete(provider: MemoryProviderDescriptor, draft: Servic
   })
 }
 
-function fieldLabel(t: MnemonTranslate, field: MemoryProviderConfigField): string {
-  const labels: Record<string, MnemonKey> = {
-    endpoint: 'overview.providerEndpoint', apiKey: 'overview.providerApiKey', account: 'overview.providerAccount', mode: 'overview.providerField.mode',
-    dataPath: 'overview.providerField.dataPath', defaultDirectory: 'overview.providerField.defaultDirectory', cliPath: 'overview.providerField.cliPath',
-  }
-  return labels[field.key] === undefined ? field.label : t(labels[field.key]!)
-}
-
 function SecretVisibilityIcon({ visible }: { visible: boolean }): JSX.Element {
   return <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
     <path d="M2.3 10s2.8-4.5 7.7-4.5 7.7 4.5 7.7 4.5-2.8 4.5-7.7 4.5S2.3 10 2.3 10Z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
@@ -161,7 +171,7 @@ function ServiceField(props: {
   onChange: (value: string | number | boolean) => void
 }): JSX.Element {
   const [secretVisible, setSecretVisible] = useState(false)
-  const label = fieldLabel(props.t, props.field)
+  const label = providerFieldLabel(props.t, props.field)
   const savedSecret = props.configuredSecrets.includes(props.field.key)
   const required = props.field.required && !savedSecret
   const secret = props.field.input === 'secret'
@@ -173,8 +183,8 @@ function ServiceField(props: {
   const input = props.field.input === 'boolean'
     ? <label className={css.providerBoolean}><input aria-label={label} type="checkbox" checked={Boolean(props.value)} disabled={props.disabled} onChange={event => props.onChange(event.target.checked)} /><span>{label}</span></label>
     : props.field.input === 'select'
-      ? <label>{label}<select aria-label={label} value={String(props.value ?? '')} required={required} disabled={props.disabled} onChange={event => props.onChange(event.target.value)}>{props.field.options?.map(option => <option key={option.value} value={option.value}>{props.t(`overview.providerOption.${option.value}` as MnemonKey)}</option>)}</select></label>
-      : <label>{label}<div className={secret ? css.providerSecretInput : undefined}><input aria-label={label} type={secret ? secretVisible ? 'text' : 'password' : props.field.input === 'number' ? 'number' : props.field.input === 'url' ? 'url' : 'text'} value={displayValue} required={required} disabled={props.disabled} autoComplete={secret ? 'new-password' : undefined} placeholder={props.field.placeholder ?? (secret ? props.t('overview.providerApiKeyOptional') : undefined)} maxLength={secret ? 8000 : 2000} step={props.field.input === 'number' ? 'any' : undefined} onFocus={event => {
+      ? <label>{label}<select aria-label={label} value={String(props.value ?? '')} required={required} disabled={props.disabled} onChange={event => props.onChange(event.target.value)}>{props.field.options?.map(option => <option key={option.value} value={option.value}>{providerOptionLabel(props.t, option)}</option>)}</select></label>
+      : <label>{label}<div className={secret ? css.providerSecretInput : undefined}><input aria-label={label} type={secret ? secretVisible ? 'text' : 'password' : props.field.input === 'number' ? 'number' : props.field.input === 'url' ? 'url' : 'text'} value={displayValue} required={required} disabled={props.disabled} autoComplete={secret ? 'new-password' : undefined} placeholder={props.field.placeholder ?? (secret ? props.t('overview.providerApiKeyOptional') : undefined)} maxLength={props.field.maxLength ?? (secret ? 8000 : 2000)} min={props.field.min} max={props.field.max} pattern={props.field.pattern} step={props.field.input === 'number' ? 'any' : undefined} onFocus={event => {
         if (showingSavedMask) event.currentTarget.select()
       }} onClick={event => {
         if (showingSavedMask) event.currentTarget.select()
@@ -360,7 +370,7 @@ function ProviderPanel(props: {
   >
     <div className={css.providerRowHeader}>
       <button type="button" className={css.providerDisclosure} aria-expanded={expanded} disabled={!enabled || controlDisabled} onClick={toggleExpanded}>
-        <span className={css.providerIdentity}><ProviderIcon providerId={props.provider.id} className={css.providerMark} /><span><strong>{props.provider.label}</strong><small>{props.t(`overview.providerSummary.${props.provider.id}` as MnemonKey)}</small></span></span>
+        <span className={css.providerIdentity}><ProviderIcon providerId={props.provider.id} icon={props.provider.icon} className={css.providerMark} /><span><strong>{props.provider.label}</strong><small>{providerSummary(props.t, props.provider)}</small></span></span>
         {enabled && <i className={css.providerChevron} aria-hidden="true">›</i>}
       </button>
       <div className={css.providerEnableControl}>
@@ -392,7 +402,7 @@ export function ProviderSettingsSection(props: ProviderSettingsSectionProps): JS
     if (!quiet) setLoading(true)
     setFailed(null)
     try {
-      const next = await client.providerServices()
+      const next = withProviderPresentation(await client.providerServices())
       if (!loadRequests.isCurrent(request)) return
       cacheCatalog(props.connection, routeKey, next)
       setCatalog(next)

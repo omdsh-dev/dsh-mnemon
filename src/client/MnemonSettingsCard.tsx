@@ -480,7 +480,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
           </div>
           <details className={css.providerPanel} open>
             <summary>
-              <span className={css.providerIdentity}><ProviderIcon providerId="mnemon-native" className={css.nativeMark} /><span><strong>mnemon</strong><small>{t('config.nativeSummary')}</small></span></span>
+              <span className={css.providerIdentity}><ProviderIcon providerId="mnemon-native" icon={{ kind: 'brand', value: 'mnemon' }} className={css.nativeMark} /><span><strong>mnemon</strong><small>{t('config.nativeSummary')}</small></span></span>
               <span className={css.providerHeaderMeta}><span className={css.providerScopeTag} data-scope={activeScope}>{t(`config.${activeScope}`)}</span><span className={css.providerState}>{t('config.officialNative')}</span></span>
             </summary>
             <div className={css.providerPanelBody}>
