@@ -69,22 +69,21 @@ export const InteractionConfig: z<InteractionConfig> = z.object({
   saveAction: z.boolean().default(true),
 })
 
-const MEMORY_PROVIDER_IDS = ['mnemon-native', 'openviking', 'honcho', 'mem0', 'hindsight', 'holographic', 'retaindb', 'byterover', 'supermemory'] as const
 const MEMORY_PLACEMENT_CAPABILITIES = ['graph', 'entities', 'related', 'exact-write', 'link', 'forget'] as const
 
 const MemoryProviderConnectionSchema: z<MemoryProviderConnection> = z.dict(z.union([z.string(), z.number(), z.boolean()]))
-const MemoryPersistenceStrategySchema: z<MemoryPersistenceStrategy> = z.object({
+const MemoryPersistenceStrategySchema = z.object({
   mode: z.union(['manual', 'automatic'] as const),
-  providerId: z.union(MEMORY_PROVIDER_IDS),
+  providerId: z.string(),
   prompt: z.string(),
   rules: z.object({
-    allowedProviderIds: z.array(z.union(MEMORY_PROVIDER_IDS)),
+    allowedProviderIds: z.array(z.string()),
     dataBoundary: z.union(['allow-remote', 'local-only'] as const),
     requiredCapabilities: z.array(z.union(MEMORY_PLACEMENT_CAPABILITIES)),
     preference: z.union(['balanced', 'local-first', 'shared-first'] as const),
   }),
   providerConnections: z.dict(MemoryProviderConnectionSchema),
-})
+}) as unknown as z<MemoryPersistenceStrategy>
 
 const TaskAgentModelSchema: z<TaskAgentModelConfig> = z.object({
   mode: z.union(['inherit', 'fixed'] as const),
@@ -234,7 +233,7 @@ function resolveCustomPacks(value: CustomPackConfig[] | undefined, legacyDataDir
   return packs
 }
 
-const MEMORY_PROVIDER_ID_SET = new Set<string>(MEMORY_PROVIDER_IDS)
+const MEMORY_PROVIDER_ID = /^[a-z][a-z0-9-]{0,127}$/u
 const MEMORY_PLACEMENT_CAPABILITY_SET = new Set<string>(MEMORY_PLACEMENT_CAPABILITIES)
 const MEMORY_PLACEMENT_PREFERENCE_SET = new Set<string>(['balanced', 'local-first', 'shared-first'])
 
@@ -242,13 +241,13 @@ function resolvePersistenceStrategy(value: MemoryPersistenceStrategy | undefined
   const mode = value?.mode ?? 'manual'
   if (mode !== 'manual' && mode !== 'automatic') throw new Error(`dsh-mnemon: unsupported persistence strategy mode: ${String(mode)}`)
   const providerId = value?.providerId ?? 'mnemon-native'
-  if (!MEMORY_PROVIDER_ID_SET.has(providerId)) throw new Error(`dsh-mnemon: unsupported persistence strategy provider: ${String(providerId)}`)
+  if (!MEMORY_PROVIDER_ID.test(providerId)) throw new Error(`dsh-mnemon: invalid persistence strategy provider: ${String(providerId)}`)
   const prompt = value?.prompt?.trim() ?? ''
   if (prompt.length > 4000) throw new Error('dsh-mnemon: persistence strategy prompt is too long (max 4000 characters)')
   const configuredProviderIds = value?.rules?.allowedProviderIds
   const allowedProviderIds = [...new Set(configuredProviderIds === undefined || (configuredProviderIds.length === 0 && mode === 'manual') ? ['mnemon-native'] : configuredProviderIds)]
   if (allowedProviderIds.length === 0) throw new Error('dsh-mnemon: persistence strategy requires at least one allowed provider')
-  for (const id of allowedProviderIds) if (!MEMORY_PROVIDER_ID_SET.has(id)) throw new Error(`dsh-mnemon: unsupported persistence strategy provider: ${String(id)}`)
+  for (const id of allowedProviderIds) if (!MEMORY_PROVIDER_ID.test(id)) throw new Error(`dsh-mnemon: invalid persistence strategy provider: ${String(id)}`)
   const dataBoundary = value?.rules?.dataBoundary ?? 'allow-remote'
   if (dataBoundary !== 'allow-remote' && dataBoundary !== 'local-only') throw new Error(`dsh-mnemon: unsupported persistence data boundary: ${String(dataBoundary)}`)
   const requiredCapabilities = [...new Set(value?.rules?.requiredCapabilities ?? [])]
@@ -256,7 +255,7 @@ function resolvePersistenceStrategy(value: MemoryPersistenceStrategy | undefined
   const preference = value?.rules?.preference ?? 'balanced'
   if (!MEMORY_PLACEMENT_PREFERENCE_SET.has(preference)) throw new Error(`dsh-mnemon: unsupported persistence preference: ${String(preference)}`)
   const providerConnections = Object.fromEntries(Object.entries(value?.providerConnections ?? {}).flatMap(([id, connection]) => {
-    if (!MEMORY_PROVIDER_ID_SET.has(id) || connection === undefined) return []
+    if (!MEMORY_PROVIDER_ID.test(id) || connection === undefined) return []
     const normalized = Object.fromEntries(Object.entries(connection).filter((entry): entry is [string, string | number | boolean] => ['string', 'number', 'boolean'].includes(typeof entry[1])))
     return [[id, normalized]]
   })) as Partial<Record<MemoryProviderId, MemoryProviderConnection>>

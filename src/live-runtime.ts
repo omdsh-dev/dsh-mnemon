@@ -132,7 +132,13 @@ export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot?: strin
         disposed = true
         composableTurns?.dispose()
         generationAttachment?.release()
-        void generationAttachment?.dispose()
+        // The composable generation owns its Source-private Provider adapters,
+        // while the compatibility service owns the base adapters exposed to
+        // legacy callers. Both ownership trees must be closed exactly once.
+        void Promise.allSettled([
+          ...(generationAttachment === undefined ? [] : [generationAttachment.dispose()]),
+          service.dispose(),
+        ])
         detachReceiptSink()
         memoryTopology.dispose()
         if (!retired) extensionAttachment?.dispose()

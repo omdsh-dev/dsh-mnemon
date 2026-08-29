@@ -112,6 +112,16 @@ describe('LiveMnemonRuntime workspace routing', () => {
     runtime.dispose()
   })
 
+  it('closes the compatibility Provider data plane with its runtime graph', () => {
+    const runtime = createRuntimeGraph(resolveConfig({ storageScope: 'global', cliPath: '/fake/mnemon' }))
+    const dispose = vi.spyOn(runtime.service, 'dispose')
+
+    runtime.dispose()
+    runtime.dispose()
+
+    expect(dispose).toHaveBeenCalledTimes(1)
+  })
+
   it('combines an opt-in global USER.md with project memory under the same configured limits', async () => {
     const globalRoot = temporaryDirectory('global-user-profile')
     const projectRoot = temporaryDirectory('project-runtime')

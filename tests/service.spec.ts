@@ -349,7 +349,10 @@ describe('MnemonService', () => {
         providerId: 'openviking', enabled: false, configured: true, status: 'disabled', memoryBodyCount: 0, activeMemoryBodyCount: 0,
       })]),
     })
-    expect(service.memoryBodies.list()).toEqual([expect.objectContaining({ provider: { id: 'mnemon-native', label: 'mnemon', kind: 'local', location: expect.any(String), apiKeyConfigured: false, settings: {}, configuredSecrets: [], capabilities: expect.any(Object) } })])
+    expect(service.memoryBodies.list()).toEqual([expect.objectContaining({ provider: expect.objectContaining({
+      id: 'mnemon-native', label: 'mnemon', kind: 'local', origin: 'native',
+      location: expect.any(String), apiKeyConfigured: false, settings: {}, configuredSecrets: [], capabilities: expect.any(Object),
+    }) })])
     await expect(service.search({ query: 'anything', memoryBodyIds: [body.id] })).rejects.toThrow('unknown memory body')
   })
 

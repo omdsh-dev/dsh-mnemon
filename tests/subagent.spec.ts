@@ -867,28 +867,29 @@ describe('Mnemon memory subagent coordinator', () => {
 
   it('selects a provider in a tool-free child and keeps user policy out of the persona', async () => {
     const host = subagents({
-      providerId: 'openviking',
+      providerId: 'work-account',
       reason: 'A shared remote scope matches this team knowledge body.',
       confidence: 'high',
     })
-    const coordinator = createCoordinator(host.value)
+    const resultTools = toolRegistry()
+    const coordinator = new MnemonSubagentCoordinator(host.value, undefined, undefined, resultTools.value)
     const placementCandidates: MemoryPlacementCandidate[] = [
       {
         id: 'mnemon-native', label: 'Mnemon Native', kind: 'local', configured: true, summary: 'Local exact memory.',
         capabilities: { search: true, browse: true, graph: true, entities: true, related: true, remember: true, link: true, forget: true, writeMode: 'exact', deletionMode: 'soft' },
       },
       {
-        id: 'openviking', label: 'OpenViking', kind: 'remote', configured: true, summary: 'Shared extracting memory.',
+        id: 'work-account', label: 'Work Vector Store', kind: 'remote', configured: true, summary: 'Shared extracting memory.',
         capabilities: { search: true, browse: true, graph: false, entities: false, related: false, remember: true, link: false, forget: false, writeMode: 'async-extracting', deletionMode: 'hard' },
       },
     ]
-    const prepared = prepareMemoryPlacement({ mode: 'automatic', prompt: '团队知识优先 OpenViking。' }, placementCandidates)
+    const prepared = prepareMemoryPlacement({ mode: 'automatic', prompt: '团队知识优先团队 Provider。' }, placementCandidates)
 
     await expect(coordinator.placeProvider(parent(), {
       name: '团队发布经验',
       description: '跨成员共享发布门禁与回滚经验。',
     }, prepared, new AbortController().signal)).resolves.toMatchObject({
-      providerId: 'openviking',
+      providerId: 'work-account',
       decidedBy: 'llm',
       runId: 'child-run-1',
     })
@@ -899,9 +900,11 @@ describe('Mnemon memory subagent coordinator', () => {
       persona: expect.stringContaining('host-filtered eligible list'),
     }))
     const request = (host.start.mock.calls[0] as unknown as [string, { prompt: Array<{ text: string }>; persona: string }])[1]
-    expect(request.prompt[0]!.text).toContain('团队知识优先 OpenViking。')
-    expect(request.persona).not.toContain('团队知识优先 OpenViking。')
+    expect(request.prompt[0]!.text).toContain('团队知识优先团队 Provider。')
+    expect(request.persona).not.toContain('团队知识优先团队 Provider。')
     expect(request.persona).not.toMatch(/api.?key|endpoint|secret/iu)
+    expect((resultTools.definitions[0] as unknown as { parameters: { properties: { providerId: { enum: string[] } } } }).parameters.properties.providerId.enum)
+      .toEqual(['mnemon-native', 'work-account'])
     expect(coordinator.snapshot()).toMatchObject({ placements: 1, lastOperation: 'placement' })
   })
 

@@ -18,7 +18,6 @@ import {
 } from './runtime-memory.ts'
 import { mutationResultCommitted, type EdgeType, type Insight, type MemoryBodyMetadataSample, type MnemonService, type RememberRequest, type SearchRequest } from './service.ts'
 import { finalizeLlmPlacement, rulesOnlyPlacement, type PreparedMemoryPlacement } from './provider-placement.ts'
-import { MEMORY_PROVIDER_IDS } from './providers/catalog.ts'
 import type { MemoryBodyMetadataMaintenanceResult, MemoryBodyMetadataUpdate, MemoryPlacementDecision, SubagentCounters } from './shared/contracts.ts'
 import type { MemoryMigrationLineage, MemoryTurnContext } from '../packages/contracts/src/index.ts'
 import type { MnemonAgentRuntimeSource, MnemonRuntimeGraph } from './live-runtime.ts'
@@ -179,15 +178,19 @@ const ANSWER_SCHEMA = {
   required: ['answer', 'citations'],
 } as const
 
-const PROVIDER_PLACEMENT_SCHEMA = {
-  type: 'object',
-  properties: {
-    providerId: { type: 'string', enum: [...MEMORY_PROVIDER_IDS] },
-    reason: { type: 'string' },
-    confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
-  },
-  required: ['providerId', 'reason', 'confidence'],
-} as const
+function providerPlacementSchema(providerIds: readonly string[]) {
+  const eligible = [...new Set(providerIds)]
+  if (eligible.length === 0) throw new Error('provider placement schema requires an eligible Provider')
+  return {
+    type: 'object',
+    properties: {
+      providerId: { type: 'string', enum: eligible },
+      reason: { type: 'string' },
+      confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+    },
+    required: ['providerId', 'reason', 'confidence'],
+  } as const
+}
 
 const METADATA_MAINTENANCE_SCHEMA = {
   type: 'object',
@@ -1215,7 +1218,8 @@ export class MnemonSubagentCoordinator {
       `Eligible Provider context (host-filtered run data):\n${indentedText(prepared.selectorBrief)}`,
       'Select the best eligible provider now.',
     ].join('\n\n')
-    const { provider, runId, result } = await this.delegate(parent, 'placement', 'Choose Memory Space provider', prompt, [], PROVIDER_PLACEMENT_SCHEMA, signal, 'spawn', PROVIDER_PLACEMENT_PERSONA)
+    const schema = providerPlacementSchema(prepared.candidates.map(candidate => candidate.id))
+    const { provider, runId, result } = await this.delegate(parent, 'placement', 'Choose Memory Space provider', prompt, [], schema, signal, 'spawn', PROVIDER_PLACEMENT_PERSONA)
     const value = object(result.structured)
     return finalizeLlmPlacement(prepared, {
       providerId: typeof value.providerId === 'string' ? value.providerId : '',

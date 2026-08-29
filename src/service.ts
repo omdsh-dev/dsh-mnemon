@@ -13,7 +13,7 @@ import {
 import type { MnemonRunner } from './runner.ts'
 import type { AuthorityCommitRecorder } from './memory-receipts.ts'
 import { finalizeLlmPlacement, prepareMemoryPlacement, rulesOnlyPlacement, type LlmMemoryPlacementSelection, type PreparedMemoryPlacement } from './provider-placement.ts'
-import { MEMORY_PROVIDER_CATALOG, memoryProviderDescriptor } from './providers/catalog.ts'
+import { BUILTIN_MEMORY_PROVIDER_CATALOG, MemoryProviderCatalog } from './providers/catalog.ts'
 import { NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter, type ProviderBodyStatus, type ProviderSearchResult } from './providers/provider.ts'
 import { memoryProviderAdapterFactories, type MemoryProviderAdapterRegistry } from './providers/registry.ts'
 import { lexicalRequiredMatchCount, lexicalSearchTokens, lexicalTokenMatchCount } from './search-tokens.ts'
@@ -48,6 +48,7 @@ import {
   type MemoryListView,
   type MnemonEmbeddingStatus,
   type MemoryPlacementDecision,
+  type MemoryProviderDescriptor,
   type MemoryReadMode,
   type MemoryReadSource,
   type MemoryReadStatus,
@@ -401,6 +402,22 @@ export class MnemonService {
   private readonly providers: Map<MemoryBody['provider']['id'], MemoryProviderAdapter>
   private readonly recallQualityPolicy: RecallQualityPolicy
   private bodiesInFlight: Promise<MemoryBodyCatalog> | undefined
+  private providersDisposed = false
+
+  private providerTypeId(providerId: string): string {
+    // Preserve prototype-based test doubles and subclasses compiled against
+    // the pre-catalog constructor while keeping real runtimes explicit.
+    const descriptor = (this.providerCatalog ?? BUILTIN_MEMORY_PROVIDER_CATALOG).descriptor(providerId)
+    return descriptor.typeId ?? descriptor.id
+  }
+
+  private isNativeProvider(providerId: string): boolean {
+    return this.providerTypeId(providerId) === 'mnemon-native'
+  }
+
+  private isNativeBody(body: MemoryBody): boolean {
+    return (body.provider.typeId ?? body.provider.id) === 'mnemon-native'
+  }
 
   constructor(
     readonly runner: MnemonRunner,
@@ -409,8 +426,11 @@ export class MnemonService {
     private readonly recallQualityPolicyRegistry: RecallQualityPolicyRegistry = recallQualityPolicies,
     providerAdapterRegistry: MemoryProviderAdapterRegistry = memoryProviderAdapterFactories,
     private readonly recordCommit?: AuthorityCommitRecorder,
+    private readonly providerCatalog: MemoryProviderCatalog = BUILTIN_MEMORY_PROVIDER_CATALOG,
   ) {
-    this.memoryBodies = memoryBodies ?? new MemoryBodyRegistry(runner)
+    this.memoryBodies = memoryBodies === undefined
+      ? new MemoryBodyRegistry(runner, runner.commandFound, () => new Date(), providerCatalog)
+      : providerCatalog === BUILTIN_MEMORY_PROVIDER_CATALOG ? memoryBodies : memoryBodies.withProviderCatalog(providerCatalog)
     this.recallQualityPolicy = recallQualityPolicyRegistry.resolve(config.recallQuality.policy)
     const nativeProvider: MemoryProviderAdapter = {
       id: 'mnemon-native',
@@ -433,7 +453,13 @@ export class MnemonService {
    * The Provider registry is supplied by the Memory Spaces parent Fiber and is
    * never published as a Cordis Context service.
    */
-  withProviderAdapterRegistry(providerAdapterRegistry: MemoryProviderAdapterRegistry): MnemonService {
+  withProviderAdapterRegistry(providerAdapterRegistry: MemoryProviderAdapterRegistry, descriptors?: readonly MemoryProviderDescriptor[]): MnemonService {
+    const providerCatalog = descriptors === undefined
+      ? this.providerCatalog
+      // A Source-private Provider snapshot is the complete explicit child
+      // composition for that generation. Never inherit Providers merely
+      // because the compatibility Host service happens to know them.
+      : new MemoryProviderCatalog(descriptors)
     return new MnemonService(
       this.runner,
       this.config,
@@ -441,7 +467,24 @@ export class MnemonService {
       this.recallQualityPolicyRegistry,
       providerAdapterRegistry,
       this.recordCommit,
+      providerCatalog,
     )
+  }
+
+  /** Release clients owned by one composable Memory Spaces generation. */
+  async dispose(): Promise<void> {
+    if (this.providersDisposed) return
+    this.providersDisposed = true
+    const failures: unknown[] = []
+    for (const provider of [...this.providers.values()].reverse()) {
+      try {
+        await provider.dispose?.()
+      } catch (error) {
+        failures.push(error)
+      }
+    }
+    this.providers.clear()
+    if (failures.length > 0) throw new AggregateError(failures, 'Memory Space Provider disposal failed')
   }
 
   async bodies(signal?: AbortSignal): Promise<MemoryBodyCatalog> {
@@ -481,14 +524,15 @@ export class MnemonService {
   bodyDirectory(): MemoryBodyCatalog {
     const mnemonDefaultStore = this.runner.persistedStore()
     const items: MemoryBodyView[] = this.memoryBodies.list().map(body => {
-      const providerEnabled = body.provider.id === 'mnemon-native' || this.memoryBodies.providerServiceEnabled(body.provider.id)
-      return { ...body, providerEnabled, mnemonDefault: body.provider.id === 'mnemon-native' && body.id === mnemonDefaultStore, healthy: false, statusLoading: true }
+      const nativeProvider = this.isNativeBody(body)
+      const providerEnabled = nativeProvider || this.memoryBodies.providerServiceEnabled(body.provider.id)
+      return { ...body, providerEnabled, mnemonDefault: nativeProvider && body.id === mnemonDefaultStore, healthy: false, statusLoading: true }
     })
     return {
       items,
-      providers: MEMORY_PROVIDER_CATALOG.map(provider => ({
+      providers: this.providerCatalog.providers.map(provider => ({
         ...provider,
-        serviceConfigured: provider.id === 'mnemon-native' || this.memoryBodies.providerServiceEnabled(provider.id),
+        serviceConfigured: (provider.typeId ?? provider.id) === 'mnemon-native' || this.memoryBodies.providerServiceEnabled(provider.id),
       })),
       persistenceStrategy: {
         mode: this.config.persistenceStrategy.mode,
@@ -528,12 +572,13 @@ export class MnemonService {
     const active = catalog.items.filter(body => body.active && body.providerEnabled !== false)
     const dshActiveStores = active.map(body => body.id)
     const providerServices = this.memoryBodies.providerServices().items.map(service => {
-      const descriptor = memoryProviderDescriptor(service.providerId)
+      const descriptor = this.providerCatalog.descriptor(service.providerId)
       const bodies = catalog.items.filter(body => body.provider.id === service.providerId)
       const activeBodies = bodies.filter(body => body.active && body.providerEnabled !== false)
       return {
         providerId: service.providerId,
         label: descriptor.label,
+        ...(descriptor.icon === undefined ? {} : { icon: descriptor.icon }),
         enabled: service.enabled,
         configured: service.configured,
         status: !service.enabled ? 'disabled' as const : 'idle' as const,
@@ -590,7 +635,7 @@ export class MnemonService {
   }
 
   async status(signal?: AbortSignal): Promise<StatusView> {
-    const hasNativeBody = this.memoryBodies.list().some(body => body.provider.id === 'mnemon-native')
+    const hasNativeBody = this.memoryBodies.list().some(body => this.isNativeBody(body))
     let versionError: unknown
     const [catalog, rawVersion] = await Promise.all([
       this.bodies(signal),
@@ -604,7 +649,7 @@ export class MnemonService {
     const active = catalog.items.filter(body => body.active && body.providerEnabled !== false)
     const dshActiveStores = active.map(body => body.id)
     const providerServices = this.memoryBodies.providerServices().items.map(service => {
-      const descriptor = memoryProviderDescriptor(service.providerId)
+      const descriptor = this.providerCatalog.descriptor(service.providerId)
       const bodies = catalog.items.filter(body => body.provider.id === service.providerId)
       const activeBodies = bodies.filter(body => body.active && body.providerEnabled !== false)
       const failed = activeBodies.filter(body => !body.healthy)
@@ -618,6 +663,7 @@ export class MnemonService {
       return {
         providerId: service.providerId,
         label: descriptor.label,
+        ...(descriptor.icon === undefined ? {} : { icon: descriptor.icon }),
         enabled: service.enabled,
         configured: service.configured,
         status,
@@ -676,7 +722,7 @@ export class MnemonService {
   async reconnectBody(id: string, signal?: AbortSignal): Promise<MemoryBodyView> {
     const body = this.memoryBodies.list().find(candidate => candidate.id === id)
     if (body === undefined) throw new Error(`unknown memory body: ${id}`)
-    if (body.provider.id !== 'mnemon-native') {
+    if (!this.isNativeBody(body)) {
       if (!this.memoryBodies.providerServiceEnabled(body.provider.id)) throw new Error(`${body.provider.label} is disabled in Settings`)
     }
     // Card-level reconnect is deliberately scoped to this projected namespace.
@@ -687,7 +733,7 @@ export class MnemonService {
     return {
       ...body,
       providerEnabled: true,
-      mnemonDefault: body.provider.id === 'mnemon-native' && body.id === this.runner.persistedStore(),
+      mnemonDefault: this.isNativeBody(body) && body.id === this.runner.persistedStore(),
       ...status,
     }
   }
@@ -765,7 +811,7 @@ export class MnemonService {
     ))
     if (recoveryPlan !== undefined && !hasRecoveryEvidence) {
       batches = await Promise.all(batches.map(async batch => {
-        if (batch.body.provider.id !== 'mnemon-native' || batch.source.status === 'unsupported' || batch.source.status === 'unavailable') return batch
+        if (!this.isNativeBody(batch.body) || batch.source.status === 'unsupported' || batch.source.status === 'unavailable') return batch
         try {
           const provider = this.providerFor(batch.body)
           const recovered = await provider.search(batch.body, {
@@ -838,10 +884,10 @@ export class MnemonService {
     const limit = 6
     let method: MemoryBodyMetadataSample['method']
     let items: Insight[]
-    if (body.provider.id === 'mnemon-native') {
+    if (this.isNativeBody(body)) {
       method = 'native-basic'
       items = await this.nativeMetadataSample(body, limit, signal)
-    } else if (METADATA_SEARCH_FIRST_PROVIDERS.has(body.provider.id) || !body.provider.capabilities.browse) {
+    } else if (METADATA_SEARCH_FIRST_PROVIDERS.has(body.provider.typeId ?? body.provider.id) || !body.provider.capabilities.browse) {
       method = 'search'
       const query = (body.description.trim() || body.name.trim()).slice(0, 400)
       items = (await provider.search(body, { query, mode: 'basic', limit }, signal)).results
@@ -1018,7 +1064,7 @@ export class MnemonService {
       const batchWriter = provider.rememberMany
       const batch = batchWriter === undefined
         ? []
-        : group.filter(entry => body.provider.id !== 'mnemon-native' || entry.request.content.length <= 8_000)
+        : group.filter(entry => !this.isNativeBody(body) || entry.request.content.length <= 8_000)
       if (batchWriter !== undefined && batch.length > 0) {
         const written = await batchWriter(body, batch.map(entry => entry.request), signal)
         if (written.length !== batch.length) throw new Error(`batch remember did not return one receipt per request for Memory Space ${body.id}`)
@@ -1035,7 +1081,7 @@ export class MnemonService {
         providerChanged ||= mutationResultCommitted(result)
       }
       if (this.activateAfterWrite(body, providerChanged)) {
-        this.recordMemoryCommit('memory-space-remember-batch', body.provider.id === 'mnemon-native' && batch.length > 0 ? 'import' : 'write', [body.id])
+        this.recordMemoryCommit('memory-space-remember-batch', this.isNativeBody(body) && batch.length > 0 ? 'import' : 'write', [body.id])
       }
     }
 
@@ -1111,7 +1157,7 @@ export class MnemonService {
       return this.createBody({
         ...body,
         providerId: strategy.providerId,
-        ...(strategy.providerId === 'mnemon-native' || connection === undefined ? {} : { connection }),
+        ...(this.isNativeProvider(strategy.providerId) || connection === undefined ? {} : { connection }),
       }, signal)
     }
 
@@ -1132,7 +1178,7 @@ export class MnemonService {
 
   async updateProviderService(providerId: MemoryBody['provider']['id'], settings: Record<string, string | number | boolean>, clearSecrets: readonly string[] = [], enabled = true, signal?: AbortSignal) {
     this.assertWritable()
-    if (providerId === 'mnemon-native') throw new Error('Mnemon Native service settings are managed by the native configuration')
+    if (this.isNativeProvider(providerId)) throw new Error('Mnemon Native service settings are managed by the native configuration')
     if (!enabled) {
       const service = this.memoryBodies.updateProviderService(providerId, settings, clearSecrets, false)
       this.recordMemoryCommit('memory-provider-service-update', 'maintain')
@@ -1140,7 +1186,7 @@ export class MnemonService {
     }
     const connection = this.memoryBodies.resolveProviderService(providerId, settings, clearSecrets)
     const provider = this.providers.get(providerId)
-    if (provider?.discover === undefined) throw new Error(`${memoryProviderDescriptor(providerId).label} does not support Memory Space discovery`)
+    if (provider?.discover === undefined) throw new Error(`${this.providerCatalog.descriptor(providerId).label} does not support Memory Space discovery`)
     const discovered = await provider.discover(connection, signal)
     const service = this.memoryBodies.syncProviderService(providerId, connection, discovered)
     this.recordMemoryCommit('memory-provider-service-update', 'maintain')
@@ -1171,12 +1217,12 @@ export class MnemonService {
   async mergeBodies(targetBodyId: string, sourceBodyIds: string[], deactivateSources = true, signal?: AbortSignal): Promise<JsonValue> {
     this.assertWritable()
     const target = this.memoryBodies.get(targetBodyId)
-    if (target.provider.id !== 'mnemon-native') throw new Error('memory-body merge currently requires a Mnemon Native target')
+    if (!this.isNativeBody(target)) throw new Error('memory-body merge currently requires a Mnemon Native target')
     const sourceIds = [...new Set(sourceBodyIds.map(id => id.trim()).filter(id => id !== ''))]
     if (sourceIds.length === 0) throw new Error('sourceMemoryBodyIds requires at least one memory body')
     if (sourceIds.includes(target.id)) throw new Error('target memory body cannot also be a merge source')
     const sources = sourceIds.map(id => this.memoryBodies.get(id))
-    if (sources.some(source => source.provider.id !== 'mnemon-native')) throw new Error('memory-body merge currently supports Mnemon Native sources only')
+    if (sources.some(source => !this.isNativeBody(source))) throw new Error('memory-body merge currently supports Mnemon Native sources only')
     const insights: Array<Record<string, JsonValue>> = []
     const edges: Array<Record<string, JsonValue>> = []
     for (const source of sources) {
@@ -1415,7 +1461,7 @@ export class MnemonService {
     return requested.map(id => {
       const body = this.memoryBodies.get(id)
       if (!body.active) throw new Error(`memory body is not active for reading: ${id}`)
-      if (body.provider.id !== 'mnemon-native' && !this.memoryBodies.providerServiceEnabled(body.provider.id)) throw new Error(`${body.provider.label} is disabled in Settings`)
+      if (!this.isNativeBody(body) && !this.memoryBodies.providerServiceEnabled(body.provider.id)) throw new Error(`${body.provider.label} is disabled in Settings`)
       return body
     })
   }
@@ -1424,7 +1470,7 @@ export class MnemonService {
     if (id !== undefined && id.trim() !== '') {
       const body = this.memoryBodies.get(id)
       if (!body.active) throw new Error(`memory body is not active for reading: ${body.id}`)
-      if (body.provider.id !== 'mnemon-native' && !this.memoryBodies.providerServiceEnabled(body.provider.id)) throw new Error(`${body.provider.label} is disabled in Settings`)
+      if (!this.isNativeBody(body) && !this.memoryBodies.providerServiceEnabled(body.provider.id)) throw new Error(`${body.provider.label} is disabled in Settings`)
       return body
     }
     const active = this.memoryBodies.active()
@@ -1435,7 +1481,7 @@ export class MnemonService {
   private writeBody(id?: string): MemoryBody {
     if (id !== undefined && id.trim() !== '') {
       const body = this.memoryBodies.get(id)
-      if (body.provider.id !== 'mnemon-native' && !this.memoryBodies.providerServiceEnabled(body.provider.id)) throw new Error(`${body.provider.label} is disabled in Settings`)
+      if (!this.isNativeBody(body) && !this.memoryBodies.providerServiceEnabled(body.provider.id)) throw new Error(`${body.provider.label} is disabled in Settings`)
       return body
     }
     const active = this.memoryBodies.active()
@@ -1474,13 +1520,20 @@ export class MnemonService {
       memoryBodyId: body.id,
       memoryBodyName: body.name,
       memoryProviderId: body.provider.id,
+      memoryProviderLabel: body.provider.label,
       memoryCapabilities: body.provider.capabilities,
     }
   }
 
   private annotateResult(result: JsonValue, body: MemoryBody): JsonValue {
     const value = record(result)
-    return value === undefined ? result : { ...value, memoryBodyId: body.id, memoryBodyName: body.name, memoryProviderId: body.provider.id }
+    return value === undefined ? result : {
+      ...value,
+      memoryBodyId: body.id,
+      memoryBodyName: body.name,
+      memoryProviderId: body.provider.id,
+      memoryProviderLabel: body.provider.label,
+    }
   }
 
   private activateAfterWrite(body: MemoryBody, providerChanged: boolean): boolean {

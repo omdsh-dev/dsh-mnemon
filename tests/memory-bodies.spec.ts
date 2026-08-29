@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveConfig } from '../src/config.ts'
 import { MemoryBodyRegistry } from '../src/memory-bodies.ts'
 import type { ProcessRunner } from '../src/process.ts'
+import { MemoryProviderCatalog } from '../src/providers/catalog.ts'
 import { createRunner } from '../src/runner.ts'
 
 const temporaryDirectories: string[] = []
@@ -244,6 +245,29 @@ describe('MemoryBodyRegistry', () => {
     expect(stored.services.openviking).toMatchObject({ endpoint: 'http://127.0.0.1:1933', apiKey: 'service-secret' })
     expect(stored.enabled.openviking).toBe(true)
     expect(stored.bodies[0].connection).toEqual({ targetUri: 'viking://user/team/memories', user: 'alice', actorPeerId: 'dsh' })
+  })
+
+  it('derives third-party card location from its descriptor instead of built-in field names', async () => {
+    const dataDir = temporaryDirectory()
+    const runner = createRunner(resolveConfig({ cliPath: '/fake/mnemon', dataDir }), vi.fn<ProcessRunner>())
+    const catalog = new MemoryProviderCatalog([{
+      id: 'vector-store', label: 'Vector Store', kind: 'remote', workspaceBinding: 'provider-global',
+      summary: 'Fixture vector store.', origin: 'third-party',
+      capabilities: {
+        search: true, browse: true, graph: false, entities: false, related: false,
+        remember: true, link: false, forget: false, writeMode: 'exact', deletionMode: 'unsupported',
+      },
+      fields: [
+        { key: 'serverUrl', label: 'Server', scope: 'service', input: 'url', required: true },
+        { key: 'collection', label: 'Collection', scope: 'memory', input: 'text', required: true },
+      ],
+    }])
+    const registry = new MemoryBodyRegistry(runner, true, () => new Date('2026-08-30T00:00:00.000Z'), catalog)
+    registry.updateProviderService('vector-store', { serverUrl: 'https://vectors.example' })
+
+    await expect(registry.create({
+      name: 'Vectors', description: 'Independent plugin namespace.', providerId: 'vector-store', connection: { collection: 'alpha' },
+    })).resolves.toMatchObject({ provider: { id: 'vector-store', location: 'https://vectors.example' } })
   })
 
   it('keeps third-party providers off by default and removes local Memory Space projections when disabled', async () => {
