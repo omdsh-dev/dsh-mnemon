@@ -113,10 +113,9 @@ describe('interaction surfaces binding', () => {
   it('registers both remaining interaction surfaces by default', async () => {
     const { ctx, injects, activeRegistrations } = makeCtx({})
     apply(ctx)
-    // The standalone sidebar workspace does not occupy conversation.view; the
-    // Both supported interaction surfaces register from the ready default.
+    // The sidebar row is now only a launcher for the same canonical view.
     expect(injects).toContain('settings.section')
-    expect(injects).not.toContain('conversation.view')
+    await waitFor(() => expect(injects).toContain('conversation.view'))
     await waitFor(() => expect(activeRegistrations()).toEqual(expect.arrayContaining(['conversation.chat.turnTail', 'mnemon-save'])))
     expect(activeRegistrations()).not.toEqual(expect.arrayContaining(TOOLVIEW_KEYS))
   })

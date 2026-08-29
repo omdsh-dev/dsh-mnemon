@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { createContext, Fragment, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { IconChevronLeftOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { consumeMnemonAnchor, subscribeMnemonAnchor, type MnemonAnchor } from './anchor.ts'
 import Markdown from 'markdown-to-jsx'
 import {
@@ -13,6 +14,7 @@ import {
   type DocumentView,
   type EntityView,
   type Insight,
+  type JsonValue,
   type MemoryBodyCatalog,
   type MemoryBodyMetadataUpdate,
   type MemoryBodyProvider,
@@ -28,7 +30,8 @@ import {
   type MemoryProviderId,
   type MemoryProviderRuntimeStatus,
   type MemoryReadSource,
-  type MnemonDisplayMode,
+  type MemorySourceManagementCatalog,
+  type MemorySourceManagementInstance,
   type RuntimeMemoryEntry,
   type RuntimeMemoryImportance,
   type RuntimeMemorySnapshot,
@@ -47,7 +50,23 @@ import { translateZh, type MnemonKey, type MnemonTranslate } from './locales.ts'
 import { MnemonDialog, type MnemonDialogProps } from './MnemonDialog.tsx'
 import { ProviderIcon } from './ProviderIcon.tsx'
 import { useRequestVersion } from './use-request-version.ts'
-import { appearanceClass } from './view-styles.ts'
+import {
+  BUILTIN_MEMORY_SOURCE_TYPE_ID_SET,
+  BUILTIN_MEMORY_SOURCE_PAGE_ID_SET,
+  BUILTIN_MEMORY_SOURCE_PAGE_IDS,
+  MNEMON_SOURCE_CONFIGURATION_MUTATE,
+  MNEMON_SOURCE_CONFIGURATION_READ,
+  type MemorySourcePageDirectory,
+  type MemorySourcePageEntry,
+} from './source-pages.tsx'
+import type { MnemonSourceManagementClient } from './dsh-compat.ts'
+import {
+  appearanceClass,
+  MnemonViewAppearanceProvider,
+  resolveMnemonViewAppearance,
+  useMnemonViewAppearance,
+  type MnemonViewSurface,
+} from './MnemonViewAppearance.tsx'
 import css from './MnemonView.module.css'
 import sidebarCss from './MnemonSidebarView.module.css'
 
@@ -62,6 +81,8 @@ export interface MnemonViewProps {
   t?: MnemonTranslate
   locale?: string
   onClose?: () => void
+  sourcePageDirectory?: MemorySourcePageDirectory
+  renderSlot?: PropsRenderSlots<'mnemon.source.page'>['renderSlot']
 }
 
 export interface MnemonWorkspaceSelection {
@@ -72,7 +93,9 @@ export interface MnemonWorkspaceSelection {
   onAlign(): void
 }
 
-type Page = Exclude<MnemonAnchor['page'], 'remember'>
+type SourcePage = `source:${string}`
+type ManagedSourcePage = `source-management:${string}`
+type Page = 'overview' | 'runtime' | 'documents' | 'explore' | 'entities' | 'remember' | 'list' | 'status' | SourcePage | ManagedSourcePage
 type SidebarMemoryPage = Extract<Page, 'overview' | 'explore' | 'list' | 'entities'>
 type MemoryPlacementMode = 'manual' | 'automatic'
 type ProviderDrafts = Partial<Record<MemoryProviderId, MemoryProviderConnection>>
@@ -221,6 +244,29 @@ const MEMORY_PAGE_TABS: Array<{ id: SidebarMemoryPage; label: MnemonKey }> = [
 const MEMORY_PAGES = new Set<Page>(MEMORY_PAGE_TABS.map(item => item.id))
 type ConfigurableMemoryLayerId = 'runtime' | 'documents' | 'memory-spaces'
 
+const EMPTY_SOURCE_PAGE_SNAPSHOT: readonly MemorySourcePageEntry[] = Object.freeze([])
+const EMPTY_SOURCE_MANAGEMENT_FIELDS: NonNullable<MemorySourceManagementInstance['management']['fields']> = []
+const EMPTY_SOURCE_PAGE_DIRECTORY: MemorySourcePageDirectory = {
+  getSnapshot: () => EMPTY_SOURCE_PAGE_SNAPSHOT,
+  subscribe: () => () => {},
+}
+
+function sourcePage(entryId: string): SourcePage {
+  return `source:${entryId}`
+}
+
+function sourcePageEntryId(page: Page): string | undefined {
+  return page.startsWith('source:') ? page.slice('source:'.length) : undefined
+}
+
+function managedSourcePage(sourceTypeId: string): ManagedSourcePage {
+  return `source-management:${sourceTypeId}`
+}
+
+function managedSourceTypeId(page: Page): string | undefined {
+  return page.startsWith('source-management:') ? page.slice('source-management:'.length) : undefined
+}
+
 function pageLayer(page: Page): ConfigurableMemoryLayerId | undefined {
   if (page === 'runtime') return 'runtime'
   if (page === 'documents') return 'documents'
@@ -258,6 +304,25 @@ function humanBytes(bytes: number): string {
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function bindSourceManagementClient(client: MnemonClient, instance: MemorySourceManagementInstance): MnemonSourceManagementClient {
+  return {
+    sourceInstanceKey: instance.sourceInstanceKey,
+    revision: instance.revision,
+    read: (operation, input = null) => client.readSourceManagement(instance.sourceInstanceKey, operation, input),
+    mutate: (operation, input, options) => client.mutateSourceManagement(
+      instance.sourceInstanceKey,
+      operation,
+      input,
+      options.expectedRevision ?? instance.revision,
+      options.confirmed,
+    ),
+  }
+}
+
+function jsonRecord(value: JsonValue): Record<string, JsonValue> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value : undefined
 }
 
 function parseBranchesInput(raw: string): string[] | undefined {
@@ -348,20 +413,39 @@ function ReadSourcePanel(props: {
   </section>
 }
 
-/** The memory workspace mirrors the SSH panel's flat tab model. */
-function WorkspaceNavigation(props: { page: Page; onSelect: (page: Page) => void; layers: Record<ConfigurableMemoryLayerId, boolean | undefined> }): JSX.Element {
+/** Sidebar mirrors the SSH panel's flat tab model; Buildin keeps the grouped navigation unchanged. */
+interface SourceNavigationEntry {
+  id: string
+  page: SourcePage | ManagedSourcePage
+  label: string
+  detail: string
+}
+
+function WorkspaceNavigation(props: { page: Page; onSelect: (page: Page) => void; sourcePages: readonly SourceNavigationEntry[]; activeBodies: number; bodyCount: number; catalogKnown: boolean; activationEnabled: boolean; writeEnabled: boolean; layers: Record<ConfigurableMemoryLayerId, boolean | undefined> }): JSX.Element {
   const t = useT()
   return (
-    <div className={appearanceClass(css.topNavigation, sidebarCss.topNavigation)}>
-      <div className={appearanceClass(css.nav, sidebarCss.nav)} role="tablist" aria-label={t('nav.aria')}>
-        {SIDEBAR_PAGE_TABS.map(item => {
-          const active = item.id === 'overview' ? isMemoryPage(props.page) : props.page === item.id
-          const layer = pageLayer(item.id)
-          const disabled = layer !== undefined && props.layers[layer] === false
-          const label = t(item.label)
-          return <button key={item.id} type="button" role="tab" aria-selected={active} data-active={active ? '' : undefined} data-layer-disabled={disabled ? '' : undefined} aria-label={disabled ? `${label} · ${t('layers.disabledBadge')}` : undefined} onClick={() => props.onSelect(item.id)}><span>{label}</span>{disabled && <em className={css.layerDisabledBadge}>{t('layers.disabledBadge')}</em>}</button>
-        })}
-      </div>
+    <div className={appearanceClass(css.topNavigation, appearance.classes.topNavigation)}>
+      {appearance.surface === 'sidebar'
+        ? <div className={appearanceClass(css.nav, appearance.classes.nav)} role="tablist" aria-label={t('nav.aria')}>
+          {SIDEBAR_PAGE_TABS.map(item => {
+            const active = item.id === 'overview' ? isMemoryPage(props.page) : props.page === item.id
+            const layer = pageLayer(item.id)
+            const disabled = layer !== undefined && props.layers[layer] === false
+            const label = t(item.label)
+            return <button key={item.id} type="button" role="tab" aria-selected={active} data-active={active ? '' : undefined} data-layer-disabled={disabled ? '' : undefined} aria-label={disabled ? `${label} · ${t('layers.disabledBadge')}` : undefined} onClick={() => props.onSelect(item.id)}><span>{label}</span>{disabled && <em className={css.layerDisabledBadge}>{t('layers.disabledBadge')}</em>}</button>
+          })}
+          {props.sourcePages.map(item => {
+            const active = props.page === item.page
+            return <button key={item.id} type="button" role="tab" aria-selected={active} data-active={active ? '' : undefined} onClick={() => props.onSelect(item.page)}><span>{item.label}</span></button>
+          })}
+        </div>
+        : <nav className={appearanceClass(css.nav, appearance.classes.nav)} aria-label={t('nav.aria')}>
+          {PAGE_NAV.map((group, groupIndex) => <Fragment key={group.aria}><div className={appearanceClass(css.navGroup, appearance.classes.navGroup)} role="group" aria-label={t(group.aria)}>{group.entries.map(item => <button key={item.id} type="button" aria-current={props.page === item.id ? 'page' : undefined} onClick={() => props.onSelect(item.id)}>{appearance.showNavigationGlyphs && <span className={css.navGlyph} aria-hidden="true">{item.glyph}</span>}<span><strong>{t(item.label)}</strong>{appearance.showNavigationDetails && <small>{t(item.detail)}</small>}</span></button>)}</div>{appearance.showNavigationDividers && groupIndex < PAGE_NAV.length - 1 && <span className={css.navGroupDivider} aria-hidden="true" />}</Fragment>)}
+          {props.sourcePages.length > 0 && <><span className={css.navGroupDivider} aria-hidden="true" /><div className={appearanceClass(css.navGroup, appearance.classes.navGroup)} role="group" aria-label={t('nav.group.sources')}>{props.sourcePages.map(item => {
+            return <button key={item.id} type="button" aria-current={props.page === item.page ? 'page' : undefined} onClick={() => props.onSelect(item.page)}>{appearance.showNavigationGlyphs && <span className={css.navGlyph} aria-hidden="true">◇</span>}<span><strong>{item.label}</strong>{appearance.showNavigationDetails && <small>{item.detail}</small>}</span></button>
+          })}</div></>}
+        </nav>}
+      {appearance.showSpaceSummary && <div className={css.spaceSummary}><span>{t('sidebar.activeSpaces')}</span><code>{props.catalogKnown ? `${props.activeBodies} / ${props.bodyCount}` : '— / —'}</code><small>{props.writeEnabled ? t('common.agentSupervised') : props.activationEnabled ? t('common.activationOnly') : t('common.readOnly')}</small></div>}
     </div>
   )
 }
@@ -2119,6 +2203,114 @@ function VersionDialog(props: { client: MnemonClient; writeEnabled: boolean; onC
   </SidebarModal>
 }
 
+/** Fixed descriptor-driven baseline; custom Source pages can only add to it. */
+function SourceManagementPage(props: {
+  instance: MemorySourceManagementInstance
+  instances: readonly MemorySourceManagementInstance[]
+  management?: MnemonSourceManagementClient
+  onSelect(sourceInstanceKey: string): void
+  onMutate(): void
+}): JSX.Element {
+  const t = useT()
+  const fields = props.instance.management.fields ?? EMPTY_SOURCE_MANAGEMENT_FIELDS
+  const [draft, setDraft] = useState<Record<string, JsonValue>>({})
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    setDraft({})
+    setError(null)
+    setSaved(false)
+    if (fields.length === 0 || props.management === undefined) {
+      setLoading(false)
+      return () => { active = false }
+    }
+    setLoading(true)
+    void props.management.read(MNEMON_SOURCE_CONFIGURATION_READ).then(result => {
+      if (!active) return
+      const root = jsonRecord(result.value)
+      const values = jsonRecord(root?.values ?? result.value) ?? {}
+      setDraft(Object.fromEntries(fields.flatMap(field => {
+        if (field.secret === true || field.input === 'secret') return []
+        const value = values[field.key]
+        return value === undefined ? [] : [[field.key, value]]
+      })))
+    }).catch(reason => {
+      if (active) setError(message(reason))
+    }).finally(() => {
+      if (active) setLoading(false)
+    })
+    return () => { active = false }
+  }, [fields, props.instance.revision, props.instance.sourceInstanceKey, props.management])
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    if (props.management === undefined) return
+    setSaving(true)
+    setSaved(false)
+    setError(null)
+    try {
+      const input = Object.fromEntries(fields.flatMap(field => {
+        const value = draft[field.key]
+        if ((field.secret === true || field.input === 'secret') && (value === undefined || value === '')) return []
+        if (field.input === 'number' && value !== undefined && value !== '') return [[field.key, Number(value)]]
+        if (field.input === 'boolean') return [[field.key, value === true]]
+        return value === undefined || value === '' ? [] : [[field.key, value]]
+      }))
+      await props.management.mutate(MNEMON_SOURCE_CONFIGURATION_MUTATE, input, { confirmed: true })
+      setSaved(true)
+      props.onMutate()
+    } catch (reason) {
+      setError(message(reason))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const availability = t(`sourcePage.availability.${props.instance.availability}` as MnemonKey)
+  return <div className={css.page} data-source-management={props.instance.sourceTypeId}>
+    <PageHeader
+      title={props.instance.management.label}
+      description={props.instance.management.description}
+      meta={props.instance.sourceTypeId}
+      {...(loading ? { loadingLabel: t('sourcePage.configLoading') } : {})}
+    />
+    {props.instances.length > 1 && <label className={css.workspacePicker}><span>{t('sourcePage.instance')}</span><select aria-label={t('sourcePage.instanceAria')} value={props.instance.sourceInstanceKey} onChange={event => props.onSelect(event.target.value)}>{props.instances.map(instance => <option key={instance.sourceInstanceKey} value={instance.sourceInstanceKey}>{instance.management.label} · {instance.sourceInstanceKey}</option>)}</select></label>}
+    <section className={css.sourceManagementSummary} data-availability={props.instance.availability} aria-label={t('sourcePage.summaryAria')}>
+      <div className={css.sourceManagementIdentity}><span aria-hidden="true" /><div><small>{t('sourcePage.package')}</small><strong>{props.instance.packageName}</strong><code>{props.instance.sourceInstanceKey}</code></div></div>
+      <dl>
+        <div><dt>{t('sourcePage.availability')}</dt><dd>{availability}</dd></div>
+        <div><dt>{t('sourcePage.role')}</dt><dd>{props.instance.role}</dd></div>
+        <div><dt>{t('sourcePage.revision')}</dt><dd><code>{short(props.instance.revision, 32)}</code></dd></div>
+      </dl>
+      <div className={css.sourceManagementCapabilities}><small>{t('sourcePage.permissions')}</small><div>{props.instance.capabilities.map(capability => <span key={capability}>{capability}</span>)}</div></div>
+    </section>
+    {props.instance.management.diagnostics !== undefined && props.instance.management.diagnostics.length > 0 && <section className={css.sourceManagementDiagnostics} aria-label={t('sourcePage.diagnostics')}><h3>{t('sourcePage.diagnostics')}</h3><ul>{props.instance.management.diagnostics.map((diagnostic, index) => <li key={`${index}:${diagnostic}`}>{diagnostic}</li>)}</ul></section>}
+    {fields.length > 0 && <form className={css.sourceManagementForm} onSubmit={event => void submit(event)}>
+      <div><h3>{t('sourcePage.configuration')}</h3><p>{t('sourcePage.configurationDescription')}</p></div>
+      <div className={css.formGrid}>{fields.map(field => {
+        const value = draft[field.key]
+        const update = (next: JsonValue): void => setDraft(current => ({ ...current, [field.key]: next }))
+        return <label key={field.key}>{field.label}
+          {field.input === 'boolean'
+            ? <input type="checkbox" checked={value === true} onChange={event => update(event.target.checked)} />
+            : field.input === 'select'
+              ? <select value={typeof value === 'string' ? value : ''} required={field.required} onChange={event => update(event.target.value)}><option value="">—</option>{field.options?.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
+              : <input type={field.input === 'secret' ? 'password' : field.input === 'number' ? 'number' : field.input === 'url' ? 'url' : 'text'} value={typeof value === 'string' || typeof value === 'number' ? value : ''} required={field.required && field.input !== 'secret'} autoComplete={field.input === 'secret' ? 'new-password' : undefined} placeholder={field.input === 'secret' ? t('sourcePage.secretPlaceholder') : undefined} onChange={event => update(event.target.value)} />}
+          {field.description !== undefined && <small>{field.description}</small>}
+        </label>
+      })}</div>
+      {error !== null && <div className={css.alert} role="alert">{error}</div>}
+      {saved && <div className={css.runtimeNotice} role="status">{t('sourcePage.configSaved')}</div>}
+      <div className={css.formActions}><button type="submit" className={css.primaryButton} disabled={saving || loading || props.management === undefined || props.instance.availability === 'unavailable'}>{saving ? t('sourcePage.configSaving') : t('sourcePage.configSave')}</button>{props.management === undefined && <span>{t('sourcePage.unavailable')}</span>}</div>
+    </form>}
+    {fields.length === 0 && props.instance.availability === 'unavailable' && <div className={css.emptyState}><span className={css.emptyGlyph}>!</span><div><h3>{t('sourcePage.unavailable')}</h3><p>{t('sourcePage.unavailableDescription')}</p></div></div>}
+  </div>
+}
+
 function StatusPage(props: { client: MnemonClient; status: StatusView | null; loading: boolean; writeEnabled: boolean; onRefresh: () => void }): JSX.Element {
   const t = useT()
   const [versionsOpen, setVersionsOpen] = useState(false)
@@ -2257,11 +2449,14 @@ export function MnemonView(props: MnemonViewProps): JSX.Element {
   return <I18nContext.Provider value={t}><LocaleContext.Provider value={props.locale ?? 'zh'}><MnemonWorkspace {...props} /></LocaleContext.Provider></I18nContext.Provider>
 }
 
-function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, workspaceSelection, surface = 'sidebar', onClose }: MnemonViewProps): JSX.Element {
+function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, workspaceSelection, onClose, sourcePageDirectory = EMPTY_SOURCE_PAGE_DIRECTORY, renderSlot }: MnemonViewProps): JSX.Element {
   const t = useT()
-  const subscribeSettings = useCallback((listener: () => void) => settingsScope.subscribe(listener), [settingsScope])
-  const getSettingsSnapshot = useCallback(() => settingsScope.getSnapshot(), [settingsScope])
-  const settingsSnapshot = useSyncExternalStore(subscribeSettings, getSettingsSnapshot, getSettingsSnapshot)
+  const locale = useLocale()
+  const appearance = useMnemonViewAppearance()
+  const settingsSnapshot = useSyncExternalStore(settingsScope.subscribe, settingsScope.getSnapshot, settingsScope.getSnapshot)
+  const subscribeSourcePages = useCallback((listener: () => void) => sourcePageDirectory.subscribe(listener), [sourcePageDirectory])
+  const getSourcePages = useCallback(() => sourcePageDirectory.getSnapshot(), [sourcePageDirectory])
+  const sourcePageEntries = useSyncExternalStore(subscribeSourcePages, getSourcePages, getSourcePages)
   const client = useMemo(() => new MnemonClient(connection, sessionId, workspaceId), [connection, sessionId, workspaceId])
   const clientContextKey = `${sessionId ?? ''}\u0000${workspaceId ?? ''}`
   const viewContextKey = `${clientContextKey}\u0000${settingsSnapshot.revision ?? 'loading'}`
@@ -2306,10 +2501,67 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const taskClient = useMemo(() => surface === 'builtin' ? client : new MnemonClient(connection, undefined, workspaceId), [client, connection, surface, workspaceId])
   const statusRequest = useRef(0)
   const [revision, setRevision] = useState(0)
+  const [sourceCatalogState, setSourceCatalogState] = useState<{ contextKey: string; value: MemorySourceManagementCatalog | null }>(() => ({ contextKey: viewContextKey, value: null }))
+  const [selectedSourceInstances, setSelectedSourceInstances] = useState<Record<string, string>>({})
   const [searchSeed, setSearchSeed] = useState('')
   const [rememberSeed, setRememberSeed] = useState('')
   const [rememberOpen, setRememberOpen] = useState(false)
   const [strategyOpen, setStrategyOpen] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    void client.sourceManagementCatalog().then(value => {
+      if (active) setSourceCatalogState({ contextKey: viewContextKey, value })
+    }).catch(() => {
+      // Rolling upgrades retain the built-in pages while an older Host lacks
+      // the composable management catalog. Optional pages remain hidden.
+      if (active) setSourceCatalogState({ contextKey: viewContextKey, value: null })
+    })
+    return () => { active = false }
+  }, [client, revision, viewContextKey])
+
+  const sourceCatalog = sourceCatalogState.contextKey === viewContextKey ? sourceCatalogState.value : null
+  const sourceInstances = sourceCatalog?.sources ?? []
+  const sourceManagementClients = useMemo(() => new Map(sourceInstances
+    .filter(source => source.availability !== 'unavailable')
+    .map(source => [source.sourceInstanceKey, bindSourceManagementClient(client, source)])), [client, sourceInstances])
+  const visibleSourcePages = useMemo(() => {
+    const visibleTypes = new Set(sourceInstances.filter(source => source.availability !== 'unavailable').map(source => source.sourceTypeId))
+    return sourcePageEntries.filter(entry => !BUILTIN_MEMORY_SOURCE_PAGE_ID_SET.has(entry.id) && visibleTypes.has(entry.sourceTypeId))
+  }, [sourceInstances, sourcePageEntries])
+  const managedSourceTypes = useMemo(() => {
+    const byType = new Map<string, MemorySourceManagementInstance[]>()
+    for (const source of sourceInstances) {
+      if (BUILTIN_MEMORY_SOURCE_TYPE_ID_SET.has(source.sourceTypeId)) continue
+      const current = byType.get(source.sourceTypeId)
+      if (current === undefined) byType.set(source.sourceTypeId, [source])
+      else current.push(source)
+    }
+    return [...byType.entries()].sort(([left], [right]) => left.localeCompare(right))
+  }, [sourceInstances])
+  const sourceNavigationEntries = useMemo<SourceNavigationEntry[]>(() => [
+    ...managedSourceTypes.map(([sourceTypeId, instances]) => ({
+      id: `management:${sourceTypeId}`,
+      page: managedSourcePage(sourceTypeId),
+      label: instances[0]!.management.label,
+      detail: sourceTypeId,
+    })),
+    ...visibleSourcePages.map(entry => ({
+      id: `custom:${entry.id}`,
+      page: sourcePage(entry.id),
+      label: entry.label,
+      detail: entry.sourceTypeId,
+    })),
+  ], [managedSourceTypes, visibleSourcePages])
+
+  useEffect(() => {
+    const entryId = sourcePageEntryId(page)
+    const managedTypeId = managedSourceTypeId(page)
+    if (
+      (entryId !== undefined && !visibleSourcePages.some(entry => entry.id === entryId))
+      || (managedTypeId !== undefined && !managedSourceTypes.some(([sourceTypeId]) => sourceTypeId === managedTypeId))
+    ) setPage('status')
+  }, [managedSourceTypes, page, visibleSourcePages])
 
   // A newly inspected workspace must never inherit visible cards, open editors,
   // search seeds, or scroll position from the previous workspace.
@@ -2432,7 +2684,52 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
     ? t('header.checking')
     : status?.healthy !== true
       ? t('header.unavailable')
-      : t('header.connected')
+      : appearance.surface === 'sidebar'
+        ? t('header.connected')
+        : catalogKnown
+          ? t('header.connectedWithCount', { count: activeBodies })
+          : t('header.directoryPending')
+  const allInstancesFor = (sourceTypeId: string): MemorySourceManagementInstance[] => sourceInstances.filter(source => source.sourceTypeId === sourceTypeId)
+  const instancesFor = (sourceTypeId: string): MemorySourceManagementInstance[] => allInstancesFor(sourceTypeId).filter(source => source.availability !== 'unavailable')
+  const renderSourceContribution = (entryId: string, children?: ReactNode): ReactNode => {
+    const separator = entryId.indexOf('/')
+    const sourceTypeId = separator < 0 ? entryId : entryId.slice(0, separator)
+    const instances = instancesFor(sourceTypeId)
+    const selectedKey = selectedSourceInstances[sourceTypeId]
+    const selected = instances.find(instance => instance.sourceInstanceKey === selectedKey) ?? instances[0]
+    const management = selected === undefined ? undefined : sourceManagementClients.get(selected.sourceInstanceKey)
+    if (renderSlot === undefined) return children ?? null
+    return renderSlot('mnemon.source.page', {
+      sourceTypeId,
+      ...(selected === undefined ? {} : { sourceInstanceKey: selected.sourceInstanceKey }),
+      sourceInstances: instances,
+      ...(management === undefined ? {} : { management }),
+      ...(sessionId === undefined ? {} : { sessionId }),
+      ...(workspaceId === undefined ? {} : { workspaceId }),
+      locale,
+      ...(children === undefined ? {} : { children }),
+    }, { only: entryId, fallback: children })
+  }
+  const activeSourcePageId = sourcePageEntryId(page)
+  const activeSourcePage = activeSourcePageId === undefined ? undefined : visibleSourcePages.find(entry => entry.id === activeSourcePageId)
+  const activeSourceInstances = activeSourcePage === undefined ? [] : instancesFor(activeSourcePage.sourceTypeId)
+  const activeSelectedKey = activeSourcePage === undefined ? undefined : selectedSourceInstances[activeSourcePage.sourceTypeId]
+  const activeSelectedInstance = activeSourceInstances.find(instance => instance.sourceInstanceKey === activeSelectedKey) ?? activeSourceInstances[0]
+  const customSourcePage = activeSourcePage === undefined || activeSelectedInstance === undefined ? null : <div className={css.page} data-source-page={activeSourcePage.id}>
+    {activeSourceInstances.length > 1 && <label className={css.workspacePicker}><span>{t('sourcePage.instance')}</span><select aria-label={t('sourcePage.instanceAria')} value={activeSelectedInstance.sourceInstanceKey} onChange={event => setSelectedSourceInstances(current => ({ ...current, [activeSourcePage.sourceTypeId]: event.target.value }))}>{activeSourceInstances.map(instance => <option key={instance.sourceInstanceKey} value={instance.sourceInstanceKey}>{instance.management.label} · {instance.sourceInstanceKey}</option>)}</select></label>}
+    {renderSourceContribution(activeSourcePage.id)}
+  </div>
+  const activeManagedSourceTypeId = managedSourceTypeId(page)
+  const activeManagedSourceInstances = activeManagedSourceTypeId === undefined ? [] : allInstancesFor(activeManagedSourceTypeId)
+  const activeManagedSelectedKey = activeManagedSourceTypeId === undefined ? undefined : selectedSourceInstances[activeManagedSourceTypeId]
+  const activeManagedSourceInstance = activeManagedSourceInstances.find(instance => instance.sourceInstanceKey === activeManagedSelectedKey) ?? activeManagedSourceInstances[0]
+  const managedSourcePageContent = activeManagedSourceTypeId === undefined || activeManagedSourceInstance === undefined ? null : <SourceManagementPage
+    instance={activeManagedSourceInstance}
+    instances={activeManagedSourceInstances}
+    {...(sourceManagementClients.get(activeManagedSourceInstance.sourceInstanceKey) === undefined ? {} : { management: sourceManagementClients.get(activeManagedSourceInstance.sourceInstanceKey)! })}
+    onSelect={sourceInstanceKey => setSelectedSourceInstances(current => ({ ...current, [activeManagedSourceTypeId]: sourceInstanceKey }))}
+    onMutate={mutate}
+  />
 
   return (
     <main className={appearanceClass(css.shell, sidebarCss.shell)} data-mnemon-surface={surface}>
@@ -2450,16 +2747,19 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       </header>
       {(statusError !== null || status?.healthy === false) && <div className={css.alert} role="alert"><strong>{t('header.notReady')}</strong><span>{statusError ?? status?.error}</span></div>}
       <div className={css.workspace}>
-        <WorkspaceNavigation page={page} onSelect={selectPrimaryPage} layers={{ runtime: runtimeLayerEnabled, documents: documentsLayerEnabled, 'memory-spaces': memorySpacesLayerEnabled }} />
+        <WorkspaceNavigation page={page} onSelect={selectPrimaryPage} sourcePages={sourceNavigationEntries} activeBodies={activeBodies} bodyCount={memoryBodies.length} catalogKnown={catalogKnown} activationEnabled={activationEnabled} writeEnabled={writeEnabled} layers={{ runtime: runtimeLayerEnabled, documents: documentsLayerEnabled, 'memory-spaces': memorySpacesLayerEnabled }} />
         {memorySpacesLayerEnabled !== false && <MemoryNavigation page={page} activationEnabled={activationEnabled} writeEnabled={writeEnabled} onSelect={selectPage} onRemember={() => openRemember()} onStrategy={() => setStrategyOpen(true)} />}
-        <section key={viewContextKey} className={appearanceClass(css.canvas, sidebarCss.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={!isMemoryPage(page) ? '' : undefined}>
-          {page === 'overview' && (memorySpacesLayerEnabled !== false ? <OverviewPage client={client} metadataClient={taskClient} revision={revision} activationEnabled={activationEnabled} writeEnabled={writeEnabled} agentAvailable={taskAgentAvailable} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onAgentRefresh={() => void loadStatus()} onBodyReconnect={bodyReconnected} onBodyMetadata={bodyMetadataUpdated} onExplore={explore} /> : <LayerDisabledPage title={t('overview.title')} />)}
-          {page === 'runtime' && (runtimeLayerEnabled !== false ? <RuntimePage client={client} revision={revision} writeEnabled={writeEnabled} onMutate={mutate} /> : <LayerDisabledPage title={t('runtime.title')} />)}
-          {page === 'documents' && (documentsLayerEnabled !== false ? <DocumentsPage client={client} revision={revision} writeEnabled={writeEnabled} {...(sessionId === undefined ? {} : { sessionId })} onMutate={mutate} /> : <LayerDisabledPage title={t('documents.title')} />)}
-          {page === 'explore' && (memorySpacesLayerEnabled !== false ? <ExplorePage client={client} agentClient={taskClient} agentAvailable={taskAgentAvailable} status={status} seed={searchSeed} writeEnabled={writeEnabled} onForget={forget} /> : <LayerDisabledPage title={t('overview.title')} />)}
-          {page === 'entities' && (memorySpacesLayerEnabled !== false ? <EntitiesPage client={client} revision={revision} writeEnabled={writeEnabled} onForget={forget} onExplore={explore} /> : <LayerDisabledPage title={t('overview.title')} />)}
-          {page === 'list' && (memorySpacesLayerEnabled !== false ? <ListPage client={client} revision={revision} writeEnabled={writeEnabled} onForget={forget} onClone={clone} onExplore={explore} /> : <LayerDisabledPage title={t('overview.title')} />)}
+        <section key={viewContextKey} className={appearanceClass(css.canvas, appearance.classes.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={!isMemoryPage(page) ? '' : undefined}>
+          {page === 'overview' && renderSourceContribution(BUILTIN_MEMORY_SOURCE_PAGE_IDS.overview, memorySpacesLayerEnabled !== false ? <OverviewPage client={client} metadataClient={taskClient} revision={revision} activationEnabled={activationEnabled} writeEnabled={writeEnabled} agentAvailable={taskAgentAvailable} fallbackBodies={memoryBodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={catalogKnown} onMutate={mutate} onAgentRefresh={() => void loadStatus()} onBodyReconnect={bodyReconnected} onBodyMetadata={bodyMetadataUpdated} onExplore={explore} /> : <LayerDisabledPage title={t('overview.title')} />)}
+          {page === 'runtime' && renderSourceContribution(BUILTIN_MEMORY_SOURCE_PAGE_IDS.runtime, runtimeLayerEnabled !== false ? <RuntimePage client={client} revision={revision} writeEnabled={writeEnabled} onMutate={mutate} /> : <LayerDisabledPage title={t('runtime.title')} />)}
+          {page === 'documents' && renderSourceContribution(BUILTIN_MEMORY_SOURCE_PAGE_IDS.documents, documentsLayerEnabled !== false ? <DocumentsPage client={client} revision={revision} writeEnabled={writeEnabled} {...(sessionId === undefined ? {} : { sessionId })} onMutate={mutate} /> : <LayerDisabledPage title={t('documents.title')} />)}
+          {page === 'explore' && renderSourceContribution(BUILTIN_MEMORY_SOURCE_PAGE_IDS.explore, memorySpacesLayerEnabled !== false ? <ExplorePage client={client} agentClient={taskClient} agentAvailable={taskAgentAvailable} status={status} seed={searchSeed} writeEnabled={writeEnabled} onForget={forget} /> : <LayerDisabledPage title={t('overview.title')} />)}
+          {page === 'entities' && renderSourceContribution(BUILTIN_MEMORY_SOURCE_PAGE_IDS.entities, memorySpacesLayerEnabled !== false ? <EntitiesPage client={client} revision={revision} writeEnabled={writeEnabled} onForget={forget} onExplore={explore} /> : <LayerDisabledPage title={t('overview.title')} />)}
+          {page === 'remember' && appearance.surface === 'buildin' && renderSourceContribution(BUILTIN_MEMORY_SOURCE_PAGE_IDS.remember, memorySpacesLayerEnabled !== false ? <RememberPage client={taskClient} agentAvailable={taskAgentAvailable} memoryBodies={memoryBodies} writeEnabled={writeEnabled} seed={rememberSeed} onMutate={mutate} /> : <LayerDisabledPage title={t('overview.title')} />)}
+          {page === 'list' && renderSourceContribution(BUILTIN_MEMORY_SOURCE_PAGE_IDS.list, memorySpacesLayerEnabled !== false ? <ListPage client={client} revision={revision} writeEnabled={writeEnabled} onForget={forget} onClone={clone} onExplore={explore} /> : <LayerDisabledPage title={t('overview.title')} />)}
           {page === 'status' && <StatusPage client={client} status={status} loading={statusLoading} writeEnabled={writeEnabled} onRefresh={() => void loadStatus()} />}
+          {activeManagedSourceInstance !== undefined && managedSourcePageContent}
+          {activeSourcePage !== undefined && customSourcePage}
         </section>
         {memorySpacesLayerEnabled !== false && rememberOpen && <RememberDialog client={taskClient} agentAvailable={taskAgentAvailable} memoryBodies={memoryBodies} writeEnabled={writeEnabled} seed={rememberSeed} onMutate={mutate} onClose={() => setRememberOpen(false)} onComplete={() => setRememberOpen(false)} />}
         {memorySpacesLayerEnabled !== false && strategyOpen && <PersistenceStrategyDialog client={taskClient} settingsScope={settingsScope} config={settingsSnapshot.value} writable={settingsSnapshot.writable} agentAvailable={taskAgentAvailable} onClose={() => setStrategyOpen(false)} />}

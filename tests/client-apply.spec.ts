@@ -57,7 +57,7 @@ function workspaceContext(initialValue: Record<string, unknown>, load: () => Pro
 }
 
 describe('Mnemon Web client composition', () => {
-  it('registers locale dictionaries and keeps settings locale-bound without a conversation tab', async () => {
+  it('registers locale dictionaries and keeps one canonical default workspace locale-bound', async () => {
     let active: 'zh' | 'en' = 'zh'
     const slots: Record<string, unknown>[] = []
     const registerLocale = vi.fn(() => () => {})
@@ -80,7 +80,12 @@ describe('Mnemon Web client composition', () => {
 
     expect(inject).toEqual(['slots', 'sessions', 'workspaces', 'connection', 'locale'])
     expect(registerLocale).toHaveBeenCalledWith('mnemon', { zh, en })
-    expect(slots.find(options => options.name === 'conversation.view')).toBeUndefined()
+    await vi.waitFor(() => expect(slots).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        name: 'conversation.view', id: 'mnemon',
+        children: { 'mnemon.source.page': { kind: 'list', scope: 'session' } },
+      }),
+    ])))
     expect(slots).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'settings.section', id: 'mnemon', order: 20 })]))
     const settingsEntry = slots.find(options => options.name === 'settings.section')
     const settingsInject = settingsEntry?.inject as (() => { scope: unknown; t: (key: keyof typeof zh) => string }) | undefined
@@ -97,15 +102,40 @@ describe('Mnemon Web client composition', () => {
     expect(settingsInject?.().t('config.scope')).toBe('Storage scope')
   })
 
-  it.each([undefined, 'sidebar'])('mounts sidebar with displayMode=%s and honors live visibility', async displayMode => {
-    const { slots, scope, dispose } = workspaceContext({ displayMode })
-    await vi.waitFor(() => expect(mountWorkspace).toHaveBeenCalledTimes(1))
-    expect(mountBetterSidebar).toHaveBeenCalledTimes(1)
-    expect(slots.some(options => options.name === 'conversation.view')).toBe(false)
-    const firstDispose = mountWorkspace.mock.results[0]!.value
-    await scope.set('storageScope', 'workspace')
-    expect(mountWorkspace).toHaveBeenCalledTimes(1)
-    expect(firstDispose).not.toHaveBeenCalled()
+  it('atomically remounts the canonical workspace appearance when display mode changes', async () => {
+    let displayMode: 'sidebar' | 'buildin' = 'buildin'
+    const slots: Record<string, unknown>[] = []
+    const conversationDisposer = vi.fn()
+    const call = vi.fn(async (_channel: string, endpoint: string, payload: { namespace?: string; ops?: Array<{ path: string[]; value?: unknown }> }) => {
+      if (endpoint === 'mutate' && payload.namespace === 'mnemon') {
+        const edit = payload.ops?.find(op => op.path[0] === 'displayMode')
+        if (edit?.value === 'sidebar' || edit?.value === 'buildin') displayMode = edit.value
+      }
+      return {
+        ok: true,
+        value: {
+          status: 'ready', value: payload.namespace === 'mnemon-ui' ? {} : { displayMode },
+          base: {}, user: { displayMode }, revision: 1, writable: true, mode: 'host',
+        },
+      }
+    })
+    const context = {
+      connection: { rpc: { call } },
+      effect: vi.fn((callback: () => unknown) => callback()),
+      locale: {
+        register: vi.fn(() => () => {}),
+        bind: vi.fn(() => (key: keyof typeof zh) => zh[key]),
+        getSnapshot: vi.fn(() => ({ active: 'zh' as const, locales: [], revision: 0 })),
+        subscribe: vi.fn(() => () => {}),
+      },
+      slots: {
+        inject: vi.fn((_name: string, factory: () => unknown) => factory()),
+        register: vi.fn((options: Record<string, unknown>) => {
+          slots.push(options)
+          return options.name === 'conversation.view' ? conversationDisposer : () => {}
+        }),
+      },
+    }
 
     await scope.set('tabEnabled', false)
     await scope.set('tabEnabled', false)
@@ -136,69 +166,10 @@ describe('Mnemon Web client composition', () => {
     expect(props).not.toHaveProperty('workspaceSelection')
     expect(props).not.toHaveProperty('onClose')
 
-    await scope.set('displayMode', 'builtin')
-    expect(slotDisposers.get(entry)).not.toHaveBeenCalled()
-    expect(slots.filter(options => options.name === 'conversation.view')).toHaveLength(1)
-
-    await scope.set('storageScope', 'workspace')
-    expect(slotDisposers.get(entry)).not.toHaveBeenCalled()
-    expect(slots.filter(options => options.name === 'conversation.view')).toHaveLength(1)
-    await scope.set('displayMode', 'sidebar')
-    expect(slotDisposers.get(entry)).toHaveBeenCalledTimes(1)
-    expect(mountWorkspace).toHaveBeenCalledTimes(1)
-    expect(mountBetterSidebar).toHaveBeenCalledTimes(1)
-    await scope.set('displayMode', 'sidebar')
-    expect(mountWorkspace).toHaveBeenCalledTimes(1)
-    await scope.set('displayMode', 'builtin')
-    expect(mountWorkspace.mock.results[0]!.value).toHaveBeenCalledTimes(1)
-    expect(mountBetterSidebar.mock.results[0]!.value).toHaveBeenCalledTimes(1)
-    const secondEntry = slots.filter(options => options.name === 'conversation.view')[1]!
-    expect(secondEntry).toBeTruthy()
-
-    await scope.set('tabEnabled', false)
-    expect(slotDisposers.get(secondEntry)).toHaveBeenCalledTimes(1)
-    await scope.set('displayMode', 'sidebar')
-    expect(mountWorkspace).toHaveBeenCalledTimes(1)
-    await scope.set('tabEnabled', true)
-    expect(mountWorkspace).toHaveBeenCalledTimes(2)
-    dispose()
-    expect(mountWorkspace.mock.results[1]!.value).toHaveBeenCalledTimes(1)
-    expect(slotDisposers.get(entry)).toHaveBeenCalledTimes(1)
-    expect(slotDisposers.get(secondEntry)).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not flash an entry while a persisted hidden workspace is loading', async () => {
-    let ready!: (value: Record<string, unknown>) => void
-    const loading = new Promise<Record<string, unknown>>(resolve => { ready = resolve })
-    const { scope, slots, dispose } = workspaceContext({}, () => loading)
-    expect(mountWorkspace).not.toHaveBeenCalled()
-    ready({ displayMode: 'builtin', tabEnabled: false })
-    await vi.waitFor(() => expect(scope.getSnapshot().status).toBe('ready'))
-    expect(mountWorkspace).not.toHaveBeenCalled()
-    expect(slots.some(options => options.name === 'conversation.view')).toBe(false)
-    await scope.set('tabEnabled', true)
-    expect(mountWorkspace).not.toHaveBeenCalled()
-    expect(slots.some(options => options.name === 'conversation.view')).toBe(true)
-    dispose()
-  })
-
-  it.each(['builtin', 'buildin'] as const)('does not flash the default sidebar while persisted %s is loading', async displayMode => {
-    let ready!: (value: Record<string, unknown>) => void
-    const { slots, slotDisposers, dispose } = workspaceContext({}, () => new Promise(resolve => { ready = resolve }))
-    expect(mountWorkspace).not.toHaveBeenCalled()
-    expect(slots.some(options => options.name === 'conversation.view')).toBe(false)
-    ready({ displayMode })
-    await vi.waitFor(() => expect(slots.some(options => options.name === 'conversation.view')).toBe(true))
-    expect(mountWorkspace).not.toHaveBeenCalled()
-    const entry = slots.find(options => options.name === 'conversation.view')!
-    dispose()
-    expect(slotDisposers.get(entry)).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps the sidebar available when the settings service is unavailable', async () => {
-    const { scope, dispose } = workspaceContext({}, async () => { throw new Error('offline') })
-    await vi.waitFor(() => expect(scope.getSnapshot().status).toBe('unavailable'))
-    expect(mountWorkspace).toHaveBeenCalledTimes(1)
-    dispose()
+    expect(conversationDisposer).toHaveBeenCalledTimes(1)
+    expect(slots.filter(options => options.name === 'conversation.view')).toHaveLength(2)
+    const sidebarEntry = slots.filter(options => options.name === 'conversation.view').at(-1)
+    expect((sidebarEntry?.inject as () => { surface: string })().surface).toBe('sidebar')
+    expect(sidebarEntry?.children).toEqual({ 'mnemon.source.page': { kind: 'list', scope: 'session' } })
   })
 })

@@ -7,13 +7,17 @@ const workspaceCss = readFileSync(new URL('../src/client/MnemonWorkspace.module.
 const sidebarSurface = 'var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base))'
 
 describe('Sidebar layout invariants', () => {
-  it('keeps an opaque backing behind the workspace under transparent-base skins', () => {
-    expect(workspaceCss).toContain(`background: ${sidebarSurface};`)
+  it('keeps the workspace surfaces opaque under transparent-base skins with a default-theme fallback', () => {
+    expect(viewCss).toContain(`--mn-bg: ${sidebarSurface};`)
+    expect(sidebarCss).toContain(`.shell.shell {\n  background: ${sidebarSurface};`)
+    expect(sidebarCss).not.toContain('background: var(--dsw-alias-bg-base);')
   })
 
-  it('anchors and hides the takeover inside the DSH advanced-mode conversation surface', () => {
-    expect(workspaceCss).toContain('.dshDesktopConversationSurface {\n  position: relative;')
-    expect(workspaceCss).toContain("html[data-dsh-mnemon-active]:not([data-dsh-taskboard-active]):not([data-dsh-ssh-active]) .dshDesktopConversationSurface > :not([data-dsh-mnemon-view])")
+  it('keeps the sidebar artifact launcher-only and never hides DSH conversation content', () => {
+    expect(workspaceCss).toContain('.entry {')
+    expect(workspaceCss).not.toContain('[data-dsh-mnemon-view]')
+    expect(workspaceCss).not.toContain('data-dsh-mnemon-active')
+    expect(workspaceCss).not.toContain('.dshDesktopConversationSurface')
   })
 
   it('pins primary page headers at the canvas origin without an initial sticky settling distance', () => {

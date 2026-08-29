@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, waitFor } from '@testing-library/react'
+import { fireEvent, render, waitFor } from '@testing-library/react'
 
 vi.mock('../src/client/MnemonView.tsx', () => ({
   MnemonView: ({ sessionId, workspaceId, workspaceSelection, t, locale, onClose }: {
@@ -16,7 +16,7 @@ vi.mock('../src/client/MnemonView.tsx', () => ({
       onSelect(id: string): void
       onAlign(): void
     }
-  }) => <div data-testid="mnemon-panel-content" data-workspace-id={workspaceId} data-effective-workspace-id={workspaceSelection?.effectiveWorkspaceId} data-locale={locale}>
+  }) => <div data-testid="mnemon-canonical-content" data-workspace-id={workspaceId} data-effective-workspace-id={workspaceSelection?.effectiveWorkspaceId} data-surface={surface} data-locale={locale}>
     <h1>{t?.('tab.label')}</h1>
     <span>{sessionId ?? 'no-session'}</span>
     <select aria-label="workspace-test-selector" value={workspaceSelection?.selectedWorkspaceId ?? ''} onChange={event => workspaceSelection?.onSelect(event.target.value)}>
@@ -27,8 +27,11 @@ vi.mock('../src/client/MnemonView.tsx', () => ({
   </div>,
 }))
 
-import { MNEMON_ANCHOR_EVENT } from '../src/client/anchor.ts'
-import { mountMnemonWorkspace } from '../src/client/workspace-mount.tsx'
+import {
+  createMnemonWorkspaceNavigation,
+  MnemonWorkspaceHost,
+  mountMnemonWorkspace,
+} from '../src/client/workspace-mount.tsx'
 
 let currentDispose: (() => void) | undefined
 const siblingDisposers: Array<() => void> = []
@@ -59,19 +62,24 @@ function mountSiblingPanel(name: 'taskboard' | 'ssh', announce = true) {
   return { entry, refresh, isOpen: () => open }
 }
 
-function renderShell(): void {
-  document.body.innerHTML = `
-    <div data-dsh-frame>
-      <aside data-pane="sidebar">
-        <div class="sidebarRoot">
-          <div class="logoRow"><button class="newSession">New</button></div>
-          <button data-dsh-taskboard-entry>Tasks</button>
-          <button data-dsh-ssh-entry>SSH</button>
-          <button class="sessionRow">Session</button>
-        </div>
-      </aside>
-      <main data-pane="conversation"><div data-chat-content>Chat stays mounted</div></main>
-    </div>`
+function wireTabs(): void {
+  const tabs = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+  for (const tab of tabs) tab.addEventListener('click', () => {
+    for (const candidate of tabs) candidate.setAttribute('aria-selected', String(candidate === tab))
+  })
+}
+
+function renderShell(advanced = false): void {
+  document.body.innerHTML = advanced
+    ? `<div class="dshDesktopFrame">
+        <aside class="dshDesktopUpstreamSidebar"><div class="logoRow"><button class="newSession">New</button></div><button data-dsh-taskboard-entry>Tasks</button><button data-dsh-ssh-entry>SSH</button></aside>
+        <main class="dshDesktopConversationSurface"><div role="tablist"><button role="tab" aria-selected="true">Chat</button><button role="tab" aria-selected="false">Memory</button></div><div data-chat-content>Chat stays mounted</div></main>
+      </div>`
+    : `<div data-dsh-frame>
+        <aside data-pane="sidebar"><div class="sidebarRoot"><div class="logoRow"><button class="newSession">New</button></div><button data-dsh-taskboard-entry>Tasks</button><button data-dsh-ssh-entry>SSH</button><button class="sessionRow">Session</button></div></aside>
+        <main data-pane="conversation"><div role="tablist"><button role="tab" aria-selected="true">Chat</button><button role="tab" aria-selected="false">Memory</button></div><div data-chat-content>Chat stays mounted</div></main>
+      </div>`
+  wireTabs()
 }
 
 function context(locale?: { getSnapshot(): { active: 'zh' | 'en'; locales: readonly never[]; revision: number }; subscribe(listener: () => void): () => void }) {
@@ -94,15 +102,8 @@ function context(locale?: { getSnapshot(): { active: 'zh' | 'en'; locales: reado
   return {
     connection: { rpc: { call: vi.fn() } },
     locale: locale ?? { getSnapshot: () => fallbackLocale, subscribe: () => () => {} },
-    sessions: {
-      list: { getSnapshot: () => snapshot, subscribe: () => () => {} },
-    },
-    workspaces: {
-      list: {
-        getSnapshot: () => workspaceSnapshot,
-        subscribe: () => () => {},
-      },
-    },
+    sessions: { list: { getSnapshot: () => snapshot, subscribe: () => () => {} } },
+    workspaces: { list: { getSnapshot: () => workspaceSnapshot, subscribe: () => () => {} } },
   }
 }
 
@@ -123,252 +124,96 @@ function receiverSensitiveStore<T>(snapshot: T) {
   return store
 }
 
-describe('Mnemon sidebar workspace', () => {
+const settings = {
+  getSnapshot: () => ({ status: 'ready' as const, value: {}, writable: true, mode: 'host' as const }),
+  subscribe: () => () => {}, set: async () => {}, unset: async () => {}, setPath: async () => {}, unsetPath: async () => {},
+}
+const sourcePageDirectory = { getSnapshot: () => [] as const, subscribe: () => () => {} }
+const t = (key: string) => key === 'tab.label' ? 'Memory' : key
+
+describe('Mnemon canonical workspace launcher', () => {
   beforeEach(() => { renderShell() })
   afterEach(() => {
     currentDispose?.()
     currentDispose = undefined
-    for (const dispose of siblingDisposers.splice(0)) dispose()
-    document.documentElement.removeAttribute('data-dsh-mnemon-active')
-    document.documentElement.removeAttribute('data-dsh-taskboard-active')
-    document.documentElement.removeAttribute('data-dsh-ssh-active')
     document.body.replaceChildren()
     vi.restoreAllMocks()
   })
 
-  it('keeps receiver-sensitive DSH 0.1.2 list stores bound', async () => {
+  it('mounts after the official panel family and opens the canonical DSH tab', () => {
+    const memoryTab = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(tab => tab.textContent === 'Memory')!
+    const clicked = vi.fn()
+    memoryTab.addEventListener('click', clicked)
+    currentDispose = mountMnemonWorkspace(context() as never, settings, t as never)
+
+    const entry = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')!
+    expect(entry.previousElementSibling?.hasAttribute('data-dsh-ssh-entry')).toBe(true)
+    fireEvent.click(entry)
+    expect(clicked).toHaveBeenCalledOnce()
+    expect(memoryTab.getAttribute('aria-selected')).toBe('true')
+    expect(document.querySelector('[data-chat-content]')?.textContent).toBe('Chat stays mounted')
+    expect(document.querySelector('[data-dsh-mnemon-view]')).toBeNull()
+  })
+
+  it('returns to the previously selected DSH tab without a second page host', () => {
+    const navigation = createMnemonWorkspaceNavigation(t as never)
+    navigation.open()
+    expect(document.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Memory')
+    navigation.close()
+    expect(document.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Chat')
+  })
+
+  it('self-heals its sidebar launcher after a React-style row replacement', async () => {
+    currentDispose = mountMnemonWorkspace(context() as never, settings, t as never)
+    document.querySelector('[data-dsh-mnemon-entry]')?.remove()
+    await waitFor(() => expect(document.querySelector('[data-dsh-mnemon-entry]')).not.toBeNull())
+    currentDispose()
+    currentDispose = undefined
+    expect(document.querySelector('[data-dsh-mnemon-entry]')).toBeNull()
+  })
+
+  it('mounts the launcher in the DSH advanced frame without replacing conversation content', () => {
+    renderShell(true)
+    currentDispose = mountMnemonWorkspace(context() as never, settings, t as never)
+    const entry = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')!
+    fireEvent.click(entry)
+    expect(document.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Memory')
+    expect(document.querySelector('[data-chat-content]')).not.toBeNull()
+    expect(document.querySelector('[data-dsh-mnemon-view]')).toBeNull()
+  })
+
+  it('keeps receiver-sensitive stores bound inside the canonical host and preserves workspace selection', async () => {
     const ctx = context()
     const sessions = receiverSensitiveStore(ctx.sessions.list.getSnapshot())
     const workspaces = receiverSensitiveStore(ctx.workspaces.list.getSnapshot())
     ctx.sessions.list = sessions
     ctx.workspaces.list = workspaces
+    render(<MnemonWorkspaceHost
+      connection={ctx.connection as never} settingsScope={settings} sessions={ctx.sessions as never} workspaces={ctx.workspaces as never}
+      localeRuntime={ctx.locale as never} sourcePageDirectory={sourcePageDirectory} navigation={createMnemonWorkspaceNavigation(t as never)}
+      surface="sidebar" t={t as never} renderSlot={() => null} SessionProvider={({ children }) => children('session-1' as never)} sessionId="session-1"
+    />)
 
-    currentDispose = mountMnemonWorkspace(ctx as never, {} as never, key => String(key))
-
-    await waitFor(() => expect(document.querySelector('[data-testid="mnemon-panel-content"]')).not.toBeNull())
+    await waitFor(() => expect(document.querySelector('[data-testid="mnemon-canonical-content"]')?.getAttribute('data-workspace-id')).toBe('workspace-1'))
     expect(sessions.reads).toBeGreaterThan(0)
     expect(workspaces.reads).toBeGreaterThan(0)
-  })
-
-  it('mounts after the official panel family and opens the workspace with a return action', async () => {
-    const dispose = currentDispose = mountMnemonWorkspace(context() as never, {} as never, key => key === 'tab.label' ? '记忆系统' : key)
-    const entry = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')
-    expect(entry?.textContent).toBe('记忆系统')
-    expect(entry?.previousElementSibling?.hasAttribute('data-dsh-ssh-entry')).toBe(true)
-    expect(document.querySelector('[data-chat-content]')).not.toBeNull()
-    await waitFor(() => expect(document.querySelector('[data-testid="mnemon-panel-content"] span')?.textContent).toBe('session-1'))
-    expect(document.querySelector('[data-testid="mnemon-panel-content"]')?.getAttribute('data-workspace-id')).toBe('workspace-1')
-
-    fireEvent.click(entry!)
-    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(true)
-    expect(entry?.getAttribute('data-active')).toBe('true')
-
-    fireEvent.click(document.querySelector('[aria-label="header.backToConversation"]')!)
-    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(false)
-    expect(entry?.hasAttribute('data-active')).toBe(false)
-    dispose()
-    currentDispose = undefined
-  })
-
-  it('returns from the panel without replacing visible or hidden conversation blocks', async () => {
-    const conversation = document.querySelector<HTMLElement>('[data-pane="conversation"]')!
-    const visibleBlock = document.querySelector<HTMLElement>('[data-chat-content]')!
-    const hiddenBlock = document.createElement('section')
-    hiddenBlock.dataset.hiddenConversationBlock = ''
-    hiddenBlock.hidden = true
-    conversation.prepend(hiddenBlock)
-    const dispose = currentDispose = mountMnemonWorkspace(context() as never, {} as never, key => String(key))
-    const entry = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')!
-    await waitFor(() => expect(document.querySelector('[aria-label="header.backToConversation"]')).not.toBeNull())
-
-    fireEvent.click(entry)
-    fireEvent.click(document.querySelector('[aria-label="header.backToConversation"]')!)
-
-    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(false)
-    expect(document.querySelector('[data-chat-content]')).toBe(visibleBlock)
-    expect(document.querySelector('[data-hidden-conversation-block]')).toBe(hiddenBlock)
-    expect(hiddenBlock.hidden).toBe(true)
-    dispose()
-    currentDispose = undefined
-  })
-
-  it('keeps the inspected workspace independent and aligns it to the current session on demand', async () => {
-    currentDispose = mountMnemonWorkspace(context() as never, {} as never, key => String(key))
-    await waitFor(() => expect(document.querySelector('[data-testid="mnemon-panel-content"]')).not.toBeNull())
-    const panel = document.querySelector<HTMLElement>('[data-testid="mnemon-panel-content"]')!
-    expect(panel.getAttribute('data-workspace-id')).toBe('workspace-1')
-    expect(panel.getAttribute('data-effective-workspace-id')).toBe('workspace-1')
-
     fireEvent.change(document.querySelector('[aria-label="workspace-test-selector"]')!, { target: { value: 'workspace-2' } })
-    await waitFor(() => expect(panel.getAttribute('data-workspace-id')).toBe('workspace-2'))
-    expect(panel.getAttribute('data-effective-workspace-id')).toBe('workspace-1')
-
-    const align = [...document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'align-test-workspace')
-    fireEvent.click(align!)
-    await waitFor(() => expect(panel.getAttribute('data-workspace-id')).toBe('workspace-1'))
+    await waitFor(() => expect(document.querySelector('[data-testid="mnemon-canonical-content"]')?.getAttribute('data-workspace-id')).toBe('workspace-2'))
+    fireEvent.click([...document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'align-test-workspace')!)
+    await waitFor(() => expect(document.querySelector('[data-testid="mnemon-canonical-content"]')?.getAttribute('data-workspace-id')).toBe('workspace-1'))
   })
 
-  it('opens for conversation anchors and yields to sessions and sibling panels', async () => {
-    const dispose = currentDispose = mountMnemonWorkspace(context() as never, {} as never, key => String(key))
-    const entry = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')!
-
-    window.dispatchEvent(new CustomEvent(MNEMON_ANCHOR_EVENT, { detail: { page: 'explore', sessionId: 'session-1' } }))
-    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(true)
-    fireEvent.click(document.querySelector('.sessionRow')!)
-    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(false)
-
-    fireEvent.click(entry)
-    document.dispatchEvent(new CustomEvent('dsh-panel-activate', { detail: 'taskboard' }))
-    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(false)
-
-    fireEvent.click(entry)
-    document.dispatchEvent(new CustomEvent('dsh-panel-activate', { detail: 'ssh' }))
-    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(false)
-    dispose()
-    currentDispose = undefined
-  })
-
-  it.each(['taskboard', 'ssh'] as const)('returns in one click after %s takes over without an activation announcement', name => {
-    const panel = mountSiblingPanel(name, false)
-    currentDispose = mountMnemonWorkspace(context() as never, {} as never, key => String(key))
-    const entry = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')!
-
-    fireEvent.click(entry)
-    fireEvent.click(panel.entry)
-    expect(panel.isOpen()).toBe(true)
-    expect(entry.hasAttribute('data-active')).toBe(false)
-    fireEvent.click(entry)
-
-    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(true)
-    expect(document.documentElement.hasAttribute(`data-dsh-${name}-active`)).toBe(false)
-    expect(panel.isOpen()).toBe(false)
-    // A subsequent store/transport refresh must not bring the old panel back.
-    panel.refresh()
-    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(true)
-    expect(document.documentElement.hasAttribute(`data-dsh-${name}-active`)).toBe(false)
-  })
-
-  it('reclaims a hidden workspace even before DOM-state synchronization has run', () => {
-    currentDispose = mountMnemonWorkspace(context() as never, {} as never, key => String(key))
-    const entry = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')!
-    fireEvent.click(entry)
-    document.documentElement.removeAttribute('data-dsh-mnemon-active')
-    document.documentElement.setAttribute('data-dsh-taskboard-active', '')
-    fireEvent.click(entry)
-
-    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(true)
-    expect(document.documentElement.hasAttribute('data-dsh-taskboard-active')).toBe(false)
-    expect(entry.getAttribute('data-active')).toBe('true')
-  })
-
-  it.each(['taskboard', 'ssh'] as const)('synchronizes its entry when %s takes over programmatically without an event', async name => {
-    currentDispose = mountMnemonWorkspace(context() as never, {} as never, key => String(key))
-    const entry = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')!
-    fireEvent.click(entry)
-    document.documentElement.setAttribute(`data-dsh-${name}-active`, '')
-
-    await waitFor(() => expect(entry.hasAttribute('data-active')).toBe(false))
-    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(false)
-    fireEvent.click(entry)
-    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(true)
-    expect(document.documentElement.hasAttribute(`data-dsh-${name}-active`)).toBe(false)
-  })
-
-  it('treats the sidebar entry as navigation and retains an already active workspace', () => {
-    currentDispose = mountMnemonWorkspace(context() as never, {} as never, key => String(key))
-    const entry = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')!
-    fireEvent.click(entry)
-    fireEvent.click(entry)
-    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(true)
-    expect(entry.getAttribute('data-active')).toBe('true')
-  })
-
-  it.each([true, false])('round-trips with the released legacy panel protocol (Mnemon mounted first: %s)', mnemonFirst => {
-    const mount = () => { currentDispose = mountMnemonWorkspace(context() as never, {} as never, key => String(key)) }
-    if (mnemonFirst) mount()
-    const board = mountSiblingPanel('taskboard')
-    const ssh = mountSiblingPanel('ssh')
-    if (!mnemonFirst) mount()
-    const entry = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')!
-    fireEvent.click(entry)
-    for (let round = 0; round < 3; round += 1) {
-      for (const panel of [board, ssh]) {
-        expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(true)
-        fireEvent.click(panel.entry)
-        expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(false)
-        fireEvent.click(entry)
-        expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(true)
-        expect(board.isOpen()).toBe(false)
-        expect(ssh.isOpen()).toBe(false)
-        board.refresh()
-        ssh.refresh()
-        expect(document.documentElement.hasAttribute('data-dsh-taskboard-active')).toBe(false)
-        expect(document.documentElement.hasAttribute('data-dsh-ssh-active')).toBe(false)
-      }
-    }
-  })
-
-  it('self-heals after a sidebar React-style row replacement', async () => {
-    const dispose = currentDispose = mountMnemonWorkspace(context() as never, {} as never, key => String(key))
-    document.querySelector('[data-dsh-mnemon-entry]')?.remove()
-    await waitFor(() => expect(document.querySelector('[data-dsh-mnemon-entry]')).not.toBeNull())
-    dispose()
-    currentDispose = undefined
-    expect(document.querySelector('[data-dsh-mnemon-entry]')).toBeNull()
-    expect(document.querySelector('[data-dsh-mnemon-view]')).toBeNull()
-  })
-
-  it('mounts inside the DSH advanced-mode frame classes when the classic panes are absent', async () => {
-    document.body.innerHTML = `
-      <div class="dshDesktopFrame">
-        <aside class="dshDesktopUpstreamSidebar">
-          <div class="logoRow"><button class="newSession">New</button></div>
-          <button data-dsh-taskboard-entry>Tasks</button>
-          <button data-dsh-ssh-entry>SSH</button>
-        </aside>
-        <main class="dshDesktopConversationSurface"><div data-chat-content>Chat stays mounted</div></main>
-      </div>`
-    const dispose = currentDispose = mountMnemonWorkspace(context() as never, {} as never, key => String(key))
-    const entry = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')
-    expect(entry).not.toBeNull()
-    await waitFor(() => expect(document.querySelector('[data-testid="mnemon-panel-content"]')).not.toBeNull())
-    expect(document.querySelector('[data-chat-content]')).not.toBeNull()
-
-    fireEvent.click(entry!)
-    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(true)
-
-    fireEvent.click(document.querySelector('[aria-label="header.backToConversation"]')!)
-    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(false)
-    dispose()
-    currentDispose = undefined
-  })
-
-  it('updates the custom sidebar entry and workspace when the DSH locale changes', async () => {
+  it('updates the launcher label with the DSH locale', async () => {
     let active: 'zh' | 'en' = 'zh'
-    let revision = 0
-    let localeSnapshot: { active: 'zh' | 'en'; locales: readonly never[]; revision: number } = {
-      active,
-      locales: [],
-      revision,
-    }
+    let snapshot: { active: 'zh' | 'en'; locales: readonly never[]; revision: number } = { active, locales: [], revision: 0 }
     const listeners = new Set<() => void>()
-    const locale = {
-      getSnapshot: () => localeSnapshot,
-      subscribe: (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener) },
-    }
-    const t = (key: string) => key === 'tab.label' ? active === 'zh' ? '记忆系统' : 'Memory System' : key
-    currentDispose = mountMnemonWorkspace(context(locale) as never, {} as never, t)
-
-    await waitFor(() => expect(document.querySelector('[data-testid="mnemon-panel-content"] h1')?.textContent).toBe('记忆系统'))
+    const locale = { getSnapshot: () => snapshot, subscribe: (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener) } }
+    const translate = (key: string) => key === 'tab.label' ? active === 'zh' ? '记忆系统' : 'Memory System' : key
+    currentDispose = mountMnemonWorkspace(context(locale) as never, settings, translate as never)
     expect(document.querySelector('[data-dsh-mnemon-entry]')?.textContent).toBe('记忆系统')
-
     active = 'en'
-    revision += 1
-    localeSnapshot = { active, locales: [] as const, revision }
+    snapshot = { active, locales: [] as const, revision: 1 }
     for (const listener of listeners) listener()
-
-    await waitFor(() => expect(document.querySelector('[data-testid="mnemon-panel-content"] h1')?.textContent).toBe('Memory System'))
-    expect(document.querySelector('[data-dsh-mnemon-entry]')?.textContent).toBe('Memory System')
-    expect(document.querySelector('[data-testid="mnemon-panel-content"]')?.getAttribute('data-locale')).toBe('en')
+    await waitFor(() => expect(document.querySelector('[data-dsh-mnemon-entry]')?.textContent).toBe('Memory System'))
   })
 })

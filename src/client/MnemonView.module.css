@@ -109,8 +109,8 @@
   .nav button small { display: block; margin-top: 1px; color: var(--mn-faint); font-size: 9px; line-height: 1.3; }
 }
 
-/* The standalone panel owns its scrollport while the underlying conversation stays mounted. */
-.canvas { min-width: 0; flex: 1; overflow: auto; overscroll-behavior-x: contain; overscroll-behavior-y: auto; scroll-behavior: auto; -webkit-overflow-scrolling: touch; background: var(--mn-surface); }
+/* The canonical DSH conversation view owns one plugin-local scrollport. */
+.canvas { min-width: 0; flex: 1; overflow: auto; overscroll-behavior-x: contain; overscroll-behavior-y: auto; scroll-behavior: auto; -webkit-overflow-scrolling: touch; background: var(--mn-bg); }
 .page { width: min(1320px, 100%); min-height: 100%; margin: 0 auto; padding: clamp(16px, 2vw, 24px) clamp(16px, 2.4vw, 28px) clamp(96px, 14vh, 150px); }
 .pageHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
 .pageHeader h2 { margin: 2px 0 2px; font-size: 20px; line-height: 1.2; letter-spacing: -.025em; }
@@ -137,6 +137,29 @@
 .emptyGlyph { display: grid; width: 76px; height: 76px; flex: 0 0 auto; place-items: center; border: 1px solid color-mix(in srgb, var(--mn-accent) 35%, var(--mn-line)); border-radius: 50%; color: var(--mn-accent); background: radial-gradient(circle, color-mix(in srgb, var(--mn-accent) 12%, transparent), transparent 65%); font: 500 26px/1 var(--mn-code); }
 .emptyState h3 { margin: 0 0 5px; font-size: 16px; }
 .emptyState p { max-width: 500px; margin: 0; color: var(--mn-muted); }
+.sourceManagementSummary { display: grid; grid-template-columns: minmax(220px, 1.2fr) minmax(260px, 1fr) minmax(220px, 1fr); gap: 14px; margin-top: 13px; padding: 15px; border: 1px solid var(--mn-line); border-radius: 12px; background: var(--mn-layer-1); }
+.sourceManagementIdentity { display: grid; min-width: 0; grid-template-columns: 9px minmax(0, 1fr); align-items: center; gap: 10px; }
+.sourceManagementIdentity > span { width: 9px; height: 9px; border-radius: 50%; background: var(--mn-success); box-shadow: 0 0 0 4px color-mix(in srgb, var(--mn-success) 12%, transparent); }
+.sourceManagementSummary[data-availability="degraded"] .sourceManagementIdentity > span { background: var(--mn-priority); box-shadow: 0 0 0 4px color-mix(in srgb, var(--mn-priority) 12%, transparent); }
+.sourceManagementSummary[data-availability="unavailable"] .sourceManagementIdentity > span { background: var(--mn-danger); box-shadow: 0 0 0 4px color-mix(in srgb, var(--mn-danger) 12%, transparent); }
+.sourceManagementIdentity > div { display: grid; min-width: 0; gap: 2px; }
+.sourceManagementIdentity small, .sourceManagementCapabilities > small { color: var(--mn-faint); font-size: 9px; }
+.sourceManagementIdentity strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.sourceManagementIdentity code { overflow: hidden; color: var(--mn-muted); font: 9px var(--mn-code); text-overflow: ellipsis; white-space: nowrap; }
+.sourceManagementSummary dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.sourceManagementSummary dl > div { display: grid; min-width: 0; align-content: center; gap: 3px; padding: 8px; border-radius: 8px; background: var(--mn-layer-2); }
+.sourceManagementSummary dt { color: var(--mn-faint); font-size: 8px; }
+.sourceManagementSummary dd { margin: 0; overflow: hidden; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.sourceManagementSummary dd code { font: 9px var(--mn-code); }
+.sourceManagementCapabilities { display: grid; min-width: 0; align-content: center; gap: 6px; }
+.sourceManagementCapabilities > div { display: flex; flex-wrap: wrap; gap: 4px; }
+.sourceManagementCapabilities span { padding: 3px 6px; border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 9%, var(--mn-layer-2)); font: 650 8px var(--mn-code); }
+.sourceManagementDiagnostics, .sourceManagementForm { margin-top: 13px; padding: 15px; border: 1px solid var(--mn-line); border-radius: 12px; background: var(--mn-layer-1); }
+.sourceManagementDiagnostics h3, .sourceManagementForm h3 { margin: 0; font-size: 13px; }
+.sourceManagementDiagnostics ul { display: grid; gap: 5px; margin: 10px 0 0; padding-left: 18px; color: var(--mn-muted); font-size: 10px; line-height: 1.5; }
+.sourceManagementForm > div:first-child p { margin: 3px 0 0; color: var(--mn-muted); font-size: 10px; }
+.sourceManagementForm .formGrid label > small { color: var(--mn-faint); font-size: 9px; line-height: 1.45; }
+.sourceManagementForm .formGrid input[type="checkbox"] { width: 16px; height: 16px; min-width: 0; accent-color: var(--mn-accent); }
 .loadingPanel { display: grid; min-height: 220px; place-items: center; border: 1px solid var(--mn-line); border-radius: 13px; color: var(--mn-muted); background: var(--mn-layer-1); }
 .asyncRegion { position: relative; min-width: 0; }
 .asyncResults { position: relative; min-width: 0; min-height: 120px; }
@@ -800,6 +823,8 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
 .versionList article > footer button { flex: none; }
 
 @media (max-width: 1000px) {
+  .sourceManagementSummary { grid-template-columns: 1fr 1fr; }
+  .sourceManagementCapabilities { grid-column: 1 / -1; }
   .graphLayout { position: relative; display: block; }
   .graphInspector { position: static; width: auto; min-height: 0; margin-top: 10px; overflow: visible; box-shadow: none; }
   .graphInspector[data-empty] { display: none; }
@@ -813,6 +838,8 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
 }
 
 @media (max-width: 760px) {
+  .sourceManagementSummary { grid-template-columns: 1fr; }
+  .sourceManagementSummary dl, .sourceManagementCapabilities { grid-column: auto; }
   .metadataList { grid-template-columns: 1fr; }
   .shell { min-height: 0; overflow: hidden; }
   .masthead { min-height: 76px; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 10px 14px; }
