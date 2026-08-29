@@ -71,6 +71,7 @@ export const RUNTIME_MEMORY_SOURCE = defineMemorySource({
             mode: request.mode,
             text: truncate(current.text, request.maxCharacters),
             revision: current.revision,
+            provenance: { sourceTypeId: 'runtime' },
           }],
         }
       },

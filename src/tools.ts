@@ -6,6 +6,8 @@ import { assertMemoryLayerParticipation } from './memory-system/access.ts'
 import type { MemoryCapability } from './memory-system/contracts.ts'
 import type { MemoryKernel } from './memory-system/kernel.ts'
 import type { MnemonAgentRuntimeSource } from './live-runtime.ts'
+import type { ComposableMemoryTurnManager } from './composable/turns.ts'
+import type { MemoryJsonValue } from '../packages/contracts/src/index.ts'
 import { isSubagent, MnemonSubagentCoordinator } from './subagent.ts'
 import {
   CATEGORIES,
@@ -169,6 +171,7 @@ interface ToolRuntime {
   runtimeMemory: RuntimeMemoryController
   documents: DocumentManager
   memoryKernel?: MemoryKernel
+  composableTurns?: ComposableMemoryTurnManager
 }
 
 function isAgentRuntimeSource(value: MnemonService | AgentRuntimeSource): value is AgentRuntimeSource {
@@ -198,6 +201,58 @@ export function registerTools(ctx: HostContextShape, serviceOrSource: MnemonServ
     return runtime
   }
   const config = serviceOrSource.config
+  const composableTurn = (exec: ToolExecution) => {
+    const agent = requireAgent(exec)
+    const manager = runtimeFor(exec).composableTurns
+    if (manager === undefined) throw new Error('Composable Memory View is unavailable in this runtime')
+    const parentId = isSubagent(agent) ? agent.session.header?.parentSession?.trim() : undefined
+    const ownerId = parentId === undefined || parentId === '' ? agent.id : parentId
+    const turn = manager.activeTurn(ownerId)
+    if (turn === undefined) throw new Error('Composable Memory View is not pinned to the current root turn')
+    return { manager, turn }
+  }
+
+  ctx.tools.register(definition({
+    name: 'mnemon_view_route',
+    description: 'Execute one exact Route offered in the current MNEMON VIEW ROUTES envelope. Use only ids present in that envelope; the Host binds the request to its hidden ReadGrant, enforces call/result/character budgets, and returns Evidence.',
+    parameters: {
+      type: 'object',
+      properties: {
+        routeId: { type: 'string', description: 'Exact View Route id.' },
+        input: { type: 'object', additionalProperties: true, description: 'Route-specific JSON input described by the offered Route.' },
+      },
+      required: ['routeId', 'input'],
+    },
+    output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
+    execute: (args: { routeId: string; input: MemoryJsonValue }, exec: ToolExecution) => {
+      const { manager, turn } = composableTurn(exec)
+      return manager.executeRoute(turn.turnId, args.routeId, args.input, exec.signal)
+    },
+    presentCall: (args: { routeId: string }) => ({ card: 'generic', title: 'Query composable memory', kind: 'search', rawInput: args.routeId }),
+    presentResult: () => ({ card: 'generic', title: 'Composable memory evidence ready' }),
+  } as never))
+
+  ctx.tools.register(definition({
+    name: 'mnemon_view_action',
+    description: 'Execute one exact Action offered in the current MNEMON VIEW ROUTES envelope. The Host rechecks write policy and authority at call time and returns a mutation Receipt; an offer is never itself authorization.',
+    parameters: {
+      type: 'object',
+      properties: {
+        offerId: { type: 'string', description: 'Exact View ActionOffer id.' },
+        input: { type: 'object', additionalProperties: true, description: 'Action-specific JSON input described by the offered Action.' },
+      },
+      required: ['offerId', 'input'],
+    },
+    output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
+    execute: (args: { offerId: string; input: MemoryJsonValue }, exec: ToolExecution) => {
+      if (!config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
+      const { manager, turn } = composableTurn(exec)
+      return manager.executeAction(turn.turnId, args.offerId, args.input, offer => offer.authority === undefined, exec.signal)
+    },
+    presentCall: (args: { offerId: string }) => ({ card: 'generic', title: 'Apply composable memory action', kind: 'edit', rawInput: args.offerId }),
+    presentResult: () => ({ card: 'generic', title: 'Composable memory receipt ready' }),
+  } as never))
+
   ctx.tools.register(definition({
     name: 'mnemon_memory_bodies',
     description: 'Inspect a bounded Memory Space catalog with ids, routing, capabilities, activation, and health; paths, settings, and statistics are omitted. Use only for explicit space inspection or management, or before a capability-dependent write. Never call it to route Recall: omit memoryBodyIds and mnemon_recall searches every pinned active space.',

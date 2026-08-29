@@ -17,6 +17,7 @@ import type { MemoryGenerationHost, MemoryTurnViewManager } from '../packages/ke
 import { createDefaultMemoryTurnViewManager } from './memory-view.ts'
 import { MemoryReceiptBridge, type AuthorityCommitRecorder } from './memory-receipts.ts'
 import { BUILTIN_MEMORY_BINDINGS } from './composable/bindings.ts'
+import { ComposableMemoryTurnManager } from './composable/turns.ts'
 
 export interface MnemonRuntimeGraph {
   config: ResolvedConfig
@@ -32,6 +33,7 @@ export interface MnemonRuntimeGraph {
   memoryViews: MemoryTurnViewManager
   /** New Composable View runtime; absent only for a legacy MemoryBoot caller. */
   memoryComposition?: MemoryGenerationHost
+  composableTurns?: ComposableMemoryTurnManager
   /** Detach from future definition changes without invalidating pinned turns. */
   retire(): void
   /** Detach this generation from future Host-global extension changes. */
@@ -112,11 +114,13 @@ export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot?: strin
         [BUILTIN_MEMORY_BINDINGS.memorySpaces, service],
       ]) })
       : undefined
+    const composableTurns = generationAttachment === undefined ? undefined : new ComposableMemoryTurnManager(generationAttachment.host)
     let retired = false
     let disposed = false
     return {
       config, runner, service, runtimeMemory, documents, storage, packs, memoryCatalog, memoryTopology, memoryKernel, memoryViews,
       ...(generationAttachment === undefined ? {} : { memoryComposition: generationAttachment.host }),
+      ...(composableTurns === undefined ? {} : { composableTurns }),
       retire: () => {
         if (retired || disposed) return
         retired = true
@@ -126,6 +130,7 @@ export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot?: strin
       dispose: () => {
         if (disposed) return
         disposed = true
+        composableTurns?.dispose()
         generationAttachment?.release()
         void generationAttachment?.dispose()
         detachReceiptSink()

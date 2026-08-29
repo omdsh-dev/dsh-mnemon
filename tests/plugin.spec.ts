@@ -126,7 +126,7 @@ describe('dsh-mnemon plugin composition', () => {
     const fixture = context({ connection: false, workspaceRegistry: false })
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
 
-    expect(fixture.tools).toHaveLength(13)
+    expect(fixture.tools).toHaveLength(15)
     expect(fixture.sections).toEqual([expect.objectContaining({ name: 'mnemon:routing' })])
     expect(fixture.contexts).toEqual([])
     expect(fixture.variables).toHaveLength(1)
@@ -172,6 +172,8 @@ describe('dsh-mnemon plugin composition', () => {
     const fixture = context()
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
     expect(fixture.tools.map(tool => (tool as { name: string }).name)).toEqual([
+      'mnemon_view_route',
+      'mnemon_view_action',
       'mnemon_memory_bodies',
       'mnemon_recall',
       'mnemon_related',
@@ -239,7 +241,7 @@ describe('dsh-mnemon plugin composition', () => {
   it('keeps stable live surfaces while fencing every mutation in read-only mode', async () => {
     const fixture = context()
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir(), writeEnabled: false })
-    expect(fixture.tools).toHaveLength(13)
+    expect(fixture.tools).toHaveLength(15)
     const runtimeTool = fixture.tools.find(tool => (tool as { name: string }).name === 'mnemon_runtime_memory') as {
       execute: (args: unknown, execution: unknown) => Promise<unknown>
     }

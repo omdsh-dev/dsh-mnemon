@@ -160,6 +160,7 @@ export function createMemorySpacesSource(providerRegistry?: MemoryProviderAdapte
             id: `${context.sourceInstanceKey}/projection`, sourceInstanceKey: context.sourceInstanceKey, mode: request.mode,
             text: truncate(`${active.length} active of ${all.length} configured Memory Space${all.length === 1 ? '' : 's'} available through scoped recall.`, request.maxCharacters),
             revision,
+            provenance: { sourceTypeId: 'memory-spaces' },
           }] : [],
           readGrant: {
             id: `${context.sourceInstanceKey}/grant/${revision}`,

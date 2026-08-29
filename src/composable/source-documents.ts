@@ -105,6 +105,7 @@ export const DOCUMENTS_MEMORY_SOURCE = defineMemorySource({
             id: `${context.sourceInstanceKey}/projection`, sourceInstanceKey: context.sourceInstanceKey, mode: request.mode,
             text: truncate(`${active.length} active project Document${active.length === 1 ? '' : 's'} available through the documents/search route.`, request.maxCharacters),
             revision: current.revision,
+            provenance: { sourceTypeId: 'documents' },
           }] : [],
           readGrant,
         }

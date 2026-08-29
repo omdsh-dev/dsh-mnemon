@@ -21,9 +21,10 @@ import { applyAgentMemoryViewWake, memoryPromptText, registerAgentMemoryViewCont
 import { AgentMemoryTurn, agentMemoryScope, openAgentTurn, type DelegatedMemoryView } from './agent-memory-turn.ts'
 import type { AssistantMessageText, LifecycleAgentSnapshot, LifecycleCounters, LifecyclePhase, LifecycleSnapshot, ReviewActivityScore, TaskAgentModelCatalog } from './shared/contracts.ts'
 import type { PreparedMemoryPlacement } from './provider-placement.ts'
-import type { MemoryWake } from '../packages/contracts/src/index.ts'
-import type { MnemonAgentRuntimeSource } from './live-runtime.ts'
-import { hostSessionEventAt, hostSessionEvents } from './session-events.ts'
+import type { MemoryOperationScope, MemoryTurnContext, MemoryWake } from '../packages/contracts/src/index.ts'
+import type { MemoryTurnViewManager } from '../packages/kernel/src/index.ts'
+import type { MnemonAgentRuntimeSource, MnemonRuntimeGraph } from './live-runtime.ts'
+import type { ComposableMemoryTurn, ComposableMemoryTurnManager } from './composable/turns.ts'
 
 type AgentRuntimeSource = Pick<MnemonAgentRuntimeSource, 'forAgent' | 'bindAgentRuntime'>
 
@@ -236,6 +237,14 @@ class MnemonAgentLifecycle {
   private lastPhase: LifecyclePhase = 'idle'
   private lastAt: string | undefined
   private lastError: string | undefined
+  private pinnedView: {
+    turn: number
+    manager: MemoryTurnViewManager
+    context: MemoryTurnContext
+    composableManager?: ComposableMemoryTurnManager
+    composableContext?: ComposableMemoryTurn
+    releaseRuntime: () => void
+  } | undefined
 
   constructor(
     readonly agent: HostAgent,
@@ -315,8 +324,11 @@ class MnemonAgentLifecycle {
   }
 
   memoryWake(): MemoryWake | undefined {
-    const pinned = this.memoryTurn?.current
-    return pinned === undefined ? undefined : pinned.manager.wake(pinned.context.viewId)
+    const pinned = this.pinnedView
+    if (pinned === undefined) return undefined
+    return pinned.composableManager !== undefined && pinned.composableContext !== undefined
+      ? pinned.composableManager.memoryWake(pinned.composableContext.view.id)
+      : pinned.manager.wake(pinned.context.viewId)
   }
 
   /**
@@ -412,11 +424,60 @@ class MnemonAgentLifecycle {
   }
 
   private openTurn(): number | undefined {
-    return openAgentTurn(this.agent)
+    let open: number | undefined
+    for (const event of this.agent.session.events) {
+      const turn = eventTurn(event)
+      if (event.type === 'turn/start' && turn !== undefined) open = turn
+      else if (event.type === 'turn/end' && turn === open) open = undefined
+    }
+    return open
+  }
+
+  private async pinView(turn: number): Promise<void> {
+    if (this.pinnedView?.turn === turn) return
+    this.releaseView()
+    const graph: MnemonRuntimeGraph | undefined = this.runtimeSource?.forAgent(this.agent)
+    const manager = graph?.memoryViews
+    if (manager === undefined || graph === undefined || this.runtimeSource === undefined) return
+    const cwd = this.agent.session.header?.cwd?.trim()
+    const scope: MemoryOperationScope = {
+      storage: this.config.storageScope,
+      ...(cwd === undefined || cwd === '' ? {} : { workspaceId: resolve(cwd) }),
+      sessionId: this.agent.id,
+      agentId: this.agent.id,
+    }
+    const context = await manager.beginTurn(`${this.agent.id}:${turn}`, scope)
+    let composableContext: ComposableMemoryTurn | undefined
+    let releaseRuntime: (() => void) | undefined
+    try {
+      composableContext = await graph.composableTurns?.beginTurn(`${this.agent.id}:${turn}`, scope)
+      releaseRuntime = this.runtimeSource.bindAgentRuntime(this.agent.id, graph)
+      this.pinnedView = {
+        turn,
+        manager,
+        context,
+        ...(graph.composableTurns === undefined ? {} : { composableManager: graph.composableTurns }),
+        ...(composableContext === undefined ? {} : { composableContext }),
+        releaseRuntime,
+      }
+    } catch (error) {
+      graph.composableTurns?.endTurn(`${this.agent.id}:${turn}`)
+      manager.endTurn(context.turnId)
+      releaseRuntime?.()
+      throw error
+    }
   }
 
   private releaseView(turn?: number): void {
-    this.memoryTurn?.end(turn)
+    const pinned = this.pinnedView
+    if (pinned === undefined || (turn !== undefined && pinned.turn !== turn)) return
+    this.pinnedView = undefined
+    try {
+      pinned.composableManager?.endTurn(pinned.composableContext?.turnId ?? '')
+      pinned.manager.endTurn(pinned.context.turnId)
+    } finally {
+      pinned.releaseRuntime()
+    }
   }
 
   private async finishTurn(payload: TurnStoppingPayload): Promise<void> {

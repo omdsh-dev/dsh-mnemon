@@ -1835,9 +1835,23 @@ Completion protocol: call \`${resultToolName}\` exactly once with the final resu
 
   private recallAuthority(agent: HostAgent, required: boolean): RecallAuthority | undefined {
     const authority = this.turnAuthority(agent, required)
-    if (authority === undefined) return undefined
-    const { context, graph } = authority
-    const state = graph.memoryViews.sourceState(context.viewId, 'memory-spaces')
+    if (authority === undefined || !isAgentRuntimeSource(this.runtimeMemoryOrSource)) return undefined
+    const graph = this.runtimeMemoryOrSource.forAgent(agent)
+    const parentId = isSubagent(agent) ? agent.session.header?.parentSession?.trim() : undefined
+    const ownerId = parentId === undefined || parentId === '' ? agent.id : parentId
+    const composable = graph.composableTurns?.activeTurn(ownerId)
+    if (composable !== undefined) {
+      const grant = composable.view.readGrants.find(candidate => candidate.schema === 'dsh-mnemon.memory-spaces/v1')
+      const value = optionalObject(grant?.value)
+      if (value === undefined || !Array.isArray(value.memoryBodyIds) || value.memoryBodyIds.some(id => typeof id !== 'string' || id.trim() === '')) {
+        throw new Error(`Composable Memory View has invalid recall authority: ${composable.view.id}`)
+      }
+      const memoryBodyIds = [...new Set(value.memoryBodyIds.map(id => String(id).trim()))]
+      if (memoryBodyIds.length === 0) throw new Error(`Composable Memory View has no recall-authorized Memory Spaces: ${composable.view.id}`)
+      return { ...authority, viewId: composable.view.id, memoryBodyIds }
+    }
+    const views = graph.memoryViews
+    const state = views.sourceState(authority.viewId, 'memory-spaces')
     const value = optionalObject(state)
     if (value === undefined || !Array.isArray(value.memoryBodyIds) || value.memoryBodyIds.some(id => typeof id !== 'string' || id.trim() === '')) {
       throw new Error(`pinned MemorySource has invalid recall authority: ${context.viewId}`)
@@ -1850,10 +1864,17 @@ Completion protocol: call \`${resultToolName}\` exactly once with the final resu
   private turnAuthority(agent: HostAgent, required: boolean): { context: MemoryTurnContext; graph: MnemonRuntimeGraph } | undefined {
     if (!isAgentRuntimeSource(this.runtimeMemoryOrSource)) return undefined
     const graph = this.runtimeMemoryOrSource.forAgent(agent)
-    const context = graph.memoryViews.activeTurn(agent.id)
-    if (context !== undefined) return { context, graph }
-    if (required) throw new Error('Recall requires the MemorySource generation pinned to the current turn')
-    return undefined
+    const parentId = isSubagent(agent) ? agent.session.header?.parentSession?.trim() : undefined
+    const ownerId = parentId === undefined || parentId === '' ? agent.id : parentId
+    const composable = graph.composableTurns?.activeTurn(ownerId)
+    if (composable !== undefined) return { turnId: composable.turnId, viewId: composable.view.id }
+    const views = graph.memoryViews
+    const pinned = views.activeTurn(ownerId)
+    if (pinned === undefined) {
+      if (required) throw new Error('Recall requires the MemorySource generation pinned to the current turn')
+      return undefined
+    }
+    return { turnId: pinned.turnId, viewId: pinned.viewId }
   }
 
   private turnRetrievalState(context: MemoryTurnContext): TurnRetrievalState {
