@@ -13,6 +13,7 @@ import {
   type DocumentView,
   type EntityView,
   type Insight,
+  type JsonValue,
   type MemoryBody,
   type MemoryBodyView,
   type MemoryBodyMetadataMaintenanceResult,
@@ -25,6 +26,8 @@ import {
   type MemoryProviderId,
   type MemorySystemDescriptor,
   type MemoryReadSource,
+  type MemorySourceManagementCatalog,
+  type MemorySourceManagementResult,
   type MnemonPackExport,
   type MnemonPackImportResult,
   type MnemonPackPreview,
@@ -145,6 +148,18 @@ export class MnemonClient {
 
   memorySystem(): Promise<MemorySystemDescriptor> {
     return this.call(MNEMON_READ_CHANNEL, 'memory-system', this.scoped())
+  }
+
+  sourceManagementCatalog(): Promise<MemorySourceManagementCatalog> {
+    return this.call(MNEMON_READ_CHANNEL, 'source-management-catalog', this.scoped())
+  }
+
+  readSourceManagement(sourceInstanceKey: string, operation: string, input: JsonValue = null): Promise<MemorySourceManagementResult> {
+    return this.call(MNEMON_READ_CHANNEL, 'source-management-read', this.scoped({ sourceInstanceKey, operation, input }))
+  }
+
+  mutateSourceManagement(sourceInstanceKey: string, operation: string, input: JsonValue, expectedRevision: string, confirmed: boolean): Promise<MemorySourceManagementResult> {
+    return this.call(MNEMON_WRITE_CHANNEL, 'source-management-mutate', this.scoped({ sourceInstanceKey, operation, input, expectedRevision, confirmed }))
   }
 
   taskAgentModels(includeCatalog?: boolean): Promise<TaskAgentModelCatalog> {

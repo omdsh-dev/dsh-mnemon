@@ -28,6 +28,44 @@ export const MNEMON_EMBEDDING_PROTOCOLS = [EMBEDDING_PROTOCOL_AUTO, EMBEDDING_PR
 export type JsonPrimitive = string | number | boolean | null
 export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue }
 
+export interface MemorySourceManagementField {
+  key: string
+  label: string
+  description?: string
+  input: 'text' | 'number' | 'boolean' | 'url' | 'secret' | 'select'
+  required: boolean
+  secret?: boolean
+  options?: Array<{ value: string; label: string }>
+}
+
+/** Browser-safe descriptor of one Source instance visible in the current scope. */
+export interface MemorySourceManagementInstance {
+  sourceInstanceKey: string
+  sourceTypeId: string
+  packageName: string
+  role: string
+  availability: 'ready' | 'degraded' | 'unavailable'
+  revision: string
+  capabilities: string[]
+  management: {
+    label: string
+    description: string
+    fields?: MemorySourceManagementField[]
+    diagnostics?: string[]
+  }
+  hints?: JsonValue
+}
+
+export interface MemorySourceManagementCatalog {
+  generationId: string
+  sources: MemorySourceManagementInstance[]
+}
+
+export interface MemorySourceManagementResult {
+  revision: string
+  value: JsonValue
+}
+
 export type RpcError =
   | { code: 'bad-request'; message: string; details: { issues: JsonValue[] } }
   | { code: 'settings-rejected'; message: string; details: { ns: string } }

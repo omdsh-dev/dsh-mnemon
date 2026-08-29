@@ -45,6 +45,51 @@ function fakeService(writeEnabled = true): MnemonService {
 }
 
 describe('Mnemon RPC', () => {
+  it('leases the Serving generation for scoped Source management requests', async () => {
+    const service = fakeService()
+    const release = vi.fn()
+    const generation = {
+      managementCatalog: vi.fn(async () => ({ generationId: 'generation:test', sources: [] })),
+      executeManagement: vi.fn(async request => ({ revision: request.mode === 'read' ? 'r1' : 'r2', value: { operation: request.operation } })),
+    }
+    const memoryComposition = { acquire: vi.fn(() => ({ generation, release })) }
+    const graph = {
+      config: service.config,
+      service,
+      runtimeMemory: {},
+      documents: {},
+      storage: {},
+      packs: {},
+      memoryComposition,
+    } as unknown as MnemonRuntimeGraph
+    const runtime = {
+      route: vi.fn(() => ({
+        graph,
+        selectedWorkspace: { id: 'workspace-1', title: 'Workspace', path: '/tmp/workspace' },
+        selectedRoot: '/tmp/data', effectiveRoot: '/tmp/data', aligned: true,
+      })),
+    } as unknown as LiveMnemonRuntime
+
+    await expect(createReadHandler(runtime)('source-management-catalog', { workspaceId: 'workspace-1', sessionId: 'session-1' }))
+      .resolves.toMatchObject({ ok: true, value: { generationId: 'generation:test' } })
+    expect(generation.managementCatalog).toHaveBeenCalledWith({ storage: 'global', workspaceId: '/tmp/workspace', sessionId: 'session-1' })
+
+    await expect(createReadHandler(runtime)('source-management-read', {
+      workspaceId: 'workspace-1', sourceInstanceKey: 'source:git/work', operation: 'repository', input: { branch: 'main' },
+    })).resolves.toMatchObject({ ok: true, value: { revision: 'r1' } })
+    expect(generation.executeManagement).toHaveBeenLastCalledWith(expect.objectContaining({
+      sourceInstanceKey: 'source:git/work', mode: 'read', operation: 'repository', confirmed: false,
+    }))
+
+    await expect(createWriteHandler(runtime)('source-management-mutate', {
+      workspaceId: 'workspace-1', sourceInstanceKey: 'source:git/work', operation: 'refresh', input: {}, expectedRevision: 'r1', confirmed: true,
+    })).resolves.toMatchObject({ ok: true, value: { revision: 'r2' } })
+    expect(generation.executeManagement).toHaveBeenLastCalledWith(expect.objectContaining({
+      sourceInstanceKey: 'source:git/work', mode: 'mutate', operation: 'refresh', expectedRevision: 'r1', confirmed: true,
+    }))
+    expect(release).toHaveBeenCalledTimes(3)
+  })
+
   it('exposes the active descriptor and enforces manual data-plane participation', async () => {
     const service = fakeService()
     const catalog = new MemoryCatalog()

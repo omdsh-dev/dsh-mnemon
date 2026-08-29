@@ -46,6 +46,50 @@ export interface MemoryManagementDescriptor {
   diagnostics?: string[]
 }
 
+export type MemorySourceManagementMode = 'read' | 'mutate'
+
+/**
+ * Authenticated human-management request delivered to one Serving Source.
+ * It is deliberately separate from model Routes and ActionOffers: no View
+ * grant crosses into the browser management plane.
+ */
+export interface MemorySourceManagementRequest {
+  scope: MemoryOperationScope
+  sourceInstanceKey: string
+  mode: MemorySourceManagementMode
+  operation: string
+  input: MemoryJsonValue
+  /** Mutations are revision-fenced by the caller and rechecked by the Source. */
+  expectedRevision?: string
+  /** The Host only forwards mutations after an explicit confirmation. */
+  confirmed: boolean
+  signal?: AbortSignal
+}
+
+/** JSON-safe management projection or mutation result from one Source. */
+export interface MemorySourceManagementResult {
+  revision: string
+  value: MemoryJsonValue
+}
+
+/** Sanitized Source instance descriptor returned to authenticated clients. */
+export interface MemorySourceManagementInstance {
+  sourceInstanceKey: string
+  sourceTypeId: string
+  packageName: string
+  role: string
+  availability: MemorySourceAvailability
+  revision: string
+  capabilities: MemoryCapability[]
+  management: MemoryManagementDescriptor
+  hints?: MemoryJsonValue
+}
+
+export interface MemorySourceManagementCatalog {
+  generationId: string
+  sources: MemorySourceManagementInstance[]
+}
+
 export interface MemorySourceRouteManifest {
   /** Stable within one Source type. Runtime prefixes it with the instance key. */
   id: string
@@ -254,6 +298,7 @@ export interface MemorySourceRuntimeContext {
 export interface MemorySourceRuntime {
   facts(request: MemoryViewRequest): MemorySourceFacts | Promise<MemorySourceFacts>
   project(request: MemoryProjectionRequest): MemoryViewContribution | Promise<MemoryViewContribution>
+  manage?(request: MemorySourceManagementRequest): MemorySourceManagementResult | Promise<MemorySourceManagementResult>
   query?(request: {
     view: ComposableMemoryView
     route: MemoryViewRoute

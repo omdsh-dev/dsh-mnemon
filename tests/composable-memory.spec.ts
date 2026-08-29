@@ -105,6 +105,13 @@ function sourceDefinition(options: {
             consistency: 'namespace-pinned-live-read',
           },
         }),
+        manage: request => {
+          if (request.mode === 'mutate' && request.expectedRevision !== 'source-r1') throw new Error('management revision conflict')
+          return {
+            revision: request.mode === 'mutate' ? 'source-r2' : 'source-r1',
+            value: { operation: request.operation, mode: request.mode, input: request.input },
+          }
+        },
         query: async request => {
           if (options.queryFailure === true) throw new Error('query unavailable')
           return {
@@ -239,6 +246,60 @@ describe('Composable View Memory compiler', () => {
       status: 'succeeded',
       revision: 'source-r2',
     })
+    await generation.dispose()
+  })
+
+  it('keeps authenticated Source management outside View grants and revision-fences mutations', async () => {
+    const generation = new MemoryCompositionGeneration(contributions())
+    const catalog = await generation.managementCatalog(REQUEST.scope)
+    expect(catalog).toMatchObject({
+      generationId: generation.id,
+      sources: [{
+        sourceInstanceKey: 'source:fixture',
+        sourceTypeId: 'example',
+        availability: 'ready',
+        revision: 'source-r1',
+        management: { label: 'Example', fields: [{ key: 'token', secret: true }] },
+      }],
+    })
+    expect(JSON.stringify(catalog)).not.toContain('sha256:source')
+
+    await expect(generation.executeManagement({
+      scope: REQUEST.scope,
+      sourceInstanceKey: 'source:fixture',
+      mode: 'read',
+      operation: 'inspect',
+      input: { query: 'safe' },
+      confirmed: false,
+    })).resolves.toEqual({ revision: 'source-r1', value: { operation: 'inspect', mode: 'read', input: { query: 'safe' } } })
+
+    await expect(generation.executeManagement({
+      scope: REQUEST.scope,
+      sourceInstanceKey: 'source:fixture',
+      mode: 'mutate',
+      operation: 'update',
+      input: { value: 'next' },
+      expectedRevision: 'source-r1',
+      confirmed: false,
+    })).rejects.toThrow('explicit confirmation')
+    await expect(generation.executeManagement({
+      scope: REQUEST.scope,
+      sourceInstanceKey: 'source:fixture',
+      mode: 'mutate',
+      operation: 'update',
+      input: { value: 'next' },
+      expectedRevision: 'stale',
+      confirmed: true,
+    })).rejects.toThrow('revision conflict')
+    await expect(generation.executeManagement({
+      scope: REQUEST.scope,
+      sourceInstanceKey: 'source:fixture',
+      mode: 'mutate',
+      operation: 'update',
+      input: { value: 'next' },
+      expectedRevision: 'source-r1',
+      confirmed: true,
+    })).resolves.toMatchObject({ revision: 'source-r2', value: { mode: 'mutate' } })
     await generation.dispose()
   })
 

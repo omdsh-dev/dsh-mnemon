@@ -10,6 +10,7 @@ import { MNEMON_ACTIVATION_CHANNEL, MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MN
 import { isMemoryProviderId } from './providers/catalog.ts'
 import { assertMemoryLayerParticipation } from './memory-system/access.ts'
 import type { MemoryCapability } from './memory-system/contracts.ts'
+import type { MemoryJsonValue, MemoryOperationScope } from '../packages/contracts/src/index.ts'
 import type {
   CreateMemoryBodyRequest,
   MemoryPlacementCapability,
@@ -44,7 +45,7 @@ function runtimeFor(
   runtimeMemory?: RuntimeMemoryController,
   storage?: StorageScopeInspector,
 ): {
-  graph: Pick<MnemonRuntimeGraph, 'service' | 'runtimeMemory' | 'documents' | 'storage' | 'packs'> & Partial<Pick<MnemonRuntimeGraph, 'memoryKernel'>>
+  graph: Pick<MnemonRuntimeGraph, 'service' | 'runtimeMemory' | 'documents' | 'storage' | 'packs'> & Partial<Pick<MnemonRuntimeGraph, 'memoryKernel' | 'memoryComposition'>>
   route?: ReturnType<LiveMnemonRuntime['route']>
   explicitWorkspace: boolean
 } {
@@ -62,6 +63,16 @@ function runtimeFor(
       packs: undefined as never,
     },
     explicitWorkspace: false,
+  }
+}
+
+function managementScope(resolved: ReturnType<typeof runtimeFor>, payload: Record<string, unknown>): MemoryOperationScope {
+  const requested = requestedScope(payload)
+  const workspaceId = resolved.route?.selectedWorkspace?.path ?? requested.workspaceId
+  return {
+    storage: resolved.graph.service.config.storageScope,
+    ...(workspaceId === undefined ? {} : { workspaceId }),
+    ...(requested.sessionId === undefined ? {} : { sessionId: requested.sessionId }),
   }
 }
 
@@ -136,7 +147,7 @@ function badRequest(message: string): RpcResult<unknown> {
 }
 
 export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController, storage?: StorageScopeInspector, versions?: VersionUpdateManager): HostRpcHandler {
-  return async (endpoint, rawPayload) => {
+  return async (endpoint, rawPayload, signal) => {
     try {
       const payload = object(rawPayload)
       if (endpoint === 'versions') {
@@ -154,6 +165,34 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
         ? resolved.graph.documents.forWorkspace(selectedWorkspace.path)
         : undefined
       switch (endpoint) {
+        case 'source-management-catalog':
+          {
+            if (resolved.graph.memoryComposition === undefined) throw new Error('Composable Source management is unavailable')
+            const lease = resolved.graph.memoryComposition.acquire()
+            try {
+              return success(await lease.generation.managementCatalog(managementScope(resolved, payload)))
+            } finally {
+              lease.release()
+            }
+          }
+        case 'source-management-read':
+          {
+            if (resolved.graph.memoryComposition === undefined) throw new Error('Composable Source management is unavailable')
+            const lease = resolved.graph.memoryComposition.acquire()
+            try {
+              return success(await lease.generation.executeManagement({
+                scope: managementScope(resolved, payload),
+                sourceInstanceKey: String(payload.sourceInstanceKey ?? ''),
+                mode: 'read',
+                operation: String(payload.operation ?? ''),
+                input: (payload.input ?? null) as MemoryJsonValue,
+                confirmed: false,
+                ...(signal === undefined ? {} : { signal }),
+              }))
+            } finally {
+              lease.release()
+            }
+          }
         case 'embedding-status':
           return success(await service.embeddingStatus())
         case 'memory-system':
@@ -361,7 +400,7 @@ export function createActivationHandler(input: RuntimeInput): HostRpcHandler {
 }
 
 export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecycle, runtimeMemory?: RuntimeMemoryController, versions?: VersionUpdateManager): HostRpcHandler {
-  return async (endpoint, rawPayload) => {
+  return async (endpoint, rawPayload, signal) => {
     try {
       const payload = object(rawPayload)
       if (endpoint === 'version-update') {
@@ -383,6 +422,25 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
       const inspectionDiverged = resolved.explicitWorkspace && resolved.route?.aligned === false
       const alignedSession = resolved.explicitWorkspace && resolved.route?.aligned === true && resolved.route.effectiveWorkspace !== undefined
       switch (endpoint) {
+        case 'source-management-mutate':
+          {
+            if (resolved.graph.memoryComposition === undefined) throw new Error('Composable Source management is unavailable')
+            const lease = resolved.graph.memoryComposition.acquire()
+            try {
+              return success(await lease.generation.executeManagement({
+                scope: managementScope(resolved, payload),
+                sourceInstanceKey: String(payload.sourceInstanceKey ?? ''),
+                mode: 'mutate',
+                operation: String(payload.operation ?? ''),
+                input: (payload.input ?? null) as MemoryJsonValue,
+                expectedRevision: String(payload.expectedRevision ?? ''),
+                confirmed: payload.confirmed === true,
+                ...(signal === undefined ? {} : { signal }),
+              }))
+            } finally {
+              lease.release()
+            }
+          }
         case 'provider-service-update':
           {
             const providerId = String(payload.providerId ?? '')

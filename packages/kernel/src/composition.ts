@@ -17,6 +17,9 @@ import type {
   MemorySourceDefinition,
   MemorySourceFacts,
   MemorySourceManifest,
+  MemorySourceManagementCatalog,
+  MemorySourceManagementRequest,
+  MemorySourceManagementResult,
   MemorySourceRouteManifest,
   MemorySourceRuntime,
   MemoryStrategyDefinition,
@@ -591,6 +594,78 @@ export class MemoryCompositionGeneration {
     }
     const viewDigest = digest(body)
     return deepFreeze({ id: `view:${viewDigest}`, digest: viewDigest, createdAt: this.now().toISOString(), ...body })
+  }
+
+  /**
+   * Project the current scope's visible Source instances for the human
+   * management plane. The returned catalog contains only JSON-safe manifest
+   * metadata and SourceFacts; runtime objects and grants remain Host-only.
+   */
+  async managementCatalog(scope: MemoryViewRequest['scope']): Promise<MemorySourceManagementCatalog> {
+    this.assertOpen()
+    const request = jsonClone({
+      scope,
+      scenario: 'management.catalog',
+      budget: DEFAULT_MEMORY_VIEW_BUDGET,
+    }, 'memory management catalog request')
+    const sources = []
+    for (const source of this.sources.values()) {
+      const descriptor = source.installed.definition.manifest.management
+      if (descriptor === undefined) continue
+      const facts = normalizeFacts(source.installed, await source.runtime.facts(request))
+      sources.push({
+        sourceInstanceKey: source.installed.instanceKey,
+        sourceTypeId: source.installed.definition.manifest.typeId,
+        packageName: source.installed.definition.manifest.packageName,
+        role: source.installed.definition.manifest.role,
+        availability: facts.availability,
+        revision: facts.revision,
+        capabilities: facts.capabilities,
+        management: descriptor,
+        ...(facts.hints === undefined ? {} : { hints: facts.hints }),
+      })
+    }
+    return jsonClone({ generationId: this.id, sources }, 'memory Source management catalog')
+  }
+
+  /** Execute one short-lived, explicitly scoped management operation. */
+  async executeManagement(requestValue: MemorySourceManagementRequest): Promise<MemorySourceManagementResult> {
+    this.assertOpen()
+    const sourceInstanceKey = instanceKey(requestValue.sourceInstanceKey, 'source')
+    const operation = id(requestValue.operation, 'memory Source management operation')
+    if (requestValue.mode !== 'read' && requestValue.mode !== 'mutate') throw new Error(`unsupported memory Source management mode: ${String(requestValue.mode)}`)
+    if (requestValue.mode === 'mutate') {
+      if (requestValue.confirmed !== true) throw new Error('memory Source management mutation requires explicit confirmation')
+      requiredText(requestValue.expectedRevision, 'memory Source management expectedRevision', 500)
+    }
+    const source = this.sources.get(sourceInstanceKey)
+    if (source?.runtime.manage === undefined || source.installed.definition.manifest.management === undefined) {
+      throw new Error(`memory Source does not expose management operations: ${sourceInstanceKey}`)
+    }
+    const facts = normalizeFacts(source.installed, await source.runtime.facts(jsonClone({
+      scope: requestValue.scope,
+      scenario: `management.${requestValue.mode}`,
+      budget: DEFAULT_MEMORY_VIEW_BUDGET,
+    }, 'memory Source management facts request')))
+    if (facts.availability === 'unavailable') throw new Error(`memory Source is unavailable in the requested management scope: ${sourceInstanceKey}`)
+    if (requestValue.mode === 'mutate' && requestValue.expectedRevision !== facts.revision) {
+      throw new Error(`memory Source management revision conflict: expected ${requestValue.expectedRevision}, current ${facts.revision}`)
+    }
+    const request: MemorySourceManagementRequest = {
+      scope: jsonClone(requestValue.scope, 'memory Source management scope'),
+      sourceInstanceKey,
+      mode: requestValue.mode,
+      operation,
+      input: jsonClone(requestValue.input, 'memory Source management input'),
+      ...(requestValue.expectedRevision === undefined ? {} : { expectedRevision: requiredText(requestValue.expectedRevision, 'memory Source management expectedRevision', 500) }),
+      confirmed: requestValue.confirmed === true,
+      ...(requestValue.signal === undefined ? {} : { signal: requestValue.signal }),
+    }
+    const result = await source.runtime.manage(request)
+    return jsonClone({
+      revision: requiredText(result.revision, 'memory Source management result revision', 500),
+      value: result.value,
+    }, 'memory Source management result')
   }
 
   async executeRoute(view: ComposableMemoryView, routeId: string, input: MemoryJsonValue, signal?: AbortSignal, budget: MemoryViewBudget = DEFAULT_MEMORY_VIEW_BUDGET): Promise<MemoryEvidence> {
