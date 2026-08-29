@@ -23,6 +23,7 @@ const host: UserConfig = {
     'source-runtime': 'src/plugins/source-runtime.ts',
     'source-documents': 'src/plugins/source-documents.ts',
     'source-memory-spaces': 'src/plugins/source-memory-spaces.ts',
+    'source-memory-spaces/provider-sdk': 'src/memory-spaces/provider-sdk.ts',
     'view-strategy-default-three-tier': 'src/plugins/strategy-default-three-tier.ts',
     contracts: 'packages/contracts/src/index.ts',
     kernel: 'packages/kernel/src/index.ts',

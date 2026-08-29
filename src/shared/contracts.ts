@@ -321,23 +321,33 @@ export interface ResolvedInteractionConfig {
   saveAction: boolean
 }
 
-export type MemoryProviderId =
-  | 'mnemon-native'
-  | 'openviking'
-  | 'honcho'
-  | 'mem0'
-  | 'hindsight'
-  | 'holographic'
-  | 'retaindb'
-  | 'byterover'
-  | 'supermemory'
+/**
+ * Provider instance identity inside one Memory Spaces Source. Built-in ids
+ * remain stable; third-party child modules may contribute additional ids.
+ */
+export type MemoryProviderId = string
 
 export type MemoryProviderConnectionValue = string | number | boolean
 export type MemoryProviderConnection = Record<string, MemoryProviderConnectionValue>
 
+export interface MemoryProviderIcon {
+  /** Bundled brand token, self-contained image data, or a short text glyph. */
+  kind: 'brand' | 'data-url' | 'glyph'
+  value: string
+}
+
+export interface MemoryProviderConfigOption {
+  value: string
+  label: string
+  /** Optional Host-provided translation key; clients fall back to label. */
+  i18nKey?: string
+}
+
 export interface MemoryProviderConfigField {
   key: string
   label: string
+  /** Optional Host-provided translation key; clients fall back to label. */
+  i18nKey?: string
   /** Service fields are configured once in Settings; memory fields belong to each Memory Space. */
   scope: 'service' | 'memory'
   /** A reusable local data location presented with the same default/custom scope UI as Mnemon Native. */
@@ -347,7 +357,15 @@ export interface MemoryProviderConfigField {
   defaultValue?: MemoryProviderConnectionValue
   placeholder?: string
   help?: string
-  options?: Array<{ value: string; label: string }>
+  min?: number
+  max?: number
+  maxLength?: number
+  pattern?: string
+  normalize?: 'trim-trailing-slash'
+  validationMessage?: string
+  /** Seed an empty service default from this field on the first discovered Memory Space. */
+  discoveryDefaultFrom?: string
+  options?: MemoryProviderConfigOption[]
 }
 
 export type MemoryPlacementCapability = 'graph' | 'entities' | 'related' | 'exact-write' | 'link' | 'forget'
@@ -419,12 +437,17 @@ export interface MemoryProviderCapabilities {
 }
 
 export interface MemoryProviderDescriptor {
+  /** Provider implementation type; omitted when it is identical to id. */
+  typeId?: string
   id: MemoryProviderId
   label: string
+  icon?: MemoryProviderIcon
   kind: 'local' | 'remote'
   /** How the provider data scope reacts when DSH switches workspaces. */
   workspaceBinding: 'automatic' | 'optional-override' | 'provider-global'
   summary: string
+  /** Optional Host-provided translation key; clients fall back to summary. */
+  summaryI18nKey?: string
   origin: 'native' | 'third-party'
   capabilities: MemoryProviderCapabilities
   fields: MemoryProviderConfigField[]
@@ -458,6 +481,7 @@ export interface UpdateMemoryProviderServiceRequest {
 export interface MemoryProviderRuntimeStatus {
   providerId: MemoryProviderId
   label: string
+  icon?: MemoryProviderIcon
   enabled: boolean
   configured: boolean
   status: 'disabled' | 'idle' | 'healthy' | 'unhealthy'
@@ -468,7 +492,11 @@ export interface MemoryProviderRuntimeStatus {
 
 export interface MemoryBodyProvider {
   id: MemoryProviderId
+  /** Implementation type; differs from id when one module has several child instances. */
+  typeId?: string
   label: string
+  icon?: MemoryProviderIcon
+  origin?: 'native' | 'third-party'
   kind: 'local' | 'remote'
   location: string
   targetUri?: string
@@ -572,6 +600,8 @@ export interface Insight {
   memoryBodyId?: string
   memoryBodyName?: string
   memoryProviderId?: MemoryProviderId
+  /** Provider label captured with the result so Client UI never needs an id catalog. */
+  memoryProviderLabel?: string
   /** Owning Provider capabilities at read time; safe to expose to clients. */
   memoryCapabilities?: MemoryProviderCapabilities
   externalUri?: string

@@ -73,6 +73,10 @@
       "types": "./lib/types/src/plugins/source-memory-spaces.d.ts",
       "default": "./lib/source-memory-spaces.js"
     },
+    "./source-memory-spaces/provider-sdk": {
+      "types": "./lib/types/src/memory-spaces/provider-sdk.d.ts",
+      "default": "./lib/source-memory-spaces/provider-sdk.js"
+    },
     "./view-strategy-default-three-tier": {
       "types": "./lib/types/src/plugins/strategy-default-three-tier.d.ts",
       "default": "./lib/view-strategy-default-three-tier.js"

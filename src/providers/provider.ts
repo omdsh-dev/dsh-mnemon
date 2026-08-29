@@ -27,6 +27,8 @@ export interface ProviderScoreSemantics {
   kind: 'normalized-relevance'
 }
 
+export type MemoryProviderScoreSemantics = 'normalized-relevance' | 'provider-native' | 'none'
+
 export const NORMALIZED_RELEVANCE_SCORE: ProviderScoreSemantics = Object.freeze({ kind: 'normalized-relevance' })
 
 /** One provider-owned namespace projected into DSH as a Memory Space. */
@@ -59,4 +61,6 @@ export interface MemoryProviderAdapter {
   related?(body: MemoryBody, id: string, depth: number, edge?: EdgeType, signal?: AbortSignal): Promise<Insight[]>
   link?(body: MemoryBody, sourceId: string, targetId: string, type: EdgeType, weight: number, reason?: string, signal?: AbortSignal): Promise<JsonValue>
   forget?(body: MemoryBody, id: string, signal?: AbortSignal): Promise<JsonValue>
+  /** Release generation-owned clients, timers, pools, or subprocess handles. */
+  dispose?(): void | Promise<void>
 }

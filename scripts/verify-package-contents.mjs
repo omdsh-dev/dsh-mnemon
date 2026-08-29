@@ -25,6 +25,7 @@ const required = [
   'lib/source-runtime.js',
   'lib/source-documents.js',
   'lib/source-memory-spaces.js',
+  'lib/source-memory-spaces/provider-sdk.js',
   'lib/view-strategy-default-three-tier.js',
   'lib/client.js',
   'lib/contracts.js',
@@ -41,6 +42,7 @@ const required = [
   'lib/types/src/plugins/source-runtime.d.ts',
   'lib/types/src/plugins/source-documents.d.ts',
   'lib/types/src/plugins/source-memory-spaces.d.ts',
+  'lib/types/src/memory-spaces/provider-sdk.d.ts',
   'lib/types/src/plugins/strategy-default-three-tier.d.ts',
   'lib/types/src/client/index.d.ts',
 ]
@@ -61,10 +63,11 @@ const relativeReadmeImages = readmeFiles.flatMap((path) => {
     .map(source => `${path}: ${source}`)
 })
 
-// Five independently importable Composable View entries add public declaration
-// surfaces while sharing runtime chunks; keep the measured 1.887 MB release
-// within a narrow 1.92 MB regression fence.
-const maximumUnpackedBytes = 1_920_000
+// The complete Provider child-module SDK and Source-scoped management bridge
+// add one public runtime/type entry to the measured 1.887 MB baseline. After
+// removing inferred declaration expansion the release is 1.986 MB; retain a
+// narrow 2.00 MB fence rather than hiding future growth behind a broad budget.
+const maximumUnpackedBytes = 2_000_000
 
 if (missing.length > 0 || unexpected.length > 0 || hostLeaks.length > 0 || relativeReadmeImages.length > 0 || pack.unpackedSize > maximumUnpackedBytes) {
   if (missing.length > 0) console.error(`Missing package files:\n${missing.map(path => `- ${path}`).join('\n')}`)
