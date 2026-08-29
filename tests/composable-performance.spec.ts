@@ -39,13 +39,17 @@ describe('Composable View performance fences', () => {
     }
 
     await generation.compose(request)
-    const started = performance.now()
+    const startedWall = performance.now()
+    const startedCpu = process.cpuUsage()
     for (let index = 0; index < 100; index += 1) await generation.compose(request)
-    const elapsed = performance.now() - started
+    const elapsedWall = performance.now() - startedWall
+    const elapsedCpu = process.cpuUsage(startedCpu)
+    const cpuMilliseconds = (elapsedCpu.user + elapsedCpu.system) / 1_000
 
-    // This is a regression fence, not a benchmark: 20 ms/view leaves broad CI
-    // headroom while catching accidental network I/O or unbounded scans.
-    expect(elapsed).toBeLessThan(2_000)
+    // CPU time isolates the control-plane cost from other Vitest workers. The
+    // wall fence remains deliberately wider so accidental I/O still fails.
+    expect(cpuMilliseconds).toBeLessThan(2_000)
+    expect(elapsedWall).toBeLessThan(5_000)
     graph.dispose()
   })
 })
