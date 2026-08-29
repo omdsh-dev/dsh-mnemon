@@ -3,7 +3,7 @@
 # variables for one-field overrides such as cliPath.
 - insert:
     - id: mnemon
-      name: dsh-mnemon
+      name: dsh-mnemon/core
       config:
         routingGuidance: true
         lifecycleEnabled: true
@@ -26,3 +26,11 @@
           candidateMultiplier: 3
           maxMediumResults: 4
           maxUnknownResults: 2
+    - id: mnemon-source-runtime
+      name: dsh-mnemon/source-runtime
+    - id: mnemon-source-documents
+      name: dsh-mnemon/source-documents
+    - id: mnemon-source-memory-spaces
+      name: dsh-mnemon/source-memory-spaces
+    - id: mnemon-strategy-default-three-tier
+      name: dsh-mnemon/view-strategy-default-three-tier

@@ -57,6 +57,26 @@
       "types": "./lib/types/src/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./core": {
+      "types": "./lib/types/src/core.d.ts",
+      "default": "./lib/core.js"
+    },
+    "./source-runtime": {
+      "types": "./lib/types/src/plugins/source-runtime.d.ts",
+      "default": "./lib/source-runtime.js"
+    },
+    "./source-documents": {
+      "types": "./lib/types/src/plugins/source-documents.d.ts",
+      "default": "./lib/source-documents.js"
+    },
+    "./source-memory-spaces": {
+      "types": "./lib/types/src/plugins/source-memory-spaces.d.ts",
+      "default": "./lib/source-memory-spaces.js"
+    },
+    "./view-strategy-default-three-tier": {
+      "types": "./lib/types/src/plugins/strategy-default-three-tier.d.ts",
+      "default": "./lib/view-strategy-default-three-tier.js"
+    },
     "./client": {
       "types": "./lib/types/src/client/index.d.ts",
       "default": "./lib/client.js"

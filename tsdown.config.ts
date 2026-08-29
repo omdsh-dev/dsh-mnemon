@@ -19,6 +19,11 @@ const host: UserConfig = {
   name: PLUGIN_ID,
   entry: {
     index: 'src/index.ts',
+    core: 'src/core.ts',
+    'source-runtime': 'src/plugins/source-runtime.ts',
+    'source-documents': 'src/plugins/source-documents.ts',
+    'source-memory-spaces': 'src/plugins/source-memory-spaces.ts',
+    'view-strategy-default-three-tier': 'src/plugins/strategy-default-three-tier.ts',
     contracts: 'packages/contracts/src/index.ts',
     kernel: 'packages/kernel/src/index.ts',
     'extension-sdk': 'packages/extension-sdk/src/index.ts',

@@ -68,6 +68,15 @@ export class MemoryGenerationHost {
       return this.evaluation
     }
 
+    if (this.removesServingContribution(snapshot)) {
+      this.evaluation = report('rejected', snapshot, [{
+        code: 'serving-contribution-removed',
+        message: 'A Source or Strategy required by the Serving generation was explicitly removed.',
+      }])
+      this.retireServing()
+      return this.evaluation
+    }
+
     let candidate: MemoryCompositionGeneration
     try {
       candidate = new MemoryCompositionGeneration(snapshot, this.options)

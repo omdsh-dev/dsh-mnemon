@@ -18,6 +18,7 @@ import { VersionUpdateManager } from './version-updates.ts'
 import { registerMnemonSubagentTokenUsageProjection } from './subagent-token-usage.ts'
 import type { HostWorkspaceRegistry } from './contracts.ts'
 import { MemoryBoot, MemoryExtensionHost, MemoryRuntime, memoryBoot } from '../packages/extension-sdk/src/index.ts'
+import { installBundledComposableMemory } from './composable/defaults.ts'
 
 export {
   BALANCED_RECALL_QUALITY_POLICY,
@@ -52,11 +53,17 @@ function optionalWorkspaceRegistry(ctx: HostContextShape): HostWorkspaceRegistry
 }
 
 /** Mount native model tools on every DSH surface and UI RPC only when Web connection exists. */
-export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
+export interface ApplyCoreOptions {
+  /** Root package compatibility mode; the core subpath uses separate Entries. */
+  compatibilityBundle: boolean
+}
+
+export function applyCore(rawContext: unknown, config: MnemonConfig = {}, options: ApplyCoreOptions = { compatibilityBundle: true }): void {
   const ctx = rawContext as unknown as HostContextShape
   registerMnemonSubagentTokenUsageProjection(ctx)
   const extensions = new MemoryRuntime(memoryBoot)
   ctx.provide?.('mnemonMemory', extensions)
+  const releaseBundledMemory = options.compatibilityBundle ? installBundledComposableMemory(extensions) : undefined
   const prepared = new Map<object, { graph: MnemonRuntimeGraph; token: symbol }>()
   const disposePrepared = (): void => {
     for (const candidate of prepared.values()) candidate.graph.dispose()
@@ -123,6 +130,7 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
       stop()
       disposePrepared()
       runtime.dispose()
+      releaseBundledMemory?.()
     }
   }, 'dsh-mnemon.lifecycle-root()')
   registerTools(ctx, runtime, coordinator)
@@ -140,4 +148,9 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
     registerRpc(webContext.connection, runtime, lifecycle, undefined, undefined, undefined, undefined, managementAuthority)
     registerSettingsRpc(webContext.connection, ctx.settings, managementAuthority)
   })
+}
+
+/** Backward-compatible one-Entry package surface. */
+export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
+  applyCore(rawContext, config, { compatibilityBundle: true })
 }

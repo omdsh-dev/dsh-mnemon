@@ -12,10 +12,11 @@ import { MemoryKernel } from './memory-system/kernel.ts'
 import { registerDefaultMemorySystem } from './memory-system/defaults.ts'
 import { MemoryTopologyManager } from './memory-system/topology.ts'
 import { registerBuiltinMemoryAdapters } from './providers/memory-system.ts'
-import type { MemoryBoot } from '../packages/extension-sdk/src/index.ts'
-import type { MemoryTurnViewManager } from '../packages/kernel/src/index.ts'
+import { MemoryRuntime, type MemoryBoot, type MemoryGenerationAttachment } from '../packages/extension-sdk/src/index.ts'
+import type { MemoryGenerationHost, MemoryTurnViewManager } from '../packages/kernel/src/index.ts'
 import { createDefaultMemoryTurnViewManager } from './memory-view.ts'
 import { MemoryReceiptBridge, type AuthorityCommitRecorder } from './memory-receipts.ts'
+import { BUILTIN_MEMORY_BINDINGS } from './composable/bindings.ts'
 
 export interface MnemonRuntimeGraph {
   config: ResolvedConfig
@@ -29,6 +30,10 @@ export interface MnemonRuntimeGraph {
   memoryTopology: MemoryTopologyManager
   memoryKernel: MemoryKernel
   memoryViews: MemoryTurnViewManager
+  /** New Composable View runtime; absent only for a legacy MemoryBoot caller. */
+  memoryComposition?: MemoryGenerationHost
+  /** Detach from future definition changes without invalidating pinned turns. */
+  retire(): void
   /** Detach this generation from future Host-global extension changes. */
   dispose(): void
 }
@@ -100,15 +105,32 @@ export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot?: strin
     memoryViews.assertSourcesReady()
     receiptBridge = new MemoryReceiptBridge(memoryKernel, memoryViews)
     const detachReceiptSink = memoryKernel.registerReceiptSink(receiptBridge)
+    const generationAttachment: MemoryGenerationAttachment | undefined = extensions instanceof MemoryRuntime
+      ? extensions.attachGeneration({ bindings: new Map<string, unknown>([
+        [BUILTIN_MEMORY_BINDINGS.runtime, runtimeMemory],
+        [BUILTIN_MEMORY_BINDINGS.documents, documents],
+        [BUILTIN_MEMORY_BINDINGS.memorySpaces, service],
+      ]) })
+      : undefined
+    let retired = false
     let disposed = false
     return {
       config, runner, service, runtimeMemory, documents, storage, packs, memoryCatalog, memoryTopology, memoryKernel, memoryViews,
+      ...(generationAttachment === undefined ? {} : { memoryComposition: generationAttachment.host }),
+      retire: () => {
+        if (retired || disposed) return
+        retired = true
+        generationAttachment?.release()
+        extensionAttachment?.release()
+      },
       dispose: () => {
         if (disposed) return
         disposed = true
+        generationAttachment?.release()
+        void generationAttachment?.dispose()
         detachReceiptSink()
         memoryTopology.dispose()
-        extensionAttachment?.release()
+        if (!retired) extensionAttachment?.dispose()
       },
     }
   } catch (error) {
@@ -148,6 +170,7 @@ export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
   private current: MnemonRuntimeGraph
   private readonly workspaceGraphs = new Map<string, MnemonRuntimeGraph>()
   private readonly agentGraphs = new Map<string, { token: symbol; graph: MnemonRuntimeGraph }>()
+  private readonly retiredGraphs = new Set<MnemonRuntimeGraph>()
   private closed = false
 
   readonly config: ResolvedConfig
@@ -184,8 +207,8 @@ export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
     }
     const previous = this.current
     this.current = next
-    previous.dispose()
-    for (const graph of this.workspaceGraphs.values()) graph.dispose()
+    this.retireGraph(previous)
+    for (const graph of this.workspaceGraphs.values()) this.retireGraph(graph)
     this.workspaceGraphs.clear()
   }
 
@@ -202,7 +225,9 @@ export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
     const token = Symbol(id)
     this.agentGraphs.set(id, { token, graph })
     return () => {
-      if (this.agentGraphs.get(id)?.token === token) this.agentGraphs.delete(id)
+      if (this.agentGraphs.get(id)?.token !== token) return
+      this.agentGraphs.delete(id)
+      this.collectRetired(graph)
     }
   }
 
@@ -213,9 +238,11 @@ export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
       this.current,
       ...this.workspaceGraphs.values(),
       ...[...this.agentGraphs.values()].map(binding => binding.graph),
+      ...this.retiredGraphs,
     ])
     this.agentGraphs.clear()
     this.workspaceGraphs.clear()
+    this.retiredGraphs.clear()
     for (const graph of graphs) graph.dispose()
   }
 
@@ -279,6 +306,19 @@ export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
       this.workspaceGraphs.set(key, graph)
     }
     return graph
+  }
+
+  private retireGraph(graph: MnemonRuntimeGraph): void {
+    graph.retire()
+    if ([...this.agentGraphs.values()].some(binding => binding.graph === graph)) this.retiredGraphs.add(graph)
+    else graph.dispose()
+  }
+
+  private collectRetired(graph: MnemonRuntimeGraph): void {
+    if (!this.retiredGraphs.has(graph)) return
+    if ([...this.agentGraphs.values()].some(binding => binding.graph === graph)) return
+    this.retiredGraphs.delete(graph)
+    graph.dispose()
   }
 
   private assertOpen(): void {

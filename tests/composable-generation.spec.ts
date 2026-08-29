@@ -62,11 +62,11 @@ describe('Memory generation lifecycle', () => {
     const firstDisposed = vi.fn()
     const secondDisposed = vi.fn()
     const host = new MemoryGenerationHost()
-    expect(host.reconcile(snapshot(1, [source('first', firstDisposed)])).state).toBe('ready')
+    expect(host.reconcile(snapshot(1, [{ ...source('stable', firstDisposed), effectiveDigest: 'v1' }])).state).toBe('ready')
     const lease = host.acquire()
     const firstId = lease.id
 
-    expect(host.reconcile(snapshot(2, [source('second', secondDisposed)])).state).toBe('ready')
+    expect(host.reconcile(snapshot(2, [{ ...source('stable', secondDisposed), effectiveDigest: 'v2' }])).state).toBe('ready')
     expect(host.inspect()).toMatchObject({
       servingGenerationId: expect.not.stringMatching(firstId),
       drainingGenerationIds: [firstId],

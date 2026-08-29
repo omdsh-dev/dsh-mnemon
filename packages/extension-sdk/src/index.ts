@@ -2,6 +2,7 @@ import type { MemoryAdapterRegistration, MemoryCatalog, MemoryLayerRegistration,
 import type { MemoryGuardRegistration, MemoryKernel } from '../../kernel/src/kernel.ts'
 import type { MemorySource, MemoryTurnViewManager } from '../../kernel/src/view.ts'
 import type { MemoryContributionSnapshot } from '../../contracts/src/index.ts'
+import { MemoryGenerationHost, type CompileMemoryGenerationOptions } from '../../kernel/src/index.ts'
 import { MemoryContributionRegistry, type MemoryContributionInstall, type MemoryContributionListener } from './registry.ts'
 
 const EXTENSION_ID = /^[a-z][a-z0-9-]{0,127}$/u
@@ -323,6 +324,27 @@ export class MemoryRuntime extends MemoryBoot {
     return this.contributions.subscribe(listener)
   }
 
+  /** Attach one Host runtime graph to the current definition set. */
+  attachGeneration(options: CompileMemoryGenerationOptions = {}): MemoryGenerationAttachment {
+    const host = new MemoryGenerationHost(options)
+    host.reconcile(this.contributions.snapshot())
+    const unsubscribe = this.contributions.subscribe(snapshot => host.reconcile(snapshot))
+    let attached = true
+    const release = (): void => {
+      if (!attached) return
+      attached = false
+      unsubscribe()
+    }
+    return {
+      host,
+      release,
+      dispose: async () => {
+        release()
+        await host.dispose()
+      },
+    }
+  }
+
   override descriptors(): MemoryExtensionDescriptor[] {
     const descriptors = [...(this.inheritedBoot?.descriptors() ?? []), ...super.descriptors()]
     return [...new Map(descriptors.map(descriptor => [descriptor.id, descriptor])).values()]
@@ -369,6 +391,14 @@ export class MemoryRuntime extends MemoryBoot {
       },
     }
   }
+}
+
+export interface MemoryGenerationAttachment {
+  readonly host: MemoryGenerationHost
+  /** Stop following definition changes while preserving leased generations. */
+  release(): void
+  /** Final-dispose every generation after the owning runtime graph is unused. */
+  dispose(): Promise<void>
 }
 
 export { installMemory, type InstallMemoryOptions, type MemoryInstallContribution } from './install.ts'
