@@ -429,7 +429,7 @@ export class MnemonService {
     private readonly providerCatalog: MemoryProviderCatalog = BUILTIN_MEMORY_PROVIDER_CATALOG,
   ) {
     this.memoryBodies = memoryBodies === undefined
-      ? new MemoryBodyRegistry(runner, runner.commandFound, () => new Date(), providerCatalog)
+      ? new MemoryBodyRegistry(runner, true, () => new Date(), providerCatalog)
       : providerCatalog === BUILTIN_MEMORY_PROVIDER_CATALOG ? memoryBodies : memoryBodies.withProviderCatalog(providerCatalog)
     this.recallQualityPolicy = recallQualityPolicyRegistry.resolve(config.recallQuality.policy)
     const nativeProvider: MemoryProviderAdapter = {

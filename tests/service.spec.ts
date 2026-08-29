@@ -6,6 +6,7 @@ import { resolveConfig } from '../src/config.ts'
 import { MemoryBodyRegistry } from '../src/memory-bodies.ts'
 import type { ProcessRunner } from '../src/process.ts'
 import { createRunner } from '../src/runner.ts'
+import type { MnemonRunner } from '../src/runner.ts'
 import { MnemonService, parseMemoryGraph } from '../src/service.ts'
 import { RecallQualityPolicyRegistry, STRICT_RECALL_QUALITY_POLICY, type RecallQualityPolicy } from '../src/recall-quality/index.ts'
 import type { AuthorityCommitRecorder } from '../src/memory-receipts.ts'
@@ -390,6 +391,38 @@ describe('MnemonService', () => {
     expect(provider.discover).toHaveBeenCalledOnce()
     expect(provider.status).toHaveBeenCalledOnce()
     expect(provider.status).toHaveBeenCalledWith(expect.objectContaining({ id: body.id, provider: expect.objectContaining({ settings: expect.objectContaining({ bankId: 'bank-1' }) }) }), undefined)
+  })
+
+  it('persists third-party Provider services when the optional native CLI is absent', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'dsh-mnemon-provider-without-cli-'))
+    temporaryDirectories.push(dataDir)
+    const config = resolveConfig({ storageScope: 'custom', dataDir, cliPath: '/missing/mnemon' })
+    const runner: MnemonRunner = {
+      command: '/missing/mnemon',
+      commandFound: false,
+      config,
+      runJson: vi.fn(async () => ({})),
+      runText: vi.fn(async () => ''),
+      runTextBatch: vi.fn(async () => []),
+      withExclusive: vi.fn(async operation => operation()),
+      effectiveDataDir: () => dataDir,
+      persistedStore: () => 'default',
+      effectiveStore: () => 'default',
+    }
+
+    const first = new MnemonService(runner, config)
+    await expect(first.updateProviderService('holographic', {})).resolves.toMatchObject({
+      providerId: 'holographic', enabled: true, configured: true,
+    })
+    expect(existsSync(join(dataDir, 'state', 'memory-providers.json'))).toBe(true)
+
+    const reloaded = new MnemonService(runner, config)
+    expect(reloaded.memoryBodies.providerServices().items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ providerId: 'holographic', enabled: true, configured: true }),
+    ]))
+    expect(reloaded.memoryBodies.list()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ provider: expect.objectContaining({ id: 'holographic' }) }),
+    ]))
   })
 
   it('refreshes one Memory Space health status in read-only mode', async () => {

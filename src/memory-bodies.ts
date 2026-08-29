@@ -211,7 +211,10 @@ export class MemoryBodyRegistry {
 
   constructor(
     readonly runner: MnemonRunner,
-    private readonly persistent = runner.commandFound,
+    // Provider service configuration and third-party Memory Space projections
+    // are DSH-owned state. Their durability must not depend on whether the
+    // optional native Mnemon CLI happens to be installed.
+    private readonly persistent = true,
     private readonly now: () => Date = () => new Date(),
     private readonly providerCatalog: MemoryProviderCatalog = BUILTIN_MEMORY_PROVIDER_CATALOG,
     sharedState?: MemoryBodyRegistry['state'],
