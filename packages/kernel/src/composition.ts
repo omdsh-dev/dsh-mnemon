@@ -558,6 +558,7 @@ export class MemoryCompositionGeneration {
       const contribution = normalizeContribution(source, sourceSpec, sourceFacts, await source.runtime.project({
         scope: request.scope,
         sourceInstanceKey: source.installed.instanceKey,
+        includeProjection: sourceSpec.projection !== undefined,
         mode: sourceSpec.projection?.mode ?? 'routed',
         maxCharacters: sourceSpec.projection?.maxCharacters ?? 1,
       }))

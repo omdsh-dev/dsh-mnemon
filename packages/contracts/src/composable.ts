@@ -141,6 +141,7 @@ export interface MemoryViewSpec {
 export interface MemoryProjectionRequest {
   scope: MemoryOperationScope
   sourceInstanceKey: string
+  includeProjection: boolean
   mode: MemorySourceMode
   maxCharacters: number
 }
