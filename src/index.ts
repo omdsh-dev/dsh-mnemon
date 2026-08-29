@@ -17,7 +17,7 @@ import { MnemonPackManager } from './pack.ts'
 import { VersionUpdateManager } from './version-updates.ts'
 import { registerMnemonSubagentTokenUsageProjection } from './subagent-token-usage.ts'
 import type { HostWorkspaceRegistry } from './contracts.ts'
-import { MemoryBoot, MemoryExtensionHost, memoryBoot } from '../packages/extension-sdk/src/index.ts'
+import { MemoryBoot, MemoryExtensionHost, MemoryRuntime, memoryBoot } from '../packages/extension-sdk/src/index.ts'
 
 export {
   BALANCED_RECALL_QUALITY_POLICY,
@@ -39,7 +39,7 @@ export const provide = ['mnemonMemory']
 // workspaceRegistry belongs to the Web profile. Core tools, lifecycle hooks,
 // and per-Agent cwd routing must also mount in profiles such as Headless.
 export const inject = ['tools', 'settings', 'commands', 'agents', 'subagents']
-export { Config, InteractionConfig, resolveConfig, resolveInteractionConfig, DocumentManager, LiveMnemonRuntime, MemoryBoot, MemoryExtensionHost, MnemonLifecycle, MnemonService, MnemonSubagentCoordinator, RuntimeMemoryController, StorageScopeInspector, MnemonPackManager, VersionUpdateManager, createRunner, createRuntimeGraph }
+export { Config, InteractionConfig, resolveConfig, resolveInteractionConfig, DocumentManager, LiveMnemonRuntime, MemoryBoot, MemoryExtensionHost, MemoryRuntime, MnemonLifecycle, MnemonService, MnemonSubagentCoordinator, RuntimeMemoryController, StorageScopeInspector, MnemonPackManager, VersionUpdateManager, createRunner, createRuntimeGraph }
 export type { MnemonConfig }
 
 /** Resolve the optional Web workspace service at call time, not plugin-mount time. */
@@ -55,7 +55,7 @@ function optionalWorkspaceRegistry(ctx: HostContextShape): HostWorkspaceRegistry
 export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
   const ctx = rawContext as unknown as HostContextShape
   registerMnemonSubagentTokenUsageProjection(ctx)
-  const extensions = memoryBoot
+  const extensions = new MemoryRuntime(memoryBoot)
   ctx.provide?.('mnemonMemory', extensions)
   const prepared = new Map<object, { graph: MnemonRuntimeGraph; token: symbol }>()
   const disposePrepared = (): void => {

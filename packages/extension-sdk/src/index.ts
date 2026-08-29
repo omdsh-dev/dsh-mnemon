@@ -1,6 +1,8 @@
 import type { MemoryAdapterRegistration, MemoryCatalog, MemoryLayerRegistration, MemoryStrategyRegistration } from '../../kernel/src/catalog.ts'
 import type { MemoryGuardRegistration, MemoryKernel } from '../../kernel/src/kernel.ts'
 import type { MemorySource, MemoryTurnViewManager } from '../../kernel/src/view.ts'
+import type { MemoryContributionSnapshot } from '../../contracts/src/index.ts'
+import { MemoryContributionRegistry, type MemoryContributionInstall, type MemoryContributionListener } from './registry.ts'
 
 const EXTENSION_ID = /^[a-z][a-z0-9-]{0,127}$/u
 
@@ -296,6 +298,98 @@ export const memoryExtensions = memoryBoot
 export function registerMemoryExtension(extension: MemoryExtension): () => void {
   return memoryBoot.register(extension)
 }
+
+/**
+ * Stable ctx.mnemonMemory façade. New Source/Strategy definitions are scoped
+ * to this Host while the legacy MemoryBoot is retained as a compatibility
+ * input for v0.3 extensions registered before core mounts.
+ */
+export class MemoryRuntime extends MemoryBoot {
+  private readonly contributions = new MemoryContributionRegistry()
+
+  constructor(private readonly inheritedBoot?: MemoryBoot) {
+    super()
+  }
+
+  installContributions(value: MemoryContributionInstall): () => void {
+    return this.contributions.install(value)
+  }
+
+  contributionSnapshot(): MemoryContributionSnapshot {
+    return this.contributions.snapshot()
+  }
+
+  onContributionsChanged(listener: MemoryContributionListener): () => void {
+    return this.contributions.subscribe(listener)
+  }
+
+  override descriptors(): MemoryExtensionDescriptor[] {
+    const descriptors = [...(this.inheritedBoot?.descriptors() ?? []), ...super.descriptors()]
+    return [...new Map(descriptors.map(descriptor => [descriptor.id, descriptor])).values()]
+      .sort((left, right) => left.id.localeCompare(right.id))
+  }
+
+  override attach(catalog: MemoryCatalog): MemoryBootAttachment {
+    const inherited = this.inheritedBoot?.attach(catalog)
+    let own: MemoryBootAttachment
+    try {
+      own = super.attach(catalog)
+    } catch (error) {
+      inherited?.dispose()
+      throw error
+    }
+    return {
+      bindKernel: kernel => {
+        try {
+          inherited?.bindKernel(kernel)
+          own.bindKernel(kernel)
+        } catch (error) {
+          own.dispose()
+          inherited?.dispose()
+          throw error
+        }
+      },
+      bindTurnViews: manager => {
+        try {
+          inherited?.bindTurnViews(manager)
+          own.bindTurnViews(manager)
+        } catch (error) {
+          own.dispose()
+          inherited?.dispose()
+          throw error
+        }
+      },
+      dispose: () => {
+        own.dispose()
+        inherited?.dispose()
+      },
+      release: () => {
+        own.release()
+        inherited?.release()
+      },
+    }
+  }
+}
+
+export { installMemory, type InstallMemoryOptions, type MemoryInstallContribution } from './install.ts'
+export { MemoryContributionRegistry, type MemoryContributionInstall, type MemoryContributionListener } from './registry.ts'
+export { defineMemorySource, defineMemoryStrategy } from '../../kernel/src/composition.ts'
+export type {
+  ComposableMemoryView,
+  MemoryActionOffer,
+  MemoryCompositionEvaluationReport,
+  MemoryEvidence,
+  MemoryMutationReceipt,
+  MemoryReadGrant,
+  MemorySourceDefinition,
+  MemorySourceFacts,
+  MemorySourceManifest,
+  MemorySourceRuntime,
+  MemoryStrategyDefinition,
+  MemoryStrategyManifest,
+  MemoryViewRequest,
+  MemoryViewSpec,
+} from '../../contracts/src/index.ts'
 
 export type { MemoryAdapterRegistration, MemoryLayerRegistration, MemoryStrategyRegistration } from '../../kernel/src/catalog.ts'
 export type { MemoryGuardRegistration } from '../../kernel/src/kernel.ts'
