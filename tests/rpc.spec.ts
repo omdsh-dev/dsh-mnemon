@@ -90,6 +90,58 @@ describe('Mnemon RPC', () => {
     expect(release).toHaveBeenCalledTimes(3)
   })
 
+  it('adapts the legacy Memory Spaces UI endpoints to the scoped Serving Source', async () => {
+    const service = fakeService()
+    const release = vi.fn()
+    const generation = {
+      managementCatalog: vi.fn(async () => ({
+        generationId: 'generation:provider-ui',
+        sources: [{
+          sourceInstanceKey: 'source:mnemon-source-memory-spaces', sourceTypeId: 'memory-spaces', packageName: 'dsh-mnemon-source-memory-spaces',
+          role: 'durable-evidence', availability: 'ready', revision: 'spaces-r7', capabilities: ['status'],
+          management: { label: 'Memory Spaces', description: 'Provider-backed namespaces.' },
+        }],
+      })),
+      executeManagement: vi.fn(async request => ({
+        revision: request.mode === 'mutate' ? 'spaces-r8' : 'spaces-r7',
+        value: request.operation === 'body-directory'
+          ? { items: [{ id: 'external-body', provider: { id: 'work-account' } }], providers: [{ id: 'work-account' }], total: 1, activeCount: 1, directory: '/external', generatedAt: 'now' }
+          : { providerId: 'work-account', enabled: true, configured: true, settings: { endpoint: 'https://vector.example' }, configuredSecrets: ['apiKey'] },
+      })),
+    }
+    const graph = {
+      config: service.config,
+      service,
+      runtimeMemory: {},
+      documents: {},
+      storage: {},
+      packs: {},
+      memoryComposition: { acquire: vi.fn(() => ({ generation, release })) },
+    } as unknown as MnemonRuntimeGraph
+    const runtime = {
+      route: vi.fn(() => ({ graph, selectedRoot: '/tmp', effectiveRoot: '/tmp', aligned: true })),
+    } as unknown as LiveMnemonRuntime
+
+    await expect(createReadHandler(runtime)('body-directory', {})).resolves.toMatchObject({
+      ok: true,
+      value: { items: [{ id: 'external-body', provider: { id: 'work-account' } }], providers: [{ id: 'work-account' }] },
+    })
+    expect(service.bodyDirectory).not.toHaveBeenCalled()
+
+    await expect(createWriteHandler(runtime)('provider-service-update', {
+      providerId: 'work-account', settings: { endpoint: 'https://vector.example', apiKey: 'browser-secret' }, enabled: true,
+    })).resolves.toMatchObject({
+      ok: true,
+      value: { providerId: 'work-account', configuredSecrets: ['apiKey'] },
+    })
+    expect(generation.executeManagement).toHaveBeenLastCalledWith(expect.objectContaining({
+      sourceInstanceKey: 'source:mnemon-source-memory-spaces', mode: 'mutate', operation: 'provider-service-update',
+      expectedRevision: 'spaces-r7', confirmed: true,
+    }))
+    expect(service.updateProviderService).not.toHaveBeenCalled()
+    expect(release).toHaveBeenCalledTimes(2)
+  })
+
   it('exposes the active descriptor and enforces manual data-plane participation', async () => {
     const service = fakeService()
     const catalog = new MemoryCatalog()
@@ -163,7 +215,7 @@ describe('Mnemon RPC', () => {
     expect(service.reconnectBody).toHaveBeenCalledWith('project')
   })
 
-  it('keeps Provider secret values on the management channel while preserving a redacted read catalog', async () => {
+  it('keeps Provider credential values Host-only on both compatibility channels', async () => {
     const service = fakeService()
     const providerServices = vi.fn((options: { includeSecrets?: boolean } = {}) => ({
       providers: [],
@@ -182,10 +234,10 @@ describe('Mnemon RPC', () => {
     })
     await expect(createWriteHandler(service)('provider-services', {})).resolves.toMatchObject({
       ok: true,
-      value: { items: [expect.objectContaining({ secretValues: { apiKey: 'provider-secret' } })] },
+      value: { items: [expect.not.objectContaining({ secretValues: expect.anything() })] },
     })
     expect(providerServices).toHaveBeenNthCalledWith(1)
-    expect(providerServices).toHaveBeenNthCalledWith(2, { includeSecrets: true })
+    expect(providerServices).toHaveBeenNthCalledWith(2)
   })
 
   it('checks versions on the read channel and keeps explicit updates on the management channel', async () => {

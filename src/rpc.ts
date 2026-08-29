@@ -7,10 +7,10 @@ import type { MnemonPackManager } from './pack.ts'
 import type { LiveMnemonRuntime, MnemonRuntimeGraph } from './live-runtime.ts'
 import { VersionUpdateManager, type VersionComponentId } from './version-updates.ts'
 import { MNEMON_ACTIVATION_CHANNEL, MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from './channels.ts'
-import { isMemoryProviderId } from './providers/catalog.ts'
 import { assertMemoryLayerParticipation } from './memory-system/access.ts'
 import type { MemoryCapability } from './memory-system/contracts.ts'
 import type { MemoryJsonValue, MemoryOperationScope } from '../packages/contracts/src/index.ts'
+import type { PreparedMemoryPlacement } from './provider-placement.ts'
 import type {
   CreateMemoryBodyRequest,
   MemoryPlacementCapability,
@@ -21,6 +21,7 @@ import type {
 export { MNEMON_ACTIVATION_CHANNEL, MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL } from './channels.ts'
 
 type RuntimeInput = MnemonService | LiveMnemonRuntime
+const MEMORY_PROVIDER_ID = /^[a-z][a-z0-9-]{0,127}$/u
 
 function isRoutedRuntime(value: RuntimeInput): value is LiveMnemonRuntime {
   return 'route' in value && typeof value.route === 'function'
@@ -76,6 +77,51 @@ function managementScope(resolved: ReturnType<typeof runtimeFor>, payload: Recor
   }
 }
 
+interface ScopedManagementValue {
+  available: boolean
+  value?: MemoryJsonValue
+}
+
+/**
+ * Compatibility bridge for the existing WebUI/RPC surface. The adapter knows
+ * only the built-in Source type; Provider descriptors and runtimes remain
+ * behind that Source's scoped management implementation.
+ */
+async function memorySpacesManagement(
+  resolved: ReturnType<typeof runtimeFor>,
+  payload: Record<string, unknown>,
+  mode: 'read' | 'mutate',
+  operation: string,
+  input: MemoryJsonValue,
+  signal?: AbortSignal,
+): Promise<ScopedManagementValue> {
+  const composition = resolved.graph.memoryComposition
+  if (composition === undefined) return { available: false }
+  const lease = composition.acquire()
+  try {
+    const scope = managementScope(resolved, payload)
+    const catalog = await lease.generation.managementCatalog(scope)
+    const source = catalog.sources.find(candidate => candidate.sourceTypeId === 'memory-spaces')
+    if (source === undefined) return { available: false }
+    const result = await lease.generation.executeManagement({
+      scope,
+      sourceInstanceKey: source.sourceInstanceKey,
+      mode,
+      operation,
+      input,
+      ...(mode === 'mutate' ? { expectedRevision: source.revision, confirmed: true } : { confirmed: false }),
+      ...(signal === undefined ? {} : { signal }),
+    })
+    return { available: true, value: result.value }
+  } finally {
+    lease.release()
+  }
+}
+
+function managementInput(payload: Record<string, unknown>): MemoryJsonValue {
+  return payload as unknown as MemoryJsonValue
+}
+
 function requireLayer(
   graph: Pick<MnemonRuntimeGraph, 'service'> & Partial<Pick<MnemonRuntimeGraph, 'memoryKernel'>>,
   layerId: string,
@@ -120,7 +166,7 @@ function providerConnections(value: unknown): CreateMemoryBodyRequest['providerC
   if (value === undefined) return undefined
   const input = object(value)
   return Object.fromEntries(Object.entries(input).map(([providerId, settings]) => {
-    if (!isMemoryProviderId(providerId)) throw new Error(`unsupported memory provider: ${providerId}`)
+    if (!MEMORY_PROVIDER_ID.test(providerId)) throw new Error(`invalid memory provider: ${providerId}`)
     const parsed = providerConnection(settings)
     if (parsed === undefined) throw new Error(`provider connection is missing for ${providerId}`)
     return [providerId, parsed]
@@ -211,8 +257,9 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
             } else if (lifecycle !== undefined && sessionId !== '') {
               try { documents = lifecycle.documents(sessionId) } catch {}
             }
+          const managedStatus = await memorySpacesManagement(resolved, payload, 'read', 'status', managementInput(payload), signal)
           return success({
-            ...await service.status(),
+            ...(managedStatus.available ? object(managedStatus.value) : await service.status(signal)),
             ...(versions === undefined ? {} : { dshMnemonVersion: versions.currentDshMnemonVersion }),
             ...(lifecycle === undefined ? {} : {
               lifecycle: service.config.storageScope === 'workspace'
@@ -243,8 +290,9 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
             } else if (lifecycle !== undefined && sessionId !== '') {
               try { documents = lifecycle.documents(sessionId) } catch {}
             }
+            const managedStatus = await memorySpacesManagement(resolved, payload, 'read', 'status-summary', managementInput(payload), signal)
             return success({
-              ...service.statusSummary(),
+              ...(managedStatus.available ? object(managedStatus.value) : service.statusSummary()),
               ...(versions === undefined ? {} : { dshMnemonVersion: versions.currentDshMnemonVersion }),
               ...(lifecycle === undefined ? {} : {
                 lifecycle: service.config.storageScope === 'workspace'
@@ -291,33 +339,53 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
           ))
         case 'graph':
           requireLayer(resolved.graph, 'memory-spaces', 'graph')
-          return success(await service.graph(undefined, Array.isArray(payload.memoryBodyIds) ? payload.memoryBodyIds.map(String) : undefined))
-        case 'bodies':
-          return success(await service.bodies())
-        case 'body-directory':
-          return success(service.bodyDirectory())
-        case 'body-reconnect':
-          return success(await service.reconnectBody(String(payload.memoryBodyId ?? '')))
-        case 'provider-services':
-          return success(service.memoryBodies.providerServices())
+          {
+            const managed = await memorySpacesManagement(resolved, payload, 'read', 'graph', managementInput(payload), signal)
+            const memoryBodyIds = Array.isArray(payload.memoryBodyIds) ? payload.memoryBodyIds.map(String) : undefined
+            return success(managed.available ? managed.value : signal === undefined ? await service.graph(undefined, memoryBodyIds) : await service.graph(signal, memoryBodyIds))
+          }
+        case 'bodies': {
+          const managed = await memorySpacesManagement(resolved, payload, 'read', 'bodies', managementInput(payload), signal)
+          return success(managed.available ? managed.value : signal === undefined ? await service.bodies() : await service.bodies(signal))
+        }
+        case 'body-directory': {
+          const managed = await memorySpacesManagement(resolved, payload, 'read', 'body-directory', managementInput(payload), signal)
+          return success(managed.available ? managed.value : service.bodyDirectory())
+        }
+        case 'body-reconnect': {
+          const managed = await memorySpacesManagement(resolved, payload, 'read', 'body-reconnect', managementInput(payload), signal)
+          return success(managed.available ? managed.value : signal === undefined ? await service.reconnectBody(String(payload.memoryBodyId ?? '')) : await service.reconnectBody(String(payload.memoryBodyId ?? ''), signal))
+        }
+        case 'provider-services': {
+          const managed = await memorySpacesManagement(resolved, payload, 'read', 'provider-services', managementInput(payload), signal)
+          return success(managed.available ? managed.value : service.memoryBodies.providerServices())
+        }
         case 'list':
           requireLayer(resolved.graph, 'memory-spaces', 'browse')
-          return success(await service.list({
-            ...(payload.query === undefined ? {} : { query: String(payload.query) }),
-            ...(payload.category === undefined ? {} : { category: payload.category as Category }),
-            ...(payload.limit === undefined ? {} : { limit: Number(payload.limit) }),
-            ...(Array.isArray(payload.memoryBodyIds) ? { memoryBodyIds: payload.memoryBodyIds.map(String) } : {}),
-          }))
+          {
+            const managed = await memorySpacesManagement(resolved, payload, 'read', 'list', managementInput(payload), signal)
+            const request = {
+              ...(payload.query === undefined ? {} : { query: String(payload.query) }),
+              ...(payload.category === undefined ? {} : { category: payload.category as Category }),
+              ...(payload.limit === undefined ? {} : { limit: Number(payload.limit) }),
+              ...(Array.isArray(payload.memoryBodyIds) ? { memoryBodyIds: payload.memoryBodyIds.map(String) } : {}),
+            }
+            return success(managed.available ? managed.value : signal === undefined ? await service.list(request) : await service.list(request, signal))
+          }
         case 'entities':
           {
             requireLayer(resolved.graph, 'memory-spaces', 'search')
+            const managed = await memorySpacesManagement(resolved, payload, 'read', 'entities', managementInput(payload), signal)
+            if (managed.available) return success(managed.value)
             const entity = payload.entity === undefined ? '' : String(payload.entity).trim()
             const limit = payload.limit === undefined ? undefined : Number(payload.limit)
-            return success(await service.entities(entity || undefined, limit))
+            return success(signal === undefined ? await service.entities(entity || undefined, limit) : await service.entities(entity || undefined, limit, signal))
           }
         case 'search':
           {
             requireLayer(resolved.graph, 'memory-spaces', 'recall')
+            const managed = await memorySpacesManagement(resolved, payload, 'read', 'search', managementInput(payload), signal)
+            if (managed.available) return success(managed.value)
             const request = {
             query: String(payload.query ?? ''),
             ...(payload.mode === undefined ? {} : { mode: payload.mode as NonNullable<SearchRequest['mode']> }),
@@ -327,7 +395,7 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
             ...(payload.intent === undefined ? {} : { intent: payload.intent as Intent }),
             ...(Array.isArray(payload.memoryBodyIds) ? { memoryBodyIds: payload.memoryBodyIds.map(String) } : {}),
             }
-            return success(await service.search(request))
+            return success(signal === undefined ? await service.search(request) : await service.search(request, signal))
           }
         case 'agent-search':
           {
@@ -353,7 +421,18 @@ export function createReadHandler(input: RuntimeInput, lifecycle?: MnemonLifecyc
           }
         case 'related':
           requireLayer(resolved.graph, 'memory-spaces', 'related')
-          return success(await service.related(String(payload.id ?? ''), payload.depth === undefined ? 2 : Number(payload.depth), payload.edge as EdgeType | undefined, undefined, payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId)))
+          {
+            const managed = await memorySpacesManagement(resolved, payload, 'read', 'related', managementInput(payload), signal)
+            const args = [
+              String(payload.id ?? ''),
+              payload.depth === undefined ? 2 : Number(payload.depth),
+              payload.edge as EdgeType | undefined,
+            ] as const
+            const memoryBodyId = payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId)
+            return success(managed.available ? managed.value : signal === undefined
+              ? await service.related(...args, undefined, memoryBodyId)
+              : await service.related(...args, signal, memoryBodyId))
+          }
         case 'turn-activities':
           if (lifecycle === undefined) throw new Error('Mnemon turn activity requires lifecycle integration')
           return success(lifecycle.turnActivities(String(payload.sessionId ?? '')))
@@ -379,7 +458,7 @@ const ACTIVATION_PAYLOAD_FIELDS = new Set(['memoryBodyId', 'active', 'sessionId'
 
 /** Keep activation on a narrow, independently validated control endpoint. */
 export function createActivationHandler(input: RuntimeInput): HostRpcHandler {
-  return async (endpoint, rawPayload) => {
+  return async (endpoint, rawPayload, signal) => {
     try {
       if (endpoint !== 'body') return badRequest(`unknown activation endpoint: ${endpoint}`)
       const payload = object(rawPayload)
@@ -390,9 +469,13 @@ export function createActivationHandler(input: RuntimeInput): HostRpcHandler {
       if (payload.sessionId !== undefined && typeof payload.sessionId !== 'string') return badRequest('sessionId must be a string')
       if (payload.workspaceId !== undefined && typeof payload.workspaceId !== 'string') return badRequest('workspaceId must be a string')
 
-      const { graph } = runtimeFor(input, payload)
-      if (!graph.service.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
-      return success(graph.service.updateBody(payload.memoryBodyId.trim(), { active: payload.active }))
+      const resolved = runtimeFor(input, payload)
+      if (!resolved.graph.service.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
+      const managed = await memorySpacesManagement(resolved, payload, 'mutate', 'body-update', managementInput({
+        memoryBodyId: payload.memoryBodyId.trim(),
+        active: payload.active,
+      }), signal)
+      return success(managed.available ? managed.value : resolved.graph.service.updateBody(payload.memoryBodyId.trim(), { active: payload.active }))
     } catch (error) {
       return failure(error)
     }
@@ -411,9 +494,12 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
       }
       const resolved = runtimeFor(input, payload, runtimeMemory)
       const { service } = resolved.graph
-      // Stored Provider secrets remain on the management channel rather than
-      // the ordinary redacted catalog, independently of semantic write mode.
-      if (endpoint === 'provider-services') return success(service.memoryBodies.providerServices({ includeSecrets: true }))
+      if (endpoint === 'provider-services') {
+        const managed = await memorySpacesManagement(resolved, payload, 'read', 'provider-services', managementInput(payload), signal)
+        // Even this authenticated compatibility channel returns only secret
+        // presence. Credential values remain Host-only.
+        return success(managed.available ? managed.value : service.memoryBodies.providerServices())
+      }
       if (!service.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
       const selectedWorkspace = resolved.route?.selectedWorkspace
       const documentController = resolved.explicitWorkspace && selectedWorkspace !== undefined
@@ -444,7 +530,6 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
         case 'provider-service-update':
           {
             const providerId = String(payload.providerId ?? '')
-            if (!isMemoryProviderId(providerId) || providerId === 'mnemon-native') throw new Error(`unsupported provider service: ${providerId}`)
             const settings = providerConnection(payload.settings)
             if (settings === undefined) throw new Error('provider service settings are required')
             const clearSecrets = payload.clearSecrets === undefined
@@ -453,8 +538,17 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
                 ? payload.clearSecrets.map(String)
                 : (() => { throw new Error('clearSecrets must be an array') })()
             const enabled = payload.enabled === undefined ? true : payload.enabled === true
-            const updated = await service.updateProviderService(providerId, settings, clearSecrets, enabled)
-            return success(service.memoryBodies.providerServices({ includeSecrets: true }).items.find(item => item.providerId === providerId) ?? updated)
+            const managed = await memorySpacesManagement(resolved, payload, 'mutate', 'provider-service-update', managementInput({
+              providerId,
+              settings,
+              clearSecrets,
+              enabled,
+            }), signal)
+            if (managed.available) return success(managed.value)
+            const updated = signal === undefined
+              ? await service.updateProviderService(providerId, settings, clearSecrets, enabled)
+              : await service.updateProviderService(providerId, settings, clearSecrets, enabled, signal)
+            return success(service.memoryBodies.providerServices().items.find(item => item.providerId === providerId) ?? updated)
           }
         case 'runtime-memory':
           requireLayer(resolved.graph, 'runtime', 'write')
@@ -547,20 +641,34 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
             ...(payload.memoryBodyId === undefined ? {} : { memoryBodyId: String(payload.memoryBodyId) }),
             source: 'user',
             } as const
+            const managed = await memorySpacesManagement(resolved, payload, 'mutate', 'remember', request as unknown as MemoryJsonValue, signal)
+            if (managed.available) return success(managed.value)
             return success(inspectionDiverged || lifecycle === undefined || (resolved.explicitWorkspace && !alignedSession)
-              ? await service.remember(request)
+              ? signal === undefined ? await service.remember(request) : await service.remember(request, signal)
               : await lifecycle.remember(String(payload.sessionId ?? ''), request))
           }
         case 'link':
           requireLayer(resolved.graph, 'memory-spaces', 'link')
-          return success(inspectionDiverged || lifecycle === undefined || (resolved.explicitWorkspace && !alignedSession)
-            ? await service.link(String(payload.sourceId ?? ''), String(payload.targetId ?? ''), payload.type as EdgeType | undefined, payload.weight === undefined ? 0.5 : Number(payload.weight), payload.reason === undefined ? undefined : String(payload.reason), undefined, payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId))
-            : await lifecycle.mutate(String(payload.sessionId ?? ''), 'link', payload))
+          {
+            const managed = await memorySpacesManagement(resolved, payload, 'mutate', 'link', managementInput(payload), signal)
+            if (managed.available) return success(managed.value)
+            return success(inspectionDiverged || lifecycle === undefined || (resolved.explicitWorkspace && !alignedSession)
+              ? signal === undefined
+                ? await service.link(String(payload.sourceId ?? ''), String(payload.targetId ?? ''), payload.type as EdgeType | undefined, payload.weight === undefined ? 0.5 : Number(payload.weight), payload.reason === undefined ? undefined : String(payload.reason), undefined, payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId))
+                : await service.link(String(payload.sourceId ?? ''), String(payload.targetId ?? ''), payload.type as EdgeType | undefined, payload.weight === undefined ? 0.5 : Number(payload.weight), payload.reason === undefined ? undefined : String(payload.reason), signal, payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId))
+              : await lifecycle.mutate(String(payload.sessionId ?? ''), 'link', payload))
+          }
         case 'forget':
           requireLayer(resolved.graph, 'memory-spaces', 'forget')
-          return success(inspectionDiverged || lifecycle === undefined || (resolved.explicitWorkspace && !alignedSession)
-            ? await service.forget(String(payload.id ?? ''), undefined, payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId))
-            : await lifecycle.mutate(String(payload.sessionId ?? ''), 'forget', { id: String(payload.id ?? ''), ...(payload.memoryBodyId === undefined ? {} : { memoryBodyId: String(payload.memoryBodyId) }) }))
+          {
+            const managed = await memorySpacesManagement(resolved, payload, 'mutate', 'forget', managementInput(payload), signal)
+            if (managed.available) return success(managed.value)
+            return success(inspectionDiverged || lifecycle === undefined || (resolved.explicitWorkspace && !alignedSession)
+              ? signal === undefined
+                ? await service.forget(String(payload.id ?? ''), undefined, payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId))
+                : await service.forget(String(payload.id ?? ''), signal, payload.memoryBodyId === undefined ? undefined : String(payload.memoryBodyId))
+              : await lifecycle.mutate(String(payload.sessionId ?? ''), 'forget', { id: String(payload.id ?? ''), ...(payload.memoryBodyId === undefined ? {} : { memoryBodyId: String(payload.memoryBodyId) }) }))
+          }
         case 'body-create':
           {
             const connection = providerConnection(payload.connection)
@@ -601,15 +709,28 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
                 },
               }),
             }
-            if (request.placement === undefined) return success(await service.createBody(request))
+            if (request.placement === undefined) {
+              const managed = await memorySpacesManagement(resolved, payload, 'mutate', 'body-create', request as unknown as MemoryJsonValue, signal)
+              return success(managed.available ? managed.value : signal === undefined ? await service.createBody(request) : await service.createBody(request, signal))
+            }
             if (lifecycle === undefined) throw new Error('automatic provider placement requires Mnemon lifecycle integration')
             requireAligned(resolved.route)
-            const prepared = service.prepareBodyPlacement(request)
+            const managedPrepared = await memorySpacesManagement(resolved, payload, 'read', 'prepare-body-placement', request as unknown as MemoryJsonValue, signal)
+            const prepared = managedPrepared.available
+              ? managedPrepared.value as unknown as PreparedMemoryPlacement
+              : service.prepareBodyPlacement(request)
             const decision = await lifecycle.placeProvider(String(payload.sessionId ?? ''), {
               name: request.name,
               description: request.description,
             }, prepared)
-            return success(await service.createBody(request, undefined, decision))
+            if (managedPrepared.available) {
+              const managed = await memorySpacesManagement(resolved, payload, 'mutate', 'body-create', {
+                request: request as unknown as MemoryJsonValue,
+                placementDecision: decision as unknown as MemoryJsonValue,
+              }, signal)
+              if (managed.available) return success(managed.value)
+            }
+            return success(signal === undefined ? await service.createBody(request, undefined, decision) : await service.createBody(request, signal, decision))
           }
         case 'body-update':
           {
@@ -637,7 +758,11 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
                 },
               }),
             }
-            return success(service.updateBody(String(payload.memoryBodyId ?? ''), request))
+            const managed = await memorySpacesManagement(resolved, payload, 'mutate', 'body-update', {
+              memoryBodyId: String(payload.memoryBodyId ?? ''),
+              ...request,
+            } as unknown as MemoryJsonValue, signal)
+            return success(managed.available ? managed.value : service.updateBody(String(payload.memoryBodyId ?? ''), request))
           }
         case 'body-metadata-maintain':
           {
@@ -659,9 +784,14 @@ export function createWriteHandler(input: RuntimeInput, lifecycle?: MnemonLifecy
         // Compatibility route for clients released before card reconnect
         // moved from the management channel to the read channel.
         case 'body-reconnect':
-          return success(await service.reconnectBody(String(payload.memoryBodyId ?? '')))
-        case 'body-delete':
-          return success(await service.deleteBody(String(payload.memoryBodyId ?? '')))
+          {
+            const managed = await memorySpacesManagement(resolved, payload, 'read', 'body-reconnect', managementInput(payload), signal)
+            return success(managed.available ? managed.value : signal === undefined ? await service.reconnectBody(String(payload.memoryBodyId ?? '')) : await service.reconnectBody(String(payload.memoryBodyId ?? ''), signal))
+          }
+        case 'body-delete': {
+          const managed = await memorySpacesManagement(resolved, payload, 'mutate', 'body-delete', managementInput(payload), signal)
+          return success(managed.available ? managed.value : signal === undefined ? await service.deleteBody(String(payload.memoryBodyId ?? '')) : await service.deleteBody(String(payload.memoryBodyId ?? ''), signal))
+        }
         default:
           return badRequest(`unknown write endpoint: ${endpoint}`)
       }
