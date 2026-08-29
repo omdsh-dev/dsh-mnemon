@@ -132,6 +132,10 @@ const MemoryTopologySchema: z<MemoryTopologyConfig> = z.object({
 })
 
 export const Config: z<Config> = z.object({
+  // Bundle wiring, not an end-user memory setting. Keep the legacy root
+  // behavior by default while allowing cordis.patch.yml to compose the public
+  // Source/Strategy Entries without double registration.
+  bundledContributions: z.boolean().default(true).hidden(),
   // Keep this optional in the schema so legacy dataDir-only installs still
   // resolve to the custom scope instead of being silently reset to global.
   storageScope: z.union(['global', 'workspace', 'custom'] as const),

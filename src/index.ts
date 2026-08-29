@@ -54,7 +54,7 @@ function optionalWorkspaceRegistry(ctx: HostContextShape): HostWorkspaceRegistry
 
 /** Mount native model tools on every DSH surface and UI RPC only when Web connection exists. */
 export interface ApplyCoreOptions {
-  /** Root package compatibility mode; the core subpath uses separate Entries. */
+  /** Install the legacy in-process Source/Strategy defaults with the core. */
   compatibilityBundle: boolean
 }
 
@@ -152,5 +152,5 @@ export function applyCore(rawContext: unknown, config: MnemonConfig = {}, option
 
 /** Backward-compatible one-Entry package surface. */
 export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
-  applyCore(rawContext, config, { compatibilityBundle: true })
+  applyCore(rawContext, config, { compatibilityBundle: config.bundledContributions !== false })
 }

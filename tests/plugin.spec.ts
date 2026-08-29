@@ -15,7 +15,7 @@ const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.
   peerDependencies: Record<string, string>
 }
 const lockfile = readFileSync(new URL('../pnpm-lock.yaml', import.meta.url), 'utf8')
-const workspaceConfig = readFileSync(new URL('../pnpm-workspace.yaml', import.meta.url), 'utf8')
+const bundlePatch = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
 
 const directories: string[] = []
 
@@ -166,6 +166,11 @@ describe('dsh-mnemon plugin composition', () => {
       ],
       platform: 'web',
     })
+  })
+
+  it('anchors client discovery on the root Core Entry without duplicating bundled contributions', () => {
+    expect(bundlePatch).toMatch(/- id: mnemon\n(?:\s+#.*\n)*\s+name: dsh-mnemon\n\s+config:\n\s+bundledContributions: false/u)
+    expect(bundlePatch).not.toContain('name: dsh-mnemon/core')
   })
 
   it('registers the full tool surface, guidance, and split RPC channels', () => {

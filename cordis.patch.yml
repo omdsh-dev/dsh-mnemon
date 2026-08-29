@@ -3,8 +3,12 @@
 # variables for one-field overrides such as cliPath.
 - insert:
     - id: mnemon
-      name: dsh-mnemon/core
+      # The root package is the Core Entry and the Web client discovery
+      # anchor. Its compatibility shortcut is disabled because the four
+      # explicit contribution Entries below own the bundled defaults.
+      name: dsh-mnemon
       config:
+        bundledContributions: false
         routingGuidance: true
         lifecycleEnabled: true
         recallMode: guided

@@ -173,6 +173,12 @@ export { normalizeDisplayMode } from './display-mode.ts'
 export type MnemonDisplayMode = 'sidebar' | 'builtin'
 
 export interface Config {
+  /**
+   * Root-entry compatibility switch. The packaged five-Entry bundle disables
+   * the built-in contribution shortcut because its Source/Strategy Entries
+   * own those contributions; standalone legacy `dsh-mnemon` mounts keep it.
+   */
+  bundledContributions?: boolean
   storageScope?: StorageScopeKind
   /** Whether USER.md follows the selected storage root or stays in the global root. */
   runtimeUserScope?: 'storage' | 'global'
