@@ -29,8 +29,19 @@ function MnemonPanel({ ctx, settings, t, onClose }: MnemonPanelProps): JSX.Eleme
   const subscribeLocale = useCallback((listener: () => void) => ctx.locale.subscribe(listener), [ctx.locale])
   const getLocaleSnapshot = useCallback(() => ctx.locale.getSnapshot(), [ctx.locale])
   const locale = useSyncExternalStore(subscribeLocale, getLocaleSnapshot, getLocaleSnapshot)
-  const sessions = useSyncExternalStore(ctx.sessions.list.subscribe, ctx.sessions.list.getSnapshot, ctx.sessions.list.getSnapshot)
-  const workspaces = useSyncExternalStore(ctx.workspaces.list.subscribe, ctx.workspaces.list.getSnapshot, ctx.workspaces.list.getSnapshot)
+  // Arrow-bound on purpose: the 0.1.2 workspace-controller store exposes
+  // prototype methods, so a detached bare reference loses `this` and crashes
+  // getSnapshot (Cannot read properties of undefined (reading 'refreshSnapshot')).
+  const sessions = useSyncExternalStore(
+    listener => ctx.sessions.list.subscribe(listener),
+    () => ctx.sessions.list.getSnapshot(),
+    () => ctx.sessions.list.getSnapshot(),
+  )
+  const workspaces = useSyncExternalStore(
+    listener => ctx.workspaces.list.subscribe(listener),
+    () => ctx.workspaces.list.getSnapshot(),
+    () => ctx.workspaces.list.getSnapshot(),
+  )
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>()
   const currentCwd = sessions.current === undefined ? undefined : sessions.byId[sessions.current]?.cwd
   const normalizePath = (value: string): string => value.replace(/[\\/]+$/u, '')
