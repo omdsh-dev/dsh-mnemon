@@ -245,7 +245,7 @@ export class DocumentController {
     })
   }
 
-  search(query: string, options: { includeArchived?: boolean; limit?: number } = {}): Promise<DocumentSearchResult> {
+  search(query: string, options: { includeArchived?: boolean; limit?: number; allowedIds?: readonly string[] } = {}): Promise<DocumentSearchResult> {
     const operation = this.queue.then(() => this.withLock(() => {
       const index = this.readIndex()
       const beforeRevision = indexRevision(index)
@@ -254,7 +254,9 @@ export class DocumentController {
       const requiredTokenMatches = lexicalRequiredMatchCount(tokens)
       const includeArchived = options.includeArchived === true
       const limit = Math.max(1, Math.min(50, Math.trunc(options.limit ?? 20)))
+      const allowedIds = options.allowedIds === undefined ? undefined : new Set(options.allowedIds)
       const ranked = index.documents
+        .filter(record => allowedIds === undefined || allowedIds.has(record.id))
         .filter(record => includeArchived || record.status === 'active')
         .map(record => {
           const view = this.view(record)
