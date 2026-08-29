@@ -32,5 +32,27 @@
       name: dsh-mnemon/source-documents
     - id: mnemon-source-memory-spaces
       name: dsh-mnemon/source-memory-spaces
+      config:
+        # Compatibility starter: every currently visible Provider is an
+        # explicit child. A custom parent composition may choose a subset.
+        providers:
+          - use: dsh-mnemon-provider-mnemon-native
+            instanceId: mnemon-native
+          - use: dsh-mnemon-provider-openviking
+            instanceId: openviking
+          - use: dsh-mnemon-provider-honcho
+            instanceId: honcho
+          - use: dsh-mnemon-provider-mem0
+            instanceId: mem0
+          - use: dsh-mnemon-provider-hindsight
+            instanceId: hindsight
+          - use: dsh-mnemon-provider-holographic
+            instanceId: holographic
+          - use: dsh-mnemon-provider-retaindb
+            instanceId: retaindb
+          - use: dsh-mnemon-provider-byterover
+            instanceId: byterover
+          - use: dsh-mnemon-provider-supermemory
+            instanceId: supermemory
     - id: mnemon-strategy-default-three-tier
       name: dsh-mnemon/view-strategy-default-three-tier
