@@ -47,9 +47,12 @@ export const RUNTIME_MEMORY_SOURCE = defineMemorySource({
     const controller = context.binding<RuntimeMemoryController>(BUILTIN_MEMORY_BINDINGS.runtime)
     if (controller === undefined) throw new Error('Runtime Memory Source requires its Host runtime binding')
     const projection = (workspaceId?: string) => controller.contextProjection(resolveGitBranch(workspaceId))
+    const prepared = new Map<string, ReturnType<typeof projection>>()
+    const scopeKey = (workspaceId?: string) => workspaceId?.trim() ?? ''
     return {
       facts(request) {
         const current = projection(request.scope.workspaceId)
+        prepared.set(scopeKey(request.scope.workspaceId), current)
         return {
           sourceInstanceKey: context.sourceInstanceKey,
           sourceTypeId: 'runtime',
@@ -63,7 +66,9 @@ export const RUNTIME_MEMORY_SOURCE = defineMemorySource({
       },
       project(request) {
         if (!request.includeProjection) return { fragments: [] }
-        const current = projection(request.scope.workspaceId)
+        const key = scopeKey(request.scope.workspaceId)
+        const current = prepared.get(key) ?? projection(request.scope.workspaceId)
+        prepared.delete(key)
         return {
           fragments: [{
             id: `${context.sourceInstanceKey}/projection`,

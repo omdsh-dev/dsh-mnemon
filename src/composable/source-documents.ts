@@ -64,6 +64,7 @@ export const DOCUMENTS_MEMORY_SOURCE = defineMemorySource({
     const documents = context.binding<DocumentManager>(BUILTIN_MEMORY_BINDINGS.documents)
     if (documents === undefined) throw new Error('Documents Source requires its Host manager binding')
     const snapshot = (workspaceId: string | undefined) => workspaceId === undefined ? undefined : documents.forWorkspace(workspaceId).snapshot()
+    const prepared = new Map<string, NonNullable<ReturnType<typeof snapshot>>>()
     return {
       facts(request) {
         const root = workspace(request.scope)
@@ -73,6 +74,7 @@ export const DOCUMENTS_MEMORY_SOURCE = defineMemorySource({
         }
         try {
           const current = snapshot(root)!
+          prepared.set(root, current)
           const active = current.documents.filter(document => document.status === 'active' && document.healthy)
           return {
             sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: 'documents', role: 'narrative', availability: 'ready',
@@ -90,7 +92,8 @@ export const DOCUMENTS_MEMORY_SOURCE = defineMemorySource({
       project(request) {
         const root = workspace(request.scope)
         if (root === undefined) return { fragments: [] }
-        const current = snapshot(root)!
+        const current = prepared.get(root) ?? snapshot(root)!
+        prepared.delete(root)
         const active = current.documents.filter(document => document.status === 'active' && document.healthy).sort((a, b) => a.id.localeCompare(b.id))
         const readGrant: MemoryReadGrant = {
           id: `${context.sourceInstanceKey}/grant/${current.revision}`,

@@ -86,6 +86,12 @@ export function createMemorySpacesSource(providerRegistry?: MemoryProviderAdapte
     const hostService = context.binding<MnemonService>(BUILTIN_MEMORY_BINDINGS.memorySpaces)
     if (hostService === undefined) throw new Error('Memory Spaces Source requires its private Host binding')
     const service = providerRegistry === undefined ? hostService : hostService.withProviderAdapterRegistry(providerRegistry)
+    let prepared: { all: ReturnType<typeof service.memoryBodies.list>; active: ReturnType<typeof service.memoryBodies.active>; revision: string } | undefined
+    const sourceState = () => {
+      const value = { all: service.memoryBodies.list(), active: service.memoryBodies.active().sort((left, right) => left.id.localeCompare(right.id)), revision: service.memoryRevision() }
+      prepared = value
+      return value
+    }
     const admittedByView = new Map<string, Map<string, string>>()
     const admit = (viewId: string, entries: Array<{ id: string; memoryBodyId?: string }>): void => {
       const current = admittedByView.get(viewId) ?? new Map<string, string>()
@@ -122,7 +128,7 @@ export function createMemorySpacesSource(providerRegistry?: MemoryProviderAdapte
     return {
       facts(): MemorySourceFacts {
         try {
-          const active = service.memoryBodies.active().sort((left, right) => left.id.localeCompare(right.id))
+          const { active, revision } = sourceState()
           const routeIds: string[] = [
             ...(active.some(body => body.provider.capabilities.search) ? ['recall'] : []),
             ...(active.some(body => body.provider.capabilities.related) ? ['related'] : []),
@@ -140,7 +146,7 @@ export function createMemorySpacesSource(providerRegistry?: MemoryProviderAdapte
           if (actionIds.includes('forget')) capabilities.push('forget')
           return {
             sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: 'memory-spaces', role: 'durable-evidence',
-            availability: active.length === 0 ? 'degraded' : 'ready', revision: service.memoryRevision(), capabilities: [...capabilities], routeIds, actionIds,
+            availability: active.length === 0 ? 'degraded' : 'ready', revision, capabilities: [...capabilities], routeIds, actionIds,
             hints: { activeCount: active.length, providerCount: new Set(active.map(body => body.provider.id)).size },
           }
         } catch (error) {
@@ -152,9 +158,8 @@ export function createMemorySpacesSource(providerRegistry?: MemoryProviderAdapte
         }
       },
       project(request) {
-        const all = service.memoryBodies.list()
-        const active = service.memoryBodies.active().sort((left, right) => left.id.localeCompare(right.id))
-        const revision = service.memoryRevision()
+        const { all, active, revision } = prepared ?? sourceState()
+        prepared = undefined
         return {
           fragments: request.includeProjection ? [{
             id: `${context.sourceInstanceKey}/projection`, sourceInstanceKey: context.sourceInstanceKey, mode: request.mode,
