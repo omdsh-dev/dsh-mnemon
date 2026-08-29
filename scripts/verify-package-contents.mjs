@@ -21,6 +21,11 @@ const required = [
   'package.json',
   'cordis.patch.yml',
   'lib/index.js',
+  'lib/core.js',
+  'lib/source-runtime.js',
+  'lib/source-documents.js',
+  'lib/source-memory-spaces.js',
+  'lib/view-strategy-default-three-tier.js',
   'lib/client.js',
   'lib/contracts.js',
   'lib/kernel.js',
@@ -32,6 +37,11 @@ const required = [
   'lib/layers/documents.js',
   'lib/layers/memory-spaces.js',
   'lib/types/src/index.d.ts',
+  'lib/types/src/core.d.ts',
+  'lib/types/src/plugins/source-runtime.d.ts',
+  'lib/types/src/plugins/source-documents.d.ts',
+  'lib/types/src/plugins/source-memory-spaces.d.ts',
+  'lib/types/src/plugins/strategy-default-three-tier.d.ts',
   'lib/types/src/client/index.d.ts',
 ]
 const allowedRootFiles = new Set(['package.json', 'cordis.patch.yml', 'LICENSE', 'README.md', 'README.zh-CN.md', 'SECURITY.md', 'THIRD_PARTY_NOTICES.md'])
@@ -51,9 +61,10 @@ const relativeReadmeImages = readmeFiles.flatMap((path) => {
     .map(source => `${path}: ${source}`)
 })
 
-// Runtime profiles, embedding protocols and delegated turn ownership include
-// their Host implementation and declarations; keep the release below 1.75 MB.
-const maximumUnpackedBytes = 1_750_000
+// Five independently importable Composable View entries add public declaration
+// surfaces while sharing runtime chunks; keep the measured 1.887 MB release
+// within a narrow 1.92 MB regression fence.
+const maximumUnpackedBytes = 1_920_000
 
 if (missing.length > 0 || unexpected.length > 0 || hostLeaks.length > 0 || relativeReadmeImages.length > 0 || pack.unpackedSize > maximumUnpackedBytes) {
   if (missing.length > 0) console.error(`Missing package files:\n${missing.map(path => `- ${path}`).join('\n')}`)
