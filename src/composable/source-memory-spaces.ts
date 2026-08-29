@@ -3,6 +3,7 @@ import type { MemoryCapability, MemoryEvidence, MemoryJsonValue, MemoryReadGrant
 import { COMPOSABLE_MEMORY_API_VERSION } from '../../packages/contracts/src/index.ts'
 import { defineMemorySource } from '../../packages/kernel/src/index.ts'
 import type { MnemonService } from '../service.ts'
+import type { MemoryProviderAdapterRegistry } from '../providers/registry.ts'
 import type { Category, EdgeType, Intent, Source } from '../shared/contracts.ts'
 import { BUILTIN_MEMORY_BINDINGS } from './bindings.ts'
 import { integer, receipt, record, stringArray, text, truncate } from './shared.ts'
@@ -22,7 +23,8 @@ function grantFor(view: { readGrants: MemoryReadGrant[] }, sourceInstanceKey: st
   return grant
 }
 
-export const MEMORY_SPACES_SOURCE = defineMemorySource({
+export function createMemorySpacesSource(providerRegistry?: MemoryProviderAdapterRegistry) {
+  return defineMemorySource({
   manifest: {
     apiVersion: COMPOSABLE_MEMORY_API_VERSION,
     kind: 'source',
@@ -81,8 +83,9 @@ export const MEMORY_SPACES_SOURCE = defineMemorySource({
     },
   },
   create(context) {
-    const service = context.binding<MnemonService>(BUILTIN_MEMORY_BINDINGS.memorySpaces)
-    if (service === undefined) throw new Error('Memory Spaces Source requires its private Host binding')
+    const hostService = context.binding<MnemonService>(BUILTIN_MEMORY_BINDINGS.memorySpaces)
+    if (hostService === undefined) throw new Error('Memory Spaces Source requires its private Host binding')
+    const service = providerRegistry === undefined ? hostService : hostService.withProviderAdapterRegistry(providerRegistry)
     const admittedByView = new Map<string, Map<string, string>>()
     const admit = (viewId: string, entries: Array<{ id: string; memoryBodyId?: string }>): void => {
       const current = admittedByView.get(viewId) ?? new Map<string, string>()
@@ -254,4 +257,8 @@ export const MEMORY_SPACES_SOURCE = defineMemorySource({
       },
     }
   },
-})
+  })
+}
+
+/** Compatibility definition samples the v0.3 registry through the legacy Host service. */
+export const MEMORY_SPACES_SOURCE = createMemorySpacesSource()

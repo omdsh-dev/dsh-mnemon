@@ -18,9 +18,26 @@ afterEach(() => {
   for (const path of temporary.splice(0).reverse()) rmSync(path, { recursive: true, force: true })
 })
 
-function mount(runtime: MemoryRuntime, entryId: string, apply: (ctx: Context) => void): () => void {
+async function mount(runtime: MemoryRuntime, entryId: string, apply: (ctx: Context) => void | Promise<void>): Promise<() => void> {
   const releases: Array<() => void> = []
   const fiber = {}
+  const child = (plugin: { apply(ctx: Context): void | Promise<void> }) => {
+    const childReleases: Array<() => void> = []
+    const childContext = {
+      fiber: {},
+      effect(factory: () => void | (() => void)) {
+        const release = factory()
+        if (typeof release === 'function') childReleases.push(release)
+      },
+    } as unknown as Context
+    const ready = Promise.resolve(plugin.apply(childContext))
+    const dispose = async () => {
+      await ready.catch(() => {})
+      for (const release of childReleases.reverse()) release()
+    }
+    releases.push(() => { void dispose() })
+    return { await: () => ready, dispose }
+  }
   const ctx = {
     fiber,
     mnemonMemory: runtime,
@@ -31,8 +48,9 @@ function mount(runtime: MemoryRuntime, entryId: string, apply: (ctx: Context) =>
       const release = factory()
       if (typeof release === 'function') releases.push(release)
     },
+    plugin: child,
   } as unknown as Context
-  apply(ctx)
+  await apply(ctx)
   return () => {
     for (const release of releases.reverse()) release()
   }
@@ -42,17 +60,17 @@ describe('five-Entry Composable View bundle', () => {
   it('installs each logical plugin through the same Fiber-owned SDK path', async () => {
     const runtime = new MemoryRuntime()
     const releases = [
-      mount(runtime, 'mnemon-source-runtime', runtimePlugin.apply),
-      mount(runtime, 'mnemon-source-documents', documentsPlugin.apply),
-      mount(runtime, 'mnemon-source-memory-spaces', memorySpacesPlugin.apply),
-      mount(runtime, 'mnemon-strategy-default-three-tier', strategyPlugin.apply),
+      await mount(runtime, 'mnemon-source-runtime', runtimePlugin.apply),
+      await mount(runtime, 'mnemon-source-documents', documentsPlugin.apply),
+      await mount(runtime, 'mnemon-source-memory-spaces', memorySpacesPlugin.apply),
+      await mount(runtime, 'mnemon-strategy-default-three-tier', strategyPlugin.apply),
     ]
     expect(runtime.contributionSnapshot()).toMatchObject({
       revision: 4,
       sources: [
         { instanceKey: 'source:mnemon-source-runtime', provenance: { packageName: 'dsh-mnemon-source-runtime' } },
         { instanceKey: 'source:mnemon-source-documents', provenance: { packageName: 'dsh-mnemon-source-documents' } },
-        { instanceKey: 'source:mnemon-source-memory-spaces', provenance: { packageName: 'dsh-mnemon-source-memory-spaces' } },
+        { instanceKey: 'source:mnemon-source-memory-spaces', provenance: { packageName: 'dsh-mnemon-source-memory-spaces' }, effectiveDigest: expect.stringContaining('providers:mnemon-native,openviking') },
       ],
       strategies: [{ instanceKey: 'strategy:mnemon-strategy-default-three-tier', provenance: { packageName: 'dsh-mnemon-strategy-default-three-tier' } }],
     })

@@ -406,7 +406,7 @@ export class MnemonService {
     readonly runner: MnemonRunner,
     readonly config: ResolvedConfig,
     memoryBodies?: MemoryBodyRegistry,
-    recallQualityPolicyRegistry: RecallQualityPolicyRegistry = recallQualityPolicies,
+    private readonly recallQualityPolicyRegistry: RecallQualityPolicyRegistry = recallQualityPolicies,
     providerAdapterRegistry: MemoryProviderAdapterRegistry = memoryProviderAdapterFactories,
     private readonly recordCommit?: AuthorityCommitRecorder,
   ) {
@@ -426,6 +426,22 @@ export class MnemonService {
       forget: (body, id, signal) => this.nativeForget(body, id, signal),
     }
     this.providers = providerAdapterRegistry.create({ memoryBodies: this.memoryBodies, config: this.config, nativeAdapter: nativeProvider })
+  }
+
+  /**
+   * Create a generation-owned data plane over the same Memory Space authority.
+   * The Provider registry is supplied by the Memory Spaces parent Fiber and is
+   * never published as a Cordis Context service.
+   */
+  withProviderAdapterRegistry(providerAdapterRegistry: MemoryProviderAdapterRegistry): MnemonService {
+    return new MnemonService(
+      this.runner,
+      this.config,
+      this.memoryBodies,
+      this.recallQualityPolicyRegistry,
+      providerAdapterRegistry,
+      this.recordCommit,
+    )
   }
 
   async bodies(signal?: AbortSignal): Promise<MemoryBodyCatalog> {
