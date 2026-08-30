@@ -134,7 +134,7 @@ export class Mem0Provider extends HttpMemoryProvider implements MemoryProviderAd
     })
     const result = jsonObject(payload) ?? {}
     return {
-      action: 'stored',
+      action: mode === 'platform' ? 'queued' : 'stored',
       provider: this.id,
       summary: mode === 'platform' ? 'Mem0 queued the memory for extraction.' : 'Mem0 stored the explicit memory.',
       ...(jsonString(result.event_id) === undefined ? {} : { eventId: jsonString(result.event_id)! }),

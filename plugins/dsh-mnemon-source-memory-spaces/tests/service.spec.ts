@@ -6,7 +6,7 @@ import { resolveMemorySpacesConfig } from "../src/config.ts"
 import { createRegistry } from './providers.ts'
 import type { ProcessRunner } from '../src/providers/process.ts'
 import { createRunner } from '../src/runner.ts'
-import type { MemorySpacesService } from '../src/service.ts'
+import { mutationResultCompletion, mutationResultCommitted, type MemorySpacesService } from '../src/service.ts'
 import type { MnemonRunner } from '../src/runner.ts'
 import { parseMemoryGraph } from 'dsh-mnemon-provider-mnemon-native'
 import { createService } from './providers.ts'
@@ -80,6 +80,41 @@ function fixture(writeEnabled = true): { service: MemorySpacesService; process: 
 }
 
 describe('MemorySpacesService', () => {
+  it.each([
+    [null, 'unknown'], [{ id: 'job', success: true }, 'unknown'],
+    [{ action: 'stored', status: 'PENDING', success: true }, 'accepted'],
+    [{ action: 'queued', operationId: 'job' }, 'accepted'],
+    [{ action: 'stored', state: 'candidate' }, 'candidate'],
+    [{ action: 'stored', status: 'partial' }, 'partial'],
+    [{ imported: 1, errors: 1 }, 'partial'], [{ imported: 0, errors: ['failed'] }, 'failed'],
+    [{ action: 'stored', success: false }, 'failed'], [{ status: 'failed' }, 'failed'],
+    [{ action: 'stored', durable: false }, 'unknown'], [{ action: 'skipped' }, 'unknown'],
+    [{ action: 'stored' }, 'committed'], [{ action: 'invalidated' }, 'committed'],
+    [{ imported: 2, errors: 0 }, 'committed'], [{ committed: true }, 'committed'],
+  ])('translates Provider result %j to %s without claiming implicit persistence', (result, completion) => {
+    expect(mutationResultCompletion(result)).toBe(completion)
+    expect(mutationResultCommitted(result)).toBe(completion === 'committed')
+  })
+
+  it.each([
+    [{ imported: 1, updated: 0, skipped: 0, errors: 1 }, false],
+    [{ imported: 1, updated: 0, skipped: 0, errors: 0 }, false],
+    [{ imported: 2, updated: 0, skipped: 0, errors: 0 }, true],
+  ])('keeps merge sources active unless all copied records are accounted for: %j', async (result, complete) => {
+    const { service, process } = fixture()
+    const target = await service.createBody({ name: 'Merge target', description: 'Synthetic import target.', active: true })
+    const defaultProcess = process.getMockImplementation()!
+    let draftPath = ''
+    process.mockImplementation(async (command, args, options) => {
+      if (!args.includes('import')) return defaultProcess(command, args, options)
+      draftPath = args[args.indexOf('import') + 1]!
+      return { stdout: JSON.stringify(result), stderr: '', exitCode: 0 }
+    })
+    await expect(service.mergeBodies(target.id, ['work'])).resolves.toMatchObject({ status: complete ? 'committed' : 'partial' })
+    expect(service.memoryBodies.get('work').active).toBe(!complete)
+    expect(existsSync(draftPath)).toBe(false)
+  })
+
   it('filters low normalized scores before returning recall content and reports structured quality stats', async () => {
     const process = vi.fn<ProcessRunner>(async () => ({
       stdout: JSON.stringify({ results: [

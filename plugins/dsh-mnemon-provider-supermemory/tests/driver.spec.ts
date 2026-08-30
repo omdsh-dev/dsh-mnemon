@@ -22,6 +22,13 @@ function response(payload: unknown, status = 200): Response {
 }
 
 describe('standalone supermemory data plane', () => {
+  it('does not treat a returned document id as completed memory extraction', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => response({ id: 'accepted-document' }))
+    const { registry, body } = await providerBody('supermemory', { endpoint: 'https://supermemory.example', apiKey: 'fixture', containerTag: 'notes' })
+    await expect(new SupermemoryProvider(registry, { fetch: fetchMock }).remember(body, { content: 'Synthetic input.' }))
+      .resolves.toMatchObject({ action: 'queued', id: 'accepted-document' })
+  })
+
   it('discovers its native namespaces independently', async () => {
     const fetchMock = vi.fn<typeof fetch>(async () => response([{ id: 'space-1', name: 'Team space', containerTag: 'team', description: 'Supermemory source metadata.' }]))
     const supermemory = await providerBody('supermemory', { endpoint: 'https://supermemory.example', apiKey: 'key', containerTag: 'old', searchMode: 'hybrid' })

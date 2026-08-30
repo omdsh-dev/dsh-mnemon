@@ -124,7 +124,7 @@ export class SupermemoryProvider extends HttpMemoryProvider implements MemoryPro
     })
     const result = jsonObject(payload) ?? {}
     return {
-      action: 'stored',
+      action: 'queued',
       provider: this.id,
       summary: 'Supermemory accepted the memory document for extraction.',
       ...(jsonString(result.id) === undefined ? {} : { id: jsonString(result.id)! }),

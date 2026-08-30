@@ -205,7 +205,7 @@ export class HindsightProvider extends HttpMemoryProvider implements MemoryProvi
       signal,
     })) ?? {}
     return {
-      action: 'stored',
+      action: 'queued',
       provider: this.id,
       summary: 'Hindsight queued the content for structured memory extraction.',
       operationId: jsonString(payload.operation_id) ?? operationId,

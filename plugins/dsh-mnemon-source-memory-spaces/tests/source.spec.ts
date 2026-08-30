@@ -32,7 +32,7 @@ describe('standalone Memory Spaces Source', () => {
           discover: async () => [{ externalId: 'notes', name: 'Notes', description: 'Fixture namespace', connection: {} }],
           status: async () => ({ healthy: true }), list: async () => [...rows], search: async () => ({ results: [...rows] }),
           graph: async () => ({ nodes: [], edges: [], generatedAt: new Date().toISOString() }),
-          remember: async () => ({ action: 'stored' }), related, forget,
+          remember: async () => ({ action: 'queued', operationId: 'extraction-job' }), related, forget,
         }),
       })
     } })
@@ -46,6 +46,10 @@ describe('standalone Memory Spaces Source', () => {
         expectedRevision: source.revision, operation: 'provider-service-update', input: { providerId: 'account', settings: {}, enabled: true } })
       const turn = await runner.beginTurn({ scope, budget: { ...DEFAULT_MEMORY_VIEW_BUDGET, maxEvidenceCharacters: 5 } })
       const route = (id: string) => turn.view.routes.find(route => route.sourceRouteId === id)!.id
+      const remember = turn.view.actionOffers.find(action => action.sourceActionId === 'remember')!
+      const accepted = await turn.executeAction(remember.id, { content: 'Queued input.' }, () => true)
+      expect(accepted).toMatchObject({ status: 'succeeded', completion: 'accepted', details: { result: { operationId: 'extraction-job' } } })
+      expect(accepted.committedAt).toBeUndefined()
       const evidence = await turn.executeRoute(route('recall'), { query: 'needle' })
       expect(evidence.items.map(item => item.id)).toEqual(['visible'])
       expect(evidence.items[0]?.text.length).toBeLessThanOrEqual(5)

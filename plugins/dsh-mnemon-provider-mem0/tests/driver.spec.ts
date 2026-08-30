@@ -22,6 +22,14 @@ function response(payload: unknown, status = 200): Response {
 }
 
 describe('standalone mem0 data plane', () => {
+  it.each(['platform', 'self-hosted'])('distinguishes asynchronous ingestion from explicit storage in %s mode without an upstream status', async mode => {
+    const fetchMock = vi.fn<typeof fetch>(async () => response({ event_id: 'event-or-record-id' }))
+    const { registry, body } = await providerBody('mem0', { endpoint: 'https://mem0.example', apiKey: 'fixture', mode, userId: 'user', agentId: 'agent' })
+    const result = await new Mem0Provider(registry, { fetch: fetchMock }).remember(body, { content: 'Synthetic memory.' })
+    expect(result).toMatchObject({ action: mode === 'platform' ? 'queued' : 'stored' })
+    if (mode === 'self-hosted') expect(JSON.parse(String(fetchMock.mock.calls[0]![1]?.body))).toMatchObject({ infer: false })
+  })
+
   it('discovers its native namespaces independently', async () => {
     const fetchMock = vi.fn<typeof fetch>(async () => response([{ id: 'alice', name: 'Alice', type: 'user', total_memories: 4 }]))
     const mem0 = await providerBody('mem0', { endpoint: 'https://mem0.example', mode: 'self-hosted', userId: 'user', agentId: 'agent' })
@@ -48,7 +56,7 @@ describe('standalone mem0 data plane', () => {
     await expect(provider.search(body, { query: 'reply style', limit: 5 })).resolves.toEqual({
       results: [expect.objectContaining({ id: 'mem-1', content: 'Alice prefers concise replies.', category: 'preference', score: 0.91 })],
     })
-    await expect(provider.remember(body, { content: 'Alice likes TypeScript.', category: 'preference' })).resolves.toMatchObject({ eventId: 'event-1', status: 'PENDING' })
+    await expect(provider.remember(body, { content: 'Alice likes TypeScript.', category: 'preference' })).resolves.toMatchObject({ action: 'queued', eventId: 'event-1', status: 'PENDING' })
     await expect(provider.forget(body, 'mem-1')).resolves.toMatchObject({ action: 'deleted', id: 'mem-1' })
 
     expect(new Headers(requests[0]?.init?.headers).get('Authorization')).toBe('Token mem0-secret')

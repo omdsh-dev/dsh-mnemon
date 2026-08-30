@@ -13,7 +13,7 @@ import type {
 import { COMPOSABLE_MEMORY_API_VERSION } from 'dsh-mnemon/contracts'
 import { defineMemorySource, memoryInputInteger as integer, createMemoryMutationReceipt as receipt, memoryInputRecord as record, memoryInputStringArray as stringArray, memoryInputText as text, truncateMemoryText as truncate } from 'dsh-mnemon/extension-sdk'
 import { modelBodyCatalog, modelStatus, modelJson } from './view-model.ts'
-import { MemorySpacesService, mutationResultCommitted } from './service.ts'
+import { MemorySpacesService, mutationResultCompletion } from './service.ts'
 import { createRunner } from './runner.ts'
 import { MemoryProviderCatalog } from './providers/catalog.ts'
 import { finalizeLlmPlacement, rulesOnlyPlacement } from './provider-placement.ts'
@@ -616,7 +616,7 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
         } else {
           throw new Error(`unsupported Memory Spaces action: ${request.offer.sourceActionId}`)
         }
-        return receipt(request.view.id, request.offer.id, context.sourceInstanceKey, service.memoryRevision(), { memoryBodyId: bodyId ?? null, result }, mutationResultCommitted(result) ? 'committed' : 'unknown')
+        return receipt(request.view.id, request.offer.id, context.sourceInstanceKey, service.memoryRevision(), { memoryBodyId: bodyId ?? null, result }, mutationResultCompletion(result))
       },
       manage(request) {
         return manageMemorySpaces(service, request)

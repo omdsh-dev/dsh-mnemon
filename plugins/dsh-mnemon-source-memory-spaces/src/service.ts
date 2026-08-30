@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { JsonValue } from './contracts.ts'
+import type { MemoryMutationCompletion } from 'dsh-mnemon/contracts'
 import type { ResolvedMemorySpacesConfig as ResolvedConfig } from './config.ts'
 import {
   MemoryBodyRegistry,
@@ -283,32 +284,37 @@ const COMMITTED_MUTATION_STATES = new Set([
   'success',
   'updated',
 ])
-const UNCOMMITTED_MUTATION_STATES = new Set([
+const PENDING_MUTATION_STATES = new Set([
   'accepted',
-  'canceled',
-  'cancelled',
-  'error',
-  'failed',
   'pending',
   'processing',
   'queued',
   'running',
-  'skipped',
 ])
+const FAILED_MUTATION_STATES = new Set(['canceled', 'cancelled', 'error', 'failed'])
 const COMMITTED_MUTATION_COUNTS = ['created', 'deleted', 'edges_inserted', 'imported', 'removed', 'stored', 'updated'] as const
 
-/** A provider mutation is authoritative only after it reports an explicit durable terminal state. */
-export function mutationResultCommitted(result: unknown): boolean {
-  if (typeof result !== 'object' || result === null || Array.isArray(result)) return false
+/** Source-private translation of Provider receipts; Core does not interpret Provider payloads. */
+export function mutationResultCompletion(result: unknown): MemoryMutationCompletion {
+  if (typeof result !== 'object' || result === null || Array.isArray(result)) return 'unknown'
   const value = result as Record<string, unknown>
-  const states = [value.action, value.status]
+  const states = [value.action, value.status, value.state]
     .filter((entry): entry is string => typeof entry === 'string')
     .map(entry => entry.trim().toLocaleLowerCase())
-  if (value.success === false || value.ok === false || value.committed === false || value.durable === false) return false
-  if (states.some(state => UNCOMMITTED_MUTATION_STATES.has(state))) return false
-  if (value.success === true || value.ok === true || value.committed === true || value.durable === true) return true
-  if (states.some(state => COMMITTED_MUTATION_STATES.has(state))) return true
-  return COMMITTED_MUTATION_COUNTS.some(key => typeof value[key] === 'number' && value[key] > 0)
+  const changed = COMMITTED_MUTATION_COUNTS.some(key => typeof value[key] === 'number' && Number.isFinite(value[key]) && value[key] > 0)
+  const errors = Array.isArray(value.errors) ? value.errors.length > 0 : typeof value.errors === 'number' && value.errors > 0
+  if (states.includes('partial') || (errors && changed)) return 'partial'
+  if (value.success === false || value.ok === false || errors || states.some(state => FAILED_MUTATION_STATES.has(state))) return 'failed'
+  if (states.includes('candidate')) return 'candidate'
+  if (states.some(state => PENDING_MUTATION_STATES.has(state))) return 'accepted'
+  if (value.committed === false || value.durable === false || states.includes('skipped')) return 'unknown'
+  if (value.committed === true || value.durable === true || states.some(state => COMMITTED_MUTATION_STATES.has(state)) || changed) return 'committed'
+  // A successful HTTP request or an id alone does not prove memory persistence.
+  return 'unknown'
+}
+
+export function mutationResultCommitted(result: unknown): boolean {
+  return mutationResultCompletion(result) === 'committed'
 }
 
 export class MemorySpacesService {
@@ -1133,22 +1139,28 @@ export class MemorySpacesService {
         }
       }
 
-      return { imported: 0, updated: 0, skipped: 0, edges_inserted: 0, targetMemoryBodyId: target.id }
+      return { action: 'merged', imported: 0, updated: 0, skipped: 0, edges_inserted: 0, targetMemoryBodyId: target.id }
     }
     const temporary = mkdtempSync(join(tmpdir(), 'dsh-mnemon-merge-'))
     const draftPath = join(temporary, 'memory-draft.json')
     try {
       writeFileSync(draftPath, JSON.stringify({ schema_version: '1', source: 'dsh-mnemon-merge', insights, edges }), { encoding: 'utf8', mode: 0o600 })
       const result = await this.runner.runJson(['import', draftPath], { ...(signal === undefined ? {} : { signal }), store: target.id })
-      this.activateAfterWrite(target, mutationResultCommitted(result))
-      if (deactivateSources) {
+      const summary = record(result)
+      const counts = [summary?.imported, summary?.updated, summary?.skipped]
+      const complete = mutationResultCommitted(result) && summary?.errors === 0
+        && counts.every(value => typeof value === 'number' && Number.isInteger(value) && value >= 0)
+        && counts.reduce<number>((sum, value) => sum + Number(value), 0) === insights.length
+      this.activateAfterWrite(target, complete)
+      if (deactivateSources && complete) {
         for (const source of sources) {
           if (!source.active) continue
           this.memoryBodies.setActive(source.id, false)
         }
       }
 
-      return this.annotateResult(result, target)
+      const completion = mutationResultCompletion(result)
+      return this.annotateResult({ ...summary, status: complete ? 'committed' : completion === 'committed' ? 'partial' : completion }, target)
     } finally {
       rmSync(temporary, { recursive: true, force: true })
     }

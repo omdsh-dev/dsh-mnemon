@@ -71,7 +71,7 @@ describe('standalone hindsight data plane', () => {
       healthy: true,
       stats: expect.objectContaining({ totalInsights: 3, edgeCount: 2, oplogCount: 4, byCategory: { world: 2, observation: 1 }, topEntities: [{ entity: 'Alice', count: 3 }] }),
     })
-    await expect(provider.remember(body, { content: 'Alice ships TypeScript.', category: 'decision', tags: ['dsh'], entities: ['Alice'] })).resolves.toMatchObject({ operationId: 'op-1', itemsCount: 1 })
+    await expect(provider.remember(body, { content: 'Alice ships TypeScript.', category: 'decision', tags: ['dsh'], entities: ['Alice'] })).resolves.toMatchObject({ action: 'queued', operationId: 'op-1', itemsCount: 1 })
     await expect(provider.forget(body, 'hs-1')).resolves.toMatchObject({ action: 'invalidated', id: 'hs-1' })
 
     expect(new URL(requests[0]!.url).pathname).toBe('/v1/default/banks/alice%2Fprofile/memories/recall')
