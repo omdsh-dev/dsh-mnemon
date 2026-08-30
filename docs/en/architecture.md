@@ -24,11 +24,14 @@ Like a Spring Boot starter, the default distribution chooses dependencies and ex
 
 | Owner | Owns | Does not own |
 |---|---|---|
-| Core/SDK | Registration, contract validation, immutable Views, budgets, generations and leases | Provider drivers, Source data formats/storage decisions, pages, DSH lifecycle policy |
+| Core | Internal registration, contract validation, immutable Views, budgets, generations and leases | Provider drivers, Source data formats/storage decisions, pages, DSH lifecycle policy |
+| SDK | Small contribution service, Source/Strategy author contracts, installation helpers and scoped test tools | Engine/registry constructors, installed records or generation handles |
 | Source | Storage/remote authority, facts, projections, grants, query/mutation and optional management/Client | Other Sources' controllers or global strategy selection |
 | Strategy | Pure deterministic `request + facts → ViewSpec` | Raw data, credentials, drivers, side effects or new authority |
 | Host | Scope, phase hooks, tool/RPC adapters, authentication, settings and supervised tasks | Source implementations or private registries |
 | Starter | Package set, Entry ids and default configuration | A second loader or runtime |
+
+`ctx.mnemonMemory` is a real restricted service object, not the engine cast to a narrower type. It exposes one registration primitive, used through `installMemory`; Host execution stays internal. Provider modules follow the same principle inside their own Source, with only a bound `host.install` capability. Public test fixtures exercise these protocols without handing out their private owners.
 
 ## Default plugin combination
 

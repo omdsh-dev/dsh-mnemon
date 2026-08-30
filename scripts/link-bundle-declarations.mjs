@@ -1,11 +1,10 @@
-import { readFileSync, readdirSync, writeFileSync, existsSync, unlinkSync } from 'node:fs'
+import { readFileSync, readdirSync, writeFileSync, existsSync, unlinkSync, rmdirSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 
-// The single-install bundle carries first-party plugins inside its artifact.
-// Their independent builds retain public package imports; only this aggregate
-// declaration build links those imports to the bundled copies of their types.
+// Link only this package's public self-references to its emitted declarations.
+// Independent plugins keep their public package imports and separate artifacts.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const output = join(root, 'lib', 'types')
 const config = JSON.parse(readFileSync(join(root, 'tsconfig.json'), 'utf8'))
@@ -73,4 +72,11 @@ function visitExport(value) {
 visitExport(manifest.exports)
 if (typeof manifest.types === 'string') retain(resolve(root, manifest.types))
 for (const filename of declarations) if (!retained.has(filename)) unlinkSync(filename)
-console.log(`Linked bundled declarations; retained ${retained.size}/${declarations.size} public type dependencies.`)
+function removeEmptyDirectories(directory) {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (entry.isDirectory()) removeEmptyDirectories(join(directory, entry.name))
+  }
+  if (directory !== output && readdirSync(directory).length === 0) rmdirSync(directory)
+}
+removeEmptyDirectories(output)
+console.log(`Linked public declarations; retained ${retained.size}/${declarations.size} public type dependencies.`)

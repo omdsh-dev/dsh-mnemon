@@ -24,11 +24,14 @@ Memory Spaces **自己定义内部 Fiber 与 Provider 协议**。每个 Provider
 
 | 归属 | 负责 | 不负责 |
 |---|---|---|
-| Core/SDK | 注册、协议校验、不可变 View、预算、运行代与租约 | Provider 驱动、Source 数据格式与存储决策、页面、DSH 生命周期策略 |
+| Core | 内部注册、协议校验、不可变 View、预算、运行代与租约 | Provider 驱动、Source 数据格式与存储决策、页面、DSH 生命周期策略 |
+| SDK | 小型贡献服务、Source/Strategy 作者契约、安装辅助与限定范围的测试工具 | 引擎/注册表构造器、已安装记录、运行代句柄 |
 | Source | 数据权威、facts、投影、grant、查询/修改、可选管理协议与 Client | 其他 Source 的控制器、全局策略选择 |
 | Strategy | 确定性的纯函数 `request + facts → ViewSpec` | 原始数据、凭据、驱动、副作用、扩张权限 |
 | Host | scope、阶段 hook、工具/RPC、认证、设置、监督任务 | Source 私有实现与注册表 |
 | Starter | 包集合、Entry id、默认配置 | 第二套加载器或运行时 |
+
+`ctx.mnemonMemory` 是真正受限的服务对象，不是给引擎套一个更窄的 TypeScript 类型。它只暴露一个注册原语，由 `installMemory` 使用；Host 执行能力留在内部。Provider 在自己的 Source 内遵循同样原则，只收到绑定子节点的 `host.install` 能力。公开测试夹具验证这些协议，不交出私有宿主对象。
 
 ## 默认插件组合
 

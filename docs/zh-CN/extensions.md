@@ -17,13 +17,19 @@ Source 不需要再实现 Provider；Provider 不需要理解 View 组合；Stra
 | 入口 | 职责 |
 |---|---|
 | `dsh-mnemon` | DSH Host 与默认 Starter |
-| `dsh-mnemon/core` | 不带 Host/UI 的、Source 无关的 `ctx.mnemonMemory` 服务 |
-| `dsh-mnemon/contracts` | JSON 安全的 manifest、facts、ViewSpec、View、Evidence、Receipt |
+| `dsh-mnemon/core` | 安装 Source 无关服务的 Cordis 插件；不导出引擎，不带 Host/UI |
+| `dsh-mnemon/contracts` | Source/Strategy 回调契约，以及 JSON 安全的 manifest、facts、ViewSpec、View、Evidence、Receipt |
 | `dsh-mnemon/extension-sdk` | Source/Strategy 定义、生命周期注册与校验 |
-| `dsh-mnemon/testing` | 真实 Cordis 组合测试夹具与已构建 Client 制品加载器 |
+| `dsh-mnemon/testing` | 限定范围的组合、route/action、管理测试，JSON 诊断与已构建 Client 制品加载器 |
 | `dsh-mnemon/client` | DSH 工作台与 Source 页面 SDK |
 | `dsh-mnemon-source-memory-spaces/provider-sdk` | Memory Spaces 自己的 Provider 子模块协议 |
-| `dsh-mnemon-source-memory-spaces/testing` | Provider 驱动测试夹具 |
+| `dsh-mnemon-source-memory-spaces/testing` | 私有子模块夹具，以及驱动权限/连接夹具 |
+
+## 公开贡献服务，不公开引擎
+
+沿用 DSH 服务/Slot 的思路，扩展点是小而明确的贡献契约。`Context.mnemonMemory` 的类型为 `MnemonMemoryService`，实际对象也只暴露 `installContributions`，并被冻结。作者调用 `installMemory(ctx, contribution, options?)`：由它解析当前 Entry 身份，并将注册清理绑定到该 Fiber；不另建平行注册 API。
+
+引擎、已安装记录、注册表、运行代和租约留在内部，`extension-sdk`、`contracts` 与 Core 插件均不导出这些对象。`MemorySourceRuntime` 则有意公开：它描述**你的 Source 要实现的回调**，不是引擎句柄。定义/factory 属于 Host 侧可执行契约；元信息、操作输入和结果保持 JSON 安全。这个服务边界不等于任意 JavaScript 的安全沙箱。
 
 ## Source 生命周期
 
@@ -60,7 +66,9 @@ Entry id 标识实例，type id 标识实现。不能剥掉 Loader 的 include �
 
 ## Provider 子模块与 Client 页面
 
-Provider 使用 Memory Spaces 公开 SDK/testing 中的 `defineMemorySpaceProvider` 与 `createMemorySpaceProviderFixture`。[external-provider.ts](../../scripts/fixtures/plugin-consumer/src/external-provider.ts) 会在两个独立父 Source 内以同名子节点测试。
+Provider 使用 Memory Spaces SDK 的 `defineMemorySpaceProvider`。模块只收到限定子节点的 `host.install(ctx, definition)` 能力；私有父 Host、Snapshot 和 Registry 不从 SDK 导出。`installMemorySpaces` 挂载显式子模块，返回 `Promise<void>`，不返回父对象句柄。[external-provider.ts](../../scripts/fixtures/plugin-consumer/src/external-provider.ts) 会在两个独立父 Source 内以同名子节点测试。
+
+通过 Source 的 `/testing` 入口使用 `mountMemorySpaceProvider`，测试真实子节点注册、带实例别名的驱动创建和清理；返回值只有冻结的 descriptor/manifest 元信息、`registered`、`createAdapter` 与 `dispose`。`createMemorySpaceProviderFixture` 单独提供经过验证的连接及限定范围的驱动权限。[发布 API 测试](../../scripts/fixtures/plugin-consumer/tests/public-api.spec.ts) 展示如何组合二者，不导入私有实现。
 
 ```yaml
 - id: work-spaces
@@ -96,12 +104,15 @@ try {
   })
   const turn = await runner.beginTurn()
   try {
-    // Assert projection, exact grants, provenance and allowed actions here.
+    const route = turn.view.routes.find(route => route.sourceRouteId === 'read')!
+    const evidence = await turn.executeRoute(route.id, {})
+    // 断言投影、证据与来源；写操作使用
+    // turn.executeAction(offer.id, input, authorize)，明确给出测试授权。
   } finally { turn.release() }
 } finally { await runner.dispose() }
 ```
 
-正式测试使用唯一临时路径，先释放 turn，再 dispose runner。这是在真实 Cordis/Core 上的测试夹具，不是另一套生产 Loader。
+正式测试使用唯一临时路径，先释放 turn，再 dispose runner。`runner.inspect()` 只返回 JSON 评估/运行代诊断；`managementClient(sourceKey)` 提供限定实例的人工操作。turn 不暴露租约，runner 不暴露引擎；通过卸载/重挂插件测试替换，不修改内部注册表。dispose 也会释放遗留 turn；在途操作持有自己的租约，完成后才排空。这是在真实 Cordis/Core 上的测试夹具，不是另一套生产 Loader。
 
 至少覆盖：正常组合、缺失/歧义依赖、双实例、schema/能力/授权拒绝、并发快照、旧修订、取消/部分失败、卸载排空/重载、持久化、管理与真实页面点击。Provider 另测凭据、真实能力、上游损坏数据、超时与父 Source 内 conformance。
 

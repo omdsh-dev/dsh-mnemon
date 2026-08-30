@@ -109,4 +109,30 @@ describe('standalone plugin repository boundary', () => {
     expect(visited.size).toBeGreaterThan(3)
     expect(violations).toEqual([])
   })
+
+  for (const [entry, allowed] of [
+    ['src/sdk/index.ts', ['src/sdk', 'src/core/contracts', 'src/core/definitions.ts']],
+    ['plugins/dsh-mnemon-source-memory-spaces/src/provider-sdk.ts', [
+      'plugins/dsh-mnemon-source-memory-spaces/src/provider-sdk.ts',
+      'plugins/dsh-mnemon-source-memory-spaces/src/contracts.ts',
+      ...['adapter', 'definitions', 'http', 'process'].map(name => `plugins/dsh-mnemon-source-memory-spaces/src/providers/${name}.ts`),
+    ]],
+  ] as const) it(`${entry} does not load its private runtime or registries`, () => {
+    const pending = [join(root, entry)]
+    const visited = new Set<string>()
+    const violations: string[] = []
+    while (pending.length > 0) {
+      const file = pending.pop()!
+      if (visited.has(file)) continue
+      visited.add(file)
+      if (!allowed.some(path => inside(join(root, path), file))) violations.push(relative(root, file))
+      for (const { specifier, typeOnly } of imports(file)) {
+        if (typeOnly) continue
+        if (specifier.startsWith('.')) pending.push(resolve(dirname(file), specifier))
+        else if (!isBuiltin(specifier)) violations.push(`${relative(root, file)}: ${specifier}`)
+      }
+    }
+    expect(visited.size).toBeGreaterThan(1)
+    expect(violations).toEqual([])
+  })
 })

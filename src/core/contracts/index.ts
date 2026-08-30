@@ -1,4 +1,4 @@
-/** JSON values are the only values allowed to cross a Mnemon plugin boundary. */
+/** Metadata, operation inputs and protocol results use JSON-safe values. */
 export type MemoryJsonPrimitive = string | number | boolean | null
 export type MemoryJsonValue = MemoryJsonPrimitive | MemoryJsonValue[] | { [key: string]: MemoryJsonValue }
 

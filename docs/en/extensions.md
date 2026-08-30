@@ -17,13 +17,19 @@ A Source need not implement a Provider. A Provider need not know View compositio
 | Entry | Responsibility |
 |---|---|
 | `dsh-mnemon` | DSH Host and default Starter |
-| `dsh-mnemon/core` | Source-neutral `ctx.mnemonMemory` service, without Host/UI |
-| `dsh-mnemon/contracts` | JSON-safe manifests, facts, ViewSpec, View, Evidence and Receipt |
+| `dsh-mnemon/core` | Cordis plugin installing the Source-neutral service; no engine exports or Host/UI |
+| `dsh-mnemon/contracts` | Source/Strategy callback contracts and JSON-safe manifests, facts, ViewSpec, View, Evidence and Receipt |
 | `dsh-mnemon/extension-sdk` | Source/Strategy definitions, lifecycle installation and validators |
-| `dsh-mnemon/testing` | Real Cordis composition fixture and built Client artifact loader |
+| `dsh-mnemon/testing` | Scoped composition, route/action and management testing; JSON diagnostics; built Client artifact loader |
 | `dsh-mnemon/client` | DSH workspace and Source-page SDK |
 | `dsh-mnemon-source-memory-spaces/provider-sdk` | Memory Spaces' own Provider child-module contract |
-| `dsh-mnemon-source-memory-spaces/testing` | Provider driver fixture |
+| `dsh-mnemon-source-memory-spaces/testing` | Private-child module fixture and driver authority/connection fixture |
+
+## A contribution service, not an engine
+
+Following the DSH service/Slot pattern, the public extension point is a small contribution contract. `Context.mnemonMemory` is typed as `MnemonMemoryService` and its actual, frozen object exposes only `installContributions`. Authors call `installMemory(ctx, contribution, options?)`: it resolves the calling Entry identity and binds registration cleanup to that Fiber. Do not introduce a parallel registration API.
+
+The engine, installed records, registry, generations and leases stay internal. Neither `extension-sdk`, `contracts` nor the Core plugin exports them. `MemorySourceRuntime` is intentionally public: it describes the callbacks **your Source implements**, not an engine handle. Definitions/factories are Host-side executable contracts; metadata, operation inputs and results are JSON-safe. This service boundary is not a sandbox for arbitrary JavaScript.
 
 ## Source lifecycle
 
@@ -60,7 +66,9 @@ Use `defineMemoryStrategy` and install with `{ strategies: [definition] }`. Decl
 
 ## Provider child and Client page
 
-Provider authors use `defineMemorySpaceProvider` and `createMemorySpaceProviderFixture` from Memory Spaces' public SDK/testing entries. [external-provider.ts](../../scripts/fixtures/plugin-consumer/src/external-provider.ts) is tested in two independent parent Sources with identical child ids.
+Provider authors use `defineMemorySpaceProvider` from Memory Spaces' SDK. A module receives only its bound `host.install(ctx, definition)` capability; the private parent Host, Snapshot and Registry are not SDK exports. `installMemorySpaces` mounts explicit children and returns `Promise<void>`, not a parent handle. [external-provider.ts](../../scripts/fixtures/plugin-consumer/src/external-provider.ts) is tested in two independent parent Sources with identical child ids.
+
+Use `mountMemorySpaceProvider` from the Source's `/testing` entry to test real child registration, aliased adapter creation and cleanup. It returns frozen descriptor/manifest metadata, `registered`, `createAdapter` and `dispose`. `createMemorySpaceProviderFixture` separately supplies validated connection data and a scoped driver authority. The [published API test](../../scripts/fixtures/plugin-consumer/tests/public-api.spec.ts) combines both without private imports.
 
 ```yaml
 - id: work-spaces
@@ -96,12 +104,15 @@ try {
   })
   const turn = await runner.beginTurn()
   try {
-    // Assert projection, exact grants, provenance and allowed actions here.
+    const route = turn.view.routes.find(route => route.sourceRouteId === 'read')!
+    const evidence = await turn.executeRoute(route.id, {})
+    // Assert projection, evidence and provenance. For writes, use
+    // turn.executeAction(offer.id, input, authorize), with explicit test authority.
   } finally { turn.release() }
 } finally { await runner.dispose() }
 ```
 
-Use unique temporary paths in real tests. Release turns before disposing the runner. This is a test harness over real Cordis/Core, not another production Loader.
+Use unique temporary paths in real tests. Release turns before disposing the runner. `runner.inspect()` returns JSON-only evaluation/generation diagnostics; `managementClient(sourceKey)` supplies scoped human operations. No turn exposes a lease, and no runner exposes the engine. Unmount/remount plugins to test replacement instead of editing an internal registry. Disposal also releases retained turns; in-flight operations hold their own leases until completion. This is a test harness over real Cordis/Core, not another production Loader.
 
 Test at least: valid composition; missing/ambiguous dependencies; two instances; schema/capability/authority denial; concurrent snapshots; stale revisions; cancellation and partial failure; unload/drain/reload; persistence; management and actual page clicks. Providers additionally test credentials, truthful capabilities, malformed upstream data, timeouts and conformance inside their parent Source.
 
