@@ -101,4 +101,4 @@ Remote Provider workspaces, users, banks, projects, containers, and URIs are the
 2. [Follow real click paths through the WebUI and Agent behavior](./ui-guide.md)
 3. [Compare all nine Providers](./memory-providers.md)
 4. [Understand lifecycle, concurrency, and failure boundaries](./workflows.md)
-5. [Read the v0.3.6 release notes](./releases/v0.3.6.md)
+5. [Read the v0.4.0 release notes](./releases/v0.4.0.md)

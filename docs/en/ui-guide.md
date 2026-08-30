@@ -2,7 +2,7 @@
 
 [简体中文](../zh-CN/ui-guide.md) | **English** | [Documentation hub](./README.md)
 
-This guide follows the v0.3.6 default `sidebar` experience and a real user path. The established v0.2 interaction flow is intentionally unchanged; compatible screenshots were captured from a live v0.2.0 1600×900 WebUI, while v0.3-specific Layer topology controls are described in the Settings section. Names, counts, and content vary with local data.
+This guide follows the v0.4.0 Sidebar-only experience and a real user path. The builtin workspace and display-mode selector are removed; the existing Sidebar workflow remains. Compatible screenshots were captured from a live v0.2.0 1600×900 WebUI, while v0.3 Layer controls retain their labeled historical screenshots. The [Sidebar-only settings screenshot](../assets/screenshots/settings-sidebar-only.png) shows the current selector-free layout. Names, counts, and content vary with local data.
 
 ## Watch the complete interaction first
 

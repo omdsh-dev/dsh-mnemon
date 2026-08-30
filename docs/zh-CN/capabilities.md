@@ -101,4 +101,4 @@
 2. [按真实点击路径认识 WebUI 与 Agent 行为](./ui-guide.md)
 3. [比较九种 Provider 的能力与配置](./memory-providers.md)
 4. [理解生命周期、并发和失败边界](./workflows.md)
-5. [查看 v0.3.6 升级说明](./releases/v0.3.6.md)
+5. [查看 v0.4.0 升级说明](./releases/v0.4.0.md)

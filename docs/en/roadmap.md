@@ -4,6 +4,11 @@
 
 The Roadmap records work beyond the current implementation; it is not a commitment to deliver these capabilities. Data safety, recoverability, and verifiability take priority.
 
+## Release boundaries
+
+- **v0.4: Sidebar-only.** Remove the builtin presentation and its display-mode setting while retaining the v0.3 architecture and memory formats. See the [v0.4.0 release notes](./releases/v0.4.0.md).
+- **v0.5: complete view-based upgrade, planned.** Develop and verify the architecture upgrade separately on top of the Sidebar-only entry. This work is not included in v0.4.0; publishing v0.4 does not declare it ready.
+
 ## P0: Reliability and Recoverable Scheduling
 
 - [ ] **Persist background-review watermarks**: save activity signals, the latest processed checkpoint, scoring version, and run state by root session; restore unprocessed activity after restart or resume.

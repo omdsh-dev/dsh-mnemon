@@ -2,7 +2,7 @@
 
 [简体中文](../zh-CN/testing-npm-regressions.md) | **English** | [Development and Verification](./development.md)
 
-This regression uses the `v0.3.5` source corresponding to npm `dsh-mnemon@0.3.5` as its baseline, not the 0.4.0 development code. The Host is pinned to the latest non-alpha npm release at the time of testing, `@deepseek-ai/dsh@0.1.1-rc.2`. The Web UI is `@linxin666/dsh-web-all@0.3.6`, with additional coverage of its original package name, `@linxin666/dsh-web-ui-all@0.3.6`.
+This regression uses the `v0.3.5` source corresponding to npm `dsh-mnemon@0.3.5` as its baseline, not the view-based development branch (then labeled 0.4.0, now planned for v0.5). The Host is pinned to the latest non-alpha npm release at the time of testing, `@deepseek-ai/dsh@0.1.1-rc.2`. The Web UI is `@linxin666/dsh-web-all@0.3.6`, with additional coverage of its original package name, `@linxin666/dsh-web-ui-all@0.3.6`.
 
 The fixes were first completed against that npm baseline, then synchronized with `main`, still at 0.3.5, and verified again for the PR. Keep separate records of the original and patched packages; current `main` is not an unmodified npm control.
 
