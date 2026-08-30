@@ -76,7 +76,7 @@ mnemon:
 | `runtimeMemory.userLimitBytes` | `4096` | 1–1048576 字节 | 完整 `USER.md` 投影的 UTF-8 字节上限 |
 | `runtimeMemory.maintenanceMaxTokens` | `8192` | 1–1000000 tokens | Runtime 迁移与压缩 worker 的完成 token 预算；不改变项目档案归档与元信息维护预算 |
 | `embedding` | `{ enabled: false, endpoint: http://localhost:11434, model: nomic-embed-text, apiKey: '', protocol: auto }` | enabled + HTTP(S) endpoint + model + 可选 apiKey + protocol（auto/ollama/openai） | 开启后，Host 为每个 Mnemon CLI 子进程注入保存的 endpoint、模型、API Key 与协议覆盖；endpoint 以 `/v1` 结尾时 Mnemon 自动使用 OpenAI 兼容协议并以 Bearer 头携带 apiKey，`protocol: openai` 可对非 `/v1` 端点显式指定；关闭后不干预既有 Host 环境和 Mnemon 默认值 |
-| `memoryTopology.layers.<id>.enabled` | 三个默认层为 `true` | boolean | 是否让该 Layer 参与；关闭不会删除或迁移已有数据 |
+| `memoryTopology.layers.<id>.enabled` | 三个默认层为 `true` | boolean | 是否让该 Source 参与；关闭不会删除或迁移已有数据 |
 | `recallQuality.policy` | `strict-v1` | 已注册策略 ID | 在召回正文序列化给 Agent 或客户端前执行的确定性策略 |
 | `recallQuality.lowScoreThreshold` | `0.25` | 0–1，低于高分阈值 | `strict-v1` 会移除低于此边界的标准化分数结果 |
 | `recallQuality.highScoreThreshold` | `0.6` | 0–1，高于低分阈值 | 保留结果达到此边界时标记为高相关度 |
@@ -154,7 +154,7 @@ Endpoint 必须是不含凭据、查询参数或片段的 HTTP(S) 绝对 URL。M
 
 [![关闭项目档案后的实际中文 Sidebar：Tab 保留，数据不被读取或删除](../assets/screenshots/sidebar-layer-disabled-zh-CN.jpg)](../assets/screenshots/sidebar-layer-disabled-zh-CN.jpg)
 
-WebUI 从 `memory-system` 描述符读取真实 Layer，因此扩展插件新增 Layer 时不需要修改前端枚举。设置页只提交变化 Layer 的 `enabled` 布尔值；同一次保存带 revision fence，候选运行图无法验证时，当前运行代保持不变。Kernel 内部仍按能力、触发来源和 Guard 做权威校验，但这些不是 v0.3 的普通用户配置项。
+WebUI 从实时管理目录读取 Source 实例，新增 Source 无须修改前端枚举。沿用的 `memoryTopology.layers` 是配置输入，不代表另有 Source 运行时。Source type id 匹配配置，Strategy 选择精确实例 key。设置更新有修订栅栏，候选组合验证成功后才替换；Core/Source 再检查能力、范围与当前权限。
 
 ### 召回质量策略
 

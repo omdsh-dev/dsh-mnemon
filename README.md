@@ -32,7 +32,7 @@
 
 [Mnemon](https://github.com/mnemon-dev/mnemon) remains the official, prioritized native engine. The third tier is replaceable; the first two keep the same storage, workspace, and interaction model regardless of provider.
 
-Since v0.3.0, the three tiers are the **default topology** of a composable kernel rather than the only shape hard-coded into every entry point. `MemoryBoot` wires trusted Layer, Adapter, Strategy, Guard, and `MemorySource` contributions into one runtime generation. Each user turn pins a lightweight `TurnView`: exact Runtime context enters Wake eagerly, while Documents and Memory Spaces contribute only bounded routing covers and keep complete recall authority Host-side. Users still install one `dsh-mnemon` package and keep the existing settings, tools, RPC, and UI workflow. See the [composable architecture](./docs/en/architecture.md#composable-memory-kernel) and [extension guide](./docs/en/extensions.md).
+Runtime, Documents and Memory Spaces are independent Source plugins. A Strategy selects their instance-specific projections, retrieval routes and actions into an immutable per-turn View. Core provides only `ctx.mnemonMemory`; Sources own their data and optional pages, while Memory Spaces owns its private Provider children. The `dsh-mnemon` Starter preserves the default three-tier experience. See [Architecture](./docs/en/architecture.md) and [Plugin development](./docs/en/extensions.md).
 
 v0.4.0 makes Sidebar the only Memory System workspace and removes the builtin display mode and its setting. Legacy display preferences are ignored without changing memory data; the complete view-based upgrade is planned for v0.5, not this release. Read the [upgrade and compatibility notes](./docs/en/releases/v0.4.0.md#upgrade-and-compatibility) before updating.
 
@@ -54,9 +54,9 @@ v0.4.7 promotes the published DSH 0.1.2-rc.1 release to the stable registry base
 
 | Tier | Keep here | How it reaches the Agent | Managed by |
 |---|---|---|---|
-| **Runtime** | Preferences, collaboration rules, project conventions, environment facts | Compact `USER.md` / `MEMORY.md` projection on every turn | Deterministic dsh-mnemon Host |
-| **Documents** | Designs, investigations, procedures, postmortems, handoffs | Search first, full Markdown on demand | Deterministic dsh-mnemon Host |
-| **Memory Spaces** | Cross-session facts, decisions, entities, relations | Bounded recall from active spaces | Mnemon Native or an external Provider |
+| **Runtime** | Preferences, collaboration rules, project conventions, environment facts | Compact `USER.md` / `MEMORY.md` projection on every turn | Runtime Source |
+| **Documents** | Designs, investigations, procedures, postmortems, handoffs | Search first, full Markdown on demand | Documents Source |
+| **Memory Spaces** | Cross-session facts, decisions, entities, relations | Bounded recall from active spaces | Memory Spaces Source + selected Provider |
 
 The tiers are not copies. A useful rule is: **every-turn context goes to Runtime, complete narratives go to Documents, and cross-task evidence goes to Memory Spaces.** Current instructions, repository files, and live tool results always outrank historical memory.
 
@@ -225,8 +225,8 @@ See [Operations, security, and troubleshooting](./docs/en/operations.md) for bac
 | Configure scope, routing, and model selection | [Configuration](./docs/en/configuration.md) |
 | Back up, update, or troubleshoot | [Operations](./docs/en/operations.md) |
 | Integrate tools, commands, or RPC | [Interface reference](./docs/en/interfaces.md) |
-| Build a Layer, Adapter, Strategy, Guard, or MemorySource extension | [Extension guide](./docs/en/extensions.md) |
-| Review the release | [v0.4.7 release notes](./docs/en/releases/v0.4.7.md) |
+| Build a Source, Strategy or Memory Spaces Provider plugin | [Extension guide](./docs/en/extensions.md) |
+| Review the release | [v0.3.5 release notes](./docs/en/releases/v0.3.5.md) |
 
 See the [documentation hub](./docs/en/README.md) for the full map.
 

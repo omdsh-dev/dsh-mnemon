@@ -9,10 +9,11 @@ has no dependency on the parent repository's tsconfig, test helpers or source.
 
 Configure `dataDir` explicitly to reuse existing data. Otherwise storage is scoped
 to the stable Source instance id under `~/.mnemon/sources/`. The default Mnemon
-bundle supplies the legacy storage paths without changing existing user data.
+bundle supplies the existing storage paths without changing existing user data.
 
-The package's patch mounts one instance. A Profile may mount the same module
-again with another Entry id and configuration. No default Strategy is installed.
+This package does not auto-mount a default instance. The Starter or a user's
+Profile explicitly mounts its Entry. The same module can be mounted again with
+another Entry id and configuration; no default Strategy is installed here.
 
 ## Source-owned Client
 
@@ -21,11 +22,11 @@ its pages, browser API adapter, Host management operations, and tests. It only
 imports the public dsh-mnemon/client helpers; it never receives a Host Context,
 raw RPC transport, credentials, or an LLM View grant.
 
-The default distribution reuses these same components and supplies its legacy
-coordination callbacks. An independent install uses Source-scoped read/mutate
-operations. Agent-assisted cross-Source maintenance is provided by a Host
-adapter, not silently installed by the Source. The default client's fallback
-registration yields to an explicitly installed Source client through DSH Slots.
+The default distribution loads these same Client plugins through DSH. Each page
+uses Source-scoped read/mutate operations. Optional Agent-assisted cross-Source
+maintenance is advertised by the Host through the same scoped page client; it
+is not silently installed by a Source. There is one Slot owner per Source page,
+not a second fallback registration or copied default implementation.
 
 pnpm verify checks Host behavior and real Source-backed page interactions, then
 builds both Host and browser artifacts plus their public declarations. Client

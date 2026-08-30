@@ -32,7 +32,7 @@
 
 [Mnemon](https://github.com/mnemon-dev/mnemon) 仍是官方优先的原生引擎。可以替换的是第三层；无论选择哪个 Provider，前两层的存储、工作区和交互心智保持不变。
 
-从 v0.3.0 开始，三层是可组合内核中的**默认拓扑**，不再是各入口各自写死的唯一结构。`MemoryBoot` 把受信任的 Layer、Adapter、Strategy、Guard 与 `MemorySource` 装配为一代运行图；每个用户回合固定一份轻量 `TurnView`：Runtime 精确内容 eager 进入 Wake，Documents 与 Memory Spaces 只给出有界路由封面，完整召回权限保留在 Host。用户仍只安装一个 `dsh-mnemon`，设置、工具、RPC 与 UI 工作流不变。参见[可组合架构](./docs/zh-CN/architecture.md#可组合记忆内核)与[扩展开发指南](./docs/zh-CN/extensions.md)。
+Runtime、Documents、Memory Spaces 是独立 Source 插件；Strategy 将各实例的投影、检索 route 与 action 组合成逐回合不可变 View。Core 只提供 `ctx.mnemonMemory`，Source 拥有数据与可选页面，Memory Spaces 自己拥有内部 Provider 子节点。`dsh-mnemon` Starter 保持默认三层使用体验。详见[架构](./docs/zh-CN/architecture.md)与[插件开发](./docs/zh-CN/extensions.md)。
 
 v0.4.0 将 Sidebar 设为记忆系统的唯一工作台入口，移除 builtin 展示模式及其设置。旧展示偏好会被忽略，不改变记忆数据；完整的 view-based 升级计划放在 v0.5，不包含在本版中。更新前请阅读[升级与兼容性说明](./docs/zh-CN/releases/v0.4.0.md#升级与兼容性)。
 
@@ -54,9 +54,9 @@ v0.4.7 将已发布的 DSH 0.1.2-rc.1 提升为稳定的 registry 基线，继�
 
 | 层级 | 适合保存 | 如何进入 Agent 上下文 | 由谁管理 |
 |---|---|---|---|
-| **运行时** | 偏好、协作规则、项目约定、环境事实 | `USER.md` / `MEMORY.md` 每轮紧凑投影 | dsh-mnemon Host 确定性管理 |
-| **档案** | 设计、调查、流程、复盘、交接材料 | 先检索，再按需阅读全文 | dsh-mnemon Host 确定性管理 |
-| **记忆体** | 跨会话事实、决策、实体与关系 | 从已激活记忆体召回有界证据 | Mnemon Native 或三方 Provider |
+| **运行时** | 偏好、协作规则、项目约定、环境事实 | `USER.md` / `MEMORY.md` 每轮紧凑投影 | Runtime Source |
+| **档案** | 设计、调查、流程、复盘、交接材料 | 先检索，再按需阅读全文 | Documents Source |
+| **记忆体** | 跨会话事实、决策、实体与关系 | 从已激活记忆体召回有界证据 | Memory Spaces Source + 所选 Provider |
 
 三层不是同一内容的副本。简单判断规则是：**每轮都需要的放运行时，需要完整阅读的放档案，需要跨任务按需召回的放记忆体。**当前指令、仓库文件与实时工具结果始终高于历史记忆。
 
@@ -225,8 +225,8 @@ dsh plugin --profile headless add "link:/absolute/path/to/dsh-mnemon"
 | 配置范围、路由与模型 | [配置参考](./docs/zh-CN/configuration.md) |
 | 备份、更新或排障 | [运维指南](./docs/zh-CN/operations.md) |
 | 接入工具、命令或 RPC | [接口参考](./docs/zh-CN/interfaces.md) |
-| 开发 Layer、Adapter、Strategy、Guard 或 MemorySource 扩展 | [扩展开发指南](./docs/zh-CN/extensions.md) |
-| 查看本次升级 | [v0.4.7 发布说明](./docs/zh-CN/releases/v0.4.7.md) |
+| 开发 Source、Strategy 或 Memory Spaces Provider 插件 | [扩展开发指南](./docs/zh-CN/extensions.md) |
+| 查看本次升级 | [v0.3.5 发布说明](./docs/zh-CN/releases/v0.3.5.md) |
 
 完整目录见[文档中心](./docs/zh-CN/README.md)。
 

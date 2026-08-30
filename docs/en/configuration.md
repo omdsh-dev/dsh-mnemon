@@ -12,9 +12,7 @@ $DSH_HOME/settings.yaml
 
 The default is commonly `~/.dsh/settings.yaml`. All current settings are marked `live`; after Save, the Host initializes a candidate runtime graph and then switches to it atomically.
 
-Executing turns retain their pinned runtime. An already-dispatched child retains its delegated runtime until that activation is disposed, even if its parent has finished; later parent turns and newly delegated activations use the new generation. Saving settings does not silently expand an existing task's Recall authority.
-
-The Web settings page edits `storageScope`, the independent `runtimeUserScope`, `dataDir`, Mnemon Native's Ollama embedding override, one master switch for each of the three memory Layers, the background task Agent model route, and the Turn memory and Save-to-memory switches under `mnemon-ui`. Global and Workspace define the scope of the complete memory system; the USER.md profile may explicitly remain global while project memory follows that scope. Mnemon Native owns its Custom data location, embedding runtime, and ZIP backup/migration controls. Each external provider has a collapsible service configuration for reusable endpoints, credentials, or executables. Enabling or saving it discovers the provider's existing namespaces and maps them into Memory Spaces → Overview; disabling it removes those local mappings without deleting provider data. Other advanced settings must be changed directly in YAML.
+The Web settings page edits `displayMode`, `storageScope`, the independent `runtimeUserScope`, `dataDir`, Mnemon Native's Ollama embedding override, one master switch for each of the three memory Sources, the background task Agent model route, and the Turn memory and Save-to-memory switches under `mnemon-ui`. Global and Workspace define the scope of the complete memory system; the USER.md profile may explicitly remain global while project memory follows that scope. Mnemon Native owns its Custom data location, embedding runtime, and ZIP backup/migration controls. Each external provider has a collapsible service configuration for reusable endpoints, credentials, or executables. Enabling or saving it discovers the provider's existing namespaces and maps them into Memory Spaces → Overview; disabling it removes those local mappings without deleting provider data. Other advanced settings must be changed directly in YAML.
 
 ## Complete Example
 
@@ -76,7 +74,7 @@ mnemon:
 | `runtimeMemory.userLimitBytes` | `4096` | 1–1048576 bytes | UTF-8 byte limit for the complete `USER.md` projection |
 | `runtimeMemory.maintenanceMaxTokens` | `8192` | 1–1000000 tokens | Completion-token budget for Runtime migration and compaction workers; does not change Document archive or metadata-maintenance budgets |
 | `embedding` | `{ enabled: false, endpoint: http://localhost:11434, model: nomic-embed-text, apiKey: '', protocol: auto }` | enabled + HTTP(S) endpoint + model + optional apiKey + protocol (auto/ollama/openai) | When enabled, the Host injects the saved endpoint, model, API key, and protocol override into every Mnemon CLI child process; an endpoint ending in `/v1` makes Mnemon use the OpenAI-compatible protocol with the API key as a Bearer token, and `protocol: openai` forces it for non-`/v1` endpoints; when disabled, existing Host environment and Mnemon defaults remain untouched |
-| `memoryTopology.layers.<id>.enabled` | `true` for the three defaults | boolean | Whether the Layer participates; disabling never deletes or migrates existing data |
+| `memoryTopology.layers.<id>.enabled` | `true` for the three defaults | boolean | Whether the Source participates; disabling never deletes or migrates existing data |
 | `recallQuality.policy` | `strict-v1` | registered policy id | Deterministic policy applied before recall content is serialized to an Agent or client |
 | `recallQuality.lowScoreThreshold` | `0.25` | 0–1, below high threshold | Normalized scores below this boundary are removed by `strict-v1` |
 | `recallQuality.highScoreThreshold` | `0.6` | 0–1, above low threshold | Retained normalized scores at or above this boundary are labeled high relevance |
@@ -144,17 +142,17 @@ The Host copies its normal process environment and then overwrites `MNEMON_EMBED
 
 The endpoint must be an absolute HTTP(S) URL without credentials, query parameters, or a fragment. Mnemon sends memory and query text to this service; the API key is stored in the DSH settings file like other settings, and a remote plain-HTTP endpoint exposes that text in transit, so use a trusted loopback endpoint or HTTPS. **Test status** runs the effective `mnemon embed --status` command for the current default Store and reports embedding-server reachability, model, the resolved protocol when Mnemon reports one, and embedding coverage without backfilling or changing memories. Save pending edits before testing so the check cannot claim an unsaved value is active.
 
-### Memory Layer switches
+### Memory Source switches
 
-Each Layer has one master switch. `enabled=true` permits the default strategy to use the Layer when needed; it does not force recall or writes on every turn. `enabled=false` stops that Layer's context injection, model calls, background processing, and data-plane Web/RPC operations together.
+Each Source has one master switch. `enabled=true` permits the default strategy to use the Source when needed; it does not force recall or writes on every turn. `enabled=false` stops that Source's context injection, model calls, background processing, and data-plane Web/RPC operations together.
 
-[![The isolated English v0.3 settings page gives each default Memory Layer one master switch](../assets/screenshots/settings-memory-layers-en.jpg)](../assets/screenshots/settings-memory-layers-en.jpg)
+[![The isolated English v0.3 settings page gives each default Memory Source one master switch](../assets/screenshots/settings-memory-layers-en.jpg)](../assets/screenshots/settings-memory-layers-en.jpg)
 
 Disabling is reversible routing state, not deletion. The corresponding Sidebar tab remains visible with an Off badge and does not read the data plane; Status, Catalog, and management directories remain observable. Re-enabling uses the original directories and data.
 
 [![The actual English Sidebar after disabling Documents: its tab remains while data is neither read nor deleted](../assets/screenshots/sidebar-layer-disabled-en.jpg)](../assets/screenshots/sidebar-layer-disabled-en.jpg)
 
-The WebUI reads the live `memory-system` descriptor, so a Layer contributed by an extension does not require a frontend enum change. Settings submit only changed `enabled` Booleans under one revision fence. If the candidate runtime graph cannot validate, the current generation remains active. The Kernel still authoritatively checks capability, trigger source, and Guards, but those are not ordinary-user settings in v0.3.
+The WebUI reads Source instances from the live management catalog; no frontend enum is required for a new Source. The existing `memoryTopology.layers` keys remain configuration input, not a second Source runtime. Source type ids select configuration; a Strategy selects exact instance keys. Settings update under a revision fence, and candidate compilation must succeed before replacement. Core and Source boundaries recheck capability, scope and current authority.
 
 ### Recall quality policies
 

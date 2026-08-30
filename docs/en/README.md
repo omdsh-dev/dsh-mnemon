@@ -16,7 +16,7 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 
 | I want to… | Document |
 |---|---|
-| Grasp the current product scope and v0.3 architecture | [Capability map](./capabilities.md) · [v0.3.0 release notes](./releases/v0.3.0.md) |
+| Grasp the current product scope and composable architecture | [Capability map](./capabilities.md) · [Architecture](./architecture.md) |
 | Decide which tier should retain something | [Storage and the three-tier model](./storage-model.md) |
 | Choose, configure, or compare a Memory Space provider | [Long-term memory providers](./memory-providers.md) |
 | Share durable memory between DSH and other Mnemon-enabled agents | [Project overview: Cross-agent sharing](./project-overview.md#cross-agent-sharing-boundary) · [Configuration: Sharing scope](./configuration.md#choose-a-cross-agent-sharing-scope) |
@@ -29,7 +29,7 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 | Troubleshoot empty recall, misalignment, CLI, or provider errors | [Operations and troubleshooting](./operations.md#troubleshooting) |
 | Use model tools, `/mnemon` commands, or internal RPC | [Interface reference](./interfaces.md) |
 | Understand Host, workers, control plane, and data plane | [Architecture](./architecture.md) |
-| Build a Layer, Adapter, Strategy, Guard, or MemorySource plugin | [Building Memory Extensions](./extensions.md) |
+| Build a Source, Strategy or Memory Spaces Provider plugin | [Building Memory Extensions](./extensions.md) |
 | Modify code, screenshots, tests, or releases | [Development and verification](./development.md) |
 | Upgrade from the previous release | [v0.4.7 release notes](./releases/v0.4.7.md) |
 | See planned work | [Roadmap](./roadmap.md) |
@@ -49,7 +49,7 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 
 ## Documentation boundaries
 
-- User documentation describes the Sidebar-first workbench, optional shared Builtin placement, and composable three-tier topology.
+- User documentation targets the Sidebar-default experience and composable View architecture while covering the compatible Buildin presentation.
 - Architecture diagrams describe stable execution boundaries, not live monitoring. Use Status for current counts and versions.
 - RPC is an internal Host-to-client protocol, not a promised stable external API.
 - There is no formal fixed DSH / Mnemon version matrix yet. Back up and validate in an isolated root before upgrading.

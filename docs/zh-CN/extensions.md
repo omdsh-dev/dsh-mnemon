@@ -1,203 +1,110 @@
-# 记忆扩展开发
+# 记忆插件开发
 
 **简体中文** | [English](../en/extensions.md) | [文档中心](./README.md)
 
-本页面向希望为 dsh-mnemon 增加记忆语义、数据面或调度策略的插件作者。普通用户仍只安装 `dsh-mnemon`；源码中的 workspace 是职责边界，公开兼容边界是根包的子路径导出。
+先确定归属，再写代码。[plugin-consumer](../../scripts/fixtures/plugin-consumer/) 中的完整示例，会在仓库外只依赖打包制品编译和测试。
 
-## 先选择扩展点
+## 一个插件，一种主要职责
 
-| 扩展点 | 负责什么 | 不应负责什么 |
+| 插件 | 拥有 | 公开依赖 |
 |---|---|---|
-| Layer | 一类记忆语义及其执行器，例如 episodic / procedural memory | 决定全局权限或直接改写其他 Layer |
-| Adapter | 外部数据面的身份、位置、范围与能力描述 | 绕过 Layer 与 Kernel 执行任意操作 |
-| Strategy | 根据请求和只读描述符提出有界步骤 | 持有数据库、网络客户端或秘密 |
-| Guard | 在 Strategy 前拒绝请求，只能收紧权限 | 放宽 Host、配置或其他 Guard 已拒绝的权限 |
-| MemorySource | 以无查询方式快照一个 Layer 的 revision、Wake 投影与 Host-only 召回状态 | 执行召回查询、mutation、选择 Strategy、构造节点树或读取其他 Layer 的 Authority |
-| Surface | 把 DSH 工具、命令、RPC 或 UI 转换为操作请求 | 自行建立第二套路由与权限规则 |
+| `dsh-mnemon-source-*` | 一种记忆权威、投影、检索/修改及可选页面 | Core contracts 与 extension SDK |
+| `dsh-mnemon-strategy-*` | Host 请求时，哪些 Source 实例以何种上下文形态、预算、route/action 参与 | Core contracts 与 extension SDK |
+| `dsh-mnemon-provider-*` | Memory Spaces 内部驱动、描述符、能力、连接 schema、图标 | Memory Spaces Provider SDK |
 
-公共入口如下；不要从 `dsh-mnemon/src/*` 或仓库内的 `packages/*` 导入。
+Source 不需要再实现 Provider；Provider 不需要理解 View 组合；Strategy 只接收 facts，不接收 Source 对象。跨包只引用声明过的公开出口，不进入其他插件的 `src`、控制器、注册表或构建配置。
 
-| 子路径 | 用途 |
+| 入口 | 职责 |
 |---|---|
-| `dsh-mnemon/contracts` | 纯 JSON/wire 类型 |
-| `dsh-mnemon/kernel` | Catalog、Topology、Kernel、Plan、Receipt 与 Guard |
-| `dsh-mnemon/extension-sdk` | 扩展定义、注册与 Cordis 生命周期接入 |
-| `dsh-mnemon/strategy-sdk` | Strategy 清单、权限封装与 replay |
-| `dsh-mnemon/provider-sdk` | 通用 Adapter Factory Registry 与当前 Memory Space Provider 接口 |
-| `dsh-mnemon/layers/*` | 三个内置 Layer 描述符 |
-| `dsh-mnemon/strategy-default-three-tier` | 默认拓扑与兼容 Strategy |
+| `dsh-mnemon` | DSH Host 与默认 Starter |
+| `dsh-mnemon/core` | 不带 Host/UI 的、Source 无关的 `ctx.mnemonMemory` 服务 |
+| `dsh-mnemon/contracts` | JSON 安全的 manifest、facts、ViewSpec、View、Evidence、Receipt |
+| `dsh-mnemon/extension-sdk` | Source/Strategy 定义、生命周期注册与校验 |
+| `dsh-mnemon/testing` | 真实 Cordis 组合测试夹具与已构建 Client 制品加载器 |
+| `dsh-mnemon/client` | DSH 工作台与 Source 页面 SDK |
+| `dsh-mnemon-source-memory-spaces/provider-sdk` | Memory Spaces 自己的 Provider 子模块协议 |
+| `dsh-mnemon-source-memory-spaces/testing` | Provider 驱动测试夹具 |
 
-## 最小 Layer 扩展
+## Source 生命周期
 
-下面的 Layer 只展示执行边界。真实实现应在自己的执行器里处理超时、取消、输出上限和秘密隔离，并只返回 JSON 值。
+用 `defineMemorySource` 定义 `MemorySourceDefinition`。manifest 声明 API 版本、type id、包名、角色、一致性和 route/action；factory 接收稳定的实例来源及不可变配置。
 
-```ts
-import { defineMemoryExtension } from 'dsh-mnemon/extension-sdk'
-
-export const episodicExtension = defineMemoryExtension({
-  descriptor: {
-    id: 'example-episodic',
-    version: '1.0.0',
-    label: 'Example Episodic Memory',
-    description: 'A bounded event-memory Layer.',
-  },
-  layers: [{
-    descriptor: {
-      id: 'episodic',
-      label: 'Episodic Memory',
-      description: 'Recalls bounded event evidence.',
-      role: 'episodic-memory',
-      order: 400,
-      capabilities: ['recall', 'write', 'project'],
-    },
-    async execute(step, context) {
-      if (context.signal?.aborted) throw new Error('operation cancelled')
-      return { layer: step.layerId, capability: step.capability, items: [] }
-    },
-  }],
-  sources: [{
-    layerId: 'episodic',
-    mode: 'routed',
-    snapshot: () => ({
-      revision: 'episodes-v1',
-      wake: 'Recent episodic evidence is available.',
-      state: { stream: 'recent' },
-    }),
-  }],
-})
-```
-
-扩展第一次出现时，运行中的 Catalog 会增加 generation，Topology 随后生成新代，并把新 Layer 加为关闭候选。设置页从 `memory-system` 描述符生成卡片，不需要为新 ID 修改前端枚举。普通用户只决定是否开启：
-
-```yaml
-mnemon:
-  memoryTopology:
-    layers:
-      episodic:
-        enabled: true
-```
-
-开启后由 Host 的固定兼容策略和扩展声明决定可执行能力；细粒度参与约束保留在 Kernel/SDK 控制面，不是普通设置项。关闭或卸载扩展不会删除其数据。卸载会让新操作停止使用该组件，并使已生成的 Plan 因 Catalog/Topology generation 改变而失效。
-
-### 把 Layer 暴露为 MemorySource
-
-声明 `project` 能力的 Layer 在把 `projection` 设为 `automatic` 前，必须存在对应的 `extension.sources` contribution。`snapshot()` 只接收固定的 Catalog、Topology、Guard generation 和 operation scope，并返回稳定的 `revision`、一段 `wake` 字符串以及可选的 JSON-safe `state`。state 参与 digest、只作为 Host 权限，绝不会进入 System Prompt。
-
-模式只保留两个：
-
-- `eager` 原样注入 `wake`，只用于几乎每个模型步骤都需要的小型上下文，例如 Runtime Memory；
-- `routed` 把 `wake` 当作一个紧凑封面：统一空白、单个最多 500 字符、以“不可信路由数据”进行 JSON 引用，并共同受 4 KiB 封面预算约束。被预算省略的封面仍通过 Host-only state 保持完整权限。
-
-Wake 总长度上限为 64 KiB。系统不再维护节点树、Zoom 或模型可见的 View ID。Recall 只接收 query 与可选 Memory Space ID；Host 从正在执行的 Agent 回合固定的 Source state 派生权限、校验请求子集，再直接查询 Provider。子 Agent 保留父 Agent 派发时的 View 与运行图，再固定自己的回合；扩展不能把父 Agent 最新 View 当作执行权限。启用自动投影的 Layer 缺少 MemorySource 时，运行图构造会失败关闭；热注册与卸载在所有已附着图上事务性执行同一就绪检查。把 Layer 与 Source 放在同一扩展中，生命周期最简单。
-
-## 通过 Cordis 拥有生命周期
-
-普通 DSH 扩展应依赖 Host 发布的 `mnemonMemory` 服务，让注册和插件 fiber 同生共死：
+- `facts(request)`：有界、非敏感的可用性、修订和能力。
+- `project(request)`：与选中修订一致的有界文本及 Source 自己的 ReadGrant。并发快照按请求/scope 捕获，不共享一个可变的“最近快照”。
+- `query`：只消费给定 View/grant，执行 Source 自身范围限制，返回带来源的有界 Evidence。
+- `mutate`：只执行已授予的 action，响应取消，区分已提交、部分成功、失败。
+- 可选 `manage`：独立于模型 grant 的认证人工管理，再次检查确认和精确修订。
+- 可选 `dispose`：运行代租约排空后释放其私有资源。
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
-import type { MemoryBoot } from 'dsh-mnemon/extension-sdk'
-import { episodicExtension } from './episodic.js'
+import { installMemory } from 'dsh-mnemon/extension-sdk'
+import { notesSource } from './source.js'
 
-declare module '@deepseek-ai/cordis' {
-  interface Context {
-    mnemonMemory: MemoryBoot
-  }
-}
-
+export const name = 'dsh-mnemon-source-notes'
 export const inject = ['mnemonMemory']
-
 export function apply(ctx: Context): void {
-  ctx.effect(
-    () => ctx.mnemonMemory.register(episodicExtension),
-    'example-episodic.register()',
-  )
+  installMemory(ctx, { sources: [notesSource] })
 }
 ```
 
-同一进程内、明确早于 dsh-mnemon 挂载的聚合包也可以调用 `registerMemoryExtension()` 预注册，并保存返回的 disposer。Cordis `isolate()` 提供作用域和所有权，不是安全沙箱；扩展代码仍与 Host 在同一进程，必须来自受信任包。
+以上假定 `source.js` 导出定义；完整文件记忆示例见 [external-source.ts](../../scripts/fixtures/plugin-consumer/src/external-source.ts)。一个插件注册 Source **或** Strategy，不兼任二者。
 
-## Strategy 插件与 replay
+Entry id 标识实例，type id 标识实现。不能剥掉 Loader 的 include 前缀。没有 Loader 身份的直接 `ctx.plugin()` 挂载，应传 `installMemory(..., { instanceId })`。路径和凭据归实例，不使用模块全局数据库或服务注册表。
 
-Strategy 只接收请求以及 Catalog/Topology 的只读快照，输出候选步骤。`defineMemoryStrategyPlugin()` 再用清单限制可访问的 Layer、Adapter、Capability 与最大步骤数；Kernel 会在其后重新校验拓扑、参与模式、绑定、预算和 Guard。
+## Strategy
+
+用 `defineMemoryStrategy` 定义，再以 `{ strategies: [definition] }` 安装。声明确定性、支持角色与上限；返回 `MemoryViewSpec`，选择准确的 Source key、eager/routed 投影预算和 Source 本地 route/action id。网络、存储、凭据访问不属于 Strategy。
+
+[external-strategy.ts](../../scripts/fixtures/plugin-consumer/src/external-strategy.ts) 是完整的显式选择示例。默认 Host 沿用 `mnemon.memoryTopology.strategyId` 配置选择其 type id；多个适用 Strategy 是错误，不采用“后导入覆盖前者”。Profile 显式替换默认 Entry；只安装一个包不等于允许它替换当前组合。
+
+## Provider 子模块与 Client 页面
+
+Provider 使用 Memory Spaces 公开 SDK/testing 中的 `defineMemorySpaceProvider` 与 `createMemorySpaceProviderFixture`。[external-provider.ts](../../scripts/fixtures/plugin-consumer/src/external-provider.ts) 会在两个独立父 Source 内以同名子节点测试。
+
+```yaml
+- id: work-spaces
+  name: dsh-mnemon-source-memory-spaces
+  config:
+    dataDir: /absolute/path/to/work-memory
+    providers:
+      - use: dsh-mnemon-provider-holographic
+        instanceId: local-facts
+```
+
+**Source 自己定义 Provider Fiber**；Core 不提供 Provider factory registry 或第二个 Context 服务。能力声明必须真实：查询型后端不能伪造全量浏览或图关系。
+
+可选的 `./client` 通过 `dsh-mnemon/client` 的 `installMemorySourceUI` 注册，由 DSH 作为普通 Client 插件加载。页面接收 `MemorySourcePageProps`：选中实例、locale、可写状态和限定范围的 `management.read/mutate`。用 `MemorySourcePageFrame` 复用 locale/appearance；React 不接收 Host Context、驱动、令牌、LLM grant 或传输层。缺少专属页面时有通用管理入口，重复归属和渲染失败局部诊断。
+
+## 独立仓库验收
+
+每个插件拥有自己的 `package.json`、exports、`src/`、`tests/`、TypeScript/构建/测试配置及 README。声明公开 peer 与开发依赖，发布 Host/Client 制品和类型，不依赖兄弟路径、工作区源码别名、根测试夹具或隐式依赖提升。
+
+只有默认 Starter 挂载默认组合；Source/Strategy 包不携带自动激活默认实例的 patch。用户 Profile、Bundle 或明确的父组合负责激活和替换。
 
 ```ts
-import {
-  MEMORY_STRATEGY_PLUGIN_API_VERSION,
-  defineMemoryStrategy,
-  defineMemoryStrategyPlugin,
-} from 'dsh-mnemon/strategy-sdk'
+import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
+import * as notes from './index.js'
+import * as focus from './strategy.js'
 
-export const focusedRecall = defineMemoryStrategyPlugin({
-  manifest: {
-    apiVersion: MEMORY_STRATEGY_PLUGIN_API_VERSION,
-    kind: 'MemoryStrategyPlugin',
-    metadata: {
-      id: 'focused-recall',
-      version: '1.0.0',
-      label: 'Focused Recall',
-      description: 'Routes recall only to Memory Spaces.',
-    },
-    permissions: {
-      layerIds: ['memory-spaces'],
-      adapterIds: [],
-      capabilities: ['recall'],
-      maxSteps: 1,
-    },
-  },
-  strategy: defineMemoryStrategy({
-    descriptor: {
-      id: 'focused-recall',
-      version: '1.0.0',
-      label: 'Focused Recall',
-      description: 'Routes recall only to Memory Spaces.',
-      hooks: ['retrieval-planning'],
-      deterministic: true,
-    },
-    propose(request) {
-      return {
-        strategyId: 'focused-recall',
-        strategyVersion: '1.0.0',
-        reason: 'Use the durable evidence layer.',
-        steps: [{ layerId: 'memory-spaces', capability: request.capability }],
-      }
-    },
-  }),
-})
+const runner = new MemoryCompositionRunner()
+try {
+  await runner.mount(notes, { instanceId: 'work', config: { path: '/tmp/test-notes.txt' } })
+  await runner.mount(focus, {
+    instanceId: 'focus',
+    config: { sourceKeys: ['source:work'], mode: 'eager' },
+  })
+  const turn = await runner.beginTurn()
+  try {
+    // Assert projection, exact grants, provenance and allowed actions here.
+  } finally { turn.release() }
+} finally { await runner.dispose() }
 ```
 
-把 `focusedRecall.strategy` 放入扩展的 `strategies` 后，用户才能把 `memoryTopology.strategyId` 切到 `focused-recall`。Strategy 返回零步骤、越权步骤或超过预算时，Kernel 都会失败关闭。用 `replayMemoryStrategy()` 对固定请求和描述符运行 golden cases；至少覆盖正常路由、禁用 Layer、手动/自动边界、缺失 Adapter、预算上限和恶意越权提案。
+正式测试使用唯一临时路径，先释放 turn，再 dispose runner。这是在真实 Cordis/Core 上的测试夹具，不是另一套生产 Loader。
 
-## Adapter 与 Memory Space Provider 的边界
+至少覆盖：正常组合、缺失/歧义依赖、双实例、schema/能力/授权拒绝、并发快照、旧修订、取消/部分失败、卸载排空/重载、持久化、管理与真实页面点击。Provider 另测凭据、真实能力、上游损坏数据、超时与父 Source 内 conformance。
 
-`extension.adapters` 注册任意 Adapter 描述符，并允许 Topology 把 `adapterId` 绑定到 Layer。v1alpha1 中，通用 Adapter contribution 是控制面描述；真正的数据面调用由对应 Layer executor 完成。
+插件运行自己的 `pnpm verify`。仓库级 `pnpm verify:plugins` 打包全部 14 个制品，用正常 semver manifest 在工作区外逐个安装、检查、测试和构建，再编译外部消费者；禁止源码 alias、manifest override 和工作区软链接。
 
-`dsh-mnemon/provider-sdk` 还公开 `MemoryAdapterFactoryRegistry`，并把九个内置 Memory Space Provider 的构造从 `MnemonService` 解耦。当前 Memory Space 设置卡、连接字段、凭据脱敏和持久 registry 仍由内置 Provider Catalog 定义；只注册一个 factory 不会自动生成全新的 Provider UI。第三方若要接入任意新引擎，今天可以提供独立 Layer/Adapter；完整的动态 Provider 描述符与配置 schema 注册是下一阶段兼容面。
-
-## 面向模型生成 Strategy 的安全流水线
-
-当前版本提供可生成、可验证的制品边界，但**不会执行模型刚写出的任意代码**。推荐流水线是：
-
-```text
-生成 source + manifest
-  -> 格式/schema/类型检查
-  -> 权限清单封装
-  -> golden replay + 越权测试
-  -> shadow 对比现行 Strategy
-  -> 人工批准或签名制品
-  -> 小流量 canary
-  -> 提升 / 自动回滚
-```
-
-评估输入应使用脱敏、可复现的操作描述符和预期 Plan，不应把 Provider 凭据或原始私有记忆交给生成模型。回执应保留 Strategy ID/version、Catalog/Topology/Guard generation 和失败状态，才能比较迭代并安全回退。
-
-## 兼容性清单
-
-- ID 使用小写字母开头的 kebab-case，发布后不要复用成不同语义。
-- 描述符和跨包输入只放 JSON-safe 数据，不传 class、闭包、Client、数据库或 secret。
-- 每次操作必须固定一个 generation；收到 stale plan 后重新规划，不要重放旧步骤。
-- `manual` 不等于“模型主动调用工具”：模型、生命周期和系统自动化都属于 `automatic` trigger。
-- Guard 只能返回 allow/deny，不能执行数据面副作用；Guard 集合变化会使旧 Plan 失效。
-- executor 必须尊重 `AbortSignal`，并把部分失败交给 Kernel 形成 `partial` 回执。
-- 自动参与 `project` 的 Layer 必须有 MemorySource；测试正常发布、Wake 预算、Host-only state，以及被拒绝并回滚的运行中卸载。
-- 为注册、热卸载、重复 ID、越权 Strategy、取消和回执状态编写测试。
+RSI 应保存可复现候选输入/制品，对照已知组合评估，经明确安装/选择决策晋升。Strategy 回放通过，不代表任意 JavaScript 已被沙箱隔离，也不授予交易、发消息或删除外部数据的权限。

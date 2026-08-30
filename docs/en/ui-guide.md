@@ -2,7 +2,7 @@
 
 [简体中文](../zh-CN/ui-guide.md) | **English** | [Documentation hub](./README.md)
 
-This guide follows the Sidebar-first experience and a real user path. Optional Builtin placement embeds the same workspace in a conversation; it does not restore the old builtin layout. Compatible workflow screenshots were captured from a live v0.2.0 1600×900 WebUI, while v0.3 Layer controls retain their labeled historical screenshots. The [entry-placement settings screenshot](../assets/screenshots/settings-entry-placement.png) shows the restored option in the local issue #139 implementation. Names, counts, and content vary with local data.
+This guide follows the retained default `sidebar` experience and a real user path. The composable Source architecture preserves the established interaction flow. Historical screenshots and the recording below come from a live v0.2.0 1600×900 WebUI; current composition controls are described in the Settings section. Names, counts, and content vary with local data.
 
 ## Watch the complete interaction first
 
@@ -148,7 +148,7 @@ Content distinguishes enumerable, query-only, and unavailable surfaces. A Provid
 
 Settings owns reusable **service configuration** only:
 
-- Memory Layer cards come from the live Catalog. Runtime, Documents, and Memory Spaces each have one master switch, with no additional participation-mode controls;
+- Memory Source cards come from the live Catalog. Runtime, Documents, and Memory Spaces each have one master switch, with no additional participation-mode controls;
 - every external Provider has its own switch and is off by default;
 - endpoint, API Key, and Provider-specific fields appear only after enabling;
 - API Keys use a conventional password field whose eye button toggles visible/hidden; there is no clear-credential checkbox, dedicated Remove row, or saved-secret caption;
@@ -156,7 +156,7 @@ Settings owns reusable **service configuration** only:
 - global / workspace / custom tags show effective scope; Providers with the same scope semantics reuse Mnemon's configuration framework.
 - User profile scope is independent: **Global user profile** combines global USER.md with workspace/custom MEMORY.md without moving either source.
 
-The screenshot below comes from an isolated installation of `dsh-mnemon@0.3.0`. Each default Layer has exactly one master switch. “On” permits on-demand use; it does not force Recall on every turn.
+The screenshot below comes from an isolated installation of `dsh-mnemon@0.3.0`. Each default Source has exactly one master switch. “On” permits on-demand use; it does not force Recall on every turn.
 
 [![Runtime Memory, Project Documents, and Memory Spaces master switches in the actual English v0.3 settings page](../assets/screenshots/settings-memory-layers-en.jpg)](../assets/screenshots/settings-memory-layers-en.jpg)
 
@@ -168,7 +168,7 @@ Mnemon-specific custom directory, backup, and migration remain in Mnemon's own e
 
 **Manage embedding settings in DSH** makes the saved Ollama endpoint and model authoritative for Mnemon child processes, including Desktop launches that do not inherit shell startup files. The endpoint rejects credentials, queries, and fragments, and the warning explains that memory and query text leave the Host for that service. **Test status** uses the saved runtime, not an unsaved draft; the isolated profile above shows a successful Mnemon v0.2.5 connection and zero-memory coverage without exposing credentials or personal memory.
 
-Disabling a Layer does not delete data. Its Sidebar tab remains visible with an Off badge and opens a reversible disabled-state explanation without reading the data plane; re-enabling restores the existing data. A newly contributed extension Layer starts disabled. The current runtime generation keeps serving until the candidate validates and swaps, so a rejected candidate never leaves a partial configuration active.
+Disabling a Source does not delete data. Its Sidebar tab remains visible with an Off badge and opens a reversible disabled-state explanation without reading the data plane; re-enabling restores the existing data. A newly contributed extension Source starts disabled. The current runtime generation keeps serving until the candidate validates and swaps, so a rejected candidate never leaves a partial configuration active.
 
 [![The actual English Sidebar keeps the Documents tab visible and explains its reversible disabled state](../assets/screenshots/sidebar-layer-disabled-en.jpg)](../assets/screenshots/sidebar-layer-disabled-en.jpg)
 

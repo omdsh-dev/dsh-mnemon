@@ -12,13 +12,13 @@ The plugin registers stable routing guidance, one static Runtime Memory protocol
 
 DSH appends a new user-role runtime-context snapshot only when this dynamic Wake changes. The snapshot deliberately remains complete because DSH defines the newest runtime-context message as superseding earlier snapshots; keeping full state preserves resume, fork, compaction, deletion, and context-trimming behavior. Moving the invariant protocol into the stable system prefix removes those bytes from every changed tail snapshot without inventing an unsafe delta chain.
 
-The lifecycle pins before the Host assembles the System Prompt, then keeps the same TurnView for every model step in that turn:
+The lifecycle pins before the Host assembles the System Prompt, then keeps the same View for every model step in that turn:
 
 ```text
 turn/start
   -> enter system-prompt/assemble hook
   -> beginTurn(root turn + operation scope)
-  -> snapshot eager and routed MemorySources
+  -> Source facts → Strategy ViewSpec → validation → Source projection
   -> pin Source revisions/digests and Host-only authority
   -> build bounded Wake
   -> continue the actual Host prompt assembly
@@ -51,7 +51,7 @@ read the pinned Memory Space Source state on the Host
 validate requested IDs are a subset; otherwise use every pinned active ID
           |
           v
-MnemonService searches authorized Providers concurrently
+Memory Spaces Source searches granted Provider namespaces concurrently
           |
           v
 quality normalization + reciprocal-rank fusion
@@ -86,7 +86,7 @@ The Web “Recall” page follows a different path from model tools:
 ```text
 Direct search
   -> RPC read channel
-  -> MnemonService.search directly
+  -> Source-scoped management search
   -> raw evidence
 
 Agent search
@@ -96,7 +96,7 @@ Agent search
   -> Host filters citations to actual memoryBodyId/id pairs
 ```
 
-The “Entities” and “Content” pages also read the deterministic service directly and do not need a second model. “Content” uses a graph snapshot and does not increment Mnemon recall access counts.
+The Entities and Content pages also use deterministic Source management reads, without a second model. Content uses the Provider browse contract, not semantic recall.
 
 ## Explicit Long-Term Writes
 

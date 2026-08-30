@@ -2,7 +2,7 @@
 
 **简体中文** | [English](../en/ui-guide.md) | [文档中心](./README.md)
 
-本指南按 Sidebar 优先体验和真实用户路径编排。可选 Builtin 入口把同一个工作台嵌入会话，不恢复旧 builtin 布局。兼容工作流截图来自 v0.2.0 的 1600×900 实机页面，v0.3 的 Layer 控制保留明确标注版本的历史截图；[展示位置设置截图](../assets/screenshots/settings-entry-placement.png)展示 issue #139 本地实现恢复的选项。名称、数量和内容会随本地数据变化。
+本指南按保留的默认 `sidebar` 体验和真实用户路径编排。Composable Source 架构保持既有交互流程；下方历史截图和录制来自 v0.2.0 的 1600×900 实机页面，当前组合控制在“设置”部分说明。名称、数量和内容会随本地数据变化。
 
 ## 先看一次完整操作
 
@@ -158,7 +158,7 @@
 - 全局 / 工作区 / 自定义标签显示当前有效范围；支持相同范围语义的 Provider 复用 Mnemon 的配置框架。
 - 用户档案范围可独立选择：“全局用户档案”会组合全局 USER.md 与工作区/自定义 MEMORY.md，不移动任何事实源。
 
-下面是隔离安装的 `dsh-mnemon@0.3.0` 实际设置页。三个默认 Layer 各自只有一个总开关；“已开启”表示允许系统按需使用，并不表示每回合强制 Recall。
+下面是隔离安装的 `dsh-mnemon@0.3.0` 实际设置页。三个默认 Source 各自只有一个总开关；“已开启”表示允许系统按需使用，并不表示每回合强制 Recall。
 
 [![v0.3 实际设置页中的运行时记忆、项目档案与记忆体总开关](../assets/screenshots/settings-memory-layers-zh-CN.jpg)](../assets/screenshots/settings-memory-layers-zh-CN.jpg)
 
@@ -170,7 +170,7 @@ Mnemon 自己的自定义目录、备份与迁移留在 Mnemon 专属折叠区�
 
 开启“由 DSH 管理嵌入配置”后，保存的 Ollama Endpoint 与模型会成为 Mnemon 子进程的权威值，也适用于无法继承 shell 启动文件的 Desktop 启动方式。Endpoint 会拒绝凭据、查询参数与片段，界面同时说明记忆与查询正文会被发送到该服务。“测试状态”只检查已保存的运行值，不会把未保存草稿误报为生效；上面的隔离 profile 通过 Mnemon v0.2.5 显示连接成功与空数据覆盖率，未包含凭据或个人记忆。
 
-关闭 Layer 不删除数据。Sidebar 中对应 Tab 保留并标记“已关闭”，点击后显示可逆停用说明而不读取数据面；重新开启后原数据恢复可用。扩展贡献的新 Layer 首次出现时默认关闭；保存前当前运行代继续服务，候选配置验证失败也不会产生半切换。
+关闭 Source 不删除数据。Sidebar 中对应 Tab 保留并标记“已关闭”，点击后显示可逆停用说明而不读取数据面；重新开启后原数据恢复可用。扩展贡献的新 Source 首次出现时默认关闭；保存前当前运行代继续服务，候选配置验证失败也不会产生半切换。
 
 [![实际关闭项目档案后，Sidebar 保留“档案”Tab 并显示可逆停用说明](../assets/screenshots/sidebar-layer-disabled-zh-CN.jpg)](../assets/screenshots/sidebar-layer-disabled-zh-CN.jpg)
 
