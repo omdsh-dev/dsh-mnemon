@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
-  ComposableMemoryView,
+  MemorySourceViewContext,
   MemoryActionOffer,
   MemoryReadGrant,
   MemoryViewRoute,
@@ -338,16 +338,14 @@ describe('Memory Spaces Provider child-module conformance', () => {
       description: 'fixture remember', capability: 'write', inputSchema: {},
     }
     const view = {
-      id: 'view:fixture', digest: 'fixture', runtimeGeneration: 'generation:fixture', strategyInstanceKey: 'strategy:fixture',
-      strategyTypeId: 'fixture', createdAt: '2026-08-30T00:00:00.000Z', scope: { storage: 'custom', workspaceId: '/fixture' },
-      projection: projected.fragments, routes: [route], readGrants: [grant], actionOffers: [offer],
-      consistency: { mode: 'namespace-pinned-live-read', sourceRevisions: { 'source:memory-spaces-fixture': 'fixture-r1' } }, explanation: 'fixture',
-    } satisfies ComposableMemoryView
+      id: 'view:fixture', scope: { storage: 'custom', workspaceId: '/fixture' },
+    } satisfies MemorySourceViewContext
 
     await expect(runtime.query?.({ view, route, grant, input: { query: 'architecture' } })).resolves.toMatchObject({
       viewId: 'view:fixture', items: [{ id: 'fixture-1', text: 'Found architecture', score: 0.91 }],
     })
-    await expect(runtime.mutate?.({ view, offer, input: { content: 'Remember the architecture.', memoryBodyId: bodyId } })).resolves.toMatchObject({
+    await expect(runtime.mutate?.({ view, offer, input: { content: 'Unscoped write.', memoryBodyId: bodyId } })).rejects.toThrow('no View ReadGrant')
+    await expect(runtime.mutate?.({ view, offer, grant, input: { content: 'Remember the architecture.', memoryBodyId: bodyId } })).resolves.toMatchObject({
       viewId: 'view:fixture', status: 'succeeded', details: { memoryBodyId: bodyId, result: { action: 'stored' } },
     })
     await runtime.dispose?.()
