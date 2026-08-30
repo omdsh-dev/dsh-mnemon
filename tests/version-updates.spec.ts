@@ -82,7 +82,10 @@ describe('VersionUpdateManager', () => {
     mkdirSync(packageRoot, { recursive: true })
     json(join(profile, 'package.json'), { name: 'dsh-profile-web', dependencies: { 'dsh-mnemon': '^0.1.2' } })
     json(join(packageRoot, 'package.json'), { name: 'dsh-mnemon', version: '0.1.2' })
-    const run = vi.fn<ProcessRunner>(async () => ({ stdout: 'updated', stderr: '', exitCode: 0 }))
+    const run = vi.fn<ProcessRunner>(async () => {
+      json(join(packageRoot, 'package.json'), { name: 'dsh-mnemon', version: '0.1.3' })
+      return { stdout: 'updated', stderr: '', exitCode: 0 }
+    })
     const manager = new VersionUpdateManager({
       packageManifestPath: join(packageRoot, 'package.json'),
       mnemonCliPath: () => '/missing/mnemon',
@@ -98,9 +101,80 @@ describe('VersionUpdateManager', () => {
       installProfile: 'web',
       installPath: profile,
     })
-    await expect(manager.update('dsh-mnemon')).resolves.toMatchObject({ updated: true, currentVersion: '0.1.3', restartRequired: true })
+    await expect(manager.update('dsh-mnemon')).resolves.toMatchObject({ updated: true, previousVersion: '0.1.2', currentVersion: '0.1.3', restartRequired: true })
     expect(manager.currentDshMnemonVersion).toBe('0.1.3')
-    expect(run).toHaveBeenCalledWith(expect.stringMatching(/pnpm$/), ['update', 'dsh-mnemon'], expect.objectContaining({ timeoutMs: 600_000, maxOutputBytes: 16 * 1024, cwd: profile }))
+    expect(run).toHaveBeenCalledWith(expect.stringMatching(/pnpm$/), ['add', 'dsh-mnemon@0.1.3', '--save-exact'], expect.objectContaining({ timeoutMs: 600_000, maxOutputBytes: 16 * 1024, cwd: profile }))
+  })
+
+  function npmFixture(current: string, tags: Record<string, string | undefined>) {
+    const profile = directory('npm-channel')
+    const packageRoot = join(profile, 'node_modules', 'dsh-mnemon')
+    mkdirSync(packageRoot, { recursive: true })
+    json(join(profile, 'package.json'), { name: 'dsh-profile-web', dependencies: { 'dsh-mnemon': current } })
+    json(join(packageRoot, 'package.json'), { name: 'dsh-mnemon', version: current })
+    const fetch = vi.fn(async (_name: string, tag = 'latest') => tags[tag])
+    const run = vi.fn<ProcessRunner>(async () => ({ stdout: '', stderr: '', exitCode: 0 }))
+    const options = {
+      packageManifestPath: join(packageRoot, 'package.json'), dshHome: profile,
+      mnemonCliPath: () => '/missing/mnemon', resolveExecutable: (name: string) => name === 'pnpm' ? '/fake/pnpm' : undefined,
+      processRunner: run, fetchNpmLatest: fetch, fetchMnemonLatest: async () => undefined,
+    }
+    return { profile, packageRoot, fetch, run, options, manager: new VersionUpdateManager(options) }
+  }
+
+  it('finds beta updates without exposing prereleases to stable users', async () => {
+    const beta = npmFixture('0.5.0-beta.1', { latest: '0.4.0', beta: '0.5.0-beta.2' })
+    expect((await beta.manager.check()).components[1]).toMatchObject({ current: '0.5.0-beta.1', latest: '0.5.0-beta.2', outdated: true })
+    expect(beta.fetch.mock.calls.map(call => call[1])).toEqual(['latest', 'beta'])
+    const stable = npmFixture('0.4.0', { latest: '0.4.1', beta: '0.5.0-beta.2' })
+    expect((await stable.manager.check()).components[1]).toMatchObject({ latest: '0.4.1', outdated: true })
+    expect(stable.fetch).toHaveBeenCalledTimes(1)
+    expect(stable.fetch).toHaveBeenCalledWith('dsh-mnemon', 'latest')
+    expect(stable.run).not.toHaveBeenCalled()
+  })
+
+  it('offers the final stable version to beta users but never downgrades to an older stable version', async () => {
+    const beta = npmFixture('0.5.0-beta.1', { latest: '0.5.0', beta: '0.5.0-beta.2' })
+    expect((await beta.manager.check()).components[1]).toMatchObject({ latest: '0.5.0', outdated: true })
+    const older = npmFixture('0.5.0-beta.1', { latest: '0.4.0' })
+    await expect(older.manager.update('dsh-mnemon')).resolves.toMatchObject({ updated: false, currentVersion: '0.5.0-beta.1' })
+    expect(older.run).not.toHaveBeenCalled()
+  })
+
+  it('rejects a mis-tagged prerelease instead of silently enrolling a stable user', async () => {
+    const stable = npmFixture('0.4.0', { latest: '0.5.0-beta.2' })
+    expect((await stable.manager.check()).components[1]).toMatchObject({ outdated: false, checkError: 'latest-unavailable' })
+    await expect(stable.manager.update('dsh-mnemon')).rejects.toThrow('Unable to verify')
+    expect(stable.run).not.toHaveBeenCalled()
+  })
+
+  it('installs the exact checked beta and verifies the profile link instead of pnpm’s old package directory', async () => {
+    const value = npmFixture('0.5.0-beta.1', { latest: '0.4.0', beta: '0.5.0-beta.2' })
+    const oldManifest = join(value.profile, 'node_modules/.pnpm/old/node_modules/dsh-mnemon/package.json')
+    mkdirSync(join(value.profile, 'node_modules/.pnpm/old/node_modules/dsh-mnemon'), { recursive: true })
+    json(oldManifest, { name: 'dsh-mnemon', version: '0.5.0-beta.1' })
+    const manager = new VersionUpdateManager({ ...value.options, packageManifestPath: oldManifest })
+    value.run.mockImplementation(async () => {
+      json(join(value.packageRoot, 'package.json'), { name: 'dsh-mnemon', version: '0.5.0-beta.2' })
+      return { stdout: 'installed', stderr: '', exitCode: 0 }
+    })
+    await expect(manager.update('dsh-mnemon')).resolves.toMatchObject({ previousVersion: '0.5.0-beta.1', currentVersion: '0.5.0-beta.2', updated: true, restartRequired: true })
+    expect(value.run).toHaveBeenCalledWith('/fake/pnpm', ['add', 'dsh-mnemon@0.5.0-beta.2', '--save-exact'], expect.objectContaining({ cwd: value.profile }))
+  })
+
+  it('does not report success when pnpm exits cleanly without installing the requested version', async () => {
+    const value = npmFixture('0.5.0-beta.1', { beta: '0.5.0-beta.2' })
+    await expect(value.manager.update('dsh-mnemon')).rejects.toThrow('did not install the requested version')
+    expect(value.manager.currentDshMnemonVersion).toBe('0.5.0-beta.1')
+  })
+
+  it('preserves the known version on installation or registry failure', async () => {
+    const value = npmFixture('0.5.0-beta.1', { beta: '0.5.0-beta.2' })
+    value.run.mockResolvedValue({ stdout: '', stderr: 'fixture network failure', exitCode: 1 })
+    await expect(value.manager.update('dsh-mnemon')).rejects.toThrow('fixture network failure')
+    expect(value.manager.currentDshMnemonVersion).toBe('0.5.0-beta.1')
+    value.fetch.mockRejectedValue(new Error('registry unavailable'))
+    expect((await value.manager.check()).components[1]).toMatchObject({ outdated: false, checkError: 'latest-unavailable' })
   })
 
   it('uses the fixed Homebrew cask command for a recognized Mnemon install', async () => {

@@ -34,7 +34,7 @@ export interface VersionUpdateDependencies {
   mnemonCliPath?: () => string | undefined
   processRunner?: ProcessRunner
   resolveExecutable?: (command: string) => string | undefined
-  fetchNpmLatest?: (name: string) => Promise<string | undefined>
+  fetchNpmLatest?: (name: string, tag?: string) => Promise<string | undefined>
   fetchMnemonLatest?: () => Promise<string | undefined>
 }
 
@@ -161,8 +161,8 @@ async function fetchJson(url: string): Promise<unknown> {
   }
 }
 
-async function fetchNpmLatest(name: string): Promise<string | undefined> {
-  const body = await fetchJson(`https://registry.npmjs.org/${encodeURIComponent(name)}/latest`)
+async function fetchNpmLatest(name: string, tag = 'latest'): Promise<string | undefined> {
+  const body = await fetchJson(`https://registry.npmjs.org/${encodeURIComponent(name)}/${encodeURIComponent(tag)}`)
   if (typeof body !== 'object' || body === null) return undefined
   const version = (body as Record<string, unknown>).version
   return typeof version === 'string' ? version : undefined
@@ -257,7 +257,7 @@ export class VersionUpdateManager {
   private readonly mnemonCliPath: () => string | undefined
   private readonly processRunner: ProcessRunner
   private readonly executable: (command: string) => string | undefined
-  private readonly fetchNpmLatest: (name: string) => Promise<string | undefined>
+  private readonly fetchNpmLatest: (name: string, tag?: string) => Promise<string | undefined>
   private readonly fetchMnemonLatest: () => Promise<string | undefined>
 
   constructor(dependencies: VersionUpdateDependencies = {}) {
@@ -273,6 +273,20 @@ export class VersionUpdateManager {
 
   get currentDshMnemonVersion(): string {
     return this.dshMnemonVersion
+  }
+
+  private async latestDshMnemonVersion(): Promise<string | undefined> {
+    const channel = parseSemver(this.currentDshMnemonVersion)?.prerelease[0]
+    const tags = channel !== undefined && ['alpha', 'beta', 'rc'].includes(channel) ? ['latest', channel] : ['latest']
+    const candidates = await Promise.all(tags.map(async tag => {
+      const version = await settledWithin(this.fetchNpmLatest(DSH_MNEMON_PACKAGE, tag), undefined)
+      const parsed = version === undefined ? undefined : parseSemver(version)
+      if (parsed === undefined) return undefined
+      // Stable users never opt in implicitly, even if a registry tag is wrong.
+      if (parsed.prerelease.length > 0 && (tag === 'latest' || parsed.prerelease[0] !== tag)) return undefined
+      return version
+    }))
+    return candidates.filter((version): version is string => version !== undefined).sort(compareVersions).at(-1)
   }
 
   private async inspectMnemon(): Promise<{ install: MnemonInstall; current?: string }> {
@@ -314,7 +328,7 @@ export class VersionUpdateManager {
     const [mnemonLocal, mnemonLatest, dshLatest] = await Promise.all([
       settledWithin(this.inspectMnemon(), { install: { mode: 'missing' } }),
       settledWithin(this.fetchMnemonLatest(), undefined),
-      settledWithin(this.fetchNpmLatest(DSH_MNEMON_PACKAGE), undefined),
+      settledWithin(this.latestDshMnemonVersion(), undefined),
     ])
     const dshInstall = inspectDshInstall(this.packageManifestPath, this.dshHome)
     const pnpm = this.executable('pnpm')
@@ -382,19 +396,24 @@ export class VersionUpdateManager {
     }
 
     if (component !== 'dsh-mnemon') throw new Error(`Unknown version component: ${String(component)}`)
-    const latest = await this.fetchNpmLatest(DSH_MNEMON_PACKAGE)
+    const latest = await this.latestDshMnemonVersion()
     if (latest === undefined) throw new Error('Unable to verify the latest dsh-mnemon release')
     if (compareVersions(this.currentDshMnemonVersion, latest) >= 0) return { component, previousVersion: this.currentDshMnemonVersion, currentVersion: this.currentDshMnemonVersion, updated: false, restartRequired: false }
     const install = inspectDshInstall(this.packageManifestPath, this.dshHome)
     const pnpm = this.executable('pnpm')
     if (install.mode !== 'npm' || install.profileDir === undefined || pnpm === undefined) throw new Error('This dsh-mnemon installation cannot be updated automatically')
-    const output = await resultOrThrow(this.processRunner, pnpm, ['update', DSH_MNEMON_PACKAGE], UPDATE_TIMEOUT_MS, { cwd: install.profileDir })
+    const previousVersion = this.currentDshMnemonVersion
+    const output = await resultOrThrow(this.processRunner, pnpm, ['add', `${DSH_MNEMON_PACKAGE}@${latest}`, '--save-exact'], UPDATE_TIMEOUT_MS, { cwd: install.profileDir })
+    // The running module may still reside in pnpm's old versioned directory.
+    // Read the profile's current public link, not that stale package path.
+    const installedVersion = manifest(join(install.profileDir, 'node_modules', DSH_MNEMON_PACKAGE, 'package.json'))?.version
+    if (installedVersion !== latest) throw new Error(`dsh-mnemon update did not install the requested version ${latest}; found ${installedVersion ?? 'no package'}`)
     const outputText = updateOutput(output)
-    this.dshMnemonVersion = latest
+    this.dshMnemonVersion = installedVersion
     return {
       component,
-      previousVersion: this.currentDshMnemonVersion,
-      currentVersion: latest,
+      previousVersion,
+      currentVersion: installedVersion,
       updated: true,
       restartRequired: true,
       ...(outputText === undefined ? {} : { output: outputText }),
