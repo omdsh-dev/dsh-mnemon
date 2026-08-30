@@ -37,12 +37,15 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
     typeId: 'runtime',
     packageName: 'dsh-mnemon-source-runtime',
     role: 'working-context',
-    capabilities: ['status', 'project', 'write'],
+    capabilities: ['status', 'project', 'write', 'forget'],
     consistency: 'exact-snapshot',
+    projection: { actions: ['wake'], targets: ['records'], effects: [], representations: ['excerpt'], overflow: 'truncate', retry: 'safe' },
     actions: [{
       id: 'mutate',
       description: 'Add, replace, or remove an entry in Runtime Memory.',
       capability: 'write',
+      semantics: { actions: ['record', 'forget'], targets: ['records'], effects: [{ target: 'records', mode: 'write' }, { target: 'records', mode: 'delete' }],
+        representations: ['receipt'], overflow: 'unavailable', retry: 'unsafe' },
       inputSchema: {
         type: 'object',
         required: ['action', 'target'],
@@ -81,7 +84,7 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
           role: 'working-context',
           availability: 'ready',
           revision: current.revision,
-          capabilities: ['status', 'project', 'write'],
+          capabilities: ['status', 'project', 'write', 'forget'],
           routeIds: [],
           actionIds: ['mutate'],
         }
@@ -104,6 +107,10 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
             ),
             revision: current.revision,
             provenance: { sourceTypeId: 'runtime' },
+            result: { representation: 'excerpt', sourceRepresentation: 'raw', coverage: 'partial', state: 'active',
+              omitted: 'Only selected branch-compatible working context, bounded by this projection budget; not a semantic summary or long-term history.',
+              expansion: { unavailable: 'Runtime exposes working projection and mutations, not a model full-history read route.' },
+            },
           }],
         }
       },

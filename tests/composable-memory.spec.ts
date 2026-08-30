@@ -4,6 +4,7 @@ import {
   type ComposableMemoryView,
   type MemoryJsonValue,
   type MemorySourceDefinition,
+  type MemorySourceRuntime,
   type MemoryStrategyDefinition,
   type MemoryViewRequest,
 } from "../src/core/contracts/index.ts"
@@ -31,6 +32,7 @@ function sourceDefinition(options: {
   typeId?: string
   dispose?: () => void
   queryFailure?: boolean
+  query?: (request: Parameters<NonNullable<MemorySourceRuntime['query']>>[0]) => void
 } = {}): MemorySourceDefinition {
   const typeId = options.typeId ?? 'example'
   return defineMemorySource({
@@ -112,6 +114,7 @@ function sourceDefinition(options: {
           }
         },
         query: async request => {
+          options.query?.(request)
           if (options.queryFailure === true) throw new Error('query unavailable')
           return {
             id: 'evidence-1',
@@ -231,6 +234,28 @@ describe('Composable View Memory compiler', () => {
     await expect(generation.executeRoute(view, routeId, { query: 'again' })).rejects.toThrow('budget is exhausted')
     await expect(generation.executeRoute(view, 'source:fixture/undeclared', { query: 'needle' })).rejects.toThrow('unavailable')
     await generation.dispose()
+  })
+
+  it('narrows execution limits before the Source runs without mutating the pinned View', async () => {
+    const query = vi.fn()
+    const generation = new MemoryCompositionGeneration(contributions(installedSource(sourceDefinition({ query }))))
+    try {
+      const view = await generation.compose(REQUEST)
+      const route = view.routes[0]!
+      await expect(generation.executeRoute(view, route.id, { query: 'needle' }, undefined,
+        { ...REQUEST.budget, maxEvidenceCharacters: 0 })).rejects.toThrow()
+      expect(query).not.toHaveBeenCalled()
+      const evidence = await generation.executeRoute(view, route.id, { query: 'needle' }, undefined,
+        { ...REQUEST.budget, maxEvidenceCharacters: 3, maxEvidenceResults: 1 })
+      expect(query.mock.calls[0]![0].route).toMatchObject({ maxCharacters: 3, maxResults: 1,
+        budgets: expect.arrayContaining([
+          { resource: 'output', unit: 'characters', measurement: 'exact', max: 3 },
+          { resource: 'output', unit: 'items', measurement: 'exact', max: 1 },
+        ]),
+      })
+      expect(evidence.items.map(item => item.text)).toEqual(['abc'])
+      expect(route).toMatchObject({ maxCharacters: 7, maxResults: 2 })
+    } finally { await generation.dispose() }
   })
 
   it('re-authorizes every ActionOffer and validates its Receipt binding', async () => {

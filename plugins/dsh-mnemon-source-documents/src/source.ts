@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { MemoryJsonValue, MemoryReadGrant, MemorySourceDefinition } from 'dsh-mnemon/contracts'
+import type { MemoryEvidenceItem, MemoryJsonValue, MemoryReadGrant, MemorySourceDefinition } from 'dsh-mnemon/contracts'
 import { COMPOSABLE_MEMORY_API_VERSION } from 'dsh-mnemon/contracts'
 import { defineMemorySource, createMemoryMutationReceipt as receipt, memoryInputRecord as record, memoryInputStringArray as stringArray, memoryInputText as text, truncateMemoryText as truncate } from 'dsh-mnemon/extension-sdk'
 import { DocumentManager } from './controller.ts'
@@ -60,10 +60,12 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
     role: 'narrative',
     capabilities: ['status', 'project', 'search', 'read', 'write'],
     consistency: 'namespace-pinned-live-read',
+    projection: { actions: ['wake'], targets: ['catalog'], effects: [], representations: ['catalog', 'excerpt'], overflow: 'truncate', retry: 'safe' },
     routes: [{
       id: 'search',
       description: 'Search only the project Documents pinned into this View.',
       capability: 'search',
+      semantics: { actions: ['read'], targets: ['records'], effects: [], representations: ['excerpt'], overflow: 'truncate', retry: 'safe' },
       inputSchema: {
         type: 'object',
         required: ['query'],
@@ -78,6 +80,7 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
       id: 'manage',
       description: 'Create a project Document or update a Document pinned into this View.',
       capability: 'write',
+      semantics: { actions: ['record'], targets: ['records'], effects: [{ target: 'records', mode: 'write' }], representations: ['receipt'], overflow: 'unavailable', retry: 'unsafe' },
       inputSchema: {
         type: 'object',
         required: ['action'],
@@ -122,6 +125,8 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
         prepared.delete(request.scope)
         if (current.revision !== request.expectedRevision) throw new Error('Documents projection revision changed during composition')
         const active = current.documents.filter(document => document.status === 'active' && document.healthy).sort((a, b) => a.id.localeCompare(b.id))
+        const cover = `${active.length} active project Document${active.length === 1 ? '' : 's'} available through the documents/search route.`
+        if (request.representation === 'catalog' && cover.length > request.maxCharacters) throw new Error('Documents catalog cannot fit the requested projection budget')
         const readGrant: MemoryReadGrant = {
           id: `${context.sourceInstanceKey}/grant/${current.revision}`,
           sourceInstanceKey: context.sourceInstanceKey,
@@ -134,9 +139,12 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
         return {
           fragments: request.includeProjection ? [{
             id: `${context.sourceInstanceKey}/projection`, sourceInstanceKey: context.sourceInstanceKey, mode: request.mode,
-            text: truncate(`${active.length} active project Document${active.length === 1 ? '' : 's'} available through the documents/search route.`, request.maxCharacters),
+            text: truncate(cover, request.maxCharacters),
             revision: current.revision,
             provenance: { sourceTypeId: 'documents' },
+            result: cover.length <= request.maxCharacters && request.representation !== 'excerpt' ? { representation: 'catalog', coverage: 'complete' } : {
+              representation: 'excerpt', sourceRepresentation: 'catalog', coverage: 'partial', omitted: 'Catalog text only, possibly clipped to the projection budget; not a summary of document contents.',
+            },
           }] : [],
           readGrant,
         }
@@ -147,7 +155,7 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
         const input = record(request.input, 'Documents search')
         const query = text(input.query, 'query', 2_000, false) ?? ''
         const limitValue = input.limit
-        const limit = typeof limitValue === 'number' && Number.isInteger(limitValue) ? Math.max(1, Math.min(20, limitValue)) : 10
+        const limit = Math.min(request.route.maxResults ?? 20, typeof limitValue === 'number' && Number.isInteger(limitValue) ? Math.max(1, Math.min(20, limitValue)) : 10)
         const controller = documents.forWorkspace(root)
         const allowedIds = grantIds(request.grant, input.includeArchived === true)
         const result = await controller.search(query, { limit, allowedIds, includeArchived: input.includeArchived === true })
@@ -157,17 +165,26 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
           .slice(0, Math.min(3, limit)) : []
         return {
           id: `evidence:${randomUUID()}`, viewId: request.view.id, routeId: request.route.id, sourceInstanceKey: context.sourceInstanceKey,
-          observedAt: new Date().toISOString(), truncated: result.total >= limit,
-          items: [...result.results.map(document => ({
+          observedAt: new Date().toISOString(), truncated: result.total > limit,
+          items: [...result.results.map<MemoryEvidenceItem>(document => ({
             id: document.id,
             text: documentEvidence(document.content, query, Math.min(2_600, request.route.maxCharacters ?? 2_600)),
             score: document.score,
             revision: String(document.revision),
             provenance: { kind: 'match', documentId: document.id, title: document.title, description: document.description, status: document.status, relativePath: document.relativePath, sourcePaths: document.sourcePaths.slice(0, 8) },
-          })), ...suggestions.map(document => ({
+            result: { representation: 'excerpt', coverage: document.content.length <= Math.min(2_600, request.route.maxCharacters ?? 2_600) ? 'complete' : 'partial', state: document.status,
+              ...(document.content.length <= Math.min(2_600, request.route.maxCharacters ?? 2_600) ? {} : { omitted: 'Query-local document excerpt; surrounding content omitted.' }),
+              expansion: { unavailable: 'Full document reading is available in human management, not through this View route.' },
+              score: { basis: `${context.sourceInstanceKey}/document-search`, meaning: 'Query-relative lexical match score, not a probability.' },
+            },
+          })), ...suggestions.map<MemoryEvidenceItem>(document => ({
             id: document.id, score: 0,
             text: truncate('No exact match. Recent Document suggestion only: ' + document.title + '\n' + document.description + '\n' + document.excerpt, 1_000),
             provenance: { kind: 'suggestion', documentId: document.id, title: document.title, status: document.status },
+            result: { representation: 'excerpt', coverage: 'partial', state: document.status, omitted: 'Recent-document suggestion, not a query match or semantic summary.',
+              expansion: { unavailable: 'This View has no full-document read route.' },
+              score: { basis: `${context.sourceInstanceKey}/document-search`, meaning: 'Zero denotes a fallback suggestion, not measured confidence.' },
+            },
           }))],
         }
       },

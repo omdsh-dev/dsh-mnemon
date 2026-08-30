@@ -36,7 +36,12 @@ export function stringArray(value: MemoryJsonValue | undefined, label: string, m
 }
 
 export function truncate(value: string, maximum: number): string {
-  return value.length <= maximum ? value : `${value.slice(0, Math.max(0, maximum - 1))}…`
+  if (maximum <= 0) return ''
+  if (value.length <= maximum) return value
+  let end = maximum - 1
+  // Keep a supplementary character whole when reserving one unit for the ellipsis.
+  if (end > 0 && /[\uD800-\uDBFF]/u.test(value[end - 1]!)) end--
+  return `${value.slice(0, end)}…`
 }
 
 export function receipt(

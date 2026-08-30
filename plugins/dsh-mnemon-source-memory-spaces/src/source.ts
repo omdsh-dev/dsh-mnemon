@@ -8,6 +8,7 @@ import type {
   MemorySourceFacts,
   MemorySourceManagementRequest,
   MemorySourceManagementResult,
+  MemoryViewRoute,
 } from 'dsh-mnemon/contracts'
 import { COMPOSABLE_MEMORY_API_VERSION } from 'dsh-mnemon/contracts'
 import { defineMemorySource, memoryInputInteger as integer, createMemoryMutationReceipt as receipt, memoryInputRecord as record, memoryInputStringArray as stringArray, memoryInputText as text, truncateMemoryText as truncate } from 'dsh-mnemon/extension-sdk'
@@ -278,11 +279,13 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
     role: 'durable-evidence',
     capabilities: ['status', 'project', 'recall', 'related', 'write', 'link', 'forget'],
     consistency: 'namespace-pinned-live-read',
+    projection: { actions: ['wake'], targets: ['catalog'], effects: [], representations: ['catalog', 'excerpt'], overflow: 'truncate', retry: 'safe' },
     routes: [
       {
         id: 'inspect', description: 'Inspect bounded Memory Space health or routing metadata without exposing storage paths or credentials.', capability: 'status',
         inputSchema: { type: 'object', required: ['section'], additionalProperties: false, properties: { section: { type: 'string', enum: ['directory', 'health'] } } },
         maxCalls: 4, maxResults: 1, maxCharacters: 12_000,
+        semantics: { actions: ['read'], targets: ['catalog'], effects: [], representations: ['catalog'], overflow: 'unavailable', retry: 'safe' },
       },
       {
         id: 'recall', description: 'Recall evidence only from Memory Spaces pinned into this View.', capability: 'recall',
@@ -294,6 +297,7 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
           },
         },
         maxCalls: 4, maxResults: 20, maxCharacters: 16_000,
+        semantics: { actions: ['read'], targets: ['records'], effects: [], representations: ['excerpt'], overflow: 'truncate', retry: 'safe' },
       },
       {
         id: 'related', description: 'Traverse related memories only from evidence already admitted by this View.', capability: 'related',
@@ -302,11 +306,15 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
           properties: { id: { type: 'string' }, depth: { type: 'integer' }, edge: { type: 'string' }, memoryBodyId: { type: 'string' } },
         },
         maxCalls: 4, maxResults: 20, maxCharacters: 16_000,
+        semantics: { actions: ['read'], targets: ['records', 'relations'], effects: [], representations: ['excerpt'], overflow: 'truncate', retry: 'safe' },
       },
     ],
     actions: [
       {
         id: 'manage-spaces', description: 'Create a Memory Space under the configured persistence policy, or update/merge spaces in this View scope.', capability: 'write',
+        semantics: { actions: ['record'], targets: ['catalog', 'records', 'relations', 'visibility'], effects: [
+          { target: 'catalog', mode: 'write' }, { target: 'records', mode: 'write' }, { target: 'relations', mode: 'write' }, { target: 'visibility', mode: 'write' },
+        ], representations: ['receipt'], overflow: 'unavailable', retry: 'unsafe' },
         inputSchema: {
           type: 'object', required: ['operation'], additionalProperties: false,
           properties: {
@@ -317,7 +325,8 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
         },
       },
       {
-        id: 'remember', description: 'Persist an exact memory in a Memory Space authorized for this View.', capability: 'write',
+        id: 'remember', description: 'Record memory using an authorized Space and its Provider; the receipt distinguishes accepted extraction from commitment.', capability: 'write',
+        semantics: { actions: ['record'], targets: ['records'], effects: [{ target: 'records', mode: 'write' }], representations: ['receipt'], overflow: 'unavailable', retry: 'unsafe' },
         inputSchema: {
           type: 'object', required: ['content'], additionalProperties: false,
           properties: {
@@ -328,13 +337,16 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
       },
       {
         id: 'link', description: 'Link two evidence items admitted by this View and owned by the same Memory Space.', capability: 'link',
+        semantics: { actions: ['record'], targets: ['relations'], effects: [{ target: 'relations', mode: 'write' }], representations: ['receipt'], overflow: 'unavailable', retry: 'unsafe' },
         inputSchema: {
           type: 'object', required: ['sourceId', 'targetId'], additionalProperties: false,
           properties: { sourceId: { type: 'string' }, targetId: { type: 'string' }, memoryBodyId: { type: 'string' }, type: { type: 'string' }, weight: { type: 'number' }, reason: { type: 'string' } },
         },
       },
       {
-        id: 'forget', description: 'Forget one evidence item admitted by this View.', capability: 'forget',
+        id: 'forget', description: 'Forget one returned evidence item using its Provider deletion mode (soft or hard); not a guarantee of universal erasure.', capability: 'forget',
+        semantics: { actions: ['forget'], targets: ['records', 'visibility'], effects: [{ target: 'records', mode: 'delete' }, { target: 'visibility', mode: 'write' }],
+          representations: ['receipt'], overflow: 'unavailable', retry: 'unsafe' },
         inputSchema: { type: 'object', required: ['id'], additionalProperties: false, properties: { id: { type: 'string' }, memoryBodyId: { type: 'string' } } },
       },
     ],
@@ -362,18 +374,33 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
       while (admittedByView.size > 128) admittedByView.delete(admittedByView.keys().next().value!)
     }
     const evidence = (
-      request: { view: { id: string }; route: { id: string } },
+      request: { view: { id: string }; route: MemoryViewRoute },
       items: Insight[],
       unavailable?: string,
-    ): MemoryEvidence => ({
+    ): MemoryEvidence => {
+      const catalog = request.route.sourceRouteId === 'inspect'
+      let remaining = request.route.maxCharacters ?? 16_000
+      let truncated = false
+      const visible = items.slice(0, request.route.maxResults ?? 20).flatMap(item => {
+        if (remaining <= 0 || (catalog && item.content.length > remaining)) { truncated = true; return [] }
+        const content = catalog ? item.content : truncate(item.content, remaining)
+        remaining -= content.length
+        const clipped = content !== item.content
+        truncated ||= clipped
+        return [{ item, content, clipped }]
+      })
+      truncated ||= visible.length < items.length
+      // Follow-up authority is limited to the evidence actually returned under the View budget.
+      if (!catalog) admit(request.view.id, visible.map(({ item }) => item))
+      return {
       id: `evidence:${randomUUID()}`,
       viewId: request.view.id,
       routeId: request.route.id,
       sourceInstanceKey: context.sourceInstanceKey,
       observedAt: new Date().toISOString(),
-      items: items.map(item => ({
+      items: visible.map(({ item, content, clipped }) => ({
         id: item.id,
-        text: item.content,
+        text: content,
         ...(item.normalizedScore ?? item.score) === undefined ? {} : { score: item.normalizedScore ?? item.score },
         ...(item.createdAt === undefined ? {} : { revision: item.createdAt }),
         provenance: {
@@ -391,10 +418,20 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
           ...(item.edgeType === undefined ? {} : { edgeType: item.edgeType }),
           ...(item.externalUri === undefined ? {} : { externalUri: item.externalUri }),
         },
+        result: catalog ? { representation: 'catalog', coverage: 'partial', omitted: 'Bounded routing/health metadata, not a semantic summary of stored memories.' } : {
+          representation: 'excerpt', coverage: clipped ? 'partial' : 'unknown',
+          ...(clipped ? { omitted: 'Provider evidence clipped to the View output budget; not a semantic summary.' } : {}),
+          expansion: { unavailable: 'Provider evidence may be a snippet; external URIs do not establish a full-content read route.' },
+          ...((item.normalizedScore ?? item.score) === undefined ? {} : {
+            score: { basis: `${context.sourceInstanceKey}/${item.memoryProviderId ?? 'provider'}`, meaning: 'Provider-scoped retrieval relevance, not calibrated confidence across Sources or queries.' },
+          }),
+        },
       })),
-      truncated: false,
+      truncated,
       ...(unavailable === undefined ? {} : { unavailable }),
-    })
+      ...(catalog && visible.length === 0 ? { unavailable: 'Inspection cannot fit the View budget as valid catalog JSON.' } : {}),
+    }
+    }
     return {
       facts(request): MemorySourceFacts {
         const { active, revision } = sourceState(request.scope)
@@ -423,12 +460,17 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
         const { all, active, revision } = prepared.get(request.scope) ?? sourceState(request.scope)
         prepared.delete(request.scope)
         if (revision !== request.expectedRevision) throw new Error('Memory Spaces projection revision changed during composition')
+        const cover = `${active.length} active of ${all.length} configured Memory Space${all.length === 1 ? '' : 's'} available through scoped recall.`
+        if (request.representation === 'catalog' && cover.length > request.maxCharacters) throw new Error('Memory Spaces catalog cannot fit the requested projection budget')
         return {
           fragments: request.includeProjection ? [{
             id: `${context.sourceInstanceKey}/projection`, sourceInstanceKey: context.sourceInstanceKey, mode: request.mode,
-            text: truncate(`${active.length} active of ${all.length} configured Memory Space${all.length === 1 ? '' : 's'} available through scoped recall.`, request.maxCharacters),
+            text: truncate(cover, request.maxCharacters),
             revision,
             provenance: { sourceTypeId: 'memory-spaces' },
+            result: cover.length <= request.maxCharacters && request.representation !== 'excerpt' ? { representation: 'catalog', coverage: 'complete' } : {
+              representation: 'excerpt', sourceRepresentation: 'catalog', coverage: 'partial', omitted: 'Bounded catalog text, not a summary of Provider memory contents.',
+            },
           }] : [],
           readGrant: {
             id: `${context.sourceInstanceKey}/grant/${revision}`,
@@ -467,11 +509,10 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
           const result = await service.search({
             query: text(input.query, 'query', 2_000)!,
             ...(mode === undefined ? {} : { mode }),
-            limit: integer(input.limit, 10, 1, 20),
+            limit: Math.min(request.route.maxResults ?? 20, integer(input.limit, 10, 1, 20)),
             memoryBodyIds: requestedBodies,
             ...(category === undefined ? {} : { category }), ...(source === undefined ? {} : { source }), ...(intent === undefined ? {} : { intent }),
           }, request.signal)
-          admit(request.view.id, result.results)
           return evidence(request, result.results, result.results.length === 0 ? result.hint : undefined)
         }
         if (request.route.sourceRouteId === 'related') {
@@ -485,7 +526,6 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
           const edge = text(input.edge, 'edge', 30, false) as EdgeType | undefined
           if (edge !== undefined && !EDGES.has(edge)) throw new Error(`unsupported edge: ${edge}`)
           const results = await service.related(id, integer(input.depth, 2, 1, 5), edge, request.signal, owner)
-          admit(request.view.id, results)
           return evidence(request, results)
         }
         throw new Error(`unsupported Memory Spaces Route: ${request.route.sourceRouteId}`)

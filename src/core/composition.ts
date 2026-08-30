@@ -674,6 +674,14 @@ export class MemoryCompositionGeneration {
     const grant = view.readGrants.find(candidate => candidate.id === route.readGrantId && candidate.sourceInstanceKey === route.sourceInstanceKey)
     if (grant === undefined) throw new Error(`memory View Route has no valid ReadGrant: ${routeId}`)
     assertInputSchema(route.inputSchema, input, 'memory Route input')
+    const executionBudget = normalizeBudget(budget)
+    const maxCharacters = Math.min(route.maxCharacters ?? executionBudget.maxEvidenceCharacters, executionBudget.maxEvidenceCharacters)
+    const maxResults = Math.min(route.maxResults ?? executionBudget.maxEvidenceResults, executionBudget.maxEvidenceResults)
+    const boundedRoute = deepFreeze({ ...route, maxCharacters, maxResults,
+      ...(route.budgets === undefined ? {} : { budgets: route.budgets.map(value => value.resource === 'output' && value.measurement === 'exact'
+        ? { ...value, max: Math.min(value.max, value.unit === 'characters' ? maxCharacters : value.unit === 'items' ? maxResults : value.max) }
+        : value) }),
+    })
     signal?.throwIfAborted()
     const counter = `${view.id}\u0000${route.id}`
     const calls = this.routeCalls.get(counter) ?? 0
@@ -683,9 +691,9 @@ export class MemoryCompositionGeneration {
     ledger.set(counter, calls + 1)
     // A dispatched failure still consumed a call and may have performed declared usage bookkeeping.
     return normalizeEvidence(await source.runtime.query({
-      view: deepFreeze({ id: view.id, scope: view.scope }), route, grant,
+      view: deepFreeze({ id: view.id, scope: view.scope }), route: boundedRoute, grant,
       input: jsonClone(input, 'memory Route input'), ...(signal === undefined ? {} : { signal }),
-    }), view, route, normalizeBudget(budget), this.now)
+    }), view, boundedRoute, executionBudget, this.now)
   }
 
   async executeAction(view: ComposableMemoryView, offerId: string, input: MemoryJsonValue, authorize: (offer: MemoryActionOffer) => boolean | Promise<boolean>, signal?: AbortSignal): Promise<MemoryMutationReceipt> {

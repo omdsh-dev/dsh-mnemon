@@ -67,9 +67,19 @@ describe('standalone runtime Source', () => {
       const receipt = await first.executeAction(offer.id,
         { action: 'add', target: 'memory', content: 'work-only sentinel' }, () => true)
       expect(receipt.status).toBe('succeeded')
+      expect(receipt.completion).toBe('committed')
+      expect(receipt.committedAt).toEqual(expect.any(String))
+      expect(offer.semantics).toMatchObject({ actions: ['record', 'forget'], effects: [
+        { target: 'records', mode: 'write' }, { target: 'records', mode: 'delete' },
+      ] })
       first.release()
       const next = await runner.beginTurn({ scope: { storage: 'custom', workspaceId: workspace } })
       expect(next.view.projection.find(value => value.sourceInstanceKey === 'source:work')?.text).toContain('work-only sentinel')
+      expect(next.view.projection.find(value => value.sourceInstanceKey === 'source:work')?.result).toMatchObject({
+        representation: 'excerpt', sourceRepresentation: 'raw', coverage: 'partial', state: 'active',
+        expansion: { unavailable: expect.any(String) },
+      })
+      expect(next.view.routes).toEqual([]) // Working context does not imply a summary tree or full-history reader.
       expect(next.view.projection.find(value => value.sourceInstanceKey === 'source:personal')?.text).not.toContain('work-only sentinel')
       next.release()
     } finally {
