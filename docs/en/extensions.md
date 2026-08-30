@@ -44,6 +44,8 @@ Define a `MemorySourceDefinition` with `defineMemorySource`. Its manifest declar
 
 The complete `ComposableMemoryView` stays in the Host and composition tests, never in Source callbacks. Do not inspect other instances' projections or grants through `request.view`; writes needing their own pinned read scope use `request.grant` directly.
 
+`facts(request, signal)` and `project(request, signal)` receive cancellation separately from the JSON input. Forward it to network reads and never write data in these callbacks. Core reads independent Sources concurrently with a default 10-second deadline per read. The DSH Host uses its existing `timeoutMs`; independent tests can set `MemoryCompositionRunner({ sourceTimeoutMs })`. Timeouts and remote failures produce sanitized `view.diagnostics`; malformed protocols still reject the View. Cancelling a turn is never downgraded to an optional Source outage. Deadlines cannot interrupt synchronous code blocking the event loop: this is not a malicious-plugin sandbox.
+
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
 import { installMemory } from 'dsh-mnemon/extension-sdk'
@@ -63,6 +65,8 @@ An Entry id identifies an instance; type id identifies its implementation. Never
 ## Strategy
 
 Use `defineMemoryStrategy` and install with `{ strategies: [definition] }`. Declare deterministic composition, supported roles and maxima. Return a `MemoryViewSpec` selecting exact Source keys, eager/routed projection budgets and Source-local route/action ids. No network, storage or secret access belongs here.
+
+Selected Sources are required by default. Set `required: false` to explicitly permit omission when that instance is unavailable or its projection fails. Required failures reject the turn without silently switching strategies. The default three-tier Strategy selects available Sources as optional so an external read failure does not remove healthy layers. A Strategy must explicitly reject a missing required instance rather than return an empty selection.
 
 [external-strategy.ts](../../scripts/fixtures/plugin-consumer/src/external-strategy.ts) is a working explicit-selector example. Select its type id with the existing `mnemon.memoryTopology.strategyId` setting in the default Host. More than one applicable Strategy is an error, not “last imported wins”. A profile replaces default Entries explicitly; installing a package alone is not authority to replace them.
 

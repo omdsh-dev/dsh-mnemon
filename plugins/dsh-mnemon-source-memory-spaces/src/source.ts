@@ -397,34 +397,26 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
     })
     return {
       facts(request): MemorySourceFacts {
-        try {
-          const { active, revision } = sourceState(request.scope)
-          const routeIds: string[] = ['inspect',
-            ...(active.some(body => body.provider.capabilities.search) ? ['recall'] : []),
-            ...(active.some(body => body.provider.capabilities.related) ? ['related'] : []),
-          ]
-          const actionIds: string[] = service.config.writeEnabled ? ['manage-spaces',
-            ...(service.bodyDirectory().providers.some(provider => provider.capabilities.remember) ? ['remember'] : []),
-            ...(active.some(body => body.provider.capabilities.link) ? ['link'] : []),
-            ...(active.some(body => body.provider.capabilities.forget) ? ['forget'] : []),
-          ] : []
-          const capabilities: MemoryCapability[] = ['status', 'project']
-          if (routeIds.includes('recall')) capabilities.push('recall')
-          if (routeIds.includes('related')) capabilities.push('related')
-          if (actionIds.includes('manage-spaces') || actionIds.includes('remember')) capabilities.push('write')
-          if (actionIds.includes('link')) capabilities.push('link')
-          if (actionIds.includes('forget')) capabilities.push('forget')
-          return {
-            sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: 'memory-spaces', role: 'durable-evidence',
-            availability: active.length === 0 ? 'degraded' : 'ready', revision, capabilities: [...capabilities], routeIds, actionIds,
-            hints: { activeCount: active.length, providerCount: new Set(active.map(body => body.provider.id)).size },
-          }
-        } catch (error) {
-          return {
-            sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: 'memory-spaces', role: 'durable-evidence', availability: 'unavailable',
-            revision: 'unavailable:memory-spaces', capabilities: ['status'], routeIds: [], actionIds: [],
-            hints: { reason: error instanceof Error ? error.message : String(error) },
-          }
+        const { active, revision } = sourceState(request.scope)
+        const routeIds: string[] = ['inspect',
+          ...(active.some(body => body.provider.capabilities.search) ? ['recall'] : []),
+          ...(active.some(body => body.provider.capabilities.related) ? ['related'] : []),
+        ]
+        const actionIds: string[] = service.config.writeEnabled ? ['manage-spaces',
+          ...(service.bodyDirectory().providers.some(provider => provider.capabilities.remember) ? ['remember'] : []),
+          ...(active.some(body => body.provider.capabilities.link) ? ['link'] : []),
+          ...(active.some(body => body.provider.capabilities.forget) ? ['forget'] : []),
+        ] : []
+        const capabilities: MemoryCapability[] = ['status', 'project']
+        if (routeIds.includes('recall')) capabilities.push('recall')
+        if (routeIds.includes('related')) capabilities.push('related')
+        if (actionIds.includes('manage-spaces') || actionIds.includes('remember')) capabilities.push('write')
+        if (actionIds.includes('link')) capabilities.push('link')
+        if (actionIds.includes('forget')) capabilities.push('forget')
+        return {
+          sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: 'memory-spaces', role: 'durable-evidence',
+          availability: active.length === 0 ? 'degraded' : 'ready', revision, capabilities: [...capabilities], routeIds, actionIds,
+          hints: { activeCount: active.length, providerCount: new Set(active.map(body => body.provider.id)).size },
         }
       },
       project(request) {

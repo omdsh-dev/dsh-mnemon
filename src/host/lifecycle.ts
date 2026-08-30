@@ -412,7 +412,7 @@ class MnemonAgentLifecycle {
     if (context.agent !== undefined && context.agent.id !== this.agent.id) return next()
     const turn = this.openTurn()
     if (turn === undefined || context.signal?.aborted === true) return next()
-    await this.memoryTurn?.begin(turn, context.signal)
+    await this.pinView(turn, context.signal)
     const assembled = await next()
     return applyAgentMemoryViewWake(assembled, this.memoryWake())
   }
@@ -427,7 +427,7 @@ class MnemonAgentLifecycle {
     return open
   }
 
-  private async pinView(turn: number): Promise<void> {
+  private async pinView(turn: number, signal?: AbortSignal): Promise<void> {
     if (this.pinnedView?.turn === turn) return
     this.releaseView()
     const graph: MnemonRuntimeGraph | undefined = this.runtimeSource?.forAgent(this.agent)
@@ -440,7 +440,7 @@ class MnemonAgentLifecycle {
       sessionId: this.agent.id,
       agentId: this.agent.id,
     }
-    const context = await manager.beginTurn(`${this.agent.id}:${turn}`, scope)
+    const context = await manager.beginTurn(`${this.agent.id}:${turn}`, scope, 'agent.root-turn', signal)
     let releaseRuntime: (() => void) | undefined
     try {
       releaseRuntime = this.runtimeSource.bindAgentRuntime(this.agent.id, graph)

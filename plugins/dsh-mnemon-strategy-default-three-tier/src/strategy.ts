@@ -43,6 +43,7 @@ export const DEFAULT_THREE_TIER_VIEW_STRATEGY = defineMemoryStrategy({
       strategyTypeId: 'default-three-tier',
       sources: selected.map(source => ({
         sourceInstanceKey: source.sourceInstanceKey,
+        required: false,
         ...(allocation.get(source.sourceInstanceKey) === undefined ? {} : { projection: allocation.get(source.sourceInstanceKey)! }),
         routeIds: source.routeIds.filter(route => route === 'inspect' || route === 'search' || route === 'recall' || route === 'related'),
         actionIds: [...source.actionIds],

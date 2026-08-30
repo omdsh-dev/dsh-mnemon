@@ -106,21 +106,13 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
           sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: 'documents', role: 'narrative', availability: 'unavailable',
           revision: 'unavailable:no-workspace', capabilities: ['status'], routeIds: [], actionIds: [], hints: { reason: 'no-workspace' },
         }
-        try {
-          const current = snapshot(root)!
-          prepared.set(request.scope, current)
-          const active = current.documents.filter(document => document.status === 'active' && document.healthy)
-          return {
-            sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: 'documents', role: 'narrative', availability: 'ready',
-            revision: current.revision, capabilities: ['status', 'project', 'search', 'read', 'write'], routeIds: ['search'], actionIds: ['manage'],
-            hints: { activeCount: active.length },
-          }
-        } catch (error) {
-          return {
-            sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: 'documents', role: 'narrative', availability: 'unavailable',
-            revision: 'unavailable:documents', capabilities: ['status'], routeIds: [], actionIds: [],
-            hints: { reason: error instanceof Error ? error.message : String(error) },
-          }
+        const current = snapshot(root)!
+        prepared.set(request.scope, current)
+        const active = current.documents.filter(document => document.status === 'active' && document.healthy)
+        return {
+          sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: 'documents', role: 'narrative', availability: 'ready',
+          revision: current.revision, capabilities: ['status', 'project', 'search', 'read', 'write'], routeIds: ['search'], actionIds: ['manage'],
+          hints: { activeCount: active.length },
         }
       },
       project(request) {

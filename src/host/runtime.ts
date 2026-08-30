@@ -43,6 +43,7 @@ export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot: string
   const userDirectory = config.runtimeUserScope === 'global' ? createStorageRoot({ storageScope: 'global' }).effectiveDataDir() : directory
   const attachment = extensions.attachGeneration({
     strategyTypeId: config.memoryTopology.strategyId,
+    sourceTimeoutMs: config.timeoutMs,
     sourceCapabilities: installed => MEMORY_CAPABILITIES.filter(capability =>
       (config.writeEnabled || !['write', 'archive', 'link', 'forget', 'maintain', 'import'].includes(capability))
       && allowsParticipation(config, installed.definition.manifest.typeId, capability, 'automatic')),

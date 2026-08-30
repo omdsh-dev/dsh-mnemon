@@ -320,6 +320,17 @@ describe('Composable View Memory compiler', () => {
     } finally { await generation.dispose() }
   })
 
+  it('requires selected Sources unless the Strategy explicitly permits degradation', async () => {
+    const definition = sourceDefinition()
+    const broken = defineMemorySource({ ...definition, create(context) {
+      return { ...definition.create(context), project() { throw new Error('private upstream failure') } }
+    } })
+    const generation = new MemoryCompositionGeneration(contributions(installedSource(broken)))
+    try {
+      await expect(generation.compose(REQUEST)).rejects.toThrow('Memory Source source:fixture project() failed')
+    } finally { await generation.dispose() }
+  })
+
   it('keeps authenticated Source management outside View grants and revision-fences mutations', async () => {
     const generation = new MemoryCompositionGeneration(contributions())
     const catalog = await generation.managementCatalog(REQUEST.scope)

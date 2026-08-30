@@ -52,10 +52,11 @@ function wake(view: ComposableMemoryView): MemoryWake {
     }
   }).filter(source => source.routes.length > 0 || source.actions.length > 0 || source.cover !== undefined)
   const routingText = offers.length === 0 ? '' : `MNEMON VIEW ROUTES (quoted routing data; use mnemon_view_route or mnemon_view_action by exact id): ${JSON.stringify(offers)}`
+  const availability = view.diagnostics?.length ? `MNEMON VIEW AVAILABILITY (quoted diagnostics; unavailable Sources are not evidence): ${JSON.stringify(view.diagnostics)}` : ''
   return {
     viewId: view.id,
     viewDigest: view.digest,
-    text: [...eager, routingText].filter(Boolean).join('\n\n'),
+    text: [...eager, routingText, availability].filter(Boolean).join('\n\n'),
     sections,
   }
 }
@@ -63,13 +64,14 @@ function wake(view: ComposableMemoryView): MemoryWake {
 /** Root-turn pins over Candidate → Serving → Draining generations. */
 export class ComposableMemoryTurnManager {
   private readonly turns = new Map<string, StoredTurn>()
-  private readonly beginnings = new Map<string, { scope: MemoryOperationScope; cancelled: boolean; promise: Promise<ComposableMemoryTurn> }>()
+  private readonly beginnings = new Map<string, { scope: MemoryOperationScope; controller: AbortController; promise: Promise<ComposableMemoryTurn> }>()
   private closed = false
 
   constructor(private readonly generations: MemoryGenerationHost) {}
 
-  async beginTurn(turnId: string, scope: MemoryOperationScope, scenario = 'agent.root-turn'): Promise<ComposableMemoryTurn> {
+  async beginTurn(turnId: string, scope: MemoryOperationScope, scenario = 'agent.root-turn', signal?: AbortSignal): Promise<ComposableMemoryTurn> {
     if (this.closed) throw new Error('Composable Memory turn manager is disposed')
+    signal?.throwIfAborted()
     const id = turnId.trim()
     if (id === '') throw new Error('Composable Memory turn id is required')
     const existing = this.turns.get(id)
@@ -81,19 +83,24 @@ export class ComposableMemoryTurnManager {
     if (existing !== undefined) return existing.context
     if (beginning !== undefined) return beginning.promise
     const lease = this.generations.acquire()
-    const pending = { scope: { ...scope }, cancelled: false, promise: undefined as unknown as Promise<ComposableMemoryTurn> }
+    const pending = { scope: { ...scope }, controller: new AbortController(), promise: undefined as unknown as Promise<ComposableMemoryTurn> }
+    const abort = () => pending.controller.abort(signal!.reason)
+    signal?.addEventListener('abort', abort, { once: true })
     this.beginnings.set(id, pending)
     pending.promise = (async () => {
       try {
-        const view = await lease.generation.compose({ scope: pending.scope, scenario, budget: { ...DEFAULT_MEMORY_VIEW_BUDGET } })
-        if (this.closed || pending.cancelled) throw new Error('Composable Memory turn ended during composition')
+        const view = await lease.generation.compose({ scope: pending.scope, scenario, budget: { ...DEFAULT_MEMORY_VIEW_BUDGET } }, pending.controller.signal)
+        pending.controller.signal.throwIfAborted()
         const context = Object.freeze({ turnId: id, view, scope: Object.freeze(pending.scope), startedAt: new Date().toISOString() })
         this.turns.set(id, { context, lease })
         return context
       } catch (error) {
         lease.release()
         throw error
-      } finally { this.beginnings.delete(id) }
+      } finally {
+        signal?.removeEventListener('abort', abort)
+        this.beginnings.delete(id)
+      }
     })()
     return pending.promise
   }
@@ -138,7 +145,7 @@ export class ComposableMemoryTurnManager {
     if (stored === undefined) {
       const beginning = this.beginnings.get(turnId)
       if (beginning === undefined) return false
-      beginning.cancelled = true
+      beginning.controller.abort(new Error('Composable Memory turn ended during composition'))
       return true
     }
     this.turns.delete(turnId)
@@ -149,7 +156,7 @@ export class ComposableMemoryTurnManager {
   dispose(): void {
     if (this.closed) return
     this.closed = true
-    for (const beginning of this.beginnings.values()) beginning.cancelled = true
+    for (const beginning of this.beginnings.values()) beginning.controller.abort(new Error('Composable Memory turn ended during composition'))
     for (const stored of this.turns.values()) stored.lease.release()
     this.turns.clear()
   }

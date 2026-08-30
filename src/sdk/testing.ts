@@ -36,6 +36,7 @@ export interface MemoryTestOptions {
   sourceConfiguration?: (source: MemoryTestSource) => Readonly<Record<string, MemoryJsonValue>>
   sourceCapabilities?: (source: MemoryTestSource) => readonly MemoryCapability[]
   now?: () => Date
+  sourceTimeoutMs?: number
 }
 
 /** JSON-only observations for composition/replacement tests, not engine access. */
@@ -65,6 +66,7 @@ export class MemoryCompositionRunner {
   readonly #entryIds = new WeakMap<object, string>()
   readonly #entries = new Map<string, { dispose(): Promise<void> }>()
   readonly #turns = new Set<() => void>()
+  readonly #beginnings = new Set<AbortController>()
   #closed = false
   #closing: Promise<void> | undefined
 
@@ -114,16 +116,21 @@ export class MemoryCompositionRunner {
     }
   }
 
-  async beginTurn(request: Partial<MemoryViewRequest> = {}): Promise<MemoryTestTurn> {
+  async beginTurn(request: Partial<MemoryViewRequest> = {}, signal?: AbortSignal): Promise<MemoryTestTurn> {
     this.#assertOpen()
+    signal?.throwIfAborted()
     const budget = { ...(request.budget ?? DEFAULT_MEMORY_VIEW_BUDGET) }
     const lease = this.#generations.acquire()
+    const controller = new AbortController()
+    const abort = () => controller.abort(signal!.reason)
+    signal?.addEventListener('abort', abort, { once: true })
+    this.#beginnings.add(controller)
     try {
       const view = await lease.generation.compose({
         scope: request.scope ?? { storage: 'custom' },
         scenario: request.scenario ?? 'plugin-test',
         budget,
-      })
+      }, controller.signal)
       this.#assertOpen()
       let active = true
       const assertActive = () => {
@@ -156,6 +163,9 @@ export class MemoryCompositionRunner {
     } catch (error) {
       lease.release()
       throw error
+    } finally {
+      signal?.removeEventListener('abort', abort)
+      this.#beginnings.delete(controller)
     }
   }
 
@@ -202,6 +212,7 @@ export class MemoryCompositionRunner {
   dispose(): Promise<void> {
     if (this.#closing !== undefined) return this.#closing
     this.#closed = true
+    for (const controller of this.#beginnings) controller.abort(new Error('MemoryCompositionRunner is disposed'))
     for (const release of this.#turns) release()
     this.#closing = (async () => {
       const failures: unknown[] = []

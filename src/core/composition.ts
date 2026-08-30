@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { setMaxListeners } from 'node:events'
 import type {
   ComposableMemoryView,
   MemoryActionOffer,
@@ -26,6 +27,7 @@ import type {
 import { DEFAULT_MEMORY_VIEW_BUDGET } from './contracts/index.ts'
 import type { InstalledMemorySource, InstalledMemoryStrategy, MemoryContributionSnapshot } from './contributions.ts'
 import { canonicalMemoryJson, deepFreeze, defineMemorySource, defineMemoryStrategy, id, jsonClone, positiveInteger, requiredText, uniqueIds, validateCapabilities, validateProvenance } from './definitions.ts'
+import { readSource, SourceReadFailure } from './source-calls.ts'
 
 const INSTANCE_KEY = /^(?:source|strategy):[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,299}$/u
 
@@ -83,6 +85,8 @@ export interface CompileMemoryGenerationOptions {
   strategyTypeId?: string
   /** Host adapter supplies scope defaults; each result is captured and digested. */
   sourceConfiguration?: (source: InstalledMemorySource) => Readonly<Record<string, MemoryJsonValue>>
+  /** Per-Source facts/project deadline. Does not turn timed-out writes into failed receipts. */
+  sourceTimeoutMs?: number
   now?: () => Date
 }
 
@@ -152,13 +156,17 @@ function normalizeViewSpec(value: MemoryViewSpec, strategy: InstalledMemoryStrat
   const seen = new Set<string>()
   let routes = 0
   let actions = 0
-  const normalizedSources: MemoryViewSourceSpec[] = value.sources.map(source => {
+  const normalizedSources: MemoryViewSourceSpec[] = value.sources.flatMap(source => {
     const key = instanceKey(source.sourceInstanceKey, 'source')
     if (seen.has(key)) throw new Error(`memory Strategy selected Source twice: ${key}`)
     seen.add(key)
     const sourceFacts = facts.get(key)
     if (sourceFacts === undefined) throw new Error(`memory Strategy selected unavailable Source: ${key}`)
-    if (sourceFacts.availability === 'unavailable') throw new Error(`memory Strategy selected unavailable Source runtime: ${key}`)
+    if (source.required !== undefined && typeof source.required !== 'boolean') throw new Error(`memory Source requirement must be boolean: ${key}`)
+    if (sourceFacts.availability === 'unavailable') {
+      if (source.required === false) return []
+      throw new Error(`memory Strategy selected unavailable required Source runtime: ${key}`)
+    }
     const routeIds = uniqueIds(source.routeIds ?? [], `memory ViewSpec route id for ${key}`)
     const availableRoutes = new Set(sourceFacts.routeIds)
     for (const routeId of routeIds) if (!availableRoutes.has(routeId)) throw new Error(`memory Strategy selected unavailable route: ${key}/${routeId}`)
@@ -172,7 +180,7 @@ function normalizeViewSpec(value: MemoryViewSpec, strategy: InstalledMemoryStrat
       maxCharacters: Math.min(positiveInteger(source.projection.maxCharacters, `memory projection budget for ${key}`, 10_000_000), budget.maxProjectionCharacters),
     }
     if (projection !== undefined && projection.mode !== 'eager' && projection.mode !== 'routed') throw new Error(`unsupported memory projection mode: ${String(projection.mode)}`)
-    return deepFreeze({ sourceInstanceKey: key, ...(projection === undefined ? {} : { projection }), routeIds, actionIds })
+    return [deepFreeze({ sourceInstanceKey: key, required: source.required !== false, ...(projection === undefined ? {} : { projection }), routeIds, actionIds })]
   })
   if (routes > Math.min(strategy.definition.manifest.maxRoutes, budget.maxRoutes)) throw new Error('memory Strategy selected too many Routes')
   if (actions > Math.min(strategy.definition.manifest.maxActions, budget.maxActions)) throw new Error('memory Strategy selected too many ActionOffers')
@@ -312,6 +320,7 @@ export class MemoryCompositionGeneration {
   private readonly permissions = new Map<string, readonly MemoryCapability[]>()
   private readonly now: () => Date
   private readonly routeCalls = new Map<string, number>()
+  private readonly sourceTimeoutMs: number
   private disposed = false
 
   constructor(snapshotValue: MemoryContributionSnapshot, options: CompileMemoryGenerationOptions = {}) {
@@ -320,6 +329,7 @@ export class MemoryCompositionGeneration {
     if (snapshot.strategies.length === 0) throw new Error('memory composition requires a Strategy')
     this.strategy = selectStrategy(snapshot.strategies, options)
     this.now = options.now ?? (() => new Date())
+    this.sourceTimeoutMs = positiveInteger(options.sourceTimeoutMs ?? 10_000, 'memory Source timeoutMs', 300_000)
     const configurations = new Map<string, Readonly<Record<string, MemoryJsonValue>>>()
     const created = new Map<string, RuntimeSource>()
     try {
@@ -345,6 +355,7 @@ export class MemoryCompositionGeneration {
     this.sources = created
     const generationInput = {
       contributionRevision: snapshot.revision,
+      sourceTimeoutMs: this.sourceTimeoutMs,
       strategy: {
         instanceKey: this.strategy.instanceKey,
         manifest: this.strategy.definition.manifest,
@@ -370,12 +381,45 @@ export class MemoryCompositionGeneration {
     })
   }
 
-  async compose(requestValue: MemoryViewRequest): Promise<ComposableMemoryView> {
+  async compose(requestValue: MemoryViewRequest, signal?: AbortSignal): Promise<ComposableMemoryView> {
+    signal?.throwIfAborted()
+    const controller = new AbortController()
+    // One owned cancellation signal may serve more than ten independent Sources.
+    setMaxListeners(0, controller.signal)
+    const abort = () => controller.abort(signal!.reason)
+    signal?.addEventListener('abort', abort, { once: true })
+    try { return await this.composeView(requestValue, controller.signal) }
+    finally {
+      controller.abort()
+      signal?.removeEventListener('abort', abort)
+    }
+  }
+
+  private async sourceFacts(source: RuntimeSource, request: MemoryViewRequest, diagnostics: MemoryCompositionDiagnostic[], signal?: AbortSignal): Promise<MemorySourceFacts> {
+    let value: MemorySourceFacts
+    try {
+      value = await readSource(source.installed.instanceKey, 'facts', this.sourceTimeoutMs,
+        abort => source.runtime.facts(request, abort), signal)
+    } catch (error) {
+      if (!(error instanceof SourceReadFailure)) throw error
+      diagnostics.push(error.diagnostic)
+      return {
+        sourceInstanceKey: source.installed.instanceKey,
+        sourceTypeId: source.installed.definition.manifest.typeId,
+        role: source.installed.definition.manifest.role,
+        availability: 'unavailable', revision: 'unavailable', capabilities: [], routeIds: [], actionIds: [],
+      }
+    }
+    // Invalid protocol/authority claims remain fatal, not ordinary remote outages.
+    return normalizeFacts(source.installed, value)
+  }
+
+  private async composeView(requestValue: MemoryViewRequest, signal: AbortSignal): Promise<ComposableMemoryView> {
     this.assertOpen()
     const request = jsonClone({ ...requestValue, scenario: requiredText(requestValue.scenario, 'memory View scenario', 300), budget: normalizeBudget(requestValue.budget) }, 'memory View request')
-    const facts = new Map<string, MemorySourceFacts>()
-    for (const source of this.sources.values()) {
-      const value = structuredClone(normalizeFacts(source.installed, await source.runtime.facts(request)))
+    const diagnostics: MemoryCompositionDiagnostic[] = []
+    const entries = await Promise.all([...this.sources.values()].map(async source => {
+      const value = structuredClone(await this.sourceFacts(source, request, diagnostics, signal))
       const permissions = this.permissions.get(source.installed.instanceKey)
       if (permissions !== undefined) {
         value.capabilities = value.capabilities.filter(capability => permissions.includes(capability))
@@ -383,31 +427,50 @@ export class MemoryCompositionGeneration {
         value.actionIds = value.actionIds.filter(id => source.installed.definition.manifest.actions?.some(action => action.id === id && permissions.includes(action.capability)))
         if (value.capabilities.length === 0) value.availability = 'unavailable'
       }
-      facts.set(source.installed.instanceKey, value)
-    }
+      return [source.installed.instanceKey, value] as const
+    }))
+    signal.throwIfAborted()
+    const facts = new Map(entries)
     const factsList = deepFreeze([...facts.values()].map(value => jsonClone(value, 'memory Source facts')))
     const proposed = this.strategy.definition.compose(request, factsList)
     const replayed = this.strategy.definition.compose(request, factsList)
     if (canonicalMemoryJson(proposed, 'memory ViewSpec') !== canonicalMemoryJson(replayed, 'replayed memory ViewSpec')) {
       throw new Error(`memory Strategy is not deterministic: ${this.strategy.instanceKey}`)
     }
-    const spec = normalizeViewSpec(proposed, this.strategy, facts, request.budget)
+    let spec: MemoryViewSpec
+    try { spec = normalizeViewSpec(proposed, this.strategy, facts, request.budget) }
+    catch (error) {
+      if (diagnostics.length === 0) throw error
+      throw new Error(`${error instanceof Error ? error.message : 'Memory View rejected'}; ${diagnostics.map(item => item.message).sort().join('; ')}`)
+    }
     const projection: MemoryViewFragment[] = []
     const grants: MemoryReadGrant[] = []
     const routes: MemoryViewRoute[] = []
     const actions: MemoryActionOffer[] = []
     let projectionCharacters = 0
-    for (const sourceSpec of spec.sources) {
+    const projected = await Promise.all(spec.sources.map(async sourceSpec => {
       const source = this.sources.get(sourceSpec.sourceInstanceKey)!
       const sourceFacts = facts.get(sourceSpec.sourceInstanceKey)!
-      const contribution = normalizeContribution(source, sourceSpec, sourceFacts, await source.runtime.project({
-        scope: request.scope,
-        sourceInstanceKey: source.installed.instanceKey,
-        expectedRevision: sourceFacts.revision,
-        includeProjection: sourceSpec.projection !== undefined,
-        mode: sourceSpec.projection?.mode ?? 'routed',
-        maxCharacters: sourceSpec.projection?.maxCharacters ?? 1,
-      }))
+      let value: MemoryViewContribution
+      try {
+        value = await readSource(source.installed.instanceKey, 'project', this.sourceTimeoutMs, abort => source.runtime.project({
+          scope: request.scope,
+          sourceInstanceKey: source.installed.instanceKey,
+          expectedRevision: sourceFacts.revision,
+          includeProjection: sourceSpec.projection !== undefined,
+          mode: sourceSpec.projection?.mode ?? 'routed',
+          maxCharacters: sourceSpec.projection?.maxCharacters ?? 1,
+        }, abort), signal)
+      } catch (error) {
+        if (!(error instanceof SourceReadFailure) || sourceSpec.required !== false) throw error
+        diagnostics.push(error.diagnostic)
+        return null
+      }
+      return { source, sourceSpec, contribution: normalizeContribution(source, sourceSpec, sourceFacts, value) }
+    }))
+    signal.throwIfAborted()
+    const successful = projected.filter(value => value !== null)
+    for (const { source, sourceSpec, contribution } of successful) {
       for (const fragment of contribution.fragments) {
         projectionCharacters += fragment.text.length
         if (projectionCharacters > request.budget.maxProjectionCharacters) throw new Error('memory View projection exceeds the root-turn budget')
@@ -421,7 +484,7 @@ export class MemoryCompositionGeneration {
       for (const actionId of sourceSpec.actionIds ?? []) actions.push(actionFor(source, actionId))
     }
     const sourceRevisions = Object.fromEntries([...facts].map(([key, value]) => [key, value.revision]))
-    const modes = new Set(spec.sources.map(source => this.sources.get(source.sourceInstanceKey)!.installed.definition.manifest.consistency))
+    const modes = new Set(successful.map(({ source }) => source.installed.definition.manifest.consistency))
     const consistency = { mode: modes.size === 1 ? [...modes][0]! : 'mixed' as const, sourceRevisions }
     const body = {
       runtimeGeneration: this.id,
@@ -434,6 +497,8 @@ export class MemoryCompositionGeneration {
       actionOffers: actions,
       consistency,
       explanation: spec.explanation,
+      ...(diagnostics.length === 0 ? {} : { diagnostics: diagnostics.sort((a, b) =>
+        (a.contributionInstanceKey ?? '').localeCompare(b.contributionInstanceKey ?? '') || a.code.localeCompare(b.code)) }),
     }
     const viewDigest = digest(body)
     return deepFreeze({ id: `view:${viewDigest}`, digest: viewDigest, createdAt: this.now().toISOString(), ...body })
@@ -451,12 +516,12 @@ export class MemoryCompositionGeneration {
       scenario: 'management.catalog',
       budget: DEFAULT_MEMORY_VIEW_BUDGET,
     }, 'memory management catalog request')
-    const sources = []
-    for (const source of this.sources.values()) {
+    const diagnostics: MemoryCompositionDiagnostic[] = []
+    const sources = await Promise.all([...this.sources.values()].map(async source => {
       const descriptor = source.installed.definition.manifest.management
-      if (descriptor === undefined) continue
-      const facts = normalizeFacts(source.installed, await source.runtime.facts(request))
-      sources.push({
+      if (descriptor === undefined) return null
+      const facts = await this.sourceFacts(source, request, diagnostics)
+      return {
         sourceInstanceKey: source.installed.instanceKey,
         sourceTypeId: source.installed.definition.manifest.typeId,
         packageName: source.installed.definition.manifest.packageName,
@@ -466,9 +531,11 @@ export class MemoryCompositionGeneration {
         capabilities: facts.capabilities,
         management: descriptor,
         ...(facts.hints === undefined ? {} : { hints: facts.hints }),
-      })
-    }
-    return jsonClone({ generationId: this.id, sources }, 'memory Source management catalog')
+      }
+    }))
+    return jsonClone({ generationId: this.id, sources: sources.filter(source => source !== null),
+      ...(diagnostics.length === 0 ? {} : { diagnostics: diagnostics.sort((a, b) => (a.contributionInstanceKey ?? '').localeCompare(b.contributionInstanceKey ?? '')) }),
+    }, 'memory Source management catalog')
   }
 
   /** Execute one short-lived, explicitly scoped management operation. */
@@ -485,12 +552,13 @@ export class MemoryCompositionGeneration {
     if (source?.runtime.manage === undefined || source.installed.definition.manifest.management === undefined) {
       throw new Error(`memory Source does not expose management operations: ${sourceInstanceKey}`)
     }
-    const facts = normalizeFacts(source.installed, await source.runtime.facts(jsonClone({
+    const diagnostics: MemoryCompositionDiagnostic[] = []
+    const facts = await this.sourceFacts(source, jsonClone({
       scope: requestValue.scope,
       scenario: `management.${requestValue.mode}`,
       budget: DEFAULT_MEMORY_VIEW_BUDGET,
-    }, 'memory Source management facts request')))
-    if (facts.availability === 'unavailable') throw new Error(`memory Source is unavailable in the requested management scope: ${sourceInstanceKey}`)
+    }, 'memory Source management facts request'), diagnostics, requestValue.signal)
+    if (facts.availability === 'unavailable') throw new Error(`memory Source is unavailable in the requested management scope: ${sourceInstanceKey}${diagnostics.length === 0 ? '' : '; ' + diagnostics[0]!.message}`)
     if (requestValue.mode === 'mutate' && requestValue.expectedRevision !== facts.revision) {
       throw new Error(`memory Source management revision conflict: expected ${requestValue.expectedRevision}, current ${facts.revision}`)
     }

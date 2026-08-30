@@ -49,13 +49,14 @@ describe('Mnemon lifecycle with the real DSH SystemPrompt', () => {
     const lifecycle = new MnemonLifecycle(host, coordinator, config, runtimeSource as never)
     const stop = lifecycle.start()
 
-    const assembly = await prompt.assemble({ agent, signal: new AbortController().signal } as never)
+    const signal = new AbortController().signal
+    const assembly = await prompt.assemble({ agent, signal } as never)
 
     expect(composableTurns.beginTurn).toHaveBeenCalledWith('real-prompt-session:1', {
       storage: 'global',
       sessionId: 'real-prompt-session',
       agentId: 'real-prompt-session',
-    })
+    }, 'agent.root-turn', signal)
     expect(assembly.sections.some(section => section.name === 'mnemon:runtime-memory-protocol')).toBe(false)
     expect(assembly.contexts).toContainEqual({ name: 'mnemon:runtime-memory', text: 'First-turn Wake' })
     expect(runtimeSource.bindAgentRuntime).toHaveBeenCalledOnce()

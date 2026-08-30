@@ -88,6 +88,7 @@ export interface MemorySourceManagementInstance {
 export interface MemorySourceManagementCatalog {
   generationId: string
   sources: MemorySourceManagementInstance[]
+  diagnostics?: MemoryCompositionDiagnostic[]
 }
 
 export interface MemorySourceRouteManifest {
@@ -173,6 +174,8 @@ export interface MemoryViewRequest {
 
 export interface MemoryViewSourceSpec {
   sourceInstanceKey: string
+  /** Defaults to true. An explicitly optional Source may be omitted on read failure. */
+  required?: boolean
   projection?: {
     mode: MemorySourceMode
     maxCharacters: number
@@ -266,6 +269,8 @@ export interface ComposableMemoryView {
   actionOffers: MemoryActionOffer[]
   consistency: MemoryViewConsistency
   explanation: string
+  /** Sanitized, turn-local availability failures; never raw provider errors. */
+  diagnostics?: MemoryCompositionDiagnostic[]
 }
 
 export interface MemoryEvidenceItem {
@@ -312,8 +317,9 @@ export interface MemorySourceViewContext {
 }
 
 export interface MemorySourceRuntime {
-  facts(request: MemoryViewRequest): MemorySourceFacts | Promise<MemorySourceFacts>
-  project(request: MemoryProjectionRequest): MemoryViewContribution | Promise<MemoryViewContribution>
+  /** Lightweight metadata. Honor cancellation; do not perform writes here. */
+  facts(request: MemoryViewRequest, signal?: AbortSignal): MemorySourceFacts | Promise<MemorySourceFacts>
+  project(request: MemoryProjectionRequest, signal?: AbortSignal): MemoryViewContribution | Promise<MemoryViewContribution>
   manage?(request: MemorySourceManagementRequest): MemorySourceManagementResult | Promise<MemorySourceManagementResult>
   query?(request: {
     view: MemorySourceViewContext

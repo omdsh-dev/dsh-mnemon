@@ -44,6 +44,8 @@ Source 不需要再实现 Provider；Provider 不需要理解 View 组合；Stra
 
 完整 `ComposableMemoryView` 留在 Host 与组合测试中，不传给 Source 回调。Source 不得从 `request.view` 遍历其他实例的投影或凭据；需要自身读取范围的写操作直接使用 `request.grant`。
 
+`facts(request, signal)` 和 `project(request, signal)` 的第二个参数是取消信号；网络读取必须传递它，回调不得写入数据。Core 并行读取不同 Source，每次读取默认最多 10 秒；DSH Host 采用现有 `timeoutMs` 配置，独立测试可设置 `MemoryCompositionRunner({ sourceTimeoutMs })`。信号不进入 Strategy 的 JSON 输入。超时或远程异常生成脱敏的 `view.diagnostics`；协议不合法仍直接拒绝。取消整轮不会被当作可选 Source 降级。超时不能中断阻塞事件循环的同步代码，这不是恶意插件沙箱。
+
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
 import { installMemory } from 'dsh-mnemon/extension-sdk'
@@ -63,6 +65,8 @@ Entry id 标识实例，type id 标识实现。不能剥掉 Loader 的 include �
 ## Strategy
 
 用 `defineMemoryStrategy` 定义，再以 `{ strategies: [definition] }` 安装。声明确定性、支持角色与上限；返回 `MemoryViewSpec`，选择准确的 Source key、eager/routed 投影预算和 Source 本地 route/action id。网络、存储、凭据访问不属于 Strategy。
+
+选中的 Source 默认必需；`required: false` 明确允许该实例在不可用或投影失败时被省略。必需实例失败会拒绝本轮 View，不悄悄切换策略。默认三层对可用 Source 作组合，并将它们标为可选，因此外部读取失败不会带走其他层。缺少必需实例时，Strategy 应明确拒绝，而不是返回一个空选择。
 
 [external-strategy.ts](../../scripts/fixtures/plugin-consumer/src/external-strategy.ts) 是完整的显式选择示例。默认 Host 沿用 `mnemon.memoryTopology.strategyId` 配置选择其 type id；多个适用 Strategy 是错误，不采用“后导入覆盖前者”。Profile 显式替换默认 Entry；只安装一个包不等于允许它替换当前组合。
 
