@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
-import { MemoryCompositionRunner, type MemoryTestTurn } from 'dsh-mnemon/testing'
+import { DEFAULT_MEMORY_VIEW_BUDGET, MemoryCompositionRunner, type MemoryTestTurn } from 'dsh-mnemon/testing'
 import * as spaces from 'dsh-mnemon-source-memory-spaces'
 import * as notes from '../lib/external-source.js'
 import * as focus from '../lib/external-strategy.js'
@@ -45,12 +45,20 @@ describe('external consumer of packed artifacts', () => {
       turns.push(pinned)
       expect(pinned.view.projection.map(fragment => fragment.text)).toEqual(['first snapshot'])
       const route = pinned.view.routes[0]!
+      expect(route).toMatchObject({ representation: 'raw', semantics: { actions: ['read'], effects: [] } })
+      expect(pinned.view.projection[0]?.result?.expansion).toEqual({ routeId: route.id, input: {} })
       const action = pinned.view.actionOffers[0]!
       await expect(pinned.executeAction(action.id, { content: 'denied' }, () => false)).rejects.toThrow('not currently authorized')
       await expect(pinned.executeAction(action.id, { content: 'second snapshot' }, () => true)).resolves.toMatchObject({ status: 'succeeded' })
       const exact = await pinned.executeRoute(route.id, {})
       expect(exact.items[0]?.text).toBe('first snapshot')
+      expect(exact.items[0]?.result).toEqual({ representation: 'raw', coverage: 'complete' })
       expect((await management.read('read')).value).toEqual({ content: 'second snapshot' })
+      const tight = await runner.beginTurn({ budget: { ...DEFAULT_MEMORY_VIEW_BUDGET, maxEvidenceCharacters: 3 } })
+      turns.push(tight)
+      const unavailable = await tight.executeRoute(tight.view.routes[0]!.id, {})
+      expect(unavailable.items).toEqual([])
+      expect(unavailable.unavailable).toContain('no semantic summary or complete result was fabricated')
 
       // A competing candidate cannot silently replace the serving Strategy.
       const removeCandidate = await runner.mount(focus, { instanceId: 'candidate', config: { sourceKeys: ['source:personal'], mode: 'routed' } })
@@ -69,6 +77,8 @@ describe('external consumer of packed artifacts', () => {
       expect((await pinned.executeRoute(route.id, {})).items[0]?.text).toBe('first snapshot')
       current.release()
       pinned.release()
+      expect(runner.inspect().drainingGenerationIds).toContain(tight.view.runtimeGeneration)
+      tight.release()
       expect(runner.inspect().drainingGenerationIds).not.toContain(pinned.view.runtimeGeneration)
     } finally { turns.forEach(turn => turn.release()); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
   })
