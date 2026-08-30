@@ -43,12 +43,6 @@ function grantIds(grant: MemoryReadGrant): string[] {
   return stringArray(record(grant.value, 'Memory Spaces ReadGrant').memoryBodyIds, 'memoryBodyIds', 10_000) ?? []
 }
 
-function grantFor(view: { readGrants: MemoryReadGrant[] }, sourceInstanceKey: string): MemoryReadGrant {
-  const grant = view.readGrants.find(candidate => candidate.sourceInstanceKey === sourceInstanceKey)
-  if (grant === undefined) throw new Error('Memory Spaces action has no View ReadGrant')
-  return grant
-}
-
 function scalarRecord(value: MemoryJsonValue | undefined, label: string): MemoryProviderConnection | undefined {
   if (value === undefined) return undefined
   const input = record(value, label)
@@ -507,7 +501,8 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
       async mutate(request) {
         const input = record(request.input, `Memory Spaces ${request.offer.sourceActionId}`)
         if (!service.config.writeEnabled) throw new Error('Memory Spaces is configured read-only')
-        const grant = grantFor(request.view, context.sourceInstanceKey)
+        const grant = request.grant
+        if (grant === undefined) throw new Error('Memory Spaces action has no View ReadGrant')
         const allowedBodies = grantIds(grant)
         const knownBodies = stringArray(record(grant.value, 'Memory Spaces scope').knownMemoryBodyIds, 'knownMemoryBodyIds', 10_000) ?? allowedBodies
         const created = createdByView.get(request.view.id) ?? new Set<string>()

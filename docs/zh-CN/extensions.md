@@ -37,10 +37,12 @@ Source 不需要再实现 Provider；Provider 不需要理解 View 组合；Stra
 
 - `facts(request)`：有界、非敏感的可用性、修订和能力。
 - `project(request)`：与选中修订一致的有界文本及 Source 自己的 ReadGrant。并发快照按请求/scope 捕获，不共享一个可变的“最近快照”。
-- `query`：只消费给定 View/grant，执行 Source 自身范围限制，返回带来源的有界 Evidence。
-- `mutate`：只执行已授予的 action，响应取消，区分已提交、部分成功、失败。
+- `query`：只收到 `{ id, scope }` 形式的 `view` 和属于本实例的 `grant`，执行 Source 自身范围限制，返回带来源的有界 Evidence。
+- `mutate`：只执行已授权的 action，响应取消，区分已提交、部分成功、失败。它同样只收到 View 身份及可选的本实例 `grant`；读取凭据不等于写授权。
 - 可选 `manage`：独立于模型 grant 的认证人工管理，再次检查确认和精确修订。
 - 可选 `dispose`：运行代租约排空后释放其私有资源。
+
+完整 `ComposableMemoryView` 留在 Host 与组合测试中，不传给 Source 回调。Source 不得从 `request.view` 遍历其他实例的投影或凭据；需要自身读取范围的写操作直接使用 `request.grant`。
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'

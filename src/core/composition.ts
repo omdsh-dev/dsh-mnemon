@@ -527,7 +527,10 @@ export class MemoryCompositionGeneration {
     if (source?.runtime.query === undefined) throw new Error(`memory Source cannot execute Route: ${route.sourceInstanceKey}`)
     this.routeCalls.set(counter, calls + 1)
     try {
-      return normalizeEvidence(await source.runtime.query({ view, route, grant, input, ...(signal === undefined ? {} : { signal }) }), view, route, normalizeBudget(budget), this.now)
+      return normalizeEvidence(await source.runtime.query({
+        view: deepFreeze({ id: view.id, scope: view.scope }), route, grant,
+        input: jsonClone(input, 'memory Route input'), ...(signal === undefined ? {} : { signal }),
+      }), view, route, normalizeBudget(budget), this.now)
     } catch (error) {
       const remaining = (this.routeCalls.get(counter) ?? 1) - 1
       if (remaining <= 0) this.routeCalls.delete(counter)
@@ -546,7 +549,12 @@ export class MemoryCompositionGeneration {
     const source = this.sources.get(offer.sourceInstanceKey)
     if (source?.runtime.mutate === undefined) throw new Error(`memory Source cannot execute ActionOffer: ${offer.sourceInstanceKey}`)
     signal?.throwIfAborted()
-    const receipt = await source.runtime.mutate({ view, offer, input, ...(signal === undefined ? {} : { signal }) })
+    const grant = view.readGrants.find(candidate => candidate.sourceInstanceKey === offer.sourceInstanceKey)
+    const receipt = await source.runtime.mutate({
+      view: deepFreeze({ id: view.id, scope: view.scope }), offer,
+      ...(grant === undefined ? {} : { grant }),
+      input: jsonClone(input, 'memory Action input'), ...(signal === undefined ? {} : { signal }),
+    })
     if (receipt.viewId !== view.id || receipt.offerId !== offer.id || receipt.sourceInstanceKey !== offer.sourceInstanceKey) {
       throw new Error('memory mutation Receipt is not bound to the requested ActionOffer')
     }

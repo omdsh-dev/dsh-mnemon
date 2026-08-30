@@ -37,10 +37,12 @@ Define a `MemorySourceDefinition` with `defineMemorySource`. Its manifest declar
 
 - `facts(request)`: bounded, non-sensitive availability, revision and capabilities.
 - `project(request)`: bounded text plus a Source-owned ReadGrant consistent with the selected revision. Capture concurrent snapshots per request/scope; do not share one mutable “last snapshot”.
-- `query`: consume only the supplied View/grant, enforce the Source's scope, return bounded Evidence with provenance.
-- `mutate`: perform only a granted action, honor cancellation and distinguish committed/partial/failed results.
+- `query`: receive only a `{ id, scope }` View identity and this instance's own `grant`, enforce the Source's scope, and return bounded Evidence with provenance.
+- `mutate`: perform only an authorized action, honor cancellation and distinguish committed/partial/failed results. It receives the same narrow View identity and an optional instance-local `grant`; a read grant is not write authorization.
 - `manage` (optional): authenticated human operations, separate from model grants; validate confirmation and exact revision again.
 - `dispose` (optional): release runtime-owned resources after generation leases drain.
+
+The complete `ComposableMemoryView` stays in the Host and composition tests, never in Source callbacks. Do not inspect other instances' projections or grants through `request.view`; writes needing their own pinned read scope use `request.grant` directly.
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'

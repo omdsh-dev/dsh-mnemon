@@ -214,7 +214,7 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
       async mutate(request) {
         const root = workspace(request.view.scope)
         if (root === undefined) throw new Error('Documents Action requires a workspace-scoped View')
-        const grant = request.view.readGrants.find(candidate => candidate.sourceInstanceKey === context.sourceInstanceKey)
+        const grant = request.grant
         const mutation = documentMutation(request.input, grant === undefined ? [] : grantIds(grant))
         const result = await documents.forWorkspace(root).mutate(mutation)
         return receipt(request.view.id, request.offer.id, context.sourceInstanceKey, result.snapshot.revision, result as unknown as MemoryJsonValue)

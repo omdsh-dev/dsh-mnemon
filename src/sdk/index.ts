@@ -15,6 +15,7 @@ export type {
   MemorySourceFacts,
   MemorySourceManifest,
   MemorySourceRuntime,
+  MemorySourceViewContext,
   MemoryStrategyDefinition,
   MemoryStrategyManifest,
   MemoryViewRequest,

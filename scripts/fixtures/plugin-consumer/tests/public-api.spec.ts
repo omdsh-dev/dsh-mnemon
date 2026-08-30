@@ -2,7 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import * as core from 'dsh-mnemon/core'
 import * as sdk from 'dsh-mnemon/extension-sdk'
-import type { MnemonMemoryService } from 'dsh-mnemon/extension-sdk'
+import type { MnemonMemoryService, MemorySourceRuntime } from 'dsh-mnemon/extension-sdk'
 import { MemoryCompositionRunner, type MemoryTestTurn } from 'dsh-mnemon/testing'
 import * as providerSdk from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import { createMemorySpaceProviderFixture, mountMemorySpaceProvider } from 'dsh-mnemon-source-memory-spaces/testing'
@@ -18,6 +18,10 @@ describe('published author API', () => {
   it('keeps Context and testing types independent of private engine types', async () => {
     expectTypeOf<Context['mnemonMemory']>().toEqualTypeOf<MnemonMemoryService>()
     expectTypeOf<keyof MnemonMemoryService>().toEqualTypeOf<'installContributions'>()
+    type Query = Parameters<NonNullable<MemorySourceRuntime['query']>>[0]
+    type Mutation = Parameters<NonNullable<MemorySourceRuntime['mutate']>>[0]
+    expectTypeOf<keyof Query['view']>().toEqualTypeOf<'id' | 'scope'>()
+    expectTypeOf<keyof Mutation['view']>().toEqualTypeOf<'id' | 'scope'>()
     expectTypeOf<keyof MemoryTestTurn>().toEqualTypeOf<'view' | 'executeRoute' | 'executeAction' | 'release'>()
     expect(Object.keys(core).sort()).toEqual(['apply', 'inject', 'name', 'provide'])
     for (const key of ['MemoryRuntime', 'MemoryContributionRegistry', 'MemoryGenerationHost']) expect(key in sdk).toBe(false)

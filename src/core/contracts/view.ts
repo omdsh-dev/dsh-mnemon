@@ -305,20 +305,28 @@ export interface MemorySourceRuntimeContext {
   configuration?: Readonly<Record<string, MemoryJsonValue>>
 }
 
+/** Operation identity only; never the complete View or another Source's data. */
+export interface MemorySourceViewContext {
+  id: string
+  scope: MemoryOperationScope
+}
+
 export interface MemorySourceRuntime {
   facts(request: MemoryViewRequest): MemorySourceFacts | Promise<MemorySourceFacts>
   project(request: MemoryProjectionRequest): MemoryViewContribution | Promise<MemoryViewContribution>
   manage?(request: MemorySourceManagementRequest): MemorySourceManagementResult | Promise<MemorySourceManagementResult>
   query?(request: {
-    view: ComposableMemoryView
+    view: MemorySourceViewContext
     route: MemoryViewRoute
     grant: MemoryReadGrant
     input: MemoryJsonValue
     signal?: AbortSignal
   }): MemoryEvidence | Promise<MemoryEvidence>
   mutate?(request: {
-    view: ComposableMemoryView
+    view: MemorySourceViewContext
     offer: MemoryActionOffer
+    /** This Source's own pinned read scope, when it contributed one. Not write authorization. */
+    grant?: MemoryReadGrant
     input: MemoryJsonValue
     signal?: AbortSignal
   }): MemoryMutationReceipt | Promise<MemoryMutationReceipt>

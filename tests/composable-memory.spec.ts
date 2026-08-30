@@ -247,6 +247,79 @@ describe('Composable View Memory compiler', () => {
     await generation.dispose()
   })
 
+  it('passes only operation identity and the owning Source grant to reads and writes', async () => {
+    const observed = vi.fn()
+    const definition = sourceDefinition()
+    const owned = defineMemorySource({ ...definition, create(context) {
+      const runtime = definition.create(context)
+      return { ...runtime,
+        query(request) { observed(request); return runtime.query!(request) },
+        mutate(request) { observed(request); return runtime.mutate!(request) },
+      }
+    } })
+    const other = defineMemorySource({ ...definition, create(context) {
+      const runtime = definition.create(context)
+      return { ...runtime, async project(request) {
+        const contribution = await runtime.project(request)
+        return {
+          fragments: contribution.fragments.map(fragment => ({ ...fragment, text: 'private-personal-projection' })),
+          readGrant: { ...contribution.readGrant!, value: { secret: 'private-personal-grant' } },
+        }
+      } }
+    } })
+    const generation = new MemoryCompositionGeneration({
+      revision: 1, sources: [installedSource(owned, 'work'), installedSource(other, 'personal')],
+      strategies: [installedStrategy()],
+    })
+    try {
+      const view = await generation.compose(REQUEST)
+      expect(view.readGrants).toHaveLength(2)
+      await generation.executeRoute(view, 'source:work/search', { query: 'needle' })
+      await generation.executeAction(view, 'source:work/remember', { text: 'fact' }, () => true)
+      expect(observed).toHaveBeenCalledTimes(2)
+      for (const [request] of observed.mock.calls) {
+        expect(request.view).toEqual({ id: view.id, scope: REQUEST.scope })
+        expect(Object.keys(request.view).sort()).toEqual(['id', 'scope'])
+        expect(request.grant.sourceInstanceKey).toBe('source:work')
+        expect(JSON.stringify(request)).not.toContain('source:personal')
+        expect(JSON.stringify(request)).not.toContain('private-personal')
+        expect(Object.isFrozen(request.view)).toBe(true)
+        expect(Object.isFrozen(request.view.scope)).toBe(true)
+        expect(Object.isFrozen(request.grant.value)).toBe(true)
+        expect(Object.isFrozen(request.input)).toBe(true)
+      }
+    } finally { await generation.dispose() }
+  })
+
+  it('does not borrow another Source grant for a write-only contribution', async () => {
+    const observed = vi.fn()
+    const definition = sourceDefinition()
+    const writeOnly = defineMemorySource({ ...definition, create(context) {
+      const runtime = definition.create(context)
+      return { ...runtime,
+        project: () => ({ fragments: [] }),
+        mutate(request) { observed(request); return runtime.mutate!(request) },
+      }
+    } })
+    const strategy = strategyDefinition((_, facts) => ({
+      strategyTypeId: 'test', explanation: 'One write-only Source and one readable Source.',
+      sources: facts.map(fact => ({ sourceInstanceKey: fact.sourceInstanceKey,
+        routeIds: fact.sourceInstanceKey === 'source:reader' ? ['search'] : [], actionIds: ['remember'],
+      })),
+    }))
+    const generation = new MemoryCompositionGeneration({ revision: 1,
+      sources: [installedSource(writeOnly, 'writer'), installedSource(definition, 'reader')],
+      strategies: [installedStrategy(strategy)],
+    })
+    try {
+      const view = await generation.compose(REQUEST)
+      await generation.executeAction(view, 'source:writer/remember', { text: 'fact' }, () => true)
+      const request = observed.mock.calls[0]![0]
+      expect(request).not.toHaveProperty('grant')
+      expect(request.view).toEqual({ id: view.id, scope: REQUEST.scope })
+    } finally { await generation.dispose() }
+  })
+
   it('keeps authenticated Source management outside View grants and revision-fences mutations', async () => {
     const generation = new MemoryCompositionGeneration(contributions())
     const catalog = await generation.managementCatalog(REQUEST.scope)

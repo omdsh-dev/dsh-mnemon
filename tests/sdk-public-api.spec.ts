@@ -14,6 +14,11 @@ describe('public plugin SDK boundary', () => {
     expectTypeOf<Context['mnemonMemory']>().toEqualTypeOf<MnemonMemoryService>()
     expectTypeOf<keyof MnemonMemoryService>().toEqualTypeOf<'installContributions'>()
     expectTypeOf<MemorySourceRuntime['facts']>().toBeFunction()
+    type Query = Parameters<NonNullable<MemorySourceRuntime['query']>>[0]
+    type Mutation = Parameters<NonNullable<MemorySourceRuntime['mutate']>>[0]
+    expectTypeOf<keyof Query['view']>().toEqualTypeOf<'id' | 'scope'>()
+    expectTypeOf<keyof Mutation['view']>().toEqualTypeOf<'id' | 'scope'>()
+    expectTypeOf<Mutation['grant']>().toEqualTypeOf<Query['grant'] | undefined>()
   })
 
   it('exports author tools without engine, registry or generation constructors', () => {
