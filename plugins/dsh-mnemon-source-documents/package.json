@@ -1,6 +1,6 @@
 {
   "name": "dsh-mnemon-source-documents",
-  "version": "0.3.5",
+  "version": "0.4.0",
   "description": "Self-contained documents Source for Composable View Memory.",
   "license": "MIT",
   "type": "module",
@@ -45,12 +45,12 @@
     "markdown-to-jsx": "^7.7.0"
   },
   "peerDependencies": {
-    "dsh-mnemon": "^0.3.5",
+    "dsh-mnemon": "^0.4.0",
     "@deepseek-ai/cordis": "^4.0.1",
     "react": "^18.2.0"
   },
   "devDependencies": {
-    "dsh-mnemon": "^0.3.5",
+    "dsh-mnemon": "^0.4.0",
     "@types/node": "^22.0.0",
     "typescript": "^5.9.0",
     "tsdown": "^0.22.0",

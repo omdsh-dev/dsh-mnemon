@@ -1,6 +1,6 @@
 {
   "name": "dsh-mnemon-strategy-default-three-tier",
-  "version": "0.3.5",
+  "version": "0.4.0",
   "description": "Explicit three-tier View Strategy for Composable View Memory.",
   "license": "MIT",
   "type": "module",
@@ -14,6 +14,6 @@
     "test": "vitest run",
     "verify": "pnpm typecheck && pnpm test && pnpm build"
   },
-  "peerDependencies": { "dsh-mnemon": "^0.3.5", "@deepseek-ai/cordis": "^4.0.1" },
-  "devDependencies": { "dsh-mnemon": "^0.3.5", "@types/node": "^22.0.0", "typescript": "^5.9.0", "tsdown": "^0.22.0", "vitest": "^3.2.0" }
+  "peerDependencies": { "dsh-mnemon": "^0.4.0", "@deepseek-ai/cordis": "^4.0.1" },
+  "devDependencies": { "dsh-mnemon": "^0.4.0", "@types/node": "^22.0.0", "typescript": "^5.9.0", "tsdown": "^0.22.0", "vitest": "^3.2.0" }
 }
