@@ -93,6 +93,10 @@ jobs:
         if: runner.os != 'Windows'
         run: pnpm run verify
 
+      - name: Verify independent plugin repositories and packed consumers
+        if: runner.os == 'Linux' && matrix.node == 24
+        run: pnpm run verify:plugins
+
       - name: Type-check package on Windows
         if: runner.os == 'Windows'
         run: pnpm run typecheck

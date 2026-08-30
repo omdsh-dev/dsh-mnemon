@@ -167,7 +167,8 @@
     "verify:build": "node scripts/verify-deterministic-build.mjs",
     "verify:headless": "node scripts/verify-headless-profile.mjs",
     "verify:package": "node scripts/verify-package-contents.mjs && node scripts/verify-public-entries.mjs && pnpm run lint:package",
-    "verify": "pnpm run typecheck && pnpm run test && pnpm run verify:build && pnpm run verify:headless && pnpm run verify:package",
+    "verify:plugins": "node scripts/verify-plugin-artifacts.mjs",
+    "verify": "pnpm run typecheck && pnpm run verify:build && pnpm run test && pnpm run verify:headless && pnpm run verify:package",
     "dsh:link-source": "node scripts/link-dsh-source.mjs",
     "dsh:restore-registry": "node scripts/link-dsh-source.mjs --restore"
   },

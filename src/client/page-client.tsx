@@ -1,6 +1,6 @@
 import type { JSX, ReactNode } from 'react'
 import type { MemoryJsonValue } from 'dsh-mnemon/contracts'
-import type { MnemonSourceManagementClient } from './dsh-compat.ts'
+import type { MnemonSourceManagementClient } from './source-contracts.ts'
 import { I18nContext, LocaleContext } from './page-kit.tsx'
 import { translateEn, translateZh } from './locales.ts'
 

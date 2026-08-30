@@ -4,9 +4,9 @@ export {
   installMemorySourceUI, memorySourcePageEntryId, MNEMON_SOURCE_PAGE_SLOT,
   MNEMON_SOURCE_CONFIGURATION_MUTATE, MNEMON_SOURCE_CONFIGURATION_READ,
   type MemorySourcePageComponent, type MemorySourcePageDefinition,
-  type MemorySourcePageProps, type MemorySourceUIContribution, type MemorySourceUIOptions,
+  type MemorySourcePageProps, type MemorySourceUIContribution, type MemorySourceUIOptions, type MemorySourceUIContext,
 } from './source-pages.tsx'
-export type { MnemonSourceManagementClient } from './dsh-compat.ts'
+export type { MnemonSourceManagementClient, MemorySourcePageInstance } from './source-contracts.ts'
 export * from './page-kit.tsx'
 export * from './page-client.tsx'
 export { MnemonDialog, type MnemonDialogProps } from './MnemonDialog.tsx'

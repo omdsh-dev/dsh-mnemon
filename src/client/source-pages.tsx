@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
-import type { MnemonClientContext, MnemonSourcePageOwnerProps } from './dsh-compat.ts'
+import type { MemorySourcePageProps } from './source-contracts.ts'
+export type { MemorySourcePageProps } from './source-contracts.ts'
 
 export const MNEMON_SOURCE_PAGE_SLOT = 'mnemon.source.page' as const
 /** Conventional operations used by Mnemon's descriptor-driven Source page. */
@@ -9,11 +10,29 @@ export const MNEMON_SOURCE_CONFIGURATION_MUTATE = 'configuration' as const
 const SOURCE_TYPE_ID = /^[a-z][a-z0-9-]{0,127}$/u
 const PAGE_ID = /^[a-z][a-z0-9-]{0,127}$/u
 
-export interface MemorySourcePageProps extends MnemonSourcePageOwnerProps {
-  /** No Host Context, Runtime, credential, raw transport, or View grant crosses this boundary. */
+export type MemorySourcePageComponent = (props: MemorySourcePageProps) => ReactNode
+
+/** The existing DSH Slot capability narrowed to this one child Slot. */
+export interface MemorySourceUIContext {
+  slots: {
+    inject(name: typeof MNEMON_SOURCE_PAGE_SLOT, setup: () => () => void): () => void
+    register(options: {
+      name: typeof MNEMON_SOURCE_PAGE_SLOT
+      id: string
+      order: number
+      label: string | (() => string)
+      priority?: number
+    }, component: MemorySourcePageComponent): () => void
+  }
 }
 
-export type MemorySourcePageComponent = (props: MemorySourcePageProps) => ReactNode
+interface MemorySourcePageDirectoryContext {
+  slots: {
+    getVersion(name: typeof MNEMON_SOURCE_PAGE_SLOT): number
+    entriesOfSlot(name: typeof MNEMON_SOURCE_PAGE_SLOT): readonly { options: { id?: string; label?: string | (() => string); order?: number } }[]
+    subscribe(name: typeof MNEMON_SOURCE_PAGE_SLOT, listener: () => void): () => void
+  }
+}
 
 export interface MemorySourcePageDefinition {
   id: string
@@ -56,7 +75,7 @@ export function memorySourcePageEntryId(sourceTypeId: string, pageId: string): s
  * registry: `slots.inject/register` own declaration waiting and disposal.
  */
 export function installMemorySourceUI(
-  ctx: Pick<MnemonClientContext, 'slots'>,
+  ctx: MemorySourceUIContext,
   contribution: MemorySourceUIContribution,
   options: MemorySourceUIOptions = {},
 ): () => void {
@@ -94,7 +113,7 @@ export function installMemorySourceUI(
 }
 
 /** Stable uSES directory over the Slot ledger; no parallel page registry. */
-export function createMemorySourcePageDirectory(ctx: Pick<MnemonClientContext, 'slots'>): MemorySourcePageDirectory {
+export function createMemorySourcePageDirectory(ctx: MemorySourcePageDirectoryContext): MemorySourcePageDirectory {
   let version = -1
   let snapshot: readonly MemorySourcePageEntry[] = Object.freeze([])
   const read = (): readonly MemorySourcePageEntry[] => {

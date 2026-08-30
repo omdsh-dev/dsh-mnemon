@@ -1,0 +1,118 @@
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import type { Context } from '@deepseek-ai/cordis'
+import { describe, expect, it } from 'vitest'
+import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
+import * as spaces from 'dsh-mnemon-source-memory-spaces'
+import * as notes from '../lib/external-source.js'
+import * as focus from '../lib/external-strategy.js'
+import provider from '../lib/external-provider.js'
+
+describe('external consumer of packed artifacts', () => {
+  it('imports every declared Node entry from installed packages, not repository sources', async () => {
+    const names: string[] = JSON.parse(readFileSync(new URL('../artifacts.json', import.meta.url), 'utf8'))
+    const require = createRequire(import.meta.url)
+    expect(names).toHaveLength(14)
+    for (const name of names) {
+      const manifest = JSON.parse(readFileSync(require.resolve(name + '/package.json'), 'utf8'))
+      for (const subpath of Object.keys(manifest.exports)) {
+        if (subpath === './client' || subpath === './package.json') continue
+        const specifier = name + (subpath === '.' ? '' : subpath.slice(1))
+        expect(Object.keys(await import(specifier)).length, specifier).toBeGreaterThan(0)
+      }
+    }
+  })
+
+  it('supports a new Source and Strategy, authority checks, exact grants and explicit replacement', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'external-notes-'))
+    const runner = new MemoryCompositionRunner()
+    try {
+      await expect(runner.mount(notes, { instanceId: 'invalid', config: { path: 'relative.txt' } })).rejects.toThrow('absolute')
+      expect(runner.runtime.contributionSnapshot().sources).toHaveLength(0)
+      for (const id of ['work', 'personal']) await runner.mount(notes, { instanceId: id, config: { path: join(directory, id + '.txt') } })
+      await expect(runner.beginTurn()).rejects.toThrow('no Serving')
+      const removeStrategy = await runner.mount(focus, { instanceId: 'focus', config: { sourceKeys: ['source:work'], mode: 'eager' } })
+      const management = await runner.managementClient('source:work')
+      const original = management.revision
+      await management.mutate('replace', { content: 'first snapshot' }, { confirmed: true })
+      await expect(management.mutate('replace', { content: 'stale' }, { confirmed: true, expectedRevision: original })).rejects.toThrow('revision conflict')
+      expect((await (await runner.managementClient('source:personal')).read('read')).value).toEqual({ content: '' })
+
+      const pinned = await runner.beginTurn()
+      expect(pinned.view.projection.map(fragment => fragment.text)).toEqual(['first snapshot'])
+      const route = pinned.view.routes[0]!
+      const action = pinned.view.actionOffers[0]!
+      await expect(pinned.lease.generation.executeAction(pinned.view, action.id, { content: 'denied' }, () => false)).rejects.toThrow('not currently authorized')
+      await expect(pinned.lease.generation.executeAction(pinned.view, action.id, { content: 'second snapshot' }, () => true)).resolves.toMatchObject({ status: 'succeeded' })
+      const exact = await pinned.lease.generation.executeRoute(pinned.view, route.id, {})
+      expect(exact.items[0]?.text).toBe('first snapshot')
+      expect((await management.read('read')).value).toEqual({ content: 'second snapshot' })
+
+      // A competing candidate cannot silently replace the serving Strategy.
+      const removeCandidate = await runner.mount(focus, { instanceId: 'candidate', config: { sourceKeys: ['source:personal'], mode: 'routed' } })
+      expect(runner.generations.inspect().evaluation.state).toBe('rejected')
+      expect(runner.generations.current()?.id).toBe(pinned.lease.id)
+      await removeCandidate()
+      await removeStrategy()
+      await expect(runner.beginTurn()).rejects.toThrow('no Serving')
+      await runner.mount(focus, { instanceId: 'focus', config: { sourceKeys: ['source:personal'], mode: 'routed' } })
+      const current = await runner.beginTurn()
+      expect(current.view.runtimeGeneration).not.toBe(pinned.view.runtimeGeneration)
+      expect(current.view.routes.map(route => route.sourceInstanceKey)).toEqual(['source:personal'])
+      expect(current.view.projection[0]?.mode).toBe('routed')
+      expect(runner.generations.inspect().drainingGenerationIds).toContain(pinned.lease.id)
+      expect((await pinned.lease.generation.executeRoute(pinned.view, route.id, {})).items[0]?.text).toBe('first snapshot')
+      current.release()
+      pinned.release()
+      expect(runner.generations.inspect().drainingGenerationIds).not.toContain(pinned.lease.id)
+    } finally { await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
+  })
+
+  it('loads a packed Provider through the Source loader and performs durable read/write', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'external-provider-loader-'))
+    const runner = new MemoryCompositionRunner()
+    try {
+      await runner.mount(focus, { instanceId: 'focus', config: { sourceKeys: ['source:spaces'], mode: 'routed' } })
+      await runner.mount(spaces, { instanceId: 'spaces', config: { dataDir: directory,
+        providers: [{ use: 'dsh-mnemon-provider-holographic', instanceId: 'local-account' }] } })
+      const management = await runner.managementClient('source:spaces')
+      await management.mutate('provider-service-update', { providerId: 'local-account', settings: {}, enabled: true }, { confirmed: true })
+      const turn = await runner.beginTurn()
+      await expect(turn.lease.generation.executeAction(turn.view, turn.view.actionOffers[0]!.id,
+        { content: 'artifact loader durable sentinel' }, () => true)).resolves.toMatchObject({ status: 'succeeded' })
+      turn.release()
+      const next = await runner.beginTurn()
+      expect((await next.lease.generation.executeRoute(next.view, next.view.routes[0]!.id, { query: 'durable sentinel' })).items[0]?.text).toContain('artifact loader durable sentinel')
+      next.release()
+    } finally { await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
+  })
+
+  it('supports an external Provider in two Source-private trees with identical child ids', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'external-provider-trees-'))
+    const runner = new MemoryCompositionRunner()
+    try {
+      await runner.mount(focus, { instanceId: 'focus', config: { sourceKeys: ['source:work', 'source:personal'], mode: 'routed' } })
+      for (const id of ['work', 'personal']) await runner.mount({ inject: ['mnemonMemory'], async apply(ctx: Context) {
+        await spaces.installMemorySpaces(ctx, [{ instanceId: 'same-child-id', module: provider, config: undefined }], { config: { dataDir: join(directory, id) } })
+      } }, { instanceId: id })
+      for (const id of ['work', 'personal']) {
+        const management = await runner.managementClient('source:' + id)
+        await management.mutate('provider-service-update', { providerId: 'same-child-id', settings: {}, enabled: true }, { confirmed: true })
+      }
+      const turn = await runner.beginTurn()
+      const offer = turn.view.actionOffers.find(offer => offer.sourceInstanceKey === 'source:work')!
+      await turn.lease.generation.executeAction(turn.view, offer.id, { content: 'work only' }, () => true)
+      turn.release()
+      const next = await runner.beginTurn()
+      for (const route of next.view.routes) {
+        const result = await next.lease.generation.executeRoute(next.view, route.id, { query: 'work' })
+        expect(result.items).toHaveLength(route.sourceInstanceKey === 'source:work' ? 1 : 0)
+      }
+      expect(runner.context.get('mnemonMemorySpace', false)).toBeUndefined()
+      expect(runner.context.get('mnemonProvider', false)).toBeUndefined()
+      next.release()
+    } finally { await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
+  })
+})

@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import { fileURLToPath } from 'node:url'
 
 export default defineConfig({
@@ -20,6 +20,8 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // These tests must execute outside the workspace, against packed artifacts.
+    exclude: [...configDefaults.exclude, 'scripts/fixtures/**'],
     coverage: { enabled: false },
     server: {
       deps: {

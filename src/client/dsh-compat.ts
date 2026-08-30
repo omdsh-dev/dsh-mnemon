@@ -7,49 +7,14 @@
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import type { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { Context } from '@deepseek-ai/cordis'
-import type { ReactNode } from 'react'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-tool/client'
 import type { MnemonKey } from './locales.ts'
-import type {
-  JsonValue,
-  MemorySourceManagementInstance,
-  MemorySourceManagementResult,
-} from '../shared/contracts.ts'
-
-/**
- * Instance- and scope-bound browser capability. It deliberately exposes only
- * the authenticated Source management protocol, never the raw DSH transport.
- */
-export interface MnemonSourceManagementClient {
-  readonly sourceInstanceKey: string
-  readonly revision: string
-  read(operation: string, input?: JsonValue): Promise<MemorySourceManagementResult>
-  mutate(
-    operation: string,
-    input: JsonValue,
-    options: { expectedRevision?: string; confirmed: true },
-  ): Promise<MemorySourceManagementResult>
-}
-
-export interface MnemonSourcePageOwnerProps {
-  /** Type-level presentation identity; never a Client or Host Fiber uid. */
-  sourceTypeId: string
-  /** Selected Host instance in the current authenticated scope. */
-  sourceInstanceKey?: string
-  sourceInstances: readonly MemorySourceManagementInstance[]
-  /** Present only while the selected Host instance remains visible. */
-  management?: MnemonSourceManagementClient
-  /** Presentation hint only; the Host still authenticates every mutation. */
-  writable?: boolean
-  sessionId?: string
-  workspaceId?: string
-  locale: string
-  /** Migration seat used by the three built-in pages in the root artifact. */
-  children?: ReactNode
-}
+import type { MemorySourcePageProps } from './source-contracts.ts'
+export type { MnemonSourceManagementClient } from './source-contracts.ts'
+export type MnemonSourcePageOwnerProps = MemorySourcePageProps
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
