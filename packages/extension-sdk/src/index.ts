@@ -307,12 +307,16 @@ export function registerMemoryExtension(extension: MemoryExtension): () => void 
  */
 export class MemoryRuntime extends MemoryBoot {
   private readonly contributions = new MemoryContributionRegistry()
+  private readonly generationAttachments = new Set<MemoryGenerationAttachment>()
+  private closed = false
+  private disposal: Promise<void> | undefined
 
   constructor(private readonly inheritedBoot?: MemoryBoot) {
     super()
   }
 
   installContributions(value: MemoryContributionInstall): () => void {
+    if (this.closed) throw new Error('Memory Runtime is disposed')
     return this.contributions.install(value)
   }
 
@@ -326,6 +330,7 @@ export class MemoryRuntime extends MemoryBoot {
 
   /** Attach one Host runtime graph to the current definition set. */
   attachGeneration(options: CompileMemoryGenerationOptions = {}): MemoryGenerationAttachment {
+    if (this.closed) throw new Error('Memory Runtime is disposed')
     const host = new MemoryGenerationHost(options)
     host.reconcile(this.contributions.snapshot())
     const unsubscribe = this.contributions.subscribe(snapshot => host.reconcile(snapshot))
@@ -335,14 +340,31 @@ export class MemoryRuntime extends MemoryBoot {
       attached = false
       unsubscribe()
     }
-    return {
+    let disposal: Promise<void> | undefined
+    const attachment: MemoryGenerationAttachment = {
       host,
       release,
-      dispose: async () => {
+      dispose: () => {
+        if (disposal !== undefined) return disposal
         release()
-        await host.dispose()
+        this.generationAttachments.delete(attachment)
+        disposal = host.dispose()
+        return disposal
       },
     }
+    this.generationAttachments.add(attachment)
+    return attachment
+  }
+
+  /** Core-Fiber shutdown also closes attachments left by a host adapter. */
+  dispose(): Promise<void> {
+    if (this.disposal !== undefined) return this.disposal
+    this.closed = true
+    this.disposal = Promise.allSettled([...this.generationAttachments].map(attachment => attachment.dispose())).then(results => {
+      const errors = results.flatMap(result => result.status === 'rejected' ? [result.reason] : [])
+      if (errors.length > 0) throw new AggregateError(errors, 'Memory Runtime cleanup failed')
+    })
+    return this.disposal
   }
 
   override descriptors(): MemoryExtensionDescriptor[] {

@@ -39,6 +39,8 @@
     }
   },
   "include": [
+    "bundles/**/*.ts",
+    "bundles/**/*.tsx",
     "src/**/*.ts",
     "src/**/*.tsx",
     "packages/**/*.ts",
