@@ -8,6 +8,10 @@
     "node": ">=20"
   },
   "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
     "./provider-sdk": {
       "types": "./lib/provider-sdk.d.ts",
       "default": "./lib/provider-sdk.js"

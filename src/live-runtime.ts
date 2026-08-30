@@ -116,6 +116,14 @@ export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot?: strin
         if (installed.provenance.packageName === 'dsh-mnemon-source-documents' && (entry === 'mnemon-source-documents' || entry === 'bundled-documents')) {
           return { dataDir: runner.effectiveDataDir() }
         }
+        if (installed.provenance.packageName === 'dsh-mnemon-source-memory-spaces' && (entry === 'mnemon-source-memory-spaces' || entry === 'bundled-memory-spaces')) {
+          return JSON.parse(JSON.stringify({
+            dataDir: runner.effectiveDataDir(), cliPath: config.cliPath, store: config.store,
+            timeoutMs: config.timeoutMs, defaultRecallLimit: config.defaultRecallLimit,
+            writeEnabled: config.writeEnabled, embedding: config.embedding,
+            recallQuality: config.recallQuality, persistenceStrategy: config.persistenceStrategy,
+          }))
+        }
         return {}
       }, bindings: new Map<string, unknown>([
         [BUILTIN_MEMORY_BINDINGS.runtime, runtimeMemory],
