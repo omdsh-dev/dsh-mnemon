@@ -699,7 +699,9 @@ export class MnemonPackManager {
           'checksums.json': strToU8(`${JSON.stringify(checksums, null, 2)}\n`),
           ...payload,
         }
-        const archive = zipSync(entries, { level: 6, mtime: new Date('1980-01-01T00:00:00.000Z') })
+        // fflate writes ZIP timestamps using local date fields. Pin those fields
+        // to keep the archive in range and byte-identical across timezones.
+        const archive = zipSync(entries, { level: 6, mtime: new Date(1980, 0, 1) })
         if (archive.length > MNEMON_PACK_MAX_ARCHIVE_BYTES) throw new Error('exported Mnemon Pack exceeds the transport safety limit')
         const stamp = exportedAt.replace(/[:.]/gu, '-').replace('T', '_').replace('Z', '')
         return {
