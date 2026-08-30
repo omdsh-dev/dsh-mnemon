@@ -99,6 +99,8 @@ Core 自行计量返回文本（UTF-16 字符或已声明的 UTF-8 字节）、�
 
 已声明语义的操作必须在每个投影片段/证据条目中返回 `result`：表示形态、覆盖范围、可选遗漏/状态/展开方式。只有 `overflow: 'truncate'` 允许机械摘录，并明确标注 partial、保留摘要或推断的来源形态；`omit` 只丢弃整条内容。`summarize / page` 必须由 Source 真正实现，Core 不会合成；预算容纳不了指定的 raw/structured 时返回不可用，不伪造完整结果。引用不是展开能力：`{ routeId, input }` 仅绑定同一 Source、本 View 确实提供且输入合法的 Route；未提供的展开标为不可用。分数保留 Source 内部解释，不自动变成跨 Source 置信度。
 
+已有 Recall/Related 工具保留条目的 `result`、版本和分数，并通过 `memoryEvidence` 保留 Core 读取标识、不可用原因及执行用量。Host 最终限额可进一步裁剪节选或整条省略，不能把节选标为原文。缓存重放保留原次读取的用量，不再执行或扣除一次 Source 调用。
+
 `facts / project` 不得持久化使用计数。查询可声明 `{ target: 'usage', mode: 'write', stage: 'retrieved' }`，但还需 write 能力；“已注入”“实际有用”必须在 Host 的真实事件发生时另行显式调用，不能在推测性编译时记账。delete/invalidate 副作用另需 forget 能力。这些约束只收紧现有能力授权；ActionOffer 仍须调用时重新授权。
 
 每个变更回执必须声明 `completion`：accepted、candidate、committed、partial、failed 或 unknown。只有确认完整提交才能带 `committedAt`，Core 不补造该时间。`createMemoryMutationReceipt(..., completion)` 默认 unknown；Source 确认所请求的持久效果完成后才传 `'committed'`。取消或传输异常不证明没有发生写入；跨 Source 流程也不是原子事务。通用 View 工具和已有产品工具均向模型保留此区别。

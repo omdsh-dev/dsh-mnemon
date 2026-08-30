@@ -52,7 +52,7 @@ Model tools, lifecycle hooks, and system scheduling use an `automatic` trigger. 
 |---|---|---|
 | `mnemon_runtime_memory` | `add` / `replace` / `remove` hot memory | Deterministic control; add overflow may start a worker |
 | `mnemon_document_manage` | Create, update, or archive a Document | Create/update deterministic; archive uses a worker |
-| `mnemon_remember` | Retain one insight under provider semantics and wait for a settled receipt | `spawn` write worker |
+| `mnemon_remember` | Retain one insight under Provider semantics; distinguish acceptance from durable completion | `spawn` write worker |
 | `mnemon_link` | Create a typed relationship where the provider supports it | `spawn` write worker |
 | `mnemon_forget` | Delete an exact ID where the provider supports it | `spawn` write worker |
 | `mnemon_memory_body_create` | Let an Agent create a Mnemon Native space; third-party connections remain user-managed in WebUI | `spawn` write worker |

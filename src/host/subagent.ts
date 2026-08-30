@@ -7,18 +7,32 @@ import { mutationResultCommitted } from './receipts.ts'
 import { SourceSession, sourceFailure } from './source-session.ts'
 import { assertParticipation } from './access.ts'
 import type { MemoryBodyMetadataMaintenanceResult, MemoryBodyMetadataUpdate, MemoryPlacementDecision, SubagentCounters } from './protocol.ts'
-import type { MemoryEvidence, MemoryMigrationLineage } from '../core/contracts/index.ts'
-import { agentScope, type MnemonAgentRuntimeSource } from './runtime.ts'
+import type { MemoryEvidence, MemoryMigrationLineage, MemoryResultSemantics } from '../core/contracts/index.ts'
+import { agentScope, type MnemonAgentRuntimeSource, type MnemonRuntimeGraph } from './runtime.ts'
+import type { ComposableMemoryTurn } from '../core/turns.ts'
 
 export type { SubagentCounters } from "./protocol.ts"
 
 type AgentRuntimeSource = MnemonAgentRuntimeSource
 
-function evidenceInsights(evidence: MemoryEvidence): Insight[] {
+type RecallInsight = Insight & { result?: MemoryResultSemantics; revision?: string }
+
+function evidenceInsights(evidence: MemoryEvidence): RecallInsight[] {
   return evidence.items.map(item => {
     const metadata = optionalObject(item.provenance) ?? {}
-    return { ...metadata, id: item.id, content: item.text, ...(item.score === undefined ? {} : { normalizedScore: item.score }) } as Insight
+    return { ...metadata, id: item.id, content: item.text, score: item.score, revision: item.revision, result: item.result } as RecallInsight
   })
+}
+
+/** Keep Core execution usage on the original read, even when the Host clips or replays its evidence. */
+function recallEvidence(evidence: MemoryEvidence, results: readonly RecallInsight[]): NonNullable<RecallResult['memoryEvidence']> {
+  const { items, ...metadata } = evidence
+  return {
+    ...metadata,
+    truncated: metadata.truncated || results.length < items.length || results.some(result => (
+      !items.some(item => item.id === result.id && item.text === result.content)
+    )),
+  }
 }
 
 const READ_TOOLS = ['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_related']
@@ -44,7 +58,7 @@ const RESULT_TOOL_OUTPUT_SCHEMA = {
   required: ['recorded'],
   additionalProperties: false,
 } as const
-const WRITE_ACTIONS = ['stored', 'updated', 'added', 'replaced', 'removed', 'skipped', 'forgotten', 'linked', 'created', 'merged', 'failed'] as const
+const WRITE_ACTIONS = ['stored', 'updated', 'added', 'replaced', 'removed', 'skipped', 'forgotten', 'linked', 'created', 'merged', 'accepted', 'candidate', 'partial', 'unknown', 'failed'] as const
 const WRITE_ACTION_SET = new Set<string>(WRITE_ACTIONS)
 const WRITE_OPERATION_RESULT_TOOL: Record<string, string> = {
   remember: 'mnemon_remember',
@@ -329,7 +343,9 @@ function assertDshOutputValue(schema: unknown, candidate: unknown, path = 'resul
 export interface RecallResult {
   query: string
   mode: string
-  results: Insight[]
+  results: RecallInsight[]
+  /** Core read identity/usage; truncated also includes the Host's final admission limits. */
+  memoryEvidence?: Omit<MemoryEvidence, 'items'>
   hint?: string
 }
 
@@ -345,7 +361,11 @@ const MODEL_RECALL_LIST_LIMIT = 8
 const MODEL_RECALL_METADATA_LIMIT = 300
 
 function boundedModelText(value: string, maximum: number): string {
-  return value.length <= maximum ? value : `${value.slice(0, maximum - 1)}…`
+  if (maximum <= 0) return ''
+  if (value.length <= maximum) return value
+  let end = maximum - 1
+  if (end > 0 && /[\uD800-\uDBFF]/u.test(value[end - 1]!)) end -= 1
+  return `${value.slice(0, end)}…`
 }
 
 interface ModelInsightAdmission {
@@ -358,7 +378,7 @@ interface ModelInsightAdmission {
 }
 
 interface ModelInsightEnvelope {
-  results: Insight[]
+  results: RecallInsight[]
 }
 
 function insightDigest(result: Pick<Insight, 'content'>): string {
@@ -371,14 +391,19 @@ function recallQueryDigest(request: SearchRequest): string {
 }
 
 /** A replay must still respect the current call's selected Source subset. */
-function replayEvidence(results: readonly Insight[], memoryBodyIds: readonly string[] | undefined): Insight[] {
-  return structuredClone(memoryBodyIds === undefined ? results : results.filter(result => (
+function replayEvidence(previous: RecallResult | undefined, memoryBodyIds: readonly string[] | undefined): Pick<RecallResult, 'results' | 'memoryEvidence'> {
+  const original = previous?.results ?? []
+  const results = structuredClone(memoryBodyIds === undefined ? original : original.filter(result => (
     result.memoryBodyId !== undefined && memoryBodyIds.includes(result.memoryBodyId)
-  ))) as Insight[]
+  ))) as RecallInsight[]
+  return { results, ...(previous?.memoryEvidence === undefined ? {} : { memoryEvidence: {
+    ...structuredClone(previous.memoryEvidence),
+    truncated: previous.memoryEvidence.truncated || results.length < original.length,
+  } }) }
 }
 
 /** Admit a small, deduplicated evidence envelope after Provider quality policy. */
-function boundedModelInsights(results: readonly Insight[], admission: ModelInsightAdmission = {}): ModelInsightEnvelope {
+function boundedModelInsights(results: readonly RecallInsight[], admission: ModelInsightAdmission = {}): ModelInsightEnvelope {
   const resultLimit = admission.resultLimit ?? MODEL_RECALL_RESULT_LIMIT
   const contentLimit = admission.contentLimit ?? MODEL_RECALL_CONTENT_LIMIT
   const totalContentLimit = admission.totalContentLimit ?? MODEL_RECALL_TOTAL_CONTENT_LIMIT
@@ -389,7 +414,7 @@ function boundedModelInsights(results: readonly Insight[], admission: ModelInsig
   let mediumCount = 0
   let unknownCount = 0
   let contentCharacters = 0
-  const admitted: Insight[] = []
+  const admitted: RecallInsight[] = []
   for (const result of results) {
     if (admitted.length >= resultLimit || result.id.length === 0 || result.id.length > 1_000) continue
     const tier = result.relevanceTier ?? 'unknown'
@@ -403,6 +428,9 @@ function boundedModelInsights(results: readonly Insight[], admission: ModelInsig
     if (remainingContent <= 0) break
     const content = boundedModelText(result.content, Math.min(contentLimit, remainingContent))
     if (content === '') continue
+    const clipped = content !== result.content
+    // Only an existing excerpt may be further clipped; other declared representations stay intact.
+    if (clipped && result.result !== undefined && result.result.representation !== 'excerpt') continue
     seenReferences.add(reference)
     seenDigests.add(digest)
     contentCharacters += content.length
@@ -411,6 +439,14 @@ function boundedModelInsights(results: readonly Insight[], admission: ModelInsig
     admitted.push({
       id: result.id,
       content,
+      ...(typeof result.score !== 'number' || !Number.isFinite(result.score) ? {} : { score: result.score }),
+      ...(result.revision === undefined ? {} : { revision: result.revision }),
+      ...(clipped ? { result: {
+        ...result.result,
+        representation: 'excerpt' as const,
+        coverage: 'partial' as const,
+        omitted: [result.result?.omitted, 'Clipped to the Host recall envelope; not a semantic summary.'].filter(Boolean).join(' '),
+      } } : result.result === undefined ? {} : { result: structuredClone(result.result) }),
       ...(result.category === undefined ? {} : { category: boundedModelText(result.category, MODEL_RECALL_METADATA_LIMIT) }),
       ...(typeof result.importance !== 'number' || !Number.isFinite(result.importance) ? {} : { importance: result.importance }),
       ...(result.tags === undefined ? {} : { tags: result.tags.slice(0, MODEL_RECALL_LIST_LIMIT).map(tag => boundedModelText(tag, MODEL_RECALL_METADATA_LIMIT)) }),
@@ -885,8 +921,11 @@ function recoverWriteResult(receipts: readonly CapturedToolReceipt[]): Record<st
   const receipt = receipts.at(-1)
   if (receipt === undefined) return undefined
   const value = optionalObject(receipt.value)
+  const completion = optionalObject(value?.memoryReceipt)?.completion
   const candidateAction = typeof value?.action === 'string' && WRITE_ACTION_SET.has(value.action) ? value.action : undefined
-  const action = candidateAction ?? WRITE_TOOL_FALLBACK_ACTION[receipt.name]
+  const action = typeof completion === 'string' && completion !== 'committed'
+    ? WRITE_ACTION_SET.has(completion) ? completion : 'unknown'
+    : candidateAction ?? WRITE_TOOL_FALLBACK_ACTION[receipt.name]
   if (action === undefined) return undefined
   const memoryBodyIds = new Set<string>()
   const documentIds = new Set<string>()
@@ -905,7 +944,7 @@ function recoverWriteResult(receipts: readonly CapturedToolReceipt[]): Record<st
   }
 }
 
-/** Recover only the bounded public result implied by a committed terminal tool receipt. */
+/** Recover a terminal tool's observed result without promoting handler success to durable completion. */
 function recoverStructuredResult(recovery: ToolReceiptRecovery | undefined, receipts: readonly CapturedToolReceipt[]): Record<string, unknown> | undefined {
   if (recovery === undefined) return undefined
   const terminalTools = new Set(recovery.terminalTools)
@@ -980,7 +1019,7 @@ export class MnemonSubagentCoordinator {
       return {
         query: previous?.query ?? scoped.query,
         mode: previous?.mode ?? scoped.mode ?? 'smart',
-        results: replayEvidence(previous?.results ?? [], scoped.memoryBodyIds),
+        ...replayEvidence(previous, scoped.memoryBodyIds),
         hint: retrieval?.recallAttempts.length === MODEL_RECALL_ATTEMPT_LIMIT
           ? 'This Recall query already ran. The Host replayed its admitted evidence without another Provider query. The turn Recall budget is closed; stop retrieval and answer from the evidence or state what remains unknown.'
           : 'This Recall query already ran. The Host replayed its admitted evidence without another Provider query. If this evidence is insufficient, use at most one materially different focused query; otherwise stop retrieval.',
@@ -992,7 +1031,7 @@ export class MnemonSubagentCoordinator {
       return {
         query: previous?.query ?? scoped.query,
         mode: previous?.mode ?? scoped.mode ?? 'smart',
-        results: replayEvidence(previous?.results ?? [], scoped.memoryBodyIds),
+        ...replayEvidence(previous, scoped.memoryBodyIds),
         hint: 'The two-query turn Recall budget is exhausted. The Host replayed the latest admitted evidence without another Provider query; stop retrieval and answer from the evidence or state what remains unknown.',
       }
     }
@@ -1004,9 +1043,11 @@ export class MnemonSubagentCoordinator {
       // Distinct concurrent tool calls are serialized so the refinement can
       // exclude evidence admitted by the initial query and share one envelope.
       if (predecessor !== undefined) await predecessor
-      const result = authority === undefined
-        ? await this.sourceFor(parent, 'memory-spaces').read<{ query: string; mode: string; results: Insight[] }>('search', scoped, signal)
-        : { query: scoped.query, mode: scoped.mode ?? 'smart', results: evidenceInsights(await this.sourceFor(parent, 'memory-spaces').route('recall', scoped, signal)) }
+      signal.throwIfAborted()
+      const evidence = authority === undefined ? undefined : await source.route('recall', scoped, signal)
+      const result = evidence === undefined
+        ? await source.read<{ query: string; mode: string; results: Insight[] }>('search', scoped, signal)
+        : { query: scoped.query, mode: scoped.mode ?? 'smart', results: evidenceInsights(evidence) }
       const priorAttempts = retrieval?.recallAttempts.slice(0, attemptIndex) ?? []
       const priorResults = priorAttempts.flatMap(entry => entry.result?.results ?? [])
       const priorContentCharacters = priorResults.reduce((total, insight) => total + insight.content.length, 0)
@@ -1033,6 +1074,7 @@ export class MnemonSubagentCoordinator {
         query: result.query,
         mode: result.mode,
         results,
+        ...(evidence === undefined ? {} : { memoryEvidence: recallEvidence(evidence, results) }),
         hint: retrieval === undefined
           ? results.length === 0
             ? 'No durable evidence was admitted; answer with appropriate uncertainty.'
@@ -1134,7 +1176,7 @@ export class MnemonSubagentCoordinator {
       return {
         query: previous?.query ?? `related:${id}`,
         mode: previous?.mode ?? 'related',
-        results: replayEvidence(previous?.results ?? [], selected === undefined ? undefined : [selected]),
+        ...replayEvidence(previous, selected === undefined ? undefined : [selected]),
         hint: retrieval.relatedDigest === digest
           ? 'This exact Related traversal already ran. The Host replayed its admitted evidence without another Provider query; stop retrieval and answer from it.'
           : 'Related traversal is complete for this turn. The Host replayed the admitted evidence; stop retrieval and answer from it.',
@@ -1143,9 +1185,10 @@ export class MnemonSubagentCoordinator {
     if (retrieval !== undefined && digest !== undefined) retrieval.relatedDigest = digest
     const operation = (async (): Promise<RecallResult> => {
       const request = { id, ...(options.depth === undefined ? {} : { depth: options.depth }), ...(options.edge === undefined ? {} : { edge: options.edge }), ...(selected === undefined ? {} : { memoryBodyId: selected }) }
-      const results = authority === undefined
-        ? await this.sourceFor(parent, 'memory-spaces').read<Insight[]>('related', request, signal)
-        : evidenceInsights(await this.sourceFor(parent, 'memory-spaces').route('related', request, signal))
+      const evidence = authority === undefined ? undefined : await source.route('related', request, signal)
+      const results = evidence === undefined
+        ? await source.read<Insight[]>('related', request, signal)
+        : evidenceInsights(evidence)
       const admitted = boundedModelInsights(results, {
         resultLimit: 4,
         totalContentLimit: 4_000,
@@ -1164,6 +1207,7 @@ export class MnemonSubagentCoordinator {
         query: `related:${id}`,
         mode: 'related',
         results: admitted.results,
+        ...(evidence === undefined ? {} : { memoryEvidence: recallEvidence(evidence, admitted.results) }),
         hint: admitted.results.length === 0
           ? 'No new graph evidence was admitted; stop retrieval and answer from the existing evidence.'
           : 'Related traversal is complete for this turn; stop retrieval and answer from the admitted evidence.',
@@ -1298,7 +1342,7 @@ export class MnemonSubagentCoordinator {
 ${naturalRequest(request)}`
     const persona = operation === 'supervised-writeback' ? SUPERVISED_WRITE_PERSONA : WRITE_PERSONA
     const terminalTool = WRITE_OPERATION_RESULT_TOOL[operation]
-    const { provider, runId, result } = await this.delegate(
+    const { provider, runId, result, receipts } = await this.delegate(
       parent,
       'write',
       `Mnemon ${operation}`,
@@ -1311,12 +1355,13 @@ ${naturalRequest(request)}`
       terminalTool === undefined ? undefined : { terminalTools: [terminalTool] },
     )
     const value = object(result.structured)
+    const observed = terminalTool === undefined ? undefined : recoverStructuredResult({ terminalTools: [terminalTool] }, receipts)
     return {
       delegated: true,
       runId,
       provider,
       summary: typeof value.summary === 'string' ? value.summary : '',
-      action: typeof value.action === 'string' ? value.action : 'failed',
+      action: typeof observed?.action === 'string' ? observed.action : typeof value.action === 'string' ? value.action : 'failed',
       memoryBodyIds: strings(value.memoryBodyIds),
       documentIds: strings(value.documentIds),
     }

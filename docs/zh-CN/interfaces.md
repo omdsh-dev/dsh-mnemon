@@ -52,7 +52,7 @@ Headless 会获得完整模型工具面。它把命令行任务作为普通用�
 |---|---|---|
 | `mnemon_runtime_memory` | `add` / `replace` / `remove` 热记忆 | 确定性控制；add 溢出时可能启动 worker |
 | `mnemon_document_manage` | 创建、更新或归档档案 | 创建/更新确定性；归档使用 worker |
-| `mnemon_remember` | 按 Provider 语义沉淀洞察，并等待落定回执 | `spawn` write worker |
+| `mnemon_remember` | 按 Provider 语义沉淀洞察，回执区分已接受与持久提交 | `spawn` write worker |
 | `mnemon_link` | 在支持能力的 Provider 中建立 typed relationship | `spawn` write worker |
 | `mnemon_forget` | 在支持能力的 Provider 中按精确 ID 删除 | `spawn` write worker |
 | `mnemon_memory_body_create` | 由 Agent 创建独立 Mnemon Native 记忆体；第三方连接只由用户在 WebUI 管理 | `spawn` write worker |
