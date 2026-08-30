@@ -1,9 +1,30 @@
-import type { MemoryContributionSnapshot } from './contracts/index.ts'
-import { MemoryGenerationHost, type CompileMemoryGenerationOptions } from './index.ts'
-import { MemoryContributionRegistry, type MemoryContributionInstall, type MemoryContributionListener } from '../sdk/registry.ts'
+import { prepareMemoryContributions, type MemoryContributionSnapshot } from './contributions.ts'
+import { MemoryGenerationHost } from './generation.ts'
+import type { CompileMemoryGenerationOptions } from './composition.ts'
+import { MemoryContributionRegistry, type MemoryContributionInstall, type MemoryContributionListener } from './registry.ts'
+import type { MnemonMemoryService } from '../sdk/service.ts'
+
+interface MemoryCoreContext {
+  provide(name: string, service: MnemonMemoryService): unknown
+  effect(factory: () => () => Promise<void>, label?: string): unknown
+}
+
+/** Only the owning Core/Host receives the engine; plugins receive its service. */
+export function provideMemoryRuntime(context: MemoryCoreContext): MemoryRuntime {
+  const runtime = new MemoryRuntime()
+  context.provide('mnemonMemory', runtime.service)
+  context.effect(() => () => runtime.dispose(), 'dsh-mnemon.core()')
+  return runtime
+}
 
 /** The single Cordis-owned registry of Source and Strategy definitions. */
 export class MemoryRuntime {
+  readonly service: MnemonMemoryService = Object.freeze<MnemonMemoryService>({
+    installContributions: (contribution, options) => {
+      if (this.closed) throw new Error('Memory Runtime is disposed')
+      return this.installContributions(prepareMemoryContributions(contribution, options))
+    },
+  })
   private readonly contributions = new MemoryContributionRegistry()
   private readonly generationAttachments = new Set<MemoryGenerationAttachment>()
   private closed = false

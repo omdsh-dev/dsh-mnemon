@@ -2,8 +2,8 @@ import type {
   InstalledMemorySource,
   InstalledMemoryStrategy,
   MemoryContributionSnapshot,
-} from "../core/contracts/index.ts"
-import { captureMemoryContributionSnapshot } from "../core/composition.ts"
+} from './contributions.ts'
+import { captureMemoryContributionSnapshot } from './composition.ts'
 
 export interface MemoryContributionInstall {
   sources?: readonly InstalledMemorySource[]

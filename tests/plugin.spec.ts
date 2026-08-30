@@ -6,7 +6,8 @@ import type { ToolDefinition, HostAgent } from "../src/host/dsh.ts"
 import { apply, inject } from '../src/index.ts'
 import { MnemonSubagentCoordinator } from "../src/host/subagent.ts"
 import { registerTools } from "../src/host/tools.ts"
-import { MemoryRuntime } from '../src/sdk/index.ts'
+import { MemoryRuntime } from '../src/core/runtime.ts'
+import type { MnemonMemoryService } from 'dsh-mnemon/extension-sdk'
 import { compositionFixture } from './fixtures/composition.ts'
 import { agentScope } from '../src/host/runtime.ts'
 import type { MemoryEvidence } from 'dsh-mnemon/contracts'
@@ -102,9 +103,15 @@ function context(options: { connection?: boolean; workspaceRegistry?: boolean } 
 async function installStarter(target: ReturnType<typeof context>) {
   const assembled = await compositionFixture()
   releases.push(assembled.dispose)
-  const core = target.ctx.get('mnemonMemory') as MemoryRuntime
-  const release = core.installContributions(assembled.extensions.contributionSnapshot())
-  releases.push(release)
+  const core = target.ctx.get('mnemonMemory') as MnemonMemoryService
+  const installed = assembled.extensions.contributionSnapshot()
+  for (const item of [...installed.sources, ...installed.strategies]) {
+    releases.push(core.installContributions(item.kind === 'source' ? { sources: [item.definition] } : { strategies: [item.definition] }, {
+      instanceId: item.provenance.entryId,
+      ...(item.provenance.artifactDigest === undefined ? {} : { artifactDigest: item.provenance.artifactDigest }),
+      ...(item.kind !== 'source' || item.effectiveDigest === undefined ? {} : { effectiveDigest: item.effectiveDigest }),
+    }))
+  }
   return core
 }
 
@@ -393,6 +400,6 @@ describe('dsh-mnemon plugin composition', () => {
     expect(() => candidate.host.acquire()).toThrow('disposed')
     for (const cleanup of fixture.effectCleanups.splice(0).reverse()) await cleanup()
     expect(() => active.host.acquire()).toThrow('disposed')
-    expect(() => (fixture.ctx.get('mnemonMemory') as MemoryRuntime).attachGeneration()).toThrow('disposed')
+    expect(() => (fixture.ctx.get('mnemonMemory') as MnemonMemoryService).installContributions({}, { instanceId: 'closed' })).toThrow('disposed')
   })
 })

@@ -327,29 +327,6 @@ export interface MemoryStrategyDefinition {
   compose(request: MemoryViewRequest, sources: readonly MemorySourceFacts[]): MemoryViewSpec
 }
 
-export interface InstalledMemorySource {
-  kind: 'source'
-  instanceKey: string
-  provenance: MemoryPackageProvenance
-  definition: MemorySourceDefinition
-  effectiveDigest?: string
-}
-
-export interface InstalledMemoryStrategy {
-  kind: 'strategy'
-  instanceKey: string
-  provenance: MemoryPackageProvenance
-  definition: MemoryStrategyDefinition
-}
-
-export type InstalledMemoryContribution = InstalledMemorySource | InstalledMemoryStrategy
-
-export interface MemoryContributionSnapshot {
-  revision: number
-  sources: InstalledMemorySource[]
-  strategies: InstalledMemoryStrategy[]
-}
-
 export interface MemoryCompositionDiagnostic {
   code: string
   message: string

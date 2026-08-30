@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { COMPOSABLE_MEMORY_API_VERSION, type InstalledMemorySource, type InstalledMemoryStrategy, type MemoryContributionSnapshot } from "../src/core/contracts/index.ts"
+import { COMPOSABLE_MEMORY_API_VERSION } from '../src/core/contracts/index.ts'
+import type { InstalledMemorySource, InstalledMemoryStrategy, MemoryContributionSnapshot } from '../src/core/contributions.ts'
 import { MemoryGenerationHost, defineMemorySource, defineMemoryStrategy } from "../src/core/index.ts"
 import { MemoryRuntime } from '../src/core/runtime.ts'
 

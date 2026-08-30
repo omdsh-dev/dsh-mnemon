@@ -2,14 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   COMPOSABLE_MEMORY_API_VERSION,
   type ComposableMemoryView,
-  type InstalledMemorySource,
-  type InstalledMemoryStrategy,
-  type MemoryContributionSnapshot,
   type MemoryJsonValue,
   type MemorySourceDefinition,
   type MemoryStrategyDefinition,
   type MemoryViewRequest,
 } from "../src/core/contracts/index.ts"
+import type { InstalledMemorySource, InstalledMemoryStrategy, MemoryContributionSnapshot } from '../src/core/contributions.ts'
 import {
   MemoryCompositionGeneration,
   MemoryCompositionRunner,

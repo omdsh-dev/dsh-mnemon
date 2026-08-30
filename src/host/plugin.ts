@@ -9,7 +9,7 @@ import { registerSettingsRpc } from './settings.ts'
 import { MnemonSubagentCoordinator } from './subagent.ts'
 import { registerTools } from './tools.ts'
 import { registerMnemonSubagentTokenUsageProjection } from './subagent-token-usage.ts'
-import { provideMemoryRuntime } from '../core/plugin.ts'
+import { provideMemoryRuntime } from '../core/runtime.ts'
 
 export const name = 'dsh-mnemon'
 export const provide = ['mnemonMemory']

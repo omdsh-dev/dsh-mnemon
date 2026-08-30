@@ -2,11 +2,11 @@ import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import { COMPOSABLE_MEMORY_API_VERSION, type MemorySourceDefinition, type MemoryStrategyDefinition } from "../src/core/contracts/index.ts"
 import {
-  MemoryRuntime,
   defineMemorySource,
   defineMemoryStrategy,
   installMemory,
 } from "../src/sdk/index.ts"
+import { MemoryRuntime } from '../src/core/runtime.ts'
 
 function source(typeId = 'example'): MemorySourceDefinition {
   return defineMemorySource({
@@ -55,11 +55,44 @@ function strategy(typeId = 'example'): MemoryStrategyDefinition {
 async function host(): Promise<{ ctx: Context; runtime: MemoryRuntime }> {
   const ctx = new Context()
   const runtime = new MemoryRuntime()
-  ctx.provide('mnemonMemory', runtime)
+  ctx.provide('mnemonMemory', runtime.service)
   return { ctx, runtime }
 }
 
 describe('Composable Memory extension SDK', () => {
+  it('publishes an actual narrow, immutable service object instead of the engine', async () => {
+    const { ctx, runtime } = await host()
+    expect(ctx.mnemonMemory).toBe(runtime.service)
+    expect(ctx.mnemonMemory).not.toBe(runtime)
+    expect(Object.keys(ctx.mnemonMemory)).toEqual(['installContributions'])
+    expect(Object.isFrozen(ctx.mnemonMemory)).toBe(true)
+    for (const name of ['dispose', 'attachGeneration', 'contributionSnapshot', 'onContributionsChanged', 'contributions']) {
+      expect(name in ctx.mnemonMemory).toBe(false)
+    }
+    await runtime.dispose()
+    expect(() => ctx.mnemonMemory.installContributions({ sources: [source()] }, { instanceId: 'closed' })).toThrow('disposed')
+  })
+
+  it('accepts only definitions at the service boundary and validates before changing the registry', async () => {
+    const { ctx, runtime } = await host()
+    const release = ctx.mnemonMemory.installContributions({ sources: [source('work'), source('personal')] }, {
+      instanceId: 'include:notes', effectiveDigest: 'backend:r1', artifactDigest: 'artifact:r1',
+    })
+    expect(runtime.contributionSnapshot().sources).toMatchObject([
+      { instanceKey: 'source:include:notes/work', effectiveDigest: 'backend:r1', provenance: { entryId: 'include:notes', artifactDigest: 'artifact:r1' } },
+      { instanceKey: 'source:include:notes/personal' },
+    ])
+    const snapshot = runtime.contributionSnapshot()
+    expect(() => ctx.mnemonMemory.installContributions({ sources: [source()], strategies: [strategy()] }, { instanceId: 'mixed' })).toThrow('cannot install both')
+    expect(() => ctx.mnemonMemory.installContributions({}, { instanceId: 'empty' })).toThrow('one Source or Strategy')
+    expect(() => ctx.mnemonMemory.installContributions({ sources: [source()] }, { instanceId: ' ' })).toThrow('stable Loader Entry')
+    expect(runtime.contributionSnapshot()).toEqual(snapshot)
+    release()
+    release()
+    expect(runtime.contributionSnapshot()).toMatchObject({ revision: 2, sources: [], strategies: [] })
+    await runtime.dispose()
+  })
+
   it('binds installMemory registration and disposer to the calling Cordis Fiber', async () => {
     const { ctx, runtime } = await host()
     const definition = source()

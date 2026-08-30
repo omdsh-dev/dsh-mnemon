@@ -3,28 +3,25 @@ import { describe, expect, it, vi } from 'vitest'
 import * as core from "../src/core/plugin.ts"
 import { COMPOSABLE_MEMORY_API_VERSION } from "../src/core/contracts/index.ts"
 import { defineMemorySource, defineMemoryStrategy, installMemory } from "../src/sdk/index.ts"
+import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
 
 describe('Source-neutral Core entry', () => {
   it('mounts on plain Cordis without a DSH default service or built-in contribution', async () => {
     const ctx = new Context()
     const fiber = ctx.plugin(core)
     await fiber.await()
-    const runtime = ctx.mnemonMemory
+    const service = ctx.mnemonMemory
     expect(core.inject).toEqual([])
-    expect(runtime.contributionSnapshot()).toMatchObject({ sources: [], strategies: [] })
-    const attachment = runtime.attachGeneration()
-    expect(attachment.host.inspect().evaluation.state).toBe('incomplete')
+    expect(Object.keys(core).sort()).toEqual(['apply', 'inject', 'name', 'provide'])
+    expect(Object.keys(service)).toEqual(['installContributions'])
+    expect(Object.isFrozen(service)).toBe(true)
     await fiber.dispose()
-    expect(() => runtime.attachGeneration()).toThrow('disposed')
-    expect(() => attachment.host.acquire()).toThrow('disposed')
-    await runtime.dispose()
+    expect(() => service.installContributions({}, { instanceId: 'closed' })).toThrow('disposed')
+    expect(ctx.get('mnemonMemory', false)).toBeUndefined()
   })
 
   it('supports third-party Source/Strategy turns without the default bundle and owns shutdown', async () => {
-    const ctx = new Context()
-    const fiber = ctx.plugin(core)
-    await fiber.await()
-    const runtime = ctx.mnemonMemory
+    const runner = new MemoryCompositionRunner()
     const disposed = vi.fn()
     const source = defineMemorySource({
       manifest: {
@@ -52,22 +49,17 @@ describe('Source-neutral Core entry', () => {
         sourceInstanceKey: fact.sourceInstanceKey, projection: { mode: 'eager', maxCharacters: 1_000 }, routes: [], actions: [],
       })) }),
     })
-    const sources = ctx.plugin({ inject: ['mnemonMemory'], apply(child: Context) {
-      installMemory(child, { sources: [source] }, { instanceId: 'notes' })
-    } })
-    const strategies = ctx.plugin({ inject: ['mnemonMemory'], apply(child: Context) {
-      installMemory(child, { strategies: [strategy] }, { instanceId: 'view' })
-    } })
-    await Promise.all([sources.await(), strategies.await()])
-    const attachment = runtime.attachGeneration()
-    const turns = new core.ComposableMemoryTurnManager(attachment.host)
-    const turn = await turns.beginTurn('test:1', { storage: 'custom' })
-    expect(turns.memoryWake(turn.view.id).text).toBe('Only external notes')
-    turns.dispose()
-    await fiber.dispose()
-    expect(disposed).toHaveBeenCalledOnce()
-    expect(() => runtime.installContributions({ sources: [] })).toThrow('disposed')
-    await Promise.all([sources.dispose(), strategies.dispose(), attachment.dispose()])
+    try {
+      await runner.mount({ inject: ['mnemonMemory'], apply(child: Context) {
+        installMemory(child, { sources: [source] })
+      } }, { instanceId: 'notes' })
+      await runner.mount({ inject: ['mnemonMemory'], apply(child: Context) {
+        installMemory(child, { strategies: [strategy] })
+      } }, { instanceId: 'view' })
+      const turn = await runner.beginTurn()
+      try { expect(turn.view.projection.map(fragment => fragment.text)).toEqual(['Only external notes']) }
+      finally { turn.release() }
+    } finally { await runner.dispose() }
     expect(disposed).toHaveBeenCalledOnce()
   })
 })

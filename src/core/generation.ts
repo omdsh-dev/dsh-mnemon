@@ -1,8 +1,8 @@
 import type {
   MemoryCompositionDiagnostic,
   MemoryCompositionEvaluationReport,
-  MemoryContributionSnapshot,
 } from "./contracts/index.ts"
+import type { MemoryContributionSnapshot } from './contributions.ts'
 import {
   MemoryCompositionGeneration,
   type CompileMemoryGenerationOptions,

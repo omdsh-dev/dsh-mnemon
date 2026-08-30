@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { canonicalMemoryJson } from "../core/composition.ts"
+import { canonicalMemoryJson } from '../core/definitions.ts'
 import type { MemoryJsonValue, MemoryMutationReceipt, MemoryMigrationLineage } from "../core/contracts/index.ts"
 
 /** Stable digest of validated configuration; raw values never enter diagnostics. */

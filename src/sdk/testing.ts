@@ -1,6 +1,6 @@
 import { Context, type Plugin } from '@deepseek-ai/cordis'
 import { readFileSync } from 'node:fs'
-import { MemoryRuntime } from "./index.ts"
+import { MemoryRuntime } from '../core/runtime.ts'
 import {
   DEFAULT_MEMORY_VIEW_BUDGET,
   type CompileMemoryGenerationOptions,
@@ -43,7 +43,7 @@ export class MemoryCompositionRunner {
   private closed = false
 
   constructor(options: CompileMemoryGenerationOptions = {}) {
-    this.context.provide('mnemonMemory', this.runtime)
+    this.context.provide('mnemonMemory', this.runtime.service)
     this.context.provide('loader', {
       locate: (fiber: object) => this.entryIds.get(fiber),
       import: (specifier: string) => import(specifier),
