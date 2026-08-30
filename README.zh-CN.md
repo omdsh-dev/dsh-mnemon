@@ -34,13 +34,7 @@
 
 Runtime、Documents、Memory Spaces 是独立 Source 插件；Strategy 将各实例的投影、检索 route 与 action 组合成逐回合不可变 View。Core 只提供 `ctx.mnemonMemory`，Source 拥有数据与可选页面，Memory Spaces 自己拥有内部 Provider 子节点。`dsh-mnemon` Starter 保持默认三层使用体验。详见[架构](./docs/zh-CN/architecture.md)与[插件开发](./docs/zh-CN/extensions.md)。
 
-v0.4.0 将 Sidebar 设为记忆系统的唯一工作台入口，移除 builtin 展示模式及其设置。旧展示偏好会被忽略，不改变记忆数据；完整的 view-based 升级计划放在 v0.5，不包含在本版中。更新前请阅读[升级与兼容性说明](./docs/zh-CN/releases/v0.4.0.md#升级与兼容性)。
-
-v0.4.1 修复记忆系统和存入记忆在依赖 `this` 的 DSH settings store 上的渲染崩溃，以及 ZIP 导出失败和跨时区归档差异；保留 v0.4.0 工作流与既有记忆格式。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.1.md)。
-
-v0.4.2 恢复可选 `displayMode: builtin`，只将 Sidebar 优先迭代的共用界面放入会话。旧 `buildin` 仍可识别，并自动保存为 `builtin`，不改变记忆数据。详见[发布说明](./docs/zh-CN/releases/v0.4.2.md)与[入口位置与范围映射](./docs/zh-CN/configuration.md#入口位置displaymode-与-tabenabled)。
-
-v0.4.3 让折叠后的记忆系统图标与侧栏相邻控件对齐，并保留原有展开样式。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.3.md)。
+本分支准备 **v0.5.0-beta.1：View-based Memory 与 Source/Strategy 插件**。SDK 处于 beta，尚未承诺冻结扩展 ABI；默认用户配置与使用流程保持兼容。开发验证不会发布这些制品。参阅 [beta 范围与升级说明](./docs/zh-CN/releases/v0.5.0-beta.1.md)；v0.4 仍是独立的 Sidebar 收敛发行线。
 
 v0.4.4 同时支持新旧 DSH 会话投影接口，修复旧版宿主读取会话历史失败的问题，并保持新版宿主和已有投影检查点兼容。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.4.md)。
 

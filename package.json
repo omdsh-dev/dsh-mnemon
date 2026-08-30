@@ -1,6 +1,6 @@
 {
   "name": "dsh-mnemon",
-  "version": "0.4.0",
+  "version": "0.5.0-beta.1",
   "description": "Composable three-tier memory control plane for DeepSeek Harness: persistent runtime context, searchable project documents, pluggable long-term memory, guarded strategies, WebUI, and headless tools.",
   "keywords": [
     "deepseek-harness",
@@ -44,7 +44,8 @@
   },
   "license": "MIT",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "beta"
   },
   "engines": {
     "node": ">=20"
@@ -127,25 +128,26 @@
     "e2e:serve": "node scripts/serve-e2e.mjs",
     "verify": "pnpm run typecheck && pnpm run verify:build && pnpm --workspace-concurrency=1 -r build && pnpm -r typecheck && pnpm -r test && pnpm run test && pnpm run verify:headless && pnpm run verify:package",
     "dsh:link-source": "node scripts/link-dsh-source.mjs",
-    "dsh:restore-registry": "node scripts/link-dsh-source.mjs --restore"
+    "dsh:restore-registry": "node scripts/link-dsh-source.mjs --restore",
+    "release:check": "node scripts/release.mjs --check"
   },
   "dependencies": {
     "fflate": "^0.8.3",
     "schemastery": "^3.18.0",
     "zod": "^4.4.3",
-    "dsh-mnemon-provider-byterover": "^0.4.0",
-    "dsh-mnemon-provider-hindsight": "^0.4.0",
-    "dsh-mnemon-provider-holographic": "^0.4.0",
-    "dsh-mnemon-provider-honcho": "^0.4.0",
-    "dsh-mnemon-provider-mem0": "^0.4.0",
-    "dsh-mnemon-provider-mnemon-native": "^0.4.0",
-    "dsh-mnemon-provider-openviking": "^0.4.0",
-    "dsh-mnemon-provider-retaindb": "^0.4.0",
-    "dsh-mnemon-provider-supermemory": "^0.4.0",
-    "dsh-mnemon-source-documents": "^0.4.0",
-    "dsh-mnemon-source-memory-spaces": "^0.4.0",
-    "dsh-mnemon-source-runtime": "^0.4.0",
-    "dsh-mnemon-strategy-default-three-tier": "^0.4.0"
+    "dsh-mnemon-provider-byterover": "0.5.0-beta.1",
+    "dsh-mnemon-provider-hindsight": "0.5.0-beta.1",
+    "dsh-mnemon-provider-holographic": "0.5.0-beta.1",
+    "dsh-mnemon-provider-honcho": "0.5.0-beta.1",
+    "dsh-mnemon-provider-mem0": "0.5.0-beta.1",
+    "dsh-mnemon-provider-mnemon-native": "0.5.0-beta.1",
+    "dsh-mnemon-provider-openviking": "0.5.0-beta.1",
+    "dsh-mnemon-provider-retaindb": "0.5.0-beta.1",
+    "dsh-mnemon-provider-supermemory": "0.5.0-beta.1",
+    "dsh-mnemon-source-documents": "0.5.0-beta.1",
+    "dsh-mnemon-source-memory-spaces": "0.5.0-beta.1",
+    "dsh-mnemon-source-runtime": "0.5.0-beta.1",
+    "dsh-mnemon-strategy-default-three-tier": "0.5.0-beta.1"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",

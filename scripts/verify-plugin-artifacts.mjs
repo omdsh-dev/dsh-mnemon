@@ -12,6 +12,7 @@ const args = new Set(process.argv.slice(2))
 for (const arg of args) if (!['--skip-build', '--keep'].includes(arg)) throw new Error(`Unknown argument: ${arg}`)
 const names = (await readdir(join(root, 'plugins'))).filter(name => name.startsWith('dsh-mnemon-')).sort()
 const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
+const distTag = manifest.publishConfig.tag
 const temporary = await mkdtemp(join(tmpdir(), 'mnemon-plugin-artifacts-'))
 assert(!inside(root, temporary), 'The consumer must be outside the development workspace')
 const artifacts = new Map()
@@ -27,7 +28,7 @@ const registry = createServer((request, response) => {
   } else if (artifactManifests.has(path)) {
     const value = artifactManifests.get(path)
     response.writeHead(200, { 'content-type': 'application/json' })
-    response.end(JSON.stringify({ name: path, 'dist-tags': { latest: value.version }, versions: { [value.version]: { ...value, dist: { tarball: registryUrl + '/tarballs/' + path } } } }))
+    response.end(JSON.stringify({ name: path, 'dist-tags': { [distTag]: value.version }, versions: { [value.version]: { ...value, dist: { tarball: registryUrl + '/tarballs/' + path } } } }))
   } else {
     response.writeHead(307, { location: 'https://registry.npmjs.org' + request.url })
     response.end()

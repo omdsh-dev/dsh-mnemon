@@ -15,7 +15,10 @@ jobs:
   publish:
     name: Publish release
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+      RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
     steps:
       - name: Check out release
         uses: actions/checkout@v6
@@ -32,15 +35,8 @@ jobs:
       - name: Install release tooling
         run: npm install --global npm@11 pnpm@10.13.1
 
-      - name: Verify release tag
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        run: |
-          package_version="$(node --print "require('./package.json').version")"
-          if [[ "$RELEASE_TAG" != "v$package_version" ]]; then
-            echo "Release tag $RELEASE_TAG does not match package version v$package_version" >&2
-            exit 1
-          fi
+      - name: Verify complete release and channel
+        run: pnpm run release:check
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -48,10 +44,10 @@ jobs:
       - name: Verify package
         run: pnpm run verify
 
-      - name: Pack release
-        run: npm pack --ignore-scripts
+      - name: Verify independent plugin artifacts and one-package installation
+        run: pnpm run verify:plugins
 
-      - name: Publish packed release
-        run: npm publish "dsh-mnemon-$(node --print "require('./package.json').version").tgz" --access public --ignore-scripts
+      - name: Pack all artifacts and publish plugins before the Starter
+        run: node scripts/release.mjs --publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

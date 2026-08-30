@@ -94,6 +94,14 @@ pnpm dsh:restore-registry
 
 Build Harness with its own `pnpm install --frozen-lockfile && pnpm build:lib` first. Linking changes generated `node_modules` only, not committed dependency versions. The rc.2 and alpha RPC/service contracts have dedicated tests; an alpha CI configuration is not a claim that a current local run used alpha.
 
+## Coordinated beta releases
+
+`pnpm release:check` is read-only. It checks the Root and all thirteen official plugins, exact internal dependency/peer versions, the release tag and `publishConfig.tag`. This coordinated version policy applies to the official distribution, not third-party repositories. Beta dependencies pin the tested prerelease explicitly; `^0.4.0` cannot install a `0.5.0-beta.1` SDK.
+
+`node scripts/release.mjs --pack` packs every built artifact into a printed temporary directory without publishing. The GitHub Release workflow runs `verify` and the external artifact suite, packs everything, then publishes the thirteen plugins before the Starter. Prereleases require GitHub's prerelease flag and an explicit `alpha`, `beta` or `rc` npm tag; stable releases require `latest`. Direct publication also inherits the package's explicit `publishConfig.tag`. Do not publish only the Root.
+
+`--publish` is an explicit registry write and requires `RELEASE_TAG` and `RELEASE_PRERELEASE`. npm publication is not transactional: on any failure the workflow stops and does not publish the remaining packages. Keep the logs/artifacts, inspect which immutable versions were published, then prepare a fresh coordinated version rather than overwriting or unpublishing them. A release is complete only after all packages are present. Development verification never creates a Git tag, GitHub Release or npm publication.
+
 ## Documentation, storage and historical evidence
 
 Keep English/Chinese pages aligned and public examples executable. Code-native Mermaid diagrams describe ownership and flow; real screenshots remain under `docs/assets`. Do not retain dead directory stubs or historical wrapper files.

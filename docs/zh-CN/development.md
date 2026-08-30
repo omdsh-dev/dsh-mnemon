@@ -94,6 +94,14 @@ pnpm dsh:restore-registry
 
 Harness 先运行自己的 `pnpm install --frozen-lockfile && pnpm build:lib`。链接仅更改生成的 `node_modules`，不改提交的依赖版本。rc.2/alpha RPC 与服务协议有专项测试；CI 有 alpha 任务，不代表当前本地运行已经使用 alpha。
 
+## 成组 beta 发布
+
+`pnpm release:check` 只读检查根包与十三个官方插件、精确内部依赖/peer 版本、Release tag 和 `publishConfig.tag`。成组版本约束只针对官方发行组合，不限制第三方仓库。Beta 依赖显式固定已验证的预发布版本；`^0.4.0` 无法安装 `0.5.0-beta.1` SDK。
+
+`node scripts/release.mjs --pack` 将所有已构建制品打包到输出的临时目录，不执行发布。GitHub Release 流程先执行 `verify` 与外部制品验证，全部打包成功后，依次发布十三个插件，最后发布 Starter。预发布要求 GitHub prerelease 标记，并显式使用 npm `alpha`、`beta` 或 `rc` tag；正式版要求 `latest`。直接发布也继承包内显式的 `publishConfig.tag`。不能只发布根包。
+
+`--publish` 是显式 registry 写操作，要求 `RELEASE_TAG` 和 `RELEASE_PRERELEASE`。npm 发布不是事务：任何失败都会停止流程，不再发布剩余包。保留日志/制品，确认已发布的不可变版本，然后准备新的完整成组版本，不能覆盖或撤销已发布版本。所有包均可获取后，才算发布完成。开发验证不会创建 Git tag、GitHub Release 或 npm 发布。
+
 ## 文档、存储与历史证据
 
 保持中英文页面一致、公开示例可执行。Mermaid 表达归属和流程；真实截图位于 `docs/assets`。不保留空目录占位或历史转发文件。

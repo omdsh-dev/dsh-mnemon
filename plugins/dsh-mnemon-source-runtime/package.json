@@ -1,6 +1,6 @@
 {
   "name": "dsh-mnemon-source-runtime",
-  "version": "0.4.0",
+  "version": "0.5.0-beta.1",
   "description": "Self-contained runtime Source for Composable View Memory.",
   "license": "MIT",
   "type": "module",
@@ -47,12 +47,12 @@
     "schemastery": "^3.18.0"
   },
   "peerDependencies": {
-    "dsh-mnemon": "^0.4.0",
+    "dsh-mnemon": "0.5.0-beta.1",
     "@deepseek-ai/cordis": "^4.0.1",
     "react": "^18.2.0"
   },
   "devDependencies": {
-    "dsh-mnemon": "^0.4.0",
+    "dsh-mnemon": "0.5.0-beta.1",
     "@types/node": "^22.0.0",
     "typescript": "^5.9.0",
     "tsdown": "^0.22.0",
@@ -69,5 +69,9 @@
     "react": {
       "optional": true
     }
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "beta"
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "dsh-mnemon-provider-retaindb",
-  "version": "0.4.0",
+  "version": "0.5.0-beta.1",
   "description": "RetainDB Provider child for the Memory Spaces Source.",
   "license": "MIT",
   "type": "module",
@@ -29,7 +29,7 @@
     "verify": "pnpm typecheck && pnpm test && pnpm build"
   },
   "peerDependencies": {
-    "dsh-mnemon-source-memory-spaces": "^0.4.0",
+    "dsh-mnemon-source-memory-spaces": "0.5.0-beta.1",
     "@deepseek-ai/cordis": "^4.0.1"
   },
   "devDependencies": {
@@ -37,6 +37,10 @@
     "typescript": "^5.9.0",
     "tsdown": "^0.22.0",
     "vitest": "^3.2.0",
-    "dsh-mnemon-source-memory-spaces": "^0.4.0"
+    "dsh-mnemon-source-memory-spaces": "0.5.0-beta.1"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "beta"
   }
 }

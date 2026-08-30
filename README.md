@@ -34,13 +34,7 @@
 
 Runtime, Documents and Memory Spaces are independent Source plugins. A Strategy selects their instance-specific projections, retrieval routes and actions into an immutable per-turn View. Core provides only `ctx.mnemonMemory`; Sources own their data and optional pages, while Memory Spaces owns its private Provider children. The `dsh-mnemon` Starter preserves the default three-tier experience. See [Architecture](./docs/en/architecture.md) and [Plugin development](./docs/en/extensions.md).
 
-v0.4.0 makes Sidebar the only Memory System workspace and removes the builtin display mode and its setting. Legacy display preferences are ignored without changing memory data; the complete view-based upgrade is planned for v0.5, not this release. Read the [upgrade and compatibility notes](./docs/en/releases/v0.4.0.md#upgrade-and-compatibility) before updating.
-
-v0.4.1 fixes Memory System and Save to memory rendering with this-dependent DSH settings stores, plus ZIP export failures and archive differences across timezones. It preserves the v0.4.0 workflow and existing memory formats. See the [patch release notes](./docs/en/releases/v0.4.1.md).
-
-v0.4.2 restores optional `displayMode: builtin` as a conversation placement for the same Sidebar-first UI. Legacy `buildin` is accepted and automatically saved as `builtin`; memory data is unchanged. See the [release notes](./docs/en/releases/v0.4.2.md) and [entry placement and scope mapping](./docs/en/configuration.md#entry-placement-displaymode-and-tabenabled).
-
-v0.4.3 aligns the collapsed Memory System icon with neighboring sidebar controls while preserving the expanded appearance. See the [patch release notes](./docs/en/releases/v0.4.3.md).
+This branch prepares **v0.5.0-beta.1: View-based Memory and Source/Strategy plugins**. The SDK is beta, not a frozen extension ABI; the default user configuration and workflows remain compatible. These artifacts are not published by development verification. See [beta scope and upgrade notes](./docs/en/releases/v0.5.0-beta.1.md); v0.4 remains the separate Sidebar-convergence release line.
 
 v0.4.4 fixes session history failures on older DSH hosts by supporting both session projection contracts. Newer hosts and existing projection checkpoints remain compatible. See the [patch release notes](./docs/en/releases/v0.4.4.md).
 
