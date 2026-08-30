@@ -2256,7 +2256,9 @@ export function MnemonView(props: MnemonViewProps): JSX.Element {
 
 function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, workspaceSelection, onClose }: MnemonViewProps): JSX.Element {
   const t = useT()
-  const settingsSnapshot = useSyncExternalStore(settingsScope.subscribe, settingsScope.getSnapshot, settingsScope.getSnapshot)
+  const subscribeSettings = useCallback((listener: () => void) => settingsScope.subscribe(listener), [settingsScope])
+  const getSettingsSnapshot = useCallback(() => settingsScope.getSnapshot(), [settingsScope])
+  const settingsSnapshot = useSyncExternalStore(subscribeSettings, getSettingsSnapshot, getSettingsSnapshot)
   const client = useMemo(() => new MnemonClient(connection, sessionId, workspaceId), [connection, sessionId, workspaceId])
   const clientContextKey = `${sessionId ?? ''}\u0000${workspaceId ?? ''}`
   const viewContextKey = `${clientContextKey}\u0000${settingsSnapshot.revision ?? 'loading'}`

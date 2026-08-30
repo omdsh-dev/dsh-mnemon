@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState, useSyncExternalStore, type JSX } from 'react'
+import { memo, useCallback, useEffect, useRef, useState, useSyncExternalStore, type JSX } from 'react'
 import { Button, IconDataOutline16, Modal, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ClientConnectionHandle, ClientSettingsScope, Config } from '../shared/contracts.ts'
 import { MnemonClient } from './api.ts'
@@ -24,7 +24,9 @@ const PREVIEW_LIMIT = 8000
 
 /** Save-to-memory action on finalized assistant messages, routed through the supervised writeback gate. */
 export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sessionId, connection, settingsScope, t }: MnemonSaveActionProps): JSX.Element {
-  const settingsSnapshot = useSyncExternalStore(settingsScope.subscribe, settingsScope.getSnapshot, settingsScope.getSnapshot)
+  const subscribeSettings = useCallback((listener: () => void) => settingsScope.subscribe(listener), [settingsScope])
+  const getSettingsSnapshot = useCallback(() => settingsScope.getSnapshot(), [settingsScope])
+  const settingsSnapshot = useSyncExternalStore(subscribeSettings, getSettingsSnapshot, getSettingsSnapshot)
   const managementWritable = settingsSnapshot.status === 'ready' && settingsSnapshot.writable
   const [open, setOpen] = useState(false)
   const [writeEnabled, setWriteEnabled] = useState<boolean | undefined>(undefined)
