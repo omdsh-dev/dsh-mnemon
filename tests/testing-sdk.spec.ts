@@ -51,6 +51,63 @@ async function fixture(options: MemoryTestOptions = {}, customize: (context: Mem
 }
 
 describe('independent plugin testing SDK', () => {
+  it('composes a read-only combined plugin while private Fiber maintenance remains independent of View execution', async () => {
+    const runner = new MemoryCompositionRunner()
+    runners.push(runner)
+    let refresh!: (value: string) => void
+    let watching = false
+    const unmount = await runner.mount({ inject: ['mnemonMemory'], apply(ctx: Context) {
+      let content = 'original private data'
+      ctx.effect(() => {
+        watching = true
+        refresh = value => { content = value }
+        return () => { watching = false }
+      })
+      installMemory(ctx, {
+        sources: [defineMemorySource({
+          manifest: { apiVersion: COMPOSABLE_MEMORY_API_VERSION, kind: 'source', typeId: 'private-tree', packageName: 'dsh-mnemon-paired',
+            role: 'tree', capabilities: ['read'], consistency: 'exact-snapshot',
+            routes: [{ id: 'open-node', description: 'Read the pinned private representation', capability: 'read', inputSchema: { type: 'object' }, maxCalls: 3,
+              semantics: { actions: ['read'], targets: ['records'], effects: [], representations: ['raw'], overflow: 'unavailable', retry: 'safe' },
+            }],
+          },
+          create: context => ({
+            facts: () => ({ sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: 'private-tree', role: 'tree', availability: 'ready',
+              revision: content, capabilities: ['read'], routeIds: ['open-node'], actionIds: [] }),
+            project: () => ({ fragments: [], readGrant: { id: 'pinned-tree', sourceInstanceKey: context.sourceInstanceKey,
+              schema: 'private-tree/v1', value: content, revision: content, consistency: 'exact-snapshot' } }),
+            query: ({ view, route, grant }) => ({ id: 'node', viewId: view.id, routeId: route.id, sourceInstanceKey: context.sourceInstanceKey,
+              observedAt: '2026-08-31T00:00:00.000Z', truncated: false,
+              items: [{ id: 'node', text: String(grant.value), provenance: { source: 'private-tree' }, result: { representation: 'raw', coverage: 'complete' } }],
+            }),
+          }),
+        })],
+        strategies: [defineMemoryStrategy({
+          manifest: { apiVersion: COMPOSABLE_MEMORY_API_VERSION, kind: 'strategy', typeId: 'paired', packageName: 'dsh-mnemon-paired',
+            deterministic: true, supportedSourceRoles: ['tree'], maxSources: 1, maxRoutes: 1, maxActions: 1 },
+          compose: (_request, sources) => ({ strategyTypeId: 'paired', explanation: 'Use my own Source or a compatible replacement.',
+            sources: sources.map(source => ({ sourceInstanceKey: source.sourceInstanceKey,
+              routeIds: source.routes.filter(route => route.semantics?.actions.includes('read')).map(route => route.id),
+            })),
+          }),
+        })],
+      })
+    } }, { instanceId: 'paired' })
+    expect(watching).toBe(true)
+    expect(runner.inspect().evaluation).toMatchObject({ state: 'ready', contributionRevision: 1 })
+    const pinned = await runner.beginTurn()
+    refresh('index refreshed privately')
+    const next = await runner.beginTurn()
+    const read = (turn: MemoryTestTurn) => turn.executeRoute(turn.view.routes[0]!.id, {})
+    expect((await read(pinned)).items[0]!.text).toBe('original private data')
+    expect((await read(next)).items[0]!.text).toBe('index refreshed privately')
+    await unmount()
+    expect(watching).toBe(false)
+    await expect(runner.beginTurn()).rejects.toThrow('no Serving')
+    // In-use Views retain their Source runtime/grant, not the private watcher Fiber.
+    expect((await read(pinned)).items[0]!.text).toBe('original private data')
+  })
+
   it('exposes operations and immutable diagnostics, not engine handles', async () => {
     const { runner } = await fixture()
     const turn = await runner.beginTurn()

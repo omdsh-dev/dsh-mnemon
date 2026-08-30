@@ -27,9 +27,6 @@ export interface MemoryContributionSnapshot {
 export function prepareMemoryContributions(contribution: MemoryInstallContribution, options: InstallMemoryOptions & { instanceId: string }): Pick<MemoryContributionSnapshot, 'sources' | 'strategies'> {
   const sources = [...(contribution.sources ?? [])]
   const strategies = [...(contribution.strategies ?? [])]
-  if (sources.length > 0 && strategies.length > 0) {
-    throw new Error('one dsh-mnemon plugin cannot install both a Source and a Strategy')
-  }
   const entryId = options.instanceId.trim()
   if (entryId === '') throw new Error('installMemory requires a stable Loader Entry id')
   const provenance = (packageName: string): MemoryPackageProvenance => ({

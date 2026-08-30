@@ -21,8 +21,8 @@ function stableEntryId(ctx: Context, explicit: string | undefined): string {
 }
 
 /**
- * Register one plugin's primary contribution and bind it to the calling Fiber.
- * Source and Strategy packages intentionally use the same installation path.
+ * Register a plugin's Source and/or Strategy definitions as one Fiber-owned batch.
+ * Contribution roles do not dictate package or repository boundaries.
  */
 export function installMemory(ctx: Context, contribution: MemoryInstallContribution, options: InstallMemoryOptions = {}): void {
   const entryId = stableEntryId(ctx, options.instanceId)

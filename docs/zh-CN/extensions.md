@@ -4,7 +4,7 @@
 
 先确定归属，再写代码。[plugin-consumer](../../scripts/fixtures/plugin-consumer/) 中的完整示例，会在仓库外只依赖打包制品编译和测试。
 
-## 一个插件，一种主要职责
+## 区分贡献的职责
 
 | 插件 | 拥有 | 公开依赖 |
 |---|---|---|
@@ -58,7 +58,7 @@ export function apply(ctx: Context): void {
 }
 ```
 
-以上假定 `source.js` 导出定义；完整文件记忆示例见 [external-source.ts](../../scripts/fixtures/plugin-consumer/src/external-source.ts)。一个插件注册 Source **或** Strategy，不兼任二者。
+以上假定 `source.js` 导出定义；完整文件记忆示例见 [external-source.ts](../../scripts/fixtures/plugin-consumer/src/external-source.ts)。Source 与 Strategy 是职责，不是强制分包/分仓。一个 OptMem 式插件可以调用 `installMemory(ctx, { sources: [source], strategies: [strategy] })`，在同一 Fiber 下成批安装、一起卸载，保留不同的实例 key；仅在需要独立复用/替换时拆包。Strategy 仍需显式选择，随包提供不等于覆盖用户的选择。
 
 Entry id 标识实例，type id 标识实现。不能剥掉 Loader 的 include 前缀。没有 Loader 身份的直接 `ctx.plugin()` 挂载，应传 `installMemory(..., { instanceId })`。路径和凭据归实例，不使用模块全局数据库或服务注册表。
 
@@ -88,6 +88,8 @@ semantics: {
 ```
 
 动作是 `record / wake / read / compress / forget`，对象区分记录、表示、关系、目录、可见性、使用元数据和候选。一条多模式操作声明的是**所有可能副作用的上界**，不是交给 Core 执行的动作序列。若调用者需要分别授权，应拆成不同的可选操作，内部仍可复用同一个处理器。使摘要失效不等于删除原文；记录 RSI 候选也不等于激活策略。
+
+五类动作是描述词汇，不是五个强制接口或统一记忆生命周期；只读 Source 无须实现变更、压缩或摘要树。已有 `capabilities` 用于 Host 权限分类，语义 `actions` 用于跨操作名称的组合选择（例如 search、related 均可描述为 read）。可用描述由 Core 推导，作者不必在 Facts 中再次填写。私有监听、索引、摘要维护、Provider 保养可由插件自己的 Cordis Fiber 使用宿主能力完成；纯 compose 与 View 调用边界不意味着存在统一维护调度器。只有用于跨插件选择、执行约束或解释 View 结果的字段才进入公共协议。
 
 Source 的 `facts` 仍只需返回可用性、版本、能力及操作 ID。Core 根据 Manifest、动态 Facts 和 Host 权限生成 `MemoryAvailableSource`，把其 `projection / routes / actions` 交给 `compose`。例如 Strategy 可通过 `source.routes.filter(route => route.semantics?.actions.includes('read') && route.semantics.effects.length === 0)` 选择纯读，不必认识 `search / recall` 等 ID。未声明语义表示**未知**，不是 Core 自动推断的支持。
 

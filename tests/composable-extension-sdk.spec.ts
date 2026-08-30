@@ -83,7 +83,7 @@ describe('Composable Memory extension SDK', () => {
       { instanceKey: 'source:include:notes/personal' },
     ])
     const snapshot = runtime.contributionSnapshot()
-    expect(() => ctx.mnemonMemory.installContributions({ sources: [source()], strategies: [strategy()] }, { instanceId: 'mixed' })).toThrow('cannot install both')
+    expect(() => ctx.mnemonMemory.installContributions({ sources: [source()], strategies: [strategy(), strategy()] }, { instanceId: 'invalid-batch' })).toThrow('duplicated')
     expect(() => ctx.mnemonMemory.installContributions({}, { instanceId: 'empty' })).toThrow('one Source or Strategy')
     expect(() => ctx.mnemonMemory.installContributions({ sources: [source()] }, { instanceId: ' ' })).toThrow('stable Loader Entry')
     expect(runtime.contributionSnapshot()).toEqual(snapshot)
@@ -140,8 +140,10 @@ describe('Composable Memory extension SDK', () => {
     await first.dispose()
   })
 
-  it('requires direct child mounts to supply stable identity and rejects mixed plugin kinds', async () => {
-    const { ctx } = await host()
+  it('requires direct child mounts to supply stable identity and supports both roles in one Fiber', async () => {
+    const { ctx, runtime } = await host()
+    const listener = vi.fn()
+    runtime.onContributionsChanged(listener)
     const unidentified = ctx.plugin({ inject: ['mnemonMemory'], apply: child => installMemory(child, { sources: [source()] }) })
     await expect(unidentified.await()).rejects.toThrow('stable Loader Entry id')
 
@@ -149,7 +151,14 @@ describe('Composable Memory extension SDK', () => {
       inject: ['mnemonMemory'],
       apply: child => installMemory(child, { sources: [source()], strategies: [strategy()] }, { instanceId: 'mixed' }),
     })
-    await expect(mixed.await()).rejects.toThrow('cannot install both')
+    await mixed.await()
+    expect(listener).toHaveBeenCalledOnce()
+    expect(runtime.contributionSnapshot()).toMatchObject({ revision: 1,
+      sources: [{ instanceKey: 'source:mixed' }], strategies: [{ instanceKey: 'strategy:mixed' }],
+    })
+    await mixed.dispose()
+    expect(listener).toHaveBeenCalledTimes(2)
+    expect(runtime.contributionSnapshot()).toMatchObject({ revision: 2, sources: [], strategies: [] })
   })
 
   it('notifies generation hosts with complete immutable snapshots', async () => {

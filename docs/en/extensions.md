@@ -4,7 +4,7 @@
 
 Choose the ownership boundary before writing code. The complete external examples under [plugin-consumer](../../scripts/fixtures/plugin-consumer/) are compiled and tested against packed artifacts outside this repository.
 
-## Pick one responsibility
+## Distinguish contribution responsibilities
 
 | Plugin | Owns | Public dependency |
 |---|---|---|
@@ -58,7 +58,7 @@ export function apply(ctx: Context): void {
 }
 ```
 
-The example assumes `source.js` exports the definition. [external-source.ts](../../scripts/fixtures/plugin-consumer/src/external-source.ts) implements the complete file-backed example. One plugin installs Source **or** Strategy contributions, not both.
+The example assumes `source.js` exports the definition. [external-source.ts](../../scripts/fixtures/plugin-consumer/src/external-source.ts) implements the complete file-backed example. Source and Strategy are roles, not mandatory package/repository boundaries. One OptMem-style package can call `installMemory(ctx, { sources: [source], strategies: [strategy] })`: both contributions install and unload together under the same Fiber, retaining distinct instance keys. Split packages only for independent reuse or replacement. Strategy selection remains explicit; bundling one does not override the user's selected Strategy.
 
 An Entry id identifies an instance; type id identifies its implementation. Never strip Loader include prefixes. Direct `ctx.plugin()` mounts without Loader identity must supply `installMemory(..., { instanceId })`. Paths/credentials remain instance-owned. Do not use a module-global database or service registry.
 
@@ -88,6 +88,8 @@ semantics: {
 ```
 
 Actions are `record`, `wake`, `read`, `compress`, and `forget`. Targets distinguish records, representations, relations, catalogs, visibility, usage, and candidates. A multi-mode operation declares the **union of possible effects**, not a sequence for Core to execute. Split it into separate offered operations if callers must authorize the modes independently. An invalidated summary is not a deleted record; recording an RSI candidate is not activating a policy.
+
+These five actions are descriptive vocabulary, not five required interfaces or a universal memory lifecycle. A read-only Source needs no mutation/compaction/tree implementation. Existing `capabilities` are Host permission categories; semantic `actions` support composition across differently named operations (e.g. `search` and `related` can both describe `read`). Core derives available descriptors; authors do not duplicate them in Facts. Private watchers, indexes, summarizers and Provider upkeep may run in the plugin's own Cordis Fibers using Host capabilities. Pure `compose` and the View operation envelope do not establish a universal maintenance scheduler. Put a field in the public protocol only when it serves cross-plugin selection, execution constraints or interpretation of View results.
 
 Sources still return only availability/revision/capability ids in `facts`. Core constructs `MemoryAvailableSource` for `compose`: its `projection`, `routes`, and `actions` come from the manifest, filtered by live availability and Host permissions. For example, a Strategy can select `source.routes.filter(route => route.semantics?.actions.includes('read') && route.semantics.effects.length === 0)` without knowing ids like `search` or `recall`. Missing semantics mean **unspecified**, not inferred support.
 
