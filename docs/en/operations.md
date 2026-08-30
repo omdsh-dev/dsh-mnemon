@@ -155,6 +155,8 @@ Report vulnerabilities privately through [SECURITY.md](../../SECURITY.md), not a
 | Document source path rejected | Keep it inside the session workspace and outside managed Documents |
 | CLI timeout | Increase `timeoutMs`; large Stores may need more than 10 seconds for status or graph |
 | Lock timeout | Check other writers; never delete a lock owned by a live process |
+| Memory System goes blank with a `refreshSnapshot` or settings-store error | Upgrade dsh-mnemon to v0.4.1 and restart the owning DSH profile; settings callbacks preserve their host store receiver |
+| ZIP export reports `date not in range 1980-2099` | Upgrade dsh-mnemon to v0.4.1; fixed local ZIP date fields work in timezones behind UTC and keep identical exports byte-stable across timezones |
 | ZIP export reports WAL busy | Wait for Memory Space writes to settle; do not bypass the uncheckpointed-WAL guard |
 | ZIP import checksum/schema failure | The backup is damaged or incompatible; preserve the current root and never unzip over it manually |
 | No Update button | Already current, remote check failed, or the source is link/manual; follow panel guidance |

@@ -24,7 +24,7 @@
 <p align="center">
   <a href="./docs/zh-CN/capabilities.md"><strong>先看能力地图</strong></a> ·
   <a href="./docs/zh-CN/getting-started.md">5 分钟开始</a> ·
-  <a href="./docs/zh-CN/releases/v0.4.0.md">v0.4.0 升级说明</a> ·
+  <a href="./docs/zh-CN/releases/v0.4.1.md">v0.4.1 升级说明</a> ·
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">观看宽屏实机演示</a>
 </p>
 
@@ -35,6 +35,8 @@
 从 v0.3.0 开始，三层是可组合内核中的**默认拓扑**，不再是各入口各自写死的唯一结构。`MemoryBoot` 把受信任的 Layer、Adapter、Strategy、Guard 与 `MemorySource` 装配为一代运行图；每个用户回合固定一份轻量 `TurnView`：Runtime 精确内容 eager 进入 Wake，Documents 与 Memory Spaces 只给出有界路由封面，完整召回权限保留在 Host。用户仍只安装一个 `dsh-mnemon`，设置、工具、RPC 与 UI 工作流不变。参见[可组合架构](./docs/zh-CN/architecture.md#可组合记忆内核)与[扩展开发指南](./docs/zh-CN/extensions.md)。
 
 v0.4.0 将 Sidebar 设为记忆系统的唯一工作台入口，移除 builtin 展示模式及其设置。旧展示偏好会被忽略，不改变记忆数据；完整的 view-based 升级计划放在 v0.5，不包含在本版中。更新前请阅读[升级与兼容性说明](./docs/zh-CN/releases/v0.4.0.md#升级与兼容性)。
+
+v0.4.1 修复记忆系统和存入记忆在依赖 `this` 的 DSH settings store 上的渲染崩溃，以及 ZIP 导出失败和跨时区归档差异；保留 v0.4.0 工作流与既有记忆格式。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.1.md)。
 
 ## 30 秒理解能力边界
 
@@ -210,7 +212,7 @@ dsh plugin --profile headless add "link:/absolute/path/to/dsh-mnemon"
 | 备份、更新或排障 | [运维指南](./docs/zh-CN/operations.md) |
 | 接入工具、命令或 RPC | [接口参考](./docs/zh-CN/interfaces.md) |
 | 开发 Layer、Adapter、Strategy、Guard 或 MemorySource 扩展 | [扩展开发指南](./docs/zh-CN/extensions.md) |
-| 查看本次升级 | [v0.4.0 发布说明](./docs/zh-CN/releases/v0.4.0.md) |
+| 查看本次升级 | [v0.4.1 发布说明](./docs/zh-CN/releases/v0.4.1.md) |
 
 完整目录见[文档中心](./docs/zh-CN/README.md)。
 
