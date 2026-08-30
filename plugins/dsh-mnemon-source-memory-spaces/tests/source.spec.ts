@@ -10,7 +10,8 @@ import { installMemorySpaces } from '../src/index.ts'
 import { MemoryBodyRegistry } from '../src/memory-bodies.ts'
 import { createRunner } from '../src/runner.ts'
 import { resolveMemorySpacesConfig } from '../src/config.ts'
-import { defineMemorySpaceProvider, MemoryProviderCatalog } from '../src/provider-sdk.ts'
+import { defineMemorySpaceProvider } from '../src/provider-sdk.ts'
+import { MemoryProviderCatalog } from '../src/providers/catalog.ts'
 
 describe('standalone Memory Spaces Source', () => {
   it('owns two isolated Provider trees, storage roots, management and LLM routes', async () => {

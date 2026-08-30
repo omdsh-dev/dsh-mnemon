@@ -1,5 +1,5 @@
 import type { JsonValue } from '../contracts.ts'
-import type { MemorySpaceAuthority } from './registry.ts'
+import type { MemorySpaceAuthority } from './adapter.ts'
 import type {
   Insight,
   MemoryBody,

@@ -17,11 +17,11 @@ import { resolveMemorySpacesConfig } from "../src/config.ts"
 import { createMemorySpacesSource } from '../src/source.ts'
 import {
   MEMORY_SPACE_PROVIDER_API_VERSION,
-  PrivateMemorySpaceProviderHost,
   defineMemorySpaceProvider,
   type MemorySpaceProviderEntry,
   type MemorySpaceProviderManifest,
 } from '../src/provider-sdk.ts'
+import { PrivateMemorySpaceProviderHost } from '../src/providers/host.ts'
 import { createMemorySpaceProviderPlugin } from '../src/providers/plugin.ts'
 import { providerEntries, descriptors } from './providers.ts'
 

@@ -1,8 +1,6 @@
 import type { Context, Plugin } from '@deepseek-ai/cordis'
-import {
-  PrivateMemorySpaceProviderHost,
-  type MemorySpaceProviderEntry,
-} from './host.ts'
+import type { PrivateMemorySpaceProviderHost } from './host.ts'
+import type { MemorySpaceProviderEntry } from './definitions.ts'
 /**
  * Build an ordinary child plugin whose only capability is a closure-held
  * registration into its Memory Spaces parent. No ctx.mnemonProvider service

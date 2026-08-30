@@ -11,6 +11,25 @@ import type {
   SearchRequest,
 } from '../contracts.ts'
 
+/** Minimum parent authority a Provider needs; no private controller class. */
+export interface MemorySpaceAuthority {
+  readonly runner: { effectiveDataDir(): string }
+  list(): MemoryBody[]
+  providerConnection(id: string, expectedProviderId?: string): MemoryProviderConnection
+}
+
+/** Scoped command transport consumed by the Native Provider. */
+export interface MemorySpaceNativeRunner {
+  runJson(args: readonly string[], options?: { signal?: AbortSignal; store?: string }): Promise<JsonValue>
+  runText(args: readonly string[], options?: { signal?: AbortSignal; store?: string }): Promise<string>
+}
+
+export interface MemoryProviderAdapterFactoryContext {
+  memoryBodies: MemorySpaceAuthority
+  config: { timeoutMs: number; defaultRecallLimit?: number }
+  nativeRunner?: MemorySpaceNativeRunner
+}
+
 export interface ProviderBodyStatus {
   healthy: boolean
   error?: string

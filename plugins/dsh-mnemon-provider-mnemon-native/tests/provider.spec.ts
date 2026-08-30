@@ -1,10 +1,22 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import type { MemorySpaceNativeRunner } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
-import { createMemorySpaceProviderFixture } from 'dsh-mnemon-source-memory-spaces/testing'
-import { definition, descriptor, MnemonNativeProvider } from '../src/index.ts'
+import { createMemorySpaceProviderFixture, mountMemorySpaceProvider } from 'dsh-mnemon-source-memory-spaces/testing'
+import module, { definition, descriptor, MnemonNativeProvider } from '../src/index.ts'
 
 describe('independent Native Provider', () => {
+  it('mounts through the public module fixture and honors an aliased child identity', async () => {
+    const mounted = await mountMemorySpaceProvider(module, { instanceId: 'local', config: undefined })
+    const { authority } = createMemorySpaceProviderFixture(descriptor, {}, { dataDir: '/unused', instanceId: 'local' })
+    try {
+      expect(mounted.descriptor).toMatchObject({ id: 'local', typeId: 'mnemon-native' })
+      expect(mounted.createAdapter({ memoryBodies: authority, config: { timeoutMs: 100 }, nativeRunner: {
+        runJson: vi.fn(), runText: vi.fn(),
+      } }).id).toBe('local')
+    } finally { await mounted.dispose() }
+    expect(mounted.registered).toBe(false)
+  })
+
   it('requires a command capability and creates its own adapter', () => {
     const { authority } = createMemorySpaceProviderFixture(descriptor, {}, { dataDir: '/unused' })
     expect(() => definition.create({ memoryBodies: authority, config: { timeoutMs: 100 }, providerInstanceId: 'native', manifest: definition.manifest })).toThrow('nativeRunner')

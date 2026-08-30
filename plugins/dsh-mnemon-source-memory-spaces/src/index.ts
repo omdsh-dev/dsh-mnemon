@@ -2,13 +2,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from 'schemastery'
 import { installMemory, memoryConfigurationDigest } from 'dsh-mnemon/extension-sdk'
 import { createMemorySpacesSource } from './source.ts'
-import {
-  PrivateMemorySpaceProviderHost,
-  defineMemorySpaceProvider,
-  type MemorySpaceProviderEntry,
-  type MemorySpaceProviderModule,
-  type MemorySpaceProviderSnapshot,
-} from './providers/host.ts'
+import { PrivateMemorySpaceProviderHost } from './providers/host.ts'
+import { defineMemorySpaceProvider, type MemorySpaceProviderEntry, type MemorySpaceProviderModule } from './providers/definitions.ts'
 import { createMemorySpaceProviderPlugin } from './providers/plugin.ts'
 import { MemorySpacesConfig, resolveMemorySpacesConfig, type MemorySpacesConfig as SourceConfig } from './config.ts'
 
@@ -105,7 +100,7 @@ export async function installMemorySpaces(
   ctx: Context,
   entries: readonly MemorySpaceProviderEntry[],
   options: InstallMemorySpacesOptions = {},
-): Promise<MemorySpaceProviderSnapshot> {
+): Promise<void> {
   if (entries.length === 0) throw new Error('Memory Spaces requires at least one explicit Provider child')
   const entryId = sourceInstanceId(ctx, options.instanceId)
   resolveMemorySpacesConfig(options.config, entryId)
@@ -122,7 +117,6 @@ export async function installMemorySpaces(
       instanceId: entryId,
       effectiveDigest: 'providers:' + memoryConfigurationDigest({ providers: snapshot.digest, config: options.config ?? {} }).slice('config:'.length),
     })
-    return snapshot
   } catch (error) {
     await Promise.allSettled(children.reverse().map(child => child.dispose()))
     throw error
@@ -134,5 +128,4 @@ export async function apply(ctx: Context, config: Config = { providers: [] }): P
   await installMemorySpaces(ctx, await resolveMemorySpaceProviderEntries(ctx, providers), { config: sourceConfig })
 }
 
-export { createMemorySpacesSource } from './source.ts'
 export type * from './contracts.ts'

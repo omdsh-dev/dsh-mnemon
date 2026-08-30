@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
 import * as spaces from 'dsh-mnemon-source-memory-spaces'
 import * as runtime from 'dsh-mnemon-source-runtime'
@@ -44,12 +44,12 @@ describe('explicit default Starter', () => {
   it('allows a Source to mount only its explicitly selected private children', async () => {
     const runner = new MemoryCompositionRunner()
     try {
-      let ids: string[] = []
+      const applyProvider = vi.fn(native.apply)
       await runner.mount({ inject: ['mnemonMemory'], async apply(ctx: Context) {
-        const snapshot = await spaces.installMemorySpaces(ctx, [{ instanceId: 'work-native', module: native, config: undefined }])
-        ids = snapshot.descriptors().map(item => item.id)
+        const result = await spaces.installMemorySpaces(ctx, [{ instanceId: 'work-native', module: { ...native, apply: applyProvider }, config: undefined }])
+        expect(result).toBeUndefined()
       } }, { instanceId: 'memory-spaces/custom:team' })
-      expect(ids).toEqual(['work-native'])
+      expect(applyProvider).toHaveBeenCalledOnce()
       expect(runner.context.get('mnemonProvider', false)).toBeUndefined()
       expect(runner.inspect().evaluation.sourceInstanceKeys).toEqual(['source:memory-spaces/custom:team'])
       await expect(spaces.apply({} as Context, { providers: ['not-installed'] })).rejects.toThrow('DSH Loader')

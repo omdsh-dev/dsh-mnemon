@@ -1,6 +1,64 @@
 import type { MemoryBody, MemoryProviderConnection, MemoryProviderDescriptor } from './contracts.ts'
 import { MemoryProviderCatalog } from './providers/catalog.ts'
-import type { MemorySpaceAuthority } from './providers/registry.ts'
+import { Context, type Plugin } from '@deepseek-ai/cordis'
+import type { MemorySpaceAuthority, MemoryProviderAdapter, MemoryProviderAdapterFactoryContext } from './providers/adapter.ts'
+import { deepFreeze, type MemorySpaceProviderManifest, type MemorySpaceProviderModule } from './providers/definitions.ts'
+import { PrivateMemorySpaceProviderHost } from './providers/host.ts'
+import { createMemorySpaceProviderPlugin } from './providers/plugin.ts'
+
+export interface MemorySpaceProviderTest {
+  readonly registered: boolean
+  readonly descriptor: MemoryProviderDescriptor
+  readonly manifest: MemorySpaceProviderManifest
+  createAdapter(context: MemoryProviderAdapterFactoryContext): MemoryProviderAdapter
+  dispose(): Promise<void>
+}
+
+/** Real private-child registration and factory validation, without exposing its Host/Registry. */
+export async function mountMemorySpaceProvider<C>(
+  module: MemorySpaceProviderModule<C>,
+  options: { instanceId?: string; sourceInstanceId?: string; config: C },
+): Promise<MemorySpaceProviderTest> {
+  const context = new Context()
+  const host = new PrivateMemorySpaceProviderHost(options.sourceInstanceId ?? 'test-memory-spaces')
+  const instanceId = options.instanceId ?? module.id
+  const plugin = createMemorySpaceProviderPlugin({ instanceId, module, config: options.config }, host)
+  const bound: Plugin.Object<C | undefined> = { ...plugin, apply: (ctx, config) => plugin.apply(ctx, config as C) }
+  const child = context.plugin(bound, options.config)
+  try {
+    await child.await()
+    if (!host.has(instanceId)) throw new Error(`Memory Space Provider child did not install a definition: ${instanceId}`)
+    const snapshot = host.snapshot()
+    const adapters = new Set<MemoryProviderAdapter>()
+    let closing: Promise<void> | undefined
+    return Object.freeze({
+      get registered() { return host.has(instanceId) },
+      descriptor: deepFreeze(snapshot.descriptors()[0]!),
+      manifest: snapshot.entries[0]!.definition.manifest,
+      createAdapter: (input: MemoryProviderAdapterFactoryContext) => {
+        if (closing !== undefined) throw new Error('Memory Space Provider test is disposed')
+        const adapter = snapshot.adapterRegistry().create(input).get(instanceId)!
+        adapters.add(adapter)
+        return adapter
+      },
+      dispose: () => {
+        closing ??= Promise.resolve().then(async () => {
+          const failures: unknown[] = []
+          for (const adapter of adapters) {
+            try { await adapter.dispose?.() } catch (error) { failures.push(error) }
+          }
+          adapters.clear()
+          try { await context.fiber.dispose() } catch (error) { failures.push(error) }
+          if (failures.length > 0) throw new AggregateError(failures, 'Memory Space Provider test cleanup failed')
+        })
+        return closing
+      },
+    })
+  } catch (error) {
+    await context.fiber.dispose()
+    throw error
+  }
+}
 
 /** Driver fixture only: real descriptor validation, no Core or service singleton. */
 export function createMemorySpaceProviderFixture(

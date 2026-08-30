@@ -1,6 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
-import { PrivateMemorySpaceProviderHost } from '../src/provider-sdk.ts'
+import { PrivateMemorySpaceProviderHost } from '../src/providers/host.ts'
 import { createMemorySpaceProviderPlugin } from '../src/providers/plugin.ts'
 import { providerEntries } from './providers.ts'
 

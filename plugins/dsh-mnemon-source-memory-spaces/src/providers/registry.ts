@@ -1,24 +1,4 @@
-import type { JsonValue, MemoryBody, MemoryProviderConnection } from '../contracts.ts'
-import type { MemoryProviderAdapter, MemoryProviderScoreSemantics } from './adapter.ts'
-
-/** Minimum parent authority a Provider needs; no private controller class. */
-export interface MemorySpaceAuthority {
-  readonly runner: { effectiveDataDir(): string }
-  list(): MemoryBody[]
-  providerConnection(id: string, expectedProviderId?: string): MemoryProviderConnection
-}
-
-/** Scoped command transport consumed by the Native Provider. */
-export interface MemorySpaceNativeRunner {
-  runJson(args: readonly string[], options?: { signal?: AbortSignal; store?: string }): Promise<JsonValue>
-  runText(args: readonly string[], options?: { signal?: AbortSignal; store?: string }): Promise<string>
-}
-
-export interface MemoryProviderAdapterFactoryContext {
-  memoryBodies: MemorySpaceAuthority
-  config: { timeoutMs: number; defaultRecallLimit?: number }
-  nativeRunner?: MemorySpaceNativeRunner
-}
+import type { MemoryProviderAdapter, MemoryProviderAdapterFactoryContext, MemoryProviderScoreSemantics } from './adapter.ts'
 
 export interface MemoryAdapterFactory<Id extends string, Context, Adapter extends { readonly id: Id }> {
   readonly id: Id
