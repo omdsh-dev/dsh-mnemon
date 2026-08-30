@@ -155,6 +155,8 @@ DSH rc.8 首次说明的可选 SQLite 不兼容性在 DSH 0.1.1-rc.2 中仍然�
 | Document source path 被拒绝 | 路径必须在会话工作区内，且不能引用受管 Documents 目录 |
 | CLI timeout | 增大 `timeoutMs`；大 Store 的状态与图谱可能超过 10 秒 |
 | lock timeout | 检查其他写进程，不要删除仍属于活跃进程的 lock |
+| 记忆系统白屏并提示 `refreshSnapshot` 或 settings store 错误 | 将 dsh-mnemon 升级到 v0.4.1 并重启所属 DSH profile；设置回调会保留宿主 store 的 `this` 绑定 |
+| ZIP 导出提示 `date not in range 1980-2099` | 将 dsh-mnemon 升级到 v0.4.1；固定本地 ZIP 日期字段后，UTC 以西时区可以正常导出，相同导出的归档字节也不再因时区变化 |
 | ZIP 导出提示 WAL busy | 等待 Memory Space 写入完成并重试；不要绕过未 checkpoint WAL 检查 |
 | ZIP 导入 checksum / schema 失败 | 备份损坏或格式不兼容；保留当前根，不要手工解压覆盖 |
 | 更新按钮不出现 | 当前已是最新、远程检查失败，或安装来源是 link / 手工模式；按面板提示沿原方式更新 |
