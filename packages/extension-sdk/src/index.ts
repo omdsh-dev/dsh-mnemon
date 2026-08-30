@@ -404,6 +404,8 @@ export interface MemoryGenerationAttachment {
 export { installMemory, type InstallMemoryOptions, type MemoryInstallContribution } from './install.ts'
 export { MemoryContributionRegistry, type MemoryContributionInstall, type MemoryContributionListener } from './registry.ts'
 export { defineMemorySource, defineMemoryStrategy } from '../../kernel/src/composition.ts'
+export { record as memoryInputRecord, text as memoryInputText, integer as memoryInputInteger, stringArray as memoryInputStringArray, truncate as truncateMemoryText, receipt as createMemoryMutationReceipt } from './input.ts'
+export { memoryConfigurationDigest } from './input.ts'
 export type {
   ComposableMemoryView,
   MemoryActionOffer,

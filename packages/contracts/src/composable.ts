@@ -291,7 +291,9 @@ export interface MemoryMutationReceipt {
 export interface MemorySourceRuntimeContext {
   sourceInstanceKey: string
   provenance: MemoryPackageProvenance
-  /** Resolve a Host-owned scoped binding. Third-party Sources usually need none. */
+  /** Immutable, JSON-only Host/scope defaults; never business objects or clients. */
+  configuration?: Readonly<Record<string, MemoryJsonValue>>
+  /** @deprecated Compatibility-only object bindings. New Sources own their runtime. */
   binding<T = unknown>(key: string): T | undefined
 }
 

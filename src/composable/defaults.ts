@@ -1,9 +1,9 @@
 import type { InstalledMemorySource, InstalledMemoryStrategy } from '../../packages/contracts/src/index.ts'
 import type { MemoryRuntime } from '../../packages/extension-sdk/src/index.ts'
 import { DEFAULT_THREE_TIER_VIEW_STRATEGY } from '../../packages/strategy-default-three-tier/src/index.ts'
-import { DOCUMENTS_MEMORY_SOURCE } from './source-documents.ts'
+import { DOCUMENTS_MEMORY_SOURCE } from '../../plugins/dsh-mnemon-source-documents/src/source.ts'
 import { MEMORY_SPACES_SOURCE } from './source-memory-spaces.ts'
-import { RUNTIME_MEMORY_SOURCE } from './source-runtime.ts'
+import { RUNTIME_MEMORY_SOURCE } from '../../plugins/dsh-mnemon-source-runtime/src/source.ts'
 
 export const BUILTIN_MEMORY_SOURCES = Object.freeze([
   RUNTIME_MEMORY_SOURCE,

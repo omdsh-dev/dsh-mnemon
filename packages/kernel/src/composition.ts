@@ -255,6 +255,9 @@ export function captureMemoryContributionSnapshot(snapshot: MemoryContributionSn
 export interface CompileMemoryGenerationOptions {
   strategyInstanceKey?: string
   strategyTypeId?: string
+  /** Host adapter supplies scope defaults; each result is captured and digested. */
+  sourceConfiguration?: (source: InstalledMemorySource) => Readonly<Record<string, MemoryJsonValue>>
+  /** @deprecated Only the pre-composable compatibility entry may use bindings. */
   bindings?: ReadonlyMap<string, unknown>
   now?: () => Date
 }
@@ -493,12 +496,16 @@ export class MemoryCompositionGeneration {
     this.strategy = selectStrategy(snapshot.strategies, options)
     this.now = options.now ?? (() => new Date())
     const bindings = options.bindings ?? new Map<string, unknown>()
+    const configurations = new Map<string, Readonly<Record<string, MemoryJsonValue>>>()
     const created = new Map<string, RuntimeSource>()
     try {
       for (const installed of snapshot.sources) {
+        const configuration = jsonClone(options.sourceConfiguration?.(installed) ?? {}, 'Source configuration')
+        configurations.set(installed.instanceKey, configuration)
         const runtime = installed.definition.create({
           sourceInstanceKey: installed.instanceKey,
           provenance: installed.provenance,
+          configuration,
           binding: <T = unknown>(key: string): T | undefined => bindings.get(key) as T | undefined,
         })
         if (typeof runtime !== 'object' || runtime === null || typeof runtime.facts !== 'function' || typeof runtime.project !== 'function') {
@@ -523,6 +530,7 @@ export class MemoryCompositionGeneration {
         manifest: source.definition.manifest,
         provenance: source.provenance,
         effectiveDigest: source.effectiveDigest ?? null,
+        configuration: configurations.get(source.instanceKey),
       })),
     }
     this.id = `generation:${digest(generationInput)}`

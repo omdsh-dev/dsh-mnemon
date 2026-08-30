@@ -1,0 +1,112 @@
+import type { MemoryJsonValue, MemorySourceDefinition, MemorySourceRuntimeContext } from 'dsh-mnemon/contracts'
+import { COMPOSABLE_MEMORY_API_VERSION } from 'dsh-mnemon/contracts'
+import { defineMemorySource, createMemoryMutationReceipt as receipt, memoryInputRecord as record, memoryInputStringArray as stringArray, memoryInputText as text, truncateMemoryText as truncate } from 'dsh-mnemon/extension-sdk'
+import { resolveGitBranch } from './git-branch.ts'
+import { RuntimeMemoryController } from './controller.ts'
+import type { RuntimeMemoryAction, RuntimeMemoryImportance, RuntimeMemoryTarget } from './contracts.ts'
+import { runtimeSourceConfig, type Config } from './config.ts'
+
+const ACTIONS = new Set<RuntimeMemoryAction>(['add', 'replace', 'remove'])
+const TARGETS = new Set<RuntimeMemoryTarget>(['memory', 'user'])
+const IMPORTANCE = new Set<RuntimeMemoryImportance>(['critical', 'normal', 'low'])
+
+export function createRuntimeMemorySource(config: Config = {}, controllerFactory?: (context: MemorySourceRuntimeContext) => RuntimeMemoryController): MemorySourceDefinition {
+ const configured = Object.freeze({ ...config })
+ return defineMemorySource({
+  manifest: {
+    apiVersion: COMPOSABLE_MEMORY_API_VERSION,
+    kind: 'source',
+    typeId: 'runtime',
+    packageName: 'dsh-mnemon-source-runtime',
+    role: 'working-context',
+    capabilities: ['status', 'project', 'write'],
+    consistency: 'exact-snapshot',
+    actions: [{
+      id: 'mutate',
+      description: 'Add, replace, or remove an entry in Runtime Memory.',
+      capability: 'write',
+      inputSchema: {
+        type: 'object',
+        required: ['action', 'target'],
+        additionalProperties: false,
+        properties: {
+          action: { type: 'string', enum: ['add', 'replace', 'remove'] },
+          target: { type: 'string', enum: ['memory', 'user'] },
+          content: { type: 'string' },
+          oldText: { type: 'string' },
+          importance: { type: 'string', enum: ['critical', 'normal', 'low'] },
+          branches: { type: 'array' },
+        },
+      },
+    }],
+    management: {
+      label: 'Runtime Memory',
+      description: 'Exact, bounded working context and user profile projection.',
+    },
+  },
+  create(context) {
+    const effective = runtimeSourceConfig({ ...context.configuration, ...configured }, context.sourceInstanceKey)
+    const controller = controllerFactory?.(context) ?? new RuntimeMemoryController(
+      { effectiveDataDir: () => effective.dataDir }, undefined, undefined,
+      { memory: effective.memoryLimitBytes, user: effective.userLimitBytes },
+      { effectiveDataDir: () => effective.userDataDir },
+    )
+    const projection = (workspaceId?: string) => controller.contextProjection(resolveGitBranch(workspaceId))
+    const prepared = new Map<string, ReturnType<typeof projection>>()
+    const scopeKey = (workspaceId?: string) => workspaceId?.trim() ?? ''
+    return {
+      facts(request) {
+        const current = projection(request.scope.workspaceId)
+        prepared.set(scopeKey(request.scope.workspaceId), current)
+        return {
+          sourceInstanceKey: context.sourceInstanceKey,
+          sourceTypeId: 'runtime',
+          role: 'working-context',
+          availability: 'ready',
+          revision: current.revision,
+          capabilities: ['status', 'project', 'write'],
+          routeIds: [],
+          actionIds: ['mutate'],
+        }
+      },
+      project(request) {
+        if (!request.includeProjection) return { fragments: [] }
+        const key = scopeKey(request.scope.workspaceId)
+        const current = prepared.get(key) ?? projection(request.scope.workspaceId)
+        prepared.delete(key)
+        return {
+          fragments: [{
+            id: `${context.sourceInstanceKey}/projection`,
+            sourceInstanceKey: context.sourceInstanceKey,
+            mode: request.mode,
+            text: truncate(current.text, request.maxCharacters),
+            revision: current.revision,
+            provenance: { sourceTypeId: 'runtime' },
+          }],
+        }
+      },
+      async mutate(request) {
+        const input = record(request.input, 'Runtime Memory mutation')
+        const action = text(input.action, 'action', 20) as RuntimeMemoryAction
+        const target = text(input.target, 'target', 20) as RuntimeMemoryTarget
+        if (!ACTIONS.has(action)) throw new Error(`unsupported Runtime Memory action: ${action}`)
+        if (!TARGETS.has(target)) throw new Error(`unsupported Runtime Memory target: ${target}`)
+        const importance = text(input.importance, 'importance', 20, false) as RuntimeMemoryImportance | undefined
+        if (importance !== undefined && !IMPORTANCE.has(importance)) throw new Error(`unsupported Runtime Memory importance: ${importance}`)
+        const result = await controller.mutate({
+          action,
+          target,
+          ...(text(input.content, 'content', 100_000, false) === undefined ? {} : { content: text(input.content, 'content', 100_000, false)! }),
+          ...(text(input.oldText, 'oldText', 100_000, false) === undefined ? {} : { oldText: text(input.oldText, 'oldText', 100_000, false)! }),
+          ...(importance === undefined ? {} : { importance }),
+          ...(input.branches === undefined ? {} : { branches: stringArray(input.branches, 'branches', 100) ?? [] }),
+        })
+        const revision = controller.snapshot().revision
+        return receipt(request.view.id, request.offer.id, context.sourceInstanceKey, revision, result as unknown as MemoryJsonValue)
+      },
+    }
+  },
+ })
+}
+
+export const RUNTIME_MEMORY_SOURCE = createRuntimeMemorySource()

@@ -1,4 +1,5 @@
 import type { ConnectionHandle as DshClientConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
+import type { DocumentSnapshot } from '../../plugins/dsh-mnemon-source-documents/src/contracts.ts'
 import type { MemoryLayerParticipation, MemorySystemDescriptor } from '../memory-system/contracts.ts'
 export type {
   MemoryLayerParticipation,
@@ -752,134 +753,8 @@ export interface EntityView {
   sources?: MemoryReadSource[]
 }
 
-export type DocumentStatus = 'active' | 'archived'
-
-export interface DocumentRecord {
-  id: string
-  title: string
-  description: string
-  status: DocumentStatus
-  filename: string
-  relativePath: string
-  sourcePaths: string[]
-  sessionIds: string[]
-  createdAt: string
-  updatedAt: string
-  lastAccessedAt: string
-  revision: number
-  contentHash: string
-  sizeBytes: number
-  archivedAt?: string
-  archiveSummary?: string
-  memoryBodyIds: string[]
-}
-
-export interface DocumentView extends DocumentRecord {
-  content: string
-}
-
-export interface DocumentSnapshot {
-  workspaceRoot: string
-  directory: string
-  indexPath: string
-  generatedAt: string
-  revision: string
-  limitBytes: number
-  activeBytes: number
-  activeCount: number
-  archivedCount: number
-  total: number
-  documents: Array<DocumentRecord & { healthy: boolean; excerpt: string }>
-}
-
-export interface DocumentSearchResult {
-  query: string
-  includeArchived: boolean
-  total: number
-  generatedAt: string
-  results: Array<DocumentView & { score: number; excerpt: string }>
-}
-
-export type DocumentMutation =
-  | { action: 'create'; title: string; description?: string; content: string; sourcePaths?: string[]; sessionIds?: string[] }
-  | { action: 'update'; id: string; title?: string; description?: string; content?: string; sourcePaths?: string[]; sessionIds?: string[] }
-
-export interface DocumentMutationResult {
-  success: true
-  action: 'created' | 'updated' | 'archived'
-  document: DocumentView
-  snapshot: DocumentSnapshot
-  maintenance?: { runId: string; provider: string; summary: string; memoryBodyIds: string[]; archivedDocumentIds: string[] }
-}
-
-export type RuntimeMemoryTarget = 'memory' | 'user'
-export type RuntimeMemoryImportance = 'critical' | 'normal' | 'low'
-export type RuntimeMemoryAction = 'add' | 'replace' | 'remove'
-
-export interface RuntimeMemoryEntry {
-  content: string
-  created_at: string
-  updated_at: string
-  target: RuntimeMemoryTarget
-  importance: RuntimeMemoryImportance
-  /** Optional git branch names that limit where this entry is projected. Absent means every branch. */
-  branches?: string[]
-}
-
-export interface RuntimeMemoryUsage {
-  used: number
-  limit: number
-}
-
-export interface RuntimeMemoryTargetView extends RuntimeMemoryUsage {
-  target: RuntimeMemoryTarget
-  entryCount: number
-  markdownPath: string
-}
-
-export interface RuntimeMemorySnapshot {
-  directory: string
-  sourcePath: string
-  revision: string
-  generatedAt: string
-  entries: RuntimeMemoryEntry[]
-  targets: Record<RuntimeMemoryTarget, RuntimeMemoryTargetView>
-}
-
-export interface RuntimeMemoryCompactedEntry {
-  content: string
-  importance: RuntimeMemoryImportance
-  /** Branch scope carried through compaction; absent means the entry is visible on every branch. */
-  branches?: string[]
-}
-
-export interface RuntimeMemoryMutation {
-  action: RuntimeMemoryAction
-  target: RuntimeMemoryTarget
-  content?: string
-  oldText?: string
-  importance?: RuntimeMemoryImportance
-  /** Git branch names limiting where a target=memory entry is projected. Absent keeps the current scope on replace; an empty list clears it. */
-  branches?: string[]
-}
-
-export type RuntimeMemoryMutationResult = {
-  success: true
-  message: string
-  target: RuntimeMemoryTarget
-  entryCount: number
-  usage: RuntimeMemoryUsage
-  added?: string
-  replaced?: { from: string; to: string }
-  removed?: string
-  maintenance?: {
-    kind: 'local-compaction' | 'mnemon-archive'
-    runId: string
-    provider: string
-    summary: string
-    memoryBodyIds: string[]
-  }
-}
+export type * from '../../plugins/dsh-mnemon-source-documents/src/contracts.ts'
+export type * from '../../plugins/dsh-mnemon-source-runtime/src/contracts.ts'
 
 export interface TurnMemoryActivity {
   turn: number

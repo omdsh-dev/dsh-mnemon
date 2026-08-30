@@ -108,7 +108,16 @@ export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot?: strin
     receiptBridge = new MemoryReceiptBridge(memoryKernel, memoryViews)
     const detachReceiptSink = memoryKernel.registerReceiptSink(receiptBridge)
     const generationAttachment: MemoryGenerationAttachment | undefined = extensions instanceof MemoryRuntime
-      ? extensions.attachGeneration({ bindings: new Map<string, unknown>([
+      ? extensions.attachGeneration({ sourceConfiguration: installed => {
+        const entry = installed.provenance.entryId
+        if (installed.provenance.packageName === 'dsh-mnemon-source-runtime' && (entry === 'mnemon-source-runtime' || entry === 'bundled-runtime')) {
+          return { dataDir: runner.effectiveDataDir(), userDataDir: (globalUserRunner ?? runner).effectiveDataDir(), memoryLimitBytes: config.runtimeMemory.memoryLimitBytes, userLimitBytes: config.runtimeMemory.userLimitBytes }
+        }
+        if (installed.provenance.packageName === 'dsh-mnemon-source-documents' && (entry === 'mnemon-source-documents' || entry === 'bundled-documents')) {
+          return { dataDir: runner.effectiveDataDir() }
+        }
+        return {}
+      }, bindings: new Map<string, unknown>([
         [BUILTIN_MEMORY_BINDINGS.runtime, runtimeMemory],
         [BUILTIN_MEMORY_BINDINGS.documents, documents],
         [BUILTIN_MEMORY_BINDINGS.memorySpaces, service],
