@@ -1,6 +1,6 @@
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessRunner } from '../src/host/process.ts'
 import { compareVersions, VersionUpdateManager } from "../src/host/version-updates.ts"
@@ -175,6 +175,75 @@ describe('VersionUpdateManager', () => {
     expect(value.manager.currentDshMnemonVersion).toBe('0.5.0-beta.1')
     value.fetch.mockRejectedValue(new Error('registry unavailable'))
     expect((await value.manager.check()).components[1]).toMatchObject({ outdated: false, checkError: 'latest-unavailable' })
+  })
+
+  function goFixture(location: 'gobin' | 'gopath' | 'download' = 'gobin') {
+    const root = directory('go-install')
+    const goPath = join(root, 'go')
+    const bin = location === 'gopath' ? join(goPath, 'bin') : join(root, 'custom-bin')
+    const commandDir = location === 'download' ? join(root, 'download') : bin
+    mkdirSync(commandDir, { recursive: true })
+    const command = join(commandDir, process.platform === 'win32' ? 'mnemon.exe' : 'mnemon')
+    writeFileSync(command, 'synthetic executable; process execution is mocked', 'utf8')
+    const environment = {
+      GOBIN: location === 'gopath' ? '' : bin,
+      GOPATH: [goPath, join(root, 'other-go')].join(delimiter),
+      GOOS: process.platform, GOHOSTOS: process.platform,
+      GOARCH: process.arch, GOHOSTARCH: process.arch,
+    }
+    const state = { current: '0.2.0', installed: '0.3.0', mainPath: 'github.com/mnemon-dev/mnemon' }
+    const run = vi.fn<ProcessRunner>(async (_command, args) => {
+      if (args[0] === '--version') return { stdout: `mnemon version ${state.current}\n`, stderr: '', exitCode: 0 }
+      if (args[0] === 'env') return { stdout: JSON.stringify(environment), stderr: '', exitCode: 0 }
+      if (args[0] === 'version') return { stdout: `\tpath\t${state.mainPath}\n\tdep\tgithub.com/mnemon-dev/mnemon\tv0.2.0\n`, stderr: '', exitCode: 0 }
+      if (args[0] === 'install') {
+        state.current = state.installed
+        return { stdout: 'go install completed', stderr: '', exitCode: 0 }
+      }
+      throw new Error(`Unexpected command: ${args.join(' ')}`)
+    })
+    const manager = new VersionUpdateManager({
+      packageManifestPath: join(root, 'package.json'), dshHome: root,
+      mnemonCliPath: () => command,
+      resolveExecutable: value => value === command ? command : value === 'go' ? '/fake/go' : undefined,
+      processRunner: run,
+      fetchNpmLatest: async () => undefined,
+      fetchMnemonLatest: async () => '0.3.0',
+    })
+    return { command, environment, state, run, manager }
+  }
+
+  it.each(['gobin', 'gopath'] as const)('updates a Go install only at its actual %s output location', async location => {
+    const value = goFixture(location)
+    expect((await value.manager.check()).components[0]).toMatchObject({ installMode: 'go', updateSupported: true, executablePath: value.command })
+    expect(value.run.mock.calls.some(([, args]) => args[0] === 'install')).toBe(false)
+    await expect(value.manager.update('mnemon')).resolves.toMatchObject({ previousVersion: '0.2.0', currentVersion: '0.3.0', updated: true })
+    expect(value.run).toHaveBeenCalledWith('/fake/go', ['install', 'github.com/mnemon-dev/mnemon@latest'], expect.objectContaining({ timeoutMs: 600_000 }))
+  })
+
+  it('keeps downloaded Go binaries outside the install output directory manual', async () => {
+    const value = goFixture('download')
+    expect((await value.manager.check()).components[0]).toMatchObject({ current: '0.2.0', outdated: true, installMode: 'manual', updateSupported: false })
+    await expect(value.manager.update('mnemon')).rejects.toThrow('cannot be updated automatically')
+    expect(value.run.mock.calls.some(([, args]) => args[0] === 'install')).toBe(false)
+  })
+
+  it('does not mistake a dependency for the main Go executable package', async () => {
+    const value = goFixture()
+    value.state.mainPath = 'example.com/other-tool'
+    expect((await value.manager.check()).components[0]).toMatchObject({ installMode: 'manual', updateSupported: false })
+  })
+
+  it('does not offer Go updates when cross compilation would change the output location', async () => {
+    const value = goFixture()
+    value.environment.GOARCH = process.arch === 'arm64' ? 'x64' : 'arm64'
+    expect((await value.manager.check()).components[0]).toMatchObject({ installMode: 'manual', updateSupported: false })
+  })
+
+  it.each(['0.2.0', 'unknown'])('does not report a successful CLI update when the active version is %s', async installed => {
+    const value = goFixture()
+    value.state.installed = installed
+    await expect(value.manager.update('mnemon')).rejects.toThrow('Mnemon update did not activate version 0.3.0')
   })
 
   it('uses the fixed Homebrew cask command for a recognized Mnemon install', async () => {

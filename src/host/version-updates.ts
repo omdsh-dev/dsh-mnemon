@@ -313,12 +313,24 @@ export class VersionUpdateManager {
     const go = this.executable('go')
     if (go !== undefined) {
       try {
+        // Release archives also contain Go build metadata. Only offer go install
+        // when its actual output would replace the executable we are using.
+        const environment = JSON.parse((await resultOrThrow(this.processRunner, go, ['env', '-json', 'GOBIN', 'GOPATH', 'GOOS', 'GOARCH', 'GOHOSTOS', 'GOHOSTARCH'], CHECK_TIMEOUT_MS)).stdout) as Record<string, unknown>
+        const goPath = typeof environment.GOPATH === 'string' ? environment.GOPATH.split(delimiter)[0] : undefined
+        const bin = typeof environment.GOBIN === 'string' && environment.GOBIN !== '' ? environment.GOBIN : goPath === undefined || goPath === '' ? undefined : join(goPath, 'bin')
+        if (bin === undefined || !isAbsolute(bin)
+          || typeof environment.GOOS !== 'string' || environment.GOOS !== environment.GOHOSTOS
+          || typeof environment.GOARCH !== 'string' || environment.GOARCH !== environment.GOHOSTARCH
+          || realpathSync(join(bin, process.platform === 'win32' ? 'mnemon.exe' : 'mnemon')) !== realCommand) {
+          return { ...(current === undefined ? {} : { current }), install: { mode: 'manual', command } }
+        }
         const metadata = await resultOrThrow(this.processRunner, go, ['version', '-m', command], CHECK_TIMEOUT_MS)
-        if (metadata.stdout.includes(MNEMON_MODULE)) {
+        const mainPath = metadata.stdout.split(/\r?\n/).map(line => line.trim().split(/\s+/)).find(fields => fields[0] === 'path')?.[1]
+        if (mainPath === MNEMON_MODULE) {
           return { ...(current === undefined ? {} : { current }), install: { mode: 'go', command, updateCommand: go, updateArgs: ['install', `${MNEMON_MODULE}@latest`] } }
         }
       } catch {
-        // A non-Go binary falls through to the manual installation mode.
+        // Unknown output locations and non-Go binaries remain manual installs.
       }
     }
     return { ...(current === undefined ? {} : { current }), install: { mode: 'manual', command } }
@@ -384,11 +396,12 @@ export class VersionUpdateManager {
       if (before.install.updateCommand === undefined || before.install.updateArgs === undefined) throw new Error('This Mnemon installation cannot be updated automatically')
       const output = await resultOrThrow(this.processRunner, before.install.updateCommand, before.install.updateArgs, UPDATE_TIMEOUT_MS)
       const after = await this.inspectMnemon()
+      if (after.current === undefined || compareVersions(after.current, latest) < 0) throw new Error(`Mnemon update did not activate version ${latest}; found ${after.current ?? 'no executable version'}`)
       const outputText = updateOutput(output)
       return {
         component,
         previousVersion: before.current,
-        currentVersion: after.current ?? latest,
+        currentVersion: after.current,
         updated: true,
         restartRequired: false,
         ...(outputText === undefined ? {} : { output: outputText }),
