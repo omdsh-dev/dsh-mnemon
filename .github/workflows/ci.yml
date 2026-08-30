@@ -107,7 +107,7 @@ jobs:
 
       - name: Verify deterministic build on Windows
         if: runner.os == 'Windows'
-        run: pnpm run verify:build && pnpm -r build
+        run: pnpm run verify:build && pnpm --workspace-concurrency=1 -r build
 
       - name: Verify published package on Windows
         if: runner.os == 'Windows'

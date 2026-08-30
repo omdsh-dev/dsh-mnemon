@@ -125,7 +125,7 @@
     "verify:package": "node scripts/verify-package-contents.mjs && node scripts/verify-public-entries.mjs && pnpm run lint:package",
     "verify:plugins": "node scripts/verify-plugin-artifacts.mjs",
     "e2e:serve": "node scripts/serve-e2e.mjs",
-    "verify": "pnpm run typecheck && pnpm run verify:build && pnpm -r build && pnpm run test && pnpm run verify:headless && pnpm run verify:package",
+    "verify": "pnpm run typecheck && pnpm run verify:build && pnpm --workspace-concurrency=1 -r build && pnpm -r typecheck && pnpm -r test && pnpm run test && pnpm run verify:headless && pnpm run verify:package",
     "dsh:link-source": "node scripts/link-dsh-source.mjs",
     "dsh:restore-registry": "node scripts/link-dsh-source.mjs --restore"
   },

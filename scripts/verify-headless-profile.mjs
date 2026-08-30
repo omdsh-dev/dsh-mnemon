@@ -9,6 +9,13 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const dshBin = join(root, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
 const marker = 'HEADLESS_MNEMON_READY'
+const arguments_ = process.argv.slice(2)
+const options = new Map()
+for (let index = 0; index < arguments_.length; index += 2) {
+  if (!['--package', '--registry'].includes(arguments_[index]) || !arguments_[index + 1]) throw new Error('Expected --package <specifier> --registry <url>')
+  options.set(arguments_[index], arguments_[index + 1])
+}
+if (options.has('--package') !== options.has('--registry')) throw new Error('--package and --registry must be supplied together')
 
 function run(args, { cwd = root, env = process.env, timeoutMs = 30_000 } = {}) {
   return new Promise((resolveRun, reject) => {
@@ -89,13 +96,17 @@ try {
     DEEPSEEK_API_KEY: 'headless-verification-key',
     DEEPSEEK_BASE_URL: `http://127.0.0.1:${address.port}`,
     MNEMON_DATA_DIR: storageRoot,
+    ...(options.has('--registry') ? { npm_config_registry: options.get('--registry'), NPM_CONFIG_REGISTRY: options.get('--registry') } : {}),
   }
 
   // link: skips dependency installation. Explicitly link the same plugin set
   // that a normal install resolves from the Starter's semver dependencies.
   const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
   const plugins = Object.keys(manifest.dependencies).filter(name => name.startsWith('dsh-mnemon-'))
-  const install = await run(['plugin', '--profile', 'headless', 'add', `link:${root}`, ...plugins.map(name => `link:${join(root, 'plugins', name)}`)], { env })
+  const packages = options.has('--package') ? [options.get('--package')] : [`link:${root}`, ...plugins.map(name => `link:${join(root, 'plugins', name)}`)]
+  const install = await run(['plugin', '--profile', 'headless', 'add', ...packages,
+    ...(options.has('--registry') ? ['--registry', options.get('--registry')] : []),
+  ], { env, timeoutMs: 120_000 })
   assertSuccess('installing dsh-mnemon into the Headless profile', install)
 
   const settingsPath = join(dshHome, 'settings.yaml')

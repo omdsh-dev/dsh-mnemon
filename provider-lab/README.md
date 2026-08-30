@@ -1,9 +1,8 @@
 # Provider Lab
 
 This localhost-only lab exercises every long-term Memory Provider supported by
-`dsh-mnemon`. Private server deployments run in Docker; Mnemon Native and
-Holographic remain in-process, while ByteRover remains a host CLI because that
-is its official local integration contract.
+`dsh-mnemon`. Private server deployments run in Docker; Holographic remains
+in-process. Mnemon Native and ByteRover use their local CLI contracts.
 
 ## Safety boundary
 
@@ -37,12 +36,14 @@ RetainDB Local viewer is at `http://127.0.0.1:18991`.
 3. Ensure Ollama has `qwen2.5:3b` and `nomic-embed-text`.
 4. Run `docker compose up -d --build` from this directory.
 5. Run `node scripts/seed-provider-lab.mjs` from the repository root after
-   `pnpm run build`. Pass the Supermemory API key printed by its first-boot log
+   `pnpm run build && pnpm --workspace-concurrency=1 -r build`. Pass the Supermemory API key printed by its first-boot log
    as `SUPERMEMORY_API_KEY`.
 
 Use `docker compose ps` and `node scripts/probe-provider-lab.mjs` for a concise
-health report. The seed command is idempotent by Memory Space name and avoids
-overwriting unrelated user Memory Spaces. It reconciles the selected lab
+health report. The seed command uses public plugin composition and defaults to the isolated
+`provider-lab/.state/memory` root, not personal memory. Use `MNEMON_DATA_DIR`
+only for a disposable lab root; the command reconciles its Provider mappings.
+It skips seeding a namespace that already has observable content. It reconciles the selected lab
 connection settings on every run; set `PROVIDER_LAB_ONLY` to a comma-separated
 provider list when only part of the lab should be checked.
 

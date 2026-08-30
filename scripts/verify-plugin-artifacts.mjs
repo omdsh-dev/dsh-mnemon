@@ -131,6 +131,10 @@ try {
   for (const name of names) await pack(join(root, 'plugins', name), name)
   await new Promise(resolve => registry.listen(0, '127.0.0.1', resolve))
   registryUrl = 'http://127.0.0.1:' + registry.address().port
+  // Exercise the user's one-package installation, not just explicit link mounts.
+  await run(process.execPath, [join(root, 'scripts/verify-headless-profile.mjs'),
+    '--package', 'file:' + artifacts.get(manifest.name), '--registry', registryUrl,
+  ], root, 'real DSH: install only the packed Starter and activate its plugins')
   await parallel(names, 3, verifyIndependent)
 
   const consumer = join(temporary, 'consumer')

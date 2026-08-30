@@ -4,19 +4,18 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { MnemonService, createRunner, resolveConfig } from '../lib/index.js'
+import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
+import * as spaces from 'dsh-mnemon-source-memory-spaces'
+import * as strategy from 'dsh-mnemon-strategy-default-three-tier'
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
-const stateRoot = join(root, 'provider-lab', '.state')
-mkdirSync(stateRoot, { recursive: true, mode: 0o700 })
-mkdirSync(join(stateRoot, 'byterover'), { recursive: true, mode: 0o700 })
+const stateRoot = process.env.MNEMON_DATA_DIR === undefined ? join(root, 'provider-lab', '.state') : join(process.env.MNEMON_DATA_DIR, 'provider-lab')
 const byteroverDefaultPath = join(homedir(), '.brv-cli', 'bin', 'brv')
 const byteroverPath = process.env.BRV_PATH ?? (existsSync(byteroverDefaultPath) ? byteroverDefaultPath : 'brv')
 
 const supermemoryApiKey = process.env.SUPERMEMORY_API_KEY?.trim()
 
-const config = resolveConfig({ storageScope: 'global', writeEnabled: true, timeoutMs: 10_000, defaultRecallLimit: 20 })
-const service = new MnemonService(createRunner(config), config)
+const dataDir = process.env.MNEMON_DATA_DIR ?? join(stateRoot, 'memory')
 
 const providers = [
   {
@@ -91,6 +90,8 @@ if (selectedProviders.some(provider => provider.id === 'supermemory') && !superm
   throw new Error('SUPERMEMORY_API_KEY is required when seeding Supermemory; copy the sm_... key from `docker compose logs supermemory`.')
 }
 
+if (selectedProviders.some(provider => provider.id === 'byterover')) mkdirSync(join(stateRoot, 'byterover'), { recursive: true, mode: 0o700 })
+
 const memories = [
   { category: 'decision', importance: 5, tags: ['architecture', 'three-tier'], entities: ['DSH', 'Mnemon'], content: 'DSH 记忆系统采用三层结构：运行时热记忆、项目档案、可替换的长期记忆 Provider。第三层允许 Mnemon Native、OpenViking、Mem0 等实现并存。' },
   { category: 'preference', importance: 4, tags: ['routing', 'policy'], entities: ['LLM', 'Provider'], content: '自动创建记忆体时，用户可以用规则与 Prompt 描述数据边界、共享倾向和能力要求，再由 LLM 在允许的 Provider 候选中作出可解释选择。' },
@@ -141,52 +142,55 @@ if (selectedProviders.some(provider => provider.id === 'mem0')) {
   try { await ensureMem0Config() } catch (error) { console.warn(`WARN  Mem0 config: ${error instanceof Error ? error.message : String(error)}`) }
 }
 
-const existing = service.memoryBodies.list()
+// The lab is a consumer of public plugin artifacts, not private controllers.
+const runner = new MemoryCompositionRunner()
 const report = []
-for (const provider of selectedProviders) {
-  let body = existing.find(candidate => candidate.name === provider.name)
-  try {
-    if (body === undefined) {
-      body = await service.createBody({
-        name: provider.name,
-        description: provider.description,
-        active: true,
-        providerId: provider.id,
-        ...(provider.connection === undefined ? {} : { connection: provider.connection }),
-      })
-    } else {
-      body = service.updateBody(body.id, {
-        name: provider.name,
-        description: provider.description,
-        active: true,
-        ...(provider.connection === undefined ? {} : { connection: provider.connection }),
-      })
-    }
-
-    let currentCount = 0
+try {
+  await runner.mount(strategy, { instanceId: 'lab-strategy' })
+  await runner.mount(spaces, { instanceId: 'lab-spaces', config: {
+    dataDir, timeoutMs: 10_000, defaultRecallLimit: 20,
+    providers: selectedProviders.map(provider => ({ use: 'dsh-mnemon-provider-' + provider.id, instanceId: provider.id })),
+  } })
+  const management = await runner.managementClient('source:lab-spaces')
+  const read = async (operation, input = null) => (await management.read(operation, input)).value
+  const mutate = async (operation, input) => (await management.mutate(operation, input, { confirmed: true })).value
+  for (const provider of selectedProviders) {
+    let body
     try {
-      currentCount = body.provider.capabilities.browse
-        ? (await service.list({ memoryBodyIds: [body.id], limit: 20 })).items.length
-        : (await service.search({ memoryBodyIds: [body.id], query: '三层结构 Provider', limit: 20 })).results.length
-    } catch {}
-
-    let stored = 0
-    const failures = []
-    if (currentCount === 0) {
-      for (const memory of memories) {
-        try {
-          await service.remember({ ...memory, source: 'user', memoryBodyId: body.id })
-          stored += 1
-        } catch (error) {
-          failures.push(error instanceof Error ? error.message : String(error))
+      const descriptor = (await read('provider-services')).providers.find(item => item.id === provider.id)
+      if (descriptor === undefined) throw new Error('Provider descriptor not available: ' + provider.id)
+      const connection = provider.connection ?? {}
+      const settings = Object.fromEntries(descriptor.fields.filter(field => field.scope === 'service' && connection[field.key] !== undefined).map(field => [field.key, connection[field.key]]))
+      const memorySettings = Object.fromEntries(descriptor.fields.filter(field => field.scope === 'memory' && connection[field.key] !== undefined).map(field => [field.key, connection[field.key]]))
+      await mutate('provider-service-update', { providerId: provider.id, settings, enabled: true })
+      const existing = (await read('body-directory')).items
+      body = existing.find(candidate => candidate.provider.id === provider.id && candidate.name === provider.name)
+        ?? existing.find(candidate => candidate.provider.id === provider.id)
+      if (body === undefined) {
+        body = await mutate('body-create', { name: provider.name, description: provider.description, active: true, providerId: provider.id, connection: memorySettings })
+      } else {
+        body = await mutate('body-update', { memoryBodyId: body.id, name: provider.name, description: provider.description, active: true, connection: memorySettings })
+      }
+      const current = body.provider.capabilities.browse
+        ? (await read('list', { memoryBodyIds: [body.id], limit: 20 })).items
+        : (await read('search', { memoryBodyIds: [body.id], query: '三层结构 Provider', limit: 20 })).results
+      let stored = 0
+      const failures = []
+      if (current.length === 0) {
+        for (const memory of memories) {
+          try {
+            await mutate('remember', { ...memory, source: 'user', memoryBodyId: body.id })
+            stored += 1
+          } catch (error) { failures.push(error instanceof Error ? error.message : String(error)) }
         }
       }
+      report.push({ provider: provider.id, bodyId: body.id, currentCount: current.length, stored, failures })
+    } catch (error) {
+      report.push({ provider: provider.id, bodyId: body?.id, currentCount: 0, stored: 0, failures: [error instanceof Error ? error.message : String(error)] })
     }
-    report.push({ provider: provider.id, bodyId: body.id, currentCount, stored, failures })
-  } catch (error) {
-    report.push({ provider: provider.id, currentCount: 0, stored: 0, failures: [error instanceof Error ? error.message : String(error)] })
   }
-}
+} finally { await runner.dispose() }
+console.log('Lab memory root: ' + dataDir)
 
 for (const item of report) {
   const state = item.failures.length === 0 ? 'READY' : item.stored > 0 ? 'PART ' : 'FAIL '

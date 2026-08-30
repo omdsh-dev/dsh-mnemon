@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Real DSH WebUI with disposable state and a loopback-only model stub.
-// Run after pnpm build && pnpm -r build; stop with Ctrl-C to remove the fixture.
+// Run after pnpm build && pnpm --workspace-concurrency=1 -r build; stop with Ctrl-C to remove the fixture.
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -67,8 +67,8 @@ try {
   // coding preset's shell requirements. Never modify a shipped DSH preset.
   const preset = join(dshHome, '.agent-presets/mnemon-e2e')
   await mkdir(preset, { recursive: true })
-  await writeFile(join(preset, 'preset.yml'), 'name: Mnemon E2E\\ndescription: Isolated memory UI test (no Shell).\\norder: 0\\n')
-  await writeFile(join(preset, 'agent.cordis.yml'), "- id: persona\\n  name: '@deepseek-ai/dsh-persona'\\n  config:\\n    text: You are testing the Mnemon memory UI.\\n")
+  await writeFile(join(preset, 'preset.yml'), 'name: Mnemon E2E\ndescription: Isolated memory UI test (no Shell).\norder: 0\n')
+  await writeFile(join(preset, 'agent.cordis.yml'), "- id: persona\n  name: '@deepseek-ai/dsh-persona'\n  config:\n    text: You are testing the Mnemon memory UI.\n")
   // Leave the entire real WebUI/plugin stack enabled. Only unrelated native
   // PTY/search tools are disabled so a test cannot launch workspace commands.
   const disabled = ['subprocess', 'bash-sandbox', 'pwsh-sandbox', 'tool-bash', 'tool-pwsh', 'permission', 'tool-fs-search', 'directory-picker']
