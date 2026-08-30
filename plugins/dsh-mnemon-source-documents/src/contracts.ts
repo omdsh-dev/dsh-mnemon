@@ -64,3 +64,6 @@ export interface DocumentCapacityPlan {
   fits: boolean
   candidates: DocumentRecord[]
 }
+
+export const DOCUMENTS_VERSION = 1
+export const DOCUMENTS_ACTIVE_LIMIT_BYTES = 10 * 1024 * 1024

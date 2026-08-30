@@ -79,3 +79,15 @@ export interface RuntimeMemoryMaintenancePlan {
   limit: number
   requiresMaintenance: boolean
 }
+
+import { DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES, DEFAULT_RUNTIME_USER_LIMIT_BYTES } from './defaults.ts'
+export const RUNTIME_MEMORY_VERSION = 1
+export const RUNTIME_ENTRY_DELIMITER = '\n§\n'
+export interface RuntimeMemoryLimits {
+  readonly memory: number
+  readonly user: number
+}
+export const RUNTIME_MEMORY_LIMITS: RuntimeMemoryLimits = {
+  memory: DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES,
+  user: DEFAULT_RUNTIME_USER_LIMIT_BYTES,
+}

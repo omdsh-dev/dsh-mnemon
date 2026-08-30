@@ -44,16 +44,8 @@ export type {
   RuntimeMemoryUsage,
 } from './contracts.ts'
 
-export const RUNTIME_MEMORY_VERSION = 1
-export const RUNTIME_ENTRY_DELIMITER = '\n§\n'
-export interface RuntimeMemoryLimits {
-  readonly memory: number
-  readonly user: number
-}
-export const RUNTIME_MEMORY_LIMITS: RuntimeMemoryLimits = {
-  memory: DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES,
-  user: DEFAULT_RUNTIME_USER_LIMIT_BYTES,
-}
+import { RUNTIME_MEMORY_VERSION, RUNTIME_ENTRY_DELIMITER, RUNTIME_MEMORY_LIMITS, type RuntimeMemoryLimits } from './contracts.ts'
+export { RUNTIME_MEMORY_VERSION, RUNTIME_ENTRY_DELIMITER, RUNTIME_MEMORY_LIMITS, type RuntimeMemoryLimits } from './contracts.ts'
 export const RUNTIME_MEMORY_PROTOCOL: string = `MNEMON RUNTIME MEMORY PROTOCOL
 Runtime Memory keeps compact hot memory available for every turn. The latest MNEMON RUNTIME MEMORY SNAPSHOT in runtime context is a complete projection of USER.md and MEMORY.md and supersedes earlier Runtime Memory snapshots. Apply applicable entries silently and never recite them merely to prove they were read.
 

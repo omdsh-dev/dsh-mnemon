@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { DocumentCapacityError, DocumentConflictError, DocumentController, DocumentManager } from '../src/documents.ts'
+import { DocumentCapacityError, DocumentConflictError, DocumentController, DocumentManager } from "../src/controller.ts"
 
 const directories: string[] = []
 

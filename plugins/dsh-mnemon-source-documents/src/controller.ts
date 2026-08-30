@@ -18,8 +18,8 @@ import { lexicalRequiredMatchCount, lexicalSearchTokens } from './search-tokens.
 
 export type { DocumentMutation, DocumentMutationResult, DocumentRecord, DocumentSearchResult, DocumentSnapshot, DocumentStatus, DocumentView } from './contracts.ts'
 
-export const DOCUMENTS_VERSION = 1
-export const DOCUMENTS_ACTIVE_LIMIT_BYTES = 10 * 1024 * 1024
+import { DOCUMENTS_VERSION, DOCUMENTS_ACTIVE_LIMIT_BYTES } from './contracts.ts'
+export { DOCUMENTS_VERSION, DOCUMENTS_ACTIVE_LIMIT_BYTES } from './contracts.ts'
 const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024
 const LOCK_TIMEOUT_MS = 5_000
 const LOCK_STALE_MS = 30_000

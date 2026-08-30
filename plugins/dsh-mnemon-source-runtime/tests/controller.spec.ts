@@ -7,7 +7,7 @@ import {
   RUNTIME_MEMORY_PROTOCOL,
   RuntimeMemoryCapacityError,
   RuntimeMemoryController,
-} from '../src/runtime-memory.ts'
+} from "../src/controller.ts"
 
 const directories: string[] = []
 
