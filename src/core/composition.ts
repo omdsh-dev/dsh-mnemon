@@ -23,18 +23,11 @@ import type {
   MemoryViewSourceSpec,
   MemoryViewSpec,
 } from "./contracts/index.ts"
+import { DEFAULT_MEMORY_VIEW_BUDGET } from './contracts/index.ts'
 import type { InstalledMemorySource, InstalledMemoryStrategy, MemoryContributionSnapshot } from './contributions.ts'
 import { canonicalMemoryJson, deepFreeze, defineMemorySource, defineMemoryStrategy, id, jsonClone, positiveInteger, requiredText, uniqueIds, validateCapabilities, validateProvenance } from './definitions.ts'
 
 const INSTANCE_KEY = /^(?:source|strategy):[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,299}$/u
-
-export const DEFAULT_MEMORY_VIEW_BUDGET: Readonly<MemoryViewBudget> = Object.freeze({
-  maxProjectionCharacters: 64 * 1024,
-  maxRoutes: 16,
-  maxActions: 16,
-  maxEvidenceResults: 16,
-  maxEvidenceCharacters: 16 * 1024,
-})
 
 function instanceKey(value: unknown, kind: 'source' | 'strategy'): string {
   const normalized = requiredText(value, `${kind} instanceKey`, 300)

@@ -15,8 +15,8 @@ describe('explicit default Starter', () => {
   it('mounts Sources and Strategy as real Cordis Entries and keeps old leases after unload', async () => {
     const value = await compositionFixture()
     fixtures.push(value)
-    const { runner, graph, releases } = value
-    expect(runner.runtime.contributionSnapshot()).toMatchObject({
+    const { extensions, graph, releases } = value
+    expect(extensions.contributionSnapshot()).toMatchObject({
       revision: 4,
       sources: [
         { instanceKey: 'source:mnemon-source-runtime' },
@@ -51,7 +51,7 @@ describe('explicit default Starter', () => {
       } }, { instanceId: 'memory-spaces/custom:team' })
       expect(ids).toEqual(['work-native'])
       expect(runner.context.get('mnemonProvider', false)).toBeUndefined()
-      expect(runner.runtime.contributionSnapshot().sources[0]?.instanceKey).toBe('source:memory-spaces/custom:team')
+      expect(runner.inspect().evaluation.sourceInstanceKeys).toEqual(['source:memory-spaces/custom:team'])
       await expect(spaces.apply({} as Context, { providers: ['not-installed'] })).rejects.toThrow('DSH Loader')
       await expect(runner.mount(spaces, { instanceId: 'duplicate', config: {
         providers: ['dsh-mnemon-provider-mnemon-native', 'dsh-mnemon-provider-mnemon-native'],

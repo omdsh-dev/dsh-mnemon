@@ -63,8 +63,8 @@ describe('public Source plugin composition', () => {
   })
 
   it('rejects ambiguous Source roles without inventing precedence', async () => {
-    const { workspace, graph, runner, root } = await fixture()
-    await runner.mount(runtimePlugin, { instanceId: 'runtime-second', config: { dataDir: root + '/second' } })
+    const { workspace, graph, mount, root } = await fixture()
+    await mount(runtimePlugin, { instanceId: 'runtime-second', config: { dataDir: root + '/second' } })
     await expect(graph.memoryComposition.current()!.compose(request(workspace))).rejects.toThrow('ambiguous working-context Sources')
   })
 })

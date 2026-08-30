@@ -11,6 +11,7 @@ import type {
   MemoryStrategyDefinition,
 } from "dsh-mnemon/contracts"
 import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
+import { installMemory } from 'dsh-mnemon/extension-sdk'
 const DEFAULT_MEMORY_VIEW_BUDGET = { maxProjectionCharacters: 16_384, maxRoutes: 16, maxActions: 16, maxEvidenceResults: 20, maxEvidenceCharacters: 16_384 }
 import { resolveMemorySpacesConfig } from "../src/config.ts"
 import { createMemorySpacesSource } from '../src/source.ts'
@@ -373,43 +374,38 @@ describe('Memory Spaces Provider child-module conformance', () => {
       },
       compose: (_request, sources) => ({
         strategyTypeId: 'fixture',
-        sources: sources.map(source => ({ sourceInstanceKey: source.sourceInstanceKey, routeIds: ['recall'], actionIds: ['remember'] })),
+        sources: sources.map(source => ({ sourceInstanceKey: source.sourceInstanceKey,
+          routeIds: source.routeIds.filter(id => id === 'recall'), actionIds: source.actionIds.filter(id => id === 'remember') })),
         explanation: 'Provider drain fixture.',
       }),
     }
     const dataDir = mkdtempSync(join(tmpdir(), 'mnemon-provider-drain-'))
     temporaryDirectories.push(dataDir)
     const harness = new MemoryCompositionRunner({ sourceConfiguration: () => ({ dataDir }) })
-    const generations = harness.generations
-    const contribution = (provider: typeof oldProvider.snapshot, revision: number) => ({
-      revision,
-      sources: [{
-        kind: 'source' as const,
-        instanceKey: 'source:memory-spaces-fixture',
-        provenance: { packageName: 'dsh-mnemon-source-memory-spaces', entryId: 'memory-spaces-fixture' },
-        definition: createMemorySpacesSource(provider),
-        effectiveDigest: `providers:${provider.digest}`,
-      }],
-      strategies: [{
-        kind: 'strategy' as const,
-        instanceKey: 'strategy:fixture',
-        provenance: { packageName: 'dsh-mnemon-strategy-fixture', entryId: 'fixture' },
-        definition: strategy,
-      }],
+    const sourcePlugin = (provider: typeof oldProvider.snapshot) => ({
+      inject: ['mnemonMemory'],
+      apply(ctx: Context) {
+        installMemory(ctx, { sources: [createMemorySpacesSource(provider)] }, { effectiveDigest: `providers:${provider.digest}` })
+      },
     })
-
-    expect(generations.reconcile(contribution(oldProvider.snapshot, 1)).state).toBe('ready')
-    const oldLease = generations.acquire()
-    expect(generations.reconcile(contribution(nextProvider.snapshot, 2)).state).toBe('ready')
-    expect(generations.inspect().drainingGenerationIds).toEqual([oldLease.id])
+    await harness.mount({ inject: ['mnemonMemory'], apply(ctx: Context) {
+      installMemory(ctx, { strategies: [strategy] })
+    } }, { instanceId: 'fixture' })
+    const unmount = await harness.mount(sourcePlugin(oldProvider.snapshot), { instanceId: 'memory-spaces-fixture' })
+    expect(harness.inspect().evaluation.state).toBe('ready')
+    const oldTurn = await harness.beginTurn()
+    await unmount()
+    await harness.mount(sourcePlugin(nextProvider.snapshot), { instanceId: 'memory-spaces-fixture' })
+    expect(harness.inspect().evaluation.state).toBe('ready')
+    expect(harness.inspect().drainingGenerationIds).toEqual([oldTurn.view.runtimeGeneration])
     expect(events).toEqual([
       'create:work-account:https://old.vector.example',
       'create:work-account:https://next.vector.example',
     ])
 
-    oldLease.release()
+    oldTurn.release()
     await vi.waitFor(() => expect(events).toContain('dispose:work-account'))
-    expect(generations.inspect().drainingGenerationIds).toEqual([])
+    expect(harness.inspect().drainingGenerationIds).toEqual([])
     await harness.dispose()
     expect(events.filter(event => event === 'dispose:work-account')).toHaveLength(2)
     await Promise.all([oldProvider.fiber.dispose(), nextProvider.fiber.dispose()])

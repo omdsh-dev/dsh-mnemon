@@ -29,7 +29,7 @@ describe.skipIf(!cliPath)('real Native Provider through Source composition', () 
       turns.push(turn)
       const offer = turn.view.actionOffers.find(item => item.sourceActionId === 'remember')!
       const text = 'composablenativesentinel verifies independent Source and Provider artifacts.'
-      await expect(turn.lease.generation.executeAction(turn.view, offer.id, {
+      await expect(turn.executeAction(offer.id, {
         content: text, memoryBodyId: body.id, category: 'fact', source: 'user', importance: 5,
       }, () => true)).resolves.toMatchObject({ status: 'succeeded' })
       const listed = await management.read('list', { memoryBodyIds: [body.id], limit: 10 })
@@ -37,7 +37,7 @@ describe.skipIf(!cliPath)('real Native Provider through Source composition', () 
       const stored = items.find(item => item.content === text)
       expect(stored).toBeDefined()
       const route = turn.view.routes.find(item => item.sourceRouteId === 'recall')!
-      const evidence = await turn.lease.generation.executeRoute(turn.view, route.id, {
+      const evidence = await turn.executeRoute(route.id, {
         query: 'composablenativesentinel', mode: 'keyword', memoryBodyIds: [body.id],
       })
       expect(evidence.items.some(item => item.text.includes('composablenativesentinel'))).toBe(true)

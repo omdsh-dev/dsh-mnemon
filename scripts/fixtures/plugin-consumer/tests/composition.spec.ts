@@ -31,7 +31,7 @@ describe('external consumer of packed artifacts', () => {
     const turns: MemoryTestTurn[] = []
     try {
       await expect(runner.mount(notes, { instanceId: 'invalid', config: { path: 'relative.txt' } })).rejects.toThrow('absolute')
-      expect(runner.runtime.contributionSnapshot().sources).toHaveLength(0)
+      expect(runner.inspect().evaluation.sourceInstanceKeys).toHaveLength(0)
       for (const id of ['work', 'personal']) await runner.mount(notes, { instanceId: id, config: { path: join(directory, id + '.txt') } })
       await expect(runner.beginTurn()).rejects.toThrow('no Serving')
       const removeStrategy = await runner.mount(focus, { instanceId: 'focus', config: { sourceKeys: ['source:work'], mode: 'eager' } })
@@ -46,16 +46,16 @@ describe('external consumer of packed artifacts', () => {
       expect(pinned.view.projection.map(fragment => fragment.text)).toEqual(['first snapshot'])
       const route = pinned.view.routes[0]!
       const action = pinned.view.actionOffers[0]!
-      await expect(pinned.lease.generation.executeAction(pinned.view, action.id, { content: 'denied' }, () => false)).rejects.toThrow('not currently authorized')
-      await expect(pinned.lease.generation.executeAction(pinned.view, action.id, { content: 'second snapshot' }, () => true)).resolves.toMatchObject({ status: 'succeeded' })
-      const exact = await pinned.lease.generation.executeRoute(pinned.view, route.id, {})
+      await expect(pinned.executeAction(action.id, { content: 'denied' }, () => false)).rejects.toThrow('not currently authorized')
+      await expect(pinned.executeAction(action.id, { content: 'second snapshot' }, () => true)).resolves.toMatchObject({ status: 'succeeded' })
+      const exact = await pinned.executeRoute(route.id, {})
       expect(exact.items[0]?.text).toBe('first snapshot')
       expect((await management.read('read')).value).toEqual({ content: 'second snapshot' })
 
       // A competing candidate cannot silently replace the serving Strategy.
       const removeCandidate = await runner.mount(focus, { instanceId: 'candidate', config: { sourceKeys: ['source:personal'], mode: 'routed' } })
-      expect(runner.generations.inspect().evaluation.state).toBe('rejected')
-      expect(runner.generations.current()?.id).toBe(pinned.lease.id)
+      expect(runner.inspect().evaluation.state).toBe('rejected')
+      expect(runner.inspect().servingGenerationId).toBe(pinned.view.runtimeGeneration)
       await removeCandidate()
       await removeStrategy()
       await expect(runner.beginTurn()).rejects.toThrow('no Serving')
@@ -65,11 +65,11 @@ describe('external consumer of packed artifacts', () => {
       expect(current.view.runtimeGeneration).not.toBe(pinned.view.runtimeGeneration)
       expect(current.view.routes.map(route => route.sourceInstanceKey)).toEqual(['source:personal'])
       expect(current.view.projection[0]?.mode).toBe('routed')
-      expect(runner.generations.inspect().drainingGenerationIds).toContain(pinned.lease.id)
-      expect((await pinned.lease.generation.executeRoute(pinned.view, route.id, {})).items[0]?.text).toBe('first snapshot')
+      expect(runner.inspect().drainingGenerationIds).toContain(pinned.view.runtimeGeneration)
+      expect((await pinned.executeRoute(route.id, {})).items[0]?.text).toBe('first snapshot')
       current.release()
       pinned.release()
-      expect(runner.generations.inspect().drainingGenerationIds).not.toContain(pinned.lease.id)
+      expect(runner.inspect().drainingGenerationIds).not.toContain(pinned.view.runtimeGeneration)
     } finally { turns.forEach(turn => turn.release()); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
   })
 
@@ -85,12 +85,12 @@ describe('external consumer of packed artifacts', () => {
       await management.mutate('provider-service-update', { providerId: 'local-account', settings: {}, enabled: true }, { confirmed: true })
       const turn = await runner.beginTurn()
       turns.push(turn)
-      await expect(turn.lease.generation.executeAction(turn.view, turn.view.actionOffers.find(offer => offer.sourceActionId === 'remember')!.id,
+      await expect(turn.executeAction(turn.view.actionOffers.find(offer => offer.sourceActionId === 'remember')!.id,
         { content: 'artifact loader durable sentinel' }, () => true)).resolves.toMatchObject({ status: 'succeeded' })
       turn.release()
       const next = await runner.beginTurn()
       turns.push(next)
-      expect((await next.lease.generation.executeRoute(next.view, next.view.routes.find(route => route.sourceRouteId === 'recall')!.id, { query: 'durable sentinel' })).items[0]?.text).toContain('artifact loader durable sentinel')
+      expect((await next.executeRoute(next.view.routes.find(route => route.sourceRouteId === 'recall')!.id, { query: 'durable sentinel' })).items[0]?.text).toContain('artifact loader durable sentinel')
       next.release()
     } finally { turns.forEach(turn => turn.release()); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
   })
@@ -111,12 +111,12 @@ describe('external consumer of packed artifacts', () => {
       const turn = await runner.beginTurn()
       turns.push(turn)
       const offer = turn.view.actionOffers.find(offer => offer.sourceInstanceKey === 'source:work' && offer.sourceActionId === 'remember')!
-      await turn.lease.generation.executeAction(turn.view, offer.id, { content: 'work only' }, () => true)
+      await turn.executeAction(offer.id, { content: 'work only' }, () => true)
       turn.release()
       const next = await runner.beginTurn()
       turns.push(next)
       for (const route of next.view.routes.filter(route => route.sourceRouteId === 'recall')) {
-        const result = await next.lease.generation.executeRoute(next.view, route.id, { query: 'work' })
+        const result = await next.executeRoute(route.id, { query: 'work' })
         expect(result.items).toHaveLength(route.sourceInstanceKey === 'source:work' ? 1 : 0)
       }
       expect(runner.context.get('mnemonMemorySpace', false)).toBeUndefined()

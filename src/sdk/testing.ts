@@ -1,13 +1,15 @@
 import { Context, type Plugin } from '@deepseek-ai/cordis'
 import { readFileSync } from 'node:fs'
-import { MemoryRuntime } from '../core/runtime.ts'
-import {
-  DEFAULT_MEMORY_VIEW_BUDGET,
-  type CompileMemoryGenerationOptions,
-  type MemoryGenerationHost,
-  type MemoryGenerationLease,
-} from "../core/index.ts"
-import type { ComposableMemoryView, MemoryViewRequest, MemoryJsonValue, MemorySourceManagementResult } from "../core/contracts/index.ts"
+import { provideMemoryRuntime } from '../core/runtime.ts'
+import type { MemoryGenerationHost } from '../core/generation.ts'
+import { jsonClone } from '../core/definitions.ts'
+import { DEFAULT_MEMORY_VIEW_BUDGET } from '../core/contracts/index.ts'
+import type {
+  ComposableMemoryView, MemoryActionOffer, MemoryCapability, MemoryCompositionEvaluationReport,
+  MemoryEvidence, MemoryJsonValue, MemoryMutationReceipt, MemoryOperationScope,
+  MemoryPackageProvenance, MemorySourceManagementCatalog, MemorySourceManagementRequest,
+  MemorySourceManagementResult, MemorySourceManifest, MemoryViewRequest,
+} from '../core/contracts/index.ts'
 
 export interface MemoryTestEntry<C> {
   instanceId: string
@@ -16,8 +18,31 @@ export interface MemoryTestEntry<C> {
 
 export interface MemoryTestTurn {
   readonly view: ComposableMemoryView
-  readonly lease: MemoryGenerationLease
+  executeRoute(routeId: string, input: MemoryJsonValue, signal?: AbortSignal): Promise<MemoryEvidence>
+  executeAction(offerId: string, input: MemoryJsonValue, authorize: (offer: MemoryActionOffer) => boolean | Promise<boolean>, signal?: AbortSignal): Promise<MemoryMutationReceipt>
   release(): void
+}
+
+/** Read-only identity/manifest, never an installed definition or Source handle. */
+export interface MemoryTestSource {
+  readonly sourceInstanceKey: string
+  readonly manifest: MemorySourceManifest
+  readonly provenance: MemoryPackageProvenance
+}
+
+export interface MemoryTestOptions {
+  strategyInstanceKey?: string
+  strategyTypeId?: string
+  sourceConfiguration?: (source: MemoryTestSource) => Readonly<Record<string, MemoryJsonValue>>
+  sourceCapabilities?: (source: MemoryTestSource) => readonly MemoryCapability[]
+  now?: () => Date
+}
+
+/** JSON-only observations for composition/replacement tests, not engine access. */
+export interface MemoryTestDiagnostics {
+  servingGenerationId?: string
+  drainingGenerationIds: string[]
+  evaluation: MemoryCompositionEvaluationReport
 }
 
 export interface MemoryTestManagementClient {
@@ -35,87 +60,137 @@ export interface MemoryTestManagementClient {
  */
 export class MemoryCompositionRunner {
   readonly context = new Context()
-  readonly runtime = new MemoryRuntime()
-  readonly generations: MemoryGenerationHost
-  private readonly entryIds = new WeakMap<object, string>()
-  private readonly entries = new Map<string, { dispose(): Promise<void> }>()
-  private readonly attachment
-  private closed = false
+  readonly #runtime = provideMemoryRuntime(this.context)
+  readonly #generations: MemoryGenerationHost
+  readonly #entryIds = new WeakMap<object, string>()
+  readonly #entries = new Map<string, { dispose(): Promise<void> }>()
+  readonly #turns = new Set<() => void>()
+  #closed = false
+  #closing: Promise<void> | undefined
 
-  constructor(options: CompileMemoryGenerationOptions = {}) {
-    this.context.provide('mnemonMemory', this.runtime.service)
+  constructor(options: MemoryTestOptions = {}) {
     this.context.provide('loader', {
-      locate: (fiber: object) => this.entryIds.get(fiber),
+      locate: (fiber: object) => this.#entryIds.get(fiber),
       import: (specifier: string) => import(specifier),
       unwrapExports: (module: Record<string, unknown>) => module.default ?? module,
     })
-    this.attachment = this.runtime.attachGeneration(options)
-    this.generations = this.attachment.host
+    const { sourceConfiguration, sourceCapabilities, ...selection } = options
+    this.#generations = this.#runtime.attachGeneration({
+      ...selection,
+      ...(sourceConfiguration === undefined ? {} : { sourceConfiguration: source => sourceConfiguration(Object.freeze({
+        sourceInstanceKey: source.instanceKey, manifest: source.definition.manifest, provenance: source.provenance,
+      })) }),
+      ...(sourceCapabilities === undefined ? {} : { sourceCapabilities: source => sourceCapabilities(Object.freeze({
+        sourceInstanceKey: source.instanceKey, manifest: source.definition.manifest, provenance: source.provenance,
+      })) }),
+    }).host
   }
 
   async mount<C>(plugin: Plugin.Object<C>, entry: MemoryTestEntry<C>): Promise<() => Promise<void>> {
-    if (this.closed) throw new Error('MemoryCompositionRunner is disposed')
+    this.#assertOpen()
     const id = entry.instanceId.trim()
-    if (id === '' || this.entries.has(id)) throw new Error(`duplicate or empty test Entry id: ${id}`)
+    if (id === '' || this.#entries.has(id)) throw new Error(`duplicate or empty test Entry id: ${id}`)
     const boundPlugin: Plugin.Object<C | undefined> = {
       ...plugin,
       apply: (ctx: Context, config: C | undefined) => {
-        this.entryIds.set(ctx.fiber, id)
+        this.#entryIds.set(ctx.fiber, id)
         return plugin.apply(ctx, config as C)
       },
     }
     const fiber = this.context.plugin(boundPlugin, entry.config)
-    this.entries.set(id, fiber)
+    this.#entries.set(id, fiber)
     try {
       await fiber.await()
+      this.#assertOpen()
     } catch (error) {
-      this.entries.delete(id)
+      if (this.#entries.get(id) === fiber) this.#entries.delete(id)
       await fiber.dispose()
       throw error
     }
     return async () => {
-      if (this.entries.get(id) !== fiber) return
-      this.entries.delete(id)
+      if (this.#entries.get(id) !== fiber) return
+      this.#entries.delete(id)
       await fiber.dispose()
     }
   }
 
   async beginTurn(request: Partial<MemoryViewRequest> = {}): Promise<MemoryTestTurn> {
-    if (this.closed) throw new Error('MemoryCompositionRunner is disposed')
-    const lease = this.generations.acquire()
+    this.#assertOpen()
+    const budget = { ...(request.budget ?? DEFAULT_MEMORY_VIEW_BUDGET) }
+    const lease = this.#generations.acquire()
     try {
       const view = await lease.generation.compose({
         scope: request.scope ?? { storage: 'custom' },
         scenario: request.scenario ?? 'plugin-test',
-        budget: request.budget ?? { ...DEFAULT_MEMORY_VIEW_BUDGET },
+        budget,
       })
-      return { view, lease, release: () => lease.release() }
+      this.#assertOpen()
+      let active = true
+      const assertActive = () => {
+        this.#assertOpen()
+        if (!active) throw new Error('Memory test turn is released')
+      }
+      const release = () => {
+        if (!active) return
+        active = false
+        this.#turns.delete(release)
+        lease.release()
+      }
+      this.#turns.add(release)
+      return Object.freeze({
+        view,
+        executeRoute: async (routeId: string, input: MemoryJsonValue, signal?: AbortSignal) => {
+          assertActive()
+          const operation = this.#generations.acquire(lease.id)
+          try { return await operation.generation.executeRoute(view, routeId, input, signal, budget) }
+          finally { operation.release() }
+        },
+        executeAction: async (offerId: string, input: MemoryJsonValue, authorize: (offer: MemoryActionOffer) => boolean | Promise<boolean>, signal?: AbortSignal) => {
+          assertActive()
+          const operation = this.#generations.acquire(lease.id)
+          try { return await operation.generation.executeAction(view, offerId, input, authorize, signal) }
+          finally { operation.release() }
+        },
+        release,
+      })
     } catch (error) {
       lease.release()
       throw error
     }
   }
 
+  inspect(): MemoryTestDiagnostics {
+    return jsonClone(this.#generations.inspect(), 'memory test diagnostics')
+  }
+
+  async managementCatalog(scope: MemoryOperationScope = { storage: 'custom' }): Promise<MemorySourceManagementCatalog> {
+    this.#assertOpen()
+    const lease = this.#generations.acquire()
+    try { return await lease.generation.managementCatalog(scope) }
+    finally { lease.release() }
+  }
+
+  /** Exercise the public protocol, including rejected confirmation/revision cases. */
+  async executeManagement(request: MemorySourceManagementRequest): Promise<MemorySourceManagementResult> {
+    this.#assertOpen()
+    const lease = this.#generations.acquire()
+    try { return await lease.generation.executeManagement(request) }
+    finally { lease.release() }
+  }
+
   /** Same scoped management contract a Source page receives, backed by real generations. */
   async managementClient(sourceInstanceKey: string, scopeValue: MemoryViewRequest['scope'] = { storage: 'custom' }): Promise<MemoryTestManagementClient> {
     const scope = structuredClone(scopeValue)
-    const initial = this.generations.acquire()
-    let revision: string
-    try {
-      const instance = (await initial.generation.managementCatalog(scope)).sources.find(source => source.sourceInstanceKey === sourceInstanceKey)
-      if (instance === undefined) throw new Error(`No managed test Source: ${sourceInstanceKey}`)
-      revision = instance.revision
-    } finally { initial.release() }
+    const instance = (await this.managementCatalog(scope)).sources.find(source => source.sourceInstanceKey === sourceInstanceKey)
+    if (instance === undefined) throw new Error(`No managed test Source: ${sourceInstanceKey}`)
+    let revision = instance.revision
     const execute = async (mode: 'read' | 'mutate', operation: string, input: MemoryJsonValue, options?: { confirmed: true; expectedRevision?: string }) => {
-      const lease = this.generations.acquire()
-      try {
-        const result = await lease.generation.executeManagement({
-          sourceInstanceKey, scope, mode, operation, input, confirmed: options?.confirmed === true,
-          ...(mode === 'read' ? {} : { expectedRevision: options?.expectedRevision ?? revision }),
-        })
-        revision = result.revision
-        return result
-      } finally { lease.release() }
+      const result = await this.executeManagement({
+        sourceInstanceKey, scope, mode, operation, input, confirmed: options?.confirmed === true,
+        ...(mode === 'read' ? {} : { expectedRevision: options?.expectedRevision ?? revision }),
+      })
+      revision = result.revision
+      return result
     }
     return {
       sourceInstanceKey, get revision() { return revision },
@@ -124,16 +199,24 @@ export class MemoryCompositionRunner {
     }
   }
 
-  async dispose(): Promise<void> {
-    if (this.closed) return
-    this.closed = true
-    const failures: unknown[] = []
-    for (const fiber of [...this.entries.values()].reverse()) {
-      try { await fiber.dispose() } catch (error) { failures.push(error) }
-    }
-    this.entries.clear()
-    try { await this.attachment.dispose() } catch (error) { failures.push(error) }
-    if (failures.length > 0) throw new AggregateError(failures, 'MemoryCompositionRunner cleanup failed')
+  dispose(): Promise<void> {
+    if (this.#closing !== undefined) return this.#closing
+    this.#closed = true
+    for (const release of this.#turns) release()
+    this.#closing = (async () => {
+      const failures: unknown[] = []
+      for (const fiber of [...this.#entries.values()].reverse()) {
+        try { await fiber.dispose() } catch (error) { failures.push(error) }
+      }
+      this.#entries.clear()
+      try { await this.context.fiber.dispose() } catch (error) { failures.push(error) }
+      if (failures.length > 0) throw new AggregateError(failures, 'MemoryCompositionRunner cleanup failed')
+    })()
+    return this.#closing
+  }
+
+  #assertOpen(): void {
+    if (this.#closed) throw new Error('MemoryCompositionRunner is disposed')
   }
 }
 

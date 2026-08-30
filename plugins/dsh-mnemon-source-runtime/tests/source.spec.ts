@@ -15,19 +15,18 @@ describe('standalone runtime Source', () => {
     try {
       await runner.mount(strategy, { instanceId: 'strategy' })
       await runner.mount(plugin, { instanceId: 'work', config: { dataDir: directory, memoryLimitBytes: 256 } })
-      const generation = runner.generations.current()!
       const base = { sourceInstanceKey: 'source:work', scope: { storage: 'custom' as const }, confirmed: true }
-      const current = () => generation.executeManagement({ ...base, mode: 'read', operation: 'snapshot', input: null })
-      await generation.executeManagement({ ...base, mode: 'mutate', operation: 'mutate', expectedRevision: (await current()).revision,
+      const current = () => runner.executeManagement({ ...base, mode: 'read', operation: 'snapshot', input: null })
+      await runner.executeManagement({ ...base, mode: 'mutate', operation: 'mutate', expectedRevision: (await current()).revision,
         input: { action: 'add', target: 'memory', content: 'A'.repeat(180) } })
       const mutation = { action: 'add', target: 'memory', content: 'B'.repeat(100) }
-      await expect(generation.executeManagement({ ...base, mode: 'mutate', operation: 'mutate', expectedRevision: (await current()).revision, input: mutation })).rejects.toMatchObject({ code: 'runtime-capacity' })
-      const planned = await generation.executeManagement({ ...base, mode: 'read', operation: 'maintenance-plan', input: mutation })
+      await expect(runner.executeManagement({ ...base, mode: 'mutate', operation: 'mutate', expectedRevision: (await current()).revision, input: mutation })).rejects.toMatchObject({ code: 'runtime-capacity' })
+      const planned = await runner.executeManagement({ ...base, mode: 'read', operation: 'maintenance-plan', input: mutation })
       const plan = planned.value as unknown as plugin.RuntimeMemoryMaintenancePlan
       expect(plan.requiresMaintenance).toBe(true)
       const input = { revision: plan.revision, mutation, compacted: [{ content: 'A summary', importance: 'normal' }], maxBytes: 100 }
-      await generation.executeManagement({ ...base, mode: 'mutate', operation: 'compact-and-mutate', expectedRevision: planned.revision, input })
-      await expect(generation.executeManagement({ ...base, mode: 'mutate', operation: 'compact-and-mutate', expectedRevision: (await current()).revision, input })).rejects.toMatchObject({ code: 'revision-conflict' })
+      await runner.executeManagement({ ...base, mode: 'mutate', operation: 'compact-and-mutate', expectedRevision: planned.revision, input })
+      await expect(runner.executeManagement({ ...base, mode: 'mutate', operation: 'compact-and-mutate', expectedRevision: (await current()).revision, input })).rejects.toMatchObject({ code: 'revision-conflict' })
       expect((await current()).value).toMatchObject({ entries: [{ content: 'A summary' }, { content: 'B'.repeat(100) }] })
     } finally { await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
   })
@@ -37,20 +36,19 @@ describe('standalone runtime Source', () => {
     try {
       await runner.mount(strategy, { instanceId: 'strategy' })
       await runner.mount(plugin, { instanceId: 'work', config: { dataDir: directory } })
-      const generation = runner.generations.current()!
       const scope = { storage: 'custom' as const }
       const base = { sourceInstanceKey: 'source:work', scope, confirmed: false }
-      const initial = await generation.executeManagement({ ...base, mode: 'read', operation: 'snapshot', input: null })
+      const initial = await runner.executeManagement({ ...base, mode: 'read', operation: 'snapshot', input: null })
       const create = { ...base, mode: 'mutate' as const, operation: 'mutate', expectedRevision: initial.revision,
         input: { action: 'add', target: 'memory', content: 'managed entry' } }
-      await expect(generation.executeManagement(create)).rejects.toThrow('confirmation')
-      const added = await generation.executeManagement({ ...create, confirmed: true })
-      await expect(generation.executeManagement({ ...create, confirmed: true })).rejects.toThrow('revision conflict')
-      const replaced = await generation.executeManagement({ ...create, confirmed: true, expectedRevision: added.revision,
+      await expect(runner.executeManagement(create)).rejects.toThrow('confirmation')
+      const added = await runner.executeManagement({ ...create, confirmed: true })
+      await expect(runner.executeManagement({ ...create, confirmed: true })).rejects.toThrow('revision conflict')
+      const replaced = await runner.executeManagement({ ...create, confirmed: true, expectedRevision: added.revision,
         input: { action: 'replace', target: 'memory', old_text: 'managed entry', content: 'replaced entry' } })
-      await generation.executeManagement({ ...create, confirmed: true, expectedRevision: replaced.revision,
+      await runner.executeManagement({ ...create, confirmed: true, expectedRevision: replaced.revision,
         input: { action: 'remove', target: 'memory', old_text: 'replaced entry' } })
-      const final = await generation.executeManagement({ ...base, mode: 'read', operation: 'snapshot', input: null })
+      const final = await runner.executeManagement({ ...base, mode: 'read', operation: 'snapshot', input: null })
       expect(final.value).toMatchObject({ entries: [] })
     } finally { await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
   })
@@ -66,7 +64,7 @@ describe('standalone runtime Source', () => {
       await runner.mount(plugin, { instanceId: 'personal', config: { dataDir: join(directory, 'personal') } })
       const first = await runner.beginTurn({ scope: { storage: 'custom', workspaceId: workspace } })
       const offer = first.view.actionOffers.find(value => value.sourceInstanceKey === 'source:work')!
-      const receipt = await first.lease.generation.executeAction(first.view, offer.id,
+      const receipt = await first.executeAction(offer.id,
         { action: 'add', target: 'memory', content: 'work-only sentinel' }, () => true)
       expect(receipt.status).toBe('succeeded')
       first.release()
@@ -84,7 +82,7 @@ describe('standalone runtime Source', () => {
     const runner = new MemoryCompositionRunner()
     try {
       await expect(runner.mount(plugin, { instanceId: 'invalid', config: { memoryLimitBytes: -1 } })).rejects.toThrow()
-      expect(runner.runtime.contributionSnapshot().sources).toHaveLength(0)
+      expect(runner.inspect().evaluation.sourceInstanceKeys).toHaveLength(0)
     } finally { await runner.dispose() }
   })
 })

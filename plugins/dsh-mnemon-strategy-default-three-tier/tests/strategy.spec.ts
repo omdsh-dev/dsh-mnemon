@@ -32,7 +32,7 @@ describe('standalone default three-tier Strategy', () => {
     const runner = new MemoryCompositionRunner()
     try {
       await runner.mount(plugin, { instanceId: 'strategy' })
-      expect(runner.generations.inspect().evaluation.state).toBe('incomplete')
+      expect(runner.inspect().evaluation.state).toBe('incomplete')
       const source = defineMemorySource({
         manifest: {
           apiVersion: COMPOSABLE_MEMORY_API_VERSION, kind: 'source', typeId: 'fixture',
@@ -52,8 +52,8 @@ describe('standalone default three-tier Strategy', () => {
       const turn = await runner.beginTurn()
       expect(turn.view.projection[0]?.text).toBe('independent fixture')
       await unmount()
-      expect(() => runner.generations.acquire()).toThrow('no Serving')
-      expect(turn.view.runtimeGeneration).toBe(turn.lease.id)
+      await expect(runner.beginTurn()).rejects.toThrow('no Serving')
+      expect(runner.inspect().drainingGenerationIds).toContain(turn.view.runtimeGeneration)
       turn.release()
     } finally { await runner.dispose() }
   })

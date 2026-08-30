@@ -157,6 +157,14 @@ export interface MemoryViewBudget {
   maxEvidenceCharacters: number
 }
 
+export const DEFAULT_MEMORY_VIEW_BUDGET: Readonly<MemoryViewBudget> = Object.freeze({
+  maxProjectionCharacters: 64 * 1024,
+  maxRoutes: 16,
+  maxActions: 16,
+  maxEvidenceResults: 16,
+  maxEvidenceCharacters: 16 * 1024,
+})
+
 export interface MemoryViewRequest {
   scope: MemoryOperationScope
   scenario: string
