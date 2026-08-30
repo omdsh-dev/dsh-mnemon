@@ -55,6 +55,7 @@ function sourceDefinition(options: {
         maxCalls: 1,
         maxResults: 3,
         maxCharacters: 20,
+        semantics: { actions: ['read'], targets: ['records'], effects: [], representations: ['raw', 'excerpt'], overflow: 'truncate', retry: 'safe' },
       }],
       actions: [{
         id: 'remember',
@@ -119,9 +120,9 @@ function sourceDefinition(options: {
             sourceInstanceKey: context.sourceInstanceKey,
             observedAt: '2026-08-30T00:00:00.000Z',
             items: [
-              { id: 'one', text: 'abcdef', provenance: { namespaceId: 'visible' } },
-              { id: 'two', text: 'ghijkl', provenance: { namespaceId: 'visible' } },
-              { id: 'three', text: 'mnopqr', provenance: { namespaceId: 'visible' } },
+              { id: 'one', text: 'abcdef', provenance: { namespaceId: 'visible' }, result: { representation: 'raw', coverage: 'complete' } },
+              { id: 'two', text: 'ghijkl', provenance: { namespaceId: 'visible' }, result: { representation: 'raw', coverage: 'complete' } },
+              { id: 'three', text: 'mnopqr', provenance: { namespaceId: 'visible' }, result: { representation: 'raw', coverage: 'complete' } },
             ],
             truncated: false,
           }
@@ -132,6 +133,7 @@ function sourceDefinition(options: {
           offerId: request.offer.id,
           sourceInstanceKey: context.sourceInstanceKey,
           status: 'succeeded',
+          completion: 'committed',
           committedAt: '2026-08-30T00:00:00.000Z',
           revision: 'source-r2',
         }),

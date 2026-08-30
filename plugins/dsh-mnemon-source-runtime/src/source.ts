@@ -140,7 +140,7 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
       async mutate(request) {
         const result = await controller.mutate(runtimeMutation(request.input))
         const revision = controller.snapshot().revision
-        return receipt(request.view.id, request.offer.id, context.sourceInstanceKey, revision, result as unknown as MemoryJsonValue)
+        return receipt(request.view.id, request.offer.id, context.sourceInstanceKey, revision, result as unknown as MemoryJsonValue, 'committed')
       },
     }
   },

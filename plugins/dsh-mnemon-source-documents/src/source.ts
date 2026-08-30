@@ -209,7 +209,7 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
         const grant = request.grant
         const mutation = documentMutation(request.input, grant === undefined ? [] : grantIds(grant))
         const result = await documents.forWorkspace(root).mutate(mutation)
-        return receipt(request.view.id, request.offer.id, context.sourceInstanceKey, result.snapshot.revision, result as unknown as MemoryJsonValue)
+        return receipt(request.view.id, request.offer.id, context.sourceInstanceKey, result.snapshot.revision, result as unknown as MemoryJsonValue, 'committed')
       },
     }
   },

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { canonicalMemoryJson } from '../core/definitions.ts'
-import type { MemoryJsonValue, MemoryMutationReceipt, MemoryMigrationLineage } from "../core/contracts/index.ts"
+import type { MemoryJsonValue, MemoryMutationReceipt, MemoryMigrationLineage, MemoryMutationCompletion } from "../core/contracts/index.ts"
 
 /** Stable digest of validated configuration; raw values never enter diagnostics. */
 export function memoryConfigurationDigest(value: unknown): string {
@@ -45,14 +45,16 @@ export function receipt(
   sourceInstanceKey: string,
   revision: string | undefined,
   details: MemoryJsonValue,
+  completion: MemoryMutationCompletion = 'unknown',
 ): MemoryMutationReceipt {
   return {
     id: `receipt:${randomUUID()}`,
     viewId,
     offerId,
     sourceInstanceKey,
-    status: 'succeeded',
-    committedAt: new Date().toISOString(),
+    status: completion === 'failed' ? 'failed' : completion === 'partial' || completion === 'unknown' ? 'partial' : 'succeeded',
+    completion,
+    ...(completion === 'committed' ? { committedAt: new Date().toISOString() } : {}),
     ...(revision === undefined ? {} : { revision }),
     details,
   }

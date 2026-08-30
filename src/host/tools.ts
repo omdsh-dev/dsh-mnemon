@@ -51,7 +51,11 @@ export function registerTools(ctx: HostContextShape, runtimeSource: MnemonAgentR
   const sourceAction = async (exec: ToolExecution, typeId: string, actionId: string, input: unknown) => {
     const receipt = await sourceFor(exec, typeId).action(actionId, input, offer => runtimeSource.config.writeEnabled && offer.authority === undefined, exec.signal)
     const details = receipt.details
-    return typeof details === 'object' && details !== null && !Array.isArray(details) && 'result' in details ? details.result : details
+    const result = typeof details === 'object' && details !== null && !Array.isArray(details) && 'result' in details ? details.result : details
+    // Keep familiar product fields, but never erase accepted/candidate/unknown completion for the model.
+    return { ...(typeof result === 'object' && result !== null && !Array.isArray(result) ? result : { result }),
+      memoryReceipt: { status: receipt.status, completion: receipt.completion, ...(receipt.committedAt === undefined ? {} : { committedAt: receipt.committedAt }) },
+    }
   }
 
   ctx.tools.register(definition({

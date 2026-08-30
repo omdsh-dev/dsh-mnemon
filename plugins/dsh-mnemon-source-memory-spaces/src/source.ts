@@ -576,7 +576,7 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
         } else {
           throw new Error(`unsupported Memory Spaces action: ${request.offer.sourceActionId}`)
         }
-        return { ...receipt(request.view.id, request.offer.id, context.sourceInstanceKey, service.memoryRevision(), { memoryBodyId: bodyId ?? null, result }), status: mutationResultCommitted(result) ? 'succeeded' : 'partial' }
+        return receipt(request.view.id, request.offer.id, context.sourceInstanceKey, service.memoryRevision(), { memoryBodyId: bodyId ?? null, result }, mutationResultCommitted(result) ? 'committed' : 'unknown')
       },
       manage(request) {
         return manageMemorySpaces(service, request)

@@ -72,6 +72,37 @@ Entry id 标识实例，type id 标识实现。不能剥掉 Loader 的 include �
 
 Host 的公共提示只说明当前 View 的通用 route/action 协议，不要求第三方 Source 遵循默认三层的使用规则。已有产品工具与人工管理保留；工具存在不代表对应 Source 已进入本轮 View。默认三层的自动后台整理只在选择 `default-three-tier` 时运行，自定义 Strategy 不会隐式触发这项业务流程。
 
+## 按属性组合，不依赖操作名称
+
+`manifest.projection` 与每条 route/action 的 `semantics` 描述能力。原生操作 ID、存储和算法仍归 Source；这些属性不产生新的 Runtime 方法或原语注册表：
+
+```ts
+semantics: {
+  actions: ['read'],
+  targets: ['records'],
+  effects: [],
+  representations: ['raw', 'excerpt'],
+  overflow: 'truncate',
+  retry: 'safe',
+}
+```
+
+动作是 `record / wake / read / compress / forget`，对象区分记录、表示、关系、目录、可见性、使用元数据和候选。一条多模式操作声明的是**所有可能副作用的上界**，不是交给 Core 执行的动作序列。若调用者需要分别授权，应拆成不同的可选操作，内部仍可复用同一个处理器。使摘要失效不等于删除原文；记录 RSI 候选也不等于激活策略。
+
+Source 的 `facts` 仍只需返回可用性、版本、能力及操作 ID。Core 根据 Manifest、动态 Facts 和 Host 权限生成 `MemoryAvailableSource`，把其 `projection / routes / actions` 交给 `compose`。例如 Strategy 可通过 `source.routes.filter(route => route.semantics?.actions.includes('read') && route.semantics.effects.length === 0)` 选择纯读，不必认识 `search / recall` 等 ID。未声明语义表示**未知**，不是 Core 自动推断的支持。
+
+仍使用 `routeIds / actionIds` 选择操作；`routeOptions[id] / actionOptions[id]` 和 projection 可进一步指定已声明的 `representation / budgets`。预算由 `resource`（output/input/cost）、`unit`、`measurement`（exact/estimated）和 `amount: 'auto' | { max, min? }` 构成。Token 还需指定 tokenizer/估算器 `basis`。`min` 只是偏好：上限收紧后可能无法达到，不会补字凑预算。`auto` 继承有限的 Host 上限或 Source 默认值/最大值，不代表无限。无法支持的单位、basis、精度直接拒绝，不用字符比例冒充精确 token。
+
+Core 自行计量返回文本（UTF-16 字符或已声明的 UTF-8 字节）、结果数与已分派的 Route 调用数。字符上限约束的是**正文载荷**，不包含工具 schema、元信息等完整序列化 prompt。Token、处理输入量和执行成本等 Source 自有预算会作为具体限额传入，要求返回 `usage` 并在执行中落实；这不是对上游成本的沙箱或数学证明。存储容量与算法仍由 Source 管理。已分派但失败的读取也消耗调用次数；即使声明可安全重试，Core 也不自动重试。
+
+已声明语义的操作必须在每个投影片段/证据条目中返回 `result`：表示形态、覆盖范围、可选遗漏/状态/展开方式。只有 `overflow: 'truncate'` 允许机械摘录，并明确标注 partial、保留摘要或推断的来源形态；`omit` 只丢弃整条内容。`summarize / page` 必须由 Source 真正实现，Core 不会合成；预算容纳不了指定的 raw/structured 时返回不可用，不伪造完整结果。引用不是展开能力：`{ routeId, input }` 仅绑定同一 Source、本 View 确实提供且输入合法的 Route；未提供的展开标为不可用。分数保留 Source 内部解释，不自动变成跨 Source 置信度。
+
+`facts / project` 不得持久化使用计数。查询可声明 `{ target: 'usage', mode: 'write', stage: 'retrieved' }`，但还需 write 能力；“已注入”“实际有用”必须在 Host 的真实事件发生时另行显式调用，不能在推测性编译时记账。delete/invalidate 副作用另需 forget 能力。这些约束只收紧现有能力授权；ActionOffer 仍须调用时重新授权。
+
+每个变更回执必须声明 `completion`：accepted、candidate、committed、partial、failed 或 unknown。只有确认完整提交才能带 `committedAt`，Core 不补造该时间。`createMemoryMutationReceipt(..., completion)` 默认 unknown；Source 确认所请求的持久效果完成后才传 `'committed'`。取消或传输异常不证明没有发生写入；跨 Source 流程也不是原子事务。通用 View 工具和已有产品工具均向模型保留此区别。
+
+[语义契约测试](../../tests/composable-semantics.spec.ts) 通过公开 testing SDK 验证改名操作、独立实例、预算、读取记账、不可展开、推断/摘录保真与尚未激活的 RSI 候选。
+
 ## Provider 子模块与 Client 页面
 
 Provider 使用 Memory Spaces SDK 的 `defineMemorySpaceProvider`。模块只收到限定子节点的 `host.install(ctx, definition)` 能力；私有父 Host、Snapshot 和 Registry 不从 SDK 导出。`installMemorySpaces` 挂载显式子模块，返回 `Promise<void>`，不返回父对象句柄。[external-provider.ts](../../scripts/fixtures/plugin-consumer/src/external-provider.ts) 会在两个独立父 Source 内以同名子节点测试。

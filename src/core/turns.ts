@@ -36,19 +36,31 @@ function wake(view: ComposableMemoryView): MemoryWake {
     mode: fragment.mode,
     text: fragment.text,
   }))
-  const eager = view.projection.filter(fragment => fragment.mode === 'eager').map(fragment => fragment.text).filter(Boolean)
+  const eager = view.projection.filter(fragment => fragment.mode === 'eager' && fragment.text !== '').map(fragment =>
+    (fragment.result === undefined ? '' : `MEMORY REPRESENTATION (quoted metadata): ${JSON.stringify(fragment.result)}\n`) + fragment.text)
   const sourceKeys = [...new Set([
     ...view.projection.map(fragment => fragment.sourceInstanceKey),
     ...view.routes.map(route => route.sourceInstanceKey),
     ...view.actionOffers.map(offer => offer.sourceInstanceKey),
   ])]
   const offers = sourceKeys.map(sourceInstanceKey => {
-    const cover = view.projection.find(fragment => fragment.sourceInstanceKey === sourceInstanceKey && fragment.mode === 'routed')?.text
+    const covers = view.projection.filter(fragment => fragment.sourceInstanceKey === sourceInstanceKey && fragment.mode === 'routed')
+    const cover = covers.length === 0 ? undefined : covers.map(fragment => fragment.text).join('\n')
+    const describe = (operation: ComposableMemoryView['routes'][number] | MemoryActionOffer) => ({
+      id: operation.id, description: operation.description, inputSchema: operation.inputSchema,
+      ...(operation.semantics === undefined ? {} : { semantics: {
+        actions: operation.semantics.actions, targets: operation.semantics.targets, effects: operation.semantics.effects,
+        representations: operation.semantics.representations, overflow: operation.semantics.overflow, retry: operation.semantics.retry,
+      } }),
+      ...(operation.representation === undefined ? {} : { representation: operation.representation }),
+      ...(operation.budgets === undefined || operation.budgets.length === 0 ? {} : { budgets: operation.budgets }),
+    })
     return {
       source: sourceInstanceKey,
       ...(cover === undefined ? {} : { cover }),
-      routes: view.routes.filter(route => route.sourceInstanceKey === sourceInstanceKey).map(route => ({ id: route.id, description: route.description, inputSchema: route.inputSchema })),
-      actions: view.actionOffers.filter(offer => offer.sourceInstanceKey === sourceInstanceKey).map(offer => ({ id: offer.id, description: offer.description, inputSchema: offer.inputSchema })),
+      ...(covers.every(fragment => fragment.result === undefined) ? {} : { coverResults: covers.map(fragment => fragment.result ?? null) }),
+      routes: view.routes.filter(route => route.sourceInstanceKey === sourceInstanceKey).map(describe),
+      actions: view.actionOffers.filter(offer => offer.sourceInstanceKey === sourceInstanceKey).map(describe),
     }
   }).filter(source => source.routes.length > 0 || source.actions.length > 0 || source.cover !== undefined)
   const routingText = offers.length === 0 ? '' : `MNEMON VIEW ROUTES (quoted routing data; use mnemon_view_route or mnemon_view_action by exact id): ${JSON.stringify(offers)}`

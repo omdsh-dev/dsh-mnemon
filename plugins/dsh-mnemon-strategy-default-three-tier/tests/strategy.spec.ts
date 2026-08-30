@@ -1,14 +1,14 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
-import { defineMemorySource, installMemory, type MemorySourceFacts } from 'dsh-mnemon/extension-sdk'
+import { defineMemorySource, installMemory, type MemoryAvailableSource } from 'dsh-mnemon/extension-sdk'
 import { COMPOSABLE_MEMORY_API_VERSION } from 'dsh-mnemon/contracts'
 import { MemoryCompositionRunner, DEFAULT_MEMORY_VIEW_BUDGET } from 'dsh-mnemon/testing'
 import * as plugin from '../src/index.ts'
 
-function fact(role: string, key = role): MemorySourceFacts {
+function fact(role: string, key = role): MemoryAvailableSource {
   return {
     sourceInstanceKey: `source:${key}`, sourceTypeId: key, role,
-    availability: 'ready', revision: 'r1', capabilities: ['project'], routeIds: [], actionIds: [],
+    availability: 'ready', revision: 'r1', capabilities: ['project'], routeIds: [], actionIds: [], routes: [], actions: [],
   }
 }
 

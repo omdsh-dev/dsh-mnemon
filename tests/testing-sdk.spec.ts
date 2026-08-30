@@ -32,7 +32,7 @@ async function fixture(options: MemoryTestOptions = {}, customize: (context: Mem
       query: ({ view, route }) => ({ id: 'evidence', viewId: view.id, routeId: route.id, sourceInstanceKey: context.sourceInstanceKey,
         observedAt: '2026-08-30T00:00:00.000Z', items: [{ id: 'note', text: 'long captured evidence', provenance: { source: 'fixture' } }], truncated: false }),
       mutate: ({ view, offer }) => ({ id: 'receipt', viewId: view.id, offerId: offer.id, sourceInstanceKey: context.sourceInstanceKey,
-        status: 'succeeded', committedAt: '2026-08-30T00:00:00.000Z' }),
+        status: 'succeeded', completion: 'committed', committedAt: '2026-08-30T00:00:00.000Z' }),
       manage: request => ({ revision: 'r1', value: request.input }),
       ...customize(context),
     }),

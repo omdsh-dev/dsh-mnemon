@@ -59,3 +59,4 @@ export interface MemoryWake {
 }
 
 export * from './view.ts'
+export * from './semantics.ts'

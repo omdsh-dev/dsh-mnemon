@@ -5,6 +5,19 @@ export { record as memoryInputRecord, text as memoryInputText, integer as memory
 export { memoryConfigurationDigest } from './input.ts'
 export { withMemoryStorageLock } from './storage-lock.ts'
 export type {
+  MemoryAvailableSource,
+  MemoryOperationSemantics,
+  MemoryOperationSelection,
+  MemorySemanticAction,
+  MemorySemanticTarget,
+  MemoryEffect,
+  MemoryRepresentation,
+  MemoryBudgetSupport,
+  MemoryBudgetRequest,
+  MemoryResolvedBudget,
+  MemoryBudgetUsage,
+  MemoryResultSemantics,
+  MemoryMutationCompletion,
   ComposableMemoryView,
   MemoryActionOffer,
   MemoryCompositionEvaluationReport,

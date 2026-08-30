@@ -64,7 +64,7 @@ export function apply(ctx: Context, config: Config): void {
         },
         mutate(request) {
           const saved = save(request.input)
-          return createMemoryMutationReceipt(request.view.id, request.offer.id, context.sourceInstanceKey, saved.revision, saved.value)
+          return createMemoryMutationReceipt(request.view.id, request.offer.id, context.sourceInstanceKey, saved.revision, saved.value, 'committed')
         },
         manage(request) {
           if (request.mode === 'read' && request.operation === 'read') {
