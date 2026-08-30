@@ -1,12 +1,13 @@
 import type { MemoryProviderDescriptor } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
+import { ICON } from './icon.ts'
 
 /** Browser-safe metadata owned by this Provider. */
 export const descriptor: MemoryProviderDescriptor = {
   "id": "mem0",
   "label": "Mem0",
   "icon": {
-    "kind": "brand",
-    "value": "mem0"
+    "kind": "data-url",
+    "value": ICON
   },
   "kind": "remote",
   "workspaceBinding": "provider-global",
