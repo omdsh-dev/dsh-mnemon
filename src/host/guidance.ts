@@ -5,7 +5,7 @@ import type { MemoryWake } from "../core/contracts/index.ts"
 export const GUIDANCE_SECTION_NAME = 'mnemon:routing'
 export const RUNTIME_MEMORY_PROTOCOL_SECTION_NAME = 'mnemon:runtime-memory-protocol'
 export const RUNTIME_MEMORY_CONTEXT_NAME = 'mnemon:runtime-memory'
-export const ROUTING_GUIDANCE = 'Use memory only when needed. Search Mnemon Documents for substantial project records. Call mnemon_recall for durable history or exact prior details; never infer a missing historical rule. Put only new user facts or explicit save/correction requests in mnemon_runtime_memory; never cache retrieved evidence. A write exists only after its receipt.'
+export const ROUTING_GUIDANCE = 'Use memory only when needed. Follow the current Mnemon View: use mnemon_view_route or mnemon_view_action only for offered ids. Installed tools do not imply an available Source. Never infer missing historical facts. An action offer is not authorization; a write exists only after its receipt.'
 const RUNTIME_MEMORY_LITERAL_OPEN_BRACES_VARIABLE = 'mnemon_runtime_memory_literal_open_braces'
 const LITERAL_OPEN_BRACES = '{{'
 

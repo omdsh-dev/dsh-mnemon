@@ -70,6 +70,8 @@ Entry id 标识实例，type id 标识实现。不能剥掉 Loader 的 include �
 
 [external-strategy.ts](../../scripts/fixtures/plugin-consumer/src/external-strategy.ts) 是完整的显式选择示例。默认 Host 沿用 `mnemon.memoryTopology.strategyId` 配置选择其 type id；多个适用 Strategy 是错误，不采用“后导入覆盖前者”。Profile 显式替换默认 Entry；只安装一个包不等于允许它替换当前组合。
 
+Host 的公共提示只说明当前 View 的通用 route/action 协议，不要求第三方 Source 遵循默认三层的使用规则。已有产品工具与人工管理保留；工具存在不代表对应 Source 已进入本轮 View。默认三层的自动后台整理只在选择 `default-three-tier` 时运行，自定义 Strategy 不会隐式触发这项业务流程。
+
 ## Provider 子模块与 Client 页面
 
 Provider 使用 Memory Spaces SDK 的 `defineMemorySpaceProvider`。模块只收到限定子节点的 `host.install(ctx, definition)` 能力；私有父 Host、Snapshot 和 Registry 不从 SDK 导出。`installMemorySpaces` 挂载显式子模块，返回 `Promise<void>`，不返回父对象句柄。[external-provider.ts](../../scripts/fixtures/plugin-consumer/src/external-provider.ts) 会在两个独立父 Source 内以同名子节点测试。

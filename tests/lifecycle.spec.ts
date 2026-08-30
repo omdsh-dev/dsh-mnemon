@@ -272,7 +272,7 @@ describe('Mnemon DSH lifecycle integration', () => {
       storage: 'global',
       sessionId: 'session-1',
       agentId: 'session-1',
-    })
+    }, 'agent.root-turn', expect.any(AbortSignal))
 
     await value.preStep([userMessage('Tool continuation')], 7, 2)
     expect(context?.text()).toBe('Pinned Wake view-7')
@@ -438,8 +438,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     if (decision.kind !== 'enter') throw new Error('unexpected rejection')
     expect(decision.messages).toHaveLength(3)
     expect(decision.messages[1]?.source).toMatchObject({ kind: 'plugin', plugin: 'dsh-mnemon', form: 'instructions' })
-    expect(decision.messages[2]?.source).toMatchObject({ kind: 'plugin', plugin: 'dsh-mnemon', form: 'recall' })
-    expect(decision.messages[1]?.content[0]?.text).toBe('[MNEMON] Search Documents for substantial project records; use mnemon_recall only for missing durable history or exact prior details, and mnemon_runtime_memory only for new user-supplied facts or explicit save/correction requests—never retrieved evidence. Otherwise use none.')
+    expect(decision.messages[1]?.content[0]?.text).toBe('[MNEMON] Use mnemon_view_route only when relevant evidence is missing. Use mnemon_view_action only for an intended memory change; require a write receipt. Use only ids offered by the current View and follow each Source\'s semantics. Otherwise use none.')
     expect(value.coordinator.recall).not.toHaveBeenCalled()
 
     const second = await value.preStep([userMessage('Second turn')], 2)
@@ -715,14 +714,60 @@ describe('Mnemon DSH lifecycle integration', () => {
     const recallOnly = fixture(resolveConfig({ recallMode: 'guided', writebackMode: 'off' }))
     const recallDecision = await recallOnly.preStep([userMessage()], 1)
     if (recallDecision.kind !== 'enter') throw new Error('unexpected rejection')
-    expect(recallDecision.messages[1]?.content[0]?.text).toContain('mnemon_recall')
-    expect(recallDecision.messages[1]?.content[0]?.text).not.toContain('mnemon_remember')
+    expect(recallDecision.messages[1]?.content[0]?.text).toContain('mnemon_view_route')
+    expect(recallDecision.messages[1]?.content[0]?.text).not.toContain('mnemon_view_action')
 
     const rememberOnly = fixture(resolveConfig({ recallMode: 'off', writebackMode: 'guided' }))
     const rememberDecision = await rememberOnly.preStep([userMessage()], 1)
     if (rememberDecision.kind !== 'enter') throw new Error('unexpected rejection')
-    expect(rememberDecision.messages[1]?.content[0]?.text).toContain('mnemon_runtime_memory')
-    expect(rememberDecision.messages[1]?.content[0]?.text).not.toContain('mnemon_recall')
+    expect(rememberDecision.messages[1]?.content[0]?.text).toContain('mnemon_view_action')
+    expect(rememberDecision.messages[1]?.content[0]?.text).not.toContain('mnemon_view_route')
+  })
+
+  it('does not send default Source guidance or run three-tier review under a custom Strategy', async () => {
+    vi.useFakeTimers()
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000, memoryTopology: { strategyId: 'personal-notes' } }))
+    try {
+      const decision = await value.preStep([durableCandidate()], 1)
+      if (decision.kind !== 'enter') throw new Error('unexpected rejection')
+      const reminder = decision.messages[1]?.content[0]?.text
+      expect(reminder).toContain('current View')
+      expect(reminder).not.toMatch(/Documents|Memory Spaces|mnemon_recall|mnemon_runtime_memory/)
+      await value.turnStopping(1)
+      await value.preStep([userMessage('one more substantive turn')], 2)
+      await value.turnStopping(2)
+      expect(value.lifecycle.snapshot('session-1').current?.reviewActivity.eligible).toBe(true)
+      expect(value.lifecycle.snapshot('session-1').current?.idleReviewPending).toBe(false)
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(value.coordinator.review).not.toHaveBeenCalled()
+      expect(value.coordinator.write).not.toHaveBeenCalled()
+    } finally { value.stop() }
+  })
+
+  it('does not suggest View actions when the existing writeEnabled preference is false', async () => {
+    const value = fixture(resolveConfig({ writeEnabled: false }))
+    try {
+      const decision = await value.preStep([userMessage()], 1)
+      if (decision.kind !== 'enter') throw new Error('unexpected rejection')
+      expect(decision.messages[1]?.content[0]?.text).toContain('mnemon_view_route')
+      expect(decision.messages[1]?.content[0]?.text).not.toContain('mnemon_view_action')
+    } finally { value.stop() }
+  })
+
+  it('rechecks the selected Strategy before running an already-scheduled default review', async () => {
+    vi.useFakeTimers()
+    const config = resolveConfig({ idleReviewMs: 5_000 })
+    const value = fixture(config)
+    try {
+      await value.preStep([durableCandidate()], 1)
+      await value.turnStopping(1)
+      await value.preStep([userMessage('one more turn')], 2)
+      await value.turnStopping(2)
+      expect(value.lifecycle.snapshot('session-1').current?.idleReviewPending).toBe(true)
+      config.memoryTopology.strategyId = 'personal-notes'
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(value.coordinator.review).not.toHaveBeenCalled()
+    } finally { value.stop() }
   })
 
   it('delegates memory-tab candidates directly to an isolated memory subagent', async () => {

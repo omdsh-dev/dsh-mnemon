@@ -192,10 +192,12 @@ function assistantMessageText(events: readonly HostSessionEvent[], messageId: st
 }
 
 function guidedReminder(config: ResolvedConfig): string | undefined {
-  if (config.recallMode === 'guided' && config.writebackMode === 'guided') return '[MNEMON] Search Documents for substantial project records; use mnemon_recall only for missing durable history or exact prior details, and mnemon_runtime_memory only for new user-supplied facts or explicit save/correction requests—never retrieved evidence. Otherwise use none.'
-  if (config.recallMode === 'guided') return '[MNEMON] Search Documents for substantial project records; use mnemon_recall only for missing durable history or exact prior details. Otherwise use neither.'
-  if (config.writebackMode === 'guided') return '[MNEMON] Use mnemon_runtime_memory only for new user-supplied facts or explicit save/correction requests, never retrieved evidence; otherwise continue without writing memory.'
-  return undefined
+  const instructions = [
+    ...(config.recallMode === 'guided' ? ['Use mnemon_view_route only when relevant evidence is missing.'] : []),
+    ...(config.writeEnabled && config.writebackMode === 'guided' ? ['Use mnemon_view_action only for an intended memory change; require a write receipt.'] : []),
+  ]
+  if (instructions.length === 0) return undefined
+  return '[MNEMON] ' + instructions.join(' ') + ' Use only ids offered by the current View and follow each Source\'s semantics. Otherwise use none.'
 }
 
 class MnemonAgentLifecycle {
@@ -483,6 +485,9 @@ class MnemonAgentLifecycle {
 
   private scheduleIdleReview(turn: number): void {
     if (!this.config.lifecycleEnabled || !this.config.writeEnabled || this.config.writebackMode !== 'guided') return
+    // Automatic three-tier maintenance belongs to the default product, not to
+    // every third-party View Strategy. Explicit management remains available.
+    if (this.config.memoryTopology.strategyId !== 'default-three-tier') return
     this.cancelIdleReview(true)
     const activity = this.ensureTurnActivity(turn)
     const tools = completedToolActivity(hostSessionEvents(this.agent.session), turn)
@@ -491,6 +496,7 @@ class MnemonAgentLifecycle {
     if (!this.reviewActivity().eligible || !this.reviewAdmitted(turn)) return
     this.idleReviewTimer = setTimeout(() => {
       this.idleReviewTimer = undefined
+      if (this.config.memoryTopology.strategyId !== 'default-three-tier') return
       if (this.agent.status !== 'idle') return
       const completed = hostSessionEvents(this.agent.session).some(event => event.type === 'turn/end' && eventTurn(event) === turn)
       if (!completed || !this.reviewActivity().eligible || !this.reviewAdmitted(turn)) return
