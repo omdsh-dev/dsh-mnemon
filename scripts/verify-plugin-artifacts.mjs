@@ -1,3 +1,5 @@
+import { createServer } from 'node:http'
+import { createReadStream } from 'node:fs'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
@@ -13,6 +15,24 @@ const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
 const temporary = await mkdtemp(join(tmpdir(), 'mnemon-plugin-artifacts-'))
 assert(!inside(root, temporary), 'The consumer must be outside the development workspace')
 const artifacts = new Map()
+const artifactManifests = new Map()
+let registryUrl = ''
+const registry = createServer((request, response) => {
+  const path = decodeURIComponent(new URL(request.url, 'http://localhost').pathname).slice(1)
+  if (path.startsWith('tarballs/')) {
+    const artifact = artifacts.get(path.slice('tarballs/'.length))
+    if (artifact === undefined) { response.writeHead(404); response.end(); return }
+    response.writeHead(200, { 'content-type': 'application/octet-stream' })
+    createReadStream(artifact).pipe(response)
+  } else if (artifactManifests.has(path)) {
+    const value = artifactManifests.get(path)
+    response.writeHead(200, { 'content-type': 'application/json' })
+    response.end(JSON.stringify({ name: path, 'dist-tags': { latest: value.version }, versions: { [value.version]: { ...value, dist: { tarball: registryUrl + '/tarballs/' + path } } } }))
+  } else {
+    response.writeHead(307, { location: 'https://registry.npmjs.org' + request.url })
+    response.end()
+  }
+})
 
 function inside(directory, path) {
   const child = relative(directory, path)
@@ -61,23 +81,16 @@ async function pack(directory, expectedName) {
   assert(artifact.files.some(file => file.path === 'LICENSE'), `${expectedName} must carry its own license`)
   for (const file of artifact.files) assert(!/^(?:src|tests|node_modules)\//u.test(file.path), `${expectedName} shipped development sources: ${file.path}`)
   artifacts.set(expectedName, join(temporary, 'tarballs', artifact.filename))
+  artifactManifests.set(expectedName, JSON.parse(await readFile(join(directory, 'package.json'), 'utf8')))
 }
 
-async function install(directory, input, all = false) {
-  const prepared = structuredClone(input)
-  prepared.devDependencies ??= {}
-  for (const [name, path] of artifacts) {
-    if (name === input.name || (!all && !['dsh-mnemon', 'dsh-mnemon-source-memory-spaces'].includes(name))) continue
-    // The package's source/configuration is unchanged. Only unpublished SDK
-    // versions are resolved to the exact tarballs under test, like a registry.
-    if (prepared.dependencies?.[name]) prepared.dependencies[name] = `file:${path}`
-    else prepared.devDependencies[name] = `file:${path}`
-  }
-  await writeFile(join(directory, 'package.json'), JSON.stringify(prepared, null, 2) + '\n')
-  await run('npm', ['install', '--ignore-scripts', '--no-audit', '--no-fund', '--package-lock=false', '--workspaces=false'], directory, `${input.name}: install tarballs`)
+async function install(directory, input) {
+  // Serve the exact artifacts with their original semver manifests. This
+  // exercises peer resolution and Starter dependencies without file overrides.
+  await run('npm', ['install', '--registry', registryUrl, '--ignore-scripts', '--no-audit', '--no-fund', '--package-lock=false', '--workspaces=false'], directory, `${input.name}: install tarballs`)
   const code = `
     const fs = require('node:fs'); const path = require('node:path');
-    for (const name of ${JSON.stringify([...artifacts.keys()].filter(name => name !== input.name && (all || ['dsh-mnemon', 'dsh-mnemon-source-memory-spaces'].includes(name))))}) {
+    for (const name of ${JSON.stringify([...artifacts.keys()].filter(name => name !== input.name))}) {
       const installed = fs.realpathSync(require.resolve(name + '/package.json'));
       if (!installed.startsWith(process.cwd() + path.sep + 'node_modules' + path.sep)) throw new Error('Workspace dependency leaked: ' + installed);
     }
@@ -116,17 +129,20 @@ try {
   await mkdir(join(temporary, 'tarballs'))
   await pack(root, manifest.name)
   for (const name of names) await pack(join(root, 'plugins', name), name)
+  await new Promise(resolve => registry.listen(0, '127.0.0.1', resolve))
+  registryUrl = 'http://127.0.0.1:' + registry.address().port
   await parallel(names, 3, verifyIndependent)
 
   const consumer = join(temporary, 'consumer')
   await cp(join(root, 'scripts/fixtures/plugin-consumer'), consumer, { recursive: true })
   const consumerManifest = JSON.parse(await readFile(join(consumer, 'package.json'), 'utf8'))
-  await install(consumer, consumerManifest, true)
+  await install(consumer, consumerManifest)
   await writeFile(join(consumer, 'artifacts.json'), JSON.stringify([...artifacts.keys()]) + '\n')
   for (const command of ['build', 'typecheck', 'test']) await run('npm', ['run', command], consumer, `external consumer: ${command}`)
   console.log(`Verified ${names.length} independent plugin repositories and ${artifacts.size} packed artifacts with public SDK-only composition and Client tests.`)
   succeeded = true
 } finally {
+  await new Promise(resolve => registry.close(resolve))
   if (succeeded && !args.has('--keep')) await rm(temporary, { recursive: true, force: true })
   else console.log(`Artifact test directory retained for inspection: ${temporary}`)
 }

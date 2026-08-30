@@ -6,7 +6,7 @@ const sidebarCss = readFileSync(new URL('../src/client/MnemonSidebarView.module.
 const saveActionCss = readFileSync(new URL('../src/client/MnemonSaveAction.module.css', import.meta.url), 'utf8')
 const dialogSource = readFileSync(new URL('../src/client/MnemonDialog.tsx', import.meta.url), 'utf8')
 const viewSource = [
-  '../bundles/default/client/MnemonView.tsx',
+  '../src/client/MnemonView.tsx',
   '../plugins/dsh-mnemon-source-runtime/src/client/pages.tsx',
   '../plugins/dsh-mnemon-source-documents/src/client/pages.tsx',
   '../plugins/dsh-mnemon-source-memory-spaces/src/client/pages.tsx',

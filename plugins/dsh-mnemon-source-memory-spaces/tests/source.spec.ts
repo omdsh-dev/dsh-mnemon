@@ -6,7 +6,10 @@ import type { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
 
 import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
-import { installMemorySpaces, MemoryBodyRegistry, createRunner, resolveMemorySpacesConfig } from '../src/index.ts'
+import { installMemorySpaces } from '../src/index.ts'
+import { MemoryBodyRegistry } from '../src/memory-bodies.ts'
+import { createRunner } from '../src/runner.ts'
+import { resolveMemorySpacesConfig } from '../src/config.ts'
 import { defineMemorySpaceProvider, MemoryProviderCatalog } from '../src/provider-sdk.ts'
 
 describe('standalone Memory Spaces Source', () => {
@@ -26,11 +29,11 @@ describe('standalone Memory Spaces Source', () => {
           operation: 'provider-service-update', input: { providerId: 'account', settings: {}, enabled: true } })
       }
       const first = await runner.beginTurn({ scope })
-      const action = first.view.actionOffers.find(offer => offer.sourceInstanceKey === 'source:work')!
+      const action = first.view.actionOffers.find(offer => offer.sourceInstanceKey === 'source:work' && offer.sourceActionId === 'remember')!
       await first.lease.generation.executeAction(first.view, action.id, { content: 'Only for work' }, () => true)
       first.release()
       const next = await runner.beginTurn({ scope })
-      for (const route of next.view.routes) {
+      for (const route of next.view.routes.filter(route => route.sourceRouteId === 'recall')) {
         const evidence = await next.lease.generation.executeRoute(next.view, route.id, { query: 'work' })
         expect(evidence.items).toHaveLength(route.sourceInstanceKey === 'source:work' ? 1 : 0)
       }
@@ -39,7 +42,7 @@ describe('standalone Memory Spaces Source', () => {
     } finally { await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
   })
 
-  it('observes durable metadata changed by another generation or the legacy facade', () => {
+  it('observes durable metadata changed by another generation', () => {
     const directory = mkdtempSync(join(tmpdir(), 'mnemon-spaces-authority-'))
     try {
       const nativeRunner = createRunner(resolveMemorySpacesConfig({ dataDir: directory }))

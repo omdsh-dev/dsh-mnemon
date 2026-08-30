@@ -103,11 +103,11 @@ jobs:
 
       - name: Test Windows integration
         if: runner.os == 'Windows'
-        run: pnpm exec vitest run tests/config.spec.ts tests/runner.spec.ts tests/version-updates.spec.ts
+        run: pnpm exec vitest run tests/config.spec.ts plugins/dsh-mnemon-source-memory-spaces/tests/runner.spec.ts tests/version-updates.spec.ts
 
       - name: Verify deterministic build on Windows
         if: runner.os == 'Windows'
-        run: pnpm run verify:build
+        run: pnpm run verify:build && pnpm -r build
 
       - name: Verify published package on Windows
         if: runner.os == 'Windows'
@@ -146,7 +146,7 @@ jobs:
           Remove-Item Env:GOPATH -ErrorAction SilentlyContinue
           Remove-Item Env:MNEMON_CLI_PATH -ErrorAction SilentlyContinue
           $env:RUN_WINDOWS_MNEMON_SMOKE = '1'
-          pnpm exec vitest run tests/windows-smoke.spec.ts
+          pnpm exec vitest run plugins/dsh-mnemon-source-memory-spaces/tests/windows-smoke.spec.ts
 
       - name: Set up Node.js 20 for compatible-plugin smoke
         if: runner.os == 'Linux' && matrix.node == 24

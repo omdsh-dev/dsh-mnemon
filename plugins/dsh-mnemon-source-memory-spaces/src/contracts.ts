@@ -1,11 +1,6 @@
 /** Contracts owned by the Memory Spaces Source, not the Mnemon Core. */
 export type { MemoryJsonValue as JsonValue } from 'dsh-mnemon/contracts'
-import type { MemoryCapability, MemoryJsonValue } from 'dsh-mnemon/contracts'
 
-/** Optional legacy receipt observer; not a Core-owned controller binding. */
-export type AuthorityCommitRecorder = (operation: {
-  layerId: string; capability: MemoryCapability; operation: string; checkpoint?: MemoryJsonValue
-}) => unknown
 export type MemoryProviderId = string
 
 export type MemoryProviderConnectionValue = string | number | boolean

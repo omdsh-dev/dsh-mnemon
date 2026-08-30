@@ -4,6 +4,7 @@ import { join, posix, resolve, win32 } from 'node:path'
 import type { JsonValue } from './contracts.ts'
 import type { ResolvedMemorySpacesConfig as ResolvedConfig } from './config.ts'
 import { runProcess, type ProcessOptions, type ProcessRunner } from './providers/process.ts'
+import { withMemoryStorageLock } from 'dsh-mnemon/extension-sdk'
 
 const UNIX_COMMON_CLI_PATHS = [
   '~/.local/bin/mnemon',
@@ -161,7 +162,6 @@ export function createRunner(config: ResolvedConfig, processRunner: ProcessRunne
   // Mnemon 0.1.2 runs store migrations while opening the database. Serializing
   // CLI processes prevents parallel status/viz calls during WebUI mount from
   // racing that migration and surfacing a transient SQLITE_BUSY error.
-  let processQueue: Promise<void> = Promise.resolve()
 
   const globalArgs = (store?: string): string[] => {
     const args: string[] = []
@@ -222,9 +222,7 @@ export function createRunner(config: ResolvedConfig, processRunner: ProcessRunne
     args: readonly string[],
     options: MnemonRunOptions = {},
   ): Promise<string> => {
-    const result = processQueue.then(() => launch(args, options))
-    processQueue = result.then(() => undefined, () => undefined)
-    return result
+    return withMemoryStorageLock(effectiveDataDir(), () => launch(args, options))
   }
 
   return {
@@ -241,18 +239,14 @@ export function createRunner(config: ResolvedConfig, processRunner: ProcessRunne
     },
     runText: execute,
     runTextBatch(commands) {
-      const result = processQueue.then(async () => {
+      return withMemoryStorageLock(effectiveDataDir(), async () => {
         const outputs: string[] = []
         for (const command of commands) outputs.push(await launch(command.args, command.options))
         return outputs
       })
-      processQueue = result.then(() => undefined, () => undefined)
-      return result
     },
     withExclusive<T>(operation: () => T | Promise<T>): Promise<T> {
-      const result = processQueue.then(operation)
-      processQueue = result.then(() => undefined, () => undefined)
-      return result
+      return withMemoryStorageLock(effectiveDataDir(), operation)
     },
     effectiveDataDir() {
       return effectiveDataDir()

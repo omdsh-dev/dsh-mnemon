@@ -1,5 +1,5 @@
 import { memo, useEffect, useState, type JSX, type MouseEvent as ReactMouseEvent } from 'react'
-import type { ClientConnectionHandle, TurnMemoryActivity } from '../shared/contracts.ts'
+import type { ClientConnectionHandle, TurnMemoryActivity } from "../host/protocol.ts"
 import { MnemonClient } from './api.ts'
 import { dispatchMnemonAnchor, type MnemonAnchorPage } from './anchor.ts'
 import type { MnemonKey } from './locales.ts'
@@ -23,11 +23,11 @@ function turnNumber(turn: unknown): number | undefined {
 
 /** Route a settled tool name to the workbench page that explains its effect. */
 export function memoryPageForTool(name: string): MnemonAnchorPage {
-  if (name === 'mnemon_document_search' || name === 'mnemon_document_manage') return 'documents'
-  if (name === 'mnemon_runtime_memory') return 'runtime'
-  if (name === 'mnemon_recall' || name === 'mnemon_related') return 'explore'
+  if (name === 'mnemon_document_search' || name === 'mnemon_document_manage') return 'documents/library'
+  if (name === 'mnemon_runtime_memory') return 'runtime/entries'
+  if (name === 'mnemon_recall' || name === 'mnemon_related') return 'memory-spaces/explore'
   if (name === 'mnemon_status') return 'status'
-  return 'overview'
+  return 'memory-spaces/spaces'
 }
 
 /** Whether this entry renders for the owner; chain selectors decline quietly. */

@@ -24,7 +24,7 @@ import {
   type MemoryListRequest,
   type MemoryListView,
   type MemoryProviderId,
-  type MemorySystemDescriptor,
+  type MemoryCompositionStatus,
   type MemoryReadSource,
   type MemorySourceManagementCatalog,
   type MemorySourceManagementResult,
@@ -47,7 +47,7 @@ import {
   type VersionComponentId,
   type VersionStatus,
   type VersionUpdateResult,
-} from '../shared/contracts.ts'
+} from "../host/protocol.ts"
 
 interface TurnActivityCacheEntry {
   cursor: number
@@ -60,15 +60,6 @@ const turnActivityCache = new WeakMap<ClientConnectionHandle, Map<string, TurnAc
 function isActivationOnly(request: UpdateMemoryBodyRequest): request is UpdateMemoryBodyRequest & { active: boolean } {
   return typeof request.active === 'boolean'
     && Object.entries(request).every(([field, value]) => field === 'active' || value === undefined)
-}
-
-function isMissingActivationChannel(reason: unknown): boolean {
-  return reason instanceof Error
-    && reason.message === `transport failure for ${MNEMON_ACTIVATION_CHANNEL}/body: HTTP 404`
-}
-
-function isMissingPrivateProviderServices(reason: unknown): boolean {
-  return reason instanceof Error && reason.message === 'unknown write endpoint: provider-services'
 }
 
 async function loadTurnActivities(connection: ClientConnectionHandle, sessionId: string | undefined, requiredCursor: number): Promise<TurnMemoryActivitySnapshot> {
@@ -139,14 +130,14 @@ export class MnemonClient {
   }
 
   statusSummary(): Promise<StatusView> {
-    return this.call<StatusView>(MNEMON_READ_CHANNEL, 'status-summary', this.scoped()).catch(() => this.status())
+    return this.call(MNEMON_READ_CHANNEL, 'status-summary', this.scoped())
   }
 
   embeddingStatus(): Promise<MnemonEmbeddingStatus> {
     return this.call(MNEMON_READ_CHANNEL, 'embedding-status', this.scoped())
   }
 
-  memorySystem(): Promise<MemorySystemDescriptor> {
+  memorySystem(): Promise<MemoryCompositionStatus> {
     return this.call(MNEMON_READ_CHANNEL, 'memory-system', this.scoped())
   }
 
@@ -160,6 +151,10 @@ export class MnemonClient {
 
   mutateSourceManagement(sourceInstanceKey: string, operation: string, input: JsonValue, expectedRevision: string, confirmed: boolean): Promise<MemorySourceManagementResult> {
     return this.call(MNEMON_WRITE_CHANNEL, 'source-management-mutate', this.scoped({ sourceInstanceKey, operation, input, expectedRevision, confirmed }))
+  }
+
+  assistSource(sourceInstanceKey: string, operation: string, input: JsonValue, expectedRevision: string, confirmed: boolean): Promise<MemorySourceManagementResult> {
+    return this.call(operation === 'activation' ? MNEMON_ACTIVATION_CHANNEL : confirmed ? MNEMON_WRITE_CHANNEL : MNEMON_READ_CHANNEL, 'source-assistance', this.scoped({ sourceInstanceKey, operation, input, expectedRevision, confirmed }))
   }
 
   taskAgentModels(includeCatalog?: boolean): Promise<TaskAgentModelCatalog> {
@@ -214,20 +209,11 @@ export class MnemonClient {
   }
 
   bodyDirectory(): Promise<MemoryBodyCatalog> {
-    // Rolling Host upgrades may not expose the fast directory endpoint yet.
-    // Preserve the previous full-catalog path as a transparent compatibility fallback.
-    return this.call<MemoryBodyCatalog>(MNEMON_READ_CHANNEL, 'body-directory', this.scoped()).catch(() => this.bodies())
+    return this.call(MNEMON_READ_CHANNEL, 'body-directory', this.scoped())
   }
 
   providerServices(): Promise<MemoryProviderServiceCatalog> {
-    const payload = this.scoped()
-    return this.call<MemoryProviderServiceCatalog>(MNEMON_WRITE_CHANNEL, 'provider-services', payload).catch(reason => {
-      // Pre-v0.2.2 Hosts exposed this catalog on the read channel. Preserve
-      // only the exact missing-endpoint fallback; every other failure stays
-      // authoritative.
-      if (!isMissingPrivateProviderServices(reason)) throw reason
-      return this.call(MNEMON_READ_CHANNEL, 'provider-services', payload)
-    })
+    return this.call(MNEMON_READ_CHANNEL, 'provider-services', this.scoped())
   }
 
   updateProviderService(request: UpdateMemoryProviderServiceRequest): Promise<MemoryProviderServiceView> {
@@ -289,15 +275,9 @@ export class MnemonClient {
   }
 
   updateBody(memoryBodyId: string, request: UpdateMemoryBodyRequest): Promise<MemoryBody> {
-    if (!isActivationOnly(request)) return this.call(MNEMON_WRITE_CHANNEL, 'body-update', this.scoped({ memoryBodyId, ...request }))
-    const payload = this.scoped({ memoryBodyId, active: request.active })
-    return this.call<MemoryBody>(MNEMON_ACTIVATION_CHANNEL, 'body', payload).catch(reason => {
-      // A rolling client-first upgrade can briefly talk to a pre-v0.2.2 Host.
-      // Fall back only when that Host has no activation route; never retry a
-      // 403 or a business rejection through the broader write boundary.
-      if (!isMissingActivationChannel(reason)) throw reason
-      return this.call(MNEMON_WRITE_CHANNEL, 'body-update', payload)
-    })
+    return isActivationOnly(request)
+      ? this.call(MNEMON_ACTIVATION_CHANNEL, 'body', this.scoped({ memoryBodyId, active: request.active }))
+      : this.call(MNEMON_WRITE_CHANNEL, 'body-update', this.scoped({ memoryBodyId, ...request }))
   }
 
   reconnectBody(memoryBodyId: string): Promise<MemoryBodyView> {

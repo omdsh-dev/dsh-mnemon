@@ -2,8 +2,8 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ProcessRunner } from '../src/process.ts'
-import { compareVersions, VersionUpdateManager } from '../src/version-updates.ts'
+import type { ProcessRunner } from '../src/host/process.ts'
+import { compareVersions, VersionUpdateManager } from "../src/host/version-updates.ts"
 
 const temporary: string[] = []
 

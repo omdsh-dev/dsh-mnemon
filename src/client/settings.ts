@@ -5,7 +5,7 @@ import {
   type ClientSettingsScope,
   type ClientSettingsSnapshot,
   type SettingsOperation,
-} from '../shared/contracts.ts'
+} from "../host/protocol.ts"
 
 export class MnemonSettingsScope<T extends object> implements ClientSettingsScope<T> {
   private snapshot: ClientSettingsSnapshot<T> = { status: 'loading', writable: false, mode: 'host' }

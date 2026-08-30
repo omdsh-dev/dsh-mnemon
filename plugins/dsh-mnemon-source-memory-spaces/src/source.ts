@@ -11,18 +11,19 @@ import type {
 } from 'dsh-mnemon/contracts'
 import { COMPOSABLE_MEMORY_API_VERSION } from 'dsh-mnemon/contracts'
 import { defineMemorySource, memoryInputInteger as integer, createMemoryMutationReceipt as receipt, memoryInputRecord as record, memoryInputStringArray as stringArray, memoryInputText as text, truncateMemoryText as truncate } from 'dsh-mnemon/extension-sdk'
-import { MemorySpacesService as MnemonService } from './service.ts'
+import { modelBodyCatalog, modelStatus, modelJson } from './view-model.ts'
+import { MemorySpacesService, mutationResultCommitted } from './service.ts'
 import { createRunner } from './runner.ts'
 import { MemoryProviderCatalog } from './providers/catalog.ts'
 import { finalizeLlmPlacement, rulesOnlyPlacement } from './provider-placement.ts'
 import { resolveMemorySpacesConfig, type MemorySpacesConfig } from './config.ts'
-import type { MemorySourceRuntimeContext } from 'dsh-mnemon/contracts'
 import { MemorySpaceProviderSnapshot } from './providers/host.ts'
 import type {
   Category,
   CreateMemoryBodyRequest,
   EdgeType,
   Intent,
+  Insight,
   MemoryPlacementDecision,
   MemoryProviderConnection,
   MemoryProviderId,
@@ -135,14 +136,15 @@ function placementDecision(value: MemoryJsonValue | undefined): MemoryPlacementD
   }
 }
 
-function managementResult(service: MnemonService, value: unknown): MemorySourceManagementResult {
+function managementResult(service: MemorySpacesService, value: unknown): MemorySourceManagementResult {
   return { revision: service.memoryRevision(), value: value as MemoryJsonValue }
 }
 
-async function manageMemorySpaces(service: MnemonService, request: MemorySourceManagementRequest): Promise<MemorySourceManagementResult> {
+async function manageMemorySpaces(service: MemorySpacesService, request: MemorySourceManagementRequest): Promise<MemorySourceManagementResult> {
   const input = request.input === null ? {} : record(request.input, `Memory Spaces management ${request.operation}`)
   if (request.mode === 'read') {
     switch (request.operation) {
+      case 'embedding-status': return managementResult(service, await service.embeddingStatus(request.signal))
       case 'status-summary': return managementResult(service, service.statusSummary())
       case 'status': return managementResult(service, await service.status(request.signal))
       case 'body-directory': return managementResult(service, service.bodyDirectory())
@@ -184,7 +186,7 @@ async function manageMemorySpaces(service: MnemonService, request: MemorySourceM
         const prepared = record(input.prepared!, 'prepared placement') as unknown as PreparedMemoryPlacement
         if (!Array.isArray(prepared.candidates) || prepared.candidates.length === 0) throw new Error('placement candidates are required')
         const selection = input.selection === undefined ? undefined : record(input.selection, 'placement selection')
-        return managementResult(service, selection === undefined ? rulesOnlyPlacement(prepared) : finalizeLlmPlacement(prepared, {
+        return managementResult(service, selection === undefined ? rulesOnlyPlacement(prepared) ?? null : finalizeLlmPlacement(prepared, {
           providerId: text(selection.providerId, 'providerId', 128)!,
           reason: text(selection.reason, 'reason', 4_000)!,
           confidence: text(selection.confidence, 'confidence', 40)!,
@@ -271,10 +273,7 @@ async function manageMemorySpaces(service: MnemonService, request: MemorySourceM
   }
 }
 
-/** Optional factory exists only for the pre-composable compatibility adapter. */
-export type MemorySpacesServiceFactory = (context: MemorySourceRuntimeContext) => { service: MnemonService; owned: boolean }
-
-export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSnapshot, config: MemorySpacesConfig = {}, legacyFactory?: MemorySpacesServiceFactory): MemorySourceDefinition {
+export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSnapshot, config: MemorySpacesConfig = {}): MemorySourceDefinition {
   const capturedConfig = structuredClone(config)
   return defineMemorySource({
   manifest: {
@@ -287,12 +286,17 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
     consistency: 'namespace-pinned-live-read',
     routes: [
       {
+        id: 'inspect', description: 'Inspect bounded Memory Space health or routing metadata without exposing storage paths or credentials.', capability: 'status',
+        inputSchema: { type: 'object', required: ['section'], additionalProperties: false, properties: { section: { type: 'string', enum: ['directory', 'health'] } } },
+        maxCalls: 4, maxResults: 1, maxCharacters: 12_000,
+      },
+      {
         id: 'recall', description: 'Recall evidence only from Memory Spaces pinned into this View.', capability: 'recall',
         inputSchema: {
           type: 'object', required: ['query'], additionalProperties: false,
           properties: {
             query: { type: 'string' }, mode: { type: 'string', enum: ['smart', 'keyword', 'basic'] }, limit: { type: 'integer' },
-            category: { type: 'string' }, source: { type: 'string' }, intent: { type: 'string' },
+            category: { type: 'string' }, source: { type: 'string' }, intent: { type: 'string' }, memoryBodyIds: { type: 'array' },
           },
         },
         maxCalls: 4, maxResults: 20, maxCharacters: 16_000,
@@ -301,12 +305,23 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
         id: 'related', description: 'Traverse related memories only from evidence already admitted by this View.', capability: 'related',
         inputSchema: {
           type: 'object', required: ['id'], additionalProperties: false,
-          properties: { id: { type: 'string' }, depth: { type: 'integer' }, edge: { type: 'string' } },
+          properties: { id: { type: 'string' }, depth: { type: 'integer' }, edge: { type: 'string' }, memoryBodyId: { type: 'string' } },
         },
         maxCalls: 4, maxResults: 20, maxCharacters: 16_000,
       },
     ],
     actions: [
+      {
+        id: 'manage-spaces', description: 'Create a Memory Space under the configured persistence policy, or update/merge spaces in this View scope.', capability: 'write',
+        inputSchema: {
+          type: 'object', required: ['operation'], additionalProperties: false,
+          properties: {
+            operation: { type: 'string', enum: ['create', 'update', 'merge'] }, request: { type: 'object' }, selection: { type: 'object' },
+            memoryBodyId: { type: 'string' }, name: { type: 'string' }, description: { type: 'string' }, active: { type: 'boolean' },
+            targetMemoryBodyId: { type: 'string' }, sourceMemoryBodyIds: { type: 'array' }, deactivateSources: { type: 'boolean' },
+          },
+        },
+      },
       {
         id: 'remember', description: 'Persist an exact memory in a Memory Space authorized for this View.', capability: 'write',
         inputSchema: {
@@ -321,12 +336,12 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
         id: 'link', description: 'Link two evidence items admitted by this View and owned by the same Memory Space.', capability: 'link',
         inputSchema: {
           type: 'object', required: ['sourceId', 'targetId'], additionalProperties: false,
-          properties: { sourceId: { type: 'string' }, targetId: { type: 'string' }, type: { type: 'string' }, weight: { type: 'number' }, reason: { type: 'string' } },
+          properties: { sourceId: { type: 'string' }, targetId: { type: 'string' }, memoryBodyId: { type: 'string' }, type: { type: 'string' }, weight: { type: 'number' }, reason: { type: 'string' } },
         },
       },
       {
         id: 'forget', description: 'Forget one evidence item admitted by this View.', capability: 'forget',
-        inputSchema: { type: 'object', required: ['id'], additionalProperties: false, properties: { id: { type: 'string' } } },
+        inputSchema: { type: 'object', required: ['id'], additionalProperties: false, properties: { id: { type: 'string' }, memoryBodyId: { type: 'string' } } },
       },
     ],
     management: {
@@ -336,29 +351,25 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
   },
   create(context) {
     const resolved = resolveMemorySpacesConfig({ ...context.configuration, ...capturedConfig }, context.sourceInstanceKey)
-    const runtime = legacyFactory?.(context) ?? {
-      service: new MnemonService(createRunner(resolved), resolved, undefined, undefined, providerSnapshot.adapterRegistry(), undefined, new MemoryProviderCatalog(providerSnapshot.descriptors())),
-      owned: true,
-    }
-    const service = runtime.service
-    const ownsService = runtime.owned
-    let prepared: { all: ReturnType<typeof service.memoryBodies.list>; active: ReturnType<typeof service.memoryBodies.active>; revision: string } | undefined
-    const sourceState = () => {
+    const service = new MemorySpacesService(createRunner(resolved), resolved, undefined, undefined, providerSnapshot.adapterRegistry(), new MemoryProviderCatalog(providerSnapshot.descriptors()))
+    const prepared = new WeakMap<object, { all: ReturnType<typeof service.memoryBodies.list>; active: ReturnType<typeof service.memoryBodies.active>; revision: string }>()
+    const sourceState = (scope: object) => {
       const value = { all: service.memoryBodies.list(), active: service.memoryBodies.active().sort((left, right) => left.id.localeCompare(right.id)), revision: service.memoryRevision() }
-      prepared = value
+      prepared.set(scope, value)
       return value
     }
     const admittedByView = new Map<string, Map<string, string>>()
+    const createdByView = new Map<string, Set<string>>()
     const admit = (viewId: string, entries: Array<{ id: string; memoryBodyId?: string }>): void => {
       const current = admittedByView.get(viewId) ?? new Map<string, string>()
-      for (const entry of entries) if (entry.memoryBodyId !== undefined) current.set(entry.id, entry.memoryBodyId)
+      for (const entry of entries) if (entry.memoryBodyId !== undefined) current.set(entry.memoryBodyId + '/' + entry.id, entry.memoryBodyId)
       admittedByView.delete(viewId)
       admittedByView.set(viewId, current)
       while (admittedByView.size > 128) admittedByView.delete(admittedByView.keys().next().value!)
     }
     const evidence = (
       request: { view: { id: string }; route: { id: string } },
-      items: Array<{ id: string; content: string; score?: number; normalizedScore?: number; createdAt?: string; memoryBodyId?: string; memoryBodyName?: string; memoryProviderId?: string; externalUri?: string }>,
+      items: Insight[],
       unavailable?: string,
     ): MemoryEvidence => ({
       id: `evidence:${randomUUID()}`,
@@ -374,7 +385,16 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
         provenance: {
           ...(item.memoryBodyId === undefined ? {} : { memoryBodyId: item.memoryBodyId }),
           ...(item.memoryBodyName === undefined ? {} : { memoryBodyName: item.memoryBodyName }),
-          ...(item.memoryProviderId === undefined ? {} : { providerId: item.memoryProviderId }),
+          ...(item.memoryProviderId === undefined ? {} : { memoryProviderId: item.memoryProviderId }),
+          ...(item.memoryProviderLabel === undefined ? {} : { memoryProviderLabel: item.memoryProviderLabel }),
+          ...(item.memoryCapabilities === undefined ? {} : { memoryCapabilities: { ...item.memoryCapabilities } }),
+          ...(item.relevanceTier === undefined ? {} : { relevanceTier: item.relevanceTier }),
+          ...(item.category === undefined ? {} : { category: item.category }),
+          ...(item.tags === undefined ? {} : { tags: item.tags }),
+          ...(item.entities === undefined ? {} : { entities: item.entities }),
+          ...(item.source === undefined ? {} : { source: item.source }),
+          ...(item.depth === undefined ? {} : { depth: item.depth }),
+          ...(item.edgeType === undefined ? {} : { edgeType: item.edgeType }),
           ...(item.externalUri === undefined ? {} : { externalUri: item.externalUri }),
         },
       })),
@@ -382,22 +402,22 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
       ...(unavailable === undefined ? {} : { unavailable }),
     })
     return {
-      facts(): MemorySourceFacts {
+      facts(request): MemorySourceFacts {
         try {
-          const { active, revision } = sourceState()
-          const routeIds: string[] = [
+          const { active, revision } = sourceState(request.scope)
+          const routeIds: string[] = ['inspect',
             ...(active.some(body => body.provider.capabilities.search) ? ['recall'] : []),
             ...(active.some(body => body.provider.capabilities.related) ? ['related'] : []),
           ]
-          const actionIds: string[] = [
-            ...(active.some(body => body.provider.capabilities.remember) ? ['remember'] : []),
+          const actionIds: string[] = service.config.writeEnabled ? ['manage-spaces',
+            ...(service.bodyDirectory().providers.some(provider => provider.capabilities.remember) ? ['remember'] : []),
             ...(active.some(body => body.provider.capabilities.link) ? ['link'] : []),
             ...(active.some(body => body.provider.capabilities.forget) ? ['forget'] : []),
-          ]
+          ] : []
           const capabilities: MemoryCapability[] = ['status', 'project']
           if (routeIds.includes('recall')) capabilities.push('recall')
           if (routeIds.includes('related')) capabilities.push('related')
-          if (actionIds.includes('remember')) capabilities.push('write')
+          if (actionIds.includes('manage-spaces') || actionIds.includes('remember')) capabilities.push('write')
           if (actionIds.includes('link')) capabilities.push('link')
           if (actionIds.includes('forget')) capabilities.push('forget')
           return {
@@ -414,8 +434,9 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
         }
       },
       project(request) {
-        const { all, active, revision } = prepared ?? sourceState()
-        prepared = undefined
+        const { all, active, revision } = prepared.get(request.scope) ?? sourceState(request.scope)
+        prepared.delete(request.scope)
+        if (revision !== request.expectedRevision) throw new Error('Memory Spaces projection revision changed during composition')
         return {
           fragments: request.includeProjection ? [{
             id: `${context.sourceInstanceKey}/projection`, sourceInstanceKey: context.sourceInstanceKey, mode: request.mode,
@@ -427,7 +448,7 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
             id: `${context.sourceInstanceKey}/grant/${revision}`,
             sourceInstanceKey: context.sourceInstanceKey,
             schema: 'dsh-mnemon.memory-spaces/v1',
-            value: { memoryBodyIds: active.map(body => body.id) },
+            value: { memoryBodyIds: active.map(body => body.id), knownMemoryBodyIds: all.map(body => body.id) },
             revision,
             consistency: 'namespace-pinned-live-read',
           },
@@ -436,6 +457,17 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
       async query(request) {
         const allowedBodies = grantIds(request.grant)
         const input = record(request.input, `Memory Spaces ${request.route.sourceRouteId}`)
+        if (request.route.sourceRouteId === 'inspect') {
+          const known = stringArray(record(request.grant.value, 'Memory Spaces scope').knownMemoryBodyIds, 'knownMemoryBodyIds', 10_000) ?? allowedBodies
+          let value: unknown
+          if (input.section === 'directory') {
+            const catalog = service.bodyDirectory()
+            const owned = createdByView.get(request.view.id)
+            value = modelBodyCatalog({ ...catalog, items: catalog.items.filter(body => known.includes(body.id) || owned?.has(body.id)) })
+          } else if (input.section === 'health') value = modelStatus(await service.status(request.signal))
+          else throw new Error('unknown Memory Spaces inspection section')
+          return evidence(request, [{ id: 'memory-spaces:' + String(input.section), content: modelJson(value, request.route.maxCharacters ?? 12_000) }])
+        }
         if (request.route.sourceRouteId === 'recall') {
           const category = text(input.category, 'category', 30, false) as Category | undefined
           const source = text(input.source, 'source', 30, false) as Source | undefined
@@ -443,12 +475,14 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
           if (category !== undefined && !CATEGORIES.has(category)) throw new Error(`unsupported category: ${category}`)
           if (source !== undefined && !SOURCES.has(source)) throw new Error(`unsupported source: ${source}`)
           if (intent !== undefined && !INTENTS.has(intent)) throw new Error(`unsupported intent: ${intent}`)
+          const requestedBodies = stringArray(input.memoryBodyIds, 'memoryBodyIds', 10_000) ?? allowedBodies
+          if (requestedBodies.some(id => !allowedBodies.includes(id))) throw new Error('Recall requested a Memory Space outside this View ReadGrant')
           const mode = text(input.mode, 'mode', 20, false) as 'smart' | 'keyword' | 'basic' | undefined
           const result = await service.search({
             query: text(input.query, 'query', 2_000)!,
             ...(mode === undefined ? {} : { mode }),
             limit: integer(input.limit, 10, 1, 20),
-            memoryBodyIds: allowedBodies,
+            memoryBodyIds: requestedBodies,
             ...(category === undefined ? {} : { category }), ...(source === undefined ? {} : { source }), ...(intent === undefined ? {} : { intent }),
           }, request.signal)
           admit(request.view.id, result.results)
@@ -456,7 +490,10 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
         }
         if (request.route.sourceRouteId === 'related') {
           const id = text(input.id, 'id', 2_000)!
-          const owner = admittedByView.get(request.view.id)?.get(id)
+          const requestedBody = text(input.memoryBodyId, 'memoryBodyId', 300, false)
+          const admitted = admittedByView.get(request.view.id)
+          const owners = [...(admitted?.entries() ?? [])].filter(([reference]) => reference.endsWith('/' + id)).map(([, bodyId]) => bodyId)
+          const owner = requestedBody === undefined ? owners.length === 1 ? owners[0] : undefined : admitted?.get(requestedBody + '/' + id)
           if (owner === undefined) throw new Error('related-memory traversal requires evidence already admitted by this View')
           if (!allowedBodies.includes(owner)) throw new Error('related-memory owner is outside this View ReadGrant')
           const edge = text(input.edge, 'edge', 30, false) as EdgeType | undefined
@@ -469,13 +506,56 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
       },
       async mutate(request) {
         const input = record(request.input, `Memory Spaces ${request.offer.sourceActionId}`)
-        const allowedBodies = grantIds(grantFor(request.view, context.sourceInstanceKey))
-        const admitted = admittedByView.get(request.view.id) ?? new Map<string, string>()
+        if (!service.config.writeEnabled) throw new Error('Memory Spaces is configured read-only')
+        const grant = grantFor(request.view, context.sourceInstanceKey)
+        const allowedBodies = grantIds(grant)
+        const knownBodies = stringArray(record(grant.value, 'Memory Spaces scope').knownMemoryBodyIds, 'knownMemoryBodyIds', 10_000) ?? allowedBodies
+        const created = createdByView.get(request.view.id) ?? new Set<string>()
+        const writeBodies = [...new Set([...knownBodies, ...created])]
+        const admittedOwner = (id: string): string | undefined => {
+          const requestedBody = text(input.memoryBodyId, 'memoryBodyId', 300, false)
+          const entries = admittedByView.get(request.view.id)
+          if (requestedBody !== undefined) return entries?.get(requestedBody + '/' + id)
+          const owners = [...(entries?.entries() ?? [])].filter(([reference]) => reference.endsWith('/' + id)).map(([, owner]) => owner)
+          return owners.length === 1 ? owners[0] : undefined
+        }
         let result: MemoryJsonValue
         let bodyId: string | undefined
-        if (request.offer.sourceActionId === 'remember') {
+        if (request.offer.sourceActionId === 'manage-spaces') {
+          if (input.operation === 'create') {
+            const selection = input.selection === undefined ? undefined : record(input.selection, 'placement selection')
+            const body = await service.createBodyForPersistence(createBodyRequest(input.request!), selection === undefined ? undefined : {
+              providerId: text(selection.providerId, 'providerId', 128)!, reason: text(selection.reason, 'reason', 4_000)!, confidence: text(selection.confidence, 'confidence', 40)!,
+            }, request.signal)
+            created.add(body.id)
+            createdByView.set(request.view.id, created)
+            while (createdByView.size > 128) createdByView.delete(createdByView.keys().next().value!)
+            bodyId = body.id
+            result = { action: 'created', memoryBodyId: body.id, name: body.name, description: body.description }
+          } else if (input.operation === 'update') {
+            bodyId = text(input.memoryBodyId, 'memoryBodyId', 300)!
+            if (!writeBodies.includes(bodyId)) throw new Error('Memory Space update is outside this View scope')
+            const body = service.updateBody(bodyId, {
+              ...(input.name === undefined ? {} : { name: text(input.name, 'name', 100)! }),
+              ...(input.description === undefined ? {} : { description: text(input.description, 'description', 1_000)! }),
+              ...(typeof input.active === 'boolean' ? { active: input.active } : {}),
+            })
+            result = { action: 'updated', memoryBodyId: body.id, name: body.name, description: body.description, active: body.active }
+          } else if (input.operation === 'merge') {
+            const target = text(input.targetMemoryBodyId, 'targetMemoryBodyId', 300)!
+            const sources = stringArray(input.sourceMemoryBodyIds, 'sourceMemoryBodyIds', 20) ?? []
+            if ([target, ...sources].some(id => !writeBodies.includes(id))) throw new Error('Memory Space merge is outside this View scope')
+            bodyId = target
+            result = await service.mergeBodies(target, sources, input.deactivateSources !== false, request.signal) as unknown as MemoryJsonValue
+          } else throw new Error('unsupported Memory Space management action')
+        } else if (request.offer.sourceActionId === 'remember') {
           bodyId = text(input.memoryBodyId, 'memoryBodyId', 300, false)
-          if (bodyId !== undefined && !allowedBodies.includes(bodyId)) throw new Error('remember destination is outside this View ReadGrant')
+          if (bodyId === undefined) {
+            const defaults = [...new Set([...allowedBodies, ...created])]
+            if (defaults.length !== 1) throw new Error('remember requires an explicit Memory Space in this View scope')
+            bodyId = defaults[0]!
+          }
+          if (!writeBodies.includes(bodyId)) throw new Error('remember destination is outside this View scope')
           const category = text(input.category, 'category', 30, false) as Category | undefined
           const source = text(input.source, 'source', 30, false) as Source | undefined
           if (category !== undefined && !CATEGORIES.has(category)) throw new Error(`unsupported category: ${category}`)
@@ -491,8 +571,8 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
         } else if (request.offer.sourceActionId === 'link') {
           const sourceId = text(input.sourceId, 'sourceId', 2_000)!
           const targetId = text(input.targetId, 'targetId', 2_000)!
-          const sourceBody = admitted.get(sourceId)
-          const targetBody = admitted.get(targetId)
+          const sourceBody = admittedOwner(sourceId)
+          const targetBody = admittedOwner(targetId)
           if (sourceBody === undefined || targetBody === undefined || sourceBody !== targetBody || !allowedBodies.includes(sourceBody)) {
             throw new Error('link requires two evidence items admitted by this View from the same Memory Space')
           }
@@ -503,23 +583,21 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
           result = await service.link(sourceId, targetId, edge, weight, text(input.reason, 'reason', 1_000, false), request.signal, bodyId) as MemoryJsonValue
         } else if (request.offer.sourceActionId === 'forget') {
           const id = text(input.id, 'id', 2_000)!
-          bodyId = admitted.get(id)
+          bodyId = admittedOwner(id)
           if (bodyId === undefined || !allowedBodies.includes(bodyId)) throw new Error('forget requires evidence already admitted by this View')
           result = await service.forget(id, request.signal, bodyId) as MemoryJsonValue
         } else {
           throw new Error(`unsupported Memory Spaces action: ${request.offer.sourceActionId}`)
         }
-        return receipt(request.view.id, request.offer.id, context.sourceInstanceKey, service.memoryRevision(), {
-          memoryBodyId: bodyId ?? null,
-          result,
-        })
+        return { ...receipt(request.view.id, request.offer.id, context.sourceInstanceKey, service.memoryRevision(), { memoryBodyId: bodyId ?? null, result }), status: mutationResultCommitted(result) ? 'succeeded' : 'partial' }
       },
       manage(request) {
         return manageMemorySpaces(service, request)
       },
       async dispose() {
         admittedByView.clear()
-        if (ownsService) await service.dispose()
+        createdByView.clear()
+        await service.dispose()
       },
     }
   },
@@ -527,4 +605,3 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
 }
 
 /** Empty template; actual installations must provide explicit Provider children. */
-export const MEMORY_SPACES_SOURCE = createMemorySpacesSource(new MemorySpaceProviderSnapshot([]))

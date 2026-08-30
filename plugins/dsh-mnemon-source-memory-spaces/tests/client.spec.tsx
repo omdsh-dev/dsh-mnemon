@@ -52,7 +52,7 @@ describe('independent Memory Spaces Source client', () => {
       inject: (_name: string, factory: () => () => void) => factory(),
       register: (options: { id: string }) => { entries.add(options.id); return () => entries.delete(options.id) },
     } } as never)
-    expect([...entries]).toEqual(['memory-spaces/spaces', 'memory-spaces/explore', 'memory-spaces/entities', 'memory-spaces/remember', 'memory-spaces/content'])
+    expect([...entries]).toEqual(['memory-spaces/spaces', 'memory-spaces/remember', 'memory-spaces/explore', 'memory-spaces/entities', 'memory-spaces/content'])
     release()
     expect(entries.size).toBe(0)
   })

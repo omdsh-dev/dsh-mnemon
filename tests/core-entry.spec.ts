@@ -1,8 +1,8 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
-import * as core from '../src/core.ts'
-import { COMPOSABLE_MEMORY_API_VERSION } from '../packages/contracts/src/index.ts'
-import { defineMemorySource, defineMemoryStrategy, installMemory } from '../packages/extension-sdk/src/index.ts'
+import * as core from "../src/core/plugin.ts"
+import { COMPOSABLE_MEMORY_API_VERSION } from "../src/core/contracts/index.ts"
+import { defineMemorySource, defineMemoryStrategy, installMemory } from "../src/sdk/index.ts"
 
 describe('Source-neutral Core entry', () => {
   it('mounts on plain Cordis without a DSH default service or built-in contribution', async () => {
@@ -12,7 +12,6 @@ describe('Source-neutral Core entry', () => {
     const runtime = ctx.mnemonMemory
     expect(core.inject).toEqual([])
     expect(runtime.contributionSnapshot()).toMatchObject({ sources: [], strategies: [] })
-    expect(runtime.descriptors()).toEqual([])
     const attachment = runtime.attachGeneration()
     expect(attachment.host.inspect().evaluation.state).toBe('incomplete')
     await fiber.dispose()

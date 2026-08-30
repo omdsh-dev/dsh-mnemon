@@ -10,12 +10,12 @@ import {
   type ClientSettingsSnapshot,
   type Config,
   type InteractionConfig,
-  type MemorySystemDescriptor,
+  type MemoryCompositionStatus,
   type MemoryTopologyDefinition,
   type MnemonEmbeddingStatus,
   type SettingsOperation,
   type TaskAgentModelCatalog,
-} from '../shared/contracts.ts'
+} from "../host/protocol.ts"
 import { MnemonClient } from './api.ts'
 import css from './MnemonSettingsCard.module.css'
 import { GlobalLocationSetting } from './GlobalLocationSetting.tsx'
@@ -126,12 +126,12 @@ function draftOf(core: Config | undefined, interaction: InteractionConfig | unde
   return { ...coreDraft(core), ...interactionDraft(interaction) }
 }
 
-function topologyOf(descriptor: MemorySystemDescriptor): MemoryTopologyDefinition {
+function topologyOf(descriptor: MemoryCompositionStatus): MemoryTopologyDefinition {
   return {
-    id: descriptor.topology.id,
-    strategyId: descriptor.topology.strategyId,
-    layers: descriptor.topology.layers.map(layer => ({
-      id: layer.id,
+    id: descriptor.configuration.id,
+    strategyId: descriptor.configuration.strategyId,
+    layers: Object.entries(descriptor.configuration.layers).map(([id, layer]) => ({
+      id,
       enabled: layer.enabled,
       participation: { ...layer.participation },
       adapterIds: [...layer.adapterIds],
@@ -201,7 +201,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   const [modelCatalogError, setModelCatalogError] = useState<string | null>(null)
   const [fullModelCatalogLoaded, setFullModelCatalogLoaded] = useState(false)
   const modelCatalogRequest = useRef(0)
-  const [memorySystem, setMemorySystem] = useState<MemorySystemDescriptor | null>(null)
+  const [memorySystem, setMemorySystem] = useState<MemoryCompositionStatus | null>(null)
   const [topologyDraft, setTopologyDraft] = useState<MemoryTopologyDefinition | null>(null)
   const [topologyState, setTopologyState] = useState<'unavailable' | 'loading' | 'ready' | 'error'>(connection === undefined ? 'unavailable' : 'loading')
   const topologyRequest = useRef(0)
@@ -727,14 +727,14 @@ function EmbeddingSettingsSection(props: {
 }
 
 function MemoryTopologySection(props: {
-  descriptor: MemorySystemDescriptor | null
+  descriptor: MemoryCompositionStatus | null
   topology: MemoryTopologyDefinition | null
   state: 'unavailable' | 'loading' | 'ready' | 'error'
   disabled: boolean
   onEnabled: (layerId: string, enabled: boolean) => void
   t: MnemonTranslate
 }): JSX.Element {
-  const layerDescriptors = new Map(props.descriptor?.catalog.layers.map(layer => [layer.id, layer]) ?? [])
+  const layerDescriptors = new Map(props.descriptor?.sources.map(source => [source.sourceTypeId, source.management]) ?? [])
 
   const builtInCopy = (layerId: string): { label: string; description: string } | undefined => {
     if (layerId === 'runtime') return { label: props.t('layers.runtimeLabel'), description: props.t('layers.runtimeDescription') }

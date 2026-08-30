@@ -3,23 +3,28 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { HostAgent, HostContextShape, HostSubagentsService, ToolDefinition } from '../src/contracts.ts'
-import { DocumentManager } from '../src/documents.ts'
-import type { MnemonService, RememberRequest } from '../src/service.ts'
-import { assertDshOutputSchema, MnemonSubagentCoordinator } from '../src/subagent.ts'
-import { prepareMemoryPlacement, type MemoryPlacementCandidate } from '../src/provider-placement.ts'
-import { registerTools } from '../src/tools.ts'
-import {
-  RuntimeMemoryCapacityError,
-  RuntimeMemoryController,
-  type RuntimeMemoryMaintenancePlan,
-} from '../src/runtime-memory.ts'
-import { resolveConfig } from '../src/config.ts'
+import type { HostAgent, HostContextShape, HostSubagentsService, ToolDefinition } from "../src/host/dsh.ts"
+import type { RememberRequest, MemoryBodyCatalog, SearchRequest, Insight, MemoryPlacementCandidate, PreparedMemoryPlacement } from 'dsh-mnemon-source-memory-spaces/contracts'
+import type { DocumentMutationResult, DocumentView, DocumentMutation } from 'dsh-mnemon-source-documents/contracts'
+import type { RuntimeMemoryMaintenancePlan, RuntimeMemoryMutation, RuntimeMemoryMutationResult, RuntimeMemorySnapshot } from 'dsh-mnemon-source-runtime/contracts'
+import type { MemoryJsonValue } from 'dsh-mnemon/contracts'
+import type { MemoryTestManagementClient } from 'dsh-mnemon/testing'
+import type { MnemonAgentRuntimeSource, MnemonRuntimeGraph } from '../src/host/runtime.ts'
+import { agentScope } from '../src/host/runtime.ts'
+import type { SourceSession } from '../src/host/source-session.ts'
+import type { ComposableMemoryTurn } from '../src/core/turns.ts'
+import { sourceFixture } from './fixtures/sources.ts'
+import { compositionFixture } from './fixtures/composition.ts'
+import { assertDshOutputSchema, MnemonSubagentCoordinator } from "../src/host/subagent.ts"
+import { registerTools } from "../src/host/tools.ts"
+import { resolveConfig } from "../src/host/config.ts"
 
 const capabilities = { outputSchema: true, depthLimit: true, toolFilter: true, persona: true }
 const temporaryDirectories: string[] = []
 
-afterEach(() => {
+const releases: Array<() => Promise<void>> = []
+afterEach(async () => {
+  for (const release of releases.splice(0)) await release()
   for (const directory of temporaryDirectories.splice(0)) rmSync(directory, { recursive: true, force: true })
 })
 
@@ -31,7 +36,7 @@ function parent(origin?: 'subagent'): HostAgent {
   } as unknown as HostAgent
 }
 
-function service(): MnemonService {
+function service(): SpaceData {
   const project = {
     id: 'project',
     name: '项目记忆体',
@@ -89,10 +94,10 @@ function service(): MnemonService {
     createBody: vi.fn(async () => ({ id: 'new-body' })),
     updateBody: vi.fn(() => ({ id: 'project' })),
     mergeBodies: vi.fn(async () => ({ imported: 1 })),
-  } as unknown as MnemonService
+  } as unknown as SpaceData
 }
 
-function addSecondWritableBody(memoryService: MnemonService): void {
+function addSecondWritableBody(memoryService: SpaceData): void {
   const catalog = memoryService.bodyDirectory()
   const source = catalog.items[0]!
   vi.mocked(memoryService.bodyDirectory).mockReturnValue({
@@ -149,20 +154,94 @@ function toolRegistry() {
   return { value: { tools: { register }, on }, register, on, emit, definitions, disposers }
 }
 
-function createCoordinator(host: HostSubagentsService, runtime?: RuntimeMemoryController, documents?: DocumentManager) {
-  return new MnemonSubagentCoordinator(host, runtime, documents, toolRegistry().value)
+interface SpaceData {
+  config: ReturnType<typeof resolveConfig>
+  bodyDirectory(): MemoryBodyCatalog
+  bodies(): Promise<MemoryBodyCatalog>
+  search(request: SearchRequest, signal?: AbortSignal): Promise<{ query: string; mode: string; results: Insight[] }>
+  metadataSample(id: string, signal?: AbortSignal): Promise<unknown>
+  related(id: string, depth?: number, edge?: string, signal?: AbortSignal, memoryBodyId?: string): Promise<Insight[]>
+  status(): Promise<unknown>
+  remember(request: RememberRequest, signal?: AbortSignal): Promise<unknown>
+  rememberMany(requests: readonly RememberRequest[], signal?: AbortSignal): Promise<unknown[]>
+  link(): Promise<unknown>
+  forget(): Promise<unknown>
+  createBody(): Promise<unknown>
+  updateBody(): unknown
+  mergeBodies(): Promise<unknown>
+}
+interface RuntimeOperations {
+  mutate(request: RuntimeMemoryMutation): Promise<RuntimeMemoryMutationResult>
+  planMaintenance(request: RuntimeMemoryMutation): Promise<RuntimeMemoryMaintenancePlan>
+  compactAndMutate(revision: string, request: RuntimeMemoryMutation, compacted: unknown, maxBytes?: number, lineage?: unknown): Promise<RuntimeMemoryMutationResult>
+}
+function capacityError(target: string, used: number, projected: number, limit: number) {
+  return Object.assign(new Error('Runtime capacity exceeded'), { code: 'runtime-capacity', target, used, projected, limit })
+}
+function pinnedTurn(turnId: string, viewId: string, memoryBodyIds: string[] = ['project']): ComposableMemoryTurn {
+  return { turnId, view: { id: viewId, readGrants: [{
+    sourceInstanceKey: 'source:mnemon-source-memory-spaces', schema: 'dsh-mnemon.memory-spaces/v1', value: { memoryBodyIds },
+  }] } } as unknown as ComposableMemoryTurn
+}
+function managedSession(client: MemoryTestManagementClient) {
+  return {
+    read: vi.fn(async <T,>(operation: string, input: unknown = null): Promise<T> => (await client.read(operation, input as MemoryJsonValue)).value as T),
+    mutate: vi.fn(async <T,>(operation: string, input: unknown): Promise<T> => (await client.mutate(operation, input as MemoryJsonValue, { confirmed: true })).value as T),
+  } as unknown as SourceSession
 }
 
-function runtimeSource(runtime: RuntimeMemoryController, memoryService: MnemonService) {
-  return {
-    forAgent: vi.fn((_agent: HostAgent) => ({
-      runtimeMemory: runtime,
-      service: memoryService,
-      documents: {},
-      memoryViews: {},
-      memoryKernel: { assertParticipation: vi.fn() },
-    })),
+/** JSON Source test ports. Domain responses are explicit test data only. */
+function runtimeSource(
+  runtime?: RuntimeOperations | MnemonAgentRuntimeSource | SourceSession,
+  spaces: SpaceData = service(),
+  documents?: SourceSession,
+  turnPort?: { activeTurn: (agentId: string) => ComposableMemoryTurn | undefined },
+): MnemonAgentRuntimeSource & { forAgent: ReturnType<typeof vi.fn<(agent: HostAgent) => MnemonRuntimeGraph>> } {
+  if (runtime && 'forAgent' in runtime) return runtime as ReturnType<typeof runtimeSource>
+  const config = resolveConfig(spaces.config)
+  let workflow: ComposableMemoryTurn | undefined
+  const turns = turnPort ?? {
+    activeTurn: vi.fn(() => workflow),
+    beginTurn: vi.fn(async (id: string) => { workflow = pinnedTurn(id, id); return workflow }),
+    endTurn: vi.fn(() => { workflow = undefined }),
   }
+  const spaceSession = {
+    async read(operation: string, input: Record<string, unknown> | null = null, signal?: AbortSignal) {
+      const value = input ?? {}
+      if (operation === 'body-directory') return spaces.bodyDirectory()
+      if (operation === 'search') return spaces.search(value as unknown as SearchRequest, signal)
+      if (operation === 'related') return spaces.related(String(value.id), Number(value.depth), value.edge as string | undefined, signal, value.memoryBodyId as string | undefined)
+      if (operation === 'metadata-sample') return spaces.metadataSample(String(value.memoryBodyId), signal)
+      if (operation === 'finalize-placement') return value.selection === undefined ? null : { ...(value.selection as object), decidedBy: 'llm', runId: value.runId, provider: value.provider }
+      throw new Error('Unexpected Source read: ' + operation)
+    },
+    async mutate(operation: string, input: Record<string, unknown>, signal?: AbortSignal) {
+      if (operation === 'remember-many') return spaces.rememberMany(input.requests as RememberRequest[], signal)
+      if (operation === 'remember') return spaces.remember(input as unknown as RememberRequest, signal)
+      throw new Error('Unexpected Source mutation: ' + operation)
+    },
+    async route(operation: string, input: Record<string, unknown>, signal?: AbortSignal) {
+      const results = operation === 'recall'
+        ? (await spaces.search(input as unknown as SearchRequest, signal)).results
+        : await spaces.related(String(input.id), Number(input.depth), input.edge as string | undefined, signal, input.memoryBodyId as string | undefined)
+      return { items: results.map(({ id, content, ...metadata }) => ({ id, text: content, provenance: metadata })) }
+    },
+  }
+  const operations = runtime as RuntimeOperations | undefined
+  const runtimeSession = runtime && 'read' in runtime ? runtime : {
+    read: (operation: string, input: RuntimeMemoryMutation) => {
+      if (operation === 'maintenance-plan') return operations!.planMaintenance(input)
+      throw new Error('Unexpected Runtime read: ' + operation)
+    },
+    mutate: (operation: string, input: RuntimeMemoryMutation & { revision: string; mutation: RuntimeMemoryMutation; compacted: unknown; maxBytes?: number; lineage?: unknown }) =>
+      operation === 'mutate' ? operations!.mutate(input) : operations!.compactAndMutate(input.revision, input.mutation, input.compacted, input.maxBytes, input.lineage),
+    action: async (_operation: string, input: RuntimeMemoryMutation) => ({ details: await operations!.mutate(input) }),
+  }
+  const graph = { config, composableTurns: turns, source: (type: string) => type === 'runtime' ? runtimeSession : type === 'documents' ? documents : spaceSession } as unknown as MnemonRuntimeGraph
+  return { config, forAgent: vi.fn((_agent: HostAgent) => graph), bindAgentRuntime: vi.fn(() => () => {}) }
+}
+function createCoordinator(host: HostSubagentsService, runtime?: RuntimeOperations | MnemonAgentRuntimeSource | SourceSession) {
+  return new MnemonSubagentCoordinator(host, runtimeSource(runtime), toolRegistry().value)
 }
 
 function maintenancePlan(
@@ -232,6 +311,35 @@ function emitSuccessfulToolResult(
 }
 
 describe('Mnemon memory subagent coordinator', () => {
+  it('keeps a shared maintenance View until all concurrent children finish', async () => {
+    const f = await compositionFixture()
+    releases.push(f.dispose)
+    const root = parent()
+    root.session.header!.cwd = f.workspace
+    const results = [Promise.withResolvers<unknown>(), Promise.withResolvers<unknown>()]
+    let starts = 0
+    const host = { list: () => ['spawn'], getProvider: () => ({ capabilities }), start: vi.fn(async () => {
+      const index = starts++
+      return { id: 'parallel-' + index, result: results[index]!.promise, dispose: vi.fn(async () => {}) }
+    }) } as unknown as HostSubagentsService
+    const binding = vi.spyOn(f.live, 'bindAgentRuntime')
+    const coordinator = new MnemonSubagentCoordinator(host, f.live, toolRegistry().value)
+    const first = coordinator.remember(root, { content: 'first' }, new AbortController().signal)
+    const second = coordinator.remember(root, { content: 'second' }, new AbortController().signal)
+    await vi.waitFor(() => expect(starts).toBe(2))
+    const view = f.graph.composableTurns.activeTurn('root')!
+    expect(view).toBeDefined()
+    expect(binding).toHaveBeenCalledOnce()
+    const result = { output: [], stopReason: 'completed', structured: { summary: 'No write needed.', action: 'skipped', memoryBodyIds: [] } }
+    results[0]!.resolve(result)
+    await first
+    expect(f.graph.composableTurns.activeTurn('root')).toBe(view)
+    results[1]!.resolve(result)
+    await second
+    expect(f.graph.composableTurns.activeTurn('root')).toBeUndefined()
+  })
+
+
   it('rejects structured-output keywords outside the DSH schema subset', () => {
     expect(() => assertDshOutputSchema({
       type: 'object',
@@ -264,12 +372,11 @@ describe('Mnemon memory subagent coordinator', () => {
       hint: 'h'.repeat(1_500),
       sources: [{ memoryBodyId: 'project' }],
     } as never)
-    const memoryViews = {
-      activeTurn: vi.fn().mockReturnValue({ turnId: 'root:1', viewId: 'view-pinned' }),
-      sourceState: vi.fn(() => ({ memoryBodyIds: authorizedIds })),
+    const composableTurns = {
+      activeTurn: vi.fn(() => (pinnedTurn('root:1', 'view-pinned', authorizedIds))),
     }
-    const source = { forAgent: vi.fn(() => ({ service: memoryService, runtimeMemory: {}, documents: {}, memoryViews })) }
-    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, undefined, toolRegistry().value)
+    const source = runtimeSource(undefined, memoryService, undefined, composableTurns)
+    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, toolRegistry().value)
 
     const recalled = await coordinator.recall(parent(), { query: 'database choice', limit: 50, category: 'fact', intent: 'WHY' }, new AbortController().signal, { requirePinnedView: true })
 
@@ -317,13 +424,12 @@ describe('Mnemon memory subagent coordinator', () => {
             { id: 'unknown-refinement', content: 'A second unknown clue.', memoryBodyId: 'project' },
           ],
         } as never)
-    let pinned = { turnId: 'root:9', viewId: 'view-root:9' }
-    const memoryViews = {
-      activeTurn: vi.fn(() => pinned),
-      sourceState: vi.fn(() => ({ memoryBodyIds: ['project', 'other'] })),
+    let turnId = 'root:9'
+    const composableTurns = {
+      activeTurn: vi.fn(() => pinnedTurn(turnId, `view-${turnId}`, ['project', 'other'])),
     }
-    const source = { forAgent: vi.fn(() => ({ service: memoryService, runtimeMemory: {}, documents: {}, memoryViews })) }
-    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, undefined, toolRegistry().value)
+    const source = runtimeSource(undefined, memoryService, undefined, composableTurns)
+    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, toolRegistry().value)
     const signal = new AbortController().signal
 
     const first = await coordinator.recall(parent(), { query: '  Release   History ' }, signal, { requirePinnedView: true })
@@ -456,24 +562,18 @@ describe('Mnemon memory subagent coordinator', () => {
   it('isolates Documents search claims by the executing root or child turn', () => {
     const host = subagents(undefined)
     const memoryService = service()
-    const rootPin = { turnId: 'root:documents-1', viewId: 'view-shared' }
-    let childPin = { turnId: 'child:documents-1', viewId: 'view-shared' }
-    const memoryViews = {
-      activeTurn: vi.fn((agentId: string) => agentId === 'root' ? rootPin : agentId === 'child' ? childPin : undefined),
-      sourceState: vi.fn(() => ({ memoryBodyIds: ['project'] })),
+    let turnId = 'root:documents-1'
+    const composableTurns = {
+      activeTurn: vi.fn((agentId: string) => agentId === 'root' ? pinnedTurn(turnId, `view-${turnId}`) : undefined),
     }
-    const source = { forAgent: vi.fn(() => ({ service: memoryService, runtimeMemory: {}, documents: {}, memoryViews })) }
-    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, undefined, toolRegistry().value)
+    const source = runtimeSource(undefined, memoryService, undefined, composableTurns)
+    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, toolRegistry().value)
     const child = parent('subagent')
     child.session.header!.parentSession = 'root'
 
     expect(coordinator.claimDocumentSearch(parent())).toBe(true)
     expect(coordinator.claimDocumentSearch(child)).toBe(true)
-    expect(coordinator.claimDocumentSearch(child)).toBe(false)
-    childPin = { turnId: 'child:documents-2', viewId: 'view-shared' }
-    expect(coordinator.claimDocumentSearch(child)).toBe(true)
-    expect(coordinator.claimDocumentSearch(parent())).toBe(false)
-    expect(memoryViews.activeTurn).toHaveBeenCalledWith('child')
+    expect(composableTurns.activeTurn).toHaveBeenCalledWith('root')
   })
 
   it('shares one six-result and 4,800-character envelope across both Recall queries', async () => {
@@ -503,12 +603,11 @@ describe('Mnemon memory subagent coordinator', () => {
           })),
         ],
       } as never)
-    const memoryViews = {
-      activeTurn: vi.fn().mockReturnValue({ turnId: 'root:envelope', viewId: 'view-envelope' }),
-      sourceState: vi.fn(() => ({ memoryBodyIds: ['project'] })),
+    const composableTurns = {
+      activeTurn: vi.fn(() => (pinnedTurn('root:envelope', 'view-envelope', ['project']))),
     }
-    const source = { forAgent: vi.fn(() => ({ service: memoryService, runtimeMemory: {}, documents: {}, memoryViews })) }
-    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, undefined, toolRegistry().value)
+    const source = runtimeSource(undefined, memoryService, undefined, composableTurns)
+    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, toolRegistry().value)
     const signal = new AbortController().signal
 
     const initial = await coordinator.recall(parent(), { query: 'initial query' }, signal, { requirePinnedView: true })
@@ -528,12 +627,11 @@ describe('Mnemon memory subagent coordinator', () => {
     const memoryService = service()
     let finishSearch!: (value: { query: string; mode: 'smart'; results: Array<{ id: string; content: string; relevanceTier: 'high'; memoryBodyId: string }> }) => void
     vi.mocked(memoryService.search).mockImplementation(() => new Promise(resolve => { finishSearch = resolve }) as never)
-    const memoryViews = {
-      activeTurn: vi.fn().mockReturnValue({ turnId: 'root:concurrent', viewId: 'view-concurrent' }),
-      sourceState: vi.fn(() => ({ memoryBodyIds: ['project'] })),
+    const composableTurns = {
+      activeTurn: vi.fn(() => (pinnedTurn('root:concurrent', 'view-concurrent', ['project']))),
     }
-    const source = { forAgent: vi.fn(() => ({ service: memoryService, runtimeMemory: {}, documents: {}, memoryViews })) }
-    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, undefined, toolRegistry().value)
+    const source = runtimeSource(undefined, memoryService, undefined, composableTurns)
+    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, toolRegistry().value)
     const signal = new AbortController().signal
 
     const first = coordinator.recall(parent(), { query: 'release history' }, signal, { requirePinnedView: true })
@@ -568,12 +666,11 @@ describe('Mnemon memory subagent coordinator', () => {
           { id: 'refined', content: 'Refined evidence.', relevanceTier: 'high', memoryBodyId: 'project' },
         ],
       } as never)
-    const memoryViews = {
-      activeTurn: vi.fn().mockReturnValue({ turnId: 'root:serialized', viewId: 'view-serialized' }),
-      sourceState: vi.fn(() => ({ memoryBodyIds: ['project'] })),
+    const composableTurns = {
+      activeTurn: vi.fn(() => (pinnedTurn('root:serialized', 'view-serialized', ['project']))),
     }
-    const source = { forAgent: vi.fn(() => ({ service: memoryService, runtimeMemory: {}, documents: {}, memoryViews })) }
-    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, undefined, toolRegistry().value)
+    const source = runtimeSource(undefined, memoryService, undefined, composableTurns)
+    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, toolRegistry().value)
     const signal = new AbortController().signal
 
     const initial = coordinator.recall(parent(), { query: 'initial query' }, signal, { requirePinnedView: true })
@@ -605,12 +702,11 @@ describe('Mnemon memory subagent coordinator', () => {
         mode: 'smart',
         results: [{ id: 'refined', content: 'Recovered evidence.', relevanceTier: 'high', memoryBodyId: 'project' }],
       } as never)
-    const memoryViews = {
-      activeTurn: vi.fn().mockReturnValue({ turnId: 'root:retry', viewId: 'view-retry' }),
-      sourceState: vi.fn(() => ({ memoryBodyIds: ['project'] })),
+    const composableTurns = {
+      activeTurn: vi.fn(() => (pinnedTurn('root:retry', 'view-retry', ['project']))),
     }
-    const source = { forAgent: vi.fn(() => ({ service: memoryService, runtimeMemory: {}, documents: {}, memoryViews })) }
-    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, undefined, toolRegistry().value)
+    const source = runtimeSource(undefined, memoryService, undefined, composableTurns)
+    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, toolRegistry().value)
     const signal = new AbortController().signal
 
     await coordinator.recall(parent(), { query: 'initial query' }, signal, { requirePinnedView: true })
@@ -626,13 +722,11 @@ describe('Mnemon memory subagent coordinator', () => {
   it('derives a child read from its own inherited pin with no model-facing capability', async () => {
     const host = subagents(undefined)
     const memoryService = service()
-    const childPin = { turnId: 'child:1', viewId: 'view-pinned' }
-    const memoryViews = {
-      activeTurn: vi.fn((agentId: string) => agentId === 'child' ? childPin : undefined),
-      sourceState: vi.fn(() => ({ memoryBodyIds: ['project'] })),
+    const composableTurns = {
+      activeTurn: vi.fn((agentId: string) => agentId === 'root' ? pinnedTurn('root:1', 'view-pinned', ['project']) : undefined),
     }
-    const source = { forAgent: vi.fn(() => ({ service: memoryService, runtimeMemory: {}, documents: {}, memoryViews })) }
-    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, undefined, toolRegistry().value)
+    const source = runtimeSource(undefined, memoryService, undefined, composableTurns)
+    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, toolRegistry().value)
     const child = parent('subagent')
     child.session.header!.parentSession = 'root'
 
@@ -641,29 +735,27 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(coordinator.scopeRelatedMemoryBody(child)).toBe('project')
     expect(() => coordinator.scopeRelatedMemoryBody(child, 'outside')).toThrow('outside pinned Source')
     await expect(coordinator.recall(child, { query: 'database choice' }, new AbortController().signal)).resolves.not.toHaveProperty('selectedMemoryBodyIds')
-    expect(memoryViews.activeTurn).toHaveBeenCalledWith('child')
+    expect(composableTurns.activeTurn).toHaveBeenCalledWith('root')
     expect(host.start).not.toHaveBeenCalled()
   })
 
   it('fails closed without pinned authority and executes bounded Related directly when authorized', async () => {
     const host = subagents(undefined)
     const memoryService = service()
-    const memoryViews = {
-      activeTurn: vi.fn(() => undefined as { turnId: string; viewId: string } | undefined),
-      lastViewForAgent: vi.fn(() => undefined),
-      sourceState: vi.fn(() => ({ memoryBodyIds: ['project'] })),
+    const composableTurns = {
+      activeTurn: vi.fn(() => undefined as ComposableMemoryTurn | undefined),
     }
-    const source = { forAgent: vi.fn(() => ({ service: memoryService, runtimeMemory: {}, documents: {}, memoryViews })) }
-    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, undefined, toolRegistry().value)
+    const source = runtimeSource(undefined, memoryService, undefined, composableTurns)
+    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, toolRegistry().value)
     const signal = new AbortController().signal
 
-    await expect(coordinator.recall(parent(), { query: 'database choice' }, signal, { requirePinnedView: true })).rejects.toThrow('MemorySource generation pinned')
+    await expect(coordinator.recall(parent(), { query: 'database choice' }, signal, { requirePinnedView: true })).rejects.toThrow('View pinned to the current turn')
     const child = parent('subagent')
     child.session.header!.parentSession = 'root'
-    await expect(coordinator.recall(child, { query: 'database choice' }, signal, { requirePinnedView: true })).rejects.toThrow('MemorySource generation pinned')
+    await expect(coordinator.recall(child, { query: 'database choice' }, signal, { requirePinnedView: true })).rejects.toThrow('View pinned to the current turn')
     expect(memoryService.search).not.toHaveBeenCalled()
 
-    memoryViews.activeTurn.mockReturnValue({ turnId: 'root:2', viewId: 'view-pinned' })
+    composableTurns.activeTurn.mockReturnValue(pinnedTurn('root:2', 'view-pinned'))
     await coordinator.recall(parent(), { query: 'SQLite' }, signal, { requirePinnedView: true })
     vi.mocked(memoryService.related).mockResolvedValue([
       { id: 'duplicate', content: 'SQLite', memoryBodyId: 'project', memoryBodyName: 'Project' },
@@ -713,7 +805,7 @@ describe('Mnemon memory subagent coordinator', () => {
       getProvider: vi.fn(() => ({ capabilities: { ...capabilities, outputSchema: false } })),
       start,
     } as unknown as HostSubagentsService
-    const coordinator = new MnemonSubagentCoordinator(host, undefined, undefined, resultTools.value)
+    const coordinator = new MnemonSubagentCoordinator(host, runtimeSource(), resultTools.value)
 
     await expect(coordinator.remember(parent(), { content: 'Use SQLite.' }, new AbortController().signal)).resolves.toMatchObject({
       delegated: true,
@@ -742,7 +834,7 @@ describe('Mnemon memory subagent coordinator', () => {
         return { id: 'child-run-1', result: Promise.resolve({ output: [], stopReason: 'completed' }), dispose: vi.fn(async () => {}) }
       }),
     } as unknown as HostSubagentsService
-    const coordinator = new MnemonSubagentCoordinator(host, undefined, undefined, resultTools.value)
+    const coordinator = new MnemonSubagentCoordinator(host, runtimeSource(), resultTools.value)
 
     await expect(coordinator.remember(parent(), { content: 'x' }, new AbortController().signal)).rejects.toThrow('recorded by a different child')
     for (const disposer of resultTools.disposers) expect(disposer).toHaveBeenCalledOnce()
@@ -762,7 +854,7 @@ describe('Mnemon memory subagent coordinator', () => {
         throw new Error('unreachable')
       }),
     } as unknown as HostSubagentsService
-    const coordinator = new MnemonSubagentCoordinator(host, undefined, undefined, resultTools.value)
+    const coordinator = new MnemonSubagentCoordinator(host, runtimeSource(), resultTools.value)
 
     await expect(coordinator.remember(parent(), { content: 'x' }, new AbortController().signal)).rejects.toThrow('result.summary is required')
     for (const disposer of resultTools.disposers) expect(disposer).toHaveBeenCalledOnce()
@@ -778,7 +870,7 @@ describe('Mnemon memory subagent coordinator', () => {
         memoryBodyName: 'Project',
       })
     })
-    const coordinator = new MnemonSubagentCoordinator(host.value, undefined, undefined, resultTools.value)
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(), resultTools.value)
 
     await expect(coordinator.remember(parent(), { content: 'Use SQLite.', memoryBodyId: 'project' }, new AbortController().signal)).resolves.toMatchObject({
       delegated: true,
@@ -801,7 +893,7 @@ describe('Mnemon memory subagent coordinator', () => {
         name: 'run_code', arguments: {}, token: outerToken, agent: child, signal: new AbortController().signal,
       }, { isError: false, value: null })
     })
-    const coordinator = new MnemonSubagentCoordinator(host.value, undefined, undefined, resultTools.value)
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(), resultTools.value)
 
     await expect(coordinator.remember(parent(), { content: 'Use SQLite.' }, new AbortController().signal)).resolves.toMatchObject({
       action: 'added', memoryBodyIds: ['project'],
@@ -819,7 +911,7 @@ describe('Mnemon memory subagent coordinator', () => {
         name: 'run_code', arguments: {}, token: outerToken, agent: child, signal: new AbortController().signal,
       }, { isError: true })
     })
-    const coordinator = new MnemonSubagentCoordinator(host.value, undefined, undefined, resultTools.value)
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(), resultTools.value)
 
     await expect(coordinator.remember(parent(), { content: 'Use SQLite.' }, new AbortController().signal)).rejects.toThrow('completed without recording its result')
   })
@@ -831,7 +923,7 @@ describe('Mnemon memory subagent coordinator', () => {
         id: 'project', name: 'Project', description: 'Project decisions.',
       })
     })
-    const partialCoordinator = new MnemonSubagentCoordinator(partial.value, undefined, undefined, resultTools.value)
+    const partialCoordinator = new MnemonSubagentCoordinator(partial.value, runtimeSource(), resultTools.value)
     await expect(partialCoordinator.remember(parent(), { content: 'Use SQLite.' }, new AbortController().signal)).rejects.toThrow('completed without recording its result')
 
     const failedTools = toolRegistry()
@@ -840,7 +932,7 @@ describe('Mnemon memory subagent coordinator', () => {
         action: 'added', memoryBodyId: 'project', memoryBodyName: 'Project',
       })
     }, 'error')
-    const failedCoordinator = new MnemonSubagentCoordinator(failed.value, undefined, undefined, failedTools.value)
+    const failedCoordinator = new MnemonSubagentCoordinator(failed.value, runtimeSource(), failedTools.value)
     await expect(failedCoordinator.remember(parent(), { content: 'Use SQLite.' }, new AbortController().signal)).rejects.toThrow('stopped with error')
   })
 
@@ -872,7 +964,7 @@ describe('Mnemon memory subagent coordinator', () => {
       confidence: 'high',
     })
     const resultTools = toolRegistry()
-    const coordinator = new MnemonSubagentCoordinator(host.value, undefined, undefined, resultTools.value)
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(), resultTools.value)
     const placementCandidates: MemoryPlacementCandidate[] = [
       {
         id: 'mnemon-native', label: 'Mnemon Native', kind: 'local', configured: true, summary: 'Local exact memory.',
@@ -883,7 +975,9 @@ describe('Mnemon memory subagent coordinator', () => {
         capabilities: { search: true, browse: true, graph: false, entities: false, related: false, remember: true, link: false, forget: false, writeMode: 'async-extracting', deletionMode: 'hard' },
       },
     ]
-    const prepared = prepareMemoryPlacement({ mode: 'automatic', prompt: '团队知识优先团队 Provider。' }, placementCandidates)
+    const prepared: PreparedMemoryPlacement = {
+      prompt: '团队知识优先团队 Provider。', candidates: placementCandidates, appliedRules: [], selectorBrief: 'Choose an eligible local or shared store.',
+    }
 
     await expect(coordinator.placeProvider(parent(), {
       name: '团队发布经验',
@@ -917,7 +1011,7 @@ describe('Mnemon memory subagent coordinator', () => {
       ],
     })
     const memoryService = service()
-    const runtime = { forAgent: vi.fn(() => ({ service: memoryService })) } as never
+    const runtime = runtimeSource(undefined, memoryService)
     const coordinator = createCoordinator(host.value, runtime)
 
     await expect(coordinator.maintainMetadata(parent(), ['product', 'release'], new AbortController().signal)).resolves.toMatchObject({
@@ -993,9 +1087,10 @@ describe('Mnemon memory subagent coordinator', () => {
   it('indexes the LRU document in Mnemon before moving it to cold storage', async () => {
     const workspace = mkdtempSync(join(tmpdir(), 'dsh-mnemon-document-coordinator-'))
     temporaryDirectories.push(workspace)
-    const documents = new DocumentManager(1_000)
-    const controller = documents.forWorkspace(workspace)
-    const old = await controller.mutate({ action: 'create', title: 'Old architecture', content: 'a'.repeat(220) })
+    const documents = await sourceFixture({ dataDir: join(workspace, '.mnemon'), workspace, documentLimitBytes: 1_000 })
+    releases.push(documents.dispose)
+    const controller = managedSession(documents.documents)
+    const old = await controller.mutate<DocumentMutationResult>('mutate', { action: 'create', title: 'Old architecture', content: 'a'.repeat(220) })
     const resultTools = toolRegistry()
     const indexedContent = `Old architecture index. Cold path: .mnemon/documents/archived/${old.document.filename}. Content SHA-256: ${old.document.contentHash}`
     const structured = {
@@ -1015,8 +1110,8 @@ describe('Mnemon memory subagent coordinator', () => {
         action: 'added', id: 'document-index-1', memoryBodyId: 'architecture', memoryBodyName: 'Architecture',
       })
     }, 'completed', structured)
-    const archive = vi.spyOn(controller, 'archive')
-    const coordinator = new MnemonSubagentCoordinator(host.value, undefined, documents, resultTools.value)
+    const archive = vi.spyOn(controller, 'mutate')
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(undefined, service(), controller), resultTools.value)
     const agent = { ...parent(), session: { header: { cwd: workspace }, events: [] } } as HostAgent
 
     const result = await coordinator.document(agent, { action: 'create', title: 'New architecture', content: 'b'.repeat(220) }, new AbortController().signal)
@@ -1024,8 +1119,9 @@ describe('Mnemon memory subagent coordinator', () => {
       action: 'created',
       maintenance: { archivedDocumentIds: [old.document.id], memoryBodyIds: ['architecture'] },
     })
-    expect(controller.get(old.document.id)).toMatchObject({ status: 'archived', archiveSummary: 'Archived with exact cold path.' })
-    expect(archive).toHaveBeenCalledWith(old.document.id, old.document.revision, expect.objectContaining({
+    expect(await controller.read<DocumentView>('document', { id: old.document.id })).toMatchObject({ status: 'archived', archiveSummary: 'Archived with exact cold path.' })
+    expect(archive).toHaveBeenCalledWith('archive', expect.objectContaining({
+      id: old.document.id, documentRevision: old.document.revision,
       memoryBodyIds: ['architecture'],
       lineage: [{
         source: { layerId: 'documents', reference: `document:${old.document.id}:${old.document.revision}`, digest: old.document.contentHash },
@@ -1035,7 +1131,7 @@ describe('Mnemon memory subagent coordinator', () => {
           digest: createHash('sha256').update(indexedContent).digest('hex'),
         },
       }],
-    }))
+    }), expect.any(AbortSignal))
     expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
       persona: expect.stringContaining('cold-document archive worker'),
       toolFilter: { allow: expect.arrayContaining(['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_remember', 'mnemon_memory_body_create']) },
@@ -1049,9 +1145,10 @@ describe('Mnemon memory subagent coordinator', () => {
   it('keeps a document active when its destination receipt omits the exact cold reference', async () => {
     const workspace = mkdtempSync(join(tmpdir(), 'dsh-mnemon-document-lineage-'))
     temporaryDirectories.push(workspace)
-    const documents = new DocumentManager()
-    const controller = documents.forWorkspace(workspace)
-    const created = await controller.mutate({ action: 'create', title: 'Release gates', content: 'Canary before production.' })
+    const documents = await sourceFixture({ dataDir: join(workspace, '.mnemon'), workspace })
+    releases.push(documents.dispose)
+    const controller = managedSession(documents.documents)
+    const created = await controller.mutate<DocumentMutationResult>('mutate', { action: 'create', title: 'Release gates', content: 'Canary before production.' })
     const resultTools = toolRegistry()
     const host = observedSubagents(resultTools, child => {
       emitSuccessfulToolResult(resultTools, child, 'mnemon_remember', { content: 'An unrelated release note.', memoryBodyId: 'release' }, {
@@ -1069,14 +1166,14 @@ describe('Mnemon memory subagent coordinator', () => {
         destinationId: 'release-note-1',
       }],
     })
-    const archive = vi.spyOn(controller, 'archive')
-    const coordinator = new MnemonSubagentCoordinator(host.value, undefined, documents, resultTools.value)
+    const archive = vi.spyOn(controller, 'mutate')
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(undefined, service(), controller), resultTools.value)
     const agent = { ...parent(), session: { header: { cwd: workspace }, events: [] } } as HostAgent
 
     await expect(coordinator.archiveDocument(agent, created.document.id, new AbortController().signal))
       .rejects.toThrow('does not contain the exact cold path and content digest')
     expect(archive).not.toHaveBeenCalled()
-    expect(controller.get(created.document.id).status).toBe('active')
+    expect((await controller.read<DocumentView>('document', { id: created.document.id })).status).toBe('active')
   })
 
   it('uses bounded routing excerpts, then batch-archives exact sources and commits atomically', async () => {
@@ -1091,7 +1188,7 @@ describe('Mnemon memory subagent coordinator', () => {
     const resultTools = toolRegistry()
     const host = subagents(structured)
     const runtime = {
-      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', plan.used, plan.projected, plan.limit)),
+      mutate: vi.fn().mockRejectedValueOnce(capacityError('memory', plan.used, plan.projected, plan.limit)),
       planMaintenance: vi.fn(async () => plan),
       compactAndMutate: vi.fn(async () => ({
         success: true,
@@ -1101,10 +1198,10 @@ describe('Mnemon memory subagent coordinator', () => {
         usage: { used: 120, limit: 10_240 },
         added: plan.pending!.content,
       })),
-    } as unknown as RuntimeMemoryController
+    } as unknown as RuntimeOperations
     const memoryService = service()
     addSecondWritableBody(memoryService)
-    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, undefined, resultTools.value)
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, resultTools.value)
     const request = { action: 'add', target: 'memory', content: plan.pending!.content } as const
 
     await expect(coordinator.runtime(parent(), request, new AbortController().signal)).resolves.toMatchObject({
@@ -1162,15 +1259,17 @@ describe('Mnemon memory subagent coordinator', () => {
   it('completes the dense Chinese capacity reproduction without starting a model worker', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'dsh-mnemon-runtime-integration-'))
     temporaryDirectories.push(directory)
-    const runtime = new RuntimeMemoryController({ effectiveDataDir: () => directory })
+    const sources = await sourceFixture({ dataDir: directory, workspace: directory })
+    releases.push(sources.dispose)
+    const runtime = managedSession(sources.runtime)
     const anchor = `项目锚点 ${'a'.repeat(220)}`
     const archived = `历史约束 ${'中'.repeat(2_550)}`
     const pending = `新增约束 ${'文'.repeat(2_550)}`
-    await runtime.mutate({ action: 'add', target: 'memory', content: anchor })
-    await runtime.mutate({ action: 'add', target: 'memory', content: archived })
+    await runtime.mutate('mutate', { action: 'add', target: 'memory', content: anchor })
+    await runtime.mutate('mutate', { action: 'add', target: 'memory', content: archived })
     const host = subagents(undefined)
     const memoryService = service()
-    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, undefined, toolRegistry().value)
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, toolRegistry().value)
 
     await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: pending }, new AbortController().signal)).resolves.toMatchObject({
       added: pending,
@@ -1180,7 +1279,7 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(memoryService.rememberMany).toHaveBeenCalledOnce()
     expect(vi.mocked(memoryService.rememberMany).mock.calls[0]![0].map(request => request.content)).toEqual([anchor, archived])
     expect(memoryService.remember).not.toHaveBeenCalled()
-    expect(runtime.snapshot().entries.map(entry => entry.content)).toEqual([pending])
+    expect((await runtime.read<RuntimeMemorySnapshot>('snapshot')).entries.map(entry => entry.content)).toEqual([pending])
     expect(coordinator.snapshot()).toMatchObject({ migrations: 1, lastOperation: 'migration', lastRunId: expect.stringMatching(/^host-/) })
   })
 
@@ -1188,10 +1287,10 @@ describe('Mnemon memory subagent coordinator', () => {
     const plan = maintenancePlan()
     const host = subagents(undefined)
     const runtime = {
-      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', plan.used, plan.projected, plan.limit)),
+      mutate: vi.fn().mockRejectedValueOnce(capacityError('memory', plan.used, plan.projected, plan.limit)),
       planMaintenance: vi.fn(async () => plan),
       compactAndMutate: vi.fn(),
-    } as unknown as RuntimeMemoryController
+    } as unknown as RuntimeOperations
     const memoryService = service()
     vi.mocked(memoryService.bodyDirectory).mockReturnValue({
       ...memoryService.bodyDirectory(),
@@ -1199,7 +1298,7 @@ describe('Mnemon memory subagent coordinator', () => {
       total: 0,
       activeCount: 0,
     })
-    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, undefined, toolRegistry().value)
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, toolRegistry().value)
 
     await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: plan.pending!.content }, new AbortController().signal))
       .rejects.toThrow('existing active writable Memory Space')
@@ -1213,22 +1312,19 @@ describe('Mnemon memory subagent coordinator', () => {
     const plan = maintenancePlan()
     const host = subagents(undefined)
     const runtime = {
-      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', plan.used, plan.projected, plan.limit)),
+      mutate: vi.fn().mockRejectedValueOnce(capacityError('memory', plan.used, plan.projected, plan.limit)),
       planMaintenance: vi.fn(async () => plan),
       compactAndMutate: vi.fn(),
-    } as unknown as RuntimeMemoryController
+    } as unknown as RuntimeOperations
     const memoryService = service()
     const source = runtimeSource(runtime, memoryService)
     const graph = source.forAgent(parent())
-    vi.mocked(graph.memoryKernel.assertParticipation).mockImplementation(() => {
-      throw new Error('memory layer memory-spaces allows write only for manual operations')
-    })
+    graph.config.memoryTopology.layers['memory-spaces']!.participation.write = 'manual'
     vi.mocked(source.forAgent).mockReturnValue(graph)
 
-    await expect(new MnemonSubagentCoordinator(host.value, source as never, undefined, toolRegistry().value)
+    await expect(new MnemonSubagentCoordinator(host.value, source as never, toolRegistry().value)
       .runtime(parent(), { action: 'add', target: 'memory', content: plan.pending!.content }, new AbortController().signal))
-      .rejects.toThrow('allows write only for manual operations')
-    expect(graph.memoryKernel.assertParticipation).toHaveBeenCalledWith('memory-spaces', 'write', 'automatic')
+      .rejects.toThrow('does not allow automatic write')
     expect(host.start).not.toHaveBeenCalled()
     expect(memoryService.rememberMany).not.toHaveBeenCalled()
     expect(memoryService.remember).not.toHaveBeenCalled()
@@ -1242,13 +1338,13 @@ describe('Mnemon memory subagent coordinator', () => {
       routes: [{ sourceIndexes: [1], memoryBodyId: 'project' }],
     })
     const runtime = {
-      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', plan.used, plan.projected, plan.limit)),
+      mutate: vi.fn().mockRejectedValueOnce(capacityError('memory', plan.used, plan.projected, plan.limit)),
       planMaintenance: vi.fn(async () => plan),
       compactAndMutate: vi.fn(),
-    } as unknown as RuntimeMemoryController
+    } as unknown as RuntimeOperations
     const memoryService = service()
     addSecondWritableBody(memoryService)
-    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, undefined, toolRegistry().value)
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, toolRegistry().value)
 
     await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: plan.pending!.content }, new AbortController().signal))
       .rejects.toThrow('omitted committed archive sources')
@@ -1261,7 +1357,7 @@ describe('Mnemon memory subagent coordinator', () => {
     const plan = maintenancePlan()
     const host = subagents(undefined, 'max-tokens')
     const runtime = {
-      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', plan.used, plan.projected, plan.limit)),
+      mutate: vi.fn().mockRejectedValueOnce(capacityError('memory', plan.used, plan.projected, plan.limit)),
       planMaintenance: vi.fn(async () => plan),
       compactAndMutate: vi.fn(async () => ({
         success: true,
@@ -1271,10 +1367,10 @@ describe('Mnemon memory subagent coordinator', () => {
         usage: { used: 120, limit: 10_240 },
         added: plan.pending!.content,
       })),
-    } as unknown as RuntimeMemoryController
+    } as unknown as RuntimeOperations
     const memoryService = service()
     addSecondWritableBody(memoryService)
-    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, undefined, toolRegistry().value)
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, toolRegistry().value)
 
     await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: plan.pending!.content }, new AbortController().signal))
       .resolves.toMatchObject({
@@ -1303,13 +1399,13 @@ describe('Mnemon memory subagent coordinator', () => {
       }
     })
     const runtime = {
-      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', plan.used, plan.projected, plan.limit)),
+      mutate: vi.fn().mockRejectedValueOnce(capacityError('memory', plan.used, plan.projected, plan.limit)),
       planMaintenance: vi.fn(async () => plan),
       compactAndMutate: vi.fn(),
-    } as unknown as RuntimeMemoryController
+    } as unknown as RuntimeOperations
     const memoryService = service()
     addSecondWritableBody(memoryService)
-    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, undefined, toolRegistry().value)
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, toolRegistry().value)
 
     await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: plan.pending!.content }, controller.signal))
       .rejects.toMatchObject({ name: 'AbortError' })
@@ -1334,7 +1430,7 @@ describe('Mnemon memory subagent coordinator', () => {
       dispose: vi.fn(async () => {}),
     })
     const runtime = {
-      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', plan.used, plan.projected, plan.limit)),
+      mutate: vi.fn().mockRejectedValueOnce(capacityError('memory', plan.used, plan.projected, plan.limit)),
       planMaintenance: vi.fn(async () => plan),
       compactAndMutate: vi.fn(async () => ({
         success: true,
@@ -1342,10 +1438,10 @@ describe('Mnemon memory subagent coordinator', () => {
         added: plan.pending!.content,
         usage: { used: 20, limit: 10_240 },
       })),
-    } as unknown as RuntimeMemoryController
+    } as unknown as RuntimeOperations
     const memoryService = service()
     addSecondWritableBody(memoryService)
-    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, undefined, toolRegistry().value)
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, toolRegistry().value)
 
     await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: plan.pending!.content }, new AbortController().signal))
       .resolves.toMatchObject({
@@ -1376,10 +1472,10 @@ describe('Mnemon memory subagent coordinator', () => {
       routes: [{ sourceIndexes: [1], memoryBodyId: 'project' }],
     })
     const runtime = {
-      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', plan.used, plan.projected, plan.limit)),
+      mutate: vi.fn().mockRejectedValueOnce(capacityError('memory', plan.used, plan.projected, plan.limit)),
       planMaintenance: vi.fn(async () => plan),
       compactAndMutate: vi.fn(async () => ({ success: true, target: 'memory', added: plan.pending!.content, usage: { used: 20, limit: 10_240 } })),
-    } as unknown as RuntimeMemoryController
+    } as unknown as RuntimeOperations
     const memoryService = service()
     vi.mocked(memoryService.rememberMany).mockResolvedValueOnce([{ action: 'skipped', memoryBodyId: 'project' }])
     vi.mocked(memoryService.search).mockResolvedValueOnce({
@@ -1387,7 +1483,7 @@ describe('Mnemon memory subagent coordinator', () => {
       mode: 'smart',
       results: [{ id: 'sqlite-1', content: sourceEntry.content, memoryBodyId: 'project', memoryBodyName: 'Project' }],
     } as never)
-    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, undefined, toolRegistry().value)
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime, memoryService) as never, toolRegistry().value)
 
     await expect(coordinator.runtime(parent(), { action: 'add', target: 'memory', content: plan.pending!.content }, new AbortController().signal))
       .resolves.toMatchObject({ maintenance: { kind: 'mnemon-archive', memoryBodyIds: ['project'] } })
@@ -1413,25 +1509,25 @@ describe('Mnemon memory subagent coordinator', () => {
       routes: [{ sourceIndexes: [1], memoryBodyId: 'project' }],
     }
     const staleRuntime = {
-      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', plan.used, plan.projected, plan.limit)),
+      mutate: vi.fn().mockRejectedValueOnce(capacityError('memory', plan.used, plan.projected, plan.limit)),
       planMaintenance: vi.fn().mockResolvedValueOnce(plan).mockResolvedValueOnce({ ...plan, revision: 'concurrent-revision' }),
       compactAndMutate: vi.fn(),
-    } as unknown as RuntimeMemoryController
+    } as unknown as RuntimeOperations
     const staleService = service()
-    await expect(new MnemonSubagentCoordinator(subagents(structured).value, runtimeSource(staleRuntime, staleService) as never, undefined, toolRegistry().value)
+    await expect(new MnemonSubagentCoordinator(subagents(structured).value, runtimeSource(staleRuntime, staleService) as never, toolRegistry().value)
       .runtime(parent(), { action: 'add', target: 'memory', content: plan.pending!.content }, new AbortController().signal))
       .rejects.toThrow('no archive writes were attempted')
     expect(staleService.rememberMany).not.toHaveBeenCalled()
     expect(staleService.remember).not.toHaveBeenCalled()
 
     const queuedRuntime = {
-      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('memory', plan.used, plan.projected, plan.limit)),
+      mutate: vi.fn().mockRejectedValueOnce(capacityError('memory', plan.used, plan.projected, plan.limit)),
       planMaintenance: vi.fn(async () => plan),
       compactAndMutate: vi.fn(),
-    } as unknown as RuntimeMemoryController
+    } as unknown as RuntimeOperations
     const queuedService = service()
     vi.mocked(queuedService.rememberMany).mockResolvedValueOnce([{ action: 'queued', status: 'pending', taskId: 'task-slow', memoryBodyId: 'project' }])
-    await expect(new MnemonSubagentCoordinator(subagents(structured).value, runtimeSource(queuedRuntime, queuedService) as never, undefined, toolRegistry().value)
+    await expect(new MnemonSubagentCoordinator(subagents(structured).value, runtimeSource(queuedRuntime, queuedService) as never, toolRegistry().value)
       .runtime(parent(), { action: 'add', target: 'memory', content: plan.pending!.content }, new AbortController().signal))
       .rejects.toThrow('did not commit synchronously')
     expect(queuedRuntime.compactAndMutate).not.toHaveBeenCalled()
@@ -1454,10 +1550,10 @@ describe('Mnemon memory subagent coordinator', () => {
     plan.revision = 'user-revision'
     plan.pending = { content: 'User prefers direct answers.', importance: 'normal' }
     const runtime = {
-      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('user', plan.used, plan.projected, plan.limit)),
+      mutate: vi.fn().mockRejectedValueOnce(capacityError('user', plan.used, plan.projected, plan.limit)),
       planMaintenance: vi.fn(async () => plan),
       compactAndMutate: vi.fn(async () => ({ success: true, message: 'Entry added.', target: 'user', entryCount: 2, usage: { used: 180, limit: 4_096 }, added: plan.pending!.content })),
-    } as unknown as RuntimeMemoryController
+    } as unknown as RuntimeOperations
     const coordinator = createCoordinator(host.value, runtime)
 
     await expect(coordinator.runtime(parent(), { action: 'add', target: 'user', content: 'User prefers direct answers.' }, new AbortController().signal)).resolves.toMatchObject({
@@ -1484,6 +1580,7 @@ describe('Mnemon memory subagent coordinator', () => {
       { action: 'add', target: 'user', content: 'User prefers direct answers.' },
       [{ content: 'User prefers concise Chinese release notes with blockers first.', importance: 'critical' }],
       expect.any(Number),
+      undefined,
     )
     expect(runtime.mutate).toHaveBeenCalledOnce()
     expect(coordinator.snapshot()).toMatchObject({ compactions: 1, migrations: 0, lastOperation: 'compaction' })
@@ -1501,10 +1598,10 @@ describe('Mnemon memory subagent coordinator', () => {
     ])
     plan.pending = { content: 'Pending preference.', importance: 'normal' }
     const runtime = {
-      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('user', plan.used, plan.projected, plan.limit)),
+      mutate: vi.fn().mockRejectedValueOnce(capacityError('user', plan.used, plan.projected, plan.limit)),
       planMaintenance: vi.fn(async () => plan),
       compactAndMutate: vi.fn(),
-    } as unknown as RuntimeMemoryController
+    } as unknown as RuntimeOperations
     const coordinator = createCoordinator(host.value, runtime)
 
     await expect(coordinator.runtime(parent(), { action: 'add', target: 'user', content: 'Pending preference.' }, new AbortController().signal)).rejects.toThrow('omitted committed entries')
@@ -1535,13 +1632,7 @@ describe('Mnemon memory subagent coordinator', () => {
   it('pins a fixed task Agent model onto the fork-based idle review delegation', async () => {
     const host = subagents({ summary: 'No mutation needed.', action: 'skipped', memoryBodyIds: [] }, 'completed', ['spawn', 'fork'])
     const resultTools = toolRegistry()
-    const coordinator = new MnemonSubagentCoordinator(
-      host.value,
-      undefined,
-      undefined,
-      resultTools.value,
-      () => ({ provider: 'pinned-provider', model: 'pinned-model' }),
-    )
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(), resultTools.value, () => ({ provider: 'pinned-provider', model: 'pinned-model' }))
 
     await expect(coordinator.review(parent(), new AbortController().signal)).resolves.toMatchObject({
       delegated: true,
@@ -1557,13 +1648,7 @@ describe('Mnemon memory subagent coordinator', () => {
   it('omits provider/model from agentOptions when the task Agent model is inherited', async () => {
     const host = subagents({ summary: 'No mutation needed.', action: 'skipped', memoryBodyIds: [] }, 'completed', ['spawn', 'fork'])
     const resultTools = toolRegistry()
-    const coordinator = new MnemonSubagentCoordinator(
-      host.value,
-      undefined,
-      undefined,
-      resultTools.value,
-      () => undefined,
-    )
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(), resultTools.value, () => undefined)
 
     await expect(coordinator.review(parent(), new AbortController().signal)).resolves.toMatchObject({
       delegated: true,
@@ -1589,19 +1674,12 @@ describe('Mnemon memory subagent coordinator', () => {
     ])
     plan.pending = { content: 'User prefers direct answers.', importance: 'normal' }
     const runtime = {
-      mutate: vi.fn().mockRejectedValueOnce(new RuntimeMemoryCapacityError('user', plan.used, plan.projected, plan.limit)),
+      mutate: vi.fn().mockRejectedValueOnce(capacityError('user', plan.used, plan.projected, plan.limit)),
       planMaintenance: vi.fn(async () => plan),
       compactAndMutate: vi.fn(async () => ({ success: true, message: 'Entry added.', target: 'user', entryCount: 2, usage: { used: 180, limit: 4_096 }, added: plan.pending!.content })),
-    } as unknown as RuntimeMemoryController
+    } as unknown as RuntimeOperations
     const resultTools = toolRegistry()
-    const coordinator = new MnemonSubagentCoordinator(
-      host.value,
-      runtime,
-      undefined,
-      resultTools.value,
-      () => ({ provider: 'pinned-provider', model: 'pinned-model' }),
-      () => 32_768,
-    )
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(runtime), resultTools.value, () => ({ provider: 'pinned-provider', model: 'pinned-model' }), () => 32_768)
 
     await expect(coordinator.runtime(parent(), { action: 'add', target: 'user', content: 'User prefers direct answers.' }, new AbortController().signal)).resolves.toMatchObject({
       maintenance: { kind: 'local-compaction' },
@@ -1613,197 +1691,64 @@ describe('Mnemon memory subagent coordinator', () => {
 })
 
 describe('Mnemon root/child tool split', () => {
-  it('routes both root and child Recall through Host-pinned Source authority', async () => {
+  it('routes root/child Recall through the coordinator and child mutations through offered Source actions', async () => {
+    const f = await compositionFixture()
+    releases.push(f.dispose)
     const registered: ToolDefinition[] = []
-    const memoryService = service()
-    const coordinator = {
-      recall: vi.fn(async () => ({ query: 'x', mode: 'smart', results: [] })),
-      related: vi.fn(async () => ({ query: 'related:m1', mode: 'related', results: [{ id: 'm2', content: 'Related fact', memoryBodyId: 'project', memoryBodyName: '项目记忆体' }] })),
-      runtime: vi.fn(async () => ({ success: true, message: 'Entry added.', target: 'user', entryCount: 1, usage: { used: 20, limit: 4096 } })),
-    } as unknown as MnemonSubagentCoordinator
-    const runtimeMemory = { mutate: vi.fn() } as unknown as RuntimeMemoryController
-    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as unknown as HostContextShape, memoryService, coordinator, runtimeMemory, { forAgent: vi.fn() } as never)
-    const recall = registered.find(tool => tool.name === 'mnemon_recall')!
-    const schemas = registered.flatMap(tool => [tool.parameters, tool.output?.schema]).filter(Boolean)
-    for (const schema of schemas) {
-      const serialized = JSON.stringify(schema)
-      expect(serialized).not.toMatch(/"(?:maxItems|minItems|minimum|maximum)":/)
-    }
+    const root = parent()
+    root.session.header!.cwd = f.workspace
+    const child = parent('subagent')
+    child.session.header!.cwd = f.workspace
+    child.session.header!.parentSession = 'root'
+    const scope = agentScope(root, f.config)
+    await f.graph.composableTurns.beginTurn('root:tools', scope, 'test')
+    const coordinator = { recall: vi.fn(async () => ({ results: [] })), related: vi.fn(async () => ({ results: [] })), runtime: vi.fn() } as unknown as MnemonSubagentCoordinator
+    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as unknown as HostContextShape, f.live, coordinator)
     const signal = new AbortController().signal
-
-    const hotMemory = registered.find(tool => tool.name === 'mnemon_runtime_memory')!
-    await hotMemory.execute({ action: 'add', target: 'user', content: 'Prefers concise replies', importance: 'critical' } as never, { agent: parent(), signal })
-    expect(coordinator.runtime).toHaveBeenCalledWith(parent(), { action: 'add', target: 'user', content: 'Prefers concise replies', importance: 'critical' }, signal)
-    await hotMemory.execute({ action: 'add', target: 'memory', content: 'Child fact' } as never, { agent: parent('subagent'), signal })
-    expect(runtimeMemory.mutate).toHaveBeenCalledWith({ action: 'add', target: 'memory', content: 'Child fact' })
-
-    await recall.execute({ query: 'root query' } as never, { agent: parent(), signal })
-    expect(coordinator.recall).toHaveBeenNthCalledWith(1, parent(), { query: 'root query' }, signal, { requirePinnedView: true })
-    expect(memoryService.search).not.toHaveBeenCalled()
-
-    await recall.execute({ query: 'child query', memoryBodyIds: ['project'] } as never, { agent: parent('subagent'), signal })
-    expect(coordinator.recall).toHaveBeenNthCalledWith(2, parent('subagent'), { query: 'child query', memoryBodyIds: ['project'] }, signal, { requirePinnedView: true })
-    expect(memoryService.search).not.toHaveBeenCalled()
-
-    const related = registered.find(tool => tool.name === 'mnemon_related')!
-    await expect(related.execute({ id: 'm1', depth: 2, memoryBodyId: 'project' } as never, { agent: parent('subagent'), signal })).resolves.toEqual({
-      query: 'related:m1',
-      mode: 'related',
-      results: [{ id: 'm2', content: 'Related fact', memoryBodyId: 'project', memoryBodyName: '项目记忆体' }],
-    })
-    expect(coordinator.related).toHaveBeenCalledWith(parent('subagent'), 'm1', 'project', signal, { depth: 2, requirePinnedView: true })
+    const hot = registered.find(tool => tool.name === 'mnemon_runtime_memory')!
+    await hot.execute({ action: 'add', target: 'user', content: 'Concise' } as never, { agent: root, signal })
+    expect(coordinator.runtime).toHaveBeenCalledWith(root, { action: 'add', target: 'user', content: 'Concise' }, signal)
+    await hot.execute({ action: 'add', target: 'memory', content: 'Child fact' } as never, { agent: child, signal })
+    expect(await f.graph.source('runtime').read('snapshot')).toMatchObject({ entries: [expect.objectContaining({ content: 'Child fact' })] })
+    const recall = registered.find(tool => tool.name === 'mnemon_recall')!
+    await recall.execute({ query: 'root query' } as never, { agent: root, signal })
+    await recall.execute({ query: 'child query', memoryBodyIds: ['project'] } as never, { agent: child, signal })
+    expect(coordinator.recall).toHaveBeenNthCalledWith(1, root, { query: 'root query' }, signal, { requirePinnedView: true })
+    expect(coordinator.recall).toHaveBeenNthCalledWith(2, child, { query: 'child query', memoryBodyIds: ['project'] }, signal, { requirePinnedView: true })
+    await registered.find(tool => tool.name === 'mnemon_related')!.execute({ id: 'm1', depth: 2, memoryBodyId: 'project' } as never, { agent: child, signal })
+    expect(coordinator.related).toHaveBeenCalledWith(child, 'm1', 'project', signal, { depth: 2, requirePinnedView: true })
     expect(registered.some(tool => tool.name === 'mnemon_memory_zoom')).toBe(false)
     expect(JSON.stringify(recall.parameters)).not.toMatch(/viewId|viewNodeId|viewCapability/u)
-    expect(JSON.stringify(recall.parameters)).toContain('do not list the catalog only to populate it')
     expect(registered.find(tool => tool.name === 'mnemon_memory_bodies')!.description).toContain('Never call it to route Recall')
-    expect(hotMemory.description).toContain('answering a read question must stay read-only')
-    expect(hotMemory.description).toContain('unless the user explicitly asks to save that exact evidence')
+    f.graph.composableTurns.endTurn('root:tools')
   })
 
-  it('uses the child pin after the parent turn ended without consulting owner-latest state', async () => {
-    const host = subagents(undefined)
-    const memoryService = service()
-    vi.mocked(memoryService.search).mockResolvedValueOnce({
-      query: 'stale parent query',
-      mode: 'smart',
-      results: [{ id: 'stale-1', content: 'Stale fact', relevanceTier: 'high', memoryBodyId: 'project' }],
-    } as never)
-    const childPin = { turnId: 'child:1', viewId: 'view-delegated' }
-    const memoryViews = {
-      activeTurn: vi.fn((agentId: string) => agentId === 'child' ? childPin : undefined),
-      lastViewForAgent: vi.fn(() => ({ id: 'view-stale', createdAt: '2026-08-29T00:00:00.000Z' })),
-      sourceState: vi.fn(() => ({ memoryBodyIds: ['project'] })),
-    }
-    const source = { forAgent: vi.fn(() => ({ service: memoryService, runtimeMemory: {}, documents: {}, memoryViews })) }
-    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, undefined, toolRegistry().value)
-    const child = parent('subagent')
-    child.session.header!.parentSession = 'root'
-
-    const result = await coordinator.recall(child, { query: 'stale parent query' }, new AbortController().signal, { requirePinnedView: true })
-
-    expect(memoryViews.activeTurn).toHaveBeenCalledWith('child')
-    expect(memoryViews.lastViewForAgent).not.toHaveBeenCalled()
-    expect(memoryService.search).toHaveBeenCalledWith(
-      expect.objectContaining({ query: 'stale parent query', memoryBodyIds: ['project'] }),
-      expect.anything(),
-    )
-    expect(result.results).toEqual([{ id: 'stale-1', content: 'Stale fact', memoryBodyId: 'project' }])
-  })
-
-  it('rejects an unpinned child even when its parent has a current and latest View', async () => {
-    const host = subagents(undefined)
-    const memoryService = service()
-    const rootPin = { turnId: 'root:2', viewId: 'view-later' }
-    const memoryViews = {
-      activeTurn: vi.fn((agentId: string) => agentId === 'root' ? rootPin : undefined),
-      lastViewForAgent: vi.fn(() => ({ id: 'view-later' })),
-      sourceState: vi.fn(() => ({ memoryBodyIds: ['project'] })),
-    }
-    const source = { forAgent: vi.fn(() => ({ service: memoryService, runtimeMemory: {}, documents: {}, memoryViews })) }
-    const coordinator = new MnemonSubagentCoordinator(host.value, source as never, undefined, toolRegistry().value)
-    const child = parent('subagent')
-    child.session.header!.parentSession = 'root'
-
-    await expect(
-      coordinator.recall(child, { query: 'orphan query' }, new AbortController().signal, { requirePinnedView: true }),
-    ).rejects.toThrow('Recall requires the MemorySource generation pinned to the current turn')
-    expect(memoryViews.activeTurn).toHaveBeenCalledWith('child')
-    expect(memoryViews.lastViewForAgent).not.toHaveBeenCalled()
-    expect(memoryService.search).not.toHaveBeenCalled()
-  })
-
-  it('projects status as a bounded health summary without control-plane paths or detailed statistics', async () => {
+  it('returns Source-owned bounded health evidence without control-plane paths', async () => {
+    const f = await compositionFixture()
+    releases.push(f.dispose)
+    await f.memorySpace()
+    const root = parent()
+    root.session.header!.cwd = f.workspace
+    await f.graph.composableTurns.beginTurn('root:health', agentScope(root, f.config), 'test')
     const registered: ToolDefinition[] = []
-    const memoryService = service()
-    vi.mocked(memoryService.status).mockResolvedValue({
-      healthy: true,
-      version: '0.3.0',
-      dshMnemonVersion: '0.3.0',
-      cliPath: '/private/bin/mnemon',
-      commandFound: true,
-      dataDir: '/private/mnemon-data',
-      store: 'project',
-      mnemonDefaultStore: 'project',
-      dshActiveStores: ['project'],
-      writeEnabled: true,
-      timeoutMs: 30_000,
-      defaultRecallLimit: 20,
-      recallQuality: {},
-      memoryBodyDirectory: '/private/mnemon-data/memory-bodies',
-      memoryBodies: [
-        { active: true, providerEnabled: true, healthy: true },
-        { active: true, providerEnabled: true, healthy: false, error: 'connection refused' },
-        { active: false, providerEnabled: false, healthy: false },
-      ],
-      providerServices: [{
-        providerId: 'openviking', label: 'OpenViking', enabled: true, configured: true,
-        status: 'unhealthy', memoryBodyCount: 2, activeMemoryBodyCount: 1, error: 'connection refused',
-      }],
-      stats: {
-        totalInsights: 10, deletedInsights: 1, edgeCount: 4, oplogCount: 12, dbSizeBytes: 4096,
-        byCategory: { decision: 9 }, topEntities: [{ entity: 'secret-project', count: 8 }], dbPath: '/private/project.db',
-      },
-    } as never)
+    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as unknown as HostContextShape, f.live, {} as MnemonSubagentCoordinator)
+    const status = await registered.find(tool => tool.name === 'mnemon_status')!.execute({} as never, { agent: root, signal: new AbortController().signal })
+    expect(status).toMatchObject({ items: [expect.objectContaining({ text: expect.stringContaining('memorySpaces') })] })
+    expect(JSON.stringify(status)).not.toMatch(/cliPath|dataDir|memoryBodyDirectory|dbPath|byCategory|topEntities|apiKey/)
+    expect(JSON.stringify(status).length).toBeLessThan(5_000)
+    f.graph.composableTurns.endTurn('root:health')
+  })
+
+  it('enforces configured automatic participation without a management escape in model tools', async () => {
+    const f = await compositionFixture({ memoryTopology: { layers: { runtime: { participation: { write: 'manual' } }, 'memory-spaces': { enabled: false } } } })
+    releases.push(f.dispose)
+    const registered: ToolDefinition[] = []
     const coordinator = { recall: vi.fn(), runtime: vi.fn() } as unknown as MnemonSubagentCoordinator
-    registerTools(
-      { tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as unknown as HostContextShape,
-      memoryService,
-      coordinator,
-      { mutate: vi.fn() } as unknown as RuntimeMemoryController,
-      {} as DocumentManager,
-    )
-
-    const status = await registered.find(tool => tool.name === 'mnemon_status')!.execute(
-      {} as never,
-      { agent: parent(), signal: new AbortController().signal },
-    ) as Record<string, unknown>
-
-    expect(status).toMatchObject({
-      healthy: false,
-      commandFound: true,
-      writeEnabled: true,
-      memorySpaces: { total: 3, active: 2, healthy: 1, unhealthy: 1, providerDisabled: 1 },
-      aggregate: { totalInsights: 10, edgeCount: 4, dbSizeBytes: 4096 },
-    })
-    expect(JSON.stringify(status)).not.toMatch(/cliPath|dataDir|memoryBodyDirectory|dbPath|byCategory|topEntities|secret-project/)
-    expect(JSON.stringify(status).length).toBeLessThan(2_000)
-  })
-
-  it('enforces automatic topology participation without hiding the management catalog', async () => {
-    const registered: ToolDefinition[] = []
-    const memoryService = {
-      ...service(),
-      config: resolveConfig({
-        memoryTopology: {
-          layers: {
-            runtime: { participation: { write: 'manual' } },
-            'memory-spaces': { enabled: false },
-          },
-        },
-      }),
-    } as MnemonService
-    const coordinator = {
-      recall: vi.fn(),
-      runtime: vi.fn(),
-    } as unknown as MnemonSubagentCoordinator
-    const runtimeMemory = { mutate: vi.fn() } as unknown as RuntimeMemoryController
-    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as unknown as HostContextShape, memoryService, coordinator, runtimeMemory, { forAgent: vi.fn() } as never)
+    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as unknown as HostContextShape, f.live, coordinator)
     const signal = new AbortController().signal
-
-    await expect(registered.find(tool => tool.name === 'mnemon_recall')!.execute(
-      { query: 'blocked' } as never,
-      { agent: parent(), signal },
-    )).rejects.toThrow('memory layer memory-spaces is disabled')
-    expect(() => registered.find(tool => tool.name === 'mnemon_runtime_memory')!.execute(
-      { action: 'add', target: 'memory', content: 'blocked' } as never,
-      { agent: parent(), signal },
-    )).toThrow('allows write only for manual operations')
-    const catalog = await registered.find(tool => tool.name === 'mnemon_memory_bodies')!.execute(
-      {} as never,
-      { agent: parent(), signal },
-    ) as { total: number; items: unknown[] }
-    expect(catalog).toMatchObject({ total: 1, omittedCount: 0 })
-    expect(JSON.stringify(catalog)).not.toMatch(/dbPath|directory|settings|stats|apiKey/)
+    await expect(registered.find(tool => tool.name === 'mnemon_recall')!.execute({ query: 'blocked' } as never, { agent: parent(), signal })).rejects.toThrow('does not allow automatic recall')
+    expect(() => registered.find(tool => tool.name === 'mnemon_runtime_memory')!.execute({ action: 'add', target: 'memory', content: 'blocked' } as never, { agent: parent(), signal })).toThrow('does not allow automatic write')
+    await expect(registered.find(tool => tool.name === 'mnemon_memory_bodies')!.execute({} as never, { agent: parent(), signal })).rejects.toThrow('does not allow automatic maintenance')
     expect(coordinator.recall).not.toHaveBeenCalled()
     expect(coordinator.runtime).not.toHaveBeenCalled()
   })

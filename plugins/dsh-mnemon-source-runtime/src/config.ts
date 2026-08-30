@@ -1,7 +1,6 @@
 import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import z from 'schemastery'
-import type { MemoryCapability, MemoryJsonValue } from 'dsh-mnemon/contracts'
 
 import { DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES, DEFAULT_RUNTIME_USER_LIMIT_BYTES, MAX_RUNTIME_MEMORY_LIMIT_BYTES } from './defaults.ts'
 export { DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES, DEFAULT_RUNTIME_USER_LIMIT_BYTES, MAX_RUNTIME_MEMORY_LIMIT_BYTES } from './defaults.ts'
@@ -21,10 +20,6 @@ export const Config: z<Config> = z.object({
 
 export interface RuntimeMemoryStorage { effectiveDataDir(): string }
 
-/** Optional adapter for pre-composable controller callers; not a Host service. */
-export type AuthorityCommitRecorder = (operation: {
-  layerId: string; capability: MemoryCapability; operation: string; checkpoint?: MemoryJsonValue
-}) => unknown
 
 export function runtimeSourceConfig(value: Config, instanceKey: string): Required<Config> {
   const config = Config(value)

@@ -18,23 +18,8 @@ const CSS_VIRTUAL_SUFFIX = '.mjs'
 const host: UserConfig = {
   name: PLUGIN_ID,
   entry: {
-    index: 'src/index.ts',
-    core: 'src/core.ts',
-    'source-runtime': 'src/plugins/source-runtime.ts',
-    'source-documents': 'src/plugins/source-documents.ts',
-    'source-memory-spaces': 'src/plugins/source-memory-spaces.ts',
-    'source-memory-spaces/provider-sdk': 'src/memory-spaces/provider-sdk.ts',
-    'view-strategy-default-three-tier': 'src/plugins/strategy-default-three-tier.ts',
-    contracts: 'packages/contracts/src/index.ts',
-    kernel: 'packages/kernel/src/index.ts',
-    'extension-sdk': 'packages/extension-sdk/src/index.ts',
-    testing: 'src/sdk/testing.ts',
-    'provider-sdk': 'src/provider-sdk.ts',
-    'strategy-sdk': 'packages/strategy-sdk/src/index.ts',
-    'strategy-default-three-tier': 'packages/strategy-default-three-tier/src/index.ts',
-    'layers/runtime': 'packages/layer-runtime/src/index.ts',
-    'layers/documents': 'packages/layer-documents/src/index.ts',
-    'layers/memory-spaces': 'packages/layer-memory-spaces/src/index.ts',
+    index: 'src/index.ts', core: 'src/core/plugin.ts', contracts: 'src/core/contracts/index.ts',
+    'extension-sdk': 'src/sdk/index.ts', testing: 'src/sdk/testing.ts',
   },
   outDir: 'lib',
   format: ['esm'],
@@ -43,9 +28,7 @@ const host: UserConfig = {
   fixedExtension: false,
   dts: false,
   clean: true,
-  // The default distribution carries its explicit first-party composition.
-  // Independent plugin builds leave these public imports external instead.
-  deps: { neverBundle: true, alwaysBundle: [/^dsh-mnemon-(?:source|provider|strategy)-/] },
+  deps: { neverBundle: true },
 }
 
 const client: UserConfig = {
@@ -62,8 +45,7 @@ const client: UserConfig = {
   clean: false,
   deps: {
     neverBundle: CLIENT_EXTERNALS,
-    alwaysBundle: ['markdown-to-jsx', /^dsh-mnemon-source-.*\/client$/],
-    onlyBundle: ['markdown-to-jsx'],
+    onlyBundle: [],
   },
   define: {
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production'),
@@ -71,8 +53,6 @@ const client: UserConfig = {
   plugins: [{
     name: 'dsh-mnemon-css-modules-inline',
     resolveId(source: string, importer: string | undefined) {
-      // First-party clients use the same public import as an external plugin.
-      // Only this aggregate build links it to the shared browser helpers.
       if (source === 'dsh-mnemon/client') return resolvePath(PROJECT_ROOT, 'src/client/extension-sdk.ts')
       if (!source.endsWith('.module.css')) return null
       const absolute = importer === undefined ? source : resolveAssetPath(source, importer)

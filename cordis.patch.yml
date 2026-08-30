@@ -3,12 +3,9 @@
 # variables for one-field overrides such as cliPath.
 - insert:
     - id: mnemon
-      # The root package is the default Host adapter, Core provider, and Web
-      # discovery anchor. Its one-Entry shortcut is disabled because the four
-      # explicit contribution Entries below own the bundled defaults.
+      # Core/Host and default settings. Sources own their independent Entries.
       name: dsh-mnemon
       config:
-        bundledContributions: false
         routingGuidance: true
         lifecycleEnabled: true
         recallMode: guided
@@ -31,13 +28,13 @@
           maxMediumResults: 4
           maxUnknownResults: 2
     - id: mnemon-source-runtime
-      name: dsh-mnemon/source-runtime
+      name: dsh-mnemon-source-runtime
     - id: mnemon-source-documents
-      name: dsh-mnemon/source-documents
+      name: dsh-mnemon-source-documents
     - id: mnemon-source-memory-spaces
-      name: dsh-mnemon/source-memory-spaces
+      name: dsh-mnemon-source-memory-spaces
       config:
-        # Compatibility starter: every currently visible Provider is an
+        # Every default Provider is an
         # explicit child. A custom parent composition may choose a subset.
         providers:
           - use: dsh-mnemon-provider-mnemon-native
@@ -59,4 +56,4 @@
           - use: dsh-mnemon-provider-supermemory
             instanceId: supermemory
     - id: mnemon-strategy-default-three-tier
-      name: dsh-mnemon/view-strategy-default-three-tier
+      name: dsh-mnemon-strategy-default-three-tier

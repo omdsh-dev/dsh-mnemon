@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ClientSettingsScope, Config } from '../shared/contracts.ts'
-import type { MnemonClientContext } from './dsh-compat.ts'
+import type { ClientSettingsScope, Config } from "../host/protocol.ts"
+import type { MnemonClientContext } from "./dsh-context.ts"
 import type { MnemonTranslate } from './locales.ts'
 import { MnemonView, type MnemonWorkspaceSelection } from './MnemonView.tsx'
 import type { MemorySourcePageDirectory } from './source-pages.tsx'
 import { mountMnemonSidebarEntry } from './sidebar-entry.ts'
 import { MnemonWorkspaceController } from './workspace-controller.ts'
+import css from './MnemonWorkspace.module.css'
 
-/** Retained for consumers that used the old selector; the duplicate panel no longer exists. */
+/** The single visible Mnemon workspace, in either DSH presentation seat. */
 export const MNEMON_VIEW_SELECTOR = '[data-mnemon-surface]'
 
 function normalizePath(value: string): string {
@@ -58,7 +59,7 @@ export interface MnemonWorkspaceHostProps extends PropsRenderSlots<'mnemon.sourc
   sessionId?: string
 }
 
-/** Canonical DSH conversation.view host; it alone receives child render authority. */
+/** Shared workspace body; its DSH registration owns Source child-render authority. */
 export function MnemonWorkspaceHost(props: MnemonWorkspaceHostProps): JSX.Element {
   const subscribeLocale = useCallback((listener: () => void) => props.localeRuntime.subscribe(listener), [props.localeRuntime])
   const getLocale = useCallback(() => props.localeRuntime.getSnapshot(), [props.localeRuntime])
@@ -108,23 +109,47 @@ export function MnemonWorkspaceHost(props: MnemonWorkspaceHostProps): JSX.Elemen
   />
 }
 
-/** Core-owned sidebar row; it only opens the canonical conversation view. */
-export function mountMnemonWorkspace(
+/** Sidebar presentation in DSH's additive shell.overlay, also without a session. */
+export function MnemonSidebarWorkspaceHost(props: MnemonWorkspaceHostProps & { controller: MnemonWorkspaceController }): JSX.Element | null {
+  const state = useSyncExternalStore(props.controller.subscribe, props.controller.getSnapshot, props.controller.getSnapshot)
+  const [bounds, setBounds] = useState<{ left: number; top: number; width: number; height: number }>()
+  useEffect(() => {
+    if (!state.open) return
+    const column = document.querySelector<HTMLElement>('[data-pane="conversation"], [class*="centerCol"], .dshDesktopConversationSurface')
+    if (column === null) return
+    const update = (): void => {
+      const { left, top, width, height } = column.getBoundingClientRect()
+      setBounds({ left, top, width, height })
+    }
+    update()
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(update)
+    observer?.observe(column)
+    window.addEventListener('resize', update)
+    const wasInert = column.inert
+    column.inert = true
+    const escape = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape' && !event.defaultPrevented && document.querySelector('[role="dialog"]') === null) props.controller.close()
+    }
+    window.addEventListener('keydown', escape)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', update)
+      window.removeEventListener('keydown', escape)
+      column.inert = wasInert
+    }
+  }, [state.open, props.controller])
+  if (!state.open || bounds === undefined) return null
+  return <section className={css.workspacePanel} style={bounds} aria-label={props.t('tab.label')}>
+    <MnemonWorkspaceHost {...props} />
+  </section>
+}
+
+/** Core-owned sidebar row; presentation state is shared with its DSH seat. */
+export function mountMnemonSidebarLauncher(
   ctx: MnemonClientContext,
-  _settings: ClientSettingsScope<Config>,
   t: MnemonTranslate,
-  navigation: MnemonWorkspaceNavigation = createMnemonWorkspaceNavigation(t),
+  controller: MnemonWorkspaceController,
 ): () => void {
   if (typeof document === 'undefined' || typeof window === 'undefined') return () => {}
-  const controller = new MnemonWorkspaceController()
-  const disposeEntry = mountMnemonSidebarEntry(controller, t, listener => ctx.locale.subscribe(listener))
-  const unsubscribe = controller.subscribe(() => {
-    if (!controller.getSnapshot().open) return
-    navigation.open()
-    controller.close()
-  })
-  return () => {
-    unsubscribe()
-    disposeEntry()
-  }
+  return mountMnemonSidebarEntry(controller, t, listener => ctx.locale.subscribe(listener))
 }

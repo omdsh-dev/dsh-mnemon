@@ -1,10 +1,14 @@
-import type { ReactNode } from 'react'
 import type { MemoryJsonValue, MemorySourceManagementInstance, MemorySourceManagementResult } from 'dsh-mnemon/contracts'
 
 /** Instance- and scope-bound capability; never the Host's raw transport. */
 export interface MnemonSourceManagementClient {
   readonly sourceInstanceKey: string
   readonly revision: string
+  /** Optional workflows advertised and authorized by the Host for this exact instance. */
+  readonly assistance?: {
+    readonly operations: readonly string[]
+    execute(operation: string, input: MemoryJsonValue, options: { expectedRevision: string; confirmed: boolean }): Promise<MemorySourceManagementResult>
+  }
   read(operation: string, input?: MemoryJsonValue): Promise<MemorySourceManagementResult>
   mutate(operation: string, input: MemoryJsonValue, options: { expectedRevision?: string; confirmed: true }): Promise<MemorySourceManagementResult>
 }
@@ -25,6 +29,9 @@ export interface MemorySourcePageProps {
   sessionId?: string
   workspaceId?: string
   locale: string
-  /** Compatibility seat used by the default distribution, not another UI runtime. */
-  children?: ReactNode
+  /** Opaque navigation data owned by this Source page. */
+  navigationInput?: MemoryJsonValue
+  onRefresh?(): void
+  /** Optional, Source-bound product preferences; no raw settings service or secrets. */
+  preferences?: { value: MemoryJsonValue; writable: boolean; replace(value: MemoryJsonValue): Promise<void> }
 }

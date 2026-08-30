@@ -9,7 +9,7 @@ import ts from 'typescript'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const output = join(root, 'lib', 'types')
 const config = JSON.parse(readFileSync(join(root, 'tsconfig.json'), 'utf8'))
-const aliases = new Map(Object.entries(config.compilerOptions.paths).map(([specifier, paths]) => {
+const aliases = new Map(Object.entries(config.compilerOptions.paths).filter(([specifier]) => specifier.startsWith('dsh-mnemon/')).map(([specifier, paths]) => {
   if (specifier.includes('*') || paths.length !== 1) throw new Error(`Expected one exact declaration alias: ${specifier}`)
   const target = resolve(output, paths[0].replace(/\.[cm]?tsx?$/u, '.d.ts'))
   if (!existsSync(target)) throw new Error(`Missing bundled declaration for ${specifier}: ${target}`)

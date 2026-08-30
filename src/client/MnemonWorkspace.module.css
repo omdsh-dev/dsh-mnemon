@@ -1,3 +1,14 @@
+.workspacePanel {
+  box-sizing: border-box;
+  position: fixed;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--dsw-alias-bg-base);
+  pointer-events: auto;
+}
+
 .entry {
   box-sizing: border-box;
   display: flex;

@@ -35,7 +35,7 @@ describe('compiled Source clients with compiled Core and no source aliases', () 
       documentsClient.installDocumentsMemoryUI({ slots } as never),
       spacesClient.installMemorySpacesUI({ slots } as never),
     ]
-    expect(pages.get('runtime/entries')).toBe(runtimeClient.RuntimeSourcePage)
+    expect(pages.get('runtime/entries')).toEqual(expect.any(Function))
     expect([...pages.keys()].some(key => key.startsWith('documents/'))).toBe(true)
     expect([...pages.keys()].some(key => key.startsWith('memory-spaces/'))).toBe(true)
     for (const release of releases.reverse()) release()

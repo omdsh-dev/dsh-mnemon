@@ -91,7 +91,11 @@ try {
     MNEMON_DATA_DIR: storageRoot,
   }
 
-  const install = await run(['plugin', '--profile', 'headless', 'add', `link:${root}`], { env })
+  // link: skips dependency installation. Explicitly link the same plugin set
+  // that a normal install resolves from the Starter's semver dependencies.
+  const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
+  const plugins = Object.keys(manifest.dependencies).filter(name => name.startsWith('dsh-mnemon-'))
+  const install = await run(['plugin', '--profile', 'headless', 'add', `link:${root}`, ...plugins.map(name => `link:${join(root, 'plugins', name)}`)], { env })
   assertSuccess('installing dsh-mnemon into the Headless profile', install)
 
   const settingsPath = join(dshHome, 'settings.yaml')
@@ -127,7 +131,7 @@ try {
   const toolRequest = requests.find(request => Array.isArray(request.tools) && request.tools.length > 0)
   if (toolRequest === undefined) throw new Error('Headless model request did not expose any tools')
   const toolNames = new Set(toolRequest.tools.map(tool => tool?.function?.name).filter(name => typeof name === 'string'))
-  const required = ['mnemon_status', 'mnemon_recall', 'mnemon_document_search', 'mnemon_runtime_memory', 'mnemon_remember']
+  const required = ['mnemon_status', 'mnemon_recall', 'mnemon_document_search', 'mnemon_runtime_memory', 'mnemon_remember', 'mnemon_view_route', 'mnemon_view_action']
   const missing = required.filter(name => !toolNames.has(name))
   if (missing.length > 0) throw new Error(`Headless model request is missing Mnemon tools: ${missing.join(', ')}`)
   if (!existsSync(join(storageRoot, 'runtime', 'memories.json'))) throw new Error('Headless plugin did not initialize isolated runtime memory')

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { resolveConfig } from '../src/config.ts'
+import { resolveConfig } from "../src/host/config.ts"
 import type {
   CreateHostAgentOptions,
   HostAgent,
@@ -9,11 +9,9 @@ import type {
   HostSession,
   HostSessionEvent,
   HostUserMessage,
-} from '../src/contracts.ts'
-import { MnemonLifecycle } from '../src/lifecycle.ts'
-import { RUNTIME_MEMORY_PROTOCOL } from '../src/runtime-memory.ts'
-import type { MnemonService } from '../src/service.ts'
-import type { MnemonSubagentCoordinator } from '../src/subagent.ts'
+} from "../src/host/dsh.ts"
+import { MnemonLifecycle } from "../src/host/lifecycle.ts"
+import type { MnemonSubagentCoordinator } from "../src/host/subagent.ts"
 
 type Listener = (...args: unknown[]) => unknown
 
@@ -88,14 +86,6 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
     steer,
     inject: vi.fn(),
   } satisfies HostAgent
-  const service = {
-    status: vi.fn(async () => ({
-      healthy: true,
-      store: 'project',
-      stats: { totalInsights: 12, edgeCount: 8 },
-      memoryBodies: [{ id: 'project', name: 'Project', description: 'Project context', active: true }],
-    })),
-  } as unknown as MnemonService
   const coordinator = {
     recall: vi.fn(async (_agent, request) => ({ query: request.query, mode: 'smart', results: [] })),
     write: vi.fn(async () => ({ delegated: true, runId: 'write-child', provider: 'spawn', summary: 'No durable memory', action: 'skipped', memoryBodyIds: [] })),
@@ -149,26 +139,21 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
       return () => rootListeners.delete(name)
     }),
   } as unknown as HostContextShape
-  const pinnedTurns = new Map<string, object>()
-  const memoryViews = {
+  const composableTurns = {
     beginTurn: vi.fn(async (turnId: string, scope: object) => {
       const turn = turnId.slice(turnId.lastIndexOf(':') + 1)
-      const context = { turnId, viewId: `view-${turn}`, viewDigest: `digest-${turn}`, scope, startedAt: '2026-08-23T00:00:00.000Z' }
-      pinnedTurns.set(turnId, context)
-      return context
+      return { turnId, view: { id: `view-${turn}`, digest: `digest-${turn}` }, scope, startedAt: '2026-08-23T00:00:00.000Z' }
     }),
-    turn: vi.fn((turnId: string) => pinnedTurns.get(turnId)),
-    wake: vi.fn((viewId: string) => ({
+    memoryWake: vi.fn((viewId: string) => ({
       viewId,
       viewDigest: viewId.replace('view-', 'digest-'),
       text: `Pinned Wake ${viewId}`,
       sections: [{ layerId: 'runtime', mode: 'eager', text: `Pinned Wake ${viewId}` }],
     })),
-    endTurn: vi.fn((turnId: string) => pinnedTurns.delete(turnId)),
-    reconcile: vi.fn(async () => ({ id: 'next-view' })),
+    endTurn: vi.fn(() => true),
   }
   const runtimeSource = {
-    forAgent: vi.fn(() => ({ config, runtimeMemory: {}, memoryViews })),
+    forAgent: vi.fn(() => ({ config, composableTurns })),
     bindAgentRuntime: vi.fn(() => vi.fn()),
   }
   const lifecycle = new MnemonLifecycle(ctx, coordinator, config, runtimeSource as never)
@@ -207,7 +192,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
       agentListeners.get('session/event')?.(agent.session, event)
     }
   }
-  return { agent, agentListeners, agentSections, agentContexts, promptAssemblies, events, followup, steer, lifecycle, service, coordinator, memoryViews, runtimeSource, createTaskAgent, disposedTaskAgents, defaultModel, llm, agentPresets, assemblePrompt, preStep, turnStopping, stop }
+  return { agent, agentListeners, agentSections, agentContexts, promptAssemblies, events, followup, steer, lifecycle, coordinator, composableTurns, runtimeSource, createTaskAgent, disposedTaskAgents, defaultModel, llm, agentPresets, assemblePrompt, preStep, turnStopping, stop }
 }
 
 afterEach(() => vi.useRealTimers())
@@ -278,36 +263,28 @@ describe('Mnemon DSH lifecycle integration', () => {
     // The snapshot is no longer a shared runtime-context contribution.
     expect(value.agentContexts).toHaveLength(0)
 
-    const first = await value.preStep([userMessage('First step')], 7, 1)
-    expect(value.promptAssemblies[0]?.sections).toContainEqual({ name: 'mnemon:runtime-memory-protocol', text: RUNTIME_MEMORY_PROTOCOL })
-    expect(value.promptAssemblies[0]?.contexts).not.toContainEqual(expect.objectContaining({ name: 'mnemon:runtime-memory' }))
-    // The pinned Wake reaches the model as this plugin's own message, appended last.
-    if (first.kind !== 'enter') throw new Error('unexpected rejection')
-    const snapshot = first.messages.at(-1)
-    expect(snapshot?.source).toMatchObject({ kind: 'plugin', plugin: 'dsh-mnemon', form: 'recall' })
-    expect(snapshot?.content[0]?.text).toBe('Pinned Wake view-7')
-    expect(value.memoryViews.beginTurn).toHaveBeenCalledOnce()
+    await value.preStep([userMessage('First step')], 7, 1)
+    expect(value.promptAssemblies[0]?.contexts).toContainEqual({ name: 'mnemon:runtime-memory', text: 'Pinned Wake view-7' })
+    expect(context?.text()).toBe('Pinned Wake view-7')
+    expect(value.composableTurns.beginTurn).toHaveBeenCalledOnce()
     expect(value.runtimeSource.bindAgentRuntime).toHaveBeenCalledOnce()
-    expect(value.memoryViews.beginTurn).toHaveBeenCalledWith('session-1:7', {
+    expect(value.composableTurns.beginTurn).toHaveBeenCalledWith('session-1:7', {
       storage: 'global',
       sessionId: 'session-1',
       agentId: 'session-1',
     })
 
-    // Same pinned Wake on a later step: unchanged text is not re-injected.
-    const continuation = await value.preStep([userMessage('Tool continuation')], 7, 2)
-    if (continuation.kind !== 'enter') throw new Error('unexpected rejection')
-    expect(continuation.messages.some(message => message.content[0]?.text === 'Pinned Wake view-7')).toBe(false)
-    expect(value.memoryViews.beginTurn).toHaveBeenCalledOnce()
+    await value.preStep([userMessage('Tool continuation')], 7, 2)
+    expect(context?.text()).toBe('Pinned Wake view-7')
+    expect(value.composableTurns.beginTurn).toHaveBeenCalledOnce()
 
     await value.turnStopping(7)
-    expect(value.memoryViews.endTurn).toHaveBeenCalledWith('session-1:7')
-    expect(value.memoryViews.reconcile).toHaveBeenCalledWith({ storage: 'global', sessionId: 'session-1', agentId: 'session-1' })
+    expect(value.composableTurns.endTurn).toHaveBeenCalledWith('session-1:7')
+    expect(context?.text()).toBe('')
 
-    const nextTurn = await value.preStep([userMessage('Next turn')], 8, 1)
-    if (nextTurn.kind !== 'enter') throw new Error('unexpected rejection')
-    expect(nextTurn.messages.at(-1)?.content[0]?.text).toBe('Pinned Wake view-8')
-    expect(value.memoryViews.beginTurn).toHaveBeenCalledTimes(2)
+    await value.preStep([userMessage('Next turn')], 8, 1)
+    expect(context?.text()).toBe('Pinned Wake view-8')
+    expect(value.composableTurns.beginTurn).toHaveBeenCalledTimes(2)
   })
 
   it('offers an active root Agent to standalone WebUI maintenance when no session is selected', () => {
@@ -464,7 +441,6 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(decision.messages[2]?.source).toMatchObject({ kind: 'plugin', plugin: 'dsh-mnemon', form: 'recall' })
     expect(decision.messages[1]?.content[0]?.text).toBe('[MNEMON] Search Documents for substantial project records; use mnemon_recall only for missing durable history or exact prior details, and mnemon_runtime_memory only for new user-supplied facts or explicit save/correction requests—never retrieved evidence. Otherwise use none.')
     expect(value.coordinator.recall).not.toHaveBeenCalled()
-    expect(value.service.status).not.toHaveBeenCalled()
 
     const second = await value.preStep([userMessage('Second turn')], 2)
     if (second.kind !== 'enter') throw new Error('unexpected rejection')
@@ -826,7 +802,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     const prompt = userMessage()
     const decision = await value.preStep([prompt], 1)
     expect(decision).toEqual({ kind: 'enter', messages: [prompt] })
-    expect(value.memoryViews.beginTurn).toHaveBeenCalledOnce()
+    expect(value.composableTurns.beginTurn).toHaveBeenCalledOnce()
     expect(value.steer).not.toHaveBeenCalled()
     await expect(value.lifecycle.supervise('session-1', 'Durable preference')).resolves.toMatchObject({ delegated: true })
   })

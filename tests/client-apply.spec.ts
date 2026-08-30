@@ -82,8 +82,8 @@ describe('Mnemon Web client composition', () => {
     expect(registerLocale).toHaveBeenCalledWith('mnemon', { zh, en })
     await vi.waitFor(() => expect(slots).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        name: 'conversation.view', id: 'mnemon',
-        children: { 'mnemon.source.page': { kind: 'list', scope: 'session' } },
+        name: 'shell.overlay', id: 'mnemon',
+        children: { 'mnemon.source.page': { kind: 'list', scope: 'root' } },
       }),
     ])))
     expect(slots).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'settings.section', id: 'mnemon', order: 20 })]))
@@ -167,9 +167,9 @@ describe('Mnemon Web client composition', () => {
     expect(props).not.toHaveProperty('onClose')
 
     expect(conversationDisposer).toHaveBeenCalledTimes(1)
-    expect(slots.filter(options => options.name === 'conversation.view')).toHaveLength(2)
-    const sidebarEntry = slots.filter(options => options.name === 'conversation.view').at(-1)
+    expect(slots.filter(options => options.name === 'conversation.view')).toHaveLength(1)
+    const sidebarEntry = slots.find(options => options.name === 'shell.overlay')
     expect((sidebarEntry?.inject as () => { surface: string })().surface).toBe('sidebar')
-    expect(sidebarEntry?.children).toEqual({ 'mnemon.source.page': { kind: 'list', scope: 'session' } })
+    expect(sidebarEntry?.children).toEqual({ 'mnemon.source.page': { kind: 'list', scope: 'root' } })
   })
 })

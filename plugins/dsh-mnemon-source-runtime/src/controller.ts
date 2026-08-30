@@ -16,8 +16,7 @@ import {
   DEFAULT_RUNTIME_USER_LIMIT_BYTES,
   MAX_RUNTIME_MEMORY_LIMIT_BYTES,
 } from './defaults.ts'
-import type { RuntimeMemoryStorage, AuthorityCommitRecorder } from './config.ts'
-import type { MemoryMigrationLineage } from 'dsh-mnemon/contracts'
+import type { RuntimeMemoryStorage } from './config.ts'
 import type {
   RuntimeMemoryAction,
   RuntimeMemoryCompactedEntry,
@@ -376,7 +375,6 @@ export class RuntimeMemoryController {
   constructor(
     runner: RuntimeMemoryStorage,
     private readonly now: () => Date = () => new Date(),
-    private readonly recordCommit?: AuthorityCommitRecorder,
     limits: RuntimeMemoryLimits = RUNTIME_MEMORY_LIMITS,
     userRunner?: RuntimeMemoryStorage,
   ) {
@@ -394,7 +392,7 @@ export class RuntimeMemoryController {
     const userDirectory = userRunner === undefined ? this.directory : join(userRunner.effectiveDataDir(), 'runtime')
     this.userController = userDirectory === this.directory || userRunner === undefined
       ? undefined
-      : new RuntimeMemoryController(userRunner, now, recordCommit, this.limits)
+      : new RuntimeMemoryController(userRunner, now, this.limits)
     this.userPath = this.userController?.userPath ?? this.localUserPath
     this.userSourcePath = this.userController?.sourcePath ?? this.sourcePath
     this.initialize()
@@ -503,22 +501,7 @@ ${memory || '(empty)'}
 
   mutate(request: RuntimeMemoryMutation): Promise<RuntimeMemoryMutationResult> {
     if (request.target === 'user' && this.userController !== undefined) return this.userController.mutate(request)
-    const operation = this.queue.then(() => this.withLock(() => {
-      const beforeRevision = revision(this.readSource())
-      const result = this.mutateLocked(request)
-      const afterRevision = revision(this.readSource())
-      return { result, beforeRevision, afterRevision }
-    })).then(({ result, beforeRevision, afterRevision }) => {
-      if (beforeRevision !== afterRevision) {
-        this.recordCommit?.({
-          layerId: 'runtime',
-          capability: 'write',
-          operation: `runtime-${request.action}`,
-          checkpoint: { beforeRevision, afterRevision, target: request.target },
-        })
-      }
-      return result
-    })
+    const operation = this.queue.then(() => this.withLock(() => this.mutateLocked(request)))
     this.queue = operation.catch(() => undefined)
     return operation
   }
@@ -557,10 +540,9 @@ ${memory || '(empty)'}
     request: RuntimeMemoryMutation,
     compacted: RuntimeMemoryCompactedEntry[],
     maxCompactedBytes?: number,
-    lineage: readonly MemoryMigrationLineage[] = [],
   ): Promise<RuntimeMemoryMutationResult> {
     if (request.target === 'user' && this.userController !== undefined) {
-      return this.userController.compactAndMutate(expectedRevision, request, compacted, maxCompactedBytes, lineage)
+      return this.userController.compactAndMutate(expectedRevision, request, compacted, maxCompactedBytes)
     }
     const operation = this.queue.then(() => this.withLock(() => {
       const file = this.readSource()
@@ -573,11 +555,7 @@ ${memory || '(empty)'}
         throw new Error('compaction byte budget is invalid')
       }
       if (!prepared.changed) {
-        return {
-          result: this.result(request.target, prepared.projectedEntries, prepared.fields),
-          beforeRevision,
-          afterRevision: beforeRevision,
-        }
+        return this.result(request.target, prepared.projectedEntries, prepared.fields)
       }
       const replacements = compactionCandidates(compacted, prepared.compactableEntries, request.target, now)
       if (prepared.pendingEntry !== undefined && replacements.some(entry => entry.content === prepared.pendingEntry!.content)) {
@@ -594,33 +572,8 @@ ${memory || '(empty)'}
       if (used > limit) throw new RuntimeMemoryCapacityError(request.target, byteCount(file.entries, request.target), used, limit)
       const next: RuntimeMemoryFile = { version: RUNTIME_MEMORY_VERSION, entries }
       this.persist(next)
-      return {
-        result: this.result(request.target, entries, prepared.fields),
-        beforeRevision,
-        afterRevision: revision(next),
-      }
-    })).then(({ result, beforeRevision, afterRevision }) => {
-      if (beforeRevision !== afterRevision) {
-        this.recordCommit?.({
-          layerId: 'runtime',
-          capability: 'write',
-          operation: `runtime-${request.action}`,
-          checkpoint: {
-            beforeRevision,
-            afterRevision,
-            target: request.target,
-            maintenance: {
-              kind: 'runtime-compaction',
-              ...(lineage.length === 0 ? {} : { lineage: lineage.map(entry => ({
-                source: { ...entry.source },
-                destination: { ...entry.destination },
-              })) }),
-            },
-          },
-        })
-      }
-      return result
-    })
+      return this.result(request.target, entries, prepared.fields)
+    }))
     this.queue = operation.catch(() => undefined)
     return operation
   }
@@ -631,10 +584,9 @@ ${memory || '(empty)'}
     target: RuntimeMemoryTarget,
     compacted: RuntimeMemoryCompactedEntry[],
     maxBytes?: number,
-    lineage: readonly MemoryMigrationLineage[] = [],
   ): Promise<RuntimeMemorySnapshot> {
     if (target === 'user' && this.userController !== undefined) {
-      return this.userController.compactTarget(expectedRevision, target, compacted, maxBytes, lineage).then(() => this.snapshot())
+      return this.userController.compactTarget(expectedRevision, target, compacted, maxBytes).then(() => this.snapshot())
     }
     const operation = this.queue.then(() => this.withLock(() => {
       const file = this.readSource()
@@ -654,26 +606,8 @@ ${memory || '(empty)'}
       if (used > limit) throw new RuntimeMemoryCapacityError(target, byteCount(file.entries, target), used, limit)
       this.persist({ version: RUNTIME_MEMORY_VERSION, entries })
       const snapshot = this.snapshotUnlocked({ version: RUNTIME_MEMORY_VERSION, entries })
-      return { snapshot, beforeRevision }
-    })).then(({ snapshot, beforeRevision }) => {
-      if (beforeRevision !== snapshot.revision) {
-        this.recordCommit?.({
-          layerId: 'runtime',
-          capability: 'maintain',
-          operation: 'runtime-compact',
-          checkpoint: {
-            beforeRevision,
-            afterRevision: snapshot.revision,
-            target,
-            ...(lineage.length === 0 ? {} : { lineage: lineage.map(entry => ({
-              source: { ...entry.source },
-              destination: { ...entry.destination },
-            })) }),
-          },
-        })
-      }
       return snapshot
-    })
+    }))
     this.queue = operation.catch(() => undefined)
     return this.userController === undefined ? operation : operation.then(() => this.snapshot())
   }

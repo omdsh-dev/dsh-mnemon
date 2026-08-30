@@ -22,10 +22,10 @@
     ],
     "paths": {
       "dsh-mnemon/contracts": [
-        "./packages/contracts/src/index.ts"
+        "./src/core/contracts/index.ts"
       ],
       "dsh-mnemon/extension-sdk": [
-        "./packages/extension-sdk/src/index.ts"
+        "./src/sdk/index.ts"
       ],
       "dsh-mnemon/testing": [
         "./src/sdk/testing.ts"
@@ -56,15 +56,51 @@
       ],
       "dsh-mnemon-source-memory-spaces/contracts": [
         "./plugins/dsh-mnemon-source-memory-spaces/src/contracts.ts"
+      ],
+      "dsh-mnemon-source-runtime": [
+        "./plugins/dsh-mnemon-source-runtime/src/index.ts"
+      ],
+      "dsh-mnemon-source-documents": [
+        "./plugins/dsh-mnemon-source-documents/src/index.ts"
+      ],
+      "dsh-mnemon-source-memory-spaces": [
+        "./plugins/dsh-mnemon-source-memory-spaces/src/index.ts"
+      ],
+      "dsh-mnemon-strategy-default-three-tier": [
+        "./plugins/dsh-mnemon-strategy-default-three-tier/src/index.ts"
+      ],
+      "dsh-mnemon-provider-mnemon-native": [
+        "./plugins/dsh-mnemon-provider-mnemon-native/src/index.ts"
+      ],
+      "dsh-mnemon-provider-openviking": [
+        "./plugins/dsh-mnemon-provider-openviking/src/index.ts"
+      ],
+      "dsh-mnemon-provider-honcho": [
+        "./plugins/dsh-mnemon-provider-honcho/src/index.ts"
+      ],
+      "dsh-mnemon-provider-mem0": [
+        "./plugins/dsh-mnemon-provider-mem0/src/index.ts"
+      ],
+      "dsh-mnemon-provider-hindsight": [
+        "./plugins/dsh-mnemon-provider-hindsight/src/index.ts"
+      ],
+      "dsh-mnemon-provider-holographic": [
+        "./plugins/dsh-mnemon-provider-holographic/src/index.ts"
+      ],
+      "dsh-mnemon-provider-retaindb": [
+        "./plugins/dsh-mnemon-provider-retaindb/src/index.ts"
+      ],
+      "dsh-mnemon-provider-byterover": [
+        "./plugins/dsh-mnemon-provider-byterover/src/index.ts"
+      ],
+      "dsh-mnemon-provider-supermemory": [
+        "./plugins/dsh-mnemon-provider-supermemory/src/index.ts"
       ]
     }
   },
   "include": [
-    "bundles/**/*.ts",
-    "bundles/**/*.tsx",
     "src/**/*.ts",
     "src/**/*.tsx",
-    "packages/**/*.ts",
     "plugins/*/src/**/*.ts",
     "plugins/*/tests/**/*.ts",
     "tests/**/*.ts",

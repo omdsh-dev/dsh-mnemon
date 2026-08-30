@@ -12,8 +12,6 @@ import {
 } from 'node:fs'
 import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { DocumentMutation, DocumentMutationResult, DocumentRecord, DocumentSearchResult, DocumentSnapshot, DocumentStatus, DocumentView } from './contracts.ts'
-import type { AuthorityCommitRecorder } from './config.ts'
-import type { MemoryMigrationLineage } from 'dsh-mnemon/contracts'
 import { lexicalRequiredMatchCount, lexicalSearchTokens } from './search-tokens.ts'
 
 export type { DocumentMutation, DocumentMutationResult, DocumentRecord, DocumentSearchResult, DocumentSnapshot, DocumentStatus, DocumentView } from './contracts.ts'
@@ -176,7 +174,6 @@ export class DocumentController {
     readonly limitBytes = DOCUMENTS_ACTIVE_LIMIT_BYTES,
     private readonly now: () => Date = () => new Date(),
     storageRoot?: string,
-    private readonly recordCommit?: AuthorityCommitRecorder,
   ) {
     this.workspaceRoot = resolve(workspaceRoot)
     if (!existsSync(this.workspaceRoot) || !statSync(this.workspaceRoot).isDirectory()) throw new Error(`document workspace is unavailable: ${this.workspaceRoot}`)
@@ -245,7 +242,6 @@ export class DocumentController {
   search(query: string, options: { includeArchived?: boolean; limit?: number; allowedIds?: readonly string[] } = {}): Promise<DocumentSearchResult> {
     const operation = this.queue.then(() => this.withLock(() => {
       const index = this.readIndex()
-      const beforeRevision = indexRevision(index)
       const normalized = query.trim().normalize('NFKC').toLocaleLowerCase()
       const tokens = lexicalSearchTokens(normalized)
       const requiredTokenMatches = lexicalRequiredMatchCount(tokens)
@@ -282,42 +278,19 @@ export class DocumentController {
         this.persistIndex(index)
       }
       const result = { query: query.trim(), includeArchived, total: ranked.length, generatedAt: this.now().toISOString(), results: ranked }
-      return { result, beforeRevision, afterRevision: indexRevision(index) }
-    })).then(({ result, beforeRevision, afterRevision }) => {
-      if (beforeRevision !== afterRevision) {
-        this.recordCommit?.({
-          layerId: 'documents',
-          capability: 'maintain',
-          operation: 'document-access-update',
-          checkpoint: { workspaceRoot: this.workspaceRoot, beforeRevision, afterRevision },
-        })
-      }
       return result
-    })
+    }))
     this.queue = operation.catch(() => undefined)
     return operation
   }
 
   mutate(request: DocumentMutation): Promise<DocumentMutationResult> {
-    const operation = this.queue.then(() => this.withLock(() => this.mutateLocked(request))).then(result => {
-      this.recordCommit?.({
-        layerId: 'documents',
-        capability: 'write',
-        operation: `document-${result.action}`,
-        checkpoint: {
-          workspaceRoot: this.workspaceRoot,
-          documentId: result.document.id,
-          documentRevision: result.document.revision,
-          sourceRevision: result.snapshot.revision,
-        },
-      })
-      return result
-    })
+    const operation = this.queue.then(() => this.withLock(() => this.mutateLocked(request)))
     this.queue = operation.catch(() => undefined)
     return operation
   }
 
-  archive(id: string, expectedRevision: number, details: { summary: string; memoryBodyIds: string[]; lineage?: readonly MemoryMigrationLineage[] }): Promise<DocumentMutationResult> {
+  archive(id: string, expectedRevision: number, details: { summary: string; memoryBodyIds: string[] }): Promise<DocumentMutationResult> {
     const operation: Promise<DocumentMutationResult> = this.queue.then(() => this.withLock((): DocumentMutationResult => {
       const index = this.readIndex()
       const current = this.requireDocument(index, id)
@@ -350,24 +323,7 @@ export class DocumentController {
         throw error
       }
       return { success: true, action: 'archived', document: { ...updated, content }, snapshot: this.snapshotUnlocked(index) }
-    })).then(result => {
-      this.recordCommit?.({
-        layerId: 'documents',
-        capability: 'archive',
-        operation: 'document-archived',
-        checkpoint: {
-          workspaceRoot: this.workspaceRoot,
-          documentId: result.document.id,
-          documentRevision: result.document.revision,
-          sourceRevision: result.snapshot.revision,
-          ...(details.lineage === undefined || details.lineage.length === 0 ? {} : { lineage: details.lineage.map(entry => ({
-            source: { ...entry.source },
-            destination: { ...entry.destination },
-          })) }),
-        },
-      })
-      return result
-    })
+    }))
     this.queue = operation.catch(() => undefined)
     return operation
   }
@@ -556,7 +512,6 @@ export class DocumentManager {
     private readonly limitBytes = DOCUMENTS_ACTIVE_LIMIT_BYTES,
     private readonly now: () => Date = () => new Date(),
     private readonly storageRoot?: () => string,
-    private readonly recordCommit?: AuthorityCommitRecorder,
   ) {}
 
   forWorkspace(workspaceRoot: string): DocumentController {
@@ -565,7 +520,7 @@ export class DocumentManager {
     const key = storageRoot === undefined ? root : `${resolve(storageRoot)}\0${root}`
     let controller = this.controllers.get(key)
     if (controller === undefined) {
-      controller = new DocumentController(root, this.limitBytes, this.now, storageRoot, this.recordCommit)
+      controller = new DocumentController(root, this.limitBytes, this.now, storageRoot)
       this.controllers.set(key, controller)
     }
     return controller

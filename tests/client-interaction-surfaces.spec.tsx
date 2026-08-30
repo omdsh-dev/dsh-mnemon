@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ClientConnectionHandle, ClientSettingsScope } from '../src/contracts.ts'
-import type { Config } from '../src/config.ts'
+import type { ClientConnectionHandle, ClientSettingsScope } from "../src/host/dsh.ts"
+import type { Config } from "../src/host/config.ts"
 import { MnemonSaveAction } from '../src/client/MnemonSaveAction.tsx'
 import { MnemonTurnTail, memoryPageForTool } from '../src/client/MnemonTurnTail.tsx'
 import { consumeMnemonAnchor, dispatchMnemonAnchor, subscribeMnemonAnchor } from '../src/client/anchor.ts'
@@ -40,17 +40,17 @@ describe('conversation interaction surfaces', () => {
     const received: string[] = []
     const unsubscribe = subscribeMnemonAnchor('session-a', anchor => received.push(anchor.page))
 
-    dispatchMnemonAnchor({ page: 'documents', sessionId: 'session-a' })
+    dispatchMnemonAnchor({ page: 'documents/library', sessionId: 'session-a' })
 
-    expect(received).toEqual(['documents'])
+    expect(received).toEqual(['documents/library'])
     expect(consumeMnemonAnchor('session-a')).toBeNull()
     unsubscribe()
   })
 
   it('keeps an anchor pending when no matching view is mounted', () => {
-    dispatchMnemonAnchor({ page: 'explore', seed: 'sqlite', sessionId: 'session-b' })
+    dispatchMnemonAnchor({ page: 'memory-spaces/explore', seed: 'sqlite', sessionId: 'session-b' })
 
-    expect(consumeMnemonAnchor('session-b')).toEqual({ page: 'explore', seed: 'sqlite', sessionId: 'session-b' })
+    expect(consumeMnemonAnchor('session-b')).toEqual({ page: 'memory-spaces/explore', seed: 'sqlite', sessionId: 'session-b' })
     expect(consumeMnemonAnchor('session-b')).toBeNull()
   })
 
@@ -73,8 +73,8 @@ describe('conversation interaction surfaces', () => {
     fireEvent.click(await screen.findByRole('button', { name: /turnTail\.label/ }))
     fireEvent.click(screen.getAllByRole('button', { name: 'turnTail.openTool' })[0]!)
 
-    expect(received).toEqual(['documents'])
-    expect(memoryPageForTool('mnemon_runtime_memory')).toBe('runtime')
+    expect(received).toEqual(['documents/library'])
+    expect(memoryPageForTool('mnemon_runtime_memory')).toBe('runtime/entries')
     unsubscribe()
   })
 

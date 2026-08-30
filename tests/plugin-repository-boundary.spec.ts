@@ -77,7 +77,7 @@ describe('standalone plugin repository boundary', () => {
         }
         if (isBuiltin(specifier)) continue
         if (!Object.hasOwn(dependencies, packageName(specifier))) violations.push(`${relative(root, file)} has undeclared dependency ${specifier}`)
-        if (specifier.startsWith('dsh-mnemon') && !(provider ? providerImports : coreImports).has(specifier)) {
+        if (specifier.startsWith('dsh-mnemon') && !(provider ? providerImports : coreImports).has(specifier) && !(file.includes(`${sep}tests${sep}`) && /^dsh-mnemon-provider-[a-z0-9-]+$/u.test(specifier))) {
           violations.push(`${relative(root, file)} crosses its public contract: ${specifier}`)
         }
       }
@@ -89,15 +89,15 @@ describe('standalone plugin repository boundary', () => {
   })
 
   it('keeps the pure Core import closure independent of Sources, Providers, clients and the default bundle', () => {
-    const pending = [join(root, 'src/core.ts')]
+    const pending = [join(root, 'src/core/plugin.ts')]
     const visited = new Set<string>()
-    const allowed = ['packages/contracts', 'packages/extension-sdk', 'packages/kernel'].map(directory => join(root, directory))
+    const allowed = ['src/core', 'src/sdk'].map(directory => join(root, directory))
     const violations: string[] = []
     while (pending.length > 0) {
       const file = pending.pop()!
       if (visited.has(file)) continue
       visited.add(file)
-      if (!allowed.some(directory => inside(directory, file)) && !['src/core.ts', 'src/composable/turns.ts'].includes(relative(root, file))) {
+      if (!allowed.some(directory => inside(directory, file)) && !inside(join(root, 'src/core'), file)) {
         violations.push(relative(root, file))
       }
       for (const { specifier, typeOnly } of imports(file)) {

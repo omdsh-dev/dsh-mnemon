@@ -60,7 +60,16 @@
     "@types/react-dom": "^18.3.0",
     "jsdom": "^26.0.0",
     "@testing-library/react": "^16.3.0",
-    "@deepseek-ai/dsh-client-ui-primitives": "0.1.1-rc.2"
+    "@deepseek-ai/dsh-client-ui-primitives": "0.1.1-rc.2",
+    "dsh-mnemon-provider-mnemon-native": "^0.4.0",
+    "dsh-mnemon-provider-openviking": "^0.4.0",
+    "dsh-mnemon-provider-honcho": "^0.4.0",
+    "dsh-mnemon-provider-mem0": "^0.4.0",
+    "dsh-mnemon-provider-hindsight": "^0.4.0",
+    "dsh-mnemon-provider-holographic": "^0.4.0",
+    "dsh-mnemon-provider-retaindb": "^0.4.0",
+    "dsh-mnemon-provider-byterover": "^0.4.0",
+    "dsh-mnemon-provider-supermemory": "^0.4.0"
   },
   "peerDependenciesMeta": {
     "react": {
@@ -72,7 +81,10 @@
       "inject": [
         "slots"
       ],
-      "platform": "web"
+      "platform": "web",
+      "external": [
+        "dsh-mnemon/client"
+      ]
     }
   }
 }

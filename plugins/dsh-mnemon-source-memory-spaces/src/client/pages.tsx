@@ -3,7 +3,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEven
 import { CATEGORIES, type Category, type EntityView, type Insight, type MemoryBodyCatalog, type MemoryBodyMetadataUpdate, type MemoryBodyProvider, type MemoryBodyView, type MemoryGraphNode, type MemoryGraphSnapshot, type MemoryPlacementCapability, type MemoryPlacementPreference, type MemoryListView, type MemoryProviderConfigField, type MemoryProviderConnection, type MemoryProviderDescriptor, type MemoryProviderId, type MemoryReadSource } from '../contracts.ts'
 import type { MemorySpacesPageClient } from './api.ts'
 import { ProviderIcon } from './ProviderIcon.tsx'
-import { normalizeBodyProviderPresentation, normalizeProviderPresentation, providerCapabilityOrLegacy, providerFieldLabel, providerDisplayLabel, providerOptionLabel, providerSummary } from './provider-presentation.ts'
+import { providerFieldLabel, providerDisplayLabel, providerOptionLabel, providerSummary } from './provider-presentation.ts'
 import { type MnemonKey, type MnemonTranslate, MnemonLogo, useRequestVersion, appearanceClass, useMnemonViewAppearance, memoryPageStyles as css, useT, useLocale, humanBytes, message, short, PageHeader, SectionSpinner, ProgressiveFooter, SidebarModal, EmptyState } from 'dsh-mnemon/client'
 
 import type { MemoryPersistenceStrategy } from '../contracts.ts'
@@ -15,64 +15,6 @@ export interface MemorySpacesPageStatus { defaultRecallLimit?: number }
 type MemoryPlacementMode = 'manual' | 'automatic'
 
 type ProviderDrafts = Partial<Record<MemoryProviderId, MemoryProviderConnection>>
-
-const LEGACY_NATIVE_CAPABILITIES: MemoryBodyProvider['capabilities'] = {
-  search: true,
-  browse: true,
-  graph: true,
-  entities: true,
-  related: true,
-  remember: true,
-  link: true,
-  forget: true,
-  writeMode: 'exact',
-  deletionMode: 'soft',
-}
-
-const LEGACY_PROVIDER_CATALOG: MemoryProviderDescriptor[] = [
-  {
-    id: 'mnemon-native', label: 'mnemon', kind: 'local', origin: 'native',
-    icon: { kind: 'brand', value: 'mnemon' }, summaryI18nKey: 'overview.providerSummary.mnemon-native',
-    workspaceBinding: 'automatic',
-    summary: 'Official local-first memory.', capabilities: LEGACY_NATIVE_CAPABILITIES, fields: [],
-  },
-  {
-    id: 'openviking', label: 'OpenViking', kind: 'remote', origin: 'third-party',
-    icon: { kind: 'brand', value: 'openviking' }, summaryI18nKey: 'overview.providerSummary.openviking',
-    workspaceBinding: 'provider-global',
-    serviceConfigured: true,
-    summary: 'Filesystem-shaped shared memory.',
-    capabilities: { ...LEGACY_NATIVE_CAPABILITIES, graph: false, entities: false, related: false, link: false, writeMode: 'async-extracting', deletionMode: 'hard' },
-    fields: [
-      { key: 'endpoint', label: 'Endpoint', scope: 'service', input: 'url', required: true, defaultValue: 'http://127.0.0.1:1933', placeholder: 'http://127.0.0.1:1933' },
-      { key: 'targetUri', label: 'Memory URI', scope: 'memory', input: 'text', required: true, defaultValue: 'viking://user/memories', placeholder: 'viking://user/memories' },
-      { key: 'apiKey', label: 'API key', scope: 'service', input: 'secret', required: false },
-      { key: 'account', label: 'Account', scope: 'service', input: 'text', required: false },
-      { key: 'user', label: 'User', scope: 'memory', input: 'text', required: false },
-      { key: 'actorPeerId', label: 'Agent peer', scope: 'memory', input: 'text', required: false, defaultValue: 'dsh' },
-    ],
-  },
-]
-
-/** Preserve the pre-provider Host contract during a rolling Web/Host restart. */
-export function normalizeMemoryBody(body: MemoryBodyView): MemoryBodyView {
-  if (body.provider !== undefined) return { ...body, provider: normalizeBodyProviderPresentation(body.provider) }
-  return {
-    ...body,
-    provider: {
-      id: 'mnemon-native',
-      label: 'mnemon',
-      icon: { kind: 'brand', value: 'mnemon' },
-      origin: 'native',
-      kind: 'local',
-      location: body.dbPath,
-      apiKeyConfigured: false,
-      settings: {},
-      configuredSecrets: [],
-      capabilities: LEGACY_NATIVE_CAPABILITIES,
-    },
-  }
-}
 
 function memoryProviderFields(provider: MemoryProviderDescriptor): MemoryProviderConfigField[] {
   return provider.fields.filter(field => field.scope !== 'service')
@@ -92,7 +34,7 @@ function providerDraftComplete(provider: MemoryProviderDescriptor | undefined, c
 }
 
 export function nativeBodyProvider(provider: MemoryBodyProvider): boolean {
-  return normalizeBodyProviderPresentation(provider).origin === 'native'
+  return provider.origin === 'native'
 }
 
 /** Shared memory-level Provider form used by manual creation, editing, and distillation policy. */
@@ -198,8 +140,8 @@ function InsightCard(props: {
     : css.dangerButton
   const inlineConfirming = appearance.surface === 'buildin' && confirming
   const providerLabel = insight.memoryProviderLabel ?? insight.memoryProviderId
-  const supportsRelated = providerCapabilityOrLegacy(insight.memoryCapabilities?.related, insight.memoryProviderId)
-  const supportsForget = providerCapabilityOrLegacy(insight.memoryCapabilities?.forget, insight.memoryProviderId)
+  const supportsRelated = insight.memoryCapabilities?.related === true
+  const supportsForget = insight.memoryCapabilities?.forget === true
   const meta = [
     insight.memoryBodyName,
     providerLabel,
@@ -727,7 +669,7 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; metadataCl
   const [syncClock, setSyncClock] = useState(() => Date.now())
   const loadRequest = useRef(0)
   const initialSyncStarted = useRef(false)
-  const compatibilityRetryStarted = useRef(false)
+  const directoryRetryStarted = useRef(false)
   const fullSyncObserved = useRef(true)
   const load = useCallback(async (quiet = false) => {
     const request = ++loadRequest.current
@@ -751,15 +693,15 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; metadataCl
           generatedAt: new Date().toISOString(),
         }
       })
-      const normalizedProviders = (Array.isArray(nextCatalog.providers) && nextCatalog.providers.length > 0 ? nextCatalog.providers : LEGACY_PROVIDER_CATALOG).map(normalizeProviderPresentation)
-      const normalizedCatalog = { ...nextCatalog, providers: normalizedProviders, items: nextCatalog.items.map(normalizeMemoryBody) }
+      const normalizedProviders = nextCatalog.providers
+      const normalizedCatalog = { ...nextCatalog, providers: normalizedProviders, items: nextCatalog.items }
       if (request !== loadRequest.current) return
       setProviderDrafts(current => mergeProviderDefaults(normalizedCatalog.providers, current))
       setCatalog(normalizedCatalog)
       setCatalogLoading(false)
       void props.client.bodies().then(next => {
         if (request !== loadRequest.current) return
-        const full = { ...next, providers: (Array.isArray(next.providers) && next.providers.length > 0 ? next.providers : normalizedProviders).map(normalizeProviderPresentation), items: next.items.map(normalizeMemoryBody) }
+        const full = { ...next, providers: next.providers, items: next.items }
         setCatalog(full)
       }).catch(reason => {
         if (request === loadRequest.current && !quiet && !directoryUnavailable) setError(message(reason))
@@ -788,8 +730,8 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; metadataCl
     void load()
   }, [load])
   useEffect(() => {
-    if (!catalogUnavailable || !props.catalogKnown || compatibilityRetryStarted.current) return
-    compatibilityRetryStarted.current = true
+    if (!catalogUnavailable || !props.catalogKnown || directoryRetryStarted.current) return
+    directoryRetryStarted.current = true
     void load(true)
   }, [catalogUnavailable, load, props.catalogKnown])
   useEffect(() => {
@@ -814,7 +756,7 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; metadataCl
       items: current.items.map(item => item.id === body.id ? { ...item, statusLoading: true } : item),
     })
     try {
-      const next = normalizeMemoryBody(await props.client.reconnectBody(body.id))
+      const next = await props.client.reconnectBody(body.id)
       setCatalog(current => current === null ? current : {
         ...current,
         items: current.items.map(item => item.id === next.id ? next : item),
@@ -1284,7 +1226,7 @@ export function PersistenceStrategyDialog(props: {
     let current = true
     void props.client.bodyDirectory().then(catalog => {
       if (!current) return
-      const next = (Array.isArray(catalog.providers) && catalog.providers.length > 0 ? catalog.providers : LEGACY_PROVIDER_CATALOG).map(normalizeProviderPresentation)
+      const next = catalog.providers
       setProviders(next)
       setProviderDrafts(previous => mergeProviderDefaults(next, previous))
       setProviderId(currentProviderId => next.some(provider => provider.id === currentProviderId && (provider.origin === 'native' || provider.serviceConfigured !== false))

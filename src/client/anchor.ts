@@ -9,8 +9,8 @@
  * the sidebar afterwards still lands on the requested page or write dialog.
  */
 
-/** Pages of the Mnemon workspace, mirroring MnemonView's internal Page union. */
-export type MnemonAnchorPage = 'overview' | 'runtime' | 'documents' | 'explore' | 'entities' | 'remember' | 'list' | 'status'
+/** The canonical workspace owns status; every other page belongs to a Source. */
+export type MnemonAnchorPage = 'status' | `${string}/${string}`
 
 export interface MnemonAnchor {
   /** Target workspace page. */

@@ -3,9 +3,9 @@ import { SlotCore } from '@deepseek-ai/dsh-client-ui-slots'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
-import type { Config } from '../src/config.ts'
-import type { ClientSettingsScope, StatusView } from '../src/shared/contracts.ts'
-import type { MnemonSourcePageOwnerProps } from '../src/client/dsh-compat.ts'
+import type { Config } from "../src/host/config.ts"
+import type { ClientSettingsScope, StatusView } from "../src/host/protocol.ts"
+import type { MnemonSourcePageOwnerProps } from "../src/client/dsh-context.ts"
 import { MnemonView } from '../src/client/MnemonView.tsx'
 import { translateEn } from '../src/client/locales.ts'
 import {
@@ -59,7 +59,7 @@ class TestSlots {
 function declareSourcePageSlot(slots: TestSlots): () => void {
   return slots.register({
     name: 'root',
-    children: { [MNEMON_SOURCE_PAGE_SLOT]: { kind: 'list', scope: 'session' } },
+    children: { [MNEMON_SOURCE_PAGE_SLOT]: { kind: 'list', scope: 'root' } },
   }, (_props: unknown) => null)
 }
 
@@ -93,16 +93,17 @@ const status: StatusView = {
 }
 
 describe('Source Client presentation conformance', () => {
-  it('lets an explicit Source client shadow the starter and restores the starter on unload', () => {
+  it('rejects duplicate page owners and lets a replacement install after unload', () => {
     const slots = new TestSlots()
     const owner = declareSourcePageSlot(slots)
-    const fallback = installMemorySourceUI({ slots } as never, { sourceTypeId: 'runtime', pages: [{ id: 'entries', label: 'Starter', component: Page }] }, { fallback: true })
-    const explicit = installMemorySourceUI({ slots } as never, { sourceTypeId: 'runtime', pages: [{ id: 'entries', label: 'Source plugin', component: Page }] })
+    const first = installMemorySourceUI({ slots } as never, { sourceTypeId: 'runtime', pages: [{ id: 'entries', label: 'First', component: Page }] })
     const directory = createMemorySourcePageDirectory({ slots } as never)
-    expect(directory.getSnapshot().map(entry => entry.label)).toEqual(['Source plugin'])
-    explicit()
-    expect(directory.getSnapshot().map(entry => entry.label)).toEqual(['Starter'])
-    fallback()
+    expect(() => installMemorySourceUI({ slots } as never, { sourceTypeId: 'runtime', pages: [{ id: 'entries', label: 'Duplicate', component: Page }] })).toThrow()
+    expect(directory.getSnapshot().map(entry => entry.label)).toEqual(['First'])
+    first()
+    const second = installMemorySourceUI({ slots } as never, { sourceTypeId: 'runtime', pages: [{ id: 'entries', label: 'Second', component: Page }] })
+    expect(directory.getSnapshot().map(entry => entry.label)).toEqual(['Second'])
+    second()
     expect(directory.getSnapshot()).toEqual([])
     owner()
   })
@@ -254,7 +255,7 @@ describe('Source Client presentation conformance', () => {
     ])))
   })
 
-  it('selects additional built-in Source instances without leaking the default compatibility page', async () => {
+  it('selects additional built-in Source instances without injecting a hidden default page', async () => {
     const sources = ['source:extra-runtime', 'source:mnemon-source-runtime'].map(sourceInstanceKey => ({
       sourceInstanceKey, sourceTypeId: 'runtime', packageName: 'dsh-mnemon-source-runtime', role: 'working-context',
       availability: 'ready', revision: 'r1', capabilities: ['read', 'write'], management: { label: sourceInstanceKey },
@@ -262,17 +263,18 @@ describe('Source Client presentation conformance', () => {
     const connection = { rpc: { call: vi.fn(async (_channel: string, endpoint: string) => ({
       ok: true, value: endpoint === 'source-management-catalog' ? { generationId: 'g1', sources } : status,
     })) } }
+    const runtimePages = [{ id: 'runtime/entries', sourceTypeId: 'runtime', pageId: 'entries', label: translateEn('nav.runtime'), order: 100 }]
     const renderSlot = ((_name: string, owner: MnemonSourcePageOwnerProps, options: { only?: string }) => options.only !== 'runtime/entries' ? null : <div>
       <span data-testid="runtime-selected-instance">{owner.management?.sourceInstanceKey}</span>
-      <span data-testid="runtime-compatibility-child">{owner.children === undefined ? 'no' : 'yes'}</span>
+      <span data-testid="runtime-hidden-child">{!('children' in owner) ? 'no' : 'yes'}</span>
     </div>) as never
-    render(<MnemonView connection={connection as never} settingsScope={settings} sessionId="s1" t={translateEn} locale="en" renderSlot={renderSlot} />)
+    render(<MnemonView connection={connection as never} settingsScope={settings} sessionId="s1" t={translateEn} locale="en" sourcePageDirectory={{ getSnapshot: () => runtimePages, subscribe: () => () => {} }} renderSlot={renderSlot} />)
     fireEvent.click(await screen.findByRole('button', { name: new RegExp(`^${translateEn('nav.runtime')}`, 'u') }))
     await waitFor(() => expect(screen.getByTestId('runtime-selected-instance').textContent).toBe('source:mnemon-source-runtime'))
-    expect(screen.getByTestId('runtime-compatibility-child').textContent).toBe('yes')
+    expect(screen.getByTestId('runtime-hidden-child').textContent).toBe('no')
     fireEvent.change(screen.getByRole('combobox', { name: 'Select Source instance' }), { target: { value: 'source:extra-runtime' } })
     expect(screen.getByTestId('runtime-selected-instance').textContent).toBe('source:extra-runtime')
-    expect(screen.getByTestId('runtime-compatibility-child').textContent).toBe('no')
+    expect(screen.getByTestId('runtime-hidden-child').textContent).toBe('no')
   })
 
   it('keeps a descriptor-driven status/config/diagnostics path when a Source has no client module', async () => {

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
-import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
+import { MemoryCompositionRunner, type MemoryTestTurn } from 'dsh-mnemon/testing'
 import * as spaces from 'dsh-mnemon-source-memory-spaces'
 import * as notes from '../lib/external-source.js'
 import * as focus from '../lib/external-strategy.js'
@@ -28,6 +28,7 @@ describe('external consumer of packed artifacts', () => {
   it('supports a new Source and Strategy, authority checks, exact grants and explicit replacement', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'external-notes-'))
     const runner = new MemoryCompositionRunner()
+    const turns: MemoryTestTurn[] = []
     try {
       await expect(runner.mount(notes, { instanceId: 'invalid', config: { path: 'relative.txt' } })).rejects.toThrow('absolute')
       expect(runner.runtime.contributionSnapshot().sources).toHaveLength(0)
@@ -41,6 +42,7 @@ describe('external consumer of packed artifacts', () => {
       expect((await (await runner.managementClient('source:personal')).read('read')).value).toEqual({ content: '' })
 
       const pinned = await runner.beginTurn()
+      turns.push(pinned)
       expect(pinned.view.projection.map(fragment => fragment.text)).toEqual(['first snapshot'])
       const route = pinned.view.routes[0]!
       const action = pinned.view.actionOffers[0]!
@@ -59,6 +61,7 @@ describe('external consumer of packed artifacts', () => {
       await expect(runner.beginTurn()).rejects.toThrow('no Serving')
       await runner.mount(focus, { instanceId: 'focus', config: { sourceKeys: ['source:personal'], mode: 'routed' } })
       const current = await runner.beginTurn()
+      turns.push(current)
       expect(current.view.runtimeGeneration).not.toBe(pinned.view.runtimeGeneration)
       expect(current.view.routes.map(route => route.sourceInstanceKey)).toEqual(['source:personal'])
       expect(current.view.projection[0]?.mode).toBe('routed')
@@ -67,12 +70,13 @@ describe('external consumer of packed artifacts', () => {
       current.release()
       pinned.release()
       expect(runner.generations.inspect().drainingGenerationIds).not.toContain(pinned.lease.id)
-    } finally { await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
+    } finally { turns.forEach(turn => turn.release()); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
   })
 
   it('loads a packed Provider through the Source loader and performs durable read/write', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'external-provider-loader-'))
     const runner = new MemoryCompositionRunner()
+    const turns: MemoryTestTurn[] = []
     try {
       await runner.mount(focus, { instanceId: 'focus', config: { sourceKeys: ['source:spaces'], mode: 'routed' } })
       await runner.mount(spaces, { instanceId: 'spaces', config: { dataDir: directory,
@@ -80,18 +84,21 @@ describe('external consumer of packed artifacts', () => {
       const management = await runner.managementClient('source:spaces')
       await management.mutate('provider-service-update', { providerId: 'local-account', settings: {}, enabled: true }, { confirmed: true })
       const turn = await runner.beginTurn()
-      await expect(turn.lease.generation.executeAction(turn.view, turn.view.actionOffers[0]!.id,
+      turns.push(turn)
+      await expect(turn.lease.generation.executeAction(turn.view, turn.view.actionOffers.find(offer => offer.sourceActionId === 'remember')!.id,
         { content: 'artifact loader durable sentinel' }, () => true)).resolves.toMatchObject({ status: 'succeeded' })
       turn.release()
       const next = await runner.beginTurn()
-      expect((await next.lease.generation.executeRoute(next.view, next.view.routes[0]!.id, { query: 'durable sentinel' })).items[0]?.text).toContain('artifact loader durable sentinel')
+      turns.push(next)
+      expect((await next.lease.generation.executeRoute(next.view, next.view.routes.find(route => route.sourceRouteId === 'recall')!.id, { query: 'durable sentinel' })).items[0]?.text).toContain('artifact loader durable sentinel')
       next.release()
-    } finally { await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
+    } finally { turns.forEach(turn => turn.release()); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
   })
 
   it('supports an external Provider in two Source-private trees with identical child ids', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'external-provider-trees-'))
     const runner = new MemoryCompositionRunner()
+    const turns: MemoryTestTurn[] = []
     try {
       await runner.mount(focus, { instanceId: 'focus', config: { sourceKeys: ['source:work', 'source:personal'], mode: 'routed' } })
       for (const id of ['work', 'personal']) await runner.mount({ inject: ['mnemonMemory'], async apply(ctx: Context) {
@@ -102,17 +109,19 @@ describe('external consumer of packed artifacts', () => {
         await management.mutate('provider-service-update', { providerId: 'same-child-id', settings: {}, enabled: true }, { confirmed: true })
       }
       const turn = await runner.beginTurn()
-      const offer = turn.view.actionOffers.find(offer => offer.sourceInstanceKey === 'source:work')!
+      turns.push(turn)
+      const offer = turn.view.actionOffers.find(offer => offer.sourceInstanceKey === 'source:work' && offer.sourceActionId === 'remember')!
       await turn.lease.generation.executeAction(turn.view, offer.id, { content: 'work only' }, () => true)
       turn.release()
       const next = await runner.beginTurn()
-      for (const route of next.view.routes) {
+      turns.push(next)
+      for (const route of next.view.routes.filter(route => route.sourceRouteId === 'recall')) {
         const result = await next.lease.generation.executeRoute(next.view, route.id, { query: 'work' })
         expect(result.items).toHaveLength(route.sourceInstanceKey === 'source:work' ? 1 : 0)
       }
       expect(runner.context.get('mnemonMemorySpace', false)).toBeUndefined()
       expect(runner.context.get('mnemonProvider', false)).toBeUndefined()
       next.release()
-    } finally { await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
+    } finally { turns.forEach(turn => turn.release()); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
   })
 })

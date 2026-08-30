@@ -3,15 +3,14 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { strToU8, unzipSync, zipSync } from 'fflate'
-import { resolveConfig } from '../src/config.ts'
-import { DocumentController } from '../src/documents.ts'
-import { MemoryBodyRegistry } from '../src/memory-bodies.ts'
-import { MnemonPackManager, MNEMON_PACK_FORMAT, MNEMON_PACK_MIME } from '../src/pack.ts'
-import { createRunner } from '../src/runner.ts'
-import { RuntimeMemoryController } from '../src/runtime-memory.ts'
-import type { ProcessRunner } from '../src/process.ts'
+import { resolveConfig } from "../src/host/config.ts"
+import { MnemonPackManager, MNEMON_PACK_FORMAT, MNEMON_PACK_MIME } from "../src/host/pack.ts"
+import { createStorageRoot } from '../src/host/storage-root.ts'
+import { sourceFixture } from './fixtures/sources.ts'
+import { withMemoryStorageLock } from 'dsh-mnemon/extension-sdk'
 
 const directories: string[] = []
+const releases: Array<() => Promise<void>> = []
 const now = () => new Date('2026-08-14T12:00:00.000Z')
 
 function temporary(label: string): string {
@@ -29,18 +28,17 @@ function sqlite(seed: number): Buffer {
 
 function runner(root: string) {
   const config = resolveConfig({ storageScope: 'custom', dataDir: root, cliPath: '/fake/mnemon' })
-  const process: ProcessRunner = async () => ({ stdout: '{}', stderr: '', exitCode: 0 })
-  return { config, runner: createRunner(config, process) }
+  return { config, runner: createStorageRoot(config) }
 }
 
 async function fixture(label: string, seed: number, bodyId = 'project') {
   const root = temporary(label)
   const workspace = temporary(`${label}-workspace`)
   const created = runner(root)
-  const runtime = new RuntimeMemoryController(created.runner, now)
-  await runtime.mutate({ action: 'add', target: 'user', content: 'Prefer concise answers', importance: 'normal' })
-  const documents = new DocumentController(workspace, undefined, now, root)
-  await documents.mutate({ action: 'create', title: `Design ${seed}`, content: `# Design\n\nSeed ${seed}` })
+  const sources = await sourceFixture({ dataDir: root, workspace })
+  releases.push(sources.dispose)
+  await sources.runtime.mutate('mutate', { action: 'add', target: 'user', content: 'Prefer concise answers', importance: 'normal' }, { confirmed: true })
+  await sources.documents.mutate('mutate', { action: 'create', title: `Design ${seed}`, content: `# Design\n\nSeed ${seed}` }, { confirmed: true })
   const data = join(root, 'data')
   mkdirSync(join(data, bodyId), { recursive: true })
   writeFileSync(join(data, bodyId, 'mnemon.db'), sqlite(seed))
@@ -52,12 +50,33 @@ async function fixture(label: string, seed: number, bodyId = 'project') {
   return { root, workspace, ...created, manager: new MnemonPackManager(created.runner, created.config, undefined, now) }
 }
 
-afterEach(() => {
-  vi.unstubAllEnvs()
+afterEach(async () => {
+  for (const release of releases.splice(0)) await release()
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
 })
 
 describe('Mnemon Pack', () => {
+  it('waits for independently loaded storage work before collecting a snapshot', async () => {
+    const source = await fixture('pack-concurrency', 20)
+    const started = Promise.withResolvers<void>()
+    const finish = Promise.withResolvers<void>()
+    const write = withMemoryStorageLock(source.root, async () => {
+      started.resolve()
+      await finish.promise
+      writeFileSync(join(source.root, 'data', 'project', 'mnemon.db'), sqlite(21))
+    })
+    await started.promise
+    let settled = false
+    const exportPromise = source.manager.exportPack('memory-spaces').then(value => { settled = true; return value })
+    await new Promise<void>(resolve => setImmediate(resolve))
+    expect(settled).toBe(false)
+    finish.resolve()
+    await write
+    const exported = await exportPromise
+    const files = unzipSync(Buffer.from(exported.base64, 'base64'))
+    expect(Buffer.from(files['payload/data/project/mnemon.db']!)).toEqual(sqlite(21))
+  })
+
   it('exports one native, checksummed Pack without leaking the host root', async () => {
     const source = await fixture('pack-export', 1)
     const exported = await source.manager.exportPack('full')
@@ -118,10 +137,11 @@ describe('Mnemon Pack', () => {
       cliPath: '/fake/mnemon',
       runtimeMemory: { memoryLimitBytes: 20_480 },
     })
-    const sourceRunner = createRunner(sourceConfig, async () => ({ stdout: '{}', stderr: '', exitCode: 0 }))
-    const runtime = new RuntimeMemoryController(sourceRunner, now, undefined, { memory: 20_480, user: 4_096 })
-    await runtime.mutate({ action: 'add', target: 'memory', content: 'a'.repeat(8_000) })
-    await runtime.mutate({ action: 'add', target: 'memory', content: 'b'.repeat(8_000) })
+    const sourceRunner = createStorageRoot(sourceConfig)
+    const sources = await sourceFixture({ dataDir: sourceRoot, workspace: sourceRoot, memoryLimitBytes: 20_480 })
+    releases.push(sources.dispose)
+    await sources.runtime.mutate('mutate', { action: 'add', target: 'memory', content: 'a'.repeat(8_000) }, { confirmed: true })
+    await sources.runtime.mutate('mutate', { action: 'add', target: 'memory', content: 'b'.repeat(8_000) }, { confirmed: true })
     const exported = await new MnemonPackManager(sourceRunner, sourceConfig, undefined, now).exportPack('runtime')
 
     const defaultTarget = runner(temporary('pack-default-runtime-target'))
@@ -135,7 +155,7 @@ describe('Mnemon Pack', () => {
       cliPath: '/fake/mnemon',
       runtimeMemory: { memoryLimitBytes: 20_480 },
     })
-    const configuredRunner = createRunner(configuredTarget, async () => ({ stdout: '{}', stderr: '', exitCode: 0 }))
+    const configuredRunner = createStorageRoot(configuredTarget)
     expect(new MnemonPackManager(configuredRunner, configuredTarget).inspectPack(exported.base64).manifest.scope).toBe('runtime')
   })
 
@@ -143,9 +163,10 @@ describe('Mnemon Pack', () => {
     const globalRoot = temporary('pack-global-user')
     const workspaceRoot = temporary('pack-workspace-runtime')
     const workspace = runner(workspaceRoot)
-    const runtime = new RuntimeMemoryController(workspace.runner, now, undefined, undefined, { effectiveDataDir: () => globalRoot })
-    await runtime.mutate({ action: 'add', target: 'user', content: 'Private global profile fixture.' })
-    await runtime.mutate({ action: 'add', target: 'memory', content: 'Workspace project fixture.' })
+    const sources = await sourceFixture({ dataDir: workspaceRoot, workspace: workspaceRoot, userDataDir: globalRoot })
+    releases.push(sources.dispose)
+    await sources.runtime.mutate('mutate', { action: 'add', target: 'user', content: 'Private global profile fixture.' }, { confirmed: true })
+    await sources.runtime.mutate('mutate', { action: 'add', target: 'memory', content: 'Workspace project fixture.' }, { confirmed: true })
 
     const exported = await new MnemonPackManager(workspace.runner, workspace.config, undefined, now).exportPack('runtime')
     const files = unzipSync(Buffer.from(exported.base64, 'base64'))
@@ -157,11 +178,12 @@ describe('Mnemon Pack', () => {
 
   it('keeps remote provider connections and credentials outside Mnemon Packs', async () => {
     const source = await fixture('pack-provider-boundary', 22)
-    const registry = new MemoryBodyRegistry(source.runner, true, now)
-    await registry.create({
-      name: 'Remote team memory', description: 'Shared remote memory.', providerId: 'openviking',
-      openViking: { endpoint: 'https://memory.example.com', targetUri: 'viking://user/team/memories', apiKey: 'must-not-enter-pack' },
-    })
+    const registryPath = join(source.root, 'data', '.dsh-memory-providers.json')
+    writeFileSync(registryPath, JSON.stringify({
+      version: 1, services: [{ providerId: 'openviking', enabled: true, settings: {
+        endpoint: 'https://memory.example.com', targetUri: 'viking://user/team/memories', apiKey: 'must-not-enter-pack',
+      } }],
+    }))
 
     const exported = await source.manager.exportPack('memory-spaces')
     const archive = Buffer.from(exported.base64, 'base64')
@@ -169,7 +191,7 @@ describe('Mnemon Pack', () => {
 
     expect(archive.includes(Buffer.from('must-not-enter-pack'))).toBe(false)
     expect(Object.keys(files).some(path => path.includes('memory-providers'))).toBe(false)
-    expect(existsSync(registry.providerRegistryPath)).toBe(true)
+    expect(existsSync(registryPath)).toBe(true)
   })
 
   it('rejects checksum tampering, unsafe paths, and malformed transport data', async () => {

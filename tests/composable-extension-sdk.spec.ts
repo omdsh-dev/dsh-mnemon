@@ -1,14 +1,12 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
-import { COMPOSABLE_MEMORY_API_VERSION, type MemorySourceDefinition, type MemoryStrategyDefinition } from '../packages/contracts/src/index.ts'
-import { MemoryCatalog } from '../packages/kernel/src/index.ts'
+import { COMPOSABLE_MEMORY_API_VERSION, type MemorySourceDefinition, type MemoryStrategyDefinition } from "../src/core/contracts/index.ts"
 import {
-  MemoryBoot,
   MemoryRuntime,
   defineMemorySource,
   defineMemoryStrategy,
   installMemory,
-} from '../packages/extension-sdk/src/index.ts'
+} from "../src/sdk/index.ts"
 
 function source(typeId = 'example'): MemorySourceDefinition {
   return defineMemorySource({
@@ -135,19 +133,4 @@ describe('Composable Memory extension SDK', () => {
     unsubscribe()
   })
 
-  it('keeps v0.3 pre-mount MemoryBoot extensions in the compatibility input only', () => {
-    const legacy = new MemoryBoot()
-    legacy.register({
-      descriptor: { id: 'legacy', version: '1', label: 'Legacy', description: 'Compatibility fixture.' },
-      layers: [{ descriptor: { id: 'legacy', label: 'Legacy', description: 'Legacy layer.', role: 'legacy', order: 900, capabilities: ['status'] } }],
-    })
-    const runtime = new MemoryRuntime(legacy)
-    const catalog = new MemoryCatalog()
-    const attachment = runtime.attach(catalog)
-    expect(catalog.layer('legacy')).toBeDefined()
-    expect(runtime.descriptors()).toEqual([expect.objectContaining({ id: 'legacy' })])
-    expect(runtime.contributionSnapshot()).toEqual({ revision: 0, sources: [], strategies: [] })
-    attachment.dispose()
-    expect(catalog.layer('legacy')).toBeUndefined()
-  })
 })

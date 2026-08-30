@@ -1,7 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from 'schemastery'
 import { installMemory, memoryConfigurationDigest } from 'dsh-mnemon/extension-sdk'
-import { createMemorySpacesSource, MEMORY_SPACES_SOURCE } from './source.ts'
+import { createMemorySpacesSource } from './source.ts'
 import {
   PrivateMemorySpaceProviderHost,
   defineMemorySpaceProvider,
@@ -16,7 +16,7 @@ export const name = 'dsh-mnemon-source-memory-spaces'
 export const inject = ['mnemonMemory']
 
 export interface Config extends SourceConfig {
-  /** Explicit Source-private children; strings retain the bundled-id syntax. */
+  /** Explicit Source-private children; resolved by DSH's module Loader. */
   providers: Array<string | MemorySpaceProviderDeclaration>
 }
 
@@ -57,20 +57,12 @@ export interface InstallMemorySpacesOptions {
 }
 
 export interface MemorySpaceProviderDeclaration {
-  /** Bundled logical package name or an installed package specifier. */
+  /** Installed package specifier; no built-in implementation registry. */
   use: string
   /** Stable child identity; defaults to the module type id when omitted. */
   instanceId?: string
   /** Validated by the child module's Cordis Config schema, when supplied. */
   config?: unknown
-}
-
-function bundledProviderEntry(use: string, available: readonly MemorySpaceProviderEntry[]): MemorySpaceProviderEntry | undefined {
-  const normalized = use.trim()
-  const id = normalized.startsWith('dsh-mnemon-provider-')
-    ? normalized.slice('dsh-mnemon-provider-'.length)
-    : normalized
-  return available.find(candidate => candidate.instanceId === id)
 }
 
 function importedProviderModule(loader: LoaderLike, value: unknown, specifier: string): MemorySpaceProviderModule<unknown> {
@@ -86,7 +78,6 @@ function importedProviderModule(loader: LoaderLike, value: unknown, specifier: s
 export async function resolveMemorySpaceProviderEntries(
   ctx: Context,
   declarations: readonly (string | MemorySpaceProviderDeclaration)[],
-  available: readonly MemorySpaceProviderEntry[] = [],
 ): Promise<MemorySpaceProviderEntry[]> {
   if (declarations.length === 0) throw new Error('Memory Spaces requires at least one explicit Provider child')
   const loader = typeof ctx.get === 'function' ? ctx.get('loader', false) as LoaderLike | undefined : undefined
@@ -95,24 +86,12 @@ export async function resolveMemorySpaceProviderEntries(
   for (const declaration of declarations) {
     const use = (typeof declaration === 'string' ? declaration : declaration.use).trim()
     if (use === '') throw new Error('Memory Space Provider declaration use is required')
-    const bundled = bundledProviderEntry(use, available)
-    let entry: MemorySpaceProviderEntry
-    if (bundled !== undefined) {
-      if (typeof declaration !== 'string' && declaration.config !== undefined) {
-        throw new Error(`bundled Memory Space Provider ${use} does not accept child config`)
-      }
-      entry = {
-        ...bundled,
-        instanceId: typeof declaration === 'string' ? bundled.instanceId : declaration.instanceId?.trim() || bundled.instanceId,
-      }
-    } else {
-      if (loader?.import === undefined) throw new Error(`cannot resolve installed Memory Space Provider module without the DSH Loader: ${use}`)
-      const module = importedProviderModule(loader, await loader.import(use), use)
-      entry = {
-        instanceId: typeof declaration === 'string' ? module.id : declaration.instanceId?.trim() || module.id,
-        module,
-        config: typeof declaration === 'string' ? undefined : declaration.config,
-      }
+    if (loader?.import === undefined) throw new Error('cannot resolve installed Memory Space Provider module without the DSH Loader: ' + use)
+    const module = importedProviderModule(loader, await loader.import(use), use)
+    const entry: MemorySpaceProviderEntry = {
+      instanceId: typeof declaration === 'string' ? module.id : declaration.instanceId?.trim() || module.id,
+      module,
+      config: typeof declaration === 'string' ? undefined : declaration.config,
     }
     if (instanceIds.has(entry.instanceId)) throw new Error(`duplicate Memory Space Provider child: ${entry.instanceId}`)
     instanceIds.add(entry.instanceId)
@@ -155,12 +134,5 @@ export async function apply(ctx: Context, config: Config = { providers: [] }): P
   await installMemorySpaces(ctx, await resolveMemorySpaceProviderEntries(ctx, providers), { config: sourceConfig })
 }
 
-export { MEMORY_SPACES_SOURCE }
-
 export { createMemorySpacesSource } from './source.ts'
-export { MemorySpacesService } from './service.ts'
-export { MemoryBodyRegistry } from './memory-bodies.ts'
-export { createRunner } from './runner.ts'
-export { resolveMemorySpacesConfig, MemorySpacesConfig } from './config.ts'
-export type { ResolvedMemorySpacesConfig } from './config.ts'
 export type * from './contracts.ts'

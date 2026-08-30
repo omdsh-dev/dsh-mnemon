@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { TurnActivityProjection } from '../src/activity.ts'
-import type { HostSessionEvent } from '../src/contracts.ts'
+import { TurnActivityProjection } from "../src/host/activity.ts"
+import type { HostSessionEvent } from "../src/host/dsh.ts"
 
 function call(seq: number, turn: number, callId: string, name: string): HostSessionEvent {
   return { type: 'tool/call', seq, data: { turn, step: 1, callId, name, arguments: '{}' } }

@@ -1,10 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createMnemonCommand } from '../src/commands.ts'
-import type { HostAgent } from '../src/contracts.ts'
-import type { MnemonService } from '../src/service.ts'
-import type { MnemonSubagentCoordinator } from '../src/subagent.ts'
+import { createMnemonCommand } from "../src/host/commands.ts"
+import type { HostAgent } from "../src/host/dsh.ts"
+import { resolveConfig } from '../src/host/config.ts'
+import type { MnemonAgentRuntimeSource, MnemonRuntimeGraph } from '../src/host/runtime.ts'
+import type { MnemonSubagentCoordinator } from "../src/host/subagent.ts"
 
-const agent = { id: 'session-1' } as HostAgent
+function runtime(fixture: { config: { writeEnabled: boolean; defaultRecallLimit: number }; status?: () => Promise<unknown> }): MnemonAgentRuntimeSource {
+  const config = resolveConfig(fixture.config)
+  return {
+    config,
+    forAgent: () => ({ config, source: () => ({ read: fixture.status }) }) as unknown as MnemonRuntimeGraph,
+    bindAgentRuntime: () => () => {},
+  }
+}
+
+const agent = { id: 'session-1', session: { header: {} } } as HostAgent
 function invocation(rawInput: string) {
   return { agent, rawInput, signal: new AbortController().signal }
 }
@@ -35,8 +45,8 @@ describe('/mnemon command', () => {
         defaultRecallLimit: 10,
         stats: { totalInsights: 3, edgeCount: 2, deletedInsights: 1 },
       })),
-    } as unknown as MnemonService
-    const result = await createMnemonCommand(service, coordinator()).handler(invocation('status'))
+    }
+    const result = await createMnemonCommand(runtime(service), coordinator()).handler(invocation('status'))
     expect(result).toEqual(expect.objectContaining({
       kind: 'success',
       text: expect.stringMatching(/default=default[\s\S]*DSH 已激活: project/u),
@@ -47,19 +57,19 @@ describe('/mnemon command', () => {
   it('runs a bounded recall and includes full ids', async () => {
     const service = {
       config: { writeEnabled: true, defaultRecallLimit: 20 },
-    } as unknown as MnemonService
+    }
     const memoryCoordinator = coordinator({
       recall: vi.fn(async () => ({ query: '为什么使用 SQLite', mode: 'smart', results: [{ id: 'memory-full-id', content: '选择 SQLite 以便本地优先', score: 0.8, memoryBodyId: 'project' }] })),
     })
-    const result = await createMnemonCommand(service, memoryCoordinator).handler(invocation('recall 为什么使用 SQLite'))
+    const result = await createMnemonCommand(runtime(service), memoryCoordinator).handler(invocation('recall 为什么使用 SQLite'))
     expect(memoryCoordinator.recall).toHaveBeenCalledWith(agent, { query: '为什么使用 SQLite', limit: 10 }, expect.any(AbortSignal))
     expect(result).toEqual(expect.objectContaining({ kind: 'success', text: expect.stringContaining('memory-full-id') }))
   })
 
   it('rejects mutation subcommands in read-only mode', async () => {
     const remember = vi.fn()
-    const service = { config: { writeEnabled: false, defaultRecallLimit: 10 }, remember } as unknown as MnemonService
-    const result = await createMnemonCommand(service, coordinator()).handler(invocation('remember 永久记住这条'))
+    const service = { config: { writeEnabled: false, defaultRecallLimit: 10 }, remember }
+    const result = await createMnemonCommand(runtime(service), coordinator()).handler(invocation('remember 永久记住这条'))
     expect(result).toEqual({ kind: 'error', text: 'Mnemon 当前为只读模式，不能写入记忆。' })
     expect(remember).not.toHaveBeenCalled()
   })
@@ -67,8 +77,8 @@ describe('/mnemon command', () => {
   it('returns the memory subagent write receipt', async () => {
     const service = {
       config: { writeEnabled: true, defaultRecallLimit: 10 },
-    } as unknown as MnemonService
-    const result = await createMnemonCommand(service, coordinator()).handler(invocation('remember 一条稳定记忆'))
+    }
+    const result = await createMnemonCommand(runtime(service), coordinator()).handler(invocation('remember 一条稳定记忆'))
     expect(result).toEqual({ kind: 'success', text: 'Mnemon 记忆 Agent 已处理：stored · 记忆体 project' })
   })
 })

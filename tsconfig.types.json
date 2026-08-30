@@ -14,11 +14,8 @@
     ]
   },
   "include": [
-    "bundles/**/*.ts",
-    "bundles/**/*.tsx",
     "src/**/*.ts",
     "src/**/*.tsx",
-    "packages/**/*.ts",
     "plugins/*/src/**/*.ts",
     "plugins/*/src/**/*.tsx"
   ]

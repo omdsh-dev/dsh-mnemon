@@ -1,11 +1,10 @@
 import { Context } from '@deepseek-ai/cordis'
 import { SystemPrompt } from '@deepseek-ai/dsh-system-prompt'
 import { describe, expect, it, vi } from 'vitest'
-import { resolveConfig } from '../src/config.ts'
-import type { HostAgent, HostContextShape, HostSessionEvent } from '../src/contracts.ts'
-import { MnemonLifecycle } from '../src/lifecycle.ts'
-import { RUNTIME_MEMORY_PROTOCOL } from '../src/runtime-memory.ts'
-import type { MnemonSubagentCoordinator } from '../src/subagent.ts'
+import { resolveConfig } from "../src/host/config.ts"
+import type { HostAgent, HostContextShape, HostSessionEvent } from "../src/host/dsh.ts"
+import { MnemonLifecycle } from "../src/host/lifecycle.ts"
+import type { MnemonSubagentCoordinator } from "../src/host/subagent.ts"
 
 describe('Mnemon lifecycle with the real DSH SystemPrompt', () => {
   it('pins and injects the first-turn Wake inside the awaited assembly boundary', async () => {
@@ -21,22 +20,15 @@ describe('Mnemon lifecycle with the real DSH SystemPrompt', () => {
       steer: vi.fn(),
       inject: vi.fn(),
     } satisfies HostAgent
-    const config = resolveConfig({ cliPath: '/fake/mnemon' })
-    const pinnedTurns = new Map<string, object>()
-    const memoryViews = {
-      beginTurn: vi.fn(async (turnId: string, scope: object) => {
-        const context = {
-          turnId,
-          viewId: 'view-first-turn',
-          viewDigest: 'digest-first-turn',
-          scope,
-          startedAt: '2026-08-23T00:00:00.000Z',
-        }
-        pinnedTurns.set(turnId, context)
-        return context
-      }),
-      turn: vi.fn((turnId: string) => pinnedTurns.get(turnId)),
-      wake: vi.fn(() => ({
+    const composableTurns = {
+      beginTurn: vi.fn(async (turnId: string, scope: object) => ({
+        turnId,
+        view: { id: 'view-first-turn' },
+        viewDigest: 'digest-first-turn',
+        scope,
+        startedAt: '2026-08-23T00:00:00.000Z',
+      })),
+      memoryWake: vi.fn(() => ({
         viewId: 'view-first-turn',
         viewDigest: 'digest-first-turn',
         text: 'First-turn Wake',
@@ -46,7 +38,7 @@ describe('Mnemon lifecycle with the real DSH SystemPrompt', () => {
       reconcile: vi.fn(async () => ({ id: 'view-next-turn' })),
     }
     const runtimeSource = {
-      forAgent: vi.fn(() => ({ config, memoryViews })),
+      forAgent: vi.fn(() => ({ composableTurns })),
       bindAgentRuntime: vi.fn(() => vi.fn()),
     }
     const coordinator = { snapshot: vi.fn(() => ({ recalls: 0, writes: 0, answers: 0, reviews: 0, failures: 0 })) } as unknown as MnemonSubagentCoordinator
@@ -59,17 +51,15 @@ describe('Mnemon lifecycle with the real DSH SystemPrompt', () => {
 
     const assembly = await prompt.assemble({ agent, signal: new AbortController().signal } as never)
 
-    expect(memoryViews.beginTurn).toHaveBeenCalledWith('real-prompt-session:1', {
+    expect(composableTurns.beginTurn).toHaveBeenCalledWith('real-prompt-session:1', {
       storage: 'global',
       sessionId: 'real-prompt-session',
       agentId: 'real-prompt-session',
     })
-    expect(assembly.sections).toContainEqual({ name: 'mnemon:runtime-memory-protocol', text: RUNTIME_MEMORY_PROTOCOL })
-    // The Wake no longer travels as a shared runtime-context contribution; it is
-    // appended as a dsh-mnemon message so it cannot invalidate other plugins' context.
-    expect(assembly.contexts).not.toContainEqual(expect.objectContaining({ name: 'mnemon:runtime-memory' }))
+    expect(assembly.sections.some(section => section.name === 'mnemon:runtime-memory-protocol')).toBe(false)
+    expect(assembly.contexts).toContainEqual({ name: 'mnemon:runtime-memory', text: 'First-turn Wake' })
     expect(runtimeSource.bindAgentRuntime).toHaveBeenCalledOnce()
     stop()
-    expect(memoryViews.endTurn).toHaveBeenCalledWith('real-prompt-session:1')
+    expect(composableTurns.endTurn).toHaveBeenCalledWith('real-prompt-session:1')
   })
 })

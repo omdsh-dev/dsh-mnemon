@@ -119,7 +119,6 @@ describe('RuntimeMemoryController', () => {
     const controller = new RuntimeMemoryController(
       { effectiveDataDir: () => directory },
       undefined,
-      undefined,
       { memory: 20_480, user: 10_240 },
     )
 
@@ -153,7 +152,7 @@ describe('RuntimeMemoryController', () => {
     await workspace.mutate({ action: 'add', target: 'user', content: 'Hidden workspace profile.' })
     await workspace.mutate({ action: 'add', target: 'memory', content: 'Exclude environment YAML from commits.' })
 
-    const combined = new RuntimeMemoryController(workspaceRunner, undefined, undefined, undefined, globalRunner)
+    const combined = new RuntimeMemoryController(workspaceRunner, undefined, undefined, globalRunner)
     expect(combined.userPath).toBe(join(globalRoot, 'runtime', 'USER.md'))
     expect(combined.userSourcePath).toBe(join(globalRoot, 'runtime', 'memories.json'))
     expect(combined.memoryPath).toBe(join(workspaceRoot, 'runtime', 'MEMORY.md'))
@@ -218,7 +217,7 @@ describe('RuntimeMemoryController', () => {
     await workspace.mutate({ action: 'add', target: 'memory', content: 'Main-only workspace fact.', branches: ['main'] })
     await workspace.mutate({ action: 'add', target: 'memory', content: 'Dev-only workspace fact.', branches: ['dev'] })
 
-    const combined = new RuntimeMemoryController(workspaceRunner, undefined, undefined, undefined, globalRunner)
+    const combined = new RuntimeMemoryController(workspaceRunner, undefined, undefined, globalRunner)
     const complete = combined.snapshot()
     const onMain = combined.contextProjection('main')
     const onDev = combined.contextProjection('dev')
@@ -347,31 +346,6 @@ describe('RuntimeMemoryController', () => {
     expect(controller.contextText()).not.toContain('pnpm manages workspace dependencies.')
   })
 
-  it('records validated migration lineage only in the compaction receipt checkpoint', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'dsh-mnemon-runtime-lineage-'))
-    directories.push(directory)
-    const commits: Array<Record<string, unknown>> = []
-    const controller = new RuntimeMemoryController(
-      { effectiveDataDir: () => directory },
-      undefined,
-      operation => {
-        commits.push(operation as unknown as Record<string, unknown>)
-        return {} as never
-      },
-    )
-    await controller.mutate({ action: 'add', target: 'memory', content: 'Project uses pnpm.' })
-    const reviewed = controller.snapshot()
-    const lineage = [{
-      source: { layerId: 'runtime', reference: `runtime:${reviewed.revision}:memory:1`, digest: 'a'.repeat(64) },
-      destination: { layerId: 'memory-spaces', reference: 'memory-space:project/item:m1', digest: 'b'.repeat(64) },
-    }]
-
-    await controller.compactTarget(reviewed.revision, 'memory', [{ content: 'Project package manager is pnpm.', importance: 'normal' }], undefined, lineage)
-
-    expect(commits.at(-1)).toMatchObject({ operation: 'runtime-compact', checkpoint: { lineage } })
-    expect(readFileSync(controller.sourcePath, 'utf8')).not.toContain('memory-space:project')
-  })
-
   it('never overwrites a concurrent mutation with an obsolete compaction plan', async () => {
     const { controller } = fixture()
     await controller.mutate({ action: 'add', target: 'user', content: 'User prefers concise replies.' })
@@ -432,35 +406,23 @@ describe('RuntimeMemoryController', () => {
     expect(readFileSync(controller.memoryPath, 'utf8')).not.toContain(oldContent)
   })
 
-  it('atomically commits a capacity-blocked add and records its migration lineage once', async () => {
+  it('atomically commits a capacity-blocked add with the reviewed compaction', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'dsh-mnemon-runtime-atomic-lineage-'))
     directories.push(directory)
-    const commits: Array<Record<string, unknown>> = []
     const controller = new RuntimeMemoryController(
       { effectiveDataDir: () => directory },
       undefined,
-      operation => {
-        commits.push(operation as unknown as Record<string, unknown>)
-        return {} as never
-      },
     )
     await controller.mutate({ action: 'add', target: 'memory', content: 'a'.repeat(5_000) })
     await controller.mutate({ action: 'add', target: 'memory', content: 'b'.repeat(5_000) })
     const request = { action: 'add', target: 'memory', content: 'new durable fact '.repeat(30) } as const
     await expect(controller.mutate(request)).rejects.toBeInstanceOf(RuntimeMemoryCapacityError)
     const plan = await controller.planMaintenance(request)
-    const lineage = [{
-      source: { layerId: 'runtime', reference: `runtime:${plan.revision}:memory:1`, digest: 'a'.repeat(64) },
-      destination: { layerId: 'memory-spaces', reference: 'memory-space:project/item:m1', digest: 'b'.repeat(64) },
-    }]
-
-    const beforeCommitCount = commits.length
     const result = await controller.compactAndMutate(
       plan.revision,
       request,
       [{ content: 'Archived workspace history.', importance: 'normal' }],
       6_000,
-      lineage,
     )
 
     expect(result).toMatchObject({ added: request.content.trim() })
@@ -468,11 +430,6 @@ describe('RuntimeMemoryController', () => {
       'Archived workspace history.',
       request.content.trim(),
     ])
-    expect(commits).toHaveLength(beforeCommitCount + 1)
-    expect(commits.at(-1)).toMatchObject({
-      operation: 'runtime-add',
-      checkpoint: { target: 'memory', maintenance: { kind: 'runtime-compaction', lineage } },
-    })
   })
 
   it('never archives or preserves a removed entry while recovering an already-over-capacity file', async () => {

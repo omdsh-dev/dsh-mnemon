@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, waitFor } from '@testing-library/react'
 
 vi.mock('../src/client/MnemonView.tsx', () => ({
   MnemonView: ({ sessionId, workspaceId, workspaceSelection, t, locale, onClose }: {
@@ -30,8 +30,11 @@ vi.mock('../src/client/MnemonView.tsx', () => ({
 import {
   createMnemonWorkspaceNavigation,
   MnemonWorkspaceHost,
-  mountMnemonWorkspace,
+  MnemonSidebarWorkspaceHost,
+  mountMnemonSidebarLauncher,
 } from '../src/client/workspace-mount.tsx'
+
+import { MnemonWorkspaceController } from '../src/client/workspace-controller.ts'
 
 let currentDispose: (() => void) | undefined
 const siblingDisposers: Array<() => void> = []
@@ -140,17 +143,18 @@ describe('Mnemon canonical workspace launcher', () => {
     vi.restoreAllMocks()
   })
 
-  it('mounts after the official panel family and opens the canonical DSH tab', () => {
+  it('mounts after the official panel family without hijacking the current conversation tab', () => {
     const memoryTab = [...document.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(tab => tab.textContent === 'Memory')!
     const clicked = vi.fn()
     memoryTab.addEventListener('click', clicked)
-    currentDispose = mountMnemonWorkspace(context() as never, settings, t as never)
+    currentDispose = mountMnemonSidebarLauncher(context() as never, t as never, new MnemonWorkspaceController())
 
     const entry = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')!
     expect(entry.previousElementSibling?.hasAttribute('data-dsh-ssh-entry')).toBe(true)
     fireEvent.click(entry)
-    expect(clicked).toHaveBeenCalledOnce()
-    expect(memoryTab.getAttribute('aria-selected')).toBe('true')
+    expect(clicked).not.toHaveBeenCalled()
+    expect(entry.dataset.active).toBe('true')
+    expect(memoryTab.getAttribute('aria-selected')).toBe('false')
     expect(document.querySelector('[data-chat-content]')?.textContent).toBe('Chat stays mounted')
     expect(document.querySelector('[data-dsh-mnemon-view]')).toBeNull()
   })
@@ -163,8 +167,39 @@ describe('Mnemon canonical workspace launcher', () => {
     expect(document.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Chat')
   })
 
+  it('opens the DSH sidebar seat before a session exists and restores the conversation on close', async () => {
+    document.querySelector('[role="tablist"]')?.remove()
+    const ctx = context()
+    const emptySessions = { byId: {} }
+    const sessions = { list: { getSnapshot: () => emptySessions, subscribe: () => () => {} } }
+    const controller = new MnemonWorkspaceController()
+    const navigation = { open: () => controller.open(), close: () => controller.close() }
+    const column = document.querySelector<HTMLElement>('[data-pane="conversation"]')!
+    column.inert = false
+    vi.spyOn(column, 'getBoundingClientRect').mockReturnValue({ left: 280, top: 0, width: 1_000, height: 720 } as DOMRect)
+    currentDispose = mountMnemonSidebarLauncher(ctx as never, t as never, controller)
+    const view = render(<MnemonSidebarWorkspaceHost
+      connection={ctx.connection as never} settingsScope={settings} sessions={sessions as never} workspaces={ctx.workspaces as never}
+      localeRuntime={ctx.locale as never} sourcePageDirectory={sourcePageDirectory} navigation={navigation}
+      surface="sidebar" t={t as never} renderSlot={() => null} controller={controller}
+    />)
+    expect(document.querySelector('[data-testid="mnemon-canonical-content"]')).toBeNull()
+    fireEvent.click(document.querySelector('[data-dsh-mnemon-entry]')!)
+    await waitFor(() => expect(view.getByText('no-session')).not.toBeNull())
+    expect(column.inert).toBe(true)
+    expect(document.querySelector('[data-chat-content]')?.textContent).toBe('Chat stays mounted')
+    fireEvent.click(view.getByText('back-test-conversation'))
+    expect(column.inert).toBe(false)
+    expect(document.querySelector('[data-testid="mnemon-canonical-content"]')).toBeNull()
+    act(() => controller.open())
+    await waitFor(() => expect(view.getByText('no-session')).not.toBeNull())
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(column.inert).toBe(false)
+    view.unmount()
+  })
+
   it('self-heals its sidebar launcher after a React-style row replacement', async () => {
-    currentDispose = mountMnemonWorkspace(context() as never, settings, t as never)
+    currentDispose = mountMnemonSidebarLauncher(context() as never, t as never, new MnemonWorkspaceController())
     document.querySelector('[data-dsh-mnemon-entry]')?.remove()
     await waitFor(() => expect(document.querySelector('[data-dsh-mnemon-entry]')).not.toBeNull())
     currentDispose()
@@ -174,10 +209,11 @@ describe('Mnemon canonical workspace launcher', () => {
 
   it('mounts the launcher in the DSH advanced frame without replacing conversation content', () => {
     renderShell(true)
-    currentDispose = mountMnemonWorkspace(context() as never, settings, t as never)
+    currentDispose = mountMnemonSidebarLauncher(context() as never, t as never, new MnemonWorkspaceController())
     const entry = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')!
     fireEvent.click(entry)
-    expect(document.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Memory')
+    expect(document.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Chat')
+    expect(entry.dataset.active).toBe('true')
     expect(document.querySelector('[data-chat-content]')).not.toBeNull()
     expect(document.querySelector('[data-dsh-mnemon-view]')).toBeNull()
   })
@@ -191,7 +227,7 @@ describe('Mnemon canonical workspace launcher', () => {
     render(<MnemonWorkspaceHost
       connection={ctx.connection as never} settingsScope={settings} sessions={ctx.sessions as never} workspaces={ctx.workspaces as never}
       localeRuntime={ctx.locale as never} sourcePageDirectory={sourcePageDirectory} navigation={createMnemonWorkspaceNavigation(t as never)}
-      surface="sidebar" t={t as never} renderSlot={() => null} SessionProvider={({ children }) => children('session-1' as never)} sessionId="session-1"
+      surface="sidebar" t={t as never} renderSlot={() => null} sessionId="session-1"
     />)
 
     await waitFor(() => expect(document.querySelector('[data-testid="mnemon-canonical-content"]')?.getAttribute('data-workspace-id')).toBe('workspace-1'))
@@ -209,7 +245,7 @@ describe('Mnemon canonical workspace launcher', () => {
     const listeners = new Set<() => void>()
     const locale = { getSnapshot: () => snapshot, subscribe: (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener) } }
     const translate = (key: string) => key === 'tab.label' ? active === 'zh' ? '记忆系统' : 'Memory System' : key
-    currentDispose = mountMnemonWorkspace(context(locale) as never, settings, translate as never)
+    currentDispose = mountMnemonSidebarLauncher(context(locale) as never, translate as never, new MnemonWorkspaceController())
     expect(document.querySelector('[data-dsh-mnemon-entry]')?.textContent).toBe('记忆系统')
     active = 'en'
     snapshot = { active, locales: [] as const, revision: 1 }

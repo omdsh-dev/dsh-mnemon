@@ -2,325 +2,131 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { resolveConfig } from '../src/config.ts'
-import type { HostAgent, HostAgentsService, HostContextShape, HostSubagentsService, HostWorkspaceRegistry } from '../src/contracts.ts'
-import { createRuntimeGraph, LiveMnemonRuntime } from '../src/live-runtime.ts'
-import { createReadHandler, createWriteHandler } from '../src/rpc.ts'
-import { MnemonLifecycle } from '../src/lifecycle.ts'
-import { MnemonSubagentCoordinator } from '../src/subagent.ts'
-import { MemoryExtensionHost } from '../packages/extension-sdk/src/index.ts'
+import type { RuntimeMemorySnapshot } from 'dsh-mnemon-source-runtime/contracts'
+import type { HostAgent, HostWorkspaceRegistry, HostAgentsService } from '../src/host/dsh.ts'
+import { createRuntimeGraph, LiveMnemonRuntime } from '../src/host/runtime.ts'
+import { resolveConfig } from '../src/host/config.ts'
+import { compositionFixture } from './fixtures/composition.ts'
 
+const fixtures: Awaited<ReturnType<typeof compositionFixture>>[] = []
 const directories: string[] = []
-
-function temporaryDirectory(label: string): string {
-  const directory = mkdtempSync(join(tmpdir(), `dsh-mnemon-${label}-`))
-  directories.push(directory)
-  return directory
+function directory() { const value = mkdtempSync(join(tmpdir(), 'mnemon-routing-')); directories.push(value); return value }
+async function fixture(options: Parameters<typeof compositionFixture>[0] = {}) {
+  const value = await compositionFixture(options); fixtures.push(value); return value
 }
-
 function agent(id: string, cwd: string): HostAgent {
-  return {
-    id,
-    status: 'idle',
-    session: { header: { cwd }, events: [] },
-    ctx: { on: vi.fn(), effect: vi.fn() },
-    followup: vi.fn(),
-    steer: vi.fn(),
-    inject: vi.fn(),
-  }
+  return { id, status: 'idle', session: { header: { cwd }, events: [] }, ctx: { on: vi.fn(), effect: vi.fn() }, followup: vi.fn(), steer: vi.fn(), inject: vi.fn() }
 }
-
-afterEach(() => {
+afterEach(async () => {
+  for (const value of fixtures.splice(0)) await value.dispose()
+  for (const value of directories.splice(0)) rmSync(value, { recursive: true, force: true })
   vi.unstubAllEnvs()
-  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
 })
 
-describe('LiveMnemonRuntime workspace routing', () => {
-  it.each(['global', 'workspace', 'custom', 'legacy-custom'] as const)('maps Builtin session reads and writes to %s storage without a workspace override', async storageScope => {
-    const globalRoot = temporaryDirectory('builtin-global')
-    const customRoot = temporaryDirectory('builtin-custom')
-    const initialRoot = temporaryDirectory('builtin-host')
-    const workspaceOne = temporaryDirectory('builtin-one')
-    const workspaceTwo = temporaryDirectory('builtin-two')
-    vi.stubEnv('MNEMON_DATA_DIR', globalRoot)
-    const sessions = [agent('session-1', workspaceOne), agent('session-2', workspaceTwo)]
-    const workspaces = sessions.map((session, index) => ({ id: `workspace-${index + 1}`, title: `Workspace ${index + 1}`, path: session.session.header!.cwd! }))
-    const runtime = new LiveMnemonRuntime(createRuntimeGraph(resolveConfig({
-      displayMode: 'builtin', cliPath: '/fake/mnemon',
-      ...(storageScope === 'legacy-custom' ? {} : { storageScope }),
-      ...(storageScope === 'custom' || storageScope === 'legacy-custom' ? { dataDir: customRoot } : {}),
-    }), initialRoot), {
-      get: id => workspaces.find(workspace => workspace.id === id), list: () => workspaces,
-    }, {
-      get: id => sessions.find(session => session.id === id), roots: () => sessions,
-    })
-    const subagents = { run: vi.fn() }
-    const lifecycle = new MnemonLifecycle({ agents: { get: (id: string) => sessions.find(session => session.id === id) } } as HostContextShape,
-      new MnemonSubagentCoordinator(subagents as unknown as HostSubagentsService, runtime), runtime.config, runtime)
-    const read = createReadHandler(runtime, lifecycle)
-    const write = createWriteHandler(runtime, lifecycle)
+describe('default Host scope over the Composable Runtime', () => {
+  it('has one composition and no duplicate controllers, catalog or kernel', async () => {
+    const { graph } = await fixture()
+    expect(graph.memoryComposition.inspect().evaluation.state).toBe('ready')
+    for (const retired of ['service', 'runtimeMemory', 'documents', 'memoryKernel', 'memoryViews', 'memoryTopology', 'runner']) expect(graph).not.toHaveProperty(retired)
+    expect((await graph.memoryComposition.current()!.managementCatalog({ storage: 'custom' })).sources.map(source => source.sourceTypeId)).toEqual(['runtime', 'documents', 'memory-spaces'])
+  })
+  it('supplies existing Runtime capacity settings through Source configuration', async () => {
+    const { graph } = await fixture({ runtimeMemory: { memoryLimitBytes: 20_480, userLimitBytes: 10_240, maintenanceMaxTokens: 32_768 } })
+    const snapshot = await graph.source('runtime').read<RuntimeMemorySnapshot>('snapshot')
+    expect(snapshot.targets).toMatchObject({ memory: { limit: 20_480 }, user: { limit: 10_240 } })
+    expect(graph.config.runtimeMemory.maintenanceMaxTokens).toBe(32_768)
+  })
+  it('preserves default settings and storage under DSH include-qualified Entry identities', async () => {
+    const value = await compositionFixture({ runtimeMemory: { memoryLimitBytes: 20_480 } }, { entryPrefix: 'profile:include' })
+    fixtures.push(value)
+    const snapshot = await value.graph.source('runtime').read<RuntimeMemorySnapshot>('snapshot')
+    expect(snapshot.targets.memory).toMatchObject({ limit: 20_480, markdownPath: join(value.graph.directory, 'runtime', 'MEMORY.md') })
+    const catalog = await value.graph.memoryComposition.current()!.managementCatalog({ storage: 'custom' })
+    expect(catalog.sources.map(source => source.sourceInstanceKey)).toEqual([
+      'source:profile:include:mnemon-source-runtime',
+      'source:profile:include:mnemon-source-documents',
+      'source:profile:include:mnemon-source-memory-spaces',
+    ])
+  })
+  it('keeps an opt-in global user profile separate from project memory', async () => {
+    const global = directory()
+    vi.stubEnv('MNEMON_DATA_DIR', global)
+    const { graph } = await fixture({ runtimeUserScope: 'global', runtimeMemory: { memoryLimitBytes: 20_480, userLimitBytes: 10_240 } })
+    const source = graph.source('runtime')
+    await source.mutate('mutate', { action: 'add', target: 'user', content: 'Prefer concise answers.' })
+    await source.mutate('mutate', { action: 'add', target: 'memory', content: 'Project uses pnpm.' })
+    const snapshot = await source.read<RuntimeMemorySnapshot>('snapshot')
+    expect(snapshot.targets.user.markdownPath).toBe(join(global, 'runtime', 'USER.md'))
+    expect(snapshot.targets.memory.markdownPath).toBe(join(graph.directory, 'runtime', 'MEMORY.md'))
+    expect(snapshot.entries).toHaveLength(2)
+  })
+  it('keeps root and child Agents on their pinned graph across a live settings swap', async () => {
+    const { graph, live, extensions, workspace, config } = await fixture()
+    const parent = agent('session', workspace)
+    const turn = await graph.composableTurns.beginTurn('session:1', { storage: 'custom', workspaceId: workspace, agentId: parent.id })
+    const release = live.bindAgentRuntime(parent.id, graph)
+    const next = createRuntimeGraph(resolveConfig({ ...config, defaultRecallLimit: 3 }), workspace, extensions)
+    live.swap(next)
+    expect(live.snapshot()).toBe(next)
+    expect(live.forAgent(parent)).toBe(graph)
+    const child = agent('child', workspace)
+    child.session.header = { cwd: workspace, origin: 'subagent', parentSession: parent.id }
+    expect(live.forAgent(child)).toBe(graph)
+    graph.composableTurns.endTurn(turn.turnId)
+    release()
+    expect(live.forAgent(parent)).toBe(next)
+    live.dispose()
+    expect(() => live.forAgent(parent)).toThrow('disposed')
+  })
+  it('resolves inspection and execution workspaces through the Host registry', async () => {
+    const one = directory(), two = directory()
+    const { graph, extensions } = await fixture({ storageScope: 'workspace' })
+    const workspaces = [{ id: 'one', title: 'One', path: one }, { id: 'two', title: 'Two', path: two }]
+    const registry = { get: (id: string) => workspaces.find(value => value.id === id), list: () => workspaces } satisfies HostWorkspaceRegistry
+    const session = agent('session', one)
+    const agents = { get: (id: string) => id === session.id ? session : undefined, roots: () => [session] } satisfies HostAgentsService
+    const live = new LiveMnemonRuntime(graph, registry, agents, extensions)
     try {
-      for (const session of sessions) {
-        const expected = storageScope === 'workspace' ? join(session.session.header!.cwd!, '.mnemon') : storageScope === 'global' ? globalRoot : customRoot
-        expect(runtime.route({ sessionId: session.id })).toMatchObject({ selectedRoot: expected, effectiveRoot: expected, aligned: true })
-        await expect(write('runtime-memory', { sessionId: session.id, action: 'add', target: 'memory', content: `Memory from ${session.id}` })).resolves.toMatchObject({ ok: true })
-        await expect(write('document', { sessionId: session.id, action: 'create', title: `Document from ${session.id}`, content: `# ${session.id}` })).resolves.toMatchObject({ ok: true })
-      }
-      for (const session of sessions) {
-        const expectedSessions = storageScope === 'workspace' ? [session] : sessions
-        const memory = await read('runtime-memory', { sessionId: session.id })
-        expect(memory).toMatchObject({ ok: true, value: { entries: expect.arrayContaining(expectedSessions.map(item => expect.objectContaining({ content: `Memory from ${item.id}` }))) } })
-        if (memory.ok) expect((memory.value as { entries: unknown[] }).entries).toHaveLength(expectedSessions.length)
-        const documents = await read('documents', { sessionId: session.id })
-        expect(documents).toMatchObject({ ok: true, value: { activeCount: expectedSessions.length } })
-      }
-      expect(subagents.run).not.toHaveBeenCalled()
-    } finally {
-      runtime.dispose()
+      expect(live.forAgent(session).directory).toBe(join(one, '.mnemon'))
+      expect(live.forWorkspaceId('two').directory).toBe(join(two, '.mnemon'))
+      expect(live.route({ workspaceId: 'two', sessionId: session.id })).toMatchObject({
+        selectedRoot: join(two, '.mnemon'), effectiveRoot: join(one, '.mnemon'), aligned: false,
+      })
+      expect(live.route({ workspaceId: 'one', sessionId: session.id }).aligned).toBe(true)
+      expect(() => live.forWorkspaceId('../../private')).toThrow('selected DSH workspace is unavailable')
+    } finally { live.dispose() }
+  })
+  it('uses Agent cwd in Headless without a Web workspace registry', async () => {
+    const workspace = directory()
+    const { graph, extensions } = await fixture({ storageScope: 'workspace' })
+    const session = agent('headless', workspace)
+    const live = new LiveMnemonRuntime(graph, undefined, { get: () => session, roots: () => [session] }, extensions)
+    try {
+      expect(live.forAgent(session).directory).toBe(join(workspace, '.mnemon'))
+      expect(live.route({ sessionId: session.id })).toMatchObject({ selectedRoot: join(workspace, '.mnemon'), effectiveRoot: join(workspace, '.mnemon'), aligned: true })
+    } finally { live.dispose() }
+  })
+  it('preserves one singleton root for global and custom storage', async () => {
+    const global = directory()
+    vi.stubEnv('MNEMON_DATA_DIR', global)
+    for (const storageScope of ['global', 'custom'] as const) {
+      const value = await fixture({ storageScope })
+      const session = agent('other-workspace', directory())
+      expect(value.live.forAgent(session)).toBe(value.graph)
+      if (storageScope === 'global') expect(value.graph.directory).toBe(global)
     }
   })
-
-  it('builds one composable memory generation beside the compatible runtime services', () => {
-    const runtime = createRuntimeGraph(resolveConfig({ storageScope: 'global', cliPath: '/fake/mnemon' }))
-    const descriptor = runtime.memoryKernel.descriptor()
-    expect(descriptor).toMatchObject({
-      topology: {
-        id: 'default-three-tier',
-        generation: 1,
-        layers: [
-          { id: 'runtime', enabled: true },
-          { id: 'documents', enabled: true },
-          { id: 'memory-spaces', enabled: true },
-        ],
-      },
-      catalog: {
-        layers: [{ id: 'runtime' }, { id: 'documents' }, { id: 'memory-spaces' }],
-        strategies: [{ id: 'default-three-tier' }],
-      },
-    })
-    expect(descriptor.catalog.adapters.map(adapter => adapter.id)).toEqual(expect.arrayContaining(['mnemon-native', 'openviking', 'supermemory']))
-  })
-
-  it('wires configured Runtime Memory limits into each runtime generation', () => {
-    const runtime = createRuntimeGraph(resolveConfig({
-      storageScope: 'global',
-      cliPath: '/fake/mnemon',
-      runtimeMemory: { memoryLimitBytes: 20_480, userLimitBytes: 10_240, maintenanceMaxTokens: 32_768 },
-    }))
-    expect(runtime.runtimeMemory.limits).toEqual({ memory: 20_480, user: 10_240 })
-    expect(runtime.config.runtimeMemory.maintenanceMaxTokens).toBe(32_768)
-    runtime.dispose()
-  })
-
-  it('closes the compatibility Provider data plane with its runtime graph', () => {
-    const runtime = createRuntimeGraph(resolveConfig({ storageScope: 'global', cliPath: '/fake/mnemon' }))
-    const dispose = vi.spyOn(runtime.service, 'dispose')
-
-    runtime.dispose()
-    runtime.dispose()
-
-    expect(dispose).toHaveBeenCalledTimes(1)
-  })
-
-  it('combines an opt-in global USER.md with project memory under the same configured limits', async () => {
-    const globalRoot = temporaryDirectory('global-user-profile')
-    const projectRoot = temporaryDirectory('project-runtime')
-    vi.stubEnv('MNEMON_DATA_DIR', globalRoot)
-    const runtime = createRuntimeGraph(resolveConfig({
-      storageScope: 'custom',
-      dataDir: projectRoot,
-      runtimeUserScope: 'global',
-      runtimeMemory: { memoryLimitBytes: 20_480, userLimitBytes: 10_240 },
-      cliPath: '/fake/mnemon',
-    }))
-
-    await runtime.runtimeMemory.mutate({ action: 'add', target: 'user', content: 'Stash local changes before pulling.' })
-    await runtime.runtimeMemory.mutate({ action: 'add', target: 'memory', content: 'Exclude deployment YAML in this project.' })
-    await runtime.runtimeMemory.mutate({ action: 'add', target: 'user', content: `profile-capacity:${'u'.repeat(6_000)}` })
-    await runtime.runtimeMemory.mutate({ action: 'add', target: 'memory', content: `project-capacity-a:${'m'.repeat(6_000)}` })
-    await runtime.runtimeMemory.mutate({ action: 'add', target: 'memory', content: `project-capacity-b:${'m'.repeat(6_000)}` })
-
-    expect(runtime.runtimeMemory.userPath).toBe(join(globalRoot, 'runtime', 'USER.md'))
-    expect(runtime.runtimeMemory.memoryPath).toBe(join(projectRoot, 'runtime', 'MEMORY.md'))
-    const snapshot = runtime.runtimeMemory.snapshot()
-    expect(snapshot.entries.map(entry => entry.content)).toEqual(expect.arrayContaining([
-      'Stash local changes before pulling.',
-      'Exclude deployment YAML in this project.',
-    ]))
-    expect(snapshot.entries).toHaveLength(5)
-    expect(snapshot.targets.user).toMatchObject({ limit: 10_240, used: expect.any(Number) })
-    expect(snapshot.targets.user.used).toBeGreaterThan(4_096)
-    expect(snapshot.targets.memory).toMatchObject({ limit: 20_480, used: expect.any(Number) })
-    expect(snapshot.targets.memory.used).toBeGreaterThan(10_240)
-    runtime.dispose()
-  })
-
-  it('discovers extension layers as disabled topology candidates until explicitly configured', () => {
-    const extensions = new MemoryExtensionHost()
-    extensions.register({
-      descriptor: { id: 'episodic-extension', version: '1', label: 'Episodic', description: 'External episodic layer.' },
-      layers: [{ descriptor: { id: 'episodic', label: 'Episodic', description: 'External event memory.', role: 'episodic', order: 400, capabilities: ['recall', 'write'] } }],
-    })
-    const discovered = createRuntimeGraph(resolveConfig({ storageScope: 'global', cliPath: '/fake/mnemon' }), undefined, extensions)
-    expect(discovered.memoryTopology.snapshot().layers.find(layer => layer.id === 'episodic')).toMatchObject({
-      enabled: false,
-      participation: { recall: 'manual', write: 'manual' },
-    })
-    discovered.dispose()
-
-    const configured = createRuntimeGraph(resolveConfig({
-      storageScope: 'global',
-      cliPath: '/fake/mnemon',
-      memoryTopology: { layers: { episodic: { enabled: true, participation: { recall: 'automatic' } } } },
-    }), undefined, extensions)
-    expect(configured.memoryTopology.snapshot().layers.find(layer => layer.id === 'episodic')).toMatchObject({ enabled: true, participation: { recall: 'automatic' } })
-    configured.dispose()
-  })
-
-  it('reconciles extensions registered and unloaded after the runtime is live', () => {
-    const extensions = new MemoryExtensionHost()
-    const runtime = createRuntimeGraph(resolveConfig({ storageScope: 'global', cliPath: '/fake/mnemon' }), undefined, extensions)
-    const dispose = extensions.register({
-      descriptor: { id: 'late-extension', version: '1', label: 'Late', description: 'Late contribution.' },
-      layers: [{ descriptor: { id: 'late-layer', label: 'Late', description: 'Late memory layer.', role: 'late-memory', order: 500, capabilities: ['recall'] } }],
-    })
-    expect(runtime.memoryTopology.snapshot().layers.find(layer => layer.id === 'late-layer')).toMatchObject({ enabled: false })
-    dispose()
-    expect(runtime.memoryTopology.snapshot().layers.find(layer => layer.id === 'late-layer')).toBeUndefined()
-    runtime.dispose()
-  })
-
-  it('rejects automatic extension projection without a MemorySource and assembles contributed Sources when present', async () => {
-    const missing = new MemoryExtensionHost()
-    missing.register({
-      descriptor: { id: 'missing-projector', version: '1', label: 'Missing', description: 'Projection fixture.' },
-      layers: [{ descriptor: { id: 'episodes', label: 'Episodes', description: 'Episodic projection.', role: 'episodes', order: 400, capabilities: ['project'] } }],
-    })
-    const config = resolveConfig({
-      storageScope: 'global',
-      cliPath: '/fake/mnemon',
-      memoryTopology: { layers: { episodes: { enabled: true, participation: { projection: 'automatic' } } } },
-    })
-    expect(() => createRuntimeGraph(config, undefined, missing)).toThrow('no MemorySource: episodes')
-
-    const extensions = new MemoryExtensionHost()
-    extensions.register({
-      descriptor: { id: 'episodes-source', version: '1', label: 'Episodes', description: 'Source fixture.' },
-      layers: [{ descriptor: { id: 'episodes', label: 'Episodes', description: 'Episodic projection.', role: 'episodes', order: 400, capabilities: ['project'] } }],
-      sources: [{
-        layerId: 'episodes',
-        mode: 'routed',
-        snapshot: () => ({ revision: 'episodes-1', wake: 'Recent bounded episodes are available.' }),
-      }],
-    })
-    const graph = createRuntimeGraph(config, undefined, extensions)
-    const turn = await graph.memoryViews.beginTurn('session:1', { storage: 'global', sessionId: 'session', agentId: 'session' })
-    expect(graph.memoryViews.wake(turn.viewId).sections).toEqual(expect.arrayContaining([
-      expect.objectContaining({ layerId: 'episodes', mode: 'routed' }),
-    ]))
-    graph.memoryViews.endTurn(turn.turnId)
-    graph.dispose()
-  })
-
-  it('keeps one Agent on its pinned runtime graph across a live swap and releases it at turn end', async () => {
-    const config = resolveConfig({ storageScope: 'global', cliPath: '/fake/mnemon' })
-    const first = createRuntimeGraph(config)
-    const runtime = new LiveMnemonRuntime(first)
-    const sessionAgent = agent('session-1', temporaryDirectory('pinned-runtime'))
-    const context = await first.memoryViews.beginTurn('session-1:1', { storage: 'global', sessionId: 'session-1', agentId: 'session-1' })
-    const release = runtime.bindAgentRuntime(sessionAgent.id, first)
-    const second = createRuntimeGraph(config)
-
-    runtime.swap(second)
-    expect(runtime.snapshot()).toBe(second)
-    expect(runtime.forAgent(sessionAgent)).toBe(first)
-    expect(runtime.forAgent(sessionAgent).memoryViews.activeTurn(sessionAgent.id)).toEqual(context)
-    const childCwd = sessionAgent.session.header!.cwd!
-    const child = agent('child-1', childCwd)
-    child.session.header = { origin: 'subagent', parentSession: sessionAgent.id, cwd: childCwd }
-    expect(runtime.forAgent(child)).toBe(first)
-
-    first.memoryViews.endTurn(context.turnId)
-    release()
-    expect(runtime.forAgent(sessionAgent)).toBe(second)
-    runtime.dispose()
-    expect(() => runtime.forAgent(sessionAgent)).toThrow('disposed')
-  })
-
-  it('separates the inspected workspace from the current session execution workspace', () => {
-    const workspaceOne = temporaryDirectory('workspace-one')
-    const workspaceTwo = temporaryDirectory('workspace-two')
-    const initialRoot = temporaryDirectory('initial')
-    const workspaces = [
-      { id: 'workspace-1', title: 'Workspace One', path: workspaceOne },
-      { id: 'workspace-2', title: 'Workspace Two', path: workspaceTwo },
-    ]
-    const registry = {
-      get: (id: string) => workspaces.find(workspace => workspace.id === id),
-      list: () => workspaces,
-    } satisfies HostWorkspaceRegistry
-    const sessionAgent = agent('session-1', workspaceOne)
-    const agents = {
-      get: (id: string) => id === sessionAgent.id ? sessionAgent : undefined,
-      roots: () => [sessionAgent],
-    } satisfies HostAgentsService
-    const config = resolveConfig({ storageScope: 'workspace', cliPath: '/fake/mnemon' })
-    const runtime = new LiveMnemonRuntime(createRuntimeGraph(config, initialRoot), registry, agents)
-
-    expect(runtime.forAgent(sessionAgent).runner.effectiveDataDir()).toBe(join(workspaceOne, '.mnemon'))
-    expect(runtime.forWorkspaceId('workspace-2').runner.effectiveDataDir()).toBe(join(workspaceTwo, '.mnemon'))
-    expect(runtime.route({ workspaceId: 'workspace-2', sessionId: 'session-1' })).toMatchObject({
-      selectedRoot: join(workspaceTwo, '.mnemon'),
-      effectiveRoot: join(workspaceOne, '.mnemon'),
-      aligned: false,
-      selectedWorkspace: { id: 'workspace-2' },
-      effectiveWorkspace: { id: 'workspace-1' },
-    })
-    expect(runtime.route({ workspaceId: 'workspace-1', sessionId: 'session-1' }).aligned).toBe(true)
-  })
-
-  it('rejects arbitrary workspace identifiers at the Host boundary', () => {
-    const workspace = temporaryDirectory('workspace')
-    const config = resolveConfig({ storageScope: 'workspace', cliPath: '/fake/mnemon' })
-    const registry = { get: vi.fn(), list: vi.fn(() => []) } satisfies HostWorkspaceRegistry
-    const runtime = new LiveMnemonRuntime(createRuntimeGraph(config, workspace), registry, { get: vi.fn(), roots: vi.fn(() => []) })
-
-    expect(() => runtime.forWorkspaceId('../../private')).toThrow('selected DSH workspace is unavailable')
-    expect(registry.get).toHaveBeenCalledWith('../../private')
-  })
-
-  it('keeps global and custom storage on their configured singleton root', () => {
-    const workspace = temporaryDirectory('workspace')
-    const globalRuntime = new LiveMnemonRuntime(createRuntimeGraph(resolveConfig({ storageScope: 'global', cliPath: '/fake/mnemon' }), workspace))
-    const customRoot = temporaryDirectory('custom')
-    const customRuntime = new LiveMnemonRuntime(createRuntimeGraph(resolveConfig({ storageScope: 'custom', dataDir: customRoot, cliPath: '/fake/mnemon' }), workspace))
-    const sessionAgent = agent('session-1', temporaryDirectory('other-workspace'))
-
-    expect(globalRuntime.forAgent(sessionAgent)).toBe(globalRuntime.snapshot())
-    expect(customRuntime.forAgent(sessionAgent)).toBe(customRuntime.snapshot())
-    expect(customRuntime.route({ sessionId: 'session-1' })).toMatchObject({ selectedRoot: customRoot, effectiveRoot: customRoot, aligned: true })
-  })
-
-  it('routes Headless workspace storage by Agent cwd without a Web workspace registry', () => {
-    const initialRoot = temporaryDirectory('headless-initial')
-    const workspace = temporaryDirectory('headless-workspace')
-    const sessionAgent = agent('headless-session', workspace)
-    const agents = {
-      get: (id: string) => id === sessionAgent.id ? sessionAgent : undefined,
-      roots: () => [sessionAgent],
-    } satisfies HostAgentsService
-    const runtime = new LiveMnemonRuntime(
-      createRuntimeGraph(resolveConfig({ storageScope: 'workspace', cliPath: '/fake/mnemon' }), initialRoot),
-      undefined,
-      agents,
-    )
-
-    expect(runtime.forAgent(sessionAgent).runner.effectiveDataDir()).toBe(join(workspace, '.mnemon'))
-    expect(runtime.route({ sessionId: sessionAgent.id })).toMatchObject({
-      selectedRoot: join(workspace, '.mnemon'),
-      effectiveRoot: join(workspace, '.mnemon'),
-      aligned: true,
-    })
-    expect(() => runtime.forWorkspaceId('web-only-selection')).toThrow('selected DSH workspace is unavailable')
+  it('keeps all eight existing Source enable/disable combinations without adding another topology engine', async () => {
+    const ids = ['runtime', 'documents', 'memory-spaces'] as const
+    for (let mask = 0; mask < 8; mask++) {
+      const { graph, workspace } = await fixture({ memoryTopology: { layers: Object.fromEntries(ids.map((id, i) => [id, { enabled: (mask & (1 << i)) !== 0 }])) } })
+      const turn = await graph.composableTurns.beginTurn('fixture:1', { storage: 'custom', workspaceId: workspace })
+      for (let i = 0; i < ids.length; i++) {
+        const source = 'source:mnemon-source-' + ids[i]
+        const exposed = turn.view.projection.some(item => item.sourceInstanceKey === source)
+        expect(exposed).toBe((mask & (1 << i)) !== 0)
+      }
+      graph.composableTurns.endTurn(turn.turnId)
+    }
   })
 })

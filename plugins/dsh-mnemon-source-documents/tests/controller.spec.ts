@@ -102,30 +102,6 @@ describe('Mnemon Documents control plane', () => {
     expect(controller.get(created.document.id)).toMatchObject({ status: 'active', content: 'Revision two.' })
   })
 
-  it('records migration lineage in the archive receipt without changing the document data format', async () => {
-    const root = workspace()
-    const commits: Array<Record<string, unknown>> = []
-    const controller = new DocumentController(root, undefined, undefined, undefined, operation => {
-      commits.push(operation as unknown as Record<string, unknown>)
-      return {} as never
-    })
-    const created = await controller.mutate({ action: 'create', title: 'Architecture', content: 'Use SQLite.' })
-    const lineage = [{
-      source: { layerId: 'documents', reference: `document:${created.document.id}:1`, digest: created.document.contentHash },
-      destination: { layerId: 'memory-spaces', reference: 'memory-space:architecture/item:index-1', digest: 'b'.repeat(64) },
-    }]
-
-    await controller.archive(created.document.id, created.document.revision, {
-      summary: 'Indexed in durable architecture memory.',
-      memoryBodyIds: ['architecture'],
-      lineage,
-    })
-
-    expect(commits.at(-1)).toMatchObject({ operation: 'document-archived', checkpoint: { lineage } })
-    const persisted = JSON.parse(readFileSync(controller.indexPath, 'utf8')) as { documents: Array<Record<string, unknown>> }
-    expect(persisted.documents[0]).not.toHaveProperty('lineage')
-  })
-
   it('rejects source traversal and resolves one controller per workspace', async () => {
     const root = workspace()
     const manager = new DocumentManager()

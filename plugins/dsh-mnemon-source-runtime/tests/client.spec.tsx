@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
-import { translateEn as t } from 'dsh-mnemon/client'
+import { translateEn as t, MnemonViewAppearanceProvider, resolveMnemonViewAppearance } from 'dsh-mnemon/client'
 import { strategy } from './fixture.ts'
 
 // Load the installed Core's actual DSH browser artifact; no repository source alias.
@@ -49,6 +49,27 @@ describe('independent Runtime Source client', () => {
     } finally { cleanup(); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
   })
 
+  it('clears branch restrictions through the Sidebar editor and real Source', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-runtime-editor-'))
+    const runner = new MemoryCompositionRunner()
+    try {
+      await runner.mount(strategy, { instanceId: 'strategy' })
+      await runner.mount(plugin, { instanceId: 'work', config: { dataDir: directory } })
+      const management = await runner.managementClient('source:work')
+      await management.mutate('mutate', { action: 'add', target: 'memory', content: 'branch-scoped note', branches: ['main'] }, { confirmed: true })
+      render(<MnemonViewAppearanceProvider value={resolveMnemonViewAppearance('sidebar', t)}>
+        <RuntimeSourcePage sourceTypeId="runtime" sourceInstanceKey="source:work" sourceInstances={[]} locale="en" writable management={management} />
+      </MnemonViewAppearanceProvider>)
+      await screen.findByText('branch-scoped note')
+      fireEvent.click(screen.getByRole('button', { name: t('runtime.editAction') }))
+      fireEvent.change(screen.getByRole('textbox', { name: t('runtime.branches') }), { target: { value: '' } })
+      fireEvent.click(screen.getByRole('button', { name: t('runtime.saveEdit') }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      const { value } = await management.read('snapshot')
+      expect((value as { entries: object[] }).entries[0]).not.toHaveProperty('branches')
+    } finally { cleanup(); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
+  })
+
   it('owns one complete, disposable page contribution', () => {
     const entries = new Map<string, unknown>()
     const release = installRuntimeMemoryUI({ slots: {
@@ -56,7 +77,7 @@ describe('independent Runtime Source client', () => {
       register: (options: { id: string }, component: unknown) => { entries.set(options.id, component); return () => entries.delete(options.id) },
     } } as never)
     expect([...entries.keys()]).toEqual(['runtime/entries'])
-    expect(entries.get('runtime/entries')).toBe(RuntimeSourcePage)
+    expect(entries.get('runtime/entries')).toEqual(expect.any(Function))
     release()
     expect(entries.size).toBe(0)
   })

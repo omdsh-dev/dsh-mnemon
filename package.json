@@ -54,8 +54,12 @@
   "types": "lib/types/src/index.d.ts",
   "typesVersions": {
     "*": {
-      "contracts": ["lib/types/packages/contracts/src/index.d.ts"],
-      "extension-sdk": ["lib/types/packages/extension-sdk/src/index.d.ts"]
+      "contracts": [
+        "lib/types/src/core/contracts/index.d.ts"
+      ],
+      "extension-sdk": [
+        "lib/types/src/sdk/index.d.ts"
+      ]
     }
   },
   "exports": {
@@ -64,72 +68,24 @@
       "default": "./lib/index.js"
     },
     "./core": {
-      "types": "./lib/types/src/core.d.ts",
+      "types": "./lib/types/src/core/plugin.d.ts",
       "default": "./lib/core.js"
-    },
-    "./source-runtime": {
-      "types": "./lib/types/src/plugins/source-runtime.d.ts",
-      "default": "./lib/source-runtime.js"
-    },
-    "./source-documents": {
-      "types": "./lib/types/src/plugins/source-documents.d.ts",
-      "default": "./lib/source-documents.js"
-    },
-    "./source-memory-spaces": {
-      "types": "./lib/types/src/plugins/source-memory-spaces.d.ts",
-      "default": "./lib/source-memory-spaces.js"
-    },
-    "./source-memory-spaces/provider-sdk": {
-      "types": "./lib/types/src/memory-spaces/provider-sdk.d.ts",
-      "default": "./lib/source-memory-spaces/provider-sdk.js"
-    },
-    "./view-strategy-default-three-tier": {
-      "types": "./lib/types/src/plugins/strategy-default-three-tier.d.ts",
-      "default": "./lib/view-strategy-default-three-tier.js"
     },
     "./client": {
       "types": "./lib/types/src/client/index.d.ts",
       "default": "./lib/client.js"
     },
     "./contracts": {
-      "types": "./lib/types/packages/contracts/src/index.d.ts",
+      "types": "./lib/types/src/core/contracts/index.d.ts",
       "default": "./lib/contracts.js"
     },
-    "./kernel": {
-      "types": "./lib/types/packages/kernel/src/index.d.ts",
-      "default": "./lib/kernel.js"
-    },
     "./extension-sdk": {
-      "types": "./lib/types/packages/extension-sdk/src/index.d.ts",
+      "types": "./lib/types/src/sdk/index.d.ts",
       "default": "./lib/extension-sdk.js"
     },
     "./testing": {
       "types": "./lib/types/src/sdk/testing.d.ts",
       "default": "./lib/testing.js"
-    },
-    "./provider-sdk": {
-      "types": "./lib/types/src/provider-sdk.d.ts",
-      "default": "./lib/provider-sdk.js"
-    },
-    "./strategy-sdk": {
-      "types": "./lib/types/packages/strategy-sdk/src/index.d.ts",
-      "default": "./lib/strategy-sdk.js"
-    },
-    "./strategy-default-three-tier": {
-      "types": "./lib/types/packages/strategy-default-three-tier/src/index.d.ts",
-      "default": "./lib/strategy-default-three-tier.js"
-    },
-    "./layers/runtime": {
-      "types": "./lib/types/packages/layer-runtime/src/index.d.ts",
-      "default": "./lib/layers/runtime.js"
-    },
-    "./layers/documents": {
-      "types": "./lib/types/packages/layer-documents/src/index.d.ts",
-      "default": "./lib/layers/documents.js"
-    },
-    "./layers/memory-spaces": {
-      "types": "./lib/types/packages/layer-memory-spaces/src/index.d.ts",
-      "default": "./lib/layers/memory-spaces.js"
     },
     "./package.json": "./package.json"
   },
@@ -168,15 +124,28 @@
     "verify:headless": "node scripts/verify-headless-profile.mjs",
     "verify:package": "node scripts/verify-package-contents.mjs && node scripts/verify-public-entries.mjs && pnpm run lint:package",
     "verify:plugins": "node scripts/verify-plugin-artifacts.mjs",
-    "verify": "pnpm run typecheck && pnpm run verify:build && pnpm run test && pnpm run verify:headless && pnpm run verify:package",
+    "e2e:serve": "node scripts/serve-e2e.mjs",
+    "verify": "pnpm run typecheck && pnpm run verify:build && pnpm -r build && pnpm run test && pnpm run verify:headless && pnpm run verify:package",
     "dsh:link-source": "node scripts/link-dsh-source.mjs",
     "dsh:restore-registry": "node scripts/link-dsh-source.mjs --restore"
   },
   "dependencies": {
     "fflate": "^0.8.3",
-    "markdown-to-jsx": "^7.7.17",
     "schemastery": "^3.18.0",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "dsh-mnemon-provider-byterover": "^0.4.0",
+    "dsh-mnemon-provider-hindsight": "^0.4.0",
+    "dsh-mnemon-provider-holographic": "^0.4.0",
+    "dsh-mnemon-provider-honcho": "^0.4.0",
+    "dsh-mnemon-provider-mem0": "^0.4.0",
+    "dsh-mnemon-provider-mnemon-native": "^0.4.0",
+    "dsh-mnemon-provider-openviking": "^0.4.0",
+    "dsh-mnemon-provider-retaindb": "^0.4.0",
+    "dsh-mnemon-provider-supermemory": "^0.4.0",
+    "dsh-mnemon-source-documents": "^0.4.0",
+    "dsh-mnemon-source-memory-spaces": "^0.4.0",
+    "dsh-mnemon-source-runtime": "^0.4.0",
+    "dsh-mnemon-strategy-default-three-tier": "^0.4.0"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
@@ -186,24 +155,23 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
-    "@deepseek-ai/cordis": "^4.0.2",
-    "@deepseek-ai/dsh": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-agent": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-agent-loop": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-client-connection": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-client-locale": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-client-store": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-client-ui-conversation": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-client-ui-primitives": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-client-ui-renderer": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-client-ui-settings": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-client-ui-slots": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-client-ui-tool": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-invariants": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-llm": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-session": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-session-persistence-jsonl": "0.1.2-rc.1",
-    "@deepseek-ai/dsh-session-projection": "0.1.2-rc.1",
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-agent": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-agent-loop": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-connection": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-locale": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-conversation": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-layout": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-settings": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-slots": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-tool": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-llm": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-session": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-session-persistence-jsonl": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-session-projection": "0.1.1-rc.2",
     "@deepseek-ai/dsh-session-projection-legacy": "npm:@deepseek-ai/dsh-session-projection@0.1.0-rc.8",
     "@deepseek-ai/dsh-session-query": "0.1.2-rc.1",
     "@deepseek-ai/dsh-subagent": "0.1.2-rc.1",

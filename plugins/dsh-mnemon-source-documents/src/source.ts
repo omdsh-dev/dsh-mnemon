@@ -1,19 +1,21 @@
 import { randomUUID } from 'node:crypto'
-import type { MemoryJsonValue, MemoryReadGrant, MemorySourceDefinition, MemorySourceRuntimeContext } from 'dsh-mnemon/contracts'
+import type { MemoryJsonValue, MemoryReadGrant, MemorySourceDefinition } from 'dsh-mnemon/contracts'
 import { COMPOSABLE_MEMORY_API_VERSION } from 'dsh-mnemon/contracts'
 import { defineMemorySource, createMemoryMutationReceipt as receipt, memoryInputRecord as record, memoryInputStringArray as stringArray, memoryInputText as text, truncateMemoryText as truncate } from 'dsh-mnemon/extension-sdk'
 import { DocumentManager } from './controller.ts'
 import type { DocumentMutation } from './contracts.ts'
 import { documentsSourceConfig, type Config } from './config.ts'
+import { documentEvidence } from './evidence.ts'
 
 function workspace(scope: { workspaceId?: string }): string | undefined {
   const value = scope.workspaceId?.trim()
   return value === undefined || value === '' ? undefined : value
 }
 
-function grantIds(grant: MemoryReadGrant): string[] {
+function grantIds(grant: MemoryReadGrant, includeArchived = false): string[] {
   const value = record(grant.value, 'Documents ReadGrant')
-  return stringArray(value.documentIds, 'documentIds', 10_000) ?? []
+  return [...(stringArray(value.documentIds, 'documentIds', 10_000) ?? []),
+    ...(includeArchived ? stringArray(value.archivedDocumentIds, 'archivedDocumentIds', 10_000) ?? [] : [])]
 }
 
 function documentMutation(value: MemoryJsonValue, allowedIds?: readonly string[]): DocumentMutation {
@@ -47,7 +49,7 @@ function documentMutation(value: MemoryJsonValue, allowedIds?: readonly string[]
   return mutation
 }
 
-export function createDocumentsMemorySource(config: Config = {}, managerFactory?: (context: MemorySourceRuntimeContext) => DocumentManager): MemorySourceDefinition {
+export function createDocumentsMemorySource(config: Config = {}): MemorySourceDefinition {
  const configured = Object.freeze({ ...config })
  return defineMemorySource({
   manifest: {
@@ -66,7 +68,7 @@ export function createDocumentsMemorySource(config: Config = {}, managerFactory?
         type: 'object',
         required: ['query'],
         additionalProperties: false,
-        properties: { query: { type: 'string' }, limit: { type: 'integer' } },
+        properties: { query: { type: 'string' }, limit: { type: 'integer' }, includeArchived: { type: 'boolean' } },
       },
       maxCalls: 4,
       maxResults: 20,
@@ -94,9 +96,9 @@ export function createDocumentsMemorySource(config: Config = {}, managerFactory?
   },
   create(context) {
     const effective = documentsSourceConfig({ ...context.configuration, ...configured }, context.sourceInstanceKey)
-    const documents = managerFactory?.(context) ?? new DocumentManager(effective.limitBytes, undefined, () => effective.dataDir)
+    const documents = new DocumentManager(effective.limitBytes, undefined, () => effective.dataDir)
     const snapshot = (workspaceId: string | undefined) => workspaceId === undefined ? undefined : documents.forWorkspace(workspaceId).snapshot()
-    const prepared = new Map<string, NonNullable<ReturnType<typeof snapshot>>>()
+    const prepared = new WeakMap<object, NonNullable<ReturnType<typeof snapshot>>>()
     return {
       facts(request) {
         const root = workspace(request.scope)
@@ -106,7 +108,7 @@ export function createDocumentsMemorySource(config: Config = {}, managerFactory?
         }
         try {
           const current = snapshot(root)!
-          prepared.set(root, current)
+          prepared.set(request.scope, current)
           const active = current.documents.filter(document => document.status === 'active' && document.healthy)
           return {
             sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: 'documents', role: 'narrative', availability: 'ready',
@@ -124,14 +126,16 @@ export function createDocumentsMemorySource(config: Config = {}, managerFactory?
       project(request) {
         const root = workspace(request.scope)
         if (root === undefined) return { fragments: [] }
-        const current = prepared.get(root) ?? snapshot(root)!
-        prepared.delete(root)
+        const current = prepared.get(request.scope) ?? snapshot(root)!
+        prepared.delete(request.scope)
+        if (current.revision !== request.expectedRevision) throw new Error('Documents projection revision changed during composition')
         const active = current.documents.filter(document => document.status === 'active' && document.healthy).sort((a, b) => a.id.localeCompare(b.id))
         const readGrant: MemoryReadGrant = {
           id: `${context.sourceInstanceKey}/grant/${current.revision}`,
           sourceInstanceKey: context.sourceInstanceKey,
           schema: 'dsh-mnemon.documents/v1',
-          value: { workspaceRoot: root, documentIds: active.map(document => document.id) },
+          value: { workspaceRoot: root, documentIds: active.map(document => document.id),
+            archivedDocumentIds: current.documents.filter(document => document.status === 'archived' && document.healthy).map(document => document.id).sort() },
           revision: current.revision,
           consistency: 'namespace-pinned-live-read',
         }
@@ -149,20 +153,30 @@ export function createDocumentsMemorySource(config: Config = {}, managerFactory?
         const root = workspace(request.view.scope)
         if (root === undefined) throw new Error('Documents Route requires a workspace-scoped View')
         const input = record(request.input, 'Documents search')
-        const query = text(input.query, 'query', 2_000)!
+        const query = text(input.query, 'query', 2_000, false) ?? ''
         const limitValue = input.limit
         const limit = typeof limitValue === 'number' && Number.isInteger(limitValue) ? Math.max(1, Math.min(20, limitValue)) : 10
-        const result = await documents.forWorkspace(root).search(query, { limit, allowedIds: grantIds(request.grant) })
+        const controller = documents.forWorkspace(root)
+        const allowedIds = grantIds(request.grant, input.includeArchived === true)
+        const result = await controller.search(query, { limit, allowedIds, includeArchived: input.includeArchived === true })
+        const suggestions = result.results.length === 0 && query !== '' ? controller.snapshot().documents
+          .filter(document => allowedIds.includes(document.id) && (input.includeArchived === true || document.status === 'active'))
+          .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
+          .slice(0, Math.min(3, limit)) : []
         return {
           id: `evidence:${randomUUID()}`, viewId: request.view.id, routeId: request.route.id, sourceInstanceKey: context.sourceInstanceKey,
           observedAt: new Date().toISOString(), truncated: result.total >= limit,
-          items: result.results.map(document => ({
+          items: [...result.results.map(document => ({
             id: document.id,
-            text: `${document.title}\n${document.description === '' ? '' : `${document.description}\n`}${document.excerpt}`,
+            text: documentEvidence(document.content, query, Math.min(2_600, request.route.maxCharacters ?? 2_600)),
             score: document.score,
             revision: String(document.revision),
-            provenance: { documentId: document.id, workspaceRoot: root, relativePath: document.relativePath },
-          })),
+            provenance: { kind: 'match', documentId: document.id, title: document.title, description: document.description, status: document.status, relativePath: document.relativePath, sourcePaths: document.sourcePaths.slice(0, 8) },
+          })), ...suggestions.map(document => ({
+            id: document.id, score: 0,
+            text: truncate('No exact match. Recent Document suggestion only: ' + document.title + '\n' + document.description + '\n' + document.excerpt, 1_000),
+            provenance: { kind: 'suggestion', documentId: document.id, title: document.title, status: document.status },
+          }))],
         }
       },
       async manage(request) {
@@ -176,7 +190,7 @@ export function createDocumentsMemorySource(config: Config = {}, managerFactory?
             case 'snapshot': value = controller.snapshot(); break
             case 'document': value = controller.get(text(input.id, 'id', 300)!); break
             case 'capacity-plan': value = controller.capacityPlan(documentMutation(request.input)); break
-            case 'search': value = await controller.search(text(input.query, 'query', 2_000)!, {
+            case 'search': value = await controller.search(text(input.query, 'query', 2_000, false) ?? '', {
               includeArchived: input.includeArchived === true,
               ...(input.limit === undefined ? {} : { limit: Math.min(100, Math.max(1, Number(input.limit) || 50)) }),
             }); break
@@ -203,9 +217,7 @@ export function createDocumentsMemorySource(config: Config = {}, managerFactory?
         const grant = request.view.readGrants.find(candidate => candidate.sourceInstanceKey === context.sourceInstanceKey)
         const mutation = documentMutation(request.input, grant === undefined ? [] : grantIds(grant))
         const result = await documents.forWorkspace(root).mutate(mutation)
-        return receipt(request.view.id, request.offer.id, context.sourceInstanceKey, result.snapshot.revision, {
-          action: result.action, documentId: result.document.id, documentRevision: result.document.revision,
-        } as MemoryJsonValue)
+        return receipt(request.view.id, request.offer.id, context.sourceInstanceKey, result.snapshot.revision, result as unknown as MemoryJsonValue)
       },
     }
   },

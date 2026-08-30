@@ -15,15 +15,20 @@ export function createMemorySourcePageClient(management: MnemonSourceManagementC
   let revision = management.revision
   let sequence = 0
   let accepted = 0
-  async function request<T>(mode: 'read' | 'mutate', operation: string, input: MemoryJsonValue): Promise<T> {
+  async function request<T>(mode: 'read' | 'mutate' | 'assist', operation: string, input: MemoryJsonValue, confirmed = true): Promise<T> {
     const ticket = ++sequence
-    const result = mode === 'read'
+    if (mode === 'assist' && !management.assistance?.operations.includes(operation)) throw new Error('Host assistance is unavailable for this Source instance: ' + operation)
+    const result = mode === 'assist'
+      ? await management.assistance!.execute(operation, input, { expectedRevision: revision, confirmed })
+      : mode === 'read'
       ? await management.read(operation, input)
       : await management.mutate(operation, input, { confirmed: true, expectedRevision: revision })
     if (ticket >= accepted) { accepted = ticket; revision = result.revision }
     return result.value as T
   }
   return {
+    canAssist: (operation: string) => management.assistance?.operations.includes(operation) === true,
+    assist: <T,>(operation: string, input: MemoryJsonValue, confirmed: boolean) => request<T>('assist', operation, input, confirmed),
     read: <T,>(operation: string, input: MemoryJsonValue = null) => request<T>('read', operation, input),
     mutate: <T,>(operation: string, input: MemoryJsonValue, confirmed: true) => {
       if (confirmed !== true) return Promise.reject<T>(new Error('Source page mutation requires explicit confirmation'))

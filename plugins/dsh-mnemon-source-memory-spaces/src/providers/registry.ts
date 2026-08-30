@@ -18,8 +18,6 @@ export interface MemoryProviderAdapterFactoryContext {
   memoryBodies: MemorySpaceAuthority
   config: { timeoutMs: number; defaultRecallLimit?: number }
   nativeRunner?: MemorySpaceNativeRunner
-  /** @deprecated Legacy caller field; new children construct their own drivers. */
-  nativeAdapter?: MemoryProviderAdapter
 }
 
 export interface MemoryAdapterFactory<Id extends string, Context, Adapter extends { readonly id: Id }> {

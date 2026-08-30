@@ -6,7 +6,7 @@ import ts from 'typescript'
 
 describe('browser bundle platform boundary', () => {
   const root = fileURLToPath(new URL('../', import.meta.url))
-  const directories = ['src/client', 'bundles/default/client', ...['runtime', 'documents', 'memory-spaces'].map(group => `plugins/dsh-mnemon-source-${group}/src/client`)]
+  const directories = ['src/client', ...['runtime', 'documents', 'memory-spaces'].map(group => `plugins/dsh-mnemon-source-${group}/src/client`)]
   const clientSources = () => directories.flatMap(directory => {
     const directoryPath = join(root, directory)
     return readdirSync(directoryPath, { recursive: true })
@@ -25,7 +25,8 @@ describe('browser bundle platform boundary', () => {
         if (!specifier.startsWith('.')) continue
         const target = resolve(root, dirname(path), specifier)
         const browserFile = directories.some(directory => target.startsWith(join(root, directory) + '/'))
-        const contract = target.endsWith('/contracts.ts')
+        const contract = target.endsWith('/contracts.ts') || target.endsWith('/host/protocol.ts')
+        if (ts.isExportDeclaration(node) && node.isTypeOnly || ts.isImportDeclaration(node) && node.importClause?.isTypeOnly) continue
         if (!browserFile && !contract) violations.push(`${path}: ${specifier}`)
         if (contract && /(?:from|import)\s*['"]node:/u.test(readFileSync(target, 'utf8'))) violations.push(`${path}: Node contract ${specifier}`)
       }
@@ -34,7 +35,7 @@ describe('browser bundle platform boundary', () => {
   })
 
   it('keeps the shared browser contract free of Node runtime imports', () => {
-    const contract = readFileSync(new URL('../src/shared/contracts.ts', import.meta.url), 'utf8')
+    const contract = readFileSync(new URL('../src/host/protocol.ts', import.meta.url), 'utf8')
     expect(contract).not.toMatch(/from\s*['"]node:/u)
   })
 

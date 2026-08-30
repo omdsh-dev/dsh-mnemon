@@ -30,11 +30,11 @@ export const DEFAULT_THREE_TIER_VIEW_STRATEGY = defineMemoryStrategy({
     const memorySpaces = soleSource(sources, 'durable-evidence')
     const selected = [runtime, documents, memorySpaces].filter((source): source is MemorySourceFacts => source !== undefined)
     const projectionBudget = request.budget.maxProjectionCharacters
-    const runtimeBudget = runtime === undefined ? 0 : Math.max(1, Math.floor(projectionBudget * 0.9))
+    const runtimeBudget = runtime === undefined || !runtime.capabilities.includes('project') ? 0 : Math.max(1, Math.floor(projectionBudget * 0.9))
     let remaining = Math.max(0, projectionBudget - runtimeBudget)
-    const documentsBudget = documents === undefined || remaining === 0 ? 0 : Math.max(1, Math.floor(remaining / (memorySpaces === undefined ? 1 : 2)))
+    const documentsBudget = documents === undefined || !documents.capabilities.includes('project') || remaining === 0 ? 0 : Math.max(1, Math.floor(remaining / (memorySpaces === undefined ? 1 : 2)))
     remaining -= documentsBudget
-    const memorySpacesBudget = memorySpaces === undefined ? 0 : remaining
+    const memorySpacesBudget = memorySpaces === undefined || !memorySpaces.capabilities.includes('project') ? 0 : remaining
     const allocation = new Map<string, { mode: 'eager' | 'routed'; maxCharacters: number }>()
     if (runtime !== undefined && runtimeBudget > 0) allocation.set(runtime.sourceInstanceKey, { mode: 'eager', maxCharacters: runtimeBudget })
     if (documents !== undefined && documentsBudget > 0) allocation.set(documents.sourceInstanceKey, { mode: 'routed', maxCharacters: documentsBudget })
@@ -44,7 +44,7 @@ export const DEFAULT_THREE_TIER_VIEW_STRATEGY = defineMemoryStrategy({
       sources: selected.map(source => ({
         sourceInstanceKey: source.sourceInstanceKey,
         ...(allocation.get(source.sourceInstanceKey) === undefined ? {} : { projection: allocation.get(source.sourceInstanceKey)! }),
-        routeIds: source.routeIds.filter(route => route === 'search' || route === 'recall' || route === 'related'),
+        routeIds: source.routeIds.filter(route => route === 'inspect' || route === 'search' || route === 'recall' || route === 'related'),
         actionIds: [...source.actionIds],
       })),
       explanation: 'Project exact working context eagerly, expose bounded narrative and durable-evidence covers, then route reads through View-pinned grants.',

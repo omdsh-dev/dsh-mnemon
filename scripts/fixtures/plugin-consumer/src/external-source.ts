@@ -35,15 +35,20 @@ export function apply(ctx: Context, config: Config): void {
       management: { label: 'External notes', description: 'A Source-owned file and management protocol.' },
     },
     create(context) {
-      let captured = ''
+      const snapshots = new WeakMap<object, string>()
       return {
-        facts() {
-          captured = read()
+        facts(request) {
+          const captured = read()
+          snapshots.set(request.scope, captured)
           return { sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: 'external-notes', role: 'notes', availability: 'ready',
             revision: revision(captured), capabilities: ['project', 'read', 'write'], routeIds: ['read'], actionIds: ['replace'] }
         },
         project(request) {
+          const captured = snapshots.get(request.scope)
+          snapshots.delete(request.scope)
+          if (captured === undefined) throw new Error('missing request snapshot')
           const rev = revision(captured)
+          if (rev !== request.expectedRevision) throw new Error('snapshot revision mismatch')
           return {
             fragments: request.includeProjection ? [{ id: 'notes', sourceInstanceKey: context.sourceInstanceKey, revision: rev,
               mode: request.mode, text: truncateMemoryText(captured, request.maxCharacters) }] : [],

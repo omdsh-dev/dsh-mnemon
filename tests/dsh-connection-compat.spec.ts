@@ -6,9 +6,9 @@ import type {
   HostRpcHandler,
   HostRpcRegistrationOptions,
   HostSettingsService,
-} from '../src/contracts.ts'
-import { registerSettingsRpc } from '../src/settings.ts'
-import { MNEMON_SETTINGS_CHANNEL } from '../src/shared/contracts.ts'
+} from "../src/host/dsh.ts"
+import { registerSettingsRpc } from "../src/host/settings.ts"
+import { MNEMON_SETTINGS_CHANNEL } from "../src/host/protocol.ts"
 
 interface RegisteredRoute {
   path: string

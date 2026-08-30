@@ -4,7 +4,7 @@ export {
   installMemorySourceUI, memorySourcePageEntryId, MNEMON_SOURCE_PAGE_SLOT,
   MNEMON_SOURCE_CONFIGURATION_MUTATE, MNEMON_SOURCE_CONFIGURATION_READ,
   type MemorySourcePageComponent, type MemorySourcePageDefinition,
-  type MemorySourcePageProps, type MemorySourceUIContribution, type MemorySourceUIOptions, type MemorySourceUIContext,
+  type MemorySourcePageProps, type MemorySourceUIContribution, type MemorySourceUIContext, type MemorySourcePageNavigation,
 } from './source-pages.tsx'
 export type { MnemonSourceManagementClient, MemorySourcePageInstance } from './source-contracts.ts'
 export * from './page-kit.tsx'

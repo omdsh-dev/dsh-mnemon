@@ -6,7 +6,7 @@ import type {
   MemoryProviderDescriptor,
   MemoryProviderServiceCatalog,
   MemoryProviderServiceView,
-} from '../shared/contracts.ts'
+} from "../host/protocol.ts"
 import { MnemonClient } from './api.ts'
 import { GlobalLocationSetting } from './GlobalLocationSetting.tsx'
 import css from './MnemonSettingsCard.module.css'
@@ -14,7 +14,6 @@ import { useRequestVersion } from './use-request-version.ts'
 import type { MnemonKey, MnemonTranslate } from './locales.ts'
 import { ProviderIcon } from './ProviderIcon.tsx'
 import {
-  normalizeProviderPresentation,
   providerFieldLabel,
   providerOptionLabel,
   providerSummary,
@@ -38,50 +37,10 @@ interface ServiceDraft {
 
 const SAVED_SECRET_MASK = '••••••••••••'
 
-const PREVIEW_CAPABILITIES: MemoryProviderDescriptor['capabilities'] = {
-  search: false,
-  browse: false,
-  graph: false,
-  entities: false,
-  related: false,
-  remember: false,
-  link: false,
-  forget: false,
-  writeMode: 'exact',
-  deletionMode: 'unsupported',
-}
-
-function providerPreview(provider: Pick<MemoryProviderDescriptor, 'id' | 'label' | 'kind' | 'workspaceBinding'>): MemoryProviderDescriptor {
-  return {
-    ...provider,
-    icon: { kind: 'brand', value: provider.id },
-    origin: 'third-party',
-    summary: '',
-    summaryI18nKey: `overview.providerSummary.${provider.id}`,
-    capabilities: PREVIEW_CAPABILITIES,
-    fields: [],
-  }
-}
-
-const PROVIDER_PREVIEWS: MemoryProviderDescriptor[] = [
-  providerPreview({ id: 'openviking', label: 'OpenViking', kind: 'remote', workspaceBinding: 'provider-global' }),
-  providerPreview({ id: 'honcho', label: 'Honcho', kind: 'remote', workspaceBinding: 'provider-global' }),
-  providerPreview({ id: 'mem0', label: 'Mem0', kind: 'remote', workspaceBinding: 'provider-global' }),
-  providerPreview({ id: 'hindsight', label: 'Hindsight', kind: 'remote', workspaceBinding: 'provider-global' }),
-  providerPreview({ id: 'holographic', label: 'Holographic', kind: 'local', workspaceBinding: 'optional-override' }),
-  providerPreview({ id: 'retaindb', label: 'RetainDB', kind: 'remote', workspaceBinding: 'provider-global' }),
-  providerPreview({ id: 'byterover', label: 'ByteRover', kind: 'local', workspaceBinding: 'optional-override' }),
-  providerPreview({ id: 'supermemory', label: 'Supermemory', kind: 'remote', workspaceBinding: 'provider-global' }),
-]
-
 const EMPTY_PROVIDER_CATALOG: MemoryProviderServiceCatalog = {
-  providers: PROVIDER_PREVIEWS,
-  items: PROVIDER_PREVIEWS.map(provider => ({ providerId: provider.id, enabled: false, configured: false, settings: {}, configuredSecrets: [] })),
+  providers: [],
+  items: [],
   generatedAt: '',
-}
-
-function withProviderPresentation(catalog: MemoryProviderServiceCatalog): MemoryProviderServiceCatalog {
-  return { ...catalog, providers: catalog.providers.map(normalizeProviderPresentation) }
 }
 
 const providerCatalogCache = new WeakMap<ClientConnectionHandle, Map<string, MemoryProviderServiceCatalog>>()
@@ -402,7 +361,7 @@ export function ProviderSettingsSection(props: ProviderSettingsSectionProps): JS
     if (!quiet) setLoading(true)
     setFailed(null)
     try {
-      const next = withProviderPresentation(await client.providerServices())
+      const next = await client.providerServices()
       if (!loadRequests.isCurrent(request)) return
       cacheCatalog(props.connection, routeKey, next)
       setCatalog(next)

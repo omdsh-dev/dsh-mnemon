@@ -1,3 +1,2 @@
-// Compatibility import; implementation belongs to the default bundle.
-export * from '../bundles/default/host.ts'
-export { applyDefaultMemoryBundle as applyCore, type ApplyDefaultBundleOptions as ApplyCoreOptions } from '../bundles/default/host.ts'
+export { name, inject, provide, Config, apply } from './host/plugin.ts'
+export type { MnemonConfig } from './host/plugin.ts'

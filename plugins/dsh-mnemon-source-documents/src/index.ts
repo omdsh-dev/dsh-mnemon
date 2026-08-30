@@ -12,5 +12,4 @@ export function apply(ctx: Context, config: Config = {}): void {
 }
 
 export { createDocumentsMemorySource, DOCUMENTS_MEMORY_SOURCE } from './source.ts'
-export * from './controller.ts'
 export type * from './contracts.ts'

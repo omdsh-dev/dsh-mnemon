@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { InteractionConfig } from '../src/config.ts'
-import type { ClientConnectionHandle } from '../src/contracts.ts'
+import type { InteractionConfig } from "../src/host/config.ts"
+import type { ClientConnectionHandle } from "../src/host/dsh.ts"
 import { MnemonSettingsScope } from '../src/client/settings.ts'
 
 describe('MnemonSettingsScope', () => {
