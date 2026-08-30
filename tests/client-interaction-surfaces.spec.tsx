@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClientConnectionHandle, ClientSettingsScope } from "../src/host/dsh.ts"
 import type { Config } from "../src/host/config.ts"
@@ -13,6 +13,19 @@ afterEach(() => {
 })
 
 const translate = (key: string): string => key
+function createLocaleRuntime() {
+  let snapshot = { active: 'zh' as 'zh' | 'en', locales: [], revision: 0 }
+  const listeners = new Set<() => void>()
+  return {
+    getSnapshot: () => snapshot,
+    subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener) } },
+    select: (active: 'zh' | 'en') => {
+      snapshot = { ...snapshot, active, revision: snapshot.revision + 1 }
+      listeners.forEach(listener => listener())
+    },
+  }
+}
+const localeRuntime = createLocaleRuntime()
 const writableSettingsSnapshot = { status: 'ready' as const, value: {}, writable: true, mode: 'host' as const }
 const readOnlySettingsSnapshot = { status: 'unavailable' as const, writable: false, mode: 'host' as const }
 const writableSettingsScope = {
@@ -68,7 +81,7 @@ describe('conversation interaction surfaces', () => {
     const connection = { rpc: { call: rpcCall } } as ClientConnectionHandle
     const received: string[] = []
     const unsubscribe = subscribeMnemonAnchor('session-a', anchor => received.push(anchor.page))
-    render(<MnemonTurnTail turn={{ turn: 2, status: 'closed' }} seq={12} openFile={vi.fn()} sessionId="session-a" connection={connection} t={translate as never} />)
+    render(<MnemonTurnTail turn={{ turn: 2, status: 'closed' }} seq={12} openFile={vi.fn()} sessionId="session-a" connection={connection} localeRuntime={localeRuntime} t={translate as never} />)
 
     fireEvent.click(await screen.findByRole('button', { name: /turnTail\.label/ }))
     fireEvent.click(screen.getAllByRole('button', { name: 'turnTail.openTool' })[0]!)
@@ -93,7 +106,7 @@ describe('conversation interaction surfaces', () => {
     })
     const connection = { rpc: { call: rpcCall } } as ClientConnectionHandle
 
-    render(<MnemonSaveAction messageId="message-1" sessionId="session-a" connection={connection} settingsScope={writableSettingsScope} t={translate as never} />)
+    render(<MnemonSaveAction messageId="message-1" sessionId="session-a" connection={connection} settingsScope={writableSettingsScope} localeRuntime={localeRuntime} t={translate as never} />)
     const action = screen.getByRole('button', { name: 'saveAction.button' })
     expect(action.textContent).toBe('')
     expect(action.getAttribute('aria-haspopup')).toBe('dialog')
@@ -140,7 +153,7 @@ describe('conversation interaction surfaces', () => {
     })
     const connection = { rpc: { call: rpcCall }, isLoopback: false } as ClientConnectionHandle
 
-    render(<MnemonSaveAction messageId="message-1" sessionId="session-a" connection={connection} settingsScope={readOnlySettingsScope} t={translate as never} />)
+    render(<MnemonSaveAction messageId="message-1" sessionId="session-a" connection={connection} settingsScope={readOnlySettingsScope} localeRuntime={localeRuntime} t={translate as never} />)
     fireEvent.click(screen.getByRole('button', { name: 'saveAction.button' }))
 
     const submit = await screen.findByRole('button', { name: 'saveAction.submit' }) as HTMLButtonElement
@@ -159,12 +172,47 @@ describe('conversation interaction surfaces', () => {
     })
     const connection = { rpc: { call: rpcCall }, isLoopback: false } as ClientConnectionHandle
 
-    render(<MnemonSaveAction messageId="message-1" sessionId="session-a" connection={connection} settingsScope={writableSettingsScope} t={translate as never} />)
+    render(<MnemonSaveAction messageId="message-1" sessionId="session-a" connection={connection} settingsScope={writableSettingsScope} localeRuntime={localeRuntime} t={translate as never} />)
     fireEvent.click(screen.getByRole('button', { name: 'saveAction.button' }))
 
     const submit = await screen.findByRole('button', { name: 'saveAction.submit' }) as HTMLButtonElement
     await waitFor(() => expect(submit.disabled).toBe(false))
     fireEvent.click(submit)
     await waitFor(() => expect(rpcCall.mock.calls.some(([, endpoint]) => endpoint === 'supervise')).toBe(true))
+  })
+
+  it('updates the save action on locale changes without remounting an edited candidate', async () => {
+    const locale = createLocaleRuntime()
+    const t = (key: string) => `${locale.getSnapshot().active}:${key}`
+    const rpcCall = vi.fn(async (_channel: string, endpoint: string) => {
+      if (endpoint === 'status') return { ok: true as const, value: { writeEnabled: true } }
+      if (endpoint === 'assistant-message') return { ok: true as const, value: { messageId: 'message-1', text: 'Original candidate.' } }
+      throw new Error(`unexpected endpoint: ${endpoint}`)
+    })
+    render(<MnemonSaveAction messageId="message-1" sessionId="session-a" connection={{ rpc: { call: rpcCall } } as ClientConnectionHandle} settingsScope={writableSettingsScope} localeRuntime={locale} t={t} />)
+    expect(screen.getByRole('button', { name: 'zh:saveAction.button' })).toBeTruthy()
+    act(() => locale.select('en'))
+    fireEvent.click(screen.getByRole('button', { name: 'en:saveAction.button' }))
+    const candidate = await screen.findByRole('textbox', { name: 'en:saveAction.candidate' })
+    fireEvent.change(candidate, { target: { value: 'Edited candidate.' } })
+    const calls = rpcCall.mock.calls.length
+    act(() => locale.select('zh'))
+    expect(screen.getByRole('dialog', { name: 'zh:saveAction.title' })).toBeTruthy()
+    expect((screen.getByRole('textbox', { name: 'zh:saveAction.candidate' }) as HTMLTextAreaElement).value).toBe('Edited candidate.')
+    expect(rpcCall).toHaveBeenCalledTimes(calls)
+  })
+
+  it('updates an expanded turn activity bar on locale changes without refetching', async () => {
+    const locale = createLocaleRuntime()
+    const t = (key: string) => `${locale.getSnapshot().active}:${key}`
+    const rpcCall = vi.fn(async () => ({ ok: true as const, value: {
+      cursor: 12, activities: [{ turn: 2, count: 1, names: ['mnemon_runtime_memory'], recalls: 0, writes: 1, documentSearches: 0, inspections: 0, failures: 0 }],
+    } }))
+    render(<MnemonTurnTail turn={{ turn: 2, status: 'closed' }} seq={12} openFile={vi.fn()} sessionId="session-a" connection={{ rpc: { call: rpcCall } } as ClientConnectionHandle} localeRuntime={locale} t={t} />)
+    fireEvent.click(await screen.findByRole('button', { name: /zh:turnTail\.label/ }))
+    act(() => locale.select('en'))
+    expect(screen.getByRole('button', { name: /en:turnTail\.label/ }).getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('button', { name: 'en:turnTail.openTool' })).toBeTruthy()
+    expect(rpcCall).toHaveBeenCalledTimes(1)
   })
 })

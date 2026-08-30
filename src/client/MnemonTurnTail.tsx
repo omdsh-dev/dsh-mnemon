@@ -1,8 +1,9 @@
-import { memo, useEffect, useState, type JSX, type MouseEvent as ReactMouseEvent } from 'react'
+import { memo, useCallback, useEffect, useState, useSyncExternalStore, type JSX, type MouseEvent as ReactMouseEvent } from 'react'
 import type { ClientConnectionHandle, TurnMemoryActivity } from "../host/protocol.ts"
 import { MnemonClient } from './api.ts'
 import { dispatchMnemonAnchor, type MnemonAnchorPage } from './anchor.ts'
 import type { MnemonKey } from './locales.ts'
+import type { MnemonClientContext } from './dsh-context.ts'
 import css from './MnemonTurnTail.module.css'
 
 export interface MnemonTurnTailProps {
@@ -13,6 +14,7 @@ export interface MnemonTurnTailProps {
   /** Injected by the slot host: the session this tail belongs to. */
   sessionId?: string
   connection: ClientConnectionHandle
+  localeRuntime: Pick<MnemonClientContext['locale'], 'getSnapshot' | 'subscribe'>
   t: (key: MnemonKey, params?: Record<string, unknown>) => string
 }
 
@@ -37,7 +39,10 @@ export function selectMnemonTurnTail(owner: { turn: unknown }): Record<string, n
 }
 
 /** One-line memory-activity bar under a completed turn; hides when the turn touched no memory. */
-export const MnemonTurnTail = memo(function MnemonTurnTail({ turn, seq, sessionId, connection, t }: MnemonTurnTailProps): JSX.Element | null {
+export const MnemonTurnTail = memo(function MnemonTurnTail({ turn, seq, sessionId, connection, localeRuntime, t }: MnemonTurnTailProps): JSX.Element | null {
+  const subscribeLocale = useCallback((listener: () => void) => localeRuntime.subscribe(listener), [localeRuntime])
+  const getLocale = useCallback(() => localeRuntime.getSnapshot(), [localeRuntime])
+  useSyncExternalStore(subscribeLocale, getLocale, getLocale)
   const [activity, setActivity] = useState<TurnMemoryActivity | null | undefined>(undefined)
   const [open, setOpen] = useState(false)
   const number = turnNumber(turn)

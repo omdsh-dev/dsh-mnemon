@@ -49,9 +49,10 @@ const INTERACTION_UNITS: Record<'turnBar' | 'saveAction', InteractionUnit> = {
         name: 'conversation.chat.turnTail',
         locale: namespace,
         select: selectMnemonTurnTail,
-        inject: (sessionId: unknown): { sessionId?: string; connection: ClientConnectionHandle; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
+        inject: (sessionId: unknown): { sessionId?: string; connection: ClientConnectionHandle; localeRuntime: MnemonClientContext['locale']; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
           ...(typeof sessionId === 'string' && sessionId !== '' ? { sessionId } : {}),
           connection: ctx.connection,
+          localeRuntime: ctx.locale,
           t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
         }),
       }, MnemonTurnTail)
@@ -66,10 +67,11 @@ const INTERACTION_UNITS: Record<'turnBar' | 'saveAction', InteractionUnit> = {
         id: 'mnemon-save',
         order: 90,
         locale: namespace,
-        inject: (sessionId: unknown): { sessionId?: string; connection: ClientConnectionHandle; settingsScope: MnemonSettingsScope<Config>; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
+        inject: (sessionId: unknown): { sessionId?: string; connection: ClientConnectionHandle; settingsScope: MnemonSettingsScope<Config>; localeRuntime: MnemonClientContext['locale']; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
           ...(typeof sessionId === 'string' && sessionId !== '' ? { sessionId } : {}),
           connection: ctx.connection,
           settingsScope: settings,
+          localeRuntime: ctx.locale,
           t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
         }),
       }, MnemonSaveAction)
