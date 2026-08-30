@@ -43,7 +43,9 @@ const host: UserConfig = {
   fixedExtension: false,
   dts: false,
   clean: true,
-  deps: { neverBundle: true },
+  // The default distribution carries its explicit first-party composition.
+  // Independent plugin builds leave these public imports external instead.
+  deps: { neverBundle: true, alwaysBundle: [/^dsh-mnemon-(?:source|provider|strategy)-/] },
 }
 
 const client: UserConfig = {

@@ -3,7 +3,11 @@
     "target": "ES2024",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2024",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,
@@ -12,12 +16,34 @@
     "jsx": "react-jsx",
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
-    "types": ["node", "vitest/globals"],
+    "types": [
+      "node",
+      "vitest/globals"
+    ],
     "paths": {
-      "dsh-mnemon/contracts": ["./packages/contracts/src/index.ts"],
-      "dsh-mnemon/extension-sdk": ["./packages/extension-sdk/src/index.ts"],
-      "dsh-mnemon/testing": ["./src/sdk/testing.ts"]
+      "dsh-mnemon/contracts": [
+        "./packages/contracts/src/index.ts"
+      ],
+      "dsh-mnemon/extension-sdk": [
+        "./packages/extension-sdk/src/index.ts"
+      ],
+      "dsh-mnemon/testing": [
+        "./src/sdk/testing.ts"
+      ],
+      "dsh-mnemon-source-memory-spaces/provider-sdk": [
+        "./plugins/dsh-mnemon-source-memory-spaces/src/provider-sdk.ts"
+      ]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "packages/**/*.ts", "plugins/*/src/**/*.ts", "plugins/*/tests/**/*.ts", "tests/**/*.ts", "tests/**/*.tsx", "vitest.config.ts", "tsdown.config.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "packages/**/*.ts",
+    "plugins/*/src/**/*.ts",
+    "plugins/*/tests/**/*.ts",
+    "tests/**/*.ts",
+    "tests/**/*.tsx",
+    "vitest.config.ts",
+    "tsdown.config.ts"
+  ]
 }

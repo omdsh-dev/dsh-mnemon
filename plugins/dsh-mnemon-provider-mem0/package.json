@@ -1,0 +1,42 @@
+{
+  "name": "dsh-mnemon-provider-mem0",
+  "version": "0.3.5",
+  "description": "Mem0 Provider child for the Memory Spaces Source.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./descriptor": {
+      "types": "./lib/descriptor.d.ts",
+      "default": "./lib/descriptor.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "README.md"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsdown",
+    "test": "vitest run",
+    "verify": "pnpm typecheck && pnpm test && pnpm build"
+  },
+  "peerDependencies": {
+    "dsh-mnemon-source-memory-spaces": "^0.3.5",
+    "@deepseek-ai/cordis": "^4.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.0",
+    "tsdown": "^0.22.0",
+    "vitest": "^3.2.0",
+    "dsh-mnemon-source-memory-spaces": "^0.3.5"
+  }
+}

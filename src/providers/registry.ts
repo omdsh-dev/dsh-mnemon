@@ -1,33 +1,14 @@
-import type { ResolvedConfig } from '../config.ts'
-import type { MemoryBodyRegistry } from '../memory-bodies.ts'
 import { ByteRoverProvider } from './byterover.ts'
 import { HindsightProvider } from './hindsight.ts'
 import { HolographicProvider } from './holographic.ts'
 import { HonchoProvider } from './honcho.ts'
 import { Mem0Provider } from './mem0.ts'
 import { OpenVikingProvider } from './openviking.ts'
-import type { MemoryProviderAdapter, MemoryProviderScoreSemantics } from './provider.ts'
 import { RetainDbProvider } from './retaindb.ts'
 import { SupermemoryProvider } from './supermemory.ts'
-import { MemoryAdapterFactoryRegistry, type MemoryAdapterFactory } from '../../packages/provider-sdk/src/index.ts'
-
-export interface MemoryProviderAdapterFactoryContext {
-  memoryBodies: MemoryBodyRegistry
-  config: Pick<ResolvedConfig, 'timeoutMs'>
-  nativeAdapter: MemoryProviderAdapter
-}
-
-export interface MemoryProviderAdapterFactory extends MemoryAdapterFactory<MemoryProviderAdapter['id'], MemoryProviderAdapterFactoryContext, MemoryProviderAdapter> {
-  /** Declared once beside the factory and copied into the complete child manifest. */
-  scoreSemantics: MemoryProviderScoreSemantics
-}
-
-/**
- * Runtime adapter factory seam. The control plane owns registration and
- * provider implementations own construction; MnemonService depends only on
- * the resulting adapter contract.
- */
-export class MemoryProviderAdapterRegistry extends MemoryAdapterFactoryRegistry<MemoryProviderAdapter['id'], MemoryProviderAdapterFactoryContext, MemoryProviderAdapter> {}
+import { MemoryProviderAdapterRegistry, type MemoryProviderAdapterFactory } from '../../plugins/dsh-mnemon-source-memory-spaces/src/providers/registry.ts'
+export { MemoryProviderAdapterRegistry } from '../../plugins/dsh-mnemon-source-memory-spaces/src/providers/registry.ts'
+export type { MemoryProviderAdapterFactory, MemoryProviderAdapterFactoryContext } from '../../plugins/dsh-mnemon-source-memory-spaces/src/providers/registry.ts'
 
 export const BUILTIN_MEMORY_PROVIDER_ADAPTER_FACTORIES: readonly MemoryProviderAdapterFactory[] = [
   { id: 'mnemon-native', scoreSemantics: 'normalized-relevance', create: context => context.nativeAdapter },

@@ -1,3 +1,11 @@
+import openviking from '../../plugins/dsh-mnemon-provider-openviking/src/index.ts'
+import honcho from '../../plugins/dsh-mnemon-provider-honcho/src/index.ts'
+import mem0 from '../../plugins/dsh-mnemon-provider-mem0/src/index.ts'
+import hindsight from '../../plugins/dsh-mnemon-provider-hindsight/src/index.ts'
+import holographic from '../../plugins/dsh-mnemon-provider-holographic/src/index.ts'
+import retaindb from '../../plugins/dsh-mnemon-provider-retaindb/src/index.ts'
+import byterover from '../../plugins/dsh-mnemon-provider-byterover/src/index.ts'
+import supermemory from '../../plugins/dsh-mnemon-provider-supermemory/src/index.ts'
 import { MEMORY_PROVIDER_CATALOG } from '../providers/catalog.ts'
 import {
   BUILTIN_MEMORY_PROVIDER_ADAPTER_FACTORIES,
@@ -47,7 +55,7 @@ function moduleFor(factory: MemoryProviderAdapterFactory): MemorySpaceProviderMo
 
 /** Every bundled Provider is expressed as the same complete child module. */
 export const BUILTIN_MEMORY_SPACE_PROVIDER_MODULES: readonly MemorySpaceProviderModule<undefined>[] =
-  Object.freeze(BUILTIN_MEMORY_PROVIDER_ADAPTER_FACTORIES.map(moduleFor))
+  Object.freeze([moduleFor(BUILTIN_MEMORY_PROVIDER_ADAPTER_FACTORIES[0]!), openviking, honcho, mem0, hindsight, holographic, retaindb, byterover, supermemory])
 
 export const BUILTIN_MEMORY_SPACE_PROVIDER_ENTRIES: readonly MemorySpaceProviderEntry<undefined>[] =
   Object.freeze(BUILTIN_MEMORY_SPACE_PROVIDER_MODULES.map(module => Object.freeze({
