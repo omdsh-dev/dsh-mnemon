@@ -97,6 +97,10 @@
       "types": "./lib/types/packages/extension-sdk/src/index.d.ts",
       "default": "./lib/extension-sdk.js"
     },
+    "./testing": {
+      "types": "./lib/types/src/sdk/testing.d.ts",
+      "default": "./lib/testing.js"
+    },
     "./provider-sdk": {
       "types": "./lib/types/src/provider-sdk.d.ts",
       "default": "./lib/provider-sdk.js"

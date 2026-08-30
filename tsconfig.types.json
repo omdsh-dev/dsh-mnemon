@@ -11,5 +11,5 @@
     "rewriteRelativeImportExtensions": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "packages/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "packages/**/*.ts", "plugins/*/src/**/*.ts"]
 }

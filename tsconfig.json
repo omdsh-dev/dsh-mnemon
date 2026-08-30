@@ -12,7 +12,12 @@
     "jsx": "react-jsx",
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
-    "types": ["node", "vitest/globals"]
+    "types": ["node", "vitest/globals"],
+    "paths": {
+      "dsh-mnemon/contracts": ["./packages/contracts/src/index.ts"],
+      "dsh-mnemon/extension-sdk": ["./packages/extension-sdk/src/index.ts"],
+      "dsh-mnemon/testing": ["./src/sdk/testing.ts"]
+    }
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "packages/**/*.ts", "tests/**/*.ts", "tests/**/*.tsx", "vitest.config.ts", "tsdown.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "packages/**/*.ts", "plugins/*/src/**/*.ts", "plugins/*/tests/**/*.ts", "tests/**/*.ts", "tests/**/*.tsx", "vitest.config.ts", "tsdown.config.ts"]
 }

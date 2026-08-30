@@ -1,0 +1,3 @@
+- insert:
+    - id: mnemon-strategy-default-three-tier
+      name: dsh-mnemon-strategy-default-three-tier

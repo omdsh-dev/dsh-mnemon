@@ -28,6 +28,7 @@ const host: UserConfig = {
     contracts: 'packages/contracts/src/index.ts',
     kernel: 'packages/kernel/src/index.ts',
     'extension-sdk': 'packages/extension-sdk/src/index.ts',
+    testing: 'src/sdk/testing.ts',
     'provider-sdk': 'src/provider-sdk.ts',
     'strategy-sdk': 'packages/strategy-sdk/src/index.ts',
     'strategy-default-three-tier': 'packages/strategy-default-three-tier/src/index.ts',
