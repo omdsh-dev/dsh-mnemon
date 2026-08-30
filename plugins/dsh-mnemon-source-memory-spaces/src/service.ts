@@ -83,15 +83,8 @@ export type {
   MemorySpacesStatus as StatusView,
 } from './contracts.ts'
 
-export interface MemoryBodyMetadataSample {
-  memoryBodyId: string
-  name: string
-  description: string
-  providerId: MemoryBody['provider']['id']
-  providerLabel: string
-  method: 'native-basic' | 'browse' | 'search'
-  evidence: Array<Pick<Insight, 'content' | 'category' | 'entities'>>
-}
+import type { MemoryBodyMetadataSample } from './contracts.ts'
+export type { MemoryBodyMetadataSample } from './contracts.ts'
 
 interface PreparedRemember {
   body: MemoryBody

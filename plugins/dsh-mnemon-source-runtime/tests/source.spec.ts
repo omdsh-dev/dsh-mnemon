@@ -9,6 +9,28 @@ import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
 import * as plugin from '../src/index.ts'
 
 describe('standalone runtime Source', () => {
+  it('owns capacity planning and revision-fenced compaction behind its management protocol', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-runtime-maintenance-'))
+    const runner = new MemoryCompositionRunner()
+    try {
+      await runner.mount(strategy, { instanceId: 'strategy' })
+      await runner.mount(plugin, { instanceId: 'work', config: { dataDir: directory, memoryLimitBytes: 256 } })
+      const generation = runner.generations.current()!
+      const base = { sourceInstanceKey: 'source:work', scope: { storage: 'custom' as const }, confirmed: true }
+      const current = () => generation.executeManagement({ ...base, mode: 'read', operation: 'snapshot', input: null })
+      await generation.executeManagement({ ...base, mode: 'mutate', operation: 'mutate', expectedRevision: (await current()).revision,
+        input: { action: 'add', target: 'memory', content: 'A'.repeat(180) } })
+      const mutation = { action: 'add', target: 'memory', content: 'B'.repeat(100) }
+      await expect(generation.executeManagement({ ...base, mode: 'mutate', operation: 'mutate', expectedRevision: (await current()).revision, input: mutation })).rejects.toMatchObject({ code: 'runtime-capacity' })
+      const planned = await generation.executeManagement({ ...base, mode: 'read', operation: 'maintenance-plan', input: mutation })
+      const plan = planned.value as unknown as plugin.RuntimeMemoryMaintenancePlan
+      expect(plan.requiresMaintenance).toBe(true)
+      const input = { revision: plan.revision, mutation, compacted: [{ content: 'A summary', importance: 'normal' }], maxBytes: 100 }
+      await generation.executeManagement({ ...base, mode: 'mutate', operation: 'compact-and-mutate', expectedRevision: planned.revision, input })
+      await expect(generation.executeManagement({ ...base, mode: 'mutate', operation: 'compact-and-mutate', expectedRevision: (await current()).revision, input })).rejects.toMatchObject({ code: 'revision-conflict' })
+      expect((await current()).value).toMatchObject({ entries: [{ content: 'A summary' }, { content: 'B'.repeat(100) }] })
+    } finally { await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
+  })
   it('serves its own management protocol with confirmation, revision fencing and legacy input compatibility', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'mnemon-runtime-management-'))
     const runner = new MemoryCompositionRunner()

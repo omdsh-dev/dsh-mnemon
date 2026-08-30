@@ -47,6 +47,15 @@
       ],
       "dsh-mnemon-source-memory-spaces/client": [
         "./plugins/dsh-mnemon-source-memory-spaces/src/client.ts"
+      ],
+      "dsh-mnemon-source-runtime/contracts": [
+        "./plugins/dsh-mnemon-source-runtime/src/contracts.ts"
+      ],
+      "dsh-mnemon-source-documents/contracts": [
+        "./plugins/dsh-mnemon-source-documents/src/contracts.ts"
+      ],
+      "dsh-mnemon-source-memory-spaces/contracts": [
+        "./plugins/dsh-mnemon-source-memory-spaces/src/contracts.ts"
       ]
     }
   },

@@ -3,7 +3,7 @@ import { COMPOSABLE_MEMORY_API_VERSION } from 'dsh-mnemon/contracts'
 import { defineMemorySource, createMemoryMutationReceipt as receipt, memoryInputRecord as record, memoryInputStringArray as stringArray, memoryInputText as text, truncateMemoryText as truncate } from 'dsh-mnemon/extension-sdk'
 import { resolveGitBranch } from './git-branch.ts'
 import { RuntimeMemoryController } from './controller.ts'
-import type { RuntimeMemoryAction, RuntimeMemoryImportance, RuntimeMemoryMutation, RuntimeMemoryTarget } from './contracts.ts'
+import type { RuntimeMemoryAction, RuntimeMemoryCompactedEntry, RuntimeMemoryImportance, RuntimeMemoryMutation, RuntimeMemoryTarget } from './contracts.ts'
 import { runtimeSourceConfig, type Config } from './config.ts'
 
 const ACTIONS = new Set<RuntimeMemoryAction>(['add', 'replace', 'remove'])
@@ -104,13 +104,33 @@ export function createRuntimeMemorySource(config: Config = {}, controllerFactory
         }
       },
       async manage(request) {
+        const input = request.input === null ? {} : record(request.input, 'Runtime Memory management')
         if (request.mode === 'read') {
-          if (request.operation !== 'snapshot') throw new Error('unsupported Runtime management read operation: ' + request.operation)
-          return { revision: projection(request.scope.workspaceId).revision, value: controller.snapshot() as unknown as MemoryJsonValue }
+          let value: unknown
+          if (request.operation === 'snapshot') value = controller.snapshot()
+          else if (request.operation === 'maintenance-plan') value = await controller.planMaintenance(runtimeMutation(request.input))
+          else throw new Error('unsupported Runtime management read operation: ' + request.operation)
+          return { revision: projection(request.scope.workspaceId).revision, value: value as MemoryJsonValue }
         }
         if (!request.confirmed) throw new Error('Runtime management mutation requires explicit confirmation')
-        if (request.operation !== 'mutate') throw new Error('unsupported Runtime management mutation operation: ' + request.operation)
-        const result = await controller.mutate(runtimeMutation(request.input))
+        let result: unknown
+        if (request.operation === 'mutate') result = await controller.mutate(runtimeMutation(request.input))
+        else if (request.operation === 'compact-and-mutate') {
+          if (!Array.isArray(input.compacted)) throw new Error('compacted must be an array')
+          const compacted = input.compacted.map(value => {
+            const entry = record(value, 'compacted entry')
+            const importance = text(entry.importance, 'importance', 20)! as RuntimeMemoryImportance
+            if (!IMPORTANCE.has(importance)) throw new Error('invalid compacted importance')
+            return {
+              content: text(entry.content, 'content', 100_000)!, importance,
+              ...(entry.branches === undefined ? {} : { branches: stringArray(entry.branches, 'branches', 100) ?? [] }),
+            } satisfies RuntimeMemoryCompactedEntry
+          })
+          result = await controller.compactAndMutate(
+            text(input.revision, 'revision', 300)!, runtimeMutation(input.mutation!), compacted,
+            typeof input.maxBytes === 'number' ? input.maxBytes : undefined,
+          )
+        } else throw new Error('unsupported Runtime management mutation operation: ' + request.operation)
         return { revision: projection(request.scope.workspaceId).revision, value: result as unknown as MemoryJsonValue }
       },
       async mutate(request) {

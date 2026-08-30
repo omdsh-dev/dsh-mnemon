@@ -66,3 +66,16 @@ export type RuntimeMemoryMutationResult = {
     memoryBodyIds: string[]
   }
 }
+
+export interface RuntimeMemoryMaintenancePlan {
+  revision: string
+  action: RuntimeMemoryAction
+  target: RuntimeMemoryTarget
+  entries: RuntimeMemoryEntry[]
+  pending?: RuntimeMemoryCompactedEntry
+  excluded?: RuntimeMemoryEntry
+  used: number
+  projected: number
+  limit: number
+  requiresMaintenance: boolean
+}

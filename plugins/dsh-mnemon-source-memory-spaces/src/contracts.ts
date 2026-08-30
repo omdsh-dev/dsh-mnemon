@@ -419,6 +419,38 @@ export interface MemoryListView {
   sources?: MemoryReadSource[]
 }
 
+export interface MemoryBodyMetadataSample {
+  memoryBodyId: string
+  name: string
+  description: string
+  providerId: MemoryBody['provider']['id']
+  providerLabel: string
+  method: 'native-basic' | 'browse' | 'search'
+  evidence: Array<Pick<Insight, 'content' | 'category' | 'entities'>>
+}
+
+export interface MemoryPlacementCandidate {
+  id: MemoryProviderId
+  label: string
+  kind: 'local' | 'remote'
+  configured: boolean
+  summary: string
+  capabilities: MemoryProviderCapabilities
+}
+
+export interface PreparedMemoryPlacement {
+  prompt: string
+  candidates: MemoryPlacementCandidate[]
+  appliedRules: string[]
+  selectorBrief: string
+}
+
+export interface LlmMemoryPlacementSelection {
+  providerId: string
+  reason: string
+  confidence: string
+}
+
 export const DEFAULT_EMBEDDING_ENDPOINT = 'http://localhost:11434'
 export const DEFAULT_EMBEDDING_MODEL = 'nomic-embed-text'
 export const EMBEDDING_PROTOCOL_AUTO = 'auto'

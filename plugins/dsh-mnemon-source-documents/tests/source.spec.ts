@@ -29,8 +29,12 @@ describe('standalone documents Source', () => {
         input: { action: 'update', id: document.id, content: 'beta sentinel' } })
       const loaded = await generation.executeManagement({ ...base, mode: 'read', operation: 'document', input: { id: document.id } })
       expect(loaded.value).toMatchObject({ content: 'beta sentinel' })
+      const capacity = await generation.executeManagement({ ...base, mode: 'read', operation: 'capacity-plan', input: { action: 'create', title: 'Plan', content: 'new narrative' } })
+      expect(capacity.value).toMatchObject({ fits: true })
       const search = await generation.executeManagement({ ...base, mode: 'read', operation: 'search', input: { query: 'beta' } })
       expect(search.value).toMatchObject({ total: 1 })
+      await expect(generation.executeManagement({ ...base, mode: 'mutate', operation: 'archive', confirmed: true, expectedRevision: search.revision,
+        input: { id: document.id, documentRevision: 1 } })).rejects.toMatchObject({ code: 'revision-conflict' })
       const archived = await generation.executeManagement({ ...base, mode: 'mutate', operation: 'archive', confirmed: true, expectedRevision: search.revision, input: { id: document.id } })
       expect(archived.value).toMatchObject({ action: 'archived', document: { status: 'archived', memoryBodyIds: [] } })
       const otherWorkspace = await generation.executeManagement({ ...base, scope: { ...base.scope, workspaceId: directory }, mode: 'read', operation: 'snapshot', input: null })

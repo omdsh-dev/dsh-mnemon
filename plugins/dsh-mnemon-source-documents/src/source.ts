@@ -175,6 +175,7 @@ export function createDocumentsMemorySource(config: Config = {}, managerFactory?
           switch (request.operation) {
             case 'snapshot': value = controller.snapshot(); break
             case 'document': value = controller.get(text(input.id, 'id', 300)!); break
+            case 'capacity-plan': value = controller.capacityPlan(documentMutation(request.input)); break
             case 'search': value = await controller.search(text(input.query, 'query', 2_000)!, {
               includeArchived: input.includeArchived === true,
               ...(input.limit === undefined ? {} : { limit: Math.min(100, Math.max(1, Number(input.limit) || 50)) }),
@@ -186,8 +187,12 @@ export function createDocumentsMemorySource(config: Config = {}, managerFactory?
           if (request.operation === 'mutate') value = await controller.mutate(documentMutation(request.input))
           else if (request.operation === 'archive') {
             const document = controller.get(text(input.id, 'id', 300)!)
-            // A Source-local archive does not claim a cross-Source distillation.
-            value = await controller.archive(document.id, document.revision, { summary: 'Archived locally by the user.', memoryBodyIds: [] })
+            const revision = input.documentRevision === undefined ? document.revision : input.documentRevision
+            if (typeof revision !== 'number' || !Number.isInteger(revision)) throw new Error('documentRevision must be an integer')
+            value = await controller.archive(document.id, revision, {
+              summary: text(input.summary, 'summary', 10_000, false) ?? 'Archived locally by the user.',
+              memoryBodyIds: stringArray(input.memoryBodyIds, 'memoryBodyIds', 100) ?? [],
+            })
           } else throw new Error('unsupported Documents management mutation operation: ' + request.operation)
         }
         return { revision: controller.snapshot().revision, value: value as MemoryJsonValue }

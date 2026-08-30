@@ -30,14 +30,11 @@ interface DocumentIndex {
   documents: DocumentRecord[]
 }
 
-export interface DocumentCapacityPlan {
-  projected: number
-  limit: number
-  fits: boolean
-  candidates: DocumentRecord[]
-}
+import type { DocumentCapacityPlan } from './contracts.ts'
+export type { DocumentCapacityPlan } from './contracts.ts'
 
 export class DocumentCapacityError extends Error {
+  readonly code = 'document-capacity' as const
   constructor(
     readonly projected: number,
     readonly limit: number,
@@ -49,6 +46,7 @@ export class DocumentCapacityError extends Error {
 }
 
 export class DocumentConflictError extends Error {
+  readonly code = 'revision-conflict' as const
   constructor() {
     super('document changed while archival was running; the active copy was preserved')
     this.name = 'DocumentConflictError'

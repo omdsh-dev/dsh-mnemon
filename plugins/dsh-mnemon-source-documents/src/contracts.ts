@@ -57,3 +57,10 @@ export interface DocumentMutationResult {
   snapshot: DocumentSnapshot
   maintenance?: { runId: string; provider: string; summary: string; memoryBodyIds: string[]; archivedDocumentIds: string[] }
 }
+
+export interface DocumentCapacityPlan {
+  projected: number
+  limit: number
+  fits: boolean
+  candidates: DocumentRecord[]
+}

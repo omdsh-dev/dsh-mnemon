@@ -103,20 +103,11 @@ interface PreparedRuntimeMemoryMutation {
 }
 
 /** Host-only plan for capacity maintenance; this is not exposed as a Tool or RPC action. */
-export interface RuntimeMemoryMaintenancePlan {
-  revision: string
-  action: RuntimeMemoryAction
-  target: RuntimeMemoryTarget
-  entries: RuntimeMemoryEntry[]
-  pending?: RuntimeMemoryCompactedEntry
-  excluded?: RuntimeMemoryEntry
-  used: number
-  projected: number
-  limit: number
-  requiresMaintenance: boolean
-}
+import type { RuntimeMemoryMaintenancePlan } from './contracts.ts'
+export type { RuntimeMemoryMaintenancePlan } from './contracts.ts'
 
 export class RuntimeMemoryCapacityError extends Error {
+  readonly code = 'runtime-capacity' as const
   constructor(
     readonly target: RuntimeMemoryTarget,
     readonly used: number,
@@ -129,6 +120,7 @@ export class RuntimeMemoryCapacityError extends Error {
 }
 
 export class RuntimeMemoryConflictError extends Error {
+  readonly code = 'revision-conflict' as const
   constructor() {
     super('runtime memory changed while archival was running; no compacted data was applied')
     this.name = 'RuntimeMemoryConflictError'

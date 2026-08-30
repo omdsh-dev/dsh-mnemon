@@ -24,6 +24,10 @@
     "./client": {
       "types": "./lib/types/client.d.ts",
       "default": "./lib/client.js"
+    },
+    "./contracts": {
+      "types": "./lib/contracts.d.ts",
+      "default": "./lib/contracts.js"
     }
   },
   "files": [

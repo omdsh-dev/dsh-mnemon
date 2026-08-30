@@ -14,6 +14,7 @@ import { defineMemorySource, memoryInputInteger as integer, createMemoryMutation
 import { MemorySpacesService as MnemonService } from './service.ts'
 import { createRunner } from './runner.ts'
 import { MemoryProviderCatalog } from './providers/catalog.ts'
+import { finalizeLlmPlacement, rulesOnlyPlacement } from './provider-placement.ts'
 import { resolveMemorySpacesConfig, type MemorySpacesConfig } from './config.ts'
 import type { MemorySourceRuntimeContext } from 'dsh-mnemon/contracts'
 import { MemorySpaceProviderSnapshot } from './providers/host.ts'
@@ -25,6 +26,9 @@ import type {
   MemoryPlacementDecision,
   MemoryProviderConnection,
   MemoryProviderId,
+  PreparedMemoryPlacement,
+  RememberRequest,
+  MemoryBodyMetadataUpdate,
   Source,
   UpdateMemoryBodyRequest,
 } from './contracts.ts'
@@ -176,6 +180,17 @@ async function manageMemorySpaces(service: MnemonService, request: MemorySourceM
       ))
       case 'body-reconnect': return managementResult(service, await service.reconnectBody(text(input.memoryBodyId, 'memoryBodyId', 300)!, request.signal))
       case 'prepare-body-placement': return managementResult(service, service.prepareBodyPlacement(createBodyRequest(request.input)))
+      case 'finalize-placement': {
+        const prepared = record(input.prepared!, 'prepared placement') as unknown as PreparedMemoryPlacement
+        if (!Array.isArray(prepared.candidates) || prepared.candidates.length === 0) throw new Error('placement candidates are required')
+        const selection = input.selection === undefined ? undefined : record(input.selection, 'placement selection')
+        return managementResult(service, selection === undefined ? rulesOnlyPlacement(prepared) : finalizeLlmPlacement(prepared, {
+          providerId: text(selection.providerId, 'providerId', 128)!,
+          reason: text(selection.reason, 'reason', 4_000)!,
+          confidence: text(selection.confidence, 'confidence', 40)!,
+        }, { runId: text(input.runId, 'runId', 300)!, provider: text(input.provider, 'provider', 300)! }))
+      }
+      case 'metadata-sample': return managementResult(service, await service.metadataSample(text(input.memoryBodyId, 'memoryBodyId', 300)!, request.signal))
       default: throw new Error(`unsupported Memory Spaces management read operation: ${request.operation}`)
     }
   }
@@ -225,6 +240,32 @@ async function manageMemorySpaces(service: MnemonService, request: MemorySourceM
       const parsed = updateBodyRequest(request.input)
       return managementResult(service, service.updateBody(parsed.memoryBodyId, parsed.request))
     }
+    case 'remember-many': {
+      if (!Array.isArray(input.requests) || input.requests.length > 1_000) throw new Error('remember-many requires at most 1000 requests')
+      return managementResult(service, await service.rememberMany(input.requests.map(value => record(value, 'remember request') as unknown as RememberRequest), request.signal))
+    }
+    case 'body-create-for-persistence': {
+      const selection = input.selection === undefined ? undefined : record(input.selection, 'placement selection')
+      return managementResult(service, await service.createBodyForPersistence(createBodyRequest(input.request ?? request.input), selection === undefined ? undefined : {
+        providerId: text(selection.providerId, 'providerId', 128)!,
+        reason: text(selection.reason, 'reason', 4_000)!,
+        confidence: text(selection.confidence, 'confidence', 40)!,
+      }, request.signal))
+    }
+    case 'body-metadata-update': {
+      if (!Array.isArray(input.updates) || input.updates.length > 20) throw new Error('metadata update requires at most 20 entries')
+      const updates = input.updates.map(value => {
+        const update = record(value, 'metadata update')
+        return { memoryBodyId: text(update.memoryBodyId, 'memoryBodyId', 300)!, title: text(update.title, 'title', 48)!, description: text(update.description, 'description', 200)! } satisfies MemoryBodyMetadataUpdate
+      })
+      return managementResult(service, service.updateBodyMetadata(updates))
+    }
+    case 'body-merge': return managementResult(service, await service.mergeBodies(
+      text(input.targetMemoryBodyId, 'targetMemoryBodyId', 300)!,
+      stringArray(input.sourceMemoryBodyIds, 'sourceMemoryBodyIds', 1_000) ?? [],
+      input.deactivateSources !== false, request.signal,
+    ))
+    case 'reload': service.memoryBodies.reload(); return managementResult(service, { reloaded: true })
     case 'body-delete': return managementResult(service, await service.deleteBody(text(input.memoryBodyId, 'memoryBodyId', 300)!, request.signal))
     default: throw new Error(`unsupported Memory Spaces management mutation operation: ${request.operation}`)
   }

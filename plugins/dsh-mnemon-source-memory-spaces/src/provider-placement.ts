@@ -7,27 +7,8 @@ import type {
   MemoryProviderId,
 } from './contracts.ts'
 
-export interface MemoryPlacementCandidate {
-  id: MemoryProviderId
-  label: string
-  kind: 'local' | 'remote'
-  configured: boolean
-  summary: string
-  capabilities: MemoryProviderCapabilities
-}
-
-export interface PreparedMemoryPlacement {
-  prompt: string
-  candidates: MemoryPlacementCandidate[]
-  appliedRules: string[]
-  selectorBrief: string
-}
-
-export interface LlmMemoryPlacementSelection {
-  providerId: string
-  reason: string
-  confidence: string
-}
+import type { MemoryPlacementCandidate, PreparedMemoryPlacement, LlmMemoryPlacementSelection } from './contracts.ts'
+export type { MemoryPlacementCandidate, PreparedMemoryPlacement, LlmMemoryPlacementSelection } from './contracts.ts'
 
 const CAPABILITY_LABELS: Record<MemoryPlacementCapability, string> = {
   graph: 'typed graph',
