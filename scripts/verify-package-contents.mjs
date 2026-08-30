@@ -63,11 +63,10 @@ const relativeReadmeImages = readmeFiles.flatMap((path) => {
     .map(source => `${path}: ${source}`)
 })
 
-// The complete Provider child-module SDK and Source-scoped management bridge
-// add one public runtime/type entry to the measured 1.887 MB baseline. After
-// removing inferred declaration expansion the release is 1.986 MB; retain a
-// narrow 2.00 MB fence rather than hiding future growth behind a broad budget.
-const maximumUnpackedBytes = 2_000_000
+// Independent Source pages share the existing styles/locales, rather than
+// duplicating the UI. Their public page kit and artifact test fixture lift the
+// measured default distribution from 1.986 MB to about 2.003 MB. Keep 1% room.
+const maximumUnpackedBytes = 2_030_000
 
 if (missing.length > 0 || unexpected.length > 0 || hostLeaks.length > 0 || relativeReadmeImages.length > 0 || pack.unpackedSize > maximumUnpackedBytes) {
   if (missing.length > 0) console.error(`Missing package files:\n${missing.map(path => `- ${path}`).join('\n')}`)

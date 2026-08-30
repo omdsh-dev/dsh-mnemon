@@ -16,8 +16,8 @@ import { MnemonSettingsScope } from './settings.ts'
 import type { MnemonClientContext } from './dsh-compat.ts'
 import {
   createMemorySourcePageDirectory,
-  installBuiltinMemorySourceUI,
 } from './source-pages.tsx'
+import { installBuiltinMemorySourceUI } from '../../bundles/default/client/source-pages.tsx'
 import {
   createMnemonWorkspaceNavigation,
   MnemonWorkspaceHost,
@@ -25,18 +25,7 @@ import {
 } from './workspace-mount.tsx'
 import { mountSubagentTokenUsageOverride } from './subagent-token-usage.tsx'
 
-export {
-  installMemorySourceUI,
-  memorySourcePageEntryId,
-  MNEMON_SOURCE_PAGE_SLOT,
-  MNEMON_SOURCE_CONFIGURATION_MUTATE,
-  MNEMON_SOURCE_CONFIGURATION_READ,
-  type MemorySourcePageComponent,
-  type MemorySourcePageDefinition,
-  type MemorySourcePageProps,
-  type MemorySourceUIContribution,
-} from './source-pages.tsx'
-export type { MnemonSourceManagementClient } from './dsh-compat.ts'
+export * from './extension-sdk.ts'
 
 export const inject = ['slots', 'sessions', 'workspaces', 'connection', 'locale']
 

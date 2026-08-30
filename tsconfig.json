@@ -35,6 +35,18 @@
       ],
       "dsh-mnemon-source-memory-spaces/testing": [
         "./plugins/dsh-mnemon-source-memory-spaces/src/testing.ts"
+      ],
+      "dsh-mnemon/client": [
+        "./src/client/extension-sdk.ts"
+      ],
+      "dsh-mnemon-source-runtime/client": [
+        "./plugins/dsh-mnemon-source-runtime/src/client.ts"
+      ],
+      "dsh-mnemon-source-documents/client": [
+        "./plugins/dsh-mnemon-source-documents/src/client.ts"
+      ],
+      "dsh-mnemon-source-memory-spaces/client": [
+        "./plugins/dsh-mnemon-source-memory-spaces/src/client.ts"
       ]
     }
   },
@@ -49,6 +61,8 @@
     "tests/**/*.ts",
     "tests/**/*.tsx",
     "vitest.config.ts",
-    "tsdown.config.ts"
+    "tsdown.config.ts",
+    "plugins/*/src/**/*.tsx",
+    "plugins/*/tests/**/*.tsx"
   ]
 }

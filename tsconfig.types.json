@@ -9,7 +9,17 @@
     "rootDir": ".",
     "allowImportingTsExtensions": false,
     "rewriteRelativeImportExtensions": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["bundles/**/*.ts", "bundles/**/*.tsx", "src/**/*.ts", "src/**/*.tsx", "packages/**/*.ts", "plugins/*/src/**/*.ts"]
+  "include": [
+    "bundles/**/*.ts",
+    "bundles/**/*.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "packages/**/*.ts",
+    "plugins/*/src/**/*.ts",
+    "plugins/*/src/**/*.tsx"
+  ]
 }

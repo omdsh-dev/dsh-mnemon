@@ -1,26 +1,12 @@
+import { strategy } from './fixture.ts'
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Context } from '@deepseek-ai/cordis'
+
 import { describe, expect, it } from 'vitest'
-import { defineMemoryStrategy, installMemory } from 'dsh-mnemon/extension-sdk'
-import { COMPOSABLE_MEMORY_API_VERSION } from 'dsh-mnemon/contracts'
+
 import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
 import * as plugin from '../src/index.ts'
-
-const strategy = {
-  inject: ['mnemonMemory'],
-  apply(ctx: Context) {
-    installMemory(ctx, { strategies: [defineMemoryStrategy({
-      manifest: { apiVersion: COMPOSABLE_MEMORY_API_VERSION, kind: 'strategy', typeId: 'test',
-        packageName: 'test-strategy', deterministic: true, supportedSourceRoles: ['narrative'],
-        maxSources: 4, maxRoutes: 4, maxActions: 4 },
-      compose: (_request, sources) => ({ strategyTypeId: 'test', explanation: 'Test only.',
-        sources: sources.map(source => ({ sourceInstanceKey: source.sourceInstanceKey,
-          projection: { mode: 'routed', maxCharacters: 2048 }, routeIds: source.routeIds, actionIds: source.actionIds })) }),
-    })] })
-  },
-}
 
 describe('standalone documents Source', () => {
   it('manages create/read/update/search/local-archive within its selected Source store', async () => {

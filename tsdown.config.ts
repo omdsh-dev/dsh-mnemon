@@ -62,7 +62,7 @@ const client: UserConfig = {
   clean: false,
   deps: {
     neverBundle: CLIENT_EXTERNALS,
-    alwaysBundle: ['markdown-to-jsx'],
+    alwaysBundle: ['markdown-to-jsx', /^dsh-mnemon-source-.*\/client$/],
     onlyBundle: ['markdown-to-jsx'],
   },
   define: {
@@ -71,6 +71,9 @@ const client: UserConfig = {
   plugins: [{
     name: 'dsh-mnemon-css-modules-inline',
     resolveId(source: string, importer: string | undefined) {
+      // First-party clients use the same public import as an external plugin.
+      // Only this aggregate build links it to the shared browser helpers.
+      if (source === 'dsh-mnemon/client') return resolvePath(PROJECT_ROOT, 'src/client/extension-sdk.ts')
       if (!source.endsWith('.module.css')) return null
       const absolute = importer === undefined ? source : resolveAssetPath(source, importer)
       return CSS_VIRTUAL_PREFIX + absolute + CSS_VIRTUAL_SUFFIX

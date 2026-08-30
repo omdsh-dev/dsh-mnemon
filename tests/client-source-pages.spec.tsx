@@ -93,6 +93,20 @@ const status: StatusView = {
 }
 
 describe('Source Client presentation conformance', () => {
+  it('lets an explicit Source client shadow the starter and restores the starter on unload', () => {
+    const slots = new TestSlots()
+    const owner = declareSourcePageSlot(slots)
+    const fallback = installMemorySourceUI({ slots } as never, { sourceTypeId: 'runtime', pages: [{ id: 'entries', label: 'Starter', component: Page }] }, { fallback: true })
+    const explicit = installMemorySourceUI({ slots } as never, { sourceTypeId: 'runtime', pages: [{ id: 'entries', label: 'Source plugin', component: Page }] })
+    const directory = createMemorySourcePageDirectory({ slots } as never)
+    expect(directory.getSnapshot().map(entry => entry.label)).toEqual(['Source plugin'])
+    explicit()
+    expect(directory.getSnapshot().map(entry => entry.label)).toEqual(['Starter'])
+    fallback()
+    expect(directory.getSnapshot()).toEqual([])
+    owner()
+  })
+
   afterEach(cleanup)
 
   it('waits for one parent declaration, commits all pages transactionally, and disposes with the Client Fiber', () => {
@@ -238,6 +252,27 @@ describe('Source Client presentation conformance', () => {
         payload: expect.objectContaining({ sourceInstanceKey: 'source:git-personal', expectedRevision: 'personal-r2', confirmed: true, operation: 'refresh' }),
       }),
     ])))
+  })
+
+  it('selects additional built-in Source instances without leaking the default compatibility page', async () => {
+    const sources = ['source:extra-runtime', 'source:mnemon-source-runtime'].map(sourceInstanceKey => ({
+      sourceInstanceKey, sourceTypeId: 'runtime', packageName: 'dsh-mnemon-source-runtime', role: 'working-context',
+      availability: 'ready', revision: 'r1', capabilities: ['read', 'write'], management: { label: sourceInstanceKey },
+    }))
+    const connection = { rpc: { call: vi.fn(async (_channel: string, endpoint: string) => ({
+      ok: true, value: endpoint === 'source-management-catalog' ? { generationId: 'g1', sources } : status,
+    })) } }
+    const renderSlot = ((_name: string, owner: MnemonSourcePageOwnerProps, options: { only?: string }) => options.only !== 'runtime/entries' ? null : <div>
+      <span data-testid="runtime-selected-instance">{owner.management?.sourceInstanceKey}</span>
+      <span data-testid="runtime-compatibility-child">{owner.children === undefined ? 'no' : 'yes'}</span>
+    </div>) as never
+    render(<MnemonView connection={connection as never} settingsScope={settings} sessionId="s1" t={translateEn} locale="en" renderSlot={renderSlot} />)
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp(`^${translateEn('nav.runtime')}`, 'u') }))
+    await waitFor(() => expect(screen.getByTestId('runtime-selected-instance').textContent).toBe('source:mnemon-source-runtime'))
+    expect(screen.getByTestId('runtime-compatibility-child').textContent).toBe('yes')
+    fireEvent.change(screen.getByRole('combobox', { name: 'Select Source instance' }), { target: { value: 'source:extra-runtime' } })
+    expect(screen.getByTestId('runtime-selected-instance').textContent).toBe('source:extra-runtime')
+    expect(screen.getByTestId('runtime-compatibility-child').textContent).toBe('no')
   })
 
   it('keeps a descriptor-driven status/config/diagnostics path when a Source has no client module', async () => {

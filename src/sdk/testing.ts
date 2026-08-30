@@ -1,4 +1,5 @@
 import { Context, type Plugin } from '@deepseek-ai/cordis'
+import { readFileSync } from 'node:fs'
 import { MemoryRuntime } from '../../packages/extension-sdk/src/index.ts'
 import {
   DEFAULT_MEMORY_VIEW_BUDGET,
@@ -6,7 +7,7 @@ import {
   type MemoryGenerationHost,
   type MemoryGenerationLease,
 } from '../../packages/kernel/src/index.ts'
-import type { ComposableMemoryView, MemoryViewRequest } from '../../packages/contracts/src/index.ts'
+import type { ComposableMemoryView, MemoryViewRequest, MemoryJsonValue, MemorySourceManagementResult } from '../../packages/contracts/src/index.ts'
 
 export interface MemoryTestEntry<C> {
   instanceId: string
@@ -17,6 +18,13 @@ export interface MemoryTestTurn {
   readonly view: ComposableMemoryView
   readonly lease: MemoryGenerationLease
   release(): void
+}
+
+export interface MemoryTestManagementClient {
+  readonly sourceInstanceKey: string
+  readonly revision: string
+  read(operation: string, input?: MemoryJsonValue): Promise<MemorySourceManagementResult>
+  mutate(operation: string, input: MemoryJsonValue, options: { confirmed: true; expectedRevision?: string }): Promise<MemorySourceManagementResult>
 }
 
 /**
@@ -88,6 +96,34 @@ export class MemoryCompositionRunner {
     }
   }
 
+  /** Same scoped management contract a Source page receives, backed by real generations. */
+  async managementClient(sourceInstanceKey: string, scopeValue: MemoryViewRequest['scope'] = { storage: 'custom' }): Promise<MemoryTestManagementClient> {
+    const scope = structuredClone(scopeValue)
+    const initial = this.generations.acquire()
+    let revision: string
+    try {
+      const instance = (await initial.generation.managementCatalog(scope)).sources.find(source => source.sourceInstanceKey === sourceInstanceKey)
+      if (instance === undefined) throw new Error(`No managed test Source: ${sourceInstanceKey}`)
+      revision = instance.revision
+    } finally { initial.release() }
+    const execute = async (mode: 'read' | 'mutate', operation: string, input: MemoryJsonValue, options?: { confirmed: true; expectedRevision?: string }) => {
+      const lease = this.generations.acquire()
+      try {
+        const result = await lease.generation.executeManagement({
+          sourceInstanceKey, scope, mode, operation, input, confirmed: options?.confirmed === true,
+          ...(mode === 'read' ? {} : { expectedRevision: options?.expectedRevision ?? revision }),
+        })
+        revision = result.revision
+        return result
+      } finally { lease.release() }
+    }
+    return {
+      sourceInstanceKey, get revision() { return revision },
+      read: (operation, input = null) => execute('read', operation, input),
+      mutate: (operation, input, options) => execute('mutate', operation, input, options),
+    }
+  }
+
   async dispose(): Promise<void> {
     if (this.closed) return
     this.closed = true
@@ -102,3 +138,36 @@ export class MemoryCompositionRunner {
 }
 
 export { DEFAULT_MEMORY_VIEW_BUDGET }
+
+/**
+ * Evaluate a trusted, already-built DSH Client artifact in a test. Dependencies
+ * are explicit (normally the test's React and UI primitives), so no production
+ * Loader, global registry, source alias, or second copy of React is required.
+ * This is a test fixture, not another Client Loader implementation.
+ */
+export function loadMemoryClientArtifact<T extends object = Record<string, unknown>>(
+  path: string | URL,
+  dependencies: Readonly<Record<string, unknown>>,
+): T {
+  let declaration: { id: string; factory(require: (id: string) => unknown): unknown } | undefined
+  const loader = { load(value: typeof declaration) {
+    if (declaration !== undefined || value === undefined || typeof value.id !== 'string' || typeof value.factory !== 'function') {
+      throw new Error('Expected exactly one DSH Client artifact declaration')
+    }
+    declaration = value
+  } }
+  const actualWindow = (globalThis as unknown as { window?: object }).window ?? {}
+  const window = new Proxy(actualWindow, {
+    get(target, key) {
+      if (key === '__ModuleLoader__') return loader
+      const value = Reflect.get(target, key, target) as unknown
+      return typeof value === 'function' ? value.bind(target) : value
+    },
+  })
+  new Function('window', readFileSync(path, 'utf8'))(window)
+  if (declaration === undefined) throw new Error('No DSH Client declaration in artifact')
+  return declaration.factory(id => {
+    if (!Object.hasOwn(dependencies, id)) throw new Error(`Missing Client test dependency: ${id}`)
+    return dependencies[id]
+  }) as T
+}

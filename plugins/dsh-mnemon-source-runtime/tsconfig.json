@@ -11,11 +11,20 @@
     "skipLibCheck": true,
     "types": [
       "node"
+    ],
+    "jsx": "react-jsx",
+    "lib": [
+      "ES2024",
+      "DOM",
+      "DOM.Iterable"
     ]
   },
   "include": [
     "src/**/*.ts",
     "tests/**/*.ts",
-    "tsdown.config.ts"
+    "tsdown.config.ts",
+    "src/**/*.tsx",
+    "tests/**/*.tsx",
+    "vitest.config.ts"
   ]
 }

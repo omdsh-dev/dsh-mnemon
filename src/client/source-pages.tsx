@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
 import type { MnemonClientContext, MnemonSourcePageOwnerProps } from './dsh-compat.ts'
-import type { MnemonTranslate } from './locales.ts'
 
 export const MNEMON_SOURCE_PAGE_SLOT = 'mnemon.source.page' as const
 /** Conventional operations used by Mnemon's descriptor-driven Source page. */
@@ -26,6 +25,11 @@ export interface MemorySourcePageDefinition {
 export interface MemorySourceUIContribution {
   sourceTypeId: string
   pages: readonly MemorySourcePageDefinition[]
+}
+
+export interface MemorySourceUIOptions {
+  /** Default distributions yield to an explicitly installed Source client. */
+  fallback?: boolean
 }
 
 export interface MemorySourcePageEntry {
@@ -54,6 +58,7 @@ export function memorySourcePageEntryId(sourceTypeId: string, pageId: string): s
 export function installMemorySourceUI(
   ctx: Pick<MnemonClientContext, 'slots'>,
   contribution: MemorySourceUIContribution,
+  options: MemorySourceUIOptions = {},
 ): () => void {
   if (contribution.pages.length === 0) throw new Error('memory Source UI requires at least one page')
   const seen = new Set<string>()
@@ -75,6 +80,7 @@ export function installMemorySourceUI(
           id: entryId,
           order,
           label: page.label,
+          ...(options.fallback === true ? { priority: 10_000 } : {}),
         }, page.component))
       }
     } catch (error) {
@@ -125,49 +131,5 @@ export function createMemorySourcePageDirectory(ctx: Pick<MnemonClientContext, '
         listener()
       })
     },
-  }
-}
-
-export const BUILTIN_MEMORY_SOURCE_PAGE_IDS = Object.freeze({
-  runtime: 'runtime/entries',
-  documents: 'documents/library',
-  overview: 'memory-spaces/spaces',
-  explore: 'memory-spaces/explore',
-  entities: 'memory-spaces/entities',
-  remember: 'memory-spaces/remember',
-  list: 'memory-spaces/content',
-})
-
-export const BUILTIN_MEMORY_SOURCE_PAGE_ID_SET: ReadonlySet<string> = new Set(Object.values(BUILTIN_MEMORY_SOURCE_PAGE_IDS))
-export const BUILTIN_MEMORY_SOURCE_TYPE_ID_SET: ReadonlySet<string> = new Set(['runtime', 'documents', 'memory-spaces'])
-
-function BuiltinMemorySourcePage(props: MemorySourcePageProps): ReactNode {
-  return props.children ?? null
-}
-
-/** Migration-time physical co-location; every built-in uses the public helper. */
-export function installBuiltinMemorySourceUI(ctx: MnemonClientContext, t: MnemonTranslate): () => void {
-  const disposers = [
-    installMemorySourceUI(ctx, {
-      sourceTypeId: 'runtime',
-      pages: [{ id: 'entries', label: () => t('nav.runtime'), component: BuiltinMemorySourcePage }],
-    }),
-    installMemorySourceUI(ctx, {
-      sourceTypeId: 'documents',
-      pages: [{ id: 'library', label: () => t('nav.documents'), component: BuiltinMemorySourcePage }],
-    }),
-    installMemorySourceUI(ctx, {
-      sourceTypeId: 'memory-spaces',
-      pages: [
-        { id: 'spaces', label: () => t('nav.bodies'), component: BuiltinMemorySourcePage },
-        { id: 'explore', label: () => t('nav.search'), component: BuiltinMemorySourcePage },
-        { id: 'entities', label: () => t('nav.entities'), component: BuiltinMemorySourcePage },
-        { id: 'remember', label: () => t('nav.remember'), component: BuiltinMemorySourcePage },
-        { id: 'content', label: () => t('nav.content'), component: BuiltinMemorySourcePage },
-      ],
-    }),
-  ]
-  return () => {
-    for (const dispose of disposers.reverse()) dispose()
   }
 }

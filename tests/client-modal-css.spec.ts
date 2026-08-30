@@ -5,7 +5,12 @@ const viewCss = readFileSync(new URL('../src/client/MnemonView.module.css', impo
 const sidebarCss = readFileSync(new URL('../src/client/MnemonSidebarView.module.css', import.meta.url), 'utf8')
 const saveActionCss = readFileSync(new URL('../src/client/MnemonSaveAction.module.css', import.meta.url), 'utf8')
 const dialogSource = readFileSync(new URL('../src/client/MnemonDialog.tsx', import.meta.url), 'utf8')
-const viewSource = readFileSync(new URL('../src/client/MnemonView.tsx', import.meta.url), 'utf8')
+const viewSource = [
+  '../bundles/default/client/MnemonView.tsx',
+  '../plugins/dsh-mnemon-source-runtime/src/client/pages.tsx',
+  '../plugins/dsh-mnemon-source-documents/src/client/pages.tsx',
+  '../plugins/dsh-mnemon-source-memory-spaces/src/client/pages.tsx',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n')
 
 describe('responsive dialog layout invariants', () => {
   it('keeps the dialog body as the only scrollport and the action footer outside it', () => {

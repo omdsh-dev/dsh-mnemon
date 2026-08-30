@@ -42,6 +42,8 @@ export interface MnemonSourcePageOwnerProps {
   sourceInstances: readonly MemorySourceManagementInstance[]
   /** Present only while the selected Host instance remains visible. */
   management?: MnemonSourceManagementClient
+  /** Presentation hint only; the Host still authenticates every mutation. */
+  writable?: boolean
   sessionId?: string
   workspaceId?: string
   locale: string
