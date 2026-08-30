@@ -53,6 +53,7 @@ async function fixture(label: string, seed: number, bodyId = 'project') {
 }
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
 })
 
@@ -87,6 +88,25 @@ describe('Mnemon Pack', () => {
       const files = unzipSync(Buffer.from(exported.base64, 'base64'))
       expect(exported.manifest).toMatchObject({ scope, components: [scope] })
       expect(Object.keys(files).filter(path => path.startsWith('payload/')).every(path => path.startsWith(`payload/${scope === 'memory-spaces' ? 'data' : scope}/`))).toBe(true)
+    }
+  })
+
+  it.each(['full', 'runtime', 'documents', 'memory-spaces'] as const)('exports byte-identical %s Packs across timezones', async (scope) => {
+    const source = await fixture('pack-timezones', 23)
+    vi.stubEnv('TZ', 'UTC')
+    const reference = await source.manager.exportPack(scope)
+
+    for (const [timeZone, offset] of [
+      ['UTC', 0],
+      ['America/Los_Angeles', 480],
+      ['Etc/GMT+12', 720],
+      ['Etc/GMT-14', -840],
+      ['Asia/Kolkata', -330],
+    ] as const) {
+      vi.stubEnv('TZ', timeZone)
+      expect(new Date('1980-01-01T00:00:00.000Z').getTimezoneOffset(), timeZone).toBe(offset)
+      const exported = await source.manager.exportPack(scope)
+      expect(exported.base64, timeZone).toBe(reference.base64)
     }
   })
 
