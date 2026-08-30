@@ -1,41 +1,81 @@
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
-import { MemoryRuntime } from '../packages/extension-sdk/src/index.ts'
-import { installBundledComposableMemory } from '../src/composable/defaults.ts'
-import { resolveConfig } from '../src/config.ts'
-import { createRuntimeGraph } from '../src/live-runtime.ts'
-
-const temporary: string[] = []
-
-afterEach(() => {
-  for (const path of temporary.splice(0).reverse()) rmSync(path, { recursive: true, force: true })
-})
-
-function fixture() {
-  const root = mkdtempSync(join(tmpdir(), 'mnemon-composable-turns-'))
-  temporary.push(root)
-  const workspace = join(root, 'workspace')
-  mkdirSync(workspace)
-  const runtime = new MemoryRuntime()
-  const releaseDefinitions = installBundledComposableMemory(runtime)
-  const graph = createRuntimeGraph(resolveConfig({ storageScope: 'custom', dataDir: join(root, 'data'), cliPath: '/fake/mnemon' }), workspace, runtime)
-  return { workspace, runtime, releaseDefinitions, graph }
-}
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { resolveConfig } from "../src/host/config.ts"
+import { createRuntimeGraph } from "../src/host/runtime.ts"
+import { compositionFixture } from './fixtures/composition.ts'
+import type { DocumentMutationResult } from 'dsh-mnemon-source-documents/contracts'
+import type { RuntimeMemorySnapshot } from 'dsh-mnemon-source-runtime/contracts'
+const fixtures: Awaited<ReturnType<typeof compositionFixture>>[] = []
+async function fixture() { const value = await compositionFixture(); fixtures.push(value); return value }
+afterEach(async () => { for (const value of fixtures.splice(0)) await value.dispose() })
 
 describe('Composable Memory root-turn boundary', () => {
+  it('joins concurrent beginnings, rejects scope reuse, and releases a cancelled composition', async () => {
+    const { workspace, graph } = await fixture()
+    const generation = graph.memoryComposition.current()!
+    const original = generation.compose.bind(generation)
+    const gate = Promise.withResolvers<void>()
+    const compose = vi.spyOn(generation, 'compose').mockImplementation(async request => { await gate.promise; return original(request) })
+    const scope = { storage: 'custom' as const, workspaceId: workspace, agentId: 'root' }
+    const first = graph.composableTurns.beginTurn('root:join', scope)
+    const second = graph.composableTurns.beginTurn('root:join', scope)
+    await expect(graph.composableTurns.beginTurn('root:join', { ...scope, agentId: 'other' })).rejects.toThrow('another scope')
+    gate.resolve()
+    expect(await first).toBe(await second)
+    expect(compose).toHaveBeenCalledOnce()
+    graph.composableTurns.endTurn('root:join')
+    const cancelled = graph.composableTurns.beginTurn('root:cancel', scope)
+    graph.composableTurns.endTurn('root:cancel')
+    await expect(cancelled).rejects.toThrow('ended during composition')
+    expect(graph.composableTurns.activeTurn('root')).toBeUndefined()
+  })
+
+  it('does not publish a View after disposal while composition is pending', async () => {
+    const { graph } = await fixture()
+    const pending = graph.composableTurns.beginTurn('root:closing', { storage: 'custom', agentId: 'root' })
+    graph.composableTurns.dispose()
+    await expect(pending).rejects.toThrow('ended during composition')
+    expect(graph.composableTurns.activeTurn('root')).toBeUndefined()
+  })
+
+  it('keeps in-flight Route I/O leased after its parent turn closes', async () => {
+    const { graph } = await fixture()
+    const turn = await graph.composableTurns.beginTurn('root:operation', { storage: 'custom', agentId: 'root' })
+    const generation = graph.memoryComposition.current()!
+    const route = turn.view.routes[0]!
+    const gate = Promise.withResolvers<void>()
+    vi.spyOn(generation, 'executeRoute').mockImplementation(async () => { await gate.promise; return {
+      id: 'evidence:test', viewId: turn.view.id, routeId: route.id, sourceInstanceKey: route.sourceInstanceKey,
+      observedAt: 'now', items: [], truncated: false,
+    } })
+    const call = graph.composableTurns.executeRoute(turn.turnId, route.id, {})
+    graph.composableTurns.endTurn(turn.turnId)
+    let closed = false
+    const close = graph.memoryComposition.dispose().then(() => { closed = true })
+    await Promise.resolve()
+    expect(closed).toBe(false)
+    gate.resolve()
+    await call
+    await close
+    expect(closed).toBe(true)
+  })
+
+
   it('pins one View and renders its projection plus callable Route ids into the LLM Wake', async () => {
-    const { workspace, graph } = fixture()
-    await graph.runtimeMemory.mutate({ action: 'add', target: 'memory', content: 'Turn-pinned composable context.' })
-    await graph.documents.forWorkspace(workspace).mutate({ action: 'create', title: 'Turn route', content: 'turn-route-token' })
+    const { workspace, graph } = await fixture()
+    await graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: 'Turn-pinned composable context.' })
+    await graph.source('documents').mutate<DocumentMutationResult>('mutate', { action: 'create', title: 'Turn route', content: 'turn-route-token' })
     const turn = await graph.composableTurns!.beginTurn('agent-1:1', {
       storage: 'custom', workspaceId: workspace, sessionId: 'agent-1', agentId: 'agent-1',
     })
     const wake = graph.composableTurns!.memoryWake(turn.view.id)
 
     expect(wake.text).toContain('Turn-pinned composable context.')
-    expect(wake.text).toContain('source:bundled-documents/search')
+    expect(wake.text).toContain('source:mnemon-source-documents/search')
+    expect(wake.text).toContain('"inputSchema"')
+    expect(wake.text).toContain('"required":["query"]')
     expect(wake.sections.map(section => section.layerId)).toEqual(['runtime', 'documents', 'memory-spaces'])
     expect(graph.composableTurns!.activeTurn('agent-1')).toBe(turn)
 
@@ -44,8 +84,8 @@ describe('Composable Memory root-turn boundary', () => {
   })
 
   it('executes Routes and reauthorized Actions against the exact leased generation', async () => {
-    const { workspace, graph } = fixture()
-    const document = await graph.documents.forWorkspace(workspace).mutate({ action: 'create', title: 'Evidence', content: 'leased-route-token' })
+    const { workspace, graph } = await fixture()
+    const document = await graph.source('documents').mutate<DocumentMutationResult>('mutate', { action: 'create', title: 'Evidence', content: 'leased-route-token' })
     const turn = await graph.composableTurns!.beginTurn('agent-1:1', {
       storage: 'custom', workspaceId: workspace, sessionId: 'agent-1', agentId: 'agent-1',
     })
@@ -61,18 +101,18 @@ describe('Composable Memory root-turn boundary', () => {
       action: 'add', target: 'memory', content: 'authorized composable write',
     }, () => true)
     expect(receipt).toMatchObject({ viewId: turn.view.id, offerId: offer.id, status: 'succeeded' })
-    expect(graph.runtimeMemory.contextText()).toContain('authorized composable write')
+    expect((await graph.source('runtime').read<RuntimeMemorySnapshot>('snapshot')).entries.some(entry => entry.content === 'authorized composable write')).toBe(true)
 
     graph.composableTurns!.endTurn(turn.turnId)
     graph.dispose()
   })
 
   it('keeps a leased turn usable while explicit plugin removal fails closed for new turns', async () => {
-    const { workspace, releaseDefinitions, graph } = fixture()
+    const { workspace, releases, graph } = await fixture()
     const turn = await graph.composableTurns!.beginTurn('agent-1:1', {
       storage: 'custom', workspaceId: workspace, sessionId: 'agent-1', agentId: 'agent-1',
     })
-    releaseDefinitions()
+    await Promise.all(releases.map(release => release()))
     await expect(graph.composableTurns!.beginTurn('agent-2:1', {
       storage: 'custom', workspaceId: workspace, sessionId: 'agent-2', agentId: 'agent-2',
     })).rejects.toThrow('No Memory Source')

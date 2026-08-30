@@ -1,13 +1,13 @@
 import { Context, type Plugin } from '@deepseek-ai/cordis'
 import { readFileSync } from 'node:fs'
-import { MemoryRuntime } from '../../packages/extension-sdk/src/index.ts'
+import { MemoryRuntime } from "./index.ts"
 import {
   DEFAULT_MEMORY_VIEW_BUDGET,
   type CompileMemoryGenerationOptions,
   type MemoryGenerationHost,
   type MemoryGenerationLease,
-} from '../../packages/kernel/src/index.ts'
-import type { ComposableMemoryView, MemoryViewRequest, MemoryJsonValue, MemorySourceManagementResult } from '../../packages/contracts/src/index.ts'
+} from "../core/index.ts"
+import type { ComposableMemoryView, MemoryViewRequest, MemoryJsonValue, MemorySourceManagementResult } from "../core/contracts/index.ts"
 
 export interface MemoryTestEntry<C> {
   instanceId: string

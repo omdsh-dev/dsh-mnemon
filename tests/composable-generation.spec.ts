@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { COMPOSABLE_MEMORY_API_VERSION, type InstalledMemorySource, type InstalledMemoryStrategy, type MemoryContributionSnapshot } from '../packages/contracts/src/index.ts'
-import { MemoryGenerationHost, defineMemorySource, defineMemoryStrategy } from '../packages/kernel/src/index.ts'
+import { COMPOSABLE_MEMORY_API_VERSION, type InstalledMemorySource, type InstalledMemoryStrategy, type MemoryContributionSnapshot } from "../src/core/contracts/index.ts"
+import { MemoryGenerationHost, defineMemorySource, defineMemoryStrategy } from "../src/core/index.ts"
+import { MemoryRuntime } from '../src/core/runtime.ts'
 
 function source(instance: string, dispose: () => void = () => {}, fail = false): InstalledMemorySource {
   const definition = defineMemorySource({
@@ -58,6 +59,13 @@ function snapshot(revision: number, sources: InstalledMemorySource[], strategies
 }
 
 describe('Memory generation lifecycle', () => {
+  it('reports cleanup failures even after a Host attachment has detached', async () => {
+    const runtime = new MemoryRuntime()
+    runtime.installContributions({ sources: [source('failure', () => { throw new Error('provider close failed') })], strategies: [strategy()] })
+    const attachment = runtime.attachGeneration()
+    await expect(attachment.dispose()).rejects.toThrow('disposal failed')
+    await expect(runtime.dispose()).rejects.toThrow('Memory Runtime cleanup failed')
+  })
   it('publishes a complete candidate and drains the previous generation after its lease', async () => {
     const firstDisposed = vi.fn()
     const secondDisposed = vi.fn()
@@ -88,7 +96,9 @@ describe('Memory generation lifecycle', () => {
     const report = host.reconcile(snapshot(2, [source('stable'), source('broken', undefined, true)]))
     expect(report).toMatchObject({ state: 'rejected', diagnostics: [{ message: expect.stringContaining('factory failed') }] })
     expect(host.current()).toBe(stable)
-    expect(host.acquire().id).toBe(stable?.id)
+    const lease = host.acquire()
+    expect(lease.id).toBe(stable?.id)
+    lease.release()
     await host.dispose()
   })
 
@@ -116,6 +126,19 @@ describe('Memory generation lifecycle', () => {
       state: 'rejected',
       diagnostics: [{ message: expect.stringContaining('exactly one') }],
     })
+  })
+
+  it('waits for in-flight leases on shutdown and refuses new acquisitions immediately', async () => {
+    const disposed = vi.fn()
+    const host = new MemoryGenerationHost()
+    host.reconcile(snapshot(1, [source('one', disposed)]))
+    const lease = host.acquire()
+    const shutdown = host.dispose()
+    expect(() => host.acquire()).toThrow('disposed')
+    expect(disposed).not.toHaveBeenCalled()
+    lease.release()
+    await shutdown
+    expect(disposed).toHaveBeenCalledOnce()
   })
 
   it('makes lease release idempotent', async () => {

@@ -3,28 +3,20 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { MemoryRuntime } from '../packages/extension-sdk/src/index.ts'
-import { installBundledComposableMemory } from '../src/composable/defaults.ts'
-import { resolveConfig } from '../src/config.ts'
-import { createRuntimeGraph } from '../src/live-runtime.ts'
-
-const temporary: string[] = []
-
-afterEach(() => {
-  for (const path of temporary.splice(0).reverse()) rmSync(path, { recursive: true, force: true })
-})
+import { resolveConfig } from "../src/host/config.ts"
+import { createRuntimeGraph } from "../src/host/runtime.ts"
+import { compositionFixture } from './fixtures/composition.ts'
+import type { DocumentMutationResult } from 'dsh-mnemon-source-documents/contracts'
+import type { RuntimeMemorySnapshot } from 'dsh-mnemon-source-runtime/contracts'
+const fixtures: Awaited<ReturnType<typeof compositionFixture>>[] = []
+async function fixture() { const value = await compositionFixture(); fixtures.push(value); return value }
+afterEach(async () => { for (const value of fixtures.splice(0)) await value.dispose() })
 
 describe('Composable View performance fences', () => {
   it('composes repeated three-Source Views within a bounded local control-plane budget', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'mnemon-composable-performance-'))
-    temporary.push(root)
-    const workspace = join(root, 'workspace')
-    mkdirSync(workspace)
-    const runtime = new MemoryRuntime()
-    installBundledComposableMemory(runtime)
-    const graph = createRuntimeGraph(resolveConfig({ storageScope: 'custom', dataDir: join(root, 'data'), cliPath: '/fake/mnemon' }), workspace, runtime)
-    await graph.runtimeMemory.mutate({ action: 'add', target: 'memory', content: 'Performance fixture.' })
-    await graph.documents.forWorkspace(workspace).mutate({ action: 'create', title: 'Performance', content: 'Bounded fixture.' })
+    const { workspace, graph } = await fixture()
+    await graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: 'Performance fixture.' })
+    await graph.source('documents').mutate<DocumentMutationResult>('mutate', { action: 'create', title: 'Performance', content: 'Bounded fixture.' })
     const generation = graph.memoryComposition!.current()!
     const request = {
       scope: { storage: 'custom' as const, workspaceId: workspace, sessionId: 'performance' },

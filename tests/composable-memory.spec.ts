@@ -9,13 +9,13 @@ import {
   type MemorySourceDefinition,
   type MemoryStrategyDefinition,
   type MemoryViewRequest,
-} from '../packages/contracts/src/index.ts'
+} from "../src/core/contracts/index.ts"
 import {
   MemoryCompositionGeneration,
   MemoryCompositionRunner,
   defineMemorySource,
   defineMemoryStrategy,
-} from '../packages/kernel/src/index.ts'
+} from "../src/core/index.ts"
 
 const REQUEST: MemoryViewRequest = {
   scope: { storage: 'workspace', workspaceId: '/workspace' },
