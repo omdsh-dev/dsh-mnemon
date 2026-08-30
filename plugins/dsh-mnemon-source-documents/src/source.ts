@@ -16,6 +16,37 @@ function grantIds(grant: MemoryReadGrant): string[] {
   return stringArray(value.documentIds, 'documentIds', 10_000) ?? []
 }
 
+function documentMutation(value: MemoryJsonValue, allowedIds?: readonly string[]): DocumentMutation {
+  const input = record(value, 'Documents mutation')
+  const action = text(input.action, 'action', 20)!
+  let mutation: DocumentMutation
+  if (action === 'create') {
+    mutation = {
+      action,
+      title: text(input.title, 'title', 160)!,
+      content: text(input.content, 'content', 1_000_000)!,
+      ...(text(input.description, 'description', 600, false) === undefined ? {} : { description: text(input.description, 'description', 600, false)! }),
+      ...(input.sourcePaths === undefined ? {} : { sourcePaths: stringArray(input.sourcePaths, 'sourcePaths') ?? [] }),
+      ...(input.sessionIds === undefined ? {} : { sessionIds: stringArray(input.sessionIds, 'sessionIds', 20) ?? [] }),
+    }
+  } else if (action === 'update') {
+    const id = text(input.id, 'id', 300)!
+    if (allowedIds !== undefined && !allowedIds.includes(id)) throw new Error('Documents update target is outside this View ReadGrant')
+    mutation = {
+      action,
+      id,
+      ...(text(input.title, 'title', 160, false) === undefined ? {} : { title: text(input.title, 'title', 160, false)! }),
+      ...(text(input.description, 'description', 600, false) === undefined ? {} : { description: text(input.description, 'description', 600, false)! }),
+      ...(text(input.content, 'content', 1_000_000, false) === undefined ? {} : { content: text(input.content, 'content', 1_000_000, false)! }),
+      ...(input.sourcePaths === undefined ? {} : { sourcePaths: stringArray(input.sourcePaths, 'sourcePaths') ?? [] }),
+      ...(input.sessionIds === undefined ? {} : { sessionIds: stringArray(input.sessionIds, 'sessionIds', 20) ?? [] }),
+    }
+  } else {
+    throw new Error(`unsupported Documents action: ${action}`)
+  }
+  return mutation
+}
+
 export function createDocumentsMemorySource(config: Config = {}, managerFactory?: (context: MemorySourceRuntimeContext) => DocumentManager): MemorySourceDefinition {
  const configured = Object.freeze({ ...config })
  return defineMemorySource({
@@ -134,37 +165,38 @@ export function createDocumentsMemorySource(config: Config = {}, managerFactory?
           })),
         }
       },
+      async manage(request) {
+        const root = workspace(request.scope)
+        if (root === undefined) throw new Error('Documents management requires a workspace')
+        const controller = documents.forWorkspace(root)
+        const input = request.input === null ? {} : record(request.input, 'Documents management')
+        let value: unknown
+        if (request.mode === 'read') {
+          switch (request.operation) {
+            case 'snapshot': value = controller.snapshot(); break
+            case 'document': value = controller.get(text(input.id, 'id', 300)!); break
+            case 'search': value = await controller.search(text(input.query, 'query', 2_000)!, {
+              includeArchived: input.includeArchived === true,
+              ...(input.limit === undefined ? {} : { limit: Math.min(100, Math.max(1, Number(input.limit) || 50)) }),
+            }); break
+            default: throw new Error('unsupported Documents management read operation: ' + request.operation)
+          }
+        } else {
+          if (!request.confirmed) throw new Error('Documents management mutation requires explicit confirmation')
+          if (request.operation === 'mutate') value = await controller.mutate(documentMutation(request.input))
+          else if (request.operation === 'archive') {
+            const document = controller.get(text(input.id, 'id', 300)!)
+            // A Source-local archive does not claim a cross-Source distillation.
+            value = await controller.archive(document.id, document.revision, { summary: 'Archived locally by the user.', memoryBodyIds: [] })
+          } else throw new Error('unsupported Documents management mutation operation: ' + request.operation)
+        }
+        return { revision: controller.snapshot().revision, value: value as MemoryJsonValue }
+      },
       async mutate(request) {
         const root = workspace(request.view.scope)
         if (root === undefined) throw new Error('Documents Action requires a workspace-scoped View')
-        const input = record(request.input, 'Documents mutation')
-        const action = text(input.action, 'action', 20)!
-        let mutation: DocumentMutation
-        if (action === 'create') {
-          mutation = {
-            action,
-            title: text(input.title, 'title', 160)!,
-            content: text(input.content, 'content', 1_000_000)!,
-            ...(text(input.description, 'description', 600, false) === undefined ? {} : { description: text(input.description, 'description', 600, false)! }),
-            ...(input.sourcePaths === undefined ? {} : { sourcePaths: stringArray(input.sourcePaths, 'sourcePaths') ?? [] }),
-            ...(input.sessionIds === undefined ? {} : { sessionIds: stringArray(input.sessionIds, 'sessionIds', 20) ?? [] }),
-          }
-        } else if (action === 'update') {
-          const id = text(input.id, 'id', 300)!
-          const grant = request.view.readGrants.find(candidate => candidate.sourceInstanceKey === context.sourceInstanceKey)
-          if (grant === undefined || !grantIds(grant).includes(id)) throw new Error('Documents update target is outside this View ReadGrant')
-          mutation = {
-            action,
-            id,
-            ...(text(input.title, 'title', 160, false) === undefined ? {} : { title: text(input.title, 'title', 160, false)! }),
-            ...(text(input.description, 'description', 600, false) === undefined ? {} : { description: text(input.description, 'description', 600, false)! }),
-            ...(text(input.content, 'content', 1_000_000, false) === undefined ? {} : { content: text(input.content, 'content', 1_000_000, false)! }),
-            ...(input.sourcePaths === undefined ? {} : { sourcePaths: stringArray(input.sourcePaths, 'sourcePaths') ?? [] }),
-            ...(input.sessionIds === undefined ? {} : { sessionIds: stringArray(input.sessionIds, 'sessionIds', 20) ?? [] }),
-          }
-        } else {
-          throw new Error(`unsupported Documents action: ${action}`)
-        }
+        const grant = request.view.readGrants.find(candidate => candidate.sourceInstanceKey === context.sourceInstanceKey)
+        const mutation = documentMutation(request.input, grant === undefined ? [] : grantIds(grant))
         const result = await documents.forWorkspace(root).mutate(mutation)
         return receipt(request.view.id, request.offer.id, context.sourceInstanceKey, result.snapshot.revision, {
           action: result.action, documentId: result.document.id, documentRevision: result.document.revision,

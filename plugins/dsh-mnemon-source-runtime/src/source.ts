@@ -3,12 +3,30 @@ import { COMPOSABLE_MEMORY_API_VERSION } from 'dsh-mnemon/contracts'
 import { defineMemorySource, createMemoryMutationReceipt as receipt, memoryInputRecord as record, memoryInputStringArray as stringArray, memoryInputText as text, truncateMemoryText as truncate } from 'dsh-mnemon/extension-sdk'
 import { resolveGitBranch } from './git-branch.ts'
 import { RuntimeMemoryController } from './controller.ts'
-import type { RuntimeMemoryAction, RuntimeMemoryImportance, RuntimeMemoryTarget } from './contracts.ts'
+import type { RuntimeMemoryAction, RuntimeMemoryImportance, RuntimeMemoryMutation, RuntimeMemoryTarget } from './contracts.ts'
 import { runtimeSourceConfig, type Config } from './config.ts'
 
 const ACTIONS = new Set<RuntimeMemoryAction>(['add', 'replace', 'remove'])
 const TARGETS = new Set<RuntimeMemoryTarget>(['memory', 'user'])
 const IMPORTANCE = new Set<RuntimeMemoryImportance>(['critical', 'normal', 'low'])
+
+function runtimeMutation(value: MemoryJsonValue): RuntimeMemoryMutation {
+  const input = record(value, 'Runtime Memory mutation')
+  const action = text(input.action, 'action', 20) as RuntimeMemoryAction
+  const target = text(input.target, 'target', 20) as RuntimeMemoryTarget
+  if (!ACTIONS.has(action)) throw new Error(`unsupported Runtime Memory action: ${action}`)
+  if (!TARGETS.has(target)) throw new Error(`unsupported Runtime Memory target: ${target}`)
+  const importance = text(input.importance, 'importance', 20, false) as RuntimeMemoryImportance | undefined
+  if (importance !== undefined && !IMPORTANCE.has(importance)) throw new Error(`unsupported Runtime Memory importance: ${importance}`)
+  return {
+    action,
+    target,
+    ...(text(input.content, 'content', 100_000, false) === undefined ? {} : { content: text(input.content, 'content', 100_000, false)! }),
+    ...(text(input.oldText ?? input.old_text, 'oldText', 100_000, false) === undefined ? {} : { oldText: text(input.oldText ?? input.old_text, 'oldText', 100_000, false)! }),
+    ...(importance === undefined ? {} : { importance }),
+    ...(input.branches === undefined ? {} : { branches: stringArray(input.branches, 'branches', 100) ?? [] }),
+  }
+}
 
 export function createRuntimeMemorySource(config: Config = {}, controllerFactory?: (context: MemorySourceRuntimeContext) => RuntimeMemoryController): MemorySourceDefinition {
  const configured = Object.freeze({ ...config })
@@ -85,22 +103,18 @@ export function createRuntimeMemorySource(config: Config = {}, controllerFactory
           }],
         }
       },
+      async manage(request) {
+        if (request.mode === 'read') {
+          if (request.operation !== 'snapshot') throw new Error('unsupported Runtime management read operation: ' + request.operation)
+          return { revision: projection(request.scope.workspaceId).revision, value: controller.snapshot() as unknown as MemoryJsonValue }
+        }
+        if (!request.confirmed) throw new Error('Runtime management mutation requires explicit confirmation')
+        if (request.operation !== 'mutate') throw new Error('unsupported Runtime management mutation operation: ' + request.operation)
+        const result = await controller.mutate(runtimeMutation(request.input))
+        return { revision: projection(request.scope.workspaceId).revision, value: result as unknown as MemoryJsonValue }
+      },
       async mutate(request) {
-        const input = record(request.input, 'Runtime Memory mutation')
-        const action = text(input.action, 'action', 20) as RuntimeMemoryAction
-        const target = text(input.target, 'target', 20) as RuntimeMemoryTarget
-        if (!ACTIONS.has(action)) throw new Error(`unsupported Runtime Memory action: ${action}`)
-        if (!TARGETS.has(target)) throw new Error(`unsupported Runtime Memory target: ${target}`)
-        const importance = text(input.importance, 'importance', 20, false) as RuntimeMemoryImportance | undefined
-        if (importance !== undefined && !IMPORTANCE.has(importance)) throw new Error(`unsupported Runtime Memory importance: ${importance}`)
-        const result = await controller.mutate({
-          action,
-          target,
-          ...(text(input.content, 'content', 100_000, false) === undefined ? {} : { content: text(input.content, 'content', 100_000, false)! }),
-          ...(text(input.oldText, 'oldText', 100_000, false) === undefined ? {} : { oldText: text(input.oldText, 'oldText', 100_000, false)! }),
-          ...(importance === undefined ? {} : { importance }),
-          ...(input.branches === undefined ? {} : { branches: stringArray(input.branches, 'branches', 100) ?? [] }),
-        })
+        const result = await controller.mutate(runtimeMutation(request.input))
         const revision = controller.snapshot().revision
         return receipt(request.view.id, request.offer.id, context.sourceInstanceKey, revision, result as unknown as MemoryJsonValue)
       },

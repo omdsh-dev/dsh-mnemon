@@ -23,6 +23,30 @@ const strategy = {
 }
 
 describe('standalone runtime Source', () => {
+  it('serves its own management protocol with confirmation, revision fencing and legacy input compatibility', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-runtime-management-'))
+    const runner = new MemoryCompositionRunner()
+    try {
+      await runner.mount(strategy, { instanceId: 'strategy' })
+      await runner.mount(plugin, { instanceId: 'work', config: { dataDir: directory } })
+      const generation = runner.generations.current()!
+      const scope = { storage: 'custom' as const }
+      const base = { sourceInstanceKey: 'source:work', scope, confirmed: false }
+      const initial = await generation.executeManagement({ ...base, mode: 'read', operation: 'snapshot', input: null })
+      const create = { ...base, mode: 'mutate' as const, operation: 'mutate', expectedRevision: initial.revision,
+        input: { action: 'add', target: 'memory', content: 'managed entry' } }
+      await expect(generation.executeManagement(create)).rejects.toThrow('confirmation')
+      const added = await generation.executeManagement({ ...create, confirmed: true })
+      await expect(generation.executeManagement({ ...create, confirmed: true })).rejects.toThrow('revision conflict')
+      const replaced = await generation.executeManagement({ ...create, confirmed: true, expectedRevision: added.revision,
+        input: { action: 'replace', target: 'memory', old_text: 'managed entry', content: 'replaced entry' } })
+      await generation.executeManagement({ ...create, confirmed: true, expectedRevision: replaced.revision,
+        input: { action: 'remove', target: 'memory', old_text: 'replaced entry' } })
+      const final = await generation.executeManagement({ ...base, mode: 'read', operation: 'snapshot', input: null })
+      expect(final.value).toMatchObject({ entries: [] })
+    } finally { await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
+  })
+
   it('owns storage and composes two independent configured instances with no private Host binding', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'mnemon-runtime-plugin-'))
     const workspace = join(directory, 'workspace')
