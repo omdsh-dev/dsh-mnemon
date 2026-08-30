@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 export default defineConfig({
   resolve: {
     alias: {
+      'dsh-mnemon-source-memory-spaces/testing': fileURLToPath(new URL('./plugins/dsh-mnemon-source-memory-spaces/src/testing.ts', import.meta.url)),
       'dsh-mnemon-source-memory-spaces/provider-sdk': fileURLToPath(new URL('./plugins/dsh-mnemon-source-memory-spaces/src/provider-sdk.ts', import.meta.url)),
       'dsh-mnemon/extension-sdk': fileURLToPath(new URL('./packages/extension-sdk/src/index.ts', import.meta.url)),
       'dsh-mnemon/contracts': fileURLToPath(new URL('./packages/contracts/src/index.ts', import.meta.url)),

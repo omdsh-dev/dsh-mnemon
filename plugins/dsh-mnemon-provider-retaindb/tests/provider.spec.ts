@@ -1,6 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
-import { PrivateMemorySpaceProviderHost, type MemorySpaceAuthority, type MemoryProviderAdapter } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
+import { PrivateMemorySpaceProviderHost, type MemorySpaceAuthority } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import module, { definition, RetainDbProvider, descriptor } from '../src/index.ts'
 
 describe('independent retaindb Provider', () => {
@@ -20,7 +20,7 @@ describe('independent retaindb Provider', () => {
 
   it('constructs its own driver from a structural authority, without the main repository', () => {
     const authority: MemorySpaceAuthority = { runner: { effectiveDataDir: () => '/unused' }, list: () => [], providerConnection: () => ({}) }
-    const adapter = definition.create({ memoryBodies: authority, config: { timeoutMs: 200 }, nativeAdapter: undefined as unknown as MemoryProviderAdapter, providerInstanceId: 'retaindb', manifest: definition.manifest })
+    const adapter = definition.create({ memoryBodies: authority, config: { timeoutMs: 200 }, providerInstanceId: 'retaindb', manifest: definition.manifest })
     expect(adapter).toBeInstanceOf(RetainDbProvider)
     expect(adapter.id).toBe('retaindb')
   })

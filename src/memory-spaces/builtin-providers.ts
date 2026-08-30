@@ -1,65 +1,21 @@
-import openviking from '../../plugins/dsh-mnemon-provider-openviking/src/index.ts'
-import honcho from '../../plugins/dsh-mnemon-provider-honcho/src/index.ts'
-import mem0 from '../../plugins/dsh-mnemon-provider-mem0/src/index.ts'
-import hindsight from '../../plugins/dsh-mnemon-provider-hindsight/src/index.ts'
-import holographic from '../../plugins/dsh-mnemon-provider-holographic/src/index.ts'
-import retaindb from '../../plugins/dsh-mnemon-provider-retaindb/src/index.ts'
-import byterover from '../../plugins/dsh-mnemon-provider-byterover/src/index.ts'
-import supermemory from '../../plugins/dsh-mnemon-provider-supermemory/src/index.ts'
-import { MEMORY_PROVIDER_CATALOG } from '../providers/catalog.ts'
-import {
-  BUILTIN_MEMORY_PROVIDER_ADAPTER_FACTORIES,
-  type MemoryProviderAdapterFactory,
-} from '../providers/registry.ts'
-import {
-  MEMORY_SPACE_PROVIDER_API_VERSION,
-  defineMemorySpaceProvider,
-  defineMemorySpaceProviderDefinition,
-  type MemorySpaceProviderEntry,
-  type MemorySpaceProviderModule,
-} from './provider-sdk.ts'
+import mnemonNative, { definition as mnemonNativeDefinition } from '../../plugins/dsh-mnemon-provider-mnemon-native/src/index.ts'
+import openviking, { definition as openvikingDefinition } from '../../plugins/dsh-mnemon-provider-openviking/src/index.ts'
+import honcho, { definition as honchoDefinition } from '../../plugins/dsh-mnemon-provider-honcho/src/index.ts'
+import mem0, { definition as mem0Definition } from '../../plugins/dsh-mnemon-provider-mem0/src/index.ts'
+import hindsight, { definition as hindsightDefinition } from '../../plugins/dsh-mnemon-provider-hindsight/src/index.ts'
+import holographic, { definition as holographicDefinition } from '../../plugins/dsh-mnemon-provider-holographic/src/index.ts'
+import retaindb, { definition as retaindbDefinition } from '../../plugins/dsh-mnemon-provider-retaindb/src/index.ts'
+import byterover, { definition as byteroverDefinition } from '../../plugins/dsh-mnemon-provider-byterover/src/index.ts'
+import supermemory, { definition as supermemoryDefinition } from '../../plugins/dsh-mnemon-provider-supermemory/src/index.ts'
+import type { MemorySpaceProviderDefinition, MemorySpaceProviderEntry, MemorySpaceProviderModule } from './provider-sdk.ts'
 
-const BUNDLED_IMPLEMENTATION_VERSION = '0.3.5'
-
-function moduleFor(factory: MemoryProviderAdapterFactory): MemorySpaceProviderModule<undefined> {
-  const descriptor = MEMORY_PROVIDER_CATALOG.find(candidate => candidate.id === factory.id)
-  if (descriptor === undefined) throw new Error(`built-in Memory Space Provider ${factory.id} has no descriptor`)
-  const definition = defineMemorySpaceProviderDefinition({
-    manifest: {
-      apiVersion: MEMORY_SPACE_PROVIDER_API_VERSION,
-      kind: 'provider',
-      typeId: descriptor.id,
-      packageName: `dsh-mnemon-provider-${descriptor.id}`,
-      version: BUNDLED_IMPLEMENTATION_VERSION,
-      label: descriptor.label,
-      ...(descriptor.icon === undefined ? {} : { icon: descriptor.icon }),
-      summary: descriptor.summary,
-      ...(descriptor.summaryI18nKey === undefined ? {} : { summaryI18nKey: descriptor.summaryI18nKey }),
-      origin: descriptor.origin,
-      locality: descriptor.kind,
-      workspaceBinding: descriptor.workspaceBinding,
-      capabilities: descriptor.capabilities,
-      fields: descriptor.fields,
-      secrets: descriptor.fields.filter(field => field.input === 'secret').map(field => field.key),
-      scoreSemantics: factory.scoreSemantics,
-    },
-    create: context => factory.create(context),
-  })
-  return defineMemorySpaceProvider({
-    id: descriptor.id,
-    apply(ctx, host) {
-      host.install(ctx, definition)
-    },
-  })
-}
-
-/** Every bundled Provider is expressed as the same complete child module. */
-export const BUILTIN_MEMORY_SPACE_PROVIDER_MODULES: readonly MemorySpaceProviderModule<undefined>[] =
-  Object.freeze([moduleFor(BUILTIN_MEMORY_PROVIDER_ADAPTER_FACTORIES[0]!), openviking, honcho, mem0, hindsight, holographic, retaindb, byterover, supermemory])
-
-export const BUILTIN_MEMORY_SPACE_PROVIDER_ENTRIES: readonly MemorySpaceProviderEntry<undefined>[] =
-  Object.freeze(BUILTIN_MEMORY_SPACE_PROVIDER_MODULES.map(module => Object.freeze({
-    instanceId: module.id,
-    module,
-    config: undefined,
-  })))
+/** Explicit default bundle; the independent Source imports no Provider. */
+export const BUILTIN_MEMORY_SPACE_PROVIDER_MODULES: readonly MemorySpaceProviderModule<undefined>[] = Object.freeze([
+  mnemonNative, openviking, honcho, mem0, hindsight, holographic, retaindb, byterover, supermemory
+])
+export const BUILTIN_MEMORY_SPACE_PROVIDER_DEFINITIONS: readonly MemorySpaceProviderDefinition[] = Object.freeze([
+  mnemonNativeDefinition, openvikingDefinition, honchoDefinition, mem0Definition, hindsightDefinition, holographicDefinition, retaindbDefinition, byteroverDefinition, supermemoryDefinition
+])
+export const BUILTIN_MEMORY_SPACE_PROVIDER_ENTRIES: readonly MemorySpaceProviderEntry<undefined>[] = Object.freeze(
+  BUILTIN_MEMORY_SPACE_PROVIDER_MODULES.map(module => Object.freeze({ instanceId: module.id, module, config: undefined })),
+)

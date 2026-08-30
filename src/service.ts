@@ -14,7 +14,7 @@ import type { MnemonRunner } from './runner.ts'
 import type { AuthorityCommitRecorder } from './memory-receipts.ts'
 import { finalizeLlmPlacement, prepareMemoryPlacement, rulesOnlyPlacement, type LlmMemoryPlacementSelection, type PreparedMemoryPlacement } from './provider-placement.ts'
 import { BUILTIN_MEMORY_PROVIDER_CATALOG, MemoryProviderCatalog } from './providers/catalog.ts'
-import { NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter, type ProviderBodyStatus, type ProviderSearchResult } from './providers/provider.ts'
+import { type MemoryProviderAdapter, type ProviderBodyStatus, type ProviderSearchResult } from './providers/provider.ts'
 import { memoryProviderAdapterFactories, type MemoryProviderAdapterRegistry } from './providers/registry.ts'
 import { lexicalRequiredMatchCount, lexicalSearchTokens, lexicalTokenMatchCount } from './search-tokens.ts'
 import {
@@ -245,83 +245,7 @@ function insightColor(category: string | undefined): string {
   return '#6574d9'
 }
 
-function normalizeInsight(value: JsonValue): Insight | undefined {
-  const item = record(value)
-  if (item === undefined) return undefined
-  // Mnemon <=0.1.2 returns full recall rows as
-  // `{ insight: { id, content, ... }, score, intent, via, signals }`; newer
-  // builds default to a compact flat row. Accept both without version gates.
-  const nested = record(item.insight)
-  const core = nested ?? item
-  const id = text(core.id)
-  const content = text(core.content)
-  if (id === undefined || content === undefined) return undefined
-  const insight: Insight = { id, content }
-  const optionalText = {
-    category: text(core.category),
-    source: text(core.source),
-    confidence: text(item.confidence),
-    intent: text(item.intent),
-    matchedVia: text(item.matched_via ?? item.via ?? item.via_edge_type),
-    createdAt: text(core.created_at),
-    edgeType: text(item.via_edge_type),
-  }
-  for (const [key, value] of Object.entries(optionalText)) if (value !== undefined) Object.assign(insight, { [key]: value })
-  const optionalNumbers = {
-    importance: number(core.importance),
-    score: number(item.score),
-    depth: number(item.depth),
-  }
-  for (const [key, value] of Object.entries(optionalNumbers)) if (value !== undefined) Object.assign(insight, { [key]: value })
-  const tags = stringArray(core.tags)
-  const entities = stringArray(core.entities)
-  if (tags !== undefined) insight.tags = tags
-  if (entities !== undefined) insight.entities = entities
-  return insight
-}
-
-const JS_STRING = '"(?:\\\\.|[^"\\\\])*"'
-const VIZ_NODE_PATTERN = new RegExp(`\\{id:(${JS_STRING}),label:(${JS_STRING}),title:(${JS_STRING}),color:(${JS_STRING}),font:\\{color:"white"\\}\\}`, 'g')
-const VIZ_EDGE_PATTERN = new RegExp(`\\{from:(${JS_STRING}),to:(${JS_STRING}),label:(${JS_STRING}),color:\\{color:(${JS_STRING})\\},arrows:"to"`, 'g')
-const EDGE_COLORS: Record<string, EdgeType> = {
-  '#aaaaaa': 'temporal',
-  '#3498db': 'semantic',
-  '#e74c3c': 'causal',
-  '#2ecc71': 'entity',
-}
-
-function decodeJsString(value: string): string {
-  const decoded = JSON.parse(value) as unknown
-  if (typeof decoded !== 'string') throw new Error('Mnemon viz contained an invalid string')
-  return decoded
-}
-
-/** Parse the official Mnemon vis.js export without executing its HTML or loading its CDN script. */
-export function parseMemoryGraph(html: string, now = new Date()): MemoryGraphSnapshot {
-  const nodes: MemoryGraphNode[] = []
-  const edges: MemoryGraphEdge[] = []
-  for (const match of html.matchAll(VIZ_NODE_PATTERN)) {
-    const id = decodeJsString(match[1]!)
-    const label = decodeJsString(match[2]!)
-    const content = decodeJsString(match[3]!).replaceAll('\\n', '\n')
-    const color = decodeJsString(match[4]!)
-    const category = /\[([a-z_]+)\]/i.exec(label)?.[1] ?? 'general'
-    nodes.push({ id, content, category, color })
-  }
-  for (const match of html.matchAll(VIZ_EDGE_PATTERN)) {
-    const color = decodeJsString(match[4]!)
-    const type = EDGE_COLORS[color.toLowerCase()]
-    edges.push({
-      sourceId: decodeJsString(match[1]!),
-      targetId: decodeJsString(match[2]!),
-      label: decodeJsString(match[3]!),
-      color,
-      ...(type === undefined ? {} : { type }),
-    })
-  }
-  if (!html.includes('var nodes = new vis.DataSet([')) throw new Error('Mnemon viz returned an unexpected HTML payload')
-  return { nodes, edges, generatedAt: now.toISOString() }
-}
+export { parseMemoryGraph } from '../plugins/dsh-mnemon-provider-mnemon-native/src/driver.ts'
 
 function boundedInteger(value: number | undefined, fallback: number, min: number, max: number): number {
   if (value === undefined) return fallback
@@ -432,20 +356,7 @@ export class MnemonService {
       ? new MemoryBodyRegistry(runner, true, () => new Date(), providerCatalog)
       : providerCatalog === BUILTIN_MEMORY_PROVIDER_CATALOG ? memoryBodies : memoryBodies.withProviderCatalog(providerCatalog)
     this.recallQualityPolicy = recallQualityPolicyRegistry.resolve(config.recallQuality.policy)
-    const nativeProvider: MemoryProviderAdapter = {
-      id: 'mnemon-native',
-      scoreSemantics: NORMALIZED_RELEVANCE_SCORE,
-      status: (body, signal) => this.nativeBodyStatus(body, signal),
-      search: (body, request, signal) => this.nativeSearch(body, request, signal),
-      graph: (body, signal) => this.nativeGraph(body, signal),
-      list: (body, _request, signal) => this.allNativeInsights(body, signal, true),
-      remember: (body, request, signal) => this.nativeRemember(body, request, signal),
-      rememberMany: (body, requests, signal) => this.nativeRememberMany(body, requests, signal),
-      related: (body, id, depth, edge, signal) => this.nativeRelated(body, id, depth, edge, signal),
-      link: (body, sourceId, targetId, type, weight, reason, signal) => this.nativeLink(body, sourceId, targetId, type, weight, reason, signal),
-      forget: (body, id, signal) => this.nativeForget(body, id, signal),
-    }
-    this.providers = providerAdapterRegistry.create({ memoryBodies: this.memoryBodies, config: this.config, nativeAdapter: nativeProvider })
+    this.providers = providerAdapterRegistry.create({ memoryBodies: this.memoryBodies, config: this.config, nativeRunner: this.runner })
   }
 
   /**
@@ -886,7 +797,9 @@ export class MnemonService {
     let items: Insight[]
     if (this.isNativeBody(body)) {
       method = 'native-basic'
-      items = await this.nativeMetadataSample(body, limit, signal)
+      items = provider.metadataSample === undefined
+        ? await provider.list(body, { limit }, signal)
+        : await provider.metadataSample(body, limit, signal)
     } else if (METADATA_SEARCH_FIRST_PROVIDERS.has(body.provider.typeId ?? body.provider.id) || !body.provider.capabilities.browse) {
       method = 'search'
       const query = (body.description.trim() || body.name.trim()).slice(0, 400)
@@ -1066,7 +979,7 @@ export class MnemonService {
         ? []
         : group.filter(entry => !this.isNativeBody(body) || entry.request.content.length <= 8_000)
       if (batchWriter !== undefined && batch.length > 0) {
-        const written = await batchWriter(body, batch.map(entry => entry.request), signal)
+        const written = await batchWriter.call(provider, body, batch.map(entry => entry.request), signal)
         if (written.length !== batch.length) throw new Error(`batch remember did not return one receipt per request for Memory Space ${body.id}`)
         for (const [offset, result] of written.entries()) {
           const entry = batch[offset]!
@@ -1227,7 +1140,7 @@ export class MnemonService {
     const edges: Array<Record<string, JsonValue>> = []
     for (const source of sources) {
       const offset = insights.length
-      const sourceInsights = await this.allNativeInsights(source, signal)
+      const sourceInsights = await this.providerFor(source).list(source, { limit: 100_000 }, signal)
       const indexById = new Map(sourceInsights.map((insight, index) => [insight.id, offset + index]))
       for (const insight of sourceInsights) {
         insights.push({
@@ -1240,7 +1153,7 @@ export class MnemonService {
           ...(insight.createdAt === undefined ? {} : { created_at: insight.createdAt }),
         })
       }
-      const graph = await this.nativeGraph(source, signal)
+      const graph = await this.providerFor(source).graph(source, signal)
       for (const edge of graph.edges) {
         const sourceIndex = indexById.get(edge.sourceId)
         const targetIndex = indexById.get(edge.targetId)
@@ -1278,174 +1191,6 @@ export class MnemonService {
     } finally {
       rmSync(temporary, { recursive: true, force: true })
     }
-  }
-
-  private async nativeBodyStatus(body: MemoryBody, signal?: AbortSignal): Promise<ProviderBodyStatus> {
-    try {
-      const raw = await this.runner.runJson(['status'], { ...(signal === undefined ? {} : { signal }), store: body.id })
-      const status = record(raw)
-      if (status === undefined) throw new Error('mnemon status returned an unexpected payload')
-      return { healthy: true, stats: this.parseStats(status) }
-    } catch (error) {
-      return { healthy: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  }
-
-  private parseStats(status: Record<string, JsonValue>): MemoryBodyStats {
-    const byCategoryRecord = record(status.by_category) ?? {}
-    const byCategory: Record<string, number> = {}
-    for (const [category, count] of Object.entries(byCategoryRecord)) if (typeof count === 'number') byCategory[category] = count
-    const topEntities = Array.isArray(status.top_entities)
-      ? status.top_entities.flatMap((entry) => {
-          const entity = record(entry)
-          const name = text(entity?.entity)
-          const count = number(entity?.count)
-          return name === undefined || count === undefined ? [] : [{ entity: name, count }]
-        })
-      : []
-    return {
-      totalInsights: number(status.total_insights) ?? 0,
-      deletedInsights: number(status.deleted_insights) ?? 0,
-      edgeCount: number(status.edge_count) ?? 0,
-      oplogCount: number(status.oplog_count) ?? 0,
-      dbSizeBytes: number(status.db_size_bytes) ?? 0,
-      byCategory,
-      topEntities,
-    }
-  }
-
-  private async nativeGraph(body: MemoryBody, signal?: AbortSignal): Promise<MemoryGraphSnapshot> {
-    const [html, insights] = await Promise.all([
-      this.runner.runText(['viz', '--format', 'html', '--output', '-'], { ...(signal === undefined ? {} : { signal }), store: body.id }),
-      // Mnemon's HTML visualization omits tags and entities. A readonly recall
-      // supplies that metadata without incrementing access counters.
-      this.allNativeInsights(body, signal, true),
-    ])
-    const snapshot = parseMemoryGraph(html)
-    const metadata = new Map(insights.map(insight => [insight.id, insight]))
-    return {
-      ...snapshot,
-      nodes: snapshot.nodes.map(node => {
-        const insight = metadata.get(node.id)
-        return insight === undefined
-          ? node
-          : { ...node, ...insight, id: node.id, content: node.content, color: node.color }
-      }),
-    }
-  }
-
-  private async allNativeInsights(body: MemoryBody, signal?: AbortSignal, readonly = false): Promise<Insight[]> {
-    const payload = await this.runner.runJson([
-      ...(readonly ? ['--readonly'] : []),
-      'recall', '', '--basic', '--limit', '100000',
-    ], { ...(signal === undefined ? {} : { signal }), store: body.id })
-    const values = Array.isArray(payload) ? payload : Array.isArray(record(payload)?.results) ? record(payload)!.results as JsonValue[] : []
-    return values.map(normalizeInsight).filter((entry): entry is Insight => entry !== undefined)
-  }
-
-  private async nativeMetadataSample(body: MemoryBody, limit: number, signal?: AbortSignal): Promise<Insight[]> {
-    const payload = await this.runner.runJson([
-      '--readonly',
-      'recall', '', '--basic', '--limit', String(limit),
-    ], { ...(signal === undefined ? {} : { signal }), store: body.id })
-    const wrapper = record(payload)
-    const values = Array.isArray(payload) ? payload : Array.isArray(wrapper?.results) ? wrapper.results : []
-    return values.map(normalizeInsight).filter((entry): entry is Insight => entry !== undefined)
-  }
-
-  private async nativeSearch(body: MemoryBody, request: SearchRequest, signal?: AbortSignal): Promise<ProviderSearchResult> {
-    const mode = request.mode ?? 'smart'
-    const args = mode === 'keyword'
-      ? ['search', request.query, '--limit', String(request.limit ?? this.config.defaultRecallLimit)]
-      : ['recall', request.query, '--limit', String(request.limit ?? this.config.defaultRecallLimit)]
-    if (mode === 'basic') args.push('--basic')
-    if (mode !== 'keyword') {
-      if (request.category !== undefined) args.push('--cat', request.category)
-      if (request.source !== undefined) args.push('--source', request.source)
-      if (request.intent !== undefined) args.push('--intent', request.intent)
-    }
-    const payload = await this.runner.runJson(args, { ...(signal === undefined ? {} : { signal }), store: body.id })
-    const wrapper = record(payload)
-    const values = Array.isArray(payload) ? payload : Array.isArray(wrapper?.results) ? wrapper.results : []
-    const hint = text(wrapper?.hint)
-    return {
-      results: values.map(normalizeInsight).filter((entry): entry is Insight => entry !== undefined),
-      ...(hint === undefined ? {} : { hint }),
-    }
-  }
-
-  private async nativeRemember(body: MemoryBody, request: RememberRequest, signal?: AbortSignal): Promise<JsonValue> {
-    const args = ['remember', request.content, '--cat', request.category ?? 'general', '--imp', String(request.importance ?? 3), '--source', request.source ?? 'user']
-    const tags = commaList(request.tags, 'tags', 20)
-    const entities = commaList(request.entities, 'entities', 50)
-    if (tags !== undefined) args.push('--tags', tags)
-    if (entities !== undefined) args.push('--entities', entities)
-    return this.runner.runJson(args, { ...(signal === undefined ? {} : { signal }), store: body.id })
-  }
-
-  private async nativeRememberMany(body: MemoryBody, requests: readonly RememberRequest[], signal?: AbortSignal): Promise<JsonValue[]> {
-    const temporary = mkdtempSync(join(tmpdir(), 'dsh-mnemon-runtime-archive-'))
-    const draftPath = join(temporary, 'memory-draft.json')
-    try {
-      writeFileSync(draftPath, JSON.stringify({
-        schema_version: '1',
-        source: 'dsh-mnemon-runtime-archive',
-        insights: requests.map(request => ({
-          content: request.content,
-          category: request.category,
-          importance: request.importance,
-          source: request.source,
-          ...(request.tags === undefined ? {} : { tags: request.tags }),
-          ...(request.entities === undefined ? {} : { entities: request.entities }),
-        })),
-      }), { encoding: 'utf8', mode: 0o600 })
-      const payload = await this.runner.runJson(['import', draftPath], { ...(signal === undefined ? {} : { signal }), store: body.id })
-      const summary = record(payload)
-      const rows = Array.isArray(summary?.results) ? summary.results : undefined
-      const errors = number(summary?.errors)
-      const imported = number(summary?.imported)
-      const updated = number(summary?.updated)
-      const skipped = number(summary?.skipped)
-      const invalid = () => new Error(`Mnemon runtime archive import returned an invalid or partial result for Memory Space ${body.id}`)
-      if (errors !== 0 || imported === undefined || updated === undefined || skipped === undefined || rows === undefined
-        || ![imported, updated, skipped].every(value => Number.isInteger(value) && value >= 0)
-        || imported + updated + skipped !== requests.length || rows.length !== requests.length) {
-        throw invalid()
-      }
-      const ordered = new Array<JsonValue>(requests.length)
-      for (const candidate of rows) {
-        const row = record(candidate)
-        const index = number(row?.index)
-        const action = text(row?.action)?.trim().toLocaleLowerCase()
-        if (index === undefined || !Number.isInteger(index) || index < 0 || index >= requests.length || ordered[index] !== undefined) {
-          throw invalid()
-        }
-        if (row?.content !== requests[index]!.content || (action !== 'added' && action !== 'updated' && action !== 'skipped')) {
-          throw invalid()
-        }
-        ordered[index] = row
-      }
-      return ordered
-    } finally {
-      rmSync(temporary, { recursive: true, force: true })
-    }
-  }
-
-  private async nativeRelated(body: MemoryBody, id: string, depth: number, edge?: EdgeType, signal?: AbortSignal): Promise<Insight[]> {
-    const args = ['related', id, '--depth', String(depth)]
-    if (edge !== undefined) args.push('--edge', edge)
-    const payload = await this.runner.runJson(args, { ...(signal === undefined ? {} : { signal }), store: body.id })
-    return Array.isArray(payload) ? payload.map(normalizeInsight).filter((entry): entry is Insight => entry !== undefined) : []
-  }
-
-  private async nativeLink(body: MemoryBody, sourceId: string, targetId: string, type: EdgeType, weight: number, reason?: string, signal?: AbortSignal): Promise<JsonValue> {
-    const args = ['link', sourceId, targetId, '--type', type, '--weight', String(weight)]
-    if (reason !== undefined) args.push('--meta', JSON.stringify({ reason }))
-    return this.runner.runJson(args, { ...(signal === undefined ? {} : { signal }), store: body.id })
-  }
-
-  private nativeForget(body: MemoryBody, id: string, signal?: AbortSignal): Promise<JsonValue> {
-    return this.runner.runJson(['forget', id], { ...(signal === undefined ? {} : { signal }), store: body.id })
   }
 
   private providerFor(body: MemoryBody): MemoryProviderAdapter {

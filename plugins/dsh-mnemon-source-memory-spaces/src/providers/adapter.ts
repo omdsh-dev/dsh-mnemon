@@ -56,6 +56,8 @@ export interface MemoryProviderAdapter {
   graph(body: MemoryBody, signal?: AbortSignal): Promise<MemoryGraphSnapshot>
   list(body: MemoryBody, request: MemoryListRequest, signal?: AbortSignal): Promise<Insight[]>
   remember(body: MemoryBody, request: RememberRequest, signal?: AbortSignal): Promise<JsonValue>
+  /** Optional cheap bounded metadata sampling, without a graph projection. */
+  metadataSample?(body: MemoryBody, limit: number, signal?: AbortSignal): Promise<Insight[]>
   /** Persist an ordered host-authorized batch and return one receipt per request. */
   rememberMany?(body: MemoryBody, requests: readonly RememberRequest[], signal?: AbortSignal): Promise<JsonValue[]>
   related?(body: MemoryBody, id: string, depth: number, edge?: EdgeType, signal?: AbortSignal): Promise<Insight[]>

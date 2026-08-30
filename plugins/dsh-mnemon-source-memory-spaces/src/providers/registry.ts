@@ -1,4 +1,4 @@
-import type { MemoryBody, MemoryProviderConnection } from '../contracts.ts'
+import type { JsonValue, MemoryBody, MemoryProviderConnection } from '../contracts.ts'
 import type { MemoryProviderAdapter, MemoryProviderScoreSemantics } from './adapter.ts'
 
 /** Minimum parent authority a Provider needs; no private controller class. */
@@ -8,11 +8,18 @@ export interface MemorySpaceAuthority {
   providerConnection(id: string, expectedProviderId?: string): MemoryProviderConnection
 }
 
+/** Scoped command transport consumed by the Native Provider. */
+export interface MemorySpaceNativeRunner {
+  runJson(args: readonly string[], options?: { signal?: AbortSignal; store?: string }): Promise<JsonValue>
+  runText(args: readonly string[], options?: { signal?: AbortSignal; store?: string }): Promise<string>
+}
+
 export interface MemoryProviderAdapterFactoryContext {
   memoryBodies: MemorySpaceAuthority
-  config: { timeoutMs: number }
-  /** @deprecated Only the pre-extraction Native compatibility factory uses this. */
-  nativeAdapter: MemoryProviderAdapter
+  config: { timeoutMs: number; defaultRecallLimit?: number }
+  nativeRunner?: MemorySpaceNativeRunner
+  /** @deprecated Legacy caller field; new children construct their own drivers. */
+  nativeAdapter?: MemoryProviderAdapter
 }
 
 export interface MemoryAdapterFactory<Id extends string, Context, Adapter extends { readonly id: Id }> {

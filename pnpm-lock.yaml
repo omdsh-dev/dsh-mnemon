@@ -222,6 +222,28 @@ importers:
         specifier: ^3.2.0
         version: 3.2.7(@types/debug@4.1.13)(@types/node@22.20.1)(jsdom@26.1.0(supports-color@7.2.0))(lightningcss@1.33.0)(supports-color@7.2.0)(yaml@2.9.0)
 
+  plugins/dsh-mnemon-provider-mnemon-native:
+    dependencies:
+      '@deepseek-ai/cordis':
+        specifier: ^4.0.1
+        version: 4.0.1(@deepseek-ai/cordis-plugin-include@1.0.6)(@deepseek-ai/cordis-plugin-loader@1.0.2)
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.20.1
+      dsh-mnemon-source-memory-spaces:
+        specifier: ^0.3.5
+        version: link:../dsh-mnemon-source-memory-spaces
+      tsdown:
+        specifier: ^0.22.0
+        version: 0.22.14(@arethetypeswrong/core@0.18.5)(publint@0.3.23)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.7(@types/debug@4.1.13)(@types/node@22.20.1)(jsdom@26.1.0(supports-color@7.2.0))(lightningcss@1.33.0)(supports-color@7.2.0)(yaml@2.9.0)
+
   plugins/dsh-mnemon-provider-openviking:
     dependencies:
       '@deepseek-ai/cordis':

@@ -1,22 +1,22 @@
 {
-  "name": "dsh-mnemon-source-memory-spaces",
+  "name": "dsh-mnemon-provider-mnemon-native",
   "version": "0.3.5",
-  "description": "Memory Spaces Source and its private Provider SDK.",
+  "description": "Native Mnemon CLI Provider child for Memory Spaces.",
   "license": "MIT",
   "type": "module",
   "engines": {
     "node": ">=20"
   },
   "exports": {
-    "./provider-sdk": {
-      "types": "./lib/provider-sdk.d.ts",
-      "default": "./lib/provider-sdk.js"
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
     },
-    "./package.json": "./package.json",
-    "./testing": {
-      "types": "./lib/testing.d.ts",
-      "default": "./lib/testing.js"
-    }
+    "./descriptor": {
+      "types": "./lib/descriptor.d.ts",
+      "default": "./lib/descriptor.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
     "lib",
@@ -28,18 +28,15 @@
     "test": "vitest run",
     "verify": "pnpm typecheck && pnpm test && pnpm build"
   },
-  "dependencies": {
-    "schemastery": "^3.18.0"
-  },
   "peerDependencies": {
-    "dsh-mnemon": "^0.3.5",
+    "dsh-mnemon-source-memory-spaces": "^0.3.5",
     "@deepseek-ai/cordis": "^4.0.1"
   },
   "devDependencies": {
-    "dsh-mnemon": "^0.3.5",
     "@types/node": "^22.0.0",
     "typescript": "^5.9.0",
     "tsdown": "^0.22.0",
-    "vitest": "^3.2.0"
+    "vitest": "^3.2.0",
+    "dsh-mnemon-source-memory-spaces": "^0.3.5"
   }
 }

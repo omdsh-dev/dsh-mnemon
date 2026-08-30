@@ -32,6 +32,9 @@
       ],
       "dsh-mnemon-source-memory-spaces/provider-sdk": [
         "./plugins/dsh-mnemon-source-memory-spaces/src/provider-sdk.ts"
+      ],
+      "dsh-mnemon-source-memory-spaces/testing": [
+        "./plugins/dsh-mnemon-source-memory-spaces/src/testing.ts"
       ]
     }
   },
