@@ -27,6 +27,7 @@ const links = new Map([
   ['@deepseek-ai/dsh-llm', 'packages/llm/llm'],
   ['@deepseek-ai/dsh-session', 'packages/core/session'],
   ['@deepseek-ai/dsh-session-persistence-jsonl', 'packages/session/session-persistence-jsonl'],
+  ['@deepseek-ai/dsh-session-projection', 'packages/session/session-projection'],
   ['@deepseek-ai/dsh-session-query', 'packages/session-query/session-query'],
   ['@deepseek-ai/dsh-subagent', 'packages/subagent/subagent'],
   ['@deepseek-ai/dsh-subagent-spawn-in-process', 'packages/subagent/subagent-spawn-in-process'],

@@ -8,7 +8,7 @@
  * and resets at every durable descriptor.
  */
 import { z } from 'zod'
-import type { HostContextShape, HostSessionEvent } from './contracts.ts'
+import type { HostContextShape } from './contracts.ts'
 
 export interface MnemonTokenUsageProjection {
   uncachedInputTokens: number
@@ -28,6 +28,11 @@ export interface MnemonSubagentTokenUsageState {
 }
 
 type UsageSample = NonNullable<MnemonSubagentTokenUsageState['last']>
+
+interface ProjectionEvent {
+  type: string
+  data: unknown
+}
 
 interface ProjectionRegistry {
   register(definition: typeof mnemonSubagentTokenUsageProjectionDefinition): unknown
@@ -53,6 +58,12 @@ const tokenUsageStateSchema: z.ZodType<MnemonSubagentTokenUsageState> = z.object
     buckets: tokenUsageSchema,
   }).strict().nullable(),
 }).strict()
+
+const tokenUsageWire = {
+  viewSchema: tokenUsageSchema.nullable(),
+  view: (state: MnemonSubagentTokenUsageState): MnemonTokenUsageProjection | null =>
+    state.descriptorSeen ? state.totals : null,
+}
 
 const emptyTokenUsage = (): MnemonTokenUsageProjection => ({
   uncachedInputTokens: 0,
@@ -88,19 +99,21 @@ function usageBuckets(value: unknown): MnemonTokenUsageProjection | undefined {
   }
 }
 
-function usageSample(event: HostSessionEvent): UsageSample | undefined {
-  const turn = nonnegativeInteger(event.data.turn)
-  const step = nonnegativeInteger(event.data.step)
+function usageSample(event: ProjectionEvent): UsageSample | undefined {
+  if (typeof event.data !== 'object' || event.data === null || Array.isArray(event.data)) return undefined
+  const data = event.data as Record<string, unknown>
+  const turn = nonnegativeInteger(data.turn)
+  const step = nonnegativeInteger(data.step)
   if (turn === undefined || step === undefined) return undefined
   let rawUsage: unknown
   if (event.type === 'assistant/chunk') {
-    const chunk = event.data.chunk
+    const chunk = data.chunk
     if (typeof chunk !== 'object' || chunk === null || Array.isArray(chunk)) return undefined
     const record = chunk as Record<string, unknown>
     if (record.type !== 'usage') return undefined
     rawUsage = record.usage
   } else if (event.type === 'assistant/message') {
-    rawUsage = event.data.usage
+    rawUsage = data.usage
   } else {
     return undefined
   }
@@ -140,12 +153,14 @@ export const mnemonSubagentTokenUsageProjectionDefinition = {
   key: MNEMON_SUBAGENT_TOKEN_USAGE_KEY,
   stateVersion: 1,
   stateSchema: tokenUsageStateSchema,
+  // DSH 0.1.0 consumes schema/view; 0.1.1+ consumes stateSchema/wire.
+  schema: tokenUsageWire.viewSchema,
   init: (): MnemonSubagentTokenUsageState => ({
     descriptorSeen: false,
     totals: emptyTokenUsage(),
     last: null,
   }),
-  apply: (state: MnemonSubagentTokenUsageState, event: HostSessionEvent): MnemonSubagentTokenUsageState => {
+  apply: (state: MnemonSubagentTokenUsageState, event: ProjectionEvent): MnemonSubagentTokenUsageState => {
     if (event.type === 'subagent/descriptor') {
       return { descriptorSeen: true, totals: emptyTokenUsage(), last: null }
     }
@@ -164,11 +179,8 @@ export const mnemonSubagentTokenUsageProjectionDefinition = {
       last: sample,
     }
   },
-  wire: {
-    viewSchema: tokenUsageSchema.nullable(),
-    view: (state: MnemonSubagentTokenUsageState): MnemonTokenUsageProjection | null =>
-      state.descriptorSeen ? state.totals : null,
-  },
+  view: tokenUsageWire.view,
+  wire: tokenUsageWire,
 } as const
 
 /** Register lazily when the optional DSH projection service is present. */

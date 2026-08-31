@@ -12,6 +12,16 @@ Install dependencies:
 pnpm install
 ```
 
+## Session projection compatibility
+
+Mnemon's child-local token-usage projection supports both DSH projection contracts: `schema` / `view` in 0.1.0 and `stateSchema` / `wire` in 0.1.1 and the supported alpha. Both entry points share the same wire schema and view function. The internal state and `stateVersion: 1` remain unchanged, so cached state survives upgrades and rollbacks between these hosts.
+
+```sh
+pnpm exec vitest run tests/subagent-token-usage-host.spec.ts tests/subagent-token-usage.spec.ts tests/client-subagent-token-usage.spec.tsx
+```
+
+The Host tests execute the published 0.1.0-rc.8 registry and the active registry against real DSH sessions, covering live snapshots, detached replay, checkpoint restoration, cross-version state, and change notifications. The legacy npm alias is a test-only development dependency; it does not replace the active Host. Source verification links the active registry to the alpha alongside the other DSH packages.
+
 ## DSH 0.1.2-alpha.1 source verification
 
 The alpha is intentionally not published to npm. Keep the registry dependencies and lockfile on the latest published DSH baseline, then overlay only generated `node_modules` links from a built Harness checkout:

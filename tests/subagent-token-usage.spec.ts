@@ -68,4 +68,12 @@ describe('Mnemon subagent token-usage projection', () => {
     expect(inject).toHaveBeenCalledWith(['sessionProjections'], expect.any(Function))
     expect(register).toHaveBeenCalledWith(projection)
   })
+
+  it.each([null, undefined, [], 'invalid', { turn: 1, step: 0, chunk: null }])(
+    'ignores malformed event data without changing child usage: %j',
+    (data) => {
+      const state = projection.apply(projection.init(), event('subagent/descriptor'))
+      expect(projection.apply(state, { type: 'assistant/chunk', data })).toBe(state)
+    },
+  )
 })
