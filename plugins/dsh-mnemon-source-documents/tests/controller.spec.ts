@@ -17,7 +17,7 @@ afterEach(() => {
 })
 
 describe('Mnemon Documents control plane', () => {
-  it('reads no bodies for revision/catalog, one for a single read, and retains full UI excerpts', async () => {
+  it('reads no bodies for revision/catalog, one for a single read, and reuses verified UI excerpts', async () => {
     const controller = new DocumentController(workspace())
     for (let index = 0; index < 24; index++) await controller.mutate({ action: 'create', title: `Record ${index}`, content: `Original ${index}` })
     const readBody = vi.spyOn(controller as unknown as { readBody(record: unknown): string }, 'readBody')
@@ -30,7 +30,18 @@ describe('Mnemon Documents control plane', () => {
     expect(readBody).toHaveBeenCalledOnce()
     readBody.mockClear()
     expect(controller.snapshot().documents.every(record => record.excerpt.startsWith('Original'))).toBe(true)
-    expect(readBody).toHaveBeenCalledTimes(24)
+    expect(readBody).not.toHaveBeenCalled()
+  })
+
+  it('reads each newly imported body once for full snapshots instead of rereading the collection', async () => {
+    const controller = new DocumentController(workspace())
+    const readBody = vi.spyOn(controller as unknown as { readBody(record: unknown): string }, 'readBody')
+    for (let index = 0; index < 32; index++) {
+      const result = await controller.mutate({ action: 'create', title: `Record ${index}`, content: `Original ${index}` })
+      expect(result.snapshot.total).toBe(index + 1)
+      expect(result.snapshot.documents.every(record => record.healthy && record.excerpt.startsWith('Original'))).toBe(true)
+    }
+    expect(readBody).toHaveBeenCalledTimes(32)
   })
 
   it('rechecks a management revision inside the mutation queue', async () => {
@@ -41,6 +52,35 @@ describe('Mnemon Documents control plane', () => {
     await first
     await expect(stale).rejects.toBeInstanceOf(DocumentConflictError)
     expect(controller.snapshot().documents.map(document => document.title)).toEqual(['First'])
+  })
+
+  it('keeps cached index records isolated from mutable controller results', async () => {
+    const controller = new DocumentController(workspace())
+    const added = await controller.mutate({ action: 'create', title: 'Metadata', content: 'Preserved.', sourcePaths: ['notes.md'], sessionIds: ['original'] })
+    const first = controller.snapshot(), revision = first.revision
+    first.documents[0]!.title = 'Untrusted caller change'
+    first.documents[0]!.sourcePaths.push('injected.md')
+    first.documents[0]!.sessionIds.length = 0
+    controller.get(added.document.id).memoryBodyIds.push('injected-space')
+    const next = controller.snapshot()
+    expect(next.revision).toBe(revision)
+    expect(next.documents[0]).toMatchObject({ title: 'Metadata', sourcePaths: ['notes.md'], sessionIds: ['original'], memoryBodyIds: [] })
+  })
+
+  it('does not cache an index mutation when its atomic write fails', async () => {
+    const controller = new DocumentController(workspace())
+    const before = await controller.mutate({ action: 'create', title: 'Durable metadata', content: 'Stored.' })
+    const revision = controller.revision()
+    const internal = controller as unknown as { atomicWrite(path: string, content: string): void }
+    const atomicWrite = internal.atomicWrite.bind(controller)
+    const failure = vi.spyOn(internal, 'atomicWrite').mockImplementation((path, content) => {
+      if (path === controller.indexPath) throw new Error('injected index write failure')
+      atomicWrite(path, content)
+    })
+    await expect(controller.mutate({ action: 'update', id: before.document.id, title: 'Uncommitted metadata' }, revision)).rejects.toThrow('index write failure')
+    failure.mockRestore()
+    expect(controller.revision()).toBe(revision)
+    expect(controller.snapshot().documents[0]).toMatchObject({ title: 'Durable metadata', revision: 1 })
   })
 
   it('creates an isolated active/archive directory and managed Markdown projection', async () => {

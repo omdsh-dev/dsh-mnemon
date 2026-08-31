@@ -10,6 +10,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs'
+import type { BigIntStats } from 'node:fs'
 import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { DocumentMutation, DocumentMutationResult, DocumentRecord, DocumentSearchResult, DocumentSnapshot, DocumentStatus, DocumentView } from './contracts.ts'
 import { lexicalRequiredMatchCount, lexicalSearchTokens } from './search-tokens.ts'
@@ -22,6 +23,7 @@ const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024
 const LOCK_TIMEOUT_MS = 5_000
 const LOCK_STALE_MS = 30_000
 const LOCK_RETRY_MS = 20
+const MAX_EXCERPT_CACHE_ENTRIES = 2_048
 
 interface DocumentIndex {
   version: typeof DOCUMENTS_VERSION
@@ -83,6 +85,15 @@ function indexRevision(index: DocumentIndex): string {
   return hash(JSON.stringify(index))
 }
 
+function copyIndex(index: DocumentIndex): DocumentIndex {
+  return { version: index.version, documents: index.documents.map(record => ({
+    ...record,
+    sourcePaths: [...record.sourcePaths],
+    sessionIds: [...record.sessionIds],
+    memoryBodyIds: [...record.memoryBodyIds],
+  })) }
+}
+
 function slug(title: string): string {
   const result = title.normalize('NFKD').toLowerCase().replace(/[^a-z0-9]+/gu, '-').replace(/^-|-$/gu, '').slice(0, 48)
   return result || 'document'
@@ -124,6 +135,11 @@ function documentBody(markdown: string): string {
 function excerpt(content: string, maximum = 220): string {
   const normalized = content.replace(/[#>*_`\[\]]/gu, '').replace(/\s+/gu, ' ').trim()
   return normalized.length <= maximum ? normalized : `${normalized.slice(0, maximum - 1)}…`
+}
+
+/** Include ctime and identity so restored mtimes and atomic replacements miss. */
+function diskIdentity(stat: BigIntStats): string {
+  return `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}:${stat.mode}`
 }
 
 function sleepSync(milliseconds: number): void {
@@ -168,6 +184,9 @@ export class DocumentController {
   readonly lockPath: string
   private readonly managedRelativePrefix: string
   private queue: Promise<unknown> = Promise.resolve()
+  private readonly excerpts = new Map<string, { identity: string; value: string }>()
+  private indexCache: { identity: string; index: DocumentIndex; revision: string } | undefined
+  private readonly indexRevisions = new WeakMap<DocumentIndex, string>()
 
   constructor(
     workspaceRoot: string,
@@ -198,7 +217,7 @@ export class DocumentController {
   }
 
   revision(): string {
-    return this.withLock(() => indexRevision(this.readIndex()))
+    return this.withLock(() => this.revisionOf(this.readIndex()))
   }
 
   get(id: string): DocumentView {
@@ -339,7 +358,7 @@ export class DocumentController {
 
   private mutateLocked(request: DocumentMutation, expectedRevision?: string): DocumentMutationResult {
     const index = this.readIndex()
-    if (expectedRevision !== undefined && indexRevision(index) !== expectedRevision) throw new DocumentConflictError()
+    if (expectedRevision !== undefined && this.revisionOf(index) !== expectedRevision) throw new DocumentConflictError()
     const now = this.now().toISOString()
     if (request.action === 'create') {
       const title = normalizeLine(request.title, 'document title', 160, true)
@@ -395,18 +414,50 @@ export class DocumentController {
   }
 
   private readIndex(): DocumentIndex {
+    const identity = diskIdentity(statSync(this.indexPath, { bigint: true }))
+    if (this.indexCache?.identity === identity) {
+      const index = copyIndex(this.indexCache.index)
+      this.indexRevisions.set(index, this.indexCache.revision)
+      return index
+    }
+    this.indexCache = undefined
     const raw = JSON.parse(readFileSync(this.indexPath, 'utf8')) as unknown
     if (!isRecord(raw) || raw.version !== DOCUMENTS_VERSION || !Array.isArray(raw.documents)) throw new Error(`invalid document index: ${this.indexPath}`)
     const documents = raw.documents.map(parseRecord)
     if (documents.some(record => record === undefined)) throw new Error(`invalid document record in ${this.indexPath}`)
-    return { version: DOCUMENTS_VERSION, documents: documents as DocumentRecord[] }
+    const index: DocumentIndex = { version: DOCUMENTS_VERSION, documents: documents as DocumentRecord[] }
+    const revision = indexRevision(index)
+    this.indexRevisions.set(index, revision)
+    try {
+      if (diskIdentity(statSync(this.indexPath, { bigint: true })) === identity) {
+        // Never expose cached mutable records/arrays through controller results.
+        this.indexCache = { identity, index: copyIndex(index), revision }
+      }
+    } catch { /* Do not cache an index concurrently removed by an external writer. */ }
+    return index
+  }
+
+  private revisionOf(index: DocumentIndex): string {
+    return this.indexRevisions.get(index) ?? indexRevision(index)
   }
 
   private snapshotUnlocked(index: DocumentIndex, includeExcerpts = true): DocumentSnapshot {
-    const documents = index.documents.map(record => {
-      const path = this.pathFor(record)
-      const healthy = existsSync(path)
-      return { ...record, healthy, excerpt: healthy && includeExcerpts ? excerpt(this.readBody(record)) : '' }
+    // Fix admission before scanning: FIFO insertion on every overflow miss
+    // would evict the next body and make every subsequent full scan miss.
+    const cachedPaths = includeExcerpts ? index.documents.slice(0, MAX_EXCERPT_CACHE_ENTRIES).map(record => this.pathFor(record)) : undefined
+    const eligiblePaths = cachedPaths === undefined ? undefined : new Set(cachedPaths)
+    if (eligiblePaths !== undefined) {
+      for (const path of this.excerpts.keys()) if (!eligiblePaths.has(path)) this.excerpts.delete(path)
+    }
+    const documents = index.documents.map((record, position) => {
+      const path = cachedPaths?.[position] ?? this.pathFor(record)
+      let stat: BigIntStats
+      try { stat = statSync(path, { bigint: true }) }
+      catch {
+        this.excerpts.delete(path)
+        return { ...record, healthy: false, excerpt: '' }
+      }
+      return { ...record, healthy: true, excerpt: includeExcerpts ? this.bodyExcerpt(record, path, stat, eligiblePaths!.has(path)) : '' }
     })
     const active = documents.filter(record => record.status === 'active')
     return {
@@ -414,7 +465,7 @@ export class DocumentController {
       directory: this.directory,
       indexPath: this.indexPath,
       generatedAt: this.now().toISOString(),
-      revision: indexRevision(index),
+      revision: this.revisionOf(index),
       limitBytes: this.limitBytes,
       activeBytes: active.reduce((sum, record) => sum + record.sizeBytes, 0),
       activeCount: active.length,
@@ -422,6 +473,24 @@ export class DocumentController {
       total: documents.length,
       documents,
     }
+  }
+
+  /** Cache only presentation excerpts; reads/search and each health check stay live. */
+  private bodyExcerpt(record: DocumentRecord, path: string, stat: BigIntStats, cacheable: boolean): string {
+    if (!cacheable) return excerpt(this.readBody(record))
+    const identity = diskIdentity(stat)
+    const cached = this.excerpts.get(path)
+    if (cached?.identity === identity) return cached.value
+    this.excerpts.delete(path)
+    const value = excerpt(this.readBody(record))
+    // An out-of-band writer may replace the body between stat and read. Return
+    // the observed body, but never stamp it with an unrelated file's identity.
+    try {
+      if (diskIdentity(statSync(path, { bigint: true })) === identity) {
+        this.excerpts.set(path, { identity, value })
+      }
+    } catch { /* The next snapshot will observe a removed/inaccessible body. */ }
+    return value
   }
 
   private requireDocument(index: DocumentIndex, rawId: string): DocumentRecord {
@@ -480,6 +549,10 @@ export class DocumentController {
   }
 
   private persistIndex(index: DocumentIndex): void {
+    // This working copy has changed. A failed write must not publish its data
+    // or revision through the cache; successful writes are observed from disk.
+    this.indexCache = undefined
+    this.indexRevisions.delete(index)
     this.atomicWrite(this.indexPath, `${JSON.stringify(index, null, 2)}\n`)
   }
 
