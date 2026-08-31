@@ -1,9 +1,11 @@
 import {
   MNEMON_SETTINGS_NAMESPACE,
   MNEMON_UI_SETTINGS_NAMESPACE,
+  normalizeDisplayMode,
   type ClientConnectionHandle,
   type Config,
   type InteractionConfig,
+  type MnemonDisplayMode,
 } from '../shared/contracts.ts'
 import { MnemonSettingsCard } from './MnemonSettingsCard.tsx'
 import { MnemonView } from './MnemonView.tsx'
@@ -75,7 +77,7 @@ function enabledOf(value: unknown, key: 'turnBar' | 'saveAction'): boolean {
 }
 
 /** The session slot supplies the scope; the shared view and Host do the rest. */
-function mountBuildinMemoryView(ctx: MnemonClientContext, settings: MnemonSettingsScope<Config>, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string): () => void {
+function mountBuiltinMemoryView(ctx: MnemonClientContext, settings: MnemonSettingsScope<Config>, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string): () => void {
   const disposeView = ctx.slots.inject('conversation.view', () => ctx.slots.register({
     name: 'conversation.view',
     id: 'mnemon',
@@ -86,7 +88,7 @@ function mountBuildinMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
       connection: ctx.connection,
       settingsScope: settings,
       sessionId,
-      surface: 'buildin' as const,
+      surface: 'builtin' as const,
       t: translate,
       locale: ctx.locale.getSnapshot().active,
     }),
@@ -120,19 +122,19 @@ export function apply(rawContext: unknown): void {
     () => mountSubagentTokenUsageOverride(ctx),
   )
   const translate = ctx.locale.bind(namespace)
-  let activeMemoryWorkspace: { mode: NonNullable<Config['displayMode']>; dispose: () => void } | undefined
+  let activeMemoryWorkspace: { mode: MnemonDisplayMode; dispose: () => void } | undefined
   const reconcileMemoryWorkspace = (): void => {
     const snapshot = settings.getSnapshot()
-    // Wait for both persisted switches so Buildin never flashes a sidebar row.
+    // Wait for both persisted switches so Builtin never flashes a sidebar row.
     const mode = snapshot.status === 'loading' || snapshot.value?.tabEnabled === false
       ? undefined
-      : snapshot.value?.displayMode ?? 'sidebar'
+      : normalizeDisplayMode(snapshot.value?.displayMode)
     if (activeMemoryWorkspace?.mode === mode) return
     activeMemoryWorkspace?.dispose()
     activeMemoryWorkspace = mode === undefined ? undefined : {
       mode,
-      dispose: mode === 'buildin'
-        ? mountBuildinMemoryView(ctx, settings, namespace, translate)
+      dispose: mode === 'builtin'
+        ? mountBuiltinMemoryView(ctx, settings, namespace, translate)
         : mountMnemonWorkspace(ctx, settings, translate),
     }
   }

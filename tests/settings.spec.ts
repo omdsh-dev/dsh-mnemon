@@ -52,7 +52,7 @@ describe('Mnemon settings bridge', () => {
     expect(written).toEqual(expect.objectContaining({ ok: true, value: expect.objectContaining({ revision: 3, user: { store: 'settings-store', idleReviewMs: 45000, tabEnabled: false, runtimeUserScope: 'global', embedding: { enabled: true, endpoint: 'http://127.0.0.1:11434', model: 'qwen3-embedding:0.6b' }, runtimeMemory: { memoryLimitBytes: 20480, userLimitBytes: 10240, maintenanceMaxTokens: 32768 }, taskAgentModel: { mode: 'fixed', provider: 'deepseek', model: 'deepseek-chat' } } }) }))
   })
 
-  it.each(['sidebar', 'buildin'] as const)('accepts live displayMode=%s and resetting the preference', async displayMode => {
+  it.each(['sidebar', 'builtin'] as const)('accepts live displayMode=%s and resetting the preference', async displayMode => {
     const mutate = vi.fn(async () => {})
     const settings = {
       writable: true,

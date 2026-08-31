@@ -1,5 +1,6 @@
 import type { HostConnectionHandle, HostRpcAuthority, HostRpcHandler, HostSettingsService, RpcResult } from './contracts.ts'
 import { MNEMON_SETTINGS_CHANNEL, MNEMON_SETTINGS_NAMESPACE, MNEMON_UI_SETTINGS_NAMESPACE } from './shared/contracts.ts'
+import { normalizeDisplayMode } from './shared/display-mode.ts'
 
 export { MNEMON_SETTINGS_CHANNEL, MNEMON_SETTINGS_NAMESPACE, MNEMON_UI_SETTINGS_NAMESPACE } from './shared/contracts.ts'
 
@@ -27,7 +28,9 @@ function descriptor(settings: HostSettingsService, namespace: string) {
   if (view === undefined) throw new Error(`${namespace} settings namespace is unavailable`)
   return {
     status: 'ready' as const,
-    value: view.value,
+    value: namespace === MNEMON_SETTINGS_NAMESPACE && displayModeOf(view.value) === 'buildin'
+      ? { ...object(view.value), displayMode: 'builtin' }
+      : view.value,
     base: view.base,
     user: view.user,
     revision: view.revision,
@@ -40,6 +43,31 @@ function descriptor(settings: HostSettingsService, namespace: string) {
 function object(value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('payload must be an object')
   return value as Record<string, unknown>
+}
+
+function displayModeOf(value: unknown): unknown {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>).displayMode
+    : undefined
+}
+
+/** Canonicalize only the legacy field through DSH's locked, revision-fenced writer. */
+export async function migrateLegacyDisplayMode(settings: HostSettingsService): Promise<void> {
+  if (!settings.writable) return
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const view = settings.describe({ redactSecrets: true }).find(candidate => candidate.ns === MNEMON_SETTINGS_NAMESPACE)
+    if (view === undefined) return
+    const hasUserMode = typeof view.user === 'object' && view.user !== null && Object.hasOwn(view.user, 'displayMode')
+    const mode = hasUserMode ? displayModeOf(view.user) : displayModeOf(view.base) ?? displayModeOf(view.value)
+    if (mode !== 'buildin') return
+    try {
+      await settings.mutate(MNEMON_SETTINGS_NAMESPACE, [{ op: 'set', path: ['displayMode'], value: 'builtin' }], view.revision)
+      return
+    } catch (error) {
+      // A concurrent explicit Sidebar choice wins; re-read instead of overwriting it.
+      if (attempt === 2 || typeof error !== 'object' || error === null || !('code' in error) || error.code !== 'SETTINGS_CONFLICT') throw error
+    }
+  }
 }
 
 const MUTABLE_FIELDS = [
@@ -97,10 +125,11 @@ export function createSettingsHandler(settings: HostSettingsService): HostRpcHan
         if (op.op === 'unset') return { op: 'unset' as const, path }
         if (op.op !== 'set') throw new Error(`unsupported settings operation: ${String(op.op)}`)
         if (path[0] === 'memoryTopology' && typeof op.value !== 'boolean') throw new Error('memory layer enabled must be boolean')
-        return { op: 'set' as const, path, value: op.value }
+        return { op: 'set' as const, path, value: namespace === MNEMON_SETTINGS_NAMESPACE && path[0] === 'displayMode' ? normalizeDisplayMode(op.value) : op.value }
       })
       const revision = payload.expectedRevision === undefined ? undefined : Number(payload.expectedRevision)
       await settings.mutate(namespace, ops, revision)
+      if (namespace === MNEMON_SETTINGS_NAMESPACE) await migrateLegacyDisplayMode(settings)
       return success(descriptor(settings, namespace))
     } catch (error) {
       return failure(error, namespace)

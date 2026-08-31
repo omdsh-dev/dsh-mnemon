@@ -201,7 +201,7 @@ describe('Mnemon config and resolution', () => {
       .toMatchObject({ turnBar: false, saveAction: false })
   })
 
-  it.each(['buildin', 'sidebar'] as const)('preserves displayMode=%s without changing storage or visibility', displayMode => {
+  it.each(['builtin', 'sidebar'] as const)('preserves displayMode=%s without changing storage or visibility', displayMode => {
     const legacy = { displayMode, storageScope: 'workspace' as const, tabEnabled: false, writeEnabled: false }
     const parsed = Config(legacy)
     expect(resolveConfig(parsed)).toMatchObject({ displayMode, storageScope: 'workspace', tabEnabled: false, writeEnabled: false })
@@ -210,8 +210,16 @@ describe('Mnemon config and resolution', () => {
     expect(legacy).toEqual({ displayMode, storageScope: 'workspace', tabEnabled: false, writeEnabled: false })
   })
 
-  it.each(['builtin', 'unknown', '', true])('rejects invalid displayMode=%s', displayMode => {
+  it('normalizes legacy buildin input to builtin without changing storage, visibility, or caller data', () => {
+    const legacy = { displayMode: 'buildin' as const, storageScope: 'workspace' as const, tabEnabled: false }
+    expect(resolveConfig(Config(legacy))).toMatchObject({ displayMode: 'builtin', storageScope: 'workspace', tabEnabled: false })
+    expect(resolveConfig(legacy).displayMode).toBe('builtin')
+    expect(legacy.displayMode).toBe('buildin')
+  })
+
+  it.each(['built-in', 'Builtin', 'unknown', '', true])('rejects invalid displayMode=%s', displayMode => {
     expect(() => Config({ displayMode } as never)).toThrow()
+    expect(() => resolveConfig({ displayMode } as never)).toThrow('displayMode')
   })
 
   it('resolves the one storage-scope setting and preserves legacy dataDir as custom', () => {

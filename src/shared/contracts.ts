@@ -131,6 +131,9 @@ export interface ResolvedRecallQualityConfig {
   maxUnknownResults: number
 }
 
+export { normalizeDisplayMode } from './display-mode.ts'
+export type MnemonDisplayMode = 'sidebar' | 'builtin'
+
 export interface Config {
   storageScope?: StorageScopeKind
   /** Whether USER.md follows the selected storage root or stays in the global root. */
@@ -148,8 +151,8 @@ export interface Config {
   memoryTopology?: MemoryTopologyConfig
   recallQuality?: RecallQualityConfig
   routingGuidance?: boolean
-  /** Entry placement only; both modes share the same memory workspace. */
-  displayMode?: 'sidebar' | 'buildin'
+  /** Entry placement only. Legacy `buildin` input is migrated to `builtin`. */
+  displayMode?: MnemonDisplayMode | 'buildin'
   tabEnabled?: boolean
   writeEnabled?: boolean
   /** DSH rc.2 management-channel authority; ignored by DSH 0.1.2-alpha.1. */
@@ -247,7 +250,7 @@ export interface ResolvedConfig {
   memoryTopology: ResolvedMemoryTopologyConfig
   recallQuality: ResolvedRecallQualityConfig
   routingGuidance: boolean
-  displayMode: 'sidebar' | 'buildin'
+  displayMode: MnemonDisplayMode
   tabEnabled: boolean
   writeEnabled: boolean
   /** DSH rc.2 management-channel authority; ignored by DSH 0.1.2-alpha.1. */

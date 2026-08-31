@@ -425,7 +425,7 @@ describe('MnemonSettingsCard', () => {
     expect(call).toHaveBeenCalledWith('/dsh-mnemon-read', 'task-agent-models', { includeCatalog: true })
   })
 
-  it.each([undefined, 'buildin', 'sidebar'] as const)('stages displayMode=%s independently of storage and saves only changed fields', async displayMode => {
+  it.each([undefined, 'builtin', 'buildin', 'sidebar'] as const)('stages displayMode=%s independently of storage and saves only changed fields', async displayMode => {
     const mutate = vi.fn(async () => {})
     const snapshot = {
       status: 'ready' as const,
@@ -443,17 +443,18 @@ describe('MnemonSettingsCard', () => {
     render(<MnemonSettingsCard scope={scope} />)
 
     const sidebar = screen.getByRole('radio', { name: 'Sidebar' }) as HTMLInputElement
-    const buildin = screen.getByRole('radio', { name: 'Buildin' }) as HTMLInputElement
-    expect(sidebar.checked).toBe(displayMode !== 'buildin')
-    expect(buildin.checked).toBe(displayMode === 'buildin')
+    const builtin = screen.getByRole('radio', { name: 'Builtin' }) as HTMLInputElement
+    const isBuiltin = displayMode === 'builtin' || displayMode === 'buildin'
+    expect(sidebar.checked).toBe(!isBuiltin)
+    expect(builtin.checked).toBe(isBuiltin)
     expect(mutate).not.toHaveBeenCalled()
-    fireEvent.click(displayMode === 'buildin' ? sidebar : buildin)
+    fireEvent.click(isBuiltin ? sidebar : builtin)
     fireEvent.click(screen.getByRole('radio', { name: '工作区' }))
     expect(mutate).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: '保存' }))
 
     await waitFor(() => expect(mutate).toHaveBeenCalledWith([
-      { op: 'set', path: ['displayMode'], value: displayMode === 'buildin' ? 'sidebar' : 'buildin' },
+      { op: 'set', path: ['displayMode'], value: isBuiltin ? 'sidebar' : 'builtin' },
       { op: 'set', path: ['storageScope'], value: 'workspace' },
     ]))
   })
@@ -693,7 +694,7 @@ describe('MnemonSettingsCard', () => {
 
     expect((screen.getByRole('radio', { name: /^全局$/ }) as HTMLInputElement).disabled).toBe(true)
     expect((screen.getByRole('radio', { name: 'Sidebar' }) as HTMLInputElement).disabled).toBe(true)
-    expect((screen.getByRole('radio', { name: 'Buildin' }) as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByRole('radio', { name: 'Builtin' }) as HTMLInputElement).disabled).toBe(true)
     expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByText('当前部署的插件设置为只读。')).toBeTruthy()
   })

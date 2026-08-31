@@ -28,6 +28,7 @@ import {
   type MemoryProviderId,
   type MemoryProviderRuntimeStatus,
   type MemoryReadSource,
+  type MnemonDisplayMode,
   type RuntimeMemoryEntry,
   type RuntimeMemoryImportance,
   type RuntimeMemorySnapshot,
@@ -57,7 +58,7 @@ export interface MnemonViewProps {
   workspaceId?: string
   workspaceSelection?: MnemonWorkspaceSelection
   /** Placement affects the scope header, never the shared pages or skin. */
-  surface?: Config['displayMode']
+  surface?: MnemonDisplayMode
   t?: MnemonTranslate
   locale?: string
   onClose?: () => void
@@ -2302,7 +2303,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const metadataSessionId = status?.lifecycle?.current?.sessionId
   // Sidebar tasks follow the inspected workspace; embedded tasks follow their
   // owning session. Both still use the same independent task-Agent endpoints.
-  const taskClient = useMemo(() => surface === 'buildin' ? client : new MnemonClient(connection, undefined, workspaceId), [client, connection, surface, workspaceId])
+  const taskClient = useMemo(() => surface === 'builtin' ? client : new MnemonClient(connection, undefined, workspaceId), [client, connection, surface, workspaceId])
   const statusRequest = useRef(0)
   const [revision, setRevision] = useState(0)
   const [searchSeed, setSearchSeed] = useState('')

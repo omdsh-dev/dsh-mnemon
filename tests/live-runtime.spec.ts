@@ -36,17 +36,17 @@ afterEach(() => {
 })
 
 describe('LiveMnemonRuntime workspace routing', () => {
-  it.each(['global', 'workspace', 'custom', 'legacy-custom'] as const)('maps Buildin session reads and writes to %s storage without a workspace override', async storageScope => {
-    const globalRoot = temporaryDirectory('buildin-global')
-    const customRoot = temporaryDirectory('buildin-custom')
-    const initialRoot = temporaryDirectory('buildin-host')
-    const workspaceOne = temporaryDirectory('buildin-one')
-    const workspaceTwo = temporaryDirectory('buildin-two')
+  it.each(['global', 'workspace', 'custom', 'legacy-custom'] as const)('maps Builtin session reads and writes to %s storage without a workspace override', async storageScope => {
+    const globalRoot = temporaryDirectory('builtin-global')
+    const customRoot = temporaryDirectory('builtin-custom')
+    const initialRoot = temporaryDirectory('builtin-host')
+    const workspaceOne = temporaryDirectory('builtin-one')
+    const workspaceTwo = temporaryDirectory('builtin-two')
     vi.stubEnv('MNEMON_DATA_DIR', globalRoot)
     const sessions = [agent('session-1', workspaceOne), agent('session-2', workspaceTwo)]
     const workspaces = sessions.map((session, index) => ({ id: `workspace-${index + 1}`, title: `Workspace ${index + 1}`, path: session.session.header!.cwd! }))
     const runtime = new LiveMnemonRuntime(createRuntimeGraph(resolveConfig({
-      displayMode: 'buildin', cliPath: '/fake/mnemon',
+      displayMode: 'builtin', cliPath: '/fake/mnemon',
       ...(storageScope === 'legacy-custom' ? {} : { storageScope }),
       ...(storageScope === 'custom' || storageScope === 'legacy-custom' ? { dataDir: customRoot } : {}),
     }), initialRoot), {

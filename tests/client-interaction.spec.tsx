@@ -155,8 +155,8 @@ describe('interaction surfaces binding', () => {
     expect(consumeMnemonAnchor('session-a')).toMatchObject({ page: 'documents' })
   })
 
-  it('opens the Buildin tab only for the current session, follows locale labels, and removes its listener on disposal', async () => {
-    const { ctx, injects, activeRegistrations, effectDisposers } = makeCtx({}, { displayMode: 'buildin' })
+  it('opens the Builtin tab only for the current session, follows locale labels, and removes its listener on disposal', async () => {
+    const { ctx, injects, activeRegistrations, effectDisposers } = makeCtx({}, { displayMode: 'builtin' })
     let label = '记忆系统'
     ctx.locale.bind.mockImplementation(() => () => label)
     const tab = document.createElement('button')
@@ -188,8 +188,8 @@ describe('interaction surfaces binding', () => {
     expect(consumeMnemonAnchor('session-a')).toMatchObject({ page: 'status' })
   })
 
-  it('keeps Buildin anchors pending without mounting or opening a hidden entry', async () => {
-    const { ctx, activeRegistrations } = makeCtx({}, { displayMode: 'buildin', tabEnabled: false })
+  it('keeps Builtin anchors pending without mounting or opening a hidden entry', async () => {
+    const { ctx, activeRegistrations } = makeCtx({}, { displayMode: 'builtin', tabEnabled: false })
     apply(ctx)
     await waitFor(() => expect(activeRegistrations()).toContain('mnemon-save'))
     expect(activeRegistrations().filter(id => id === 'mnemon')).toHaveLength(1) // settings only

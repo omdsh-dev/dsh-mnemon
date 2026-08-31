@@ -4,6 +4,7 @@ import {
   DEFAULT_EMBEDDING_MODEL,
   DEFAULT_EMBEDDING_PROTOCOL,
   MNEMON_EMBEDDING_PROTOCOLS,
+  normalizeDisplayMode,
   type ClientConnectionHandle,
   type ClientSettingsScope,
   type ClientSettingsSnapshot,
@@ -43,7 +44,7 @@ type TopologyField = `memoryTopology.${string}`
 type DraftField = CoreField | EmbeddingField | TaskAgentField | InteractionField
 type Field = DraftField | TopologyField
 interface Draft extends Record<InteractionField, boolean> {
-  displayMode: 'sidebar' | 'buildin'
+  displayMode: 'sidebar' | 'builtin'
   storageScope: string
   runtimeUserScope: 'storage' | 'global'
   dataDir: string
@@ -76,7 +77,7 @@ function coreDraft(value: Config | undefined): Pick<Draft, CoreField | Embedding
   const resolved = value ?? {}
   const dataDir = resolved.dataDir?.trim() || legacyPackDirectory(resolved)
   return {
-    displayMode: resolved.displayMode ?? 'sidebar',
+    displayMode: normalizeDisplayMode(resolved.displayMode),
     storageScope: resolved.storageScope ?? (dataDir === '' ? 'global' : 'custom'),
     runtimeUserScope: resolved.runtimeUserScope === 'global' ? 'global' : 'storage',
     dataDir,
@@ -440,7 +441,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
           </div>
           <div className={css.choiceGrid} role="radiogroup" aria-label={t('config.displayAria')}>
             <ChoiceCard id="mnemon-display-sidebar" name="mnemon-display" label={t('config.displaySidebar')} detail={t('config.displaySidebarHint')} checked={draft.displayMode === 'sidebar'} disabled={coreDisabled} onChange={() => edit('displayMode', 'sidebar')} />
-            <ChoiceCard id="mnemon-display-buildin" name="mnemon-display" label={t('config.displayBuildin')} detail={t('config.displayBuildinHint')} checked={draft.displayMode === 'buildin'} disabled={coreDisabled} onChange={() => edit('displayMode', 'buildin')} />
+            <ChoiceCard id="mnemon-display-builtin" name="mnemon-display" label={t('config.displayBuiltin')} detail={t('config.displayBuiltinHint')} checked={draft.displayMode === 'builtin'} disabled={coreDisabled} onChange={() => edit('displayMode', 'builtin')} />
           </div>
         </section>
 

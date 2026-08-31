@@ -17,7 +17,11 @@ const { values } = parseArgs({ options: {
   'cli-name': { type: 'string', default: 'mnemon' },
   'mnemon-first': { type: 'boolean', default: false },
   'panel-event-loss': { type: 'boolean', default: false },
+  'display-mode': { type: 'string', default: 'sidebar' },
+  'storage-scope': { type: 'string', default: 'custom' },
 } })
+if (!['sidebar', 'builtin', 'buildin'].includes(values['display-mode'])) throw new Error('--display-mode must be sidebar, builtin, or legacy buildin')
+if (!['global', 'workspace', 'custom'].includes(values['storage-scope'])) throw new Error('--storage-scope must be global, workspace, or custom')
 if (!values.cli) throw new Error('Pass --cli /absolute/path/to/a/test-owned/mnemon binary')
 const cli = resolve(values.cli)
 await access(cli, constants.X_OK)
@@ -94,9 +98,9 @@ try {
 - id: mnemon
   config:
     cliPath: ${JSON.stringify(values['cli-name'])}
-    storageScope: custom
-    dataDir: ${JSON.stringify(dataDir)}
-    lifecycleEnabled: false
+    displayMode: ${values['display-mode']}
+    storageScope: ${values['storage-scope']}
+${values['storage-scope'] === 'custom' ? `    dataDir: ${JSON.stringify(dataDir)}\n` : ''}    lifecycleEnabled: false
     writeEnabled: true
 - id: agent-presets
   config:
@@ -108,7 +112,7 @@ try {
       name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'
 `)
   await writeFile(join(workspace, 'README.md'), '# Isolated npm Web UI regression\n\nSynthetic workspace: no personal memory or credentials.\n')
-  const manifest = { fixture, workspace, dshHome, dataDir, cli, cliName: values['cli-name'], dsh: dshManifest.version, packages, mnemonFirst: values['mnemon-first'], panelEventLoss: values['panel-event-loss'], harnessPid: process.pid }
+  const manifest = { fixture, workspace, dshHome, dataDir, cli, cliName: values['cli-name'], dsh: dshManifest.version, packages, displayMode: values['display-mode'], storageScope: values['storage-scope'], mnemonFirst: values['mnemon-first'], panelEventLoss: values['panel-event-loss'], harnessPid: process.pid }
   await writeFile(join(fixture, 'fixture.json'), JSON.stringify(manifest, null, 2) + '\n')
   console.log(JSON.stringify(manifest, null, 2))
   web = spawn(process.execPath, [dshBin, 'web', '--no-open', '--host', '127.0.0.1', '--port', '0'], {

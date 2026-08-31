@@ -114,18 +114,22 @@ describe('Mnemon Web client composition', () => {
     expect(mountWorkspace.mock.results[1]!.value).toHaveBeenCalledTimes(1)
   })
 
-  it('reuses MnemonView in the owning conversation and switches either entry live without duplicates', async () => {
-    const { context, slots, slotDisposers, scope, dispose } = workspaceContext({ displayMode: 'buildin' })
+  it.each(['builtin', 'buildin'] as const)('reuses MnemonView for %s and switches either entry live without duplicates', async displayMode => {
+    const { context, slots, slotDisposers, scope, dispose } = workspaceContext({ displayMode })
     await vi.waitFor(() => expect(slots.some(options => options.name === 'conversation.view')).toBe(true))
     expect(mountWorkspace).not.toHaveBeenCalled()
     const entry = slots.find(options => options.name === 'conversation.view')!
     expect(entry).toMatchObject({ id: 'mnemon', order: 30 })
     expect(context.slots.register).toHaveBeenCalledWith(entry, MnemonView)
     const props = (entry.inject as (sessionId: string) => Record<string, unknown>)('session-2')
-    expect(props).toMatchObject({ connection: context.connection, settingsScope: scope, sessionId: 'session-2', surface: 'buildin', locale: 'zh' })
+    expect(props).toMatchObject({ connection: context.connection, settingsScope: scope, sessionId: 'session-2', surface: 'builtin', locale: 'zh' })
     expect(props).not.toHaveProperty('workspaceId')
     expect(props).not.toHaveProperty('workspaceSelection')
     expect(props).not.toHaveProperty('onClose')
+
+    await scope.set('displayMode', 'builtin')
+    expect(slotDisposers.get(entry)).not.toHaveBeenCalled()
+    expect(slots.filter(options => options.name === 'conversation.view')).toHaveLength(1)
 
     await scope.set('storageScope', 'workspace')
     expect(slotDisposers.get(entry)).not.toHaveBeenCalled()
@@ -135,7 +139,7 @@ describe('Mnemon Web client composition', () => {
     expect(mountWorkspace).toHaveBeenCalledTimes(1)
     await scope.set('displayMode', 'sidebar')
     expect(mountWorkspace).toHaveBeenCalledTimes(1)
-    await scope.set('displayMode', 'buildin')
+    await scope.set('displayMode', 'builtin')
     expect(mountWorkspace.mock.results[0]!.value).toHaveBeenCalledTimes(1)
     const secondEntry = slots.filter(options => options.name === 'conversation.view')[1]!
     expect(secondEntry).toBeTruthy()
@@ -157,7 +161,7 @@ describe('Mnemon Web client composition', () => {
     const loading = new Promise<Record<string, unknown>>(resolve => { ready = resolve })
     const { scope, slots, dispose } = workspaceContext({}, () => loading)
     expect(mountWorkspace).not.toHaveBeenCalled()
-    ready({ displayMode: 'buildin', tabEnabled: false })
+    ready({ displayMode: 'builtin', tabEnabled: false })
     await vi.waitFor(() => expect(scope.getSnapshot().status).toBe('ready'))
     expect(mountWorkspace).not.toHaveBeenCalled()
     expect(slots.some(options => options.name === 'conversation.view')).toBe(false)
@@ -167,12 +171,12 @@ describe('Mnemon Web client composition', () => {
     dispose()
   })
 
-  it('does not flash the default sidebar while a persisted buildin preference is loading', async () => {
+  it.each(['builtin', 'buildin'] as const)('does not flash the default sidebar while persisted %s is loading', async displayMode => {
     let ready!: (value: Record<string, unknown>) => void
     const { slots, slotDisposers, dispose } = workspaceContext({}, () => new Promise(resolve => { ready = resolve }))
     expect(mountWorkspace).not.toHaveBeenCalled()
     expect(slots.some(options => options.name === 'conversation.view')).toBe(false)
-    ready({ displayMode: 'buildin' })
+    ready({ displayMode })
     await vi.waitFor(() => expect(slots.some(options => options.name === 'conversation.view')).toBe(true))
     expect(mountWorkspace).not.toHaveBeenCalled()
     const entry = slots.find(options => options.name === 'conversation.view')!
