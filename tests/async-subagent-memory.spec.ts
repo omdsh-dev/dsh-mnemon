@@ -257,9 +257,9 @@ describe('asynchronous child memory authority', () => {
     await value.recall(first, 'release history')
     await value.recall(second, 'release history')
     expect(value.search).toHaveBeenCalledTimes(2)
-    expect(value.coordinator.claimDocumentSearch(first)).toBe(true)
-    expect(value.coordinator.claimDocumentSearch(second)).toBe(true)
-    expect(value.coordinator.claimDocumentSearch(first)).toBe(false)
+    expect((await value.coordinator.documentQuery(first, { query: 'probe' }, new AbortController().signal) as { notRun?: boolean }).notRun === true).toBe(false)
+    expect((await value.coordinator.documentQuery(second, { query: 'probe' }, new AbortController().signal) as { notRun?: boolean }).notRun === true).toBe(false)
+    expect((await value.coordinator.documentQuery(first, { query: 'probe' }, new AbortController().signal) as { notRun?: boolean }).notRun === true).toBe(true)
   })
 
   it('retains nested delegation after both ancestors finish and the parent is disposed', async () => {
@@ -425,7 +425,7 @@ describe('asynchronous child memory authority', () => {
     for (let index = 0; index < 130; index += 1) {
       const child = value.create(`parallel-${index}`, value.root)
       await value.begin(child, 1)
-      expect(value.coordinator.claimDocumentSearch(child)).toBe(true)
+      expect((await value.coordinator.documentQuery(child, { query: 'probe' }, new AbortController().signal) as { notRun?: boolean }).notRun === true).toBe(false)
     }
     const exhausted = await value.recall(first, 'third query')
     expect(exhausted.hint).toContain('budget is exhausted')

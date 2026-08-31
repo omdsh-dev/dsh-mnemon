@@ -299,6 +299,10 @@ export interface MemoryEvidence {
   items: MemoryEvidenceItem[]
   truncated: boolean
   unavailable?: string
+  /** Source-owned read metadata; never authority or credentials. */
+  metadata?: MemoryJsonValue
+  /** Strategy-owned model presentation. Host audit retains the evidence separately. */
+  output?: MemoryJsonValue
 }
 
 export interface MemoryMutationReceipt {
@@ -358,7 +362,22 @@ export interface MemorySourceDefinition {
 export interface MemoryStrategyDefinition {
   manifest: MemoryStrategyManifest
   compose(request: MemoryViewRequest, sources: readonly MemoryAvailableSource[]): MemoryViewSpec
+  /** Optional execution policy, instantiated once for each executing turn, never during compose. */
+  createTurn?(view: ComposableMemoryView): MemoryStrategyTurn
 }
+
+export interface MemoryStrategyReadRequest {
+  route: MemoryViewRoute
+  input: MemoryJsonValue
+  signal?: AbortSignal
+}
+
+export interface MemoryStrategyTurn {
+  /** The continuation can read only this offered Route, with the same grant and ceilings. */
+  query(request: MemoryStrategyReadRequest, read: MemoryStrategyRead): Promise<MemoryEvidence>
+}
+
+export type MemoryStrategyRead = (input: MemoryJsonValue, limits?: Partial<Pick<MemoryViewRoute, 'maxResults' | 'maxCharacters'>>) => Promise<MemoryEvidence>
 
 export interface MemoryCompositionDiagnostic {
   code: string

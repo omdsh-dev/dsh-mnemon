@@ -17,6 +17,8 @@ import type {
   MemorySourceManagementRequest,
   MemorySourceManagementResult,
   MemorySourceRuntime,
+  MemoryStrategyTurn,
+  MemoryStrategyRead,
   MemoryViewBudget,
   MemoryViewContribution,
   MemoryViewFragment,
@@ -328,7 +330,8 @@ export class MemoryCompositionGeneration {
   private readonly sources: ReadonlyMap<string, RuntimeSource>
   private readonly permissions = new Map<string, readonly MemoryCapability[]>()
   private readonly now: () => Date
-  private readonly routeCalls = new Map<string, number>()
+  private routeCalls = new WeakMap<object, Map<string, number>>()
+  private strategyTurns = new WeakMap<object, MemoryStrategyTurn>()
   private readonly sourceTimeoutMs: number
   private disposed = false
 
@@ -605,17 +608,45 @@ export class MemoryCompositionGeneration {
     const maxResults = Math.min(route.maxResults ?? executionBudget.maxEvidenceResults, executionBudget.maxEvidenceResults)
     const boundedRoute = deepFreeze({ ...route, maxCharacters, maxResults })
     signal?.throwIfAborted()
-    const counter = `${view.id}\u0000${route.id}`
-    const calls = this.routeCalls.get(counter) ?? 0
-    if (calls >= route.maxCalls) throw new Error(`memory View Route call budget is exhausted: ${route.id}`)
     const source = this.sources.get(route.sourceInstanceKey)
     if (source?.runtime.query === undefined) throw new Error(`memory Source cannot execute Route: ${route.sourceInstanceKey}`)
-    ledger.set(counter, calls + 1)
-    // A dispatched failure still consumed a call and may have performed declared usage bookkeeping.
-    return normalizeEvidence(await source.runtime.query({
-      view: deepFreeze({ id: view.id, scope: view.scope }), route: boundedRoute, grant,
-      input: jsonClone(input, 'memory Route input'), ...(signal === undefined ? {} : { signal }),
-    }), view, boundedRoute, executionBudget, this.now)
+    let active = true
+    const read: MemoryStrategyRead = async (selectedInput, limits = {}) => {
+      if (!active) throw new Error('memory Strategy read continuation is no longer active')
+      this.assertOpen()
+      signal?.throwIfAborted()
+      assertInputSchema(route.inputSchema, selectedInput, 'memory Route input')
+      const selectedRoute = deepFreeze({ ...boundedRoute,
+        maxResults: Math.min(maxResults, limits.maxResults === undefined ? maxResults : positiveInteger(limits.maxResults, 'Strategy maxResults', 10_000)),
+        maxCharacters: Math.min(maxCharacters, limits.maxCharacters === undefined ? maxCharacters : positiveInteger(limits.maxCharacters, 'Strategy maxCharacters', 10_000_000)),
+      })
+      // Equal View digests do not make independent turns share execution state.
+      let ledger = this.routeCalls.get(execution)
+      if (ledger === undefined) { ledger = new Map(); this.routeCalls.set(execution, ledger) }
+      const counter = `${view.id}\u0000${route.id}`
+      const calls = ledger.get(counter) ?? 0
+      if (calls >= route.maxCalls) throw new Error(`memory View Route call budget is exhausted: ${route.id}`)
+      ledger.set(counter, calls + 1)
+      // A dispatched failure consumed a call; Core never guesses safe retry.
+      const value = await source.runtime.query!({
+        view: deepFreeze({ id: view.id, scope: view.scope }), route: selectedRoute, grant,
+        input: jsonClone(selectedInput, 'memory Route input'), ...(signal === undefined ? {} : { signal }),
+      })
+      return normalizeEvidence(value, view, selectedRoute, executionBudget, this.now)
+    }
+    try {
+      let policy = this.strategyTurns.get(execution)
+      if (policy === undefined && this.strategy.definition.createTurn !== undefined) {
+        policy = this.strategy.definition.createTurn(view)
+        if (typeof policy?.query !== 'function') throw new Error('memory Strategy returned an invalid turn policy')
+        this.strategyTurns.set(execution, policy)
+      }
+      const value = policy === undefined ? await read(input) : await policy.query({
+        route: boundedRoute, input: jsonClone(input, 'memory Strategy input'), ...(signal === undefined ? {} : { signal }),
+      }, read)
+      signal?.throwIfAborted()
+      return normalizeEvidence(value, view, boundedRoute, executionBudget, this.now)
+    } finally { active = false }
   }
 
   async executeAction(view: ComposableMemoryView, offerId: string, input: MemoryJsonValue, authorize: (offer: MemoryActionOffer) => boolean | Promise<boolean>, signal?: AbortSignal): Promise<MemoryMutationReceipt> {
@@ -652,7 +683,8 @@ export class MemoryCompositionGeneration {
   async dispose(): Promise<void> {
     if (this.disposed) return
     this.disposed = true
-    this.routeCalls.clear()
+    this.routeCalls = new WeakMap()
+    this.strategyTurns = new WeakMap()
     const failures: unknown[] = []
     for (const source of [...this.sources.values()].reverse()) {
       try {

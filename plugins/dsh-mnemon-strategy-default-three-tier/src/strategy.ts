@@ -1,5 +1,6 @@
 import { defineMemoryStrategy, type MemorySourceFacts } from 'dsh-mnemon/extension-sdk'
 import { COMPOSABLE_MEMORY_API_VERSION } from 'dsh-mnemon/contracts'
+import { createThreeTierTurn } from './retrieval.ts'
 
 const VIEW_ROLES = ['working-context', 'narrative', 'durable-evidence'] as const
 
@@ -13,6 +14,7 @@ function soleSource(sources: readonly MemorySourceFacts[], role: typeof VIEW_ROL
 
 /** Pure View composition; no dependency on any Source implementation. */
 export const DEFAULT_THREE_TIER_VIEW_STRATEGY = defineMemoryStrategy({
+  createTurn: createThreeTierTurn,
   manifest: {
     apiVersion: COMPOSABLE_MEMORY_API_VERSION,
     kind: 'strategy',

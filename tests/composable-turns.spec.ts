@@ -12,6 +12,45 @@ async function fixture() { const value = await compositionFixture(); fixtures.pu
 afterEach(async () => { for (const value of fixtures.splice(0)) await value.dispose() })
 
 describe('Composable Memory root-turn boundary', () => {
+  it('retains dispatch authority until the last delegation and child turn release it', async () => {
+    const { workspace, releases, graph } = await fixture()
+    const scope = { storage: 'custom' as const, workspaceId: workspace, agentId: 'parent' }
+    const parent = await graph.composableTurns.beginTurn('parent:1', scope)
+    const first = graph.composableTurns.retainView(parent.view.id)
+    const second = graph.composableTurns.retainView(parent.view.id)
+    graph.composableTurns.endTurn(parent.turnId)
+    await Promise.all(releases.map(release => release()))
+    expect(graph.memoryComposition.inspect().drainingGenerationIds).toContain(parent.view.runtimeGeneration)
+    first()
+    first()
+    expect(() => graph.composableTurns.pinTurn('child:1', { ...scope, workspaceId: '/other' }, parent.view.id)).toThrow('storage scope')
+    const child = graph.composableTurns.pinTurn('child:1', { ...scope, agentId: 'child' }, parent.view.id)
+    second()
+    expect(child.view).toBe(parent.view)
+    expect(graph.composableTurns.memoryWake(child.view.id).viewId).toBe(parent.view.id)
+    expect(graph.memoryComposition.generation(parent.view.runtimeGeneration)).toBeDefined()
+    graph.composableTurns.endTurn(child.turnId)
+    expect(graph.composableTurns.get(parent.view.id)).toBeUndefined()
+    expect(graph.memoryComposition.generation(parent.view.runtimeGeneration)).toBeUndefined()
+  })
+
+  it('assigns independent Route budgets to child executions sharing a dispatch View', async () => {
+    const { workspace, graph } = await fixture()
+    const scope = { storage: 'custom' as const, workspaceId: workspace, agentId: 'parent' }
+    const parent = await graph.composableTurns.beginTurn('parent:1', scope)
+    const child = graph.composableTurns.pinTurn('child:1', { ...scope, agentId: 'child' }, parent.view.id)
+    const route = parent.view.routes.find(candidate => candidate.sourceRouteId === 'search')!
+    await graph.composableTurns.executeRoute(parent.turnId, route.id, { query: 'bounded' })
+    await expect(graph.composableTurns.executeRoute(parent.turnId, route.id, { query: 'bounded' })).resolves.toMatchObject({ output: { notRun: true } })
+    const read = await graph.composableTurns.executeRoute(child.turnId, route.id, { query: 'bounded' })
+    expect(read).toMatchObject({ viewId: parent.view.id })
+    expect(read.output).not.toHaveProperty('notRun')
+    graph.composableTurns.endTurn(child.turnId)
+    const next = graph.composableTurns.pinTurn('child:1', { ...scope, agentId: 'child' }, parent.view.id)
+    expect(next).not.toBe(child)
+    await expect(graph.composableTurns.executeRoute(next.turnId, route.id, { query: 'bounded' })).resolves.toMatchObject({ viewId: parent.view.id })
+  })
+
   it('joins concurrent beginnings, rejects scope reuse, and releases a cancelled composition', async () => {
     const { workspace, graph } = await fixture()
     const generation = graph.memoryComposition.current()!

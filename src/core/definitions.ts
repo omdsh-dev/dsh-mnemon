@@ -151,6 +151,7 @@ export function defineMemoryStrategy<T extends MemoryStrategyDefinition>(definit
   if (!PACKAGE.test(packageName)) throw new Error(`invalid memory Strategy packageName: ${packageName}`)
   if (manifest.deterministic !== true) throw new Error('memory Strategy must declare deterministic: true')
   if (typeof definition.compose !== 'function') throw new Error(`memory Strategy compose() is required: ${typeId}`)
+  if (definition.createTurn !== undefined && typeof definition.createTurn !== 'function') throw new Error('memory Strategy createTurn must be a function')
   const normalizedManifest = jsonClone({
     ...manifest,
     typeId,
@@ -160,5 +161,7 @@ export function defineMemoryStrategy<T extends MemoryStrategyDefinition>(definit
     maxRoutes: positiveInteger(manifest.maxRoutes, 'memory Strategy maxRoutes', 1_000),
     maxActions: positiveInteger(manifest.maxActions, 'memory Strategy maxActions', 1_000),
   }, 'memory Strategy manifest')
-  return Object.freeze({ manifest: normalizedManifest, compose: definition.compose }) as T
+  return Object.freeze({ manifest: normalizedManifest, compose: definition.compose,
+    ...(definition.createTurn === undefined ? {} : { createTurn: definition.createTurn }),
+  }) as T
 }

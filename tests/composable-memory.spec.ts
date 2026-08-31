@@ -194,6 +194,49 @@ function contributions(source = installedSource(), strategy = installedStrategy(
 }
 
 describe('Composable View Memory compiler', () => {
+  it('creates execution policies only on a read, shares them within a turn and isolates equal Views', async () => {
+    const query = vi.fn()
+    const createTurn = vi.fn(() => {
+      let pending: Promise<import('../src/core/contracts/view.ts').MemoryEvidence> | undefined
+      return { query: (_request: unknown, read: import('../src/core/contracts/view.ts').MemoryStrategyRead) => pending ??= read({ query: 'fixed' }) }
+    })
+    const definition = defineMemoryStrategy({ ...strategyDefinition(), createTurn })
+    const generation = new MemoryCompositionGeneration(contributions(installedSource(sourceDefinition({ query })), installedStrategy(definition)))
+    try {
+      const view = await generation.compose(REQUEST)
+      expect(createTurn).not.toHaveBeenCalled()
+      const turn = {}, child = {}
+      const route = view.routes[0]!.id
+      const read = (execution: object) => generation.executeRoute(view, route, { query: 'user' }, undefined, REQUEST.budget, execution)
+      const results = await Promise.all([read(turn), read(turn), read(child)])
+      expect(results[0]).toEqual(results[1])
+      expect(createTurn).toHaveBeenCalledTimes(2)
+      expect(query).toHaveBeenCalledTimes(2)
+    } finally { await generation.dispose() }
+  })
+
+  it('fences a Strategy continuation by schema, effective ceilings, dispatched calls and lifetime', async () => {
+    const query = vi.fn()
+    let continuation: import('../src/core/contracts/view.ts').MemoryStrategyRead | undefined
+    const definition = defineMemoryStrategy({ ...strategyDefinition(), createTurn: () => ({
+      async query(_request, read) {
+        continuation = read
+        await expect(read({ query: 'x', forbidden: true })).rejects.toThrow('unsupported property')
+        const evidence = await read({ query: 'x' }, { maxResults: 999, maxCharacters: 999 })
+        await expect(read({ query: 'second' })).rejects.toThrow('budget is exhausted')
+        return evidence
+      },
+    }) })
+    const generation = new MemoryCompositionGeneration(contributions(installedSource(sourceDefinition({ query })), installedStrategy(definition)))
+    try {
+      const view = await generation.compose(REQUEST)
+      await generation.executeRoute(view, view.routes[0]!.id, { query: 'x' })
+      expect(query).toHaveBeenCalledOnce()
+      expect(query.mock.calls[0]![0].route).toMatchObject({ maxResults: 2, maxCharacters: 7 })
+      await expect(continuation!({ query: 'late' })).rejects.toThrow('no longer active')
+    } finally { await generation.dispose() }
+  })
+
   it('compiles one Source and one Strategy into the normalized immutable View', async () => {
     const generation = new MemoryCompositionGeneration(contributions(), {
       now: () => new Date('2026-08-30T00:00:00.000Z'),

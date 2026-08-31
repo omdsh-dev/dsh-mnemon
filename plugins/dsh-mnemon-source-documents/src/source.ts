@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { MemoryJsonValue, MemoryReadGrant, MemorySourceDefinition } from 'dsh-mnemon/contracts'
+import type { MemoryEvidenceItem, MemoryJsonValue, MemoryReadGrant, MemorySourceDefinition } from 'dsh-mnemon/contracts'
 import { COMPOSABLE_MEMORY_API_VERSION } from 'dsh-mnemon/contracts'
 import { defineMemorySource, createMemoryMutationReceipt as receipt, memoryInputRecord as record, memoryInputStringArray as stringArray, memoryInputText as text, truncateMemoryText as truncate } from 'dsh-mnemon/extension-sdk'
 import { DocumentManager } from './controller.ts'
@@ -147,7 +147,7 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
         const input = record(request.input, 'Documents search')
         const query = text(input.query, 'query', 2_000, false) ?? ''
         const limitValue = input.limit
-        const limit = typeof limitValue === 'number' && Number.isInteger(limitValue) ? Math.max(1, Math.min(20, limitValue)) : 10
+        const limit = Math.min(request.route.maxResults ?? 20, typeof limitValue === 'number' && Number.isInteger(limitValue) ? Math.max(1, Math.min(20, limitValue)) : 10)
         const controller = documents.forWorkspace(root)
         const allowedIds = grantIds(request.grant, input.includeArchived === true)
         const result = await controller.search(query, { limit, allowedIds, includeArchived: input.includeArchived === true })
@@ -155,20 +155,31 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
           .filter(document => allowedIds.includes(document.id) && (input.includeArchived === true || document.status === 'active'))
           .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
           .slice(0, Math.min(3, limit)) : []
+        let remaining = request.route.maxCharacters ?? 16_000
+        const items: MemoryEvidenceItem[] = []
+        let truncated = result.total > limit
+        for (const document of result.results) {
+          if (remaining <= 0) { truncated = true; break }
+          const content = documentEvidence(document.content, query, Math.min(2_600, remaining))
+          remaining -= content.length
+          truncated ||= content !== document.content
+          items.push({
+            id: document.id, text: content, score: document.score, revision: String(document.revision),
+            provenance: { kind: 'match', documentId: document.id, title: document.title, description: document.description,
+              status: document.status, relativePath: document.relativePath, sourcePaths: document.sourcePaths.slice(0, 8) },
+          })
+        }
+        for (const document of suggestions) {
+          if (remaining <= 0) { truncated = true; break }
+          const excerpt = truncate(document.excerpt, Math.min(1_000, remaining))
+          remaining -= excerpt.length
+          items.push({ id: document.id, score: 0, text: excerpt,
+            provenance: { kind: 'suggestion', documentId: document.id, title: document.title, description: document.description, status: document.status } })
+        }
         return {
+          metadata: { query: result.query, includeArchived: result.includeArchived, total: result.total },
           id: `evidence:${randomUUID()}`, viewId: request.view.id, routeId: request.route.id, sourceInstanceKey: context.sourceInstanceKey,
-          observedAt: new Date().toISOString(), truncated: result.total >= limit,
-          items: [...result.results.map(document => ({
-            id: document.id,
-            text: documentEvidence(document.content, query, Math.min(2_600, request.route.maxCharacters ?? 2_600)),
-            score: document.score,
-            revision: String(document.revision),
-            provenance: { kind: 'match', documentId: document.id, title: document.title, description: document.description, status: document.status, relativePath: document.relativePath, sourcePaths: document.sourcePaths.slice(0, 8) },
-          })), ...suggestions.map(document => ({
-            id: document.id, score: 0,
-            text: truncate('No exact match. Recent Document suggestion only: ' + document.title + '\n' + document.description + '\n' + document.excerpt, 1_000),
-            provenance: { kind: 'suggestion', documentId: document.id, title: document.title, status: document.status },
-          }))],
+          observedAt: new Date().toISOString(), truncated, items,
         }
       },
       async manage(request) {

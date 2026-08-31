@@ -70,9 +70,10 @@ export function registerTools(ctx: HostContextShape, runtimeSource: MnemonAgentR
       required: ['routeId', 'input'],
     },
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
-    execute: (args: { routeId: string; input: MemoryJsonValue }, exec: ToolExecution) => {
+    execute: async (args: { routeId: string; input: MemoryJsonValue }, exec: ToolExecution) => {
       const { manager, turn } = composableTurn(exec)
-      return manager.executeRoute(turn.turnId, args.routeId, args.input, exec.signal)
+      const evidence = await manager.executeRoute(turn.turnId, args.routeId, args.input, exec.signal)
+      return evidence.output ?? evidence
     },
     presentCall: (args: { routeId: string }) => ({ card: 'generic', title: 'Query composable memory', kind: 'search', rawInput: args.routeId }),
     presentResult: () => ({ card: 'generic', title: 'Composable memory evidence ready' }),
@@ -106,7 +107,8 @@ export function registerTools(ctx: HostContextShape, runtimeSource: MnemonAgentR
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     async execute(_args: unknown, exec: ToolExecution) {
       requireSource(exec, 'memory-spaces', 'status')
-      return sourceFor(exec, 'memory-spaces').route('inspect', { section: 'directory' }, exec.signal)
+      const evidence = await sourceFor(exec, 'memory-spaces').route('inspect', { section: 'directory' }, exec.signal)
+      return evidence.output ?? evidence
     },
     presentCall: () => ({ card: 'generic', title: 'Inspect Mnemon Memory Spaces', kind: 'search' }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon Memory Spaces ready' }),
@@ -172,7 +174,8 @@ export function registerTools(ctx: HostContextShape, runtimeSource: MnemonAgentR
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value) },
     async execute(_args: unknown, exec: ToolExecution) {
       requireSource(exec, 'memory-spaces', 'status')
-      return sourceFor(exec, 'memory-spaces').route('inspect', { section: 'health' }, exec.signal)
+      const evidence = await sourceFor(exec, 'memory-spaces').route('inspect', { section: 'health' }, exec.signal)
+      return evidence.output ?? evidence
     },
     presentCall: () => ({ card: 'generic', title: 'Check Mnemon status', kind: 'other' }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon status checked' }),
@@ -194,16 +197,7 @@ export function registerTools(ctx: HostContextShape, runtimeSource: MnemonAgentR
     async execute(args: { query: string; includeArchived?: boolean; limit?: number }, exec: ToolExecution) {
       const agent = requireAgent(exec)
       requireSource(exec, 'documents', 'search')
-      if (!coordinator.claimDocumentSearch(agent)) {
-        return {
-          query: args.query.trim(),
-          includeArchived: args.includeArchived === true,
-          notRun: true,
-          results: [],
-          hint: 'This Agent turn already used its Documents search slot, so no second disk query ran. Use the admitted evidence, make one focused mnemon_recall only if exact durable history is still missing, or answer with appropriate uncertainty.',
-        }
-      }
-      return sourceFor(exec, 'documents').route('search', { query: args.query, limit: Math.min(4, args.limit ?? 4), ...(args.includeArchived === undefined ? {} : { includeArchived: args.includeArchived }) }, exec.signal)
+      return coordinator.documentQuery(agent, args, exec.signal)
     },
     presentCall: (args: { query: string }) => ({ card: 'generic', title: 'Search Mnemon Documents', kind: 'search', rawInput: args.query }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon Documents ready' }),

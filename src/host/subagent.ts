@@ -24,17 +24,6 @@ function evidenceInsights(evidence: MemoryEvidence): RecallInsight[] {
   })
 }
 
-/** Keep Core execution usage on the original read, even when the Host clips or replays its evidence. */
-function recallEvidence(evidence: MemoryEvidence, results: readonly RecallInsight[]): NonNullable<RecallResult['memoryEvidence']> {
-  const { items, ...metadata } = evidence
-  return {
-    ...metadata,
-    truncated: metadata.truncated || results.length < items.length || results.some(result => (
-      !items.some(item => item.id === result.id && item.text === result.content)
-    )),
-  }
-}
-
 const READ_TOOLS = ['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_related']
 const WRITE_TOOLS = [
   ...READ_TOOLS,
@@ -118,22 +107,6 @@ interface RecallAuthority {
   viewId: string
   memoryBodyIds: string[]
   service: MnemonService
-}
-
-interface RecallAttempt {
-  queryDigest: string
-  result?: RecallResult
-  pending?: Promise<RecallResult>
-}
-
-interface TurnRetrievalState {
-  documentSearchClaimed?: boolean
-  recallAttempts: RecallAttempt[]
-  relatedDigest?: string
-  relatedResult?: RecallResult
-  relatedPending?: Promise<RecallResult>
-  evidenceDigests: Set<string>
-  evidenceReferences: Set<string>
 }
 
 const WRITE_SCHEMA = {
@@ -347,114 +320,6 @@ export interface RecallResult {
   /** Core read identity/usage; truncated also includes the Host's final admission limits. */
   memoryEvidence?: Omit<MemoryEvidence, 'items'>
   hint?: string
-}
-
-const MODEL_RECALL_RESULT_LIMIT = 6
-const MODEL_RECALL_CONTENT_LIMIT = 1_200
-const MODEL_RECALL_TOTAL_CONTENT_LIMIT = 4_800
-const MODEL_RECALL_ATTEMPT_LIMIT = 2
-const MODEL_RECALL_INITIAL_RESULT_LIMIT = 4
-const MODEL_RECALL_INITIAL_TOTAL_CONTENT_LIMIT = 3_600
-const MODEL_RECALL_MEDIUM_LIMIT_PER_ATTEMPT = 1
-const MODEL_RECALL_UNKNOWN_LIMIT_PER_ATTEMPT = 1
-const MODEL_RECALL_LIST_LIMIT = 8
-const MODEL_RECALL_METADATA_LIMIT = 300
-
-function boundedModelText(value: string, maximum: number): string {
-  if (maximum <= 0) return ''
-  if (value.length <= maximum) return value
-  let end = maximum - 1
-  if (end > 0 && /[\uD800-\uDBFF]/u.test(value[end - 1]!)) end -= 1
-  return `${value.slice(0, end)}…`
-}
-
-interface ModelInsightAdmission {
-  resultLimit?: number
-  contentLimit?: number
-  totalContentLimit?: number
-  mediumLimit?: number
-  unknownLimit?: number
-  excludeDigests?: ReadonlySet<string>
-}
-
-interface ModelInsightEnvelope {
-  results: RecallInsight[]
-}
-
-function insightDigest(result: Pick<Insight, 'content'>): string {
-  return sha256(result.content.trim().replace(/\s+/gu, ' '))
-}
-
-function recallQueryDigest(request: SearchRequest): string {
-  const lexical = (request.query.match(/[\p{L}\p{N}]+/gu) ?? []).join(' ').toLocaleLowerCase()
-  return sha256(JSON.stringify({ query: lexical, memoryBodyIds: [...request.memoryBodyIds ?? []].sort() }))
-}
-
-/** A replay must still respect the current call's selected Source subset. */
-function replayEvidence(previous: RecallResult | undefined, memoryBodyIds: readonly string[] | undefined): Pick<RecallResult, 'results' | 'memoryEvidence'> {
-  const original = previous?.results ?? []
-  const results = structuredClone(memoryBodyIds === undefined ? original : original.filter(result => (
-    result.memoryBodyId !== undefined && memoryBodyIds.includes(result.memoryBodyId)
-  ))) as RecallInsight[]
-  return { results, ...(previous?.memoryEvidence === undefined ? {} : { memoryEvidence: {
-    ...structuredClone(previous.memoryEvidence),
-    truncated: previous.memoryEvidence.truncated || results.length < original.length,
-  } }) }
-}
-
-/** Admit a small, deduplicated evidence envelope after Provider quality policy. */
-function boundedModelInsights(results: readonly RecallInsight[], admission: ModelInsightAdmission = {}): ModelInsightEnvelope {
-  const resultLimit = admission.resultLimit ?? MODEL_RECALL_RESULT_LIMIT
-  const contentLimit = admission.contentLimit ?? MODEL_RECALL_CONTENT_LIMIT
-  const totalContentLimit = admission.totalContentLimit ?? MODEL_RECALL_TOTAL_CONTENT_LIMIT
-  const mediumLimit = admission.mediumLimit ?? MODEL_RECALL_MEDIUM_LIMIT_PER_ATTEMPT
-  const unknownLimit = admission.unknownLimit ?? MODEL_RECALL_UNKNOWN_LIMIT_PER_ATTEMPT
-  const seenReferences = new Set<string>()
-  const seenDigests = new Set<string>(admission.excludeDigests)
-  let mediumCount = 0
-  let unknownCount = 0
-  let contentCharacters = 0
-  const admitted: RecallInsight[] = []
-  for (const result of results) {
-    if (admitted.length >= resultLimit || result.id.length === 0 || result.id.length > 1_000) continue
-    const tier = result.relevanceTier ?? 'unknown'
-    if (tier === 'low') continue
-    if (tier === 'medium' && mediumCount >= mediumLimit) continue
-    if (tier === 'unknown' && unknownCount >= unknownLimit) continue
-    const reference = `${result.memoryBodyId ?? ''}/${result.id}`
-    const digest = insightDigest(result)
-    if (seenReferences.has(reference) || seenDigests.has(digest)) continue
-    const remainingContent = totalContentLimit - contentCharacters
-    if (remainingContent <= 0) break
-    const content = boundedModelText(result.content, Math.min(contentLimit, remainingContent))
-    if (content === '') continue
-    const clipped = content !== result.content
-    seenReferences.add(reference)
-    seenDigests.add(digest)
-    contentCharacters += content.length
-    if (tier === 'medium') mediumCount += 1
-    if (tier === 'unknown') unknownCount += 1
-    admitted.push({
-      id: result.id,
-      content,
-      ...(typeof result.score !== 'number' || !Number.isFinite(result.score) ? {} : { score: result.score }),
-      ...(result.revision === undefined ? {} : { revision: result.revision }),
-      ...(result.category === undefined ? {} : { category: boundedModelText(result.category, MODEL_RECALL_METADATA_LIMIT) }),
-      ...(typeof result.importance !== 'number' || !Number.isFinite(result.importance) ? {} : { importance: result.importance }),
-      ...(result.tags === undefined ? {} : { tags: result.tags.slice(0, MODEL_RECALL_LIST_LIMIT).map(tag => boundedModelText(tag, MODEL_RECALL_METADATA_LIMIT)) }),
-      ...(result.entities === undefined ? {} : { entities: result.entities.slice(0, MODEL_RECALL_LIST_LIMIT).map(entity => boundedModelText(entity, MODEL_RECALL_METADATA_LIMIT)) }),
-      ...(result.source === undefined ? {} : { source: boundedModelText(result.source, MODEL_RECALL_METADATA_LIMIT) }),
-      ...(result.createdAt === undefined ? {} : { createdAt: boundedModelText(result.createdAt, MODEL_RECALL_METADATA_LIMIT) }),
-      ...(typeof result.depth !== 'number' || !Number.isFinite(result.depth) ? {} : { depth: result.depth }),
-      ...(result.edgeType === undefined ? {} : { edgeType: boundedModelText(result.edgeType, MODEL_RECALL_METADATA_LIMIT) }),
-      ...(result.memoryBodyId === undefined ? {} : { memoryBodyId: boundedModelText(result.memoryBodyId, 1_000) }),
-      ...(result.memoryBodyName === undefined ? {} : { memoryBodyName: boundedModelText(result.memoryBodyName, MODEL_RECALL_METADATA_LIMIT) }),
-      ...(result.memoryProviderId === undefined ? {} : { memoryProviderId: result.memoryProviderId }),
-      ...(result.memoryCapabilities === undefined ? {} : { memoryCapabilities: structuredClone(result.memoryCapabilities) }),
-      ...(result.externalUri === undefined ? {} : { externalUri: boundedModelText(result.externalUri, 2_000) }),
-    })
-  }
-  return { results: admitted }
 }
 
 /** Compatibility name for the v0.3 pre-release API. Recall no longer delegates. */
@@ -953,7 +818,7 @@ export class MnemonSubagentCoordinator {
   private readonly counters: SubagentCounters = { recalls: 0, writes: 0, answers: 0, reviews: 0, placements: 0, migrations: 0, compactions: 0, documentArchives: 0, metadataMaintenances: 0, failures: 0 }
   private runtimeQueue: Promise<unknown> = Promise.resolve()
   private documentQueue: Promise<unknown> = Promise.resolve()
-  private readonly retrievalTurns = new Map<string, TurnRetrievalState>()
+  private readonly observedReads = new WeakMap<ComposableMemoryTurn, Set<string>>()
   private readonly workflows = new Map<string, { users: number; ready: Promise<unknown>; release: () => void }>()
 
   constructor(
@@ -980,130 +845,34 @@ export class MnemonSubagentCoordinator {
     return this.sourceFor(parent, 'documents').read<DocumentSearchResult>('search', { query, includeArchived, ...(limit === undefined ? {} : { limit }) })
   }
 
-  /** Admit at most one model-facing Documents query for one executing turn. */
-  claimDocumentSearch(parent: HostAgent): boolean {
-    const authority = this.turnAuthority(parent, true)!
-    const retrieval = this.turnRetrievalState(authority.turnId)
-    if (retrieval.documentSearchClaimed === true) return false
-    retrieval.documentSearchClaimed = true
-    return true
+  /** Both model aliases and generic Routes execute the selected Strategy, not Host-local quotas. */
+  async documentQuery(parent: HostAgent, input: unknown, signal: AbortSignal): Promise<unknown> {
+    const evidence = await this.readRoute(parent, 'documents', 'search', input, signal, true)
+    return evidence.output ?? evidence
   }
 
   async recall(parent: HostAgent, request: SearchRequest, signal: AbortSignal, options: { requirePinnedView?: boolean } = {}): Promise<RecallResult> {
+    const evidence = await this.readRoute(parent, 'memory-spaces', 'recall', request, signal, options.requirePinnedView === true)
+    return (evidence.output ?? { query: request.query, mode: request.mode ?? 'smart', results: evidenceInsights(evidence),
+      ...(evidence.unavailable === undefined ? {} : { unavailable: evidence.unavailable }) }) as unknown as RecallResult
+  }
+
+  private async readRoute(parent: HostAgent, typeId: string, routeId: string, input: unknown, signal: AbortSignal, required: boolean): Promise<MemoryEvidence> {
     signal.throwIfAborted()
-    const authority = this.recallAuthority(parent, options.requirePinnedView === true)
-    const service = authority?.service ?? this.serviceFor(parent)
-    // Model-selected semantic filters are too brittle to be authoritative:
-    // one wrong category can hide the exact evidence. The query and pinned
-    // Source remain the complete model-facing routing contract.
-    const limited: SearchRequest = {
-      query: request.query,
-      ...(request.mode === undefined ? {} : { mode: request.mode }),
-      limit: Math.min(request.limit ?? MODEL_RECALL_RESULT_LIMIT, MODEL_RECALL_RESULT_LIMIT),
-      ...(request.memoryBodyIds === undefined ? {} : { memoryBodyIds: request.memoryBodyIds }),
-    }
-    const scoped = this.scopeRecallWithAuthority(limited, authority)
-    const digest = authority === undefined ? undefined : recallQueryDigest(scoped)
-    const retrieval = authority === undefined ? undefined : this.turnRetrievalState(authority.context)
-    const repeated = digest === undefined ? undefined : retrieval?.recallAttempts.find(attempt => attempt.queryDigest === digest)
-    if (repeated !== undefined) {
-      const previous = repeated.result ?? await repeated.pending
-      return {
-        query: previous?.query ?? scoped.query,
-        mode: previous?.mode ?? scoped.mode ?? 'smart',
-        ...replayEvidence(previous, scoped.memoryBodyIds),
-        hint: retrieval?.recallAttempts.length === MODEL_RECALL_ATTEMPT_LIMIT
-          ? 'This Recall query already ran. The Host replayed its admitted evidence without another Provider query. The turn Recall budget is closed; stop retrieval and answer from the evidence or state what remains unknown.'
-          : 'This Recall query already ran. The Host replayed its admitted evidence without another Provider query. If this evidence is insufficient, use at most one materially different focused query; otherwise stop retrieval.',
-      }
-    }
-    if (retrieval !== undefined && retrieval.recallAttempts.length >= MODEL_RECALL_ATTEMPT_LIMIT) {
-      const latest = retrieval.recallAttempts[retrieval.recallAttempts.length - 1]
-      const previous = latest?.result ?? await latest?.pending
-      return {
-        query: previous?.query ?? scoped.query,
-        mode: previous?.mode ?? scoped.mode ?? 'smart',
-        ...replayEvidence(previous, scoped.memoryBodyIds),
-        hint: 'The two-query turn Recall budget is exhausted. The Host replayed the latest admitted evidence without another Provider query; stop retrieval and answer from the evidence or state what remains unknown.',
-      }
-    }
-    const attemptIndex = retrieval?.recallAttempts.length ?? 0
-    const predecessor = attemptIndex === 0 ? undefined : retrieval?.recallAttempts[attemptIndex - 1]?.pending
-    const attempt: RecallAttempt | undefined = retrieval === undefined || digest === undefined ? undefined : { queryDigest: digest }
-    if (attempt !== undefined && retrieval !== undefined) retrieval.recallAttempts.push(attempt)
-    const operation = (async (): Promise<RecallResult> => {
-      // Distinct concurrent tool calls are serialized so the refinement can
-      // exclude evidence admitted by the initial query and share one envelope.
-      if (predecessor !== undefined) await predecessor
-      signal.throwIfAborted()
-      const evidence = authority === undefined ? undefined : await source.route('recall', scoped, signal)
-      const result = evidence === undefined
-        ? await source.read<{ query: string; mode: string; results: Insight[] }>('search', scoped, signal)
-        : { query: scoped.query, mode: scoped.mode ?? 'smart', results: evidenceInsights(evidence) }
-      const priorAttempts = retrieval?.recallAttempts.slice(0, attemptIndex) ?? []
-      const priorResults = priorAttempts.flatMap(entry => entry.result?.results ?? [])
-      const priorContentCharacters = priorResults.reduce((total, insight) => total + insight.content.length, 0)
-      const requestedLimit = Math.min(limited.limit ?? MODEL_RECALL_RESULT_LIMIT, MODEL_RECALL_RESULT_LIMIT)
-      const envelope = boundedModelInsights(result.results, retrieval === undefined
-        ? { resultLimit: requestedLimit }
-        : {
-            resultLimit: Math.min(requestedLimit, attemptIndex === 0
-              ? MODEL_RECALL_INITIAL_RESULT_LIMIT
-              : Math.max(0, MODEL_RECALL_RESULT_LIMIT - priorResults.length)),
-            totalContentLimit: attemptIndex === 0
-              ? MODEL_RECALL_INITIAL_TOTAL_CONTENT_LIMIT
-              : Math.max(0, MODEL_RECALL_TOTAL_CONTENT_LIMIT - priorContentCharacters),
-            // A materially different query must be able to contribute one
-            // bounded medium/unknown clue even when the first attempt used
-            // its own slot. The shared result and character limits still cap
-            // the complete turn envelope.
-            mediumLimit: MODEL_RECALL_MEDIUM_LIMIT_PER_ATTEMPT,
-            unknownLimit: MODEL_RECALL_UNKNOWN_LIMIT_PER_ATTEMPT,
-            excludeDigests: retrieval.evidenceDigests,
-          })
-      const results = envelope.results
-      const response: RecallResult = {
-        query: result.query,
-        mode: result.mode,
-        results,
-        ...(evidence === undefined ? {} : { memoryEvidence: recallEvidence(evidence, results) }),
-        hint: retrieval === undefined
-          ? results.length === 0
-            ? 'No durable evidence was admitted; answer with appropriate uncertainty.'
-            : 'Recall is complete; answer from the admitted evidence.'
-          : attemptIndex === 0
-            ? results.length === 0
-              ? 'No durable evidence was admitted. If exact history is still required, you may make one materially different focused Recall query; otherwise stop and answer with appropriate uncertainty.'
-              : 'Answer from this admitted evidence. Only if it is insufficient for the current question may you make one materially different focused Recall query; otherwise stop retrieval. Use Related only when graph context is materially required.'
-            : results.length === 0
-              ? 'Recall refinement admitted no new durable evidence. The turn Recall budget is closed; stop retrieval and answer with appropriate uncertainty.'
-              : 'Recall refinement is complete. The turn Recall budget is closed; stop retrieval and answer from the admitted evidence. Use Related only when graph context is materially required.',
-      }
-      if (retrieval !== undefined) {
-        if (attempt !== undefined) {
-          attempt.result = structuredClone(response)
-        }
-        for (const insight of results) {
-          retrieval.evidenceDigests.add(insightDigest(insight))
-          retrieval.evidenceReferences.add(`${insight.memoryBodyId ?? ''}/${insight.id}`)
-        }
-      }
-      this.recordRecall()
-      return response
-    })()
-    if (attempt !== undefined) attempt.pending = operation
+    const graph = this.runtimeSource.forAgent(parent)
+    if (required && graph.composableTurns.activeTurn(parent.id) === undefined) throw new Error('Recall requires the View pinned to the current turn')
+    const release = await this.acquireWorkflow(parent, graph, routeId)
     try {
-      return await operation
-    } catch (error) {
-      if (retrieval !== undefined && attempt !== undefined && attempt.result === undefined) {
-        const index = retrieval.recallAttempts.indexOf(attempt)
-        if (index >= 0) retrieval.recallAttempts.splice(index, 1)
+      const turn = this.turnAuthority(parent, true)!.context
+      const evidence = await graph.source(typeId, turn.scope).forTurn(turn).route(routeId, input, signal)
+      if (typeId === 'memory-spaces' && ['recall', 'related'].includes(routeId)) {
+        const observed = this.observedReads.get(turn) ?? new Set<string>()
+        if (!observed.has(evidence.id)) { this.recordRecall(); observed.add(evidence.id) }
+        this.observedReads.set(turn, observed)
       }
-      this.counters.failures += 1
-      throw error
-    } finally {
-      if (attempt?.pending === operation) delete attempt.pending
-    }
+      return evidence
+    } catch (error) { this.counters.failures += 1; throw error }
+    finally { release() }
   }
 
   /** Bind a model read to the Source state pinned by its own executing turn. */
@@ -1136,90 +905,12 @@ export class MnemonSubagentCoordinator {
     return requested
   }
 
-  async related(
-    parent: HostAgent,
-    id: string,
-    memoryBodyId: string | undefined,
-    signal: AbortSignal,
-    options: { depth?: number; edge?: EdgeType; requirePinnedView?: boolean } = {},
-  ): Promise<RecallResult> {
-    signal.throwIfAborted()
-    const authority = this.recallAuthority(parent, options.requirePinnedView === true)
-    const service = authority?.service ?? this.serviceFor(parent)
-    const selected = this.scopeRelatedWithAuthority(memoryBodyId, authority)
-    const retrieval = authority === undefined ? undefined : this.turnRetrievalState(authority.context)
-    const reference = `${selected ?? ''}/${id}`
-    if (retrieval !== undefined && !retrieval.evidenceReferences.has(reference)) {
-      return {
-        query: `related:${id}`,
-        mode: 'related',
-        results: [],
-        hint: 'Related traversal requires an insight admitted by the current turn\'s direct Recall. No Provider query was made.',
-      }
-    }
-    const digest = authority === undefined ? undefined : sha256(JSON.stringify({
-      id,
-      memoryBodyId: selected ?? '',
-      depth: options.depth ?? 2,
-      edge: options.edge ?? '',
-    }))
-    if (retrieval?.relatedDigest !== undefined) {
-      const previous = retrieval.relatedResult ?? await retrieval.relatedPending
-      return {
-        query: previous?.query ?? `related:${id}`,
-        mode: previous?.mode ?? 'related',
-        ...replayEvidence(previous, selected === undefined ? undefined : [selected]),
-        hint: retrieval.relatedDigest === digest
-          ? 'This exact Related traversal already ran. The Host replayed its admitted evidence without another Provider query; stop retrieval and answer from it.'
-          : 'Related traversal is complete for this turn. The Host replayed the admitted evidence; stop retrieval and answer from it.',
-      }
-    }
-    if (retrieval !== undefined && digest !== undefined) retrieval.relatedDigest = digest
-    const operation = (async (): Promise<RecallResult> => {
-      const request = { id, ...(options.depth === undefined ? {} : { depth: options.depth }), ...(options.edge === undefined ? {} : { edge: options.edge }), ...(selected === undefined ? {} : { memoryBodyId: selected }) }
-      const evidence = authority === undefined ? undefined : await source.route('related', request, signal)
-      const results = evidence === undefined
-        ? await source.read<Insight[]>('related', request, signal)
-        : evidenceInsights(evidence)
-      const admitted = boundedModelInsights(results, {
-        resultLimit: 4,
-        totalContentLimit: 4_000,
-        mediumLimit: 4,
-        unknownLimit: 4,
-        ...(retrieval === undefined ? {} : { excludeDigests: retrieval.evidenceDigests }),
-      })
-      if (retrieval !== undefined) {
-        for (const insight of admitted.results) {
-          retrieval.evidenceDigests.add(insightDigest(insight))
-          retrieval.evidenceReferences.add(`${insight.memoryBodyId ?? ''}/${insight.id}`)
-        }
-      }
-      this.recordRecall()
-      const response: RecallResult = {
-        query: `related:${id}`,
-        mode: 'related',
-        results: admitted.results,
-        ...(evidence === undefined ? {} : { memoryEvidence: recallEvidence(evidence, admitted.results) }),
-        hint: admitted.results.length === 0
-          ? 'No new graph evidence was admitted; stop retrieval and answer from the existing evidence.'
-          : 'Related traversal is complete for this turn; stop retrieval and answer from the admitted evidence.',
-      }
-      if (retrieval !== undefined) retrieval.relatedResult = structuredClone(response)
-      return response
-    })()
-    if (retrieval !== undefined) retrieval.relatedPending = operation
-    try {
-      return await operation
-    } catch (error) {
-      if (retrieval !== undefined && retrieval.relatedDigest === digest) {
-        delete retrieval.relatedDigest
-        delete retrieval.relatedResult
-      }
-      this.counters.failures += 1
-      throw error
-    } finally {
-      if (retrieval?.relatedPending === operation) delete retrieval.relatedPending
-    }
+  async related(parent: HostAgent, id: string, memoryBodyId: string | undefined, signal: AbortSignal,
+    options: { depth?: number; edge?: EdgeType; requirePinnedView?: boolean } = {}): Promise<RecallResult> {
+    const input = { id, ...(memoryBodyId === undefined ? {} : { memoryBodyId }),
+      ...(options.depth === undefined ? {} : { depth: options.depth }), ...(options.edge === undefined ? {} : { edge: options.edge }) }
+    const evidence = await this.readRoute(parent, 'memory-spaces', 'related', input, signal, options.requirePinnedView === true)
+    return (evidence.output ?? { query: 'related:' + id, mode: 'related', results: evidenceInsights(evidence) }) as unknown as RecallResult
   }
 
   async placeProvider(
@@ -1920,17 +1611,6 @@ Completion protocol: call \`${resultToolName}\` exactly once with the final resu
     return undefined
   }
 
-  private turnRetrievalState(context: MemoryTurnContext): TurnRetrievalState {
-    const current = this.retrievalTurns.get(context)
-    if (current !== undefined) return current
-    const created: TurnRetrievalState = {
-      recallAttempts: [],
-      evidenceDigests: new Set(),
-      evidenceReferences: new Set(),
-    }
-    this.retrievalTurns.set(context, created)
-    return created
-  }
 
   private recordRecall(): void {
     this.counters.recalls += 1

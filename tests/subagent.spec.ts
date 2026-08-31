@@ -16,6 +16,7 @@ import type { ComposableMemoryTurn } from '../src/core/turns.ts'
 import { sourceFixture } from './fixtures/sources.ts'
 import { compositionFixture } from './fixtures/composition.ts'
 import { assertDshOutputSchema, MnemonSubagentCoordinator } from "../src/host/subagent.ts"
+import { DEFAULT_THREE_TIER_VIEW_STRATEGY } from 'dsh-mnemon-strategy-default-three-tier'
 import { registerTools } from "../src/host/tools.ts"
 import { resolveConfig } from "../src/host/config.ts"
 
@@ -180,7 +181,7 @@ function capacityError(target: string, used: number, projected: number, limit: n
 }
 function pinnedTurn(turnId: string, viewId: string, memoryBodyIds: string[] = ['project']): ComposableMemoryTurn {
   return { turnId, view: { id: viewId, readGrants: [{
-    sourceInstanceKey: 'source:mnemon-source-memory-spaces', schema: 'dsh-mnemon.memory-spaces/v1', value: { memoryBodyIds },
+    id: 'space-grant', sourceInstanceKey: 'source:mnemon-source-memory-spaces', schema: 'dsh-mnemon.memory-spaces/v1', value: { memoryBodyIds },
   }] } } as unknown as ComposableMemoryTurn
 }
 function managedSession(client: MemoryTestManagementClient) {
@@ -205,7 +206,21 @@ function runtimeSource(
     beginTurn: vi.fn(async (id: string) => { workflow = pinnedTurn(id, id); return workflow }),
     endTurn: vi.fn(() => { workflow = undefined }),
   }
+  const policies = new WeakMap<ComposableMemoryTurn, ReturnType<NonNullable<typeof DEFAULT_THREE_TIER_VIEW_STRATEGY.createTurn>>>()
+  const policyFor = (turn: ComposableMemoryTurn) => {
+    let policy = policies.get(turn)
+    if (!policy) { policy = DEFAULT_THREE_TIER_VIEW_STRATEGY.createTurn!(turn.view); policies.set(turn, policy) }
+    return policy
+  }
   const spaceSession = {
+    forTurn: (turn: ComposableMemoryTurn) => ({ ...spaceSession, route: (operation: string, input: MemoryJsonValue, signal: AbortSignal) => {
+      const route = { id: 'space/' + operation, sourceInstanceKey: 'source:mnemon-source-memory-spaces', sourceRouteId: operation, readGrantId: 'space-grant', maxCalls: 4 }
+      return policyFor(turn).query({ route: route as never, input, signal }, async input => {
+        const value = await spaceSession.route(operation, input as Record<string, unknown>, signal)
+        return { id: 'read-' + Math.random(), viewId: turn.view.id, routeId: route.id, sourceInstanceKey: route.sourceInstanceKey,
+          observedAt: new Date().toISOString(), truncated: false, ...value } as MemoryEvidence
+      })
+    } }),
     async read(operation: string, input: Record<string, unknown> | null = null, signal?: AbortSignal) {
       const value = input ?? {}
       if (operation === 'body-directory') return spaces.bodyDirectory()
@@ -237,7 +252,11 @@ function runtimeSource(
       operation === 'mutate' ? operations!.mutate(input) : operations!.compactAndMutate(input.revision, input.mutation, input.compacted, input.maxBytes, input.lineage),
     action: async (_operation: string, input: RuntimeMemoryMutation) => ({ details: await operations!.mutate(input) }),
   }
-  const graph = { config, composableTurns: turns, source: (type: string) => type === 'runtime' ? runtimeSession : type === 'documents' ? documents : spaceSession } as unknown as MnemonRuntimeGraph
+  const documentSession = documents ?? { forTurn: (turn: ComposableMemoryTurn) => ({ route: (operation: string, input: MemoryJsonValue, signal: AbortSignal) => {
+    if (!turn.view.readGrants.some(grant => grant.id === 'doc-grant')) turn.view.readGrants.push({ id: 'doc-grant', sourceInstanceKey: 'docs', schema: 'dsh-mnemon.documents/v1' } as never)
+    return policyFor(turn).query({ route: { id: 'docs/search', sourceInstanceKey: 'docs', sourceRouteId: operation, readGrantId: 'doc-grant' } as never, input, signal }, async () => ({ id: 'docs', viewId: turn.view.id, routeId: 'docs/search', sourceInstanceKey: 'docs', observedAt: 'now', items: [], truncated: false }))
+  } }) }
+  const graph = { config, composableTurns: turns, source: (type: string) => type === 'runtime' ? runtimeSession : type === 'documents' ? documentSession : spaceSession } as unknown as MnemonRuntimeGraph
   return { config, forAgent: vi.fn((_agent: HostAgent) => graph), bindAgentRuntime: vi.fn(() => () => {}) }
 }
 function createCoordinator(host: HostSubagentsService, runtime?: RuntimeOperations | MnemonAgentRuntimeSource | SourceSession) {
@@ -411,7 +430,7 @@ describe('Mnemon memory subagent coordinator', () => {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const result = await coordinator.recall(agent, { query: 'exact record' }, signal, { requirePinnedView: true })
       expect(result.results).toEqual([])
-      expect(result.memoryEvidence).toMatchObject({ unavailable: 'An exact record cannot fit this output budget.', truncated: true })
+      expect(result).toMatchObject({ unavailable: 'An exact record cannot fit this output budget.' })
     }
     expect(route).toHaveBeenCalledOnce()
   })
@@ -580,7 +599,7 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(memoryService.search).toHaveBeenCalledOnce()
   })
 
-  it('isolates Documents search claims by the executing root or child turn', () => {
+  it('isolates Documents search claims by the executing root or child turn', async () => {
     const host = subagents(undefined)
     const memoryService = service()
     let turnId = 'root:documents-1'
@@ -592,8 +611,12 @@ describe('Mnemon memory subagent coordinator', () => {
     const child = parent('subagent')
     child.session.header!.parentSession = 'root'
 
-    expect(coordinator.claimDocumentSearch(parent())).toBe(true)
-    expect(coordinator.claimDocumentSearch(child)).toBe(true)
+    expect((await coordinator.documentQuery(parent(), { query: 'probe' }, new AbortController().signal) as { notRun?: boolean }).notRun === true).toBe(false)
+    expect((await coordinator.documentQuery(child, { query: 'probe' }, new AbortController().signal) as { notRun?: boolean }).notRun === true).toBe(false)
+    expect((await coordinator.documentQuery(parent(), { query: 'probe' }, new AbortController().signal) as { notRun?: boolean }).notRun === true).toBe(true)
+    expect((await coordinator.documentQuery(child, { query: 'probe' }, new AbortController().signal) as { notRun?: boolean }).notRun === true).toBe(true)
+    rootPin = pinnedTurn('root:documents-2', 'view-documents')
+    expect((await coordinator.documentQuery(parent(), { query: 'probe' }, new AbortController().signal) as { notRun?: boolean }).notRun === true).toBe(false)
     expect(composableTurns.activeTurn).toHaveBeenCalledWith('root')
   })
 
@@ -657,7 +680,7 @@ describe('Mnemon memory subagent coordinator', () => {
 
     const first = coordinator.recall(parent(), { query: 'release history' }, signal, { requirePinnedView: true })
     const duplicate = coordinator.recall(parent(), { query: 'release history' }, signal, { requirePinnedView: true })
-    expect(memoryService.search).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(memoryService.search).toHaveBeenCalledOnce())
     finishSearch({
       query: 'release history',
       mode: 'smart',
@@ -696,7 +719,7 @@ describe('Mnemon memory subagent coordinator', () => {
 
     const initial = coordinator.recall(parent(), { query: 'initial query' }, signal, { requirePinnedView: true })
     const refined = coordinator.recall(parent(), { query: 'refined query' }, signal, { requirePinnedView: true })
-    expect(memoryService.search).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(memoryService.search).toHaveBeenCalledOnce())
     finishInitial({
       query: 'initial query',
       mode: 'smart',
@@ -1777,7 +1800,7 @@ describe('Mnemon root/child tool split', () => {
     const registered: ToolDefinition[] = []
     registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as unknown as HostContextShape, f.live, {} as MnemonSubagentCoordinator)
     const status = await registered.find(tool => tool.name === 'mnemon_status')!.execute({} as never, { agent: root, signal: new AbortController().signal })
-    expect(status).toMatchObject({ items: [expect.objectContaining({ text: expect.stringContaining('memorySpaces') })] })
+    expect(status).toMatchObject({ memorySpaces: { active: 1 }, healthy: true })
     expect(JSON.stringify(status)).not.toMatch(/cliPath|dataDir|memoryBodyDirectory|dbPath|byCategory|topEntities|apiKey/)
     expect(JSON.stringify(status).length).toBeLessThan(5_000)
     f.graph.composableTurns.endTurn('root:health')
