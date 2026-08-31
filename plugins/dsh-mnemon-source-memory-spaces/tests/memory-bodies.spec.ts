@@ -21,6 +21,28 @@ function temporaryDirectory(): string {
 }
 
 describe('MemoryBodyRegistry', () => {
+  it('refreshes once per public metadata operation, not once per body or Provider descriptor', () => {
+    const dataDir = temporaryDirectory()
+    const runner = createRunner(resolveMemorySpacesConfig({ cliPath: '/fake/mnemon', dataDir }), vi.fn<ProcessRunner>())
+    const registry = createRegistry(runner, true)
+    registry.syncProviderService('holographic', { dataPath: join(dataDir, 'facts.json') }, Array.from({ length: 128 }, (_, index) => ({
+      externalId: `namespace-${index}`, name: `Namespace ${index}`, description: 'Real registry metadata fixture.', connection: {},
+    })))
+    const revision = vi.spyOn(registry as unknown as { diskRevision(): string }, 'diskRevision')
+    const bodies = registry.list()
+    expect(bodies).toHaveLength(128)
+    expect(revision).toHaveBeenCalledOnce()
+    revision.mockClear()
+    expect(registry.active()).toHaveLength(128)
+    expect(revision).toHaveBeenCalledOnce()
+    revision.mockClear()
+    expect(registry.providerServices().items).toHaveLength(8)
+    expect(revision).toHaveBeenCalledOnce()
+    revision.mockClear()
+    expect(registry.providerConnection(bodies[0]!.id)).toMatchObject({ dataPath: join(dataDir, 'facts.json') })
+    expect(revision).toHaveBeenCalledOnce()
+  })
+
   it('keeps an empty data directory at zero memory spaces instead of creating a phantom default', () => {
     const dataDir = temporaryDirectory()
     const runner = createRunner(resolveMemorySpacesConfig({ cliPath: '/fake/mnemon', dataDir }), vi.fn<ProcessRunner>())

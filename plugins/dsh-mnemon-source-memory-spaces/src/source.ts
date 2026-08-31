@@ -347,9 +347,10 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
   create(context) {
     const resolved = resolveMemorySpacesConfig({ ...context.configuration, ...capturedConfig }, context.sourceInstanceKey)
     const service = new MemorySpacesService(createRunner(resolved), resolved, undefined, undefined, providerSnapshot.adapterRegistry(), new MemoryProviderCatalog(providerSnapshot.descriptors()))
-    const prepared = new WeakMap<object, { all: ReturnType<typeof service.memoryBodies.list>; active: ReturnType<typeof service.memoryBodies.active>; revision: string }>()
+    const canRemember = providerSnapshot.entries.some(entry => entry.definition.manifest.capabilities.remember)
+    const prepared = new WeakMap<object, ReturnType<typeof service.memoryState>>()
     const sourceState = (scope: object) => {
-      const value = { all: service.memoryBodies.list(), active: service.memoryBodies.active().sort((left, right) => left.id.localeCompare(right.id)), revision: service.memoryRevision() }
+      const value = service.memoryState()
       prepared.set(scope, value)
       return value
     }
@@ -423,7 +424,7 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
           ...(active.some(body => body.provider.capabilities.related) ? ['related'] : []),
         ]
         const actionIds: string[] = service.config.writeEnabled ? ['manage-spaces',
-          ...(service.bodyDirectory().providers.some(provider => provider.capabilities.remember) ? ['remember'] : []),
+          ...(canRemember ? ['remember'] : []),
           ...(active.some(body => body.provider.capabilities.link) ? ['link'] : []),
           ...(active.some(body => body.provider.capabilities.forget) ? ['forget'] : []),
         ] : []

@@ -406,16 +406,18 @@ export class MemorySpacesService {
   /** Return the control-plane directory without waiting for provider I/O. */
   bodyDirectory(): MemoryBodyCatalog {
     const mnemonDefaultStore = this.runner.persistedStore()
-    const items: MemoryBodyView[] = this.memoryBodies.list().map(body => {
+    const all = this.memoryBodies.list()
+    const enabled = new Set(this.memoryBodies.providerServices().items.filter(service => service.enabled).map(service => service.providerId))
+    const items: MemoryBodyView[] = all.map(body => {
       const nativeProvider = this.isNativeBody(body)
-      const providerEnabled = nativeProvider || this.memoryBodies.providerServiceEnabled(body.provider.id)
+      const providerEnabled = nativeProvider || enabled.has(body.provider.id)
       return { ...body, providerEnabled, mnemonDefault: nativeProvider && body.id === mnemonDefaultStore, healthy: false, statusLoading: true }
     })
     return {
       items,
       providers: this.providerCatalog.providers.map(provider => ({
         ...provider,
-        serviceConfigured: (provider.typeId ?? provider.id) === 'mnemon-native' || this.memoryBodies.providerServiceEnabled(provider.id),
+        serviceConfigured: (provider.typeId ?? provider.id) === 'mnemon-native' || enabled.has(provider.id),
       })),
       persistenceStrategy: {
         mode: this.config.persistenceStrategy.mode,
@@ -432,7 +434,17 @@ export class MemorySpacesService {
 
   /** Stable, secret-free checkpoint for the projected Memory Space authority. */
   memoryRevision(): string {
-    const bodies = this.memoryBodies.list()
+    return this.memoryState().revision
+  }
+
+  /** One local metadata observation supplies membership and its revision. */
+  memoryState(): { all: MemoryBody[]; active: MemoryBody[]; revision: string } {
+    const all = this.memoryBodies.list()
+    const serviceItems = this.memoryBodies.providerServices().items
+    const enabled = new Set(serviceItems.filter(service => service.enabled).map(service => service.providerId))
+    const active = all.filter(body => body.active && (this.isNativeBody(body) || enabled.has(body.provider.id)))
+      .sort((left, right) => left.id.localeCompare(right.id))
+    const bodies = [...all]
       .sort((left, right) => left.id.localeCompare(right.id))
       .map(body => ({
         id: body.id,
@@ -443,10 +455,10 @@ export class MemorySpacesService {
         updatedAt: body.updatedAt,
         capabilities: body.provider.capabilities,
       }))
-    const services = this.memoryBodies.providerServices().items
+    const services = serviceItems
       .map(service => ({ providerId: service.providerId, enabled: service.enabled, configured: service.configured }))
       .sort((left, right) => left.providerId.localeCompare(right.providerId))
-    return createHash('sha256').update(JSON.stringify({ bodies, services })).digest('hex')
+    return { all, active, revision: createHash('sha256').update(JSON.stringify({ bodies, services })).digest('hex') }
   }
 
   /** Return a usable system snapshot without waiting for any Provider I/O. */

@@ -256,7 +256,10 @@ export class MemoryBodyRegistry {
   }
 
   active(): MemoryBody[] {
-    return this.list().filter(body => body.active && (this.isNative(body.provider.id) || this.providerServiceEnabled(body.provider.id)))
+    // list() has just refreshed this synchronous authority snapshot. Avoid
+    // restatting both registry files once more for every projected body.
+    return this.list().filter(body => body.active && (this.isNative(body.provider.id)
+      || Object.hasOwn(this.services, body.provider.id) && this.serviceEnabled[body.provider.id] === true))
   }
 
   get(id: string): MemoryBody {
@@ -286,6 +289,11 @@ export class MemoryBodyRegistry {
     if (expectedProviderId !== undefined && body.providerId !== expectedProviderId) {
       throw new Error(`memory body ${normalized} uses ${body.providerId}, not ${expectedProviderId}`)
     }
+    return this.connectionFor(body)
+  }
+
+  /** Used only after a public operation has refreshed the registry authority. */
+  private connectionFor(body: StoredMemoryBody): MemoryProviderConnection {
     const legacy = this.providerTypeId(body.providerId) === 'openviking' && body.openViking !== undefined
       ? legacyOpenVikingConnection(body.openViking)
       : undefined
@@ -315,7 +323,7 @@ export class MemoryBodyRegistry {
       const publicConnection = this.providerCatalog.publicScoped(provider.id, 'service', connection ?? {})
       return {
         providerId: provider.id,
-        enabled: this.providerServiceEnabled(provider.id),
+        enabled: Object.hasOwn(this.services, provider.id) && this.serviceEnabled[provider.id] === true,
         configured: connection !== undefined,
         ...publicConnection,
         ...(options.includeSecrets === true && connection !== undefined
@@ -820,7 +828,7 @@ export class MemoryBodyRegistry {
   private view(body: StoredMemoryBody): MemoryBody {
     const descriptor = this.providerCatalog.descriptor(body.providerId)
     const nativeProvider = this.isNative(body.providerId)
-    const connection = nativeProvider ? {} : this.providerConnection(body.id)
+    const connection = nativeProvider ? {} : this.connectionFor(body)
     const effectivePublicConnection = this.providerCatalog.public(body.providerId, connection)
     const publicConnection = nativeProvider
       ? effectivePublicConnection

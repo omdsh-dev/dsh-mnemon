@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveMemorySpacesConfig } from "../src/config.ts"
 import { createRegistry } from './providers.ts'
@@ -80,6 +81,26 @@ function fixture(writeEnabled = true): { service: MemorySpacesService; process: 
 }
 
 describe('MemorySpacesService', () => {
+  it('shares membership work while retaining the exact secret-free revision encoding', () => {
+    const { service } = fixture()
+    const bodies = service.memoryBodies.list().sort((left, right) => left.id.localeCompare(right.id)).map(body => ({
+      id: body.id, name: body.name, description: body.description, active: body.active, providerId: body.provider.id,
+      updatedAt: body.updatedAt, capabilities: body.provider.capabilities,
+    }))
+    const services = service.memoryBodies.providerServices().items.map(service => ({
+      providerId: service.providerId, enabled: service.enabled, configured: service.configured,
+    })).sort((left, right) => left.providerId.localeCompare(right.providerId))
+    const expected = createHash('sha256').update(JSON.stringify({ bodies, services })).digest('hex')
+    const list = vi.spyOn(service.memoryBodies, 'list')
+    const providerServices = vi.spyOn(service.memoryBodies, 'providerServices')
+    const state = service.memoryState()
+    expect(state.revision).toBe(expected)
+    expect(state.active.map(body => body.id)).toEqual(['work'])
+    expect(list).toHaveBeenCalledOnce()
+    expect(providerServices).toHaveBeenCalledOnce()
+    expect(service.memoryRevision()).toBe(expected)
+  })
+
   it.each([
     [null, 'unknown'], [{ id: 'job', success: true }, 'unknown'],
     [{ action: 'stored', status: 'PENDING', success: true }, 'accepted'],
