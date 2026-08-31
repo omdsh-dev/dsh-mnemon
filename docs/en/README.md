@@ -30,7 +30,7 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 | Understand Host, workers, control plane, and data plane | [Architecture](./architecture.md) |
 | Build a Layer, Adapter, Strategy, Guard, or MemorySource plugin | [Building Memory Extensions](./extensions.md) |
 | Modify code, screenshots, tests, or releases | [Development and verification](./development.md) |
-| Upgrade from the previous release | [v0.4.3 release notes](./releases/v0.4.3.md) |
+| Upgrade from the previous release | [v0.4.4 release notes](./releases/v0.4.4.md) |
 | See planned work | [Roadmap](./roadmap.md) |
 
 ## Core terms
