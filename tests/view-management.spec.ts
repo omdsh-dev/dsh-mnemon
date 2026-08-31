@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { AgentMemoryTurn } from '../src/host/agent-memory-turn.ts'
 import type { HostAgent } from '../src/host/dsh.ts'
 import { createViewHandler } from '../src/host/view-rpc.ts'
+import { createRuntimeGraph } from '../src/host/runtime.ts'
 import type { MemoryViewConfigurationRequest, MemoryViewPreferences } from '../src/host/view-protocol.ts'
 import { viewManagementFixture } from './fixtures/view-management.ts'
 import type { RuntimeMemorySnapshot } from 'dsh-mnemon-source-runtime/contracts'
@@ -133,6 +134,36 @@ describe('View configuration with the real pinned DSH Cordis Loader', () => {
     expect(next.view.strategyTypeId).toBe('default-three-tier')
     f.graph.composableTurns.endTurn('after-failure')
     expect(f.treeWrite).not.toHaveBeenCalled()
+  })
+
+  it('keeps a newly opened workspace on the committed baseline during an in-flight save', async () => {
+    const f = await fixture()
+    const mutate = f.settings.mutate.bind(f.settings)
+    let opened: ReturnType<typeof createRuntimeGraph> | undefined
+    vi.mocked(f.settings.mutate).mockImplementationOnce(async (...args) => {
+      opened = createRuntimeGraph(f.config, join(f.root, 'new-workspace'), f.engine)
+      const before = await opened.composableTurns.beginTurn('during-commit', scope(f))
+      expect(before.view.strategyExtensions ?? []).toEqual([])
+      opened.composableTurns.endTurn(before.turnId)
+      await mutate(...args)
+    })
+    await f.management.apply(f.config, scope(f), await request(f, { light: { enabled: true, config: {} } }))
+    try {
+      const after = await opened!.composableTurns.beginTurn('after-commit', scope(f))
+      expect(after.view.strategyExtensions?.map(entry => entry.typeId)).toEqual(['light-context'])
+      opened!.composableTurns.endTurn(after.turnId)
+    } finally { opened?.dispose() }
+  })
+
+  it('does not endlessly retry a failing startup overlay through its own rollback events', async () => {
+    const f = await fixture({ entries: { light: { enabled: true, config: {} }, capture: { enabled: true, config: {} } } })
+    const update = vi.spyOn(f.loader.resolve('capture'), 'update').mockRejectedValue(new Error('Startup plugin failure'))
+    await vi.waitFor(async () => expect((await f.management.catalog()).diagnostics.join(' ')).toContain('rollback was incomplete'))
+    // One attempt plus the explicit rollback. Its Loader events must not
+    // schedule another activation loop against unchanged persisted settings.
+    await new Promise(resolve => setTimeout(resolve, 30))
+    expect(update).toHaveBeenCalledTimes(2)
+    expect(f.loader.resolve('light').disabled).toBe(true)
   })
 
   it('rolls back earlier entries after a later Cordis activation fails', async () => {

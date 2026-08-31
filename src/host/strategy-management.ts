@@ -93,6 +93,7 @@ export class MemoryStrategyManagement {
   private timer: ReturnType<typeof setTimeout> | undefined
   private restoreError: string | undefined
   private discoveryWarnings: string[] = []
+  private changingEntries = false
 
   constructor(private readonly ctx: HostContextShape, private readonly engine: MemoryRuntime) {
     // DSH's settings document is home-wide; a Loader's resolution anchor is
@@ -113,7 +114,7 @@ export class MemoryStrategyManagement {
 
   start(): () => void {
     const schedule = () => {
-      if (this.closed || this.timer || !Object.keys(this.settings.get().entries ?? {}).length) return
+      if (this.closed || this.changingEntries || this.timer || !Object.keys(this.settings.get().entries ?? {}).length) return
       this.timer = setTimeout(() => {
         this.timer = undefined
         void this.exclusive(() => this.restore()).catch(error => { this.restoreError = error instanceof Error ? error.message : String(error) })
@@ -143,32 +144,32 @@ export class MemoryStrategyManagement {
     for (const entry of loader.entries()) {
       if (entry.options.group || !PACKAGE.test(entry.options.name)) continue
       try {
-      let module = entry.fiber?.runtime?.callback as { memoryStrategyConfiguration?: MemoryStrategyConfiguration } | undefined
-      if (!module?.memoryStrategyConfiguration) module = await entry.parent.tree.import(entry.options.name) as typeof module
-      const definition = module?.memoryStrategyConfiguration
-      if (!definition || definition.apiVersion !== 'dsh-mnemon/strategy-configuration/v1' || typeof definition.create !== 'function') continue
-      if (installed.sources.some(source => source.provenance.entryId === entry.id)) throw new Error('This Entry also owns Sources; manage its lifecycle through DSH.')
-      if (!Array.isArray(definition.fields) || definition.fields.length > 16
-        || new Set(definition.fields.map(field => field.key)).size !== definition.fields.length
-        || definition.fields.some(field => !/^[a-zA-Z][a-zA-Z0-9]{0,99}$/u.test(field.key) || !['number', 'text', 'textarea', 'string-list', 'source-list'].includes(field.input))) throw new Error('Invalid Strategy configuration descriptor')
-      const publicConfig = configuration(definition, entry.options.config)
-      const contribution = [...installed.strategies, ...(installed.strategyExtensions ?? [])].find(value => value.provenance.entryId === entry.id)
-      const manifest = contribution?.definition.manifest
-      const ancestorDisabled = entry.parent.ctx?.fiber?.entry?.disabled === true
-      const writable = this.ctx.settings.writable && !ancestorDisabled && (entry.options.disabled === undefined || typeof entry.options.disabled === 'boolean')
-      const value: MemoryStrategyEntryView = {
-        entryId: entry.id, packageName: entry.options.name, typeId: definition.typeId, kind: definition.kind,
-        label: definition.label, description: definition.description, fields: definition.fields, config: publicConfig,
-        enabled: !entry.disabled, active: contribution !== undefined, writable,
-        ...(manifest?.kind === 'strategy-extension' ? { strategyTypeId: manifest.strategyTypeId, slot: manifest.slot } : {}),
-        ...(ancestorDisabled ? { diagnostic: 'This Entry is disabled by its parent.' } : {}),
-      }
-      const managed = { entry, definition, value }
-      // Even disabled Entries have discoverable target/slot metadata, without mounting.
-      const candidate = prepared(managed, publicConfig)
-      const extension = candidate.strategyExtensions?.[0]?.definition.manifest
-      if (extension) { value.strategyTypeId = extension.strategyTypeId; value.slot = extension.slot }
-      result.push(managed)
+        let module = entry.fiber?.runtime?.callback as { memoryStrategyConfiguration?: MemoryStrategyConfiguration } | undefined
+        if (!module?.memoryStrategyConfiguration) module = await entry.parent.tree.import(entry.options.name) as typeof module
+        const definition = module?.memoryStrategyConfiguration
+        if (!definition || definition.apiVersion !== 'dsh-mnemon/strategy-configuration/v1' || typeof definition.create !== 'function') continue
+        if (installed.sources.some(source => source.provenance.entryId === entry.id)) throw new Error('This Entry also owns Sources; manage its lifecycle through DSH.')
+        if (!Array.isArray(definition.fields) || definition.fields.length > 16
+          || new Set(definition.fields.map(field => field.key)).size !== definition.fields.length
+          || definition.fields.some(field => !/^[a-zA-Z][a-zA-Z0-9]{0,99}$/u.test(field.key) || !['number', 'text', 'textarea', 'string-list', 'source-list'].includes(field.input))) throw new Error('Invalid Strategy configuration descriptor')
+        const publicConfig = configuration(definition, entry.options.config)
+        const contribution = [...installed.strategies, ...(installed.strategyExtensions ?? [])].find(value => value.provenance.entryId === entry.id)
+        const manifest = contribution?.definition.manifest
+        const ancestorDisabled = entry.parent.ctx?.fiber?.entry?.disabled === true
+        const writable = this.ctx.settings.writable && !ancestorDisabled && (entry.options.disabled === undefined || typeof entry.options.disabled === 'boolean')
+        const value: MemoryStrategyEntryView = {
+          entryId: entry.id, packageName: entry.options.name, typeId: definition.typeId, kind: definition.kind,
+          label: definition.label, description: definition.description, fields: definition.fields, config: publicConfig,
+          enabled: !entry.disabled, active: contribution !== undefined, writable,
+          ...(manifest?.kind === 'strategy-extension' ? { strategyTypeId: manifest.strategyTypeId, slot: manifest.slot } : {}),
+          ...(ancestorDisabled ? { diagnostic: 'This Entry is disabled by its parent.' } : {}),
+        }
+        const managed = { entry, definition, value }
+        // Even disabled Entries have discoverable target/slot metadata, without mounting.
+        const candidate = prepared(managed, publicConfig)
+        const extension = candidate.strategyExtensions?.[0]?.definition.manifest
+        if (extension) { value.strategyTypeId = extension.strategyTypeId; value.slot = extension.slot }
+        result.push(managed)
       } catch (error) {
         // A broken optional editor must not hide the real View or other plugins.
         warnings.push(`${entry.id}: ${error instanceof Error ? error.message : String(error)}`)
@@ -275,7 +276,8 @@ export class MemoryStrategyManagement {
     const changed = items.filter(item => desired[item.entry.id] && hash(desired[item.entry.id]) !== hash({ enabled: item.value.enabled, config: item.value.config }))
       .sort((a, b) => Number(desired[a.entry.id]!.enabled) - Number(desired[b.entry.id]!.enabled))
     const restored: Array<{ entry: StrategyLoaderEntry; disabled: boolean | null; config: unknown }> = []
-    await this.engine.batch(async () => {
+    this.changingEntries = true
+    try { await this.engine.batch(async () => {
       try {
         for (const item of changed) {
           signal?.throwIfAborted()
@@ -303,7 +305,7 @@ export class MemoryStrategyManagement {
         if (failures.length) throw new AggregateError([error, ...failures], 'Strategy change failed and rollback was incomplete; inspect DSH plugin state.')
         throw error
       }
-    })
+    }) } finally { this.changingEntries = false }
   }
 
   private exclusive<T>(operation: () => Promise<T>): Promise<T> {

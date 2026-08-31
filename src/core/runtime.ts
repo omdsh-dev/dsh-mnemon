@@ -31,15 +31,17 @@ export class MemoryRuntime {
   private disposal: Promise<void> | undefined
   private readonly disposalFailures: unknown[] = []
   private batchDepth = 0
+  private batchSnapshot: MemoryContributionSnapshot | undefined
   private readonly reconciliations = new Map<MemoryGenerationHost, MemoryContributionSnapshot>()
 
   /** Host assembly transaction: existing leases stay served until all Fibers settle. */
   async batch<T>(operation: () => Promise<T>): Promise<T> {
     if (this.closed) throw new Error('Memory Runtime is disposed')
-    this.batchDepth += 1
+    if (this.batchDepth++ === 0) this.batchSnapshot = this.contributions.snapshot()
     try { return await operation() }
     finally {
       if (--this.batchDepth === 0) {
+        this.batchSnapshot = undefined
         const pending = [...this.reconciliations]
         this.reconciliations.clear()
         for (const [host, snapshot] of pending) host.reconcile(snapshot)
@@ -64,7 +66,10 @@ export class MemoryRuntime {
   attachGeneration(options: CompileMemoryGenerationOptions = {}): MemoryGenerationAttachment {
     if (this.closed) throw new Error('Memory Runtime is disposed')
     const host = new MemoryGenerationHost(options)
-    host.reconcile(this.contributions.snapshot())
+    host.reconcile(this.batchSnapshot ?? this.contributions.snapshot())
+    // A workspace first opened during a settings transaction also starts from
+    // the committed baseline, then joins the final reconciliation.
+    if (this.batchSnapshot !== undefined) this.reconciliations.set(host, this.contributions.snapshot())
     const unsubscribe = this.contributions.subscribe(snapshot => {
       if (this.batchDepth) this.reconciliations.set(host, snapshot)
       else host.reconcile(snapshot)
