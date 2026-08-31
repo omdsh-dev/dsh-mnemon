@@ -91,12 +91,17 @@ function context(options: { connection?: boolean; workspaceRegistry?: boolean } 
 
 describe('dsh-mnemon plugin composition', () => {
   it('keeps the installed DSH prerelease family coherent', () => {
+    const legacyProjection = '@deepseek-ai/dsh-session-projection-legacy'
     const directDshDependencies = Object.entries(manifest.devDependencies)
       .filter(([name]) => name === '@deepseek-ai/dsh' || name.startsWith('@deepseek-ai/dsh-'))
-    const lockedDshVersions = [...lockfile.matchAll(/@deepseek-ai\/dsh(?:-[a-z0-9-]+)?@(\d+\.\d+\.\d+-rc\.\d+)/g)]
-      .map(match => match[1])
+      .filter(([name]) => name !== legacyProjection)
+    const lockedDshVersions = [...lockfile.matchAll(/(@deepseek-ai\/dsh(?:-[a-z0-9-]+)?)@(\d+\.\d+\.\d+-rc\.\d+)/g)]
+      // Only this aliased regression fixture may use the older host contract.
+      .filter(([, name, version]) => name !== '@deepseek-ai/dsh-session-projection' || version !== '0.1.0-rc.8')
+      .map(match => match[2])
 
-    expect(directDshDependencies).toHaveLength(19)
+    expect(manifest.devDependencies[legacyProjection]).toBe('npm:@deepseek-ai/dsh-session-projection@0.1.0-rc.8')
+    expect(directDshDependencies).toHaveLength(20)
     expect(new Set(directDshDependencies.map(([, version]) => version))).toEqual(new Set(['0.1.1-rc.2']))
     expect(manifest.engines.node).toBe('>=20')
     expect(manifest.peerDependencies['@deepseek-ai/dsh-client-ui-primitives']).toContain('^0.1.1-rc.1')

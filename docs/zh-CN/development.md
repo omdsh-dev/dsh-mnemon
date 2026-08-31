@@ -12,6 +12,16 @@
 pnpm install
 ```
 
+## Session projection 兼容性
+
+Mnemon 的 child-local token-usage projection 同时支持两代 DSH 契约：0.1.0 的 `schema` / `view`，以及 0.1.1 和受支持 alpha 的 `stateSchema` / `wire`。两组入口共用同一份 wire schema 和 view 函数。内部状态和 `stateVersion: 1` 保持不变，因此在这些 Host 之间升级或回滚时可以继续使用缓存状态。
+
+```sh
+pnpm exec vitest run tests/subagent-token-usage-host.spec.ts tests/subagent-token-usage.spec.ts tests/client-subagent-token-usage.spec.tsx
+```
+
+Host 测试使用真实 DSH Session，分别运行已发布的 0.1.0-rc.8 registry 和当前激活的 registry，覆盖实时快照、离线重放、checkpoint 恢复、跨版本状态和变更通知。旧版 npm alias 仅用于测试，是开发依赖，不会替换实际 Host。源码验证会把当前 registry 与其他 DSH package 一同链接到 alpha。
+
 ## DSH 0.1.2-alpha.1 源码验证
 
 该 alpha 刻意不发布到 npm。`package.json` 与 lockfile 继续保留最新已发布 DSH 基线，只在构建完成的 Harness 检出上覆盖生成的 `node_modules` 直连：
