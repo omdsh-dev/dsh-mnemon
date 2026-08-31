@@ -9,8 +9,8 @@ import type { RuntimeMemorySnapshot } from 'dsh-mnemon-source-runtime/contracts'
 
 const fixtures: Awaited<ReturnType<typeof viewManagementFixture>>[] = []
 afterEach(async () => { for (const value of fixtures.splice(0)) await value.dispose() })
-async function fixture(saved?: MemoryViewPreferences) {
-  const value = await viewManagementFixture(saved)
+async function fixture(saved?: MemoryViewPreferences, anchor?: string, stored?: Record<string, MemoryViewPreferences>) {
+  const value = await viewManagementFixture(saved, anchor, stored)
   fixtures.push(value)
   return value
 }
@@ -98,6 +98,20 @@ describe('View configuration with the real pinned DSH Cordis Loader', () => {
     expect(f.loader.resolve('light').options.config).toEqual({ maxProjectionCharacters: 900 })
     expect(f.settings.mutate).not.toHaveBeenCalled()
     expect(f.treeWrite).not.toHaveBeenCalled()
+  })
+
+  it('isolates Profiles sharing one settings document, and restores only the matching Loader anchor', async () => {
+    const webAnchor = 'file:///isolated/profiles/web/cordis.yml'
+    const first = await fixture(undefined, webAnchor)
+    await first.management.apply(first.config, scope(first), await request(first, { light: { enabled: true, config: { maxProjectionCharacters: 700 } } }))
+    const namespace = first.management.settingsNamespace
+    const stored = { [namespace]: first.settingsDocuments.get(namespace)!.value as MemoryViewPreferences }
+    const headless = await fixture(undefined, 'file:///isolated/profiles/headless/cordis.yml', stored)
+    expect(headless.management.settingsNamespace).not.toBe(namespace)
+    expect(headless.loader.resolve('light').disabled).toBe(true)
+    const restarted = await fixture(undefined, webAnchor, stored)
+    expect(restarted.management.settingsNamespace).toBe(namespace)
+    await vi.waitFor(async () => expect((await restarted.management.catalog()).entries.find(entry => entry.entryId === 'light')).toMatchObject({ active: true, config: { maxProjectionCharacters: 700 } }))
   })
 
   it('rolls back live registrations if durable settings fail, including pinned and future views', async () => {

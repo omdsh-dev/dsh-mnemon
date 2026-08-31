@@ -29,13 +29,13 @@ interface TestLoader extends StrategyLoader {
   write(): void
 }
 
-export async function viewManagementFixture(saved?: MemoryViewPreferences) {
+export async function viewManagementFixture(saved?: MemoryViewPreferences, anchor?: string, stored: Record<string, MemoryViewPreferences> = {}) {
   const root = mkdtempSync(join(tmpdir(), 'mnemon-view-management-'))
   const workspace = join(root, 'workspace')
   mkdirSync(workspace)
   const ctx = new Context()
   const engine = provideMemoryRuntime(ctx)
-  const loaderFiber = ctx.plugin(Loader)
+  const loaderFiber = ctx.plugin(Loader, anchor === undefined ? undefined : { baseUrl: anchor })
   await loaderFiber.await()
   const loader = ctx.get('loader') as TestLoader
   const modules: Record<string, unknown> = {
@@ -51,7 +51,7 @@ export async function viewManagementFixture(saved?: MemoryViewPreferences) {
   const settings: HostSettingsService = {
     writable: true,
     register: (namespace, _schema, options) => {
-      settingsDocuments.set(namespace, { value: structuredClone(namespace === 'mnemon-view' && saved ? saved : options.base ?? {}), revision: 0,
+      settingsDocuments.set(namespace, { value: structuredClone(stored[namespace] ?? (namespace.startsWith('mnemon-view') && saved ? saved : options.base ?? {})), revision: 0,
         ...(options.validate === undefined ? {} : { validate: options.validate as (value: never) => void }) })
       return { get: () => settingsDocuments.get(namespace)!.value as never }
     },

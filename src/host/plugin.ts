@@ -12,7 +12,6 @@ import { registerMnemonSubagentTokenUsageProjection } from './subagent-token-usa
 import { provideMemoryRuntime } from '../core/runtime.ts'
 import { MemoryStrategyManagement } from './strategy-management.ts'
 import { registerViewRpc } from './view-rpc.ts'
-import { MNEMON_VIEW_SETTINGS_NAMESPACE } from './view-protocol.ts'
 
 export const name = 'dsh-mnemon'
 export const provide = ['mnemonMemory']
@@ -63,7 +62,7 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
   const runtime = new LiveMnemonRuntime(initialCandidate?.graph ?? createRuntimeGraph(effectiveConfig(initialSettings), undefined, extensions), optionalWorkspaceRegistry(ctx), ctx.agents, extensions)
   const resolved = runtime.config
   ctx.on('settings/updated', ((namespace: string, next: Config) => {
-    if (namespace === MNEMON_VIEW_SETTINGS_NAMESPACE) {
+    if (namespace === viewStrategies.settingsNamespace) {
       runtime.swap(createRuntimeGraph(effectiveConfig(settings.get()), undefined, extensions))
       return
     }

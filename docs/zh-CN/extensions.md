@@ -74,7 +74,7 @@ Core 只处理目标/槽身份、JSON、64,000 字符上限、确定性回放、
 
 专用 Strategy Entry 可以导出 `memoryStrategyConfiguration`，由 Core SDK 的 `defineMemoryStrategyConfiguration` 定义。它包含中英文展示文案、公开字段（`number`、`text`、`textarea`、`string-list`、`source-list），以及**与 `apply()` 共用的纯 `create(config)` factory**。factory 只返回一个 Strategy 或扩展贡献，不做 I/O、凭据访问、Source 注册或 Fiber 挂载；完整例子见可选策略包。这只是可选的编辑器约定，不是组合功能的准入要求。混合 Source/Strategy Entry 以及未声明编辑器的插件仍可观察，由 DSH 管理配置。
 
-Host 只发现已存在的 `(scope/)dsh-mnemon-strategy-*` Loader Entry（包括停用项），页面不会安装任意包。预览使用真实 Source 进行组合，不提交配置、不执行 Action、不调用模型。应用前校验完整候选，经 Cordis 更新原 Entry，把 Profile 级用户偏好保存在 DSH 的 `mnemon-view` 设置中，不改写包内或生成的 Loader YAML。加载或持久化失败会回滚；已有轮次的 pin 保持不变。Source 上限及 Host 的写入/权限约束仍然有效。
+Host 只发现已存在的 `(scope/)dsh-mnemon-strategy-*` Loader Entry（包括停用项），页面不会安装任意包。预览使用真实 Source 进行组合，不提交配置、不执行 Action、不调用模型。应用前校验完整候选，经 Cordis 更新原 Entry，把 Profile 级用户偏好保存在 DSH 设置中。`mnemon-view-<Loader 装配目录摘要>` 命名空间在共享设置文件内隔离各 Profile（没有装配目录的嵌入式 Host 使用 `mnemon-view`），不改写包内或生成的 Loader YAML。加载或持久化失败会回滚；已有轮次的 pin 保持不变。Source 上限及 Host 的写入/权限约束仍然有效。
 
 ### 默认三层扩展
 

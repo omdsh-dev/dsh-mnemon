@@ -22,7 +22,7 @@ export interface StrategyLoaderEntry {
   parent: { tree: { import(name: string): Promise<unknown> | unknown }; ctx?: { fiber?: { entry?: { disabled: boolean } } } }
   update(options: { disabled?: boolean | null; config?: unknown }): Promise<void>
 }
-export interface StrategyLoader { entries(): Iterable<StrategyLoaderEntry> }
+export interface StrategyLoader { entries(): Iterable<StrategyLoaderEntry>; config?: { baseUrl?: string }; context?: { baseUrl?: string } }
 interface ManagedEntry { entry: StrategyLoaderEntry; definition: MemoryStrategyConfiguration; value: MemoryStrategyEntryView }
 
 const schema: z<MemoryViewPreferences> = z.object({
@@ -86,6 +86,7 @@ function prepared(item: ManagedEntry, config: Record<string, MemoryJsonValue>) {
  * the live authority; this class never owns an alternate plugin registry.
  */
 export class MemoryStrategyManagement {
+  readonly settingsNamespace: string
   private readonly settings: HostSettingsScope<MemoryViewPreferences>
   private queue: Promise<unknown> = Promise.resolve()
   private closed = false
@@ -94,7 +95,13 @@ export class MemoryStrategyManagement {
   private discoveryWarnings: string[] = []
 
   constructor(private readonly ctx: HostContextShape, private readonly engine: MemoryRuntime) {
-    this.settings = ctx.settings.register<MemoryViewPreferences>(MNEMON_VIEW_SETTINGS_NAMESPACE, schema, {
+    // DSH's settings document is home-wide; a Loader's resolution anchor is
+    // Profile-specific and stable across restarts. Do not share Entry overrides
+    // merely because two Profiles use the same short Entry ids.
+    const loader = this.loader()
+    const anchor = loader?.config?.baseUrl ?? loader?.context?.baseUrl
+    this.settingsNamespace = anchor ? `${MNEMON_VIEW_SETTINGS_NAMESPACE}-${hash(anchor).slice(0, 16)}` : MNEMON_VIEW_SETTINGS_NAMESPACE
+    this.settings = ctx.settings.register<MemoryViewPreferences>(this.settingsNamespace, schema, {
       base: { entries: {} }, applies: 'live', validate: value => { preferences(value) },
     })
   }
@@ -113,7 +120,7 @@ export class MemoryStrategyManagement {
       }, 0)
     }
     const stops = [this.ctx.on('loader/entry-init', schedule), this.ctx.on('loader/partial-dispose', schedule),
-      this.ctx.on('settings/updated', ((namespace: string) => { if (namespace === MNEMON_VIEW_SETTINGS_NAMESPACE) schedule() }) as never)]
+      this.ctx.on('settings/updated', ((namespace: string) => { if (namespace === this.settingsNamespace) schedule() }) as never)]
     schedule()
     return () => { this.closed = true; clearTimeout(this.timer); for (const stop of stops.reverse()) stop() }
   }
@@ -124,7 +131,7 @@ export class MemoryStrategyManagement {
   }
 
   private settingsRevision(): number {
-    return this.ctx.settings.describe({ redactSecrets: true }).find(value => value.ns === MNEMON_VIEW_SETTINGS_NAMESPACE)?.revision ?? 0
+    return this.ctx.settings.describe({ redactSecrets: true }).find(value => value.ns === this.settingsNamespace)?.revision ?? 0
   }
 
   private async managed(): Promise<ManagedEntry[]> {
@@ -172,7 +179,7 @@ export class MemoryStrategyManagement {
   }
 
   private revision(items: ManagedEntry[]): string {
-    return hash({ settings: this.ctx.settings.describe({ redactSecrets: true }).filter(value => value.ns === 'mnemon' || value.ns === MNEMON_VIEW_SETTINGS_NAMESPACE).map(value => [value.ns, value.revision]), contribution: this.engine.contributionSnapshot().revision,
+    return hash({ settings: this.ctx.settings.describe({ redactSecrets: true }).filter(value => value.ns === 'mnemon' || value.ns === this.settingsNamespace).map(value => [value.ns, value.revision]), contribution: this.engine.contributionSnapshot().revision,
       entries: items.map(({ entry, value }) => ({ id: entry.id, name: entry.options.name, enabled: !entry.disabled, config: value.config })) })
   }
 
@@ -241,7 +248,7 @@ export class MemoryStrategyManagement {
       const previous = preferences(this.settings.get())
       const next = preferences({ strategyTypeId: request.strategyTypeId, entries: { ...previous.entries, ...request.entries } })
       await this.updateEntries(items, request.entries, async () => {
-        await this.ctx.settings.mutate(MNEMON_VIEW_SETTINGS_NAMESPACE, [
+        await this.ctx.settings.mutate(this.settingsNamespace, [
             { op: 'set', path: ['strategyTypeId'], value: next.strategyTypeId },
             { op: 'set', path: ['entries'], value: next.entries },
           ], expected)
