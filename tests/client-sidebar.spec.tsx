@@ -3,12 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, waitFor } from '@testing-library/react'
 
 vi.mock('../src/client/MnemonView.tsx', () => ({
-  MnemonView: ({ sessionId, workspaceId, workspaceSelection, t, locale, onClose, surface }: {
+  MnemonView: ({ sessionId, workspaceId, workspaceSelection, t, locale, onClose, surface, active }: {
     sessionId?: string
     workspaceId?: string
     t?: (key: string) => string
     locale?: 'zh' | 'en'
     surface?: 'sidebar' | 'builtin'
+    active?: boolean
     onClose?: () => void
     workspaceSelection?: {
       options: Array<{ id: string; title: string }>
@@ -17,7 +18,7 @@ vi.mock('../src/client/MnemonView.tsx', () => ({
       onSelect(id: string): void
       onAlign(): void
     }
-  }) => <div data-testid="mnemon-canonical-content" data-workspace-id={workspaceId} data-effective-workspace-id={workspaceSelection?.effectiveWorkspaceId} data-locale={locale} data-surface={surface} data-has-workspace-picker={workspaceSelection !== undefined} data-has-back-action={onClose !== undefined}>
+  }) => <div data-testid="mnemon-canonical-content" data-active={active} data-workspace-id={workspaceId} data-effective-workspace-id={workspaceSelection?.effectiveWorkspaceId} data-locale={locale} data-surface={surface} data-has-workspace-picker={workspaceSelection !== undefined} data-has-back-action={onClose !== undefined}>
     <h1>{t?.('tab.label')}</h1>
     <span>{sessionId ?? 'no-session'}</span>
     <select aria-label="workspace-test-selector" value={workspaceSelection?.selectedWorkspaceId ?? ''} onChange={event => workspaceSelection?.onSelect(event.target.value)}>
@@ -205,11 +206,14 @@ describe('Mnemon canonical workspace launcher', () => {
     const entry = document.querySelector('[data-dsh-mnemon-entry]')!
     fireEvent.click(entry)
     const content = await view.findByTestId('mnemon-canonical-content')
+    expect(content.getAttribute('data-active')).toBe('true')
     fireEvent.change(view.getByRole('combobox'), { target: { value: 'workspace-2' } })
     fireEvent.click(document.querySelector('[data-dsh-taskboard-entry]')!)
     expect(content.closest<HTMLElement>('[data-dsh-mnemon-view]')?.hidden).toBe(true)
+    expect(content.getAttribute('data-active')).toBe('false')
     fireEvent.click(entry)
     expect(view.getByTestId('mnemon-canonical-content')).toBe(content)
+    expect(content.getAttribute('data-active')).toBe('true')
     expect(content.getAttribute('data-workspace-id')).toBe('workspace-2')
     view.unmount()
   })

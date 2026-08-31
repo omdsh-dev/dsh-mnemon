@@ -120,8 +120,8 @@ function Snapshot({ view, dashboard }: { view: MemoryViewInspection; dashboard: 
 }
 
 /** A human management surface. It never runs a model or invokes a View Action. */
-export function MemoryViewPage({ client, canConfigure = true, refreshKey = 0, onConfigured }: {
-  client: Pick<MnemonClient, 'viewDashboard' | 'previewView' | 'applyView'>; canConfigure?: boolean; refreshKey?: number; onConfigured?(): void
+export function MemoryViewPage({ client, active = true, canConfigure = true, refreshKey = 0, onConfigured }: {
+  client: Pick<MnemonClient, 'viewDashboard' | 'previewView' | 'applyView'>; active?: boolean; canConfigure?: boolean; refreshKey?: number; onConfigured?(): void
 }): JSX.Element {
   const t = useT()
   const [dashboard, setDashboard] = useState<MemoryViewDashboard | null>(null)
@@ -139,6 +139,7 @@ export function MemoryViewPage({ client, canConfigure = true, refreshKey = 0, on
   const refresh = useCallback(async (discard = false) => {
     const request = ++version.current
     setLoading(true)
+    setWorking(null)
     try {
       const next = await client.viewDashboard()
       if (request !== version.current) return
@@ -153,7 +154,8 @@ export function MemoryViewPage({ client, canConfigure = true, refreshKey = 0, on
     } catch (reason) { if (request === version.current) setError(message(reason)) }
     finally { if (request === version.current) setLoading(false) }
   }, [client])
-  useEffect(() => { void refresh(); return () => { version.current += 1 } }, [refresh, refreshKey])
+  useEffect(() => { if (active) void refresh() }, [active, refresh, refreshKey])
+  useEffect(() => () => { version.current += 1 }, [client])
   const edit = (next: Draft) => { version.current += 1; setDraft(next); setPreview(null); setSaved(false); setError(null); setWorking(null); setLoading(false) }
   const dirty = dashboard !== null && draft !== null && serialize(draft) !== serialize(initial(dashboard))
   const readonly = !canConfigure || dashboard?.writable !== true

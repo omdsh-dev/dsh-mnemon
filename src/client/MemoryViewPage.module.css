@@ -65,4 +65,4 @@
 .empty { display: grid; justify-items: start; gap: 10px; padding: 14px 0; }
 .empty h3 { margin: 0; font-size: 13px; }
 @container mnemon-view (max-width: 680px) { .layout { grid-template-columns: minmax(0, 1fr); } .text { max-height: 240px; } }
-@container mnemon-view (max-width: 380px) { .panelHeader, .content, .footer { padding: 12px; } .details summary { padding-inline: 12px; } .detailsBody { padding-inline: 12px; } .buttons > button { flex: 1; } }
+@container mnemon-view (max-width: 380px) { .panelHeader, .content, .footer { padding: 12px; } .details summary { padding-inline: 12px; } .detailsBody { padding-inline: 12px; } .buttons > button { flex: 1 1 100%; white-space: normal; } }

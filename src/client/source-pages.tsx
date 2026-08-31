@@ -28,6 +28,7 @@ export interface MemorySourceUIContext {
 }
 
 interface MemorySourcePageDirectoryContext {
+  locale?: { getSnapshot(): unknown; subscribe(listener: () => void): () => void }
   slots: {
     getVersion(name: typeof MNEMON_SOURCE_PAGE_SLOT): number
     entriesOfSlot(name: typeof MNEMON_SOURCE_PAGE_SLOT): readonly { options: { id?: string; label?: string | (() => string); order?: number }; component?: unknown }[]
@@ -119,11 +120,14 @@ export function installMemorySourceUI(
 /** Stable uSES directory over the Slot ledger; no parallel page registry. */
 export function createMemorySourcePageDirectory(ctx: MemorySourcePageDirectoryContext): MemorySourcePageDirectory {
   let version = -1
+  let localeSnapshot: unknown
   let snapshot: readonly MemorySourcePageEntry[] = Object.freeze([])
   const read = (): readonly MemorySourcePageEntry[] => {
     const currentVersion = ctx.slots.getVersion(MNEMON_SOURCE_PAGE_SLOT)
-    if (currentVersion === version) return snapshot
+    const currentLocale = ctx.locale?.getSnapshot()
+    if (currentVersion === version && currentLocale === localeSnapshot) return snapshot
     version = currentVersion
+    localeSnapshot = currentLocale
     snapshot = Object.freeze(ctx.slots.entriesOfSlot(MNEMON_SOURCE_PAGE_SLOT).flatMap(entry => {
       const id = entry.options.id
       if (id === undefined) return []
@@ -158,10 +162,13 @@ export function createMemorySourcePageDirectory(ctx: MemorySourcePageDirectoryCo
   return {
     getSnapshot: read,
     subscribe(listener) {
-      return ctx.slots.subscribe(MNEMON_SOURCE_PAGE_SLOT, () => {
+      const changed = () => {
         read()
         listener()
-      })
+      }
+      const stopSlots = ctx.slots.subscribe(MNEMON_SOURCE_PAGE_SLOT, changed)
+      const stopLocale = ctx.locale?.subscribe(changed)
+      return () => { stopLocale?.(); stopSlots() }
     },
   }
 }

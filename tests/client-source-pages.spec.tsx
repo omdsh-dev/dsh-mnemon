@@ -177,6 +177,28 @@ describe('Source Client presentation conformance', () => {
     disposeOwner()
   })
 
+  it('refreshes plugin-owned labels on locale changes without replacing Source Fibers', () => {
+    const slots = new TestSlots(), owner = declareSourcePageSlot(slots)
+    let current = { active: 'zh', revision: 0 }
+    const listeners = new Set<() => void>()
+    const locale = { getSnapshot: () => current, subscribe: (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener) } } }
+    const page = installMemorySourceUI({ slots } as never, { sourceTypeId: 'git', pages: [{ id: 'repo', label: () => current.active === 'zh' ? '仓库' : 'Repository', navigation: { detail: () => current.active }, component: Page }] })
+    const directory = createMemorySourcePageDirectory({ slots, locale } as never)
+    const first = directory.getSnapshot(), entry = slots.entriesOfSlot(MNEMON_SOURCE_PAGE_SLOT)[0]
+    expect(first[0]?.label).toBe('仓库')
+    const listener = vi.fn(), stop = directory.subscribe(listener)
+    current = { active: 'en', revision: 1 }
+    for (const changed of listeners) changed()
+    expect(listener).toHaveBeenCalledOnce()
+    const second = directory.getSnapshot()
+    expect(second[0]).toMatchObject({ label: 'Repository', navigation: { detail: 'en' } })
+    expect(second).not.toBe(first)
+    expect(directory.getSnapshot()).toBe(second)
+    expect(slots.entriesOfSlot(MNEMON_SOURCE_PAGE_SLOT)[0]).toBe(entry)
+    stop(); expect(listeners.size).toBe(0)
+    page(); owner()
+  })
+
   it('routes one type-level page across authorized instances without exposing the raw transport', async () => {
     const calls: Array<{ channel: string; endpoint: string; payload: Record<string, unknown> }> = []
     const sourceCatalog = {

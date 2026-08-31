@@ -37,6 +37,7 @@ export interface MnemonWorkspaceHostProps extends PropsRenderSlots<'mnemon.sourc
   navigation: MnemonWorkspaceNavigation
   t: MnemonTranslate
   sessionId?: string
+  active?: boolean
 }
 
 export interface MnemonBuiltinWorkspaceHostProps extends Pick<MnemonWorkspaceHostProps,
@@ -102,6 +103,7 @@ export function MnemonWorkspaceHost(props: MnemonWorkspaceHostProps): JSX.Elemen
     {...(sessionId === undefined ? {} : { sessionId })}
     {...(resolvedSelectedId === undefined ? {} : { workspaceId: resolvedSelectedId })}
     workspaceSelection={selection}
+    active={props.active ?? true}
     t={props.t}
     locale={locale.active}
     sourcePageDirectory={props.sourcePageDirectory}
@@ -156,7 +158,7 @@ export function MnemonSidebarWorkspaceHost(props: MnemonWorkspaceHostProps & { c
   if (bounds === undefined) return null
   // Hide the existing DSH subtree so panel navigation retains Source page state.
   return <section data-dsh-mnemon-view hidden={!state.open} className={css.workspacePanel} style={{ ...bounds, display: state.open ? undefined : 'none' }} aria-label={props.t('tab.label')}>
-    <MnemonWorkspaceHost {...props} />
+    <MnemonWorkspaceHost {...props} active={state.open} />
   </section>
 }
 

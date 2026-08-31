@@ -171,6 +171,23 @@ describe('View page interaction and localization', () => {
     expect(screen.queryByText(/^Saved\./)).toBeNull()
   })
 
+  it('refreshes the actual snapshot when a retained sidebar reopens without discarding its draft', async () => {
+    const f = fixture()
+    const page = (active: boolean) => <I18nContext.Provider value={translateEn}><LocaleContext.Provider value="en"><MemoryViewPage client={f.client} active={active} /></LocaleContext.Provider></I18nContext.Provider>
+    const mounted = render(page(true)); await ready()
+    fireEvent.click(screen.getByRole('switch', { name: 'Light context' }))
+    mounted.rerender(page(false))
+    const requests = f.client.viewDashboard.mock.calls.length
+    f.update({ current: { ...snapshot('recent'), turn: 2, memoryText: 'Second turn memory', projection: [{ id: 'second', sourceInstanceKey: 'source:runtime', mode: 'eager', text: 'Second turn context', revision: 'r2' }] } })
+    expect(f.client.viewDashboard).toHaveBeenCalledTimes(requests)
+    mounted.rerender(page(true))
+    await screen.findByText('Second turn context')
+    expect(screen.getByRole('switch', { name: 'Light context' }).getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByText('Unsaved changes')).toBeTruthy()
+    expect(f.client.viewDashboard).toHaveBeenCalledTimes(requests + 1)
+    expect(f.client.applyView).not.toHaveBeenCalled()
+  })
+
   it('allows inspection and preview while configuration is read-only', async () => {
     const f = fixture(); f.mount('en', false); await ready()
     expect((screen.getByRole('switch', { name: 'Light context' }) as HTMLButtonElement).disabled).toBe(true)

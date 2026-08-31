@@ -27,6 +27,8 @@ export interface MnemonViewProps {
   workspaceSelection?: MnemonWorkspaceSelection
   /** Placement changes scope controls, not Source pages or their visual skin. */
   surface?: MnemonDisplayMode
+  /** Sidebar retains its subtree while hidden; refresh View when reopened. */
+  active?: boolean
   t?: MnemonTranslate
   locale?: string
   onClose?: () => void
@@ -487,7 +489,7 @@ export function MnemonView(props: MnemonViewProps): JSX.Element {
   return <I18nContext.Provider value={t}><LocaleContext.Provider value={props.locale ?? 'zh'}><MnemonWorkspace {...props} /></LocaleContext.Provider></I18nContext.Provider>
 }
 
-function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, workspaceSelection, surface = 'sidebar', onClose, sourcePageDirectory = EMPTY_SOURCE_PAGE_DIRECTORY, renderSlot }: MnemonViewProps): JSX.Element {
+function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, workspaceSelection, surface = 'sidebar', active = true, onClose, sourcePageDirectory = EMPTY_SOURCE_PAGE_DIRECTORY, renderSlot }: MnemonViewProps): JSX.Element {
   const t = useT()
   const locale = useLocale()
   const subscribeSettings = useCallback((listener: () => void) => settingsScope.subscribe(listener), [settingsScope])
@@ -706,7 +708,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
         <WorkspaceNavigation page={page} onSelect={selectPage} sourcePages={sourceNavigationEntries} disabledTypes={disabledTypes} />
         <section key={viewContextKey} className={appearanceClass(css.canvas, sidebarCss.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={(activeSourcePage?.navigation?.stickyHeader !== false) ? '' : undefined}>
           {page === 'status' && <StatusPage client={client} status={status} loading={statusLoading} writeEnabled={writeEnabled} onRefresh={() => void loadStatus()} />}
-          {page === 'view' && <MemoryViewPage client={client} refreshKey={revision} canConfigure={settingsSnapshot.writable && (connection.isLoopback !== false || settingsSnapshot.value?.remoteAccess === 'trusted-host')} onConfigured={mutate} />}
+          {page === 'view' && <MemoryViewPage client={client} active={active} refreshKey={revision} canConfigure={settingsSnapshot.writable && (connection.isLoopback !== false || settingsSnapshot.value?.remoteAccess === 'trusted-host')} onConfigured={mutate} />}
           {activeManagedSourceInstance !== undefined && managedSourcePageContent}
           {activeSourcePage !== undefined && customSourcePage}
         </section>
