@@ -72,6 +72,23 @@ function configuration(definition: MemoryStrategyConfiguration, input: unknown):
   return config
 }
 
+function validatePresentation(definition: MemoryStrategyConfiguration): void {
+  const text = (value: unknown) => typeof value === 'object' && value !== null && ['en', 'zh-CN'].every(key => {
+    const item = (value as Record<string, unknown>)[key]
+    return typeof item === 'string' && item.length <= 4000
+  })
+  if (!text(definition.label) || !text(definition.description) || definition.fields.some(field => !text(field.label)
+    || field.description !== undefined && !text(field.description)
+    || [field.minimum, field.maximum].some(bound => bound !== undefined && (typeof bound !== 'number' || !Number.isFinite(bound)))
+    || field.sourceRoles !== undefined && (!Array.isArray(field.sourceRoles) || field.sourceRoles.length > 32
+      || field.sourceRoles.some(role => typeof role !== 'string' || !role || role.length > 128)))) throw new Error('Invalid Strategy editor presentation metadata')
+  // Bound the display payload as well as saved values. One malformed editor
+  // must not make the entire dashboard unserializable or crash React.
+  const json = canonicalMemoryJson({ label: definition.label, description: definition.description, fields: definition.fields }, 'Strategy editor metadata')
+  if (json.length > 64 * 1024) throw new Error('Strategy editor metadata exceeds 64 KiB')
+  for (const field of definition.fields) if (field.defaultValue !== undefined) configuration(definition, { [field.key]: field.defaultValue })
+}
+
 function prepared(item: ManagedEntry, config: Record<string, MemoryJsonValue>) {
   const contribution = item.definition.create(configuration(item.definition, config))
   if (contribution.sources?.length) throw new Error('A managed Strategy factory cannot register Sources')
@@ -152,6 +169,7 @@ export class MemoryStrategyManagement {
         if (!Array.isArray(definition.fields) || definition.fields.length > 16
           || new Set(definition.fields.map(field => field.key)).size !== definition.fields.length
           || definition.fields.some(field => !/^[a-zA-Z][a-zA-Z0-9]{0,99}$/u.test(field.key) || !['number', 'text', 'textarea', 'string-list', 'source-list'].includes(field.input))) throw new Error('Invalid Strategy configuration descriptor')
+        validatePresentation(definition)
         const publicConfig = configuration(definition, entry.options.config)
         const contribution = [...installed.strategies, ...(installed.strategyExtensions ?? [])].find(value => value.provenance.entryId === entry.id)
         const manifest = contribution?.definition.manifest
