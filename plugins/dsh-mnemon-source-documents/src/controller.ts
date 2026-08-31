@@ -192,6 +192,15 @@ export class DocumentController {
     return this.withLock(() => this.snapshotUnlocked(this.readIndex()))
   }
 
+  /** Source facts and read-grant membership need metadata, not every document body. */
+  catalog(): DocumentSnapshot {
+    return this.withLock(() => this.snapshotUnlocked(this.readIndex(), false))
+  }
+
+  revision(): string {
+    return this.withLock(() => indexRevision(this.readIndex()))
+  }
+
   get(id: string): DocumentView {
     return this.withLock(() => this.view(this.requireDocument(this.readIndex(), id)))
   }
@@ -284,8 +293,8 @@ export class DocumentController {
     return operation
   }
 
-  mutate(request: DocumentMutation): Promise<DocumentMutationResult> {
-    const operation = this.queue.then(() => this.withLock(() => this.mutateLocked(request)))
+  mutate(request: DocumentMutation, expectedRevision?: string): Promise<DocumentMutationResult> {
+    const operation = this.queue.then(() => this.withLock(() => this.mutateLocked(request, expectedRevision)))
     this.queue = operation.catch(() => undefined)
     return operation
   }
@@ -328,8 +337,9 @@ export class DocumentController {
     return operation
   }
 
-  private mutateLocked(request: DocumentMutation): DocumentMutationResult {
+  private mutateLocked(request: DocumentMutation, expectedRevision?: string): DocumentMutationResult {
     const index = this.readIndex()
+    if (expectedRevision !== undefined && indexRevision(index) !== expectedRevision) throw new DocumentConflictError()
     const now = this.now().toISOString()
     if (request.action === 'create') {
       const title = normalizeLine(request.title, 'document title', 160, true)
@@ -392,11 +402,11 @@ export class DocumentController {
     return { version: DOCUMENTS_VERSION, documents: documents as DocumentRecord[] }
   }
 
-  private snapshotUnlocked(index: DocumentIndex): DocumentSnapshot {
+  private snapshotUnlocked(index: DocumentIndex, includeExcerpts = true): DocumentSnapshot {
     const documents = index.documents.map(record => {
       const path = this.pathFor(record)
       const healthy = existsSync(path)
-      return { ...record, healthy, excerpt: healthy ? excerpt(this.readBody(record)) : '' }
+      return { ...record, healthy, excerpt: healthy && includeExcerpts ? excerpt(this.readBody(record)) : '' }
     })
     const active = documents.filter(record => record.status === 'active')
     return {

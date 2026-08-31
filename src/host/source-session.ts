@@ -46,9 +46,8 @@ export class SourceSession {
     const lease = this.generations.acquire(turn?.view.runtimeGeneration)
     try { return await this.select(lease.generation) } finally { lease.release() }
   }
-  private async select(generation: import('../core/composition.ts').MemoryCompositionGeneration) {
-    const catalog = await generation.managementCatalog(this.scope)
-    const candidates = catalog.sources.filter(source => source.sourceTypeId === this.typeId)
+  private select(generation: import('../core/composition.ts').MemoryCompositionGeneration) {
+    const candidates = generation.sourceInstances().filter(source => source.sourceTypeId === this.typeId)
     const source = candidates.find(source => isDefaultSourceInstance(source.sourceInstanceKey, this.typeId))
       ?? (candidates.length === 1 ? candidates[0] : undefined)
     if (source === undefined) throw new Error('Source ' + this.typeId + ' is ' + (candidates.length === 0 ? 'not installed' : 'ambiguous; select an explicit instance'))
@@ -58,10 +57,11 @@ export class SourceSession {
     const lease = this.generations.acquire(this.activeTurn()?.view.runtimeGeneration)
     try {
       const source = await this.select(lease.generation)
+      const expectedRevision = mode === 'mutate' ? await lease.generation.managementRevision(source.sourceInstanceKey, this.scope, signal) : undefined
       const result = await lease.generation.executeManagement({
         sourceInstanceKey: source.sourceInstanceKey, scope: this.scope, mode, operation, input: json(input),
         confirmed: mode === 'mutate',
-        ...(mode === 'mutate' ? { expectedRevision: source.revision } : {}),
+        ...(expectedRevision === undefined ? {} : { expectedRevision }),
         ...(signal === undefined ? {} : { signal }),
       })
       return result.value as T

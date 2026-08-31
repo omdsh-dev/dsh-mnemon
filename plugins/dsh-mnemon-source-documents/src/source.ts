@@ -97,7 +97,7 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
   create(context) {
     const effective = documentsSourceConfig({ ...context.configuration, ...configured }, context.sourceInstanceKey)
     const documents = new DocumentManager(effective.limitBytes, undefined, () => effective.dataDir)
-    const snapshot = (workspaceId: string | undefined) => workspaceId === undefined ? undefined : documents.forWorkspace(workspaceId).snapshot()
+    const snapshot = (workspaceId: string | undefined) => workspaceId === undefined ? undefined : documents.forWorkspace(workspaceId).catalog()
     const prepared = new WeakMap<object, NonNullable<ReturnType<typeof snapshot>>>()
     return {
       facts(request) {
@@ -105,6 +105,10 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
         if (root === undefined) return {
           sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: 'documents', role: 'narrative', availability: 'unavailable',
           revision: 'unavailable:no-workspace', capabilities: ['status'], routeIds: [], actionIds: [], hints: { reason: 'no-workspace' },
+        }
+        if (request.scenario.startsWith('management.') && request.scenario !== 'management.catalog') return {
+          sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: 'documents', role: 'narrative', availability: 'ready',
+          revision: documents.forWorkspace(root).revision(), capabilities: ['status', 'project', 'search', 'read', 'write'], routeIds: ['search'], actionIds: ['manage'],
         }
         const current = snapshot(root)!
         prepared.set(request.scope, current)
@@ -201,7 +205,7 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
           }
         } else {
           if (!request.confirmed) throw new Error('Documents management mutation requires explicit confirmation')
-          if (request.operation === 'mutate') value = await controller.mutate(documentMutation(request.input))
+          if (request.operation === 'mutate') value = await controller.mutate(documentMutation(request.input), request.expectedRevision)
           else if (request.operation === 'archive') {
             const document = controller.get(text(input.id, 'id', 300)!)
             const revision = input.documentRevision === undefined ? document.revision : input.documentRevision
@@ -212,7 +216,9 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
             })
           } else throw new Error('unsupported Documents management mutation operation: ' + request.operation)
         }
-        return { revision: controller.snapshot().revision, value: value as MemoryJsonValue }
+        const completed = value as { revision?: unknown; snapshot?: { revision?: string } }
+        const revision = completed.snapshot?.revision ?? (typeof completed.revision === 'string' ? completed.revision : controller.revision())
+        return { revision, value: value as MemoryJsonValue }
       },
       async mutate(request) {
         const root = workspace(request.view.scope)

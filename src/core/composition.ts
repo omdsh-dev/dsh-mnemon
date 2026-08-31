@@ -525,6 +525,22 @@ export class MemoryCompositionGeneration {
    * management plane. The returned catalog contains only JSON-safe manifest
    * metadata and SourceFacts; runtime objects and grants remain Host-only.
    */
+  sourceInstances(): ReadonlyArray<{ sourceInstanceKey: string; sourceTypeId: string }> {
+    this.assertOpen()
+    return [...this.sources.values()].map(source => ({ sourceInstanceKey: source.installed.instanceKey, sourceTypeId: source.installed.definition.manifest.typeId }))
+  }
+
+  /** A caller without a cached human revision may fence just its selected Source. */
+  async managementRevision(sourceInstanceKey: string, scope: MemoryViewRequest['scope'], signal?: AbortSignal): Promise<string> {
+    this.assertOpen()
+    const source = this.sources.get(instanceKey(sourceInstanceKey, 'source'))
+    if (source?.runtime.manage === undefined) throw new Error('Source does not expose management: ' + sourceInstanceKey)
+    const diagnostics: MemoryCompositionDiagnostic[] = []
+    const facts = await this.sourceFacts(source, jsonClone({ scope, scenario: 'management.revision', budget: DEFAULT_MEMORY_VIEW_BUDGET }, 'management revision request'), diagnostics, signal)
+    if (facts.availability === 'unavailable') throw new Error('Source is unavailable in the requested management scope: ' + sourceInstanceKey)
+    return facts.revision
+  }
+
   async managementCatalog(scope: MemoryViewRequest['scope']): Promise<MemorySourceManagementCatalog> {
     this.assertOpen()
     const request = jsonClone({

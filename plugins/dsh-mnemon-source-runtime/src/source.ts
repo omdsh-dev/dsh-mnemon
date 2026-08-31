@@ -73,6 +73,10 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
     const prepared = new WeakMap<object, ReturnType<typeof projection>>()
     return {
       facts(request) {
+        if (request.scenario.startsWith('management.')) return {
+          sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: 'runtime', role: 'working-context', availability: 'ready',
+          revision: controller.snapshot().revision, capabilities: ['status', 'project', 'write'], routeIds: [], actionIds: ['mutate'],
+        }
         const current = projection(request.scope.workspaceId)
         prepared.set(request.scope, current)
         return {
@@ -114,7 +118,7 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
           if (request.operation === 'snapshot') value = controller.snapshot()
           else if (request.operation === 'maintenance-plan') value = await controller.planMaintenance(runtimeMutation(request.input))
           else throw new Error('unsupported Runtime management read operation: ' + request.operation)
-          return { revision: projection(request.scope.workspaceId).revision, value: value as MemoryJsonValue }
+          return { revision: controller.snapshot().revision, value: value as MemoryJsonValue }
         }
         if (!request.confirmed) throw new Error('Runtime management mutation requires explicit confirmation')
         let result: unknown
@@ -135,7 +139,7 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
             typeof input.maxBytes === 'number' ? input.maxBytes : undefined,
           )
         } else throw new Error('unsupported Runtime management mutation operation: ' + request.operation)
-        return { revision: projection(request.scope.workspaceId).revision, value: result as unknown as MemoryJsonValue }
+        return { revision: controller.snapshot().revision, value: result as unknown as MemoryJsonValue }
       },
       async mutate(request) {
         const result = await controller.mutate(runtimeMutation(request.input))

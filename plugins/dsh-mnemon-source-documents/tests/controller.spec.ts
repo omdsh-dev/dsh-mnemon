@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DocumentCapacityError, DocumentConflictError, DocumentController, DocumentManager } from "../src/controller.ts"
 
 const directories: string[] = []
@@ -17,6 +17,32 @@ afterEach(() => {
 })
 
 describe('Mnemon Documents control plane', () => {
+  it('reads no bodies for revision/catalog, one for a single read, and retains full UI excerpts', async () => {
+    const controller = new DocumentController(workspace())
+    for (let index = 0; index < 24; index++) await controller.mutate({ action: 'create', title: `Record ${index}`, content: `Original ${index}` })
+    const readBody = vi.spyOn(controller as unknown as { readBody(record: unknown): string }, 'readBody')
+    const catalog = controller.catalog()
+    expect(controller.revision()).toBe(catalog.revision)
+    expect(catalog.documents).toHaveLength(24)
+    expect(catalog.documents.every(record => record.healthy && record.excerpt === '')).toBe(true)
+    expect(readBody).not.toHaveBeenCalled()
+    controller.get(catalog.documents[0]!.id)
+    expect(readBody).toHaveBeenCalledOnce()
+    readBody.mockClear()
+    expect(controller.snapshot().documents.every(record => record.excerpt.startsWith('Original'))).toBe(true)
+    expect(readBody).toHaveBeenCalledTimes(24)
+  })
+
+  it('rechecks a management revision inside the mutation queue', async () => {
+    const controller = new DocumentController(workspace())
+    const revision = controller.revision()
+    const first = controller.mutate({ action: 'create', title: 'First', content: 'Kept.' }, revision)
+    const stale = controller.mutate({ action: 'create', title: 'Stale', content: 'Must not commit.' }, revision)
+    await first
+    await expect(stale).rejects.toBeInstanceOf(DocumentConflictError)
+    expect(controller.snapshot().documents.map(document => document.title)).toEqual(['First'])
+  })
+
   it('creates an isolated active/archive directory and managed Markdown projection', async () => {
     const root = workspace()
     writeFileSync(join(root, 'ADR.md'), '# Original\nDo not mutate me.\n')
