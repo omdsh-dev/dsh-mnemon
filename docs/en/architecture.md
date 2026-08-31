@@ -75,7 +75,7 @@ sequenceDiagram
   Core->>Source: facts; project after Strategy selection
   Source-->>Core: fragments + opaque ReadGrant
   Core-->>Host: immutable View
-  Host->>LLM: bounded Wake + routes/actions
+  Host->>LLM: own plugin message: bounded Wake + routes/actions
   LLM->>Host: selected route/action + input
   Host->>Core: scope, authority and budget checks
   Core->>Source: query / mutate
@@ -90,16 +90,18 @@ Candidate composition is validated before publication. A rejected additional can
 
 Each turn pins one immutable View. Writes yield receipts; later turns see new revisions. Concurrent root/child work cannot substitute another turn's grant. A Source/Provider failure remains scoped and observable; partial, failed, cancelled and committed results are not conflated. Disabling participation does not delete data.
 
+A child captures its delegated View and generation at dispatch, retaining both until disposal even if the parent completes or the Serving generation changes. Each child execution has its own turn identity and retrieval budget; it never falls back to the parent's latest View. Wake is appended after shared context as a `dsh-mnemon` plugin message, without reinjecting or interpolating other plugins' context.
+
 ## WebUI and management
 
 Each Source owns its optional `./client` DSH module, pages, management operations and tests. It registers through the public Source-page SDK into the workspace's `mnemon.source.page` Slot. DSH still owns Client lifecycle and React rendering.
 
 The Host supplies a scoped management client and sanitized instance metadata, not raw RPC/Host Context or an LLM grant. Reads and confirmed revision-fenced mutations address one Source. Default workflow assistance (such as Document-to-Space archival) lives in Host coordination and uses those same public operations.
 
-Sidebar uses the DSH `shell.overlay` slot so it opens without a conversation; Buildin uses `conversation.view`. They mount mutually exclusively and share the same workspace and Source pages. No separate React root, fallback page registry or cloned business page exists.
+One shared workspace has two mutually exclusive DSH placements. Sidebar uses `shell.overlay`, opens without a conversation, and keeps its own workspace selection. The same DSH-owned subtree retains Source page state while another panel is active; the launcher coordinates with Taskboard/SSH and restores chat interaction on close. Builtin uses `conversation.view` and the owning session's storage scope for reads, writes and tasks, with no independent workspace picker. Both placements render the same Source-owned child Slots. No separate React root, fallback page registry or cloned business page exists.
 
 ## Compatibility and future evolution
 
-The default Starter retains configuration keys, storage selection, persisted formats, named tools and user workflows. This does **not** preserve private controllers, old `kernel/layers/provider-sdk` root exports or historical wrapper packages. The current public entry list is in [Extension development](./extensions.md).
+The default Starter retains storage selection, persisted formats, named tools and user workflows. `displayMode` selects `sidebar` (default) or `builtin`; the Host accepts legacy `buildin` and saves the canonical spelling through DSH's revision-fenced settings writer when writable. This changes one preference, not memory data or Core/Source contracts. Other configuration keys retain their meaning. This does **not** preserve private controllers, old `kernel/layers/provider-sdk` root exports or historical wrapper packages. The current public entry list is in [Extension development](./extensions.md).
 
 The RSI seam is deliberately small: create a candidate Source/Strategy artifact, test/replay it with fixed facts and requests, review its requested authority, then install/select it normally. Generations support verified replacement and drain; they are not an autonomous code-execution or promotion service. Cordis ownership/isolation is not a security sandbox. High-risk external actions require a separate authority boundary and are not authorized merely by being called “memory”.

@@ -17,7 +17,7 @@ You need:
 
 Regular semantic work prefers a provider named `spawn` with `toolFilter`, `persona`, and `depthLimit`. Mnemon supplies a schema-validated, one-run result tool instead of depending on the Provider's `outputSchema` path. Optional score-based background review additionally requires a provider named `fork` with `inheritsParentContext=true`. Missing `fork` does not block deterministic pages or regular manual actions.
 
-This checkout prepares the composable v0.5.0-beta.1 distribution; its Root and thirteen plugin artifacts have not been published as part of this work. The registry examples below describe the previously published v0.3.5 installation experience. Read the [beta scope and upgrade notes](./releases/v0.5.0-beta.1.md); to test this checkout, use the [development verification fixtures](./development.md). The pinned local baseline is DSH 0.1.1-rc.2 and Mnemon 0.2.3; some retained screenshots come from dsh-mnemon v0.2.0. DSH rc.2 uses `Promise.withResolvers` and the Node Zstd API, so Node 20 cannot boot its complete profile. CI separately covers the source-only DSH 0.1.2-alpha.1 profile. Back up and repeat verification against an isolated root before upgrading.
+This checkout prepares the composable v0.5.0-beta.1 distribution; its Root and thirteen plugin artifacts have not been published as part of this work. The registry examples below follow main's v0.4.3 release line. Read the [beta scope and upgrade notes](./releases/v0.5.0-beta.1.md); to test this checkout, use the [development verification fixtures](./development.md). The pinned DSH baseline is 0.1.1-rc.2; Native integration is also tested with Mnemon 0.2.5. Some retained screenshots come from dsh-mnemon v0.2.0. DSH rc.2 uses `Promise.withResolvers` and the Node Zstd API, so Node 20 cannot boot its complete profile. CI separately covers the source-only DSH 0.1.2-alpha.1 profile. Back up and repeat verification against an isolated root before upgrading.
 
 Install and verify the tested DSH release with:
 
@@ -139,11 +139,11 @@ With `storageScope=workspace`, Headless resolves `<invocation cwd>/.mnemon`; no 
 
 Open **Settings → Memory System**:
 
-[![Memory System settings: entry placement, memory scope, and layers](../assets/screenshots/settings-entry-placement.png)](../assets/screenshots/settings-entry-placement.png)
+[![Memory System settings: entry placement, memory scope and layers](../assets/screenshots/settings-entry-placement.png)](../assets/screenshots/settings-entry-placement.png)
 
 ### Workbench entry
 
-By default, open the dedicated workbench from Memory System in the DSH sidebar. Choose Builtin in Settings, or set `displayMode: builtin`, to show the same UI as a conversation tab instead. Save switches the entry live without changing stored data.
+By default, open the dedicated workbench from Memory System in the DSH sidebar. Choose Builtin in Settings, or set `displayMode: builtin`, to show the same Source pages as a conversation tab instead. Save switches the entry live without changing stored data.
 
 ### Storage location
 
@@ -159,7 +159,7 @@ Save initializes a candidate runtime graph before atomically switching the Host.
 
 A first installation should show Runtime, Documents, and Memory Spaces enabled. Each Source has one master switch. Enabling only permits on-demand use; it does not force recall on every turn. Disabling stops that Source's context, tools, background work, and data-plane Web/RPC together without deleting data. Its Sidebar tab is marked Off, and re-enabling restores the existing data. Keep all three defaults on for the first workflow.
 
-In Workspace mode, conversation Agents, tools, and lifecycle hooks use the current conversation's effective root. Independent task Agents launched by Sidebar use the inspected workspace explicitly, including when no main session is selected. Its header reports a mismatch and offers one-click alignment. Builtin automatically uses its own conversation's scope for reads, writes, and tasks, so it needs no storage-mode badge, workspace picker, or alignment control.
+In Workspace mode, conversation Agents, tools, and lifecycle hooks use the current conversation's effective root. Independent task Agents launched by Sidebar use the inspected workspace explicitly, including when no main session is selected. Its header reports a mismatch and offers one-click alignment. Builtin uses its owning conversation's scope for reads, writes and tasks, with no storage-mode badge, workspace picker or alignment control.
 
 ## 5. Open the Sidebar workbench
 

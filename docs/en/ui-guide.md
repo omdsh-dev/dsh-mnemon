@@ -2,7 +2,7 @@
 
 [简体中文](../zh-CN/ui-guide.md) | **English** | [Documentation hub](./README.md)
 
-This guide follows the retained default `sidebar` experience and a real user path. The composable Source architecture preserves the established interaction flow. Historical screenshots and the recording below come from a live v0.2.0 1600×900 WebUI; current composition controls are described in the Settings section. Names, counts, and content vary with local data.
+This guide follows the Sidebar-first experience and a real user path. The composable Source architecture preserves the established interaction flow; optional Builtin placement embeds the same pages in a conversation, not a separate layout. Historical screenshots and recordings come from a live v0.2.0 1600×900 WebUI. The [entry-placement settings screenshot](../assets/screenshots/settings-entry-placement.png) records the restored option in v0.4.2; current composition controls are described in the Settings section. Names, counts, and content vary with local data.
 
 ## Watch the complete interaction first
 
@@ -16,7 +16,7 @@ The roughly 55-second recording leaves a clear pause on page transitions, dialog
 
 The Memory System sidebar entry always opens its workspace, including after visiting Task Board or SSH. Clicking it again keeps the current page open; use Back to conversation to close it.
 
-With `displayMode: builtin`, open Memory System from the conversation's tabs instead. The Sidebar entry is absent. The header omits storage-mode and workspace-selection controls because the Host automatically maps that session to global, workspace, or custom storage. All pages and dialogs below are shared; conversation shortcuts open the matching tab. See [scope mapping](./configuration.md#entry-placement-displaymode-and-tabenabled).
+With `displayMode: builtin`, open Memory System from the conversation's tabs instead; the Sidebar entry is absent. The header omits storage-mode and workspace-selection controls because the Host uses the owning session's global, workspace or custom scope. All Source pages and dialogs below are shared, and conversation shortcuts open the matching tab. See [scope mapping](./configuration.md#entry-placement-displaymode-and-tabenabled).
 
 Primary pages remain **Status, Runtime, Documents, Memory Spaces**. Memory Spaces adds **Overview, Recall, Content, Entities**, with **Remember** and **Distillation strategy** at the top right.
 

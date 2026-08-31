@@ -36,11 +36,7 @@ Runtime、Documents、Memory Spaces 是独立 Source 插件；Strategy 将各实
 
 本分支准备 **v0.5.0-beta.1：View-based Memory 与 Source/Strategy 插件**。SDK 处于 beta，尚未承诺冻结扩展 ABI；默认用户配置与使用流程保持兼容。开发验证不会发布这些制品。参阅 [beta 范围与升级说明](./docs/zh-CN/releases/v0.5.0-beta.1.md)；v0.4 仍是独立的 Sidebar 收敛发行线。
 
-v0.4.4 同时支持新旧 DSH 会话投影接口，修复旧版宿主读取会话历史失败的问题，并保持新版宿主和已有投影检查点兼容。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.4.md)。
-
-v0.4.5 在已安装 Better Sidebar 时向其注册记忆系统，同时保留 DSH 普通 Sidebar 入口，并兼容两种客户端加载顺序。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.5.md)。
-
-v0.4.6 继续以 DSH 0.1.1-rc.2 作为稳定基线，并通过能力检测兼容 DSH 0.1.2-alpha.4 与 alpha.5 的 Session 事件快照接口。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.6.md)。
+v0.5 分支已纳入 main 的 v0.4.3 行为：默认使用 Sidebar，可选 `displayMode: builtin` 将同一组 Source 页面放入所属会话。旧 `buildin` 可识别并自动保存为 `builtin`，不改变记忆数据；折叠图标与侧栏相邻控件对齐，v0.4.1 的 settings store 与 ZIP 修复也继续保留。详见[最新稳定版说明](./docs/zh-CN/releases/v0.4.3.md)与[入口位置及范围映射](./docs/zh-CN/configuration.md#入口位置displaymode-与-tabenabled)。
 
 v0.4.7 将已发布的 DSH 0.1.2-rc.1 提升为稳定的 registry 基线，继续对其 alpha.5 前序版本执行源码验证，并保留上一条 0.1.1-rc.2 版本线的真实 WebUI 回归。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.7.md)。
 
@@ -220,7 +216,7 @@ dsh plugin --profile headless add "link:/absolute/path/to/dsh-mnemon"
 | 备份、更新或排障 | [运维指南](./docs/zh-CN/operations.md) |
 | 接入工具、命令或 RPC | [接口参考](./docs/zh-CN/interfaces.md) |
 | 开发 Source、Strategy 或 Memory Spaces Provider 插件 | [扩展开发指南](./docs/zh-CN/extensions.md) |
-| 查看本次升级 | [v0.3.5 发布说明](./docs/zh-CN/releases/v0.3.5.md) |
+| 查看稳定版升级 | [v0.4.3 发布说明](./docs/zh-CN/releases/v0.4.3.md) |
 
 完整目录见[文档中心](./docs/zh-CN/README.md)。
 

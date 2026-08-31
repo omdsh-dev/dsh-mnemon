@@ -75,7 +75,7 @@ sequenceDiagram
   Core->>Source: facts; project after Strategy selection
   Source-->>Core: fragments + opaque ReadGrant
   Core-->>Host: immutable View
-  Host->>LLM: bounded Wake + routes/actions
+  Host->>LLM: own plugin message: bounded Wake + routes/actions
   LLM->>Host: selected route/action + input
   Host->>Core: scope, authority and budget checks
   Core->>Source: query / mutate
@@ -90,16 +90,18 @@ sequenceDiagram
 
 每回合固定一个不可变 View。写入生成回执，后续回合读取新修订；并发父/子 Agent 不能借用另一回合的 grant。Source/Provider 故障保持局部、可观察；部分成功、失败、取消、已提交不会混为一谈。停用参与不删除数据。
 
+子 Agent 在派发时捕获委托 View 及运行代，保留至自身释放，不因父回合结束或 Serving 换代而改变。每次子执行具有独立回合身份与检索预算，不会回退到父 Agent 的最新 View。Wake 以 `dsh-mnemon` 自有插件消息追加在共享上下文之后，不重复注入或插值其他插件的上下文。
+
 ## WebUI 与管理面
 
 Source 自己拥有可选的 `./client` DSH 模块、页面、管理协议与测试，通过公开 Source 页面 SDK 注册到工作台的 `mnemon.source.page` Slot。Client 生命周期与 React 渲染仍由 DSH 管理。
 
 Host 交给页面的是限定实例的管理客户端与脱敏元信息，不是裸 RPC、Host Context 或 LLM grant。读取和带确认、修订栅栏的修改指向一个 Source。档案归档到记忆体等默认协作由 Host 编排，也只调用公开管理协议。
 
-Sidebar 使用 DSH `shell.overlay`，因此无会话也可打开；Buildin 使用 `conversation.view`。二者互斥挂载，共用工作台和 Source 页面，不创建第二个 React root、兜底页面注册表或复制业务页面。
+同一个共用工作台提供两个互斥的 DSH 入口。Sidebar 使用 `shell.overlay`，无会话也可打开，并保留自己的工作区选择；切到其他面板时，保留同一个 DSH 渲染子树及 Source 页面状态，入口负责与 Taskboard/SSH 协调，关闭后恢复聊天交互。Builtin 使用 `conversation.view`，读写和任务均使用所属会话的存储范围，不提供独立工作区选择器。两个入口渲染同一组 Source 自有子 Slot，不创建第二个 React root、兜底页面注册表或复制业务页面。
 
 ## 使用兼容与未来演进
 
-默认 Starter 保留配置键、存储选择、持久格式、具名工具及使用流程；这**不意味着**保留私有控制器、旧根包 `kernel/layers/provider-sdk` 入口和历史包装包。当前公开入口见[扩展开发](./extensions.md)。
+默认 Starter 保留存储选择、持久格式、具名工具及使用流程。`displayMode` 选择默认的 `sidebar` 或 `builtin`；Host 接受旧 `buildin`，并在配置可写时通过 DSH 带修订栅栏的设置写入器保存规范拼写。这只修改一项偏好，不改变记忆数据或 Core/Source 契约；其他配置键保留原有语义。这**不意味着**保留私有控制器、旧根包 `kernel/layers/provider-sdk` 入口和历史包装包。当前公开入口见[扩展开发](./extensions.md)。
 
 RSI 的边界保持简洁：产出候选 Source/Strategy 制品，用固定 facts/request 测试与回放，审查权限，再按正常装配方式安装和选择。运行代支持验证后的替换与排空，不是自动执行生成代码或自动晋升服务。Cordis 的归属/隔离并非安全沙箱；高风险外部操作仍需单独的授权边界，不能以“记忆”之名自动获得权限。

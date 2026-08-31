@@ -80,6 +80,12 @@ pnpm e2e:serve
 
 检查无会话 Sidebar、所有一级/二级页面、Runtime 增改删与清空分支、Documents 创建/搜索/读取、Provider 设置与发现、激活、故障态、取消弹窗、存入记忆、布局切换、locale、返回聊天后交互恢复。读写/删除使用临时 Provider 或受控夹具，不能对个人记忆做实验。
 
+另检查 `displayMode` 实时切换：Sidebar 与 Builtin 不得同时挂载，二者使用同一组 Source 页面。Builtin 的全局/工作区/自定义范围读写及任务遵循所属会话，隐藏范围控件，切换会话时清理旧数据与编辑器。验证旧 `buildin` 规范化，以及原生 Sidebar 皮肤和已支持布局插件下的折叠图标。
+
+[2026-08-31 main rebase 验证记录](../pr-assets/main-rebase-20260831/README.md)列明精确 revision、完整测试、独立制品和真实双入口验证及其限制。
+
+已发布 Taskboard/SSH 组合、CLI 命令名解析、安装顺序与受控面板通知丢失，使用独立的 [npm WebUI 回归夹具](./testing-npm-regressions.md)。夹具同时支持当前本地 Starter 与十三个插件的组合，以及已发布对照包。
+
 DSH rc.2 对 Bundle 变化的 Client 卸载并不完整；修改 Client 包/locale 注册后刷新页面。Mnemon 普通设置仍实时生效。区分上游 Profile/传输告警与 Mnemon 故障，不隐藏控制台。
 
 ## DSH 源码验证
@@ -88,11 +94,11 @@ CI 还构建源码版 `dsh-v0.1.2-alpha.1`。已有 Harness 构建目录时：
 
 ```sh
 DSH_SOURCE_ROOT=/absolute/path/to/deepseek-harness pnpm dsh:link-source
-pnpm verify
+pnpm_config_verify_deps_before_run=false pnpm verify
 pnpm dsh:restore-registry
 ```
 
-Harness 先运行自己的 `pnpm install --frozen-lockfile && pnpm build:lib`。链接仅更改生成的 `node_modules`，不改提交的依赖版本。rc.2/alpha RPC 与服务协议有专项测试；CI 有 alpha 任务，不代表当前本地运行已经使用 alpha。
+Harness 先运行自己的 `pnpm install --frozen-lockfile && pnpm build:lib`。链接仅更改生成的 `node_modules`，不改提交的依赖版本。本次调用关闭 pnpm 的运行前依赖验证，避免嵌套脚本自动恢复 registry 链接。rc.2/alpha RPC 与服务协议有专项测试；CI 有 alpha 任务，不代表当前本地运行已经使用 alpha。
 
 ## 成组 beta 发布
 

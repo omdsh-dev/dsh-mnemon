@@ -21,7 +21,7 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 | Choose, configure, or compare a Memory Space provider | [Long-term memory providers](./memory-providers.md) |
 | Share durable memory between DSH and other Mnemon-enabled agents | [Project overview: Cross-agent sharing](./project-overview.md#cross-agent-sharing-boundary) · [Configuration: Sharing scope](./configuration.md#choose-a-cross-agent-sharing-scope) |
 | Learn when injection, recall, remembering, and archiving happen | [Lifecycle and workflows](./workflows.md) |
-| Configure global / workspace / custom storage, entry placement, and visibility | [Configuration reference](./configuration.md) |
+| Configure global / workspace / custom storage, entry placement and visibility | [Configuration reference](./configuration.md) |
 | Understand workspace inspection versus the Agent's effective directory | [UI guide: Workspace mode](./ui-guide.md#workspace-mode-separating-inspection-from-execution) |
 | Check or update Mnemon and dsh-mnemon | [Operations: Version checks and updates](./operations.md#version-checks-and-updates) |
 | Back up, restore, or migrate the complete memory root | [Operations: Backup and recovery](./operations.md#backup-and-recovery) |
@@ -31,7 +31,8 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 | Understand Host, workers, control plane, and data plane | [Architecture](./architecture.md) |
 | Build a Source, Strategy or Memory Spaces Provider plugin | [Building Memory Extensions](./extensions.md) |
 | Modify code, screenshots, tests, or releases | [Development and verification](./development.md) |
-| Upgrade from the previous release | [v0.4.7 release notes](./releases/v0.4.7.md) |
+| Upgrade from the previous stable release | [v0.4.3 release notes](./releases/v0.4.3.md) |
+| Try the View-based plugin beta | [v0.5.0-beta.1 scope and upgrade notes](./releases/v0.5.0-beta.1.md) |
 | See planned work | [Roadmap](./roadmap.md) |
 
 ## Core terms
@@ -49,7 +50,7 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 
 ## Documentation boundaries
 
-- User documentation targets the Sidebar-default experience and composable View architecture while covering the compatible Buildin presentation.
+- User documentation targets the Sidebar-first experience, optional shared Builtin placement and composable View architecture; legacy `buildin` preferences are normalized without manual cleanup.
 - Architecture diagrams describe stable execution boundaries, not live monitoring. Use Status for current counts and versions.
 - RPC is an internal Host-to-client protocol, not a promised stable external API.
 - There is no formal fixed DSH / Mnemon version matrix yet. Back up and validate in an isolated root before upgrading.

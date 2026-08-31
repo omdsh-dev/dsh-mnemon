@@ -80,6 +80,12 @@ The fixture prints a temporary workspace and loopback URL. It isolates `DSH_HOME
 
 Check Sidebar without a session, all primary/secondary tabs, Runtime add/edit/remove and branch clear, Documents create/search/read, Provider settings/discovery, activation, error states, dialog cancellation, Save-to-memory, layout switching, locale and restoration of chat interaction. Use a disposable real Provider or controlled fixture for write/read/forget; never test against personal memory.
 
+Also switch `displayMode` live: Sidebar and Builtin must never mount together. Both use the same Source pages; Builtin follows its owning session for global/workspace/custom reads, writes and tasks, hides scope controls, and clears stale data and editors when the session changes. Check legacy `buildin` normalization and the collapsed icon under the native Sidebar skin as well as supported layout plugins.
+
+The [2026-08-31 main-rebase verification](../pr-assets/main-rebase-20260831/README.md) records the exact revisions, full suite, independent artifacts and real shared-placement checks, including their limits.
+
+For the released Taskboard/SSH combination, command-name CLI lookup, install ordering and controlled panel-event loss, use the separate [npm WebUI regression harness](./testing-npm-regressions.md). It supports the current local Starter plus all thirteen plugins as well as published control packages.
+
 DSH rc.2 does not fully unload every Client module on bundle changes. Refresh after Client package/locale registration changes; ordinary Mnemon settings still apply live. Separate upstream profile/transport warnings from Mnemon failures rather than hiding the console.
 
 ## DSH source verification
@@ -88,11 +94,11 @@ CI also builds the source-only `dsh-v0.1.2-alpha.1` tag. To repeat with a built 
 
 ```sh
 DSH_SOURCE_ROOT=/absolute/path/to/deepseek-harness pnpm dsh:link-source
-pnpm verify
+pnpm_config_verify_deps_before_run=false pnpm verify
 pnpm dsh:restore-registry
 ```
 
-Build Harness with its own `pnpm install --frozen-lockfile && pnpm build:lib` first. Linking changes generated `node_modules` only, not committed dependency versions. The rc.2 and alpha RPC/service contracts have dedicated tests; an alpha CI configuration is not a claim that a current local run used alpha.
+Build Harness with its own `pnpm install --frozen-lockfile && pnpm build:lib` first. Linking changes generated `node_modules` only, not committed dependency versions. Disable pnpm's pre-run dependency verification for this invocation so nested scripts do not restore the registry links. The rc.2 and alpha RPC/service contracts have dedicated tests; an alpha CI configuration is not a claim that a current local run used alpha.
 
 ## Coordinated beta releases
 

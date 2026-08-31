@@ -31,7 +31,8 @@
 | 理解 Host、worker、控制面与数据面 | [架构设计](./architecture.md) |
 | 开发 Source、Strategy 或 Memory Spaces Provider 插件 | [记忆扩展开发](./extensions.md) |
 | 修改代码、截图、测试或发布 | [开发与验证](./development.md) |
-| 从上一版本升级 | [v0.4.7 发布说明](./releases/v0.4.7.md) |
+| 从上一稳定版本升级 | [v0.4.3 发布说明](./releases/v0.4.3.md) |
+| 尝试 View-based 插件 beta | [v0.5.0-beta.1 范围与升级说明](./releases/v0.5.0-beta.1.md) |
 | 查看下一阶段计划 | [Roadmap](./roadmap.md) |
 
 ## 核心术语
@@ -49,7 +50,7 @@
 
 ## 文档边界
 
-- 用户文档以 Sidebar 默认体验和可组合 View 架构为主，同时说明保持使用兼容的 Buildin 展示形态。
+- 用户文档以 Sidebar 优先体验、可选的共用 Builtin 入口和可组合 View 架构为主；旧 `buildin` 偏好会规范化，无需手动清理。
 - 架构图表达稳定执行边界，不是实时监控面板；实时数量与版本以“状态”页为准。
 - RPC 是 Host 与插件客户端之间的内部协议，不承诺稳定外部 API。
 - 当前没有正式固定的 DSH / Mnemon 版本矩阵；升级前应备份并在隔离目录验证。

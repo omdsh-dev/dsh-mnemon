@@ -2,7 +2,7 @@
 
 **简体中文** | [English](../en/ui-guide.md) | [文档中心](./README.md)
 
-本指南按保留的默认 `sidebar` 体验和真实用户路径编排。Composable Source 架构保持既有交互流程；下方历史截图和录制来自 v0.2.0 的 1600×900 实机页面，当前组合控制在“设置”部分说明。名称、数量和内容会随本地数据变化。
+本指南按 Sidebar 优先体验和真实用户路径编排。Composable Source 架构保持既有交互流程；可选 Builtin 入口将同一组页面放入会话，不另建布局。历史截图和录制来自 v0.2.0 的 1600×900 实机页面；[入口位置设置截图](../assets/screenshots/settings-entry-placement.png)记录 v0.4.2 恢复的选项，当前组合控制在“设置”部分说明。名称、数量和内容会随本地数据变化。
 
 ## 先看一次完整操作
 
@@ -16,7 +16,7 @@
 
 侧栏“记忆系统”始终打开工作台，从任务看板或 SSH 返回时也一样。重复点击保留当前页面；关闭工作台请使用“返回会话”。
 
-设置 `displayMode: builtin` 后，改从会话的标签页打开“记忆系统”，侧栏入口不再出现。Host 自动将该会话映射到全局、工作区或自定义存储，所以页眉不显示存储模式和工作区选择控件。下述页面与弹窗全部共用，对话快捷入口也会打开对应标签页。详见[范围映射](./configuration.md#入口位置displaymode-与-tabenabled)。
+使用 `displayMode: builtin` 时，从会话 Tab 打开“记忆系统”，Sidebar 不再显示入口。Host 使用所属会话的全局、工作区或自定义范围，因此顶部不显示存储模式和工作区选择器。以下 Source 页面与弹窗全部共用，对话快捷入口会打开匹配的 Tab。详见[范围映射](./configuration.md#入口位置displaymode-与-tabenabled)。
 
 一级页始终按**状态、运行时、档案、记忆体**排列。记忆体内部再分为**概览、检索、内容、实体**，右上角保留“沉淀记忆”和“沉淀策略”。
 
@@ -213,6 +213,6 @@ Mnemon 自己的自定义目录、备份与迁移留在 Mnemon 专属折叠区�
 - 记忆体开关只决定它是否参与 dsh-mnemon 读取路由，不等于 Mnemon CLI 默认 Store。
 - Mnemon Native 物理删除需要二次确认；三方记忆体使用“断开”，不删除 Provider 数据。
 - 页面按区域异步加载；局部错误不阻塞其他区域，也不会堆叠多个转圈。
-- 工作台默认从 Sidebar 打开，Builtin 将相同界面放进所属会话；本回合记忆和存入记忆仍作为对话内快捷入口。
+- 工作台默认从 Sidebar 打开，Builtin 将同一界面放入所属会话；本回合记忆和存入记忆仍作为对话内快捷入口。
 
 下一步：[能力地图](./capabilities.md) · [快速开始](./getting-started.md) · [Provider 指南](./memory-providers.md) · [配置参考](./configuration.md)
