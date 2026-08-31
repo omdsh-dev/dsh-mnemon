@@ -612,6 +612,28 @@ describe('MnemonService', () => {
     ]), expect.anything())
   })
 
+  it('degrades the readonly probe when the CLI hits the 0.2.6 readonly OOM regression', async () => {
+    let calls = 0
+    const process = vi.fn<ProcessRunner>(async (_command, args) => {
+      calls += 1
+      if (args.includes('--readonly')) throw new Error('mnemon recall exited 1: Error: query insights: SQL logic error: out of memory (1)')
+      return { stdout: JSON.stringify({ results: [{ id: 'sqlite', content: 'SQLite for local-first storage.', category: 'decision' }] }), stderr: '', exitCode: 0 }
+    })
+    const config = resolveConfig({ cliPath: '/fake/mnemon', dataDir: populatedDataDir(), store: 'work' })
+    const runner = createRunner(config, process)
+    const service = new MnemonService(runner, config, new MemoryBodyRegistry(runner, true))
+
+    await expect(service.metadataSample('work')).resolves.toMatchObject({
+      memoryBodyId: 'work',
+      providerId: 'mnemon-native',
+      method: 'native-basic',
+      evidence: [{ content: 'SQLite for local-first storage.' }],
+    })
+    expect(calls).toBe(2)
+    expect(process.mock.calls[0]).toEqual(['/fake/mnemon', expect.arrayContaining(['--readonly', 'recall', '', '--basic']), expect.anything()])
+    expect(process.mock.calls[1]).toEqual(['/fake/mnemon', expect.arrayContaining(['recall', '', '--basic']), expect.anything()])
+  })
+
   it('uses a single native search request when Provider browse would fan out', async () => {
     const { service } = fixture()
     const provider = {

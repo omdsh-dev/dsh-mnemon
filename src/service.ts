@@ -1272,20 +1272,35 @@ export class MnemonService {
     }
   }
 
+  /**
+   * Read-only recall probe with degradation for the mnemon CLI 0.2.6
+   * regression in which `--readonly recall` fails with a SQLite
+   * "out of memory (1)" error on every query (see mnemon-dev/mnemon#123).
+   *
+   * The readonly snapshot stays the preferred contract (it does not
+   * increment access counters); when the CLI reports that known failure we
+   * retry once without the snapshot so browse/metadata probes keep working
+   * on affected CLI releases.
+   */
+  private async readonlyRecall(args: string[], options: { store: string; signal?: AbortSignal }): Promise<JsonValue> {
+    try {
+      return await this.runner.runJson(['--readonly', ...args], options)
+    } catch (error) {
+      if (!(error instanceof Error) || !/SQL logic error[^\n]*out of memory/i.test(error.message)) throw error
+      return await this.runner.runJson(args, options)
+    }
+  }
+
   private async allNativeInsights(body: MemoryBody, signal?: AbortSignal, readonly = false): Promise<Insight[]> {
-    const payload = await this.runner.runJson([
-      ...(readonly ? ['--readonly'] : []),
-      'recall', '', '--basic', '--limit', '100000',
-    ], { ...(signal === undefined ? {} : { signal }), store: body.id })
+    const args = ['recall', '', '--basic', '--limit', '100000']
+    const options = { ...(signal === undefined ? {} : { signal }), store: body.id }
+    const payload = readonly ? await this.readonlyRecall(args, options) : await this.runner.runJson(args, options)
     const values = Array.isArray(payload) ? payload : Array.isArray(record(payload)?.results) ? record(payload)!.results as JsonValue[] : []
     return values.map(normalizeInsight).filter((entry): entry is Insight => entry !== undefined)
   }
 
   private async nativeMetadataSample(body: MemoryBody, limit: number, signal?: AbortSignal): Promise<Insight[]> {
-    const payload = await this.runner.runJson([
-      '--readonly',
-      'recall', '', '--basic', '--limit', String(limit),
-    ], { ...(signal === undefined ? {} : { signal }), store: body.id })
+    const payload = await this.readonlyRecall(['recall', '', '--basic', '--limit', String(limit)], { ...(signal === undefined ? {} : { signal }), store: body.id })
     const wrapper = record(payload)
     const values = Array.isArray(payload) ? payload : Array.isArray(wrapper?.results) ? wrapper.results : []
     return values.map(normalizeInsight).filter((entry): entry is Insight => entry !== undefined)
