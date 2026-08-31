@@ -25,6 +25,7 @@ describe('public plugin SDK boundary', () => {
     expect(sdk.installMemory).toBeTypeOf('function')
     expect(sdk.defineMemorySource).toBeTypeOf('function')
     expect(sdk.defineMemoryStrategy).toBeTypeOf('function')
+    expect(sdk.defineMemoryStrategyExtension).toBeTypeOf('function')
     for (const name of ['MemoryRuntime', 'MemoryContributionRegistry', 'MemoryGenerationHost', 'ComposableMemoryTurnManager']) {
       expect(name in sdk).toBe(false)
     }

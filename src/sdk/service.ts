@@ -1,9 +1,10 @@
-import type { MemorySourceDefinition, MemoryStrategyDefinition } from '../core/contracts/index.ts'
+import type { MemorySourceDefinition, MemoryStrategyDefinition, MemoryStrategyExtensionDefinition } from '../core/contracts/index.ts'
 
 export interface MemoryInstallContribution {
   /** One package may supply either or both roles; installation/disposal is atomic. */
   sources?: readonly MemorySourceDefinition[]
   strategies?: readonly MemoryStrategyDefinition[]
+  strategyExtensions?: readonly MemoryStrategyExtensionDefinition[]
 }
 
 export interface InstallMemoryOptions {

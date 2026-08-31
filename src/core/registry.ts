@@ -1,6 +1,7 @@
 import type {
   InstalledMemorySource,
   InstalledMemoryStrategy,
+  InstalledMemoryStrategyExtension,
   MemoryContributionSnapshot,
 } from './contributions.ts'
 import { captureMemoryContributionSnapshot } from './composition.ts'
@@ -8,6 +9,7 @@ import { captureMemoryContributionSnapshot } from './composition.ts'
 export interface MemoryContributionInstall {
   sources?: readonly InstalledMemorySource[]
   strategies?: readonly InstalledMemoryStrategy[]
+  strategyExtensions?: readonly InstalledMemoryStrategyExtension[]
 }
 
 export type MemoryContributionListener = (snapshot: MemoryContributionSnapshot) => void
@@ -21,28 +23,36 @@ export type MemoryContributionListener = (snapshot: MemoryContributionSnapshot) 
 export class MemoryContributionRegistry {
   private readonly sources = new Map<string, InstalledMemorySource>()
   private readonly strategies = new Map<string, InstalledMemoryStrategy>()
+  private readonly extensions = new Map<string, InstalledMemoryStrategyExtension>()
   private readonly listeners = new Set<MemoryContributionListener>()
   private revision = 0
 
   install(value: MemoryContributionInstall): () => void {
     const incomingSources = [...(value.sources ?? [])]
     const incomingStrategies = [...(value.strategies ?? [])]
-    if (incomingSources.length + incomingStrategies.length === 0) throw new Error('installMemory requires one Source or Strategy contribution')
+    const incomingExtensions = [...(value.strategyExtensions ?? [])]
+    if (incomingSources.length + incomingStrategies.length + incomingExtensions.length === 0) throw new Error('installMemory requires one Source, Strategy or Strategy extension contribution')
     for (const source of incomingSources) {
       if (this.sources.has(source.instanceKey)) throw new Error(`memory Source instance is already installed: ${source.instanceKey}`)
     }
     for (const strategy of incomingStrategies) {
       if (this.strategies.has(strategy.instanceKey)) throw new Error(`memory Strategy instance is already installed: ${strategy.instanceKey}`)
     }
+    for (const extension of incomingExtensions) {
+      if (this.extensions.has(extension.instanceKey)) throw new Error(`memory Strategy extension instance is already installed: ${extension.instanceKey}`)
+    }
     const candidate = captureMemoryContributionSnapshot({
       revision: this.revision + 1,
       sources: [...this.sources.values(), ...incomingSources],
       strategies: [...this.strategies.values(), ...incomingStrategies],
+      strategyExtensions: [...this.extensions.values(), ...incomingExtensions],
     })
     const capturedSources = candidate.sources.filter(source => incomingSources.some(incoming => incoming.instanceKey === source.instanceKey))
     const capturedStrategies = candidate.strategies.filter(strategy => incomingStrategies.some(incoming => incoming.instanceKey === strategy.instanceKey))
+    const capturedExtensions = (candidate.strategyExtensions ?? []).filter(extension => incomingExtensions.some(incoming => incoming.instanceKey === extension.instanceKey))
     for (const source of capturedSources) this.sources.set(source.instanceKey, source)
     for (const strategy of capturedStrategies) this.strategies.set(strategy.instanceKey, strategy)
+    for (const extension of capturedExtensions) this.extensions.set(extension.instanceKey, extension)
     this.revision = candidate.revision
     this.notify(candidate)
 
@@ -61,6 +71,11 @@ export class MemoryContributionRegistry {
         this.strategies.delete(strategy.instanceKey)
         changed = true
       }
+      for (const extension of capturedExtensions) {
+        if (this.extensions.get(extension.instanceKey) !== extension) continue
+        this.extensions.delete(extension.instanceKey)
+        changed = true
+      }
       if (!changed) return
       this.revision += 1
       this.notify(this.snapshot())
@@ -72,6 +87,7 @@ export class MemoryContributionRegistry {
       revision: this.revision,
       sources: [...this.sources.values()],
       strategies: [...this.strategies.values()],
+      strategyExtensions: [...this.extensions.values()],
     })
   }
 

@@ -7,7 +7,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const excluded = new Set(['./client', './package.json'])
 const privateNames = new Set([
   'MemoryRuntime', 'MemoryContributionRegistry', 'MemoryContributionSnapshot',
-  'InstalledMemorySource', 'InstalledMemoryStrategy', 'MemoryGenerationAttachment',
+  'InstalledMemorySource', 'InstalledMemoryStrategy', 'InstalledMemoryStrategyExtension', 'MemoryGenerationAttachment',
   'MemoryGenerationHost', 'MemoryGenerationLease', 'MemoryCompositionGeneration',
   'CompileMemoryGenerationOptions', 'ComposableMemoryTurnManager', 'provideMemoryRuntime',
   'PrivateMemorySpaceProviderHost', 'MemorySpaceProviderSnapshot', 'MemorySpaceProviderSnapshotEntry',

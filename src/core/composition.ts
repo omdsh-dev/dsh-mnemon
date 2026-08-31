@@ -19,6 +19,7 @@ import type {
   MemorySourceRuntime,
   MemoryStrategyTurn,
   MemoryStrategyRead,
+  MemoryStrategyContribution,
   MemoryViewBudget,
   MemoryViewContribution,
   MemoryViewFragment,
@@ -28,13 +29,13 @@ import type {
   MemoryViewSpec,
 } from "./contracts/index.ts"
 import { DEFAULT_MEMORY_VIEW_BUDGET } from './contracts/index.ts'
-import type { InstalledMemorySource, InstalledMemoryStrategy, MemoryContributionSnapshot } from './contributions.ts'
-import { canonicalMemoryJson, deepFreeze, defineMemorySource, defineMemoryStrategy, id, jsonClone, positiveInteger, requiredText, uniqueIds, validateCapabilities, validateProvenance } from './definitions.ts'
+import type { InstalledMemorySource, InstalledMemoryStrategy, InstalledMemoryStrategyExtension, MemoryContributionSnapshot } from './contributions.ts'
+import { canonicalMemoryJson, deepFreeze, defineMemorySource, defineMemoryStrategy, defineMemoryStrategyExtension, id, jsonClone, positiveInteger, requiredText, uniqueIds, validateCapabilities, validateProvenance } from './definitions.ts'
 import { readSource, SourceReadFailure } from './source-calls.ts'
 
-const INSTANCE_KEY = /^(?:source|strategy):[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,299}$/u
+const INSTANCE_KEY = /^(?:source|strategy|strategy-extension):[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,299}$/u
 
-function instanceKey(value: unknown, kind: 'source' | 'strategy'): string {
+function instanceKey(value: unknown, kind: 'source' | 'strategy' | 'strategy-extension'): string {
   const normalized = requiredText(value, `${kind} instanceKey`, 300)
   if (!INSTANCE_KEY.test(normalized) || !normalized.startsWith(`${kind}:`)) {
     throw new Error(`${kind} instanceKey must start with ${kind}: and contain only stable identifier characters`)
@@ -69,16 +70,38 @@ function captureStrategy(strategy: InstalledMemoryStrategy): InstalledMemoryStra
   })
 }
 
+function captureExtension(extension: InstalledMemoryStrategyExtension): InstalledMemoryStrategyExtension {
+  const definition = defineMemoryStrategyExtension(extension.definition)
+  return Object.freeze({
+    kind: 'strategy-extension',
+    instanceKey: instanceKey(extension.instanceKey, 'strategy-extension'),
+    provenance: validateProvenance(extension.provenance, definition.manifest.packageName),
+    definition,
+  })
+}
+
 export function captureMemoryContributionSnapshot(snapshot: MemoryContributionSnapshot): MemoryContributionSnapshot {
   if (!Number.isInteger(snapshot.revision) || snapshot.revision < 0) throw new Error('memory contribution revision must be a non-negative integer')
   const sources = snapshot.sources.map(captureSource)
   const strategies = snapshot.strategies.map(captureStrategy)
+  const extensions = (snapshot.strategyExtensions ?? []).map(captureExtension)
+    .sort((a, b) => a.instanceKey.localeCompare(b.instanceKey))
+  const slots = new Map<string, string>()
+  for (const extension of extensions) {
+    const manifest = extension.definition.manifest
+    const slot = `${manifest.strategyTypeId}/${manifest.slot}`
+    const occupied = slots.get(slot)
+    if (occupied !== undefined) throw new Error(`memory Strategy extension slot conflict: ${slot} (${occupied}, ${extension.instanceKey})`)
+    slots.set(slot, extension.instanceKey)
+  }
   const keys = new Set<string>()
-  for (const contribution of [...sources, ...strategies]) {
+  for (const contribution of [...sources, ...strategies, ...extensions]) {
     if (keys.has(contribution.instanceKey)) throw new Error(`memory contribution instanceKey is duplicated: ${contribution.instanceKey}`)
     keys.add(contribution.instanceKey)
   }
-  return Object.freeze({ revision: snapshot.revision, sources: Object.freeze(sources) as unknown as InstalledMemorySource[], strategies: Object.freeze(strategies) as unknown as InstalledMemoryStrategy[] })
+  return Object.freeze({ revision: snapshot.revision, sources: Object.freeze(sources) as unknown as InstalledMemorySource[], strategies: Object.freeze(strategies) as unknown as InstalledMemoryStrategy[],
+    ...(extensions.length === 0 ? {} : { strategyExtensions: Object.freeze(extensions) as unknown as InstalledMemoryStrategyExtension[] }),
+  })
 }
 
 export interface CompileMemoryGenerationOptions {
@@ -345,6 +368,7 @@ export class MemoryCompositionGeneration {
   readonly id: string
   readonly report: MemoryCompositionEvaluationReport
   readonly strategy: InstalledMemoryStrategy
+  private readonly extensions: readonly InstalledMemoryStrategyExtension[]
   private readonly sources: ReadonlyMap<string, RuntimeSource>
   private readonly permissions = new Map<string, readonly MemoryCapability[]>()
   private readonly now: () => Date
@@ -358,6 +382,12 @@ export class MemoryCompositionGeneration {
     if (snapshot.sources.length === 0) throw new Error('memory composition requires at least one Source')
     if (snapshot.strategies.length === 0) throw new Error('memory composition requires a Strategy')
     this.strategy = selectStrategy(snapshot.strategies, options)
+    this.extensions = (snapshot.strategyExtensions ?? []).filter(extension => extension.definition.manifest.strategyTypeId === this.strategy.definition.manifest.typeId)
+    for (const extension of this.extensions) {
+      if (!this.strategy.definition.manifest.extensionSlots?.includes(extension.definition.manifest.slot)) {
+        throw new Error(`memory Strategy does not support extension slot: ${extension.definition.manifest.slot} (${extension.instanceKey})`)
+      }
+    }
     this.now = options.now ?? (() => new Date())
     this.sourceTimeoutMs = positiveInteger(options.sourceTimeoutMs ?? 10_000, 'memory Source timeoutMs', 300_000)
     const configurations = new Map<string, Readonly<Record<string, MemoryJsonValue>>>()
@@ -391,6 +421,9 @@ export class MemoryCompositionGeneration {
         manifest: this.strategy.definition.manifest,
         provenance: this.strategy.provenance,
       },
+      ...(this.extensions.length === 0 ? {} : { strategyExtensions: this.extensions.map(extension => ({
+        instanceKey: extension.instanceKey, manifest: extension.definition.manifest, provenance: extension.provenance,
+      })) }),
       sources: snapshot.sources.map(source => ({
         instanceKey: source.instanceKey,
         manifest: source.definition.manifest,
@@ -406,8 +439,12 @@ export class MemoryCompositionGeneration {
       contributionRevision: snapshot.revision,
       generationId: this.id,
       strategyInstanceKey: this.strategy.instanceKey,
+      ...(this.extensions.length === 0 ? {} : { strategyExtensionInstanceKeys: this.extensions.map(extension => extension.instanceKey) }),
       sourceInstanceKeys: [...this.sources.keys()],
-      diagnostics: [],
+      diagnostics: (snapshot.strategyExtensions ?? []).filter(extension => !this.extensions.includes(extension)).map(extension => ({
+        code: 'strategy-extension-inactive', contributionInstanceKey: extension.instanceKey,
+        message: `Strategy extension targets ${extension.definition.manifest.strategyTypeId}; selected Strategy is ${this.strategy.definition.manifest.typeId}.`,
+      })),
     })
   }
 
@@ -466,8 +503,13 @@ export class MemoryCompositionGeneration {
     signal.throwIfAborted()
     const facts = new Map(entries)
     const factsList = deepFreeze([...facts.values()].map(value => jsonClone(value, 'memory Source facts')))
-    const proposed = this.strategy.definition.compose(request, factsList)
-    const replayed = this.strategy.definition.compose(request, factsList)
+    const contributions = this.strategyContributions(request, factsList)
+    const replayedContributions = this.strategyContributions(request, factsList)
+    if (canonicalMemoryJson(contributions) !== canonicalMemoryJson(replayedContributions)) {
+      throw new Error(`memory Strategy extensions are not deterministic: ${this.extensions.map(extension => extension.instanceKey).join(', ')}`)
+    }
+    const proposed = this.strategy.definition.compose(request, factsList, contributions)
+    const replayed = this.strategy.definition.compose(request, factsList, replayedContributions)
     if (canonicalMemoryJson(proposed, 'memory ViewSpec') !== canonicalMemoryJson(replayed, 'replayed memory ViewSpec')) {
       throw new Error(`memory Strategy is not deterministic: ${this.strategy.instanceKey}`)
     }
@@ -524,6 +566,7 @@ export class MemoryCompositionGeneration {
       runtimeGeneration: this.id,
       strategyInstanceKey: this.strategy.instanceKey,
       strategyTypeId: this.strategy.definition.manifest.typeId,
+      ...(contributions.length === 0 ? {} : { strategyExtensions: contributions.map(({ value, ...identity }) => ({ ...identity, digest: digest(value) })) }),
       scope: request.scope,
       projection,
       routes,
@@ -537,6 +580,15 @@ export class MemoryCompositionGeneration {
     }
     const viewDigest = digest(body)
     return deepFreeze({ id: `view:${viewDigest}`, digest: viewDigest, createdAt: this.now().toISOString(), ...body })
+  }
+
+  private strategyContributions(request: MemoryViewRequest, sources: readonly MemoryAvailableSource[]): readonly MemoryStrategyContribution[] {
+    return deepFreeze(this.extensions.map(extension => {
+      const label = `memory Strategy extension ${extension.instanceKey}`
+      const value = jsonClone(extension.definition.contribute(request, sources), label)
+      if (canonicalMemoryJson(value, label).length > 64_000) throw new Error(`${label} exceeds 64000 characters`)
+      return { instanceKey: extension.instanceKey, typeId: extension.definition.manifest.typeId, slot: extension.definition.manifest.slot, value }
+    }))
   }
 
   /**

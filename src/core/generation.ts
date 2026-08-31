@@ -68,7 +68,7 @@ export class MemoryGenerationHost {
       if (snapshot.sources.length === 0) diagnostics.push({ code: 'missing-source', message: 'No Memory Source contribution is installed.' })
       if (snapshot.strategies.length === 0) diagnostics.push({ code: 'missing-strategy', message: 'No Memory Strategy contribution is installed.' })
       this.evaluation = report('incomplete', snapshot, diagnostics)
-      if (this.removesServingContribution(snapshot)) this.retireServing()
+      if (this.removesServingContribution(snapshot) || this.removesServingExtension(snapshot)) this.retireServing()
       return this.evaluation
     }
 
@@ -89,7 +89,7 @@ export class MemoryGenerationHost {
         code: 'composition-rejected',
         message: error instanceof Error ? error.message : String(error),
       }])
-      if (this.removesServingContribution(snapshot)) this.retireServing()
+      if (this.removesServingContribution(snapshot) || this.removesServingExtension(snapshot)) this.retireServing()
       return this.evaluation
     }
 
@@ -184,6 +184,12 @@ export class MemoryGenerationHost {
       ...(this.serving.generation.report.strategyInstanceKey === undefined ? [] : [this.serving.generation.report.strategyInstanceKey]),
     ]
     return required.some(key => !available.has(key))
+  }
+
+  /** A failed replacement must not keep applying an explicitly disabled policy. */
+  private removesServingExtension(snapshot: MemoryContributionSnapshot): boolean {
+    const available = new Set((snapshot.strategyExtensions ?? []).map(extension => extension.instanceKey))
+    return this.serving?.generation.report.strategyExtensionInstanceKeys?.some(key => !available.has(key)) ?? false
   }
 
   private retireServing(): void {

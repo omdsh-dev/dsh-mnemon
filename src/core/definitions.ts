@@ -1,4 +1,4 @@
-import type { MemoryPackageProvenance, MemorySourceActionManifest, MemorySourceDefinition, MemorySourceManifest, MemorySourceRouteManifest, MemoryStrategyDefinition } from './contracts/index.ts'
+import type { MemoryPackageProvenance, MemorySourceActionManifest, MemorySourceDefinition, MemorySourceManifest, MemorySourceRouteManifest, MemoryStrategyDefinition, MemoryStrategyExtensionDefinition } from './contracts/index.ts'
 import { COMPOSABLE_MEMORY_API_VERSION, MEMORY_CAPABILITIES } from './contracts/index.ts'
 
 const ID = /^[a-z][a-z0-9-]{0,127}$/u
@@ -192,8 +192,28 @@ export function defineMemoryStrategy<T extends MemoryStrategyDefinition>(definit
     maxSources: positiveInteger(manifest.maxSources, 'memory Strategy maxSources', 1_000),
     maxRoutes: positiveInteger(manifest.maxRoutes, 'memory Strategy maxRoutes', 1_000),
     maxActions: positiveInteger(manifest.maxActions, 'memory Strategy maxActions', 1_000),
+    ...(manifest.extensionSlots === undefined ? {} : { extensionSlots: uniqueIds(manifest.extensionSlots, 'memory Strategy extension slot') }),
   }, 'memory Strategy manifest')
   return Object.freeze({ manifest: normalizedManifest, compose: definition.compose,
     ...(definition.createTurn === undefined ? {} : { createTurn: definition.createTurn }),
+  }) as T
+}
+
+export function defineMemoryStrategyExtension<T extends MemoryStrategyExtensionDefinition>(definition: T): T {
+  const manifest = definition.manifest
+  if (manifest.apiVersion !== COMPOSABLE_MEMORY_API_VERSION) throw new Error(`unsupported memory Strategy extension API: ${String(manifest.apiVersion)}`)
+  if (manifest.kind !== 'strategy-extension') throw new Error('memory Strategy extension kind must be strategy-extension')
+  const packageName = requiredText(manifest.packageName, 'memory Strategy extension packageName', 214)
+  if (!PACKAGE.test(packageName)) throw new Error(`invalid memory Strategy extension packageName: ${packageName}`)
+  if (manifest.deterministic !== true) throw new Error('memory Strategy extension must declare deterministic: true')
+  if (typeof definition.contribute !== 'function') throw new Error('memory Strategy extension contribute() is required')
+  return Object.freeze({
+    manifest: jsonClone({
+      ...manifest, packageName,
+      typeId: id(manifest.typeId, 'memory Strategy extension typeId'),
+      strategyTypeId: id(manifest.strategyTypeId, 'memory Strategy extension target'),
+      slot: id(manifest.slot, 'memory Strategy extension slot'),
+    }, 'memory Strategy extension manifest'),
+    contribute: definition.contribute,
   }) as T
 }

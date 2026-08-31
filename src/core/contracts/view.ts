@@ -18,7 +18,7 @@ export const COMPOSABLE_MEMORY_API_VERSION = 'dsh-mnemon/v1' as const
 /** Persistence truth, not a taxonomy of memory operations. */
 export type MemoryMutationCompletion = 'accepted' | 'candidate' | 'committed' | 'partial' | 'failed' | 'unknown'
 
-export type MemoryContributionKind = 'source' | 'strategy'
+export type MemoryContributionKind = 'source' | 'strategy' | 'strategy-extension'
 export type MemorySourceAvailability = 'ready' | 'degraded' | 'unavailable'
 export type MemoryViewConsistencyMode = 'exact-snapshot' | 'namespace-pinned-live-read'
 
@@ -138,6 +138,33 @@ export interface MemoryStrategyManifest {
   maxSources: number
   maxRoutes: number
   maxActions: number
+  /** Exclusive contribution slots owned by this Strategy, not Core vocabulary. */
+  extensionSlots?: string[]
+}
+
+/** An additive plugin targets one explicit Strategy contract, never replaces it. */
+export interface MemoryStrategyExtensionManifest {
+  apiVersion: typeof COMPOSABLE_MEMORY_API_VERSION
+  kind: 'strategy-extension'
+  typeId: string
+  packageName: string
+  strategyTypeId: string
+  slot: string
+  deterministic: true
+}
+
+export interface MemoryStrategyExtensionDefinition {
+  manifest: MemoryStrategyExtensionManifest
+  /** Pure, bounded JSON proposal; no Source handles, write callbacks or credentials. */
+  contribute(request: MemoryViewRequest, sources: readonly MemoryAvailableSource[]): MemoryJsonValue
+}
+
+/** The owning Strategy interprets value using its public, slot-specific contract. */
+export interface MemoryStrategyContribution {
+  instanceKey: string
+  typeId: string
+  slot: string
+  value: MemoryJsonValue
 }
 
 export interface MemorySourceFacts {
@@ -278,6 +305,8 @@ export interface ComposableMemoryView {
   runtimeGeneration: string
   strategyInstanceKey: string
   strategyTypeId: string
+  /** Auditable active contributions, without publishing their configuration to the LLM. */
+  strategyExtensions?: Array<{ instanceKey: string; typeId: string; slot: string; digest: string }>
   createdAt: string
   scope: MemoryOperationScope
   projection: MemoryViewFragment[]
@@ -370,7 +399,7 @@ export interface MemorySourceDefinition {
 
 export interface MemoryStrategyDefinition {
   manifest: MemoryStrategyManifest
-  compose(request: MemoryViewRequest, sources: readonly MemoryAvailableSource[]): MemoryViewSpec
+  compose(request: MemoryViewRequest, sources: readonly MemoryAvailableSource[], contributions?: readonly MemoryStrategyContribution[]): MemoryViewSpec
   /** Optional execution policy, instantiated once for each executing turn, never during compose. */
   createTurn?(view: ComposableMemoryView): MemoryStrategyTurn
 }
@@ -399,6 +428,7 @@ export interface MemoryCompositionEvaluationReport {
   contributionRevision: number
   generationId?: string
   strategyInstanceKey?: string
+  strategyExtensionInstanceKeys?: string[]
   sourceInstanceKeys: string[]
   diagnostics: MemoryCompositionDiagnostic[]
 }
