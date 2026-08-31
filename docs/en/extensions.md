@@ -70,6 +70,14 @@ A Strategy may declare exclusive `extensionSlots`. A small plugin uses `defineMe
 
 Core validates identities, JSON and the 64,000-character bound, deterministic replay, lifecycle, and the final View's existing budgets and permissions. It does not interpret business slot names. Callbacks see only the request and permission-filtered Source facts, never Source handles, grants, or write callbacks. The owning Strategy's public SDK defines slot semantics.
 
+### Optional View configuration descriptor
+
+A dedicated Strategy Entry can export `memoryStrategyConfiguration`, created with `defineMemoryStrategyConfiguration` from the Core SDK. It declares human-facing English/Chinese labels, public fields (`number`, `text`, `textarea`, `string-list`, `source-list`), and a **pure `create(config)` factory shared with `apply()`**. The factory returns exactly one Strategy or extension contribution; no I/O, credentials, Source registration, or Fiber mounting. See the optional Strategy packages for complete examples. This is an optional editor contract, not a requirement for composition. Combined Source/Strategy Entries and plugins without this descriptor remain observable but are configured through DSH.
+
+The Host discovers existing `(scope/)dsh-mnemon-strategy-*` Loader Entries, including disabled entries; it cannot install arbitrary packages from this page. Preview composes the real Sources without committing configuration, executing Actions, or running a model. Apply validates the complete candidate, updates existing Cordis Entries, and persists a Profile-wide user overlay in DSH's `mnemon-view` settings. It never writes package/generated Loader YAML. Failed activation or persistence rolls back; existing turn pins remain unchanged. Source limits and Host write/permission gates still apply.
+
+### Default three-tier extensions
+
 The default Strategy exposes `defineThreeTierExtension` at `dsh-mnemon-strategy-default-three-tier/extension-sdk`:
 
 | Optional plugin | Slot | Contribution |

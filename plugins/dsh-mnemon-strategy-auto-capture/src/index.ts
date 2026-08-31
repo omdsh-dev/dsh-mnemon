@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { installMemory } from 'dsh-mnemon/extension-sdk'
+import { installMemory, defineMemoryStrategyConfiguration } from 'dsh-mnemon/extension-sdk'
 import { defineThreeTierExtension, validateThreeTierExtension } from 'dsh-mnemon-strategy-default-three-tier/extension-sdk'
 
 export interface Config { sourceKeys?: string[]; actionIds?: string[]; instruction?: string }
@@ -20,3 +20,15 @@ export function createAutoCaptureExtension(config: Config = {}) {
 export function apply(ctx: Context, config: Config = {}): void {
   installMemory(ctx, { strategyExtensions: [createAutoCaptureExtension(config)] })
 }
+
+export const memoryStrategyConfiguration = defineMemoryStrategyConfiguration({
+  kind: 'strategy-extension', typeId: 'auto-capture',
+  label: { en: 'Active capture', 'zh-CN': '主动记录' },
+  description: { en: 'Guide the current LLM to retain durable user-supplied facts; no background Agent.', 'zh-CN': '引导当前 LLM 保留持久的用户事实，不启动后台 Agent。' },
+  fields: [
+    { key: 'sourceKeys', input: 'source-list', sourceRoles: ['durable-evidence'], label: { en: 'Recording targets', 'zh-CN': '记录目标' } },
+    { key: 'instruction', input: 'textarea', defaultValue: instruction, maximum: 4000, label: { en: 'Recording instruction', 'zh-CN': '记录指引' } },
+    { key: 'actionIds', input: 'string-list', defaultValue: ['remember'], label: { en: 'Recording operation IDs', 'zh-CN': '记录操作 ID' }, description: { en: 'Source-local operation IDs; this does not grant write permission.', 'zh-CN': '填写 Source 内部的操作 ID；此配置不会授予写入权限。' } },
+  ],
+  create: config => ({ strategyExtensions: [createAutoCaptureExtension(config as Config)] }),
+})
