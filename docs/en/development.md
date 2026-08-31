@@ -12,7 +12,7 @@ pnpm run verify
 pnpm run verify:plugins
 ```
 
-`verify` checks types, deterministic Root builds, independent plugin builds, the full test suite, a real isolated DSH Headless profile and package exports/contents. Independent plugin checks run as separate type/test phases after building all public artifacts. Do not mix `pnpm -r verify` clean builds with tests reading sibling artifacts; use `pnpm verify` for the whole workspace. `verify:plugins` repeats verification **outside** the workspace against semver-installed tarballs and an external Source/Strategy/Provider/Client consumer. It also installs only the packed Root into real DSH, resolving all default plugins from a loopback registry without workspace links or manifest rewrites.
+`verify` checks types, deterministic Root builds, independent plugin builds, the full test suite, a real isolated DSH Headless profile and package exports/contents. Independent plugin checks run as separate type/test phases after building all public artifacts. Do not mix `pnpm -r verify` clean builds with tests reading sibling artifacts; use `pnpm verify` for the whole workspace. `verify:plugins` repeats verification **outside** the workspace against semver-installed tarballs and an external Source/Strategy/Provider/Client consumer. It also installs only the packed Root into real DSH, resolving all default plugins from a loopback registry without workspace links or manifest rewrites, then repeats activation with the three optional Strategy plugins. The external consumer compiles its own Strategy extension against the owning Strategy's packed SDK.
 
 ## Repository ownership
 
@@ -27,13 +27,16 @@ plugins/
   dsh-mnemon-source-documents/
   dsh-mnemon-source-memory-spaces/
   dsh-mnemon-strategy-default-three-tier/
+  dsh-mnemon-strategy-scoped/         # optional selection contribution
+  dsh-mnemon-strategy-light-context/  # optional projection contribution
+  dsh-mnemon-strategy-auto-capture/   # optional in-turn capture contribution
   dsh-mnemon-provider-*/
 tests/        Host/Core/UI composition and boundary tests
 scripts/      reproducible build, artifacts, Headless and Web fixtures
 cordis.patch.yml   default Starter composition
 ```
 
-Root owns Core/SDK and the DSH Host/default Starter, not Source storage implementations. Each directory under `plugins/` is a publishable standalone project. The default distribution depends on them by public semver; Source/Strategy peers depend on Core's public SDK, and Providers depend on the Memory Spaces SDK. Peer/development relationships can produce a package-manager cycle warning; production import boundaries are independently checked.
+Root owns Core/SDK and the DSH Host/default Starter, not Source storage implementations. Each directory under `plugins/` is a publishable standalone project. The default distribution depends on its thirteen default plugins by public semver; the three optional packages are development dependencies only, not installed by the Starter. Source/Strategy peers depend on Core's public SDK, Strategy extensions on their owner's public SDK, and Providers on the Memory Spaces SDK. Peer/development relationships can produce a package-manager cycle warning; production import boundaries are independently checked.
 
 No private workspace packages, forwarding controller modules, business bindings or compatibility directory remain. Compatibility means retained user configuration, data and workflows, not retention of historical internal symbols.
 
@@ -52,6 +55,7 @@ A plugin can be copied to a new repository and use its own `pnpm install && pnpm
 | Boundary | Tests |
 |---|---|
 | Core/SDK | Immutable Views, budgets, Strategy validation, concurrent turns, grants, leases, generation replacement, cleanup and performance |
+| Strategy extension | Independent slots, combination/order, unload, conflict, read-only scope, shared quotas and actual Host activation |
 | Source | Its controller/storage, revisions, snapshots, JSON operations, own Client clicks and instance isolation |
 | Provider | Driver behavior, credentials, capability truth and fault responses |
 | Memory Spaces | Provider child lifecycle, cross-provider conformance, merge/routing/quality and Native process serialization |
@@ -67,6 +71,10 @@ MNEMON_NATIVE_TEST_CLI=/absolute/path/to/mnemon pnpm --filter dsh-mnemon-source-
 The test never discovers a personal data root or installs a binary. These checks do not certify every live external service or every account configuration. Provider Lab is an explicit separate integration environment.
 
 The performance regression composes 100 three-Source Views under wall/CPU budgets. Deterministic builds compare all generated hashes. Neither check promises production network latency or LLM quality.
+
+Both the default and three-extension profiles run that performance fence. The
+[2026-09-01 Strategy contribution verification](../pr-assets/strategy-extensions-20260901/README.md)
+records coexistence, independent artifacts, real Headless activation and limits.
 
 ## Real WebUI
 
@@ -102,9 +110,9 @@ Build Harness with its own `pnpm install --frozen-lockfile && pnpm build:lib` fi
 
 ## Coordinated beta releases
 
-`pnpm release:check` is read-only. It checks the Root and all thirteen official plugins, exact internal dependency/peer versions, the release tag and `publishConfig.tag`. This coordinated version policy applies to the official distribution, not third-party repositories. Beta dependencies pin the tested prerelease explicitly; `^0.4.0` cannot install a `0.5.0-beta.1` SDK.
+`pnpm release:check` is read-only. It checks the Root and all sixteen official plugins, exact internal dependency/peer versions, the release tag and `publishConfig.tag`. This coordinated version policy applies to the official distribution, not third-party repositories. Beta dependencies pin the tested prerelease explicitly; `^0.4.0` cannot install a `0.5.0-beta.1` SDK.
 
-`node scripts/release.mjs --pack` packs every built artifact into a printed temporary directory without publishing. The GitHub Release workflow runs `verify` and the external artifact suite, packs everything, then publishes the thirteen plugins before the Starter. Prereleases require GitHub's prerelease flag and an explicit `alpha`, `beta` or `rc` npm tag; stable releases require `latest`. Direct publication also inherits the package's explicit `publishConfig.tag`. Do not publish only the Root.
+`node scripts/release.mjs --pack` packs every built artifact into a printed temporary directory without publishing. The GitHub Release workflow runs `verify` and the external artifact suite, packs everything, then publishes the sixteen plugins before the Starter. Prereleases require GitHub's prerelease flag and an explicit `alpha`, `beta` or `rc` npm tag; stable releases require `latest`. Direct publication also inherits the package's explicit `publishConfig.tag`. Do not publish only the Root.
 
 `--publish` is an explicit registry write and requires `RELEASE_TAG` and `RELEASE_PRERELEASE`. npm publication is not transactional: on any failure the workflow stops and does not publish the remaining packages. Keep the logs/artifacts, inspect which immutable versions were published, then prepare a fresh coordinated version rather than overwriting or unpublishing them. A release is complete only after all packages are present. Development verification never creates a Git tag, GitHub Release or npm publication.
 

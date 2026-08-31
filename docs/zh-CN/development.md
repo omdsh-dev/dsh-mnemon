@@ -12,7 +12,7 @@ pnpm run verify
 pnpm run verify:plugins
 ```
 
-`verify` 包含类型检查、根包确定性构建、独立插件构建、完整测试集、真实隔离 DSH Headless 和包出口/内容验证。独立插件检查在所有公开制品构建完成后分阶段执行。不要用 `pnpm -r verify` 同时清理重建制品和运行读取它们的测试；整个工作区使用 `pnpm verify`。`verify:plugins` 在工作区**外部**，基于 semver 安装的 tarball 重复验证，并测试外部 Source/Strategy/Provider/Client 消费者；还向真实 DSH 仅安装根包 tarball，从 loopback registry 解析全部默认插件，不使用工作区链接或改写 manifest。
+`verify` 包含类型检查、根包确定性构建、独立插件构建、完整测试集、真实隔离 DSH Headless 和包出口/内容验证。独立插件检查在所有公开制品构建完成后分阶段执行。不要用 `pnpm -r verify` 同时清理重建制品和运行读取它们的测试；整个工作区使用 `pnpm verify`。`verify:plugins` 在工作区**外部**，基于 semver 安装的 tarball 重复验证，并测试外部 Source/Strategy/Provider/Client 消费者；还向真实 DSH 仅安装根包 tarball，从 loopback registry 解析全部默认插件，不使用工作区链接或改写 manifest，再额外安装三个可选 Strategy 插件验证共存。外部消费者还通过完整 Strategy 的打包 SDK 编译自己实现的策略贡献。
 
 ## 仓库归属
 
@@ -27,13 +27,16 @@ plugins/
   dsh-mnemon-source-documents/
   dsh-mnemon-source-memory-spaces/
   dsh-mnemon-strategy-default-three-tier/
+  dsh-mnemon-strategy-scoped/         # 可选选择贡献
+  dsh-mnemon-strategy-light-context/  # 可选投影贡献
+  dsh-mnemon-strategy-auto-capture/   # 可选对话内记录贡献
   dsh-mnemon-provider-*/
 tests/        Host/Core/UI composition and boundary tests
 scripts/      reproducible build, artifacts, Headless and Web fixtures
 cordis.patch.yml   default Starter composition
 ```
 
-根包拥有 Core/SDK、DSH Host 和默认 Starter，不拥有 Source 存储实现。`plugins/` 下每个目录都是可独立发布的项目。默认发行包按公开 semver 依赖它们；Source/Strategy 通过 peer 使用 Core SDK，Provider 使用 Memory Spaces SDK。peer/开发依赖会产生包管理器环依赖提示；生产代码导入边界另有独立检查。
+根包拥有 Core/SDK、DSH Host 和默认 Starter，不拥有 Source 存储实现。`plugins/` 下每个目录都是可独立发布的项目。默认发行包按公开 semver 依赖十三个默认插件，三个可选包仅是开发依赖，不由 Starter 安装；Source/Strategy 通过 peer 使用 Core SDK，策略贡献使用其完整 Strategy 的公开 SDK，Provider 使用 Memory Spaces SDK。peer/开发依赖会产生包管理器环依赖提示；生产代码导入边界另有独立检查。
 
 不再保留私有工作区包、控制器转发文件、业务 binding 或 compatibility 目录。兼容指用户配置、数据与使用流程，不是延续历史内部符号。
 
@@ -52,6 +55,7 @@ pnpm --filter dsh-mnemon-source-runtime verify
 | 边界 | 测试 |
 |---|---|
 | Core/SDK | 不可变 View、预算、Strategy 校验、并发回合、grant、租约、换代、清理与性能 |
+| 策略贡献 | 独立槽、组合/顺序、卸载、冲突、只读范围、共享配额与真实 Host 激活 |
 | Source | 自己的控制器/存储、修订、快照、JSON 操作、Client 点击与实例隔离 |
 | Provider | 驱动、凭据、真实能力与故障响应 |
 | Memory Spaces | Provider 子节点生命周期、跨 Provider conformance、合并/路由/召回质量、Native 进程串行化 |
@@ -67,6 +71,10 @@ MNEMON_NATIVE_TEST_CLI=/absolute/path/to/mnemon pnpm --filter dsh-mnemon-source-
 该测试不会发现个人数据根或安装二进制。这些检查不等于验证过所有真实远端服务或账号配置。Provider Lab 是需要明确启动的独立集成环境。
 
 性能回归对 100 次三 Source View 组合约束 wall/CPU 时间；确定性构建比较所有生成文件 hash。二者不承诺生产网络延迟或 LLM 质量。
+
+默认组合和三插件组合均运行上述性能门槛。
+[2026-09-01 策略贡献验证](../pr-assets/strategy-extensions-20260901/README.md)
+记录了共存、独立制品、真实 Headless 激活结果及其边界。
 
 ## 真实 WebUI
 
@@ -102,9 +110,9 @@ Harness 先运行自己的 `pnpm install --frozen-lockfile && pnpm build:lib`。
 
 ## 成组 beta 发布
 
-`pnpm release:check` 只读检查根包与十三个官方插件、精确内部依赖/peer 版本、Release tag 和 `publishConfig.tag`。成组版本约束只针对官方发行组合，不限制第三方仓库。Beta 依赖显式固定已验证的预发布版本；`^0.4.0` 无法安装 `0.5.0-beta.1` SDK。
+`pnpm release:check` 只读检查根包与十六个官方插件、精确内部依赖/peer 版本、Release tag 和 `publishConfig.tag`。成组版本约束只针对官方发行组合，不限制第三方仓库。Beta 依赖显式固定已验证的预发布版本；`^0.4.0` 无法安装 `0.5.0-beta.1` SDK。
 
-`node scripts/release.mjs --pack` 将所有已构建制品打包到输出的临时目录，不执行发布。GitHub Release 流程先执行 `verify` 与外部制品验证，全部打包成功后，依次发布十三个插件，最后发布 Starter。预发布要求 GitHub prerelease 标记，并显式使用 npm `alpha`、`beta` 或 `rc` tag；正式版要求 `latest`。直接发布也继承包内显式的 `publishConfig.tag`。不能只发布根包。
+`node scripts/release.mjs --pack` 将所有已构建制品打包到输出的临时目录，不执行发布。GitHub Release 流程先执行 `verify` 与外部制品验证，全部打包成功后，依次发布十六个插件，最后发布 Starter。预发布要求 GitHub prerelease 标记，并显式使用 npm `alpha`、`beta` 或 `rc` tag；正式版要求 `latest`。直接发布也继承包内显式的 `publishConfig.tag`。不能只发布根包。
 
 `--publish` 是显式 registry 写操作，要求 `RELEASE_TAG` 和 `RELEASE_PRERELEASE`。npm 发布不是事务：任何失败都会停止流程，不再发布剩余包。保留日志/制品，确认已发布的不可变版本，然后准备新的完整成组版本，不能覆盖或撤销已发布版本。所有包均可获取后，才算发布完成。开发验证不会创建 Git tag、GitHub Release 或 npm 发布。
 

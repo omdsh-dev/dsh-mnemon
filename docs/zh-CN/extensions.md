@@ -9,7 +9,7 @@
 | 插件 | 拥有 | 公开依赖 |
 |---|---|---|
 | `dsh-mnemon-source-*` | 一种记忆权威、投影、检索/修改及可选页面 | Core contracts 与 extension SDK |
-| `dsh-mnemon-strategy-*` | Host 请求时，哪些 Source 实例以何种上下文形态、预算、route/action 参与 | Core contracts 与 extension SDK |
+| `dsh-mnemon-strategy-*` | 完整 View Strategy，或目标 Strategy 支持的可叠加贡献 | Core contracts、extension SDK；目标 Strategy 的扩展 SDK |
 | `dsh-mnemon-provider-*` | Memory Spaces 内部驱动、描述符、能力、连接 schema、图标 | Memory Spaces Provider SDK |
 
 Source 不需要再实现 Provider；Provider 不需要理解 View 组合；Strategy 只接收 facts，不接收 Source 对象。跨包只引用声明过的公开出口，不进入其他插件的 `src`、控制器、注册表或构建配置。
@@ -62,9 +62,55 @@ export function apply(ctx: Context): void {
 
 Entry id 标识实例，type id 标识实现。不能剥掉 Loader 的 include 前缀。没有 Loader 身份的直接 `ctx.plugin()` 挂载，应传 `installMemory(..., { instanceId })`。路径和凭据归实例，不使用模块全局数据库或服务注册表。
 
-## Strategy
+## 完整 Strategy 与可叠加贡献
 
 用 `defineMemoryStrategy` 定义，再以 `{ strategies: [definition] }` 安装。声明确定性、支持角色与上限；纯 `compose` 返回 `MemoryViewSpec`，选择准确的 Source key、eager/routed 投影预算和 Source 本地 route/action id。组合阶段不执行网络、存储或凭据访问。
+
+完整 Strategy 用可选 `extensionSlots` 声明自有的独占扩展槽。小插件使用 `defineMemoryStrategyExtension`，以 `{ strategyExtensions: [definition] }` 安装。启用后向目标 Strategy 的一个槽贡献有界 JSON，停用只撤销自身贡献；不同槽同时参与一个 View，同一目标的重复槽会拒绝注册，不按安装顺序覆盖。目标 Strategy 未被选择时，贡献保持可观察但不执行；不支持的槽会拒绝候选运行代，并保留已有 Serving。
+
+Core 只处理目标/槽身份、JSON、64,000 字符上限、确定性回放、生命周期和最终 View 的原有预算/权限，不解释业务槽名。扩展回调只接收 request 和权限过滤后的 Source facts，没有 Source 对象、grant 或写入回调。槽语义由目标 Strategy 的公开 SDK 定义。动态回调或槽值在具体回合中不合法时，该回合拒绝，不偷偷回退到忽略插件的 View。
+
+默认三层的 `dsh-mnemon-strategy-default-three-tier/extension-sdk` 提供 `defineThreeTierExtension` 和三个槽：
+
+| 可选插件 | 槽 | 贡献与边界 |
+|---|---|---|
+| `dsh-mnemon-strategy-scoped` | `selection` | Source key 顺序、可写子集；不创建 Source、不改变其物理存储范围 |
+| `dsh-mnemon-strategy-light-context` | `projection` | 一份共享投影上限，只收紧 Host 预算；不是增量注入或摘要压缩 |
+| `dsh-mnemon-strategy-auto-capture` | `capture` | 当前对话的记录指引、目标与明确 Action id；不启动后台 Agent、不直接写入 |
+
+三个包都是可选安装，不属于默认 Starter 的运行依赖。把包安装并作为 DSH Entry 启用后，它们会自动参与 `default-three-tier`，不需要修改 `strategyId`。仅下载 npm 包不等于启用。默认 Source 组合、预算和提醒在没有扩展时不变。Runtime 当前没有展开 route；把常驻预算压得很低可能隐藏热记忆，需要针对实际任务评测。
+
+在依赖已安装的 Profile 的最终 `cordis.patch.yml` 追加以下配置即可同时启用。Source key 若包含 Loader 的 include 前缀，应使用实例目录中的完整 key；省略 `scoped.config` 时按角色/key 确定性组合现有实例，不创建新的存储。
+
+```yaml
+- insert:
+    - id: mnemon-strategy-scoped
+      name: dsh-mnemon-strategy-scoped
+    - id: mnemon-strategy-light-context
+      name: dsh-mnemon-strategy-light-context
+      config:
+        maxProjectionCharacters: 4096
+    - id: mnemon-strategy-auto-capture
+      name: dsh-mnemon-strategy-auto-capture
+```
+
+`scoped` 的 `sourceKeys` 表示优先顺序，`writableSourceKeys` 限定可写子集。自动容量整理同样受本轮可写范围限制；被禁止时保留原数据并报错，不绕过范围向其他 Source 迁移。只有显式人工管理走独立的管理授权。
+
+```ts
+import type { Context } from '@deepseek-ai/cordis'
+import { installMemory } from 'dsh-mnemon/extension-sdk'
+import { defineThreeTierExtension } from 'dsh-mnemon-strategy-default-three-tier/extension-sdk'
+
+export const inject = ['mnemonMemory']
+export function apply(ctx: Context): void {
+  installMemory(ctx, { strategyExtensions: [defineThreeTierExtension({
+    typeId: 'my-light-context', packageName: 'dsh-mnemon-strategy-my-light-context',
+    slot: 'projection', contribute: () => ({ maxProjectionCharacters: 4096 }),
+  })] })
+}
+```
+
+扩展不另建后台调度器；对话内写入仍通过已有 Host 工具、授权和 Source 回执。`capture` 不能把 `manage-spaces` 等一般写操作自动当成记录：作者必须指定实际记录用的 Action id。共享检索预算仍按整个执行回合计算，不按 Source 数量倍增；缓存和 Related 准入带 Source 身份，避免同名空间串用证据。停用贡献后重建失败时，不继续使用已撤销策略；已固定的旧回合仍按原租约完成。
 
 可选的 `createTurn(view)` 返回执行级 `query(request, read)` 策略。它只获得绑定当前 Route 和私有 grant 的 `read(input, narrowerLimits?)`，Core 仍校验输入、有效上限、已分派次数和生命周期。策略可以筛选、重放结果，并用 `Evidence.output` 提供简洁模型输出，但不会获得 Source 对象、写入回调或新增权限。即使继承同一个不可变 View，不同执行轮次也拥有独立策略状态。不提供此钩子时，读取仍经过 Core 边界直接进入 Source。
 
@@ -136,6 +182,6 @@ try {
 
 至少覆盖：正常组合、缺失/歧义依赖、双实例、schema/能力/授权拒绝、并发快照、旧修订、取消/部分失败、卸载排空/重载、持久化、管理与真实页面点击。Provider 另测凭据、真实能力、上游损坏数据、超时与父 Source 内 conformance。
 
-插件运行自己的 `pnpm verify`。仓库级 `pnpm verify:plugins` 打包全部 14 个制品，用正常 semver manifest 在工作区外逐个安装、检查、测试和构建，再编译外部消费者；禁止源码 alias、manifest override 和工作区软链接。
+插件运行自己的 `pnpm verify`。仓库级 `pnpm verify:plugins` 打包全部 17 个制品，用正常 semver manifest 在工作区外逐个安装、检查、测试和构建，再编译外部消费者；禁止源码 alias、manifest override 和工作区软链接。
 
 RSI 应保存可复现候选输入/制品，对照已知组合评估，经明确安装/选择决策晋升。Strategy 回放通过，不代表任意 JavaScript 已被沙箱隔离，也不授予交易、发消息或删除外部数据的权限。

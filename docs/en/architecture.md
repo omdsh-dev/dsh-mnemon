@@ -13,21 +13,24 @@ flowchart TB
   Starter --> Docs["dsh-mnemon-source-documents"]
   Starter --> Spaces["dsh-mnemon-source-memory-spaces"]
   Starter --> Strategy["dsh-mnemon-strategy-default-three-tier"]
+  Scope["strategy-scoped · optional"] -. selection .-> Strategy
+  Light["strategy-light-context · optional"] -. projection .-> Strategy
+  Capture["strategy-auto-capture · optional"] -. capture .-> Strategy
   Spaces --> Providers["dsh-mnemon-provider-* · private child Fibers"]
 ```
 
-This diagram shows installation ownership, not business calls. DSH creates the top-level Entries/Fibers. Each Source or Strategy uses the same `installMemory(ctx, ...)` SDK and Cordis-owned disposer. Core provides only `ctx.mnemonMemory`; it does not implement a Memory Spaces Fiber or publish `ctx.mnemonMemorySpace`.
+Solid edges show installation ownership; dotted edges show optional Strategy contributions, not business calls. DSH creates the top-level Entries/Fibers. Sources, Strategies and their contributions use the same `installMemory(ctx, ...)` SDK and Cordis-owned disposer. Core provides only `ctx.mnemonMemory`; it does not implement a Memory Spaces Fiber or publish `ctx.mnemonMemorySpace`.
 
 Memory Spaces authors its **own** child Fibers and Provider protocol. Each configured Provider is an explicitly installed module; two Source instances can use the same child id without sharing their registry or credentials. No dependency scan or global Provider registry selects implementations.
 
-Like a Spring Boot starter, the default distribution chooses dependencies and explicit defaults. It does not turn Source business code into Core. Users still install `dsh-mnemon`; contributors can independently build, test, publish and install any of the 13 plugin packages. Alternative compositions explicitly choose Source instances and a Strategy.
+Like a Spring Boot starter, the default distribution chooses dependencies and explicit defaults. It does not turn Source business code into Core. Users still install `dsh-mnemon`; 16 plugin packages can be independently built, tested and published. Three optional Strategy contribution packages are enabled separately, not included in the default Starter. Complete Strategy replacement remains explicit.
 
 | Owner | Owns | Does not own |
 |---|---|---|
 | Core | Internal registration, contract validation, immutable Views, budgets, generations and leases | Provider drivers, Source data formats/storage decisions, pages, DSH lifecycle policy |
 | SDK | Small contribution service, Source/Strategy author contracts, installation helpers and scoped test tools | Engine/registry constructors, installed records or generation handles |
 | Source | Storage/remote authority, facts, projections, grants, query/mutation and optional management/Client | Other Sources' controllers or global strategy selection |
-| Strategy | Pure deterministic `request + facts → ViewSpec` | Raw data, credentials, drivers, side effects or new authority |
+| Strategy | Pure deterministic `request + facts + owned-slot contributions → ViewSpec`; owns slot semantics | Raw data, credentials, drivers, side effects or new authority |
 | Host | Scope, phase hooks, tool/RPC adapters, authentication, settings and supervised tasks | Source implementations or private registries |
 | Starter | Package set, Entry ids and default configuration | A second loader or runtime |
 
@@ -44,7 +47,7 @@ Like a Spring Boot starter, the default distribution chooses dependencies and ex
 
 The nine independent Provider plugin packages are `dsh-mnemon-provider-{mnemon-native,openviking,honcho,mem0,hindsight,holographic,retaindb,byterover,supermemory}`. A Provider runs *inside* Memory Spaces as its storage/retrieval driver, not as a new Core contribution. A Git/Notion/health plugin should normally be a Source; an alternate way to combine them is a Strategy.
 
-Default Strategy selection rejects multiple instances with the same default role as ambiguous. A multi-Notion or multi-space deployment selects explicit instance keys in its own Strategy; it must not rely on import order.
+The unextended default Strategy rejects duplicate roles. Enable `strategy-scoped` to compose multiple instances explicitly; disabling restores that ambiguity check rather than guessing by load order. The default Strategy owns its three extension slots. Core only carries bounded contributions and enforces the existing budget and authority contract.
 
 ## View data flow
 

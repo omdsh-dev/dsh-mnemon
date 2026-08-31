@@ -9,7 +9,7 @@ Choose the ownership boundary before writing code. The complete external example
 | Plugin | Owns | Public dependency |
 |---|---|---|
 | `dsh-mnemon-source-*` | A memory authority, projection, retrieval/mutation and optional pages | Core contracts and extension SDK |
-| `dsh-mnemon-strategy-*` | Which Source instances participate, when requested by the Host, with which context mode/budget/routes/actions | Core contracts and extension SDK |
+| `dsh-mnemon-strategy-*` | A complete View Strategy, or an additive contribution supported by its target Strategy | Core contracts and extension SDK; the target Strategy's extension SDK |
 | `dsh-mnemon-provider-*` | A driver under Memory Spaces, with its descriptor, capabilities, connection schema and icons | Memory Spaces Provider SDK |
 
 A Source need not implement a Provider. A Provider need not know View composition. A Strategy receives facts, not Source objects. Cross-package imports target declared public exports only; never reach into another plugin's `src`, controller, registry or build configuration.
@@ -62,9 +62,55 @@ The example assumes `source.js` exports the definition. [external-source.ts](../
 
 An Entry id identifies an instance; type id identifies its implementation. Never strip Loader include prefixes. Direct `ctx.plugin()` mounts without Loader identity must supply `installMemory(..., { instanceId })`. Paths/credentials remain instance-owned. Do not use a module-global database or service registry.
 
-## Strategy
+## Complete Strategies and additive contributions
 
 Use `defineMemoryStrategy` and install with `{ strategies: [definition] }`. Declare deterministic composition, supported roles and maxima. Pure `compose` returns a `MemoryViewSpec` selecting exact Source keys, eager/routed projection budgets and Source-local route/action ids. It performs no network, storage or secret access.
+
+A Strategy may declare exclusive `extensionSlots`. A small plugin uses `defineMemoryStrategyExtension`, installed through `{ strategyExtensions: [definition] }`. Enabling contributes bounded JSON to one target slot; disabling removes only that contribution. Different slots compose into one View. Duplicate slots for the same target reject registration instead of using installation order. Contributions targeting an unselected Strategy are observable but do not execute. Unsupported slots reject the candidate generation and preserve existing Serving; invalid dynamic results reject the affected turn rather than silently ignoring the plugin.
+
+Core validates identities, JSON and the 64,000-character bound, deterministic replay, lifecycle, and the final View's existing budgets and permissions. It does not interpret business slot names. Callbacks see only the request and permission-filtered Source facts, never Source handles, grants, or write callbacks. The owning Strategy's public SDK defines slot semantics.
+
+The default Strategy exposes `defineThreeTierExtension` at `dsh-mnemon-strategy-default-three-tier/extension-sdk`:
+
+| Optional plugin | Slot | Contribution |
+|---|---|---|
+| `dsh-mnemon-strategy-scoped` | `selection` | Source key order and writable subset; does not create Sources or change physical storage scope |
+| `dsh-mnemon-strategy-light-context` | `projection` | One shared projection cap; not incremental injection or summarization |
+| `dsh-mnemon-strategy-auto-capture` | `capture` | Current-turn instructions, targets and explicit recording Action ids; no background Agent or direct writes |
+
+Install and enable these as DSH Entries alongside `default-three-tier`; no `strategyId` change is needed. Downloading a package alone is not activation. They are not default Starter runtime dependencies, and without extensions the original three-tier selection, allocation and guidance remain unchanged. Runtime currently has no expansion route: an aggressively small cap can hide hot context and needs workload-level evaluation.
+
+With dependencies installed, append these Entries to the Profile's final `cordis.patch.yml` to enable all three. Source keys must retain any Loader include prefix. Omitting `scoped.config` deterministically selects existing instances by role/key; it does not create storage.
+
+```yaml
+- insert:
+    - id: mnemon-strategy-scoped
+      name: dsh-mnemon-strategy-scoped
+    - id: mnemon-strategy-light-context
+      name: dsh-mnemon-strategy-light-context
+      config:
+        maxProjectionCharacters: 4096
+    - id: mnemon-strategy-auto-capture
+      name: dsh-mnemon-strategy-auto-capture
+```
+
+`scoped.sourceKeys` expresses priority and `writableSourceKeys` narrows the writable subset. Automatic capacity maintenance also checks the current View's write scope; a denied operation preserves the original data and fails instead of migrating around the restriction. Explicit operator management remains separately authorized.
+
+```ts
+import type { Context } from '@deepseek-ai/cordis'
+import { installMemory } from 'dsh-mnemon/extension-sdk'
+import { defineThreeTierExtension } from 'dsh-mnemon-strategy-default-three-tier/extension-sdk'
+
+export const inject = ['mnemonMemory']
+export function apply(ctx: Context): void {
+  installMemory(ctx, { strategyExtensions: [defineThreeTierExtension({
+    typeId: 'my-light-context', packageName: 'dsh-mnemon-strategy-my-light-context',
+    slot: 'projection', contribute: () => ({ maxProjectionCharacters: 4096 }),
+  })] })
+}
+```
+
+In-turn writes still use Host tools, authorization and Source receipts. A capture contributor must name actual recording Actions, not infer them from generic write capability. Retrieval limits remain shared across the executing turn; Source-qualified replay and Related admission prevent cross-instance aliasing. If removal cannot produce a replacement generation, new turns fail closed rather than revive the disabled policy. Existing pinned turns retain their leases.
 
 Optional `createTurn(view)` supplies an execution-local `query(request, read)` policy. The only supplied I/O is `read(input, narrowerLimits?)`, bound to the selected Route and its private grant. Core still validates inputs, ceilings, dispatched calls and lifetime. A policy may admit/replay results and supply a compact `Evidence.output` for the model; it does not obtain a Source object, write continuation or authority. Separate executions get separate policy state even when they inherit the same immutable View. Without this hook, reads go directly to the Source through the same Core fences.
 
@@ -136,6 +182,6 @@ Use unique temporary paths in real tests. Release turns before disposing the run
 
 Test at least: valid composition; missing/ambiguous dependencies; two instances; schema/capability/authority denial; concurrent snapshots; stale revisions; cancellation and partial failure; unload/drain/reload; persistence; management and actual page clicks. Providers additionally test credentials, truthful capabilities, malformed upstream data, timeouts and conformance inside their parent Source.
 
-Run each plugin's `pnpm verify`. At repository level, `pnpm verify:plugins` packs all 14 artifacts, installs every plugin outside the workspace through ordinary semver manifests, then type-checks/tests/builds each and compiles the external consumer. No source aliases, manifest overrides or workspace links are permitted in that gate.
+Run each plugin's `pnpm verify`. At repository level, `pnpm verify:plugins` packs all 17 artifacts, installs every plugin outside the workspace through ordinary semver manifests, then type-checks/tests/builds each and compiles the external consumer. No source aliases, manifest overrides or workspace links are permitted in that gate.
 
 For RSI, keep candidate inputs/artifacts reproducible, compare against a known composition, and promote only through an explicit installation/selection decision. Passing a Strategy replay does not sandbox arbitrary JavaScript or grant permission to trade, send messages or delete external data.

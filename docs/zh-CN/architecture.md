@@ -13,21 +13,24 @@ flowchart TB
   Starter --> Docs["dsh-mnemon-source-documents"]
   Starter --> Spaces["dsh-mnemon-source-memory-spaces"]
   Starter --> Strategy["dsh-mnemon-strategy-default-three-tier"]
+  Scope["strategy-scoped · 可选"] -. selection .-> Strategy
+  Light["strategy-light-context · 可选"] -. projection .-> Strategy
+  Capture["strategy-auto-capture · 可选"] -. capture .-> Strategy
   Spaces --> Providers["dsh-mnemon-provider-* · private child Fibers"]
 ```
 
-图中表示安装归属，不是业务调用链。DSH 创建顶层 Entry/Fiber；Source 与 Strategy 都使用同一套 `installMemory(ctx, ...)` SDK 注册，由 Cordis 负责卸载。Core 只提供 `ctx.mnemonMemory`，不替 Memory Spaces 实现 Fiber，也不提供 `ctx.mnemonMemorySpace`。
+图中实线表示安装归属，虚线表示可选的策略贡献，不是业务调用链。DSH 创建顶层 Entry/Fiber；Source、Strategy 与策略贡献使用同一套 `installMemory(ctx, ...)` SDK 注册，由 Cordis 负责卸载。Core 只提供 `ctx.mnemonMemory`，不替 Memory Spaces 实现 Fiber，也不提供 `ctx.mnemonMemorySpace`。
 
 Memory Spaces **自己定义内部 Fiber 与 Provider 协议**。每个 Provider 都来自明确安装并配置的子模块；两个 Source 实例可以使用同名子节点，各自持有独立目录和凭据。不存在扫描依赖自动选择实现、全局 Provider 注册表等隐式装配。
 
-借鉴 Spring Boot Starter，默认发行包负责选依赖、给默认配置，不把 Source 业务收回 Core。用户仍安装 `dsh-mnemon`；贡献者可以独立开发、构建、测试、发布与安装 13 个插件包中的任意一个。其他组合显式选择 Source 实例及 Strategy。
+借鉴 Spring Boot Starter，默认发行包负责选依赖、给默认配置，不把 Source 业务收回 Core。用户仍安装 `dsh-mnemon`；16 个插件包可独立开发、测试与发布，其中三个策略贡献包按需启用，不进入默认 Starter。完整 Strategy 的替换仍需显式选择。
 
 | 归属 | 负责 | 不负责 |
 |---|---|---|
 | Core | 内部注册、协议校验、不可变 View、预算、运行代与租约 | Provider 驱动、Source 数据格式与存储决策、页面、DSH 生命周期策略 |
 | SDK | 小型贡献服务、Source/Strategy 作者契约、安装辅助与限定范围的测试工具 | 引擎/注册表构造器、已安装记录、运行代句柄 |
 | Source | 数据权威、facts、投影、grant、查询/修改、可选管理协议与 Client | 其他 Source 的控制器、全局策略选择 |
-| Strategy | 确定性的纯函数 `request + facts → ViewSpec` | 原始数据、凭据、驱动、副作用、扩张权限 |
+| Strategy | 确定性的纯函数 `request + facts + 自有槽贡献 → ViewSpec`，拥有槽语义 | 原始数据、凭据、驱动、副作用、扩张权限 |
 | Host | scope、阶段 hook、工具/RPC、认证、设置、监督任务 | Source 私有实现与注册表 |
 | Starter | 包集合、Entry id、默认配置 | 第二套加载器或运行时 |
 
@@ -44,7 +47,7 @@ Memory Spaces **自己定义内部 Fiber 与 Provider 协议**。每个 Provider
 
 九个独立 Provider 插件包为 `dsh-mnemon-provider-{mnemon-native,openviking,honcho,mem0,hindsight,holographic,retaindb,byterover,supermemory}`。Provider 运行在 Memory Spaces **内部**，负责存储/检索驱动，不是 Core 的新贡献种类。Git、Notion、健康记录通常应实现 Source；不同的组合方式应实现 Strategy。
 
-默认 Strategy 对同一默认角色出现多个实例报歧义错误。双 Notion、多 Space Source 等场景应在自己的 Strategy 中选择明确的实例 key，不能依赖导入顺序。
+默认 Strategy 对同一默认角色出现多个实例报歧义错误。可启用 `strategy-scoped` 显式组合多个实例；停用后恢复默认歧义检查，不按加载顺序猜测。三个策略扩展槽归默认 Strategy 所有，Core 只传递有界贡献并执行原有预算/权限校验，不理解这些槽的业务语义。
 
 ## View 数据流
 
