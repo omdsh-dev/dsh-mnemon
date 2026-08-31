@@ -7,6 +7,9 @@ import { createRuntimeGraph } from '../src/host/runtime.ts'
 import type { MemoryViewConfigurationRequest, MemoryViewPreferences } from '../src/host/view-protocol.ts'
 import { viewManagementFixture } from './fixtures/view-management.ts'
 import type { RuntimeMemorySnapshot } from 'dsh-mnemon-source-runtime/contracts'
+import type { Context } from '@deepseek-ai/cordis'
+import { COMPOSABLE_MEMORY_API_VERSION } from 'dsh-mnemon/contracts'
+import { defineMemoryStrategy, defineMemoryStrategyConfiguration, installMemory } from 'dsh-mnemon/extension-sdk'
 
 const fixtures: Awaited<ReturnType<typeof viewManagementFixture>>[] = []
 afterEach(async () => { for (const value of fixtures.splice(0)) await value.dispose() })
@@ -87,6 +90,40 @@ describe('View configuration with the real pinned DSH Cordis Loader', () => {
     const catalog = await f.management.catalog()
     expect(catalog.entries.find(item => item.entryId === 'light')).toMatchObject({ enabled: false, config: { maxProjectionCharacters: 700 } })
     expect(catalog.entries.find(item => item.entryId === 'capture')).toMatchObject({ enabled: true, active: true, config: { instruction: 'Remember only user-approved preferences.' } })
+    expect(f.treeWrite).not.toHaveBeenCalled()
+  })
+
+  it('selects another complete Strategy and can return without uninstalling the previous composition', async () => {
+    const f = await fixture()
+    const name = 'dsh-mnemon-strategy-empty-view'
+    const descriptor = defineMemoryStrategyConfiguration({ kind: 'strategy', typeId: 'empty-view', fields: [],
+      label: { en: 'Empty view', 'zh-CN': '空视图' }, description: { en: 'Test-only complete Strategy.', 'zh-CN': '测试策略。' },
+      create: () => ({ strategies: [defineMemoryStrategy({ manifest: { apiVersion: COMPOSABLE_MEMORY_API_VERSION, kind: 'strategy', typeId: 'empty-view', packageName: name,
+        deterministic: true, supportedSourceRoles: ['working-context', 'narrative', 'durable-evidence'], maxSources: 3, maxRoutes: 1, maxActions: 1 },
+        compose: () => ({ strategyTypeId: 'empty-view', explanation: 'Explicit empty test view.', sources: [] }) })] }),
+    })
+    f.modules[name] = { name, inject: ['mnemonMemory'], memoryStrategyConfiguration: descriptor, apply: (ctx: Context) => installMemory(ctx, descriptor.create({})) }
+    await f.loader.root.update([...f.loader.entries()].map(entry => entry.options).concat({ id: 'empty', name, disabled: true }))
+    const discovered = await f.management.catalog()
+    expect(discovered.diagnostics).toEqual([])
+    expect(discovered.entries.find(entry => entry.entryId === 'empty')).toMatchObject({ typeId: 'empty-view', enabled: false, writable: true })
+    await f.management.apply(f.config, scope(f), await request(f, { light: { enabled: true, config: { maxProjectionCharacters: 512 } } }))
+    const alternate = { ...await request(f, { empty: { enabled: true, config: {} } }), strategyTypeId: 'empty-view' }
+    expect(await f.management.preview(f.config, scope(f), alternate)).toMatchObject({ strategyTypeId: 'empty-view', projection: [], extensions: [] })
+    await f.management.apply(f.config, scope(f), alternate)
+    const graph = createRuntimeGraph(f.management.resolveConfig(f.config), f.workspace, f.engine)
+    try {
+      const turn = await graph.composableTurns.beginTurn('alternate', scope(f))
+      expect(turn.view.strategyTypeId).toBe('empty-view')
+      expect(turn.view.strategyExtensions ?? []).toEqual([])
+      graph.composableTurns.endTurn(turn.turnId)
+    } finally { graph.dispose() }
+    expect(f.loader.resolve('light').disabled).toBe(false)
+    expect(f.loader.resolve('mnemon-strategy-default-three-tier').disabled).toBe(false)
+    await f.management.apply(f.config, scope(f), await request(f))
+    const restored = await f.management.preview(f.config, scope(f), await request(f))
+    expect(restored.extensions.map(value => value.typeId)).toEqual(['light-context'])
+    expect(f.loader.resolve('empty').disabled).toBe(false)
     expect(f.treeWrite).not.toHaveBeenCalled()
   })
 

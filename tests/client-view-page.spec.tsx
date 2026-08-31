@@ -93,6 +93,21 @@ describe('View page interaction and localization', () => {
     expect(f.client.applyView).toHaveBeenCalledOnce()
   })
 
+  it('selects an installed complete Strategy without disabling other Entries or applying before confirmation', async () => {
+    const f = fixture()
+    const entries = f.dashboard().entries.map(entry => entry.typeId === 'light-context' ? { ...entry, enabled: true, active: true } : entry)
+    f.update({ entries: [...entries, { ...entries[0]!, entryId: 'alternate', typeId: 'alternate', packageName: 'dsh-mnemon-strategy-alternate', label: { en: 'Alternate', 'zh-CN': '其他策略' }, enabled: false, active: false }] })
+    f.mount(); await ready()
+    fireEvent.change(screen.getByRole('combobox', { name: 'Choose base strategy' }), { target: { value: 'alternate' } })
+    expect(screen.getByText('Original session context')).toBeTruthy()
+    expect(screen.getByRole('switch', { name: 'Light context' }).getAttribute('aria-checked')).toBe('true')
+    expect(f.client.applyView).not.toHaveBeenCalled()
+    fireEvent.click(editor().getByRole('button', { name: 'Apply to future turns' }))
+    await waitFor(() => expect(f.client.applyView).toHaveBeenCalledWith(expect.objectContaining({ strategyTypeId: 'alternate', entries: expect.objectContaining({
+      alternate: { enabled: true, config: {} }, 'default-three-tier': { enabled: true, config: {} }, 'light-context': { enabled: true, config: {} },
+    }) })))
+  })
+
   it('edits declared numeric fields and restores omission rather than persisting a synthetic default', async () => {
     const f = fixture(); f.mount(); await ready()
     fireEvent.click(screen.getByRole('switch', { name: 'Light context' }))
