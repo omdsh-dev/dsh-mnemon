@@ -37,6 +37,8 @@ describe('Documents disk-backed snapshot freshness through the public SDK', () =
       const created = (await client.mutate('mutate', { action: 'create', title: 'External changes', content: 'Original story one.' }, { confirmed: true })).value as unknown as DocumentMutationResult
       await client.mutate('mutate', { action: 'create', title: 'Other story', content: 'Unchanged second story.' }, { confirmed: true })
       const path = join(f.dataDir, created.document.relativePath)
+      const fixedTime = new Date('2025-01-01T00:00:00.000Z')
+      utimesSync(path, fixedTime, fixedTime)
       const original = readFileSync(path, 'utf8'), before = statSync(path)
       const snapshot = async () => (await client.read('snapshot')).value as unknown as DocumentSnapshot
       const selected = (value: DocumentSnapshot) => value.documents.find(document => document.id === created.document.id)!
@@ -48,6 +50,7 @@ describe('Documents disk-backed snapshot freshness through the public SDK', () =
       expect(Buffer.byteLength(edited)).toBe(Buffer.byteLength(original))
       writeFileSync(path, edited)
       utimesSync(path, before.atime, before.mtime)
+      expect(statSync(path, { bigint: true }).mtimeNs).toBe(BigInt(fixedTime.getTime()) * 1_000_000n)
       const changed = await snapshot()
       expect(selected(changed)).toMatchObject({ healthy: true, excerpt: 'Modified story one.' })
       expect(changed.revision).toBe(initial.revision) // Body edits do not invent an index revision.
@@ -122,13 +125,16 @@ describe('Documents disk-backed snapshot freshness through the public SDK', () =
     try {
       const { client } = await f.mount()
       await client.mutate('mutate', { action: 'create', title: 'Initial', content: 'Stored body.' }, { confirmed: true })
-      const before = await client.read('snapshot')
       const path = join(f.dataDir, 'documents', 'index.json')
+      const fixedTime = new Date('2025-01-01T00:00:00.000Z')
+      utimesSync(path, fixedTime, fixedTime)
+      const before = await client.read('snapshot')
       const original = readFileSync(path, 'utf8'), stat = statSync(path)
       const edited = original.replace('Initial', 'Changed')
       expect(edited.length).toBe(original.length)
       writeFileSync(path, edited)
       utimesSync(path, stat.atime, stat.mtime)
+      expect(statSync(path, { bigint: true }).mtimeNs).toBe(BigInt(fixedTime.getTime()) * 1_000_000n)
       const changed = await client.read('snapshot')
       expect(changed.revision).not.toBe(before.revision)
       expect(changed.value).toMatchObject({ documents: [{ title: 'Changed', excerpt: 'Stored body.' }] })

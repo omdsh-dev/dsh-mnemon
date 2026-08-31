@@ -54,8 +54,40 @@ export function deepFreeze<T>(value: T): T {
   return Object.freeze(value)
 }
 
+/** Validate the JSON boundary without allocating a discarded canonical string. */
+function assertMemoryJson(value: unknown, label: string, ancestors = new Set<object>(), depth = 0): void {
+  if (depth > 48) throw new Error(`${label} is nested too deeply`)
+  if (value === null || typeof value === 'boolean' || typeof value === 'string') return
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new Error(`${label} contains a non-finite number`)
+    return
+  }
+  if (typeof value !== 'object') throw new Error(`${label} contains a non-JSON value`)
+  if (ancestors.has(value)) throw new Error(`${label} contains a cycle`)
+  ancestors.add(value)
+  try {
+    if (Array.isArray(value)) {
+      // Do not dispatch through caller-owned forEach/map properties: a hidden
+      // override can skip invalid elements and then disappear in structuredClone.
+      const length = value.length
+      for (let index = 0; index < length; index++) {
+        if (index in value) assertMemoryJson(value[index], label, ancestors, depth + 1)
+      }
+      return
+    }
+    const prototype = Object.getPrototypeOf(value)
+    if (prototype !== Object.prototype && prototype !== null) throw new Error(`${label} contains a non-JSON object`)
+    // Accessors can affect later values. Retain canonical visitation order so
+    // removing serialization does not change which boundary values are checked.
+    const entries = Object.entries(value).sort(([left], [right]) => left.localeCompare(right))
+    for (const [, item] of entries) assertMemoryJson(item, label, ancestors, depth + 1)
+  } finally {
+    ancestors.delete(value)
+  }
+}
+
 export function jsonClone<T>(value: T, label: string): T {
-  canonicalMemoryJson(value, label)
+  assertMemoryJson(value, label)
   return deepFreeze(structuredClone(value))
 }
 
