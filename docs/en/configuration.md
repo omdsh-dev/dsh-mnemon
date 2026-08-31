@@ -88,7 +88,8 @@ mnemon:
 | `recallMode` | `guided` | `guided` / `off` | Whether to inject one durable on-demand recall cue per session; does not remove explicit recall |
 | `writebackMode` | `guided` | `guided` / `off` | Whether to inject one durable hot-memory cue per session and enable scored, dirty-admitted background review; does not remove explicit writes |
 | `idleReviewMs` | `30000` | 5000–600000 ms | Required continuous idle time after the threshold is reached |
-| `tabEnabled` | `true` | boolean | Whether to mount the Sidebar entry and workbench; Host RPC, commands, and Agent tools remain registered when off |
+| `displayMode` | `sidebar` | `sidebar` / `builtin`; legacy `buildin` accepted | Entry placement: standalone Sidebar or a conversation tab using the same workspace UI; legacy spelling is migrated to `builtin` |
+| `tabEnabled` | `true` | boolean | Whether to mount the selected entry and workbench; Host RPC, commands, and Agent tools remain registered when off |
 | `writeEnabled` | `true` | boolean | Whether to expose semantic write tools, write RPC, and write commands |
 | `taskAgentModel` | `{ mode: inherit }` | `inherit` / `fixed` | Model route for independent task Agents used by AI metadata, Agent Query, memory distillation, and Document archiving, plus the idle-review worker; `fixed` requires both `provider` and `model` and also pins their bounded workers for write, answer, provider placement, migration, compaction, archive, and metadata maintenance. Conversation Recall and Related are direct Host reads and do not use this route |
 | `remoteAccess` | `read-only` | `read-only` / `trusted-host` | DSH 0.1.1-rc.2 compatibility policy for non-loopback Mnemon management RPC; startup-only and ignored by DSH 0.1.2-alpha.1 |
@@ -330,15 +331,27 @@ routingGuidance=false
   -> runtime-memory context remains
 ```
 
-## Sidebar and the `tabEnabled` UI Switch
+## Entry Placement: `displayMode` and `tabEnabled`
 
-Memory System uses only the Sidebar entry, opening a dedicated center-column workbench with a minimal, logo-free skin aligned with official DSH panels. Settings no longer offer a display-mode selector, and the plugin never registers a `conversation.view` tab.
+Memory System defaults to Sidebar, opening a dedicated center-column workbench with a minimal, logo-free skin aligned with official DSH panels. Set `displayMode: builtin`, or select Builtin in Settings, to put that same workspace in the current conversation's `conversation.view` tab instead. Pages, navigation, dialogs, and styling remain shared; there is no separate builtin UI.
 
 The sidebar entry is an explicit navigation action: clicking it again keeps the workspace open; use “Back to conversation” to close it. Switching to the task board or SSH synchronizes both visibility and entry state, so a missed peer activation notification cannot prevent reopening Memory System.
 
-Upgrade compatibility: legacy `displayMode` fields in YAML or user settings, including `buildin`, are ignored. Existing installations start without manual cleanup, and no memory data is migrated or deleted. This field is no longer an effective setting, and new settings RPC mutations cannot write it.
+Builtin omits the header's storage-mode badge, workspace picker, and alignment controls. Every read, write, and independent task request follows its owning session through the existing Host routing:
 
-`tabEnabled=false` removes the Sidebar entry and workbench live; enabling it again always restores Sidebar. Host RPC, commands, and tools remain registered, so an Agent or command already in progress stays valid. Turn memory and Save to memory remain independently controlled by `mnemon-ui`.
+| `storageScope` | Builtin read/write root |
+|---|---|
+| `global` | Shared `MNEMON_DATA_DIR` or `~/.mnemon`, regardless of the session workspace |
+| `workspace` | The current session's `<cwd>/.mnemon`; switching conversations follows their respective workspaces |
+| `custom` | Configured `dataDir`, regardless of the session workspace |
+
+The existing `runtimeUserScope: global` exception still keeps USER.md global. Changing placement does not change scope, migrate memory data, or revive the old builtin navigation. Settings RPC applies entry changes live.
+
+The canonical spelling is **`builtin`**. Historical `displayMode: buildin` preferences ignored by v0.4.0–v0.4.1 are accepted again, but runtime and UI state normalize them to `builtin`. On startup and external settings changes, the Host rewrites that one field through DSH's revision-fenced settings writer. Old-client RPC writes also persist `builtin` directly. Other fields and document comments are preserved; an explicit newer Sidebar choice wins a concurrent migration.
+
+If the old value comes only from a composition profile, migration saves a canonical user-setting override instead of rewriting the profile file. A read-only settings provider still recognizes the alias but is not written; a persistence failure is reported in the Host log without disabling the normalized entry.
+
+`tabEnabled=false` removes the selected entry and workbench live; enabling it again restores the configured placement. The two entries are mutually exclusive. Host RPC, commands, and tools remain registered, so an Agent or command already in progress stays valid. Turn memory and Save to memory remain independently controlled by `mnemon-ui` and navigate to the selected placement.
 
 ## Profile Patch Overrides
 
@@ -351,6 +364,14 @@ Workspace isolation:
 ```yaml
 mnemon:
   storageScope: workspace
+```
+
+The same workspace isolation inside each conversation:
+
+```yaml
+mnemon:
+  storageScope: workspace
+  displayMode: builtin
 ```
 
 An explicit Windows CLI path:

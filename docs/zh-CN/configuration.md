@@ -88,7 +88,8 @@ mnemon:
 | `recallMode` | `guided` | `guided` / `off` | 是否在每个会话注入一次可持续复用的按需 recall cue；不移除显式召回 |
 | `writebackMode` | `guided` | `guided` / `off` | 是否在每个会话注入一次可持续复用的热记忆 cue，并启用评分加 dirty admission 的后台审查；不移除显式写入 |
 | `idleReviewMs` | `30000` | 5000–600000 ms | 达标后需要连续空闲的时间 |
-| `tabEnabled` | `true` | boolean | 是否挂载 Sidebar 入口和工作台；关闭后 Host RPC、命令和 Agent 工具保持注册 |
+| `displayMode` | `sidebar` | `sidebar` / `builtin`；兼容旧值 `buildin` | 入口位置：独立 Sidebar 或会话内标签页，共用同一工作台；旧拼写自动迁移为 `builtin` |
+| `tabEnabled` | `true` | boolean | 是否挂载所选入口和工作台；关闭后 Host RPC、命令和 Agent 工具保持注册 |
 | `writeEnabled` | `true` | boolean | 是否暴露语义写工具、写 RPC 和写命令 |
 | `taskAgentModel` | `{ mode: inherit }` | `inherit` / `fixed` | AI 元信息、Agent 查询、记忆沉淀和档案归档使用的独立任务 Agent，以及空闲复盘 worker 的模型路由；`fixed` 必须同时保存 `provider` 与 `model`，并会钉住对应的写入、证据问答、Provider 选择、迁移、压缩、归档和元信息维护 worker。对话中的 Recall 与 Related 是 Host 直接读取，不使用该路由 |
 | `remoteAccess` | `read-only` | `read-only` / `trusted-host` | DSH 0.1.1-rc.2 的非 loopback Mnemon 管理 RPC 兼容策略；仅启动时读取，DSH 0.1.2-alpha.1 会忽略 |
@@ -330,15 +331,27 @@ routingGuidance=false
   -> runtime-memory context remains
 ```
 
-## Sidebar 入口与 `tabEnabled` 界面开关
+## 入口位置：`displayMode` 与 `tabEnabled`
 
-记忆系统只提供 Sidebar 入口：从 DSH 左侧栏打开独立主内容区工作台，使用无 Mnemon Logo 的 DSH 官方风格极简皮肤。设置页不再提供展示形态选择，也不会注册 `conversation.view` 内嵌标签页。
+记忆系统默认使用 Sidebar：从 DSH 左侧栏打开独立主内容区工作台，使用无 Mnemon Logo 的 DSH 官方风格极简皮肤。设置 `displayMode: builtin`，或在设置页选择 Builtin，即可把同一个工作台放进当前会话的 `conversation.view` 标签页。页面、导航、弹窗和样式全部共用，不维护另一套 builtin 界面。
 
 侧栏“记忆系统”是打开工作台的导航入口，重复点击仍保持打开；请使用“返回会话”关闭。与任务看板、SSH 切换时，同时同步面板可见性和入口状态，即使其他插件的激活通知遗漏，点击也能重新打开记忆系统。
 
-升级兼容：旧 YAML 或用户设置中的 `displayMode`（包括 `buildin`）会被忽略，不需要手工清理即可启动，也不会迁移或删除记忆数据。该字段不再属于有效配置，新的设置 RPC 不再接受对它的写入。
+Builtin 隐藏页眉中的存储模式标记、工作区选择和对齐控件。所有读取、写入和独立任务请求都通过现有 Host 路由跟随所属会话：
 
-`tabEnabled=false` 会实时移除 Sidebar 入口和工作台；重新开启后仍使用 Sidebar。Host RPC、命令和工具保持注册，运行中的 Agent 或命令不会因界面开关而失效。对话内的本回合记忆与存入记忆仍由 `mnemon-ui` 独立控制。
+| `storageScope` | Builtin 实际读写根 |
+|---|---|
+| `global` | 共享 `MNEMON_DATA_DIR` 或 `~/.mnemon`，不受会话工作区影响 |
+| `workspace` | 当前会话的 `<cwd>/.mnemon`；切换会话时自动跟随各自工作区 |
+| `custom` | 配置的 `dataDir`，不受会话工作区影响 |
+
+既有 `runtimeUserScope: global` 例外仍让 USER.md 保持全局。切换入口不会改变范围、迁移记忆数据或恢复旧 builtin 导航。设置 RPC 保存后实时切换入口。
+
+规范拼写统一为 **`builtin`**。v0.4.0–v0.4.1 忽略的历史 `displayMode: buildin` 偏好会重新识别，但运行时与界面统一使用 `builtin`。Host 启动及配置外部热更新时，通过 DSH 带修订号保护的设置接口自动写回这一个字段；旧客户端 RPC 提交 `buildin` 也直接保存为 `builtin`。其他字段和配置注释保持不变，并发期间用户明确选择的 Sidebar 优先，不会被迁移覆盖。
+
+如果旧值只来自组合 profile，迁移保存一条规范的用户设置覆盖，不直接改写 profile 文件。只读设置仍识别旧拼写，但不会绕过只读限制写盘；落盘失败会记录在 Host 日志中，不会关闭已归一化的入口。
+
+`tabEnabled=false` 会实时移除所选入口和工作台；重新开启后恢复配置的入口位置，两种入口不会同时出现。Host RPC、命令和工具保持注册，运行中的 Agent 或命令不会因界面开关而失效。对话内的本回合记忆与存入记忆仍由 `mnemon-ui` 独立控制，并跳转到所选入口。
 
 ## Profile patch 覆盖
 
@@ -351,6 +364,14 @@ routingGuidance=false
 ```yaml
 mnemon:
   storageScope: workspace
+```
+
+在各会话内使用相同的工作区隔离：
+
+```yaml
+mnemon:
+  storageScope: workspace
+  displayMode: builtin
 ```
 
 显式指定 Windows CLI 路径：

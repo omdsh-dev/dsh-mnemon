@@ -197,7 +197,7 @@ Recommended scenarios:
 9. Read-only: write tools, write commands, and write RPC are rejected while reads remain available.
 10. Sidebar: all four primary tabs, four Memory Space secondary tabs, stable headings, filters, and progressive loading work.
 11. Conversation UI: Turn memory appears only for completed turns with activity; links land correctly; canceling Save to memory performs no write.
-12. Settings: storage scopes and both conversation switches apply live; `tabEnabled` controls Sidebar visibility, and legacy display preferences never restore an embedded entry.
+12. Settings: storage scopes, `displayMode`, and both conversation switches apply live; `tabEnabled` controls the selected entry. Sidebar and Builtin never mount together. Builtin shares all pages and dialogs, hides scope controls, follows the owning session for global/workspace/custom reads and writes, and clears stale data and editors on session changes.
 13. ZIP: export can be previewed and merged into an isolated custom root; damaged checksums are rejected.
 14. Versions: checking never installs; link/manual sources offer no unsafe update; successful updates trigger a fresh status check.
 15. Status and browser console: no unhandled errors or warnings.

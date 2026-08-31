@@ -21,7 +21,7 @@
 | 选择、配置或比较记忆体 Provider | [长期记忆 Provider](./memory-providers.md) |
 | 让 DSH 与其他 Mnemon-enabled Agent 共享长期记忆 | [项目介绍：跨 Agent 共享边界](./project-overview.md#跨-agent-共享边界) · [配置参考：共享范围](./configuration.md#选择跨-agent-共享范围) |
 | 了解每轮注入、召回、沉淀和归档何时发生 | [生命周期与核心流程](./workflows.md) |
-| 配置全局 / 工作区 / 自定义目录与 Sidebar 显示 | [配置参考](./configuration.md) |
+| 配置全局 / 工作区 / 自定义目录、入口位置与显示 | [配置参考](./configuration.md) |
 | 理解工作区“查看目录”与 Agent“实际生效目录” | [UI 指南：工作区模式](./ui-guide.md#工作区模式查看与执行分离) |
 | 检查或更新 Mnemon 与 dsh-mnemon | [运维指南：版本检查与更新](./operations.md#版本检查与更新) |
 | 备份、恢复或迁移完整记忆目录 | [运维指南：备份与恢复](./operations.md#备份与恢复) |
@@ -48,7 +48,7 @@
 
 ## 文档边界
 
-- 用户文档以 Sidebar 唯一工作台入口和可组合三层拓扑为主。
+- 用户文档以 Sidebar 优先工作台、共用界面的可选 Builtin 入口和可组合三层拓扑为主。
 - 架构图表达稳定执行边界，不是实时监控面板；实时数量与版本以“状态”页为准。
 - RPC 是 Host 与插件客户端之间的内部协议，不承诺稳定外部 API。
 - 当前没有正式固定的 DSH / Mnemon 版本矩阵；升级前应备份并在隔离目录验证。

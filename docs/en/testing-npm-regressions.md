@@ -2,6 +2,8 @@
 
 [简体中文](../zh-CN/testing-npm-regressions.md) | **English** | [Development and Verification](./development.md)
 
+The latest [issue #139 Builtin verification record](../pr-assets/builtin-139/README.md) covers the unmodified npm 0.4.1 control, canonical `builtin` migration, all three storage scopes, and real Web screenshots. The baseline description and 2026-08-30 record below remain historical evidence for the earlier npm 0.3.5 regressions.
+
 This regression uses the `v0.3.5` source corresponding to npm `dsh-mnemon@0.3.5` as its baseline, not the view-based development branch (then labeled 0.4.0, now planned for v0.5). The Host is pinned to the latest non-alpha npm release at the time of testing, `@deepseek-ai/dsh@0.1.1-rc.2`. The Web UI is `@linxin666/dsh-web-all@0.3.6`, with additional coverage of its original package name, `@linxin666/dsh-web-ui-all@0.3.6`.
 
 The fixes were first completed against that npm baseline, then synchronized with `main`, still at 0.3.5, and verified again for the PR. Keep separate records of the original and patched packages; current `main` is not an unmodified npm control.
@@ -21,6 +23,21 @@ Each run creates an independent DSH_HOME, memory directory, workspace, random lo
 `--package dsh-mnemon@0.3.5` starts the unmodified npm control; `--package /absolute/path/to/local-pack.tgz` installs a locally built patch. By default, the profile uses `cliPath: mnemon` and a child-process-only PATH to test command-name resolution instead of bypassing the issue with an absolute cliPath. Use `--cli-name` to select a different configured value.
 
 ## Panel navigation
+
+### Entry placement and storage scope
+
+The harness also accepts `--display-mode sidebar|builtin` (default `sidebar`, with legacy `buildin` input accepted) and `--storage-scope global|workspace|custom` (default `custom`). Global mode uses the fixture-owned `MNEMON_DATA_DIR`, workspace mode uses the test session's `.mnemon`, and custom mode uses the fixture's explicit directory. No personal root is used.
+
+```sh
+node scripts/serve-web-regression.mjs --cli /absolute/path/to/test-owned/mnemon --display-mode buildin --storage-scope workspace
+node scripts/serve-web-regression.mjs --cli /absolute/path/to/test-owned/mnemon --package dsh-mnemon@0.4.1 --display-mode buildin --storage-scope workspace
+```
+
+Both commands intentionally start with the old spelling; the second is the unmodified issue #139 control. The patched Host must save `mnemon.displayMode: builtin` automatically. Verify that the conversation tab shares Sidebar pages and dialogs, has no scope selector, and follows the owning session for reads and writes. Switch entry placement live and reload to check persistence; switch conversations across two workspaces to check isolation. Record the linked commit or packed artifact separately from the displayed package version.
+
+`pnpm verify:headless` also starts with a legacy YAML user setting, checks its canonical writeback and preservation of unrelated fields/comments, then restarts Headless to verify idempotence. No Web connection or real model is needed for migration.
+
+### Sidebar panel round trips
 
 1. Click Memory System → Task Board → Memory System, checking the genuinely visible main page after each step.
 2. Repeat multiple rounds, including session and task data, SSH, returning to the conversation, collapsing and reopening the sidebar, and reloading.
