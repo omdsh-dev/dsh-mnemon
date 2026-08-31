@@ -400,6 +400,8 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
           ...(item.memoryCapabilities === undefined ? {} : { memoryCapabilities: { ...item.memoryCapabilities } }),
           ...(item.relevanceTier === undefined ? {} : { relevanceTier: item.relevanceTier }),
           ...(item.category === undefined ? {} : { category: item.category }),
+          ...(item.importance === undefined ? {} : { importance: item.importance }),
+          ...(item.createdAt === undefined ? {} : { createdAt: item.createdAt }),
           ...(item.tags === undefined ? {} : { tags: item.tags }),
           ...(item.entities === undefined ? {} : { entities: item.entities }),
           ...(item.source === undefined ? {} : { source: item.source }),

@@ -18,7 +18,7 @@ describe('standalone Memory Spaces Source', () => {
     const directory = mkdtempSync(join(tmpdir(), 'mnemon-spaces-bounded-'))
     const runner = new MemoryCompositionRunner()
     const scope = { storage: 'custom' as const }
-    const rows = [{ id: 'visible', content: 'needle😀 evidence one', score: 1 }, { id: 'hidden', content: 'needle evidence two', score: 0.9 }]
+    const rows = [{ id: 'visible', content: 'needle😀 evidence one', score: 1, importance: 0.8, createdAt: '2026-08-30T00:00:00.000Z' }, { id: 'hidden', content: 'needle evidence two', score: 0.9 }]
     const related = vi.fn(async () => [...rows])
     const forget = vi.fn(async () => ({ action: 'deleted' }))
     const boundedProvider = defineMemorySpaceProvider<undefined>({ id: 'bounded', apply(ctx, host) {
@@ -52,6 +52,7 @@ describe('standalone Memory Spaces Source', () => {
       expect(accepted.committedAt).toBeUndefined()
       const evidence = await turn.executeRoute(route('recall'), { query: 'needle' })
       expect(evidence.items.map(item => item.id)).toEqual(['visible'])
+      expect(evidence.items[0]?.provenance).toMatchObject({ importance: 0.8, createdAt: '2026-08-30T00:00:00.000Z' })
       expect(evidence.items[0]?.text.length).toBeLessThanOrEqual(5)
       expect(evidence.truncated).toBe(true)
       await expect(turn.executeRoute(route('related'), { id: 'hidden' })).rejects.toThrow('already admitted')

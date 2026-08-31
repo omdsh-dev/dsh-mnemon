@@ -15,10 +15,10 @@ async function fixture(kind: 'documents' | 'memory-spaces') {
       const content = `${input.query ?? input.id} evidence ${index} ` + 'x'.repeat(1_900)
       const text = truncateMemoryText(content, Math.min(2_600, remaining))
       remaining -= text.length
-      return { id: `${input.query ?? input.id}:${index}`, text,
+      return { id: `${input.query ?? input.id}:${index}`, text, score: 0.9,
         provenance: kind === 'documents'
           ? { kind: 'match', title: 'Record', description: 'Saved record', status: 'active', relativePath: 'records/a.md', sourcePaths: [] }
-          : { memoryBodyId: 'project', relevanceTier: 'high' },
+          : { memoryBodyId: 'project', relevanceTier: 'high', importance: 0.8, createdAt: '2026-08-30T00:00:00.000Z' },
       }
     }).filter(item => item.text !== '')
     return { id: 'evidence:' + (input.query ?? input.id), viewId: request.view.id, routeId: request.route.id,
@@ -76,6 +76,8 @@ describe('independent three-tier execution policy', () => {
       const first = await turn.executeRoute(route, { query: 'ALPHA!', category: 'wrong', intent: 'wrong', limit: 99 })
       expect(query.mock.calls[0]![0].input).toEqual({ query: 'ALPHA!', limit: 6, memoryBodyIds: ['project', 'other'] })
       expect(output(first).results).toHaveLength(3)
+      expect(output(first).results[0]).toMatchObject({ importance: 0.8, createdAt: '2026-08-30T00:00:00.000Z' })
+      expect(output(first).results[0]).not.toHaveProperty('score') // Old main intentionally hides ranking scores.
       expect(output(first).results.every(item => item.content.length <= 1_200)).toBe(true)
       expect(output(await turn.executeRoute(route, { query: 'alpha' })).results).toEqual(output(first).results)
       expect(query).toHaveBeenCalledOnce()
