@@ -18,11 +18,13 @@ The Memory System sidebar entry always opens its workspace, including after visi
 
 With `displayMode: builtin`, open Memory System from the conversation's tabs instead; the Sidebar entry is absent. The header omits storage-mode and workspace-selection controls because the Host uses the owning session's global, workspace or custom scope. All Source pages and dialogs below are shared, and conversation shortcuts open the matching tab. See [scope mapping](./configuration.md#entry-placement-displaymode-and-tabenabled).
 
-Primary pages remain **Status, Runtime, Documents, Memory Spaces**. Memory Spaces adds **Overview, Recall, Content, Entities**, with **Remember** and **Distillation strategy** at the top right.
+Primary pages are **Status, View, Runtime, Documents, Memory Spaces**. Memory Spaces adds **Overview, Recall, Content, Entities**, with **Remember** and **Distillation strategy** at the top right. The older recording above predates the View tab.
 
 | Visible action | What happens after the click | Independent task Agent? |
 |---|---|---|
 | Refresh status, synchronize now, click a Memory Space card | The Host reads asynchronously; one region spinner or the card's state dot shows progress | No |
+| Inspect View / Generate preview | Read the real pinned snapshot, or compile an explicitly labelled read-only candidate from current Sources | No model, maintenance or memory writes |
+| Apply to future turns | Validate the whole composition, update existing DSH plugin Entries, and persist Profile-local preferences | No; the current turn stays pinned |
 | Direct search, browse Content, inspect Entities | Provider-native read contracts run concurrently and render progressively | No |
 | Agent query | Recall runs first; bounded evidence goes to a clean top-level task Agent | Yes, read-only |
 | Remember / Save to memory | An editable confirmation precedes qualification, deduplication, distillation, routing, and writing | Starts after confirmation |
@@ -42,6 +44,19 @@ The page loads concurrently and progressively. Only one region-level spinner rem
 [![Check dsh-mnemon and Mnemon versions](../assets/screenshots/version-check.png)](../assets/screenshots/version-check.png)
 
 Checking is read-only. Update actions appear only for supported installation sources with a newer release. Restart `dsh web` after updating dsh-mnemon.
+
+## View: inspect context and compose strategies
+
+The tab is **View** in English and **视图** in Chinese. It uses the same surfaces, typography and controls as the other pages. At wide widths, inspection and configuration sit side by side; narrow layouts stack them.
+
+- **Actual View** is the active turn's pinned snapshot or the latest snapshot retained by the running Host. Inspect Source fragments, resident character count, read routes, write actions, Strategy guidance and snapshot identity. Reopening the Sidebar refreshes it without discarding a draft; **Refresh view status** also refreshes it explicitly. No generated turn, a mismatched workspace, or a restarted Host shows an explanation, not a reconstructed historical snapshot.
+- **Configuration preview** compiles the draft against current Source state without activating plugins or executing Actions. It does not call a model or rewrite memory. It is not an already-injected View, and later Source changes may change the eventual result.
+- **Strategy composition** selects one base Strategy and independently enables optional additive plugins. Plugins define their own fields: Source order and writable subset, resident character ceiling, or capture instructions. **Use plugin default** removes the override; explicitly selecting no writable Sources means no writes.
+- **Apply to future turns** validates the entire proposal before changing Entries. Conflicts, stale revisions or activation/persistence failures are reported; unrelated plugins remain enabled. Configurations are saved for the current DSH Profile across its workspaces and replayed after restart. They do not alter an active turn or its existing permissions.
+
+This is not a plugin marketplace. Install and register optional `dsh-mnemon-strategy-*` plugins through DSH first; configured disabled Entries can then be enabled here. A plugin without an optional configuration descriptor remains usable through normal DSH configuration and is read-only on this page. The three optional extensions are not automatically installed by the default Starter. See [plugin-owned configuration metadata](./extensions.md).
+
+Character counts cover projected content, **not tokens or the complete model request**. The raw memory snapshot does not include the entire conversation, tool catalog or system prompt. Displayed Strategy guidance still follows Host injection settings. Active capture guides the current LLM; it does not start an autonomous background Agent.
 
 ## 2. Runtime: maintain every-turn context
 
