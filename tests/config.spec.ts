@@ -44,6 +44,7 @@ describe('Mnemon config and resolution', () => {
       recallMode: 'guided',
       writebackMode: 'guided',
       idleReviewMs: 30_000,
+      displayMode: 'sidebar',
       tabEnabled: true,
       writeEnabled: true,
       remoteAccess: 'read-only',
@@ -200,14 +201,17 @@ describe('Mnemon config and resolution', () => {
       .toMatchObject({ turnBar: false, saveAction: false })
   })
 
-  it.each(['buildin', 'sidebar'])('ignores a legacy displayMode=%s without losing other settings', displayMode => {
+  it.each(['buildin', 'sidebar'] as const)('preserves displayMode=%s without changing storage or visibility', displayMode => {
     const legacy = { displayMode, storageScope: 'workspace' as const, tabEnabled: false, writeEnabled: false }
     const parsed = Config(legacy)
-    expect(resolveConfig(parsed)).toMatchObject({ storageScope: 'workspace', tabEnabled: false, writeEnabled: false })
-    expect(resolveConfig(parsed)).not.toHaveProperty('displayMode')
-    expect(resolveConfig({})).not.toHaveProperty('displayMode')
-    expect(Config.dict).not.toHaveProperty('displayMode')
+    expect(resolveConfig(parsed)).toMatchObject({ displayMode, storageScope: 'workspace', tabEnabled: false, writeEnabled: false })
+    expect(resolveConfig({}).displayMode).toBe('sidebar')
+    expect(Config({}).displayMode).toBe('sidebar')
     expect(legacy).toEqual({ displayMode, storageScope: 'workspace', tabEnabled: false, writeEnabled: false })
+  })
+
+  it.each(['builtin', 'unknown', '', true])('rejects invalid displayMode=%s', displayMode => {
+    expect(() => Config({ displayMode } as never)).toThrow()
   })
 
   it('resolves the one storage-scope setting and preserves legacy dataDir as custom', () => {

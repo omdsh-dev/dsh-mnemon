@@ -148,6 +148,8 @@ export interface Config {
   memoryTopology?: MemoryTopologyConfig
   recallQuality?: RecallQualityConfig
   routingGuidance?: boolean
+  /** Entry placement only; both modes share the same memory workspace. */
+  displayMode?: 'sidebar' | 'buildin'
   tabEnabled?: boolean
   writeEnabled?: boolean
   /** DSH rc.2 management-channel authority; ignored by DSH 0.1.2-alpha.1. */
@@ -245,6 +247,7 @@ export interface ResolvedConfig {
   memoryTopology: ResolvedMemoryTopologyConfig
   recallQuality: ResolvedRecallQualityConfig
   routingGuidance: boolean
+  displayMode: 'sidebar' | 'buildin'
   tabEnabled: boolean
   writeEnabled: boolean
   /** DSH rc.2 management-channel authority; ignored by DSH 0.1.2-alpha.1. */

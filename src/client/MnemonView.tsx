@@ -56,6 +56,8 @@ export interface MnemonViewProps {
   sessionId?: string
   workspaceId?: string
   workspaceSelection?: MnemonWorkspaceSelection
+  /** Placement affects the scope header, never the shared pages or skin. */
+  surface?: Config['displayMode']
   t?: MnemonTranslate
   locale?: string
   onClose?: () => void
@@ -2254,7 +2256,7 @@ export function MnemonView(props: MnemonViewProps): JSX.Element {
   return <I18nContext.Provider value={t}><LocaleContext.Provider value={props.locale ?? 'zh'}><MnemonWorkspace {...props} /></LocaleContext.Provider></I18nContext.Provider>
 }
 
-function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, workspaceSelection, onClose }: MnemonViewProps): JSX.Element {
+function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, workspaceSelection, surface = 'sidebar', onClose }: MnemonViewProps): JSX.Element {
   const t = useT()
   const subscribeSettings = useCallback((listener: () => void) => settingsScope.subscribe(listener), [settingsScope])
   const getSettingsSnapshot = useCallback(() => settingsScope.getSnapshot(), [settingsScope])
@@ -2298,7 +2300,9 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const documentsLayerEnabled = layerEnabled('documents')
   const memorySpacesLayerEnabled = layerEnabled('memory-spaces')
   const metadataSessionId = status?.lifecycle?.current?.sessionId
-  const taskClient = useMemo(() => new MnemonClient(connection, undefined, workspaceId), [connection, workspaceId])
+  // Sidebar tasks follow the inspected workspace; embedded tasks follow their
+  // owning session. Both still use the same independent task-Agent endpoints.
+  const taskClient = useMemo(() => surface === 'buildin' ? client : new MnemonClient(connection, undefined, workspaceId), [client, connection, surface, workspaceId])
   const statusRequest = useRef(0)
   const [revision, setRevision] = useState(0)
   const [searchSeed, setSearchSeed] = useState('')
@@ -2430,14 +2434,16 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       : t('header.connected')
 
   return (
-    <main className={appearanceClass(css.shell, sidebarCss.shell)} data-mnemon-surface="sidebar">
+    <main className={appearanceClass(css.shell, sidebarCss.shell)} data-mnemon-surface={surface}>
       <header className={appearanceClass(css.masthead, sidebarCss.masthead)}>
         {onClose !== undefined && <button type="button" className={appearanceClass(css.ghostButton, css.backButton)} onClick={onClose} aria-label={t('header.backToConversation')}><IconChevronLeftOutline14 size={14} /><span>{t('header.backToConversation')}</span></button>}
         <div className={appearanceClass(css.brand, sidebarCss.brand)}>
           <h1>{t('tab.label')}</h1>
-          <span className={css.storageMode} aria-label={t('workspace.storageModeAria', { mode: storageModeText })}><span>{t('workspace.storageMode')}</span><strong>{storageModeText}</strong></span>
-          {workspacePicker}
-          {canAlignWorkspace && <div className={appearanceClass(css.workspaceMismatch, sidebarCss.workspaceMismatch)} role="status" aria-label={`${t('workspace.mismatchTitle')}. ${workspaceDifference}`} title={workspaceDifference}><span>{t('workspace.mismatchShort')}</span><button type="button" onClick={workspaceSelection.onAlign}>{t('workspace.align')}</button></div>}
+          {surface === 'sidebar' && <>
+            <span className={css.storageMode} aria-label={t('workspace.storageModeAria', { mode: storageModeText })}><span>{t('workspace.storageMode')}</span><strong>{storageModeText}</strong></span>
+            {workspacePicker}
+            {canAlignWorkspace && <div className={appearanceClass(css.workspaceMismatch, sidebarCss.workspaceMismatch)} role="status" aria-label={`${t('workspace.mismatchTitle')}. ${workspaceDifference}`} title={workspaceDifference}><span>{t('workspace.mismatchShort')}</span><button type="button" onClick={workspaceSelection.onAlign}>{t('workspace.align')}</button></div>}
+          </>}
         </div>
         <div className={appearanceClass(css.headerActions, sidebarCss.headerActions)}><div className={appearanceClass(css.statusCluster, sidebarCss.statusCluster)}><span className={`${css.statusDot} ${statusLoading && status === null ? css.checking : status?.healthy === true ? css.online : css.offline}`} /><span>{connectionLabel}</span><button type="button" className={css.iconButton} disabled={statusLoading} onClick={refreshAll} aria-label={t('common.refresh')}>↻</button></div></div>
       </header>

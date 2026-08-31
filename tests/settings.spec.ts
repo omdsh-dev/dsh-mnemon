@@ -52,14 +52,29 @@ describe('Mnemon settings bridge', () => {
     expect(written).toEqual(expect.objectContaining({ ok: true, value: expect.objectContaining({ revision: 3, user: { store: 'settings-store', idleReviewMs: 45000, tabEnabled: false, runtimeUserScope: 'global', embedding: { enabled: true, endpoint: 'http://127.0.0.1:11434', model: 'qwen3-embedding:0.6b' }, runtimeMemory: { memoryLimitBytes: 20480, userLimitBytes: 10240, maintenanceMaxTokens: 32768 }, taskAgentModel: { mode: 'fixed', provider: 'deepseek', model: 'deepseek-chat' } } }) }))
   })
 
-  it.each(['other', 'displayMode'])('rejects unsupported settings field %s', async field => {
+  it.each(['sidebar', 'buildin'] as const)('accepts live displayMode=%s and resetting the preference', async displayMode => {
+    const mutate = vi.fn(async () => {})
+    const settings = {
+      writable: true,
+      register: vi.fn(),
+      mutate,
+      describe: () => [{ ns: 'mnemon', value: {}, revision: 0, applies: 'live' as const }],
+    } as unknown as HostSettingsService
+    const handler = createSettingsHandler(settings)
+    const op = { op: 'set', path: ['displayMode'], value: displayMode }
+    await expect(handler('mutate', { ops: [op], expectedRevision: 0 })).resolves.toMatchObject({ ok: true })
+    expect(mutate).toHaveBeenCalledWith('mnemon', [op], 0)
+    await expect(handler('mutate', { ops: [{ op: 'unset', path: ['displayMode'] }] })).resolves.toMatchObject({ ok: true })
+  })
+
+  it('rejects unsupported settings fields', async () => {
     const settings = {
       writable: true,
       register: vi.fn(),
       mutate: vi.fn(),
       describe: () => [{ ns: 'mnemon', value: {}, revision: 0, applies: 'restart' as const }],
     } as unknown as HostSettingsService
-    const response = await createSettingsHandler(settings)('mutate', { ops: [{ op: 'set', path: [field], value: field === 'displayMode' ? 'buildin' : true }] })
+    const response = await createSettingsHandler(settings)('mutate', { ops: [{ op: 'set', path: ['other'], value: true }] })
     expect(response).toEqual(expect.objectContaining({
       ok: false,
       error: expect.objectContaining({ code: 'settings-rejected', details: { ns: 'mnemon' } }),

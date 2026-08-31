@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apply, inject } from '../src/client/index.ts'
 import { en, zh } from '../src/client/locales.ts'
 import { MnemonSettingsScope } from '../src/client/settings.ts'
+import { MnemonView } from '../src/client/MnemonView.tsx'
 import type { Config } from '../src/shared/contracts.ts'
 
 const { mountWorkspace } = vi.hoisted(() => ({ mountWorkspace: vi.fn(() => vi.fn()) }))
@@ -12,6 +13,7 @@ function workspaceContext(initialValue: Record<string, unknown>, load: () => Pro
   let value = initialValue
   let revision = 0
   const slots: Record<string, unknown>[] = []
+  const slotDisposers = new Map<Record<string, unknown>, ReturnType<typeof vi.fn>>()
   const disposers: Array<() => void> = []
   const context = {
     connection: { rpc: { call: vi.fn(async (_channel: string, endpoint: string, payload: { namespace?: string; ops?: Array<{ path: string[]; value?: unknown }> }) => {
@@ -36,13 +38,18 @@ function workspaceContext(initialValue: Record<string, unknown>, load: () => Pro
     },
     slots: {
       inject: vi.fn((_name: string, factory: () => unknown) => factory()),
-      register: vi.fn((options: Record<string, unknown>) => { slots.push(options); return () => {} }),
+      register: vi.fn((options: Record<string, unknown>, _component?: unknown) => {
+        slots.push(options)
+        const dispose = vi.fn()
+        slotDisposers.set(options, dispose)
+        return dispose
+      }),
     },
   }
   apply(context)
   const settingsEntry = slots.find(options => options.name === 'settings.section')!
   const scope = (settingsEntry.inject as () => { scope: MnemonSettingsScope<Config> })().scope
-  return { context, slots, scope, dispose: () => { for (const dispose of disposers.splice(0).reverse()) dispose() } }
+  return { context, slots, slotDisposers, scope, dispose: () => { for (const dispose of disposers.splice(0).reverse()) dispose() } }
 }
 
 describe('Mnemon Web client composition', () => {
@@ -86,7 +93,7 @@ describe('Mnemon Web client composition', () => {
     expect(settingsInject?.().t('config.scope')).toBe('Storage scope')
   })
 
-  it.each([undefined, 'buildin', 'sidebar'])('only mounts sidebar with legacy displayMode=%s and honors live visibility', async displayMode => {
+  it.each([undefined, 'sidebar'])('mounts sidebar with displayMode=%s and honors live visibility', async displayMode => {
     const { slots, scope, dispose } = workspaceContext({ displayMode })
     await vi.waitFor(() => expect(mountWorkspace).toHaveBeenCalledTimes(1))
     expect(slots.some(options => options.name === 'conversation.view')).toBe(false)
@@ -107,17 +114,70 @@ describe('Mnemon Web client composition', () => {
     expect(mountWorkspace.mock.results[1]!.value).toHaveBeenCalledTimes(1)
   })
 
+  it('reuses MnemonView in the owning conversation and switches either entry live without duplicates', async () => {
+    const { context, slots, slotDisposers, scope, dispose } = workspaceContext({ displayMode: 'buildin' })
+    await vi.waitFor(() => expect(slots.some(options => options.name === 'conversation.view')).toBe(true))
+    expect(mountWorkspace).not.toHaveBeenCalled()
+    const entry = slots.find(options => options.name === 'conversation.view')!
+    expect(entry).toMatchObject({ id: 'mnemon', order: 30 })
+    expect(context.slots.register).toHaveBeenCalledWith(entry, MnemonView)
+    const props = (entry.inject as (sessionId: string) => Record<string, unknown>)('session-2')
+    expect(props).toMatchObject({ connection: context.connection, settingsScope: scope, sessionId: 'session-2', surface: 'buildin', locale: 'zh' })
+    expect(props).not.toHaveProperty('workspaceId')
+    expect(props).not.toHaveProperty('workspaceSelection')
+    expect(props).not.toHaveProperty('onClose')
+
+    await scope.set('storageScope', 'workspace')
+    expect(slotDisposers.get(entry)).not.toHaveBeenCalled()
+    expect(slots.filter(options => options.name === 'conversation.view')).toHaveLength(1)
+    await scope.set('displayMode', 'sidebar')
+    expect(slotDisposers.get(entry)).toHaveBeenCalledTimes(1)
+    expect(mountWorkspace).toHaveBeenCalledTimes(1)
+    await scope.set('displayMode', 'sidebar')
+    expect(mountWorkspace).toHaveBeenCalledTimes(1)
+    await scope.set('displayMode', 'buildin')
+    expect(mountWorkspace.mock.results[0]!.value).toHaveBeenCalledTimes(1)
+    const secondEntry = slots.filter(options => options.name === 'conversation.view')[1]!
+    expect(secondEntry).toBeTruthy()
+
+    await scope.set('tabEnabled', false)
+    expect(slotDisposers.get(secondEntry)).toHaveBeenCalledTimes(1)
+    await scope.set('displayMode', 'sidebar')
+    expect(mountWorkspace).toHaveBeenCalledTimes(1)
+    await scope.set('tabEnabled', true)
+    expect(mountWorkspace).toHaveBeenCalledTimes(2)
+    dispose()
+    expect(mountWorkspace.mock.results[1]!.value).toHaveBeenCalledTimes(1)
+    expect(slotDisposers.get(entry)).toHaveBeenCalledTimes(1)
+    expect(slotDisposers.get(secondEntry)).toHaveBeenCalledTimes(1)
+  })
+
   it('does not flash an entry while a persisted hidden workspace is loading', async () => {
     let ready!: (value: Record<string, unknown>) => void
     const loading = new Promise<Record<string, unknown>>(resolve => { ready = resolve })
-    const { scope, dispose } = workspaceContext({}, () => loading)
+    const { scope, slots, dispose } = workspaceContext({}, () => loading)
     expect(mountWorkspace).not.toHaveBeenCalled()
     ready({ displayMode: 'buildin', tabEnabled: false })
     await vi.waitFor(() => expect(scope.getSnapshot().status).toBe('ready'))
     expect(mountWorkspace).not.toHaveBeenCalled()
+    expect(slots.some(options => options.name === 'conversation.view')).toBe(false)
     await scope.set('tabEnabled', true)
-    expect(mountWorkspace).toHaveBeenCalledTimes(1)
+    expect(mountWorkspace).not.toHaveBeenCalled()
+    expect(slots.some(options => options.name === 'conversation.view')).toBe(true)
     dispose()
+  })
+
+  it('does not flash the default sidebar while a persisted buildin preference is loading', async () => {
+    let ready!: (value: Record<string, unknown>) => void
+    const { slots, slotDisposers, dispose } = workspaceContext({}, () => new Promise(resolve => { ready = resolve }))
+    expect(mountWorkspace).not.toHaveBeenCalled()
+    expect(slots.some(options => options.name === 'conversation.view')).toBe(false)
+    ready({ displayMode: 'buildin' })
+    await vi.waitFor(() => expect(slots.some(options => options.name === 'conversation.view')).toBe(true))
+    expect(mountWorkspace).not.toHaveBeenCalled()
+    const entry = slots.find(options => options.name === 'conversation.view')!
+    dispose()
+    expect(slotDisposers.get(entry)).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the sidebar available when the settings service is unavailable', async () => {
