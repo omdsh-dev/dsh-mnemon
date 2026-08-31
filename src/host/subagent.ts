@@ -7,7 +7,7 @@ import { mutationResultCommitted } from './receipts.ts'
 import { SourceSession, sourceFailure } from './source-session.ts'
 import { assertParticipation } from './access.ts'
 import type { MemoryBodyMetadataMaintenanceResult, MemoryBodyMetadataUpdate, MemoryPlacementDecision, SubagentCounters } from './protocol.ts'
-import type { MemoryEvidence, MemoryMigrationLineage, MemoryResultSemantics } from '../core/contracts/index.ts'
+import type { MemoryEvidence, MemoryMigrationLineage } from '../core/contracts/index.ts'
 import { agentScope, type MnemonAgentRuntimeSource, type MnemonRuntimeGraph } from './runtime.ts'
 import type { ComposableMemoryTurn } from '../core/turns.ts'
 
@@ -15,12 +15,12 @@ export type { SubagentCounters } from "./protocol.ts"
 
 type AgentRuntimeSource = MnemonAgentRuntimeSource
 
-type RecallInsight = Insight & { result?: MemoryResultSemantics; revision?: string }
+type RecallInsight = Insight & { revision?: string }
 
 function evidenceInsights(evidence: MemoryEvidence): RecallInsight[] {
   return evidence.items.map(item => {
     const metadata = optionalObject(item.provenance) ?? {}
-    return { ...metadata, id: item.id, content: item.text, score: item.score, revision: item.revision, result: item.result } as RecallInsight
+    return { ...metadata, id: item.id, content: item.text, score: item.score, revision: item.revision } as RecallInsight
   })
 }
 
@@ -429,8 +429,6 @@ function boundedModelInsights(results: readonly RecallInsight[], admission: Mode
     const content = boundedModelText(result.content, Math.min(contentLimit, remainingContent))
     if (content === '') continue
     const clipped = content !== result.content
-    // Only an existing excerpt may be further clipped; other declared representations stay intact.
-    if (clipped && result.result !== undefined && result.result.representation !== 'excerpt') continue
     seenReferences.add(reference)
     seenDigests.add(digest)
     contentCharacters += content.length
@@ -441,12 +439,6 @@ function boundedModelInsights(results: readonly RecallInsight[], admission: Mode
       content,
       ...(typeof result.score !== 'number' || !Number.isFinite(result.score) ? {} : { score: result.score }),
       ...(result.revision === undefined ? {} : { revision: result.revision }),
-      ...(clipped ? { result: {
-        ...result.result,
-        representation: 'excerpt' as const,
-        coverage: 'partial' as const,
-        omitted: [result.result?.omitted, 'Clipped to the Host recall envelope; not a semantic summary.'].filter(Boolean).join(' '),
-      } } : result.result === undefined ? {} : { result: structuredClone(result.result) }),
       ...(result.category === undefined ? {} : { category: boundedModelText(result.category, MODEL_RECALL_METADATA_LIMIT) }),
       ...(typeof result.importance !== 'number' || !Number.isFinite(result.importance) ? {} : { importance: result.importance }),
       ...(result.tags === undefined ? {} : { tags: result.tags.slice(0, MODEL_RECALL_LIST_LIMIT).map(tag => boundedModelText(tag, MODEL_RECALL_METADATA_LIMIT)) }),

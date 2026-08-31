@@ -41,7 +41,6 @@ describe.skipIf(!cliPath)('real Native Provider through Source composition', () 
         query: 'composablenativesentinel', mode: 'keyword', memoryBodyIds: [body.id],
       })
       expect(evidence.items.some(item => item.text.includes('composablenativesentinel'))).toBe(true)
-      expect(evidence.items[0]?.result).toMatchObject({ representation: 'excerpt', coverage: 'unknown', expansion: { unavailable: expect.any(String) } })
       await management.mutate('forget', { id: stored!.id, memoryBodyId: body.id }, { confirmed: true })
       const after = await management.read('list', { memoryBodyIds: [body.id], limit: 10 })
       expect((after.value as unknown as { items: Insight[] }).items).toHaveLength(0)

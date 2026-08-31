@@ -57,7 +57,6 @@ function sourceDefinition(options: {
         maxCalls: 1,
         maxResults: 3,
         maxCharacters: 20,
-        semantics: { actions: ['read'], targets: ['records'], effects: [], representations: ['raw', 'excerpt'], overflow: 'truncate', retry: 'safe' },
       }],
       actions: [{
         id: 'remember',
@@ -221,7 +220,7 @@ describe('Composable View Memory compiler', () => {
     await generation.dispose()
   })
 
-  it('executes only a pinned Route, enforces its schema/call budget, and truncates Evidence', async () => {
+  it('executes only a pinned Route and omits whole over-budget items without rewriting their content', async () => {
     const generation = new MemoryCompositionGeneration(contributions())
     const view = await generation.compose(REQUEST)
     const routeId = view.routes[0]!.id
@@ -229,7 +228,7 @@ describe('Composable View Memory compiler', () => {
     await expect(generation.executeRoute(view, routeId, { query: 'needle', unexpected: true }))
       .rejects.toThrow('unsupported property')
     const evidence = await generation.executeRoute(view, routeId, { query: 'needle' })
-    expect(evidence.items.map(item => item.text)).toEqual(['abcdef', 'g'])
+    expect(evidence.items.map(item => item.text)).toEqual(['abcdef'])
     expect(evidence.truncated).toBe(true)
     await expect(generation.executeRoute(view, routeId, { query: 'again' })).rejects.toThrow('budget is exhausted')
     await expect(generation.executeRoute(view, 'source:fixture/undeclared', { query: 'needle' })).rejects.toThrow('unavailable')
@@ -247,13 +246,9 @@ describe('Composable View Memory compiler', () => {
       expect(query).not.toHaveBeenCalled()
       const evidence = await generation.executeRoute(view, route.id, { query: 'needle' }, undefined,
         { ...REQUEST.budget, maxEvidenceCharacters: 3, maxEvidenceResults: 1 })
-      expect(query.mock.calls[0]![0].route).toMatchObject({ maxCharacters: 3, maxResults: 1,
-        budgets: expect.arrayContaining([
-          { resource: 'output', unit: 'characters', measurement: 'exact', max: 3 },
-          { resource: 'output', unit: 'items', measurement: 'exact', max: 1 },
-        ]),
-      })
-      expect(evidence.items.map(item => item.text)).toEqual(['abc'])
+      expect(query.mock.calls[0]![0].route).toMatchObject({ maxCharacters: 3, maxResults: 1 })
+      expect(evidence.items).toEqual([])
+      expect(evidence.truncated).toBe(true)
       expect(route).toMatchObject({ maxCharacters: 7, maxResults: 2 })
     } finally { await generation.dispose() }
   })

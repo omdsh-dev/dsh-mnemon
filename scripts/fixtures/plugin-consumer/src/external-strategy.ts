@@ -19,16 +19,8 @@ export function apply(ctx: Context, config: Config): void {
         .sort((left, right) => left.sourceInstanceKey.localeCompare(right.sourceInstanceKey))
       return { strategyTypeId: 'external-focus', explanation: 'Only explicitly selected Source instances enter this View.',
         sources: chosen.map(source => ({ sourceInstanceKey: source.sourceInstanceKey,
-          ...(source.projection?.actions.includes('wake') ? {
-            projection: { mode, maxCharacters: Math.max(1, Math.floor(request.budget.maxProjectionCharacters / Math.max(1, chosen.length))) },
-          } : {}),
-          routeIds: source.routes.filter(route => route.semantics?.actions.includes('read')).map(route => route.id),
-          actionIds: source.actions.filter(action => action.semantics?.actions.some(action => ['record', 'compress', 'forget'].includes(action))).map(action => action.id),
-          routeOptions: Object.fromEntries(source.routes.filter(route => route.semantics?.actions.includes('read')).map(route => [route.id, {
-            ...(route.semantics?.representations.includes('raw') ? { representation: 'raw' as const } : {}),
-            budgets: [{ resource: 'output' as const, unit: 'characters' as const, measurement: 'exact' as const, amount: 'auto' as const }],
-          }])),
-        })) }
+          projection: { mode, maxCharacters: Math.floor(request.budget.maxProjectionCharacters / Math.max(1, chosen.length)) },
+          routeIds: source.routeIds, actionIds: source.actionIds })) }
     },
   })] })
 }

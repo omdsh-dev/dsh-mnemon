@@ -28,12 +28,9 @@ export function apply(ctx: Context, config: Config): void {
     manifest: {
       apiVersion: COMPOSABLE_MEMORY_API_VERSION, kind: 'source', typeId: 'external-notes', packageName: name,
       role: 'notes', capabilities: ['project', 'read', 'write'], consistency: 'exact-snapshot',
-      projection: { actions: ['wake'], targets: ['records'], effects: [], representations: ['excerpt'], overflow: 'truncate', retry: 'safe' },
       routes: [{ id: 'read', description: 'Read the exact notes captured by this View.', capability: 'read',
-        semantics: { actions: ['read'], targets: ['records'], effects: [], representations: ['raw'], overflow: 'unavailable', retry: 'safe' },
         inputSchema: { type: 'object', properties: {}, additionalProperties: false }, maxCalls: 3, maxResults: 1, maxCharacters: 8_000 }],
       actions: [{ id: 'replace', description: 'Replace this instance of notes.', capability: 'write',
-        semantics: { actions: ['record'], targets: ['records'], effects: [{ target: 'records', mode: 'write' }], representations: ['receipt'], overflow: 'unavailable', retry: 'unsafe' },
         inputSchema: { type: 'object', required: ['content'], properties: { content: { type: 'string' } }, additionalProperties: false } }],
       management: { label: 'External notes', description: 'A Source-owned file and management protocol.' },
     },
@@ -54,12 +51,7 @@ export function apply(ctx: Context, config: Config): void {
           if (rev !== request.expectedRevision) throw new Error('snapshot revision mismatch')
           return {
             fragments: request.includeProjection ? [{ id: 'notes', sourceInstanceKey: context.sourceInstanceKey, revision: rev,
-              mode: request.mode, text: truncateMemoryText(captured, request.maxCharacters),
-              result: { representation: 'excerpt', sourceRepresentation: 'raw', coverage: captured.length <= request.maxCharacters ? 'complete' : 'partial',
-                ...(captured.length <= request.maxCharacters ? {} : { omitted: 'Snapshot clipped to the projection budget.' }),
-                expansion: { routeId: 'read', input: {} },
-              },
-            }] : [],
+              mode: request.mode, text: truncateMemoryText(captured, request.maxCharacters) }] : [],
             readGrant: { id: context.sourceInstanceKey + '/notes', sourceInstanceKey: context.sourceInstanceKey,
               schema: 'external-notes/v1', consistency: 'exact-snapshot', revision: rev, value: { text: captured } },
           }
@@ -68,8 +60,7 @@ export function apply(ctx: Context, config: Config): void {
           const text = memoryInputRecord(request.grant.value, 'notes grant').text as string
           return { id: randomUUID(), viewId: request.view.id, routeId: request.route.id, sourceInstanceKey: context.sourceInstanceKey,
             observedAt: new Date().toISOString(), truncated: false,
-            items: [{ id: 'notes', text, revision: request.grant.revision, provenance: { source: context.sourceInstanceKey },
-              result: { representation: 'raw', coverage: 'complete' } }] }
+            items: [{ id: 'notes', text, revision: request.grant.revision, provenance: { source: context.sourceInstanceKey } }] }
         },
         mutate(request) {
           const saved = save(request.input)

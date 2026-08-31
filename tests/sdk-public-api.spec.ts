@@ -10,14 +10,6 @@ import type { InstalledMemorySource } from 'dsh-mnemon/contracts'
 import type { MemoryContributionSnapshot } from 'dsh-mnemon/contracts'
 
 describe('public plugin SDK boundary', () => {
-  it('keeps mechanical excerpts inside tiny character budgets without splitting Unicode pairs', () => {
-    for (const value of ['hello', '😀😀😀', '中文😀text']) for (let limit = 0; limit < value.length; limit++) {
-      const result = sdk.truncateMemoryText(value, limit)
-      expect(result.length).toBeLessThanOrEqual(limit)
-      expect(/\p{Surrogate}/u.test(result)).toBe(false)
-    }
-  })
-
   it('types the only Context service as its contribution protocol', () => {
     expectTypeOf<Context['mnemonMemory']>().toEqualTypeOf<MnemonMemoryService>()
     expectTypeOf<keyof MnemonMemoryService>().toEqualTypeOf<'installContributions'>()

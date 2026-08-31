@@ -38,7 +38,6 @@ describe('standalone documents Source', () => {
       expect(archived.value).toMatchObject({ action: 'archived', document: { status: 'archived', memoryBodyIds: [] } })
       const archivedTurn = await runner.beginTurn({ scope: base.scope })
       const archivedEvidence = await archivedTurn.executeRoute(archivedTurn.view.routes[0]!.id, { query: 'beta', includeArchived: true })
-      expect(archivedEvidence.items[0]?.result).toMatchObject({ representation: 'excerpt', state: 'archived' })
       const otherWorkspace = await runner.executeManagement({ ...base, scope: { ...base.scope, workspaceId: directory }, mode: 'read', operation: 'snapshot', input: null })
       // A configured dataDir is one explicit authority, even if a caller's cwd changes.
       expect(otherWorkspace.value).toMatchObject({ total: 1, workspaceRoot: directory })
@@ -66,15 +65,7 @@ describe('standalone documents Source', () => {
       const route = next.view.routes.find(value => value.sourceInstanceKey === 'source:work')!
       const evidence = await next.executeRoute(route.id, { query: 'sentinel' })
       expect(evidence.items).toHaveLength(1)
-      expect(next.view.projection[0]?.result).toEqual({ representation: 'catalog', coverage: 'complete' })
-      expect(route.semantics).toMatchObject({ actions: ['read'], effects: [], representations: ['excerpt'] })
-      expect(evidence.items[0]?.result).toMatchObject({ representation: 'excerpt', coverage: 'complete', state: 'active',
-        expansion: { unavailable: expect.any(String) }, score: { meaning: expect.stringContaining('not a probability') },
-      })
       const suggestions = await next.executeRoute(route.id, { query: 'unmatched-secret' })
-      expect(suggestions.items[0]?.result).toMatchObject({ representation: 'excerpt', coverage: 'partial',
-        omitted: expect.stringContaining('not a query match'), score: { meaning: expect.stringContaining('fallback') },
-      })
       const personal = next.view.routes.find(value => value.sourceInstanceKey === 'source:personal')!
       expect((await next.executeRoute(personal.id, { query: 'sentinel' })).items).toHaveLength(0)
       next.release()

@@ -72,40 +72,13 @@ Selected Sources are required by default. Set `required: false` to explicitly pe
 
 Host guidance describes the current View's generic route/action protocol, not the default three-tier Sources' business rules. Existing product tools and explicit management remain available; tool presence does not mean that a Source participates in this turn's View. Automatic three-tier background review runs only with `default-three-tier`, never implicitly under a custom Strategy.
 
-## Compose by properties, not operation names
+## Open operations, bounded execution
 
-`manifest.projection` and each route/action's `semantics` describe an operation. Native ids and algorithms remain Source-owned; these properties do not add Runtime methods or a primitive registry:
+A Source owns its operation names, input schemas, storage, indexes and maintenance. There is no mandatory five-action taxonomy, summary tree, representation vocabulary or multidimensional budget protocol. A Strategy selects public operations it understands, by id, role and/or capability. Core derives `MemoryAvailableSource.routes/actions` from manifests, live facts and Host permissions; plugin authors do not duplicate descriptors in facts.
 
-```ts
-semantics: {
-  actions: ['read'],
-  targets: ['records'],
-  effects: [],
-  representations: ['raw', 'excerpt'],
-  overflow: 'truncate',
-  retry: 'safe',
-}
-```
-
-Actions are `record`, `wake`, `read`, `compress`, and `forget`. Targets distinguish records, representations, relations, catalogs, visibility, usage, and candidates. A multi-mode operation declares the **union of possible effects**, not a sequence for Core to execute. Split it into separate offered operations if callers must authorize the modes independently. An invalidated summary is not a deleted record; recording an RSI candidate is not activating a policy.
-
-These five actions are descriptive vocabulary, not five required interfaces or a universal memory lifecycle. A read-only Source needs no mutation/compaction/tree implementation. Existing `capabilities` are Host permission categories; semantic `actions` support composition across differently named operations (e.g. `search` and `related` can both describe `read`). Core derives available descriptors; authors do not duplicate them in Facts. Private watchers, indexes, summarizers and Provider upkeep may run in the plugin's own Cordis Fibers using Host capabilities. Pure `compose` and the View operation envelope do not establish a universal maintenance scheduler. Put a field in the public protocol only when it serves cross-plugin selection, execution constraints or interpretation of View results.
-
-Sources still return only availability/revision/capability ids in `facts`. Core constructs `MemoryAvailableSource` for `compose`: its `projection`, `routes`, and `actions` come from the manifest, filtered by live availability and Host permissions. For example, a Strategy can select `source.routes.filter(route => route.semantics?.actions.includes('read') && route.semantics.effects.length === 0)` without knowing ids like `search` or `recall`. Missing semantics mean **unspecified**, not inferred support.
-
-Selections retain `routeIds`/`actionIds`. Optional `routeOptions[id]`, `actionOptions[id]`, and projection options select a declared `representation` and `budgets`. Every budget specifies `resource` (`output`, `input`, `cost`), `unit`, `measurement` (`exact`, `estimated`), and `amount: 'auto' | { max, min? }`. Token metrics additionally name a tokenizer/estimator `basis`. `min` is a preference: a tighter ceiling may make it unattainable; Core never pads output. `auto` inherits a finite Host ceiling or a Source-declared default/maximum, never infinity. Unsupported units/bases/guarantees reject composition rather than silently using a token heuristic.
-
-Core measures returned text (UTF-16 characters or declared UTF-8 bytes), result counts, and dispatched route calls. Character ceilings bound **payload text**, not the whole serialized prompt including tool schemas/metadata. Source-owned token, input-work and cost limits are passed as resolved budgets and require `usage` reports; plugins must enforce them during execution. This is not a sandbox or a proof of upstream cost. Source storage capacity and algorithms remain private. Failed dispatched reads consume a call; Core does not automatically retry, even for operations declaring retry safety.
-
-Described operations return `result` on every projection fragment/evidence item: `representation`, `coverage`, optional omissions/state, and optional expansion. Core only clips text when `overflow: 'truncate'` explicitly permits excerpts; it marks them partial and preserves an inferred/summary origin. `omit` drops whole items. `summarize` and `page` require Source implementations; Core cannot synthesize either. It returns unavailable instead of fabricating a required raw/structured result. A citation is not an expansion: `{ routeId, input }` is bound to the same Source and an actually offered, schema-valid route; an unoffered expansion becomes unavailable. Scores carry a Source-local interpretation, not automatic cross-Source calibration.
-
-Named Recall/Related tools retain each item's `result`, revision and score, plus a `memoryEvidence` envelope identifying the Core read, unavailable reason and execution usage. Final Host limits can further clip an excerpt or omit an intact item; they never relabel it as original content. Replay retains the original read's usage and does not dispatch or charge another Source call.
-
-`facts`/`project` never perform persistent usage writes. A query may explicitly declare retrieval bookkeeping (`{ target: 'usage', mode: 'write', stage: 'retrieved' }`), which additionally requires write capability. Injection/useful-feedback accounting must happen in a separate explicitly invoked operation at the real Host event, not during speculative composition. Delete/invalidate effects additionally require `forget`. These permissions only narrow existing capability grants; an ActionOffer still needs call-time authorization.
+Core bounds projection characters, evidence characters/items and dispatched calls. These are payload ceilings, not complete LLM-prompt token estimates. Sources receive effective bounds and own excerpts and structured formatting; Core omits oversized evidence rather than manufacturing a summary or splitting JSON. Failed dispatched reads consume a call. There is no automatic retry.
 
 Every mutation receipt declares `completion`: `accepted`, `candidate`, `committed`, `partial`, `failed`, or `unknown`. Only a confirmed full commit can include `committedAt`; Core never invents that timestamp. `createMemoryMutationReceipt(..., completion)` defaults to `unknown`; pass `'committed'` only after the requested durable effect completes. Cancellation or a transport exception does not prove that no write occurred, and a cross-Source workflow is not atomic. Generic and named product tools preserve this distinction for the model.
-
-The public-runner [semantic conformance tests](../../tests/composable-semantics.spec.ts) exercise renamed operations, independent instances, budgets, retrieval bookkeeping, unavailable expansion, inference/excerpt fidelity, and uncommitted RSI candidates.
 
 ## Provider child and Client page
 

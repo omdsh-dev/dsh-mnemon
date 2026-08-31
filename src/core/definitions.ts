@@ -1,78 +1,9 @@
-import type { MemoryBudgetMetric, MemoryBudgetSupport, MemoryOperationSemantics, MemoryPackageProvenance, MemorySourceActionManifest, MemorySourceDefinition, MemorySourceManifest, MemorySourceRouteManifest, MemoryStrategyDefinition } from './contracts/index.ts'
+import type { MemoryPackageProvenance, MemorySourceActionManifest, MemorySourceDefinition, MemorySourceManifest, MemorySourceRouteManifest, MemoryStrategyDefinition } from './contracts/index.ts'
 import { COMPOSABLE_MEMORY_API_VERSION, MEMORY_CAPABILITIES } from './contracts/index.ts'
 
 const ID = /^[a-z][a-z0-9-]{0,127}$/u
 const PACKAGE = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/u
 const CAPABILITIES = new Set<string>(MEMORY_CAPABILITIES)
-const ACTIONS = ['record', 'wake', 'read', 'compress', 'forget']
-const TARGETS = ['records', 'representations', 'relations', 'catalog', 'visibility', 'usage', 'candidates']
-export const MEMORY_REPRESENTATIONS = ['raw', 'excerpt', 'summary', 'inference', 'structured', 'catalog', 'receipt']
-
-export function validateMemorySemanticMember<T extends string>(value: T, values: readonly string[], label: string): T {
-  if (!values.includes(value)) throw new Error(`unsupported memory ${label}: ${String(value)}`)
-  return value
-}
-
-function semanticMembers<T extends string>(value: T[], values: readonly string[], label: string): T[] {
-  if (!Array.isArray(value) || value.length === 0 || new Set(value).size !== value.length) throw new Error(`memory ${label} must be a nonempty unique list`)
-  return value.map(item => validateMemorySemanticMember(item, values, label))
-}
-
-export function validateMemoryBudgetMetric(value: MemoryBudgetMetric): MemoryBudgetMetric {
-  const resource = validateMemorySemanticMember(value.resource, ['output', 'input', 'cost'], 'budget resource')
-  const unit = validateMemorySemanticMember(value.unit, resource === 'cost' ? ['calls', 'milliseconds', 'tokens'] : ['characters', 'bytes', 'tokens', 'items'], 'budget unit')
-  const measurement = validateMemorySemanticMember(value.measurement, ['exact', 'estimated'], 'budget measurement')
-  if (unit !== 'tokens' && value.basis !== undefined) throw new Error('only token budgets accept a measurement basis')
-  return { resource, unit, measurement, ...(unit === 'tokens' ? { basis: requiredText(value.basis, 'token budget basis', 300) } : {}) }
-}
-
-export function memoryBudgetMetricKey(value: MemoryBudgetMetric): string {
-  return `${value.resource}/${value.unit}/${value.measurement}/${value.basis ?? ''}`
-}
-
-export function validateMemoryBudgetSupports(values: MemoryBudgetSupport[] = []): MemoryBudgetSupport[] {
-  const seen = new Set<string>()
-  return values.map(value => {
-    const normalized = validateMemoryBudgetMetric(value)
-    const key = memoryBudgetMetricKey(normalized)
-    if (seen.has(key)) throw new Error(`duplicated memory budget: ${key}`)
-    seen.add(key)
-    const maximum = positiveInteger(value.maximum, 'budget maximum', 1_000_000_000)
-    const fallback = positiveInteger(value.default, 'budget default', maximum)
-    return { ...normalized, default: fallback, maximum }
-  })
-}
-
-function validateSemantics(value: MemoryOperationSemantics, phase: 'projection' | 'route' | 'action'): MemoryOperationSemantics {
-  const actions = semanticMembers(value.actions, ACTIONS, 'semantic actions')
-  const targets = semanticMembers(value.targets, TARGETS, 'semantic targets')
-  const representations = semanticMembers(value.representations, MEMORY_REPRESENTATIONS, 'representations')
-  if (!Array.isArray(value.effects)) throw new Error('memory effects must be an explicit list (empty for pure reads)')
-  const effects = value.effects.map(effect => {
-    validateMemorySemanticMember(effect.target, TARGETS, 'effect target')
-    validateMemorySemanticMember(effect.mode, ['write', 'delete', 'invalidate'], 'effect mode')
-    if (effect.target === 'usage') validateMemorySemanticMember(effect.stage!, ['retrieved', 'injected', 'feedback'], 'usage stage')
-    else if (effect.stage !== undefined) throw new Error('only usage effects have an accounting stage')
-    if (!targets.includes(effect.target)) throw new Error('memory effect target is not declared by the operation')
-    return effect
-  })
-  if (new Set(effects.map(effect => canonicalMemoryJson(effect))).size !== effects.length) throw new Error('duplicated memory effect')
-  if (phase === 'projection' && (effects.length > 0 || !actions.includes('wake') || actions.some(action => !['wake', 'read', 'compress'].includes(action)))) {
-    throw new Error('memory projection must wake without persistent effects')
-  }
-  if (phase === 'route' && (actions.some(action => !['read', 'compress'].includes(action)) || effects.some(effect => effect.target !== 'usage' || effect.stage !== 'retrieved'))) {
-    throw new Error('memory Route may only read/compress and explicitly account for retrieval usage')
-  }
-  if (phase === 'action' && (!actions.some(action => ['record', 'compress', 'forget'].includes(action)) || !representations.includes('receipt'))) {
-    throw new Error('memory Action must declare a mutation and receipt representation')
-  }
-  const overflow = validateMemorySemanticMember(value.overflow, ['truncate', 'omit', 'summarize', 'page', 'unavailable'], 'overflow policy')
-  if (overflow === 'truncate' && !representations.includes('excerpt')) throw new Error('truncation requires an explicit excerpt representation')
-  return jsonClone({ actions, targets, effects, representations, overflow,
-    retry: validateMemorySemanticMember(value.retry, ['safe', 'unsafe', 'idempotency-key'], 'retry policy'),
-    ...(value.budgets === undefined ? {} : { budgets: validateMemoryBudgetSupports(value.budgets) }),
-  }, 'memory operation semantics')
-}
 
 export function requiredText(value: unknown, label: string, maximum = 500): string {
   if (typeof value !== 'string') throw new Error(`${label} must be a string`)
@@ -166,7 +97,6 @@ function validateRoute(route: MemorySourceRouteManifest): MemorySourceRouteManif
     maxCalls: positiveInteger(route.maxCalls, 'memory Source route maxCalls', 100),
     ...(route.maxResults === undefined ? {} : { maxResults: positiveInteger(route.maxResults, 'memory Source route maxResults', 10_000) }),
     ...(route.maxCharacters === undefined ? {} : { maxCharacters: positiveInteger(route.maxCharacters, 'memory Source route maxCharacters', 10_000_000) }),
-    ...(route.semantics === undefined ? {} : { semantics: validateSemantics(route.semantics, 'route') }),
   }
   if (!CAPABILITIES.has(normalized.capability)) throw new Error(`unsupported memory Source route capability: ${normalized.capability}`)
   return deepFreeze(normalized)
@@ -179,7 +109,6 @@ function validateAction(action: MemorySourceActionManifest): MemorySourceActionM
     capability: id(action.capability, 'memory Source action capability') as MemorySourceActionManifest['capability'],
     inputSchema: jsonClone(action.inputSchema, 'memory Source action input schema'),
     ...(action.authority === undefined ? {} : { authority: requiredText(action.authority, 'memory Source action authority', 300) }),
-    ...(action.semantics === undefined ? {} : { semantics: validateSemantics(action.semantics, 'action') }),
   }
   if (!CAPABILITIES.has(normalized.capability)) throw new Error(`unsupported memory Source action capability: ${normalized.capability}`)
   return deepFreeze(normalized)
@@ -207,7 +136,6 @@ export function defineMemorySource<T extends MemorySourceDefinition>(definition:
     packageName,
     role,
     capabilities: validateCapabilities(manifest.capabilities, 'memory Source capability'),
-    ...(manifest.projection === undefined ? {} : { projection: validateSemantics(manifest.projection, 'projection') }),
     routes,
     actions,
   }, 'memory Source manifest')

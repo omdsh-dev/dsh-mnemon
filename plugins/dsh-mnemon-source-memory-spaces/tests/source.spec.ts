@@ -53,9 +53,6 @@ describe('standalone Memory Spaces Source', () => {
       const evidence = await turn.executeRoute(route('recall'), { query: 'needle' })
       expect(evidence.items.map(item => item.id)).toEqual(['visible'])
       expect(evidence.items[0]?.text.length).toBeLessThanOrEqual(5)
-      expect(evidence.items[0]?.result).toMatchObject({ representation: 'excerpt', coverage: 'partial',
-        expansion: { unavailable: expect.any(String) }, score: { meaning: expect.stringContaining('not calibrated confidence') },
-      })
       expect(evidence.truncated).toBe(true)
       await expect(turn.executeRoute(route('related'), { id: 'hidden' })).rejects.toThrow('already admitted')
       expect(related).not.toHaveBeenCalled()

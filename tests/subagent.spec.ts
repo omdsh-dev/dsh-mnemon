@@ -395,58 +395,6 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(coordinator.snapshot()).toMatchObject({ recalls: 1, failures: 0, lastOperation: 'recall' })
   })
 
-  it('preserves Core result semantics through Recall clipping, Related and replay', async () => {
-    const host = subagents(undefined)
-    const agent = parent()
-    const turn = pinnedTurn('root:semantics', 'view-semantics')
-    const source = runtimeSource(undefined, service(), undefined, {
-      activeTurn: () => turn,
-    })
-    const session = source.forAgent(agent).source('memory-spaces', agentScope(agent, source.config))
-    const evidence: MemoryEvidence = {
-      id: 'read-1', viewId: 'view-semantics', routeId: 'recall-1', sourceInstanceKey: 'spaces-1',
-      observedAt: '2026-08-31T00:00:00.000Z', truncated: false,
-      usage: [{ resource: 'cost', unit: 'calls', measurement: 'exact', used: 1 }],
-      items: [{
-        id: 'inference-1', text: `${'x'.repeat(1_198)}😀 detail`, score: 0.7, revision: 'revision-1',
-        provenance: { memoryBodyId: 'project', relevanceTier: 'high' },
-        result: { representation: 'excerpt', sourceRepresentation: 'inference', coverage: 'unknown', state: 'candidate',
-          expansion: { unavailable: 'No full-content route.' }, score: { basis: 'provider-A', meaning: 'Source-local relevance' } },
-      }, {
-        id: 'raw-1', text: 'Exact original', provenance: { memoryBodyId: 'project', relevanceTier: 'high' },
-        result: { representation: 'raw', coverage: 'complete' },
-      }, {
-        id: 'raw-too-large', text: 'r'.repeat(1_400), provenance: { memoryBodyId: 'project', relevanceTier: 'high' },
-        result: { representation: 'raw', coverage: 'complete' },
-      }],
-    }
-    const route = vi.spyOn(session, 'route').mockResolvedValueOnce(evidence).mockResolvedValueOnce({
-      ...evidence, id: 'read-2', routeId: 'related-1',
-      items: [{ ...evidence.items[0]!, id: 'related-1', text: 'Related inference' }],
-    })
-    const coordinator = new MnemonSubagentCoordinator(host.value, source, toolRegistry().value)
-    const signal = new AbortController().signal
-    const first = await coordinator.recall(agent, { query: 'semantic evidence' }, signal, { requirePinnedView: true })
-    expect(first.results.map(item => item.id)).toEqual(['inference-1', 'raw-1'])
-    expect(first.results[0]).toMatchObject({ score: 0.7, revision: 'revision-1', result: {
-      representation: 'excerpt', sourceRepresentation: 'inference', coverage: 'partial', state: 'candidate',
-      expansion: { unavailable: 'No full-content route.' }, score: { basis: 'provider-A' },
-    } })
-    expect(first.results[0]!.content).toBe(`${'x'.repeat(1_198)}…`)
-    expect(first.results[1]!.result).toEqual({ representation: 'raw', coverage: 'complete' })
-    expect(first.memoryEvidence).toMatchObject({ id: 'read-1', sourceInstanceKey: 'spaces-1', viewId: 'view-semantics', truncated: true, usage: evidence.usage })
-    const replay = await coordinator.recall(agent, { query: 'semantic evidence' }, signal, { requirePinnedView: true })
-    expect(replay.results).toEqual(first.results)
-    expect(replay.memoryEvidence).toEqual(first.memoryEvidence)
-    expect(route).toHaveBeenCalledOnce()
-    const related = await coordinator.related(agent, 'inference-1', 'project', signal, { requirePinnedView: true })
-    expect(related.results[0]!.result).toEqual(evidence.items[0]!.result)
-    expect(related.memoryEvidence).toMatchObject({ id: 'read-2', routeId: 'related-1', truncated: false })
-    expect((await coordinator.related(agent, 'inference-1', 'project', signal, { requirePinnedView: true })).memoryEvidence).toEqual(related.memoryEvidence)
-    expect(route).toHaveBeenCalledTimes(2)
-    expect(host.start).not.toHaveBeenCalled()
-  })
-
   it('keeps a Core budget-unavailable reason visible on empty Recall and replay', async () => {
     const agent = parent()
     const turn = pinnedTurn('root:unavailable', 'view-unavailable')

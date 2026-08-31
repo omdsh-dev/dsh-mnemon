@@ -3,7 +3,6 @@ import { describe, expect, expectTypeOf, it } from 'vitest'
 import * as core from 'dsh-mnemon/core'
 import * as sdk from 'dsh-mnemon/extension-sdk'
 import type { MnemonMemoryService, MemorySourceRuntime } from 'dsh-mnemon/extension-sdk'
-import { COMPOSABLE_MEMORY_API_VERSION, type MemoryOperationSemantics } from 'dsh-mnemon/contracts'
 import { MemoryCompositionRunner, type MemoryTestTurn } from 'dsh-mnemon/testing'
 import * as providerSdk from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import { createMemorySpaceProviderFixture, mountMemorySpaceProvider } from 'dsh-mnemon-source-memory-spaces/testing'
@@ -16,45 +15,9 @@ import type { InstalledMemorySource } from 'dsh-mnemon/contracts'
 import type { PrivateMemorySpaceProviderHost } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 
 describe('published author API', () => {
-  it('installs both roles in one external package without adding a Context service or mutation interface', async () => {
-    const runner = new MemoryCompositionRunner()
-    try {
-      const remove = await runner.mount({ inject: ['mnemonMemory'], apply(ctx: Context) {
-        sdk.installMemory(ctx, {
-          sources: [sdk.defineMemorySource({
-            manifest: { apiVersion: COMPOSABLE_MEMORY_API_VERSION, kind: 'source', typeId: 'paired-notes', packageName: 'dsh-mnemon-paired',
-              role: 'notes', capabilities: ['project'], consistency: 'exact-snapshot',
-              projection: { actions: ['wake'], targets: ['records'], effects: [], representations: ['raw'], overflow: 'unavailable', retry: 'safe' },
-            },
-            create: context => ({
-              facts: () => ({ sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: 'paired-notes', role: 'notes', availability: 'ready',
-                revision: 'r1', capabilities: ['project'], routeIds: [], actionIds: [] }),
-              project: request => ({ fragments: [{ id: 'note', sourceInstanceKey: context.sourceInstanceKey, mode: request.mode,
-                text: 'Author-owned format', revision: 'r1', result: { representation: 'raw', coverage: 'complete' } }] }),
-            }),
-          })],
-          strategies: [sdk.defineMemoryStrategy({
-            manifest: { apiVersion: COMPOSABLE_MEMORY_API_VERSION, kind: 'strategy', typeId: 'paired-focus', packageName: 'dsh-mnemon-paired',
-              deterministic: true, supportedSourceRoles: ['notes'], maxSources: 1, maxRoutes: 1, maxActions: 1 },
-            compose: (_request, sources) => ({ strategyTypeId: 'paired-focus', explanation: 'Contribute both roles without prescribing storage.',
-              sources: sources.map(source => ({ sourceInstanceKey: source.sourceInstanceKey, projection: { mode: 'eager', maxCharacters: 100 } })),
-            }),
-          })],
-        })
-      } }, { instanceId: 'paired' })
-      expect(runner.inspect().evaluation).toMatchObject({ state: 'ready', contributionRevision: 1 })
-      const turn = await runner.beginTurn()
-      expect(turn.view.projection[0]?.text).toBe('Author-owned format')
-      expect(turn.view.actionOffers).toEqual([])
-      await remove()
-      await expect(runner.beginTurn()).rejects.toThrow('no Serving')
-    } finally { await runner.dispose() }
-  })
-
   it('keeps Context and testing types independent of private engine types', async () => {
     expectTypeOf<Context['mnemonMemory']>().toEqualTypeOf<MnemonMemoryService>()
     expectTypeOf<keyof MnemonMemoryService>().toEqualTypeOf<'installContributions'>()
-    expectTypeOf<MemoryOperationSemantics['actions'][number]>().toEqualTypeOf<'record' | 'wake' | 'read' | 'compress' | 'forget'>()
     type Query = Parameters<NonNullable<MemorySourceRuntime['query']>>[0]
     type Mutation = Parameters<NonNullable<MemorySourceRuntime['mutate']>>[0]
     expectTypeOf<keyof Query['view']>().toEqualTypeOf<'id' | 'scope'>()

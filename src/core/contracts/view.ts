@@ -11,15 +11,12 @@ import type {
   MemoryOperationScope,
   MemoryReceiptStatus,
   MemorySourceMode,
-  MemoryOperationSemantics,
-  MemoryOperationSelection,
-  MemoryResolvedBudget,
-  MemoryBudgetUsage,
-  MemoryResultSemantics,
-  MemoryMutationCompletion,
 } from './index.ts'
 
 export const COMPOSABLE_MEMORY_API_VERSION = 'dsh-mnemon/v1' as const
+
+/** Persistence truth, not a taxonomy of memory operations. */
+export type MemoryMutationCompletion = 'accepted' | 'candidate' | 'committed' | 'partial' | 'failed' | 'unknown'
 
 export type MemoryContributionKind = 'source' | 'strategy'
 export type MemorySourceAvailability = 'ready' | 'degraded' | 'unavailable'
@@ -106,8 +103,6 @@ export interface MemorySourceRouteManifest {
   maxCalls: number
   maxResults?: number
   maxCharacters?: number
-  /** Omission means unspecified semantics, not inferred support. */
-  semantics?: MemoryOperationSemantics
 }
 
 export interface MemorySourceActionManifest {
@@ -118,7 +113,6 @@ export interface MemorySourceActionManifest {
   inputSchema: MemoryJsonValue
   /** High-risk non-memory actions must name an external authority. */
   authority?: string
-  semantics?: MemoryOperationSemantics
 }
 
 export interface MemorySourceManifest {
@@ -129,7 +123,6 @@ export interface MemorySourceManifest {
   role: string
   capabilities: MemoryCapability[]
   consistency: MemoryViewConsistencyMode
-  projection?: MemoryOperationSemantics
   routes?: MemorySourceRouteManifest[]
   actions?: MemorySourceActionManifest[]
   management?: MemoryManagementDescriptor
@@ -160,19 +153,18 @@ export interface MemorySourceFacts {
   hints?: MemoryJsonValue
 }
 
-/** Core derives this from Manifest + live Facts + Host permissions. Sources do not author it twice. */
-export interface MemoryAvailableSource extends MemorySourceFacts {
-  projection?: MemoryOperationSemantics
-  routes: MemorySourceRouteManifest[]
-  actions: MemorySourceActionManifest[]
-}
-
 export interface MemoryViewBudget {
   maxProjectionCharacters: number
   maxRoutes: number
   maxActions: number
   maxEvidenceResults: number
   maxEvidenceCharacters: number
+}
+
+/** Manifest operations filtered by live availability and Host permissions. */
+export interface MemoryAvailableSource extends MemorySourceFacts {
+  routes: MemorySourceRouteManifest[]
+  actions: MemorySourceActionManifest[]
 }
 
 export const DEFAULT_MEMORY_VIEW_BUDGET: Readonly<MemoryViewBudget> = Object.freeze({
@@ -193,17 +185,14 @@ export interface MemoryViewSourceSpec {
   sourceInstanceKey: string
   /** Defaults to true. An explicitly optional Source may be omitted on read failure. */
   required?: boolean
-  projection?: MemoryOperationSelection & {
+  projection?: {
     mode: MemorySourceMode
-    maxCharacters?: number
+    maxCharacters: number
   }
   /** Source-local route ids declared by its manifest/facts. */
   routeIds?: string[]
   /** Source-local action ids declared by its manifest/facts. */
   actionIds?: string[]
-  /** Options may only narrow operations selected above. Keys are Source-local ids. */
-  routeOptions?: Record<string, MemoryOperationSelection>
-  actionOptions?: Record<string, MemoryOperationSelection>
 }
 
 /** Pure Strategy output. Runtime treats it as a proposal, never as authority. */
@@ -221,8 +210,6 @@ export interface MemoryProjectionRequest {
   includeProjection: boolean
   mode: MemorySourceMode
   maxCharacters: number
-  representation?: MemoryResultSemantics['representation']
-  budgets?: MemoryResolvedBudget[]
 }
 
 export interface MemoryViewFragment {
@@ -232,7 +219,6 @@ export interface MemoryViewFragment {
   text: string
   revision: string
   provenance?: MemoryJsonValue
-  result?: MemoryResultSemantics
 }
 
 export interface MemoryReadGrant {
@@ -247,7 +233,6 @@ export interface MemoryReadGrant {
 export interface MemoryViewContribution {
   fragments: MemoryViewFragment[]
   readGrant?: MemoryReadGrant
-  usage?: MemoryBudgetUsage[]
 }
 
 export interface MemoryViewRoute {
@@ -261,9 +246,6 @@ export interface MemoryViewRoute {
   maxCalls: number
   maxResults?: number
   maxCharacters?: number
-  semantics?: MemoryOperationSemantics
-  representation?: MemoryResultSemantics['representation']
-  budgets?: MemoryResolvedBudget[]
 }
 
 export interface MemoryActionOffer {
@@ -274,9 +256,6 @@ export interface MemoryActionOffer {
   capability: MemoryCapability
   inputSchema: MemoryJsonValue
   authority?: string
-  semantics?: MemoryOperationSemantics
-  representation?: MemoryResultSemantics['representation']
-  budgets?: MemoryResolvedBudget[]
 }
 
 export interface MemoryViewConsistency {
@@ -294,7 +273,6 @@ export interface ComposableMemoryView {
   createdAt: string
   scope: MemoryOperationScope
   projection: MemoryViewFragment[]
-  projectionUsage?: Record<string, MemoryBudgetUsage[]>
   routes: MemoryViewRoute[]
   readGrants: MemoryReadGrant[]
   actionOffers: MemoryActionOffer[]
@@ -310,7 +288,6 @@ export interface MemoryEvidenceItem {
   provenance: MemoryJsonValue
   score?: number
   revision?: string
-  result?: MemoryResultSemantics
 }
 
 export interface MemoryEvidence {
@@ -322,7 +299,6 @@ export interface MemoryEvidence {
   items: MemoryEvidenceItem[]
   truncated: boolean
   unavailable?: string
-  usage?: MemoryBudgetUsage[]
 }
 
 export interface MemoryMutationReceipt {
@@ -332,11 +308,10 @@ export interface MemoryMutationReceipt {
   sourceInstanceKey: string
   status: MemoryReceiptStatus
   completion: MemoryMutationCompletion
-  /** Only present for an explicitly confirmed full commit; Core never supplies it. */
+  /** Only an explicitly confirmed commit may carry this timestamp. */
   committedAt?: string
   revision?: string
   details?: MemoryJsonValue
-  usage?: MemoryBudgetUsage[]
 }
 
 export interface MemorySourceRuntimeContext {
