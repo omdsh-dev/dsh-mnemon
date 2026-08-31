@@ -4,7 +4,6 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   RUNTIME_ENTRY_DELIMITER,
-  RUNTIME_MEMORY_PROTOCOL,
   RuntimeMemoryCapacityError,
   RuntimeMemoryController,
 } from "../src/controller.ts"
@@ -257,12 +256,6 @@ describe('RuntimeMemoryController', () => {
     const { controller } = fixture()
     await controller.mutate({ action: 'add', target: 'user', content: 'User prefers concise Chinese replies', importance: 'critical' })
     const context = controller.contextText()
-    expect(RUNTIME_MEMORY_PROTOCOL).toContain('Manage hot memory exclusively with mnemon_runtime_memory')
-    expect(RUNTIME_MEMORY_PROTOCOL).toContain('Use action="add" only for a new independent fact')
-    expect(RUNTIME_MEMORY_PROTOCOL).toContain('Use action="replace" with a short unique old_text')
-    expect(RUNTIME_MEMORY_PROTOCOL).toContain('Use action="remove" with a short unique old_text')
-    expect(RUNTIME_MEMORY_PROTOCOL).toContain('The user\'s explicit request in the current turn wins over both files')
-    expect(RUNTIME_MEMORY_PROTOCOL).toContain('call mnemon_recall instead of inferring or filling the gap')
     expect(context).toContain('MNEMON RUNTIME MEMORY SNAPSHOT')
     expect(context).toMatch(/Revision: [a-f0-9]{64}/u)
     expect(context).toContain('Contents of USER.md (user profile; entries: 1; UTF-8 bytes:')
@@ -272,21 +265,6 @@ describe('RuntimeMemoryController', () => {
     expect(context).not.toContain('MNEMON RUNTIME MEMORY PROTOCOL')
     expect(context).not.toContain('WRITE PROTOCOL')
     expect(context).not.toContain(controller.sourcePath)
-  })
-
-  it('removes the stable protocol bytes from every changed runtime-context snapshot', async () => {
-    const { controller } = fixture()
-    await controller.mutate({ action: 'add', target: 'user', content: 'User prefers compact release notes', importance: 'critical' })
-    await controller.mutate({ action: 'add', target: 'memory', content: 'Release checks run with pnpm verify' })
-
-    const snapshot = controller.contextText()
-    const protocolBytes = Buffer.byteLength(RUNTIME_MEMORY_PROTOCOL, 'utf8')
-    const snapshotBytes = Buffer.byteLength(snapshot, 'utf8')
-    const formerCombinedBytes = Buffer.byteLength(`${RUNTIME_MEMORY_PROTOCOL}\n\n${snapshot}`, 'utf8')
-
-    expect(protocolBytes).toBe(3_990)
-    expect(formerCombinedBytes - snapshotBytes).toBe(3_992)
-    expect(snapshotBytes).toBeLessThan(protocolBytes)
   })
 
   it('assembles every prompt from the latest generated USER.md and MEMORY.md projections', async () => {

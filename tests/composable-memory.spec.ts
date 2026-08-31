@@ -122,9 +122,9 @@ function sourceDefinition(options: {
             sourceInstanceKey: context.sourceInstanceKey,
             observedAt: '2026-08-30T00:00:00.000Z',
             items: [
-              { id: 'one', text: 'abcdef', provenance: { namespaceId: 'visible' }, result: { representation: 'raw', coverage: 'complete' } },
-              { id: 'two', text: 'ghijkl', provenance: { namespaceId: 'visible' }, result: { representation: 'raw', coverage: 'complete' } },
-              { id: 'three', text: 'mnopqr', provenance: { namespaceId: 'visible' }, result: { representation: 'raw', coverage: 'complete' } },
+              { id: 'one', text: 'abcdef', provenance: { namespaceId: 'visible' } },
+              { id: 'two', text: 'ghijkl', provenance: { namespaceId: 'visible' } },
+              { id: 'three', text: 'mnopqr', provenance: { namespaceId: 'visible' } },
             ],
             truncated: false,
           }
@@ -194,6 +194,25 @@ function contributions(source = installedSource(), strategy = installedStrategy(
 }
 
 describe('Composable View Memory compiler', () => {
+  it('pins trusted Strategy guidance in the digest and rejects malformed or oversized instructions', async () => {
+    let guidance: unknown = { system: 'Instruction {{model}}', routing: 'Route only as offered', reminders: { read: 'Read only if needed' } }
+    const base = strategyDefinition()
+    const strategy = strategyDefinition((request, facts) => ({ ...base.compose(request, facts), guidance: guidance as never }))
+    const generation = new MemoryCompositionGeneration(contributions(installedSource(), installedStrategy(strategy)))
+    try {
+      const first = await generation.compose(REQUEST)
+      expect(first.guidance).toEqual(guidance)
+      expect(Object.isFrozen(first.guidance?.reminders)).toBe(true)
+      ;(guidance as { system: string }).system = 'Updated instruction'
+      expect(first.guidance?.system).toBe('Instruction {{model}}')
+      expect((await generation.compose(REQUEST)).digest).not.toBe(first.digest)
+      for (const invalid of [1, [], null, { system: 12 }, { reminders: 'invalid' }, { reminders: { read: 1 } }, { system: 'x'.repeat(16_385) }]) {
+        guidance = invalid
+        await expect(generation.compose(REQUEST)).rejects.toThrow(/Strategy (guidance|reminder)/)
+      }
+    } finally { await generation.dispose() }
+  })
+
   it('creates execution policies only on a read, shares them within a turn and isolates equal Views', async () => {
     const query = vi.fn()
     const createTurn = vi.fn(() => {

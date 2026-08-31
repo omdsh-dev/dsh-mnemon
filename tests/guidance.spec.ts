@@ -1,10 +1,26 @@
 import { describe, expect, it, vi } from 'vitest'
-import { renderContextSnapshot, renderPrompt } from '@deepseek-ai/dsh-system-prompt'
-import type { HostAgent, HostContextShape } from '../src/host/dsh.ts'
-import { registerAgentMemoryViewContext, registerMemoryPromptInterpolation, applyAgentMemoryViewWake, registerGuidance, RUNTIME_MEMORY_CONTEXT_NAME } from '../src/host/guidance.ts'
-import type { MemoryWake } from '../src/core/contracts/index.ts'
+import { renderContextSnapshot } from '@deepseek-ai/dsh-system-prompt'
+import type { HostContextShape } from '../src/host/dsh.ts'
+import { applyMemoryViewGuidance, withoutMemoryViewContext, registerGuidance, RUNTIME_MEMORY_CONTEXT_NAME } from '../src/host/guidance.ts'
+import type { ComposableMemoryView } from '../src/core/contracts/index.ts'
 
-describe('Source-neutral View Wake interpolation', () => {
+describe('Source-neutral View guidance', () => {
+  it('uses pinned Strategy instructions and removes stale default instructions on a Strategy switch', () => {
+    const assembly = {
+      sections: [{ name: 'host', text: 'Host protocol' }, { name: 'mnemon:routing', text: 'stale routing' },
+        { name: 'mnemon:strategy', text: 'stale strategy' }, { name: 'mnemon:runtime-memory-protocol', text: 'stale legacy' }],
+      contexts: [{ name: RUNTIME_MEMORY_CONTEXT_NAME, text: 'stale context' }],
+    }
+    const selected = { guidance: { system: 'Trusted instruction {{model}}', routing: 'Selected routing' } } as ComposableMemoryView
+    const result = applyMemoryViewGuidance(assembly, selected)
+    expect(result.sections).toEqual([{ name: 'host', text: 'Host protocol' },
+      { name: 'mnemon:strategy', text: 'Trusted instruction {{model}}' }, { name: 'mnemon:routing', text: 'Selected routing' }])
+    expect(result.contexts).toEqual([])
+    expect(assembly.sections).toHaveLength(4)
+    const custom = applyMemoryViewGuidance(result, {} as ComposableMemoryView, false)
+    expect(custom.sections).toEqual([{ name: 'host', text: 'Host protocol' }])
+  })
+
   it('registers only View-based guidance and respects the existing preference', () => {
     const section = vi.fn()
     const ctx = { get: () => ({ section }) } as unknown as HostContextShape

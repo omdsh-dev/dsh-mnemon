@@ -17,7 +17,9 @@ import type { DocumentMutation } from 'dsh-mnemon-source-documents/contracts'
 import { MnemonSubagentCoordinator, type DelegatedWriteResult } from './subagent.ts'
 import { scoreReviewActivity } from './review-activity.ts'
 import { TurnActivityProjection, type TurnMemoryActivity, type TurnMemoryActivitySnapshot } from './activity.ts'
-import { applyAgentMemoryViewWake, registerAgentMemoryViewContext } from './guidance.ts'
+import { applyMemoryViewGuidance } from './guidance.ts'
+import { modelMemoryWake } from './view-presentation.ts'
+import { AgentMemoryTurn, agentMemoryScope, openAgentTurn, type DelegatedMemoryView } from './agent-memory-turn.ts'
 import type { AssistantMessageText, LifecycleAgentSnapshot, LifecycleCounters, LifecyclePhase, LifecycleSnapshot, ReviewActivityScore, TaskAgentModelCatalog } from "./protocol.ts"
 import type { PreparedMemoryPlacement } from 'dsh-mnemon-source-memory-spaces/contracts'
 import type { MemoryOperationScope, MemoryWake } from "../core/contracts/index.ts"
@@ -191,7 +193,11 @@ function assistantMessageText(events: readonly HostSessionEvent[], messageId: st
   return null
 }
 
-function guidedReminder(config: ResolvedConfig): string | undefined {
+function guidedReminder(config: ResolvedConfig, guidance?: import('../core/contracts/view.ts').MemoryViewGuidance): string | undefined {
+  const read = config.recallMode === 'guided'
+  const write = config.writeEnabled && config.writebackMode === 'guided'
+  const chosen = read && write ? guidance?.reminders?.both : read ? guidance?.reminders?.read : write ? guidance?.reminders?.write : undefined
+  if (chosen !== undefined) return chosen
   const instructions = [
     ...(config.recallMode === 'guided' ? ['Use mnemon_view_route only when relevant evidence is missing.'] : []),
     ...(config.writeEnabled && config.writebackMode === 'guided' ? ['Use mnemon_view_action only for an intended memory change; require a write receipt.'] : []),
@@ -324,7 +330,7 @@ class MnemonAgentLifecycle {
   memoryWake(): MemoryWake | undefined {
     const pinned = this.pinnedView
     if (pinned === undefined) return undefined
-    return pinned.manager.memoryWake(pinned.context.view.id)
+    return modelMemoryWake(pinned.graph, pinned.context)
   }
 
   /**
@@ -400,7 +406,7 @@ class MnemonAgentLifecycle {
       this.mark('prime')
     }
     if (this.cueAlreadyVisible()) return { kind: 'enter', messages: withSnapshot(decision.messages) }
-    const reminder = guidedReminder(this.config)
+    const reminder = guidedReminder(this.config, this.memoryTurn?.current?.context.view.guidance)
     if (reminder === undefined) return { kind: 'enter', messages: withSnapshot(decision.messages) }
     this.cueInjected = true
     this.guidedTurns.add(payload.turn)
@@ -416,47 +422,7 @@ class MnemonAgentLifecycle {
     if (turn === undefined || context.signal?.aborted === true) return next()
     await this.pinView(turn, context.signal)
     const assembled = await next()
-    return applyAgentMemoryViewWake(assembled, this.memoryWake())
-  }
-
-  private openTurn(): number | undefined {
-    let open: number | undefined
-    for (const event of this.agent.session.events) {
-      const turn = eventTurn(event)
-      if (event.type === 'turn/start' && turn !== undefined) open = turn
-      else if (event.type === 'turn/end' && turn === open) open = undefined
-    }
-    return open
-  }
-
-  private async pinView(turn: number, signal?: AbortSignal): Promise<void> {
-    if (this.pinnedView?.turn === turn) return
-    this.releaseView()
-    const graph: MnemonRuntimeGraph | undefined = this.runtimeSource?.forAgent(this.agent)
-    const manager = graph?.composableTurns
-    if (manager === undefined || graph === undefined || this.runtimeSource === undefined) return
-    const cwd = this.agent.session.header?.cwd?.trim()
-    const scope: MemoryOperationScope = {
-      storage: this.config.storageScope,
-      ...(cwd === undefined || cwd === '' ? {} : { workspaceId: resolve(cwd) }),
-      sessionId: this.agent.id,
-      agentId: this.agent.id,
-    }
-    const context = await manager.beginTurn(`${this.agent.id}:${turn}`, scope, 'agent.root-turn', signal)
-    let releaseRuntime: (() => void) | undefined
-    try {
-      releaseRuntime = this.runtimeSource.bindAgentRuntime(this.agent.id, graph)
-      this.pinnedView = {
-        turn,
-        manager,
-        context,
-        releaseRuntime,
-      }
-    } catch (error) {
-      manager.endTurn(context.turnId)
-      releaseRuntime?.()
-      throw error
-    }
+    return applyMemoryViewGuidance(assembled, this.memoryTurn?.current?.context.view, this.config.routingGuidance)
   }
 
   private releaseView(turn?: number): void {
@@ -1073,7 +1039,7 @@ export class MnemonLifecycle {
           if (context.agent !== undefined && context.agent !== agent) return next()
           const turn = openAgentTurn(agent)
           if (turn !== undefined) await memory.begin(turn, context.signal)
-          return next()
+          return applyMemoryViewGuidance(await next(), memory.current?.context.view, this.config.routingGuidance)
         }) as never))
         stops.push(agent.ctx.on('agent/pre-step', (async (payload: PreStepPayload, next: () => Promise<HostPreStepDecision>) => {
           const decision = await next()

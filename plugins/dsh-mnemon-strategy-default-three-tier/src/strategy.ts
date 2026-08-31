@@ -1,6 +1,7 @@
 import { defineMemoryStrategy, type MemorySourceFacts } from 'dsh-mnemon/extension-sdk'
 import { COMPOSABLE_MEMORY_API_VERSION } from 'dsh-mnemon/contracts'
 import { createThreeTierTurn } from './retrieval.ts'
+import { ROUTING_GUIDANCE, RUNTIME_MEMORY_PROTOCOL, THREE_TIER_REMINDERS } from './guidance.ts'
 
 const VIEW_ROLES = ['working-context', 'narrative', 'durable-evidence'] as const
 
@@ -30,6 +31,7 @@ export const DEFAULT_THREE_TIER_VIEW_STRATEGY = defineMemoryStrategy({
     const runtime = soleSource(sources, 'working-context')
     const documents = soleSource(sources, 'narrative')
     const memorySpaces = soleSource(sources, 'durable-evidence')
+    const classicSources = runtime?.sourceTypeId === 'runtime' && documents?.sourceTypeId === 'documents' && memorySpaces?.sourceTypeId === 'memory-spaces'
     const selected = [runtime, documents, memorySpaces].filter((source): source is MemorySourceFacts => source !== undefined)
     const projectionBudget = request.budget.maxProjectionCharacters
     const runtimeBudget = runtime === undefined || !runtime.capabilities.includes('project') ? 0 : Math.max(1, Math.floor(projectionBudget * 0.9))
@@ -43,6 +45,10 @@ export const DEFAULT_THREE_TIER_VIEW_STRATEGY = defineMemoryStrategy({
     if (memorySpaces !== undefined && memorySpacesBudget > 0) allocation.set(memorySpaces.sourceInstanceKey, { mode: 'routed', maxCharacters: memorySpacesBudget })
     return {
       strategyTypeId: 'default-three-tier',
+      guidance: {
+        ...(classicSources ? { routing: ROUTING_GUIDANCE, reminders: THREE_TIER_REMINDERS } : {}),
+        ...(runtime?.sourceTypeId === 'runtime' && runtime.capabilities.includes('project') ? { system: RUNTIME_MEMORY_PROTOCOL } : {}),
+      },
       sources: selected.map(source => ({
         sourceInstanceKey: source.sourceInstanceKey,
         required: false,

@@ -200,6 +200,14 @@ export interface MemoryViewSpec {
   strategyTypeId: string
   sources: MemoryViewSourceSpec[]
   explanation: string
+  /** Trusted Strategy instructions, separate from quoted Source data. */
+  guidance?: MemoryViewGuidance
+}
+
+export interface MemoryViewGuidance {
+  system?: string
+  routing?: string
+  reminders?: { read?: string; write?: string; both?: string }
 }
 
 export interface MemoryProjectionRequest {
@@ -278,6 +286,7 @@ export interface ComposableMemoryView {
   actionOffers: MemoryActionOffer[]
   consistency: MemoryViewConsistency
   explanation: string
+  guidance?: MemoryViewGuidance
   /** Sanitized, turn-local availability failures; never raw provider errors. */
   diagnostics?: MemoryCompositionDiagnostic[]
 }

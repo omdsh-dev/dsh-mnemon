@@ -58,19 +58,23 @@ export function apply(ctx: Context): void {
 }
 ```
 
-The example assumes `source.js` exports the definition. [external-source.ts](../../scripts/fixtures/plugin-consumer/src/external-source.ts) implements the complete file-backed example. Source and Strategy are roles, not mandatory package/repository boundaries. One OptMem-style package can call `installMemory(ctx, { sources: [source], strategies: [strategy] })`: both contributions install and unload together under the same Fiber, retaining distinct instance keys. Split packages only for independent reuse or replacement. Strategy selection remains explicit; bundling one does not override the user's selected Strategy.
+The example assumes `source.js` exports the definition. [external-source.ts](../../scripts/fixtures/plugin-consumer/src/external-source.ts) implements the complete file-backed example. Source and Strategy are roles, not mandatory package/repository boundaries. One package can call `installMemory(ctx, { sources: [source], strategies: [strategy] })`: both contributions install and unload together under the same Fiber, retaining distinct instance keys. Split packages only for independent reuse or replacement. Strategy selection remains explicit; bundling one does not override the user's selected Strategy.
 
 An Entry id identifies an instance; type id identifies its implementation. Never strip Loader include prefixes. Direct `ctx.plugin()` mounts without Loader identity must supply `installMemory(..., { instanceId })`. Paths/credentials remain instance-owned. Do not use a module-global database or service registry.
 
 ## Strategy
 
-Use `defineMemoryStrategy` and install with `{ strategies: [definition] }`. Declare deterministic composition, supported roles and maxima. Return a `MemoryViewSpec` selecting exact Source keys, eager/routed projection budgets and Source-local route/action ids. No network, storage or secret access belongs here.
+Use `defineMemoryStrategy` and install with `{ strategies: [definition] }`. Declare deterministic composition, supported roles and maxima. Pure `compose` returns a `MemoryViewSpec` selecting exact Source keys, eager/routed projection budgets and Source-local route/action ids. It performs no network, storage or secret access.
+
+Optional `createTurn(view)` supplies an execution-local `query(request, read)` policy. The only supplied I/O is `read(input, narrowerLimits?)`, bound to the selected Route and its private grant. Core still validates inputs, ceilings, dispatched calls and lifetime. A policy may admit/replay results and supply a compact `Evidence.output` for the model; it does not obtain a Source object, write continuation or authority. Separate executions get separate policy state even when they inherit the same immutable View. Without this hook, reads go directly to the Source through the same Core fences.
+
+The default three-tier plugin uses this hook for the old Documents slot, two-query Recall envelope, deduplication and Related admission. Named tools and generic View routes share that policy. Source implementations retain raw search, storage and maintenance; explicit DSH-assisted writing/archiving remains a Host workflow, not a generic Core background job.
 
 Selected Sources are required by default. Set `required: false` to explicitly permit omission when that instance is unavailable or its projection fails. Required failures reject the turn without silently switching strategies. The default three-tier Strategy selects available Sources as optional so an external read failure does not remove healthy layers. A Strategy must explicitly reject a missing required instance rather than return an empty selection.
 
 [external-strategy.ts](../../scripts/fixtures/plugin-consumer/src/external-strategy.ts) is a working explicit-selector example. Select its type id with the existing `mnemon.memoryTopology.strategyId` setting in the default Host. More than one applicable Strategy is an error, not “last imported wins”. A profile replaces default Entries explicitly; installing a package alone is not authority to replace them.
 
-Host guidance describes the current View's generic route/action protocol, not the default three-tier Sources' business rules. Existing product tools and explicit management remain available; tool presence does not mean that a Source participates in this turn's View. Automatic three-tier background review runs only with `default-three-tier`, never implicitly under a custom Strategy.
+Optional `ViewSpec.guidance` carries the Strategy's trusted `system`, `routing` and read/write reminders separately from quoted Source data. It is validated and pinned into the View digest. The Host supplies generic routing guidance when none is provided and renders named tool availability without repeating schemas already in DSH's tool catalog; external/unbound operations keep their exact ids and schemas. Existing product tools and explicit management remain available; tool presence does not mean that a Source participates in this turn's View. Automatic three-tier background review runs only with `default-three-tier`, never implicitly under a custom Strategy.
 
 ## Open operations, bounded execution
 

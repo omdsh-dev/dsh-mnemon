@@ -58,19 +58,23 @@ export function apply(ctx: Context): void {
 }
 ```
 
-以上假定 `source.js` 导出定义；完整文件记忆示例见 [external-source.ts](../../scripts/fixtures/plugin-consumer/src/external-source.ts)。Source 与 Strategy 是职责，不是强制分包/分仓。一个 OptMem 式插件可以调用 `installMemory(ctx, { sources: [source], strategies: [strategy] })`，在同一 Fiber 下成批安装、一起卸载，保留不同的实例 key；仅在需要独立复用/替换时拆包。Strategy 仍需显式选择，随包提供不等于覆盖用户的选择。
+以上假定 `source.js` 导出定义；完整文件记忆示例见 [external-source.ts](../../scripts/fixtures/plugin-consumer/src/external-source.ts)。Source 与 Strategy 是职责，不是强制分包/分仓。一个插件可以调用 `installMemory(ctx, { sources: [source], strategies: [strategy] })`，在同一 Fiber 下成批安装、一起卸载，保留不同的实例 key；仅在需要独立复用/替换时拆包。Strategy 仍需显式选择，随包提供不等于覆盖用户的选择。
 
 Entry id 标识实例，type id 标识实现。不能剥掉 Loader 的 include 前缀。没有 Loader 身份的直接 `ctx.plugin()` 挂载，应传 `installMemory(..., { instanceId })`。路径和凭据归实例，不使用模块全局数据库或服务注册表。
 
 ## Strategy
 
-用 `defineMemoryStrategy` 定义，再以 `{ strategies: [definition] }` 安装。声明确定性、支持角色与上限；返回 `MemoryViewSpec`，选择准确的 Source key、eager/routed 投影预算和 Source 本地 route/action id。网络、存储、凭据访问不属于 Strategy。
+用 `defineMemoryStrategy` 定义，再以 `{ strategies: [definition] }` 安装。声明确定性、支持角色与上限；纯 `compose` 返回 `MemoryViewSpec`，选择准确的 Source key、eager/routed 投影预算和 Source 本地 route/action id。组合阶段不执行网络、存储或凭据访问。
+
+可选的 `createTurn(view)` 返回执行级 `query(request, read)` 策略。它只获得绑定当前 Route 和私有 grant 的 `read(input, narrowerLimits?)`，Core 仍校验输入、有效上限、已分派次数和生命周期。策略可以筛选、重放结果，并用 `Evidence.output` 提供简洁模型输出，但不会获得 Source 对象、写入回调或新增权限。即使继承同一个不可变 View，不同执行轮次也拥有独立策略状态。不提供此钩子时，读取仍经过 Core 边界直接进入 Source。
+
+默认三层插件用此钩子实现旧版 Documents 单次查询、Recall 两次查询的共享证据预算、去重与 Related 准入。命名工具和通用 View Route 共用这套策略。Source 保留原始检索、存储和维护能力；显式的 DSH 辅助写入/归档仍由 Host 工作流执行，不成为 Core 的通用后台任务。
 
 选中的 Source 默认必需；`required: false` 明确允许该实例在不可用或投影失败时被省略。必需实例失败会拒绝本轮 View，不悄悄切换策略。默认三层对可用 Source 作组合，并将它们标为可选，因此外部读取失败不会带走其他层。缺少必需实例时，Strategy 应明确拒绝，而不是返回一个空选择。
 
 [external-strategy.ts](../../scripts/fixtures/plugin-consumer/src/external-strategy.ts) 是完整的显式选择示例。默认 Host 沿用 `mnemon.memoryTopology.strategyId` 配置选择其 type id；多个适用 Strategy 是错误，不采用“后导入覆盖前者”。Profile 显式替换默认 Entry；只安装一个包不等于允许它替换当前组合。
 
-Host 的公共提示只说明当前 View 的通用 route/action 协议，不要求第三方 Source 遵循默认三层的使用规则。已有产品工具与人工管理保留；工具存在不代表对应 Source 已进入本轮 View。默认三层的自动后台整理只在选择 `default-three-tier` 时运行，自定义 Strategy 不会隐式触发这项业务流程。
+可选 `ViewSpec.guidance` 承载 Strategy 的可信 `system`、`routing` 和读写提醒，与 Source 的引用数据分离，经校验后进入 View digest。没有提供时，Host 使用通用路由提示。已有 DSH 命名工具只显示本轮可用性，不重复注入工具目录中的 schema；外部或未绑定的操作仍展示准确 id 和 schema。已有产品工具与人工管理保留；工具存在不代表对应 Source 已进入本轮 View。默认三层的自动后台整理只在选择 `default-three-tier` 时运行，自定义 Strategy 不会隐式触发这项业务流程。
 
 ## 开放操作，有限执行
 

@@ -56,6 +56,7 @@ export interface MemoryWake {
   viewDigest: string
   text: string
   sections: MemoryWakeSection[]
+  guidance?: import('./view.ts').MemoryViewGuidance
 }
 
 export * from './view.ts'

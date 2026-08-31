@@ -25,4 +25,5 @@ export type {
   MemoryStrategyManifest,
   MemoryViewRequest,
   MemoryViewSpec,
+  MemoryViewGuidance,
 } from "../core/contracts/index.ts"

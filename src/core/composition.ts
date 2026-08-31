@@ -193,7 +193,25 @@ function normalizeViewSpec(value: MemoryViewSpec, strategy: InstalledMemoryStrat
   })
   if (routes > Math.min(strategy.definition.manifest.maxRoutes, budget.maxRoutes)) throw new Error('memory Strategy selected too many Routes')
   if (actions > Math.min(strategy.definition.manifest.maxActions, budget.maxActions)) throw new Error('memory Strategy selected too many ActionOffers')
-  return deepFreeze({ strategyTypeId: value.strategyTypeId, sources: normalizedSources, explanation: requiredText(value.explanation, 'memory ViewSpec explanation', 4_000) })
+  let guidance: MemoryViewSpec['guidance']
+  if (value.guidance !== undefined) {
+    const input = jsonClone(value.guidance, 'Strategy guidance')
+    if (input === null || typeof input !== 'object' || Array.isArray(input)) throw new Error('Strategy guidance must be an object')
+    guidance = {}
+    for (const key of ['system', 'routing'] as const) {
+      if (input[key] !== undefined) guidance[key] = requiredText(input[key], 'Strategy guidance ' + key, 16_384)
+    }
+    if (input.reminders !== undefined) {
+      if (input.reminders === null || typeof input.reminders !== 'object' || Array.isArray(input.reminders)) throw new Error('Strategy guidance reminders must be an object')
+      guidance.reminders = {}
+      for (const key of ['read', 'write', 'both'] as const) {
+        if (input.reminders[key] !== undefined) guidance.reminders[key] = requiredText(input.reminders[key], 'Strategy reminder ' + key, 16_384)
+      }
+    }
+  }
+  return deepFreeze({ strategyTypeId: value.strategyTypeId, sources: normalizedSources, explanation: requiredText(value.explanation, 'memory ViewSpec explanation', 4_000),
+    ...(guidance === undefined ? {} : { guidance }),
+  })
 }
 
 function normalizeContribution(source: RuntimeSource, spec: MemoryViewSourceSpec, facts: MemorySourceFacts, value: MemoryViewContribution): MemoryViewContribution {
@@ -513,6 +531,7 @@ export class MemoryCompositionGeneration {
       actionOffers: actions,
       consistency,
       explanation: spec.explanation,
+      ...(spec.guidance === undefined ? {} : { guidance: spec.guidance }),
       ...(diagnostics.length === 0 ? {} : { diagnostics: diagnostics.sort((a, b) =>
         (a.contributionInstanceKey ?? '').localeCompare(b.contributionInstanceKey ?? '') || a.code.localeCompare(b.code)) }),
     }

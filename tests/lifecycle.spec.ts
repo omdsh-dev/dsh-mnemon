@@ -142,7 +142,9 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
   const composableTurns = {
     beginTurn: vi.fn(async (turnId: string, scope: object) => {
       const turn = turnId.slice(turnId.lastIndexOf(':') + 1)
-      return { turnId, view: { id: `view-${turn}`, digest: `digest-${turn}` }, scope, startedAt: '2026-08-23T00:00:00.000Z' }
+      const context = { turnId, view: { id: `view-${turn}`, digest: `digest-${turn}`, runtimeGeneration: 'fixture-generation', routes: [], actionOffers: [] }, scope, startedAt: '2026-08-23T00:00:00.000Z' }
+      pinnedTurns.set(turnId, context)
+      return context
     }),
     memoryWake: vi.fn((viewId: string) => ({
       viewId,
@@ -153,7 +155,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
     endTurn: vi.fn(() => true),
   }
   const runtimeSource = {
-    forAgent: vi.fn(() => ({ config, composableTurns })),
+    forAgent: vi.fn(() => ({ config, composableTurns, memoryComposition: { generation: () => ({ sourceInstances: () => [] }) } })),
     bindAgentRuntime: vi.fn(() => vi.fn()),
   }
   const lifecycle = new MnemonLifecycle(ctx, coordinator, config, runtimeSource as never)

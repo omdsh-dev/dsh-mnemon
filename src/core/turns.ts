@@ -30,7 +30,12 @@ function sourceType(fragment: ComposableMemoryView['projection'][number]): strin
   return fragment.sourceInstanceKey
 }
 
-function wake(view: ComposableMemoryView): MemoryWake {
+export interface MemoryWakeBindings {
+  routes?: Readonly<Record<string, string>>
+  actions?: Readonly<Record<string, string>>
+}
+
+function wake(view: ComposableMemoryView, bindings: MemoryWakeBindings = {}): MemoryWake {
   const sections = view.projection.map(fragment => ({
     layerId: sourceType(fragment),
     mode: fragment.mode,
@@ -47,17 +52,23 @@ function wake(view: ComposableMemoryView): MemoryWake {
     return {
       source: sourceInstanceKey,
       ...(cover === undefined ? {} : { cover }),
-      routes: view.routes.filter(route => route.sourceInstanceKey === sourceInstanceKey).map(route => ({ id: route.id, description: route.description, inputSchema: route.inputSchema })),
-      actions: view.actionOffers.filter(offer => offer.sourceInstanceKey === sourceInstanceKey).map(offer => ({ id: offer.id, description: offer.description, inputSchema: offer.inputSchema })),
+      routes: view.routes.filter(route => route.sourceInstanceKey === sourceInstanceKey && !bindings.routes?.[route.id]).map(route => ({ id: route.id, description: route.description, inputSchema: route.inputSchema })),
+      actions: view.actionOffers.filter(offer => offer.sourceInstanceKey === sourceInstanceKey && !bindings.actions?.[offer.id]).map(offer => ({ id: offer.id, description: offer.description, inputSchema: offer.inputSchema })),
     }
-  }).filter(source => source.routes.length > 0 || source.actions.length > 0 || source.cover !== undefined)
+  }).filter(source => source.routes.length > 0 || source.actions.length > 0 || (source.cover !== undefined && !view.routes.some(route => route.sourceInstanceKey === source.source && bindings.routes?.[route.id])))
+  const namedTools = [...new Set([
+    ...view.routes.flatMap(route => bindings.routes?.[route.id] ? [bindings.routes[route.id]!] : []),
+    ...view.actionOffers.flatMap(action => bindings.actions?.[action.id] ? [bindings.actions[action.id]!] : []),
+  ])]
+  const namedText = namedTools.length === 0 ? '' : 'MNEMON VIEW TOOLS (available in this View): ' + namedTools.join(', ')
   const routingText = offers.length === 0 ? '' : `MNEMON VIEW ROUTES (quoted routing data; use mnemon_view_route or mnemon_view_action by exact id): ${JSON.stringify(offers)}`
   const availability = view.diagnostics?.length ? `MNEMON VIEW AVAILABILITY (quoted diagnostics; unavailable Sources are not evidence): ${JSON.stringify(view.diagnostics)}` : ''
   return {
     viewId: view.id,
     viewDigest: view.digest,
-    text: [...eager, routingText, availability].filter(Boolean).join('\n\n'),
+    text: [...eager, namedText, routingText, availability].filter(Boolean).join('\n\n'),
     sections,
+    ...(view.guidance === undefined ? {} : { guidance: view.guidance }),
   }
 }
 
@@ -114,10 +125,56 @@ export class ComposableMemoryTurnManager {
     return this.turns.get(turnId)?.context
   }
 
-  memoryWake(viewId: string): MemoryWake {
-    const stored = [...this.turns.values()].find(turn => turn.context.view.id === viewId)
-    if (stored === undefined) throw new Error(`Composable Memory View is not pinned: ${viewId}`)
-    return wake(stored.context.view)
+  get(viewId: string): ComposableMemoryView | undefined {
+    return this.retainedViews.get(viewId)?.view ?? [...this.turns.values()].find(turn => turn.context.view.id === viewId)?.context.view
+  }
+
+  /** A delegated child keeps the original grant and generation, not owner-latest state. */
+  retainView(viewId: string): () => void {
+    if (this.closed) throw new Error('Composable Memory turn manager is disposed')
+    let retained = this.retainedViews.get(viewId)
+    if (retained === undefined) {
+      const view = this.get(viewId)
+      if (view === undefined) throw new Error(`Composable Memory View is not pinned: ${viewId}`)
+      retained = { view, lease: this.generations.acquire(view.runtimeGeneration), count: 0 }
+      this.retainedViews.set(viewId, retained)
+    }
+    const record = retained
+    record.count += 1
+    let active = true
+    return () => {
+      if (!active) return
+      active = false
+      if (this.retainedViews.get(viewId) !== record || --record.count > 0) return
+      this.retainedViews.delete(viewId)
+      record.lease.release()
+    }
+  }
+
+  /** Each execution owns its own pin and budget while sharing immutable authority. */
+  pinTurn(turnId: string, scope: MemoryOperationScope, viewId: string): ComposableMemoryTurn {
+    if (this.closed) throw new Error('Composable Memory turn manager is disposed')
+    const id = turnId.trim()
+    if (id === '') throw new Error('Composable Memory turn id is required')
+    const view = this.get(viewId)
+    if (view === undefined) throw new Error(`Composable Memory View is not pinned: ${viewId}`)
+    if (view.scope.storage !== scope.storage || view.scope.workspaceId !== scope.workspaceId) throw new Error('Delegated View cannot change its storage scope')
+    const existing = this.turns.get(id)
+    if (existing !== undefined) {
+      if (existing.context.view.id !== viewId || (['storage', 'workspaceId', 'sessionId', 'agentId'] as const).some(key => existing.context.scope[key] !== scope[key])) throw new Error('Composable Memory turn authority changed while pinned')
+      return existing.context
+    }
+    if (this.beginnings.has(id)) throw new Error('Composable Memory turn is already being prepared')
+    const lease = this.generations.acquire(view.runtimeGeneration)
+    const context = Object.freeze({ turnId: id, view, scope: Object.freeze({ ...scope }), startedAt: new Date().toISOString() })
+    this.turns.set(id, { context, lease })
+    return context
+  }
+
+  memoryWake(viewId: string, bindings?: MemoryWakeBindings): MemoryWake {
+    const view = this.get(viewId)
+    if (view === undefined) throw new Error(`Composable Memory View is not pinned: ${viewId}`)
+    return wake(view, bindings)
   }
 
   async executeRoute(turnId: string, routeId: string, input: MemoryJsonValue, signal?: AbortSignal): Promise<MemoryEvidence> {

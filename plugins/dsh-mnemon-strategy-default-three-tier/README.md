@@ -14,6 +14,12 @@ Source schemas and provenance are the public read protocol. This plugin formats
 the familiar compact model response; Core retains the evidence/authority envelope
 for auditing without serializing it again into every model tool result.
 
+The default plugin also owns the existing three-tier instructions and reminders.
+They are pinned in `ViewSpec.guidance`, separately from Source projections. The
+Host renders them for the selected turn; a different Strategy does not inherit
+this plugin's instructions. DSH-assisted write/archival workflows remain Host
+adapters over Source operations; Core does not schedule autonomous maintenance.
+
 Its own directory is a standalone project: install its declared dependencies,
 then run `pnpm verify`. When developing against an unreleased Mnemon, install a
 packed `dsh-mnemon` artifact as the peer instead of linking its source tree.
