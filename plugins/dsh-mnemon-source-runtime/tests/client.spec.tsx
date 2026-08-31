@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
-import { translateEn as t, MnemonViewAppearanceProvider, resolveMnemonViewAppearance } from 'dsh-mnemon/client'
+import { translateEn as t } from 'dsh-mnemon/client'
 import { strategy } from './fixture.ts'
 
 // Load the installed Core's actual DSH browser artifact; no repository source alias.
@@ -35,10 +35,11 @@ describe('independent Runtime Source client', () => {
       const personal = await runner.managementClient('source:personal')
       const base = { sourceTypeId: 'runtime', sourceInstances: [], locale: 'en', writable: true }
       const view = render(<RuntimeSourcePage {...base} sourceInstanceKey="source:work" management={work} />)
+      fireEvent.click(await screen.findByRole('button', { name: t('runtime.addButton') }))
       const textarea = await screen.findByRole('textbox', { name: t('runtime.content') })
       await waitFor(() => expect(document.querySelector('button[type="submit"]')?.hasAttribute('disabled')).toBe(true))
       fireEvent.change(textarea, { target: { value: 'Source-owned runtime entry' } })
-      fireEvent.click(textarea.closest('form')!.querySelector('button[type="submit"]')!)
+      fireEvent.click(screen.getByRole('button', { name: t('runtime.addAction') }))
       expect(await screen.findByText('Source-owned runtime entry')).not.toBeNull()
       expect((await work.read('snapshot')).value).toMatchObject({ entries: [expect.objectContaining({ content: 'Source-owned runtime entry' })] })
       view.rerender(<RuntimeSourcePage {...base} sourceInstanceKey="source:personal" management={personal} />)
@@ -57,9 +58,7 @@ describe('independent Runtime Source client', () => {
       await runner.mount(plugin, { instanceId: 'work', config: { dataDir: directory } })
       const management = await runner.managementClient('source:work')
       await management.mutate('mutate', { action: 'add', target: 'memory', content: 'branch-scoped note', branches: ['main'] }, { confirmed: true })
-      render(<MnemonViewAppearanceProvider value={resolveMnemonViewAppearance('sidebar', t)}>
-        <RuntimeSourcePage sourceTypeId="runtime" sourceInstanceKey="source:work" sourceInstances={[]} locale="en" writable management={management} />
-      </MnemonViewAppearanceProvider>)
+      render(<RuntimeSourcePage sourceTypeId="runtime" sourceInstanceKey="source:work" sourceInstances={[]} locale="en" writable management={management} />)
       await screen.findByText('branch-scoped note')
       fireEvent.click(screen.getByRole('button', { name: t('runtime.editAction') }))
       fireEvent.change(screen.getByRole('textbox', { name: t('runtime.branches') }), { target: { value: '' } })

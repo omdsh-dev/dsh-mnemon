@@ -29,7 +29,9 @@ export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sess
   const subscribeLocale = useCallback((listener: () => void) => localeRuntime.subscribe(listener), [localeRuntime])
   const getLocale = useCallback(() => localeRuntime.getSnapshot(), [localeRuntime])
   useSyncExternalStore(subscribeLocale, getLocale, getLocale)
-  const settingsSnapshot = useSyncExternalStore(settingsScope.subscribe, settingsScope.getSnapshot, settingsScope.getSnapshot)
+  const subscribeSettings = useCallback((listener: () => void) => settingsScope.subscribe(listener), [settingsScope])
+  const getSettingsSnapshot = useCallback(() => settingsScope.getSnapshot(), [settingsScope])
+  const settingsSnapshot = useSyncExternalStore(subscribeSettings, getSettingsSnapshot, getSettingsSnapshot)
   const managementWritable = settingsSnapshot.status === 'ready' && settingsSnapshot.writable
   const [open, setOpen] = useState(false)
   const [writeEnabled, setWriteEnabled] = useState<boolean | undefined>(undefined)

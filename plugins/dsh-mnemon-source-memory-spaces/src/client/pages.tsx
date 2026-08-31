@@ -4,7 +4,7 @@ import { CATEGORIES, type Category, type EntityView, type Insight, type MemoryBo
 import type { MemorySpacesPageClient } from './api.ts'
 import { ProviderIcon } from './ProviderIcon.tsx'
 import { providerFieldLabel, providerDisplayLabel, providerOptionLabel, providerSummary } from './provider-presentation.ts'
-import { type MnemonKey, type MnemonTranslate, MnemonLogo, useRequestVersion, appearanceClass, useMnemonViewAppearance, memoryPageStyles as css, useT, useLocale, humanBytes, message, short, PageHeader, SectionSpinner, ProgressiveFooter, SidebarModal, EmptyState } from 'dsh-mnemon/client'
+import { type MnemonKey, type MnemonTranslate, useRequestVersion, appearanceClass, memorySidebarStyles as sidebarCss, memoryPageStyles as css, useT, useLocale, humanBytes, message, short, PageHeader, SectionSpinner, ProgressiveFooter, SidebarModal, EmptyState } from 'dsh-mnemon/client'
 
 import type { MemoryPersistenceStrategy } from '../contracts.ts'
 
@@ -128,17 +128,11 @@ function InsightCard(props: {
   onClone?: (insight: Insight) => void
 }): JSX.Element {
   const t = useT()
-  const appearance = useMnemonViewAppearance()
   const [confirming, setConfirming] = useState(false)
   const [forgetting, setForgetting] = useState(false)
   const { insight } = props
-  const neutralActionClass = appearance.surface === 'sidebar'
-    ? appearanceClass(css.ghostButton, appearance.classes.itemActionButton)
-    : css.ghostButton
-  const forgetActionClass = appearance.surface === 'sidebar'
-    ? appearanceClass(css.dangerButton, appearanceClass(appearance.classes.itemActionButton, appearance.classes.itemDangerAction))
-    : css.dangerButton
-  const inlineConfirming = appearance.surface === 'buildin' && confirming
+  const neutralActionClass = appearanceClass(css.ghostButton, sidebarCss.itemActionButton)
+  const forgetActionClass = appearanceClass(css.dangerButton, appearanceClass(sidebarCss.itemActionButton, sidebarCss.itemDangerAction))
   const providerLabel = insight.memoryProviderLabel ?? insight.memoryProviderId
   const supportsRelated = insight.memoryCapabilities?.related === true
   const supportsForget = insight.memoryCapabilities?.forget === true
@@ -172,13 +166,7 @@ function InsightCard(props: {
       {(insight.tags?.length ?? 0) > 0 && <div className={css.tags}>{insight.tags!.map(tag => <span key={tag}>#{tag}</span>)}</div>}
       {(insight.entities?.length ?? 0) > 0 && <div className={css.entities}>{insight.entities!.map(entity => <span key={entity}>{entity}</span>)}</div>}
       <div className={css.cardActions}>
-        {inlineConfirming ? (
-          <div className={css.confirmBar} role="group" aria-label={t('card.confirmAria')}>
-            <span>{t('card.confirmText')}</span>
-            <button type="button" className={css.dangerSolidButton} disabled={forgetting} onClick={() => void forget()}>{forgetting ? t('card.processing') : t('card.confirmForget')}</button>
-            <button type="button" className={css.ghostButton} disabled={forgetting} onClick={() => setConfirming(false)}>{t('common.cancel')}</button>
-          </div>
-        ) : (
+        {(
           <>
             {props.onRelated !== undefined && supportsRelated && <button type="button" className={neutralActionClass} onClick={() => props.onRelated?.(insight)}>{t('card.related')}</button>}
             {props.onClone !== undefined && <button type="button" className={neutralActionClass} onClick={() => props.onClone?.(insight)}>{t('card.clone')}</button>}
@@ -188,7 +176,7 @@ function InsightCard(props: {
         )}
       </div>
     </article>
-    {appearance.surface === 'sidebar' && confirming && <SidebarModal title={t('card.confirmText')} description={`${insight.memoryBodyName ?? insight.memoryBodyId ?? ''}${insight.memoryBodyName === undefined && insight.memoryBodyId === undefined ? '' : ' · '}${insight.id}`} busy={forgetting} onClose={() => setConfirming(false)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close data-autofocus className={css.ghostButton} disabled={forgetting} onClick={() => setConfirming(false)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} disabled={forgetting} onClick={() => void forget()}>{forgetting ? t('card.processing') : t('card.confirmForget')}</button></div>}><div className={css.bodyDeleteConfirm}><div className={css.bodyDeleteSummary}><p className={css.bodyDeleteContent}>{insight.content}</p><span>{meta.join(' · ')}</span></div></div></SidebarModal>}
+    {confirming && <SidebarModal title={t('card.confirmText')} description={`${insight.memoryBodyName ?? insight.memoryBodyId ?? ''}${insight.memoryBodyName === undefined && insight.memoryBodyId === undefined ? '' : ' · '}${insight.id}`} busy={forgetting} onClose={() => setConfirming(false)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close data-autofocus className={css.ghostButton} disabled={forgetting} onClick={() => setConfirming(false)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} disabled={forgetting} onClick={() => void forget()}>{forgetting ? t('card.processing') : t('card.confirmForget')}</button></div>}><div className={css.bodyDeleteConfirm}><div className={css.bodyDeleteSummary}><p className={css.bodyDeleteContent}>{insight.content}</p><span>{meta.join(' · ')}</span></div></div></SidebarModal>}
     </>
   )
 }
@@ -634,7 +622,6 @@ function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | 
 export function OverviewPage(props: { client: MemorySpacesPageClient; metadataClient: MemorySpacesPageClient; revision: number; activationEnabled: boolean; writeEnabled: boolean; agentAvailable: boolean; fallbackBodies: MemoryBodyView[]; fallbackDirectory: string | undefined; catalogKnown: boolean; onMutate: () => void; onAgentRefresh: () => void; onBodyReconnect: (body: MemoryBodyView) => void; onBodyMetadata: (updates: readonly MemoryBodyMetadataUpdate[]) => void; onExplore: (query: string) => void }): JSX.Element {
   const t = useT()
   const locale = useLocale()
-  const appearance = useMnemonViewAppearance()
   const bodyCreateFormId = useId()
   const bodyEditFormId = useId()
   const [graph, setGraph] = useState<MemoryGraphSnapshot | null>(null)
@@ -816,7 +803,7 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; metadataCl
       })
       setBodyName(''); setBodyDescription(''); setBodyProviderId(providers.find(provider => provider.origin === 'native')?.id ?? providers[0]?.id ?? 'mnemon-native')
       setProviderDrafts(current => Object.fromEntries(providers.map(provider => [provider.id, Object.fromEntries(Object.entries(current[provider.id] ?? {}).map(([key, value]) => [key, provider.fields.some(field => field.key === key && field.input === 'secret') ? '' : value]))])))
-      if (appearance.surface === 'sidebar') setCreatingBodyOpen(false)
+      setCreatingBodyOpen(false)
       await load(true)
       props.onMutate()
     } catch (reason) { setError(message(reason)) } finally { setCreating(false) }
@@ -910,7 +897,6 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; metadataCl
     <label>{t('overview.editName')}<input aria-label={t('overview.editName')} value={editName} onChange={event => setEditName(event.target.value)} maxLength={100} required /></label>
     <label>{t('overview.editDescription')}<textarea aria-label={t('overview.editDescription')} value={editDescription} onChange={event => setEditDescription(event.target.value)} rows={4} maxLength={1000} /></label>
     {!nativeBodyProvider(body.provider) && (() => { const descriptor = providers.find(provider => provider.id === body.provider.id); return descriptor === undefined ? null : <ProviderMemoryFields provider={descriptor} connection={editConnection} onChange={(key, value) => setEditConnection(current => ({ ...current, [key]: value }))} body={body} clearSecrets={editClearSecrets} onClearSecretsChange={setEditClearSecrets} /> })()}
-    {appearance.surface === 'buildin' && <div className={css.bodyEditActions}><button type="submit" className={css.primaryButton} disabled={savingBody === body.id || editName.trim() === ''}>{savingBody === body.id ? t('overview.savingBody') : t('overview.saveBody')}</button><button type="button" className={css.ghostButton} onClick={() => setEditingBody(null)}>{t('common.cancel')}</button></div>}
   </form>
   const bodyCreateForm = <form id={bodyCreateFormId} className={appearanceClass(css.bodyEdit, css.bodyCreateForm)} onSubmit={event => void create(event)}>
     <section className={css.createSection}>
@@ -933,47 +919,42 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; metadataCl
       })}</fieldset>
       {selectedProvider !== undefined && selectedProvider.origin !== 'native' && <ProviderMemoryFields provider={selectedProvider} connection={providerDrafts[selectedProvider.id] ?? {}} onChange={(key, value) => updateProviderDraft(selectedProvider.id, key, value)} />}
     </section>
-    {appearance.surface === 'buildin' && <div className={appearanceClass(css.bodyEditActions, css.bodyCreateActions)}><button type="button" className={css.ghostButton} disabled={creating} onClick={() => setCreatingBodyOpen(false)}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={creating || bodyName.trim() === '' || bodyDescription.trim() === '' || !providerDraftComplete(selectedProvider, providerDrafts[bodyProviderId])}>{creating ? t('overview.creating') : t('overview.createAction')}</button></div>}
   </form>
   const bodyToggle = (body: MemoryBodyView) => <button type="button" className={css.bodySwitch} role="switch" aria-checked={body.active} aria-label={t('overview.toggleAria', { name: body.name })} disabled={!props.activationEnabled || changing === body.id || deletingBody === body.id} onClick={() => void toggle(body)}><span className={css.bodySwitchTrack} aria-hidden="true"><i /></span><span>{changing === body.id ? t('overview.toggling') : body.active ? t('common.active') : t('common.inactive')}</span></button>
-  const bodyEditActionClass = appearanceClass(css.ghostButton, appearanceClass(appearance.classes.itemActionButton, appearance.classes.itemEditAction))
-  const bodyDeleteActionClass = appearanceClass(css.dangerButton, appearanceClass(appearance.classes.itemActionButton, appearance.classes.itemDangerAction))
+  const bodyEditActionClass = appearanceClass(css.ghostButton, appearanceClass(sidebarCss.itemActionButton, sidebarCss.itemEditAction))
+  const bodyDeleteActionClass = appearanceClass(css.dangerButton, appearanceClass(sidebarCss.itemActionButton, sidebarCss.itemDangerAction))
   return (
     <div className={css.page}>
-      <PageHeader title={appearance.surface === 'sidebar' ? t('nav.overview') : t('overview.title')} description={t(appearance.surface === 'sidebar' ? 'overview.pageDescription' : 'overview.description')} meta={fullSyncAge} {...(loading ? { loadingLabel: catalogLoading ? t('overview.directoryLoading') : graphLoading ? t('overview.snapshotLoading') : t('overview.healthLoading') } : {})}
+      <PageHeader title={t('nav.overview')} description={t(('overview.pageDescription'))} meta={fullSyncAge} {...(loading ? { loadingLabel: catalogLoading ? t('overview.directoryLoading') : graphLoading ? t('overview.snapshotLoading') : t('overview.healthLoading') } : {})}
         action={<button type="button" className={css.secondaryButton} disabled={loading} onClick={() => void load()}>{loading ? t('overview.syncing') : t('overview.syncNow')}</button>} />
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
       <section className={css.bodyDirectory} aria-label={t('overview.directory')}>
         <div className={css.bodyDirectoryHeader}>
           <div><h3>{t('overview.directory')}</h3><p>{t('overview.directory.description')}</p><code className={css.bodyDirectoryPath}>{catalogUnavailable ? t('overview.directory.unsynced') : catalog?.directory || props.fallbackDirectory || t('overview.directory.waiting')}</code></div>
-          <div className={appearance.surface === 'sidebar' ? appearanceClass(css.bodyDirectoryControls, appearance.classes.bodyDirectoryActions) : css.bodyDirectoryControls}>
+          <div className={appearanceClass(css.bodyDirectoryControls, sidebarCss.bodyDirectoryActions)}>
             <strong>{catalogUnavailable ? t('overview.directory.unsyncedBadge') : `${catalog?.activeCount ?? '—'} / ${catalog?.total ?? '—'} ${t('common.active')}`}</strong>
             {props.writeEnabled && !catalogUnavailable && <button type="button" className={bodyEditActionClass} title={!props.agentAvailable ? t('overview.metadataUnavailable') : undefined} onClick={() => { setMetadataSelection([]); setMetadataTasks({}); setMetadataOpen(true); if (!props.agentAvailable) props.onAgentRefresh() }}>{t('overview.metadataAction')}</button>}
-            {appearance.surface === 'sidebar' && props.writeEnabled && !catalogUnavailable && <button type="button" className={bodyEditActionClass} onClick={() => setCreatingBodyOpen(true)}>{t('overview.createTitle')}</button>}
+            {props.writeEnabled && !catalogUnavailable && <button type="button" className={bodyEditActionClass} onClick={() => setCreatingBodyOpen(true)}>{t('overview.createTitle')}</button>}
           </div>
         </div>
         <div className={css.bodyGrid}>
           {catalog?.items.map(body => (
-            <article key={body.id} className={css.bodyCard} data-provider={body.provider.id} data-active={body.active || undefined} data-healthy={!body.statusLoading && body.healthy || undefined} data-status-loading={body.statusLoading || undefined} data-reconnectable="" data-reconnecting={reconnectingBody === body.id || undefined} data-mnemon-default={body.mnemonDefault || undefined} data-editing={(appearance.surface === 'buildin' && editingBody === body.id) || undefined} tabIndex={0} aria-label={t('overview.reconnectAria', { name: body.name })} title={reconnectingBody === body.id ? t('overview.reconnecting') : body.error ?? t('overview.reconnectHint')} onClick={event => {
+            <article key={body.id} className={css.bodyCard} data-provider={body.provider.id} data-active={body.active || undefined} data-healthy={!body.statusLoading && body.healthy || undefined} data-status-loading={body.statusLoading || undefined} data-reconnectable="" data-reconnecting={reconnectingBody === body.id || undefined} data-mnemon-default={body.mnemonDefault || undefined} data-editing={undefined} tabIndex={0} aria-label={t('overview.reconnectAria', { name: body.name })} title={reconnectingBody === body.id ? t('overview.reconnecting') : body.error ?? t('overview.reconnectHint')} onClick={event => {
               if (event.target instanceof Element && event.target.closest('button, input, textarea, select, label, a, [role="switch"]') !== null) return
               void reconnect(body)
             }} onKeyDown={event => {
               if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return
               event.preventDefault(); void reconnect(body)
             }}>
-              {appearance.surface === 'buildin'
-                ? editingBody === body.id
-                  ? bodyEditForm(body)
-                  : <><div className={css.bodyCardTop}><span className={css.bodySignal} /><div><strong>{body.name}</strong><code>{body.id}</code><div className={css.bodyProviderRow}><MemoryProviderBadge providerId={body.provider.id} label={body.provider.label} /><small className={css.bodyHealth}>{reconnectingBody === body.id ? t('overview.reconnecting') : body.statusLoading ? t('overview.storageChecking') : body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small>{body.mnemonDefault && <small className={css.mnemonDefaultBadge}>{t('overview.mnemonDefault')}</small>}</div></div><div className={css.bodyCardActions}>{bodyToggle(body)}<button type="button" className={css.bodyEditButton} aria-label={t('overview.editBodyAria', { name: body.name })} title={t('overview.editBody')} disabled={!props.writeEnabled} onClick={() => beginEdit(body)}>✎</button></div></div><p>{body.description || t('overview.noDescription')}</p>{placementReceipt(body)}<footer>{!nativeBodyProvider(body.provider) ? <><span className={css.bodyFooterBlock} title={t(body.provider.kind === 'remote' ? 'overview.providerRemote' : 'overview.providerLocal')}>{t(body.provider.kind === 'remote' ? 'overview.providerRemote' : 'overview.providerLocal')}</span><span className={`${css.bodyFooterBlock} ${css.bodyFooterGrow}`} title={body.provider.location || body.provider.label}>{body.provider.location || body.provider.label}</span></> : <><span className={css.bodyFooterBlock} title={t('common.memories', { count: body.stats?.totalInsights ?? 0 })}>{t('common.memories', { count: body.stats?.totalInsights ?? 0 })}</span><span className={css.bodyFooterBlock} title={t('common.edges', { count: body.stats?.edgeCount ?? 0 })}>{t('common.edges', { count: body.stats?.edgeCount ?? 0 })}</span><span className={css.bodyFooterBlock} title={humanBytes(body.stats?.dbSizeBytes ?? 0)}>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></>}</footer></>
-                : <><div className={appearance.classes.bodyCardHeader}><div className={appearance.classes.bodyCardIdentity}><span className={css.bodySignal} /><div><strong>{body.name}</strong><div className={appearance.classes.bodyCardMeta}><code>{body.id}</code><MemoryProviderBadge providerId={body.provider.id} label={body.provider.label} /><small className={css.bodyHealth}>{reconnectingBody === body.id ? t('overview.reconnecting') : body.statusLoading ? t('overview.storageChecking') : body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small>{body.mnemonDefault && <small className={css.mnemonDefaultBadge}>{t('overview.mnemonDefault')}</small>}</div></div></div>{bodyToggle(body)}</div><p title={body.description || t('overview.noDescription')}>{body.description || t('overview.noDescription')}</p>{placementReceipt(body)}<footer className={appearance.classes.bodyCardFooter}><div className={appearance.classes.bodyCardStats}>{!nativeBodyProvider(body.provider) ? <><span className={css.bodyFooterBlock} title={t(body.provider.kind === 'remote' ? 'overview.providerRemote' : 'overview.providerLocal')}>{t(body.provider.kind === 'remote' ? 'overview.providerRemote' : 'overview.providerLocal')}</span><span className={`${css.bodyFooterBlock} ${css.bodyFooterGrow}`} title={body.provider.location || body.provider.label}>{body.provider.location || body.provider.label}</span></> : <><span className={css.bodyFooterBlock} title={t('common.memories', { count: body.stats?.totalInsights ?? 0 })}>{t('common.memories', { count: body.stats?.totalInsights ?? 0 })}</span><span className={css.bodyFooterBlock} title={t('common.edges', { count: body.stats?.edgeCount ?? 0 })}>{t('common.edges', { count: body.stats?.edgeCount ?? 0 })}</span><span className={css.bodyFooterBlock} title={humanBytes(body.stats?.dbSizeBytes ?? 0)}>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></>}</div><div className={css.bodyCardActions}><button type="button" className={bodyEditActionClass} aria-label={t('overview.editBodyAria', { name: body.name })} disabled={!props.writeEnabled || deletingBody === body.id} onClick={() => beginEdit(body)}>{t('overview.editBody')}</button><button type="button" className={bodyDeleteActionClass} aria-label={t(!nativeBodyProvider(body.provider) ? 'overview.disconnectBodyAria' : 'overview.deleteBodyAria', { name: body.name })} title={canDeleteBody(body) ? undefined : t('overview.lastStoreDeleteHint')} disabled={!props.writeEnabled || deletingBody === body.id || !canDeleteBody(body)} onClick={() => setConfirmingDeleteBody(body.id)}>{!nativeBodyProvider(body.provider) ? t('overview.disconnectBody') : t('overview.deleteBody')}</button></div></footer></>}
+              {<><div className={sidebarCss.bodyCardHeader}><div className={sidebarCss.bodyCardIdentity}><span className={css.bodySignal} /><div><strong>{body.name}</strong><div className={sidebarCss.bodyCardMeta}><code>{body.id}</code><MemoryProviderBadge providerId={body.provider.id} label={body.provider.label} /><small className={css.bodyHealth}>{reconnectingBody === body.id ? t('overview.reconnecting') : body.statusLoading ? t('overview.storageChecking') : body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small>{body.mnemonDefault && <small className={css.mnemonDefaultBadge}>{t('overview.mnemonDefault')}</small>}</div></div></div>{bodyToggle(body)}</div><p title={body.description || t('overview.noDescription')}>{body.description || t('overview.noDescription')}</p>{placementReceipt(body)}<footer className={sidebarCss.bodyCardFooter}><div className={sidebarCss.bodyCardStats}>{!nativeBodyProvider(body.provider) ? <><span className={css.bodyFooterBlock} title={t(body.provider.kind === 'remote' ? 'overview.providerRemote' : 'overview.providerLocal')}>{t(body.provider.kind === 'remote' ? 'overview.providerRemote' : 'overview.providerLocal')}</span><span className={`${css.bodyFooterBlock} ${css.bodyFooterGrow}`} title={body.provider.location || body.provider.label}>{body.provider.location || body.provider.label}</span></> : <><span className={css.bodyFooterBlock} title={t('common.memories', { count: body.stats?.totalInsights ?? 0 })}>{t('common.memories', { count: body.stats?.totalInsights ?? 0 })}</span><span className={css.bodyFooterBlock} title={t('common.edges', { count: body.stats?.edgeCount ?? 0 })}>{t('common.edges', { count: body.stats?.edgeCount ?? 0 })}</span><span className={css.bodyFooterBlock} title={humanBytes(body.stats?.dbSizeBytes ?? 0)}>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></>}</div><div className={css.bodyCardActions}><button type="button" className={bodyEditActionClass} aria-label={t('overview.editBodyAria', { name: body.name })} disabled={!props.writeEnabled || deletingBody === body.id} onClick={() => beginEdit(body)}>{t('overview.editBody')}</button><button type="button" className={bodyDeleteActionClass} aria-label={t(!nativeBodyProvider(body.provider) ? 'overview.disconnectBodyAria' : 'overview.deleteBodyAria', { name: body.name })} title={canDeleteBody(body) ? undefined : t('overview.lastStoreDeleteHint')} disabled={!props.writeEnabled || deletingBody === body.id || !canDeleteBody(body)} onClick={() => setConfirmingDeleteBody(body.id)}>{!nativeBodyProvider(body.provider) ? t('overview.disconnectBody') : t('overview.deleteBody')}</button></div></footer></>}
             </article>
           ))}
           {catalog?.total === 0 && <div className={css.bodyDirectoryEmpty}><span>◇</span><div><strong>{catalogUnavailable ? t('overview.unsyncedTitle') : t('overview.emptyTitle')}</strong><p>{catalogUnavailable ? t('overview.unsyncedShort') : t('overview.emptyShort')}</p></div></div>}
         </div>
-        {appearance.surface === 'buildin' && props.writeEnabled && !catalogUnavailable && <details className={css.bodyCreate} open={catalog?.total === 0 ? true : undefined}><summary>{t('overview.create')}</summary>{bodyCreateForm}</details>}
+
       </section>
       <div className={css.asyncRegion}><ReadSourcePanel title={t('overview.snapshotSources')} hint={t('overview.snapshotSourcesHint')} sources={graphSources} /></div>
-      {appearance.surface === 'sidebar' && creatingBodyOpen && <SidebarModal title={t('overview.createTitle')} description={t('overview.createDialogHint')} busy={creating} wide onClose={() => setCreatingBodyOpen(false)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close className={css.ghostButton} disabled={creating} onClick={() => setCreatingBodyOpen(false)}>{t('common.cancel')}</button><button type="submit" form={bodyCreateFormId} className={css.primaryButton} disabled={creating || bodyName.trim() === '' || bodyDescription.trim() === '' || !providerDraftComplete(selectedProvider, providerDrafts[bodyProviderId])}>{creating ? t('overview.creating') : t('overview.createAction')}</button></div>}>{bodyCreateForm}</SidebarModal>}
+      {creatingBodyOpen && <SidebarModal title={t('overview.createTitle')} description={t('overview.createDialogHint')} busy={creating} wide onClose={() => setCreatingBodyOpen(false)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close className={css.ghostButton} disabled={creating} onClick={() => setCreatingBodyOpen(false)}>{t('common.cancel')}</button><button type="submit" form={bodyCreateFormId} className={css.primaryButton} disabled={creating || bodyName.trim() === '' || bodyDescription.trim() === '' || !providerDraftComplete(selectedProvider, providerDrafts[bodyProviderId])}>{creating ? t('overview.creating') : t('overview.createAction')}</button></div>}>{bodyCreateForm}</SidebarModal>}
       {metadataOpen && <SidebarModal title={t('overview.metadataTitle')} description={t('overview.metadataDescription')} busy={metadataBusy} wide onClose={() => setMetadataOpen(false)} footer={<><p className={css.modalFooterNote}>{t('overview.metadataSafety')}</p><div className={css.modalFooterActions}><button type="button" data-dialog-close className={css.ghostButton} disabled={metadataBusy} onClick={() => setMetadataOpen(false)}>{t('common.cancel')}</button><button type="button" className={css.primaryButton} disabled={!props.agentAvailable || metadataSelection.length === 0} title={!props.agentAvailable ? t('overview.metadataUnavailable') : undefined} onClick={maintainMetadata}>{t('overview.metadataGenerate', { count: metadataSelection.length })}</button></div></>}><div className={css.metadataDialog}>
         {!props.agentAvailable && <div className={css.inlineError} role="status">{t('overview.metadataUnavailable')}</div>}
         <div className={css.metadataToolbar}><span>{t('overview.metadataSelected', { count: metadataSelection.length })}{metadataRunningCount > 0 && <em>{t('overview.metadataRunningCount', { count: metadataRunningCount })}</em>}</span><button type="button" className={css.ghostButton} disabled={metadataSelectable.length === 0} onClick={() => setMetadataSelection(metadataAllSelected ? [] : metadataSelectable.map(body => body.id))}>{metadataAllSelected ? t('overview.metadataClear') : t('overview.metadataSelectAll')}</button></div>
@@ -983,8 +964,8 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; metadataCl
           return <label key={body.id} data-provider={body.provider.id} data-selected={selected || undefined} data-refreshing={task?.status === 'running' || undefined} data-refreshed={task?.status === 'success' || undefined} data-failed={task?.status === 'error' || undefined}><input type="checkbox" checked={selected} disabled={task?.status === 'running'} onChange={event => setMetadataSelection(current => event.target.checked ? [...new Set([...current, body.id])] : current.filter(id => id !== body.id))} /><i className={css.choiceControl} data-kind="check" aria-hidden="true" /><span><strong>{body.name}</strong><small>{body.description || t('overview.noDescription')}</small><span><MemoryProviderBadge providerId={body.provider.id} label={body.provider.label} />{task === undefined ? <code>{body.id}</code> : <small className={css.metadataTaskStatus} data-status={task.status} title={task.error}>{task.status === 'running' ? t('overview.metadataTaskRunning') : task.status === 'success' ? t('overview.metadataTaskSuccess') : t('overview.metadataTaskError', { error: task.error ?? t('overview.metadataTaskUnknown') })}</small>}</span></span></label>
         })}</div>
       </div></SidebarModal>}
-      {appearance.surface === 'sidebar' && editingBodyView !== undefined && <SidebarModal title={t('overview.editBodyAria', { name: editingBodyView.name })} description={editingBodyView.id} busy={savingBody === editingBodyView.id} onClose={() => setEditingBody(null)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close className={css.ghostButton} disabled={savingBody === editingBodyView.id} onClick={() => setEditingBody(null)}>{t('common.cancel')}</button><button type="submit" form={bodyEditFormId} className={css.primaryButton} disabled={savingBody === editingBodyView.id || editName.trim() === ''}>{savingBody === editingBodyView.id ? t('overview.savingBody') : t('overview.saveBody')}</button></div>}>{bodyEditForm(editingBodyView)}</SidebarModal>}
-      {appearance.surface === 'sidebar' && deletingBodyView !== undefined && <SidebarModal title={t(!nativeBodyProvider(deletingBodyView.provider) ? 'overview.disconnectTitle' : 'overview.deleteTitle', { name: deletingBodyView.name })} description={deletingBodyView.id} busy={deletingBody === deletingBodyView.id} onClose={() => setConfirmingDeleteBody(null)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close data-autofocus className={css.ghostButton} disabled={deletingBody === deletingBodyView.id} onClick={() => setConfirmingDeleteBody(null)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} title={canDeleteBody(deletingBodyView) ? undefined : t('overview.lastStoreDeleteHint')} disabled={deletingBody === deletingBodyView.id || !canDeleteBody(deletingBodyView)} onClick={() => void deleteBody(deletingBodyView)}>{deletingBody === deletingBodyView.id ? t('overview.deletingBody') : t(!nativeBodyProvider(deletingBodyView.provider) ? 'overview.disconnectAction' : 'overview.deleteAction')}</button></div>}><div className={css.bodyDeleteConfirm}><p>{t(!nativeBodyProvider(deletingBodyView.provider) ? 'overview.disconnectWarning' : 'overview.deleteWarning', { provider: deletingBodyView.provider.label })}</p><div className={css.bodyDeleteSummary}><strong>{deletingBodyView.name}</strong><span>{deletingBodyView.provider.label} · {deletingBodyView.provider.location || t('common.memories', { count: deletingBodyView.stats?.totalInsights ?? 0 })}</span></div></div></SidebarModal>}
+      {editingBodyView !== undefined && <SidebarModal title={t('overview.editBodyAria', { name: editingBodyView.name })} description={editingBodyView.id} busy={savingBody === editingBodyView.id} onClose={() => setEditingBody(null)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close className={css.ghostButton} disabled={savingBody === editingBodyView.id} onClick={() => setEditingBody(null)}>{t('common.cancel')}</button><button type="submit" form={bodyEditFormId} className={css.primaryButton} disabled={savingBody === editingBodyView.id || editName.trim() === ''}>{savingBody === editingBodyView.id ? t('overview.savingBody') : t('overview.saveBody')}</button></div>}>{bodyEditForm(editingBodyView)}</SidebarModal>}
+      {deletingBodyView !== undefined && <SidebarModal title={t(!nativeBodyProvider(deletingBodyView.provider) ? 'overview.disconnectTitle' : 'overview.deleteTitle', { name: deletingBodyView.name })} description={deletingBodyView.id} busy={deletingBody === deletingBodyView.id} onClose={() => setConfirmingDeleteBody(null)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close data-autofocus className={css.ghostButton} disabled={deletingBody === deletingBodyView.id} onClick={() => setConfirmingDeleteBody(null)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} title={canDeleteBody(deletingBodyView) ? undefined : t('overview.lastStoreDeleteHint')} disabled={deletingBody === deletingBodyView.id || !canDeleteBody(deletingBodyView)} onClick={() => void deleteBody(deletingBodyView)}>{deletingBody === deletingBodyView.id ? t('overview.deletingBody') : t(!nativeBodyProvider(deletingBodyView.provider) ? 'overview.disconnectAction' : 'overview.deleteAction')}</button></div>}><div className={css.bodyDeleteConfirm}><p>{t(!nativeBodyProvider(deletingBodyView.provider) ? 'overview.disconnectWarning' : 'overview.deleteWarning', { provider: deletingBodyView.provider.label })}</p><div className={css.bodyDeleteSummary}><strong>{deletingBodyView.name}</strong><span>{deletingBodyView.provider.label} · {deletingBodyView.provider.location || t('common.memories', { count: deletingBodyView.stats?.totalInsights ?? 0 })}</span></div></div></SidebarModal>}
       {!catalogUnavailable && graph !== null && graph.nodes.length > 0 ? (
         <div className={css.graphLayout}>
           <section className={css.graphPanel}>
@@ -997,7 +978,7 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; metadataCl
           </section>
           <aside className={css.graphInspector} data-empty={selected === null || undefined}>
             {selected === null ? (
-              <div className={css.inspectorEmpty}>{appearance.showLogo ? <MnemonLogo className={css.inspectorLogo} title={t('overview.inspector')} /> : <span className={appearanceClass(css.inspectorLogo, appearance.classes.inspectorGlyph)} aria-hidden="true">◇</span>}<h3>{t('overview.selectNode')}</h3><p>{t('overview.selectNodeText')}</p></div>
+              <div className={css.inspectorEmpty}><span className={appearanceClass(css.inspectorLogo, sidebarCss.inspectorGlyph)} aria-hidden="true">◇</span><h3>{t('overview.selectNode')}</h3><p>{t('overview.selectNodeText')}</p></div>
             ) : (
               <>
                 <div className={css.inspectorHeading}><span>{t(selectedKind === 'space' ? 'overview.inspectorSpace' : selectedKind === 'entity' ? 'overview.inspectorEntity' : 'overview.inspector')}</span><button type="button" onClick={() => setSelected(null)} aria-label={t('overview.closeInspector')}>×</button></div>
@@ -1031,8 +1012,7 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; metadataCl
 
 export function ExplorePage(props: { client: MemorySpacesPageClient; agentClient: MemorySpacesPageClient; agentAvailable: boolean; status: MemorySpacesPageStatus | null; seed: string; writeEnabled: boolean; onForget: (insight: Insight) => Promise<void> }): JSX.Element {
   const t = useT()
-  const appearance = useMnemonViewAppearance()
-  const pageSize = appearance.surface === 'sidebar' ? 6 : Number.MAX_SAFE_INTEGER
+  const pageSize = 6
   const [query, setQuery] = useState(props.seed)
   const [mode, setMode] = useState<'smart' | 'keyword' | 'basic'>('smart')
   const [category, setCategory] = useState<Category | ''>('')
@@ -1120,8 +1100,8 @@ export function ExplorePage(props: { client: MemorySpacesPageClient; agentClient
       {searched && !searching && results.length === 0 && error === null && <EmptyState glyph="0" title={t('search.emptyTitle')}>{t('search.emptyText')}</EmptyState>}
       {results.length > 0 && (
         <div className={relatedTo === null ? css.singleColumn : css.resultLayout}>
-          <section className={css.results}><div className={css.sectionHeading}><div><h3>{t('search.results')}</h3></div><strong>{results.length}</strong></div>{visibleResults.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onRelated={item => void showRelated(item)} />)}{appearance.surface === 'sidebar' && <ProgressiveFooter visible={visibleResults.length} total={results.length} pageSize={pageSize} onMore={() => setVisibleResultLimit(value => value + pageSize)} />}</section>
-          {relatedTo !== null && <aside id="mnemon-related-pane" className={css.relatedPane}><div className={css.sectionHeading}><div><h3>{t('search.related')}</h3></div><button type="button" onClick={() => { relatedRequests.begin(); setRelatedTo(null); setRelatedLoading(false) }} aria-label={t('search.closeRelated')}>×</button></div><p className={css.relatedSource}>{relatedTo.content}</p>{relatedLoading && <div className={css.loading}>{t('search.traversing')}</div>}{!relatedLoading && related.length === 0 && <div className={css.muted}>{t('search.noRelated')}</div>}{visibleRelated.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onRelated={item => void showRelated(item)} />)}{appearance.surface === 'sidebar' && !relatedLoading && <ProgressiveFooter visible={visibleRelated.length} total={related.length} pageSize={pageSize} onMore={() => setVisibleRelatedLimit(value => value + pageSize)} />}</aside>}
+          <section className={css.results}><div className={css.sectionHeading}><div><h3>{t('search.results')}</h3></div><strong>{results.length}</strong></div>{visibleResults.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onRelated={item => void showRelated(item)} />)}{<ProgressiveFooter visible={visibleResults.length} total={results.length} pageSize={pageSize} onMore={() => setVisibleResultLimit(value => value + pageSize)} />}</section>
+          {relatedTo !== null && <aside id="mnemon-related-pane" className={css.relatedPane}><div className={css.sectionHeading}><div><h3>{t('search.related')}</h3></div><button type="button" onClick={() => { relatedRequests.begin(); setRelatedTo(null); setRelatedLoading(false) }} aria-label={t('search.closeRelated')}>×</button></div><p className={css.relatedSource}>{relatedTo.content}</p>{relatedLoading && <div className={css.loading}>{t('search.traversing')}</div>}{!relatedLoading && related.length === 0 && <div className={css.muted}>{t('search.noRelated')}</div>}{visibleRelated.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onRelated={item => void showRelated(item)} />)}{!relatedLoading && <ProgressiveFooter visible={visibleRelated.length} total={related.length} pageSize={pageSize} onMore={() => setVisibleRelatedLimit(value => value + pageSize)} />}</aside>}
         </div>
       )}
       </div>
@@ -1131,9 +1111,8 @@ export function ExplorePage(props: { client: MemorySpacesPageClient; agentClient
 
 export function EntitiesPage(props: { client: MemorySpacesPageClient; revision: number; writeEnabled: boolean; onForget: (insight: Insight) => Promise<void>; onExplore: (query: string) => void }): JSX.Element {
   const t = useT()
-  const appearance = useMnemonViewAppearance()
-  const entityPageSize = appearance.surface === 'sidebar' ? 10 : Number.MAX_SAFE_INTEGER
-  const insightPageSize = appearance.surface === 'sidebar' ? 6 : Number.MAX_SAFE_INTEGER
+  const entityPageSize = 10
+  const insightPageSize = 6
   const [view, setView] = useState<EntityView>({ items: [], insights: [] })
   const [entity, setEntity] = useState('')
   const [entityFilter, setEntityFilter] = useState('')
@@ -1183,7 +1162,7 @@ export function EntitiesPage(props: { client: MemorySpacesPageClient; revision: 
           <form className={css.entitySearch} onSubmit={submit}><input aria-label={t('entities.nameAria')} value={entity} onChange={event => { setEntity(event.target.value); setEntityFilter(event.target.value) }} onKeyDown={event => { if (event.key === 'Escape' && entityFilter !== '') { event.preventDefault(); setEntityFilter('') } }} placeholder={t('entities.placeholder')} /><button type="submit" className={css.primaryButton} disabled={loading || entity.trim() === ''}>{t('entities.action')}</button></form>
           <div className={css.entityHeading}><span>{t('entities.top')}</span><small>{entityFilter === '' ? t('entities.frequency') : t('entities.filterHint')}</small></div>
           <div className={css.entityList}>{visibleEntities.map(item => <button key={item.entity} type="button" aria-pressed={view.selected === item.entity} onClick={() => { setEntity(item.entity); void load(item.entity) }}><span>{item.entity}</span><strong>{item.count}</strong></button>)}</div>
-          {appearance.surface === 'sidebar' && visibleEntities.length > 0 && filteredTotal > visibleEntityLimit && <ProgressiveFooter compact visible={visibleEntities.length} total={filteredTotal} pageSize={entityPageSize} onMore={() => setVisibleEntityLimit(value => value + entityPageSize)} />}
+          {visibleEntities.length > 0 && filteredTotal > visibleEntityLimit && <ProgressiveFooter compact visible={visibleEntities.length} total={filteredTotal} pageSize={entityPageSize} onMore={() => setVisibleEntityLimit(value => value + entityPageSize)} />}
           {!loading && view.items.length === 0 && <p className={css.muted}>{t('entities.emptyRail')}</p>}
           {!loading && view.items.length > 0 && visibleEntities.length === 0 && entityFilter !== '' && <p className={css.muted}>{t('entities.filterEmpty')}</p>}
         </aside>
@@ -1191,7 +1170,7 @@ export function EntitiesPage(props: { client: MemorySpacesPageClient; revision: 
           {loading && <SectionSpinner label={t('entities.loading')} />}
           {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
           {!loading && view.selected === undefined && <EmptyState glyph="◎" title={t('entities.selectTitle')}>{t('entities.selectText')}</EmptyState>}
-          {view.selected !== undefined && <><div className={css.sectionHeading}><div><h3>{view.selected}</h3></div><strong>{view.insights.length}</strong></div>{!loading && view.insights.length === 0 ? <EmptyState glyph="0" title={t('entities.emptyTitle')}>{t('entities.emptyText')}</EmptyState> : <>{visibleInsights.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={props.onForget} onRelated={() => props.onExplore(insight.content)} />)}{appearance.surface === 'sidebar' && !loading && <ProgressiveFooter visible={visibleInsights.length} total={view.insights.length} pageSize={insightPageSize} onMore={() => setVisibleInsightLimit(value => value + insightPageSize)} />}</>}</>}
+          {view.selected !== undefined && <><div className={css.sectionHeading}><div><h3>{view.selected}</h3></div><strong>{view.insights.length}</strong></div>{!loading && view.insights.length === 0 ? <EmptyState glyph="0" title={t('entities.emptyTitle')}>{t('entities.emptyText')}</EmptyState> : <>{visibleInsights.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={props.onForget} onRelated={() => props.onExplore(insight.content)} />)}{!loading && <ProgressiveFooter visible={visibleInsights.length} total={view.insights.length} pageSize={insightPageSize} onMore={() => setVisibleInsightLimit(value => value + insightPageSize)} />}</>}</>}
         </section>
       </div>}
     </div>
@@ -1314,7 +1293,7 @@ export function PersistenceStrategyDialog(props: {
   </SidebarModal>
 }
 
-export function RememberPage(props: { client: MemorySpacesPageClient; agentAvailable: boolean; memoryBodies: MemoryBodyView[]; writeEnabled: boolean; seed: string; onMutate: () => void; onClose?: () => void; onComplete?: () => void }): JSX.Element {
+export function RememberPage(props: { client: MemorySpacesPageClient; agentAvailable: boolean; memoryBodies: MemoryBodyView[]; writeEnabled: boolean; seed: string; onMutate: () => void; onClose: () => void; onComplete?: () => void }): JSX.Element {
   const t = useT()
   const rememberFormId = useId()
   const [content, setContent] = useState(props.seed)
@@ -1364,7 +1343,7 @@ export function RememberPage(props: { client: MemorySpacesPageClient; agentAvail
       <div className={css.supervisedHeading}><div><h3>{t('remember.delegateTitle')}</h3></div><span className={!props.agentAvailable ? css.sessionMissing : css.sessionReady}>{!props.agentAvailable ? t('remember.noTaskAgent') : t('remember.taskAgentReady')}</span></div>
       <label className={css.fieldWide}>{t('remember.candidate')}<textarea aria-label={t('remember.candidateAria')} value={content} onChange={event => setContent(event.target.value)} maxLength={8000} rows={8} placeholder={t('remember.placeholder')} /></label>
       {!props.agentAvailable && <p className={css.sessionHint}>{t('remember.taskAgentHint')}</p>}
-      {props.onClose === undefined ? <div className={css.formActions}><button type="submit" className={css.primaryButton} disabled={supervising || content.trim() === '' || !props.agentAvailable}>{supervising ? t('remember.processing') : t('remember.action')}</button>{result !== null && <span role="status">{result}</span>}</div> : result !== null && <p className={css.modalInlineStatus} role="status">{result}</p>}
+      {result !== null && <p className={css.modalInlineStatus} role="status">{result}</p>}
     </form>
     <details className={css.advancedWrite}>
       <summary><span><strong>{t('remember.advanced')}</strong><small>{t('remember.advancedHint')}</small></span><span>{t('remember.expand')}</span></summary>
@@ -1375,20 +1354,12 @@ export function RememberPage(props: { client: MemorySpacesPageClient; agentAvail
     </details>
   </section>
 
-  if (props.onClose !== undefined) {
-    return <SidebarModal title={t('remember.title')} description={t('remember.description')} busy={supervising || saving} onClose={props.onClose} footer={props.writeEnabled ? <div className={css.modalFooterActions}><button type="button" data-dialog-close className={css.ghostButton} disabled={supervising || saving} onClick={props.onClose}>{t('common.cancel')}</button><button type="submit" form={rememberFormId} className={css.primaryButton} disabled={supervising || content.trim() === '' || !props.agentAvailable}>{supervising ? t('remember.processing') : t('remember.action')}</button></div> : undefined}>{props.writeEnabled ? composer : <EmptyState glyph="⊘" title={t('remember.readOnlyTitle')}>{t('remember.readOnlyText')}</EmptyState>}</SidebarModal>
-  }
-
-  return <div className={css.page}>
-    <PageHeader title={t('remember.title')} description={t('remember.description')} meta={props.writeEnabled ? t('remember.worker') : t('common.readOnly')} />
-    {!props.writeEnabled ? <EmptyState glyph="⊘" title={t('remember.readOnlyTitle')}>{t('remember.readOnlyText')}</EmptyState> : <div className={css.writebackLayout}><aside className={css.writeGuide}><h3>{t('remember.flowTitle')}</h3><ol><li><strong>{t('remember.routeTitle')}</strong><span>{t('remember.routeText')}</span></li><li><strong>{t('remember.dedupeTitle')}</strong><span>{t('remember.dedupeText')}</span></li><li><strong>{t('remember.writeTitle')}</strong><span>{t('remember.writeText')}</span></li></ol><p>{t('remember.flowText')}</p></aside>{composer}</div>}
-  </div>
+  return <SidebarModal title={t('remember.title')} description={t('remember.description')} busy={supervising || saving} onClose={props.onClose} footer={props.writeEnabled ? <div className={css.modalFooterActions}><button type="button" data-dialog-close className={css.ghostButton} disabled={supervising || saving} onClick={props.onClose}>{t('common.cancel')}</button><button type="submit" form={rememberFormId} className={css.primaryButton} disabled={supervising || content.trim() === '' || !props.agentAvailable}>{supervising ? t('remember.processing') : t('remember.action')}</button></div> : undefined}>{props.writeEnabled ? composer : <EmptyState glyph="⊘" title={t('remember.readOnlyTitle')}>{t('remember.readOnlyText')}</EmptyState>}</SidebarModal>
 }
 
 export function ListPage(props: { client: MemorySpacesPageClient; revision: number; writeEnabled: boolean; onForget: (insight: Insight) => Promise<void>; onClone: (insight: Insight) => void; onExplore: (query: string) => void }): JSX.Element {
   const t = useT()
-  const appearance = useMnemonViewAppearance()
-  const pageSize = appearance.surface === 'sidebar' ? 12 : 48
+  const pageSize = 12
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState<Category | ''>('')
   const [view, setView] = useState<MemoryListView | null>(null)

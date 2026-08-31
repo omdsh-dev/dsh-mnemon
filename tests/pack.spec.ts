@@ -51,6 +51,7 @@ async function fixture(label: string, seed: number, bodyId = 'project') {
 }
 
 afterEach(async () => {
+  vi.unstubAllEnvs()
   for (const release of releases.splice(0)) await release()
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
 })

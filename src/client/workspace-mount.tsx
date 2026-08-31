@@ -9,8 +9,14 @@ import { mountMnemonSidebarEntry } from './sidebar-entry.ts'
 import { MnemonWorkspaceController } from './workspace-controller.ts'
 import css from './MnemonWorkspace.module.css'
 
-/** The single visible Mnemon workspace, in either DSH presentation seat. */
-export const MNEMON_VIEW_SELECTOR = '[data-mnemon-surface]'
+/** The single visible Mnemon workspace, mounted by DSH's shell overlay. */
+export const MNEMON_VIEW_SELECTOR = '[data-dsh-mnemon-view]'
+
+const ACTIVE_ATTR = 'data-dsh-mnemon-active'
+const TASKBOARD_ACTIVE_ATTR = 'data-dsh-taskboard-active'
+const SSH_ACTIVE_ATTR = 'data-dsh-ssh-active'
+const ACTIVATE_EVENT = 'dsh-panel-activate'
+const SIDEBAR_CONTEXT_SELECTOR = '[data-dsh-taskboard-entry], [data-dsh-ssh-entry], [class*="sessionRow"], [class*="projectRow"], [class*="searchResultRow"], [class*="searchResultWorkspace"], [class*="newSession"]'
 
 function normalizePath(value: string): string {
   return value.replace(/[\\/]+$/u, '')
@@ -21,31 +27,6 @@ export interface MnemonWorkspaceNavigation {
   close(): void
 }
 
-/** Navigate to and from the one DSH-owned conversation.view registration. */
-export function createMnemonWorkspaceNavigation(t: MnemonTranslate): MnemonWorkspaceNavigation {
-  let previousTab: HTMLElement | undefined
-  const memoryTab = (): HTMLElement | undefined => {
-    const label = t('tab.label').trim()
-    return [...document.querySelectorAll<HTMLElement>('[role="tab"]')]
-      .find(candidate => candidate.textContent?.trim() === label)
-  }
-  return {
-    open() {
-      const target = memoryTab()
-      if (target === undefined) return
-      const current = document.querySelector<HTMLElement>('[role="tab"][aria-selected="true"], [role="tab"][data-active]')
-      if (current !== null && current !== target) previousTab = current
-      target.click()
-    },
-    close() {
-      const target = memoryTab()
-      const fallback = [...document.querySelectorAll<HTMLElement>('[role="tab"]')].find(candidate => candidate !== target)
-      const destination = previousTab?.isConnected === true ? previousTab : fallback
-      destination?.click()
-    },
-  }
-}
-
 export interface MnemonWorkspaceHostProps extends PropsRenderSlots<'mnemon.source.page'> {
   connection: MnemonClientContext['connection']
   settingsScope: ClientSettingsScope<Config>
@@ -54,9 +35,30 @@ export interface MnemonWorkspaceHostProps extends PropsRenderSlots<'mnemon.sourc
   localeRuntime: MnemonClientContext['locale']
   sourcePageDirectory: MemorySourcePageDirectory
   navigation: MnemonWorkspaceNavigation
-  surface: 'buildin' | 'sidebar'
   t: MnemonTranslate
   sessionId?: string
+}
+
+export interface MnemonBuiltinWorkspaceHostProps extends Pick<MnemonWorkspaceHostProps,
+  'connection' | 'settingsScope' | 'localeRuntime' | 'sourcePageDirectory' | 'renderSlot' | 't'> {
+  sessionId: string
+}
+
+/** Builtin follows its DSH slot session, never the Sidebar's workspace picker. */
+export function MnemonBuiltinWorkspaceHost(props: MnemonBuiltinWorkspaceHostProps): JSX.Element {
+  const subscribeLocale = useCallback((listener: () => void) => props.localeRuntime.subscribe(listener), [props.localeRuntime])
+  const getLocale = useCallback(() => props.localeRuntime.getSnapshot(), [props.localeRuntime])
+  const locale = useSyncExternalStore(subscribeLocale, getLocale, getLocale)
+  return <MnemonView
+    connection={props.connection}
+    settingsScope={props.settingsScope}
+    sessionId={props.sessionId}
+    surface="builtin"
+    t={props.t}
+    locale={locale.active}
+    sourcePageDirectory={props.sourcePageDirectory}
+    renderSlot={props.renderSlot}
+  />
 }
 
 /** Shared workspace body; its DSH registration owns Source child-render authority. */
@@ -100,12 +102,11 @@ export function MnemonWorkspaceHost(props: MnemonWorkspaceHostProps): JSX.Elemen
     {...(sessionId === undefined ? {} : { sessionId })}
     {...(resolvedSelectedId === undefined ? {} : { workspaceId: resolvedSelectedId })}
     workspaceSelection={selection}
-    surface={props.surface}
     t={props.t}
     locale={locale.active}
     sourcePageDirectory={props.sourcePageDirectory}
     renderSlot={props.renderSlot}
-    {...(props.surface === 'sidebar' ? { onClose: props.navigation.close } : {})}
+    onClose={props.navigation.close}
   />
 }
 
@@ -115,31 +116,46 @@ export function MnemonSidebarWorkspaceHost(props: MnemonWorkspaceHostProps & { c
   const [bounds, setBounds] = useState<{ left: number; top: number; width: number; height: number }>()
   useEffect(() => {
     if (!state.open) return
-    const column = document.querySelector<HTMLElement>('[data-pane="conversation"], [class*="centerCol"], .dshDesktopConversationSurface')
-    if (column === null) return
+    let column: HTMLElement | null = null
+    let wasInert = false
     const update = (): void => {
+      if (column === null) return
       const { left, top, width, height } = column.getBoundingClientRect()
-      setBounds({ left, top, width, height })
+      setBounds(previous => previous?.left === left && previous.top === top && previous.width === width && previous.height === height ? previous : { left, top, width, height })
     }
-    update()
     const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(update)
-    observer?.observe(column)
+    const connect = (): void => {
+      const next = document.querySelector<HTMLElement>('[data-pane="conversation"], [class*="centerCol"], .dshDesktopConversationSurface')
+      if (next !== column) {
+        if (column !== null) { observer?.unobserve(column); column.inert = wasInert }
+        column = next
+        if (column !== null) {
+          wasInert = column.inert
+          column.inert = true
+          observer?.observe(column)
+        }
+      }
+      update()
+    }
+    connect()
+    const shell = new MutationObserver(connect)
+    shell.observe(document.body, { childList: true, subtree: true })
     window.addEventListener('resize', update)
-    const wasInert = column.inert
-    column.inert = true
     const escape = (event: KeyboardEvent): void => {
       if (event.key === 'Escape' && !event.defaultPrevented && document.querySelector('[role="dialog"]') === null) props.controller.close()
     }
     window.addEventListener('keydown', escape)
     return () => {
+      shell.disconnect()
       observer?.disconnect()
       window.removeEventListener('resize', update)
       window.removeEventListener('keydown', escape)
-      column.inert = wasInert
+      if (column !== null) column.inert = wasInert
     }
   }, [state.open, props.controller])
-  if (!state.open || bounds === undefined) return null
-  return <section className={css.workspacePanel} style={bounds} aria-label={props.t('tab.label')}>
+  if (bounds === undefined) return null
+  // Hide the existing DSH subtree so panel navigation retains Source page state.
+  return <section data-dsh-mnemon-view hidden={!state.open} className={css.workspacePanel} style={{ ...bounds, display: state.open ? undefined : 'none' }} aria-label={props.t('tab.label')}>
     <MnemonWorkspaceHost {...props} />
   </section>
 }
@@ -151,5 +167,51 @@ export function mountMnemonSidebarLauncher(
   controller: MnemonWorkspaceController,
 ): () => void {
   if (typeof document === 'undefined' || typeof window === 'undefined') return () => {}
-  return mountMnemonSidebarEntry(controller, t, listener => ctx.locale.subscribe(listener))
+  const stopEntry = mountMnemonSidebarEntry(controller, t, listener => ctx.locale.subscribe(listener))
+  const stopPanels = coordinateSidebarPanels(controller)
+  return () => { stopPanels(); stopEntry() }
+}
+
+/** Coordinate released peer panels; their DOM flags also cover lost events. */
+function coordinateSidebarPanels(controller: MnemonWorkspaceController): () => void {
+  let announcing = false
+  const applyActive = (): void => {
+    const html = document.documentElement
+    if (!controller.getSnapshot().open) { html.removeAttribute(ACTIVE_ATTR); return }
+    // Released Taskboard and SSH only close for each other's event names.
+    announcing = true
+    try {
+      document.dispatchEvent(new CustomEvent(ACTIVATE_EVENT, { detail: 'ssh' }))
+      document.dispatchEvent(new CustomEvent(ACTIVATE_EVENT, { detail: 'taskboard' }))
+    } finally { announcing = false }
+    html.removeAttribute(TASKBOARD_ACTIVE_ATTR)
+    html.removeAttribute(SSH_ACTIVE_ATTR)
+    html.setAttribute(ACTIVE_ATTR, '')
+    document.dispatchEvent(new CustomEvent(ACTIVATE_EVENT, { detail: 'mnemon' }))
+  }
+  const onActivate = (event: Event): void => {
+    if (announcing || !controller.getSnapshot().open) return
+    const detail = (event as CustomEvent<unknown>).detail
+    if (detail === 'taskboard' || detail === 'ssh') controller.close()
+  }
+  const onContext = (event: MouseEvent): void => {
+    if (controller.getSnapshot().open && event.target instanceof Element && event.target.closest(SIDEBAR_CONTEXT_SELECTOR) !== null) controller.close()
+  }
+  const observer = new MutationObserver(() => {
+    if (!controller.getSnapshot().open) return
+    const html = document.documentElement
+    if (!html.hasAttribute(ACTIVE_ATTR) || html.hasAttribute(TASKBOARD_ACTIVE_ATTR) || html.hasAttribute(SSH_ACTIVE_ATTR)) controller.close()
+  })
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: [ACTIVE_ATTR, TASKBOARD_ACTIVE_ATTR, SSH_ACTIVE_ATTR] })
+  document.addEventListener('click', onContext, true)
+  document.addEventListener(ACTIVATE_EVENT, onActivate)
+  const unsubscribe = controller.subscribe(applyActive)
+  applyActive()
+  return () => {
+    unsubscribe()
+    observer.disconnect()
+    document.removeEventListener('click', onContext, true)
+    document.removeEventListener(ACTIVATE_EVENT, onActivate)
+    document.documentElement.removeAttribute(ACTIVE_ATTR)
+  }
 }

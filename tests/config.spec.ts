@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { resolveConfig } from "../src/host/config.ts"
+import { Config, resolveConfig } from "../src/host/config.ts"
 
 afterEach(() => vi.unstubAllEnvs())
 

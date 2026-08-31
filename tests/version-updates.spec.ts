@@ -18,10 +18,30 @@ function json(path: string, value: unknown): void {
 }
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true })
 })
 
 describe('VersionUpdateManager', () => {
+  it('resolves a configured CLI command on PATH and observes availability changes without restarting', async () => {
+    const root = directory('configured-cli-path')
+    const command = join(root, process.platform === 'win32' ? 'mnemon-test.exe' : 'mnemon-test')
+    const install = () => { writeFileSync(command, '#!/bin/sh\n'); chmodSync(command, 0o755) }
+    install()
+    vi.stubEnv('PATH', root)
+    const run = vi.fn<ProcessRunner>(async () => ({ stdout: 'mnemon version 0.2.5\n', stderr: '', exitCode: 0 }))
+    const manager = new VersionUpdateManager({
+      packageManifestPath: join(root, 'package.json'), mnemonCliPath: () => 'mnemon-test', processRunner: run,
+      fetchNpmLatest: async () => undefined, fetchMnemonLatest: async () => '0.2.5',
+    })
+    expect((await manager.check()).components.find(item => item.id === 'mnemon')).toMatchObject({ current: '0.2.5', executablePath: command })
+    expect(run).toHaveBeenCalledWith(command, ['--version'], expect.any(Object))
+    rmSync(command)
+    expect((await manager.check()).components.find(item => item.id === 'mnemon')).toMatchObject({ installMode: 'missing' })
+    install()
+    expect((await manager.check()).components.find(item => item.id === 'mnemon')).toMatchObject({ current: '0.2.5', executablePath: command })
+  })
+
   it('compares releases and prereleases using semantic-version precedence', () => {
     expect(compareVersions('0.1.9', '0.1.10')).toBeLessThan(0)
     expect(compareVersions('v1.0.0-rc.2', '1.0.0')).toBeLessThan(0)

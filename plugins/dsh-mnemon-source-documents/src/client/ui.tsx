@@ -29,7 +29,7 @@ export function DocumentsSourcePage(props: MemorySourcePageProps): ReactNode {
 }
 
 export function installDocumentsMemoryUI(ctx: Parameters<typeof installMemorySourceUI>[0], t: MnemonTranslate = translateEn): () => void {
-  return installMemorySourceUI(ctx, { sourceTypeId: 'documents', pages: [{ id: 'library', order: 200, navigation: { group: 'storage', glyph: '▤', detail: () => t('nav.documents.detail') }, label: () => t('nav.documents'), component: DocumentsSourcePage }] })
+  return installMemorySourceUI(ctx, { sourceTypeId: 'documents', pages: [{ id: 'library', order: 200, navigation: { group: 'storage', glyph: '▤' }, label: () => t('nav.documents'), component: DocumentsSourcePage }] })
 }
 
 export const inject = ['slots', 'locale']

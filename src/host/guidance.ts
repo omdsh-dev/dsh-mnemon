@@ -1,60 +1,15 @@
-import type { HostAgent, HostContextShape } from "./dsh.ts"
+import type { HostContextShape } from './dsh.ts'
 import type { ResolvedConfig } from './config.ts'
 import type { ComposableMemoryView } from '../core/contracts/index.ts'
 
 export const GUIDANCE_SECTION_NAME = 'mnemon:routing'
-export const RUNTIME_MEMORY_PROTOCOL_SECTION_NAME = 'mnemon:runtime-memory-protocol'
 export const RUNTIME_MEMORY_CONTEXT_NAME = 'mnemon:runtime-memory'
 export const STRATEGY_SECTION_NAME = 'mnemon:strategy'
 export const ROUTING_GUIDANCE = 'Use memory only when needed. Follow the current Mnemon View: use mnemon_view_route or mnemon_view_action only for offered ids. Installed tools do not imply an available Source. Never infer missing historical facts. An action offer is not authorization; a write exists only after its receipt.'
-const RUNTIME_MEMORY_LITERAL_OPEN_BRACES_VARIABLE = 'mnemon_runtime_memory_literal_open_braces'
-const LITERAL_OPEN_BRACES = '{{'
 
-interface SystemPromptRegistry {
-  section?: (value: { name: string; order: number; text: string | (() => string) }) => unknown
-  context?: (value: { name: string; order: number; text: string | (() => string) }) => unknown
-  variable?: (name: string, provider: () => string) => unknown
-}
-
-function systemPrompt(ctx: HostContextShape): SystemPromptRegistry | undefined {
-  return ctx.get('systemPrompt') as SystemPromptRegistry | undefined
-}
-
-function scopedSystemPrompt(agent: HostAgent): SystemPromptRegistry | undefined {
-  return agent.ctx.get?.('systemPrompt') as SystemPromptRegistry | undefined
-}
-
-export function memoryPromptText(value: string): string {
-  return value.replaceAll(
-    LITERAL_OPEN_BRACES,
-    `{{${RUNTIME_MEMORY_LITERAL_OPEN_BRACES_VARIABLE}}}`,
-  )
-}
-
-function disposer(...values: unknown[]): () => void {
-  const disposes = values.filter((value): value is () => void => typeof value === 'function')
-  return () => {
-    for (let index = disposes.length - 1; index >= 0; index -= 1) disposes[index]!()
-  }
-}
-
-/** Replace the already-materialized Agent protocol and context with the Wake pinned during assembly. */
-export function applyAgentMemoryViewWake<T extends { sections: Array<{ name: string; text: string }>; contexts: Array<{ name: string; text: string }> }>(assembly: T, wake: MemoryWake | undefined): T {
-  const sections = assembly.sections
-  const rendered = wake === undefined ? '' : memoryPromptText(wake.text)
-  let found = false
-  const contexts = assembly.contexts.map(context => {
-    if (context.name !== RUNTIME_MEMORY_CONTEXT_NAME) return context
-    found = true
-    return { ...context, text: rendered }
-  })
-  if (!found) contexts.push({ name: RUNTIME_MEMORY_CONTEXT_NAME, text: rendered })
-  return { ...assembly, sections, contexts }
-}
-
-/** Register the non-recursive escape used by Source-provided View Wake contexts. */
-export function registerMemoryPromptInterpolation(ctx: HostContextShape): void {
-  systemPrompt(ctx)?.variable?.(RUNTIME_MEMORY_LITERAL_OPEN_BRACES_VARIABLE, () => LITERAL_OPEN_BRACES)
+/** A View is an own-plugin message, never part of the shared context snapshot. */
+export function withoutMemoryViewContext<T extends { contexts: Array<{ name: string; text: string }> }>(assembly: T): T {
+  return { ...assembly, contexts: assembly.contexts.filter(context => context.name !== RUNTIME_MEMORY_CONTEXT_NAME) }
 }
 
 /** Inject trusted Strategy instructions after interpolation; Source text stays quoted in the Wake. */
@@ -67,23 +22,10 @@ export function applyMemoryViewGuidance<T extends { sections: Array<{ name: stri
 }
 
 export function registerGuidance(ctx: HostContextShape, config?: Pick<ResolvedConfig, 'routingGuidance'>): void {
-  systemPrompt(ctx)?.section?.({
+  const prompt = ctx.get('systemPrompt') as { section?: (value: { name: string; order: number; text: () => string }) => unknown } | undefined
+  prompt?.section?.({
     name: GUIDANCE_SECTION_NAME,
     order: 150,
     text: () => config?.routingGuidance === false ? '' : ROUTING_GUIDANCE,
   })
-}
-
-/** Project only the immutable Wake pinned by the root Agent lifecycle. */
-export function registerAgentMemoryViewContext(agent: HostAgent, wake: () => MemoryWake | undefined): () => void {
-  const prompt = scopedSystemPrompt(agent)
-  const stopContext = prompt?.context?.({
-    name: RUNTIME_MEMORY_CONTEXT_NAME,
-    order: 145,
-    text: () => {
-      const current = wake()
-      return current === undefined ? '' : memoryPromptText(current.text)
-    },
-  })
-  return disposer(stopContext)
 }

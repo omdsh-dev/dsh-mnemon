@@ -103,10 +103,10 @@ interface ToolReceiptRecovery {
 }
 
 interface RecallAuthority {
-  context: MemoryTurnContext
+  context: ComposableMemoryTurn
   viewId: string
   memoryBodyIds: string[]
-  service: MnemonService
+  source: SourceSession
 }
 
 const WRITE_SCHEMA = {
@@ -1592,21 +1592,18 @@ Completion protocol: call \`${resultToolName}\` exactly once with the final resu
   private recallAuthority(agent: HostAgent, required: boolean): RecallAuthority | undefined {
     const authority = this.turnAuthority(agent, required)
     if (authority === undefined) return undefined
-    const graph = this.runtimeSource.forAgent(agent)
-    const ownerId = agentScope(agent, graph.config).agentId!
-    const turn = graph.composableTurns.activeTurn(ownerId)!
+    const { context: turn, graph } = authority
     const grants = turn.view.readGrants.filter(candidate => candidate.schema === 'dsh-mnemon.memory-spaces/v1')
     if (grants.length !== 1) throw new Error('The current View has no unambiguous Memory Spaces ReadGrant')
     const value = optionalObject(grants[0]!.value)
     if (value === undefined || !Array.isArray(value.memoryBodyIds) || value.memoryBodyIds.some(id => typeof id !== 'string' || id.trim() === '')) throw new Error('The current View has invalid Memory Spaces read scope')
-    return { ...authority, memoryBodyIds: [...new Set(value.memoryBodyIds.map(String))] }
+    return { context: turn, viewId: turn.view.id, memoryBodyIds: [...new Set(value.memoryBodyIds.map(String))], source: graph.source('memory-spaces', turn.scope).forTurn(turn) }
   }
 
-  private turnAuthority(agent: HostAgent, required: boolean): Pick<RecallAuthority, 'turnId' | 'viewId'> | undefined {
+  private turnAuthority(agent: HostAgent, required: boolean): { context: ComposableMemoryTurn; graph: MnemonRuntimeGraph } | undefined {
     const graph = this.runtimeSource.forAgent(agent)
-    const ownerId = agentScope(agent, graph.config).agentId!
-    const turn = graph.composableTurns.activeTurn(ownerId)
-    if (turn !== undefined) return { turnId: turn.turnId, viewId: turn.view.id }
+    const turn = graph.composableTurns.activeTurn(agent.id)
+    if (turn !== undefined) return { context: turn, graph }
     if (required) throw new Error('Recall requires the View pinned to the current turn')
     return undefined
   }

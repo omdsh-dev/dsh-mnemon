@@ -33,7 +33,10 @@ describe('copied pre-extraction storage and user configuration', () => {
     let fixture: Awaited<ReturnType<typeof compositionFixture>> | undefined
     try {
       fixture = await compositionFixture(options)
-      expect(fixture.config).toMatchObject(options)
+      const { displayMode, ...preservedOptions } = options
+      expect(displayMode).toBe('buildin')
+      expect(fixture.config).toMatchObject(preservedOptions)
+      expect(fixture.config).toHaveProperty('displayMode', 'builtin')
       const { graph, workspace } = fixture
       const turn = await graph.composableTurns.beginTurn('upgrade:1', { storage: 'custom', workspaceId: workspace, agentId: 'upgrade' })
       const wake = graph.composableTurns.memoryWake(turn.view.id)

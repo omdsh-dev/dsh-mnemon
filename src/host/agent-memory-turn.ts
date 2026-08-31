@@ -1,9 +1,8 @@
 import { resolve } from 'node:path'
-import type { MemoryOperationScope, MemoryTurnContext } from '../packages/contracts/src/index.ts'
-import type { MemoryTurnViewManager } from '../packages/kernel/src/index.ts'
-import type { HostAgent } from './contracts.ts'
-import type { MnemonAgentRuntimeSource, MnemonRuntimeGraph } from './live-runtime.ts'
-import { hostSessionEvents } from './session-events.ts'
+import type { MemoryOperationScope } from '../core/contracts/index.ts'
+import type { ComposableMemoryTurn, ComposableMemoryTurnManager } from '../core/turns.ts'
+import type { HostAgent } from './dsh.ts'
+import type { MnemonAgentRuntimeSource, MnemonRuntimeGraph } from './runtime.ts'
 
 /** Host-owned authority captured before a child activation starts executing. */
 export interface DelegatedMemoryView {
@@ -15,8 +14,8 @@ export interface DelegatedMemoryView {
 export interface PinnedAgentMemoryTurn {
   readonly turn: number
   readonly graph: MnemonRuntimeGraph
-  readonly manager: MemoryTurnViewManager
-  readonly context: MemoryTurnContext
+  readonly manager: ComposableMemoryTurnManager
+  readonly context: ComposableMemoryTurn
   readonly releaseRuntime?: () => void
 }
 
@@ -47,7 +46,7 @@ export function openAgentTurn(agent: HostAgent): number | undefined {
  */
 export class AgentMemoryTurn {
   private pinned: PinnedAgentMemoryTurn | undefined
-  private pending: { turn: number; generation: number; result: Promise<void> } | undefined
+  private pending: { turn: number; generation: number; controller: AbortController; result: Promise<void> } | undefined
   private generation = 0
   private closed = false
   private readonly releaseDelegation: (() => void) | undefined
@@ -58,7 +57,7 @@ export class AgentMemoryTurn {
     private readonly delegation?: DelegatedMemoryView,
   ) {
     if (delegation === undefined) return
-    const releaseView = delegation.viewId === undefined ? undefined : delegation.graph.memoryViews.retainView(delegation.viewId)
+    const releaseView = delegation.viewId === undefined ? undefined : delegation.graph.composableTurns.retainView(delegation.viewId)
     try {
       const releaseRuntime = runtime.bindAgentRuntime(agent.id, delegation.graph)
       this.releaseDelegation = () => {
@@ -78,7 +77,7 @@ export class AgentMemoryTurn {
   delegate(): DelegatedMemoryView {
     if (this.closed) throw new Error('memory Agent lifetime has ended')
     if (this.pinned !== undefined) {
-      return { graph: this.pinned.graph, scope: this.pinned.context.scope, viewId: this.pinned.context.viewId }
+      return { graph: this.pinned.graph, scope: this.pinned.context.scope, viewId: this.pinned.context.view.id }
     }
     if (this.delegation !== undefined) return this.delegation
     const graph = this.runtime.forAgent(this.agent)
@@ -94,11 +93,15 @@ export class AgentMemoryTurn {
     if (this.pending?.turn === turn) return this.pending.result
     this.end()
     const generation = this.generation
-    const result = this.pin(turn, generation, signal)
-    this.pending = { turn, generation, result }
+    const controller = new AbortController()
+    const abort = () => controller.abort(signal!.reason)
+    signal?.addEventListener('abort', abort, { once: true })
+    const result = this.pin(turn, generation, controller.signal)
+    this.pending = { turn, generation, controller, result }
     try {
       await result
     } finally {
+      signal?.removeEventListener('abort', abort)
       if (this.pending?.generation === generation) this.pending = undefined
     }
   }
@@ -106,6 +109,7 @@ export class AgentMemoryTurn {
   end(turn?: number): void {
     if (turn !== undefined && this.pinned?.turn !== turn && this.pending?.turn !== turn) return
     this.generation += 1
+    this.pending?.controller.abort(new Error('memory turn ended during View preparation'))
     this.pending = undefined
     const pinned = this.pinned
     this.pinned = undefined
@@ -125,13 +129,13 @@ export class AgentMemoryTurn {
 
   private async pin(turn: number, generation: number, signal?: AbortSignal): Promise<void> {
     const graph = this.delegation?.graph ?? this.runtime.forAgent(this.agent)
-    const manager = graph.memoryViews
+    const manager = graph.composableTurns
     const scope = this.delegation === undefined
       ? agentMemoryScope(this.agent, graph)
       : { ...this.delegation.scope, sessionId: this.agent.id, agentId: this.agent.id }
     const turnId = `${this.agent.id}:${turn}`
     const context = this.delegation?.viewId === undefined
-      ? await manager.beginTurn(turnId, scope)
+      ? await manager.beginTurn(turnId, scope, 'agent.root-turn', signal)
       : manager.pinTurn(turnId, scope, this.delegation.viewId)
     let releaseRuntime: (() => void) | undefined
     try {

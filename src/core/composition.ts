@@ -630,7 +630,7 @@ export class MemoryCompositionGeneration {
     }, 'memory Source management result')
   }
 
-  async executeRoute(view: ComposableMemoryView, routeId: string, input: MemoryJsonValue, signal?: AbortSignal, budget: MemoryViewBudget = DEFAULT_MEMORY_VIEW_BUDGET): Promise<MemoryEvidence> {
+  async executeRoute(view: ComposableMemoryView, routeId: string, input: MemoryJsonValue, signal?: AbortSignal, budget: MemoryViewBudget = DEFAULT_MEMORY_VIEW_BUDGET, execution: object = view): Promise<MemoryEvidence> {
     this.assertOpen()
     if (view.runtimeGeneration !== this.id) throw new Error('memory View belongs to a different runtime generation')
     const route = view.routes.find(candidate => candidate.id === routeId)

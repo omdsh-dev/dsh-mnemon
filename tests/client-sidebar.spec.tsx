@@ -3,11 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, waitFor } from '@testing-library/react'
 
 vi.mock('../src/client/MnemonView.tsx', () => ({
-  MnemonView: ({ sessionId, workspaceId, workspaceSelection, t, locale, onClose }: {
+  MnemonView: ({ sessionId, workspaceId, workspaceSelection, t, locale, onClose, surface }: {
     sessionId?: string
     workspaceId?: string
     t?: (key: string) => string
     locale?: 'zh' | 'en'
+    surface?: 'sidebar' | 'builtin'
     onClose?: () => void
     workspaceSelection?: {
       options: Array<{ id: string; title: string }>
@@ -16,7 +17,7 @@ vi.mock('../src/client/MnemonView.tsx', () => ({
       onSelect(id: string): void
       onAlign(): void
     }
-  }) => <div data-testid="mnemon-canonical-content" data-workspace-id={workspaceId} data-effective-workspace-id={workspaceSelection?.effectiveWorkspaceId} data-surface={surface} data-locale={locale}>
+  }) => <div data-testid="mnemon-canonical-content" data-workspace-id={workspaceId} data-effective-workspace-id={workspaceSelection?.effectiveWorkspaceId} data-locale={locale} data-surface={surface} data-has-workspace-picker={workspaceSelection !== undefined} data-has-back-action={onClose !== undefined}>
     <h1>{t?.('tab.label')}</h1>
     <span>{sessionId ?? 'no-session'}</span>
     <select aria-label="workspace-test-selector" value={workspaceSelection?.selectedWorkspaceId ?? ''} onChange={event => workspaceSelection?.onSelect(event.target.value)}>
@@ -28,9 +29,9 @@ vi.mock('../src/client/MnemonView.tsx', () => ({
 }))
 
 import {
-  createMnemonWorkspaceNavigation,
   MnemonWorkspaceHost,
   MnemonSidebarWorkspaceHost,
+  MnemonBuiltinWorkspaceHost,
   mountMnemonSidebarLauncher,
 } from '../src/client/workspace-mount.tsx'
 
@@ -139,6 +140,8 @@ describe('Mnemon canonical workspace launcher', () => {
   afterEach(() => {
     currentDispose?.()
     currentDispose = undefined
+    for (const stop of siblingDisposers.splice(0)) stop()
+    for (const name of ['mnemon', 'taskboard', 'ssh']) document.documentElement.removeAttribute(`data-dsh-${name}-active`)
     document.body.replaceChildren()
     vi.restoreAllMocks()
   })
@@ -159,14 +162,6 @@ describe('Mnemon canonical workspace launcher', () => {
     expect(document.querySelector('[data-dsh-mnemon-view]')).toBeNull()
   })
 
-  it('returns to the previously selected DSH tab without a second page host', () => {
-    const navigation = createMnemonWorkspaceNavigation(t as never)
-    navigation.open()
-    expect(document.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Memory')
-    navigation.close()
-    expect(document.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Chat')
-  })
-
   it('opens the DSH sidebar seat before a session exists and restores the conversation on close', async () => {
     document.querySelector('[role="tablist"]')?.remove()
     const ctx = context()
@@ -181,7 +176,7 @@ describe('Mnemon canonical workspace launcher', () => {
     const view = render(<MnemonSidebarWorkspaceHost
       connection={ctx.connection as never} settingsScope={settings} sessions={sessions as never} workspaces={ctx.workspaces as never}
       localeRuntime={ctx.locale as never} sourcePageDirectory={sourcePageDirectory} navigation={navigation}
-      surface="sidebar" t={t as never} renderSlot={() => null} controller={controller}
+      t={t as never} renderSlot={() => null} controller={controller}
     />)
     expect(document.querySelector('[data-testid="mnemon-canonical-content"]')).toBeNull()
     fireEvent.click(document.querySelector('[data-dsh-mnemon-entry]')!)
@@ -190,12 +185,139 @@ describe('Mnemon canonical workspace launcher', () => {
     expect(document.querySelector('[data-chat-content]')?.textContent).toBe('Chat stays mounted')
     fireEvent.click(view.getByText('back-test-conversation'))
     expect(column.inert).toBe(false)
-    expect(document.querySelector('[data-testid="mnemon-canonical-content"]')).toBeNull()
+    expect(document.querySelector<HTMLElement>('[data-dsh-mnemon-view]')?.hidden).toBe(true)
     act(() => controller.open())
     await waitFor(() => expect(view.getByText('no-session')).not.toBeNull())
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(column.inert).toBe(false)
     view.unmount()
+  })
+
+  it('retains the workspace subtree when a peer panel takes over and the user returns', async () => {
+    const ctx = context()
+    const controller = new MnemonWorkspaceController()
+    currentDispose = mountMnemonSidebarLauncher(ctx as never, t as never, controller)
+    const view = render(<MnemonSidebarWorkspaceHost
+      connection={ctx.connection as never} settingsScope={settings} sessions={ctx.sessions as never} workspaces={ctx.workspaces as never}
+      localeRuntime={ctx.locale as never} sourcePageDirectory={sourcePageDirectory}
+      navigation={{ open: () => controller.open(), close: () => controller.close() }} t={t as never} renderSlot={() => null} controller={controller}
+    />)
+    const entry = document.querySelector('[data-dsh-mnemon-entry]')!
+    fireEvent.click(entry)
+    const content = await view.findByTestId('mnemon-canonical-content')
+    fireEvent.change(view.getByRole('combobox'), { target: { value: 'workspace-2' } })
+    fireEvent.click(document.querySelector('[data-dsh-taskboard-entry]')!)
+    expect(content.closest<HTMLElement>('[data-dsh-mnemon-view]')?.hidden).toBe(true)
+    fireEvent.click(entry)
+    expect(view.getByTestId('mnemon-canonical-content')).toBe(content)
+    expect(content.getAttribute('data-workspace-id')).toBe('workspace-2')
+    view.unmount()
+  })
+
+  it('attaches after a delayed conversation column and restores replaced columns', async () => {
+    document.querySelector('[data-pane="conversation"]')!.remove()
+    const ctx = context()
+    const controller = new MnemonWorkspaceController()
+    const view = render(<MnemonSidebarWorkspaceHost
+      connection={ctx.connection as never} settingsScope={settings} sessions={ctx.sessions as never} workspaces={ctx.workspaces as never}
+      localeRuntime={ctx.locale as never} sourcePageDirectory={sourcePageDirectory}
+      navigation={{ open: () => controller.open(), close: () => controller.close() }} t={t as never} renderSlot={() => null} controller={controller}
+    />)
+    act(() => controller.open())
+    const column = document.createElement('main')
+    column.dataset.pane = 'conversation'
+    column.inert = false
+    document.body.append(column)
+    await waitFor(() => expect(column.inert).toBe(true))
+    const replacement = document.createElement('main')
+    replacement.dataset.pane = 'conversation'
+    replacement.inert = false
+    column.replaceWith(replacement)
+    await waitFor(() => expect(replacement.inert).toBe(true))
+    expect(column.inert).toBe(false)
+    act(() => controller.close())
+    expect(replacement.inert).toBe(false)
+    view.unmount()
+  })
+
+  it.each(['taskboard', 'ssh'] as const)('returns in one click after %s takes over without an activation announcement', name => {
+    const panel = mountSiblingPanel(name, false)
+    currentDispose = mountMnemonSidebarLauncher(context() as never, key => String(key), new MnemonWorkspaceController())
+    const entry = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')!
+
+    fireEvent.click(entry)
+    fireEvent.click(panel.entry)
+    expect(panel.isOpen()).toBe(true)
+    expect(entry.hasAttribute('data-active')).toBe(false)
+    fireEvent.click(entry)
+
+    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(true)
+    expect(document.documentElement.hasAttribute(`data-dsh-${name}-active`)).toBe(false)
+    expect(panel.isOpen()).toBe(false)
+    // A subsequent store/transport refresh must not bring the old panel back.
+    panel.refresh()
+    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(true)
+    expect(document.documentElement.hasAttribute(`data-dsh-${name}-active`)).toBe(false)
+  })
+
+  it('reclaims a hidden workspace even before DOM-state synchronization has run', () => {
+    currentDispose = mountMnemonSidebarLauncher(context() as never, key => String(key), new MnemonWorkspaceController())
+    const entry = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')!
+    fireEvent.click(entry)
+    document.documentElement.removeAttribute('data-dsh-mnemon-active')
+    document.documentElement.setAttribute('data-dsh-taskboard-active', '')
+    fireEvent.click(entry)
+
+    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(true)
+    expect(document.documentElement.hasAttribute('data-dsh-taskboard-active')).toBe(false)
+    expect(entry.getAttribute('data-active')).toBe('true')
+  })
+
+  it.each(['taskboard', 'ssh'] as const)('synchronizes its entry when %s takes over programmatically without an event', async name => {
+    currentDispose = mountMnemonSidebarLauncher(context() as never, key => String(key), new MnemonWorkspaceController())
+    const entry = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')!
+    fireEvent.click(entry)
+    document.documentElement.setAttribute(`data-dsh-${name}-active`, '')
+
+    await waitFor(() => expect(entry.hasAttribute('data-active')).toBe(false))
+    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(false)
+    fireEvent.click(entry)
+    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(true)
+    expect(document.documentElement.hasAttribute(`data-dsh-${name}-active`)).toBe(false)
+  })
+
+  it('treats the sidebar entry as navigation and retains an already active workspace', () => {
+    currentDispose = mountMnemonSidebarLauncher(context() as never, key => String(key), new MnemonWorkspaceController())
+    const entry = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')!
+    fireEvent.click(entry)
+    fireEvent.click(entry)
+    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(true)
+    expect(entry.getAttribute('data-active')).toBe('true')
+  })
+
+  it.each([true, false])('round-trips with the released legacy panel protocol (Mnemon mounted first: %s)', mnemonFirst => {
+    const mount = () => { currentDispose = mountMnemonSidebarLauncher(context() as never, key => String(key), new MnemonWorkspaceController()) }
+    if (mnemonFirst) mount()
+    const board = mountSiblingPanel('taskboard')
+    const ssh = mountSiblingPanel('ssh')
+    if (!mnemonFirst) mount()
+    const entry = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')!
+    fireEvent.click(entry)
+    for (let round = 0; round < 3; round += 1) {
+      for (const panel of [board, ssh]) {
+        expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(true)
+        fireEvent.click(panel.entry)
+        expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(false)
+        fireEvent.click(entry)
+        expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(true)
+        expect(board.isOpen()).toBe(false)
+        expect(ssh.isOpen()).toBe(false)
+        board.refresh()
+        ssh.refresh()
+        expect(document.documentElement.hasAttribute('data-dsh-taskboard-active')).toBe(false)
+        expect(document.documentElement.hasAttribute('data-dsh-ssh-active')).toBe(false)
+      }
+    }
   })
 
   it('self-heals its sidebar launcher after a React-style row replacement', async () => {
@@ -226,8 +348,8 @@ describe('Mnemon canonical workspace launcher', () => {
     ctx.workspaces.list = workspaces
     render(<MnemonWorkspaceHost
       connection={ctx.connection as never} settingsScope={settings} sessions={ctx.sessions as never} workspaces={ctx.workspaces as never}
-      localeRuntime={ctx.locale as never} sourcePageDirectory={sourcePageDirectory} navigation={createMnemonWorkspaceNavigation(t as never)}
-      surface="sidebar" t={t as never} renderSlot={() => null} sessionId="session-1"
+      localeRuntime={ctx.locale as never} sourcePageDirectory={sourcePageDirectory} navigation={{ open() {}, close() {} }}
+      t={t as never} renderSlot={() => null} sessionId="session-1"
     />)
 
     await waitFor(() => expect(document.querySelector('[data-testid="mnemon-canonical-content"]')?.getAttribute('data-workspace-id')).toBe('workspace-1'))
@@ -237,6 +359,51 @@ describe('Mnemon canonical workspace launcher', () => {
     await waitFor(() => expect(document.querySelector('[data-testid="mnemon-canonical-content"]')?.getAttribute('data-workspace-id')).toBe('workspace-2'))
     fireEvent.click([...document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'align-test-workspace')!)
     await waitFor(() => expect(document.querySelector('[data-testid="mnemon-canonical-content"]')?.getAttribute('data-workspace-id')).toBe('workspace-1'))
+  })
+
+  it('renders Builtin with only its owning session and releases a receiver-sensitive locale subscription', () => {
+    let snapshot: { active: 'zh' | 'en'; locales: readonly never[]; revision: number } = { active: 'zh', locales: [], revision: 0 }
+    const listeners = new Set<() => void>()
+    const locale = {
+      getSnapshot() { expect(this).toBe(locale); return snapshot },
+      subscribe(listener: () => void) {
+        expect(this).toBe(locale)
+        listeners.add(listener)
+        return () => { listeners.delete(listener) }
+      },
+    }
+    const ctx = context(locale)
+    const translate = (key: string) => key === 'tab.label' ? snapshot.active === 'zh' ? '记忆系统' : 'Memory System' : key
+    const props = {
+      connection: ctx.connection as never,
+      settingsScope: settings,
+      localeRuntime: locale as never,
+      sourcePageDirectory,
+      renderSlot: () => null,
+      t: translate as never,
+    }
+    // No global sessions/workspaces stores, picker or navigation are supplied.
+    const view = render(<MnemonBuiltinWorkspaceHost {...props} sessionId="owning-session" />)
+    const content = view.getByTestId('mnemon-canonical-content')
+    expect(content.dataset.surface).toBe('builtin')
+    expect(content.dataset.hasWorkspacePicker).toBe('false')
+    expect(content.dataset.hasBackAction).toBe('false')
+    expect(content.hasAttribute('data-workspace-id')).toBe(false)
+    expect(view.getByText('owning-session')).not.toBeNull()
+    expect(view.getByRole('heading').textContent).toBe('记忆系统')
+    expect(listeners.size).toBe(1)
+    act(() => {
+      snapshot = { active: 'en', locales: [], revision: 1 }
+      for (const listener of listeners) listener()
+    })
+    expect(content.dataset.locale).toBe('en')
+    expect(view.getByRole('heading').textContent).toBe('Memory System')
+    view.rerender(<MnemonBuiltinWorkspaceHost {...props} sessionId="another-owning-session" />)
+    expect(view.queryByText('owning-session')).toBeNull()
+    expect(view.getByText('another-owning-session')).not.toBeNull()
+    expect(listeners.size).toBe(1)
+    view.unmount()
+    expect(listeners.size).toBe(0)
   })
 
   it('updates the launcher label with the DSH locale', async () => {

@@ -81,20 +81,28 @@ export function findMnemonCommand(
   const env = options.env ?? process.env
   const home = options.home ?? homedir()
   const isExecutable = options.isExecutable ?? (path => executable(path, platform))
-  if (config.cliPath !== undefined) return expandHome(config.cliPath, home, platform)
-  const envPath = envValue(env, 'MNEMON_CLI_PATH', platform)?.trim()
-  if (envPath !== undefined && envPath !== '') {
-    const path = expandHome(envPath, home, platform)
-    if (isExecutable(path)) return path
-  }
   const paths = pathApi(platform)
-  for (const directory of (envValue(env, 'PATH', platform) ?? '').split(paths.delimiter)) {
-    if (directory === '') continue
-    for (const name of platform === 'win32' ? ['mnemon.exe'] : ['mnemon']) {
+  const resolveCommand = (command: string): string | undefined => {
+    const expanded = expandHome(command, home, platform)
+    // Explicit paths remain authoritative even when missing, so execution
+    // reports the configured path instead of silently choosing another CLI.
+    if (expanded.includes('/') || expanded.includes('\\')) return expanded
+    const name = platform === 'win32' && paths.extname(expanded) === '' ? `${expanded}.exe` : expanded
+    for (const directory of (envValue(env, 'PATH', platform) ?? '').split(paths.delimiter)) {
+      if (directory === '') continue
       const path = paths.join(directory, name)
       if (isExecutable(path)) return path
     }
+    return undefined
   }
+  if (config.cliPath !== undefined) return resolveCommand(config.cliPath)
+  const envPath = envValue(env, 'MNEMON_CLI_PATH', platform)?.trim()
+  if (envPath !== undefined && envPath !== '') {
+    const path = resolveCommand(envPath)
+    if (path !== undefined && isExecutable(path)) return path
+  }
+  const fromPath = resolveCommand('mnemon')
+  if (fromPath !== undefined) return fromPath
   for (const path of commonCliPaths(platform, env, home)) {
     if (isExecutable(path)) return path
   }
@@ -157,8 +165,9 @@ function processEnvironment(config: ResolvedConfig): NodeJS.ProcessEnv | undefin
 }
 
 export function createRunner(config: ResolvedConfig, processRunner: ProcessRunner = runProcess, workspaceRoot?: string): MnemonRunner {
-  const found = findMnemonCommand(config)
-  const command = found ?? config.cliPath ?? 'mnemon'
+  // Installation can change while DSH stays running. Status and execution
+  // must resolve the same current executable, not a boot-time availability flag.
+  const currentCommand = (): string => findMnemonCommand(config) ?? config.cliPath ?? 'mnemon'
   // Mnemon 0.1.2 runs store migrations while opening the database. Serializing
   // CLI processes prevents parallel status/viz calls during WebUI mount from
   // racing that migration and surfacing a transient SQLITE_BUSY error.
@@ -201,7 +210,7 @@ export function createRunner(config: ResolvedConfig, processRunner: ProcessRunne
     }
     let result
     try {
-      result = await processRunner(command, argv, processOptions)
+      result = await processRunner(currentCommand(), argv, processOptions)
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
       const hint = process.platform === 'win32'
@@ -226,8 +235,11 @@ export function createRunner(config: ResolvedConfig, processRunner: ProcessRunne
   }
 
   return {
-    command,
-    commandFound: found !== undefined && executable(found),
+    get command() { return currentCommand() },
+    get commandFound() {
+      const found = findMnemonCommand(config)
+      return found !== undefined && executable(found)
+    },
     config,
     async runJson(args, options) {
       const stdout = await execute(args, options)

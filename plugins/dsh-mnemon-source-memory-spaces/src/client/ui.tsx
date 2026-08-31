@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type JSX, type ReactNode } f
 import type { MemoryJsonValue } from 'dsh-mnemon/contracts'
 import {
   createMemorySourcePageClient, installMemorySourceUI, MemorySourcePageFrame, translateEn, message, PageHeader,
-  memoryPageStyles as css, appearanceClass, useMnemonViewAppearance, useT,
+  memoryPageStyles as css, appearanceClass, memorySidebarStyles as sidebarCss, useT,
   type MemorySourcePageProps, type MnemonSourceManagementClient, type MnemonTranslate,
 } from 'dsh-mnemon/client'
 import type { Insight, MemorySpacesStatus } from '../contracts.ts'
@@ -43,24 +43,22 @@ const TABS = [{ id: 'spaces', key: 'nav.overview' }, { id: 'explore', key: 'nav.
 
 function MemorySpacesSourceView(props: MemorySourcePageProps & { page: Page }): JSX.Element | null {
   const t = useT()
-  const appearance = useMnemonViewAppearance()
-  const sidebar = appearance.surface === 'sidebar'
   const client = useMemo(() => props.management === undefined ? undefined : memorySpacesPageClient(props.management), [props.management])
   const [revision, setRevision] = useState(0)
   const [status, setStatus] = useState<MemorySpacesStatus | null>(null)
-  const [page, setPage] = useState<Page>(() => sidebar && props.management !== undefined ? rememberedPages.get(props.management) ?? (props.page === 'remember' ? 'spaces' : props.page) : props.page)
+  const [page, setPage] = useState<Page>(() => props.management !== undefined ? rememberedPages.get(props.management) ?? (props.page === 'remember' ? 'spaces' : props.page) : props.page)
   const [seed, setSeed] = useState('')
-  const [rememberOpen, setRememberOpen] = useState(props.page === 'remember' && sidebar)
+  const [rememberOpen, setRememberOpen] = useState(props.page === 'remember')
   const [strategyOpen, setStrategyOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const refresh = useCallback(() => { setRevision(value => value + 1); props.onRefresh?.() }, [props.onRefresh])
   useEffect(() => {
-    setPage(sidebar && props.management !== undefined && props.navigationInput === undefined ? rememberedPages.get(props.management) ?? (props.page === 'remember' ? 'spaces' : props.page) : props.page === 'remember' && sidebar ? 'spaces' : props.page)
-    setRememberOpen(props.page === 'remember' && sidebar)
+    setPage(props.management !== undefined && props.navigationInput === undefined ? rememberedPages.get(props.management) ?? (props.page === 'remember' ? 'spaces' : props.page) : props.page === 'remember' ? 'spaces' : props.page)
+    setRememberOpen(props.page === 'remember')
     const value = props.navigationInput
     setSeed(typeof value === 'object' && value !== null && !Array.isArray(value) && typeof value.seed === 'string' ? value.seed : '')
-  }, [props.page, props.navigationInput, sidebar])
-  useEffect(() => { if (props.management !== undefined && sidebar) rememberedPages.set(props.management, page) }, [props.management, sidebar, page])
+  }, [props.page, props.navigationInput])
+  useEffect(() => { if (props.management !== undefined) rememberedPages.set(props.management, page) }, [props.management, page])
   useEffect(() => {
     let active = true
     setError(null)
@@ -72,23 +70,22 @@ function MemorySpacesSourceView(props: MemorySourcePageProps & { page: Page }): 
   const activationEnabled = status?.writeEnabled === true && (writable || client.canAssist('activation'))
   const agentAvailable = client.canAssist('supervise')
   const explore = (query: string) => { setSeed(query); setPage('explore') }
-  const remember = (content = '') => { setSeed(content); if (sidebar) setRememberOpen(true); else setPage('remember') }
+  const remember = (content = '') => { setSeed(content); setRememberOpen(true) }
   const forget = async (insight: Insight) => { await client.forget(insight.id, insight.memoryBodyId); refresh() }
   const bodies = status?.memoryBodies ?? []
   const preferences = props.preferences
   return <>
     {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
-    {sidebar && <section className={appearance.classes.memoryWorkspace}>
-      <PageHeader title={t('nav.bodies')} description={t('overview.description')} meta={writable ? t('common.agentSupervised') : activationEnabled ? t('common.activationOnly') : t('common.readOnly')} action={<div className={css.memoryHeaderActions}><button type="button" className={appearanceClass(css.primaryButton, appearance.classes.memoryWriteButton)} disabled={!writable} onClick={() => remember()}>{t('nav.rememberAction')}</button>{preferences !== undefined && <button type="button" className={css.secondaryButton} onClick={() => setStrategyOpen(true)}>{t('strategy.action')}</button>}</div>} />
-      <div className={appearance.classes.memoryNavigation}><div className={appearance.classes.memoryTabs} role="tablist" aria-label={t('nav.memory.aria')}>{TABS.map(tab => <button key={tab.id} type="button" role="tab" aria-selected={page === tab.id} data-active={page === tab.id ? '' : undefined} onClick={() => setPage(tab.id)}>{t(tab.key)}</button>)}</div></div>
+    {<section className={sidebarCss.memoryWorkspace}>
+      <PageHeader title={t('nav.bodies')} description={t('overview.description')} meta={writable ? t('common.agentSupervised') : activationEnabled ? t('common.activationOnly') : t('common.readOnly')} action={<div className={css.memoryHeaderActions}><button type="button" className={appearanceClass(css.primaryButton, sidebarCss.memoryWriteButton)} disabled={!writable} onClick={() => remember()}>{t('nav.rememberAction')}</button>{preferences !== undefined && <button type="button" className={css.secondaryButton} onClick={() => setStrategyOpen(true)}>{t('strategy.action')}</button>}</div>} />
+      <div className={sidebarCss.memoryNavigation}><div className={sidebarCss.memoryTabs} role="tablist" aria-label={t('nav.memory.aria')}>{TABS.map(tab => <button key={tab.id} type="button" role="tab" aria-selected={page === tab.id} data-active={page === tab.id ? '' : undefined} onClick={() => setPage(tab.id)}>{t(tab.key)}</button>)}</div></div>
     </section>}
     {page === 'spaces' && <OverviewPage client={client} metadataClient={client} revision={revision} activationEnabled={activationEnabled} writeEnabled={writable} agentAvailable={agentAvailable} fallbackBodies={bodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={status?.memoryBodies !== undefined} onMutate={refresh} onAgentRefresh={refresh} onBodyReconnect={refresh} onBodyMetadata={refresh} onExplore={explore} />}
     {page === 'explore' && <ExplorePage client={client} agentClient={client} agentAvailable={client.canAssist('agent-search')} status={status} seed={seed} writeEnabled={writable} onForget={forget} />}
     {page === 'entities' && <EntitiesPage client={client} revision={revision} writeEnabled={writable} onForget={forget} onExplore={explore} />}
-    {page === 'remember' && !sidebar && <RememberPage client={client} agentAvailable={agentAvailable} memoryBodies={bodies} writeEnabled={writable} seed={seed} onMutate={refresh} />}
     {page === 'content' && <ListPage client={client} revision={revision} writeEnabled={writable} onForget={forget} onClone={insight => remember(insight.content)} onExplore={explore} />}
-    {sidebar && rememberOpen && <RememberPage client={client} agentAvailable={agentAvailable} memoryBodies={bodies} writeEnabled={writable} seed={seed} onMutate={refresh} onClose={() => setRememberOpen(false)} onComplete={() => setRememberOpen(false)} />}
-    {sidebar && strategyOpen && preferences !== undefined && <PersistenceStrategyDialog client={client} settingsScope={{ setPath: async (path, value) => {
+    {rememberOpen && <RememberPage client={client} agentAvailable={agentAvailable} memoryBodies={bodies} writeEnabled={writable} seed={seed} onMutate={refresh} onClose={() => setRememberOpen(false)} onComplete={() => setRememberOpen(false)} />}
+    {strategyOpen && preferences !== undefined && <PersistenceStrategyDialog client={client} settingsScope={{ setPath: async (path, value) => {
       if (path.length !== 1 || path[0] !== 'persistenceStrategy') throw new Error('Preference path is outside this Source')
       await preferences.replace(JSON.parse(JSON.stringify({ persistenceStrategy: value })) as MemoryJsonValue)
     } }} config={preferences.value as unknown as MemoryPlacementPageConfig} writable={preferences.writable} agentAvailable={agentAvailable} onClose={() => setStrategyOpen(false)} />}
@@ -101,15 +98,15 @@ export function MemorySpacesSourcePage(props: MemorySourcePageProps & { page: Pa
 
 export function installMemorySpacesUI(ctx: Parameters<typeof installMemorySourceUI>[0], t: MnemonTranslate = translateEn): () => void {
   const pages = [
-    { id: 'spaces', key: 'nav.bodies', detail: 'nav.bodies.detail', order: 300, glyph: '◇' },
-    { id: 'remember', key: 'nav.remember', detail: 'nav.remember.detail', order: 400, glyph: '+' },
-    { id: 'explore', key: 'nav.search', detail: 'nav.search.detail', order: 500, glyph: '⌕' },
-    { id: 'entities', key: 'nav.entities', detail: 'nav.entities.detail', order: 600, glyph: '◎' },
-    { id: 'content', key: 'nav.content', detail: 'nav.content.detail', order: 700, glyph: '≡' },
+    { id: 'spaces', key: 'nav.bodies', order: 300, glyph: '◇' },
+    { id: 'remember', key: 'nav.rememberAction', order: 400, glyph: '+' },
+    { id: 'explore', key: 'nav.search', order: 500, glyph: '⌕' },
+    { id: 'entities', key: 'nav.entities', order: 600, glyph: '◎' },
+    { id: 'content', key: 'nav.content', order: 700, glyph: '≡' },
   ] as const
   return installMemorySourceUI(ctx, { sourceTypeId: 'memory-spaces', pages: pages.map(page => ({
     id: page.id, order: page.order, label: () => t(page.key),
-    navigation: { stickyHeader: false, group: page.id === 'spaces' ? 'storage' : 'tools', primary: page.id === 'spaces', glyph: page.glyph, detail: () => t(page.detail) },
+    navigation: { stickyHeader: false, group: page.id === 'spaces' ? 'storage' : 'tools', primary: page.id === 'spaces', glyph: page.glyph },
     component: props => <MemorySpacesSourcePage {...props} page={page.id} />,
   })) })
 }

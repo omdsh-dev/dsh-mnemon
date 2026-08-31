@@ -2,9 +2,8 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join, win32 } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { resolveConfig } from '../src/config.ts'
+import { resolveMemorySpacesConfig as resolveConfig } from '../src/config.ts'
 import { createRunner, findMnemonCommand } from '../src/runner.ts'
-import { VersionUpdateManager } from '../src/version-updates.ts'
 
 const temporaryDirectories: string[] = []
 
@@ -38,7 +37,7 @@ describe('Mnemon CLI discovery', () => {
     })).toBeUndefined()
   })
 
-  it('uses the same executable for command-name health checks, execution and version checks', async () => {
+  it('uses the same executable for command-name health checks and execution', async () => {
     const root = temporaryDirectory()
     const binary = join(root, process.platform === 'win32' ? 'mnemon.exe' : 'mnemon')
     writeFileSync(binary, 'fixture')
@@ -48,18 +47,11 @@ describe('Mnemon CLI discovery', () => {
     const config = resolveConfig({ cliPath: 'mnemon', dataDir: root })
     const run = vi.fn(async () => ({ stdout: 'mnemon version 0.2.5\n', stderr: '', exitCode: 0 }))
     const runner = createRunner(config, run)
-    const versions = new VersionUpdateManager({
-      mnemonCliPath: () => config.cliPath, processRunner: run, dshHome: join(root, 'dsh-home'),
-      fetchNpmLatest: async () => '0.3.5', fetchMnemonLatest: async () => '0.2.5',
-    })
 
     expect(runner.command).toBe(binary)
     expect(runner.commandFound).toBe(true)
     await runner.runText(['--version'], { globalFlags: false })
     expect(run).toHaveBeenCalledWith(binary, ['--version'], expect.any(Object))
-    expect((await versions.check()).components.find(item => item.id === 'mnemon')).toMatchObject({
-      executablePath: binary, current: '0.2.5',
-    })
   })
 
   it('refreshes CLI discovery after installation and removal without recreating the runner', async () => {

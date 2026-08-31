@@ -53,9 +53,10 @@ describe('compiled Source clients with compiled Core and no source aliases', () 
       const base = { sourceTypeId: 'runtime', sourceInstances: [], locale: 'en', writable: true }
       const Page = runtimeClient.RuntimeSourcePage
       const view = render(<Page {...base} sourceInstanceKey="source:work" management={work} />)
+      fireEvent.click(await screen.findByRole('button', { name: core.translateEn('runtime.addButton') }))
       const textarea = await screen.findByRole('textbox', { name: core.translateEn('runtime.content') })
       fireEvent.change(textarea, { target: { value: 'compiled UI sentinel' } })
-      fireEvent.click(textarea.closest('form')!.querySelector('button[type="submit"]')!)
+      fireEvent.click(screen.getByRole('button', { name: core.translateEn('runtime.addAction') }))
       expect(await screen.findByText('compiled UI sentinel')).not.toBeNull()
       expect((await work.read('snapshot')).value).toMatchObject({ entries: [expect.objectContaining({ content: 'compiled UI sentinel' })] })
       view.rerender(<Page {...base} sourceInstanceKey="source:personal" management={personal} />)

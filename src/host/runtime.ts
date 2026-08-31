@@ -32,8 +32,7 @@ export interface MnemonAgentRuntimeSource {
 
 export function agentScope(agent: HostAgent, config: ResolvedConfig): MemoryOperationScope {
   const workspaceId = agent.session.header?.cwd?.trim()
-  const owner = agent.session.header?.origin === 'subagent' ? agent.session.header.parentSession?.trim() || agent.id : agent.id
-  return { storage: config.storageScope, ...(workspaceId ? { workspaceId: resolve(workspaceId) } : {}), sessionId: agent.id, agentId: owner }
+  return { storage: config.storageScope, ...(workspaceId ? { workspaceId: resolve(workspaceId) } : {}), sessionId: agent.id, agentId: agent.id }
 }
 
 /** One default-product scope over the single Composable Runtime. */

@@ -231,7 +231,7 @@ describe('Source Client presentation conformance', () => {
       renderSlot={renderSlot}
     />)
 
-    fireEvent.click(await screen.findByRole('button', { name: /Repository/u }))
+    fireEvent.click(await screen.findByRole('tab', { name: 'Repository' }))
     expect((await screen.findByTestId('selected-source')).textContent).toBe('source:git-work')
     expect(lastProps).toMatchObject({
       sourceTypeId: 'git', sourceInstanceKey: 'source:git-work', sessionId: 'session-1', workspaceId: 'workspace-1', locale: 'en-US',
@@ -269,7 +269,7 @@ describe('Source Client presentation conformance', () => {
       <span data-testid="runtime-hidden-child">{!('children' in owner) ? 'no' : 'yes'}</span>
     </div>) as never
     render(<MnemonView connection={connection as never} settingsScope={settings} sessionId="s1" t={translateEn} locale="en" sourcePageDirectory={{ getSnapshot: () => runtimePages, subscribe: () => () => {} }} renderSlot={renderSlot} />)
-    fireEvent.click(await screen.findByRole('button', { name: new RegExp(`^${translateEn('nav.runtime')}`, 'u') }))
+    fireEvent.click(await screen.findByRole('tab', { name: translateEn('nav.runtime') }))
     await waitFor(() => expect(screen.getByTestId('runtime-selected-instance').textContent).toBe('source:mnemon-source-runtime'))
     expect(screen.getByTestId('runtime-hidden-child').textContent).toBe('no')
     fireEvent.change(screen.getByRole('combobox', { name: 'Select Source instance' }), { target: { value: 'source:extra-runtime' } })
@@ -312,7 +312,7 @@ describe('Source Client presentation conformance', () => {
       sourcePageDirectory={{ getSnapshot: () => emptyPages, subscribe: () => () => {} }}
     />)
 
-    fireEvent.click(await screen.findByRole('button', { name: /Health records/u }))
+    fireEvent.click(await screen.findByRole('tab', { name: 'Health records' }))
     expect(await screen.findByText('Sanitized health observations.')).not.toBeNull()
     expect(screen.getByText('Last sync completed with two redacted observations.')).not.toBeNull()
     const endpoint = await screen.findByLabelText(/^Endpoint/u)

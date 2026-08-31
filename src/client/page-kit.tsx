@@ -2,7 +2,8 @@ import type { JSX } from 'react'
 import { createContext, useContext } from 'react'
 import { translateZh, type MnemonTranslate } from './locales.ts'
 import { MnemonDialog, type MnemonDialogProps } from './MnemonDialog.tsx'
-import { appearanceClass, useMnemonViewAppearance } from './MnemonViewAppearance.tsx'
+import { appearanceClass } from './view-styles.ts'
+import sidebarCss from './MnemonSidebarView.module.css'
 import css from './MnemonView.module.css'
 
 export const I18nContext = createContext<MnemonTranslate>(translateZh)
@@ -36,9 +37,8 @@ export function short(value: string, max: number): string {
 }
 
 export function PageHeader(props: { title: string; description: string; meta?: string; loadingLabel?: string; action?: JSX.Element }): JSX.Element {
-  const appearance = useMnemonViewAppearance()
   return (
-    <div className={appearanceClass(css.pageHeader, appearance.classes.pageHeader)}>
+    <div className={appearanceClass(css.pageHeader, sidebarCss.pageHeader)}>
       <div><h2>{props.title}</h2><p>{props.description}</p></div>
       <div className={css.pageHeaderMeta}>{props.loadingLabel !== undefined && <PageSpinner label={props.loadingLabel} />}{props.meta !== undefined && <code>{props.meta}</code>}{props.action}</div>
     </div>
@@ -76,3 +76,4 @@ export function EmptyState(props: { glyph: string; title: string; children: stri
 }
 
 export const memoryPageStyles: Readonly<Record<string, string>> = css
+export const memorySidebarStyles: Readonly<Record<string, string>> = sidebarCss

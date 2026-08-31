@@ -392,7 +392,7 @@ describe('Mnemon memory subagent coordinator', () => {
       sources: [{ memoryBodyId: 'project' }],
     } as never)
     const composableTurns = {
-      activeTurn: vi.fn(() => (pinnedTurn('root:1', 'view-pinned', authorizedIds))),
+      activeTurn: vi.fn().mockReturnValue(pinnedTurn('root:1', 'view-pinned', authorizedIds)),
     }
     const source = runtimeSource(undefined, memoryService, undefined, composableTurns)
     const coordinator = new MnemonSubagentCoordinator(host.value, source as never, toolRegistry().value)
@@ -464,9 +464,9 @@ describe('Mnemon memory subagent coordinator', () => {
             { id: 'unknown-refinement', content: 'A second unknown clue.', memoryBodyId: 'project' },
           ],
         } as never)
-    let turnId = 'root:9'
+    let pinned = pinnedTurn('root:9', 'view-root:9', ['project', 'other'])
     const composableTurns = {
-      activeTurn: vi.fn(() => pinnedTurn(turnId, `view-${turnId}`, ['project', 'other'])),
+      activeTurn: vi.fn(() => pinned),
     }
     const source = runtimeSource(undefined, memoryService, undefined, composableTurns)
     const coordinator = new MnemonSubagentCoordinator(host.value, source as never, toolRegistry().value)
@@ -476,7 +476,7 @@ describe('Mnemon memory subagent coordinator', () => {
     const duplicate = await coordinator.recall(parent(), { query: 'release-history?!', mode: 'basic', limit: 1 }, signal, { requirePinnedView: true })
     const refinement = await coordinator.recall(parent(), { query: 'rollback drill' }, signal, { requirePinnedView: true })
     const exhausted = await coordinator.recall(parent(), { query: 'tenant recovery' }, signal, { requirePinnedView: true })
-    pinned = { turnId: 'root:10', viewId: 'view-root:10' }
+    pinned = pinnedTurn('root:10', 'view-root:10', ['project', 'other'])
     const nextTurn = await coordinator.recall(parent(), { query: 'rollback drill' }, signal, { requirePinnedView: true })
 
     expect(first.results.map(result => result.id)).toEqual(['high-1', 'medium-1', 'unknown-1'])
@@ -502,11 +502,10 @@ describe('Mnemon memory subagent coordinator', () => {
       mode: 'smart',
       results: (request.memoryBodyIds ?? []).map(memoryBodyId => ({ id: memoryBodyId, content: `Evidence in ${memoryBodyId}.`, memoryBodyId, relevanceTier: 'high' })),
     }) as never)
-    const memoryViews = {
-      activeTurn: vi.fn().mockReturnValue({ turnId: 'root:scoped', viewId: 'view-scoped' }),
-      sourceState: vi.fn(() => ({ memoryBodyIds: ['project', 'other'] })),
+    const composableTurns = {
+      activeTurn: vi.fn().mockReturnValue(pinnedTurn('root:scoped', 'view-scoped', ['project', 'other'])),
     }
-    const source = { forAgent: () => ({ service: memoryService, memoryViews }) }
+    const source = runtimeSource(undefined, memoryService, undefined, composableTurns)
     const coordinator = new MnemonSubagentCoordinator(subagents(undefined).value, source as never)
     const signal = new AbortController().signal
     const first = await coordinator.recall(parent(), { query: 'same query', memoryBodyIds: ['project'] }, signal, { requirePinnedView: true })
@@ -532,13 +531,10 @@ describe('Mnemon memory subagent coordinator', () => {
     vi.mocked(memoryService.related).mockResolvedValueOnce([
       { id: 'neighbor', content: 'Graph evidence from A.', relevanceTier: 'high', memoryBodyId: 'space-a' },
     ])
-    const memoryViews = {
-      activeTurn: vi.fn().mockReturnValue({ turnId: 'root:related', viewId: 'view-related' }),
-      sourceState: () => ({ memoryBodyIds: ['space-a', 'space-b'] }),
+    const composableTurns = {
+      activeTurn: vi.fn().mockReturnValue(pinnedTurn('root:related', 'view-related', ['space-a', 'space-b'])),
     }
-    const coordinator = new MnemonSubagentCoordinator(subagents(undefined).value, {
-      forAgent: () => ({ service: memoryService, memoryViews }),
-    } as never)
+    const coordinator = new MnemonSubagentCoordinator(subagents(undefined).value, runtimeSource(undefined, memoryService, undefined, composableTurns))
     const signal = new AbortController().signal
     await coordinator.recall(parent(), { query: 'release history' }, signal, { requirePinnedView: true })
     const first = await coordinator.related(parent(), 'a', 'space-a', signal, { requirePinnedView: true })
@@ -557,17 +553,16 @@ describe('Mnemon memory subagent coordinator', () => {
       if (request.query === 'initial') await gate
       return { query: request.query, mode: 'smart', results: [{ id: request.query, content: request.query, memoryBodyId: 'project', relevanceTier: 'high' }] } as never
     })
-    const memoryViews = {
-      activeTurn: vi.fn().mockReturnValue({ turnId: 'root:queued', viewId: 'view-queued' }),
-      sourceState: vi.fn(() => ({ memoryBodyIds: ['project'] })),
+    const composableTurns = {
+      activeTurn: vi.fn().mockReturnValue(pinnedTurn('root:queued', 'view-queued')),
     }
-    let currentService = memoryService
-    const source = { forAgent: () => ({ service: currentService, memoryViews }) }
+    let currentRuntime = runtimeSource(undefined, memoryService, undefined, composableTurns)
+    const source = { forAgent: (agent: HostAgent) => currentRuntime.forAgent(agent) }
     const coordinator = new MnemonSubagentCoordinator(subagents(undefined).value, source as never)
     const signal = new AbortController().signal
     const initial = coordinator.recall(parent(), { query: 'initial' }, signal, { requirePinnedView: true })
     const refined = coordinator.recall(parent(), { query: 'refined' }, signal, { requirePinnedView: true })
-    currentService = replacement
+    currentRuntime = runtimeSource(undefined, replacement, undefined, composableTurns)
     complete()
     await Promise.all([initial, refined])
     expect(memoryService.search).toHaveBeenCalledTimes(2)
@@ -582,11 +577,10 @@ describe('Mnemon memory subagent coordinator', () => {
       await gate
       return { query: request.query, mode: 'smart', results: [] } as never
     })
-    const memoryViews = {
-      activeTurn: vi.fn().mockReturnValue({ turnId: 'root:cancel', viewId: 'view-cancel' }),
-      sourceState: vi.fn(() => ({ memoryBodyIds: ['project'] })),
+    const composableTurns = {
+      activeTurn: vi.fn().mockReturnValue(pinnedTurn('root:cancel', 'view-cancel')),
     }
-    const source = { forAgent: () => ({ service: memoryService, memoryViews }) }
+    const source = runtimeSource(undefined, memoryService, undefined, composableTurns)
     const coordinator = new MnemonSubagentCoordinator(subagents(undefined).value, source as never)
     const controller = new AbortController()
     const initial = coordinator.recall(parent(), { query: 'initial' }, new AbortController().signal, { requirePinnedView: true })
@@ -602,9 +596,10 @@ describe('Mnemon memory subagent coordinator', () => {
   it('isolates Documents search claims by the executing root or child turn', async () => {
     const host = subagents(undefined)
     const memoryService = service()
-    let turnId = 'root:documents-1'
+    let rootPin = pinnedTurn('root:documents-1', 'view-documents')
+    const childPin = pinnedTurn('child:documents-1', 'view-documents')
     const composableTurns = {
-      activeTurn: vi.fn((agentId: string) => agentId === 'root' ? pinnedTurn(turnId, `view-${turnId}`) : undefined),
+      activeTurn: vi.fn((agentId: string) => agentId === 'root' ? rootPin : agentId === 'child' ? childPin : undefined),
     }
     const source = runtimeSource(undefined, memoryService, undefined, composableTurns)
     const coordinator = new MnemonSubagentCoordinator(host.value, source as never, toolRegistry().value)
@@ -618,6 +613,7 @@ describe('Mnemon memory subagent coordinator', () => {
     rootPin = pinnedTurn('root:documents-2', 'view-documents')
     expect((await coordinator.documentQuery(parent(), { query: 'probe' }, new AbortController().signal) as { notRun?: boolean }).notRun === true).toBe(false)
     expect(composableTurns.activeTurn).toHaveBeenCalledWith('root')
+    expect(composableTurns.activeTurn).toHaveBeenCalledWith('child')
   })
 
   it('shares one six-result and 4,800-character envelope across both Recall queries', async () => {
@@ -648,7 +644,7 @@ describe('Mnemon memory subagent coordinator', () => {
         ],
       } as never)
     const composableTurns = {
-      activeTurn: vi.fn(() => (pinnedTurn('root:envelope', 'view-envelope', ['project']))),
+      activeTurn: vi.fn().mockReturnValue(pinnedTurn('root:envelope', 'view-envelope', ['project'])),
     }
     const source = runtimeSource(undefined, memoryService, undefined, composableTurns)
     const coordinator = new MnemonSubagentCoordinator(host.value, source as never, toolRegistry().value)
@@ -672,7 +668,7 @@ describe('Mnemon memory subagent coordinator', () => {
     let finishSearch!: (value: { query: string; mode: 'smart'; results: Array<{ id: string; content: string; relevanceTier: 'high'; memoryBodyId: string }> }) => void
     vi.mocked(memoryService.search).mockImplementation(() => new Promise(resolve => { finishSearch = resolve }) as never)
     const composableTurns = {
-      activeTurn: vi.fn(() => (pinnedTurn('root:concurrent', 'view-concurrent', ['project']))),
+      activeTurn: vi.fn().mockReturnValue(pinnedTurn('root:concurrent', 'view-concurrent', ['project'])),
     }
     const source = runtimeSource(undefined, memoryService, undefined, composableTurns)
     const coordinator = new MnemonSubagentCoordinator(host.value, source as never, toolRegistry().value)
@@ -711,7 +707,7 @@ describe('Mnemon memory subagent coordinator', () => {
         ],
       } as never)
     const composableTurns = {
-      activeTurn: vi.fn(() => (pinnedTurn('root:serialized', 'view-serialized', ['project']))),
+      activeTurn: vi.fn().mockReturnValue(pinnedTurn('root:serialized', 'view-serialized', ['project'])),
     }
     const source = runtimeSource(undefined, memoryService, undefined, composableTurns)
     const coordinator = new MnemonSubagentCoordinator(host.value, source as never, toolRegistry().value)
@@ -747,7 +743,7 @@ describe('Mnemon memory subagent coordinator', () => {
         results: [{ id: 'refined', content: 'Recovered evidence.', relevanceTier: 'high', memoryBodyId: 'project' }],
       } as never)
     const composableTurns = {
-      activeTurn: vi.fn(() => (pinnedTurn('root:retry', 'view-retry', ['project']))),
+      activeTurn: vi.fn().mockReturnValue(pinnedTurn('root:retry', 'view-retry', ['project'])),
     }
     const source = runtimeSource(undefined, memoryService, undefined, composableTurns)
     const coordinator = new MnemonSubagentCoordinator(host.value, source as never, toolRegistry().value)
@@ -766,9 +762,8 @@ describe('Mnemon memory subagent coordinator', () => {
   it('derives a child read from its own inherited pin with no model-facing capability', async () => {
     const host = subagents(undefined)
     const memoryService = service()
-    const composableTurns = {
-      activeTurn: vi.fn((agentId: string) => agentId === 'root' ? pinnedTurn('root:1', 'view-pinned', ['project']) : undefined),
-    }
+    const childPin = pinnedTurn('child:1', 'view-pinned', ['project'])
+    const composableTurns = { activeTurn: vi.fn((agentId: string) => agentId === 'child' ? childPin : undefined) }
     const source = runtimeSource(undefined, memoryService, undefined, composableTurns)
     const coordinator = new MnemonSubagentCoordinator(host.value, source as never, toolRegistry().value)
     const child = parent('subagent')
@@ -779,7 +774,7 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(coordinator.scopeRelatedMemoryBody(child)).toBe('project')
     expect(() => coordinator.scopeRelatedMemoryBody(child, 'outside')).toThrow('outside pinned Source')
     await expect(coordinator.recall(child, { query: 'database choice' }, new AbortController().signal)).resolves.not.toHaveProperty('selectedMemoryBodyIds')
-    expect(composableTurns.activeTurn).toHaveBeenCalledWith('root')
+    expect(composableTurns.activeTurn).toHaveBeenCalledWith('child')
     expect(host.start).not.toHaveBeenCalled()
   })
 
@@ -1768,7 +1763,8 @@ describe('Mnemon root/child tool split', () => {
     child.session.header!.cwd = f.workspace
     child.session.header!.parentSession = 'root'
     const scope = agentScope(root, f.config)
-    await f.graph.composableTurns.beginTurn('root:tools', scope, 'test')
+    const dispatch = await f.graph.composableTurns.beginTurn('root:tools', scope, 'test')
+    f.graph.composableTurns.pinTurn('child:tools', agentScope(child, f.config), dispatch.view.id)
     const coordinator = { recall: vi.fn(async () => ({ results: [] })), related: vi.fn(async () => ({ results: [] })), runtime: vi.fn() } as unknown as MnemonSubagentCoordinator
     registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as unknown as HostContextShape, f.live, coordinator)
     const signal = new AbortController().signal

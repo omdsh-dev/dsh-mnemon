@@ -147,13 +147,13 @@ describe('interaction surfaces binding', () => {
     document.body.append(tab)
 
     apply(ctx)
-    await waitFor(() => expect(injects).toContain('conversation.view'))
+    await waitFor(() => expect(injects).toContain('shell.overlay'))
     dispatchMnemonAnchor({ page: 'documents/library', sessionId: 'session-a' })
 
     expect(clicked).not.toHaveBeenCalled()
-    expect(injects).not.toContain('conversation.view')
     expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(true)
-    expect(consumeMnemonAnchor('session-a')).toMatchObject({ page: 'documents' })
+    expect(injects).not.toContain('conversation.view')
+    expect(consumeMnemonAnchor('session-a')).toMatchObject({ page: 'documents/library' })
   })
 
   it('opens the Builtin tab only for the current session, follows locale labels, and removes its listener on disposal', async () => {
@@ -170,11 +170,32 @@ describe('interaction surfaces binding', () => {
     await waitFor(() => expect(injects).toContain('conversation.view'))
     expect(activeRegistrations().filter(id => id === 'mnemon')).toHaveLength(2)
 
-    dispatchMnemonAnchor({ page: 'documents', sessionId: 'session-b' })
+    dispatchMnemonAnchor({ page: 'documents/library', sessionId: 'session-b' })
     expect(clicked).not.toHaveBeenCalled()
-    expect(consumeMnemonAnchor('session-b')).toMatchObject({ page: 'documents' })
-    dispatchMnemonAnchor({ page: 'remember', seed: 'Scoped candidate', sessionId: 'session-a' })
+    expect(consumeMnemonAnchor('session-b')).toMatchObject({ page: 'documents/library' })
+    dispatchMnemonAnchor({ page: 'memory-spaces/remember', seed: 'Scoped candidate', sessionId: 'session-a' })
     expect(clicked).toHaveBeenCalledTimes(1)
+    expect(consumeMnemonAnchor('session-a')).toMatchObject({ page: 'memory-spaces/remember', seed: 'Scoped candidate' })
+    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(false)
+
+    label = 'Memory System'
+    tab.textContent = label
+    dispatchMnemonAnchor({ page: 'runtime/entries', sessionId: 'session-a' })
+    expect(clicked).toHaveBeenCalledTimes(2)
+    consumeMnemonAnchor('session-a')
+    for (const dispose of effectDisposers) dispose()
+    dispatchMnemonAnchor({ page: 'status', sessionId: 'session-a' })
+    expect(clicked).toHaveBeenCalledTimes(2)
+    expect(consumeMnemonAnchor('session-a')).toMatchObject({ page: 'status' })
+  })
+
+  it('keeps Builtin anchors pending without mounting or opening a hidden entry', async () => {
+    const { ctx, activeRegistrations } = makeCtx({}, { displayMode: 'builtin', tabEnabled: false })
+    apply(ctx)
+    await waitFor(() => expect(activeRegistrations()).toContain('mnemon-save'))
+    expect(activeRegistrations().filter(id => id === 'mnemon')).toHaveLength(1) // settings only
+    dispatchMnemonAnchor({ page: 'documents/library', sessionId: 'session-a' })
+    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(false)
     expect(consumeMnemonAnchor('session-a')).toMatchObject({ page: 'documents/library' })
   })
 

@@ -22,9 +22,8 @@ import { modelMemoryWake } from './view-presentation.ts'
 import { AgentMemoryTurn, agentMemoryScope, openAgentTurn, type DelegatedMemoryView } from './agent-memory-turn.ts'
 import type { AssistantMessageText, LifecycleAgentSnapshot, LifecycleCounters, LifecyclePhase, LifecycleSnapshot, ReviewActivityScore, TaskAgentModelCatalog } from "./protocol.ts"
 import type { PreparedMemoryPlacement } from 'dsh-mnemon-source-memory-spaces/contracts'
-import type { MemoryOperationScope, MemoryWake } from "../core/contracts/index.ts"
-import type { MnemonAgentRuntimeSource, MnemonRuntimeGraph } from "./runtime.ts"
-import type { ComposableMemoryTurn, ComposableMemoryTurnManager } from "../core/turns.ts"
+import type { MemoryWake } from "../core/contracts/index.ts"
+import type { MnemonAgentRuntimeSource } from "./runtime.ts"
 
 type AgentRuntimeSource = Pick<MnemonAgentRuntimeSource, 'forAgent' | 'bindAgentRuntime'>
 
@@ -243,12 +242,6 @@ class MnemonAgentLifecycle {
   private lastPhase: LifecyclePhase = 'idle'
   private lastAt: string | undefined
   private lastError: string | undefined
-  private pinnedView: {
-    turn: number
-    manager: ComposableMemoryTurnManager
-    context: ComposableMemoryTurn
-    releaseRuntime: () => void
-  } | undefined
 
   constructor(
     readonly agent: HostAgent,
@@ -272,6 +265,7 @@ class MnemonAgentLifecycle {
         this.startSource = payload.source
         this.primePending = true
         this.cueInjected = false
+        this.injectedMemoryText = undefined
         this.mark('prime')
       }) as never),
       this.agent.ctx.on('session/event', ((session: HostAgent['session'], event: HostSessionEvent) => this.sessionEvent(session, event)) as never),
@@ -328,7 +322,7 @@ class MnemonAgentLifecycle {
   }
 
   memoryWake(): MemoryWake | undefined {
-    const pinned = this.pinnedView
+    const pinned = this.memoryTurn?.current
     if (pinned === undefined) return undefined
     return modelMemoryWake(pinned.graph, pinned.context)
   }
@@ -366,10 +360,11 @@ class MnemonAgentLifecycle {
   private memorySnapshotMessage(): HostUserMessage | undefined {
     const wake = this.memoryWake()
     if (wake === undefined) return undefined
-    const text = memoryPromptText(wake.text)
+    // This message bypasses SystemPrompt interpolation; Source text stays literal.
+    const text = wake.text
     if (text.trim() === '' || text === this.injectedMemoryText) return undefined
     this.injectedMemoryText = text
-    return createPluginMessage(text, 'recall', 'Runtime memory snapshot')
+    return createPluginMessage(text, 'recall', 'Memory View snapshot')
   }
 
   private async preStep(payload: PreStepPayload, next: () => Promise<HostPreStepDecision>): Promise<HostPreStepDecision> {
@@ -418,22 +413,15 @@ class MnemonAgentLifecycle {
 
   private async assemblePrompt(assembly: PromptAssembly, context: PromptAssemblyContext, next: () => Promise<PromptAssembly>): Promise<PromptAssembly> {
     if (context.agent !== undefined && context.agent.id !== this.agent.id) return next()
-    const turn = this.openTurn()
+    const turn = openAgentTurn(this.agent)
     if (turn === undefined || context.signal?.aborted === true) return next()
-    await this.pinView(turn, context.signal)
+    await this.memoryTurn?.begin(turn, context.signal)
     const assembled = await next()
     return applyMemoryViewGuidance(assembled, this.memoryTurn?.current?.context.view, this.config.routingGuidance)
   }
 
   private releaseView(turn?: number): void {
-    const pinned = this.pinnedView
-    if (pinned === undefined || (turn !== undefined && pinned.turn !== turn)) return
-    this.pinnedView = undefined
-    try {
-      pinned.manager.endTurn(pinned.context.turnId)
-    } finally {
-      pinned.releaseRuntime()
-    }
+    this.memoryTurn?.end(turn)
   }
 
   private async finishTurn(payload: TurnStoppingPayload): Promise<void> {
@@ -980,12 +968,8 @@ export class MnemonLifecycle {
     let dispose: () => unknown
     dispose = agent.ctx.effect(() => {
       const stop = lifecycle.start()
-      const stopRuntimeContext = this.runtimeSource === undefined
-        ? () => {}
-        : registerAgentMemoryViewContext(agent, () => lifecycle.memoryWake())
       return () => {
         try {
-          stopRuntimeContext()
           stop()
         } finally {
           memoryTurn?.dispose()
@@ -1011,11 +995,11 @@ export class MnemonLifecycle {
       delegation = parentMemory.delegate()
     } else {
       const graph = runtime.forAgent(parent)
-      const parentPin = graph.memoryViews.activeTurn(parent.id)
+      const parentPin = graph.composableTurns.activeTurn(parent.id)
       delegation = {
         graph,
         scope: parentPin?.scope ?? agentMemoryScope(parent, graph),
-        ...(parentPin === undefined ? {} : { viewId: parentPin.viewId }),
+        ...(parentPin === undefined ? {} : { viewId: parentPin.view.id }),
       }
     }
     let dispose: () => unknown

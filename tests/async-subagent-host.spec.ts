@@ -14,11 +14,11 @@ import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { type ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { HostAgent, HostContextShape } from '../src/contracts.ts'
-import { MnemonLifecycle } from '../src/lifecycle.ts'
-import { LiveMnemonRuntime } from '../src/live-runtime.ts'
-import { MnemonSubagentCoordinator } from '../src/subagent.ts'
-import { registerTools } from '../src/tools.ts'
+import type { HostAgent, HostContextShape } from '../src/host/dsh.ts'
+import { MnemonLifecycle } from '../src/host/lifecycle.ts'
+import { LiveMnemonRuntime } from '../src/host/runtime.ts'
+import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
+import { registerTools } from '../src/host/tools.ts'
 import { memoryGraphFixture } from './helpers/memory-graph.ts'
 
 type Response = string | { name: string; args: Record<string, unknown> }
@@ -99,7 +99,7 @@ async function harness(respond: (options: GenerateOptions) => Response | Promise
   const root = await mkdtemp(join(tmpdir(), 'mnemon-async-host-'))
   const ctx = new Context()
   const memory = memoryGraphFixture()
-  const runtime = new LiveMnemonRuntime(memory.graph)
+  const runtime = new LiveMnemonRuntime(memory.graph, undefined, undefined, memory.extensions)
   let stop: (() => void) | undefined
   cleanups.push(async () => {
     try { await ctx.fiber.dispose() } finally {
@@ -172,13 +172,13 @@ describe('asynchronous Recall with the real DSH host', () => {
     expect(value.children).toHaveLength(1)
     const child = value.children[0]!
     await vi.waitFor(() => expect(childCalls).toBe(1), { timeout: 5_000 })
-    const dispatchView = value.views.activeTurn(child.id)!.viewId
+    const dispatchView = value.views.activeTurn(child.id)!.view.id
     expect(value.views.activeTurn(value.parent.id)).toBeUndefined()
     const replacement = memoryGraphFixture(['replacement'])
     value.runtime.swap(replacement.graph)
     await value.runParent()
     expect(value.runtime.forAgent(child as unknown as HostAgent)).toBe(value.graph)
-    expect(value.views.activeTurn(child.id)!.viewId).toBe(dispatchView)
+    expect(value.views.activeTurn(child.id)!.view.id).toBe(dispatchView)
     expect(value.lifecycle.snapshot().activeAgents).toBe(1)
     release.resolve()
     await vi.waitFor(() => expect(value.ctx.agents.get(child.id)).toBeUndefined(), { timeout: 5_000 })

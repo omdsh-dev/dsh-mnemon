@@ -75,6 +75,7 @@ function wake(view: ComposableMemoryView, bindings: MemoryWakeBindings = {}): Me
 /** Root-turn pins over Candidate → Serving → Draining generations. */
 export class ComposableMemoryTurnManager {
   private readonly turns = new Map<string, StoredTurn>()
+  private readonly retainedViews = new Map<string, { view: ComposableMemoryView; lease: MemoryGenerationLease; count: number }>()
   private readonly beginnings = new Map<string, { scope: MemoryOperationScope; controller: AbortController; promise: Promise<ComposableMemoryTurn> }>()
   private closed = false
 
@@ -110,7 +111,7 @@ export class ComposableMemoryTurnManager {
         throw error
       } finally {
         signal?.removeEventListener('abort', abort)
-        this.beginnings.delete(id)
+        if (this.beginnings.get(id) === pending) this.beginnings.delete(id)
       }
     })()
     return pending.promise
@@ -180,7 +181,7 @@ export class ComposableMemoryTurnManager {
   async executeRoute(turnId: string, routeId: string, input: MemoryJsonValue, signal?: AbortSignal): Promise<MemoryEvidence> {
     const stored = this.requireTurn(turnId)
     const operation = this.generations.acquire(stored.lease.id)
-    try { return await operation.generation.executeRoute(stored.context.view, routeId, input, signal) }
+    try { return await operation.generation.executeRoute(stored.context.view, routeId, input, signal, DEFAULT_MEMORY_VIEW_BUDGET, stored.context) }
     finally { operation.release() }
   }
 
@@ -202,6 +203,7 @@ export class ComposableMemoryTurnManager {
     if (stored === undefined) {
       const beginning = this.beginnings.get(turnId)
       if (beginning === undefined) return false
+      this.beginnings.delete(turnId)
       beginning.controller.abort(new Error('Composable Memory turn ended during composition'))
       return true
     }
@@ -216,6 +218,8 @@ export class ComposableMemoryTurnManager {
     for (const beginning of this.beginnings.values()) beginning.controller.abort(new Error('Composable Memory turn ended during composition'))
     for (const stored of this.turns.values()) stored.lease.release()
     this.turns.clear()
+    for (const retained of this.retainedViews.values()) retained.lease.release()
+    this.retainedViews.clear()
   }
 
   private requireTurn(turnId: string): StoredTurn {

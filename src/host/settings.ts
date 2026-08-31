@@ -1,5 +1,6 @@
 import type { HostConnectionHandle, HostRpcAuthority, HostRpcHandler, HostSettingsService, RpcResult } from "./dsh.ts"
 import { MNEMON_SETTINGS_CHANNEL, MNEMON_SETTINGS_NAMESPACE, MNEMON_UI_SETTINGS_NAMESPACE } from "./protocol.ts"
+import { normalizeDisplayMode } from './display-mode.ts'
 
 export { MNEMON_SETTINGS_CHANNEL, MNEMON_SETTINGS_NAMESPACE, MNEMON_UI_SETTINGS_NAMESPACE } from "./protocol.ts"
 

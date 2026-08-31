@@ -3,10 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMemorySnapshot } from 'dsh-mnemon-source-runtime/contracts'
-import type { HostAgent, HostWorkspaceRegistry, HostAgentsService } from '../src/host/dsh.ts'
+import type { HostAgent, HostWorkspaceRegistry, HostAgentsService, HostContextShape, HostSubagentsService } from '../src/host/dsh.ts'
 import { createRuntimeGraph, LiveMnemonRuntime } from '../src/host/runtime.ts'
 import { resolveConfig } from '../src/host/config.ts'
 import { compositionFixture } from './fixtures/composition.ts'
+import { createReadHandler, createWriteHandler } from '../src/host/rpc.ts'
+import { MnemonLifecycle } from '../src/host/lifecycle.ts'
+import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
 
 const fixtures: Awaited<ReturnType<typeof compositionFixture>>[] = []
 const directories: string[] = []
@@ -24,6 +27,43 @@ afterEach(async () => {
 })
 
 describe('default Host scope over the Composable Runtime', () => {
+  it.each(['global', 'workspace', 'custom', 'legacy-custom'] as const)('keeps Builtin session-only reads and writes in %s storage through real Sources', async storageScope => {
+    const globalRoot = directory(), customRoot = directory()
+    vi.stubEnv('MNEMON_DATA_DIR', globalRoot)
+    const sessions = [agent('session-1', directory()), agent('session-2', directory())]
+    const workspaces = sessions.map((session, index) => ({ id: `workspace-${index + 1}`, title: `Workspace ${index + 1}`, path: session.session.header!.cwd! }))
+    const agents = { get: (id: string) => sessions.find(session => session.id === id), roots: () => sessions }
+    const config = resolveConfig({
+      displayMode: 'builtin', cliPath: '/fake/mnemon', runtimeUserScope: 'storage',
+      ...(storageScope === 'legacy-custom' ? {} : { storageScope }),
+      ...(storageScope === 'custom' || storageScope === 'legacy-custom' ? { dataDir: customRoot } : {}),
+    })
+    const value = await compositionFixture(config, {
+      agents, workspaceRegistry: { get: id => workspaces.find(workspace => workspace.id === id), list: () => workspaces },
+    })
+    fixtures.push(value)
+    const subagents = { run: vi.fn(), start: vi.fn() }
+    const lifecycle = new MnemonLifecycle({ agents } as HostContextShape,
+      new MnemonSubagentCoordinator(subagents as unknown as HostSubagentsService, value.live), value.live.config, value.live)
+    const read = createReadHandler(value.live, lifecycle)
+    const write = createWriteHandler(value.live, lifecycle)
+    for (const session of sessions) {
+      const expected = storageScope === 'workspace' ? join(session.session.header!.cwd!, '.mnemon') : storageScope === 'global' ? globalRoot : customRoot
+      expect(value.live.route({ sessionId: session.id })).toMatchObject({ selectedRoot: expected, effectiveRoot: expected, aligned: true })
+      await expect(write('runtime-memory', { sessionId: session.id, action: 'add', target: 'memory', content: `Memory from ${session.id}` })).resolves.toMatchObject({ ok: true })
+      await expect(write('document', { sessionId: session.id, action: 'create', title: `Document from ${session.id}`, content: `# ${session.id}` })).resolves.toMatchObject({ ok: true })
+    }
+    for (const session of sessions) {
+      const expectedSessions = storageScope === 'workspace' ? [session] : sessions
+      const memory = await read('runtime-memory', { sessionId: session.id })
+      expect(memory).toMatchObject({ ok: true, value: { entries: expect.arrayContaining(expectedSessions.map(item => expect.objectContaining({ content: `Memory from ${item.id}` }))) } })
+      if (memory.ok) expect((memory.value as { entries: unknown[] }).entries).toHaveLength(expectedSessions.length)
+      await expect(read('documents', { sessionId: session.id })).resolves.toMatchObject({ ok: true, value: { activeCount: expectedSessions.length } })
+    }
+    expect(subagents.run).not.toHaveBeenCalled()
+    expect(subagents.start).not.toHaveBeenCalled()
+  })
+
   it('has one composition and no duplicate controllers, catalog or kernel', async () => {
     const { graph } = await fixture()
     expect(graph.memoryComposition.inspect().evaluation.state).toBe('ready')

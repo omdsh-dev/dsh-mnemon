@@ -10,7 +10,15 @@ export class SourceSession {
     private readonly turns: ComposableMemoryTurnManager,
     readonly typeId: string,
     readonly scope: MemoryOperationScope,
+    private readonly pinnedTurn?: ComposableMemoryTurn,
   ) {}
+
+  /** Capture execution identity before awaiting work; never borrow a later turn. */
+  forTurn(turn: ComposableMemoryTurn): SourceSession {
+    if (turn.scope.agentId !== this.scope.agentId || turn.scope.sessionId !== this.scope.sessionId
+      || turn.scope.storage !== this.scope.storage || turn.scope.workspaceId !== this.scope.workspaceId) throw new Error('Source session scope does not match the pinned turn')
+    return new SourceSession(this.generations, this.turns, this.typeId, this.scope, turn)
+  }
 
   read<T>(operation: string, input: unknown = null, signal?: AbortSignal): Promise<T> {
     return this.execute<T>('read', operation, input, signal)
@@ -25,6 +33,7 @@ export class SourceSession {
     const source = await this.selected(turn)
     const route = turn.view.routes.find(item => item.sourceInstanceKey === source.sourceInstanceKey && item.sourceRouteId === routeId)
     if (route === undefined) throw new Error('Source Route is not offered by the current View: ' + this.typeId + '/' + routeId)
+    this.assertTurn(turn)
     return this.turns.executeRoute(turn.turnId, route.id, json(input), signal)
   }
   async action(actionId: string, input: unknown, authorize: (offer: MemoryActionOffer) => boolean, signal?: AbortSignal): Promise<MemoryMutationReceipt> {
@@ -32,10 +41,18 @@ export class SourceSession {
     const source = await this.selected(turn)
     const offer = turn.view.actionOffers.find(item => item.sourceInstanceKey === source.sourceInstanceKey && item.sourceActionId === actionId)
     if (offer === undefined) throw new Error('Source Action is not offered by the current View: ' + this.typeId + '/' + actionId)
+    this.assertTurn(turn)
     return this.turns.executeAction(turn.turnId, offer.id, json(input), authorize, signal)
   }
   private activeTurn(): ComposableMemoryTurn | undefined {
+    if (this.pinnedTurn !== undefined) {
+      this.assertTurn(this.pinnedTurn)
+      return this.pinnedTurn
+    }
     return this.scope.agentId === undefined ? undefined : this.turns.activeTurn(this.scope.agentId)
+  }
+  private assertTurn(turn: ComposableMemoryTurn): void {
+    if (this.turns.turn(turn.turnId) !== turn) throw new Error('Memory operation belongs to an ended turn')
   }
   private requireTurn(): ComposableMemoryTurn {
     const turn = this.activeTurn()

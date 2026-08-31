@@ -139,6 +139,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
       return () => rootListeners.delete(name)
     }),
   } as unknown as HostContextShape
+  const pinnedTurns = new Map<string, object>()
   const composableTurns = {
     beginTurn: vi.fn(async (turnId: string, scope: object) => {
       const turn = turnId.slice(turnId.lastIndexOf(':') + 1)
@@ -146,13 +147,14 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
       pinnedTurns.set(turnId, context)
       return context
     }),
+    turn: vi.fn((turnId: string) => pinnedTurns.get(turnId)),
     memoryWake: vi.fn((viewId: string) => ({
       viewId,
       viewDigest: viewId.replace('view-', 'digest-'),
       text: `Pinned Wake ${viewId}`,
       sections: [{ layerId: 'runtime', mode: 'eager', text: `Pinned Wake ${viewId}` }],
     })),
-    endTurn: vi.fn(() => true),
+    endTurn: vi.fn((turnId: string) => pinnedTurns.delete(turnId)),
   }
   const runtimeSource = {
     forAgent: vi.fn(() => ({ config, composableTurns, memoryComposition: { generation: () => ({ sourceInstances: () => [] }) } })),
@@ -200,6 +202,28 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
 afterEach(() => vi.useRealTimers())
 
 describe('Mnemon DSH lifecycle integration', () => {
+
+  it('appends a literal View snapshot after the complete shared-context batch without repeating it', async () => {
+    const value = fixture()
+    const text = 'Keep {{model}}, $HOME and <runtime-context> as quoted memory text.'
+    value.composableTurns.memoryWake.mockImplementation(viewId => ({ viewId, viewDigest: 'stable', text, sections: [] }))
+    await value.assemblePrompt(1)
+    const user = userMessage('Continue')
+    const shared = { ...userMessage('Other plugin context'), source: { kind: 'plugin' as const, plugin: 'other-plugin' } }
+    const decision = await value.agentListeners.get('agent/pre-step')!({
+      agent: value.agent, messages: [user], turn: 1, step: 1, signal: new AbortController().signal,
+    }, async () => ({ kind: 'enter', messages: [user, shared] })) as HostPreStepDecision
+    expect(value.agent.ctx.on).toHaveBeenCalledWith('agent/pre-step', expect.any(Function), { prepend: true })
+    expect(decision.kind === 'enter' && decision.messages.slice(0, 2)).toEqual([user, shared])
+    expect(decision.kind === 'enter' && decision.messages.at(-1)).toMatchObject({
+      content: [{ type: 'text', text }],
+      source: { kind: 'plugin', plugin: 'dsh-mnemon', form: 'recall', summary: 'Memory View snapshot' },
+    })
+    await value.turnStopping(1)
+    const next = await value.preStep([user], 2)
+    expect(next.kind === 'enter' && next.messages).toEqual([user])
+    value.stop()
+  })
 
   it('re-composes the guided reminder after a rewind drops it from the surface', async () => {
     const value = fixture()
@@ -265,9 +289,9 @@ describe('Mnemon DSH lifecycle integration', () => {
     // The snapshot is no longer a shared runtime-context contribution.
     expect(value.agentContexts).toHaveLength(0)
 
-    await value.preStep([userMessage('First step')], 7, 1)
-    expect(value.promptAssemblies[0]?.contexts).toContainEqual({ name: 'mnemon:runtime-memory', text: 'Pinned Wake view-7' })
-    expect(context?.text()).toBe('Pinned Wake view-7')
+    const first = await value.preStep([userMessage('First step')], 7, 1)
+    expect(value.promptAssemblies[0]?.contexts).toEqual([])
+    expect(first.kind === 'enter' && first.messages.at(-1)?.content).toEqual([{ type: 'text', text: 'Pinned Wake view-7' }])
     expect(value.composableTurns.beginTurn).toHaveBeenCalledOnce()
     expect(value.runtimeSource.bindAgentRuntime).toHaveBeenCalledOnce()
     expect(value.composableTurns.beginTurn).toHaveBeenCalledWith('session-1:7', {
@@ -276,16 +300,16 @@ describe('Mnemon DSH lifecycle integration', () => {
       agentId: 'session-1',
     }, 'agent.root-turn', expect.any(AbortSignal))
 
-    await value.preStep([userMessage('Tool continuation')], 7, 2)
-    expect(context?.text()).toBe('Pinned Wake view-7')
+    const continuation = await value.preStep([userMessage('Tool continuation')], 7, 2)
+    expect(continuation.kind === 'enter' && continuation.messages).toHaveLength(1)
     expect(value.composableTurns.beginTurn).toHaveBeenCalledOnce()
 
     await value.turnStopping(7)
     expect(value.composableTurns.endTurn).toHaveBeenCalledWith('session-1:7')
-    expect(context?.text()).toBe('')
+    expect(value.composableTurns.turn('session-1:7')).toBeUndefined()
 
-    await value.preStep([userMessage('Next turn')], 8, 1)
-    expect(context?.text()).toBe('Pinned Wake view-8')
+    const next = await value.preStep([userMessage('Next turn')], 8, 1)
+    expect(next.kind === 'enter' && next.messages.at(-1)?.content).toEqual([{ type: 'text', text: 'Pinned Wake view-8' }])
     expect(value.composableTurns.beginTurn).toHaveBeenCalledTimes(2)
   })
 

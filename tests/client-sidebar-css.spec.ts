@@ -3,14 +3,17 @@ import { describe, expect, it } from 'vitest'
 
 const sidebarCss = readFileSync(new URL('../src/client/MnemonSidebarView.module.css', import.meta.url), 'utf8')
 const workspaceCss = readFileSync(new URL('../src/client/MnemonWorkspace.module.css', import.meta.url), 'utf8')
+const viewCss = readFileSync(new URL('../src/client/MnemonView.module.css', import.meta.url), 'utf8')
 
 const sidebarSurface = 'var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base))'
 
 describe('Sidebar layout invariants', () => {
   it('keeps the workspace surfaces opaque under transparent-base skins with a default-theme fallback', () => {
-    expect(viewCss).toContain(`--mn-bg: ${sidebarSurface};`)
-    expect(sidebarCss).toContain(`.shell.shell {\n  background: ${sidebarSurface};`)
-    expect(sidebarCss).not.toContain('background: var(--dsw-alias-bg-base);')
+    expect(viewCss).toContain('--mn-bg: var(--dsw-alias-bg-base);')
+    expect(viewCss).toContain('--mn-backdrop: var(--dsw-alias-bg-overlay, var(--mn-bg));')
+    expect(viewCss).toContain('--mn-surface: linear-gradient(var(--mn-bg), var(--mn-bg)), linear-gradient(var(--mn-backdrop), var(--mn-backdrop)) var(--mn-bg);')
+    expect(sidebarCss).toContain('.shell.shell {\n  background: var(--mn-surface);')
+    expect(workspaceCss).toContain(`background: ${sidebarSurface};`)
   })
 
   it('keeps the sidebar artifact launcher-only and never hides DSH conversation content', () => {

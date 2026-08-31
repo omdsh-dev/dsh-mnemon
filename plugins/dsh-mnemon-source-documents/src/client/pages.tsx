@@ -3,7 +3,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type 
 import Markdown from 'markdown-to-jsx'
 import { type DocumentRecord, type DocumentSnapshot, type DocumentView } from '../contracts.ts'
 import type { DocumentsPageClient } from './api.ts'
-import { useRequestVersion, appearanceClass, useMnemonViewAppearance, memoryPageStyles as css, useT, useLocale, humanBytes, message, PageHeader, ProgressiveFooter, SidebarModal, EmptyState } from 'dsh-mnemon/client'
+import { useRequestVersion, appearanceClass, memorySidebarStyles as sidebarCss, memoryPageStyles as css, useT, useLocale, humanBytes, message, PageHeader, ProgressiveFooter, SidebarModal, EmptyState } from 'dsh-mnemon/client'
 
 const SAFE_LINK_PATTERN = /^(?:https?:|mailto:|#|\/)/iu
 
@@ -40,10 +40,9 @@ type DocumentListItem = DocumentRecord & { healthy?: boolean; excerpt: string }
 export function DocumentsPage(props: { client: DocumentsPageClient; revision: number; writeEnabled: boolean; sessionId?: string; canCreate?: boolean; onMutate: () => void }): JSX.Element {
   const t = useT()
   const locale = useLocale()
-  const appearance = useMnemonViewAppearance()
   const documentCreateFormId = useId()
   const documentEditFormId = useId()
-  const pageSize = appearance.surface === 'sidebar' ? 8 : Number.MAX_SAFE_INTEGER
+  const pageSize = 8
   const readerRef = useRef<HTMLElement | null>(null)
   const [snapshot, setSnapshot] = useState<DocumentSnapshot | null>(null)
   const [items, setItems] = useState<DocumentListItem[]>([])
@@ -95,13 +94,13 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
     return () => { active = false }
   }, [props.client, selectedId, props.revision])
   useLayoutEffect(() => {
-    if (appearance.surface === 'sidebar' && readerRef.current !== null) readerRef.current.scrollTop = 0
-  }, [appearance.surface, selectedId])
+    if (readerRef.current !== null) readerRef.current.scrollTop = 0
+  }, [selectedId])
   useEffect(() => {
-    if (appearance.surface !== 'sidebar' || selectedId === null) return
+    if (selectedId === null) return
     const index = items.findIndex(item => item.id === selectedId)
     if (index >= visibleLimit) setVisibleLimit(Math.ceil((index + 1) / pageSize) * pageSize)
-  }, [appearance.surface, items, pageSize, selectedId, visibleLimit])
+  }, [items, pageSize, selectedId, visibleLimit])
 
   const resetComposer = () => { setTitle(''); setDescription(''); setContent(''); setSources(''); setComposing(false) }
   const startComposer = () => { setTitle(''); setDescription(''); setContent(''); setSources(''); setEditing(false); setComposing(true) }
@@ -150,20 +149,14 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
     <div className={css.documentEditorMeta}><label>{t('documents.name')}<input value={title} onChange={event => setTitle(event.target.value)} required /></label><label>{t('documents.routing')}<input value={description} onChange={event => setDescription(event.target.value)} /></label></div>
     <label>{t('documents.sources')}<input value={sources} onChange={event => setSources(event.target.value)} placeholder={t('documents.sourcesPlaceholder')} /></label>
     <label>{t('documents.markdown')}<textarea value={content} onChange={event => setContent(event.target.value)} rows={10} required /></label>
-    {appearance.surface === 'buildin' && <footer><button type="button" className={css.ghostButton} disabled={saving} onClick={resetComposer}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={saving || title.trim() === '' || content.trim() === ''}>{saving ? t('documents.saving') : t('documents.create')}</button></footer>}
   </form>
   const editComposer = selected === null ? null : <form id={documentEditFormId} className={css.documentEditor} onSubmit={event => void update(event)}>
     <header><div><h3>{t('documents.editTitle')}</h3><p>{t('documents.editorHint')}</p></div><code>{selected.id}</code></header>
     <div className={css.documentEditorMeta}><label>{t('documents.name')}<input value={title} onChange={event => setTitle(event.target.value)} required /></label><label>{t('documents.routing')}<input value={description} onChange={event => setDescription(event.target.value)} /></label></div>
     <label>{t('documents.sources')}<input value={sources} onChange={event => setSources(event.target.value)} /></label><label>{t('documents.markdown')}<textarea value={content} onChange={event => setContent(event.target.value)} rows={18} required /></label>
-    {appearance.surface === 'buildin' && <footer><button type="button" className={css.ghostButton} disabled={saving} onClick={() => setEditing(false)}>{t('common.cancel')}</button><button type="submit" className={css.primaryButton} disabled={saving}>{saving ? t('documents.saving') : t('documents.save')}</button></footer>}
   </form>
-  const documentEditActionClass = appearance.surface === 'sidebar'
-    ? appearanceClass(css.ghostButton, appearanceClass(appearance.classes.itemActionButton, appearance.classes.itemEditAction))
-    : css.secondaryButton
-  const documentArchiveActionClass = appearance.surface === 'sidebar'
-    ? appearanceClass(css.dangerButton, appearanceClass(appearance.classes.itemActionButton, appearance.classes.itemDangerAction))
-    : css.dangerButton
+  const documentEditActionClass = appearanceClass(css.ghostButton, appearanceClass(sidebarCss.itemActionButton, sidebarCss.itemEditAction))
+  const documentArchiveActionClass = appearanceClass(css.dangerButton, appearanceClass(sidebarCss.itemActionButton, sidebarCss.itemDangerAction))
   const visibleItems = items.slice(0, visibleLimit)
   const selectDocument = (documentId: string) => {
     if (selectedId === documentId) return
@@ -175,7 +168,7 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
 
   return (
     <div className={css.page}>
-      <PageHeader title={t('documents.title')} description={t('documents.description')} meta={snapshot === null ? t('common.loading') : t('documents.capacity', { used: humanBytes(snapshot.activeBytes), limit: humanBytes(snapshot.limitBytes) })} action={<><button type="button" className={css.secondaryButton} disabled={loading} onClick={() => void display(query, status)}>{t('documents.refresh')}</button>{appearance.surface === 'sidebar' && props.writeEnabled && (props.canCreate ?? props.sessionId !== undefined) && <button type="button" className={css.primaryButton} onClick={startComposer}>{t('documents.new')}</button>}</>} />
+      <PageHeader title={t('documents.title')} description={t('documents.description')} meta={snapshot === null ? t('common.loading') : t('documents.capacity', { used: humanBytes(snapshot.activeBytes), limit: humanBytes(snapshot.limitBytes) })} action={<><button type="button" className={css.secondaryButton} disabled={loading} onClick={() => void display(query, status)}>{t('documents.refresh')}</button>{props.writeEnabled && (props.canCreate ?? props.sessionId !== undefined) && <button type="button" className={css.primaryButton} onClick={startComposer}>{t('documents.new')}</button>}</>} />
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
       {notice !== null && <div className={css.runtimeNotice} role="status">{notice}</div>}
 
@@ -188,35 +181,35 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
       <section className={css.documentToolbar}>
         <form onSubmit={event => { event.preventDefault(); void display(query, status) }}><span aria-hidden="true">⌕</span><input aria-label={t('documents.searchAria')} value={query} onChange={event => setQuery(event.target.value)} placeholder={t('documents.searchPlaceholder')} /><button type="submit" className={css.secondaryButton}>{t('documents.search')}</button></form>
         <div role="group" aria-label={t('documents.scope')}><button type="button" data-active={status === 'active' || undefined} onClick={() => setStatus('active')}>{t('documents.active')} <b>{activeCount}</b></button><button type="button" data-active={status === 'archived' || undefined} onClick={() => setStatus('archived')}>{t('documents.archivedCount')} <b>{archivedCount}</b></button></div>
-        {appearance.surface === 'buildin' && props.writeEnabled && (props.canCreate ?? props.sessionId !== undefined) && <button type="button" className={css.primaryButton} onClick={() => { if (composing) resetComposer(); else startComposer() }}>{composing ? t('common.cancel') : t('documents.new')}</button>}
+
       </section>
 
-      {composing && appearance.surface === 'buildin' && composer}
+
 
       <div className={css.documentWorkspace}>
         <aside className={css.documentList} aria-label={t('documents.list')}>
           <header><span>{status === 'active' ? t('documents.activeList') : t('documents.archiveList')}</span><code>{items.length}</code></header>
           {visibleItems.map(document => <button type="button" key={document.id} aria-pressed={selectedId === document.id} data-selected={selectedId === document.id || undefined} onClick={() => selectDocument(document.id)}><div><strong>{document.title}</strong><time dateTime={document.updatedAt}>{new Date(document.updatedAt).toLocaleDateString(locale)}</time></div><p>{document.description || document.excerpt || t('documents.noDescription')}</p><footer><span>{humanBytes(document.sizeBytes)}</span><code>{document.id.slice(0, 8)}</code>{document.healthy === false && <em>{t('documents.missing')}</em>}</footer></button>)}
-          {appearance.surface === 'sidebar' && !loading && <ProgressiveFooter compact visible={visibleItems.length} total={items.length} pageSize={pageSize} onMore={() => setVisibleLimit(value => value + pageSize)} />}
+          {!loading && <ProgressiveFooter compact visible={visibleItems.length} total={items.length} pageSize={pageSize} onMore={() => setVisibleLimit(value => value + pageSize)} />}
           {!loading && items.length === 0 && <div className={css.documentListEmpty}><span>▤</span><strong>{status === 'active' ? t('documents.emptyActive') : t('documents.emptyArchived')}</strong><p>{status === 'active' ? t('documents.emptyActiveText') : t('documents.emptyArchivedText')}</p></div>}
           {loading && <div className={css.loading}>{t('common.loading')}</div>}
         </aside>
 
-        <section ref={readerRef} className={css.documentReader} aria-label={t('documents.reader')} data-scroll-region={appearance.surface === 'sidebar' ? '' : undefined}>
-          {selected === null ? <EmptyState glyph="▤" title={t('documents.selectTitle')}>{t('documents.selectText')}</EmptyState> : editing && appearance.surface === 'buildin' ? editComposer : <article className={css.documentDetail}>
+        <section ref={readerRef} className={css.documentReader} aria-label={t('documents.reader')} data-scroll-region={''}>
+          {selected === null ? <EmptyState glyph="▤" title={t('documents.selectTitle')}>{t('documents.selectText')}</EmptyState> : (<article className={css.documentDetail}>
             <header><div><span>{selected.status === 'active' ? t('documents.active') : t('documents.coldArchive')}</span><h3>{selected.title}</h3><p>{selected.description || t('documents.noDescription')}</p></div><div>{props.writeEnabled && selected.status === 'active' && <button type="button" className={documentEditActionClass} onClick={beginEdit}>{t('documents.edit')}</button>}</div></header>
             <dl><div><dt>{t('documents.path')}</dt><dd><code>{selected.relativePath}</code></dd></div><div><dt>{t('documents.revision')}</dt><dd>{selected.revision}</dd></div><div><dt>{t('documents.hash')}</dt><dd><code>{selected.contentHash.slice(0, 16)}</code></dd></div><div><dt>{t('documents.size')}</dt><dd>{humanBytes(selected.sizeBytes)}</dd></div></dl>
             {selected.sourcePaths.length > 0 && <div className={css.documentSources}><span>{t('documents.sources')}</span>{selected.sourcePaths.map(path => <code key={path}>{path}</code>)}</div>}
             {selected.status === 'archived' && <div className={css.documentArchiveReceipt}><strong>{t('documents.archiveReceipt')}</strong><p>{selected.archiveSummary}</p><div>{selected.memoryBodyIds.map(id => <code key={id}>{id}</code>)}</div></div>}
             <DocumentMarkdown content={selected.content} />
-            {props.writeEnabled && selected.status === 'active' && <footer className={css.documentDanger}>{appearance.surface === 'buildin' && confirmArchive ? <><span>{t('documents.archiveConfirm')}</span><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void archive()}>{saving ? t('documents.archiving') : t('documents.archiveNow')}</button><button type="button" className={css.ghostButton} onClick={() => setConfirmArchive(false)}>{t('common.cancel')}</button></> : <><div><strong>{t('documents.archiveTitle')}</strong><p>{t('documents.archiveDescription')}</p></div><button type="button" className={documentArchiveActionClass} onClick={() => setConfirmArchive(true)}>{t('documents.archive')}</button></>}</footer>}
-          </article>}
+            {props.writeEnabled && selected.status === 'active' && <footer className={css.documentDanger}>{<><div><strong>{t('documents.archiveTitle')}</strong><p>{t('documents.archiveDescription')}</p></div><button type="button" className={documentArchiveActionClass} onClick={() => setConfirmArchive(true)}>{t('documents.archive')}</button></>}</footer>}
+          </article>)}
         </section>
       </div>
       <p className={css.runtimeFootnote}>{t('documents.footnote')}</p>
-      {composing && appearance.surface === 'sidebar' && <SidebarModal title={t('documents.newTitle')} description={t('documents.editorHint')} busy={saving} onClose={resetComposer} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close className={css.ghostButton} disabled={saving} onClick={resetComposer}>{t('common.cancel')}</button><button type="submit" form={documentCreateFormId} className={css.primaryButton} disabled={saving || title.trim() === '' || content.trim() === ''}>{saving ? t('documents.saving') : t('documents.create')}</button></div>}>{composer}</SidebarModal>}
-      {editing && appearance.surface === 'sidebar' && selected !== null && <SidebarModal title={t('documents.editTitle')} description={selected.title} busy={saving} onClose={() => setEditing(false)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close className={css.ghostButton} disabled={saving} onClick={() => setEditing(false)}>{t('common.cancel')}</button><button type="submit" form={documentEditFormId} className={css.primaryButton} disabled={saving}>{saving ? t('documents.saving') : t('documents.save')}</button></div>}>{editComposer}</SidebarModal>}
-      {confirmArchive && appearance.surface === 'sidebar' && selected !== null && <SidebarModal title={t('documents.archiveConfirm')} description={selected.title} busy={saving} onClose={() => setConfirmArchive(false)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close data-autofocus className={css.ghostButton} disabled={saving} onClick={() => setConfirmArchive(false)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void archive()}>{saving ? t('documents.archiving') : t('documents.archiveNow')}</button></div>}><div className={css.bodyDeleteConfirm}><p>{t('documents.archiveDescription')}</p><div className={css.bodyDeleteSummary}><strong>{selected.title}</strong><span>{selected.relativePath} · {humanBytes(selected.sizeBytes)}</span></div></div></SidebarModal>}
+      {composing && <SidebarModal title={t('documents.newTitle')} description={t('documents.editorHint')} busy={saving} onClose={resetComposer} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close className={css.ghostButton} disabled={saving} onClick={resetComposer}>{t('common.cancel')}</button><button type="submit" form={documentCreateFormId} className={css.primaryButton} disabled={saving || title.trim() === '' || content.trim() === ''}>{saving ? t('documents.saving') : t('documents.create')}</button></div>}>{composer}</SidebarModal>}
+      {editing && selected !== null && <SidebarModal title={t('documents.editTitle')} description={selected.title} busy={saving} onClose={() => setEditing(false)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close className={css.ghostButton} disabled={saving} onClick={() => setEditing(false)}>{t('common.cancel')}</button><button type="submit" form={documentEditFormId} className={css.primaryButton} disabled={saving}>{saving ? t('documents.saving') : t('documents.save')}</button></div>}>{editComposer}</SidebarModal>}
+      {confirmArchive && selected !== null && <SidebarModal title={t('documents.archiveConfirm')} description={selected.title} busy={saving} onClose={() => setConfirmArchive(false)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close data-autofocus className={css.ghostButton} disabled={saving} onClick={() => setConfirmArchive(false)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void archive()}>{saving ? t('documents.archiving') : t('documents.archiveNow')}</button></div>}><div className={css.bodyDeleteConfirm}><p>{t('documents.archiveDescription')}</p><div className={css.bodyDeleteSummary}><strong>{selected.title}</strong><span>{selected.relativePath} · {humanBytes(selected.sizeBytes)}</span></div></div></SidebarModal>}
     </div>
   )
 }

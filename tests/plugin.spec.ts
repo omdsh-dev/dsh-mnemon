@@ -145,6 +145,45 @@ describe('dsh-mnemon plugin composition', () => {
     expect(inject).toEqual(['tools', 'settings', 'commands', 'agents', 'subagents'])
   })
 
+  it('owns legacy display migration at startup, on external edits and until Host disposal', async () => {
+    const fixture = context({ connection: false })
+    const base = { cliPath: '/fake/mnemon', dataDir: dataDir(), displayMode: 'buildin' as const }
+    let user: Record<string, unknown> = {}
+    let revision = 1
+    const mutate = vi.fn(async (namespace: string, ops: Array<{ path: string[]; value: unknown }>, expected: number) => {
+      expect(namespace).toBe('mnemon')
+      expect(expected).toBe(revision)
+      expect(ops).toEqual([{ op: 'set', path: ['displayMode'], value: 'builtin' }])
+      user = { ...user, displayMode: ops[0]!.value }
+      revision += 1
+    })
+    Object.assign(fixture.ctx.settings, {
+      writable: true,
+      describe: () => [{ ns: 'mnemon', base, user, value: { ...base, ...user }, revision, applies: 'live' }],
+      mutate,
+    })
+    apply(fixture.ctx as never, base)
+    await vi.waitFor(() => expect(mutate).toHaveBeenCalledTimes(1))
+    expect(user).toEqual({ displayMode: 'builtin' })
+    const updated = (fixture.listeners as Array<[string, (namespace: string) => void]>)
+      .find(([name]) => name === 'settings/document-updated')![1]
+    user = { displayMode: 'buildin', timeoutMs: 25000 }
+    revision += 1
+    updated('unrelated')
+    expect(mutate).toHaveBeenCalledTimes(1)
+    updated('mnemon')
+    await vi.waitFor(() => expect(mutate).toHaveBeenCalledTimes(2))
+    expect(user).toEqual({ displayMode: 'builtin', timeoutMs: 25000 })
+    updated('mnemon')
+    expect(mutate).toHaveBeenCalledTimes(2)
+    for (const cleanup of fixture.effectCleanups.splice(0).reverse()) await cleanup()
+    user = { displayMode: 'buildin' }
+    revision += 1
+    updated('mnemon')
+    expect(mutate).toHaveBeenCalledTimes(2)
+    expect(user).toEqual({ displayMode: 'buildin' })
+  })
+
   it('mounts its complete Agent surface without Web-only Host services', () => {
     const fixture = context({ connection: false, workspaceRegistry: false })
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
@@ -152,7 +191,7 @@ describe('dsh-mnemon plugin composition', () => {
     expect(fixture.tools).toHaveLength(15)
     expect(fixture.sections).toEqual([expect.objectContaining({ name: 'mnemon:routing' })])
     expect(fixture.contexts).toEqual([])
-    expect(fixture.variables).toHaveLength(1)
+    expect(fixture.variables).toEqual([])
     expect(fixture.commands).toEqual([expect.objectContaining({ name: 'mnemon' })])
     expect(fixture.channels).toEqual([])
   })
@@ -227,7 +266,7 @@ describe('dsh-mnemon plugin composition', () => {
     expect(recallTool.description).toContain('only when the current question needs history')
     expect(fixture.sections).toEqual([expect.objectContaining({ name: 'mnemon:routing' })])
     expect(fixture.contexts).toEqual([])
-    expect(fixture.variables).toHaveLength(1)
+    expect(fixture.variables).toEqual([])
     const guidance = (fixture.sections[0] as { text: () => string }).text()
     expect(guidance).toContain('mnemon_view_route')
     expect(guidance).toContain('Never infer missing historical facts')

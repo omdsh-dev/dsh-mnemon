@@ -1,6 +1,6 @@
 import z from 'schemastery'
 import { isAbsolute } from 'node:path'
-import { normalizeDisplayMode } from './shared/display-mode.ts'
+import { normalizeDisplayMode } from './display-mode.ts'
 import {
   DEFAULT_IDLE_REVIEW_MS,
   DEFAULT_EMBEDDING_ENDPOINT,

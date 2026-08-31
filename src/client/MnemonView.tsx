@@ -1,5 +1,5 @@
 import { isDefaultSourceInstance } from '../host/protocol.ts'
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type ReactNode } from 'react'
 import { IconChevronLeftOutline14 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { consumeMnemonAnchor, subscribeMnemonAnchor, type MnemonAnchor } from "./anchor.ts"
@@ -8,12 +8,13 @@ import { type ClientConnectionHandle, type ClientSettingsScope, type Config, typ
 import { MnemonClient } from "./api.ts"
 import { translateZh, type MnemonKey, type MnemonTranslate } from "./locales.ts"
 
-import { MnemonLogo } from "./MnemonLogo.tsx"
 import { ProviderIcon } from "./ProviderIcon.tsx"
 
 import { MNEMON_SOURCE_CONFIGURATION_MUTATE, MNEMON_SOURCE_CONFIGURATION_READ, type MemorySourcePageDirectory, type MemorySourcePageEntry } from "./source-pages.tsx"
 import type { MnemonSourceManagementClient } from "./dsh-context.ts"
-import { appearanceClass, MnemonViewAppearanceProvider, resolveMnemonViewAppearance, useMnemonViewAppearance, type MnemonViewSurface } from "./MnemonViewAppearance.tsx"
+import type { MnemonDisplayMode } from '../host/protocol.ts'
+import { appearanceClass } from './view-styles.ts'
+import sidebarCss from './MnemonSidebarView.module.css'
 import css from "./MnemonView.module.css"
 import { I18nContext, LocaleContext, useT, useLocale, humanBytes, message, short, PageHeader, SidebarModal, EmptyState } from "./page-kit.tsx"
 
@@ -23,7 +24,8 @@ export interface MnemonViewProps {
   sessionId?: string
   workspaceId?: string
   workspaceSelection?: MnemonWorkspaceSelection
-  surface?: MnemonViewSurface
+  /** Placement changes scope controls, not Source pages or their visual skin. */
+  surface?: MnemonDisplayMode
   t?: MnemonTranslate
   locale?: string
   onClose?: () => void
@@ -70,13 +72,18 @@ function managedSourceTypeId(page: Page): string | undefined {
   return page.startsWith('source-management:') ? page.slice('source-management:'.length) : undefined
 }
 
-function bindSourceManagementClient(client: MnemonClient, instance: MemorySourceManagementInstance): MnemonSourceManagementClient {
+function bindSourceManagementClient(client: MnemonClient, instance: MemorySourceManagementInstance, taskClient: MnemonClient): MnemonSourceManagementClient {
   return {
     sourceInstanceKey: instance.sourceInstanceKey,
     revision: instance.revision,
     ...(instance.assistance === undefined || instance.assistance.length === 0 ? {} : { assistance: {
       operations: instance.assistance,
-      execute: (operation: string, input: JsonValue, options: { expectedRevision: string; confirmed: boolean }) => client.assistSource(instance.sourceInstanceKey, operation, input, options.expectedRevision, options.confirmed),
+      execute: (operation: string, input: JsonValue, options: { expectedRevision: string; confirmed: boolean }) => {
+        // These clean task-Agent workflows follow the inspected Sidebar root;
+        // normal Source edits keep their existing session-aware write path.
+        const task = ['agent-search', 'supervise', 'body-create', 'body-metadata-maintain'].includes(operation)
+        return (task ? taskClient : client).assistSource(instance.sourceInstanceKey, operation, input, options.expectedRevision, options.confirmed)
+      },
     } }),
     read: (operation, input = null) => client.readSourceManagement(instance.sourceInstanceKey, operation, input),
     mutate: (operation, input, options) => client.mutateSourceManagement(
@@ -112,25 +119,20 @@ interface SourceNavigationEntry {
   primary: boolean
 }
 
-function WorkspaceNavigation(props: { page: Page; onSelect(page: Page): void; sourcePages: readonly SourceNavigationEntry[]; activeBodies: number; bodyCount: number; catalogKnown: boolean; activationEnabled: boolean; writeEnabled: boolean; disabledTypes: ReadonlySet<string> }): JSX.Element {
+function WorkspaceNavigation(props: { page: Page; onSelect(page: Page): void; sourcePages: readonly SourceNavigationEntry[]; disabledTypes: ReadonlySet<string> }): JSX.Element {
   const t = useT()
-  const appearance = useMnemonViewAppearance()
   const entries: readonly SourceNavigationEntry[] = [
-    { id: 'status', page: 'status', label: t('nav.status'), detail: t('nav.status.detail'), group: 'system', glyph: '⌘', primary: true },
+    { id: 'status', page: 'status', label: t('nav.status'), detail: '', group: 'system', glyph: '⌘', primary: true },
     ...props.sourcePages,
   ]
   const selectedType = sourcePageEntryId(props.page)?.split('/')[0]
   const button = (item: SourceNavigationEntry) => {
-    const active = props.page === item.page || appearance.surface === 'sidebar' && selectedType !== undefined && selectedType === item.sourceTypeId
+    const active = props.page === item.page || selectedType !== undefined && selectedType === item.sourceTypeId
     const disabled = item.sourceTypeId !== undefined && props.disabledTypes.has(item.sourceTypeId)
-    return <button key={item.id} type="button" {...(appearance.surface === 'sidebar' ? { role: 'tab', 'aria-selected': active } : { 'aria-current': active ? 'page' as const : undefined })} data-active={active ? '' : undefined} aria-label={disabled ? item.label + ' · ' + t('layers.disabledBadge') : undefined} data-layer-disabled={disabled ? '' : undefined} onClick={() => props.onSelect(item.page)}>{appearance.showNavigationGlyphs && <span className={css.navGlyph} aria-hidden="true">{item.glyph}</span>}<span>{appearance.surface === 'sidebar' ? item.label : <strong>{item.label}</strong>}{appearance.showNavigationDetails && <small>{item.detail}</small>}</span>{disabled && <em className={css.layerDisabledBadge}>{t('layers.disabledBadge')}</em>}</button>
+    return <button key={item.id} type="button" role="tab" aria-selected={active} data-active={active ? '' : undefined} aria-label={disabled ? item.label + ' · ' + t('layers.disabledBadge') : undefined} data-layer-disabled={disabled ? '' : undefined} onClick={() => props.onSelect(item.page)}><span>{item.label}</span>{disabled && <em className={css.layerDisabledBadge}>{t('layers.disabledBadge')}</em>}</button>
   }
-  const groups = (['system', 'storage', 'tools', 'sources'] as const).map(group => ({ group, entries: entries.filter(entry => entry.group === group) })).filter(group => group.entries.length > 0)
-  return <div className={appearanceClass(css.topNavigation, appearance.classes.topNavigation)}>
-    {appearance.surface === 'sidebar'
-      ? <div className={appearanceClass(css.nav, appearance.classes.nav)} role="tablist" aria-label={t('nav.aria')}>{entries.filter(entry => entry.primary).map(button)}</div>
-      : <nav className={appearanceClass(css.nav, appearance.classes.nav)} aria-label={t('nav.aria')}>{groups.map((group, index) => <Fragment key={group.group}><div className={appearanceClass(css.navGroup, appearance.classes.navGroup)} role="group" aria-label={t(('nav.group.' + group.group) as MnemonKey)}>{group.entries.map(button)}</div>{appearance.showNavigationDividers && index < groups.length - 1 && <span className={css.navGroupDivider} aria-hidden="true" />}</Fragment>)}</nav>}
-    {appearance.showSpaceSummary && <div className={css.spaceSummary}><span>{t('sidebar.activeSpaces')}</span><code>{props.catalogKnown ? props.activeBodies + ' / ' + props.bodyCount : '— / —'}</code><small>{props.writeEnabled ? t('common.agentSupervised') : props.activationEnabled ? t('common.activationOnly') : t('common.readOnly')}</small></div>}
+  return <div className={appearanceClass(css.topNavigation, sidebarCss.topNavigation)}>
+    <div className={appearanceClass(css.nav, sidebarCss.nav)} role="tablist" aria-label={t('nav.aria')}>{entries.filter(entry => entry.primary).map(button)}</div>
   </div>
 }
 
@@ -480,19 +482,20 @@ function StorageDomains(props: {
 
 export function MnemonView(props: MnemonViewProps): JSX.Element {
   const t = props.t ?? translateZh
-  const appearance = resolveMnemonViewAppearance(props.surface ?? 'buildin', t)
-  return <I18nContext.Provider value={t}><LocaleContext.Provider value={props.locale ?? 'zh'}><MnemonViewAppearanceProvider value={appearance}><MnemonWorkspace {...props} /></MnemonViewAppearanceProvider></LocaleContext.Provider></I18nContext.Provider>
+  return <I18nContext.Provider value={t}><LocaleContext.Provider value={props.locale ?? 'zh'}><MnemonWorkspace {...props} /></LocaleContext.Provider></I18nContext.Provider>
 }
 
-function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, workspaceSelection, onClose, sourcePageDirectory = EMPTY_SOURCE_PAGE_DIRECTORY, renderSlot }: MnemonViewProps): JSX.Element {
+function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, workspaceSelection, surface = 'sidebar', onClose, sourcePageDirectory = EMPTY_SOURCE_PAGE_DIRECTORY, renderSlot }: MnemonViewProps): JSX.Element {
   const t = useT()
   const locale = useLocale()
-  const appearance = useMnemonViewAppearance()
-  const settingsSnapshot = useSyncExternalStore(settingsScope.subscribe, settingsScope.getSnapshot, settingsScope.getSnapshot)
+  const subscribeSettings = useCallback((listener: () => void) => settingsScope.subscribe(listener), [settingsScope])
+  const getSettingsSnapshot = useCallback(() => settingsScope.getSnapshot(), [settingsScope])
+  const settingsSnapshot = useSyncExternalStore(subscribeSettings, getSettingsSnapshot, getSettingsSnapshot)
   const subscribeSourcePages = useCallback((listener: () => void) => sourcePageDirectory.subscribe(listener), [sourcePageDirectory])
   const getSourcePages = useCallback(() => sourcePageDirectory.getSnapshot(), [sourcePageDirectory])
   const sourcePageEntries = useSyncExternalStore(subscribeSourcePages, getSourcePages, getSourcePages)
   const client = useMemo(() => new MnemonClient(connection, sessionId, workspaceId), [connection, sessionId, workspaceId])
+  const taskClient = useMemo(() => surface === 'builtin' ? client : new MnemonClient(connection, undefined, workspaceId), [client, connection, surface, workspaceId])
   const clientContextKey = `${sessionId ?? ''}\u0000${workspaceId ?? ''}`
   const viewContextKey = `${clientContextKey}\u0000${settingsSnapshot.revision ?? 'loading'}`
   const [page, setPage] = useState<Page>('status')
@@ -535,7 +538,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const sourceCatalog = sourceCatalogState.contextKey === viewContextKey ? sourceCatalogState.value : null
   const sourceInstances = sourceCatalog?.sources ?? []
   const sourceManagementClients = useMemo(() => new Map(sourceInstances
-    .map(source => [source.sourceInstanceKey, bindSourceManagementClient(client, source)])), [client, sourceInstances])
+    .map(source => [source.sourceInstanceKey, bindSourceManagementClient(client, source, taskClient)])), [client, sourceInstances, taskClient])
   const visibleSourcePages = useMemo(() => {
     const visibleTypes = new Set(sourceInstances.map(source => source.sourceTypeId))
     return sourcePageEntries.filter(entry => visibleTypes.has(entry.sourceTypeId))
@@ -610,7 +613,6 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const refreshAll = () => { setRevision(value => value + 1); void loadStatus() }
   const activationEnabled = status?.writeEnabled === true
   const writeEnabled = activationEnabled && settingsSnapshot.status === 'ready' && settingsSnapshot.writable
-  const stats = status?.stats
   const catalogKnown = status?.memoryBodies !== undefined
   const memoryBodies = useMemo(() => (status?.memoryBodies ?? []), [status])
   const activeBodies = memoryBodies.filter(body => body.active).length
@@ -623,16 +625,12 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const workspaceDifference = workspaceContext === undefined
     ? ''
     : `${t('workspace.selectedRoot', { root: workspaceContext.selectedRoot })}; ${t('workspace.effectiveRoot', { root: workspaceContext.effectiveRoot })}`
-  const workspacePicker = showWorkspacePicker && <label className={appearanceClass(css.workspacePicker, appearance.classes.workspacePicker)}><span>{t('workspace.viewing')}</span><select aria-label={t('workspace.selectorAria')} value={workspaceSelection.selectedWorkspaceId ?? ''} onChange={event => workspaceSelection.onSelect(event.target.value)}>{workspaceSelection.options.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.title}</option>)}</select></label>
+  const workspacePicker = showWorkspacePicker && <label className={appearanceClass(css.workspacePicker, sidebarCss.workspacePicker)}><span>{t('workspace.viewing')}</span><select aria-label={t('workspace.selectorAria')} value={workspaceSelection.selectedWorkspaceId ?? ''} onChange={event => workspaceSelection.onSelect(event.target.value)}>{workspaceSelection.options.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.title}</option>)}</select></label>
   const connectionLabel = status === null && statusLoading
     ? t('header.checking')
     : status?.healthy !== true
       ? t('header.unavailable')
-      : appearance.surface === 'sidebar'
-        ? t('header.connected')
-        : catalogKnown
-          ? t('header.connectedWithCount', { count: activeBodies })
-          : t('header.directoryPending')
+      : (t('header.connected'))
   const disabledTypes = new Set(Object.entries(status?.memorySystem?.configuration.layers ?? {}).filter(([, value]) => !value.enabled).map(([id]) => id))
   const allInstancesFor = (sourceTypeId: string): MemorySourceManagementInstance[] => sourceInstances.filter(source => source.sourceTypeId === sourceTypeId)
   const instancesFor = (sourceTypeId: string): MemorySourceManagementInstance[] => allInstancesFor(sourceTypeId)
@@ -687,25 +685,24 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   />
 
   return (
-    <main className={appearanceClass(css.shell, appearance.classes.shell)} data-mnemon-surface={appearance.surface}>
-      <header className={appearanceClass(css.masthead, appearance.classes.masthead)}>
-        {appearance.surface === 'sidebar' && onClose !== undefined && <button type="button" className={appearanceClass(css.ghostButton, css.backButton)} onClick={onClose} aria-label={t('header.backToConversation')}><IconChevronLeftOutline14 size={14} /><span>{t('header.backToConversation')}</span></button>}
-        <div className={appearanceClass(css.brand, appearance.classes.brand)}>
-          {appearance.showLogo && <MnemonLogo className={css.brandLogo} />}
-          <h1>{appearance.title}</h1>
-          {appearance.surface === 'sidebar' && <span className={css.storageMode} aria-label={t('workspace.storageModeAria', { mode: storageModeText })}><span>{t('workspace.storageMode')}</span><strong>{storageModeText}</strong></span>}
-          {appearance.surface === 'sidebar' && workspacePicker}
-          {appearance.surface === 'sidebar' && canAlignWorkspace && <div className={appearanceClass(css.workspaceMismatch, appearance.classes.workspaceMismatch)} role="status" aria-label={`${t('workspace.mismatchTitle')}. ${workspaceDifference}`} title={workspaceDifference}><span>{t('workspace.mismatchShort')}</span><button type="button" onClick={workspaceSelection.onAlign}>{t('workspace.align')}</button></div>}
+    <main className={appearanceClass(css.shell, sidebarCss.shell)} data-mnemon-surface={surface}>
+      <header className={appearanceClass(css.masthead, sidebarCss.masthead)}>
+        {onClose !== undefined && <button type="button" className={appearanceClass(css.ghostButton, css.backButton)} onClick={onClose} aria-label={t('header.backToConversation')}><IconChevronLeftOutline14 size={14} /><span>{t('header.backToConversation')}</span></button>}
+        <div className={appearanceClass(css.brand, sidebarCss.brand)}>
+          <h1>{t('tab.label')}</h1>
+          {surface === 'sidebar' && <>
+            <span className={css.storageMode} aria-label={t('workspace.storageModeAria', { mode: storageModeText })}><span>{t('workspace.storageMode')}</span><strong>{storageModeText}</strong></span>
+            {workspacePicker}
+            {canAlignWorkspace && <div className={appearanceClass(css.workspaceMismatch, sidebarCss.workspaceMismatch)} role="status" aria-label={`${t('workspace.mismatchTitle')}. ${workspaceDifference}`} title={workspaceDifference}><span>{t('workspace.mismatchShort')}</span><button type="button" onClick={workspaceSelection.onAlign}>{t('workspace.align')}</button></div>}
+          </>}
         </div>
-        {appearance.showTelemetry && <section className={css.telemetry} aria-label={t('telemetry.aria')}><div className={css.telemetryMetric}><span>{t('telemetry.memories')}</span><strong>{stats?.totalInsights ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.graph')}</span><strong>{stats?.edgeCount ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.entities')}</span><strong>{stats?.topEntities.length ?? '—'}</strong></div><div className={css.telemetryMetric}><span>{t('telemetry.spaces')}</span><strong>{status === null || !catalogKnown ? '—' : activeBodies}</strong></div></section>}
-        <div className={appearanceClass(css.headerActions, appearance.classes.headerActions)}>{appearance.surface === 'buildin' && workspacePicker}<div className={appearanceClass(css.statusCluster, appearance.classes.statusCluster)}><span className={`${css.statusDot} ${statusLoading && status === null ? css.checking : status?.healthy === true ? css.online : css.offline}`} /><span>{connectionLabel}</span><button type="button" className={css.iconButton} disabled={statusLoading} onClick={refreshAll} aria-label={t('common.refresh')}>↻</button></div></div>
+        <div className={appearanceClass(css.headerActions, sidebarCss.headerActions)}><div className={appearanceClass(css.statusCluster, sidebarCss.statusCluster)}><span className={`${css.statusDot} ${statusLoading && status === null ? css.checking : status?.healthy === true ? css.online : css.offline}`} /><span>{connectionLabel}</span><button type="button" className={css.iconButton} disabled={statusLoading} onClick={refreshAll} aria-label={t('common.refresh')}>↻</button></div></div>
       </header>
       {sourceCatalogState.contextKey === viewContextKey && sourceCatalogState.error !== null && <div className={css.alert} role="alert">{sourceCatalogState.error}</div>}
       {(statusError !== null || status?.healthy === false) && <div className={css.alert} role="alert"><strong>{t('header.notReady')}</strong><span>{statusError ?? status?.error}</span></div>}
-      {appearance.surface === 'buildin' && workspaceDiverged && <div className={css.workspaceMismatch} role="status"><div><strong>{t('workspace.mismatchTitle')}</strong><span>{t('workspace.mismatchDescription')}</span><div><code>{t('workspace.selectedRoot', { root: workspaceContext.selectedRoot })}</code><code>{t('workspace.effectiveRoot', { root: workspaceContext.effectiveRoot })}</code></div></div>{canAlignWorkspace && <button type="button" className={css.secondaryButton} onClick={workspaceSelection.onAlign}>{t('workspace.align')}</button>}</div>}
       <div className={css.workspace}>
-        <WorkspaceNavigation page={page} onSelect={selectPage} sourcePages={sourceNavigationEntries} activeBodies={activeBodies} bodyCount={memoryBodies.length} catalogKnown={catalogKnown} activationEnabled={activationEnabled} writeEnabled={writeEnabled} disabledTypes={disabledTypes} />
-        <section key={viewContextKey} className={appearanceClass(css.canvas, appearance.classes.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={appearance.surface === 'sidebar' && activeSourcePage?.navigation?.stickyHeader !== false ? '' : undefined}>
+        <WorkspaceNavigation page={page} onSelect={selectPage} sourcePages={sourceNavigationEntries} disabledTypes={disabledTypes} />
+        <section key={viewContextKey} className={appearanceClass(css.canvas, sidebarCss.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={(activeSourcePage?.navigation?.stickyHeader !== false) ? '' : undefined}>
           {page === 'status' && <StatusPage client={client} status={status} loading={statusLoading} writeEnabled={writeEnabled} onRefresh={() => void loadStatus()} />}
           {activeManagedSourceInstance !== undefined && managedSourcePageContent}
           {activeSourcePage !== undefined && customSourcePage}

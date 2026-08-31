@@ -1,11 +1,11 @@
 import { Config, InteractionConfig, resolveConfig, resolveInteractionConfig, type Config as MnemonConfig } from './config.ts'
 import { registerCommands } from './commands.ts'
 import type { HostContextShape, HostWorkspaceRegistry } from './dsh.ts'
-import { registerGuidance, registerMemoryPromptInterpolation } from './guidance.ts'
+import { registerGuidance } from './guidance.ts'
 import { createRuntimeGraph, LiveMnemonRuntime, type MnemonRuntimeGraph } from './runtime.ts'
 import { MnemonLifecycle } from './lifecycle.ts'
 import { registerRpc } from './rpc.ts'
-import { registerSettingsRpc } from './settings.ts'
+import { migrateLegacyDisplayMode, registerSettingsRpc } from './settings.ts'
 import { MnemonSubagentCoordinator } from './subagent.ts'
 import { registerTools } from './tools.ts'
 import { registerMnemonSubagentTokenUsageProjection } from './subagent-token-usage.ts'
@@ -68,6 +68,20 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
     base: resolveInteractionConfig(resolved.conversationInteraction),
     applies: 'live',
   })
+  ctx.effect(() => {
+    let disposed = false
+    const migrate = (): void => {
+      if (disposed) return
+      void migrateLegacyDisplayMode(ctx.settings).catch(error => {
+        console.warn('dsh-mnemon: could not persist the builtin displayMode migration', error)
+      })
+    }
+    const unsubscribe = ctx.on('settings/document-updated', ((namespace: string) => {
+      if (namespace === 'mnemon') migrate()
+    }) as never)
+    migrate()
+    return () => { disposed = true; unsubscribe() }
+  }, 'dsh-mnemon: canonical displayMode migration')
   const coordinator = new MnemonSubagentCoordinator(ctx.subagents, runtime, ctx, () => {
     const taskAgentModel = runtime.config.taskAgentModel
     if (taskAgentModel.mode !== 'fixed') return undefined
@@ -88,7 +102,6 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
   registerTools(ctx, runtime, coordinator)
   registerCommands(ctx.commands, runtime, coordinator)
   registerGuidance(ctx, resolved)
-  registerMemoryPromptInterpolation(ctx)
   ctx.inject(['connection'], (webContext) => {
     // `inject` guarantees the service at runtime; retain the defensive guard
     // because HostContextShape also models profiles where it is absent.

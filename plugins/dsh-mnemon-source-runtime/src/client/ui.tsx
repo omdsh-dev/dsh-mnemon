@@ -26,7 +26,7 @@ export function RuntimeSourcePage(props: MemorySourcePageProps): ReactNode {
 }
 
 export function installRuntimeMemoryUI(ctx: Parameters<typeof installMemorySourceUI>[0], t: MnemonTranslate = translateEn): () => void {
-  return installMemorySourceUI(ctx, { sourceTypeId: 'runtime', pages: [{ id: 'entries', order: 100, navigation: { group: 'storage', glyph: '◫', detail: () => t('nav.runtime.detail') }, label: () => t('nav.runtime'), component: RuntimeSourcePage }] })
+  return installMemorySourceUI(ctx, { sourceTypeId: 'runtime', pages: [{ id: 'entries', order: 100, navigation: { group: 'storage', glyph: '◫' }, label: () => t('nav.runtime'), component: RuntimeSourcePage }] })
 }
 
 export const inject = ['slots', 'locale']

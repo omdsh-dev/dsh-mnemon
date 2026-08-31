@@ -5,11 +5,11 @@ import {
   type ClientConnectionHandle,
   type Config,
   type InteractionConfig,
+  type MnemonDisplayMode,
 } from "../host/protocol.ts"
 import { MnemonSettingsCard } from './MnemonSettingsCard.tsx'
 import { MnemonTurnTail, selectMnemonTurnTail } from './MnemonTurnTail.tsx'
 import { MnemonSaveAction } from './MnemonSaveAction.tsx'
-import { MNEMON_ANCHOR_EVENT, type MnemonAnchor } from './anchor.ts'
 import { en, zh, type MnemonKey } from './locales.ts'
 import { MnemonSettingsScope } from './settings.ts'
 import type { MnemonClientContext } from "./dsh-context.ts"
@@ -17,12 +17,12 @@ import {
   createMemorySourcePageDirectory,
 } from './source-pages.tsx'
 import {
-  createMnemonWorkspaceNavigation,
-  MnemonWorkspaceHost,
   MnemonSidebarWorkspaceHost,
+  MnemonBuiltinWorkspaceHost,
   mountMnemonSidebarLauncher,
 } from './workspace-mount.tsx'
 import { MnemonWorkspaceController } from './workspace-controller.ts'
+import { MNEMON_ANCHOR_EVENT, type MnemonAnchor } from './anchor.ts'
 import { mountSubagentTokenUsageOverride } from './subagent-token-usage.tsx'
 
 export * from './extension-sdk.ts'
@@ -87,13 +87,11 @@ function enabledOf(value: unknown, key: 'turnBar' | 'saveAction'): boolean {
   return (value as Partial<Record<typeof key, boolean>>)[key] !== false
 }
 
-type DisplayMode = NonNullable<Config['displayMode']>
-
-function mountCanonicalMemoryView(ctx: MnemonClientContext, settings: MnemonSettingsScope<Config>, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string, surface: DisplayMode): () => void {
+function mountSidebarMemoryView(ctx: MnemonClientContext, settings: MnemonSettingsScope<Config>, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string): () => void {
   const controller = new MnemonWorkspaceController()
-  const navigation = surface === 'sidebar' ? { open: () => controller.open(), close: () => controller.close() } : createMnemonWorkspaceNavigation(translate)
+  const navigation = { open: () => controller.open(), close: () => controller.close() }
   const sourcePageDirectory = createMemorySourcePageDirectory(ctx)
-  const slotName = surface === 'sidebar' ? 'shell.overlay' : 'conversation.view'
+  const slotName = 'shell.overlay'
   const disposeView = ctx.slots.inject(slotName, () => ctx.slots.register({
     name: slotName,
     id: 'mnemon',
@@ -112,17 +110,53 @@ function mountCanonicalMemoryView(ctx: MnemonClientContext, settings: MnemonSett
       sourcePageDirectory,
       navigation,
       controller,
-      surface,
       t: translate,
     }),
-  }, surface === 'sidebar' ? MnemonSidebarWorkspaceHost : MnemonWorkspaceHost))
+  }, MnemonSidebarWorkspaceHost))
   if (typeof window === 'undefined' || typeof document === 'undefined') return disposeView
   const openMemoryView = (): void => { navigation.open() }
   window.addEventListener(MNEMON_ANCHOR_EVENT, openMemoryView)
-  const disposeLauncher = surface === 'sidebar' ? mountMnemonSidebarLauncher(ctx, translate, controller) : () => {}
+  const disposeLauncher = mountMnemonSidebarLauncher(ctx, translate, controller)
   return () => {
     disposeLauncher()
     window.removeEventListener(MNEMON_ANCHOR_EVENT, openMemoryView)
+    disposeView()
+  }
+}
+
+/** DSH supplies the owning session; Source pages retain the same render contract. */
+function mountBuiltinMemoryView(ctx: MnemonClientContext, settings: MnemonSettingsScope<Config>, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string): () => void {
+  const sourcePageDirectory = createMemorySourcePageDirectory(ctx)
+  const disposeView = ctx.slots.inject('conversation.view', () => ctx.slots.register({
+    name: 'conversation.view',
+    id: 'mnemon',
+    order: 30,
+    label: () => translate('tab.label'),
+    locale: namespace,
+    children: {
+      'mnemon.source.page': { kind: 'list', scope: 'root' },
+    },
+    inject: sessionId => ({
+      connection: ctx.connection,
+      settingsScope: settings,
+      sessionId,
+      localeRuntime: ctx.locale,
+      sourcePageDirectory,
+      t: translate,
+    }),
+  }, MnemonBuiltinWorkspaceHost))
+  if (typeof window === 'undefined' || typeof document === 'undefined') return disposeView
+  const openView = (event: Event): void => {
+    const sessionId = (event as CustomEvent<MnemonAnchor>).detail?.sessionId
+    if (sessionId !== undefined && sessionId !== ctx.sessions.list.getSnapshot().current) return
+    const label = translate('tab.label').trim()
+    const tab = [...document.querySelectorAll<HTMLElement>('[role="tab"]')]
+      .find(candidate => candidate.textContent?.trim() === label)
+    tab?.click()
+  }
+  window.addEventListener(MNEMON_ANCHOR_EVENT, openView)
+  return () => {
+    window.removeEventListener(MNEMON_ANCHOR_EVENT, openView)
     disposeView()
   }
 }
@@ -139,21 +173,20 @@ export function apply(rawContext: unknown): void {
     'conversation.session.header.lineage',
     () => mountSubagentTokenUsageOverride(ctx),
   )
-  let activeMemoryWorkspace: { mode: DisplayMode; dispose: () => void } | undefined
+  let activeMemoryWorkspace: { mode: MnemonDisplayMode; dispose: () => void } | undefined
   const reconcileMemoryWorkspace = (): void => {
     const snapshot = settings.getSnapshot()
-    // Wait for both persisted switches so Builtin never flashes a sidebar row.
     const mode = snapshot.status === 'loading' || snapshot.value?.tabEnabled === false
       ? undefined
       : normalizeDisplayMode(snapshot.value?.displayMode)
     if (activeMemoryWorkspace?.mode === mode) return
     activeMemoryWorkspace?.dispose()
-    activeMemoryWorkspace = mode === undefined
-      ? undefined
-      : {
-          mode,
-          dispose: mountCanonicalMemoryView(ctx, settings, namespace, translate, mode),
-        }
+    activeMemoryWorkspace = mode === undefined ? undefined : {
+      mode,
+      dispose: mode === 'builtin'
+        ? mountBuiltinMemoryView(ctx, settings, namespace, translate)
+        : mountSidebarMemoryView(ctx, settings, namespace, translate),
+    }
   }
   ctx.effect(() => {
     const unsubscribe = settings.subscribe(reconcileMemoryWorkspace)
