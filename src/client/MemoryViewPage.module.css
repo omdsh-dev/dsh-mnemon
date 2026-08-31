@@ -1,0 +1,68 @@
+.page { container: mnemon-view / inline-size; }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(248px, 304px); align-items: start; gap: 18px; }
+.panel { min-width: 0; border: 1px solid var(--mn-line); border-radius: 10px; background: var(--mn-layer-1); overflow: hidden; }
+.panelHeader { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--mn-line); }
+.panelHeader h3 { margin: 0; font-size: 13px; font-weight: 600; }
+.segmented { display: flex; min-width: 0; flex-wrap: wrap; gap: 4px; }
+.segmented button { min-height: 32px; border: 0; border-radius: 6px; padding: 5px 9px; color: var(--mn-muted); background: transparent; cursor: pointer; }
+.segmented button[aria-selected="true"] { color: var(--mn-text); background: var(--mn-layer-2); font-weight: 600; }
+.content { display: grid; min-width: 0; gap: 14px; padding: 16px; }
+.caption { margin: 0; color: var(--mn-muted); font-size: 11px; line-height: 1.65; overflow-wrap: anywhere; }
+.meta, .metrics { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; color: var(--mn-muted); font-size: 11px; }
+.badge { display: inline-flex; align-items: center; min-width: 0; padding: 2px 7px; border: 1px solid var(--mn-line); border-radius: 5px; color: var(--mn-muted); background: var(--mn-layer-2); font-size: 10px; overflow-wrap: anywhere; }
+.positive { color: var(--mn-success); }
+.draft { color: var(--mn-accent); }
+.heading { margin: 0; font-size: 12px; font-weight: 600; }
+.fragment { min-width: 0; overflow: hidden; border: 1px solid var(--mn-line); border-radius: 7px; }
+.fragmentHeader { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 10px; padding: 9px 11px; background: var(--mn-layer-2); }
+.fragmentHeader strong { font-size: 12px; }
+.text { margin: 0; min-width: 0; max-height: 340px; overflow: auto; padding: 12px; color: var(--mn-text); background: var(--mn-bg); font: 11px/1.7 var(--mn-code); white-space: pre-wrap; overflow-wrap: anywhere; }
+.details { min-width: 0; border-top: 1px solid var(--mn-line); }
+.details summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 40px; padding: 10px 16px; color: var(--mn-muted); font-size: 12px; cursor: pointer; list-style: none; }
+.details summary::-webkit-details-marker { display: none; }
+.details summary::after { content: '›'; flex: 0 0 auto; font-size: 16px; }
+.details[open] > summary::after { transform: rotate(90deg); }
+.detailsBody { display: grid; gap: 10px; padding: 0 16px 14px; min-width: 0; }
+.operations { display: grid; gap: 10px; }
+.operation { min-width: 0; padding: 9px 11px; border: 1px solid var(--mn-line); border-radius: 6px; }
+.operation code, .identity code, .package { font: 10px/1.6 var(--mn-code); overflow-wrap: anywhere; }
+.operation p { margin: 4px 0 0; color: var(--mn-muted); font-size: 11px; }
+.identity { display: grid; gap: 6px; color: var(--mn-muted); }
+.editor { display: grid; gap: 14px; min-width: 0; }
+.strategy { min-width: 0; border: 1px solid var(--mn-line); border-radius: 7px; }
+.strategyBody { display: grid; gap: 7px; padding: 12px; min-width: 0; }
+.strategyTop { display: flex; min-width: 0; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.strategyTop strong { font-size: 12px; overflow-wrap: anywhere; }
+.package { color: var(--mn-faint); }
+.switch { position: relative; width: 30px; height: 18px; min-width: 30px; flex: 0 0 auto; border: 0; border-radius: 12px; padding: 0; background: var(--mn-line-strong); cursor: pointer; }
+.switch::after { content: ''; position: absolute; width: 12px; height: 12px; border-radius: 50%; top: 3px; left: 3px; background: var(--mn-text); }
+.switch[aria-checked="true"] { background: var(--mn-accent); }
+.switch[aria-checked="true"]::after { transform: translateX(12px); background: var(--mn-bg); }
+.switch:disabled { cursor: default; opacity: .5; }
+.select { width: 100%; max-width: 100%; min-height: 34px; border: 1px solid var(--mn-line-strong); border-radius: 6px; padding: 5px 8px; background: var(--mn-input); }
+.field { display: grid; gap: 7px; padding: 11px 0; min-width: 0; border-top: 1px solid var(--mn-line); }
+.field:first-child { border-top: 0; }
+.fieldLabel { font-size: 11px; font-weight: 600; }
+.field input:not([type="checkbox"]), .field textarea { width: 100%; min-width: 0; max-width: 100%; min-height: 32px; border: 1px solid var(--mn-line-strong); border-radius: 6px; padding: 6px 8px; background: var(--mn-input); font-size: 11px; }
+.field textarea { min-height: 78px; resize: vertical; }
+.field input:disabled, .field textarea:disabled { opacity: .6; }
+.check { display: flex; align-items: center; gap: 7px; min-height: 26px; color: var(--mn-muted); font-size: 11px; cursor: pointer; }
+.check input { margin: 0; accent-color: var(--mn-accent); }
+.sourceList { display: grid; gap: 7px; }
+.source { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; }
+.source label { min-width: 0; align-items: start; }
+.source input { flex: 0 0 auto; margin-top: 3px; }
+.source span { min-width: 0; overflow-wrap: anywhere; }
+.source small { display: block; color: var(--mn-faint); font: 9px/1.6 var(--mn-code); }
+.reorder { display: flex; }
+.reorder button { width: 24px; height: 26px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--mn-muted); cursor: pointer; }
+.reorder button:hover { background: var(--mn-hover); }
+.reorder button:disabled { opacity: .3; cursor: default; }
+.footer { display: grid; gap: 10px; border-top: 1px solid var(--mn-line); padding: 14px 16px; background: var(--mn-layer-1); }
+.buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.buttons button { min-width: 0; }
+.notice { margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--mn-line); border-radius: 7px; color: var(--mn-muted); background: var(--mn-layer-1); font-size: 12px; overflow-wrap: anywhere; }
+.empty { display: grid; justify-items: start; gap: 10px; padding: 14px 0; }
+.empty h3 { margin: 0; font-size: 13px; }
+@container mnemon-view (max-width: 680px) { .layout { grid-template-columns: minmax(0, 1fr); } .text { max-height: 240px; } }
+@container mnemon-view (max-width: 380px) { .panelHeader, .content, .footer { padding: 12px; } .details summary { padding-inline: 12px; } .detailsBody { padding-inline: 12px; } .buttons > button { flex: 1; } }

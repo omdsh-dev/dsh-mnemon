@@ -6,6 +6,7 @@ import { consumeMnemonAnchor, subscribeMnemonAnchor, type MnemonAnchor } from ".
 
 import { type ClientConnectionHandle, type ClientSettingsScope, type Config, type JsonValue, type MemoryProviderRuntimeStatus, type MemorySourceManagementCatalog, type MemorySourceManagementInstance, type StatusView, type StorageAreaInventory, type StorageScopeInventory, type StorageScopeKind, type VersionComponentStatus, type VersionInstallMode, type VersionStatus, type VersionUpdateResult } from "../host/protocol.ts"
 import { MnemonClient } from "./api.ts"
+import { MemoryViewPage } from './MemoryViewPage.tsx'
 import { translateZh, type MnemonKey, type MnemonTranslate } from "./locales.ts"
 
 import { ProviderIcon } from "./ProviderIcon.tsx"
@@ -45,7 +46,7 @@ type SourcePage = `source:${string}`
 
 type ManagedSourcePage = `source-management:${string}`
 
-type Page = 'status' | SourcePage | ManagedSourcePage
+type Page = 'status' | 'view' | SourcePage | ManagedSourcePage
 
 const EMPTY_SOURCE_PAGE_SNAPSHOT: readonly MemorySourcePageEntry[] = Object.freeze([])
 
@@ -123,6 +124,7 @@ function WorkspaceNavigation(props: { page: Page; onSelect(page: Page): void; so
   const t = useT()
   const entries: readonly SourceNavigationEntry[] = [
     { id: 'status', page: 'status', label: t('nav.status'), detail: '', group: 'system', glyph: '⌘', primary: true },
+    { id: 'view', page: 'view', label: t('nav.view'), detail: '', group: 'system', glyph: '◇', primary: true },
     ...props.sourcePages,
   ]
   const selectedType = sourcePageEntryId(props.page)?.split('/')[0]
@@ -704,6 +706,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
         <WorkspaceNavigation page={page} onSelect={selectPage} sourcePages={sourceNavigationEntries} disabledTypes={disabledTypes} />
         <section key={viewContextKey} className={appearanceClass(css.canvas, sidebarCss.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={(activeSourcePage?.navigation?.stickyHeader !== false) ? '' : undefined}>
           {page === 'status' && <StatusPage client={client} status={status} loading={statusLoading} writeEnabled={writeEnabled} onRefresh={() => void loadStatus()} />}
+          {page === 'view' && <MemoryViewPage client={client} refreshKey={revision} canConfigure={settingsSnapshot.writable && (connection.isLoopback !== false || settingsSnapshot.value?.remoteAccess === 'trusted-host')} onConfigured={mutate} />}
           {activeManagedSourceInstance !== undefined && managedSourcePageContent}
           {activeSourcePage !== undefined && customSourcePage}
         </section>
