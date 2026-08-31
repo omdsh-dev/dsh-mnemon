@@ -35,7 +35,7 @@ export interface MemoryWakeBindings {
   actions?: Readonly<Record<string, string>>
 }
 
-function wake(view: ComposableMemoryView, bindings: MemoryWakeBindings = {}): MemoryWake {
+export function createMemoryWake(view: ComposableMemoryView, bindings: MemoryWakeBindings = {}): MemoryWake {
   const sections = view.projection.map(fragment => ({
     layerId: sourceType(fragment),
     mode: fragment.mode,
@@ -175,7 +175,7 @@ export class ComposableMemoryTurnManager {
   memoryWake(viewId: string, bindings?: MemoryWakeBindings): MemoryWake {
     const view = this.get(viewId)
     if (view === undefined) throw new Error(`Composable Memory View is not pinned: ${viewId}`)
-    return wake(view, bindings)
+    return createMemoryWake(view, bindings)
   }
 
   async executeRoute(turnId: string, routeId: string, input: MemoryJsonValue, signal?: AbortSignal): Promise<MemoryEvidence> {

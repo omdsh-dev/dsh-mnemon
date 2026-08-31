@@ -258,6 +258,7 @@ class MnemonAgentLifecycle {
     const disposers = [
       this.agent.ctx.on('agent/session-start', ((payload: SessionStartPayload) => {
         this.releaseView()
+        this.memoryTurn?.clearInspection()
         this.cancelIdleReview(true)
         this.guidedTurns.clear()
         this.turnActivity.clear()
@@ -702,6 +703,11 @@ export class MnemonLifecycle {
   workspaceRoot(sessionId?: string): string | undefined {
     if (sessionId === undefined || sessionId.trim() === '') return undefined
     return this.ctx.agents.get(sessionId.trim())?.session.header?.cwd
+  }
+
+  memoryView(sessionId: string, workspaceRoot?: string): import('./view-protocol.ts').MemoryViewInspection | undefined {
+    const agent = this.ctx.agents.get(sessionId.trim())
+    return agent === undefined ? undefined : this.memoryTurns.get(agent)?.inspect(workspaceRoot)
   }
 
   /** Settled memory-tool activity for all turns, resolved per session. */

@@ -10,6 +10,9 @@ import { MnemonSubagentCoordinator } from './subagent.ts'
 import { registerTools } from './tools.ts'
 import { registerMnemonSubagentTokenUsageProjection } from './subagent-token-usage.ts'
 import { provideMemoryRuntime } from '../core/runtime.ts'
+import { MemoryStrategyManagement } from './strategy-management.ts'
+import { registerViewRpc } from './view-rpc.ts'
+import { MNEMON_VIEW_SETTINGS_NAMESPACE } from './view-protocol.ts'
 
 export const name = 'dsh-mnemon'
 export const provide = ['mnemonMemory']
@@ -31,6 +34,8 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
   const ctx = rawContext as unknown as HostContextShape
   registerMnemonSubagentTokenUsageProjection(ctx)
   const extensions = provideMemoryRuntime(ctx)
+  const viewStrategies = new MemoryStrategyManagement(ctx, extensions)
+  const effectiveConfig = (value: Config) => viewStrategies.resolveConfig(resolveConfig(value))
   const prepared = new Map<object, { graph: MnemonRuntimeGraph; token: symbol }>()
   const disposePrepared = (): void => {
     for (const candidate of prepared.values()) candidate.graph.dispose()
@@ -41,7 +46,7 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
     applies: 'live',
     validate: value => {
       disposePrepared()
-      const candidate = { graph: createRuntimeGraph(resolveConfig(value), undefined, extensions), token: Symbol('prepared-runtime') }
+      const candidate = { graph: createRuntimeGraph(effectiveConfig(value), undefined, extensions), token: Symbol('prepared-runtime') }
       prepared.set(value, candidate)
       // Settings commits synchronously after validation. A standalone/cancelled
       // validation has no commit event, so retire its attached graph next tick.
@@ -55,15 +60,20 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
   const initialSettings = settings.get()
   const initialCandidate = prepared.get(initialSettings)
   if (initialCandidate !== undefined) prepared.delete(initialSettings)
-  const runtime = new LiveMnemonRuntime(initialCandidate?.graph ?? createRuntimeGraph(resolveConfig(initialSettings), undefined, extensions), optionalWorkspaceRegistry(ctx), ctx.agents, extensions)
+  const runtime = new LiveMnemonRuntime(initialCandidate?.graph ?? createRuntimeGraph(effectiveConfig(initialSettings), undefined, extensions), optionalWorkspaceRegistry(ctx), ctx.agents, extensions)
   const resolved = runtime.config
   ctx.on('settings/updated', ((namespace: string, next: Config) => {
+    if (namespace === MNEMON_VIEW_SETTINGS_NAMESPACE) {
+      runtime.swap(createRuntimeGraph(effectiveConfig(settings.get()), undefined, extensions))
+      return
+    }
     if (namespace !== 'mnemon') return
     const candidate = prepared.get(next)
     if (candidate !== undefined) prepared.delete(next)
     disposePrepared()
-    runtime.swap(candidate?.graph ?? createRuntimeGraph(resolveConfig(next), undefined, extensions))
+    runtime.swap(candidate?.graph ?? createRuntimeGraph(effectiveConfig(next), undefined, extensions))
   }) as never)
+  ctx.effect(() => viewStrategies.start(), 'dsh-mnemon: strategy Entry settings')
   ctx.settings.register('mnemon-ui', InteractionConfig, {
     base: resolveInteractionConfig(resolved.conversationInteraction),
     applies: 'live',
@@ -112,5 +122,6 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
     const managementAuthority = resolved.remoteAccess === 'trusted-host' ? 'trusted-host' : 'loopback'
     registerRpc(webContext.connection, runtime, lifecycle, undefined, managementAuthority)
     registerSettingsRpc(webContext.connection, ctx.settings, managementAuthority)
+    registerViewRpc(webContext.connection, runtime, extensions, viewStrategies, lifecycle, managementAuthority)
   })
 }

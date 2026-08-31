@@ -30,6 +30,22 @@ export class MemoryRuntime {
   private closed = false
   private disposal: Promise<void> | undefined
   private readonly disposalFailures: unknown[] = []
+  private batchDepth = 0
+  private readonly reconciliations = new Map<MemoryGenerationHost, MemoryContributionSnapshot>()
+
+  /** Host assembly transaction: existing leases stay served until all Fibers settle. */
+  async batch<T>(operation: () => Promise<T>): Promise<T> {
+    if (this.closed) throw new Error('Memory Runtime is disposed')
+    this.batchDepth += 1
+    try { return await operation() }
+    finally {
+      if (--this.batchDepth === 0) {
+        const pending = [...this.reconciliations]
+        this.reconciliations.clear()
+        for (const [host, snapshot] of pending) host.reconcile(snapshot)
+      }
+    }
+  }
 
   installContributions(value: MemoryContributionInstall): () => void {
     if (this.closed) throw new Error('Memory Runtime is disposed')
@@ -49,12 +65,16 @@ export class MemoryRuntime {
     if (this.closed) throw new Error('Memory Runtime is disposed')
     const host = new MemoryGenerationHost(options)
     host.reconcile(this.contributions.snapshot())
-    const unsubscribe = this.contributions.subscribe(snapshot => host.reconcile(snapshot))
+    const unsubscribe = this.contributions.subscribe(snapshot => {
+      if (this.batchDepth) this.reconciliations.set(host, snapshot)
+      else host.reconcile(snapshot)
+    })
     let attached = true
     const release = (): void => {
       if (!attached) return
       attached = false
       unsubscribe()
+      this.reconciliations.delete(host)
     }
     let disposal: Promise<void> | undefined
     const attachment: MemoryGenerationAttachment = {

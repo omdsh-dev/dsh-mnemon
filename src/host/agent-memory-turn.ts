@@ -3,6 +3,8 @@ import type { MemoryOperationScope } from '../core/contracts/index.ts'
 import type { ComposableMemoryTurn, ComposableMemoryTurnManager } from '../core/turns.ts'
 import type { HostAgent } from './dsh.ts'
 import type { MnemonAgentRuntimeSource, MnemonRuntimeGraph } from './runtime.ts'
+import { inspectMemoryView, modelMemoryWake } from './view-presentation.ts'
+import type { MemoryViewInspection } from './view-protocol.ts'
 
 /** Host-owned authority captured before a child activation starts executing. */
 export interface DelegatedMemoryView {
@@ -49,6 +51,8 @@ export class AgentMemoryTurn {
   private pending: { turn: number; generation: number; controller: AbortController; result: Promise<void> } | undefined
   private generation = 0
   private closed = false
+  private lastInspection: MemoryViewInspection | undefined
+  private lastWorkspace: string | undefined
   private readonly releaseDelegation: (() => void) | undefined
 
   constructor(
@@ -72,6 +76,14 @@ export class AgentMemoryTurn {
   get current(): PinnedAgentMemoryTurn | undefined {
     return this.pinned
   }
+
+  inspect(workspaceRoot?: string): MemoryViewInspection | undefined {
+    if (this.lastInspection === undefined) return undefined
+    if (workspaceRoot !== undefined && resolve(workspaceRoot) !== this.lastWorkspace) return undefined
+    return structuredClone({ ...this.lastInspection, state: this.pinned === undefined ? 'recent' : 'active' })
+  }
+
+  clearInspection(): void { this.lastInspection = undefined; this.lastWorkspace = undefined }
 
   /** Capture now; descendants must not resolve a later parent turn on demand. */
   delegate(): DelegatedMemoryView {
@@ -124,6 +136,7 @@ export class AgentMemoryTurn {
   dispose(): void {
     if (this.closed) return
     this.closed = true
+    this.clearInspection()
     try { this.end() } finally { this.releaseDelegation?.() }
   }
 
@@ -142,7 +155,10 @@ export class AgentMemoryTurn {
       if (this.closed || this.generation !== generation) throw new Error('memory turn ended during View preparation')
       signal?.throwIfAborted()
       if (this.delegation === undefined) releaseRuntime = this.runtime.bindAgentRuntime(this.agent.id, graph)
+      const inspection = inspectMemoryView(graph.memoryComposition.generation(context.view.runtimeGeneration)!, context.view, 'active', turn, modelMemoryWake(graph, context).text)
       this.pinned = { turn, graph, manager, context, ...(releaseRuntime === undefined ? {} : { releaseRuntime }) }
+      this.lastInspection = inspection
+      this.lastWorkspace = context.scope.workspaceId === undefined ? undefined : resolve(context.scope.workspaceId)
     } catch (error) {
       if (manager.turn(context.turnId) === context) manager.endTurn(context.turnId)
       releaseRuntime?.()

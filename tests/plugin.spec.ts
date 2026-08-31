@@ -274,12 +274,13 @@ describe('dsh-mnemon plugin composition', () => {
     expect(guidance.length).toBeLessThan(360)
     expect(guidance).not.toContain('RECALL RESULT')
     expect(fixture.commands).toEqual([expect.objectContaining({ name: 'mnemon' })])
-    expect(fixture.channels).toHaveLength(5)
+    expect(fixture.channels).toHaveLength(7)
     expect(fixture.channels).toEqual(expect.arrayContaining([
       ['/dsh-mnemon-activation', expect.anything(), { authority: 'trusted-host' }],
       ['/dsh-mnemon-pack', expect.anything(), { authority: 'loopback' }],
     ]))
     expect(fixture.registrations).toEqual([
+      expect.arrayContaining(['mnemon-view', expect.anything(), expect.objectContaining({ applies: 'live', base: { entries: {} } })]),
       expect.arrayContaining(['mnemon', expect.anything(), expect.objectContaining({ applies: 'live' })]),
       expect.arrayContaining(['mnemon-ui', expect.anything(), expect.objectContaining({ applies: 'live', base: { turnBar: true, saveAction: true } })]),
     ])
@@ -288,20 +289,21 @@ describe('dsh-mnemon plugin composition', () => {
   it('preserves rc.2 channel authorities with one call shape accepted by the authenticated alpha API', () => {
     const fixture = context()
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
-    for (const channel of ['/dsh-mnemon-write', '/dsh-mnemon-settings', '/dsh-mnemon-pack']) {
+    for (const channel of ['/dsh-mnemon-write', '/dsh-mnemon-settings', '/dsh-mnemon-pack', '/dsh-mnemon-view-settings']) {
       expect(fixture.channels).toEqual(expect.arrayContaining([
         [channel, expect.anything(), { authority: 'loopback' }],
       ]))
     }
     expect(fixture.channels).toEqual(expect.arrayContaining([
       ['/dsh-mnemon-read', expect.anything(), { authority: 'trusted-host' }],
+      ['/dsh-mnemon-view', expect.anything(), { authority: 'trusted-host' }],
     ]))
   })
 
   it('promotes management channels only through the explicit startup setting', () => {
     const fixture = context()
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir(), remoteAccess: 'trusted-host' })
-    for (const channel of ['/dsh-mnemon-write', '/dsh-mnemon-settings', '/dsh-mnemon-pack']) {
+    for (const channel of ['/dsh-mnemon-write', '/dsh-mnemon-settings', '/dsh-mnemon-pack', '/dsh-mnemon-view-settings']) {
       expect(fixture.channels).toEqual(expect.arrayContaining([
         [channel, expect.anything(), { authority: 'trusted-host' }],
       ]))
@@ -316,7 +318,7 @@ describe('dsh-mnemon plugin composition', () => {
       execute: (args: unknown, execution: unknown) => Promise<unknown>
     }
     expect(() => runtimeTool.execute({ action: 'add', target: 'memory', content: 'blocked' }, { signal: new AbortController().signal })).toThrow('read-only')
-    expect(fixture.channels).toHaveLength(5)
+    expect(fixture.channels).toHaveLength(7)
     expect(fixture.channels).toEqual(expect.arrayContaining([
       ['/dsh-mnemon-activation', expect.anything(), { authority: 'trusted-host' }],
       ['/dsh-mnemon-pack', expect.anything(), { authority: 'loopback' }],
@@ -394,7 +396,7 @@ describe('dsh-mnemon plugin composition', () => {
     ])
     expect(fixture.contexts).toEqual([])
     expect((fixture.sections[0] as { text: () => string }).text()).toBe('')
-    expect(fixture.channels).toHaveLength(5)
+    expect(fixture.channels).toHaveLength(7)
   })
 
   it('atomically switches the same live RPC faces after settings validation', async () => {

@@ -143,7 +143,9 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
   const composableTurns = {
     beginTurn: vi.fn(async (turnId: string, scope: object) => {
       const turn = turnId.slice(turnId.lastIndexOf(':') + 1)
-      const context = { turnId, view: { id: `view-${turn}`, digest: `digest-${turn}`, runtimeGeneration: 'fixture-generation', routes: [], actionOffers: [] }, scope, startedAt: '2026-08-23T00:00:00.000Z' }
+      const context = { turnId, view: { id: `view-${turn}`, digest: `digest-${turn}`, runtimeGeneration: 'fixture-generation',
+        strategyTypeId: config.memoryTopology.strategyId, strategyInstanceKey: 'strategy:fixture', createdAt: '2026-08-23T00:00:00.000Z',
+        projection: [], readGrants: [], routes: [], actionOffers: [] }, scope, startedAt: '2026-08-23T00:00:00.000Z' }
       pinnedTurns.set(turnId, context)
       return context
     }),

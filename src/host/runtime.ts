@@ -11,6 +11,7 @@ import type { MemoryGenerationHost } from '../core/generation.ts'
 import { ComposableMemoryTurnManager } from '../core/turns.ts'
 import { MEMORY_CAPABILITIES, type MemoryOperationScope } from '../core/contracts/index.ts'
 import { allowsParticipation } from './access.ts'
+import type { CompileMemoryGenerationOptions } from '../core/composition.ts'
 
 export interface MnemonRuntimeGraph {
   readonly config: ResolvedConfig
@@ -35,12 +36,11 @@ export function agentScope(agent: HostAgent, config: ResolvedConfig): MemoryOper
   return { storage: config.storageScope, ...(workspaceId ? { workspaceId: resolve(workspaceId) } : {}), sessionId: agent.id, agentId: agent.id }
 }
 
-/** One default-product scope over the single Composable Runtime. */
-export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot: string | undefined, extensions: MemoryRuntime): MnemonRuntimeGraph {
+/** Shared by production graphs and read-only View previews. */
+export function memoryGenerationOptions(config: ResolvedConfig, workspaceRoot: string | undefined): CompileMemoryGenerationOptions {
   const directory = createStorageRoot(config, workspaceRoot).effectiveDataDir()
-  const root = createStorageRoot(config, workspaceRoot)
   const userDirectory = config.runtimeUserScope === 'global' ? createStorageRoot({ storageScope: 'global' }).effectiveDataDir() : directory
-  const attachment = extensions.attachGeneration({
+  return {
     strategyTypeId: config.memoryTopology.strategyId,
     sourceTimeoutMs: config.timeoutMs,
     sourceCapabilities: installed => MEMORY_CAPABILITIES.filter(capability =>
@@ -58,7 +58,14 @@ export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot: string
       }))
       return {}
     },
-  })
+  }
+}
+
+/** One default-product scope over the single Composable Runtime. */
+export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot: string | undefined, extensions: MemoryRuntime): MnemonRuntimeGraph {
+  const root = createStorageRoot(config, workspaceRoot)
+  const directory = root.effectiveDataDir()
+  const attachment = extensions.attachGeneration(memoryGenerationOptions(config, workspaceRoot))
   const evaluation = attachment.host.inspect().evaluation
   if (evaluation.state === 'rejected') {
     void attachment.dispose()

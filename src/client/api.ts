@@ -3,6 +3,11 @@ import {
   MNEMON_PACK_CHANNEL,
   MNEMON_READ_CHANNEL,
   MNEMON_WRITE_CHANNEL,
+  MNEMON_VIEW_CHANNEL,
+  MNEMON_VIEW_WRITE_CHANNEL,
+  type MemoryViewDashboard,
+  type MemoryViewInspection,
+  type MemoryViewConfigurationRequest,
   type AssistantMessageText,
   type CreateMemoryBodyRequest,
   type ClientConnectionHandle,
@@ -139,6 +144,14 @@ export class MnemonClient {
 
   memorySystem(): Promise<MemoryCompositionStatus> {
     return this.call(MNEMON_READ_CHANNEL, 'memory-system', this.scoped())
+  }
+
+  viewDashboard(): Promise<MemoryViewDashboard> { return this.call(MNEMON_VIEW_CHANNEL, 'dashboard', this.scoped()) }
+  previewView(configuration: MemoryViewConfigurationRequest): Promise<MemoryViewInspection> {
+    return this.call(MNEMON_VIEW_CHANNEL, 'preview', this.scoped({ configuration }))
+  }
+  applyView(configuration: MemoryViewConfigurationRequest): Promise<{ saved: true }> {
+    return this.call(MNEMON_VIEW_WRITE_CHANNEL, 'apply', this.scoped({ configuration, confirmed: true }))
   }
 
   sourceManagementCatalog(): Promise<MemorySourceManagementCatalog> {
