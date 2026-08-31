@@ -4,7 +4,7 @@
 
 本页从空白环境走到第一次可验证召回，默认采用 Sidebar、全局存储和兼容旧行为的 `default-three-tier` 拓扑。普通使用不需要配置 TurnView、Strategy 或 generation 概念。
 
-如果你已经安装完成，可直接跳到[首次验证](#6-完成第一次验证)。从 v0.3.x 升级前，请先看 [v0.4.0 Sidebar-only 兼容性说明](./releases/v0.4.0.md#升级与兼容性)。如果从 v0.2.x 升级，还应阅读 [v0.3.0 升级与数据兼容](./releases/v0.3.0.md#升级与数据兼容)。
+如果你已经安装完成，可直接跳到[首次验证](#6-完成第一次验证)。从 v0.3.x 或 v0.4.0–v0.4.1 升级前，请阅读 [v0.4.2 入口位置兼容性说明](./releases/v0.4.2.md#升级与兼容性)，特别是保留的 `buildin` 偏好会自动规范化。如果从 v0.2.x 升级，还应阅读 [v0.3.0 升级与数据兼容](./releases/v0.3.0.md#升级与数据兼容)。
 
 ## 1. 前置条件
 
@@ -17,7 +17,7 @@
 
 普通语义任务优先使用名为 `spawn` 的 Provider，并要求 `toolFilter`、`persona` 与 `depthLimit`。Mnemon 会为每次运行提供一个经过 schema 校验的一次性结果工具，不依赖 Provider 的 `outputSchema` 路径。可选的评分后台审查还要求名为 `fork`、且 `inheritsParentContext=true` 的 Provider。缺少 `fork` 不影响确定性页面读取和普通手动操作。
 
-本文流程以 dsh-mnemon v0.4.1、DSH 0.1.1-rc.2 和 Mnemon 0.2.3 作为推荐 registry 基线；部分保持兼容的界面截图拍摄于 dsh-mnemon v0.2.0。DSH rc.2 使用 `Promise.withResolvers` 和 Node Zstd API，因此 Node 20 无法启动完整 profile。源码兼容性也已针对尚未发布到 npm 的 DSH 0.1.2-alpha.1 验证。升级前先备份，并在隔离目录重复本页验证。
+本文流程以 dsh-mnemon v0.4.2、DSH 0.1.1-rc.2 和 Mnemon 0.2.3 作为推荐 registry 基线；部分保持兼容的界面截图拍摄于 dsh-mnemon v0.2.0。DSH rc.2 使用 `Promise.withResolvers` 和 Node Zstd API，因此 Node 20 无法启动完整 profile。源码兼容性也已针对尚未发布到 npm 的 DSH 0.1.2-alpha.1 验证。升级前先备份，并在隔离目录重复本页验证。
 
 安装并核对已验证的 DSH 版本：
 

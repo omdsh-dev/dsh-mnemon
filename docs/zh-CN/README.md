@@ -30,7 +30,7 @@
 | 理解 Host、worker、控制面与数据面 | [架构设计](./architecture.md) |
 | 开发 Layer、Adapter、Strategy、Guard 或 MemorySource 插件 | [记忆扩展开发](./extensions.md) |
 | 修改代码、截图、测试或发布 | [开发与验证](./development.md) |
-| 从上一版本升级 | [v0.4.1 发布说明](./releases/v0.4.1.md) |
+| 从上一版本升级 | [v0.4.2 发布说明](./releases/v0.4.2.md) |
 | 查看下一阶段计划 | [Roadmap](./roadmap.md) |
 
 ## 核心术语

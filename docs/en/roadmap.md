@@ -6,7 +6,7 @@ The Roadmap records work beyond the current implementation; it is not a commitme
 
 ## Release boundaries
 
-- **v0.4: Sidebar-first.** Retain the v0.3 architecture and memory formats. v0.4.0 initially removed builtin presentation; current development restores optional `displayMode: builtin` as entry placement sharing the Sidebar UI, not a separate layout. The [v0.4.0 release notes](./releases/v0.4.0.md) remain the historical release record.
+- **v0.4: Sidebar-first.** Retain the v0.3 architecture and memory formats. v0.4.0 initially removed builtin presentation; [v0.4.2](./releases/v0.4.2.md) restores optional `displayMode: builtin` as entry placement sharing the Sidebar UI, not a separate layout. The [v0.4.0 release notes](./releases/v0.4.0.md) remain the historical release record.
 - **v0.5: complete view-based upgrade, planned.** Develop and verify the architecture upgrade separately on top of the shared workbench. This work is not included in v0.4.0; publishing v0.4 does not declare it ready.
 
 ## P0: Reliability and Recoverable Scheduling
