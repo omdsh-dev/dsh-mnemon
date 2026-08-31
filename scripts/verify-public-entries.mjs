@@ -37,7 +37,7 @@ function verifyDeclarations(filename) {
 }
 
 let imported = 0
-for (const directory of [root, resolve(root, 'plugins/dsh-mnemon-source-memory-spaces')]) {
+for (const directory of [root, resolve(root, 'plugins/dsh-mnemon-source-memory-spaces'), resolve(root, 'plugins/dsh-mnemon-strategy-default-three-tier')]) {
   const manifest = JSON.parse(readFileSync(resolve(directory, 'package.json'), 'utf8'))
   for (const [subpath, descriptor] of Object.entries(manifest.exports)) {
     if (excluded.has(subpath)) continue

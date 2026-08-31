@@ -2,13 +2,22 @@ import { performance } from 'node:perf_hooks'
 import { afterEach, describe, expect, it } from 'vitest'
 import { compositionFixture } from './fixtures/composition.ts'
 import type { DocumentMutationResult } from 'dsh-mnemon-source-documents/contracts'
+import * as scoped from 'dsh-mnemon-strategy-scoped'
+import * as light from 'dsh-mnemon-strategy-light-context'
+import * as capture from 'dsh-mnemon-strategy-auto-capture'
 const fixtures: Awaited<ReturnType<typeof compositionFixture>>[] = []
 async function fixture() { const value = await compositionFixture(); fixtures.push(value); return value }
 afterEach(async () => { for (const value of fixtures.splice(0)) await value.dispose() })
 
 describe('Composable View performance fences', () => {
-  it('composes repeated three-Source Views within a bounded local control-plane budget', async () => {
-    const { workspace, graph } = await fixture()
+  it.each(['default', 'additive'])('composes repeated three-Source Views within a bounded local control-plane budget (%s)', async mode => {
+    const f = await fixture()
+    const { workspace, graph } = f
+    if (mode === 'additive') {
+      await f.mount(scoped, { instanceId: 'scoped' })
+      await f.mount(light, { instanceId: 'light' })
+      await f.mount(capture, { instanceId: 'capture' })
+    }
     await graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: 'Performance fixture.' })
     await graph.source('documents').mutate<DocumentMutationResult>('mutate', { action: 'create', title: 'Performance', content: 'Bounded fixture.' })
     const generation = graph.memoryComposition!.current()!
@@ -24,7 +33,8 @@ describe('Composable View performance fences', () => {
       },
     }
 
-    await generation.compose(request)
+    const warm = await generation.compose(request)
+    expect(warm.strategyExtensions?.length ?? 0).toBe(mode === 'additive' ? 3 : 0)
     const startedWall = performance.now()
     const startedCpu = process.cpuUsage()
     for (let index = 0; index < 100; index += 1) await generation.compose(request)

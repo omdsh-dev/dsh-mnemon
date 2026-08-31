@@ -84,7 +84,7 @@ describe('Composable Memory extension SDK', () => {
     ])
     const snapshot = runtime.contributionSnapshot()
     expect(() => ctx.mnemonMemory.installContributions({ sources: [source()], strategies: [strategy(), strategy()] }, { instanceId: 'invalid-batch' })).toThrow('duplicated')
-    expect(() => ctx.mnemonMemory.installContributions({}, { instanceId: 'empty' })).toThrow('one Source or Strategy')
+    expect(() => ctx.mnemonMemory.installContributions({}, { instanceId: 'empty' })).toThrow('one Source, Strategy or Strategy extension')
     expect(() => ctx.mnemonMemory.installContributions({ sources: [source()] }, { instanceId: ' ' })).toThrow('stable Loader Entry')
     expect(runtime.contributionSnapshot()).toEqual(snapshot)
     release()

@@ -12,10 +12,13 @@ const marker = 'HEADLESS_MNEMON_READY'
 const arguments_ = process.argv.slice(2)
 const options = new Map()
 for (let index = 0; index < arguments_.length; index += 2) {
-  if (!['--package', '--registry'].includes(arguments_[index]) || !arguments_[index + 1]) throw new Error('Expected --package <specifier> --registry <url>')
+  if (!['--package', '--registry', '--strategy-extensions'].includes(arguments_[index]) || !arguments_[index + 1]) throw new Error('Expected --package <specifier> --registry <url> and/or --strategy-extensions true')
   options.set(arguments_[index], arguments_[index + 1])
 }
 if (options.has('--package') !== options.has('--registry')) throw new Error('--package and --registry must be supplied together')
+if (options.has('--strategy-extensions') && options.get('--strategy-extensions') !== 'true') throw new Error('--strategy-extensions expects true')
+const extensions = options.has('--strategy-extensions')
+  ? ['dsh-mnemon-strategy-scoped', 'dsh-mnemon-strategy-light-context', 'dsh-mnemon-strategy-auto-capture'] : []
 
 function run(args, { cwd = root, env = process.env, timeoutMs = 30_000 } = {}) {
   return new Promise((resolveRun, reject) => {
@@ -103,7 +106,9 @@ try {
   // that a normal install resolves from the Starter's semver dependencies.
   const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
   const plugins = Object.keys(manifest.dependencies).filter(name => name.startsWith('dsh-mnemon-'))
-  const packages = options.has('--package') ? [options.get('--package')] : [`link:${root}`, ...plugins.map(name => `link:${join(root, 'plugins', name)}`)]
+  const packages = options.has('--package')
+    ? [options.get('--package'), ...extensions.map(name => `${name}@${manifest.version}`)]
+    : [`link:${root}`, ...[...plugins, ...extensions].map(name => `link:${join(root, 'plugins', name)}`)]
   const install = await run(['plugin', '--profile', 'headless', 'add', ...packages,
     ...(options.has('--registry') ? ['--registry', options.get('--registry')] : []),
   ], { env, timeoutMs: 120_000 })
@@ -130,7 +135,9 @@ try {
   disabled: true
 - id: tool-fs-search
   disabled: true
-`.trimStart())
+`.trimStart() + (extensions.length === 0 ? '' : '\n- insert:\n' + extensions.map(name =>
+    `    - id: ${name.slice(4)}\n      name: ${name}\n`,
+  ).join('')))
 
   const execution = await run(['--profile', 'headless', 'Verify that the Mnemon tool surface is available.'], {
     cwd: workspaceRoot,
@@ -145,6 +152,12 @@ try {
   const required = ['mnemon_status', 'mnemon_recall', 'mnemon_document_search', 'mnemon_runtime_memory', 'mnemon_remember', 'mnemon_view_route', 'mnemon_view_action']
   const missing = required.filter(name => !toolNames.has(name))
   if (missing.length > 0) throw new Error(`Headless model request is missing Mnemon tools: ${missing.join(', ')}`)
+  if (extensions.length > 0) {
+    const prompt = JSON.stringify(toolRequest.messages)
+    for (const expected of ['Source order expresses preference', 'MNEMON OPTIONAL AUTO CAPTURE']) {
+      if (!prompt.includes(expected)) throw new Error(`Optional Strategy contribution did not reach the real DSH prompt: ${expected}`)
+    }
+  }
   if (!existsSync(join(storageRoot, 'runtime', 'memories.json'))) throw new Error('Headless plugin did not initialize isolated runtime memory')
 
   const canonicalSettings = await readFile(settingsPath, 'utf8')
@@ -157,6 +170,7 @@ try {
 
   console.log(`Verified Headless profile activation with ${toolNames.size} total tools and ${required.length} representative Mnemon tools.`)
   console.log('Verified buildin-to-builtin persistence, preservation of unrelated settings/comments, and an idempotent Headless restart.')
+  if (extensions.length > 0) console.log('Verified simultaneous activation of scoped, light-context and auto-capture Entries without changing the default Strategy.')
 } finally {
   await new Promise(resolveClose => server.close(resolveClose))
   await rm(temporaryRoot, { recursive: true, force: true })

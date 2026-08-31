@@ -6,15 +6,65 @@ import type { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
 import { MemoryCompositionRunner, type MemoryTestTurn } from 'dsh-mnemon/testing'
 import * as spaces from 'dsh-mnemon-source-memory-spaces'
+import * as runtime from 'dsh-mnemon-source-runtime'
+import * as threeTier from 'dsh-mnemon-strategy-default-three-tier'
+import * as scoped from 'dsh-mnemon-strategy-scoped'
+import * as light from 'dsh-mnemon-strategy-light-context'
+import * as capture from 'dsh-mnemon-strategy-auto-capture'
 import * as notes from '../lib/external-source.js'
 import * as focus from '../lib/external-strategy.js'
+import * as externalBudget from '../lib/external-strategy-extension.js'
 import provider from '../lib/external-provider.js'
 
 describe('external consumer of packed artifacts', () => {
+  it('composes three optional plugins and an independently authored replacement slot using only packed SDKs', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'external-additive-strategies-'))
+    const runner = new MemoryCompositionRunner({ strategyTypeId: 'default-three-tier' })
+    const turns: MemoryTestTurn[] = []
+    try {
+      await runner.mount(threeTier, { instanceId: 'default' })
+      // Extensions may be enabled before the Sources they will compose.
+      await runner.mount(scoped, { instanceId: 'scoped' })
+      const removeLight = await runner.mount(light, { instanceId: 'light', config: { maxProjectionCharacters: 200 } })
+      await runner.mount(capture, { instanceId: 'capture' })
+      for (const id of ['global', 'project']) {
+        await runner.mount(runtime, { instanceId: id, config: { dataDir: join(directory, id) } })
+        await (await runner.managementClient('source:' + id)).mutate('mutate',
+          { action: 'add', target: 'memory', content: (id + ' source sentinel. ').repeat(100) }, { confirmed: true })
+      }
+      await runner.mount(spaces, { instanceId: 'spaces', config: { dataDir: join(directory, 'spaces'),
+        providers: [{ use: 'dsh-mnemon-provider-holographic', instanceId: 'local-account' }] } })
+      const management = await runner.managementClient('source:spaces')
+      await management.mutate('provider-service-update', { providerId: 'local-account', settings: {}, enabled: true }, { confirmed: true })
+      const first = await runner.beginTurn()
+      turns.push(first)
+      expect(first.view.strategyTypeId).toBe('default-three-tier')
+      expect(first.view.strategyExtensions?.map(item => item.slot).sort()).toEqual(['capture', 'projection', 'selection'])
+      expect(first.view.projection.reduce((sum, item) => sum + item.text.length, 0)).toBeLessThanOrEqual(200)
+      expect(first.view.projection.filter(item => item.mode === 'eager')).toHaveLength(2)
+      expect(first.view.guidance?.system).toContain('MNEMON OPTIONAL AUTO CAPTURE')
+      const offer = first.view.actionOffers.find(offer => offer.sourceActionId === 'remember')!
+      await expect(first.executeAction(offer.id, { content: 'Packed additive sentinel.' }, () => false)).rejects.toThrow('not currently authorized')
+      await expect(first.executeAction(offer.id, { content: 'Packed additive sentinel.' }, () => true)).resolves.toMatchObject({ completion: 'committed' })
+      await expect(runner.mount(externalBudget, { instanceId: 'external-budget' })).rejects.toThrow('slot conflict')
+      await removeLight()
+      await runner.mount(externalBudget, { instanceId: 'external-budget' })
+      const next = await runner.beginTurn()
+      turns.push(next)
+      expect(next.view.strategyExtensions?.map(item => item.typeId).sort()).toEqual(['auto-capture', 'external-budget', 'scoped'])
+      const characters = next.view.projection.reduce((sum, item) => sum + item.text.length, 0)
+      expect(characters).toBeGreaterThan(200)
+      expect(characters).toBeLessThanOrEqual(1_200)
+      const route = next.view.routes.find(route => route.sourceRouteId === 'recall')!
+      expect((await next.executeRoute(route.id, { query: 'Packed additive sentinel' })).items[0]?.text).toContain('Packed additive sentinel')
+      expect(first.view.strategyExtensions?.some(item => item.typeId === 'light-context')).toBe(true)
+    } finally { turns.forEach(turn => turn.release()); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
+  })
+
   it('imports every declared Node entry from installed packages, not repository sources', async () => {
     const names: string[] = JSON.parse(readFileSync(new URL('../artifacts.json', import.meta.url), 'utf8'))
     const require = createRequire(import.meta.url)
-    expect(names).toHaveLength(14)
+    expect(names).toHaveLength(17)
     for (const name of names) {
       const manifest = JSON.parse(readFileSync(require.resolve(name + '/package.json'), 'utf8'))
       for (const subpath of Object.keys(manifest.exports)) {

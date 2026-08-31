@@ -91,8 +91,15 @@ async function install(directory, input) {
   await run('npm', ['install', '--registry', registryUrl, '--ignore-scripts', '--no-audit', '--no-fund', '--package-lock=false', '--workspaces=false'], directory, `${input.name}: install tarballs`)
   const code = `
     const fs = require('node:fs'); const path = require('node:path');
+    const direct = new Set(${JSON.stringify(Object.keys({ ...input.dependencies, ...input.devDependencies, ...input.peerDependencies }))});
     for (const name of ${JSON.stringify([...artifacts.keys()].filter(name => name !== input.name))}) {
-      const installed = fs.realpathSync(require.resolve(name + '/package.json'));
+      let resolved;
+      try { resolved = require.resolve(name + '/package.json'); }
+      catch (error) {
+        if (error.code === 'MODULE_NOT_FOUND' && !direct.has(name)) continue;
+        throw error;
+      }
+      const installed = fs.realpathSync(resolved);
       if (!installed.startsWith(process.cwd() + path.sep + 'node_modules' + path.sep)) throw new Error('Workspace dependency leaked: ' + installed);
     }
   `
@@ -124,7 +131,8 @@ try {
     await run('pnpm', ['build'], root, 'build default distribution and public SDK')
     await parallel(names.filter(name => name.startsWith('dsh-mnemon-source-')), 3,
       name => run('pnpm', ['build'], join(root, 'plugins', name), `build ${name}`))
-    await parallel(names.filter(name => !name.startsWith('dsh-mnemon-source-')), 3,
+    await run('pnpm', ['build'], join(root, 'plugins/dsh-mnemon-strategy-default-three-tier'), 'build Strategy-owned extension SDK')
+    await parallel(names.filter(name => !name.startsWith('dsh-mnemon-source-') && name !== 'dsh-mnemon-strategy-default-three-tier'), 3,
       name => run('pnpm', ['build'], join(root, 'plugins', name), `build ${name}`))
   }
   await mkdir(join(temporary, 'tarballs'))
@@ -136,6 +144,9 @@ try {
   await run(process.execPath, [join(root, 'scripts/verify-headless-profile.mjs'),
     '--package', 'file:' + artifacts.get(manifest.name), '--registry', registryUrl,
   ], root, 'real DSH: install only the packed Starter and activate its plugins')
+  await run(process.execPath, [join(root, 'scripts/verify-headless-profile.mjs'),
+    '--package', 'file:' + artifacts.get(manifest.name), '--registry', registryUrl, '--strategy-extensions', 'true',
+  ], root, 'real DSH: activate three optional packed Strategy plugins together')
   await parallel(names, 3, verifyIndependent)
 
   const consumer = join(temporary, 'consumer')

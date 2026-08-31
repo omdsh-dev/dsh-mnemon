@@ -9,6 +9,8 @@ const root = fileURLToPath(new URL('../', import.meta.url))
 const pluginNames = readdirSync(join(root, 'plugins')).filter(name => name.startsWith('dsh-mnemon-')).sort()
 const coreImports = new Set(['dsh-mnemon/contracts', 'dsh-mnemon/extension-sdk', 'dsh-mnemon/testing', 'dsh-mnemon/client'])
 const providerImports = new Set(['dsh-mnemon-source-memory-spaces/provider-sdk', 'dsh-mnemon-source-memory-spaces/testing'])
+const threeTierExtensions = new Set(['dsh-mnemon-strategy-auto-capture', 'dsh-mnemon-strategy-light-context', 'dsh-mnemon-strategy-scoped'])
+const threeTierOwner = 'dsh-mnemon-strategy-default-three-tier'
 
 function inside(directory: string, path: string): boolean {
   const child = relative(directory, path)
@@ -38,11 +40,11 @@ function packageName(specifier: string): string {
 }
 
 describe('standalone plugin repository boundary', () => {
-  it('keeps the expected three Sources, one Strategy and nine private Providers explicit', () => {
+  it('keeps three Sources, one complete Strategy, three optional contributions and nine private Providers explicit', () => {
     expect(pluginNames.filter(name => name.startsWith('dsh-mnemon-source-'))).toEqual([
       'dsh-mnemon-source-documents', 'dsh-mnemon-source-memory-spaces', 'dsh-mnemon-source-runtime',
     ])
-    expect(pluginNames.filter(name => name.startsWith('dsh-mnemon-strategy-'))).toEqual(['dsh-mnemon-strategy-default-three-tier'])
+    expect(pluginNames.filter(name => name.startsWith('dsh-mnemon-strategy-'))).toEqual([...threeTierExtensions, threeTierOwner].sort())
     expect(pluginNames.filter(name => name.startsWith('dsh-mnemon-provider-'))).toHaveLength(9)
   })
 
@@ -64,6 +66,7 @@ describe('standalone plugin repository boundary', () => {
     const provider = name.startsWith('dsh-mnemon-provider-')
     expect(manifest.peerDependencies[provider ? 'dsh-mnemon-source-memory-spaces' : 'dsh-mnemon']).toBeTruthy()
     if (provider) expect(manifest.peerDependencies['dsh-mnemon']).toBeUndefined()
+    if (threeTierExtensions.has(name)) expect(manifest.peerDependencies[threeTierOwner]).toBeTruthy()
 
     const files = ['src', 'tests'].flatMap(group => readdirSync(join(directory, group), { recursive: true })
       .filter(path => /\.[cm]?[jt]sx?$/u.test(String(path))).map(path => join(directory, group, String(path))))
@@ -77,7 +80,9 @@ describe('standalone plugin repository boundary', () => {
         }
         if (isBuiltin(specifier)) continue
         if (!Object.hasOwn(dependencies, packageName(specifier))) violations.push(`${relative(root, file)} has undeclared dependency ${specifier}`)
-        if (specifier.startsWith('dsh-mnemon') && !(provider ? providerImports : coreImports).has(specifier) && !(file.includes(`${sep}tests${sep}`) && /^dsh-mnemon-provider-[a-z0-9-]+$/u.test(specifier))) {
+        const ownerContract = threeTierExtensions.has(name) && specifier === threeTierOwner + '/extension-sdk'
+        const testOwner = threeTierExtensions.has(name) && file.includes(`${sep}tests${sep}`) && specifier === threeTierOwner
+        if (specifier.startsWith('dsh-mnemon') && !(provider ? providerImports : coreImports).has(specifier) && !ownerContract && !testOwner && !(file.includes(`${sep}tests${sep}`) && /^dsh-mnemon-provider-[a-z0-9-]+$/u.test(specifier))) {
           violations.push(`${relative(root, file)} crosses its public contract: ${specifier}`)
         }
       }
@@ -86,6 +91,11 @@ describe('standalone plugin repository boundary', () => {
       }
     }
     expect(violations).toEqual([])
+  })
+
+  it('keeps the Strategy-owned SDK independent of its runtime policy and every Source implementation', () => {
+    const entry = join(root, 'plugins', threeTierOwner, 'src/extension-sdk.ts')
+    expect(imports(entry).map(item => item.specifier).sort()).toEqual(['dsh-mnemon/contracts', 'dsh-mnemon/extension-sdk'])
   })
 
   it('keeps the pure Core import closure independent of Sources, Providers, clients and the default bundle', () => {
