@@ -421,7 +421,7 @@ describe('Mnemon memory subagent coordinator', () => {
       activeTurn: () => turn,
     })
     const route = vi.spyOn(source.forAgent(agent).source('memory-spaces', agentScope(agent, source.config)), 'route').mockResolvedValue({
-      id: 'read-unavailable', viewId: 'view-unavailable', routeId: 'recall-1', sourceInstanceKey: 'spaces-1',
+      id: 'read-unavailable', viewId: 'view-unavailable', routeId: 'space/recall', sourceInstanceKey: 'source:mnemon-source-memory-spaces',
       observedAt: '2026-08-31T00:00:00.000Z', items: [], truncated: true,
       unavailable: 'An exact record cannot fit this output budget.',
     })

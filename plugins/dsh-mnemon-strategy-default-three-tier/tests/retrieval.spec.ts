@@ -4,15 +4,16 @@ import { defineMemorySource, installMemory, truncateMemoryText, type MemorySourc
 import { COMPOSABLE_MEMORY_API_VERSION, type MemoryJsonValue } from 'dsh-mnemon/contracts'
 import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
 import * as plugin from '../src/index.ts'
+import { defineThreeTierExtension } from '../src/extension-sdk.ts'
 
 /** An external Source repository can implement this protocol without a sibling import. */
-async function fixture(kind: 'documents' | 'memory-spaces') {
+async function fixture(kind: 'documents' | 'memory-spaces', copies = 1) {
   const runner = new MemoryCompositionRunner()
   const query = vi.fn<NonNullable<MemorySourceRuntime['query']>>(request => {
     const input = request.input as { query?: string; id?: string }
     let remaining = request.route.maxCharacters ?? 16_000
     const items = Array.from({ length: 6 }, (_, index) => {
-      const content = `${input.query ?? input.id} evidence ${index} ` + 'x'.repeat(1_900)
+      const content = (copies === 1 ? '' : request.route.sourceInstanceKey + ' ') + `${input.query ?? input.id} evidence ${index} ` + 'x'.repeat(1_900)
       const text = truncateMemoryText(content, Math.min(2_600, remaining))
       remaining -= text.length
       return { id: `${input.query ?? input.id}:${index}`, text, score: 0.9,
@@ -27,7 +28,7 @@ async function fixture(kind: 'documents' | 'memory-spaces') {
     }
   })
   await runner.mount(plugin, { instanceId: 'strategy' })
-  await runner.mount({ inject: ['mnemonMemory'], apply(ctx: Context) {
+  for (let index = 0; index < copies; index++) await runner.mount({ inject: ['mnemonMemory'], apply(ctx: Context) {
     const operations = kind === 'documents' ? ['search'] : ['recall', 'related']
     installMemory(ctx, { sources: [defineMemorySource({
       manifest: { apiVersion: COMPOSABLE_MEMORY_API_VERSION, kind: 'source', typeId: kind,
@@ -40,17 +41,46 @@ async function fixture(kind: 'documents' | 'memory-spaces') {
         facts: () => ({ sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: kind,
           role: kind === 'documents' ? 'narrative' : 'durable-evidence', availability: 'ready', revision: 'r1',
           capabilities: ['project', 'read'], routeIds: operations, actionIds: [] }),
-        project: () => ({ fragments: [], readGrant: { id: kind, sourceInstanceKey: context.sourceInstanceKey,
+        project: () => ({ fragments: [], readGrant: { id: `${kind}:${context.sourceInstanceKey}`, sourceInstanceKey: context.sourceInstanceKey,
           schema: `dsh-mnemon.${kind}/v1`, value: { memoryBodyIds: ['project', 'other'] }, revision: 'r1', consistency: 'exact-snapshot' } }),
         query,
       }),
     })] })
-  } }, { instanceId: 'source' })
+  } }, { instanceId: index === 0 ? 'source' : `source-${index}` })
+  if (copies > 1) await runner.mount({ inject: ['mnemonMemory'], apply(ctx: Context) {
+    installMemory(ctx, { strategyExtensions: [defineThreeTierExtension({ typeId: 'scope', packageName: 'test-scope', slot: 'selection',
+      contribute: (_request, sources) => ({ sourceKeys: sources.map(source => source.sourceInstanceKey) }) })] })
+  } }, { instanceId: 'scope' })
   return { runner, query }
 }
 const output = (value: { output?: MemoryJsonValue }) => value.output as { results: Array<{ id: string; content: string }>; notRun?: boolean; hint: string }
 
 describe('independent three-tier execution policy', () => {
+  it('preserves empty-read diagnostics on same-Source replay without leaking them to another Source', async () => {
+    const { runner, query } = await fixture('memory-spaces', 3)
+    query.mockImplementation(request => ({ id: 'empty:' + request.route.sourceInstanceKey,
+      viewId: request.view.id, routeId: request.route.id, sourceInstanceKey: request.route.sourceInstanceKey,
+      observedAt: '2026-08-31T00:00:00.000Z', items: [], truncated: true,
+      unavailable: 'Exact evidence cannot fit for ' + request.route.sourceInstanceKey,
+    }))
+    try {
+      const turn = await runner.beginTurn()
+      const routes = turn.view.routes.filter(route => route.sourceRouteId === 'recall')
+      const expected = 'Exact evidence cannot fit for ' + routes[0]!.sourceInstanceKey
+      for (let index = 0; index < 2; index++) {
+        const result = await turn.executeRoute(routes[0]!.id, { query: 'first' })
+        expect(result).toMatchObject({ unavailable: expected, output: { unavailable: expected, results: [] } })
+      }
+      expect(query).toHaveBeenCalledOnce()
+      await turn.executeRoute(routes[1]!.id, { query: 'second' })
+      const third = await turn.executeRoute(routes[2]!.id, { query: 'third' })
+      expect(query).toHaveBeenCalledTimes(2)
+      expect(third.unavailable).toBeUndefined()
+      expect(third.output).toMatchObject({ query: 'third', results: [] })
+      expect(third.output).not.toHaveProperty('unavailable')
+    } finally { await runner.dispose() }
+  })
+
   it('shares the Documents slot across concurrent calls and resets it for an identical new View', async () => {
     const { runner, query } = await fixture('documents')
     try {
@@ -108,6 +138,47 @@ describe('independent three-tier execution policy', () => {
       expect(replay.routeId).toBe(related)
       expect(query).toHaveBeenCalledTimes(2)
       expect(output(replay).results).toEqual(output(graph).results)
+    } finally { await runner.dispose() }
+  })
+
+  it('isolates identical namespace/query ids across Sources while retaining the shared two-query budget', async () => {
+    const { runner, query } = await fixture('memory-spaces', 3)
+    try {
+      const turn = await runner.beginTurn()
+      const recalls = turn.view.routes.filter(route => route.sourceRouteId === 'recall')
+      const first = await turn.executeRoute(recalls[0]!.id, { query: 'same query' })
+      const related = turn.view.routes.find(route => route.sourceInstanceKey === recalls[1]!.sourceInstanceKey && route.sourceRouteId === 'related')!
+      const denied = await turn.executeRoute(related.id, { id: output(first).results[0]!.id, memoryBodyId: 'project' })
+      expect(output(denied).results).toEqual([])
+      expect(query).toHaveBeenCalledOnce()
+      const second = await turn.executeRoute(recalls[1]!.id, { query: 'same query' })
+      expect(query).toHaveBeenCalledTimes(2)
+      expect(second.sourceInstanceKey).toBe(recalls[1]!.sourceInstanceKey)
+      expect(output(second).results.length).toBeGreaterThan(0)
+      expect(output(second).results.every(item => item.content.startsWith(recalls[1]!.sourceInstanceKey))).toBe(true)
+      const exhausted = await turn.executeRoute(recalls[2]!.id, { query: 'same query' })
+      expect(query).toHaveBeenCalledTimes(2)
+      expect(exhausted.sourceInstanceKey).toBe(recalls[2]!.sourceInstanceKey)
+      expect(output(exhausted).results).toEqual([])
+      expect(output(exhausted).hint).toContain('budget is exhausted')
+      expect([...output(first).results, ...output(second).results].reduce((sum, item) => sum + item.content.length, 0)).toBeLessThanOrEqual(4_800)
+    } finally { await runner.dispose() }
+  })
+
+  it('does not replay another Source\'s Related evidence when graph budgets are shared', async () => {
+    const { runner, query } = await fixture('memory-spaces', 2)
+    try {
+      const turn = await runner.beginTurn()
+      const recalls = turn.view.routes.filter(route => route.sourceRouteId === 'recall')
+      const first = await turn.executeRoute(recalls[0]!.id, { query: 'alpha' })
+      const second = await turn.executeRoute(recalls[1]!.id, { query: 'alpha' })
+      const related = turn.view.routes.filter(route => route.sourceRouteId === 'related')
+      await turn.executeRoute(related[0]!.id, { id: output(first).results[0]!.id, memoryBodyId: 'project' })
+      const result = await turn.executeRoute(related[1]!.id, { id: output(second).results[0]!.id, memoryBodyId: 'project' })
+      expect(query).toHaveBeenCalledTimes(3)
+      expect(result.sourceInstanceKey).toBe(related[1]!.sourceInstanceKey)
+      expect(result.routeId).toBe(related[1]!.id)
+      expect(output(result).results).toEqual([])
     } finally { await runner.dispose() }
   })
 })

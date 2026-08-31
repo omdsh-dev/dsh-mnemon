@@ -12,6 +12,10 @@
       "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./extension-sdk": {
+      "types": "./lib/extension-sdk.d.ts",
+      "default": "./lib/extension-sdk.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

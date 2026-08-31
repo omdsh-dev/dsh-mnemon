@@ -16,7 +16,7 @@ interface RecallResult {
   query: string; mode: string; results: RecallInsight[]; hint?: string
   memoryEvidence?: Omit<MemoryEvidence, 'items'>
 }
-interface RecallAuthority { viewId: string; memoryBodyIds: string[] }
+interface RecallAuthority { viewId: string; sourceInstanceKey: string; memoryBodyIds: string[] }
 interface RecallAttempt { queryDigest: string; result?: RecallResult; pending?: Promise<RecallResult> }
 interface TurnRetrievalState {
   documentSearchClaimed?: boolean; recallAttempts: RecallAttempt[]
@@ -97,13 +97,14 @@ function insightDigest(result: Pick<Insight, 'content'>): string {
   return sha256(result.content.trim().replace(/\s+/gu, ' '))
 }
 
-function recallQueryDigest(request: SearchRequest): string {
+function recallQueryDigest(request: SearchRequest, sourceInstanceKey: string): string {
   const lexical = (request.query.match(/[\p{L}\p{N}]+/gu) ?? []).join(' ').toLocaleLowerCase()
-  return sha256(JSON.stringify({ query: lexical, memoryBodyIds: [...request.memoryBodyIds ?? []].sort() }))
+  return sha256(JSON.stringify({ sourceInstanceKey, query: lexical, memoryBodyIds: [...request.memoryBodyIds ?? []].sort() }))
 }
 
 /** A replay must still respect the current call's selected Source subset. */
-function replayEvidence(previous: RecallResult | undefined, memoryBodyIds: readonly string[] | undefined): Pick<RecallResult, 'results' | 'memoryEvidence'> {
+function replayEvidence(previous: RecallResult | undefined, memoryBodyIds: readonly string[] | undefined, sourceInstanceKey: string): Pick<RecallResult, 'results' | 'memoryEvidence'> {
+  if (previous?.memoryEvidence?.sourceInstanceKey !== sourceInstanceKey) return { results: [] }
   const original = previous?.results ?? []
   const results = structuredClone(memoryBodyIds === undefined ? original : original.filter(result => (
     result.memoryBodyId !== undefined && memoryBodyIds.includes(result.memoryBodyId)
@@ -182,7 +183,7 @@ class ThreeTierTurn implements MemoryStrategyTurn {
     }
     const value = object(grant.value, 'Memory Spaces grant')
     if (!Array.isArray(value.memoryBodyIds) || value.memoryBodyIds.some(id => typeof id !== 'string')) throw new Error('Invalid Memory Spaces read scope')
-    const authority = { viewId: this.view.id, memoryBodyIds: [...new Set(value.memoryBodyIds as string[])] }
+    const authority = { viewId: this.view.id, sourceInstanceKey: request.route.sourceInstanceKey, memoryBodyIds: [...new Set(value.memoryBodyIds as string[])] }
     const signal = request.signal ?? new AbortController().signal
     const result = request.route.sourceRouteId === 'recall'
       ? await this.recall(input as unknown as SearchRequest, read, signal, authority)
@@ -240,7 +241,7 @@ class ThreeTierTurn implements MemoryStrategyTurn {
       ...(request.memoryBodyIds === undefined ? {} : { memoryBodyIds: request.memoryBodyIds }),
     }
     const scoped = scopeRecall(limited, authority)
-    const digest = recallQueryDigest(scoped)
+    const digest = recallQueryDigest(scoped, authority.sourceInstanceKey)
     const retrieval = this.state
     const repeated = retrieval.recallAttempts.find(attempt => attempt.queryDigest === digest)
     if (repeated !== undefined) {
@@ -248,7 +249,7 @@ class ThreeTierTurn implements MemoryStrategyTurn {
       return {
         query: previous?.query ?? scoped.query,
         mode: previous?.mode ?? scoped.mode ?? 'smart',
-        ...replayEvidence(previous, scoped.memoryBodyIds),
+        ...replayEvidence(previous, scoped.memoryBodyIds, authority.sourceInstanceKey),
         hint: retrieval.recallAttempts.length === MODEL_RECALL_ATTEMPT_LIMIT
           ? 'This Recall query already ran. The Host replayed its admitted evidence without another Provider query. The turn Recall budget is closed; stop retrieval and answer from the evidence or state what remains unknown.'
           : 'This Recall query already ran. The Host replayed its admitted evidence without another Provider query. If this evidence is insufficient, use at most one materially different focused query; otherwise stop retrieval.',
@@ -256,11 +257,12 @@ class ThreeTierTurn implements MemoryStrategyTurn {
     }
     if (retrieval.recallAttempts.length >= MODEL_RECALL_ATTEMPT_LIMIT) {
       const latest = retrieval.recallAttempts[retrieval.recallAttempts.length - 1]
-      const previous = latest?.result ?? await latest?.pending
+      const last = latest?.result ?? await latest?.pending
+      const previous = last?.memoryEvidence?.sourceInstanceKey === authority.sourceInstanceKey ? last : undefined
       return {
         query: previous?.query ?? scoped.query,
         mode: previous?.mode ?? scoped.mode ?? 'smart',
-        ...replayEvidence(previous, scoped.memoryBodyIds),
+        ...replayEvidence(previous, scoped.memoryBodyIds, authority.sourceInstanceKey),
         hint: 'The two-query turn Recall budget is exhausted. The Host replayed the latest admitted evidence without another Provider query; stop retrieval and answer from the evidence or state what remains unknown.',
       }
     }
@@ -311,7 +313,7 @@ class ThreeTierTurn implements MemoryStrategyTurn {
       attempt.result = structuredClone(response)
       for (const insight of results) {
         retrieval.evidenceDigests.add(insightDigest(insight))
-        retrieval.evidenceReferences.add(`${insight.memoryBodyId ?? ''}/${insight.id}`)
+        retrieval.evidenceReferences.add(`${authority.sourceInstanceKey}/${insight.memoryBodyId ?? ''}/${insight.id}`)
       }
       return response
     })()
@@ -333,7 +335,7 @@ class ThreeTierTurn implements MemoryStrategyTurn {
     signal.throwIfAborted()
     const selected = scopeRelated(memoryBodyId, authority)
     const retrieval = this.state
-    const reference = `${selected}/${id}`
+    const reference = `${authority.sourceInstanceKey}/${selected}/${id}`
     if (!retrieval.evidenceReferences.has(reference)) {
       return {
         query: `related:${id}`,
@@ -343,17 +345,19 @@ class ThreeTierTurn implements MemoryStrategyTurn {
       }
     }
     const digest = sha256(JSON.stringify({
+      sourceInstanceKey: authority.sourceInstanceKey,
       id,
       memoryBodyId: selected,
       depth: options.depth ?? 2,
       edge: options.edge ?? '',
     }))
     if (retrieval.relatedDigest !== undefined) {
-      const previous = retrieval.relatedResult ?? await retrieval.relatedPending
+      const last = retrieval.relatedResult ?? await retrieval.relatedPending
+      const previous = last?.memoryEvidence?.sourceInstanceKey === authority.sourceInstanceKey ? last : undefined
       return {
         query: previous?.query ?? `related:${id}`,
         mode: previous?.mode ?? 'related',
-        ...replayEvidence(previous, [selected]),
+        ...replayEvidence(previous, [selected], authority.sourceInstanceKey),
         hint: retrieval.relatedDigest === digest
           ? 'This exact Related traversal already ran. The Host replayed its admitted evidence without another Provider query; stop retrieval and answer from it.'
           : 'Related traversal is complete for this turn. The Host replayed the admitted evidence; stop retrieval and answer from it.',
@@ -373,7 +377,7 @@ class ThreeTierTurn implements MemoryStrategyTurn {
       })
       for (const insight of admitted.results) {
         retrieval.evidenceDigests.add(insightDigest(insight))
-        retrieval.evidenceReferences.add(`${insight.memoryBodyId ?? ''}/${insight.id}`)
+        retrieval.evidenceReferences.add(`${authority.sourceInstanceKey}/${insight.memoryBodyId ?? ''}/${insight.id}`)
       }
       const response: RecallResult = {
         query: `related:${id}`,
