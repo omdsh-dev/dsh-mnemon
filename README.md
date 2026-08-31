@@ -38,6 +38,8 @@ v0.4.0 makes Sidebar the only Memory System workspace and removes the builtin di
 
 v0.4.1 fixes Memory System and Save to memory rendering with this-dependent DSH settings stores, plus ZIP export failures and archive differences across timezones. It preserves the v0.4.0 workflow and existing memory formats. See the [patch release notes](./docs/en/releases/v0.4.1.md).
 
+Current development restores optional `displayMode: builtin` as a conversation placement for the same Sidebar-first UI. Legacy `buildin` is accepted and automatically saved as `builtin`; memory data is unchanged. See [entry placement and scope mapping](./docs/en/configuration.md#entry-placement-displaymode-and-tabenabled).
+
 ## Understand the scope in 30 seconds
 
 | Tier | Keep here | How it reaches the Agent | Managed by |

@@ -2,7 +2,7 @@
 
 [简体中文](../zh-CN/ui-guide.md) | **English** | [Documentation hub](./README.md)
 
-This guide follows the v0.4.0 Sidebar-only experience and a real user path. The builtin workspace and display-mode selector are removed; the existing Sidebar workflow remains. Compatible screenshots were captured from a live v0.2.0 1600×900 WebUI, while v0.3 Layer controls retain their labeled historical screenshots. The [Sidebar-only settings screenshot](../assets/screenshots/settings-sidebar-only.png) shows the current selector-free layout. Names, counts, and content vary with local data.
+This guide follows the Sidebar-first experience and a real user path. Optional Builtin placement embeds the same workspace in a conversation; it does not restore the old builtin layout. Compatible workflow screenshots were captured from a live v0.2.0 1600×900 WebUI, while v0.3 Layer controls retain their labeled historical screenshots. The [entry-placement settings screenshot](../assets/screenshots/settings-entry-placement.png) shows the restored option in the local issue #139 implementation. Names, counts, and content vary with local data.
 
 ## Watch the complete interaction first
 
@@ -15,6 +15,8 @@ The roughly 55-second recording leaves a clear pause on page transitions, dialog
 ## Interaction model
 
 The Memory System sidebar entry always opens its workspace, including after visiting Task Board or SSH. Clicking it again keeps the current page open; use Back to conversation to close it.
+
+With `displayMode: builtin`, open Memory System from the conversation's tabs instead. The Sidebar entry is absent. The header omits storage-mode and workspace-selection controls because the Host automatically maps that session to global, workspace, or custom storage. All pages and dialogs below are shared; conversation shortcuts open the matching tab. See [scope mapping](./configuration.md#entry-placement-displaymode-and-tabenabled).
 
 Primary pages remain **Status, Runtime, Documents, Memory Spaces**. Memory Spaces adds **Overview, Recall, Content, Entities**, with **Remember** and **Distillation strategy** at the top right.
 
@@ -209,6 +211,6 @@ Remote Provider workspaces, users, banks, projects, containers, and URIs are ind
 - A Memory Space toggle controls only whether dsh-mnemon includes it in read routing. It is not the Mnemon CLI default Store.
 - Mnemon Native physical deletion requires confirmation. External spaces use Disconnect and leave Provider data untouched.
 - Pages load by region; a local error never blocks unrelated data or creates a wall of spinners.
-- The workbench always opens through Sidebar; Turn memory and Save to memory remain conversation shortcuts.
+- The workbench defaults to Sidebar; Builtin puts the same UI in the owning conversation. Turn memory and Save to memory remain conversation shortcuts.
 
 Next: [Capability map](./capabilities.md) · [Getting Started](./getting-started.md) · [Provider guide](./memory-providers.md) · [Configuration](./configuration.md)

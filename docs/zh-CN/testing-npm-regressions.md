@@ -2,6 +2,8 @@
 
 **简体中文** | [English](../en/testing-npm-regressions.md) | [开发与验证](./development.md)
 
+最新的 [issue #139 Builtin 验证记录](../pr-assets/builtin-139/README.md)覆盖未修改的 npm 0.4.1 对照版、规范 `builtin` 迁移、三种存储范围及真实 Web 截图。下述基线说明和 2026-08-30 记录仍保留为较早 npm 0.3.5 回归的历史证据。
+
 本轮以 npm `dsh-mnemon@0.3.5` 对应的 `v0.3.5` 源码为基线，不使用 view-based 开发分支（当时标为 0.4.0，现计划于 v0.5 发布）。Host 固定为 npm 的非 alpha 最新版 `@deepseek-ai/dsh@0.1.1-rc.2`；Web UI 使用 `@linxin666/dsh-web-all@0.3.6`，并覆盖原包名 `@linxin666/dsh-web-ui-all@0.3.6`。
 
 修复先在该 npm 基线上完成，再同步仍为 0.3.5 的 `main` 并重新验证 PR 代码。保留原版与补丁版的独立记录，不能将最新 `main` 当作未经修改的 npm 对照版。
@@ -21,6 +23,21 @@ node scripts/serve-web-regression.mjs --cli /absolute/path/to/test-owned/mnemon
 `--package dsh-mnemon@0.3.5` 启动未修改的 npm 对照版；`--package /absolute/path/to/local-pack.tgz` 安装本地构建的补丁包。默认以 `cliPath: mnemon` 和仅对子进程生效的 PATH 验证命令名解析，而不是用绝对 cliPath 绕过问题。可通过 `--cli-name` 指定另一个配置值。
 
 ## 页面切换
+
+### 入口位置与存储范围
+
+脚本还接受 `--display-mode sidebar|builtin`（默认 `sidebar`，也接受旧输入 `buildin`）与 `--storage-scope global|workspace|custom`（默认 `custom`）。全局模式使用夹具独占的 `MNEMON_DATA_DIR`，工作区模式使用测试会话的 `.mnemon`，自定义模式使用夹具的显式目录，不使用个人数据根。
+
+```sh
+node scripts/serve-web-regression.mjs --cli /absolute/path/to/test-owned/mnemon --display-mode buildin --storage-scope workspace
+node scripts/serve-web-regression.mjs --cli /absolute/path/to/test-owned/mnemon --package dsh-mnemon@0.4.1 --display-mode buildin --storage-scope workspace
+```
+
+两条命令都刻意使用旧拼写启动，第二条是 issue #139 的未修改对照组；修复后的 Host 必须自动保存 `mnemon.displayMode: builtin`。会话标签页应共用 Sidebar 页面与弹窗、不显示范围选择，并按所属会话读写。实时切换入口并刷新检查持久化；在两个工作区之间切换会话检查隔离。单独记录 link commit 或打包产物，不把页面显示的包版本当作修复身份。
+
+`pnpm verify:headless` 也会从含旧拼写的 YAML 用户设置启动，检查规范写回、其他字段及注释保留，再重启 Headless 验证幂等性。迁移不依赖 Web 连接或真实模型。
+
+### Sidebar 面板往返
 
 1. 点击“记忆系统 → 任务看板 → 记忆系统”，每一步检查真正可见的主页面。
 2. 重复多轮，覆盖有会话、任务数据、SSH、返回会话、侧栏收起再展开和刷新页面。

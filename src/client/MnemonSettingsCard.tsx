@@ -4,6 +4,7 @@ import {
   DEFAULT_EMBEDDING_MODEL,
   DEFAULT_EMBEDDING_PROTOCOL,
   MNEMON_EMBEDDING_PROTOCOLS,
+  normalizeDisplayMode,
   type ClientConnectionHandle,
   type ClientSettingsScope,
   type ClientSettingsSnapshot,
@@ -35,7 +36,7 @@ export interface MnemonSettingsCardProps {
   t?: MnemonTranslate
 }
 
-type CoreField = 'storageScope' | 'runtimeUserScope' | 'dataDir'
+type CoreField = 'displayMode' | 'storageScope' | 'runtimeUserScope' | 'dataDir'
 type EmbeddingField = 'embeddingEnabled' | 'embeddingEndpoint' | 'embeddingModel' | 'embeddingApiKey' | 'embeddingProtocol'
 type TaskAgentField = 'taskAgentModelMode' | 'taskAgentProvider' | 'taskAgentModel'
 type InteractionField = 'turnBar' | 'saveAction'
@@ -43,6 +44,7 @@ type TopologyField = `memoryTopology.${string}`
 type DraftField = CoreField | EmbeddingField | TaskAgentField | InteractionField
 type Field = DraftField | TopologyField
 interface Draft extends Record<InteractionField, boolean> {
+  displayMode: 'sidebar' | 'builtin'
   storageScope: string
   runtimeUserScope: 'storage' | 'global'
   dataDir: string
@@ -56,7 +58,7 @@ interface Draft extends Record<InteractionField, boolean> {
   taskAgentModel: string
 }
 
-const CORE_FIELDS: CoreField[] = ['storageScope', 'runtimeUserScope', 'dataDir']
+const CORE_FIELDS: CoreField[] = ['displayMode', 'storageScope', 'runtimeUserScope', 'dataDir']
 const EMBEDDING_FIELDS: EmbeddingField[] = ['embeddingEnabled', 'embeddingEndpoint', 'embeddingModel', 'embeddingApiKey', 'embeddingProtocol']
 const INTERACTION_FIELDS: InteractionField[] = ['turnBar', 'saveAction']
 const TASK_AGENT_FIELDS: TaskAgentField[] = ['taskAgentModelMode', 'taskAgentProvider', 'taskAgentModel']
@@ -75,6 +77,7 @@ function coreDraft(value: Config | undefined): Pick<Draft, CoreField | Embedding
   const resolved = value ?? {}
   const dataDir = resolved.dataDir?.trim() || legacyPackDirectory(resolved)
   return {
+    displayMode: normalizeDisplayMode(resolved.displayMode),
     storageScope: resolved.storageScope ?? (dataDir === '' ? 'global' : 'custom'),
     runtimeUserScope: resolved.runtimeUserScope === 'global' ? 'global' : 'storage',
     dataDir,
@@ -431,6 +434,16 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
           <h1>{t('config.title')}</h1>
           <p>{t('config.description')}</p>
         </header>
+
+        <section className={css.section} aria-labelledby="mnemon-display-heading">
+          <div className={css.sectionHeading}>
+            <div><h2 id="mnemon-display-heading">{t('config.displayTitle')}</h2><p>{t('config.displayDescription')}</p></div>
+          </div>
+          <div className={css.choiceGrid} role="radiogroup" aria-label={t('config.displayAria')}>
+            <ChoiceCard id="mnemon-display-sidebar" name="mnemon-display" label={t('config.displaySidebar')} detail={t('config.displaySidebarHint')} checked={draft.displayMode === 'sidebar'} disabled={coreDisabled} onChange={() => edit('displayMode', 'sidebar')} />
+            <ChoiceCard id="mnemon-display-builtin" name="mnemon-display" label={t('config.displayBuiltin')} detail={t('config.displayBuiltinHint')} checked={draft.displayMode === 'builtin'} disabled={coreDisabled} onChange={() => edit('displayMode', 'builtin')} />
+          </div>
+        </section>
 
         <section className={css.section} aria-labelledby="mnemon-storage-heading">
           <div className={css.sectionHeading}>

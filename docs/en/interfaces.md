@@ -9,12 +9,13 @@ This page is an integration reference. For daily use, start with the [Sidebar an
 | Entry | Default | Description |
 |---|---:|---|
 | Sidebar | Yes | Dedicated Memory System workbench with Status, Runtime, Documents, and Memory Spaces |
+| Builtin | No | Optional conversation tab for the same workbench, automatically scoped to its session |
 | Turn memory | Yes | Memory-tool summary for a completed turn, with exact page links |
 | Save to memory | Yes | Action beside finalized assistant replies; confirmation invokes supervised writing |
 | `/mnemon` | — | Conversation command entry |
 | Model tools | — | Structured Root Agent read/write entry |
 
-Sidebar is the only workbench entry, with visibility controlled by `tabEnabled`. The two conversation shortcuts can be disabled independently through `mnemon-ui` settings.
+`displayMode` selects Sidebar (default) or Builtin; `tabEnabled` controls the selected entry's visibility. Builtin does not show the Sidebar scope controls. The two conversation shortcuts can be disabled independently through `mnemon-ui` settings.
 
 ## Profile surfaces
 

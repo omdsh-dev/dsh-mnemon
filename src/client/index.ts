@@ -1,13 +1,17 @@
 import {
   MNEMON_SETTINGS_NAMESPACE,
   MNEMON_UI_SETTINGS_NAMESPACE,
+  normalizeDisplayMode,
   type ClientConnectionHandle,
   type Config,
   type InteractionConfig,
+  type MnemonDisplayMode,
 } from '../shared/contracts.ts'
 import { MnemonSettingsCard } from './MnemonSettingsCard.tsx'
+import { MnemonView } from './MnemonView.tsx'
 import { MnemonTurnTail, selectMnemonTurnTail } from './MnemonTurnTail.tsx'
 import { MnemonSaveAction } from './MnemonSaveAction.tsx'
+import { MNEMON_ANCHOR_EVENT, type MnemonAnchor } from './anchor.ts'
 import { en, zh, type MnemonKey } from './locales.ts'
 import { MnemonSettingsScope } from './settings.ts'
 import type { MnemonClientContext } from './dsh-compat.ts'
@@ -72,6 +76,40 @@ function enabledOf(value: unknown, key: 'turnBar' | 'saveAction'): boolean {
   return (value as Partial<Record<typeof key, boolean>>)[key] !== false
 }
 
+/** The session slot supplies the scope; the shared view and Host do the rest. */
+function mountBuiltinMemoryView(ctx: MnemonClientContext, settings: MnemonSettingsScope<Config>, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string): () => void {
+  const disposeView = ctx.slots.inject('conversation.view', () => ctx.slots.register({
+    name: 'conversation.view',
+    id: 'mnemon',
+    order: 30,
+    label: () => translate('tab.label'),
+    locale: namespace,
+    inject: sessionId => ({
+      connection: ctx.connection,
+      settingsScope: settings,
+      sessionId,
+      surface: 'builtin' as const,
+      t: translate,
+      locale: ctx.locale.getSnapshot().active,
+    }),
+  }, MnemonView))
+  if (typeof window === 'undefined' || typeof document === 'undefined') return disposeView
+  const openView = (event: Event): void => {
+    const sessionId = (event as CustomEvent<MnemonAnchor>).detail?.sessionId
+    if (sessionId !== undefined && sessionId !== ctx.sessions.list.getSnapshot().current) return
+    // DSH owns tab selection; keep navigation on its normal click path.
+    const label = translate('tab.label').trim()
+    const tab = [...document.querySelectorAll<HTMLElement>('[role="tab"]')]
+      .find(candidate => candidate.textContent?.trim() === label)
+    tab?.click()
+  }
+  window.addEventListener(MNEMON_ANCHOR_EVENT, openView)
+  return () => {
+    window.removeEventListener(MNEMON_ANCHOR_EVENT, openView)
+    disposeView()
+  }
+}
+
 /** Mount the memory workspace plus the optional in-conversation interaction surfaces. */
 export function apply(rawContext: unknown): void {
   const ctx = rawContext as MnemonClientContext
@@ -84,24 +122,31 @@ export function apply(rawContext: unknown): void {
     () => mountSubagentTokenUsageOverride(ctx),
   )
   const translate = ctx.locale.bind(namespace)
-  let disposeMemoryWorkspace: (() => void) | undefined
+  let activeMemoryWorkspace: { mode: MnemonDisplayMode; dispose: () => void } | undefined
   const reconcileMemoryWorkspace = (): void => {
     const snapshot = settings.getSnapshot()
-    // Wait for the persisted visibility switch before mounting the sidebar.
-    const enabled = snapshot.status !== 'loading' && snapshot.value?.tabEnabled !== false
-    if (enabled === (disposeMemoryWorkspace !== undefined)) return
-    disposeMemoryWorkspace?.()
-    disposeMemoryWorkspace = enabled ? mountMnemonWorkspace(ctx, settings, translate) : undefined
+    // Wait for both persisted switches so Builtin never flashes a sidebar row.
+    const mode = snapshot.status === 'loading' || snapshot.value?.tabEnabled === false
+      ? undefined
+      : normalizeDisplayMode(snapshot.value?.displayMode)
+    if (activeMemoryWorkspace?.mode === mode) return
+    activeMemoryWorkspace?.dispose()
+    activeMemoryWorkspace = mode === undefined ? undefined : {
+      mode,
+      dispose: mode === 'builtin'
+        ? mountBuiltinMemoryView(ctx, settings, namespace, translate)
+        : mountMnemonWorkspace(ctx, settings, translate),
+    }
   }
   ctx.effect(() => {
     const unsubscribe = settings.subscribe(reconcileMemoryWorkspace)
     reconcileMemoryWorkspace()
     return () => {
       unsubscribe()
-      disposeMemoryWorkspace?.()
-      disposeMemoryWorkspace = undefined
+      activeMemoryWorkspace?.dispose()
+      activeMemoryWorkspace = undefined
     }
-  }, 'dsh-mnemon: sidebar memory workspace')
+  }, 'dsh-mnemon: memory workspace entry')
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
     id: 'mnemon',

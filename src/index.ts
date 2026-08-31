@@ -9,7 +9,7 @@ import { registerRpc } from './rpc.ts'
 import { createRunner } from './runner.ts'
 import { RuntimeMemoryController } from './runtime-memory.ts'
 import { MnemonService } from './service.ts'
-import { registerSettingsRpc } from './settings.ts'
+import { migrateLegacyDisplayMode, registerSettingsRpc } from './settings.ts'
 import { MnemonSubagentCoordinator } from './subagent.ts'
 import { registerTools } from './tools.ts'
 import { StorageScopeInspector } from './storage-scope.ts'
@@ -94,6 +94,20 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
     base: resolveInteractionConfig(resolved.conversationInteraction),
     applies: 'live',
   })
+  ctx.effect(() => {
+    let disposed = false
+    const migrate = (): void => {
+      if (disposed) return
+      void migrateLegacyDisplayMode(ctx.settings).catch(error => {
+        console.warn('dsh-mnemon: could not persist the builtin displayMode migration', error)
+      })
+    }
+    const unsubscribe = ctx.on('settings/document-updated', ((namespace: string) => {
+      if (namespace === 'mnemon') migrate()
+    }) as never)
+    migrate()
+    return () => { disposed = true; unsubscribe() }
+  }, 'dsh-mnemon: canonical displayMode migration')
   const coordinator = new MnemonSubagentCoordinator(ctx.subagents, runtime, undefined, ctx, () => {
     const taskAgentModel = runtime.config.taskAgentModel
     if (taskAgentModel.mode !== 'fixed') return undefined

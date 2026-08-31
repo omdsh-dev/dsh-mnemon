@@ -38,6 +38,8 @@ v0.4.0 将 Sidebar 设为记忆系统的唯一工作台入口，移除 builtin �
 
 v0.4.1 修复记忆系统和存入记忆在依赖 `this` 的 DSH settings store 上的渲染崩溃，以及 ZIP 导出失败和跨时区归档差异；保留 v0.4.0 工作流与既有记忆格式。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.1.md)。
 
+当前开发恢复可选 `displayMode: builtin`，只将 Sidebar 优先迭代的共用界面放入会话。旧 `buildin` 仍可识别，并自动保存为 `builtin`，不改变记忆数据。详见[入口位置与范围映射](./docs/zh-CN/configuration.md#入口位置displaymode-与-tabenabled)。
+
 ## 30 秒理解能力边界
 
 | 层级 | 适合保存 | 如何进入 Agent 上下文 | 由谁管理 |

@@ -21,7 +21,7 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 | Choose, configure, or compare a Memory Space provider | [Long-term memory providers](./memory-providers.md) |
 | Share durable memory between DSH and other Mnemon-enabled agents | [Project overview: Cross-agent sharing](./project-overview.md#cross-agent-sharing-boundary) · [Configuration: Sharing scope](./configuration.md#choose-a-cross-agent-sharing-scope) |
 | Learn when injection, recall, remembering, and archiving happen | [Lifecycle and workflows](./workflows.md) |
-| Configure global / workspace / custom storage and Sidebar visibility | [Configuration reference](./configuration.md) |
+| Configure global / workspace / custom storage, entry placement, and visibility | [Configuration reference](./configuration.md) |
 | Understand workspace inspection versus the Agent's effective directory | [UI guide: Workspace mode](./ui-guide.md#workspace-mode-separating-inspection-from-execution) |
 | Check or update Mnemon and dsh-mnemon | [Operations: Version checks and updates](./operations.md#version-checks-and-updates) |
 | Back up, restore, or migrate the complete memory root | [Operations: Backup and recovery](./operations.md#backup-and-recovery) |
@@ -48,7 +48,7 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 
 ## Documentation boundaries
 
-- User documentation describes the sidebar-only workbench and composable three-tier topology.
+- User documentation describes the Sidebar-first workbench, optional shared Builtin placement, and composable three-tier topology.
 - Architecture diagrams describe stable execution boundaries, not live monitoring. Use Status for current counts and versions.
 - RPC is an internal Host-to-client protocol, not a promised stable external API.
 - There is no formal fixed DSH / Mnemon version matrix yet. Back up and validate in an isolated root before upgrading.

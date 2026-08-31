@@ -3,8 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveConfig } from '../src/config.ts'
-import type { HostAgent, HostAgentsService, HostWorkspaceRegistry } from '../src/contracts.ts'
+import type { HostAgent, HostAgentsService, HostContextShape, HostSubagentsService, HostWorkspaceRegistry } from '../src/contracts.ts'
 import { createRuntimeGraph, LiveMnemonRuntime } from '../src/live-runtime.ts'
+import { createReadHandler, createWriteHandler } from '../src/rpc.ts'
+import { MnemonLifecycle } from '../src/lifecycle.ts'
+import { MnemonSubagentCoordinator } from '../src/subagent.ts'
 import { MemoryExtensionHost } from '../packages/extension-sdk/src/index.ts'
 
 const directories: string[] = []
@@ -33,6 +36,50 @@ afterEach(() => {
 })
 
 describe('LiveMnemonRuntime workspace routing', () => {
+  it.each(['global', 'workspace', 'custom', 'legacy-custom'] as const)('maps Builtin session reads and writes to %s storage without a workspace override', async storageScope => {
+    const globalRoot = temporaryDirectory('builtin-global')
+    const customRoot = temporaryDirectory('builtin-custom')
+    const initialRoot = temporaryDirectory('builtin-host')
+    const workspaceOne = temporaryDirectory('builtin-one')
+    const workspaceTwo = temporaryDirectory('builtin-two')
+    vi.stubEnv('MNEMON_DATA_DIR', globalRoot)
+    const sessions = [agent('session-1', workspaceOne), agent('session-2', workspaceTwo)]
+    const workspaces = sessions.map((session, index) => ({ id: `workspace-${index + 1}`, title: `Workspace ${index + 1}`, path: session.session.header!.cwd! }))
+    const runtime = new LiveMnemonRuntime(createRuntimeGraph(resolveConfig({
+      displayMode: 'builtin', cliPath: '/fake/mnemon',
+      ...(storageScope === 'legacy-custom' ? {} : { storageScope }),
+      ...(storageScope === 'custom' || storageScope === 'legacy-custom' ? { dataDir: customRoot } : {}),
+    }), initialRoot), {
+      get: id => workspaces.find(workspace => workspace.id === id), list: () => workspaces,
+    }, {
+      get: id => sessions.find(session => session.id === id), roots: () => sessions,
+    })
+    const subagents = { run: vi.fn() }
+    const lifecycle = new MnemonLifecycle({ agents: { get: (id: string) => sessions.find(session => session.id === id) } } as HostContextShape,
+      new MnemonSubagentCoordinator(subagents as unknown as HostSubagentsService, runtime), runtime.config, runtime)
+    const read = createReadHandler(runtime, lifecycle)
+    const write = createWriteHandler(runtime, lifecycle)
+    try {
+      for (const session of sessions) {
+        const expected = storageScope === 'workspace' ? join(session.session.header!.cwd!, '.mnemon') : storageScope === 'global' ? globalRoot : customRoot
+        expect(runtime.route({ sessionId: session.id })).toMatchObject({ selectedRoot: expected, effectiveRoot: expected, aligned: true })
+        await expect(write('runtime-memory', { sessionId: session.id, action: 'add', target: 'memory', content: `Memory from ${session.id}` })).resolves.toMatchObject({ ok: true })
+        await expect(write('document', { sessionId: session.id, action: 'create', title: `Document from ${session.id}`, content: `# ${session.id}` })).resolves.toMatchObject({ ok: true })
+      }
+      for (const session of sessions) {
+        const expectedSessions = storageScope === 'workspace' ? [session] : sessions
+        const memory = await read('runtime-memory', { sessionId: session.id })
+        expect(memory).toMatchObject({ ok: true, value: { entries: expect.arrayContaining(expectedSessions.map(item => expect.objectContaining({ content: `Memory from ${item.id}` }))) } })
+        if (memory.ok) expect((memory.value as { entries: unknown[] }).entries).toHaveLength(expectedSessions.length)
+        const documents = await read('documents', { sessionId: session.id })
+        expect(documents).toMatchObject({ ok: true, value: { activeCount: expectedSessions.length } })
+      }
+      expect(subagents.run).not.toHaveBeenCalled()
+    } finally {
+      runtime.dispose()
+    }
+  })
+
   it('builds one composable memory generation beside the compatible runtime services', () => {
     const runtime = createRuntimeGraph(resolveConfig({ storageScope: 'global', cliPath: '/fake/mnemon' }))
     const descriptor = runtime.memoryKernel.descriptor()

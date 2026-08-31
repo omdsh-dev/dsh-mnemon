@@ -137,11 +137,11 @@ dsh --profile headless "回答前先检查持久化的项目上下文。"
 
 打开“设置 → 记忆系统”：
 
-[![仅 Sidebar 展示的记忆系统设置：记忆范围与记忆层](../assets/screenshots/settings-sidebar-only.png)](../assets/screenshots/settings-sidebar-only.png)
+[![记忆系统设置：展示位置、记忆范围与记忆层](../assets/screenshots/settings-entry-placement.png)](../assets/screenshots/settings-entry-placement.png)
 
 ### 工作台入口
 
-点击 DSH 侧边栏中的“记忆系统”打开独立工作台。Sidebar 是唯一展示方式，无需选择展示形态。
+默认点击 DSH 侧边栏中的“记忆系统”打开独立工作台。在设置页选择 Builtin，或设置 `displayMode: builtin`，可把相同界面改为会话内标签页。保存后实时切换入口，不改变已存数据。
 
 ### 存储位置
 
@@ -157,7 +157,7 @@ dsh --profile headless "回答前先检查持久化的项目上下文。"
 
 首次安装应看到 Runtime、Documents、Memory Spaces 三个默认 Layer，且均已启用。每层只有一个总开关；开启只是允许系统按需使用，不会强制每回合召回。关闭会一起停止该层的上下文、工具、后台处理和数据面 Web/RPC，但不会删除数据；Sidebar Tab 会标记“已关闭”，重新开启即可恢复。第一次使用建议保持默认值。
 
-在工作区模式下，对话 Agent、工具与生命周期使用当前会话的实际根；从工作台启动的独立任务 Agent 会显式使用正在查看的工作区，即使没有选中主 session 也一样。两者不一致时顶部会提示并提供一键对齐。
+在工作区模式下，对话 Agent、工具与生命周期使用当前会话的实际根；从 Sidebar 启动的独立任务 Agent 会显式使用正在查看的工作区，即使没有选中主 session 也一样。两者不一致时顶部会提示并提供一键对齐。Builtin 的读写和任务自动跟随所属会话范围，无需展示存储模式标记、工作区选择或对齐控件。
 
 ## 5. 打开 Sidebar 工作台
 

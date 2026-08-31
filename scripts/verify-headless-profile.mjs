@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -94,6 +94,9 @@ try {
   const install = await run(['plugin', '--profile', 'headless', 'add', `link:${root}`], { env })
   assertSuccess('installing dsh-mnemon into the Headless profile', install)
 
+  const settingsPath = join(dshHome, 'settings.yaml')
+  await writeFile(settingsPath, '# Legacy placement migration fixture\nmnemon:\n  displayMode: buildin\n  timeoutMs: 25000\n')
+
   // The verification exercises Mnemon composition, not DSH's native PTY
   // transport. Disable the unrelated shell stack so the check remains
   // hermetic on CI Node/platform combinations without a node-pty prebuild.
@@ -129,7 +132,16 @@ try {
   if (missing.length > 0) throw new Error(`Headless model request is missing Mnemon tools: ${missing.join(', ')}`)
   if (!existsSync(join(storageRoot, 'runtime', 'memories.json'))) throw new Error('Headless plugin did not initialize isolated runtime memory')
 
+  const canonicalSettings = await readFile(settingsPath, 'utf8')
+  if (!canonicalSettings.includes('displayMode: builtin') || canonicalSettings.includes('displayMode: buildin')) throw new Error('Headless did not persist the canonical builtin displayMode')
+  if (!canonicalSettings.includes('# Legacy placement migration fixture') || !canonicalSettings.includes('timeoutMs: 25000')) throw new Error('Placement migration changed unrelated configuration or comments')
+  const restarted = await run(['--profile', 'headless', 'Verify that normalized Mnemon settings survive a restart.'], { cwd: workspaceRoot, env })
+  assertSuccess('restarting Headless with normalized Mnemon settings', restarted)
+  if (!restarted.stdout.includes(marker)) throw new Error('Restarted Headless did not complete its test turn')
+  if (await readFile(settingsPath, 'utf8') !== canonicalSettings) throw new Error('Canonical placement was rewritten on restart')
+
   console.log(`Verified Headless profile activation with ${toolNames.size} total tools and ${required.length} representative Mnemon tools.`)
+  console.log('Verified buildin-to-builtin persistence, preservation of unrelated settings/comments, and an idempotent Headless restart.')
 } finally {
   await new Promise(resolveClose => server.close(resolveClose))
   await rm(temporaryRoot, { recursive: true, force: true })

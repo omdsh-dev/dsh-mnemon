@@ -31,6 +31,7 @@ function makeCtx(initialValue: unknown, coreValue: Record<string, unknown> = {})
   const localeSnapshot = { active: 'zh' as const, locales: [] as const, revision: 0 }
 
   const ctx = {
+    sessions: { list: { getSnapshot: () => ({ current: 'session-a', byId: {} }) } },
     slots: {
       inject: (slot: string, factory: () => unknown) => {
         injects.push(slot)
@@ -135,8 +136,8 @@ describe('interaction surfaces binding', () => {
     expect(activeRegistrations()).not.toContain('conversation.chat.turnTail')
   })
 
-  it('opens the sidebar for a conversation anchor and ignores a legacy display preference', async () => {
-    const { ctx, injects, activeRegistrations } = makeCtx({}, { displayMode: 'buildin' })
+  it('opens the default sidebar for a conversation anchor', async () => {
+    const { ctx, injects, activeRegistrations } = makeCtx({})
     const tab = document.createElement('button')
     tab.setAttribute('role', 'tab')
     tab.textContent = 'tab.label'
@@ -151,6 +152,49 @@ describe('interaction surfaces binding', () => {
     expect(clicked).not.toHaveBeenCalled()
     expect(injects).not.toContain('conversation.view')
     expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(true)
+    expect(consumeMnemonAnchor('session-a')).toMatchObject({ page: 'documents' })
+  })
+
+  it('opens the Builtin tab only for the current session, follows locale labels, and removes its listener on disposal', async () => {
+    const { ctx, injects, activeRegistrations, effectDisposers } = makeCtx({}, { displayMode: 'builtin' })
+    let label = '记忆系统'
+    ctx.locale.bind.mockImplementation(() => () => label)
+    const tab = document.createElement('button')
+    tab.setAttribute('role', 'tab')
+    tab.textContent = label
+    const clicked = vi.fn()
+    tab.addEventListener('click', clicked)
+    document.body.append(tab)
+    apply(ctx)
+    await waitFor(() => expect(injects).toContain('conversation.view'))
+    expect(activeRegistrations().filter(id => id === 'mnemon')).toHaveLength(2)
+
+    dispatchMnemonAnchor({ page: 'documents', sessionId: 'session-b' })
+    expect(clicked).not.toHaveBeenCalled()
+    expect(consumeMnemonAnchor('session-b')).toMatchObject({ page: 'documents' })
+    dispatchMnemonAnchor({ page: 'remember', seed: 'Scoped candidate', sessionId: 'session-a' })
+    expect(clicked).toHaveBeenCalledTimes(1)
+    expect(consumeMnemonAnchor('session-a')).toMatchObject({ page: 'remember', seed: 'Scoped candidate' })
+    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(false)
+
+    label = 'Memory System'
+    tab.textContent = label
+    dispatchMnemonAnchor({ page: 'runtime', sessionId: 'session-a' })
+    expect(clicked).toHaveBeenCalledTimes(2)
+    consumeMnemonAnchor('session-a')
+    for (const dispose of effectDisposers) dispose()
+    dispatchMnemonAnchor({ page: 'status', sessionId: 'session-a' })
+    expect(clicked).toHaveBeenCalledTimes(2)
+    expect(consumeMnemonAnchor('session-a')).toMatchObject({ page: 'status' })
+  })
+
+  it('keeps Builtin anchors pending without mounting or opening a hidden entry', async () => {
+    const { ctx, activeRegistrations } = makeCtx({}, { displayMode: 'builtin', tabEnabled: false })
+    apply(ctx)
+    await waitFor(() => expect(activeRegistrations()).toContain('mnemon-save'))
+    expect(activeRegistrations().filter(id => id === 'mnemon')).toHaveLength(1) // settings only
+    dispatchMnemonAnchor({ page: 'documents', sessionId: 'session-a' })
+    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(false)
     expect(consumeMnemonAnchor('session-a')).toMatchObject({ page: 'documents' })
   })
 

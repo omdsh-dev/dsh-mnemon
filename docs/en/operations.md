@@ -143,7 +143,7 @@ Report vulnerabilities privately through [SECURITY.md](../../SECURITY.md), not a
 |---|---|
 | Mnemon unavailable | macOS/Linux: run `command -v mnemon`, `mnemon --version`. Windows PowerShell: run `Get-Command mnemon`, `Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"`. Set `MNEMON_CLI_PATH` or `mnemon.cliPath`, then restart |
 | Headless Agent has no Mnemon tools | Plugins are profile-local. Run `dsh plugin --profile headless add dsh-mnemon`; a Web-profile installation does not carry over |
-| Memory System missing from sidebar | Check `tabEnabled=true` and that the DSH sidebar is available; for a local link run `pnpm run build`, then restart the profile; legacy `displayMode` no longer affects the entry |
+| Memory System entry missing | Check `tabEnabled=true`; `displayMode=sidebar` uses the sidebar, while `displayMode=builtin` uses the open conversation's tabs. For a local link run `pnpm run build`, then restart the profile |
 | Status healthy but recall empty | Check active spaces, storage scope, inspected root, effective session root, and query focus |
 | Header reports misalignment | The workbench is inspecting another workspace; align or keep deliberate read-only inspection; Agent-backed actions are rejected |
 | Saved settings appear unchanged | Inspect the save error; success applies live and reloads automatically without refresh |

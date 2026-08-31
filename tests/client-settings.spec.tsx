@@ -425,11 +425,11 @@ describe('MnemonSettingsCard', () => {
     expect(call).toHaveBeenCalledWith('/dsh-mnemon-read', 'task-agent-models', { includeCatalog: true })
   })
 
-  it.each([undefined, 'buildin', 'sidebar'])('omits the display selector even with legacy displayMode=%s', async displayMode => {
+  it.each([undefined, 'builtin', 'buildin', 'sidebar'] as const)('stages displayMode=%s independently of storage and saves only changed fields', async displayMode => {
     const mutate = vi.fn(async () => {})
     const snapshot = {
       status: 'ready' as const,
-      value: { storageScope: 'global' as const, displayMode },
+      value: { storageScope: 'global' as const, ...(displayMode === undefined ? {} : { displayMode }) },
       base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
     }
     const scope = {
@@ -442,14 +442,19 @@ describe('MnemonSettingsCard', () => {
 
     render(<MnemonSettingsCard scope={scope} />)
 
-    expect(screen.queryByRole('heading', { name: '展示形态' })).toBeNull()
-    expect(screen.queryByRole('radio', { name: /Sidebar|Buildin/ })).toBeNull()
-    expect(screen.queryByText('选择记忆系统在 DSH Web 中的入口位置；切换后立即生效。')).toBeNull()
+    const sidebar = screen.getByRole('radio', { name: 'Sidebar' }) as HTMLInputElement
+    const builtin = screen.getByRole('radio', { name: 'Builtin' }) as HTMLInputElement
+    const isBuiltin = displayMode === 'builtin' || displayMode === 'buildin'
+    expect(sidebar.checked).toBe(!isBuiltin)
+    expect(builtin.checked).toBe(isBuiltin)
     expect(mutate).not.toHaveBeenCalled()
+    fireEvent.click(isBuiltin ? sidebar : builtin)
     fireEvent.click(screen.getByRole('radio', { name: '工作区' }))
+    expect(mutate).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: '保存' }))
 
     await waitFor(() => expect(mutate).toHaveBeenCalledWith([
+      { op: 'set', path: ['displayMode'], value: isBuiltin ? 'sidebar' : 'builtin' },
       { op: 'set', path: ['storageScope'], value: 'workspace' },
     ]))
   })
@@ -688,6 +693,8 @@ describe('MnemonSettingsCard', () => {
     render(<MnemonSettingsCard scope={scope} />)
 
     expect((screen.getByRole('radio', { name: /^全局$/ }) as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByRole('radio', { name: 'Sidebar' }) as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByRole('radio', { name: 'Builtin' }) as HTMLInputElement).disabled).toBe(true)
     expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByText('当前部署的插件设置为只读。')).toBeTruthy()
   })

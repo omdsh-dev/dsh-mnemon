@@ -137,11 +137,11 @@ With `storageScope=workspace`, Headless resolves `<invocation cwd>/.mnemon`; no 
 
 Open **Settings → Memory System**:
 
-[![Sidebar-only Memory System settings: memory scope and layers](../assets/screenshots/settings-sidebar-only.png)](../assets/screenshots/settings-sidebar-only.png)
+[![Memory System settings: entry placement, memory scope, and layers](../assets/screenshots/settings-entry-placement.png)](../assets/screenshots/settings-entry-placement.png)
 
 ### Workbench entry
 
-Open the dedicated workbench from Memory System in the DSH sidebar. Sidebar is the only presentation; no display-mode selection is needed.
+By default, open the dedicated workbench from Memory System in the DSH sidebar. Choose Builtin in Settings, or set `displayMode: builtin`, to show the same UI as a conversation tab instead. Save switches the entry live without changing stored data.
 
 ### Storage location
 
@@ -157,7 +157,7 @@ Save initializes a candidate runtime graph before atomically switching the Host.
 
 A first installation should show Runtime, Documents, and Memory Spaces enabled. Each Layer has one master switch. Enabling only permits on-demand use; it does not force recall on every turn. Disabling stops that Layer's context, tools, background work, and data-plane Web/RPC together without deleting data. Its Sidebar tab is marked Off, and re-enabling restores the existing data. Keep all three defaults on for the first workflow.
 
-In Workspace mode, conversation Agents, tools, and lifecycle hooks use the current conversation's effective root. Independent task Agents launched by the workbench use the inspected workspace explicitly, including when no main session is selected. The header reports a mismatch and offers one-click alignment.
+In Workspace mode, conversation Agents, tools, and lifecycle hooks use the current conversation's effective root. Independent task Agents launched by Sidebar use the inspected workspace explicitly, including when no main session is selected. Its header reports a mismatch and offers one-click alignment. Builtin automatically uses its own conversation's scope for reads, writes, and tasks, so it needs no storage-mode badge, workspace picker, or alignment control.
 
 ## 5. Open the Sidebar workbench
 

@@ -1,5 +1,6 @@
 import z from 'schemastery'
 import { isAbsolute } from 'node:path'
+import { normalizeDisplayMode } from './shared/display-mode.ts'
 import {
   DEFAULT_IDLE_REVIEW_MS,
   DEFAULT_EMBEDDING_ENDPOINT,
@@ -169,6 +170,8 @@ export const Config: z<Config> = z.object({
     maxUnknownResults: DEFAULT_RECALL_MAX_UNKNOWN_RESULTS,
   }),
   routingGuidance: z.boolean().default(true),
+  // Retain the raw alias here so startup can migrate the exact stored field.
+  displayMode: z.union(['sidebar', 'builtin', 'buildin'] as const).default('sidebar'),
   tabEnabled: z.boolean().default(true),
   writeEnabled: z.boolean().default(true),
   remoteAccess: z.union(['read-only', 'trusted-host'] as const).default('read-only'),
@@ -410,6 +413,7 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     memoryTopology: resolveMemoryTopology(config.memoryTopology),
     recallQuality: resolveRecallQuality(config.recallQuality),
     routingGuidance: config.routingGuidance ?? true,
+    displayMode: normalizeDisplayMode(config.displayMode),
     tabEnabled: config.tabEnabled ?? true,
     writeEnabled: config.writeEnabled ?? true,
     remoteAccess: config.remoteAccess ?? 'read-only',

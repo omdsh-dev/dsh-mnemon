@@ -143,7 +143,7 @@ DSH rc.8 首次说明的可选 SQLite 不兼容性在 DSH 0.1.1-rc.2 中仍然�
 |---|---|
 | Mnemon 不可用 | macOS/Linux 运行 `command -v mnemon`、`mnemon --version`；Windows PowerShell 运行 `Get-Command mnemon`、`Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"`。设置 `MNEMON_CLI_PATH` 或 `mnemon.cliPath` 后重启 |
 | Headless Agent 没有 Mnemon 工具 | 插件按 profile 独立安装；运行 `dsh plugin --profile headless add dsh-mnemon`，Web profile 的安装不会自动带入 |
-| 左侧栏没有“记忆系统” | 检查 `tabEnabled=true`，确认 DSH 侧边栏可用；本地 link 先 `pnpm run build` 再重启 profile；旧 `displayMode` 不再影响入口 |
+| 找不到“记忆系统”入口 | 检查 `tabEnabled=true`；`displayMode=sidebar` 使用侧边栏，`displayMode=builtin` 使用已打开会话的标签页。本地 link 先 `pnpm run build` 再重启 profile |
 | 状态正常但召回为空 | 检查 active 记忆体、存储范围、查看目录、会话实际目录和查询是否足够聚焦 |
 | 顶部提示目录未对齐 | 工作台正在查看另一个工作区；点击一键对齐，或有意保留只读查看；Agent-backed 操作在未对齐时拒绝 |
 | 设置保存后无变化 | 查看保存错误；成功保存应实时切换并自动重新读取，不需要刷新 |
