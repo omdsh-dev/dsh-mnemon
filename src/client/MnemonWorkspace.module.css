@@ -82,15 +82,22 @@ html[data-dsh-mnemon-active]:not([data-dsh-taskboard-active]):not([data-dsh-ssh-
   text-overflow: ellipsis;
 }
 
-[data-dsh-frame][data-sidebar-collapsed] .entry {
+/* The native DSH frame exposes collapse state without a skin's data-dsh-frame. */
+[data-sidebar-collapsed] .entry {
   width: 36px;
   min-height: 36px;
   justify-content: center;
   margin: 0 auto 12px;
   padding: 0;
   border-radius: 50%;
+  color: var(--dsw-alias-label-primary);
 }
 
-[data-dsh-frame][data-sidebar-collapsed] .entryLabel {
+[data-sidebar-collapsed] .entryIcon svg {
+  width: 20px;
+  height: 20px;
+}
+
+[data-sidebar-collapsed] .entryLabel {
   display: none;
 }
