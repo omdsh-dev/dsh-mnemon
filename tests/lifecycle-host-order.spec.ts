@@ -26,7 +26,12 @@ describe('Mnemon lifecycle with the real DSH SystemPrompt', () => {
       beginTurn: vi.fn(async (turnId: string, scope: object) => {
         const context = {
           turnId,
-          view: { id: 'view-first-turn', digest: 'digest-first-turn' },
+          view: {
+            id: 'view-first-turn', digest: 'digest-first-turn', runtimeGeneration: 'generation:first',
+            createdAt: '2026-08-23T00:00:00.000Z', strategyTypeId: 'default-three-tier', strategyInstanceKey: 'strategy:default',
+            projection: [{ id: 'runtime:first', sourceInstanceKey: 'source:runtime', mode: 'eager', text: 'First-turn Wake', revision: 'r1' }],
+            routes: [], actionOffers: [], readGrants: [], diagnostics: [],
+          },
           scope,
           startedAt: '2026-08-23T00:00:00.000Z',
         }
@@ -43,7 +48,7 @@ describe('Mnemon lifecycle with the real DSH SystemPrompt', () => {
       endTurn: vi.fn((turnId: string) => pinnedTurns.delete(turnId)),
     }
     const runtimeSource = {
-      forAgent: vi.fn(() => ({ config, composableTurns })),
+      forAgent: vi.fn(() => ({ config, composableTurns, memoryComposition: { generation: () => ({ sourceInstances: () => [] }) } })),
       bindAgentRuntime: vi.fn(() => vi.fn()),
     }
     const coordinator = { snapshot: vi.fn(() => ({ recalls: 0, writes: 0, answers: 0, reviews: 0, failures: 0 })) } as unknown as MnemonSubagentCoordinator
@@ -66,6 +71,7 @@ describe('Mnemon lifecycle with the real DSH SystemPrompt', () => {
     // appended as a dsh-mnemon message so it cannot invalidate other plugins' context.
     expect(assembly.contexts).not.toContainEqual(expect.objectContaining({ name: 'mnemon:runtime-memory' }))
     expect(runtimeSource.bindAgentRuntime).toHaveBeenCalledOnce()
+    expect(lifecycle.memoryView(agent.id)).toMatchObject({ id: 'view-first-turn', state: 'active', memoryText: 'First-turn Wake', turn: 1 })
     stop()
     expect(composableTurns.endTurn).toHaveBeenCalledWith('real-prompt-session:1')
   })

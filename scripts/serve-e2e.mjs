@@ -9,13 +9,19 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+const flags = new Set(process.argv.slice(2))
+for (const flag of flags) if (flag !== '--strategy-extensions') throw new Error('Unknown option: ' + flag)
+const extensions = flags.has('--strategy-extensions')
+  ? ['dsh-mnemon-strategy-scoped', 'dsh-mnemon-strategy-light-context', 'dsh-mnemon-strategy-auto-capture'] : []
 const fixture = await mkdtemp(join(tmpdir(), 'mnemon-web-e2e-'))
 const dshHome = join(fixture, 'dsh-home')
 const dataDir = join(fixture, 'data')
 const workspace = join(fixture, 'workspace')
 await Promise.all([dshHome, dataDir, workspace].map(path => mkdir(path)))
+let modelRequests = 0
 const model = createServer(async (request, response) => {
   for await (const _chunk of request) { /* Consume the request without storing model input. */ }
+  console.log('Fixture model request: ' + ++modelRequests)
   response.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' })
   for (const choice of [
     { index: 0, delta: { role: 'assistant', content: 'Isolated Mnemon WebUI test response.' }, finish_reason: null },
@@ -38,6 +44,20 @@ const env = {
 const dshBin = join(root, 'node_modules/@deepseek-ai/dsh/lib/bin.js')
 let web
 let stopping = false
+let restarting = false
+function launch() {
+  web = spawn(process.execPath, [dshBin, 'web', '--no-open', '--host', '127.0.0.1', '--port', '0'], { env, cwd: workspace, stdio: 'inherit' })
+  web.once('error', error => { console.error(error); process.exitCode = 1; void stop() })
+  web.once('exit', code => { if (!stopping && !restarting) { if (code) process.exitCode = code; void stop() } })
+}
+async function restart() {
+  if (stopping || restarting || !web || web.exitCode !== null) return
+  restarting = true
+  web.kill('SIGTERM')
+  await new Promise(resolveExit => web.once('exit', resolveExit))
+  if (!stopping) { console.log('Restarting the same disposable Profile'); launch() }
+  restarting = false
+}
 async function stop() {
   if (stopping) return
   stopping = true
@@ -52,12 +72,13 @@ async function stop() {
 }
 process.once('SIGINT', () => { void stop() })
 process.once('SIGTERM', () => { void stop() })
+process.on('SIGUSR2', () => { void restart() })
 
 try {
   const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
   const plugins = Object.keys(manifest.dependencies).filter(name => name.startsWith('dsh-mnemon-'))
   const installer = spawn(process.execPath, [dshBin, 'plugin', '--profile', 'web', 'add',
-    `link:${root}`, ...plugins.map(name => `link:${join(root, 'plugins', name)}`),
+    `link:${root}`, ...[...plugins, ...extensions].map(name => `link:${join(root, 'plugins', name)}`),
   ], { env, cwd: workspace, stdio: 'inherit' })
   await new Promise((resolveInstall, reject) => {
     installer.once('error', reject)
@@ -81,14 +102,14 @@ try {
     - id: e2e-directory-picker-ui
       name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'
 `
-  await writeFile(join(dshHome, 'profiles/web/cordis.patch.yml'), disabled.map(id => `- id: ${id}\n  disabled: true\n`).join('') + browsePicker)
+  const strategyEntries = extensions.length === 0 ? '' : '\n- insert:\n' + extensions.map(name => `    - id: ${name.slice(4)}\n      name: ${name}\n      disabled: true\n`).join('')
+  await writeFile(join(dshHome, 'profiles/web/cordis.patch.yml'), disabled.map(id => `- id: ${id}\n  disabled: true\n`).join('') + browsePicker + strategyEntries)
   await writeFile(join(workspace, 'README.md'), '# Mnemon isolated browser test\n\nNo production memory or credentials are used.\n')
   console.log('Fixture: ' + fixture)
   console.log('Workspace: ' + workspace)
+  console.log('Fixture PID: ' + process.pid + ' (SIGUSR2 restarts WebUI, retaining test data)')
   console.log('For a conversation, choose the Mnemon E2E preset in the WebUI.')
-  web = spawn(process.execPath, [dshBin, 'web', '--no-open', '--host', '127.0.0.1', '--port', '0'], { env, cwd: workspace, stdio: 'inherit' })
-  web.once('error', error => { console.error(error); process.exitCode = 1; void stop() })
-  web.once('exit', code => { if (code) process.exitCode = code; void stop() })
+  launch()
 } catch (error) {
   console.error(error)
   process.exitCode = 1
