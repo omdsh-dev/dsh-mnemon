@@ -24,7 +24,7 @@
 <p align="center">
   <a href="./docs/zh-CN/capabilities.md"><strong>先看能力地图</strong></a> ·
   <a href="./docs/zh-CN/getting-started.md">5 分钟开始</a> ·
-  <a href="./docs/zh-CN/releases/v0.4.2.md">v0.4.2 升级说明</a> ·
+  <a href="./docs/zh-CN/releases/v0.4.3.md">v0.4.3 升级说明</a> ·
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">观看宽屏实机演示</a>
 </p>
 
@@ -39,6 +39,8 @@ v0.4.0 将 Sidebar 设为记忆系统的唯一工作台入口，移除 builtin �
 v0.4.1 修复记忆系统和存入记忆在依赖 `this` 的 DSH settings store 上的渲染崩溃，以及 ZIP 导出失败和跨时区归档差异；保留 v0.4.0 工作流与既有记忆格式。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.1.md)。
 
 v0.4.2 恢复可选 `displayMode: builtin`，只将 Sidebar 优先迭代的共用界面放入会话。旧 `buildin` 仍可识别，并自动保存为 `builtin`，不改变记忆数据。详见[发布说明](./docs/zh-CN/releases/v0.4.2.md)与[入口位置与范围映射](./docs/zh-CN/configuration.md#入口位置displaymode-与-tabenabled)。
+
+v0.4.3 让折叠后的记忆系统图标与侧栏相邻控件对齐，并保留原有展开样式。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.3.md)。
 
 ## 30 秒理解能力边界
 
@@ -214,7 +216,7 @@ dsh plugin --profile headless add "link:/absolute/path/to/dsh-mnemon"
 | 备份、更新或排障 | [运维指南](./docs/zh-CN/operations.md) |
 | 接入工具、命令或 RPC | [接口参考](./docs/zh-CN/interfaces.md) |
 | 开发 Layer、Adapter、Strategy、Guard 或 MemorySource 扩展 | [扩展开发指南](./docs/zh-CN/extensions.md) |
-| 查看本次升级 | [v0.4.2 发布说明](./docs/zh-CN/releases/v0.4.2.md) |
+| 查看本次升级 | [v0.4.3 发布说明](./docs/zh-CN/releases/v0.4.3.md) |
 
 完整目录见[文档中心](./docs/zh-CN/README.md)。
 
