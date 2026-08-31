@@ -66,6 +66,18 @@
       "dsh-mnemon-source-memory-spaces": [
         "./plugins/dsh-mnemon-source-memory-spaces/src/index.ts"
       ],
+      "dsh-mnemon-strategy-default-three-tier/extension-sdk": [
+        "./plugins/dsh-mnemon-strategy-default-three-tier/src/extension-sdk.ts"
+      ],
+      "dsh-mnemon-strategy-scoped": [
+        "./plugins/dsh-mnemon-strategy-scoped/src/index.ts"
+      ],
+      "dsh-mnemon-strategy-light-context": [
+        "./plugins/dsh-mnemon-strategy-light-context/src/index.ts"
+      ],
+      "dsh-mnemon-strategy-auto-capture": [
+        "./plugins/dsh-mnemon-strategy-auto-capture/src/index.ts"
+      ],
       "dsh-mnemon-strategy-default-three-tier": [
         "./plugins/dsh-mnemon-strategy-default-three-tier/src/index.ts"
       ],

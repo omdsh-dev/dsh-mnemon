@@ -1066,7 +1066,7 @@ ${naturalRequest(request)}`
   }
 
   private async documentLocked(parent: HostAgent, request: DocumentMutation, signal: AbortSignal): Promise<CoordinatedDocumentResult> {
-    const controller = this.sourceFor(parent, 'documents')
+    const controller = await this.writableSourceFor(parent, 'documents', 'manage')
     const archivedDocumentIds: string[] = []
     const memoryBodyIds = new Set<string>()
     let lastArchive: CoordinatedDocumentResult['maintenance']
@@ -1107,7 +1107,7 @@ ${naturalRequest(request)}`
   }
 
   private async archiveDocumentLocked(parent: HostAgent, id: string, signal: AbortSignal): Promise<CoordinatedDocumentResult> {
-    const controller = this.sourceFor(parent, 'documents')
+    const controller = await this.writableSourceFor(parent, 'documents', 'manage')
     const document = await controller.read<DocumentView>('document', { id }, signal)
     if (document.status !== 'active') throw new Error('only active documents can be archived')
     const source = documentMigrationSource(document)
@@ -1154,8 +1154,7 @@ ${naturalRequest(request)}`
     if (plan.entries.length === 0) throw new Error('runtime memory capacity was exceeded without entries available for maintenance')
     if (request.target === 'user') return this.compactUserAndCommit(parent, request, plan, signal)
 
-    this.assertAutomaticMemoryWrite(parent)
-    const memoryService = this.sourceFor(parent, 'memory-spaces')
+    const memoryService = await this.assertAutomaticMemoryWrite(parent)
     const eligibleBodies = (await memoryService.read<MemoryBodyCatalog>('body-directory', null, signal)).items.filter(body => (
       body.active && body.providerEnabled !== false && body.provider.capabilities.remember === true
     ))
@@ -1635,9 +1634,19 @@ Completion protocol: call \`${resultToolName}\` exactly once with the final resu
     return graph.source(typeId, agentScope(parent, graph.config))
   }
 
-  private assertAutomaticMemoryWrite(parent: HostAgent): void {
+  /** View narrowing also governs implicit maintenance; operator management is separate. */
+  private async writableSourceFor(parent: HostAgent, typeId: string, actionId: string): Promise<SourceSession> {
+    const authority = this.turnAuthority(parent, false)
+    if (authority === undefined) return this.sourceFor(parent, typeId)
+    const source = authority.graph.source(typeId, authority.context.scope).forTurn(authority.context)
+    await source.assertActionOffered(actionId, offer => authority.graph.config.writeEnabled && offer.authority === undefined)
+    return source
+  }
+
+  private async assertAutomaticMemoryWrite(parent: HostAgent): Promise<SourceSession> {
     const graph = this.runtimeSource.forAgent(parent)
     if (!graph.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only')
     assertParticipation(graph.config, 'memory-spaces', 'write', 'automatic')
+    return this.writableSourceFor(parent, 'memory-spaces', 'remember')
   }
 }

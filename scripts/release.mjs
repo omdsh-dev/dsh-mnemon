@@ -31,7 +31,9 @@ export function createReleasePlan(packages, { tag, prerelease } = {}) {
     assert.equal(manifest.publishConfig?.tag, distTag, `${manifest.name}: publishConfig.tag must match the release channel`)
     if (item !== starter) {
       assert.match(manifest.name, /^dsh-mnemon-(?:source|strategy|provider)-[a-z0-9-]+$/u)
-      assert.equal(starter.manifest.dependencies?.[manifest.name], version, `${manifest.name}: Starter must pin the tested plugin version`)
+      // Optional strategy contributions ship independently, not in the default
+      // Starter. The development workspace still pins and tests their artifact.
+      assert.equal(starter.manifest.dependencies?.[manifest.name] ?? starter.manifest.devDependencies?.[manifest.name], version, `${manifest.name}: Starter must pin the tested plugin version (runtime or development)`)
     }
     for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies', 'devDependencies']) {
       for (const [name, range] of Object.entries(manifest[field] ?? {})) {

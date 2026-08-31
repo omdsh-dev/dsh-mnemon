@@ -44,6 +44,18 @@ describe('three-tier owned extension contracts', () => {
     expect(strategy.compose(request, facts.map(source => ({ ...source, actionIds: [], actions: [] })), [capture]).guidance?.system).toBeUndefined()
   })
 
+  it('keeps runtime semantics but never claims a narrowed or multi-Source projection is the entire store', () => {
+    const facts = sources().map((source, index) => ({ ...source, sourceTypeId: ['runtime', 'documents', 'memory-spaces'][index]! }))
+    const original = strategy.compose(request, facts)
+    expect(original.guidance?.system).toContain('complete projection')
+    const limited = strategy.compose(request, facts, [contribution('projection', { maxProjectionCharacters: 100 })])
+    expect(limited.guidance?.system).toContain('budget-limited projection')
+    expect(limited.guidance?.system).not.toContain('complete projection')
+    const scoped = strategy.compose(request, facts, [contribution('selection', { sourceKeys: facts.map(source => source.sourceInstanceKey) })])
+    expect(scoped.guidance?.system).toContain('only that Source')
+    expect(scoped.guidance?.system).toContain('Read-only Sources stay read-only')
+  })
+
   it('keeps all allocation sums finite and bounded, including tiny budgets and 32 Sources', () => {
     for (const count of [0, 1, 2, 3, 7, 16, 32]) for (const budget of [1, 2, 3, 7, 100, 4096, 10000000]) {
       const facts = sources(count)

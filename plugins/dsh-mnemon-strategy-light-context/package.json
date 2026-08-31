@@ -1,0 +1,45 @@
+{
+  "name": "dsh-mnemon-strategy-light-context",
+  "version": "0.5.0-beta.1",
+  "description": "Additive shared projection budget cap for Mnemon's default three-tier Strategy.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "README.md"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsdown",
+    "test": "vitest run",
+    "verify": "pnpm typecheck && pnpm test && pnpm build"
+  },
+  "peerDependencies": {
+    "dsh-mnemon": "0.5.0-beta.1",
+    "dsh-mnemon-strategy-default-three-tier": "0.5.0-beta.1",
+    "@deepseek-ai/cordis": "^4.0.1"
+  },
+  "devDependencies": {
+    "dsh-mnemon": "0.5.0-beta.1",
+    "dsh-mnemon-strategy-default-three-tier": "0.5.0-beta.1",
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.0",
+    "tsdown": "^0.22.0",
+    "vitest": "^3.2.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "beta"
+  }
+}

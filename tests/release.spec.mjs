@@ -15,7 +15,7 @@ describe('complete, channel-safe official release', () => {
   it('validates every real package and publishes the Starter last', async () => {
     const packages = await readReleasePackages(root)
     const plan = createReleasePlan(packages)
-    expect(plan.packages).toHaveLength(14)
+    expect(plan.packages).toHaveLength(17)
     expect(plan.distTag).toBe('beta')
     expect(plan.packages.at(-1).manifest.name).toBe('dsh-mnemon')
     for (const { directory, manifest } of packages.filter(item => item.manifest.name.startsWith('dsh-mnemon-provider-'))) {
@@ -46,6 +46,16 @@ describe('complete, channel-safe official release', () => {
     const stalePeer = fixture()
     stalePeer[1].manifest.peerDependencies = { 'dsh-mnemon': '^0.4.0' }
     expect(() => createReleasePlan(stalePeer)).toThrow('must pin the tested release version')
+  })
+
+  it('releases optional plugins without silently adding them to the default Starter', () => {
+    const packages = fixture()
+    const optional = { directory: '/optional', manifest: { name: 'dsh-mnemon-strategy-example', version: '0.5.0-beta.1', publishConfig: { access: 'public', tag: 'beta' } } }
+    packages[0].manifest.devDependencies = { [optional.manifest.name]: optional.manifest.version }
+    expect(createReleasePlan([...packages, optional]).packages.map(item => item.manifest.name)).toContain(optional.manifest.name)
+    expect(packages[0].manifest.dependencies).not.toHaveProperty(optional.manifest.name)
+    delete packages[0].manifest.devDependencies
+    expect(() => createReleasePlan([...packages, optional])).toThrow('pin the tested plugin version')
   })
 
   it('packs all packages before any publish and passes an explicit non-latest tag', async () => {

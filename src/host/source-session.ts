@@ -38,11 +38,20 @@ export class SourceSession {
   }
   async action(actionId: string, input: unknown, authorize: (offer: MemoryActionOffer) => boolean, signal?: AbortSignal): Promise<MemoryMutationReceipt> {
     const turn = this.requireTurn()
+    const offer = await this.offeredAction(turn, actionId)
+    return this.turns.executeAction(turn.turnId, offer.id, json(input), authorize, signal)
+  }
+  /** Preflight Host-coordinated maintenance before any management side effect. */
+  async assertActionOffered(actionId: string, authorize: (offer: MemoryActionOffer) => boolean): Promise<void> {
+    const offer = await this.offeredAction(this.requireTurn(), actionId)
+    if (!authorize(offer)) throw new Error('memory ActionOffer is not currently authorized: ' + offer.id)
+  }
+  private async offeredAction(turn: ComposableMemoryTurn, actionId: string): Promise<MemoryActionOffer> {
     const source = await this.selected(turn)
     const offer = turn.view.actionOffers.find(item => item.sourceInstanceKey === source.sourceInstanceKey && item.sourceActionId === actionId)
     if (offer === undefined) throw new Error('Source Action is not offered by the current View: ' + this.typeId + '/' + actionId)
     this.assertTurn(turn)
-    return this.turns.executeAction(turn.turnId, offer.id, json(input), authorize, signal)
+    return offer
   }
   private activeTurn(): ComposableMemoryTurn | undefined {
     if (this.pinnedTurn !== undefined) {
