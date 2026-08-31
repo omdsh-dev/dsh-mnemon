@@ -59,7 +59,7 @@ describe('public Source plugin composition', () => {
     const evidence = await generation.executeRoute(next, route.id, { query: 'provider-marker', mode: 'keyword', limit: 10 })
     expect(evidence.items.some(item => item.text.includes('provider-marker'))).toBe(true)
     expect(evidence.items.every(item => (item.provenance as { memoryBodyId: string }).memoryBodyId === body.id)).toBe(true)
-    await expect(generation.executeRoute(next, route.id, { query: 'provider-marker', memoryBodyIds: ['not-pinned'] })).rejects.toThrow('View')
+    await expect(generation.executeRoute(next, route.id, { query: 'provider-marker', memoryBodyIds: ['not-pinned'] })).rejects.toThrow('outside pinned Source')
   })
 
   it('rejects ambiguous Source roles without inventing precedence', async () => {

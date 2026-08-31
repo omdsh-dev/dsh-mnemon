@@ -10,7 +10,6 @@ import { MemoryRuntime } from '../src/core/runtime.ts'
 import type { MnemonMemoryService } from 'dsh-mnemon/extension-sdk'
 import { compositionFixture } from './fixtures/composition.ts'
 import { agentScope } from '../src/host/runtime.ts'
-import type { MemoryEvidence } from 'dsh-mnemon/contracts'
 
 const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
   dsh: { client: { inject: string[]; platform: string } }
@@ -298,11 +297,13 @@ describe('dsh-mnemon plugin composition', () => {
     const tools: ToolDefinition[] = []
     const coordinator = new MnemonSubagentCoordinator({ list: () => [], getProvider: () => undefined, start: vi.fn() } as never, f.live)
     registerTools({ tools: { register: (tool: ToolDefinition) => { tools.push(tool) } } } as never, f.live, coordinator)
-    const result = await tools.find(tool => tool.name === 'mnemon_document_search')!.execute({ query: '冷归档不变量' } as never, { agent: root, signal: new AbortController().signal }) as MemoryEvidence
-    expect(result.items).toEqual([expect.objectContaining({
-      text: expect.stringContaining('No exact match. Recent Document suggestion only'),
-      provenance: expect.objectContaining({ kind: 'suggestion', title: 'Cold Archive Transaction Contract' }),
+    const result = await tools.find(tool => tool.name === 'mnemon_document_search')!.execute({ query: '冷归档不变量' } as never, { agent: root, signal: new AbortController().signal }) as { results: unknown[]; suggestions: unknown[]; suggestionHint: string }
+    expect(result.results).toEqual([])
+    expect(result.suggestions).toEqual([expect.objectContaining({
+      excerpt: expect.stringContaining('Land the durable cold reference'),
+      title: 'Cold Archive Transaction Contract',
     })])
+    expect(result.suggestionHint).toContain('No exact match.')
     f.graph.composableTurns.endTurn('root:documents')
   })
 
@@ -319,10 +320,10 @@ describe('dsh-mnemon plugin composition', () => {
     const tools: ToolDefinition[] = []
     const coordinator = new MnemonSubagentCoordinator({ list: () => [], getProvider: () => undefined, start: vi.fn() } as never, f.live)
     registerTools({ tools: { register: (tool: ToolDefinition) => { tools.push(tool) } } } as never, f.live, coordinator)
-    const result = await tools.find(tool => tool.name === 'mnemon_document_search')!.execute({ query: needle } as never, { agent: root, signal: new AbortController().signal }) as MemoryEvidence
-    expect(result.items).toHaveLength(1)
-    expect(result.items[0]!.text).toContain(needle)
-    expect(result.items[0]!.text.length).toBeLessThanOrEqual(2_600)
+    const result = await tools.find(tool => tool.name === 'mnemon_document_search')!.execute({ query: needle } as never, { agent: root, signal: new AbortController().signal }) as { results: Array<{ content: string }> }
+    expect(result.results).toHaveLength(1)
+    expect(result.results[0]!.content).toContain(needle)
+    expect(result.results[0]!.content.length).toBeLessThanOrEqual(2_600)
     expect(JSON.stringify(result)).not.toMatch(/contentHash|generatedAt|indexPath|directory/)
     expect(JSON.stringify(result).length).toBeLessThan(8_000)
     f.graph.composableTurns.endTurn('root:documents')
@@ -332,8 +333,9 @@ describe('dsh-mnemon plugin composition', () => {
     const f = await compositionFixture()
     releases.push(f.dispose)
     const root = { id: 'root', session: { header: { cwd: f.workspace }, events: [] } } as unknown as HostAgent
-    await f.graph.composableTurns.beginTurn('root:documents', agentScope(root, f.config), 'test')
-    const execute = vi.spyOn(f.graph.memoryComposition.current()!, 'executeRoute')
+    const turn = await f.graph.composableTurns.beginTurn('root:documents', agentScope(root, f.config), 'test')
+    const route = turn.view.routes.find(route => route.sourceRouteId === 'search')!
+    const execute = vi.spyOn(f.graph.memoryComposition.current()!.sourceRuntime(route.sourceInstanceKey)!, 'query')
     const tools: ToolDefinition[] = []
     const coordinator = new MnemonSubagentCoordinator({ list: () => [], getProvider: () => undefined, start: vi.fn() } as never, f.live)
     registerTools({ tools: { register: (tool: ToolDefinition) => { tools.push(tool) } } } as never, f.live, coordinator)
