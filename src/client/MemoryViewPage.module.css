@@ -132,11 +132,15 @@
 
 @container mnemon-view (max-width: 920px) {
   .layout[data-editor-open] { grid-template-columns: minmax(0, 1fr); }
+  .layout[data-editor-open] > .panel:not(.strategyPanel) { display: none; }
   .strategyPanel { position: static; max-height: none; }
   .layout[data-editor-open] .snapshotLayout { grid-template-columns: minmax(0, 1fr) minmax(220px, 260px); }
   .layout[data-editor-open] .inspector { border-top: 0; border-left: 1px solid var(--mn-line); }
 }
 @container mnemon-view (max-width: 680px) {
+  .page [class*='pageHeader'] { display: grid; gap: 9px; }
+  .page [class*='pageHeaderMeta'] { justify-content: flex-start; }
+  .pageActions { justify-content: flex-start; }
   .snapshotLayout, .layout[data-editor-open] .snapshotLayout { grid-template-columns: minmax(0, 1fr); }
   .inspector, .layout[data-editor-open] .inspector { border-top: 1px solid var(--mn-line); border-left: 0; }
   .turnFocus { grid-template-columns: minmax(0, 1fr); }

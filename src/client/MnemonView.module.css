@@ -93,7 +93,7 @@
 .workspaceMismatch code { overflow: hidden; color: var(--mn-faint); font: 9px/1.4 var(--mn-code); text-overflow: ellipsis; white-space: nowrap; }
 .workspaceMismatch > button { min-height: 32px; flex: 0 0 auto; white-space: nowrap; }
 
-.workspace { display: flex; min-height: 0; flex: 1; flex-direction: row; }
+.workspace { display: flex; min-height: 0; flex: 1; flex-direction: row; container: mnemon-workspace / inline-size; }
 .sideNavigation { width: 176px; min-width: 176px; flex: 0 0 176px; overflow: hidden; padding: 10px 8px; border-right: 1px solid var(--mn-line); background: var(--mn-layer-1); }
 .nav { display: flex; min-width: 0; height: 100%; flex-direction: column; gap: 3px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
 .nav button { position: relative; display: grid; width: 100%; min-width: 0; min-height: 40px; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 7px 9px; border: 0; border-radius: 7px; color: var(--mn-muted); background: transparent; text-align: left; cursor: pointer; }

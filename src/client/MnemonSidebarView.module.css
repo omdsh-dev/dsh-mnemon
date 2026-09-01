@@ -120,6 +120,13 @@
   background: var(--dsw-alias-bg-layer-1);
 }
 
+@container (max-width: 620px) {
+  .shell .sideNavigation { width: 54px; min-width: 54px; flex-basis: 54px; padding: 8px 6px; }
+  .shell .nav button { min-width: 0; grid-template-columns: 1fr; justify-items: center; padding: 7px 5px; text-align: center; }
+  .shell .nav button > [class*='navLabel'],
+  .shell .nav button > [class*='layerDisabledBadge'] { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+}
+
 .shell .memoryWorkspace {
   flex: 0 0 auto;
   padding: 12px 16px 0;

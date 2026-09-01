@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 const sidebarCss = readFileSync(new URL('../src/client/MnemonSidebarView.module.css', import.meta.url), 'utf8')
 const workspaceCss = readFileSync(new URL('../src/client/MnemonWorkspace.module.css', import.meta.url), 'utf8')
 const viewCss = readFileSync(new URL('../src/client/MnemonView.module.css', import.meta.url), 'utf8')
+const memoryViewCss = readFileSync(new URL('../src/client/MemoryViewPage.module.css', import.meta.url), 'utf8')
 
 const sidebarSurface = 'var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base))'
 
@@ -33,13 +34,19 @@ describe('Sidebar layout invariants', () => {
   })
 
   it('keeps memory navigation in a vertical sidebar and collapses it to an icon rail', () => {
-    expect(viewCss).toContain('.workspace { display: flex; min-height: 0; flex: 1; flex-direction: row; }')
+    expect(viewCss).toContain('.workspace { display: flex; min-height: 0; flex: 1; flex-direction: row; container: mnemon-workspace / inline-size; }')
     expect(viewCss).toContain('.sideNavigation { width: 176px;')
     expect(viewCss).toContain(".nav button[data-active]::before")
     expect(sidebarCss).toContain('.shell .sideNavigation {\n  width: 172px;')
     expect(sidebarCss).toContain('.shell .sideNavigation { width: 54px; min-width: 54px;')
+    expect(sidebarCss).toContain('@container (max-width: 620px)')
     expect(viewCss).not.toContain('.topNavigation')
     expect(sidebarCss).not.toContain('.topNavigation')
+  })
+
+  it('switches narrow View surfaces to the strategy editor instead of placing it below a long snapshot', () => {
+    expect(memoryViewCss).toContain('@container mnemon-view (max-width: 920px)')
+    expect(memoryViewCss).toContain('.layout[data-editor-open] > .panel:not(.strategyPanel) { display: none; }')
   })
 
   it('renders runtime metadata as real chips while keeping form values at normal weight', () => {
