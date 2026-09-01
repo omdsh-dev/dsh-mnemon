@@ -26,6 +26,29 @@ function excerpt(value: string, maximum = 104): string {
   return normalized.length > maximum ? normalized.slice(0, maximum - 1) + '…' : normalized
 }
 
+function semanticItems(value: string, source: Source | undefined, t: MnemonTranslate, maximum = 3): string[] {
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  if (source?.sourceTypeId === 'documents') {
+    const match = normalized.match(/(\d+)\s+active project Documents/i)
+    if (match?.[1]) return [t('view.documentsAvailable', { count: match[1] })]
+  }
+  if (source?.sourceTypeId === 'memory-spaces') {
+    const match = normalized.match(/(\d+)\s+active of\s+(\d+)\s+configured Memory Spaces/i)
+    if (match?.[1] && match[2]) return [t('view.spacesAvailable', { active: match[1], total: match[2] })]
+  }
+  const candidates = value
+    .replace(/\r/g, '')
+    .replace(/<\/?runtime-memory-file[^>]*>/gi, '\n')
+    .split(/\n+|\s+§\s+/)
+    .map(item => item.replace(/^[\s#>*-]+/, '').replace(/^“|”$/g, '').trim())
+    .filter(item => item.length > 2
+      && !/^MNEMON RUNTIME MEMORY SNAPSHOT(?:\s+Revision:.*)?$/i.test(item)
+      && !/^Revision:\s*\S+$/i.test(item)
+      && !/^Contents of\s+.+\(.*\)$/i.test(item))
+    .map(item => excerpt(item, 92))
+  return [...new Set(candidates)].slice(0, maximum)
+}
+
 function StringList(props: { value: MemoryJsonValue; label: string; disabled: boolean; onChange(value: MemoryJsonValue): void }): JSX.Element {
   const serial = serialize(props.value)
   const [draft, setDraft] = useState({ serial, text: Array.isArray(props.value) ? props.value.join('\n') : '' })
@@ -115,8 +138,7 @@ function Snapshot({ view, dashboard }: { view: MemoryViewInspection; dashboard: 
     routes: view.routes.filter(route => route.sourceInstanceKey === key),
     actions: view.actions.filter(action => action.sourceInstanceKey === key),
   })).filter(group => group.fragments.length + group.routes.length + group.actions.length > 0)
-  const initialSelection = view.projection[0] ? `fragment:${view.projection[0].id}` : groups[0] ? `source:${groups[0].key}` : 'overview'
-  const [selection, setSelection] = useState(initialSelection)
+  const [selection, setSelection] = useState<string | null>(null)
   const selectedFragment = view.projection.find(fragment => selection === `fragment:${fragment.id}`)
   const selectedRoute = view.routes.find(route => selection === `route:${route.id}`)
   const selectedAction = view.actions.find(action => selection === `action:${action.id}`)
@@ -124,62 +146,78 @@ function Snapshot({ view, dashboard }: { view: MemoryViewInspection; dashboard: 
     ?? groups.find(group => selection === `source:${group.key}`)?.key
   const selectedGroup = groups.find(group => group.key === selectedSourceKey)
   const selectedSourceName = selectedGroup ? sourceLabel(selectedGroup.source, selectedGroup.key, t) : t('view.overview')
-  const selectionExists = selection === 'overview' ? initialSelection === 'overview' : selectedFragment !== undefined || selectedRoute !== undefined || selectedAction !== undefined || selectedGroup !== undefined
-  useEffect(() => { if (!selectionExists) setSelection(initialSelection) }, [initialSelection, selectionExists])
+  const selectionExists = selection === null || selectedFragment !== undefined || selectedRoute !== undefined || selectedAction !== undefined || selectedGroup !== undefined
+  useEffect(() => { if (!selectionExists) setSelection(null) }, [selectionExists])
   const select = (key: string) => ({ 'aria-pressed': selection === key, onClick: () => setSelection(key) } as const)
+  const injected = groups.map(group => ({ ...group, visibleFragments: group.fragments.filter(fragment => fragment.mode === 'eager') }))
+    .filter(group => group.visibleFragments.length > 0)
+  const available = groups.map(group => ({ ...group, visibleFragments: group.fragments.filter(fragment => fragment.mode !== 'eager') }))
+    .filter(group => group.visibleFragments.length > 0 || group.routes.length > 0)
+  const writeOnly = groups.filter(group => group.actions.length > 0
+    && !injected.some(item => item.key === group.key) && !available.some(item => item.key === group.key))
+  const items = (group: typeof injected[number] | typeof available[number]): string[] => [...new Set(group.visibleFragments
+    .flatMap(fragment => semanticItems(fragment.text, group.source, t, 2)))].slice(0, 3)
+  const selectedKind = selectedFragment ? t(selectedFragment.mode === 'eager' ? 'view.injected' : 'view.available') : selectedRoute ? t('view.reads') : selectedAction ? t('view.writes') : t('view.source')
+  const selectedTitle = selectedFragment ? selectedSourceName : selectedRoute?.description || selectedAction?.description || selectedSourceName
+  const characters = view.projection.reduce((sum, fragment) => sum + fragment.text.length, 0)
   return <>
-    <div className={css.snapshotLayout}>
+    <div className={css.snapshotLayout} data-inspector-open={selection === null ? undefined : ''}>
       <div className={css.snapshotStage}>
         <section className={css.turnFocus} aria-label={t('view.snapshot')}>
-          <div><span className={`${css.badge} ${view.state === 'active' ? css.positive : ''}`}>{t(view.state === 'preview' ? 'view.previewBadge' : view.state === 'active' ? 'view.active' : 'view.recent')}</span>
-            <h3>{view.turn === undefined ? view.strategyTypeId : t('view.turn', { turn: view.turn })}</h3>
-            <div className={css.meta}><time dateTime={view.createdAt}>{new Date(view.createdAt).toLocaleString(locale)}</time><span>{view.strategyTypeId}</span>{view.extensions.map(extension => <span key={extension.instanceKey}>{extension.typeId}</span>)}</div>
+          <div className={css.turnIdentity}><span className={`${css.badge} ${view.state === 'active' ? css.positive : ''}`}>{t(view.state === 'preview' ? 'view.previewBadge' : view.state === 'active' ? 'view.active' : 'view.recent')}</span>
+            <h3>{view.turn === undefined ? view.strategyTypeId : t('view.turn', { turn: view.turn })}</h3><span>{view.strategyTypeId}</span>
+            {view.extensions.map(extension => <span key={extension.instanceKey}>{extension.typeId}</span>)}
           </div>
-          <div className={css.metrics} aria-label={t('view.snapshotMetrics')}><strong>{t('view.characters', { count: number(view.projection.reduce((sum, fragment) => sum + fragment.text.length, 0)) })}</strong><span>{t('view.fragments', { count: view.projection.length })}</span><span>{t('view.routesCount', { count: view.routes.length })}</span><span>{t('view.actionsCount', { count: view.actions.length })}</span></div>
+          <div className={css.metrics} aria-label={t('view.snapshotMetrics')}><strong>{t('view.characters', { count: number(characters) })}</strong><span aria-label={t('view.routesCount', { count: view.routes.length })}><i aria-hidden="true">↙</i>{number(view.routes.length)}</span><span aria-label={t('view.actionsCount', { count: view.actions.length })}><i aria-hidden="true">↗</i>{number(view.actions.length)}</span></div>
         </section>
 
-        <section className={`${css.layer} ${css.residentLayer}`} aria-label={t('view.residentLayer')}>
-          <header className={css.layerHeader}><div><span className={css.layerIndex}>01</span><h3>{t('view.residentLayer')}</h3></div><span>{view.projection.length}</span></header>
-          {view.projection.length === 0 ? <p className={css.layerEmpty}>{t('view.emptyProjection')}</p> : <div className={css.fragmentGrid}>
-            {view.projection.map(fragment => {
-              const source = dashboard.sources.find(item => item.sourceInstanceKey === fragment.sourceInstanceKey)
-              const key = `fragment:${fragment.id}`
-              return <button key={fragment.id} type="button" className={css.fragmentCard} data-source-type={source?.sourceTypeId ?? 'other'} {...select(key)}>
-                <span className={css.fragmentSource}><i aria-hidden="true">{sourceGlyph(source)}</i>{sourceLabel(source, fragment.sourceInstanceKey, t)}<em>{t(fragment.mode === 'eager' ? 'view.eager' : 'view.routed')}</em></span>
-                <span className={css.fragmentPreview}>“{excerpt(fragment.text) || t('view.emptyText')}”</span>
-                <span className={css.fragmentMeta}>{t('view.characters', { count: number(fragment.text.length) })}<code>{fragment.revision}</code></span>
-              </button>
-            })}
-          </div>}
-        </section>
+        <div className={css.semanticCanvas}>
+          <section className={css.canvasBand} aria-label={t('view.injected')}>
+            <header className={css.bandHeader}><h3>{t('view.injected')}</h3><span>{injected.length}</span></header>
+            {injected.length === 0 ? <p className={css.layerEmpty}>{t('view.injectedEmpty')}</p> : <div className={css.nodeGrid}>
+              {injected.map(group => {
+                const summaries = items(group)
+                const count = group.visibleFragments.reduce((sum, fragment) => sum + fragment.text.length, 0)
+                return <button key={group.key} type="button" className={css.canvasNode} data-source-type={group.source?.sourceTypeId ?? 'other'} {...select(`source:${group.key}`)}>
+                  <span className={css.nodeTop}><i aria-hidden="true">{sourceGlyph(group.source)}</i><strong>{sourceLabel(group.source, group.key, t)}</strong><span className={css.nodeSignals}>{group.actions.length > 0 && <span aria-label={t('view.actionsCount', { count: group.actions.length })}><b aria-hidden="true">↗</b>{number(group.actions.length)}</span>}</span></span>
+                  <span className={css.semanticList}>{summaries.map(value => <span key={value}>{value}</span>)}</span>
+                  <span className={css.nodeFoot}>{t('view.characters', { count: number(count) })}{group.visibleFragments.length > 1 && <em>+{number(group.visibleFragments.length - 1)}</em>}</span>
+                </button>
+              })}
+            </div>}
+          </section>
 
-        <section className={`${css.layer} ${css.callableLayer}`} aria-label={t('view.callableLayer')}>
-          <header className={css.layerHeader}><div><span className={css.layerIndex}>02</span><h3>{t('view.callableLayer')}</h3></div><span>{view.routes.length + view.actions.length}</span></header>
-          {groups.length === 0 ? <p className={css.layerEmpty}>{t('view.noOperations')}</p> : <div className={css.sourceLanes}>
-            {groups.map(group => <article className={css.sourceLane} key={group.key} data-source-type={group.source?.sourceTypeId ?? 'other'}>
-              <button type="button" className={css.sourceIdentity} {...select(`source:${group.key}`)}><i aria-hidden="true">{sourceGlyph(group.source)}</i><span><strong>{sourceLabel(group.source, group.key, t)}</strong><small>{group.source?.role ?? group.key}</small></span></button>
-              <div className={css.capabilities}>
-                {group.routes.map(route => <button key={route.id} type="button" className={css.capability} {...select(`route:${route.id}`)}><span>↙</span><strong>{route.description || route.operationId}</strong><code>{route.operationId}</code></button>)}
-                {group.actions.map(action => <button key={action.id} type="button" className={css.capability} {...select(`action:${action.id}`)}><span>↗</span><strong>{action.description || action.operationId}</strong><code>{action.operationId}</code></button>)}
-                {group.routes.length + group.actions.length === 0 && <span className={css.residentOnly}>{t('view.residentOnly')}</span>}
-              </div>
-            </article>)}
-          </div>}
-        </section>
+          <section className={`${css.canvasBand} ${css.availableBand}`} aria-label={t('view.available')}>
+            <header className={css.bandHeader}><h3>{t('view.available')}</h3><span>{available.length}</span></header>
+            {available.length === 0 ? <p className={css.layerEmpty}>{t('view.availableEmpty')}</p> : <div className={css.nodeGrid}>
+              {available.map(group => {
+                const summaries = items(group)
+                const operations = group.routes.map(route => route.operationId)
+                return <button key={group.key} type="button" className={`${css.canvasNode} ${css.availableNode}`} data-source-type={group.source?.sourceTypeId ?? 'other'} {...select(`source:${group.key}`)}>
+                  <span className={css.nodeTop}><i aria-hidden="true">{sourceGlyph(group.source)}</i><strong>{sourceLabel(group.source, group.key, t)}</strong><span className={css.nodeSignals}>{group.routes.length > 0 && <span aria-label={t('view.routesCount', { count: group.routes.length })}><b aria-hidden="true">↙</b>{number(group.routes.length)}</span>}{group.actions.length > 0 && <span aria-label={t('view.actionsCount', { count: group.actions.length })}><b aria-hidden="true">↗</b>{number(group.actions.length)}</span>}</span></span>
+                  {summaries.length > 0 && <span className={css.semanticList}>{summaries.map(value => <span key={value}>{value}</span>)}</span>}
+                  <span className={css.operationChips}>{operations.slice(0, 3).map(operation => <code key={operation}>{operation}</code>)}{operations.length > 3 && <em>+{number(operations.length - 3)}</em>}</span>
+                </button>
+              })}
+            </div>}
+          </section>
+
+          {writeOnly.length > 0 && <div className={css.writeTargets}><span>{t('view.writeTargets')}</span>{writeOnly.map(group => <button type="button" key={group.key} data-source-type={group.source?.sourceTypeId ?? 'other'} {...select(`source:${group.key}`)}><i aria-hidden="true">{sourceGlyph(group.source)}</i>{sourceLabel(group.source, group.key, t)}<b aria-hidden="true">↗</b>{number(group.actions.length)}</button>)}</div>}
+        </div>
       </div>
 
-      <aside className={css.inspector} aria-label={t('view.details')}>
-        <header className={css.inspectorHeader}><span>{selectedFragment ? t('view.residentLayer') : selectedRoute ? t('view.reads') : selectedAction ? t('view.writes') : t('view.source')}</span><h3>{selectedFragment ? selectedSourceName : selectedRoute?.description || selectedAction?.description || selectedSourceName}</h3></header>
+      {selection !== null && <aside className={css.inspector} aria-label={t('view.details')}>
+        <header className={css.inspectorHeader}><div><span>{selectedKind}</span><h3>{selectedTitle}</h3></div><button type="button" className={css.closePanel} aria-label={t('view.closeDetails')} onClick={() => setSelection(null)}>×</button></header>
         <div className={css.inspectorBody}>
           {selectedFragment && <>{text(selectedFragment.text)}<dl className={css.properties}><div><dt>{t('view.source')}</dt><dd>{selectedSourceName}</dd></div><div><dt>{t('view.mode')}</dt><dd>{t(selectedFragment.mode === 'eager' ? 'view.eager' : 'view.routed')}</dd></div><div><dt>{t('view.revision')}</dt><dd><code>{selectedFragment.revision}</code></dd></div></dl></>}
           {selectedRoute && <dl className={css.properties}><div><dt>{t('view.source')}</dt><dd>{selectedSourceName}</dd></div><div><dt>{t('view.operation')}</dt><dd><code>{selectedRoute.operationId}</code></dd></div><div><dt>{t('view.maxCalls')}</dt><dd>{number(selectedRoute.maxCalls)}</dd></div></dl>}
           {selectedAction && <dl className={css.properties}><div><dt>{t('view.source')}</dt><dd>{selectedSourceName}</dd></div><div><dt>{t('view.operation')}</dt><dd><code>{selectedAction.operationId}</code></dd></div></dl>}
           {!selectedFragment && !selectedRoute && !selectedAction && selectedGroup && <dl className={css.properties}><div><dt>{t('view.sourceKey')}</dt><dd><code>{selectedGroup.key}</code></dd></div><div><dt>{t('view.sourceRole')}</dt><dd>{selectedGroup.source?.role ?? '—'}</dd></div></dl>}
           {selectedGroup && <section className={css.related}><h4>{t('view.sameSource')}</h4><div className={css.relatedCounts}><span>{t('view.fragments', { count: selectedGroup.fragments.length })}</span><span>{t('view.routesCount', { count: selectedGroup.routes.length })}</span><span>{t('view.actionsCount', { count: selectedGroup.actions.length })}</span></div>
-            {[...selectedGroup.routes.map(value => ({ key: `route:${value.id}`, glyph: '↙', label: value.description || value.operationId })), ...selectedGroup.actions.map(value => ({ key: `action:${value.id}`, glyph: '↗', label: value.description || value.operationId }))].map(value => <button type="button" key={value.key} {...select(value.key)}><span aria-hidden="true">{value.glyph}</span>{value.label}</button>)}
+            {[...selectedGroup.fragments.map(value => ({ key: `fragment:${value.id}`, glyph: value.mode === 'eager' ? '●' : '○', label: excerpt(value.text, 78) || t('view.emptyText') })), ...selectedGroup.routes.map(value => ({ key: `route:${value.id}`, glyph: '↙', label: value.description || value.operationId })), ...selectedGroup.actions.map(value => ({ key: `action:${value.id}`, glyph: '↗', label: value.description || value.operationId }))].map(value => <button type="button" key={value.key} {...select(value.key)}><span aria-hidden="true">{value.glyph}</span>{value.label}</button>)}
           </section>}
         </div>
-      </aside>
+      </aside>}
     </div>
     {view.guidance && <details className={css.details}><summary>{t('view.guidance')}</summary><div className={css.detailsBody}><p className={css.caption}>{t('view.guidanceHint')}</p>
       {([['view.systemGuidance', view.guidance.system], ['view.bothReminder', view.guidance.reminders?.both], ['view.readReminder', view.guidance.reminders?.read], ['view.writeReminder', view.guidance.reminders?.write]] as const).map(([label, value]) => value ? <section key={label}><h4 className={css.heading}>{t(label)}</h4>{text(value)}</section> : null)}

@@ -69,11 +69,28 @@ describe('View page interaction and localization', () => {
     const f = fixture(); f.mount(); await ready()
     expect(screen.getByText('Pinned for this turn')).toBeTruthy()
     expect(screen.queryByRole('form', { name: 'Strategy composition' })).toBeNull()
-    expect(screen.getByRole('region', { name: 'Resident context' })).toBeTruthy()
-    expect(screen.getByRole('region', { name: 'On-demand capabilities' })).toBeTruthy()
-    expect(screen.getByRole('complementary', { name: 'View details' })).toBeTruthy()
+    const injected = screen.getByRole('region', { name: 'Injected' })
+    const available = screen.getByRole('region', { name: 'Available on demand' })
+    expect(within(injected).getByRole('button', { name: /^Runtime/ })).toBeTruthy()
+    expect(within(available).getByRole('button', { name: /^Documents/ })).toBeTruthy()
+    expect(screen.queryByRole('complementary', { name: 'View details' })).toBeNull()
     expect(screen.queryByRole('combobox', { name: 'Choose base strategy' })).toBeNull()
-    expect(screen.getByText('Search records')).toBeTruthy()
+    expect(screen.queryByText('Search records')).toBeNull()
+    expect(screen.queryByText('Write runtime')).toBeNull()
+
+    fireEvent.click(within(injected).getByRole('button', { name: /^Runtime/ }))
+    let inspector = screen.getByRole('complementary', { name: 'View details' })
+    expect(within(inspector).getByText('Original session context')).toBeTruthy()
+    fireEvent.click(within(inspector).getByRole('button', { name: /Write runtime/ }))
+    expect(within(inspector).getByRole('heading', { name: 'Write runtime' })).toBeTruthy()
+    fireEvent.click(within(inspector).getByRole('button', { name: 'Close details' }))
+    expect(screen.queryByRole('complementary', { name: 'View details' })).toBeNull()
+
+    fireEvent.click(within(available).getByRole('button', { name: /^Documents/ }))
+    inspector = screen.getByRole('complementary', { name: 'View details' })
+    fireEvent.click(within(inspector).getByRole('button', { name: /Search records/ }))
+    expect(within(inspector).getByRole('heading', { name: 'Search records' })).toBeTruthy()
+    expect(within(inspector).getByText('2')).toBeTruthy()
     expect(screen.getByText('Original Strategy instructions')).toBeTruthy()
     expect(screen.getByText('Exact original Host memory text')).toBeTruthy()
     expect(f.client.previewView).not.toHaveBeenCalled()
@@ -99,25 +116,51 @@ describe('View page interaction and localization', () => {
     const rendered = f.mount()
     await screen.findByText('SANITIZED-0 · synthetic backup-shaped memory fragment')
 
-    const resident = screen.getByRole('region', { name: 'Resident context' })
-    const callable = screen.getByRole('region', { name: 'On-demand capabilities' })
-    const inspector = screen.getByRole('complementary', { name: 'View details' })
-    expect(within(resident).getAllByRole('button')).toHaveLength(20)
-    expect(within(callable).getAllByRole('article')).toHaveLength(4)
-    expect(within(callable).getAllByRole('button')).toHaveLength(24)
+    const injected = screen.getByRole('region', { name: 'Injected' })
+    const available = screen.getByRole('region', { name: 'Available on demand' })
+    expect(within(injected).getAllByRole('button')).toHaveLength(3)
+    expect(within(available).getAllByRole('button')).toHaveLength(4)
+    expect(screen.queryByRole('complementary', { name: 'View details' })).toBeNull()
+    expect(screen.queryByText('Route 11 evidence')).toBeNull()
+    expect(screen.queryByText('Action 7 memory')).toBeNull()
 
-    const longCard = within(resident).getAllByRole('button')[15]!
-    expect(longCard.textContent?.length).toBeLessThan(220)
-    fireEvent.click(longCard)
+    const documents = within(injected).getByRole('button', { name: /^Documents/ })
+    expect(documents.textContent?.length).toBeLessThan(360)
+    expect(documents.textContent).not.toContain('DOC-11-LONG')
+    fireEvent.click(documents)
+    let inspector = screen.getByRole('complementary', { name: 'View details' })
+    fireEvent.click(within(inspector).getByRole('button', { name: /DOC-11-LONG/ }))
     expect(inspector.querySelector('pre')?.textContent).toBe(longDocument)
+    fireEvent.click(within(inspector).getByRole('button', { name: 'Close details' }))
 
-    fireEvent.click(within(callable).getByRole('button', { name: 'Notion Reference external' }))
+    fireEvent.click(within(available).getByRole('button', { name: /^Notion Reference/ }))
+    inspector = screen.getByRole('complementary', { name: 'View details' })
     expect(within(inspector).getByText('0 content fragments')).toBeTruthy()
     expect(within(inspector).getByText('2 read routes')).toBeTruthy()
-    fireEvent.click(within(callable).getByRole('button', { name: '↙ Route 11 evidence read-11' }))
+    fireEvent.click(within(inspector).getByRole('button', { name: /Route 11 evidence/ }))
     expect(within(inspector).getByRole('heading', { name: 'Route 11 evidence' })).toBeTruthy()
     expect(within(inspector).getByText('12')).toBeTruthy()
     rendered.unmount()
+  })
+
+  it('derives compact Source signals from real projection text without inventing summaries', async () => {
+    const f = fixture()
+    f.update({ current: { ...snapshot(), projection: [
+      { id: 'runtime', sourceInstanceKey: 'source:runtime', mode: 'eager', revision: 'runtime-r1', text: '<runtime-memory-file path="USER.md">\n# MNEMON RUNTIME MEMORY SNAPSHOT\nRevision: secret-r1\n默认使用中文 § 分阶段提交\n</runtime-memory-file>' },
+      { id: 'documents', sourceInstanceKey: 'source:documents', mode: 'routed', revision: 'documents-r1', text: '11 active project Documents. Use search.' },
+      { id: 'spaces', sourceInstanceKey: 'source:spaces', mode: 'routed', revision: 'spaces-r1', text: '2 active of 4 configured Memory Spaces. Use recall.' },
+    ], routes: [
+      { id: 'documents-search', sourceInstanceKey: 'source:documents', operationId: 'search', description: 'Search project records', maxCalls: 2 },
+      { id: 'spaces-recall', sourceInstanceKey: 'source:spaces', operationId: 'recall', description: 'Recall durable evidence', maxCalls: 2 },
+    ] } })
+    f.mount('zh-CN')
+    await screen.findByText('默认使用中文')
+    expect(screen.getByText('分阶段提交')).toBeTruthy()
+    expect(screen.getByText('11 份项目档案可检索')).toBeTruthy()
+    expect(screen.getByText('2 / 4 个记忆体可召回')).toBeTruthy()
+    expect(screen.queryByText(/secret-r1/)).toBeNull()
+    expect(screen.queryByText(/runtime-memory-file/)).toBeNull()
+    expect(screen.queryByText('搜索项目记录')).toBeNull()
   })
 
   it('keeps draft, read-only preview and pinned current View distinct until an explicit save', async () => {
