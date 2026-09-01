@@ -73,11 +73,9 @@
 .inspectorHeader h3 { margin: 5px 0 0; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
 .inspectorBody { display: grid; min-width: 0; gap: 13px; padding: 13px; }
 .text { margin: 0; min-width: 0; max-height: 330px; overflow: auto; border: 1px solid var(--mn-line); border-radius: 6px; padding: 10px; color: var(--mn-text); background: var(--mn-bg); font: 10px/1.65 var(--mn-code); white-space: pre-wrap; overflow-wrap: anywhere; }
-.properties { display: grid; margin: 0; border-top: 1px solid var(--mn-line); }
-.properties > div { display: grid; min-width: 0; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--mn-line); font-size: 10px; }
-.properties dt { color: var(--mn-faint); }
-.properties dd { min-width: 0; margin: 0; color: var(--mn-muted); overflow-wrap: anywhere; }
-.properties code { font: 9px/1.5 var(--mn-code); }
+.detailCapabilities { display: grid; gap: 6px; }
+.detailCapabilities > div { display: grid; min-width: 0; grid-template-columns: 17px minmax(0, 1fr); align-items: center; gap: 5px; }
+.detailCapabilities b { color: var(--mn-faint); font-size: 10px; font-weight: 500; }
 .related { display: grid; min-width: 0; gap: 7px; }
 .related h4 { margin: 0; font-size: 11px; }
 .relatedCounts { display: flex; flex-wrap: wrap; gap: 5px 9px; color: var(--mn-faint); font-size: 9px; }

@@ -140,13 +140,11 @@ function Snapshot({ view, dashboard }: { view: MemoryViewInspection; dashboard: 
   })).filter(group => group.fragments.length + group.routes.length + group.actions.length > 0)
   const [selection, setSelection] = useState<string | null>(null)
   const selectedFragment = view.projection.find(fragment => selection === `fragment:${fragment.id}`)
-  const selectedRoute = view.routes.find(route => selection === `route:${route.id}`)
-  const selectedAction = view.actions.find(action => selection === `action:${action.id}`)
-  const selectedSourceKey = selectedFragment?.sourceInstanceKey ?? selectedRoute?.sourceInstanceKey ?? selectedAction?.sourceInstanceKey
-    ?? groups.find(group => selection === `source:${group.key}`)?.key
+  const selectedSourceKey = selectedFragment?.sourceInstanceKey ?? groups.find(group => selection === `source:${group.key}`)?.key
   const selectedGroup = groups.find(group => group.key === selectedSourceKey)
   const selectedSourceName = selectedGroup ? sourceLabel(selectedGroup.source, selectedGroup.key, t) : t('view.overview')
-  const selectionExists = selection === null || selectedFragment !== undefined || selectedRoute !== undefined || selectedAction !== undefined || selectedGroup !== undefined
+  const selectedContent = selectedGroup?.fragments.filter(fragment => fragment.mode === 'eager') ?? []
+  const selectionExists = selection === null || selectedFragment !== undefined || selectedGroup !== undefined
   useEffect(() => { if (!selectionExists) setSelection(null) }, [selectionExists])
   const select = (key: string) => ({ 'aria-pressed': selection === key, onClick: () => setSelection(key) } as const)
   const injected = groups.map(group => ({ ...group, visibleFragments: group.fragments.filter(fragment => fragment.mode === 'eager') }))
@@ -157,8 +155,8 @@ function Snapshot({ view, dashboard }: { view: MemoryViewInspection; dashboard: 
     && !injected.some(item => item.key === group.key) && !available.some(item => item.key === group.key))
   const items = (group: typeof injected[number] | typeof available[number]): string[] => [...new Set(group.visibleFragments
     .flatMap(fragment => semanticItems(fragment.text, group.source, t, 2)))].slice(0, 3)
-  const selectedKind = selectedFragment ? t(selectedFragment.mode === 'eager' ? 'view.injected' : 'view.available') : selectedRoute ? t('view.reads') : selectedAction ? t('view.writes') : t('view.source')
-  const selectedTitle = selectedFragment ? selectedSourceName : selectedRoute?.description || selectedAction?.description || selectedSourceName
+  const selectedKind = selectedFragment ? t('view.injected') : t('view.source')
+  const selectedTitle = selectedSourceName
   const characters = view.projection.reduce((sum, fragment) => sum + fragment.text.length, 0)
   return <>
     <div className={css.snapshotLayout} data-inspector-open={selection === null ? undefined : ''}>
@@ -209,13 +207,14 @@ function Snapshot({ view, dashboard }: { view: MemoryViewInspection; dashboard: 
       {selection !== null && <aside className={css.inspector} aria-label={t('view.details')}>
         <header className={css.inspectorHeader}><div><span>{selectedKind}</span><h3>{selectedTitle}</h3></div><button type="button" className={css.closePanel} aria-label={t('view.closeDetails')} onClick={() => setSelection(null)}>×</button></header>
         <div className={css.inspectorBody}>
-          {selectedFragment && <>{text(selectedFragment.text)}<dl className={css.properties}><div><dt>{t('view.source')}</dt><dd>{selectedSourceName}</dd></div><div><dt>{t('view.mode')}</dt><dd>{t(selectedFragment.mode === 'eager' ? 'view.eager' : 'view.routed')}</dd></div><div><dt>{t('view.revision')}</dt><dd><code>{selectedFragment.revision}</code></dd></div></dl></>}
-          {selectedRoute && <dl className={css.properties}><div><dt>{t('view.source')}</dt><dd>{selectedSourceName}</dd></div><div><dt>{t('view.operation')}</dt><dd><code>{selectedRoute.operationId}</code></dd></div><div><dt>{t('view.maxCalls')}</dt><dd>{number(selectedRoute.maxCalls)}</dd></div></dl>}
-          {selectedAction && <dl className={css.properties}><div><dt>{t('view.source')}</dt><dd>{selectedSourceName}</dd></div><div><dt>{t('view.operation')}</dt><dd><code>{selectedAction.operationId}</code></dd></div></dl>}
-          {!selectedFragment && !selectedRoute && !selectedAction && selectedGroup && <dl className={css.properties}><div><dt>{t('view.sourceKey')}</dt><dd><code>{selectedGroup.key}</code></dd></div><div><dt>{t('view.sourceRole')}</dt><dd>{selectedGroup.source?.role ?? '—'}</dd></div></dl>}
-          {selectedGroup && <section className={css.related}><h4>{t('view.sameSource')}</h4><div className={css.relatedCounts}><span>{t('view.fragments', { count: selectedGroup.fragments.length })}</span><span>{t('view.routesCount', { count: selectedGroup.routes.length })}</span><span>{t('view.actionsCount', { count: selectedGroup.actions.length })}</span></div>
-            {[...selectedGroup.fragments.map(value => ({ key: `fragment:${value.id}`, glyph: value.mode === 'eager' ? '●' : '○', label: excerpt(value.text, 78) || t('view.emptyText') })), ...selectedGroup.routes.map(value => ({ key: `route:${value.id}`, glyph: '↙', label: value.description || value.operationId })), ...selectedGroup.actions.map(value => ({ key: `action:${value.id}`, glyph: '↗', label: value.description || value.operationId }))].map(value => <button type="button" key={value.key} {...select(value.key)}><span aria-hidden="true">{value.glyph}</span>{value.label}</button>)}
-          </section>}
+          {selectedFragment && text(selectedFragment.text)}
+          {selectedGroup && <><div className={css.relatedCounts}><span>{t('view.injectedFragments', { count: selectedContent.length })}</span><span>{t('view.routesCount', { count: selectedGroup.routes.length })}</span><span>{t('view.actionsCount', { count: selectedGroup.actions.length })}</span></div>
+            <div className={css.detailCapabilities}>
+              {selectedGroup.routes.length > 0 && <div aria-label={t('view.reads')}><b aria-hidden="true">↙</b><span className={css.operationChips}>{selectedGroup.routes.slice(0, 3).map(route => <code key={route.id}>{route.operationId}</code>)}{selectedGroup.routes.length > 3 && <em>+{number(selectedGroup.routes.length - 3)}</em>}</span></div>}
+              {selectedGroup.actions.length > 0 && <div aria-label={t('view.writes')}><b aria-hidden="true">↗</b><span className={css.operationChips}>{selectedGroup.actions.slice(0, 3).map(action => <code key={action.id}>{action.operationId}</code>)}{selectedGroup.actions.length > 3 && <em>+{number(selectedGroup.actions.length - 3)}</em>}</span></div>}
+            </div>
+            {!selectedFragment && selectedContent.length > 0 && <section className={css.related}><h4>{t('view.currentContent')}</h4>{selectedContent.map(value => <button type="button" key={value.id} {...select(`fragment:${value.id}`)}><span aria-hidden="true">●</span>{excerpt(value.text, 78) || t('view.emptyText')}</button>)}</section>}
+          </>}
         </div>
       </aside>}
     </div>
