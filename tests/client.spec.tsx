@@ -11,7 +11,7 @@ import { TEST_PROVIDERS as MEMORY_PROVIDER_CATALOG } from './fixtures/providers.
 describe('MnemonView', () => {
   afterEach(cleanup)
   async function selectWorkspaceTab(name: string): Promise<void> {
-    const navigation = await screen.findByRole('navigation', { name: 'Mnemon 页面' })
+    const navigation = await screen.findByRole('tablist', { name: 'Mnemon 页面' })
     if (['概览', '检索', '实体', '内容'].includes(name)) {
       fireEvent.click(within(navigation).getByRole('tab', { name: '记忆体' }))
       fireEvent.click(await screen.findByRole('tab', { name }))
@@ -362,7 +362,7 @@ describe('MnemonView', () => {
       const { connection, call } = createConnection({ layerSwitches })
       render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface={surface} />)
       await screen.findByText('已连接')
-      const navigation = screen.getByRole('navigation', { name: 'Mnemon 页面' })
+      const navigation = screen.getByRole('tablist', { name: 'Mnemon 页面' })
 
       for (const id of ids) {
         const item = within(navigation).getByRole('tab', { name: layerSwitches[id] ? labels[id] : `${labels[id]} · 已关闭` })
@@ -694,18 +694,18 @@ describe('MnemonView', () => {
     expect(screen.queryByRole('region', { name: '记忆统计' })).toBeNull()
     expect(screen.queryByText('运行与诊断')).toBeNull()
 
-    const navigation = screen.getByRole('navigation', { name: 'Mnemon 页面' })
+    const navigation = screen.getByRole('tablist', { name: 'Mnemon 页面' })
     const items = within(navigation).getAllByRole('tab')
     const statusItem = within(navigation).getByRole('tab', { name: '状态' })
     const runtimeItem = within(navigation).getByRole('tab', { name: '运行时' })
     const bodiesItem = within(navigation).getByRole('tab', { name: '记忆体' })
     const documentsItem = within(navigation).getByRole('tab', { name: '档案' })
     expect(items).toHaveLength(5)
-    expect(items.map(item => item.getAttribute('aria-label'))).toEqual(['状态', '视图', '运行时', '档案', '记忆体'])
-    expect(statusItem.getAttribute('aria-current')).toBe('page')
+    expect(items.map(item => item.textContent)).toEqual(['状态', '视图', '运行时', '档案', '记忆体'])
+    expect(statusItem.hasAttribute('aria-current')).toBe(false)
     expect(statusItem.hasAttribute('data-active')).toBe(true)
     expect(bodiesItem.hasAttribute('aria-current')).toBe(false)
-    expect(screen.getByRole('tablist', { name: 'Mnemon 页面' }).getAttribute('aria-orientation')).toBe('vertical')
+    expect(screen.getByRole('tablist', { name: 'Mnemon 页面' }).hasAttribute('aria-orientation')).toBe(false)
 
     const canvas = screen.getByTestId('mnemon-canvas')
     expect(canvas.hasAttribute('data-lock-page-header')).toBe(true)
@@ -715,7 +715,7 @@ describe('MnemonView', () => {
     expect(canvas.hasAttribute('data-lock-page-header')).toBe(false)
     expect(statusItem.hasAttribute('aria-current')).toBe(false)
     expect(statusItem.hasAttribute('data-active')).toBe(false)
-    expect(bodiesItem.getAttribute('aria-current')).toBe('page')
+    expect(bodiesItem.hasAttribute('aria-current')).toBe(false)
     expect(bodiesItem.hasAttribute('data-active')).toBe(true)
     const memoryTablist = screen.getByRole('tablist', { name: '记忆体页面' })
     const memoryTabs = within(memoryTablist).getAllByRole('tab')
@@ -870,7 +870,7 @@ describe('MnemonView', () => {
     const { connection } = createConnection({ runtimeBranch: true })
     render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
     await screen.findByText('已连接')
-    const navigation = screen.getByRole('navigation', { name: 'Mnemon 页面' })
+    const navigation = screen.getByRole('tablist', { name: 'Mnemon 页面' })
     fireEvent.click(within(navigation).getByRole('tab', { name: '运行时' }))
     expect(await screen.findByText('feat/branch-ui 分支上决定用 v2 渲染管线')).toBeTruthy()
     expect(screen.getByText('feat/branch-ui', { selector: '[title]' })).toBeTruthy()
@@ -1630,7 +1630,7 @@ describe('MnemonView', () => {
     render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" t={translateEn} locale="en" />)
 
     await waitFor(() => expect(screen.getByText('Connected')).toBeTruthy())
-    const navigation = await screen.findByRole('navigation', { name: 'Mnemon pages' })
+    const navigation = await screen.findByRole('tablist', { name: 'Mnemon pages' })
     fireEvent.click(within(navigation).getByRole('tab', { name: 'Memory Spaces' }))
     expect(screen.getByRole('heading', { name: 'Memory Spaces' })).toBeTruthy()
     expect(screen.getByRole('region', { name: 'Memory Space Directory' })).toBeTruthy()

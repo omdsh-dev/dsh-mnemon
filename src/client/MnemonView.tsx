@@ -133,14 +133,11 @@ function WorkspaceNavigation(props: { page: Page; onSelect(page: Page): void; so
   const button = (item: SourceNavigationEntry) => {
     const active = props.page === item.page || selectedType !== undefined && selectedType === item.sourceTypeId
     const disabled = item.sourceTypeId !== undefined && props.disabledTypes.has(item.sourceTypeId)
-    const ariaLabel = disabled ? item.label + ' · ' + t('layers.disabledBadge') : item.label
-    return <button key={item.id} type="button" role="tab" aria-selected={active} aria-current={active ? 'page' : undefined} data-active={active ? '' : undefined} aria-label={ariaLabel} title={item.detail || item.label} data-navigation-group={item.group} data-layer-disabled={disabled ? '' : undefined} onClick={() => props.onSelect(item.page)}>
-      <span className={css.navGlyph} aria-hidden="true">{item.glyph}</span><span className={css.navLabel}>{item.label}</span>{disabled && <em className={css.layerDisabledBadge}>{t('layers.disabledBadge')}</em>}
-    </button>
+    return <button key={item.id} type="button" role="tab" aria-selected={active} data-active={active ? '' : undefined} aria-label={disabled ? item.label + ' · ' + t('layers.disabledBadge') : undefined} data-layer-disabled={disabled ? '' : undefined} onClick={() => props.onSelect(item.page)}><span>{item.label}</span>{disabled && <em className={css.layerDisabledBadge}>{t('layers.disabledBadge')}</em>}</button>
   }
-  return <aside className={appearanceClass(css.sideNavigation, sidebarCss.sideNavigation)}>
-    <nav aria-label={t('nav.aria')}><div className={appearanceClass(css.nav, sidebarCss.nav)} role="tablist" aria-label={t('nav.aria')} aria-orientation="vertical">{entries.filter(entry => entry.primary).map(button)}</div></nav>
-  </aside>
+  return <div className={appearanceClass(css.topNavigation, sidebarCss.topNavigation)}>
+    <div className={appearanceClass(css.nav, sidebarCss.nav)} role="tablist" aria-label={t('nav.aria')}>{entries.filter(entry => entry.primary).map(button)}</div>
+  </div>
 }
 
 function versionModeLabel(t: MnemonTranslate, mode: VersionInstallMode): string {

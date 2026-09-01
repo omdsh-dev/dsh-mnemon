@@ -36,15 +36,13 @@ describe('Sidebar layout invariants', () => {
     expect(sidebarCss).toContain(".shell .statusCluster > span:not([class*='statusDot']) { display: inline; }")
   })
 
-  it('keeps memory navigation in a vertical sidebar and collapses it to an icon rail', () => {
-    expect(viewCss).toContain('.workspace { display: flex; min-height: 0; flex: 1; flex-direction: row; container: mnemon-workspace / inline-size; }')
-    expect(viewCss).toContain('.sideNavigation { width: 176px;')
-    expect(viewCss).toContain(".nav button[data-active]::before")
-    expect(sidebarCss).toContain('.shell .sideNavigation {\n  width: 172px;')
-    expect(sidebarCss).toContain('.shell .sideNavigation { width: 54px; min-width: 54px;')
-    expect(sidebarCss).toContain('@container (max-width: 620px)')
-    expect(viewCss).not.toContain('.topNavigation')
-    expect(sidebarCss).not.toContain('.topNavigation')
+  it('keeps DSH as the only sidebar and preserves the established Mnemon tab strip', () => {
+    expect(viewCss).toContain('.workspace { display: flex; min-height: 0; flex: 1; flex-direction: column; }')
+    expect(viewCss).toContain('.topNavigation { display: flex;')
+    expect(sidebarCss).toContain('.shell .topNavigation {\n  min-height: 0;')
+    expect(sidebarCss).toContain('border-bottom-color: var(--dsw-alias-state-business-primary);')
+    expect(viewCss).not.toContain('.sideNavigation')
+    expect(sidebarCss).not.toContain('.sideNavigation')
   })
 
   it('switches narrow View surfaces to the strategy editor instead of placing it below a long snapshot', () => {

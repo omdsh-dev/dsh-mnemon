@@ -1,5 +1,5 @@
 /*
- * Sidebar is a DSH-native utility panel: plain title, compact navigation and semantic
+ * Sidebar is a DSH-native utility panel: plain title, compact tabs and semantic
  * host tokens. These classes compose with the shared view and dialog styles.
  */
 .shell.shell {
@@ -96,35 +96,35 @@
 }
 .shell .workspaceMismatch > button:hover { background: var(--dsw-alias-interactive-bg-hover); }
 
-.shell .sideNavigation {
-  width: 172px;
-  min-width: 172px;
-  flex-basis: 172px;
-  padding: 9px 8px;
-  border-right-color: var(--dsw-alias-border-l1);
+.shell .topNavigation {
+  min-height: 0;
+  gap: 0;
+  padding: 0 16px;
+  border-bottom: 0;
   background: var(--mn-surface);
 }
+
+.shell .topNavigation::after { display: none; }
 .shell .nav {
-  gap: 3px;
+  flex: 1;
+  gap: 2px;
+  padding-right: 0;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
 }
 .shell .nav button {
-  min-height: 38px;
-  padding: 7px 8px;
-  border-radius: 6px;
+  min-height: 0;
+  gap: 0;
+  padding: 7px 14px;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
   font-size: 13px;
   font-weight: 400;
 }
 .shell .nav button:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .shell .nav button[data-active] {
   color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-bg-layer-1);
-}
-
-@container (max-width: 620px) {
-  .shell .sideNavigation { width: 54px; min-width: 54px; flex-basis: 54px; padding: 8px 6px; }
-  .shell .nav button { min-width: 0; grid-template-columns: 1fr; justify-items: center; padding: 7px 5px; text-align: center; }
-  .shell .nav button > [class*='navLabel'],
-  .shell .nav button > [class*='layerDisabledBadge'] { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+  border-bottom-color: var(--dsw-alias-state-business-primary);
+  font-weight: 600;
 }
 
 .shell .memoryWorkspace {
@@ -733,13 +733,14 @@
   .shell .workspaceMismatch > span { display: none; }
   .shell .workspacePicker { gap: 0; padding-left: 0; }
   .shell .workspacePicker select { width: min(160px, 31vw); border-left: 0; }
-  .shell .sideNavigation { width: 54px; min-width: 54px; flex-basis: 54px; padding: 8px 6px; }
+  .shell .topNavigation { padding: 0 12px; }
   .shell .memoryNavigation { padding-inline: 12px; }
   .shell .memoryTabs button { padding-inline: 10px; }
   .shell .nav button {
-    min-width: 0;
-    padding: 7px 5px;
-    text-align: center;
+    min-width: max-content;
+    flex-direction: row;
+    padding: 7px 12px;
+    text-align: left;
   }
   .shell .canvas > div { padding: 14px 12px calc(170px + env(safe-area-inset-bottom, 0px)); }
   .shell .canvas[data-lock-page-header] [class*='pageHeader'] { margin-inline: -12px; padding-inline: 12px; }
@@ -756,10 +757,6 @@
   .shell [class*='documentWorkspace'] { height: auto; min-height: 0; }
   .shell [class*='documentList'] { overflow-y: auto; scrollbar-gutter: auto; }
   .shell [class*='documentReader'] { overflow: visible; scrollbar-gutter: auto; }
-}
-
-@media (max-width: 520px) {
-  .shell .sideNavigation { width: 50px; min-width: 50px; flex-basis: 50px; padding-inline: 4px; }
 }
 
 @media (min-width: 761px) and (max-height: 560px) {
