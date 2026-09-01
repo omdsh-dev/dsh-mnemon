@@ -9,6 +9,12 @@
   pointer-events: auto;
 }
 
+.workspacePanel > * {
+  width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
 .entry {
   box-sizing: border-box;
   display: flex;

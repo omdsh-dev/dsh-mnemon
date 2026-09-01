@@ -18,6 +18,45 @@ const SSH_ACTIVE_ATTR = 'data-dsh-ssh-active'
 const ACTIVATE_EVENT = 'dsh-panel-activate'
 const SIDEBAR_CONTEXT_SELECTOR = '[data-dsh-taskboard-entry], [data-dsh-ssh-entry], [class*="sessionRow"], [class*="projectRow"], [class*="searchResultRow"], [class*="searchResultWorkspace"], [class*="newSession"]'
 
+interface MnemonWorkspaceSurface {
+  column: HTMLElement
+  frame?: HTMLElement
+  details?: HTMLElement
+}
+
+function resolveWorkspaceSurface(): MnemonWorkspaceSurface | undefined {
+  const explicit = document.querySelector<HTMLElement>('[data-pane="conversation"]')
+    ?? document.querySelector<HTMLElement>('.dshDesktopConversationSurface')
+  if (explicit !== null) return { column: explicit }
+
+  const column = document.querySelector<HTMLElement>('[class*="centerCol"]')
+  if (column === null) return undefined
+  const frame = column.parentElement
+  const details = frame === null
+    ? undefined
+    : Array.from(frame.children).find((child): child is HTMLElement => child instanceof HTMLElement && child !== column && child.className.includes('detailsCol'))
+  return frame === null || details === undefined ? { column } : { column, frame, details }
+}
+
+function sameWorkspaceSurface(left: MnemonWorkspaceSurface | undefined, right: MnemonWorkspaceSurface | undefined): boolean {
+  return left?.column === right?.column && left?.frame === right?.frame && left?.details === right?.details
+}
+
+function workspaceSurfaceBounds(surface: MnemonWorkspaceSurface): { left: number; top: number; width: number; height: number } {
+  const columnRect = surface.column.getBoundingClientRect()
+  if (surface.frame === undefined) {
+    const { left, top, width, height } = columnRect
+    return { left, top, width, height }
+  }
+  const frameRect = surface.frame.getBoundingClientRect()
+  return {
+    left: columnRect.left,
+    top: frameRect.top,
+    width: Math.max(0, frameRect.left + frameRect.width - columnRect.left),
+    height: frameRect.height,
+  }
+}
+
 function normalizePath(value: string): string {
   return value.replace(/[\\/]+$/u, '')
 }
@@ -118,23 +157,35 @@ export function MnemonSidebarWorkspaceHost(props: MnemonWorkspaceHostProps & { c
   const [bounds, setBounds] = useState<{ left: number; top: number; width: number; height: number }>()
   useEffect(() => {
     if (!state.open) return
-    let column: HTMLElement | null = null
-    let wasInert = false
+    let surface: MnemonWorkspaceSurface | undefined
+    const previousInert = new Map<HTMLElement, boolean>()
     const update = (): void => {
-      if (column === null) return
-      const { left, top, width, height } = column.getBoundingClientRect()
+      if (surface === undefined) return
+      const { left, top, width, height } = workspaceSurfaceBounds(surface)
       setBounds(previous => previous?.left === left && previous.top === top && previous.width === width && previous.height === height ? previous : { left, top, width, height })
     }
     const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(update)
+    const observedTargets = (value: MnemonWorkspaceSurface): HTMLElement[] => [...new Set([value.column, value.frame, value.details].filter((target): target is HTMLElement => target !== undefined))]
+    const inertTargets = (value: MnemonWorkspaceSurface): HTMLElement[] => [value.column, value.details].filter((target): target is HTMLElement => target !== undefined)
+    const detach = (): void => {
+      if (surface !== undefined) {
+        for (const target of observedTargets(surface)) observer?.unobserve(target)
+      }
+      for (const [target, inert] of previousInert) target.inert = inert
+      previousInert.clear()
+      surface = undefined
+    }
     const connect = (): void => {
-      const next = document.querySelector<HTMLElement>('[data-pane="conversation"], [class*="centerCol"], .dshDesktopConversationSurface')
-      if (next !== column) {
-        if (column !== null) { observer?.unobserve(column); column.inert = wasInert }
-        column = next
-        if (column !== null) {
-          wasInert = column.inert
-          column.inert = true
-          observer?.observe(column)
+      const next = resolveWorkspaceSurface()
+      if (!sameWorkspaceSurface(next, surface)) {
+        detach()
+        surface = next
+        if (surface !== undefined) {
+          for (const target of inertTargets(surface)) {
+            previousInert.set(target, target.inert)
+            target.inert = true
+          }
+          for (const target of observedTargets(surface)) observer?.observe(target)
         }
       }
       update()
@@ -152,7 +203,7 @@ export function MnemonSidebarWorkspaceHost(props: MnemonWorkspaceHostProps & { c
       observer?.disconnect()
       window.removeEventListener('resize', update)
       window.removeEventListener('keydown', escape)
-      if (column !== null) column.inert = wasInert
+      detach()
     }
   }, [state.open, props.controller])
   if (bounds === undefined) return null

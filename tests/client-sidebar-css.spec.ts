@@ -19,6 +19,9 @@ describe('Sidebar layout invariants', () => {
 
   it('keeps the sidebar artifact launcher-only and never hides DSH conversation content', () => {
     expect(workspaceCss).toContain('.entry {')
+    expect(workspaceCss).toContain('.workspacePanel > * {')
+    expect(workspaceCss).toContain('width: 100%;')
+    expect(workspaceCss).toContain('flex: 1 1 auto;')
     expect(workspaceCss).not.toContain('[data-dsh-mnemon-view]')
     expect(workspaceCss).not.toContain('data-dsh-mnemon-active')
     expect(workspaceCss).not.toContain('.dshDesktopConversationSurface')

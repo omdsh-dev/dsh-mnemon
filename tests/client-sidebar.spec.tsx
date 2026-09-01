@@ -183,6 +183,7 @@ describe('Mnemon canonical workspace launcher', () => {
     fireEvent.click(document.querySelector('[data-dsh-mnemon-entry]')!)
     await waitFor(() => expect(view.getByText('no-session')).not.toBeNull())
     expect(column.inert).toBe(true)
+    expect(document.querySelector<HTMLElement>('[data-dsh-mnemon-view]')?.style.width).toBe('1000px')
     expect(document.querySelector('[data-chat-content]')?.textContent).toBe('Chat stays mounted')
     fireEvent.click(view.getByText('back-test-conversation'))
     expect(column.inert).toBe(false)
@@ -191,6 +192,47 @@ describe('Mnemon canonical workspace launcher', () => {
     await waitFor(() => expect(view.getByText('no-session')).not.toBeNull())
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(column.inert).toBe(false)
+    view.unmount()
+  })
+
+  it('covers both center and details columns in the released three-column DSH frame', async () => {
+    document.body.innerHTML = `<div class="released_frame">
+      <aside data-pane="sidebar"><div class="sidebarRoot"><div class="logoRow"><button class="newSession">New</button></div></div></aside>
+      <main class="released_centerCol"><div data-chat-content>Chat stays mounted</div></main>
+      <aside class="released_detailsCol"><button>Details stay mounted</button></aside>
+      <div class="released_overlayLayer"></div>
+    </div>`
+    const frame = document.querySelector<HTMLElement>('.released_frame')!
+    const center = document.querySelector<HTMLElement>('.released_centerCol')!
+    const details = document.querySelector<HTMLElement>('.released_detailsCol')!
+    center.inert = false
+    details.inert = false
+    vi.spyOn(frame, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 1_080, height: 900 } as DOMRect)
+    vi.spyOn(center, 'getBoundingClientRect').mockReturnValue({ left: 280, top: 0, width: 430, height: 900 } as DOMRect)
+    vi.spyOn(details, 'getBoundingClientRect').mockReturnValue({ left: 710, top: 0, width: 370, height: 900 } as DOMRect)
+    const ctx = context()
+    const controller = new MnemonWorkspaceController()
+    const view = render(<MnemonSidebarWorkspaceHost
+      connection={ctx.connection as never} settingsScope={settings} sessions={ctx.sessions as never} workspaces={ctx.workspaces as never}
+      localeRuntime={ctx.locale as never} sourcePageDirectory={sourcePageDirectory}
+      navigation={{ open: () => controller.open(), close: () => controller.close() }} t={t as never} renderSlot={() => null} controller={controller}
+    />)
+
+    act(() => controller.open())
+    await waitFor(() => expect(view.getByTestId('mnemon-canonical-content')).not.toBeNull())
+    const panel = document.querySelector<HTMLElement>('[data-dsh-mnemon-view]')!
+    expect(panel.style.left).toBe('280px')
+    expect(panel.style.top).toBe('0px')
+    expect(panel.style.width).toBe('800px')
+    expect(panel.style.height).toBe('900px')
+    expect(center.inert).toBe(true)
+    expect(details.inert).toBe(true)
+    expect(document.querySelector('[data-chat-content]')?.textContent).toBe('Chat stays mounted')
+    expect(details.textContent).toContain('Details stay mounted')
+
+    act(() => controller.close())
+    expect(center.inert).toBe(false)
+    expect(details.inert).toBe(false)
     view.unmount()
   })
 
