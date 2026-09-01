@@ -241,7 +241,8 @@ describe('View page interaction and localization', () => {
     const connection = { rpc: { call: vi.fn(async (_channel: string, endpoint: string) => ({ ok: true as const, value: endpoint === 'dashboard' ? f.dashboard() : endpoint === 'source-management-catalog' ? { generationId: 'g', sources: [] } : { healthy: true, writeEnabled: true, memoryBodies: [] } })) } }
     render(<MnemonView connection={connection as never} settingsScope={settings} t={locale === 'zh' ? translateZh : translateEn} locale={locale} />)
     const title = locale === 'zh' ? '视图' : 'View'
-    fireEvent.click(await screen.findByRole('tab', { name: title }))
+    const navigation = await screen.findByRole('navigation', { name: locale === 'zh' ? 'Mnemon 页面' : 'Mnemon pages' })
+    fireEvent.click(within(navigation).getByRole('tab', { name: title }))
     await screen.findByRole('heading', { name: title })
     await ready()
     expect(screen.getByRole('switch', { name: locale === 'zh' ? '轻量上下文' : 'Light context' })).toBeTruthy()

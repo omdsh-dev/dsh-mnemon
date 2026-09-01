@@ -93,21 +93,20 @@
 .workspaceMismatch code { overflow: hidden; color: var(--mn-faint); font: 9px/1.4 var(--mn-code); text-overflow: ellipsis; white-space: nowrap; }
 .workspaceMismatch > button { min-height: 32px; flex: 0 0 auto; white-space: nowrap; }
 
-.workspace { display: flex; min-height: 0; flex: 1; flex-direction: column; }
-.topNavigation { display: flex; min-width: 0; min-height: 46px; flex: 0 0 auto; align-items: stretch; justify-content: space-between; gap: 14px; padding: 0 16px; border-bottom: 1px solid var(--mn-line); background: var(--mn-layer-1); }
-.nav { display: flex; min-width: 0; align-items: stretch; gap: 10px; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: none; }
-.nav::-webkit-scrollbar { display: none; }
-.nav button { position: relative; display: flex; min-width: max-content; min-height: 44px; align-items: center; gap: 7px; padding: 0 3px; border: 0; color: var(--mn-muted); background: transparent; text-align: left; cursor: pointer; }
-.nav button:hover { color: var(--mn-text); }
+.workspace { display: flex; min-height: 0; flex: 1; flex-direction: row; }
+.sideNavigation { width: 176px; min-width: 176px; flex: 0 0 176px; overflow: hidden; padding: 10px 8px; border-right: 1px solid var(--mn-line); background: var(--mn-layer-1); }
+.nav { display: flex; min-width: 0; height: 100%; flex-direction: column; gap: 3px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.nav button { position: relative; display: grid; width: 100%; min-width: 0; min-height: 40px; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 7px 9px; border: 0; border-radius: 7px; color: var(--mn-muted); background: transparent; text-align: left; cursor: pointer; }
+.nav button:hover { color: var(--mn-text); background: var(--mn-hover); }
+.nav button[data-active] { color: var(--mn-text); background: var(--mn-layer-2); }
+.nav button[data-active]::before { position: absolute; top: 8px; bottom: 8px; left: 0; width: 2px; border-radius: 2px; background: var(--mn-accent); content: ''; }
+.nav button[data-navigation-group='system'] + button:not([data-navigation-group='system']) { margin-top: 10px; }
+.nav button[data-navigation-group='system'] + button:not([data-navigation-group='system'])::after { position: absolute; top: -6px; right: 5px; left: 5px; height: 1px; background: var(--mn-line); content: ''; }
 .nav button[data-layer-disabled] { color: var(--mn-faint); }
 .nav .layerDisabledBadge { display: inline-flex; align-items: center; border: 1px solid var(--mn-line); border-radius: 999px; padding: 1px 5px; color: var(--mn-faint); background: var(--mn-layer-2); font: 500 8px/1.4 var(--mn-code); font-style: normal; }
-.nav button > span:last-child { display: block; min-width: 0; }
-.nav button strong { font-size: 12px; font-weight: 600; }
-.nav button small { display: none; }
-@media (min-width: 1000px) {
-  .nav button { min-height: 50px; }
-  .nav button small { display: block; margin-top: 1px; color: var(--mn-faint); font-size: 9px; line-height: 1.3; }
-}
+.navGlyph { display: grid; width: 24px; height: 24px; place-items: center; color: var(--mn-faint); font: 12px/1 var(--mn-code); }
+.nav button[data-active] .navGlyph { color: var(--mn-accent); }
+.navLabel { min-width: 0; overflow: hidden; font-size: 12px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 
 /* The canonical DSH conversation view owns one plugin-local scrollport. */
 .canvas { min-width: 0; flex: 1; overflow: auto; overscroll-behavior-x: contain; overscroll-behavior-y: auto; scroll-behavior: auto; -webkit-overflow-scrolling: touch; background: var(--mn-bg); }
@@ -864,9 +863,10 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
   .modalFooterActions button { min-width: 0; min-height: 44px; padding-block: 8px; white-space: normal; }
   .modal .supervisedForm textarea { min-height: clamp(130px, 30vh, 210px); }
   .versionList article > footer { align-items: stretch; flex-direction: column; }
-  .topNavigation { position: relative; padding: 0 10px; }
-  .topNavigation::after { position: absolute; z-index: 2; top: 0; right: 0; bottom: 0; width: 34px; pointer-events: none; content: "›"; display: grid; place-items: center end; padding-right: 5px; color: var(--mn-faint); background: linear-gradient(90deg, transparent, var(--mn-layer-1) 72%); font: 16px var(--mn-code); }  .nav { flex: 1; padding-right: 26px; scroll-padding-inline: 10px 34px; }
-  .nav button { min-width: 60px; flex-direction: column; gap: 3px; justify-content: center; padding: 4px 3px; text-align: center; }
+  .sideNavigation { width: 54px; min-width: 54px; flex-basis: 54px; padding: 8px 6px; }
+  .nav button { min-height: 42px; grid-template-columns: 1fr; justify-items: center; padding: 7px 5px; }
+  .navLabel, .nav .layerDisabledBadge { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+  .nav button[data-navigation-group='system'] + button:not([data-navigation-group='system'])::after { right: 3px; left: 3px; }
   .page { padding: 18px 13px calc(170px + env(safe-area-inset-bottom, 0px)); }
   .pageHeader { display: grid; gap: 10px; }
   .pageHeaderMeta { justify-content: space-between; }
@@ -917,8 +917,7 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
   .brand h1 { font-size: 16px; }
   .headerActions { max-width: 58vw; }
   .workspacePicker select { width: min(150px, 39vw); }
-  .nav { scroll-snap-type: x proximity; }
-  .nav button { min-width: 68px; scroll-snap-align: start; }
+  .sideNavigation { width: 50px; min-width: 50px; flex-basis: 50px; padding-inline: 4px; }
   .pageHeader h2 { font-size: 19px; }
   .pageHeaderMeta { align-items: stretch; flex-wrap: wrap; }
   .pageHeaderMeta > code { display: flex; min-height: 34px; align-items: center; }
@@ -967,8 +966,7 @@ button.readSourceCard:hover { border-color: color-mix(in srgb, var(--mn-provider
 @media (max-width: 1000px) and (max-height: 760px) {
   .shell { min-height: 0; }
   .masthead { min-height: 58px; }
-  .topNavigation { min-height: 44px; }
-  .nav button { min-height: 42px; }
+  .nav button { min-height: 40px; }
   .graphViewport { min-height: 300px; }
   .graphSvg { height: 300px; }
 }

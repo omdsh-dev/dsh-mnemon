@@ -32,6 +32,16 @@ describe('Sidebar layout invariants', () => {
     expect(sidebarCss).toContain(".shell .statusCluster > span:not([class*='statusDot']) { display: inline; }")
   })
 
+  it('keeps memory navigation in a vertical sidebar and collapses it to an icon rail', () => {
+    expect(viewCss).toContain('.workspace { display: flex; min-height: 0; flex: 1; flex-direction: row; }')
+    expect(viewCss).toContain('.sideNavigation { width: 176px;')
+    expect(viewCss).toContain(".nav button[data-active]::before")
+    expect(sidebarCss).toContain('.shell .sideNavigation {\n  width: 172px;')
+    expect(sidebarCss).toContain('.shell .sideNavigation { width: 54px; min-width: 54px;')
+    expect(viewCss).not.toContain('.topNavigation')
+    expect(sidebarCss).not.toContain('.topNavigation')
+  })
+
   it('renders runtime metadata as real chips while keeping form values at normal weight', () => {
     expect(sidebarCss).toContain(".shell [class*='runtimeEntryBadges'] > span {")
     expect(sidebarCss).toContain('border-radius: 999px;')
