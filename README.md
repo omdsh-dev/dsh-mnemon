@@ -24,7 +24,7 @@
 <p align="center">
   <a href="./docs/en/capabilities.md"><strong>Explore the capability map</strong></a> ·
   <a href="./docs/en/getting-started.md">Start in five minutes</a> ·
-  <a href="./docs/en/releases/v0.4.4.md">Read the v0.4.4 notes</a> ·
+  <a href="./docs/en/releases/v0.4.5.md">Read the v0.4.5 notes</a> ·
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">Watch the widescreen demo</a>
 </p>
 
@@ -43,6 +43,8 @@ v0.4.2 restores optional `displayMode: builtin` as a conversation placement for 
 v0.4.3 aligns the collapsed Memory System icon with neighboring sidebar controls while preserving the expanded appearance. See the [patch release notes](./docs/en/releases/v0.4.3.md).
 
 v0.4.4 fixes session history failures on older DSH hosts by supporting both session projection contracts. Newer hosts and existing projection checkpoints remain compatible. See the [patch release notes](./docs/en/releases/v0.4.4.md).
+
+v0.4.5 registers Memory System with an installed Better Sidebar while keeping the normal DSH Sidebar entry and both client activation orders working. See the [patch release notes](./docs/en/releases/v0.4.5.md).
 
 ## Understand the scope in 30 seconds
 
@@ -218,7 +220,7 @@ See [Operations, security, and troubleshooting](./docs/en/operations.md) for bac
 | Back up, update, or troubleshoot | [Operations](./docs/en/operations.md) |
 | Integrate tools, commands, or RPC | [Interface reference](./docs/en/interfaces.md) |
 | Build a Layer, Adapter, Strategy, Guard, or MemorySource extension | [Extension guide](./docs/en/extensions.md) |
-| Review the release | [v0.4.4 release notes](./docs/en/releases/v0.4.4.md) |
+| Review the release | [v0.4.5 release notes](./docs/en/releases/v0.4.5.md) |
 
 See the [documentation hub](./docs/en/README.md) for the full map.
 
