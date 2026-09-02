@@ -31,6 +31,8 @@ function makeCtx(initialValue: unknown, coreValue: Record<string, unknown> = {})
   const localeSnapshot = { active: 'zh' as const, locales: [] as const, revision: 0 }
 
   const ctx = {
+    get: vi.fn(() => undefined),
+    on: vi.fn(() => () => {}),
     sessions: { list: { getSnapshot: () => ({ current: 'session-a', byId: {} }) } },
     slots: {
       inject: (slot: string, factory: () => unknown) => {
