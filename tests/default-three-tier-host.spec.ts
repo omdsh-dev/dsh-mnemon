@@ -80,6 +80,12 @@ describe('default three-tier Host presentation and shared execution', () => {
     expect(first.results).toHaveLength(1)
     expect(first.results[0].content.length).toBeLessThanOrEqual(2_600)
     expect(first).not.toHaveProperty('items')
+    const firstEntry = order === 'named-first' ? 'named' : 'generic'
+    const firstArgs = firstEntry === 'named' ? { query: 'protocol-token' } : { routeId: route.id, input: { query: 'protocol-token' } }
+    const meta = registered.get(firstEntry === 'named' ? 'mnemon_document_search' : 'mnemon_view_route')!.output.presentationMeta!(firstArgs, first)
+    expect(meta).toMatchObject({ schema: 'dsh-mnemon.activity/v1', kind: 'read', operationId: firstEntry === 'named' ? 'search' : 'view-route',
+      items: [{ id: expect.any(String), title: 'Protocol record', excerpt: expect.stringContaining('protocol-token') }] })
+    if (firstEntry === 'generic') expect(meta).toMatchObject({ reference: route.id })
     const second = await execute(order === 'named-first' ? 'generic' : 'named')
     expect(second).toMatchObject({ notRun: true, results: [] })
     expect(read).toHaveBeenCalledOnce()

@@ -57,6 +57,7 @@ export function inspectMemoryView(generation: MemoryCompositionGeneration, view:
     state, ...(turn === undefined ? {} : { turn }), strategyTypeId: view.strategyTypeId, strategyInstanceKey: view.strategyInstanceKey,
     extensions: view.strategyExtensions ?? [],
     projection: view.projection.map(({ id, sourceInstanceKey, mode, text, revision }) => ({ id, sourceInstanceKey, mode, text, revision })),
+    sourcePresentations: view.sourcePresentations ?? [],
     routes: view.routes.map(({ id, sourceInstanceKey, sourceRouteId, description, maxCalls }) => ({ id, sourceInstanceKey, operationId: sourceRouteId, description, maxCalls })),
     actions: view.actionOffers.map(({ id, sourceInstanceKey, sourceActionId, description }) => ({ id, sourceInstanceKey, operationId: sourceActionId, description })),
     memoryText: memoryText ?? presentMemoryWake(generation, view).text,

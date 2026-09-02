@@ -34,9 +34,13 @@ export function createViewHandler(runtime: LiveMnemonRuntime, engine: MemoryRunt
       if (endpoint === 'dashboard') {
         const catalog = await management.catalog()
         const current = sessionId === undefined || !aligned ? undefined : lifecycle?.memoryView(sessionId, workspaceId)
+        const activity = current?.turn === undefined || sessionId === undefined
+          ? undefined
+          : lifecycle?.turnActivities(sessionId).activities.find(candidate => candidate.turn === current.turn)
         const snapshot = engine.contributionSnapshot()
         const value: MemoryViewDashboard = { ...catalog, strategyTypeId: config.memoryTopology.strategyId,
           ...(current === undefined ? { currentUnavailable: sessionId === undefined ? 'no-session' as const : !aligned ? 'unaligned' as const : 'not-generated' as const } : { current }),
+          ...(activity === undefined ? {} : { activity }),
           sources: snapshot.sources.map(source => ({ sourceInstanceKey: source.instanceKey, sourceTypeId: source.definition.manifest.typeId,
             role: source.definition.manifest.role, label: source.definition.manifest.management?.label ?? source.definition.manifest.typeId })),
         }

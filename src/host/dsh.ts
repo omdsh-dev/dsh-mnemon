@@ -89,6 +89,8 @@ export interface ToolDefinition {
   output: {
     schema: Record<string, unknown>
     render: (args: Record<string, unknown>, value: never) => Array<{ type: 'text'; text: string }>
+    /** Durable, JSON-safe, tool-private projection available to Host UI replay. */
+    presentationMeta?: (args: unknown, value: unknown) => JsonValue
   }
   execute: (args: never, execution: ToolExecution) => Promise<unknown>
   presentCall?: (args: never) => Record<string, unknown>

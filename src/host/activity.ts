@@ -1,5 +1,6 @@
 import type { HostSessionEvent } from "./dsh.ts"
 import type { TurnMemoryActivity, TurnMemoryActivitySnapshot } from "./protocol.ts"
+import { parseMnemonActivityMeta } from './activity-presentation.ts'
 
 export type { TurnMemoryActivity, TurnMemoryActivitySnapshot } from "./protocol.ts"
 
@@ -31,7 +32,8 @@ function resultCallId(event: HostSessionEvent): string | undefined {
 }
 
 function emptyActivity(turn: number): TurnMemoryActivity {
-  return { turn, count: 0, names: [], recalls: 0, writes: 0, documentSearches: 0, inspections: 0, failures: 0 }
+  return { turn, count: 0, names: [], recalls: 0, writes: 0, documentSearches: 0, inspections: 0, failures: 0,
+    retrieved: [], writebacks: [] }
 }
 
 /**
@@ -63,7 +65,10 @@ export class TurnActivityProjection {
       cursor: typeof currentLastSeq === 'number' ? currentLastSeq : events.length,
       activities: [...this.byTurn.values()]
         .sort((left, right) => left.turn - right.turn)
-        .map(activity => ({ ...activity, names: [...activity.names] })),
+        .map(activity => ({ ...activity, names: [...activity.names],
+          retrieved: activity.retrieved.map(read => ({ ...read, items: read.items.map(item => ({ ...item })) })),
+          writebacks: activity.writebacks.map(write => ({ ...write, item: { ...write.item } })),
+        })),
     }
   }
 
@@ -95,6 +100,9 @@ export class TurnActivityProjection {
       activity.failures += 1
       return
     }
+    const semantic = parseMnemonActivityMeta(event.data.meta, callId, call.name)
+    if (semantic.read !== undefined) activity.retrieved.push(semantic.read)
+    if (semantic.writeback !== undefined) activity.writebacks.push(semantic.writeback)
     if (call.name === 'mnemon_document_search') activity.documentSearches += 1
     else if (RECALL_TOOLS.has(call.name)) activity.recalls += 1
     else if (WRITE_TOOLS.has(call.name)) activity.writes += 1

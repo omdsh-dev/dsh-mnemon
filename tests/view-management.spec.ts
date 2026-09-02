@@ -58,6 +58,7 @@ describe('View configuration with the real pinned DSH Cordis Loader', () => {
     expect(preview.state).toBe('preview')
     expect(preview.extensions.map(item => item.slot).sort()).toEqual(['capture', 'projection', 'selection'])
     expect(preview.projection.reduce((sum, item) => sum + item.text.length, 0)).toBeLessThanOrEqual(512)
+    expect(preview.sourcePresentations?.map(item => item.sourceInstanceKey)).toEqual([runtimeKey, documentsKey, spacesKey])
     expect(preview.actions.every(action => action.sourceInstanceKey === spacesKey)).toBe(true)
     expect(preview).not.toHaveProperty('readGrants')
     expect(preview.routes.every(route => !('readGrantId' in route))).toBe(true)
@@ -302,5 +303,24 @@ describe('View configuration with the real pinned DSH Cordis Loader', () => {
     await expect(handler('dashboard', { workspaceId: 'workspace' })).resolves.toMatchObject({ ok: true, value: { currentUnavailable: 'no-session' } })
     await expect(handler('preview', { workspaceId: 'workspace', configuration: config })).resolves.toMatchObject({ ok: true, value: { state: 'preview' } })
     expect(f.settings.mutate).not.toHaveBeenCalled()
+  })
+
+  it('keeps durable turn activity beside, rather than inside, the frozen View inspection', async () => {
+    const f = await fixture()
+    const preview = await f.management.preview(f.config, scope(f), await request(f))
+    const current = { ...preview, state: 'active' as const, turn: 7 }
+    const activity = { turn: 7, count: 1, names: ['mnemon_document_search'], recalls: 0, writes: 0,
+      documentSearches: 1, inspections: 0, failures: 0,
+      retrieved: [{ callId: 'read-1', toolName: 'mnemon_document_search', sourceTypeId: 'documents', operationId: 'search',
+        items: [{ id: 'doc-1', title: 'Release plan' }] }], writebacks: [] }
+    const lifecycle = {
+      workspaceRoot: () => f.workspace,
+      memoryView: () => current,
+      turnActivities: () => ({ cursor: 9, activities: [activity] }),
+    }
+    const handler = createViewHandler(f.live, f.engine, f.management, 'read', lifecycle as never)
+    const response = await handler('dashboard', { sessionId: 'root', workspaceId: 'workspace' })
+    expect(response).toMatchObject({ ok: true, value: { current: { id: current.id, turn: 7 }, activity } })
+    expect(current).not.toHaveProperty('activity')
   })
 })

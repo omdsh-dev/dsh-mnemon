@@ -1,4 +1,5 @@
-import type { MemoryJsonValue, MemoryViewGuidance } from '../core/contracts/index.ts'
+import type { MemoryJsonValue, MemoryViewGuidance, MemoryViewSourcePresentation } from '../core/contracts/index.ts'
+import type { TurnMemoryActivity } from './protocol.ts'
 import type { MemoryLocalizedText, MemoryStrategyConfigurationField } from '../sdk/strategy-configuration.ts'
 
 export const MNEMON_VIEW_CHANNEL = '/dsh-mnemon-view'
@@ -40,6 +41,7 @@ export interface MemoryViewInspection {
   strategyInstanceKey: string
   extensions: Array<{ instanceKey: string; typeId: string; slot: string; digest: string }>
   projection: Array<{ id: string; sourceInstanceKey: string; mode: string; text: string; revision: string }>
+  sourcePresentations?: MemoryViewSourcePresentation[]
   routes: Array<{ id: string; sourceInstanceKey: string; operationId: string; description: string; maxCalls: number }>
   actions: Array<{ id: string; sourceInstanceKey: string; operationId: string; description: string }>
   memoryText: string
@@ -53,6 +55,8 @@ export interface MemoryViewDashboard {
   strategyTypeId: string
   entries: MemoryStrategyEntryView[]
   current?: MemoryViewInspection
+  /** Durable activity observed after the frozen current View was compiled. */
+  activity?: TurnMemoryActivity
   currentUnavailable?: 'no-session' | 'unaligned' | 'not-generated'
   sources: Array<{ sourceInstanceKey: string; sourceTypeId: string; role: string; label: string }>
   diagnostics: string[]

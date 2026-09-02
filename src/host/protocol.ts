@@ -294,6 +294,34 @@ export interface TurnMemoryActivity {
   documentSearches: number
   inspections: number
   failures: number
+  /** Successful evidence-bearing reads with tool-authored safe previews. */
+  retrieved: MemoryActivityRead[]
+  /** Only writes whose tool-authored result confirms durable commitment. */
+  writebacks: MemoryActivityWriteback[]
+}
+
+export interface MemoryActivityItem {
+  id: string
+  title: string
+  excerpt?: string
+}
+
+export interface MemoryActivityRead {
+  callId: string
+  toolName: string
+  operationId: string
+  reference?: string
+  sourceTypeId?: string
+  items: MemoryActivityItem[]
+}
+
+export interface MemoryActivityWriteback {
+  callId: string
+  toolName: string
+  operationId: string
+  reference?: string
+  sourceTypeId?: string
+  item: MemoryActivityItem
 }
 
 export interface TurnMemoryActivitySnapshot {

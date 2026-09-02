@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { TurnActivityProjection } from "../src/host/activity.ts"
+import { memoryReadPresentation, memoryWritePresentation } from '../src/host/activity-presentation.ts'
 import type { HostSessionEvent } from "../src/host/dsh.ts"
 
 function call(seq: number, turn: number, callId: string, name: string): HostSessionEvent {
   return { type: 'tool/call', seq, data: { turn, step: 1, callId, name, arguments: '{}' } }
 }
 
-function result(seq: number, turn: number, callId: string, failed = false): HostSessionEvent {
+function result(seq: number, turn: number, callId: string, failed = false, meta?: unknown): HostSessionEvent {
   return {
     type: 'tool/result',
     seq,
@@ -15,6 +16,7 @@ function result(seq: number, turn: number, callId: string, failed = false): Host
       step: 1,
       message: { source: { callId } },
       ...(failed ? { error: { name: 'Error', code: 'failed' } } : {}),
+      ...(meta === undefined ? {} : { meta }),
     },
   }
 }
@@ -41,12 +43,42 @@ describe('TurnActivityProjection', () => {
         documentSearches: 1,
         inspections: 1,
         failures: 1,
+        retrieved: [],
+        writebacks: [],
       }],
     })
 
     events.push(result(10, 1, 'write-pending'))
     expect(projection.snapshot(events).activities[0]).toMatchObject({ count: 5, writes: 1, failures: 1 })
     expect(projection.snapshot(events).activities[0]).toMatchObject({ count: 5, writes: 1, failures: 1 })
+  })
+
+  it('projects only tool-authored bounded reads and committed writebacks', () => {
+    const projection = new TurnActivityProjection()
+    const readMeta = memoryReadPresentation('documents', 'search')({ query: 'release' }, {
+      results: [{ id: 'doc-1', title: 'Release plan', content: 'Ship after the final verification.' }],
+      ignored: { credential: 'secret' },
+    })
+    const committedMeta = memoryWritePresentation('runtime', 'mutate')({
+      action: 'add', target: 'memory', content: 'Use pnpm verify before release.',
+    }, { success: true, added: 'Use pnpm verify before release.' })
+    const pendingMeta = memoryWritePresentation('memory-spaces', 'remember')({ content: 'Not durable yet.' }, {
+      memoryReceipt: { status: 'succeeded', completion: 'accepted' },
+    })
+    const events = [
+      call(1, 3, 'read', 'mnemon_document_search'), result(2, 3, 'read', false, readMeta),
+      call(3, 3, 'write', 'mnemon_runtime_memory'), result(4, 3, 'write', false, committedMeta),
+      call(5, 3, 'pending', 'mnemon_remember'), result(6, 3, 'pending', false, pendingMeta),
+    ]
+
+    expect(projection.snapshot(events).activities[0]).toMatchObject({
+      retrieved: [{ callId: 'read', toolName: 'mnemon_document_search', sourceTypeId: 'documents', operationId: 'search',
+        items: [{ id: 'doc-1', title: 'Release plan', excerpt: 'Ship after the final verification.' }] }],
+      writebacks: [{ callId: 'write', toolName: 'mnemon_runtime_memory', sourceTypeId: 'runtime', operationId: 'mutate',
+        item: { id: 'mutate', title: 'Use pnpm verify before release.' } }],
+    })
+    expect(projection.snapshot(events).activities[0]!.writebacks).toHaveLength(1)
+    expect(JSON.stringify(projection.snapshot(events))).not.toContain('credential')
   })
 
   it('resets when the durable event log is replaced by a shorter session', () => {
