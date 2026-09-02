@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   verify-dsh-alpha-source:
-    name: Verify DSH 0.1.2-alpha.1 source
+    name: Verify DSH 0.1.2-alpha.5 source
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: deepseek-ai/deepseek-harness
-          ref: dsh-v0.1.2-alpha.1
+          ref: dsh-v0.1.2-alpha.5
           path: deepseek-harness
 
       - name: Set up Node.js
@@ -49,6 +49,7 @@ jobs:
         working-directory: dsh-mnemon
         env:
           DSH_SOURCE_ROOT: ${{ github.workspace }}/deepseek-harness
+          DSH_SOURCE_VERSION: 0.1.2-alpha.5
         run: pnpm run dsh:link-source
 
       - name: Verify against DSH alpha

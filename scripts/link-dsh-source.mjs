@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const restore = process.argv[2] === '--restore'
 const sourceInput = process.env.DSH_SOURCE_ROOT ?? (restore ? undefined : process.argv[2])
-const expectedVersion = process.env.DSH_SOURCE_VERSION ?? '0.1.2-alpha.1'
+const expectedVersion = process.env.DSH_SOURCE_VERSION ?? '0.1.2-alpha.5'
 
 if (!restore && sourceInput === undefined) {
   throw new Error('Set DSH_SOURCE_ROOT or pass the DeepSeek Harness source checkout path.')

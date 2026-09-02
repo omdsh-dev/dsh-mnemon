@@ -92,7 +92,7 @@ mnemon:
 | `tabEnabled` | `true` | boolean | 是否挂载所选入口和工作台；关闭后 Host RPC、命令和 Agent 工具保持注册 |
 | `writeEnabled` | `true` | boolean | 是否暴露语义写工具、写 RPC 和写命令 |
 | `taskAgentModel` | `{ mode: inherit }` | `inherit` / `fixed` | AI 元信息、Agent 查询、记忆沉淀和档案归档使用的独立任务 Agent，以及空闲复盘 worker 的模型路由；`fixed` 必须同时保存 `provider` 与 `model`，并会钉住对应的写入、证据问答、Provider 选择、迁移、压缩、归档和元信息维护 worker。对话中的 Recall 与 Related 是 Host 直接读取，不使用该路由 |
-| `remoteAccess` | `read-only` | `read-only` / `trusted-host` | DSH 0.1.1-rc.2 的非 loopback Mnemon 管理 RPC 兼容策略；仅启动时读取，DSH 0.1.2-alpha.1 会忽略 |
+| `remoteAccess` | `read-only` | `read-only` / `trusted-host` | DSH 0.1.1-rc.2 的非 loopback Mnemon 管理 RPC 兼容策略；仅启动时读取，DSH 0.1.2-alpha.5 会忽略 |
 | `mnemon-ui.turnBar` | `true` | boolean | 回合尾记忆活动条；默认开启，**保存后实时生效** |
 | `mnemon-ui.saveAction` | `true` | boolean | 已定稿助手回复旁的「存入记忆」图标与确认弹窗；默认开启，**保存后实时生效** |
 
@@ -164,11 +164,11 @@ WebUI 从 `memory-system` 描述符读取真实 Layer，因此扩展插件新增
 
 ### 浏览器认证
 
-同一条无分支注册路径支持两个已验证 DSH 版本。Mnemon 始终传入 0.1.1-rc.2 所需的末尾 authority 对象；0.1.2-alpha.1 的双参数 JavaScript 实现会自然忽略它，因此无需 package 版本判断或 capability 分支。
+同一条无分支注册路径支持两个已验证 DSH 版本。Mnemon 始终传入 0.1.1-rc.2 所需的末尾 authority 对象；0.1.2-alpha.5 的双参数 JavaScript 实现会自然忽略它，因此无需 package 版本判断或 capability 分支。
 
 在 DSH 0.1.1-rc.2 上，`remoteAccess` 仍是真实的启动时安全边界，不能通过 Web settings 修改。默认 `read-only` 会把设置、ZIP 备份、Provider 连接和宽泛 mutation 限制在 loopback；只有部署层已经提供可靠认证时，才可使用 `trusted-host` 将三个管理通道整体提升。DSH `trustedHosts` 只是 Host/Origin 防线，不是用户身份认证。
 
-DSH 0.1.2-alpha.1 已移除逐方法权限层，所有 Mnemon RPC 统一经过一次性启动 token 与签名 Cookie 建立的浏览器会话。它会忽略 `remoteAccess`；该设置仅为同一插件配置安全回滚到 rc.2 而保留。两个版本中的 `writeEnabled=false` 都只是产品级只读模式，不能替代 transport 身份认证。
+DSH 0.1.2-alpha.5 已移除逐方法权限层，所有 Mnemon RPC 统一经过一次性启动 token 与签名 Cookie 建立的浏览器会话。它会忽略 `remoteAccess`；该设置仅为同一插件配置安全回滚到 rc.2 而保留。两个版本中的 `writeEnabled=false` 都只是产品级只读模式，不能替代 transport 身份认证。
 
 ## 存储范围
 

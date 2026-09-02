@@ -216,7 +216,7 @@ browser component
   -> local CLI or managed files
 ```
 
-同一个 Mnemon 构建无需检测运行时版本即可支持两代 DSH transport。0.1.1-rc.2 中，读与激活通道使用 `trusted-host`，写、设置和备份默认保持 `loopback`，只有启动时的 `remoteAccess=trusted-host` 兼容设置会将三者整体提升。0.1.2-alpha.1 会忽略末尾 authority 参数，并用启动 token 建立的浏览器会话统一保护所有通道。激活处理器仍只接受精确的记忆体 ID 与布尔状态；Provider 凭据值只经私密管理目录传递，普通读目录始终脱敏。浏览器组件从 Host settings 推导产品可写性，并在传输前禁用 mutation 控件。`writeEnabled=false` 时所有 mutation 处理器都会在 Host 边界拒绝请求。
+同一个 Mnemon 构建无需检测运行时版本即可支持两代 DSH transport。0.1.1-rc.2 中，读与激活通道使用 `trusted-host`，写、设置和备份默认保持 `loopback`，只有启动时的 `remoteAccess=trusted-host` 兼容设置会将三者整体提升。0.1.2-alpha.5 会忽略末尾 authority 参数，并用启动 token 建立的浏览器会话统一保护所有通道。激活处理器仍只接受精确的记忆体 ID 与布尔状态；Provider 凭据值只经私密管理目录传递，普通读目录始终脱敏。浏览器组件从 Host settings 推导产品可写性，并在传输前禁用 mutation 控件。`writeEnabled=false` 时所有 mutation 处理器都会在 Host 边界拒绝请求。
 
 ## 国际化
 

@@ -4,9 +4,10 @@ import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import LlmRuntime, { LlmAdapter, createUserMessage, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { LlmAdapter, createUserMessage, type ContentBlock, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SessionQueryEngine from '@deepseek-ai/dsh-session-query'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
@@ -70,6 +71,30 @@ async function gate(promise: Promise<void>, signal?: AbortSignal): Promise<void>
   }
 }
 
+interface CompatibleSubagentContinuation {
+  followup?(parent: Agent, childId: SessionId, content: ContentBlock[], options: {
+    source: { kind: 'user' }
+    signal: AbortSignal
+  }): Promise<unknown>
+  sendMessage?(sender: Agent, targetId: SessionId, content: ContentBlock[], options: {
+    signal: AbortSignal
+  }): Promise<unknown>
+}
+
+async function continueChild(runtime: SubagentRuntime, parent: Agent, childId: SessionId, content: ContentBlock[]): Promise<void> {
+  const compatible = runtime as unknown as CompatibleSubagentContinuation
+  const signal = new AbortController().signal
+  if (typeof compatible.sendMessage === 'function') {
+    await compatible.sendMessage(parent, childId, content, { signal })
+    return
+  }
+  if (typeof compatible.followup === 'function') {
+    await compatible.followup(parent, childId, content, { source: { kind: 'user' }, signal })
+    return
+  }
+  throw new TypeError('Unsupported DSH subagent continuation API')
+}
+
 async function harness(respond: (options: GenerateOptions) => Response | Promise<Response>) {
   const root = await mkdtemp(join(tmpdir(), 'mnemon-async-host-'))
   const ctx = new Context()
@@ -86,6 +111,7 @@ async function harness(respond: (options: GenerateOptions) => Response | Promise
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
   await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SessionReads)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
@@ -178,9 +204,7 @@ describe('asynchronous Recall with the real DSH host', () => {
     expect(value.search).toHaveBeenCalledTimes(2)
     const replacement = memoryGraphFixture(['replacement'])
     value.runtime.swap(replacement.graph)
-    await value.ctx.subagents.followup(value.parent, child.id, [{ type: 'text', text: 'Recall release history again.' }], {
-      source: { kind: 'user' }, signal: new AbortController().signal,
-    })
+    await continueChild(value.ctx.subagents, value.parent, child.id, [{ type: 'text', text: 'Recall release history again.' }])
     await vi.waitFor(() => expect(value.ctx.agents.get(child.id)).toBeUndefined(), { timeout: 5_000 })
     expect(value.children).toHaveLength(2)
     expect(value.children[1]!.id).toBe(child.id)

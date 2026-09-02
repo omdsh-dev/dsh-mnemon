@@ -146,6 +146,27 @@ export interface HostSessionEvent {
   data: Record<string, unknown>
 }
 
+/**
+ * Minimum session log surface shared by the stable DSH rc line and the 0.1.2
+ * alpha line. rc.2 exposes the immutable log through `events`; alpha.4+
+ * replaces that property with range snapshots and indexed reads.
+ */
+export interface HostSession {
+  header?: { origin?: 'subagent'; parentSession?: string; delegationDepth?: number; cwd?: string; agentPreset?: string }
+  /** Stable rc.2 event-log accessor. */
+  events?: readonly HostSessionEvent[]
+  /** DSH 0.1.2-alpha.4+ event-log accessor. */
+  snapshotEvents?(fromSeq?: number, toSeqExclusive?: number): readonly HostSessionEvent[]
+  /** DSH 0.1.2-alpha.4+ indexed event accessor. */
+  eventAt?(seq: number): HostSessionEvent | undefined
+  /**
+   * Model-visible event sequences, in order. Optional because not every host
+   * publishes a surface projection; when absent, callers fall back to
+   * session-scoped state.
+   */
+  surface?: { readonly nodes: readonly number[] }
+}
+
 export type HostPreStepDecision = { kind: 'reject' } | { kind: 'enter'; messages: HostUserMessage[] }
 
 export interface HostAgentContext {
@@ -164,16 +185,7 @@ export interface HostAgent {
   id: string
   status: 'idle' | 'running'
   options?: { provider?: string; model?: string; maxTokens?: number }
-  session: {
-    header?: { origin?: 'subagent'; parentSession?: string; delegationDepth?: number; cwd?: string; agentPreset?: string }
-    events: readonly HostSessionEvent[]
-    /**
-     * Model-visible event sequences, in order. Optional because not every host
-     * publishes a surface projection; when absent, callers fall back to
-     * session-scoped state.
-     */
-    surface?: { readonly nodes: readonly number[] }
-  }
+  session: HostSession
   ctx: HostAgentContext
   followup(message: HostUserMessage): void
   steer(message: HostUserMessage): void

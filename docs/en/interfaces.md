@@ -201,7 +201,7 @@ endpoints: get, mutate
 
 Mutations use settings revisions to prevent overwriting concurrent edits. `mnemon` owns Host/storage settings; `mnemon-ui` owns `turnBar` and `saveAction`.
 
-Mnemon uses one registration call shape for both hosts: it always supplies the rc.2 authority object, which alpha ignores as an extra JavaScript argument. Thus rc.2 retains method-specific trust tiers, while DSH 0.1.2-alpha.1 authenticates the complete Host API with one browser session. No runtime version or function-arity branch is used.
+Mnemon uses one registration call shape for both hosts: it always supplies the rc.2 authority object, which alpha ignores as an extra JavaScript argument. Thus rc.2 retains method-specific trust tiers, while DSH 0.1.2-alpha.5 authenticates the complete Host API with one browser session. No runtime version or function-arity branch is used.
 
 ## npm exports and extension service
 

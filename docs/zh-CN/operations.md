@@ -122,7 +122,7 @@ DSH rc.8 首次说明的可选 SQLite 不兼容性在 DSH 0.1.1-rc.2 中仍然�
 ### Web 与模型
 
 - DSH 0.1.1-rc.2 中，读与激活使用 `trusted-host`；写、设置和备份默认保持 `loopback`，只有 Host 本地 `remoteAccess: trusted-host` 才会将三者整体提升。
-- DSH 0.1.2-alpha.1 中，所有 RPC 与 stream 都要求同一个已认证浏览器会话；保留的 `remoteAccess` 不影响 transport。
+- DSH 0.1.2-alpha.5 中，所有 RPC 与 stream 都要求同一个已认证浏览器会话；保留的 `remoteAccess` 不影响 transport。
 - 普通 Provider 目录始终脱敏；已保存凭据只会经当前版本对应的受保护管理通道返回。
 - WebUI 依据 Host 返回的可写 settings snapshot 判断产品能力，不再根据传输位置猜测权限；设置通道不可用时会显示明确诊断，而不是空白页。
 - WebUI 不直接读取 SQLite、启动进程、调用远程 Provider 或指定任意更新命令；Provider 网络访问只发生在 Host。

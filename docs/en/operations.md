@@ -122,7 +122,7 @@ Existing turns and delegated child activations may still use the old runtime. Wa
 ### Web and model
 
 - On DSH 0.1.1-rc.2, read and activation use `trusted-host`; write, settings, and backup default to `loopback` and are promoted together only by local `remoteAccess: trusted-host` configuration.
-- On DSH 0.1.2-alpha.1, every RPC and stream requires the same authenticated browser session; the retained `remoteAccess` value has no transport effect.
+- On DSH 0.1.2-alpha.5, every RPC and stream requires the same authenticated browser session; the retained `remoteAccess` value has no transport effect.
 - The ordinary Provider catalog is redacted. Saved credential values travel only through the version-appropriate protected management channel.
 - The WebUI follows the Host's writable settings snapshot instead of inferring capability from transport locality; an unavailable settings channel renders an explicit diagnostic rather than an empty page.
 - The WebUI neither reads SQLite, starts processes, calls remote providers, nor supplies arbitrary update commands; provider network access remains inside the Host.

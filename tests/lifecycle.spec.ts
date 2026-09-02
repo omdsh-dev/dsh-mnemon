@@ -6,6 +6,7 @@ import type {
   HostAgentContext,
   HostContextShape,
   HostPreStepDecision,
+  HostSession,
   HostSessionEvent,
   HostUserMessage,
 } from '../src/contracts.ts'
@@ -256,6 +257,22 @@ describe('Mnemon DSH lifecycle integration', () => {
     const second = await value.preStep([userMessage()], 2)
     expect(second.kind === 'enter' && second.messages).toHaveLength(2)
   })
+
+  it('drives a new alpha session through snapshot and indexed event accessors', async () => {
+    const value = fixture()
+    const session = value.agent.session as HostSession
+    delete session.events
+    session.snapshotEvents = () => value.events
+    session.eventAt = seq => value.events[seq]
+
+    const decision = await value.preStep([userMessage()], 1)
+    expect(decision.kind).toBe('enter')
+    expect(value.lifecycle.snapshot('session-1').current?.memoryToolCalls).toBe(0)
+
+    await value.turnStopping(1)
+    expect(value.memoryViews.endTurn).toHaveBeenCalledWith('session-1:1')
+  })
+
   it('pins one immutable Wake across every model step and releases it at the turn boundary', async () => {
     const value = fixture()
     // The snapshot is no longer a shared runtime-context contribution.
