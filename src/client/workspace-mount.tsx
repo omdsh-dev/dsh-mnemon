@@ -22,10 +22,17 @@ interface MnemonPanelProps {
   ctx: MnemonClientContext
   settings: ClientSettingsScope<Config>
   t: MnemonTranslate
-  onClose: () => void
+  onClose?: () => void
+  scope?: MnemonWorkspaceScope
 }
 
-function MnemonPanel({ ctx, settings, t, onClose }: MnemonPanelProps): JSX.Element {
+export interface MnemonWorkspaceScope {
+  sessionId: string
+  cwd?: string
+}
+
+/** Shared sidebar-sized view used by both the legacy workspace and Better Sidebar. */
+export function MnemonPanel({ ctx, settings, t, onClose, scope }: MnemonPanelProps): JSX.Element {
   const subscribeLocale = useCallback((listener: () => void) => ctx.locale.subscribe(listener), [ctx.locale])
   const getLocaleSnapshot = useCallback(() => ctx.locale.getSnapshot(), [ctx.locale])
   const locale = useSyncExternalStore(subscribeLocale, getLocaleSnapshot, getLocaleSnapshot)
@@ -40,7 +47,10 @@ function MnemonPanel({ ctx, settings, t, onClose }: MnemonPanelProps): JSX.Eleme
     () => ctx.workspaces.list.getSnapshot(),
   )
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>()
-  const currentCwd = sessions.current === undefined ? undefined : sessions.byId[sessions.current]?.cwd
+  const sessionId = scope?.sessionId ?? sessions.current
+  const currentCwd = scope === undefined
+    ? (sessions.current === undefined ? undefined : sessions.byId[sessions.current]?.cwd)
+    : scope.cwd
   const normalizePath = (value: string): string => value.replace(/[\\/]+$/u, '')
   const effectiveWorkspace = currentCwd === undefined
     ? undefined
@@ -64,7 +74,7 @@ function MnemonPanel({ ctx, settings, t, onClose }: MnemonPanelProps): JSX.Eleme
     },
   }), [effectiveWorkspace, resolvedSelectedId, workspaces.items])
 
-  return <MnemonView connection={ctx.connection} settingsScope={settings} {...(sessions.current === undefined ? {} : { sessionId: sessions.current })} {...(resolvedSelectedId === undefined ? {} : { workspaceId: resolvedSelectedId })} workspaceSelection={selection} t={t} locale={locale.active} onClose={onClose} />
+  return <MnemonView connection={ctx.connection} settingsScope={settings} {...(sessionId === undefined ? {} : { sessionId })} {...(resolvedSelectedId === undefined ? {} : { workspaceId: resolvedSelectedId })} workspaceSelection={selection} t={t} locale={locale.active} {...(onClose === undefined ? {} : { onClose })} />
 }
 
 function conversationColumn(): HTMLElement | undefined {

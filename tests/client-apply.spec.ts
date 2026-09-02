@@ -5,8 +5,12 @@ import { MnemonSettingsScope } from '../src/client/settings.ts'
 import { MnemonView } from '../src/client/MnemonView.tsx'
 import type { Config } from '../src/shared/contracts.ts'
 
-const { mountWorkspace } = vi.hoisted(() => ({ mountWorkspace: vi.fn(() => vi.fn()) }))
+const { mountWorkspace, mountBetterSidebar } = vi.hoisted(() => ({
+  mountWorkspace: vi.fn(() => vi.fn()),
+  mountBetterSidebar: vi.fn(() => vi.fn()),
+}))
 vi.mock('../src/client/workspace-mount.tsx', () => ({ mountMnemonWorkspace: mountWorkspace }))
+vi.mock('../src/client/better-sidebar.tsx', () => ({ mountBetterSidebarTab: mountBetterSidebar }))
 afterEach(() => vi.clearAllMocks())
 
 function workspaceContext(initialValue: Record<string, unknown>, load: () => Promise<Record<string, unknown>> = async () => initialValue) {
@@ -96,6 +100,7 @@ describe('Mnemon Web client composition', () => {
   it.each([undefined, 'sidebar'])('mounts sidebar with displayMode=%s and honors live visibility', async displayMode => {
     const { slots, scope, dispose } = workspaceContext({ displayMode })
     await vi.waitFor(() => expect(mountWorkspace).toHaveBeenCalledTimes(1))
+    expect(mountBetterSidebar).toHaveBeenCalledTimes(1)
     expect(slots.some(options => options.name === 'conversation.view')).toBe(false)
     const firstDispose = mountWorkspace.mock.results[0]!.value
     await scope.set('storageScope', 'workspace')
@@ -105,19 +110,23 @@ describe('Mnemon Web client composition', () => {
     await scope.set('tabEnabled', false)
     await scope.set('tabEnabled', false)
     expect(firstDispose).toHaveBeenCalledTimes(1)
+    expect(mountBetterSidebar.mock.results[0]!.value).toHaveBeenCalledTimes(1)
     expect(mountWorkspace).toHaveBeenCalledTimes(1)
     await scope.set('tabEnabled', true)
     expect(mountWorkspace).toHaveBeenCalledTimes(2)
+    expect(mountBetterSidebar).toHaveBeenCalledTimes(2)
     expect(slots.some(options => options.name === 'conversation.view')).toBe(false)
     dispose()
     expect(firstDispose).toHaveBeenCalledTimes(1)
     expect(mountWorkspace.mock.results[1]!.value).toHaveBeenCalledTimes(1)
+    expect(mountBetterSidebar.mock.results[1]!.value).toHaveBeenCalledTimes(1)
   })
 
   it.each(['builtin', 'buildin'] as const)('reuses MnemonView for %s and switches either entry live without duplicates', async displayMode => {
     const { context, slots, slotDisposers, scope, dispose } = workspaceContext({ displayMode })
     await vi.waitFor(() => expect(slots.some(options => options.name === 'conversation.view')).toBe(true))
     expect(mountWorkspace).not.toHaveBeenCalled()
+    expect(mountBetterSidebar).not.toHaveBeenCalled()
     const entry = slots.find(options => options.name === 'conversation.view')!
     expect(entry).toMatchObject({ id: 'mnemon', order: 30 })
     expect(context.slots.register).toHaveBeenCalledWith(entry, MnemonView)
@@ -137,10 +146,12 @@ describe('Mnemon Web client composition', () => {
     await scope.set('displayMode', 'sidebar')
     expect(slotDisposers.get(entry)).toHaveBeenCalledTimes(1)
     expect(mountWorkspace).toHaveBeenCalledTimes(1)
+    expect(mountBetterSidebar).toHaveBeenCalledTimes(1)
     await scope.set('displayMode', 'sidebar')
     expect(mountWorkspace).toHaveBeenCalledTimes(1)
     await scope.set('displayMode', 'builtin')
     expect(mountWorkspace.mock.results[0]!.value).toHaveBeenCalledTimes(1)
+    expect(mountBetterSidebar.mock.results[0]!.value).toHaveBeenCalledTimes(1)
     const secondEntry = slots.filter(options => options.name === 'conversation.view')[1]!
     expect(secondEntry).toBeTruthy()
 

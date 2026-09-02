@@ -16,6 +16,7 @@ import { en, zh, type MnemonKey } from './locales.ts'
 import { MnemonSettingsScope } from './settings.ts'
 import type { MnemonClientContext } from './dsh-compat.ts'
 import { mountMnemonWorkspace } from './workspace-mount.tsx'
+import { mountBetterSidebarTab } from './better-sidebar.tsx'
 import { mountSubagentTokenUsageOverride } from './subagent-token-usage.tsx'
 
 export const inject = ['slots', 'sessions', 'workspaces', 'connection', 'locale']
@@ -131,11 +132,22 @@ export function apply(rawContext: unknown): void {
       : normalizeDisplayMode(snapshot.value?.displayMode)
     if (activeMemoryWorkspace?.mode === mode) return
     activeMemoryWorkspace?.dispose()
-    activeMemoryWorkspace = mode === undefined ? undefined : {
+    if (mode === undefined) {
+      activeMemoryWorkspace = undefined
+      return
+    }
+    const disposeView = mode === 'builtin'
+      ? mountBuiltinMemoryView(ctx, settings, namespace, translate)
+      : mountMnemonWorkspace(ctx, settings, translate)
+    const disposeBetterSidebar = mode === 'sidebar'
+      ? mountBetterSidebarTab(ctx, settings, translate)
+      : () => {}
+    activeMemoryWorkspace = {
       mode,
-      dispose: mode === 'builtin'
-        ? mountBuiltinMemoryView(ctx, settings, namespace, translate)
-        : mountMnemonWorkspace(ctx, settings, translate),
+      dispose: () => {
+        disposeBetterSidebar()
+        disposeView()
+      },
     }
   }
   ctx.effect(() => {
