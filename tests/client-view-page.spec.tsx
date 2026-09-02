@@ -19,6 +19,12 @@ function snapshot(state: MemoryViewInspection['state'] = 'active'): MemoryViewIn
   return { state, id: 'view:original', digest: 'digest:original', generationId: 'generation:original', createdAt: '2026-09-01T00:00:00Z', turn: 1,
     strategyTypeId: 'default-three-tier', strategyInstanceKey: 'strategy:base', extensions: [],
     projection: [{ id: 'fragment-1', sourceInstanceKey: 'source:runtime', mode: 'eager', text: 'Original session context', revision: 'r1' }],
+    sourcePresentations: [
+      { sourceInstanceKey: 'source:runtime', mode: 'eager', visibleItems: 1, totalItems: 1,
+        items: [{ id: 'runtime-context', title: 'Original session context', excerpt: 'Current working context.' }] },
+      { sourceInstanceKey: 'source:documents', mode: 'routed', visibleItems: 3, totalItems: 3,
+        items: [{ id: 'release-plan', title: 'Release plan', excerpt: 'Ship after verification.' }] },
+    ],
     routes: [{ id: 'route:1', sourceInstanceKey: 'source:documents', operationId: 'search', description: 'Search records', maxCalls: 2 }],
     actions: [{ id: 'action:1', sourceInstanceKey: 'source:runtime', operationId: 'mutate', description: 'Write runtime' }],
     memoryText: 'Exact original Host memory text', guidance: { system: 'Original Strategy instructions' }, diagnostics: [],
@@ -26,6 +32,10 @@ function snapshot(state: MemoryViewInspection['state'] = 'active'): MemoryViewIn
 }
 function fixture() {
   let dashboard: MemoryViewDashboard = { revision: 'settings-1', writable: true, strategyTypeId: 'default-three-tier', current: snapshot(), diagnostics: [],
+    activity: { turn: 1, count: 2, names: ['mnemon_document_search', 'mnemon_runtime_memory'], recalls: 0, writes: 1, documentSearches: 1, inspections: 0, failures: 0,
+      retrieved: [{ callId: 'read-1', toolName: 'mnemon_document_search', operationId: 'search', sourceTypeId: 'documents', items: [{ id: 'release-plan', title: 'Release plan', excerpt: 'Ship after verification.' }] }],
+      writebacks: [{ callId: 'write-1', toolName: 'mnemon_runtime_memory', operationId: 'mutate', sourceTypeId: 'runtime', item: { id: 'preference', title: 'Preference updated', excerpt: 'Use pnpm verify.' } }],
+    },
     sources: [
       { sourceInstanceKey: 'source:runtime', sourceTypeId: 'runtime', label: 'Runtime', role: 'working-context' },
       { sourceInstanceKey: 'source:documents', sourceTypeId: 'documents', label: 'Documents', role: 'narrative' },
@@ -40,6 +50,8 @@ function fixture() {
     viewDashboard: vi.fn(async () => structuredClone(dashboard)),
     previewView: vi.fn(async (_request: MemoryViewConfigurationRequest): Promise<MemoryViewInspection> => ({ ...snapshot('preview'), id: 'view:preview',
       projection: [{ id: 'preview-fragment', sourceInstanceKey: 'source:runtime', mode: 'eager', text: 'Preview-only context', revision: 'r1' }],
+      sourcePresentations: [{ sourceInstanceKey: 'source:runtime', mode: 'eager', visibleItems: 1,
+        items: [{ id: 'preview-context', title: 'Preview-only context' }] }],
       memoryText: 'Preview-only Host text',
     })),
     applyView: vi.fn(async (request: MemoryViewConfigurationRequest): Promise<{ saved: true }> => {
@@ -65,14 +77,20 @@ function configure(name: string) {
 }
 
 describe('View page interaction and localization', () => {
-  it('renders real snapshot content, operations, guidance and raw memory without adding demo metrics', async () => {
+  it('renders the four real View layers without exposing operation prose on the canvas', async () => {
     const f = fixture(); f.mount(); await ready()
     expect(screen.getByText('Pinned for this turn')).toBeTruthy()
     expect(screen.queryByRole('form', { name: 'Strategy composition' })).toBeNull()
     const injected = screen.getByRole('region', { name: 'Injected' })
-    const available = screen.getByRole('region', { name: 'Available on demand' })
+    const retrieved = screen.getByRole('region', { name: 'Retrieved this turn' })
+    const available = screen.getByRole('region', { name: 'Available' })
+    const writeback = screen.getByRole('region', { name: 'Written this turn' })
     expect(within(injected).getByRole('button', { name: /^Runtime/ })).toBeTruthy()
+    expect(within(retrieved).getByRole('button', { name: /^Documents/ })).toBeTruthy()
     expect(within(available).getByRole('button', { name: /^Documents/ })).toBeTruthy()
+    expect(within(writeback).getByRole('button', { name: /^Runtime/ })).toBeTruthy()
+    expect(screen.getByLabelText('1 items retrieved this turn')).toBeTruthy()
+    expect(screen.getByLabelText('1 items written this turn')).toBeTruthy()
     expect(screen.queryByRole('complementary', { name: 'View details' })).toBeNull()
     expect(screen.queryByRole('combobox', { name: 'Choose base strategy' })).toBeNull()
     expect(screen.queryByText('Search records')).toBeNull()
@@ -80,16 +98,16 @@ describe('View page interaction and localization', () => {
 
     fireEvent.click(within(injected).getByRole('button', { name: /^Runtime/ }))
     let inspector = screen.getByRole('complementary', { name: 'View details' })
-    expect(within(inspector).getByText('Original session context')).toBeTruthy()
-    expect(within(inspector).getByText('mutate')).toBeTruthy()
+    expect(within(inspector).getAllByText('Original session context')).toHaveLength(2)
+    expect(within(inspector).getByText('1 write actions')).toBeTruthy()
     expect(within(inspector).queryByText('Write runtime')).toBeNull()
     fireEvent.click(within(inspector).getByRole('button', { name: 'Close details' }))
     expect(screen.queryByRole('complementary', { name: 'View details' })).toBeNull()
 
     fireEvent.click(within(available).getByRole('button', { name: /^Documents/ }))
     inspector = screen.getByRole('complementary', { name: 'View details' })
-    expect(within(inspector).getByText('0 injected fragments')).toBeTruthy()
-    expect(within(inspector).getByText('search')).toBeTruthy()
+    expect(within(inspector).getByText('3 items')).toBeTruthy()
+    expect(within(inspector).getByText('1 read routes')).toBeTruthy()
     expect(within(inspector).queryByText('Search records')).toBeNull()
     expect(screen.getByText('Original Strategy instructions')).toBeTruthy()
     expect(screen.getByText('Exact original Host memory text')).toBeTruthy()
@@ -106,66 +124,90 @@ describe('View page interaction and localization', () => {
       { sourceInstanceKey: 'source:notion', sourceTypeId: 'notion', label: 'Notion Reference', role: 'external' },
     ]
     const longDocument = `DOC-11-LONG\n${'A durable project record with decisions, exceptions, and verification evidence. '.repeat(190)}`
-    const projection = Array.from({ length: 20 }, (_, index) => {
-      const sourceInstanceKey = index < 5 ? 'source:runtime' : index < 16 ? 'source:documents' : 'source:spaces'
-      return { id: `fragment-${index}`, sourceInstanceKey, mode: index % 4 === 0 ? 'routed' : 'eager', text: index === 15 ? longDocument : `SANITIZED-${index} · synthetic backup-shaped memory fragment`, revision: `r${index + 1}` }
-    })
+    const projection = [{ id: 'fragment-runtime', sourceInstanceKey: 'source:runtime', mode: 'eager' as const, text: longDocument, revision: 'r1' }]
+    const runtimeItems = Array.from({ length: 24 }, (_, index) => ({ id: `runtime-${index}`, title: `SANITIZED-${index}`, excerpt: 'Bounded source-authored presentation.' }))
     const routes = Array.from({ length: 12 }, (_, index) => ({ id: `route-${index}`, sourceInstanceKey: index < 6 ? 'source:documents' : index < 10 ? 'source:spaces' : 'source:notion', operationId: `read-${index}`, description: `Route ${index} evidence`, maxCalls: index + 1 }))
     const actions = Array.from({ length: 8 }, (_, index) => ({ id: `action-${index}`, sourceInstanceKey: index < 5 ? 'source:runtime' : 'source:spaces', operationId: `write-${index}`, description: `Action ${index} memory` }))
-    f.update({ sources, current: { ...snapshot(), id: 'view:complex', digest: 'digest:complex', projection, routes, actions, memoryText: `SANITIZED VIEW\n${'bounded memory text '.repeat(500)}` } })
+    f.update({ sources, current: { ...snapshot(), id: 'view:complex', digest: 'digest:complex', projection, routes, actions,
+      sourcePresentations: [
+        { sourceInstanceKey: 'source:runtime', mode: 'eager', visibleItems: 24, totalItems: 24, items: runtimeItems },
+        { sourceInstanceKey: 'source:documents', mode: 'routed', visibleItems: 11, totalItems: 16, items: [{ id: 'doc-1', title: 'Architecture decision', excerpt: 'Accepted with one exception.' }] },
+        { sourceInstanceKey: 'source:spaces', mode: 'routed', visibleItems: 4, totalItems: 4, items: [{ id: 'space-1', title: 'Project constraints' }] },
+        { sourceInstanceKey: 'source:notion', mode: 'routed', visibleItems: 5, items: [{ id: 'notion-1', title: 'External release notes' }] },
+      ], memoryText: `SANITIZED VIEW\n${'bounded memory text '.repeat(500)}` } })
     const rendered = f.mount()
-    await screen.findByText('SANITIZED-0 · synthetic backup-shaped memory fragment')
+    await screen.findByText('SANITIZED-0')
 
     const injected = screen.getByRole('region', { name: 'Injected' })
-    const available = screen.getByRole('region', { name: 'Available on demand' })
-    expect(within(injected).getAllByRole('button')).toHaveLength(3)
-    expect(within(available).getAllByRole('button')).toHaveLength(4)
+    const available = screen.getByRole('region', { name: 'Available' })
+    expect(within(injected).getAllByRole('button')).toHaveLength(1)
+    expect(within(available).getAllByRole('button')).toHaveLength(3)
     expect(screen.queryByRole('complementary', { name: 'View details' })).toBeNull()
     expect(screen.queryByText('Route 11 evidence')).toBeNull()
     expect(screen.queryByText('Action 7 memory')).toBeNull()
 
-    const documents = within(injected).getByRole('button', { name: /^Documents/ })
-    expect(documents.textContent?.length).toBeLessThan(360)
-    expect(documents.textContent).not.toContain('DOC-11-LONG')
-    fireEvent.click(documents)
+    const runtime = within(injected).getByRole('button', { name: /^Runtime/ })
+    expect(runtime.textContent?.length).toBeLessThan(360)
+    expect(runtime.textContent).toContain('+22')
+    expect(runtime.textContent).not.toContain('DOC-11-LONG')
+    fireEvent.click(runtime)
     let inspector = screen.getByRole('complementary', { name: 'View details' })
-    fireEvent.click(within(inspector).getByRole('button', { name: /DOC-11-LONG/ }))
+    expect(within(inspector).getByText('SANITIZED-23')).toBeTruthy()
+    fireEvent.click(within(inspector).getByText('Show exact injection'))
     expect(inspector.querySelector('pre')?.textContent).toBe(longDocument)
     fireEvent.click(within(inspector).getByRole('button', { name: 'Close details' }))
 
     fireEvent.click(within(available).getByRole('button', { name: /^Notion Reference/ }))
     inspector = screen.getByRole('complementary', { name: 'View details' })
-    expect(within(inspector).getByText('0 injected fragments')).toBeTruthy()
+    expect(within(inspector).getByText('5 items')).toBeTruthy()
     expect(within(inspector).getByText('2 read routes')).toBeTruthy()
-    expect(within(inspector).getByText('read-11')).toBeTruthy()
+    expect(within(inspector).getByText('External release notes')).toBeTruthy()
+    expect(within(inspector).queryByText('read-11')).toBeNull()
     expect(within(inspector).queryByText('Route 11 evidence')).toBeNull()
     rendered.unmount()
   })
 
-  it('derives compact Source signals from real projection text without inventing summaries', async () => {
+  it('uses Source-authored presentation without parsing private projection syntax', async () => {
     const f = fixture()
     f.update({ current: { ...snapshot(), projection: [
       { id: 'runtime', sourceInstanceKey: 'source:runtime', mode: 'eager', revision: 'runtime-r1', text: '<runtime-memory-file path="USER.md">\n# MNEMON RUNTIME MEMORY SNAPSHOT\nRevision: secret-r1\n默认使用中文 § 分阶段提交\n</runtime-memory-file>' },
       { id: 'documents', sourceInstanceKey: 'source:documents', mode: 'routed', revision: 'documents-r1', text: '11 active project Documents. Use search.' },
       { id: 'spaces', sourceInstanceKey: 'source:spaces', mode: 'routed', revision: 'spaces-r1', text: '2 active of 4 configured Memory Spaces. Use recall.' },
+    ], sourcePresentations: [
+      { sourceInstanceKey: 'source:runtime', mode: 'eager', visibleItems: 2, items: [
+        { id: 'preference', title: '偏好：中文' }, { id: 'workflow', title: '流程：分阶段提交' },
+      ] },
+      { sourceInstanceKey: 'source:documents', mode: 'routed', visibleItems: 11, items: [{ id: 'doc', title: '发布架构' }] },
+      { sourceInstanceKey: 'source:spaces', mode: 'routed', visibleItems: 2, totalItems: 4, items: [{ id: 'space', title: '项目约束' }] },
     ], routes: [
       { id: 'documents-search', sourceInstanceKey: 'source:documents', operationId: 'search', description: 'Search project records', maxCalls: 2 },
       { id: 'spaces-recall', sourceInstanceKey: 'source:spaces', operationId: 'recall', description: 'Recall durable evidence', maxCalls: 2 },
     ] } })
     f.mount('zh-CN')
-    await screen.findByText('默认使用中文')
-    expect(screen.getByText('分阶段提交')).toBeTruthy()
-    expect(screen.getByText('11 份项目档案可检索')).toBeTruthy()
-    expect(screen.getByText('2 / 4 个记忆体可召回')).toBeTruthy()
-    expect(screen.queryByText(/secret-r1/)).toBeNull()
-    expect(screen.queryByText(/runtime-memory-file/)).toBeNull()
+    await screen.findByText('偏好：中文')
+    expect(screen.getByText('流程：分阶段提交')).toBeTruthy()
+    expect(screen.getByText('发布架构')).toBeTruthy()
+    expect(screen.getByText('项目约束')).toBeTruthy()
+    const injected = screen.getByRole('region', { name: '已注入' })
+    expect(within(injected).queryByText('默认使用中文')).toBeNull()
+    expect(within(injected).queryByText(/runtime-memory-file/)).toBeNull()
     expect(screen.queryByText('搜索项目记录')).toBeNull()
-    fireEvent.click(within(screen.getByRole('region', { name: '可唤醒' })).getByRole('button', { name: /^记忆体/ }))
+    const available = screen.getByRole('region', { name: '可访问' })
+    expect(within(available).getByText('11 项')).toBeTruthy()
+    expect(within(available).getByText('2 / 4 项')).toBeTruthy()
+    fireEvent.click(within(available).getByRole('button', { name: /^记忆体/ }))
     const inspector = screen.getByRole('complementary', { name: '视图详情' })
-    expect(within(inspector).getByText('0 个已注入片段')).toBeTruthy()
-    expect(within(inspector).getByText('recall')).toBeTruthy()
+    expect(within(inspector).getByText('2 / 4 项')).toBeTruthy()
+    expect(within(inspector).getByText('1 个读取入口')).toBeTruthy()
     expect(within(inspector).queryByText(/2 active of 4 configured/)).toBeNull()
     expect(within(inspector).queryByText('Recall durable evidence')).toBeNull()
+
+    fireEvent.click(within(inspector).getByRole('button', { name: '关闭详情' }))
+    fireEvent.click(within(injected).getByRole('button', { name: /^运行时/ }))
+    const runtimeInspector = screen.getByRole('complementary', { name: '视图详情' })
+    fireEvent.click(within(runtimeInspector).getByText('查看注入原文'))
+    expect(runtimeInspector.querySelector('pre')?.textContent).toContain('secret-r1')
+    expect(runtimeInspector.querySelector('pre')?.textContent).toContain('runtime-memory-file')
   })
 
   it('keeps draft, read-only preview and pinned current View distinct until an explicit save', async () => {
@@ -179,6 +221,8 @@ describe('View page interaction and localization', () => {
     fireEvent.click(editor().getByRole('button', { name: 'Generate preview' }))
     await screen.findByText('Preview-only context')
     expect(screen.getByText('Read-only preview · not injected')).toBeTruthy()
+    expect(within(screen.getByRole('region', { name: 'Retrieved this turn' })).queryByRole('button')).toBeNull()
+    expect(within(screen.getByRole('region', { name: 'Written this turn' })).queryByRole('button')).toBeNull()
     expect(f.client.previewView).toHaveBeenCalledWith(expect.objectContaining({ expectedRevision: 'settings-1', entries: expect.objectContaining({
       'light-context': { enabled: true, config: {} }, 'auto-capture': { enabled: true, config: {} },
     }) }))
@@ -299,7 +343,8 @@ describe('View page interaction and localization', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Light context' }))
     mounted.rerender(page(false))
     const requests = f.client.viewDashboard.mock.calls.length
-    f.update({ current: { ...snapshot('recent'), turn: 2, memoryText: 'Second turn memory', projection: [{ id: 'second', sourceInstanceKey: 'source:runtime', mode: 'eager', text: 'Second turn context', revision: 'r2' }] } })
+    f.update({ current: { ...snapshot('recent'), turn: 2, memoryText: 'Second turn memory', projection: [{ id: 'second', sourceInstanceKey: 'source:runtime', mode: 'eager', text: 'Second turn context', revision: 'r2' }],
+      sourcePresentations: [{ sourceInstanceKey: 'source:runtime', mode: 'eager', visibleItems: 1, items: [{ id: 'second', title: 'Second turn context' }] }] } })
     expect(f.client.viewDashboard).toHaveBeenCalledTimes(requests)
     mounted.rerender(page(true))
     await screen.findByText('Second turn context')
