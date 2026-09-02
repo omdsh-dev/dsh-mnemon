@@ -17,6 +17,8 @@ import type {
   MemorySourceManagementRequest,
   MemorySourceManagementResult,
   MemorySourceRuntime,
+  MemorySourcePresentation,
+  MemoryViewSourcePresentation,
   MemoryStrategyTurn,
   MemoryStrategyRead,
   MemoryStrategyContribution,
@@ -264,8 +266,36 @@ function normalizeContribution(source: RuntimeSource, spec: MemoryViewSourceSpec
     }, `memory ReadGrant for ${source.installed.instanceKey}`)
   }
   if ((spec.routeIds?.length ?? 0) > 0 && readGrant === undefined) throw new Error(`memory Source did not return a ReadGrant for selected Routes: ${source.installed.instanceKey}`)
-  if (facts.availability === 'unavailable' && (fragments.length > 0 || readGrant !== undefined)) throw new Error(`unavailable memory Source returned a View contribution: ${source.installed.instanceKey}`)
-  return deepFreeze({ fragments, ...(readGrant === undefined ? {} : { readGrant }) })
+  let presentation: MemorySourcePresentation | undefined
+  if (value.presentation !== undefined) {
+    const label = `memory Source presentation for ${source.installed.instanceKey}`
+    const visibleItems = value.presentation.visibleItems
+    const totalItems = value.presentation.totalItems
+    if (!Number.isSafeInteger(visibleItems) || visibleItems < 0 || visibleItems > 1_000_000_000) {
+      throw new Error(`${label} visibleItems must be a non-negative safe integer`)
+    }
+    if (totalItems !== undefined && (!Number.isSafeInteger(totalItems) || totalItems < visibleItems || totalItems > 1_000_000_000)) {
+      throw new Error(`${label} totalItems must be a safe integer no smaller than visibleItems`)
+    }
+    const sourceItems = value.presentation.items ?? []
+    if (!Array.isArray(sourceItems) || sourceItems.length > 24 || sourceItems.length > visibleItems) {
+      throw new Error(`${label} items must be a preview of at most 24 visible items`)
+    }
+    const seen = new Set<string>()
+    const items = sourceItems.map((item, index) => {
+      const itemId = requiredText(item.id, `${label} item id ${index}`, 300)
+      if (seen.has(itemId)) throw new Error(`${label} item id is duplicated: ${itemId}`)
+      seen.add(itemId)
+      return {
+        id: itemId,
+        title: requiredText(item.title, `${label} item title ${index}`, 160),
+        ...(item.excerpt === undefined ? {} : { excerpt: requiredText(item.excerpt, `${label} item excerpt ${index}`, 600) }),
+      }
+    })
+    presentation = jsonClone({ visibleItems, ...(totalItems === undefined ? {} : { totalItems }), ...(items.length === 0 ? {} : { items }) }, label)
+  }
+  if (facts.availability === 'unavailable' && (fragments.length > 0 || readGrant !== undefined || presentation !== undefined)) throw new Error(`unavailable memory Source returned a View contribution: ${source.installed.instanceKey}`)
+  return deepFreeze({ fragments, ...(readGrant === undefined ? {} : { readGrant }), ...(presentation === undefined ? {} : { presentation }) })
 }
 
 function routeFor(source: RuntimeSource, routeId: string, grant: MemoryReadGrant, budget: MemoryViewBudget): MemoryViewRoute {
@@ -523,6 +553,7 @@ export class MemoryCompositionGeneration {
     const grants: MemoryReadGrant[] = []
     const routes: MemoryViewRoute[] = []
     const actions: MemoryActionOffer[] = []
+    const sourcePresentations: MemoryViewSourcePresentation[] = []
     let projectionCharacters = 0
     const projected = await Promise.all(spec.sources.map(async sourceSpec => {
       const source = this.sources.get(sourceSpec.sourceInstanceKey)!
@@ -557,6 +588,11 @@ export class MemoryCompositionGeneration {
         grants.push(contribution.readGrant)
         for (const routeId of sourceSpec.routeIds ?? []) routes.push(routeFor(source, routeId, contribution.readGrant, request.budget))
       }
+      if (contribution.presentation !== undefined) sourcePresentations.push(deepFreeze({
+        sourceInstanceKey: source.installed.instanceKey,
+        mode: sourceSpec.projection?.mode ?? 'routed',
+        ...contribution.presentation,
+      }))
       for (const actionId of sourceSpec.actionIds ?? []) actions.push(actionFor(source, actionId))
     }
     const sourceRevisions = Object.fromEntries([...facts].map(([key, value]) => [key, value.revision]))
@@ -569,6 +605,7 @@ export class MemoryCompositionGeneration {
       ...(contributions.length === 0 ? {} : { strategyExtensions: contributions.map(({ value, ...identity }) => ({ ...identity, digest: digest(value) })) }),
       scope: request.scope,
       projection,
+      ...(sourcePresentations.length === 0 ? {} : { sourcePresentations }),
       routes,
       readGrants: grants,
       actionOffers: actions,

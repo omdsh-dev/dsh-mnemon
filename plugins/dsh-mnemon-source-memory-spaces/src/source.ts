@@ -460,6 +460,15 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
             revision,
             consistency: 'namespace-pinned-live-read',
           },
+          presentation: {
+            visibleItems: active.length,
+            totalItems: all.length,
+            items: active.slice(0, 24).map(body => ({
+              id: body.id,
+              title: truncate(body.name, 160),
+              ...(body.description.trim() === '' ? {} : { excerpt: truncate(body.description, 600) }),
+            })),
+          },
         }
       },
       async query(request) {

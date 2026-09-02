@@ -194,6 +194,42 @@ function contributions(source = installedSource(), strategy = installedStrategy(
 }
 
 describe('Composable View Memory compiler', () => {
+  it('normalizes bounded Source presentation without rendering it to the model', async () => {
+    const base = sourceDefinition()
+    let presentation: unknown = {
+      visibleItems: 2,
+      totalItems: 3,
+      items: [{ id: 'one', title: 'Visible item', excerpt: 'Source-authored preview' }],
+    }
+    const source = defineMemorySource({ ...base, create(context) {
+      const runtime = base.create(context)
+      return { ...runtime, async project(request) {
+        return { ...await runtime.project(request), presentation: presentation as never }
+      } }
+    } })
+    const generation = new MemoryCompositionGeneration(contributions(installedSource(source)))
+    try {
+      const view = await generation.compose(REQUEST)
+      expect(view.sourcePresentations).toEqual([{
+        sourceInstanceKey: 'source:fixture', mode: 'eager', visibleItems: 2, totalItems: 3,
+        items: [{ id: 'one', title: 'Visible item', excerpt: 'Source-authored preview' }],
+      }])
+      expect(Object.isFrozen(view.sourcePresentations?.[0]?.items)).toBe(true)
+      expect(JSON.stringify(view.projection)).not.toContain('Source-authored preview')
+
+      for (const invalid of [
+        { visibleItems: -1 },
+        { visibleItems: 1, totalItems: 0 },
+        { visibleItems: 0, items: [{ id: 'one', title: 'overflow' }] },
+        { visibleItems: 2, items: [{ id: 'same', title: 'one' }, { id: 'same', title: 'two' }] },
+        { visibleItems: 1, items: [{ id: 'one', title: 'x'.repeat(161) }] },
+      ]) {
+        presentation = invalid
+        await expect(generation.compose(REQUEST)).rejects.toThrow('presentation')
+      }
+    } finally { await generation.dispose() }
+  })
+
   it('pins trusted Strategy guidance in the digest and rejects malformed or oversized instructions', async () => {
     let guidance: unknown = { system: 'Instruction {{model}}', routing: 'Route only as offered', reminders: { read: 'Read only if needed' } }
     const base = strategyDefinition()

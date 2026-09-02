@@ -143,6 +143,18 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
             provenance: { sourceTypeId: 'documents' },
           }] : [],
           readGrant,
+          presentation: {
+            visibleItems: active.length,
+            totalItems: current.documents.length,
+            items: [...active]
+              .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt) || left.id.localeCompare(right.id))
+              .slice(0, 24)
+              .map(document => ({
+                id: document.id,
+                title: truncate(document.title, 160),
+                ...((document.description || document.excerpt).trim() === '' ? {} : { excerpt: truncate(document.description || document.excerpt, 600) }),
+              })),
+          },
         }
       },
       async query(request) {

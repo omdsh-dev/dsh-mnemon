@@ -104,6 +104,14 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
             revision: current.revision,
             provenance: { sourceTypeId: 'runtime' },
           }],
+          presentation: {
+            visibleItems: current.entries.length,
+            totalItems: current.totalEntries,
+            items: current.entries.slice(0, 24).map((entry, index) => ({
+              id: `${entry.target}:${entry.created_at}:${index}`,
+              title: truncate(entry.content, 160),
+            })),
+          },
         }
       },
       async manage(request) {

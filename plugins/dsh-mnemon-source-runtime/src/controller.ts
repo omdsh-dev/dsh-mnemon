@@ -49,6 +49,10 @@ export { RUNTIME_MEMORY_VERSION, RUNTIME_ENTRY_DELIMITER, RUNTIME_MEMORY_LIMITS,
 export interface RuntimeMemoryContextProjection {
   revision: string
   text: string
+  /** Exact entries represented by this branch-aware prompt projection. */
+  entries: RuntimeMemoryEntry[]
+  /** Complete stored entry count before branch filtering. */
+  totalEntries: number
 }
 
 const LOCK_TIMEOUT_MS = 5_000
@@ -430,11 +434,16 @@ export class RuntimeMemoryController {
         } satisfies RuntimeMemorySnapshot
     const storeMemory = this.targetView(entries, 'memory')
     const storeUser = this.targetView(entries, 'user')
+    const visibleEntries = branchScope === undefined
+      ? entries
+      : entries.filter(entry => entry.target === 'user' || entryMatchesBranch(entry, branchScope))
     const branchLine = branchScope === undefined
       ? ''
       : `\nGit branch: ${branchScope}${local.hidden > 0 ? ` (${local.hidden} branch-scoped entr${local.hidden === 1 ? 'y' : 'ies'} hidden)` : ''}`
     return {
       revision: snapshot.revision,
+      entries: visibleEntries.map(entry => ({ ...entry, ...(entry.branches === undefined ? {} : { branches: [...entry.branches] }) })),
+      totalEntries: entries.length,
       text: `MNEMON RUNTIME MEMORY SNAPSHOT
 Revision: ${snapshot.revision}${branchLine}
 

@@ -62,6 +62,9 @@ describe('standalone documents Source', () => {
       expect(receipt.completion).toBe('committed')
       first.release()
       const next = await runner.beginTurn({ scope: { storage: 'custom', workspaceId: workspace } })
+      expect(next.view.sourcePresentations?.find(value => value.sourceInstanceKey === 'source:work')).toMatchObject({
+        mode: 'routed', visibleItems: 1, totalItems: 1, items: [{ title: 'Work' }],
+      })
       const route = next.view.routes.find(value => value.sourceInstanceKey === 'source:work')!
       const evidence = await next.executeRoute(route.id, { query: 'sentinel' })
       expect(evidence.items).toHaveLength(1)

@@ -18,6 +18,8 @@ export type {
   MemorySourceFacts,
   MemoryAvailableSource,
   MemorySourceManifest,
+  MemorySourcePresentation,
+  MemorySourcePresentationItem,
   MemorySourceRuntime,
   MemorySourceViewContext,
   MemoryStrategyDefinition,
@@ -29,6 +31,7 @@ export type {
   MemoryStrategyRead,
   MemoryStrategyManifest,
   MemoryViewRequest,
+  MemoryViewSourcePresentation,
   MemoryViewSpec,
   MemoryViewGuidance,
 } from "../core/contracts/index.ts"

@@ -85,6 +85,10 @@ describe('standalone Memory Spaces Source', () => {
           operation: 'provider-service-update', input: { providerId: 'account', settings: {}, enabled: true } })
       }
       const first = await runner.beginTurn({ scope })
+      expect(first.view.sourcePresentations?.filter(value => value.visibleItems > 0)).toEqual(expect.arrayContaining([
+        expect.objectContaining({ mode: 'routed', visibleItems: 1, totalItems: 1,
+          items: [expect.objectContaining({ title: 'Notes', excerpt: 'Provider namespace' })] }),
+      ]))
       const action = first.view.actionOffers.find(offer => offer.sourceInstanceKey === 'source:work' && offer.sourceActionId === 'remember')!
       await first.executeAction(action.id, { content: 'Only for work' }, () => true)
       first.release()

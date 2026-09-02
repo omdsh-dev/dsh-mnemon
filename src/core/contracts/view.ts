@@ -256,6 +256,34 @@ export interface MemoryViewFragment {
   provenance?: MemoryJsonValue
 }
 
+/**
+ * Bounded, Source-authored human presentation for one item in a View.
+ * It is descriptive only: Core never treats it as Evidence, authority, or
+ * model instructions, and the Host never renders executable UI from it.
+ */
+export interface MemorySourcePresentationItem {
+  id: string
+  title: string
+  excerpt?: string
+}
+
+/**
+ * Optional browser-safe description of the items represented by a Source.
+ * `visibleItems` is the number in this View scope; `items` may be a bounded
+ * preview subset. `totalItems` may include inactive or out-of-scope items.
+ */
+export interface MemorySourcePresentation {
+  visibleItems: number
+  totalItems?: number
+  items?: MemorySourcePresentationItem[]
+}
+
+/** Source presentation after Core binds it to the selected mode and instance. */
+export interface MemoryViewSourcePresentation extends MemorySourcePresentation {
+  sourceInstanceKey: string
+  mode: MemorySourceMode
+}
+
 export interface MemoryReadGrant {
   id: string
   sourceInstanceKey: string
@@ -268,6 +296,8 @@ export interface MemoryReadGrant {
 export interface MemoryViewContribution {
   fragments: MemoryViewFragment[]
   readGrant?: MemoryReadGrant
+  /** Optional non-authoritative presentation; old Sources may omit it. */
+  presentation?: MemorySourcePresentation
 }
 
 export interface MemoryViewRoute {
@@ -310,6 +340,8 @@ export interface ComposableMemoryView {
   createdAt: string
   scope: MemoryOperationScope
   projection: MemoryViewFragment[]
+  /** Optional Source-authored browser presentation; never model-rendered. */
+  sourcePresentations?: MemoryViewSourcePresentation[]
   routes: MemoryViewRoute[]
   readGrants: MemoryReadGrant[]
   actionOffers: MemoryActionOffer[]

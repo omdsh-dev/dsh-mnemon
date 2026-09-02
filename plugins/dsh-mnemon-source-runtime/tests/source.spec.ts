@@ -72,6 +72,9 @@ describe('standalone runtime Source', () => {
       first.release()
       const next = await runner.beginTurn({ scope: { storage: 'custom', workspaceId: workspace } })
       expect(next.view.projection.find(value => value.sourceInstanceKey === 'source:work')?.text).toContain('work-only sentinel')
+      expect(next.view.sourcePresentations?.find(value => value.sourceInstanceKey === 'source:work')).toMatchObject({
+        mode: 'eager', visibleItems: 1, totalItems: 1, items: [{ title: 'work-only sentinel' }],
+      })
       expect(next.view.routes).toEqual([]) // Working context does not imply a summary tree or full-history reader.
       expect(next.view.projection.find(value => value.sourceInstanceKey === 'source:personal')?.text).not.toContain('work-only sentinel')
       next.release()
