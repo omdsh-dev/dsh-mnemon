@@ -1,5 +1,5 @@
-import { access, lstat, mkdir, readFile, readlink, rm, symlink, writeFile } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { access, lstat, mkdir, readFile, readdir, readlink, rm, symlink, writeFile } from 'node:fs/promises'
+import { dirname, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -42,16 +42,74 @@ async function manifest(directory) {
   return JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'))
 }
 
+function normalizedPath(value) {
+  return value.split(sep).join('/')
+}
+
+function restorePath(name) {
+  return normalizedPath(join('node_modules', ...name.split('/')))
+}
+
 function validateRestoreTargets(value) {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error('Invalid DSH registry link restore record.')
   }
-  for (const name of links.keys()) {
-    if (typeof value[name] !== 'string' || value[name] === '') {
-      throw new Error(`Missing recorded registry link for ${name}`)
+
+  // Records created before the plugin-workspace layout covered only Root.
+  if (!('version' in value) && [...links.keys()].every(name => typeof value[name] === 'string' && value[name] !== '')) {
+    return Object.fromEntries([...links.keys()].map(name => [restorePath(name), value[name]]))
+  }
+
+  if (value.version !== 1 || typeof value.targets !== 'object' || value.targets === null || Array.isArray(value.targets)) {
+    throw new Error('Invalid DSH registry link restore record version.')
+  }
+  const targets = value.targets
+  for (const [path, target] of Object.entries(targets)) {
+    const normalized = path.replaceAll('\\', '/')
+    const dependency = [...links.keys()].find(name => normalized.endsWith(`/node_modules/${name}`) || normalized === `node_modules/${name}`)
+    const workspacePath = /^plugins\/[^/]+\/node_modules\//u.test(normalized)
+    if (normalized !== path || dependency === undefined || (!workspacePath && normalized !== `node_modules/${dependency}`)) {
+      throw new Error(`Invalid DSH registry restore path: ${path}`)
+    }
+    const destination = resolve(root, normalized)
+    if (!destination.startsWith(`${root}${sep}`) || typeof target !== 'string' || target === '') {
+      throw new Error(`Invalid DSH registry restore target for ${path}`)
     }
   }
-  return value
+  return targets
+}
+
+async function workspaceRoots() {
+  const plugins = await readdir(join(root, 'plugins'), { withFileTypes: true })
+  return [root, ...plugins.filter(entry => entry.isDirectory()).map(entry => join(root, 'plugins', entry.name))]
+}
+
+async function overlayDestinations(sourceByName) {
+  const destinations = []
+  for (const packageRoot of await workspaceRoots()) {
+    // Root exercises the full DSH source graph. Independent plugin workspaces
+    // only need the Harness-owned Cordis identity; their Client dev dependency
+    // stays registry-backed so Vitest does not execute a package outside that
+    // workspace's filesystem root.
+    const dependencies = packageRoot === root ? links.keys() : ['@deepseek-ai/cordis']
+    for (const name of dependencies) {
+      const destination = join(packageRoot, 'node_modules', ...name.split('/'))
+      let status
+      try {
+        status = await lstat(destination)
+      } catch (error) {
+        if (packageRoot !== root && error?.code === 'ENOENT') continue
+        throw error
+      }
+      if (!status.isSymbolicLink()) throw new Error(`Expected pnpm dependency link at ${destination}`)
+      destinations.push({
+        key: normalizedPath(relative(root, destination)),
+        destination,
+        source: sourceByName.get(name),
+      })
+    }
+  }
+  return destinations
 }
 
 if (restore) {
@@ -62,15 +120,14 @@ if (restore) {
     if (error?.code === 'ENOENT') throw new Error('No recorded DSH registry links are available to restore.')
     throw error
   }
-  for (const name of links.keys()) {
-    const target = targets[name]
-    const destination = join(root, 'node_modules', ...name.split('/'))
+  for (const [path, target] of Object.entries(targets)) {
+    const destination = resolve(root, path)
     await rm(destination, { recursive: true, force: true })
     await mkdir(dirname(destination), { recursive: true })
     await symlink(target, destination, process.platform === 'win32' ? 'junction' : 'dir')
   }
   await rm(restoreFile, { force: true })
-  console.log(`Restored ${links.size} registry package links.`)
+  console.log(`Restored ${Object.keys(targets).length} registry package links.`)
   process.exit(0)
 }
 
@@ -81,7 +138,7 @@ if (sourceManifest.version !== expectedVersion) {
 }
 await access(join(sourceRoot, 'apps', 'cli', 'lib', 'bin.js'))
 
-const validatedLinks = []
+const sourceByName = new Map()
 for (const [name, relativeSource] of links) {
   const source = join(sourceRoot, relativeSource)
   const packageManifest = await manifest(source)
@@ -92,22 +149,22 @@ for (const [name, relativeSource] of links) {
     throw new Error(`Expected ${name}@${expectedVersion}, received ${String(packageManifest.version)}`)
   }
   await access(join(source, 'lib'))
-  validatedLinks.push([name, source])
+  sourceByName.set(name, source)
 }
 
+const destinations = await overlayDestinations(sourceByName)
 try {
-  validateRestoreTargets(JSON.parse(await readFile(restoreFile, 'utf8')))
+  const targets = validateRestoreTargets(JSON.parse(await readFile(restoreFile, 'utf8')))
+  if (destinations.some(({ key }) => !(key in targets)) || Object.keys(targets).length !== destinations.length) {
+    throw new Error('Restore existing DSH source links before applying the expanded workspace overlay.')
+  }
 } catch (error) {
   if (error?.code !== 'ENOENT') throw error
-  const restoreTargets = Object.fromEntries(await Promise.all([...links.keys()].map(async name => [
-    name,
-    await readlink(join(root, 'node_modules', ...name.split('/'))),
-  ])))
-  await writeFile(restoreFile, `${JSON.stringify(restoreTargets, null, 2)}\n`, { flag: 'wx' })
+  const targets = Object.fromEntries(await Promise.all(destinations.map(async ({ key, destination }) => [key, await readlink(destination)])))
+  await writeFile(restoreFile, `${JSON.stringify({ version: 1, targets }, null, 2)}\n`, { flag: 'wx' })
 }
 
-for (const [name, source] of validatedLinks) {
-  const destination = join(root, 'node_modules', ...name.split('/'))
+for (const { destination, source } of destinations) {
   await mkdir(dirname(destination), { recursive: true })
   try {
     await lstat(destination)
@@ -118,6 +175,6 @@ for (const [name, source] of validatedLinks) {
   await symlink(source, destination, process.platform === 'win32' ? 'junction' : 'dir')
 }
 
-console.log(`Linked ${links.size} build-time packages from DSH ${expectedVersion} at ${sourceRoot}.`)
+console.log(`Linked ${destinations.length} Root/workspace dependency paths from DSH ${expectedVersion} at ${sourceRoot}.`)
 console.log('Run pnpm_config_verify_deps_before_run=false pnpm run verify to preserve these source links while verifying.')
 console.log('Run pnpm_config_verify_deps_before_run=false pnpm run dsh:restore-registry to restore registry dependencies.')

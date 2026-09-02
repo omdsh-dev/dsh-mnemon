@@ -98,7 +98,7 @@ DSH rc.2 对 Bundle 变化的 Client 卸载并不完整；修改 Client 包/loca
 
 ## DSH 源码验证
 
-CI 还构建源码版 `dsh-v0.1.2-alpha.1`。已有 Harness 构建目录时：
+CI 还构建源码版 `dsh-v0.1.2-alpha.5`。已有 Harness 构建目录时：
 
 ```sh
 DSH_SOURCE_ROOT=/absolute/path/to/deepseek-harness pnpm dsh:link-source
@@ -106,7 +106,7 @@ pnpm_config_verify_deps_before_run=false pnpm verify
 pnpm dsh:restore-registry
 ```
 
-Harness 先运行自己的 `pnpm install --frozen-lockfile && pnpm build:lib`。链接仅更改生成的 `node_modules`，不改提交的依赖版本。本次调用关闭 pnpm 的运行前依赖验证，避免嵌套脚本自动恢复 registry 链接。rc.2/alpha RPC 与服务协议有专项测试；CI 有 alpha 任务，不代表当前本地运行已经使用 alpha。
+Harness 先运行自己的 `pnpm install --frozen-lockfile && pnpm build:lib`。链接仅更改生成的 `node_modules`，不改提交的依赖版本；它会覆盖 Starter 的 DSH 依赖图和每个已安装插件 workspace 的 Cordis 身份，再逐项恢复原 pnpm 链接。插件 Client 测试依赖仍留在各自 workspace 内，构建后的 Starter 负责验证 alpha Client API。本次调用关闭 pnpm 的运行前依赖验证，避免嵌套脚本自动恢复 registry 链接。rc.2/alpha RPC 与服务协议有专项测试；CI 有 alpha 任务，不代表当前本地运行已经使用 alpha。
 
 ## 成组 beta 发布
 

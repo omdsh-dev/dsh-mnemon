@@ -98,7 +98,7 @@ DSH rc.2 does not fully unload every Client module on bundle changes. Refresh af
 
 ## DSH source verification
 
-CI also builds the source-only `dsh-v0.1.2-alpha.1` tag. To repeat with a built Harness checkout:
+CI also builds the source-only `dsh-v0.1.2-alpha.5` tag. To repeat with a built Harness checkout:
 
 ```sh
 DSH_SOURCE_ROOT=/absolute/path/to/deepseek-harness pnpm dsh:link-source
@@ -106,7 +106,7 @@ pnpm_config_verify_deps_before_run=false pnpm verify
 pnpm dsh:restore-registry
 ```
 
-Build Harness with its own `pnpm install --frozen-lockfile && pnpm build:lib` first. Linking changes generated `node_modules` only, not committed dependency versions. Disable pnpm's pre-run dependency verification for this invocation so nested scripts do not restore the registry links. The rc.2 and alpha RPC/service contracts have dedicated tests; an alpha CI configuration is not a claim that a current local run used alpha.
+Build Harness with its own `pnpm install --frozen-lockfile && pnpm build:lib` first. Linking changes generated `node_modules` only, not committed dependency versions. It overlays the Starter's DSH graph and every installed plugin workspace's Cordis identity, then restores every original pnpm link. Plugin Client test dependencies remain workspace-local while the built Starter exercises the alpha Client APIs. Disable pnpm's pre-run dependency verification for this invocation so nested scripts do not restore the registry links. The rc.2 and alpha RPC/service contracts have dedicated tests; an alpha CI configuration is not a claim that a current local run used alpha.
 
 ## Coordinated beta releases
 
