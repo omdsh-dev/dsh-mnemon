@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { createPortal } from 'react-dom'
+import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ClientSettingsScope, Config } from "../host/protocol.ts"
 import type { MnemonClientContext } from "./dsh-context.ts"
 import type { MnemonTranslate } from './locales.ts'
 import { MnemonView, type MnemonWorkspaceSelection } from './MnemonView.tsx'
 import type { MemorySourcePageDirectory } from './source-pages.tsx'
-import type { MnemonSourcePageOutlet, MnemonSourcePageRenderer } from './source-page-outlet.ts'
+import type { MnemonBetterSidebarSeat } from './better-sidebar-seat.ts'
 import { mountMnemonSidebarEntry } from './sidebar-entry.ts'
 import { MnemonWorkspaceController } from './workspace-controller.ts'
 import css from './MnemonWorkspace.module.css'
@@ -66,11 +68,6 @@ export interface MnemonWorkspaceNavigation {
   close(): void
 }
 
-export interface MnemonWorkspaceScope {
-  sessionId: string
-  cwd?: string
-}
-
 export interface MnemonWorkspaceHostProps {
   connection: MnemonClientContext['connection']
   settingsScope: ClientSettingsScope<Config>
@@ -83,7 +80,7 @@ export interface MnemonWorkspaceHostProps {
   sessionId?: string
   cwd?: string
   active?: boolean
-  renderSlot?: MnemonSourcePageRenderer
+  renderSlot?: PropsRenderSlots<'mnemon.source.page'>['renderSlot']
 }
 
 export interface MnemonBuiltinWorkspaceHostProps extends Pick<MnemonWorkspaceHostProps,
@@ -159,10 +156,12 @@ export function MnemonWorkspaceHost(props: MnemonWorkspaceHostProps): JSX.Elemen
 }
 
 /** Sidebar presentation in DSH's additive shell.overlay, also without a session. */
-export function MnemonSidebarWorkspaceHost(props: MnemonWorkspaceHostProps & { controller: MnemonWorkspaceController; sourcePageOutlet?: MnemonSourcePageOutlet }): JSX.Element | null {
+export function MnemonSidebarWorkspaceHost(props: MnemonWorkspaceHostProps & { controller: MnemonWorkspaceController; betterSidebarSeat?: MnemonBetterSidebarSeat }): JSX.Element {
   const state = useSyncExternalStore(props.controller.subscribe, props.controller.getSnapshot, props.controller.getSnapshot)
+  const subscribeBetterSidebar = useCallback((listener: () => void) => props.betterSidebarSeat?.subscribe(listener) ?? (() => {}), [props.betterSidebarSeat])
+  const getBetterSidebar = useCallback(() => props.betterSidebarSeat?.getSnapshot(), [props.betterSidebarSeat])
+  const betterSidebar = useSyncExternalStore(subscribeBetterSidebar, getBetterSidebar, getBetterSidebar)
   const [bounds, setBounds] = useState<{ left: number; top: number; width: number; height: number }>()
-  useEffect(() => props.renderSlot === undefined ? undefined : props.sourcePageOutlet?.attach(props.renderSlot), [props.renderSlot, props.sourcePageOutlet])
   useEffect(() => {
     if (!state.open) return
     let surface: MnemonWorkspaceSurface | undefined
@@ -214,11 +213,26 @@ export function MnemonSidebarWorkspaceHost(props: MnemonWorkspaceHostProps & { c
       detach()
     }
   }, [state.open, props.controller])
-  if (bounds === undefined) return null
+  const betterSidebarView = betterSidebar === undefined ? null : createPortal(<MnemonWorkspaceHost
+    connection={props.connection}
+    settingsScope={props.settingsScope}
+    sessions={props.sessions}
+    workspaces={props.workspaces}
+    localeRuntime={props.localeRuntime}
+    sourcePageDirectory={props.sourcePageDirectory}
+    sessionId={betterSidebar.scope.sessionId}
+    {...(betterSidebar.scope.cwd === undefined ? {} : { cwd: betterSidebar.scope.cwd })}
+    active={betterSidebar.visible}
+    t={props.t}
+    {...(props.renderSlot === undefined ? {} : { renderSlot: props.renderSlot })}
+  />, betterSidebar.target)
   // Hide the existing DSH subtree so panel navigation retains Source page state.
-  return <section data-dsh-mnemon-view hidden={!state.open} className={css.workspacePanel} style={{ ...bounds, display: state.open ? undefined : 'none' }} aria-label={props.t('tab.label')}>
-    <MnemonWorkspaceHost {...props} active={state.open} />
-  </section>
+  return <>
+    {betterSidebarView}
+    {bounds !== undefined && <section data-dsh-mnemon-view hidden={!state.open} className={css.workspacePanel} style={{ ...bounds, display: state.open ? undefined : 'none' }} aria-label={props.t('tab.label')}>
+      <MnemonWorkspaceHost {...props} active={state.open} />
+    </section>}
+  </>
 }
 
 /** Core-owned sidebar row; presentation state is shared with its DSH seat. */

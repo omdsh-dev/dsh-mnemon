@@ -3,10 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const { mountBetterSidebar } = vi.hoisted(() => ({
   mountBetterSidebar: vi.fn((
     _ctx: unknown,
-    _settings: unknown,
     _translate: unknown,
-    _sourcePageDirectory: unknown,
-    _sourcePageOutlet: unknown,
+    _seat: unknown,
   ) => vi.fn()),
 }))
 vi.mock('../src/client/better-sidebar.tsx', () => ({ mountBetterSidebarTab: mountBetterSidebar }))
@@ -89,8 +87,7 @@ describe('Mnemon Web client composition', () => {
     expect(mountBetterSidebar).toHaveBeenCalledTimes(1)
     const shellEntry = slots.find(options => options.name === 'shell.overlay')!
     const shellProps = (shellEntry.inject as () => Record<string, unknown>)()
-    expect(mountBetterSidebar.mock.calls[0]![3]).toBe(shellProps.sourcePageDirectory)
-    expect(mountBetterSidebar.mock.calls[0]![4]).toBe(shellProps.sourcePageOutlet)
+    expect(mountBetterSidebar.mock.calls[0]![2]).toBe(shellProps.betterSidebarSeat)
     const firstBetterSidebarStop = mountBetterSidebar.mock.results[0]!.value
     await scope.setPath(['displayMode'], 'sidebar')
     expect(workspaceStops).toHaveLength(1)

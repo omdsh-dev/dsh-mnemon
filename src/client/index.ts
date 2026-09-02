@@ -16,7 +16,7 @@ import type { MnemonClientContext } from "./dsh-context.ts"
 import {
   createMemorySourcePageDirectory,
 } from './source-pages.tsx'
-import { MnemonSourcePageOutlet } from './source-page-outlet.ts'
+import { MnemonBetterSidebarSeat } from './better-sidebar-seat.ts'
 import {
   MnemonSidebarWorkspaceHost,
   MnemonBuiltinWorkspaceHost,
@@ -93,7 +93,7 @@ function mountSidebarMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
   const controller = new MnemonWorkspaceController()
   const navigation = { open: () => controller.open(), close: () => controller.close() }
   const sourcePageDirectory = createMemorySourcePageDirectory(ctx)
-  const sourcePageOutlet = new MnemonSourcePageOutlet()
+  const betterSidebarSeat = new MnemonBetterSidebarSeat()
   const slotName = 'shell.overlay'
   const disposeView = ctx.slots.inject(slotName, () => ctx.slots.register({
     name: slotName,
@@ -113,11 +113,11 @@ function mountSidebarMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
       sourcePageDirectory,
       navigation,
       controller,
-      sourcePageOutlet,
+      betterSidebarSeat,
       t: translate,
     }),
   }, MnemonSidebarWorkspaceHost))
-  const disposeBetterSidebar = mountBetterSidebarTab(ctx, settings, translate, sourcePageDirectory, sourcePageOutlet)
+  const disposeBetterSidebar = mountBetterSidebarTab(ctx, translate, betterSidebarSeat)
   if (typeof window === 'undefined' || typeof document === 'undefined') return () => { disposeBetterSidebar(); disposeView() }
   const openMemoryView = (): void => { navigation.open() }
   window.addEventListener(MNEMON_ANCHOR_EVENT, openMemoryView)

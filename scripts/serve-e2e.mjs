@@ -10,7 +10,17 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const flags = new Set(process.argv.slice(2))
-for (const flag of flags) if (flag !== '--strategy-extensions') throw new Error('Unknown option: ' + flag)
+let betterSidebarRoot
+for (const flag of flags) {
+  if (flag === '--strategy-extensions') continue
+  if (flag.startsWith('--better-sidebar=')) {
+    const value = flag.slice('--better-sidebar='.length)
+    if (value === '') throw new Error('--better-sidebar requires a package directory')
+    betterSidebarRoot = resolve(value)
+    continue
+  }
+  throw new Error('Unknown option: ' + flag)
+}
 const extensions = flags.has('--strategy-extensions')
   ? ['dsh-mnemon-strategy-scoped', 'dsh-mnemon-strategy-light-context', 'dsh-mnemon-strategy-auto-capture'] : []
 const fixture = await mkdtemp(join(tmpdir(), 'mnemon-web-e2e-'))
@@ -79,6 +89,7 @@ try {
   const plugins = Object.keys(manifest.dependencies).filter(name => name.startsWith('dsh-mnemon-'))
   const installer = spawn(process.execPath, [dshBin, 'plugin', '--profile', 'web', 'add',
     `link:${root}`, ...[...plugins, ...extensions].map(name => `link:${join(root, 'plugins', name)}`),
+    ...(betterSidebarRoot === undefined ? [] : [`link:${betterSidebarRoot}`]),
   ], { env, cwd: workspace, stdio: 'inherit' })
   await new Promise((resolveInstall, reject) => {
     installer.once('error', reject)

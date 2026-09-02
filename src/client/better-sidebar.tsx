@@ -1,10 +1,8 @@
-import { useSyncExternalStore, type ReactNode } from 'react'
-import type { ClientSettingsScope, Config } from '../host/protocol.ts'
+import { useEffect, useRef, type ReactNode } from 'react'
 import type { MnemonClientContext } from './dsh-context.ts'
 import type { MnemonTranslate } from './locales.ts'
-import type { MemorySourcePageDirectory } from './source-pages.tsx'
-import type { MnemonSourcePageOutlet } from './source-page-outlet.ts'
-import { MnemonWorkspaceHost, type MnemonWorkspaceScope } from './workspace-mount.tsx'
+import type { MnemonBetterSidebarSeat, MnemonWorkspaceScope } from './better-sidebar-seat.ts'
+import css from './MnemonWorkspace.module.css'
 
 /** Stable type id exposed to Better Sidebar and its persisted tab state. */
 export const MNEMON_BETTER_SIDEBAR_TAB_ID = 'dsh-mnemon:memory'
@@ -28,11 +26,7 @@ interface BetterSidebarService {
 }
 
 interface BetterSidebarMemoryTabProps extends BetterSidebarTabProps {
-  ctx: MnemonClientContext
-  settings: ClientSettingsScope<Config>
-  sourcePageDirectory: MemorySourcePageDirectory
-  sourcePageOutlet: MnemonSourcePageOutlet
-  t: MnemonTranslate
+  seat: MnemonBetterSidebarSeat
 }
 
 function MnemonTabIcon({ size }: { size: number }): JSX.Element {
@@ -42,26 +36,14 @@ function MnemonTabIcon({ size }: { size: number }): JSX.Element {
   </svg>
 }
 
-/** Better Sidebar supplies scope/visibility; DSH Slots still own Source pages. */
+/** Better Sidebar supplies a DOM seat; the DSH renderer remains the owner. */
 function BetterSidebarMemoryTab(props: BetterSidebarMemoryTabProps): JSX.Element {
-  const renderSlot = useSyncExternalStore(
-    props.sourcePageOutlet.subscribe,
-    props.sourcePageOutlet.getSnapshot,
-    props.sourcePageOutlet.getSnapshot,
-  )
-  return <MnemonWorkspaceHost
-    connection={props.ctx.connection}
-    settingsScope={props.settings}
-    sessions={props.ctx.sessions}
-    workspaces={props.ctx.workspaces}
-    localeRuntime={props.ctx.locale}
-    sourcePageDirectory={props.sourcePageDirectory}
-    sessionId={props.scope.sessionId}
-    {...(props.scope.cwd === undefined ? {} : { cwd: props.scope.cwd })}
-    active={props.visible}
-    t={props.t}
-    {...(renderSlot === undefined ? {} : { renderSlot })}
-  />
+  const target = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (target.current === null) return
+    return props.seat.attach(target.current, props.scope, props.visible)
+  }, [props.scope.cwd, props.scope.sessionId, props.seat, props.visible])
+  return <div ref={target} className={css.betterSidebarSeat} data-dsh-mnemon-better-sidebar-seat />
 }
 
 /**
@@ -73,10 +55,8 @@ function BetterSidebarMemoryTab(props: BetterSidebarMemoryTabProps): JSX.Element
  */
 export function mountBetterSidebarTab(
   ctx: MnemonClientContext,
-  settings: ClientSettingsScope<Config>,
   t: MnemonTranslate,
-  sourcePageDirectory: MemorySourcePageDirectory,
-  sourcePageOutlet: MnemonSourcePageOutlet,
+  seat: MnemonBetterSidebarSeat,
 ): () => void {
   let current: { service: BetterSidebarService; dispose: () => void } | undefined
 
@@ -92,15 +72,7 @@ export function mountBetterSidebarTab(
       icon: size => <MnemonTabIcon size={size} />,
       order: 55,
       single: true,
-      component: ({ scope, visible }) => <BetterSidebarMemoryTab
-        ctx={ctx}
-        settings={settings}
-        sourcePageDirectory={sourcePageDirectory}
-        sourcePageOutlet={sourcePageOutlet}
-        scope={scope}
-        visible={visible}
-        t={t}
-      />,
+      component: ({ scope, visible }) => <BetterSidebarMemoryTab seat={seat} scope={scope} visible={visible} />,
     })
     current = { service, dispose }
   }

@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, fireEvent, render, waitFor } from '@testing-library/react'
+import { createContext, useContext, type ReactNode } from 'react'
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react'
 
 vi.mock('../src/client/MnemonView.tsx', () => ({
-  MnemonView: ({ sessionId, workspaceId, workspaceSelection, t, locale, onClose, surface, active }: {
+  MnemonView: ({ sessionId, workspaceId, workspaceSelection, t, locale, onClose, surface, active, renderSlot }: {
     sessionId?: string
     workspaceId?: string
     t?: (key: string) => string
@@ -11,6 +12,7 @@ vi.mock('../src/client/MnemonView.tsx', () => ({
     surface?: 'sidebar' | 'builtin'
     active?: boolean
     onClose?: () => void
+    renderSlot?: (name: string, props: unknown, options: unknown) => ReactNode
     workspaceSelection?: {
       options: Array<{ id: string; title: string }>
       selectedWorkspaceId?: string
@@ -18,7 +20,7 @@ vi.mock('../src/client/MnemonView.tsx', () => ({
       onSelect(id: string): void
       onAlign(): void
     }
-  }) => <div data-testid="mnemon-canonical-content" data-active={active} data-workspace-id={workspaceId} data-effective-workspace-id={workspaceSelection?.effectiveWorkspaceId} data-locale={locale} data-surface={surface} data-has-workspace-picker={workspaceSelection !== undefined} data-has-back-action={onClose !== undefined}>
+  }) => <div data-testid="mnemon-canonical-content" data-active={active} data-session-id={sessionId} data-workspace-id={workspaceId} data-effective-workspace-id={workspaceSelection?.effectiveWorkspaceId} data-locale={locale} data-surface={surface} data-has-workspace-picker={workspaceSelection !== undefined} data-has-back-action={onClose !== undefined} data-has-source-renderer={renderSlot !== undefined}>
     <h1>{t?.('tab.label')}</h1>
     <span>{sessionId ?? 'no-session'}</span>
     <select aria-label="workspace-test-selector" value={workspaceSelection?.selectedWorkspaceId ?? ''} onChange={event => workspaceSelection?.onSelect(event.target.value)}>
@@ -26,6 +28,7 @@ vi.mock('../src/client/MnemonView.tsx', () => ({
     </select>
     <button type="button" onClick={workspaceSelection?.onAlign}>align-test-workspace</button>
     <button type="button" aria-label={t?.('header.backToConversation')} onClick={onClose}>back-test-conversation</button>
+    {renderSlot?.('mnemon.source.page', {}, {})}
   </div>,
 }))
 
@@ -37,7 +40,7 @@ import {
 } from '../src/client/workspace-mount.tsx'
 
 import { MnemonWorkspaceController } from '../src/client/workspace-controller.ts'
-import { MnemonSourcePageOutlet } from '../src/client/source-page-outlet.ts'
+import { MnemonBetterSidebarSeat } from '../src/client/better-sidebar-seat.ts'
 
 let currentDispose: (() => void) | undefined
 const siblingDisposers: Array<() => void> = []
@@ -136,6 +139,11 @@ const settings = {
 }
 const sourcePageDirectory = { getSnapshot: () => [] as const, subscribe: () => () => {} }
 const t = (key: string) => key === 'tab.label' ? 'Memory' : key
+const slotOwnerContext = createContext('outside-owner')
+
+function SlotOwnerProbe(): JSX.Element {
+  return <span data-testid="slot-owner-probe">{useContext(slotOwnerContext)}</span>
+}
 
 describe('Mnemon canonical workspace launcher', () => {
   beforeEach(() => { renderShell() })
@@ -164,21 +172,30 @@ describe('Mnemon canonical workspace launcher', () => {
     expect(document.querySelector('[data-dsh-mnemon-view]')).toBeNull()
   })
 
-  it('publishes and releases the shell-owned Source child renderer', async () => {
+  it('portals the Better Sidebar workspace through the shell-owned Source renderer tree', async () => {
     const ctx = context()
     const controller = new MnemonWorkspaceController()
-    const sourcePageOutlet = new MnemonSourcePageOutlet()
-    const renderSlot = vi.fn(() => null)
-    const view = render(<MnemonSidebarWorkspaceHost
+    const betterSidebarSeat = new MnemonBetterSidebarSeat()
+    const target = document.createElement('div')
+    document.body.append(target)
+    const detach = betterSidebarSeat.attach(target, { sessionId: 'session-portaled', cwd: '/tmp/workspace-two' }, true)
+    const renderSlot = vi.fn(() => <SlotOwnerProbe />)
+    const view = render(<slotOwnerContext.Provider value="dsh-renderer-owner"><MnemonSidebarWorkspaceHost
       connection={ctx.connection as never} settingsScope={settings} sessions={ctx.sessions as never} workspaces={ctx.workspaces as never}
       localeRuntime={ctx.locale as never} sourcePageDirectory={sourcePageDirectory}
       navigation={{ open: () => controller.open(), close: () => controller.close() }} t={t as never}
-      renderSlot={renderSlot as never} controller={controller} sourcePageOutlet={sourcePageOutlet}
-    />)
+      renderSlot={renderSlot as never} controller={controller} betterSidebarSeat={betterSidebarSeat}
+    /></slotOwnerContext.Provider>)
 
-    await waitFor(() => expect(sourcePageOutlet.getSnapshot()).toBe(renderSlot))
+    await waitFor(() => expect(within(target).getByTestId('slot-owner-probe').textContent).toBe('dsh-renderer-owner'))
+    const content = within(target).getByTestId('mnemon-canonical-content')
+    expect(content.dataset.sessionId).toBe('session-portaled')
+    expect(content.dataset.workspaceId).toBe('workspace-2')
+    expect(content.dataset.hasBackAction).toBe('false')
+    expect(content.dataset.hasSourceRenderer).toBe('true')
+    detach()
+    await waitFor(() => expect(target.childElementCount).toBe(0))
     view.unmount()
-    expect(sourcePageOutlet.getSnapshot()).toBeUndefined()
   })
 
   it('opens the DSH sidebar seat before a session exists and restores the conversation on close', async () => {
