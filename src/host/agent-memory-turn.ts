@@ -3,6 +3,7 @@ import type { MemoryOperationScope } from '../core/contracts/index.ts'
 import type { ComposableMemoryTurn, ComposableMemoryTurnManager } from '../core/turns.ts'
 import type { HostAgent } from './dsh.ts'
 import type { MnemonAgentRuntimeSource, MnemonRuntimeGraph } from './runtime.ts'
+import { hostSessionEvents } from './session-events.ts'
 import { inspectMemoryView, modelMemoryWake } from './view-presentation.ts'
 import type { MemoryViewInspection } from './view-protocol.ts'
 

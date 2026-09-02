@@ -37,6 +37,7 @@ import {
 } from '../src/client/workspace-mount.tsx'
 
 import { MnemonWorkspaceController } from '../src/client/workspace-controller.ts'
+import { MnemonSourcePageOutlet } from '../src/client/source-page-outlet.ts'
 
 let currentDispose: (() => void) | undefined
 const siblingDisposers: Array<() => void> = []
@@ -161,6 +162,23 @@ describe('Mnemon canonical workspace launcher', () => {
     expect(memoryTab.getAttribute('aria-selected')).toBe('false')
     expect(document.querySelector('[data-chat-content]')?.textContent).toBe('Chat stays mounted')
     expect(document.querySelector('[data-dsh-mnemon-view]')).toBeNull()
+  })
+
+  it('publishes and releases the shell-owned Source child renderer', async () => {
+    const ctx = context()
+    const controller = new MnemonWorkspaceController()
+    const sourcePageOutlet = new MnemonSourcePageOutlet()
+    const renderSlot = vi.fn(() => null)
+    const view = render(<MnemonSidebarWorkspaceHost
+      connection={ctx.connection as never} settingsScope={settings} sessions={ctx.sessions as never} workspaces={ctx.workspaces as never}
+      localeRuntime={ctx.locale as never} sourcePageDirectory={sourcePageDirectory}
+      navigation={{ open: () => controller.open(), close: () => controller.close() }} t={t as never}
+      renderSlot={renderSlot as never} controller={controller} sourcePageOutlet={sourcePageOutlet}
+    />)
+
+    await waitFor(() => expect(sourcePageOutlet.getSnapshot()).toBe(renderSlot))
+    view.unmount()
+    expect(sourcePageOutlet.getSnapshot()).toBeUndefined()
   })
 
   it('opens the DSH sidebar seat before a session exists and restores the conversation on close', async () => {

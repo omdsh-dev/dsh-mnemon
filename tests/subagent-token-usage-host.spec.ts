@@ -13,9 +13,9 @@ import {
   mnemonSubagentTokenUsageProjectionDefinition as projection,
   type MnemonSubagentTokenUsageState,
   type MnemonTokenUsageProjection,
-} from '../src/subagent-token-usage.ts'
-import type { HostSession } from '../src/contracts.ts'
-import { hostSessionEvents } from '../src/session-events.ts'
+} from '../src/host/subagent-token-usage.ts'
+import type { HostSession } from '../src/host/dsh.ts'
+import { hostSessionEvents } from '../src/host/session-events.ts'
 
 declare module '@deepseek-ai/dsh-session-projection' {
   interface SessionProjectionMap {

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ClientSettingsScope, Config } from "../host/protocol.ts"
 import type { MnemonClientContext } from "./dsh-context.ts"
 import type { MnemonTranslate } from './locales.ts'
 import { MnemonView, type MnemonWorkspaceSelection } from './MnemonView.tsx'
 import type { MemorySourcePageDirectory } from './source-pages.tsx'
+import type { MnemonSourcePageOutlet, MnemonSourcePageRenderer } from './source-page-outlet.ts'
 import { mountMnemonSidebarEntry } from './sidebar-entry.ts'
 import { MnemonWorkspaceController } from './workspace-controller.ts'
 import css from './MnemonWorkspace.module.css'
@@ -66,17 +66,24 @@ export interface MnemonWorkspaceNavigation {
   close(): void
 }
 
-export interface MnemonWorkspaceHostProps extends PropsRenderSlots<'mnemon.source.page'> {
+export interface MnemonWorkspaceScope {
+  sessionId: string
+  cwd?: string
+}
+
+export interface MnemonWorkspaceHostProps {
   connection: MnemonClientContext['connection']
   settingsScope: ClientSettingsScope<Config>
   sessions: MnemonClientContext['sessions']
   workspaces: MnemonClientContext['workspaces']
   localeRuntime: MnemonClientContext['locale']
   sourcePageDirectory: MemorySourcePageDirectory
-  navigation: MnemonWorkspaceNavigation
+  navigation?: MnemonWorkspaceNavigation
   t: MnemonTranslate
   sessionId?: string
+  cwd?: string
   active?: boolean
+  renderSlot?: MnemonSourcePageRenderer
 }
 
 export interface MnemonBuiltinWorkspaceHostProps extends Pick<MnemonWorkspaceHostProps,
@@ -97,7 +104,7 @@ export function MnemonBuiltinWorkspaceHost(props: MnemonBuiltinWorkspaceHostProp
     t={props.t}
     locale={locale.active}
     sourcePageDirectory={props.sourcePageDirectory}
-    renderSlot={props.renderSlot}
+    {...(props.renderSlot === undefined ? {} : { renderSlot: props.renderSlot })}
   />
 }
 
@@ -114,7 +121,7 @@ export function MnemonWorkspaceHost(props: MnemonWorkspaceHostProps): JSX.Elemen
   const workspaces = useSyncExternalStore(subscribeWorkspaces, getWorkspaces, getWorkspaces)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>()
   const sessionId = props.sessionId ?? sessions.current
-  const currentCwd = sessionId === undefined ? undefined : (sessions.byId as Record<string, { cwd?: string }>)[sessionId]?.cwd
+  const currentCwd = props.cwd ?? (sessionId === undefined ? undefined : (sessions.byId as Record<string, { cwd?: string }>)[sessionId]?.cwd)
   const effectiveWorkspace = currentCwd === undefined
     ? undefined
     : workspaces.items.find(workspace => normalizePath(workspace.path) === normalizePath(currentCwd))
@@ -146,15 +153,16 @@ export function MnemonWorkspaceHost(props: MnemonWorkspaceHostProps): JSX.Elemen
     t={props.t}
     locale={locale.active}
     sourcePageDirectory={props.sourcePageDirectory}
-    renderSlot={props.renderSlot}
-    onClose={props.navigation.close}
+    {...(props.renderSlot === undefined ? {} : { renderSlot: props.renderSlot })}
+    {...(props.navigation === undefined ? {} : { onClose: props.navigation.close })}
   />
 }
 
 /** Sidebar presentation in DSH's additive shell.overlay, also without a session. */
-export function MnemonSidebarWorkspaceHost(props: MnemonWorkspaceHostProps & { controller: MnemonWorkspaceController }): JSX.Element | null {
+export function MnemonSidebarWorkspaceHost(props: MnemonWorkspaceHostProps & { controller: MnemonWorkspaceController; sourcePageOutlet?: MnemonSourcePageOutlet }): JSX.Element | null {
   const state = useSyncExternalStore(props.controller.subscribe, props.controller.getSnapshot, props.controller.getSnapshot)
   const [bounds, setBounds] = useState<{ left: number; top: number; width: number; height: number }>()
+  useEffect(() => props.renderSlot === undefined ? undefined : props.sourcePageOutlet?.attach(props.renderSlot), [props.renderSlot, props.sourcePageOutlet])
   useEffect(() => {
     if (!state.open) return
     let surface: MnemonWorkspaceSurface | undefined

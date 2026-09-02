@@ -16,11 +16,13 @@ import type { MnemonClientContext } from "./dsh-context.ts"
 import {
   createMemorySourcePageDirectory,
 } from './source-pages.tsx'
+import { MnemonSourcePageOutlet } from './source-page-outlet.ts'
 import {
   MnemonSidebarWorkspaceHost,
   MnemonBuiltinWorkspaceHost,
   mountMnemonSidebarLauncher,
 } from './workspace-mount.tsx'
+import { mountBetterSidebarTab } from './better-sidebar.tsx'
 import { MnemonWorkspaceController } from './workspace-controller.ts'
 import { MNEMON_ANCHOR_EVENT, type MnemonAnchor } from './anchor.ts'
 import { mountSubagentTokenUsageOverride } from './subagent-token-usage.tsx'
@@ -91,6 +93,7 @@ function mountSidebarMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
   const controller = new MnemonWorkspaceController()
   const navigation = { open: () => controller.open(), close: () => controller.close() }
   const sourcePageDirectory = createMemorySourcePageDirectory(ctx)
+  const sourcePageOutlet = new MnemonSourcePageOutlet()
   const slotName = 'shell.overlay'
   const disposeView = ctx.slots.inject(slotName, () => ctx.slots.register({
     name: slotName,
@@ -110,16 +113,19 @@ function mountSidebarMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
       sourcePageDirectory,
       navigation,
       controller,
+      sourcePageOutlet,
       t: translate,
     }),
   }, MnemonSidebarWorkspaceHost))
-  if (typeof window === 'undefined' || typeof document === 'undefined') return disposeView
+  const disposeBetterSidebar = mountBetterSidebarTab(ctx, settings, translate, sourcePageDirectory, sourcePageOutlet)
+  if (typeof window === 'undefined' || typeof document === 'undefined') return () => { disposeBetterSidebar(); disposeView() }
   const openMemoryView = (): void => { navigation.open() }
   window.addEventListener(MNEMON_ANCHOR_EVENT, openMemoryView)
   const disposeLauncher = mountMnemonSidebarLauncher(ctx, translate, controller)
   return () => {
     disposeLauncher()
     window.removeEventListener(MNEMON_ANCHOR_EVENT, openMemoryView)
+    disposeBetterSidebar()
     disposeView()
   }
 }

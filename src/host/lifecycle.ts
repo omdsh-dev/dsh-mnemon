@@ -24,6 +24,7 @@ import type { AssistantMessageText, LifecycleAgentSnapshot, LifecycleCounters, L
 import type { PreparedMemoryPlacement } from 'dsh-mnemon-source-memory-spaces/contracts'
 import type { MemoryWake } from "../core/contracts/index.ts"
 import type { MnemonAgentRuntimeSource } from "./runtime.ts"
+import { hostSessionEventAt, hostSessionEvents } from './session-events.ts'
 
 type AgentRuntimeSource = Pick<MnemonAgentRuntimeSource, 'forAgent' | 'bindAgentRuntime'>
 

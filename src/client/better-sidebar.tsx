@@ -1,8 +1,10 @@
-import type { ReactNode } from 'react'
-import type { ClientSettingsScope, Config } from '../shared/contracts.ts'
-import type { MnemonClientContext } from './dsh-compat.ts'
+import { useSyncExternalStore, type ReactNode } from 'react'
+import type { ClientSettingsScope, Config } from '../host/protocol.ts'
+import type { MnemonClientContext } from './dsh-context.ts'
 import type { MnemonTranslate } from './locales.ts'
-import { MnemonPanel, type MnemonWorkspaceScope } from './workspace-mount.tsx'
+import type { MemorySourcePageDirectory } from './source-pages.tsx'
+import type { MnemonSourcePageOutlet } from './source-page-outlet.ts'
+import { MnemonWorkspaceHost, type MnemonWorkspaceScope } from './workspace-mount.tsx'
 
 /** Stable type id exposed to Better Sidebar and its persisted tab state. */
 export const MNEMON_BETTER_SIDEBAR_TAB_ID = 'dsh-mnemon:memory'
@@ -25,11 +27,41 @@ interface BetterSidebarService {
   registerTab(descriptor: BetterSidebarTabDescriptor): () => void
 }
 
+interface BetterSidebarMemoryTabProps extends BetterSidebarTabProps {
+  ctx: MnemonClientContext
+  settings: ClientSettingsScope<Config>
+  sourcePageDirectory: MemorySourcePageDirectory
+  sourcePageOutlet: MnemonSourcePageOutlet
+  t: MnemonTranslate
+}
+
 function MnemonTabIcon({ size }: { size: number }): JSX.Element {
   return <svg aria-hidden="true" viewBox="0 0 16 16" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <ellipse cx="8" cy="3.5" rx="5" ry="2" />
     <path d="M3 3.5v4c0 1.1 2.2 2 5 2s5-.9 5-2v-4M3 7.5v4c0 1.1 2.2 2 5 2s5-.9 5-2v-4" />
   </svg>
+}
+
+/** Better Sidebar supplies scope/visibility; DSH Slots still own Source pages. */
+function BetterSidebarMemoryTab(props: BetterSidebarMemoryTabProps): JSX.Element {
+  const renderSlot = useSyncExternalStore(
+    props.sourcePageOutlet.subscribe,
+    props.sourcePageOutlet.getSnapshot,
+    props.sourcePageOutlet.getSnapshot,
+  )
+  return <MnemonWorkspaceHost
+    connection={props.ctx.connection}
+    settingsScope={props.settings}
+    sessions={props.ctx.sessions}
+    workspaces={props.ctx.workspaces}
+    localeRuntime={props.ctx.locale}
+    sourcePageDirectory={props.sourcePageDirectory}
+    sessionId={props.scope.sessionId}
+    {...(props.scope.cwd === undefined ? {} : { cwd: props.scope.cwd })}
+    active={props.visible}
+    t={props.t}
+    {...(renderSlot === undefined ? {} : { renderSlot })}
+  />
 }
 
 /**
@@ -43,6 +75,8 @@ export function mountBetterSidebarTab(
   ctx: MnemonClientContext,
   settings: ClientSettingsScope<Config>,
   t: MnemonTranslate,
+  sourcePageDirectory: MemorySourcePageDirectory,
+  sourcePageOutlet: MnemonSourcePageOutlet,
 ): () => void {
   let current: { service: BetterSidebarService; dispose: () => void } | undefined
 
@@ -58,7 +92,15 @@ export function mountBetterSidebarTab(
       icon: size => <MnemonTabIcon size={size} />,
       order: 55,
       single: true,
-      component: ({ scope }) => <MnemonPanel ctx={ctx} settings={settings} t={t} scope={scope} />,
+      component: ({ scope, visible }) => <BetterSidebarMemoryTab
+        ctx={ctx}
+        settings={settings}
+        sourcePageDirectory={sourcePageDirectory}
+        sourcePageOutlet={sourcePageOutlet}
+        scope={scope}
+        visible={visible}
+        t={t}
+      />,
     })
     current = { service, dispose }
   }

@@ -10,6 +10,7 @@ import type { MemoryBodyMetadataMaintenanceResult, MemoryBodyMetadataUpdate, Mem
 import type { MemoryEvidence, MemoryMigrationLineage } from '../core/contracts/index.ts'
 import { agentScope, type MnemonAgentRuntimeSource, type MnemonRuntimeGraph } from './runtime.ts'
 import type { ComposableMemoryTurn } from '../core/turns.ts'
+import { hostSessionEvents } from './session-events.ts'
 
 export type { SubagentCounters } from "./protocol.ts"
 

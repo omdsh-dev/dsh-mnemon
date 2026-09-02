@@ -1,4 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+const { mountBetterSidebar } = vi.hoisted(() => ({
+  mountBetterSidebar: vi.fn((
+    _ctx: unknown,
+    _settings: unknown,
+    _translate: unknown,
+    _sourcePageDirectory: unknown,
+    _sourcePageOutlet: unknown,
+  ) => vi.fn()),
+}))
+vi.mock('../src/client/better-sidebar.tsx', () => ({ mountBetterSidebarTab: mountBetterSidebar }))
+
 import { apply, inject } from '../src/client/index.ts'
 import { en, zh } from '../src/client/locales.ts'
 import { MnemonSettingsScope } from '../src/client/settings.ts'
@@ -6,7 +18,10 @@ import { MnemonBuiltinWorkspaceHost } from '../src/client/workspace-mount.tsx'
 import type { Config } from '../src/host/protocol.ts'
 
 const disposers: Array<() => void> = []
-afterEach(() => { for (const stop of disposers.splice(0).reverse()) stop() })
+afterEach(() => {
+  for (const stop of disposers.splice(0).reverse()) stop()
+  vi.clearAllMocks()
+})
 
 function workspaceContext(initialValue: Record<string, unknown>, load: () => Promise<Record<string, unknown>> = async () => initialValue) {
   let value = initialValue
@@ -71,14 +86,22 @@ describe('Mnemon Web client composition', () => {
   it.each([undefined, 'sidebar'])('keeps one complete Sidebar for displayMode=%s with live visibility', async displayMode => {
     const { slots, scope, workspaceStops } = workspaceContext({ displayMode })
     await vi.waitFor(() => expect(workspaceStops).toHaveLength(1))
+    expect(mountBetterSidebar).toHaveBeenCalledTimes(1)
+    const shellEntry = slots.find(options => options.name === 'shell.overlay')!
+    const shellProps = (shellEntry.inject as () => Record<string, unknown>)()
+    expect(mountBetterSidebar.mock.calls[0]![3]).toBe(shellProps.sourcePageDirectory)
+    expect(mountBetterSidebar.mock.calls[0]![4]).toBe(shellProps.sourcePageOutlet)
+    const firstBetterSidebarStop = mountBetterSidebar.mock.results[0]!.value
     await scope.setPath(['displayMode'], 'sidebar')
     expect(workspaceStops).toHaveLength(1)
     expect(workspaceStops[0]).not.toHaveBeenCalled()
     await scope.set('tabEnabled', false)
     await scope.set('tabEnabled', false)
     expect(workspaceStops[0]).toHaveBeenCalledOnce()
+    expect(firstBetterSidebarStop).toHaveBeenCalledOnce()
     await scope.set('tabEnabled', true)
     expect(workspaceStops).toHaveLength(2)
+    expect(mountBetterSidebar).toHaveBeenCalledTimes(2)
     expect(slots.some(options => options.name === 'conversation.view')).toBe(false)
   })
 
@@ -86,6 +109,7 @@ describe('Mnemon Web client composition', () => {
     const { context, slots, scope, workspaceStops } = workspaceContext({ displayMode })
     await vi.waitFor(() => expect(workspaceStops).toHaveLength(1))
     expect(slots.some(options => options.name === 'shell.overlay')).toBe(false)
+    expect(mountBetterSidebar).not.toHaveBeenCalled()
     const entry = slots.find(options => options.name === 'conversation.view')!
     expect(entry).toMatchObject({ id: 'mnemon', order: 30, children: { 'mnemon.source.page': { kind: 'list', scope: 'root' } } })
     expect(context.slots.register).toHaveBeenCalledWith(entry, MnemonBuiltinWorkspaceHost)
@@ -100,9 +124,11 @@ describe('Mnemon Web client composition', () => {
     await scope.set('displayMode', 'sidebar')
     expect(workspaceStops[0]).toHaveBeenCalledOnce()
     expect(workspaceStops).toHaveLength(2)
+    expect(mountBetterSidebar).toHaveBeenCalledTimes(1)
     expect(slots.at(-1)).toMatchObject({ name: 'shell.overlay' })
     await scope.set('displayMode', 'builtin')
     expect(workspaceStops[1]).toHaveBeenCalledOnce()
+    expect(mountBetterSidebar.mock.results[0]!.value).toHaveBeenCalledOnce()
     expect(workspaceStops).toHaveLength(3)
     expect(slots.at(-1)).toMatchObject({ name: 'conversation.view' })
     await scope.set('tabEnabled', false)

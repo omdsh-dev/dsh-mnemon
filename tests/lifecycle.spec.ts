@@ -283,7 +283,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(value.lifecycle.snapshot('session-1').current?.memoryToolCalls).toBe(0)
 
     await value.turnStopping(1)
-    expect(value.memoryViews.endTurn).toHaveBeenCalledWith('session-1:1')
+    expect(value.composableTurns.endTurn).toHaveBeenCalledWith('session-1:1')
   })
 
   it('pins one immutable Wake across every model step and releases it at the turn boundary', async () => {

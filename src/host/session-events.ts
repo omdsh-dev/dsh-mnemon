@@ -1,4 +1,4 @@
-import type { HostSession, HostSessionEvent } from './contracts.ts'
+import type { HostSession, HostSessionEvent } from './dsh.ts'
 
 function eventArray(value: unknown): readonly HostSessionEvent[] | undefined {
   return Array.isArray(value) ? value as readonly HostSessionEvent[] : undefined
