@@ -17,7 +17,7 @@ You need:
 
 Regular semantic work prefers a provider named `spawn` with `toolFilter`, `persona`, and `depthLimit`. Mnemon supplies a schema-validated, one-run result tool instead of depending on the Provider's `outputSchema` path. Optional score-based background review additionally requires a provider named `fork` with `inheritsParentContext=true`. Missing `fork` does not block deterministic pages or regular manual actions.
 
-This workflow uses dsh-mnemon v0.4.5, DSH 0.1.1-rc.2, and Mnemon 0.2.3 as the recommended registry baseline. Some compatible UI screenshots were captured on dsh-mnemon v0.2.0. DSH rc.2 uses `Promise.withResolvers` and the Node Zstd API, so Node 20 cannot boot its complete profile. Source compatibility is also verified against DSH 0.1.2-alpha.1, which is not published to npm. Back up and repeat this verification against an isolated root before upgrading.
+This workflow uses dsh-mnemon v0.4.5, DSH 0.1.1-rc.2, and Mnemon 0.2.3 as the recommended registry baseline. Some compatible UI screenshots were captured on dsh-mnemon v0.2.0. DSH rc.2 uses `Promise.withResolvers` and the Node Zstd API, so Node 20 cannot boot its complete profile. Source compatibility is also verified against the latest DSH 0.1.2-alpha.5 preview while rc.2 remains the recommended installation target. Back up and repeat this verification against an isolated root before upgrading.
 
 Install and verify the tested DSH release with:
 

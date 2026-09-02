@@ -22,6 +22,7 @@ import { MEMORY_PROVIDER_IDS } from './providers/catalog.ts'
 import type { MemoryBodyMetadataMaintenanceResult, MemoryBodyMetadataUpdate, MemoryPlacementDecision, SubagentCounters } from './shared/contracts.ts'
 import type { MemoryMigrationLineage, MemoryTurnContext } from '../packages/contracts/src/index.ts'
 import type { MnemonAgentRuntimeSource, MnemonRuntimeGraph } from './live-runtime.ts'
+import { hostSessionEvents } from './session-events.ts'
 
 export type { SubagentCounters } from './shared/contracts.ts'
 
@@ -487,7 +488,7 @@ function subagentFailureDetail(run: HostSubagentRun, result: HostSubagentResult)
     const diagnostic = safeFailureDetail(result.diagnostic)
     if (diagnostic !== '') return diagnostic
   }
-  const events = run.localAgent?.session.events ?? []
+  const events = run.localAgent === undefined ? [] : hostSessionEvents(run.localAgent.session)
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index]
     if (event?.type !== 'turn/end') continue

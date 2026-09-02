@@ -3,6 +3,7 @@ import type { MemoryOperationScope, MemoryTurnContext } from '../packages/contra
 import type { MemoryTurnViewManager } from '../packages/kernel/src/index.ts'
 import type { HostAgent } from './contracts.ts'
 import type { MnemonAgentRuntimeSource, MnemonRuntimeGraph } from './live-runtime.ts'
+import { hostSessionEvents } from './session-events.ts'
 
 /** Host-owned authority captured before a child activation starts executing. */
 export interface DelegatedMemoryView {
@@ -32,7 +33,7 @@ export function agentMemoryScope(agent: HostAgent, graph: MnemonRuntimeGraph): M
 /** The durable log, not a parent session id, identifies the executing turn. */
 export function openAgentTurn(agent: HostAgent): number | undefined {
   let open: number | undefined
-  for (const event of agent.session.events) {
+  for (const event of hostSessionEvents(agent.session)) {
     const turn = typeof event.data.turn === 'number' ? event.data.turn : undefined
     if (event.type === 'turn/start' && turn !== undefined) open = turn
     else if (event.type === 'turn/end' && turn === open) open = undefined

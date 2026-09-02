@@ -201,7 +201,7 @@ endpoints: get, mutate
 
 mutation 使用 settings revision 防止覆盖并发编辑。`mnemon` 管理 Host / 存储设置；`mnemon-ui` 管理 `turnBar` 与 `saveAction`。
 
-Mnemon 对两个 Host 使用同一种注册调用：始终传入 rc.2 authority 对象，alpha 将其作为额外 JavaScript 参数忽略。因此 rc.2 保留逐方法 trust 层，DSH 0.1.2-alpha.1 则使用同一浏览器会话认证完整 Host API；整个过程没有运行时版本或函数参数数量分支。
+Mnemon 对两个 Host 使用同一种注册调用：始终传入 rc.2 authority 对象，alpha 将其作为额外 JavaScript 参数忽略。因此 rc.2 保留逐方法 trust 层，DSH 0.1.2-alpha.5 则使用同一浏览器会话认证完整 Host API；整个过程没有运行时版本或函数参数数量分支。
 
 ## npm 导出与扩展服务
 

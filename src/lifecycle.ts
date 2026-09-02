@@ -23,6 +23,7 @@ import type { AssistantMessageText, LifecycleAgentSnapshot, LifecycleCounters, L
 import type { PreparedMemoryPlacement } from './provider-placement.ts'
 import type { MemoryWake } from '../packages/contracts/src/index.ts'
 import type { MnemonAgentRuntimeSource } from './live-runtime.ts'
+import { hostSessionEventAt, hostSessionEvents } from './session-events.ts'
 
 type AgentRuntimeSource = Pick<MnemonAgentRuntimeSource, 'forAgent' | 'bindAgentRuntime'>
 
@@ -284,7 +285,7 @@ class MnemonAgentLifecycle {
       startSource: this.startSource,
       primePending: this.primePending,
       guidedTurns: this.guidedTurns.size,
-      memoryToolCalls: memoryToolCalls(this.agent.session.events),
+      memoryToolCalls: memoryToolCalls(hostSessionEvents(this.agent.session)),
       idleReviewPending: this.idleReviewTimer !== undefined,
       reviewRunning: this.reviewRunning,
       reviewActivity: this.reviewActivity(),
@@ -305,12 +306,12 @@ class MnemonAgentLifecycle {
 
   /** Incremental snapshot of settled Mnemon activity in this durable log. */
   turnMemoryActivities(): TurnMemoryActivitySnapshot {
-    return this.memoryActivity.snapshot(this.agent.session.events)
+    return this.memoryActivity.snapshot(hostSessionEvents(this.agent.session))
   }
 
   /** Plain text of one finalized assistant message, from this agent's session log. */
   assistantMessageText(messageId: string): AssistantMessageText | null {
-    return assistantMessageText(this.agent.session.events, messageId)
+    return assistantMessageText(hostSessionEvents(this.agent.session), messageId)
   }
 
   memoryWake(): MemoryWake | undefined {
@@ -334,7 +335,7 @@ class MnemonAgentLifecycle {
     const nodes = this.agent.session.surface?.nodes
     if (nodes === undefined) return this.cueInjected
     for (const seq of nodes) {
-      if (isOwnUserMessageEvent(this.agent.session.events[seq])) return true
+      if (isOwnUserMessageEvent(hostSessionEventAt(this.agent.session, seq))) return true
     }
     return false
   }
@@ -436,14 +437,14 @@ class MnemonAgentLifecycle {
     if (!this.config.lifecycleEnabled || !this.config.writeEnabled || this.config.writebackMode !== 'guided') return
     this.cancelIdleReview(true)
     const activity = this.ensureTurnActivity(turn)
-    const tools = completedToolActivity(this.agent.session.events, turn)
+    const tools = completedToolActivity(hostSessionEvents(this.agent.session), turn)
     activity.toolCallCount = tools.count
     activity.toolNames = tools.names
     if (!this.reviewActivity().eligible || !this.reviewAdmitted(turn)) return
     this.idleReviewTimer = setTimeout(() => {
       this.idleReviewTimer = undefined
       if (this.agent.status !== 'idle') return
-      const completed = this.agent.session.events.some(event => event.type === 'turn/end' && eventTurn(event) === turn)
+      const completed = hostSessionEvents(this.agent.session).some(event => event.type === 'turn/end' && eventTurn(event) === turn)
       if (!completed || !this.reviewActivity().eligible || !this.reviewAdmitted(turn)) return
       void this.runIdleReview()
     }, this.config.idleReviewMs)
@@ -523,7 +524,7 @@ class MnemonAgentLifecycle {
       explicitCandidate ||= activity.explicitCandidate
       completedNonMemoryTool ||= activity.toolCallCount > 0 && [...activity.toolNames].some(name => !name.startsWith('mnemon_'))
     }
-    const assistantTextLength = this.agent.session.events
+    const assistantTextLength = hostSessionEvents(this.agent.session)
       .filter(event => {
         const turn = eventTurn(event)
         return turn !== undefined && turns.has(turn)
