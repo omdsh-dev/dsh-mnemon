@@ -24,7 +24,7 @@
 <p align="center">
   <a href="./docs/zh-CN/capabilities.md"><strong>先看能力地图</strong></a> ·
   <a href="./docs/zh-CN/getting-started.md">5 分钟开始</a> ·
-  <a href="./docs/zh-CN/releases/v0.4.5.md">v0.4.5 升级说明</a> ·
+  <a href="./docs/zh-CN/releases/v0.4.6.md">v0.4.6 升级说明</a> ·
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">观看宽屏实机演示</a>
 </p>
 
@@ -45,6 +45,8 @@ v0.4.3 让折叠后的记忆系统图标与侧栏相邻控件对齐，并保留�
 v0.4.4 同时支持新旧 DSH 会话投影接口，修复旧版宿主读取会话历史失败的问题，并保持新版宿主和已有投影检查点兼容。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.4.md)。
 
 v0.4.5 在已安装 Better Sidebar 时向其注册记忆系统，同时保留 DSH 普通 Sidebar 入口，并兼容两种客户端加载顺序。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.5.md)。
+
+v0.4.6 继续以 DSH 0.1.1-rc.2 作为稳定基线，并通过能力检测兼容 DSH 0.1.2-alpha.4 与 alpha.5 的 Session 事件快照接口。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.6.md)。
 
 ## 30 秒理解能力边界
 
@@ -220,7 +222,7 @@ dsh plugin --profile headless add "link:/absolute/path/to/dsh-mnemon"
 | 备份、更新或排障 | [运维指南](./docs/zh-CN/operations.md) |
 | 接入工具、命令或 RPC | [接口参考](./docs/zh-CN/interfaces.md) |
 | 开发 Layer、Adapter、Strategy、Guard 或 MemorySource 扩展 | [扩展开发指南](./docs/zh-CN/extensions.md) |
-| 查看本次升级 | [v0.4.5 发布说明](./docs/zh-CN/releases/v0.4.5.md) |
+| 查看本次升级 | [v0.4.6 发布说明](./docs/zh-CN/releases/v0.4.6.md) |
 
 完整目录见[文档中心](./docs/zh-CN/README.md)。
 
