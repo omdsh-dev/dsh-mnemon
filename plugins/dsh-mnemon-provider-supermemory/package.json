@@ -1,6 +1,6 @@
 {
   "name": "dsh-mnemon-provider-supermemory",
-  "version": "0.5.0-beta.1",
+  "version": "0.5.0-rc.1",
   "description": "Supermemory Provider child for the Memory Spaces Source.",
   "license": "MIT",
   "type": "module",
@@ -29,18 +29,27 @@
     "verify": "pnpm typecheck && pnpm test && pnpm build"
   },
   "peerDependencies": {
-    "dsh-mnemon-source-memory-spaces": "0.5.0-beta.1",
-    "@deepseek-ai/cordis": "^4.0.1"
+    "@deepseek-ai/cordis": "^4.0.1",
+    "dsh-mnemon-source-memory-spaces": "0.5.0-rc.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "typescript": "^5.9.0",
+    "dsh-mnemon-source-memory-spaces": "0.5.0-rc.1",
     "tsdown": "^0.22.0",
-    "vitest": "^3.2.0",
-    "dsh-mnemon-source-memory-spaces": "0.5.0-beta.1"
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
   },
   "publishConfig": {
     "access": "public",
-    "tag": "beta"
+    "tag": "rc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/omdsh-dev/dsh-mnemon.git",
+    "directory": "plugins/dsh-mnemon-provider-supermemory"
+  },
+  "homepage": "https://github.com/omdsh-dev/dsh-mnemon/tree/main/plugins/dsh-mnemon-provider-supermemory#readme",
+  "bugs": {
+    "url": "https://github.com/omdsh-dev/dsh-mnemon/issues"
   }
 }

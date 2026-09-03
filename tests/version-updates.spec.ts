@@ -153,6 +153,12 @@ describe('VersionUpdateManager', () => {
     expect(stable.run).not.toHaveBeenCalled()
   })
 
+  it('follows the rc channel for an installed release candidate', async () => {
+    const candidate = npmFixture('0.5.0-rc.1', { latest: '0.4.7', rc: '0.5.0-rc.2' })
+    expect((await candidate.manager.check()).components[1]).toMatchObject({ current: '0.5.0-rc.1', latest: '0.5.0-rc.2', outdated: true })
+    expect(candidate.fetch.mock.calls.map(call => call[1])).toEqual(['latest', 'rc'])
+  })
+
   it('offers the final stable version to beta users but never downgrades to an older stable version', async () => {
     const beta = npmFixture('0.5.0-beta.1', { latest: '0.5.0', beta: '0.5.0-beta.2' })
     expect((await beta.manager.check()).components[1]).toMatchObject({ latest: '0.5.0', outdated: true })
