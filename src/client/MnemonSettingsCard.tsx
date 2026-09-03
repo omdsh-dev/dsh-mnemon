@@ -693,7 +693,7 @@ function MemoryEnhancementsSection(props: {
     }
   }
 
-  return <section className={css.section} aria-labelledby="mnemon-enhancements-heading" aria-busy={working !== null}>
+  return <section className={`${css.section} ${css.enhancementsSection}`} aria-labelledby="mnemon-enhancements-heading" aria-busy={working !== null}>
     <div className={css.sectionHeading}>
       <div><h2 id="mnemon-enhancements-heading">{props.t('config.enhancementsTitle')}</h2><p>{props.t('config.enhancementsDescription')}</p></div>
     </div>
