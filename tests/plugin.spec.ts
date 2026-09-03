@@ -15,6 +15,7 @@ const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.
   peerDependencies: Record<string, string>
 }
 const lockfile = readFileSync(new URL('../pnpm-lock.yaml', import.meta.url), 'utf8')
+const workspaceConfig = readFileSync(new URL('../pnpm-workspace.yaml', import.meta.url), 'utf8')
 
 const directories: string[] = []
 
@@ -95,19 +96,26 @@ describe('dsh-mnemon plugin composition', () => {
     const directDshDependencies = Object.entries(manifest.devDependencies)
       .filter(([name]) => name === '@deepseek-ai/dsh' || name.startsWith('@deepseek-ai/dsh-'))
       .filter(([name]) => name !== legacyProjection)
-    const lockedDshVersions = [...lockfile.matchAll(/(@deepseek-ai\/dsh(?:-[a-z0-9-]+)?)@(\d+\.\d+\.\d+-rc\.\d+)/g)]
+    const lockedDshVersions = [...lockfile.matchAll(/(@deepseek-ai\/dsh(?:-[a-z0-9-]+)?)@(\d+\.\d+\.\d+-(?:alpha|rc)\.\d+)/g)]
       // Only this aliased regression fixture may use the older host contract.
       .filter(([, name, version]) => name !== '@deepseek-ai/dsh-session-projection' || version !== '0.1.0-rc.8')
       .map(match => match[2])
+    const lockedRcReleases = [...lockfile.matchAll(/^  '(@deepseek-ai\/dsh(?:-[a-z0-9-]+)?)@(0\.1\.2-rc\.1)':$/gm)]
+      .map(([, name, version]) => `${name}@${version}`)
+    const releaseAgeExclusions = [...workspaceConfig.matchAll(/^  - '(@deepseek-ai\/dsh(?:-[a-z0-9-]+)?@0\.1\.2-rc\.1)'$/gm)]
+      .map(match => match[1])
 
     expect(manifest.devDependencies[legacyProjection]).toBe('npm:@deepseek-ai/dsh-session-projection@0.1.0-rc.8')
-    expect(directDshDependencies).toHaveLength(20)
-    expect(new Set(directDshDependencies.map(([, version]) => version))).toEqual(new Set(['0.1.1-rc.2']))
+    expect(directDshDependencies).toHaveLength(22)
+    expect(new Set(directDshDependencies.map(([, version]) => version))).toEqual(new Set(['0.1.2-rc.1']))
     expect(manifest.engines.node).toBe('>=20')
     expect(manifest.peerDependencies['@deepseek-ai/dsh-client-ui-primitives']).toContain('^0.1.1-rc.1')
     expect(manifest.peerDependencies['@deepseek-ai/dsh-client-ui-primitives']).toContain('^0.1.2-alpha.1')
     expect(lockedDshVersions.length).toBeGreaterThan(100)
-    expect(new Set(lockedDshVersions)).toEqual(new Set(['0.1.1-rc.1', '0.1.1-rc.2']))
+    expect(new Set(lockedDshVersions)).toEqual(new Set(['0.1.2-rc.1']))
+    expect(new Set(releaseAgeExclusions)).toEqual(new Set(lockedRcReleases))
+    expect(releaseAgeExclusions).toHaveLength(new Set(lockedRcReleases).size)
+    expect(workspaceConfig).not.toMatch(/^  - ['"]@deepseek-ai\/\*/m)
   })
 
   it('keeps Web-only workspace and connection services out of its core dependencies', () => {

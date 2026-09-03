@@ -1,6 +1,7 @@
 /** Mnemon compatibility shim for DSH's fork-backed subagent token metric. */
 import { createElement, type ComponentType, type ReactElement } from 'react'
-import type { SnapshotSelectorHook, StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
+import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-store'
+import type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
 import type { MnemonClientContext, MnemonSessionListState, MnemonSessionSummary } from './dsh-compat.ts'
 
 export const MNEMON_SUBAGENT_TOKEN_USAGE_KEY = 'mnemonSubagentTokenUsage'

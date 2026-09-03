@@ -4,7 +4,9 @@
 
 ## Environment
 
-The published plugin retains its Node.js 20 engine floor for older compatible DSH hosts. The registry-backed development baseline remains the stable DSH 0.1.1-rc.2 line, whose complete profiles require Node.js `^22.19.0 || >=24.0.0`. CI also checks the latest DSH 0.1.2-alpha.5 tag on Node 24 by building Harness from source, linking its build-time packages, and running the complete Mnemon verification chain. The regular matrix runs Linux on Node.js 22.19 and 24 plus Windows on Node.js 24. After the Node 24 build, CI switches to Node 20 and imports every Node-compatible published subpath as a plugin-runtime compatibility smoke.
+The published plugin retains its Node.js 20 engine floor for older compatible DSH hosts. The registry-backed development baseline is the stable DSH 0.1.2-rc.1 release. Every directly consumed DSH package is pinned to that exact release; `dsh-invariants` closes the required peer set, while `dsh-client-store` supplies the public selector types referenced by the published UI Slots declarations. CI also checks the immediately preceding DSH 0.1.2-alpha.5 tag on Node 24 by building Harness from source, linking the same build-time package set, and running the complete Mnemon verification chain. The regular matrix runs Linux on Node.js 22.19 and 24 plus Windows on Node.js 24. After the Node 24 build, CI switches to Node 20 and imports every Node-compatible published subpath as a plugin-runtime compatibility smoke.
+
+The reviewed rc.1 cohort is enumerated with exact versions under `minimumReleaseAgeExclude` because the alpha source job installs Mnemon with pnpm 11 while the packages are inside its release-age quarantine. A composition test requires this exemption set to equal the rc.1 packages in the lockfile and rejects a scope wildcard, so later `@deepseek-ai` publications remain quarantined.
 
 Install dependencies:
 
@@ -14,17 +16,17 @@ pnpm install
 
 ## Session projection compatibility
 
-Mnemon's child-local token-usage projection supports both DSH projection contracts: `schema` / `view` in 0.1.0 and `stateSchema` / `wire` in 0.1.1 and the supported alpha. Both entry points share the same wire schema and view function. The internal state and `stateVersion: 1` remain unchanged, so cached state survives upgrades and rollbacks between these hosts.
+Mnemon's child-local token-usage projection supports both DSH projection contracts: `schema` / `view` in 0.1.0 and `stateSchema` / `wire` in 0.1.1 and supported 0.1.2 prereleases. Both entry points share the same wire schema and view function. The internal state and `stateVersion: 1` remain unchanged, so cached state survives upgrades and rollbacks between these hosts.
 
 ```sh
 pnpm exec vitest run tests/subagent-token-usage-host.spec.ts tests/subagent-token-usage.spec.ts tests/client-subagent-token-usage.spec.tsx
 ```
 
-The Host tests execute the published 0.1.0-rc.8 registry and the active registry against real DSH sessions, covering live snapshots, detached replay, checkpoint restoration, cross-version state, and change notifications. The legacy npm alias is a test-only development dependency; it does not replace the active Host. Source verification links the active registry to the alpha alongside the other DSH packages.
+The Host tests execute the published 0.1.0-rc.8 registry and the active 0.1.2-rc.1 registry against real DSH sessions, covering live snapshots, detached replay, checkpoint restoration, cross-version state, and change notifications. The legacy npm alias is a test-only development dependency; it does not replace the active Host. Source verification replaces the active registry links with the alpha.5 build-time packages, including Store and Invariants.
 
-## DSH 0.1.2-alpha.5 source verification
+## DSH 0.1.2-alpha.5 source compatibility
 
-Keep the registry dependencies and lockfile on the stable rc.2 baseline, then overlay only generated `node_modules` links from a built alpha Harness checkout. This tests the alpha without turning it into the package's dependency baseline:
+Keep the registry dependencies and lockfile on the stable 0.1.2-rc.1 baseline, then overlay only generated `node_modules` links from a built alpha.5 Harness checkout. This preserves coverage of the immediately preceding alpha contract without turning it back into the package's dependency baseline:
 
 ```sh
 git clone https://github.com/deepseek-ai/deepseek-harness.git
@@ -37,22 +39,22 @@ DSH_SOURCE_ROOT=/absolute/path/to/deepseek-harness pnpm run dsh:link-source
 pnpm_config_verify_deps_before_run=false pnpm run verify
 ```
 
-The link command validates every package name and alpha version, records the existing direct registry links under generated `node_modules`, and only then replaces them. It does not edit `package.json` or `pnpm-lock.yaml`. Disable pnpm 11's automatic pre-run dependency installation for this intentional overlay, as shown above; otherwise it can silently restore registry packages before verification. Run `pnpm_config_verify_deps_before_run=false pnpm run dsh:restore-registry` afterward to restore exactly the recorded links. The compatibility work covers the removed client runtime, controller/renderer-owned client services, extensible locale IDs, the Workspace snapshot change, and the branch-free dual-generation Host RPC registration.
+The link command validates every package name and alpha version, records the existing direct registry links under generated `node_modules`, and only then replaces them. It does not edit `package.json` or `pnpm-lock.yaml`. Disable pnpm 11's automatic pre-run dependency installation for this intentional overlay, as shown above; otherwise it can silently restore registry packages before verification. Run `pnpm_config_verify_deps_before_run=false pnpm run dsh:restore-registry` afterward to restore exactly the recorded links. The compatibility work covers the removed client runtime, controller/renderer-owned client services, Store-backed selector types, extensible locale IDs, the Workspace snapshot change, and the branch-free dual-generation Host RPC registration.
 
 ### Compatibility findings
 
-The [upstream alpha release](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.2-alpha.5) covers far more than the plugin seam; the [full comparison](https://github.com/deepseek-ai/deepseek-harness/compare/dsh-v0.1.1-rc.2...dsh-v0.1.2-alpha.5) includes the Client, Host, SDK, profiles, persistence, UI, and generated references. The Mnemon-relevant findings are:
+The [upstream 0.1.2-rc.1 release](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.2-rc.1) consolidates an alpha series that covers far more than the plugin seam; the [full comparison](https://github.com/deepseek-ai/deepseek-harness/compare/dsh-v0.1.1-rc.2...dsh-v0.1.2-rc.1) includes the Client, Host, SDK, profiles, persistence, UI, and generated references. The Mnemon-relevant findings are:
 
 - `@deepseek-ai/dsh-client-runtime` is removed. Session and Workspace state now belong to API controllers, observable contracts belong to `dsh-client-store`, and `ctx.slots` belongs to the UI renderer.
 - Chat-specific slot contracts, including `conversation.chat.turnTail`, moved out of the target-neutral conversation package. Mnemon now types its minimum selector boundary without importing the old owner.
 - The Workspace list no longer publishes `recentWorkspaceId`; Mnemon selects the current session's canonical cwd match, then the first available workspace.
 - Locale IDs are extensible by third-party language packs, so Mnemon passes unknown active locale IDs through for date formatting while its own dictionary still falls back through DSH locale resolution.
-- `HostConnectionRpc.handle()` no longer accepts per-method authority options. Every alpha RPC and stream requires the same launch-token-derived browser session. Mnemon nevertheless retains the rc.2 `remoteAccess` configuration and always passes rc.2's trailing authority object: rc.2 consumes it, while alpha's two-argument JavaScript implementation ignores it. This preserves both security models without version parsing, function-arity inspection, or a capability branch.
+- `HostConnectionRpc.handle()` no longer accepts per-method authority options. Every 0.1.2 RPC and stream requires the same launch-token-derived browser session. Mnemon nevertheless retains the older rc.2 `remoteAccess` configuration and always passes rc.2's trailing authority object: rc.2 consumes it, while the 0.1.2 two-argument JavaScript implementation ignores it. This preserves both security models without version parsing, function-arity inspection, or a capability branch.
 - The legacy ApiProxy transport is removed in favor of Remote/gateway APIs. Mnemon's generic Connection channels remain supported; Headless progress moving to stderr does not affect its stdout result assertion.
-- DSH adds subagent model configuration and revises token accounting, but the official lineage row still consumes the generic complete-log projection. Mnemon therefore retains its child-local projection wrapper and verifies it against the alpha slot ledger.
-- Stable rc.2 exposes the complete log as `session.events`; alpha.4 and later replace it with `snapshotEvents()` and `eventAt()`. Mnemon reads this surface through capability detection, preferring alpha snapshots and falling back to the rc property without parsing version strings.
+- DSH adds subagent model configuration and revises token accounting, but the official lineage row still consumes the generic complete-log projection. Mnemon therefore retains its child-local projection wrapper and verifies it against both the rc.1 and alpha.5 slot ledgers.
+- DSH 0.1.1-rc.2 exposes the complete log as `session.events`; alpha.4 and later, including 0.1.2-rc.1, use `snapshotEvents()` and `eventAt()`. Mnemon reads this surface through capability detection, preferring snapshots and falling back to the older rc property without parsing version strings.
 
-No alpha dependency is committed because rc.2 remains the stable registry baseline. The dedicated source-overlay CI job is the reproducible authority for alpha compatibility.
+The exact 0.1.2-rc.1 dependency closure is committed as the stable registry baseline. The dedicated source-overlay CI job remains the reproducible authority for alpha.5 compatibility. The [isolated WebUI evidence](../pr-assets/dsh-rc1-compat/README.md) records the rc.1 workflow and the previous rc.2 backward regression.
 
 ## Standard Commands
 
@@ -147,7 +149,7 @@ The existing Vitest suites cover:
 - worker tool isolation, the schema subset, and structured receipts;
 - lifecycle cues, scoring, idle debounce, cancellation, and watermark retention;
 - asynchronous child View/runtime retention, per-turn budgets, cache isolation, nested delegation, cancellation, collection, and disposal;
-- real rc.2 / alpha Connection registration, RPC authority or authentication, read-only behavior, and settings revisions;
+- real rc.1 / alpha.5 Connection registration, legacy rc.2 RPC authority, authentication, read-only behavior, and settings revisions;
 - the Web workspace, bilingual copy, and key interactions;
 - core activation without Web-only services and Agent-cwd routing for Headless;
 - Client/Host source boundaries, deterministic build hashes, package contents, exports, and TypeScript resolution.
