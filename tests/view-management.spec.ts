@@ -305,6 +305,22 @@ describe('View configuration with the real pinned DSH Cordis Loader', () => {
     expect(f.settings.mutate).not.toHaveBeenCalled()
   })
 
+  it('keeps plugin inspection read-only and requires confirmation before DSH installation', async () => {
+    const f = await fixture()
+    const installation = {
+      environment: () => ({ supported: true, profileName: 'web', suggestions: ['dsh-mnemon-strategy-focus'] }),
+      inspect: vi.fn(async () => ({ packageName: 'dsh-mnemon-strategy-focus', version: '0.5.0-beta.4', kind: 'strategy', mnemonPeerRange: '^0.5.0', installed: false })),
+      install: vi.fn(async () => ({ packageName: 'dsh-mnemon-strategy-focus', version: '0.5.0-beta.4', profileName: 'web', installed: true, restartRequired: true })),
+    }
+    const reader = createViewHandler(f.live, f.engine, f.management, 'read', undefined, installation as never)
+    const writer = createViewHandler(f.live, f.engine, f.management, 'write', undefined, installation as never)
+    await expect(reader('inspect-plugin', { packageName: 'dsh-mnemon-strategy-focus' })).resolves.toMatchObject({ ok: true, value: { kind: 'strategy' } })
+    await expect(writer('install-plugin', { packageName: 'dsh-mnemon-strategy-focus', version: '0.5.0-beta.4' })).resolves.toMatchObject({ ok: false, error: { message: expect.stringContaining('confirmation') } })
+    await expect(writer('install-plugin', { packageName: 'dsh-mnemon-strategy-focus', version: '0.5.0-beta.4', confirmed: true })).resolves.toMatchObject({ ok: true, value: { restartRequired: true } })
+    expect(installation.install).toHaveBeenCalledOnce()
+    await expect(reader('dashboard', {})).resolves.toMatchObject({ ok: true, value: { pluginInstallation: { supported: true, profileName: 'web' } } })
+  })
+
   it('keeps durable turn activity beside, rather than inside, the frozen View inspection', async () => {
     const f = await fixture()
     const preview = await f.management.preview(f.config, scope(f), await request(f))

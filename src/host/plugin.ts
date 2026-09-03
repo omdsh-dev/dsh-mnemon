@@ -12,6 +12,7 @@ import { registerMnemonSubagentTokenUsageProjection } from './subagent-token-usa
 import { provideMemoryRuntime } from '../core/runtime.ts'
 import { MemoryStrategyManagement } from './strategy-management.ts'
 import { registerViewRpc } from './view-rpc.ts'
+import { MemoryPluginInstallation } from './plugin-installation.ts'
 
 export const name = 'dsh-mnemon'
 export const provide = ['mnemonMemory']
@@ -34,6 +35,7 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
   registerMnemonSubagentTokenUsageProjection(ctx)
   const extensions = provideMemoryRuntime(ctx)
   const viewStrategies = new MemoryStrategyManagement(ctx, extensions)
+  const pluginInstallation = new MemoryPluginInstallation(ctx)
   const effectiveConfig = (value: Config) => viewStrategies.resolveConfig(resolveConfig(value))
   const prepared = new Map<object, { graph: MnemonRuntimeGraph; token: symbol }>()
   const disposePrepared = (): void => {
@@ -121,6 +123,6 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
     const managementAuthority = resolved.remoteAccess === 'trusted-host' ? 'trusted-host' : 'loopback'
     registerRpc(webContext.connection, runtime, lifecycle, undefined, managementAuthority)
     registerSettingsRpc(webContext.connection, ctx.settings, managementAuthority)
-    registerViewRpc(webContext.connection, runtime, extensions, viewStrategies, lifecycle, managementAuthority)
+    registerViewRpc(webContext.connection, runtime, extensions, viewStrategies, lifecycle, managementAuthority, pluginInstallation)
   })
 }

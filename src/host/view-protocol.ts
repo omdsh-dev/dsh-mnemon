@@ -58,7 +58,8 @@ export interface MemoryViewDashboard {
   /** Durable activity observed after the frozen current View was compiled. */
   activity?: TurnMemoryActivity
   currentUnavailable?: 'no-session' | 'unaligned' | 'not-generated'
-  sources: Array<{ sourceInstanceKey: string; sourceTypeId: string; role: string; label: string }>
+  sources: Array<{ sourceInstanceKey: string; sourceTypeId: string; packageName: string; role: string; label: string }>
+  pluginInstallation: MemoryPluginInstallationEnvironment
   diagnostics: string[]
 }
 
@@ -66,4 +67,30 @@ export interface MemoryViewConfigurationRequest {
   expectedRevision: string
   strategyTypeId: string
   entries: Record<string, MemoryStrategyPreference>
+}
+
+export type MemoryPluginKind = 'source' | 'strategy'
+
+export interface MemoryPluginInstallationEnvironment {
+  supported: boolean
+  profileName?: string
+  reason?: 'loader-unavailable' | 'profile-unavailable' | 'cli-unavailable'
+  suggestions: string[]
+}
+
+export interface MemoryPluginInspection {
+  packageName: string
+  version: string
+  kind: MemoryPluginKind
+  description?: string
+  mnemonPeerRange: string
+  installed: boolean
+}
+
+export interface MemoryPluginInstallResult {
+  packageName: string
+  version: string
+  profileName: string
+  installed: true
+  restartRequired: true
 }

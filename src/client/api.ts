@@ -8,6 +8,8 @@ import {
   type MemoryViewDashboard,
   type MemoryViewInspection,
   type MemoryViewConfigurationRequest,
+  type MemoryPluginInspection,
+  type MemoryPluginInstallResult,
   type AssistantMessageText,
   type CreateMemoryBodyRequest,
   type ClientConnectionHandle,
@@ -152,6 +154,12 @@ export class MnemonClient {
   }
   applyView(configuration: MemoryViewConfigurationRequest): Promise<{ saved: true }> {
     return this.call(MNEMON_VIEW_WRITE_CHANNEL, 'apply', this.scoped({ configuration, confirmed: true }))
+  }
+  inspectMemoryPlugin(packageName: string): Promise<MemoryPluginInspection> {
+    return this.call(MNEMON_VIEW_CHANNEL, 'inspect-plugin', { packageName })
+  }
+  installMemoryPlugin(packageName: string, version: string): Promise<MemoryPluginInstallResult> {
+    return this.call(MNEMON_VIEW_WRITE_CHANNEL, 'install-plugin', { packageName, version, confirmed: true })
   }
 
   sourceManagementCatalog(): Promise<MemorySourceManagementCatalog> {

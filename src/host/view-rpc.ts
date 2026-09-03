@@ -1,9 +1,11 @@
+import { resolve } from 'node:path'
 import type { HostConnectionHandle, HostRpcAuthority, HostRpcHandler } from './dsh.ts'
 import type { MnemonLifecycle } from './lifecycle.ts'
 import type { LiveMnemonRuntime } from './runtime.ts'
 import type { MemoryRuntime } from '../core/runtime.ts'
 import type { MemoryOperationScope } from '../core/contracts/index.ts'
 import type { MemoryStrategyManagement } from './strategy-management.ts'
+import type { MemoryPluginInstallation } from './plugin-installation.ts'
 import { MNEMON_VIEW_CHANNEL, MNEMON_VIEW_WRITE_CHANNEL, type MemoryViewConfigurationRequest, type MemoryViewDashboard } from './view-protocol.ts'
 
 function object(value: unknown): Record<string, unknown> {
@@ -16,11 +18,20 @@ function optionalId(value: unknown): string | undefined {
   return value.trim() || undefined
 }
 
-export function createViewHandler(runtime: LiveMnemonRuntime, engine: MemoryRuntime, management: MemoryStrategyManagement, access: 'read' | 'write', lifecycle?: MnemonLifecycle): HostRpcHandler {
+export function createViewHandler(runtime: LiveMnemonRuntime, engine: MemoryRuntime, management: MemoryStrategyManagement, access: 'read' | 'write', lifecycle?: MnemonLifecycle, installation?: MemoryPluginInstallation): HostRpcHandler {
   return async (endpoint, input, signal) => {
     try {
-      if (access === 'read' ? endpoint !== 'dashboard' && endpoint !== 'preview' : endpoint !== 'apply') throw new Error('View operation is not available on this channel')
+      if (access === 'read' ? !['dashboard', 'preview', 'inspect-plugin'].includes(endpoint) : !['apply', 'install-plugin'].includes(endpoint)) throw new Error('View operation is not available on this channel')
       const payload = object(input)
+      if (endpoint === 'inspect-plugin') {
+        if (installation === undefined || typeof payload.packageName !== 'string') throw new Error('Plugin discovery is unavailable')
+        return { ok: true, value: await installation.inspect(payload.packageName) }
+      }
+      if (endpoint === 'install-plugin') {
+        if (installation === undefined || typeof payload.packageName !== 'string' || typeof payload.version !== 'string') throw new Error('Plugin installation is unavailable')
+        if (payload.confirmed !== true) throw new Error('Plugin installation requires confirmation')
+        return { ok: true, value: await installation.install(payload.packageName, payload.version, signal) }
+      }
       const sessionId = optionalId(payload.sessionId)
       const selectedWorkspaceId = optionalId(payload.workspaceId)
       const route = runtime.route({ ...(sessionId === undefined ? {} : { sessionId }), ...(selectedWorkspaceId === undefined ? {} : { workspaceId: selectedWorkspaceId }) })
@@ -42,7 +53,9 @@ export function createViewHandler(runtime: LiveMnemonRuntime, engine: MemoryRunt
           ...(current === undefined ? { currentUnavailable: sessionId === undefined ? 'no-session' as const : !aligned ? 'unaligned' as const : 'not-generated' as const } : { current }),
           ...(activity === undefined ? {} : { activity }),
           sources: snapshot.sources.map(source => ({ sourceInstanceKey: source.instanceKey, sourceTypeId: source.definition.manifest.typeId,
-            role: source.definition.manifest.role, label: source.definition.manifest.management?.label ?? source.definition.manifest.typeId })),
+            packageName: source.definition.manifest.packageName, role: source.definition.manifest.role,
+            label: source.definition.manifest.management?.label ?? source.definition.manifest.typeId })),
+          pluginInstallation: installation?.environment() ?? { supported: false, reason: 'loader-unavailable', suggestions: [] },
         }
         return { ok: true, value }
       }
@@ -61,8 +74,7 @@ export function createViewHandler(runtime: LiveMnemonRuntime, engine: MemoryRunt
   }
 }
 
-export function registerViewRpc(connection: HostConnectionHandle, runtime: LiveMnemonRuntime, engine: MemoryRuntime, management: MemoryStrategyManagement, lifecycle: MnemonLifecycle, authority: HostRpcAuthority): void {
-  connection.rpc.handle(MNEMON_VIEW_CHANNEL, createViewHandler(runtime, engine, management, 'read', lifecycle), { authority: 'trusted-host' })
-  connection.rpc.handle(MNEMON_VIEW_WRITE_CHANNEL, createViewHandler(runtime, engine, management, 'write', lifecycle), { authority })
+export function registerViewRpc(connection: HostConnectionHandle, runtime: LiveMnemonRuntime, engine: MemoryRuntime, management: MemoryStrategyManagement, lifecycle: MnemonLifecycle, authority: HostRpcAuthority, installation?: MemoryPluginInstallation): void {
+  connection.rpc.handle(MNEMON_VIEW_CHANNEL, createViewHandler(runtime, engine, management, 'read', lifecycle, installation), { authority: 'trusted-host' })
+  connection.rpc.handle(MNEMON_VIEW_WRITE_CHANNEL, createViewHandler(runtime, engine, management, 'write', lifecycle, installation), { authority })
 }
-import { resolve } from 'node:path'

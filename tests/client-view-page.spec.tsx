@@ -32,14 +32,15 @@ function snapshot(state: MemoryViewInspection['state'] = 'active'): MemoryViewIn
 }
 function fixture() {
   let dashboard: MemoryViewDashboard = { revision: 'settings-1', writable: true, strategyTypeId: 'default-three-tier', current: snapshot(), diagnostics: [],
+    pluginInstallation: { supported: true, profileName: 'web', suggestions: [] },
     activity: { turn: 1, count: 2, names: ['mnemon_document_search', 'mnemon_runtime_memory'], recalls: 0, writes: 1, documentSearches: 1, inspections: 0, failures: 0,
       retrieved: [{ callId: 'read-1', toolName: 'mnemon_document_search', operationId: 'search', sourceTypeId: 'documents', items: [{ id: 'release-plan', title: 'Release plan', excerpt: 'Ship after verification.' }] }],
       writebacks: [{ callId: 'write-1', toolName: 'mnemon_runtime_memory', operationId: 'mutate', sourceTypeId: 'runtime', item: { id: 'preference', title: 'Preference updated', excerpt: 'Use pnpm verify.' } }],
     },
     sources: [
-      { sourceInstanceKey: 'source:runtime', sourceTypeId: 'runtime', label: 'Runtime', role: 'working-context' },
-      { sourceInstanceKey: 'source:documents', sourceTypeId: 'documents', label: 'Documents', role: 'narrative' },
-      { sourceInstanceKey: 'source:spaces', sourceTypeId: 'memory-spaces', label: 'Memory Spaces', role: 'durable-evidence' },
+      { sourceInstanceKey: 'source:runtime', sourceTypeId: 'runtime', packageName: 'dsh-mnemon-source-runtime', label: 'Runtime', role: 'working-context' },
+      { sourceInstanceKey: 'source:documents', sourceTypeId: 'documents', packageName: 'dsh-mnemon-source-documents', label: 'Documents', role: 'narrative' },
+      { sourceInstanceKey: 'source:spaces', sourceTypeId: 'memory-spaces', packageName: 'dsh-mnemon-source-memory-spaces', label: 'Memory Spaces', role: 'durable-evidence' },
     ],
     entries: [base, scoped, light, capture].map((definition, index) => ({ entryId: definition.typeId, packageName: 'dsh-mnemon-strategy-' + definition.typeId,
       typeId: definition.typeId, kind: definition.kind, label: definition.label, description: definition.description, fields: definition.fields,
@@ -118,10 +119,10 @@ describe('View page interaction and localization', () => {
   it('keeps a backup-shaped multi-Source View legible without duplicating long resident content', async () => {
     const f = fixture()
     const sources: MemoryViewDashboard['sources'] = [
-      { sourceInstanceKey: 'source:runtime', sourceTypeId: 'runtime', label: 'Runtime', role: 'working-context' },
-      { sourceInstanceKey: 'source:documents', sourceTypeId: 'documents', label: 'Documents', role: 'narrative' },
-      { sourceInstanceKey: 'source:spaces', sourceTypeId: 'memory-spaces', label: 'Memory Spaces', role: 'durable-evidence' },
-      { sourceInstanceKey: 'source:notion', sourceTypeId: 'notion', label: 'Notion Reference', role: 'external' },
+      { sourceInstanceKey: 'source:runtime', sourceTypeId: 'runtime', packageName: 'dsh-mnemon-source-runtime', label: 'Runtime', role: 'working-context' },
+      { sourceInstanceKey: 'source:documents', sourceTypeId: 'documents', packageName: 'dsh-mnemon-source-documents', label: 'Documents', role: 'narrative' },
+      { sourceInstanceKey: 'source:spaces', sourceTypeId: 'memory-spaces', packageName: 'dsh-mnemon-source-memory-spaces', label: 'Memory Spaces', role: 'durable-evidence' },
+      { sourceInstanceKey: 'source:notion', sourceTypeId: 'notion', packageName: 'dsh-mnemon-source-notion', label: 'Notion Reference', role: 'external' },
     ]
     const longDocument = `DOC-11-LONG\n${'A durable project record with decisions, exceptions, and verification evidence. '.repeat(190)}`
     const projection = [{ id: 'fragment-runtime', sourceInstanceKey: 'source:runtime', mode: 'eager' as const, text: longDocument, revision: 'r1' }]
