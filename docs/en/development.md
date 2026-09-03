@@ -52,7 +52,7 @@ The [upstream 0.1.2-rc.1 release](https://github.com/deepseek-ai/deepseek-harnes
 - DSH adds subagent model configuration and revises token accounting, but the official lineage row still consumes the generic complete-log projection. Mnemon therefore retains its child-local projection wrapper and verifies it against both the rc.1 and alpha.5 slot ledgers.
 - DSH 0.1.1-rc.2 exposes the complete log as `session.events`; alpha.4 and later, including 0.1.2-rc.1, use `snapshotEvents()` and `eventAt()`. Mnemon reads this surface through capability detection, preferring snapshots and falling back to the older rc property without parsing version strings.
 
-The exact 0.1.2-rc.1 dependency closure is committed as the stable registry baseline. The dedicated source-overlay CI job remains the reproducible authority for alpha.5 compatibility.
+The exact 0.1.2-rc.1 dependency closure is committed as the stable registry baseline. The dedicated source-overlay CI job remains the reproducible authority for alpha.5 compatibility. The [isolated WebUI evidence](../pr-assets/dsh-rc1-compat/README.md) records the rc.1 workflow and the previous rc.2 backward regression.
 
 ## Standard Commands
 

@@ -52,7 +52,7 @@ pnpm_config_verify_deps_before_run=false pnpm run verify
 - DSH 新增 subagent 模型配置并调整 token 统计，但官方 lineage 行仍读取通用的完整日志 projection；Mnemon 因此保留 child-local projection wrapper，并针对 rc.1 与 alpha.5 两套 slot ledger 验证。
 - DSH 0.1.1-rc.2 通过 `session.events` 暴露完整日志；alpha.4 及之后版本（包括 0.1.2-rc.1）改用 `snapshotEvents()` 与 `eventAt()`。Mnemon 通过能力检测读取该接口，优先使用 snapshot，并回退到旧 rc 属性，无需解析版本字符串。
 
-仓库将精确的 0.1.2-rc.1 依赖闭包作为稳定 registry 基线提交；专用的源码覆盖 CI job 继续作为 alpha.5 兼容性的可复现事实源。
+仓库将精确的 0.1.2-rc.1 依赖闭包作为稳定 registry 基线提交；专用的源码覆盖 CI job 继续作为 alpha.5 兼容性的可复现事实源。[隔离 WebUI 证据](../pr-assets/dsh-rc1-compat/README.md)记录了 rc.1 工作流以及对上一版 rc.2 的向后回归验证。
 
 ## 标准命令
 
