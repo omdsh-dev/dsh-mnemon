@@ -13,6 +13,10 @@ for (const arg of args) if (!['--skip-build', '--keep'].includes(arg)) throw new
 const names = (await readdir(join(root, 'plugins'))).filter(name => name.startsWith('dsh-mnemon-')).sort()
 const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
 const distTag = manifest.publishConfig.tag
+const upgradeBaseResponse = await fetch('https://registry.npmjs.org/dsh-mnemon/0.4.7')
+assert(upgradeBaseResponse.ok, `Unable to read the published v0.4.7 upgrade base (${upgradeBaseResponse.status})`)
+const upgradeBaseManifest = await upgradeBaseResponse.json()
+assert.equal(upgradeBaseManifest.version, '0.4.7')
 const temporary = await mkdtemp(join(tmpdir(), 'mnemon-plugin-artifacts-'))
 assert(!inside(root, temporary), 'The consumer must be outside the development workspace')
 const artifacts = new Map()
@@ -27,8 +31,14 @@ const registry = createServer((request, response) => {
     createReadStream(artifact).pipe(response)
   } else if (artifactManifests.has(path)) {
     const value = artifactManifests.get(path)
+    const versions = { [value.version]: { ...value, dist: { tarball: registryUrl + '/tarballs/' + path } } }
+    const tags = { [distTag]: value.version }
+    if (path === 'dsh-mnemon') {
+      versions[upgradeBaseManifest.version] = upgradeBaseManifest
+      tags.latest = upgradeBaseManifest.version
+    }
     response.writeHead(200, { 'content-type': 'application/json' })
-    response.end(JSON.stringify({ name: path, 'dist-tags': { [distTag]: value.version }, versions: { [value.version]: { ...value, dist: { tarball: registryUrl + '/tarballs/' + path } } } }))
+    response.end(JSON.stringify({ name: path, 'dist-tags': tags, versions }))
   } else {
     response.writeHead(307, { location: 'https://registry.npmjs.org' + request.url })
     response.end()
@@ -143,6 +153,7 @@ try {
   // Exercise the user's one-package installation, not just explicit link mounts.
   await run(process.execPath, [join(root, 'scripts/verify-headless-profile.mjs'),
     '--package', 'file:' + artifacts.get(manifest.name), '--registry', registryUrl,
+    '--upgrade-from', 'dsh-mnemon@0.4.7', '--upgrade-registry', 'https://registry.npmjs.org',
   ], root, 'real DSH: install only the packed Starter and activate its plugins')
   await run(process.execPath, [join(root, 'scripts/verify-headless-profile.mjs'),
     '--package', 'file:' + artifacts.get(manifest.name), '--registry', registryUrl, '--strategy-extensions', 'true',

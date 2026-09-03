@@ -1,29 +1,46 @@
 name: Publish to npm
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: Full commit SHA already merged as the current main HEAD
+        required: true
+        type: string
 
 concurrency:
-  group: npm-publish-${{ github.event.release.tag_name }}
+  group: npm-publish-${{ inputs.revision }}
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
-  publish:
-    name: Publish release
+  prepare:
+    name: Freeze, verify, upgrade and pack
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
-      RELEASE_TAG: ${{ github.event.release.tag_name }}
-      RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+      RELEASE_REVISION: ${{ inputs.revision }}
+      RELEASE_PRERELEASE: 'true'
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      tag: ${{ steps.release.outputs.tag }}
+      artifact: ${{ steps.release.outputs.artifact }}
     steps:
-      - name: Check out release
+      - name: Check out frozen revision
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ inputs.revision }}
+          fetch-depth: 0
+
+      - name: Verify frozen main revision
+        run: |
+          [[ "$RELEASE_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          git fetch origin main
+          test "$(git rev-parse HEAD)" = "$RELEASE_REVISION"
+          test "$(git rev-parse origin/main)" = "$RELEASE_REVISION"
+          test -z "$(git status --porcelain)"
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -35,19 +52,140 @@ jobs:
       - name: Install release tooling
         run: npm install --global npm@11 pnpm@10.13.1
 
-      - name: Verify complete release and channel
+      - name: Resolve release metadata
+        id: release
+        run: |
+          version=$(node --print "require('./package.json').version")
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]
+          tag="v${version}"
+          artifact="npm-release-${version}-${RELEASE_REVISION:0:12}"
+          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "artifact=$artifact" >> "$GITHUB_OUTPUT"
+
+      - name: Verify complete release and rc channel
         run: pnpm run release:check
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify package
+      - name: Run complete workspace verification
         run: pnpm run verify
 
-      - name: Verify independent plugin artifacts and one-package installation
+      - name: Verify independent plugins and packed v0.4.7 upgrade E2E
         run: pnpm run verify:plugins
 
-      - name: Pack all artifacts and publish plugins before the Starter
-        run: node scripts/release.mjs --publish
+      - name: Pack the frozen seventeen-artifact set
+        run: node scripts/release.mjs --pack --artifacts release-artifacts
+
+      - name: Upload frozen release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.release.outputs.artifact }}
+          path: release-artifacts/
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Approve, publish, verify and upgrade
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: npm-release
+      url: https://www.npmjs.com/package/dsh-mnemon/v/${{ needs.prepare.outputs.version }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      RELEASE_REVISION: ${{ inputs.revision }}
+      RELEASE_PRERELEASE: 'true'
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      NPM_CONFIG_REGISTRY: https://registry.npmjs.org
+    steps:
+      - name: Check out frozen revision
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.revision }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      - name: Install release tooling and runtime dependencies
+        run: |
+          npm install --global npm@11 pnpm@10.13.1
+          pnpm install --frozen-lockfile
+
+      - name: Download frozen release artifacts
+        uses: actions/download-artifact@v5
+        with:
+          name: ${{ needs.prepare.outputs.artifact }}
+          path: release-artifacts
+
+      - name: Verify npm publication identity
+        run: npm whoami
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish sixteen plugins serially to rc
+        run: node scripts/release.mjs --publish-plugins --artifacts release-artifacts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Read back and install all Registry plugins
+        run: node scripts/release.mjs --verify-plugins --artifacts release-artifacts
+
+      - name: Publish the Starter to rc
+        run: node scripts/release.mjs --publish-starter --artifacts release-artifacts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Read back and install the complete Registry release
+        run: node scripts/release.mjs --verify-release --artifacts release-artifacts
+
+      - name: Smoke-test a real v0.4.7 to rc Registry upgrade
+        run: >-
+          node scripts/verify-headless-profile.mjs
+          --upgrade-from dsh-mnemon@0.4.7
+          --upgrade-registry https://registry.npmjs.org
+          --package dsh-mnemon@${{ needs.prepare.outputs.version }}
+          --registry https://registry.npmjs.org
+          --strategy-extensions true
+
+  release:
+    name: Create GitHub prerelease last
+    needs: [prepare, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_REVISION: ${{ inputs.revision }}
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+    steps:
+      - name: Check out frozen revision
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.revision }}
+          fetch-depth: 0
+
+      - name: Create immutable GitHub prerelease
+        run: |
+          if git rev-parse "refs/tags/$RELEASE_TAG" >/dev/null 2>&1; then
+            test "$(git rev-list -n 1 "$RELEASE_TAG")" = "$RELEASE_REVISION"
+          fi
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            test "$(gh release view "$RELEASE_TAG" --json isPrerelease --jq .isPrerelease)" = true
+          else
+            gh release create "$RELEASE_TAG" \
+              --target "$RELEASE_REVISION" \
+              --prerelease \
+              --title "$RELEASE_TAG: Composable Memory Plugins" \
+              --notes-file .github/release-notes/v0.5.0-rc.1.md
+          fi

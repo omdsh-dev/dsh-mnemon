@@ -12,10 +12,12 @@ const marker = 'HEADLESS_MNEMON_READY'
 const arguments_ = process.argv.slice(2)
 const options = new Map()
 for (let index = 0; index < arguments_.length; index += 2) {
-  if (!['--package', '--registry', '--strategy-extensions'].includes(arguments_[index]) || !arguments_[index + 1]) throw new Error('Expected --package <specifier> --registry <url> and/or --strategy-extensions true')
+  if (!['--package', '--registry', '--strategy-extensions', '--upgrade-from', '--upgrade-registry'].includes(arguments_[index]) || !arguments_[index + 1]) throw new Error('Expected package, registry, upgrade, and/or strategy-extension options in key/value pairs')
   options.set(arguments_[index], arguments_[index + 1])
 }
 if (options.has('--package') !== options.has('--registry')) throw new Error('--package and --registry must be supplied together')
+if (options.has('--upgrade-from') !== options.has('--upgrade-registry')) throw new Error('--upgrade-from and --upgrade-registry must be supplied together')
+if (options.has('--upgrade-from') && !options.has('--package')) throw new Error('--upgrade-from requires a target --package')
 if (options.has('--strategy-extensions') && options.get('--strategy-extensions') !== 'true') throw new Error('--strategy-extensions expects true')
 const extensionNames = ['dsh-mnemon-strategy-scoped', 'dsh-mnemon-strategy-light-context', 'dsh-mnemon-strategy-auto-capture']
 const extensionNameSet = new Set(extensionNames)
@@ -103,6 +105,20 @@ try {
     ...(options.has('--registry') ? { npm_config_registry: options.get('--registry'), NPM_CONFIG_REGISTRY: options.get('--registry') } : {}),
   }
 
+  const settingsPath = join(dshHome, 'settings.yaml')
+  await writeFile(settingsPath, '# Legacy placement migration fixture\nmnemon:\n  displayMode: buildin\n  timeoutMs: 25000\n')
+
+  let upgradeMemory
+  if (options.has('--upgrade-from')) {
+    const initialInstall = await run(['plugin', '--profile', 'headless', 'add', options.get('--upgrade-from'), '--registry', options.get('--upgrade-registry')], { env, timeoutMs: 120_000 })
+    assertSuccess(`installing ${options.get('--upgrade-from')} before the upgrade`, initialInstall)
+    const initialExecution = await run(['--profile', 'headless', 'Initialize isolated memory before upgrading Mnemon.'], { cwd: workspaceRoot, env })
+    assertSuccess('running the pre-upgrade Headless profile', initialExecution)
+    if (!initialExecution.stdout.includes(marker)) throw new Error(`Pre-upgrade Headless output did not contain ${marker}:\n${initialExecution.stdout}`)
+    upgradeMemory = await readFile(join(storageRoot, 'runtime', 'memories.json'), 'utf8')
+    requests.length = 0
+  }
+
   // link: skips dependency installation. Explicitly link the same plugin set
   // that a normal install resolves from the Starter's semver dependencies.
   const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
@@ -116,9 +132,6 @@ try {
     ...(options.has('--registry') ? ['--registry', options.get('--registry')] : []),
   ], { env, timeoutMs: 120_000 })
   assertSuccess('installing dsh-mnemon into the Headless profile', install)
-
-  const settingsPath = join(dshHome, 'settings.yaml')
-  await writeFile(settingsPath, '# Legacy placement migration fixture\nmnemon:\n  displayMode: buildin\n  timeoutMs: 25000\n')
 
   // The verification exercises Mnemon composition, not DSH's native PTY
   // transport. Disable the unrelated shell stack so the check remains
@@ -162,6 +175,7 @@ try {
     }
   }
   if (!existsSync(join(storageRoot, 'runtime', 'memories.json'))) throw new Error('Headless plugin did not initialize isolated runtime memory')
+  if (upgradeMemory !== undefined && await readFile(join(storageRoot, 'runtime', 'memories.json'), 'utf8') !== upgradeMemory) throw new Error('Package upgrade changed existing Runtime Memory bytes')
 
   const canonicalSettings = await readFile(settingsPath, 'utf8')
   if (!canonicalSettings.includes('displayMode: builtin') || canonicalSettings.includes('displayMode: buildin')) throw new Error('Headless did not persist the canonical builtin displayMode')
@@ -172,6 +186,7 @@ try {
   if (await readFile(settingsPath, 'utf8') !== canonicalSettings) throw new Error('Canonical placement was rewritten on restart')
 
   console.log(`Verified Headless profile activation with ${toolNames.size} total tools and ${required.length} representative Mnemon tools.`)
+  if (options.has('--upgrade-from')) console.log(`Verified an isolated ${options.get('--upgrade-from')} to ${options.get('--package')} package upgrade without changing Runtime Memory bytes.`)
   console.log('Verified buildin-to-builtin persistence, preservation of unrelated settings/comments, and an idempotent Headless restart.')
   if (extensionsEnabled) console.log('Verified simultaneous activation of scoped, light-context and auto-capture Entries without changing the default Strategy.')
 } finally {
