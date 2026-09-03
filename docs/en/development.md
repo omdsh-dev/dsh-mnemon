@@ -6,6 +6,8 @@
 
 The published plugin retains its Node.js 20 engine floor for older compatible DSH hosts. The registry-backed development baseline is the stable DSH 0.1.2-rc.1 release. Every directly consumed DSH package is pinned to that exact release; `dsh-invariants` closes the required peer set, while `dsh-client-store` supplies the public selector types referenced by the published UI Slots declarations. CI also checks the immediately preceding DSH 0.1.2-alpha.5 tag on Node 24 by building Harness from source, linking the same build-time package set, and running the complete Mnemon verification chain. The regular matrix runs Linux on Node.js 22.19 and 24 plus Windows on Node.js 24. After the Node 24 build, CI switches to Node 20 and imports every Node-compatible published subpath as a plugin-runtime compatibility smoke.
 
+The reviewed rc.1 cohort is enumerated with exact versions under `minimumReleaseAgeExclude` because the alpha source job installs Mnemon with pnpm 11 while the packages are inside its release-age quarantine. A composition test requires this exemption set to equal the rc.1 packages in the lockfile and rejects a scope wildcard, so later `@deepseek-ai` publications remain quarantined.
+
 Install dependencies:
 
 ```sh

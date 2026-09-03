@@ -6,6 +6,8 @@
 
 发布的插件仍为较旧且兼容的 DSH Host 保留 Node.js 20 engine 下限。Registry-backed 开发基线现为稳定的 DSH 0.1.2-rc.1；所有直接使用的 DSH package 都精确固定到该版本，`dsh-invariants` 补齐必需的 peer 集合，`dsh-client-store` 则提供已发布 UI Slots 声明所引用的公共 selector 类型。CI 还会在 Node 24 上检出它的直接前身 DSH 0.1.2-alpha.5 tag，构建 Harness、链接同一组构建期 package，并运行 Mnemon 完整验证链。常规矩阵在 Node.js 22.19 和 24 上运行 Linux，并在 Node.js 24 上运行 Windows；Node 24 构建后还会切换 Node 20，导入全部 Node-compatible 发布子路径作为插件运行时兼容 smoke。
 
+alpha 源码 job 使用 pnpm 11 安装 Mnemon，而经审查的 rc.1 package cohort 此时仍处于 release-age 隔离窗口，因此 `minimumReleaseAgeExclude` 按精确版本枚举整套 rc.1。组合测试要求该豁免集合与 lockfile 中的 rc.1 package 完全相等，并拒绝 scope 通配符，后续发布的 `@deepseek-ai` package 仍会继续被隔离。
+
 安装依赖：
 
 ```sh
