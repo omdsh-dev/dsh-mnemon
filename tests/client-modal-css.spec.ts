@@ -20,6 +20,10 @@ describe('responsive dialog layout invariants', () => {
     expect(sidebarCss).not.toContain('.shell .modal > div:last-child')
   })
 
+  it('applies the fixed sidebar skin to wide dialogs instead of collapsing them to the base width', () => {
+    expect(dialogSource).toContain('appearanceClass(css.modalWide, sidebarCss.modalWide)')
+  })
+
   it('uses a safe-area-aware bottom sheet and touch-sized actions on narrow viewports', () => {
     expect(viewCss).toContain('.modalBackdrop { align-items: flex-end; padding: max(10px, env(safe-area-inset-top, 0px)) 0 0; }')
     expect(viewCss).toContain('.modal, .modalWide { width: 100vw;')

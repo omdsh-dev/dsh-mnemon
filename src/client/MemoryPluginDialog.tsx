@@ -5,6 +5,7 @@ import type { MemoryPluginInspection, MemoryStrategyEntryView, MemoryStrategyPre
 import type { MnemonClient } from './api.ts'
 import type { MnemonTranslate } from './locales.ts'
 import { message, SidebarModal, useLocale, useT } from './page-kit.tsx'
+import { appearanceClass } from './view-styles.ts'
 import common from './MnemonView.module.css'
 import css from './MemoryPluginDialog.module.css'
 
@@ -167,7 +168,7 @@ export function MemoryPluginDialog({ client, canConfigure, refreshKey = 0, onCon
     finally { setWorking(null) }
   }
   const card = (entry: MemoryStrategyEntryView) => <StrategyCard key={entry.entryId} entry={entry} preference={draft?.entries[entry.entryId] ?? { enabled: entry.enabled, config: entry.config }} sources={dashboard!.sources} disabled={readonly || busy} selectedStrategy={draft!.strategyTypeId} onChange={value => edit({ ...draft!, entries: { ...draft!.entries, [entry.entryId]: value } })} />
-  const footer = <><span className={common.modalFooterMeta}>{dashboard?.pluginInstallation.profileName === undefined ? '' : t('plugins.profile', { name: dashboard.pluginInstallation.profileName })}</span><div className={common.modalFooterActions}><button type="button" data-dialog-close className={common.ghostButton} disabled={busy} onClick={onClose}>{t('common.cancel')}</button>{section === 'composition' && <><button type="button" className={common.secondaryButton} disabled={busy || !dirty} onClick={() => void refresh(true)}>{t('plugins.reset')}</button><button type="submit" form={formId} className={common.primaryButton} disabled={readonly || busy || !dirty || stale}>{t(working === 'apply' ? 'plugins.saving' : 'plugins.apply')}</button></>}</div></>
+  const footer = <><span className={appearanceClass(common.modalFooterMeta, css.footerMeta)}>{dashboard?.pluginInstallation.profileName === undefined ? '' : t('plugins.profile', { name: dashboard.pluginInstallation.profileName })}</span><div className={appearanceClass(common.modalFooterActions, css.footerActions)}><button type="button" data-dialog-close className={common.ghostButton} disabled={busy} onClick={onClose}>{t('common.cancel')}</button>{section === 'composition' && <><button type="button" className={common.secondaryButton} disabled={busy || !dirty} onClick={() => void refresh(true)}>{t('plugins.reset')}</button><button type="submit" form={formId} className={common.primaryButton} disabled={readonly || busy || !dirty || stale}>{t(working === 'apply' ? 'plugins.saving' : 'plugins.apply')}</button></>}</div></>
   return <SidebarModal wide title={t('plugins.title')} description={t('plugins.description')} busy={busy} contentReady={!loading} onClose={onClose} footer={footer}>
     <div className={css.dialogBody}>
       <div className={css.segmented} role="tablist" aria-label={t('plugins.tabs')}><button type="button" role="tab" aria-selected={section === 'composition'} onClick={() => setSection('composition')}>{t('plugins.composition')}</button><button type="button" role="tab" aria-selected={section === 'discover'} onClick={() => setSection('discover')}>{t('plugins.discover')}</button></div>

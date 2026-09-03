@@ -51,6 +51,14 @@ describe('Sidebar layout invariants', () => {
     expect(memoryPluginCss).toContain('.sourceGrid, .strategyGrid { grid-template-columns: minmax(0, 1fr); }')
   })
 
+  it('keeps plugin switches visually compact and lays out all three footer actions deliberately', () => {
+    expect(memoryPluginCss).toContain('.switch::before {')
+    expect(memoryPluginCss).toContain(".switch[aria-checked='true']::before { background: var(--mn-accent); }")
+    expect(memoryPluginCss).toContain('.footerActions.footerActions { grid-template-columns: repeat(3, minmax(0, 1fr)); }')
+    expect(memoryPluginCss).toContain('.footerActions > :last-child { grid-column: 1 / -1; }')
+    expect(memoryPluginCss).toContain(".inspectForm input, .select, .field input:not([type='checkbox']) { min-height: 44px; }")
+  })
+
   it('renders runtime metadata as real chips while keeping form values at normal weight', () => {
     expect(sidebarCss).toContain(".shell [class*='runtimeEntryBadges'] > span {")
     expect(sidebarCss).toContain('border-radius: 999px;')
