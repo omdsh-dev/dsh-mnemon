@@ -157,9 +157,15 @@ export function MemoryPluginDialog({ client, canConfigure, refreshKey = 0, onCon
   const hasSource = dashboard && draft ? dashboard.entries.some(entry => entry.roles.includes('source') && preference(entry, draft).enabled) : false
   const invalid = !selectedReady || !hasSource || [...issues.values()].some(value => value.missing.length > 0 || value.conflicts.length > 0)
   const names = new Map<string, string>()
+  const providers = new Map<string, string[]>()
   for (const entry of dashboard?.entries ?? []) {
-    names.set(entry.entryId, localized(entry.label, locale))
-    for (const capability of entry.provides) if (!names.has(capability.id)) names.set(capability.id, localized(entry.label, locale))
+    const label = localized(entry.label, locale)
+    names.set(entry.entryId, label)
+    for (const capability of entry.provides) providers.set(capability.id, [...providers.get(capability.id) ?? [], label])
+  }
+  for (const [capability, labels] of providers) {
+    const unique = [...new Set(labels)]
+    names.set(capability, unique.length === 1 ? unique[0]! : capability === 'source' ? t('plugins.anySource') : unique.join(' / '))
   }
   const busy = loading || working !== null
   const apply = async (): Promise<void> => {

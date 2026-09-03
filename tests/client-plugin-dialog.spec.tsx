@@ -69,6 +69,7 @@ describe('Memory plugin dialog', () => {
     expect(within(dialog).getByText('dsh-mnemon-source-runtime')).toBeTruthy()
     expect(within(dialog).getByText('Notion')).toBeTruthy()
     expect(within(dialog).getByText('dsh-mnemon-source-notion')).toBeTruthy()
+    expect(within(dialog).getByText('Depends on · Any Source')).toBeTruthy()
     fireEvent.click(within(dialog).getByRole('switch', { name: scoped.label.en }))
     fireEvent.click(within(dialog).getByRole('switch', { name: light.label.en }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save composition' }))
