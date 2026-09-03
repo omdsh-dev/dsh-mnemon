@@ -135,8 +135,8 @@ try {
   disabled: true
 - id: tool-fs-search
   disabled: true
-`.trimStart() + (extensions.length === 0 ? '' : '\n- insert:\n' + extensions.map(name =>
-    `    - id: ${name.slice(4)}\n      name: ${name}\n`,
+`.trimStart() + (extensions.length === 0 ? '' : extensions.map(name =>
+    `- id: ${name.slice(4)}\n  disabled: false\n`,
   ).join('')))
 
   const execution = await run(['--profile', 'headless', 'Verify that the Mnemon tool surface is available.'], {

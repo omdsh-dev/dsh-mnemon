@@ -66,7 +66,13 @@ describe('standalone plugin repository boundary', () => {
     const provider = name.startsWith('dsh-mnemon-provider-')
     expect(manifest.peerDependencies[provider ? 'dsh-mnemon-source-memory-spaces' : 'dsh-mnemon']).toBeTruthy()
     if (provider) expect(manifest.peerDependencies['dsh-mnemon']).toBeUndefined()
-    if (threeTierExtensions.has(name)) expect(manifest.peerDependencies[threeTierOwner]).toBeTruthy()
+    if (threeTierExtensions.has(name)) {
+      expect(manifest.peerDependencies[threeTierOwner]).toBeTruthy()
+      expect(manifest.dsh?.bundle?.patch).toBe('./cordis.patch.yml')
+      const patch = readFileSync(join(directory, 'cordis.patch.yml'), 'utf8')
+      expect(patch).toContain(`name: ${name}`)
+      expect(patch).toContain('disabled: true')
+    }
 
     const files = ['src', 'tests'].flatMap(group => readdirSync(join(directory, group), { recursive: true })
       .filter(path => /\.[cm]?[jt]sx?$/u.test(String(path))).map(path => join(directory, group, String(path))))

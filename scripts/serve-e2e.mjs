@@ -113,8 +113,7 @@ try {
     - id: e2e-directory-picker-ui
       name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'
 `
-  const strategyEntries = extensions.length === 0 ? '' : '\n- insert:\n' + extensions.map(name => `    - id: ${name.slice(4)}\n      name: ${name}\n      disabled: true\n`).join('')
-  await writeFile(join(dshHome, 'profiles/web/cordis.patch.yml'), disabled.map(id => `- id: ${id}\n  disabled: true\n`).join('') + browsePicker + strategyEntries)
+  await writeFile(join(dshHome, 'profiles/web/cordis.patch.yml'), disabled.map(id => `- id: ${id}\n  disabled: true\n`).join('') + browsePicker)
   await writeFile(join(workspace, 'README.md'), '# Mnemon isolated browser test\n\nNo production memory or credentials are used.\n')
   console.log('Fixture: ' + fixture)
   console.log('Workspace: ' + workspace)
