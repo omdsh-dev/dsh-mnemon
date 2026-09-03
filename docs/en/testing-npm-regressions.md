@@ -19,7 +19,7 @@ pnpm --workspace-concurrency=1 -r build
 node scripts/serve-web-regression.mjs --cli /absolute/path/to/test-owned/mnemon
 ```
 
-On the current Composable View branch, the default local package installs the Starter and sixteen built plugins together, with three enhancement Entries disabled by default. Published control packages resolve their own registry dependencies. Unpublished beta tarballs need the local-registry artifact harness described in [Development](./development.md), not an assumption that those versions exist on npm. The historical results below remain records of their named builds.
+The composable release installs the Starter and sixteen version-locked plugins together, with three enhancement Entries disabled by default. Published control packages resolve their own Registry dependencies. Unpublished prerelease tarballs use the local-registry artifact harness described in [Development](./development.md), never an assumption that those versions exist on npm. The historical results below remain records of their named builds.
 
 Each run creates an independent DSH_HOME, memory directory, workspace, random loopback port, and local model response service. It does not change global dsh, user profiles, personal memories, or existing workspaces. The session model returns fixed test text without calling a paid model. Shell tools and optional SSH/PTY/tunnel installation scripts are outside this regression. `fixture.json` records versions, directories, test switches, and owned processes; `dsh.log` stores this instance's service log. Ctrl-C stops only this instance and retains its directory for audit.
 

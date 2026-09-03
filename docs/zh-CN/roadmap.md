@@ -7,7 +7,7 @@ Roadmap 记录当前实现之外的工作，不是已交付能力承诺。优先
 ## 版本边界
 
 - **v0.4：Sidebar 优先。** 保留 v0.3 架构与记忆数据格式。v0.4.0 最初移除 builtin；[v0.4.2](./releases/v0.4.2.md) 恢复可选 `displayMode: builtin`，共用同一界面；[v0.4.3](./releases/v0.4.3.md) 修复折叠侧栏图标。v0.4.0 说明保留为历史发布记录。
-- **v0.5：本分支的 View-based 插件 beta。** 保留 main 的共用工作台，独立验证架构升级，参见 [beta 范围](./releases/v0.5.0-beta.1.md)。这项工作不包含在 v0.4 中，发布 v0.4 不代表 beta 已发布或 SDK 已冻结。
+- **v0.5：View-based 插件 RC。** 架构升级保留共用工作台，并以可独立验证的插件发布，参见 [RC 范围](./releases/v0.5.0-rc.1.md)。SDK 仍处于预发布阶段，扩展 ABI 尚未冻结。
 
 ## P0：可靠性与可恢复调度
 

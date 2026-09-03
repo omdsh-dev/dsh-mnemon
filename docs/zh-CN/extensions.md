@@ -67,7 +67,7 @@ export function apply(ctx: Context): void {
 
 以上假定 `source.js` 导出定义；完整文件记忆示例见 [external-source.ts](../../scripts/fixtures/plugin-consumer/src/external-source.ts)。Source 与 Strategy 是职责，不是强制分包/分仓。一个插件可以调用 `installMemory(ctx, { sources: [source], strategies: [strategy] })`，在同一 Fiber 下成批安装、一起卸载，保留不同的实例 key；仅在需要独立复用/替换时拆包。Strategy 仍需显式选择，随包提供不等于覆盖用户的选择。
 
-每个可组合插件都应导出一份 JSON 安全的 `memoryPlugin` 描述，并把同一个对象传给 `installMemory`。`roles` 只描述贡献职责，不产生两套插件类型；`provides` 与 `requires` 构成激活关系图。只有两个提供者确实不能同时参与时，才把能力标记为 `exclusive: true`。只声明硬依赖：能够真实降级或空操作的插件，不应强迫用户安装无关依赖。Core 会在运行 Source factory 前校验激活图，并且仍是唯一把图编译为一个 View 的组件。没有这份 beta 描述的旧插件保持既有组合行为，但 Host 只能推断有限的身份与关系信息。
+每个可组合插件都应导出一份 JSON 安全的 `memoryPlugin` 描述，并把同一个对象传给 `installMemory`。`roles` 只描述贡献职责，不产生两套插件类型；`provides` 与 `requires` 构成激活关系图。只有两个提供者确实不能同时参与时，才把能力标记为 `exclusive: true`。只声明硬依赖：能够真实降级或空操作的插件，不应强迫用户安装无关依赖。Core 会在运行 Source factory 前校验激活图，并且仍是唯一把图编译为一个 View 的组件。没有这份预发布描述的旧插件保持既有组合行为，但 Host 只能推断有限的身份与关系信息。
 
 Entry id 标识实例，type id 标识实现。不能剥掉 Loader 的 include 前缀。没有 Loader 身份的直接 `ctx.plugin()` 挂载，应传 `installMemory(..., { instanceId })`。路径和凭据归实例，不使用模块全局数据库或服务注册表。
 
@@ -83,7 +83,7 @@ Core 只处理目标/槽身份、JSON、64,000 字符上限、确定性回放、
 
 专用 Strategy Entry 还可以导出 `memoryStrategyConfiguration`，由 Core SDK 的 `defineMemoryStrategyConfiguration` 定义。它包含中英文展示文案、公开字段（`number`、`text`、`textarea`、`string-list`、`source-list`），以及**与 `apply()` 共用的纯 `create(config)` factory**。factory 只返回一个 Strategy 或扩展贡献以及同一份 `memoryPlugin` 描述，不做 I/O、凭据访问、Source 注册或 Fiber 挂载；完整例子见内置增强包。这只是面向 Host 与未来工具的可选约定，不定义插件身份或激活关系。
 
-v0.5 不向普通用户提供通用的记忆插件发现、依赖图或安装弹窗。这个 beta 阶段先稳定 Source/Strategy 契约和单 View 编译边界，避免把尚在收敛的插件心智加入 v0.4 的日常工作流。三个随 Starter 安装的增强只以“设置 → 记忆系统 → 记忆增强”中的行为开关呈现；包名、Entry、依赖和互斥关系不进入这层界面。
+v0.5 不向普通用户提供通用的记忆插件发现、依赖图或安装弹窗。这个 RC 阶段先稳定 Source/Strategy 契约和单 View 编译边界，避免把尚在收敛的插件心智加入 v0.4 的日常工作流。三个随 Starter 安装的增强只以“设置 → 记忆系统 → 记忆增强”中的行为开关呈现；包名、Entry、依赖和互斥关系不进入这层界面。
 
 第三方插件仍走 DSH 原生 Profile/Loader 流程：用准确包名执行 `dsh plugin --profile <Profile> add <包名>@<版本> --save-exact`，检查其 `peerDependencies` 与 `dsh.bundle.patch`，重启后在 Profile 装配中明确激活。下载 npm 包本身不等于激活，Mnemon 也不会在当前进程热加载新代码。欢迎外部作者按本页契约贡献独立仓库；通用图形化管理会在接口和社区用例稳定后再评估，不是 v0.5 承诺。
 
