@@ -45,18 +45,16 @@ The page loads concurrently and progressively. Only one region-level spinner rem
 
 Checking is read-only. Update actions appear only for supported installation sources with a newer release. Restart `dsh web` after updating dsh-mnemon.
 
-## View: inspect context and compose strategies
+## Memory plugins: install and compose
 
-The tab is **View** in English and **视图** in Chinese. It uses the same surfaces, typography and controls as the other pages. At wide widths, inspection and configuration sit side by side; narrow layouts stack them.
+There is no standalone View page. Open **Memory plugins** from Status; the resulting View remains a pinned runtime artifact compiled for an LLM turn, not a second user-managed document.
 
-- **Actual View** is the active turn's pinned snapshot or the latest snapshot retained by the running Host. Inspect Source fragments, resident character count, read routes, write actions, Strategy guidance and snapshot identity. Reopening the Sidebar refreshes it without discarding a draft; **Refresh view status** also refreshes it explicitly. No generated turn, a mismatched workspace, or a restarted Host shows an explanation, not a reconstructed historical snapshot.
-- **Configuration preview** compiles the draft against current Source state without activating plugins or executing Actions. It does not call a model or rewrite memory. It is not an already-injected View, and later Source changes may change the eventual result.
-- **Strategy composition** selects one base Strategy and independently enables optional additive plugins. Plugins define their own fields: Source order and writable subset, resident character ceiling, or capture instructions. **Use plugin default** removes the override; explicitly selecting no writable Sources means no writes.
-- **Apply to future turns** validates the entire proposal before changing Entries. Conflicts, stale revisions or activation/persistence failures are reported; unrelated plugins remain enabled. Configurations are saved for the current DSH Profile across its workspaces and replayed after restart. They do not alter an active turn or its existing permissions.
+- **Sources** shows every registered Source Entry and its observed runtime state. A switch changes only that Source, verifies its Core contribution, and persists the explicit Profile-local choice. It does not delete Source data.
+- **Base and additive Strategies** selects one complete Strategy and independently enables compatible extensions. Each plugin owns its editor fields, such as Source order, writable subset, resident-content ceiling, or capture guidance. **Use plugin default** removes an override.
+- **Save composition** validates the complete candidate before changing Entries. Conflicts, stale revisions, activation failures, and persistence failures are reported and rolled back; unrelated plugins remain enabled. The saved composition affects future turns only.
+- **Discover** accepts an exact `dsh-mnemon-source-*` or `dsh-mnemon-strategy-*` npm name. It inspects identity and compatibility first, then asks for a second explicit confirmation before DSH installs the exact version into the active Profile. Restart registers the bundle disabled; activation remains a separate choice.
 
-This is not a plugin marketplace. Install and register optional `dsh-mnemon-strategy-*` plugins through DSH first; configured disabled Entries can then be enabled here. A plugin without an optional configuration descriptor remains usable through normal DSH configuration and is read-only on this page. The three optional extensions are not automatically installed by the default Starter. See [plugin-owned configuration metadata](./extensions.md).
-
-Character counts cover projected content, **not tokens or the complete model request**. The raw memory snapshot does not include the entire conversation, tool catalog or system prompt. Displayed Strategy guidance still follows Host injection settings. Active capture guides the current LLM; it does not start an autonomous background Agent.
+This is a bounded installation surface, not a curated marketplace. Packages without the optional Strategy editor descriptor remain usable through normal DSH configuration and appear read-only here. The three example extensions are not installed by the default Starter. See [plugin-owned configuration metadata](./extensions.md).
 
 ## 2. Runtime: maintain every-turn context
 

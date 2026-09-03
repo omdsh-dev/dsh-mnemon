@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryPluginInstallation } from '../src/host/plugin-installation.ts'
-import type { HostContextShape } from '../src/host/dsh.ts'
+import type { HostContextShape, HostSettingsService } from '../src/host/dsh.ts'
 import type { ProcessOptions } from '../src/host/process.ts'
 
 const roots: string[] = []
@@ -18,8 +18,42 @@ async function profile() {
   await writeFile(join(directory, 'cordis.yml'), '[]\n')
   await writeFile(join(directory, 'package.json'), JSON.stringify({ name: 'dsh-profile-web', private: true, dependencies: {}, dsh: { profile: { bundles: [] } } }, null, 2))
   const loader = { entries: () => [], config: { baseUrl: pathToFileURL(join(directory, 'cordis.yml')).href } }
-  const ctx = { get: (name: string) => name === 'loader' ? loader : undefined } as unknown as HostContextShape
-  return { root, directory, ctx }
+  const documents = new Map<string, { value: Record<string, unknown>; revision: number; validate?: (value: never) => void }>()
+  const listeners = new Map<string, Set<(...args: any[]) => void>>()
+  const emit = (name: string, ...args: any[]) => { for (const listener of listeners.get(name) ?? []) listener(...args) }
+  const settings: HostSettingsService = {
+    writable: true,
+    register: (namespace, _schema, options) => {
+      if (!documents.has(namespace)) documents.set(namespace, { value: structuredClone(options.base ?? {}) as Record<string, unknown>, revision: 0,
+        ...(options.validate === undefined ? {} : { validate: options.validate as (value: never) => void }) })
+      return { get: () => documents.get(namespace)!.value as never }
+    },
+    describe: () => [...documents].map(([ns, value]) => ({ ns, value: value.value, revision: value.revision, applies: 'live' as const })),
+    mutate: vi.fn(async (namespace, operations, expectedRevision) => {
+      const current = documents.get(namespace)!
+      if (expectedRevision !== undefined && expectedRevision !== current.revision) throw new Error('Settings changed concurrently')
+      const next = structuredClone(current.value)
+      for (const operation of operations) {
+        if (operation.op !== 'set' || operation.path.length !== 1) throw new Error('Unexpected settings mutation')
+        next[operation.path[0]!] = structuredClone(operation.value)
+      }
+      current.validate?.(next as never)
+      current.value = next
+      current.revision += 1
+      emit('settings/updated', namespace, next)
+    }),
+  }
+  const ctx = {
+    settings,
+    get: (name: string) => name === 'loader' ? loader : undefined,
+    on: (name: string, listener: (...args: any[]) => void) => {
+      const entries = listeners.get(name) ?? new Set()
+      entries.add(listener)
+      listeners.set(name, entries)
+      return () => { entries.delete(listener) }
+    },
+  } as unknown as HostContextShape
+  return { root, directory, ctx, settings, documents, emit }
 }
 
 const registryManifest = (name = 'dsh-mnemon-strategy-focus') => ({
@@ -98,7 +132,7 @@ describe('DSH-native Memory plugin installation', () => {
       }),
     }
     const loader = { entries: () => [entry], config: { baseUrl: pathToFileURL(join(f.directory, 'cordis.yml')).href } }
-    const ctx = { ...f.ctx, settings: { writable: true }, get: (name: string) => name === 'loader' ? loader : undefined } as unknown as HostContextShape
+    const ctx = { ...f.ctx, get: (name: string) => name === 'loader' ? loader : undefined } as unknown as HostContextShape
     const engine = { contributionSnapshot: () => ({ sources: active ? [{ provenance: { entryId: 'notion' } }] : [], strategies: [], strategyExtensions: [] }),
       batch: async (operation: () => Promise<void>) => operation() }
     const manager = new MemoryPluginInstallation(ctx, { engine: engine as never, resolveDshCommand: () => ({ command: '/fake/dsh', prefix: [] }) })
@@ -106,5 +140,44 @@ describe('DSH-native Memory plugin installation', () => {
     await manager.setSourceEnabled('notion', true)
     expect(entry.update).toHaveBeenCalledWith({ disabled: false })
     expect(manager.registered()).toMatchObject([{ entryId: 'notion', enabled: true, active: true }])
+    expect(f.documents.get(manager.settingsNamespace)?.value).toEqual({ sources: { notion: { enabled: true } } })
+
+    // A bundle is mounted from its disabled default again on Profile restart.
+    active = false
+    entry.disabled = true
+    entry.options.disabled = true
+    const restarted = new MemoryPluginInstallation(ctx, { engine: engine as never, resolveDshCommand: () => ({ command: '/fake/dsh', prefix: [] }) })
+    const stop = restarted.start()
+    await vi.waitFor(() => expect(active).toBe(true))
+    expect(entry.disabled).toBe(false)
+    expect(f.settings.mutate).toHaveBeenCalledOnce()
+    stop()
+  })
+
+  it('rolls back Source activation when the Profile preference cannot be persisted', async () => {
+    const f = await profile()
+    let active = false
+    const entry = {
+      id: 'notes', disabled: true,
+      options: { id: 'notes', name: 'dsh-mnemon-source-notes', disabled: true },
+      parent: { tree: { import: async () => ({}) } }, fiber: { await: async () => {} },
+      update: vi.fn(async ({ disabled }: { disabled?: boolean | null }) => {
+        entry.disabled = disabled === true
+        entry.options.disabled = disabled === true
+        active = disabled !== true
+      }),
+    }
+    const loader = { entries: () => [entry], config: { baseUrl: pathToFileURL(join(f.directory, 'cordis.yml')).href } }
+    const ctx = { ...f.ctx, get: (name: string) => name === 'loader' ? loader : undefined } as unknown as HostContextShape
+    const engine = { contributionSnapshot: () => ({ sources: active ? [{ provenance: { entryId: 'notes' } }] : [], strategies: [], strategyExtensions: [] }),
+      batch: async (operation: () => Promise<void>) => operation() }
+    const manager = new MemoryPluginInstallation(ctx, { engine: engine as never, resolveDshCommand: () => ({ command: '/fake/dsh', prefix: [] }) })
+    vi.mocked(f.settings.mutate).mockRejectedValueOnce(new Error('Disk full'))
+    await expect(manager.setSourceEnabled('notes', true)).rejects.toThrow('Disk full')
+    expect(entry.disabled).toBe(true)
+    expect(active).toBe(false)
+    expect(entry.update).toHaveBeenNthCalledWith(1, { disabled: false })
+    expect(entry.update).toHaveBeenNthCalledWith(2, { disabled: true })
+    expect(f.documents.get(manager.settingsNamespace)?.value).toEqual({ sources: {} })
   })
 })

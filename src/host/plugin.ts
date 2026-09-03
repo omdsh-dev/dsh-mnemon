@@ -75,6 +75,7 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
     runtime.swap(candidate?.graph ?? createRuntimeGraph(effectiveConfig(next), undefined, extensions))
   }) as never)
   ctx.effect(() => viewStrategies.start(), 'dsh-mnemon: strategy Entry settings')
+  ctx.effect(() => pluginInstallation.start(), 'dsh-mnemon: Source Entry settings')
   ctx.settings.register('mnemon-ui', InteractionConfig, {
     base: resolveInteractionConfig(resolved.conversationInteraction),
     applies: 'live',

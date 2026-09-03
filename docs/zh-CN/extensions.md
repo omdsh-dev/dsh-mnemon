@@ -74,7 +74,7 @@ Core 只处理目标/槽身份、JSON、64,000 字符上限、确定性回放、
 
 专用 Strategy Entry 可以导出 `memoryStrategyConfiguration`，由 Core SDK 的 `defineMemoryStrategyConfiguration` 定义。它包含中英文展示文案、公开字段（`number`、`text`、`textarea`、`string-list`、`source-list），以及**与 `apply()` 共用的纯 `create(config)` factory**。factory 只返回一个 Strategy 或扩展贡献，不做 I/O、凭据访问、Source 注册或 Fiber 挂载；完整例子见可选策略包。这只是可选的编辑器约定，不是组合功能的准入要求。混合 Source/Strategy Entry 以及未声明编辑器的插件仍可观察，由 DSH 管理配置。
 
-状态页的 **记忆插件** 弹窗会发现已注册的 `(scope/)dsh-mnemon-source-*` 与 `(scope/)dsh-mnemon-strategy-*` Loader Entry，包括停用项。Strategy 变更会先校验完整候选，再更新 Cordis Entry，并把 Profile 级用户偏好保存在 DSH 设置中。`mnemon-view-<Loader 装配目录摘要>` 命名空间在共享设置文件内隔离各 Profile（没有装配目录的嵌入式 Host 使用 `mnemon-view`）。激活或持久化失败会回滚；已有轮次的 pin 保持不变。Source 启停同样核对 Core 实际注册结果，不符合预期便回滚 Entry。Source 上限及 Host 的写入/权限约束仍然有效。
+状态页的 **记忆插件** 弹窗会发现已注册的 `(scope/)dsh-mnemon-source-*` 与 `(scope/)dsh-mnemon-strategy-*` Loader Entry，包括停用项。Strategy 变更会先校验完整候选，再更新 Cordis Entry，并把 Profile 级用户偏好保存在 DSH 设置中。`mnemon-view-<Loader 装配目录摘要>` 隔离 Strategy 偏好，`mnemon-plugins-<Loader 装配目录摘要>` 则让明确的 Source 启停选择在 bundle 重新装配后仍能恢复（没有装配目录的嵌入式 Host 使用 `mnemon-view` / `mnemon-plugins`）。激活或持久化失败会回滚；已有轮次的 pin 保持不变。Source 启停同样先核对 Core 实际注册结果，再提交偏好；注册不符合预期或持久化失败都会回滚 Entry。Source 上限及 Host 的写入/权限约束仍然有效。
 
 发现入口只接受准确的 `dsh-mnemon-source-*` 或 `dsh-mnemon-strategy-*` npm 包名。安装前，Host 会核对包身份、语义版本、`dsh-mnemon` peer 声明和安全的 `dsh.bundle.patch`；确认写入后委托 `dsh plugin --profile <当前 Profile> add <包名>@<版本> --save-exact`。它不改写 Loader YAML，也不在当前进程热加载新代码。重启 DSH 后，新 bundle 先以停用状态注册，再由用户在弹窗中明确启用。只有能识别当前 Loader、Profile、DSH CLI 且连接具备写权限时，页面才允许安装。
 
