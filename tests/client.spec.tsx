@@ -465,7 +465,7 @@ describe('MnemonView', () => {
     await selectWorkspaceTab('状态')
     expect(screen.getByRole('heading', { name: '系统状态' })).toBeTruthy()
     expect(screen.queryByRole('tab', { name: '视图' })).toBeNull()
-    expect(screen.getByRole('button', { name: '记忆插件' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '记忆插件' })).toBeNull()
     expect(within(screen.getByRole('region', { name: 'Mnemon 运行状态' })).getAllByRole('article')).toHaveLength(4)
     expect(screen.queryByText('记忆子 Agent 可用')).toBeNull()
     expect(screen.queryByRole('heading', { name: '子 Agent 生命周期' })).toBeNull()

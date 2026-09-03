@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest'
 const sidebarCss = readFileSync(new URL('../src/client/MnemonSidebarView.module.css', import.meta.url), 'utf8')
 const workspaceCss = readFileSync(new URL('../src/client/MnemonWorkspace.module.css', import.meta.url), 'utf8')
 const viewCss = readFileSync(new URL('../src/client/MnemonView.module.css', import.meta.url), 'utf8')
-const memoryPluginCss = readFileSync(new URL('../src/client/MemoryPluginDialog.module.css', import.meta.url), 'utf8')
 
 const sidebarSurface = 'var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base))'
 
@@ -43,20 +42,6 @@ describe('Sidebar layout invariants', () => {
     expect(sidebarCss).toContain('border-bottom-color: var(--dsw-alias-state-business-primary);')
     expect(viewCss).not.toContain('.sideNavigation')
     expect(sidebarCss).not.toContain('.sideNavigation')
-  })
-
-  it('keeps plugin composition dense on desktop and single-column on narrow dialogs', () => {
-    expect(memoryPluginCss).toContain('.pluginGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));')
-    expect(memoryPluginCss).toContain('@media (max-width: 680px)')
-    expect(memoryPluginCss).toContain('.pluginGrid { grid-template-columns: minmax(0, 1fr); }')
-  })
-
-  it('keeps plugin switches visually compact and lays out all three footer actions deliberately', () => {
-    expect(memoryPluginCss).toContain('.switch::before {')
-    expect(memoryPluginCss).toContain(".switch[aria-checked='true']::before { background: var(--mn-accent); }")
-    expect(memoryPluginCss).toContain('.footerActions.footerActions { grid-template-columns: repeat(3, minmax(0, 1fr)); }')
-    expect(memoryPluginCss).toContain('.footerActions > :last-child { grid-column: 1 / -1; }')
-    expect(memoryPluginCss).toContain(".inspectForm input, .field input:not([type='checkbox']) { min-height: 44px; }")
   })
 
   it('renders runtime metadata as real chips while keeping form values at normal weight', () => {

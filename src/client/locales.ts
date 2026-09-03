@@ -1,8 +1,6 @@
 /** Mnemon workspace copy, synchronized with DSH's global locale service. */
-import { pluginZh, pluginEn } from './plugin-locales.ts'
 
 export const zh = {
-  ...pluginZh,
   'tab.label': '记忆系统',
   'term.space': '记忆体',
   'term.spaces': '记忆体',
@@ -724,6 +722,15 @@ export const zh = {
   'config.topologyEnabled': '已开启',
   'config.topologyDisabled': '已关闭',
   'config.topologyLayerToggle': '启用 {layer}',
+  'config.enhancementsTitle': '记忆增强',
+  'config.enhancementsDescription': '为默认三层记忆开启可选行为；切换后立即生效。',
+  'config.enhancementCapture': '主动记录',
+  'config.enhancementCaptureHint': '在当前对话中识别并保存值得长期保留的事实',
+  'config.enhancementLightContext': '轻量上下文',
+  'config.enhancementLightContextHint': '减少常驻内容，同时保留按需读取能力',
+  'config.enhancementScoped': '范围组合',
+  'config.enhancementScopedHint': '按稳定顺序组合当前可用的记忆来源',
+  'config.enhancementsFailed': '无法更新记忆增强设置，请重试。',
   'layers.runtimeLabel': '运行时记忆',
   'layers.runtimeDescription': '有界且确定的热记忆，在每个符合条件的回合中直接注入。',
   'layers.documentsLabel': '项目档案',
@@ -918,7 +925,6 @@ export const zh = {
 export type MnemonKey = keyof typeof zh
 
 export const en = {
-  ...pluginEn,
   'tab.label': 'Memory System',
   'term.space': 'Memory Space',
   'term.spaces': 'Memory Spaces',
@@ -1640,6 +1646,15 @@ export const en = {
   'config.topologyEnabled': 'Enabled',
   'config.topologyDisabled': 'Disabled',
   'config.topologyLayerToggle': 'Enable {layer}',
+  'config.enhancementsTitle': 'Memory enhancements',
+  'config.enhancementsDescription': 'Enable optional behavior for the default three-layer memory. Changes apply immediately.',
+  'config.enhancementCapture': 'Active capture',
+  'config.enhancementCaptureHint': 'Identify and retain durable facts from the current conversation',
+  'config.enhancementLightContext': 'Light context',
+  'config.enhancementLightContextHint': 'Reduce resident content while keeping on-demand reads available',
+  'config.enhancementScoped': 'Scoped composition',
+  'config.enhancementScopedHint': 'Compose currently available memory sources in a stable order',
+  'config.enhancementsFailed': 'Could not update memory enhancements. Try again.',
   'layers.runtimeLabel': 'Runtime Memory',
   'layers.runtimeDescription': 'Bounded, deterministic hot memory injected directly into every eligible turn.',
   'layers.documentsLabel': 'Project Documents',
