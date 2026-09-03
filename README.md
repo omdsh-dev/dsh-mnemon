@@ -134,6 +134,8 @@ dsh plugin --profile web add dsh-mnemon
 dsh --profile web
 ```
 
+When the Web profile is published under a cloud hostname, stable DSH 0.1.1-rc.2 needs an authenticated HTTPS reverse proxy, an explicit trusted authority, and a local Mnemon management override. Follow the [cloud-hosted WebUI procedure](./docs/en/operations.md#cloud-hosted-webui); do not expose the loopback service directly.
+
 DSH profiles have independent plugin rosters. Install the same package separately for one-shot Headless tasks:
 
 ```sh

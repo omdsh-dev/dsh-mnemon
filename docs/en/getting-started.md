@@ -113,6 +113,8 @@ Then start or restart the profile:
 dsh --profile web
 ```
 
+If the Web profile is reached through a cloud hostname, do not publish port 3080 directly. Stable DSH 0.1.1-rc.2 keeps Mnemon management channels loopback-only by default, so a remote page can be visible while the Memory System cannot load settings or perform writes. Configure the authenticated reverse proxy, `remoteAccess` override, and trusted authority together by following [Cloud-hosted WebUI on stable DSH rc.2](./operations.md#cloud-hosted-webui). The same section explains the different launch-token flow on DSH 0.1.2-alpha.5.
+
 Upgrade and uninstall:
 
 ```sh

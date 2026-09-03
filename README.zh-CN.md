@@ -134,6 +134,8 @@ dsh plugin --profile web add dsh-mnemon
 dsh --profile web
 ```
 
+将 Web profile 发布到云端域名时，稳定版 DSH 0.1.1-rc.2 需要带身份认证的 HTTPS 反向代理、显式可信 authority，以及本机 Mnemon 管理权限覆盖。请按[云端 WebUI 操作步骤](./docs/zh-CN/operations.md#cloud-hosted-webui)配置，不要把回环服务直接暴露到公网。
+
 DSH 各 profile 的插件清单彼此独立。一次性 Headless 任务需要单独安装：
 
 ```sh

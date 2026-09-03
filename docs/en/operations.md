@@ -102,6 +102,58 @@ Recommended migration: export from the old scope → switch and confirm the new 
 
 Existing turns and delegated child activations may still use the old runtime. Wait for them to finish or cancel them before moving or retiring its data. Parent completion alone does not release an asynchronous child's delegation; a newly created or cold-resumed activation captures its own authorized generation.
 
+<a id="cloud-hosted-webui"></a>
+
+## Cloud-hosted WebUI on stable DSH 0.1.1-rc.2
+
+Stable DSH 0.1.1-rc.2 is the recommended registry target. Its secure default lets a trusted remote browser use ordinary Mnemon reads and activation, but keeps settings, backups, Provider connections, and broad mutations on loopback. A cloud page may therefore open while the Memory System cannot load its settings or complete writes.
+
+Use the following procedure only when the public entry already has reliable user authentication:
+
+1. Terminate HTTPS and authenticate users at a reverse proxy or access gateway. Proxy the same-origin `/` and `/api` traffic, including streams, to `http://127.0.0.1:3080` while preserving the external `Host` authority. DSH's trusted-host check is a Host/Origin fence, not authentication.
+2. Open the Web profile patch at `~/.dsh/profiles/web/cordis.patch.yml`, or `$DSH_HOME/profiles/web/cordis.patch.yml` when `DSH_HOME` is set. If it already has a top-level `- id: mnemon` entry, edit that entry instead of adding a duplicate. If the initialized file still ends in the empty-array marker `[]`, replace that marker with the complete row below; otherwise append the row to the existing top-level YAML list:
+
+   ```yaml
+   - id: mnemon
+     config:
+       routingGuidance: true
+       lifecycleEnabled: true
+       recallMode: guided
+       writebackMode: guided
+       idleReviewMs: 30000
+       tabEnabled: true
+       writeEnabled: true
+       remoteAccess: trusted-host
+       timeoutMs: 10000
+       defaultRecallLimit: 10
+       embedding:
+         enabled: false
+         endpoint: http://localhost:11434
+         model: nomic-embed-text
+       recallQuality:
+         policy: strict-v1
+         lowScoreThreshold: 0.25
+         highScoreThreshold: 0.6
+         candidateMultiplier: 3
+         maxMediumResults: 4
+         maxUnknownResults: 2
+   ```
+
+   A profile patch replaces the targeted row's complete `config` instead of deep-merging one field. Preserve any existing Mnemon customizations, and compare this row with `dsh web --dump-default-config` after upgrading dsh-mnemon so new bundled defaults are not masked.
+3. Inspect the effective tree with `dsh web --dump-config`. Confirm that the final `mnemon` row contains `remoteAccess: trusted-host` and that stderr reports no unmatched `mnemon` target.
+4. Start the loopback service with the external authority. Use a bare `host[:port]`, not a URL:
+
+   ```sh
+   dsh web --trusted-host memory.example.com --no-open
+   ```
+
+   For a non-default public port, use the exact authority, for example `memory.example.com:8443`. DSH 0.1.1-rc.2 deliberately rejects `--host 0.0.0.0`; keep the service on loopback and let the authenticated proxy or an SSH tunnel reach it.
+5. Restart the Host after changing `remoteAccess` because Mnemon captures this policy at startup. Open the external HTTPS URL, pass the proxy's authentication, then verify that **Status** and **Settings → Memory System** both load and that an intentional small settings save succeeds.
+
+If the browser receives a Host/Origin rejection, check `--trusted-host`, the public port, and whether the proxy preserves `Host`. If reads work but settings or writes remain unavailable, check the effective `mnemon` row and confirm that the Host was restarted.
+
+DSH 0.1.2-alpha.5 is a preview compatibility target with a different security model: it ignores `remoteAccess` and authenticates every RPC and stream through the browser session created by its one-time launch token and signed cookie. Keep the row above for safe rollback to rc.2, but after every alpha Host restart or public-authority change, open the launch URL printed by DSH to establish a fresh cookie. HTTPS and deployment access controls remain recommended.
+
 ## Security boundaries
 
 ### Process

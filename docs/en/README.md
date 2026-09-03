@@ -25,6 +25,7 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 | Understand workspace inspection versus the Agent's effective directory | [UI guide: Workspace mode](./ui-guide.md#workspace-mode-separating-inspection-from-execution) |
 | Check or update Mnemon and dsh-mnemon | [Operations: Version checks and updates](./operations.md#version-checks-and-updates) |
 | Back up, restore, or migrate the complete memory root | [Operations: Backup and recovery](./operations.md#backup-and-recovery) |
+| Publish the WebUI behind a cloud hostname | [Operations: Cloud-hosted WebUI](./operations.md#cloud-hosted-webui) |
 | Troubleshoot empty recall, misalignment, CLI, or provider errors | [Operations and troubleshooting](./operations.md#troubleshooting) |
 | Use model tools, `/mnemon` commands, or internal RPC | [Interface reference](./interfaces.md) |
 | Understand Host, workers, control plane, and data plane | [Architecture](./architecture.md) |
