@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { HostConnectionHandle, HostSettingsService } from '../src/contracts.ts'
-import { createSettingsHandler, registerSettingsRpc } from '../src/settings.ts'
-import { MNEMON_SETTINGS_CHANNEL } from '../src/shared/contracts.ts'
+import type { HostConnectionHandle, HostSettingsService } from "../src/host/dsh.ts"
+import { createSettingsHandler, registerSettingsRpc } from "../src/host/settings.ts"
+import { MNEMON_SETTINGS_CHANNEL } from "../src/host/protocol.ts"
 
 describe('Mnemon settings bridge', () => {
   it('supplies the rc.2 authority object accepted and ignored by the alpha API', () => {

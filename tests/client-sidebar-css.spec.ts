@@ -3,17 +3,27 @@ import { describe, expect, it } from 'vitest'
 
 const sidebarCss = readFileSync(new URL('../src/client/MnemonSidebarView.module.css', import.meta.url), 'utf8')
 const workspaceCss = readFileSync(new URL('../src/client/MnemonWorkspace.module.css', import.meta.url), 'utf8')
+const viewCss = readFileSync(new URL('../src/client/MnemonView.module.css', import.meta.url), 'utf8')
 
 const sidebarSurface = 'var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base))'
 
 describe('Sidebar layout invariants', () => {
-  it('keeps an opaque backing behind the workspace under transparent-base skins', () => {
+  it('keeps the workspace surfaces opaque under transparent-base skins with a default-theme fallback', () => {
+    expect(viewCss).toContain('--mn-bg: var(--dsw-alias-bg-base);')
+    expect(viewCss).toContain('--mn-backdrop: var(--dsw-alias-bg-overlay, var(--mn-bg));')
+    expect(viewCss).toContain('--mn-surface: linear-gradient(var(--mn-bg), var(--mn-bg)), linear-gradient(var(--mn-backdrop), var(--mn-backdrop)) var(--mn-bg);')
+    expect(sidebarCss).toContain('.shell.shell {\n  background: var(--mn-surface);')
     expect(workspaceCss).toContain(`background: ${sidebarSurface};`)
   })
 
-  it('anchors and hides the takeover inside the DSH advanced-mode conversation surface', () => {
-    expect(workspaceCss).toContain('.dshDesktopConversationSurface {\n  position: relative;')
-    expect(workspaceCss).toContain("html[data-dsh-mnemon-active]:not([data-dsh-taskboard-active]):not([data-dsh-ssh-active]) .dshDesktopConversationSurface > :not([data-dsh-mnemon-view])")
+  it('keeps the sidebar artifact launcher-only and never hides DSH conversation content', () => {
+    expect(workspaceCss).toContain('.entry {')
+    expect(workspaceCss).toContain('.workspacePanel > * {')
+    expect(workspaceCss).toContain('width: 100%;')
+    expect(workspaceCss).toContain('flex: 1 1 auto;')
+    expect(workspaceCss).not.toContain('[data-dsh-mnemon-view]')
+    expect(workspaceCss).not.toContain('data-dsh-mnemon-active')
+    expect(workspaceCss).not.toContain('.dshDesktopConversationSurface')
   })
 
   it('pins primary page headers at the canvas origin without an initial sticky settling distance', () => {
@@ -23,6 +33,15 @@ describe('Sidebar layout invariants', () => {
 
   it('keeps the connected label visible in the compact Sidebar header', () => {
     expect(sidebarCss).toContain(".shell .statusCluster > span:not([class*='statusDot']) { display: inline; }")
+  })
+
+  it('keeps DSH as the only sidebar and preserves the established Mnemon tab strip', () => {
+    expect(viewCss).toContain('.workspace { display: flex; min-height: 0; flex: 1; flex-direction: column; }')
+    expect(viewCss).toContain('.topNavigation { display: flex;')
+    expect(sidebarCss).toContain('.shell .topNavigation {\n  min-height: 0;')
+    expect(sidebarCss).toContain('border-bottom-color: var(--dsw-alias-state-business-primary);')
+    expect(viewCss).not.toContain('.sideNavigation')
+    expect(sidebarCss).not.toContain('.sideNavigation')
   })
 
   it('renders runtime metadata as real chips while keeping form values at normal weight', () => {

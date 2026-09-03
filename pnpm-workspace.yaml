@@ -1,5 +1,10 @@
 packages:
-  - packages/*
+  - plugins/*
+
+# Author packages use normal semver peers; the workspace links those peers only
+# for local development. Packed/extracted packages have no workspace dependency.
+linkWorkspacePackages: true
+preferWorkspacePackages: true
 
 allowBuilds:
   '@deepseek-ai/dsh-subprocess-local': true

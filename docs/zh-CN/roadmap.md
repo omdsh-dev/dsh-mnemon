@@ -6,8 +6,8 @@ Roadmap 记录当前实现之外的工作，不是已交付能力承诺。优先
 
 ## 版本边界
 
-- **v0.4：Sidebar 优先。** 保留 v0.3 架构与记忆数据格式。v0.4.0 最初移除了 builtin 展示；[v0.4.2](./releases/v0.4.2.md) 恢复可选 `displayMode: builtin`，只改变入口位置并共用 Sidebar 界面，不维护独立布局。[v0.4.0 发布说明](./releases/v0.4.0.md)仍保留为历史发布记录。
-- **v0.5：计划中的完整 view-based 升级。** 在共用工作台基础上独立开发和验证架构升级。这项工作不包含在 v0.4.0 中，发布 v0.4 不代表新架构已就绪。
+- **v0.4：Sidebar 优先。** 保留 v0.3 架构与记忆数据格式。v0.4.0 最初移除 builtin；[v0.4.2](./releases/v0.4.2.md) 恢复可选 `displayMode: builtin`，共用同一界面；[v0.4.3](./releases/v0.4.3.md) 修复折叠侧栏图标。v0.4.0 说明保留为历史发布记录。
+- **v0.5：View-based 插件 RC。** 架构升级保留共用工作台，并以可独立验证的插件发布，参见 [RC 范围](./releases/v0.5.0-rc.1.md)。SDK 仍处于预发布阶段，扩展 ABI 尚未冻结。
 
 ## P0：可靠性与可恢复调度
 
@@ -21,7 +21,6 @@ Roadmap 记录当前实现之外的工作，不是已交付能力承诺。优先
 ## P1：长期维护与数据运维
 
 - [ ] **动态 Memory Space Provider Catalog**：把 Provider 描述符、连接 schema、凭据脱敏、发现与 Factory 一起注册，使新 Provider 插件无需修改内置 union 或 WebUI。
-- [ ] **全路径 Kernel 化与持久回执**：把现有兼容 controller 流逐步收敛到统一 Plan/Execute/Receipt，并为审计、重试和跨重启比较持久化有界回执。
 - [ ] **Strategy 制品晋级流水线**：提供 schema/类型检查、golden replay、shadow、canary、签名、版本回退和指标比较，让模型生成策略只能通过受控制品进入 active 拓扑。
 - [ ] **跨 session 长期整理**：基于时间和新增 session 数触发独立整理，而不是复用逐 turn 审查。
 - [ ] **Mnemon GC / forget 审阅**：生成衰减、冲突、过时内容和孤立关系候选，展示证据后再执行删除。
@@ -37,7 +36,7 @@ Roadmap 记录当前实现之外的工作，不是已交付能力承诺。优先
 
 - [ ] **后台审查历史**：展示最近评分、checkpoint、等待/运行/失败、worker 回执和产生的变更。
 - [ ] **切换到 DSH 通用目录选择器**（等待 [dsh-external/issues#603](https://github.com/dsh-external/issues/issues/603)）：当前自定义存储暂用手动填写 Host 路径，以避开远端 `browse` 部署无法调用 `native` picker 的问题；DSH 暴露插件可复用的 directory-picker 服务后，改用由能力提供方统一选择 native / browse 的流程，并仅在必要时保留手动输入作为兜底。
-- [ ] **完整国际化**：覆盖命令、工具卡、Host 错误、兼容默认元数据和确认文案。
+- [ ] **完整国际化**：覆盖命令、工具卡、Host 错误、默认元数据和确认文案。
 - [ ] **多记忆体 E2E**：覆盖自动建空间、跨空间召回、一次迁移分流、多种边、合并和受控 forget。
 - [ ] **URL 子路径部署矩阵**：为 `/prefix/` 下的 DSH 外壳、静态资源、插件资源、RPC/API 和 WebSocket 建立真实反代 E2E；dsh-mnemon 客户端继续只通过宿主 `connection` 通信，宿主则需提供统一 base URL，避免根路径资源导致“页面可开、插件请求失败”的半可用状态。
 - [ ] **容量与故障注入**：真实触发 USER/MEMORY 边界、Document LRU、revision 冲突、CLI 超时和 Host 中途重启。
@@ -46,7 +45,7 @@ Roadmap 记录当前实现之外的工作，不是已交付能力承诺。优先
 
 ## 当前明确不在范围内
 
-- 模型生成代码后立即在 Host 内自动执行；当前只提供 manifest、权限封装、replay 与 Kernel 校验原语。
+- 自动执行模型生成代码；当前边界是 manifest、纯 Strategy 回放、协议校验和运行代替换，受信任安装仍需明确进行。
 - 把 Cordis isolate 当作不可信插件的安全沙箱；第三方 executor 和 Strategy 仍须来自受信任包。
 - Runtime `daily` target；当前只维护 `user` 和 `memory`。
 - 没有明确触达语义的主动通知守护进程；Mnemon 仍是按需拉取系统。

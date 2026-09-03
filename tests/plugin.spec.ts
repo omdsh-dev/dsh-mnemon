@@ -2,11 +2,14 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ToolDefinition } from '../src/contracts.ts'
+import type { ToolDefinition, HostAgent } from "../src/host/dsh.ts"
 import { apply, inject } from '../src/index.ts'
-import { MnemonSubagentCoordinator } from '../src/subagent.ts'
-import { registerTools } from '../src/tools.ts'
-import { memoryExtensions } from '../packages/extension-sdk/src/index.ts'
+import { MnemonSubagentCoordinator } from "../src/host/subagent.ts"
+import { registerTools } from "../src/host/tools.ts"
+import { MemoryRuntime } from '../src/core/runtime.ts'
+import type { MnemonMemoryService } from 'dsh-mnemon/extension-sdk'
+import { compositionFixture } from './fixtures/composition.ts'
+import { agentScope } from '../src/host/runtime.ts'
 
 const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
   dsh: { client: { inject: string[]; platform: string } }
@@ -16,10 +19,14 @@ const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.
 }
 const lockfile = readFileSync(new URL('../pnpm-lock.yaml', import.meta.url), 'utf8')
 const workspaceConfig = readFileSync(new URL('../pnpm-workspace.yaml', import.meta.url), 'utf8')
+const bundlePatch = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
 
 const directories: string[] = []
 
-afterEach(() => {
+const releases: Array<() => unknown> = []
+afterEach(async () => {
+  for (const release of releases.splice(0).reverse()) await release()
+  vi.restoreAllMocks()
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
 })
 
@@ -44,7 +51,9 @@ function context(options: { connection?: boolean; workspaceRegistry?: boolean } 
   const commands: unknown[] = []
   const listeners: unknown[] = []
   const effectCleanups: Array<() => unknown> = []
+  const services = new Map<string, unknown>()
   const ctx = {
+    provide: vi.fn((name: string, value: unknown) => { services.set(name, value) }),
     tools: { register: vi.fn((tool: unknown) => { tools.push(tool) }) },
     commands: { register: vi.fn((command: unknown) => { commands.push(command) }) },
     settings: {
@@ -68,7 +77,7 @@ function context(options: { connection?: boolean; workspaceRegistry?: boolean } 
         }
       }
       if (name === 'workspaceRegistry' && 'workspaceRegistry' in ctx) return ctx.workspaceRegistry
-      return undefined
+      return services.get(name)
     }),
     inject: vi.fn((services: string[], callback: (value: unknown) => void) => {
       if (services.includes('connection') && !('connection' in ctx)) return
@@ -87,7 +96,23 @@ function context(options: { connection?: boolean; workspaceRegistry?: boolean } 
   }
   if (options.connection !== false) Object.assign(ctx, { connection })
   if (options.workspaceRegistry !== false) Object.assign(ctx, { workspaceRegistry: { get: vi.fn(), list: vi.fn(() => []) } })
+  releases.push(async () => { for (const cleanup of effectCleanups.splice(0).reverse()) await cleanup() })
   return { ctx, tools, sections, contexts, variables, channels, registrations, commands, listeners, effectCleanups }
+}
+
+async function installStarter(target: ReturnType<typeof context>) {
+  const assembled = await compositionFixture()
+  releases.push(assembled.dispose)
+  const core = target.ctx.get('mnemonMemory') as MnemonMemoryService
+  const installed = assembled.extensions.contributionSnapshot()
+  for (const item of [...installed.sources, ...installed.strategies]) {
+    releases.push(core.installContributions(item.kind === 'source' ? { sources: [item.definition] } : { strategies: [item.definition] }, {
+      instanceId: item.provenance.entryId,
+      ...(item.provenance.artifactDigest === undefined ? {} : { artifactDigest: item.provenance.artifactDigest }),
+      ...(item.kind !== 'source' || item.effectiveDigest === undefined ? {} : { effectiveDigest: item.effectiveDigest }),
+    }))
+  }
+  return core
 }
 
 describe('dsh-mnemon plugin composition', () => {
@@ -105,8 +130,7 @@ describe('dsh-mnemon plugin composition', () => {
     const releaseAgeExclusions = [...workspaceConfig.matchAll(/^  - '(@deepseek-ai\/dsh(?:-[a-z0-9-]+)?@0\.1\.2-rc\.1)'$/gm)]
       .map(match => match[1])
 
-    expect(manifest.devDependencies[legacyProjection]).toBe('npm:@deepseek-ai/dsh-session-projection@0.1.0-rc.8')
-    expect(directDshDependencies).toHaveLength(22)
+    expect(directDshDependencies).toHaveLength(23)
     expect(new Set(directDshDependencies.map(([, version]) => version))).toEqual(new Set(['0.1.2-rc.1']))
     expect(manifest.engines.node).toBe('>=20')
     expect(manifest.peerDependencies['@deepseek-ai/dsh-client-ui-primitives']).toContain('^0.1.1-rc.1')
@@ -122,14 +146,53 @@ describe('dsh-mnemon plugin composition', () => {
     expect(inject).toEqual(['tools', 'settings', 'commands', 'agents', 'subagents'])
   })
 
+  it('owns legacy display migration at startup, on external edits and until Host disposal', async () => {
+    const fixture = context({ connection: false })
+    const base = { cliPath: '/fake/mnemon', dataDir: dataDir(), displayMode: 'buildin' as const }
+    let user: Record<string, unknown> = {}
+    let revision = 1
+    const mutate = vi.fn(async (namespace: string, ops: Array<{ path: string[]; value: unknown }>, expected: number) => {
+      expect(namespace).toBe('mnemon')
+      expect(expected).toBe(revision)
+      expect(ops).toEqual([{ op: 'set', path: ['displayMode'], value: 'builtin' }])
+      user = { ...user, displayMode: ops[0]!.value }
+      revision += 1
+    })
+    Object.assign(fixture.ctx.settings, {
+      writable: true,
+      describe: () => [{ ns: 'mnemon', base, user, value: { ...base, ...user }, revision, applies: 'live' }],
+      mutate,
+    })
+    apply(fixture.ctx as never, base)
+    await vi.waitFor(() => expect(mutate).toHaveBeenCalledTimes(1))
+    expect(user).toEqual({ displayMode: 'builtin' })
+    const updated = (fixture.listeners as Array<[string, (namespace: string) => void]>)
+      .find(([name]) => name === 'settings/document-updated')![1]
+    user = { displayMode: 'buildin', timeoutMs: 25000 }
+    revision += 1
+    updated('unrelated')
+    expect(mutate).toHaveBeenCalledTimes(1)
+    updated('mnemon')
+    await vi.waitFor(() => expect(mutate).toHaveBeenCalledTimes(2))
+    expect(user).toEqual({ displayMode: 'builtin', timeoutMs: 25000 })
+    updated('mnemon')
+    expect(mutate).toHaveBeenCalledTimes(2)
+    for (const cleanup of fixture.effectCleanups.splice(0).reverse()) await cleanup()
+    user = { displayMode: 'buildin' }
+    revision += 1
+    updated('mnemon')
+    expect(mutate).toHaveBeenCalledTimes(2)
+    expect(user).toEqual({ displayMode: 'buildin' })
+  })
+
   it('mounts its complete Agent surface without Web-only Host services', () => {
     const fixture = context({ connection: false, workspaceRegistry: false })
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
 
-    expect(fixture.tools).toHaveLength(13)
+    expect(fixture.tools).toHaveLength(15)
     expect(fixture.sections).toEqual([expect.objectContaining({ name: 'mnemon:routing' })])
     expect(fixture.contexts).toEqual([])
-    expect(fixture.variables).toHaveLength(1)
+    expect(fixture.variables).toEqual([])
     expect(fixture.commands).toEqual([expect.objectContaining({ name: 'mnemon' })])
     expect(fixture.channels).toEqual([])
   })
@@ -138,6 +201,7 @@ describe('dsh-mnemon plugin composition', () => {
     const fixture = context({ workspaceRegistry: false })
     const workspace = dataDir()
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', storageScope: 'workspace' })
+    await installStarter(fixture)
     Object.assign(fixture.ctx, {
       workspaceRegistry: {
         get: (id: string) => id === 'late-workspace' ? { id, title: 'Late Workspace', path: workspace } : undefined,
@@ -168,10 +232,18 @@ describe('dsh-mnemon plugin composition', () => {
     })
   })
 
+  it('anchors client discovery on the Host Entry while the Starter declares every plugin', () => {
+    expect(bundlePatch).toMatch(/- id: mnemon\n(?:\s+#.*\n)*\s+name: dsh-mnemon\n/u)
+    expect(bundlePatch).not.toContain('bundledContributions')
+    expect(bundlePatch).not.toContain('name: dsh-mnemon/core')
+  })
+
   it('registers the full tool surface, guidance, and split RPC channels', () => {
     const fixture = context()
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
     expect(fixture.tools.map(tool => (tool as { name: string }).name)).toEqual([
+      'mnemon_view_route',
+      'mnemon_view_action',
       'mnemon_memory_bodies',
       'mnemon_recall',
       'mnemon_related',
@@ -195,19 +267,22 @@ describe('dsh-mnemon plugin composition', () => {
     expect(recallTool.description).toContain('only when the current question needs history')
     expect(fixture.sections).toEqual([expect.objectContaining({ name: 'mnemon:routing' })])
     expect(fixture.contexts).toEqual([])
-    expect(fixture.variables).toHaveLength(1)
+    expect(fixture.variables).toEqual([])
     const guidance = (fixture.sections[0] as { text: () => string }).text()
-    expect(guidance).toContain('Call mnemon_recall')
-    expect(guidance).toContain('never infer a missing historical rule')
+    expect(guidance).toContain('mnemon_view_route')
+    expect(guidance).toContain('Never infer missing historical facts')
+    expect(guidance).not.toMatch(/Documents|mnemon_recall|mnemon_runtime_memory/)
     expect(guidance.length).toBeLessThan(360)
     expect(guidance).not.toContain('RECALL RESULT')
     expect(fixture.commands).toEqual([expect.objectContaining({ name: 'mnemon' })])
-    expect(fixture.channels).toHaveLength(5)
+    expect(fixture.channels).toHaveLength(7)
     expect(fixture.channels).toEqual(expect.arrayContaining([
       ['/dsh-mnemon-activation', expect.anything(), { authority: 'trusted-host' }],
       ['/dsh-mnemon-pack', expect.anything(), { authority: 'loopback' }],
     ]))
     expect(fixture.registrations).toEqual([
+      expect.arrayContaining(['mnemon-view', expect.anything(), expect.objectContaining({ applies: 'live', base: { entries: {} } })]),
+      expect.arrayContaining(['mnemon-plugins', expect.anything(), expect.objectContaining({ applies: 'live', base: { sources: {} } })]),
       expect.arrayContaining(['mnemon', expect.anything(), expect.objectContaining({ applies: 'live' })]),
       expect.arrayContaining(['mnemon-ui', expect.anything(), expect.objectContaining({ applies: 'live', base: { turnBar: true, saveAction: true } })]),
     ])
@@ -216,20 +291,21 @@ describe('dsh-mnemon plugin composition', () => {
   it('preserves rc.2 channel authorities with one call shape accepted by the authenticated alpha API', () => {
     const fixture = context()
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
-    for (const channel of ['/dsh-mnemon-write', '/dsh-mnemon-settings', '/dsh-mnemon-pack']) {
+    for (const channel of ['/dsh-mnemon-write', '/dsh-mnemon-settings', '/dsh-mnemon-pack', '/dsh-mnemon-view-settings']) {
       expect(fixture.channels).toEqual(expect.arrayContaining([
         [channel, expect.anything(), { authority: 'loopback' }],
       ]))
     }
     expect(fixture.channels).toEqual(expect.arrayContaining([
       ['/dsh-mnemon-read', expect.anything(), { authority: 'trusted-host' }],
+      ['/dsh-mnemon-view', expect.anything(), { authority: 'trusted-host' }],
     ]))
   })
 
-  it('promotes all rc.2 management channels only through the startup compatibility setting', () => {
+  it('promotes management channels only through the explicit startup setting', () => {
     const fixture = context()
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir(), remoteAccess: 'trusted-host' })
-    for (const channel of ['/dsh-mnemon-write', '/dsh-mnemon-settings', '/dsh-mnemon-pack']) {
+    for (const channel of ['/dsh-mnemon-write', '/dsh-mnemon-settings', '/dsh-mnemon-pack', '/dsh-mnemon-view-settings']) {
       expect(fixture.channels).toEqual(expect.arrayContaining([
         [channel, expect.anything(), { authority: 'trusted-host' }],
       ]))
@@ -239,12 +315,12 @@ describe('dsh-mnemon plugin composition', () => {
   it('keeps stable live surfaces while fencing every mutation in read-only mode', async () => {
     const fixture = context()
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir(), writeEnabled: false })
-    expect(fixture.tools).toHaveLength(13)
+    expect(fixture.tools).toHaveLength(15)
     const runtimeTool = fixture.tools.find(tool => (tool as { name: string }).name === 'mnemon_runtime_memory') as {
       execute: (args: unknown, execution: unknown) => Promise<unknown>
     }
     expect(() => runtimeTool.execute({ action: 'add', target: 'memory', content: 'blocked' }, { signal: new AbortController().signal })).toThrow('read-only')
-    expect(fixture.channels).toHaveLength(5)
+    expect(fixture.channels).toHaveLength(7)
     expect(fixture.channels).toEqual(expect.arrayContaining([
       ['/dsh-mnemon-activation', expect.anything(), { authority: 'trusted-host' }],
       ['/dsh-mnemon-pack', expect.anything(), { authority: 'loopback' }],
@@ -252,110 +328,66 @@ describe('dsh-mnemon plugin composition', () => {
     expect(fixture.contexts).toEqual([])
   })
 
-  it('offers compact recent-document suggestions when a cross-language query has no exact match', async () => {
-    const fixture = context()
-    const workspace = dataDir()
-    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
-    const tools = fixture.tools as Array<{
-      name: string
-      execute: (args: unknown, execution: unknown) => Promise<unknown>
-    }>
-    const agent = {
-      id: 'document-worker',
-      options: {},
-      session: { header: { origin: 'subagent', cwd: workspace }, events: [] },
-    }
-    const execution = { agent, signal: new AbortController().signal }
-    await tools.find(tool => tool.name === 'mnemon_document_manage')!.execute({
-      action: 'create',
-      title: 'Cold Archive Transaction Contract',
-      description: 'Write-ahead archival ordering and recovery invariants.',
+  it('offers bounded Source-owned suggestions when a cross-language query has no exact match', async () => {
+    const f = await compositionFixture()
+    releases.push(f.dispose)
+    await f.graph.source('documents').mutate('mutate', {
+      action: 'create', title: 'Cold Archive Transaction Contract', description: 'Write-ahead archival ordering and recovery invariants.',
       content: 'Land the durable cold reference before moving the managed original.',
-    }, execution)
-
-    const result = await tools.find(tool => tool.name === 'mnemon_document_search')!.execute({
-      query: '冷归档不变量',
-    }, execution) as { total: number; results: unknown[]; suggestions: Array<{ title: string }>; suggestionHint: string }
-
-    expect(result.total).toBe(0)
+    })
+    const root = { id: 'root', session: { header: { cwd: f.workspace }, events: [] } } as unknown as HostAgent
+    await f.graph.composableTurns.beginTurn('root:documents', agentScope(root, f.config), 'test')
+    const tools: ToolDefinition[] = []
+    const coordinator = new MnemonSubagentCoordinator({ list: () => [], getProvider: () => undefined, start: vi.fn() } as never, f.live)
+    registerTools({ tools: { register: (tool: ToolDefinition) => { tools.push(tool) } } } as never, f.live, coordinator)
+    const result = await tools.find(tool => tool.name === 'mnemon_document_search')!.execute({ query: '冷归档不变量' } as never, { agent: root, signal: new AbortController().signal }) as { results: unknown[]; suggestions: unknown[]; suggestionHint: string }
     expect(result.results).toEqual([])
-    expect(result.suggestions).toEqual([expect.objectContaining({ title: 'Cold Archive Transaction Contract' })])
-    expect(result.suggestionHint).toContain('mnemon_recall')
-    expect(result.suggestionHint).toContain('rather than repeating Document search')
+    expect(result.suggestions).toEqual([expect.objectContaining({
+      excerpt: expect.stringContaining('Land the durable cold reference'),
+      title: 'Cold Archive Transaction Contract',
+    })])
+    expect(result.suggestionHint).toContain('No exact match.')
+    f.graph.composableTurns.endTurn('root:documents')
   })
 
-  it('returns bounded query-local document evidence without managed-record internals', async () => {
-    const fixture = context()
-    const workspace = dataDir()
-    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
-    const tools = fixture.tools as Array<{
-      name: string
-      execute: (args: unknown, execution: unknown) => Promise<unknown>
-    }>
-    const agent = {
-      id: 'document-boundary-worker',
-      options: {},
-      session: { header: { origin: 'subagent', cwd: workspace }, events: [] },
-    }
-    const execution = { agent, signal: new AbortController().signal }
+  it('returns bounded query-local evidence without copying managed record internals', async () => {
+    const f = await compositionFixture()
+    releases.push(f.dispose)
     const needle = 'TENANT-SKEW-NEEDLE-729'
-    await tools.find(tool => tool.name === 'mnemon_document_manage')!.execute({
-      action: 'create',
-      title: 'Long incident record',
-      description: 'A deliberately long managed record.',
-      sourcePaths: ['reports/incident.md'],
-      content: `${'before '.repeat(1_500)}${needle}\n${'after '.repeat(1_500)}`,
-    }, execution)
-
-    const result = await tools.find(tool => tool.name === 'mnemon_document_search')!.execute({ query: needle }, execution) as {
-      results: Array<Record<string, unknown> & { content: string }>
-      hint: string
-    }
-
+    await f.graph.source('documents').mutate('mutate', {
+      action: 'create', title: 'Long incident record', description: 'A deliberately long managed record.', sourcePaths: ['reports/incident.md'],
+      content: 'before '.repeat(1_500) + needle + '\n' + 'after '.repeat(1_500),
+    })
+    const root = { id: 'root', session: { header: { cwd: f.workspace }, events: [] } } as unknown as HostAgent
+    await f.graph.composableTurns.beginTurn('root:documents', agentScope(root, f.config), 'test')
+    const tools: ToolDefinition[] = []
+    const coordinator = new MnemonSubagentCoordinator({ list: () => [], getProvider: () => undefined, start: vi.fn() } as never, f.live)
+    registerTools({ tools: { register: (tool: ToolDefinition) => { tools.push(tool) } } } as never, f.live, coordinator)
+    const result = await tools.find(tool => tool.name === 'mnemon_document_search')!.execute({ query: needle } as never, { agent: root, signal: new AbortController().signal }) as { results: Array<{ content: string }> }
     expect(result.results).toHaveLength(1)
     expect(result.results[0]!.content).toContain(needle)
     expect(result.results[0]!.content.length).toBeLessThanOrEqual(2_600)
-    expect(result.results[0]).not.toHaveProperty('contentHash')
-    expect(result.results[0]).not.toHaveProperty('revision')
-    expect(result).not.toHaveProperty('generatedAt')
+    expect(JSON.stringify(result)).not.toMatch(/contentHash|generatedAt|indexPath|directory/)
     expect(JSON.stringify(result).length).toBeLessThan(8_000)
-    expect(result.hint).toContain('do not repeat Document search')
+    f.graph.composableTurns.endTurn('root:documents')
   })
 
-  it('does not repeat Documents I/O after a pinned root turn spends its search slot', async () => {
-    const registered: ToolDefinition[] = []
-    const controller = {
-      search: vi.fn(async (query: string) => ({ query, includeArchived: false, total: 0, results: [] })),
-      snapshot: vi.fn(() => ({ documents: [] })),
-    }
-    const documents = {
-      forAgent: vi.fn(() => controller),
-    }
-    const memoryViews = {
-      activeTurn: vi.fn().mockReturnValue({ turnId: 'root:documents', viewId: 'view-documents' }),
-      sourceState: vi.fn(() => ({ memoryBodyIds: ['project'] })),
-    }
-    const runtime = {
-      config: { memoryTopology: undefined },
-      forAgent: vi.fn(() => ({
-        service: { config: { memoryTopology: undefined } },
-        runtimeMemory: {},
-        documents,
-        memoryViews,
-      })),
-    }
-    const coordinator = new MnemonSubagentCoordinator(
-      { list: () => [], getProvider: () => undefined, start: vi.fn() } as never,
-      runtime as never,
-    )
-    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as never, runtime as never, coordinator)
-    const tool = registered.find(candidate => candidate.name === 'mnemon_document_search')!
-    const execution = { agent: { id: 'root', options: {}, session: { header: {}, events: [] } }, signal: new AbortController().signal }
-
-    const first = await tool.execute({ query: 'ORCHID-47 root cause' } as never, execution as never)
-    expect(first).not.toHaveProperty('notRun')
-    await expect(tool.execute({ query: 'incident ORCHID generation key' } as never, execution as never)).resolves.toMatchObject({ notRun: true, results: [] })
-    expect(controller.search).toHaveBeenCalledOnce()
+  it('shares one Documents route claim across the pinned root turn', async () => {
+    const f = await compositionFixture()
+    releases.push(f.dispose)
+    const root = { id: 'root', session: { header: { cwd: f.workspace }, events: [] } } as unknown as HostAgent
+    const turn = await f.graph.composableTurns.beginTurn('root:documents', agentScope(root, f.config), 'test')
+    const route = turn.view.routes.find(route => route.sourceRouteId === 'search')!
+    const execute = vi.spyOn(f.graph.memoryComposition.current()!.sourceRuntime(route.sourceInstanceKey)!, 'query')
+    const tools: ToolDefinition[] = []
+    const coordinator = new MnemonSubagentCoordinator({ list: () => [], getProvider: () => undefined, start: vi.fn() } as never, f.live)
+    registerTools({ tools: { register: (tool: ToolDefinition) => { tools.push(tool) } } } as never, f.live, coordinator)
+    const tool = tools.find(candidate => candidate.name === 'mnemon_document_search')!
+    const execution = { agent: root, signal: new AbortController().signal }
+    expect(await tool.execute({ query: 'ORCHID-47 root cause' } as never, execution)).not.toHaveProperty('notRun')
+    expect(await tool.execute({ query: 'incident ORCHID generation key' } as never, execution)).toMatchObject({ notRun: true, results: [] })
+    expect(execute).toHaveBeenCalledOnce()
+    f.graph.composableTurns.endTurn('root:documents')
   })
 
   it('keeps guidance and Web RPC registrations stable while their live values are disabled', () => {
@@ -366,7 +398,7 @@ describe('dsh-mnemon plugin composition', () => {
     ])
     expect(fixture.contexts).toEqual([])
     expect((fixture.sections[0] as { text: () => string }).text()).toBe('')
-    expect(fixture.channels).toHaveLength(5)
+    expect(fixture.channels).toHaveLength(7)
   })
 
   it('atomically switches the same live RPC faces after settings validation', async () => {
@@ -392,6 +424,7 @@ describe('dsh-mnemon plugin composition', () => {
     const invalidRoot = join(dataDir(), 'not-a-directory')
     writeFileSync(invalidRoot, 'occupied')
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', storageScope: 'custom', dataDir: initialRoot })
+    await installStarter(fixture)
     const packRegistration = fixture.channels.find(channel => (channel as unknown[])[0] === '/dsh-mnemon-pack') as [string, (endpoint: string, payload: unknown) => Promise<{ ok: boolean; value?: { root: string } }>]
     const coreRegistration = fixture.registrations.find(registration => (registration as unknown[])[0] === 'mnemon') as [string, unknown, { validate: (value: object) => void }]
 
@@ -399,20 +432,20 @@ describe('dsh-mnemon plugin composition', () => {
     await expect(packRegistration[1]('target', {})).resolves.toMatchObject({ ok: true, value: { root: initialRoot } })
   })
 
-  it('retires uncommitted settings candidates and disposes the active runtime with the Cordis effect', async () => {
+  it('retires uncommitted candidates and closes every graph with the Cordis effect', async () => {
     const fixture = context()
-    const targets = (memoryExtensions as unknown as { targets: Set<unknown> }).targets
-    const baseline = targets.size
+    const attach = vi.spyOn(MemoryRuntime.prototype, 'attachGeneration')
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
-    expect(targets.size).toBe(baseline + 1)
-
+    expect(attach).toHaveBeenCalledOnce()
+    const active = attach.mock.results[0]!.value as ReturnType<MemoryRuntime['attachGeneration']>
     const coreRegistration = fixture.registrations.find(registration => (registration as unknown[])[0] === 'mnemon') as [string, unknown, { validate: (value: object) => void }]
     coreRegistration[2].validate({ cliPath: '/fake/mnemon', dataDir: dataDir() })
-    expect(targets.size).toBe(baseline + 2)
+    expect(attach).toHaveBeenCalledTimes(2)
+    const candidate = attach.mock.results[1]!.value as ReturnType<MemoryRuntime['attachGeneration']>
     await Promise.resolve()
-    expect(targets.size).toBe(baseline + 1)
-
-    for (const cleanup of fixture.effectCleanups.splice(0).reverse()) cleanup()
-    expect(targets.size).toBe(baseline)
+    expect(() => candidate.host.acquire()).toThrow('disposed')
+    for (const cleanup of fixture.effectCleanups.splice(0).reverse()) await cleanup()
+    expect(() => active.host.acquire()).toThrow('disposed')
+    expect(() => (fixture.ctx.get('mnemonMemory') as MnemonMemoryService).installContributions({}, { instanceId: 'closed' })).toThrow('disposed')
   })
 })

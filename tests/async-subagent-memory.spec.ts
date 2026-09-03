@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { HostAgent, HostContextShape, HostSessionEvent } from '../src/contracts.ts'
-import { MnemonLifecycle } from '../src/lifecycle.ts'
-import { LiveMnemonRuntime } from '../src/live-runtime.ts'
-import { MnemonSubagentCoordinator } from '../src/subagent.ts'
+import type { HostAgent, HostContextShape, HostSessionEvent } from '../src/host/dsh.ts'
+import { MnemonLifecycle } from '../src/host/lifecycle.ts'
+import { LiveMnemonRuntime } from '../src/host/runtime.ts'
+import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
 import { memoryGraphFixture as graphFixture } from './helpers/memory-graph.ts'
 
 type Listener = (...args: unknown[]) => unknown
@@ -53,7 +53,7 @@ function events() {
 
 function fixture() {
   const memory = graphFixture()
-  const runtime = new LiveMnemonRuntime(memory.graph)
+  const runtime = new LiveMnemonRuntime(memory.graph, undefined, undefined, memory.extensions)
   const registry = new Map<string, HostAgent>()
   const controls = new Map<HostAgent, ReturnType<typeof events>>()
   const hostEvents = events()
@@ -101,13 +101,8 @@ function fixture() {
     await controls.get(agent)!.waterfall('system-prompt/assemble', [assembly, { agent, signal }], () => assembly)
   }
   const end = async (agent: HostAgent, turn: number) => {
-    const graph = runtime.forAgent(agent)
-    const scope = graph.memoryViews.activeTurn(agent.id)?.scope
     append(agent, 'turn/end', turn)
     agent.status = 'idle'
-    // Drain the root's fire-and-forget post-turn reconciliation before the
-    // next test action mutates Source state or recreates a session identity.
-    if (scope !== undefined && agent.session.header?.origin !== 'subagent') await graph.memoryViews.reconcile(scope)
   }
   const dispose = (agent: HostAgent) => {
     controls.get(agent)!.dispose()
@@ -209,7 +204,7 @@ describe('asynchronous child memory authority', () => {
   it('keeps a delegated View alive under collection pressure until its last child releases it', async () => {
     const value = fixture()
     await value.begin(value.root, 1)
-    const original = value.views.activeTurn(value.root.id)!.viewId
+    const original = value.views.activeTurn(value.root.id)!.view.id
     const child = value.create('child', value.root)
     await value.end(value.root, 1)
     for (let turn = 2; turn <= 6; turn += 1) {
@@ -253,13 +248,13 @@ describe('asynchronous child memory authority', () => {
     const second = value.create('second', value.root)
     await value.begin(first, 1)
     await value.begin(second, 1)
-    expect(value.views.activeTurn(first.id)!.viewId).toBe(value.views.activeTurn(second.id)!.viewId)
+    expect(value.views.activeTurn(first.id)!.view.id).toBe(value.views.activeTurn(second.id)!.view.id)
     await value.recall(first, 'release history')
     await value.recall(second, 'release history')
     expect(value.search).toHaveBeenCalledTimes(2)
-    expect(value.coordinator.claimDocumentSearch(first)).toBe(true)
-    expect(value.coordinator.claimDocumentSearch(second)).toBe(true)
-    expect(value.coordinator.claimDocumentSearch(first)).toBe(false)
+    expect((await value.coordinator.documentQuery(first, { query: 'probe' }, new AbortController().signal) as { notRun?: boolean }).notRun === true).toBe(false)
+    expect((await value.coordinator.documentQuery(second, { query: 'probe' }, new AbortController().signal) as { notRun?: boolean }).notRun === true).toBe(false)
+    expect((await value.coordinator.documentQuery(first, { query: 'probe' }, new AbortController().signal) as { notRun?: boolean }).notRun === true).toBe(true)
   })
 
   it('retains nested delegation after both ancestors finish and the parent is disposed', async () => {
@@ -425,7 +420,7 @@ describe('asynchronous child memory authority', () => {
     for (let index = 0; index < 130; index += 1) {
       const child = value.create(`parallel-${index}`, value.root)
       await value.begin(child, 1)
-      expect(value.coordinator.claimDocumentSearch(child)).toBe(true)
+      expect((await value.coordinator.documentQuery(child, { query: 'probe' }, new AbortController().signal) as { notRun?: boolean }).notRun === true).toBe(false)
     }
     const exhausted = await value.recall(first, 'third query')
     expect(exhausted.hint).toContain('budget is exhausted')
@@ -436,7 +431,7 @@ describe('asynchronous child memory authority', () => {
   it('rolls back a delegated View and runtime when child hook installation fails', async () => {
     const value = fixture()
     await value.begin(value.root, 1)
-    const original = value.views.activeTurn(value.root.id)!.viewId
+    const original = value.views.activeTurn(value.root.id)!.view.id
     expect(() => value.create('broken-child', value.root, ctx => {
       const on = ctx.on
       ctx.on = (name, listener, options) => {
@@ -455,6 +450,6 @@ describe('asynchronous child memory authority', () => {
     value.runtime.swap(replacement.graph)
     const child = [...value.controls.keys()].find(agent => agent.id === 'broken-child')!
     expect(value.runtime.forAgent(child)).toBe(replacement.graph)
-    await expect(value.recall(child, 'no authority')).rejects.toThrow('requires the MemorySource generation pinned')
+    await expect(value.recall(child, 'no authority')).rejects.toThrow('pinned to the current turn')
   })
 })

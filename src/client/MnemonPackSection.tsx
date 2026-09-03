@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type JSX } from 'react'
-import type { ClientConnectionHandle, MnemonPackExport, MnemonPackPreview } from '../shared/contracts.ts'
+import type { ClientConnectionHandle, MnemonPackExport, MnemonPackPreview } from "../host/protocol.ts"
 import { MnemonClient } from './api.ts'
 import type { MnemonTranslate } from './locales.ts'
 import css from './MnemonSettingsCard.module.css'

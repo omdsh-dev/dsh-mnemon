@@ -9,6 +9,19 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const dshBin = join(root, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
 const marker = 'HEADLESS_MNEMON_READY'
+const arguments_ = process.argv.slice(2)
+const options = new Map()
+for (let index = 0; index < arguments_.length; index += 2) {
+  if (!['--package', '--registry', '--strategy-extensions', '--upgrade-from', '--upgrade-registry'].includes(arguments_[index]) || !arguments_[index + 1]) throw new Error('Expected package, registry, upgrade, and/or strategy-extension options in key/value pairs')
+  options.set(arguments_[index], arguments_[index + 1])
+}
+if (options.has('--package') !== options.has('--registry')) throw new Error('--package and --registry must be supplied together')
+if (options.has('--upgrade-from') !== options.has('--upgrade-registry')) throw new Error('--upgrade-from and --upgrade-registry must be supplied together')
+if (options.has('--upgrade-from') && !options.has('--package')) throw new Error('--upgrade-from requires a target --package')
+if (options.has('--strategy-extensions') && options.get('--strategy-extensions') !== 'true') throw new Error('--strategy-extensions expects true')
+const extensionNames = ['dsh-mnemon-strategy-scoped', 'dsh-mnemon-strategy-light-context', 'dsh-mnemon-strategy-auto-capture']
+const extensionNameSet = new Set(extensionNames)
+const extensionsEnabled = options.has('--strategy-extensions')
 
 function run(args, { cwd = root, env = process.env, timeoutMs = 30_000 } = {}) {
   return new Promise((resolveRun, reject) => {
@@ -89,13 +102,36 @@ try {
     DEEPSEEK_API_KEY: 'headless-verification-key',
     DEEPSEEK_BASE_URL: `http://127.0.0.1:${address.port}`,
     MNEMON_DATA_DIR: storageRoot,
+    ...(options.has('--registry') ? { npm_config_registry: options.get('--registry'), NPM_CONFIG_REGISTRY: options.get('--registry') } : {}),
   }
-
-  const install = await run(['plugin', '--profile', 'headless', 'add', `link:${root}`], { env })
-  assertSuccess('installing dsh-mnemon into the Headless profile', install)
 
   const settingsPath = join(dshHome, 'settings.yaml')
   await writeFile(settingsPath, '# Legacy placement migration fixture\nmnemon:\n  displayMode: buildin\n  timeoutMs: 25000\n')
+
+  let upgradeMemory
+  if (options.has('--upgrade-from')) {
+    const initialInstall = await run(['plugin', '--profile', 'headless', 'add', options.get('--upgrade-from'), '--registry', options.get('--upgrade-registry')], { env, timeoutMs: 120_000 })
+    assertSuccess(`installing ${options.get('--upgrade-from')} before the upgrade`, initialInstall)
+    const initialExecution = await run(['--profile', 'headless', 'Initialize isolated memory before upgrading Mnemon.'], { cwd: workspaceRoot, env })
+    assertSuccess('running the pre-upgrade Headless profile', initialExecution)
+    if (!initialExecution.stdout.includes(marker)) throw new Error(`Pre-upgrade Headless output did not contain ${marker}:\n${initialExecution.stdout}`)
+    upgradeMemory = await readFile(join(storageRoot, 'runtime', 'memories.json'), 'utf8')
+    requests.length = 0
+  }
+
+  // link: skips dependency installation. Explicitly link the same plugin set
+  // that a normal install resolves from the Starter's semver dependencies.
+  const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
+  // Root owns the disabled enhancement Entries. Adding their self-registering
+  // bundles as separate Profile layers would intentionally duplicate ids.
+  const plugins = Object.keys(manifest.dependencies).filter(name => name.startsWith('dsh-mnemon-') && !extensionNameSet.has(name))
+  const packages = options.has('--package')
+    ? [options.get('--package')]
+    : [`link:${root}`, ...plugins.map(name => `link:${join(root, 'plugins', name)}`)]
+  const install = await run(['plugin', '--profile', 'headless', 'add', ...packages,
+    ...(options.has('--registry') ? ['--registry', options.get('--registry')] : []),
+  ], { env, timeoutMs: 120_000 })
+  assertSuccess('installing dsh-mnemon into the Headless profile', install)
 
   // The verification exercises Mnemon composition, not DSH's native PTY
   // transport. Disable the unrelated shell stack so the check remains
@@ -115,7 +151,9 @@ try {
   disabled: true
 - id: tool-fs-search
   disabled: true
-`.trimStart())
+`.trimStart() + (!extensionsEnabled ? '' : extensionNames.map(name =>
+    `- id: ${name.slice(4)}\n  disabled: false\n`,
+  ).join('')))
 
   const execution = await run(['--profile', 'headless', 'Verify that the Mnemon tool surface is available.'], {
     cwd: workspaceRoot,
@@ -127,10 +165,17 @@ try {
   const toolRequest = requests.find(request => Array.isArray(request.tools) && request.tools.length > 0)
   if (toolRequest === undefined) throw new Error('Headless model request did not expose any tools')
   const toolNames = new Set(toolRequest.tools.map(tool => tool?.function?.name).filter(name => typeof name === 'string'))
-  const required = ['mnemon_status', 'mnemon_recall', 'mnemon_document_search', 'mnemon_runtime_memory', 'mnemon_remember']
+  const required = ['mnemon_status', 'mnemon_recall', 'mnemon_document_search', 'mnemon_runtime_memory', 'mnemon_remember', 'mnemon_view_route', 'mnemon_view_action']
   const missing = required.filter(name => !toolNames.has(name))
   if (missing.length > 0) throw new Error(`Headless model request is missing Mnemon tools: ${missing.join(', ')}`)
+  if (extensionsEnabled) {
+    const prompt = JSON.stringify(toolRequest.messages)
+    for (const expected of ['Source order expresses preference', 'MNEMON OPTIONAL AUTO CAPTURE']) {
+      if (!prompt.includes(expected)) throw new Error(`Optional Strategy contribution did not reach the real DSH prompt: ${expected}`)
+    }
+  }
   if (!existsSync(join(storageRoot, 'runtime', 'memories.json'))) throw new Error('Headless plugin did not initialize isolated runtime memory')
+  if (upgradeMemory !== undefined && await readFile(join(storageRoot, 'runtime', 'memories.json'), 'utf8') !== upgradeMemory) throw new Error('Package upgrade changed existing Runtime Memory bytes')
 
   const canonicalSettings = await readFile(settingsPath, 'utf8')
   if (!canonicalSettings.includes('displayMode: builtin') || canonicalSettings.includes('displayMode: buildin')) throw new Error('Headless did not persist the canonical builtin displayMode')
@@ -141,7 +186,9 @@ try {
   if (await readFile(settingsPath, 'utf8') !== canonicalSettings) throw new Error('Canonical placement was rewritten on restart')
 
   console.log(`Verified Headless profile activation with ${toolNames.size} total tools and ${required.length} representative Mnemon tools.`)
+  if (options.has('--upgrade-from')) console.log(`Verified an isolated ${options.get('--upgrade-from')} to ${options.get('--package')} package upgrade without changing Runtime Memory bytes.`)
   console.log('Verified buildin-to-builtin persistence, preservation of unrelated settings/comments, and an idempotent Headless restart.')
+  if (extensionsEnabled) console.log('Verified simultaneous activation of scoped, light-context and auto-capture Entries without changing the default Strategy.')
 } finally {
   await new Promise(resolveClose => server.close(resolveClose))
   await rm(temporaryRoot, { recursive: true, force: true })

@@ -12,8 +12,7 @@
 // unbound call sites and green once they wrap the methods.
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ClientConnectionHandle, ClientSettingsScope, ClientSettingsSnapshot } from '../src/contracts.ts'
-import type { Config } from '../src/config.ts'
+import type { ClientConnectionHandle, ClientSettingsScope, ClientSettingsSnapshot, Config } from '../src/host/protocol.ts'
 import { MnemonSaveAction } from '../src/client/MnemonSaveAction.tsx'
 import { MnemonView } from '../src/client/MnemonView.tsx'
 
@@ -40,6 +39,7 @@ class ThisBoundSettingsScope implements ClientSettingsScope<Config> {
 
 /** Rejecting RPC is fine: both views catch async load failures; only the synchronous render path matters here. */
 const connection = { rpc: { call: vi.fn(() => Promise.reject(new Error('no host'))) } } as unknown as ClientConnectionHandle
+const locale = { getSnapshot: () => 'en-US', subscribe: () => () => {} }
 
 describe('settings scope this-binding', () => {
   afterEach(cleanup)
@@ -49,7 +49,7 @@ describe('settings scope this-binding', () => {
   })
 
   it('renders MnemonSaveAction with a this-bound settings scope (real Host shape)', () => {
-    render(<MnemonSaveAction messageId="message-1" connection={connection} settingsScope={new ThisBoundSettingsScope()} t={key => key} />)
+    render(<MnemonSaveAction messageId="message-1" connection={connection} settingsScope={new ThisBoundSettingsScope()} localeRuntime={locale as never} t={key => key} />)
     expect(screen.getByLabelText('saveAction.button')).toBeTruthy()
   })
 })

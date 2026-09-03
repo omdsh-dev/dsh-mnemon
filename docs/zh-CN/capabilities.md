@@ -4,7 +4,7 @@
 
 `dsh-mnemon` 是 DeepSeek Harness（DSH）的记忆系统控制面。它不要求所有知识进入同一种数据库，而是把高频上下文、完整项目叙事和可检索长期记忆组织成三层，并让九种长期记忆 Provider 进入同一套创建、激活、检索、沉淀与观察工作流。
 
-从 v0.3.0 起，三层是可组合内核的默认拓扑。普通用户只需要决定每层是否开启；`MemoryBoot` 在控制面装配扩展贡献的 Layer、Adapter、Strategy、Guard 与 MemorySource。轻量的逐回合 `TurnView` 让 Runtime 精确内容 eager、持久来源 routed，同时保持默认用户工作流不变。
+Runtime、Documents、Memory Spaces 是独立 Source 插件；Strategy 将各实例的投影、检索 route 与 action 组合成逐回合不可变 View。Core 只提供 `ctx.mnemonMemory`，Source 拥有数据与可选页面，Memory Spaces 自己拥有内部 Provider 子节点。`dsh-mnemon` Starter 保持默认三层使用体验。详见[架构](./architecture.md)与[插件开发](./extensions.md)。
 
 一句话判断：**每轮都需要的放运行时，需要完整阅读的放档案，需要跨任务按需召回的放记忆体。**
 

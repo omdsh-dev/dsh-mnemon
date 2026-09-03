@@ -30,7 +30,7 @@ This page is an integration reference. For daily use, start with the [Sidebar an
 
 Headless receives the full model-tool surface. Its task argument is submitted as an ordinary user message, so it does not provide an interactive slash-command dispatcher. Explicit and model-guided writes that finish before the Agent becomes idle are durable.
 
-Model tools, lifecycle hooks, and system scheduling use an `automatic` trigger. User-initiated data-plane operations over Web/RPC use `manual`. Setting a Layer to `manual` therefore preserves direct management while denying model tools and automatic projection. `memory-system` and `status` are control-plane observations and remain readable even when a Layer is disabled.
+Model tools, lifecycle hooks, and system scheduling use an `automatic` trigger. User-initiated data-plane operations over Web/RPC use `manual`. Setting a Source to `manual` therefore preserves direct management while denying model tools and automatic projection. `memory-system` and `status` are control-plane observations and remain readable even when a Source is disabled.
 
 ## Model tools
 
@@ -52,7 +52,7 @@ Model tools, lifecycle hooks, and system scheduling use an `automatic` trigger. 
 |---|---|---|
 | `mnemon_runtime_memory` | `add` / `replace` / `remove` hot memory | Deterministic control; add overflow may start a worker |
 | `mnemon_document_manage` | Create, update, or archive a Document | Create/update deterministic; archive uses a worker |
-| `mnemon_remember` | Retain one insight under provider semantics and wait for a settled receipt | `spawn` write worker |
+| `mnemon_remember` | Retain one insight under Provider semantics; distinguish acceptance from durable completion | `spawn` write worker |
 | `mnemon_link` | Create a typed relationship where the provider supports it | `spawn` write worker |
 | `mnemon_forget` | Delete an exact ID where the provider supports it | `spawn` write worker |
 | `mnemon_memory_body_create` | Let an Agent create a Mnemon Native space; third-party connections remain user-managed in WebUI | `spawn` write worker |
@@ -124,7 +124,7 @@ rc.2 rollback authority: trusted-host
 | Endpoint | Behavior |
 |---|---|
 | `status` | Aggregated service, version, lifecycle, Documents, workspace/storage context, and current Memory System descriptor |
-| `memory-system` | Current Catalog and Topology snapshots, including generations, Layer/Adapter/Strategy descriptors, and participation modes |
+| `memory-system` | Serving/candidate evaluation, sanitized Source instance descriptors and current participation configuration |
 | `versions` | Check installed/latest Mnemon and dsh-mnemon versions and installation sources |
 | `runtime-memory` | Runtime snapshot |
 | `documents` / `document` / `document-search` | Directory, body, and deterministic search |
@@ -205,35 +205,20 @@ Mnemon uses one registration call shape for both transport generations: it alway
 
 ## npm exports and extension service
 
-The root package continues to expose Host composition and existing core classes:
+Core publishes `ctx.mnemonMemory: MemoryRuntime`. Source/Strategy plugins use `inject = ['mnemonMemory']` and `installMemory`. Source controllers and Provider registries are not Root exports. Each plugin owns its own public `./contracts` and optional `./client` entry.
 
-```text
-apply
-Config / resolveConfig
-createRunner
-MnemonService
-RuntimeMemoryController
-DocumentManager
-StorageScopeInspector
-MnemonSubagentCoordinator
-MnemonLifecycle
-```
-
-`dsh-mnemon/client` exports `apply` and `inject` for the DSH client bundle. Client implementation classes and RPC endpoints are internal and should not be treated as a stable public SDK.
-
-Composable-memory APIs use dedicated subpaths:
-
-| Subpath | Stable responsibility |
+| Entry | Responsibility |
 |---|---|
-| `dsh-mnemon/contracts` | Wire-safe descriptors, Topology, Plan, and Receipt types |
-| `dsh-mnemon/kernel` | Catalog, Topology Manager, Kernel, and Guard APIs |
-| `dsh-mnemon/extension-sdk` | `MemoryBoot`, Layer/Adapter/Strategy/Guard/MemorySource contributions, and process-level pre-registration |
-| `dsh-mnemon/strategy-sdk` | Strategy definitions, permission manifests, and replay |
-| `dsh-mnemon/provider-sdk` | Adapter Factory Registry and current Provider Adapter interfaces |
-| `dsh-mnemon/layers/runtime`, `documents`, `memory-spaces` | The three default Layer descriptors |
-| `dsh-mnemon/strategy-default-three-tier` | Default topology and scheduling Strategy |
+| `dsh-mnemon` | DSH Host and default Starter |
+| `dsh-mnemon/core` | Source-neutral `ctx.mnemonMemory` service, without Host/UI |
+| `dsh-mnemon/contracts` | JSON-safe manifests, facts, ViewSpec, View, Evidence and Receipt |
+| `dsh-mnemon/extension-sdk` | Source/Strategy definitions, lifecycle installation and validators |
+| `dsh-mnemon/testing` | Real Cordis composition fixture and built Client artifact loader |
+| `dsh-mnemon/client` | DSH workspace and Source-page SDK |
+| `dsh-mnemon-source-memory-spaces/provider-sdk` | Memory Spaces' own Provider child-module contract |
+| `dsh-mnemon-source-memory-spaces/testing` | Provider driver fixture |
 
-The Host publishes `mnemonMemory: MemoryBoot` as a Cordis service (`MemoryExtensionHost` remains a v0.3 pre-release alias). Another DSH plugin can declare `inject = ['mnemonMemory']` and lifecycle-register Layers, Adapters, Strategies, Guards, or MemorySources. Disposal advances generations and invalidates stale Plans and TurnViews; unloading a Source required by an automatic project-capable Layer is rejected and rolled back. See [Building Memory Extensions](./extensions.md) for a complete example. Internal RPC and `MnemonClient` remain outside the public SDK.
+Generic model tools `mnemon_view_route` and `mnemon_view_action` execute only routes/offers present in the current View. Existing named tools preserve the default workflow. Browser management uses `source-management-catalog`, `source-management-read`, `source-management-mutate` and optional `source-assistance`; instance identity, confirmation, revision and current authority are checked by the Host/Source. Internal RPC names are not the plugin SDK: use the scoped page client. See [Plugin development](./extensions.md).
 
 ## Internationalization
 

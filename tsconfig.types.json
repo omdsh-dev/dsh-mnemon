@@ -9,7 +9,14 @@
     "rootDir": ".",
     "allowImportingTsExtensions": false,
     "rewriteRelativeImportExtensions": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "packages/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "plugins/*/src/**/*.ts",
+    "plugins/*/src/**/*.tsx"
+  ]
 }

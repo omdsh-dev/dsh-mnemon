@@ -17,28 +17,16 @@ if (result.status !== 0) {
 const parsedPack = JSON.parse(result.stdout)
 const pack = Array.isArray(parsedPack) ? parsedPack[0] : Object.values(parsedPack)[0]
 const paths = pack.files.map(file => file.path)
-const required = [
-  'package.json',
-  'cordis.patch.yml',
-  'lib/index.js',
-  'lib/client.js',
-  'lib/contracts.js',
-  'lib/kernel.js',
-  'lib/extension-sdk.js',
-  'lib/provider-sdk.js',
-  'lib/strategy-sdk.js',
-  'lib/strategy-default-three-tier.js',
-  'lib/layers/runtime.js',
-  'lib/layers/documents.js',
-  'lib/layers/memory-spaces.js',
-  'lib/types/src/index.d.ts',
-  'lib/types/src/client/index.d.ts',
-]
+const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+const required = ['package.json', 'cordis.patch.yml', 'lib/client.js', ...Object.entries(manifest.exports)
+  .filter(([name]) => name !== './package.json')
+  .flatMap(([, value]) => [value.default.slice(2), value.types.slice(2)])]
+
 const allowedRootFiles = new Set(['package.json', 'cordis.patch.yml', 'LICENSE', 'README.md', 'README.zh-CN.md', 'SECURITY.md', 'THIRD_PARTY_NOTICES.md'])
 const missing = required.filter(path => !paths.includes(path))
 const unexpected = paths.filter(path => !allowedRootFiles.has(path) && !(/^lib\/.+\.(?:js|d\.ts)$/.test(path)))
 const clientBundle = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
-const hostLeaks = ['require("node:', "require('node:", '#region src/version-updates.ts', '#region src/rpc.ts']
+const hostLeaks = ['require("node:', "require('node:", '#region src/host/version-updates.ts', '#region src/host/rpc.ts']
   .filter(pattern => clientBundle.includes(pattern))
 const readmeFiles = ['README.md', 'README.zh-CN.md']
 const relativeReadmeImages = readmeFiles.flatMap((path) => {
@@ -51,9 +39,9 @@ const relativeReadmeImages = readmeFiles.flatMap((path) => {
     .map(source => `${path}: ${source}`)
 })
 
-// Runtime profiles, embedding protocols and delegated turn ownership include
-// their Host implementation and declarations; keep the release below 1.75 MB.
-const maximumUnpackedBytes = 1_750_000
+// Core/Host and the shared page kit only; Source/Provider implementations must
+// ship in their own artifacts. Keep a bounded budget, not the old monolith size.
+const maximumUnpackedBytes = 1_250_000
 
 if (missing.length > 0 || unexpected.length > 0 || hostLeaks.length > 0 || relativeReadmeImages.length > 0 || pack.unpackedSize > maximumUnpackedBytes) {
   if (missing.length > 0) console.error(`Missing package files:\n${missing.map(path => `- ${path}`).join('\n')}`)

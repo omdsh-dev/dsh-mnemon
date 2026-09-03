@@ -33,11 +33,13 @@ Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"
 [![检查与更新 Mnemon CLI 和 dsh-mnemon](../assets/screenshots/version-check.png)](../assets/screenshots/version-check.png)
 
 - **Mnemon CLI**：本地版本来自 `mnemon --version`，最新版本来自 Mnemon GitHub Releases。
-- **dsh-mnemon**：运行版本来自当前插件包，最新版本来自 npm registry。
+- **dsh-mnemon**：运行版本来自当前插件包，更新查询 npm `latest`；已安装的 beta/alpha/rc 同时查询自身通道，也可升级到更高的正式版。稳定版用户不会自动进入预发布通道。
 
 检查只读，不会自动安装。只有发现更高版本并安全识别安装来源时才显示“更新”：Mnemon 支持 Homebrew Cask / Formula 与 `go install`；dsh-mnemon 支持当前 DSH Profile 中由 pnpm 管理的 npm 安装。`link:` / `file:` 开发版本与无法识别的手工安装只显示说明，避免覆盖源码。
 
-更新命令由 Host 固定选择：浏览器不能传入命令或参数，执行禁用 shell，并限制时间与输出。更新完成后界面自动重新检查两个组件并刷新状态。Mnemon CLI 从下一次调用起生效；dsh-mnemon 仍需重启 `dsh web` 才能加载新插件代码。
+Go 更新还要求当前执行文件确实位于本机 Go 的安装输出位置（`GOBIN`，或 `GOPATH` 第一项的 `bin` 目录），且未配置交叉编译目标。不能仅因下载的二进制包含 Go 构建信息就认定它由 Go 管理。CLI 更新后还会核验当前执行文件已达到所检查的版本，才报告成功。
+
+更新命令由 Host 固定选择：浏览器不能传入命令或参数，执行禁用 shell，并限制时间与输出。插件更新在所属 profile 中安装已检查的精确版本，确认实际安装版本后才报告成功，避免固定 beta 版本未变却提示已更新。更新完成后界面自动重新检查两个组件并刷新状态。Mnemon CLI 从下一次调用起生效；dsh-mnemon 仍需重启 `dsh web` 才能加载新插件代码。
 
 DSH rc.8 首次说明的可选 SQLite 不兼容性在 DSH 0.1.1-rc.2 中仍然存在。它只针对 `@deepseek-ai/dsh-session-persistence-sqlite`，内置 profile 默认不启用。rc.2 后端使用 schema 17，会拒绝旧 schema，且不提供迁移路径；手工挂载过它的部署应先备份，再重建 DSH 会话数据库。dsh-mnemon 的 Runtime、Documents、Memory Spaces 与 Provider 数据位于独立存储根，不受影响。
 

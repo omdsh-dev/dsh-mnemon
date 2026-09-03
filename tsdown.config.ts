@@ -18,16 +18,8 @@ const CSS_VIRTUAL_SUFFIX = '.mjs'
 const host: UserConfig = {
   name: PLUGIN_ID,
   entry: {
-    index: 'src/index.ts',
-    contracts: 'packages/contracts/src/index.ts',
-    kernel: 'packages/kernel/src/index.ts',
-    'extension-sdk': 'packages/extension-sdk/src/index.ts',
-    'provider-sdk': 'src/provider-sdk.ts',
-    'strategy-sdk': 'packages/strategy-sdk/src/index.ts',
-    'strategy-default-three-tier': 'packages/strategy-default-three-tier/src/index.ts',
-    'layers/runtime': 'packages/layer-runtime/src/index.ts',
-    'layers/documents': 'packages/layer-documents/src/index.ts',
-    'layers/memory-spaces': 'packages/layer-memory-spaces/src/index.ts',
+    index: 'src/index.ts', core: 'src/core/plugin.ts', contracts: 'src/core/contracts/index.ts',
+    'extension-sdk': 'src/sdk/index.ts', testing: 'src/sdk/testing.ts',
   },
   outDir: 'lib',
   format: ['esm'],
@@ -53,8 +45,7 @@ const client: UserConfig = {
   clean: false,
   deps: {
     neverBundle: CLIENT_EXTERNALS,
-    alwaysBundle: ['markdown-to-jsx'],
-    onlyBundle: ['markdown-to-jsx'],
+    onlyBundle: [],
   },
   define: {
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production'),
@@ -62,6 +53,7 @@ const client: UserConfig = {
   plugins: [{
     name: 'dsh-mnemon-css-modules-inline',
     resolveId(source: string, importer: string | undefined) {
+      if (source === 'dsh-mnemon/client') return resolvePath(PROJECT_ROOT, 'src/client/extension-sdk.ts')
       if (!source.endsWith('.module.css')) return null
       const absolute = importer === undefined ? source : resolveAssetPath(source, importer)
       return CSS_VIRTUAL_PREFIX + absolute + CSS_VIRTUAL_SUFFIX

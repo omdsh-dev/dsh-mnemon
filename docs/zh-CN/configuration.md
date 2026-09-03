@@ -76,7 +76,7 @@ mnemon:
 | `runtimeMemory.userLimitBytes` | `4096` | 1–1048576 字节 | 完整 `USER.md` 投影的 UTF-8 字节上限 |
 | `runtimeMemory.maintenanceMaxTokens` | `8192` | 1–1000000 tokens | Runtime 迁移与压缩 worker 的完成 token 预算；不改变项目档案归档与元信息维护预算 |
 | `embedding` | `{ enabled: false, endpoint: http://localhost:11434, model: nomic-embed-text, apiKey: '', protocol: auto }` | enabled + HTTP(S) endpoint + model + 可选 apiKey + protocol（auto/ollama/openai） | 开启后，Host 为每个 Mnemon CLI 子进程注入保存的 endpoint、模型、API Key 与协议覆盖；endpoint 以 `/v1` 结尾时 Mnemon 自动使用 OpenAI 兼容协议并以 Bearer 头携带 apiKey，`protocol: openai` 可对非 `/v1` 端点显式指定；关闭后不干预既有 Host 环境和 Mnemon 默认值 |
-| `memoryTopology.layers.<id>.enabled` | 三个默认层为 `true` | boolean | 是否让该 Layer 参与；关闭不会删除或迁移已有数据 |
+| `memoryTopology.layers.<id>.enabled` | 三个默认层为 `true` | boolean | 是否让该 Source 参与；关闭不会删除或迁移已有数据 |
 | `recallQuality.policy` | `strict-v1` | 已注册策略 ID | 在召回正文序列化给 Agent 或客户端前执行的确定性策略 |
 | `recallQuality.lowScoreThreshold` | `0.25` | 0–1，低于高分阈值 | `strict-v1` 会移除低于此边界的标准化分数结果 |
 | `recallQuality.highScoreThreshold` | `0.6` | 0–1，高于低分阈值 | 保留结果达到此边界时标记为高相关度 |
@@ -154,7 +154,7 @@ Endpoint 必须是不含凭据、查询参数或片段的 HTTP(S) 绝对 URL。M
 
 [![关闭项目档案后的实际中文 Sidebar：Tab 保留，数据不被读取或删除](../assets/screenshots/sidebar-layer-disabled-zh-CN.jpg)](../assets/screenshots/sidebar-layer-disabled-zh-CN.jpg)
 
-WebUI 从 `memory-system` 描述符读取真实 Layer，因此扩展插件新增 Layer 时不需要修改前端枚举。设置页只提交变化 Layer 的 `enabled` 布尔值；同一次保存带 revision fence，候选运行图无法验证时，当前运行代保持不变。Kernel 内部仍按能力、触发来源和 Guard 做权威校验，但这些不是 v0.3 的普通用户配置项。
+WebUI 从实时管理目录读取 Source 实例，新增 Source 无须修改前端枚举。沿用的 `memoryTopology.layers` 是配置输入，不代表另有 Source 运行时。Source type id 匹配配置，Strategy 选择精确实例 key。设置更新有修订栅栏，候选组合验证成功后才替换；Core/Source 再检查能力、范围与当前权限。
 
 ### 召回质量策略
 
@@ -350,6 +350,8 @@ Builtin 隐藏页眉中的存储模式标记、工作区选择和对齐控件。
 既有 `runtimeUserScope: global` 例外仍让 USER.md 保持全局。切换入口不会改变范围、迁移记忆数据或恢复旧 builtin 导航。设置 RPC 保存后实时切换入口。
 
 规范拼写统一为 **`builtin`**。v0.4.0–v0.4.1 忽略的历史 `displayMode: buildin` 偏好会重新识别，但运行时与界面统一使用 `builtin`。Host 启动及配置外部热更新时，通过 DSH 带修订号保护的设置接口自动写回这一个字段；旧客户端 RPC 提交 `buildin` 也直接保存为 `builtin`。其他字段和配置注释保持不变，并发期间用户明确选择的 Sidebar 优先，不会被迁移覆盖。
+
+在设置页面保存后，当前界面会立即更新。直接编辑 `settings.yaml` 时，Host 会检测并规范化，但当前 Mnemon Client 的设置快照不订阅外部文件变更推送，需要刷新浏览器才能看到变化。这与 main 的 Client 行为一致，不是另一次存储或插件迁移。
 
 如果旧值只来自组合 profile，迁移保存一条规范的用户设置覆盖，不直接改写 profile 文件。只读设置仍识别旧拼写，但不会绕过只读限制写盘；落盘失败会记录在 Host 日志中，不会关闭已归一化的入口。
 

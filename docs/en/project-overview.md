@@ -4,7 +4,7 @@
 
 `dsh-mnemon` integrates long-term Memory Spaces with DeepSeek Harness, then adds Runtime hot memory, Project Documents, lifecycle routing, independent task Agents, a deterministic control layer, and native DSH interfaces. The third tier is provider-backed: Mnemon Native is the official, prioritized, full-capability implementation, while eight third-party engines reuse the same workflow through explicit adapters.
 
-The three tiers are now the default Topology of a composable kernel. `MemoryBoot` assembles trusted contributions; each Layer exposes an eager or routed `MemorySource`; each executing Agent turn pins a lightweight `TurnView`, with children retaining their delegated View independently of parent completion; committed mutations emit Receipts for the next turn. Layers, Adapters, Strategies, and Guards remain internal control-plane boundaries. A normal installation keeps the same three-tier mental model, while extensions and per-Layer switches need no duplicate Host or WebUI.
+Runtime, Documents and Memory Spaces are independent Source plugins. A Strategy selects their instance-specific projections, retrieval routes and actions into an immutable per-turn View. Core provides only `ctx.mnemonMemory`; Sources own their data and optional pages, while Memory Spaces owns its private Provider children. The `dsh-mnemon` Starter preserves the default three-tier experience. See [Architecture](./architecture.md) and [Plugin development](./extensions.md).
 
 Its goal is not to store more text. It balances long-term continuity, current-fact priority, context cost, and recoverable writes.
 
@@ -66,13 +66,21 @@ The default `global` root, `~/.mnemon`, is the simplest choice for several local
 
 ## Architecture
 
-[![dsh-mnemon v0.2.0 architecture with Web, conversation and Headless surfaces, control plane, task Agents, and three data tiers](../assets/diagrams/en/project-architecture.svg)](../assets/diagrams/en/project-architecture.svg)
+
+```mermaid
+flowchart LR
+  Source["Source plugins · owned data and pages"] -->|facts| Strategy["Strategy plugin"]
+  Strategy -->|ViewSpec| Core["Core validation + Source projection"]
+  Core --> View["View"]
+  View -->|Wake / Routes / Actions| LLM["LLM via DSH Host"]
+```
+
 
 Four boundaries shape the system:
 
 1. **Interaction**: conversation, Sidebar workbench, `/mnemon` commands, and model tools.
 2. **Supervision**: user-visible AI metadata, Agent Query, semantic writes, and archiving run in independent top-level task Agents; bounded internal workers are used only for structured judgment.
-3. **Deterministic control**: the Host enforces schema, paths, permissions, capacity, locks, revisions, CLI arguments, timeouts, and cancellation.
+3. **Deterministic control**: the Host enforces scope and authority; each Source enforces schema, paths, capacity, locks, revisions and driver timeouts.
 4. **Data**: Runtime, Documents, and Mnemon Native data live under the effective `storageRoot`; external providers are reached only by the Host through explicit connections, never directly by the browser.
 
 ### Memory System flow

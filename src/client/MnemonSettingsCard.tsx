@@ -10,16 +10,17 @@ import {
   type ClientSettingsSnapshot,
   type Config,
   type InteractionConfig,
-  type MemorySystemDescriptor,
+  type MemoryCompositionStatus,
   type MemoryTopologyDefinition,
   type MnemonEmbeddingStatus,
   type SettingsOperation,
   type TaskAgentModelCatalog,
-} from '../shared/contracts.ts'
+} from "../host/protocol.ts"
+import type { MemoryPluginEntryView, MemoryViewDashboard } from '../host/view-protocol.ts'
 import { MnemonClient } from './api.ts'
 import css from './MnemonSettingsCard.module.css'
 import { GlobalLocationSetting } from './GlobalLocationSetting.tsx'
-import { translateZh, type MnemonTranslate } from './locales.ts'
+import { translateZh, type MnemonKey, type MnemonTranslate } from './locales.ts'
 import { MnemonPackSection } from './MnemonPackSection.tsx'
 import { ProviderIcon } from './ProviderIcon.tsx'
 import { ProviderSettingsSection } from './ProviderSettingsSection.tsx'
@@ -62,6 +63,11 @@ const CORE_FIELDS: CoreField[] = ['displayMode', 'storageScope', 'runtimeUserSco
 const EMBEDDING_FIELDS: EmbeddingField[] = ['embeddingEnabled', 'embeddingEndpoint', 'embeddingModel', 'embeddingApiKey', 'embeddingProtocol']
 const INTERACTION_FIELDS: InteractionField[] = ['turnBar', 'saveAction']
 const TASK_AGENT_FIELDS: TaskAgentField[] = ['taskAgentModelMode', 'taskAgentProvider', 'taskAgentModel']
+const MEMORY_ENHANCEMENTS: ReadonlyArray<{ packageName: string; label: MnemonKey; hint: MnemonKey }> = [
+  { packageName: 'dsh-mnemon-strategy-auto-capture', label: 'config.enhancementCapture', hint: 'config.enhancementCaptureHint' },
+  { packageName: 'dsh-mnemon-strategy-light-context', label: 'config.enhancementLightContext', hint: 'config.enhancementLightContextHint' },
+  { packageName: 'dsh-mnemon-strategy-scoped', label: 'config.enhancementScoped', hint: 'config.enhancementScopedHint' },
+]
 function record(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}
 }
@@ -126,12 +132,12 @@ function draftOf(core: Config | undefined, interaction: InteractionConfig | unde
   return { ...coreDraft(core), ...interactionDraft(interaction) }
 }
 
-function topologyOf(descriptor: MemorySystemDescriptor): MemoryTopologyDefinition {
+function topologyOf(descriptor: MemoryCompositionStatus): MemoryTopologyDefinition {
   return {
-    id: descriptor.topology.id,
-    strategyId: descriptor.topology.strategyId,
-    layers: descriptor.topology.layers.map(layer => ({
-      id: layer.id,
+    id: descriptor.configuration.id,
+    strategyId: descriptor.configuration.strategyId,
+    layers: Object.entries(descriptor.configuration.layers).map(([id, layer]) => ({
+      id,
       enabled: layer.enabled,
       participation: { ...layer.participation },
       adapterIds: [...layer.adapterIds],
@@ -201,7 +207,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   const [modelCatalogError, setModelCatalogError] = useState<string | null>(null)
   const [fullModelCatalogLoaded, setFullModelCatalogLoaded] = useState(false)
   const modelCatalogRequest = useRef(0)
-  const [memorySystem, setMemorySystem] = useState<MemorySystemDescriptor | null>(null)
+  const [memorySystem, setMemorySystem] = useState<MemoryCompositionStatus | null>(null)
   const [topologyDraft, setTopologyDraft] = useState<MemoryTopologyDefinition | null>(null)
   const [topologyState, setTopologyState] = useState<'unavailable' | 'loading' | 'ready' | 'error'>(connection === undefined ? 'unavailable' : 'loading')
   const topologyRequest = useRef(0)
@@ -474,13 +480,21 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
           t={t}
         />
 
+        <MemoryEnhancementsSection
+          {...(connection === undefined ? {} : { connection })}
+          {...(sessionId === undefined ? {} : { sessionId })}
+          {...(workspaceId === undefined ? {} : { workspaceId })}
+          refreshKey={targetRevision}
+          t={t}
+        />
+
         <section className={css.section} aria-labelledby="mnemon-providers-heading">
           <div className={css.sectionHeading}>
             <div><h2 id="mnemon-providers-heading">{t('config.providersTitle')}</h2><p>{t('config.providersDescription')}</p></div>
           </div>
           <details className={css.providerPanel} open>
             <summary>
-              <span className={css.providerIdentity}><ProviderIcon providerId="mnemon-native" className={css.nativeMark} /><span><strong>mnemon</strong><small>{t('config.nativeSummary')}</small></span></span>
+              <span className={css.providerIdentity}><ProviderIcon providerId="mnemon-native" icon={{ kind: 'brand', value: 'mnemon' }} className={css.nativeMark} /><span><strong>mnemon</strong><small>{t('config.nativeSummary')}</small></span></span>
               <span className={css.providerHeaderMeta}><span className={css.providerScopeTag} data-scope={activeScope}>{t(`config.${activeScope}`)}</span><span className={css.providerState}>{t('config.officialNative')}</span></span>
             </summary>
             <div className={css.providerPanelBody}>
@@ -584,6 +598,118 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
       </>}
     </section>
   )
+}
+
+/**
+ * v0.5 exposes the shipped behavior toggles, not the underlying plugin graph.
+ * Older Hosts simply omit this section when the View settings channel is absent.
+ */
+function MemoryEnhancementsSection(props: {
+  connection?: ClientConnectionHandle
+  sessionId?: string
+  workspaceId?: string
+  refreshKey: number
+  t: MnemonTranslate
+}): JSX.Element | null {
+  const client = useMemo(() => props.connection === undefined
+    ? undefined
+    : new MnemonClient(props.connection, props.sessionId, props.workspaceId), [props.connection, props.sessionId, props.workspaceId])
+  const [dashboard, setDashboard] = useState<MemoryViewDashboard | null>(null)
+  const [state, setState] = useState<'loading' | 'ready' | 'unavailable'>(client === undefined ? 'unavailable' : 'loading')
+  const [working, setWorking] = useState<string | null>(null)
+  const [failure, setFailure] = useState<'apply' | 'refresh' | null>(null)
+  const request = useRef(0)
+
+  const load = useCallback(async (): Promise<void> => {
+    if (client === undefined) {
+      request.current += 1
+      setDashboard(null)
+      setState('unavailable')
+      return
+    }
+    const ticket = request.current + 1
+    request.current = ticket
+    setState('loading')
+    try {
+      const next = await client.viewDashboard()
+      if (request.current !== ticket) return
+      setDashboard(next)
+      setState('ready')
+      setFailure(null)
+    } catch {
+      if (request.current !== ticket) return
+      setDashboard(null)
+      setState('unavailable')
+    }
+  }, [client, props.refreshKey])
+
+  useEffect(() => {
+    void load()
+    return () => { request.current += 1 }
+  }, [load])
+
+  const entries = MEMORY_ENHANCEMENTS.flatMap(definition => {
+    const entry = dashboard?.entries.find(candidate => candidate.packageName === definition.packageName
+      && candidate.roles.includes('strategy-extension'))
+    return entry === undefined ? [] : [{ definition, entry }]
+  })
+
+  if (state !== 'ready' || dashboard === null || entries.length === 0) return null
+
+  const toggle = async (entry: MemoryPluginEntryView): Promise<void> => {
+    if (client === undefined || working !== null || !dashboard.writable || !entry.writable) return
+    const previous = dashboard
+    const enabled = !entry.enabled
+    const ticket = request.current + 1
+    request.current = ticket
+    setWorking(entry.packageName)
+    setFailure(null)
+    setDashboard({ ...dashboard, entries: dashboard.entries.map(candidate => candidate.entryId === entry.entryId
+      ? { ...candidate, enabled }
+      : candidate) })
+    try {
+      await client.applyView({
+        expectedRevision: previous.revision,
+        strategyTypeId: previous.strategyTypeId,
+        entries: { [entry.entryId]: { enabled, config: structuredClone(entry.config) } },
+      })
+      try {
+        const next = await client.viewDashboard()
+        if (request.current !== ticket) return
+        setDashboard(next)
+      } catch {
+        if (request.current !== ticket) return
+        // The apply already committed. Preserve its visible value and prevent
+        // another write with a stale revision until this section is reopened.
+        setDashboard(current => current === null ? current : { ...current, writable: false })
+        setFailure('refresh')
+      }
+    } catch {
+      if (request.current !== ticket) return
+      setDashboard(previous)
+      setFailure('apply')
+    } finally {
+      if (request.current === ticket) setWorking(null)
+    }
+  }
+
+  return <section className={`${css.section} ${css.enhancementsSection}`} aria-labelledby="mnemon-enhancements-heading" aria-busy={working !== null}>
+    <div className={css.sectionHeading}>
+      <div><h2 id="mnemon-enhancements-heading">{props.t('config.enhancementsTitle')}</h2><p>{props.t('config.enhancementsDescription')}</p></div>
+    </div>
+    <div className={css.rowGroup}>
+      {entries.map(({ definition, entry }) => <ToggleRow
+        key={entry.entryId}
+        id={`mnemon-enhancement-${entry.entryId.replace(/[^a-zA-Z0-9_-]/gu, '-')}`}
+        label={props.t(definition.label)}
+        hint={props.t(definition.hint)}
+        checked={entry.enabled}
+        disabled={working !== null || !dashboard.writable || !entry.writable}
+        onChange={() => void toggle(entry)}
+      />)}
+    </div>
+    {failure !== null && <p className={css.error} role="alert">{props.t(failure === 'refresh' ? 'config.enhancementsRefreshFailed' : 'config.enhancementsFailed')}</p>}
+  </section>
 }
 
 function EmbeddingSettingsSection(props: {
@@ -727,14 +853,14 @@ function EmbeddingSettingsSection(props: {
 }
 
 function MemoryTopologySection(props: {
-  descriptor: MemorySystemDescriptor | null
+  descriptor: MemoryCompositionStatus | null
   topology: MemoryTopologyDefinition | null
   state: 'unavailable' | 'loading' | 'ready' | 'error'
   disabled: boolean
   onEnabled: (layerId: string, enabled: boolean) => void
   t: MnemonTranslate
 }): JSX.Element {
-  const layerDescriptors = new Map(props.descriptor?.catalog.layers.map(layer => [layer.id, layer]) ?? [])
+  const layerDescriptors = new Map(props.descriptor?.sources.map(source => [source.sourceTypeId, source.management]) ?? [])
 
   const builtInCopy = (layerId: string): { label: string; description: string } | undefined => {
     if (layerId === 'runtime') return { label: props.t('layers.runtimeLabel'), description: props.t('layers.runtimeDescription') }

@@ -1,6 +1,6 @@
 {
   "name": "dsh-mnemon",
-  "version": "0.4.7",
+  "version": "0.5.0-rc.1",
   "description": "Composable three-tier memory control plane for DeepSeek Harness: persistent runtime context, searchable project documents, pluggable long-term memory, guarded strategies, WebUI, and headless tools.",
   "keywords": [
     "deepseek-harness",
@@ -44,7 +44,8 @@
   },
   "license": "MIT",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "tag": "rc"
   },
   "engines": {
     "node": ">=20"
@@ -52,50 +53,40 @@
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/src/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "contracts": [
+        "lib/types/src/core/contracts/index.d.ts"
+      ],
+      "extension-sdk": [
+        "lib/types/src/sdk/index.d.ts"
+      ]
+    }
+  },
   "exports": {
     ".": {
       "types": "./lib/types/src/index.d.ts",
       "default": "./lib/index.js"
+    },
+    "./core": {
+      "types": "./lib/types/src/core/plugin.d.ts",
+      "default": "./lib/core.js"
     },
     "./client": {
       "types": "./lib/types/src/client/index.d.ts",
       "default": "./lib/client.js"
     },
     "./contracts": {
-      "types": "./lib/types/packages/contracts/src/index.d.ts",
+      "types": "./lib/types/src/core/contracts/index.d.ts",
       "default": "./lib/contracts.js"
     },
-    "./kernel": {
-      "types": "./lib/types/packages/kernel/src/index.d.ts",
-      "default": "./lib/kernel.js"
-    },
     "./extension-sdk": {
-      "types": "./lib/types/packages/extension-sdk/src/index.d.ts",
+      "types": "./lib/types/src/sdk/index.d.ts",
       "default": "./lib/extension-sdk.js"
     },
-    "./provider-sdk": {
-      "types": "./lib/types/src/provider-sdk.d.ts",
-      "default": "./lib/provider-sdk.js"
-    },
-    "./strategy-sdk": {
-      "types": "./lib/types/packages/strategy-sdk/src/index.d.ts",
-      "default": "./lib/strategy-sdk.js"
-    },
-    "./strategy-default-three-tier": {
-      "types": "./lib/types/packages/strategy-default-three-tier/src/index.d.ts",
-      "default": "./lib/strategy-default-three-tier.js"
-    },
-    "./layers/runtime": {
-      "types": "./lib/types/packages/layer-runtime/src/index.d.ts",
-      "default": "./lib/layers/runtime.js"
-    },
-    "./layers/documents": {
-      "types": "./lib/types/packages/layer-documents/src/index.d.ts",
-      "default": "./lib/layers/documents.js"
-    },
-    "./layers/memory-spaces": {
-      "types": "./lib/types/packages/layer-memory-spaces/src/index.d.ts",
-      "default": "./lib/layers/memory-spaces.js"
+    "./testing": {
+      "types": "./lib/types/src/sdk/testing.d.ts",
+      "default": "./lib/testing.js"
     },
     "./package.json": "./package.json"
   },
@@ -124,7 +115,7 @@
     }
   },
   "scripts": {
-    "build": "tsdown && tsc -p tsconfig.types.json",
+    "build": "tsdown && tsc -p tsconfig.types.json && node scripts/link-bundle-declarations.mjs",
     "bundle": "tsdown",
     "prepublishOnly": "pnpm run verify",
     "lint:package": "publint --strict && attw --pack . --profile esm-only --quiet",
@@ -133,17 +124,36 @@
     "verify:build": "node scripts/verify-deterministic-build.mjs",
     "verify:headless": "node scripts/verify-headless-profile.mjs",
     "verify:package": "node scripts/verify-package-contents.mjs && node scripts/verify-public-entries.mjs && pnpm run lint:package",
-    "verify": "pnpm run typecheck && pnpm run test && pnpm run verify:build && pnpm run verify:headless && pnpm run verify:package",
+    "verify:plugins": "node scripts/verify-plugin-artifacts.mjs",
+    "e2e:serve": "node scripts/serve-e2e.mjs",
+    "verify": "pnpm run typecheck && pnpm run verify:build && pnpm --workspace-concurrency=1 -r build && pnpm -r typecheck && pnpm -r test && pnpm run test && pnpm run verify:headless && pnpm run verify:package",
     "dsh:link-source": "node scripts/link-dsh-source.mjs",
-    "dsh:restore-registry": "node scripts/link-dsh-source.mjs --restore"
+    "dsh:restore-registry": "node scripts/link-dsh-source.mjs --restore",
+    "release:check": "node scripts/release.mjs --check"
   },
   "dependencies": {
+    "dsh-mnemon-provider-byterover": "0.5.0-rc.1",
+    "dsh-mnemon-provider-hindsight": "0.5.0-rc.1",
+    "dsh-mnemon-provider-holographic": "0.5.0-rc.1",
+    "dsh-mnemon-provider-honcho": "0.5.0-rc.1",
+    "dsh-mnemon-provider-mem0": "0.5.0-rc.1",
+    "dsh-mnemon-provider-mnemon-native": "0.5.0-rc.1",
+    "dsh-mnemon-provider-openviking": "0.5.0-rc.1",
+    "dsh-mnemon-provider-retaindb": "0.5.0-rc.1",
+    "dsh-mnemon-provider-supermemory": "0.5.0-rc.1",
+    "dsh-mnemon-source-documents": "0.5.0-rc.1",
+    "dsh-mnemon-source-memory-spaces": "0.5.0-rc.1",
+    "dsh-mnemon-source-runtime": "0.5.0-rc.1",
+    "dsh-mnemon-strategy-auto-capture": "0.5.0-rc.1",
+    "dsh-mnemon-strategy-default-three-tier": "0.5.0-rc.1",
+    "dsh-mnemon-strategy-light-context": "0.5.0-rc.1",
+    "dsh-mnemon-strategy-scoped": "0.5.0-rc.1",
     "fflate": "^0.8.3",
-    "markdown-to-jsx": "^7.7.17",
     "schemastery": "^3.18.0",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-client-ui-primitives": "^0.1.0-rc.6 || ^0.1.1-rc.1 || ^0.1.2-alpha.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
@@ -158,6 +168,7 @@
     "@deepseek-ai/dsh-client-locale": "0.1.2-rc.1",
     "@deepseek-ai/dsh-client-store": "0.1.2-rc.1",
     "@deepseek-ai/dsh-client-ui-conversation": "0.1.2-rc.1",
+    "@deepseek-ai/dsh-client-ui-layout": "0.1.2-rc.1",
     "@deepseek-ai/dsh-client-ui-primitives": "0.1.2-rc.1",
     "@deepseek-ai/dsh-client-ui-renderer": "0.1.2-rc.1",
     "@deepseek-ai/dsh-client-ui-settings": "0.1.2-rc.1",

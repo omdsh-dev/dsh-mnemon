@@ -4,7 +4,7 @@
 
 `dsh-mnemon` is the memory-system control plane for DeepSeek Harness (DSH). It does not force every kind of knowledge into one database. It organizes frequent context, complete project narratives, and retrievable long-term memory into three tiers, then brings nine long-term-memory providers into one workflow for creation, activation, recall, distillation, and observation.
 
-Since v0.3.0, those tiers are the default topology of a composable kernel. Ordinary users decide only whether each Layer is on; `MemoryBoot` assembles extension Layers, Adapters, Strategies, Guards, and MemorySources in the control plane. A lightweight per-turn `TurnView` keeps exact Runtime context eager and durable sources routed, without changing the default user workflow.
+Runtime, Documents and Memory Spaces are independent Source plugins. A Strategy selects their instance-specific projections, retrieval routes and actions into an immutable per-turn View. Core provides only `ctx.mnemonMemory`; Sources own their data and optional pages, while Memory Spaces owns its private Provider children. The `dsh-mnemon` Starter preserves the default three-tier experience. See [Architecture](./architecture.md) and [Plugin development](./extensions.md).
 
 The short decision rule is: **keep every-turn context in Runtime, complete narratives in Documents, and cross-task evidence in Memory Spaces.**
 

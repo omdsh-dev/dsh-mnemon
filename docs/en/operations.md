@@ -33,11 +33,13 @@ Status shows Mnemon / dsh-mnemon versions, Runtime, Memory Spaces, Documents, an
 [![Check and update Mnemon CLI and dsh-mnemon](../assets/screenshots/version-check.png)](../assets/screenshots/version-check.png)
 
 - **Mnemon CLI**: installed from `mnemon --version`; latest from Mnemon GitHub Releases.
-- **dsh-mnemon**: installed from the running package; latest from the npm registry.
+- **dsh-mnemon**: installed from the running package; updates from npm `latest`. An installed beta/alpha/rc also checks its own channel and can graduate to a newer stable version. Stable users never opt into prereleases automatically.
 
 Checking is read-only and never installs automatically. Update appears only when a newer version exists and the source is safely recognized. Mnemon supports Homebrew Cask / Formula and `go install`; dsh-mnemon supports npm installations managed by pnpm in the owning DSH Profile. `link:` / `file:` development builds and unrecognized manual installs show guidance only.
 
-The Host fixes update commands and arguments. The browser cannot supply either; shell is disabled and execution/output are bounded. After an update, the UI rechecks both components and refreshes Status automatically. Mnemon applies on the next CLI call. Restart `dsh web` after updating dsh-mnemon.
+Go updates additionally require the active executable to resolve to the current Go installation output (`GOBIN`, or the first `GOPATH` entry's `bin` directory), with no cross-compilation target. A downloaded binary is not a Go-managed installation merely because it contains Go build metadata. CLI updates must verify that the active executable actually reaches the checked release before reporting success.
+
+The Host fixes update commands and arguments. The browser cannot supply either; shell is disabled and execution/output are bounded. A plugin update installs the exact checked version in its owning profile and verifies the installed package before reporting success; pinned beta versions cannot silently remain on an older release. After an update, the UI rechecks both components and refreshes Status automatically. Mnemon applies on the next CLI call. Restart `dsh web` after updating dsh-mnemon.
 
 The opt-in SQLite incompatibility first called out for DSH rc.8 remains in DSH 0.1.1-rc.2. It applies only to `@deepseek-ai/dsh-session-persistence-sqlite`, which shipped profiles do not select. The rc.2 backend uses schema version 17, rejects older schemas, and provides no migration path: deployments that mounted it manually should back up and recreate the DSH session database. dsh-mnemon's Runtime, Documents, Memory Spaces, and Provider data use separate storage roots and are unaffected.
 

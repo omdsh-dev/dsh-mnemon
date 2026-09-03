@@ -3,10 +3,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MnemonSettingsCard } from '../src/client/MnemonSettingsCard.tsx'
 import { translateEn } from '../src/client/locales.ts'
-import type { ClientConnectionHandle, ClientSettingsScope } from '../src/contracts.ts'
-import type { Config, InteractionConfig } from '../src/config.ts'
-import type { MemorySystemDescriptor } from '../src/shared/contracts.ts'
-import { MEMORY_PROVIDER_CATALOG } from '../src/providers/catalog.ts'
+import type { ClientConnectionHandle, ClientSettingsScope } from "../src/host/dsh.ts"
+import type { Config, InteractionConfig } from "../src/host/config.ts"
+import type { MemoryCompositionStatus } from "../src/host/protocol.ts"
+import { TEST_PROVIDERS as MEMORY_PROVIDER_CATALOG } from './fixtures/providers.ts'
 
 afterEach(cleanup)
 
@@ -119,7 +119,7 @@ describe('MnemonSettingsCard', () => {
         value: { available: true, model: 'qwen3-embedding:0.6b', totalInsights: 8, embedded: 6, coverage: '75%' },
       }
       if (channel === '/dsh-mnemon-read' && endpoint === 'task-agent-models') return { ok: true as const, value: { groups: [], failures: [] } }
-      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [], items: [], generatedAt: '' } }
+      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [], items: [], generatedAt: '' } }
       if (channel === '/dsh-mnemon-pack' && endpoint === 'target') return { ok: true as const, value: { root: '/root/.mnemon', scope: 'global' as const } }
       throw new Error(`unexpected ${channel} ${endpoint}`)
     })
@@ -145,26 +145,18 @@ describe('MnemonSettingsCard', () => {
       set: vi.fn(async () => {}), unset: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}), mutate,
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
     const participation = { recall: 'automatic', write: 'automatic', projection: 'automatic', maintenance: 'automatic' } as const
-    const descriptor: MemorySystemDescriptor = {
-      catalog: {
-        generation: 4,
-        layers: [
-          { id: 'runtime', label: 'Runtime Memory', description: 'Hot context', role: 'working-context', order: 100, capabilities: ['read', 'write', 'project'] },
-          { id: 'documents', label: 'Documents', description: 'Narrative records', role: 'narrative', order: 200, capabilities: ['search', 'write'] },
-          { id: 'memory-spaces', label: 'Memory Spaces', description: 'Durable evidence', role: 'durable-evidence', order: 300, capabilities: ['recall', 'write'] },
-        ],
-        adapters: [],
-        strategies: [{ id: 'default-three-tier', version: '1', label: 'Default strategy', description: 'Stable routing', hooks: ['placement'], deterministic: true }],
-      },
-      topology: {
-        id: 'default-three-tier', strategyId: 'default-three-tier', generation: 1, catalogGeneration: 4, createdAt: '2026-08-19T00:00:00.000Z',
-        layers: ['runtime', 'documents', 'memory-spaces'].map(id => ({ id, enabled: true, participation: { ...participation }, adapterIds: [] })),
+    const descriptor: MemoryCompositionStatus = {
+      evaluation: { state: 'ready', contributionRevision: 4, sourceInstanceKeys: [], diagnostics: [] },
+      sources: [],
+      configuration: {
+        id: 'default-three-tier', strategyId: 'default-three-tier',
+        layers: Object.fromEntries(['runtime', 'documents', 'memory-spaces'].map(id => [id, { enabled: true, participation: { ...participation }, adapterIds: [] }])),
       },
     }
     const call = vi.fn(async (channel: string, endpoint: string) => {
       if (channel === '/dsh-mnemon-read' && endpoint === 'memory-system') return { ok: true as const, value: descriptor }
       if (channel === '/dsh-mnemon-read' && endpoint === 'task-agent-models') return { ok: true as const, value: { groups: [], failures: [] } }
-      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [], items: [], generatedAt: '' } }
+      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [], items: [], generatedAt: '' } }
       if (channel === '/dsh-mnemon-pack' && endpoint === 'target') return { ok: true as const, value: { root: '/root/.mnemon', scope: 'global' as const } }
       throw new Error(`unexpected ${channel} ${endpoint}`)
     })
@@ -211,7 +203,7 @@ describe('MnemonSettingsCard', () => {
     })
     const firstWorkspace = deferred<ReturnType<typeof catalog>>()
     const call = vi.fn(async (channel: string, endpoint: string, payload?: { workspaceId?: string }) => {
-      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-services') {
+      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') {
         return payload?.workspaceId === 'workspace-1' ? firstWorkspace.promise : catalog('https://workspace-2.example')
       }
       if (channel === '/dsh-mnemon-pack' && endpoint === 'target') return { ok: true as const, value: { root: '/workspace/.mnemon', scope: 'workspace' as const } }
@@ -221,7 +213,7 @@ describe('MnemonSettingsCard', () => {
     const view = render(<MnemonSettingsCard scope={scope} connection={connection} workspaceId="workspace-1" workspaceLabel="One" />)
 
     view.rerender(<MnemonSettingsCard scope={scope} connection={connection} workspaceId="workspace-2" workspaceLabel="Two" />)
-    await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'provider-services', { workspaceId: 'workspace-2' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-read', 'provider-services', { workspaceId: 'workspace-2' }))
     const providerGroup = await screen.findByRole('group', { name: 'OpenViking 服务配置' }, { timeout: 5_000 })
     fireEvent.click(within(providerGroup).getByRole('button'))
     await waitFor(() => expect((screen.getByLabelText('服务地址') as HTMLInputElement).value).toBe('https://workspace-2.example'), { timeout: 5_000 })
@@ -247,7 +239,7 @@ describe('MnemonSettingsCard', () => {
         ok: true as const,
         value: { effective: { provider: 'deepseek', model: 'deepseek-chat', source: 'dsh-default' as const }, groups: [], failures: [] },
       }
-      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-services') return {
+      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return {
         ok: true as const, value: { providers: [], items: [], generatedAt: '' },
       }
       if (channel === '/dsh-mnemon-pack' && endpoint === 'target') return {
@@ -801,7 +793,7 @@ describe('MnemonSettingsCard', () => {
     expect((view.getByLabelText('存入记忆按钮') as HTMLInputElement).checked).toBe(true)
   })
 
-  it('renders every third-party provider off while local settings hydrate', () => {
+  it('does not invent Provider registrations while the Host catalog is loading', () => {
     const snapshot = {
       status: 'ready' as const,
       value: { storageScope: 'workspace' as const },
@@ -815,20 +807,15 @@ describe('MnemonSettingsCard', () => {
     } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
     const providerSettings = new Promise<never>(() => {})
     const call = vi.fn((channel: string, endpoint: string) => {
-      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-services') return providerSettings
+      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return providerSettings
       if (channel === '/dsh-mnemon-pack' && endpoint === 'target') return Promise.resolve({ ok: true as const, value: { root: '/active/.mnemon', scope: 'global' } })
       return Promise.reject(new Error(`unexpected ${channel} ${endpoint}`))
     })
 
     render(<MnemonSettingsCard scope={scope} connection={{ rpc: { call } } as ClientConnectionHandle} />)
 
-    expect(screen.getAllByRole('group', { name: /服务配置/ })).toHaveLength(8)
-    const toggles = screen.getAllByRole('checkbox', { name: /^启用 / }) as HTMLInputElement[]
-    expect(toggles).toHaveLength(8)
-    expect(toggles.every(toggle => !toggle.checked && toggle.disabled)).toBe(true)
-    expect(screen.getByText('官方原生').parentElement?.textContent).toContain('工作区')
-    expect(screen.getByRole('group', { name: 'Holographic 服务配置' }).textContent).toContain('工作区')
-    expect(screen.getByRole('group', { name: 'OpenViking 服务配置' }).textContent).toContain('全局')
+    expect(screen.queryAllByRole('group', { name: /服务配置/ })).toHaveLength(0)
+    expect(screen.queryAllByRole('checkbox', { name: /^启用 / })).toHaveLength(0)
     expect(screen.getByRole('status').textContent).toBe('正在读取 Provider 配置…')
   })
 
@@ -849,10 +836,10 @@ describe('MnemonSettingsCard', () => {
       label: 'Holographic', kind: 'local' as const, origin: 'third-party' as const, summary: 'Local facts',
       workspaceBinding: 'optional-override' as const,
       capabilities: { search: true, browse: true, graph: true, entities: true, related: true, remember: true, link: false, forget: true, writeMode: 'exact' as const, deletionMode: 'hard' as const },
-      fields: [{ key: 'dataPath', label: 'Fact store path', scope: 'service' as const, role: 'global-location' as const, input: 'path' as const, required: false }],
+      fields: [{ key: 'dataPath', label: 'Fact store path', i18nKey: 'overview.providerField.dataPath' as const, scope: 'service' as const, role: 'global-location' as const, input: 'path' as const, required: false }],
     }
     const call = vi.fn(async (channel: string, endpoint: string, payload: unknown) => {
-      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [provider], items: [{ providerId: 'holographic', enabled: true, configured: true, settings: { dataPath: '/srv/dsh/holographic.json' }, configuredSecrets: [] }], generatedAt: '2026-08-17T00:00:00.000Z' } }
+      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [provider], items: [{ providerId: 'holographic', enabled: true, configured: true, settings: { dataPath: '/srv/dsh/holographic.json' }, configuredSecrets: [] }], generatedAt: '2026-08-17T00:00:00.000Z' } }
       if (channel === '/dsh-mnemon-write' && endpoint === 'provider-service-update') {
         const request = payload as { settings: Record<string, string> }
         return { ok: true as const, value: { providerId: 'holographic', enabled: true, configured: true, settings: request.settings, configuredSecrets: [] } }
@@ -897,6 +884,62 @@ describe('MnemonSettingsCard', () => {
     })))
   })
 
+  it('renders and saves an unknown Provider instance entirely from its descriptor', async () => {
+    const snapshot = {
+      status: 'ready' as const,
+      value: { storageScope: 'global' as const },
+      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
+    }
+    const scope = {
+      snapshot,
+      getSnapshot() { return this.snapshot },
+      subscribe() { return () => {} },
+      set: vi.fn(async () => {}), unset: vi.fn(async () => {}), setPath: vi.fn(async () => {}), unsetPath: vi.fn(async () => {}),
+    } satisfies ClientSettingsScope<Config> & { snapshot: typeof snapshot }
+    const provider = {
+      id: 'work-account', typeId: 'vector-store', label: 'Vector Store', icon: { kind: 'glyph' as const, value: 'VS' },
+      kind: 'remote' as const, origin: 'third-party' as const, workspaceBinding: 'provider-global' as const,
+      summary: 'Independent vector memory.',
+      capabilities: { search: true, browse: true, graph: false, entities: false, related: false, remember: true, link: false, forget: false, writeMode: 'exact' as const, deletionMode: 'unsupported' as const },
+      fields: [
+        { key: 'serverUrl', label: 'Vector endpoint', scope: 'service' as const, input: 'url' as const, required: true },
+        { key: 'apiToken', label: 'Vector API token', scope: 'service' as const, input: 'secret' as const, required: true },
+        { key: 'collection', label: 'Collection', scope: 'memory' as const, input: 'text' as const, required: true },
+      ],
+    }
+    const call = vi.fn(async (channel: string, endpoint: string, payload: unknown) => {
+      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return {
+        ok: true as const,
+        value: {
+          providers: [provider],
+          items: [{ providerId: 'work-account', enabled: true, configured: true, settings: { serverUrl: 'https://vectors.example' }, configuredSecrets: ['apiToken'] }],
+          generatedAt: '2026-08-30T00:00:00.000Z',
+        },
+      }
+      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-service-update') {
+        const request = payload as { settings: Record<string, string> }
+        return { ok: true as const, value: { providerId: 'work-account', enabled: true, configured: true, settings: request.settings, configuredSecrets: ['apiToken'] } }
+      }
+      if (channel === '/dsh-mnemon-pack' && endpoint === 'target') return { ok: true as const, value: { root: '/active/.mnemon', scope: 'global' } }
+      throw new Error(`unexpected ${channel} ${endpoint}`)
+    })
+
+    render(<MnemonSettingsCard scope={scope} connection={{ rpc: { call } } as ClientConnectionHandle} />)
+
+    const card = await screen.findByRole('group', { name: 'Vector Store 服务配置' })
+    expect(card.querySelector('[data-provider-icon="work-account"]')?.textContent).toBe('VS')
+    expect(within(card).getByText('Independent vector memory.')).toBeTruthy()
+    fireEvent.click(within(card).getByRole('button'))
+    const endpoint = within(card).getByRole('textbox', { name: 'Vector endpoint' })
+    expect((within(card).getByLabelText('Vector API token') as HTMLInputElement).type).toBe('password')
+    fireEvent.change(endpoint, { target: { value: 'https://vectors-v2.example' } })
+    fireEvent.click(within(card).getByRole('button', { name: '保存服务配置' }))
+
+    await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'provider-service-update', expect.objectContaining({
+      providerId: 'work-account', enabled: true, settings: { serverUrl: 'https://vectors-v2.example' },
+    })))
+  })
+
   it('edits a reusable provider service and reports its Memory Space synchronization', async () => {
     const snapshot = {
       status: 'ready' as const,
@@ -915,13 +958,13 @@ describe('MnemonSettingsCard', () => {
       workspaceBinding: 'provider-global' as const,
       capabilities: { search: true, browse: true, graph: false, entities: false, related: false, remember: true, link: false, forget: true, writeMode: 'async-extracting' as const, deletionMode: 'hard' as const },
       fields: [
-        { key: 'endpoint', label: 'Endpoint', scope: 'service' as const, input: 'url' as const, required: true, defaultValue: 'http://127.0.0.1:1933' },
-        { key: 'apiKey', label: 'API key', scope: 'service' as const, input: 'secret' as const, required: false },
+        { key: 'endpoint', label: 'Endpoint', i18nKey: 'overview.providerEndpoint' as const, scope: 'service' as const, input: 'url' as const, required: true, defaultValue: 'http://127.0.0.1:1933' },
+        { key: 'apiKey', label: 'API key', i18nKey: 'overview.providerApiKey' as const, scope: 'service' as const, input: 'secret' as const, required: false },
         { key: 'targetUri', label: 'Memory URI', scope: 'memory' as const, input: 'text' as const, required: true, defaultValue: 'viking://user/memories' },
       ],
     }
     const call = vi.fn(async (channel: string, endpoint: string) => {
-      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [provider], items: [{ providerId: 'openviking', enabled: true, configured: true, settings: { endpoint: 'http://127.0.0.1:1933' }, configuredSecrets: ['apiKey'], secretValues: { apiKey: 'service-secret' } }], generatedAt: '2026-08-17T00:00:00.000Z' } }
+      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [provider], items: [{ providerId: 'openviking', enabled: true, configured: true, settings: { endpoint: 'http://127.0.0.1:1933' }, configuredSecrets: ['apiKey'], secretValues: { apiKey: 'service-secret' } }], generatedAt: '2026-08-17T00:00:00.000Z' } }
       if (channel === '/dsh-mnemon-write' && endpoint === 'provider-service-update') return { ok: true as const, value: { providerId: 'openviking', enabled: true, configured: true, settings: { endpoint: 'http://127.0.0.1:1933' }, configuredSecrets: ['apiKey'], secretValues: { apiKey: 'service-secret' } } }
       if (channel === '/dsh-mnemon-pack' && endpoint === 'target') return { ok: true as const, value: { root: '/workspace/.mnemon', scope: 'workspace' } }
       throw new Error(`unexpected ${channel} ${endpoint}`)
@@ -989,13 +1032,13 @@ describe('MnemonSettingsCard', () => {
       workspaceBinding: 'provider-global' as const,
       capabilities: { search: true, browse: true, graph: false, entities: false, related: false, remember: true, link: false, forget: true, writeMode: 'async-extracting' as const, deletionMode: 'soft' as const },
       fields: [
-        { key: 'endpoint', label: 'Endpoint', scope: 'service' as const, input: 'url' as const, required: true, defaultValue: 'https://api.supermemory.ai' },
-        { key: 'apiKey', label: 'API key', scope: 'service' as const, input: 'secret' as const, required: true },
+        { key: 'endpoint', label: 'Endpoint', i18nKey: 'overview.providerEndpoint' as const, scope: 'service' as const, input: 'url' as const, required: true, defaultValue: 'https://api.supermemory.ai' },
+        { key: 'apiKey', label: 'API key', i18nKey: 'overview.providerApiKey' as const, scope: 'service' as const, input: 'secret' as const, required: true },
       ],
     }
     let service = { providerId: 'supermemory' as const, enabled: false, configured: false, settings: {}, configuredSecrets: [] as string[] }
     const call = vi.fn(async (channel: string, endpoint: string, payload: unknown) => {
-      if (channel === '/dsh-mnemon-write' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [provider], items: [service], generatedAt: '2026-08-17T00:00:00.000Z' } }
+      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [provider], items: [service], generatedAt: '2026-08-17T00:00:00.000Z' } }
       if (channel === '/dsh-mnemon-write' && endpoint === 'provider-service-update') {
         const request = payload as { enabled: boolean; settings: Record<string, unknown> }
         service = {

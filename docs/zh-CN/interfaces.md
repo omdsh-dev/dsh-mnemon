@@ -52,7 +52,7 @@ Headless 会获得完整模型工具面。它把命令行任务作为普通用�
 |---|---|---|
 | `mnemon_runtime_memory` | `add` / `replace` / `remove` 热记忆 | 确定性控制；add 溢出时可能启动 worker |
 | `mnemon_document_manage` | 创建、更新或归档档案 | 创建/更新确定性；归档使用 worker |
-| `mnemon_remember` | 按 Provider 语义沉淀洞察，并等待落定回执 | `spawn` write worker |
+| `mnemon_remember` | 按 Provider 语义沉淀洞察，回执区分已接受与持久提交 | `spawn` write worker |
 | `mnemon_link` | 在支持能力的 Provider 中建立 typed relationship | `spawn` write worker |
 | `mnemon_forget` | 在支持能力的 Provider 中按精确 ID 删除 | `spawn` write worker |
 | `mnemon_memory_body_create` | 由 Agent 创建独立 Mnemon Native 记忆体；第三方连接只由用户在 WebUI 管理 | `spawn` write worker |
@@ -124,7 +124,7 @@ rc.2 rollback authority: trusted-host
 | Endpoint | 行为 |
 |---|---|
 | `status` | 服务、版本、生命周期、档案、存储上下文及当前 Memory System 描述符的聚合状态 |
-| `memory-system` | 当前 Catalog 与 Topology 快照，包含各自 generation、Layer/Adapter/Strategy 描述和参与模式 |
+| `memory-system` | Serving/候选评估、脱敏 Source 实例描述符与当前参与配置 |
 | `versions` | 检查 Mnemon 与 dsh-mnemon 当前 / 最新版本和安装来源 |
 | `runtime-memory` | 运行时快照 |
 | `documents` / `document` / `document-search` | 档案目录、正文与确定性搜索 |
@@ -205,35 +205,20 @@ Mnemon 对两代 transport 使用同一种注册调用：始终传入 rc.2 autho
 
 ## npm 导出与扩展服务
 
-根包继续公开 Host 侧组合与现有核心类：
+Core 发布 `ctx.mnemonMemory: MemoryRuntime`；Source/Strategy 插件通过 `inject = ['mnemonMemory']` 与 `installMemory` 注册。Source 控制器及 Provider 注册表不是根包出口。各插件拥有自己的公开 `./contracts` 与可选 `./client`。
 
-```text
-apply
-Config / resolveConfig
-createRunner
-MnemonService
-RuntimeMemoryController
-DocumentManager
-StorageScopeInspector
-MnemonSubagentCoordinator
-MnemonLifecycle
-```
-
-`dsh-mnemon/client` 导出 DSH client bundle 的 `apply` 与 `inject`。客户端实现类与 RPC endpoint 目前均属于内部实现，不应当作稳定公共 SDK。
-
-可组合记忆 API 使用独立子路径：
-
-| 子路径 | 稳定职责 |
+| 入口 | 职责 |
 |---|---|
-| `dsh-mnemon/contracts` | wire-safe 描述符、Topology、Plan 与 Receipt 类型 |
-| `dsh-mnemon/kernel` | Catalog、Topology Manager、Kernel 与 Guard API |
-| `dsh-mnemon/extension-sdk` | `MemoryBoot`、Layer/Adapter/Strategy/Guard/MemorySource contribution 与进程级预注册 |
-| `dsh-mnemon/strategy-sdk` | Strategy 定义、权限清单和 replay |
-| `dsh-mnemon/provider-sdk` | Adapter Factory Registry 与当前 Provider Adapter 接口 |
-| `dsh-mnemon/layers/runtime`、`documents`、`memory-spaces` | 三个默认 Layer 描述符 |
-| `dsh-mnemon/strategy-default-three-tier` | 默认拓扑与调度策略 |
+| `dsh-mnemon` | DSH Host 与默认 Starter |
+| `dsh-mnemon/core` | 不带 Host/UI 的、Source 无关的 `ctx.mnemonMemory` 服务 |
+| `dsh-mnemon/contracts` | JSON 安全的 manifest、facts、ViewSpec、View、Evidence、Receipt |
+| `dsh-mnemon/extension-sdk` | Source/Strategy 定义、生命周期注册与校验 |
+| `dsh-mnemon/testing` | 真实 Cordis 组合测试夹具与已构建 Client 制品加载器 |
+| `dsh-mnemon/client` | DSH 工作台与 Source 页面 SDK |
+| `dsh-mnemon-source-memory-spaces/provider-sdk` | Memory Spaces 自己的 Provider 子模块协议 |
+| `dsh-mnemon-source-memory-spaces/testing` | Provider 驱动测试夹具 |
 
-Host 发布 Cordis 服务 `mnemonMemory: MemoryBoot`（`MemoryExtensionHost` 保留为 v0.3 预发布别名）。其他 DSH 插件声明 `inject = ['mnemonMemory']` 后，可以把 Layer、Adapter、Strategy、Guard 或 MemorySource 注册到同一生命周期；卸载 disposer 会推动 generation 并使旧 Plan 与 TurnView 失效，若卸载会让自动参与投影的 Layer 失去 Source，则操作会被拒绝并回滚。完整示例见[记忆扩展开发](./extensions.md)。内部 RPC 与 `MnemonClient` 仍不属于公开 SDK。
+通用模型工具 `mnemon_view_route`、`mnemon_view_action` 只执行当前 View 内的 route/offer；原有具名工具保留默认工作流。浏览器管理使用 `source-management-catalog`、`source-management-read`、`source-management-mutate` 与可选 `source-assistance`，Host/Source 检查实例、确认、修订与当前权限。内部 RPC 名称不是插件 SDK，页面应使用限定实例的管理客户端。见[插件开发](./extensions.md)。
 
 ## 国际化范围
 

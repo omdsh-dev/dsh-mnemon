@@ -49,6 +49,7 @@ await new Promise((resolveListen, reject) => {
 })
 const env = {
   ...process.env,
+  CI: '1',
   PATH: `${dirname(cli)}${delimiter}${process.env.PATH ?? ''}`,
   DSH_HOME: dshHome,
   DSH_TELEMETRY_DISABLED: '1',
@@ -74,12 +75,22 @@ process.once('SIGINT', () => { void stop() })
 process.once('SIGTERM', () => { void stop() })
 
 try {
-  const packages = [
-    values.package,
-    ...(values['web-ui'] === 'none' ? [] : [values['web-ui']]),
-    ...(values['panel-event-loss'] ? [`link:${join(root, 'scripts/web-regression-panel-event-loss')}`] : []),
+  // The local Starter and its unpublished sibling plugins form one install.
+  // Published control packages still resolve their own registry dependencies.
+  const starter = [values.package]
+  if (values.package === `link:${root}`) {
+    const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
+    for (const name of Object.keys(manifest.dependencies ?? {})) {
+      if (name.startsWith('dsh-mnemon-')) starter.push(`link:${join(root, 'plugins', name)}`)
+    }
+  }
+  const groups = [
+    starter,
+    ...(values['web-ui'] === 'none' ? [] : [[values['web-ui']]]),
+    ...(values['panel-event-loss'] ? [[`link:${join(root, 'scripts/web-regression-panel-event-loss')}`]] : []),
   ]
-  for (const group of values['mnemon-first'] ? packages.map(packageName => [packageName]) : [packages]) {
+  const packages = groups.flat()
+  for (const group of values['mnemon-first'] ? groups : [packages]) {
     // Optional SSH/PTY/tunnel native installers are outside this UI regression.
     const installer = spawn(process.execPath, [dshBin, 'plugin', '--profile', 'web', 'add', ...group, '--ignore-scripts'], {
       env, cwd: workspace, stdio: 'inherit', shell: false,

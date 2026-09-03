@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { HostSessionEvent } from '../src/contracts.ts'
+import type { HostSessionEvent } from "../src/host/dsh.ts"
 import {
   mnemonSubagentTokenUsageProjectionDefinition as projection,
   registerMnemonSubagentTokenUsageProjection,
-} from '../src/subagent-token-usage.ts'
+} from "../src/host/subagent-token-usage.ts"
 
 function event(type: string, data: Record<string, unknown> = {}): HostSessionEvent {
   return { type, data }

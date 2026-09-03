@@ -5,7 +5,12 @@ const viewCss = readFileSync(new URL('../src/client/MnemonView.module.css', impo
 const sidebarCss = readFileSync(new URL('../src/client/MnemonSidebarView.module.css', import.meta.url), 'utf8')
 const saveActionCss = readFileSync(new URL('../src/client/MnemonSaveAction.module.css', import.meta.url), 'utf8')
 const dialogSource = readFileSync(new URL('../src/client/MnemonDialog.tsx', import.meta.url), 'utf8')
-const viewSource = readFileSync(new URL('../src/client/MnemonView.tsx', import.meta.url), 'utf8')
+const viewSource = [
+  '../src/client/MnemonView.tsx',
+  '../plugins/dsh-mnemon-source-runtime/src/client/pages.tsx',
+  '../plugins/dsh-mnemon-source-documents/src/client/pages.tsx',
+  '../plugins/dsh-mnemon-source-memory-spaces/src/client/pages.tsx',
+].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n')
 
 describe('responsive dialog layout invariants', () => {
   it('keeps the dialog body as the only scrollport and the action footer outside it', () => {
@@ -13,6 +18,10 @@ describe('responsive dialog layout invariants', () => {
     expect(viewCss).toContain('.modalFooter { display: flex; flex: none;')
     expect(sidebarCss).toContain(".shell .modal > [class*='modalBody'] { min-height: 0; overflow-x: hidden; overflow-y: auto;")
     expect(sidebarCss).not.toContain('.shell .modal > div:last-child')
+  })
+
+  it('applies the fixed sidebar skin to wide dialogs instead of collapsing them to the base width', () => {
+    expect(dialogSource).toContain('appearanceClass(css.modalWide, sidebarCss.modalWide)')
   })
 
   it('uses a safe-area-aware bottom sheet and touch-sized actions on narrow viewports', () => {

@@ -6,8 +6,8 @@ The Roadmap records work beyond the current implementation; it is not a commitme
 
 ## Release boundaries
 
-- **v0.4: Sidebar-first.** Retain the v0.3 architecture and memory formats. v0.4.0 initially removed builtin presentation; [v0.4.2](./releases/v0.4.2.md) restores optional `displayMode: builtin` as entry placement sharing the Sidebar UI, not a separate layout. The [v0.4.0 release notes](./releases/v0.4.0.md) remain the historical release record.
-- **v0.5: complete view-based upgrade, planned.** Develop and verify the architecture upgrade separately on top of the shared workbench. This work is not included in v0.4.0; publishing v0.4 does not declare it ready.
+- **v0.4: Sidebar-first.** Retain the v0.3 architecture and memory formats. v0.4.0 initially removed builtin presentation; [v0.4.2](./releases/v0.4.2.md) restores optional `displayMode: builtin` with the shared UI, and [v0.4.3](./releases/v0.4.3.md) fixes the collapsed Sidebar icon. The v0.4.0 notes remain a historical release record.
+- **v0.5: View-based plugin release candidate.** The architecture upgrade retains the shared workbench and ships as independently verifiable plugins; see the [RC scope](./releases/v0.5.0-rc.1.md). Its SDK remains prerelease and is not yet a frozen extension ABI.
 
 ## P0: Reliability and Recoverable Scheduling
 
@@ -21,7 +21,6 @@ The Roadmap records work beyond the current implementation; it is not a commitme
 ## P1: Long-Term Maintenance and Data Operations
 
 - [ ] **Dynamic Memory Space Provider Catalog**: register Provider descriptors, connection schemas, credential redaction, discovery, and Factories together so a new Provider plugin needs no built-in union or WebUI edit.
-- [ ] **Kernelize every path and persist Receipts**: converge compatibility-controller flows on Plan/Execute/Receipt and persist bounded Receipts for audit, retry, and comparison across restarts.
 - [ ] **Strategy artifact promotion pipeline**: provide schema/type checks, golden replay, shadow, canary, signing, version rollback, and metric comparison so model-generated Strategies reach the active topology only as controlled artifacts.
 - [ ] **Long-term organization across sessions**: trigger an independent organization process based on time and the number of new sessions instead of reusing per-turn review.
 - [ ] **Mnemon GC / forget review**: generate candidates for decay, conflicts, obsolete content, and orphaned relationships, then present evidence before deletion.
@@ -37,7 +36,7 @@ The Roadmap records work beyond the current implementation; it is not a commitme
 
 - [ ] **Background-review history**: show recent scores, checkpoints, waiting/running/failed states, worker receipts, and resulting changes.
 - [ ] **Switch to DSH's shared directory picker** (blocked on [dsh-external/issues#603](https://github.com/dsh-external/issues/issues/603)): custom storage temporarily uses a manually entered Host path because remote `browse` deployments cannot invoke the `native` picker; once DSH exposes a reusable directory-picker service for plugins, move to the provider-selected native / browse flow and retain manual entry only as a fallback if needed.
-- [ ] **Complete internationalization**: cover commands, tool cards, Host errors, compatibility default metadata, and confirmation copy.
+- [ ] **Complete internationalization**: cover commands, tool cards, Host errors, default metadata, and confirmation copy.
 - [ ] **Multi-Memory-Space E2E**: cover automatic space creation, cross-space recall, one-pass migration routing, multiple relationship types, merge, and controlled forget.
 - [ ] **URL-subpath deployment matrix**: add real reverse-proxy E2E for the DSH shell, static assets, plugin assets, RPC/API, and WebSocket under `/prefix/`; keep the dsh-mnemon client transport-neutral through the host `connection`, while the host supplies one coherent base URL so root-relative assets cannot leave the deployment half functional.
 - [ ] **Capacity and fault injection**: exercise real USER/MEMORY boundaries, Document LRU, revision conflicts, CLI timeouts, and mid-operation Host restarts.
@@ -46,7 +45,7 @@ The Roadmap records work beyond the current implementation; it is not a commitme
 
 ## Explicitly Out of Scope
 
-- Automatically executing code in the Host immediately after a model generates it. The current release provides manifests, permission wrapping, replay, and Kernel-validation primitives only.
+- Automatically executing generated code. Current boundaries cover manifests, pure Strategy replay, contract validation and generation replacement; trusted installation remains explicit.
 - Treating a Cordis isolate as a security sandbox for untrusted plugins. Third-party executors and Strategies must still come from trusted packages.
 - A Runtime `daily` target; only `user` and `memory` are currently maintained.
 - A proactive notification daemon without explicit delivery semantics; Mnemon remains an on-demand pull system.

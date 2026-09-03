@@ -2,7 +2,7 @@
 
 [简体中文](../zh-CN/ui-guide.md) | **English** | [Documentation hub](./README.md)
 
-This guide follows the Sidebar-first experience and a real user path. Optional Builtin placement embeds the same workspace in a conversation; it does not restore the old builtin layout. Compatible workflow screenshots were captured from a live v0.2.0 1600×900 WebUI, while v0.3 Layer controls retain their labeled historical screenshots. The [entry-placement settings screenshot](../assets/screenshots/settings-entry-placement.png) shows the restored option in the local issue #139 implementation. Names, counts, and content vary with local data.
+This guide follows the Sidebar-first experience and a real user path. The composable Source architecture preserves the established interaction flow; optional Builtin placement embeds the same pages in a conversation, not a separate layout. The only visible v0.5 change from v0.4 is three Memory enhancement switches under **Settings → Memory System**; there is no View page or generic plugin-management entry. Historical screenshots and recordings come from a live v0.2.0 1600×900 WebUI. The [entry-placement settings screenshot](../assets/screenshots/settings-entry-placement.png) records the option restored in v0.4.2. Names, counts, and content vary with local data.
 
 ## Watch the complete interaction first
 
@@ -16,13 +16,14 @@ The roughly 55-second recording leaves a clear pause on page transitions, dialog
 
 The Memory System sidebar entry always opens its workspace, including after visiting Task Board or SSH. Clicking it again keeps the current page open; use Back to conversation to close it.
 
-With `displayMode: builtin`, open Memory System from the conversation's tabs instead. The Sidebar entry is absent. The header omits storage-mode and workspace-selection controls because the Host automatically maps that session to global, workspace, or custom storage. All pages and dialogs below are shared; conversation shortcuts open the matching tab. See [scope mapping](./configuration.md#entry-placement-displaymode-and-tabenabled).
+With `displayMode: builtin`, open Memory System from the conversation's tabs instead; the Sidebar entry is absent. The header omits storage-mode and workspace-selection controls because the Host uses the owning session's global, workspace or custom scope. All Source pages and dialogs below are shared, and conversation shortcuts open the matching tab. See [scope mapping](./configuration.md#entry-placement-displaymode-and-tabenabled).
 
-Primary pages remain **Status, Runtime, Documents, Memory Spaces**. Memory Spaces adds **Overview, Recall, Content, Entities**, with **Remember** and **Distillation strategy** at the top right.
+Primary pages remain **Status, Runtime, Documents, Memory Spaces**. Memory Spaces adds **Overview, Recall, Content, Entities**, with **Remember** and **Distillation strategy** at the top right. A generated View is an internal per-turn runtime artifact, not a navigation page; Status does not own plugin discovery or installation.
 
 | Visible action | What happens after the click | Independent task Agent? |
 |---|---|---|
 | Refresh status, synchronize now, click a Memory Space card | The Host reads asynchronously; one region spinner or the card's state dot shows progress | No |
+| Toggle a Memory enhancement | Enable or disable one shipped behavior for future turns | No |
 | Direct search, browse Content, inspect Entities | Provider-native read contracts run concurrently and render progressively | No |
 | Agent query | Recall runs first; bounded evidence goes to a clean top-level task Agent | Yes, read-only |
 | Remember / Save to memory | An editable confirmation precedes qualification, deduplication, distillation, routing, and writing | Starts after confirmation |
@@ -42,6 +43,16 @@ The page loads concurrently and progressively. Only one region-level spinner rem
 [![Check dsh-mnemon and Mnemon versions](../assets/screenshots/version-check.png)](../assets/screenshots/version-check.png)
 
 Checking is read-only. Update actions appear only for supported installation sources with a newer release. Restart `dsh web` after updating dsh-mnemon.
+
+## Memory enhancements: expose stable behavior only
+
+There is no standalone View page, and Status exposes no plugin catalog, dependency graph, or installation flow. The Starter ships three disabled enhancements using the same switches as other settings under **Settings → Memory System → Memory enhancements**:
+
+- **Active capture** identifies and records facts worth retaining from the current conversation;
+- **Light context** reduces resident content while preserving on-demand reads;
+- **Scoped composition** combines the currently available memory sources in stable order.
+
+A switch applies immediately to future turns; it never rewrites a turn that already pinned its View. All three may be enabled together, and disabling one never deletes Source data. The UI describes observable behavior only—never package names, Entries, dependencies, or conflicts. Third-party Sources and Strategies continue to use DSH Profile/Loader installation and composition; see [Building Memory Plugins](./extensions.md) for the author contract and contribution path.
 
 ## 2. Runtime: maintain every-turn context
 
@@ -146,17 +157,18 @@ Content distinguishes enumerable, query-only, and unavailable surfaces. A Provid
 
 [![Memory System settings for display, scope, Provider services, and backup](../assets/screenshots/settings-memory-system.png)](../assets/screenshots/settings-memory-system.png)
 
-Settings owns reusable **service configuration** only:
+Settings centralizes stable user choices and reusable **service configuration**:
 
-- Memory Layer cards come from the live Catalog. Runtime, Documents, and Memory Spaces each have one master switch, with no additional participation-mode controls;
+- Memory Source cards come from the live Catalog. Runtime, Documents, and Memory Spaces each have one master switch, with no additional participation-mode controls;
+- Memory enhancements provide three shipped switches—Active capture, Light context, and Scoped composition—disabled by default and applied immediately to future turns;
 - every external Provider has its own switch and is off by default;
 - endpoint, API Key, and Provider-specific fields appear only after enabling;
 - API Keys use a conventional password field whose eye button toggles visible/hidden; there is no clear-credential checkbox, dedicated Remove row, or saved-secret caption;
-- Save updates service configuration without waiting for discovery or recall; health belongs on Status and instances belong on Overview;
+- the three enhancement switches apply immediately; the footer Save action persists all other changes without waiting for discovery or recall. Health belongs on Status and instances belong on Overview;
 - global / workspace / custom tags show effective scope; Providers with the same scope semantics reuse Mnemon's configuration framework.
 - User profile scope is independent: **Global user profile** combines global USER.md with workspace/custom MEMORY.md without moving either source.
 
-The screenshot below comes from an isolated installation of `dsh-mnemon@0.3.0`. Each default Layer has exactly one master switch. “On” permits on-demand use; it does not force Recall on every turn.
+The screenshot below comes from an isolated installation of `dsh-mnemon@0.3.0`. Each default Source has exactly one master switch. “On” permits on-demand use; it does not force Recall on every turn.
 
 [![Runtime Memory, Project Documents, and Memory Spaces master switches in the actual English v0.3 settings page](../assets/screenshots/settings-memory-layers-en.jpg)](../assets/screenshots/settings-memory-layers-en.jpg)
 
@@ -168,7 +180,7 @@ Mnemon-specific custom directory, backup, and migration remain in Mnemon's own e
 
 **Manage embedding settings in DSH** makes the saved Ollama endpoint and model authoritative for Mnemon child processes, including Desktop launches that do not inherit shell startup files. The endpoint rejects credentials, queries, and fragments, and the warning explains that memory and query text leave the Host for that service. **Test status** uses the saved runtime, not an unsaved draft; the isolated profile above shows a successful Mnemon v0.2.5 connection and zero-memory coverage without exposing credentials or personal memory.
 
-Disabling a Layer does not delete data. Its Sidebar tab remains visible with an Off badge and opens a reversible disabled-state explanation without reading the data plane; re-enabling restores the existing data. A newly contributed extension Layer starts disabled. The current runtime generation keeps serving until the candidate validates and swaps, so a rejected candidate never leaves a partial configuration active.
+Disabling a Source does not delete data. Its Sidebar tab remains visible with an Off badge and opens a reversible disabled-state explanation without reading the data plane; re-enabling restores the existing data. A newly contributed extension Source starts disabled. The current runtime generation keeps serving until the candidate validates and swaps, so a rejected candidate never leaves a partial configuration active.
 
 [![The actual English Sidebar keeps the Documents tab visible and explains its reversible disabled state](../assets/screenshots/sidebar-layer-disabled-en.jpg)](../assets/screenshots/sidebar-layer-disabled-en.jpg)
 

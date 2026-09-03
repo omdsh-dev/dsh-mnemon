@@ -2,7 +2,7 @@
 
 [简体中文](../zh-CN/getting-started.md) | **English** | [Documentation hub](./README.md)
 
-This guide goes from a blank environment to the first verified recall. It uses Sidebar, global storage, and the compatible `default-three-tier` topology. You do not need to configure TurnView, Strategy, or generation concepts for normal use.
+This guide goes from a blank environment to the first verified recall. It uses Sidebar, global storage, and the default `default-three-tier` composition. You do not need to configure View, Strategy, or generation concepts for normal use.
 
 If installation is complete, jump to [First verification](#6-complete-first-verification). When upgrading from v0.3.x or v0.4.0–v0.4.1, read the [v0.4.2 entry-placement compatibility notes](./releases/v0.4.2.md#upgrade-and-compatibility), including automatic normalization of retained `buildin` preferences. If you are upgrading from v0.2.x, also read the [v0.3.0 upgrade notes](./releases/v0.3.0.md#upgrade-and-data-compatibility).
 
@@ -17,7 +17,7 @@ You need:
 
 Regular semantic work prefers a provider named `spawn` with `toolFilter`, `persona`, and `depthLimit`. Mnemon supplies a schema-validated, one-run result tool instead of depending on the Provider's `outputSchema` path. Optional score-based background review additionally requires a provider named `fork` with `inheritsParentContext=true`. Missing `fork` does not block deterministic pages or regular manual actions.
 
-This workflow uses dsh-mnemon v0.4.7, DSH 0.1.2-rc.1, and Mnemon 0.2.3 as the recommended registry baseline. Some compatible UI screenshots were captured on dsh-mnemon v0.2.0. A complete DSH rc.1 profile uses Host primitives unavailable on Node 20, while the plugin package itself retains Node.js 20 compatibility for older compatible Hosts. The immediately preceding DSH 0.1.2-alpha.5 remains covered from source, and DSH 0.1.1-rc.2 remains a backward-regression target. Back up and repeat this verification against an isolated root before upgrading.
+The current prerelease is the composable v0.5.0-rc.1 distribution: one Starter and sixteen version-locked official plugins. Read the [release-candidate scope and upgrade notes](./releases/v0.5.0-rc.1.md). The pinned DSH baseline is stable 0.1.2-rc.1; Native integration is also tested with Mnemon 0.2.5. Some retained screenshots come from dsh-mnemon v0.2.0. The complete DSH rc.1 profile requires Node `^22.19.0 || >=24.0.0`, while the Mnemon package retains its Node 20 engine floor for older compatible Hosts. CI separately covers the source-only DSH 0.1.2-alpha.5 predecessor and retains a rollback regression on 0.1.1-rc.2. Back up and repeat verification against an isolated root before upgrading.
 
 Install and verify the tested DSH release with:
 
@@ -139,11 +139,11 @@ With `storageScope=workspace`, Headless resolves `<invocation cwd>/.mnemon`; no 
 
 Open **Settings → Memory System**:
 
-[![Memory System settings: entry placement, memory scope, and layers](../assets/screenshots/settings-entry-placement.png)](../assets/screenshots/settings-entry-placement.png)
+[![Memory System settings: entry placement, memory scope and layers](../assets/screenshots/settings-entry-placement.png)](../assets/screenshots/settings-entry-placement.png)
 
 ### Workbench entry
 
-By default, open the dedicated workbench from Memory System in the DSH sidebar. Choose Builtin in Settings, or set `displayMode: builtin`, to show the same UI as a conversation tab instead. Save switches the entry live without changing stored data.
+By default, open the dedicated workbench from Memory System in the DSH sidebar. Choose Builtin in Settings, or set `displayMode: builtin`, to show the same Source pages as a conversation tab instead. Save switches the entry live without changing stored data.
 
 ### Storage location
 
@@ -155,11 +155,11 @@ By default, open the dedicated workbench from Memory System in the DSH sidebar. 
 
 Save initializes a candidate runtime graph before atomically switching the Host. The page clears stale state and reloads automatically—no browser refresh is needed. Changing scope never migrates, merges, or deletes old data.
 
-### Layer topology
+### Default Source composition
 
-A first installation should show Runtime, Documents, and Memory Spaces enabled. Each Layer has one master switch. Enabling only permits on-demand use; it does not force recall on every turn. Disabling stops that Layer's context, tools, background work, and data-plane Web/RPC together without deleting data. Its Sidebar tab is marked Off, and re-enabling restores the existing data. Keep all three defaults on for the first workflow.
+A first installation should show Runtime, Documents, and Memory Spaces enabled. Each Source has one master switch. Enabling only permits on-demand use; it does not force recall on every turn. Disabling stops that Source's context, tools, background work, and data-plane Web/RPC together without deleting data. Its Sidebar tab is marked Off, and re-enabling restores the existing data. Keep all three defaults on for the first workflow.
 
-In Workspace mode, conversation Agents, tools, and lifecycle hooks use the current conversation's effective root. Independent task Agents launched by Sidebar use the inspected workspace explicitly, including when no main session is selected. Its header reports a mismatch and offers one-click alignment. Builtin automatically uses its own conversation's scope for reads, writes, and tasks, so it needs no storage-mode badge, workspace picker, or alignment control.
+In Workspace mode, conversation Agents, tools, and lifecycle hooks use the current conversation's effective root. Independent task Agents launched by Sidebar use the inspected workspace explicitly, including when no main session is selected. Its header reports a mismatch and offers one-click alignment. Builtin uses its owning conversation's scope for reads, writes and tasks, with no storage-mode badge, workspace picker or alignment control.
 
 ## 5. Open the Sidebar workbench
 
@@ -172,7 +172,7 @@ Confirm that:
 - the top right says Connected;
 - Mnemon and dsh-mnemon show installed versions;
 - the storage root matches your chosen scope;
-- Memory System reports `default-three-tier`, with the three default Layers matching Settings;
+- Memory System reports `default-three-tier`, with the three default Sources matching Settings;
 - Runtime, Documents, and Memory Spaces report no errors.
 
 If Mnemon is unavailable, run `command -v mnemon` and `mnemon --version` on macOS/Linux, or `Get-Command mnemon` and `Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"` on Windows PowerShell. See [Troubleshooting](./operations.md#troubleshooting) for other symptoms.

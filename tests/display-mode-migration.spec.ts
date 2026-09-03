@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { Config } from '../src/config.ts'
-import type { HostSettingsService, SettingsOperation } from '../src/contracts.ts'
-import { createSettingsHandler, migrateLegacyDisplayMode } from '../src/settings.ts'
+import { Config } from '../src/host/config.ts'
+import type { HostSettingsService, SettingsOperation } from '../src/host/dsh.ts'
+import { createSettingsHandler, migrateLegacyDisplayMode } from '../src/host/settings.ts'
 
 function fixture(options: { base?: Record<string, unknown>; user?: Record<string, unknown>; writable?: boolean } = {}) {
   const base = options.base ?? {}

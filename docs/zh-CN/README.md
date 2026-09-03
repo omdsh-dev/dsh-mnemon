@@ -16,7 +16,7 @@
 
 | 我想要…… | 文档 |
 |---|---|
-| 一次看懂当前产品范围与 v0.3 架构 | [能力地图](./capabilities.md) · [v0.3.0 发布说明](./releases/v0.3.0.md) |
+| 一次看懂当前产品范围与可组合架构 | [能力地图](./capabilities.md) · [架构设计](./architecture.md) |
 | 决定一条信息应放在哪一层 | [存储与三层记忆模型](./storage-model.md) |
 | 选择、配置或比较记忆体 Provider | [长期记忆 Provider](./memory-providers.md) |
 | 让 DSH 与其他 Mnemon-enabled Agent 共享长期记忆 | [项目介绍：跨 Agent 共享边界](./project-overview.md#跨-agent-共享边界) · [配置参考：共享范围](./configuration.md#选择跨-agent-共享范围) |
@@ -29,9 +29,10 @@
 | 排查召回为空、目录未对齐、CLI 或 Provider 问题 | [运维、安全与故障排查](./operations.md#故障排查) |
 | 使用模型工具、`/mnemon` 命令或内部 RPC | [接口参考](./interfaces.md) |
 | 理解 Host、worker、控制面与数据面 | [架构设计](./architecture.md) |
-| 开发 Layer、Adapter、Strategy、Guard 或 MemorySource 插件 | [记忆扩展开发](./extensions.md) |
+| 开发 Source、Strategy 或 Memory Spaces Provider 插件 | [记忆扩展开发](./extensions.md) |
 | 修改代码、截图、测试或发布 | [开发与验证](./development.md) |
-| 从上一版本升级 | [v0.4.7 发布说明](./releases/v0.4.7.md) |
+| 从上一稳定版本升级 | [v0.4.3 发布说明](./releases/v0.4.3.md) |
+| 尝试 View-based 插件 RC | [v0.5.0-rc.1 范围与升级说明](./releases/v0.5.0-rc.1.md) |
 | 查看下一阶段计划 | [Roadmap](./roadmap.md) |
 
 ## 核心术语
@@ -49,7 +50,7 @@
 
 ## 文档边界
 
-- 用户文档以 Sidebar 优先工作台、共用界面的可选 Builtin 入口和可组合三层拓扑为主。
+- 用户文档以 Sidebar 优先体验、可选的共用 Builtin 入口和可组合 View 架构为主；旧 `buildin` 偏好会规范化，无需手动清理。
 - 架构图表达稳定执行边界，不是实时监控面板；实时数量与版本以“状态”页为准。
 - RPC 是 Host 与插件客户端之间的内部协议，不承诺稳定外部 API。
 - 当前没有正式固定的 DSH / Mnemon 版本矩阵；升级前应备份并在隔离目录验证。

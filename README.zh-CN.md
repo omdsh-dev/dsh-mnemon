@@ -32,21 +32,11 @@
 
 [Mnemon](https://github.com/mnemon-dev/mnemon) 仍是官方优先的原生引擎。可以替换的是第三层；无论选择哪个 Provider，前两层的存储、工作区和交互心智保持不变。
 
-从 v0.3.0 开始，三层是可组合内核中的**默认拓扑**，不再是各入口各自写死的唯一结构。`MemoryBoot` 把受信任的 Layer、Adapter、Strategy、Guard 与 `MemorySource` 装配为一代运行图；每个用户回合固定一份轻量 `TurnView`：Runtime 精确内容 eager 进入 Wake，Documents 与 Memory Spaces 只给出有界路由封面，完整召回权限保留在 Host。用户仍只安装一个 `dsh-mnemon`，设置、工具、RPC 与 UI 工作流不变。参见[可组合架构](./docs/zh-CN/architecture.md#可组合记忆内核)与[扩展开发指南](./docs/zh-CN/extensions.md)。
+Runtime、Documents、Memory Spaces 是独立 Source 插件；Strategy 将各实例的投影、检索 route 与 action 组合成逐回合不可变 View。Core 只提供 `ctx.mnemonMemory`，Source 拥有数据与可选页面，Memory Spaces 自己拥有内部 Provider 子节点。`dsh-mnemon` Starter 保持默认三层使用体验。详见[架构](./docs/zh-CN/architecture.md)与[插件开发](./docs/zh-CN/extensions.md)。
 
-v0.4.0 将 Sidebar 设为记忆系统的唯一工作台入口，移除 builtin 展示模式及其设置。旧展示偏好会被忽略，不改变记忆数据；完整的 view-based 升级计划放在 v0.5，不包含在本版中。更新前请阅读[升级与兼容性说明](./docs/zh-CN/releases/v0.4.0.md#升级与兼容性)。
+**v0.5.0-rc.1 引入 View-based Memory，以及独立发布的 Source/Strategy/Provider 插件。** SDK 仍是预发布 API，尚未冻结扩展 ABI；默认用户配置与使用流程保持兼容。相对 v0.4，普通界面只在“设置 → 记忆系统”增加三个默认关闭的增强开关，不增加 View 页或插件管理入口。参阅 [RC 范围与升级说明](./docs/zh-CN/releases/v0.5.0-rc.1.md)；v0.4 仍是稳定的 Sidebar 收敛发行线。
 
-v0.4.1 修复记忆系统和存入记忆在依赖 `this` 的 DSH settings store 上的渲染崩溃，以及 ZIP 导出失败和跨时区归档差异；保留 v0.4.0 工作流与既有记忆格式。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.1.md)。
-
-v0.4.2 恢复可选 `displayMode: builtin`，只将 Sidebar 优先迭代的共用界面放入会话。旧 `buildin` 仍可识别，并自动保存为 `builtin`，不改变记忆数据。详见[发布说明](./docs/zh-CN/releases/v0.4.2.md)与[入口位置与范围映射](./docs/zh-CN/configuration.md#入口位置displaymode-与-tabenabled)。
-
-v0.4.3 让折叠后的记忆系统图标与侧栏相邻控件对齐，并保留原有展开样式。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.3.md)。
-
-v0.4.4 同时支持新旧 DSH 会话投影接口，修复旧版宿主读取会话历史失败的问题，并保持新版宿主和已有投影检查点兼容。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.4.md)。
-
-v0.4.5 在已安装 Better Sidebar 时向其注册记忆系统，同时保留 DSH 普通 Sidebar 入口，并兼容两种客户端加载顺序。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.5.md)。
-
-v0.4.6 继续以 DSH 0.1.1-rc.2 作为稳定基线，并通过能力检测兼容 DSH 0.1.2-alpha.4 与 alpha.5 的 Session 事件快照接口。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.6.md)。
+v0.5 分支已纳入 main 的 v0.4.3 行为：默认使用 Sidebar，可选 `displayMode: builtin` 将同一组 Source 页面放入所属会话。旧 `buildin` 可识别并自动保存为 `builtin`，不改变记忆数据；折叠图标与侧栏相邻控件对齐，v0.4.1 的 settings store 与 ZIP 修复也继续保留。详见[最新稳定版说明](./docs/zh-CN/releases/v0.4.3.md)与[入口位置及范围映射](./docs/zh-CN/configuration.md#入口位置displaymode-与-tabenabled)。
 
 v0.4.7 将已发布的 DSH 0.1.2-rc.1 提升为稳定的 registry 基线，继续对其 alpha.5 前序版本执行源码验证，并保留上一条 0.1.1-rc.2 版本线的真实 WebUI 回归。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.7.md)。
 
@@ -54,9 +44,9 @@ v0.4.7 将已发布的 DSH 0.1.2-rc.1 提升为稳定的 registry 基线，继�
 
 | 层级 | 适合保存 | 如何进入 Agent 上下文 | 由谁管理 |
 |---|---|---|---|
-| **运行时** | 偏好、协作规则、项目约定、环境事实 | `USER.md` / `MEMORY.md` 每轮紧凑投影 | dsh-mnemon Host 确定性管理 |
-| **档案** | 设计、调查、流程、复盘、交接材料 | 先检索，再按需阅读全文 | dsh-mnemon Host 确定性管理 |
-| **记忆体** | 跨会话事实、决策、实体与关系 | 从已激活记忆体召回有界证据 | Mnemon Native 或三方 Provider |
+| **运行时** | 偏好、协作规则、项目约定、环境事实 | `USER.md` / `MEMORY.md` 每轮紧凑投影 | Runtime Source |
+| **档案** | 设计、调查、流程、复盘、交接材料 | 先检索，再按需阅读全文 | Documents Source |
+| **记忆体** | 跨会话事实、决策、实体与关系 | 从已激活记忆体召回有界证据 | Memory Spaces Source + 所选 Provider |
 
 三层不是同一内容的副本。简单判断规则是：**每轮都需要的放运行时，需要完整阅读的放档案，需要跨任务按需召回的放记忆体。**当前指令、仓库文件与实时工具结果始终高于历史记忆。
 
@@ -225,8 +215,8 @@ dsh plugin --profile headless add "link:/absolute/path/to/dsh-mnemon"
 | 配置范围、路由与模型 | [配置参考](./docs/zh-CN/configuration.md) |
 | 备份、更新或排障 | [运维指南](./docs/zh-CN/operations.md) |
 | 接入工具、命令或 RPC | [接口参考](./docs/zh-CN/interfaces.md) |
-| 开发 Layer、Adapter、Strategy、Guard 或 MemorySource 扩展 | [扩展开发指南](./docs/zh-CN/extensions.md) |
-| 查看本次升级 | [v0.4.7 发布说明](./docs/zh-CN/releases/v0.4.7.md) |
+| 开发 Source、Strategy 或 Memory Spaces Provider 插件 | [扩展开发指南](./docs/zh-CN/extensions.md) |
+| 查看稳定版升级 | [v0.4.3 发布说明](./docs/zh-CN/releases/v0.4.3.md) |
 
 完整目录见[文档中心](./docs/zh-CN/README.md)。
 

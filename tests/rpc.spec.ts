@@ -1,607 +1,384 @@
-import { describe, expect, it, vi } from 'vitest'
-import { resolveConfig } from '../src/config.ts'
-import type { HostConnectionHandle, HostRpcHandler } from '../src/contracts.ts'
-import type { MnemonLifecycle } from '../src/lifecycle.ts'
-import { createActivationHandler, createPackHandler, createReadHandler, createWriteHandler, MNEMON_ACTIVATION_CHANNEL, MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL, registerRpc } from '../src/rpc.ts'
-import type { RuntimeMemoryController } from '../src/runtime-memory.ts'
-import { MnemonService } from '../src/service.ts'
-import type { MnemonPackManager } from '../src/pack.ts'
-import type { LiveMnemonRuntime, MnemonRuntimeGraph } from '../src/live-runtime.ts'
-import type { VersionUpdateManager } from '../src/version-updates.ts'
-import { DEFAULT_THREE_TIER_TOPOLOGY, MemoryCatalog, MemoryKernel, MemoryTopologyManager, registerDefaultMemorySystem } from '../src/memory-system/index.ts'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { resolveConfig, type Config } from '../src/host/config.ts'
+import type { HostConnectionHandle, HostRpcHandler } from '../src/host/dsh.ts'
+import type { MnemonLifecycle } from '../src/host/lifecycle.ts'
+import { createActivationHandler, createPackHandler, createReadHandler, createWriteHandler, MNEMON_ACTIVATION_CHANNEL, MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_WRITE_CHANNEL, registerRpc } from '../src/host/rpc.ts'
+import type { LiveMnemonRuntime, MnemonRuntimeGraph } from '../src/host/runtime.ts'
+import type { VersionUpdateManager } from '../src/host/version-updates.ts'
+import { compositionFixture } from './fixtures/composition.ts'
+import openviking from 'dsh-mnemon-provider-openviking'
 
-function fakeService(writeEnabled = true): MnemonService {
-  return {
-    config: resolveConfig({ writeEnabled }),
-    status: vi.fn(async () => ({ healthy: true })),
-    statusSummary: vi.fn(() => ({ healthy: true, memoryBodies: [] })),
-    embeddingStatus: vi.fn(async () => ({ available: true, model: 'nomic-embed-text', totalInsights: 2, embedded: 1, coverage: '50%' })),
-    updateProviderService: vi.fn(async (providerId, settings) => ({ providerId, configured: true, settings, configuredSecrets: [] })),
-    memoryBodies: {
-      providerServices: vi.fn(() => ({ providers: [], items: [], generatedAt: 'now' })),
-    },
-    bodyDirectory: vi.fn(() => ({ items: [{ id: 'project', name: 'Project', description: 'Project memory.', active: true, providerEnabled: true }], providers: [], total: 1, activeCount: 1, directory: '/tmp/mnemon/data', generatedAt: 'now' })),
-    bodies: vi.fn(async () => ({ items: [], total: 0, activeCount: 0, directory: '/tmp/mnemon/data', generatedAt: 'now' })),
-    graph: vi.fn(async () => ({ nodes: [], edges: [], generatedAt: 'now' })),
-    list: vi.fn(async () => ({ items: [], total: 0, generatedAt: 'now' })),
-    entities: vi.fn(async () => ({ items: [], insights: [] })),
-    search: vi.fn(async request => ({ query: request.query, mode: 'smart', results: [] })),
-    related: vi.fn(async () => []),
-    remember: vi.fn(async () => ({ action: 'added' })),
-    link: vi.fn(async () => ({ status: 'linked' })),
-    forget: vi.fn(async () => ({ status: 'deleted' })),
-    prepareBodyPlacement: vi.fn(request => ({
-      prompt: request.placement?.prompt ?? '',
-      candidates: [{ id: 'mnemon-native' }],
-      appliedRules: ['preference:balanced'],
-      selectorBrief: 'eligible providers',
-    })),
-    createBody: vi.fn(async request => ({ id: '00000000-0000-4000-8000-000000000001', name: request.name, description: request.description, active: request.active ?? false })),
-    updateBody: vi.fn((id, request) => ({ id, name: request.name ?? id, description: request.description ?? '', active: request.active ?? false })),
-    updateBodyMetadata: vi.fn(updates => updates),
-    reconnectBody: vi.fn(async id => ({ id, name: id, description: '', active: true, healthy: true })),
-    deleteBody: vi.fn(async id => ({ id, name: id, description: '', active: false })),
-  } as unknown as MnemonService
+const cleanup: Array<() => Promise<void>> = []
+afterEach(async () => { for (const release of cleanup.splice(0)) await release() })
+
+async function fixture(config: Config = {}) {
+  const value = await compositionFixture(config)
+  cleanup.push(value.dispose)
+  return value
 }
 
-describe('Mnemon RPC', () => {
-  it('exposes the active descriptor and enforces manual data-plane participation', async () => {
-    const service = fakeService()
-    const catalog = new MemoryCatalog()
-    registerDefaultMemorySystem(catalog)
-    const topology = new MemoryTopologyManager(catalog, DEFAULT_THREE_TIER_TOPOLOGY)
-    topology.configureLayer('memory-spaces', { enabled: false })
-    const memoryKernel = new MemoryKernel(catalog, topology)
-    const graph = {
-      config: service.config,
-      service,
-      runtimeMemory: {},
-      documents: {},
-      storage: {},
-      packs: {},
-      memoryKernel,
-    } as unknown as MnemonRuntimeGraph
-    const runtime = {
-      route: vi.fn(() => ({ graph, selectedRoot: '/tmp', effectiveRoot: '/tmp', aligned: true })),
-    } as unknown as LiveMnemonRuntime
-    const read = createReadHandler(runtime)
+/** Host unit tests use Source JSON boundaries, not fake Source implementations. */
+function protocolFixture(options: Config = {}) {
+  const sources = Object.fromEntries(['runtime', 'documents', 'memory-spaces'].map(type => [type, {
+    read: vi.fn(async (_operation: string, _input?: unknown, _signal?: AbortSignal): Promise<unknown> => ({})),
+    mutate: vi.fn(async (_operation: string, _input?: unknown, _signal?: AbortSignal): Promise<unknown> => ({})),
+  }]))
+  sources['runtime']!.read.mockResolvedValue({ entries: [], targets: {} })
+  sources['documents']!.read.mockResolvedValue({ documents: [], activeCount: 0 })
+  sources['memory-spaces']!.read.mockImplementation(async operation => {
+    if (operation === 'body-directory') return { items: [{ id: 'project', active: true, providerEnabled: true }], total: 1, providers: [] }
+    if (operation === 'search') return { query: 'SQLite', mode: 'smart', results: [] }
+    if (operation === 'prepare-body-placement') return { candidates: [{ id: 'mnemon-native' }], selectorBrief: 'eligible providers' }
+    return { healthy: true, memoryBodies: [] }
+  })
+  const generation = {
+    managementCatalog: vi.fn(async () => ({ generationId: 'g1', sources: ['runtime', 'documents', 'memory-spaces'].map(type => ({
+      sourceInstanceKey: 'source:mnemon-source-' + type, sourceTypeId: type, packageName: 'dsh-mnemon-source-' + type,
+      role: type, availability: 'ready', revision: 'r1', capabilities: ['status'], management: { label: type, description: type },
+    })) })),
+    executeManagement: vi.fn(async (_request: unknown) => ({ revision: 'r2', value: {} })),
+  }
+  const release = vi.fn()
+  const graph = {
+    config: resolveConfig(options), directory: '/fixture/data',
+    source: vi.fn((type: string) => sources[type]!),
+    memoryComposition: { current: () => generation, acquire: vi.fn(() => ({ generation, release })), inspect: () => ({ evaluation: { state: 'ready' } }) },
+    storage: { catalog: vi.fn(() => ({ activeRoot: '/fixture/data' })) },
+    packs: {
+      target: vi.fn(() => ({ root: '/fixture/data', scope: 'custom' })),
+      exportPack: vi.fn(async () => ({ fileName: 'backup.zip', base64: 'eA==' })),
+      inspectPack: vi.fn(() => ({ archiveBytes: 1 })),
+      importPack: vi.fn(async () => ({ imported: true })),
+    },
+  }
+  const route = {
+    graph, selectedWorkspace: { id: 'workspace', title: 'Fixture', path: '/fixture/workspace' },
+    selectedRoot: '/fixture/data', effectiveRoot: '/fixture/data', aligned: true,
+  }
+  const runtime = { config: graph.config, route: vi.fn(() => route) } as unknown as LiveMnemonRuntime
+  return { runtime, graph, route, sources, generation, release }
+}
 
-    await expect(read('memory-system', {})).resolves.toMatchObject({
-      ok: true,
-      value: { topology: { layers: expect.arrayContaining([expect.objectContaining({ id: 'memory-spaces', enabled: false })]) } },
-    })
-    await expect(read('search', { query: 'blocked' })).resolves.toMatchObject({
-      ok: false,
-      error: { message: expect.stringContaining('memory layer memory-spaces is disabled') },
-    })
-    await expect(read('bodies', {})).resolves.toMatchObject({ ok: true })
-    expect(service.search).not.toHaveBeenCalled()
+function lifecycle(methods: Record<string, unknown> = {}): MnemonLifecycle {
+  return { workspaceRoot: () => '/fixture/workspace', snapshot: () => ({ enabled: true, taskAgentAvailable: true }), ...methods } as unknown as MnemonLifecycle
+}
+
+describe('Mnemon RPC Source boundaries', () => {
+  it('provides default assistance for include-qualified Sources without rewriting their identity', async () => {
+    const f = await compositionFixture({}, { entryPrefix: 'include' })
+    cleanup.push(f.dispose)
+    const catalog = await createReadHandler(f.live, lifecycle())('source-management-catalog', { workspaceId: 'workspace' })
+    expect(catalog).toMatchObject({ ok: true, value: { sources: expect.arrayContaining([expect.objectContaining({
+      sourceInstanceKey: 'source:include:mnemon-source-runtime', assistance: expect.arrayContaining(['mutate']),
+    })]) } })
+  })
+  it('uses scoped Serving leases, Source identity, confirmation and exact revisions', async () => {
+    const f = await fixture()
+    const generation = f.graph.memoryComposition.current()!
+    const execute = vi.spyOn(generation, 'executeManagement')
+    const read = createReadHandler(f.live)
+    const write = createWriteHandler(f.live)
+    const catalog = await read('source-management-catalog', { workspaceId: 'workspace', sessionId: 's1' })
+    expect(catalog).toMatchObject({ ok: true, value: { sources: expect.arrayContaining([expect.objectContaining({
+      sourceInstanceKey: 'source:mnemon-source-runtime', packageName: 'dsh-mnemon-source-runtime',
+    })]) } })
+    const snapshot = await read('source-management-read', { workspaceId: 'workspace', sourceInstanceKey: 'source:mnemon-source-runtime', operation: 'snapshot' })
+    expect(snapshot.ok).toBe(true)
+    const revision = (snapshot as { ok: true; value: { revision: string } }).value.revision
+    const request = { workspaceId: 'workspace', sourceInstanceKey: 'source:mnemon-source-runtime', operation: 'mutate',
+      input: { action: 'add', target: 'memory', content: 'through Source protocol' }, expectedRevision: revision }
+    expect(await write('source-management-mutate', { ...request, confirmed: false })).toMatchObject({ ok: false })
+    expect(await write('source-management-mutate', { ...request, confirmed: true })).toMatchObject({ ok: true, value: { value: { added: 'through Source protocol' } } })
+    expect(await write('source-management-mutate', { ...request, confirmed: true })).toMatchObject({ ok: false, error: { message: expect.stringContaining('revision conflict') } })
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({ scope: { storage: 'custom', workspaceId: f.workspace }, sourceInstanceKey: request.sourceInstanceKey }))
+    expect(await read('source-management-read', { sourceInstanceKey: 'source:missing', operation: 'snapshot' })).toMatchObject({ ok: false })
   })
 
-  it('exposes runtime snapshots and routes hot-memory writes through its controller', async () => {
-    const runtimeMemory = {
-      snapshot: vi.fn(() => ({ entries: [], targets: {} })),
-      mutate: vi.fn(async () => ({ success: true, message: 'Entry added.', target: 'memory', entryCount: 1, usage: { used: 5, limit: 10240 }, added: 'hello' })),
-    } as unknown as RuntimeMemoryController
-    await expect(createReadHandler(fakeService(), undefined, runtimeMemory)('runtime-memory', {})).resolves.toMatchObject({ ok: true, value: { entries: [] } })
-    await expect(createWriteHandler(fakeService(), undefined, runtimeMemory)('runtime-memory', { action: 'add', target: 'memory', content: 'hello', importance: 'normal', branches: ['main'] })).resolves.toMatchObject({ ok: true, value: { added: 'hello' } })
-    expect(runtimeMemory.mutate).toHaveBeenCalledWith({ action: 'add', target: 'memory', content: 'hello', importance: 'normal', branches: ['main'] })
-
-    const lifecycle = { runtime: vi.fn(async () => ({ success: true, message: 'Entry added after archival.', target: 'memory', entryCount: 2, usage: { used: 20, limit: 10240 }, added: 'world' })) } as unknown as MnemonLifecycle
-    await expect(createWriteHandler(fakeService(), lifecycle, runtimeMemory)('runtime-memory', { sessionId: 'session-1', action: 'add', target: 'memory', content: 'world', branches: ['release/v2'] })).resolves.toMatchObject({ ok: true, value: { added: 'world' } })
-    expect(lifecycle.runtime).toHaveBeenCalledWith('session-1', { action: 'add', target: 'memory', content: 'world', branches: ['release/v2'] })
-
-    await expect(createWriteHandler(fakeService(), undefined, runtimeMemory)('runtime-memory', { action: 'add', target: 'memory', content: 'invalid', branches: ['main', 42] })).resolves.toMatchObject({
-      ok: false,
-      error: { message: 'branches must be an array of strings' },
-    })
-    expect(runtimeMemory.mutate).toHaveBeenCalledOnce()
-    expect(lifecycle.runtime).toHaveBeenCalledOnce()
+  it('keeps the Runtime UX and validates branch input in the owning Source', async () => {
+    const f = await fixture()
+    const write = createWriteHandler(f.live)
+    expect(await write('runtime-memory', { action: 'add', target: 'memory', content: 'hello', branches: ['main'] })).toMatchObject({ ok: true, value: { added: 'hello' } })
+    expect(await createReadHandler(f.live)('runtime-memory', {})).toMatchObject({ ok: true, value: { entries: [expect.objectContaining({ content: 'hello', branches: ['main'] })] } })
+    expect(await write('runtime-memory', { action: 'add', target: 'memory', content: 'bad', branches: ['main', 42] })).toMatchObject({ ok: false })
+    expect(await write('runtime-memory', { action: 'replace', target: 'memory', old_text: 'hello', content: 'updated' })).toMatchObject({ ok: true, value: { replaced: { to: 'updated' } } })
   })
 
-  it('dispatches read operations and rejects unknown endpoints', async () => {
-    const service = fakeService()
-    await expect(createReadHandler(service)('search', { query: 'SQLite' })).resolves.toMatchObject({ ok: true, value: { query: 'SQLite' } })
-    await expect(createReadHandler(service)('graph', {})).resolves.toMatchObject({ ok: true, value: { nodes: [] } })
-    await expect(createReadHandler(service)('bodies', {})).resolves.toMatchObject({ ok: true, value: { items: [], total: 0 } })
-    await expect(createReadHandler(service)('body-directory', {})).resolves.toMatchObject({ ok: true, value: { total: 1 } })
-    await expect(createReadHandler(service)('body-reconnect', { memoryBodyId: 'project' })).resolves.toMatchObject({ ok: true, value: { id: 'project', healthy: true } })
-    await expect(createReadHandler(service)('status-summary', {})).resolves.toMatchObject({ ok: true, value: { healthy: true } })
-    await expect(createReadHandler(service)('embedding-status', {})).resolves.toMatchObject({ ok: true, value: { available: true, coverage: '50%' } })
-    await expect(createReadHandler(service)('provider-services', {})).resolves.toMatchObject({ ok: true, value: { items: [] } })
-    await expect(createReadHandler(service)('list', { category: 'decision' })).resolves.toMatchObject({ ok: true, value: { total: 0 } })
-    await expect(createReadHandler(service)('entities', { entity: 'SQLite' })).resolves.toMatchObject({ ok: true, value: { insights: [] } })
-    await expect(createReadHandler(service)('nope', {})).resolves.toEqual({
-      ok: false,
-      error: { code: 'bad-request', message: 'unknown read endpoint: nope', details: { issues: [] } },
-    })
-    expect(service.reconnectBody).toHaveBeenCalledWith('project')
-  })
-
-  it('keeps Provider secret values on the management channel while preserving a redacted read catalog', async () => {
-    const service = fakeService()
-    const providerServices = vi.fn((options: { includeSecrets?: boolean } = {}) => ({
-      providers: [],
-      items: [{
-        providerId: 'openviking', configured: true, enabled: true,
-        settings: { endpoint: 'https://memory.example' }, configuredSecrets: ['apiKey'],
-        ...(options.includeSecrets === true ? { secretValues: { apiKey: 'provider-secret' } } : {}),
-      }],
-      generatedAt: 'now',
-    }))
-    service.memoryBodies.providerServices = providerServices as never
-
-    await expect(createReadHandler(service)('provider-services', {})).resolves.toMatchObject({
-      ok: true,
-      value: { items: [expect.not.objectContaining({ secretValues: expect.anything() })] },
-    })
-    await expect(createWriteHandler(service)('provider-services', {})).resolves.toMatchObject({
-      ok: true,
-      value: { items: [expect.objectContaining({ secretValues: { apiKey: 'provider-secret' } })] },
-    })
-    expect(providerServices).toHaveBeenNthCalledWith(1)
-    expect(providerServices).toHaveBeenNthCalledWith(2, { includeSecrets: true })
-  })
-
-  it('checks versions on the read channel and keeps explicit updates on the management channel', async () => {
-    const versions = {
-      currentDshMnemonVersion: '0.1.2',
-      check: vi.fn(async () => ({ checkedAt: 'now', components: [{ id: 'mnemon', current: '0.2.0' }] })),
-      update: vi.fn(async (component: string) => ({ component, updated: true, restartRequired: component === 'dsh-mnemon' })),
-    } as unknown as VersionUpdateManager
-    await expect(createReadHandler(fakeService(), undefined, undefined, undefined, versions)('versions', {})).resolves.toMatchObject({ ok: true, value: { checkedAt: 'now' } })
-    await expect(createReadHandler(fakeService(), undefined, undefined, undefined, versions)('status', {})).resolves.toMatchObject({ ok: true, value: { dshMnemonVersion: '0.1.2' } })
-    await expect(createWriteHandler(fakeService(false), undefined, undefined, versions)('version-update', { component: 'dsh-mnemon' })).resolves.toMatchObject({ ok: true, value: { updated: true } })
-    await expect(createWriteHandler(fakeService(), undefined, undefined, versions)('version-update', { component: 'other' })).resolves.toMatchObject({ ok: false, error: { code: 'bad-request' } })
-    expect(versions.update).toHaveBeenCalledWith('dsh-mnemon')
-  })
-
-  it('returns one cached turn-activity projection while preserving the legacy endpoint', async () => {
-    const service = fakeService()
-    const lifecycle = {
-      turnActivities: vi.fn(() => ({
-        cursor: 12,
-        activities: [{ turn: 2, count: 1, names: ['mnemon_recall'], recalls: 1, writes: 0, documentSearches: 0, inspections: 0, failures: 0 }],
-      })),
-    } as unknown as MnemonLifecycle
-
-    await expect(createReadHandler(service, lifecycle)('turn-activities', { sessionId: 'session-1' })).resolves.toMatchObject({ ok: true, value: { cursor: 12 } })
-    await expect(createReadHandler(service, lifecycle)('turn-activity', { sessionId: 'session-1', turn: 2 })).resolves.toMatchObject({ ok: true, value: { recalls: 1 } })
-    expect(lifecycle.turnActivities).toHaveBeenCalledTimes(2)
-  })
-
-  it('rejects malformed enum values at the service boundary', async () => {
-    const config = resolveConfig({ cliPath: '/fake/mnemon' })
-    const service = Object.create(MnemonService.prototype) as MnemonService
-    Object.assign(service, {
-      config,
-      runner: { runJson: vi.fn(), effectiveDataDir: () => '/tmp', effectiveStore: () => 'default' },
-    })
-    await expect(createReadHandler(service)('search', { query: 'x', mode: 'anything' })).resolves.toMatchObject({
-      ok: false,
-      error: { code: 'internal', details: {} },
-    })
-  })
-
-  it('forces human Tab writes to user provenance', async () => {
-    const service = fakeService()
-    await createWriteHandler(service)('remember', { content: 'A durable preference' })
-    expect(service.remember).toHaveBeenCalledWith(expect.objectContaining({ source: 'user' }))
-  })
-
-  it('deletes a Memory Space through the management channel', async () => {
-    const service = fakeService()
-    await expect(createWriteHandler(service)('body-delete', { memoryBodyId: 'project' })).resolves.toMatchObject({ ok: true, value: { id: 'project' } })
-    expect(service.deleteBody).toHaveBeenCalledWith('project')
-  })
-
-  it('allows only activation state through the narrow control endpoint', async () => {
-    const service = fakeService()
-    const handler = createActivationHandler(service)
-
-    await expect(handler('body', { memoryBodyId: ' project ', active: true, sessionId: 'session-1' })).resolves.toMatchObject({
-      ok: true,
-      value: { id: 'project', active: true },
-    })
-    expect(service.updateBody).toHaveBeenCalledWith('project', { active: true })
-
-    await expect(handler('body', { memoryBodyId: 'project', active: true, name: 'renamed' })).resolves.toMatchObject({
-      ok: false,
-      error: { code: 'bad-request', message: 'unsupported activation fields: name' },
-    })
-    await expect(handler('body', { memoryBodyId: 'project', active: 'true' })).resolves.toMatchObject({
-      ok: false,
-      error: { code: 'bad-request', message: 'active must be a boolean' },
-    })
-    await expect(handler('body-update', { memoryBodyId: 'project', active: true })).resolves.toMatchObject({
-      ok: false,
-      error: { code: 'bad-request', message: 'unknown activation endpoint: body-update' },
-    })
-  })
-
-  it('keeps activation disabled in read-only mode', async () => {
-    const service = fakeService(false)
-    await expect(createActivationHandler(service)('body', { memoryBodyId: 'project', active: true })).resolves.toMatchObject({
-      ok: false,
-      error: { code: 'internal', message: 'dsh-mnemon is configured read-only (writeEnabled: false)' },
-    })
-    expect(service.updateBody).not.toHaveBeenCalled()
-  })
-
-  it('keeps the legacy management-channel reconnect route for older clients', async () => {
-    const service = fakeService()
-    await expect(createWriteHandler(service)('body-reconnect', { memoryBodyId: 'project' })).resolves.toMatchObject({ ok: true, value: { id: 'project', healthy: true } })
-    expect(service.reconnectBody).toHaveBeenCalledWith('project')
-  })
-
-  it('updates provider service settings without creating a Memory Space', async () => {
-    const service = fakeService()
-    await expect(createWriteHandler(service)('provider-service-update', {
-      providerId: 'openviking', settings: { endpoint: 'http://127.0.0.1:1933' }, clearSecrets: ['apiKey'], enabled: false,
-    })).resolves.toMatchObject({ ok: true, value: { providerId: 'openviking', configured: true } })
-    expect(service.updateProviderService).toHaveBeenCalledWith('openviking', { endpoint: 'http://127.0.0.1:1933' }, ['apiKey'], false)
-    expect(service.createBody).not.toHaveBeenCalled()
-  })
-
-  it('resolves automatic provider placement through the bound Agent before creating a Memory Space', async () => {
-    const service = fakeService()
-    const decision = {
-      mode: 'automatic' as const,
-      providerId: 'mnemon-native' as const,
-      decidedBy: 'rules' as const,
-      reason: 'Graph support is required.',
-      confidence: 'high' as const,
-      candidateProviderIds: ['mnemon-native' as const],
-      appliedRules: ['requires:graph'],
-      decidedAt: '2026-08-16T00:00:00.000Z',
+  it('preserves explicit empty branch scope through Host assistance without a session', async () => {
+    const f = await fixture()
+    const write = createWriteHandler(f.live, lifecycle())
+    const sourceInstanceKey = 'source:mnemon-source-runtime'
+    const assist = async (input: unknown) => {
+      const sources = await f.graph.memoryComposition.current()!.managementCatalog({ storage: 'custom' })
+      const expectedRevision = sources.sources.find(source => source.sourceInstanceKey === sourceInstanceKey)!.revision
+      return write('source-assistance', { sourceInstanceKey, operation: 'mutate', confirmed: true, expectedRevision, input })
     }
-    const lifecycle = {
-      placeProvider: vi.fn(async () => decision),
-    } as unknown as MnemonLifecycle
-
-    await expect(createWriteHandler(service, lifecycle)('body-create', {
-      sessionId: 'session-1',
-      name: '产品知识',
-      description: '精确记录产品决策并维护关系。',
-      placement: {
-        mode: 'automatic',
-        prompt: '共享不是重点，优先可解释性。',
-        rules: { dataBoundary: 'local-only', requiredCapabilities: ['graph'] },
-      },
-      providerConnections: {
-        holographic: { dataPath: '/tmp/holographic.json', defaultTrust: 0.6, minTrust: 0.4 },
-      },
-    })).resolves.toMatchObject({ ok: true, value: { name: '产品知识' } })
-
-    expect(service.prepareBodyPlacement).toHaveBeenCalledWith(expect.objectContaining({
-      placement: expect.objectContaining({ prompt: '共享不是重点，优先可解释性。' }),
-      providerConnections: { holographic: { dataPath: '/tmp/holographic.json', defaultTrust: 0.6, minTrust: 0.4 } },
-    }))
-    expect(lifecycle.placeProvider).toHaveBeenCalledWith('session-1', {
-      name: '产品知识',
-      description: '精确记录产品决策并维护关系。',
-    }, expect.objectContaining({ selectorBrief: 'eligible providers' }))
-    expect(service.createBody).toHaveBeenCalledWith(expect.objectContaining({ placement: expect.any(Object) }), undefined, decision)
+    expect(await assist({ action: 'add', target: 'memory', content: 'scoped', branches: ['main'] })).toMatchObject({ ok: true })
+    expect(await assist({ action: 'replace', target: 'memory', old_text: 'scoped', content: 'unscoped', branches: [] })).toMatchObject({ ok: true })
+    const snapshot = await f.graph.source('runtime').read<{ entries: Array<{ content: string; branches?: string[] }> }>('snapshot')
+    expect(snapshot.entries).toHaveLength(1)
+    expect(snapshot.entries[0]).toMatchObject({ content: 'unscoped' })
+    expect(snapshot.entries[0]).not.toHaveProperty('branches')
   })
 
-  it('applies AI-generated Memory Space metadata only after exact selected-space validation', async () => {
-    const service = fakeService()
-    const maintained = {
-      delegated: true as const,
-      runId: 'metadata-1',
-      provider: 'spawn',
-      summary: 'Updated project metadata.',
-      updates: [{ memoryBodyId: 'project', title: '产品决策', description: '记录稳定的产品范围与取舍，在规划和复盘产品方向时召回。' }],
-    }
-    const lifecycle = { maintainMetadata: vi.fn(async () => maintained) } as unknown as MnemonLifecycle
-
-    await expect(createWriteHandler(service, lifecycle)('body-metadata-maintain', {
-      sessionId: 'session-1', memoryBodyIds: ['project'],
-    })).resolves.toMatchObject({ ok: true, value: { runId: 'metadata-1' } })
-
-    expect(lifecycle.maintainMetadata).toHaveBeenCalledWith('session-1', ['project'], undefined)
-    expect(service.updateBodyMetadata).toHaveBeenCalledWith(maintained.updates)
+  it('round-trips Documents through their selected workspace Source', async () => {
+    const f = await fixture()
+    const write = createWriteHandler(f.live)
+    const read = createReadHandler(f.live)
+    const created = await write('document', { workspaceId: 'workspace', action: 'create', title: 'Design', content: '# composable views', sourcePaths: ['src/index.ts'] })
+    expect(created).toMatchObject({ ok: true, value: { action: 'created' } })
+    const id = (created as { ok: true; value: { document: { id: string } } }).value.document.id
+    expect(await read('documents', { workspaceId: 'workspace' })).toMatchObject({ ok: true, value: { activeCount: 1 } })
+    expect(await read('document', { workspaceId: 'workspace', id })).toMatchObject({ ok: true, value: { id, content: '# composable views' } })
+    expect(await read('document-search', { workspaceId: 'workspace', query: 'composable' })).toMatchObject({ ok: true, value: { total: 1 } })
+    expect(await read('documents', { workspaceId: '/arbitrary/path' })).toMatchObject({ ok: false, error: { message: expect.stringContaining('workspace is unavailable') } })
   })
 
-  it('does not commit when metadata maintenance returns no valid updates', async () => {
-    const service = fakeService()
-    const maintained = {
-      delegated: true as const,
-      runId: 'metadata-2',
-      provider: 'spawn',
-      summary: 'No valid metadata.',
-      updates: [],
-    }
-    const lifecycle = { maintainMetadata: vi.fn(async () => maintained) } as unknown as MnemonLifecycle
-
-    await expect(createWriteHandler(service, lifecycle)('body-metadata-maintain', {
-      sessionId: 'session-1', memoryBodyIds: ['project'],
-    })).resolves.toMatchObject({ ok: true, value: { runId: 'metadata-2', updates: [] } })
-
-    expect(service.updateBodyMetadata).not.toHaveBeenCalled()
+  it('keeps Provider secrets Host-only and Provider metadata on the read channel', async () => {
+    const f = await compositionFixture({}, { providers: [{ instanceId: openviking.id, module: openviking, config: undefined }] })
+    cleanup.push(f.dispose)
+    const write = createWriteHandler(f.live)
+    const read = createReadHandler(f.live)
+    const updated = await write('provider-service-update', { providerId: 'openviking', settings: { endpoint: 'https://memory.example', apiKey: 'host-only-secret' }, enabled: false })
+    expect(updated).toMatchObject({ ok: true })
+    const providers = await read('provider-services', {})
+    expect(providers).toMatchObject({ ok: true, value: { items: expect.arrayContaining([expect.objectContaining({ providerId: 'openviking', configuredSecrets: ['apiKey'] })]) } })
+    expect(JSON.stringify([updated, providers])).not.toContain('host-only-secret')
+    expect(await write('provider-services', {})).toMatchObject({ ok: false, error: { code: 'bad-request' } })
   })
 
-  it('routes supervised Tab writeback through an independent task Agent', async () => {
-    const service = fakeService()
-    const lifecycle = {
-      workspaceRoot: vi.fn(() => undefined),
-      superviseTask: vi.fn(async () => ({ delegated: true, sessionId: 'session-1', runId: 'child-1', provider: 'spawn', summary: 'stored', action: 'stored', memoryBodyIds: ['project'] })),
-    } as unknown as MnemonLifecycle
-    await expect(createWriteHandler(service, lifecycle)('supervise', { sessionId: 'session-1', content: 'A candidate', idempotencyKey: 'message-1' })).resolves.toMatchObject({ ok: true, value: { delegated: true, runId: 'child-1' } })
-    expect(lifecycle.superviseTask).toHaveBeenCalledWith('session-1', 'A candidate', 'message-1', undefined)
-    expect(service.remember).not.toHaveBeenCalled()
+  it('validates enum values before Provider I/O', async () => {
+    const f = await fixture()
+    expect(await createReadHandler(f.live)('search', { query: 'x', mode: 'anything' })).toMatchObject({ ok: false, error: { message: expect.stringContaining('mode') } })
   })
 
-  it('exposes the DSH model catalog for independent task Agent settings', async () => {
-    const service = fakeService()
-    const catalog = {
-      effective: { provider: 'deepseek', model: 'deepseek-chat', source: 'dsh-default' as const },
-      groups: [{ id: 'deepseek', name: 'DeepSeek', models: [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }] }],
-      failures: [],
-    }
-    const lifecycle = { taskAgentModels: vi.fn(async () => catalog) } as unknown as MnemonLifecycle
-
-    await expect(createReadHandler(service, lifecycle)('task-agent-models', { includeCatalog: false })).resolves.toEqual({ ok: true, value: catalog })
-    expect(lifecycle.taskAgentModels).toHaveBeenCalledWith(false)
+  it('preserves human write provenance through the Source protocol', async () => {
+    const f = await fixture()
+    const body = await f.memorySpace()
+    const execute = vi.spyOn(f.graph.memoryComposition.current()!, 'executeManagement')
+    const result = await createWriteHandler(f.live)('remember', { content: 'SQLite is local', source: 'inferred', memoryBodyId: body.id })
+    expect(result).toMatchObject({ ok: true })
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({ operation: 'remember', input: expect.objectContaining({ source: 'user' }) }))
+    expect(await createReadHandler(f.live)('search', { query: 'SQLite', memoryBodyIds: [body.id] })).toMatchObject({ ok: true, value: { results: expect.arrayContaining([expect.objectContaining({ content: 'SQLite is local' })]) } })
   })
 
-  it('routes sessionless supervised work through a workspace task Agent', async () => {
-    const service = fakeService()
-    const lifecycle = {
-      workspaceRoot: vi.fn(() => undefined),
-      superviseTask: vi.fn(async () => ({ delegated: true, sessionId: 'task-1', runId: 'child-1', provider: 'spawn', summary: 'stored', action: 'stored', memoryBodyIds: ['project'] })),
-    } as unknown as MnemonLifecycle
-    await expect(createWriteHandler(service, lifecycle)('supervise', { content: 'A workspace candidate' })).resolves.toMatchObject({ ok: true, value: { sessionId: 'task-1' } })
-    expect(lifecycle.superviseTask).toHaveBeenCalledWith('', 'A workspace candidate', undefined, undefined)
+  it('exposes configuration while disabling model/manual data-plane participation, not inspection', async () => {
+    const f = await fixture({ memoryTopology: { layers: { 'memory-spaces': { enabled: false } } } })
+    const read = createReadHandler(f.live)
+    expect(await read('memory-system', {})).toMatchObject({ ok: true, value: { configuration: { layers: { 'memory-spaces': { enabled: false } } } } })
+    expect(await read('search', { query: 'blocked' })).toMatchObject({ ok: false, error: { message: expect.stringContaining('does not allow manual') } })
+    expect(await read('body-directory', {})).toMatchObject({ ok: true })
   })
 
-  it('routes project Documents reads and controlled mutations through the bound session', async () => {
-    const service = fakeService()
-    const lifecycle = {
-      documents: vi.fn(() => ({ activeCount: 1, archivedCount: 0, documents: [] })),
-      document: vi.fn(() => ({ id: 'doc-1', content: '# Design' })),
-      searchDocuments: vi.fn(async () => ({ query: 'design', results: [] })),
-      mutateDocument: vi.fn(async () => ({ success: true, action: 'created', document: { id: 'doc-2' } })),
-      archiveDocument: vi.fn(async () => ({ success: true, action: 'archived', document: { id: 'doc-1' } })),
-    } as unknown as MnemonLifecycle
+  it('returns clear errors for malformed payloads and unknown endpoints', async () => {
+    const f = protocolFixture()
+    const read = createReadHandler(f.runtime)
+    expect(await read('nope', {})).toEqual({ ok: false, error: { code: 'bad-request', message: 'unknown read endpoint: nope', details: { issues: [] } } })
+    expect(await read('status', [])).toMatchObject({ ok: false })
+    expect(await read('status', { workspaceId: 42 })).toMatchObject({ ok: false })
+    expect(await createWriteHandler(f.runtime)('nope', {})).toMatchObject({ ok: false, error: { code: 'bad-request' } })
+  })
 
-    await expect(createReadHandler(service, lifecycle)('documents', { sessionId: 'session-1' })).resolves.toMatchObject({ ok: true, value: { activeCount: 1 } })
-    await expect(createReadHandler(service, lifecycle)('document', { sessionId: 'session-1', id: 'doc-1' })).resolves.toMatchObject({ ok: true, value: { content: '# Design' } })
-    await expect(createReadHandler(service, lifecycle)('document-search', { sessionId: 'session-1', query: 'design', includeArchived: true })).resolves.toMatchObject({ ok: true, value: { query: 'design' } })
-    await expect(createWriteHandler(service, lifecycle)('document', { sessionId: 'session-1', action: 'create', title: 'Design', content: '# Design', sourcePaths: ['src/index.ts'] })).resolves.toMatchObject({ ok: true, value: { action: 'created' } })
-    await expect(createWriteHandler(service, lifecycle)('document', { sessionId: 'session-1', action: 'archive', id: 'doc-1' })).resolves.toMatchObject({ ok: true, value: { action: 'archived' } })
+  it('leases generic management independently of product-specific Source sessions', async () => {
+    const f = protocolFixture()
+    await createReadHandler(f.runtime)('source-management-catalog', { workspaceId: 'workspace', sessionId: 's1' })
+    await createReadHandler(f.runtime)('source-management-read', { sourceInstanceKey: 'source:git/work', operation: 'repository', input: { branch: 'main' } })
+    await createWriteHandler(f.runtime)('source-management-mutate', { sourceInstanceKey: 'source:git/work', operation: 'refresh', input: {}, expectedRevision: 'r1', confirmed: true })
+    expect(f.generation.managementCatalog).toHaveBeenCalledWith({ storage: 'global', workspaceId: '/fixture/workspace', sessionId: 's1' })
+    expect(f.generation.executeManagement).toHaveBeenLastCalledWith(expect.objectContaining({ sourceInstanceKey: 'source:git/work', mode: 'mutate', operation: 'refresh', expectedRevision: 'r1', confirmed: true }))
+    expect(f.graph.source).not.toHaveBeenCalled()
+    expect(f.release).toHaveBeenCalledTimes(3)
+  })
+})
 
-    expect(lifecycle.searchDocuments).toHaveBeenCalledWith('session-1', 'design', true, undefined)
-    expect(lifecycle.mutateDocument).toHaveBeenCalledWith('session-1', { action: 'create', title: 'Design', content: '# Design', sourcePaths: ['src/index.ts'], sessionIds: ['session-1'] })
-    expect(lifecycle.archiveDocument).toHaveBeenCalledWith('session-1', 'doc-1', undefined)
+describe('Host assistance and channels', () => {
+  it('advertises only available, instance-bound assistance', async () => {
+    const f = protocolFixture()
+    const read = createReadHandler(f.runtime, lifecycle({ snapshot: () => ({ taskAgentAvailable: false }) }))
+    const catalog = await read('source-management-catalog', {})
+    expect(catalog).toMatchObject({ ok: true, value: { sources: [
+      expect.objectContaining({ assistance: ['mutate'] }),
+      expect.objectContaining({ assistance: ['mutate'] }),
+      expect.objectContaining({ assistance: ['activation'] }),
+    ] } })
+    expect(await createWriteHandler(f.runtime, lifecycle())('source-assistance', { sourceInstanceKey: 'source:other-runtime', operation: 'mutate', input: {}, expectedRevision: 'r1', confirmed: true })).toMatchObject({ ok: false })
+    expect(await createWriteHandler(f.runtime, lifecycle())('source-assistance', { sourceInstanceKey: 'source:mnemon-source-runtime', operation: 'mutate', input: {}, expectedRevision: 'old', confirmed: true })).toMatchObject({ ok: false })
+  })
+
+  it('routes Runtime semantic writes through the bound Agent, direct writes through the inspected Source', async () => {
+    const f = protocolFixture()
+    const mutate = vi.fn(async () => ({ success: true }))
+    const write = createWriteHandler(f.runtime, lifecycle({ runtime: mutate }))
+    await write('runtime-memory', { sessionId: 's1', action: 'replace', target: 'memory', old_text: 'before', content: 'after' })
+    expect(mutate).toHaveBeenCalledWith('s1', expect.objectContaining({ oldText: 'before', content: 'after' }), undefined)
+    f.route.aligned = false
+    await write('runtime-memory', { sessionId: 's1', action: 'add', target: 'memory', content: 'inspect' })
+    expect(f.sources.runtime!.mutate).toHaveBeenCalledWith('mutate', expect.objectContaining({ content: 'inspect' }), undefined)
+    expect(mutate).toHaveBeenCalledOnce()
   })
 
   it('keeps Tab reads deterministic while delegating semantic writes', async () => {
-    const service = fakeService()
-    const lifecycle = {
-      recall: vi.fn(),
-      related: vi.fn(),
-      remember: vi.fn(async () => ({ delegated: true, runId: 'write-1', provider: 'spawn', summary: 'stored', action: 'stored', memoryBodyIds: ['project'] })),
-    } as unknown as MnemonLifecycle
-
-    await expect(createReadHandler(service, lifecycle)('search', { sessionId: 'session-1', query: 'SQLite' })).resolves.toMatchObject({ ok: true, value: { query: 'SQLite', results: [] } })
-    await expect(createReadHandler(service, lifecycle)('entities', { sessionId: 'session-1', entity: 'SQLite' })).resolves.toMatchObject({ ok: true, value: { insights: [] } })
-    await expect(createReadHandler(service, lifecycle)('related', { sessionId: 'session-1', id: 'm1', memoryBodyId: 'project' })).resolves.toMatchObject({ ok: true, value: [] })
-    await expect(createWriteHandler(service, lifecycle)('remember', { sessionId: 'session-1', content: 'Use SQLite', memoryBodyId: 'project' })).resolves.toMatchObject({ ok: true, value: { runId: 'write-1' } })
-    expect(service.search).toHaveBeenCalledWith(expect.objectContaining({ query: 'SQLite' }))
-    expect(service.entities).toHaveBeenCalledWith('SQLite', undefined)
-    expect(service.related).toHaveBeenCalledWith('m1', 2, undefined, undefined, 'project')
-    expect(lifecycle.recall).not.toHaveBeenCalled()
-    expect(lifecycle.related).not.toHaveBeenCalled()
-    expect(lifecycle.remember).toHaveBeenCalledWith('session-1', expect.objectContaining({ content: 'Use SQLite', memoryBodyId: 'project', source: 'user' }))
-    expect(service.remember).not.toHaveBeenCalled()
+    const f = protocolFixture()
+    const recall = vi.fn()
+    const remember = vi.fn(async () => ({ delegated: true, runId: 'write-1' }))
+    const life = lifecycle({ recall, remember })
+    const read = createReadHandler(f.runtime, life)
+    await read('search', { sessionId: 's1', query: 'SQLite' })
+    await read('entities', { sessionId: 's1', entity: 'SQLite' })
+    await read('related', { sessionId: 's1', id: 'm1' })
+    expect(recall).not.toHaveBeenCalled()
+    expect(await createWriteHandler(f.runtime, life)('remember', { sessionId: 's1', content: 'SQLite' })).toMatchObject({ ok: true, value: { runId: 'write-1' } })
+    expect(remember).toHaveBeenCalledWith('s1', expect.objectContaining({ source: 'user' }), undefined)
+    f.route.aligned = false
+    await createWriteHandler(f.runtime, life)('remember', { sessionId: 's1', content: 'inspected' })
+    expect(f.sources['memory-spaces']!.mutate).toHaveBeenCalledWith('remember', expect.objectContaining({ content: 'inspected', source: 'user' }), undefined)
   })
 
-  it('performs Agent query synthesis only after a deterministic direct search', async () => {
-    const service = fakeService()
-    const lifecycle = {
-      answerTask: vi.fn(async () => ({ answer: 'SQLite.', citations: [], delegation: { runId: 'answer-1', provider: 'spawn' } })),
-    } as unknown as MnemonLifecycle
-
-    await expect(createReadHandler(service, lifecycle)('agent-search', { sessionId: 'session-1', query: 'database' })).resolves.toMatchObject({
-      ok: true,
-      value: { query: 'database', answer: 'SQLite.', delegation: { runId: 'answer-1' }, results: [] },
-    })
-    expect(service.search).toHaveBeenCalledWith(expect.objectContaining({ query: 'database' }))
-    expect(lifecycle.answerTask).toHaveBeenCalledWith('session-1', 'database', [], undefined)
+  it('synthesizes answers only after deterministic Source search and honors cancellation', async () => {
+    const f = protocolFixture()
+    const answerTask = vi.fn(async () => ({ answer: 'SQLite.', citations: [] }))
+    const controller = new AbortController()
+    expect(await createReadHandler(f.runtime, lifecycle({ answerTask }))('agent-search', { sessionId: 's1', query: 'SQLite' }, controller.signal)).toMatchObject({ ok: true, value: { query: 'SQLite', answer: 'SQLite.' } })
+    expect(f.sources['memory-spaces']!.read).toHaveBeenCalledWith('search', expect.objectContaining({ query: 'SQLite' }), controller.signal)
+    expect(answerTask).toHaveBeenCalledWith('s1', 'SQLite', [], '/fixture/workspace', controller.signal)
+    expect(f.sources['memory-spaces']!.read.mock.invocationCallOrder[0]).toBeLessThan(answerTask.mock.invocationCallOrder[0]!)
   })
 
-  it('adds lifecycle diagnostics to status without changing Mnemon runtime status', async () => {
-    const service = fakeService()
-    const lifecycle = {
-      snapshot: vi.fn(() => ({ enabled: true, activeAgents: 1, sessionAvailable: true })),
-    } as unknown as MnemonLifecycle
-    await expect(createReadHandler(service, lifecycle)('status', { sessionId: 'session-1' })).resolves.toMatchObject({
-      ok: true,
-      value: { healthy: true, lifecycle: { enabled: true, activeAgents: 1, sessionAvailable: true } },
-    })
-    expect(lifecycle.snapshot).toHaveBeenCalledWith('session-1')
+  it('resolves Provider placement before asking its Source to create a namespace', async () => {
+    const f = protocolFixture()
+    const decision = { providerId: 'mnemon-native', reason: 'local', confidence: 'high' }
+    const placeProvider = vi.fn(async () => decision)
+    const write = createWriteHandler(f.runtime, lifecycle({ placeProvider }))
+    const request = { sessionId: 's1', name: 'Product', description: 'Decisions', placement: { mode: 'automatic', prompt: 'local first' } }
+    expect(await write('body-create', request)).toMatchObject({ ok: true })
+    expect(placeProvider).toHaveBeenCalledWith('s1', { name: 'Product', description: 'Decisions' }, expect.objectContaining({ selectorBrief: 'eligible providers' }), undefined)
+    expect(f.sources['memory-spaces']!.mutate).toHaveBeenCalledWith('body-create', { request, placementDecision: decision }, undefined)
+    f.route.aligned = false
+    expect(await write('body-create', request)).toMatchObject({ ok: false, error: { message: expect.stringContaining('align the workbench') } })
+    expect(placeProvider).toHaveBeenCalledOnce()
   })
 
-  it('reports inspection/execution divergence, keeps direct workbench writes on the inspected graph, and fences Agent work', async () => {
-    const selectedService = fakeService()
-    selectedService.config.storageScope = 'workspace'
-    const selectedGraph = {
-      config: selectedService.config,
-      service: selectedService,
-      runtimeMemory: { snapshot: vi.fn(() => ({ entries: [] })) },
-      documents: { forWorkspace: vi.fn(() => ({ snapshot: vi.fn(() => ({ workspaceRoot: '/tmp/workspace-two' })) })) },
-      storage: { catalog: vi.fn(() => ({ activeRoot: '/tmp/workspace-two/.mnemon' })) },
-      packs: {},
-    } as unknown as MnemonRuntimeGraph
-    const route = {
-      graph: selectedGraph,
-      selectedWorkspace: { id: 'workspace-2', title: 'Workspace Two', path: '/tmp/workspace-two' },
-      effectiveWorkspace: { id: 'workspace-1', title: 'Workspace One', path: '/tmp/workspace-one' },
-      selectedRoot: '/tmp/workspace-two/.mnemon',
-      effectiveRoot: '/tmp/workspace-one/.mnemon',
-      aligned: false,
+  it('validates exactly selected active Spaces before metadata curation and commits only valid results', async () => {
+    const f = protocolFixture()
+    const updates = [{ memoryBodyId: 'project', title: '产品决策', description: '记录产品决策并供规划时召回。' }]
+    const maintainMetadata = vi.fn(async () => ({ runId: 'metadata', updates }))
+    const write = createWriteHandler(f.runtime, lifecycle({ maintainMetadata }))
+    expect(await write('body-metadata-maintain', { memoryBodyIds: ['project', 'project'] })).toMatchObject({ ok: true })
+    expect(maintainMetadata).toHaveBeenCalledWith('', ['project'], '/fixture/workspace', undefined)
+    expect(f.sources['memory-spaces']!.mutate).toHaveBeenCalledWith('body-metadata-update', { updates }, undefined)
+    expect(await write('body-metadata-maintain', { memoryBodyIds: ['unknown'] })).toMatchObject({ ok: false })
+    expect(await write('body-metadata-maintain', { memoryBodyIds: [] })).toMatchObject({ ok: false })
+    expect(maintainMetadata).toHaveBeenCalledOnce()
+    maintainMetadata.mockResolvedValue({ runId: 'empty', updates: [] })
+    f.sources['memory-spaces']!.mutate.mockClear()
+    expect(await write('body-metadata-maintain', { memoryBodyIds: ['project'] })).toMatchObject({ ok: true })
+    expect(f.sources['memory-spaces']!.mutate).not.toHaveBeenCalled()
+  })
+
+  it.each(['s1', undefined])('routes supervised work through workspace task context (%s)', async sessionId => {
+    const f = protocolFixture()
+    const superviseTask = vi.fn(async () => ({ runId: 'task', delegated: true }))
+    expect(await createWriteHandler(f.runtime, lifecycle({ superviseTask }))('supervise', { ...(sessionId ? { sessionId } : {}), content: 'candidate', idempotencyKey: 'message' })).toMatchObject({ ok: true })
+    expect(superviseTask).toHaveBeenCalledWith(sessionId ?? '', 'candidate', 'message', '/fixture/workspace', undefined)
+    expect(f.sources['memory-spaces']!.mutate).not.toHaveBeenCalled()
+  })
+
+  it('archives Documents through the selected workspace even without a session', async () => {
+    const f = protocolFixture()
+    f.route.aligned = false
+    const archiveDocument = vi.fn(async () => ({ action: 'archived' }))
+    expect(await createWriteHandler(f.runtime, lifecycle({ archiveDocument }))('document', { action: 'archive', id: 'doc-1' })).toMatchObject({ ok: true })
+    expect(archiveDocument).toHaveBeenCalledWith('', 'doc-1', '/fixture/workspace', undefined)
+  })
+
+  it('adds lifecycle and storage diagnostics without replacing Source status', async () => {
+    const f = protocolFixture()
+    f.route.aligned = false
+    f.route.effectiveRoot = '/fixture/other'
+    expect(await createReadHandler(f.runtime, lifecycle())('status-summary', { sessionId: 's1' })).toMatchObject({ ok: true, value: {
+      healthy: true, lifecycle: { enabled: true }, memorySystem: { evaluation: { state: 'ready' } },
+      workspaceContext: { aligned: false, selectedRoot: '/fixture/data', effectiveRoot: '/fixture/other' },
+    } })
+  })
+
+  it('keeps activation strictly narrower than the configuration/mutation channel', async () => {
+    const f = protocolFixture()
+    const activate = createActivationHandler(f.runtime)
+    expect(await activate('body', { memoryBodyId: 'project', active: true })).toMatchObject({ ok: true })
+    expect(f.sources['memory-spaces']!.mutate).toHaveBeenCalledWith('body-update', { memoryBodyId: 'project', active: true }, undefined)
+    for (const payload of [{ memoryBodyId: 'project', active: true, name: 'rename' }, { memoryBodyId: 'project', active: 'yes' }, { memoryBodyId: '', active: false }]) {
+      expect(await activate('body', payload)).toMatchObject({ ok: false, error: { code: 'bad-request' } })
     }
-    const runtime = { route: vi.fn(() => route) } as unknown as LiveMnemonRuntime
-    const lifecycle = {
-      snapshot: vi.fn(() => ({ enabled: true })),
-      supervise: vi.fn(),
-      superviseTask: vi.fn(async () => ({ delegated: true, sessionId: 'task-1', runId: 'child-1' })),
-      remember: vi.fn(async () => ({ delegated: true, runId: 'write-1' })),
-    } as unknown as MnemonLifecycle
-
-    await expect(createReadHandler(runtime, lifecycle)('status', { sessionId: 'session-1', workspaceId: 'workspace-2' })).resolves.toMatchObject({
-      ok: true,
-      value: {
-        workspaceContext: {
-          mode: selectedService.config.storageScope,
-          selectedRoot: '/tmp/workspace-two/.mnemon',
-          effectiveRoot: '/tmp/workspace-one/.mnemon',
-          aligned: false,
-          selectedWorkspace: { id: 'workspace-2' },
-          effectiveWorkspace: { id: 'workspace-1' },
-        },
-      },
-    })
-    await expect(createWriteHandler(runtime, lifecycle)('remember', { sessionId: 'session-1', workspaceId: 'workspace-2', content: 'Inspect this workspace' })).resolves.toMatchObject({ ok: true })
-    expect(selectedService.remember).toHaveBeenCalledWith(expect.objectContaining({ content: 'Inspect this workspace', source: 'user' }))
-
-    await expect(createWriteHandler(runtime, lifecycle)('supervise', { sessionId: 'session-1', workspaceId: 'workspace-2', content: 'Run in the selected workspace' })).resolves.toMatchObject({ ok: true })
-    expect(lifecycle.supervise).not.toHaveBeenCalled()
-    expect(lifecycle.superviseTask).toHaveBeenCalledWith('session-1', 'Run in the selected workspace', undefined, '/tmp/workspace-two')
-
-    route.aligned = true
-    route.effectiveRoot = route.selectedRoot
-    route.effectiveWorkspace = route.selectedWorkspace
-    await expect(createWriteHandler(runtime, lifecycle)('remember', { sessionId: 'session-1', workspaceId: 'workspace-2', content: 'Use the aligned Agent path' })).resolves.toMatchObject({ ok: true })
-    expect(lifecycle.remember).toHaveBeenCalledWith('session-1', expect.objectContaining({ content: 'Use the aligned Agent path' }))
-    expect(selectedService.remember).toHaveBeenCalledTimes(1)
+    expect(await activate('body-delete', {})).toMatchObject({ ok: false })
+    expect(f.sources['memory-spaces']!.mutate).toHaveBeenCalledOnce()
   })
 
-  it('runs workspace-scoped maintenance without a selected conversation session', async () => {
-    const selectedService = fakeService()
-    selectedService.config.storageScope = 'workspace'
-    const selectedWorkspace = { id: 'workspace-2', title: 'Workspace Two', path: '/tmp/workspace-two' }
-    const runtime = {
-      route: vi.fn(() => ({
-        graph: {
-          config: selectedService.config,
-          service: selectedService,
-          runtimeMemory: {},
-          documents: { forWorkspace: vi.fn(() => ({})) },
-          storage: {},
-          packs: {},
-        },
-        selectedWorkspace,
-        selectedRoot: '/tmp/workspace-two/.mnemon',
-        effectiveRoot: '/tmp/global/.mnemon',
-        aligned: false,
-      })),
-    } as unknown as LiveMnemonRuntime
-    const maintained = {
-      delegated: true as const,
-      runId: 'metadata-task',
-      provider: 'spawn',
-      summary: 'updated',
-      updates: [{ memoryBodyId: 'project', title: '产品决策', description: '记录稳定的产品范围与取舍，在规划和复盘产品方向时召回。' }],
-    }
-    const lifecycle = {
-      maintainMetadata: vi.fn(async () => maintained),
-      archiveDocument: vi.fn(async () => ({ success: true, action: 'archived', document: { id: 'doc-1' } })),
-    } as unknown as MnemonLifecycle
-
-    await expect(createWriteHandler(runtime, lifecycle)('body-metadata-maintain', {
-      workspaceId: 'workspace-2', memoryBodyIds: ['project'],
-    })).resolves.toMatchObject({ ok: true, value: { runId: 'metadata-task' } })
-    await expect(createWriteHandler(runtime, lifecycle)('document', {
-      workspaceId: 'workspace-2', action: 'archive', id: 'doc-1',
-    })).resolves.toMatchObject({ ok: true, value: { action: 'archived' } })
-
-    expect(lifecycle.maintainMetadata).toHaveBeenCalledWith('', ['project'], '/tmp/workspace-two')
-    expect(lifecycle.archiveDocument).toHaveBeenCalledWith('', 'doc-1', '/tmp/workspace-two')
+  it('allows Source-bound activation with the exact revision, not other Source operations', async () => {
+    const f = protocolFixture()
+    const activate = createActivationHandler(f.runtime)
+    const request = { sourceInstanceKey: 'source:mnemon-source-memory-spaces', operation: 'activation', expectedRevision: 'r1', confirmed: true, input: { memoryBodyId: 'project', active: false } }
+    expect(await activate('source-assistance', request)).toMatchObject({ ok: true })
+    expect(f.generation.executeManagement).toHaveBeenCalledWith(expect.objectContaining({ sourceInstanceKey: request.sourceInstanceKey, expectedRevision: 'r1', operation: 'body-update' }))
+    expect(await activate('source-assistance', { ...request, input: { ...request.input, name: 'rename' } })).toMatchObject({ ok: false })
+    expect(await activate('source-assistance', { ...request, operation: 'body-delete' })).toMatchObject({ ok: false })
   })
 
-  it('does not treat a browser workspace hint as an inspection override in global scope', async () => {
-    const service = fakeService()
-    const mutate = vi.fn()
-    const graph = {
-      config: service.config,
-      service,
-      runtimeMemory: { mutate },
-      documents: {},
-      storage: {},
-      packs: {},
-    } as unknown as MnemonRuntimeGraph
-    const route = {
-      graph,
-      selectedWorkspace: { id: 'workspace-2', title: 'Workspace Two', path: '/tmp/workspace-two' },
-      effectiveWorkspace: { id: 'workspace-1', title: 'Workspace One', path: '/tmp/workspace-one' },
-      selectedRoot: '/tmp/global',
-      effectiveRoot: '/tmp/global',
-      aligned: true,
-    }
-    const runtime = { route: vi.fn(() => route) } as unknown as LiveMnemonRuntime
-    const lifecycle = {
-      runtime: vi.fn(async () => ({ success: true })),
-      remember: vi.fn(async () => ({ delegated: true })),
-    } as unknown as MnemonLifecycle
-
-    await createWriteHandler(runtime, lifecycle)('runtime-memory', { sessionId: 'session-1', workspaceId: 'workspace-2', action: 'add', target: 'memory', content: 'Global hot memory' })
-    expect(lifecycle.runtime).toHaveBeenCalledWith('session-1', expect.objectContaining({ content: 'Global hot memory' }))
-    expect(mutate).not.toHaveBeenCalled()
-    await createWriteHandler(runtime, lifecycle)('remember', { sessionId: 'session-1', workspaceId: 'workspace-2', content: 'Global durable memory' })
-    expect(lifecycle.remember).toHaveBeenCalledWith('session-1', expect.objectContaining({ content: 'Global durable memory' }))
-    expect(service.remember).not.toHaveBeenCalled()
-  })
-
-  it('always supplies the rc.2 authority object accepted and ignored by the alpha API', () => {
+  it('keeps inspection and activation RPC registrations stable while enforcing read-only mutations', async () => {
+    const f = protocolFixture({ writeEnabled: false })
     const handle = vi.fn()
-    const connection = { rpc: { handle } } as unknown as HostConnectionHandle
-    registerRpc(connection, fakeService())
+    registerRpc({ rpc: { handle } } as unknown as HostConnectionHandle, f.runtime)
+    expect(handle).toHaveBeenCalledTimes(4)
     expect(handle).toHaveBeenCalledWith(MNEMON_READ_CHANNEL, expect.any(Function), { authority: 'trusted-host' })
     expect(handle).toHaveBeenCalledWith(MNEMON_ACTIVATION_CHANNEL, expect.any(Function), { authority: 'trusted-host' })
     expect(handle).toHaveBeenCalledWith(MNEMON_WRITE_CHANNEL, expect.any(Function), { authority: 'loopback' })
-  })
-
-  it('retains explicit rc.2 promotion without branching on the DSH version', () => {
-    const handle = vi.fn()
-    const connection = { rpc: { handle } } as unknown as HostConnectionHandle
-    registerRpc(connection, fakeService(), undefined, undefined, undefined, undefined, undefined, 'trusted-host')
-    expect(handle).toHaveBeenCalledWith(MNEMON_WRITE_CHANNEL, expect.any(Function), { authority: 'trusted-host' })
-  })
-
-  it('keeps Pack backup and restore on a dedicated authenticated channel', async () => {
-    const packs = {
-      target: vi.fn(() => ({ root: '/tmp/mnemon', scope: 'custom' })),
-      exportPack: vi.fn(async () => ({ fileName: 'backup.zip', base64: 'eA==' })),
-      inspectPack: vi.fn(() => ({ archiveBytes: 1, manifest: { components: ['runtime'] } })),
-      importPack: vi.fn(async () => ({ imported: true })),
-    } as unknown as MnemonPackManager
-
-    await expect(createPackHandler(packs)('target', {})).resolves.toMatchObject({ ok: true, value: { root: '/tmp/mnemon' } })
-    await expect(createPackHandler(packs)('export', { scope: 'runtime' })).resolves.toMatchObject({ ok: true, value: { fileName: 'backup.zip' } })
-    expect(packs.exportPack).toHaveBeenCalledWith('full')
-    await expect(createPackHandler(packs)('inspect', { base64: 'eA==', fileName: 'backup.zip' })).resolves.toMatchObject({ ok: true, value: { archiveBytes: 1 } })
-    await expect(createPackHandler(packs)('import', { base64: 'eA==', mode: 'replace', components: ['runtime'] })).resolves.toMatchObject({ ok: true, value: { imported: true } })
-    expect(packs.importPack).toHaveBeenCalledWith('eA==', { mode: 'merge' })
-    await expect(createPackHandler(packs, false)('import', { base64: 'eA==', mode: 'merge' })).resolves.toMatchObject({ ok: false, error: { code: 'internal' } })
-
-    const workspacePacks = { ...packs, target: vi.fn(() => ({ root: '/workspace/.mnemon', scope: 'workspace' })) } as unknown as MnemonPackManager
-    const route = vi.fn(() => ({ graph: { packs: workspacePacks } }))
-    const runtime = { route } as unknown as LiveMnemonRuntime
-    await expect(createPackHandler(runtime)('target', { sessionId: 'session-1', workspaceId: 'workspace-1' })).resolves.toMatchObject({ ok: true, value: { root: '/workspace/.mnemon' } })
-    expect(route).toHaveBeenCalledWith({ sessionId: 'session-1', workspaceId: 'workspace-1' })
-
-    const handle = vi.fn()
-    registerRpc({ rpc: { handle } } as unknown as HostConnectionHandle, fakeService(), undefined, undefined, undefined, packs)
     expect(handle).toHaveBeenCalledWith(MNEMON_PACK_CHANNEL, expect.any(Function), { authority: 'loopback' })
+    for (const channel of [MNEMON_WRITE_CHANNEL, MNEMON_ACTIVATION_CHANNEL]) {
+      const handler = handle.mock.calls.find(([id]) => id === channel)![1] as HostRpcHandler
+      expect(await handler(channel === MNEMON_WRITE_CHANNEL ? 'remember' : 'body', { content: 'blocked', memoryBodyId: 'project', active: false })).toMatchObject({ ok: false })
+    }
+    expect(f.sources['memory-spaces']!.mutate).not.toHaveBeenCalled()
   })
 
-  it('keeps the live write channel stable but rejects it in read-only mode', async () => {
+  it('supports explicitly selected trusted-host management without a parallel RPC implementation', () => {
+    const f = protocolFixture()
     const handle = vi.fn()
-    registerRpc({ rpc: { handle } } as unknown as HostConnectionHandle, fakeService(false))
-    expect(handle).toHaveBeenCalledTimes(3)
-    const writeHandler = handle.mock.calls.find(([channel]) => channel === MNEMON_WRITE_CHANNEL)?.[1] as HostRpcHandler
-    await expect(writeHandler('remember', { content: 'blocked' })).resolves.toMatchObject({ ok: false, error: { code: 'internal' } })
+    registerRpc({ rpc: { handle } } as unknown as HostConnectionHandle, f.runtime, undefined, undefined, 'trusted-host')
+    expect(handle).toHaveBeenCalledWith(MNEMON_WRITE_CHANNEL, expect.any(Function), { authority: 'trusted-host' })
+    expect(handle).toHaveBeenCalledWith(MNEMON_PACK_CHANNEL, expect.any(Function), { authority: 'trusted-host' })
+  })
+
+  it('keeps Pack transport authenticated, selected-root scoped, and merge-only from the page', async () => {
+    const f = protocolFixture()
+    const handler = createPackHandler(f.runtime)
+    expect(await handler('target', {})).toMatchObject({ ok: true, value: { root: '/fixture/data' } })
+    expect(await handler('export', { scope: 'runtime' })).toMatchObject({ ok: true })
+    expect(f.graph.packs.exportPack).toHaveBeenCalledWith('full')
+    expect(await handler('inspect', { base64: 'eA==', fileName: 'backup.zip' })).toMatchObject({ ok: true })
+    expect(await handler('import', { base64: 'eA==', mode: 'replace', components: ['runtime'] })).toMatchObject({ ok: true })
+    expect(f.graph.packs.importPack).toHaveBeenCalledWith('eA==', { mode: 'merge' })
+    expect(f.sources['memory-spaces']!.mutate).toHaveBeenCalledWith('reload', {})
+    const readonly = protocolFixture({ writeEnabled: false })
+    expect(await createPackHandler(readonly.runtime)('import', { base64: 'eA==' })).toMatchObject({ ok: false })
+    expect(readonly.graph.packs.importPack).not.toHaveBeenCalled()
+  })
+
+  it('checks versions on read and performs explicit updates only on management', async () => {
+    const f = protocolFixture()
+    const versions = { check: vi.fn(async () => ({ components: [] })), update: vi.fn(async () => ({ updated: true })) } as unknown as VersionUpdateManager
+    expect(await createReadHandler(f.runtime, undefined, versions)('versions', {})).toMatchObject({ ok: true })
+    expect(await createWriteHandler(f.runtime, undefined, versions)('version-update', { component: 'mnemon' })).toMatchObject({ ok: true })
+    expect(await createWriteHandler(f.runtime, undefined, versions)('version-update', { component: 'other' })).toMatchObject({ ok: false })
+    expect(versions.update).toHaveBeenCalledOnce()
+  })
+
+  it('exposes task model choices and cached turn activities without Source work', async () => {
+    const f = protocolFixture()
+    const taskAgentModels = vi.fn(async () => ({ groups: [], failures: [] }))
+    const turnActivities = vi.fn(() => ({ cursor: 12, activities: [{ turn: 2, recalls: 1 }] }))
+    const read = createReadHandler(f.runtime, lifecycle({ taskAgentModels, turnActivities }))
+    expect(await read('task-agent-models', { includeCatalog: false })).toMatchObject({ ok: true })
+    expect(taskAgentModels).toHaveBeenCalledWith(false)
+    expect(await read('turn-activities', { sessionId: 's1' })).toMatchObject({ ok: true, value: { cursor: 12 } })
+    expect(await read('turn-activity', { sessionId: 's1', turn: 2 })).toMatchObject({ ok: true, value: { recalls: 1 } })
+    expect(f.graph.source).not.toHaveBeenCalled()
   })
 })

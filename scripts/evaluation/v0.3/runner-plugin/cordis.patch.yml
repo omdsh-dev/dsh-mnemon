@@ -1,6 +1,0 @@
-- id: headless-runner
-  disabled: true
-
-- insert:
-    - id: mnemon-evaluation-runner
-      name: dsh-mnemon-evaluation-runner

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { ClientConnectionHandle } from '../src/contracts.ts'
+import type { ClientConnectionHandle } from "../src/host/dsh.ts"
 import { MnemonClient } from '../src/client/api.ts'
 
 describe('MnemonClient turn activity batching', () => {
@@ -78,15 +78,15 @@ describe('MnemonClient turn activity batching', () => {
     })
   })
 
-  it('loads Provider secrets through the management channel and never masks an authentication rejection', async () => {
+  it('loads redacted Provider settings through the read channel and never masks an authentication rejection', async () => {
     const call = vi.fn(async (channel: string) => {
-      if (channel === '/dsh-mnemon-write') return { ok: true as const, value: { providers: [], items: [], generatedAt: 'now' } }
+      if (channel === '/dsh-mnemon-read') return { ok: true as const, value: { providers: [], items: [], generatedAt: 'now' } }
       throw new Error(`unexpected channel: ${channel}`)
     })
     const client = new MnemonClient({ rpc: { call } } as ClientConnectionHandle, 'session-1')
 
     await client.providerServices()
-    expect(call).toHaveBeenLastCalledWith('/dsh-mnemon-write', 'provider-services', { sessionId: 'session-1' })
+    expect(call).toHaveBeenLastCalledWith('/dsh-mnemon-read', 'provider-services', { sessionId: 'session-1' })
 
     call.mockReset()
     call.mockRejectedValue(new Error('transport failure for /dsh-mnemon-write/provider-services: HTTP 403'))
@@ -94,18 +94,11 @@ describe('MnemonClient turn activity batching', () => {
     expect(call).toHaveBeenCalledTimes(1)
   })
 
-  it('falls back to the legacy Provider catalog only when an older Host lacks its private endpoint', async () => {
-    const call = vi.fn(async (channel: string) => {
-      if (channel === '/dsh-mnemon-write') return { ok: false as const, error: { code: 'bad-request' as const, message: 'unknown write endpoint: provider-services', details: { issues: [] } } }
-      return { ok: true as const, value: { providers: [], items: [], generatedAt: 'now' } }
-    })
+  it('does not retry an unavailable Provider catalog on a write endpoint', async () => {
+    const call = vi.fn(async () => ({ ok: false as const, error: { code: 'bad-request' as const, message: 'unknown read endpoint: provider-services', details: { issues: [] } } }))
     const client = new MnemonClient({ rpc: { call } } as ClientConnectionHandle)
-
-    await client.providerServices()
-    expect(call.mock.calls).toEqual([
-      ['/dsh-mnemon-write', 'provider-services', {}],
-      ['/dsh-mnemon-read', 'provider-services', {}],
-    ])
+    await expect(client.providerServices()).rejects.toThrow('unknown read endpoint')
+    expect(call.mock.calls).toEqual([['/dsh-mnemon-read', 'provider-services', {}]])
   })
 
   it('loads the independent task Agent model catalog without a session dependency', async () => {
@@ -158,17 +151,16 @@ describe('MnemonClient turn activity batching', () => {
     })
   })
 
-  it('falls back to the legacy write route only when an older Host lacks the activation channel', async () => {
+  it('never widens activation authority by falling back to a general write route', async () => {
     const call = vi.fn(async (channel: string) => {
       if (channel === '/dsh-mnemon-activation') throw new Error('transport failure for /dsh-mnemon-activation/body: HTTP 404')
       return { ok: true as const, value: { id: 'project', active: true } }
     })
     const client = new MnemonClient({ rpc: { call } } as ClientConnectionHandle)
 
-    await client.updateBody('project', { active: true })
+    await expect(client.updateBody('project', { active: true })).rejects.toThrow('HTTP 404')
     expect(call.mock.calls).toEqual([
       ['/dsh-mnemon-activation', 'body', { memoryBodyId: 'project', active: true }],
-      ['/dsh-mnemon-write', 'body-update', { memoryBodyId: 'project', active: true }],
     ])
 
     call.mockReset()

@@ -32,21 +32,11 @@
 
 [Mnemon](https://github.com/mnemon-dev/mnemon) remains the official, prioritized native engine. The third tier is replaceable; the first two keep the same storage, workspace, and interaction model regardless of provider.
 
-Since v0.3.0, the three tiers are the **default topology** of a composable kernel rather than the only shape hard-coded into every entry point. `MemoryBoot` wires trusted Layer, Adapter, Strategy, Guard, and `MemorySource` contributions into one runtime generation. Each user turn pins a lightweight `TurnView`: exact Runtime context enters Wake eagerly, while Documents and Memory Spaces contribute only bounded routing covers and keep complete recall authority Host-side. Users still install one `dsh-mnemon` package and keep the existing settings, tools, RPC, and UI workflow. See the [composable architecture](./docs/en/architecture.md#composable-memory-kernel) and [extension guide](./docs/en/extensions.md).
+Runtime, Documents and Memory Spaces are independent Source plugins. A Strategy selects their instance-specific projections, retrieval routes and actions into an immutable per-turn View. Core provides only `ctx.mnemonMemory`; Sources own their data and optional pages, while Memory Spaces owns its private Provider children. The `dsh-mnemon` Starter preserves the default three-tier experience. See [Architecture](./docs/en/architecture.md) and [Plugin development](./docs/en/extensions.md).
 
-v0.4.0 makes Sidebar the only Memory System workspace and removes the builtin display mode and its setting. Legacy display preferences are ignored without changing memory data; the complete view-based upgrade is planned for v0.5, not this release. Read the [upgrade and compatibility notes](./docs/en/releases/v0.4.0.md#upgrade-and-compatibility) before updating.
+**v0.5.0-rc.1 introduces View-based Memory and independently published Source/Strategy/Provider plugins.** The SDK remains a prerelease API rather than a frozen extension ABI; default user configuration and workflows stay compatible. Compared with v0.4, the ordinary UI adds only three disabled-by-default enhancement switches under **Settings → Memory System**—no View page or plugin-management entry. See the [release-candidate scope and upgrade notes](./docs/en/releases/v0.5.0-rc.1.md); v0.4 remains the stable Sidebar-convergence line.
 
-v0.4.1 fixes Memory System and Save to memory rendering with this-dependent DSH settings stores, plus ZIP export failures and archive differences across timezones. It preserves the v0.4.0 workflow and existing memory formats. See the [patch release notes](./docs/en/releases/v0.4.1.md).
-
-v0.4.2 restores optional `displayMode: builtin` as a conversation placement for the same Sidebar-first UI. Legacy `buildin` is accepted and automatically saved as `builtin`; memory data is unchanged. See the [release notes](./docs/en/releases/v0.4.2.md) and [entry placement and scope mapping](./docs/en/configuration.md#entry-placement-displaymode-and-tabenabled).
-
-v0.4.3 aligns the collapsed Memory System icon with neighboring sidebar controls while preserving the expanded appearance. See the [patch release notes](./docs/en/releases/v0.4.3.md).
-
-v0.4.4 fixes session history failures on older DSH hosts by supporting both session projection contracts. Newer hosts and existing projection checkpoints remain compatible. See the [patch release notes](./docs/en/releases/v0.4.4.md).
-
-v0.4.5 registers Memory System with an installed Better Sidebar while keeping the normal DSH Sidebar entry and both client activation orders working. See the [patch release notes](./docs/en/releases/v0.4.5.md).
-
-v0.4.6 keeps DSH 0.1.1-rc.2 as the stable baseline while adding capability-detected support for the Session event snapshots used by DSH 0.1.2-alpha.4 and alpha.5. See the [patch release notes](./docs/en/releases/v0.4.6.md).
+The v0.5 branch includes main's v0.4.3 behavior: Sidebar is the default; optional `displayMode: builtin` places the same Source pages in the owning conversation. Legacy `buildin` is accepted and automatically saved as `builtin`, without changing memory data. The collapsed icon aligns with neighboring Sidebar controls. The settings-store and ZIP fixes from v0.4.1 are retained. See the [latest stable release notes](./docs/en/releases/v0.4.3.md) and [entry placement and scope mapping](./docs/en/configuration.md#entry-placement-displaymode-and-tabenabled).
 
 v0.4.7 promotes the published DSH 0.1.2-rc.1 release to the stable registry baseline, keeps source verification against its alpha.5 predecessor, and retains a real WebUI regression on the previous 0.1.1-rc.2 line. See the [patch release notes](./docs/en/releases/v0.4.7.md).
 
@@ -54,9 +44,9 @@ v0.4.7 promotes the published DSH 0.1.2-rc.1 release to the stable registry base
 
 | Tier | Keep here | How it reaches the Agent | Managed by |
 |---|---|---|---|
-| **Runtime** | Preferences, collaboration rules, project conventions, environment facts | Compact `USER.md` / `MEMORY.md` projection on every turn | Deterministic dsh-mnemon Host |
-| **Documents** | Designs, investigations, procedures, postmortems, handoffs | Search first, full Markdown on demand | Deterministic dsh-mnemon Host |
-| **Memory Spaces** | Cross-session facts, decisions, entities, relations | Bounded recall from active spaces | Mnemon Native or an external Provider |
+| **Runtime** | Preferences, collaboration rules, project conventions, environment facts | Compact `USER.md` / `MEMORY.md` projection on every turn | Runtime Source |
+| **Documents** | Designs, investigations, procedures, postmortems, handoffs | Search first, full Markdown on demand | Documents Source |
+| **Memory Spaces** | Cross-session facts, decisions, entities, relations | Bounded recall from active spaces | Memory Spaces Source + selected Provider |
 
 The tiers are not copies. A useful rule is: **every-turn context goes to Runtime, complete narratives go to Documents, and cross-task evidence goes to Memory Spaces.** Current instructions, repository files, and live tool results always outrank historical memory.
 
@@ -225,8 +215,8 @@ See [Operations, security, and troubleshooting](./docs/en/operations.md) for bac
 | Configure scope, routing, and model selection | [Configuration](./docs/en/configuration.md) |
 | Back up, update, or troubleshoot | [Operations](./docs/en/operations.md) |
 | Integrate tools, commands, or RPC | [Interface reference](./docs/en/interfaces.md) |
-| Build a Layer, Adapter, Strategy, Guard, or MemorySource extension | [Extension guide](./docs/en/extensions.md) |
-| Review the release | [v0.4.7 release notes](./docs/en/releases/v0.4.7.md) |
+| Build a Source, Strategy or Memory Spaces Provider plugin | [Extension guide](./docs/en/extensions.md) |
+| Review the stable release | [v0.4.3 release notes](./docs/en/releases/v0.4.3.md) |
 
 See the [documentation hub](./docs/en/README.md) for the full map.
 

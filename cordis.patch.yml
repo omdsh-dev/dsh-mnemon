@@ -3,6 +3,7 @@
 # variables for one-field overrides such as cliPath.
 - insert:
     - id: mnemon
+      # Core/Host and default settings. Sources own their independent Entries.
       name: dsh-mnemon
       config:
         routingGuidance: true
@@ -26,3 +27,44 @@
           candidateMultiplier: 3
           maxMediumResults: 4
           maxUnknownResults: 2
+    - id: mnemon-source-runtime
+      name: dsh-mnemon-source-runtime
+    - id: mnemon-source-documents
+      name: dsh-mnemon-source-documents
+    - id: mnemon-source-memory-spaces
+      name: dsh-mnemon-source-memory-spaces
+      config:
+        # Every default Provider is an
+        # explicit child. A custom parent composition may choose a subset.
+        providers:
+          - use: dsh-mnemon-provider-mnemon-native
+            instanceId: mnemon-native
+          - use: dsh-mnemon-provider-openviking
+            instanceId: openviking
+          - use: dsh-mnemon-provider-honcho
+            instanceId: honcho
+          - use: dsh-mnemon-provider-mem0
+            instanceId: mem0
+          - use: dsh-mnemon-provider-hindsight
+            instanceId: hindsight
+          - use: dsh-mnemon-provider-holographic
+            instanceId: holographic
+          - use: dsh-mnemon-provider-retaindb
+            instanceId: retaindb
+          - use: dsh-mnemon-provider-byterover
+            instanceId: byterover
+          - use: dsh-mnemon-provider-supermemory
+            instanceId: supermemory
+    - id: mnemon-strategy-default-three-tier
+      name: dsh-mnemon-strategy-default-three-tier
+    # v0.5 ships these narrowly scoped enhancements with the Starter so the
+    # Settings switches are always available. They remain opt-in.
+    - id: mnemon-strategy-auto-capture
+      name: dsh-mnemon-strategy-auto-capture
+      disabled: true
+    - id: mnemon-strategy-light-context
+      name: dsh-mnemon-strategy-light-context
+      disabled: true
+    - id: mnemon-strategy-scoped
+      name: dsh-mnemon-strategy-scoped
+      disabled: true

@@ -12,13 +12,13 @@
 
 DSH 只在这份动态 Wake 发生变化时追加新的 user-role runtime-context 快照。该快照仍刻意保持完整，因为 DSH 将最新 runtime-context 消息定义为取代旧快照；完整状态能保护 resume、fork、compaction、删除和上下文裁剪语义。把不变协议放入稳定 system 前缀，可以从每个变化后的尾部快照移除这些字节，又不需要构造不可恢复的 diff 链。
 
-生命周期会在 Host 组装 System Prompt 前固定 TurnView，并让本回合所有模型 step 使用同一个 View：
+生命周期会在 Host 组装 System Prompt 前固定 View，并让本回合所有模型 step 使用同一个 View：
 
 ```text
 turn/start
   -> 进入 system-prompt/assemble hook
   -> beginTurn(root turn + operation scope)
-  -> snapshot eager and routed MemorySources
+  -> Source facts → Strategy ViewSpec → validation → Source projection
   -> pin Source revisions/digests and Host-only authority
   -> build bounded Wake
   -> 继续真正的 Host prompt assembly
@@ -51,7 +51,7 @@ read the pinned Memory Space Source state on the Host
 validate requested IDs are a subset; otherwise use every pinned active ID
           |
           v
-MnemonService searches authorized Providers concurrently
+Memory Spaces Source searches granted Provider namespaces concurrently
           |
           v
 quality normalization + reciprocal-rank fusion
@@ -86,7 +86,7 @@ Web “检索”页与模型工具路径不同：
 ```text
 Direct search
   -> RPC read channel
-  -> MnemonService.search directly
+  -> Source-scoped management search
   -> raw evidence
 
 Agent search
@@ -96,7 +96,7 @@ Agent search
   -> Host filters citations to actual memoryBodyId/id pairs
 ```
 
-“实体”和“内容”页也直接读取确定性服务，不需要第二个模型。“内容”使用图谱快照，不增加 Mnemon recall 访问计数。
+“实体”和“内容”页也经 Source 管理协议执行确定性读取，不需要第二个模型。“内容”使用 Provider 的只读 browse 契约，不冒充语义 Recall。
 
 ## 显式长期写入
 

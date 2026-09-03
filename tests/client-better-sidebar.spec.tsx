@@ -1,18 +1,10 @@
 // @vitest-environment jsdom
+import { render, waitFor } from '@testing-library/react'
 import type { ReactElement, ReactNode } from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../src/client/MnemonView.tsx', () => ({
-  MnemonView: ({ sessionId, workspaceId, locale, onClose }: {
-    sessionId?: string
-    workspaceId?: string
-    locale?: string
-    onClose?: () => void
-  }) => <div data-testid="mnemon-better-sidebar-view" data-session-id={sessionId} data-workspace-id={workspaceId} data-locale={locale} data-has-close={onClose === undefined ? 'false' : 'true'} />,
-}))
-
 import { MNEMON_BETTER_SIDEBAR_TAB_ID, mountBetterSidebarTab } from '../src/client/better-sidebar.tsx'
+import { MnemonBetterSidebarSeat } from '../src/client/better-sidebar-seat.ts'
 
 interface Descriptor {
   id: string
@@ -81,7 +73,7 @@ describe('Better Sidebar integration', () => {
     const ctx = context()
     const first = service()
     const second = service()
-    const dispose = mountBetterSidebarTab(ctx.value as never, {} as never, key => key === 'tab.label' ? '记忆系统' : key)
+    const dispose = mountBetterSidebarTab(ctx.value as never, key => key === 'tab.label' ? '记忆系统' : key, new MnemonBetterSidebarSeat())
 
     expect(first.registerTab).not.toHaveBeenCalled()
     ctx.setService(first)
@@ -105,22 +97,27 @@ describe('Better Sidebar integration', () => {
     expect(second.dispose).toHaveBeenCalledTimes(1)
   })
 
-  it('renders the Better Sidebar session scope instead of the globally active session', async () => {
+  it('publishes only the tab DOM seat, scope, and visibility to the DSH renderer', async () => {
     const ctx = context()
     const sidebar = service()
+    const seat = new MnemonBetterSidebarSeat()
     ctx.setService(sidebar)
-    const dispose = mountBetterSidebarTab(ctx.value as never, {} as never, key => String(key))
+    const dispose = mountBetterSidebarTab(ctx.value as never, key => String(key), seat)
     const descriptor = sidebar.registerTab.mock.calls[0]![0]
-
-    render(descriptor.component({
+    const view = render(descriptor.component({
       scope: { sessionId: 'session-target', cwd: 'C:\\workspace\\target\\' },
       visible: true,
     }) as ReactElement)
 
-    await waitFor(() => expect(screen.getByTestId('mnemon-better-sidebar-view').getAttribute('data-workspace-id')).toBe('workspace-target'))
-    expect(screen.getByTestId('mnemon-better-sidebar-view').getAttribute('data-session-id')).toBe('session-target')
-    expect(screen.getByTestId('mnemon-better-sidebar-view').getAttribute('data-locale')).toBe('zh')
-    expect(screen.getByTestId('mnemon-better-sidebar-view').getAttribute('data-has-close')).toBe('false')
+    await waitFor(() => expect(seat.getSnapshot()?.scope).toEqual({ sessionId: 'session-target', cwd: 'C:\\workspace\\target\\' }))
+    expect(seat.getSnapshot()?.visible).toBe(true)
+    expect(seat.getSnapshot()?.target).toBe(view.container.querySelector('[data-dsh-mnemon-better-sidebar-seat]'))
+    expect(view.container.querySelector('[data-testid="mnemon-better-sidebar-view"]')).toBeNull()
+
+    view.rerender(descriptor.component({ scope: { sessionId: 'session-target', cwd: 'C:\\workspace\\target\\' }, visible: false }) as ReactElement)
+    await waitFor(() => expect(seat.getSnapshot()?.visible).toBe(false))
+    view.unmount()
+    expect(seat.getSnapshot()).toBeUndefined()
     dispose()
   })
 })

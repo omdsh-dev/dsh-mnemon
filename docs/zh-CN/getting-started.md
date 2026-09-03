@@ -2,9 +2,9 @@
 
 **简体中文** | [English](../en/getting-started.md) | [文档中心](./README.md)
 
-本页从空白环境走到第一次可验证召回，默认采用 Sidebar、全局存储和兼容旧行为的 `default-three-tier` 拓扑。普通使用不需要配置 TurnView、Strategy 或 generation 概念。
+本页从空白环境走到第一次可验证召回，默认采用 Sidebar、全局存储和保留原使用体验的 `default-three-tier` 组合。普通使用不需要配置 View、Strategy 或 generation 概念。
 
-如果你已经安装完成，可直接跳到[首次验证](#6-完成第一次验证)。从 v0.3.x 或 v0.4.0–v0.4.1 升级前，请阅读 [v0.4.2 入口位置兼容性说明](./releases/v0.4.2.md#升级与兼容性)，特别是保留的 `buildin` 偏好会自动规范化。如果从 v0.2.x 升级，还应阅读 [v0.3.0 升级与数据兼容](./releases/v0.3.0.md#升级与数据兼容)。
+如果你已经安装完成，可直接跳到[首次验证](#6-完成第一次验证)。从 v0.3.x 或 v0.4.0–v0.4.1 升级前，请先看 [v0.4.2 入口位置兼容性说明](./releases/v0.4.2.md#升级与兼容性)，包括保留的 `buildin` 偏好的自动规范化。如果从 v0.2.x 升级，还应阅读 [v0.3.0 升级与数据兼容](./releases/v0.3.0.md#升级与数据兼容)。
 
 ## 1. 前置条件
 
@@ -17,7 +17,7 @@
 
 普通语义任务优先使用名为 `spawn` 的 Provider，并要求 `toolFilter`、`persona` 与 `depthLimit`。Mnemon 会为每次运行提供一个经过 schema 校验的一次性结果工具，不依赖 Provider 的 `outputSchema` 路径。可选的评分后台审查还要求名为 `fork`、且 `inheritsParentContext=true` 的 Provider。缺少 `fork` 不影响确定性页面读取和普通手动操作。
 
-本文流程以 dsh-mnemon v0.4.7、DSH 0.1.2-rc.1 和 Mnemon 0.2.3 作为推荐 registry 基线；部分保持兼容的界面截图拍摄于 dsh-mnemon v0.2.0。完整 DSH rc.1 profile 使用 Node 20 不具备的 Host 原语，而插件包本身仍为较旧且兼容的 Host 保留 Node.js 20 支持。它的直接前序版本 DSH 0.1.2-alpha.5 继续通过源码覆盖，DSH 0.1.1-rc.2 则保留为向后回归目标。升级前先备份，并在隔离目录重复本页验证。
+当前预发布版是 composable v0.5.0-rc.1：一个 Starter 与十六个锁定同版本的官方插件。请先阅读 [RC 范围与升级说明](./releases/v0.5.0-rc.1.md)。DSH 锁定基线是稳定版 0.1.2-rc.1，Native 集成另经 Mnemon 0.2.5 验证。部分保留截图来自 dsh-mnemon v0.2.0。完整 DSH rc.1 profile 需要 Node `^22.19.0 || >=24.0.0`，Mnemon 包仍为较旧且兼容的 Host 保留 Node 20 engine 下限。CI 另从源码覆盖 DSH 0.1.2-alpha.5 前序版本，并保留对 0.1.1-rc.2 的回滚回归。升级前先备份，并在隔离目录重复验证。
 
 安装并核对已验证的 DSH 版本：
 
@@ -139,11 +139,11 @@ dsh --profile headless "回答前先检查持久化的项目上下文。"
 
 打开“设置 → 记忆系统”：
 
-[![记忆系统设置：展示位置、记忆范围与记忆层](../assets/screenshots/settings-entry-placement.png)](../assets/screenshots/settings-entry-placement.png)
+[![记忆系统设置：入口位置、记忆范围与记忆层](../assets/screenshots/settings-entry-placement.png)](../assets/screenshots/settings-entry-placement.png)
 
 ### 工作台入口
 
-默认点击 DSH 侧边栏中的“记忆系统”打开独立工作台。在设置页选择 Builtin，或设置 `displayMode: builtin`，可把相同界面改为会话内标签页。保存后实时切换入口，不改变已存数据。
+默认点击 DSH 侧边栏中的“记忆系统”打开独立工作台。在设置中选择 Builtin，或配置 `displayMode: builtin`，可将同一组 Source 页面放入会话 Tab。保存后入口实时切换，不改变记忆数据。
 
 ### 存储位置
 
@@ -155,11 +155,11 @@ dsh --profile headless "回答前先检查持久化的项目上下文。"
 
 点击保存后会先初始化新运行图，再原子切换 Host；页面自动清理旧状态并重新读取，无需刷新浏览器。切换范围不会自动迁移、合并或删除旧数据。
 
-### Layer 拓扑
+### 默认 Source 组合
 
-首次安装应看到 Runtime、Documents、Memory Spaces 三个默认 Layer，且均已启用。每层只有一个总开关；开启只是允许系统按需使用，不会强制每回合召回。关闭会一起停止该层的上下文、工具、后台处理和数据面 Web/RPC，但不会删除数据；Sidebar Tab 会标记“已关闭”，重新开启即可恢复。第一次使用建议保持默认值。
+首次安装应看到 Runtime、Documents、Memory Spaces 三个默认 Source，且均已启用。每层只有一个总开关；开启只是允许系统按需使用，不会强制每回合召回。关闭会一起停止该层的上下文、工具、后台处理和数据面 Web/RPC，但不会删除数据；Sidebar Tab 会标记“已关闭”，重新开启即可恢复。第一次使用建议保持默认值。
 
-在工作区模式下，对话 Agent、工具与生命周期使用当前会话的实际根；从 Sidebar 启动的独立任务 Agent 会显式使用正在查看的工作区，即使没有选中主 session 也一样。两者不一致时顶部会提示并提供一键对齐。Builtin 的读写和任务自动跟随所属会话范围，无需展示存储模式标记、工作区选择或对齐控件。
+在工作区模式下，对话 Agent、工具与生命周期使用当前会话的实际根；从 Sidebar 启动的独立任务 Agent 会显式使用正在查看的工作区，即使没有选中主 session 也一样。两者不一致时顶部会提示并提供一键对齐。Builtin 的读写和任务使用所属会话的范围，因此不显示存储模式、工作区选择器或对齐控件。
 
 ## 5. 打开 Sidebar 工作台
 
@@ -172,7 +172,7 @@ dsh --profile headless "回答前先检查持久化的项目上下文。"
 - 右上角显示“已连接”；
 - Mnemon 与 dsh-mnemon 能显示当前版本；
 - 存储根与刚才选择的范围一致；
-- Memory System 显示 `default-three-tier`，三个默认 Layer 与设置一致；
+- Memory System 显示 `default-three-tier`，三个默认 Source 与设置一致；
 - Runtime、Documents 和 Memory Spaces 没有错误提示。
 
 如果 Mnemon 不可用，macOS/Linux 先运行 `command -v mnemon` 与 `mnemon --version`；Windows PowerShell 运行 `Get-Command mnemon` 与 `Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"`。更多症状见[故障排查](./operations.md#故障排查)。

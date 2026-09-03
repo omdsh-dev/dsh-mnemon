@@ -2,7 +2,7 @@ import type { ReactElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-store'
 import type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
-import type { MnemonSessionListState } from '../src/client/dsh-compat.ts'
+import type { MnemonSessionListState } from "../src/client/dsh-context.ts"
 import {
   createScopedUseSessions,
   mountSubagentTokenUsageOverride,

@@ -1,0 +1,103 @@
+{
+  "name": "dsh-mnemon-source-memory-spaces",
+  "version": "0.5.0-rc.1",
+  "description": "Memory Spaces Source and its private Provider SDK.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./provider-sdk": {
+      "types": "./lib/provider-sdk.d.ts",
+      "default": "./lib/provider-sdk.js"
+    },
+    "./package.json": "./package.json",
+    "./testing": {
+      "types": "./lib/testing.d.ts",
+      "default": "./lib/testing.js"
+    },
+    "./client": {
+      "types": "./lib/types/client.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./contracts": {
+      "types": "./lib/contracts.d.ts",
+      "default": "./lib/contracts.js"
+    }
+  },
+  "files": [
+    "lib",
+    "README.md"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsdown && tsc -p tsconfig.client-types.json",
+    "test": "vitest run",
+    "verify": "pnpm typecheck && pnpm test && pnpm build"
+  },
+  "dependencies": {
+    "schemastery": "^3.18.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "dsh-mnemon": "0.5.0-rc.1",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-client-ui-primitives": "0.1.2-rc.1",
+    "@testing-library/react": "^16.3.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "dsh-mnemon": "0.5.0-rc.1",
+    "dsh-mnemon-provider-byterover": "0.5.0-rc.1",
+    "dsh-mnemon-provider-hindsight": "0.5.0-rc.1",
+    "dsh-mnemon-provider-holographic": "0.5.0-rc.1",
+    "dsh-mnemon-provider-honcho": "0.5.0-rc.1",
+    "dsh-mnemon-provider-mem0": "0.5.0-rc.1",
+    "dsh-mnemon-provider-mnemon-native": "0.5.0-rc.1",
+    "dsh-mnemon-provider-openviking": "0.5.0-rc.1",
+    "dsh-mnemon-provider-retaindb": "0.5.0-rc.1",
+    "dsh-mnemon-provider-supermemory": "0.5.0-rc.1",
+    "jsdom": "^26.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tsdown": "^0.22.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "dsh": {
+    "client": {
+      "inject": [
+        "slots"
+      ],
+      "platform": "web",
+      "external": [
+        "dsh-mnemon/client"
+      ]
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "rc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/omdsh-dev/dsh-mnemon.git",
+    "directory": "plugins/dsh-mnemon-source-memory-spaces"
+  },
+  "homepage": "https://github.com/omdsh-dev/dsh-mnemon/tree/main/plugins/dsh-mnemon-source-memory-spaces#readme",
+  "bugs": {
+    "url": "https://github.com/omdsh-dev/dsh-mnemon/issues"
+  }
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { QODERWORK_REVIEW_POLICY, scoreReviewActivity } from '../src/review-activity.ts'
+import { QODERWORK_REVIEW_POLICY, scoreReviewActivity } from "../src/host/review-activity.ts"
 
 describe('QoderWork-compatible background review score', () => {
   it('uses the original constants without provider token accounting', () => {

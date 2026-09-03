@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { StorageScopeInspector } from '../src/storage-scope.ts'
+import { StorageScopeInspector } from "../src/host/storage-scope.ts"
 
 const directories: string[] = []
 

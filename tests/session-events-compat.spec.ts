@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { openAgentTurn } from '../src/agent-memory-turn.ts'
-import type { HostAgent, HostSession, HostSessionEvent } from '../src/contracts.ts'
-import { hostSessionEventAt, hostSessionEvents } from '../src/session-events.ts'
+import { openAgentTurn } from '../src/host/agent-memory-turn.ts'
+import type { HostAgent, HostSession, HostSessionEvent } from '../src/host/dsh.ts'
+import { hostSessionEventAt, hostSessionEvents } from '../src/host/session-events.ts'
 
 const turnStart: HostSessionEvent = { type: 'turn/start', seq: 0, data: { turn: 1 } }
 

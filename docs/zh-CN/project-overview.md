@@ -4,7 +4,7 @@
 
 `dsh-mnemon` 将长期记忆体接入 DeepSeek Harness，并补充运行时热记忆、项目档案、生命周期路由、独立任务 Agent、确定性控制层与 DSH 原生界面。第三层采用可替换 Provider：Mnemon Native 是官方优先、默认完整能力实现；8 种三方引擎通过显式适配器复用同一套记忆体工作流。
 
-三层现在由可组合内核表达为默认 Topology：`MemoryBoot` 装配受信任 contribution，每个 Layer 提供 eager 或 routed `MemorySource`，每个执行中的 Agent 回合固定轻量 `TurnView`，子 Agent 独立保留其委托 View、不受父回合结束影响，已提交 mutation 用 Receipt 推进下一回合。Layer、Adapter、Strategy 与 Guard 保留为控制面内部边界。普通安装仍得到完全相同的三层心智；扩展与逐层开关不要求复制一套 Host 或 WebUI。
+Runtime、Documents、Memory Spaces 是独立 Source 插件；Strategy 将各实例的投影、检索 route 与 action 组合成逐回合不可变 View。Core 只提供 `ctx.mnemonMemory`，Source 拥有数据与可选页面，Memory Spaces 自己拥有内部 Provider 子节点。`dsh-mnemon` Starter 保持默认三层使用体验。详见[架构](./architecture.md)与[插件开发](./extensions.md)。
 
 它要解决的不是“保存更多文字”，而是让 Agent 在长期连续性、当前事实优先、上下文成本和可恢复写入之间取得平衡。
 
@@ -66,13 +66,21 @@
 
 ## 总体架构
 
-[![dsh-mnemon v0.2.0 架构：Web、对话与 Headless 入口、控制面、独立任务 Agent 和三层数据面](../assets/diagrams/zh-CN/project-architecture.svg)](../assets/diagrams/zh-CN/project-architecture.svg)
+
+```mermaid
+flowchart LR
+  Source["Source plugins · owned data and pages"] -->|facts| Strategy["Strategy plugin"]
+  Strategy -->|ViewSpec| Core["Core validation + Source projection"]
+  Core --> View["View"]
+  View -->|Wake / Routes / Actions| LLM["LLM via DSH Host"]
+```
+
 
 架构由四个边界组成：
 
 1. **交互边界**：用户通过对话、Sidebar 工作台、`/mnemon` 命令与模型工具使用记忆。
 2. **监督边界**：用户可见的 AI 元信息、Agent 查询、语义写入和归档由独立顶层任务 Agent 执行；需要结构化判断时才继续调用内部受限 worker。
-3. **确定性控制边界**：Host 校验 schema、路径、权限、容量、锁、revision、CLI 参数、超时与取消。
+3. **确定性控制边界**：Host 校验范围与权限；Source 校验 schema、路径、容量、锁、revision、驱动超时与取消。
 4. **数据边界**：Runtime、Documents 与 Mnemon Native 数据位于当前 `storageRoot`；第三方 Provider 只在 Host 内通过显式连接访问，浏览器不直连。
 
 ### 记忆系统流转
