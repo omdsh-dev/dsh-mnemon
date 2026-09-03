@@ -18,6 +18,7 @@ const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.
   peerDependencies: Record<string, string>
 }
 const lockfile = readFileSync(new URL('../pnpm-lock.yaml', import.meta.url), 'utf8')
+const workspaceConfig = readFileSync(new URL('../pnpm-workspace.yaml', import.meta.url), 'utf8')
 const bundlePatch = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
 
 const directories: string[] = []
@@ -129,16 +130,16 @@ describe('dsh-mnemon plugin composition', () => {
     const releaseAgeExclusions = [...workspaceConfig.matchAll(/^  - '(@deepseek-ai\/dsh(?:-[a-z0-9-]+)?@0\.1\.2-rc\.1)'$/gm)]
       .map(match => match[1])
 
-    expect(directDshDependencies.length).toBeGreaterThanOrEqual(10)
-    expect(new Set(directDshDependencies.map(([, version]) => version))).toEqual(new Set(['0.1.1-rc.2']))
+    expect(directDshDependencies).toHaveLength(23)
+    expect(new Set(directDshDependencies.map(([, version]) => version))).toEqual(new Set(['0.1.2-rc.1']))
     expect(manifest.engines.node).toBe('>=20')
     expect(manifest.peerDependencies['@deepseek-ai/dsh-client-ui-primitives']).toContain('^0.1.1-rc.1')
     expect(manifest.peerDependencies['@deepseek-ai/dsh-client-ui-primitives']).toContain('^0.1.2-alpha.1')
     expect(lockedDshVersions.length).toBeGreaterThan(100)
-    // A fresh workspace resolution may deduplicate rc.1 to the pinned rc.2.
-    // Require the supported family, not the presence of an obsolete copy.
-    expect(lockedDshVersions).toContain('0.1.1-rc.2')
-    expect(lockedDshVersions.every(version => version === '0.1.1-rc.1' || version === '0.1.1-rc.2')).toBe(true)
+    expect(new Set(lockedDshVersions)).toEqual(new Set(['0.1.2-rc.1']))
+    expect(new Set(releaseAgeExclusions)).toEqual(new Set(lockedRcReleases))
+    expect(releaseAgeExclusions).toHaveLength(new Set(lockedRcReleases).size)
+    expect(workspaceConfig).not.toMatch(/^  - ['"]@deepseek-ai\/\*/m)
   })
 
   it('keeps Web-only workspace and connection services out of its core dependencies', () => {

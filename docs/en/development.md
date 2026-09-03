@@ -4,7 +4,9 @@
 
 ## Environment and commands
 
-The plugin's Node engine floor is 20. The pinned complete DSH development profile is 0.1.1-rc.2 and needs Node `^22.19.0 || >=24.0.0`; use Node 24 for development. Public Node entries are also smoke-tested on Node 20 in CI.
+The plugin's Node engine floor is 20. The pinned complete DSH development profile is the stable 0.1.2-rc.1 release and needs Node `^22.19.0 || >=24.0.0`; use Node 24 for development. Root, Source Client tests and the external artifact consumer use that rc.1 cohort. `dsh-invariants` closes its peer graph, while `dsh-client-store` owns the public selector type used by the subagent projection adapter. Public Node entries are also smoke-tested on Node 20 in CI, and the immediately preceding 0.1.2-alpha.5 remains covered from source.
+
+The reviewed rc.1 cohort is enumerated with exact versions under `minimumReleaseAgeExclude` because pnpm 11 may encounter the packages while they are inside its release-age quarantine. A composition test requires that list to equal the rc.1 packages in the lockfile and rejects a scope wildcard, so later `@deepseek-ai` publications remain quarantined.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -94,9 +96,9 @@ The [2026-08-31 main-rebase verification](../pr-assets/main-rebase-20260831/READ
 
 For the released Taskboard/SSH combination, command-name CLI lookup, install ordering and controlled panel-event loss, use the separate [npm WebUI regression harness](./testing-npm-regressions.md). It supports the current local Starter plus all thirteen plugins as well as published control packages.
 
-DSH rc.2 does not fully unload every Client module on bundle changes. Refresh after Client package/locale registration changes; ordinary Mnemon settings still apply live. Separate upstream profile/transport warnings from Mnemon failures rather than hiding the console.
+The previous DSH 0.1.1-rc.2 line does not fully unload every Client module on bundle changes. Refresh after Client package/locale registration changes when exercising that rollback target; ordinary Mnemon settings still apply live. Separate upstream profile/transport warnings from Mnemon failures rather than hiding the console.
 
-## DSH source verification
+## DSH 0.1.2-alpha.5 source compatibility
 
 CI also builds the source-only `dsh-v0.1.2-alpha.5` tag. To repeat with a built Harness checkout:
 
@@ -106,7 +108,7 @@ pnpm_config_verify_deps_before_run=false pnpm verify
 pnpm dsh:restore-registry
 ```
 
-Build Harness with its own `pnpm install --frozen-lockfile && pnpm build:lib` first. Linking changes generated `node_modules` only, not committed dependency versions. It overlays the Starter's DSH graph and every installed plugin workspace's Cordis identity, then restores every original pnpm link. Plugin Client test dependencies remain workspace-local while the built Starter exercises the alpha Client APIs. Disable pnpm's pre-run dependency verification for this invocation so nested scripts do not restore the registry links. The rc.2 and alpha RPC/service contracts have dedicated tests; an alpha CI configuration is not a claim that a current local run used alpha.
+Build Harness with its own `pnpm install --frozen-lockfile && pnpm build:lib` first. Linking changes generated `node_modules` only, not committed dependency versions. It overlays the Starter's complete DSH graph, including Store, Invariants and the additional Layout dependency, plus every installed plugin workspace's Cordis identity; every original pnpm link is recorded and restored. Plugin Client test dependencies remain workspace-local on rc.1 while the built Starter exercises alpha.5 Client APIs. Disable pnpm's pre-run dependency verification for this invocation so nested scripts do not restore the registry links. Stable rc.1, source alpha.5 and legacy rc.2 contracts have dedicated tests. The [isolated rc.1/rc.2 WebUI evidence](../pr-assets/dsh-rc1-compat/README.md) records the released Host behavior.
 
 ## Coordinated beta releases
 

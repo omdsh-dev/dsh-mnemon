@@ -17,7 +17,7 @@
 
 普通语义任务优先使用名为 `spawn` 的 Provider，并要求 `toolFilter`、`persona` 与 `depthLimit`。Mnemon 会为每次运行提供一个经过 schema 校验的一次性结果工具，不依赖 Provider 的 `outputSchema` 路径。可选的评分后台审查还要求名为 `fork`、且 `inheritsParentContext=true` 的 Provider。缺少 `fork` 不影响确定性页面读取和普通手动操作。
 
-当前检出准备 composable v0.5.0-beta.1 发行形态；本次工作没有发布根包及十三个插件制品。下文 registry 示例沿用 main 的 v0.4.3 发行线；先阅读 [beta 范围与升级说明](./releases/v0.5.0-beta.1.md)，验证当前检出请使用[开发验证夹具](./development.md)。DSH 锁定基线为 0.1.1-rc.2，Native 集成另经 Mnemon 0.2.5 验证。部分保留截图来自 dsh-mnemon v0.2.0。DSH rc.2 使用 `Promise.withResolvers` 和 Node Zstd API，因此 Node 20 无法启动完整 profile。CI 另覆盖仅源码可用的 DSH 0.1.2-alpha.1 profile。升级前先备份，并在隔离目录重复验证。
+当前检出准备 composable v0.5.0-beta.1 发行形态；本次工作没有发布根包及十六个官方插件制品。下文 registry 示例沿用 main 的 v0.4.7 发行线；先阅读 [beta 范围与升级说明](./releases/v0.5.0-beta.1.md)，验证当前检出请使用[开发验证夹具](./development.md)。DSH 锁定基线是稳定版 0.1.2-rc.1，Native 集成另经 Mnemon 0.2.5 验证。部分保留截图来自 dsh-mnemon v0.2.0。完整 rc.1 profile 需要 Node `^22.19.0 || >=24.0.0`，Mnemon 包仍为较旧且兼容的 Host 保留 Node 20 engine 下限。CI 另从源码覆盖 DSH 0.1.2-alpha.5 前序版本，并保留对 0.1.1-rc.2 的回滚回归。升级前先备份，并在隔离目录重复验证。
 
 安装并核对已验证的 DSH 版本：
 

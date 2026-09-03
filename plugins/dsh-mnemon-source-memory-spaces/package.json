@@ -60,7 +60,7 @@
     "@types/react-dom": "^18.3.0",
     "jsdom": "^26.0.0",
     "@testing-library/react": "^16.3.0",
-    "@deepseek-ai/dsh-client-ui-primitives": "0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.1.2-rc.1",
     "dsh-mnemon-provider-mnemon-native": "0.5.0-beta.1",
     "dsh-mnemon-provider-openviking": "0.5.0-beta.1",
     "dsh-mnemon-provider-honcho": "0.5.0-beta.1",

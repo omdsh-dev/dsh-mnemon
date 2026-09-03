@@ -20,6 +20,7 @@ const links = new Map([
   ['@deepseek-ai/dsh-client-locale', 'packages/client/locale'],
   ['@deepseek-ai/dsh-client-store', 'packages/client/store'],
   ['@deepseek-ai/dsh-client-ui-conversation', 'packages/client/ui-conversation'],
+  ['@deepseek-ai/dsh-client-ui-layout', 'packages/client/ui-layout'],
   ['@deepseek-ai/dsh-client-ui-primitives', 'packages/client/ui-primitives'],
   ['@deepseek-ai/dsh-client-ui-renderer', 'packages/client/ui-renderer'],
   ['@deepseek-ai/dsh-client-ui-settings', 'packages/client/ui-settings'],
