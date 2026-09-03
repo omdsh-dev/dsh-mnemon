@@ -25,6 +25,7 @@
 | 理解工作区“查看目录”与 Agent“实际生效目录” | [UI 指南：工作区模式](./ui-guide.md#工作区模式查看与执行分离) |
 | 检查或更新 Mnemon 与 dsh-mnemon | [运维指南：版本检查与更新](./operations.md#版本检查与更新) |
 | 备份、恢复或迁移完整记忆目录 | [运维指南：备份与恢复](./operations.md#备份与恢复) |
+| 通过云端域名发布 WebUI | [运维指南：云端 WebUI](./operations.md#cloud-hosted-webui) |
 | 排查召回为空、目录未对齐、CLI 或 Provider 问题 | [运维、安全与故障排查](./operations.md#故障排查) |
 | 使用模型工具、`/mnemon` 命令或内部 RPC | [接口参考](./interfaces.md) |
 | 理解 Host、worker、控制面与数据面 | [架构设计](./architecture.md) |

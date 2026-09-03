@@ -170,6 +170,8 @@ On DSH 0.1.1-rc.2, `remoteAccess` remains a real startup security boundary and c
 
 DSH 0.1.2-alpha.5 removes those method-specific privilege tiers and authenticates every Mnemon RPC through the browser session established by its one-time launch token and signed cookie. It ignores `remoteAccess`, which remains accepted solely so the same plugin configuration can roll back to rc.2 safely. `writeEnabled=false` is a product-level read-only mode in both versions; it is not a substitute for transport authentication.
 
+For the complete proxy, profile-patch, trusted-authority, restart, and verification workflow, see [Cloud-hosted WebUI on stable DSH rc.2](./operations.md#cloud-hosted-webui).
+
 ## Storage Scopes
 
 ### `global`
@@ -356,6 +358,8 @@ If the old value comes only from a composition profile, migration saves a canoni
 ## Profile Patch Overrides
 
 The bundled `cordis.patch.yml` provides the default config row. A DSH profile configuration with the same ID may replace that row as a whole. Do not add only `cliPath` to a final profile patch: use `MNEMON_CLI_PATH` or the `mnemon.cliPath` user setting instead. When a profile patch must be customized for another reason, retain every key that must remain enabled instead of assuming a deep merge.
+
+The cloud rc.2 `remoteAccess` override is one such whole-row customization. Use the complete, upgrade-aware example in the [cloud-hosted WebUI procedure](./operations.md#cloud-hosted-webui), not a standalone `config: { remoteAccess: trusted-host }` fragment.
 
 ## Common Configurations
 

@@ -102,6 +102,58 @@ DSH rc.8 首次说明的可选 SQLite 不兼容性在 DSH 0.1.1-rc.2 中仍然�
 
 现有回合和已委托的子 Agent activation 可能仍使用旧运行图。迁移或停用其数据前，应等待它们结束或取消这些任务。父回合结束本身不会释放异步子任务的委托；新创建或冷恢复的 activation 会捕获自己获准使用的 generation。
 
+<a id="cloud-hosted-webui"></a>
+
+## 稳定版 DSH 0.1.1-rc.2 的云端 WebUI
+
+稳定版 DSH 0.1.1-rc.2 是推荐的 registry 安装目标。其安全默认值允许受信任的远程浏览器执行普通 Mnemon 读取和激活，但设置、备份、Provider 连接与宽泛 mutation 仍限于回环地址。因此云端页面可能可以打开，“记忆系统”却无法加载设置或完成写入。
+
+仅当公网入口已经具备可靠的用户身份认证时，才执行以下步骤：
+
+1. 在反向代理或访问网关终止 HTTPS 并认证用户。把同源的 `/` 与 `/api` 流量（包括 stream）代理到 `http://127.0.0.1:3080`，同时保留外部 `Host` authority。DSH 的 trusted-host 检查只是 Host/Origin 防线，不是身份认证。
+2. 打开 Web profile 的 `~/.dsh/profiles/web/cordis.patch.yml`；如果设置了 `DSH_HOME`，则路径为 `$DSH_HOME/profiles/web/cordis.patch.yml`。如果文件里已经有顶层 `- id: mnemon`，请直接修改该项，不要再添加重复项。如果初始化后的文件仍以空数组标记 `[]` 结尾，请用下面的完整配置行替换这个标记；否则把该行追加到现有顶层 YAML 列表：
+
+   ```yaml
+   - id: mnemon
+     config:
+       routingGuidance: true
+       lifecycleEnabled: true
+       recallMode: guided
+       writebackMode: guided
+       idleReviewMs: 30000
+       tabEnabled: true
+       writeEnabled: true
+       remoteAccess: trusted-host
+       timeoutMs: 10000
+       defaultRecallLimit: 10
+       embedding:
+         enabled: false
+         endpoint: http://localhost:11434
+         model: nomic-embed-text
+       recallQuality:
+         policy: strict-v1
+         lowScoreThreshold: 0.25
+         highScoreThreshold: 0.6
+         candidateMultiplier: 3
+         maxMediumResults: 4
+         maxUnknownResults: 2
+   ```
+
+   Profile patch 会替换目标行的完整 `config`，不会只深度合并一个字段。请保留已有 Mnemon 自定义项；升级 dsh-mnemon 后用 `dsh web --dump-default-config` 对照这行，避免遮蔽新增的包内默认值。
+3. 运行 `dsh web --dump-config` 检查最终配置树。确认最后的 `mnemon` 行包含 `remoteAccess: trusted-host`，并且 stderr 没有报告无法匹配 `mnemon` 目标。
+4. 使用外部 authority 启动回环服务。参数应为裸 `host[:port]`，不是 URL：
+
+   ```sh
+   dsh web --trusted-host memory.example.com --no-open
+   ```
+
+   公网入口使用非默认端口时，应传入准确 authority，例如 `memory.example.com:8443`。DSH 0.1.1-rc.2 会刻意拒绝 `--host 0.0.0.0`；请让服务保持在回环地址，只由带认证的代理或 SSH tunnel 访问。
+5. 修改 `remoteAccess` 后必须重启 Host，因为 Mnemon 只在启动时捕获该策略。打开外部 HTTPS 地址，通过代理认证，然后确认“状态”和“设置 → 记忆系统”都能加载，并用一次有意的小范围设置保存验证写通道。
+
+如果浏览器提示 Host/Origin 被拒绝，请检查 `--trusted-host`、公网端口，以及代理是否保留 `Host`。如果读取正常但设置或写入仍不可用，请检查最终 `mnemon` 行，并确认 Host 已经重启。
+
+DSH 0.1.2-alpha.5 是安全模型不同的预览兼容目标：它会忽略 `remoteAccess`，并通过一次性启动 token 与签名 Cookie 建立的浏览器会话认证全部 RPC 和 stream。保留上面的配置有利于安全回滚到 rc.2；但每次 alpha Host 重启或公网 authority 变化后，都应打开 DSH 输出的启动 URL 以建立新 Cookie。仍建议使用 HTTPS 与部署层访问控制。
+
 ## 安全边界
 
 ### 进程

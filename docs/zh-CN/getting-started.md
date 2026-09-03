@@ -113,6 +113,8 @@ dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 dsh --profile web
 ```
 
+如果需要通过云端域名访问 Web profile，不要直接发布 3080 端口。稳定版 DSH 0.1.1-rc.2 默认只允许回环地址使用 Mnemon 管理通道，因此远程页面可能可以打开，但“记忆系统”无法加载设置或执行写入。请按[稳定版 DSH rc.2 的云端 WebUI](./operations.md#cloud-hosted-webui)同时配置带认证的反向代理、`remoteAccess` 覆盖和可信 authority；同一节也说明了 DSH 0.1.2-alpha.5 不同的启动 token 流程。
+
 升级与卸载：
 
 ```sh

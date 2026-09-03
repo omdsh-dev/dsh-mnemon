@@ -170,6 +170,8 @@ WebUI 从 `memory-system` 描述符读取真实 Layer，因此扩展插件新增
 
 DSH 0.1.2-alpha.5 已移除逐方法权限层，所有 Mnemon RPC 统一经过一次性启动 token 与签名 Cookie 建立的浏览器会话。它会忽略 `remoteAccess`；该设置仅为同一插件配置安全回滚到 rc.2 而保留。两个版本中的 `writeEnabled=false` 都只是产品级只读模式，不能替代 transport 身份认证。
 
+完整的代理、profile patch、可信 authority、重启与验证流程见[稳定版 DSH rc.2 的云端 WebUI](./operations.md#cloud-hosted-webui)。
+
 ## 存储范围
 
 ### `global`
@@ -356,6 +358,8 @@ Builtin 隐藏页眉中的存储模式标记、工作区选择和对齐控件。
 ## Profile patch 覆盖
 
 包内 `cordis.patch.yml` 提供默认 config 行。DSH profile 的同 ID 配置可能整体覆盖这行。不要在 profile 的最终 patch 中只增加 `cliPath`；请改用 `MNEMON_CLI_PATH` 或用户设置 `mnemon.cliPath`。确因其他原因需要自定义 profile patch 时，应保留仍需启用的全部键，而不是假设深合并。
+
+云端 rc.2 的 `remoteAccess` 覆盖就属于这种整行自定义。请使用[云端 WebUI 操作步骤](./operations.md#cloud-hosted-webui)中的完整、可随升级核对的示例，不要只写 `config: { remoteAccess: trusted-host }` 片段。
 
 ## 常见配置
 
