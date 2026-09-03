@@ -1,26 +1,29 @@
-import type { MemoryJsonValue, MemoryViewGuidance, MemoryViewSourcePresentation } from '../core/contracts/index.ts'
+import type { MemoryJsonValue, MemoryPluginLocalizedText, MemoryPluginRole, MemoryViewGuidance, MemoryViewSourcePresentation } from '../core/contracts/index.ts'
 import type { TurnMemoryActivity } from './protocol.ts'
-import type { MemoryLocalizedText, MemoryStrategyConfigurationField } from '../sdk/strategy-configuration.ts'
+import type { MemoryStrategyConfigurationField } from '../sdk/strategy-configuration.ts'
 
 export const MNEMON_VIEW_CHANNEL = '/dsh-mnemon-view'
 export const MNEMON_VIEW_WRITE_CHANNEL = '/dsh-mnemon-view-settings'
 export const MNEMON_VIEW_SETTINGS_NAMESPACE = 'mnemon-view'
 
-export interface MemoryStrategyPreference { enabled: boolean; config: Record<string, MemoryJsonValue> }
+export interface MemoryPluginPreference { enabled: boolean; config: Record<string, MemoryJsonValue> }
 export interface MemoryViewPreferences {
   strategyTypeId?: string
-  entries: Record<string, MemoryStrategyPreference>
+  entries: Record<string, MemoryPluginPreference>
 }
 
-export interface MemoryStrategyEntryView {
+export interface MemoryPluginEntryView {
   entryId: string
   packageName: string
-  typeId: string
-  kind: 'strategy' | 'strategy-extension'
+  roles: MemoryPluginRole[]
+  typeId?: string
   strategyTypeId?: string
   slot?: string
-  label: MemoryLocalizedText
-  description: MemoryLocalizedText
+  label: MemoryPluginLocalizedText
+  description: MemoryPluginLocalizedText
+  provides: Array<{ id: string; exclusive: boolean }>
+  requires: string[]
+  requiredBy: string[]
   fields: readonly MemoryStrategyConfigurationField[]
   enabled: boolean
   active: boolean
@@ -53,21 +56,20 @@ export interface MemoryViewDashboard {
   revision: string
   writable: boolean
   strategyTypeId: string
-  entries: MemoryStrategyEntryView[]
+  entries: MemoryPluginEntryView[]
   current?: MemoryViewInspection
   /** Durable activity observed after the frozen current View was compiled. */
   activity?: TurnMemoryActivity
   currentUnavailable?: 'no-session' | 'unaligned' | 'not-generated'
   sources: Array<{ sourceInstanceKey: string; sourceTypeId: string; packageName: string; role: string; label: string }>
   pluginInstallation: MemoryPluginInstallationEnvironment
-  registeredPlugins: MemoryRegisteredPluginView[]
   diagnostics: string[]
 }
 
 export interface MemoryViewConfigurationRequest {
   expectedRevision: string
   strategyTypeId: string
-  entries: Record<string, MemoryStrategyPreference>
+  entries: Record<string, MemoryPluginPreference>
 }
 
 export type MemoryPluginKind = 'source' | 'strategy'
@@ -94,14 +96,4 @@ export interface MemoryPluginInstallResult {
   profileName: string
   installed: true
   restartRequired: true
-}
-
-export interface MemoryRegisteredPluginView {
-  entryId: string
-  packageName: string
-  kind: MemoryPluginKind
-  enabled: boolean
-  active: boolean
-  writable: boolean
-  diagnostic?: string
 }

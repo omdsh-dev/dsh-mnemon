@@ -10,7 +10,7 @@ import { MnemonSubagentCoordinator } from './subagent.ts'
 import { registerTools } from './tools.ts'
 import { registerMnemonSubagentTokenUsageProjection } from './subagent-token-usage.ts'
 import { provideMemoryRuntime } from '../core/runtime.ts'
-import { MemoryStrategyManagement } from './strategy-management.ts'
+import { MemoryPluginManagement } from './plugin-management.ts'
 import { registerViewRpc } from './view-rpc.ts'
 import { MemoryPluginInstallation } from './plugin-installation.ts'
 
@@ -34,9 +34,9 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
   const ctx = rawContext as unknown as HostContextShape
   registerMnemonSubagentTokenUsageProjection(ctx)
   const extensions = provideMemoryRuntime(ctx)
-  const viewStrategies = new MemoryStrategyManagement(ctx, extensions)
-  const pluginInstallation = new MemoryPluginInstallation(ctx, { engine: extensions })
-  const effectiveConfig = (value: Config) => viewStrategies.resolveConfig(resolveConfig(value))
+  const memoryPlugins = new MemoryPluginManagement(ctx, extensions)
+  const pluginInstallation = new MemoryPluginInstallation(ctx)
+  const effectiveConfig = (value: Config) => memoryPlugins.resolveConfig(resolveConfig(value))
   const prepared = new Map<object, { graph: MnemonRuntimeGraph; token: symbol }>()
   const disposePrepared = (): void => {
     for (const candidate of prepared.values()) candidate.graph.dispose()
@@ -64,7 +64,7 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
   const runtime = new LiveMnemonRuntime(initialCandidate?.graph ?? createRuntimeGraph(effectiveConfig(initialSettings), undefined, extensions), optionalWorkspaceRegistry(ctx), ctx.agents, extensions)
   const resolved = runtime.config
   ctx.on('settings/updated', ((namespace: string, next: Config) => {
-    if (namespace === viewStrategies.settingsNamespace) {
+    if (namespace === memoryPlugins.settingsNamespace) {
       runtime.swap(createRuntimeGraph(effectiveConfig(settings.get()), undefined, extensions))
       return
     }
@@ -74,8 +74,7 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
     disposePrepared()
     runtime.swap(candidate?.graph ?? createRuntimeGraph(effectiveConfig(next), undefined, extensions))
   }) as never)
-  ctx.effect(() => viewStrategies.start(), 'dsh-mnemon: strategy Entry settings')
-  ctx.effect(() => pluginInstallation.start(), 'dsh-mnemon: Source Entry settings')
+  ctx.effect(() => memoryPlugins.start(), 'dsh-mnemon: plugin graph settings')
   ctx.settings.register('mnemon-ui', InteractionConfig, {
     base: resolveInteractionConfig(resolved.conversationInteraction),
     applies: 'live',
@@ -124,6 +123,6 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
     const managementAuthority = resolved.remoteAccess === 'trusted-host' ? 'trusted-host' : 'loopback'
     registerRpc(webContext.connection, runtime, lifecycle, undefined, managementAuthority)
     registerSettingsRpc(webContext.connection, ctx.settings, managementAuthority)
-    registerViewRpc(webContext.connection, runtime, extensions, viewStrategies, lifecycle, managementAuthority, pluginInstallation)
+    registerViewRpc(webContext.connection, runtime, extensions, memoryPlugins, lifecycle, managementAuthority, pluginInstallation)
   })
 }

@@ -48,17 +48,26 @@ Source 不需要再实现 Provider；Provider 不需要理解 View 组合；Stra
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
-import { installMemory } from 'dsh-mnemon/extension-sdk'
+import { defineMemoryPlugin, installMemory } from 'dsh-mnemon/extension-sdk'
 import { notesSource } from './source.js'
 
 export const name = 'dsh-mnemon-source-notes'
 export const inject = ['mnemonMemory']
+export const memoryPlugin = defineMemoryPlugin({
+  packageName: name,
+  label: { en: 'Notes', 'zh-CN': '笔记' },
+  description: { en: 'Durable personal notes.', 'zh-CN': '长期个人笔记。' },
+  roles: ['source'],
+  provides: [{ id: 'source' }, { id: 'source.durable-evidence' }],
+})
 export function apply(ctx: Context): void {
-  installMemory(ctx, { sources: [notesSource] })
+  installMemory(ctx, { plugin: memoryPlugin, sources: [notesSource] })
 }
 ```
 
 以上假定 `source.js` 导出定义；完整文件记忆示例见 [external-source.ts](../../scripts/fixtures/plugin-consumer/src/external-source.ts)。Source 与 Strategy 是职责，不是强制分包/分仓。一个插件可以调用 `installMemory(ctx, { sources: [source], strategies: [strategy] })`，在同一 Fiber 下成批安装、一起卸载，保留不同的实例 key；仅在需要独立复用/替换时拆包。Strategy 仍需显式选择，随包提供不等于覆盖用户的选择。
+
+每个受管理插件都应导出一份 JSON 安全的 `memoryPlugin` 描述，并把同一个对象传给 `installMemory`。`roles` 只描述贡献职责，不产生两套插件类型；`provides` 与 `requires` 构成激活关系图。只有两个提供者确实不能同时参与时，才把能力标记为 `exclusive: true`。只声明硬依赖：能够真实降级或空操作的插件，不应强迫用户安装无关依赖。Core 会在运行 Source factory 前校验激活图，并且仍是唯一把图编译为一个 View 的组件。没有这份 beta 描述的旧插件保持既有组合行为，但管理界面只能推断有限的身份与关系信息。
 
 Entry id 标识实例，type id 标识实现。不能剥掉 Loader 的 include 前缀。没有 Loader 身份的直接 `ctx.plugin()` 挂载，应传 `installMemory(..., { instanceId })`。路径和凭据归实例，不使用模块全局数据库或服务注册表。
 
@@ -72,9 +81,9 @@ Core 只处理目标/槽身份、JSON、64,000 字符上限、确定性回放、
 
 ### 可选的视图配置声明
 
-专用 Strategy Entry 可以导出 `memoryStrategyConfiguration`，由 Core SDK 的 `defineMemoryStrategyConfiguration` 定义。它包含中英文展示文案、公开字段（`number`、`text`、`textarea`、`string-list`、`source-list），以及**与 `apply()` 共用的纯 `create(config)` factory**。factory 只返回一个 Strategy 或扩展贡献，不做 I/O、凭据访问、Source 注册或 Fiber 挂载；完整例子见可选策略包。这只是可选的编辑器约定，不是组合功能的准入要求。混合 Source/Strategy Entry 以及未声明编辑器的插件仍可观察，由 DSH 管理配置。
+专用 Strategy Entry 还可以导出 `memoryStrategyConfiguration`，由 Core SDK 的 `defineMemoryStrategyConfiguration` 定义。它包含中英文展示文案、公开字段（`number`、`text`、`textarea`、`string-list`、`source-list`），以及**与 `apply()` 共用的纯 `create(config)` factory**。factory 只返回一个 Strategy 或扩展贡献以及同一份 `memoryPlugin` 描述，不做 I/O、凭据访问、Source 注册或 Fiber 挂载；完整例子见可选策略包。这只是可选的编辑器约定，不定义插件身份或激活关系。
 
-状态页的 **记忆插件** 弹窗会发现已注册的 `(scope/)dsh-mnemon-source-*` 与 `(scope/)dsh-mnemon-strategy-*` Loader Entry，包括停用项。Strategy 变更会先校验完整候选，再更新 Cordis Entry，并把 Profile 级用户偏好保存在 DSH 设置中。`mnemon-view-<Loader 装配目录摘要>` 隔离 Strategy 偏好，`mnemon-plugins-<Loader 装配目录摘要>` 则让明确的 Source 启停选择在 bundle 重新装配后仍能恢复（没有装配目录的嵌入式 Host 使用 `mnemon-view` / `mnemon-plugins`）。激活或持久化失败会回滚；已有轮次的 pin 保持不变。Source 启停同样先核对 Core 实际注册结果，再提交偏好；注册不符合预期或持久化失败都会回滚 Entry。Source 上限及 Host 的写入/权限约束仍然有效。
+状态页的 **记忆插件** 弹窗会发现已注册的 `(scope/)dsh-mnemon-source-*` 与 `(scope/)dsh-mnemon-strategy-*` Loader Entry，包括停用项。所有插件共用一份草稿与一次激活动作；界面可以自动启用唯一依赖、停用依赖当前插件的节点、替换互斥节点。Host 会重新校验整张关系图，在一个缓冲事务中更新 Cordis Entry，编译一个真实候选 View，然后才把 Profile 覆盖写入 `mnemon-view-<Loader 装配目录摘要>`。任何激活、组合或持久化失败都会回滚所有改动；已有轮次的 pin 保持不变。旧的 Source 开关只作为迁移输入读取，新的写入统一进入同一份文档。Source 上限及 Host 的写入/权限约束仍然有效。
 
 发现入口只接受准确的 `dsh-mnemon-source-*` 或 `dsh-mnemon-strategy-*` npm 包名。安装前，Host 会核对包身份、语义版本、`dsh-mnemon` peer 声明和安全的 `dsh.bundle.patch`；确认写入后委托 `dsh plugin --profile <当前 Profile> add <包名>@<版本> --save-exact`。它不改写 Loader YAML，也不在当前进程热加载新代码。重启 DSH 后，新 bundle 先以停用状态注册，再由用户在弹窗中明确启用。只有能识别当前 Loader、Profile、DSH CLI 且连接具备写权限时，页面才允许安装。
 

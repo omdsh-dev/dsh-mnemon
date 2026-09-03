@@ -4,12 +4,19 @@ import { dirname, isAbsolute } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { COMPOSABLE_MEMORY_API_VERSION, type MemoryJsonValue } from 'dsh-mnemon/contracts'
 import {
-  defineMemorySource, installMemory, memoryConfigurationDigest, createMemoryMutationReceipt,
+  defineMemoryPlugin, defineMemorySource, installMemory, memoryConfigurationDigest, createMemoryMutationReceipt,
   memoryInputRecord, memoryInputText, truncateMemoryText,
 } from 'dsh-mnemon/extension-sdk'
 
 export const name = 'dsh-mnemon-source-external-notes'
 export const inject = ['mnemonMemory']
+export const memoryPlugin = defineMemoryPlugin({
+  packageName: name,
+  label: { en: 'External notes', 'zh-CN': '外部笔记' },
+  description: { en: 'A Source-owned file and management protocol.', 'zh-CN': '由 Source 自主管理的文件与协议。' },
+  roles: ['source'],
+  provides: [{ id: 'source' }, { id: 'source.notes' }],
+})
 export interface Config { path: string }
 
 /** A deliberately small external Source: the file, protocol and snapshots are its own. */
@@ -78,5 +85,5 @@ export function apply(ctx: Context, config: Config): void {
       }
     },
   })
-  installMemory(ctx, { sources: [definition] }, { effectiveDigest: memoryConfigurationDigest(config) })
+  installMemory(ctx, { plugin: memoryPlugin, sources: [definition] }, { effectiveDigest: memoryConfigurationDigest(config) })
 }

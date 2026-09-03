@@ -4,7 +4,7 @@ import type { MnemonLifecycle } from './lifecycle.ts'
 import type { LiveMnemonRuntime } from './runtime.ts'
 import type { MemoryRuntime } from '../core/runtime.ts'
 import type { MemoryOperationScope } from '../core/contracts/index.ts'
-import type { MemoryStrategyManagement } from './strategy-management.ts'
+import type { MemoryPluginManagement } from './plugin-management.ts'
 import type { MemoryPluginInstallation } from './plugin-installation.ts'
 import { MNEMON_VIEW_CHANNEL, MNEMON_VIEW_WRITE_CHANNEL, type MemoryViewConfigurationRequest, type MemoryViewDashboard } from './view-protocol.ts'
 
@@ -18,10 +18,10 @@ function optionalId(value: unknown): string | undefined {
   return value.trim() || undefined
 }
 
-export function createViewHandler(runtime: LiveMnemonRuntime, engine: MemoryRuntime, management: MemoryStrategyManagement, access: 'read' | 'write', lifecycle?: MnemonLifecycle, installation?: MemoryPluginInstallation): HostRpcHandler {
+export function createViewHandler(runtime: LiveMnemonRuntime, engine: MemoryRuntime, management: MemoryPluginManagement, access: 'read' | 'write', lifecycle?: MnemonLifecycle, installation?: MemoryPluginInstallation): HostRpcHandler {
   return async (endpoint, input, signal) => {
     try {
-      if (access === 'read' ? !['dashboard', 'preview', 'inspect-plugin'].includes(endpoint) : !['apply', 'install-plugin', 'set-source-plugin-enabled'].includes(endpoint)) throw new Error('View operation is not available on this channel')
+      if (access === 'read' ? !['dashboard', 'preview', 'inspect-plugin'].includes(endpoint) : !['apply', 'install-plugin'].includes(endpoint)) throw new Error('View operation is not available on this channel')
       const payload = object(input)
       if (endpoint === 'inspect-plugin') {
         if (installation === undefined || typeof payload.packageName !== 'string') throw new Error('Plugin discovery is unavailable')
@@ -31,12 +31,6 @@ export function createViewHandler(runtime: LiveMnemonRuntime, engine: MemoryRunt
         if (installation === undefined || typeof payload.packageName !== 'string' || typeof payload.version !== 'string') throw new Error('Plugin installation is unavailable')
         if (payload.confirmed !== true) throw new Error('Plugin installation requires confirmation')
         return { ok: true, value: await installation.install(payload.packageName, payload.version, signal) }
-      }
-      if (endpoint === 'set-source-plugin-enabled') {
-        if (installation === undefined || typeof payload.entryId !== 'string' || typeof payload.enabled !== 'boolean') throw new Error('Source plugin activation is unavailable')
-        if (payload.confirmed !== true) throw new Error('Source plugin activation requires confirmation')
-        await installation.setSourceEnabled(payload.entryId, payload.enabled, signal)
-        return { ok: true, value: { saved: true } }
       }
       const sessionId = optionalId(payload.sessionId)
       const selectedWorkspaceId = optionalId(payload.workspaceId)
@@ -62,7 +56,6 @@ export function createViewHandler(runtime: LiveMnemonRuntime, engine: MemoryRunt
             packageName: source.definition.manifest.packageName, role: source.definition.manifest.role,
             label: source.definition.manifest.management?.label ?? source.definition.manifest.typeId })),
           pluginInstallation: installation?.environment() ?? { supported: false, reason: 'loader-unavailable', suggestions: [] },
-          registeredPlugins: installation?.registered() ?? [],
         }
         return { ok: true, value }
       }
@@ -81,7 +74,7 @@ export function createViewHandler(runtime: LiveMnemonRuntime, engine: MemoryRunt
   }
 }
 
-export function registerViewRpc(connection: HostConnectionHandle, runtime: LiveMnemonRuntime, engine: MemoryRuntime, management: MemoryStrategyManagement, lifecycle: MnemonLifecycle, authority: HostRpcAuthority, installation?: MemoryPluginInstallation): void {
+export function registerViewRpc(connection: HostConnectionHandle, runtime: LiveMnemonRuntime, engine: MemoryRuntime, management: MemoryPluginManagement, lifecycle: MnemonLifecycle, authority: HostRpcAuthority, installation?: MemoryPluginInstallation): void {
   connection.rpc.handle(MNEMON_VIEW_CHANNEL, createViewHandler(runtime, engine, management, 'read', lifecycle, installation), { authority: 'trusted-host' })
   connection.rpc.handle(MNEMON_VIEW_WRITE_CHANNEL, createViewHandler(runtime, engine, management, 'write', lifecycle, installation), { authority })
 }

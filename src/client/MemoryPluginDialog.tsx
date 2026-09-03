@@ -1,7 +1,7 @@
 import { useCallback, useId, useRef, useState, useEffect } from 'react'
 import type { MemoryJsonValue } from '../core/contracts/index.ts'
 import type { MemoryLocalizedText, MemoryStrategyConfigurationField } from '../sdk/strategy-configuration.ts'
-import type { MemoryPluginInspection, MemoryStrategyEntryView, MemoryStrategyPreference, MemoryViewConfigurationRequest, MemoryViewDashboard } from '../host/view-protocol.ts'
+import type { MemoryPluginEntryView, MemoryPluginInspection, MemoryPluginPreference, MemoryViewConfigurationRequest, MemoryViewDashboard } from '../host/view-protocol.ts'
 import type { MnemonClient } from './api.ts'
 import type { MnemonTranslate } from './locales.ts'
 import { message, SidebarModal, useLocale, useT } from './page-kit.tsx'
@@ -11,7 +11,7 @@ import css from './MemoryPluginDialog.module.css'
 
 type Draft = Omit<MemoryViewConfigurationRequest, 'expectedRevision'>
 type Source = MemoryViewDashboard['sources'][number]
-type PluginClient = Pick<MnemonClient, 'viewDashboard' | 'applyView' | 'inspectMemoryPlugin' | 'installMemoryPlugin' | 'setSourceMemoryPluginEnabled'>
+type PluginClient = Pick<MnemonClient, 'viewDashboard' | 'applyView' | 'inspectMemoryPlugin' | 'installMemoryPlugin'>
 
 const serialize = (value: unknown): string => JSON.stringify(value)
 const initial = (dashboard: MemoryViewDashboard): Draft => ({ strategyTypeId: dashboard.strategyTypeId,
@@ -24,6 +24,25 @@ function sourceLabel(source: Source | undefined, key: string, t: MnemonTranslate
   if (typeId === 'memory-spaces') return t('nav.bodies')
   if (source?.label) return source.label
   return typeId?.split(/[._-]+/u).filter(Boolean).map(word => word[0]!.toUpperCase() + word.slice(1)).join(' ') || key
+}
+
+function preference(entry: MemoryPluginEntryView, draft: Draft): MemoryPluginPreference {
+  return draft.entries[entry.entryId] ?? { enabled: entry.enabled, config: entry.config }
+}
+
+function graphIssues(entries: MemoryPluginEntryView[], draft: Draft): Map<string, { missing: string[]; conflicts: string[] }> {
+  const active = entries.filter(entry => preference(entry, draft).enabled)
+  const providers = new Map<string, MemoryPluginEntryView[]>()
+  for (const entry of active) for (const capability of entry.provides) providers.set(capability.id, [...providers.get(capability.id) ?? [], entry])
+  return new Map(entries.map(entry => {
+    if (!preference(entry, draft).enabled) return [entry.entryId, { missing: [], conflicts: [] }]
+    const missing = entry.requires.filter(requirement => !providers.has(requirement))
+    const conflicts = entry.provides.flatMap(capability => {
+      const values = providers.get(capability.id) ?? []
+      return capability.exclusive && values.length > 1 ? values.filter(value => value.entryId !== entry.entryId).map(value => value.entryId) : []
+    })
+    return [entry.entryId, { missing, conflicts: [...new Set(conflicts)] }]
+  }))
 }
 
 function StringList(props: { value: MemoryJsonValue; label: string; disabled: boolean; onChange(value: MemoryJsonValue): void }): JSX.Element {
@@ -71,22 +90,26 @@ function ConfigurationField({ field, config, sources, disabled, onChange }: {
   </div>
 }
 
-function StrategyCard({ entry, preference, sources, disabled, selectedStrategy, onChange }: {
-  entry: MemoryStrategyEntryView; preference: MemoryStrategyPreference; sources: Source[]; disabled: boolean; selectedStrategy: string
-  onChange(value: MemoryStrategyPreference): void
+function PluginCard({ entry, value, sources, disabled, selectedStrategy, issues, names, onToggle, onSelect, onChange }: {
+  entry: MemoryPluginEntryView; value: MemoryPluginPreference; sources: Source[]; disabled: boolean; selectedStrategy: string
+  issues: { missing: string[]; conflicts: string[] }; names: Map<string, string>
+  onToggle(): void; onSelect(): void; onChange(value: MemoryPluginPreference): void
 }): JSX.Element {
   const t = useT(), locale = useLocale()
   return <section className={css.pluginCard} aria-label={localized(entry.label, locale)}>
     <div className={css.cardBody}>
-      <div className={css.cardTop}><div><strong>{localized(entry.label, locale)}</strong><code>{entry.packageName}</code></div>{entry.kind === 'strategy-extension' && <button type="button" role="switch" aria-label={localized(entry.label, locale)} aria-checked={preference.enabled} className={css.switch} disabled={disabled || !entry.writable} onClick={() => onChange({ ...preference, enabled: !preference.enabled })} />}</div>
-      <p className={css.caption}>{localized(entry.description, locale)}</p>
-      <div className={css.statusLine}><span data-active={entry.active || undefined}>{entry.active ? t('plugins.running') : entry.enabled ? t('plugins.notReady') : t('plugins.registered')}</span>{entry.kind === 'strategy-extension' && <span>{preference.enabled ? t('plugins.enabled') : t('plugins.disabled')}</span>}</div>
-      {entry.kind === 'strategy-extension' && preference.enabled && entry.strategyTypeId !== selectedStrategy && <p className={css.caption}>{t('plugins.otherStrategy', { strategy: entry.strategyTypeId })}</p>}
+      <div className={css.cardTop}><div><div className={css.titleLine}><strong>{localized(entry.label, locale)}</strong>{entry.roles.map(role => <span className={css.role} key={role}>{role === 'strategy-extension' ? t('plugins.rolePolicy') : role === 'strategy' ? t('plugins.roleStrategy') : t('plugins.roleSource')}</span>)}</div><code>{entry.packageName}</code></div><button type="button" role="switch" aria-label={localized(entry.label, locale)} aria-checked={value.enabled} className={css.switch} disabled={disabled || !entry.writable} onClick={onToggle} /></div>
+      {localized(entry.description, locale) && <p className={css.caption}>{localized(entry.description, locale)}</p>}
+      <div className={css.statusLine}><span data-active={entry.active || undefined}>{entry.active ? t('plugins.running') : entry.enabled ? t('plugins.notReady') : t('plugins.registered')}</span><span>{value.enabled ? t('plugins.enabled') : t('plugins.disabled')}</span>{entry.roles.includes('strategy') && value.enabled && entry.typeId && <button type="button" className={css.viewChoice} data-selected={entry.typeId === selectedStrategy || undefined} onClick={onSelect}>{entry.typeId === selectedStrategy ? t('plugins.viewOwner') : t('plugins.useForView')}</button>}</div>
+      {value.enabled && entry.strategyTypeId && entry.strategyTypeId !== selectedStrategy && <p className={css.relation} data-warning="">{t('plugins.otherStrategy', { strategy: entry.strategyTypeId })}</p>}
+      {value.enabled && entry.requires.length > 0 && <p className={css.relation}>{t('plugins.dependsOn', { names: entry.requires.map(requirement => names.get(requirement) ?? requirement).join(' · ') })}</p>}
+      {issues.missing.length > 0 && <p className={css.relation} data-warning="">{t('plugins.missingDependency', { names: issues.missing.map(requirement => names.get(requirement) ?? requirement).join(' · ') })}</p>}
+      {issues.conflicts.length > 0 && <p className={css.relation} data-warning="">{t('plugins.conflictsWith', { names: issues.conflicts.map(entryId => names.get(entryId) ?? entryId).join(' · ') })}</p>}
       {entry.diagnostic && <p className={css.caption}>{entry.diagnostic}</p>}
     </div>
-    {entry.fields.length > 0 && <details className={css.details}><summary>{t('plugins.configure')}</summary><div className={css.detailsBody}>{entry.fields.map(field => <ConfigurationField key={field.key} field={field} config={preference.config} sources={sources} disabled={disabled || !entry.writable} onChange={(key, value) => {
-      const config = { ...preference.config }; if (value === undefined) delete config[key]; else config[key] = value
-      onChange({ ...preference, config })
+    {entry.fields.length > 0 && value.enabled && <details className={css.details}><summary>{t('plugins.configure')}</summary><div className={css.detailsBody}>{entry.fields.map(field => <ConfigurationField key={field.key} field={field} config={value.config} sources={sources} disabled={disabled || !entry.writable} onChange={(key, next) => {
+      const config = { ...value.config }; if (next === undefined) delete config[key]; else config[key] = next
+      onChange({ ...value, config })
     }} />)}</div></details>}
   </section>
 }
@@ -101,7 +124,7 @@ export function MemoryPluginDialog({ client, canConfigure, refreshKey = 0, onCon
   const [dashboard, setDashboard] = useState<MemoryViewDashboard | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [loading, setLoading] = useState(true)
-  const [working, setWorking] = useState<'apply' | 'source' | 'inspect' | 'install' | null>(null)
+  const [working, setWorking] = useState<'apply' | 'inspect' | 'install' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [stale, setStale] = useState(false)
@@ -118,7 +141,7 @@ export function MemoryPluginDialog({ client, canConfigure, refreshKey = 0, onCon
       if (request !== version.current) return
       const previous = latest.current
       const dirty = previous.dashboard !== null && previous.draft !== null && serialize(previous.draft) !== serialize(initial(previous.dashboard))
-      if (dirty && !discard) { setStale(next.revision !== previous.dashboard!.revision); setDashboard({ ...previous.dashboard!, registeredPlugins: next.registeredPlugins, pluginInstallation: next.pluginInstallation }) }
+      if (dirty && !discard) { setStale(next.revision !== previous.dashboard!.revision); setDashboard({ ...previous.dashboard!, pluginInstallation: next.pluginInstallation }) }
       else { setDashboard(next); setDraft(initial(next)); setStale(false); setError(null) }
     } catch (reason) { if (request === version.current) setError(message(reason)) }
     finally { if (request === version.current) setLoading(false) }
@@ -128,13 +151,16 @@ export function MemoryPluginDialog({ client, canConfigure, refreshKey = 0, onCon
   const edit = (next: Draft): void => { setDraft(next); setSaved(false); setError(null) }
   const dirty = dashboard !== null && draft !== null && serialize(draft) !== serialize(initial(dashboard))
   const readonly = !canConfigure || dashboard?.writable !== true
-  const bases = dashboard?.entries.filter(entry => entry.kind === 'strategy') ?? []
-  const selected = bases.find(entry => entry.typeId === draft?.strategyTypeId)
-  const additions = dashboard?.entries.filter(entry => entry.kind === 'strategy-extension') ?? []
-  const strategyActive = dashboard?.entries.filter(entry => entry.enabled).length ?? 0
-  const registeredSources = dashboard?.registeredPlugins.filter(entry => entry.kind === 'source') ?? []
-  const activeSourcePackages = [...new Set(dashboard?.sources.map(source => source.packageName) ?? [])]
-  const sourceRows = [...registeredSources, ...activeSourcePackages.filter(name => !registeredSources.some(entry => entry.packageName === name)).map(packageName => ({ entryId: packageName, packageName, kind: 'source' as const, enabled: true, active: true, writable: false }))]
+  const enabledPlugins = dashboard && draft ? dashboard.entries.filter(entry => preference(entry, draft).enabled).length : 0
+  const issues = dashboard && draft ? graphIssues(dashboard.entries, draft) : new Map<string, { missing: string[]; conflicts: string[] }>()
+  const selectedReady = dashboard && draft ? dashboard.entries.some(entry => entry.roles.includes('strategy') && entry.typeId === draft.strategyTypeId && preference(entry, draft).enabled) : false
+  const hasSource = dashboard && draft ? dashboard.entries.some(entry => entry.roles.includes('source') && preference(entry, draft).enabled) : false
+  const invalid = !selectedReady || !hasSource || [...issues.values()].some(value => value.missing.length > 0 || value.conflicts.length > 0)
+  const names = new Map<string, string>()
+  for (const entry of dashboard?.entries ?? []) {
+    names.set(entry.entryId, localized(entry.label, locale))
+    for (const capability of entry.provides) if (!names.has(capability.id)) names.set(capability.id, localized(entry.label, locale))
+  }
   const busy = loading || working !== null
   const apply = async (): Promise<void> => {
     if (dashboard === null || draft === null || readonly || !dirty || stale) return
@@ -148,11 +174,44 @@ export function MemoryPluginDialog({ client, canConfigure, refreshKey = 0, onCon
     } catch (reason) { if (request === version.current) setError(message(reason)) }
     finally { if (request === version.current) setWorking(null) }
   }
-  const toggleSource = async (entryId: string, enabled: boolean): Promise<void> => {
-    setWorking('source'); setError(null)
-    try { await client.setSourceMemoryPluginEnabled(entryId, enabled); await refresh(true); onConfigured?.() }
-    catch (reason) { setError(message(reason)) }
-    finally { setWorking(null) }
+  const toggle = (target: MemoryPluginEntryView): void => {
+    if (dashboard === null || draft === null) return
+    const entries = { ...draft.entries }
+    const state = (entry: MemoryPluginEntryView) => entries[entry.entryId] ?? { enabled: entry.enabled, config: entry.config }
+    const setEnabled = (entry: MemoryPluginEntryView, enabled: boolean) => { entries[entry.entryId] = { ...state(entry), enabled } }
+    const enabling = !state(target).enabled
+    setEnabled(target, enabling)
+    if (enabling) {
+      const visit = (entry: MemoryPluginEntryView, seen = new Set<string>()): void => {
+        if (seen.has(entry.entryId)) return
+        seen.add(entry.entryId)
+        for (const requirement of entry.requires) {
+          const providers = dashboard.entries.filter(candidate => candidate.provides.some(capability => capability.id === requirement))
+          if (providers.length === 1 && providers[0]!.writable) { setEnabled(providers[0]!, true); visit(providers[0]!, seen) }
+        }
+      }
+      visit(target)
+      for (const capability of target.provides.filter(value => value.exclusive)) {
+        for (const candidate of dashboard.entries) if (candidate.entryId !== target.entryId && state(candidate).enabled
+          && candidate.provides.some(value => value.id === capability.id) && candidate.writable) setEnabled(candidate, false)
+      }
+    }
+    if (!enabling) {
+      let changed = true
+      while (changed) {
+        changed = false
+        const provided = new Set(dashboard.entries.filter(entry => state(entry).enabled).flatMap(entry => entry.provides.map(capability => capability.id)))
+        for (const entry of dashboard.entries) if (state(entry).enabled && entry.requires.some(requirement => !provided.has(requirement)) && entry.writable) {
+          setEnabled(entry, false); changed = true
+        }
+      }
+    }
+    let strategyTypeId = draft.strategyTypeId
+    if (target.roles.includes('strategy') && target.typeId) {
+      if (enabling) strategyTypeId = target.typeId
+      else if (strategyTypeId === target.typeId) strategyTypeId = dashboard.entries.find(entry => entry.roles.includes('strategy') && entry.typeId && state(entry).enabled)?.typeId ?? strategyTypeId
+    }
+    edit({ strategyTypeId, entries })
   }
   const inspect = async (name = packageName): Promise<void> => {
     const normalized = name.trim(); if (normalized === '') return
@@ -167,36 +226,29 @@ export function MemoryPluginDialog({ client, canConfigure, refreshKey = 0, onCon
     catch (reason) { setError(message(reason)) }
     finally { setWorking(null) }
   }
-  const card = (entry: MemoryStrategyEntryView) => <StrategyCard key={entry.entryId} entry={entry} preference={draft?.entries[entry.entryId] ?? { enabled: entry.enabled, config: entry.config }} sources={dashboard!.sources} disabled={readonly || busy} selectedStrategy={draft!.strategyTypeId} onChange={value => edit({ ...draft!, entries: { ...draft!.entries, [entry.entryId]: value } })} />
-  const footer = <><span className={appearanceClass(common.modalFooterMeta, css.footerMeta)}>{dashboard?.pluginInstallation.profileName === undefined ? '' : t('plugins.profile', { name: dashboard.pluginInstallation.profileName })}</span><div className={appearanceClass(common.modalFooterActions, css.footerActions)}><button type="button" data-dialog-close className={common.ghostButton} disabled={busy} onClick={onClose}>{t('common.cancel')}</button>{section === 'composition' && <><button type="button" className={common.secondaryButton} disabled={busy || !dirty} onClick={() => void refresh(true)}>{t('plugins.reset')}</button><button type="submit" form={formId} className={common.primaryButton} disabled={readonly || busy || !dirty || stale}>{t(working === 'apply' ? 'plugins.saving' : 'plugins.apply')}</button></>}</div></>
+  const card = (entry: MemoryPluginEntryView) => <PluginCard key={entry.entryId} entry={entry} value={preference(entry, draft!)} sources={dashboard!.sources} disabled={readonly || busy} selectedStrategy={draft!.strategyTypeId}
+    issues={issues.get(entry.entryId) ?? { missing: [], conflicts: [] }} names={names} onToggle={() => toggle(entry)}
+    onSelect={() => entry.typeId && edit({ ...draft!, strategyTypeId: entry.typeId })}
+    onChange={value => edit({ ...draft!, entries: { ...draft!.entries, [entry.entryId]: value } })} />
+  const footer = <><span className={appearanceClass(common.modalFooterMeta, css.footerMeta)}>{dashboard?.pluginInstallation.profileName === undefined ? '' : t('plugins.profile', { name: dashboard.pluginInstallation.profileName })}</span><div className={appearanceClass(common.modalFooterActions, css.footerActions)}><button type="button" data-dialog-close className={common.ghostButton} disabled={busy} onClick={onClose}>{t('common.cancel')}</button>{section === 'composition' && <><button type="button" className={common.secondaryButton} disabled={busy || !dirty} onClick={() => void refresh(true)}>{t('plugins.reset')}</button><button type="submit" form={formId} className={common.primaryButton} disabled={readonly || busy || !dirty || stale || invalid}>{t(working === 'apply' ? 'plugins.saving' : 'plugins.apply')}</button></>}</div></>
   return <SidebarModal wide title={t('plugins.title')} description={t('plugins.description')} busy={busy} contentReady={!loading} onClose={onClose} footer={footer}>
     <div className={css.dialogBody}>
       <div className={css.segmented} role="tablist" aria-label={t('plugins.tabs')}><button type="button" role="tab" aria-selected={section === 'composition'} onClick={() => setSection('composition')}>{t('plugins.composition')}</button><button type="button" role="tab" aria-selected={section === 'discover'} onClick={() => setSection('discover')}>{t('plugins.discover')}</button></div>
-      {dashboard && <div className={css.summary}><strong>{t('plugins.summary', { sources: dashboard.sources.length, active: strategyActive, total: dashboard.entries.length })}</strong>{dashboard.pluginInstallation.profileName && <span>{t('plugins.profile', { name: dashboard.pluginInstallation.profileName })}</span>}</div>}
+      {dashboard && <div className={css.summary}><strong>{t('plugins.summary', { active: enabledPlugins, total: dashboard.entries.length })}</strong>{dashboard.pluginInstallation.profileName && <span>{t('plugins.profile', { name: dashboard.pluginInstallation.profileName })}</span>}</div>}
       {error && <div className={common.inlineError} role="alert">{error}</div>}
       {saved && <div className={css.notice} role="status">{t('plugins.saved')}</div>}
       {stale && <div className={css.notice} role="alert">{t('plugins.externalChange')}</div>}
       {section === 'composition' && dashboard && draft && <form id={formId} className={css.composition} aria-label={t('plugins.composition')} onSubmit={event => { event.preventDefault(); void apply() }}>
-        <header className={css.sectionHeader}><div><h3>{t('plugins.sources')}</h3><p>{t('plugins.sourcesHint')}</p></div><span>{dashboard.sources.length}</span></header>
-        <div className={css.sourceGrid}>{sourceRows.map(entry => {
-          const instances = dashboard.sources.filter(source => source.packageName === entry.packageName)
-          return <article className={css.sourceCard} key={entry.entryId}><div><strong>{sourceLabel(instances[0], entry.entryId, t, entry.packageName)}</strong><code>{entry.packageName}</code></div><div className={css.sourceState}><span data-active={entry.active || undefined}>{entry.active ? t('plugins.running') : t('plugins.registered')}</span>{instances.length > 0 && <small>{t('plugins.sourceInstances', { count: instances.length })}</small>}{entry.writable && <button type="button" role="switch" aria-label={entry.packageName} aria-checked={entry.enabled} className={css.switch} disabled={readonly || busy} onClick={() => void toggleSource(entry.entryId, !entry.enabled)} />}</div></article>
-        })}</div>
-        <header className={css.sectionHeader}><div><h3>{t('plugins.base')}</h3><p>{t('plugins.profileHint')}</p></div>{dirty && <span data-draft="">{t('plugins.draft')}</span>}</header>
-        {bases.length > 1 && <select className={css.select} aria-label={t('plugins.baseSelect')} disabled={readonly || busy} value={draft.strategyTypeId} onChange={event => {
-          const base = bases.find(entry => entry.typeId === event.target.value)
-          edit({ ...draft, strategyTypeId: event.target.value, entries: base?.writable ? { ...draft.entries, [base.entryId]: { enabled: true, config: draft.entries[base.entryId]?.config ?? base.config } } : draft.entries })
-        }}>{bases.map(entry => <option key={entry.entryId} value={entry.typeId}>{localized(entry.label, locale)}</option>)}</select>}
-        {selected && card(selected)}
-        <header className={css.sectionHeader}><div><h3>{t('plugins.extensions')}</h3><p>{t('plugins.extensionsHint')}</p></div><span>{additions.length}</span></header>
+        <header className={css.sectionHeader}><div><h3>{t('plugins.graph')}</h3><p>{t('plugins.graphHint')}</p></div>{dirty && <span data-draft="">{t('plugins.draft')}</span>}</header>
         {readonly && <p className={css.caption}>{t('plugins.readOnly')}</p>}
-        {additions.length === 0 ? <p className={css.caption}>{t('plugins.noExtensions')}</p> : <div className={css.strategyGrid}>{additions.map(card)}</div>}
+        {invalid && <div className={css.notice} role="alert">{t('plugins.invalidGraph')}</div>}
+        <div className={css.pluginGrid}>{dashboard.entries.map(card)}</div>
         {!dirty && <p className={css.unchanged}>{t('plugins.unchanged')}</p>}
       </form>}
       {section === 'discover' && dashboard && <div className={css.discovery}>
         <header className={css.sectionHeader}><div><h3>{t('plugins.suggestions')}</h3><p>{t('plugins.suggestionsHint')}</p></div></header>
         <div className={css.suggestionList}>{dashboard.pluginInstallation.suggestions.map(name => {
-          const entry = dashboard.registeredPlugins.find(item => item.packageName === name) ?? dashboard.entries.find(item => item.packageName === name)
+          const entry = dashboard.entries.find(item => item.packageName === name)
           return <article key={name}><div><strong>{name}</strong>{entry && <span data-active={entry.active || undefined}>{entry.enabled ? t('plugins.enabled') : t('plugins.registered')}</span>}</div>{entry === undefined && <button type="button" className={common.secondaryButton} disabled={busy} onClick={() => void inspect(name)}>{t('plugins.inspect')}</button>}</article>
         })}</div>
         <form className={css.inspectForm} onSubmit={event => { event.preventDefault(); void inspect() }}><label><span>{t('plugins.exactPackage')}</span><input value={packageName} maxLength={214} placeholder={t('plugins.packagePlaceholder')} onChange={event => { setPackageName(event.target.value); setInspection(null); setConfirming(false); setInstalled(false) }} /></label><button type="submit" className={common.secondaryButton} disabled={busy || packageName.trim() === ''}>{working === 'inspect' ? t('plugins.inspecting') : t('plugins.inspect')}</button></form>

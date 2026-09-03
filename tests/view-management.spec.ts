@@ -13,7 +13,7 @@ import { defineMemoryStrategy, defineMemoryStrategyConfiguration, installMemory 
 
 const fixtures: Awaited<ReturnType<typeof viewManagementFixture>>[] = []
 afterEach(async () => { for (const value of fixtures.splice(0)) await value.dispose() })
-async function fixture(saved?: MemoryViewPreferences, anchor?: string, stored?: Record<string, MemoryViewPreferences>) {
+async function fixture(saved?: MemoryViewPreferences, anchor?: string, stored?: Record<string, object>) {
   const value = await viewManagementFixture(saved, anchor, stored)
   fixtures.push(value)
   return value
@@ -32,12 +32,41 @@ describe('View configuration with the real pinned DSH Cordis Loader', () => {
     const before = f.engine.contributionSnapshot().revision
     const catalog = await f.management.catalog()
     expect(catalog.entries.map(item => [item.typeId, item.enabled, item.active])).toEqual([
-      ['default-three-tier', true, true], ['scoped', false, false], ['light-context', false, false], ['auto-capture', false, false],
+      ['documents', true, true], ['memory-spaces', true, true], ['runtime', true, true], ['default-three-tier', true, true],
+      ['auto-capture', false, false], ['light-context', false, false], ['scoped', false, false],
     ])
-    expect(catalog.entries[2]).toMatchObject({ label: { en: 'Light context', 'zh-CN': '轻量上下文' }, slot: 'projection', writable: true })
+    expect(catalog.entries.find(entry => entry.typeId === 'light-context')).toMatchObject({
+      label: { en: 'Light context', 'zh-CN': '轻量上下文' }, slot: 'projection', writable: true,
+      roles: ['strategy-extension'], requires: ['strategy.default-three-tier'],
+    })
+    expect(catalog.entries.find(entry => entry.typeId === 'memory-spaces')).toMatchObject({ roles: ['source'], provides: expect.arrayContaining([{ id: 'source.durable-evidence', exclusive: false }]) })
     expect(f.engine.contributionSnapshot().revision).toBe(before)
     expect(f.settings.mutate).not.toHaveBeenCalled()
     expect(f.treeWrite).not.toHaveBeenCalled()
+  })
+
+  it('applies Source and Strategy activation through one graph transaction', async () => {
+    const f = await fixture()
+    await f.management.apply(f.config, scope(f), await request(f, {
+      capture: { enabled: true, config: {} },
+    }))
+    expect(f.engine.contributionSnapshot().strategyExtensions?.map(value => value.definition.manifest.typeId)).toContain('auto-capture')
+
+    await expect(f.management.apply(f.config, scope(f), await request(f, {
+      'mnemon-source-memory-spaces': { enabled: false, config: {} },
+    }))).rejects.toThrow('source.durable-evidence')
+    expect(f.loader.resolve('mnemon-source-memory-spaces').disabled).toBe(false)
+
+    await f.management.apply(f.config, scope(f), await request(f, {
+      'mnemon-source-memory-spaces': { enabled: false, config: {} },
+      capture: { enabled: false, config: {} },
+    }))
+    expect(f.loader.resolve('mnemon-source-memory-spaces').disabled).toBe(true)
+    expect(f.engine.contributionSnapshot().sources.some(value => value.provenance.entryId === 'mnemon-source-memory-spaces')).toBe(false)
+    expect(f.graph.memoryComposition.inspect().evaluation.state).toBe('ready')
+    const turn = await f.graph.composableTurns.beginTurn('without-durable-source', scope(f))
+    expect(turn.view.sourcePresentations?.map(value => value.sourceInstanceKey)).not.toContain(spacesKey)
+    f.graph.composableTurns.endTurn(turn.turnId)
   })
 
   it('previews the actual composition read-only, saves through Cordis, and keeps the old turn immutable', async () => {
@@ -133,7 +162,7 @@ describe('View configuration with the real pinned DSH Cordis Loader', () => {
       light: { enabled: true, config: { maxProjectionCharacters: 900 } },
       capture: { enabled: true, config: {} },
     } })
-    await vi.waitFor(async () => expect((await f.management.catalog()).entries.filter(entry => entry.kind === 'strategy-extension' && entry.active)).toHaveLength(2))
+    await vi.waitFor(async () => expect((await f.management.catalog()).entries.filter(entry => entry.roles.includes('strategy-extension') && entry.active)).toHaveLength(2))
     expect(f.loader.resolve('light').options.config).toEqual({ maxProjectionCharacters: 900 })
     expect(f.settings.mutate).not.toHaveBeenCalled()
     expect(f.treeWrite).not.toHaveBeenCalled()
@@ -151,6 +180,19 @@ describe('View configuration with the real pinned DSH Cordis Loader', () => {
     const restarted = await fixture(undefined, webAnchor, stored)
     expect(restarted.management.settingsNamespace).toBe(namespace)
     await vi.waitFor(async () => expect((await restarted.management.catalog()).entries.find(entry => entry.entryId === 'light')).toMatchObject({ active: true, config: { maxProjectionCharacters: 700 } }))
+  })
+
+  it('reads the previous Source overlay once as migration input without writing a second settings model', async () => {
+    const anchor = 'file:///isolated/profiles/legacy/cordis.yml'
+    const probe = await fixture(undefined, anchor)
+    const suffix = probe.management.settingsNamespace.slice('mnemon-view'.length)
+    const restarted = await fixture(undefined, anchor, {
+      [`mnemon-plugins${suffix}`]: { sources: { 'mnemon-source-documents': { enabled: false } } },
+    })
+    await vi.waitFor(async () => expect((await restarted.management.catalog()).entries.find(entry => entry.entryId === 'mnemon-source-documents')).toMatchObject({ enabled: false, active: false }))
+    expect(restarted.settings.mutate).not.toHaveBeenCalled()
+    expect(restarted.settingsDocuments.get(restarted.management.settingsNamespace)?.value).toEqual({ entries: {} })
+    expect(restarted.treeWrite).not.toHaveBeenCalled()
   })
 
   it('rolls back live registrations if durable settings fail, including pinned and future views', async () => {
@@ -251,8 +293,8 @@ describe('View configuration with the real pinned DSH Cordis Loader', () => {
     const f = await fixture()
     f.modules['dsh-mnemon-strategy-light-context'] = { memoryStrategyConfiguration: { apiVersion: 'dsh-mnemon/strategy-configuration/v1', create: () => ({}), fields: null } }
     const catalog = await f.management.catalog()
-    expect(catalog.diagnostics.join(' ')).toContain('light: Invalid Strategy configuration descriptor')
-    expect(catalog.entries.map(entry => entry.entryId)).toEqual(['mnemon-strategy-default-three-tier', 'scoped', 'capture'])
+    expect(catalog.diagnostics.join(' ')).toContain('light: Invalid plugin configuration descriptor')
+    expect(catalog.entries.filter(entry => entry.roles.includes('strategy') || entry.roles.includes('strategy-extension')).map(entry => entry.entryId)).toEqual(['mnemon-strategy-default-three-tier', 'capture', 'scoped'])
     const preview = await f.management.preview(f.config, scope(f), await request(f))
     expect(preview.strategyTypeId).toBe('default-three-tier')
   })
@@ -271,7 +313,7 @@ describe('View configuration with the real pinned DSH Cordis Loader', () => {
     const catalog = await f.management.catalog()
     expect(catalog.diagnostics).toHaveLength(1)
     expect(catalog.diagnostics[0]).toContain('light:')
-    expect(catalog.entries.map(entry => entry.typeId)).toEqual(['default-three-tier', 'scoped', 'auto-capture'])
+    expect(catalog.entries.filter(entry => entry.roles.includes('strategy') || entry.roles.includes('strategy-extension')).map(entry => entry.typeId)).toEqual(['default-three-tier', 'auto-capture', 'scoped'])
     expect(f.loader.resolve('light').disabled).toBe(true)
     const turn = await f.graph.composableTurns.beginTurn('valid-with-bad-editor', scope(f))
     expect(turn.view.strategyTypeId).toBe('default-three-tier')

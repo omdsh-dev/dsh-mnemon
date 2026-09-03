@@ -15,21 +15,21 @@ import * as capture from 'dsh-mnemon-strategy-auto-capture'
 import { provideMemoryRuntime } from '../../src/core/runtime.ts'
 import { resolveConfig } from '../../src/host/config.ts'
 import { createRuntimeGraph, LiveMnemonRuntime } from '../../src/host/runtime.ts'
-import { MemoryStrategyManagement, type StrategyLoader, type StrategyLoaderEntry } from '../../src/host/strategy-management.ts'
+import { MemoryPluginManagement, type MemoryPluginLoader, type MemoryPluginLoaderEntry } from '../../src/host/plugin-management.ts'
 import type { HostContextShape, HostSettingsService } from '../../src/host/dsh.ts'
 import type { MemoryViewPreferences } from '../../src/host/view-protocol.ts'
 
 // Use the Loader shipped with the pinned DSH, not a lifecycle simulator.
 const requireDsh = createRequire(new URL('../../node_modules/@deepseek-ai/dsh/package.json', import.meta.url))
 const { Loader } = await import(requireDsh.resolve('@deepseek-ai/cordis-plugin-loader')) as { Loader: Plugin }
-interface TestLoader extends StrategyLoader {
+interface TestLoader extends MemoryPluginLoader {
   import(name: string): Promise<unknown>
   root: { update(entries: object[]): Promise<void>; stop(): Promise<void> }
-  resolve(id: string): StrategyLoaderEntry
+  resolve(id: string): MemoryPluginLoaderEntry
   write(): void
 }
 
-export async function viewManagementFixture(saved?: MemoryViewPreferences, anchor?: string, stored: Record<string, MemoryViewPreferences> = {}) {
+export async function viewManagementFixture(saved?: MemoryViewPreferences, anchor?: string, stored: Record<string, object> = {}) {
   const root = mkdtempSync(join(tmpdir(), 'mnemon-view-management-'))
   const workspace = join(root, 'workspace')
   mkdirSync(workspace)
@@ -73,7 +73,7 @@ export async function viewManagementFixture(saved?: MemoryViewPreferences, ancho
   ctx.provide('settings', settings)
   const config = resolveConfig({ storageScope: 'custom', dataDir: join(root, 'data'), cliPath: '/fake/mnemon', runtimeUserScope: 'storage' })
   settings.register('mnemon', {}, { base: config, applies: 'live' })
-  const management = new MemoryStrategyManagement(ctx as unknown as HostContextShape, engine)
+  const management = new MemoryPluginManagement(ctx as unknown as HostContextShape, engine)
   const stop = management.start()
   await loader.root.update([
     { id: 'mnemon-source-runtime', name: runtime.name },

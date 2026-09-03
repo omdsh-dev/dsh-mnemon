@@ -7,7 +7,7 @@ import { MemoryCompositionRunner, type MemoryTestTurn } from 'dsh-mnemon/testing
 import * as providerSdk from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import { createMemorySpaceProviderFixture, mountMemorySpaceProvider } from 'dsh-mnemon-source-memory-spaces/testing'
 import provider from '../lib/external-provider.js'
-import { memoryStrategyConfiguration } from '../lib/external-strategy-extension.js'
+import { memoryPlugin, memoryStrategyConfiguration } from '../lib/external-strategy-extension.js'
 // @ts-expect-error The installed SDK must not expose Core's engine.
 import type { MemoryRuntime } from 'dsh-mnemon/extension-sdk'
 // @ts-expect-error Installed records are not public author contracts.
@@ -17,9 +17,13 @@ import type { PrivateMemorySpaceProviderHost } from 'dsh-mnemon-source-memory-sp
 
 describe('published author API', () => {
   it('compiles and consumes an optional Strategy editor against packed public SDKs', () => {
+    expect(memoryPlugin).toMatchObject({ apiVersion: 'dsh-mnemon/plugin/v1', roles: ['strategy-extension'], requires: ['strategy.default-three-tier'] })
     expect(memoryStrategyConfiguration.apiVersion).toBe('dsh-mnemon/strategy-configuration/v1')
     expect(memoryStrategyConfiguration.label.en).toBe('External budget')
-    expect(memoryStrategyConfiguration.create({}).strategyExtensions?.[0]?.manifest).toMatchObject({ typeId: 'external-budget', slot: 'projection' })
+    expect(memoryStrategyConfiguration.create({})).toMatchObject({
+      plugin: memoryPlugin,
+      strategyExtensions: [{ manifest: { typeId: 'external-budget', slot: 'projection' } }],
+    })
   })
   it('keeps Context and testing types independent of private engine types', async () => {
     expectTypeOf<Context['mnemonMemory']>().toEqualTypeOf<MnemonMemoryService>()

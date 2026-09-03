@@ -48,17 +48,26 @@ The complete `ComposableMemoryView` stays in the Host and composition tests, nev
 
 ```ts
 import type { Context } from '@deepseek-ai/cordis'
-import { installMemory } from 'dsh-mnemon/extension-sdk'
+import { defineMemoryPlugin, installMemory } from 'dsh-mnemon/extension-sdk'
 import { notesSource } from './source.js'
 
 export const name = 'dsh-mnemon-source-notes'
 export const inject = ['mnemonMemory']
+export const memoryPlugin = defineMemoryPlugin({
+  packageName: name,
+  label: { en: 'Notes', 'zh-CN': '笔记' },
+  description: { en: 'Durable personal notes.', 'zh-CN': '长期个人笔记。' },
+  roles: ['source'],
+  provides: [{ id: 'source' }, { id: 'source.durable-evidence' }],
+})
 export function apply(ctx: Context): void {
-  installMemory(ctx, { sources: [notesSource] })
+  installMemory(ctx, { plugin: memoryPlugin, sources: [notesSource] })
 }
 ```
 
 The example assumes `source.js` exports the definition. [external-source.ts](../../scripts/fixtures/plugin-consumer/src/external-source.ts) implements the complete file-backed example. Source and Strategy are roles, not mandatory package/repository boundaries. One package can call `installMemory(ctx, { sources: [source], strategies: [strategy] })`: both contributions install and unload together under the same Fiber, retaining distinct instance keys. Split packages only for independent reuse or replacement. Strategy selection remains explicit; bundling one does not override the user's selected Strategy.
+
+Every managed plugin should export one JSON-safe `memoryPlugin` descriptor and pass the same object to `installMemory`. `roles` describe contributions; they do not create separate plugin classes. `provides` and `requires` form the activation graph. Mark a provided capability `exclusive: true` only when two providers cannot participate together. Declare only hard requirements: a plugin that can truthfully degrade or no-op must not force an unrelated dependency. Core validates the active graph before running Source factories, and remains the only component that compiles the graph into one View. Plugins without this beta descriptor keep their existing composition behavior, but the management UI can only infer limited identity and relationship information.
 
 An Entry id identifies an instance; type id identifies its implementation. Never strip Loader include prefixes. Direct `ctx.plugin()` mounts without Loader identity must supply `installMemory(..., { instanceId })`. Paths/credentials remain instance-owned. Do not use a module-global database or service registry.
 
@@ -72,9 +81,9 @@ Core validates identities, JSON and the 64,000-character bound, deterministic re
 
 ### Optional View configuration descriptor
 
-A dedicated Strategy Entry can export `memoryStrategyConfiguration`, created with `defineMemoryStrategyConfiguration` from the Core SDK. It declares human-facing English/Chinese labels, public fields (`number`, `text`, `textarea`, `string-list`, `source-list`), and a **pure `create(config)` factory shared with `apply()`**. The factory returns exactly one Strategy or extension contribution; no I/O, credentials, Source registration, or Fiber mounting. See the optional Strategy packages for complete examples. This is an optional editor contract, not a requirement for composition. Combined Source/Strategy Entries and plugins without this descriptor remain observable but are configured through DSH.
+A dedicated Strategy Entry can additionally export `memoryStrategyConfiguration`, created with `defineMemoryStrategyConfiguration` from the Core SDK. It declares public fields (`number`, `text`, `textarea`, `string-list`, `source-list`) and a **pure `create(config)` factory shared with `apply()`**. The factory returns exactly one Strategy or extension contribution together with the same `memoryPlugin` descriptor; it performs no I/O, credential access or Fiber mounting. This editor contract is optional and does not define plugin identity or activation relations.
 
-The Status page's **Memory plugins** dialog discovers registered `(scope/)dsh-mnemon-source-*` and `(scope/)dsh-mnemon-strategy-*` Loader Entries, including disabled entries. Strategy changes validate the complete candidate before updating Cordis Entries and persisting a Profile-wide user overlay in DSH settings. The namespace `mnemon-view-<Loader-anchor hash>` isolates Strategy preferences, while `mnemon-plugins-<Loader-anchor hash>` keeps explicit Source activation choices across bundle remounts (`mnemon-view` / `mnemon-plugins` are used by embedded Hosts without an anchor). Failed activation or persistence rolls back; existing turn pins remain unchanged. Source activation likewise verifies the observed Core registration before committing its preference and rolls the Entry back on mismatch or persistence failure. Source limits and Host write/permission gates still apply.
+The Status page's **Memory plugins** dialog discovers registered `(scope/)dsh-mnemon-source-*` and `(scope/)dsh-mnemon-strategy-*` Loader Entries, including disabled entries. All entries use one draft and one activation action. The UI can enable a unique dependency, disable dependents and replace an exclusive peer; the Host revalidates the graph, updates Cordis Entries in one buffered transaction, compiles one real candidate View, then persists the Profile overlay under `mnemon-view-<Loader-anchor hash>`. Any activation, composition or persistence failure rolls every changed Entry back; existing turn pins remain unchanged. Previously saved Source switches are read as a migration input, while new writes use the unified document. Source limits and Host write/permission gates still apply.
 
 Discovery accepts only an exact `dsh-mnemon-source-*` or `dsh-mnemon-strategy-*` npm package name. Before installation, the Host verifies its package identity, semantic version, `dsh-mnemon` peer declaration, and safe `dsh.bundle.patch`. The confirmed write delegates to `dsh plugin --profile <current> add <name>@<version> --save-exact`; it does not edit Loader YAML or live-load new code. Restart DSH to register the new bundle, initially disabled, then enable it explicitly in the dialog. This UI is available only when the running Loader, Profile and DSH CLI can be identified and the connection has write authority.
 
