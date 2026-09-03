@@ -177,7 +177,7 @@ export async function publishRelease(plan, artifacts, run = npm, {
 }
 
 async function verifyInstalledPackages(directory, packages, version) {
-  for (const { name } of packages) {
+  for (const { manifest: { name } } of packages) {
     const installed = JSON.parse(await readFile(join(directory, 'node_modules', name, 'package.json'), 'utf8'))
     assert.equal(installed.version, version, `${name}: installed version differs from the frozen release`)
   }

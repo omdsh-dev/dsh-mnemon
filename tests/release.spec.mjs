@@ -1,9 +1,9 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
-import { createReleasePlan, packRelease, publishRelease, readReleasePackages } from '../scripts/release.mjs'
+import { createReleasePlan, packRelease, publishRelease, readReleasePackages, verifyRegistryRelease } from '../scripts/release.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 function fixture(version = '0.5.0-rc.1', distTag = 'rc') {
@@ -133,5 +133,34 @@ describe('complete, channel-safe official release', () => {
     await expect(publishRelease(plan, artifacts, run, {
       inspect: async () => ({ version: plan.version, integrity: 'sha512-different' }),
     })).rejects.toThrow('different Registry artifact')
+  })
+
+  it('installs the frozen Starter and verifies every Registry plugin manifest', async () => {
+    const plan = createReleasePlan(fixture())
+    const artifacts = plan.packages.map(item => ({
+      name: item.manifest.name,
+      filename: join('/artifacts', item.manifest.name + '.tgz'),
+      integrity: `sha512-${item.manifest.name}`,
+    }))
+    const run = vi.fn(async (args, directory) => {
+      expect(args[0]).toBe('install')
+      for (const { manifest } of plan.packages) {
+        const packageDirectory = join(directory, 'node_modules', manifest.name)
+        await mkdir(packageDirectory, { recursive: true })
+        await writeFile(join(packageDirectory, 'package.json'), JSON.stringify({ name: manifest.name, version: plan.version }))
+      }
+      return ''
+    })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      await verifyRegistryRelease(plan, artifacts, run, {
+        scope: 'plugins',
+        inspect: async name => ({ version: plan.version, integrity: `sha512-${name}` }),
+      })
+    } finally {
+      log.mockRestore()
+    }
+    expect(run).toHaveBeenCalledOnce()
+    expect(run.mock.calls[0][0]).toContain(`file:${artifacts.at(-1).filename}`)
   })
 })
