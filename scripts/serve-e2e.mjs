@@ -22,6 +22,7 @@ for (const flag of flags) {
   throw new Error('Unknown option: ' + flag)
 }
 const extensionNames = ['dsh-mnemon-strategy-scoped', 'dsh-mnemon-strategy-light-context', 'dsh-mnemon-strategy-auto-capture']
+const extensionNameSet = new Set(extensionNames)
 const extensionsEnabled = flags.has('--strategy-extensions')
 const fixture = await mkdtemp(join(tmpdir(), 'mnemon-web-e2e-'))
 const dshHome = join(fixture, 'dsh-home')
@@ -86,7 +87,9 @@ process.on('SIGUSR2', () => { void restart() })
 
 try {
   const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
-  const plugins = Object.keys(manifest.dependencies).filter(name => name.startsWith('dsh-mnemon-'))
+  // Root owns the disabled enhancement Entries. Adding their self-registering
+  // bundles as separate Profile layers would intentionally duplicate ids.
+  const plugins = Object.keys(manifest.dependencies).filter(name => name.startsWith('dsh-mnemon-') && !extensionNameSet.has(name))
   const installer = spawn(process.execPath, [dshBin, 'plugin', '--profile', 'web', 'add',
     `link:${root}`, ...plugins.map(name => `link:${join(root, 'plugins', name)}`),
     ...(betterSidebarRoot === undefined ? [] : [`link:${betterSidebarRoot}`]),

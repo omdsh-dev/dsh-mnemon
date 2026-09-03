@@ -18,6 +18,7 @@ for (let index = 0; index < arguments_.length; index += 2) {
 if (options.has('--package') !== options.has('--registry')) throw new Error('--package and --registry must be supplied together')
 if (options.has('--strategy-extensions') && options.get('--strategy-extensions') !== 'true') throw new Error('--strategy-extensions expects true')
 const extensionNames = ['dsh-mnemon-strategy-scoped', 'dsh-mnemon-strategy-light-context', 'dsh-mnemon-strategy-auto-capture']
+const extensionNameSet = new Set(extensionNames)
 const extensionsEnabled = options.has('--strategy-extensions')
 
 function run(args, { cwd = root, env = process.env, timeoutMs = 30_000 } = {}) {
@@ -105,7 +106,9 @@ try {
   // link: skips dependency installation. Explicitly link the same plugin set
   // that a normal install resolves from the Starter's semver dependencies.
   const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
-  const plugins = Object.keys(manifest.dependencies).filter(name => name.startsWith('dsh-mnemon-'))
+  // Root owns the disabled enhancement Entries. Adding their self-registering
+  // bundles as separate Profile layers would intentionally duplicate ids.
+  const plugins = Object.keys(manifest.dependencies).filter(name => name.startsWith('dsh-mnemon-') && !extensionNameSet.has(name))
   const packages = options.has('--package')
     ? [options.get('--package')]
     : [`link:${root}`, ...plugins.map(name => `link:${join(root, 'plugins', name)}`)]
