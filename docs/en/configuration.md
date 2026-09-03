@@ -92,7 +92,7 @@ mnemon:
 | `tabEnabled` | `true` | boolean | Whether to mount the selected entry and workbench; Host RPC, commands, and Agent tools remain registered when off |
 | `writeEnabled` | `true` | boolean | Whether to expose semantic write tools, write RPC, and write commands |
 | `taskAgentModel` | `{ mode: inherit }` | `inherit` / `fixed` | Model route for independent task Agents used by AI metadata, Agent Query, memory distillation, and Document archiving, plus the idle-review worker; `fixed` requires both `provider` and `model` and also pins their bounded workers for write, answer, provider placement, migration, compaction, archive, and metadata maintenance. Conversation Recall and Related are direct Host reads and do not use this route |
-| `remoteAccess` | `read-only` | `read-only` / `trusted-host` | DSH 0.1.1-rc.2 compatibility policy for non-loopback Mnemon management RPC; startup-only and ignored by DSH 0.1.2-alpha.5 |
+| `remoteAccess` | `read-only` | `read-only` / `trusted-host` | Startup-only DSH 0.1.1-rc.2 rollback policy for non-loopback Mnemon management RPC; ignored by DSH 0.1.2-alpha.5 and 0.1.2-rc.1 |
 | `mnemon-ui.turnBar` | `true` | boolean | Turn-tail memory activity bar; on by default, **applies live after saving** |
 | `mnemon-ui.saveAction` | `true` | boolean | “Save to memory” icon and confirmation on finalized assistant replies; on by default, **applies live after saving** |
 
@@ -164,13 +164,13 @@ Policies are pure, bounded host extensions. A plugin may call `registerRecallQua
 
 ### Browser authentication
 
-One branch-free registration path supports both verified DSH versions. Mnemon always supplies the trailing authority object required by 0.1.1-rc.2; the 0.1.2-alpha.5 two-argument JavaScript implementation naturally ignores it, so no package-version check or capability branch is involved.
+One branch-free registration path supports the stable DSH 0.1.2-rc.1 baseline, its alpha.5 predecessor, and the previous 0.1.1-rc.2 line. Mnemon always supplies the trailing authority object required by rc.2; the 0.1.2 two-argument JavaScript implementation naturally ignores it, so no package-version check or capability branch is involved.
 
-On DSH 0.1.1-rc.2, `remoteAccess` remains a real startup security boundary and cannot be changed through Web settings. The default `read-only` mode keeps settings, ZIP backups, Provider connections, and broad mutations loopback-only; `trusted-host` promotes all three management channels together and must be used only behind reliable deployment authentication. DSH `trustedHosts` is a Host/Origin fence, not user authentication.
+DSH 0.1.2-rc.1 and alpha.5 authenticate every Mnemon RPC through the browser session established from the Host's launch-token URL and signed, authority-bound cookie. They ignore `remoteAccess`, which remains accepted solely so the same plugin configuration can roll back to rc.2 safely. DSH `trustedHosts` remains a Host/Origin fence, not a replacement for HTTPS or deployment access controls.
 
-DSH 0.1.2-alpha.5 removes those method-specific privilege tiers and authenticates every Mnemon RPC through the browser session established by its one-time launch token and signed cookie. It ignores `remoteAccess`, which remains accepted solely so the same plugin configuration can roll back to rc.2 safely. `writeEnabled=false` is a product-level read-only mode in both versions; it is not a substitute for transport authentication.
+On DSH 0.1.1-rc.2, `remoteAccess` remains a real startup security boundary and cannot be changed through Web settings. The default `read-only` mode keeps settings, ZIP backups, Provider connections, and broad mutations loopback-only; `trusted-host` promotes all three management channels together and must be used only behind reliable deployment authentication. `writeEnabled=false` is a product-level read-only mode on every supported version; it is not a substitute for transport authentication.
 
-For the complete proxy, profile-patch, trusted-authority, restart, and verification workflow, see [Cloud-hosted WebUI on stable DSH rc.2](./operations.md#cloud-hosted-webui).
+For the complete proxy, launch-token, trusted-authority, rc.2 rollback-patch, restart, and verification workflow, see [Cloud-hosted WebUI](./operations.md#cloud-hosted-webui).
 
 ## Storage Scopes
 
@@ -359,7 +359,7 @@ If the old value comes only from a composition profile, migration saves a canoni
 
 The bundled `cordis.patch.yml` provides the default config row. A DSH profile configuration with the same ID may replace that row as a whole. Do not add only `cliPath` to a final profile patch: use `MNEMON_CLI_PATH` or the `mnemon.cliPath` user setting instead. When a profile patch must be customized for another reason, retain every key that must remain enabled instead of assuming a deep merge.
 
-The cloud rc.2 `remoteAccess` override is one such whole-row customization. Use the complete, upgrade-aware example in the [cloud-hosted WebUI procedure](./operations.md#cloud-hosted-webui), not a standalone `config: { remoteAccess: trusted-host }` fragment.
+The `remoteAccess` override needed for a cloud rc.2 rollback is one such whole-row customization. Stable DSH 0.1.2-rc.1 does not need that override. When rc.2 is required, use the complete, upgrade-aware example in the [cloud-hosted WebUI procedure](./operations.md#cloud-hosted-webui), not a standalone `config: { remoteAccess: trusted-host }` fragment.
 
 ## Common Configurations
 

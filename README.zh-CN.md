@@ -24,7 +24,7 @@
 <p align="center">
   <a href="./docs/zh-CN/capabilities.md"><strong>先看能力地图</strong></a> ·
   <a href="./docs/zh-CN/getting-started.md">5 分钟开始</a> ·
-  <a href="./docs/zh-CN/releases/v0.4.6.md">v0.4.6 升级说明</a> ·
+  <a href="./docs/zh-CN/releases/v0.4.7.md">v0.4.7 升级说明</a> ·
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">观看宽屏实机演示</a>
 </p>
 
@@ -47,6 +47,8 @@ v0.4.4 同时支持新旧 DSH 会话投影接口，修复旧版宿主读取会�
 v0.4.5 在已安装 Better Sidebar 时向其注册记忆系统，同时保留 DSH 普通 Sidebar 入口，并兼容两种客户端加载顺序。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.5.md)。
 
 v0.4.6 继续以 DSH 0.1.1-rc.2 作为稳定基线，并通过能力检测兼容 DSH 0.1.2-alpha.4 与 alpha.5 的 Session 事件快照接口。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.6.md)。
+
+v0.4.7 将已发布的 DSH 0.1.2-rc.1 提升为稳定的 registry 基线，继续对其 alpha.5 前序版本执行源码验证，并保留上一条 0.1.1-rc.2 版本线的真实 WebUI 回归。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.7.md)。
 
 ## 30 秒理解能力边界
 
@@ -122,10 +124,10 @@ Windows 推荐安装 v0.2.3 或更高版本的官方 ZIP；标准安装目录与
 
 ### 2. 安装 DSH 与插件
 
-Registry 安装仍以稳定的 DSH 0.1.1-rc.2 验证；其完整 profile 需要 Node.js `^22.19.0 || >=24.0.0`，Node 20 缺少 rc.2 使用的宿主原语。源码兼容性也已针对最新的 DSH 0.1.2-alpha.5 预览版验证，rc.2 仍是推荐的 registry 安装目标。dsh-mnemon 包本身仍为较旧且兼容的 DSH Host 保留 Node.js 20 支持。下面显式指定已发布版本以保证可复现安装；插件作者可参照 [alpha 源码验证流程](./docs/zh-CN/development.md#dsh-012-alpha5-源码验证)。
+Registry 安装以稳定的 DSH 0.1.2-rc.1 验证；其完整 profile 需要 Node.js `^22.19.0 || >=24.0.0`。它的直接前序版本 DSH 0.1.2-alpha.5 继续通过源码覆盖，上一条 0.1.1-rc.2 registry 版本线则保留为向后回归目标。dsh-mnemon 包本身仍为较旧且兼容的 DSH Host 保留 Node.js 20 支持。下面显式指定已发布版本以保证可复现安装；插件作者可参照 [alpha 源码兼容流程](./docs/zh-CN/development.md#dsh-012-alpha5-源码兼容)。
 
 ```sh
-npm install -g @deepseek-ai/dsh@0.1.1-rc.2
+npm install -g @deepseek-ai/dsh@0.1.2-rc.1
 dsh --version
 ```
 
@@ -134,7 +136,7 @@ dsh plugin --profile web add dsh-mnemon
 dsh --profile web
 ```
 
-将 Web profile 发布到云端域名时，稳定版 DSH 0.1.1-rc.2 需要带身份认证的 HTTPS 反向代理、显式可信 authority，以及本机 Mnemon 管理权限覆盖。请按[云端 WebUI 操作步骤](./docs/zh-CN/operations.md#cloud-hosted-webui)配置，不要把回环服务直接暴露到公网。
+将 Web profile 发布到云端域名时，稳定版 DSH 0.1.2-rc.1 需要 HTTPS 反向代理或访问网关、显式可信 authority，以及 Host 启动时输出的一次性启动 URL。请按[云端 WebUI 操作步骤](./docs/zh-CN/operations.md#cloud-hosted-webui)配置，不要把回环服务直接暴露到公网。
 
 DSH 各 profile 的插件清单彼此独立。一次性 Headless 任务需要单独安装：
 
@@ -224,7 +226,7 @@ dsh plugin --profile headless add "link:/absolute/path/to/dsh-mnemon"
 | 备份、更新或排障 | [运维指南](./docs/zh-CN/operations.md) |
 | 接入工具、命令或 RPC | [接口参考](./docs/zh-CN/interfaces.md) |
 | 开发 Layer、Adapter、Strategy、Guard 或 MemorySource 扩展 | [扩展开发指南](./docs/zh-CN/extensions.md) |
-| 查看本次升级 | [v0.4.6 发布说明](./docs/zh-CN/releases/v0.4.6.md) |
+| 查看本次升级 | [v0.4.7 发布说明](./docs/zh-CN/releases/v0.4.7.md) |
 
 完整目录见[文档中心](./docs/zh-CN/README.md)。
 

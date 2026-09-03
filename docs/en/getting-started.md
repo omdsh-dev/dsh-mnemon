@@ -10,19 +10,19 @@ If installation is complete, jump to [First verification](#6-complete-first-veri
 
 You need:
 
-- Node.js `^22.19.0 || >=24.0.0` for the DSH 0.1.1-rc.2 baseline;
+- Node.js `^22.19.0 || >=24.0.0` for the DSH 0.1.2-rc.1 baseline;
 - a DSH Web or Headless profile that starts successfully;
 - a locally executable `mnemon` CLI;
 - a DSH model route capable of creating independent task Agents.
 
 Regular semantic work prefers a provider named `spawn` with `toolFilter`, `persona`, and `depthLimit`. Mnemon supplies a schema-validated, one-run result tool instead of depending on the Provider's `outputSchema` path. Optional score-based background review additionally requires a provider named `fork` with `inheritsParentContext=true`. Missing `fork` does not block deterministic pages or regular manual actions.
 
-This workflow uses dsh-mnemon v0.4.6, DSH 0.1.1-rc.2, and Mnemon 0.2.3 as the recommended registry baseline. Some compatible UI screenshots were captured on dsh-mnemon v0.2.0. DSH rc.2 uses `Promise.withResolvers` and the Node Zstd API, so Node 20 cannot boot its complete profile. Source compatibility is also verified against the latest DSH 0.1.2-alpha.5 preview while rc.2 remains the recommended installation target. Back up and repeat this verification against an isolated root before upgrading.
+This workflow uses dsh-mnemon v0.4.7, DSH 0.1.2-rc.1, and Mnemon 0.2.3 as the recommended registry baseline. Some compatible UI screenshots were captured on dsh-mnemon v0.2.0. A complete DSH rc.1 profile uses Host primitives unavailable on Node 20, while the plugin package itself retains Node.js 20 compatibility for older compatible Hosts. The immediately preceding DSH 0.1.2-alpha.5 remains covered from source, and DSH 0.1.1-rc.2 remains a backward-regression target. Back up and repeat this verification against an isolated root before upgrading.
 
 Install and verify the tested DSH release with:
 
 ```sh
-npm install -g @deepseek-ai/dsh@0.1.1-rc.2
+npm install -g @deepseek-ai/dsh@0.1.2-rc.1
 dsh --version
 npm view @deepseek-ai/dsh dist-tags
 ```
@@ -113,7 +113,7 @@ Then start or restart the profile:
 dsh --profile web
 ```
 
-If the Web profile is reached through a cloud hostname, do not publish port 3080 directly. Stable DSH 0.1.1-rc.2 keeps Mnemon management channels loopback-only by default, so a remote page can be visible while the Memory System cannot load settings or perform writes. Configure the authenticated reverse proxy, `remoteAccess` override, and trusted authority together by following [Cloud-hosted WebUI on stable DSH rc.2](./operations.md#cloud-hosted-webui). The same section explains the different launch-token flow on DSH 0.1.2-alpha.5.
+If the Web profile is reached through a cloud hostname, do not publish port 3080 directly. Stable DSH 0.1.2-rc.1 authenticates every Mnemon RPC and stream through a browser session established from the one-time URL printed at Host startup. Configure the HTTPS reverse proxy or access gateway and trusted authority together, then open that launch URL, by following [Cloud-hosted WebUI](./operations.md#cloud-hosted-webui). The same section preserves the different `remoteAccess` procedure required when rolling back to DSH 0.1.1-rc.2.
 
 Upgrade and uninstall:
 

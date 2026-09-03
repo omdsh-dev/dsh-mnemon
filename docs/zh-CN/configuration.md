@@ -92,7 +92,7 @@ mnemon:
 | `tabEnabled` | `true` | boolean | 是否挂载所选入口和工作台；关闭后 Host RPC、命令和 Agent 工具保持注册 |
 | `writeEnabled` | `true` | boolean | 是否暴露语义写工具、写 RPC 和写命令 |
 | `taskAgentModel` | `{ mode: inherit }` | `inherit` / `fixed` | AI 元信息、Agent 查询、记忆沉淀和档案归档使用的独立任务 Agent，以及空闲复盘 worker 的模型路由；`fixed` 必须同时保存 `provider` 与 `model`，并会钉住对应的写入、证据问答、Provider 选择、迁移、压缩、归档和元信息维护 worker。对话中的 Recall 与 Related 是 Host 直接读取，不使用该路由 |
-| `remoteAccess` | `read-only` | `read-only` / `trusted-host` | DSH 0.1.1-rc.2 的非 loopback Mnemon 管理 RPC 兼容策略；仅启动时读取，DSH 0.1.2-alpha.5 会忽略 |
+| `remoteAccess` | `read-only` | `read-only` / `trusted-host` | 回滚到 DSH 0.1.1-rc.2 时使用的非 loopback Mnemon 管理 RPC 策略；仅启动时读取，DSH 0.1.2-alpha.5 与 0.1.2-rc.1 会忽略 |
 | `mnemon-ui.turnBar` | `true` | boolean | 回合尾记忆活动条；默认开启，**保存后实时生效** |
 | `mnemon-ui.saveAction` | `true` | boolean | 已定稿助手回复旁的「存入记忆」图标与确认弹窗；默认开启，**保存后实时生效** |
 
@@ -164,13 +164,13 @@ WebUI 从 `memory-system` 描述符读取真实 Layer，因此扩展插件新增
 
 ### 浏览器认证
 
-同一条无分支注册路径支持两个已验证 DSH 版本。Mnemon 始终传入 0.1.1-rc.2 所需的末尾 authority 对象；0.1.2-alpha.5 的双参数 JavaScript 实现会自然忽略它，因此无需 package 版本判断或 capability 分支。
+同一条无分支注册路径支持稳定的 DSH 0.1.2-rc.1 基线、它的 alpha.5 前序版本和上一条 0.1.1-rc.2 版本线。Mnemon 始终传入 rc.2 所需的末尾 authority 对象；0.1.2 的双参数 JavaScript 实现会自然忽略它，因此无需 package 版本判断或 capability 分支。
 
-在 DSH 0.1.1-rc.2 上，`remoteAccess` 仍是真实的启动时安全边界，不能通过 Web settings 修改。默认 `read-only` 会把设置、ZIP 备份、Provider 连接和宽泛 mutation 限制在 loopback；只有部署层已经提供可靠认证时，才可使用 `trusted-host` 将三个管理通道整体提升。DSH `trustedHosts` 只是 Host/Origin 防线，不是用户身份认证。
+DSH 0.1.2-rc.1 与 alpha.5 的所有 Mnemon RPC 都统一经过 Host 启动 token URL 与签名、绑定 authority 的 Cookie 所建立的浏览器会话。它们会忽略 `remoteAccess`；该设置仅为同一插件配置安全回滚到 rc.2 而保留。DSH `trustedHosts` 仍只是 Host/Origin 防线，不能替代 HTTPS 或部署层访问控制。
 
-DSH 0.1.2-alpha.5 已移除逐方法权限层，所有 Mnemon RPC 统一经过一次性启动 token 与签名 Cookie 建立的浏览器会话。它会忽略 `remoteAccess`；该设置仅为同一插件配置安全回滚到 rc.2 而保留。两个版本中的 `writeEnabled=false` 都只是产品级只读模式，不能替代 transport 身份认证。
+在 DSH 0.1.1-rc.2 上，`remoteAccess` 仍是真实的启动时安全边界，不能通过 Web settings 修改。默认 `read-only` 会把设置、ZIP 备份、Provider 连接和宽泛 mutation 限制在 loopback；只有部署层已经提供可靠认证时，才可使用 `trusted-host` 将三个管理通道整体提升。所有受支持版本中的 `writeEnabled=false` 都只是产品级只读模式，不能替代 transport 身份认证。
 
-完整的代理、profile patch、可信 authority、重启与验证流程见[稳定版 DSH rc.2 的云端 WebUI](./operations.md#cloud-hosted-webui)。
+完整的代理、启动 token、可信 authority、rc.2 回滚 patch、重启与验证流程见[云端 WebUI](./operations.md#cloud-hosted-webui)。
 
 ## 存储范围
 
@@ -359,7 +359,7 @@ Builtin 隐藏页眉中的存储模式标记、工作区选择和对齐控件。
 
 包内 `cordis.patch.yml` 提供默认 config 行。DSH profile 的同 ID 配置可能整体覆盖这行。不要在 profile 的最终 patch 中只增加 `cliPath`；请改用 `MNEMON_CLI_PATH` 或用户设置 `mnemon.cliPath`。确因其他原因需要自定义 profile patch 时，应保留仍需启用的全部键，而不是假设深合并。
 
-云端 rc.2 的 `remoteAccess` 覆盖就属于这种整行自定义。请使用[云端 WebUI 操作步骤](./operations.md#cloud-hosted-webui)中的完整、可随升级核对的示例，不要只写 `config: { remoteAccess: trusted-host }` 片段。
+云端回滚到 rc.2 时所需的 `remoteAccess` 覆盖就属于这种整行自定义；稳定版 DSH 0.1.2-rc.1 不需要该覆盖。确需 rc.2 时，请使用[云端 WebUI 操作步骤](./operations.md#cloud-hosted-webui)中的完整、可随升级核对的示例，不要只写 `config: { remoteAccess: trusted-host }` 片段。
 
 ## 常见配置
 

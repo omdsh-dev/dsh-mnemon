@@ -24,7 +24,7 @@
 <p align="center">
   <a href="./docs/en/capabilities.md"><strong>Explore the capability map</strong></a> ·
   <a href="./docs/en/getting-started.md">Start in five minutes</a> ·
-  <a href="./docs/en/releases/v0.4.6.md">Read the v0.4.6 notes</a> ·
+  <a href="./docs/en/releases/v0.4.7.md">Read the v0.4.7 notes</a> ·
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">Watch the widescreen demo</a>
 </p>
 
@@ -47,6 +47,8 @@ v0.4.4 fixes session history failures on older DSH hosts by supporting both sess
 v0.4.5 registers Memory System with an installed Better Sidebar while keeping the normal DSH Sidebar entry and both client activation orders working. See the [patch release notes](./docs/en/releases/v0.4.5.md).
 
 v0.4.6 keeps DSH 0.1.1-rc.2 as the stable baseline while adding capability-detected support for the Session event snapshots used by DSH 0.1.2-alpha.4 and alpha.5. See the [patch release notes](./docs/en/releases/v0.4.6.md).
+
+v0.4.7 promotes the published DSH 0.1.2-rc.1 release to the stable registry baseline, keeps source verification against its alpha.5 predecessor, and retains a real WebUI regression on the previous 0.1.1-rc.2 line. See the [patch release notes](./docs/en/releases/v0.4.7.md).
 
 ## Understand the scope in 30 seconds
 
@@ -122,10 +124,10 @@ Windows users can install the official v0.2.3-or-newer release ZIP. The expected
 
 ### 2. Install DSH and the plugin
 
-The registry installation remains verified against stable DSH 0.1.1-rc.2, whose complete profiles require Node.js `^22.19.0 || >=24.0.0`; Node 20 lacks host primitives used by rc.2. Source compatibility is also verified against the latest DSH 0.1.2-alpha.5 preview while rc.2 remains the recommended registry target. The dsh-mnemon package itself retains Node.js 20 compatibility for older compatible DSH hosts. Use the exact published version below for a reproducible installation; plugin authors can follow the [alpha source workflow](./docs/en/development.md#dsh-012-alpha5-source-verification).
+The registry installation is verified against stable DSH 0.1.2-rc.1, whose complete profiles require Node.js `^22.19.0 || >=24.0.0`. The immediately preceding DSH 0.1.2-alpha.5 remains covered from source, and the previous 0.1.1-rc.2 registry line remains a backward-regression target. The dsh-mnemon package itself retains Node.js 20 compatibility for older compatible DSH hosts. Use the exact published version below for a reproducible installation; plugin authors can follow the [alpha source workflow](./docs/en/development.md#dsh-012-alpha5-source-compatibility).
 
 ```sh
-npm install -g @deepseek-ai/dsh@0.1.1-rc.2
+npm install -g @deepseek-ai/dsh@0.1.2-rc.1
 dsh --version
 ```
 
@@ -134,7 +136,7 @@ dsh plugin --profile web add dsh-mnemon
 dsh --profile web
 ```
 
-When the Web profile is published under a cloud hostname, stable DSH 0.1.1-rc.2 needs an authenticated HTTPS reverse proxy, an explicit trusted authority, and a local Mnemon management override. Follow the [cloud-hosted WebUI procedure](./docs/en/operations.md#cloud-hosted-webui); do not expose the loopback service directly.
+When the Web profile is published under a cloud hostname, stable DSH 0.1.2-rc.1 needs an HTTPS reverse proxy or access gateway, an explicit trusted authority, and the one-time launch URL printed at Host startup. Follow the [cloud-hosted WebUI procedure](./docs/en/operations.md#cloud-hosted-webui); do not expose the loopback service directly.
 
 DSH profiles have independent plugin rosters. Install the same package separately for one-shot Headless tasks:
 
@@ -224,7 +226,7 @@ See [Operations, security, and troubleshooting](./docs/en/operations.md) for bac
 | Back up, update, or troubleshoot | [Operations](./docs/en/operations.md) |
 | Integrate tools, commands, or RPC | [Interface reference](./docs/en/interfaces.md) |
 | Build a Layer, Adapter, Strategy, Guard, or MemorySource extension | [Extension guide](./docs/en/extensions.md) |
-| Review the release | [v0.4.6 release notes](./docs/en/releases/v0.4.6.md) |
+| Review the release | [v0.4.7 release notes](./docs/en/releases/v0.4.7.md) |
 
 See the [documentation hub](./docs/en/README.md) for the full map.
 
