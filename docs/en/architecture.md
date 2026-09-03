@@ -13,17 +13,16 @@ flowchart TB
   Starter --> Docs["dsh-mnemon-source-documents"]
   Starter --> Spaces["dsh-mnemon-source-memory-spaces"]
   Starter --> Strategy["dsh-mnemon-strategy-default-three-tier"]
-  Scope["strategy-scoped · optional"] -. selection .-> Strategy
-  Light["strategy-light-context · optional"] -. projection .-> Strategy
-  Capture["strategy-auto-capture · optional"] -. capture .-> Strategy
+  Starter --> Helpers["three shipped enhancements · disabled"]
+  Helpers -. selection / projection / capture .-> Strategy
   Spaces --> Providers["dsh-mnemon-provider-* · private child Fibers"]
 ```
 
-Solid edges show installation ownership; dotted edges show optional Strategy contributions, not business calls. DSH creates the top-level Entries/Fibers. Sources, Strategies and their contributions use the same `installMemory(ctx, ...)` SDK and Cordis-owned disposer. Core provides only `ctx.mnemonMemory`; it does not implement a Memory Spaces Fiber or publish `ctx.mnemonMemorySpace`.
+Solid edges show Starter installation ownership; the dotted edge shows Strategy contributions that take effect only after the user enables them, not business calls. DSH creates the top-level Entries/Fibers. Sources, Strategies and their contributions use the same `installMemory(ctx, ...)` SDK and Cordis-owned disposer. Core provides only `ctx.mnemonMemory`; it does not implement a Memory Spaces Fiber or publish `ctx.mnemonMemorySpace`.
 
 Memory Spaces authors its **own** child Fibers and Provider protocol. Each configured Provider is an explicitly installed module; two Source instances can use the same child id without sharing their registry or credentials. No dependency scan or global Provider registry selects implementations.
 
-Like a Spring Boot starter, the default distribution chooses dependencies and explicit defaults. It does not turn Source business code into Core. Users still install `dsh-mnemon`; 16 plugin packages can be independently built, tested and published. Three optional Strategy contribution packages are enabled separately, not included in the default Starter. Complete Strategy replacement remains explicit.
+Like a Spring Boot starter, the default distribution chooses dependencies and explicit defaults. It does not turn Source business code into Core. Users still install only `dsh-mnemon`; 16 plugin packages can be independently built, tested and published. The Starter installs every official package, with three Strategy enhancements shipped as disabled Entries that join the View only after their Settings switches are enabled. Complete Strategy replacement remains explicit.
 
 | Owner | Owns | Does not own |
 |---|---|---|

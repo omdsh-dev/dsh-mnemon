@@ -67,7 +67,7 @@ export function apply(ctx: Context): void {
 
 以上假定 `source.js` 导出定义；完整文件记忆示例见 [external-source.ts](../../scripts/fixtures/plugin-consumer/src/external-source.ts)。Source 与 Strategy 是职责，不是强制分包/分仓。一个插件可以调用 `installMemory(ctx, { sources: [source], strategies: [strategy] })`，在同一 Fiber 下成批安装、一起卸载，保留不同的实例 key；仅在需要独立复用/替换时拆包。Strategy 仍需显式选择，随包提供不等于覆盖用户的选择。
 
-每个受管理插件都应导出一份 JSON 安全的 `memoryPlugin` 描述，并把同一个对象传给 `installMemory`。`roles` 只描述贡献职责，不产生两套插件类型；`provides` 与 `requires` 构成激活关系图。只有两个提供者确实不能同时参与时，才把能力标记为 `exclusive: true`。只声明硬依赖：能够真实降级或空操作的插件，不应强迫用户安装无关依赖。Core 会在运行 Source factory 前校验激活图，并且仍是唯一把图编译为一个 View 的组件。没有这份 beta 描述的旧插件保持既有组合行为，但管理界面只能推断有限的身份与关系信息。
+每个可组合插件都应导出一份 JSON 安全的 `memoryPlugin` 描述，并把同一个对象传给 `installMemory`。`roles` 只描述贡献职责，不产生两套插件类型；`provides` 与 `requires` 构成激活关系图。只有两个提供者确实不能同时参与时，才把能力标记为 `exclusive: true`。只声明硬依赖：能够真实降级或空操作的插件，不应强迫用户安装无关依赖。Core 会在运行 Source factory 前校验激活图，并且仍是唯一把图编译为一个 View 的组件。没有这份 beta 描述的旧插件保持既有组合行为，但 Host 只能推断有限的身份与关系信息。
 
 Entry id 标识实例，type id 标识实现。不能剥掉 Loader 的 include 前缀。没有 Loader 身份的直接 `ctx.plugin()` 挂载，应传 `installMemory(..., { instanceId })`。路径和凭据归实例，不使用模块全局数据库或服务注册表。
 
@@ -79,13 +79,13 @@ Entry id 标识实例，type id 标识实现。不能剥掉 Loader 的 include �
 
 Core 只处理目标/槽身份、JSON、64,000 字符上限、确定性回放、生命周期和最终 View 的原有预算/权限，不解释业务槽名。扩展回调只接收 request 和权限过滤后的 Source facts，没有 Source 对象、grant 或写入回调。槽语义由目标 Strategy 的公开 SDK 定义。动态回调或槽值在具体回合中不合法时，该回合拒绝，不偷偷回退到忽略插件的 View。
 
-### 可选的视图配置声明
+### 可选的配置声明
 
-专用 Strategy Entry 还可以导出 `memoryStrategyConfiguration`，由 Core SDK 的 `defineMemoryStrategyConfiguration` 定义。它包含中英文展示文案、公开字段（`number`、`text`、`textarea`、`string-list`、`source-list`），以及**与 `apply()` 共用的纯 `create(config)` factory**。factory 只返回一个 Strategy 或扩展贡献以及同一份 `memoryPlugin` 描述，不做 I/O、凭据访问、Source 注册或 Fiber 挂载；完整例子见可选策略包。这只是可选的编辑器约定，不定义插件身份或激活关系。
+专用 Strategy Entry 还可以导出 `memoryStrategyConfiguration`，由 Core SDK 的 `defineMemoryStrategyConfiguration` 定义。它包含中英文展示文案、公开字段（`number`、`text`、`textarea`、`string-list`、`source-list`），以及**与 `apply()` 共用的纯 `create(config)` factory**。factory 只返回一个 Strategy 或扩展贡献以及同一份 `memoryPlugin` 描述，不做 I/O、凭据访问、Source 注册或 Fiber 挂载；完整例子见内置增强包。这只是面向 Host 与未来工具的可选约定，不定义插件身份或激活关系。
 
-状态页的 **记忆插件** 弹窗会发现已注册的 `(scope/)dsh-mnemon-source-*` 与 `(scope/)dsh-mnemon-strategy-*` Loader Entry，包括停用项。所有插件共用一份草稿与一次激活动作；界面可以自动启用唯一依赖、停用依赖当前插件的节点、替换互斥节点。Host 会重新校验整张关系图，在一个缓冲事务中更新 Cordis Entry，编译一个真实候选 View，然后才把 Profile 覆盖写入 `mnemon-view-<Loader 装配目录摘要>`。任何激活、组合或持久化失败都会回滚所有改动；已有轮次的 pin 保持不变。旧的 Source 开关只作为迁移输入读取，新的写入统一进入同一份文档。Source 上限及 Host 的写入/权限约束仍然有效。
+v0.5 不向普通用户提供通用的记忆插件发现、依赖图或安装弹窗。这个 beta 阶段先稳定 Source/Strategy 契约和单 View 编译边界，避免把尚在收敛的插件心智加入 v0.4 的日常工作流。三个随 Starter 安装的增强只以“设置 → 记忆系统 → 记忆增强”中的行为开关呈现；包名、Entry、依赖和互斥关系不进入这层界面。
 
-发现入口只接受准确的 `dsh-mnemon-source-*` 或 `dsh-mnemon-strategy-*` npm 包名。安装前，Host 会核对包身份、语义版本、`dsh-mnemon` peer 声明和安全的 `dsh.bundle.patch`；确认写入后委托 `dsh plugin --profile <当前 Profile> add <包名>@<版本> --save-exact`。它不改写 Loader YAML，也不在当前进程热加载新代码。重启 DSH 后，新 bundle 先以停用状态注册，再由用户在弹窗中明确启用。只有能识别当前 Loader、Profile、DSH CLI 且连接具备写权限时，页面才允许安装。
+第三方插件仍走 DSH 原生 Profile/Loader 流程：用准确包名执行 `dsh plugin --profile <Profile> add <包名>@<版本> --save-exact`，检查其 `peerDependencies` 与 `dsh.bundle.patch`，重启后在 Profile 装配中明确激活。下载 npm 包本身不等于激活，Mnemon 也不会在当前进程热加载新代码。欢迎外部作者按本页契约贡献独立仓库；通用图形化管理会在接口和社区用例稳定后再评估，不是 v0.5 承诺。
 
 ### 默认三层扩展
 
@@ -97,13 +97,9 @@ Core 只处理目标/槽身份、JSON、64,000 字符上限、确定性回放、
 | `dsh-mnemon-strategy-light-context` | `projection` | 一份共享投影上限，只收紧 Host 预算；不是增量注入或摘要压缩 |
 | `dsh-mnemon-strategy-auto-capture` | `capture` | 当前对话的记录指引、目标与明确 Action id；不启动后台 Agent、不直接写入 |
 
-三个包都是可选安装，不属于默认 Starter 的运行依赖。把包安装并作为 DSH Entry 启用后，它们会自动参与 `default-three-tier`，不需要修改 `strategyId`。仅下载 npm 包不等于启用。默认 Source 组合、预算和提醒在没有扩展时不变。Runtime 当前没有展开 route；把常驻预算压得很低可能隐藏热记忆，需要针对实际任务评测。
+Starter 会安装这三个包并注册为停用的 DSH Entry，因此 v0.5 的三个开关始终可用，但默认组合、预算和提醒保持 v0.4 行为。打开开关后，对应贡献自动参与 `default-three-tier`，不需要修改 `strategyId`；关闭只撤销该贡献，不删除任何 Source 数据。Runtime 当前没有展开 route；把常驻预算压得很低可能隐藏热记忆，需要针对实际任务评测。
 
-每个可选包都携带 DSH bundle patch，安装后注册一个停用的 Entry。可以在状态页弹窗中安装，或使用等价 CLI；重启 DSH 后，再从 **记忆插件** 中启用和配置。安装本身不会激活贡献。Source key 若包含 Loader 的 include 前缀，应使用实例目录中的完整 key；省略 `scoped.config` 时按角色/key 确定性组合现有实例，不创建新的存储。
-
-```sh
-dsh plugin --profile web add dsh-mnemon-strategy-scoped@0.5.0-beta.1 --save-exact
-```
+`scoped` 的 Source key 若包含 Loader 的 include 前缀，应使用实例目录中的完整 key；省略配置时按角色/key 确定性组合现有实例，不创建新的存储。内置界面只提供稳定的开关，复杂字段仍由高级 Profile 配置管理。
 
 `scoped` 的 `sourceKeys` 表示优先顺序，`writableSourceKeys` 限定可写子集。自动容量整理同样受本轮可写范围限制；被禁止时保留原数据并报错，不绕过范围向其他 Source 迁移。只有显式人工管理走独立的管理授权。
 

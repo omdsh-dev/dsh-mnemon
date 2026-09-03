@@ -14,7 +14,7 @@ pnpm run verify
 pnpm run verify:plugins
 ```
 
-`verify` checks types, deterministic Root builds, independent plugin builds, the full test suite, a real isolated DSH Headless profile and package exports/contents. Independent plugin checks run as separate type/test phases after building all public artifacts. Do not mix `pnpm -r verify` clean builds with tests reading sibling artifacts; use `pnpm verify` for the whole workspace. `verify:plugins` repeats verification **outside** the workspace against semver-installed tarballs and an external Source/Strategy/Provider/Client consumer. It also installs only the packed Root into real DSH, resolving all default plugins from a loopback registry without workspace links or manifest rewrites, then repeats activation with the three optional Strategy plugins. The external consumer compiles its own Strategy extension against the owning Strategy's packed SDK.
+`verify` checks types, deterministic Root builds, independent plugin builds, the full test suite, a real isolated DSH Headless profile and package exports/contents. Independent plugin checks run as separate type/test phases after building all public artifacts. Do not mix `pnpm -r verify` clean builds with tests reading sibling artifacts; use `pnpm verify` for the whole workspace. `verify:plugins` repeats verification **outside** the workspace against semver-installed tarballs and an external Source/Strategy/Provider/Client consumer. It also installs only the packed Root into real DSH, resolving all sixteen official plugins from a loopback registry without workspace links or manifest rewrites, then separately verifies the three shipped enhancements moving from disabled defaults to simultaneous activation. The external consumer compiles its own Strategy extension against the owning Strategy's packed SDK.
 
 ## Repository ownership
 
@@ -29,16 +29,16 @@ plugins/
   dsh-mnemon-source-documents/
   dsh-mnemon-source-memory-spaces/
   dsh-mnemon-strategy-default-three-tier/
-  dsh-mnemon-strategy-scoped/         # optional selection contribution
-  dsh-mnemon-strategy-light-context/  # optional projection contribution
-  dsh-mnemon-strategy-auto-capture/   # optional in-turn capture contribution
+  dsh-mnemon-strategy-scoped/         # shipped, disabled selection contribution
+  dsh-mnemon-strategy-light-context/  # shipped, disabled projection contribution
+  dsh-mnemon-strategy-auto-capture/   # shipped, disabled in-turn capture contribution
   dsh-mnemon-provider-*/
 tests/        Host/Core/UI composition and boundary tests
 scripts/      reproducible build, artifacts, Headless and Web fixtures
 cordis.patch.yml   default Starter composition
 ```
 
-Root owns Core/SDK and the DSH Host/default Starter, not Source storage implementations. Each directory under `plugins/` is a publishable standalone project. The default distribution depends on its thirteen default plugins by public semver; the three optional packages are development dependencies only, not installed by the Starter. Source/Strategy peers depend on Core's public SDK, Strategy extensions on their owner's public SDK, and Providers on the Memory Spaces SDK. Peer/development relationships can produce a package-manager cycle warning; production import boundaries are independently checked.
+Root owns Core/SDK and the DSH Host/default Starter, not Source storage implementations. Each directory under `plugins/` is a publishable standalone project. The default distribution depends on all sixteen official plugins by public semver; the three enhancement packages are installed by the Starter but their Entries are disabled by default. Source/Strategy peers depend on Core's public SDK, Strategy extensions on their owner's public SDK, and Providers on the Memory Spaces SDK. Peer/development relationships can produce a package-manager cycle warning; production import boundaries are independently checked.
 
 No private workspace packages, forwarding controller modules, business bindings or compatibility directory remain. Compatibility means retained user configuration, data and workflows, not retention of historical internal symbols.
 
@@ -94,7 +94,7 @@ Also switch `displayMode` live: Sidebar and Builtin must never mount together. B
 
 The [2026-09-04 main-rebase verification](../pr-assets/main-rebase-20260904/README.md) records the exact v0.4.7/DSH rc.1 revisions, full registry and source-overlay suites, independent artifacts, plugin composition persistence and real shared-placement checks, including their limits.
 
-For the released Taskboard/SSH combination, command-name CLI lookup, install ordering and controlled panel-event loss, use the separate [npm WebUI regression harness](./testing-npm-regressions.md). It supports the current local Starter plus all thirteen plugins as well as published control packages.
+For the released Taskboard/SSH combination, command-name CLI lookup, install ordering and controlled panel-event loss, use the separate [npm WebUI regression harness](./testing-npm-regressions.md). It supports the current local Starter plus all sixteen plugins as well as published control packages.
 
 The previous DSH 0.1.1-rc.2 line does not fully unload every Client module on bundle changes. Refresh after Client package/locale registration changes when exercising that rollback target; ordinary Mnemon settings still apply live. Separate upstream profile/transport warnings from Mnemon failures rather than hiding the console.
 

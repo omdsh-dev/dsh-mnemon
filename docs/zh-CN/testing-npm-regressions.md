@@ -19,7 +19,7 @@ pnpm --workspace-concurrency=1 -r build
 node scripts/serve-web-regression.mjs --cli /absolute/path/to/test-owned/mnemon
 ```
 
-在当前 Composable View 分支，默认本地安装会将 Starter 和十三个已构建插件作为一组安装；已发布对照包仍解析自身的 registry 依赖。未发布 beta tarball 应使用[开发与验证](./development.md)中的本地 registry 制品夹具，不能假定这些版本已存在于 npm。下方历史结果仍仅对应其标明的构建。
+在当前 Composable View 分支，默认本地安装会将 Starter 和十六个已构建插件作为一组安装，其中三个增强 Entry 默认停用；已发布对照包仍解析自身的 registry 依赖。未发布 beta tarball 应使用[开发与验证](./development.md)中的本地 registry 制品夹具，不能假定这些版本已存在于 npm。下方历史结果仍仅对应其标明的构建。
 
 脚本为每次运行创建独立 DSH_HOME、记忆目录、工作区、随机 loopback 端口及本地模型响应服务。不会修改全局 dsh、用户 profile、真实记忆或已有工作区。会话模型只返回固定测试文本，不调用付费模型；shell 工具与可选的 SSH/PTY/tunnel 安装脚本未参与此回归。`fixture.json` 记录版本、目录、测试开关和所属进程；`dsh.log` 保存本次服务日志。Ctrl-C 只停止本次测试实例，保留目录供审计。
 

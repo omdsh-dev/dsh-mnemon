@@ -13,17 +13,16 @@ flowchart TB
   Starter --> Docs["dsh-mnemon-source-documents"]
   Starter --> Spaces["dsh-mnemon-source-memory-spaces"]
   Starter --> Strategy["dsh-mnemon-strategy-default-three-tier"]
-  Scope["strategy-scoped · 可选"] -. selection .-> Strategy
-  Light["strategy-light-context · 可选"] -. projection .-> Strategy
-  Capture["strategy-auto-capture · 可选"] -. capture .-> Strategy
+  Starter --> Helpers["三种随附增强 · 默认停用"]
+  Helpers -. selection / projection / capture .-> Strategy
   Spaces --> Providers["dsh-mnemon-provider-* · private child Fibers"]
 ```
 
-图中实线表示安装归属，虚线表示可选的策略贡献，不是业务调用链。DSH 创建顶层 Entry/Fiber；Source、Strategy 与策略贡献使用同一套 `installMemory(ctx, ...)` SDK 注册，由 Cordis 负责卸载。Core 只提供 `ctx.mnemonMemory`，不替 Memory Spaces 实现 Fiber，也不提供 `ctx.mnemonMemorySpace`。
+图中实线表示 Starter 安装归属，虚线表示用户开启后才生效的策略贡献，不是业务调用链。DSH 创建顶层 Entry/Fiber；Source、Strategy 与策略贡献使用同一套 `installMemory(ctx, ...)` SDK 注册，由 Cordis 负责卸载。Core 只提供 `ctx.mnemonMemory`，不替 Memory Spaces 实现 Fiber，也不提供 `ctx.mnemonMemorySpace`。
 
 Memory Spaces **自己定义内部 Fiber 与 Provider 协议**。每个 Provider 都来自明确安装并配置的子模块；两个 Source 实例可以使用同名子节点，各自持有独立目录和凭据。不存在扫描依赖自动选择实现、全局 Provider 注册表等隐式装配。
 
-借鉴 Spring Boot Starter，默认发行包负责选依赖、给默认配置，不把 Source 业务收回 Core。用户仍安装 `dsh-mnemon`；16 个插件包可独立开发、测试与发布，其中三个策略贡献包按需启用，不进入默认 Starter。完整 Strategy 的替换仍需显式选择。
+借鉴 Spring Boot Starter，默认发行包负责选依赖、给默认配置，不把 Source 业务收回 Core。用户仍只安装 `dsh-mnemon`；16 个插件包可独立开发、测试与发布。Starter 安装全部官方包，其中三个策略增强以停用 Entry 随附，只有设置开关打开后才参与 View；完整 Strategy 的替换仍需显式选择。
 
 | 归属 | 负责 | 不负责 |
 |---|---|---|

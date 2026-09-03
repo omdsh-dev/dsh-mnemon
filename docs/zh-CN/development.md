@@ -14,7 +14,7 @@ pnpm run verify
 pnpm run verify:plugins
 ```
 
-`verify` 包含类型检查、根包确定性构建、独立插件构建、完整测试集、真实隔离 DSH Headless 和包出口/内容验证。独立插件检查在所有公开制品构建完成后分阶段执行。不要用 `pnpm -r verify` 同时清理重建制品和运行读取它们的测试；整个工作区使用 `pnpm verify`。`verify:plugins` 在工作区**外部**，基于 semver 安装的 tarball 重复验证，并测试外部 Source/Strategy/Provider/Client 消费者；还向真实 DSH 仅安装根包 tarball，从 loopback registry 解析全部默认插件，不使用工作区链接或改写 manifest，再额外安装三个可选 Strategy 插件验证共存。外部消费者还通过完整 Strategy 的打包 SDK 编译自己实现的策略贡献。
+`verify` 包含类型检查、根包确定性构建、独立插件构建、完整测试集、真实隔离 DSH Headless 和包出口/内容验证。独立插件检查在所有公开制品构建完成后分阶段执行。不要用 `pnpm -r verify` 同时清理重建制品和运行读取它们的测试；整个工作区使用 `pnpm verify`。`verify:plugins` 在工作区**外部**，基于 semver 安装的 tarball 重复验证，并测试外部 Source/Strategy/Provider/Client 消费者；还向真实 DSH 仅安装根包 tarball，从 loopback registry 解析全部十六个官方插件，不使用工作区链接或改写 manifest，再单独验证三个随附增强从默认停用到同时启用。外部消费者还通过完整 Strategy 的打包 SDK 编译自己实现的策略贡献。
 
 ## 仓库归属
 
@@ -29,16 +29,16 @@ plugins/
   dsh-mnemon-source-documents/
   dsh-mnemon-source-memory-spaces/
   dsh-mnemon-strategy-default-three-tier/
-  dsh-mnemon-strategy-scoped/         # 可选选择贡献
-  dsh-mnemon-strategy-light-context/  # 可选投影贡献
-  dsh-mnemon-strategy-auto-capture/   # 可选对话内记录贡献
+  dsh-mnemon-strategy-scoped/         # 随附、默认关闭的选择贡献
+  dsh-mnemon-strategy-light-context/  # 随附、默认关闭的投影贡献
+  dsh-mnemon-strategy-auto-capture/   # 随附、默认关闭的对话内记录贡献
   dsh-mnemon-provider-*/
 tests/        Host/Core/UI composition and boundary tests
 scripts/      reproducible build, artifacts, Headless and Web fixtures
 cordis.patch.yml   default Starter composition
 ```
 
-根包拥有 Core/SDK、DSH Host 和默认 Starter，不拥有 Source 存储实现。`plugins/` 下每个目录都是可独立发布的项目。默认发行包按公开 semver 依赖十三个默认插件，三个可选包仅是开发依赖，不由 Starter 安装；Source/Strategy 通过 peer 使用 Core SDK，策略贡献使用其完整 Strategy 的公开 SDK，Provider 使用 Memory Spaces SDK。peer/开发依赖会产生包管理器环依赖提示；生产代码导入边界另有独立检查。
+根包拥有 Core/SDK、DSH Host 和默认 Starter，不拥有 Source 存储实现。`plugins/` 下每个目录都是可独立发布的项目。默认发行包按公开 semver 依赖全部十六个官方插件；三个增强包由 Starter 安装但其 Entry 默认停用。Source/Strategy 通过 peer 使用 Core SDK，策略贡献使用其完整 Strategy 的公开 SDK，Provider 使用 Memory Spaces SDK。peer/开发关系会产生包管理器环依赖提示；生产代码导入边界另有独立检查。
 
 不再保留私有工作区包、控制器转发文件、业务 binding 或 compatibility 目录。兼容指用户配置、数据与使用流程，不是延续历史内部符号。
 
@@ -94,7 +94,7 @@ pnpm e2e:serve
 
 [2026-09-04 main rebase 验证记录](../pr-assets/main-rebase-20260904/README.md)列明精确的 v0.4.7/DSH rc.1 revision、registry 与源码覆盖完整测试、独立制品、插件组合重启持久化和真实双入口验证及其限制。
 
-已发布 Taskboard/SSH 组合、CLI 命令名解析、安装顺序与受控面板通知丢失，使用独立的 [npm WebUI 回归夹具](./testing-npm-regressions.md)。夹具同时支持当前本地 Starter 与十三个插件的组合，以及已发布对照包。
+已发布 Taskboard/SSH 组合、CLI 命令名解析、安装顺序与受控面板通知丢失，使用独立的 [npm WebUI 回归夹具](./testing-npm-regressions.md)。夹具同时支持当前本地 Starter 与十六个插件的组合，以及已发布对照包。
 
 上一条 DSH 0.1.1-rc.2 版本线对 Bundle 变化的 Client 卸载并不完整；验证该回滚目标并修改 Client 包/locale 注册后应刷新页面。Mnemon 普通设置仍实时生效。区分上游 Profile/传输告警与 Mnemon 故障，不隐藏控制台。
 

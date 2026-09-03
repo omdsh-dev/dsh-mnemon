@@ -34,7 +34,7 @@
 
 Runtime、Documents、Memory Spaces 是独立 Source 插件；Strategy 将各实例的投影、检索 route 与 action 组合成逐回合不可变 View。Core 只提供 `ctx.mnemonMemory`，Source 拥有数据与可选页面，Memory Spaces 自己拥有内部 Provider 子节点。`dsh-mnemon` Starter 保持默认三层使用体验。详见[架构](./docs/zh-CN/architecture.md)与[插件开发](./docs/zh-CN/extensions.md)。
 
-本分支准备 **v0.5.0-beta.1：View-based Memory 与 Source/Strategy 插件**。SDK 处于 beta，尚未承诺冻结扩展 ABI；默认用户配置与使用流程保持兼容。开发验证不会发布这些制品。参阅 [beta 范围与升级说明](./docs/zh-CN/releases/v0.5.0-beta.1.md)；v0.4 仍是独立的 Sidebar 收敛发行线。
+本分支准备 **v0.5.0-beta.1：View-based Memory 与 Source/Strategy 插件**。SDK 处于 beta，尚未承诺冻结扩展 ABI；默认用户配置与使用流程保持兼容。相对 v0.4，普通界面只在“设置 → 记忆系统”增加三个默认关闭的增强开关，不增加 View 页或插件管理入口。开发验证不会发布这些制品。参阅 [beta 范围与升级说明](./docs/zh-CN/releases/v0.5.0-beta.1.md)；v0.4 仍是独立的 Sidebar 收敛发行线。
 
 v0.5 分支已纳入 main 的 v0.4.3 行为：默认使用 Sidebar，可选 `displayMode: builtin` 将同一组 Source 页面放入所属会话。旧 `buildin` 可识别并自动保存为 `builtin`，不改变记忆数据；折叠图标与侧栏相邻控件对齐，v0.4.1 的 settings store 与 ZIP 修复也继续保留。详见[最新稳定版说明](./docs/zh-CN/releases/v0.4.3.md)与[入口位置及范围映射](./docs/zh-CN/configuration.md#入口位置displaymode-与-tabenabled)。
 

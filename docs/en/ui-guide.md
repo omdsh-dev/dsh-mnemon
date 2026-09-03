@@ -2,7 +2,7 @@
 
 [简体中文](../zh-CN/ui-guide.md) | **English** | [Documentation hub](./README.md)
 
-This guide follows the Sidebar-first experience and a real user path. The composable Source architecture preserves the established interaction flow; optional Builtin placement embeds the same pages in a conversation, not a separate layout. Historical screenshots and recordings come from a live v0.2.0 1600×900 WebUI. The [entry-placement settings screenshot](../assets/screenshots/settings-entry-placement.png) records the restored option in v0.4.2; current composition controls are described in the Settings section. Names, counts, and content vary with local data.
+This guide follows the Sidebar-first experience and a real user path. The composable Source architecture preserves the established interaction flow; optional Builtin placement embeds the same pages in a conversation, not a separate layout. The only visible v0.5 change from v0.4 is three Memory enhancement switches under **Settings → Memory System**; there is no View page or generic plugin-management entry. Historical screenshots and recordings come from a live v0.2.0 1600×900 WebUI. The [entry-placement settings screenshot](../assets/screenshots/settings-entry-placement.png) records the option restored in v0.4.2. Names, counts, and content vary with local data.
 
 ## Watch the complete interaction first
 
@@ -18,13 +18,12 @@ The Memory System sidebar entry always opens its workspace, including after visi
 
 With `displayMode: builtin`, open Memory System from the conversation's tabs instead; the Sidebar entry is absent. The header omits storage-mode and workspace-selection controls because the Host uses the owning session's global, workspace or custom scope. All Source pages and dialogs below are shared, and conversation shortcuts open the matching tab. See [scope mapping](./configuration.md#entry-placement-displaymode-and-tabenabled).
 
-Primary pages are **Status, Runtime, Documents, Memory Spaces**. Memory Spaces adds **Overview, Recall, Content, Entities**, with **Remember** and **Distillation strategy** at the top right. Status provides the **Memory plugins** dialog for Source discovery/activation and Strategy composition; the generated View remains a runtime concept rather than a separate navigation page.
+Primary pages remain **Status, Runtime, Documents, Memory Spaces**. Memory Spaces adds **Overview, Recall, Content, Entities**, with **Remember** and **Distillation strategy** at the top right. A generated View is an internal per-turn runtime artifact, not a navigation page; Status does not own plugin discovery or installation.
 
 | Visible action | What happens after the click | Independent task Agent? |
 |---|---|---|
 | Refresh status, synchronize now, click a Memory Space card | The Host reads asynchronously; one region spinner or the card's state dot shows progress | No |
-| Open Memory plugins | Inspect registered Sources and Strategies, discover an exact package, or compose future turns | No model or memory writes |
-| Save composition | Validate the whole composition, update existing DSH plugin Entries, and persist Profile-local preferences | No; the current turn stays pinned |
+| Toggle a Memory enhancement | Enable or disable one shipped behavior for future turns | No |
 | Direct search, browse Content, inspect Entities | Provider-native read contracts run concurrently and render progressively | No |
 | Agent query | Recall runs first; bounded evidence goes to a clean top-level task Agent | Yes, read-only |
 | Remember / Save to memory | An editable confirmation precedes qualification, deduplication, distillation, routing, and writing | Starts after confirmation |
@@ -45,16 +44,15 @@ The page loads concurrently and progressively. Only one region-level spinner rem
 
 Checking is read-only. Update actions appear only for supported installation sources with a newer release. Restart `dsh web` after updating dsh-mnemon.
 
-## Memory plugins: install and compose
+## Memory enhancements: expose stable behavior only
 
-There is no standalone View page. Open **Memory plugins** from Status; the resulting View remains a pinned runtime artifact compiled for an LLM turn, not a second user-managed document.
+There is no standalone View page, and Status exposes no plugin catalog, dependency graph, or installation flow. The Starter ships three disabled enhancements using the same switches as other settings under **Settings → Memory System → Memory enhancements**:
 
-- **Sources** shows every registered Source Entry and its observed runtime state. A switch changes only that Source, verifies its Core contribution, and persists the explicit Profile-local choice. It does not delete Source data.
-- **Base and additive Strategies** selects one complete Strategy and independently enables compatible extensions. Each plugin owns its editor fields, such as Source order, writable subset, resident-content ceiling, or capture guidance. **Use plugin default** removes an override.
-- **Save composition** validates the complete candidate before changing Entries. Conflicts, stale revisions, activation failures, and persistence failures are reported and rolled back; unrelated plugins remain enabled. The saved composition affects future turns only.
-- **Discover** accepts an exact `dsh-mnemon-source-*` or `dsh-mnemon-strategy-*` npm name. It inspects identity and compatibility first, then asks for a second explicit confirmation before DSH installs the exact version into the active Profile. Restart registers the bundle disabled; activation remains a separate choice.
+- **Active capture** identifies and records facts worth retaining from the current conversation;
+- **Light context** reduces resident content while preserving on-demand reads;
+- **Scoped composition** combines the currently available memory sources in stable order.
 
-This is a bounded installation surface, not a curated marketplace. Packages without the optional Strategy editor descriptor remain usable through normal DSH configuration and appear read-only here. The three example extensions are not installed by the default Starter. See [plugin-owned configuration metadata](./extensions.md).
+A switch applies immediately to future turns; it never rewrites a turn that already pinned its View. All three may be enabled together, and disabling one never deletes Source data. The UI describes observable behavior only—never package names, Entries, dependencies, or conflicts. Third-party Sources and Strategies continue to use DSH Profile/Loader installation and composition; see [Building Memory Plugins](./extensions.md) for the author contract and contribution path.
 
 ## 2. Runtime: maintain every-turn context
 
@@ -159,13 +157,14 @@ Content distinguishes enumerable, query-only, and unavailable surfaces. A Provid
 
 [![Memory System settings for display, scope, Provider services, and backup](../assets/screenshots/settings-memory-system.png)](../assets/screenshots/settings-memory-system.png)
 
-Settings owns reusable **service configuration** only:
+Settings centralizes stable user choices and reusable **service configuration**:
 
 - Memory Source cards come from the live Catalog. Runtime, Documents, and Memory Spaces each have one master switch, with no additional participation-mode controls;
+- Memory enhancements provide three shipped switches—Active capture, Light context, and Scoped composition—disabled by default and applied immediately to future turns;
 - every external Provider has its own switch and is off by default;
 - endpoint, API Key, and Provider-specific fields appear only after enabling;
 - API Keys use a conventional password field whose eye button toggles visible/hidden; there is no clear-credential checkbox, dedicated Remove row, or saved-secret caption;
-- Save updates service configuration without waiting for discovery or recall; health belongs on Status and instances belong on Overview;
+- the three enhancement switches apply immediately; the footer Save action persists all other changes without waiting for discovery or recall. Health belongs on Status and instances belong on Overview;
 - global / workspace / custom tags show effective scope; Providers with the same scope semantics reuse Mnemon's configuration framework.
 - User profile scope is independent: **Global user profile** combines global USER.md with workspace/custom MEMORY.md without moving either source.
 
