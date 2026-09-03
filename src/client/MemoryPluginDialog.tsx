@@ -16,9 +16,13 @@ const serialize = (value: unknown): string => JSON.stringify(value)
 const initial = (dashboard: MemoryViewDashboard): Draft => ({ strategyTypeId: dashboard.strategyTypeId,
   entries: Object.fromEntries(dashboard.entries.filter(entry => entry.writable).map(entry => [entry.entryId, { enabled: entry.enabled, config: structuredClone(entry.config) }])) })
 const localized = (value: MemoryLocalizedText, locale: string): string => locale.startsWith('zh') ? value['zh-CN'] : value.en
-function sourceLabel(source: Source | undefined, key: string, t: MnemonTranslate): string {
-  return source?.sourceTypeId === 'runtime' ? t('nav.runtime') : source?.sourceTypeId === 'documents' ? t('nav.documents')
-    : source?.sourceTypeId === 'memory-spaces' ? t('nav.bodies') : source?.label ?? key
+function sourceLabel(source: Source | undefined, key: string, t: MnemonTranslate, packageName = source?.packageName): string {
+  const typeId = source?.sourceTypeId ?? packageName?.split('/').at(-1)?.replace(/^dsh-mnemon-source-/u, '')
+  if (typeId === 'runtime') return t('nav.runtime')
+  if (typeId === 'documents') return t('nav.documents')
+  if (typeId === 'memory-spaces') return t('nav.bodies')
+  if (source?.label) return source.label
+  return typeId?.split(/[._-]+/u).filter(Boolean).map(word => word[0]!.toUpperCase() + word.slice(1)).join(' ') || key
 }
 
 function StringList(props: { value: MemoryJsonValue; label: string; disabled: boolean; onChange(value: MemoryJsonValue): void }): JSX.Element {
@@ -175,7 +179,7 @@ export function MemoryPluginDialog({ client, canConfigure, refreshKey = 0, onCon
         <header className={css.sectionHeader}><div><h3>{t('plugins.sources')}</h3><p>{t('plugins.sourcesHint')}</p></div><span>{dashboard.sources.length}</span></header>
         <div className={css.sourceGrid}>{sourceRows.map(entry => {
           const instances = dashboard.sources.filter(source => source.packageName === entry.packageName)
-          return <article className={css.sourceCard} key={entry.entryId}><div><strong>{instances[0] === undefined ? entry.packageName : sourceLabel(instances[0], entry.entryId, t)}</strong><code>{entry.packageName}</code></div><div className={css.sourceState}><span data-active={entry.active || undefined}>{entry.active ? t('plugins.running') : t('plugins.registered')}</span>{instances.length > 0 && <small>{t('plugins.sourceInstances', { count: instances.length })}</small>}{entry.writable && <button type="button" role="switch" aria-label={entry.packageName} aria-checked={entry.enabled} className={css.switch} disabled={readonly || busy} onClick={() => void toggleSource(entry.entryId, !entry.enabled)} />}</div></article>
+          return <article className={css.sourceCard} key={entry.entryId}><div><strong>{sourceLabel(instances[0], entry.entryId, t, entry.packageName)}</strong><code>{entry.packageName}</code></div><div className={css.sourceState}><span data-active={entry.active || undefined}>{entry.active ? t('plugins.running') : t('plugins.registered')}</span>{instances.length > 0 && <small>{t('plugins.sourceInstances', { count: instances.length })}</small>}{entry.writable && <button type="button" role="switch" aria-label={entry.packageName} aria-checked={entry.enabled} className={css.switch} disabled={readonly || busy} onClick={() => void toggleSource(entry.entryId, !entry.enabled)} />}</div></article>
         })}</div>
         <header className={css.sectionHeader}><div><h3>{t('plugins.base')}</h3><p>{t('plugins.profileHint')}</p></div>{dirty && <span data-draft="">{t('plugins.draft')}</span>}</header>
         {bases.length > 1 && <select className={css.select} aria-label={t('plugins.baseSelect')} disabled={readonly || busy} value={draft.strategyTypeId} onChange={event => {
