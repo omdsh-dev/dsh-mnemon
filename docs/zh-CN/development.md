@@ -4,7 +4,7 @@
 
 ## 环境
 
-发布的插件仍为较旧且兼容的 DSH Host 保留 Node.js 20 engine 下限。Registry-backed 开发基线仍为稳定的 DSH 0.1.1-rc.2，其完整 profile 需要 Node.js `^22.19.0 || >=24.0.0`。CI 还会在 Node 24 上检出最新的 DSH 0.1.2-alpha.5 tag，构建 Harness、链接构建期 package，并运行 Mnemon 完整验证链。常规矩阵在 Node.js 22.19 和 24 上运行 Linux，并在 Node.js 24 上运行 Windows；Node 24 构建后还会切换 Node 20，导入全部 Node-compatible 发布子路径作为插件运行时兼容 smoke。
+发布的插件仍为较旧且兼容的 DSH Host 保留 Node.js 20 engine 下限。Registry-backed 开发基线现为稳定的 DSH 0.1.2-rc.1；所有直接使用的 DSH package 都精确固定到该版本，`dsh-invariants` 补齐必需的 peer 集合，`dsh-client-store` 则提供已发布 UI Slots 声明所引用的公共 selector 类型。CI 还会在 Node 24 上检出它的直接前身 DSH 0.1.2-alpha.5 tag，构建 Harness、链接同一组构建期 package，并运行 Mnemon 完整验证链。常规矩阵在 Node.js 22.19 和 24 上运行 Linux，并在 Node.js 24 上运行 Windows；Node 24 构建后还会切换 Node 20，导入全部 Node-compatible 发布子路径作为插件运行时兼容 smoke。
 
 安装依赖：
 
@@ -14,17 +14,17 @@ pnpm install
 
 ## Session projection 兼容性
 
-Mnemon 的 child-local token-usage projection 同时支持两代 DSH 契约：0.1.0 的 `schema` / `view`，以及 0.1.1 和受支持 alpha 的 `stateSchema` / `wire`。两组入口共用同一份 wire schema 和 view 函数。内部状态和 `stateVersion: 1` 保持不变，因此在这些 Host 之间升级或回滚时可以继续使用缓存状态。
+Mnemon 的 child-local token-usage projection 同时支持两代 DSH 契约：0.1.0 的 `schema` / `view`，以及 0.1.1 和受支持 0.1.2 预发布版的 `stateSchema` / `wire`。两组入口共用同一份 wire schema 和 view 函数。内部状态和 `stateVersion: 1` 保持不变，因此在这些 Host 之间升级或回滚时可以继续使用缓存状态。
 
 ```sh
 pnpm exec vitest run tests/subagent-token-usage-host.spec.ts tests/subagent-token-usage.spec.ts tests/client-subagent-token-usage.spec.tsx
 ```
 
-Host 测试使用真实 DSH Session，分别运行已发布的 0.1.0-rc.8 registry 和当前激活的 registry，覆盖实时快照、离线重放、checkpoint 恢复、跨版本状态和变更通知。旧版 npm alias 仅用于测试，是开发依赖，不会替换实际 Host。源码验证会把当前 registry 与其他 DSH package 一同链接到 alpha。
+Host 测试使用真实 DSH Session，分别运行已发布的 0.1.0-rc.8 registry 和当前激活的 0.1.2-rc.1 registry，覆盖实时快照、离线重放、checkpoint 恢复、跨版本状态和变更通知。旧版 npm alias 仅用于测试，是开发依赖，不会替换实际 Host。源码验证会将当前 registry 直连替换为 alpha.5 构建期 package，并包括 Store 与 Invariants。
 
-## DSH 0.1.2-alpha.5 源码验证
+## DSH 0.1.2-alpha.5 源码兼容
 
-`package.json` 与 lockfile 继续保留稳定的 rc.2 基线，只在构建完成的 alpha Harness 检出上覆盖生成的 `node_modules` 直连。这样可以验证 alpha，而不会把它变成 package 的依赖基线：
+`package.json` 与 lockfile 保持稳定的 0.1.2-rc.1 基线，只在构建完成的 alpha.5 Harness 检出上覆盖生成的 `node_modules` 直连。这样可以继续覆盖其直接前身的 alpha 契约，而不会把 alpha 重新变成 package 的依赖基线：
 
 ```sh
 git clone https://github.com/deepseek-ai/deepseek-harness.git
@@ -37,22 +37,22 @@ DSH_SOURCE_ROOT=/absolute/path/to/deepseek-harness pnpm run dsh:link-source
 pnpm_config_verify_deps_before_run=false pnpm run verify
 ```
 
-链接命令会先校验每个 package 名称与 alpha 版本，在生成的 `node_modules` 中记录现有 registry 直连，然后才执行替换；它不会修改 `package.json` 或 `pnpm-lock.yaml`。对这一显式源码覆盖，应按上面的命令关闭 pnpm 11 的运行前自动依赖安装；否则它可能在验证前静默还原 registry 包。验证后运行 `pnpm_config_verify_deps_before_run=false pnpm run dsh:restore-registry` 即可精确恢复记录的链接。兼容工作覆盖已移除的 client runtime、由 controller/renderer 新归属的客户端服务、可扩展 locale ID、Workspace snapshot 变化，以及无分支的双世代 Host RPC 注册。
+链接命令会先校验每个 package 名称与 alpha 版本，在生成的 `node_modules` 中记录现有 registry 直连，然后才执行替换；它不会修改 `package.json` 或 `pnpm-lock.yaml`。对这一显式源码覆盖，应按上面的命令关闭 pnpm 11 的运行前自动依赖安装；否则它可能在验证前静默还原 registry 包。验证后运行 `pnpm_config_verify_deps_before_run=false pnpm run dsh:restore-registry` 即可精确恢复记录的链接。兼容工作覆盖已移除的 client runtime、由 controller/renderer 新归属的客户端服务、Store-backed selector 类型、可扩展 locale ID、Workspace snapshot 变化，以及无分支的双世代 Host RPC 注册。
 
 ### 兼容性研究结论
 
-[上游 alpha release](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.2-alpha.5) 的范围远超插件接口；[完整比较](https://github.com/deepseek-ai/deepseek-harness/compare/dsh-v0.1.1-rc.2...dsh-v0.1.2-alpha.5) 同时覆盖 Client、Host、SDK、profile、持久化、UI 与生成参考。与 Mnemon 直接相关的结论如下：
+[上游 0.1.2-rc.1 release](https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.1.2-rc.1) 汇总了一条远超插件接口的 alpha 发布线；[完整比较](https://github.com/deepseek-ai/deepseek-harness/compare/dsh-v0.1.1-rc.2...dsh-v0.1.2-rc.1) 同时覆盖 Client、Host、SDK、profile、持久化、UI 与生成参考。与 Mnemon 直接相关的结论如下：
 
 - `@deepseek-ai/dsh-client-runtime` 已删除。Session / Workspace 状态分别归属 API controller，可观察契约归属 `dsh-client-store`，`ctx.slots` 归属 UI renderer。
 - `conversation.chat.turnTail` 等 Chat 专属 slot contract 已移出 target-neutral conversation package；Mnemon 现在只声明 selector 所需的最小边界，不再导入旧 owner。
 - Workspace 列表不再提供 `recentWorkspaceId`；Mnemon 优先匹配当前 session 的 canonical cwd，否则选择首个可用 workspace。
 - 第三方语言包可以扩展 locale ID；Mnemon 会把未知 active locale 原样传给日期格式化，自身词典仍经 DSH locale fallback 解析。
-- `HostConnectionRpc.handle()` 不再接受逐方法 authority 选项；alpha 的所有 RPC 与 stream 统一要求由启动 token 建立的浏览器会话。Mnemon 仍保留 rc.2 的 `remoteAccess` 配置，并始终传入 rc.2 所需的末尾 authority 对象：rc.2 会使用它，alpha 的双参数 JavaScript 实现会忽略它。整个过程不解析版本、不检查函数参数数量，也没有 capability 分支。
+- `HostConnectionRpc.handle()` 不再接受逐方法 authority 选项；0.1.2 的所有 RPC 与 stream 统一要求由启动 token 建立的浏览器会话。Mnemon 仍保留旧 rc.2 的 `remoteAccess` 配置，并始终传入 rc.2 所需的末尾 authority 对象：rc.2 会使用它，0.1.2 的双参数 JavaScript 实现会忽略它。整个过程不解析版本、不检查函数参数数量，也没有 capability 分支。
 - 旧 ApiProxy transport 已由 Remote/gateway API 取代；Mnemon 使用的 generic Connection channel 仍受支持。Headless 进度改写 stderr，不影响插件对 stdout 结果的断言。
-- DSH 新增 subagent 模型配置并调整 token 统计，但官方 lineage 行仍读取通用的完整日志 projection；Mnemon 因此保留 child-local projection wrapper，并针对 alpha slot ledger 验证。
-- 稳定的 rc.2 通过 `session.events` 暴露完整日志；alpha.4 及之后版本改为 `snapshotEvents()` 与 `eventAt()`。Mnemon 通过能力检测读取该接口，优先使用 alpha snapshot，并回退到 rc 属性，无需解析版本字符串。
+- DSH 新增 subagent 模型配置并调整 token 统计，但官方 lineage 行仍读取通用的完整日志 projection；Mnemon 因此保留 child-local projection wrapper，并针对 rc.1 与 alpha.5 两套 slot ledger 验证。
+- DSH 0.1.1-rc.2 通过 `session.events` 暴露完整日志；alpha.4 及之后版本（包括 0.1.2-rc.1）改用 `snapshotEvents()` 与 `eventAt()`。Mnemon 通过能力检测读取该接口，优先使用 snapshot，并回退到旧 rc 属性，无需解析版本字符串。
 
-仓库不会提交 alpha dependency，因为 rc.2 仍是稳定的 registry 基线；专用的源码覆盖 CI job 是 alpha 兼容性的可复现事实源。
+仓库将精确的 0.1.2-rc.1 依赖闭包作为稳定 registry 基线提交；专用的源码覆盖 CI job 继续作为 alpha.5 兼容性的可复现事实源。
 
 ## 标准命令
 
@@ -147,7 +147,7 @@ Host 将所有 package dependency 保持为 external。Client 将 React、ReactD
 - worker 工具隔离、schema 子集、结构化回执；
 - 生命周期 cue、评分、idle debounce、取消和水位保留；
 - 异步子 Agent 的 View / 运行图保留、逐回合预算、缓存隔离、嵌套委托、取消、回收和销毁；
-- 真实 rc.2 / alpha Connection 注册、RPC authority 或认证、只读行为和设置 revision；
+- 真实 rc.1 / alpha.5 Connection 注册、旧 rc.2 RPC authority、认证、只读行为和设置 revision；
 - Web 工作台、双语文案和关键交互；
 - 不依赖 Web 专有服务的核心激活，以及 Headless 按 Agent cwd 路由；
 - Client/Host 源码边界、确定性构建 hash、发布包内容、exports 和 TypeScript 解析。
