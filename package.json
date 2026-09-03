@@ -147,7 +147,10 @@
     "dsh-mnemon-source-documents": "0.5.0-beta.1",
     "dsh-mnemon-source-memory-spaces": "0.5.0-beta.1",
     "dsh-mnemon-source-runtime": "0.5.0-beta.1",
-    "dsh-mnemon-strategy-default-three-tier": "0.5.0-beta.1"
+    "dsh-mnemon-strategy-auto-capture": "0.5.0-beta.1",
+    "dsh-mnemon-strategy-default-three-tier": "0.5.0-beta.1",
+    "dsh-mnemon-strategy-light-context": "0.5.0-beta.1",
+    "dsh-mnemon-strategy-scoped": "0.5.0-beta.1"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
@@ -156,9 +159,6 @@
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "dsh-mnemon-strategy-scoped": "0.5.0-beta.1",
-    "dsh-mnemon-strategy-light-context": "0.5.0-beta.1",
-    "dsh-mnemon-strategy-auto-capture": "0.5.0-beta.1",
     "@arethetypeswrong/cli": "^0.18.5",
     "@deepseek-ai/cordis": "^4.0.2",
     "@deepseek-ai/dsh": "0.1.2-rc.1",

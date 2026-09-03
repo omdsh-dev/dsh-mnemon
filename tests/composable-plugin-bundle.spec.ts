@@ -5,6 +5,9 @@ import * as spaces from 'dsh-mnemon-source-memory-spaces'
 import * as runtime from 'dsh-mnemon-source-runtime'
 import * as documents from 'dsh-mnemon-source-documents'
 import * as strategy from 'dsh-mnemon-strategy-default-three-tier'
+import * as autoCapture from 'dsh-mnemon-strategy-auto-capture'
+import * as lightContext from 'dsh-mnemon-strategy-light-context'
+import * as scoped from 'dsh-mnemon-strategy-scoped'
 import native from 'dsh-mnemon-provider-mnemon-native'
 import type { Context } from '@deepseek-ai/cordis'
 import { compositionFixture } from './fixtures/composition.ts'
@@ -36,12 +39,15 @@ describe('explicit default Starter', () => {
     } finally { lease.release() }
     expect(graph.memoryComposition.inspect().drainingGenerationIds).toEqual([])
   })
-  it('declares five stable Entries and installed package specifiers without source forwarders', () => {
+  it('declares the stable Starter Entries with enhancements present but disabled', () => {
     expect([runtime.name, documents.name, spaces.name, strategy.name]).toEqual([
       'dsh-mnemon-source-runtime', 'dsh-mnemon-source-documents', 'dsh-mnemon-source-memory-spaces', 'dsh-mnemon-strategy-default-three-tier',
     ])
     const patch = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
     for (const name of [runtime.name, documents.name, spaces.name, strategy.name]) expect(patch).toContain(name)
+    for (const name of [autoCapture.name, lightContext.name, scoped.name]) {
+      expect(patch).toMatch(new RegExp(`name: ${name}\\n\\s+disabled: true`, 'u'))
+    }
     expect(patch).not.toContain('dsh-mnemon/source-')
     expect(patch).not.toContain('bundledContributions')
   })

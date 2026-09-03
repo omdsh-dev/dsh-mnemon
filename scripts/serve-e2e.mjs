@@ -21,8 +21,8 @@ for (const flag of flags) {
   }
   throw new Error('Unknown option: ' + flag)
 }
-const extensions = flags.has('--strategy-extensions')
-  ? ['dsh-mnemon-strategy-scoped', 'dsh-mnemon-strategy-light-context', 'dsh-mnemon-strategy-auto-capture'] : []
+const extensionNames = ['dsh-mnemon-strategy-scoped', 'dsh-mnemon-strategy-light-context', 'dsh-mnemon-strategy-auto-capture']
+const extensionsEnabled = flags.has('--strategy-extensions')
 const fixture = await mkdtemp(join(tmpdir(), 'mnemon-web-e2e-'))
 const dshHome = join(fixture, 'dsh-home')
 const dataDir = join(fixture, 'data')
@@ -88,7 +88,7 @@ try {
   const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
   const plugins = Object.keys(manifest.dependencies).filter(name => name.startsWith('dsh-mnemon-'))
   const installer = spawn(process.execPath, [dshBin, 'plugin', '--profile', 'web', 'add',
-    `link:${root}`, ...[...plugins, ...extensions].map(name => `link:${join(root, 'plugins', name)}`),
+    `link:${root}`, ...plugins.map(name => `link:${join(root, 'plugins', name)}`),
     ...(betterSidebarRoot === undefined ? [] : [`link:${betterSidebarRoot}`]),
   ], { env, cwd: workspace, stdio: 'inherit' })
   await new Promise((resolveInstall, reject) => {
@@ -113,7 +113,8 @@ try {
     - id: e2e-directory-picker-ui
       name: '@deepseek-ai/dsh-client-ui-directory-picker-browse'
 `
-  await writeFile(join(dshHome, 'profiles/web/cordis.patch.yml'), disabled.map(id => `- id: ${id}\n  disabled: true\n`).join('') + browsePicker)
+  await writeFile(join(dshHome, 'profiles/web/cordis.patch.yml'), disabled.map(id => `- id: ${id}\n  disabled: true\n`).join('') + browsePicker
+    + (extensionsEnabled ? extensionNames.map(name => `- id: ${name.slice(4)}\n  disabled: false\n`).join('') : ''))
   await writeFile(join(workspace, 'README.md'), '# Mnemon isolated browser test\n\nNo production memory or credentials are used.\n')
   console.log('Fixture: ' + fixture)
   console.log('Workspace: ' + workspace)

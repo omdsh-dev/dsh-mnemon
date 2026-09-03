@@ -39,7 +39,8 @@ function featureEntry([entryId, packageName, label]: typeof FEATURES[number]): M
   }
 }
 
-function fixture(options: { writable?: boolean; failApply?: boolean; unavailable?: boolean } = {}) {
+function fixture(options: { writable?: boolean; failApply?: boolean; failRefreshAfterApply?: boolean; unavailable?: boolean } = {}) {
+  let applied = false
   let dashboard: MemoryViewDashboard = {
     revision: 'view-1', writable: options.writable !== false, strategyTypeId: 'default-three-tier',
     entries: FEATURES.map(featureEntry), currentUnavailable: 'no-session', sources: [], diagnostics: [],
@@ -48,6 +49,7 @@ function fixture(options: { writable?: boolean; failApply?: boolean; unavailable
   const call = vi.fn(async (channel: string, endpoint: string, payload: unknown) => {
     if (channel === '/dsh-mnemon-view' && endpoint === 'dashboard') {
       if (options.unavailable) return { ok: false as const, error: { code: 'internal' as const, message: 'legacy host', details: {} } }
+      if (options.failRefreshAfterApply && applied) return { ok: false as const, error: { code: 'internal' as const, message: 'refresh failed', details: {} } }
       return { ok: true as const, value: structuredClone(dashboard) }
     }
     if (channel === '/dsh-mnemon-view-settings' && endpoint === 'apply') {
@@ -60,6 +62,7 @@ function fixture(options: { writable?: boolean; failApply?: boolean; unavailable
           ? entry
           : { ...entry, ...request.entries[entry.entryId], active: request.entries[entry.entryId]!.enabled }),
       }
+      applied = true
       return { ok: true as const, value: { saved: true as const } }
     }
     if (channel === '/dsh-mnemon-read' && endpoint === 'task-agent-models') return { ok: true as const, value: { groups: [], failures: [] } }
@@ -112,6 +115,17 @@ describe('Memory enhancement settings', () => {
     await waitFor(() => expect(light.checked).toBe(false))
     expect(screen.getByRole('alert').textContent).toBe('无法更新记忆增强设置，请重试。')
     expect(screen.queryByText(/plugin graph|插件图/iu)).toBeNull()
+  })
+
+  it('keeps a committed value and prevents stale writes when only refresh fails', async () => {
+    const { connection } = fixture({ failRefreshAfterApply: true })
+    render(<MnemonSettingsCard scope={settingsScope()} connection={connection} />)
+
+    const capture = await screen.findByRole('checkbox', { name: '主动记录' }) as HTMLInputElement
+    fireEvent.click(capture)
+    await waitFor(() => expect(capture.checked).toBe(true))
+    await waitFor(() => expect(capture.disabled).toBe(true))
+    expect(screen.getByRole('alert').textContent).toBe('设置已更新，但状态刷新失败；请重新打开设置。')
   })
 
   it('uses English feature copy and honors a read-only Host', async () => {

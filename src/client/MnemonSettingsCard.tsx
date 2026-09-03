@@ -617,7 +617,7 @@ function MemoryEnhancementsSection(props: {
   const [dashboard, setDashboard] = useState<MemoryViewDashboard | null>(null)
   const [state, setState] = useState<'loading' | 'ready' | 'unavailable'>(client === undefined ? 'unavailable' : 'loading')
   const [working, setWorking] = useState<string | null>(null)
-  const [failed, setFailed] = useState(false)
+  const [failure, setFailure] = useState<'apply' | 'refresh' | null>(null)
   const request = useRef(0)
 
   const load = useCallback(async (): Promise<void> => {
@@ -635,7 +635,7 @@ function MemoryEnhancementsSection(props: {
       if (request.current !== ticket) return
       setDashboard(next)
       setState('ready')
-      setFailed(false)
+      setFailure(null)
     } catch {
       if (request.current !== ticket) return
       setDashboard(null)
@@ -663,7 +663,7 @@ function MemoryEnhancementsSection(props: {
     const ticket = request.current + 1
     request.current = ticket
     setWorking(entry.packageName)
-    setFailed(false)
+    setFailure(null)
     setDashboard({ ...dashboard, entries: dashboard.entries.map(candidate => candidate.entryId === entry.entryId
       ? { ...candidate, enabled }
       : candidate) })
@@ -673,13 +673,21 @@ function MemoryEnhancementsSection(props: {
         strategyTypeId: previous.strategyTypeId,
         entries: { [entry.entryId]: { enabled, config: structuredClone(entry.config) } },
       })
-      const next = await client.viewDashboard()
-      if (request.current !== ticket) return
-      setDashboard(next)
+      try {
+        const next = await client.viewDashboard()
+        if (request.current !== ticket) return
+        setDashboard(next)
+      } catch {
+        if (request.current !== ticket) return
+        // The apply already committed. Preserve its visible value and prevent
+        // another write with a stale revision until this section is reopened.
+        setDashboard(current => current === null ? current : { ...current, writable: false })
+        setFailure('refresh')
+      }
     } catch {
       if (request.current !== ticket) return
       setDashboard(previous)
-      setFailed(true)
+      setFailure('apply')
     } finally {
       if (request.current === ticket) setWorking(null)
     }
@@ -700,7 +708,7 @@ function MemoryEnhancementsSection(props: {
         onChange={() => void toggle(entry)}
       />)}
     </div>
-    {failed && <p className={css.error} role="alert">{props.t('config.enhancementsFailed')}</p>}
+    {failure !== null && <p className={css.error} role="alert">{props.t(failure === 'refresh' ? 'config.enhancementsRefreshFailed' : 'config.enhancementsFailed')}</p>}
   </section>
 }
 

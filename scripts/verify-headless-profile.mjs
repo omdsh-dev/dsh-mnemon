@@ -17,8 +17,8 @@ for (let index = 0; index < arguments_.length; index += 2) {
 }
 if (options.has('--package') !== options.has('--registry')) throw new Error('--package and --registry must be supplied together')
 if (options.has('--strategy-extensions') && options.get('--strategy-extensions') !== 'true') throw new Error('--strategy-extensions expects true')
-const extensions = options.has('--strategy-extensions')
-  ? ['dsh-mnemon-strategy-scoped', 'dsh-mnemon-strategy-light-context', 'dsh-mnemon-strategy-auto-capture'] : []
+const extensionNames = ['dsh-mnemon-strategy-scoped', 'dsh-mnemon-strategy-light-context', 'dsh-mnemon-strategy-auto-capture']
+const extensionsEnabled = options.has('--strategy-extensions')
 
 function run(args, { cwd = root, env = process.env, timeoutMs = 30_000 } = {}) {
   return new Promise((resolveRun, reject) => {
@@ -107,8 +107,8 @@ try {
   const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
   const plugins = Object.keys(manifest.dependencies).filter(name => name.startsWith('dsh-mnemon-'))
   const packages = options.has('--package')
-    ? [options.get('--package'), ...extensions.map(name => `${name}@${manifest.version}`)]
-    : [`link:${root}`, ...[...plugins, ...extensions].map(name => `link:${join(root, 'plugins', name)}`)]
+    ? [options.get('--package')]
+    : [`link:${root}`, ...plugins.map(name => `link:${join(root, 'plugins', name)}`)]
   const install = await run(['plugin', '--profile', 'headless', 'add', ...packages,
     ...(options.has('--registry') ? ['--registry', options.get('--registry')] : []),
   ], { env, timeoutMs: 120_000 })
@@ -135,7 +135,7 @@ try {
   disabled: true
 - id: tool-fs-search
   disabled: true
-`.trimStart() + (extensions.length === 0 ? '' : extensions.map(name =>
+`.trimStart() + (!extensionsEnabled ? '' : extensionNames.map(name =>
     `- id: ${name.slice(4)}\n  disabled: false\n`,
   ).join('')))
 
@@ -152,7 +152,7 @@ try {
   const required = ['mnemon_status', 'mnemon_recall', 'mnemon_document_search', 'mnemon_runtime_memory', 'mnemon_remember', 'mnemon_view_route', 'mnemon_view_action']
   const missing = required.filter(name => !toolNames.has(name))
   if (missing.length > 0) throw new Error(`Headless model request is missing Mnemon tools: ${missing.join(', ')}`)
-  if (extensions.length > 0) {
+  if (extensionsEnabled) {
     const prompt = JSON.stringify(toolRequest.messages)
     for (const expected of ['Source order expresses preference', 'MNEMON OPTIONAL AUTO CAPTURE']) {
       if (!prompt.includes(expected)) throw new Error(`Optional Strategy contribution did not reach the real DSH prompt: ${expected}`)
@@ -170,7 +170,7 @@ try {
 
   console.log(`Verified Headless profile activation with ${toolNames.size} total tools and ${required.length} representative Mnemon tools.`)
   console.log('Verified buildin-to-builtin persistence, preservation of unrelated settings/comments, and an idempotent Headless restart.')
-  if (extensions.length > 0) console.log('Verified simultaneous activation of scoped, light-context and auto-capture Entries without changing the default Strategy.')
+  if (extensionsEnabled) console.log('Verified simultaneous activation of scoped, light-context and auto-capture Entries without changing the default Strategy.')
 } finally {
   await new Promise(resolveClose => server.close(resolveClose))
   await rm(temporaryRoot, { recursive: true, force: true })
