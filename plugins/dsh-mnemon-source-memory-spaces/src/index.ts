@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from 'schemastery'
-import { installMemory, memoryConfigurationDigest } from 'dsh-mnemon/extension-sdk'
+import { defineMemoryPlugin, installMemory, memoryConfigurationDigest } from 'dsh-mnemon/extension-sdk'
 import { createMemorySpacesSource } from './source.ts'
 import { PrivateMemorySpaceProviderHost } from './providers/host.ts'
 import { defineMemorySpaceProvider, type MemorySpaceProviderEntry, type MemorySpaceProviderModule } from './providers/definitions.ts'
@@ -9,6 +9,14 @@ import { MemorySpacesConfig, resolveMemorySpacesConfig, type MemorySpacesConfig 
 
 export const name = 'dsh-mnemon-source-memory-spaces'
 export const inject = ['mnemonMemory']
+
+export const memoryPlugin = defineMemoryPlugin({
+  packageName: name,
+  label: { en: 'Memory Spaces', 'zh-CN': '记忆空间' },
+  description: { en: 'Durable evidence backed by explicitly configured Provider children.', 'zh-CN': '由显式配置的 Provider 子插件承载的长期证据。' },
+  roles: ['source'],
+  provides: [{ id: 'source' }, { id: 'source.durable-evidence' }],
+})
 
 export interface Config extends SourceConfig {
   /** Explicit Source-private children; resolved by DSH's module Loader. */
@@ -113,7 +121,7 @@ export async function installMemorySpaces(
       if (!privateHost.has(entry.instanceId)) throw new Error(`Memory Space Provider child did not install a definition: ${entry.instanceId}`)
     }
     const snapshot = privateHost.snapshot()
-    installMemory(ctx, { sources: [createMemorySpacesSource(snapshot, options.config)] }, {
+    installMemory(ctx, { plugin: memoryPlugin, sources: [createMemorySpacesSource(snapshot, options.config)] }, {
       instanceId: entryId,
       effectiveDigest: 'providers:' + memoryConfigurationDigest({ providers: snapshot.digest, config: options.config ?? {} }).slice('config:'.length),
     })

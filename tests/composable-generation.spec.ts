@@ -119,6 +119,21 @@ describe('Memory generation lifecycle', () => {
     await host.dispose()
   })
 
+  it('publishes a valid replacement when one of several optional Sources is removed', async () => {
+    const firstDisposed = vi.fn()
+    const secondDisposed = vi.fn()
+    const host = new MemoryGenerationHost()
+    expect(host.reconcile(snapshot(1, [source('first', firstDisposed), source('second', secondDisposed)])).state).toBe('ready')
+    const previous = host.current()!.id
+    expect(host.reconcile(snapshot(2, [source('first')])).state).toBe('ready')
+    expect(host.current()?.id).not.toBe(previous)
+    expect(host.inspect().servingGenerationId).toBe(host.current()?.id)
+    await Promise.resolve()
+    expect(firstDisposed).toHaveBeenCalledOnce()
+    expect(secondDisposed).toHaveBeenCalledOnce()
+    await host.dispose()
+  })
+
   it('does not publish an incomplete initial assembly or infer a Strategy by priority', () => {
     const host = new MemoryGenerationHost()
     expect(host.reconcile(snapshot(1, [], [])).state).toBe('incomplete')

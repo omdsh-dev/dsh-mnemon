@@ -1,6 +1,6 @@
 export { installMemory } from './install.ts'
 export type { MnemonMemoryService, InstallMemoryOptions, MemoryInstallContribution } from './service.ts'
-export { defineMemorySource, defineMemoryStrategy, defineMemoryStrategyExtension } from '../core/definitions.ts'
+export { defineMemoryPlugin, defineMemorySource, defineMemoryStrategy, defineMemoryStrategyExtension } from '../core/definitions.ts'
 export { record as memoryInputRecord, text as memoryInputText, integer as memoryInputInteger, stringArray as memoryInputStringArray, truncate as truncateMemoryText, receipt as createMemoryMutationReceipt, migrationLineage as memoryInputMigrationLineage } from './input.ts'
 export { memoryConfigurationDigest } from './input.ts'
 export { defineMemoryStrategyConfiguration } from './strategy-configuration.ts'
@@ -12,6 +12,10 @@ export type {
   MemoryCompositionEvaluationReport,
   MemoryEvidence,
   MemoryMutationReceipt,
+  MemoryPluginDescriptor,
+  MemoryPluginLocalizedText,
+  MemoryPluginProvidedCapability,
+  MemoryPluginRole,
   MemoryMutationCompletion,
   MemoryReadGrant,
   MemorySourceDefinition,

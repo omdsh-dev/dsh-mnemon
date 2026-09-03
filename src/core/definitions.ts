@@ -1,9 +1,10 @@
-import type { MemoryPackageProvenance, MemorySourceActionManifest, MemorySourceDefinition, MemorySourceManifest, MemorySourceRouteManifest, MemoryStrategyDefinition, MemoryStrategyExtensionDefinition } from './contracts/index.ts'
-import { COMPOSABLE_MEMORY_API_VERSION, MEMORY_CAPABILITIES } from './contracts/index.ts'
+import type { MemoryPackageProvenance, MemoryPluginDescriptor, MemoryPluginLocalizedText, MemorySourceActionManifest, MemorySourceDefinition, MemorySourceManifest, MemorySourceRouteManifest, MemoryStrategyDefinition, MemoryStrategyExtensionDefinition } from './contracts/index.ts'
+import { COMPOSABLE_MEMORY_API_VERSION, MEMORY_CAPABILITIES, MEMORY_PLUGIN_API_VERSION } from './contracts/index.ts'
 
 const ID = /^[a-z][a-z0-9-]{0,127}$/u
 const PACKAGE = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/u
 const CAPABILITIES = new Set<string>(MEMORY_CAPABILITIES)
+const PLUGIN_CAPABILITY = /^[a-z][a-z0-9.-]{0,127}$/u
 
 export function requiredText(value: unknown, label: string, maximum = 500): string {
   if (typeof value !== 'string') throw new Error(`${label} must be a string`)
@@ -118,6 +119,50 @@ export function validateCapabilities(values: readonly string[], label: string): 
     if (!CAPABILITIES.has(capability)) throw new Error(`${label} contains unsupported capability: ${capability}`)
   }
   return normalized as MemorySourceManifest['capabilities']
+}
+
+function localizedText(value: MemoryPluginLocalizedText, label: string): MemoryPluginLocalizedText {
+  return deepFreeze({
+    en: requiredText(value.en, `${label} (English)`, 4_000),
+    'zh-CN': requiredText(value['zh-CN'], `${label} (Simplified Chinese)`, 4_000),
+  })
+}
+
+function pluginCapabilities(values: readonly string[], label: string): string[] {
+  const output: string[] = []
+  const seen = new Set<string>()
+  for (const value of values) {
+    const normalized = requiredText(value, label, 128)
+    if (!PLUGIN_CAPABILITY.test(normalized)) throw new Error(`${label} must match [a-z][a-z0-9.-]{0,127}`)
+    if (seen.has(normalized)) throw new Error(`${label} is duplicated: ${normalized}`)
+    seen.add(normalized)
+    output.push(normalized)
+  }
+  return output
+}
+
+/** Validate a plugin node independently of whether its Fiber is active. */
+export function defineMemoryPlugin(value: Omit<MemoryPluginDescriptor, 'apiVersion'> | MemoryPluginDescriptor): MemoryPluginDescriptor {
+  if ('apiVersion' in value && value.apiVersion !== MEMORY_PLUGIN_API_VERSION) throw new Error(`unsupported memory plugin API: ${String(value.apiVersion)}`)
+  const packageName = requiredText(value.packageName, 'memory plugin packageName', 214)
+  if (!PACKAGE.test(packageName)) throw new Error(`invalid memory plugin packageName: ${packageName}`)
+  const roles = uniqueIds(value.roles, 'memory plugin role') as MemoryPluginDescriptor['roles']
+  if (roles.length === 0 || roles.some(role => !['source', 'strategy', 'strategy-extension'].includes(role))) throw new Error('memory plugin must declare at least one supported contribution role')
+  const providedIds = pluginCapabilities(value.provides.map(capability => capability.id), 'memory plugin provided capability')
+  const provides = value.provides.map((capability, index) => deepFreeze({ id: providedIds[index]!, ...(capability.exclusive === true ? { exclusive: true as const } : {}) }))
+  if (provides.length === 0) throw new Error('memory plugin must provide at least one capability')
+  const requires = pluginCapabilities(value.requires ?? [], 'memory plugin required capability')
+  const selfProvided = new Set(providedIds)
+  for (const requirement of requires) if (selfProvided.has(requirement)) throw new Error(`memory plugin cannot require its own capability: ${requirement}`)
+  return deepFreeze({
+    apiVersion: MEMORY_PLUGIN_API_VERSION,
+    packageName,
+    label: localizedText(value.label, 'memory plugin label'),
+    description: localizedText(value.description, 'memory plugin description'),
+    roles,
+    provides,
+    ...(requires.length === 0 ? {} : { requires }),
+  })
 }
 
 function validateRoute(route: MemorySourceRouteManifest): MemorySourceRouteManifest {

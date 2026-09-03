@@ -1,10 +1,18 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { installMemory, defineMemoryStrategyConfiguration } from 'dsh-mnemon/extension-sdk'
+import { defineMemoryPlugin, installMemory, defineMemoryStrategyConfiguration } from 'dsh-mnemon/extension-sdk'
 import { defineThreeTierExtension, validateThreeTierExtension } from 'dsh-mnemon-strategy-default-three-tier/extension-sdk'
 
 export interface Config { sourceKeys?: string[]; writableSourceKeys?: string[] }
 export const name = 'dsh-mnemon-strategy-scoped'
 export const inject = ['mnemonMemory']
+export const memoryPlugin = defineMemoryPlugin({
+  packageName: name,
+  label: { en: 'Scoped composition', 'zh-CN': '范围组合' },
+  description: { en: 'Select and order the Sources admitted to the current View.', 'zh-CN': '选择并排序允许进入当前 View 的 Source。' },
+  roles: ['strategy-extension'],
+  provides: [{ id: 'strategy.default-three-tier.selection', exclusive: true }],
+  requires: ['strategy.default-three-tier'],
+})
 const roles = ['working-context', 'narrative', 'durable-evidence']
 
 export function createScopedExtension(config: Config = {}) {
@@ -25,7 +33,7 @@ export function createScopedExtension(config: Config = {}) {
 }
 
 export function apply(ctx: Context, config: Config = {}): void {
-  installMemory(ctx, { strategyExtensions: [createScopedExtension(config)] })
+  installMemory(ctx, { plugin: memoryPlugin, strategyExtensions: [createScopedExtension(config)] })
 }
 
 export const memoryStrategyConfiguration = defineMemoryStrategyConfiguration({
@@ -36,5 +44,5 @@ export const memoryStrategyConfiguration = defineMemoryStrategyConfiguration({
     { key: 'sourceKeys', input: 'source-list', label: { en: 'Sources, in priority order', 'zh-CN': '参与 Source（按优先顺序）' }, description: { en: 'Unset uses all eligible instances. An explicit empty list selects none.', 'zh-CN': '未设置时使用全部适用实例；明确留空则不选择任何实例。' } },
     { key: 'writableSourceKeys', input: 'source-list', label: { en: 'Writable Sources', 'zh-CN': '允许写入的 Source' }, description: { en: 'Unset preserves existing permissions. An empty list makes this View read-only.', 'zh-CN': '未设置时保留已有权限；明确留空使此 View 只读。' } },
   ],
-  create: config => ({ strategyExtensions: [createScopedExtension(config as Config)] }),
+  create: config => ({ plugin: memoryPlugin, strategyExtensions: [createScopedExtension(config as Config)] }),
 })

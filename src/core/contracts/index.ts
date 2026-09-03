@@ -59,4 +59,5 @@ export interface MemoryWake {
   guidance?: import('./view.ts').MemoryViewGuidance
 }
 
+export * from './plugin.ts'
 export * from './view.ts'

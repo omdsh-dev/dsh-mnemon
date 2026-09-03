@@ -48,13 +48,13 @@ describe('independent in-turn auto-capture Strategy extension', () => {
     } finally { await runner.dispose() }
   })
 
-  it('does not invent a capture target when there is no durable Source', async () => {
+  it('refuses activation when its durable Source dependency is absent', async () => {
     const { runner } = await fixture()
     try {
       await runner.mount(plugin, { instanceId: 'capture' })
+      expect(runner.inspect().evaluation).toMatchObject({ state: 'rejected', diagnostics: [{ message: expect.stringContaining('source.durable-evidence') }] })
       const turn = await runner.beginTurn()
-      expect(turn.view.strategyExtensions).toHaveLength(1)
-      expect(turn.view.guidance?.system).toBeUndefined()
+      expect(turn.view.strategyExtensions).toBeUndefined()
       turn.release()
     } finally { await runner.dispose() }
   })

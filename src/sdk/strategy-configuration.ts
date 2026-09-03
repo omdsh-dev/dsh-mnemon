@@ -1,8 +1,8 @@
 import type { MemoryInstallContribution } from './service.ts'
-import type { MemoryJsonValue } from '../core/contracts/index.ts'
+import type { MemoryJsonValue, MemoryPluginLocalizedText } from '../core/contracts/index.ts'
 
 /** Human-facing metadata only. It is never added to a model View. */
-export interface MemoryLocalizedText { en: string; 'zh-CN': string }
+export type MemoryLocalizedText = MemoryPluginLocalizedText
 
 export interface MemoryStrategyConfigurationField {
   key: string

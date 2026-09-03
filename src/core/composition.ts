@@ -10,6 +10,7 @@ import type {
   MemoryEvidence,
   MemoryEvidenceItem,
   MemoryJsonValue,
+  MemoryPluginDescriptor,
   MemoryMutationReceipt,
   MemoryReadGrant,
   MemorySourceFacts,
@@ -31,11 +32,12 @@ import type {
   MemoryViewSpec,
 } from "./contracts/index.ts"
 import { DEFAULT_MEMORY_VIEW_BUDGET } from './contracts/index.ts'
-import type { InstalledMemorySource, InstalledMemoryStrategy, InstalledMemoryStrategyExtension, MemoryContributionSnapshot } from './contributions.ts'
-import { canonicalMemoryJson, deepFreeze, defineMemorySource, defineMemoryStrategy, defineMemoryStrategyExtension, id, jsonClone, positiveInteger, requiredText, uniqueIds, validateCapabilities, validateProvenance } from './definitions.ts'
+import type { InstalledMemoryPlugin, InstalledMemorySource, InstalledMemoryStrategy, InstalledMemoryStrategyExtension, MemoryContributionSnapshot } from './contributions.ts'
+import { canonicalMemoryJson, deepFreeze, defineMemoryPlugin, defineMemorySource, defineMemoryStrategy, defineMemoryStrategyExtension, id, jsonClone, positiveInteger, requiredText, uniqueIds, validateCapabilities, validateProvenance } from './definitions.ts'
 import { readSource, SourceReadFailure } from './source-calls.ts'
 
 const INSTANCE_KEY = /^(?:source|strategy|strategy-extension):[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,299}$/u
+const PLUGIN_INSTANCE_KEY = /^plugin:[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,299}$/u
 
 function instanceKey(value: unknown, kind: 'source' | 'strategy' | 'strategy-extension'): string {
   const normalized = requiredText(value, `${kind} instanceKey`, 300)
@@ -82,11 +84,47 @@ function captureExtension(extension: InstalledMemoryStrategyExtension): Installe
   })
 }
 
+function capturePlugin(plugin: InstalledMemoryPlugin): InstalledMemoryPlugin {
+  const descriptor = defineMemoryPlugin(plugin.descriptor)
+  const key = requiredText(plugin.instanceKey, 'memory plugin instanceKey', 307)
+  if (!PLUGIN_INSTANCE_KEY.test(key)) throw new Error('memory plugin instanceKey must start with plugin: and contain only stable identifier characters')
+  return Object.freeze({
+    kind: 'plugin',
+    instanceKey: key,
+    provenance: validateProvenance(plugin.provenance, descriptor.packageName),
+    descriptor,
+  })
+}
+
+/** Validate active dependency and exclusivity edges before any Source factory runs. */
+export function validateMemoryPluginGraph(
+  plugins: readonly Pick<InstalledMemoryPlugin, 'instanceKey' | 'descriptor'>[],
+  implicitCapabilities: readonly string[] = [],
+): void {
+  const providers = new Map<string, Array<{ plugin: Pick<InstalledMemoryPlugin, 'instanceKey' | 'descriptor'>; exclusive: boolean }>>()
+  for (const capability of implicitCapabilities) providers.set(capability, [])
+  for (const plugin of plugins) for (const capability of plugin.descriptor.provides) {
+    const values = providers.get(capability.id) ?? []
+    values.push({ plugin, exclusive: capability.exclusive === true })
+    providers.set(capability.id, values)
+  }
+  for (const [capability, values] of providers) {
+    if (values.length > 1 && values.some(value => value.exclusive)) {
+      throw new Error(`memory plugin capability conflict: ${capability} (${values.map(value => value.plugin.descriptor.packageName).join(', ')})`)
+    }
+  }
+  for (const plugin of plugins) for (const requirement of plugin.descriptor.requires ?? []) {
+    if (!providers.has(requirement)) throw new Error(`memory plugin dependency unavailable: ${plugin.descriptor.packageName} requires ${requirement}`)
+  }
+}
+
 export function captureMemoryContributionSnapshot(snapshot: MemoryContributionSnapshot): MemoryContributionSnapshot {
   if (!Number.isInteger(snapshot.revision) || snapshot.revision < 0) throw new Error('memory contribution revision must be a non-negative integer')
   const sources = snapshot.sources.map(captureSource)
   const strategies = snapshot.strategies.map(captureStrategy)
   const extensions = (snapshot.strategyExtensions ?? []).map(captureExtension)
+    .sort((a, b) => a.instanceKey.localeCompare(b.instanceKey))
+  const plugins = (snapshot.plugins ?? []).map(capturePlugin)
     .sort((a, b) => a.instanceKey.localeCompare(b.instanceKey))
   const slots = new Map<string, string>()
   for (const extension of extensions) {
@@ -101,8 +139,21 @@ export function captureMemoryContributionSnapshot(snapshot: MemoryContributionSn
     if (keys.has(contribution.instanceKey)) throw new Error(`memory contribution instanceKey is duplicated: ${contribution.instanceKey}`)
     keys.add(contribution.instanceKey)
   }
+  const pluginKeys = new Set<string>()
+  for (const plugin of plugins) {
+    if (pluginKeys.has(plugin.instanceKey)) throw new Error(`memory plugin instanceKey is duplicated: ${plugin.instanceKey}`)
+    pluginKeys.add(plugin.instanceKey)
+    const owned = [...sources, ...strategies, ...extensions].filter(contribution => contribution.provenance.entryId === plugin.provenance.entryId)
+    if (owned.length === 0) throw new Error(`memory plugin descriptor has no contribution: ${plugin.instanceKey}`)
+    if (owned.some(contribution => contribution.provenance.packageName !== plugin.descriptor.packageName)) {
+      throw new Error(`memory plugin descriptor package does not match an owned contribution: ${plugin.instanceKey}`)
+    }
+    const roles = new Set(owned.map(contribution => contribution.kind))
+    for (const role of roles) if (!plugin.descriptor.roles.includes(role)) throw new Error(`memory plugin descriptor does not declare active role: ${role} (${plugin.instanceKey})`)
+  }
   return Object.freeze({ revision: snapshot.revision, sources: Object.freeze(sources) as unknown as InstalledMemorySource[], strategies: Object.freeze(strategies) as unknown as InstalledMemoryStrategy[],
     ...(extensions.length === 0 ? {} : { strategyExtensions: Object.freeze(extensions) as unknown as InstalledMemoryStrategyExtension[] }),
+    ...(plugins.length === 0 ? {} : { plugins: Object.freeze(plugins) as unknown as InstalledMemoryPlugin[] }),
   })
 }
 
@@ -411,6 +462,11 @@ export class MemoryCompositionGeneration {
     const snapshot = captureMemoryContributionSnapshot(snapshotValue)
     if (snapshot.sources.length === 0) throw new Error('memory composition requires at least one Source')
     if (snapshot.strategies.length === 0) throw new Error('memory composition requires a Strategy')
+    validateMemoryPluginGraph(snapshot.plugins ?? [], [
+      ...(snapshot.sources.length === 0 ? [] : ['source']),
+      ...snapshot.sources.map(source => `source.${source.definition.manifest.role}`),
+      ...(snapshot.strategies.length === 0 ? [] : ['strategy']),
+    ])
     this.strategy = selectStrategy(snapshot.strategies, options)
     this.extensions = (snapshot.strategyExtensions ?? []).filter(extension => extension.definition.manifest.strategyTypeId === this.strategy.definition.manifest.typeId)
     for (const extension of this.extensions) {

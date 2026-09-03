@@ -1,10 +1,18 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { installMemory, defineMemoryStrategyConfiguration } from 'dsh-mnemon/extension-sdk'
+import { defineMemoryPlugin, installMemory, defineMemoryStrategyConfiguration } from 'dsh-mnemon/extension-sdk'
 import { defineThreeTierExtension, validateThreeTierExtension } from 'dsh-mnemon-strategy-default-three-tier/extension-sdk'
 
 export interface Config { sourceKeys?: string[]; actionIds?: string[]; instruction?: string }
 export const name = 'dsh-mnemon-strategy-auto-capture'
 export const inject = ['mnemonMemory']
+export const memoryPlugin = defineMemoryPlugin({
+  packageName: name,
+  label: { en: 'Active capture', 'zh-CN': '主动记录' },
+  description: { en: 'Guide the current LLM to retain qualified durable facts.', 'zh-CN': '引导当前 LLM 保留符合条件的长期事实。' },
+  roles: ['strategy-extension'],
+  provides: [{ id: 'strategy.default-three-tier.capture', exclusive: true }],
+  requires: ['strategy.default-three-tier', 'source.durable-evidence'],
+})
 const instruction = 'During the current conversation, consider recording at most one new durable user-supplied preference, correction, or established project fact that will help a future task. Compare existing memory first; skip duplicates, secrets, transient progress, guesses, assistant-authored claims and facts merely retrieved from memory. Respect a request not to remember. Prefer adding one concise fact to one eligible durable Source; do not copy the same fact into multiple layers. Continue without writing when no candidate qualifies.'
 
 export function createAutoCaptureExtension(config: Config = {}) {
@@ -18,7 +26,7 @@ export function createAutoCaptureExtension(config: Config = {}) {
 }
 
 export function apply(ctx: Context, config: Config = {}): void {
-  installMemory(ctx, { strategyExtensions: [createAutoCaptureExtension(config)] })
+  installMemory(ctx, { plugin: memoryPlugin, strategyExtensions: [createAutoCaptureExtension(config)] })
 }
 
 export const memoryStrategyConfiguration = defineMemoryStrategyConfiguration({
@@ -30,5 +38,5 @@ export const memoryStrategyConfiguration = defineMemoryStrategyConfiguration({
     { key: 'instruction', input: 'textarea', defaultValue: instruction, maximum: 4000, label: { en: 'Recording instruction', 'zh-CN': '记录指引' } },
     { key: 'actionIds', input: 'string-list', defaultValue: ['remember'], label: { en: 'Recording operation IDs', 'zh-CN': '记录操作 ID' }, description: { en: 'Source-local operation IDs; this does not grant write permission.', 'zh-CN': '填写 Source 内部的操作 ID；此配置不会授予写入权限。' } },
   ],
-  create: config => ({ strategyExtensions: [createAutoCaptureExtension(config as Config)] }),
+  create: config => ({ plugin: memoryPlugin, strategyExtensions: [createAutoCaptureExtension(config as Config)] }),
 })
