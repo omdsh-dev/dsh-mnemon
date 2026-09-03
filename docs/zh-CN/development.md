@@ -92,7 +92,7 @@ pnpm e2e:serve
 
 另检查 `displayMode` 实时切换：Sidebar 与 Builtin 不得同时挂载，二者使用同一组 Source 页面。Builtin 的全局/工作区/自定义范围读写及任务遵循所属会话，隐藏范围控件，切换会话时清理旧数据与编辑器。验证旧 `buildin` 规范化，以及原生 Sidebar 皮肤和已支持布局插件下的折叠图标。
 
-[2026-08-31 main rebase 验证记录](../pr-assets/main-rebase-20260831/README.md)列明精确 revision、完整测试、独立制品和真实双入口验证及其限制。
+[2026-09-04 main rebase 验证记录](../pr-assets/main-rebase-20260904/README.md)列明精确的 v0.4.7/DSH rc.1 revision、registry 与源码覆盖完整测试、独立制品、插件组合重启持久化和真实双入口验证及其限制。
 
 已发布 Taskboard/SSH 组合、CLI 命令名解析、安装顺序与受控面板通知丢失，使用独立的 [npm WebUI 回归夹具](./testing-npm-regressions.md)。夹具同时支持当前本地 Starter 与十三个插件的组合，以及已发布对照包。
 

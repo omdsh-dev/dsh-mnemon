@@ -92,7 +92,7 @@ Check Sidebar without a session, all primary/secondary tabs, Runtime add/edit/re
 
 Also switch `displayMode` live: Sidebar and Builtin must never mount together. Both use the same Source pages; Builtin follows its owning session for global/workspace/custom reads, writes and tasks, hides scope controls, and clears stale data and editors when the session changes. Check legacy `buildin` normalization and the collapsed icon under the native Sidebar skin as well as supported layout plugins.
 
-The [2026-08-31 main-rebase verification](../pr-assets/main-rebase-20260831/README.md) records the exact revisions, full suite, independent artifacts and real shared-placement checks, including their limits.
+The [2026-09-04 main-rebase verification](../pr-assets/main-rebase-20260904/README.md) records the exact v0.4.7/DSH rc.1 revisions, full registry and source-overlay suites, independent artifacts, plugin composition persistence and real shared-placement checks, including their limits.
 
 For the released Taskboard/SSH combination, command-name CLI lookup, install ordering and controlled panel-event loss, use the separate [npm WebUI regression harness](./testing-npm-regressions.md). It supports the current local Starter plus all thirteen plugins as well as published control packages.
 
