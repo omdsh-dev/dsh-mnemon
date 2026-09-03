@@ -117,8 +117,8 @@ RPC is an internal Host-to-client bridge, not a stable external HTTP API.
 
 ```text
 channel:   /dsh-mnemon-read
-rc.2 authority: trusted-host
-alpha authentication: DSH browser session
+rc.2 rollback authority: trusted-host
+0.1.2 authentication: DSH browser session
 ```
 
 | Endpoint | Behavior |
@@ -142,8 +142,8 @@ Memory Space activation has a narrower request schema on its own control channel
 
 ```text
 channel:   /dsh-mnemon-activation
-rc.2 authority: trusted-host
-alpha authentication: DSH browser session
+rc.2 rollback authority: trusted-host
+0.1.2 authentication: DSH browser session
 endpoint:  body
 ```
 
@@ -153,8 +153,8 @@ All broader mutations remain on the write channel:
 
 ```text
 channel:   /dsh-mnemon-write
-rc.2 authority: loopback (`trusted-host` when `remoteAccess=trusted-host`)
-alpha authentication: DSH browser session
+rc.2 rollback authority: loopback (`trusted-host` when `remoteAccess=trusted-host`)
+0.1.2 authentication: DSH browser session
 ```
 
 | Endpoint | Behavior |
@@ -176,8 +176,8 @@ With `writeEnabled=false`, both activation control and the write channel remain 
 
 ```text
 channel:   /dsh-mnemon-pack
-rc.2 authority: loopback (`trusted-host` when `remoteAccess=trusted-host`)
-alpha authentication: DSH browser session
+rc.2 rollback authority: loopback (`trusted-host` when `remoteAccess=trusted-host`)
+0.1.2 authentication: DSH browser session
 ```
 
 | Endpoint | Behavior |
@@ -193,15 +193,15 @@ Backups contain private memory, so callers must treat the authenticated DSH brow
 
 ```text
 channel:   /dsh-mnemon-settings
-rc.2 authority: loopback (`trusted-host` when `remoteAccess=trusted-host`)
-alpha authentication: DSH browser session
+rc.2 rollback authority: loopback (`trusted-host` when `remoteAccess=trusted-host`)
+0.1.2 authentication: DSH browser session
 namespaces: mnemon, mnemon-ui
 endpoints: get, mutate
 ```
 
 Mutations use settings revisions to prevent overwriting concurrent edits. `mnemon` owns Host/storage settings; `mnemon-ui` owns `turnBar` and `saveAction`.
 
-Mnemon uses one registration call shape for both hosts: it always supplies the rc.2 authority object, which alpha ignores as an extra JavaScript argument. Thus rc.2 retains method-specific trust tiers, while DSH 0.1.2-alpha.5 authenticates the complete Host API with one browser session. No runtime version or function-arity branch is used.
+Mnemon uses one registration call shape for both transport generations: it always supplies the rc.2 authority object, which DSH 0.1.2 ignores as an extra JavaScript argument. Thus stable DSH 0.1.2-rc.1 and its alpha.5 predecessor authenticate the complete Host API with one browser session, while the rc.2 rollback retains method-specific trust tiers. No runtime version or function-arity branch is used.
 
 ## npm exports and extension service
 

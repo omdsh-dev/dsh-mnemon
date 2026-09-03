@@ -10,19 +10,19 @@
 
 你需要：
 
-- DSH 0.1.1-rc.2 基线所需的 Node.js `^22.19.0 || >=24.0.0`；
+- DSH 0.1.2-rc.1 基线所需的 Node.js `^22.19.0 || >=24.0.0`；
 - 一个可以启动的 DSH Web 或 Headless profile；
 - 本地可执行的 `mnemon` CLI；
 - 一个能够创建独立任务 Agent 的 DSH 模型路由。
 
 普通语义任务优先使用名为 `spawn` 的 Provider，并要求 `toolFilter`、`persona` 与 `depthLimit`。Mnemon 会为每次运行提供一个经过 schema 校验的一次性结果工具，不依赖 Provider 的 `outputSchema` 路径。可选的评分后台审查还要求名为 `fork`、且 `inheritsParentContext=true` 的 Provider。缺少 `fork` 不影响确定性页面读取和普通手动操作。
 
-本文流程以 dsh-mnemon v0.4.6、DSH 0.1.1-rc.2 和 Mnemon 0.2.3 作为推荐 registry 基线；部分保持兼容的界面截图拍摄于 dsh-mnemon v0.2.0。DSH rc.2 使用 `Promise.withResolvers` 和 Node Zstd API，因此 Node 20 无法启动完整 profile。源码兼容性也已针对最新的 DSH 0.1.2-alpha.5 预览版验证，rc.2 仍是推荐安装目标。升级前先备份，并在隔离目录重复本页验证。
+本文流程以 dsh-mnemon v0.4.7、DSH 0.1.2-rc.1 和 Mnemon 0.2.3 作为推荐 registry 基线；部分保持兼容的界面截图拍摄于 dsh-mnemon v0.2.0。完整 DSH rc.1 profile 使用 Node 20 不具备的 Host 原语，而插件包本身仍为较旧且兼容的 Host 保留 Node.js 20 支持。它的直接前序版本 DSH 0.1.2-alpha.5 继续通过源码覆盖，DSH 0.1.1-rc.2 则保留为向后回归目标。升级前先备份，并在隔离目录重复本页验证。
 
 安装并核对已验证的 DSH 版本：
 
 ```sh
-npm install -g @deepseek-ai/dsh@0.1.1-rc.2
+npm install -g @deepseek-ai/dsh@0.1.2-rc.1
 dsh --version
 npm view @deepseek-ai/dsh dist-tags
 ```
@@ -113,7 +113,7 @@ dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
 dsh --profile web
 ```
 
-如果需要通过云端域名访问 Web profile，不要直接发布 3080 端口。稳定版 DSH 0.1.1-rc.2 默认只允许回环地址使用 Mnemon 管理通道，因此远程页面可能可以打开，但“记忆系统”无法加载设置或执行写入。请按[稳定版 DSH rc.2 的云端 WebUI](./operations.md#cloud-hosted-webui)同时配置带认证的反向代理、`remoteAccess` 覆盖和可信 authority；同一节也说明了 DSH 0.1.2-alpha.5 不同的启动 token 流程。
+如果需要通过云端域名访问 Web profile，不要直接发布 3080 端口。稳定版 DSH 0.1.2-rc.1 通过 Host 启动时输出的一次性 URL 建立浏览器会话，并用它认证全部 Mnemon RPC 与 stream。请按[云端 WebUI](./operations.md#cloud-hosted-webui)同时配置 HTTPS 反向代理或访问网关与可信 authority，再打开该启动 URL；同一节也保留了回滚到 DSH 0.1.1-rc.2 时所需的另一套 `remoteAccess` 步骤。
 
 升级与卸载：
 

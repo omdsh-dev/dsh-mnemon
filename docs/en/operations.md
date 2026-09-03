@@ -104,14 +104,28 @@ Existing turns and delegated child activations may still use the old runtime. Wa
 
 <a id="cloud-hosted-webui"></a>
 
-## Cloud-hosted WebUI on stable DSH 0.1.1-rc.2
+## Cloud-hosted WebUI on stable DSH 0.1.2-rc.1
 
-Stable DSH 0.1.1-rc.2 is the recommended registry target. Its secure default lets a trusted remote browser use ordinary Mnemon reads and activation, but keeps settings, backups, Provider connections, and broad mutations on loopback. A cloud page may therefore open while the Memory System cannot load its settings or complete writes.
+Stable DSH 0.1.2-rc.1 is the recommended registry target. It authenticates the page, every RPC, and every stream through an authority-bound browser session created from the launch-token URL printed by the Host. `--trusted-host` remains a Host/Origin fence; it does not replace HTTPS or deployment access controls.
 
-Use the following procedure only when the public entry already has reliable user authentication:
+1. Terminate HTTPS at a reverse proxy or access gateway and protect the public entry for its intended users. Proxy the same-origin `/` and `/api` traffic, including streams, to `http://127.0.0.1:3080` while preserving the external `Host` authority.
+2. Start the loopback service with the external authority. Use a bare `host[:port]`, not a URL:
 
-1. Terminate HTTPS and authenticate users at a reverse proxy or access gateway. Proxy the same-origin `/` and `/api` traffic, including streams, to `http://127.0.0.1:3080` while preserving the external `Host` authority. DSH's trusted-host check is a Host/Origin fence, not authentication.
-2. Open the Web profile patch at `~/.dsh/profiles/web/cordis.patch.yml`, or `$DSH_HOME/profiles/web/cordis.patch.yml` when `DSH_HOME` is set. If it already has a top-level `- id: mnemon` entry, edit that entry instead of adding a duplicate. If the initialized file still ends in the empty-array marker `[]`, replace that marker with the complete row below; otherwise append the row to the existing top-level YAML list:
+   ```sh
+   dsh web --trusted-host memory.example.com --no-open
+   ```
+
+   For a non-default public port, use the exact authority, for example `memory.example.com:8443`. DSH deliberately rejects `--host 0.0.0.0`; keep the service on loopback and let the proxy or an SSH tunnel reach it.
+3. For a browser that does not already have a valid cookie for this public authority, use the launch-token URL printed as `dsh web: ...`. With a reverse proxy, replace only the printed loopback origin with the public HTTPS origin and preserve the `/` path and `?token=...` query. For example, transform `http://127.0.0.1:3080/?token=...` into `https://memory.example.com/?token=...`. Treat that URL as a credential and do not put it in logs, tickets, or chat. DSH exchanges it for an HttpOnly, SameSite cookie and redirects to a clean `/`; a still-valid authority-bound cookie can survive a Host restart.
+4. Open the clean external URL and verify that **Status** and **Settings → Memory System** both load, an intentional small settings save succeeds, and a page reload remains authenticated.
+
+An HTTP 403 points to the Host/Origin fence: check `--trusted-host`, the public port, and whether the proxy preserves `Host`. An HTTP 401 means the browser session is missing or invalid: return to the current process's launch-token URL. DSH 0.1.2-alpha.5 uses the same browser-session model and remains covered as the immediate source-compatibility predecessor. Both releases ignore Mnemon's retained `remoteAccess` compatibility setting.
+
+### DSH 0.1.1-rc.2 rollback
+
+The previous rc.2 line uses method-specific authority tiers instead of the browser-session model. Ordinary reads and activation may use `trusted-host`, while settings, backups, Provider connections, and broad mutations remain loopback-only unless local Mnemon configuration promotes all management channels. Use rc.2 remotely only behind reliable user authentication.
+
+1. Open `~/.dsh/profiles/web/cordis.patch.yml`, or `$DSH_HOME/profiles/web/cordis.patch.yml` when `DSH_HOME` is set. Edit an existing top-level `- id: mnemon` entry instead of adding a duplicate. If the initialized file still ends in `[]`, replace that marker with the complete row below; otherwise append the row to the existing top-level YAML list:
 
    ```yaml
    - id: mnemon
@@ -139,20 +153,9 @@ Use the following procedure only when the public entry already has reliable user
          maxUnknownResults: 2
    ```
 
-   A profile patch replaces the targeted row's complete `config` instead of deep-merging one field. Preserve any existing Mnemon customizations, and compare this row with `dsh web --dump-default-config` after upgrading dsh-mnemon so new bundled defaults are not masked.
-3. Inspect the effective tree with `dsh web --dump-config`. Confirm that the final `mnemon` row contains `remoteAccess: trusted-host` and that stderr reports no unmatched `mnemon` target.
-4. Start the loopback service with the external authority. Use a bare `host[:port]`, not a URL:
-
-   ```sh
-   dsh web --trusted-host memory.example.com --no-open
-   ```
-
-   For a non-default public port, use the exact authority, for example `memory.example.com:8443`. DSH 0.1.1-rc.2 deliberately rejects `--host 0.0.0.0`; keep the service on loopback and let the authenticated proxy or an SSH tunnel reach it.
-5. Restart the Host after changing `remoteAccess` because Mnemon captures this policy at startup. Open the external HTTPS URL, pass the proxy's authentication, then verify that **Status** and **Settings → Memory System** both load and that an intentional small settings save succeeds.
-
-If the browser receives a Host/Origin rejection, check `--trusted-host`, the public port, and whether the proxy preserves `Host`. If reads work but settings or writes remain unavailable, check the effective `mnemon` row and confirm that the Host was restarted.
-
-DSH 0.1.2-alpha.5 is a preview compatibility target with a different security model: it ignores `remoteAccess` and authenticates every RPC and stream through the browser session created by its one-time launch token and signed cookie. Keep the row above for safe rollback to rc.2, but after every alpha Host restart or public-authority change, open the launch URL printed by DSH to establish a fresh cookie. HTTPS and deployment access controls remain recommended.
+   A profile patch replaces the targeted row's complete `config` instead of deep-merging one field. Preserve existing customizations, and compare it with `dsh web --dump-default-config` after a plugin upgrade so new bundled defaults are not masked.
+2. Inspect the effective tree with `dsh web --dump-config`. Confirm that the final `mnemon` row contains `remoteAccess: trusted-host` and that stderr reports no unmatched `mnemon` target.
+3. Start rc.2 with the same `--trusted-host` command, then restart it after any `remoteAccess` change because Mnemon captures that policy at startup. Verify **Status**, settings loading, and one deliberate small save through the authenticated proxy.
 
 ## Security boundaries
 
@@ -173,8 +176,8 @@ DSH 0.1.2-alpha.5 is a preview compatibility target with a different security mo
 
 ### Web and model
 
+- On DSH 0.1.2-rc.1 and its alpha.5 predecessor, every RPC and stream requires the same authenticated browser session; the retained `remoteAccess` value has no transport effect.
 - On DSH 0.1.1-rc.2, read and activation use `trusted-host`; write, settings, and backup default to `loopback` and are promoted together only by local `remoteAccess: trusted-host` configuration.
-- On DSH 0.1.2-alpha.5, every RPC and stream requires the same authenticated browser session; the retained `remoteAccess` value has no transport effect.
 - The ordinary Provider catalog is redacted. Saved credential values travel only through the version-appropriate protected management channel.
 - The WebUI follows the Host's writable settings snapshot instead of inferring capability from transport locality; an unavailable settings channel renders an explicit diagnostic rather than an empty page.
 - The WebUI neither reads SQLite, starts processes, calls remote providers, nor supplies arbitrary update commands; provider network access remains inside the Host.

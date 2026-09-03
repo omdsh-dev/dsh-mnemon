@@ -117,8 +117,8 @@ RPC 是 DSH Host 与插件客户端之间的内部桥，不是稳定外部 HTTP 
 
 ```text
 channel:   /dsh-mnemon-read
-rc.2 authority: trusted-host
-alpha authentication: DSH browser session
+rc.2 rollback authority: trusted-host
+0.1.2 authentication: DSH browser session
 ```
 
 | Endpoint | 行为 |
@@ -142,8 +142,8 @@ alpha authentication: DSH browser session
 
 ```text
 channel:   /dsh-mnemon-activation
-rc.2 authority: trusted-host
-alpha authentication: DSH browser session
+rc.2 rollback authority: trusted-host
+0.1.2 authentication: DSH browser session
 endpoint:  body
 ```
 
@@ -153,8 +153,8 @@ endpoint:  body
 
 ```text
 channel:   /dsh-mnemon-write
-rc.2 authority: loopback（`remoteAccess=trusted-host` 时为 trusted-host）
-alpha authentication: DSH browser session
+rc.2 rollback authority: loopback（`remoteAccess=trusted-host` 时为 trusted-host）
+0.1.2 authentication: DSH browser session
 ```
 
 | Endpoint | 行为 |
@@ -176,8 +176,8 @@ alpha authentication: DSH browser session
 
 ```text
 channel:   /dsh-mnemon-pack
-rc.2 authority: loopback（`remoteAccess=trusted-host` 时为 trusted-host）
-alpha authentication: DSH browser session
+rc.2 rollback authority: loopback（`remoteAccess=trusted-host` 时为 trusted-host）
+0.1.2 authentication: DSH browser session
 ```
 
 | Endpoint | 行为 |
@@ -193,15 +193,15 @@ alpha authentication: DSH browser session
 
 ```text
 channel:   /dsh-mnemon-settings
-rc.2 authority: loopback（`remoteAccess=trusted-host` 时为 trusted-host）
-alpha authentication: DSH browser session
+rc.2 rollback authority: loopback（`remoteAccess=trusted-host` 时为 trusted-host）
+0.1.2 authentication: DSH browser session
 namespaces: mnemon, mnemon-ui
 endpoints: get, mutate
 ```
 
 mutation 使用 settings revision 防止覆盖并发编辑。`mnemon` 管理 Host / 存储设置；`mnemon-ui` 管理 `turnBar` 与 `saveAction`。
 
-Mnemon 对两个 Host 使用同一种注册调用：始终传入 rc.2 authority 对象，alpha 将其作为额外 JavaScript 参数忽略。因此 rc.2 保留逐方法 trust 层，DSH 0.1.2-alpha.5 则使用同一浏览器会话认证完整 Host API；整个过程没有运行时版本或函数参数数量分支。
+Mnemon 对两代 transport 使用同一种注册调用：始终传入 rc.2 authority 对象，DSH 0.1.2 将其作为额外 JavaScript 参数忽略。因此稳定版 DSH 0.1.2-rc.1 与它的 alpha.5 前序版本使用同一浏览器会话认证完整 Host API，rc.2 回滚则保留逐方法 trust 层；整个过程没有运行时版本或函数参数数量分支。
 
 ## npm 导出与扩展服务
 
