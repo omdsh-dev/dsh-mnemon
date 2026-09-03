@@ -29,11 +29,15 @@ describe('external consumer of packed artifacts', () => {
       await runner.mount(capture, { instanceId: 'capture' })
       for (const id of ['global', 'project']) {
         await runner.mount(runtime, { instanceId: id, config: { dataDir: join(directory, id) } })
+      }
+      expect(runner.inspect().evaluation).toMatchObject({ state: 'rejected', diagnostics: [{ message: expect.stringContaining('source.durable-evidence') }] })
+      await runner.mount(spaces, { instanceId: 'spaces', config: { dataDir: join(directory, 'spaces'),
+        providers: [{ use: 'dsh-mnemon-provider-holographic', instanceId: 'local-account' }] } })
+      expect(runner.inspect().evaluation.state).toBe('ready')
+      for (const id of ['global', 'project']) {
         await (await runner.managementClient('source:' + id)).mutate('mutate',
           { action: 'add', target: 'memory', content: (id + ' source sentinel. ').repeat(100) }, { confirmed: true })
       }
-      await runner.mount(spaces, { instanceId: 'spaces', config: { dataDir: join(directory, 'spaces'),
-        providers: [{ use: 'dsh-mnemon-provider-holographic', instanceId: 'local-account' }] } })
       const management = await runner.managementClient('source:spaces')
       await management.mutate('provider-service-update', { providerId: 'local-account', settings: {}, enabled: true }, { confirmed: true })
       const first = await runner.beginTurn()

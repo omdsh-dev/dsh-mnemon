@@ -12,7 +12,7 @@ const fixtures: Awaited<ReturnType<typeof compositionFixture>>[] = []
 afterEach(async () => { for (const value of fixtures.splice(0)) await value.dispose() })
 
 describe('explicit default Starter', () => {
-  it('mounts Sources and Strategy as real Cordis Entries and keeps old leases after unload', async () => {
+  it('mounts real Cordis Entries, recomposes remaining Sources, and keeps old leases after unload', async () => {
     const value = await compositionFixture()
     fixtures.push(value)
     const { extensions, graph, releases } = value
@@ -26,10 +26,14 @@ describe('explicit default Starter', () => {
       strategies: [{ instanceKey: 'strategy:mnemon-strategy-default-three-tier' }],
     })
     const lease = graph.memoryComposition.acquire()
-    await releases[0]!()
-    expect(graph.memoryComposition.inspect().evaluation.state).toBe('rejected')
-    expect(graph.memoryComposition.inspect().drainingGenerationIds).toContain(lease.id)
-    lease.release()
+    try {
+      await releases[0]!()
+      expect(graph.memoryComposition.inspect().evaluation).toMatchObject({
+        state: 'ready',
+        sourceInstanceKeys: ['source:mnemon-source-documents', 'source:mnemon-source-memory-spaces'],
+      })
+      expect(graph.memoryComposition.inspect().drainingGenerationIds).toContain(lease.id)
+    } finally { lease.release() }
     expect(graph.memoryComposition.inspect().drainingGenerationIds).toEqual([])
   })
   it('declares five stable Entries and installed package specifiers without source forwarders', () => {

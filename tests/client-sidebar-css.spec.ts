@@ -46,9 +46,9 @@ describe('Sidebar layout invariants', () => {
   })
 
   it('keeps plugin composition dense on desktop and single-column on narrow dialogs', () => {
-    expect(memoryPluginCss).toContain('.strategyGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));')
+    expect(memoryPluginCss).toContain('.pluginGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));')
     expect(memoryPluginCss).toContain('@media (max-width: 680px)')
-    expect(memoryPluginCss).toContain('.sourceGrid, .strategyGrid { grid-template-columns: minmax(0, 1fr); }')
+    expect(memoryPluginCss).toContain('.pluginGrid { grid-template-columns: minmax(0, 1fr); }')
   })
 
   it('keeps plugin switches visually compact and lays out all three footer actions deliberately', () => {
@@ -56,7 +56,7 @@ describe('Sidebar layout invariants', () => {
     expect(memoryPluginCss).toContain(".switch[aria-checked='true']::before { background: var(--mn-accent); }")
     expect(memoryPluginCss).toContain('.footerActions.footerActions { grid-template-columns: repeat(3, minmax(0, 1fr)); }')
     expect(memoryPluginCss).toContain('.footerActions > :last-child { grid-column: 1 / -1; }')
-    expect(memoryPluginCss).toContain(".inspectForm input, .select, .field input:not([type='checkbox']) { min-height: 44px; }")
+    expect(memoryPluginCss).toContain(".inspectForm input, .field input:not([type='checkbox']) { min-height: 44px; }")
   })
 
   it('renders runtime metadata as real chips while keeping form values at normal weight', () => {
