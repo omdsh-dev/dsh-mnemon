@@ -309,6 +309,7 @@ describe('View configuration with the real pinned DSH Cordis Loader', () => {
     const f = await fixture()
     const installation = {
       environment: () => ({ supported: true, profileName: 'web', suggestions: ['dsh-mnemon-strategy-focus'] }),
+      registered: () => [],
       inspect: vi.fn(async () => ({ packageName: 'dsh-mnemon-strategy-focus', version: '0.5.0-beta.4', kind: 'strategy', mnemonPeerRange: '^0.5.0', installed: false })),
       install: vi.fn(async () => ({ packageName: 'dsh-mnemon-strategy-focus', version: '0.5.0-beta.4', profileName: 'web', installed: true, restartRequired: true })),
     }

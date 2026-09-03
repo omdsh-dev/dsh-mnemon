@@ -60,6 +60,7 @@ export interface MemoryViewDashboard {
   currentUnavailable?: 'no-session' | 'unaligned' | 'not-generated'
   sources: Array<{ sourceInstanceKey: string; sourceTypeId: string; packageName: string; role: string; label: string }>
   pluginInstallation: MemoryPluginInstallationEnvironment
+  registeredPlugins: MemoryRegisteredPluginView[]
   diagnostics: string[]
 }
 
@@ -93,4 +94,14 @@ export interface MemoryPluginInstallResult {
   profileName: string
   installed: true
   restartRequired: true
+}
+
+export interface MemoryRegisteredPluginView {
+  entryId: string
+  packageName: string
+  kind: MemoryPluginKind
+  enabled: boolean
+  active: boolean
+  writable: boolean
+  diagnostic?: string
 }

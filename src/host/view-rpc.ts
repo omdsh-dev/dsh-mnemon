@@ -21,7 +21,7 @@ function optionalId(value: unknown): string | undefined {
 export function createViewHandler(runtime: LiveMnemonRuntime, engine: MemoryRuntime, management: MemoryStrategyManagement, access: 'read' | 'write', lifecycle?: MnemonLifecycle, installation?: MemoryPluginInstallation): HostRpcHandler {
   return async (endpoint, input, signal) => {
     try {
-      if (access === 'read' ? !['dashboard', 'preview', 'inspect-plugin'].includes(endpoint) : !['apply', 'install-plugin'].includes(endpoint)) throw new Error('View operation is not available on this channel')
+      if (access === 'read' ? !['dashboard', 'preview', 'inspect-plugin'].includes(endpoint) : !['apply', 'install-plugin', 'set-source-plugin-enabled'].includes(endpoint)) throw new Error('View operation is not available on this channel')
       const payload = object(input)
       if (endpoint === 'inspect-plugin') {
         if (installation === undefined || typeof payload.packageName !== 'string') throw new Error('Plugin discovery is unavailable')
@@ -31,6 +31,12 @@ export function createViewHandler(runtime: LiveMnemonRuntime, engine: MemoryRunt
         if (installation === undefined || typeof payload.packageName !== 'string' || typeof payload.version !== 'string') throw new Error('Plugin installation is unavailable')
         if (payload.confirmed !== true) throw new Error('Plugin installation requires confirmation')
         return { ok: true, value: await installation.install(payload.packageName, payload.version, signal) }
+      }
+      if (endpoint === 'set-source-plugin-enabled') {
+        if (installation === undefined || typeof payload.entryId !== 'string' || typeof payload.enabled !== 'boolean') throw new Error('Source plugin activation is unavailable')
+        if (payload.confirmed !== true) throw new Error('Source plugin activation requires confirmation')
+        await installation.setSourceEnabled(payload.entryId, payload.enabled, signal)
+        return { ok: true, value: { saved: true } }
       }
       const sessionId = optionalId(payload.sessionId)
       const selectedWorkspaceId = optionalId(payload.workspaceId)
@@ -56,6 +62,7 @@ export function createViewHandler(runtime: LiveMnemonRuntime, engine: MemoryRunt
             packageName: source.definition.manifest.packageName, role: source.definition.manifest.role,
             label: source.definition.manifest.management?.label ?? source.definition.manifest.typeId })),
           pluginInstallation: installation?.environment() ?? { supported: false, reason: 'loader-unavailable', suggestions: [] },
+          registeredPlugins: installation?.registered() ?? [],
         }
         return { ok: true, value }
       }

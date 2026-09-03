@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 const sidebarCss = readFileSync(new URL('../src/client/MnemonSidebarView.module.css', import.meta.url), 'utf8')
 const workspaceCss = readFileSync(new URL('../src/client/MnemonWorkspace.module.css', import.meta.url), 'utf8')
 const viewCss = readFileSync(new URL('../src/client/MnemonView.module.css', import.meta.url), 'utf8')
-const memoryViewCss = readFileSync(new URL('../src/client/MemoryViewPage.module.css', import.meta.url), 'utf8')
+const memoryPluginCss = readFileSync(new URL('../src/client/MemoryPluginDialog.module.css', import.meta.url), 'utf8')
 
 const sidebarSurface = 'var(--dsw-alias-bg-overlay, var(--dsw-alias-bg-base))'
 
@@ -45,9 +45,10 @@ describe('Sidebar layout invariants', () => {
     expect(sidebarCss).not.toContain('.sideNavigation')
   })
 
-  it('switches narrow View surfaces to the strategy editor instead of placing it below a long snapshot', () => {
-    expect(memoryViewCss).toContain('@container mnemon-view (max-width: 920px)')
-    expect(memoryViewCss).toContain('.layout[data-editor-open] > .panel:not(.strategyPanel) { display: none; }')
+  it('keeps plugin composition dense on desktop and single-column on narrow dialogs', () => {
+    expect(memoryPluginCss).toContain('.strategyGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));')
+    expect(memoryPluginCss).toContain('@media (max-width: 680px)')
+    expect(memoryPluginCss).toContain('.sourceGrid, .strategyGrid { grid-template-columns: minmax(0, 1fr); }')
   })
 
   it('renders runtime metadata as real chips while keeping form values at normal weight', () => {

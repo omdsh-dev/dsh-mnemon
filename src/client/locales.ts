@@ -1,8 +1,8 @@
 /** Mnemon workspace copy, synchronized with DSH's global locale service. */
-import { viewZh, viewEn } from './view-locales.ts'
+import { pluginZh, pluginEn } from './plugin-locales.ts'
 
 export const zh = {
-  ...viewZh,
+  ...pluginZh,
   'tab.label': '记忆系统',
   'term.space': '记忆体',
   'term.spaces': '记忆体',
@@ -918,7 +918,7 @@ export const zh = {
 export type MnemonKey = keyof typeof zh
 
 export const en = {
-  ...viewEn,
+  ...pluginEn,
   'tab.label': 'Memory System',
   'term.space': 'Memory Space',
   'term.spaces': 'Memory Spaces',

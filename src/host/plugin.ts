@@ -35,7 +35,7 @@ export function apply(rawContext: unknown, config: MnemonConfig = {}): void {
   registerMnemonSubagentTokenUsageProjection(ctx)
   const extensions = provideMemoryRuntime(ctx)
   const viewStrategies = new MemoryStrategyManagement(ctx, extensions)
-  const pluginInstallation = new MemoryPluginInstallation(ctx)
+  const pluginInstallation = new MemoryPluginInstallation(ctx, { engine: extensions })
   const effectiveConfig = (value: Config) => viewStrategies.resolveConfig(resolveConfig(value))
   const prepared = new Map<object, { graph: MnemonRuntimeGraph; token: symbol }>()
   const disposePrepared = (): void => {

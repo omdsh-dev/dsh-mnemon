@@ -18,13 +18,13 @@ The Memory System sidebar entry always opens its workspace, including after visi
 
 With `displayMode: builtin`, open Memory System from the conversation's tabs instead; the Sidebar entry is absent. The header omits storage-mode and workspace-selection controls because the Host uses the owning session's global, workspace or custom scope. All Source pages and dialogs below are shared, and conversation shortcuts open the matching tab. See [scope mapping](./configuration.md#entry-placement-displaymode-and-tabenabled).
 
-Primary pages are **Status, View, Runtime, Documents, Memory Spaces**. Memory Spaces adds **Overview, Recall, Content, Entities**, with **Remember** and **Distillation strategy** at the top right. The older recording above predates the View tab.
+Primary pages are **Status, Runtime, Documents, Memory Spaces**. Memory Spaces adds **Overview, Recall, Content, Entities**, with **Remember** and **Distillation strategy** at the top right. Status provides the **Memory plugins** dialog for Source discovery/activation and Strategy composition; the generated View remains a runtime concept rather than a separate navigation page.
 
 | Visible action | What happens after the click | Independent task Agent? |
 |---|---|---|
 | Refresh status, synchronize now, click a Memory Space card | The Host reads asynchronously; one region spinner or the card's state dot shows progress | No |
-| Inspect View / Generate preview | Read the real pinned snapshot, or compile an explicitly labelled read-only candidate from current Sources | No model, maintenance or memory writes |
-| Apply to future turns | Validate the whole composition, update existing DSH plugin Entries, and persist Profile-local preferences | No; the current turn stays pinned |
+| Open Memory plugins | Inspect registered Sources and Strategies, discover an exact package, or compose future turns | No model or memory writes |
+| Save composition | Validate the whole composition, update existing DSH plugin Entries, and persist Profile-local preferences | No; the current turn stays pinned |
 | Direct search, browse Content, inspect Entities | Provider-native read contracts run concurrently and render progressively | No |
 | Agent query | Recall runs first; bounded evidence goes to a clean top-level task Agent | Yes, read-only |
 | Remember / Save to memory | An editable confirmation precedes qualification, deduplication, distillation, routing, and writing | Starts after confirmation |

@@ -2,10 +2,11 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, normalize, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { HostContextShape } from './dsh.ts'
+import type { MemoryRuntime } from '../core/runtime.ts'
 import { runProcess, type ProcessRunner } from './process.ts'
 import type { StrategyLoader } from './strategy-management.ts'
 import { parseSemver, resolveExecutable } from './version-updates.ts'
-import type { MemoryPluginInstallResult, MemoryPluginInstallationEnvironment, MemoryPluginInspection, MemoryPluginKind } from './view-protocol.ts'
+import type { MemoryPluginInstallResult, MemoryPluginInstallationEnvironment, MemoryPluginInspection, MemoryPluginKind, MemoryRegisteredPluginView } from './view-protocol.ts'
 
 const PACKAGE = /^(?:@[a-z0-9._-]+\/)?dsh-mnemon-(source|strategy)-[a-z0-9][a-z0-9._-]*$/u
 const SUGGESTIONS = [
@@ -35,6 +36,7 @@ interface Profile {
 interface DshCommand { command: string; prefix: string[] }
 
 export interface MemoryPluginInstallationDependencies {
+  engine?: MemoryRuntime
   processRunner?: ProcessRunner
   fetchPackage?: (packageName: string, tag: string) => Promise<unknown>
   resolveDshCommand?: () => DshCommand | undefined
@@ -123,9 +125,11 @@ export class MemoryPluginInstallation {
   private readonly fetcher: (packageName: string, tag: string) => Promise<unknown>
   private readonly command: () => DshCommand | undefined
   private readonly currentVersion: string
+  private readonly engine: MemoryRuntime | undefined
   private queue: Promise<unknown> = Promise.resolve()
 
   constructor(private readonly ctx: HostContextShape, dependencies: MemoryPluginInstallationDependencies = {}) {
+    this.engine = dependencies.engine
     this.runner = dependencies.processRunner ?? runProcess
     this.fetcher = dependencies.fetchPackage ?? fetchPackage
     this.command = dependencies.resolveDshCommand ?? dshCommand
@@ -139,6 +143,23 @@ export class MemoryPluginInstallation {
     if (profile === undefined) return { supported: false, reason: 'profile-unavailable', suggestions: this.suggestions }
     if (this.command() === undefined) return { supported: false, profileName: profile.name, reason: 'cli-unavailable', suggestions: this.suggestions }
     return { supported: true, profileName: profile.name, suggestions: this.suggestions }
+  }
+
+  registered(): MemoryRegisteredPluginView[] {
+    const loader = this.ctx.get('loader') as Partial<StrategyLoader> | undefined
+    if (loader === undefined || typeof loader.entries !== 'function') return []
+    const snapshot = this.engine?.contributionSnapshot()
+    return [...loader.entries()].flatMap(entry => {
+      if (entry.options.group || !PACKAGE.test(entry.options.name)) return []
+      const kind = packageKind(entry.options.name)
+      const ancestorDisabled = entry.parent.ctx?.fiber?.entry?.disabled === true
+      const active = kind === 'source'
+        ? snapshot?.sources.some(source => source.provenance.entryId === entry.id) === true
+        : [...snapshot?.strategies ?? [], ...snapshot?.strategyExtensions ?? []].some(strategy => strategy.provenance.entryId === entry.id)
+      return [{ entryId: entry.id, packageName: entry.options.name, kind, enabled: !entry.disabled, active,
+        writable: this.ctx.settings.writable && !ancestorDisabled && (entry.options.disabled === undefined || typeof entry.options.disabled === 'boolean'),
+        ...(ancestorDisabled ? { diagnostic: 'This Entry is disabled by its parent.' } : {}) }]
+    }).sort((left, right) => left.kind.localeCompare(right.kind) || left.packageName.localeCompare(right.packageName) || left.entryId.localeCompare(right.entryId))
   }
 
   async inspect(packageName: string): Promise<MemoryPluginInspection> {
@@ -182,6 +203,30 @@ export class MemoryPluginInstallation {
       const bundles = value?.dsh?.profile?.bundles
       if (dependency === undefined || !Array.isArray(bundles) || !bundles.includes(packageName)) throw new Error('DSH completed without registering the package as a Profile bundle')
       return { packageName, version, profileName: profile.name, installed: true, restartRequired: true }
+    })
+  }
+
+  setSourceEnabled(entryId: string, enabled: boolean, signal?: AbortSignal): Promise<void> {
+    return this.exclusive(async () => {
+      if (this.engine === undefined || !this.ctx.settings.writable) throw new Error('Source plugin activation is read-only')
+      const loader = this.ctx.get('loader') as Partial<StrategyLoader> | undefined
+      const entry = loader === undefined || typeof loader.entries !== 'function' ? undefined : [...loader.entries()].find(candidate => candidate.id === entryId)
+      if (entry === undefined || entry.options.group || packageKind(entry.options.name) !== 'source') throw new Error('Source plugin Entry was not found')
+      if (entry.parent.ctx?.fiber?.entry?.disabled === true || entry.options.disabled !== undefined && typeof entry.options.disabled !== 'boolean') throw new Error('Source plugin lifecycle is owned by its parent DSH configuration')
+      const previous = entry.options.disabled as boolean | undefined
+      await this.engine.batch(async () => {
+        try {
+          signal?.throwIfAborted()
+          await entry.update({ disabled: !enabled })
+          await entry.fiber?.await?.()
+          const active = this.engine!.contributionSnapshot().sources.some(source => source.provenance.entryId === entry.id)
+          if (entry.disabled === enabled || active !== enabled) throw new Error('Cordis did not register the requested Source state')
+        } catch (error) {
+          await entry.update({ disabled: previous ?? null })
+          await entry.fiber?.await?.()
+          throw error
+        }
+      })
     })
   }
 

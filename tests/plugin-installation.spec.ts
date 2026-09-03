@@ -83,4 +83,28 @@ describe('DSH-native Memory plugin installation', () => {
     const manager = new MemoryPluginInstallation(f.ctx, { fetchPackage: async name => registryManifest(name), resolveDshCommand: () => ({ command: '/fake/dsh', prefix: [] }) })
     await expect(manager.install('dsh-mnemon-strategy-focus', '0.5.0-beta.3')).rejects.toThrow('version changed')
   })
+
+  it('activates a registered Source Entry and reports only the observed runtime state', async () => {
+    const f = await profile()
+    let active = false
+    const entry = {
+      id: 'notion', disabled: true,
+      options: { id: 'notion', name: 'dsh-mnemon-source-notion', disabled: true },
+      parent: { tree: { import: async () => ({}) } }, fiber: { await: async () => {} },
+      update: vi.fn(async ({ disabled }: { disabled?: boolean | null }) => {
+        entry.disabled = disabled === true
+        entry.options.disabled = disabled === true
+        active = disabled !== true
+      }),
+    }
+    const loader = { entries: () => [entry], config: { baseUrl: pathToFileURL(join(f.directory, 'cordis.yml')).href } }
+    const ctx = { ...f.ctx, settings: { writable: true }, get: (name: string) => name === 'loader' ? loader : undefined } as unknown as HostContextShape
+    const engine = { contributionSnapshot: () => ({ sources: active ? [{ provenance: { entryId: 'notion' } }] : [], strategies: [], strategyExtensions: [] }),
+      batch: async (operation: () => Promise<void>) => operation() }
+    const manager = new MemoryPluginInstallation(ctx, { engine: engine as never, resolveDshCommand: () => ({ command: '/fake/dsh', prefix: [] }) })
+    expect(manager.registered()).toMatchObject([{ entryId: 'notion', enabled: false, active: false, writable: true }])
+    await manager.setSourceEnabled('notion', true)
+    expect(entry.update).toHaveBeenCalledWith({ disabled: false })
+    expect(manager.registered()).toMatchObject([{ entryId: 'notion', enabled: true, active: true }])
+  })
 })

@@ -74,7 +74,9 @@ Core validates identities, JSON and the 64,000-character bound, deterministic re
 
 A dedicated Strategy Entry can export `memoryStrategyConfiguration`, created with `defineMemoryStrategyConfiguration` from the Core SDK. It declares human-facing English/Chinese labels, public fields (`number`, `text`, `textarea`, `string-list`, `source-list`), and a **pure `create(config)` factory shared with `apply()`**. The factory returns exactly one Strategy or extension contribution; no I/O, credentials, Source registration, or Fiber mounting. See the optional Strategy packages for complete examples. This is an optional editor contract, not a requirement for composition. Combined Source/Strategy Entries and plugins without this descriptor remain observable but are configured through DSH.
 
-The Host discovers existing `(scope/)dsh-mnemon-strategy-*` Loader Entries, including disabled entries; it cannot install arbitrary packages from this page. Preview composes the real Sources without committing configuration, executing Actions, or running a model. Apply validates the complete candidate, updates existing Cordis Entries, and persists a Profile-wide user overlay in DSH settings. The namespace `mnemon-view-<Loader-anchor hash>` isolates Profiles within DSH's shared settings document (`mnemon-view` for embedded Hosts without an anchor). It never writes package/generated Loader YAML. Failed activation or persistence rolls back; existing turn pins remain unchanged. Source limits and Host write/permission gates still apply.
+The Status page's **Memory plugins** dialog discovers registered `(scope/)dsh-mnemon-source-*` and `(scope/)dsh-mnemon-strategy-*` Loader Entries, including disabled entries. Strategy changes validate the complete candidate before updating Cordis Entries and persisting a Profile-wide user overlay in DSH settings. The namespace `mnemon-view-<Loader-anchor hash>` isolates Profiles within DSH's shared settings document (`mnemon-view` for embedded Hosts without an anchor). Failed activation or persistence rolls back; existing turn pins remain unchanged. Source activation likewise verifies the observed Core registration and rolls the Entry back on mismatch. Source limits and Host write/permission gates still apply.
+
+Discovery accepts only an exact `dsh-mnemon-source-*` or `dsh-mnemon-strategy-*` npm package name. Before installation, the Host verifies its package identity, semantic version, `dsh-mnemon` peer declaration, and safe `dsh.bundle.patch`. The confirmed write delegates to `dsh plugin --profile <current> add <name>@<version> --save-exact`; it does not edit Loader YAML or live-load new code. Restart DSH to register the new bundle, initially disabled, then enable it explicitly in the dialog. This UI is available only when the running Loader, Profile and DSH CLI can be identified and the connection has write authority.
 
 ### Default three-tier extensions
 
@@ -88,18 +90,10 @@ The default Strategy exposes `defineThreeTierExtension` at `dsh-mnemon-strategy-
 
 Install and enable these as DSH Entries alongside `default-three-tier`; no `strategyId` change is needed. Downloading a package alone is not activation. They are not default Starter runtime dependencies, and without extensions the original three-tier selection, allocation and guidance remain unchanged. Runtime currently has no expansion route: an aggressively small cap can hide hot context and needs workload-level evaluation.
 
-With dependencies installed, append these Entries to the Profile's final `cordis.patch.yml` to enable all three. Source keys must retain any Loader include prefix. Omitting `scoped.config` deterministically selects existing instances by role/key; it does not create storage.
+Each optional package ships a DSH bundle patch that registers one disabled Entry. Install it through the Status dialog or the equivalent CLI, restart DSH, then enable and configure it in **Memory plugins**. Installation never activates the contribution by itself. Source keys must retain any Loader include prefix. Omitting `scoped.config` deterministically selects existing instances by role/key; it does not create storage.
 
-```yaml
-- insert:
-    - id: mnemon-strategy-scoped
-      name: dsh-mnemon-strategy-scoped
-    - id: mnemon-strategy-light-context
-      name: dsh-mnemon-strategy-light-context
-      config:
-        maxProjectionCharacters: 4096
-    - id: mnemon-strategy-auto-capture
-      name: dsh-mnemon-strategy-auto-capture
+```sh
+dsh plugin --profile web add dsh-mnemon-strategy-scoped@0.5.0-beta.1 --save-exact
 ```
 
 `scoped.sourceKeys` expresses priority and `writableSourceKeys` narrows the writable subset. Automatic capacity maintenance also checks the current View's write scope; a denied operation preserves the original data and fails instead of migrating around the restriction. Explicit operator management remains separately authorized.

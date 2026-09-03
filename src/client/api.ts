@@ -161,6 +161,9 @@ export class MnemonClient {
   installMemoryPlugin(packageName: string, version: string): Promise<MemoryPluginInstallResult> {
     return this.call(MNEMON_VIEW_WRITE_CHANNEL, 'install-plugin', { packageName, version, confirmed: true })
   }
+  setSourceMemoryPluginEnabled(entryId: string, enabled: boolean): Promise<{ saved: true }> {
+    return this.call(MNEMON_VIEW_WRITE_CHANNEL, 'set-source-plugin-enabled', { entryId, enabled, confirmed: true })
+  }
 
   sourceManagementCatalog(): Promise<MemorySourceManagementCatalog> {
     return this.call(MNEMON_READ_CHANNEL, 'source-management-catalog', this.scoped())

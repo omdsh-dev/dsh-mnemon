@@ -6,7 +6,7 @@ import { consumeMnemonAnchor, subscribeMnemonAnchor, type MnemonAnchor } from ".
 
 import { type ClientConnectionHandle, type ClientSettingsScope, type Config, type JsonValue, type MemoryProviderRuntimeStatus, type MemorySourceManagementCatalog, type MemorySourceManagementInstance, type StatusView, type StorageAreaInventory, type StorageScopeInventory, type StorageScopeKind, type VersionComponentStatus, type VersionInstallMode, type VersionStatus, type VersionUpdateResult } from "../host/protocol.ts"
 import { MnemonClient } from "./api.ts"
-import { MemoryViewPage } from './MemoryViewPage.tsx'
+import { MemoryPluginDialog } from './MemoryPluginDialog.tsx'
 import { translateZh, type MnemonKey, type MnemonTranslate } from "./locales.ts"
 
 import { ProviderIcon } from "./ProviderIcon.tsx"
@@ -48,7 +48,7 @@ type SourcePage = `source:${string}`
 
 type ManagedSourcePage = `source-management:${string}`
 
-type Page = 'status' | 'view' | SourcePage | ManagedSourcePage
+type Page = 'status' | SourcePage | ManagedSourcePage
 
 const EMPTY_SOURCE_PAGE_SNAPSHOT: readonly MemorySourcePageEntry[] = Object.freeze([])
 
@@ -126,7 +126,6 @@ function WorkspaceNavigation(props: { page: Page; onSelect(page: Page): void; so
   const t = useT()
   const entries: readonly SourceNavigationEntry[] = [
     { id: 'status', page: 'status', label: t('nav.status'), detail: '', group: 'system', glyph: '⌘', primary: true },
-    { id: 'view', page: 'view', label: t('nav.view'), detail: '', group: 'system', glyph: '◇', primary: true },
     ...props.sourcePages,
   ]
   const selectedType = sourcePageEntryId(props.page)?.split('/')[0]
@@ -351,9 +350,10 @@ function SourceManagementPage(props: {
   </div>
 }
 
-function StatusPage(props: { client: MnemonClient; status: StatusView | null; loading: boolean; writeEnabled: boolean; onRefresh: () => void }): JSX.Element {
+function StatusPage(props: { client: MnemonClient; status: StatusView | null; loading: boolean; writeEnabled: boolean; canConfigure: boolean; refreshKey: number; onRefresh: () => void; onConfigured(): void }): JSX.Element {
   const t = useT()
   const [versionsOpen, setVersionsOpen] = useState(false)
+  const [pluginsOpen, setPluginsOpen] = useState(false)
   const status = props.status
   const documents = status?.documents
   const catalogKnown = status?.memoryBodies !== undefined
@@ -367,7 +367,7 @@ function StatusPage(props: { client: MnemonClient; status: StatusView | null; lo
   const runtimeMemoryEntries = runtimeArea === undefined ? 0 : Number(runtimeArea.details.memoryEntries ?? 0)
   return (
     <div className={css.page}>
-      <PageHeader title={t('status.title')} description={t('status.description')} meta={status === null && props.loading ? t('common.loading') : status === null ? t('status.checkRequired') : t('status.nominal')} {...(props.loading ? { loadingLabel: t('status.rechecking') } : {})} action={<div className={css.statusHeaderActions}><button type="button" className={css.ghostButton} disabled={props.loading} onClick={props.onRefresh}>{props.loading ? t('status.rechecking') : t('status.recheck')}</button><button type="button" className={css.secondaryButton} onClick={() => setVersionsOpen(true)}>{t('versions.checkAction')}</button></div>} />
+      <PageHeader title={t('status.title')} description={t('status.description')} meta={status === null && props.loading ? t('common.loading') : status === null ? t('status.checkRequired') : t('status.nominal')} {...(props.loading ? { loadingLabel: t('status.rechecking') } : {})} action={<div className={css.statusHeaderActions}><button type="button" className={css.primaryButton} onClick={() => setPluginsOpen(true)}>{t('plugins.open')}</button><button type="button" className={css.ghostButton} disabled={props.loading} onClick={props.onRefresh}>{props.loading ? t('status.rechecking') : t('status.recheck')}</button><button type="button" className={css.secondaryButton} onClick={() => setVersionsOpen(true)}>{t('versions.checkAction')}</button></div>} />
 
       <section className={css.healthStrip} aria-label={t('status.aria')}>
         <article><span className={`${css.healthIndicator} ${status === null ? css.healthMuted : css.healthGood}`} /><div><small>{t('status.engine')}</small><strong>{status?.dshMnemonVersion === undefined ? 'dsh-mnemon' : `dsh-mnemon ${status.dshMnemonVersion}`}</strong><p>{status === null ? t('status.pluginChecking') : t('status.pluginReady')}</p></div></article>
@@ -379,6 +379,7 @@ function StatusPage(props: { client: MnemonClient; status: StatusView | null; lo
       <div className={css.asyncStatusBlock}>{status !== null && status.memoryBodies !== undefined && <NativeProviderHealth status={status} />}</div>
       <div className={css.asyncStatusBlock}>{status?.providerServices !== undefined && <ProviderHealth services={status.providerServices} />}</div>
       <div className={css.asyncStatusBlock}><StorageDomains catalog={storage} selected={selectedScope} selectedKind={selectedScopeKind} /></div>
+      {pluginsOpen && <MemoryPluginDialog client={props.client} canConfigure={props.canConfigure} refreshKey={props.refreshKey} onClose={() => setPluginsOpen(false)} onConfigured={props.onConfigured} />}
       {versionsOpen && <VersionDialog client={props.client} writeEnabled={props.writeEnabled} onClose={() => setVersionsOpen(false)} onRefreshStatus={props.onRefresh} />}
     </div>
   )
@@ -489,7 +490,7 @@ export function MnemonView(props: MnemonViewProps): JSX.Element {
   return <I18nContext.Provider value={t}><LocaleContext.Provider value={props.locale ?? 'zh'}><MnemonWorkspace {...props} /></LocaleContext.Provider></I18nContext.Provider>
 }
 
-function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, workspaceSelection, surface = 'sidebar', active = true, onClose, sourcePageDirectory = EMPTY_SOURCE_PAGE_DIRECTORY, renderSlot }: MnemonViewProps): JSX.Element {
+function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, workspaceSelection, surface = 'sidebar', onClose, sourcePageDirectory = EMPTY_SOURCE_PAGE_DIRECTORY, renderSlot }: MnemonViewProps): JSX.Element {
   const t = useT()
   const locale = useLocale()
   const subscribeSettings = useCallback((listener: () => void) => settingsScope.subscribe(listener), [settingsScope])
@@ -617,6 +618,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const refreshAll = () => { setRevision(value => value + 1); void loadStatus() }
   const activationEnabled = status?.writeEnabled === true
   const writeEnabled = activationEnabled && settingsSnapshot.status === 'ready' && settingsSnapshot.writable
+  const canConfigurePlugins = settingsSnapshot.writable && (connection.isLoopback !== false || settingsSnapshot.value?.remoteAccess === 'trusted-host')
   const catalogKnown = status?.memoryBodies !== undefined
   const memoryBodies = useMemo(() => (status?.memoryBodies ?? []), [status])
   const activeBodies = memoryBodies.filter(body => body.active).length
@@ -707,8 +709,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       <div className={css.workspace}>
         <WorkspaceNavigation page={page} onSelect={selectPage} sourcePages={sourceNavigationEntries} disabledTypes={disabledTypes} />
         <section key={viewContextKey} className={appearanceClass(css.canvas, sidebarCss.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={(activeSourcePage?.navigation?.stickyHeader !== false) ? '' : undefined}>
-          {page === 'status' && <StatusPage client={client} status={status} loading={statusLoading} writeEnabled={writeEnabled} onRefresh={() => void loadStatus()} />}
-          {page === 'view' && <MemoryViewPage client={client} active={active} refreshKey={revision} canConfigure={settingsSnapshot.writable && (connection.isLoopback !== false || settingsSnapshot.value?.remoteAccess === 'trusted-host')} onConfigured={mutate} />}
+          {page === 'status' && <StatusPage client={client} status={status} loading={statusLoading} writeEnabled={writeEnabled} canConfigure={canConfigurePlugins} refreshKey={revision} onRefresh={() => void loadStatus()} onConfigured={mutate} />}
           {activeManagedSourceInstance !== undefined && managedSourcePageContent}
           {activeSourcePage !== undefined && customSourcePage}
         </section>

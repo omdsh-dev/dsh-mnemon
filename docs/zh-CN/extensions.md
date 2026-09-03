@@ -74,7 +74,9 @@ Core 只处理目标/槽身份、JSON、64,000 字符上限、确定性回放、
 
 专用 Strategy Entry 可以导出 `memoryStrategyConfiguration`，由 Core SDK 的 `defineMemoryStrategyConfiguration` 定义。它包含中英文展示文案、公开字段（`number`、`text`、`textarea`、`string-list`、`source-list），以及**与 `apply()` 共用的纯 `create(config)` factory**。factory 只返回一个 Strategy 或扩展贡献，不做 I/O、凭据访问、Source 注册或 Fiber 挂载；完整例子见可选策略包。这只是可选的编辑器约定，不是组合功能的准入要求。混合 Source/Strategy Entry 以及未声明编辑器的插件仍可观察，由 DSH 管理配置。
 
-Host 只发现已存在的 `(scope/)dsh-mnemon-strategy-*` Loader Entry（包括停用项），页面不会安装任意包。预览使用真实 Source 进行组合，不提交配置、不执行 Action、不调用模型。应用前校验完整候选，经 Cordis 更新原 Entry，把 Profile 级用户偏好保存在 DSH 设置中。`mnemon-view-<Loader 装配目录摘要>` 命名空间在共享设置文件内隔离各 Profile（没有装配目录的嵌入式 Host 使用 `mnemon-view`），不改写包内或生成的 Loader YAML。加载或持久化失败会回滚；已有轮次的 pin 保持不变。Source 上限及 Host 的写入/权限约束仍然有效。
+状态页的 **记忆插件** 弹窗会发现已注册的 `(scope/)dsh-mnemon-source-*` 与 `(scope/)dsh-mnemon-strategy-*` Loader Entry，包括停用项。Strategy 变更会先校验完整候选，再更新 Cordis Entry，并把 Profile 级用户偏好保存在 DSH 设置中。`mnemon-view-<Loader 装配目录摘要>` 命名空间在共享设置文件内隔离各 Profile（没有装配目录的嵌入式 Host 使用 `mnemon-view`）。激活或持久化失败会回滚；已有轮次的 pin 保持不变。Source 启停同样核对 Core 实际注册结果，不符合预期便回滚 Entry。Source 上限及 Host 的写入/权限约束仍然有效。
+
+发现入口只接受准确的 `dsh-mnemon-source-*` 或 `dsh-mnemon-strategy-*` npm 包名。安装前，Host 会核对包身份、语义版本、`dsh-mnemon` peer 声明和安全的 `dsh.bundle.patch`；确认写入后委托 `dsh plugin --profile <当前 Profile> add <包名>@<版本> --save-exact`。它不改写 Loader YAML，也不在当前进程热加载新代码。重启 DSH 后，新 bundle 先以停用状态注册，再由用户在弹窗中明确启用。只有能识别当前 Loader、Profile、DSH CLI 且连接具备写权限时，页面才允许安装。
 
 ### 默认三层扩展
 
@@ -88,18 +90,10 @@ Host 只发现已存在的 `(scope/)dsh-mnemon-strategy-*` Loader Entry（包括
 
 三个包都是可选安装，不属于默认 Starter 的运行依赖。把包安装并作为 DSH Entry 启用后，它们会自动参与 `default-three-tier`，不需要修改 `strategyId`。仅下载 npm 包不等于启用。默认 Source 组合、预算和提醒在没有扩展时不变。Runtime 当前没有展开 route；把常驻预算压得很低可能隐藏热记忆，需要针对实际任务评测。
 
-在依赖已安装的 Profile 的最终 `cordis.patch.yml` 追加以下配置即可同时启用。Source key 若包含 Loader 的 include 前缀，应使用实例目录中的完整 key；省略 `scoped.config` 时按角色/key 确定性组合现有实例，不创建新的存储。
+每个可选包都携带 DSH bundle patch，安装后注册一个停用的 Entry。可以在状态页弹窗中安装，或使用等价 CLI；重启 DSH 后，再从 **记忆插件** 中启用和配置。安装本身不会激活贡献。Source key 若包含 Loader 的 include 前缀，应使用实例目录中的完整 key；省略 `scoped.config` 时按角色/key 确定性组合现有实例，不创建新的存储。
 
-```yaml
-- insert:
-    - id: mnemon-strategy-scoped
-      name: dsh-mnemon-strategy-scoped
-    - id: mnemon-strategy-light-context
-      name: dsh-mnemon-strategy-light-context
-      config:
-        maxProjectionCharacters: 4096
-    - id: mnemon-strategy-auto-capture
-      name: dsh-mnemon-strategy-auto-capture
+```sh
+dsh plugin --profile web add dsh-mnemon-strategy-scoped@0.5.0-beta.1 --save-exact
 ```
 
 `scoped` 的 `sourceKeys` 表示优先顺序，`writableSourceKeys` 限定可写子集。自动容量整理同样受本轮可写范围限制；被禁止时保留原数据并报错，不绕过范围向其他 Source 迁移。只有显式人工管理走独立的管理授权。
