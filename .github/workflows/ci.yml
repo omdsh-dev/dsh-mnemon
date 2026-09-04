@@ -33,8 +33,24 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify source workspace
-        run: pnpm run verify
+      - name: Type-check integrated source
+        run: pnpm run typecheck
+
+      - name: Verify deterministic root build
+        run: pnpm run verify:build
+
+      - name: Build public plugin SDK entries
+        run: >-
+          pnpm --workspace-concurrency=2
+          --filter dsh-mnemon-source-memory-spaces
+          --filter dsh-mnemon-strategy-default-three-tier
+          --parallel run build
+
+      - name: Test integrated source
+        run: pnpm run test
+
+      - name: Verify root package
+        run: pnpm run verify:package
 
       - name: Set up Node.js 20 for runtime compatibility
         uses: actions/setup-node@v6
@@ -67,5 +83,5 @@ jobs:
 
       - name: Verify packed and independently installed plugins
         env:
-          MNEMON_PLUGIN_VERIFY_CONCURRENCY: '4'
+          MNEMON_PLUGIN_VERIFY_CONCURRENCY: '6'
         run: pnpm run verify:plugins
