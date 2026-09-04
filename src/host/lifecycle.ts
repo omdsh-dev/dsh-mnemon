@@ -235,6 +235,7 @@ class MnemonAgentLifecycle {
   private injectedMemoryText: string | undefined
   private idleReviewTimer: ReturnType<typeof setTimeout> | undefined
   private reviewController: AbortController | undefined
+  private idleReviewRun: Promise<void> | undefined
   private reviewRunning = false
   private lastReviewAt: string | undefined
   private lastReviewAction: string | undefined
@@ -416,7 +417,11 @@ class MnemonAgentLifecycle {
   private async assemblePrompt(assembly: PromptAssembly, context: PromptAssemblyContext, next: () => Promise<PromptAssembly>): Promise<PromptAssembly> {
     if (context.agent !== undefined && context.agent.id !== this.agent.id) return next()
     const turn = openAgentTurn(this.agent)
-    if (turn === undefined || context.signal?.aborted === true) return next()
+    if (turn === undefined) return next()
+    // Prompt assembly precedes pre-step. Wait for aborted maintenance cleanup
+    // here, before this ordinary turn tries to own the same Agent runtime.
+    await this.settleIdleReview()
+    if (context.signal?.aborted === true || openAgentTurn(this.agent) !== turn) return next()
     await this.memoryTurn?.begin(turn, context.signal)
     const assembled = await next()
     return applyMemoryViewGuidance(assembled, this.memoryTurn?.current?.context.view, this.config.routingGuidance)
@@ -456,8 +461,17 @@ class MnemonAgentLifecycle {
       if (this.agent.status !== 'idle') return
       const completed = hostSessionEvents(this.agent.session).some(event => event.type === 'turn/end' && eventTurn(event) === turn)
       if (!completed || !this.reviewActivity().eligible || !this.reviewAdmitted(turn)) return
-      void this.runIdleReview()
+      this.startIdleReview()
     }, this.config.idleReviewMs)
+  }
+
+  private startIdleReview(): void {
+    const run = this.runIdleReview()
+    this.idleReviewRun = run
+    const clear = () => {
+      if (this.idleReviewRun === run) this.idleReviewRun = undefined
+    }
+    void run.then(clear, clear)
   }
 
   private async runIdleReview(): Promise<void> {
@@ -489,6 +503,11 @@ class MnemonAgentLifecycle {
     if (this.idleReviewTimer !== undefined) clearTimeout(this.idleReviewTimer)
     this.idleReviewTimer = undefined
     if (abortRunning) this.reviewController?.abort()
+  }
+
+  private async settleIdleReview(): Promise<void> {
+    this.cancelIdleReview(true)
+    await this.idleReviewRun
   }
 
   private ensureTurnActivity(turn: number) {
