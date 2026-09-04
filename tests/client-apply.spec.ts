@@ -62,6 +62,19 @@ function workspaceContext(initialValue: Record<string, unknown>, load: () => Pro
 }
 
 describe('Mnemon Web client composition', () => {
+  it('releases an acquired shell slot when a later Sidebar mount step throws', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mountBetterSidebar.mockImplementationOnce(() => { throw new Error('broken Sidebar integration') })
+
+    const { scope, workspaceStops } = workspaceContext({ displayMode: 'sidebar' })
+    await vi.waitFor(() => expect(scope.getSnapshot().status).toBe('ready'))
+
+    expect(workspaceStops).toHaveLength(1)
+    expect(workspaceStops[0]).toHaveBeenCalledOnce()
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
   it('keeps a locale-bound Sidebar with Source child-render authority and conversation actions', async () => {
     const { context, slots, scope, settingsEntry, setLocale } = workspaceContext({})
     expect(inject).toEqual(['slots', 'sessions', 'workspaces', 'connection', 'locale'])
