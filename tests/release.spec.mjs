@@ -151,6 +151,43 @@ describe('complete, channel-safe official release', () => {
     expect(inspect).toHaveBeenCalledTimes(14)
   })
 
+  it('submits a plugin cohort before waiting for Registry propagation and still exposes the Starter last', async () => {
+    const packages = fixture()
+    const strategy = {
+      directory: '/strategy',
+      manifest: { name: 'dsh-mnemon-strategy-example', version: '0.5.0', publishConfig: { access: 'public', tag: 'latest' } },
+    }
+    packages[0].manifest.devDependencies = { [strategy.manifest.name]: strategy.manifest.version }
+    const plan = createReleasePlan([...packages, strategy])
+    const artifacts = plan.packages.map(item => ({
+      name: item.manifest.name,
+      filename: item.manifest.name + '.tgz',
+      integrity: `sha512-${item.manifest.name}`,
+    }))
+    const submitted = new Set()
+    const events = []
+    const run = vi.fn(async args => {
+      if (args[0] !== 'publish') return ''
+      const artifact = artifacts.find(item => item.filename === args[1])
+      submitted.add(artifact.name)
+      events.push(`submit:${artifact.name}`)
+      return ''
+    })
+    const inspect = vi.fn(async name => {
+      const pluginCohortReady = plan.plugins.every(item => submitted.has(item.manifest.name))
+      const visible = submitted.has(name) && (name === plan.starter.manifest.name || pluginCohortReady)
+      if (!visible) return null
+      events.push(`visible:${name}`)
+      return { version: plan.version, integrity: `sha512-${name}` }
+    })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try { await publishRelease(plan, artifacts, run, { inspect }) } finally { log.mockRestore() }
+    const lastPluginSubmit = Math.max(...plan.plugins.map(item => events.indexOf(`submit:${item.manifest.name}`)))
+    const firstPluginVisible = Math.min(...plan.plugins.map(item => events.indexOf(`visible:${item.manifest.name}`)))
+    expect(lastPluginSubmit).toBeLessThan(firstPluginVisible)
+    expect(firstPluginVisible).toBeLessThan(events.indexOf(`submit:${plan.starter.manifest.name}`))
+  })
+
   it('installs the frozen Starter and verifies every Registry plugin manifest', async () => {
     const plan = createReleasePlan(fixture())
     const artifacts = plan.packages.map(item => ({
