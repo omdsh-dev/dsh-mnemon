@@ -1,4 +1,5 @@
 packages:
+  - .
   - plugins/*
 
 # Author packages use normal semver peers; the workspace links those peers only

@@ -110,15 +110,17 @@ pnpm dsh:restore-registry
 
 Harness 先运行自己的 `pnpm install --frozen-lockfile && pnpm build:lib`。链接仅更改生成的 `node_modules`，不改提交的依赖版本；它会覆盖 Starter 的完整 DSH 依赖图，包括 Store、Invariants 和新增的 Layout 依赖，并统一每个已安装插件 workspace 的 Cordis 身份；原 pnpm 链接逐项记录并恢复。插件 Client 测试依赖仍以 rc.1 留在各自 workspace 内，构建后的 Starter 负责验证 alpha.5 Client API。本次调用关闭 pnpm 的运行前依赖验证，避免嵌套脚本自动恢复 registry 链接。该覆盖流程是维护者显式执行的兼容检查，不属于最小化的每 PR CI 图；[隔离的 rc.1/rc.2 WebUI 证据](../pr-assets/dsh-rc1-compat/README.md)记录了正式 Host 行为。
 
-## 成组发布
+## 选择性发布
 
-`pnpm release:check` 只读检查根包与十六个官方插件、精确内部依赖/peer 版本、仓库元数据、Release tag 和 `publishConfig.tag`。成组版本约束只针对官方发行组合，不限制第三方仓库。全部官方包显式固定同一组已验证版本；正式版使用 `latest`，预发布使用对应命名通道。
+官方包采用独立版本。`dsh-mnemon` Starter 是经过测试的物料清单：它精确固定每个内置插件，而插件 peer dependency 描述当前 minor 线内的兼容范围。只有自身制品或发布元数据变化的插件才升级；只要固定的组合发生变化，Starter 就升级。仅作为反向依赖测试目标的包不会因此重新发布。
 
-手动触发的 npm workflow 接收完整 commit SHA，且该 SHA 必须已经等于 `main`。在取得任何 npm 凭证前，它会运行 `verify`、独立插件验证和一次真实的 packed `v0.4.7` 升级，再一次性打包十七个制品并记录 revision、字节数与 SHA-512 integrity。受保护的 `npm-release` Environment 是 Registry 写入门禁。批准后，workflow 顺序发布十六个插件，从 Registry 回读并通过冻结的本地 Starter 安装验证，再发布 Starter、验证完整 Registry 安装，并执行真实 Registry `v0.4.7` 升级；最后才创建匹配的 GitHub prerelease 或正式 Release。
+凡 PR 会改变发布制品，都使用 `pnpm changeset` 添加发布意图；`pnpm release:status` 可预览版本变化，已有的 source CI job 会把 PR 与其精确 base revision 比较，并拒绝任何已变化却未出现在新增 changeset 中的发布包。专用发布 PR 运行 `pnpm release:version`，一次性应用意图、同步 Starter 与外部 fixture 的精确依赖、更新 Provider 中生成的版本声明并刷新 lockfile。workspace peer 与开发关系使用 minor 线兼容范围，因此未变化包的 manifest 也保持不变。`pnpm release:check` 是只读检查，验证完整的混合版本组合、内部兼容范围、Starter 精确版本、仓库元数据和每个包的 npm 通道。
 
-中断的流程可以恢复：只有 Registry 中同版本制品的 integrity 与冻结 tarball 完全一致时才会跳过；同版本内容不同会立即终止。预发布显式使用 npm `alpha`、`beta` 或 `rc` tag，正式版使用 `latest`。不能只发布根包。
+手动触发的 npm workflow 接收完整 commit SHA，且该 SHA 必须已经等于 `main`。它从 Git 历史确定上一个发布 revision，只选择版本发生增长的包。在取得 npm 凭证前，workflow 会运行完整 workspace 与独立插件验证，只打包选中的插件和 Starter，并记录完整组合、两个 revision、字节数与 SHA-512 integrity。受保护的 `npm-release` Environment 是 Registry 写入门禁。批准后，变化的插件在依赖安全的层内并发发布；一层在 Registry 可读后才进入依赖它的下一层。随后通过冻结的本地 Starter 安装完整混合版本组合，最后发布 Starter、验证干净 Registry 安装并运行真实升级，之后才创建 GitHub Release。
 
-`--publish` 是显式 registry 写操作，要求 `RELEASE_TAG` 和 `RELEASE_PRERELEASE`。npm 发布不是事务：任何失败都会停止流程，不再发布剩余包。保留日志/制品，确认已发布的不可变版本，然后准备新的完整成组版本，不能覆盖或撤销已发布版本。所有包均可获取后，才算发布完成。开发验证不会创建 Git tag、GitHub Release 或 npm 发布。
+中断的流程可以恢复：Registry 中已有的选中版本只有在 integrity 与冻结 tarball 完全一致时才能复用；同版本内容不同会立即终止。正式包使用 `latest`，预发布显式使用 `alpha`、`beta` 或 `rc` 通道。未变化的包必须已存在于 Registry，并通过完整 Starter 安装接受验证，但不会再次打包或发布。
+
+npm 发布不是事务。失败时保留冻结制品并重跑同一 revision；完整性检查会安全跳过匹配版本并继续补齐缺失版本。不能覆盖或撤销不可变版本。只有新 Starter 及其精确组合中的所有版本都可安装，才算发布完成。开发验证不会创建 Git tag、GitHub Release 或 npm 发布。
 
 ## 文档、存储与历史证据
 

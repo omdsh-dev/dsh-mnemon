@@ -72,6 +72,7 @@
 - [ ] 持久化格式、RPC 权限、路径或凭据处理的变更包含兼容或拒绝路径、安全分析和相应测试。 / Changes to persistence formats, RPC authority, paths, or credentials include compatibility or rejection paths, security analysis, and tests.
 - [ ] 没有提交 token、密钥、私有记忆、未脱敏日志或生成的 `lib/` 文件。 / I did not commit tokens, credentials, private memory, unredacted logs, or generated `lib/` files.
 - [ ] 用户可见文案和长期文档已同步维护中文与英文版本，命令、配置键和路径保持一致。 / User-facing copy and long-lived documentation are synchronized in Chinese and English, with matching commands, configuration keys, and paths.
+- [ ] 会改变发布制品或其元数据的 PR 已添加 changeset；仅测试、CI 或站点文档变更可不添加。 / A PR that changes a published artifact or its metadata includes a changeset; test-only, CI-only, and site-documentation-only changes may omit one.
 - [ ] 新增和修改的代码、注释、文档、提交信息不含 emoji。 / New and modified code, comments, documentation, and commits contain no emoji.
 
 ## 兼容性与数据安全 / Compatibility and Data Safety

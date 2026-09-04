@@ -122,9 +122,9 @@ jobs:
               errors.push('请填写使用的 AI 模型和编码 Agent 工具；未使用时两项均填 N/A。 / Provide the AI model and coding Agent tool; enter N/A in both fields when none were used.');
             }
 
-            const requiredRuleCount = 6;
+            const requiredRuleCount = 7;
             if (checkedLines(repoRules).length < requiredRuleCount) {
-              errors.push('请逐项确认“仓库规范检查 / Repository Rules”的全部六项。 / Confirm all six items in “仓库规范检查 / Repository Rules”.');
+              errors.push('请逐项确认“仓库规范检查 / Repository Rules”的全部七项。 / Confirm all seven items in “仓库规范检查 / Repository Rules”.');
             }
             if (isBlank(compatibility)) {
               errors.push('请填写“兼容性与数据安全 / Compatibility and Data Safety”；没有影响时填 N/A 并说明理由。 / Complete “兼容性与数据安全 / Compatibility and Data Safety”; enter N/A with a reason when there is no impact.');

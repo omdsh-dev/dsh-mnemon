@@ -128,6 +128,10 @@
     "verify:plugins": "node scripts/verify-plugin-artifacts.mjs",
     "e2e:serve": "node scripts/serve-e2e.mjs",
     "verify": "pnpm run typecheck && pnpm run verify:build && pnpm --workspace-concurrency=4 -r build && pnpm -r typecheck && pnpm -r test && pnpm run test:root && pnpm run verify:headless && pnpm run verify:package",
+    "changeset": "changeset",
+    "release:intent": "node scripts/check-release-intent.mjs",
+    "release:status": "changeset status",
+    "release:version": "changeset version && node scripts/sync-release-metadata.mjs && pnpm install --lockfile-only",
     "dsh:link-source": "node scripts/link-dsh-source.mjs",
     "dsh:restore-registry": "node scripts/link-dsh-source.mjs --restore",
     "release:check": "node scripts/release.mjs --check"
@@ -161,6 +165,7 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
+    "@changesets/cli": "^2.31.1",
     "@deepseek-ai/cordis": "^4.0.2",
     "@deepseek-ai/dsh": "0.1.2-rc.1",
     "@deepseek-ai/dsh-agent": "0.1.2-rc.1",
@@ -195,6 +200,7 @@
     "publint": "^0.3.23",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "semver": "^7.8.5",
     "tsdown": "^0.22.0",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0"
