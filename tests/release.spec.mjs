@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
-import { createReleasePlan, packRelease, publishRelease, readReleasePackages, verifyRegistryRelease } from '../scripts/release.mjs'
+import { createReleasePlan, packRelease, publishRelease, readReleasePackages, verifyRegistryRelease, waitForRegistryArtifact } from '../scripts/release.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 function fixture(version = '0.5.0', distTag = 'latest') {
@@ -136,6 +136,19 @@ describe('complete, channel-safe official release', () => {
     await expect(publishRelease(plan, artifacts, run, {
       inspect: async () => ({ version: plan.version, integrity: 'sha512-different' }),
     })).rejects.toThrow('different Registry artifact')
+  })
+
+  it('allows stable Registry metadata to become readable after the old twelve-attempt window', async () => {
+    const expected = { name: 'dsh-mnemon-provider-example', version: '0.5.0', integrity: 'sha512-example' }
+    const inspect = vi.fn(async () => inspect.mock.calls.length < 14 ? null : {
+      version: expected.version,
+      integrity: expected.integrity,
+    })
+    await expect(waitForRegistryArtifact(expected, 'https://registry.example.test', vi.fn(), inspect, 30, 0)).resolves.toEqual({
+      version: expected.version,
+      integrity: expected.integrity,
+    })
+    expect(inspect).toHaveBeenCalledTimes(14)
   })
 
   it('installs the frozen Starter and verifies every Registry plugin manifest', async () => {

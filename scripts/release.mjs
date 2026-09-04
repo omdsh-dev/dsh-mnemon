@@ -140,7 +140,7 @@ export async function inspectRegistryArtifact(name, version, registry = defaultR
   }
 }
 
-async function waitForRegistryArtifact(expected, registry, run, inspect, attempts = 12) {
+export async function waitForRegistryArtifact(expected, registry, run, inspect, attempts = 30, retryDelayMs = 3_000) {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const published = await inspect(expected.name, expected.version, registry, run)
     if (published !== null) {
@@ -148,7 +148,7 @@ async function waitForRegistryArtifact(expected, registry, run, inspect, attempt
       assert.equal(published.integrity, expected.integrity, `${expected.name}: Registry bytes differ from the frozen tarball`)
       return published
     }
-    if (attempt < attempts) await new Promise(resolveDelay => setTimeout(resolveDelay, 2_000))
+    if (attempt < attempts) await new Promise(resolveDelay => setTimeout(resolveDelay, retryDelayMs))
   }
   throw new Error(`${expected.name}@${expected.version} did not become readable from ${registry}`)
 }
