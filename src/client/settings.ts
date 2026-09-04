@@ -94,6 +94,12 @@ export class MnemonSettingsScope<T extends object> implements ClientSettingsScop
 
   private publish(snapshot: ClientSettingsSnapshot<T>): void {
     this.snapshot = snapshot
-    for (const listener of this.listeners) listener()
+    for (const listener of this.listeners) {
+      try {
+        listener()
+      } catch (error) {
+        console.warn('dsh-mnemon: settings listener failed; keeping the published Host snapshot', error)
+      }
+    }
   }
 }

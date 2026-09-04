@@ -4,6 +4,23 @@ import type { ClientConnectionHandle } from "../src/host/dsh.ts"
 import { MnemonSettingsScope } from '../src/client/settings.ts'
 
 describe('MnemonSettingsScope', () => {
+  it('keeps a successful Host snapshot when one subscriber throws', async () => {
+    const snapshot = { status: 'ready' as const, value: { turnBar: true }, revision: 1, writable: true, mode: 'host' as const }
+    const call = vi.fn(async () => ({ ok: true as const, value: snapshot }))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const scope = new MnemonSettingsScope<InteractionConfig>({ rpc: { call } } as ClientConnectionHandle, 'mnemon-ui')
+    const laterListener = vi.fn()
+    scope.subscribe(() => { throw new Error('broken client mount') })
+    scope.subscribe(laterListener)
+
+    await vi.waitFor(() => expect(scope.getSnapshot()).toEqual(snapshot))
+
+    expect(laterListener).toHaveBeenCalledOnce()
+    expect(call).toHaveBeenCalledOnce()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('keeping the published Host snapshot'), expect.any(Error))
+    warn.mockRestore()
+  })
+
   it('commits a multi-field edit through one namespaced revision fence', async () => {
     const call = vi.fn(async (_channel: string, endpoint: string, payload: unknown) => {
       if (endpoint === 'get') return { ok: true as const, value: { status: 'ready', value: { turnBar: false, saveAction: false }, revision: 3, writable: true, mode: 'host' } }

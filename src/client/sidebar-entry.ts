@@ -63,14 +63,15 @@ function createEntry(controller: MnemonWorkspaceController): { entry: HTMLButton
 function placeEntry(root: HTMLElement, entry: HTMLButtonElement): boolean {
   const button = newSessionButton(root)
   if (button === undefined) return false
-  if (entry.parentElement === root) return true
   const row = button.closest('[class*="logoRow"]')
   const base = row !== null && row.parentElement === root ? row : button
-  const family = Array.from(root.children).filter(
+  const parent = base.parentElement ?? root
+  if (entry.parentElement === parent) return true
+  const family = Array.from(parent.children).filter(
     (element): element is HTMLElement => element instanceof HTMLElement && element.matches(FAMILY_SELECTOR),
   )
   const anchor = family.at(-1)?.nextElementSibling ?? base.nextElementSibling
-  root.insertBefore(entry, anchor)
+  parent.insertBefore(entry, anchor !== null && anchor.parentElement === parent ? anchor : null)
   return true
 }
 
@@ -128,14 +129,19 @@ export function mountMnemonSidebarEntry(
   }
   const unsubscribe = controller.subscribe(syncActive)
   const unsubscribeLocale = subscribeLocale?.(syncLabel) ?? (() => {})
-  syncActive()
-  tryPlace()
-
-  return () => {
+  const dispose = (): void => {
     waitObserver.disconnect()
     rootObserver.disconnect()
     unsubscribe()
     unsubscribeLocale()
     entry.remove()
+  }
+  try {
+    syncActive()
+    tryPlace()
+    return dispose
+  } catch (error) {
+    dispose()
+    throw error
   }
 }

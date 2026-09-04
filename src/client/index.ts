@@ -117,16 +117,36 @@ function mountSidebarMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
       t: translate,
     }),
   }, MnemonSidebarWorkspaceHost))
-  const disposeBetterSidebar = mountBetterSidebarTab(ctx, translate, betterSidebarSeat)
-  if (typeof window === 'undefined' || typeof document === 'undefined') return () => { disposeBetterSidebar(); disposeView() }
+  let disposeBetterSidebar: (() => void) | undefined
+  let disposeLauncher: (() => void) | undefined
+  let listening = false
+  let disposed = false
   const openMemoryView = (): void => { navigation.open() }
-  window.addEventListener(MNEMON_ANCHOR_EVENT, openMemoryView)
-  const disposeLauncher = mountMnemonSidebarLauncher(ctx, translate, controller)
-  return () => {
-    disposeLauncher()
-    window.removeEventListener(MNEMON_ANCHOR_EVENT, openMemoryView)
-    disposeBetterSidebar()
-    disposeView()
+  const dispose = (): void => {
+    if (disposed) return
+    disposed = true
+    try {
+      disposeLauncher?.()
+    } finally {
+      if (listening) window.removeEventListener(MNEMON_ANCHOR_EVENT, openMemoryView)
+      try {
+        disposeBetterSidebar?.()
+      } finally {
+        disposeView()
+      }
+    }
+  }
+  try {
+    disposeBetterSidebar = mountBetterSidebarTab(ctx, translate, betterSidebarSeat)
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      window.addEventListener(MNEMON_ANCHOR_EVENT, openMemoryView)
+      listening = true
+      disposeLauncher = mountMnemonSidebarLauncher(ctx, translate, controller)
+    }
+    return dispose
+  } catch (error) {
+    dispose()
+    throw error
   }
 }
 

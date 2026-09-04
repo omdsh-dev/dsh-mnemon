@@ -410,6 +410,30 @@ describe('Mnemon canonical workspace launcher', () => {
     expect(document.querySelector('[data-dsh-mnemon-entry]')).toBeNull()
   })
 
+  it('mounts beside a nested DSH Desktop new-session row without using a foreign anchor', async () => {
+    document.body.innerHTML = `<div data-dsh-frame>
+      <aside data-pane="sidebar">
+        <div class="dshp-root" data-dshp-panel-sidebar>
+          <div class="dshp-logoRow"><button>Brand</button></div>
+          <div class="dshp-panelArea"><button class="dshp-menuItem dshp-newSession">New</button><div data-slot></div></div>
+          <div class="dshp-regionArea"></div>
+        </div>
+      </aside>
+      <main data-pane="conversation"><div data-chat-content>Chat stays mounted</div></main>
+    </div>`
+    const panelArea = document.querySelector<HTMLElement>('.dshp-panelArea')!
+    const slot = panelArea.querySelector<HTMLElement>('[data-slot]')!
+
+    currentDispose = mountMnemonSidebarLauncher(context() as never, t as never, new MnemonWorkspaceController())
+
+    const entry = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')!
+    expect(entry.parentElement).toBe(panelArea)
+    expect(entry.nextElementSibling).toBe(slot)
+
+    entry.remove()
+    await waitFor(() => expect(document.querySelector('[data-dsh-mnemon-entry]')?.parentElement).toBe(panelArea))
+  })
+
   it('mounts the launcher in the DSH advanced frame without replacing conversation content', () => {
     renderShell(true)
     currentDispose = mountMnemonSidebarLauncher(context() as never, t as never, new MnemonWorkspaceController())
