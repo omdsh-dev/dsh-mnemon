@@ -87,7 +87,7 @@ jobs:
         run: pnpm run verify
 
       - name: Verify independent plugins and packed v0.4.7 upgrade E2E
-        run: pnpm run verify:plugins
+        run: pnpm run verify:plugins --skip-build
 
       - name: Pack the frozen seventeen-artifact set
         run: node scripts/release.mjs --pack --artifacts release-artifacts

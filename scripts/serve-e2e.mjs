@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Real DSH WebUI with disposable state and a loopback-only model stub.
-// Run after pnpm build && pnpm --workspace-concurrency=1 -r build; stop with Ctrl-C to remove the fixture.
+// Run after pnpm build && pnpm --workspace-concurrency=4 -r build; stop with Ctrl-C to remove the fixture.
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'

@@ -6,7 +6,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
   pull-requests: read
 
 jobs:
@@ -146,21 +145,11 @@ jobs:
               return;
             }
 
-            const comment = [
-              '本 PR 未满足仓库贡献规范。请更新描述并保持 PR 模板完整：',
-              'This PR does not meet the repository contribution requirements. Update the description and keep the PR template intact:',
-              '',
-              ...errors.map((error) => `- ${error}`),
-              '',
-              '修正后，规则检查会在编辑 PR 描述或推送新提交时重新运行。',
-              'After correction, the policy check will run again when the PR description is edited or a new commit is pushed.',
-            ].join('\n');
-            if (context.payload.action !== 'synchronize') {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: pr.number,
-                body: comment,
-              });
-            }
+            await core.summary
+              .addHeading('PR contribution requirements')
+              .addRaw('Update the PR description and keep the complete template.\n')
+              .addList(errors)
+              .addRaw('After correction, edit the PR description or push a commit to rerun this check.\n')
+              .write();
+            for (const error of errors) core.error(error);
             core.setFailed(errors.join('\n'));
