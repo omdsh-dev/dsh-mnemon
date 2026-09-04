@@ -159,8 +159,8 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
     endTurn: vi.fn((turnId: string) => pinnedTurns.delete(turnId)),
   }
   const runtimeSource = {
-    forAgent: vi.fn(() => ({ config, composableTurns, memoryComposition: { generation: () => ({ sourceInstances: () => [] }) } })),
-    bindAgentRuntime: vi.fn(() => vi.fn()),
+    forAgent: vi.fn((_agent: HostAgent) => ({ config, composableTurns, memoryComposition: { generation: () => ({ sourceInstances: () => [] }) } })),
+    bindAgentRuntime: vi.fn((_agentId: string, _graph: unknown): (() => void) => () => undefined),
   }
   const lifecycle = new MnemonLifecycle(ctx, coordinator, config, runtimeSource as never)
   const stop = lifecycle.start()
@@ -705,9 +705,8 @@ describe('Mnemon DSH lifecycle integration', () => {
   it('keeps the activity watermark when a new turn aborts an in-flight review', async () => {
     vi.useFakeTimers()
     const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
-    let finish: (() => void) | undefined
-    vi.mocked(value.coordinator.review).mockImplementationOnce(async () => await new Promise(resolve => {
-      finish = () => resolve({
+    vi.mocked(value.coordinator.review).mockImplementationOnce(async (_parent, signal) => await new Promise(resolve => {
+      const finish = () => resolve({
         delegated: true,
         runId: 'review-child',
         provider: 'fork',
@@ -715,6 +714,8 @@ describe('Mnemon DSH lifecycle integration', () => {
         action: 'skipped',
         memoryBodyIds: [],
       })
+      if (signal.aborted) finish()
+      else signal.addEventListener('abort', finish, { once: true })
     }))
 
     await value.preStep([durableCandidate()], 1)
@@ -727,7 +728,6 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ reviewRunning: true })
 
     await value.preStep([userMessage('new evidence')], 3)
-    finish?.()
     await vi.advanceTimersByTimeAsync(0)
 
     expect(value.lifecycle.snapshot('session-1').current).toMatchObject({
@@ -736,6 +736,56 @@ describe('Mnemon DSH lifecycle integration', () => {
       reviewActivity: { score: 6, turnCount: 3, eligible: true },
     })
     expect(value.lifecycle.snapshot('session-1').current?.lastReviewAt).toBeUndefined()
+  })
+
+  it('settles an aborted idle review before a new turn pins the same Agent runtime', async () => {
+    vi.useFakeTimers()
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
+    const bindings = new Set<string>()
+    vi.mocked(value.runtimeSource.bindAgentRuntime).mockImplementation((agentId: string) => {
+      if (bindings.has(agentId)) throw new Error(`Mnemon runtime is already pinned for Agent ${agentId}`)
+      bindings.add(agentId)
+      return () => { bindings.delete(agentId) }
+    })
+    vi.mocked(value.coordinator.review).mockImplementationOnce(async (parent, signal) => {
+      const release = value.runtimeSource.bindAgentRuntime(parent.id, value.runtimeSource.forAgent(parent))
+      try {
+        await new Promise<void>(resolve => {
+          if (signal.aborted) resolve()
+          else signal.addEventListener('abort', () => resolve(), { once: true })
+        })
+        return {
+          delegated: true,
+          runId: 'review-child',
+          provider: 'fork',
+          summary: 'Aborted stale review',
+          action: 'skipped',
+          memoryBodyIds: [],
+          documentIds: [],
+        }
+      } finally {
+        release()
+      }
+    })
+
+    try {
+      await value.preStep([durableCandidate()], 1)
+      await value.turnStopping(1)
+      await value.preStep([userMessage('threshold turn')], 2)
+      await value.turnStopping(2)
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ reviewRunning: true })
+
+      await expect(value.preStep([userMessage('new evidence')], 3)).resolves.toMatchObject({ kind: 'enter' })
+      expect(value.lifecycle.snapshot('session-1').current).toMatchObject({
+        reviewRunning: false,
+        idleReviewPending: false,
+      })
+      expect(bindings).toEqual(new Set(['session-1']))
+    } finally {
+      value.stop()
+      await vi.advanceTimersByTimeAsync(0)
+    }
   })
 
   it('can cue recall and remember independently', async () => {
