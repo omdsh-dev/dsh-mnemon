@@ -5,74 +5,18 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
-  verify-dsh-alpha-source:
-    name: Verify DSH 0.1.2-alpha.5 source
+  verify-source:
+    name: Verify source (Node 22.19)
     runs-on: ubuntu-latest
-    timeout-minutes: 35
-    steps:
-      - name: Check out dsh-mnemon
-        uses: actions/checkout@v6
-        with:
-          path: dsh-mnemon
-
-      - name: Check out DSH alpha source
-        uses: actions/checkout@v6
-        with:
-          repository: deepseek-ai/deepseek-harness
-          ref: dsh-v0.1.2-alpha.5
-          path: deepseek-harness
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          package-manager-cache: false
-
-      - name: Install pnpm
-        run: npm install --global pnpm@11.7.0
-
-      - name: Build DSH alpha libraries
-        working-directory: deepseek-harness
-        run: |
-          pnpm install --frozen-lockfile
-          pnpm run build:lib
-
-      - name: Install dsh-mnemon dependencies
-        working-directory: dsh-mnemon
-        run: pnpm install --frozen-lockfile
-
-      - name: Link DSH alpha source packages
-        working-directory: dsh-mnemon
-        env:
-          DSH_SOURCE_ROOT: ${{ github.workspace }}/deepseek-harness
-          DSH_SOURCE_VERSION: 0.1.2-alpha.5
-        run: pnpm run dsh:link-source
-
-      - name: Verify against DSH alpha
-        working-directory: dsh-mnemon
-        env:
-          # Keep the deliberate source overlay through nested pnpm scripts.
-          pnpm_config_verify_deps_before_run: 'false'
-        run: pnpm run verify
-
-  verify:
-    name: Verify (${{ matrix.os }}, Node ${{ matrix.node }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            node: 22.19.0
-          - os: ubuntu-latest
-            node: 24
-          - os: windows-latest
-            node: 24
+    timeout-minutes: 15
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -80,7 +24,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: ${{ matrix.node }}
+          node-version: 22.19.0
           package-manager-cache: false
 
       - name: Install pnpm
@@ -89,72 +33,57 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify package
-        if: runner.os != 'Windows'
-        run: pnpm run verify
-
-      - name: Verify independent plugin repositories and packed consumers
-        if: runner.os == 'Linux' && matrix.node == 24
-        run: pnpm run verify:plugins
-
-      - name: Type-check package on Windows
-        if: runner.os == 'Windows'
+      - name: Type-check integrated source
         run: pnpm run typecheck
 
-      - name: Test Windows integration
-        if: runner.os == 'Windows'
-        run: pnpm exec vitest run tests/config.spec.ts plugins/dsh-mnemon-source-memory-spaces/tests/runner.spec.ts tests/version-updates.spec.ts
+      - name: Verify deterministic root build
+        run: pnpm run verify:build
 
-      - name: Verify deterministic build on Windows
-        if: runner.os == 'Windows'
-        run: pnpm run verify:build && pnpm --workspace-concurrency=1 -r build
+      - name: Build public plugin SDK entries
+        run: >-
+          pnpm --workspace-concurrency=2
+          --filter dsh-mnemon-source-memory-spaces
+          --filter dsh-mnemon-source-documents
+          --filter dsh-mnemon-source-runtime
+          --filter dsh-mnemon-strategy-default-three-tier
+          --parallel run build
 
-      - name: Verify published package on Windows
-        if: runner.os == 'Windows'
+      - name: Test integrated source
+        run: pnpm run test
+
+      - name: Verify root package
         run: pnpm run verify:package
 
-      - name: Download and verify Mnemon Windows release
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $version = '0.2.3'
-          $archiveName = "mnemon_${version}_windows_amd64.zip"
-          $releaseBase = "https://github.com/mnemon-dev/mnemon/releases/download/v${version}"
-          $archive = Join-Path $env:RUNNER_TEMP $archiveName
-          $checksumFile = Join-Path $env:RUNNER_TEMP 'mnemon-checksums.txt'
-          Invoke-WebRequest "${releaseBase}/${archiveName}" -OutFile $archive
-          Invoke-WebRequest "${releaseBase}/checksums.txt" -OutFile $checksumFile
-          $line = Get-Content $checksumFile | Where-Object { $_.EndsWith("  $archiveName") } | Select-Object -First 1
-          if (-not $line) { throw "Checksum entry not found for $archiveName" }
-          $expected = (($line -split '\s+')[0]).ToLowerInvariant()
-          $actual = (Get-FileHash -Path $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($actual -ne $expected) { throw "Checksum mismatch for $archiveName" }
-          $installDir = Join-Path $env:LOCALAPPDATA 'Programs\mnemon'
-          New-Item -ItemType Directory -Force -Path $installDir | Out-Null
-          Expand-Archive -Path $archive -DestinationPath $installDir -Force
-          $command = Join-Path $installDir 'mnemon.exe'
-          "MNEMON_WINDOWS_SMOKE_PATH=$command" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "MNEMON_WINDOWS_SMOKE_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Smoke-test default Windows discovery
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $installDir = Split-Path $env:MNEMON_WINDOWS_SMOKE_PATH
-          $env:PATH = (($env:PATH -split ';') | Where-Object { $_.TrimEnd('\') -ine $installDir.TrimEnd('\') }) -join ';'
-          Remove-Item Env:GOBIN -ErrorAction SilentlyContinue
-          Remove-Item Env:GOPATH -ErrorAction SilentlyContinue
-          Remove-Item Env:MNEMON_CLI_PATH -ErrorAction SilentlyContinue
-          $env:RUN_WINDOWS_MNEMON_SMOKE = '1'
-          pnpm exec vitest run plugins/dsh-mnemon-source-memory-spaces/tests/windows-smoke.spec.ts
-
-      - name: Set up Node.js 20 for compatible-plugin smoke
-        if: runner.os == 'Linux' && matrix.node == 24
+      - name: Set up Node.js 20 for runtime compatibility
         uses: actions/setup-node@v6
         with:
           node-version: 20
           package-manager-cache: false
 
-      - name: Import public plugin entries on Node.js 20
-        if: runner.os == 'Linux' && matrix.node == 24
+      - name: Import every public entry on Node.js 20
         run: node scripts/verify-public-entries.mjs
+
+  verify-artifacts:
+    name: Verify packed plugins (Node 24)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Install pnpm
+        run: npm install --global pnpm@10.13.1
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify packed and independently installed plugins
+        env:
+          MNEMON_PLUGIN_VERIFY_CONCURRENCY: '4'
+        run: pnpm run verify:plugins

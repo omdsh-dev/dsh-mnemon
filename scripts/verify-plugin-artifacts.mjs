@@ -11,6 +11,9 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const args = new Set(process.argv.slice(2))
 for (const arg of args) if (!['--skip-build', '--keep'].includes(arg)) throw new Error(`Unknown argument: ${arg}`)
 const names = (await readdir(join(root, 'plugins'))).filter(name => name.startsWith('dsh-mnemon-')).sort()
+const configuredConcurrency = process.env.MNEMON_PLUGIN_VERIFY_CONCURRENCY ?? '4'
+assert.match(configuredConcurrency, /^[1-9]\d*$/, 'MNEMON_PLUGIN_VERIFY_CONCURRENCY must be a positive integer')
+const concurrency = Math.min(Number(configuredConcurrency), names.length)
 const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
 const distTag = manifest.publishConfig.tag
 const upgradeBaseResponse = await fetch('https://registry.npmjs.org/dsh-mnemon/0.4.7')
@@ -91,8 +94,10 @@ async function pack(directory, expectedName) {
   assert.equal(artifact.version, manifest.version)
   assert(artifact.files.some(file => file.path === 'LICENSE'), `${expectedName} must carry its own license`)
   for (const file of artifact.files) assert(!/^(?:src|tests|node_modules)\//u.test(file.path), `${expectedName} shipped development sources: ${file.path}`)
-  artifacts.set(expectedName, join(temporary, 'tarballs', artifact.filename))
-  artifactManifests.set(expectedName, JSON.parse(await readFile(join(directory, 'package.json'), 'utf8')))
+  return {
+    path: join(temporary, 'tarballs', artifact.filename),
+    manifest: JSON.parse(await readFile(join(directory, 'package.json'), 'utf8')),
+  }
 }
 
 async function install(directory, input) {
@@ -135,38 +140,64 @@ async function verifyIndependent(name) {
   assert(!inside(root, installed))
 }
 
-let succeeded = false
-try {
-  if (!args.has('--skip-build')) {
-    await run('pnpm', ['build'], root, 'build default distribution and public SDK')
-    await parallel(names.filter(name => name.startsWith('dsh-mnemon-source-')), 3,
-      name => run('pnpm', ['build'], join(root, 'plugins', name), `build ${name}`))
-    await run('pnpm', ['build'], join(root, 'plugins/dsh-mnemon-strategy-default-three-tier'), 'build Strategy-owned extension SDK')
-    await parallel(names.filter(name => !name.startsWith('dsh-mnemon-source-') && name !== 'dsh-mnemon-strategy-default-three-tier'), 3,
-      name => run('pnpm', ['build'], join(root, 'plugins', name), `build ${name}`))
-  }
-  await mkdir(join(temporary, 'tarballs'))
-  await pack(root, manifest.name)
-  for (const name of names) await pack(join(root, 'plugins', name), name)
-  await new Promise(resolve => registry.listen(0, '127.0.0.1', resolve))
-  registryUrl = 'http://127.0.0.1:' + registry.address().port
-  // Exercise the user's one-package installation, not just explicit link mounts.
-  await run(process.execPath, [join(root, 'scripts/verify-headless-profile.mjs'),
-    '--package', 'file:' + artifacts.get(manifest.name), '--registry', registryUrl,
-    '--upgrade-from', 'dsh-mnemon@0.4.7', '--upgrade-registry', 'https://registry.npmjs.org',
-  ], root, 'real DSH: install only the packed Starter and activate its plugins')
-  await run(process.execPath, [join(root, 'scripts/verify-headless-profile.mjs'),
-    '--package', 'file:' + artifacts.get(manifest.name), '--registry', registryUrl, '--strategy-extensions', 'true',
-  ], root, 'real DSH: activate three optional packed Strategy plugins together')
-  await parallel(names, 3, verifyIndependent)
-
+async function verifyConsumer() {
   const consumer = join(temporary, 'consumer')
   await cp(join(root, 'scripts/fixtures/plugin-consumer'), consumer, { recursive: true })
   const consumerManifest = JSON.parse(await readFile(join(consumer, 'package.json'), 'utf8'))
   await install(consumer, consumerManifest)
   await writeFile(join(consumer, 'artifacts.json'), JSON.stringify([...artifacts.keys()]) + '\n')
   for (const command of ['build', 'typecheck', 'test']) await run('npm', ['run', command], consumer, `external consumer: ${command}`)
-  console.log(`Verified ${names.length} independent plugin repositories and ${artifacts.size} packed artifacts with public SDK-only composition and Client tests.`)
+}
+
+let succeeded = false
+try {
+  if (!args.has('--skip-build')) {
+    await run('pnpm', ['build'], root, 'build default distribution and public SDK')
+    await Promise.all([
+      parallel(names.filter(name => name.startsWith('dsh-mnemon-source-')), concurrency,
+        name => run('pnpm', ['build'], join(root, 'plugins', name), `build ${name}`)),
+      run('pnpm', ['build'], join(root, 'plugins/dsh-mnemon-strategy-default-three-tier'), 'build Strategy-owned extension SDK'),
+    ])
+    await parallel(names.filter(name => !name.startsWith('dsh-mnemon-source-') && name !== 'dsh-mnemon-strategy-default-three-tier'), concurrency,
+      name => run('pnpm', ['build'], join(root, 'plugins', name), `build ${name}`))
+  }
+  await mkdir(join(temporary, 'tarballs'))
+  const packages = [
+    { directory: root, name: manifest.name },
+    ...names.map(name => ({ directory: join(root, 'plugins', name), name })),
+  ]
+  const packed = new Map()
+  await parallel(packages, concurrency, async input => packed.set(input.name, await pack(input.directory, input.name)))
+  // Parallel packing completes out of order. Populate the public registry maps
+  // in package-name order so leak checks and the consumer fixture stay stable.
+  for (const input of packages) {
+    const result = packed.get(input.name)
+    assert(result, `Missing packed artifact for ${input.name}`)
+    artifacts.set(input.name, result.path)
+    artifactManifests.set(input.name, result.manifest)
+  }
+  await new Promise(resolve => registry.listen(0, '127.0.0.1', resolve))
+  registryUrl = 'http://127.0.0.1:' + registry.address().port
+  const priority = name => name.startsWith('dsh-mnemon-source-') ? 40
+    : name.startsWith('dsh-mnemon-provider-') ? 30 : 20
+  const checks = [
+    ...names.map(name => ({ label: name, priority: priority(name), action: () => verifyIndependent(name) })),
+    { label: 'external consumer', priority: 25, action: verifyConsumer },
+    { label: 'real DSH Starter upgrade', priority: 10, action: () => run(process.execPath, [
+      join(root, 'scripts/verify-headless-profile.mjs'),
+      '--package', 'file:' + artifacts.get(manifest.name), '--registry', registryUrl,
+      '--upgrade-from', 'dsh-mnemon@0.4.7', '--upgrade-registry', 'https://registry.npmjs.org',
+    ], root, 'real DSH: install only the packed Starter and activate its plugins') },
+    { label: 'real DSH Strategy composition', priority: 10, action: () => run(process.execPath, [
+      join(root, 'scripts/verify-headless-profile.mjs'),
+      '--package', 'file:' + artifacts.get(manifest.name), '--registry', registryUrl, '--strategy-extensions', 'true',
+    ], root, 'real DSH: activate three optional packed Strategy plugins together') },
+  ].sort((left, right) => right.priority - left.priority || left.label.localeCompare(right.label))
+  // Longest checks enter the bounded worker pool first. This keeps all npm
+  // installs, real DSH checks and the external consumer concurrent without
+  // oversubscribing the runner with an unbounded Promise.all.
+  await parallel(checks, concurrency, check => check.action())
+  console.log(`Verified ${names.length} independent plugin repositories and ${artifacts.size} packed artifacts with ${concurrency} workers, public SDK-only composition and Client tests.`)
   succeeded = true
 } finally {
   await new Promise(resolve => registry.close(resolve))
