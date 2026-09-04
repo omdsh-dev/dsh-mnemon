@@ -31,8 +31,8 @@ This hub is organized by what you need to accomplish. New users should follow Ge
 | Understand Host, workers, control plane, and data plane | [Architecture](./architecture.md) |
 | Build a Source, Strategy or Memory Spaces Provider plugin | [Building Memory Extensions](./extensions.md) |
 | Modify code, screenshots, tests, or releases | [Development and verification](./development.md) |
-| Upgrade from the previous stable release | [v0.4.3 release notes](./releases/v0.4.3.md) |
-| Try the View-based plugin release candidate | [v0.5.0-rc.1 scope and upgrade notes](./releases/v0.5.0-rc.1.md) |
+| Upgrade to the current stable release | [v0.5.0 release notes](./releases/v0.5.0.md) |
+| Review the preceding release candidate | [v0.5.0-rc.1 scope and upgrade notes](./releases/v0.5.0-rc.1.md) |
 | See planned work | [Roadmap](./roadmap.md) |
 
 ## Core terms

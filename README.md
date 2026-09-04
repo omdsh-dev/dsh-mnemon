@@ -24,7 +24,7 @@
 <p align="center">
   <a href="./docs/en/capabilities.md"><strong>Explore the capability map</strong></a> ·
   <a href="./docs/en/getting-started.md">Start in five minutes</a> ·
-  <a href="./docs/en/releases/v0.4.7.md">Read the v0.4.7 notes</a> ·
+  <a href="./docs/en/releases/v0.5.0.md">Read the v0.5.0 notes</a> ·
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">Watch the widescreen demo</a>
 </p>
 
@@ -34,11 +34,11 @@
 
 Runtime, Documents and Memory Spaces are independent Source plugins. A Strategy selects their instance-specific projections, retrieval routes and actions into an immutable per-turn View. Core provides only `ctx.mnemonMemory`; Sources own their data and optional pages, while Memory Spaces owns its private Provider children. The `dsh-mnemon` Starter preserves the default three-tier experience. See [Architecture](./docs/en/architecture.md) and [Plugin development](./docs/en/extensions.md).
 
-**v0.5.0-rc.1 introduces View-based Memory and independently published Source/Strategy/Provider plugins.** The SDK remains a prerelease API rather than a frozen extension ABI; default user configuration and workflows stay compatible. Compared with v0.4, the ordinary UI adds only three disabled-by-default enhancement switches under **Settings → Memory System**—no View page or plugin-management entry. See the [release-candidate scope and upgrade notes](./docs/en/releases/v0.5.0-rc.1.md); v0.4 remains the stable Sidebar-convergence line.
+**v0.5.0 introduces View-based Memory and independently published Source/Strategy/Provider plugins as the current stable release.** The documented extension exports form the supported v0.5 surface; internal paths and Host RPC remain private. Default user configuration and workflows stay compatible. Compared with v0.4, the ordinary UI adds only three disabled-by-default enhancement switches under **Settings → Memory System**—no View page or plugin-management entry. See the [v0.5.0 scope and upgrade notes](./docs/en/releases/v0.5.0.md).
 
-The v0.5 branch includes main's v0.4.3 behavior: Sidebar is the default; optional `displayMode: builtin` places the same Source pages in the owning conversation. Legacy `buildin` is accepted and automatically saved as `builtin`, without changing memory data. The collapsed icon aligns with neighboring Sidebar controls. The settings-store and ZIP fixes from v0.4.1 are retained. See the [latest stable release notes](./docs/en/releases/v0.4.3.md) and [entry placement and scope mapping](./docs/en/configuration.md#entry-placement-displaymode-and-tabenabled).
+v0.5.0 retains the v0.4 Sidebar behavior: Sidebar is the default; optional `displayMode: builtin` places the same Source pages in the owning conversation. Legacy `buildin` is accepted and automatically saved as `builtin`, without changing memory data. The collapsed icon aligns with neighboring Sidebar controls, and the settings-store and ZIP fixes remain included. See the [stable release notes](./docs/en/releases/v0.5.0.md) and [entry placement and scope mapping](./docs/en/configuration.md#entry-placement-displaymode-and-tabenabled).
 
-v0.4.7 promotes the published DSH 0.1.2-rc.1 release to the stable registry baseline, keeps source verification against its alpha.5 predecessor, and retains a real WebUI regression on the previous 0.1.1-rc.2 line. See the [patch release notes](./docs/en/releases/v0.4.7.md).
+The tested DSH baseline remains 0.1.2-rc.1, with source verification against its alpha.5 predecessor and a real WebUI regression on the previous 0.1.1-rc.2 line.
 
 ## Understand the scope in 30 seconds
 
@@ -216,7 +216,7 @@ See [Operations, security, and troubleshooting](./docs/en/operations.md) for bac
 | Back up, update, or troubleshoot | [Operations](./docs/en/operations.md) |
 | Integrate tools, commands, or RPC | [Interface reference](./docs/en/interfaces.md) |
 | Build a Source, Strategy or Memory Spaces Provider plugin | [Extension guide](./docs/en/extensions.md) |
-| Review the stable release | [v0.4.3 release notes](./docs/en/releases/v0.4.3.md) |
+| Review the stable release | [v0.5.0 release notes](./docs/en/releases/v0.5.0.md) |
 
 See the [documentation hub](./docs/en/README.md) for the full map.
 

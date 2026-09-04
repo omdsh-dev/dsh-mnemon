@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createReleasePlan, packRelease, publishRelease, readReleasePackages, verifyRegistryRelease } from '../scripts/release.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
-function fixture(version = '0.5.0-rc.1', distTag = 'rc') {
+function fixture(version = '0.5.0', distTag = 'latest') {
   const provider = { directory: '/provider', manifest: { name: 'dsh-mnemon-provider-example', version, publishConfig: { access: 'public', tag: distTag } } }
   const starter = { directory: '/starter', manifest: { name: 'dsh-mnemon', version, publishConfig: { access: 'public', tag: distTag }, dependencies: { [provider.manifest.name]: version } } }
   return [starter, provider]
@@ -17,7 +17,7 @@ describe('complete, channel-safe official release', () => {
     const packages = await readReleasePackages(root)
     const plan = createReleasePlan(packages)
     expect(plan.packages).toHaveLength(17)
-    expect(plan.distTag).toBe('rc')
+    expect(plan.distTag).toBe('latest')
     expect(plan.packages.at(-1).manifest.name).toBe('dsh-mnemon')
     for (const { directory, manifest } of packages.filter(item => item.manifest.name.startsWith('dsh-mnemon-provider-'))) {
       // Provider contribution metadata must not retain the previous product version.
@@ -32,14 +32,14 @@ describe('complete, channel-safe official release', () => {
 
   it('rejects tag, prerelease and publishConfig mismatches before packing', () => {
     expect(() => createReleasePlan(fixture(), { tag: 'v0.4.0' })).toThrow('Release tag')
-    expect(() => createReleasePlan(fixture(), { prerelease: false })).toThrow('prerelease flag')
+    expect(() => createReleasePlan(fixture('0.5.0-rc.1', 'rc'), { prerelease: false })).toThrow('prerelease flag')
     expect(() => createReleasePlan(fixture('0.5.0-rc.1', 'latest'))).toThrow('publishConfig.tag')
     expect(() => createReleasePlan(fixture('0.5.0-dev.1'))).toThrow('Expected a stable version')
   })
 
   it('rejects missing artifacts, skewed versions and old peer ranges', () => {
     const packages = fixture()
-    packages[0].manifest.dependencies['dsh-mnemon-source-missing'] = '0.5.0-rc.1'
+    packages[0].manifest.dependencies['dsh-mnemon-source-missing'] = '0.5.0'
     expect(() => createReleasePlan(packages)).toThrow('missing release artifact')
     const skewed = fixture()
     skewed[1].manifest.version = '0.4.0'
@@ -51,7 +51,7 @@ describe('complete, channel-safe official release', () => {
 
   it('releases optional plugins without silently adding them to the default Starter', () => {
     const packages = fixture()
-    const optional = { directory: '/optional', manifest: { name: 'dsh-mnemon-strategy-example', version: '0.5.0-rc.1', publishConfig: { access: 'public', tag: 'rc' } } }
+    const optional = { directory: '/optional', manifest: { name: 'dsh-mnemon-strategy-example', version: '0.5.0', publishConfig: { access: 'public', tag: 'latest' } } }
     packages[0].manifest.devDependencies = { [optional.manifest.name]: optional.manifest.version }
     expect(createReleasePlan([...packages, optional]).packages.map(item => item.manifest.name)).toContain(optional.manifest.name)
     expect(packages[0].manifest.dependencies).not.toHaveProperty(optional.manifest.name)
@@ -59,7 +59,7 @@ describe('complete, channel-safe official release', () => {
     expect(() => createReleasePlan([...packages, optional])).toThrow('pin the tested plugin version')
   })
 
-  it('packs all packages before any publish and passes an explicit non-latest tag', async () => {
+  it('packs all packages before any publish and passes the explicit release tag', async () => {
     const plan = createReleasePlan(fixture())
     const destination = await mkdtemp(join(tmpdir(), 'mnemon-release-test-'))
     const calls = []
@@ -90,7 +90,7 @@ describe('complete, channel-safe official release', () => {
     }
     expect(calls.map(args => args[0])).toEqual(['pack', 'pack', 'publish', 'publish'])
     for (const args of calls.filter(args => args[0] === 'publish')) {
-      expect(args).toContain('rc')
+      expect(args).toContain('latest')
       expect(args).toContain('--ignore-scripts')
     }
     expect(calls.at(-1)[1]).toBe(join(destination, 'dsh-mnemon.tgz'))
@@ -118,7 +118,10 @@ describe('complete, channel-safe official release', () => {
     expect(workflow.indexOf('--publish-plugins')).toBeLessThan(workflow.indexOf('--publish-starter'))
     expect(workflow.indexOf('--publish-starter')).toBeLessThan(workflow.indexOf('gh release create'))
     expect(workflow).toContain('--upgrade-from dsh-mnemon@0.4.7')
-    expect(workflow).toContain('RELEASE_PRERELEASE: \'true\'')
+    expect(workflow).toContain('echo "RELEASE_PRERELEASE=$prerelease"')
+    expect(workflow).toContain('release_args+=(--prerelease)')
+    expect(workflow).toContain('release_args+=(--latest)')
+    expect(workflow).not.toContain('RELEASE_PRERELEASE: \'true\'')
     expect(workflow).not.toContain('npm publish "dsh-mnemon-')
   })
 
