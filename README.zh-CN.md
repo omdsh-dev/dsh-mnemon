@@ -24,7 +24,7 @@
 <p align="center">
   <a href="./docs/zh-CN/capabilities.md"><strong>先看能力地图</strong></a> ·
   <a href="./docs/zh-CN/getting-started.md">5 分钟开始</a> ·
-  <a href="./docs/zh-CN/releases/v0.4.7.md">v0.4.7 升级说明</a> ·
+  <a href="./docs/zh-CN/releases/v0.5.0.md">v0.5.0 升级说明</a> ·
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">观看宽屏实机演示</a>
 </p>
 
@@ -34,11 +34,11 @@
 
 Runtime、Documents、Memory Spaces 是独立 Source 插件；Strategy 将各实例的投影、检索 route 与 action 组合成逐回合不可变 View。Core 只提供 `ctx.mnemonMemory`，Source 拥有数据与可选页面，Memory Spaces 自己拥有内部 Provider 子节点。`dsh-mnemon` Starter 保持默认三层使用体验。详见[架构](./docs/zh-CN/architecture.md)与[插件开发](./docs/zh-CN/extensions.md)。
 
-**v0.5.0-rc.1 引入 View-based Memory，以及独立发布的 Source/Strategy/Provider 插件。** SDK 仍是预发布 API，尚未冻结扩展 ABI；默认用户配置与使用流程保持兼容。相对 v0.4，普通界面只在“设置 → 记忆系统”增加三个默认关闭的增强开关，不增加 View 页或插件管理入口。参阅 [RC 范围与升级说明](./docs/zh-CN/releases/v0.5.0-rc.1.md)；v0.4 仍是稳定的 Sidebar 收敛发行线。
+**v0.5.0 以当前稳定版引入 View-based Memory，以及独立发布的 Source/Strategy/Provider 插件。** 文档化的扩展导出构成 v0.5 支持表面，内部路径与 Host RPC 仍是私有实现。默认用户配置与使用流程保持兼容。相对 v0.4，普通界面只在“设置 → 记忆系统”增加三个默认关闭的增强开关，不增加 View 页或插件管理入口。参阅 [v0.5.0 范围与升级说明](./docs/zh-CN/releases/v0.5.0.md)。
 
-v0.5 分支已纳入 main 的 v0.4.3 行为：默认使用 Sidebar，可选 `displayMode: builtin` 将同一组 Source 页面放入所属会话。旧 `buildin` 可识别并自动保存为 `builtin`，不改变记忆数据；折叠图标与侧栏相邻控件对齐，v0.4.1 的 settings store 与 ZIP 修复也继续保留。详见[最新稳定版说明](./docs/zh-CN/releases/v0.4.3.md)与[入口位置及范围映射](./docs/zh-CN/configuration.md#入口位置displaymode-与-tabenabled)。
+v0.5.0 保留 v0.4 的 Sidebar 行为：默认使用 Sidebar，可选 `displayMode: builtin` 将同一组 Source 页面放入所属会话。旧 `buildin` 可识别并自动保存为 `builtin`，不改变记忆数据；折叠图标与侧栏相邻控件对齐，settings store 与 ZIP 修复也继续保留。详见[稳定版说明](./docs/zh-CN/releases/v0.5.0.md)与[入口位置及范围映射](./docs/zh-CN/configuration.md#入口位置displaymode-与-tabenabled)。
 
-v0.4.7 将已发布的 DSH 0.1.2-rc.1 提升为稳定的 registry 基线，继续对其 alpha.5 前序版本执行源码验证，并保留上一条 0.1.1-rc.2 版本线的真实 WebUI 回归。详见[补丁发布说明](./docs/zh-CN/releases/v0.4.7.md)。
+已验证的 DSH 基线仍是 0.1.2-rc.1，同时继续覆盖其 alpha.5 前序源码和上一条 0.1.1-rc.2 版本线的真实 WebUI 回归。
 
 ## 30 秒理解能力边界
 
@@ -216,7 +216,7 @@ dsh plugin --profile headless add "link:/absolute/path/to/dsh-mnemon"
 | 备份、更新或排障 | [运维指南](./docs/zh-CN/operations.md) |
 | 接入工具、命令或 RPC | [接口参考](./docs/zh-CN/interfaces.md) |
 | 开发 Source、Strategy 或 Memory Spaces Provider 插件 | [扩展开发指南](./docs/zh-CN/extensions.md) |
-| 查看稳定版升级 | [v0.4.3 发布说明](./docs/zh-CN/releases/v0.4.3.md) |
+| 查看稳定版升级 | [v0.5.0 发布说明](./docs/zh-CN/releases/v0.5.0.md) |
 
 完整目录见[文档中心](./docs/zh-CN/README.md)。
 

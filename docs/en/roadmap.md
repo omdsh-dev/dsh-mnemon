@@ -7,7 +7,7 @@ The Roadmap records work beyond the current implementation; it is not a commitme
 ## Release boundaries
 
 - **v0.4: Sidebar-first.** Retain the v0.3 architecture and memory formats. v0.4.0 initially removed builtin presentation; [v0.4.2](./releases/v0.4.2.md) restores optional `displayMode: builtin` with the shared UI, and [v0.4.3](./releases/v0.4.3.md) fixes the collapsed Sidebar icon. The v0.4.0 notes remain a historical release record.
-- **v0.5: View-based plugin release candidate.** The architecture upgrade retains the shared workbench and ships as independently verifiable plugins; see the [RC scope](./releases/v0.5.0-rc.1.md). Its SDK remains prerelease and is not yet a frozen extension ABI.
+- **v0.5: View-based plugin release.** The architecture upgrade retains the shared workbench and ships as independently verifiable plugins; see the [v0.5.0 scope](./releases/v0.5.0.md). Documented extension exports form the supported v0.5 surface; internal paths remain private.
 
 ## P0: Reliability and Recoverable Scheduling
 

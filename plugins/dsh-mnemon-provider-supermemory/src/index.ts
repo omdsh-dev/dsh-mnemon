@@ -7,7 +7,7 @@ export { SupermemoryProvider, descriptor }
 export const definition = defineMemorySpaceProviderDefinition({
   manifest: {
     apiVersion: MEMORY_SPACE_PROVIDER_API_VERSION, kind: 'provider',
-    typeId: descriptor.id, packageName: 'dsh-mnemon-provider-supermemory', version: '0.5.0-rc.1',
+    typeId: descriptor.id, packageName: 'dsh-mnemon-provider-supermemory', version: '0.5.0',
     label: descriptor.label, icon: descriptor.icon, summary: descriptor.summary,
     ...(descriptor.summaryI18nKey === undefined ? {} : { summaryI18nKey: descriptor.summaryI18nKey }),
     origin: descriptor.origin, locality: descriptor.kind, workspaceBinding: descriptor.workspaceBinding,

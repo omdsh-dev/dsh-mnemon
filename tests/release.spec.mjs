@@ -17,7 +17,7 @@ describe('complete, channel-safe official release', () => {
     const packages = await readReleasePackages(root)
     const plan = createReleasePlan(packages)
     expect(plan.packages).toHaveLength(17)
-    expect(plan.distTag).toBe('rc')
+    expect(plan.distTag).toBe('latest')
     expect(plan.packages.at(-1).manifest.name).toBe('dsh-mnemon')
     for (const { directory, manifest } of packages.filter(item => item.manifest.name.startsWith('dsh-mnemon-provider-'))) {
       // Provider contribution metadata must not retain the previous product version.

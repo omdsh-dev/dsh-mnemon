@@ -31,8 +31,8 @@
 | 理解 Host、worker、控制面与数据面 | [架构设计](./architecture.md) |
 | 开发 Source、Strategy 或 Memory Spaces Provider 插件 | [记忆扩展开发](./extensions.md) |
 | 修改代码、截图、测试或发布 | [开发与验证](./development.md) |
-| 从上一稳定版本升级 | [v0.4.3 发布说明](./releases/v0.4.3.md) |
-| 尝试 View-based 插件 RC | [v0.5.0-rc.1 范围与升级说明](./releases/v0.5.0-rc.1.md) |
+| 升级到当前稳定版本 | [v0.5.0 发布说明](./releases/v0.5.0.md) |
+| 查阅上一版 RC 记录 | [v0.5.0-rc.1 范围与升级说明](./releases/v0.5.0-rc.1.md) |
 | 查看下一阶段计划 | [Roadmap](./roadmap.md) |
 
 ## 核心术语
