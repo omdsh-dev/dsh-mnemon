@@ -88,7 +88,7 @@ jobs:
 
       - name: Verify independent plugins and packed v0.4.7 upgrade E2E
         env:
-          MNEMON_PLUGIN_VERIFY_CONCURRENCY: '6'
+          MNEMON_PLUGIN_VERIFY_CONCURRENCY: '4'
         run: pnpm run verify:plugins --skip-build
 
       - name: Pack the frozen seventeen-artifact set
