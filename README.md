@@ -24,7 +24,7 @@
 <p align="center">
   <a href="./docs/en/capabilities.md"><strong>Explore the capability map</strong></a> ·
   <a href="./docs/en/getting-started.md">Start in five minutes</a> ·
-  <a href="./docs/en/releases/v0.5.0.md">Read the v0.5.0 notes</a> ·
+  <a href="./docs/en/releases/v0.5.1.md">Read the v0.5.1 notes</a> ·
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">Watch the widescreen demo</a>
 </p>
 
@@ -34,11 +34,13 @@
 
 Runtime, Documents and Memory Spaces are independent Source plugins. A Strategy selects their instance-specific projections, retrieval routes and actions into an immutable per-turn View. Core provides only `ctx.mnemonMemory`; Sources own their data and optional pages, while Memory Spaces owns its private Provider children. The `dsh-mnemon` Starter preserves the default three-tier experience. See [Architecture](./docs/en/architecture.md) and [Plugin development](./docs/en/extensions.md).
 
-**v0.5.0 introduces View-based Memory and independently published Source/Strategy/Provider plugins as the current stable release.** The documented extension exports form the supported v0.5 surface; internal paths and Host RPC remain private. Default user configuration and workflows stay compatible. Compared with v0.4, the ordinary UI adds only three disabled-by-default enhancement switches under **Settings → Memory System**—no View page or plugin-management entry. See the [v0.5.0 scope and upgrade notes](./docs/en/releases/v0.5.0.md).
+**The v0.5 line introduces View-based Memory and independently published Source/Strategy/Provider plugins.** The documented extension exports form the supported v0.5 surface; internal paths and Host RPC remain private. Default user configuration and workflows stay compatible. Compared with v0.4, the ordinary UI adds only three disabled-by-default enhancement switches under **Settings → Memory System**—no View page or plugin-management entry. See the [v0.5.0 architecture scope](./docs/en/releases/v0.5.0.md).
 
 v0.5.0 retains the v0.4 Sidebar behavior: Sidebar is the default; optional `displayMode: builtin` places the same Source pages in the owning conversation. Legacy `buildin` is accepted and automatically saved as `builtin`, without changing memory data. The collapsed icon aligns with neighboring Sidebar controls, and the settings-store and ZIP fixes remain included. See the [stable release notes](./docs/en/releases/v0.5.0.md) and [entry placement and scope mapping](./docs/en/configuration.md#entry-placement-displaymode-and-tabenabled).
 
-The tested DSH baseline remains 0.1.2-rc.1, with source verification against its alpha.5 predecessor and a real WebUI regression on the previous 0.1.1-rc.2 line.
+v0.5.1 fixes writable settings under the released nested Desktop Sidebar and removes an Idle Review race that could reject the next conversation turn with an `already pinned` error. See the [v0.5.1 patch notes](./docs/en/releases/v0.5.1.md).
+
+The tested DSH baseline remains 0.1.2-rc.1, with Node 20 public-entry compatibility and retained regression evidence for the previous 0.1.1-rc.2 line.
 
 ## Understand the scope in 30 seconds
 
@@ -114,7 +116,7 @@ Windows users can install the official v0.2.3-or-newer release ZIP. The expected
 
 ### 2. Install DSH and the plugin
 
-The registry installation is verified against stable DSH 0.1.2-rc.1, whose complete profiles require Node.js `^22.19.0 || >=24.0.0`. The immediately preceding DSH 0.1.2-alpha.5 remains covered from source, and the previous 0.1.1-rc.2 registry line remains a backward-regression target. The dsh-mnemon package itself retains Node.js 20 compatibility for older compatible DSH hosts. Use the exact published version below for a reproducible installation; plugin authors can follow the [alpha source workflow](./docs/en/development.md#dsh-012-alpha5-source-compatibility).
+The registry installation is verified against stable DSH 0.1.2-rc.1, whose complete profiles require Node.js `^22.19.0 || >=24.0.0`. The dsh-mnemon package itself retains Node.js 20 public-entry compatibility for older compatible DSH hosts. Use the exact published version below for a reproducible installation; maintainers can run the optional [alpha source compatibility workflow](./docs/en/development.md#manual-dsh-012-alpha5-source-compatibility).
 
 ```sh
 npm install -g @deepseek-ai/dsh@0.1.2-rc.1
@@ -122,7 +124,7 @@ dsh --version
 ```
 
 ```sh
-dsh plugin --profile web add dsh-mnemon
+dsh plugin --profile web add dsh-mnemon@0.5.1
 dsh --profile web
 ```
 
@@ -216,7 +218,7 @@ See [Operations, security, and troubleshooting](./docs/en/operations.md) for bac
 | Back up, update, or troubleshoot | [Operations](./docs/en/operations.md) |
 | Integrate tools, commands, or RPC | [Interface reference](./docs/en/interfaces.md) |
 | Build a Source, Strategy or Memory Spaces Provider plugin | [Extension guide](./docs/en/extensions.md) |
-| Review the stable release | [v0.5.0 release notes](./docs/en/releases/v0.5.0.md) |
+| Review the stable release | [v0.5.1 release notes](./docs/en/releases/v0.5.1.md) |
 
 See the [documentation hub](./docs/en/README.md) for the full map.
 

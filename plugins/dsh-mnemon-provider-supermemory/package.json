@@ -1,6 +1,6 @@
 {
   "name": "dsh-mnemon-provider-supermemory",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Supermemory Provider child for the Memory Spaces Source.",
   "license": "MIT",
   "type": "module",
@@ -30,11 +30,11 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "dsh-mnemon-source-memory-spaces": "0.5.0"
+    "dsh-mnemon-source-memory-spaces": "0.5.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "dsh-mnemon-source-memory-spaces": "0.5.0",
+    "dsh-mnemon-source-memory-spaces": "0.5.1",
     "tsdown": "^0.22.0",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0"

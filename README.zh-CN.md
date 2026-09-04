@@ -24,7 +24,7 @@
 <p align="center">
   <a href="./docs/zh-CN/capabilities.md"><strong>先看能力地图</strong></a> ·
   <a href="./docs/zh-CN/getting-started.md">5 分钟开始</a> ·
-  <a href="./docs/zh-CN/releases/v0.5.0.md">v0.5.0 升级说明</a> ·
+  <a href="./docs/zh-CN/releases/v0.5.1.md">v0.5.1 升级说明</a> ·
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">观看宽屏实机演示</a>
 </p>
 
@@ -34,11 +34,13 @@
 
 Runtime、Documents、Memory Spaces 是独立 Source 插件；Strategy 将各实例的投影、检索 route 与 action 组合成逐回合不可变 View。Core 只提供 `ctx.mnemonMemory`，Source 拥有数据与可选页面，Memory Spaces 自己拥有内部 Provider 子节点。`dsh-mnemon` Starter 保持默认三层使用体验。详见[架构](./docs/zh-CN/architecture.md)与[插件开发](./docs/zh-CN/extensions.md)。
 
-**v0.5.0 以当前稳定版引入 View-based Memory，以及独立发布的 Source/Strategy/Provider 插件。** 文档化的扩展导出构成 v0.5 支持表面，内部路径与 Host RPC 仍是私有实现。默认用户配置与使用流程保持兼容。相对 v0.4，普通界面只在“设置 → 记忆系统”增加三个默认关闭的增强开关，不增加 View 页或插件管理入口。参阅 [v0.5.0 范围与升级说明](./docs/zh-CN/releases/v0.5.0.md)。
+**v0.5 版本线引入 View-based Memory，以及独立发布的 Source/Strategy/Provider 插件。** 文档化的扩展导出构成 v0.5 支持表面，内部路径与 Host RPC 仍是私有实现。默认用户配置与使用流程保持兼容。相对 v0.4，普通界面只在“设置 → 记忆系统”增加三个默认关闭的增强开关，不增加 View 页或插件管理入口。参阅 [v0.5.0 架构范围](./docs/zh-CN/releases/v0.5.0.md)。
 
 v0.5.0 保留 v0.4 的 Sidebar 行为：默认使用 Sidebar，可选 `displayMode: builtin` 将同一组 Source 页面放入所属会话。旧 `buildin` 可识别并自动保存为 `builtin`，不改变记忆数据；折叠图标与侧栏相邻控件对齐，settings store 与 ZIP 修复也继续保留。详见[稳定版说明](./docs/zh-CN/releases/v0.5.0.md)与[入口位置及范围映射](./docs/zh-CN/configuration.md#入口位置displaymode-与-tabenabled)。
 
-已验证的 DSH 基线仍是 0.1.2-rc.1，同时继续覆盖其 alpha.5 前序源码和上一条 0.1.1-rc.2 版本线的真实 WebUI 回归。
+v0.5.1 修复正式 Desktop 嵌套 Sidebar 下设置不可写，以及 Idle Review 竞态导致下一轮对话出现 `already pinned` 错误的问题。详见 [v0.5.1 补丁说明](./docs/zh-CN/releases/v0.5.1.md)。
+
+已验证的 DSH 基线仍是 0.1.2-rc.1，同时保留 Node 20 公开入口兼容与上一条 0.1.1-rc.2 版本线的回归证据。
 
 ## 30 秒理解能力边界
 
@@ -114,7 +116,7 @@ Windows 推荐安装 v0.2.3 或更高版本的官方 ZIP；标准安装目录与
 
 ### 2. 安装 DSH 与插件
 
-Registry 安装以稳定的 DSH 0.1.2-rc.1 验证；其完整 profile 需要 Node.js `^22.19.0 || >=24.0.0`。它的直接前序版本 DSH 0.1.2-alpha.5 继续通过源码覆盖，上一条 0.1.1-rc.2 registry 版本线则保留为向后回归目标。dsh-mnemon 包本身仍为较旧且兼容的 DSH Host 保留 Node.js 20 支持。下面显式指定已发布版本以保证可复现安装；插件作者可参照 [alpha 源码兼容流程](./docs/zh-CN/development.md#dsh-012-alpha5-源码兼容)。
+Registry 安装以稳定的 DSH 0.1.2-rc.1 验证；其完整 profile 需要 Node.js `^22.19.0 || >=24.0.0`。dsh-mnemon 包本身仍为较旧且兼容的 DSH Host 保留 Node.js 20 公开入口兼容。下面显式指定已发布版本以保证可复现安装；维护者可按需运行 [alpha 源码兼容流程](./docs/zh-CN/development.md#手动-dsh-012-alpha5-源码兼容)。
 
 ```sh
 npm install -g @deepseek-ai/dsh@0.1.2-rc.1
@@ -122,7 +124,7 @@ dsh --version
 ```
 
 ```sh
-dsh plugin --profile web add dsh-mnemon
+dsh plugin --profile web add dsh-mnemon@0.5.1
 dsh --profile web
 ```
 
@@ -216,7 +218,7 @@ dsh plugin --profile headless add "link:/absolute/path/to/dsh-mnemon"
 | 备份、更新或排障 | [运维指南](./docs/zh-CN/operations.md) |
 | 接入工具、命令或 RPC | [接口参考](./docs/zh-CN/interfaces.md) |
 | 开发 Source、Strategy 或 Memory Spaces Provider 插件 | [扩展开发指南](./docs/zh-CN/extensions.md) |
-| 查看稳定版升级 | [v0.5.0 发布说明](./docs/zh-CN/releases/v0.5.0.md) |
+| 查看稳定版升级 | [v0.5.1 发布说明](./docs/zh-CN/releases/v0.5.1.md) |
 
 完整目录见[文档中心](./docs/zh-CN/README.md)。
 

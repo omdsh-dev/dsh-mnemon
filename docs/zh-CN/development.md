@@ -4,7 +4,7 @@
 
 ## 环境与命令
 
-插件的 Node engine 下限为 20；锁定的完整 DSH 开发 Profile 是稳定版 0.1.2-rc.1，需要 Node `^22.19.0 || >=24.0.0`，建议开发使用 Node 24。Root、Source Client 测试和外部制品消费者均使用该 rc.1 依赖族；`dsh-invariants` 闭合 peer 图，`dsh-client-store` 则提供子 Agent projection 适配器使用的公开 selector 类型。CI 另在 Node 20 冒烟导入公开 Node 入口，并继续从源码覆盖直接前序版本 0.1.2-alpha.5。
+插件的 Node engine 下限为 20；锁定的完整 DSH 开发 Profile 是稳定版 0.1.2-rc.1，需要 Node `^22.19.0 || >=24.0.0`，建议开发使用 Node 24。Root、Source Client 测试和外部制品消费者均使用该 rc.1 依赖族；`dsh-invariants` 闭合 peer 图，`dsh-client-store` 则提供子 Agent projection 适配器使用的公开 selector 类型。CI 另在 Node 20 冒烟导入公开 Node 入口；直接前序版本 0.1.2-alpha.5 保留显式源码覆盖流程。
 
 pnpm 11 可能在 rc.1 仍处于发布时间隔离窗口时安装这组已审核制品，因此 `minimumReleaseAgeExclude` 逐项列出精确版本。组合测试要求该列表与 lockfile 中的 rc.1 包完全一致，并拒绝 scope 通配符，使后续发布的 `@deepseek-ai` 包仍受隔离策略约束。
 
@@ -98,9 +98,9 @@ pnpm e2e:serve
 
 上一条 DSH 0.1.1-rc.2 版本线对 Bundle 变化的 Client 卸载并不完整；验证该回滚目标并修改 Client 包/locale 注册后应刷新页面。Mnemon 普通设置仍实时生效。区分上游 Profile/传输告警与 Mnemon 故障，不隐藏控制台。
 
-## DSH 0.1.2-alpha.5 源码兼容
+## 手动 DSH 0.1.2-alpha.5 源码兼容
 
-CI 还构建源码版 `dsh-v0.1.2-alpha.5`。已有 Harness 构建目录时：
+需要按需验证源码版 `dsh-v0.1.2-alpha.5` 时，先准备已构建的 Harness 目录：
 
 ```sh
 DSH_SOURCE_ROOT=/absolute/path/to/deepseek-harness pnpm dsh:link-source
@@ -108,7 +108,7 @@ pnpm_config_verify_deps_before_run=false pnpm verify
 pnpm dsh:restore-registry
 ```
 
-Harness 先运行自己的 `pnpm install --frozen-lockfile && pnpm build:lib`。链接仅更改生成的 `node_modules`，不改提交的依赖版本；它会覆盖 Starter 的完整 DSH 依赖图，包括 Store、Invariants 和新增的 Layout 依赖，并统一每个已安装插件 workspace 的 Cordis 身份；原 pnpm 链接逐项记录并恢复。插件 Client 测试依赖仍以 rc.1 留在各自 workspace 内，构建后的 Starter 负责验证 alpha.5 Client API。本次调用关闭 pnpm 的运行前依赖验证，避免嵌套脚本自动恢复 registry 链接。稳定 rc.1、源码 alpha.5 和旧 rc.2 协议均有专项测试；[隔离的 rc.1/rc.2 WebUI 证据](../pr-assets/dsh-rc1-compat/README.md)记录了正式 Host 行为。
+Harness 先运行自己的 `pnpm install --frozen-lockfile && pnpm build:lib`。链接仅更改生成的 `node_modules`，不改提交的依赖版本；它会覆盖 Starter 的完整 DSH 依赖图，包括 Store、Invariants 和新增的 Layout 依赖，并统一每个已安装插件 workspace 的 Cordis 身份；原 pnpm 链接逐项记录并恢复。插件 Client 测试依赖仍以 rc.1 留在各自 workspace 内，构建后的 Starter 负责验证 alpha.5 Client API。本次调用关闭 pnpm 的运行前依赖验证，避免嵌套脚本自动恢复 registry 链接。该覆盖流程是维护者显式执行的兼容检查，不属于最小化的每 PR CI 图；[隔离的 rc.1/rc.2 WebUI 证据](../pr-assets/dsh-rc1-compat/README.md)记录了正式 Host 行为。
 
 ## 成组发布
 
