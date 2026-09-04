@@ -131,7 +131,7 @@ function missingRegistryVersion(error) {
 
 export async function inspectRegistryArtifact(name, version, registry = defaultRegistry, run = npm) {
   try {
-    const output = await run(['view', `${name}@${version}`, 'version', 'dist.integrity', '--json', '--registry', registry], root)
+    const output = await run(['view', `${name}@${version}`, 'version', 'dist.integrity', '--json', '--prefer-online', '--registry', registry], root)
     const value = JSON.parse(output)
     return { version: value.version, integrity: value['dist.integrity'] }
   } catch (error) {
@@ -140,17 +140,33 @@ export async function inspectRegistryArtifact(name, version, registry = defaultR
   }
 }
 
-export async function waitForRegistryArtifact(expected, registry, run, inspect, attempts = 30, retryDelayMs = 3_000) {
+export async function waitForRegistryArtifacts(expectedArtifacts, registry, run, inspect, attempts = 90, retryDelayMs = 5_000) {
+  assert(expectedArtifacts.length > 0, 'Expected at least one Registry artifact')
+  const pending = new Map(expectedArtifacts.map(expected => [expected.name, expected]))
+  assert.equal(pending.size, expectedArtifacts.length, 'Registry artifact names must be unique')
+  const published = new Map()
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const published = await inspect(expected.name, expected.version, registry, run)
-    if (published !== null) {
-      assert.equal(published.version, expected.version, `${expected.name}: unexpected Registry version`)
-      assert.equal(published.integrity, expected.integrity, `${expected.name}: Registry bytes differ from the frozen tarball`)
-      return published
+    const inspections = await Promise.all([...pending.values()].map(async expected => ({
+      expected,
+      actual: await inspect(expected.name, expected.version, registry, run),
+    })))
+    for (const { expected, actual } of inspections) {
+      if (actual === null) continue
+      assert.equal(actual.version, expected.version, `${expected.name}: unexpected Registry version`)
+      assert.equal(actual.integrity, expected.integrity, `${expected.name}: Registry bytes differ from the frozen tarball`)
+      pending.delete(expected.name)
+      published.set(expected.name, actual)
     }
+    if (pending.size === 0) return expectedArtifacts.map(expected => published.get(expected.name))
     if (attempt < attempts) await new Promise(resolveDelay => setTimeout(resolveDelay, retryDelayMs))
   }
-  throw new Error(`${expected.name}@${expected.version} did not become readable from ${registry}`)
+  const missing = [...pending.values()].map(expected => `${expected.name}@${expected.version}`).join(', ')
+  throw new Error(`${missing} did not become readable from ${registry}`)
+}
+
+export async function waitForRegistryArtifact(expected, registry, run, inspect, attempts = 90, retryDelayMs = 5_000) {
+  const [published] = await waitForRegistryArtifacts([expected], registry, run, inspect, attempts, retryDelayMs)
+  return published
 }
 
 export async function publishRelease(plan, artifacts, run = npm, {
@@ -161,18 +177,29 @@ export async function publishRelease(plan, artifacts, run = npm, {
 } = {}) {
   assert.deepEqual(artifacts.map(item => item.name), plan.packages.map(item => item.manifest.name), 'Pack the entire release before publishing')
   assert(['all', 'plugins', 'starter'].includes(scope), 'Unknown publication scope')
-  const selected = scope === 'plugins' ? artifacts.slice(0, -1) : scope === 'starter' ? artifacts.slice(-1) : artifacts
-  for (const artifact of selected) {
-    const expected = { ...artifact, version: plan.version }
-    const published = await inspect(artifact.name, plan.version, registry, run)
-    if (published !== null) {
-      assert.equal(published.integrity, artifact.integrity, `${artifact.name}: refusing to reuse a different Registry artifact at the frozen version`)
-      console.log(`Verified existing ${artifact.name}@${plan.version} on ${plan.distTag}`)
-      continue
+  const groups = scope === 'plugins'
+    ? [artifacts.slice(0, -1)]
+    : scope === 'starter'
+      ? [artifacts.slice(-1)]
+      : [artifacts.slice(0, -1), artifacts.slice(-1)]
+  for (const group of groups) {
+    const awaitingRegistry = []
+    for (const artifact of group) {
+      const expected = { ...artifact, version: plan.version }
+      const published = await inspect(artifact.name, plan.version, registry, run)
+      if (published !== null) {
+        assert.equal(published.integrity, artifact.integrity, `${artifact.name}: refusing to reuse a different Registry artifact at the frozen version`)
+        console.log(`Verified existing ${artifact.name}@${plan.version} on ${plan.distTag}`)
+        continue
+      }
+      await run(['publish', artifact.filename, '--access', 'public', '--ignore-scripts', '--tag', plan.distTag, '--registry', registry, ...(provenance ? ['--provenance'] : [])], root)
+      awaitingRegistry.push(expected)
+      console.log(`Submitted ${artifact.name}@${plan.version} to ${plan.distTag}`)
     }
-    await run(['publish', artifact.filename, '--access', 'public', '--ignore-scripts', '--tag', plan.distTag, '--registry', registry, ...(provenance ? ['--provenance'] : [])], root)
-    await waitForRegistryArtifact(expected, registry, run, inspect)
-    console.log(`Published ${artifact.name}@${plan.version} to ${plan.distTag}`)
+    if (awaitingRegistry.length > 0) {
+      await waitForRegistryArtifacts(awaitingRegistry, registry, run, inspect)
+      for (const expected of awaitingRegistry) console.log(`Published ${expected.name}@${plan.version} to ${plan.distTag}`)
+    }
   }
 }
 
