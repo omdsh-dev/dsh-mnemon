@@ -2,10 +2,7 @@
 
 **简体中文** | [English](https://github.com/omdsh-dev/dsh-mnemon/blob/main/README.md)
 
-[![npm](https://img.shields.io/npm/v/dsh-mnemon)](https://www.npmjs.com/package/dsh-mnemon)
-[![下载量](https://img.shields.io/npm/dt/dsh-mnemon)](https://www.npmjs.com/package/dsh-mnemon)
-[![MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/LICENSE)
-[![dshfind](https://dshfind.com/api/badge/omdsh-dev/dsh-mnemon?lang=zh)](https://dshfind.com/zh/plugins/omdsh-dev/dsh-mnemon)
+[![npm](https://img.shields.io/npm/v/dsh-mnemon)](https://www.npmjs.com/package/dsh-mnemon) [![下载量](https://img.shields.io/npm/dt/dsh-mnemon)](https://www.npmjs.com/package/dsh-mnemon) [![MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/LICENSE) [![dshfind](https://dshfind.com/api/badge/omdsh-dev/dsh-mnemon?lang=zh)](https://dshfind.com/zh/plugins/omdsh-dev/dsh-mnemon)
 
 **DeepSeek Harness 的可组合记忆系统。默认三层，自定义 Source 与 Strategy，每回合一个 View。**
 
@@ -71,15 +68,7 @@ Starter 随附 **3 个 Source、1 个默认 Strategy、3 个可选策略贡献�
 
 Memory Spaces 可使用以下 Provider 插件：
 
-[Mnemon Native](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-mnemon-native/README.md) ·
-[OpenViking](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-openviking/README.md) ·
-[Honcho](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-honcho/README.md) ·
-[Mem0](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-mem0/README.md) ·
-[Hindsight](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-hindsight/README.md) ·
-[Holographic](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-holographic/README.md) ·
-[RetainDB](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-retaindb/README.md) ·
-[ByteRover](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-byterover/README.md) ·
-[Supermemory](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-supermemory/README.md)。
+[Mnemon Native](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-mnemon-native/README.md) · [OpenViking](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-openviking/README.md) · [Honcho](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-honcho/README.md) · [Mem0](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-mem0/README.md) · [Hindsight](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-hindsight/README.md) · [Holographic](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-holographic/README.md) · [RetainDB](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-retaindb/README.md) · [ByteRover](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-byterover/README.md) · [Supermemory](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-supermemory/README.md)。
 
 Native 是默认后端，三方服务需要显式配置和启用。图谱、删除、精确写入与枚举能力保留各后端的真实差异。[Provider 能力与部署](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/memory-providers.md)。
 

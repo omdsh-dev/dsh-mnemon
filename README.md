@@ -2,10 +2,7 @@
 
 **English** | [简体中文](https://github.com/omdsh-dev/dsh-mnemon/blob/main/README.zh-CN.md)
 
-[![npm](https://img.shields.io/npm/v/dsh-mnemon)](https://www.npmjs.com/package/dsh-mnemon)
-[![Downloads](https://img.shields.io/npm/dt/dsh-mnemon)](https://www.npmjs.com/package/dsh-mnemon)
-[![MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/LICENSE)
-[![dshfind](https://dshfind.com/api/badge/omdsh-dev/dsh-mnemon)](https://dshfind.com/plugins/omdsh-dev/dsh-mnemon)
+[![npm](https://img.shields.io/npm/v/dsh-mnemon)](https://www.npmjs.com/package/dsh-mnemon) [![Downloads](https://img.shields.io/npm/dt/dsh-mnemon)](https://www.npmjs.com/package/dsh-mnemon) [![MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/LICENSE) [![dshfind](https://dshfind.com/api/badge/omdsh-dev/dsh-mnemon)](https://dshfind.com/plugins/omdsh-dev/dsh-mnemon)
 
 **Composable memory for DeepSeek Harness. Three tiers by default; your Sources and Strategies, one View per turn.**
 
@@ -71,15 +68,7 @@ The three enhancements occupy different slots of the default Strategy and can co
 
 Memory Spaces can use these Provider plugins:
 
-[Mnemon Native](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-mnemon-native/README.md) ·
-[OpenViking](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-openviking/README.md) ·
-[Honcho](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-honcho/README.md) ·
-[Mem0](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-mem0/README.md) ·
-[Hindsight](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-hindsight/README.md) ·
-[Holographic](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-holographic/README.md) ·
-[RetainDB](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-retaindb/README.md) ·
-[ByteRover](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-byterover/README.md) ·
-[Supermemory](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-supermemory/README.md).
+[Mnemon Native](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-mnemon-native/README.md) · [OpenViking](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-openviking/README.md) · [Honcho](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-honcho/README.md) · [Mem0](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-mem0/README.md) · [Hindsight](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-hindsight/README.md) · [Holographic](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-holographic/README.md) · [RetainDB](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-retaindb/README.md) · [ByteRover](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-byterover/README.md) · [Supermemory](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-supermemory/README.md).
 
 Native is the default backend; third-party services are disabled until explicitly configured. Graph, deletion, exact-write and enumeration capabilities remain backend-specific. [Provider capabilities and setup](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/memory-providers.md).
 
