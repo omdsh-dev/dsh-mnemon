@@ -68,7 +68,7 @@
 <!-- 本仓库硬性规范，请逐项确认。 / Confirm every mandatory repository rule. -->
 
 - [ ] 未修改 DSH 官方源码，未让 tsconfig 指向 DSH 源码 checkout，仅使用正式的 `@deepseek-ai/*` NPM 契约。 / I did not modify DSH source or point tsconfig at a DSH source checkout, and used only published `@deepseek-ai/*` NPM contracts.
-- [ ] Client 与 Host 边界仍以 `src/shared/contracts.ts` 为准，没有在两侧重复定义 wire DTO。 / The Client and Host boundary still uses `src/shared/contracts.ts` as the single source for wire DTOs.
+- [ ] Client 与 Host 边界仍以浏览器安全的 `src/host/protocol.ts` 为准，没有在两侧重复定义 wire DTO。 / The Client and Host boundary still uses browser-safe `src/host/protocol.ts` as the source for wire DTOs.
 - [ ] 持久化格式、RPC 权限、路径或凭据处理的变更包含兼容或拒绝路径、安全分析和相应测试。 / Changes to persistence formats, RPC authority, paths, or credentials include compatibility or rejection paths, security analysis, and tests.
 - [ ] 没有提交 token、密钥、私有记忆、未脱敏日志或生成的 `lib/` 文件。 / I did not commit tokens, credentials, private memory, unredacted logs, or generated `lib/` files.
 - [ ] 用户可见文案和长期文档已同步维护中文与英文版本，命令、配置键和路径保持一致。 / User-facing copy and long-lived documentation are synchronized in Chinese and English, with matching commands, configuration keys, and paths.

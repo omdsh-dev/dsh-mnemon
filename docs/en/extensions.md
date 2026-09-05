@@ -161,6 +161,8 @@ An optional `./client` entry calls `installMemorySourceUI` from `dsh-mnemon/clie
 
 ## Independent repository checklist
 
+Keep business copy and layout inside the Source package. The default Sources demonstrate this with public data-only `presentation/locales.json`, `presentation/page.module.css` and `presentation/sidebar.module.css` assets, plus a private Client presentation module. Their own builds load the assets without importing repository build scripts. They retain the existing page-kit class namespace for usage compatibility; a third-party Source can use its own namespace and does not need to add words or selectors to Root.
+
 A plugin directory owns `package.json`, exports, `src/`, `tests/`, TypeScript/build/test configuration and README. Declare compatible public peers and development dependencies. Publish built Host/Client artifacts and declarations; never depend on sibling paths, workspace source aliases, root test helpers or implicit hoisting.
 
 The default Starter alone mounts defaults. Source/Strategy packages do not ship self-activating default patches. A user's profile, bundle or explicit parent composition controls activation and replacement.

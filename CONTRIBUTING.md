@@ -59,7 +59,7 @@ Code, comments, documentation, commit messages, and PR titles must not contain e
 4. **Provide real evidence**: attach a local screenshot or short video for user-visible changes. For Host, CLI, or Headless changes, attach redacted logs or command results.
 5. **Keep both languages synchronized**: long-lived documents under `docs/en/` and `docs/zh-CN/` must have matching names and responsibilities. Keep `README.md` and `README.zh-CN.md` synchronized.
 6. **Explain security and data effects**: changes to persistence formats, paths, RPC authority, Provider credentials, or import/export must explain compatibility, migration or rejection, rollback, and data retention.
-7. **Keep boundaries stable**: `src/shared/contracts.ts` is the single source of Client and Host wire DTOs. Do not reintroduce Host modules into browser code.
+7. **Keep boundaries stable**: `src/host/protocol.ts` is the browser-safe source of Client and Host wire DTOs. Do not import executable Host modules into browser code.
 8. **Disclose AI coding**: complete the PR template with the model and coding tool used. Contributors remain responsible for the final code, verification, and security.
 9. **Do not commit generated output**: ensure the worktree contains no `lib/` output or temporary Provider-lab data.
 
