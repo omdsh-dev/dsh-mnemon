@@ -55,3 +55,11 @@ packed `dsh-mnemon` artifact as the peer instead of linking its source tree.
 
 The Starter or a user's Profile explicitly mounts its Entry. This package has
 no auto-activation patch; installing it does not override a configured Strategy.
+
+## Installation and verification
+
+The default Starter already mounts and selects this Strategy. In an independent Profile, install the package, mount its Entry and explicitly select `default-three-tier`; another installed Strategy does not win by import order.
+
+Installing an npm package is not the same as activating a contribution. From a source checkout, run `pnpm verify` with declared public peers installed; use a packed peer for unreleased SDK work.
+
+[Plugin development and independent fixtures](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/development/extensions.md) · [中文指南](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/development/extensions.md)

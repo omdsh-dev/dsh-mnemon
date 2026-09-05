@@ -11,7 +11,7 @@
 
 运行时上下文、可检索档案和长期证据，使用同一个熟悉的 Sidebar。默认 Starter 安装经过验证的插件组合；贡献者可以独立替换或扩展其中的部分。
 
-[![真实 DSH Sidebar 中的合成 Runtime 记忆](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/showcase/zh-CN/runtime.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/showcase/demo.mp4)
+[![真实 DSH Sidebar 中的合成 Runtime 记忆](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/e1b58f917289325ee430106385da2d4ff2c67153/docs/assets/showcase/zh-CN/runtime.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/e1b58f917289325ee430106385da2d4ff2c67153/docs/assets/showcase/demo.mp4)
 
 [快速开始](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/getting-started.md) · [观看演示](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/showcase/demo.mp4) · [制作插件](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/development/extensions.md) · [文档中心](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/README.md)
 
@@ -43,7 +43,7 @@ Headless 使用同一个包：`dsh plugin --profile headless add dsh-mnemon`。
 
 ## Source + Strategy → View
 
-[![Source facts 经 Strategy 与 Core 校验，形成交给 DSH Host 的唯一 View](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/diagrams/composable-memory.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/development/architecture.md)
+[![Source facts 经 Strategy 与 Core 校验，形成交给 DSH Host 的唯一 View](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/e1b58f917289325ee430106385da2d4ff2c67153/docs/assets/diagrams/composable-memory.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/development/architecture.md)
 
 - **Source** 拥有记忆、投影、读写操作，以及可选的 DSH 页面。
 - **Strategy** 决定可用 Source 如何参与：选择范围、常驻内容、检索与使用指引。纯组合不写入记忆。

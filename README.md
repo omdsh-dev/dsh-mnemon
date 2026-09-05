@@ -11,7 +11,7 @@
 
 Runtime context, searchable documents and long-term evidence share a familiar Sidebar. The default Starter installs a tested plugin combination; contributors can replace or extend its parts without rebuilding the memory system.
 
-[![Real DSH Sidebar with synthetic Runtime memories](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/showcase/en/runtime.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/showcase/demo.mp4)
+[![Real DSH Sidebar with synthetic Runtime memories](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/e1b58f917289325ee430106385da2d4ff2c67153/docs/assets/showcase/en/runtime.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/e1b58f917289325ee430106385da2d4ff2c67153/docs/assets/showcase/demo.mp4)
 
 [Get started](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/getting-started.md) · [Watch the demo](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/showcase/demo.mp4) · [Build a plugin](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/development/extensions.md) · [Documentation](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/README.md)
 
@@ -43,7 +43,7 @@ Upgrading from v0.4 retains the familiar configuration, data and workflow. Three
 
 ## Source + Strategy → View
 
-[![Source facts flow through a Strategy and Core validation into one View for the DSH Host](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/diagrams/composable-memory.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/development/architecture.md)
+[![Source facts flow through a Strategy and Core validation into one View for the DSH Host](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/e1b58f917289325ee430106385da2d4ff2c67153/docs/assets/diagrams/composable-memory.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/development/architecture.md)
 
 - **Source** owns memory, its projection, read/write operations and optional DSH pages.
 - **Strategy** chooses how available Sources participate: selection, resident context, retrieval and guidance. Pure composition does not write memory.

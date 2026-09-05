@@ -25,22 +25,8 @@ The public package entry exports `resolveEmbedding`, `resolvePersistenceStrategy
 
 ## Source-owned Client
 
-The optional ./client entry is a normal DSH Client module. This package owns
-its pages, browser API adapter, Host management operations, and tests. It only
-imports the public dsh-mnemon/client helpers; it never receives a Host Context,
-raw RPC transport, credentials, or an LLM View grant.
+The optional `./client` entry owns the Source's pages and `presentation/` resources. It uses `dsh-mnemon/client` for the shared frame and scoped management, without receiving raw RPC transport, credentials, a Host Context or an LLM grant. DSH mounts the same pages in the default Starter; cross-Source Agent workflows remain optional Host assistance.
 
-Business copy and layout live in `presentation/`. The Client bundles its own
-assets; the public data-only paths also let the Starter preserve existing
-page-kit exports. Updating this page does not require editing Starter resources.
+`pnpm verify` checks Host behavior, real Source-backed page interactions, and Host/browser artifacts. Client tests consume the installed Core's public testing entry.
 
-The default distribution loads these same Client plugins through DSH. Each page
-uses Source-scoped read/mutate operations. Optional Agent-assisted cross-Source
-maintenance is advertised by the Host through the same scoped page client; it
-is not silently installed by a Source. There is one Slot owner per Source page,
-not a second fallback registration or copied default implementation.
-
-pnpm verify checks Host behavior and real Source-backed page interactions, then
-builds both Host and browser artifacts plus their public declarations. Client
-tests load the installed Core's browser artifact using dsh-mnemon/testing; they
-have no dependency on Core's repository sources or configuration files.
+[Plugin development](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/development/extensions.md) · [中文指南](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/development/extensions.md)
