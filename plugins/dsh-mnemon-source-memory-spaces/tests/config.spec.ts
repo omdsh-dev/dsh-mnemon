@@ -62,4 +62,3 @@ describe('Memory Spaces configuration rules', () => {
     })
   })
 })
-
