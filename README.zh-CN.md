@@ -24,7 +24,7 @@
 <p align="center">
   <a href="./docs/zh-CN/capabilities.md"><strong>先看能力地图</strong></a> ·
   <a href="./docs/zh-CN/getting-started.md">5 分钟开始</a> ·
-  <a href="./docs/zh-CN/releases/v0.5.1.md">v0.5.1 升级说明</a> ·
+  <a href="./docs/zh-CN/releases/v0.5.2.md">v0.5.2 升级说明</a> ·
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">观看宽屏实机演示</a>
 </p>
 
@@ -39,6 +39,8 @@ Runtime、Documents、Memory Spaces 是独立 Source 插件；Strategy 将各实
 v0.5.0 保留 v0.4 的 Sidebar 行为：默认使用 Sidebar，可选 `displayMode: builtin` 将同一组 Source 页面放入所属会话。旧 `buildin` 可识别并自动保存为 `builtin`，不改变记忆数据；折叠图标与侧栏相邻控件对齐，settings store 与 ZIP 修复也继续保留。详见[稳定版说明](./docs/zh-CN/releases/v0.5.0.md)与[入口位置及范围映射](./docs/zh-CN/configuration.md#入口位置displaymode-与-tabenabled)。
 
 v0.5.1 修复正式 Desktop 嵌套 Sidebar 下设置不可写，以及 Idle Review 竞态导致下一轮对话出现 `already pinned` 错误的问题。详见 [v0.5.1 补丁说明](./docs/zh-CN/releases/v0.5.1.md)。
+
+v0.5.2 让既有 `mnemon` profile Entry 成为完整 Starter 的原子总开关，使保留的停用状态不再让 v0.5 Source 与 Strategy Entry 等待 `mnemonMemory`；同时完成独立包版本与选择性发布的一次性迁移。详见 [v0.5.2 补丁说明](./docs/zh-CN/releases/v0.5.2.md)。
 
 已验证的 DSH 基线仍是 0.1.2-rc.1，同时保留 Node 20 公开入口兼容与上一条 0.1.1-rc.2 版本线的回归证据。
 
@@ -124,7 +126,7 @@ dsh --version
 ```
 
 ```sh
-dsh plugin --profile web add dsh-mnemon@0.5.1
+dsh plugin --profile web add dsh-mnemon@0.5.2
 dsh --profile web
 ```
 
@@ -218,7 +220,7 @@ dsh plugin --profile headless add "link:/absolute/path/to/dsh-mnemon"
 | 备份、更新或排障 | [运维指南](./docs/zh-CN/operations.md) |
 | 接入工具、命令或 RPC | [接口参考](./docs/zh-CN/interfaces.md) |
 | 开发 Source、Strategy 或 Memory Spaces Provider 插件 | [扩展开发指南](./docs/zh-CN/extensions.md) |
-| 查看稳定版升级 | [v0.5.1 发布说明](./docs/zh-CN/releases/v0.5.1.md) |
+| 查看稳定版升级 | [v0.5.2 发布说明](./docs/zh-CN/releases/v0.5.2.md) |
 
 完整目录见[文档中心](./docs/zh-CN/README.md)。
 

@@ -1,6 +1,6 @@
 {
   "name": "dsh-mnemon-strategy-auto-capture",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Additive in-turn durable-memory capture guidance; no background tasks or new write authority.",
   "license": "MIT",
   "type": "module",
@@ -38,8 +38,8 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "@types/node": "^22.0.0",
-    "dsh-mnemon": "^0.5.1",
-    "dsh-mnemon-strategy-default-three-tier": "^0.5.1",
+    "dsh-mnemon": "^0.5.2",
+    "dsh-mnemon-strategy-default-three-tier": "^0.5.2",
     "tsdown": "^0.22.0",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0"

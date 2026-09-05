@@ -24,7 +24,7 @@
 <p align="center">
   <a href="./docs/en/capabilities.md"><strong>Explore the capability map</strong></a> ·
   <a href="./docs/en/getting-started.md">Start in five minutes</a> ·
-  <a href="./docs/en/releases/v0.5.1.md">Read the v0.5.1 notes</a> ·
+  <a href="./docs/en/releases/v0.5.2.md">Read the v0.5.2 notes</a> ·
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">Watch the widescreen demo</a>
 </p>
 
@@ -39,6 +39,8 @@ Runtime, Documents and Memory Spaces are independent Source plugins. A Strategy 
 v0.5.0 retains the v0.4 Sidebar behavior: Sidebar is the default; optional `displayMode: builtin` places the same Source pages in the owning conversation. Legacy `buildin` is accepted and automatically saved as `builtin`, without changing memory data. The collapsed icon aligns with neighboring Sidebar controls, and the settings-store and ZIP fixes remain included. See the [stable release notes](./docs/en/releases/v0.5.0.md) and [entry placement and scope mapping](./docs/en/configuration.md#entry-placement-displaymode-and-tabenabled).
 
 v0.5.1 fixes writable settings under the released nested Desktop Sidebar and removes an Idle Review race that could reject the next conversation turn with an `already pinned` error. See the [v0.5.1 patch notes](./docs/en/releases/v0.5.1.md).
+
+v0.5.2 makes the existing `mnemon` profile Entry an atomic switch for the complete Starter, so a retained disabled state no longer leaves v0.5 Source and Strategy Entries waiting on `mnemonMemory`. It also completes the one-time transition to independent package versions and selective publication. See the [v0.5.2 patch notes](./docs/en/releases/v0.5.2.md).
 
 The tested DSH baseline remains 0.1.2-rc.1, with Node 20 public-entry compatibility and retained regression evidence for the previous 0.1.1-rc.2 line.
 
@@ -124,7 +126,7 @@ dsh --version
 ```
 
 ```sh
-dsh plugin --profile web add dsh-mnemon@0.5.1
+dsh plugin --profile web add dsh-mnemon@0.5.2
 dsh --profile web
 ```
 
@@ -218,7 +220,7 @@ See [Operations, security, and troubleshooting](./docs/en/operations.md) for bac
 | Back up, update, or troubleshoot | [Operations](./docs/en/operations.md) |
 | Integrate tools, commands, or RPC | [Interface reference](./docs/en/interfaces.md) |
 | Build a Source, Strategy or Memory Spaces Provider plugin | [Extension guide](./docs/en/extensions.md) |
-| Review the stable release | [v0.5.1 release notes](./docs/en/releases/v0.5.1.md) |
+| Review the stable release | [v0.5.2 release notes](./docs/en/releases/v0.5.2.md) |
 
 See the [documentation hub](./docs/en/README.md) for the full map.
 
