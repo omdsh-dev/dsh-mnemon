@@ -123,6 +123,17 @@ Stable DSH 0.1.2-rc.1 is the recommended registry target. It authenticates the p
 
 An HTTP 403 points to the Host/Origin fence: check `--trusted-host`, the public port, and whether the proxy preserves `Host`. An HTTP 401 means the browser session is missing or invalid: return to the current process's launch-token URL. DSH 0.1.2-alpha.5 uses the same browser-session model and remains covered as the immediate source-compatibility predecessor. Both releases ignore Mnemon's retained `remoteAccess` compatibility setting.
 
+### Disable the complete Starter
+
+The legacy `mnemon` Entry remains the lifecycle switch for the complete Starter. To disable Mnemon without leaving its Source or Strategy Entries waiting on the missing Host service, add this profile patch and restart DSH:
+
+```yaml
+- id: mnemon
+  disabled: true
+```
+
+This disables the Core/Host, all three bundled Sources, the default Strategy, and all three optional Strategy enhancements together. It does not remove installed packages or delete memory data. Remove the override, or change it to `false`, and restart DSH to enable the Starter again.
+
 ### DSH 0.1.1-rc.2 rollback
 
 The previous rc.2 line uses method-specific authority tiers instead of the browser-session model. Ordinary reads and activation may use `trusted-host`, while settings, backups, Provider connections, and broad mutations remain loopback-only unless local Mnemon configuration promotes all management channels. Use rc.2 remotely only behind reliable user authentication.

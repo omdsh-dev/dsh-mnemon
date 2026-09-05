@@ -39,14 +39,20 @@ describe('explicit default Starter', () => {
     } finally { lease.release() }
     expect(graph.memoryComposition.inspect().drainingGenerationIds).toEqual([])
   })
-  it('declares the stable Starter Entries with enhancements present but disabled', () => {
+  it('keeps stable Starter Entries inside the legacy core lifecycle gate', () => {
     expect([runtime.name, documents.name, spaces.name, strategy.name]).toEqual([
       'dsh-mnemon-source-runtime', 'dsh-mnemon-source-documents', 'dsh-mnemon-source-memory-spaces', 'dsh-mnemon-strategy-default-three-tier',
     ])
     const patch = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
-    for (const name of [runtime.name, documents.name, spaces.name, strategy.name]) expect(patch).toContain(name)
+    expect(patch).toMatch(/    - id: mnemon-bundle\n      name: cordis:group\n      group: true/u)
+    expect(patch).toContain("[...loader.entries()].find(entry => entry.options.id === 'mnemon')")
+    expect(patch).toContain('entry.evaluate(entry.options.disabled.__jsExpr)')
+    expect(patch).toMatch(/        - id: mnemon\n          # Core\/Host/u)
+    for (const name of [runtime.name, documents.name, spaces.name, strategy.name]) {
+      expect(patch).toMatch(new RegExp(`        - id: ${name.slice(4)}\\n          name: ${name}`, 'u'))
+    }
     for (const name of [autoCapture.name, lightContext.name, scoped.name]) {
-      expect(patch).toMatch(new RegExp(`name: ${name}\\n\\s+disabled: true`, 'u'))
+      expect(patch).toMatch(new RegExp(`        - id: ${name.slice(4)}\\n          name: ${name}\\n          disabled: true`, 'u'))
     }
     expect(patch).not.toContain('dsh-mnemon/source-')
     expect(patch).not.toContain('bundledContributions')
