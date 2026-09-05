@@ -1,6 +1,6 @@
 {
   "name": "dsh-mnemon-source-runtime",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Self-contained runtime Source for Composable View Memory.",
   "license": "MIT",
   "type": "module",
@@ -57,7 +57,7 @@
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
-    "dsh-mnemon": "^0.5.1",
+    "dsh-mnemon": "^0.5.2",
     "jsdom": "^26.0.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
