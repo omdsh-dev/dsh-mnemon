@@ -20,6 +20,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -32,6 +34,13 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Validate release intent
+        if: github.event_name == 'pull_request'
+        env:
+          CHANGESET_BASE_REVISION: ${{ github.event.pull_request.base.sha }}
+          CHANGESET_REVISION: ${{ github.sha }}
+        run: pnpm run release:intent
 
       - name: Type-check integrated source
         run: pnpm run typecheck

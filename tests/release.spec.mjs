@@ -3,143 +3,285 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
-import { createReleasePlan, packRelease, publishRelease, readReleasePackages, verifyRegistryRelease, waitForRegistryArtifact } from '../scripts/release.mjs'
+import {
+  assertVersionedPublicationChanges,
+  createReleasePlan,
+  packRelease,
+  publishRelease,
+  readChangedPaths,
+  readReleaseArtifacts,
+  readReleasePackages,
+  publicationInputsChanged,
+  verifyRegistryRelease,
+  waitForRegistryArtifact,
+  writeReleaseManifest,
+} from '../scripts/release.mjs'
+import { syncReleaseMetadata } from '../scripts/sync-release-metadata.mjs'
+import { assertReleaseIntentCoverage } from '../scripts/check-release-intent.mjs'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
-function fixture(version = '0.5.0', distTag = 'latest') {
-  const provider = { directory: '/provider', manifest: { name: 'dsh-mnemon-provider-example', version, publishConfig: { access: 'public', tag: distTag } } }
-  const starter = { directory: '/starter', manifest: { name: 'dsh-mnemon', version, publishConfig: { access: 'public', tag: distTag }, dependencies: { [provider.manifest.name]: version } } }
-  return [starter, provider]
+const revision = '1'.repeat(40)
+const baseRevision = '2'.repeat(40)
+
+function tag(version) {
+  return version.match(/-(alpha|beta|rc)\./)?.[1] ?? 'latest'
 }
 
-describe('complete, channel-safe official release', () => {
-  it('validates every real package and publishes the Starter last', async () => {
+function item(directory, name, version, extra = {}) {
+  return { directory, manifest: { name, version, publishConfig: { access: 'public', tag: tag(version) }, ...extra } }
+}
+
+function fixture({
+  starterVersion = '0.5.2',
+  sourceVersion = '0.5.0',
+  providerVersion = '0.5.1',
+  secondProviderVersion,
+} = {}) {
+  const source = item('/source', 'dsh-mnemon-source-memory-spaces', sourceVersion, {
+    peerDependencies: { 'dsh-mnemon': '^0.5.0' },
+  })
+  const providers = [item('/provider', 'dsh-mnemon-provider-example', providerVersion, {
+    peerDependencies: { 'dsh-mnemon-source-memory-spaces': '^0.5.0' },
+  })]
+  if (secondProviderVersion !== undefined) providers.push(item('/provider-two', 'dsh-mnemon-provider-second', secondProviderVersion, {
+    peerDependencies: { 'dsh-mnemon-source-memory-spaces': '^0.5.0' },
+  }))
+  const dependencies = Object.fromEntries([source, ...providers].map(packageItem => [packageItem.manifest.name, packageItem.manifest.version]))
+  const starter = item('/starter', 'dsh-mnemon', starterVersion, { dependencies })
+  return [starter, source, ...providers]
+}
+
+function previousVersions(packages, overrides = {}) {
+  return new Map(packages.map(packageItem => [packageItem.manifest.name,
+    overrides[packageItem.manifest.name] ?? packageItem.manifest.version]))
+}
+
+function artifactFor(packageItem) {
+  return {
+    name: packageItem.manifest.name,
+    version: packageItem.manifest.version,
+    filename: join('/artifacts', `${packageItem.manifest.name}-${packageItem.manifest.version}.tgz`),
+    integrity: `sha512-${packageItem.manifest.name}-${packageItem.manifest.version}`,
+  }
+}
+
+describe('selective, channel-safe official release', () => {
+  it('validates every real package without requiring one shared version', async () => {
     const packages = await readReleasePackages(root)
     const plan = createReleasePlan(packages)
-    expect(plan.packages).toHaveLength(17)
+    expect(plan.composition).toHaveLength(17)
     expect(plan.distTag).toBe('latest')
-    expect(plan.packages.at(-1).manifest.name).toBe('dsh-mnemon')
-    for (const { directory, manifest } of packages.filter(item => item.manifest.name.startsWith('dsh-mnemon-provider-'))) {
-      // Provider contribution metadata must not retain the previous product version.
+    expect(plan.composition.at(-1).manifest.name).toBe('dsh-mnemon')
+    for (const { directory, manifest } of packages.filter(packageItem => packageItem.manifest.name.startsWith('dsh-mnemon-provider-'))) {
       const source = await readFile(join(directory, 'src/index.ts'), 'utf8')
       expect(source).toContain(`version: '${manifest.version}'`)
     }
   })
 
-  it.each([['0.5.0', 'latest', false], ['0.5.0-beta.1', 'beta', true], ['0.5.0-rc.1', 'rc', true]])('selects the explicit channel for %s', (version, channel, prerelease) => {
-    expect(createReleasePlan(fixture(version, channel), { tag: `v${version}`, prerelease }).distTag).toBe(channel)
-  })
-
-  it('rejects tag, prerelease and publishConfig mismatches before packing', () => {
-    expect(() => createReleasePlan(fixture(), { tag: 'v0.4.0' })).toThrow('Release tag')
-    expect(() => createReleasePlan(fixture('0.5.0-rc.1', 'rc'), { prerelease: false })).toThrow('prerelease flag')
-    expect(() => createReleasePlan(fixture('0.5.0-rc.1', 'latest'))).toThrow('publishConfig.tag')
-    expect(() => createReleasePlan(fixture('0.5.0-dev.1'))).toThrow('Expected a stable version')
-  })
-
-  it('rejects missing artifacts, skewed versions and old peer ranges', () => {
+  it('selects one changed plugin plus the aggregate Starter and reuses unchanged versions', () => {
     const packages = fixture()
-    packages[0].manifest.dependencies['dsh-mnemon-source-missing'] = '0.5.0'
-    expect(() => createReleasePlan(packages)).toThrow('missing release artifact')
-    const skewed = fixture()
-    skewed[1].manifest.version = '0.4.0'
-    expect(() => createReleasePlan(skewed)).toThrow('versions must agree')
+    const baseVersions = previousVersions(packages, {
+      'dsh-mnemon': '0.5.1',
+      'dsh-mnemon-provider-example': '0.5.0',
+    })
+    const plan = createReleasePlan(packages, { baseVersions })
+    expect(plan.composition.map(packageItem => `${packageItem.manifest.name}@${packageItem.manifest.version}`)).toEqual([
+      'dsh-mnemon-provider-example@0.5.1',
+      'dsh-mnemon-source-memory-spaces@0.5.0',
+      'dsh-mnemon@0.5.2',
+    ])
+    expect(plan.releasePackages.map(packageItem => packageItem.manifest.name)).toEqual([
+      'dsh-mnemon-provider-example',
+      'dsh-mnemon',
+    ])
+  })
+
+  it('requires the Starter snapshot to advance with a plugin and rejects incompatible internal ranges', () => {
+    const packages = fixture({ starterVersion: '0.5.1' })
+    const baseVersions = previousVersions(packages, { 'dsh-mnemon-provider-example': '0.5.0' })
+    expect(() => createReleasePlan(packages, { baseVersions })).toThrow('Starter version must advance')
+
+    const exactPeer = fixture()
+    exactPeer[1].manifest.peerDependencies['dsh-mnemon'] = '0.5.2'
+    expect(() => createReleasePlan(exactPeer)).toThrow('must declare a compatible range')
+
     const stalePeer = fixture()
-    stalePeer[1].manifest.peerDependencies = { 'dsh-mnemon': '^0.4.0' }
-    expect(() => createReleasePlan(stalePeer)).toThrow('must pin the tested release version')
+    stalePeer[2].manifest.peerDependencies['dsh-mnemon-source-memory-spaces'] = '^0.4.0'
+    expect(() => createReleasePlan(stalePeer)).toThrow('does not accept')
+
+    const stalePin = fixture()
+    stalePin[0].manifest.dependencies['dsh-mnemon-provider-example'] = '0.5.0'
+    expect(() => createReleasePlan(stalePin)).toThrow('pin the tested plugin version')
   })
 
-  it('releases optional plugins without silently adding them to the default Starter', () => {
+  it.each([
+    ['0.5.2', 'latest', false],
+    ['0.5.2-beta.1', 'beta', true],
+    ['0.5.2-rc.1', 'rc', true],
+  ])('selects the explicit Starter channel for %s', (version, channel, prerelease) => {
+    const packages = fixture({ starterVersion: version, providerVersion: version })
+    expect(createReleasePlan(packages, { tag: `v${version}`, prerelease }).distTag).toBe(channel)
+  })
+
+  it('rejects tag, prerelease, package channel and version regressions before packing', () => {
+    expect(() => createReleasePlan(fixture(), { tag: 'v0.4.0' })).toThrow('Release tag')
+    expect(() => createReleasePlan(fixture({ starterVersion: '0.5.2-rc.1', providerVersion: '0.5.2-rc.1' }), { prerelease: false })).toThrow('prerelease flag')
+    const wrongChannel = fixture()
+    wrongChannel[2].manifest.publishConfig.tag = 'beta'
+    expect(() => createReleasePlan(wrongChannel)).toThrow('publishConfig.tag')
     const packages = fixture()
-    const optional = { directory: '/optional', manifest: { name: 'dsh-mnemon-strategy-example', version: '0.5.0', publishConfig: { access: 'public', tag: 'latest' } } }
-    packages[0].manifest.devDependencies = { [optional.manifest.name]: optional.manifest.version }
-    expect(createReleasePlan([...packages, optional]).packages.map(item => item.manifest.name)).toContain(optional.manifest.name)
-    expect(packages[0].manifest.dependencies).not.toHaveProperty(optional.manifest.name)
-    delete packages[0].manifest.devDependencies
-    expect(() => createReleasePlan([...packages, optional])).toThrow('pin the tested plugin version')
+    expect(() => createReleasePlan(packages, { baseVersions: previousVersions(packages, { 'dsh-mnemon': '0.5.3' }) })).toThrow('version must advance')
   })
 
-  it('packs all packages before any publish and passes the explicit release tag', async () => {
-    const plan = createReleasePlan(fixture())
+  it('orders changed dependencies before dependents while leaving unrelated plugins in one layer', () => {
+    const packages = fixture({ sourceVersion: '0.5.1', secondProviderVersion: '0.5.1' })
+    const plan = createReleasePlan(packages, { baseVersions: previousVersions(packages, {
+      'dsh-mnemon': '0.5.1',
+      'dsh-mnemon-source-memory-spaces': '0.5.0',
+      'dsh-mnemon-provider-example': '0.5.0',
+      'dsh-mnemon-provider-second': '0.5.0',
+    }) })
+    expect(plan.pluginLayers.map(layer => layer.map(packageItem => packageItem.manifest.name))).toEqual([
+      ['dsh-mnemon-source-memory-spaces'],
+      ['dsh-mnemon-provider-example', 'dsh-mnemon-provider-second'],
+    ])
+    expect(plan.releasePackages.at(-1).manifest.name).toBe('dsh-mnemon')
+  })
+
+  it('requires every changed publication input to have an advanced package version', () => {
+    const packages = fixture()
+    const plan = createReleasePlan(packages, { baseVersions: previousVersions(packages, {
+      'dsh-mnemon': '0.5.1',
+      'dsh-mnemon-provider-example': '0.5.0',
+    }) })
+    expect(publicationInputsChanged(plan, [
+      'plugins/dsh-mnemon-provider-example/src/index.ts',
+      'plugins/dsh-mnemon-source-memory-spaces/tests/source.spec.ts',
+      '.github/workflows/ci.yml',
+      'src/index.ts',
+    ])).toEqual(new Set(['dsh-mnemon-provider-example', 'dsh-mnemon']))
+    expect(() => assertVersionedPublicationChanges(plan, ['plugins/dsh-mnemon-source-memory-spaces/src/source.ts']))
+      .toThrow('dsh-mnemon-source-memory-spaces')
+    expect(() => assertVersionedPublicationChanges(plan, ['plugins/dsh-mnemon-source-memory-spaces/tests/source.spec.ts']))
+      .not.toThrow()
+    expect(() => assertVersionedPublicationChanges(plan, ['plugins/dsh-mnemon-source-memory-spaces/package.json'], {
+      ignoredPackageJson: new Set(['dsh-mnemon-source-memory-spaces']),
+    })).not.toThrow()
+  })
+
+  it('includes deleted files when discovering changed publication inputs', async () => {
+    const run = vi.fn(async args => args[0] === 'diff' ? 'src/removed.ts\n' : '')
+    await expect(readChangedPaths(baseRevision, revision, run)).resolves.toEqual(['src/removed.ts'])
+    expect(run.mock.calls.at(-1)[0]).toEqual([
+      'diff', '--name-only', '--diff-filter=ACMRD', baseRevision, revision, '--',
+    ])
+  })
+
+  it('requires a changeset for every package with changed publication inputs', () => {
+    const changed = new Set(['dsh-mnemon', 'dsh-mnemon-provider-example'])
+    expect(() => assertReleaseIntentCoverage(changed, [{ name: 'dsh-mnemon', type: 'patch' }]))
+      .toThrow('dsh-mnemon-provider-example')
+    expect(() => assertReleaseIntentCoverage(changed, [
+      { name: 'dsh-mnemon', type: 'patch' },
+      { name: 'dsh-mnemon-provider-example', type: 'patch' },
+    ])).not.toThrow()
+  })
+
+  it('packs only selected versions and freezes the full mixed-version composition', async () => {
+    const packages = fixture()
+    const plan = createReleasePlan(packages, { baseVersions: previousVersions(packages, {
+      'dsh-mnemon': '0.5.1',
+      'dsh-mnemon-provider-example': '0.5.0',
+    }) })
     const destination = await mkdtemp(join(tmpdir(), 'mnemon-release-test-'))
     const calls = []
-    const published = new Set()
-    let artifacts
     const run = vi.fn(async (args, cwd) => {
-      calls.push(args)
-      if (args[0] === 'publish') {
-        published.add(artifacts.find(item => item.filename === args[1]).name)
-        return ''
-      }
-      const { manifest } = plan.packages.find(item => item.directory === cwd)
-      const filename = manifest.name + '.tgz'
-      await writeFile(join(destination, filename), manifest.name)
-      return JSON.stringify([{ name: manifest.name, version: plan.version, filename, files: [{ path: 'LICENSE' }] }])
+      calls.push([args, cwd])
+      const packageItem = plan.releasePackages.find(candidate => candidate.directory === cwd)
+      const filename = `${packageItem.manifest.name}-${packageItem.manifest.version}.tgz`
+      await writeFile(join(destination, filename), `${packageItem.manifest.name}@${packageItem.manifest.version}`)
+      return JSON.stringify([{
+        name: packageItem.manifest.name,
+        version: packageItem.manifest.version,
+        filename,
+        files: [{ path: 'LICENSE' }],
+      }])
     })
-    artifacts = await packRelease(plan, destination, run)
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
     try {
-      await publishRelease(plan, artifacts, run, {
-        inspect: async name => published.has(name)
-          ? { version: plan.version, integrity: artifacts.find(item => item.name === name).integrity }
-          : null,
-      })
+      const artifacts = await packRelease(plan, destination, run)
+      expect(calls.map(([, cwd]) => cwd)).toEqual(['/provider', '/starter'])
+      expect(artifacts.map(artifact => `${artifact.name}@${artifact.version}`)).toEqual([
+        'dsh-mnemon-provider-example@0.5.1',
+        'dsh-mnemon@0.5.2',
+      ])
+      const manifest = await writeReleaseManifest(plan, artifacts, destination, { revision, baseRevision })
+      expect(manifest.schemaVersion).toBe(2)
+      expect(manifest.composition).toEqual([
+        { name: 'dsh-mnemon-provider-example', version: '0.5.1' },
+        { name: 'dsh-mnemon-source-memory-spaces', version: '0.5.0' },
+        { name: 'dsh-mnemon', version: '0.5.2' },
+      ])
+      await expect(readReleaseArtifacts(plan, destination, { revision, baseRevision })).resolves.toHaveLength(2)
     } finally {
-      log.mockRestore()
       await rm(destination, { recursive: true, force: true })
     }
-    expect(calls.map(args => args[0])).toEqual(['pack', 'pack', 'publish', 'publish'])
-    for (const args of calls.filter(args => args[0] === 'publish')) {
-      expect(args).toContain('latest')
-      expect(args).toContain('--ignore-scripts')
-    }
-    expect(calls.at(-1)[1]).toBe(join(destination, 'dsh-mnemon.tgz'))
   })
 
-  it('refuses partial artifact sets and stops before publishing the Starter after a plugin failure', async () => {
-    const plan = createReleasePlan(fixture())
-    const artifacts = plan.packages.map(item => ({ name: item.manifest.name, filename: item.manifest.name + '.tgz', integrity: `sha512-${item.manifest.name}` }))
-    const run = vi.fn(async () => { throw new Error('registry rejected publish') })
-    await expect(publishRelease(plan, artifacts.slice(0, 1), run)).rejects.toThrow('entire release')
-    expect(run).not.toHaveBeenCalled()
-    await expect(publishRelease(plan, artifacts, run, { inspect: async () => null })).rejects.toThrow('registry rejected')
-    expect(run).toHaveBeenCalledTimes(1)
-    expect(run.mock.calls[0][0][1]).not.toBe('dsh-mnemon.tgz')
-  })
-
-  it('requires artifact tests and release validation in the actual publishing workflow', async () => {
-    const workflow = await readFile(join(root, '.github/workflows/publish.yml'), 'utf8')
-    expect(workflow).toContain('pnpm run release:check')
-    expect(workflow).toContain('pnpm run verify:plugins')
-    expect(workflow).toContain('environment:\n      name: npm-release')
-    expect(workflow).toContain('node scripts/release.mjs --publish-plugins')
-    expect(workflow).toContain('node scripts/release.mjs --verify-plugins')
-    expect(workflow).toContain('node scripts/release.mjs --publish-starter')
-    expect(workflow.indexOf('--publish-plugins')).toBeLessThan(workflow.indexOf('--publish-starter'))
-    expect(workflow.indexOf('--publish-starter')).toBeLessThan(workflow.indexOf('gh release create'))
-    expect(workflow).toContain('--upgrade-from dsh-mnemon@0.4.7')
-    expect(workflow).toContain('echo "RELEASE_PRERELEASE=$prerelease"')
-    expect(workflow).toContain('release_args+=(--prerelease)')
-    expect(workflow).toContain('release_args+=(--latest)')
-    expect(workflow).not.toContain('RELEASE_PRERELEASE: \'true\'')
-    expect(workflow).not.toContain('npm publish "dsh-mnemon-')
-  })
-
-  it('resumes only when an existing Registry artifact matches the frozen bytes', async () => {
-    const plan = createReleasePlan(fixture())
-    const artifacts = plan.packages.map(item => ({ name: item.manifest.name, filename: item.manifest.name + '.tgz', integrity: `sha512-${item.manifest.name}` }))
-    const run = vi.fn(async () => '')
-    const inspect = vi.fn(async name => ({ version: plan.version, integrity: `sha512-${name}` }))
+  it('submits independent plugins concurrently, waits for their cohort and never includes the Starter', async () => {
+    const packages = fixture({ secondProviderVersion: '0.5.1' })
+    const plan = createReleasePlan(packages, { baseVersions: previousVersions(packages, {
+      'dsh-mnemon': '0.5.1',
+      'dsh-mnemon-provider-example': '0.5.0',
+      'dsh-mnemon-provider-second': '0.5.0',
+    }) })
+    const artifacts = plan.releasePackages.map(artifactFor)
+    const published = new Set()
+    let active = 0
+    let maximumActive = 0
+    const run = vi.fn(async args => {
+      if (args[0] !== 'publish') return ''
+      active += 1
+      maximumActive = Math.max(maximumActive, active)
+      await new Promise(resolve => setTimeout(resolve, 5))
+      const artifact = artifacts.find(candidate => candidate.filename === args[1])
+      published.add(artifact.name)
+      active -= 1
+      return ''
+    })
+    const inspect = vi.fn(async (name, version) => published.has(name)
+      ? { version, integrity: artifacts.find(artifact => artifact.name === name).integrity }
+      : null)
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
-    try { await publishRelease(plan, artifacts, run, { inspect }) } finally { log.mockRestore() }
+    try {
+      await publishRelease(plan, artifacts, run, { scope: 'plugins', inspect, provenance: false, concurrency: 2 })
+    } finally {
+      log.mockRestore()
+    }
+    expect(maximumActive).toBe(2)
+    expect(published).toEqual(new Set(['dsh-mnemon-provider-example', 'dsh-mnemon-provider-second']))
+    expect(run.mock.calls.flatMap(([args]) => args).join(' ')).not.toContain('/artifacts/dsh-mnemon-0.5.2.tgz')
+  })
+
+  it('resumes only when an existing selected artifact matches the frozen bytes', async () => {
+    const packages = fixture()
+    const plan = createReleasePlan(packages, { baseVersions: previousVersions(packages, {
+      'dsh-mnemon': '0.5.1',
+      'dsh-mnemon-provider-example': '0.5.0',
+    }) })
+    const artifacts = plan.releasePackages.map(artifactFor)
+    const run = vi.fn(async () => '')
+    const inspect = vi.fn(async (name, version) => ({ version, integrity: artifacts.find(artifact => artifact.name === name).integrity }))
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try { await publishRelease(plan, artifacts, run, { inspect, provenance: false }) } finally { log.mockRestore() }
     expect(run).not.toHaveBeenCalled()
     await expect(publishRelease(plan, artifacts, run, {
-      inspect: async () => ({ version: plan.version, integrity: 'sha512-different' }),
+      inspect: async (name, version) => ({ name, version, integrity: 'sha512-different' }),
+      provenance: false,
     })).rejects.toThrow('different Registry artifact')
   })
 
-  it('allows stable Registry metadata to become readable after the old twelve-attempt window', async () => {
-    const expected = { name: 'dsh-mnemon-provider-example', version: '0.5.0', integrity: 'sha512-example' }
+  it('allows Registry metadata to become readable after the old twelve-attempt window', async () => {
+    const expected = { name: 'dsh-mnemon-provider-example', version: '0.5.1', integrity: 'sha512-example' }
     const inspect = vi.fn(async () => inspect.mock.calls.length < 14 ? null : {
       version: expected.version,
       integrity: expected.integrity,
@@ -151,56 +293,22 @@ describe('complete, channel-safe official release', () => {
     expect(inspect).toHaveBeenCalledTimes(14)
   })
 
-  it('submits a plugin cohort before waiting for Registry propagation and still exposes the Starter last', async () => {
+  it('installs the frozen Starter and verifies every mixed-version Registry package', async () => {
     const packages = fixture()
-    const strategy = {
-      directory: '/strategy',
-      manifest: { name: 'dsh-mnemon-strategy-example', version: '0.5.0', publishConfig: { access: 'public', tag: 'latest' } },
-    }
-    packages[0].manifest.devDependencies = { [strategy.manifest.name]: strategy.manifest.version }
-    const plan = createReleasePlan([...packages, strategy])
-    const artifacts = plan.packages.map(item => ({
-      name: item.manifest.name,
-      filename: item.manifest.name + '.tgz',
-      integrity: `sha512-${item.manifest.name}`,
-    }))
-    const submitted = new Set()
-    const events = []
-    const run = vi.fn(async args => {
-      if (args[0] !== 'publish') return ''
-      const artifact = artifacts.find(item => item.filename === args[1])
-      submitted.add(artifact.name)
-      events.push(`submit:${artifact.name}`)
-      return ''
-    })
-    const inspect = vi.fn(async name => {
-      const pluginCohortReady = plan.plugins.every(item => submitted.has(item.manifest.name))
-      const visible = submitted.has(name) && (name === plan.starter.manifest.name || pluginCohortReady)
-      if (!visible) return null
-      events.push(`visible:${name}`)
-      return { version: plan.version, integrity: `sha512-${name}` }
-    })
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
-    try { await publishRelease(plan, artifacts, run, { inspect }) } finally { log.mockRestore() }
-    const lastPluginSubmit = Math.max(...plan.plugins.map(item => events.indexOf(`submit:${item.manifest.name}`)))
-    const firstPluginVisible = Math.min(...plan.plugins.map(item => events.indexOf(`visible:${item.manifest.name}`)))
-    expect(lastPluginSubmit).toBeLessThan(firstPluginVisible)
-    expect(firstPluginVisible).toBeLessThan(events.indexOf(`submit:${plan.starter.manifest.name}`))
-  })
-
-  it('installs the frozen Starter and verifies every Registry plugin manifest', async () => {
-    const plan = createReleasePlan(fixture())
-    const artifacts = plan.packages.map(item => ({
-      name: item.manifest.name,
-      filename: join('/artifacts', item.manifest.name + '.tgz'),
-      integrity: `sha512-${item.manifest.name}`,
-    }))
+    const plan = createReleasePlan(packages, { baseVersions: previousVersions(packages, {
+      'dsh-mnemon': '0.5.1',
+      'dsh-mnemon-provider-example': '0.5.0',
+    }) })
+    const artifacts = plan.releasePackages.map(artifactFor)
     const run = vi.fn(async (args, directory) => {
       expect(args[0]).toBe('install')
-      for (const { manifest } of plan.packages) {
-        const packageDirectory = join(directory, 'node_modules', manifest.name)
+      for (const packageItem of plan.composition) {
+        const packageDirectory = join(directory, 'node_modules', packageItem.manifest.name)
         await mkdir(packageDirectory, { recursive: true })
-        await writeFile(join(packageDirectory, 'package.json'), JSON.stringify({ name: manifest.name, version: plan.version }))
+        await writeFile(join(packageDirectory, 'package.json'), JSON.stringify({
+          name: packageItem.manifest.name,
+          version: packageItem.manifest.version,
+        }))
       }
       return ''
     })
@@ -208,12 +316,66 @@ describe('complete, channel-safe official release', () => {
     try {
       await verifyRegistryRelease(plan, artifacts, run, {
         scope: 'plugins',
-        inspect: async name => ({ version: plan.version, integrity: `sha512-${name}` }),
+        inspect: async (name, version) => ({
+          version,
+          integrity: artifacts.find(artifact => artifact.name === name)?.integrity ?? `registry-${name}`,
+        }),
       })
     } finally {
       log.mockRestore()
     }
     expect(run).toHaveBeenCalledOnce()
-    expect(run.mock.calls[0][0]).toContain(`file:${artifacts.at(-1).filename}`)
+    expect(run.mock.calls[0][0]).toContain(`file:${artifacts.find(artifact => artifact.name === 'dsh-mnemon').filename}`)
+  })
+
+  it('keeps the workflow frozen, selective, dependency-ordered and Starter-last', async () => {
+    const workflow = await readFile(join(root, '.github/workflows/publish.yml'), 'utf8')
+    expect(workflow).toContain('RELEASE_BASE_REVISION')
+    expect(workflow).toContain('node scripts/release.mjs --publish-plugins')
+    expect(workflow).toContain('node scripts/release.mjs --verify-plugins')
+    expect(workflow).toContain('node scripts/release.mjs --publish-starter')
+    expect(workflow.indexOf('--publish-plugins')).toBeLessThan(workflow.indexOf('--publish-starter'))
+    expect(workflow.indexOf('--publish-starter')).toBeLessThan(workflow.indexOf('gh release create'))
+    expect(workflow).not.toContain('seventeen-artifact')
+    expect(workflow).not.toContain('sixteen plugins serially')
+  })
+})
+
+describe('release metadata synchronization', () => {
+  it('updates exact aggregate/fixture pins and generated provider versions without narrowing workspace ranges', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'mnemon-release-sync-'))
+    const providerName = 'dsh-mnemon-provider-example'
+    const providerDirectory = join(directory, 'plugins', providerName)
+    try {
+      await mkdir(join(providerDirectory, 'src'), { recursive: true })
+      await mkdir(join(directory, 'scripts/fixtures/plugin-consumer'), { recursive: true })
+      await writeFile(join(directory, 'package.json'), JSON.stringify({
+        name: 'dsh-mnemon', version: '0.5.3', dependencies: { [providerName]: '0.5.1' }, publishConfig: { access: 'public', tag: 'latest' },
+      }, null, 2) + '\n')
+      await writeFile(join(providerDirectory, 'package.json'), JSON.stringify({
+        name: providerName,
+        version: '0.5.2',
+        peerDependencies: { 'dsh-mnemon': '^0.5.0' },
+        devDependencies: { 'dsh-mnemon': '^0.5.0' },
+        publishConfig: { access: 'public', tag: 'latest' },
+      }, null, 2) + '\n')
+      await writeFile(join(providerDirectory, 'src/index.ts'), `export const value = { packageName: '${providerName}', version: '0.5.1' }\n`)
+      await writeFile(join(directory, 'scripts/fixtures/plugin-consumer/package.json'), JSON.stringify({
+        name: 'consumer', private: true, dependencies: { 'dsh-mnemon': '0.5.1', [providerName]: '0.5.1' },
+      }, null, 2) + '\n')
+
+      await syncReleaseMetadata(directory)
+
+      const starter = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'))
+      const provider = JSON.parse(await readFile(join(providerDirectory, 'package.json'), 'utf8'))
+      const consumer = JSON.parse(await readFile(join(directory, 'scripts/fixtures/plugin-consumer/package.json'), 'utf8'))
+      expect(starter.dependencies[providerName]).toBe('0.5.2')
+      expect(provider.peerDependencies['dsh-mnemon']).toBe('^0.5.0')
+      expect(provider.devDependencies['dsh-mnemon']).toBe('^0.5.0')
+      expect(await readFile(join(providerDirectory, 'src/index.ts'), 'utf8')).toContain("version: '0.5.2'")
+      expect(consumer.dependencies).toEqual({ 'dsh-mnemon': '0.5.3', [providerName]: '0.5.2' })
+    } finally {
+      await rm(directory, { recursive: true, force: true })
+    }
   })
 })

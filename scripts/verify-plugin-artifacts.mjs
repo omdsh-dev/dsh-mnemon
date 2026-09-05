@@ -15,7 +15,6 @@ const configuredConcurrency = process.env.MNEMON_PLUGIN_VERIFY_CONCURRENCY ?? '4
 assert.match(configuredConcurrency, /^[1-9]\d*$/, 'MNEMON_PLUGIN_VERIFY_CONCURRENCY must be a positive integer')
 const concurrency = Math.min(Number(configuredConcurrency), names.length)
 const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
-const distTag = manifest.publishConfig.tag
 const upgradeBaseResponse = await fetch('https://registry.npmjs.org/dsh-mnemon/0.4.7')
 assert(upgradeBaseResponse.ok, `Unable to read the published v0.4.7 upgrade base (${upgradeBaseResponse.status})`)
 const upgradeBaseManifest = await upgradeBaseResponse.json()
@@ -35,7 +34,7 @@ const registry = createServer((request, response) => {
   } else if (artifactManifests.has(path)) {
     const value = artifactManifests.get(path)
     const versions = { [value.version]: { ...value, dist: { tarball: registryUrl + '/tarballs/' + path } } }
-    const tags = { [distTag]: value.version }
+    const tags = { [value.publishConfig.tag]: value.version }
     if (path === 'dsh-mnemon') {
       versions[upgradeBaseManifest.version] = upgradeBaseManifest
       tags.latest = upgradeBaseManifest.version
@@ -90,8 +89,9 @@ async function parallel(values, concurrency, action) {
 async function pack(directory, expectedName) {
   const output = await run('npm', ['pack', '--ignore-scripts', '--json', '--pack-destination', join(temporary, 'tarballs')], directory, `pack ${expectedName}`)
   const [artifact] = JSON.parse(output)
+  const ownManifest = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'))
   assert.equal(artifact.name, expectedName)
-  assert.equal(artifact.version, manifest.version)
+  assert.equal(artifact.version, ownManifest.version)
   assert(artifact.files.some(file => file.path === 'LICENSE'), `${expectedName} must carry its own license`)
   for (const file of artifact.files) assert(!/^(?:src|tests|node_modules)\//u.test(file.path), `${expectedName} shipped development sources: ${file.path}`)
   return {
