@@ -33,7 +33,7 @@ const registry = createServer((request, response) => {
     createReadStream(artifact).pipe(response)
   } else if (artifactManifests.has(path)) {
     const value = artifactManifests.get(path)
-    const versions = { [value.version]: { ...value, dist: { tarball: registryUrl + '/tarballs/' + path } } }
+    const versions = { [value.version]: { ...value, dist: { ...value.dist, tarball: registryUrl + '/tarballs/' + path } } }
     const tags = { [value.publishConfig.tag]: value.version }
     if (path === 'dsh-mnemon') {
       versions[upgradeBaseManifest.version] = upgradeBaseManifest
@@ -92,11 +92,14 @@ async function pack(directory, expectedName) {
   const ownManifest = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'))
   assert.equal(artifact.name, expectedName)
   assert.equal(artifact.version, ownManifest.version)
+  assert.match(artifact.integrity, /^sha512-\S+$/u)
   assert(artifact.files.some(file => file.path === 'LICENSE'), `${expectedName} must carry its own license`)
   for (const file of artifact.files) assert(!/^(?:src|tests|node_modules)\//u.test(file.path), `${expectedName} shipped development sources: ${file.path}`)
   return {
     path: join(temporary, 'tarballs', artifact.filename),
-    manifest: JSON.parse(await readFile(join(directory, 'package.json'), 'utf8')),
+    // Unreleased artifacts can share a version with npm. Supplying integrity
+    // prevents pnpm from reusing different bytes from its package store.
+    manifest: { ...ownManifest, dist: { integrity: artifact.integrity } },
   }
 }
 
