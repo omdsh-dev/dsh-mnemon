@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createContext, useContext, type ReactNode } from 'react'
 import { act, fireEvent, render, waitFor, within } from '@testing-library/react'
 
-vi.mock('../src/client/MnemonView.tsx', () => ({
-  MnemonView: ({ sessionId, workspaceId, workspaceSelection, t, locale, onClose, surface, active, renderSlot }: {
+vi.mock('../src/client/MnemonWorkbench.tsx', () => ({
+  MnemonWorkbench: ({ sessionId, workspaceId, workspaceSelection, t, locale, onClose, surface, active, renderSlot }: {
     sessionId?: string
     workspaceId?: string
     t?: (key: string) => string

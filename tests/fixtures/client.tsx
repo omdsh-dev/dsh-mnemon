@@ -3,7 +3,7 @@ import { createElement, useEffect, useMemo, type ComponentProps, type ComponentT
 import { installRuntimeMemoryUI } from 'dsh-mnemon-source-runtime/client'
 import { installDocumentsMemoryUI } from 'dsh-mnemon-source-documents/client'
 import { installMemorySpacesUI } from 'dsh-mnemon-source-memory-spaces/client'
-import { MnemonView } from '../../src/client/MnemonView.tsx'
+import { MnemonWorkbench } from '../../src/client/MnemonWorkbench.tsx'
 import { translateZh, type MnemonTranslate } from '../../src/client/locales.ts'
 import { createMemorySourcePageDirectory, MNEMON_SOURCE_PAGE_SLOT, type MemorySourcePageProps } from '../../src/client/source-pages.tsx'
 import type { MemorySourceManagementCatalog } from '../../src/host/protocol.ts'
@@ -25,16 +25,16 @@ function sourcePages(t: MnemonTranslate) {
     renderSlot: ((_name: string, props: MemorySourcePageProps, options: { only?: string }) => {
       const entry = slots.entriesOfSlot(MNEMON_SOURCE_PAGE_SLOT).find(entry => entry.options.id === options.only)
       return entry === undefined ? null : createElement(entry.component as ComponentType<MemorySourcePageProps>, props)
-    }) as NonNullable<ComponentProps<typeof MnemonView>['renderSlot']>,
+    }) as NonNullable<ComponentProps<typeof MnemonWorkbench>['renderSlot']>,
     dispose: () => { for (const release of releases.reverse()) release() },
   }
 }
 
-export function ComposedMnemonView(props: ComponentProps<typeof MnemonView>) {
+export function ComposedMnemonWorkbench(props: ComponentProps<typeof MnemonWorkbench>) {
   const pages = useMemo(() => sourcePages(props.t ?? translateZh), [props.t])
   useEffect(() => () => pages.dispose(), [pages])
   const connection = useMemo(() => ({ ...props.connection, rpc: { ...props.connection.rpc, call: sourceTransport(props.connection.rpc.call.bind(props.connection.rpc)) } }), [props.connection])
-  return <MnemonView {...pages} {...props} connection={connection as typeof props.connection} />
+  return <MnemonWorkbench {...pages} {...props} connection={connection as typeof props.connection} />
 }
 
 export const sourceCatalog: MemorySourceManagementCatalog = {

@@ -24,9 +24,35 @@ afterEach(cleanup)
 import type { Context } from '@deepseek-ai/cordis'
 import { installMemorySpaces } from '../src/index.ts'
 import { provider } from './fixture.ts'
-import { MemorySpacesSourcePage, installMemorySpacesUI } from '../src/client.ts'
+import { MemorySpacesSourcePage, installMemorySpacesUI, memorySpacesPageClient } from '../src/client.ts'
 
 describe('independent Memory Spaces Source client', () => {
+  it('selects advertised assistance for placement and activation while tracking revisions', async () => {
+    const read = vi.fn(async () => ({ revision: 'r2', value: {} }))
+    const mutate = vi.fn(async () => ({ revision: 'r4', value: {} }))
+    const execute = vi.fn(async () => ({ revision: 'r3', value: {} }))
+    const client = memorySpacesPageClient({ sourceInstanceKey: 'source:spaces', revision: 'r1', read, mutate,
+      assistance: { operations: ['activation', 'body-create'], execute } })
+    await client.reconnectBody('project')
+    await client.updateBody('project', { active: true })
+    expect(execute).toHaveBeenLastCalledWith('activation', { memoryBodyId: 'project', active: true }, { confirmed: true, expectedRevision: 'r2' })
+    await client.updateBody('project', { name: 'Project' })
+    expect(mutate).toHaveBeenLastCalledWith('body-update', { memoryBodyId: 'project', name: 'Project' }, { confirmed: true, expectedRevision: 'r3' })
+    await client.createBody({ name: 'Team', description: 'Shared context', placement: { mode: 'automatic', prompt: 'Prefer shared context' } })
+    expect(execute).toHaveBeenLastCalledWith('body-create', expect.objectContaining({ placement: { mode: 'automatic', prompt: 'Prefer shared context' } }), { confirmed: true, expectedRevision: 'r4' })
+    expect(mutate).toHaveBeenCalledOnce()
+  })
+
+  it('does not retry a rejected assisted activation as a general mutation', async () => {
+    const mutate = vi.fn()
+    const execute = vi.fn(async () => { throw new Error('activation denied') })
+    const client = memorySpacesPageClient({ sourceInstanceKey: 'source:spaces', revision: 'r1', read: vi.fn(), mutate,
+      assistance: { operations: ['activation'], execute } })
+    await expect(client.updateBody('project', { active: true })).rejects.toThrow('activation denied')
+    expect(execute).toHaveBeenCalledOnce()
+    expect(mutate).not.toHaveBeenCalled()
+  })
+
   it('searches an explicitly mounted Provider through the selected Source', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'mnemon-spaces-client-'))
     const runner = new MemoryCompositionRunner()

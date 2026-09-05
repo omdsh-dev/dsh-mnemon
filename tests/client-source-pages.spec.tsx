@@ -6,7 +6,7 @@ import type { ReactNode } from 'react'
 import type { Config } from "../src/host/config.ts"
 import type { ClientSettingsScope, StatusView } from "../src/host/protocol.ts"
 import type { MnemonSourcePageOwnerProps } from "../src/client/dsh-context.ts"
-import { MnemonView } from '../src/client/MnemonView.tsx'
+import { MnemonWorkbench } from '../src/client/MnemonWorkbench.tsx'
 import { translateEn } from '../src/client/locales.ts'
 import {
   createMemorySourcePageDirectory,
@@ -242,7 +242,7 @@ describe('Source Client presentation conformance', () => {
       options.only === 'git/repository' ? <CustomPage {...owner} /> : options.fallback
     )) as never
 
-    render(<MnemonView
+    render(<MnemonWorkbench
       connection={connection as never}
       settingsScope={settings}
       sessionId="session-1"
@@ -290,7 +290,7 @@ describe('Source Client presentation conformance', () => {
       <span data-testid="runtime-selected-instance">{owner.management?.sourceInstanceKey}</span>
       <span data-testid="runtime-hidden-child">{!('children' in owner) ? 'no' : 'yes'}</span>
     </div>) as never
-    render(<MnemonView connection={connection as never} settingsScope={settings} sessionId="s1" t={translateEn} locale="en" sourcePageDirectory={{ getSnapshot: () => runtimePages, subscribe: () => () => {} }} renderSlot={renderSlot} />)
+    render(<MnemonWorkbench connection={connection as never} settingsScope={settings} sessionId="s1" t={translateEn} locale="en" sourcePageDirectory={{ getSnapshot: () => runtimePages, subscribe: () => () => {} }} renderSlot={renderSlot} />)
     fireEvent.click(await screen.findByRole('tab', { name: translateEn('nav.runtime') }))
     await waitFor(() => expect(screen.getByTestId('runtime-selected-instance').textContent).toBe('source:mnemon-source-runtime'))
     expect(screen.getByTestId('runtime-hidden-child').textContent).toBe('no')
@@ -324,7 +324,7 @@ describe('Source Client presentation conformance', () => {
     }) } }
     const emptyPages = [] as const
 
-    render(<MnemonView
+    render(<MnemonWorkbench
       connection={connection as never}
       settingsScope={settings}
       sessionId="session-health"

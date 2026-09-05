@@ -4,7 +4,7 @@ import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ClientSettingsScope, Config } from "../host/protocol.ts"
 import type { MnemonClientContext } from "./dsh-context.ts"
 import type { MnemonTranslate } from './locales.ts'
-import { MnemonView, type MnemonWorkspaceSelection } from './MnemonView.tsx'
+import { MnemonWorkbench, type MnemonWorkspaceSelection } from './MnemonWorkbench.tsx'
 import type { MemorySourcePageDirectory } from './source-pages.tsx'
 import type { MnemonBetterSidebarSeat } from './better-sidebar-seat.ts'
 import { mountMnemonSidebarEntry } from './sidebar-entry.ts'
@@ -93,7 +93,7 @@ export function MnemonBuiltinWorkspaceHost(props: MnemonBuiltinWorkspaceHostProp
   const subscribeLocale = useCallback((listener: () => void) => props.localeRuntime.subscribe(listener), [props.localeRuntime])
   const getLocale = useCallback(() => props.localeRuntime.getSnapshot(), [props.localeRuntime])
   const locale = useSyncExternalStore(subscribeLocale, getLocale, getLocale)
-  return <MnemonView
+  return <MnemonWorkbench
     connection={props.connection}
     settingsScope={props.settingsScope}
     sessionId={props.sessionId}
@@ -140,7 +140,7 @@ export function MnemonWorkspaceHost(props: MnemonWorkspaceHostProps): JSX.Elemen
     },
   }), [effectiveWorkspace, resolvedSelectedId, workspaces.items])
 
-  return <MnemonView
+  return <MnemonWorkbench
     connection={props.connection}
     settingsScope={props.settingsScope}
     {...(sessionId === undefined ? {} : { sessionId })}

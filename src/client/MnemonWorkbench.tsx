@@ -18,7 +18,7 @@ import sidebarCss from './MnemonSidebarView.module.css'
 import css from "./MnemonView.module.css"
 import { I18nContext, LocaleContext, useT, useLocale, humanBytes, message, short, PageHeader, SidebarModal, EmptyState } from "./page-kit.tsx"
 
-export interface MnemonViewProps {
+export interface MnemonWorkbenchProps {
   connection: ClientConnectionHandle
   settingsScope: ClientSettingsScope<Config>
   sessionId?: string
@@ -482,12 +482,12 @@ function StorageDomains(props: {
   )
 }
 
-export function MnemonView(props: MnemonViewProps): JSX.Element {
+export function MnemonWorkbench(props: MnemonWorkbenchProps): JSX.Element {
   const t = props.t ?? translateZh
   return <I18nContext.Provider value={t}><LocaleContext.Provider value={props.locale ?? 'zh'}><MnemonWorkspace {...props} /></LocaleContext.Provider></I18nContext.Provider>
 }
 
-function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, workspaceSelection, surface = 'sidebar', onClose, sourcePageDirectory = EMPTY_SOURCE_PAGE_DIRECTORY, renderSlot }: MnemonViewProps): JSX.Element {
+function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, workspaceSelection, surface = 'sidebar', onClose, sourcePageDirectory = EMPTY_SOURCE_PAGE_DIRECTORY, renderSlot }: MnemonWorkbenchProps): JSX.Element {
   const t = useT()
   const locale = useLocale()
   const subscribeSettings = useCallback((listener: () => void) => settingsScope.subscribe(listener), [settingsScope])
