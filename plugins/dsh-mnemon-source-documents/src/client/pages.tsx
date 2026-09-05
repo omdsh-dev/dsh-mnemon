@@ -1,9 +1,10 @@
+import { css, sidebarCss, useT } from './presentation.ts'
 import type { JSX } from 'react'
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import Markdown from 'markdown-to-jsx'
 import { type DocumentRecord, type DocumentSnapshot, type DocumentView } from '../contracts.ts'
 import type { DocumentsPageClient } from './api.ts'
-import { useRequestVersion, appearanceClass, memorySidebarStyles as sidebarCss, memoryPageStyles as css, useT, useLocale, humanBytes, message, PageHeader, ProgressiveFooter, SidebarModal, EmptyState } from 'dsh-mnemon/client'
+import { useRequestVersion, appearanceClass, useLocale, humanBytes, message, PageHeader, ProgressiveFooter, SidebarModal, EmptyState } from 'dsh-mnemon/client'
 
 const SAFE_LINK_PATTERN = /^(?:https?:|mailto:|#|\/)/iu
 

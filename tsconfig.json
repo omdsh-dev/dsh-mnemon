@@ -108,7 +108,8 @@
       "dsh-mnemon-provider-supermemory": [
         "./plugins/dsh-mnemon-provider-supermemory/src/index.ts"
       ]
-    }
+    },
+    "resolveJsonModule": true
   },
   "include": [
     "src/**/*.ts",

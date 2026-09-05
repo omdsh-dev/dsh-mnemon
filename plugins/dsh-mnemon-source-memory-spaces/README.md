@@ -30,6 +30,10 @@ its pages, browser API adapter, Host management operations, and tests. It only
 imports the public dsh-mnemon/client helpers; it never receives a Host Context,
 raw RPC transport, credentials, or an LLM View grant.
 
+Business copy and layout live in `presentation/`. The Client bundles its own
+assets; the public data-only paths also let the Starter preserve existing
+page-kit exports. Updating this page does not require editing Starter resources.
+
 The default distribution loads these same Client plugins through DSH. Each page
 uses Source-scoped read/mutate operations. Optional Agent-assisted cross-Source
 maintenance is advertised by the Host through the same scoped page client; it

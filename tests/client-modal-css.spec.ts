@@ -92,7 +92,8 @@ describe('responsive dialog layout invariants', () => {
 
 describe('entity rail list invariants', () => {
   it('truncates long entity names and keeps the frequency count inside the row', () => {
-    expect(viewCss).toContain('.entityList button > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }')
-    expect(viewCss).toContain('.entityList strong { flex: none;')
+    const sourceCss = readFileSync(new URL('../plugins/dsh-mnemon-source-memory-spaces/presentation/page.module.css', import.meta.url), 'utf8')
+    expect(sourceCss).toContain('.entityList button > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }')
+    expect(sourceCss).toContain('.entityList strong { flex: none;')
   })
 })

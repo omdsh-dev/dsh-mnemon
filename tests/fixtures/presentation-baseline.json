@@ -1,0 +1,23 @@
+{
+  "revision": "7bcadbcf368798bfee1f2c2c45aa9638c55dd09d",
+  "page": {
+    "rules": 1028,
+    "rulesSha256": "143b186b539db7311ca741913ef071246199c8c4eceba01dae6c04b418475603",
+    "classes": 265,
+    "classesSha256": "94d4b0d52ebdcf86ded56d62d2bca435cce977dd9353aaa0a0b3fbde9d355e87"
+  },
+  "sidebar": {
+    "rules": 282,
+    "rulesSha256": "8d7041825335f8eae52af776ee75cedc65a61d700d679919d7f5e37e0b270aa8",
+    "classes": 29,
+    "classesSha256": "c2eeeb8d1e00063d29bfe2949339820184f3e8b22f631c362edd85aad8bfe573"
+  },
+  "zh": {
+    "keys": 920,
+    "sha256": "113989185ff1504aeec94127384b66d927fa279c76b5fff80e33055db9330caa"
+  },
+  "en": {
+    "keys": 920,
+    "sha256": "aa9c822766476f503eacbc0fedb69d440427403c95c84ac3c1a5919a3fad23f5"
+  }
+}

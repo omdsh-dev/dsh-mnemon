@@ -1,0 +1,62 @@
+.shell .modal form[class*='runtimeComposer'] {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.shell .modal form[class*='runtimeComposer'] > [class*='runtimeComposerHeading'] { display: none; }
+
+.shell [class*='runtimeComposerActions'] label {
+  gap: 5px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.shell [class*='runtimeComposer'] > textarea,
+.shell [class*='runtimeComposerActions'] select,
+.shell [class*='runtimeEntry'] select {
+  min-height: 34px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  padding: 7px 10px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-specific-input-major);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.shell [class*='runtimeTargetDescription'] { font-size: 12px; }
+
+.shell [class*='runtimeEntryMeta'] > span,
+.shell [class*='runtimeEntryBadges'] > span,
+.shell [class*='runtimeEntryMeta'] time { font-size: 11px; }
+
+.shell [class*='runtimeEntry'] > p { font-size: 13px; }
+.shell [class*='runtimeEntryBadges'] > span {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 999px;
+  padding: 0 8px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-layer-1);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 20px;
+}
+.shell [class*='runtimeEntryBadges'] > [class*='runtimeEntryTarget'] {
+  border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 30%, var(--dsw-alias-border-l1));
+  color: var(--dsw-alias-state-business-primary);
+  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 7%, var(--dsw-alias-bg-layer-1));
+  font-family: var(--dsw-font-family);
+  font-weight: 500;
+}
+.shell [class*='runtimeEntry'][data-importance='critical'] [class*='runtimeEntryBadges'] > span:last-child {
+  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 24%, var(--dsw-alias-border-l1));
+  color: var(--dsw-alias-state-error-primary);
+  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 6%, var(--dsw-alias-bg-layer-1));
+}
+.shell [class*='runtimeEntry'] footer { gap: 6px; }

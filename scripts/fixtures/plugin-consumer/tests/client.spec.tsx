@@ -24,6 +24,29 @@ const spacesClient = loadMemoryClientArtifact<typeof import('dsh-mnemon-source-m
 afterEach(cleanup)
 
 describe('compiled Source clients with compiled Core and no source aliases', () => {
+  it('loads Source copy and styles even when the shared kit has stale business presentation', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'source-presentation-'))
+    const runner = new MemoryCompositionRunner()
+    const sharedCopy = () => 'stale shared copy'
+    const oldKit = { ...core, useT: () => sharedCopy,
+      memoryPageStyles: Object.fromEntries(Object.entries(core.memoryPageStyles).filter(([key]) => !key.startsWith('runtime'))),
+      memorySidebarStyles: Object.fromEntries(Object.entries(core.memorySidebarStyles).filter(([key]) => !key.startsWith('runtime'))),
+    }
+    const owned = loadMemoryClientArtifact<typeof import('dsh-mnemon-source-runtime/client')>(require.resolve('dsh-mnemon-source-runtime/client'), {
+      ...sourceDependencies, 'dsh-mnemon/client': oldKit,
+    })
+    try {
+      await runner.mount(focus, { instanceId: 'focus', config: { sourceKeys: ['source:work'], mode: 'eager' } })
+      await runner.mount(runtime, { instanceId: 'work', config: { dataDir: directory } })
+      const management = await runner.managementClient('source:work')
+      const view = render(<owned.RuntimeSourcePage sourceTypeId="runtime" sourceInstanceKey="source:work" sourceInstances={[]} locale="en" writable management={management} />)
+      expect(await screen.findByRole('heading', { name: core.translateEn('runtime.title') })).not.toBeNull()
+      expect(view.container.querySelector('[class*="runtimeSummaryCard"]')).not.toBeNull()
+      const style = document.querySelector('style[data-plugin-css="dsh-mnemon-source-runtime/presentation/page.module.css"]')
+      expect(style?.textContent).toContain('runtimeSummaryCard')
+    } finally { cleanup(); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
+  })
+
   it('registers all Source-owned pages and disposes them through the shared public UI contract', () => {
     const pages = new Map<string, unknown>()
     const slots = {

@@ -1,9 +1,12 @@
 import { configDefaults, defineConfig } from 'vitest/config'
 import { fileURLToPath } from 'node:url'
+import { clientCssPlugin } from './tsdown.config.ts'
 
 export default defineConfig({
+  // Compile the real class maps; JSDOM does not implement the browser CSS layout engine.
+  plugins: [{ ...clientCssPlugin(false), enforce: 'pre' } as never],
   resolve: {
-    alias: {
+    alias: Object.entries({
       'dsh-mnemon/client': fileURLToPath(new URL('./src/client/extension-sdk.ts', import.meta.url)),
       'dsh-mnemon-source-runtime/client': fileURLToPath(new URL('./plugins/dsh-mnemon-source-runtime/src/client.ts', import.meta.url)),
       'dsh-mnemon-source-documents/client': fileURLToPath(new URL('./plugins/dsh-mnemon-source-documents/src/client.ts', import.meta.url)),
@@ -33,7 +36,7 @@ export default defineConfig({
       'dsh-mnemon-provider-retaindb': fileURLToPath(new URL('./plugins/dsh-mnemon-provider-retaindb/src/index.ts', import.meta.url)),
       'dsh-mnemon-provider-byterover': fileURLToPath(new URL('./plugins/dsh-mnemon-provider-byterover/src/index.ts', import.meta.url)),
       'dsh-mnemon-provider-supermemory': fileURLToPath(new URL('./plugins/dsh-mnemon-provider-supermemory/src/index.ts', import.meta.url)),
-    },
+    }).map(([name, replacement]) => ({ find: new RegExp('^' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$'), replacement })),
     // Source-linked DSH workspaces resolve through their real paths. Keep UI
     // packages on Mnemon's React instance just as the browser bundle does.
     dedupe: ['react', 'react-dom'],

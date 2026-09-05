@@ -26,8 +26,9 @@ describe('browser bundle platform boundary', () => {
         const target = resolve(root, dirname(path), specifier)
         const browserFile = directories.some(directory => target.startsWith(join(root, directory) + '/'))
         const contract = target.endsWith('/contracts.ts') || target.endsWith('/host/protocol.ts')
+        const presentation = /\/presentation\/[^/]+\.(?:json|module\.css)$/.test(target)
         if (ts.isExportDeclaration(node) && node.isTypeOnly || ts.isImportDeclaration(node) && node.importClause?.isTypeOnly) continue
-        if (!browserFile && !contract) violations.push(`${path}: ${specifier}`)
+        if (!browserFile && !contract && !presentation) violations.push(`${path}: ${specifier}`)
         if (contract && /(?:from|import)\s*['"]node:/u.test(readFileSync(target, 'utf8'))) violations.push(`${path}: Node contract ${specifier}`)
       }
     }

@@ -10,6 +10,7 @@
     "rewriteRelativeImportExtensions": true
   },
   "include": [
-    "src/client.ts"
+    "src/client.ts",
+    "src/**/*.d.ts"
   ]
 }
