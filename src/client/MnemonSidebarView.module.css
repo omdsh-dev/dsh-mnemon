@@ -459,7 +459,8 @@
 @media (max-width: 520px) {
   .shell .masthead { min-height: 46px; }
   .shell .brand h1 { font-size: 16px; }
-  .shell .headerActions { max-width: 62vw; }
+  .shell .headerActions { max-width: none; flex: 0 0 auto; }
+  .shell [class*='backButton'] > span { display: none; }
   .shell [class*='storageMode'] { padding-inline: 7px; }
   .shell .workspacePicker select { width: min(118px, 30vw); padding-left: 8px; }
   .shell .workspaceMismatch > button { padding-inline: 6px; }

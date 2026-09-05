@@ -16,11 +16,12 @@ describe('default Source presentation migration', () => {
     expect(memoryPageStyles.primaryButton).toContain('primaryButton')
   })
 
-  it.each(['page', 'sidebar'] as const)('preserves the %s rules and published class map from v0.5.2', kind => {
+  it.each(['page', 'sidebar'] as const)('preserves the %s migration and public class map, with the explicit compact-header fix', kind => {
     const filename = kind === 'page' ? 'src/client/MnemonView.module.css' : 'src/client/MnemonSidebarView.module.css'
     const files = [filename, ...sources.map(source => `plugins/dsh-mnemon-source-${source}/presentation/${kind}.module.css`)]
     // Rules include their container/media conditions. Browser checks cover cascade and layout.
-    expect(presentationFingerprint(files.map(path => ({ filename: presentationNamespace(path), text: read(path) })))).toEqual(baseline[kind])
+    const expected = { ...baseline[kind], ...(kind === 'sidebar' ? baseline.compactHeaderFix : {}) }
+    expect(presentationFingerprint(files.map(path => ({ filename: presentationNamespace(path), text: read(path) })))).toEqual(expected)
   })
 
   it('preserves every public bilingual key and value while Sources own their copy', () => {

@@ -35,6 +35,8 @@ describe('Sidebar layout invariants', () => {
 
   it('keeps the connected label visible in the compact Sidebar header', () => {
     expect(sidebarCss).toContain(".shell .statusCluster > span:not([class*='statusDot']) { display: inline; }")
+    expect(sidebarCss).toContain('.shell .headerActions { max-width: none; flex: 0 0 auto; }')
+    expect(sidebarCss).toContain(".shell [class*='backButton'] > span { display: none; }")
   })
 
   it('keeps DSH as the only sidebar and preserves the established Mnemon tab strip', () => {

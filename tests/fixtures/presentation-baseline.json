@@ -12,6 +12,10 @@
     "classes": 29,
     "classesSha256": "c2eeeb8d1e00063d29bfe2949339820184f3e8b22f631c362edd85aad8bfe573"
   },
+  "compactHeaderFix": {
+    "rules": 283,
+    "rulesSha256": "0f7aff274be86a2ada3fa787893121334c2eb7053c86bc115c80f6f4a4e03f13"
+  },
   "zh": {
     "keys": 920,
     "sha256": "113989185ff1504aeec94127384b66d927fa279c76b5fff80e33055db9330caa"
