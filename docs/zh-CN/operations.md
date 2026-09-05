@@ -62,7 +62,7 @@ DSH rc.8 首次说明的可选 SQLite 不兼容性在 DSH 0.1.1-rc.2 中仍然�
 - 相同 Document ID + 相同内容跳过，ID 冲突且内容不同则生成新 ID；
 - 相同 Memory Space ID + 相同数据库跳过，内容不同则生成新 ID。
 
-导入受 `writeEnabled` 控制，只读部署会拒绝。ZIP 包含私有记忆，应加密、限制访问并验证恢复。Provider 凭据保存在 `state/memory-providers.json`（`0600`），不会进入 ZIP。已保存的值只经认证后的管理通道返回，绝不进入普通脱敏读目录；若要备份连接，需要按下述离线快照保护整个 `state/`。
+导入受 `writeEnabled` 控制，只读部署会拒绝。ZIP 包含私有记忆，应加密、限制访问并验证恢复。Provider 凭据保存在 `state/memory-providers.json`（`0600`），不会进入 ZIP。已保存的凭据值也不会经管理通道返回；若要备份连接，需要按下述离线快照保护整个 `state/`。
 
 ### 恢复演练
 
@@ -191,7 +191,7 @@ HTTP 403 通常来自 Host/Origin 防线：检查 `--trusted-host`、公网端�
 
 - DSH 0.1.2-rc.1 与它的 alpha.5 前序版本中，所有 RPC 与 stream 都要求同一个已认证浏览器会话；保留的 `remoteAccess` 不影响 transport。
 - DSH 0.1.1-rc.2 中，读与激活使用 `trusted-host`；写、设置和备份默认保持 `loopback`，只有 Host 本地 `remoteAccess: trusted-host` 才会将三者整体提升。
-- 普通 Provider 目录始终脱敏；已保存凭据只会经当前版本对应的受保护管理通道返回。
+- Provider 目录和管理响应始终脱敏；界面只显示已配置字段名，不返回已保存凭据值。
 - WebUI 依据 Host 返回的可写 settings snapshot 判断产品能力，不再根据传输位置猜测权限；设置通道不可用时会显示明确诊断，而不是空白页。
 - WebUI 不直接读取 SQLite、启动进程、调用远程 Provider 或指定任意更新命令；Provider 网络访问只发生在 Host。
 - worker 使用 persona、工具白名单、经过 schema 校验的一次性结果工具与 `maxDepth: 1`。
@@ -214,7 +214,7 @@ HTTP 403 通常来自 Host/Origin 防线：检查 `--trusted-host`、公网端�
 | 找不到“记忆系统”入口 | 检查 `tabEnabled=true`；`displayMode=sidebar` 使用侧边栏，`displayMode=builtin` 使用已打开会话的标签页。本地 link 先 `pnpm run build` 再重启 profile |
 | 保留的 `buildin` 偏好在升级后打开了会话标签页 | v0.4.2 恢复该偏好并保存为 `builtin`；如果希望继续使用独立入口，请选择 Sidebar。记忆范围与已存数据不变 |
 | 状态正常但召回为空 | 检查 active 记忆体、存储范围、查看目录、会话实际目录和查询是否足够聚焦 |
-| 顶部提示目录未对齐 | 工作台正在查看另一个工作区；点击一键对齐，或有意保留只读查看；Agent-backed 操作在未对齐时拒绝 |
+| 顶部提示目录未对齐 | 工作台正在查看另一个工作区；确认是否为预期范围。工作台任务在查看工作区执行，对话工具仍使用所属会话范围 |
 | 设置保存后无变化 | 查看保存错误；成功保存应实时切换并自动重新读取，不需要刷新 |
 | 自定义目录被拒绝 | 使用绝对路径、`~` 或 `~/...` |
 | `memoryBodyId is required...` | active 数量不是恰好 1；显式选择目标 |

@@ -158,7 +158,7 @@ The WebUI reads Source instances from the live management catalog; no frontend e
 
 `strict-v1` is the Agent-safe default: for Providers that explicitly declare a normalized 0–1 relevance score, non-positive and below-threshold rows are removed before their content reaches an Agent. It then returns every high-relevance row up to the requested limit, at most four medium-relevance rows, and at most two unscored or unknown-scale rows by default; it does not fill the result limit with weaker evidence. `balanced-v1` retains low-score rows only after primary evidence, and `exhaustive-v1` preserves finite scored rows for direct inspection. An out-of-range score is treated as unknown-scale instead of being fabricated into a confidence value. Cross-provider ordering continues to use reciprocal-rank fusion.
 
-Policies are pure, bounded host extensions. A plugin may call `registerRecallQualityPolicy(policy)` before the runtime graph is constructed, then select that policy id in configuration. Invalid limits, decisions, or selections fall back to `strict-v1`; an unknown configured id rejects the candidate runtime graph. Filtering counts are returned as structured `source.quality` statistics and are not appended to Agent hints.
+These pure recall-quality policies belong to the Memory Spaces Source. Configuration selects a policy ID shipped by that Source. Its internal registration function is not a public plugin API; custom retrieval belongs behind the public Source/Provider contracts. Invalid limits, decisions, or selections fall back to `strict-v1`; an unknown configured id rejects the candidate runtime graph. Filtering counts are returned as structured `source.quality` statistics and are not appended to Agent hints.
 
 ### Browser authentication
 
@@ -278,7 +278,6 @@ DSH 0.1.1-rc.2 includes each model's declared input modalities in the live catal
 Regular workers prefer `spawn`. If no provider has that name, another provider with all of the following capabilities can be selected:
 
 ```text
-outputSchema = true
 toolFilter   = true
 persona      = true
 depthLimit   = true
@@ -302,9 +301,9 @@ mnemon:
 Effects:
 
 - Model write tools are not registered;
-- `/dsh-mnemon-write` RPC is not registered;
+- write and activation RPCs remain registered, with memory mutations rejected at the Host boundary;
 - `/mnemon remember` and `/mnemon forget` are rejected;
-- semantic mutations through `MnemonService` are rejected.
+- Source management and model actions cannot bypass the Host write restriction.
 
 This is feature-level read-only behavior, not a read-only filesystem mode: the Runtime controller may still initialize or repair projections, Document search updates LRU access times, and Mnemon read commands may trigger upstream database migrations. Do not treat `writeEnabled=false` as a safety guarantee for read-only mounts.
 

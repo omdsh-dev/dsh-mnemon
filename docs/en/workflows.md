@@ -4,13 +4,13 @@
 
 ## Per-Turn Context
 
-The plugin registers stable routing guidance, one static Runtime Memory protocol, and one Wake context slot:
+The default composition provides stable routing guidance, a static Runtime Memory protocol, and a Wake snapshot message updated when needed:
 
 - `mnemon:routing`: a system prompt section that, when `routingGuidance=true`, provides concise boundaries for tiered queries;
 - `mnemon:runtime-memory-protocol`: a system prompt section containing the invariant Runtime Memory semantics and write rules. It is present only while the eager Runtime source participates in automatic projection and remains byte-identical across memory writes;
-- `mnemon:runtime-memory`: the slot filled from the immutable Wake pinned for the current root turn. Runtime Memory contributes a complete revisioned USER/MEMORY state snapshot without repeating the static protocol; Documents and Memory Spaces contribute bounded covers rather than their complete catalogs.
+- Wake snapshot: rendered from the immutable View pinned for the current root turn, carried by an own message with `source.plugin=dsh-mnemon` and `form=recall`. Runtime Memory contributes a complete revisioned USER/MEMORY state snapshot without repeating the static protocol; Documents and Memory Spaces contribute bounded covers rather than their complete catalogs.
 
-DSH appends a new user-role runtime-context snapshot only when this dynamic Wake changes. The snapshot deliberately remains complete because DSH defines the newest runtime-context message as superseding earlier snapshots; keeping full state preserves resume, fork, compaction, deletion, and context-trimming behavior. Moving the invariant protocol into the stable system prefix removes those bytes from every changed tail snapshot without inventing an unsafe delta chain.
+The Host appends a new user-role plugin message only when the Wake changes; it does not resend other plugins' shared context. Snapshots remain complete states rather than patches that depend on earlier messages. The static protocol stays in the system prefix, and Source text is transmitted literally without template interpolation. See [Architecture](./architecture.md#lifecycle-and-failures) for turn, child-Agent and generation ownership.
 
 The lifecycle pins before the Host assembles the System Prompt, then keeps the same View for every model step in that turn:
 
@@ -23,7 +23,7 @@ turn/start
   -> build bounded Wake
   -> continue the actual Host prompt assembly
   -> align the static protocol section with the pinned Runtime source
-  -> replace mnemon:runtime-memory with that Wake
+  -> append the changed Wake as this plugin's own complete snapshot message
 
 agent/pre-step(step=1)
   -> cancel pending/running background review for a new turn
@@ -34,7 +34,7 @@ agent/pre-step(step=1)
 
 Source snapshotting does not run semantic recall. Prime only initializes routing state and does not run asynchronous CLI status queries.
 
-A child captures and retains its live parent's pinned View and runtime at `agent/created`, before its driver starts. Its own turns pin that retained View, even after the parent finishes or moves to a newer generation. The delegation is released when the child activation is disposed. A cold resume receives a new delegation; an explicitly Host-created background child with no parent model turn snapshots a fresh scoped View. Children have their own turn authority without root-only cues or idle review. See [the authority lifecycle](./architecture.md#direct-recall-and-supervised-mutations).
+A child captures and retains its live parent's pinned View and runtime at `agent/created`, before its driver starts. Its own turns pin that retained View, even after the parent finishes or moves to a newer generation. The delegation is released when the child activation is disposed. A cold resume receives a new delegation; an explicitly Host-created background child with no parent model turn snapshots a fresh scoped View. Children have their own turn authority without root-only cues or idle review. See [the authority lifecycle](./architecture.md#lifecycle-and-failures).
 
 ## Agent Recall
 

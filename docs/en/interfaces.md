@@ -105,7 +105,7 @@ Web workbench requests carry `sessionId` and an optional `workspaceId`. The Host
 - deterministic reads and manual maintenance may route to the inspected root selected by `workspaceId`;
 - Agents, tools, commands, and lifecycle hooks still route by the Agent cwd associated with `sessionId`;
 - `status.workspaceContext` returns selected / effective roots and `aligned`;
-- Agent-backed operations are rejected while misaligned.
+- independent task Agents started from the workbench use the inspected workspace; they do not require the main conversation to match. Conversation tools continue to use their own session cwd and pinned View, not the workbench inspection scope.
 
 Profiles without a Web workspace registry, including Headless, have no arbitrary inspection target. Agent execution still routes `workspace` scope directly from the session cwd.
 
@@ -165,10 +165,10 @@ rc.2 rollback authority: loopback (`trusted-host` when `remoteAccess=trusted-hos
 | `remember` / `link` / `forget` | Durable semantic write, relation, and soft deletion |
 | `body-create` / `body-update` / `body-delete` | Create/connect, edit, or confirm Native deletion / remote disconnection |
 | `body-reconnect` | Legacy compatibility route for clients released before reconnect moved to the read channel |
-| `provider-services` / `provider-service-update` | Read private Provider settings for the local settings UI, or update one service |
+| `provider-service-update` | Update one Provider service; credentials remain on the Host and the response is redacted |
 | `version-update` | Update a named component with Host-fixed commands and arguments |
 
-The private `provider-services` response, including saved credential values needed by the settings editor, is available only over this management channel. The ordinary read endpoint always returns a redacted catalog.
+`provider-services` returns a redacted catalog through the read channel. The settings editor knows which credential fields are configured; it can replace or explicitly clear them without reading saved values back.
 
 With `writeEnabled=false`, both activation control and the write channel remain registered but mutations are rejected at the Host boundary. The browser also disables mutation controls from the Host's settings snapshot before transport.
 
@@ -205,7 +205,7 @@ Mnemon uses one registration call shape for both transport generations: it alway
 
 ## npm exports and extension service
 
-Core publishes `ctx.mnemonMemory: MemoryRuntime`. Source/Strategy plugins use `inject = ['mnemonMemory']` and `installMemory`. Source controllers and Provider registries are not Root exports. Each plugin owns its own public `./contracts` and optional `./client` entry.
+Core publishes `ctx.mnemonMemory: MnemonMemoryService`; the actual service exposes only `installContributions`. Source/Strategy authors use `inject = ['mnemonMemory']` and `installMemory`, without receiving an engine, controller or registry. Public subpaths are defined by each package's `package.json#exports`; Sources may provide their own `./contracts` and optional `./client`.
 
 | Entry | Responsibility |
 |---|---|

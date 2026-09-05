@@ -4,13 +4,13 @@
 
 ## 每轮上下文
 
-插件会注册稳定的路由指导、一份静态 Runtime Memory 协议和一个 Wake context 槽位：
+默认组合提供稳定的路由指引、静态 Runtime Memory 协议，以及按需更新的 Wake 快照消息：
 
 - `mnemon:routing`：system prompt section；当 `routingGuidance=true` 时提供简短的分层查询边界；
 - `mnemon:runtime-memory-protocol`：system prompt section，只包含不变的 Runtime Memory 语义与写入规则。它只在 eager Runtime Source 参与自动投影时出现，记忆变更前后保持逐字节一致；
-- `mnemon:runtime-memory`：由当前 root 回合固定的不可变 Wake 填充。Runtime Memory 提供带 revision 的完整 USER/MEMORY 状态快照，不再重复静态协议；Documents 与 Memory Spaces 只贡献有界封面，不注入完整目录。
+- Wake 快照：由当前 root 回合固定的不可变 View 渲染，以 `source.plugin=dsh-mnemon`、`form=recall` 的自有消息承载。Runtime Memory 提供带 revision 的完整 USER/MEMORY 状态快照，不再重复静态协议；Documents 与 Memory Spaces 只贡献有界封面，不注入完整目录。
 
-DSH 只在这份动态 Wake 发生变化时追加新的 user-role runtime-context 快照。该快照仍刻意保持完整，因为 DSH 将最新 runtime-context 消息定义为取代旧快照；完整状态能保护 resume、fork、compaction、删除和上下文裁剪语义。把不变协议放入稳定 system 前缀，可以从每个变化后的尾部快照移除这些字节，又不需要构造不可恢复的 diff 链。
+Host 只在 Wake 内容变化时追加新的 user-role 插件消息，不再重新发送其他插件的共享上下文。快照保持完整状态，不构造依赖旧消息的补丁链；静态协议留在 system 前缀，Source 文本按原文传递而不做模板插值。回合、子 Agent 与运行代的所有权见[架构说明](./architecture.md#生命周期与失败)。
 
 生命周期会在 Host 组装 System Prompt 前固定 View，并让本回合所有模型 step 使用同一个 View：
 
@@ -23,7 +23,7 @@ turn/start
   -> build bounded Wake
   -> 继续真正的 Host prompt assembly
   -> 让静态协议 section 与已固定的 Runtime Source 对齐
-  -> replace mnemon:runtime-memory with that Wake
+  -> append the changed Wake as this plugin's own complete snapshot message
 
 agent/pre-step(step=1)
   -> cancel pending/running background review for a new turn
@@ -34,7 +34,7 @@ agent/pre-step(step=1)
 
 Source snapshot 不执行语义召回。Prime 只初始化路由状态，不执行异步 CLI 状态查询。
 
-子 Agent 在 `agent/created`、driver 启动前捕获并保留存活父 Agent 的固定 View 与运行图。自己的各个回合固定这一被保留的 View，即使父回合已结束或已进入更新的 generation。子 Agent activation 销毁时释放委托；冷恢复重新获取委托；Host 显式创建且没有父模型回合的后台子任务生成新的 scoped View。子 Agent 拥有自己的回合权限，但不安装 root 专属的 cue 或空闲审查。详见[权限生命周期](./architecture.md#直接召回与受监督-mutation)。
+子 Agent 在 `agent/created`、driver 启动前捕获并保留存活父 Agent 的固定 View 与运行图。自己的各个回合固定这一被保留的 View，即使父回合已结束或已进入更新的 generation。子 Agent activation 销毁时释放委托；冷恢复重新获取委托；Host 显式创建且没有父模型回合的后台子任务生成新的 scoped View。子 Agent 拥有自己的回合权限，但不安装 root 专属的 cue 或空闲审查。详见[权限生命周期](./architecture.md#生命周期与失败)。
 
 ## Agent 召回
 

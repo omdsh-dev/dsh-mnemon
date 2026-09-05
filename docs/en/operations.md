@@ -62,7 +62,7 @@ The UI offers safe merge, not “overwrite everything”:
 - Identical Document ID + hash is skipped; conflicting content receives a new ID.
 - Identical Memory Space ID + database is skipped; conflicting content receives a new ID.
 
-Import is governed by `writeEnabled` and is rejected in read-only deployments. A ZIP contains private memory—encrypt it, restrict access, and rehearse recovery. Provider credentials live in `state/memory-providers.json` with mode `0600`; they are excluded from ZIP. Saved values are returned only through the authenticated management channel, never through the ordinary redacted read catalog. Protect the entire `state/` directory in the offline snapshot below if connections must be backed up.
+Import is governed by `writeEnabled` and is rejected in read-only deployments. A ZIP contains private memory—encrypt it, restrict access, and rehearse recovery. Provider credentials live in `state/memory-providers.json` with mode `0600`; they are excluded from ZIP. Saved credential values are not returned through management responses either. Protect the entire `state/` directory in the offline snapshot below if connections must be backed up.
 
 ### Recovery rehearsal
 
@@ -191,7 +191,7 @@ The previous rc.2 line uses method-specific authority tiers instead of the brows
 
 - On DSH 0.1.2-rc.1 and its alpha.5 predecessor, every RPC and stream requires the same authenticated browser session; the retained `remoteAccess` value has no transport effect.
 - On DSH 0.1.1-rc.2, read and activation use `trusted-host`; write, settings, and backup default to `loopback` and are promoted together only by local `remoteAccess: trusted-host` configuration.
-- The ordinary Provider catalog is redacted. Saved credential values travel only through the version-appropriate protected management channel.
+- Provider catalogs and management responses are redacted; the UI receives configured field names, never saved credential values.
 - The WebUI follows the Host's writable settings snapshot instead of inferring capability from transport locality; an unavailable settings channel renders an explicit diagnostic rather than an empty page.
 - The WebUI neither reads SQLite, starts processes, calls remote providers, nor supplies arbitrary update commands; provider network access remains inside the Host.
 - Workers use persona, tool allowlists, schema-validated one-run result tools, and `maxDepth: 1`.
@@ -214,7 +214,7 @@ Report vulnerabilities privately through [SECURITY.md](../../SECURITY.md), not a
 | Memory System entry missing | Check `tabEnabled=true`; `displayMode=sidebar` uses the sidebar, while `displayMode=builtin` uses the open conversation's tabs. For a local link run `pnpm run build`, then restart the profile |
 | A retained `buildin` preference opens a conversation tab after upgrading | v0.4.2 restores that preference and saves it as `builtin`; select Sidebar to keep the standalone entry. Memory scope and stored data are unchanged |
 | Status healthy but recall empty | Check active spaces, storage scope, inspected root, effective session root, and query focus |
-| Header reports misalignment | The workbench is inspecting another workspace; align or keep deliberate read-only inspection; Agent-backed actions are rejected |
+| Header reports misalignment | Confirm that the inspected workspace is intended. Workbench tasks execute there; conversation tools retain their own session scope |
 | Saved settings appear unchanged | Inspect the save error; success applies live and reloads automatically without refresh |
 | Custom directory rejected | Use an absolute path, `~`, or `~/...` |
 | `memoryBodyId is required...` | Active count is not exactly one; select a target explicitly |

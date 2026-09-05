@@ -105,7 +105,7 @@ Web 工作台请求携带 `sessionId` 和可选 `workspaceId`。Host 只接受 `
 - 确定性读取与人工维护可以路由到 `workspaceId` 选择的查看根；
 - Agent、工具、命令和生命周期仍按 `sessionId` 对应 Agent cwd 路由；
 - `status.workspaceContext` 返回 selected / effective roots 与 `aligned`；
-- 需要 Agent 的操作在未对齐时拒绝。
+- 工作台发起的独立任务 Agent 使用查看工作区，不要求当前主会话与其对齐；对话工具仍使用所属会话的 cwd 和本轮 View，不借用工作台的查看范围。
 
 Headless 等没有 Web 工作区目录的 profile 不提供任意查看目标；Agent 执行仍直接根据 session cwd 路由 `workspace` 范围。
 
@@ -165,10 +165,10 @@ rc.2 rollback authority: loopback（`remoteAccess=trusted-host` 时为 trusted-h
 | `remember` / `link` / `forget` | 长期语义写入、关系与软删除 |
 | `body-create` / `body-update` / `body-delete` | 记忆体创建/连接、编辑，以及确认后的 Native 删除或远程断开 |
 | `body-reconnect` | 为迁移到读通道前发布的旧客户端保留的兼容入口 |
-| `provider-services` / `provider-service-update` | 为本地设置 UI 读取 Provider 私密配置，或更新单个服务 |
+| `provider-service-update` | 更新单个 Provider 服务；凭据仅在 Host 保存，响应脱敏 |
 | `version-update` | 更新明确组件；Host 固定命令与参数 |
 
-包含设置编辑器所需已保存凭据值的私密 `provider-services` 响应只存在于该管理通道。普通读端点始终返回脱敏目录。
+`provider-services` 通过读通道返回脱敏目录。设置编辑器只知道哪些凭据字段已经配置；保存新的值或显式清除字段，不回读已保存的凭据值。
 
 `writeEnabled=false` 时激活控制与写通道仍稳定注册，但所有 mutation 都在 Host 边界拒绝。浏览器也会根据 Host settings snapshot 在传输前禁用 mutation 控件。
 
@@ -205,7 +205,7 @@ Mnemon 对两代 transport 使用同一种注册调用：始终传入 rc.2 autho
 
 ## npm 导出与扩展服务
 
-Core 发布 `ctx.mnemonMemory: MemoryRuntime`；Source/Strategy 插件通过 `inject = ['mnemonMemory']` 与 `installMemory` 注册。Source 控制器及 Provider 注册表不是根包出口。各插件拥有自己的公开 `./contracts` 与可选 `./client`。
+Core 发布 `ctx.mnemonMemory: MnemonMemoryService`，实际服务只提供 `installContributions`。Source/Strategy 作者通过 `inject = ['mnemonMemory']` 与 `installMemory` 注册，不获得引擎、控制器或注册表。各包的公开子入口以其 `package.json#exports` 为准；Source 可提供自己的 `./contracts` 和可选 `./client`。
 
 | 入口 | 职责 |
 |---|---|

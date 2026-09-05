@@ -160,7 +160,7 @@ WebUI 从实时管理目录读取 Source 实例，新增 Source 无须修改前�
 
 `strict-v1` 是面向 Agent 的安全默认值：仅对明确声明为 0–1 标准化相关度的 Provider，在正文进入 Agent 前移除非正分和低于阈值的结果；随后在请求上限内保留全部高相关度结果，默认最多保留 4 条中相关度结果和 2 条无 score 或未知量纲结果，不再用较弱证据补满 limit。`balanced-v1` 把低分结果放在主要证据之后，`exhaustive-v1` 为直接检查保留有限分数结果。超出声明范围的分数按未知量纲处理，不伪造成置信度。跨 Provider 排序继续使用倒数排名融合。
 
-策略是纯函数、受限的 Host 扩展。其他插件可在运行图创建前调用 `registerRecallQualityPolicy(policy)`，然后在配置中选择该策略 ID。非法候选上限、决策或选择会回退到 `strict-v1`；配置未知 ID 会拒绝候选运行图。过滤计数通过结构化的 `source.quality` 返回，不会拼接进 Agent hint。
+这些是 Memory Spaces Source 自己维护的纯函数召回质量策略，配置只能选择已随该 Source 提供的策略 ID。内部注册函数不是公开插件 API；自定义检索实现应通过 Source/Provider 的公开契约接入。非法候选上限、决策或选择会回退到 `strict-v1`；配置未知 ID 会拒绝候选运行图。过滤计数通过结构化的 `source.quality` 返回，不会拼接进 Agent hint。
 
 ### 浏览器认证
 
@@ -280,7 +280,6 @@ DSH 0.1.1-rc.2 会在实时模型目录中提供各模型声明的输入模态�
 普通 worker 会优先选择 `spawn`；如果没有该名称，可以选择另一个具备全部能力的 provider：
 
 ```text
-outputSchema = true
 toolFilter   = true
 persona      = true
 depthLimit   = true
@@ -304,9 +303,9 @@ mnemon:
 效果：
 
 - 不注册模型写工具；
-- 不注册 `/dsh-mnemon-write` RPC；
+- 写与激活 RPC 保持注册，在 Host 边界拒绝记忆 mutation；
 - `/mnemon remember` 和 `/mnemon forget` 拒绝；
-- `MnemonService` 的语义 mutation 拒绝。
+- Source 管理与模型 action 同样不能绕过 Host 的写入限制。
 
 它是“功能只读”，不是文件系统只读模式：Runtime 控制器仍可能初始化或修复投影，Document 搜索会更新 LRU 访问时间，Mnemon 读命令也可能触发上游数据库迁移。不要把 `writeEnabled=false` 用作只读挂载的安全承诺。
 

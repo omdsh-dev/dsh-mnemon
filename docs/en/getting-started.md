@@ -183,14 +183,13 @@ If Mnemon is unavailable, run `command -v mnemon` and `mnemon --version` on macO
 
 1. Open **Memory Spaces → Overview**.
 2. Select **Create Memory Space**.
-3. The default **Choose manually** path preserves the existing flow. Keep **Mnemon Native** for the official local-first default, or select and configure a third-party engine from the same panel.
-4. With a connected conversation, **Smart selection** adds data-boundary, required-capability, soft-preference, strategy-prompt, and multi-provider candidate controls.
-5. Use a narrow name such as “Project Decisions.”
-6. Describe what belongs there and which tasks should recall it, then enable read activation.
+3. Choose an enabled Provider explicitly. Keep **Mnemon Native** for the official local-first default; enable third-party services in Settings first.
+4. Use a narrow name such as “Project Decisions.”
+5. Describe what belongs there and which tasks should recall it, then enable read activation.
 
 In an empty storage root, the first Memory Space uses Mnemon's native `default` Store ID while keeping the name and description you supplied. Its activation toggle affects DSH only.
 
-Smart selection first has the Host enforce the provider allowlist, data boundary, and required capabilities. One remaining candidate is selected deterministically; only an ambiguous eligible set reaches an independent task Agent, which considers the soft preference and strategy prompt. Provider credentials never enter model context, and the resulting card retains the source, reason, and confidence.
+**Smart selection belongs to Memory Spaces → Distillation strategy, not the creation dialog.** The Host first enforces the provider allowlist, data boundary, and required capabilities. One remaining candidate is selected deterministically; only an ambiguous eligible set reaches an independent task Agent, which considers the soft preference and strategy prompt. Provider credentials never enter model context, and the resulting card retains the source, reason, and confidence.
 
 See [Long-term memory providers](./memory-providers.md) before connecting an external service or CLI.
 

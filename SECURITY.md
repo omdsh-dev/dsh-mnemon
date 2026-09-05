@@ -6,10 +6,10 @@
 
 | Version | Supported |
 |---|---|
-| 0.3.x (npm `dsh-mnemon`) | ✅ |
-| < 0.3 | ❌ |
+| Latest stable `dsh-mnemon` Starter and its pinned official plugins | Security fixes |
+| Older releases | Upgrade to the latest stable Starter |
 
-Only the latest published version receives security fixes. The plugin targets the DSH mainline snapshot it was verified against; see the compatibility baseline in [README.md](./README.md).
+Only the latest stable release receives security fixes. Official Source, Strategy and Provider packages in this repository are in scope even when published independently; report both the Starter version and the affected package version. The Starter pins a tested combination. See the verified Host and runtime baselines in [Compatibility](./docs/en/compatibility.md).
 
 ## Reporting a vulnerability
 
@@ -63,10 +63,10 @@ Out of scope:
 
 | 版本 | 支持 |
 |---|---|
-| 0.3.x（npm `dsh-mnemon`） | ✅ |
-| < 0.3 | ❌ |
+| 最新稳定版 `dsh-mnemon` Starter 及其固定的官方插件组合 | 提供安全修复 |
+| 较旧版本 | 升级到最新稳定版 Starter |
 
-仅最新发布版本获得安全修复。插件以验证时的 DSH mainline 快照为兼容基线，见 [README.zh-CN.md](./README.zh-CN.md)。
+仅最新稳定版本获得安全修复。本仓库的官方 Source、Strategy 和 Provider 包即使独立发布，也属于报告范围；请同时提供 Starter 与受影响包的版本。Starter 固定经过验证的组合，已验证的宿主和运行环境见[兼容性说明](./docs/zh-CN/compatibility.md)。
 
 ### 报告漏洞
 
