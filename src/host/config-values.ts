@@ -1,3 +1,5 @@
+import { resolveRecallQuality } from 'dsh-mnemon-source-memory-spaces'
+
 export const DEFAULT_IDLE_REVIEW_MS = 30_000
 export const DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES = 10 * 1024
 export const DEFAULT_RUNTIME_USER_LIMIT_BYTES = 4 * 1024
@@ -8,9 +10,10 @@ export { DEFAULT_EMBEDDING_ENDPOINT, DEFAULT_EMBEDDING_MODEL, DEFAULT_EMBEDDING_
 
 export const DEFAULT_TIMEOUT_MS = 10_000
 export const DEFAULT_RECALL_LIMIT = 10
-export const DEFAULT_RECALL_QUALITY_POLICY = 'strict-v1'
-export const DEFAULT_RECALL_LOW_SCORE_THRESHOLD = 0.25
-export const DEFAULT_RECALL_HIGH_SCORE_THRESHOLD = 0.6
-export const DEFAULT_RECALL_CANDIDATE_MULTIPLIER = 3
-export const DEFAULT_RECALL_MAX_MEDIUM_RESULTS = 4
-export const DEFAULT_RECALL_MAX_UNKNOWN_RESULTS = 2
+const recallDefaults = resolveRecallQuality(undefined)
+export const DEFAULT_RECALL_QUALITY_POLICY = recallDefaults.policy
+export const DEFAULT_RECALL_LOW_SCORE_THRESHOLD = recallDefaults.lowScoreThreshold
+export const DEFAULT_RECALL_HIGH_SCORE_THRESHOLD = recallDefaults.highScoreThreshold
+export const DEFAULT_RECALL_CANDIDATE_MULTIPLIER = recallDefaults.candidateMultiplier
+export const DEFAULT_RECALL_MAX_MEDIUM_RESULTS = recallDefaults.maxMediumResults
+export const DEFAULT_RECALL_MAX_UNKNOWN_RESULTS = recallDefaults.maxUnknownResults

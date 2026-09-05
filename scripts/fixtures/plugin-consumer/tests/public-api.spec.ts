@@ -5,6 +5,7 @@ import * as sdk from 'dsh-mnemon/extension-sdk'
 import type { MnemonMemoryService, MemorySourceRuntime } from 'dsh-mnemon/extension-sdk'
 import { MemoryCompositionRunner, type MemoryTestTurn } from 'dsh-mnemon/testing'
 import * as providerSdk from 'dsh-mnemon-source-memory-spaces/provider-sdk'
+import { resolveEmbedding, resolvePersistenceStrategy, resolveRecallQuality } from 'dsh-mnemon-source-memory-spaces'
 import { createMemorySpaceProviderFixture, mountMemorySpaceProvider } from 'dsh-mnemon-source-memory-spaces/testing'
 import provider from '../lib/external-provider.js'
 import { memoryPlugin, memoryStrategyConfiguration } from '../lib/external-strategy-extension.js'
@@ -16,6 +17,11 @@ import type { InstalledMemorySource } from 'dsh-mnemon/contracts'
 import type { PrivateMemorySpaceProviderHost } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 
 describe('published author API', () => {
+  it('resolves Source configuration through the packed package without a Host', () => {
+    expect(resolveRecallQuality(undefined)).toMatchObject({ policy: 'strict-v1', candidateMultiplier: 3 })
+    expect(resolveEmbedding({ endpoint: ' https://embedding.example.test/// ' }).endpoint).toBe('https://embedding.example.test')
+    expect(resolvePersistenceStrategy({ mode: 'manual', rules: { allowedProviderIds: [] } }).rules.allowedProviderIds).toEqual(['mnemon-native'])
+  })
   it('compiles and consumes an optional Strategy editor against packed public SDKs', () => {
     expect(memoryPlugin).toMatchObject({ apiVersion: 'dsh-mnemon/plugin/v1', roles: ['strategy-extension'], requires: ['strategy.default-three-tier'] })
     expect(memoryStrategyConfiguration.apiVersion).toBe('dsh-mnemon/strategy-configuration/v1')

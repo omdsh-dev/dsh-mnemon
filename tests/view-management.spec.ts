@@ -299,7 +299,6 @@ describe('View configuration with the real pinned DSH Cordis Loader', () => {
     expect(preview.strategyTypeId).toBe('default-three-tier')
   })
 
-
   it.each([
     { light: { enabled: true, config: { maxProjectionCharacters: 0 } } },
     { missing: { enabled: true, config: {} } },
