@@ -45,6 +45,9 @@ jobs:
       - name: Type-check integrated source
         run: pnpm run typecheck
 
+      - name: Check documentation links and public plugin catalog
+        run: pnpm run verify:docs
+
       - name: Verify deterministic root build
         run: pnpm run verify:build
 
