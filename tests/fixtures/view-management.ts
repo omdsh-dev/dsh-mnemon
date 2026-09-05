@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
@@ -20,7 +20,7 @@ import type { HostContextShape, HostSettingsService } from '../../src/host/dsh.t
 import type { MemoryViewPreferences } from '../../src/host/view-protocol.ts'
 
 // Use the Loader shipped with the pinned DSH, not a lifecycle simulator.
-const requireDsh = createRequire(new URL('../../node_modules/@deepseek-ai/dsh/package.json', import.meta.url))
+const requireDsh = createRequire(realpathSync(new URL('../../node_modules/@deepseek-ai/dsh/package.json', import.meta.url)))
 const { Loader } = await import(requireDsh.resolve('@deepseek-ai/cordis-plugin-loader')) as { Loader: Plugin }
 interface TestLoader extends MemoryPluginLoader {
   import(name: string): Promise<unknown>
