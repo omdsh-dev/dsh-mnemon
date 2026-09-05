@@ -17,6 +17,13 @@ function fixture() {
 }
 
 describe('Host memory execution ownership', () => {
+  it('supports the Node 20 Promise API advertised by the package', async () => {
+    const f = fixture()
+    const unsupported = vi.spyOn(Promise, 'withResolvers').mockImplementation(() => { throw new Error('unavailable on Node 20') })
+    try { await f.owner.begin(1); expect(f.owner.current).toBeDefined() }
+    finally { unsupported.mockRestore() }
+  })
+
   it('does not acquire resources for an already canceled operation', async () => {
     const f = fixture()
     const bind = vi.spyOn(f.live, 'bindAgentRuntime')

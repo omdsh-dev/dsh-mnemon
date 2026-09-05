@@ -94,8 +94,8 @@ export class MemoryExecutions {
   private open(agent: HostAgent, kind: ExecutionSlot['kind'], turnId: string, purpose: string, delegation?: DelegatedMemoryView): ExecutionSlot {
     this.assertOpen()
     const previous = this.slots.get(agent.id)
-    const done = Promise.withResolvers<void>()
-    const ready = Promise.withResolvers<MemoryExecution>()
+    const done = deferred<void>()
+    const ready = deferred<MemoryExecution>()
     let execution: MemoryExecution | undefined
     const finish = () => {
       if (this.slots.get(agent.id) === slot) this.slots.delete(agent.id)
@@ -150,9 +150,16 @@ export class MemoryExecutions {
 
 async function untilAborted<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   signal.throwIfAborted()
-  const aborted = Promise.withResolvers<never>()
+  const aborted = deferred<never>()
   const abort = () => aborted.reject(signal.reason)
   signal.addEventListener('abort', abort, { once: true })
   try { return await Promise.race([promise, aborted.promise]) }
   finally { signal.removeEventListener('abort', abort) }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason: unknown) => void
+  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no })
+  return { promise, resolve, reject }
 }
