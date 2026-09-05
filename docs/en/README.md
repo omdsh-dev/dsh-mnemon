@@ -1,56 +1,40 @@
-# dsh-mnemon Documentation
+# Documentation
 
-[简体中文](../zh-CN/README.md) | **English** | [Project home](../../README.md)
+**English** | [简体中文](../zh-CN/README.md) | [Project home](../../README.md)
 
-This hub is organized by what you need to accomplish. New users should follow Getting Started, then use the visual guide for the interface. Existing v0.2.x users can go directly to the v0.3.0 release notes; reference documents are for deployment, integration, and development work.
+Start with the default three-tier workflow. The implementation is composable; you do not need to manage plugins to use it.
 
-## New-user path
+## Use the system
 
-1. [Capability map](./capabilities.md): understand the three tiers, nine Providers, and which clicks start independent task Agents in 30 seconds.
-2. [Roughly 55-second widescreen live demo](../assets/media/dsh-mnemon-memory-system-demo.mp4): see paced full-page scrolling, Provider and dialog interactions, and a completed read-only Agent Query.
-3. [Getting Started](./getting-started.md): install Mnemon and the plugin, choose storage, and complete first-run verification.
-4. [Sidebar and conversation UI guide](./ui-guide.md): learn Status, Runtime, Documents, Memory Spaces, and in-conversation entry points.
-5. [Project overview](./project-overview.md): understand the three-tier model, cross-agent sharing boundary, read/write boundaries, and complete flow.
-
-## Find a task
-
-| I want to… | Document |
+| Task | Guide |
 |---|---|
-| Grasp the current product scope and composable architecture | [Capability map](./capabilities.md) · [Architecture](./architecture.md) |
-| Decide which tier should retain something | [Storage and the three-tier model](./storage-model.md) |
-| Choose, configure, or compare a Memory Space provider | [Long-term memory providers](./memory-providers.md) |
-| Share durable memory between DSH and other Mnemon-enabled agents | [Project overview: Cross-agent sharing](./project-overview.md#cross-agent-sharing-boundary) · [Configuration: Sharing scope](./configuration.md#choose-a-cross-agent-sharing-scope) |
-| Learn when injection, recall, remembering, and archiving happen | [Lifecycle and workflows](./workflows.md) |
-| Configure global / workspace / custom storage, entry placement and visibility | [Configuration reference](./configuration.md) |
-| Understand workspace inspection versus the Agent's effective directory | [UI guide: Workspace mode](./ui-guide.md#workspace-mode-separating-inspection-from-execution) |
-| Check or update Mnemon and dsh-mnemon | [Operations: Version checks and updates](./operations.md#version-checks-and-updates) |
-| Back up, restore, or migrate the complete memory root | [Operations: Backup and recovery](./operations.md#backup-and-recovery) |
-| Publish the WebUI behind a cloud hostname | [Operations: Cloud-hosted WebUI](./operations.md#cloud-hosted-webui) |
-| Troubleshoot empty recall, misalignment, CLI, or provider errors | [Operations and troubleshooting](./operations.md#troubleshooting) |
-| Use model tools, `/mnemon` commands, or internal RPC | [Interface reference](./interfaces.md) |
-| Understand Host, workers, control plane, and data plane | [Architecture](./architecture.md) |
-| Build a Source, Strategy or Memory Spaces Provider plugin | [Building Memory Extensions](./extensions.md) |
-| Modify code, screenshots, tests, or releases | [Development and verification](./development.md) |
-| Upgrade to the current stable release | [v0.5.2 release notes](./releases/v0.5.2.md) |
-| Review the preceding release candidate | [v0.5.0-rc.1 scope and upgrade notes](./releases/v0.5.0-rc.1.md) |
-| See planned work | [Roadmap](./roadmap.md) |
+| Install and verify the first memory | [Getting started](./guides/getting-started.md) |
+| Understand the available behaviors | [Capability map](./guides/capabilities.md) |
+| Navigate Sidebar, Documents and settings | [UI guide](./guides/ui-guide.md) |
+| Choose a long-term backend | [Providers](./guides/memory-providers.md) |
+| Back up, restore or troubleshoot | [Operations](./guides/operations.md) |
+| Upgrade an existing installation | [Compatibility and upgrades](./reference/compatibility.md) |
 
-## Core terms
+## Look up a contract
 
-| Term | Code / alternate name | Meaning |
-|---|---|---|
-| Memory System | 记忆系统 | The complete dsh-mnemon entry in DSH |
-| Runtime Memory | USER / MEMORY | Hot memory projected into every turn |
-| Project Documents | Documents / 档案 | Managed, searchable project knowledge that keeps full Markdown structure |
-| Memory Space | 记忆体 | An independent, activatable, on-demand long-term-memory instance backed by Mnemon or an external Provider |
-| Cross-agent memory sharing | 跨 Agent 共享 | Mnemon-enabled agents use the same root and Store to share durable memory, not the complete DSH context |
-| Remember | Distill / 沉淀 | Start an independent task Agent for qualification, dedupe, and writing |
-| Recall | 召回 | Retrieve bounded evidence from active Memory Spaces |
-| Archive | 归档 | Create a cold reference before moving an infrequently used Document out of active storage |
+| Question | Reference |
+|---|---|
+| Which settings and scopes apply? | [Configuration](./reference/configuration.md) |
+| What is stored, shared or archived? | [Storage model](./reference/storage-model.md) |
+| When do reads, writes and maintenance run? | [Workflows](./reference/workflows.md) |
+| Which tools and commands are exposed? | [Interfaces](./reference/interfaces.md) |
 
-## Documentation boundaries
+## Build an extension
 
-- User documentation targets the Sidebar-first experience, optional shared Builtin placement and composable View architecture; legacy `buildin` preferences are normalized without manual cleanup.
-- Architecture diagrams describe stable execution boundaries, not live monitoring. Use Status for current counts and versions.
-- RPC is an internal Host-to-client protocol, not a promised stable external API.
-- There is no formal fixed DSH / Mnemon version matrix yet. Back up and validate in an isolated root before upgrading.
+| Task | Developer guide |
+|---|---|
+| Understand Source, Strategy, View and ownership | [Architecture](./development/architecture.md) |
+| Create a Source, Strategy or Provider | [Plugin development](./development/extensions.md) |
+| Build, test and capture a real WebUI | [Development and verification](./development/README.md) |
+| Version and release independent packages | [Release process](./development/releasing.md) |
+
+Source owns memory and its operations; Strategy composes selected Sources; Core validates one immutable View for the executing turn. The default three tiers are one composition, not mandatory Core types. A Memory Spaces Provider is a child module of that Source.
+
+[Release history](./releases/README.md) · [Roadmap](./roadmap.md) · [Historical verification evidence](../pr-assets/README.md)
+
+Current guides describe the current implementation. Dated screenshots, old benchmarks and PR reports establish only their named revisions and environments. Internal Host RPCs are not an external plugin SDK.

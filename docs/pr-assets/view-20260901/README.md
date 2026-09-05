@@ -62,4 +62,4 @@ The test tab was closed, viewport override reset, server/model stub stopped, and
 
 This verifies UI and local composition behavior, not real-model recording quality, production latency, live cloud Provider accounts or Native/Windows binaries. Resident character counts are neither tokens nor total prompt cost. View inspection exposes no read grants or provider credentials. Recent snapshots last only for the running Host/agent lifecycle, not as a persistent historical transcript. Strategy conflicts remain explicit; not every independent complete Strategy is an additive plugin.
 
-Usage: [English](../../en/ui-guide.md), [简体中文](../../zh-CN/ui-guide.md). Authoring: [English](../../en/extensions.md), [简体中文](../../zh-CN/extensions.md).
+Usage: [English](../../en/guides/ui-guide.md), [简体中文](../../zh-CN/guides/ui-guide.md). Authoring: [English](../../en/development/extensions.md), [简体中文](../../zh-CN/development/extensions.md).

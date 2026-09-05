@@ -1,8 +1,8 @@
 # Contributing
 
-[简体中文](CONTRIBUTING.zh-CN.md) | **English**
+[简体中文](./CONTRIBUTING.zh-CN.md) | **English**
 
-Thank you for contributing to dsh-mnemon. This document defines the Issue, Pull Request, verification, and maintenance rules. See the [Development and Verification Guide](docs/en/development.md) for implementation details and test scenarios.
+Thank you for contributing to dsh-mnemon. This document defines the Issue, Pull Request, verification, and maintenance rules. See the [Development and Verification Guide](./docs/en/development/README.md) for implementation details and test scenarios.
 
 ## Pull Request scope
 
@@ -76,8 +76,8 @@ Code, comments, documentation, commit messages, and PR titles must not contain e
 - use the bilingual [Bug report form](.github/ISSUE_TEMPLATE/bug_report.yml) for bugs, including reproduction, environment, evidence, smoke tests, code references, and a patch proposal;
 - use the bilingual [standard Issue form](.github/ISSUE_TEMPLATE/standard_issue.yml) for features, enhancements, documentation, and questions;
 - Issues with missing required information are closed automatically; contributors may request reopening after completing the template;
-- see [Issue Triage](ISSUE_TRIAGE.md) or [Issue 分类标准](ISSUE_TRIAGE.zh-CN.md) for labels, classification, and closure criteria;
-- report security vulnerabilities privately through [SECURITY.md](SECURITY.md), not in a public Issue.
+- see [Issue Triage](./ISSUE_TRIAGE.md) or [Issue 分类标准](./ISSUE_TRIAGE.zh-CN.md) for labels, classification, and closure criteria;
+- report security vulnerabilities privately through [SECURITY.md](./SECURITY.md), not in a public Issue.
 
 ## Pull Request rules
 

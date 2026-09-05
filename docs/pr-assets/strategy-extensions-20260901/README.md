@@ -109,5 +109,5 @@ directories. Personal memory, active profiles and remote accounts were not used.
   task did not repeat manual browser clicks or certify live cloud accounts,
   real Native/Windows execution, source-only DSH alpha or production latency.
 
-Usage and author contracts: [English](../../en/extensions.md),
-[简体中文](../../zh-CN/extensions.md).
+Usage and author contracts: [English](../../en/development/extensions.md),
+[简体中文](../../zh-CN/development/extensions.md).
