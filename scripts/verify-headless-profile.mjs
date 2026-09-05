@@ -136,7 +136,8 @@ try {
   // The verification exercises Mnemon composition, not DSH's native PTY
   // transport. Disable the unrelated shell stack so the check remains
   // hermetic on CI Node/platform combinations without a node-pty prebuild.
-  await writeFile(join(dshHome, 'profiles', 'headless', 'cordis.patch.yml'), `
+  const profilePatchPath = join(dshHome, 'profiles', 'headless', 'cordis.patch.yml')
+  const profileOverrides = `
 - id: subprocess
   disabled: true
 - id: bash-sandbox
@@ -153,7 +154,8 @@ try {
   disabled: true
 `.trimStart() + (!extensionsEnabled ? '' : extensionNames.map(name =>
     `- id: ${name.slice(4)}\n  disabled: false\n`,
-  ).join('')))
+  ).join(''))
+  await writeFile(profilePatchPath, profileOverrides)
 
   const execution = await run(['--profile', 'headless', 'Verify that the Mnemon tool surface is available.'], {
     cwd: workspaceRoot,
@@ -185,9 +187,26 @@ try {
   if (!restarted.stdout.includes(marker)) throw new Error('Restarted Headless did not complete its test turn')
   if (await readFile(settingsPath, 'utf8') !== canonicalSettings) throw new Error('Canonical placement was rewritten on restart')
 
+  requests.length = 0
+  await writeFile(profilePatchPath, profileOverrides + '- id: mnemon\n  disabled: true\n')
+  const disabledExecution = await run(['--profile', 'headless', 'Verify that disabling Mnemon leaves the Host available.'], {
+    cwd: workspaceRoot,
+    env,
+  })
+  assertSuccess('running Headless with the Mnemon Starter disabled', disabledExecution)
+  if (!disabledExecution.stdout.includes(marker)) throw new Error('Mnemon-disabled Headless output did not contain the model marker')
+  const pendingEntries = disabledExecution.stderr.split(/\r?\n/u).filter(line => line.includes('waiting for service:'))
+  if (pendingEntries.length > 0) throw new Error(`Mnemon-disabled Headless left dependent Entries pending:\n${pendingEntries.join('\n')}`)
+  const disabledToolNames = new Set(requests.flatMap(request => Array.isArray(request.tools)
+    ? request.tools.map(tool => tool?.function?.name).filter(name => typeof name === 'string')
+    : []))
+  const leakedMnemonTools = [...disabledToolNames].filter(name => name.startsWith('mnemon_')).sort()
+  if (leakedMnemonTools.length > 0) throw new Error(`Mnemon-disabled Headless exposed Mnemon tools: ${leakedMnemonTools.join(', ')}`)
+
   console.log(`Verified Headless profile activation with ${toolNames.size} total tools and ${required.length} representative Mnemon tools.`)
   if (options.has('--upgrade-from')) console.log(`Verified an isolated ${options.get('--upgrade-from')} to ${options.get('--package')} package upgrade without changing Runtime Memory bytes.`)
   console.log('Verified buildin-to-builtin persistence, preservation of unrelated settings/comments, and an idempotent Headless restart.')
+  console.log('Verified that disabling the legacy mnemon Entry disables the complete Starter without blocking DSH startup.')
   if (extensionsEnabled) console.log('Verified simultaneous activation of scoped, light-context and auto-capture Entries without changing the default Strategy.')
 } finally {
   await new Promise(resolveClose => server.close(resolveClose))

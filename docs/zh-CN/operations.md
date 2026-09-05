@@ -123,6 +123,17 @@ DSH rc.8 首次说明的可选 SQLite 不兼容性在 DSH 0.1.1-rc.2 中仍然�
 
 HTTP 403 通常来自 Host/Origin 防线：检查 `--trusted-host`、公网端口与代理是否保留 `Host`。HTTP 401 表示浏览器会话缺失或无效：重新使用当前进程的启动 token URL。DSH 0.1.2-alpha.5 使用相同的浏览器会话模型，并继续作为直接前序源码兼容目标；两个版本都会忽略 Mnemon 保留的 `remoteAccess` 兼容设置。
 
+### 停用完整 Starter
+
+既有的 `mnemon` Entry 继续作为整个 Starter 的生命周期总开关。需要停用 Mnemon 时，在 profile patch 中加入以下配置并重启 DSH；不需要逐项停用 Source 或 Strategy：
+
+```yaml
+- id: mnemon
+  disabled: true
+```
+
+该开关会同时停用 Core/Host、三个随附 Source、默认 Strategy 和三个可选 Strategy 增强，不会卸载包或删除记忆数据。删除该覆盖项，或把它改为 `false`，再重启 DSH，即可重新启用完整 Starter。
+
 ### 回滚到 DSH 0.1.1-rc.2
 
 上一条 rc.2 版本线使用逐方法 authority 层，而不是浏览器会话模型。普通读取与激活可以使用 `trusted-host`，设置、备份、Provider 连接和宽泛 mutation 则默认保持 loopback，只有 Host 本地 Mnemon 配置才能整体提升这些管理通道。远程使用 rc.2 时，公网入口必须已经具备可靠的用户认证。
