@@ -24,6 +24,11 @@ describe('published author API', () => {
       plugin: memoryPlugin,
       strategyExtensions: [{ manifest: { typeId: 'external-budget', slot: 'projection' } }],
     })
+    expect(() => memoryStrategyConfiguration.create({ unknown: true })).toThrow('not declared')
+    expect(() => sdk.defineMemoryStrategyConfiguration({
+      ...memoryStrategyConfiguration,
+      fields: [{ key: 'budget', input: 'number', label: { en: 'Budget', 'zh-CN': '预算' }, defaultValue: 1.5 }],
+    })).toThrow('Invalid numeric')
   })
   it('keeps Context and testing types independent of private engine types', async () => {
     expectTypeOf<Context['mnemonMemory']>().toEqualTypeOf<MnemonMemoryService>()

@@ -83,6 +83,8 @@ Core 只处理目标/槽身份、JSON、64,000 字符上限、确定性回放、
 
 专用 Strategy Entry 还可以导出 `memoryStrategyConfiguration`，由 Core SDK 的 `defineMemoryStrategyConfiguration` 定义。它包含中英文展示文案、公开字段（`number`、`text`、`textarea`、`string-list`、`source-list`），以及**与 `apply()` 共用的纯 `create(config)` factory**。factory 只返回一个 Strategy 或扩展贡献以及同一份 `memoryPlugin` 描述，不做 I/O、凭据访问、Source 注册或 Fiber 挂载；完整例子见内置增强包。这只是面向 Host 与未来工具的可选约定，不定义插件身份或激活关系。
 
+helper 校验并冻结元信息副本，不执行 factory；返回的 `create(config)` 会校验传入字段与所声明的贡献，省略值的默认行为仍由 factory 负责。`number` 必须是有限整数；列表最多 32 个不重复、非空且不超过 500 字符的字符串；文本默认上限为 4,000 字符。Host 对未使用 helper 的模块复用同一套校验，同时保留 Loader 身份检查和局部错误隔离。
+
 v0.5 不向普通用户提供通用的记忆插件发现、依赖图或安装弹窗。本版稳定 Source/Strategy 契约和单 View 编译边界，同时不把插件心智加入 v0.4 的日常工作流。三个随 Starter 安装的增强只以“设置 → 记忆系统 → 记忆增强”中的行为开关呈现；包名、Entry、依赖和互斥关系不进入这层界面。
 
 第三方插件仍走 DSH 原生 Profile/Loader 流程：用准确包名执行 `dsh plugin --profile <Profile> add <包名>@<版本> --save-exact`，检查其 `peerDependencies` 与 `dsh.bundle.patch`，重启后在 Profile 装配中明确激活。下载 npm 包本身不等于激活，Mnemon 也不会在当前进程热加载新代码。欢迎外部作者按本页契约贡献独立仓库；通用图形化管理会在接口和社区用例稳定后再评估，不是 v0.5 承诺。
