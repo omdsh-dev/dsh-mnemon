@@ -1,6 +1,6 @@
 # Issue Triage
 
-[简体中文](ISSUE_TRIAGE.zh-CN.md) | **English**
+[简体中文](./ISSUE_TRIAGE.zh-CN.md) | **English**
 
 This document defines the dsh-mnemon Issue label system, classification, information requests, and closure process. The goal is to keep every open Issue searchable, verifiable, assignable, and traceable.
 

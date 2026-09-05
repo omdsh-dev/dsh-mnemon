@@ -1,240 +1,113 @@
-<h1 align="center">dsh-mnemon</h1>
+# dsh-mnemon
 
-<p align="center"><strong>English</strong> · <a href="./README.zh-CN.md">简体中文</a></p>
+**English** | [简体中文](https://github.com/omdsh-dev/dsh-mnemon/blob/main/README.zh-CN.md)
 
-<p align="center">
-  <a href="https://www.npmjs.com/package/dsh-mnemon"><img alt="npm version" src="https://img.shields.io/npm/v/dsh-mnemon?label=npm" /></a>
-  <a href="https://www.npmjs.com/package/dsh-mnemon"><img alt="npm downloads" src="https://img.shields.io/npm/dt/dsh-mnemon?label=downloads%20total" /></a>
-  <a href="https://github.com/omdsh-dev/dsh-mnemon/releases/latest"><img alt="GitHub release" src="https://img.shields.io/github/v/release/omdsh-dev/dsh-mnemon" /></a>
-  <a href="https://github.com/omdsh-dev/dsh-mnemon/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/omdsh-dev/dsh-mnemon" /></a>
-  <a href="./LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg" /></a>
-  <a href="https://dshfind.com/en/plugins/omdsh-dev/dsh-mnemon?ref=badge"><img alt="dshfind" src="https://dshfind.com/api/badge/omdsh-dev/dsh-mnemon?lang=en" /></a>
-  <a href="https://dshfind.com/en/plugins/omdsh-dev/dsh-mnemon?ref=badge"><img alt="dshfind downloads" src="https://dshfind.com/api/badge/omdsh-dev/dsh-mnemon?metric=downloads&amp;lang=en" /></a>
-</p>
+[![npm](https://img.shields.io/npm/v/dsh-mnemon)](https://www.npmjs.com/package/dsh-mnemon)
+[![Downloads](https://img.shields.io/npm/dt/dsh-mnemon)](https://www.npmjs.com/package/dsh-mnemon)
+[![MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/LICENSE)
+[![dshfind](https://dshfind.com/api/badge/omdsh-dev/dsh-mnemon)](https://dshfind.com/plugins/omdsh-dev/dsh-mnemon)
 
-<p align="center"><strong>The three-tier, pluggable, Agent-driven memory system for DeepSeek Harness.</strong></p>
-<p align="center">Three memory tiers · Nine long-term providers · One supervised workflow</p>
+**Composable memory for DeepSeek Harness. Three tiers by default; your Sources and Strategies, one View per turn.**
 
-<p align="center">
-  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">
-    <img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/9196fd9991676a6bd9a84d615fcd301eb52e872a/docs/assets/media/dsh-mnemon-memory-system-demo-poster.jpg" alt="dsh-mnemon v0.2.0 live multi-memory snapshot and observable provider surfaces" width="1180">
-  </a>
-</p>
+Runtime context, searchable documents and long-term evidence share a familiar Sidebar. The default Starter installs a tested plugin combination; contributors can replace or extend its parts without rebuilding the memory system.
 
-<p align="center">
-  <a href="./docs/en/capabilities.md"><strong>Explore the capability map</strong></a> ·
-  <a href="./docs/en/getting-started.md">Start in five minutes</a> ·
-  <a href="./docs/en/releases/v0.5.2.md">Read the v0.5.2 notes</a> ·
-  <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.mp4">Watch the widescreen demo</a>
-</p>
+[![Real DSH Sidebar with synthetic Runtime memories](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/showcase/en/runtime.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/showcase/demo.mp4)
 
-`dsh-mnemon` gives DSH one memory control plane without forcing every kind of knowledge into one database. Runtime Memory keeps compact context available every turn. Project Documents preserve complete narratives. Memory Spaces retrieve durable evidence on demand and can use **Mnemon, OpenViking, Honcho, Mem0, Hindsight, Holographic, RetainDB, ByteRover, or Supermemory**.
+[Get started](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/getting-started.md) · [Watch the demo](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/showcase/demo.mp4) · [Build a plugin](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/development/extensions.md) · [Documentation](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/README.md)
 
-[Mnemon](https://github.com/mnemon-dev/mnemon) remains the official, prioritized native engine. The third tier is replaceable; the first two keep the same storage, workspace, and interaction model regardless of provider.
+## Use three tiers, not three copies
 
-Runtime, Documents and Memory Spaces are independent Source plugins. A Strategy selects their instance-specific projections, retrieval routes and actions into an immutable per-turn View. Core provides only `ctx.mnemonMemory`; Sources own their data and optional pages, while Memory Spaces owns its private Provider children. The `dsh-mnemon` Starter preserves the default three-tier experience. See [Architecture](./docs/en/architecture.md) and [Plugin development](./docs/en/extensions.md).
-
-**The v0.5 line introduces View-based Memory and independently published Source/Strategy/Provider plugins.** The documented extension exports form the supported v0.5 surface; internal paths and Host RPC remain private. Default user configuration and workflows stay compatible. Compared with v0.4, the ordinary UI adds only three disabled-by-default enhancement switches under **Settings → Memory System**—no View page or plugin-management entry. See the [v0.5.0 architecture scope](./docs/en/releases/v0.5.0.md).
-
-v0.5.0 retains the v0.4 Sidebar behavior: Sidebar is the default; optional `displayMode: builtin` places the same Source pages in the owning conversation. Legacy `buildin` is accepted and automatically saved as `builtin`, without changing memory data. The collapsed icon aligns with neighboring Sidebar controls, and the settings-store and ZIP fixes remain included. See the [stable release notes](./docs/en/releases/v0.5.0.md) and [entry placement and scope mapping](./docs/en/configuration.md#entry-placement-displaymode-and-tabenabled).
-
-v0.5.1 fixes writable settings under the released nested Desktop Sidebar and removes an Idle Review race that could reject the next conversation turn with an `already pinned` error. See the [v0.5.1 patch notes](./docs/en/releases/v0.5.1.md).
-
-v0.5.2 makes the existing `mnemon` profile Entry an atomic switch for the complete Starter, so a retained disabled state no longer leaves v0.5 Source and Strategy Entries waiting on `mnemonMemory`. It also completes the one-time transition to independent package versions and selective publication. See the [v0.5.2 patch notes](./docs/en/releases/v0.5.2.md).
-
-The tested DSH baseline remains 0.1.2-rc.1, with Node 20 public-entry compatibility and retained regression evidence for the previous 0.1.1-rc.2 line.
-
-## Understand the scope in 30 seconds
-
-| Tier | Keep here | How it reaches the Agent | Managed by |
-|---|---|---|---|
-| **Runtime** | Preferences, collaboration rules, project conventions, environment facts | Compact `USER.md` / `MEMORY.md` projection on every turn | Runtime Source |
-| **Documents** | Designs, investigations, procedures, postmortems, handoffs | Search first, full Markdown on demand | Documents Source |
-| **Memory Spaces** | Cross-session facts, decisions, entities, relations | Bounded recall from active spaces | Memory Spaces Source + selected Provider |
-
-The tiers are not copies. A useful rule is: **every-turn context goes to Runtime, complete narratives go to Documents, and cross-task evidence goes to Memory Spaces.** Current instructions, repository files, and live tool results always outrank historical memory.
-
-## Clicks that start real work
-
-| User action | What actually runs | Data effect |
+| Memory | Keep here | How it reaches the Agent |
 |---|---|---|
-| **Search** | Concurrent provider-native recall | Read-only |
-| **Agent query** | A clean top-level task Agent receives bounded evidence and writes an answer | Read-only |
-| **Remember** / **Save to memory** | A clean task Agent qualifies, routes, deduplicates, distills, and writes behind Host controls | Writes only if accepted |
-| **Smart selection** | Hard rules filter providers; a task Agent resolves only genuine ambiguity | Saves a routing receipt |
-| **AI metadata** | One asynchronous task Agent per selected Memory Space, each using the provider's fastest sample path | Local title/description only |
-| **Archive Document** | A task Agent creates a searchable cold reference before the Host moves the original | Supervised move |
-| **Turn memory** | Expands exact recall, write, and Document-search activity; each item navigates to its source | Read-only |
+| **Runtime** | Preferences, working agreements, facts needed on the next turn | Compact USER / MEMORY projection |
+| **Documents** | Designs, investigations, procedures and handoffs | Search, then read the relevant narrative |
+| **Memory Spaces** | Durable facts, decisions, entities and relationships | On-demand evidence from enabled backends |
 
-Only the rows that explicitly name a task Agent spend a separate model context; **Search** and **Turn memory** are deterministic Host reads.
+Use the same data from Sidebar, conversation tools or Headless. Global, workspace and custom storage scopes are explicit. Direct retrieval does not spawn a Mnemon task Agent; Agent Query, semantic writes and maintenance may use the configured model. [Workflows and costs](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/reference/workflows.md).
 
-Task Agents do not reuse or consume the main conversation history. By default they follow DSH's new-session model route; **Settings → Memory System → Background task Agent** can select a dedicated Provider and model. That fixed route also applies to bounded Mnemon workers for idle checkpoint review, writes, evidence-bound answers, provider placement, memory migration, USER compaction, Document archiving, and metadata maintenance. Conversation Recall and Related stay direct Host reads and do not use this background route.
+## Start with the default installation
 
-With DSH 0.1.1-rc.2, the first-party `deepseek-official/deepseek-v4-flash-vision-exp` route appears with an **Image input** label. Mnemon background jobs still send text-only prompts; multimodal conversation messages keep their DSH attachment references through lifecycle processing, and raw image bytes are never copied into memory.
-
-## One Memory Space workflow, nine providers
-
-| Provider | Shape | Best fit |
-|---|---|---|
-| **[Mnemon](https://github.com/mnemon-dev/mnemon)** | Official native local CLI + SQLite | Exact writes, entities, typed relationships, local-first sharing |
-| **[OpenViking](https://github.com/volcengine/OpenViking)** | HTTP + `viking://` | Resource trees and asynchronous extraction |
-| **[Honcho](https://github.com/plastic-labs/honcho)** | HTTP workspace / peers | Team and Agent-peer conclusions |
-| **[Mem0](https://github.com/mem0ai/mem0)** | Platform or self-hosted HTTP | Existing user / Agent memory |
-| **[Hindsight](https://github.com/vectorize-io/hindsight)** | HTTP memory bank | Banks, entities, provider-native graph |
-| **[Holographic](https://github.com/NousResearch/hermes-agent/tree/main/plugins/memory/holographic)** | Local structured fact files | Auditable facts, trust scores, local entities |
-| **[RetainDB](https://github.com/RetainDB/RetainDB)** | HTTP project / user | Project- and user-scoped profiles |
-| **[ByteRover](https://github.com/campfirein/byterover-cli)** | Local `brv` CLI | Code knowledge trees and curate workflows |
-| **[Supermemory](https://github.com/supermemoryai/supermemory)** | HTTP container | Document ingestion and container sharing |
-
-Provider capability differences stay visible. dsh-mnemon never invents graph edges, deletion semantics, or enumerable content for an engine that does not provide them. **Settings owns reusable Provider services; Memory Spaces owns concrete instances, activation, scope, and metadata.** External Providers are off by default.
-
-See the [provider capability and deployment matrix](./docs/en/memory-providers.md).
-
-## Real WebUI walkthrough
-
-The following roughly 55-second capture comes from a live 1600×900 DSH WebUI. It deliberately pauses on full-page scrolling, page transitions, Provider cards, dialogs, button-state changes, and a completed read-only Agent Query. Destructive confirmations are deliberately not submitted.
-
-![Full dsh-mnemon v0.2.0 WebUI walkthrough with scrolling and button interactions](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.gif)
-
-[Watch the 1600×900 MP4](https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/media/dsh-mnemon-memory-system-demo.mp4) · [Open the page-by-page UI guide](./docs/en/ui-guide.md)
-
-## Start in five minutes
-
-### 1. Install Mnemon Native
-
-Mnemon is the default engine and the simplest local-first starting point:
+You need a compatible DSH Host. **Mnemon Native also needs a separately installed `mnemon` CLI**; installing the npm Starter does not install that binary or third-party backend services. Follow the [platform installation guide](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/getting-started.md) and [verified compatibility baselines](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/reference/compatibility.md).
 
 ```sh
-# macOS
-brew install --cask mnemon-dev/tap/mnemon
-
-# macOS / Linux via Go
-go install github.com/mnemon-dev/mnemon@latest
-
 mnemon --version
+dsh plugin --profile web add dsh-mnemon
+dsh web
 ```
 
-Windows users can install the official v0.2.3-or-newer release ZIP. The expected installation path and checksum procedure are in [Getting Started](./docs/en/getting-started.md#2-install-mnemon).
+For Headless, add the same package to that profile with `dsh plugin --profile headless add dsh-mnemon`.
 
-### 2. Install DSH and the plugin
+Open **Memory System → Status**, then add a Runtime memory. Select a DSH workspace before creating Documents, even with global storage. To retain long-term facts, create a Memory Space with an explicitly selected Provider. Sidebar is the default; optional Builtin placement uses the same pages.
 
-The registry installation is verified against stable DSH 0.1.2-rc.1, whose complete profiles require Node.js `^22.19.0 || >=24.0.0`. The dsh-mnemon package itself retains Node.js 20 public-entry compatibility for older compatible DSH hosts. Use the exact published version below for a reproducible installation; maintainers can run the optional [alpha source compatibility workflow](./docs/en/development.md#manual-dsh-012-alpha5-source-compatibility).
+Upgrading from v0.4 retains the familiar configuration, data and workflow. Three optional enhancements are exposed in **Settings → Memory System**; no View tab or generic memory-plugin manager is added. [Upgrade checklist](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/reference/compatibility.md).
+
+## Source + Strategy → View
+
+[![Source facts flow through a Strategy and Core validation into one View for the DSH Host](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/diagrams/composable-memory.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/development/architecture.md)
+
+- **Source** owns memory, its projection, read/write operations and optional DSH pages.
+- **Strategy** chooses how available Sources participate: selection, resident context, retrieval and guidance. Pure composition does not write memory.
+- **Core** validates the proposal, asks Sources for bounded projections and compiles an immutable **View**. The **DSH Host** pins it to the executing turn and controls tool access.
+
+A View includes context **and** the scoped routes/actions the LLM can use next. It is not another database or a frontend page. Memory Spaces owns its Provider child Fibers; Core exposes only the small `ctx.mnemonMemory` contribution service.
+
+The same public contracts serve the default plugins and external repositories. Source authors keep their data and backend choices; Strategy authors reuse those capabilities, the turn lifecycle, budgets and test fixtures. [Architecture and sequence diagrams](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/development/architecture.md).
+
+## Official plugins
+
+The Starter ships **3 Sources, 1 default Strategy, 3 optional Strategy contributions and 9 Providers**. Packages are independently versioned and published; the Starter pins an exact tested combination.
+
+| Package | Responsibility | Default |
+|---|---|---|
+| [dsh-mnemon-source-runtime](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-source-runtime/README.md) | USER / MEMORY, revisions and local hot storage | Enabled |
+| [dsh-mnemon-source-documents](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-source-documents/README.md) | Markdown, search, revisions and archiving | Enabled |
+| [dsh-mnemon-source-memory-spaces](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-source-memory-spaces/README.md) | Durable evidence and Source-owned Provider children | Enabled |
+| [dsh-mnemon-strategy-default-three-tier](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-strategy-default-three-tier/README.md) | The familiar three-tier View and turn retrieval policy | Selected |
+| [dsh-mnemon-strategy-auto-capture](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-strategy-auto-capture/README.md) | In-turn guidance to retain useful facts | Off |
+| [dsh-mnemon-strategy-light-context](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-strategy-light-context/README.md) | A shared resident-projection ceiling | Off |
+| [dsh-mnemon-strategy-scoped](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-strategy-scoped/README.md) | Ordered Source selection and a writable subset | Off |
+
+The three enhancements occupy different slots of the default Strategy and can coexist. They still produce one View. Capture is guidance, not an autonomous recorder; a projection ceiling is not token accounting or delta injection; scoped selection does not create storage.
+
+Memory Spaces can use these Provider plugins:
+
+[Mnemon Native](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-mnemon-native/README.md) ·
+[OpenViking](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-openviking/README.md) ·
+[Honcho](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-honcho/README.md) ·
+[Mem0](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-mem0/README.md) ·
+[Hindsight](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-hindsight/README.md) ·
+[Holographic](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-holographic/README.md) ·
+[RetainDB](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-retaindb/README.md) ·
+[ByteRover](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-byterover/README.md) ·
+[Supermemory](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-provider-supermemory/README.md).
+
+Native is the default backend; third-party services are disabled until explicitly configured. Graph, deletion, exact-write and enumeration capabilities remain backend-specific. [Provider capabilities and setup](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/memory-providers.md).
+
+## Build your own composition
+
+Use `dsh-mnemon/extension-sdk` to define and install a Source or Strategy on its Cordis Fiber. Use the owning Strategy's SDK for an additive contribution, or `dsh-mnemon-source-memory-spaces/provider-sdk` for a Memory Spaces driver.
+
+Your repository owns its manifest, public dependencies, implementation, tests and build. DSH's Profile/Loader installs and mounts it; Mnemon does not scan arbitrary installed plugins. Installing code, activating a contribution and choosing the complete Strategy are distinct decisions.
+
+Start with the [plugin author guide](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/development/extensions.md) and [external consumer examples](https://github.com/omdsh-dev/dsh-mnemon/tree/main/scripts/fixtures/plugin-consumer/). They cover isolated package consumption, multiple instances, disposal, scoped reads and authorized writes. A Git or Notion integration can be a new Source; it is not implied support for every existing DSH memory plugin.
+
+Independent plugin repositories are welcome. Contributions to this repository follow [CONTRIBUTING](https://github.com/omdsh-dev/dsh-mnemon/blob/main/CONTRIBUTING.md); discuss new capabilities and Providers in an Issue first.
+
+## Data and trust
+
+- Runtime and Documents are local; Native is local by default. External Providers use their configured services and scopes.
+- Disabling participation does not erase memory. Switching storage scope does not migrate it. Provider disabling may clear local catalog metadata, not remote data.
+- Saved Provider credentials stay on the Host and are excluded from Mnemon Packs. Packs still contain private memory and need protection.
+- Source and Strategy plugins are trusted in-process JavaScript, **not sandboxed code**. Historical memory never outranks current instructions. Model-generated plugins are not automatically installed.
+
+[Backup and recovery](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/operations.md) · [Security policy](https://github.com/omdsh-dev/dsh-mnemon/blob/main/SECURITY.md) · [Release history](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/releases/README.md) · [Roadmap](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/roadmap.md)
+
+## Develop and verify
 
 ```sh
-npm install -g @deepseek-ai/dsh@0.1.2-rc.1
-dsh --version
+pnpm install --frozen-lockfile
+pnpm verify
+pnpm verify:plugins
 ```
 
-```sh
-dsh plugin --profile web add dsh-mnemon@0.5.2
-dsh --profile web
-```
-
-When the Web profile is published under a cloud hostname, stable DSH 0.1.2-rc.1 needs an HTTPS reverse proxy or access gateway, an explicit trusted authority, and the one-time launch URL printed at Host startup. Follow the [cloud-hosted WebUI procedure](./docs/en/operations.md#cloud-hosted-webui); do not expose the loopback service directly.
-
-DSH profiles have independent plugin rosters. Install the same package separately for one-shot Headless tasks:
-
-```sh
-dsh plugin --profile headless add dsh-mnemon
-dsh --profile headless "Check durable project context before answering this task."
-```
-
-For a local checkout, use an absolute path:
-
-```sh
-dsh plugin --profile web add "link:/absolute/path/to/dsh-mnemon"
-dsh plugin --profile headless add "link:/absolute/path/to/dsh-mnemon"
-```
-
-### 3. Verify the first workflow
-
-1. Open **Memory System → Status** and verify dsh-mnemon, Mnemon Native, Runtime, Documents, and enabled Providers.
-2. Open **Memory Spaces → Overview → Create Memory Space** and choose an enabled Provider explicitly.
-3. Submit one stable, future-useful candidate through **Remember**.
-4. Open **Recall**, run a direct search, then run **Agent query** against the same question.
-5. Return to the conversation, expand **Turn memory**, and follow one exact tool link.
-
-The primary tab order is intentionally stable: **Status, Runtime, Documents, Memory Spaces**.
-
-## Familiar controls, expanded capability
-
-### Agent-driven memory operations
-
-| Supervised distillation | Bounded Agent query |
-|---|---|
-| [![Edit a candidate before dispatching an independent task Agent](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/screenshots/remember-dialog.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/screenshots/remember-dialog.png) | [![Read-only Agent answer grounded in bounded multi-provider evidence](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/screenshots/recall-agent-answer.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/screenshots/recall-agent-answer.png) |
-
-The workbench makes the task boundary explicit before dispatch and keeps the returned answer beside its evidence scope. Conversation-native Turn memory and Save to memory remain enabled by default and can be changed independently under **Settings → Memory System → Conversation interface**.
-
-### Manual or policy-driven placement
-
-| Create explicitly | Route future distillation intelligently |
-|---|---|
-| [![Choose a Provider while creating a Memory Space](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/screenshots/memory-space-create-dialog.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/screenshots/memory-space-create-dialog.png) | [![Choose manual or smart Provider placement](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/screenshots/distillation-strategy.png)](https://github.com/omdsh-dev/dsh-mnemon/blob/e6ca446e45bdd17991f3c7c98560456de465282b/docs/assets/screenshots/distillation-strategy.png) |
-
-Manual creation always asks the user to choose. Smart selection is a distillation policy: hard rules define the eligible set, then an optional prompt guides the Agent only when several candidates remain.
-
-## Global, workspace, and custom scope
-
-| Scope | Behavior |
-|---|---|
-| `global` | Uses `~/.mnemon`; ideal for a local control plane shared across workspaces and Agents |
-| `workspace` | Uses `<workspace>/.mnemon`; local Providers that support workspace following move with the effective workspace |
-| `custom` | An explicit path with global semantics, useful for team conventions or isolated environments |
-
-Set `runtimeUserScope: global` together with `storageScope: workspace` to project the global USER.md profile and workspace MEMORY.md at the same time. User-profile writes stay global; project Runtime, Documents, Memory Spaces, and Provider state remain isolated. No existing entries are copied or deleted when switching.
-
-Remote Provider workspaces, users, banks, projects, containers, and URIs remain their own namespaces; switching the DSH workspace never silently rewrites them. In workspace mode, the workbench may inspect one selected workspace while the current conversation continues to execute in its own cwd. Independent task Agents launched from the workbench use the inspected workspace even when no main session is selected.
-
-## Web, conversation, and Headless share one system
-
-| Surface | What remains available |
-|---|---|
-| **Sidebar WebUI** | Status, Runtime, Documents, Memory Spaces, Provider services, visualization, and confirmation surfaces |
-| **Conversation UI** | Turn memory, Save to memory, exact navigation to the corresponding page |
-| **Headless** | Runtime injection, Document search, Memory Space tools, workspace routing, and supervised writes without a WebUI |
-| **Commands** | `/mnemon status`, `recall`, `related`, `remember`, and `forget` |
-
-## Data and security boundaries
-
-- Runtime and Documents are local deterministic stores. Mnemon Native is local by default; external Providers are explicit opt-ins.
-- Provider credentials are mode `0600` under `<storageRoot>/state/memory-providers.json`. They are never returned to the browser, smart-selection Agent, or Mnemon Pack.
-- Host calls use argument arrays with shell disabled, bounded output, timeouts, cancellation, schema validation, path boundaries, locks, and revisions.
-- Disabling a Provider clears its local catalog metadata but never deletes remote data. Reconnecting rebuilds metadata from the Provider, using local defaults only when a field cannot be mapped.
-- Changing scope never migrates, merges, or deletes an old root automatically.
-- There is no deterministic secret scanner yet. Never store keys, tokens, private keys, or raw sensitive logs in any tier.
-- Uninstalling the plugin does not remove local or remote memory data.
-
-See [Operations, security, and troubleshooting](./docs/en/operations.md) for backup, recovery, and diagnostics.
-
-## Documentation
-
-| I want to… | Start here |
-|---|---|
-| See the complete product boundary | [Capability map](./docs/en/capabilities.md) |
-| Install and verify the first workflow | [Getting Started](./docs/en/getting-started.md) |
-| Follow every visible click and Agent action | [Sidebar and conversation UI guide](./docs/en/ui-guide.md) |
-| Compare or deploy all nine Providers | [Long-term memory providers](./docs/en/memory-providers.md) |
-| Understand tiering and lifecycle | [Storage model](./docs/en/storage-model.md) · [Workflows](./docs/en/workflows.md) |
-| Configure scope, routing, and model selection | [Configuration](./docs/en/configuration.md) |
-| Back up, update, or troubleshoot | [Operations](./docs/en/operations.md) |
-| Integrate tools, commands, or RPC | [Interface reference](./docs/en/interfaces.md) |
-| Build a Source, Strategy or Memory Spaces Provider plugin | [Extension guide](./docs/en/extensions.md) |
-| Review the stable release | [v0.5.2 release notes](./docs/en/releases/v0.5.2.md) |
-
-See the [documentation hub](./docs/en/README.md) for the full map.
-
-## Development
-
-```sh
-pnpm install
-pnpm run verify
-```
-
-`verify` runs TypeScript checks, Vitest, a reproducible double build, an isolated real Headless-profile activation check, and published-package validation. `lib/` is generated and intentionally not tracked.
-
-Before opening an Issue or Pull Request, read the [contribution rules](./CONTRIBUTING.md) ([简体中文](./CONTRIBUTING.zh-CN.md)) and use the bilingual repository templates. Incomplete reports and PR descriptions are rejected by bilingual automated policy checks.
-
-## License
-
-MIT. Report security issues privately through [SECURITY.md](./SECURITY.md), not a public issue.
+Use Node.js `^22.19.0 || >=24.0.0` and pnpm 10.13.1. Package-level checks run independently; WebUI captures use disposable data and a real DSH Host. Tests of mechanics are not claims of LLM accuracy or live cloud-Provider conformance. [Development](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/development/README.md) · [Media provenance](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/showcase/README.md).

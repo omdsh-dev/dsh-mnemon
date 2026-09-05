@@ -1,0 +1,104 @@
+# 能力地图：三层记忆、九种 Provider 与独立任务 Agent
+
+**简体中文** | [English](../../en/guides/capabilities.md) | [文档中心](../README.md)
+
+`dsh-mnemon` 是 DeepSeek Harness（DSH）的记忆系统控制面。它不要求所有知识进入同一种数据库，而是把高频上下文、完整项目叙事和可检索长期记忆组织成三层，并让九种长期记忆 Provider 进入同一套创建、激活、检索、沉淀与观察工作流。
+
+Runtime、Documents、Memory Spaces 是独立 Source 插件；Strategy 将各实例的投影、检索 route 与 action 组合成逐回合不可变 View。Core 只提供 `ctx.mnemonMemory`，Source 拥有数据与可选页面，Memory Spaces 自己拥有内部 Provider 子节点。`dsh-mnemon` Starter 保持默认三层使用体验。详见[架构](../development/architecture.md)与[插件开发](../development/extensions.md)。
+
+一句话判断：**每轮都需要的放运行时，需要完整阅读的放档案，需要跨任务按需召回的放记忆体。**
+
+## 30 秒能力总览
+
+| 用户目标 | 在哪里操作 | 实际执行方式 | 是否改变数据 |
+|---|---|---|---|
+| 保持偏好、约定和环境事实常驻上下文 | **运行时** | Host 确定性维护 `USER.md` / `MEMORY.md` 投影 | 是，用户确认后立即写入 |
+| 保存设计、调查、流程和交接全文 | **档案** | Host 管理 Markdown、索引、容量与 revision | 新建/编辑会；阅读/检索不会 |
+| 从九种底层建立长期记忆体 | **记忆体 → 概览 → 创建记忆体** | 人工明确指定已启用 Provider | 是 |
+| 让系统在合格 Provider 中选底层 | **记忆体 → 沉淀策略 → 智能选择** | Host 先执行硬规则；仍有多个候选时启动独立任务 Agent | 保存策略会；判断本身只产生选择回执 |
+| 查询原始长期记忆证据 | **记忆体 → 检索 → 检索** | 并发调用已激活记忆体的最快原生召回路径 | 否 |
+| 用证据直接组织答案 | **记忆体 → 检索 → Agent 查询** | 新建无会话历史的独立顶层任务 Agent，只接收有界证据 | 否 |
+| 把候选内容判断、查重、提炼后写入 | **沉淀记忆**或回复旁的**存入记忆** | 新建独立顶层任务 Agent；Host 校验工具、路径、锁、容量与回执 | 只有 Agent 决定写入时会 |
+| 批量补全记忆体标题与说明 | **记忆体 → 概览 → AI 维护元信息** | 每个记忆体拥有互不影响的异步任务；先快速采样，再分别生成 | 是，只更新本地目录元信息 |
+| 把档案移出热容量且仍可追溯 | **档案 → 归档** | 独立任务 Agent 先建立可检索冷引用，Host 验证后再移动原文 | 是 |
+| 查看本轮使用了哪些记忆 | 回复下方的**本回合记忆** | 汇总召回、沉淀和档案检索活动，并提供精确页面跳转 | 否 |
+
+## 三层不是三个副本
+
+| 层级 | 最适合 | 进入上下文 | 数据权威 |
+|---|---|---|---|
+| **运行时记忆** | 高频偏好、协作约定、项目事实 | 每轮紧凑注入 | `runtime/memories.json`；Markdown 是投影 |
+| **项目档案** | 需要保留结构与来源的长文 | 先确定性检索，再按需阅读全文 | `documents/index.json` 与受管 Markdown |
+| **记忆体** | 跨会话事实、决策、实体与关系 | 从已激活记忆体按需召回有界证据 | Mnemon Native Store 或对应三方 Provider |
+
+在默认 Starter 中，Runtime 与 Documents 使用各自 Source 的本地存储，Memory Spaces 通过 Provider 替换后端。Provider 变化不改变另外两个 Source；外部 Source 与 Strategy 插件可以通过公开契约定义其他组合。
+
+## 九种长期记忆 Provider
+
+| Provider | 形态 | 适合场景 | 作用域行为 |
+|---|---|---|---|
+| **Mnemon** | 官方原生，本地 CLI + SQLite | 完整图谱、精确写入、默认本地优先 | 支持全局、工作区和自定义根 |
+| **OpenViking** | HTTP + `viking://` | 已有资源树与异步提炼工作流 | 使用目标 URI / 用户身份 |
+| **Honcho** | HTTP workspace / peers | 团队与 Agent peer conclusions | 使用 Provider workspace |
+| **Mem0** | Platform 或自托管 HTTP | 已有 Mem0 用户/Agent 记忆 | 使用 user / agent 身份 |
+| **Hindsight** | HTTP memory bank | bank、实体与 Provider 图谱 | 使用 bank ID |
+| **Holographic** | 本地结构化事实文件 | 可审计的本地实体与语义事实 | 默认跟随工作区，可覆盖路径 |
+| **RetainDB** | HTTP project / user | 项目与用户双作用域记忆 | 使用 project / user 身份 |
+| **ByteRover** | 本地 `brv` CLI | 代码知识目录与 curate 流程 | 默认跟随工作区，可覆盖目录 |
+| **Supermemory** | HTTP container | 文档摄取与容器级共享 | 使用 container tag |
+
+设置页只管理可复用的**服务配置**与启用开关；记忆体页管理具体**实例配置**、激活状态和元信息。Provider 默认关闭，只有启用并保存后才会被发现、同步和参与路由。完整字段与能力差异见[长期记忆 Provider](./memory-providers.md)。
+
+## 点击之后，谁在工作
+
+### 确定性 Host 操作
+
+以下操作不需要模型：状态检查、原始检索、内容与实体浏览、记忆体激活、运行时普通增删改、档案阅读和普通编辑。它们直接经过 Host 的 schema、路径、权限、锁、revision、容量、超时与取消边界。
+
+### 独立顶层任务 Agent
+
+以下用户可感知能力不会复用主对话历史，也不会占用主会话上下文：
+
+- **沉淀记忆**：判断价值、选择范围、查重、提炼并写入；
+- **Agent 查询**：根据有界召回证据组织回答；
+- **AI 维护元信息**：对每个选中的记忆体独立生成标题与说明；
+- **档案归档**：先形成冷引用，再允许 Host 移动原文；
+- **智能选择 Provider**：只有硬规则留下多个候选时才调用模型。
+
+这些任务默认跟随 DSH 新建会话时的模型路由；也可以在**设置 → 记忆系统 → 后台任务 Agent**单独指定 Provider 与模型。在 DSH 0.1.1-rc.2 中，支持图片的目录项会标记**图片输入**，包括 `deepseek-official/deepseek-v4-flash-vision-exp`；当前 Mnemon 任务 Prompt 仍为纯文本。任务彼此隔离，单个失败只回写到对应记忆体或操作表面，不会阻塞整页。
+
+内部仍可能使用受限 worker 完成结构化判断，但它属于实现细节。用户界面与产品文档统一称为“独立任务 Agent”。
+
+## 全局、工作区与自定义
+
+- **全局**：使用 `~/.mnemon`，适合本机多个工作区和 Agent 共享控制面。
+- **工作区**：使用 `<workspace>/.mnemon`；Mnemon、Holographic 与 ByteRover 等本地数据面可以自动跟随工作区。
+- **自定义**：本质上是显式路径的全局范围，适合团队约定或隔离演示环境。
+
+远程 Provider 的 workspace、user、bank、project、container 或 URI 是它们自己的命名空间，不会因 DSH 左上角切换工作区而被隐式重写。工作区页可以查看选定目录；独立任务 Agent 的写入位置始终由当前任务的有效工作区和保存的范围规则确定。
+
+## Web、对话与 Headless 是同一套系统
+
+| 表面 | 获得的能力 |
+|---|---|
+| **Sidebar WebUI** | 状态、运行时、档案、记忆体、Provider 配置、可视化与所有用户确认入口 |
+| **对话内入口** | 本回合记忆、存入记忆、精确跳转到检索/内容/实体页面 |
+| **Headless** | 相同的运行时注入、档案检索、记忆体工具、工作区路由和受监督写入，没有 WebUI |
+| **命令与工具** | `/mnemon` 命令以及供 Agent 使用的最小权限工具面 |
+
+## 明确不做什么
+
+- 不把历史记忆置于当前用户指令、实时工具结果或仓库事实之上；
+- 不把所有 Provider 的能力伪装成完全一致；缺少图谱、删除或精确写入时会明确降级；
+- 不把三方凭据返回浏览器、智能选择 Agent 或 Mnemon Pack；
+- 不因关闭 Provider 就删除远程数据；关闭会清理本地目录元数据，重连后再从 Provider 重建；
+- 不在切换存储范围时自动迁移、合并或删除旧根目录；
+- 不承诺跨本地文件系统和远程 Provider 的分布式事务。
+
+## 继续体验
+
+1. [5 分钟完成第一次验证](./getting-started.md)
+2. [按真实点击路径认识 WebUI 与 Agent 行为](./ui-guide.md)
+3. [比较九种 Provider 的能力与配置](./memory-providers.md)
+4. [理解生命周期、并发和失败边界](../reference/workflows.md)
+5. [检查兼容性并升级](../reference/compatibility.md)

@@ -1,8 +1,8 @@
 # 贡献指南
 
-**简体中文** | [English](CONTRIBUTING.md)
+**简体中文** | [English](./CONTRIBUTING.md)
 
-欢迎为 dsh-mnemon 贡献代码。本文件定义 Issue、Pull Request、验证和维护规则；实现细节与测试场景见[开发和验证指南](docs/zh-CN/development.md)。
+欢迎为 dsh-mnemon 贡献代码。本文件定义 Issue、Pull Request、验证和维护规则；实现细节与测试场景见[开发和验证指南](./docs/zh-CN/development/README.md)。
 
 ## PR 范围
 
@@ -76,8 +76,8 @@ fix(client): honor trusted remote management grant
 - Bug 使用双语[Bug 报告表单](.github/ISSUE_TEMPLATE/bug_report.yml)，必须包含复现、环境、证据、冒烟测试、代码引用和补丁草案；
 - 功能、增强、文档和问题使用双语[标准 Issue 表单](.github/ISSUE_TEMPLATE/standard_issue.yml)；
 - 缺少模板必填信息的 Issue 会被自动关闭，补充完整后可以请求重开；
-- 标签体系、分类和关闭标准见[Issue 分类标准](ISSUE_TRIAGE.zh-CN.md)或英文版 [Issue Triage](ISSUE_TRIAGE.md)；
-- 安全漏洞必须按 [SECURITY.md](SECURITY.md) 私下报告，不要创建公开 Issue。
+- 标签体系、分类和关闭标准见[Issue 分类标准](./ISSUE_TRIAGE.zh-CN.md)或英文版 [Issue Triage](./ISSUE_TRIAGE.md)；
+- 安全漏洞必须按 [SECURITY.md](./SECURITY.md) 私下报告，不要创建公开 Issue。
 
 ## PR 规则
 

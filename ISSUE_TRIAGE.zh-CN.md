@@ -1,6 +1,6 @@
 # Issue 分类标准与处理流程
 
-**简体中文** | [English](ISSUE_TRIAGE.md)
+**简体中文** | [English](./ISSUE_TRIAGE.md)
 
 本文件定义 dsh-mnemon 的 Issue 标签体系、分类、补充信息和关闭流程。目标是让每个 Open Issue 可检索、可验证、可认领、可追溯。
 

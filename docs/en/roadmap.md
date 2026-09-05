@@ -1,53 +1,37 @@
 # Roadmap
 
-[简体中文](../zh-CN/roadmap.md) | **English** | [Documentation Center](./README.md)
+**English** | [简体中文](../zh-CN/roadmap.md) | [Documentation](./README.md)
 
-The Roadmap records work beyond the current implementation; it is not a commitment to deliver these capabilities. Data safety, recoverability, and verifiability take priority.
+This page separates shipped foundations from remaining work. Future items are directions, not release promises.
 
-## Release boundaries
+## Shipped foundations
 
-- **v0.4: Sidebar-first.** Retain the v0.3 architecture and memory formats. v0.4.0 initially removed builtin presentation; [v0.4.2](./releases/v0.4.2.md) restores optional `displayMode: builtin` with the shared UI, and [v0.4.3](./releases/v0.4.3.md) fixes the collapsed Sidebar icon. The v0.4.0 notes remain a historical release record.
-- **v0.5: View-based plugin release.** The architecture upgrade retains the shared workbench and ships as independently verifiable plugins; see the [v0.5.0 scope](./releases/v0.5.0.md). Documented extension exports form the supported v0.5 surface; internal paths remain private.
+- Independent Source, Strategy and Provider packages, a small public contribution service, Source-owned pages and one immutable View per executing turn.
+- A default three-tier Starter and three optional, composable enhancements.
+- Source-local Provider descriptors, connection schemas, redaction and child-Fiber registration.
+- Public-contract tests, independently installed artifacts, isolated Headless/WebUI fixtures and selective package releases.
 
-## P0: Reliability and Recoverable Scheduling
+See [Architecture](./development/architecture.md), [Development](./development/README.md) and [Release process](./development/releasing.md) for the actual scope and limits.
 
-- [ ] **Persist background-review watermarks**: save activity signals, the latest processed checkpoint, scoring version, and run state by root session; restore unprocessed activity after restart or resume.
-- [ ] **Idempotent checkpoints**: assign a stable identifier to each review input to prevent timeouts, retries, or duplicate hooks from producing duplicate Documents.
-- [ ] **Backoff, circuit breaking, and manual retry**: apply bounded backoff after consecutive failures, show the reason on the Status page, and allow explicit recovery.
-- [ ] **Deterministic sensitive-data defenses**: add secret/credential pattern detection, size limits, and audit receipts beyond LLM admission.
-- [ ] **Automated real-WebUI E2E**: isolate DSH_HOME, storageRoot, workspace, and the port; cover light tasks, score-based review, cancellation, and failures without partial writes.
-- [ ] **Correct cold-reference paths**: under every storage scope, write resolvable references that match the actual managed path.
+## Next: reliability and recoverability
 
-## P1: Long-Term Maintenance and Data Operations
+- Persist background-review watermarks and pending activity across restarts; add bounded backoff and explicit retry.
+- Improve idempotence and cancellation under interrupted maintenance; retain evidence of partial writes and source revisions.
+- Add a deterministic sensitive-content defense before memory admission. Current model guidance is not a secret scanner.
+- Expand real WebUI and fault-injection coverage: scopes, concurrent edits, capacity limits, remote deployment paths, provider recovery and supported OS combinations.
+- Extend the [verified compatibility matrix](./reference/compatibility.md), including explicitly authorized real-Provider tests. Adapter fixtures alone are insufficient.
 
-- [ ] **Dynamic Memory Space Provider Catalog**: register Provider descriptors, connection schemas, credential redaction, discovery, and Factories together so a new Provider plugin needs no built-in union or WebUI edit.
-- [ ] **Strategy artifact promotion pipeline**: provide schema/type checks, golden replay, shadow, canary, signing, version rollback, and metric comparison so model-generated Strategies reach the active topology only as controlled artifacts.
-- [ ] **Long-term organization across sessions**: trigger an independent organization process based on time and the number of new sessions instead of reusing per-turn review.
-- [ ] **Mnemon GC / forget review**: generate candidates for decay, conflicts, obsolete content, and orphaned relationships, then present evidence before deletion.
-- [ ] **Consistent backup and recovery**: provide unified snapshots, checksums, and recovery rehearsals for the registry, multiple databases, Runtime, and Documents.
-- [ ] **Repair and rebuild tools**: detect damaged JSON, missing projections, orphaned Documents, missing databases, and registry/disk inconsistencies.
-- [ ] **Schema migration**: add explicit upgrade and rollback strategies for Runtime, the Documents index, and the Memory Space registry.
-- [ ] **Compatibility matrix**: document and automatically test supported combinations of DSH, the Mnemon CLI, Node, and data formats.
-- [ ] **Cordis / DSH capability contract tests**: add host-integration coverage for service injection, hot reload and disposal, and late-registered tools; in particular, verify that Mnemon's schema-validated one-run result tool remains reachable inside a subagent while `toolFilter` still hides every non-allowlisted capability, using [issue #14](https://github.com/omdsh-dev/dsh-mnemon/issues/14) / [PR #17](https://github.com/omdsh-dev/dsh-mnemon/pull/17) as the regression scenario.
-- [ ] **Explicit host capability declarations**: have Cordis / DSH authoritatively expose writability, trusted control-plane access, directory selection, and structured-output support, gradually replacing plugin-side permission inference from loopback state, service names, or transport location.
-- [ ] **Explicit Documents workspace ownership**: record the source workspace under shared storage scopes or provide a configurable isolation strategy.
+## Later: controlled maintenance and extension growth
 
-## P2: Observability, Experience, and Release Engineering
+- Reviewable long-term consolidation, conflict/decay candidates and deliberate forgetting.
+- Stronger multi-component backup/restore drills and repair tools for damaged metadata or missing projections.
+- Explicit data-format migration and rollback procedures when persistent formats actually need to change.
+- Better background-review history and diagnostics; broader internationalization of Host errors and command output.
+- A reusable DSH directory picker when the Host exposes the necessary capability; track [dsh-external/issues#603](https://github.com/dsh-external/issues/issues/603).
+- Candidate Source/Strategy evaluation and controlled promotion for RSI: preserve inputs, artifacts, permissions and comparison results before an explicit installation decision.
 
-- [ ] **Background-review history**: show recent scores, checkpoints, waiting/running/failed states, worker receipts, and resulting changes.
-- [ ] **Switch to DSH's shared directory picker** (blocked on [dsh-external/issues#603](https://github.com/dsh-external/issues/issues/603)): custom storage temporarily uses a manually entered Host path because remote `browse` deployments cannot invoke the `native` picker; once DSH exposes a reusable directory-picker service for plugins, move to the provider-selected native / browse flow and retain manual entry only as a fallback if needed.
-- [ ] **Complete internationalization**: cover commands, tool cards, Host errors, default metadata, and confirmation copy.
-- [ ] **Multi-Memory-Space E2E**: cover automatic space creation, cross-space recall, one-pass migration routing, multiple relationship types, merge, and controlled forget.
-- [ ] **URL-subpath deployment matrix**: add real reverse-proxy E2E for the DSH shell, static assets, plugin assets, RPC/API, and WebSocket under `/prefix/`; keep the dsh-mnemon client transport-neutral through the host `connection`, while the host supplies one coherent base URL so root-relative assets cannot leave the deployment half functional.
-- [ ] **Capacity and fault injection**: exercise real USER/MEMORY boundaries, Document LRU, revision conflicts, CLI timeouts, and mid-operation Host restarts.
-- [ ] **Documentation consistency checks**: add relative links, external links, bilingual file mirroring, configuration-key matching, and code-block matching to CI.
-- [ ] **Release completion**: establish stable versions, a changelog, upgrade/uninstall/data-retention guides, artifact checksums, and a minimum-support policy.
+## Boundaries that remain
 
-## Explicitly Out of Scope
+The current UI presents memory behavior, not a generic plugin marketplace or View canvas. External plugins follow DSH installation and the public author contracts.
 
-- Automatically executing generated code. Current boundaries cover manifests, pure Strategy replay, contract validation and generation replacement; trusted installation remains explicit.
-- Treating a Cordis isolate as a security sandbox for untrusted plugins. Third-party executors and Strategies must still come from trusted packages.
-- A Runtime `daily` target; only `user` and `memory` are currently maintained.
-- A proactive notification daemon without explicit delivery semantics; Mnemon remains an on-demand pull system.
-- Declaring internal RPC or `MnemonClient` to be a stable public SDK.
-- Automatically deleting the source Memory Space database; merge currently preserves the source files.
+Cordis ownership is not a sandbox. There is no automatic execution of model-generated code, universal deletion guarantee, cross-Provider transaction, notification daemon or claim that every third-party memory plugin integrates without adaptation.
