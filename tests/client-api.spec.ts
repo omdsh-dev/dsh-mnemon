@@ -2,7 +2,31 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ClientConnectionHandle } from "../src/host/dsh.ts"
 import { MnemonClient } from '../src/client/api.ts'
 
-describe('MnemonClient turn activity batching', () => {
+describe('MnemonClient product transport', () => {
+  it('keeps Source management scoped to its instance, workspace and revision', async () => {
+    const call = vi.fn(async () => ({ ok: true as const, value: { revision: 'r2', value: {} } }))
+    const client = new MnemonClient({ rpc: { call } } as ClientConnectionHandle, 'session-1', 'workspace-1')
+    await client.readSourceManagement('source:spaces', 'body-reconnect', { memoryBodyId: 'project' })
+    expect(call).toHaveBeenLastCalledWith('/dsh-mnemon-read', 'source-management-read', {
+      sourceInstanceKey: 'source:spaces', operation: 'body-reconnect', input: { memoryBodyId: 'project' }, sessionId: 'session-1', workspaceId: 'workspace-1',
+    })
+    await client.mutateSourceManagement('source:spaces', 'body-update', { memoryBodyId: 'project', name: 'Project' }, 'r2', true)
+    expect(call).toHaveBeenLastCalledWith('/dsh-mnemon-write', 'source-management-mutate', {
+      sourceInstanceKey: 'source:spaces', operation: 'body-update', input: { memoryBodyId: 'project', name: 'Project' }, expectedRevision: 'r2', confirmed: true,
+      sessionId: 'session-1', workspaceId: 'workspace-1',
+    })
+  })
+
+  it.each([403, 404])('never widens Source activation authority after HTTP %i', async status => {
+    const call = vi.fn(async () => { throw new Error(`HTTP ${status}`) })
+    const client = new MnemonClient({ rpc: { call } } as ClientConnectionHandle, 'session-1', 'workspace-1')
+    await expect(client.assistSource('source:spaces', 'activation', { memoryBodyId: 'project', active: true }, 'r1', true)).rejects.toThrow(`HTTP ${status}`)
+    expect(call.mock.calls).toEqual([['/dsh-mnemon-activation', 'source-assistance', {
+      sourceInstanceKey: 'source:spaces', operation: 'activation', input: { memoryBodyId: 'project', active: true }, expectedRevision: 'r1', confirmed: true,
+      sessionId: 'session-1', workspaceId: 'workspace-1',
+    }]])
+  })
+
   it('shares one bulk projection across all turn tails until the durable cursor advances', async () => {
     let cursor = 7
     const call = vi.fn(async (_channel: string, endpoint: string) => {
@@ -32,30 +56,6 @@ describe('MnemonClient turn activity batching', () => {
     cursor = 10
     await client.turnActivity(2, 10)
     expect(call).toHaveBeenCalledTimes(2)
-  })
-
-  it('keeps automatic placement policy scoped to the active session and workspace', async () => {
-    const call = vi.fn(async () => ({
-      ok: true as const,
-      value: { id: 'body-1', name: 'Team memory', description: 'Shared context.', active: false },
-    }))
-    const client = new MnemonClient({ rpc: { call } } as ClientConnectionHandle, 'session-1', 'workspace-1')
-
-    await client.createBody({
-      name: 'Team memory',
-      description: 'Shared context.',
-      placement: {
-        mode: 'automatic',
-        prompt: 'Prefer collaboration when policy allows it.',
-        rules: { preference: 'shared-first', allowedProviderIds: ['mnemon-native', 'openviking'] },
-      },
-    })
-
-    expect(call).toHaveBeenCalledWith(expect.any(String), 'body-create', expect.objectContaining({
-      sessionId: 'session-1',
-      workspaceId: 'workspace-1',
-      placement: expect.objectContaining({ mode: 'automatic', rules: expect.objectContaining({ preference: 'shared-first' }) }),
-    }))
   })
 
   it('routes native backup operations to the selected workspace', async () => {
@@ -123,49 +123,5 @@ describe('MnemonClient turn activity batching', () => {
     expect(call).toHaveBeenCalledWith('/dsh-mnemon-read', 'embedding-status', {
       sessionId: 'session-1', workspaceId: 'workspace-1',
     })
-  })
-
-  it('routes a card-level Memory Space reconnect through the read channel with the active scope', async () => {
-    const call = vi.fn(async () => ({ ok: true as const, value: { id: 'mem0-body', healthy: true } }))
-    const client = new MnemonClient({ rpc: { call } } as ClientConnectionHandle, 'session-1', 'workspace-1')
-
-    await client.reconnectBody('mem0-body')
-
-    expect(call).toHaveBeenCalledWith('/dsh-mnemon-read', 'body-reconnect', {
-      memoryBodyId: 'mem0-body', sessionId: 'session-1', workspaceId: 'workspace-1',
-    })
-  })
-
-  it('routes activation through its narrow channel while keeping metadata on the management channel', async () => {
-    const call = vi.fn(async () => ({ ok: true as const, value: { id: 'project', active: true } }))
-    const client = new MnemonClient({ rpc: { call } } as ClientConnectionHandle, 'session-1', 'workspace-1')
-
-    await client.updateBody('project', { active: true })
-    expect(call).toHaveBeenLastCalledWith('/dsh-mnemon-activation', 'body', {
-      memoryBodyId: 'project', active: true, sessionId: 'session-1', workspaceId: 'workspace-1',
-    })
-
-    await client.updateBody('project', { name: 'Project decisions', description: 'Stable decisions.' })
-    expect(call).toHaveBeenLastCalledWith('/dsh-mnemon-write', 'body-update', {
-      memoryBodyId: 'project', name: 'Project decisions', description: 'Stable decisions.', sessionId: 'session-1', workspaceId: 'workspace-1',
-    })
-  })
-
-  it('never widens activation authority by falling back to a general write route', async () => {
-    const call = vi.fn(async (channel: string) => {
-      if (channel === '/dsh-mnemon-activation') throw new Error('transport failure for /dsh-mnemon-activation/body: HTTP 404')
-      return { ok: true as const, value: { id: 'project', active: true } }
-    })
-    const client = new MnemonClient({ rpc: { call } } as ClientConnectionHandle)
-
-    await expect(client.updateBody('project', { active: true })).rejects.toThrow('HTTP 404')
-    expect(call.mock.calls).toEqual([
-      ['/dsh-mnemon-activation', 'body', { memoryBodyId: 'project', active: true }],
-    ])
-
-    call.mockReset()
-    call.mockRejectedValue(new Error('transport failure for /dsh-mnemon-activation/body: HTTP 403'))
-    await expect(client.updateBody('project', { active: false })).rejects.toThrow('HTTP 403')
-    expect(call).toHaveBeenCalledTimes(1)
   })
 })

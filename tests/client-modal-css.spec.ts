@@ -6,7 +6,7 @@ const sidebarCss = readFileSync(new URL('../src/client/MnemonSidebarView.module.
 const saveActionCss = readFileSync(new URL('../src/client/MnemonSaveAction.module.css', import.meta.url), 'utf8')
 const dialogSource = readFileSync(new URL('../src/client/MnemonDialog.tsx', import.meta.url), 'utf8')
 const viewSource = [
-  '../src/client/MnemonView.tsx',
+  '../src/client/MnemonWorkbench.tsx',
   '../plugins/dsh-mnemon-source-runtime/src/client/pages.tsx',
   '../plugins/dsh-mnemon-source-documents/src/client/pages.tsx',
   '../plugins/dsh-mnemon-source-memory-spaces/src/client/pages.tsx',
@@ -92,7 +92,8 @@ describe('responsive dialog layout invariants', () => {
 
 describe('entity rail list invariants', () => {
   it('truncates long entity names and keeps the frequency count inside the row', () => {
-    expect(viewCss).toContain('.entityList button > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }')
-    expect(viewCss).toContain('.entityList strong { flex: none;')
+    const sourceCss = readFileSync(new URL('../plugins/dsh-mnemon-source-memory-spaces/presentation/page.module.css', import.meta.url), 'utf8')
+    expect(sourceCss).toContain('.entityList button > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }')
+    expect(sourceCss).toContain('.entityList strong { flex: none;')
   })
 })

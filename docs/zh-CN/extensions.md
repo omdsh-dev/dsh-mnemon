@@ -83,6 +83,8 @@ Core 只处理目标/槽身份、JSON、64,000 字符上限、确定性回放、
 
 专用 Strategy Entry 还可以导出 `memoryStrategyConfiguration`，由 Core SDK 的 `defineMemoryStrategyConfiguration` 定义。它包含中英文展示文案、公开字段（`number`、`text`、`textarea`、`string-list`、`source-list`），以及**与 `apply()` 共用的纯 `create(config)` factory**。factory 只返回一个 Strategy 或扩展贡献以及同一份 `memoryPlugin` 描述，不做 I/O、凭据访问、Source 注册或 Fiber 挂载；完整例子见内置增强包。这只是面向 Host 与未来工具的可选约定，不定义插件身份或激活关系。
 
+helper 校验并冻结元信息副本，不执行 factory；返回的 `create(config)` 会校验传入字段与所声明的贡献，省略值的默认行为仍由 factory 负责。`number` 必须是有限整数；列表最多 32 个不重复、非空且不超过 500 字符的字符串；文本默认上限为 4,000 字符。Host 对未使用 helper 的模块复用同一套校验，同时保留 Loader 身份检查和局部错误隔离。
+
 v0.5 不向普通用户提供通用的记忆插件发现、依赖图或安装弹窗。本版稳定 Source/Strategy 契约和单 View 编译边界，同时不把插件心智加入 v0.4 的日常工作流。三个随 Starter 安装的增强只以“设置 → 记忆系统 → 记忆增强”中的行为开关呈现；包名、Entry、依赖和互斥关系不进入这层界面。
 
 第三方插件仍走 DSH 原生 Profile/Loader 流程：用准确包名执行 `dsh plugin --profile <Profile> add <包名>@<版本> --save-exact`，检查其 `peerDependencies` 与 `dsh.bundle.patch`，重启后在 Profile 装配中明确激活。下载 npm 包本身不等于激活，Mnemon 也不会在当前进程热加载新代码。欢迎外部作者按本页契约贡献独立仓库；通用图形化管理会在接口和社区用例稳定后再评估，不是 v0.5 承诺。
@@ -158,6 +160,8 @@ Provider 使用 Memory Spaces SDK 的 `defineMemorySpaceProvider`。模块只收
 可选的 `./client` 通过 `dsh-mnemon/client` 的 `installMemorySourceUI` 注册，由 DSH 作为普通 Client 插件加载。页面接收 `MemorySourcePageProps`：选中实例、locale、可写状态和限定范围的 `management.read/mutate`。用 `MemorySourcePageFrame` 复用 locale/appearance；React 不接收 Host Context、驱动、令牌、LLM grant 或传输层。缺少专属页面时有通用管理入口，重复归属和渲染失败局部诊断。
 
 ## 独立仓库验收
+
+业务文案和布局应留在 Source 包内。默认 Source 使用公开、仅含数据的 `presentation/locales.json`、`presentation/page.module.css`、`presentation/sidebar.module.css`，以及私有 Client 呈现模块示范这一点；独立构建无需引用仓库中的构建脚本。默认 Source 保留既有页面工具的类名命名空间以维持使用兼容；第三方 Source 可使用自己的命名空间，不必向 Root 添加词条或选择器。
 
 每个插件拥有自己的 `package.json`、exports、`src/`、`tests/`、TypeScript/构建/测试配置及 README。声明公开 peer 与开发依赖，发布 Host/Client 制品和类型，不依赖兄弟路径、工作区源码别名、根测试夹具或隐式依赖提升。
 

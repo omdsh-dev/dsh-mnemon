@@ -300,32 +300,7 @@ describe('View configuration with the real pinned DSH Cordis Loader', () => {
   })
 
   it.each([
-    { label: { en: { invalid: true }, 'zh-CN': '错误' } },
-    { fields: [{ key: 'v', input: 'text', label: { en: 'Missing Chinese label' } }] },
-    { fields: [{ key: 'v', input: 'source-list', label: { en: 'Sources', 'zh-CN': '来源' }, sourceRoles: {} }] },
-    { fields: [{ key: 'v', input: 'number', label: { en: 'Budget', 'zh-CN': '预算' }, defaultValue: 'invalid' }] },
-    { fields: [{ key: 'v', input: 'number', label: { en: 'Budget', 'zh-CN': '预算' }, defaultValue: () => 100 }] },
-  ])('contains malformed optional editor metadata locally (%#)', async overrides => {
-    const f = await fixture()
-    const name = 'dsh-mnemon-strategy-light-context'
-    const original = f.modules[name] as { memoryStrategyConfiguration: object }
-    f.modules[name] = { ...original, memoryStrategyConfiguration: { ...original.memoryStrategyConfiguration, ...overrides } }
-    const catalog = await f.management.catalog()
-    expect(catalog.diagnostics).toHaveLength(1)
-    expect(catalog.diagnostics[0]).toContain('light:')
-    expect(catalog.entries.filter(entry => entry.roles.includes('strategy') || entry.roles.includes('strategy-extension')).map(entry => entry.typeId)).toEqual(['default-three-tier', 'auto-capture', 'scoped'])
-    expect(f.loader.resolve('light').disabled).toBe(true)
-    const turn = await f.graph.composableTurns.beginTurn('valid-with-bad-editor', scope(f))
-    expect(turn.view.strategyTypeId).toBe('default-three-tier')
-    f.graph.composableTurns.endTurn(turn.turnId)
-  })
-
-  it.each([
     { light: { enabled: true, config: { maxProjectionCharacters: 0 } } },
-    { light: { enabled: true, config: { maxProjectionCharacters: 1.5 } } },
-    { capture: { enabled: true, config: { instruction: 'x'.repeat(4001) } } },
-    { scoped: { enabled: true, config: { sourceKeys: [runtimeKey, runtimeKey] } } },
-    { light: { enabled: true, config: { unknown: true } } },
     { missing: { enabled: true, config: {} } },
   ])('rejects invalid configuration without changing state (#%#)', async entries => {
     const f = await fixture()

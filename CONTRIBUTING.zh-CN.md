@@ -59,7 +59,7 @@ fix(client): honor trusted remote management grant
 4. **真实证据**：用户可见变更附本地截图或短视频；Host、CLI、Headless 变更附脱敏日志或操作结果。
 5. **双语同步**：长期文档在 `docs/en/` 和 `docs/zh-CN/` 保持同名、同职责；根 README 同步维护 `README.md` 和 `README.zh-CN.md`。
 6. **安全与数据**：持久化格式、路径、RPC authority、Provider 凭据或导入导出变更必须说明兼容、迁移或拒绝、回滚和数据保留行为。
-7. **边界稳定**：`src/shared/contracts.ts` 是 Client 与 Host wire DTO 的唯一来源；不得在浏览器半区重新引入 Host 模块。
+7. **边界稳定**：`src/host/protocol.ts` 是可在浏览器使用的 Client 与 Host wire DTO 来源；不得在浏览器半区引入可执行的 Host 模块。
 8. **AI 披露**：按 PR 模板如实填写使用的模型和编码工具；贡献者仍对最终代码、验证和安全负责。
 9. **不提交生成物**：确认工作区不包含 `lib/` 或临时 Provider lab 数据。
 

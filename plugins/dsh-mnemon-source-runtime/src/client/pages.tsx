@@ -1,8 +1,9 @@
+import { css, sidebarCss, useT } from './presentation.ts'
 import type { JSX } from 'react'
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react'
 import { type RuntimeMemoryEntry, type RuntimeMemoryImportance, type RuntimeMemorySnapshot, type RuntimeMemoryTarget } from '../contracts.ts'
 import type { RuntimePageClient } from './api.ts'
-import { type MnemonKey, appearanceClass, memorySidebarStyles as sidebarCss, memoryPageStyles as css, useT, useLocale, humanBytes, message, parseBranchesInput, PageHeader, ProgressiveFooter, SidebarModal } from 'dsh-mnemon/client'
+import { type MnemonKey, appearanceClass, useLocale, humanBytes, message, parseBranchesInput, PageHeader, ProgressiveFooter, SidebarModal } from 'dsh-mnemon/client'
 
 export function RuntimePage(props: { client: RuntimePageClient; revision: number; writeEnabled: boolean; onMutate: () => void }): JSX.Element {
   const t = useT()

@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { dirname, relative, resolve as resolvePath } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { UserConfig } from 'tsdown'
+import type { UserConfig, TsdownPlugin } from 'tsdown'
 import { transform } from 'lightningcss'
 
 const PLUGIN_ID = 'dsh-mnemon'
@@ -45,17 +45,28 @@ const client: UserConfig = {
   clean: false,
   deps: {
     neverBundle: CLIENT_EXTERNALS,
-    onlyBundle: [],
+    alwaysBundle: [/^dsh-mnemon-source-[^/]+\/presentation\//],
   },
   define: {
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production'),
   },
-  plugins: [{
+  plugins: [clientCssPlugin()],
+  outputOptions: {
+    banner: `window.__ModuleLoader__.load({ id: ${JSON.stringify(PLUGIN_ID)}, factory: (require) => {`,
+    footer: 'return module.exports; } });',
+    intro: 'var module = { exports: {} }; var exports = module.exports;',
+  },
+}
+
+export function clientCssPlugin(injectStyles = true): TsdownPlugin {
+  return {
     name: 'dsh-mnemon-css-modules-inline',
     resolveId(source: string, importer: string | undefined) {
       if (source === 'dsh-mnemon/client') return resolvePath(PROJECT_ROOT, 'src/client/extension-sdk.ts')
       if (!source.endsWith('.module.css')) return null
-      const absolute = importer === undefined ? source : resolveAssetPath(source, importer)
+      const absolute = source.startsWith('dsh-mnemon-source-')
+        ? fileURLToPath(import.meta.resolve(source))
+        : importer === undefined ? source : resolveAssetPath(source, importer)
       return CSS_VIRTUAL_PREFIX + absolute + CSS_VIRTUAL_SUFFIX
     },
     async load(virtualId: string) {
@@ -65,32 +76,26 @@ const client: UserConfig = {
       const source = await readFile(fileId)
       const filename = portableRelativePath(PROJECT_ROOT, fileId)
       const { code, exports: cssExports } = transform({
-        filename,
+        // Default Source assets share the established page-kit class namespace.
+        filename: presentationNamespace(filename),
         code: source,
         cssModules: { pattern: '[hash]_[local]' },
         minify: true,
       })
       const classMap = stableCssClassMap(cssExports)
-      const tagId = `${PLUGIN_ID}/${filename}`
+      const tagId = filename.match(/dsh-mnemon-source-[^/]+\/presentation\/[^/]+$/)?.[0] ?? `${PLUGIN_ID}/${filename}`
       return [
         `const css = ${JSON.stringify(code.toString())};`,
         `const tagId = ${JSON.stringify(tagId)};`,
-        'if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {',
-        '  const tag = document.createElement("style");',
-        `  tag.dataset.plugin = ${JSON.stringify(PLUGIN_ID)};`,
-        '  tag.dataset.pluginCss = tagId;',
-        '  tag.textContent = css;',
-        '  document.head.appendChild(tag);',
+        `if (${injectStyles} && typeof document !== "undefined") {`,
+        '  let tag = document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]");',
+        '  if (!tag) { tag = document.createElement("style"); tag.dataset.pluginCss = tagId; document.head.appendChild(tag); }',
+        '  if (tag.textContent !== css) tag.textContent = css;',
         '}',
         `export default ${JSON.stringify(classMap)};`,
       ].join('\n')
     },
-  }],
-  outputOptions: {
-    banner: `window.__ModuleLoader__.load({ id: ${JSON.stringify(PLUGIN_ID)}, factory: (require) => {`,
-    footer: 'return module.exports; } });',
-    intro: 'var module = { exports: {} }; var exports = module.exports;',
-  },
+  }
 }
 
 function resolveAssetPath(source: string, importer: string): string {
@@ -99,6 +104,12 @@ function resolveAssetPath(source: string, importer: string): string {
 
 export function portableRelativePath(root: string, path: string): string {
   return relative(root, path).replaceAll('\\', '/')
+}
+
+export function presentationNamespace(filename: string): string {
+  if (/dsh-mnemon-source-[^/]+\/presentation\/page\.module\.css$/.test(filename)) return 'src/client/MnemonView.module.css'
+  if (/dsh-mnemon-source-[^/]+\/presentation\/sidebar\.module\.css$/.test(filename)) return 'src/client/MnemonSidebarView.module.css'
+  return filename
 }
 
 export function stableCssClassMap(cssExports: Record<string, { name: string }> | void): Record<string, string> {

@@ -42,6 +42,12 @@ for (const directory of [root, resolve(root, 'plugins/dsh-mnemon-source-memory-s
   for (const [subpath, descriptor] of Object.entries(manifest.exports)) {
     if (excluded.has(subpath)) continue
     const label = manifest.name + (subpath === '.' ? '' : subpath.slice(1))
+    if (subpath.startsWith('./presentation/') && typeof descriptor === 'string') {
+      const asset = readFileSync(resolve(directory, descriptor), 'utf8')
+      if (subpath.endsWith('.json')) JSON.parse(asset)
+      else if (!subpath.endsWith('.module.css') || !asset.trim()) throw new Error(`invalid presentation asset ${label}`)
+      continue
+    }
     if (typeof descriptor !== 'object' || descriptor === null || typeof descriptor.default !== 'string' || typeof descriptor.types !== 'string') {
       throw new Error(`public export ${label} must declare default and types paths`)
     }

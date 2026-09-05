@@ -88,6 +88,8 @@ sequenceDiagram
 
 ## Lifecycle and failures
 
+Host `MemoryExecutions` pairs each Core turn with its runtime binding. Agent lifecycles and background coordinators use the same owner: concurrent maintenance shares one View, and a foreground handoff waits for child/tool cleanup before resolving the current runtime. The lifecycle decides whether to cancel idle review; the owner does not cancel unrelated authorized writes or grant new authority.
+
 Candidate composition is validated before publication. A rejected additional candidate does not silently replace the Serving generation. Explicit removal of a required contribution retires that generation and prevents new turns from acquiring it. Existing turns and in-flight operations retain leases until they finish; then the old Source runtime and private resources drain.
 
 Each turn pins one immutable View. Writes yield receipts; later turns see new revisions. Concurrent root/child work cannot substitute another turn's grant. A Source/Provider failure remains scoped and observable; partial, failed, cancelled and committed results are not conflated. Disabling participation does not delete data.
@@ -95,6 +97,8 @@ Each turn pins one immutable View. Writes yield receipts; later turns see new re
 A child captures its delegated View and generation at dispatch, retaining both until disposal even if the parent completes or the Serving generation changes. Each child execution has its own turn identity and retrieval budget; it never falls back to the parent's latest View. Wake is appended after shared context as a `dsh-mnemon` plugin message, without reinjecting or interpolating other plugins' context.
 
 ## WebUI and management
+
+Default Sources own their bilingual copy and layout assets under `presentation/`. Their Clients load those assets themselves; the Starter also composes them through public package paths to retain the existing optional page-kit exports. The workbench owns navigation, containers and theme, not Source-specific selectors. This is default-product presentation, not a Core requirement or a new UI framework.
 
 Each Source owns its optional `./client` DSH module, pages, management operations and tests. It registers through the public Source-page SDK into the workspace's `mnemon.source.page` Slot. DSH still owns Client lifecycle and React rendering.
 

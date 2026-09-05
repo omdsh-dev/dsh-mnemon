@@ -1,0 +1,78 @@
+.runtimeComposer { border: 1px solid var(--mn-line); border-radius: 12px; background: var(--mn-layer-1); }
+.runtimeComposer { margin-bottom: 13px; padding: 15px; background: linear-gradient(135deg, color-mix(in srgb, var(--mn-accent) 5%, var(--mn-layer-1)), var(--mn-layer-1) 55%); }
+.runtimeComposerHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 11px; }
+.runtimeComposerHeading h3 { margin: 0 0 2px; font-size: 14px; }
+.runtimeComposerHeading p { margin: 0; color: var(--mn-muted); font-size: 10px; }
+.runtimeComposerHeading > span { flex: 0 0 auto; padding: 4px 8px; border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 9%, transparent); font: 650 9px var(--mn-code); }
+.runtimeComposer > textarea,
+.runtimeEntry textarea { width: 100%; resize: vertical; border: 1px solid var(--mn-line); border-radius: 9px; outline: 0; padding: 10px 11px; color: var(--mn-text); background: var(--mn-input); line-height: 1.6; }
+.runtimeComposer > textarea:focus,
+.runtimeEntry textarea:focus { border-color: var(--mn-accent); }
+.runtimeComposerActions { display: flex; align-items: flex-end; justify-content: flex-end; gap: 9px; margin-top: 10px; }
+.runtimeComposerActions label { display: grid; gap: 4px; color: var(--mn-faint); font-size: 9px; }
+.runtimeComposerActions select,
+.runtimeEntry select { min-width: 135px; height: 34px; border: 1px solid var(--mn-line); border-radius: 8px; outline: 0; padding: 0 8px; background: var(--mn-input); }
+.runtimeReadOnly { margin-bottom: 13px; padding: 9px 12px; border: 1px solid color-mix(in srgb, var(--mn-success) 28%, var(--mn-line)); border-radius: 9px; color: var(--mn-success); background: color-mix(in srgb, var(--mn-success) 6%, var(--mn-layer-1)); font-size: 11px; }
+.runtimeReadOnly { color: var(--mn-muted); border-color: var(--mn-line); background: var(--mn-layer-1); }
+.runtimeSummaryGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+.runtimeSummaryCard { min-width: 0; border: 1px solid var(--mn-line); border-radius: 11px; background: var(--mn-layer-1); }
+.runtimeBrowser { overflow: hidden; border: 1px solid var(--mn-line); border-radius: 11px; background: var(--mn-layer-1); }
+.runtimeBrowserToolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border-bottom: 1px solid var(--mn-line); }
+.runtimeScopeFilter { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; }
+.runtimeScopeFilter button { min-height: 32px; border: 1px solid transparent; border-radius: 7px; padding: 0 10px; color: var(--mn-muted); background: transparent; cursor: pointer; }
+.runtimeScopeFilter button:hover { background: var(--mn-hover); }
+.runtimeScopeFilter button[data-active] { border-color: var(--mn-line); color: var(--mn-text); background: var(--mn-layer-2); }
+.runtimeScopeFilter b { margin-left: 4px; color: var(--mn-faint); font: 600 10px var(--mn-code); }
+.runtimeFilterQuery { display: flex; width: min(320px, 42%); min-width: 210px; align-items: center; gap: 7px; border: 1px solid var(--mn-line); border-radius: 8px; padding: 0 9px; background: var(--mn-input); }
+.runtimeFilterQuery > span { color: var(--mn-faint); }
+.runtimeFilterQuery input { width: 100%; min-width: 0; height: 32px; border: 0; outline: 0; color: var(--mn-text); background: transparent; }
+.runtimeUnifiedList { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 10px; background: color-mix(in srgb, var(--mn-layer-2) 30%, var(--mn-layer-1)); }
+.runtimeEntryBadges { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.runtimeEntryMeta .runtimeEntryTarget { color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 8%, var(--mn-layer-2)); font-family: var(--mn-code); }
+.runtimeEntryMeta .runtimeEntryBranch { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 8%, var(--mn-layer-2)); font-family: var(--mn-code); }
+.runtimeComposerBranch { display: grid; gap: 4px; color: var(--mn-faint); font-size: 9px; }
+.runtimeComposerBranch input { width: 100%; border: 1px solid var(--mn-line); border-radius: 8px; outline: 0; padding: 7px 9px; color: var(--mn-text); background: var(--mn-input); font-size: 12px; }
+.runtimeComposerBranch input:focus { border-color: var(--mn-accent); }
+.bodyEditBranch { display: grid; gap: 4px; color: var(--mn-faint); font-size: 9px; }
+.bodyEditBranch input { width: 100%; border: 1px solid var(--mn-line); border-radius: 8px; outline: 0; padding: 7px 9px; color: var(--mn-text); background: var(--mn-input); font-size: 12px; }
+.bodyEditBranch input:focus { border-color: var(--mn-accent); }
+.bodyEditBranch small { color: var(--mn-faint); font-size: 9px; }
+.runtimeTargetHeader { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 14px 15px 9px; }
+.runtimeTargetHeader > div { display: grid; gap: 1px; }
+.runtimeTargetHeader span { color: var(--mn-faint); font: 650 9px var(--mn-code); letter-spacing: .08em; }
+.runtimeTargetHeader h3 { margin: 0; font-size: 15px; }
+.runtimeTargetHeader > strong { display: grid; min-width: 28px; height: 28px; place-items: center; border-radius: 8px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 9%, transparent); font: 650 11px var(--mn-code); }
+.capacityLine { display: flex; align-items: center; gap: 9px; padding: 0 15px; }
+.capacityLine > div { height: 4px; flex: 1; overflow: hidden; border-radius: 999px; background: var(--mn-layer-2); }
+.capacityLine i { display: block; height: 100%; border-radius: inherit; background: var(--mn-success); transition: width .25s ease; }
+.capacityLine > span { min-width: 88px; color: var(--mn-faint); font: 9px var(--mn-code); text-align: right; }
+.runtimeTargetDescription { min-height: 31px; margin: 8px 15px 12px; color: var(--mn-muted); font-size: 10px; }
+.runtimeEntry { --mn-provider-color: var(--mn-accent); position: relative; padding: 11px 12px 10px; border: 1px solid var(--mn-line); border-radius: 8px; background: linear-gradient(90deg, color-mix(in srgb, var(--mn-provider-color) 5%, var(--mn-layer-1)), var(--mn-layer-1) 34%); box-shadow: inset 3px 0 0 color-mix(in srgb, var(--mn-provider-color) 68%, transparent); }
+.runtimeEntry[data-importance="critical"] { --mn-provider-color: var(--mn-priority); }
+.runtimeEntry[data-importance="low"] { --mn-provider-color: var(--mn-faint); }
+.runtimeEntryMeta { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.runtimeEntryMeta > span,
+.runtimeEntryBadges > span { padding: 2px 6px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-layer-2); font-size: 9px; }
+.runtimeEntry[data-importance="critical"] .runtimeEntryMeta > span,
+.runtimeEntry[data-importance="critical"] .runtimeEntryBadges > span:not(.runtimeEntryTarget) { color: var(--mn-priority); background: color-mix(in srgb, var(--mn-priority) 9%, transparent); }
+.runtimeEntryMeta time { overflow: hidden; color: var(--mn-faint); font: 8px var(--mn-code); text-overflow: ellipsis; white-space: nowrap; }
+.runtimeEntry > p { min-height: 42px; margin: 9px 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; line-height: 1.6; }
+.runtimeEntry > select { margin-top: 7px; }
+.runtimeEntry footer { display: flex; min-height: 30px; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--mn-line); }
+.runtimeEntry footer > span { margin-right: auto; color: var(--mn-danger); font-size: 10px; }
+.runtimeEmpty { display: grid; min-height: 126px; place-items: center; align-content: center; gap: 5px; color: var(--mn-faint); text-align: center; }
+.runtimeEmpty > span { font: 24px var(--mn-code); opacity: .65; }
+.runtimeEmpty p { margin: 0; font-size: 10px; }
+
+@media (max-width: 1000px) {
+  .runtimeSummaryGrid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 760px) {
+  .runtimeComposerHeading,
+.runtimeComposerActions { align-items: stretch; flex-direction: column; }
+  .runtimeComposerActions select,
+.runtimeComposerActions button { width: 100%; }
+  .runtimeBrowserToolbar { align-items: stretch; flex-direction: column; }
+  .runtimeFilterQuery { width: 100%; min-width: 0; }
+}

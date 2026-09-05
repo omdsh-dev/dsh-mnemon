@@ -20,11 +20,15 @@
     "./contracts": {
       "types": "./lib/contracts.d.ts",
       "default": "./lib/contracts.js"
-    }
+    },
+    "./presentation/locales.json": "./presentation/locales.json",
+    "./presentation/page.module.css": "./presentation/page.module.css",
+    "./presentation/sidebar.module.css": "./presentation/sidebar.module.css"
   },
   "files": [
     "lib",
-    "README.md"
+    "README.md",
+    "presentation"
   ],
   "dsh": {
     "client": {
@@ -63,7 +67,8 @@
     "react-dom": "^18.2.0",
     "tsdown": "^0.22.0",
     "typescript": "^5.9.0",
-    "vitest": "^3.2.0"
+    "vitest": "^3.2.0",
+    "lightningcss": "^1.33.0"
   },
   "peerDependenciesMeta": {
     "react": {

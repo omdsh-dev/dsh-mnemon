@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { resolveConfig } from '../src/host/config.ts'
 import type { HostAgent, HostContextShape, HostSessionEvent } from '../src/host/dsh.ts'
 import { MnemonLifecycle } from '../src/host/lifecycle.ts'
+import { MemoryExecutions } from '../src/host/memory-executions.ts'
 import type { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
 
 describe('Mnemon lifecycle with the real DSH SystemPrompt', () => {
@@ -47,10 +48,11 @@ describe('Mnemon lifecycle with the real DSH SystemPrompt', () => {
       })),
       endTurn: vi.fn((turnId: string) => pinnedTurns.delete(turnId)),
     }
-    const runtimeSource = {
+    const binding = {
       forAgent: vi.fn(() => ({ config, composableTurns, memoryComposition: { generation: () => ({ sourceInstances: () => [] }) } })),
       bindAgentRuntime: vi.fn(() => vi.fn()),
     }
+    const runtimeSource = { ...binding, executions: new MemoryExecutions(binding as never) }
     const coordinator = { snapshot: vi.fn(() => ({ recalls: 0, writes: 0, answers: 0, reviews: 0, failures: 0 })) } as unknown as MnemonSubagentCoordinator
     const host = {
       agents: { get: (id: string) => id === agent.id ? agent : undefined, roots: () => [agent] },

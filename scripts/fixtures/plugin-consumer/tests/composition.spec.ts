@@ -74,6 +74,12 @@ describe('external consumer of packed artifacts', () => {
       for (const subpath of Object.keys(manifest.exports)) {
         if (subpath === './client' || subpath === './package.json') continue
         const specifier = name + (subpath === '.' ? '' : subpath.slice(1))
+        if (subpath.startsWith('./presentation/')) {
+          const asset = readFileSync(require.resolve(specifier), 'utf8')
+          if (subpath.endsWith('.json')) expect(Object.keys(JSON.parse(asset)).sort()).toEqual(['en', 'zh'])
+          else expect(asset.trim()).not.toBe('')
+          continue
+        }
         expect(Object.keys(await import(specifier)).length, specifier).toBeGreaterThan(0)
       }
     }

@@ -820,7 +820,6 @@ export class MnemonSubagentCoordinator {
   private runtimeQueue: Promise<unknown> = Promise.resolve()
   private documentQueue: Promise<unknown> = Promise.resolve()
   private readonly observedReads = new WeakMap<ComposableMemoryTurn, Set<string>>()
-  private readonly workflows = new Map<string, { users: number; ready: Promise<unknown>; release: () => void }>()
 
   constructor(
     private readonly subagents: HostSubagentsService,
@@ -862,10 +861,10 @@ export class MnemonSubagentCoordinator {
     signal.throwIfAborted()
     const graph = this.runtimeSource.forAgent(parent)
     if (required && graph.composableTurns.activeTurn(parent.id) === undefined) throw new Error('Recall requires the View pinned to the current turn')
-    const release = await this.acquireWorkflow(parent, graph, routeId)
+    const execution = await this.runtimeSource.executions.workflow(parent, routeId, signal)
     try {
-      const turn = this.turnAuthority(parent, true)!.context
-      const evidence = await graph.source(typeId, turn.scope).forTurn(turn).route(routeId, input, signal)
+      const turn = execution.context
+      const evidence = await execution.graph.source(typeId, turn.scope).forTurn(turn).route(routeId, input, execution.signal)
       if (typeId === 'memory-spaces' && ['recall', 'related'].includes(routeId)) {
         const observed = this.observedReads.get(turn) ?? new Set<string>()
         if (!observed.has(evidence.id)) { this.recordRecall(); observed.add(evidence.id) }
@@ -873,7 +872,7 @@ export class MnemonSubagentCoordinator {
       }
       return evidence
     } catch (error) { this.counters.failures += 1; throw error }
-    finally { release() }
+    finally { execution.release() }
   }
 
   /** Bind a model read to the Source state pinned by its own executing turn. */
@@ -1402,12 +1401,15 @@ ${runtimeSnapshotContext('user', plan.entries)}`
     let failure: unknown
     let disposeResultTool: (() => unknown) | undefined
     let disposeResultObserver: (() => unknown) | undefined
-    const graph = this.runtimeSource.forAgent(parent)
     let releaseWorkflow: (() => void) | undefined
     try {
       // A maintenance/task run has its own bounded View only when no parent
       // turn is open. Ordinary children reuse the parent's immutable View.
-      if (tools.length > 0) releaseWorkflow = await this.acquireWorkflow(parent, graph, operation)
+      if (tools.length > 0) {
+        const execution = await this.runtimeSource.executions.workflow(parent, operation, signal)
+        releaseWorkflow = execution.release
+        signal = execution.signal
+      }
       const observer = this.resultRuntime.on('tools/result', ((execution: ToolExecution, result: HostToolResultObservation) => {
         if (execution.token !== undefined) {
           const entries = stagedReceipts.get(execution.token)
@@ -1541,35 +1543,6 @@ Completion protocol: call \`${resultToolName}\` exactly once with the final resu
       releaseWorkflow?.()
       if (cleanupFailure !== undefined) throw cleanupFailure
     }
-  }
-
-  /** Concurrent maintenance children share one owned View until the last exits. */
-  private async acquireWorkflow(parent: HostAgent, graph: ReturnType<AgentRuntimeSource['forAgent']>, operation: string): Promise<() => void> {
-    const scope = agentScope(parent, graph.config)
-    const key = scope.agentId!
-    let owned = this.workflows.get(key)
-    if (owned === undefined) {
-      if (graph.composableTurns.activeTurn(key) !== undefined) return () => {}
-      const turnId = 'workflow:' + randomUUID()
-      const releaseRuntime = this.runtimeSource.bindAgentRuntime(parent.id, graph)
-      owned = { users: 0, ready: graph.composableTurns.beginTurn(turnId, scope, 'agent.' + operation), release: () => {
-        graph.composableTurns.endTurn(turnId)
-        releaseRuntime()
-      } }
-      this.workflows.set(key, owned)
-    }
-    owned.users += 1
-    const current = owned
-    let released = false
-    const release = () => {
-      if (released) return
-      released = true
-      if (--current.users > 0) return
-      if (this.workflows.get(key) === current) this.workflows.delete(key)
-      current.release()
-    }
-    try { await current.ready } catch (error) { release(); throw error }
-    return release
   }
 
   private provider(preferred: 'spawn' | 'fork'): string {

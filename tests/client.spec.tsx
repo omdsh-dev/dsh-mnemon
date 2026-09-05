@@ -4,11 +4,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClientConnectionHandle } from "../src/host/dsh.ts"
 import type { ClientSettingsScope, ClientSettingsSnapshot } from "../src/host/dsh.ts"
 import type { Config } from "../src/host/config.ts"
-import { ComposedMnemonView as MnemonView } from './fixtures/client.tsx'
+import { ComposedMnemonWorkbench as MnemonWorkbench } from './fixtures/client.tsx'
 import { translateEn } from '../src/client/locales.ts'
 import { TEST_PROVIDERS as MEMORY_PROVIDER_CATALOG } from './fixtures/providers.ts'
 
-describe('MnemonView', () => {
+describe('MnemonWorkbench', () => {
   afterEach(cleanup)
   async function selectWorkspaceTab(name: string): Promise<void> {
     const navigation = await screen.findByRole('tablist', { name: 'Mnemon 页面' })
@@ -360,7 +360,7 @@ describe('MnemonView', () => {
     for (let mask = 0; mask < 8; mask += 1) {
       const layerSwitches = Object.fromEntries(ids.map((id, index) => [id, (mask & (1 << index)) !== 0])) as Record<typeof ids[number], boolean>
       const { connection, call } = createConnection({ layerSwitches })
-      render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface={surface} />)
+      render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" surface={surface} />)
       await screen.findByText('已连接')
       const navigation = screen.getByRole('tablist', { name: 'Mnemon 页面' })
 
@@ -381,7 +381,7 @@ describe('MnemonView', () => {
 
   it('shows the live graph, sidebar pages, and memory write dialog by default', async () => {
     const { connection } = createConnection()
-    const { container } = render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    const { container } = render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
     await selectWorkspaceTab('记忆体')
     expect(screen.getByRole('heading', { name: '记忆体' })).toBeTruthy()
@@ -487,7 +487,7 @@ describe('MnemonView', () => {
 
   it('keeps a Native Provider failure out of the dsh-mnemon engine summary', async () => {
     const { connection } = createConnection({ nativeUnhealthy: true })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
 
     const engineStatus = await screen.findByRole('region', { name: 'Mnemon 运行状态' })
     expect(within(engineStatus).getByText('dsh-mnemon 0.1.2')).toBeTruthy()
@@ -502,7 +502,7 @@ describe('MnemonView', () => {
 
   it('activates an additional memory space through the narrow control route without crashing the live graph', async () => {
     const { connection, call } = createConnection({ withInactiveBody: true })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
 
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
     await selectWorkspaceTab('记忆体')
@@ -521,7 +521,7 @@ describe('MnemonView', () => {
 
   it('keeps only activation controls writable when remote management is not authorized', async () => {
     const { connection, call } = createConnection({ isLoopback: false, withInactiveBody: true })
-    render(<MnemonView connection={connection} settingsScope={readOnlySettingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={readOnlySettingsScope} sessionId="session-1" />)
 
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
     fireEvent.click(await screen.findByRole('button', { name: '检查版本' }))
@@ -552,7 +552,7 @@ describe('MnemonView', () => {
 
   it('enables memory management controls from a writable authenticated Host snapshot', async () => {
     const { connection } = createConnection({ isLoopback: false, withInactiveBody: true })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
 
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
     fireEvent.click(await screen.findByRole('tab', { name: '记忆体' }))
@@ -568,7 +568,7 @@ describe('MnemonView', () => {
 
   it('keeps overview, recall, content, and entities aligned with each provider read contract', async () => {
     const { connection } = createConnection({ withProviderSources: true })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
 
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
     fireEvent.click(await screen.findByRole('tab', { name: '记忆体' }))
@@ -615,7 +615,7 @@ describe('MnemonView', () => {
 
   it('checks both product versions and only offers a safe supported update', async () => {
     const { connection, call } = createConnection()
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
 
     await waitFor(() => expect(screen.getByText('dsh-mnemon 0.1.2')).toBeTruthy())
     fireEvent.click(await screen.findByRole('button', { name: '检查版本' }))
@@ -639,7 +639,7 @@ describe('MnemonView', () => {
 
   it('keeps a version check dismissible and moves focus into ready content', async () => {
     const { connection, resolveVersions } = createConnection({ versionsDeferred: true })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
 
     await waitFor(() => expect(screen.getByText('dsh-mnemon 0.1.2')).toBeTruthy())
     const trigger = screen.getByRole('button', { name: '检查版本' })
@@ -671,7 +671,7 @@ describe('MnemonView', () => {
   it.each(['sidebar', 'builtin'] as const)('shares Source navigation, dialogs, filters, and the same skin in %s placement', async surface => {
     const { connection, call } = createConnection({ withInactiveBody: true })
     const onClose = vi.fn()
-    const { container } = render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface={surface} {...(surface === 'sidebar' ? { onClose } : {})} />)
+    const { container } = render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" surface={surface} {...(surface === 'sidebar' ? { onClose } : {})} />)
 
     expect(screen.queryByLabelText('存储位置模式：自定义') !== null).toBe(surface === 'sidebar')
     expect(screen.queryByLabelText('存储位置模式：—')).toBeNull()
@@ -870,7 +870,7 @@ describe('MnemonView', () => {
 
   it('shows a branch badge on scoped runtime entries and a branch input in the add dialog', async () => {
     const { connection } = createConnection({ runtimeBranch: true })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
     await screen.findByText('已连接')
     const navigation = screen.getByRole('tablist', { name: 'Mnemon 页面' })
     fireEvent.click(within(navigation).getByRole('tab', { name: '运行时' }))
@@ -883,7 +883,7 @@ describe('MnemonView', () => {
 
   it('keeps DSH activation independent from the protected Mnemon default Store', async () => {
     const { connection } = createConnection()
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
 
     fireEvent.click(await screen.findByRole('tab', { name: '记忆体' }))
     await waitFor(() => expect(screen.getByText('Mnemon 默认')).toBeTruthy())
@@ -900,7 +900,7 @@ describe('MnemonView', () => {
 
   it('keeps the Memory Space directory interactive while the live graph is still pending', async () => {
     const { connection } = createConnection({ graphPending: true })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
 
     fireEvent.click(await screen.findByRole('tab', { name: '记忆体' }))
     expect(await screen.findByText('项目记忆体')).toBeTruthy()
@@ -911,7 +911,7 @@ describe('MnemonView', () => {
 
   it('uses the card status signal as the only per-space reconnect spinner', async () => {
     const { connection, call } = createConnection({ reconnectPending: true })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
 
     fireEvent.click(await screen.findByRole('tab', { name: '记忆体' }))
     const title = await screen.findByText('项目记忆体')
@@ -928,7 +928,7 @@ describe('MnemonView', () => {
   it('runs one full entry sync and keeps later card sync scoped to one Memory Space', async () => {
     const interval = vi.spyOn(window, 'setInterval')
     const { connection, call } = createConnection()
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
 
     fireEvent.click(await screen.findByRole('tab', { name: '记忆体' }))
     const title = await screen.findByText('项目记忆体')
@@ -954,7 +954,7 @@ describe('MnemonView', () => {
 
   it('shows one page-level spinner while deep status checks continue in the background', async () => {
     const { connection } = createConnection({ statusPending: true })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
 
     fireEvent.click(await screen.findByRole('tab', { name: '状态' }))
     expect(await screen.findByRole('heading', { name: '系统状态' })).toBeTruthy()
@@ -965,7 +965,7 @@ describe('MnemonView', () => {
 
   it('edits an existing Memory Space name and description', async () => {
     const { connection, call } = createConnection()
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
 
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
     await selectWorkspaceTab('记忆体')
@@ -983,7 +983,7 @@ describe('MnemonView', () => {
 
   it.each(['sidebar', 'builtin'] as const)('generates active Memory Space metadata with the %s task context', async surface => {
     const { connection, call } = createConnection({ withInactiveBody: true })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface={surface} />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" surface={surface} />)
 
     fireEvent.click(await screen.findByRole('tab', { name: '记忆体' }))
     await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
@@ -1004,7 +1004,7 @@ describe('MnemonView', () => {
 
   it('uses an available lifecycle Agent when the standalone Memory UI has no selected session', async () => {
     const { connection, call } = createConnection()
-    render(<MnemonView connection={connection} settingsScope={settingsScope} />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} />)
 
     fireEvent.click(await screen.findByRole('tab', { name: '记忆体' }))
     await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
@@ -1022,7 +1022,7 @@ describe('MnemonView', () => {
 
   it('opens metadata maintenance from the status directory while detailed Memory data is pending', async () => {
     const { connection } = createConnection({ directoryPending: true })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} />)
 
     fireEvent.click(await screen.findByRole('tab', { name: '记忆体' }))
     const action = await screen.findByRole('button', { name: 'AI 维护元信息' })
@@ -1035,7 +1035,7 @@ describe('MnemonView', () => {
 
   it('keeps metadata maintenance runnable from the selected workspace when the conversation points elsewhere', async () => {
     const { connection, call } = createConnection({ workspaceMismatch: true })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" workspaceId="workspace-2" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" workspaceId="workspace-2" />)
 
     fireEvent.click(await screen.findByRole('tab', { name: '记忆体' }))
     await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
@@ -1053,7 +1053,7 @@ describe('MnemonView', () => {
 
   it.each(['sidebar', 'builtin'] as const)('isolates concurrent metadata tasks and partial failures in %s', async surface => {
     const { connection, call } = createConnection({ withSecondActiveBody: true, metadataFailureBodyId: 'preferences' })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface={surface} />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" surface={surface} />)
 
     fireEvent.click(await screen.findByRole('tab', { name: '记忆体' }))
     await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
@@ -1076,7 +1076,7 @@ describe('MnemonView', () => {
 
   it('adds OpenViking through the existing Memory Space creation flow', async () => {
     const { connection, call } = createConnection({ withInactiveBody: true })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
 
     fireEvent.click(await screen.findByRole('tab', { name: '记忆体' }))
     await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
@@ -1108,7 +1108,7 @@ describe('MnemonView', () => {
     const { connection, call } = createConnection({ withInactiveBody: true })
     const setPath = vi.fn(async () => {})
     const strategySettingsScope = { ...settingsScope, setPath }
-    render(<MnemonView connection={connection} settingsScope={strategySettingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={strategySettingsScope} sessionId="session-1" />)
 
     fireEvent.click(await screen.findByRole('tab', { name: '记忆体' }))
     await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
@@ -1160,7 +1160,7 @@ describe('MnemonView', () => {
 
   it('shows every third-party engine under the existing Memory Space flow', async () => {
     const { connection, call } = createConnection({ withInactiveBody: true })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
 
     fireEvent.click(await screen.findByRole('tab', { name: '记忆体' }))
     await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
@@ -1184,7 +1184,7 @@ describe('MnemonView', () => {
 
   it('enforces the local-only rule while keeping local third-party engines eligible', async () => {
     const { connection } = createConnection({ withInactiveBody: true })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
 
     fireEvent.click(await screen.findByRole('tab', { name: '记忆体' }))
     await waitFor(() => expect(screen.getByRole('region', { name: '记忆体目录' })).toBeTruthy())
@@ -1201,7 +1201,7 @@ describe('MnemonView', () => {
 
   it('shows the persisted provider decision on the Memory Space card', async () => {
     const { connection } = createConnection({ withPlacement: true })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
 
     fireEvent.click(await screen.findByRole('tab', { name: '记忆体' }))
     await waitFor(() => expect(screen.getByText('Agent 智能选择')).toBeTruthy())
@@ -1215,7 +1215,7 @@ describe('MnemonView', () => {
     const onAlign = vi.fn()
     const workspaceSettingsSnapshot = { ...settingsSnapshot, value: { storageScope: 'workspace' as const } }
     const workspaceSettingsScope = { ...settingsScope, getSnapshot: () => workspaceSettingsSnapshot }
-    render(<MnemonView
+    render(<MnemonWorkbench
       connection={connection}
       settingsScope={workspaceSettingsScope}
       sessionId="session-1"
@@ -1254,7 +1254,7 @@ describe('MnemonView', () => {
       return call(channel, endpoint, payload)
     })
     const delayedConnection = { rpc: { call: delayedCall } } as unknown as ClientConnectionHandle
-    const view = (workspaceId: string) => <MnemonView connection={delayedConnection} settingsScope={settingsScope} surface={surface} {...(surface === 'sidebar' ? { sessionId: 'session-1', workspaceId } : { sessionId: workspaceId === 'workspace-1' ? 'session-1' : 'session-2' })} />
+    const view = (workspaceId: string) => <MnemonWorkbench connection={delayedConnection} settingsScope={settingsScope} surface={surface} {...(surface === 'sidebar' ? { sessionId: 'session-1', workspaceId } : { sessionId: workspaceId === 'workspace-1' ? 'session-1' : 'session-2' })} />
     const { rerender } = render(view('workspace-1'))
 
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
@@ -1318,7 +1318,7 @@ describe('MnemonView', () => {
       subscribe: (listener: () => void) => { listeners.add(listener); return () => listeners.delete(listener) },
       set: async () => {}, unset: async () => {}, setPath: async () => {}, unsetPath: async () => {},
     } satisfies ClientSettingsScope<Config>
-    render(<MnemonView connection={connection} settingsScope={liveSettingsScope} sessionId="session-1" surface={surface} />)
+    render(<MnemonWorkbench connection={connection} settingsScope={liveSettingsScope} sessionId="session-1" surface={surface} />)
 
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
     fireEvent.click(await screen.findByRole('tab', { name: '运行时' }))
@@ -1345,7 +1345,7 @@ describe('MnemonView', () => {
 
   it('clamps long node content in the graph inspector and opens a full-text preview', async () => {
     const { connection } = createConnection({ longContent: true })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
 
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
     await selectWorkspaceTab('记忆体')
@@ -1369,7 +1369,7 @@ describe('MnemonView', () => {
 
   it('resets the shared canvas scroll position when switching pages', async () => {
     const { connection } = createConnection()
-    render(<div data-testid="dsh-host-scrollport"><MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" /></div>)
+    render(<div data-testid="dsh-host-scrollport"><MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" /></div>)
 
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
     const canvas = screen.getByTestId('mnemon-canvas')
@@ -1387,7 +1387,7 @@ describe('MnemonView', () => {
 
   it('progressively renders long content lists instead of mounting every card', async () => {
     const { connection } = createConnection({ listCount: 60 })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
 
     await selectWorkspaceTab('内容')
@@ -1403,7 +1403,7 @@ describe('MnemonView', () => {
 
   it('progressively reveals large Sidebar collections and resets scoped readers', async () => {
     const { connection } = createConnection({ runtimeCount: 23, searchCount: 15, entityCount: 25, entityInsightCount: 15, listCount: 25, documentCount: 17 })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
 
     fireEvent.click(await screen.findByRole('tab', { name: '运行时' }))
@@ -1469,7 +1469,7 @@ describe('MnemonView', () => {
 
   it('requires dialog confirmation before forgetting a recalled memory', async () => {
     const { connection, call } = createConnection()
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
 
     await selectWorkspaceTab('检索')
@@ -1488,7 +1488,7 @@ describe('MnemonView', () => {
 
   it('keeps the newest related-memory response when requests finish out of order', async () => {
     const { connection, resolveRelated } = createConnection({ relatedDeferred: true })
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
 
     await selectWorkspaceTab('检索')
@@ -1507,7 +1507,7 @@ describe('MnemonView', () => {
 
   it.each(['sidebar', 'builtin'] as const)('shows an Agent answer using the %s task context', async surface => {
     const { connection, call } = createConnection()
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface={surface} />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" surface={surface} />)
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
 
     await selectWorkspaceTab('检索')
@@ -1527,7 +1527,7 @@ describe('MnemonView', () => {
 
   it.each(['sidebar', 'builtin'] as const)('creates and cold-archives a managed Document through the shared %s UI', async surface => {
     const { connection, call } = createConnection()
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface={surface} />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" surface={surface} />)
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
     await selectWorkspaceTab('档案')
     await waitFor(() => expect(screen.getByText('发布验证清单')).toBeTruthy())
@@ -1552,7 +1552,7 @@ describe('MnemonView', () => {
 
   it.each(['sidebar', 'builtin'] as const)('dispatches distillation with the %s task context', async surface => {
     const { connection, call } = createConnection()
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" surface={surface} />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" surface={surface} />)
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
 
     await openRememberDialog()
@@ -1587,7 +1587,7 @@ describe('MnemonView', () => {
       if (endpoint === 'graph') return { ok: true, value: { nodes: [], edges: [], generatedAt: '2026-08-13T03:00:00.000Z' } }
       return { ok: false, error: { code: 'unexpected', message: endpoint } }
     })
-    render(<MnemonView connection={{ rpc: { call } } as unknown as ClientConnectionHandle} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={{ rpc: { call } } as unknown as ClientConnectionHandle} settingsScope={settingsScope} sessionId="session-1" />)
 
     await selectWorkspaceTab('记忆体')
     await waitFor(() => expect(screen.getAllByRole('heading', { name: '还没有记忆体' })).toHaveLength(1))
@@ -1617,7 +1617,7 @@ describe('MnemonView', () => {
       if (endpoint === 'graph') return { ok: true, value: { nodes: [], edges: [], generatedAt: '2026-08-13T03:00:00.000Z' } }
       return { ok: false, error: { code: 'unexpected', message: endpoint } }
     })
-    render(<MnemonView connection={{ rpc: { call } } as unknown as ClientConnectionHandle} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={{ rpc: { call } } as unknown as ClientConnectionHandle} settingsScope={settingsScope} sessionId="session-1" />)
 
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
     await selectWorkspaceTab('记忆体')
@@ -1629,7 +1629,7 @@ describe('MnemonView', () => {
 
   it('renders all product copy in English with Memory Space terminology', async () => {
     const { connection } = createConnection()
-    render(<MnemonView connection={connection} settingsScope={settingsScope} sessionId="session-1" t={translateEn} locale="en" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" t={translateEn} locale="en" />)
 
     await waitFor(() => expect(screen.getByText('Connected')).toBeTruthy())
     const navigation = await screen.findByRole('tablist', { name: 'Mnemon pages' })

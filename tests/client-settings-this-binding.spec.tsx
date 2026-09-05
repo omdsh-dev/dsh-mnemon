@@ -14,7 +14,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClientConnectionHandle, ClientSettingsScope, ClientSettingsSnapshot, Config } from '../src/host/protocol.ts'
 import { MnemonSaveAction } from '../src/client/MnemonSaveAction.tsx'
-import { MnemonView } from '../src/client/MnemonView.tsx'
+import { MnemonWorkbench } from '../src/client/MnemonWorkbench.tsx'
 
 class ThisBoundSettingsScope implements ClientSettingsScope<Config> {
   private state: ClientSettingsSnapshot<Config>
@@ -44,8 +44,8 @@ const locale = { getSnapshot: () => 'en-US', subscribe: () => () => {} }
 describe('settings scope this-binding', () => {
   afterEach(cleanup)
 
-  it('renders MnemonView with a this-bound settings scope (real Host shape)', () => {
-    expect(() => render(<MnemonView connection={connection} settingsScope={new ThisBoundSettingsScope()} sessionId="session-1" />)).not.toThrow()
+  it('renders MnemonWorkbench with a this-bound settings scope (real Host shape)', () => {
+    expect(() => render(<MnemonWorkbench connection={connection} settingsScope={new ThisBoundSettingsScope()} sessionId="session-1" />)).not.toThrow()
   })
 
   it('renders MnemonSaveAction with a this-bound settings scope (real Host shape)', () => {

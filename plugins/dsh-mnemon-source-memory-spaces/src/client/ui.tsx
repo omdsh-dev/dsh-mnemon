@@ -1,9 +1,9 @@
+import { css, sidebarCss, useT } from './presentation.ts'
 import { useCallback, useEffect, useMemo, useState, type JSX, type ReactNode } from 'react'
 import type { MemoryJsonValue } from 'dsh-mnemon/contracts'
 import {
   createMemorySourcePageClient, installMemorySourceUI, MemorySourcePageFrame, translateEn, message, PageHeader,
-  memoryPageStyles as css, appearanceClass, memorySidebarStyles as sidebarCss, useT,
-  type MemorySourcePageProps, type MnemonSourceManagementClient, type MnemonTranslate,
+  appearanceClass, type MemorySourcePageProps, type MnemonSourceManagementClient, type MnemonTranslate,
 } from 'dsh-mnemon/client'
 import type { Insight, MemorySpacesStatus } from '../contracts.ts'
 import { OverviewPage, ExplorePage, EntitiesPage, RememberPage, ListPage, PersistenceStrategyDialog, type MemoryPlacementPageConfig } from './pages.tsx'

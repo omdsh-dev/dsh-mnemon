@@ -7,6 +7,8 @@ import { defineMemorySpaceProvider, type MemorySpaceProviderEntry, type MemorySp
 import { createMemorySpaceProviderPlugin } from './providers/plugin.ts'
 import { MemorySpacesConfig, resolveMemorySpacesConfig, type MemorySpacesConfig as SourceConfig } from './config.ts'
 
+export { resolveEmbedding, resolvePersistenceStrategy, resolveRecallQuality } from './config.ts'
+
 export const name = 'dsh-mnemon-source-memory-spaces'
 export const inject = ['mnemonMemory']
 

@@ -5,6 +5,12 @@ import { MnemonDialog, type MnemonDialogProps } from './MnemonDialog.tsx'
 import { appearanceClass } from './view-styles.ts'
 import sidebarCss from './MnemonSidebarView.module.css'
 import css from './MnemonView.module.css'
+import runtimeCss from 'dsh-mnemon-source-runtime/presentation/page.module.css'
+import runtimeSidebarCss from 'dsh-mnemon-source-runtime/presentation/sidebar.module.css'
+import documentsCss from 'dsh-mnemon-source-documents/presentation/page.module.css'
+import documentsSidebarCss from 'dsh-mnemon-source-documents/presentation/sidebar.module.css'
+import spacesCss from 'dsh-mnemon-source-memory-spaces/presentation/page.module.css'
+import spacesSidebarCss from 'dsh-mnemon-source-memory-spaces/presentation/sidebar.module.css'
 
 export const I18nContext = createContext<MnemonTranslate>(translateZh)
 
@@ -75,5 +81,7 @@ export function EmptyState(props: { glyph: string; title: string; children: stri
   )
 }
 
-export const memoryPageStyles: Readonly<Record<string, string>> = css
-export const memorySidebarStyles: Readonly<Record<string, string>> = sidebarCss
+// The default product combines Source assets through public package paths.
+// Existing page-kit consumers keep the same class map; Core does not load UI.
+export const memoryPageStyles: Readonly<Record<string, string>> = { ...css, ...runtimeCss, ...documentsCss, ...spacesCss }
+export const memorySidebarStyles: Readonly<Record<string, string>> = { ...sidebarCss, ...runtimeSidebarCss, ...documentsSidebarCss, ...spacesSidebarCss }

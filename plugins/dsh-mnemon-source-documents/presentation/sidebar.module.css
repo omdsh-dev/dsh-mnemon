@@ -1,0 +1,63 @@
+.shell .modal form[class*='documentEditor'] {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.shell .modal form[class*='documentEditor'] > header { display: none; }
+
+.shell [class*='documentEditor'] label {
+  gap: 5px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.shell [class*='documentEditor'] input,
+.shell [class*='documentEditor'] textarea {
+  min-height: 34px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  padding: 7px 10px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-specific-input-major);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.shell [class*='documentList'] > button p,
+.shell [class*='documentDetail'] > header p,
+.shell [class*='documentArchiveReceipt'] p { font-size: 12px; }
+
+.shell [class*='documentSummary'] article > span,
+.shell [class*='documentSummary'] article > small,
+.shell [class*='documentList'] > header,
+.shell [class*='documentList'] > button time,
+.shell [class*='documentList'] > button footer,
+.shell [class*='documentDetail'] dt,
+.shell [class*='documentSources'] > span { font-size: 11px; }
+
+.shell [class*='documentToolbar'] > div button,
+.shell [class*='documentDetail'] dd,
+.shell [class*='documentDanger'] p { font-size: 12px; }
+
+.shell [class*='documentList'] > button strong { font-size: 13px; }
+.shell [class*='documentWorkspace'] {
+  height: clamp(520px, calc(100dvh - 220px), 760px);
+  min-height: 520px;
+  align-items: stretch;
+}
+.shell [class*='documentList'],
+.shell [class*='documentReader'] {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+@media (max-width: 760px) {
+  .shell [class*='documentWorkspace'] { height: auto; min-height: 0; }
+  .shell [class*='documentList'] { overflow-y: auto; scrollbar-gutter: auto; }
+  .shell [class*='documentReader'] { overflow: visible; scrollbar-gutter: auto; }
+}

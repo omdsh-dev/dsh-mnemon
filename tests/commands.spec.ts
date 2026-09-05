@@ -4,14 +4,16 @@ import type { HostAgent } from "../src/host/dsh.ts"
 import { resolveConfig } from '../src/host/config.ts'
 import type { MnemonAgentRuntimeSource, MnemonRuntimeGraph } from '../src/host/runtime.ts'
 import type { MnemonSubagentCoordinator } from "../src/host/subagent.ts"
+import { MemoryExecutions } from '../src/host/memory-executions.ts'
 
 function runtime(fixture: { config: { writeEnabled: boolean; defaultRecallLimit: number }; status?: () => Promise<unknown> }): MnemonAgentRuntimeSource {
   const config = resolveConfig(fixture.config)
-  return {
+  const source = {
     config,
     forAgent: () => ({ config, source: () => ({ read: fixture.status }) }) as unknown as MnemonRuntimeGraph,
     bindAgentRuntime: () => () => {},
   }
+  return { ...source, executions: new MemoryExecutions(source) }
 }
 
 const agent = { id: 'session-1', session: { header: {} } } as HostAgent

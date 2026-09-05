@@ -11,6 +11,8 @@ import type { MemoryEvidence, MemoryJsonValue } from 'dsh-mnemon/contracts'
 import type { MemoryTestManagementClient } from 'dsh-mnemon/testing'
 import type { MnemonAgentRuntimeSource, MnemonRuntimeGraph } from '../src/host/runtime.ts'
 import { agentScope } from '../src/host/runtime.ts'
+import { AgentMemoryTurn } from '../src/host/agent-memory-turn.ts'
+import { MemoryExecutions } from '../src/host/memory-executions.ts'
 import type { SourceSession } from '../src/host/source-session.ts'
 import type { ComposableMemoryTurn } from '../src/core/turns.ts'
 import { sourceFixture } from './fixtures/sources.ts'
@@ -203,6 +205,7 @@ function runtimeSource(
   let workflow: ComposableMemoryTurn | undefined
   const turns = turnPort ?? {
     activeTurn: vi.fn(() => workflow),
+    turn: vi.fn(() => workflow),
     beginTurn: vi.fn(async (id: string) => { workflow = pinnedTurn(id, id); return workflow }),
     endTurn: vi.fn(() => { workflow = undefined }),
   }
@@ -257,7 +260,8 @@ function runtimeSource(
     return policyFor(turn).query({ route: { id: 'docs/search', sourceInstanceKey: 'docs', sourceRouteId: operation, readGrantId: 'doc-grant' } as never, input, signal }, async () => ({ id: 'docs', viewId: turn.view.id, routeId: 'docs/search', sourceInstanceKey: 'docs', observedAt: 'now', items: [], truncated: false }))
   } }) }
   const graph = { config, composableTurns: turns, source: (type: string) => type === 'runtime' ? runtimeSession : type === 'documents' ? documentSession : spaceSession } as unknown as MnemonRuntimeGraph
-  return { config, forAgent: vi.fn((_agent: HostAgent) => graph), bindAgentRuntime: vi.fn(() => () => {}) }
+  const source = { config, forAgent: vi.fn((_agent: HostAgent) => graph), bindAgentRuntime: vi.fn(() => () => {}) }
+  return { ...source, executions: new MemoryExecutions(source) }
 }
 function createCoordinator(host: HostSubagentsService, runtime?: RuntimeOperations | MnemonAgentRuntimeSource | SourceSession) {
   return new MnemonSubagentCoordinator(host, runtimeSource(runtime), toolRegistry().value)
@@ -344,7 +348,8 @@ describe('Mnemon memory subagent coordinator', () => {
     const binding = vi.spyOn(f.live, 'bindAgentRuntime')
     const coordinator = new MnemonSubagentCoordinator(host, f.live, toolRegistry().value)
     const first = coordinator.remember(root, { content: 'first' }, new AbortController().signal)
-    const second = coordinator.remember(root, { content: 'second' }, new AbortController().signal)
+    const second = new MnemonSubagentCoordinator(host, f.live, toolRegistry().value)
+      .remember(root, { content: 'second' }, new AbortController().signal)
     await vi.waitFor(() => expect(starts).toBe(2))
     const view = f.graph.composableTurns.activeTurn('root')!
     expect(view).toBeDefined()
@@ -358,6 +363,43 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(f.graph.composableTurns.activeTurn('root')).toBeUndefined()
   })
 
+
+  it('waits for background child and result-tool cleanup before pinning a foreground turn', async () => {
+    const f = await compositionFixture()
+    releases.push(f.dispose)
+    const root = parent()
+    root.session.header!.cwd = f.workspace
+    const childCleanup = Promise.withResolvers<void>()
+    const toolCleanup = Promise.withResolvers<void>()
+    const host = subagents({ summary: 'No write needed.', action: 'skipped', memoryBodyIds: [] })
+    host.dispose.mockImplementation(() => childCleanup.promise)
+    const tools = toolRegistry()
+    tools.register.mockImplementationOnce(() => vi.fn(() => toolCleanup.promise))
+    const coordinator = new MnemonSubagentCoordinator(host.value, f.live, tools.value)
+    const background = coordinator.remember(root, { content: 'first' }, new AbortController().signal)
+    await vi.waitFor(() => expect(host.dispose).toHaveBeenCalledOnce())
+    const workflow = f.graph.composableTurns.activeTurn(root.id)
+    const owner = new AgentMemoryTurn(root, f.live)
+    let foregroundSettled = false
+    const foreground = owner.begin(1).then(() => { foregroundSettled = true }, error => { foregroundSettled = true; return error })
+    try {
+      await new Promise(resolve => setTimeout(resolve, 10))
+      expect(foregroundSettled).toBe(false)
+      expect(f.graph.composableTurns.activeTurn(root.id)).toBe(workflow)
+      childCleanup.resolve()
+      await new Promise(resolve => setTimeout(resolve, 10))
+      expect(foregroundSettled).toBe(false)
+      toolCleanup.resolve()
+      await background
+      expect(await foreground).toBeUndefined()
+      expect(owner.current?.context.turnId).toBe('root:1')
+    } finally {
+      childCleanup.resolve()
+      toolCleanup.resolve()
+      await Promise.all([background, foreground])
+      owner.dispose()
+    }
+  })
 
   it('rejects structured-output keywords outside the DSH schema subset', () => {
     expect(() => assertDshOutputSchema({
@@ -506,7 +548,7 @@ describe('Mnemon memory subagent coordinator', () => {
       activeTurn: vi.fn().mockReturnValue(pinnedTurn('root:scoped', 'view-scoped', ['project', 'other'])),
     }
     const source = runtimeSource(undefined, memoryService, undefined, composableTurns)
-    const coordinator = new MnemonSubagentCoordinator(subagents(undefined).value, source as never)
+    const coordinator = new MnemonSubagentCoordinator(subagents(undefined).value, source)
     const signal = new AbortController().signal
     const first = await coordinator.recall(parent(), { query: 'same query', memoryBodyIds: ['project'] }, signal, { requirePinnedView: true })
     const second = await coordinator.recall(parent(), { query: 'same query', memoryBodyIds: ['other'] }, signal, { requirePinnedView: true })
@@ -558,7 +600,8 @@ describe('Mnemon memory subagent coordinator', () => {
     }
     let currentRuntime = runtimeSource(undefined, memoryService, undefined, composableTurns)
     const source = { forAgent: (agent: HostAgent) => currentRuntime.forAgent(agent) }
-    const coordinator = new MnemonSubagentCoordinator(subagents(undefined).value, source as never)
+    const coordinator = new MnemonSubagentCoordinator(subagents(undefined).value,
+      { ...source, executions: new MemoryExecutions(source as never) } as never)
     const signal = new AbortController().signal
     const initial = coordinator.recall(parent(), { query: 'initial' }, signal, { requirePinnedView: true })
     const refined = coordinator.recall(parent(), { query: 'refined' }, signal, { requirePinnedView: true })

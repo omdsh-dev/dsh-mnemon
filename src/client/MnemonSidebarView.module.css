@@ -127,52 +127,6 @@
   font-weight: 600;
 }
 
-.shell .memoryWorkspace {
-  flex: 0 0 auto;
-  padding: 12px 16px 0;
-  border-bottom: 1px solid var(--dsw-alias-border-l1);
-  background: var(--mn-surface);
-}
-.shell .memoryWorkspace > [class*='pageHeader'] { margin-bottom: 8px; }
-
-.shell .memoryNavigation {
-  display: flex;
-  min-width: 0;
-  flex: 0 0 auto;
-  align-items: flex-end;
-  gap: 12px;
-  padding: 0;
-}
-
-.shell .memoryTabs {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  gap: 2px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.shell .memoryTabs::-webkit-scrollbar { display: none; }
-.shell .memoryTabs button {
-  min-width: max-content;
-  min-height: 0;
-  padding: 6px 12px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  border-radius: 6px 6px 0 0;
-  color: var(--dsw-alias-label-secondary);
-  background: transparent;
-  font-size: 13px;
-  cursor: pointer;
-}
-.shell .memoryTabs button:hover { background: var(--dsw-alias-interactive-bg-hover); }
-.shell .memoryTabs button[data-active] {
-  border-bottom-color: var(--dsw-alias-state-business-primary);
-  color: var(--dsw-alias-label-primary);
-  font-weight: 600;
-}
-.shell .memoryWriteButton { flex: none; }
-
 .shell .modalBackdrop {
   position: fixed;
   z-index: 1300;
@@ -217,28 +171,7 @@
 .shell .modal > [class*='modalBody'] { min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 18px; scrollbar-gutter: stable; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
 .shell .modal > [class*='modalFooter'] { border-top-color: var(--dsw-alias-border-l1); }
 @supports (height: 100dvh) { .shell .modal { max-height: calc(100dvh - 48px); } }
-.shell .modal form[class*='runtimeComposer'],
-.shell .modal form[class*='documentEditor'] {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-.shell .modal form[class*='runtimeComposer'] > [class*='runtimeComposerHeading'],
-.shell .modal form[class*='documentEditor'] > header { display: none; }
-.shell .modal section[class*='supervisedComposer'] { overflow: visible; }
-.shell .modal form[class*='supervisedForm'] { padding: 0; }
-.shell .modal [class*='supervisedHeading'] { margin-bottom: 10px; }
-.shell .modal [class*='supervisedHeading'] h3 { display: none; }
 .shell .modal [class*='formActions'] { justify-content: flex-end; }
-.shell .modal details[class*='advancedWrite'] {
-  margin-top: 14px;
-  overflow: hidden;
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 10px;
-  background: var(--dsw-alias-bg-layer-1);
-}
 
 /*
  * DSH action hierarchy, shared by the installed SSH and task-board panels.
@@ -260,8 +193,7 @@
   background: var(--dsw-alias-button-info-hover);
 }
 
-.shell [class*='secondaryButton'],
-.shell [class*='ghostButton'] {
+.shell [class*='secondaryButton'], .shell [class*='ghostButton'] {
   min-height: 32px;
   padding: 5px 12px;
   border: 1px solid var(--dsw-alias-border-l2);
@@ -272,8 +204,7 @@
   font-weight: 400;
   white-space: nowrap;
 }
-.shell [class*='secondaryButton']:hover:not(:disabled),
-.shell [class*='ghostButton']:hover:not(:disabled) {
+.shell [class*='secondaryButton']:hover:not(:disabled), .shell [class*='ghostButton']:hover:not(:disabled) {
   filter: none;
   background: var(--dsw-alias-interactive-bg-hover);
 }
@@ -309,10 +240,7 @@
 .shell [class*='dangerSolidButton']:hover:not(:disabled) { filter: brightness(1.08); }
 
 .shell [class*='iconButton'],
-.shell [class*='bodyEditButton'],
-.shell [class*='inspectorEye'],
-.shell [class*='inspectorHeading'] button,
-.shell [class*='sectionHeading'] button {
+.shell [class*='bodyEditButton'], .shell [class*='sectionHeading'] button {
   display: inline-flex;
   width: 26px;
   height: 26px;
@@ -327,10 +255,7 @@
   font-size: 13px;
 }
 .shell [class*='iconButton']:hover:not(:disabled),
-.shell [class*='bodyEditButton']:hover:not(:disabled),
-.shell [class*='inspectorEye']:hover:not(:disabled),
-.shell [class*='inspectorHeading'] button:hover:not(:disabled),
-.shell [class*='sectionHeading'] button:hover:not(:disabled) {
+.shell [class*='bodyEditButton']:hover:not(:disabled), .shell [class*='sectionHeading'] button:hover:not(:disabled) {
   border: 0;
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-interactive-bg-hover);
@@ -342,10 +267,7 @@
 .shell [class*='dangerButton'],
 .shell [class*='dangerSolidButton'],
 .shell [class*='iconButton'],
-.shell [class*='bodyEditButton'],
-.shell [class*='inspectorEye'],
-.shell [class*='inspectorHeading'] button,
-.shell [class*='sectionHeading'] button {
+.shell [class*='bodyEditButton'], .shell [class*='sectionHeading'] button {
   cursor: pointer;
   transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease, outline-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
 }
@@ -355,10 +277,7 @@
 .shell [class*='dangerButton']:active:not(:disabled),
 .shell [class*='dangerSolidButton']:active:not(:disabled),
 .shell [class*='iconButton']:active:not(:disabled),
-.shell [class*='bodyEditButton']:active:not(:disabled),
-.shell [class*='inspectorEye']:active:not(:disabled),
-.shell [class*='inspectorHeading'] button:active:not(:disabled),
-.shell [class*='sectionHeading'] button:active:not(:disabled) {
+.shell [class*='bodyEditButton']:active:not(:disabled), .shell [class*='sectionHeading'] button:active:not(:disabled) {
   transform: translateY(1px);
 }
 .shell [class*='primaryButton']:disabled,
@@ -366,9 +285,7 @@
 .shell [class*='ghostButton']:disabled,
 .shell [class*='dangerButton']:disabled,
 .shell [class*='dangerSolidButton']:disabled,
-.shell [class*='iconButton']:disabled,
-.shell [class*='bodyEditButton']:disabled,
-.shell [class*='inspectorEye']:disabled {
+.shell [class*='iconButton']:disabled, .shell [class*='bodyEditButton']:disabled {
   cursor: default;
   opacity: .45;
 }
@@ -376,13 +293,11 @@
 .shell .canvas { background: var(--mn-surface); }
 .shell button,
 .shell input,
-.shell select,
-.shell textarea { font-family: var(--dsw-font-family); }
+.shell select, .shell textarea { font-family: var(--dsw-font-family); }
 .shell button:focus-visible,
 .shell input:focus-visible,
 .shell select:focus-visible,
-.shell textarea:focus-visible,
-.shell summary:focus-visible {
+.shell textarea:focus-visible, .shell summary:focus-visible {
   outline: 2px solid var(--dsw-alias-state-business-primary);
   outline-offset: 2px;
 }
@@ -415,15 +330,9 @@
  * Shared component rules continue to provide layout and dialog behavior.
  */
 .shell input,
-.shell select,
-.shell textarea { font-family: var(--dsw-font-family); font-size: 13px; font-weight: 400; }
+.shell select, .shell textarea { font-family: var(--dsw-font-family); font-size: 13px; font-weight: 400; }
 
-.shell [class*='bodyEdit'] label,
-.shell [class*='runtimeComposerActions'] label,
-.shell [class*='documentEditor'] label,
-.shell [class*='searchControls'] label,
-.shell [class*='formGrid'] label,
-.shell [class*='fieldWide'] {
+.shell [class*='bodyEdit'] label, .shell [class*='formGrid'] label {
   gap: 5px;
   color: var(--dsw-alias-label-secondary);
   font-size: 12px;
@@ -433,18 +342,8 @@
 .shell [class*='bodyEdit'] input,
 .shell [class*='bodyEdit'] select,
 .shell [class*='bodyEdit'] textarea,
-.shell [class*='runtimeComposer'] > textarea,
-.shell [class*='runtimeComposerActions'] select,
-.shell [class*='runtimeEntry'] select,
-.shell [class*='documentEditor'] input,
-.shell [class*='documentEditor'] textarea,
-.shell [class*='searchControls'] select,
 .shell [class*='formGrid'] select,
-.shell [class*='formGrid'] input,
-.shell [class*='listToolbar'] input,
-.shell [class*='listToolbar'] select,
-.shell [class*='entitySearch'] input,
-.shell [class*='bodyCreate'] input {
+.shell [class*='formGrid'] input, .shell [class*='bodyCreate'] input {
   min-height: 34px;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 8px;
@@ -457,218 +356,24 @@
 .shell select { cursor: pointer; font-weight: 400; }
 .shell textarea { font-weight: 400; line-height: 1.55; }
 
-.shell [class*='cardKicker'],
-.shell [class*='sectionHeading'] > div > span,
-.shell [class*='entityHeading'] > span,
-.shell [class*='inspectorHeading'] > span {
+.shell [class*='cardKicker'], .shell [class*='sectionHeading'] > div > span {
   font-size: 11px;
   letter-spacing: .06em;
 }
 
-.shell [class*='bodyDirectoryHeader'] p,
-.shell [class*='bodyCard'] > p,
-.shell [class*='graphToolbar'],
-.shell [class*='graphFooter'],
-.shell [class*='runtimeTargetDescription'],
-.shell [class*='documentList'] > button p,
-.shell [class*='documentDetail'] > header p,
-.shell [class*='documentArchiveReceipt'] p,
 .shell [class*='healthStrip'] p,
 .shell [class*='storageAreaGrid'] article > p,
 .shell [class*='statusSectionHeader'] p,
-.shell [class*='writeGuide'] li span,
-.shell [class*='writeGuide'] > p,
-.shell [class*='manualActions'] p { font-size: 12px; }
+.shell [class*='writeGuide'] li span, .shell [class*='writeGuide'] > p { font-size: 12px; }
 
-.shell [class*='bodyDirectoryPath'],
-.shell [class*='bodyCard'] footer,
-.shell [class*='bodyHealth'],
-.shell [class*='badge'],
-.shell [class*='entities'] span,
-.shell [class*='runtimeEntryMeta'] > span,
-.shell [class*='runtimeEntryBadges'] > span,
-.shell [class*='runtimeEntryMeta'] time,
 .shell [class*='runtimeFootnote'],
-.shell [class*='documentSummary'] article > span,
-.shell [class*='documentSummary'] article > small,
-.shell [class*='documentList'] > header,
-.shell [class*='documentList'] > button time,
-.shell [class*='documentList'] > button footer,
-.shell [class*='documentDetail'] dt,
-.shell [class*='documentSources'] > span,
 .shell [class*='storageRoot'] span,
 .shell [class*='storageRoot'] small,
 .shell [class*='storageAreaMetric'] span,
 .shell [class*='storageAreaMetric'] code,
 .shell [class*='storagePath'],
-.shell [class*='storageAreaGrid'] article > small,
-.shell [class*='storageFootnote'] { font-size: 11px; }
-
-.shell [class*='bodySwitch'],
-.shell [class*='graphCanvasControls'] button,
-.shell [class*='documentToolbar'] > div button,
-.shell [class*='documentDetail'] dd,
-.shell [class*='documentDanger'] p,
-.shell [class*='advancedWrite'] summary small { font-size: 12px; }
-
-.shell [class*='documentList'] > button strong,
-.shell [class*='runtimeEntry'] > p,
-.shell [class*='inspectorMeta'] dd { font-size: 13px; }
-.shell [class*='runtimeEntryBadges'] > span {
-  display: inline-flex;
-  min-height: 22px;
-  align-items: center;
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 999px;
-  padding: 0 8px;
-  color: var(--dsw-alias-label-secondary);
-  background: var(--dsw-alias-bg-layer-1);
-  font-size: 11px;
-  font-weight: 400;
-  line-height: 20px;
-}
-.shell [class*='runtimeEntryBadges'] > [class*='runtimeEntryTarget'] {
-  border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 30%, var(--dsw-alias-border-l1));
-  color: var(--dsw-alias-state-business-primary);
-  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 7%, var(--dsw-alias-bg-layer-1));
-  font-family: var(--dsw-font-family);
-  font-weight: 500;
-}
-.shell [class*='runtimeEntry'][data-importance='critical'] [class*='runtimeEntryBadges'] > span:last-child {
-  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 24%, var(--dsw-alias-border-l1));
-  color: var(--dsw-alias-state-error-primary);
-  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 6%, var(--dsw-alias-bg-layer-1));
-}
-.shell [class*='listProgress'],
-.shell [class*='compactListProgress'] { color: var(--dsw-alias-label-tertiary); font-size: 12px; }
-.shell [class*='documentWorkspace'] {
-  height: clamp(520px, calc(100dvh - 220px), 760px);
-  min-height: 520px;
-  align-items: stretch;
-}
-.shell [class*='documentList'],
-.shell [class*='documentReader'] {
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
-}
-
-.shell [class*='bodyGrid'] {
-  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
-}
-.shell article[class*='bodyCard'] {
-  display: flex;
-  height: 100%;
-  flex-direction: column;
-  padding: 11px 11px 11px 14px;
-  border-color: var(--mn-line);
-  border-radius: 8px;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--mn-provider-color) 5%, var(--mn-layer-1)), var(--mn-layer-1) 34%);
-  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--mn-provider-color) 68%, transparent);
-}
-.shell article[class*='bodyCard'][data-active] {
-  border-color: var(--mn-line);
-  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--mn-provider-color) 78%, transparent);
-}
-.shell .bodyCardHeader {
-  display: flex;
-  min-width: 0;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-.shell .bodyDirectoryActions {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
-}
-.shell .bodyDirectoryActions > strong {
-  padding: 5px 8px;
-  border-radius: 999px;
-  color: var(--dsw-alias-state-business-primary);
-  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 8%, transparent);
-  font-size: 11px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.shell .bodyCardIdentity {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  align-items: flex-start;
-  gap: 8px;
-}
-.shell .bodyCardIdentity > [class*='bodySignal'] {
-  width: 6px;
-  height: 6px;
-  flex: 0 0 auto;
-  margin-top: 7px;
-}
-.shell article[class*='bodyCard'][data-reconnecting] .bodyCardIdentity > [class*='bodySignal'] {
-  width: 6px;
-  height: 6px;
-}
-.shell .bodyCardIdentity > div { display: grid; min-width: 0; flex: 1; gap: 2px; }
-.shell .bodyCardIdentity strong {
-  overflow: hidden;
-  font-size: 13px;
-  line-height: 20px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.shell .bodyCardMeta {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 8px;
-}
-.shell .bodyCardMeta code {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.shell .bodyCardMeta [class*='bodyHealth'] { flex: 0 0 auto; font-size: 11px; letter-spacing: 0; }
-.shell .bodyCardHeader > [class*='bodySwitch'] { min-height: 24px; flex: 0 0 auto; }
-.shell article[class*='bodyCard'] > p {
-  display: -webkit-box;
-  min-height: calc(1.55em * 4);
-  max-height: calc(1.55em * 4);
-  margin: 12px 0;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
-  line-height: 1.55;
-}
-.shell .bodyCardFooter {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
-  min-width: 0;
-  align-items: center;
-  gap: 10px;
-  margin-top: auto;
-  padding-top: 9px;
-  white-space: nowrap;
-}
-.shell .bodyCardStats {
-  display: flex;
-  min-width: 0;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 10px;
-  overflow: hidden;
-}
-.shell .bodyCardFooter [class*='bodyCardActions'] {
-  display: flex;
-  flex: 0 0 auto;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 6px;
-}
+.shell [class*='storageAreaGrid'] article > small, .shell [class*='storageFootnote'] { font-size: 11px; }
+.shell [class*='listProgress'], .shell [class*='compactListProgress'] { color: var(--dsw-alias-label-tertiary); font-size: 12px; }
 .shell .itemActionButton {
   min-height: 28px;
   padding: 4px 9px;
@@ -677,8 +382,6 @@
   font-size: 12px;
   line-height: 18px;
 }
-.shell [class*='runtimeEntry'] footer,
-.shell [class*='cardActions'] { gap: 6px; }
 .shell .itemEditAction {
   color: var(--dsw-alias-state-business-primary);
   border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 38%, var(--dsw-alias-border-l2));
@@ -709,33 +412,16 @@
   font-variant-numeric: tabular-nums;
 }
 
-.shell .inspectorGlyph {
-  display: grid;
-  width: 44px;
-  height: 44px;
-  margin-bottom: 10px;
-  place-items: center;
-  border: 1px solid var(--dsw-alias-border-l1);
-  border-radius: 10px;
-  color: var(--dsw-alias-label-tertiary);
-  background: var(--dsw-alias-bg-layer-1);
-  font: 20px/1 var(--mn-code);
-  opacity: 1;
-}
-
 @media (max-width: 760px) {
   .shell .masthead { min-height: 48px; padding: 8px 12px 4px; }
   .shell .headerActions { max-width: none; }
   .shell .statusCluster > span:not([class*='statusDot']) { display: inline; }
   .shell [class*='storageMode'] { min-width: 0; }
   .shell [class*='storageMode'] > span,
-  .shell .workspacePicker > span,
-  .shell .workspaceMismatch > span { display: none; }
+.shell .workspacePicker > span, .shell .workspaceMismatch > span { display: none; }
   .shell .workspacePicker { gap: 0; padding-left: 0; }
   .shell .workspacePicker select { width: min(160px, 31vw); border-left: 0; }
   .shell .topNavigation { padding: 0 12px; }
-  .shell .memoryNavigation { padding-inline: 12px; }
-  .shell .memoryTabs button { padding-inline: 10px; }
   .shell .nav button {
     min-width: max-content;
     flex-direction: row;
@@ -754,9 +440,6 @@
   .shell .modal > [class*='modalBody'] button { min-height: 44px; }
   .shell .modal > [class*='modalFooter'] { padding: 10px max(14px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px)); }
   .shell .modal > [class*='modalFooter'] [class*='modalFooterActions'] button { min-height: 44px; padding-block: 8px; }
-  .shell [class*='documentWorkspace'] { height: auto; min-height: 0; }
-  .shell [class*='documentList'] { overflow-y: auto; scrollbar-gutter: auto; }
-  .shell [class*='documentReader'] { overflow: visible; scrollbar-gutter: auto; }
 }
 
 @media (min-width: 761px) and (max-height: 560px) {
@@ -776,7 +459,8 @@
 @media (max-width: 520px) {
   .shell .masthead { min-height: 46px; }
   .shell .brand h1 { font-size: 16px; }
-  .shell .headerActions { max-width: 62vw; }
+  .shell .headerActions { max-width: none; flex: 0 0 auto; }
+  .shell [class*='backButton'] > span { display: none; }
   .shell [class*='storageMode'] { padding-inline: 7px; }
   .shell .workspacePicker select { width: min(118px, 30vw); padding-left: 8px; }
   .shell .workspaceMismatch > button { padding-inline: 6px; }
@@ -789,21 +473,17 @@
 
 @media (pointer: coarse) {
   .shell .modal > header [class*='iconButton'] { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
-  .shell .modal > [class*='modalBody'] button,
-  .shell .modal > [class*='modalFooter'] button { min-height: 44px; }
+  .shell .modal > [class*='modalBody'] button, .shell .modal > [class*='modalFooter'] button { min-height: 44px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .shell [class*='primaryButton'],
-  .shell [class*='secondaryButton'],
-  .shell [class*='ghostButton'],
-  .shell [class*='dangerButton'],
-  .shell [class*='dangerSolidButton'],
-  .shell [class*='iconButton'],
-  .shell [class*='bodyEditButton'],
-  .shell [class*='inspectorEye'],
-  .shell [class*='inspectorHeading'] button,
-  .shell [class*='sectionHeading'] button {
+.shell [class*='secondaryButton'],
+.shell [class*='ghostButton'],
+.shell [class*='dangerButton'],
+.shell [class*='dangerSolidButton'],
+.shell [class*='iconButton'],
+.shell [class*='bodyEditButton'], .shell [class*='sectionHeading'] button {
     transition: none;
   }
 }

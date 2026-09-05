@@ -85,6 +85,7 @@ describe('standalone plugin repository boundary', () => {
           continue
         }
         if (isBuiltin(specifier)) continue
+        if (packageName(specifier) === name && Object.hasOwn(manifest.exports, '.' + specifier.slice(name.length))) continue
         if (!Object.hasOwn(dependencies, packageName(specifier))) violations.push(`${relative(root, file)} has undeclared dependency ${specifier}`)
         const ownerContract = threeTierExtensions.has(name) && specifier === threeTierOwner + '/extension-sdk'
         const testOwner = threeTierExtensions.has(name) && file.includes(`${sep}tests${sep}`) && specifier === threeTierOwner

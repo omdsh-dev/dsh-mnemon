@@ -1,10 +1,11 @@
+import { css, sidebarCss, useT } from './presentation.ts'
 import type { JSX } from 'react'
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { CATEGORIES, type Category, type EntityView, type Insight, type MemoryBodyCatalog, type MemoryBodyMetadataUpdate, type MemoryBodyProvider, type MemoryBodyView, type MemoryGraphNode, type MemoryGraphSnapshot, type MemoryPlacementCapability, type MemoryPlacementPreference, type MemoryListView, type MemoryProviderConfigField, type MemoryProviderConnection, type MemoryProviderDescriptor, type MemoryProviderId, type MemoryReadSource } from '../contracts.ts'
 import type { MemorySpacesPageClient } from './api.ts'
 import { ProviderIcon } from './ProviderIcon.tsx'
 import { providerFieldLabel, providerDisplayLabel, providerOptionLabel, providerSummary } from './provider-presentation.ts'
-import { type MnemonKey, type MnemonTranslate, useRequestVersion, appearanceClass, memorySidebarStyles as sidebarCss, memoryPageStyles as css, useT, useLocale, humanBytes, message, short, PageHeader, SectionSpinner, ProgressiveFooter, SidebarModal, EmptyState } from 'dsh-mnemon/client'
+import { type MnemonKey, type MnemonTranslate, useRequestVersion, appearanceClass, useLocale, humanBytes, message, short, PageHeader, SectionSpinner, ProgressiveFooter, SidebarModal, EmptyState } from 'dsh-mnemon/client'
 
 import type { MemoryPersistenceStrategy } from '../contracts.ts'
 

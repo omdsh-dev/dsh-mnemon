@@ -19,12 +19,20 @@ The host must already provide `ctx.mnemonMemory`; a Strategy decides how this So
 
 Run `pnpm install && pnpm verify` in this directory. Its own tests mount real Cordis Fibers and exercise Source isolation, scoped management, View actions/routes, persistence and failed-child cleanup. Provider authors use `mountMemorySpaceProvider(module, { instanceId, config })` from the public `/testing` entry to test actual child registration and obtain frozen metadata plus `createAdapter`/`dispose`. `createMemorySpaceProviderFixture` supplies scoped authority and validated connection data for driver tests. Dispose the mounted fixture to release its adapters and Fiber. Neither fixture exposes the private Host, Registry or Snapshot; test the full Source separately for View integration.
 
+## Configuration ownership
+
+The public package entry exports `resolveEmbedding`, `resolvePersistenceStrategy`, and `resolveRecallQuality`. They validate and normalize this Source's settings without I/O or mounting a Fiber. The Starter uses the same rules and recall defaults; it still owns legacy setting keys, storage scope, and its Host timeout policy. Independent Source configuration retains its own instance defaults and timeout limits.
+
 ## Source-owned Client
 
 The optional ./client entry is a normal DSH Client module. This package owns
 its pages, browser API adapter, Host management operations, and tests. It only
 imports the public dsh-mnemon/client helpers; it never receives a Host Context,
 raw RPC transport, credentials, or an LLM View grant.
+
+Business copy and layout live in `presentation/`. The Client bundles its own
+assets; the public data-only paths also let the Starter preserve existing
+page-kit exports. Updating this page does not require editing Starter resources.
 
 The default distribution loads these same Client plugins through DSH. Each page
 uses Source-scoped read/mutate operations. Optional Agent-assisted cross-Source

@@ -19,7 +19,7 @@ import {
 } from '../core/contributions.ts'
 import { canonicalMemoryJson, defineMemoryPlugin } from '../core/definitions.ts'
 import type { MemoryRuntime } from '../core/runtime.ts'
-import type { MemoryStrategyConfiguration } from '../sdk/strategy-configuration.ts'
+import { readMemoryStrategyConfiguration, memoryStrategyConfigurationValues as configuration, type MemoryStrategyConfiguration } from '../sdk/strategy-configuration.ts'
 import type { ResolvedConfig } from './config.ts'
 import type { HostContextShape, HostSettingsScope } from './dsh.ts'
 import { memoryGenerationOptions } from './runtime.ts'
@@ -107,42 +107,6 @@ function legacyPreferences(value: LegacySourcePreferences): LegacySourcePreferen
   return clone({ sources })
 }
 
-function configuration(definition: MemoryStrategyConfiguration, input: unknown): Record<string, MemoryJsonValue> {
-  const config = record(input ?? {})
-  const fields = new Map(definition.fields.map(field => [field.key, field]))
-  for (const [key, value] of Object.entries(config)) {
-    const field = fields.get(key)
-    if (!field) throw new Error(`Plugin field is not declared for management: ${key}`)
-    if (field.input === 'number') {
-      if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isInteger(value)
-        || field.minimum !== undefined && value < field.minimum || field.maximum !== undefined && value > field.maximum) throw new Error(`Invalid numeric plugin field: ${key}`)
-    } else if (field.input === 'source-list' || field.input === 'string-list') {
-      if (!Array.isArray(value) || value.length > 32 || value.some(item => typeof item !== 'string' || !item.trim() || item.length > 500) || new Set(value).size !== value.length) throw new Error(`Invalid plugin list: ${key}`)
-    } else if (typeof value !== 'string' || value.length > (field.maximum ?? 4_000)) throw new Error(`Invalid plugin text: ${key}`)
-  }
-  return config
-}
-
-function validateEditor(definition: MemoryStrategyConfiguration): void {
-  const text = (value: unknown) => typeof value === 'object' && value !== null && ['en', 'zh-CN'].every(key => {
-    const item = (value as Record<string, unknown>)[key]
-    return typeof item === 'string' && item.trim() !== '' && item.length <= 4_000
-  })
-  if (definition.apiVersion !== 'dsh-mnemon/strategy-configuration/v1' || typeof definition.create !== 'function'
-    || !['strategy', 'strategy-extension'].includes(definition.kind) || !/^[a-z][a-z0-9-]{0,127}$/u.test(definition.typeId)
-    || !Array.isArray(definition.fields) || definition.fields.length > 16
-    || new Set(definition.fields.map(field => field.key)).size !== definition.fields.length
-    || definition.fields.some(field => !/^[a-zA-Z][a-zA-Z0-9]{0,99}$/u.test(field.key)
-      || !['number', 'text', 'textarea', 'string-list', 'source-list'].includes(field.input)
-      || !text(field.label) || field.description !== undefined && !text(field.description)
-      || [field.minimum, field.maximum].some(bound => bound !== undefined && (typeof bound !== 'number' || !Number.isFinite(bound)))
-      || field.sourceRoles !== undefined && (!Array.isArray(field.sourceRoles) || field.sourceRoles.length > 32
-        || field.sourceRoles.some((role: unknown) => typeof role !== 'string' || !role || role.length > 128)))
-    || !text(definition.label) || !text(definition.description)) throw new Error('Invalid plugin configuration descriptor')
-  const json = canonicalMemoryJson({ label: definition.label, description: definition.description, fields: definition.fields }, 'Plugin editor metadata')
-  if (json.length > 64 * 1024) throw new Error('Plugin editor metadata exceeds 64 KiB')
-  for (const field of definition.fields) if (field.defaultValue !== undefined) configuration(definition, { [field.key]: field.defaultValue })
-}
 
 function contributionRoles(snapshot: MemoryContributionSnapshot, entryId: string): MemoryPluginRole[] {
   const roles = new Set<MemoryPluginRole>()
@@ -170,10 +134,9 @@ function fallbackDescriptor(entry: MemoryPluginLoaderEntry, snapshot: MemoryCont
 
 function prepared(item: ManagedPlugin, config: Record<string, MemoryJsonValue>) {
   if (item.editor === undefined) throw new Error(`Plugin does not expose a pure configuration factory: ${item.entry.id}`)
-  const contribution = item.editor.create(configuration(item.editor, config))
+  const contribution = item.editor.create(config)
   const values = [...(contribution.strategies ?? []), ...(contribution.strategyExtensions ?? [])]
-  if (values.length !== 1 || values[0]!.manifest.typeId !== item.editor.typeId || values[0]!.manifest.kind !== item.editor.kind
-    || values[0]!.manifest.packageName !== item.entry.options.name) throw new Error('Plugin factory does not match its declared Entry')
+  if (values[0]!.manifest.packageName !== item.entry.options.name) throw new Error('Plugin factory does not match its declared Entry')
   if (contribution.plugin !== undefined && hash(contribution.plugin) !== hash(item.descriptor)) throw new Error('Plugin factory descriptor does not match its module export')
   return prepareMemoryContributions({ ...contribution, plugin: contribution.plugin ?? item.descriptor }, { instanceId: item.entry.id })
 }
@@ -288,8 +251,7 @@ export class MemoryPluginManagement {
       try {
         let module = entry.fiber?.runtime?.callback as MemoryPluginModule | undefined
         if (!module?.memoryPlugin && !module?.memoryStrategyConfiguration) module = await entry.parent.tree.import(entry.options.name) as MemoryPluginModule
-        const editor = module?.memoryStrategyConfiguration
-        if (editor !== undefined) validateEditor(editor)
+        const editor = module?.memoryStrategyConfiguration === undefined ? undefined : readMemoryStrategyConfiguration(module.memoryStrategyConfiguration)
         const registeredDescriptor = snapshot.plugins?.find(plugin => plugin.provenance.entryId === entry.id)?.descriptor
         const descriptor = defineMemoryPlugin(module?.memoryPlugin ?? registeredDescriptor ?? fallbackDescriptor(entry, snapshot, editor))
         if (descriptor.packageName !== entry.options.name) throw new Error('Plugin descriptor package does not match its Loader Entry')
