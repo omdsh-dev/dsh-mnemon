@@ -19,14 +19,14 @@ import { scoreReviewActivity } from './review-activity.ts'
 import { TurnActivityProjection, type TurnMemoryActivity, type TurnMemoryActivitySnapshot } from './activity.ts'
 import { applyMemoryViewGuidance } from './guidance.ts'
 import { modelMemoryWake } from './view-presentation.ts'
-import { AgentMemoryTurn, agentMemoryScope, openAgentTurn, type DelegatedMemoryView } from './agent-memory-turn.ts'
+import { AgentMemoryTurn, openAgentTurn, type DelegatedMemoryView } from './agent-memory-turn.ts'
 import type { AssistantMessageText, LifecycleAgentSnapshot, LifecycleCounters, LifecyclePhase, LifecycleSnapshot, ReviewActivityScore, TaskAgentModelCatalog } from "./protocol.ts"
 import type { PreparedMemoryPlacement } from 'dsh-mnemon-source-memory-spaces/contracts'
 import type { MemoryWake } from "../core/contracts/index.ts"
-import type { MnemonAgentRuntimeSource } from "./runtime.ts"
+import { agentScope, type MnemonAgentRuntimeSource } from './runtime.ts'
 import { hostSessionEventAt, hostSessionEvents } from './session-events.ts'
 
-type AgentRuntimeSource = Pick<MnemonAgentRuntimeSource, 'forAgent' | 'bindAgentRuntime'>
+type AgentRuntimeSource = Pick<MnemonAgentRuntimeSource, 'forAgent' | 'executions'>
 
 interface HostDefaultModelService {
   currentSelection(): { provider: string; model: string }
@@ -235,7 +235,6 @@ class MnemonAgentLifecycle {
   private injectedMemoryText: string | undefined
   private idleReviewTimer: ReturnType<typeof setTimeout> | undefined
   private reviewController: AbortController | undefined
-  private idleReviewRun: Promise<void> | undefined
   private reviewRunning = false
   private lastReviewAt: string | undefined
   private lastReviewAction: string | undefined
@@ -418,9 +417,8 @@ class MnemonAgentLifecycle {
     if (context.agent !== undefined && context.agent.id !== this.agent.id) return next()
     const turn = openAgentTurn(this.agent)
     if (turn === undefined) return next()
-    // Prompt assembly precedes pre-step. Wait for aborted maintenance cleanup
-    // here, before this ordinary turn tries to own the same Agent runtime.
-    await this.settleIdleReview()
+    // Cancel idle work before prompt assembly; the execution owner drains it.
+    this.cancelIdleReview(true)
     if (context.signal?.aborted === true || openAgentTurn(this.agent) !== turn) return next()
     await this.memoryTurn?.begin(turn, context.signal)
     const assembled = await next()
@@ -461,17 +459,8 @@ class MnemonAgentLifecycle {
       if (this.agent.status !== 'idle') return
       const completed = hostSessionEvents(this.agent.session).some(event => event.type === 'turn/end' && eventTurn(event) === turn)
       if (!completed || !this.reviewActivity().eligible || !this.reviewAdmitted(turn)) return
-      this.startIdleReview()
+      void this.runIdleReview()
     }, this.config.idleReviewMs)
-  }
-
-  private startIdleReview(): void {
-    const run = this.runIdleReview()
-    this.idleReviewRun = run
-    const clear = () => {
-      if (this.idleReviewRun === run) this.idleReviewRun = undefined
-    }
-    void run.then(clear, clear)
   }
 
   private async runIdleReview(): Promise<void> {
@@ -503,11 +492,6 @@ class MnemonAgentLifecycle {
     if (this.idleReviewTimer !== undefined) clearTimeout(this.idleReviewTimer)
     this.idleReviewTimer = undefined
     if (abortRunning) this.reviewController?.abort()
-  }
-
-  private async settleIdleReview(): Promise<void> {
-    this.cancelIdleReview(true)
-    await this.idleReviewRun
   }
 
   private ensureTurnActivity(turn: number) {
@@ -1024,7 +1008,7 @@ export class MnemonLifecycle {
       const parentPin = graph.composableTurns.activeTurn(parent.id)
       delegation = {
         graph,
-        scope: parentPin?.scope ?? agentMemoryScope(parent, graph),
+        scope: parentPin?.scope ?? agentScope(parent, graph.config),
         ...(parentPin === undefined ? {} : { viewId: parentPin.view.id }),
       }
     }

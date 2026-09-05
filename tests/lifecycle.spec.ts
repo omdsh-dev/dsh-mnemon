@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { MemoryExecutions } from '../src/host/memory-executions.ts'
 import { resolveConfig } from "../src/host/config.ts"
 import type {
   CreateHostAgentOptions,
@@ -141,6 +142,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
   } as unknown as HostContextShape
   const pinnedTurns = new Map<string, object>()
   const composableTurns = {
+    activeTurn: vi.fn(() => [...pinnedTurns.values()].at(-1)),
     beginTurn: vi.fn(async (turnId: string, scope: object) => {
       const turn = turnId.slice(turnId.lastIndexOf(':') + 1)
       const context = { turnId, view: { id: `view-${turn}`, digest: `digest-${turn}`, runtimeGeneration: 'fixture-generation',
@@ -158,10 +160,11 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
     })),
     endTurn: vi.fn((turnId: string) => pinnedTurns.delete(turnId)),
   }
-  const runtimeSource = {
+  const runtimeBinding = {
     forAgent: vi.fn((_agent: HostAgent) => ({ config, composableTurns, memoryComposition: { generation: () => ({ sourceInstances: () => [] }) } })),
     bindAgentRuntime: vi.fn((_agentId: string, _graph: unknown): (() => void) => () => undefined),
   }
+  const runtimeSource = { ...runtimeBinding, executions: new MemoryExecutions(runtimeBinding as never) }
   const lifecycle = new MnemonLifecycle(ctx, coordinator, config, runtimeSource as never)
   const stop = lifecycle.start()
 
@@ -741,14 +744,8 @@ describe('Mnemon DSH lifecycle integration', () => {
   it('settles an aborted idle review before a new turn pins the same Agent runtime', async () => {
     vi.useFakeTimers()
     const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
-    const bindings = new Set<string>()
-    vi.mocked(value.runtimeSource.bindAgentRuntime).mockImplementation((agentId: string) => {
-      if (bindings.has(agentId)) throw new Error(`Mnemon runtime is already pinned for Agent ${agentId}`)
-      bindings.add(agentId)
-      return () => { bindings.delete(agentId) }
-    })
     vi.mocked(value.coordinator.review).mockImplementationOnce(async (parent, signal) => {
-      const release = value.runtimeSource.bindAgentRuntime(parent.id, value.runtimeSource.forAgent(parent))
+      const execution = await value.runtimeSource.executions.workflow(parent, 'review', signal)
       try {
         await new Promise<void>(resolve => {
           if (signal.aborted) resolve()
@@ -764,7 +761,7 @@ describe('Mnemon DSH lifecycle integration', () => {
           documentIds: [],
         }
       } finally {
-        release()
+        execution.release()
       }
     })
 
@@ -781,7 +778,7 @@ describe('Mnemon DSH lifecycle integration', () => {
         reviewRunning: false,
         idleReviewPending: false,
       })
-      expect(bindings).toEqual(new Set(['session-1']))
+      expect(value.composableTurns.activeTurn()).toMatchObject({ turnId: 'session-1:3' })
     } finally {
       value.stop()
       await vi.advanceTimersByTimeAsync(0)

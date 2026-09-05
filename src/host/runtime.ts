@@ -12,6 +12,7 @@ import { ComposableMemoryTurnManager } from '../core/turns.ts'
 import { MEMORY_CAPABILITIES, type MemoryOperationScope } from '../core/contracts/index.ts'
 import { allowsParticipation } from './access.ts'
 import type { CompileMemoryGenerationOptions } from '../core/composition.ts'
+import { MemoryExecutions } from './memory-executions.ts'
 
 export interface MnemonRuntimeGraph {
   readonly config: ResolvedConfig
@@ -27,6 +28,7 @@ export interface MnemonRuntimeGraph {
 
 export interface MnemonAgentRuntimeSource {
   readonly config: ResolvedConfig
+  readonly executions: MemoryExecutions
   forAgent(agent: HostAgent): MnemonRuntimeGraph
   bindAgentRuntime(agentId: string, graph: MnemonRuntimeGraph): () => void
 }
@@ -115,6 +117,7 @@ function liveProxy<T extends object>(resolve: () => T): T {
  * generation until that invocation settles.
  */
 export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
+  readonly executions = new MemoryExecutions(this)
   private current: MnemonRuntimeGraph
   private readonly workspaceGraphs = new Map<string, MnemonRuntimeGraph>()
   private readonly agentGraphs = new Map<string, { token: symbol; graph: MnemonRuntimeGraph }>()
@@ -165,6 +168,7 @@ export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
 
   dispose(): void {
     if (this.closed) return
+    this.executions.dispose()
     this.closed = true
     const graphs = new Set<MnemonRuntimeGraph>([
       this.current,

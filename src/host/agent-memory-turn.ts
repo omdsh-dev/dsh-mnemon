@@ -1,8 +1,8 @@
 import { resolve } from 'node:path'
 import type { MemoryOperationScope } from '../core/contracts/index.ts'
-import type { ComposableMemoryTurn, ComposableMemoryTurnManager } from '../core/turns.ts'
+import type { ComposableMemoryTurn } from '../core/turns.ts'
 import type { HostAgent } from './dsh.ts'
-import type { MnemonAgentRuntimeSource, MnemonRuntimeGraph } from './runtime.ts'
+import { agentScope, type MnemonAgentRuntimeSource, type MnemonRuntimeGraph } from './runtime.ts'
 import { hostSessionEvents } from './session-events.ts'
 import { inspectMemoryView, modelMemoryWake } from './view-presentation.ts'
 import type { MemoryViewInspection } from './view-protocol.ts'
@@ -17,19 +17,8 @@ export interface DelegatedMemoryView {
 export interface PinnedAgentMemoryTurn {
   readonly turn: number
   readonly graph: MnemonRuntimeGraph
-  readonly manager: ComposableMemoryTurnManager
   readonly context: ComposableMemoryTurn
-  readonly releaseRuntime?: () => void
-}
-
-export function agentMemoryScope(agent: HostAgent, graph: MnemonRuntimeGraph): MemoryOperationScope {
-  const cwd = agent.session.header?.cwd?.trim()
-  return {
-    storage: graph.config.storageScope,
-    ...(cwd === undefined || cwd === '' ? {} : { workspaceId: resolve(cwd) }),
-    sessionId: agent.id,
-    agentId: agent.id,
-  }
+  release(): void
 }
 
 /** The durable log, not a parent session id, identifies the executing turn. */
@@ -58,20 +47,11 @@ export class AgentMemoryTurn {
 
   constructor(
     private readonly agent: HostAgent,
-    private readonly runtime: Pick<MnemonAgentRuntimeSource, 'forAgent' | 'bindAgentRuntime'>,
+    private readonly runtime: Pick<MnemonAgentRuntimeSource, 'forAgent' | 'executions'>,
     private readonly delegation?: DelegatedMemoryView,
   ) {
     if (delegation === undefined) return
-    const releaseView = delegation.viewId === undefined ? undefined : delegation.graph.composableTurns.retainView(delegation.viewId)
-    try {
-      const releaseRuntime = runtime.bindAgentRuntime(agent.id, delegation.graph)
-      this.releaseDelegation = () => {
-        try { releaseView?.() } finally { releaseRuntime() }
-      }
-    } catch (error) {
-      releaseView?.()
-      throw error
-    }
+    this.releaseDelegation = runtime.executions.retain(agent, delegation)
   }
 
   get current(): PinnedAgentMemoryTurn | undefined {
@@ -96,7 +76,7 @@ export class AgentMemoryTurn {
     const graph = this.runtime.forAgent(this.agent)
     // Explicit Host background operations have no model turn to inherit. Their
     // child creates a fresh scoped View, never a historical owner-latest View.
-    return { graph, scope: agentMemoryScope(this.agent, graph) }
+    return { graph, scope: agentScope(this.agent, graph.config) }
   }
 
   async begin(turn: number, signal?: AbortSignal): Promise<void> {
@@ -126,12 +106,7 @@ export class AgentMemoryTurn {
     this.pending = undefined
     const pinned = this.pinned
     this.pinned = undefined
-    if (pinned === undefined) return
-    try {
-      if (pinned.manager.turn(pinned.context.turnId) === pinned.context) pinned.manager.endTurn(pinned.context.turnId)
-    } finally {
-      pinned.releaseRuntime?.()
-    }
+    pinned?.release()
   }
 
   dispose(): void {
@@ -141,28 +116,18 @@ export class AgentMemoryTurn {
     try { this.end() } finally { this.releaseDelegation?.() }
   }
 
-  private async pin(turn: number, generation: number, signal?: AbortSignal): Promise<void> {
-    const graph = this.delegation?.graph ?? this.runtime.forAgent(this.agent)
-    const manager = graph.composableTurns
-    const scope = this.delegation === undefined
-      ? agentMemoryScope(this.agent, graph)
-      : { ...this.delegation.scope, sessionId: this.agent.id, agentId: this.agent.id }
-    const turnId = `${this.agent.id}:${turn}`
-    const context = this.delegation?.viewId === undefined
-      ? await manager.beginTurn(turnId, scope, 'agent.root-turn', signal)
-      : manager.pinTurn(turnId, scope, this.delegation.viewId)
-    let releaseRuntime: (() => void) | undefined
+  private async pin(turn: number, generation: number, signal: AbortSignal): Promise<void> {
+    const execution = await this.runtime.executions.turn(this.agent, turn, signal, this.delegation)
+    const { graph, context } = execution
     try {
       if (this.closed || this.generation !== generation) throw new Error('memory turn ended during View preparation')
       signal?.throwIfAborted()
-      if (this.delegation === undefined) releaseRuntime = this.runtime.bindAgentRuntime(this.agent.id, graph)
       const inspection = inspectMemoryView(graph.memoryComposition.generation(context.view.runtimeGeneration)!, context.view, 'active', turn, modelMemoryWake(graph, context).text)
-      this.pinned = { turn, graph, manager, context, ...(releaseRuntime === undefined ? {} : { releaseRuntime }) }
+      this.pinned = { turn, graph, context, release: execution.release }
       this.lastInspection = inspection
       this.lastWorkspace = context.scope.workspaceId === undefined ? undefined : resolve(context.scope.workspaceId)
     } catch (error) {
-      if (manager.turn(context.turnId) === context) manager.endTurn(context.turnId)
-      releaseRuntime?.()
+      execution.release()
       throw error
     }
   }
