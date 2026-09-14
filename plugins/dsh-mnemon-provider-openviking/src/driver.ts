@@ -28,8 +28,6 @@ interface OpenVikingRequestOptions {
 interface OpenVikingProviderOptions {
   fetch?: typeof fetch
   requestTimeoutMs?: number
-  settlementTimeoutMs?: number
-  pollIntervalMs?: number
 }
 
 function object(value: unknown): Record<string, unknown> | undefined {
@@ -44,16 +42,29 @@ function number(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
-function delay(ms: number, signal?: AbortSignal): Promise<void> {
-  if (signal?.aborted === true) return Promise.reject(signal.reason ?? new Error('OpenViking request aborted'))
-  return new Promise((resolve, reject) => {
-    const aborted = () => { clearTimeout(timer); reject(signal?.reason ?? new Error('OpenViking request aborted')) }
-    const timer = setTimeout(() => {
-      signal?.removeEventListener('abort', aborted)
-      resolve()
-    }, ms)
-    signal?.addEventListener('abort', aborted, { once: true })
-  })
+/**
+ * OpenViking keeps long-term memory as markdown files under the memory
+ * namespace, and its extraction pipeline only derives durable memories from a
+ * conversation: a session whose single turn carries the memorized text is
+ * committed with an empty diff, so remember() used to report success while
+ * nothing was stored. Writing the file through the content API keeps the write
+ * deterministic and makes it retrievable as soon as it returns.
+ */
+const MEMORY_FOLDERS: Record<string, string> = {
+  preference: 'preferences',
+  insight: 'experiences',
+  decision: 'experiences',
+  context: 'events',
+  fact: 'entities',
+  general: 'entities',
+}
+
+function memoryUri(root: string, category: string, content: string): string {
+  const folder = MEMORY_FOLDERS[category] ?? 'entities'
+  const firstLine = content.split('\n').find(line => line.trim().length > 0) ?? 'memory'
+  const slug = firstLine.replace(/^#+\s*/u, '').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/gu, '').slice(0, 48).toLowerCase() || 'memory'
+  const stamp = new Date().toISOString().replace(/[-:T]/gu, '').slice(0, 14)
+  return `${root}/${folder}/${stamp}-${slug}-${randomUUID().slice(0, 8)}.md`
 }
 
 function categoryFromUri(uri: string): string {
@@ -67,14 +78,10 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
   readonly scoreSemantics = NORMALIZED_RELEVANCE_SCORE
   private readonly requestFetch: typeof fetch
   private readonly requestTimeoutMs: number
-  private readonly settlementTimeoutMs: number
-  private readonly pollIntervalMs: number
 
   constructor(private readonly memorySpaces: MemorySpaceAuthority, options: OpenVikingProviderOptions = {}) {
     this.requestFetch = options.fetch ?? globalThis.fetch
     this.requestTimeoutMs = options.requestTimeoutMs ?? 15_000
-    this.settlementTimeoutMs = options.settlementTimeoutMs ?? 120_000
-    this.pollIntervalMs = options.pollIntervalMs ?? 750
   }
 
   async discover(connection: MemoryProviderConnection, signal?: AbortSignal): Promise<ProviderMemorySpace[]> {
@@ -188,53 +195,29 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
   }
 
   async remember(body: MemorySpace, request: RememberRequest, signal?: AbortSignal): Promise<JsonValue> {
-    const sessionId = `dsh-mnemon-${Date.now()}-${randomUUID()}`
-    await this.request(body, '/api/v1/sessions', {
+    const connection = this.connection(body)
+    const root = connection.targetUri.replace(/\/+$/u, '')
+    if (root === '') throw new Error('OpenViking memory space requires a memory URI')
+    const category = string(request.category) ?? 'general'
+    const uri = memoryUri(root, category, request.content)
+    const tags = ['source=mnemon', `category=${category}`]
+    const importance = number(request.importance)
+    if (importance !== undefined) tags.push(`importance=${importance}`)
+    const written = object(await this.request(body, '/api/v1/content/write', {
       method: 'POST',
-      body: JSON.stringify({ session_id: sessionId }),
-    }, { signal })
-    await this.request(body, `/api/v1/sessions/${encodeURIComponent(sessionId)}/messages`, {
-      method: 'POST',
-      body: JSON.stringify({ role: 'user', content: request.content }),
-    }, { signal })
-    const committed = object(await this.request(body, `/api/v1/sessions/${encodeURIComponent(sessionId)}/commit`, {
-      method: 'POST',
-      body: JSON.stringify({ keep_recent_count: 0 }),
-    }, { signal, timeoutMs: 30_000 }))
-    const taskId = string(committed?.task_id)
-    const archiveUri = string(committed?.archive_uri)
-    if (taskId === undefined) {
-      return {
-        action: 'skipped',
-        provider: 'openviking',
-        summary: string(committed?.reason) ?? 'OpenViking did not archive a memory candidate.',
-        sessionId,
-      }
-    }
-
-    const task = await this.settleTask(body, taskId, signal)
-    if (task === undefined) {
-      return {
-        action: 'queued',
-        provider: 'openviking',
-        summary: 'OpenViking accepted the session and is extracting durable memories asynchronously.',
-        status: 'pending',
-        taskId,
-        sessionId,
-        ...(archiveUri === undefined ? {} : { archiveUri }),
-      }
-    }
-    const taskResult = object(task.result)
-    const extracted = object(taskResult?.memories_extracted) ?? {}
-    const total = Object.values(extracted).reduce<number>((sum, value) => sum + (number(value) ?? 0), 0)
+      body: JSON.stringify({ uri, content: request.content, mode: 'replace', wait: true, tags }),
+    }, { signal, timeoutMs: Math.max(this.requestTimeoutMs, 60_000) })) ?? {}
+    const rootUri = string(written.root_uri)
+    const writtenBytes = number(written.written_bytes)
     return {
-      action: total > 0 ? 'stored' : 'skipped',
+      action: 'stored',
       provider: 'openviking',
-      summary: total > 0 ? `OpenViking extracted ${total} durable ${total === 1 ? 'memory' : 'memories'}.` : 'OpenViking completed extraction without a durable memory change.',
-      taskId,
-      sessionId,
-      ...(archiveUri === undefined ? {} : { archiveUri }),
-      extracted: extracted as JsonValue,
+      uri,
+      externalUri: uri,
+      summary: `OpenViking stored the memory at ${uri} (category ${category}).`,
+      ...(rootUri === undefined ? {} : { rootUri }),
+      ...(writtenBytes === undefined ? {} : { writtenBytes }),
+      vectorStatus: string(written.vector_status) ?? 'unknown',
     }
   }
 
@@ -260,18 +243,6 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
     if ((body.provider.typeId ?? body.provider.id) !== this.id) throw new Error(`OpenViking cannot serve provider ${body.provider.id}`)
     const connection = this.memorySpaces.providerConnection(body.id, body.provider.id)
     return { endpoint: String(connection.endpoint ?? ''), targetUri: String(connection.targetUri ?? ''), apiKey: String(connection.apiKey ?? ''), account: String(connection.account ?? ''), user: String(connection.user ?? ''), actorPeerId: String(connection.actorPeerId ?? '') }
-  }
-
-  private async settleTask(body: MemorySpace, taskId: string, signal?: AbortSignal): Promise<Record<string, unknown> | undefined> {
-    const deadline = Date.now() + this.settlementTimeoutMs
-    while (Date.now() < deadline) {
-      const task = object(await this.request(body, `/api/v1/tasks/${encodeURIComponent(taskId)}`, {}, { signal, timeoutMs: 10_000 })) ?? {}
-      const status = string(task.status)
-      if (status === 'completed') return task
-      if (status === 'failed' || status === 'cancelled') throw new Error(`OpenViking memory extraction ${status}: ${string(task.error) ?? taskId}`)
-      await delay(this.pollIntervalMs, signal)
-    }
-    return undefined
   }
 
   private async request(body: MemorySpace, path: string, init: RequestInit = {}, options: OpenVikingRequestOptions = {}): Promise<unknown> {

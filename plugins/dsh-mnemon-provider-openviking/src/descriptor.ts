@@ -23,7 +23,7 @@ export const descriptor: MemoryProviderDescriptor = {
     "remember": true,
     "link": false,
     "forget": true,
-    "writeMode": "async-extracting",
+    "writeMode": "exact",
     "deletionMode": "hard"
   },
   "fields": [

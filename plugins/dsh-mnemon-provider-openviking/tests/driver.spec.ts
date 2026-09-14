@@ -8,14 +8,14 @@ import { OpenVikingProvider, descriptor } from '../src/index.ts'
 const temporaryDirectories: string[] = []
 afterEach(() => { for (const directory of temporaryDirectories.splice(0)) rmSync(directory, { recursive: true, force: true }) })
 
-async function bodyAndRegistry(fetchMock: typeof fetch, options: { settlementTimeoutMs?: number; pollIntervalMs?: number } = {}) {
+async function bodyAndRegistry(fetchMock: typeof fetch) {
   const dataDir = mkdtempSync(join(tmpdir(), 'mnemon-openviking-driver-'))
   temporaryDirectories.push(dataDir)
   const { authority, body } = createMemorySpaceProviderFixture(descriptor, {
     endpoint: 'https://memory.example.com', targetUri: 'viking://user/team/memories', apiKey: 'private-key',
     account: 'acme', user: 'grivn', actorPeerId: 'dsh-workbench',
   }, { dataDir, instanceId: 'work-account' })
-  return { body, provider: new OpenVikingProvider(authority, { fetch: fetchMock, requestTimeoutMs: 1_000, settlementTimeoutMs: options.settlementTimeoutMs ?? 1_000, pollIntervalMs: options.pollIntervalMs ?? 1 }) }
+  return { body, provider: new OpenVikingProvider(authority, { fetch: fetchMock, requestTimeoutMs: 1_000 }) }
 }
 
 function ok(result: unknown): Response { return new Response(JSON.stringify({ status: 'ok', result }), { status: 200, headers: { 'Content-Type': 'application/json' } }) }
@@ -98,52 +98,58 @@ describe('standalone OpenViking data plane', () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('recursive=true')
   })
 
-  it('settles asynchronous extraction and returns a truthful write receipt', async () => {
-    const paths: string[] = []
-    const fetchMock = vi.fn<typeof fetch>(async (url) => {
+  it('writes the memory through the content API and returns an exact write receipt', async () => {
+    const requests: Array<{ path: string; body: Record<string, unknown> }> = []
+    const fetchMock = vi.fn<typeof fetch>(async (url, init) => {
       const path = new URL(String(url)).pathname
-      paths.push(path)
-      if (path === '/api/v1/sessions') return ok({ session_id: 'created' })
-      if (path.endsWith('/messages')) return ok({ message_id: 'message-1' })
-      if (path.endsWith('/commit')) return ok({ status: 'accepted', task_id: 'task-1', archive_uri: 'viking://user/team/sessions/session/history/archive_001' })
-      if (path === '/api/v1/tasks/task-1') return ok({ status: 'completed', result: { memories_extracted: { preferences: 1, events: 1 } } })
+      requests.push({ path, body: JSON.parse(String(init?.body)) as Record<string, unknown> })
+      if (path === '/api/v1/content/write') {
+        return ok({
+          uri: 'viking://user/team/memories/experiences/20260816010101-example-1a2b3c4d.md',
+          root_uri: 'viking://user/team/memories/experiences',
+          context_type: 'memory',
+          mode: 'replace',
+          written_bytes: 42,
+          content_updated: true,
+          vector_status: 'complete',
+        })
+      }
       throw new Error(`unexpected path ${path}`)
     })
     const { body, provider } = await bodyAndRegistry(fetchMock)
 
-    await expect(provider.remember(body, { content: '发布必须先通过灰度验证。', category: 'decision' })).resolves.toMatchObject({
+    await expect(provider.remember(body, { content: '发布必须先通过灰度验证。', category: 'decision', importance: 4 })).resolves.toMatchObject({
       action: 'stored',
       provider: 'openviking',
-      taskId: 'task-1',
-      archiveUri: 'viking://user/team/sessions/session/history/archive_001',
-      extracted: { preferences: 1, events: 1 },
+      vectorStatus: 'complete',
+      writtenBytes: 42,
     })
-    expect(paths).toEqual([
-      '/api/v1/sessions',
-      expect.stringMatching(/^\/api\/v1\/sessions\/dsh-mnemon-.*\/messages$/),
-      expect.stringMatching(/^\/api\/v1\/sessions\/dsh-mnemon-.*\/commit$/),
-      '/api/v1/tasks/task-1',
-    ])
+
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.path).toBe('/api/v1/content/write')
+    expect(requests[0]?.body).toMatchObject({
+      mode: 'replace',
+      wait: true,
+      content: '发布必须先通过灰度验证。',
+      tags: ['source=mnemon', 'category=decision', 'importance=4'],
+    })
+    expect(String(requests[0]?.body.uri)).toMatch(/^viking:\/\/user\/team\/memories\/experiences\/.*\.md$/u)
   })
 
-  it('returns a queued receipt when accepted extraction outlives the wait window', async () => {
-    const fetchMock = vi.fn<typeof fetch>(async (url) => {
-      const path = new URL(String(url)).pathname
-      if (path === '/api/v1/sessions') return ok({ session_id: 'created' })
-      if (path.endsWith('/messages')) return ok({ message_id: 'message-1' })
-      if (path.endsWith('/commit')) return ok({ status: 'accepted', task_id: 'task-slow', archive_uri: 'viking://user/team/sessions/session/history/archive_slow' })
-      if (path === '/api/v1/tasks/task-slow') return ok({ status: 'running' })
-      throw new Error(`unexpected path ${path}`)
+  it('routes each memory category into its OpenViking memory folder', async () => {
+    const uris: string[] = []
+    const fetchMock = vi.fn<typeof fetch>(async (_url, init) => {
+      const request = JSON.parse(String(init?.body)) as { uri: string }
+      uris.push(request.uri)
+      return ok({ uri: request.uri, vector_status: 'complete' })
     })
-    const { body, provider } = await bodyAndRegistry(fetchMock, { settlementTimeoutMs: 5 })
+    const { body, provider } = await bodyAndRegistry(fetchMock)
 
-    await expect(provider.remember(body, { content: '异步提取不应被误报为失败。', category: 'decision' })).resolves.toMatchObject({
-      action: 'queued',
-      provider: 'openviking',
-      status: 'pending',
-      taskId: 'task-slow',
-      archiveUri: 'viking://user/team/sessions/session/history/archive_slow',
-    })
+    await provider.remember(body, { content: '偏好简洁回答。', category: 'preference' })
+    await provider.remember(body, { content: '发布必须先通过灰度验证。', category: 'decision' })
+    await provider.remember(body, { content: 'ServerKit 使用 Go 后端。', category: 'fact' })
+
+    expect(uris.map(uri => uri.split('/').at(-2))).toEqual(['preferences', 'experiences', 'entities'])
   })
 
   it('forgets only an exact non-generated memory file inside the configured root', async () => {
