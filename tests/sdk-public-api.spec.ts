@@ -10,9 +10,9 @@ import type { InstalledMemorySource } from 'dsh-mnemon/contracts'
 import type { MemoryContributionSnapshot } from 'dsh-mnemon/contracts'
 
 describe('public plugin SDK boundary', () => {
-  it('types the only Context service as its contribution protocol', () => {
+  it('exposes contribution installation and metadata observation without execution authority', () => {
     expectTypeOf<Context['mnemonMemory']>().toEqualTypeOf<MnemonMemoryService>()
-    expectTypeOf<keyof MnemonMemoryService>().toEqualTypeOf<'installContributions'>()
+    expectTypeOf<keyof MnemonMemoryService>().toEqualTypeOf<'installContributions' | 'observeOperations'>()
     expectTypeOf<MemorySourceRuntime['facts']>().toBeFunction()
     type Query = Parameters<NonNullable<MemorySourceRuntime['query']>>[0]
     type Mutation = Parameters<NonNullable<MemorySourceRuntime['mutate']>>[0]
@@ -23,6 +23,7 @@ describe('public plugin SDK boundary', () => {
 
   it('exports author tools without engine, registry or generation constructors', () => {
     expect(sdk.installMemory).toBeTypeOf('function')
+    expect(sdk.observeMemoryOperations).toBeTypeOf('function')
     expect(sdk.defineMemorySource).toBeTypeOf('function')
     expect(sdk.defineMemoryStrategy).toBeTypeOf('function')
     expect(sdk.defineMemoryStrategyExtension).toBeTypeOf('function')

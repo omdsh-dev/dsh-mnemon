@@ -13,7 +13,7 @@ describe('Source-neutral Core entry', () => {
     const service = ctx.mnemonMemory
     expect(core.inject).toEqual([])
     expect(Object.keys(core).sort()).toEqual(['apply', 'inject', 'name', 'provide'])
-    expect(Object.keys(service)).toEqual(['installContributions'])
+    expect(Object.keys(service)).toEqual(['observeOperations', 'installContributions'])
     expect(Object.isFrozen(service)).toBe(true)
     await fiber.dispose()
     expect(() => service.installContributions({}, { instanceId: 'closed' })).toThrow('disposed')

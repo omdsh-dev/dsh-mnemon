@@ -22,7 +22,7 @@ Solid edges show Starter installation ownership; the dotted edge shows Strategy 
 
 Memory Spaces authors its **own** child Fibers and Provider protocol. Each configured Provider is an explicitly installed module; two Source instances can use the same child id without sharing their registry or credentials. No dependency scan or global Provider registry selects implementations.
 
-Like a Spring Boot starter, the default distribution chooses dependencies and explicit defaults. It does not turn Source business code into Core. Users still install only `dsh-mnemon`; 16 plugin packages can be independently built, tested and published. The Starter installs every official package, with three Strategy enhancements shipped as disabled Entries that join the View only after their Settings switches are enabled. Complete Strategy replacement remains explicit.
+Like a Spring Boot starter, the default distribution chooses dependencies and explicit defaults. It does not turn Source business code into Core. Users still install only `dsh-mnemon`; 38 plugin packages can be independently built, tested and published. The Starter installs every official package, with the original Runtime, Documents and Memory Spaces combination enabled by default. Additional Sources, complete Strategies and enhancements are optional Entries that join the View only after activation. Complete Strategy replacement remains explicit.
 
 | Owner | Owns | Does not own |
 |---|---|---|
@@ -117,3 +117,5 @@ One shared workspace has two mutually exclusive DSH placements. Sidebar uses `sh
 The default Starter retains storage selection, persisted formats, named tools and user workflows. `displayMode` selects `sidebar` (default) or `builtin`; the Host accepts legacy `buildin` and saves the canonical spelling through DSH's revision-fenced settings writer when writable. This changes one preference, not memory data or Core/Source contracts. Other configuration keys retain their meaning. This does **not** preserve private controllers, old `kernel/layers/provider-sdk` root exports or historical wrapper packages. The current public entry list is in [Extension development](./extensions.md).
 
 The RSI seam is deliberately small: create a candidate Source/Strategy artifact, test/replay it with fixed facts and requests, review its requested authority, then install/select it normally. Generations support verified replacement and drain; they are not an autonomous code-execution or promotion service. Cordis ownership/isolation is not a security sandbox. High-risk external actions require a separate authority boundary and are not authorized merely by being called “memory”.
+
+See [Structured context access](context-access.md) for the public access, operation, resource and policy contracts.

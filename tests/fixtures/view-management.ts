@@ -40,7 +40,7 @@ export async function viewManagementFixture(saved?: MemoryViewPreferences, ancho
   const loader = ctx.get('loader') as TestLoader
   const modules: Record<string, unknown> = {
     [runtime.name]: runtime, [documents.name]: documents,
-    [spaces.name]: { name: spaces.name, inject: ['mnemonMemory'], apply: (ctx: Context) => spaces.installMemorySpaces(ctx, [{ instanceId: holographic.id, module: holographic, config: undefined }]) },
+    [spaces.name]: { name: spaces.name, memoryPlugin: spaces.memoryPlugin, inject: ['mnemonMemory'], apply: (ctx: Context) => spaces.installMemorySpaces(ctx, [{ instanceId: holographic.id, module: holographic, config: undefined }]) },
     [base.name]: base, [scoped.name]: scoped, [light.name]: light, [capture.name]: capture,
   }
   loader.import = vi.fn(async name => {

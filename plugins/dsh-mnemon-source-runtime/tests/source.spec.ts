@@ -9,6 +9,27 @@ import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
 import * as plugin from '../src/index.ts'
 
 describe('standalone runtime Source', () => {
+  it('imports a reviewed portable user track into its own root with CAS, capacity and recovery history', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-runtime-transfer-')), runner = new MemoryCompositionRunner()
+    try {
+      await runner.mount(strategy, { instanceId: 'strategy' })
+      await runner.mount(plugin, { instanceId: 'work', config: { dataDir: join(directory, 'memory'), userDataDir: join(directory, 'user'), userLimitBytes: 100 } })
+      const client = await runner.managementClient('source:work', { storage: 'custom' })
+      await client.mutate('mutate', { action: 'add', target: 'user', content: 'Original profile' }, { confirmed: true })
+      const before = await client.read('transfer-export', { track: 'user' }), portable = structuredClone(before.value) as any
+      portable.entries[0].value[0].content = 'Portable profile'
+      const imported = await client.mutate('transfer-import', { snapshot: portable }, { confirmed: true, expectedRevision: before.revision })
+      expect(imported.value).toEqual(portable)
+      await expect(client.mutate('transfer-import', { snapshot: portable }, { confirmed: true, expectedRevision: before.revision })).rejects.toThrow('revision conflict')
+      const current = await client.read('transfer-export', { track: 'user' })
+      portable.entries[0].value[0].content = 'a'.repeat(101)
+      await expect(client.mutate('transfer-import', { snapshot: portable }, { confirmed: true, expectedRevision: current.revision })).rejects.toThrow('capacity')
+      expect((await client.read('snapshot')).value).toMatchObject({ entries: [{content:'Portable profile',target:'user'}] })
+      const fs = await import('node:fs/promises')
+      const backups = await fs.readdir(join(directory, 'user/runtime/transfer-history'))
+      expect(await fs.readFile(join(directory, 'user/runtime/transfer-history', backups[0]!), 'utf8')).toContain('Original profile')
+    } finally { await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
+  })
   it('owns capacity planning and revision-fenced compaction behind its management protocol', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'mnemon-runtime-maintenance-'))
     const runner = new MemoryCompositionRunner()

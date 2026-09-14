@@ -1,0 +1,1123 @@
+{
+  "format": 1,
+  "capturedAt": "2026-09-14T06:20:39.271707+00:00",
+  "scope": "Isolated local acceptance fixtures; selected metadata only, no credentials or private conversation transcripts.",
+  "runtime": {
+    "dsh": "0.1.5-rc.1",
+    "mnemon": "0.2.7",
+    "model": "DeepSeek-V41-Flash",
+    "reasoning": "High",
+    "webOrigin": "http://127.0.0.1:5281",
+    "defaultCompositionUnchanged": true,
+    "optionalStrategyEnabledInAcceptanceProfile": true
+  },
+  "implementationCheckpoints": [
+    "345d1ed",
+    "4df9dab"
+  ],
+  "sourceVersions": [
+    {
+      "id": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+      "state": "archived",
+      "createdAt": "2026-09-14T05:16:00.560Z",
+      "updatedAt": "2026-09-14T05:37:47.616Z",
+      "contentDigest": "bc0d342c69dc0a0a2fd752c8261cc6f946950586d2b80737ad7c49f330c537ec",
+      "lineageId": "c1ab77e5-8869-4ee6-99a1-fabda32fd6cb",
+      "release": 1,
+      "enabled": true,
+      "supersededBy": "f4ece482-c82a-41d1-8d97-9ac7546f2962",
+      "validation": {
+        "runId": "29881bf1-2671-4906-a8be-1eff1a8b9a6f",
+        "digest": "bc0d342c69dc0a0a2fd752c8261cc6f946950586d2b80737ad7c49f330c537ec",
+        "status": "passed",
+        "at": "2026-09-14T05:16:57.495Z"
+      },
+      "inspection": {
+        "digest": "bc0d342c69dc0a0a2fd752c8261cc6f946950586d2b80737ad7c49f330c537ec",
+        "errors": [],
+        "warnings": [],
+        "scriptCount": 2
+      },
+      "publishedAt": "2026-09-14T05:18:19.054Z",
+      "name": "api-response-check",
+      "files": [
+        {
+          "path": "references/usage.md",
+          "bytes": 4426,
+          "sha256": "341c67f9cd28067b42c751eb99c6d302a612c26129c6826b19b683323dea6df7"
+        },
+        {
+          "path": "scripts/check-response.mjs",
+          "bytes": 4650,
+          "sha256": "a96c74e08b2147075eee4eb99c724f1a896f02d411f33af847a2f4d7349afdf5"
+        },
+        {
+          "path": "SKILL.md",
+          "bytes": 3470,
+          "sha256": "779c7b9d5d9c976e8444c84ac86da72be10d802710d9b013143ffad23cf0816a"
+        },
+        {
+          "path": "tests/check-response.test.mjs",
+          "bytes": 5513,
+          "sha256": "ea75ee41616a5d4f97385ea34b53c91a7b9bd83bc5de1d9ce6b86fb1c5b84940"
+        }
+      ],
+      "checks": [
+        {
+          "label": "运行 node:test 测试套件，覆盖有效响应、非 2xx、非法 JSON、顶层形状与输入错误",
+          "command": "node --test tests/check-response.test.mjs"
+        },
+        {
+          "label": "通过标准输入传入有效夹具时通过并退出 0",
+          "command": "printf '%s' '{\"status\":200,\"body\":\"{\\\"ok\\\":true}\"}' | node scripts/check-response.mjs -"
+        }
+      ],
+      "basis": {
+        "id": "learning:source:include:mnemon-source-learning:77840953-0f79-4aaf-85a5-9f277ec42c77",
+        "digest": "215766e786323d6ed49be1c2b4784c12c2874c3328cd92f689e0c473b56ca869",
+        "kind": "learning",
+        "signals": 1,
+        "sourceInstanceKey": "source:include:mnemon-source-learning",
+        "recordId": "77840953-0f79-4aaf-85a5-9f277ec42c77",
+        "recordVersion": 1
+      }
+    },
+    {
+      "id": "f4ece482-c82a-41d1-8d97-9ac7546f2962",
+      "state": "active",
+      "createdAt": "2026-09-14T05:29:06.327Z",
+      "updatedAt": "2026-09-14T05:37:47.616Z",
+      "contentDigest": "b17ef91b7ee03909039d4fec16dd24bf21d35559ae206184f12f0a30d714c81e",
+      "lineageId": "c1ab77e5-8869-4ee6-99a1-fabda32fd6cb",
+      "release": 2,
+      "enabled": true,
+      "baseId": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+      "validation": {
+        "runId": "ce848aa5-fab2-4294-a171-802c1a7d6a64",
+        "digest": "b17ef91b7ee03909039d4fec16dd24bf21d35559ae206184f12f0a30d714c81e",
+        "status": "passed",
+        "at": "2026-09-14T05:32:55.511Z"
+      },
+      "inspection": {
+        "digest": "b17ef91b7ee03909039d4fec16dd24bf21d35559ae206184f12f0a30d714c81e",
+        "errors": [],
+        "warnings": [],
+        "scriptCount": 2
+      },
+      "publishedAt": "2026-09-14T05:37:47.616Z",
+      "name": "api-response-check",
+      "files": [
+        {
+          "path": "references/usage.md",
+          "bytes": 5975,
+          "sha256": "5213d03db37292f5d04ab12bac211f2be79748274a7ab7633c699f11dc222ae9"
+        },
+        {
+          "path": "scripts/check-response.mjs",
+          "bytes": 6027,
+          "sha256": "5e199f8605a32771752f491a472a5f86d4fbf2c5ad7dda24599283412356b2c8"
+        },
+        {
+          "path": "SKILL.md",
+          "bytes": 4148,
+          "sha256": "371989a3d949f2de228051754b8a22349fd709ec6072b4d78bff6ebf4fd8f156"
+        },
+        {
+          "path": "tests/check-response.test.mjs",
+          "bytes": 8933,
+          "sha256": "3f034d0ff2a8d5e9f653fbfe53c8e68bbc171977f93d9e1e0fd91a05c55b302a"
+        }
+      ],
+      "checks": [
+        {
+          "label": "回归测试：原有行为及数组选项（19 例）",
+          "command": "node --test tests/check-response.test.mjs"
+        },
+        {
+          "label": "默认模式：对象夹具通过并退出 0",
+          "command": "printf '%s' '{\"status\":200,\"body\":\"{\\\"ok\\\":true}\"}' | node scripts/check-response.mjs -"
+        },
+        {
+          "label": "--allow-array：空数组夹具通过并退出 0",
+          "command": "printf '%s' '{\"status\":200,\"body\":\"[]\"}' | node scripts/check-response.mjs --allow-array -"
+        },
+        {
+          "label": "--allow-array：非空数组夹具通过并退出 0",
+          "command": "printf '%s' '{\"status\":200,\"body\":\"[{\\\"id\\\":1}]\"}' | node scripts/check-response.mjs --allow-array -"
+        }
+      ],
+      "basis": {
+        "id": "feedback:c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+        "digest": "e73650d0b96e3a46230a328b8e1c3da221d00c93faa953cd3dfebc8b4b6979b6",
+        "kind": "feedback",
+        "signals": 2,
+        "recordId": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+        "recordVersion": 3
+      },
+      "publishedFilesMatchReviewedBundle": true
+    },
+    {
+      "id": "4f16a3db-a5c7-42b5-987d-6cdf858476ca",
+      "state": "rejected",
+      "createdAt": "2026-09-14T05:46:21.565Z",
+      "updatedAt": "2026-09-14T05:48:14.580Z",
+      "contentDigest": "ba0ddd930fdd0b4b1f572a6845f5bffce8982562f31accd76317d28dba8cd3b7",
+      "lineageId": "c1ab77e5-8869-4ee6-99a1-fabda32fd6cb",
+      "release": 3,
+      "enabled": true,
+      "baseId": "f4ece482-c82a-41d1-8d97-9ac7546f2962",
+      "inspection": {
+        "digest": "ba0ddd930fdd0b4b1f572a6845f5bffce8982562f31accd76317d28dba8cd3b7",
+        "errors": [],
+        "warnings": [],
+        "scriptCount": 2
+      },
+      "name": "api-response-check",
+      "files": [
+        {
+          "path": "references/usage.md",
+          "bytes": 4426,
+          "sha256": "341c67f9cd28067b42c751eb99c6d302a612c26129c6826b19b683323dea6df7"
+        },
+        {
+          "path": "scripts/check-response.mjs",
+          "bytes": 4650,
+          "sha256": "a96c74e08b2147075eee4eb99c724f1a896f02d411f33af847a2f4d7349afdf5"
+        },
+        {
+          "path": "SKILL.md",
+          "bytes": 3470,
+          "sha256": "779c7b9d5d9c976e8444c84ac86da72be10d802710d9b013143ffad23cf0816a"
+        },
+        {
+          "path": "tests/check-response.test.mjs",
+          "bytes": 5513,
+          "sha256": "ea75ee41616a5d4f97385ea34b53c91a7b9bd83bc5de1d9ce6b86fb1c5b84940"
+        }
+      ],
+      "checks": [
+        {
+          "label": "取消运行验收",
+          "command": "node -e \"setTimeout(() => console.log('late completion'), 25000)\""
+        },
+        {
+          "label": "通过标准输入传入有效夹具时通过并退出 0",
+          "command": "printf '%s' '{\"status\":200,\"body\":\"{\\\"ok\\\":true}\"}' | node scripts/check-response.mjs -"
+        }
+      ],
+      "basis": {
+        "id": "history:c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+        "digest": "bc0d342c69dc0a0a2fd752c8261cc6f946950586d2b80737ad7c49f330c537ec",
+        "kind": "manual",
+        "signals": 1,
+        "recordId": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+        "recordVersion": 4
+      }
+    },
+    {
+      "id": "d3932c59-1915-4a6f-9cc6-7c4200cba51f",
+      "state": "active",
+      "createdAt": "2026-09-14T05:48:21.752Z",
+      "updatedAt": "2026-09-14T06:08:11.450Z",
+      "contentDigest": "b740d6292470cab7b39d89548065cac45b78063a6a086eee1f2efd28e437383a",
+      "lineageId": "5f6d58c8-66f4-4a34-9641-3800e55c5a87",
+      "release": 1,
+      "enabled": true,
+      "inspection": {
+        "digest": "b740d6292470cab7b39d89548065cac45b78063a6a086eee1f2efd28e437383a",
+        "errors": [],
+        "warnings": [
+          "Instructions only; no executable checks were declared"
+        ],
+        "scriptCount": 0
+      },
+      "publishedAt": "2026-09-14T05:50:03.768Z",
+      "name": "fixture-review",
+      "files": [
+        {
+          "path": "references/checklist.md",
+          "bytes": 292,
+          "sha256": "78cf396dba76f0af6dda096492731aa0166e32924d5100d7bc9c1a3b99df9ed9"
+        },
+        {
+          "path": "SKILL.md",
+          "bytes": 1101,
+          "sha256": "7a8765725796710c15cb5cdcc8b5f89e75fa9a6bd263bbb15df92e0de6055175"
+        }
+      ],
+      "checks": [],
+      "basis": {
+        "id": "native:fixture-review",
+        "digest": "5e24fd90a79db8fdbc6c19e4c9a2fbe2c849924d7489255152f638fb9bd9033d",
+        "kind": "native",
+        "signals": 1
+      },
+      "publishedFilesMatchReviewedBundle": true
+    },
+    {
+      "id": "a31c48f7-93a3-44a9-96c3-19f931d17c3f",
+      "state": "rejected",
+      "createdAt": "2026-09-14T05:54:39.868Z",
+      "updatedAt": "2026-09-14T05:54:59.759Z",
+      "contentDigest": "5da8025953476b411348fef8a705d0851366f403530e9bb9690063e9aaa3abe8",
+      "lineageId": "c1ab77e5-8869-4ee6-99a1-fabda32fd6cb",
+      "release": 4,
+      "enabled": true,
+      "baseId": "f4ece482-c82a-41d1-8d97-9ac7546f2962",
+      "inspection": {
+        "digest": "5da8025953476b411348fef8a705d0851366f403530e9bb9690063e9aaa3abe8",
+        "errors": [],
+        "warnings": [],
+        "scriptCount": 2
+      },
+      "name": "api-response-check",
+      "files": [
+        {
+          "path": "references/usage.md",
+          "bytes": 4426,
+          "sha256": "341c67f9cd28067b42c751eb99c6d302a612c26129c6826b19b683323dea6df7"
+        },
+        {
+          "path": "scripts/check-response.mjs",
+          "bytes": 4650,
+          "sha256": "a96c74e08b2147075eee4eb99c724f1a896f02d411f33af847a2f4d7349afdf5"
+        },
+        {
+          "path": "SKILL.md",
+          "bytes": 3470,
+          "sha256": "779c7b9d5d9c976e8444c84ac86da72be10d802710d9b013143ffad23cf0816a"
+        },
+        {
+          "path": "tests/check-response.test.mjs",
+          "bytes": 5513,
+          "sha256": "ea75ee41616a5d4f97385ea34b53c91a7b9bd83bc5de1d9ce6b86fb1c5b84940"
+        }
+      ],
+      "checks": [
+        {
+          "label": "取消运行与证据回流验收",
+          "command": "node -e \"setTimeout(() => console.log('late completion'), 25000)\""
+        },
+        {
+          "label": "通过标准输入传入有效夹具时通过并退出 0",
+          "command": "printf '%s' '{\"status\":200,\"body\":\"{\\\"ok\\\":true}\"}' | node scripts/check-response.mjs -"
+        }
+      ],
+      "basis": {
+        "id": "history:c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+        "digest": "bc0d342c69dc0a0a2fd752c8261cc6f946950586d2b80737ad7c49f330c537ec",
+        "kind": "manual",
+        "signals": 1,
+        "recordId": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+        "recordVersion": 4
+      }
+    },
+    {
+      "id": "dbe4b462-120c-41cf-8664-69fbfc4747a6",
+      "state": "rejected",
+      "createdAt": "2026-09-14T06:05:48.670Z",
+      "updatedAt": "2026-09-14T06:07:18.122Z",
+      "contentDigest": "06ceb3761e383dc5d39be958b4f6f7edd99b88a34d02feaf478c32ea7b1780c6",
+      "lineageId": "c1ab77e5-8869-4ee6-99a1-fabda32fd6cb",
+      "release": 5,
+      "enabled": true,
+      "baseId": "f4ece482-c82a-41d1-8d97-9ac7546f2962",
+      "inspection": {
+        "digest": "06ceb3761e383dc5d39be958b4f6f7edd99b88a34d02feaf478c32ea7b1780c6",
+        "errors": [
+          "SKILL.md name and description must match the reviewed skill"
+        ],
+        "warnings": [],
+        "scriptCount": 2
+      },
+      "name": "api-response-check",
+      "files": [
+        {
+          "path": "references/usage.md",
+          "bytes": 4426,
+          "sha256": "341c67f9cd28067b42c751eb99c6d302a612c26129c6826b19b683323dea6df7"
+        },
+        {
+          "path": "scripts/check-response.mjs",
+          "bytes": 4650,
+          "sha256": "a96c74e08b2147075eee4eb99c724f1a896f02d411f33af847a2f4d7349afdf5"
+        },
+        {
+          "path": "SKILL.md",
+          "bytes": 3278,
+          "sha256": "a9339497c03e54db6d755b6bdc616a6e13040046dfd67498f23152de20d9a380"
+        },
+        {
+          "path": "tests/check-response.test.mjs",
+          "bytes": 5513,
+          "sha256": "ea75ee41616a5d4f97385ea34b53c91a7b9bd83bc5de1d9ce6b86fb1c5b84940"
+        }
+      ],
+      "checks": [
+        {
+          "label": "编辑后应重新检查这 11 个回归用例",
+          "command": "node --test tests/check-response.test.mjs"
+        },
+        {
+          "label": "通过标准输入传入有效夹具时通过并退出 0",
+          "command": "printf '%s' '{\"status\":200,\"body\":\"{\\\"ok\\\":true}\"}' | node scripts/check-response.mjs -"
+        }
+      ],
+      "basis": {
+        "id": "history:c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+        "digest": "bc0d342c69dc0a0a2fd752c8261cc6f946950586d2b80737ad7c49f330c537ec",
+        "kind": "manual",
+        "signals": 1,
+        "recordId": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+        "recordVersion": 4
+      }
+    },
+    {
+      "id": "e088407a-baf4-4095-913d-a19d16c6fbca",
+      "state": "rejected",
+      "createdAt": "2026-09-14T06:17:11.944Z",
+      "updatedAt": "2026-09-14T06:17:45.488Z",
+      "contentDigest": "bc0d342c69dc0a0a2fd752c8261cc6f946950586d2b80737ad7c49f330c537ec",
+      "lineageId": "c1ab77e5-8869-4ee6-99a1-fabda32fd6cb",
+      "release": 6,
+      "enabled": true,
+      "baseId": "f4ece482-c82a-41d1-8d97-9ac7546f2962",
+      "inspection": {
+        "digest": "bc0d342c69dc0a0a2fd752c8261cc6f946950586d2b80737ad7c49f330c537ec",
+        "errors": [],
+        "warnings": [],
+        "scriptCount": 2
+      },
+      "name": "api-response-check",
+      "files": [
+        {
+          "path": "references/usage.md",
+          "bytes": 4426,
+          "sha256": "341c67f9cd28067b42c751eb99c6d302a612c26129c6826b19b683323dea6df7"
+        },
+        {
+          "path": "scripts/check-response.mjs",
+          "bytes": 4650,
+          "sha256": "a96c74e08b2147075eee4eb99c724f1a896f02d411f33af847a2f4d7349afdf5"
+        },
+        {
+          "path": "SKILL.md",
+          "bytes": 3470,
+          "sha256": "779c7b9d5d9c976e8444c84ac86da72be10d802710d9b013143ffad23cf0816a"
+        },
+        {
+          "path": "tests/check-response.test.mjs",
+          "bytes": 5513,
+          "sha256": "ea75ee41616a5d4f97385ea34b53c91a7b9bd83bc5de1d9ce6b86fb1c5b84940"
+        }
+      ],
+      "checks": [
+        {
+          "label": "运行 node:test 测试套件，覆盖有效响应、非 2xx、非法 JSON、顶层形状与输入错误",
+          "command": "node --test tests/check-response.test.mjs"
+        },
+        {
+          "label": "通过标准输入传入有效夹具时通过并退出 0",
+          "command": "printf '%s' '{\"status\":200,\"body\":\"{\\\"ok\\\":true}\"}' | node scripts/check-response.mjs -"
+        }
+      ],
+      "basis": {
+        "id": "history:c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+        "digest": "bc0d342c69dc0a0a2fd752c8261cc6f946950586d2b80737ad7c49f330c537ec",
+        "kind": "manual",
+        "signals": 1,
+        "recordId": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+        "recordVersion": 4
+      }
+    }
+  ],
+  "runs": [
+    {
+      "id": "b5f9b65a-1538-4596-97ed-632d6bbd6349",
+      "createdAt": "2026-09-14T05:15:11.940Z",
+      "kind": "generate",
+      "status": "completed",
+      "candidateId": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+      "completedAt": "2026-09-14T05:16:00.570Z",
+      "results": []
+    },
+    {
+      "id": "29881bf1-2671-4906-a8be-1eff1a8b9a6f",
+      "createdAt": "2026-09-14T05:16:56.744Z",
+      "kind": "validate",
+      "status": "completed",
+      "skillId": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+      "contentDigest": "bc0d342c69dc0a0a2fd752c8261cc6f946950586d2b80737ad7c49f330c537ec",
+      "completedAt": "2026-09-14T05:16:57.502Z",
+      "results": [
+        {
+          "label": "运行 node:test 测试套件，覆盖有效响应、非 2xx、非法 JSON、顶层形状与输入错误",
+          "command": "node --test tests/check-response.test.mjs",
+          "toolCallId": "mnemon-skill-check:25a74066-ac66-4105-8271-4ef61fe52390",
+          "status": "passed",
+          "exitCode": 0
+        },
+        {
+          "label": "通过标准输入传入有效夹具时通过并退出 0",
+          "command": "printf '%s' '{\"status\":200,\"body\":\"{\\\"ok\\\":true}\"}' | node scripts/check-response.mjs -",
+          "toolCallId": "mnemon-skill-check:2e545246-0ca0-497e-9822-92e919c49829",
+          "status": "passed",
+          "exitCode": 0
+        }
+      ]
+    },
+    {
+      "id": "58066cfa-e830-4181-8b91-d00bb635aa5d",
+      "createdAt": "2026-09-14T05:30:31.411Z",
+      "kind": "validate",
+      "status": "completed",
+      "skillId": "f4ece482-c82a-41d1-8d97-9ac7546f2962",
+      "contentDigest": "d8bb65551632d2f79431c64b828c9e57300f27494c55df020a8f6b7e4ccc9257",
+      "completedAt": "2026-09-14T05:30:32.568Z",
+      "results": [
+        {
+          "label": "运行 node:test 测试套件（含默认拒绝数组、--allow-array 允许空/非空数组、非 2xx 优先失败）",
+          "command": "node --test tests/check-response.test.mjs",
+          "toolCallId": "mnemon-skill-check:30172106-72fc-4adb-981d-74a21cae8a21",
+          "status": "passed",
+          "exitCode": 0
+        },
+        {
+          "label": "默认模式：对象夹具通过并退出 0",
+          "command": "printf '%s' '{\"status\":200,\"body\":\"{\\\"ok\\\":true}\"}' | node scripts/check-response.mjs -",
+          "toolCallId": "mnemon-skill-check:7416b329-2998-4f7c-9640-e5aec97859de",
+          "status": "passed",
+          "exitCode": 0
+        },
+        {
+          "label": "--allow-array：空数组夹具通过并退出 0",
+          "command": "printf '%s' '{\"status\":200,\"body\":\"[]\"}' | node scripts/check-response.mjs --allow-array -",
+          "toolCallId": "mnemon-skill-check:586671d7-1fa3-431f-a73b-542d625c7f55",
+          "status": "passed",
+          "exitCode": 0
+        },
+        {
+          "label": "--allow-array：非空数组夹具通过并退出 0",
+          "command": "printf '%s' '{\"status\":200,\"body\":\"[{\\\"id\\\":1}]\"}' | node scripts/check-response.mjs --allow-array -",
+          "toolCallId": "mnemon-skill-check:7094a1a6-181d-47e2-8e1b-1ecb1bb2bf57",
+          "status": "passed",
+          "exitCode": 0
+        }
+      ]
+    },
+    {
+      "id": "ce848aa5-fab2-4294-a171-802c1a7d6a64",
+      "createdAt": "2026-09-14T05:32:54.379Z",
+      "kind": "validate",
+      "status": "completed",
+      "skillId": "f4ece482-c82a-41d1-8d97-9ac7546f2962",
+      "contentDigest": "b17ef91b7ee03909039d4fec16dd24bf21d35559ae206184f12f0a30d714c81e",
+      "completedAt": "2026-09-14T05:32:55.521Z",
+      "results": [
+        {
+          "label": "回归测试：原有行为及数组选项（19 例）",
+          "command": "node --test tests/check-response.test.mjs",
+          "toolCallId": "mnemon-skill-check:8998887e-638a-40d4-9f78-d2de1b419eeb",
+          "status": "passed",
+          "exitCode": 0
+        },
+        {
+          "label": "默认模式：对象夹具通过并退出 0",
+          "command": "printf '%s' '{\"status\":200,\"body\":\"{\\\"ok\\\":true}\"}' | node scripts/check-response.mjs -",
+          "toolCallId": "mnemon-skill-check:8a7072df-f138-40e8-af93-c5420e67da2a",
+          "status": "passed",
+          "exitCode": 0
+        },
+        {
+          "label": "--allow-array：空数组夹具通过并退出 0",
+          "command": "printf '%s' '{\"status\":200,\"body\":\"[]\"}' | node scripts/check-response.mjs --allow-array -",
+          "toolCallId": "mnemon-skill-check:30caec83-1a55-4bcc-8bee-96de6a78a6a0",
+          "status": "passed",
+          "exitCode": 0
+        },
+        {
+          "label": "--allow-array：非空数组夹具通过并退出 0",
+          "command": "printf '%s' '{\"status\":200,\"body\":\"[{\\\"id\\\":1}]\"}' | node scripts/check-response.mjs --allow-array -",
+          "toolCallId": "mnemon-skill-check:0c8b9309-8efe-4e37-9cbd-3739325698a8",
+          "status": "passed",
+          "exitCode": 0
+        }
+      ]
+    },
+    {
+      "id": "d8b1d14e-3e7b-457b-bc3b-a3dc98953407",
+      "createdAt": "2026-09-14T05:44:39.178Z",
+      "kind": "generate",
+      "status": "failed",
+      "completedAt": "2026-09-14T05:44:54.838Z",
+      "error": "SyntaxError: Unexpected non-whitespace character after JSON at position 3157 (line 1 column 3158)",
+      "results": []
+    },
+    {
+      "id": "3312a049-8c5f-470e-b814-5b02f71510e6",
+      "createdAt": "2026-09-14T05:46:35.700Z",
+      "kind": "validate",
+      "status": "failed",
+      "skillId": "4f16a3db-a5c7-42b5-987d-6cdf858476ca",
+      "contentDigest": "941fb42f646486341cfb51a6637c98b6b932c333d1750fcc496d0c42ad9fb992",
+      "completedAt": "2026-09-14T05:46:35.873Z",
+      "results": [
+        {
+          "label": "失败保护验收：必须保留非零退出码",
+          "command": "node -e \"console.error('Deliberate acceptance failure'); process.exit(7)\"",
+          "toolCallId": "mnemon-skill-check:c23382b5-74f3-476b-b8d9-e1100370ce62",
+          "status": "failed",
+          "exitCode": 7,
+          "failureSummary": "Deliberate acceptance failure"
+        },
+        {
+          "label": "通过标准输入传入有效夹具时通过并退出 0",
+          "command": "printf '%s' '{\"status\":200,\"body\":\"{\\\"ok\\\":true}\"}' | node scripts/check-response.mjs -",
+          "toolCallId": "mnemon-skill-check:95e44b78-bf25-4ed4-93f3-cf0852a7713e",
+          "status": "passed",
+          "exitCode": 0
+        }
+      ]
+    },
+    {
+      "id": "782b7c02-89b2-4dc3-a127-6806322dd3ea",
+      "createdAt": "2026-09-14T05:47:22.335Z",
+      "kind": "validate",
+      "status": "cancelled",
+      "skillId": "4f16a3db-a5c7-42b5-987d-6cdf858476ca",
+      "contentDigest": "ba0ddd930fdd0b4b1f572a6845f5bffce8982562f31accd76317d28dba8cd3b7",
+      "completedAt": "2026-09-14T05:47:33.783Z",
+      "error": "Error: Skill run cancelled by the operator",
+      "results": [
+        {
+          "label": "取消运行验收",
+          "command": "node -e \"setTimeout(() => console.log('late completion'), 25000)\"",
+          "toolCallId": "mnemon-skill-check:840db1cc-182a-45f3-b63c-a24aea5b4c8b",
+          "status": "blocked",
+          "exitCode": null,
+          "failureSummary": "Error: tool call aborted"
+        }
+      ]
+    },
+    {
+      "id": "0be20c28-9f53-4cce-ab14-0c2fa79d5078",
+      "createdAt": "2026-09-14T05:48:15.733Z",
+      "kind": "generate",
+      "status": "completed",
+      "candidateId": "d3932c59-1915-4a6f-9cc6-7c4200cba51f",
+      "completedAt": "2026-09-14T05:48:21.770Z",
+      "results": []
+    },
+    {
+      "id": "8c3e2947-2c61-46fa-b7a3-323029857f18",
+      "createdAt": "2026-09-14T05:54:40.424Z",
+      "kind": "validate",
+      "status": "cancelled",
+      "skillId": "a31c48f7-93a3-44a9-96c3-19f931d17c3f",
+      "contentDigest": "5da8025953476b411348fef8a705d0851366f403530e9bb9690063e9aaa3abe8",
+      "completedAt": "2026-09-14T05:54:40.715Z",
+      "error": "Error: Skill run cancelled by the operator",
+      "results": [
+        {
+          "label": "取消运行与证据回流验收",
+          "command": "node -e \"setTimeout(() => console.log('late completion'), 25000)\"",
+          "toolCallId": "mnemon-skill-check:9b64f12c-66ff-4065-bbca-a12fe16853b0",
+          "status": "cancelled",
+          "exitCode": null,
+          "failureSummary": "Command cancelled before validation completed"
+        }
+      ]
+    },
+    {
+      "id": "9967f4e3-7982-4ceb-8707-8a352443ed42",
+      "createdAt": "2026-09-14T06:05:49.176Z",
+      "kind": "validate",
+      "status": "completed",
+      "skillId": "dbe4b462-120c-41cf-8664-69fbfc4747a6",
+      "contentDigest": "bc0d342c69dc0a0a2fd752c8261cc6f946950586d2b80737ad7c49f330c537ec",
+      "completedAt": "2026-09-14T06:05:50.553Z",
+      "results": [
+        {
+          "label": "运行 node:test 测试套件，覆盖有效响应、非 2xx、非法 JSON、顶层形状与输入错误",
+          "command": "node --test tests/check-response.test.mjs",
+          "toolCallId": "mnemon-skill-check:a65a6752-3699-44bf-b0e3-d0853c43cd73",
+          "status": "passed",
+          "exitCode": 0
+        },
+        {
+          "label": "通过标准输入传入有效夹具时通过并退出 0",
+          "command": "printf '%s' '{\"status\":200,\"body\":\"{\\\"ok\\\":true}\"}' | node scripts/check-response.mjs -",
+          "toolCallId": "mnemon-skill-check:435b32d1-34d6-46bd-8436-9af4d3bae02f",
+          "status": "passed",
+          "exitCode": 0
+        }
+      ]
+    }
+  ],
+  "usageAndFeedback": [
+    {
+      "id": "a51443e3-411f-400a-9433-6691e2997f12",
+      "createdAt": "2026-09-14T05:21:38.162Z",
+      "kind": "native-load",
+      "skillId": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+      "contentDigest": "bc0d342c69dc0a0a2fd752c8261cc6f946950586d2b80737ad7c49f330c537ec",
+      "release": 1,
+      "verifiedByHuman": false
+    },
+    {
+      "id": "c98b7e2a-0f6f-43e8-90e4-b8d1fee9005d",
+      "createdAt": "2026-09-14T05:24:59.258Z",
+      "kind": "execution",
+      "skillId": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+      "contentDigest": "bc0d342c69dc0a0a2fd752c8261cc6f946950586d2b80737ad7c49f330c537ec",
+      "release": 1,
+      "status": "passed",
+      "exitCode": 0,
+      "verifiedByHuman": false,
+      "concern": false
+    },
+    {
+      "id": "5da5c119-2125-4f08-bb41-ccd9af6befca",
+      "createdAt": "2026-09-14T05:24:59.308Z",
+      "kind": "execution",
+      "skillId": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+      "contentDigest": "bc0d342c69dc0a0a2fd752c8261cc6f946950586d2b80737ad7c49f330c537ec",
+      "release": 1,
+      "status": "failed",
+      "exitCode": 1,
+      "verifiedByHuman": false,
+      "concern": true,
+      "resolvedBy": "f4ece482-c82a-41d1-8d97-9ac7546f2962"
+    },
+    {
+      "id": "ecc27cec-ed65-4986-9727-3d58a37ab9bb",
+      "createdAt": "2026-09-14T05:27:25.539Z",
+      "kind": "feedback",
+      "skillId": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+      "contentDigest": "bc0d342c69dc0a0a2fd752c8261cc6f946950586d2b80737ad7c49f330c537ec",
+      "release": 1,
+      "verdict": "outdated",
+      "verifiedByHuman": true,
+      "concern": true,
+      "resolvedBy": "f4ece482-c82a-41d1-8d97-9ac7546f2962"
+    },
+    {
+      "id": "dc91e0d8-bb86-4b0d-a794-9e46ab9a3b04",
+      "createdAt": "2026-09-14T05:38:59.911Z",
+      "kind": "native-load",
+      "skillId": "f4ece482-c82a-41d1-8d97-9ac7546f2962",
+      "contentDigest": "b17ef91b7ee03909039d4fec16dd24bf21d35559ae206184f12f0a30d714c81e",
+      "release": 2,
+      "verifiedByHuman": false
+    },
+    {
+      "id": "ab3d88f9-8783-4fc1-a2c3-4c0ffb46130b",
+      "createdAt": "2026-09-14T05:39:01.812Z",
+      "kind": "execution",
+      "skillId": "f4ece482-c82a-41d1-8d97-9ac7546f2962",
+      "contentDigest": "b17ef91b7ee03909039d4fec16dd24bf21d35559ae206184f12f0a30d714c81e",
+      "release": 2,
+      "status": "passed",
+      "exitCode": 0,
+      "verifiedByHuman": false,
+      "concern": false
+    }
+  ],
+  "learningObservations": [
+    {
+      "id": "90fe9f05-ec4a-4dfb-a867-cc2d60faaa48",
+      "createdAt": "2026-09-14T05:16:57.502Z",
+      "sourceInstanceKey": "source:include:mnemon-source-playbooks",
+      "recordId": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+      "activityKind": "skill-validated",
+      "level": "info",
+      "verifiedByHuman": false,
+      "artifactId": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+      "artifactDigest": "bc0d342c69dc0a0a2fd752c8261cc6f946950586d2b80737ad7c49f330c537ec",
+      "status": "passed",
+      "capturedAt": "2026-09-14T05:16:57.502Z"
+    },
+    {
+      "id": "b65ea796-251e-4ab3-823b-ff23a8e0ff0c",
+      "createdAt": "2026-09-14T05:18:19.068Z",
+      "sourceInstanceKey": "source:include:mnemon-source-playbooks",
+      "recordId": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+      "activityKind": "skill-published",
+      "level": "info",
+      "verifiedByHuman": true,
+      "artifactId": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+      "artifactDigest": "bc0d342c69dc0a0a2fd752c8261cc6f946950586d2b80737ad7c49f330c537ec",
+      "status": "published",
+      "capturedAt": "2026-09-14T05:18:19.068Z"
+    },
+    {
+      "id": "228486e0-297a-469d-8c76-392d878636b5",
+      "createdAt": "2026-09-14T05:24:59.270Z",
+      "sourceInstanceKey": "source:include:mnemon-source-playbooks",
+      "recordId": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+      "activityKind": "skill-executed",
+      "level": "info",
+      "verifiedByHuman": false,
+      "artifactId": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+      "artifactDigest": "bc0d342c69dc0a0a2fd752c8261cc6f946950586d2b80737ad7c49f330c537ec",
+      "status": "passed",
+      "exitCode": 0,
+      "capturedAt": "2026-09-14T05:24:59.270Z"
+    },
+    {
+      "id": "405ec1a7-1fc1-47f3-8465-dca6ed14bb02",
+      "createdAt": "2026-09-14T05:24:59.319Z",
+      "sourceInstanceKey": "source:include:mnemon-source-playbooks",
+      "recordId": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+      "activityKind": "skill-executed",
+      "level": "warning",
+      "verifiedByHuman": false,
+      "artifactId": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+      "artifactDigest": "bc0d342c69dc0a0a2fd752c8261cc6f946950586d2b80737ad7c49f330c537ec",
+      "status": "failed",
+      "exitCode": 1,
+      "capturedAt": "2026-09-14T05:24:59.319Z"
+    },
+    {
+      "id": "6f10f5b9-0f3d-4a76-85d6-b32f334cb4dd",
+      "createdAt": "2026-09-14T05:27:25.553Z",
+      "sourceInstanceKey": "source:include:mnemon-source-playbooks",
+      "recordId": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+      "activityKind": "skill-feedback",
+      "level": "warning",
+      "verifiedByHuman": true,
+      "artifactId": "c53cad2d-914b-41f8-a1f6-7beeb599fef3",
+      "artifactDigest": "bc0d342c69dc0a0a2fd752c8261cc6f946950586d2b80737ad7c49f330c537ec",
+      "status": "outdated",
+      "capturedAt": "2026-09-14T05:27:25.553Z"
+    },
+    {
+      "id": "f0803bc3-dcee-4e5c-af6f-89c5f31d7639",
+      "createdAt": "2026-09-14T05:30:32.569Z",
+      "sourceInstanceKey": "source:include:mnemon-source-playbooks",
+      "recordId": "f4ece482-c82a-41d1-8d97-9ac7546f2962",
+      "activityKind": "skill-validated",
+      "level": "info",
+      "verifiedByHuman": false,
+      "artifactId": "f4ece482-c82a-41d1-8d97-9ac7546f2962",
+      "artifactDigest": "d8bb65551632d2f79431c64b828c9e57300f27494c55df020a8f6b7e4ccc9257",
+      "status": "passed",
+      "capturedAt": "2026-09-14T05:30:32.569Z"
+    },
+    {
+      "id": "c79a86f5-3c64-434a-83bd-b236f3169377",
+      "createdAt": "2026-09-14T05:32:55.522Z",
+      "sourceInstanceKey": "source:include:mnemon-source-playbooks",
+      "recordId": "f4ece482-c82a-41d1-8d97-9ac7546f2962",
+      "activityKind": "skill-validated",
+      "level": "info",
+      "verifiedByHuman": false,
+      "artifactId": "f4ece482-c82a-41d1-8d97-9ac7546f2962",
+      "artifactDigest": "b17ef91b7ee03909039d4fec16dd24bf21d35559ae206184f12f0a30d714c81e",
+      "status": "passed",
+      "capturedAt": "2026-09-14T05:32:55.522Z"
+    },
+    {
+      "id": "47adf9f2-63ca-45d9-aa82-4b12e3fc8b4d",
+      "createdAt": "2026-09-14T05:37:47.631Z",
+      "sourceInstanceKey": "source:include:mnemon-source-playbooks",
+      "recordId": "f4ece482-c82a-41d1-8d97-9ac7546f2962",
+      "activityKind": "skill-published",
+      "level": "info",
+      "verifiedByHuman": true,
+      "artifactId": "f4ece482-c82a-41d1-8d97-9ac7546f2962",
+      "artifactDigest": "b17ef91b7ee03909039d4fec16dd24bf21d35559ae206184f12f0a30d714c81e",
+      "status": "published",
+      "capturedAt": "2026-09-14T05:37:47.631Z"
+    },
+    {
+      "id": "c6f65a4a-8c4f-4109-8c21-da7e16b1b78d",
+      "createdAt": "2026-09-14T05:39:01.827Z",
+      "sourceInstanceKey": "source:include:mnemon-source-playbooks",
+      "recordId": "f4ece482-c82a-41d1-8d97-9ac7546f2962",
+      "activityKind": "skill-executed",
+      "level": "info",
+      "verifiedByHuman": false,
+      "artifactId": "f4ece482-c82a-41d1-8d97-9ac7546f2962",
+      "artifactDigest": "b17ef91b7ee03909039d4fec16dd24bf21d35559ae206184f12f0a30d714c81e",
+      "status": "passed",
+      "exitCode": 0,
+      "capturedAt": "2026-09-14T05:39:01.827Z"
+    },
+    {
+      "id": "68c1e3a0-eae0-4568-bc62-22daddaa4689",
+      "createdAt": "2026-09-14T05:46:35.870Z",
+      "sourceInstanceKey": "source:include:mnemon-source-playbooks",
+      "recordId": "4f16a3db-a5c7-42b5-987d-6cdf858476ca",
+      "activityKind": "skill-validated",
+      "level": "warning",
+      "verifiedByHuman": false,
+      "artifactId": "4f16a3db-a5c7-42b5-987d-6cdf858476ca",
+      "artifactDigest": "941fb42f646486341cfb51a6637c98b6b932c333d1750fcc496d0c42ad9fb992",
+      "status": "failed",
+      "capturedAt": "2026-09-14T05:46:35.870Z"
+    },
+    {
+      "id": "ded171ff-020c-4c70-936d-1108dbdd4dae",
+      "createdAt": "2026-09-14T05:50:03.782Z",
+      "sourceInstanceKey": "source:include:mnemon-source-playbooks",
+      "recordId": "d3932c59-1915-4a6f-9cc6-7c4200cba51f",
+      "activityKind": "skill-published",
+      "level": "info",
+      "verifiedByHuman": true,
+      "artifactId": "d3932c59-1915-4a6f-9cc6-7c4200cba51f",
+      "artifactDigest": "b740d6292470cab7b39d89548065cac45b78063a6a086eee1f2efd28e437383a",
+      "status": "published",
+      "capturedAt": "2026-09-14T05:50:03.782Z"
+    },
+    {
+      "id": "a5b6fc19-70cd-40f0-a149-906270724f10",
+      "createdAt": "2026-09-14T05:54:40.733Z",
+      "sourceInstanceKey": "source:include:mnemon-source-playbooks",
+      "recordId": "a31c48f7-93a3-44a9-96c3-19f931d17c3f",
+      "activityKind": "skill-validated",
+      "level": "warning",
+      "verifiedByHuman": false,
+      "artifactId": "a31c48f7-93a3-44a9-96c3-19f931d17c3f",
+      "artifactDigest": "5da8025953476b411348fef8a705d0851366f403530e9bb9690063e9aaa3abe8",
+      "status": "cancelled",
+      "capturedAt": "2026-09-14T05:54:40.733Z"
+    },
+    {
+      "id": "b249b30c-ead4-457b-83b7-965802e141e5",
+      "createdAt": "2026-09-14T06:05:50.571Z",
+      "sourceInstanceKey": "source:include:mnemon-source-playbooks",
+      "recordId": "dbe4b462-120c-41cf-8664-69fbfc4747a6",
+      "activityKind": "skill-validated",
+      "level": "info",
+      "verifiedByHuman": false,
+      "artifactId": "dbe4b462-120c-41cf-8664-69fbfc4747a6",
+      "artifactDigest": "bc0d342c69dc0a0a2fd752c8261cc6f946950586d2b80737ad7c49f330c537ec",
+      "status": "passed",
+      "capturedAt": "2026-09-14T06:05:50.571Z"
+    }
+  ],
+  "nativeOriginal": {
+    "name": "fixture-review",
+    "fileCount": 2,
+    "originalFilesPreserved": true
+  },
+  "observedWebInteractions": {
+    "strategyTurn": {
+      "trigger": "Explicit bounded request in the main conversation with Skill refinement enabled.",
+      "toolSequence": [
+        "skill-context",
+        "skill-read:SKILL.md",
+        "skill-read:scripts/check-response.mjs",
+        "skill-read:tests/check-response.test.mjs",
+        "skill-read:references/usage.md",
+        "propose-skill"
+      ],
+      "candidateId": "f4ece482-c82a-41d1-8d97-9ac7546f2962",
+      "candidateExecutedOrPublishedByModel": false
+    },
+    "rootConnectDisconnectReconnect": true,
+    "rawNativeEditDisableEnable": true,
+    "managedDisableEnable": true,
+    "editInvalidatedPreviousValidation": true,
+    "structuralMismatchBlockedPublication": true,
+    "historyRestoreCreatedPendingWithoutChangingActiveVersion": true,
+    "finalActive": 2,
+    "finalPending": 0,
+    "finalUnresolvedFeedback": 0,
+    "themes": [
+      "dark",
+      "light"
+    ],
+    "viewports": [
+      {
+        "width": 1440,
+        "height": 1050
+      },
+      {
+        "width": 390,
+        "height": 844,
+        "documentScrollWidth": 390
+      }
+    ]
+  },
+  "checks": {
+    "root": {
+      "passed": 1045,
+      "skippedOptIn": 6
+    },
+    "pluginTests": {
+      "packages": 38,
+      "passed": 471
+    },
+    "artifacts": {
+      "independentRepositories": 38,
+      "packedArtifacts": 39
+    },
+    "package": {
+      "files": 53,
+      "packedBytes": 312881,
+      "unpackedBytes": 1415682,
+      "nodeEntries": 12,
+      "publicTypeDependencies": 30,
+      "executableHelpEntries": 1
+    },
+    "typecheck": "passed",
+    "headless": "passed: 39 tools, 8 representative Mnemon tools, restart, migration and disabling"
+  },
+  "limitations": [
+    "Candidates require operator review and publication. The live Strategy turn used an explicit bounded request; unattended evolution is not claimed.",
+    "Actual shell outcomes are attributed to exact skill paths or workdirs; a shell command masking an inner script failure is not proof that each inner command succeeded.",
+    "Instruction-only bundles may publish after structural review without executable checks; no script-test success is implied.",
+    "The first native generation failed JSON parsing and saved no candidate. A retry required a visible metadata correction before publication.",
+    "An earlier cancelled run retained a blocked tool transport result; the final repeated check records cancelled with no exit code and emits a warning observation.",
+    "Windows-only and broad Flash stress suites were not run."
+  ],
+  "screenshots": [
+    {
+      "path": "../../assets/skill-lifecycle-20260914/01-evidence-generation-dark.png",
+      "bytes": 92431,
+      "sha256": "e5376f9d4c21fedb36ab42abd65c2ae0daa8d9b8a472901ba389554043e0126f"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/02-native-validation-dark.png",
+      "bytes": 114696,
+      "sha256": "cf59e0bdb5b94402ad7c71133f6d27afb255d92882fe63afe2fc41bc1ed8d2fa"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/03-optional-plugin-enabled.png",
+      "bytes": 70271,
+      "sha256": "5e984e66cca16a5728d0f1f6c2a5250b5952971efd57e0ddd4f484c25db55666"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/04-native-skill-main-conversation.png",
+      "bytes": 127819,
+      "sha256": "5ca1a63431e5cda871054ed7c9a991f464694cc591fa8083d5bec1e311347453"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/06-strategy-generated-revision.png",
+      "bytes": 112970,
+      "sha256": "b7d564d284a48c0a225b28271498a4fbad1ea8043bd0df5f1d916fbb82bddf47"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/07-resource-version-comparison.png",
+      "bytes": 121755,
+      "sha256": "f0c023d66b6feb58dc08053aff166b82086b464285c04e484b47c248b1fc5eea"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/08-edit-invalidates-validation.png",
+      "bytes": 103326,
+      "sha256": "dd6b2f2abb4ac1f30271cc4dfd94eaa3c38bca778b33a9df02a930bde49f37a3"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/09-regression-checks-passed.png",
+      "bytes": 127814,
+      "sha256": "d618a0e5e4cd5b1b0772b01d96439c3c512b1332d37267bacf09e317c2ce29d7"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/10-published-revision-native-execution.png",
+      "bytes": 128414,
+      "sha256": "e5fb1e30a4d97f6a03f3a5ff85d7f69f801a982626232122786f446d2010427b"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/11-native-directory-discovery.png",
+      "bytes": 101098,
+      "sha256": "54de2a7c8ccc85028b06f66c7fab8eb60aa31a4b3a1d2d3acf02bb5d24073b61"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/12-native-skill-disabled.png",
+      "bytes": 82477,
+      "sha256": "82136cd1220e75da643333480851c99b54ba042db261376fa98902323e063195"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/13-native-resource-editing.png",
+      "bytes": 81774,
+      "sha256": "cee7cafe6a2741961d7403b499e8b6a91cce9ac95e93d0b039c44f25818fb6b7"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/14-native-revision-request.png",
+      "bytes": 88879,
+      "sha256": "85ae19e9287e8d1d2444dbdfbfd2764a68497bbe80dcaafccd60b2a73334b642"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/15-generation-failure-retains-original.png",
+      "bytes": 129806,
+      "sha256": "2b8de6bf25e1a0aa33006c25eb915ad545f54957f05eefcb689141e8bf5b67fc"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/16-version-history-feedback-resolved.png",
+      "bytes": 90384,
+      "sha256": "6b927e21773d9909479edb658614cb936d1e37082d847740b29321bfb8089501"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/17-restoration-requires-review.png",
+      "bytes": 104265,
+      "sha256": "7e8a18a936789d10e5a63f95b4fc1fbefa1aed03a60fbbae7b6ab2f6bd2ea2c5"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/18-nonzero-result-blocks-publication.png",
+      "bytes": 113859,
+      "sha256": "7f302362807f6160b301e524338f8b80075148a4eed231b62135fbf86cc4f010"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/19-cancelled-check-retains-candidate.png",
+      "bytes": 94727,
+      "sha256": "96d6ab147d2de8c4f5fe9662f772f6c5a846485c7de5cf719b6714896890b537"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/20-native-candidate-structure-check.png",
+      "bytes": 106391,
+      "sha256": "4a40dc916992474e024a2621c1bc58ba74156b79a73ab1835f03b277e874de59"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/21-native-resource-review.png",
+      "bytes": 97931,
+      "sha256": "b85b4f30b0ee0e9c191adbaeffa5b622d5b7f59b7dc502520b15c4533fbfd729"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/22-native-managed-version.png",
+      "bytes": 113973,
+      "sha256": "fba39bba931e62470b88fec456efc262b0464c601cda91e6e60116422e353c29"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/23-learning-feedback-return.png",
+      "bytes": 154198,
+      "sha256": "72ed8a795e8b1d43390ca0e4b8db4a69bc1597949cb5e977cd6586903286dcbd"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/24-memory-sidebar-panorama-dark.png",
+      "bytes": 128352,
+      "sha256": "d816854562c1cd4cdd947c8463245948cffd9dc4faf2c05b5da6d384a612c14a"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/25-memory-sidebar-panorama-light.png",
+      "bytes": 126534,
+      "sha256": "7eb1039eb3c75cd5d4feba1e5f1caa770a7f13ad4cc7fb62274ec3d16eee39d1"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/26-skills-mobile-light.png",
+      "bytes": 29543,
+      "sha256": "c9ca8903a8846b0ba6e1f81eb59ce461aa3236e9c13933e3257e65de7ac5e53d"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/27-resource-comparison-mobile-light.png",
+      "bytes": 41244,
+      "sha256": "04ee3530ccd6866934b4ddda259274fd6bf6c4bb5d415a885e4ad8cb453c9362"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/28-resource-comparison-mobile-dark.png",
+      "bytes": 40810,
+      "sha256": "174c9a62ce637408ed4d4471b53b416d4494410ce57f62f114cc9b23d2ae4dce"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/29-published-skill-disabled.png",
+      "bytes": 109082,
+      "sha256": "70fa2e90bbd41a874d147999455b54e485a9a88c45481d7080161145dddad89e"
+    },
+    {
+      "path": "../../assets/skill-lifecycle-20260914/30-directory-disconnected.png",
+      "bytes": 87008,
+      "sha256": "8ce1451295ac426d06e4db5f367f5bde4544fff1324e8c84db9084435173b20e"
+    }
+  ]
+}

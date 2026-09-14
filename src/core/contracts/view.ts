@@ -1,3 +1,4 @@
+import type { MemorySourceOperationInventory } from './operations.ts'
 /**
  * Public narrow waist for Composable View Memory plugins.
  *
@@ -47,6 +48,8 @@ export interface MemoryManagementDescriptor {
   description: string
   fields?: MemoryManagementField[]
   diagnostics?: string[]
+  /** Display-only descriptions of human workflows; never model offers or authorization. */
+  operations?: MemorySourceOperationInventory
 }
 
 export type MemorySourceManagementMode = 'read' | 'mutate'
@@ -73,6 +76,8 @@ export interface MemorySourceManagementRequest {
 export interface MemorySourceManagementResult {
   revision: string
   value: MemoryJsonValue
+  /** Changed metadata, including implicit changes such as a superseded original. */
+  records?: import('./observations.ts').MemoryOperationRecord[]
 }
 
 /** Sanitized Source instance descriptor returned to authenticated clients. */
@@ -86,6 +91,8 @@ export interface MemorySourceManagementInstance {
   capabilities: MemoryCapability[]
   management: MemoryManagementDescriptor
   hints?: MemoryJsonValue
+  context?: import('./operations.ts').MemoryContextProfile
+  operations?: import('./operations.ts').MemorySourceOperationInventory
 }
 
 export interface MemorySourceManagementCatalog {
@@ -100,6 +107,7 @@ export interface MemorySourceRouteManifest {
   description: string
   capability: MemoryCapability
   inputSchema: MemoryJsonValue
+  access?: import('./operations.ts').MemoryAccessSemantics
   maxCalls: number
   maxResults?: number
   maxCharacters?: number
@@ -113,6 +121,7 @@ export interface MemorySourceActionManifest {
   inputSchema: MemoryJsonValue
   /** High-risk non-memory actions must name an external authority. */
   authority?: string
+  operation?: import('./operations.ts').MemoryOperationSemantics
 }
 
 export interface MemorySourceManifest {
@@ -126,6 +135,7 @@ export interface MemorySourceManifest {
   routes?: MemorySourceRouteManifest[]
   actions?: MemorySourceActionManifest[]
   management?: MemoryManagementDescriptor
+  context?: import('./operations.ts').MemoryContextProfile
 }
 
 export interface MemoryStrategyManifest {
@@ -135,11 +145,15 @@ export interface MemoryStrategyManifest {
   packageName: string
   deterministic: true
   supportedSourceRoles: string[]
+  /** Additional roles may participate through these live, Host-filtered capabilities. */
+  acceptedSourceCapabilities?: MemoryCapability[]
   maxSources: number
   maxRoutes: number
   maxActions: number
   /** Exclusive contribution slots owned by this Strategy, not Core vocabulary. */
   extensionSlots?: string[]
+  /** Public proposal formats accepted in independently named extension slots. */
+  acceptedContributionFormats?: Array<typeof import('./decisions.ts').MEMORY_CONTEXT_POLICY_FORMAT>
 }
 
 /** An additive plugin targets one explicit Strategy contract, never replaces it. */
@@ -151,6 +165,7 @@ export interface MemoryStrategyExtensionManifest {
   strategyTypeId: string
   slot: string
   deterministic: true
+  contributionFormat?: typeof import('./decisions.ts').MEMORY_CONTEXT_POLICY_FORMAT
 }
 
 export interface MemoryStrategyExtensionDefinition {
@@ -192,6 +207,7 @@ export interface MemoryViewBudget {
 export interface MemoryAvailableSource extends MemorySourceFacts {
   routes: MemorySourceRouteManifest[]
   actions: MemorySourceActionManifest[]
+  context?: import('./operations.ts').MemoryContextProfile
 }
 
 export const DEFAULT_MEMORY_VIEW_BUDGET: Readonly<MemoryViewBudget> = Object.freeze({
@@ -226,6 +242,7 @@ export interface MemoryViewSourceSpec {
 export interface MemoryViewSpec {
   strategyTypeId: string
   sources: MemoryViewSourceSpec[]
+  decisions?: import('./decisions.ts').MemoryContextDecisionTrace[]
   explanation: string
   /** Trusted Strategy instructions, separate from quoted Source data. */
   guidance?: MemoryViewGuidance
@@ -311,6 +328,7 @@ export interface MemoryViewRoute {
   maxCalls: number
   maxResults?: number
   maxCharacters?: number
+  access?: import('./operations.ts').MemoryAccessSemantics
 }
 
 export interface MemoryActionOffer {
@@ -321,6 +339,7 @@ export interface MemoryActionOffer {
   capability: MemoryCapability
   inputSchema: MemoryJsonValue
   authority?: string
+  operation?: import('./operations.ts').MemoryOperationSemantics
 }
 
 export interface MemoryViewConsistency {
@@ -348,6 +367,7 @@ export interface ComposableMemoryView {
   consistency: MemoryViewConsistency
   explanation: string
   guidance?: MemoryViewGuidance
+  decisions?: import('./decisions.ts').MemoryContextDecisionTrace[]
   /** Sanitized, turn-local availability failures; never raw provider errors. */
   diagnostics?: MemoryCompositionDiagnostic[]
 }
@@ -358,6 +378,8 @@ export interface MemoryEvidenceItem {
   provenance: MemoryJsonValue
   score?: number
   revision?: string
+  reference?: import('./operations.ts').MemoryResourceReference
+  execution?: import('./operations.ts').MemoryExecutionResult
 }
 
 export interface MemoryEvidence {
@@ -373,6 +395,7 @@ export interface MemoryEvidence {
   metadata?: MemoryJsonValue
   /** Strategy-owned model presentation. Host audit retains the evidence separately. */
   output?: MemoryJsonValue
+  continuation?: import('./operations.ts').MemoryReadContinuation
 }
 
 export interface MemoryMutationReceipt {
@@ -386,6 +409,7 @@ export interface MemoryMutationReceipt {
   committedAt?: string
   revision?: string
   details?: MemoryJsonValue
+  execution?: import('./operations.ts').MemoryExecutionResult
 }
 
 export interface MemorySourceRuntimeContext {

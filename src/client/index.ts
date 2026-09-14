@@ -1,3 +1,4 @@
+import { SourceOverlaysHost, MNEMON_CLOSE_WORKSPACE_EVENT } from './source-overlays.tsx'
 import {
   MNEMON_SETTINGS_NAMESPACE,
   MNEMON_UI_SETTINGS_NAMESPACE,
@@ -14,7 +15,7 @@ import { en, zh, type MnemonKey } from './locales.ts'
 import { MnemonSettingsScope } from './settings.ts'
 import type { MnemonClientContext } from "./dsh-context.ts"
 import {
-  createMemorySourcePageDirectory,
+  createMemorySourcePageDirectory, createMemorySourceOverlayDirectory,
 } from './source-pages.tsx'
 import { MnemonBetterSidebarSeat } from './better-sidebar-seat.ts'
 import {
@@ -122,13 +123,14 @@ function mountSidebarMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
   let listening = false
   let disposed = false
   const openMemoryView = (): void => { navigation.open() }
+  const closeMemoryView = (): void => { navigation.close() }
   const dispose = (): void => {
     if (disposed) return
     disposed = true
     try {
       disposeLauncher?.()
     } finally {
-      if (listening) window.removeEventListener(MNEMON_ANCHOR_EVENT, openMemoryView)
+      if (listening) { window.removeEventListener(MNEMON_ANCHOR_EVENT, openMemoryView); window.removeEventListener(MNEMON_CLOSE_WORKSPACE_EVENT, closeMemoryView) }
       try {
         disposeBetterSidebar?.()
       } finally {
@@ -140,6 +142,7 @@ function mountSidebarMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
     disposeBetterSidebar = mountBetterSidebarTab(ctx, translate, betterSidebarSeat)
     if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       window.addEventListener(MNEMON_ANCHOR_EVENT, openMemoryView)
+      window.addEventListener(MNEMON_CLOSE_WORKSPACE_EVENT, closeMemoryView)
       listening = true
       disposeLauncher = mountMnemonSidebarLauncher(ctx, translate, controller)
     }
@@ -223,6 +226,12 @@ export function apply(rawContext: unknown): void {
       activeMemoryWorkspace = undefined
     }
   }, 'dsh-mnemon: memory workspace entry')
+  const overlayDirectory = createMemorySourceOverlayDirectory(ctx)
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay', id: 'mnemon-source-overlays', order: 40,
+    children: { 'mnemon.source.overlay': { kind: 'list', scope: 'root' } },
+    inject: () => ({ connection: ctx.connection, sessions: ctx.sessions, localeRuntime: ctx.locale, settingsScope: settings, directory: overlayDirectory }),
+  }, SourceOverlaysHost))
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
     id: 'mnemon',

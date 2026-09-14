@@ -428,3 +428,7 @@ mnemon:
 mnemon:
   writebackMode: off
 ```
+
+## 可选工作区组合
+
+参见[可组合的工作区服务](../guides/workspace-services.md)。Starter 默认关闭这些 Source 和策略入口。在所属 DSH profile 中选择 `memoryTopology.strategyId: workspace`，启用需要的插件，并明确配置预算和 Source 参数。

@@ -1,4 +1,5 @@
 import z from 'schemastery'
+import { DEFAULT_MEMORY_VIEW_BUDGET, type MemoryViewBudget } from '../core/contracts/index.ts'
 import { isAbsolute } from 'node:path'
 import { normalizeDisplayMode } from './display-mode.ts'
 import { resolveEmbedding, resolvePersistenceStrategy, resolveRecallQuality } from 'dsh-mnemon-source-memory-spaces'
@@ -129,6 +130,13 @@ const MemoryTopologySchema: z<MemoryTopologyConfig> = z.object({
   id: z.string(),
   strategyId: z.string(),
   layers: z.dict(MemoryLayerConfigSchema),
+  viewBudget: z.object({
+    maxProjectionCharacters: z.number().step(1).min(1).max(262144),
+    maxRoutes: z.number().step(1).min(1).max(128),
+    maxActions: z.number().step(1).min(1).max(128),
+    maxEvidenceResults: z.number().step(1).min(1).max(100),
+    maxEvidenceCharacters: z.number().step(1).min(1).max(262144),
+  }),
 })
 
 export const Config: z<Config> = z.object({
@@ -273,6 +281,19 @@ function memoryComponentId(value: string | undefined, fallback: string, label: s
   return id
 }
 
+function resolveViewBudget(value: Partial<MemoryViewBudget> = {}): MemoryViewBudget {
+  const limits: MemoryViewBudget = { maxProjectionCharacters: 262144, maxRoutes: 128, maxActions: 128, maxEvidenceResults: 100, maxEvidenceCharacters: 262144 }
+  if (Object.keys(value).some(key => !Object.hasOwn(limits, key))) throw new Error('dsh-mnemon: unsupported View budget field')
+  const result = { ...DEFAULT_MEMORY_VIEW_BUDGET }
+  for (const key of Object.keys(limits) as (keyof MemoryViewBudget)[]) {
+    const next = value[key] ?? result[key]
+    const minimum = 1
+    if (!Number.isSafeInteger(next) || next < minimum || next > limits[key]) throw new Error('dsh-mnemon: View budget ' + key + ' is outside its supported range')
+    result[key] = next
+  }
+  return result
+}
+
 function resolveMemoryTopology(value: MemoryTopologyConfig | undefined): SharedResolvedConfig['memoryTopology'] {
   const defaults: NonNullable<MemoryTopologyConfig['layers']> = {
     runtime: {},
@@ -297,6 +318,7 @@ function resolveMemoryTopology(value: MemoryTopologyConfig | undefined): SharedR
     return [id, { enabled: candidate?.enabled ?? true, participation, adapterIds }]
   }))
   return {
+    viewBudget: resolveViewBudget(value?.viewBudget),
     id: memoryComponentId(value?.id, 'default-three-tier', 'memory topology id'),
     strategyId: memoryComponentId(value?.strategyId, 'default-three-tier', 'memory strategy id'),
     layers,

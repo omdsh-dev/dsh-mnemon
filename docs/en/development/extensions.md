@@ -4,6 +4,8 @@
 
 Choose the ownership boundary before writing code. The complete external examples under [plugin-consumer](../../../scripts/fixtures/plugin-consumer) are compiled and tested against packed artifacts outside this repository.
 
+Sources can also contribute an additive shell widget with `installMemorySourceOverlayUI` from `dsh-mnemon/client`. Its `overlays` definitions use the same instance-bound `MemorySourcePageProps` as management pages. The Host declares `mnemon.source.overlay`, supplies authenticated management clients and public session navigation, and renders installed Source contributions in both Sidebar and Builtin modes. Widget state, layout, polling and persistence belong to the Source. Catalog revision refreshes retain the same client identity; session changes replace its scope binding. `coordinateSources: true` explicitly requests a directory of other authorized Source clients, without exposing the raw transport or server objects.
+
 ## Distinguish contribution responsibilities
 
 | Plugin | Owns | Public dependency |
@@ -197,6 +199,36 @@ Use unique temporary paths in real tests. Release turns before disposing the run
 
 Test at least: valid composition; missing/ambiguous dependencies; two instances; schema/capability/authority denial; concurrent snapshots; stale revisions; cancellation and partial failure; unload/drain/reload; persistence; management and actual page clicks. Providers additionally test credentials, truthful capabilities, malformed upstream data, timeouts and conformance inside their parent Source.
 
-Run each plugin's `pnpm verify`. At repository level, `pnpm verify:plugins` packs all 17 artifacts, installs every plugin outside the workspace through ordinary semver manifests, then type-checks/tests/builds each and compiles the external consumer. No source aliases, manifest overrides or workspace links are permitted in that gate.
+Run each plugin's `pnpm verify`. At repository level, `pnpm verify:plugins` packs all package artifacts, installs every plugin outside the workspace through ordinary semver manifests, then type-checks/tests/builds each and compiles the external consumer. No source aliases, manifest overrides or workspace links are permitted in that gate.
 
 For RSI, keep candidate inputs/artifacts reproducible, compare against a known composition, and promote only through an explicit installation/selection decision. Passing a Strategy replay does not sandbox arbitrary JavaScript or grant permission to trade, send messages or delete external data.
+
+### Human coordination between Source pages
+
+A Source page may declare `coordinateSources: true`. The Host then provides an optional `managementDirectory` containing only the current authenticated scope's Source metadata and individually bound management clients. The page must explicitly select its target instance and use that Source's normal read, confirmation and revision checks. It receives no raw transport, provider clients, server runtimes or stores. This allows review suggestions and explicit export/import workflows without adding a business registry to the Host or giving one Source runtime access to another.
+
+`localizedLabel` supplies English and Simplified Chinese navigation labels. An optional `sessionNavigation.open(id)` uses DSH's public session navigation. It does not grant session mutation authority. Pages remain usable when this navigation capability is absent.
+
+## Generic composition configuration
+
+Settings → Memory → Composition settings renders the configuration descriptors published by installed Strategies and their enhancements. It supports Source selection and ordering, optional values, bounded numbers and text. A draft is previewed through the public View API before applying its revision-fenced request. Editing a field invalidates that preview. Source management pages continue to own business data; this editor changes composition only.
+
+`memoryTopology.viewBudget` configures Host limits for projection/evidence characters, evidence results and route/action counts. Route/action limits are positive integers from 1 to 128 (default 16). Each turn captures its budget with its View, so subsequent configuration changes do not alter an in-progress turn. Independent Sources receive the resolved storage directory through their generic configuration; an explicit Source-owned `dataDir` takes precedence.
+
+## Portable Source snapshots
+
+`dsh-mnemon/contracts` exports `MemoryTransferCatalog`, `MemoryTransferTrack` and `MemoryTransferSnapshot`. These JSON-only types describe an optional human management protocol: `transfer-catalog` lists a Source's supported tracks, `transfer-export` returns a track snapshot, and confirmed `transfer-import` accepts `{ snapshot }` with the latest Source revision. An import returns its normalized snapshot and revision, allowing an interrupted coordinator to verify prior receipts before continuing.
+
+Sources own entry validation, scope rebinding, idempotency, capacity and recovery history. A snapshot never imports local authority, filesystem roots, runtime handles or another Source's revision. `dsh-mnemon/source-sdk` offers opt-in `transfer: true` for record Sources; it excludes session tracks and uses explicit record states for deletion. Missing entries retain local data. The independent synchronization Source uses only these public clients, its own plans and its own bare Git repository. Neither the Host nor a Strategy implements a synchronization-specific registry.
+
+### Optional operation observations
+
+Sources can return bounded `records: [{ id, revision, state }]` metadata with a management result, or in mutation receipt details. Include implicit changes such as an original archived by revision approval. Core forwards only these metadata fields; the state vocabulary belongs to the Source. Optional observer failures, including rejected promises, never invalidate the completed operation.
+
+`observeMemoryOperations(ctx, observer)` subscribes to Core-generated, immutable metadata after a successful dispatch. It is tied to the installing Fiber. Events contain scoped Source and operation identities, bounded record identifiers, and the actual mutation status/completion when available. They never contain inputs, prompts, record bodies or grants, and grant no execution authority. A read is exposure, not proof of use or helpfulness. Management completion does not imply a committed memory receipt. Observers should enqueue their own bounded persistence work and handle failures; they cannot invalidate an already completed operation. Keep domain interpretation and feedback policy in optional Source and Strategy plugins.
+
+Use `MemoryPluginSurface`, `MemoryPluginNotice`, `MemoryPluginMetrics` and `memoryPluginStyles` from `dsh-mnemon/client` for optional plugin pages. Custom layouts can place the CSS declarations in `memoryPluginTokens` on their own root and use its `--mc-*` semantic colors. These browser-only primitives follow DSH theme colors and accessible keyboard focus. They carry no Source execution authority. Strategy configuration fields also support `input: 'boolean'`; values are validated as booleans before the pure factory runs.
+
+`MemoryMarkdown` uses DSH's public Markdown renderer. `MemoryMarkdownEditor` adds preview, an unsaved-change indicator, explicit discard and ⌘/Ctrl+S. Pass `value`, `savedValue`, `locale`, `label`, `onChange` and `onSave`; `dirty` can include other fields in the same save. The Source still owns scope, version checks, persistence and error handling. Keep the version from opening the document until saving succeeds, retain a rejected draft, and discard stale responses when the selected workspace changes.
+
+See [Structured context access](context-access.md) for the public access, operation, resource and policy contracts.

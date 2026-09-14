@@ -60,6 +60,9 @@
       ],
       "extension-sdk": [
         "lib/types/src/sdk/index.d.ts"
+      ],
+      "source-sdk": [
+        "lib/types/src/sdk/source/index.d.ts"
       ]
     }
   },
@@ -88,7 +91,11 @@
       "types": "./lib/types/src/sdk/testing.d.ts",
       "default": "./lib/testing.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./source-sdk": {
+      "types": "./lib/types/src/sdk/source/index.d.ts",
+      "default": "./lib/source-sdk.js"
+    }
   },
   "files": [
     "lib",
@@ -129,14 +136,15 @@
     "verify:plugins": "node scripts/verify-plugin-artifacts.mjs",
     "verify:docs": "node scripts/verify-docs.mjs",
     "e2e:serve": "node scripts/serve-e2e.mjs",
-    "verify": "pnpm run verify:docs && pnpm run typecheck && pnpm run verify:build && pnpm --workspace-concurrency=4 -r build && pnpm -r typecheck && pnpm -r test && pnpm run test:root && pnpm run verify:headless && pnpm run verify:package",
+    "verify": "pnpm run verify:docs && pnpm run verify:build && pnpm run build:plugins && pnpm run typecheck && pnpm -r typecheck && pnpm -r test && pnpm run test:root && pnpm run verify:headless && pnpm run verify:package",
     "changeset": "changeset",
     "release:intent": "node scripts/check-release-intent.mjs",
     "release:status": "changeset status",
     "release:version": "changeset version && node scripts/sync-release-metadata.mjs && pnpm install --lockfile-only",
     "dsh:link-source": "node scripts/link-dsh-source.mjs",
     "dsh:restore-registry": "node scripts/link-dsh-source.mjs --restore",
-    "release:check": "node scripts/release.mjs --check"
+    "release:check": "node scripts/release.mjs --check",
+    "build:plugins": "node scripts/build-plugin-packages.mjs"
   },
   "dependencies": {
     "dsh-mnemon-provider-byterover": "0.5.4",
@@ -149,15 +157,39 @@
     "dsh-mnemon-provider-retaindb": "0.5.4",
     "dsh-mnemon-provider-supermemory": "0.5.4",
     "dsh-mnemon-source-documents": "0.5.6",
+    "dsh-mnemon-source-journal": "0.1.0",
     "dsh-mnemon-source-memory-spaces": "0.5.7",
+    "dsh-mnemon-source-playbooks": "0.1.0",
+    "dsh-mnemon-source-project-context": "0.1.0",
     "dsh-mnemon-source-runtime": "0.5.6",
+    "dsh-mnemon-source-tasks": "0.1.0",
     "dsh-mnemon-strategy-auto-capture": "0.5.4",
     "dsh-mnemon-strategy-default-three-tier": "0.5.5",
+    "dsh-mnemon-strategy-journal-capture": "0.1.0",
     "dsh-mnemon-strategy-light-context": "0.5.4",
+    "dsh-mnemon-strategy-prompt-schedule": "0.1.0",
+    "dsh-mnemon-strategy-review-cycle": "0.1.0",
     "dsh-mnemon-strategy-scoped": "0.5.4",
+    "dsh-mnemon-strategy-team-coordination": "0.1.0",
+    "dsh-mnemon-strategy-workspace": "0.1.0",
     "fflate": "^0.8.3",
     "schemastery": "^3.18.0",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "dsh-mnemon-source-files": "0.1.0",
+    "dsh-mnemon-source-sessions": "0.1.0",
+    "dsh-mnemon-source-agent-jobs": "0.1.0",
+    "dsh-mnemon-source-review": "0.1.0",
+    "dsh-mnemon-source-collaboration": "0.1.0",
+    "dsh-mnemon-source-notifications": "0.1.0",
+    "dsh-mnemon-strategy-focus": "0.1.0",
+    "dsh-mnemon-source-canvas": "0.1.0",
+    "dsh-mnemon-source-sync": "0.1.0",
+    "dsh-mnemon-source-learning": "0.1.0",
+    "dsh-mnemon-strategy-learning-cycle": "0.1.0",
+    "semver": "^7.8.5",
+    "dsh-mnemon-strategy-skill-refinement": "0.1.0",
+    "proper-lockfile": "^4.1.2",
+    "@vscode/ripgrep": "1.18.0"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
@@ -167,6 +199,7 @@
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
+    "dsh-mnemon-workspace-kit": "0.1.0",
     "@arethetypeswrong/cli": "^0.18.5",
     "@changesets/cli": "^2.31.1",
     "@deepseek-ai/cordis": "^4.0.2",
@@ -222,11 +255,12 @@
     "publint": "^0.3.23",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "semver": "^7.8.5",
     "shiki": "^4.3.1",
     "tsdown": "^0.22.0",
     "typescript": "^5.9.0",
-    "vitest": "^3.2.0"
+    "vitest": "^3.2.0",
+    "@types/semver": "^7.7.1",
+    "@types/proper-lockfile": "^4.1.4"
   },
   "bin": {
     "dsh-mnemon-repair-session": "bin/repair-legacy-session.mjs"

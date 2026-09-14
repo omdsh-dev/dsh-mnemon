@@ -42,12 +42,12 @@
   },
   "memorySpaceTerminology": {
     "zh": {
-      "keys": 970,
-      "sha256": "9695883ce974c8285af814e8fa74ee85eefd453bd07bf59e6de9708b69aa1cef"
+      "keys": 973,
+      "sha256": "42f0a304ac367c7856f65430692e128e05f80a5793fa148085adfca5a6845f54"
     },
     "en": {
-      "keys": 970,
-      "sha256": "0d053d62985459f373effb50f2d1edf9416e3df3f11302353bce8d2608c384e3"
+      "keys": 973,
+      "sha256": "74721331f8de61a3423161265d61a2ea6820c81fb5f94ce0af7a944b772e17ac"
     },
     "page": {
       "rules": 1067,
@@ -82,22 +82,31 @@
   },
   "documentArchivePlan": {
     "en": {
-      "keys": 977,
-      "sha256": "a1dbc00dc42c58a72b4cae969f9dee67a7ec8603aedc80df043a6254c95c64b5"
+      "keys": 980,
+      "sha256": "fd5fd65888a8675dc5f0fc67cb1e616c98d557178d0eaaab4c995e6e578e36eb"
     },
     "zh": {
-      "keys": 977,
-      "sha256": "3d9159e3de1143cd73e68cc09917ee236101af5cb64aa81fc977028c9bb503bd"
+      "keys": 980,
+      "sha256": "a9e7d82c5bb9f9ced7bb45b326002756d9d94ba0c1665d43db6b2906befe69a8"
     }
+  },
+  "pluginNavigation": {
+    "page": {
+      "rules": 1072,
+      "rulesSha256": "ede5a39d423579264a7d8dd53f213424534ba0205472e07fee74d4fa89b441da",
+      "classes": 277,
+      "classesSha256": "2880400da83afb1934e7a103d81e3b5caebd5f8c2708ad517acfb3beb980602b"
+    },
+    "sidebar": {}
   },
   "idleReviewWarning": {
     "en": {
-      "keys": 980,
-      "sha256": "f08ccf3c1de45c07c4f2564d4b1904d272240d2288fa5a6f608417022a325224"
+      "keys": 983,
+      "sha256": "46d1bfedd5505a9873dc9fff366badaa958cdef65c3f31414d087121e6d9f280"
     },
     "zh": {
-      "keys": 980,
-      "sha256": "12817b8c6f44c3bfd5ed5f0a0b5cb09e36cc06f490e551bfe0049edf33d72e9e"
+      "keys": 983,
+      "sha256": "bdc394d6d71df788576ad35c7fd0b98f5e597d35872957001508365fdd0997bb"
     }
   }
 }

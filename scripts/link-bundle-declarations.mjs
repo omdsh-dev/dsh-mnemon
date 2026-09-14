@@ -46,9 +46,9 @@ function link(directory) {
 
 link(output)
 
-// tsc emits declarations for the complete development workspace, including
-// independently published plugin entries that the aggregate does not expose.
-// Ship the transitive type graph of public entries, not these unrelated roots.
+// TypeScript also follows imported contract sources when emitting Root types.
+// Ship only the transitive type graph reachable from this package's public
+// entries; independent plugins keep their declarations in their own artifacts.
 const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 const retained = new Set()
 function retain(filename) {

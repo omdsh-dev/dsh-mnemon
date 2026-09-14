@@ -426,3 +426,7 @@ Disable only background writeback decisions:
 mnemon:
   writebackMode: off
 ```
+
+## Optional workspace composition
+
+See [Composable workspace services](../guides/workspace-services.md). The Starter keeps these Source and Strategy entries disabled by default. Select `memoryTopology.strategyId: workspace` and enable the desired entries in the owning DSH profile; budgets and Source settings remain explicit.

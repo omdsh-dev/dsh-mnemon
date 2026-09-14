@@ -149,6 +149,7 @@ describe('MnemonSettingsCard', () => {
       evaluation: { state: 'ready', contributionRevision: 4, sourceInstanceKeys: [], diagnostics: [] },
       sources: [],
       configuration: {
+        viewBudget: { maxProjectionCharacters: 65536, maxRoutes: 16, maxActions: 16, maxEvidenceResults: 16, maxEvidenceCharacters: 16384 },
         id: 'default-three-tier', strategyId: 'default-three-tier',
         layers: Object.fromEntries(['runtime', 'documents', 'memory-spaces'].map(id => [id, { enabled: true, participation: { ...participation }, adapterIds: [] }])),
       },
@@ -437,8 +438,8 @@ describe('MnemonSettingsCard', () => {
 
     render(<MnemonSettingsCard scope={scope} />)
 
-    const sidebar = screen.getByRole('radio', { name: 'Sidebar' }) as HTMLInputElement
-    const builtin = screen.getByRole('radio', { name: 'Builtin' }) as HTMLInputElement
+    const sidebar = screen.getByRole('radio', { name: '侧边栏' }) as HTMLInputElement
+    const builtin = screen.getByRole('radio', { name: '会话内' }) as HTMLInputElement
     const isBuiltin = displayMode === 'builtin' || displayMode === 'buildin'
     expect(sidebar.checked).toBe(!isBuiltin)
     expect(builtin.checked).toBe(isBuiltin)
@@ -688,8 +689,8 @@ describe('MnemonSettingsCard', () => {
     render(<MnemonSettingsCard scope={scope} />)
 
     expect((screen.getByRole('radio', { name: /^全局$/ }) as HTMLInputElement).disabled).toBe(true)
-    expect((screen.getByRole('radio', { name: 'Sidebar' }) as HTMLInputElement).disabled).toBe(true)
-    expect((screen.getByRole('radio', { name: 'Builtin' }) as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByRole('radio', { name: '侧边栏' }) as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByRole('radio', { name: '会话内' }) as HTMLInputElement).disabled).toBe(true)
     expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByText('当前部署的插件设置为只读。')).toBeTruthy()
   })

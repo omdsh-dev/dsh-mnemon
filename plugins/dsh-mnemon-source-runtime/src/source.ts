@@ -31,15 +31,15 @@ function runtimeMutation(value: MemoryJsonValue): RuntimeMemoryMutation {
 export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefinition {
  const configured = Object.freeze({ ...config })
  return defineMemorySource({
-  manifest: {
+  manifest: { context: {"mode":"eager","weight":16} satisfies import('dsh-mnemon/contracts').MemoryContextProfile,
     apiVersion: COMPOSABLE_MEMORY_API_VERSION,
     kind: 'source',
     typeId: 'runtime',
     packageName: 'dsh-mnemon-source-runtime',
     role: 'working-context',
-    capabilities: ['status', 'project', 'write'],
+    capabilities: ['status', 'project', 'write', 'export', 'import'],
     consistency: 'exact-snapshot',
-    actions: [{
+    actions: [{ operation: {"effects":["append","update","remove"],"execution":"immediate"} satisfies import('dsh-mnemon/contracts').MemoryOperationSemantics,
       id: 'mutate',
       description: 'Add, replace, or remove an entry in Runtime Memory.',
       capability: 'write',
@@ -70,12 +70,21 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
       { effectiveDataDir: () => effective.userDataDir },
     )
     const projection = (workspaceId?: string) => controller.contextProjection(resolveGitBranch(workspaceId))
+    const transferRevisions = new Map<string, string>()
+    const transfer = (track: string) => {
+      if (track !== 'memory' && track !== 'user') throw new Error('Choose memory or user transfer track')
+      const snapshot = controller.transferSnapshot(track)
+      const revision = controller.snapshot().revision
+      transferRevisions.set(revision + '/' + track, snapshot.revision)
+      while (transferRevisions.size > 128) transferRevisions.delete(transferRevisions.keys().next().value!)
+      return { revision, value: { format: 'mnemon-source-transfer/v1', track, entries: [{ id: track, value: snapshot.entries }] } as unknown as MemoryJsonValue }
+    }
     const prepared = new WeakMap<object, ReturnType<typeof projection>>()
     return {
       facts(request) {
         if (request.scenario.startsWith('management.')) return {
           sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: 'runtime', role: 'working-context', availability: 'ready',
-          revision: controller.snapshot().revision, capabilities: ['status', 'project', 'write'], routeIds: [], actionIds: ['mutate'],
+          revision: controller.snapshot().revision, capabilities: ['status', 'project', 'write', 'export', 'import'], routeIds: [], actionIds: ['mutate'],
         }
         const current = projection(request.scope.workspaceId)
         prepared.set(request.scope, current)
@@ -85,7 +94,7 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
           role: 'working-context',
           availability: 'ready',
           revision: current.revision,
-          capabilities: ['status', 'project', 'write'],
+          capabilities: ['status', 'project', 'write', 'export', 'import'],
           routeIds: [],
           actionIds: ['mutate'],
         }
@@ -117,6 +126,8 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
       async manage(request) {
         const input = request.input === null ? {} : record(request.input, 'Runtime Memory management')
         if (request.mode === 'read') {
+          if (request.operation === 'transfer-catalog') return { revision: controller.snapshot().revision, value: { format: 'mnemon-source-transfer/v1', tracks: [{ id: 'memory', scope: 'global', label: { en: 'Working memory', 'zh-CN': '工作记忆' } }, { id: 'user', scope: 'global', label: { en: 'User profile', 'zh-CN': '用户档案' } }] } }
+          if (request.operation === 'transfer-export') return transfer(text(input.track, 'track', 100)!)
           let value: unknown
           if (request.operation === 'snapshot') value = controller.snapshot()
           else if (request.operation === 'maintenance-plan') value = await controller.planMaintenance(runtimeMutation(request.input))
@@ -124,6 +135,15 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
           return { revision: controller.snapshot().revision, value: value as MemoryJsonValue }
         }
         if (!request.confirmed) throw new Error('Runtime management mutation requires explicit confirmation')
+        if (request.operation === 'transfer-import') {
+          const snapshot = record(input.snapshot!, 'transfer snapshot'), track = text(snapshot.track, 'track', 100)!
+          if (snapshot.format !== 'mnemon-source-transfer/v1' || !Array.isArray(snapshot.entries) || snapshot.entries.length > 100 || !request.expectedRevision || !['memory', 'user'].includes(track)) throw new Error('Invalid Runtime transfer snapshot')
+          const entries = snapshot.entries.flatMap(value => { const entry = record(value, 'transfer entry'); if (!Array.isArray(entry.value)) throw new Error('Runtime track requires entry arrays'); return entry.value })
+          const targetRevision = transferRevisions.get(request.expectedRevision + '/' + track)
+          if (!targetRevision) throw new Error('Export the current Runtime track before importing a reviewed snapshot')
+          await controller.importTarget(track as RuntimeMemoryTarget, targetRevision, entries)
+          return transfer(track)
+        }
         let result: unknown
         if (request.operation === 'mutate') result = await controller.mutate(runtimeMutation(request.input))
         else if (request.operation === 'compact-and-mutate') {

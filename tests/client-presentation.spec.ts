@@ -11,7 +11,7 @@ const read = (path: string) => readFileSync(new URL('../' + path, import.meta.ur
 
 describe('default Source presentation migration', () => {
   it('uses real class maps rather than non-enumerable test proxies', () => {
-    expect(Object.keys(memoryPageStyles)).toHaveLength(baseline.memorySpaceTerminology.page.classes)
+    expect(Object.keys(memoryPageStyles)).toHaveLength(baseline.pluginNavigation.page.classes)
     expect(Object.keys(memorySidebarStyles)).toHaveLength(baseline.sidebar.classes)
     expect(memoryPageStyles.primaryButton).toContain('primaryButton')
   })
@@ -20,7 +20,7 @@ describe('default Source presentation migration', () => {
     const filename = kind === 'page' ? 'src/client/MnemonView.module.css' : 'src/client/MnemonSidebarView.module.css'
     const files = [filename, ...sources.map(source => `plugins/dsh-mnemon-source-${source}/presentation/${kind}.module.css`)]
     // Rules include their container/media conditions. Browser checks cover cascade and layout.
-    const expected = { ...baseline[kind], ...baseline.memorySpaceTerminology[kind], ...baseline.centralizedWorkspaces[kind] }
+    const expected = { ...baseline[kind], ...baseline.memorySpaceTerminology[kind], ...baseline.centralizedWorkspaces[kind], ...baseline.pluginNavigation[kind] }
     expect(presentationFingerprint(files.map(path => ({ filename: presentationNamespace(path), text: read(path) })))).toEqual(expected)
   })
 

@@ -1,0 +1,92 @@
+{
+  "checkpoint": "183fd9f",
+  "harness": "tests/learning-flash.spec.ts",
+  "environment": {
+    "dsh": "0.1.5-rc.1",
+    "mnemon": "0.2.7",
+    "model": "deepseek-flash",
+    "modelsReturned": [
+      "deepseek-flash"
+    ],
+    "isolated": true
+  },
+  "result": "passed",
+  "modelCalls": 11,
+  "maxConcurrentModels": 1,
+  "toolErrors": [],
+  "checks": [
+    "human evidence captured; real Flash review persisted; stable preference pending with independent signals",
+    "explicit negative feedback reopened review; plugin wake did not count as a human turn; original remained active",
+    "actual task completion returned as outcome evidence",
+    "manual review used the same real Flash model and persisted completion"
+  ],
+  "scope": "Published DSH agent loop, real hosted Flash model, native Mnemon, optional Sources and Strategy; automated integration test.",
+  "webui": {
+    "result": "passed",
+    "implementationCheckpoint": "c4a439c",
+    "regressionCheckpoint": "9ee284c",
+    "browser": "DSH main WebUI in the in-app browser",
+    "authentication": "Restored by opening the exact URL printed by dsh web; authenticated URLs are not retained here.",
+    "gallery": "../../workspace-feedback-validation-20260914.md",
+    "screenshots": 39,
+    "humanRounds": 4,
+    "reviewedHumanRounds": 4,
+    "outcomeObservations": 9,
+    "reviewedOutcomeObservations": 9,
+    "adoptedOrTransferredItems": 3,
+    "pendingItems": 1,
+    "needsReview": 0,
+    "cliCalls": {
+      "model": "deepseek-flash",
+      "successful": 2,
+      "sameExternalSession": true,
+      "persistedMessages": 4,
+      "cancelledBeforeModelRequest": 1
+    },
+    "nativeMemory": {
+      "provider": "mnemon",
+      "version": "0.2.7",
+      "supervisedWrite": true,
+      "webuiRead": true,
+      "recordPrefix": "68b8f5d3"
+    },
+    "viewports": [
+      {
+        "width": 1440,
+        "height": 1000
+      },
+      {
+        "width": 1440,
+        "height": 1500
+      },
+      {
+        "width": 390,
+        "height": 844
+      }
+    ],
+    "themes": [
+      "light",
+      "dark"
+    ],
+    "narrowDocumentOverflow": false,
+    "viewportRestored": true,
+    "systemThemeRestored": true,
+    "checks": [
+      "negative feedback, compared revision, batch approval and archived original",
+      "pending procedure handoff and destination approval",
+      "cancelled outcome retains status and warning severity; no extra human round",
+      "real Flash review excludes assistant reports and cancelled work as confirmation or success",
+      "plugin dependency disable/enable, registry peer preflight, same-version install prevention",
+      "actual switch to three-tier composition and restoration of optional workspace enhancements",
+      "Markdown preview and keyboard save; skill file creation, edit and recoverable removal",
+      "native file search, session history, exact bookmark and native model catalog",
+      "independent real Flash reviewer and task/job/review feedback",
+      "notification read state and real native Mnemon write/read"
+    ],
+    "limitations": [
+      "Branch packages are not published to npm. WebUI preflight is complemented by independent artifact installation/upgrade/activation tests.",
+      "One earlier incomplete model review is retained in history; retry with the updated output budget completed. The original failure cause was not proven.",
+      "No external account/channel or vision quality certification is implied. Older deterministic-model UI checkpoints retain their recorded scope."
+    ]
+  }
+}

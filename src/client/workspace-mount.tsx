@@ -1,7 +1,9 @@
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ClientSettingsScope, Config } from "../host/protocol.ts"
+import { isWorkspaceStorageScope } from '../host/protocol.ts'
 import type { MnemonClientContext } from "./dsh-context.ts"
 import type { MnemonTranslate } from './locales.ts'
 import { MnemonWorkbench, type MnemonWorkspaceSelection } from './MnemonWorkbench.tsx'
@@ -107,6 +109,12 @@ export function MnemonBuiltinWorkspaceHost(props: MnemonBuiltinWorkspaceHostProp
 
 /** Shared workspace body; its DSH registration owns Source child-render authority. */
 export function MnemonWorkspaceHost(props: MnemonWorkspaceHostProps): JSX.Element {
+  const subscribeStorageMode = useCallback((listener: () => void) => props.settingsScope.subscribe(listener), [props.settingsScope])
+  const getStorageMode = useCallback(() => {
+    const config = props.settingsScope.getSnapshot().value
+    return config?.storageScope ?? (config?.dataDir?.trim() ? 'custom' : 'global')
+  }, [props.settingsScope])
+  const storageMode = useSyncExternalStore(subscribeStorageMode, getStorageMode, getStorageMode)
   const subscribeLocale = useCallback((listener: () => void) => props.localeRuntime.subscribe(listener), [props.localeRuntime])
   const getLocale = useCallback(() => props.localeRuntime.getSnapshot(), [props.localeRuntime])
   const subscribeSessions = useCallback((listener: () => void) => props.sessions.list.subscribe(listener), [props.sessions.list])
@@ -124,7 +132,9 @@ export function MnemonWorkspaceHost(props: MnemonWorkspaceHostProps): JSX.Elemen
     : workspaces.items.find(workspace => normalizePath(workspace.path) === normalizePath(currentCwd))
   const fallbackWorkspace = effectiveWorkspace ?? workspaces.items[0]
   const selectedExists = selectedWorkspaceId !== undefined && workspaces.items.some(workspace => String(workspace.workspaceId) === selectedWorkspaceId)
-  const resolvedSelectedId = selectedExists ? selectedWorkspaceId : fallbackWorkspace === undefined ? undefined : String(fallbackWorkspace.workspaceId)
+  // Workspace storage modes expose a persistent inspection picker. Other modes
+  // follow the current conversation so an invisible old selection cannot win.
+  const resolvedSelectedId = isWorkspaceStorageScope(storageMode) && selectedExists ? selectedWorkspaceId : fallbackWorkspace === undefined ? undefined : String(fallbackWorkspace.workspaceId)
 
   useEffect(() => {
     if (resolvedSelectedId !== selectedWorkspaceId) setSelectedWorkspaceId(resolvedSelectedId)
@@ -146,6 +156,7 @@ export function MnemonWorkspaceHost(props: MnemonWorkspaceHostProps): JSX.Elemen
     {...(sessionId === undefined ? {} : { sessionId })}
     {...(resolvedSelectedId === undefined ? {} : { workspaceId: resolvedSelectedId })}
     workspaceSelection={selection}
+    {...(props.sessions.open === undefined ? {} : { onOpenSession: async (id: string) => { await props.sessions.refresh?.(); props.sessions.open!(id as SessionId); props.navigation?.close() } })}
     active={props.active ?? true}
     t={props.t}
     locale={locale.active}

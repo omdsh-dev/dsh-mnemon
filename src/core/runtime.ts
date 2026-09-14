@@ -3,6 +3,8 @@ import { MemoryGenerationHost } from './generation.ts'
 import type { CompileMemoryGenerationOptions } from './composition.ts'
 import { MemoryContributionRegistry, type MemoryContributionInstall, type MemoryContributionListener } from './registry.ts'
 import type { MnemonMemoryService } from '../sdk/service.ts'
+import type { MemoryOperationObservation, MemoryOperationObserver } from './contracts/index.ts'
+import { deepFreeze, jsonClone } from './definitions.ts'
 
 interface MemoryCoreContext {
   provide(name: string, service: MnemonMemoryService): unknown
@@ -20,12 +22,18 @@ export function provideMemoryRuntime(context: MemoryCoreContext): MemoryRuntime 
 /** The single Cordis-owned registry of Source and Strategy definitions. */
 export class MemoryRuntime {
   readonly service: MnemonMemoryService = Object.freeze<MnemonMemoryService>({
+    observeOperations: observer => {
+      if (this.closed) throw new Error('Memory Runtime is disposed')
+      this.observers.add(observer)
+      return () => { this.observers.delete(observer) }
+    },
     installContributions: (contribution, options) => {
       if (this.closed) throw new Error('Memory Runtime is disposed')
       return this.installContributions(prepareMemoryContributions(contribution, options))
     },
   })
   private readonly contributions = new MemoryContributionRegistry()
+  private readonly observers = new Set<MemoryOperationObserver>()
   private readonly generationAttachments = new Set<MemoryGenerationAttachment>()
   private closed = false
   private disposal: Promise<void> | undefined
@@ -65,7 +73,13 @@ export class MemoryRuntime {
   /** Attach one Host runtime graph to the current definition set. */
   attachGeneration(options: CompileMemoryGenerationOptions = {}): MemoryGenerationAttachment {
     if (this.closed) throw new Error('Memory Runtime is disposed')
-    const host = new MemoryGenerationHost(options)
+    const host = new MemoryGenerationHost({ ...options, observeOperation: value => {
+      const observation = deepFreeze(jsonClone(value, 'memory operation observation'))
+      for (const observer of [...this.observers, ...(options.observeOperation ? [options.observeOperation] : [])]) {
+        // Optional feedback cannot invalidate an operation that already completed.
+        try { void Promise.resolve(observer(observation as Readonly<MemoryOperationObservation>)).catch(() => {}) } catch {}
+      }
+    } })
     host.reconcile(this.batchSnapshot ?? this.contributions.snapshot())
     // A workspace first opened during a settings transaction also starts from
     // the committed baseline, then joins the final reconciliation.
@@ -103,6 +117,7 @@ export class MemoryRuntime {
   dispose(): Promise<void> {
     if (this.disposal !== undefined) return this.disposal
     this.closed = true
+    this.observers.clear()
     this.disposal = Promise.allSettled([...this.generationAttachments].map(attachment => attachment.dispose())).then(() => {
       if (this.disposalFailures.length > 0) throw new AggregateError(this.disposalFailures, 'Memory Runtime cleanup failed')
     })

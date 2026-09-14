@@ -3,6 +3,7 @@ import {
   COMPOSABLE_MEMORY_API_VERSION,
   type ComposableMemoryView,
   type MemoryJsonValue,
+  type MemoryOperationObservation,
   type MemorySourceDefinition,
   type MemorySourceRuntime,
   type MemoryStrategyDefinition,
@@ -194,6 +195,35 @@ function contributions(source = installedSource(), strategy = installedStrategy(
 }
 
 describe('Composable View Memory compiler', () => {
+  it.each([false, true])('isolates synchronous and asynchronous observers (%s) and emits only completed metadata', async (asynchronous) => {
+    const observations: Readonly<MemoryOperationObservation>[] = []
+    const generation = new MemoryCompositionGeneration(contributions(), { observeOperation(value) {
+      observations.push(value)
+      expect(Object.isFrozen(value.scope)).toBe(true)
+      if (asynchronous) return Promise.reject(new Error('optional observer failed'))
+      throw new Error('optional observer failed')
+    } })
+    try {
+      const view = await generation.compose(REQUEST)
+      const offer = view.actionOffers[0]!.id
+      await expect(generation.executeAction(view, offer, { text: 'private body' }, () => false)).rejects.toThrow('not currently authorized')
+      expect(observations).toHaveLength(0)
+      await generation.executeRoute(view, view.routes[0]!.id, { query: 'private query' })
+      await generation.executeAction(view, offer, { text: 'private body' }, () => true)
+      await generation.executeManagement({ scope: REQUEST.scope, sourceInstanceKey: 'source:fixture', mode: 'mutate', operation: 'update', input: { id: 'record-1', token: 'private token' }, expectedRevision: 'source-r1', confirmed: true })
+      expect(observations).toMatchObject([
+        { kind: 'read', actor: 'model', sourceInstanceKey: 'source:fixture', recordIds: ['one'] },
+        { kind: 'mutation', status: 'succeeded', completion: 'committed', actor: 'model' },
+        { kind: 'management', operation: 'update', actor: 'operator', recordIds: ['record-1'] },
+      ])
+      expect(observations[0]).not.toHaveProperty('completion')
+      expect(observations[2]).not.toHaveProperty('completion')
+      const serialized = JSON.stringify(observations)
+      for (const secret of ['private body', 'private query', 'private token', 'namespaceIds', 'stable projection', 'abcdef']) expect(serialized).not.toContain(secret)
+      expect(new Set(observations.map(value => value.id)).size).toBe(3)
+    } finally { await generation.dispose() }
+  })
+
   it('normalizes bounded Source presentation without rendering it to the model', async () => {
     const base = sourceDefinition()
     let presentation: unknown = {
@@ -577,4 +607,22 @@ describe('Composable View Memory compiler', () => {
     await expect(generation.executeRoute(view, view.routes[0]!.id, cyclic)).rejects.toThrow()
     await generation.dispose()
   })
+})
+
+it('observes Source-owned implicit record changes and strips non-metadata fields', async () => {
+  const source = sourceDefinition(), observations: Readonly<MemoryOperationObservation>[] = []
+  const definition = { ...source, create(context: Parameters<typeof source.create>[0]) {
+    const runtime = source.create(context)
+    return { ...runtime, async manage(request: Parameters<NonNullable<typeof runtime.manage>>[0]) {
+      const value = await runtime.manage!(request)
+      return { ...value, records: [{ id: 'new-version', revision: '2', state: 'active', content: 'private record body' }, { id: 'old-version', revision: '7', state: 'archived' }] }
+    } }
+  } }
+  const generation = new MemoryCompositionGeneration(contributions(installedSource(definition)), { observeOperation: event => { observations.push(event) } })
+  try {
+    const result = await generation.executeManagement({ scope: REQUEST.scope, sourceInstanceKey: 'source:fixture', mode: 'mutate', operation: 'approve', input: { id: 'new-version' }, expectedRevision: 'source-r1', confirmed: true })
+    expect(result.records).toEqual([{ id: 'new-version', revision: '2', state: 'active' }, { id: 'old-version', revision: '7', state: 'archived' }])
+    expect(observations[0]?.recordIds).toEqual(['new-version', 'old-version'])
+    expect(JSON.stringify(observations)).not.toContain('private record body')
+  } finally { await generation.dispose() }
 })

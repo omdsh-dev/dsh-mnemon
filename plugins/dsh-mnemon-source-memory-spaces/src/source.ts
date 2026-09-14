@@ -271,7 +271,7 @@ async function manageMemorySpaces(service: MemorySpacesService, request: MemoryS
 export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSnapshot, config: MemorySpacesConfig = {}): MemorySourceDefinition {
   const capturedConfig = structuredClone(config)
   return defineMemorySource({
-  manifest: {
+  manifest: { context: {"mode":"routed","weight":1} satisfies import('dsh-mnemon/contracts').MemoryContextProfile,
     apiVersion: COMPOSABLE_MEMORY_API_VERSION,
     kind: 'source',
     typeId: 'memory-spaces',
@@ -280,12 +280,12 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
     capabilities: ['status', 'project', 'recall', 'related', 'write', 'link', 'forget'],
     consistency: 'namespace-pinned-live-read',
     routes: [
-      {
+      { access: {"kinds":["browse"],"result":"records"} satisfies import('dsh-mnemon/contracts').MemoryAccessSemantics,
         id: 'inspect', description: 'Inspect bounded Memory Space health or routing metadata without exposing storage paths or credentials.', capability: 'status',
         inputSchema: { type: 'object', required: ['section'], additionalProperties: false, properties: { section: { type: 'string', enum: ['directory', 'health'] } } },
         maxCalls: 4, maxResults: 1, maxCharacters: 12_000,
       },
-      {
+      { access: {"kinds":["search"],"result":"records"} satisfies import('dsh-mnemon/contracts').MemoryAccessSemantics,
         id: 'recall', description: 'Recall evidence only from Memory Spaces pinned into this View.', capability: 'recall',
         inputSchema: {
           type: 'object', required: ['query'], additionalProperties: false,
@@ -296,7 +296,7 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
         },
         maxCalls: 4, maxResults: 20, maxCharacters: 16_000,
       },
-      {
+      { access: {"kinds":["related"],"result":"records"} satisfies import('dsh-mnemon/contracts').MemoryAccessSemantics,
         id: 'related', description: 'Traverse related memories only from evidence already admitted by this View.', capability: 'related',
         inputSchema: {
           type: 'object', required: ['id'], additionalProperties: false,
@@ -306,7 +306,7 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
       },
     ],
     actions: [
-      {
+      { operation: {"effects":["append","update","remove"],"execution":"immediate","requiresReadGrant":true} satisfies import('dsh-mnemon/contracts').MemoryOperationSemantics,
         id: 'manage-spaces', description: 'Create a Memory Space under the configured persistence policy, or update/merge spaces in this View scope.', capability: 'write',
         inputSchema: {
           type: 'object', required: ['operation'], additionalProperties: false,
@@ -317,7 +317,7 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
           },
         },
       },
-      {
+      { operation: {"effects":["append"],"execution":"immediate"} satisfies import('dsh-mnemon/contracts').MemoryOperationSemantics,
         id: 'remember', description: 'Record memory using an authorized Space and its Provider; the receipt distinguishes accepted extraction from commitment.', capability: 'write',
         inputSchema: {
           type: 'object', required: ['content'], additionalProperties: false,
@@ -327,14 +327,14 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
           },
         },
       },
-      {
+      { operation: {"effects":["update"],"execution":"immediate","requiresReadGrant":true} satisfies import('dsh-mnemon/contracts').MemoryOperationSemantics,
         id: 'link', description: 'Link two evidence items admitted by this View and owned by the same Memory Space.', capability: 'link',
         inputSchema: {
           type: 'object', required: ['sourceId', 'targetId'], additionalProperties: false,
           properties: { sourceId: { type: 'string' }, targetId: { type: 'string' }, memoryBodyId: { type: 'string' }, type: { type: 'string' }, weight: { type: 'number' }, reason: { type: 'string' } },
         },
       },
-      {
+      { operation: {"effects":["remove"],"execution":"immediate","requiresReadGrant":true} satisfies import('dsh-mnemon/contracts').MemoryOperationSemantics,
         id: 'forget', description: 'Forget one returned evidence item using its Provider deletion mode (soft or hard); not a guarantee of universal erasure.', capability: 'forget',
         inputSchema: { type: 'object', required: ['id'], additionalProperties: false, properties: { id: { type: 'string' }, memoryBodyId: { type: 'string' } } },
       },

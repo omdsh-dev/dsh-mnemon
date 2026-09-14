@@ -64,7 +64,7 @@ describe('Composable Memory extension SDK', () => {
     const { ctx, runtime } = await host()
     expect(ctx.mnemonMemory).toBe(runtime.service)
     expect(ctx.mnemonMemory).not.toBe(runtime)
-    expect(Object.keys(ctx.mnemonMemory)).toEqual(['installContributions'])
+    expect(Object.keys(ctx.mnemonMemory)).toEqual(['observeOperations', 'installContributions'])
     expect(Object.isFrozen(ctx.mnemonMemory)).toBe(true)
     for (const name of ['dispose', 'attachGeneration', 'contributionSnapshot', 'onContributionsChanged', 'contributions']) {
       expect(name in ctx.mnemonMemory).toBe(false)

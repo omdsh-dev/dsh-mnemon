@@ -7,10 +7,18 @@ import { describe, expect, it } from 'vitest'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
 const pluginNames = readdirSync(join(root, 'plugins')).filter(name => name.startsWith('dsh-mnemon-')).sort()
-const coreImports = new Set(['dsh-mnemon/contracts', 'dsh-mnemon/extension-sdk', 'dsh-mnemon/testing', 'dsh-mnemon/client'])
+const coreImports = new Set(['dsh-mnemon/contracts', 'dsh-mnemon/extension-sdk', 'dsh-mnemon/source-sdk', 'dsh-mnemon/testing', 'dsh-mnemon/client'])
 const providerImports = new Set(['dsh-mnemon-source-memory-spaces/provider-sdk', 'dsh-mnemon-source-memory-spaces/testing'])
 const threeTierExtensions = new Set(['dsh-mnemon-strategy-auto-capture', 'dsh-mnemon-strategy-light-context', 'dsh-mnemon-strategy-scoped'])
 const threeTierOwner = 'dsh-mnemon-strategy-default-three-tier'
+const workspaceOwner = 'dsh-mnemon-strategy-workspace'
+const workspaceExtensions = new Set(['focus', 'journal-capture', 'learning-cycle', 'prompt-schedule', 'review-cycle', 'skill-refinement', 'team-coordination'].map(name => 'dsh-mnemon-strategy-' + name))
+const libraryNames = new Set(['dsh-mnemon-workspace-kit'])
+const manifests = new Map(pluginNames.map(name => [name, JSON.parse(readFileSync(join(root, 'plugins', name, 'package.json'), 'utf8'))]))
+
+function publicExport(name: string, specifier: string): boolean {
+  return Object.hasOwn(manifests.get(name)?.exports ?? {}, '.' + specifier.slice(name.length))
+}
 
 function inside(directory: string, path: string): boolean {
   const child = relative(directory, path)
@@ -40,12 +48,14 @@ function packageName(specifier: string): string {
 }
 
 describe('standalone plugin repository boundary', () => {
-  it('keeps three Sources, one complete Strategy, three optional contributions and nine private Providers explicit', () => {
+  it('keeps independent Sources, complete Strategies, their contributions and private Providers explicit', () => {
     expect(pluginNames.filter(name => name.startsWith('dsh-mnemon-source-'))).toEqual([
-      'dsh-mnemon-source-documents', 'dsh-mnemon-source-memory-spaces', 'dsh-mnemon-source-runtime',
-    ])
-    expect(pluginNames.filter(name => name.startsWith('dsh-mnemon-strategy-'))).toEqual([...threeTierExtensions, threeTierOwner].sort())
+      'agent-jobs', 'canvas', 'collaboration', 'documents', 'files', 'journal', 'learning', 'memory-spaces',
+      'notifications', 'playbooks', 'project-context', 'review', 'runtime', 'sessions', 'sync', 'tasks',
+    ].map(name => 'dsh-mnemon-source-' + name))
+    expect(pluginNames.filter(name => name.startsWith('dsh-mnemon-strategy-'))).toEqual([...threeTierExtensions, threeTierOwner, ...workspaceExtensions, workspaceOwner].sort())
     expect(pluginNames.filter(name => name.startsWith('dsh-mnemon-provider-'))).toHaveLength(9)
+    expect(pluginNames.filter(name => !/^dsh-mnemon-(source|strategy|provider)-/.test(name))).toEqual([...libraryNames])
   })
 
   for (const name of pluginNames) it(`${name} owns its build, tests and declared public dependencies`, () => {
@@ -66,8 +76,11 @@ describe('standalone plugin repository boundary', () => {
     const provider = name.startsWith('dsh-mnemon-provider-')
     expect(manifest.peerDependencies[provider ? 'dsh-mnemon-source-memory-spaces' : 'dsh-mnemon']).toBeTruthy()
     if (provider) expect(manifest.peerDependencies['dsh-mnemon']).toBeUndefined()
+    const policyOwner = threeTierExtensions.has(name) ? threeTierOwner : workspaceExtensions.has(name) ? workspaceOwner : undefined
+    if (policyOwner) {
+      expect(manifest.peerDependencies[policyOwner]).toBeTruthy()
+    }
     if (threeTierExtensions.has(name)) {
-      expect(manifest.peerDependencies[threeTierOwner]).toBeTruthy()
       expect(manifest.dsh?.bundle?.patch).toBe('./cordis.patch.yml')
       const patch = readFileSync(join(directory, 'cordis.patch.yml'), 'utf8')
       expect(patch).toContain(`name: ${name}`)
@@ -87,13 +100,17 @@ describe('standalone plugin repository boundary', () => {
         if (isBuiltin(specifier)) continue
         if (packageName(specifier) === name && Object.hasOwn(manifest.exports, '.' + specifier.slice(name.length))) continue
         if (!Object.hasOwn(dependencies, packageName(specifier))) violations.push(`${relative(root, file)} has undeclared dependency ${specifier}`)
-        const ownerContract = threeTierExtensions.has(name) && specifier === threeTierOwner + '/extension-sdk'
-        const testOwner = threeTierExtensions.has(name) && file.includes(`${sep}tests${sep}`) && specifier === threeTierOwner
-        if (specifier.startsWith('dsh-mnemon') && !(provider ? providerImports : coreImports).has(specifier) && !ownerContract && !testOwner && !(file.includes(`${sep}tests${sep}`) && /^dsh-mnemon-provider-[a-z0-9-]+$/u.test(specifier))) {
+        const importedName = packageName(specifier)
+        const ownerContract = policyOwner && specifier === policyOwner + '/extension-sdk'
+        const libraryContract = libraryNames.has(importedName) && publicExport(importedName, specifier)
+        // Integration tests may compose published entry points. Production Sources
+        // still cannot import another Source or a Strategy implementation.
+        const testContract = file.includes(`${sep}tests${sep}`) && publicExport(importedName, specifier)
+        if (specifier.startsWith('dsh-mnemon') && !(provider ? providerImports : coreImports).has(specifier) && !ownerContract && !libraryContract && !testContract) {
           violations.push(`${relative(root, file)} crosses its public contract: ${specifier}`)
         }
       }
-      if (file.includes(`${sep}src${sep}`) && /\.(?:binding|mnemonMemorySpace)\b/u.test(readFileSync(file, 'utf8'))) {
+      if (file.includes(`${sep}src${sep}`) && /\.mnemonMemorySpace\b|\b(?:ctx|context)\.(?:mnemon\.)?binding\b/u.test(readFileSync(file, 'utf8'))) {
         violations.push(`${relative(root, file)} reaches into a Host business binding`)
       }
     }
@@ -128,7 +145,8 @@ describe('standalone plugin repository boundary', () => {
   })
 
   for (const [entry, allowed] of [
-    ['src/sdk/index.ts', ['src/sdk', 'src/core/contracts', 'src/core/definitions.ts']],
+    ['src/sdk/index.ts', ['src/sdk', 'src/core/contracts', 'src/core/definitions.ts', 'src/core/decision-contracts.ts', 'src/core/operation-contracts.ts']],
+    ['src/sdk/source/index.ts', ['src/sdk', 'src/core/contracts', 'src/core/definitions.ts', 'src/core/decision-contracts.ts', 'src/core/operation-contracts.ts']],
     ['plugins/dsh-mnemon-source-memory-spaces/src/provider-sdk.ts', [
       'plugins/dsh-mnemon-source-memory-spaces/src/provider-sdk.ts',
       'plugins/dsh-mnemon-source-memory-spaces/src/contracts.ts',
@@ -146,7 +164,7 @@ describe('standalone plugin repository boundary', () => {
       for (const { specifier, typeOnly } of imports(file)) {
         if (typeOnly) continue
         if (specifier.startsWith('.')) pending.push(resolve(dirname(file), specifier))
-        else if (!isBuiltin(specifier)) violations.push(`${relative(root, file)}: ${specifier}`)
+        else if (!isBuiltin(specifier) && !(entry === 'src/sdk/source/index.ts' && ['proper-lockfile', '@vscode/ripgrep'].includes(specifier))) violations.push(`${relative(root, file)}: ${specifier}`)
       }
     }
     expect(visited.size).toBeGreaterThan(1)

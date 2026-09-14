@@ -1,0 +1,8 @@
+import { defineConfig } from 'tsdown'
+export default defineConfig([
+ { entry: ['src/index.ts'], outDir: 'lib', format: 'esm', platform: 'node', target: 'es2024', dts: true, clean: true, fixedExtension: false, deps: { neverBundle: true } },
+ { entry: { client: 'src/client.tsx' }, outDir: 'lib', format: 'cjs', platform: 'browser', target: 'es2022', dts: false, clean: false, fixedExtension: false,
+   outExtensions: () => ({ js: '.js', dts: '.d.ts' }), deps: { neverBundle: [/^react(?:\/|$)/, /^dsh-mnemon(?:\/|$)/], alwaysBundle: ['dsh-mnemon-workspace-kit/client'] },
+   outputOptions: { banner: 'window.__ModuleLoader__.load({ id: "dsh-mnemon-source-sessions", factory: (require) => {', intro: 'var module = { exports: {} }; var exports = module.exports;', footer: 'return module.exports; } });' },
+ },
+])

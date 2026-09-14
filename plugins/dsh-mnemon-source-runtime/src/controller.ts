@@ -494,6 +494,39 @@ ${memory || '(empty)'}
     return operation
   }
 
+  /** A portable track owns one target, including a separately configured USER root. */
+  transferSnapshot(target: RuntimeMemoryTarget): { revision: string; entries: RuntimeMemoryEntry[] } {
+    if (target === 'user' && this.userController) return this.userController.transferSnapshot(target)
+    const entries = this.readSource().entries.filter(entry => entry.target === target)
+    return { revision: revision({ version: RUNTIME_MEMORY_VERSION, entries }), entries }
+  }
+
+  importTarget(target: RuntimeMemoryTarget, expectedRevision: string, values: unknown[]): Promise<void> {
+    if (target === 'user' && this.userController) return this.userController.importTarget(target, expectedRevision, values)
+    const operation = this.queue.then(() => this.withLock(() => {
+      const file = this.readSource(), previous = file.entries.filter(entry => entry.target === target)
+      if (revision({ version: RUNTIME_MEMORY_VERSION, entries: previous }) !== expectedRevision) throw new RuntimeMemoryConflictError()
+      if (values.length > 10000) throw new Error('Too many imported Runtime entries')
+      const entries: RuntimeMemoryEntry[] = [], seen = new Set<string>()
+      for (const raw of values) {
+        const entry = parseEntry(raw)
+        if (!entry || entry.target !== target || !Number.isFinite(Date.parse(entry.created_at)) || !Number.isFinite(Date.parse(entry.updated_at))) throw new Error('Invalid Runtime transfer entry')
+        normalizeContent(entry.content, 'content')
+        const key = JSON.stringify([entry.content, entry.importance, entry.branches])
+        if (!seen.has(key)) { seen.add(key); entries.push(entry) }
+      }
+      const used = byteCount(entries, target)
+      if (used > this.limits[target]) throw new RuntimeMemoryCapacityError(target, byteCount(previous, target), used, this.limits[target])
+      if (JSON.stringify(previous) === JSON.stringify(entries)) return
+      const recovery = join(this.directory, 'transfer-history')
+      mkdirSync(recovery, { recursive: true, mode: 0o700 })
+      writeFileSync(join(recovery, `${target}-${expectedRevision}.json`), JSON.stringify({ target, entries: previous }) + '\n', { mode: 0o600, flag: 'w' })
+      this.persist({ version: RUNTIME_MEMORY_VERSION, entries: [...file.entries.filter(entry => entry.target !== target), ...entries] })
+    }))
+    this.queue = operation.catch(() => undefined)
+    return operation
+  }
+
   /** Resolve exactly which committed entries survive a blocked mutation and are safe to compact. */
   planMaintenance(request: RuntimeMemoryMutation): Promise<RuntimeMemoryMaintenancePlan> {
     if (request.target === 'user' && this.userController !== undefined) return this.userController.planMaintenance(request)

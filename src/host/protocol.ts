@@ -56,22 +56,9 @@ export interface MemorySourceManagementField {
 }
 
 /** Browser-safe descriptor of one Source instance visible in the current scope. */
-export interface MemorySourceManagementInstance {
-  sourceInstanceKey: string
-  sourceTypeId: string
-  packageName: string
-  role: string
-  availability: 'ready' | 'degraded' | 'unavailable'
-  revision: string
+export interface MemorySourceManagementInstance extends Omit<import('../core/contracts/index.ts').MemorySourceManagementInstance, 'capabilities'> {
   capabilities: string[]
   assistance?: readonly string[]
-  management: {
-    label: string
-    description: string
-    fields?: MemorySourceManagementField[]
-    diagnostics?: string[]
-  }
-  hints?: JsonValue
 }
 
 export interface MemorySourceManagementCatalog {
@@ -131,6 +118,7 @@ export interface MemoryLayerConfig {
 }
 
 export interface MemoryTopologyConfig {
+  viewBudget?: Partial<import('../core/contracts/index.ts').MemoryViewBudget>
   id?: string
   strategyId?: string
   layers?: Record<string, MemoryLayerConfig>
@@ -143,6 +131,7 @@ export interface ResolvedMemoryLayerConfig {
 }
 
 export interface ResolvedMemoryTopologyConfig {
+  viewBudget: import('../core/contracts/index.ts').MemoryViewBudget
   id: string
   strategyId: string
   layers: Record<string, ResolvedMemoryLayerConfig>

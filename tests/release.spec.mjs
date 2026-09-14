@@ -69,7 +69,13 @@ describe('selective, channel-safe official release', () => {
   it('validates every real package without requiring one shared version', async () => {
     const packages = await readReleasePackages(root)
     const plan = createReleasePlan(packages)
-    expect(plan.composition).toHaveLength(17)
+    expect(plan.composition).toHaveLength(packages.length)
+    const library = plan.composition.find(item => item.manifest.name === 'dsh-mnemon-workspace-kit')
+    expect(library).toBeDefined()
+    expect(library.manifest.dsh).toBeUndefined()
+    const layerNames = plan.pluginLayers.map(layer => layer.map(item => item.manifest.name))
+    expect(layerNames.findIndex(layer => layer.includes('dsh-mnemon-workspace-kit')))
+      .toBeLessThan(layerNames.findIndex(layer => layer.includes('dsh-mnemon-source-sync')))
     expect(plan.distTag).toBe('latest')
     expect(plan.composition.at(-1).manifest.name).toBe('dsh-mnemon')
     for (const { directory, manifest } of packages.filter(packageItem => packageItem.manifest.name.startsWith('dsh-mnemon-provider-'))) {

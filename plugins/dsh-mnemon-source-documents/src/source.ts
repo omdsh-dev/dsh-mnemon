@@ -66,7 +66,7 @@ function documentMutation(value: MemoryJsonValue, allowedIds?: readonly string[]
 export function createDocumentsMemorySource(config: Config = {}): MemorySourceDefinition {
  const configured = Object.freeze({ ...config })
  return defineMemorySource({
-  manifest: {
+  manifest: { context: {"mode":"routed","weight":1} satisfies import('dsh-mnemon/contracts').MemoryContextProfile,
     apiVersion: COMPOSABLE_MEMORY_API_VERSION,
     kind: 'source',
     typeId: 'documents',
@@ -74,7 +74,7 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
     role: 'narrative',
     capabilities: ['status', 'project', 'search', 'read', 'write'],
     consistency: 'namespace-pinned-live-read',
-    routes: [{
+    routes: [{ access: {"kinds":["search","read"],"result":"records"} satisfies import('dsh-mnemon/contracts').MemoryAccessSemantics,
       id: 'search',
       description: 'Search only the project Documents pinned into this View.',
       capability: 'search',
@@ -88,7 +88,7 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
       maxResults: 20,
       maxCharacters: 16_000,
     }],
-    actions: [{
+    actions: [{ operation: {"effects":["update","remove","transfer"],"execution":"immediate","requiresReadGrant":true} satisfies import('dsh-mnemon/contracts').MemoryOperationSemantics,
       id: 'manage',
       description: 'Create a project Document or update a Document pinned into this View.',
       capability: 'write',
@@ -101,7 +101,7 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
           id: { type: 'string' }, ...CREATE_PROPERTIES,
         },
       },
-    }, {
+    }, { operation: {"effects":["append"],"execution":"immediate"} satisfies import('dsh-mnemon/contracts').MemoryOperationSemantics,
       id: 'create',
       description: 'Create one new project Document without updating or archiving existing documents. Capacity exhaustion rejects the write.',
       capability: 'write',

@@ -63,6 +63,13 @@ describe('Mnemon config and resolution', () => {
     })
   })
 
+  it('bounds generic composition and evidence budgets while preserving defaults', () => {
+    expect(resolveConfig().memoryTopology.viewBudget).toMatchObject({ maxRoutes: 16, maxActions: 16, maxEvidenceCharacters: 16384 })
+    expect(resolveConfig({ memoryTopology: { viewBudget: { maxRoutes: 96, maxActions: 1, maxEvidenceCharacters: 400 } } }).memoryTopology.viewBudget).toMatchObject({ maxRoutes: 96, maxActions: 1, maxEvidenceCharacters: 400 })
+    for (const value of [-1, 129, 1.5, NaN, Infinity]) expect(() => resolveConfig({ memoryTopology: { viewBudget: { maxRoutes: value } } })).toThrow('View budget')
+    expect(() => resolveConfig({ memoryTopology: { viewBudget: { maxEvidenceResults: 0 } } })).toThrow('View budget')
+  })
+
   it('resolves independently switchable memory layer participation without deleting bindings', () => {
     expect(resolveConfig({
       memoryTopology: {

@@ -1,5 +1,6 @@
 import type { MemoryPackageProvenance, MemoryPluginDescriptor, MemoryPluginLocalizedText, MemorySourceActionManifest, MemorySourceDefinition, MemorySourceManifest, MemorySourceRouteManifest, MemoryStrategyDefinition, MemoryStrategyExtensionDefinition } from './contracts/index.ts'
-import { COMPOSABLE_MEMORY_API_VERSION, MEMORY_CAPABILITIES, MEMORY_PLUGIN_API_VERSION } from './contracts/index.ts'
+import { COMPOSABLE_MEMORY_API_VERSION, MEMORY_CAPABILITIES, MEMORY_PLUGIN_API_VERSION, MEMORY_CONTEXT_POLICY_FORMAT } from './contracts/index.ts'
+import { validateMemoryAccess, validateMemoryContext, validateMemoryManagementOperations, validateMemoryOperation } from './operation-contracts.ts'
 
 const ID = /^[a-z][a-z0-9-]{0,127}$/u
 const PACKAGE = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/u
@@ -171,6 +172,7 @@ function validateRoute(route: MemorySourceRouteManifest): MemorySourceRouteManif
     description: requiredText(route.description, 'memory Source route description', 2_000),
     capability: id(route.capability, 'memory Source route capability') as MemorySourceRouteManifest['capability'],
     inputSchema: jsonClone(route.inputSchema, 'memory Source route input schema'),
+    ...(route.access === undefined ? {} : { access: validateMemoryAccess(route.access) }),
     maxCalls: positiveInteger(route.maxCalls, 'memory Source route maxCalls', 100),
     ...(route.maxResults === undefined ? {} : { maxResults: positiveInteger(route.maxResults, 'memory Source route maxResults', 10_000) }),
     ...(route.maxCharacters === undefined ? {} : { maxCharacters: positiveInteger(route.maxCharacters, 'memory Source route maxCharacters', 10_000_000) }),
@@ -186,6 +188,7 @@ function validateAction(action: MemorySourceActionManifest): MemorySourceActionM
     capability: id(action.capability, 'memory Source action capability') as MemorySourceActionManifest['capability'],
     inputSchema: jsonClone(action.inputSchema, 'memory Source action input schema'),
     ...(action.authority === undefined ? {} : { authority: requiredText(action.authority, 'memory Source action authority', 300) }),
+    ...(action.operation === undefined ? {} : { operation: validateMemoryOperation(action.operation, action.authority) }),
   }
   if (!CAPABILITIES.has(normalized.capability)) throw new Error(`unsupported memory Source action capability: ${normalized.capability}`)
   return deepFreeze(normalized)
@@ -213,6 +216,8 @@ export function defineMemorySource<T extends MemorySourceDefinition>(definition:
     packageName,
     role,
     capabilities: validateCapabilities(manifest.capabilities, 'memory Source capability'),
+    ...(manifest.context === undefined ? {} : { context: validateMemoryContext(manifest.context) }),
+    ...(manifest.management?.operations === undefined ? {} : { management: { ...manifest.management, operations: validateMemoryManagementOperations(manifest.management.operations) } }),
     routes,
     actions,
   }, 'memory Source manifest')
@@ -229,11 +234,13 @@ export function defineMemoryStrategy<T extends MemoryStrategyDefinition>(definit
   if (manifest.deterministic !== true) throw new Error('memory Strategy must declare deterministic: true')
   if (typeof definition.compose !== 'function') throw new Error(`memory Strategy compose() is required: ${typeId}`)
   if (definition.createTurn !== undefined && typeof definition.createTurn !== 'function') throw new Error('memory Strategy createTurn must be a function')
+  if (manifest.acceptedContributionFormats !== undefined && (!Array.isArray(manifest.acceptedContributionFormats) || manifest.acceptedContributionFormats.length > 1 || manifest.acceptedContributionFormats.some(value => value !== MEMORY_CONTEXT_POLICY_FORMAT))) throw new Error('Unsupported Strategy contribution format')
   const normalizedManifest = jsonClone({
     ...manifest,
     typeId,
     packageName,
     supportedSourceRoles: uniqueIds(manifest.supportedSourceRoles, 'memory Strategy supported Source role'),
+    ...(manifest.acceptedSourceCapabilities === undefined ? {} : { acceptedSourceCapabilities: validateCapabilities(manifest.acceptedSourceCapabilities, 'memory Strategy accepted Source capability') }),
     maxSources: positiveInteger(manifest.maxSources, 'memory Strategy maxSources', 1_000),
     maxRoutes: positiveInteger(manifest.maxRoutes, 'memory Strategy maxRoutes', 1_000),
     maxActions: positiveInteger(manifest.maxActions, 'memory Strategy maxActions', 1_000),
@@ -252,6 +259,7 @@ export function defineMemoryStrategyExtension<T extends MemoryStrategyExtensionD
   if (!PACKAGE.test(packageName)) throw new Error(`invalid memory Strategy extension packageName: ${packageName}`)
   if (manifest.deterministic !== true) throw new Error('memory Strategy extension must declare deterministic: true')
   if (typeof definition.contribute !== 'function') throw new Error('memory Strategy extension contribute() is required')
+  if (manifest.contributionFormat !== undefined && manifest.contributionFormat !== MEMORY_CONTEXT_POLICY_FORMAT) throw new Error('Unsupported Strategy extension contribution format')
   return Object.freeze({
     manifest: jsonClone({
       ...manifest, packageName,

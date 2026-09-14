@@ -33,6 +33,12 @@ export function assertReleaseIntentCoverage(changedPackages, releases) {
   return covered
 }
 
+/** A newly introduced package still needs pending intent; it is not a versioned release PR. */
+export function createReleaseIntentPlan(packages, baseVersions) {
+  const versioned = packages.some(item => baseVersions.has(item.manifest.name) && baseVersions.get(item.manifest.name) !== item.manifest.version)
+  return createReleasePlan(packages, versioned ? { baseVersions } : {})
+}
+
 export function assertVersionedReleaseIntent(plan, paths, options, pendingChangesets) {
   assert(plan.selectionComputed && plan.releasePackages.length > 0, 'Expected a versioned release plan')
   assert.equal(pendingChangesets.length, 0, `Release pull request still contains pending changesets: ${pendingChangesets.join(', ')}`)
@@ -68,11 +74,11 @@ async function main() {
 
   const packages = await readReleasePackages()
   const baseVersions = await readReleaseVersionsAtRevision(packages, baseRevision)
-  const plan = createReleasePlan(packages, { baseVersions })
+  const plan = createReleaseIntentPlan(packages, baseVersions)
   const paths = await readChangedPaths(baseRevision, revision)
   const ignoredPackageJson = await devOnlyManifestChanges(plan, paths, baseRevision, revision)
   const changedPackages = publicationInputsChanged(plan, paths, { ignoredPackageJson })
-  if (plan.releasePackages.length > 0) {
+  if (plan.selectionComputed && plan.releasePackages.length > 0) {
     const covered = assertVersionedReleaseIntent(plan, paths, { ignoredPackageJson }, await readPendingChangesets())
     console.log(`Verified consumed changesets and version coverage for release packages: ${[...covered].sort().join(', ')}.`)
     return

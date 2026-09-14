@@ -50,7 +50,7 @@ function workspaceContext(initialValue: Record<string, unknown>, load: () => Pro
       register: vi.fn((options: Record<string, unknown>) => {
         slots.push(options)
         const stop = vi.fn()
-        if (options.name === 'shell.overlay' || options.name === 'conversation.view') workspaceStops.push(stop)
+        if (options.id === 'mnemon' && (options.name === 'shell.overlay' || options.name === 'conversation.view')) workspaceStops.push(stop)
         return stop
       }),
     },
@@ -77,6 +77,7 @@ describe('Mnemon Web client composition', () => {
 
   it('keeps a locale-bound Sidebar with Source child-render authority and conversation actions', async () => {
     const { context, slots, scope, settingsEntry, setLocale } = workspaceContext({})
+    expect(slots).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'shell.overlay', id: 'mnemon-source-overlays', children: { 'mnemon.source.overlay': { kind: 'list', scope: 'root' } } })]))
     expect(inject).toEqual(['slots', 'sessions', 'workspaces', 'connection', 'locale'])
     expect(context.locale.register).toHaveBeenCalledWith('mnemon', { zh, en })
     await vi.waitFor(() => expect(slots).toEqual(expect.arrayContaining([
@@ -98,7 +99,7 @@ describe('Mnemon Web client composition', () => {
     const { slots, scope, workspaceStops } = workspaceContext({ displayMode })
     await vi.waitFor(() => expect(workspaceStops).toHaveLength(1))
     expect(mountBetterSidebar).toHaveBeenCalledTimes(1)
-    const shellEntry = slots.find(options => options.name === 'shell.overlay')!
+    const shellEntry = slots.find(options => options.name === 'shell.overlay' && options.id === 'mnemon')!
     const shellProps = (shellEntry.inject as () => Record<string, unknown>)()
     expect(mountBetterSidebar.mock.calls[0]![2]).toBe(shellProps.betterSidebarSeat)
     const firstBetterSidebarStop = mountBetterSidebar.mock.results[0]!.value
@@ -118,7 +119,7 @@ describe('Mnemon Web client composition', () => {
   it.each(['builtin', 'buildin'])('mounts displayMode=%s through the owning session and the same Source page slot', async displayMode => {
     const { context, slots, scope, workspaceStops } = workspaceContext({ displayMode })
     await vi.waitFor(() => expect(workspaceStops).toHaveLength(1))
-    expect(slots.some(options => options.name === 'shell.overlay')).toBe(false)
+    expect(slots.some(options => options.name === 'shell.overlay' && options.id === 'mnemon')).toBe(false)
     expect(mountBetterSidebar).not.toHaveBeenCalled()
     const entry = slots.find(options => options.name === 'conversation.view')!
     expect(entry).toMatchObject({ id: 'mnemon', order: 30, children: { 'mnemon.source.page': { kind: 'list', scope: 'root' } } })
@@ -166,7 +167,7 @@ describe('Mnemon Web client composition', () => {
     expect(workspaceStops).toHaveLength(0)
     ready.resolve({ displayMode: 'builtin' })
     await vi.waitFor(() => expect(workspaceStops).toHaveLength(1))
-    expect(slots.some(options => options.name === 'shell.overlay')).toBe(false)
+    expect(slots.some(options => options.name === 'shell.overlay' && options.id === 'mnemon')).toBe(false)
     expect(slots.some(options => options.name === 'conversation.view')).toBe(true)
   })
 
@@ -174,6 +175,6 @@ describe('Mnemon Web client composition', () => {
     const { slots, scope, workspaceStops } = workspaceContext({}, async () => { throw new Error('offline') })
     await vi.waitFor(() => expect(scope.getSnapshot().status).toBe('unavailable'))
     expect(workspaceStops).toHaveLength(1)
-    expect(slots.some(options => options.name === 'shell.overlay')).toBe(true)
+    expect(slots.some(options => options.name === 'shell.overlay' && options.id === 'mnemon')).toBe(true)
   })
 })

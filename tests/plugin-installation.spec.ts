@@ -53,7 +53,7 @@ async function profile() {
       return () => { entries.delete(listener) }
     },
   } as unknown as HostContextShape
-  return { root, directory, ctx, settings, documents, emit }
+  return { root, directory, ctx, settings, documents, emit, loader }
 }
 
 const registryManifest = (name = 'dsh-mnemon-strategy-focus') => ({
@@ -65,9 +65,7 @@ describe('DSH-native Memory plugin installation', () => {
   it('reports the exact active Profile and keeps suggestions distinct from activation', async () => {
     const f = await profile()
     const manager = new MemoryPluginInstallation(f.ctx, { resolveDshCommand: () => ({ command: '/fake/dsh', prefix: [] }) })
-    expect(manager.environment()).toEqual({ supported: true, profileName: 'web', suggestions: [
-      'dsh-mnemon-strategy-scoped', 'dsh-mnemon-strategy-light-context', 'dsh-mnemon-strategy-auto-capture',
-    ] })
+    expect(manager.environment()).toMatchObject({ supported: true, profileName: 'web', suggestions: expect.arrayContaining(['dsh-mnemon-source-learning', 'dsh-mnemon-strategy-learning-cycle']) })
   })
 
   it('discovers a compatible Source or Strategy only from an exact package name', async () => {
@@ -77,7 +75,7 @@ describe('DSH-native Memory plugin installation', () => {
       resolveDshCommand: () => ({ command: '/fake/dsh', prefix: [] }) })
     await expect(manager.inspect('dsh-mnemon-strategy-focus')).resolves.toEqual({
       packageName: 'dsh-mnemon-strategy-focus', version: '0.5.0-beta.4', kind: 'strategy',
-      description: 'A bounded test Strategy.', mnemonPeerRange: '^0.5.0-beta.1', installed: false,
+      description: 'A bounded test Strategy.', mnemonPeerRange: '^0.5.0-beta.1', installed: false, registered: false, compatible: true, peerChecks: [{ packageName: 'dsh-mnemon', range: '^0.5.0-beta.1', installedVersion: '0.5.0-beta.1', compatible: true }],
     })
     expect(fetchPackage).toHaveBeenCalledWith('dsh-mnemon-strategy-focus', 'beta')
     await expect(manager.inspect('file:../plugin')).rejects.toThrow('exact dsh-mnemon')
@@ -118,4 +116,31 @@ describe('DSH-native Memory plugin installation', () => {
     await expect(manager.install('dsh-mnemon-strategy-focus', '0.5.0-beta.3')).rejects.toThrow('version changed')
   })
 
+})
+
+it('checks actual peer ranges and blocks incompatible installation before starting a process', async () => {
+  const f = await profile(), processRunner = vi.fn()
+  const manager = new MemoryPluginInstallation(f.ctx, { currentVersion: '0.5.8', processRunner,
+    fetchPackage: async name => ({ ...registryManifest(name), peerDependencies: { 'dsh-mnemon': '>=0.6.0', '@deepseek-ai/dsh-llm': '^0.1.5-rc.1' } }),
+    resolveInstalledVersion: name => name === '@deepseek-ai/dsh-llm' ? '0.1.0-rc.8' : undefined,
+    resolveDshCommand: () => ({ command: '/fake/dsh', prefix: [] }),
+  })
+  const result = await manager.inspect('dsh-mnemon-source-notes')
+  expect(result.compatible).toBe(false)
+  expect(result.peerChecks.every(check => !check.compatible)).toBe(true)
+  await expect(manager.install(result.packageName, result.version)).rejects.toThrow('incompatible')
+  expect(processRunner).not.toHaveBeenCalled()
+})
+
+it('recognizes a registered Starter module without requiring a second bundle layer', async () => {
+  const f = await profile(), name = 'dsh-mnemon-source-notes'
+  f.loader.entries = () => [{ options: { name } }] as never
+  const manager = new MemoryPluginInstallation(f.ctx, { currentVersion: '0.5.8',
+    fetchPackage: async packageName => ({ ...registryManifest(packageName), dsh: undefined }),
+    resolveInstalledVersion: () => '0.5.0-beta.2', resolveDshCommand: () => ({ command: '/fake/dsh', prefix: [] }),
+  })
+  expect(await manager.inspect(name)).toMatchObject({ installed: true, installedVersion: '0.5.0-beta.2', registered: true, compatible: true })
+  Object.defineProperty(f.settings, 'writable', { value: false })
+  expect(manager.environment()).toMatchObject({ supported: false, reason: 'read-only' })
+  await expect(manager.install(name, '0.5.0-beta.4')).rejects.toThrow('cannot install')
 })

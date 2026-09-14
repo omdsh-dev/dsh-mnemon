@@ -68,7 +68,9 @@ describe('external consumer of packed artifacts', () => {
   it('imports every declared Node entry from installed packages, not repository sources', async () => {
     const names: string[] = JSON.parse(readFileSync(new URL('../artifacts.json', import.meta.url), 'utf8'))
     const require = createRequire(import.meta.url)
-    expect(names).toHaveLength(17)
+    const consumer = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+    const declared = Object.keys(consumer.devDependencies).filter(name => name === 'dsh-mnemon' || name.startsWith('dsh-mnemon-'))
+    expect([...names].sort()).toEqual(declared.sort())
     for (const name of names) {
       const manifest = JSON.parse(readFileSync(require.resolve(name + '/package.json'), 'utf8'))
       for (const subpath of Object.keys(manifest.exports)) {

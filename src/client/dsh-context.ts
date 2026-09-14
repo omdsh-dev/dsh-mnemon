@@ -24,6 +24,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
   interface SlotMap {
     /** Optional Source-specific pages owned by the canonical Mnemon workspace. */
+    'mnemon.source.overlay': { kind: 'list'; scope: 'root'; owner: MnemonSourcePageOwnerProps }
     'mnemon.source.page': {
       kind: 'list'
       scope: 'root'
@@ -65,6 +66,6 @@ interface SnapshotStore<State> {
 export type MnemonClientContext = Context & {
   connection: ConnectionHandle
   locale: LocaleRuntime
-  sessions: { list: SnapshotStore<MnemonSessionListState> }
+  sessions: { list: SnapshotStore<MnemonSessionListState>; refresh?(): Promise<void>; open?(id: import('@deepseek-ai/dsh-session').SessionId): void }
   workspaces: { list: SnapshotStore<MnemonWorkspaceListState> }
 }

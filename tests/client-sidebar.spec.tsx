@@ -134,7 +134,7 @@ function receiverSensitiveStore<T>(snapshot: T) {
 }
 
 const settings = {
-  getSnapshot: () => ({ status: 'ready' as const, value: {}, writable: true, mode: 'host' as const }),
+  getSnapshot: () => ({ status: 'ready' as const, value: { storageScope: 'workspace' as const }, writable: true, mode: 'host' as const }),
   subscribe: () => () => {}, set: async () => {}, unset: async () => {}, setPath: async () => {}, unsetPath: async () => {},
 }
 const sourcePageDirectory = { getSnapshot: () => [] as const, subscribe: () => () => {} }
@@ -462,14 +462,14 @@ describe('Mnemon canonical workspace launcher', () => {
     expect(document.querySelector('[data-dsh-mnemon-view]')).toBeNull()
   })
 
-  it('keeps receiver-sensitive stores bound inside the canonical host and preserves workspace selection', async () => {
+  it.each(['workspace', 'workspaces'] as const)('keeps receiver-sensitive stores bound and preserves %s inspection selection', async storageScope => {
     const ctx = context()
     const sessions = receiverSensitiveStore(ctx.sessions.list.getSnapshot())
     const workspaces = receiverSensitiveStore(ctx.workspaces.list.getSnapshot())
     ctx.sessions.list = sessions
     ctx.workspaces.list = workspaces
     render(<MnemonWorkspaceHost
-      connection={ctx.connection as never} settingsScope={settings} sessions={ctx.sessions as never} workspaces={ctx.workspaces as never}
+      connection={ctx.connection as never} settingsScope={{ ...settings, getSnapshot: () => ({ ...settings.getSnapshot(), value: { storageScope } }) }} sessions={ctx.sessions as never} workspaces={ctx.workspaces as never}
       localeRuntime={ctx.locale as never} sourcePageDirectory={sourcePageDirectory} navigation={{ open() {}, close() {} }}
       t={t as never} renderSlot={() => null} sessionId="session-1"
     />)
@@ -481,6 +481,20 @@ describe('Mnemon canonical workspace launcher', () => {
     await waitFor(() => expect(document.querySelector('[data-testid="mnemon-canonical-content"]')?.getAttribute('data-workspace-id')).toBe('workspace-2'))
     fireEvent.click([...document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === 'align-test-workspace')!)
     await waitFor(() => expect(document.querySelector('[data-testid="mnemon-canonical-content"]')?.getAttribute('data-workspace-id')).toBe('workspace-1'))
+  })
+
+  it.each(['global', 'custom'] as const)('follows the active conversation workspace in %s storage without a hidden sticky inspection target', async storageScope => {
+    const ctx = context(), scope = { ...settings, getSnapshot: () => ({ ...settings.getSnapshot(), value: { storageScope } }) }
+    const props = { connection: ctx.connection as never, settingsScope: scope, sessions: ctx.sessions as never, workspaces: ctx.workspaces as never, localeRuntime: ctx.locale as never, sourcePageDirectory, t: t as never }
+    const view = render(<MnemonWorkspaceHost {...props} sessionId="session-1" cwd="/tmp/workspace-one" />)
+    const content = view.getByTestId('mnemon-canonical-content')
+    expect(content.dataset.workspaceId).toBe('workspace-1')
+    view.rerender(<MnemonWorkspaceHost {...props} sessionId="session-2" cwd="/tmp/workspace-two" />)
+    expect(content.dataset.workspaceId).toBe('workspace-2')
+    fireEvent.change(view.getByLabelText('workspace-test-selector'), { target: { value: 'workspace-1' } })
+    expect(content.dataset.workspaceId).toBe('workspace-2')
+    view.rerender(<MnemonWorkspaceHost {...props} sessionId="session-1" cwd="/tmp/workspace-one" />)
+    expect(content.dataset.workspaceId).toBe('workspace-1')
   })
 
   it('renders Builtin with only its owning session and releases a receiver-sensitive locale subscription', () => {

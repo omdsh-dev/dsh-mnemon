@@ -13,7 +13,7 @@ const execute = promisify(execFile)
 const defaultRegistry = 'https://registry.npmjs.org'
 const manifestName = 'release-manifest.json'
 const starterName = 'dsh-mnemon'
-const internalName = /^dsh-mnemon-(?:source|strategy|provider)-[a-z0-9-]+$/u
+const internalName = /^dsh-mnemon-(?:(?:source|strategy|provider)-[a-z0-9-]+|[a-z0-9-]+-kit)$/u
 const releaseVersion = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(alpha|beta|rc)\.(?:0|[1-9]\d*))?$/u
 
 function distTagForVersion(version) {

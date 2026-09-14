@@ -16,6 +16,11 @@ export interface MnemonSourceManagementClient {
 /** Browser metadata is display-only; the Host validates capability identifiers. */
 export type MemorySourcePageInstance = Omit<MemorySourceManagementInstance, 'capabilities'> & { capabilities: readonly string[] }
 
+/** Opt-in human coordination across separately authenticated Source clients. */
+export interface MemorySourceManagementDirectory {
+  readonly sources: readonly MemorySourcePageInstance[]
+  client(sourceInstanceKey: string): MnemonSourceManagementClient | undefined
+}
 export interface MemorySourcePageProps {
   /** Type-level presentation identity; never a Client or Host Fiber uid. */
   sourceTypeId: string
@@ -24,6 +29,10 @@ export interface MemorySourcePageProps {
   sourceInstances: readonly MemorySourcePageInstance[]
   /** Present only while the selected Host instance remains visible. */
   management?: MnemonSourceManagementClient
+  /** Only pages declaring coordinateSources receive this scope-bound directory. */
+  managementDirectory?: MemorySourceManagementDirectory
+  /** Public DSH navigation; no transport or session mutation authority. */
+  sessionNavigation?: { open(sessionId: string): Promise<void> }
   /** Presentation hint only; the Host still authenticates every mutation. */
   writable?: boolean
   sessionId?: string

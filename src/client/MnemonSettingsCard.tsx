@@ -19,6 +19,9 @@ import {
 } from "../host/protocol.ts"
 import type { MemoryPluginEntryView, MemoryViewDashboard } from '../host/view-protocol.ts'
 import { MnemonClient } from './api.ts'
+import { MemoryCompositionEditor } from './MemoryCompositionEditor.tsx'
+import { MemoryPluginManager } from './MemoryPluginManager.tsx'
+import { SettingsSurface } from './SettingsSurface.tsx'
 import css from './MnemonSettingsCard.module.css'
 import { GlobalLocationSetting } from './GlobalLocationSetting.tsx'
 import { translateZh, type MnemonKey, type MnemonTranslate } from './locales.ts'
@@ -435,14 +438,14 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
     setApplied(false)
   }
   return (
-    <section className={css.page} aria-label={t('config.aria')} aria-busy={saving || loading}>
+    <SettingsSurface t={t}><section className={css.page} aria-label={t('config.aria')} aria-busy={saving || loading}>
       {loading ? <p className={css.loading} role="status">{t('common.loading')}</p> : <>
         <header className={css.pageHeader}>
           <h1>{t('config.title')}</h1>
           <p>{t('config.description')}</p>
         </header>
 
-        <section className={css.section} aria-labelledby="mnemon-display-heading">
+        <section className={`${css.section} ${css.preferenceRow}`} aria-labelledby="mnemon-display-heading">
           <div className={css.sectionHeading}>
             <div><h2 id="mnemon-display-heading">{t('config.displayTitle')}</h2><p>{t('config.displayDescription')}</p></div>
           </div>
@@ -452,7 +455,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
           </div>
         </section>
 
-        <section className={css.section} aria-labelledby="mnemon-storage-heading">
+        <section className={`${css.section} ${css.preferenceRow}`} aria-labelledby="mnemon-storage-heading">
           <div className={css.sectionHeading}>
             <div><h2 id="mnemon-storage-heading">{t('config.storageTitle')}</h2><p>{t('config.storageDescription')}</p></div>
           </div>
@@ -475,7 +478,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
           </div>}
         </section>
 
-        <section className={css.section} aria-labelledby="mnemon-runtime-user-scope-heading">
+        <section className={`${css.section} ${css.preferenceRow}`} aria-labelledby="mnemon-runtime-user-scope-heading">
           <div className={css.sectionHeading}>
             <div><h2 id="mnemon-runtime-user-scope-heading">{t('config.runtimeUserScopeTitle')}</h2><p>{t('config.runtimeUserScopeDescription')}</p></div>
           </div>
@@ -484,6 +487,24 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
             <ChoiceCard id="mnemon-runtime-user-global" name="mnemon-runtime-user-scope" label={t('config.runtimeUserScopeGlobal')} detail={t('config.runtimeUserScopeGlobalHint')} checked={draft.runtimeUserScope === 'global'} disabled={coreDisabled} onChange={() => edit('runtimeUserScope', 'global')} />
           </div>
         </section>
+
+        <MemoryPluginManager
+          {...(connection === undefined ? {} : { connection })}
+          {...(sessionId === undefined ? {} : { sessionId })}
+          {...(workspaceId === undefined ? {} : { workspaceId })}
+          refreshKey={targetRevision}
+          onChange={() => setTargetRevision(value => value + 1)}
+          locale={t('config.title') === translateZh('config.title') ? 'zh-CN' : 'en'}
+        />
+
+        <MemoryCompositionEditor
+          {...(connection === undefined ? {} : { connection })}
+          {...(sessionId === undefined ? {} : { sessionId })}
+          {...(workspaceId === undefined ? {} : { workspaceId })}
+          refreshKey={targetRevision}
+          onChange={() => setTargetRevision(value => value + 1)}
+          locale={t('config.title') === translateZh('config.title') ? 'zh-CN' : 'en'}
+        />
 
         <MemoryTopologySection
           descriptor={memorySystem}
@@ -610,7 +631,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
         </footer>
         <p className={css.settingsNote}>{t('config.noticeBefore')} <code>.dsh/settings.yaml</code>{t('config.noticeAfter')}</p>
       </>}
-    </section>
+    </section></SettingsSurface>
   )
 }
 
@@ -668,7 +689,7 @@ function MemoryEnhancementsSection(props: {
     return entry === undefined ? [] : [{ definition, entry }]
   })
 
-  if (state !== 'ready' || dashboard === null || entries.length === 0) return null
+  if (state !== 'ready' || dashboard === null || entries.length === 0 || dashboard.strategyTypeId !== 'default-three-tier') return null
 
   const toggle = async (entry: MemoryPluginEntryView): Promise<void> => {
     if (client === undefined || working !== null || !dashboard.writable || !entry.writable) return
@@ -992,7 +1013,7 @@ function TaskAgentModelSection(props: {
 }
 
 function ChoiceCard(props: { id: string; name: string; label: string; detail: string; checked: boolean; disabled: boolean; onChange: () => void }): JSX.Element {
-  return <label className={css.choiceCard} htmlFor={props.id}><input id={props.id} name={props.name} type="radio" aria-label={props.label} checked={props.checked} disabled={props.disabled} onChange={props.onChange} /><span className={css.choiceFace}><strong>{props.label}</strong><small>{props.detail}</small><span className={css.check} aria-hidden="true">✓</span></span></label>
+  return <label className={css.choiceCard} htmlFor={props.id}><input id={props.id} name={props.name} type="radio" aria-label={props.label} aria-describedby={props.id + '-description'} checked={props.checked} disabled={props.disabled} onChange={props.onChange} /><span className={css.choiceFace} title={props.detail}><strong>{props.label}</strong><small id={props.id + '-description'}>{props.detail}</small><span className={css.check} aria-hidden="true">✓</span></span></label>
 }
 
 function ToggleRow(props: { id: string; label: string; hint: string; checked: boolean; disabled: boolean; onChange: (value: boolean) => void }): JSX.Element {

@@ -8,6 +8,7 @@ import type { MemoryCapability, MemoryJsonValue } from '../core/contracts/index.
 import { agentScope, type MnemonAgentRuntimeSource, type MnemonRuntimeGraph } from './runtime.ts'
 import { isSubagent, MnemonSubagentCoordinator } from './subagent.ts'
 import { memoryReadPresentation, memoryWritePresentation } from './activity-presentation.ts'
+import { authorizeMemoryAction } from './action-authority.ts'
 
 const text = (value: unknown): Array<{ type: 'text'; text: string }> => [{
   type: 'text',
@@ -83,7 +84,7 @@ export function registerTools(ctx: HostContextShape, runtimeSource: MnemonAgentR
 
   ctx.tools.register(definition({
     name: 'mnemon_view_action',
-    description: 'Execute one exact Action offered in the current MNEMON VIEW ROUTES envelope. The Host rechecks write policy and authority at call time and returns a mutation Receipt; an offer is never itself authorization.',
+    description: 'Execute one exact Action offered in the current MNEMON VIEW ROUTES envelope. The Host rechecks write policy and returns a mutation Receipt. Actions with external authority require one DSH approval for this exact displayed call; unavailable or rejected approval denies execution.',
     parameters: {
       type: 'object',
       properties: {
@@ -95,8 +96,14 @@ export function registerTools(ctx: HostContextShape, runtimeSource: MnemonAgentR
     output: { schema: JSON_OBJECT_OUTPUT, render: (_args: unknown, value: unknown) => text(value),
       presentationMeta: memoryWritePresentation(undefined, 'view-action', 'offerId') },
     execute: (args: { offerId: string; input: MemoryJsonValue }, exec: ToolExecution) => {
-      if (!config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
-      return coordinator.action(requireAgent(exec), args.offerId, args.input, exec.signal)
+      if (!runtimeSource.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
+      const { manager, turn } = composableTurn(exec)
+      // The shared product workflow handles capacity maintenance. Offers with
+      // explicit external authority keep the exact-call DSH approval path.
+      if (turn.view.actionOffers.find(offer => offer.id === args.offerId)?.authority === undefined) {
+        return coordinator.action(requireAgent(exec), args.offerId, args.input, exec.signal)
+      }
+      return manager.executeAction(turn.turnId, args.offerId, args.input, offer => authorizeMemoryAction(ctx, offer, exec, () => runtimeSource.config.writeEnabled), exec.signal)
     },
     presentCall: (args: { offerId: string }) => ({ card: 'generic', title: 'Apply composable memory action', kind: 'edit', rawInput: args.offerId }),
     presentResult: () => ({ card: 'generic', title: 'Composable memory receipt ready' }),
