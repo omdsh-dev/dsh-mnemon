@@ -11,12 +11,13 @@ using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
 // A GUI-subsystem observer, not a terminal parent. It launches each Node probe
-// with CREATE_NO_WINDOW and observes actual visible desktop windows using Win32.
+// with DETACHED_PROCESS and observes actual visible desktop windows using Win32.
 class Observer {
     delegate bool EnumWindowsProc(IntPtr window, IntPtr state);
     [DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowsProc callback, IntPtr state);
     [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr window);
     [DllImport("user32.dll")] static extern bool IsIconic(IntPtr window);
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr window);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr window, StringBuilder value, int max);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr window, StringBuilder value, int max);
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint pid);
@@ -71,8 +72,11 @@ class Observer {
         }, IntPtr.Zero);
         return result;
     }
-    static void Screenshot(string phase) {
-        var bounds = Screen.PrimaryScreen.Bounds;
+    static void Screenshot(string phase, IntPtr window) {
+        SetForegroundWindow(window);
+        Thread.Sleep(150);
+        RECT rectangle; GetWindowRect(window, out rectangle);
+        var bounds = Rectangle.Intersect(new Rectangle(rectangle.left, rectangle.top, rectangle.right - rectangle.left, rectangle.bottom - rectangle.top), Screen.PrimaryScreen.Bounds);
         using (var bitmap = new Bitmap(bounds.Width, bounds.Height)) {
             using (var graphics = Graphics.FromImage(bitmap)) graphics.CopyFromScreen(bounds.X, bounds.Y, 0, 0, bounds.Size);
             bitmap.Save(Path.Combine(outputDir, phase + "-first-window.png"), ImageFormat.Png);
@@ -86,7 +90,7 @@ class Observer {
         startup.flags = 1; startup.showWindow = 1;
         var command = new StringBuilder("\"" + node + "\" --experimental-strip-types \"" + worker + "\" \"" + configFile + "\" " + phase);
         PROCESS_INFORMATION process;
-        uint flags = positive ? 0x00000010u : 0x08000000u;
+        uint flags = positive ? 0x00000010u : 0x00000008u;
         if (!CreateProcess(node, command, IntPtr.Zero, IntPtr.Zero, false, flags, IntPtr.Zero, workdir, ref startup, out process)) throw new Exception("CreateProcess failed: " + Marshal.GetLastWin32Error());
         var timer = Stopwatch.StartNew();
         bool checkedConsole = positive;
@@ -113,7 +117,12 @@ class Observer {
                 // Git observation free of screenshot latency.
                 if (positive && seen.Count > 0 && !screenshotAttempted) {
                     screenshotAttempted = true;
-                    try { Screenshot(phase); } catch (Exception error) { screenshotError = error.Message; }
+                    try {
+                        foreach (var window in seen.Values) {
+                            Screenshot(phase, new IntPtr(Convert.ToInt64((string)window["handle"], 16)));
+                            break;
+                        }
+                    } catch (Exception error) { screenshotError = error.Message; }
                 }
                 if (!checkedConsole && File.Exists(Path.Combine(outputDir, phase + "-ready"))) {
                     nodeHadConsole = AttachConsole(process.pid);
@@ -128,7 +137,7 @@ class Observer {
             GetExitCodeProcess(process.process, out exitCode);
         } finally { CloseHandle(process.thread); CloseHandle(process.process); }
         return new {
-            phase, nodePid = process.pid, flags = positive ? "CREATE_NEW_CONSOLE" : "CREATE_NO_WINDOW",
+            phase, nodePid = process.pid, flags = positive ? "CREATE_NEW_CONSOLE" : "DETACHED_PROCESS",
             observerConsoleHandle = GetConsoleWindow().ToInt64(), checkedConsole, nodeHadConsole, attachError,
             exitCode, samples, elapsedMs = timer.Elapsed.TotalMilliseconds, screenshotError,
             preexistingVisibleConsoleWindows = preexisting.Values,

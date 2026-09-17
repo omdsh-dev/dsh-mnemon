@@ -10,7 +10,7 @@ $source = 'plugins/dsh-mnemon-source-runtime/src/git-branch.ts'
 $baselineModule = Join-Path $root 'baseline.ts'
 $fixedModule = Join-Path $root 'fixed.ts'
 node -e 'const fs=require("node:fs"); const cp=require("node:child_process"); fs.writeFileSync(process.argv[1], cp.execFileSync("git", ["show", process.argv[2]], {windowsHide:true}))' $baselineModule "${base}:$source"
-Copy-Item $source $fixedModule
+node -e 'const fs=require("node:fs"); const cp=require("node:child_process"); fs.writeFileSync(process.argv[1], cp.execFileSync("git", ["show", process.argv[2]], {windowsHide:true}))' $fixedModule "HEAD:$source"
 if ((git hash-object $source) -ne $expectedFixedBlob) { throw 'Validation source differs from exact production fix source blob' }
 if (-not (Select-String -Path $fixedModule -SimpleMatch 'windowsHide: true')) { throw 'Fixed source does not have windowsHide' }
 $fixture = Join-Path $root 'fixture'
