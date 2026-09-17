@@ -1,0 +1,32 @@
+name: Issue 259 Windows console A-B validation
+
+on:
+  push:
+    branches: [codex/verify-259-windows-console]
+
+permissions:
+  contents: read
+
+jobs:
+  observe-windows:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.19.0
+          package-manager-cache: false
+      - name: Observe actual before and after Git console windows
+        shell: pwsh
+        run: ./scripts/issue-259-windows/run.ps1
+      - name: Preserve sanitized observation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue-259-windows-evidence
+          path: ${{ runner.temp }}/issue-259-windows/evidence
+          retention-days: 14
