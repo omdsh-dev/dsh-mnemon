@@ -18,6 +18,7 @@ class Observer {
     [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr window);
     [DllImport("user32.dll")] static extern bool IsIconic(IntPtr window);
     [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr window);
+    [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr window, int command);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr window, StringBuilder value, int max);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr window, StringBuilder value, int max);
     [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr window, out uint pid);
@@ -72,15 +73,23 @@ class Observer {
         }, IntPtr.Zero);
         return result;
     }
-    static void Screenshot(string phase, IntPtr window) {
-        SetForegroundWindow(window);
-        Thread.Sleep(150);
-        RECT rectangle; GetWindowRect(window, out rectangle);
-        var bounds = Rectangle.Intersect(new Rectangle(rectangle.left, rectangle.top, rectangle.right - rectangle.left, rectangle.bottom - rectangle.top), Screen.PrimaryScreen.Bounds);
+    static bool Screenshot(string phase, IntPtr window, bool positive) {
+        uint expectedPid = 0;
+        if (window != IntPtr.Zero) {
+            GetWindowThreadProcessId(window, out expectedPid);
+            SetForegroundWindow(window);
+            if (positive) Thread.Sleep(150);
+        }
+        var bounds = Screen.PrimaryScreen.Bounds;
         using (var bitmap = new Bitmap(bounds.Width, bounds.Height)) {
             using (var graphics = Graphics.FromImage(bitmap)) graphics.CopyFromScreen(bounds.X, bounds.Y, 0, 0, bounds.Size);
-            bitmap.Save(Path.Combine(outputDir, phase + "-first-window.png"), ImageFormat.Png);
+            if (window != IntPtr.Zero) {
+                uint actualPid; GetWindowThreadProcessId(window, out actualPid);
+                if (!IsWindowVisible(window) || actualPid != expectedPid) return false;
+            }
+            bitmap.Save(Path.Combine(outputDir, phase + "-desktop.png"), ImageFormat.Png);
         }
+        return true;
     }
     static object RunPhase(string node, string worker, string configFile, string phase, bool positive) {
         Thread.Sleep(350);
@@ -99,11 +108,14 @@ class Observer {
         int samples = 0;
         string screenshotError = null;
         bool screenshotAttempted = false;
+        bool screenshotCaptured = false;
+        object screenshotObservation = null;
         uint exitCode;
         try {
             while (true) {
                 samples++;
-                foreach (var pair in Snapshot()) {
+                var currentWindows = Snapshot();
+                foreach (var pair in currentWindows) {
                     if (preexisting.ContainsKey(pair.Key)) continue;
                     if (!seen.ContainsKey(pair.Key)) {
                         pair.Value["firstMs"] = timer.Elapsed.TotalMilliseconds;
@@ -113,15 +125,23 @@ class Observer {
                     seen[pair.Key]["lastMs"] = timer.Elapsed.TotalMilliseconds;
                     seen[pair.Key]["samples"] = (int)seen[pair.Key]["samples"] + 1;
                 }
-                // The long positive control gives a stable screenshot. Keep real
-                // Git observation free of screenshot latency.
-                if (positive && seen.Count > 0 && !screenshotAttempted) {
+                // Capture one actual baseline flash, keeping the target visible
+                // for the entire screen copy. Retry a later flash if it vanished.
+                if ((positive || phase.StartsWith("baseline")) && seen.Count > 0 && !screenshotCaptured) {
                     screenshotAttempted = true;
                     try {
-                        foreach (var window in seen.Values) {
-                            Screenshot(phase, new IntPtr(Convert.ToInt64((string)window["handle"], 16)));
-                            break;
+                        foreach (var pair in currentWindows) {
+                            if (preexisting.ContainsKey(pair.Key)) continue;
+                            screenshotCaptured = Screenshot(phase, new IntPtr(Convert.ToInt64((string)pair.Value["handle"], 16)), positive);
+                            if (screenshotCaptured) { screenshotObservation = new { elapsedMs = timer.Elapsed.TotalMilliseconds, window = pair.Value }; break; }
                         }
+                    } catch (Exception error) { screenshotError = error.Message; }
+                }
+                if (phase.StartsWith("fixed") && timer.ElapsedMilliseconds >= 1000 && !screenshotAttempted) {
+                    screenshotAttempted = true;
+                    try {
+                        screenshotCaptured = Screenshot(phase, IntPtr.Zero, false);
+                        screenshotObservation = new { elapsedMs = timer.Elapsed.TotalMilliseconds, visibleConsoleWindows = currentWindows.Values };
                     } catch (Exception error) { screenshotError = error.Message; }
                 }
                 if (!checkedConsole && File.Exists(Path.Combine(outputDir, phase + "-ready"))) {
@@ -139,7 +159,7 @@ class Observer {
         return new {
             phase, nodePid = process.pid, flags = positive ? "CREATE_NEW_CONSOLE" : "DETACHED_PROCESS",
             observerConsoleHandle = GetConsoleWindow().ToInt64(), checkedConsole, nodeHadConsole, attachError,
-            exitCode, samples, elapsedMs = timer.Elapsed.TotalMilliseconds, screenshotError,
+            exitCode, samples, elapsedMs = timer.Elapsed.TotalMilliseconds, screenshotError, screenshotCaptured, screenshotObservation,
             preexistingVisibleConsoleWindows = preexisting.Values,
             newVisibleConsoleWindows = seen.Values, newVisibleConsoleWindowCount = seen.Count
         };
@@ -150,6 +170,7 @@ class Observer {
         outputDir = (string)config["outputDir"]; workdir = (string)config["workdir"];
         Directory.CreateDirectory(outputDir);
         var report = new Dictionary<string, object>();
+        var minimizedForScreenshots = new List<IntPtr>();
         int status = 0;
         timeBeginPeriod(1);
         try {
@@ -160,6 +181,14 @@ class Observer {
             report["osVersion"] = Environment.OSVersion.ToString();
             report["screenBounds"] = Screen.PrimaryScreen.Bounds.ToString();
             if (GetConsoleWindow() != IntPtr.Zero) throw new Exception("Observer unexpectedly has a console");
+            // Only ephemeral runner console windows are minimized; their running
+            // processes are untouched. Restore the windows after observation.
+            foreach (var window in Snapshot().Values) {
+                var handle = new IntPtr(Convert.ToInt64((string)window["handle"], 16));
+                ShowWindow(handle, 6);
+                minimizedForScreenshots.Add(handle);
+            }
+            report["preexistingConsoleWindowsMinimized"] = minimizedForScreenshots.Count;
             var phases = new List<object>(); report["phases"] = phases;
             foreach (string phase in new [] { "positive-control", "baseline-1", "fixed-1", "baseline-2", "fixed-2" }) {
                 object data = RunPhase((string)config["node"], (string)config["worker"], configFile, phase, phase == "positive-control");
@@ -167,7 +196,11 @@ class Observer {
                 File.WriteAllText(Path.Combine(outputDir, "windows-observation.json"), Json.Serialize(report));
             }
         } catch (Exception error) { report["error"] = error.ToString(); status = 1; }
-        finally { timeEndPeriod(1); File.WriteAllText(Path.Combine(outputDir, "windows-observation.json"), Json.Serialize(report)); }
+        finally {
+            foreach (var handle in minimizedForScreenshots) ShowWindow(handle, 9);
+            timeEndPeriod(1);
+            File.WriteAllText(Path.Combine(outputDir, "windows-observation.json"), Json.Serialize(report));
+        }
         return status;
     }
 }

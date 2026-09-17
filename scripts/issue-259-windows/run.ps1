@@ -53,6 +53,7 @@ $rows = foreach ($phase in $report.phases) {
   $result = Get-Content (Join-Path $output "$($phase.phase)-result.json") -Raw | ConvertFrom-Json
   [pscustomobject]@{ Phase = $phase.phase; Exit = $phase.exitCode; VisibleWindows = $phase.newVisibleConsoleWindowCount; NodeHadConsole = $phase.nodeHadConsole; Probes = $result.probes; Branch = $result.branch; Success = $result.success }
   if ($phase.exitCode -ne 0 -or -not $result.success) { throw "Behavior failed in $($phase.phase)" }
+  if (-not $phase.screenshotCaptured) { throw "Screenshot was not captured in $($phase.phase)" }
   if ($phase.phase -ne 'positive-control' -and (-not $phase.checkedConsole -or $phase.nodeHadConsole -or $phase.attachError -ne 6)) { throw "No-console parent not confirmed in $($phase.phase)" }
 }
 $rows | Format-Table | Out-String | Tee-Object -FilePath (Join-Path $output 'summary.txt')
