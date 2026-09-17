@@ -15,8 +15,8 @@ export function resolveGitBranch(cwd?: string): string | undefined {
     const output = execFileSync('git', ['-C', root, 'branch', '--show-current'], {
       encoding: 'utf8',
       timeout: GIT_BRANCH_TIMEOUT_MS,
-      windowsHide: true,
       stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
     })
     const branch = output.trim()
     return branch === '' ? undefined : branch

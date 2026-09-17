@@ -4,11 +4,14 @@ $root = Join-Path $env:RUNNER_TEMP 'issue-259-windows'
 $output = Join-Path $root 'evidence'
 New-Item -ItemType Directory -Force $output | Out-Null
 $base = '6da061e8fa51a30ed50c6fff2a4cadcddf7a4a6a'
+$fixedRevision = '1a9d455004c9204a74b87c920d81b67b3f7b954f'
+$expectedFixedBlob = '340e4817a695d4807142e12d09bd70e792cec847'
 $source = 'plugins/dsh-mnemon-source-runtime/src/git-branch.ts'
 $baselineModule = Join-Path $root 'baseline.ts'
 $fixedModule = Join-Path $root 'fixed.ts'
-(git show "${base}:$source") | Set-Content -Encoding utf8NoBOM $baselineModule
+node -e 'const fs=require("node:fs"); const cp=require("node:child_process"); fs.writeFileSync(process.argv[1], cp.execFileSync("git", ["show", process.argv[2]], {windowsHide:true}))' $baselineModule "${base}:$source"
 Copy-Item $source $fixedModule
+if ((git hash-object $source) -ne $expectedFixedBlob) { throw 'Validation source differs from exact production fix source blob' }
 if (-not (Select-String -Path $fixedModule -SimpleMatch 'windowsHide: true')) { throw 'Fixed source does not have windowsHide' }
 $fixture = Join-Path $root 'fixture'
 $detached = Join-Path $root 'detached'
@@ -27,7 +30,7 @@ $config = @{
 $configFile = Join-Path $root 'config.json'
 $config | ConvertTo-Json | Set-Content -Encoding utf8NoBOM $configFile
 $metadata = @{
-  baselineRevision = $base; validationRevision = (git rev-parse HEAD)
+  baselineRevision = $base; fixedRevision = $fixedRevision; validationRevision = (git rev-parse HEAD)
   sourcePath = $source; baselineBlob = (git rev-parse "${base}:$source"); fixedBlob = (git hash-object $source)
   baselineSha256 = (Get-FileHash $baselineModule -Algorithm SHA256).Hash
   fixedSha256 = (Get-FileHash $fixedModule -Algorithm SHA256).Hash
@@ -40,7 +43,8 @@ $metadata | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8NoBOM (Join-Path
 Copy-Item $baselineModule, $fixedModule $output
 $csc = Join-Path $env:WINDIR 'Microsoft.NET/Framework64/v4.0.30319/csc.exe'
 $observer = Join-Path $root 'Observer.exe'
-& $csc /nologo /target:winexe /r:System.Web.Extensions.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll "/out:$observer" scripts/issue-259-windows/Observer.cs
+$observerSource = Join-Path $workdir 'scripts\issue-259-windows\Observer.cs'
+& $csc /nologo /target:winexe /r:System.Web.Extensions.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll "/out:$observer" $observerSource
 if ($LASTEXITCODE -ne 0) { throw 'Observer compilation failed' }
 $process = Start-Process -FilePath $observer -ArgumentList "`"$configFile`"" -PassThru -Wait
 if ($process.ExitCode -ne 0) { Get-Content (Join-Path $output 'windows-observation.json'); throw 'Observer failed' }
