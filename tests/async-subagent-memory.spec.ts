@@ -1,3 +1,4 @@
+import { resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HostAgent, HostContextShape, HostSessionEvent } from '../src/host/dsh.ts'
 import { MnemonLifecycle } from '../src/host/lifecycle.ts'
@@ -74,7 +75,7 @@ function fixture() {
       id,
       status: 'idle',
       session: {
-        header: { cwd: '/workspace/project', ...(parent === undefined ? {} : { origin: 'subagent', parentSession: parent.id }) },
+        header: { cwd: resolve('/workspace/project'), ...(parent === undefined ? {} : { origin: 'subagent', parentSession: parent.id }) },
         events: [],
       },
       ctx,
@@ -314,10 +315,10 @@ describe('asynchronous child memory authority', () => {
     const value = fixture()
     await value.begin(value.root, 1)
     const child = value.create('child', value.root)
-    child.session.header!.cwd = '/workspace/unrelated'
+    child.session.header!.cwd = resolve('/workspace/unrelated')
     await value.end(value.root, 1)
     await value.begin(child, 1)
-    expect(value.views.activeTurn(child.id)!.scope).toMatchObject({ workspaceId: '/workspace/project', agentId: child.id, sessionId: child.id })
+    expect(value.views.activeTurn(child.id)!.scope).toMatchObject({ workspaceId: resolve('/workspace/project'), agentId: child.id, sessionId: child.id })
   })
 
   it('resets a child turn budget after clear without broadening its delegation', async () => {

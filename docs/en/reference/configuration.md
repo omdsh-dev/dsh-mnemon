@@ -236,6 +236,8 @@ mnemon:
 
 All four areas (`runtime`, `data`, `documents`, `state`) live under `<central-root>/workspaces/<sha256(canonical-workspace-path)>/`. Existing symlink aliases resolve to the same ID; different workspace paths remain isolated. A move or rename selects a new ID, with no automatic migration. Sidebar inspection follows the selected registered workspace; Builtin and Headless follow the owning session cwd. Global USER.md still uses `MNEMON_DATA_DIR` or `~/.mnemon`, even when the central root is customized.
 
+Workspace identity resolution allows not-yet-created directory descendants, including Unicode names and descendants below a symlink alias. A path below an existing file is rejected with `ENOTDIR` on every platform, including Windows, before a storage ID is computed. This does not change valid IDs or move, rewrite or remove existing storage.
+
 Changing scopes never migrates, merges or deletes an old root. A ZIP Pack still contains only the selected workspace root; back up the whole central directory to preserve all workspaces. Remote Provider namespaces retain their own sharing semantics.
 
 ### `custom`

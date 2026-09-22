@@ -238,6 +238,8 @@ mnemon:
 
 四个 area（`runtime`、`data`、`documents`、`state`）都保存在 `<集中根>/workspaces/<规范工作区路径的 SHA-256>/`。现存符号链接别名解析到同一 ID，不同工作区路径相互隔离。移动或重命名会选择新 ID，不会自动迁移。Sidebar 跟随所选的已登记工作区，Builtin 和 Headless 跟随所属会话 cwd。即使集中根为自定义目录，全局 USER.md 仍使用 `MNEMON_DATA_DIR` 或 `~/.mnemon`。
 
+工作区身份解析允许尚未创建的目录后代，包括 Unicode 名称和符号链接别名下的后代。若路径位于现存文件之下，所有平台（包括 Windows）都会在计算存储 ID 之前以 `ENOTDIR` 拒绝。有效 ID 保持不变，既有存储不会被移动、改写或删除。
+
 切换范围不会迁移、合并或删除旧根。ZIP Pack 仍只包含当前工作区根；要保留全部工作区，请备份整个集中目录。远端 Provider 命名空间仍遵循自身共享语义。
 
 ### `custom`

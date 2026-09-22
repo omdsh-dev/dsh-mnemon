@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import ts from 'typescript'
@@ -24,9 +24,10 @@ describe('browser bundle platform boundary', () => {
         if (/^(?:node:|dsh-mnemon\/(?:core|kernel|extension-sdk)|dsh-mnemon-source-[^/]+$)/u.test(specifier)) violations.push(`${path}: ${specifier}`)
         if (!specifier.startsWith('.')) continue
         const target = resolve(root, dirname(path), specifier)
-        const browserFile = directories.some(directory => target.startsWith(join(root, directory) + '/'))
-        const contract = target.endsWith('/contracts.ts') || target.endsWith('/host/protocol.ts')
-        const presentation = /\/presentation\/[^/]+\.(?:json|module\.css)$/.test(target)
+        const browserFile = directories.some(directory => target.startsWith(join(root, directory) + sep))
+        const normalized = target.split(sep).join('/')
+        const contract = normalized.endsWith('/contracts.ts') || normalized.endsWith('/host/protocol.ts')
+        const presentation = /\/presentation\/[^/]+\.(?:json|module\.css)$/.test(normalized)
         if (ts.isExportDeclaration(node) && node.isTypeOnly || ts.isImportDeclaration(node) && node.importClause?.isTypeOnly) continue
         if (!browserFile && !contract && !presentation) violations.push(`${path}: ${specifier}`)
         if (contract && /(?:from|import)\s*['"]node:/u.test(readFileSync(target, 'utf8'))) violations.push(`${path}: Node contract ${specifier}`)
