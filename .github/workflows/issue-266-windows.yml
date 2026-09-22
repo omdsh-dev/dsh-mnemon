@@ -1,0 +1,46 @@
+name: Issue 266 Windows workspace validation
+
+on:
+  push:
+    branches: [codex/validate-266-windows-workspace]
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.19.0', '24']
+    env:
+      MNEMON_VALIDATION_PHASE: baseline
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+          package-manager-cache: false
+      - name: Observe the actual Windows filesystem contract
+        run: node --experimental-strip-types scripts/issue-266-windows/observe.mjs $env:MNEMON_VALIDATION_PHASE
+      - name: Install pnpm
+        run: npm install --global pnpm@10.13.1
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run the three reported Windows test files
+        shell: pwsh
+        run: |
+          pnpm exec vitest run tests/workspace-storage.spec.ts tests/client-platform-boundary.spec.ts tests/async-subagent-memory.spec.ts --reporter=default --reporter=json --outputFile=issue-266-results/vitest.json
+          $testStatus = $LASTEXITCODE
+          $report = Get-Content issue-266-results/vitest.json -Raw | ConvertFrom-Json
+          if ($env:MNEMON_VALIDATION_PHASE -eq 'baseline') {
+            if ($testStatus -ne 1 -or $report.numFailedTests -ne 3) { throw 'The three reported baseline failures were not reproduced' }
+          } elseif ($testStatus -ne 0) { throw 'The fixed Windows suite failed' }
+          exit 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: issue-266-${{ env.MNEMON_VALIDATION_PHASE }}-node-${{ matrix.node }}
+          path: issue-266-results
