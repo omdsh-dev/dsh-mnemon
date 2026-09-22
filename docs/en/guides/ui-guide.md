@@ -66,6 +66,8 @@ The header summarizes User Profile (`USER.md`) and Working Memory (`MEMORY.md`).
 
 Runtime entries display their creation time, newest first, across both targets and text filters. Editing an older entry keeps its original position. Show more continues in the same order.
 
+Edit and Remove select the entry's full content within its target. A short entry such as `X` can be changed or removed while `EGO_LINUX_CHROME` remains intact. Identical entries in the same target are still ambiguous and are rejected without changing data.
+
 When Working Memory reaches capacity, the Host archives the exact original entries. If a routing batch fails or returns an invalid proposal, that entire batch uses the eligible default Memory Space (or the first eligible space when no default is available). Earlier valid batches keep their destinations, and the maintenance summary records the fallback reason. Caller cancellation still stops the operation.
 
 Spaces created by the current conversation View, or known spaces activated during that turn, can receive the archive once active and supported. Spaces created elsewhere after the turn began require a new turn. A destination failure explains the directory or scope restriction and leaves existing Runtime entries intact; the pending add has not been saved, so retry its original input after correcting the cause.
@@ -218,6 +220,8 @@ Save to memory sits in the native action strip for finalized replies. The first 
 
 Both conversation controls are on by default and can be changed independently under **Settings → Memory System → Conversation interface**. Saving applies live.
 
+In Builtin mode, automatic shortcuts require one unambiguous Memory System tab in the main conversation. If split panes expose multiple eligible conversation tabs, the shortcut stays pending; open Memory System in the intended conversation manually. Each Builtin view retains its owning session.
+
 ## Workspace mode: inspection and execution are distinct
 
 | Concept | Selected by | Affects |
@@ -242,3 +246,7 @@ Next: [Capability map](./capabilities.md) · [Getting Started](./getting-started
 ## Optional workspace services
 
 See [Composable workspace services](workspace-services.md) for independent Sources, policies, activation, data ownership and retained acceptance evidence.
+
+## Idle review controls
+
+Settings includes **Idle review**: enable it independently, choose bounded spawn or full-context fork, and set the interval, attempt cap, checkpoint size and output budget. Changes respect the existing Host settings grant; read-only clients cannot save them. The Memory System shows an Agent Teams compatibility pause or partial-write receipts after failure. Refresh status to read current state. See [configuration](../reference/configuration.md#provider-requirements) for retention and restart limits.

@@ -8,7 +8,7 @@ import {
   type InteractionConfig,
   type MnemonDisplayMode,
 } from "../host/protocol.ts"
-import { MnemonSettingsCard } from './MnemonSettingsCard.tsx'
+import { MnemonSettingsHost } from './MnemonSettingsHost.tsx'
 import { MnemonTurnTail, selectMnemonTurnTail } from './MnemonTurnTail.tsx'
 import { MnemonSaveAction } from './MnemonSaveAction.tsx'
 import { en, zh, type MnemonKey } from './locales.ts'
@@ -30,7 +30,7 @@ import { mountSubagentTokenUsageOverride } from './subagent-token-usage.tsx'
 
 export * from './extension-sdk.ts'
 
-export const inject = ['slots', 'sessions', 'workspaces', 'connection', 'locale']
+export const inject = ['slots', 'sessions', 'workspaces', 'uiSession', 'connection', 'locale']
 
 /** Interaction surfaces: slot name, settings toggle, and the registrations it owns. */
 type MnemonNamespace = 'mnemon'
@@ -48,8 +48,11 @@ const INTERACTION_UNITS: Record<'turnBar' | 'saveAction', InteractionUnit> = {
     slot: 'conversation.chat.turnTail',
     enabled: (value: unknown): boolean => enabledOf(value, 'turnBar'),
     register(ctx: MnemonClientContext, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string): () => void {
-      return ctx.slots.register({
-        name: 'conversation.chat.turnTail',
+      // RC hosts use a chain; alpha hosts use a list. A named options value
+      // satisfies both public contracts while retaining each runtime's field.
+      const options = {
+        name: 'conversation.chat.turnTail' as const,
+        id: 'dsh-mnemon/turn-tail',
         locale: namespace,
         select: selectMnemonTurnTail,
         inject: (sessionId: unknown): { sessionId?: string; connection: ClientConnectionHandle; localeRuntime: MnemonClientContext['locale']; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => ({
@@ -58,7 +61,8 @@ const INTERACTION_UNITS: Record<'turnBar' | 'saveAction', InteractionUnit> = {
           localeRuntime: ctx.locale,
           t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
         }),
-      }, MnemonTurnTail)
+      }
+      return ctx.slots.register(options, MnemonTurnTail)
     },
   },
   saveAction: {
@@ -110,6 +114,7 @@ function mountSidebarMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
       settingsScope: settings,
       sessions: ctx.sessions,
       workspaces: ctx.workspaces,
+      currentSession: ctx.uiSession.adapter.current,
       localeRuntime: ctx.locale,
       sourcePageDirectory,
       navigation,
@@ -177,11 +182,18 @@ function mountBuiltinMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
   if (typeof window === 'undefined' || typeof document === 'undefined') return disposeView
   const openView = (event: Event): void => {
     const sessionId = (event as CustomEvent<MnemonAnchor>).detail?.sessionId
-    if (sessionId !== undefined && sessionId !== ctx.sessions.list.getSnapshot().current) return
+    const mainSessionId = ctx.uiSession.adapter.current.getSnapshot().key
+    if (mainSessionId === undefined || (sessionId !== undefined && sessionId !== mainSessionId)) return
     const label = translate('tab.label').trim()
-    const tab = [...document.querySelectorAll<HTMLElement>('[role="tab"]')]
-      .find(candidate => candidate.textContent?.trim() === label)
-    tab?.click()
+    const eligible = (candidate: HTMLElement): boolean => !candidate.hasAttribute('disabled')
+      && candidate.getAttribute('aria-disabled') !== 'true' && candidate.closest('[hidden], [aria-hidden="true"]') === null
+    const conversations = [...document.querySelectorAll<HTMLElement>('[data-slot="main.conversation"]')].filter(eligible)
+    if (conversations.length !== 1) return
+    const tabs = [...conversations[0]!.querySelectorAll<HTMLElement>('[role="tab"]')]
+      .filter(candidate => candidate.textContent?.trim() === label && eligible(candidate))
+    // Split panes can expose identically labelled tabs without a public
+    // session marker. Keep the anchor pending instead of choosing a pane.
+    if (tabs.length === 1) tabs[0]!.click()
   }
   window.addEventListener(MNEMON_ANCHOR_EVENT, openView)
   return () => {
@@ -238,25 +250,16 @@ export function apply(rawContext: unknown): void {
     order: 20,
     label: () => translate('tab.label'),
     locale: namespace,
-    inject: (): { scope: MnemonSettingsScope<Config>; interactionScope: MnemonSettingsScope<InteractionConfig>; connection: ClientConnectionHandle; sessionId?: string; workspaceId?: string; workspaceLabel?: string; t: (key: MnemonKey, params?: Record<string, unknown>) => string } => {
-      const sessions = ctx.sessions?.list?.getSnapshot?.() ?? { current: undefined, byId: {} }
-      const workspaces = ctx.workspaces?.list?.getSnapshot?.() ?? { items: [] }
-      const sessionId = sessions.current
-      const cwd = sessionId === undefined ? undefined : sessions.byId[sessionId]?.cwd
-      const normalizePath = (value: string): string => value.replace(/[\\/]+$/u, '')
-      const workspace = cwd === undefined
-        ? workspaces.items[0]
-        : workspaces.items.find(candidate => normalizePath(candidate.path) === normalizePath(cwd))
-      return {
-        scope: settings,
-        interactionScope: interactionSettings,
-        connection: ctx.connection,
-        ...(sessionId === undefined ? {} : { sessionId }),
-        ...(workspace === undefined ? {} : { workspaceId: String(workspace.workspaceId), workspaceLabel: workspace.title }),
-        t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
-      }
-    },
-  }, MnemonSettingsCard))
+    inject: () => ({
+      scope: settings,
+      interactionScope: interactionSettings,
+      connection: ctx.connection,
+      sessions: ctx.sessions,
+      workspaces: ctx.workspaces,
+      currentSession: ctx.uiSession.adapter.current,
+      t: translate,
+    }),
+  }, MnemonSettingsHost))
 
   // In-conversation interaction surfaces default on and are bound live: each
   // settings change registers or disposes the slot contributions without a

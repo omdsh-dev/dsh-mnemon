@@ -93,9 +93,9 @@ branches (optional)
 ### Operations
 
 - `add` writes an independent new fact; exactly identical content is not added twice.
-- `replace` uses a unique substring match on `old_text` to locate and replace an entire item.
-- `remove` uses a unique substring to remove an entire item.
-- Zero or multiple matches are rejected; no fuzzy mutation is performed.
+- `replace` and `remove` first match the normalized full content of `old_text` within the requested `target`, then replace or remove that entire item. One exact match takes precedence even when other items contain the same text.
+- When no full-content match exists, a unique substring still locates the item.
+- Zero matches, duplicate exact matches, and ambiguous substring matches are rejected without changing the store; no fuzzy mutation is performed. Branch tags control projection and are not mutation selectors.
 
 ### Capacity
 

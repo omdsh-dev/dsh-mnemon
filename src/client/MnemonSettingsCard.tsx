@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type JSX } from 'react'
 import {
   DEFAULT_EMBEDDING_ENDPOINT,
+  DEFAULT_IDLE_REVIEW,
   DEFAULT_EMBEDDING_MODEL,
   DEFAULT_EMBEDDING_PROTOCOL,
   MNEMON_EMBEDDING_PROTOCOLS,
@@ -16,6 +17,7 @@ import {
   type MnemonEmbeddingStatus,
   type SettingsOperation,
   type TaskAgentModelCatalog,
+  type ResolvedIdleReviewConfig,
 } from "../host/protocol.ts"
 import type { MemoryPluginEntryView, MemoryViewDashboard } from '../host/view-protocol.ts'
 import { MnemonClient } from './api.ts'
@@ -46,9 +48,10 @@ type EmbeddingField = 'embeddingEnabled' | 'embeddingEndpoint' | 'embeddingModel
 type TaskAgentField = 'taskAgentModelMode' | 'taskAgentProvider' | 'taskAgentModel'
 type InteractionField = 'turnBar' | 'saveAction'
 type TopologyField = `memoryTopology.${string}`
-type DraftField = CoreField | EmbeddingField | TaskAgentField | InteractionField
+type DraftField = CoreField | EmbeddingField | TaskAgentField | InteractionField | 'idleReview'
 type Field = DraftField | TopologyField
 interface Draft extends Record<InteractionField, boolean> {
+  idleReview: ResolvedIdleReviewConfig
   displayMode: 'sidebar' | 'builtin'
   storageScope: string
   runtimeUserScope: 'storage' | 'global'
@@ -83,10 +86,11 @@ function legacyPackDirectory(value: Config): string {
     ?? ''
 }
 
-function coreDraft(value: Config | undefined): Pick<Draft, CoreField | EmbeddingField | TaskAgentField> {
+function coreDraft(value: Config | undefined): Pick<Draft, CoreField | EmbeddingField | TaskAgentField | 'idleReview'> {
   const resolved = value ?? {}
   const dataDir = resolved.dataDir?.trim() || legacyPackDirectory(resolved)
   return {
+    idleReview: { ...DEFAULT_IDLE_REVIEW, ...resolved.idleReview },
     displayMode: normalizeDisplayMode(resolved.displayMode),
     storageScope: resolved.storageScope ?? (dataDir === '' ? 'global' : 'custom'),
     runtimeUserScope: resolved.runtimeUserScope === 'global' ? 'global' : 'storage',
@@ -150,6 +154,10 @@ function topologyOf(descriptor: MemoryCompositionStatus): MemoryTopologyDefiniti
 }
 
 function validation(t: MnemonTranslate, draft: Draft): string | null {
+  for (const [field, min, max] of [['minIntervalMs', 5_000, 86_400_000], ['maxPerSession', 0, 200], ['maxContextChars', 1_000, 1_000_000], ['maxTokens', 128, 131_072]] as const) {
+    const value = draft.idleReview[field]
+    if (!Number.isInteger(value) || value < min || value > max) return t('config.reviewInvalid')
+  }
   if (!['global', 'workspace', 'custom', 'workspaces'].includes(draft.storageScope)) return t('config.invalidScope')
   if (!['storage', 'global'].includes(draft.runtimeUserScope)) return t('config.invalidRuntimeUserScope')
   if (draft.storageScope === 'custom' || (draft.storageScope === 'workspaces' && draft.dataDir.trim() !== '')) {
@@ -362,6 +370,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
     try {
       const coreOps = operations(CORE_FIELDS, dirty, draft)
       const regularCoreChanged = coreOps.length > 0
+      coreOps.push(...operations(['idleReview'], dirty, draft))
       const embeddingChanged = EMBEDDING_FIELDS.some(field => dirty.has(field))
       const taskAgentChanged = TASK_AGENT_FIELDS.some(field => dirty.has(field))
       const topologyChanged = [...dirty].some(field => field.startsWith('memoryTopology.'))
@@ -514,6 +523,16 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
           onEnabled={editLayerEnabled}
           t={t}
         />
+
+        <section className={css.section} aria-labelledby="mnemon-review-heading">
+          <div className={css.sectionHeading}><div><h2 id="mnemon-review-heading">{t('config.reviewTitle')}</h2></div></div>
+          <ToggleRow id="mnemon-idle-review" label={t('config.reviewEnabled')} hint={t('config.reviewDescription')} checked={draft.idleReview.enabled} disabled={coreDisabled} onChange={enabled => editMany({ idleReview: { ...draft.idleReview, enabled } })} />
+          <div className={css.taskAgentFields}>
+            <label><span><strong>{t('config.reviewProvider')}</strong></span><select value={draft.idleReview.provider} disabled={coreDisabled} onChange={event => editMany({ idleReview: { ...draft.idleReview, provider: event.target.value as 'spawn' | 'fork' } })}><option value="spawn">{t('config.reviewSpawn')}</option><option value="fork">{t('config.reviewFork')}</option></select></label>
+            <label><span><strong>{t('config.reviewFallback')}</strong></span><select value={draft.idleReview.fallback} disabled={coreDisabled} onChange={event => editMany({ idleReview: { ...draft.idleReview, fallback: event.target.value as 'spawn' | 'skip' } })}><option value="spawn">{t('config.reviewSpawn')}</option><option value="skip">{t('config.reviewSkip')}</option></select></label>
+            {(['minIntervalMs', 'maxPerSession', 'maxContextChars', 'maxTokens'] as const).map(field => <label key={field}><span><strong>{t(`config.review.${field}`)}</strong></span><input type="number" step="1" value={draft.idleReview[field]} disabled={coreDisabled} onChange={event => editMany({ idleReview: { ...draft.idleReview, [field]: Number(event.target.value) } })} /></label>)}
+          </div>
+        </section>
 
         <MemoryEnhancementsSection
           {...(connection === undefined ? {} : { connection })}

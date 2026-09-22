@@ -246,9 +246,12 @@ function prepareMutation(
   }
 
   const oldText = normalizeContent(request.oldText, 'oldText')
-  const matches = entries
+  const substringMatches = entries
     .map((entry, index) => entry.target === request.target && entry.content.includes(oldText) ? index : -1)
     .filter(index => index >= 0)
+  const exactMatches = substringMatches.filter(index => entries[index]!.content === oldText)
+  // Full entry content takes precedence, but duplicate exact entries remain ambiguous.
+  const matches = exactMatches.length > 0 ? exactMatches : substringMatches
   if (matches.length === 0) throw new Error(`No ${request.target} entry contains ${JSON.stringify(oldText)}.`)
   if (matches.length > 1) throw new Error(`Multiple ${request.target} entries contain ${JSON.stringify(oldText)}; use a unique substring.`)
   const index = matches[0]!

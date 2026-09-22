@@ -112,6 +112,7 @@ function context(locale?: { getSnapshot(): { active: 'zh' | 'en'; locales: reado
     connection: { rpc: { call: vi.fn() } },
     locale: locale ?? { getSnapshot: () => fallbackLocale, subscribe: () => () => {} },
     sessions: { list: { getSnapshot: () => snapshot, subscribe: () => () => {} } },
+    currentSession: { getSnapshot: () => ({ key: 'session-1', hooks: {}, keyedHooks: {}, props: {} }), subscribe: () => () => {} },
     workspaces: { list: { getSnapshot: () => workspaceSnapshot, subscribe: () => () => {} } },
   }
 }
@@ -198,7 +199,7 @@ describe('Mnemon canonical workspace launcher', () => {
     const detach = betterSidebarSeat.attach(target, { sessionId: 'session-portaled', cwd: '/tmp/workspace-two' }, true)
     const renderSlot = vi.fn(() => <SlotOwnerProbe />)
     const view = render(<slotOwnerContext.Provider value="dsh-renderer-owner"><MnemonSidebarWorkspaceHost
-      connection={ctx.connection as never} settingsScope={settings} sessions={ctx.sessions as never} workspaces={ctx.workspaces as never}
+      connection={ctx.connection as never} settingsScope={settings} sessions={ctx.sessions as never} workspaces={ctx.workspaces as never} currentSession={ctx.currentSession}
       localeRuntime={ctx.locale as never} sourcePageDirectory={sourcePageDirectory}
       navigation={{ open: () => controller.open(), close: () => controller.close() }} t={t as never}
       renderSlot={renderSlot as never} controller={controller} betterSidebarSeat={betterSidebarSeat}
@@ -227,7 +228,7 @@ describe('Mnemon canonical workspace launcher', () => {
     vi.spyOn(column, 'getBoundingClientRect').mockReturnValue({ left: 280, top: 0, width: 1_000, height: 720 } as DOMRect)
     currentDispose = mountMnemonSidebarLauncher(ctx as never, t as never, controller)
     const view = render(<MnemonSidebarWorkspaceHost
-      connection={ctx.connection as never} settingsScope={settings} sessions={sessions as never} workspaces={ctx.workspaces as never}
+      connection={ctx.connection as never} settingsScope={settings} sessions={sessions as never} workspaces={ctx.workspaces as never} currentSession={{ getSnapshot: () => ({ key: undefined, hooks: {}, keyedHooks: {}, props: {} }), subscribe: () => () => {} }}
       localeRuntime={ctx.locale as never} sourcePageDirectory={sourcePageDirectory} navigation={navigation}
       t={t as never} renderSlot={() => null} controller={controller}
     />)
@@ -265,7 +266,7 @@ describe('Mnemon canonical workspace launcher', () => {
     const ctx = context()
     const controller = new MnemonWorkspaceController()
     const view = render(<MnemonSidebarWorkspaceHost
-      connection={ctx.connection as never} settingsScope={settings} sessions={ctx.sessions as never} workspaces={ctx.workspaces as never}
+      connection={ctx.connection as never} settingsScope={settings} sessions={ctx.sessions as never} workspaces={ctx.workspaces as never} currentSession={ctx.currentSession}
       localeRuntime={ctx.locale as never} sourcePageDirectory={sourcePageDirectory}
       navigation={{ open: () => controller.open(), close: () => controller.close() }} t={t as never} renderSlot={() => null} controller={controller}
     />)
@@ -293,7 +294,7 @@ describe('Mnemon canonical workspace launcher', () => {
     const controller = new MnemonWorkspaceController()
     currentDispose = mountMnemonSidebarLauncher(ctx as never, t as never, controller)
     const view = render(<MnemonSidebarWorkspaceHost
-      connection={ctx.connection as never} settingsScope={settings} sessions={ctx.sessions as never} workspaces={ctx.workspaces as never}
+      connection={ctx.connection as never} settingsScope={settings} sessions={ctx.sessions as never} workspaces={ctx.workspaces as never} currentSession={ctx.currentSession}
       localeRuntime={ctx.locale as never} sourcePageDirectory={sourcePageDirectory}
       navigation={{ open: () => controller.open(), close: () => controller.close() }} t={t as never} renderSlot={() => null} controller={controller}
     />)
@@ -317,7 +318,7 @@ describe('Mnemon canonical workspace launcher', () => {
     const ctx = context()
     const controller = new MnemonWorkspaceController()
     const view = render(<MnemonSidebarWorkspaceHost
-      connection={ctx.connection as never} settingsScope={settings} sessions={ctx.sessions as never} workspaces={ctx.workspaces as never}
+      connection={ctx.connection as never} settingsScope={settings} sessions={ctx.sessions as never} workspaces={ctx.workspaces as never} currentSession={ctx.currentSession}
       localeRuntime={ctx.locale as never} sourcePageDirectory={sourcePageDirectory}
       navigation={{ open: () => controller.open(), close: () => controller.close() }} t={t as never} renderSlot={() => null} controller={controller}
     />)
@@ -469,7 +470,7 @@ describe('Mnemon canonical workspace launcher', () => {
     ctx.sessions.list = sessions
     ctx.workspaces.list = workspaces
     render(<MnemonWorkspaceHost
-      connection={ctx.connection as never} settingsScope={{ ...settings, getSnapshot: () => ({ ...settings.getSnapshot(), value: { storageScope } }) }} sessions={ctx.sessions as never} workspaces={ctx.workspaces as never}
+      connection={ctx.connection as never} settingsScope={{ ...settings, getSnapshot: () => ({ ...settings.getSnapshot(), value: { storageScope } }) }} sessions={ctx.sessions as never} workspaces={ctx.workspaces as never} currentSession={ctx.currentSession}
       localeRuntime={ctx.locale as never} sourcePageDirectory={sourcePageDirectory} navigation={{ open() {}, close() {} }}
       t={t as never} renderSlot={() => null} sessionId="session-1"
     />)
@@ -485,7 +486,7 @@ describe('Mnemon canonical workspace launcher', () => {
 
   it.each(['global', 'custom'] as const)('follows the active conversation workspace in %s storage without a hidden sticky inspection target', async storageScope => {
     const ctx = context(), scope = { ...settings, getSnapshot: () => ({ ...settings.getSnapshot(), value: { storageScope } }) }
-    const props = { connection: ctx.connection as never, settingsScope: scope, sessions: ctx.sessions as never, workspaces: ctx.workspaces as never, localeRuntime: ctx.locale as never, sourcePageDirectory, t: t as never }
+    const props = { connection: ctx.connection as never, settingsScope: scope, sessions: ctx.sessions as never, workspaces: ctx.workspaces as never, currentSession: ctx.currentSession, localeRuntime: ctx.locale as never, sourcePageDirectory, t: t as never }
     const view = render(<MnemonWorkspaceHost {...props} sessionId="session-1" cwd="/tmp/workspace-one" />)
     const content = view.getByTestId('mnemon-canonical-content')
     expect(content.dataset.workspaceId).toBe('workspace-1')

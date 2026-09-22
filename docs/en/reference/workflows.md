@@ -135,7 +135,7 @@ request
   -> return compact receipt
 ```
 
-`replace` and `remove` must match exactly one item through `old_text`. Capacity maintenance is triggered only when the requested add or size-increasing replacement would exceed the target limit.
+`replace` and `remove` prefer a unique full-content match through `old_text` within the requested target; only when no exact match exists do they use a unique substring. Duplicate exact entries remain ambiguous. Capacity maintenance is triggered only when the requested add or size-increasing replacement would exceed the target limit.
 
 ## USER.md Capacity Maintenance
 

@@ -13,7 +13,7 @@ import type {
   HostUserMessage,
 } from "../src/host/dsh.ts"
 import { MnemonLifecycle } from "../src/host/lifecycle.ts"
-import type { MnemonSubagentCoordinator } from "../src/host/subagent.ts"
+import { IdleReviewError, type MnemonSubagentCoordinator } from "../src/host/subagent.ts"
 
 type Listener = (...args: unknown[]) => unknown
 
@@ -586,6 +586,98 @@ describe('Mnemon DSH lifecycle integration', () => {
     })
   })
 
+  it('bounds idle review attempts across a long session, including failed runs (issues 100/255)', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const value = fixture({ ...resolveConfig({ idleReviewMs: 5_000 }), idleReview: { enabled: true, provider: 'spawn', minIntervalMs: 300_000, maxPerSession: 2 } } as never)
+    vi.mocked(value.coordinator.review).mockRejectedValue(new Error('TeamError: reviewer failed'))
+    try {
+      for (let turn = 1; turn <= 30; turn += 1) {
+        await value.preStep([durableCandidate(300)], turn)
+        await value.turnStopping(turn)
+        await vi.advanceTimersByTimeAsync(5_000)
+      }
+      expect(value.coordinator.review).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(300_000)
+      expect(value.coordinator.review).toHaveBeenCalledTimes(2)
+      await value.preStep([durableCandidate(300)], 31)
+      await value.turnStopping(31)
+      await vi.advanceTimersByTimeAsync(600_000)
+      expect(value.coordinator.review).toHaveBeenCalledTimes(2)
+    } finally { value.stop(); warn.mockRestore() }
+  })
+
+  it('caps successful review children even when every later checkpoint is eligible (issue 100)', async () => {
+    vi.useFakeTimers()
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000, idleReview: { minIntervalMs: 5_000, maxPerSession: 2 } }))
+    try {
+      for (let turn = 1; turn <= 30; turn += 1) {
+        await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn)
+        await vi.advanceTimersByTimeAsync(5_000)
+      }
+      expect(value.coordinator.review).toHaveBeenCalledTimes(2)
+      expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ idleReviewAttempts: 2, idleReviewPending: false })
+      value.agentListeners.get('agent/session-start')?.({ source: 'compact' })
+      await value.preStep([durableCandidate(300)], 31); await value.turnStopping(31)
+      await vi.advanceTimersByTimeAsync(300_000)
+      expect(value.coordinator.review).toHaveBeenCalledTimes(2)
+    } finally { value.stop() }
+  })
+
+  it('pauses review before creating a child while Team tools are installed and resumes after removal', async () => {
+    vi.useFakeTimers()
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
+    let teamTools = true
+    const get = value.agent.ctx.get!
+    value.agent.ctx.get = name => name === 'agentTeams' ? {} : get(name)
+    value.agent.ctx.tools = { get: name => teamTools && name === 'spawn_teammate' ? {} : undefined }
+    try {
+      for (let turn = 1; turn <= 3; turn += 1) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await vi.advanceTimersByTimeAsync(600_000)
+      expect(value.coordinator.review).not.toHaveBeenCalled()
+      expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ idleReviewBlocked: 'agent-team', idleReviewAttempts: 0, idleReviewPending: false })
+      teamTools = false
+      await value.preStep([durableCandidate(300)], 4)
+      await value.turnStopping(4)
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(value.coordinator.review).toHaveBeenCalledOnce()
+    } finally { value.stop() }
+  })
+
+  it('disables only idle review and cancels an already scheduled review when toggled off', async () => {
+    vi.useFakeTimers()
+    const config = resolveConfig({ idleReviewMs: 5_000 })
+    const value = fixture(config)
+    try {
+      await value.preStep([durableCandidate(300)], 1); await value.turnStopping(1)
+      await value.preStep([durableCandidate(300)], 2); await value.turnStopping(2)
+      config.idleReview.enabled = false
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(value.coordinator.review).not.toHaveBeenCalled()
+      expect(value.lifecycle.snapshot('session-1').counters).toMatchObject({ recallCues: 1, writebackCues: 1 })
+      await value.lifecycle.supervise('session-1', 'Explicit durable fact')
+      expect(value.coordinator.write).toHaveBeenCalledOnce()
+    } finally { value.stop() }
+  })
+
+  it('surfaces committed receipts without counting an incomplete review as success', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
+    vi.mocked(value.coordinator.review).mockRejectedValueOnce(new IdleReviewError('TeamError: after commit', {
+      status: 'partial', runId: 'review-run', provider: 'fork', receipts: [{ tool: 'mnemon_document_create', action: 'created', documentId: 'committed-document' }],
+    }))
+    try {
+      await value.preStep([durableCandidate(300)], 1); await value.turnStopping(1)
+      await value.preStep([durableCandidate(300)], 2); await value.turnStopping(2)
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ lastPhase: 'error', idleReviewAttempts: 1,
+        lastReviewFailure: { status: 'partial', runId: 'review-run', receipts: [{ documentId: 'committed-document' }] } })
+      expect(value.lifecycle.snapshot('session-1').counters.failures).toBe(1)
+      expect(value.lifecycle.snapshot('session-1').current?.lastReviewAction).toBeUndefined()
+    } finally { value.stop(); warn.mockRestore() }
+  })
+
   it('reports idle-review failures and retains the warning until a successful review', async () => {
     vi.useFakeTimers()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -609,7 +701,7 @@ describe('Mnemon DSH lifecycle integration', () => {
       await value.preStep([userMessage('Continue the task')], 3)
       expect(value.lifecycle.snapshot('session-1').current?.lastError).toContain('CONTEXT_WINDOW_EXCEEDED')
       await value.turnStopping(3)
-      await vi.advanceTimersByTimeAsync(5_000)
+      await vi.advanceTimersByTimeAsync(300_000)
       expect(value.lifecycle.snapshot('session-1').current?.lastError).toBeUndefined()
       expect(warn).toHaveBeenCalledOnce()
     } finally {

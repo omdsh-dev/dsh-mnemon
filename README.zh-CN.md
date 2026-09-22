@@ -30,6 +30,8 @@
 
 运行时上下文、可检索档案和长期证据，使用同一个熟悉的侧栏（Sidebar）。默认安装包（Starter）安装经过验证的插件组合；贡献者可以独立替换或扩展其中的部分。
 
+自动空闲审查默认使用有界 spawn 检查点、至少五分钟间隔与每个加载会话最多 20 次尝试，并提供独立开关。已发布的 Agent Teams 工具冲突会在创建子 Agent 前暂停审查；失败运行保留已提交回执元数据且不自动重放。详见[审查配置与兼容性](./docs/zh-CN/reference/configuration.md)。
+
 ## 三层记忆，三种用途
 
 | 记忆 | 适合保存 | 如何进入 Agent 上下文 |
@@ -58,7 +60,7 @@ Headless 使用同一个包：`dsh plugin --profile headless add dsh-mnemon`。
 
 从 v0.4 升级保留熟悉的配置、数据与工作流。三个可选增强仅在**设置 → 记忆系统**中透出，不增加 View 页或通用记忆插件管理器。[升级清单](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/reference/compatibility.md)。
 
-当前开发基线为 npm `latest` 发布的 DSH `0.1.5-rc.1`。现有会话若报 `source summary requires notice form`，需要显式执行 `dsh-mnemon-repair-session --input FILE --output NEW_FILE` 生成修复副本；替换任何文件前请阅读[旧会话恢复流程](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/operations.md#dsh-015-兼容与旧会话恢复)。
+锁定的开发基线为 DSH `0.1.5-rc.1`；其他经过验证的版本记录在[兼容性矩阵](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/reference/compatibility.md)。现有会话若报 `source summary requires notice form`，需要显式执行 `dsh-mnemon-repair-session --input FILE --output NEW_FILE` 生成修复副本；替换任何文件前请阅读[旧会话恢复流程](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/operations.md#dsh-015-兼容与旧会话恢复)。
 
 ## Source + Strategy → View
 

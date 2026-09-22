@@ -12,6 +12,9 @@ For new evaluations, commit the reusable harness, workload generator, concise bi
 
 | Record / 记录 | Scope / 范围 |
 |---|---|
+| [DSH RC / alpha compatibility — issue #261](./issue-261-dsh-slots/README.md) / [中文](./issue-261-dsh-slots/README.zh-CN.md) | Published package types, real WebUI before/after, turn-tail peers, session isolation and packed Headless / 正式制品类型、真实 WebUI 前后对比、回合插件组合、会话隔离与制品 Headless |
+| [Windows Git probe console — issue #259](./issue-259-windows-git-console/README.md) / [中文](./issue-259-windows-git-console/README.zh-CN.md) | Actual Windows before/after window observation, real WebUI, CLI and plugin composition / 真实 Windows 窗口前后观测、WebUI、CLI 与插件组合验证 |
+| [OpenViking exact writes — issue #233](./issue-233-openviking-20260916/README.md) / [中文](./issue-233-openviking-20260916/README.zh-CN.md) | Controlled false-receipt reproduction, exact content writes and published OpenViking storage/search/delete / 受控错误回执复现、精确正文写入与正式 OpenViking 存储/检索/删除 |
 | [Runtime archive write authority — issue #250](./issue-250-runtime-write-scope/README.md) / [中文](./issue-250-runtime-write-scope/README.zh-CN.md) | Same-View Native space creation, baseline next-turn recovery, fixed first-turn success and byte-exact CLI readback / 同 View 创建 Native 空间、基线下一回合恢复、修复后首回合成功与 CLI 逐字节核验 |
 | [v0.5.8 release](./release-v0.5.8/README.md) / [中文](./release-v0.5.8/README.zh-CN.md) | Versioned package validation, Runtime persistence and real Native CLI / 版本化制品验证、Runtime 持久化与真实 Native CLI |
 | [ORCA LINK sidebar — issue #232](./issue-232-orca-sidebar/README.md) | Real skin reproduction, visible/clickable entry, Runtime and Native CLI / 真实皮肤复现、侧栏入口、热记忆与 Native CLI |

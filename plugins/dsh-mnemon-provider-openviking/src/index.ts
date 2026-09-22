@@ -7,7 +7,7 @@ export { OpenVikingProvider, descriptor }
 export const definition = defineMemorySpaceProviderDefinition({
   manifest: {
     apiVersion: MEMORY_SPACE_PROVIDER_API_VERSION, kind: 'provider',
-    typeId: descriptor.id, packageName: 'dsh-mnemon-provider-openviking', version: '0.5.4',
+    typeId: descriptor.id, packageName: 'dsh-mnemon-provider-openviking', version: '0.5.5',
     label: descriptor.label, icon: descriptor.icon, summary: descriptor.summary,
     ...(descriptor.summaryI18nKey === undefined ? {} : { summaryI18nKey: descriptor.summaryI18nKey }),
     origin: descriptor.origin, locality: descriptor.kind, workspaceBinding: descriptor.workspaceBinding,
@@ -15,7 +15,7 @@ export const definition = defineMemorySpaceProviderDefinition({
     secrets: descriptor.fields.filter(field => field.input === 'secret').map(field => field.key),
     scoreSemantics: 'normalized-relevance',
   },
-  create: context => new OpenVikingProvider(context.memorySpaces ?? context.memoryBodies, { requestTimeoutMs: context.config.timeoutMs, settlementTimeoutMs: context.config.timeoutMs }),
+  create: context => new OpenVikingProvider(context.memorySpaces ?? context.memoryBodies, { requestTimeoutMs: context.config.timeoutMs }),
 })
 
 export default defineMemorySpaceProvider<undefined>({

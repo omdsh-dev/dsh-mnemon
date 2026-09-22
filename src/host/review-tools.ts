@@ -10,6 +10,17 @@ export interface ReviewToolHost {
 const startingReview = new AsyncLocalStorage<symbol>()
 
 /**
+ * The published Agent Teams alpha.2 tool suite installs its policy before a
+ * provider publishes a child descriptor. Both rc.2 in-process providers then
+ * lose membership on step two. Inspect public services/capabilities only and
+ * skip before creating a child; do not remove another plugin's policy.
+ */
+export function idleReviewBlockReason(parent: HostAgent): 'agent-team' | undefined {
+  return parent.ctx?.get?.('agentTeams') !== undefined
+    && parent.ctx.tools?.get?.('spawn_teammate', parent) !== undefined ? 'agent-team' : undefined
+}
+
+/**
  * DSH restrict() filters inherited capabilities, leaving own-scope plugin tools
  * visible. Attach its monotonic execution guard during publication, before a
  * review child can run. Async context attributes concurrent provider starts;
@@ -20,6 +31,7 @@ export async function startGuardedReview(
   parent: HostAgent,
   toolNames: readonly string[],
   start: () => Promise<HostSubagentRun>,
+  published?: (agent: HostAgent) => void,
 ): Promise<HostSubagentRun> {
   const agents = host.agents
   if (typeof agents?.isOwnedBy !== 'function') throw new Error('Mnemon review requires DSH Agent ownership and scoped tool guard support')
@@ -40,6 +52,7 @@ export async function startGuardedReview(
       })
       if (typeof dispose !== 'function') throw new Error('Mnemon review tool guard did not return a disposer')
       guards.set(agent, dispose as () => unknown)
+      published?.(agent)
     } catch (error) {
       attachmentError = error
       // Synchronous publication failure lets the provider roll back the child.

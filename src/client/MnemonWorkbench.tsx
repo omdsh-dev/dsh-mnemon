@@ -586,10 +586,16 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       </header>
       {sourceCatalogState.contextKey === viewContextKey && sourceCatalogState.error !== null && <div className={css.alert} role="alert">{sourceCatalogState.error}</div>}
       {(statusError !== null || status?.healthy === false) && <div className={css.alert} role="alert"><strong>{t('header.notReady')}</strong><span>{statusError ?? status?.error}</span></div>}
+      {status?.lifecycle?.current?.idleReviewBlocked === 'agent-team' && <div className={css.alert} role="status">{t('status.reviewTeamPaused')}</div>}
       {status?.lifecycle?.current?.lastError !== undefined && <div className={css.alert} role="alert" aria-label={t('status.reviewFailed')}>
         <strong>{t('status.reviewFailed')}</strong>
         <span>{status.lifecycle.current.lastError}</span>
         <span>{t('status.reviewFailedDetail')}</span>
+        {status.lifecycle.current.lastReviewFailure?.status === 'partial' && <>
+          <strong>{t('status.reviewPartial')}</strong>
+          <span>{t('status.reviewRun', { id: status.lifecycle.current.lastReviewFailure.runId ?? '' })}</span>
+          <ul>{status.lifecycle.current.lastReviewFailure.receipts.map((receipt, index) => <li key={index}>{[receipt.tool, receipt.action, receipt.documentId, receipt.target, receipt.revision].filter(Boolean).join(' · ')}</li>)}</ul>
+        </>}
         {/CONTEXT_WINDOW_EXCEEDED|exceed(?:s|ed)? (?:the )?(?:available )?context (?:size|window)/iu.test(status.lifecycle.current.lastError) && <span>{t('status.reviewContextWindow')}</span>}
       </div>}
       <div className={css.workspace}>

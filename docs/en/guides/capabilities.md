@@ -38,7 +38,7 @@ In the default Starter, Runtime and Documents use their own local Source storage
 | Provider | Form | Best fit | Scope behavior |
 |---|---|---|---|
 | **Mnemon** | Official native local CLI + SQLite | Full graph, exact writes, local-first default | Global, workspace, or custom root |
-| **OpenViking** | HTTP + `viking://` | Existing resource trees and asynchronous extraction | Target URI and user identity |
+| **OpenViking** | HTTP + `viking://` | Existing resource trees, verified exact writes and semantic retrieval | Target URI and user identity |
 | **Honcho** | HTTP workspace / peers | Team and Agent-peer conclusions | Provider workspace |
 | **Mem0** | Platform or self-hosted HTTP | Existing Mem0 user/Agent memories | User / agent identity |
 | **Hindsight** | HTTP memory bank | Banks, entities, and provider-native graph | Bank ID |

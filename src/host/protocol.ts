@@ -161,6 +161,27 @@ export interface ResolvedRuntimeMemoryConfig {
 export { normalizeDisplayMode } from './display-mode.ts'
 export type MnemonDisplayMode = 'sidebar' | 'builtin'
 
+export const DEFAULT_IDLE_REVIEW = {
+  enabled: true,
+  provider: 'spawn',
+  fallback: 'spawn',
+  minIntervalMs: 300_000,
+  maxPerSession: 20,
+  maxContextChars: 24_000,
+  maxTokens: 4_096,
+} satisfies ResolvedIdleReviewConfig
+
+export interface ResolvedIdleReviewConfig {
+  enabled: boolean
+  provider: 'spawn' | 'fork'
+  /** Applies only before a child starts; a failed run is never replayed. */
+  fallback: 'spawn' | 'skip'
+  minIntervalMs: number
+  maxPerSession: number
+  maxContextChars: number
+  maxTokens: number
+}
+
 export interface Config {
   storageScope?: StorageScopeKind
   /** Whether USER.md follows the selected storage root or stays in the global root. */
@@ -188,6 +209,7 @@ export interface Config {
   recallMode?: 'guided' | 'off'
   writebackMode?: 'guided' | 'off'
   idleReviewMs?: number
+  idleReview?: Partial<ResolvedIdleReviewConfig>
   conversationInteraction?: {
     toolviews?: boolean
     turnBar?: boolean
@@ -265,6 +287,7 @@ export interface ResolvedConfig {
   recallMode: 'guided' | 'off'
   writebackMode: 'guided' | 'off'
   idleReviewMs: number
+  idleReview: ResolvedIdleReviewConfig
   conversationInteraction: {
     toolviews: boolean
     turnBar: boolean
@@ -426,8 +449,20 @@ export interface LifecycleAgentSnapshot {
   lastReviewAction?: string
   lastReviewScore?: number
   lastReviewDocumentIds?: string[]
+  idleReviewAttempts?: number
+  idleReviewBlocked?: 'agent-team'
+  nextReviewAt?: string
+  lastReviewFailure?: IdleReviewFailure
   lastAt?: string
   lastError?: string
+}
+
+/** Reconciliation metadata only; raw tool arguments and memory content stay private. */
+export interface IdleReviewFailure {
+  status: 'failed' | 'partial'
+  runId?: string
+  provider: string
+  receipts: Array<{ tool: string; action: string; documentId?: string; target?: string; revision?: string }>
 }
 
 export interface LifecycleSnapshot {

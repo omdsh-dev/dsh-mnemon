@@ -15,8 +15,9 @@ import type {
 import type { Insight, RememberRequest, SearchRequest } from 'dsh-mnemon-source-memory-spaces/contracts'
 import type { RuntimeMemoryMutation } from 'dsh-mnemon-source-runtime/contracts'
 import type { DocumentMutation } from 'dsh-mnemon-source-documents/contracts'
-import { MnemonSubagentCoordinator, type DelegatedWriteResult } from './subagent.ts'
+import { IdleReviewError, MnemonSubagentCoordinator, type DelegatedWriteResult } from './subagent.ts'
 import { scoreReviewActivity } from './review-activity.ts'
+import { idleReviewBlockReason } from './review-tools.ts'
 import { TurnActivityProjection, type TurnMemoryActivity, type TurnMemoryActivitySnapshot } from './activity.ts'
 import { applyMemoryViewGuidance } from './guidance.ts'
 import { modelMemoryWake } from './view-presentation.ts'
@@ -240,6 +241,9 @@ class MnemonAgentLifecycle {
   private lastReviewAction: string | undefined
   private lastReviewScore: number | undefined
   private lastReviewDocumentIds: string[] | undefined
+  private idleReviewAttempts = 0
+  private lastReviewAttemptAt: number | undefined
+  private lastReviewFailure: LifecycleAgentSnapshot['lastReviewFailure']
   private lastPhase: LifecyclePhase = 'idle'
   private lastAt: string | undefined
   private lastError: string | undefined
@@ -299,6 +303,10 @@ class MnemonAgentLifecycle {
       idleReviewPending: this.idleReviewTimer !== undefined,
       reviewRunning: this.reviewRunning,
       reviewActivity: this.reviewActivity(),
+      idleReviewAttempts: this.idleReviewAttempts,
+      ...(idleReviewBlockReason(this.agent) === undefined ? {} : { idleReviewBlocked: 'agent-team' as const }),
+      ...(this.lastReviewAttemptAt === undefined ? {} : { nextReviewAt: new Date(this.lastReviewAttemptAt + this.config.idleReview.minIntervalMs).toISOString() }),
+      ...(this.lastReviewFailure === undefined ? {} : { lastReviewFailure: this.lastReviewFailure }),
       lastPhase: this.lastPhase,
       ...(this.lastReviewAt === undefined ? {} : { lastReviewAt: this.lastReviewAt }),
       ...(this.lastReviewAction === undefined ? {} : { lastReviewAction: this.lastReviewAction }),
@@ -444,11 +452,11 @@ class MnemonAgentLifecycle {
   }
 
   private scheduleIdleReview(turn: number): void {
-    if (!this.config.lifecycleEnabled || !this.config.writeEnabled || this.config.writebackMode !== 'guided') return
+    this.cancelIdleReview(true)
+    if (!this.idleReviewAllowed()) return
     // Automatic three-tier maintenance belongs to the default product, not to
     // every third-party View Strategy. Explicit management remains available.
     if (this.config.memoryTopology.strategyId !== 'default-three-tier') return
-    this.cancelIdleReview(true)
     const activity = this.ensureTurnActivity(turn)
     const tools = completedToolActivity(hostSessionEvents(this.agent.session), turn)
     activity.toolCallCount = tools.count
@@ -456,17 +464,30 @@ class MnemonAgentLifecycle {
     if (!this.reviewActivity().eligible || !this.reviewAdmitted(turn)) return
     this.idleReviewTimer = setTimeout(() => {
       this.idleReviewTimer = undefined
-      if (this.config.memoryTopology.strategyId !== 'default-three-tier') return
+      if (!this.idleReviewAllowed() || this.reviewRunning) return
+      if (this.lastReviewAttemptAt !== undefined && Date.now() < this.lastReviewAttemptAt + this.config.idleReview.minIntervalMs) {
+        this.scheduleIdleReview(turn)
+        return
+      }
       if (this.agent.status !== 'idle') return
       const completed = hostSessionEvents(this.agent.session).some(event => event.type === 'turn/end' && eventTurn(event) === turn)
       if (!completed || !this.reviewActivity().eligible || !this.reviewAdmitted(turn)) return
       void this.runIdleReview()
-    }, this.config.idleReviewMs)
+    }, Math.max(this.config.idleReviewMs, (this.lastReviewAttemptAt ?? -Infinity) + this.config.idleReview.minIntervalMs - Date.now()))
+  }
+
+  private idleReviewAllowed(): boolean {
+    return this.config.lifecycleEnabled && this.config.writeEnabled && this.config.writebackMode === 'guided'
+      && this.config.idleReview.enabled && this.idleReviewAttempts < this.config.idleReview.maxPerSession
+      && idleReviewBlockReason(this.agent) === undefined
+      && this.config.memoryTopology.strategyId === 'default-three-tier'
   }
 
   private async runIdleReview(): Promise<void> {
     const controller = new AbortController()
     const triggeredScore = this.reviewActivity().score
+    this.idleReviewAttempts += 1
+    this.lastReviewAttemptAt = Date.now()
     this.reviewRunning = true
     this.reviewController = controller
     this.mark('review')
@@ -477,11 +498,15 @@ class MnemonAgentLifecycle {
       this.lastReviewAction = result.action
       this.lastReviewScore = triggeredScore
       this.lastReviewDocumentIds = result.documentIds
+      this.lastReviewFailure = undefined
       this.turnActivity.clear()
       this.lastError = undefined
       this.mark('review')
     } catch (error) {
-      if (!controller.signal.aborted) this.fail(error)
+      // Cancellation after a commit still needs reconciliation. Never retry a
+      // failed child here, even when a different provider is available.
+      if (error instanceof IdleReviewError) this.lastReviewFailure = error.review
+      if (!controller.signal.aborted || error instanceof IdleReviewError && error.review.status === 'partial') this.fail(error)
     } finally {
       if (this.reviewController === controller) {
         this.reviewRunning = false

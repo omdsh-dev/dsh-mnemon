@@ -958,9 +958,10 @@ describe('MemorySpacesService', () => {
   })
 
   it('fuses heterogeneous provider ranks without comparing raw scores and isolates provider failures', async () => {
-    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
+    const fetchMock = vi.fn<typeof fetch>(async url => new Response(JSON.stringify({
       status: 'success',
-      result: { memories: [{ uri: 'viking://user/team/memories/preferences/concise.md', overview: 'Prefer concise answers.', score: 99 }] },
+      result: new URL(String(url)).pathname === '/api/v1/content/read' ? 'Prefer concise answers.'
+        : { memories: [{ uri: 'viking://user/team/memories/preferences/concise.md', overview: 'Summary', score: 99 }] },
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
     vi.stubGlobal('fetch', fetchMock)
     const { service } = fixture()

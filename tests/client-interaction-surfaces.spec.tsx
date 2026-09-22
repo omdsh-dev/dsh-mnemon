@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClientConnectionHandle, ClientSettingsScope } from "../src/host/dsh.ts"
+import type { TurnMemoryActivitySnapshot } from '../src/host/protocol.ts'
 import type { Config } from "../src/host/config.ts"
 import { MnemonSaveAction } from '../src/client/MnemonSaveAction.tsx'
 import { MnemonTurnTail, memoryPageForTool } from '../src/client/MnemonTurnTail.tsx'
@@ -77,6 +78,78 @@ describe('conversation interaction surfaces', () => {
 
     expect(consumeMnemonAnchor('session-b')).toEqual({ page: 'memory-spaces/explore', seed: 'sqlite', sessionId: 'session-b' })
     expect(consumeMnemonAnchor('session-b')).toBeNull()
+  })
+
+  it.each([
+    null,
+    undefined,
+    {},
+    { turn: 2 },
+    { turn: 2, status: 'open' },
+    { status: 'closed' },
+    { turn: '2', status: 'closed' },
+  ])('does not request or display activity for an open or invalid turn: %j', async turn => {
+    const rpcCall = vi.fn(async () => ({ ok: true as const, value: { cursor: 12, activities: [] } }))
+    render(<MnemonTurnTail turn={turn} seq={12} openFile={vi.fn()} sessionId="session-a" connection={{ rpc: { call: rpcCall } } as ClientConnectionHandle} localeRuntime={localeRuntime} t={translate} />)
+
+    await act(async () => {})
+    expect(rpcCall).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: /turnTail\.label/ })).toBeNull()
+  })
+
+  it('loads activity when the same turn number and sequence close without final assistant text', async () => {
+    const rpcCall = vi.fn(async () => ({ ok: true as const, value: {
+      cursor: 12, activities: [{ turn: 2, count: 1, names: ['mnemon_runtime_memory'], recalls: 0, writes: 1, documentSearches: 0, inspections: 0, failures: 0 }],
+    } }))
+    const props = { seq: 12, openFile: vi.fn(), sessionId: 'session-a', connection: { rpc: { call: rpcCall } } as ClientConnectionHandle, localeRuntime, t: translate }
+    const view = render(<MnemonTurnTail {...props} turn={{ turn: 2, status: 'open', closing: null }} />)
+    await act(async () => {})
+    expect(rpcCall).not.toHaveBeenCalled()
+
+    view.rerender(<MnemonTurnTail {...props} turn={{ turn: 2, status: 'closed', closing: null }} />)
+
+    expect(await screen.findByRole('button', { name: /turnTail\.label/ })).toBeTruthy()
+    expect(rpcCall).toHaveBeenCalledTimes(1)
+    expect(rpcCall).toHaveBeenCalledWith('/dsh-mnemon-read', 'turn-activities', { sessionId: 'session-a' })
+  })
+
+  it('hides a completed turn with no memory activity', async () => {
+    const rpcCall = vi.fn(async () => ({ ok: true as const, value: { cursor: 12, activities: [] } }))
+    render(<MnemonTurnTail turn={{ turn: 2, status: 'closed' }} seq={12} openFile={vi.fn()} sessionId="session-a" connection={{ rpc: { call: rpcCall } } as ClientConnectionHandle} localeRuntime={localeRuntime} t={translate} />)
+
+    await act(async () => {})
+    expect(rpcCall).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: /turnTail\.label/ })).toBeNull()
+  })
+
+  it('ignores an in-flight activity result after its turn becomes open', async () => {
+    const request = deferred<{ ok: true; value: TurnMemoryActivitySnapshot }>()
+    const rpcCall = vi.fn(() => request.promise)
+    const props = { seq: 12, openFile: vi.fn(), sessionId: 'session-a', connection: { rpc: { call: rpcCall } } as ClientConnectionHandle, localeRuntime, t: translate }
+    const view = render(<MnemonTurnTail {...props} turn={{ turn: 2, status: 'closed' }} />)
+    expect(rpcCall).toHaveBeenCalledTimes(1)
+    view.rerender(<MnemonTurnTail {...props} turn={{ turn: 2, status: 'open' }} />)
+
+    await act(async () => request.resolve({ ok: true, value: {
+      cursor: 12, activities: [{ turn: 2, count: 1, names: ['mnemon_runtime_memory'], recalls: 0, writes: 1, documentSearches: 0, inspections: 0, failures: 0, retrieved: [], writebacks: [] }],
+    } }))
+
+    expect(rpcCall).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: /turnTail\.label/ })).toBeNull()
+  })
+
+  it('hides already loaded activity when its turn becomes open', async () => {
+    const rpcCall = vi.fn(async () => ({ ok: true as const, value: {
+      cursor: 12, activities: [{ turn: 2, count: 1, names: ['mnemon_runtime_memory'], recalls: 0, writes: 1, documentSearches: 0, inspections: 0, failures: 0 }],
+    } }))
+    const props = { seq: 12, openFile: vi.fn(), sessionId: 'session-a', connection: { rpc: { call: rpcCall } } as ClientConnectionHandle, localeRuntime, t: translate }
+    const view = render(<MnemonTurnTail {...props} turn={{ turn: 2, status: 'closed' }} />)
+    await screen.findByRole('button', { name: /turnTail\.label/ })
+
+    view.rerender(<MnemonTurnTail {...props} turn={{ turn: 2, status: 'open' }} />)
+
+    expect(rpcCall).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: /turnTail\.label/ })).toBeNull()
   })
 
   it.each(['mnemon_document_search', 'mnemon_document_create'])('opens %s from turn activity on the Documents page', async toolName => {

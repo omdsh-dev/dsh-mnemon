@@ -79,12 +79,72 @@ describe('RuntimeMemoryController', () => {
     expect(controller.snapshot().entries).toEqual([])
   })
 
-  it('rejects ambiguous substring mutations without changing the source', async () => {
+  it.each([
+    ['memory', 'remove'], ['memory', 'replace'], ['user', 'remove'], ['user', 'replace'],
+  ] as const)('prefers an exact %s entry for %s over other substring matches', async (target, action) => {
+    const now = new Date('2026-08-13T08:00:00.000Z')
+    const { directory, controller } = fixture(now)
+    const otherTarget = target === 'memory' ? 'user' : 'memory'
+    await controller.mutate({ action: 'add', target, content: 'EGO_LINUX_CHROME' })
+    await controller.mutate({ action: 'add', target, content: 'X', importance: 'critical', ...(target === 'memory' ? { branches: ['main'] } : {}) })
+    await controller.mutate({ action: 'add', target: otherTarget, content: 'X' })
+    const before = controller.snapshot()
+    now.setTime(Date.parse('2026-08-14T08:00:00.000Z'))
+
+    const result = await controller.mutate({ action, target, oldText: ' \nX\t ', ...(action === 'replace' ? { content: 'Y' } : {}) })
+    expect(result).toMatchObject(action === 'remove'
+      ? { removed: 'X', entryCount: 1 }
+      : { replaced: { from: 'X', to: 'Y' }, entryCount: 2 })
+    const entries = controller.snapshot().entries
+    expect(entries.filter(entry => entry.content !== 'Y')).toEqual([before.entries[0], before.entries[2]])
+    if (action === 'replace') {
+      expect(entries[1]).toEqual({ ...before.entries[1], content: 'Y', updated_at: '2026-08-14T08:00:00.000Z' })
+    }
+    const projection = action === 'remove' ? 'EGO_LINUX_CHROME\n' : `EGO_LINUX_CHROME${RUNTIME_ENTRY_DELIMITER}Y\n`
+    expect(readFileSync(target === 'memory' ? controller.memoryPath : controller.userPath, 'utf8')).toBe(projection)
+    expect(new RuntimeMemoryController({ effectiveDataDir: () => directory }).snapshot().entries).toEqual(entries)
+    expect(controller.contextProjection('main').entries.filter(entry => entry.target === target).map(entry => entry.content))
+      .toEqual(action === 'remove' ? ['EGO_LINUX_CHROME'] : ['EGO_LINUX_CHROME', 'Y'])
+    if (target === 'memory') {
+      expect(controller.contextProjection('dev').entries.filter(entry => entry.target === target).map(entry => entry.content)).toEqual(['EGO_LINUX_CHROME'])
+    }
+  })
+
+  it.each(['memory', 'user'] as const)('keeps substring fallback within %s when another target has an exact match', async target => {
+    const { controller } = fixture()
+    const otherTarget = target === 'memory' ? 'user' : 'memory'
+    await controller.mutate({ action: 'add', target, content: 'EGO_LINUX_CHROME' })
+    await controller.mutate({ action: 'add', target: otherTarget, content: 'X' })
+    const other = controller.snapshot().entries[1]
+
+    await expect(controller.mutate({ action: 'replace', target, oldText: 'X', content: 'Updated environment' }))
+      .resolves.toMatchObject({ replaced: { from: 'EGO_LINUX_CHROME', to: 'Updated environment' } })
+    expect(controller.snapshot().entries[1]).toEqual(other)
+  })
+
+  it.each(['remove', 'replace'] as const)('rejects %s of duplicate exact entries without choosing a branch or changing files', async action => {
+    const { controller } = fixture()
+    await controller.mutate({ action: 'add', target: 'memory', content: 'X', branches: ['main'] })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'temporary value', branches: ['dev'] })
+    await controller.mutate({ action: 'replace', target: 'memory', oldText: 'temporary value', content: 'X' })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'EGO_LINUX_CHROME' })
+    const paths = [controller.sourcePath, controller.memoryPath, controller.userPath]
+    const before = paths.map(path => readFileSync(path, 'utf8'))
+
+    await expect(controller.mutate({ action, target: 'memory', oldText: 'X', content: 'Y', branches: ['main'] }))
+      .rejects.toThrow('Multiple memory entries')
+    expect(paths.map(path => readFileSync(path, 'utf8'))).toEqual(before)
+  })
+
+  it.each(['remove', 'replace'] as const)('rejects ambiguous substring %s without changing the source', async action => {
     const { controller } = fixture()
     await controller.mutate({ action: 'add', target: 'memory', content: 'SQLite is local-first' })
     await controller.mutate({ action: 'add', target: 'memory', content: 'SQLite uses one file' })
-    await expect(controller.mutate({ action: 'remove', target: 'memory', oldText: 'SQLite' })).rejects.toThrow('Multiple memory entries')
-    expect(controller.snapshot().entries).toHaveLength(2)
+    const paths = [controller.sourcePath, controller.memoryPath, controller.userPath]
+    const before = paths.map(path => readFileSync(path, 'utf8'))
+    await expect(controller.mutate({ action, target: 'memory', oldText: 'SQLite', content: 'Updated database' })).rejects.toThrow('Multiple memory entries')
+    await expect(controller.mutate({ action, target: 'memory', oldText: 'missing', content: 'Updated database' })).rejects.toThrow('No memory entry')
+    expect(paths.map(path => readFileSync(path, 'utf8'))).toEqual(before)
   })
 
   it('serializes concurrent callers, including independent controller instances', async () => {
@@ -351,14 +411,15 @@ describe('RuntimeMemoryController', () => {
     ])
   })
 
-  it('atomically compacts surviving entries and applies a capacity-blocked replacement', async () => {
+  it('atomically compacts surviving entries and applies a capacity-blocked exact replacement', async () => {
     const { controller } = fixture()
-    const oldContent = `old-${'o'.repeat(96)}`
+    const oldContent = 'X'
+    const containingEntry = `EGO_LINUX_CHROME ${'a'.repeat(4_984)}`
     const replacement = `new-${'n'.repeat(496)}`
     await controller.mutate({ action: 'add', target: 'memory', content: oldContent })
-    await controller.mutate({ action: 'add', target: 'memory', content: 'a'.repeat(5_000) })
+    await controller.mutate({ action: 'add', target: 'memory', content: containingEntry })
     await controller.mutate({ action: 'add', target: 'memory', content: 'b'.repeat(5_000) })
-    const request = { action: 'replace', target: 'memory', oldText: 'old-', content: replacement } as const
+    const request = { action: 'replace', target: 'memory', oldText: oldContent, content: replacement } as const
 
     await expect(controller.mutate(request)).rejects.toBeInstanceOf(RuntimeMemoryCapacityError)
     const plan = await controller.planMaintenance(request)
@@ -368,7 +429,7 @@ describe('RuntimeMemoryController', () => {
       pending: { content: replacement },
       excluded: { content: oldContent },
     })
-    expect(plan.entries.map(entry => entry.content)).toEqual(['a'.repeat(5_000), 'b'.repeat(5_000)])
+    expect(plan.entries.map(entry => entry.content)).toEqual([containingEntry, 'b'.repeat(5_000)])
 
     const result = await controller.compactAndMutate(
       plan.revision,

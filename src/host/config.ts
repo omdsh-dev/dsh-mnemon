@@ -1,5 +1,6 @@
 import z from 'schemastery'
 import { DEFAULT_MEMORY_VIEW_BUDGET, type MemoryViewBudget } from '../core/contracts/index.ts'
+import { DEFAULT_IDLE_REVIEW } from './protocol.ts'
 import { isAbsolute } from 'node:path'
 import { normalizeDisplayMode } from './display-mode.ts'
 import { resolveEmbedding, resolvePersistenceStrategy, resolveRecallQuality } from 'dsh-mnemon-source-memory-spaces'
@@ -115,6 +116,16 @@ const RuntimeMemorySchema: z<RuntimeMemoryConfig> = z.object({
   maintenanceMaxTokens: z.number().step(1).min(1).max(MAX_RUNTIME_MAINTENANCE_MAX_TOKENS).default(DEFAULT_RUNTIME_MAINTENANCE_MAX_TOKENS),
 })
 
+const IdleReviewSchema = z.object({
+  enabled: z.boolean().default(DEFAULT_IDLE_REVIEW.enabled),
+  provider: z.union(['spawn', 'fork'] as const).default(DEFAULT_IDLE_REVIEW.provider),
+  fallback: z.union(['spawn', 'skip'] as const).default(DEFAULT_IDLE_REVIEW.fallback),
+  minIntervalMs: z.number().step(1).min(5_000).max(86_400_000).default(DEFAULT_IDLE_REVIEW.minIntervalMs),
+  maxPerSession: z.number().step(1).min(0).max(200).default(DEFAULT_IDLE_REVIEW.maxPerSession),
+  maxContextChars: z.number().step(1).min(1_000).max(1_000_000).default(DEFAULT_IDLE_REVIEW.maxContextChars),
+  maxTokens: z.number().step(1).min(128).max(131_072).default(DEFAULT_IDLE_REVIEW.maxTokens),
+})
+
 const MemoryParticipationModeSchema = z.union(['off', 'manual', 'automatic'] as const)
 const MemoryLayerConfigSchema = z.object({
   enabled: z.boolean(),
@@ -189,6 +200,7 @@ export const Config: z<Config> = z.object({
   recallMode: z.union(['guided', 'off'] as const).default('guided'),
   writebackMode: z.union(['guided', 'off'] as const).default('guided'),
   idleReviewMs: z.number().step(1).min(5_000).max(600_000).default(DEFAULT_IDLE_REVIEW_MS),
+  idleReview: IdleReviewSchema.default(DEFAULT_IDLE_REVIEW),
   // Conversation surfaces default on and remain independently switchable live.
   conversationInteraction: z.object({
     toolviews: z.boolean().default(false),
@@ -366,6 +378,7 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     recallMode: config.recallMode ?? 'guided',
     writebackMode: config.writebackMode ?? 'guided',
     idleReviewMs: config.idleReviewMs ?? DEFAULT_IDLE_REVIEW_MS,
+    idleReview: IdleReviewSchema(config.idleReview ?? {}),
     conversationInteraction: {
       toolviews: config.conversationInteraction?.toolviews ?? false,
       turnBar: config.conversationInteraction?.turnBar ?? true,

@@ -59,18 +59,23 @@ describe('standalone runtime Source', () => {
       await runner.mount(plugin, { instanceId: 'work', config: { dataDir: directory } })
       const scope = { storage: 'custom' as const }
       const base = { sourceInstanceKey: 'source:work', scope, confirmed: false }
+      await (await runner.managementClient('source:work')).mutate('mutate',
+        { action: 'add', target: 'memory', content: 'EGO_LINUX_CHROME' }, { confirmed: true })
       const initial = await runner.executeManagement({ ...base, mode: 'read', operation: 'snapshot', input: null })
       const create = { ...base, mode: 'mutate' as const, operation: 'mutate', expectedRevision: initial.revision,
-        input: { action: 'add', target: 'memory', content: 'managed entry' } }
+        input: { action: 'add', target: 'memory', content: 'X' } }
       await expect(runner.executeManagement(create)).rejects.toThrow('confirmation')
       const added = await runner.executeManagement({ ...create, confirmed: true })
       await expect(runner.executeManagement({ ...create, confirmed: true })).rejects.toThrow('revision conflict')
-      const replaced = await runner.executeManagement({ ...create, confirmed: true, expectedRevision: added.revision,
-        input: { action: 'replace', target: 'memory', old_text: 'managed entry', content: 'replaced entry' } })
+      const replace = { ...create, expectedRevision: added.revision,
+        input: { action: 'replace', target: 'memory', old_text: 'X', content: 'LINUX' } }
+      await expect(runner.executeManagement(replace)).rejects.toThrow('confirmation')
+      const replaced = await runner.executeManagement({ ...replace, confirmed: true })
+      await expect(runner.executeManagement({ ...replace, confirmed: true })).rejects.toThrow('revision conflict')
       await runner.executeManagement({ ...create, confirmed: true, expectedRevision: replaced.revision,
-        input: { action: 'remove', target: 'memory', old_text: 'replaced entry' } })
+        input: { action: 'remove', target: 'memory', old_text: 'LINUX' } })
       const final = await runner.executeManagement({ ...base, mode: 'read', operation: 'snapshot', input: null })
-      expect(final.value).toMatchObject({ entries: [] })
+      expect(final.value).toMatchObject({ entries: [{ content: 'EGO_LINUX_CHROME' }] })
     } finally { await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
   })
 

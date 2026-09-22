@@ -50,6 +50,14 @@ mnemon:
   recallMode: guided
   writebackMode: guided
   idleReviewMs: 30000
+  idleReview:
+    enabled: true
+    provider: spawn
+    fallback: spawn
+    minIntervalMs: 300000
+    maxPerSession: 20
+    maxContextChars: 24000
+    maxTokens: 4096
   tabEnabled: true
   writeEnabled: true
   taskAgentModel:
@@ -86,6 +94,13 @@ mnemon:
 | `recallMode` | `guided` | `guided` / `off` | Whether to inject one durable on-demand recall cue per session; does not remove explicit recall |
 | `writebackMode` | `guided` | `guided` / `off` | Whether to inject one durable hot-memory cue per session and enable scored, dirty-admitted background review; does not remove explicit writes |
 | `idleReviewMs` | `30000` | 5000–600000 ms | Required continuous idle time after the threshold is reached |
+| `idleReview.enabled` | `true` | boolean | Independent automatic-review switch |
+| `idleReview.provider` | `spawn` | `spawn` / `fork` | Bounded checkpoint or inherited parent context |
+| `idleReview.fallback` | `spawn` | `spawn` / `skip` | Missing/incompatible fork handling before startup only |
+| `idleReview.minIntervalMs` | `300000` | 5000–86400000 ms | Minimum interval between attempts |
+| `idleReview.maxPerSession` | `20` | 0–200 | Attempt cap per loaded parent Agent; includes failures/cancellations |
+| `idleReview.maxContextChars` | `24000` | 1000–1000000 | Spawn checkpoint character limit |
+| `idleReview.maxTokens` | `4096` | 128–131072 | Per-response model output limit |
 | `displayMode` | `sidebar` | `sidebar` / `builtin`; legacy `buildin` accepted | Entry placement: standalone Sidebar or a conversation tab using the same workspace UI; legacy spelling is migrated to `builtin` |
 | `tabEnabled` | `true` | boolean | Whether to mount the selected entry and workbench; Host RPC, commands, and Agent tools remain registered when off |
 | `writeEnabled` | `true` | boolean | Whether to expose semantic write tools, write RPC, and write commands |
@@ -300,15 +315,16 @@ persona      = true
 depthLimit   = true
 ```
 
-Background review has no fallback: a compatible provider named `fork` must exist and must have:
+Background review defaults to a non-inheriting `spawn` provider and an explicit, bounded checkpoint from the parent's current public surface. It includes whole visible text messages and successful tool results; omitted or unavailable context is not reconstructed. `idleReview.provider: fork` retains full-parent-context review and requires `inheritsParentContext=true`. If fork is missing or incompatible, `idleReview.fallback` chooses `spawn` or `skip` before startup. A started run is never retried through another provider.
 
-```text
-inheritsParentContext = true
-```
+Review requires local child publication, `agents.isOwnedBy`, and `agent.ctx.tools.guard`; the guard also blocks unrelated own-scope plugin tools and Code Mode subcalls. `maxContextChars` bounds the spawn checkpoint, while `maxTokens` limits each model response, not the inherited fork input or total multi-step usage.
 
-Review also requires local child publication through DSH's Agent registry, `agents.isOwnedBy`, and `agent.ctx.tools.guard`. These public APIs are present in the published 0.1.1-rc.1, 0.1.2-rc.1, and 0.1.5-rc.1 cohorts. The guard covers own-scope plugin tools as well as Code Mode subcalls.
+`idleReviewMs` remains the continuous-idle debounce. A separate `minIntervalMs` spaces attempts, including failures and cancellations. `maxPerSession` caps attempts for the loaded parent Agent, including across context clear/compact notifications; zero suspends review. Restarting the Host or unloading/reopening the Agent starts a new in-memory budget. Completed runs are disposed through DSH's public API. Persisted session history is retained: the published Host provides no plugin-scoped archive/TTL contract, and Mnemon never deletes session files or other plugins' agents.
 
-A missing `fork` or guard capability does not block deterministic state or regular UI reads. Review never falls back to an unguarded child. Failed reviews are logged by the Host and shown as a warning in the Memory System workspace when its status is loaded or refreshed. The warning persists across ordinary turns until a review succeeds or the session resets. A context-window error requires a task model whose context window covers the inherited parent conversation; review candidates remain pending for a later eligible checkpoint.
+**Known composition limitation:** the published DSH 0.1.5-rc.2 with experimental Agent Teams 0.1.5-alpha.2 tools installs a Team policy before either fork or spawn publishes its descriptor. Both providers can then fail with `TEAM_NOT_MEMBER`. Mnemon checks the public `agentTeams` service and scoped `spawn_teammate` capability and pauses automatic review before creating a child. The workspace explains the pause. TeamService alone does not trigger it; after Team tools are removed, the next eligible completed turn can schedule review. This does not change recall, writeback, or manual-operation settings and does not repair upstream manual delegation.
+
+Failed reviews remain failures. The workspace shows the child run id and committed mutation receipt metadata when writes happened before failure, including a committed inner tool followed by a failed Code Mode wrapper. No rollback or automatic replay occurs. Inspect the run and the listed document ids or Runtime revisions before any manual retry. A later review still respects the cooldown and session budget. To disable only this maintenance pass, set `idleReview.enabled: false` in Settings or configuration.
+
 
 ## Read-Only Configuration
 

@@ -48,6 +48,8 @@ const relativeReadmeImages = readmeFiles.flatMap((path) => {
 // comes from the host's public renderer, rather than another bundled parser.
 // The public Source SDK, shared collection UI and access contracts move about
 // 200 KB out of optional-library ownership; retain a bounded 1.68 MB ceiling.
+// This assembly also includes main's bounded idle review and public DSH session
+// binding fixes; Source implementations remain in their independent artifacts.
 const maximumUnpackedBytes = 1_680_000
 
 if (missing.length > 0 || unexpected.length > 0 || hostLeaks.length > 0 || relativeReadmeImages.length > 0 || pack.unpackedSize > maximumUnpackedBytes) {

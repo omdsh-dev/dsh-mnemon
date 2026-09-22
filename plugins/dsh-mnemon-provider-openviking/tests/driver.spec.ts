@@ -8,14 +8,14 @@ import { OpenVikingProvider, descriptor } from '../src/index.ts'
 const temporaryDirectories: string[] = []
 afterEach(() => { for (const directory of temporaryDirectories.splice(0)) rmSync(directory, { recursive: true, force: true }) })
 
-async function bodyAndRegistry(fetchMock: typeof fetch, options: { settlementTimeoutMs?: number; pollIntervalMs?: number } = {}) {
+async function bodyAndRegistry(fetchMock: typeof fetch) {
   const dataDir = mkdtempSync(join(tmpdir(), 'mnemon-openviking-driver-'))
   temporaryDirectories.push(dataDir)
   const { authority, body } = createMemorySpaceProviderFixture(descriptor, {
     endpoint: 'https://memory.example.com', targetUri: 'viking://user/team/memories', apiKey: 'private-key',
     account: 'acme', user: 'grivn', actorPeerId: 'dsh-workbench',
   }, { dataDir, instanceId: 'work-account' })
-  return { body, provider: new OpenVikingProvider(authority, { fetch: fetchMock, requestTimeoutMs: 1_000, settlementTimeoutMs: options.settlementTimeoutMs ?? 1_000, pollIntervalMs: options.pollIntervalMs ?? 1 }) }
+  return { body, provider: new OpenVikingProvider(authority, { fetch: fetchMock, requestTimeoutMs: 1_000 }) }
 }
 
 function ok(result: unknown): Response { return new Response(JSON.stringify({ status: 'ok', result }), { status: 200, headers: { 'Content-Type': 'application/json' } }) }
@@ -37,13 +37,16 @@ describe('standalone OpenViking data plane', () => {
       return ok([
         { user_id: 'alice', display_name: 'Alice', description: 'Product lead memory.' },
         { user_id: 'bob', name: 'Bob', role: 'Engineer' },
+        { user_id: '../foreign', display_name: 'Unsafe namespace' },
+        { user_id: '%2e%2e', display_name: 'Encoded unsafe namespace' },
+        { user_id: 'a@b@c', display_name: 'Invalid identity' },
       ])
     })
     const { provider } = await bodyAndRegistry(fetchMock)
 
     await expect(provider.discover({ endpoint: 'https://memory.example.com', apiKey: 'private-key', account: 'acme' })).resolves.toEqual([
-      { externalId: 'acme:alice', name: 'Alice', description: 'Product lead memory.', connection: { targetUri: 'viking://user/memories', user: 'alice', actorPeerId: 'dsh' } },
-      { externalId: 'acme:bob', name: 'Bob', description: 'Engineer', connection: { targetUri: 'viking://user/memories', user: 'bob', actorPeerId: 'dsh' } },
+      { externalId: 'acme:alice', name: 'Alice', description: 'Product lead memory.', connection: { targetUri: 'viking://user/alice/memories', user: 'alice', actorPeerId: 'dsh' } },
+      { externalId: 'acme:bob', name: 'Bob', description: 'Engineer', connection: { targetUri: 'viking://user/bob/memories', user: 'bob', actorPeerId: 'dsh' } },
     ])
   })
 
@@ -51,6 +54,7 @@ describe('standalone OpenViking data plane', () => {
     const requests: Array<{ url: string; init?: RequestInit }> = []
     const fetchMock = vi.fn<typeof fetch>(async (url, init) => {
       requests.push({ url: String(url), ...(init === undefined ? {} : { init }) })
+      if (new URL(String(url)).pathname === '/api/v1/content/read') return ok('用户偏好简洁中文回答。')
       return ok({
         memories: [{
           uri: 'viking://user/team/memories/preferences/style.md',
@@ -84,7 +88,7 @@ describe('standalone OpenViking data plane', () => {
   })
 
   it('browses remote memory markdown without exposing OpenViking system files', async () => {
-    const fetchMock = vi.fn<typeof fetch>(async () => ok([
+    const fetchMock = vi.fn<typeof fetch>(async url => new URL(String(url)).pathname === '/api/v1/content/read' ? ok('偏好简洁回答。') : ok([
       { uri: 'viking://user/team/memories/preferences/style.md', isDir: false, abstract: '偏好简洁回答。', modTime: '2026-08-16T00:00:00Z' },
       { uri: 'viking://user/team/memories/preferences', isDir: true },
       { uri: 'viking://user/team/memories/preferences/.abstract.md', isDir: false, abstract: 'system summary' },
@@ -98,52 +102,69 @@ describe('standalone OpenViking data plane', () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('recursive=true')
   })
 
-  it('settles asynchronous extraction and returns a truthful write receipt', async () => {
-    const paths: string[] = []
-    const fetchMock = vi.fn<typeof fetch>(async (url) => {
+  it('writes the memory through the content API and returns an exact write receipt', async () => {
+    const requests: Array<{ path: string; body: Record<string, unknown> }> = []
+    const fetchMock = vi.fn<typeof fetch>(async (url, init) => {
       const path = new URL(String(url)).pathname
-      paths.push(path)
-      if (path === '/api/v1/sessions') return ok({ session_id: 'created' })
-      if (path.endsWith('/messages')) return ok({ message_id: 'message-1' })
-      if (path.endsWith('/commit')) return ok({ status: 'accepted', task_id: 'task-1', archive_uri: 'viking://user/team/sessions/session/history/archive_001' })
-      if (path === '/api/v1/tasks/task-1') return ok({ status: 'completed', result: { memories_extracted: { preferences: 1, events: 1 } } })
+      if (path === '/api/v1/content/read') return ok('发布必须先通过灰度验证。')
+      const input = JSON.parse(String(init?.body)) as Record<string, unknown>
+      requests.push({ path, body: input })
+      if (path === '/api/v1/content/write') {
+        return ok({
+          uri: input.uri,
+          root_uri: 'viking://user/team/memories/experiences',
+          context_type: 'memory',
+          mode: 'create',
+          written_bytes: Buffer.byteLength(String(input.content)),
+          content_updated: true,
+          semantic_status: 'skipped',
+          vector_status: 'complete',
+        })
+      }
       throw new Error(`unexpected path ${path}`)
     })
     const { body, provider } = await bodyAndRegistry(fetchMock)
 
-    await expect(provider.remember(body, { content: '发布必须先通过灰度验证。', category: 'decision' })).resolves.toMatchObject({
+    await expect(provider.remember(body, { content: '发布必须先通过灰度验证。', category: 'decision', importance: 4 })).resolves.toMatchObject({
       action: 'stored',
       provider: 'openviking',
-      taskId: 'task-1',
-      archiveUri: 'viking://user/team/sessions/session/history/archive_001',
-      extracted: { preferences: 1, events: 1 },
+      vectorStatus: 'complete',
+      writtenBytes: Buffer.byteLength('发布必须先通过灰度验证。'),
     })
-    expect(paths).toEqual([
-      '/api/v1/sessions',
-      expect.stringMatching(/^\/api\/v1\/sessions\/dsh-mnemon-.*\/messages$/),
-      expect.stringMatching(/^\/api\/v1\/sessions\/dsh-mnemon-.*\/commit$/),
-      '/api/v1/tasks/task-1',
-    ])
+
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.path).toBe('/api/v1/content/write')
+    expect(requests[0]?.body).toMatchObject({
+      mode: 'create',
+      wait: true,
+      content: '发布必须先通过灰度验证。',
+      tags: ['source=mnemon', 'category=decision', 'importance=4'],
+    })
+    expect(String(requests[0]?.body.uri)).toMatch(/^viking:\/\/user\/team\/memories\/experiences\/.*\.md$/u)
   })
 
-  it('returns a queued receipt when accepted extraction outlives the wait window', async () => {
-    const fetchMock = vi.fn<typeof fetch>(async (url) => {
-      const path = new URL(String(url)).pathname
-      if (path === '/api/v1/sessions') return ok({ session_id: 'created' })
-      if (path.endsWith('/messages')) return ok({ message_id: 'message-1' })
-      if (path.endsWith('/commit')) return ok({ status: 'accepted', task_id: 'task-slow', archive_uri: 'viking://user/team/sessions/session/history/archive_slow' })
-      if (path === '/api/v1/tasks/task-slow') return ok({ status: 'running' })
-      throw new Error(`unexpected path ${path}`)
+  it('routes each memory category into its OpenViking memory folder', async () => {
+    const uris: string[] = []
+    const files = new Map<string, string>()
+    const fetchMock = vi.fn<typeof fetch>(async (url, init) => {
+      const parsed = new URL(String(url))
+      if (parsed.pathname === '/api/v1/content/read') return ok(files.get(parsed.searchParams.get('uri')!))
+      const request = JSON.parse(String(init?.body)) as { uri: string; content: string }
+      uris.push(request.uri)
+      files.set(request.uri, request.content)
+      return ok({ uri: request.uri, mode: 'create', context_type: 'memory', content_updated: true,
+        written_bytes: Buffer.byteLength(request.content), semantic_status: 'skipped', vector_status: 'complete' })
     })
-    const { body, provider } = await bodyAndRegistry(fetchMock, { settlementTimeoutMs: 5 })
+    const { body, provider } = await bodyAndRegistry(fetchMock)
 
-    await expect(provider.remember(body, { content: '异步提取不应被误报为失败。', category: 'decision' })).resolves.toMatchObject({
-      action: 'queued',
-      provider: 'openviking',
-      status: 'pending',
-      taskId: 'task-slow',
-      archiveUri: 'viking://user/team/sessions/session/history/archive_slow',
-    })
+    await provider.remember(body, { content: '偏好简洁回答。', category: 'preference' })
+    await provider.remember(body, { content: '发布必须先通过灰度验证。', category: 'decision' })
+    await provider.remember(body, { content: 'ServerKit 使用 Go 后端。', category: 'fact' })
+    await provider.remember(body, { content: 'Context', category: 'context' })
+    await provider.remember(body, { content: 'Insight', category: 'insight' })
+    await provider.remember(body, { content: 'General', category: 'general' })
+
+    expect(uris.map(uri => uri.split('/').at(-2))).toEqual(['preferences', 'experiences', 'entities', 'events', 'experiences', 'entities'])
   })
 
   it('forgets only an exact non-generated memory file inside the configured root', async () => {

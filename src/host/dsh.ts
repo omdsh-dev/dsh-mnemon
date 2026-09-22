@@ -175,7 +175,11 @@ export type HostPreStepDecision = { kind: 'reject' } | { kind: 'enter'; messages
 
 export interface HostAgentContext {
   /** DSH's monotonic guard also covers tools registered in this Agent's scope. */
-  tools?: { guard?(guard: (execution: ToolExecution) => string | undefined): unknown }
+  tools?: {
+    guard?(guard: (execution: ToolExecution) => string | undefined): unknown
+    /** Public presentation-agnostic lookup in the exact Agent scope. */
+    get?(name: string, scope?: HostAgent): unknown
+  }
   /**
    * `options` is optional and forwarded verbatim to the host. `prepend`
    * places the listener at the head of the chain, which for a waterfall

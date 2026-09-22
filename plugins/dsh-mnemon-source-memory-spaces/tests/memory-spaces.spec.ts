@@ -238,7 +238,7 @@ describe('MemorySpaceRegistry', () => {
         account: 'acme',
         user: 'grivn',
         apiKeyConfigured: true,
-        capabilities: expect.objectContaining({ graph: false, remember: true, writeMode: 'async-extracting' }),
+        capabilities: expect.objectContaining({ graph: false, remember: true, writeMode: 'exact' }),
       },
     })
     expect(registry.openVikingConnection(created.id)).toMatchObject({ apiKey: 'secret-token' })

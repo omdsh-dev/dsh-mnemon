@@ -25,8 +25,8 @@ describe('default Source presentation migration', () => {
   })
 
   it('preserves bilingual memory space terminology while Sources own their copy', () => {
-    expect(copyFingerprint(zh)).toEqual(baseline.idleReviewWarning.zh)
-    expect(copyFingerprint(en)).toEqual(baseline.idleReviewWarning.en)
+    expect(copyFingerprint(zh)).toEqual(baseline.mainSynchronization.zh)
+    expect(copyFingerprint(en)).toEqual(baseline.mainSynchronization.en)
     for (const source of sources) {
       const copy = JSON.parse(read(`plugins/dsh-mnemon-source-${source}/presentation/locales.json`))
       expect(Object.keys(copy.en).sort()).toEqual(Object.keys(copy.zh).sort())

@@ -28,6 +28,7 @@ function workspaceContext(initialValue: Record<string, unknown>, load: () => Pro
   const slots: Record<string, unknown>[] = []
   const workspaceStops: ReturnType<typeof vi.fn>[] = []
   const context = {
+    uiSession: { adapter: { current: { getSnapshot: () => ({ key: undefined }), subscribe: () => () => {} } } },
     connection: { rpc: { call: vi.fn(async (_channel: string, endpoint: string, payload: { namespace?: string; ops?: Array<{ path: string[]; value?: unknown }> }) => {
       if (payload.namespace === 'mnemon') {
         if (endpoint === 'get') value = await load()
@@ -78,7 +79,7 @@ describe('Mnemon Web client composition', () => {
   it('keeps a locale-bound Sidebar with Source child-render authority and conversation actions', async () => {
     const { context, slots, scope, settingsEntry, setLocale } = workspaceContext({})
     expect(slots).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'shell.overlay', id: 'mnemon-source-overlays', children: { 'mnemon.source.overlay': { kind: 'list', scope: 'root' } } })]))
-    expect(inject).toEqual(['slots', 'sessions', 'workspaces', 'connection', 'locale'])
+    expect(inject).toEqual(['slots', 'sessions', 'workspaces', 'uiSession', 'connection', 'locale'])
     expect(context.locale.register).toHaveBeenCalledWith('mnemon', { zh, en })
     await vi.waitFor(() => expect(slots).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: 'shell.overlay', id: 'mnemon', children: { 'mnemon.source.page': { kind: 'list', scope: 'root' } } }),

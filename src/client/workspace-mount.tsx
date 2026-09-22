@@ -11,6 +11,7 @@ import type { MemorySourcePageDirectory } from './source-pages.tsx'
 import type { MnemonBetterSidebarSeat } from './better-sidebar-seat.ts'
 import { mountMnemonSidebarEntry } from './sidebar-entry.ts'
 import { MnemonWorkspaceController } from './workspace-controller.ts'
+import { useMnemonSessionId, type MnemonSessionBinding } from './session-binding.ts'
 import css from './MnemonWorkspace.module.css'
 
 /** The single visible Mnemon workspace, mounted by DSH's shell overlay. */
@@ -75,11 +76,12 @@ export interface MnemonWorkspaceHostProps {
   settingsScope: ClientSettingsScope<Config>
   sessions: MnemonClientContext['sessions']
   workspaces: MnemonClientContext['workspaces']
+  currentSession: MnemonSessionBinding
   localeRuntime: MnemonClientContext['locale']
   sourcePageDirectory: MemorySourcePageDirectory
   navigation?: MnemonWorkspaceNavigation
   t: MnemonTranslate
-  sessionId?: string
+  sessionId?: string | undefined
   cwd?: string
   active?: boolean
   renderSlot?: PropsRenderSlots<'mnemon.source.page'>['renderSlot']
@@ -124,9 +126,10 @@ export function MnemonWorkspaceHost(props: MnemonWorkspaceHostProps): JSX.Elemen
   const locale = useSyncExternalStore(subscribeLocale, getLocale, getLocale)
   const sessions = useSyncExternalStore(subscribeSessions, getSessions, getSessions)
   const workspaces = useSyncExternalStore(subscribeWorkspaces, getWorkspaces, getWorkspaces)
+  const mainSessionId = useMnemonSessionId(props.currentSession)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>()
-  const sessionId = props.sessionId ?? sessions.current
-  const currentCwd = props.cwd ?? (sessionId === undefined ? undefined : (sessions.byId as Record<string, { cwd?: string }>)[sessionId]?.cwd)
+  const sessionId = Object.hasOwn(props, 'sessionId') ? props.sessionId : mainSessionId
+  const currentCwd = props.cwd ?? (sessionId === undefined ? undefined : Object.entries(sessions.byId).find(([id]) => id === sessionId)?.[1]?.cwd)
   const effectiveWorkspace = currentCwd === undefined
     ? undefined
     : workspaces.items.find(workspace => normalizePath(workspace.path) === normalizePath(currentCwd))
@@ -229,6 +232,7 @@ export function MnemonSidebarWorkspaceHost(props: MnemonWorkspaceHostProps & { c
     settingsScope={props.settingsScope}
     sessions={props.sessions}
     workspaces={props.workspaces}
+    currentSession={props.currentSession}
     localeRuntime={props.localeRuntime}
     sourcePageDirectory={props.sourcePageDirectory}
     sessionId={betterSidebar.scope.sessionId}

@@ -39,7 +39,7 @@ describe('MnemonWorkbench', () => {
     getSnapshot: () => readOnlySettingsSnapshot,
   } satisfies ClientSettingsScope<Config>
 
-  function createConnection(options: { reviewError?: string; isLoopback?: boolean; withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; runtimeBranch?: boolean; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; directoryPending?: boolean; reconnectPending?: boolean; relatedDeferred?: boolean; versionsDeferred?: boolean; layerSwitches?: Record<'runtime' | 'documents' | 'memory-spaces', boolean> } = {}) {
+  function createConnection(options: { reviewPartial?: boolean; reviewTeam?: boolean; reviewError?: string; isLoopback?: boolean; withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; runtimeBranch?: boolean; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; directoryPending?: boolean; reconnectPending?: boolean; relatedDeferred?: boolean; versionsDeferred?: boolean; layerSwitches?: Record<'runtime' | 'documents' | 'memory-spaces', boolean> } = {}) {
     const body = {
       id: 'project',
       provider: MEMORY_PROVIDER_CATALOG.find(item => item.id === 'mnemon-native')!, providerId: 'mnemon-native', providerEnabled: true, providerSettings: {}, configuredSecrets: [],
@@ -133,6 +133,11 @@ describe('MnemonWorkbench', () => {
           lastReviewAction: 'skipped',
           lastPhase: 'writeback',
           ...(options.reviewError === undefined ? {} : { lastError: options.reviewError }),
+          ...(options.reviewTeam ? { idleReviewBlocked: 'agent-team' } : {}),
+          ...(options.reviewPartial ? { lastReviewFailure: { status: 'partial', runId: 'review-run-255', provider: 'spawn', receipts: [
+            { tool: 'mnemon_document_create', action: 'created', documentId: 'committed-document-255' },
+            { tool: 'mnemon_runtime_memory', action: 'added', target: 'memory', revision: 'committed-runtime-revision' },
+          ] } } : {}),
           lastAt: '2026-08-13T03:00:00.000Z',
         },
       },
@@ -386,8 +391,26 @@ describe('MnemonWorkbench', () => {
     render(<MnemonWorkbench connection={connection} settingsScope={writable ? settingsScope : readOnlySettingsScope} t={translateEn} locale="en" />)
     const warning = await screen.findByRole('alert', { name: 'Background review failed' })
     expect(within(warning).getByText(error)).toBeTruthy()
-    expect(within(warning).getByText(/context window covers the parent conversation/)).toBeTruthy()
+    expect(within(warning).getByText(/bounded checkpoint review/)).toBeTruthy()
     expect(screen.queryByText('System nominal')).toBeNull()
+  })
+
+  it('shows partial review receipts to a read-only observer without offering replay', async () => {
+    const { connection } = createConnection({ reviewError: 'Model failed after confirmed commits', reviewPartial: true })
+    render(<MnemonWorkbench connection={connection} settingsScope={readOnlySettingsScope} t={translateEn} locale="en" />)
+    const warning = await screen.findByRole('alert', { name: 'Background review failed' })
+    expect(within(warning).getByText(/Some writes committed/)).toBeTruthy()
+    expect(within(warning).getByText(/review-run-255/)).toBeTruthy()
+    expect(within(warning).getByText(/committed-document-255/)).toBeTruthy()
+    expect(within(warning).getByText(/committed-runtime-revision/)).toBeTruthy()
+    expect(within(warning).queryByRole('button')).toBeNull()
+  })
+
+  it('explains an automatic-review Team pause without presenting a failed child', async () => {
+    const { connection } = createConnection({ reviewTeam: true })
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} t={translateEn} locale="en" />)
+    expect(await screen.findByText(/Idle review is paused while Agent Teams tools are active/)).toBeTruthy()
+    expect(screen.queryByRole('alert', { name: 'Background review failed' })).toBeNull()
   })
 
   it('shows the live graph, sidebar pages, and memory write dialog by default', async () => {

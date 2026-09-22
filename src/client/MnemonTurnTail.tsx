@@ -23,6 +23,10 @@ function turnNumber(turn: unknown): number | undefined {
   return typeof value === 'number' ? value : undefined
 }
 
+function isClosedTurn(turn: unknown): boolean {
+  return (turn as { status?: unknown } | null)?.status === 'closed'
+}
+
 /** Route a settled tool name to the workbench page that explains its effect. */
 export function memoryPageForTool(name: string): MnemonAnchorPage {
   if (name === 'mnemon_document_search' || name === 'mnemon_document_manage' || name === 'mnemon_document_create') return 'documents/library'
@@ -34,8 +38,7 @@ export function memoryPageForTool(name: string): MnemonAnchorPage {
 
 /** Whether this entry renders for the owner; chain selectors decline quietly. */
 export function selectMnemonTurnTail(owner: { turn: unknown }): Record<string, never> | null {
-  const turn = owner.turn as unknown as { status?: unknown }
-  return turn.status === 'closed' ? {} : null
+  return isClosedTurn(owner.turn) ? {} : null
 }
 
 /** One-line memory-activity bar under a completed turn; hides when the turn touched no memory. */
@@ -46,9 +49,11 @@ export const MnemonTurnTail = memo(function MnemonTurnTail({ turn, seq, sessionI
   const [activity, setActivity] = useState<TurnMemoryActivity | null | undefined>(undefined)
   const [open, setOpen] = useState(false)
   const number = turnNumber(turn)
+  // List-slot hosts render every entry without calling its chain selector.
+  const closed = isClosedTurn(turn)
 
   useEffect(() => {
-    if (number === undefined) {
+    if (!closed || number === undefined) {
       setActivity(null)
       return
     }
@@ -58,10 +63,10 @@ export const MnemonTurnTail = memo(function MnemonTurnTail({ turn, seq, sessionI
       .then(result => { if (alive) setActivity(result) })
       .catch(() => { if (alive) setActivity(null) })
     return () => { alive = false }
-  }, [connection, sessionId, number, seq])
+  }, [connection, sessionId, number, seq, closed])
 
+  if (!closed || number === undefined) return null
   if (activity === undefined || activity === null) return null
-  if (number === undefined) return null
 
   const openTool = (name: string, event: ReactMouseEvent): void => {
     event.stopPropagation()

@@ -11,7 +11,7 @@ Each adapter is an independently published `dsh-mnemon-provider-*` package, inst
 | Provider | Data plane | Recall / browse | Graph / related | Write | Forget |
 |---|---|---|---|---|---|
 | **Mnemon Native** | Local `mnemon.db` through the official CLI | Yes / yes | Full typed graph / yes | Exact | Soft delete |
-| **OpenViking** | Existing HTTP service and `viking://` memory root | Yes / yes | Projected nodes / no | Async extraction | Guarded hard delete for exact user `.md` resources |
+| **OpenViking** | Existing HTTP service and `viking://` memory root | Yes / yes | Projected nodes / no | Verified exact content | Guarded hard delete for exact user `.md` resources |
 | **Honcho** | v3 workspace conclusions | Yes / yes | No / no | Exact peer conclusion | Hard delete |
 | **Mem0** | Platform v3 or self-hosted HTTP API | Yes / yes | No / no | Async extraction | Hard delete |
 | **Hindsight** | Memory bank API and knowledge graph | Yes / yes | Provider graph / yes | Async retain | Invalidate (soft) |
@@ -54,6 +54,9 @@ Connection secrets never enter the selector prompt. `local-only` excludes every 
 
 ## Operational boundaries
 
+- OpenViking writes a new `.md` file with `content/write`, `mode: "create"`, `wait: true`, and source/category tags. Categories map to `preferences`, `experiences` (insight/decision), `events` (context), or `entities` (fact/general). A stored receipt requires matching URI, byte count, completed vector indexing and exact public full-content readback; semantic processing may be `skipped` for memory files. Recall and browse read full content rather than treating summaries as the stored original. Session extraction and LLM curation are no longer used for these writes.
+- OpenViking requires a server supporting that content API; the published v0.4.20 backend is covered by the optional integration test. For v0.4.20 discovery, configure `account` and an account-admin API key permitted to enumerate users and access the selected namespace: ROOT keys cannot access tenant data, and development mode disables admin discovery. Existing explicit `viking://user/<user>/memories` roots remain valid. Legacy `viking://user/memories` resolves using the configured `user`, or the authenticated system-status identity when omitted. Configuration is retained without a registry migration. Unsafe path components and deletion outside the selected user root are rejected.
+- OpenViking errors, incomplete indexing and timeouts never produce a committed receipt. A write may already exist remotely; its error includes the requested URI for inspection before retrying. There is no automatic extraction fallback or retry. A verified receipt carries the exact file `id`, allowing the Host to compensate a later failed local archive by deleting only its new index. Unknown remote write outcomes remain for inspection. Upgrading or rolling back the adapter does not delete existing remote files; a downgrade restores the older write behavior.
 - The WebUI never calls external services or local CLIs directly. Provider I/O stays in the Host with cancellation, timeouts, bounded process output, and shell-disabled argument arrays.
 - Disabling a provider removes all of its local Memory Space mappings, activation state, and mapped title/description metadata. Re-enabling discovers them again from the provider. Reconciliation never deletes provider-owned data; per-memory Forget remains a separate capability-controlled action.
 - Holographic is a TypeScript adaptation of local structured-fact semantics, using an atomic JSON store and an independent data format and lifecycle implementation.

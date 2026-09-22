@@ -162,13 +162,12 @@ describe('dsh-mnemon plugin composition', () => {
     const releaseAgeExclusions = [...workspaceConfig.matchAll(/^  - '(@deepseek-ai\/dsh(?:-[a-z0-9-]+)?@0\.1\.5-rc\.1)'$/gm)]
       .map(match => match[1])
 
-    expect(directDshDependencies).toHaveLength(27)
+    expect(directDshDependencies).toHaveLength(28)
     expect(new Set(directDshDependencies.map(([, version]) => version))).toEqual(new Set(['0.1.5-rc.1']))
     expect(manifest.engines.node).toBe('>=20')
-    expect(manifest.peerDependencies['@deepseek-ai/dsh-client-ui-primitives']).toContain('^0.1.1-rc.1')
-    expect(manifest.peerDependencies['@deepseek-ai/dsh-client-ui-primitives']).toContain('^0.1.2-alpha.1')
-    expect(manifest.peerDependencies['@deepseek-ai/dsh-typert-protocol']).toContain('^0.1.0-rc.6')
-    expect(manifest.peerDependencies['@deepseek-ai/dsh-typert-protocol']).toContain('^0.1.2-alpha.1')
+    for (const name of ['@deepseek-ai/dsh-client-ui-primitives', '@deepseek-ai/dsh-typert-protocol']) {
+      expect(manifest.peerDependencies[name]).toBe('^0.1.5-rc.1 || ^0.1.6-alpha.2')
+    }
     expect(lockedDshVersions.length).toBeGreaterThan(100)
     expect(new Set(lockedDshVersions)).toEqual(new Set(['0.1.5-rc.1']))
     expect(new Set(releaseAgeExclusions)).toEqual(new Set(lockedRcReleases))
@@ -260,6 +259,7 @@ describe('dsh-mnemon plugin composition', () => {
         '@deepseek-ai/dsh-client-ui-conversation',
         '@deepseek-ai/dsh-client-ui-renderer',
         '@deepseek-ai/dsh-client-ui-settings',
+        '@deepseek-ai/dsh-client-ui-session',
         '@deepseek-ai/dsh-client-locale',
       ],
       platform: 'web',

@@ -14,7 +14,9 @@ import type { MemoryCompositionGeneration } from '../core/composition.ts'
 import { agentScope, type MnemonAgentRuntimeSource, type MnemonRuntimeGraph } from './runtime.ts'
 import type { ComposableMemoryTurn } from '../core/turns.ts'
 import { hostSessionEvents } from './session-events.ts'
-import { startGuardedReview, type ReviewToolHost } from './review-tools.ts'
+import { idleReviewBlockReason, startGuardedReview, type ReviewToolHost } from './review-tools.ts'
+import { reviewCheckpoint } from './review-checkpoint.ts'
+import type { IdleReviewFailure } from './protocol.ts'
 
 export type { SubagentCounters } from "./protocol.ts"
 
@@ -117,6 +119,27 @@ interface CapturedSubagentResult {
 interface CapturedToolReceipt extends CapturedSubagentResult {
   name: string
   arguments: unknown
+}
+
+export class IdleReviewError extends Error {
+  constructor(message: string, readonly review: IdleReviewFailure, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'IdleReviewError'
+  }
+}
+
+function reviewReceipt(receipt: CapturedToolReceipt): IdleReviewFailure['receipts'][number] | undefined {
+  if (!mutationResultCommitted(receipt.value)) return undefined
+  const value = object(receipt.value)
+  const args = optionalObject(receipt.arguments)
+  const document = optionalObject(value.document)
+  return {
+    tool: receipt.name,
+    action: typeof value.action === 'string' ? value.action : 'committed',
+    ...(typeof document?.id === 'string' ? { documentId: document.id } : {}),
+    ...(typeof args?.target === 'string' ? { target: args.target } : {}),
+    ...(typeof value.revision === 'string' ? { revision: value.revision } : {}),
+  }
 }
 
 interface MigrationSource {
@@ -1160,9 +1183,19 @@ ${naturalRequest(request)}`
     }
   }
 
-  async review(parent: HostAgent, signal: AbortSignal): Promise<DelegatedWriteResult> {
-    const prompt = 'Review the inherited completed checkpoint now.'
-    const { provider, runId, result } = await this.delegate(parent, 'review', 'Mnemon idle checkpoint review', prompt, REVIEW_TOOLS, WRITE_SCHEMA, signal, 'fork', REVIEW_PERSONA)
+  async review(parent: HostAgent, signal: AbortSignal): Promise<DelegatedWriteResult | { delegated: false; action: 'skipped'; summary: string; documentIds: string[] }> {
+    if (idleReviewBlockReason(parent) !== undefined) return { delegated: false, action: 'skipped', summary: 'Idle review is paused while Agent Teams tools are active because the published child policy is incompatible.', documentIds: [] }
+    const config = this.runtimeSource.config.idleReview
+    let preferred = config.provider
+    if (preferred === 'fork') {
+      try { this.provider('fork') } catch (error) {
+        if (config.fallback === 'skip') return { delegated: false, action: 'skipped', summary: 'Fork provider unavailable; idle review skipped.', documentIds: [] }
+        preferred = 'spawn'
+      }
+    }
+    const prompt = preferred === 'fork' ? 'Review the inherited completed checkpoint now.' : reviewCheckpoint(parent.session, config.maxContextChars)
+    const persona = preferred === 'fork' ? REVIEW_PERSONA : REVIEW_PERSONA.replaceAll('inherited', 'supplied bounded')
+    const { provider, runId, result } = await this.delegate(parent, 'review', 'Mnemon idle checkpoint review', prompt, REVIEW_TOOLS, WRITE_SCHEMA, signal, preferred, persona, { terminalTools: ['mnemon_runtime_memory', 'mnemon_document_create'] })
     const value = object(result.structured)
     return {
       delegated: true,
@@ -1679,10 +1712,13 @@ ${runtimeSnapshotContext('user', plan.entries)}`
     const staged = new WeakMap<object, CapturedSubagentResult>()
     const recoverableTools = new Set(recovery?.terminalTools ?? [])
     const committedReceipts: CapturedToolReceipt[] = []
+    const reviewReceipts: CapturedToolReceipt[] = []
+    let reviewChildId: string | undefined
     // Code Mode sub-dispatches are provisional until their enclosing run_code
     // execution publishes a successful authoritative result.
     const stagedReceipts = new Map<symbol, CapturedToolReceipt[]>()
     let run: HostSubagentRun | undefined
+    let completed: { provider: string; runId: string; result: HostSubagentResult; receipts: CapturedToolReceipt[] } | undefined
     let failure: unknown
     let disposeResultObserver: (() => unknown) | undefined
     let releaseWorkflow: (() => void) | undefined
@@ -1696,7 +1732,14 @@ ${runtimeSnapshotContext('user', plan.entries)}`
       }
       if (this.disposed) throw new Error('dsh-mnemon subagent coordinator is disposed')
       const observer = this.resultRuntime.on('tools/result', ((execution: ToolExecution, result: HostToolResultObservation) => {
-        if (signal.aborted || !this.resultRequests.has(requestId)) return
+        if (!this.resultRequests.has(requestId)) return
+        // A committed Source result remains useful reconciliation evidence even
+        // if its outer Code Mode execution or the reviewer later fails/aborts.
+        if (operation === 'review' && execution.agent?.id === reviewChildId && execution.name !== undefined
+          && recoverableTools.has(execution.name) && result.isError !== true && Object.hasOwn(result, 'value')) {
+          reviewReceipts.push({ agentId: execution.agent!.id, name: execution.name, arguments: execution.arguments, value: result.value })
+        }
+        if (signal.aborted) return
         if (execution.token !== undefined) {
           const entries = stagedReceipts.get(execution.token)
           if (entries !== undefined) {
@@ -1753,6 +1796,7 @@ This is the only completion channel for this run. Do not finish with a plain-tex
         ? this.runtimeMaintenanceMaxTokensResolver?.() ?? 8_192
         : operation === 'document-archive' ? 8_192
         : operation === 'metadata-maintenance' ? 4_096
+        : operation === 'review' ? this.runtimeSource.config.idleReview.maxTokens
         : undefined
       const fixed = this.taskAgentModelResolver?.()
       const baseAgentOptions = perOpMaxTokens === undefined ? undefined : { maxTokens: perOpMaxTokens }
@@ -1768,7 +1812,7 @@ This is the only completion channel for this run. Do not finish with a plain-tex
         persona: completionPersona,
       })
       run = operation === 'review'
-        ? await startGuardedReview(this.resultRuntime, parent, [...tools, resultToolName], start)
+        ? await startGuardedReview(this.resultRuntime, parent, [...tools, resultToolName], start, child => { reviewChildId = child.id })
         : await start()
       const activeRun = run
       const result = await activeRun.result
@@ -1785,11 +1829,8 @@ This is the only completion channel for this run. Do not finish with a plain-tex
         throw new Error(`memory subagent stopped with ${result.stopReason}${detail === undefined ? '' : `: ${detail}`}`)
       }
       if (structured === undefined) throw new Error('memory subagent completed without recording its result')
-      this.counters[operation === 'write' ? 'writes' : operation === 'review' ? 'reviews' : operation === 'placement' ? 'placements' : operation === 'migration' ? 'migrations' : operation === 'compaction' ? 'compactions' : operation === 'document-archive' ? 'documentArchives' : operation === 'metadata-maintenance' ? 'metadataMaintenances' : 'answers'] += 1
-      this.counters.lastRunId = activeRun.id
-      if (operation !== 'answer') this.counters.lastOperation = operation
-      this.counters.lastAt = new Date().toISOString()
-      return {
+      if (operation === 'review' && ['failed', 'partial', 'unknown'].includes(String(object(structured).action))) throw new Error(`memory review reported ${object(structured).action}`)
+      completed = {
         provider,
         runId: activeRun.id,
         result: { ...result, structured },
@@ -1797,8 +1838,12 @@ This is the only completion channel for this run. Do not finish with a plain-tex
       }
     } catch (error) {
       this.counters.failures += 1
-      failure = error
-      throw error
+      const receipts = reviewReceipts.map(reviewReceipt).filter((receipt): receipt is NonNullable<typeof receipt> => receipt !== undefined)
+      failure = operation === 'review' ? new IdleReviewError(error instanceof Error ? error.message : String(error), {
+        status: receipts.length > 0 ? 'partial' : 'failed', provider,
+        ...(reviewChildId === undefined ? {} : { runId: reviewChildId }), receipts,
+      }, { cause: error }) : error
+      throw failure
     } finally {
       // Revoke before asynchronous child disposal, including rejected startup.
       this.resultRequests.delete(requestId)
@@ -1818,8 +1863,22 @@ This is the only completion channel for this run. Do not finish with a plain-tex
         }
       }
       releaseWorkflow?.()
-      if (cleanupFailure !== undefined) throw cleanupFailure
+      if (cleanupFailure !== undefined) {
+        this.counters.failures += 1
+        if (operation !== 'review') throw cleanupFailure
+        const receipts = reviewReceipts.map(reviewReceipt).filter((receipt): receipt is NonNullable<typeof receipt> => receipt !== undefined)
+        throw new IdleReviewError(cleanupFailure instanceof Error ? cleanupFailure.message : String(cleanupFailure), {
+          status: receipts.length > 0 ? 'partial' : 'failed', provider,
+          ...(reviewChildId === undefined ? {} : { runId: reviewChildId }), receipts,
+        }, { cause: cleanupFailure })
+      }
     }
+    if (completed === undefined) throw new Error('memory subagent did not complete')
+    this.counters[operation === 'write' ? 'writes' : operation === 'review' ? 'reviews' : operation === 'placement' ? 'placements' : operation === 'migration' ? 'migrations' : operation === 'compaction' ? 'compactions' : operation === 'document-archive' ? 'documentArchives' : operation === 'metadata-maintenance' ? 'metadataMaintenances' : 'answers'] += 1
+    this.counters.lastRunId = completed.runId
+    if (operation !== 'answer') this.counters.lastOperation = operation
+    this.counters.lastAt = new Date().toISOString()
+    return completed
   }
 
   private provider(preferred: 'spawn' | 'fork'): string {

@@ -147,7 +147,7 @@
 .taskAgentFields > label > span { display: flex; min-width: 0; flex-direction: column; }
 .taskAgentFields strong { font-size: 12px; font-weight: 500; line-height: 18px; }
 .taskAgentFields small { color: var(--dsw-alias-label-tertiary); font-size: 10px; line-height: 16px; }
-.taskAgentFields select {
+.taskAgentFields select, .taskAgentFields input[type='number'] {
   width: 100%;
   min-width: 0;
   height: 38px;
@@ -160,8 +160,8 @@
   font: inherit;
   font-size: 12px;
 }
-.taskAgentFields select:disabled { cursor: default; opacity: .46; }
-.taskAgentFields select:focus-visible { box-shadow: 0 0 0 2px var(--dsw-alias-border-l3); }
+.taskAgentFields select:disabled, .taskAgentFields input:disabled { cursor: default; opacity: .46; }
+.taskAgentFields select:focus-visible, .taskAgentFields input:focus-visible { box-shadow: 0 0 0 2px var(--dsw-alias-border-l3); }
 .taskAgentEffective { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; }
 .taskAgentEffective > span { color: var(--dsw-alias-label-tertiary); font-size: 10px; line-height: 16px; }
 .taskAgentEffective code { min-width: 0; overflow: hidden; border-radius: 999px; padding: 3px 8px; color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-bg-layer-2); font-family: var(--ds-font-family-code, ui-monospace, monospace); font-size: 10px; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }

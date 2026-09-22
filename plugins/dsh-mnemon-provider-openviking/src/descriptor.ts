@@ -11,7 +11,7 @@ export const descriptor: MemoryProviderDescriptor = {
   },
   "kind": "remote",
   "workspaceBinding": "provider-global",
-  "summary": "Filesystem-shaped shared memory with tiered reads and automatic semantic extraction.",
+  "summary": "Filesystem-shaped shared memory with verified exact writes and semantic retrieval.",
   "summaryI18nKey": "overview.providerSummary.openviking",
   "origin": "third-party",
   "capabilities": {
@@ -23,7 +23,7 @@ export const descriptor: MemoryProviderDescriptor = {
     "remember": true,
     "link": false,
     "forget": true,
-    "writeMode": "async-extracting",
+    "writeMode": "exact",
     "deletionMode": "hard"
   },
   "fields": [
@@ -45,7 +45,7 @@ export const descriptor: MemoryProviderDescriptor = {
       "required": true,
       "defaultValue": "viking://user/memories",
       "placeholder": "viking://user/memories",
-      "pattern": "^viking://user(?:/[^/]+)?/memories$",
+      "pattern": "^viking://user(?:/(?!\\.{1,2}/)[a-zA-Z0-9_.@-]+)?/memories$",
       "normalize": "trim-trailing-slash",
       "validationMessage": "OpenViking memory URI must be a viking://user/.../memories root",
       "i18nKey": "overview.providerTargetUri"

@@ -16,6 +16,7 @@ export function resolveGitBranch(cwd?: string): string | undefined {
       encoding: 'utf8',
       timeout: GIT_BRANCH_TIMEOUT_MS,
       stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
     })
     const branch = output.trim()
     return branch === '' ? undefined : branch

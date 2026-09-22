@@ -30,7 +30,7 @@ importers:
         specifier: 0.5.5
         version: link:plugins/dsh-mnemon-provider-mnemon-native
       dsh-mnemon-provider-openviking:
-        specifier: 0.5.4
+        specifier: 0.5.5
         version: link:plugins/dsh-mnemon-provider-openviking
       dsh-mnemon-provider-retaindb:
         specifier: 0.5.4
@@ -60,7 +60,7 @@ importers:
         specifier: 0.1.0
         version: link:plugins/dsh-mnemon-source-learning
       dsh-mnemon-source-memory-spaces:
-        specifier: 0.5.7
+        specifier: 0.5.8
         version: link:plugins/dsh-mnemon-source-memory-spaces
       dsh-mnemon-source-notifications:
         specifier: 0.1.0
@@ -75,7 +75,7 @@ importers:
         specifier: 0.1.0
         version: link:plugins/dsh-mnemon-source-review
       dsh-mnemon-source-runtime:
-        specifier: 0.5.6
+        specifier: 0.5.8
         version: link:plugins/dsh-mnemon-source-runtime
       dsh-mnemon-source-sessions:
         specifier: 0.1.0
@@ -178,6 +178,9 @@ importers:
         specifier: 0.1.5-rc.1
         version: 0.1.5-rc.1(@deepseek-ai/cordis@4.0.2)
       '@deepseek-ai/dsh-client-ui-renderer':
+        specifier: 0.1.5-rc.1
+        version: 0.1.5-rc.1(@deepseek-ai/cordis@4.0.2)
+      '@deepseek-ai/dsh-client-ui-session':
         specifier: 0.1.5-rc.1
         version: 0.1.5-rc.1(@deepseek-ai/cordis@4.0.2)
       '@deepseek-ai/dsh-client-ui-settings':
@@ -467,7 +470,7 @@ importers:
         specifier: ^22.0.0
         version: 22.20.1
       dsh-mnemon-source-memory-spaces:
-        specifier: ^0.5.4
+        specifier: ^0.5.8
         version: link:../dsh-mnemon-source-memory-spaces
       tsdown:
         specifier: ^0.22.0
@@ -1281,7 +1284,7 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1
       dsh-mnemon:
-        specifier: ^0.5.9
+        specifier: ^0.5.10
         version: link:../..
       dsh-mnemon-provider-byterover:
         specifier: ^0.5.4
@@ -1302,7 +1305,7 @@ importers:
         specifier: ^0.5.5
         version: link:../dsh-mnemon-provider-mnemon-native
       dsh-mnemon-provider-openviking:
-        specifier: ^0.5.4
+        specifier: ^0.5.5
         version: link:../dsh-mnemon-provider-openviking
       dsh-mnemon-provider-retaindb:
         specifier: ^0.5.4
@@ -1838,7 +1841,7 @@ importers:
         specifier: ^2.1.1
         version: 2.1.1
       dsh-mnemon:
-        specifier: ^0.5.7
+        specifier: ^0.5.11
         version: link:../..
       jsdom:
         specifier: ^26.0.0

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { HostAgent, HostSubagentRun, ToolExecution } from '../src/host/dsh.ts'
-import { startGuardedReview, type ReviewToolHost } from '../src/host/review-tools.ts'
+import { idleReviewBlockReason, startGuardedReview, type ReviewToolHost } from '../src/host/review-tools.ts'
 
 function fixture() {
   const listeners = new Set<(event: { agent: HostAgent }) => void>()
@@ -42,6 +42,12 @@ function fixture() {
 }
 
 describe('review publication and execution boundary', () => {
+  it.each([[false, false], [true, false], [false, true], [true, true]])('checks scoped Team tools together with the public service: %s/%s', (service, capability) => {
+    const get = vi.fn(() => capability ? {} : undefined)
+    const parent = { ctx: { get: (name: string) => service && name === 'agentTeams' ? {} : undefined, tools: { get } } } as unknown as HostAgent
+    expect(idleReviewBlockReason(parent)).toBe(service && capability ? 'agent-team' : undefined)
+    if (service) expect(get).toHaveBeenCalledWith('spawn_teammate', parent)
+  })
   it('separates nested same-parent reviews and leaves other parents alone', async () => {
     const f = fixture()
     const outer = f.child('outer'), inner = f.child('inner'), unrelated = f.child('unrelated')

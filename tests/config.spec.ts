@@ -4,6 +4,9 @@ import { Config, resolveConfig } from "../src/host/config.ts"
 afterEach(() => vi.unstubAllEnvs())
 
 describe('Mnemon config and resolution', () => {
+  it.each([{ maxPerSession: -1 }, { maxPerSession: 201 }, { minIntervalMs: 0 }, { maxContextChars: 1 }, { maxTokens: 0 }, { provider: 'unisolated' }])('rejects invalid idle review policy %j', idleReview => {
+    expect(() => resolveConfig({ idleReview } as never)).toThrow()
+  })
   it('materializes conservative defaults', () => {
     expect(resolveConfig({})).toMatchObject({
       storageScope: 'global',
@@ -42,6 +45,7 @@ describe('Mnemon config and resolution', () => {
       recallMode: 'guided',
       writebackMode: 'guided',
       idleReviewMs: 30_000,
+      idleReview: { enabled: true, provider: 'spawn', fallback: 'spawn', minIntervalMs: 300_000, maxPerSession: 20, maxContextChars: 24_000, maxTokens: 4_096 },
       displayMode: 'sidebar',
       tabEnabled: true,
       writeEnabled: true,

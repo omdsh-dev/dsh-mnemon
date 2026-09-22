@@ -75,7 +75,7 @@ const MUTABLE_FIELDS = [
   'runtimeMemory',
   'embedding',
   'recallQuality',
-  'routingGuidance', 'lifecycleEnabled', 'recallMode', 'writebackMode', 'idleReviewMs',
+  'routingGuidance', 'lifecycleEnabled', 'recallMode', 'writebackMode', 'idleReviewMs', 'idleReview',
   'displayMode', 'tabEnabled', 'writeEnabled', 'persistenceStrategy', 'taskAgentModel',
 ]
 // remoteAccess is intentionally absent: on rc.2 changing the transport

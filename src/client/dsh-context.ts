@@ -11,6 +11,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 import type {} from '@deepseek-ai/dsh-client-ui-tool/client'
 import type { MnemonKey } from './locales.ts'
 import type { MemorySourcePageProps } from './source-contracts.ts'
@@ -41,7 +42,6 @@ export interface MnemonSessionSummary {
 }
 
 export interface MnemonSessionListState {
-  current?: string
   byId: Record<string, MnemonSessionSummary>
   [key: string]: unknown
 }

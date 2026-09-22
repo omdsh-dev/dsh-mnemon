@@ -17,6 +17,21 @@ function deferred<T>() {
 }
 
 describe('MnemonSettingsCard', () => {
+  it('saves independent review settings and rejects an invalid attempt budget', async () => {
+    const mutate = vi.fn(async () => {})
+    const snapshot = { status: 'ready' as const, value: {}, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const }
+    const scope = { getSnapshot: () => snapshot, subscribe: () => () => {}, set: vi.fn(), unset: vi.fn(), setPath: vi.fn(), unsetPath: vi.fn(), mutate }
+    render(<MnemonSettingsCard scope={scope} />)
+    fireEvent.click(screen.getByRole('checkbox', { name: '启用空闲审查' }))
+    fireEvent.change(screen.getByRole('spinbutton', { name: '每会话最多尝试次数' }), { target: { value: '-1' } })
+    expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(mutate).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByRole('spinbutton', { name: '每会话最多尝试次数' }), { target: { value: '3' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['idleReview'], value: {
+      enabled: false, provider: 'spawn', fallback: 'spawn', minIntervalMs: 300_000, maxPerSession: 3, maxContextChars: 24_000, maxTokens: 4_096,
+    } }]))
+  })
   it('persists a validated DSH-managed Mnemon embedding override as one live setting', async () => {
     const mutate = vi.fn(async () => {})
     const snapshot = {
@@ -689,6 +704,8 @@ describe('MnemonSettingsCard', () => {
     render(<MnemonSettingsCard scope={scope} />)
 
     expect((screen.getByRole('radio', { name: /^全局$/ }) as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByRole('checkbox', { name: '启用空闲审查' }) as HTMLInputElement).disabled).toBe(true)
+    expect((screen.getByRole('combobox', { name: '审查方式' }) as HTMLSelectElement).disabled).toBe(true)
     expect((screen.getByRole('radio', { name: '侧边栏' }) as HTMLInputElement).disabled).toBe(true)
     expect((screen.getByRole('radio', { name: '会话内' }) as HTMLInputElement).disabled).toBe(true)
     expect((screen.getByRole('button', { name: '保存' }) as HTMLButtonElement).disabled).toBe(true)

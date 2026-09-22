@@ -38,7 +38,7 @@ Runtime、Documents、Memory Spaces 是独立 Source 插件；Strategy 将各实
 | Provider | 形态 | 适合场景 | 作用域行为 |
 |---|---|---|---|
 | **Mnemon** | 官方原生，本地 CLI + SQLite | 完整图谱、精确写入、默认本地优先 | 支持全局、工作区和自定义根 |
-| **OpenViking** | HTTP + `viking://` | 已有资源树与异步提炼工作流 | 使用目标 URI / 用户身份 |
+| **OpenViking** | HTTP + `viking://` | 已有资源树、经验证的精确写入与语义召回 | 使用目标 URI / 用户身份 |
 | **Honcho** | HTTP workspace / peers | 团队与 Agent peer conclusions | 使用 Provider workspace |
 | **Mem0** | Platform 或自托管 HTTP | 已有 Mem0 用户/Agent 记忆 | 使用 user / agent 身份 |
 | **Hindsight** | HTTP memory bank | bank、实体与 Provider 图谱 | 使用 bank ID |

@@ -20,6 +20,7 @@ import { compositionFixture } from './fixtures/composition.ts'
 
 const requireDsh = createRequire(realpathSync(new URL('../node_modules/@deepseek-ai/dsh/package.json', import.meta.url)))
 const fork = await import(requireDsh.resolve('@deepseek-ai/dsh-subagent-fork-in-process'))
+const spawn = await import(requireDsh.resolve('@deepseek-ai/dsh-subagent-spawn-in-process'))
 const requireTools = createRequire(realpathSync(new URL('../node_modules/@deepseek-ai/dsh-tools/package.json', import.meta.url)))
 const worker = await import(requireTools.resolve('@deepseek-ai/dsh-code-runtime-worker-thread'))
 const foreignTool = 'mcp__aoci__aoci_overview'
@@ -48,8 +49,9 @@ class ReviewAdapter extends LlmAdapter {
   }
 }
 
-it.each(['native', 'ptc'] as const)('reuses the complete fork checkpoint and denies own-scope foreign execution in %s mode', async mode => {
+it.each(['native', 'ptc'].flatMap(mode => ['fork', 'spawn'].map(provider => ({ mode, provider }))))('reuses checkpoint evidence and denies own-scope foreign execution with $provider in $mode mode', async ({ mode, provider }) => {
   const f = await compositionFixture()
+  f.config.idleReview.provider = provider as 'fork' | 'spawn'
   const ctx = new Context()
   let stop: (() => void) | undefined
   const executions: string[] = []
@@ -72,6 +74,7 @@ it.each(['native', 'ptc'] as const)('reuses the complete fork checkpoint and den
     await ctx.plugin(AgentLoop, { agents: [] })
     await ctx.plugin(SubagentRuntime)
     await ctx.plugin(fork, { providerName: 'fork' })
+    await ctx.plugin(spawn, { providerName: 'spawn' })
     ctx.llm.registerAdapter(['mock'], new ReviewAdapter(options => {
       if (options.sessionId === 'parent') return parentCalls < 5
         ? { name: foreignTool, args: { chunk: parentCalls++ } }

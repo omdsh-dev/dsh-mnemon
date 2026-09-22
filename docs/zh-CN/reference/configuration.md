@@ -52,6 +52,14 @@ mnemon:
   recallMode: guided
   writebackMode: guided
   idleReviewMs: 30000
+  idleReview:
+    enabled: true
+    provider: spawn
+    fallback: spawn
+    minIntervalMs: 300000
+    maxPerSession: 20
+    maxContextChars: 24000
+    maxTokens: 4096
   tabEnabled: true
   writeEnabled: true
   taskAgentModel:
@@ -88,6 +96,13 @@ mnemon:
 | `recallMode` | `guided` | `guided` / `off` | 是否在每个会话注入一次可持续复用的按需 recall cue；不移除显式召回 |
 | `writebackMode` | `guided` | `guided` / `off` | 是否在每个会话注入一次可持续复用的热记忆 cue，并启用评分加 dirty admission 的后台审查；不移除显式写入 |
 | `idleReviewMs` | `30000` | 5000–600000 ms | 达标后需要连续空闲的时间 |
+| `idleReview.enabled` | `true` | boolean | 自动审查独立开关 |
+| `idleReview.provider` | `spawn` | `spawn` / `fork` | 有界检查点或继承父上下文 |
+| `idleReview.fallback` | `spawn` | `spawn` / `skip` | 仅启动前处理 fork 缺失/不兼容 |
+| `idleReview.minIntervalMs` | `300000` | 5000–86400000 ms | 两次尝试的最短间隔 |
+| `idleReview.maxPerSession` | `20` | 0–200 | 当前加载父 Agent 的尝试上限；包括失败/取消 |
+| `idleReview.maxContextChars` | `24000` | 1000–1000000 | spawn 检查点字符上限 |
+| `idleReview.maxTokens` | `4096` | 128–131072 | 每次模型响应输出上限 |
 | `displayMode` | `sidebar` | `sidebar` / `builtin`；兼容旧值 `buildin` | 入口位置：独立 Sidebar 或会话内标签页，共用同一工作台；旧拼写自动迁移为 `builtin` |
 | `tabEnabled` | `true` | boolean | 是否挂载所选入口和工作台；关闭后 Host RPC、命令和 Agent 工具保持注册 |
 | `writeEnabled` | `true` | boolean | 是否暴露语义写工具、写 RPC 和写命令 |
@@ -302,15 +317,16 @@ persona      = true
 depthLimit   = true
 ```
 
-后台审查没有回退：必须存在名为 `fork` 的兼容 provider，并且：
+后台审查默认使用不继承父上下文的 `spawn` Provider，并从父 Agent 当前公开 surface 构建有界检查点。仅收录完整可见文本消息与成功工具结果，不重建被省略或不可用的上下文。`idleReview.provider: fork` 保留完整父上下文审查，并要求 `inheritsParentContext=true`。fork 缺失或不兼容时，`idleReview.fallback` 在启动前选择 `spawn` 或 `skip`；已启动的运行绝不通过其他 Provider 重试。
 
-```text
-inheritsParentContext = true
-```
+审查要求本地子 Agent 发布、`agents.isOwnedBy` 和 `agent.ctx.tools.guard`；guard 同样阻止无关的 own-scope 插件工具与 Code Mode 子调用。`maxContextChars` 限制 spawn 检查点；`maxTokens` 限制每次模型响应，不限制 fork 继承输入或多步运行的总用量。
 
-审查还要求通过 DSH Agent 注册表发布本地子 Agent，并提供 `agents.isOwnedBy` 与 `agent.ctx.tools.guard`。已发布的 0.1.1-rc.1、0.1.2-rc.1 和 0.1.5-rc.1 包均包含这些公开 API。执行限制覆盖插件在子 Agent 作用域内注册的工具及 Code Mode 子调用。
+`idleReviewMs` 仍是连续空闲防抖时间。独立的 `minIntervalMs` 限制尝试间隔，失败与取消也计入；`maxPerSession` 限制当前加载的父 Agent 的尝试次数，清空/压缩上下文通知不会重置，零表示暂停。重启 Host 或卸载后重新打开 Agent 会获得新的内存内预算。运行结束通过 DSH 公开 API dispose。持久会话历史保留：已发布 Host 没有插件范围的归档/TTL 契约，Mnemon 不删除会话文件或其他插件的 Agent。
 
-缺少 `fork` 或 guard 能力不会阻止确定性状态或普通 UI 读取。审查不会回退到未受保护的子 Agent。审查失败会写入 Host 日志，并在记忆系统工作区加载或刷新状态时显示警告。警告会跨普通轮次保留，直到审查成功或会话重置。上下文窗口错误需要选择窗口足以覆盖继承父会话的任务模型；审查候选内容会保留到后续符合条件的检查点。
+**已知组合限制：**已发布的 DSH 0.1.5-rc.2 与 experimental Agent Teams 0.1.5-alpha.2 工具在 fork 和 spawn 发布 descriptor 之前安装 Team policy，两种 Provider 都可能随后报 `TEAM_NOT_MEMBER`。Mnemon 检查公开的 `agentTeams` 服务和当前作用域的 `spawn_teammate` 能力，在创建子 Agent 前暂停自动审查，并在工作区解释原因。仅加载 TeamService 不会暂停；移除 Team 工具后，下一个符合条件的已完成回合可再次排程。不更改召回、writeback 或手动操作设置，也不修复上游的手动委派问题。
+
+失败的审查仍计为失败。如果失败前已有写入提交，工作区显示子运行 id 和已提交变更回执元数据，包括 Code Mode 外层失败前已提交的内部工具。不自动回滚或重放。手动重试前请核对该运行、档案 id 或 Runtime revision。后续审查仍遵守冷却和会话预算。只需停用此维护流程时，可在设置或配置中使用 `idleReview.enabled: false`。
+
 
 ## 只读配置
 

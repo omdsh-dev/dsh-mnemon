@@ -119,7 +119,7 @@ function addSecondWritableBody(memoryService: SpaceData): void {
 
 function subagents(structured: unknown, stopReason = 'completed', providers = ['spawn'], localAgent?: HostAgent, diagnostic?: string) {
   const dispose = vi.fn(async () => {})
-  const start = vi.fn(async () => ({
+  const start = vi.fn(async (_provider?: string, _request?: Parameters<HostSubagentsService['start']>[1]) => ({
     id: 'child-run-1',
     result: Promise.resolve({ output: [], structured, stopReason, ...(diagnostic === undefined ? {} : { diagnostic }) }),
     dispose,
@@ -168,17 +168,18 @@ function toolRegistry() {
   }
   const owners = new Map<string, HostAgent>()
   const agents = { isOwnedBy: (id: string, owner: HostAgent) => owners.get(id) === owner }
+  const publish = (child: HostAgent, owner: HostAgent) => { owners.set(child.id, owner); emit('agent/created', { agent: child }) }
   const withReviewPublication = (host: HostSubagentsService): HostSubagentsService => ({ ...host,
     async start(provider, request) {
       const run = await host.start(provider, request)
-      if (provider !== 'fork') return run
+      if (request.label !== 'Mnemon idle checkpoint review') return run
       const child = { ...parent('subagent'), id: run.id, ctx: { tools: { guard: () => () => {} } } } as unknown as HostAgent
       owners.set(child.id, request.parent)
       emit('agent/created', { agent: child })
       return { ...run, localAgent: child }
     },
   })
-  return { value: { tools: { register }, on, agents }, register, on, emit, definitions, disposers, withReviewPublication }
+  return { value: { tools: { register }, on, agents }, register, on, emit, publish, definitions, disposers, withReviewPublication }
 }
 
 interface SpaceData {
@@ -1654,9 +1655,68 @@ describe('Mnemon memory subagent coordinator', () => {
     await expect(createCoordinator(invalid.value, runtime).maintainMetadata(parent(), ['product'], new AbortController().signal)).resolves.toMatchObject({ updates: [] })
   })
 
+  it('reviews without a fork provider using bounded spawn context (issue 255)', async () => {
+    const host = subagents({ summary: 'No mutation needed.', action: 'skipped', memoryBodyIds: [] })
+    const coordinator = createCoordinator(host.value)
+    await expect(coordinator.review(parent(), new AbortController().signal)).resolves.toMatchObject({ provider: 'spawn', action: 'skipped' })
+    expect(host.start).toHaveBeenCalledOnce()
+    expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({ agentOptions: { maxTokens: 4096 } }))
+  })
+
+  it.each(['spawn', 'skip'] as const)('handles an unavailable fork before startup with %s policy', async fallback => {
+    const host = subagents({ summary: 'No mutation.', action: 'skipped', memoryBodyIds: [] })
+    const runtime = runtimeSource()
+    Object.assign(runtime.config.idleReview, { provider: 'fork', fallback })
+    const coordinator = createCoordinator(host.value, runtime)
+    await expect(coordinator.review(parent(), new AbortController().signal)).resolves.toMatchObject({ delegated: fallback === 'spawn', action: 'skipped' })
+    expect(host.start).toHaveBeenCalledTimes(fallback === 'spawn' ? 1 : 0)
+    expect(coordinator.snapshot().failures).toBe(0)
+  })
+
+  it('does not report review success when child disposal fails', async () => {
+    const host = subagents({ summary: 'No mutation.', action: 'skipped', memoryBodyIds: [] })
+    host.dispose.mockRejectedValueOnce(new Error('child disposal failed'))
+    const coordinator = createCoordinator(host.value)
+    await expect(coordinator.review(parent(), new AbortController().signal)).rejects.toMatchObject({
+      message: 'child disposal failed', review: { status: 'failed', receipts: [] },
+    })
+    expect(coordinator.snapshot()).toMatchObject({ failures: 1, reviews: 0 })
+  })
+
+  it.each([false, true])('retains own committed receipts after a failed review without replay, Code Mode=%s', async codeMode => {
+    const registry = toolRegistry()
+    const child = { ...parent('subagent'), id: 'review-child', ctx: { tools: { guard: () => () => {} } } } as unknown as HostAgent
+    const host = subagents(undefined, 'error', ['fork', 'spawn'])
+    host.start.mockImplementationOnce(async (_provider, request) => {
+      registry.publish(child, request!.parent)
+      const token = Symbol('outer Code Mode')
+      const committed = { action: 'created', document: { id: 'document-committed' }, memoryReceipt: { completion: 'committed', status: 'succeeded', committedAt: '2026-09-16T00:00:00Z' } }
+      registry.emit('tools/result', { agent: child, name: 'mnemon_document_create', arguments: { title: 'private title' }, ...(codeMode ? { parent: token } : {}) }, { value: committed })
+      registry.emit('tools/result', { agent: { ...child, id: 'unrelated-child' }, name: 'mnemon_document_create' }, { value: { ...committed, document: { id: 'unrelated-document' } } })
+      registry.emit('tools/result', { agent: child, name: 'mnemon_runtime_memory', arguments: { target: 'memory' } }, { value: { action: 'added', revision: 'runtime-revision' } })
+      registry.emit('tools/result', { agent: child, name: 'mnemon_runtime_memory' }, { value: { action: 'added' }, isError: true })
+      if (codeMode) registry.emit('tools/result', { agent: child, name: 'run_code', token }, { isError: true })
+      return { id: child.id, localAgent: child, result: Promise.resolve({ output: [], structured: undefined, stopReason: 'error', diagnostic: 'TeamError: lost membership' }), dispose: host.dispose }
+    })
+    const runtime = runtimeSource()
+    runtime.config.idleReview.provider = 'fork'
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtime, registry.value)
+    await expect(coordinator.review(parent(), new AbortController().signal)).rejects.toMatchObject({
+      message: expect.stringContaining('TeamError'), review: { status: 'partial', runId: child.id, provider: 'fork', receipts: [
+        { tool: 'mnemon_document_create', action: 'created', documentId: 'document-committed' },
+        { tool: 'mnemon_runtime_memory', action: 'added', target: 'memory', revision: 'runtime-revision' },
+      ] },
+    })
+    expect(host.start).toHaveBeenCalledOnce()
+    expect(host.dispose).toHaveBeenCalledOnce()
+    expect(coordinator.snapshot()).toMatchObject({ failures: 1, reviews: 0 })
+  })
+
   it('reviews a completed full-context checkpoint through fork with a maintenance-only tool set', async () => {
     const host = subagents({ summary: 'No mutation needed.', action: 'skipped', memoryBodyIds: [] }, 'completed', ['spawn', 'fork'])
-    const coordinator = createCoordinator(host.value)
+    const runtime = runtimeSource()
+    runtime.config.idleReview.provider = 'fork'
+    const coordinator = createCoordinator(host.value, runtime)
 
     await expect(coordinator.review(parent(), new AbortController().signal)).resolves.toMatchObject({
       delegated: true,
@@ -2398,19 +2458,19 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(host.dispose).toHaveBeenCalledOnce()
   })
 
-  it('pins a fixed task Agent model onto the fork-based idle review delegation', async () => {
+  it('pins a fixed task Agent model onto the bounded idle review delegation', async () => {
     const host = subagents({ summary: 'No mutation needed.', action: 'skipped', memoryBodyIds: [] }, 'completed', ['spawn', 'fork'])
     const resultTools = toolRegistry()
     const coordinator = new MnemonSubagentCoordinator(resultTools.withReviewPublication(host.value), runtimeSource(), resultTools.value, () => ({ provider: 'pinned-provider', model: 'pinned-model' }))
 
     await expect(coordinator.review(parent(), new AbortController().signal)).resolves.toMatchObject({
       delegated: true,
-      provider: 'fork',
+      provider: 'spawn',
       action: 'skipped',
     })
-    expect(host.start).toHaveBeenCalledWith('fork', expect.objectContaining({
+    expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
       toolFilter: { allow: expect.arrayContaining(['mnemon_document_search', 'mnemon_runtime_memory', 'mnemon_document_create']) },
-      agentOptions: { provider: 'pinned-provider', model: 'pinned-model' },
+      agentOptions: { provider: 'pinned-provider', model: 'pinned-model', maxTokens: 4096 },
     }))
   })
 
@@ -2421,10 +2481,10 @@ describe('Mnemon memory subagent coordinator', () => {
 
     await expect(coordinator.review(parent(), new AbortController().signal)).resolves.toMatchObject({
       delegated: true,
-      provider: 'fork',
+      provider: 'spawn',
     })
     const reviewCall = (host.start.mock.calls[0] as unknown as [string, { agentOptions?: unknown }])[1]
-    expect(reviewCall.agentOptions).toBeUndefined()
+    expect(reviewCall.agentOptions).toEqual({ maxTokens: 4096 })
   })
 
   it('merges a fixed task Agent model with the configured Runtime maintenance maxTokens', async () => {
