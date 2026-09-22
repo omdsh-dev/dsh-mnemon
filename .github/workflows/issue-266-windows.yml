@@ -16,7 +16,7 @@ jobs:
       matrix:
         node: ['22.19.0', '24']
     env:
-      MNEMON_VALIDATION_PHASE: baseline
+      MNEMON_VALIDATION_PHASE: fixed
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
