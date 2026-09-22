@@ -1,4 +1,6 @@
-import { createHash } from 'node:crypto'
+import { resolveMemoryDecisionGuidance, validateMemoryContextPolicy, validateMemoryDecisionTraces } from './decision-contracts.ts'
+import { validateMemoryExecution, validateMemoryReference } from './operation-contracts.ts'
+import { createHash, randomUUID } from 'node:crypto'
 import { setMaxListeners } from 'node:events'
 import type {
   ComposableMemoryView,
@@ -12,6 +14,8 @@ import type {
   MemoryJsonValue,
   MemoryPluginDescriptor,
   MemoryMutationReceipt,
+  MemoryOperationObservation,
+  MemoryOperationObserver,
   MemoryReadGrant,
   MemorySourceFacts,
   MemorySourceManagementCatalog,
@@ -31,7 +35,7 @@ import type {
   MemoryViewSourceSpec,
   MemoryViewSpec,
 } from "./contracts/index.ts"
-import { DEFAULT_MEMORY_VIEW_BUDGET } from './contracts/index.ts'
+import { DEFAULT_MEMORY_VIEW_BUDGET, MEMORY_CONTEXT_POLICY_FORMAT } from './contracts/index.ts'
 import type { InstalledMemoryPlugin, InstalledMemorySource, InstalledMemoryStrategy, InstalledMemoryStrategyExtension, MemoryContributionSnapshot } from './contributions.ts'
 import { canonicalMemoryJson, deepFreeze, defineMemoryPlugin, defineMemorySource, defineMemoryStrategy, defineMemoryStrategyExtension, id, jsonClone, positiveInteger, requiredText, uniqueIds, validateCapabilities, validateProvenance } from './definitions.ts'
 import { readSource, SourceReadFailure } from './source-calls.ts'
@@ -158,6 +162,8 @@ export function captureMemoryContributionSnapshot(snapshot: MemoryContributionSn
 }
 
 export interface CompileMemoryGenerationOptions {
+  /** Metadata only; observers cannot affect operation results or read grants. */
+  observeOperation?: MemoryOperationObserver
   /** Host authorization ceiling; Strategies can only narrow it. Management remains separately authorized. */
   sourceCapabilities?: (source: InstalledMemorySource) => readonly MemoryCapability[]
   strategyInstanceKey?: string
@@ -232,7 +238,7 @@ function normalizeFacts(source: InstalledMemorySource, facts: MemorySourceFacts)
   }, `memory Source facts for ${source.instanceKey}`)
 }
 
-function normalizeViewSpec(value: MemoryViewSpec, strategy: InstalledMemoryStrategy, facts: ReadonlyMap<string, MemorySourceFacts>, budget: MemoryViewBudget): MemoryViewSpec {
+function normalizeViewSpec(value: MemoryViewSpec, strategy: InstalledMemoryStrategy, facts: ReadonlyMap<string, MemorySourceFacts>, budget: MemoryViewBudget, contributions: readonly MemoryStrategyContribution[]): MemoryViewSpec {
   if (value.strategyTypeId !== strategy.definition.manifest.typeId) throw new Error('memory ViewSpec strategyTypeId does not match the selected Strategy')
   const maxSources = Math.min(strategy.definition.manifest.maxSources, facts.size)
   if (!Array.isArray(value.sources) || value.sources.length > maxSources) throw new Error(`memory Strategy selected too many Sources (max ${maxSources})`)
@@ -245,7 +251,7 @@ function normalizeViewSpec(value: MemoryViewSpec, strategy: InstalledMemoryStrat
     seen.add(key)
     const sourceFacts = facts.get(key)
     if (sourceFacts === undefined) throw new Error(`memory Strategy selected unavailable Source: ${key}`)
-    if (!strategy.definition.manifest.supportedSourceRoles.includes(sourceFacts.role)) throw new Error(`memory Strategy selected an unsupported Source role: ${sourceFacts.role}`)
+    if (!strategy.definition.manifest.supportedSourceRoles.includes(sourceFacts.role) && !strategy.definition.manifest.acceptedSourceCapabilities?.some(capability => sourceFacts.capabilities.includes(capability))) throw new Error(`memory Strategy selected an unsupported Source role: ${sourceFacts.role}`)
     if (source.required !== undefined && typeof source.required !== 'boolean') throw new Error(`memory Source requirement must be boolean: ${key}`)
     if (sourceFacts.availability === 'unavailable') {
       if (source.required === false) return []
@@ -285,7 +291,8 @@ function normalizeViewSpec(value: MemoryViewSpec, strategy: InstalledMemoryStrat
       }
     }
   }
-  return deepFreeze({ strategyTypeId: value.strategyTypeId, sources: normalizedSources, explanation: requiredText(value.explanation, 'memory ViewSpec explanation', 4_000),
+  const decisions = value.decisions === undefined ? undefined : validateMemoryDecisionTraces(value.decisions, normalizedSources, contributions)
+  return deepFreeze({ strategyTypeId: value.strategyTypeId, sources: normalizedSources, ...(decisions === undefined ? {} : { decisions }), explanation: requiredText(value.explanation, 'memory ViewSpec explanation', 4_000),
     ...(guidance === undefined ? {} : { guidance }),
   })
 }
@@ -359,6 +366,7 @@ function routeFor(source: RuntimeSource, routeId: string, grant: MemoryReadGrant
     description: manifest.description,
     capability: manifest.capability,
     inputSchema: manifest.inputSchema,
+    ...(manifest.access === undefined ? {} : { access: manifest.access }),
     readGrantId: grant.id,
     maxCalls: manifest.maxCalls,
     maxResults: Math.min(manifest.maxResults ?? budget.maxEvidenceResults, budget.maxEvidenceResults),
@@ -377,6 +385,7 @@ function actionFor(source: RuntimeSource, actionId: string): MemoryActionOffer {
     capability: manifest.capability,
     inputSchema: manifest.inputSchema,
     ...(manifest.authority === undefined ? {} : { authority: manifest.authority }),
+    ...(manifest.operation === undefined ? {} : { operation: manifest.operation }),
   })
 }
 
@@ -432,11 +441,24 @@ function normalizeEvidence(value: MemoryEvidence, view: ComposableMemoryView, ro
       truncated = true
       continue
     }
-    items.push(jsonClone({ ...item, id: requiredText(item.id, 'memory Evidence item id', 500), text }, 'memory Evidence item'))
+    items.push(jsonClone({ ...item, id: requiredText(item.id, 'memory Evidence item id', 500), text,
+      ...(item.reference === undefined ? {} : { reference: validateMemoryReference(item.reference) }),
+      ...(item.execution === undefined ? {} : { execution: validateMemoryExecution(item.execution) }),
+    }, 'memory Evidence item'))
     characters += text.length
   }
+  const { continuation: next, ...body } = value
+  let continuation: MemoryEvidence['continuation']
+  if (next !== undefined) {
+    const target = view.routes.find(candidate => candidate.sourceInstanceKey === route.sourceInstanceKey && (candidate.id === next.routeId || candidate.sourceRouteId === next.routeId))
+    if (!target) throw new Error('Memory continuation must target an offered route of the same Source')
+    assertInputSchema(target.inputSchema, next.input, 'Memory continuation input')
+    if (canonicalMemoryJson(next.input).length > 8000) throw new Error('Memory continuation input exceeds its limit')
+    continuation = { routeId: target.id, input: jsonClone(next.input, 'Memory continuation input') }
+  }
   return jsonClone({
-    ...value,
+    ...body,
+    ...(continuation === undefined ? {} : { continuation }),
     id: requiredText(value.id, 'memory Evidence id', 500),
     observedAt: typeof value.observedAt === 'string' && value.observedAt.trim() !== '' ? value.observedAt : now().toISOString(),
     items,
@@ -456,9 +478,11 @@ export class MemoryCompositionGeneration {
   private routeCalls = new WeakMap<object, Map<string, number>>()
   private strategyTurns = new WeakMap<object, MemoryStrategyTurn>()
   private readonly sourceTimeoutMs: number
+  private readonly observer: MemoryOperationObserver | undefined
   private disposed = false
 
   constructor(snapshotValue: MemoryContributionSnapshot, options: CompileMemoryGenerationOptions = {}) {
+    this.observer = options.observeOperation
     const snapshot = captureMemoryContributionSnapshot(snapshotValue)
     if (snapshot.sources.length === 0) throw new Error('memory composition requires at least one Source')
     if (snapshot.strategies.length === 0) throw new Error('memory composition requires a Strategy')
@@ -470,7 +494,7 @@ export class MemoryCompositionGeneration {
     this.strategy = selectStrategy(snapshot.strategies, options)
     this.extensions = (snapshot.strategyExtensions ?? []).filter(extension => extension.definition.manifest.strategyTypeId === this.strategy.definition.manifest.typeId)
     for (const extension of this.extensions) {
-      if (!this.strategy.definition.manifest.extensionSlots?.includes(extension.definition.manifest.slot)) {
+      if (!this.strategy.definition.manifest.extensionSlots?.includes(extension.definition.manifest.slot) && !(extension.definition.manifest.contributionFormat && this.strategy.definition.manifest.acceptedContributionFormats?.includes(extension.definition.manifest.contributionFormat))) {
         throw new Error(`memory Strategy does not support extension slot: ${extension.definition.manifest.slot} (${extension.instanceKey})`)
       }
     }
@@ -583,7 +607,7 @@ export class MemoryCompositionGeneration {
       const manifest = source.installed.definition.manifest
       const routes = (manifest.routes ?? []).filter(route => value.availability !== 'unavailable' && value.routeIds.includes(route.id) && value.capabilities.includes(route.capability))
       const actions = (manifest.actions ?? []).filter(action => value.availability !== 'unavailable' && value.actionIds.includes(action.id) && value.capabilities.includes(action.capability))
-      const descriptor: MemoryAvailableSource = { ...value, routes, actions, routeIds: routes.map(route => route.id), actionIds: actions.map(action => action.id) }
+      const descriptor: MemoryAvailableSource = { ...value, ...(manifest.context === undefined ? {} : { context: manifest.context }), routes, actions, routeIds: routes.map(route => route.id), actionIds: actions.map(action => action.id) }
       return [source.installed.instanceKey, descriptor] as const
     }))
     signal.throwIfAborted()
@@ -600,7 +624,7 @@ export class MemoryCompositionGeneration {
       throw new Error(`memory Strategy is not deterministic: ${this.strategy.instanceKey}`)
     }
     let spec: MemoryViewSpec
-    try { spec = normalizeViewSpec(proposed, this.strategy, facts, request.budget) }
+    try { spec = normalizeViewSpec(proposed, this.strategy, facts, request.budget, contributions) }
     catch (error) {
       if (diagnostics.length === 0) throw error
       throw new Error(`${error instanceof Error ? error.message : 'Memory View rejected'}; ${diagnostics.map(item => item.message).sort().join('; ')}`)
@@ -654,6 +678,8 @@ export class MemoryCompositionGeneration {
     const sourceRevisions = Object.fromEntries([...facts].map(([key, value]) => [key, value.revision]))
     const modes = new Set(successful.map(({ source }) => source.installed.definition.manifest.consistency))
     const consistency = { mode: modes.size === 1 ? [...modes][0]! : 'mixed' as const, sourceRevisions }
+    const decisions = spec.decisions?.map(decision => decision.state === 'applied' && !successful.some(item => item.source.installed.instanceKey === decision.sourceInstanceKey) ? { ...decision, state: 'unavailable' as const } : decision)
+    const guidance = resolveMemoryDecisionGuidance(spec.guidance, decisions, contributions)
     const body = {
       runtimeGeneration: this.id,
       strategyInstanceKey: this.strategy.instanceKey,
@@ -667,7 +693,8 @@ export class MemoryCompositionGeneration {
       actionOffers: actions,
       consistency,
       explanation: spec.explanation,
-      ...(spec.guidance === undefined ? {} : { guidance: spec.guidance }),
+      ...(guidance === undefined ? {} : { guidance }),
+      ...(decisions === undefined ? {} : { decisions }),
       ...(diagnostics.length === 0 ? {} : { diagnostics: diagnostics.sort((a, b) =>
         (a.contributionInstanceKey ?? '').localeCompare(b.contributionInstanceKey ?? '') || a.code.localeCompare(b.code)) }),
     }
@@ -678,7 +705,8 @@ export class MemoryCompositionGeneration {
   private strategyContributions(request: MemoryViewRequest, sources: readonly MemoryAvailableSource[]): readonly MemoryStrategyContribution[] {
     return deepFreeze(this.extensions.map(extension => {
       const label = `memory Strategy extension ${extension.instanceKey}`
-      const value = jsonClone(extension.definition.contribute(request, sources), label)
+      const proposal = extension.definition.contribute(request, sources)
+      const value = jsonClone(extension.definition.manifest.contributionFormat === MEMORY_CONTEXT_POLICY_FORMAT ? validateMemoryContextPolicy(proposal, sources) as unknown as MemoryJsonValue : proposal, label)
       if (canonicalMemoryJson(value, label).length > 64_000) throw new Error(`${label} exceeds 64000 characters`)
       return { instanceKey: extension.instanceKey, typeId: extension.definition.manifest.typeId, slot: extension.definition.manifest.slot, value }
     }))
@@ -726,6 +754,11 @@ export class MemoryCompositionGeneration {
         revision: facts.revision,
         capabilities: facts.capabilities,
         management: descriptor,
+        ...(source.installed.definition.manifest.context === undefined ? {} : { context: source.installed.definition.manifest.context }),
+        operations: {
+          reads: (source.installed.definition.manifest.routes ?? []).filter(route => facts.routeIds.includes(route.id)).map(({ id, description, access }) => ({ id, description, ...(access === undefined ? {} : { access }) })),
+          actions: (source.installed.definition.manifest.actions ?? []).filter(action => facts.actionIds.includes(action.id)).map(({ id, description, operation, authority }) => ({ id, description, requiresApproval: authority !== undefined, ...(operation === undefined ? {} : { operation }) })),
+        },
         ...(facts.hints === undefined ? {} : { hints: facts.hints }),
       }
     }))
@@ -769,10 +802,18 @@ export class MemoryCompositionGeneration {
       ...(requestValue.signal === undefined ? {} : { signal: requestValue.signal }),
     }
     const result = await source.runtime.manage(request)
-    return jsonClone({
+    const records = operationRecords(result.records)
+    const normalized = jsonClone({
       revision: requiredText(result.revision, 'memory Source management result revision', 500),
       value: result.value,
+      ...(records === undefined ? {} : { records }),
     }, 'memory Source management result')
+    if (request.mode === 'mutate') this.observe(source, {
+      scope: request.scope, operation, kind: 'management', actor: 'operator', revision: normalized.revision,
+      recordIds: records?.map(record => record.id) ?? operationRecordIds(request.input),
+      ...(records === undefined ? {} : { records }),
+    })
+    return normalized
   }
 
   async executeRoute(view: ComposableMemoryView, routeId: string, input: MemoryJsonValue, signal?: AbortSignal, budget: MemoryViewBudget = DEFAULT_MEMORY_VIEW_BUDGET, execution: object = view): Promise<MemoryEvidence> {
@@ -825,7 +866,10 @@ export class MemoryCompositionGeneration {
         route: boundedRoute, input: jsonClone(input, 'memory Strategy input'), ...(signal === undefined ? {} : { signal }),
       }, read)
       signal?.throwIfAborted()
-      return normalizeEvidence(value, view, boundedRoute, executionBudget, this.now)
+      const evidence = normalizeEvidence(value, view, boundedRoute, executionBudget, this.now)
+      this.observe(source, { scope: view.scope, viewId: view.id, operation: route.sourceRouteId,
+        kind: 'read', actor: 'model', recordIds: evidence.items.map(item => item.id).slice(0, 32) })
+      return evidence
     } finally { active = false }
   }
 
@@ -840,6 +884,7 @@ export class MemoryCompositionGeneration {
     if (source?.runtime.mutate === undefined) throw new Error(`memory Source cannot execute ActionOffer: ${offer.sourceInstanceKey}`)
     signal?.throwIfAborted()
     const grant = view.readGrants.find(candidate => candidate.sourceInstanceKey === offer.sourceInstanceKey)
+    if (offer.operation?.requiresReadGrant && !grant) throw new Error('Memory operation requires this Source’s pinned read grant')
     const receipt = await source.runtime.mutate({
       view: deepFreeze({ id: view.id, scope: view.scope }), offer,
       ...(grant === undefined ? {} : { grant }),
@@ -854,10 +899,33 @@ export class MemoryCompositionGeneration {
       if (receipt.status !== 'succeeded' || typeof receipt.committedAt !== 'string' || !Number.isFinite(Date.parse(receipt.committedAt))) throw new Error('committed memory Receipt requires successful status and an explicit commit timestamp')
     } else if (receipt.committedAt !== undefined) throw new Error('uncommitted memory Receipt cannot claim a commit timestamp')
     if (receipt.completion === 'failed' && receipt.status === 'succeeded') throw new Error('failed memory completion cannot have successful status')
-    return jsonClone({
+    if (offer.operation?.execution === 'deferred' && receipt.completion === 'accepted' && !receipt.execution) throw new Error('Accepted deferred work must return its execution identity and state')
+    if (receipt.execution !== undefined) {
+      validateMemoryExecution(receipt.execution)
+      if (['queued', 'running', 'unknown'].includes(receipt.execution.state) && receipt.completion === 'committed') throw new Error('Pending execution cannot claim committed completion')
+      if (['failed', 'cancelled', 'interrupted', 'timed-out'].includes(receipt.execution.state) && receipt.status === 'succeeded') throw new Error('Failed execution cannot claim a successful receipt')
+    }
+    const normalized = jsonClone({
       ...receipt,
       id: requiredText(receipt.id, 'memory mutation Receipt id', 500),
     }, 'memory mutation Receipt')
+    const records = receipt.details && typeof receipt.details === 'object' && !Array.isArray(receipt.details) ? operationRecords(receipt.details.records) : undefined
+    this.observe(source, { scope: view.scope, viewId: view.id, operation: offer.sourceActionId,
+      kind: 'mutation', actor: 'model', recordIds: records?.map(record => record.id) ?? operationRecordIds(receipt.details, input),
+      ...(records === undefined ? {} : { records }),
+      status: receipt.status, completion: receipt.completion,
+      ...(receipt.execution === undefined ? {} : { execution: receipt.execution }),
+      ...(receipt.revision === undefined ? {} : { revision: receipt.revision }),
+    })
+    return normalized
+  }
+
+  private observe(source: RuntimeSource, value: Omit<MemoryOperationObservation, 'id' | 'occurredAt' | 'sourceInstanceKey' | 'sourceTypeId'>): void {
+    if (!this.observer) return
+    const observation = deepFreeze(jsonClone({ ...value, id: randomUUID(), occurredAt: this.now().toISOString(),
+      sourceInstanceKey: source.installed.instanceKey, sourceTypeId: source.installed.definition.manifest.typeId,
+    }, 'memory operation observation'))
+    try { void Promise.resolve(this.observer(observation)).catch(() => {}) } catch {}
   }
 
   async dispose(): Promise<void> {
@@ -883,6 +951,25 @@ export class MemoryCompositionGeneration {
   private assertOpen(): void {
     if (this.disposed) throw new Error(`memory runtime generation is disposed: ${this.id}`)
   }
+}
+
+function operationRecords(value: unknown): import('./contracts/index.ts').MemoryOperationRecord[] | undefined {
+  if (!Array.isArray(value) || value.length > 100) return undefined
+  const records: import('./contracts/index.ts').MemoryOperationRecord[] = []
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || typeof item.id !== 'string' || !item.id || item.id.length > 500) return undefined
+    records.push({ id: item.id, ...(typeof item.revision === 'string' && item.revision.length <= 500 ? { revision: item.revision } : {}), ...(typeof item.state === 'string' && item.state.length <= 100 ? { state: item.state } : {}) })
+  }
+  return records
+}
+
+function operationRecordIds(...values: Array<MemoryJsonValue | undefined>): string[] {
+  for (const value of values) if (value && typeof value === 'object' && !Array.isArray(value)) {
+    if (Array.isArray(value.recordIds) && value.recordIds.length <= 100 && value.recordIds.every(id => typeof id === 'string' && id.length > 0 && id.length <= 500)) return [...new Set(value.recordIds as string[])]
+    const recordId = value.recordId ?? value.id
+    if (typeof recordId === 'string' && recordId.length > 0 && recordId.length <= 500) return [recordId]
+  }
+  return []
 }
 
 export interface MemoryCompositionRunnerInput {

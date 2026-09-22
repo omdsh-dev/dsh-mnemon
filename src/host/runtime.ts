@@ -51,7 +51,7 @@ export function memoryGenerationOptions(config: ResolvedConfig, workspaceRoot: s
       && allowsParticipation(config, installed.definition.manifest.typeId, capability, 'automatic')),
     sourceConfiguration: installed => {
       const type = installed.definition.manifest.typeId
-      if (!isDefaultSourceInstance(installed.instanceKey, type)) return {}
+      if (!isDefaultSourceInstance(installed.instanceKey, type)) return { dataDir: directory }
       if (type === 'runtime') return { dataDir: directory, userDataDir: userDirectory, memoryLimitBytes: config.runtimeMemory.memoryLimitBytes, userLimitBytes: config.runtimeMemory.userLimitBytes }
       if (type === 'documents') return { dataDir: directory }
       if (type === 'memory-spaces') return JSON.parse(JSON.stringify({
@@ -59,7 +59,7 @@ export function memoryGenerationOptions(config: ResolvedConfig, workspaceRoot: s
         defaultRecallLimit: config.defaultRecallLimit, writeEnabled: config.writeEnabled,
         embedding: config.embedding, recallQuality: config.recallQuality, persistenceStrategy: config.persistenceStrategy,
       }))
-      return {}
+      return { dataDir: directory }
     },
   }
 }
@@ -74,7 +74,7 @@ export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot: string
     void attachment.dispose()
     throw new Error(evaluation.diagnostics.map(value => value.message).join('; '))
   }
-  const composableTurns = new ComposableMemoryTurnManager(attachment.host)
+  const composableTurns = new ComposableMemoryTurnManager(attachment.host, config.memoryTopology.viewBudget)
   let disposed = false
   return {
     config, directory, storage: new StorageScopeInspector(root, config), packs: new MnemonPackManager(root, config),

@@ -1,4 +1,6 @@
 export { installMemory } from './install.ts'
+export { observeMemoryOperations } from './observations.ts'
+export type { MemoryOperationObservation, MemoryOperationObserver } from '../core/contracts/observations.ts'
 export type { MnemonMemoryService, InstallMemoryOptions, MemoryInstallContribution } from './service.ts'
 export { defineMemoryPlugin, defineMemorySource, defineMemoryStrategy, defineMemoryStrategyExtension } from '../core/definitions.ts'
 export { record as memoryInputRecord, text as memoryInputText, integer as memoryInputInteger, stringArray as memoryInputStringArray, truncate as truncateMemoryText, receipt as createMemoryMutationReceipt, migrationLineage as memoryInputMigrationLineage } from './input.ts'
@@ -6,6 +8,7 @@ export { memoryConfigurationDigest } from './input.ts'
 export { defineMemoryStrategyConfiguration } from './strategy-configuration.ts'
 export type { MemoryStrategyConfiguration, MemoryStrategyConfigurationField, MemoryLocalizedText } from './strategy-configuration.ts'
 export { withMemoryStorageLock } from './storage-lock.ts'
+export { defineMemoryContextPolicy, composeMemoryContext, validateMemoryContextPolicy, validateMemoryContextSelection, memoryContextHints, type MemoryContextCompositionOptions } from './context-policy.ts'
 export type {
   ComposableMemoryView,
   MemoryActionOffer,

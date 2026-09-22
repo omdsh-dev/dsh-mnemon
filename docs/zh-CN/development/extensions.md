@@ -4,6 +4,8 @@
 
 先确定归属，再写代码。[plugin-consumer](../../../scripts/fixtures/plugin-consumer) 中的完整示例，会在仓库外只依赖打包制品编译和测试。
 
+Source 可通过 `dsh-mnemon/client` 的 `installMemorySourceOverlayUI` 添加独立浮层。`overlays` 使用与管理页面相同的实例绑定 `MemorySourcePageProps`。Host 声明 `mnemon.source.overlay`，提供有权限约束的管理客户端与公开会话导航，并在侧栏和内嵌模式下渲染已安装的 Source 贡献。控件状态、布局、轮询和位置持久化由 Source 自行负责。目录版本刷新保留客户端身份，切换会话则更换范围绑定。只有显式声明 `coordinateSources: true` 的贡献才会获得其他已授权 Source 客户端目录，不会暴露原始通信接口或服务端对象。
+
 ## 区分贡献的职责
 
 | 插件 | 拥有 | 公开依赖 |
@@ -197,6 +199,36 @@ try {
 
 至少覆盖：正常组合、缺失/歧义依赖、双实例、schema/能力/授权拒绝、并发快照、旧修订、取消/部分失败、卸载排空/重载、持久化、管理与真实页面点击。Provider 另测凭据、真实能力、上游损坏数据、超时与父 Source 内 conformance。
 
-插件运行自己的 `pnpm verify`。仓库级 `pnpm verify:plugins` 打包全部 17 个制品，用正常 semver manifest 在工作区外逐个安装、检查、测试和构建，再编译外部消费者；禁止源码 alias、manifest override 和工作区软链接。
+插件运行自己的 `pnpm verify`。仓库级 `pnpm verify:plugins` 打包全部 所有包制品，用正常 semver manifest 在工作区外逐个安装、检查、测试和构建，再编译外部消费者；禁止源码 alias、manifest override 和工作区软链接。
 
 RSI 应保存可复现候选输入/制品，对照已知组合评估，经明确安装/选择决策晋升。Strategy 回放通过，不代表任意 JavaScript 已被沙箱隔离，也不授予交易、发消息或删除外部数据的权限。
+
+### Source 页面之间的人工协调
+
+页面可声明 `coordinateSources: true`，由宿主提供当前认证作用域内的 `managementDirectory`。目录只有 Source 展示元数据及分别绑定的管理客户端；页面需显式选择目标实例，并遵循目标 Source 自身的读取、确认与版本检查。页面不获得原始传输、Provider 客户端、服务端运行时或存储句柄。这样可以实现审核建议转入待审核库、显式导出导入等工作流，无需在宿主增加业务注册表，也不赋予一个 Source 运行时访问另一个 Source 数据的能力。
+
+`localizedLabel` 提供中英文导航名称。可选的 `sessionNavigation.open(id)` 使用 DSH 公开会话导航能力，不授予会话修改权限；没有此能力时，页面的其他功能仍然可用。
+
+## 通用组合配置
+
+「设置 → 记忆系统 → 组合策略配置」根据已安装 Strategy 及其增强插件公开的配置声明生成界面，支持 Source 选择和排序、可选值、有界数字与文本。草稿先通过公开 View API 预览，再提交带版本检查的配置请求；字段变化会使旧预览失效。业务数据继续由 Source 自身的管理页面负责，这个编辑器只修改组合策略。
+
+`memoryTopology.viewBudget` 设置 Host 对上下文字符、证据字符、证据数量和路由/操作数量的限制。路由与操作上限均为 1–128 的正整数，默认 16。每个轮次随 View 捕获预算，后续配置变化不会改变正在进行的轮次。独立 Source 通过通用配置收到已解析的存储目录；显式 Source `dataDir` 优先。
+
+## 可迁移的 Source 快照
+
+`dsh-mnemon/contracts` 导出 `MemoryTransferCatalog`、`MemoryTransferTrack` 和 `MemoryTransferSnapshot`，它们定义可选的人类管理协议：`transfer-catalog` 列出 Source 支持的轨道；`transfer-export` 返回指定轨道的快照；`transfer-import` 接收 `{ snapshot }`，要求显式确认和最新 Source 版本。导入返回规范化后的快照与版本，使协调页面能在中断后核对已有回执再继续。
+
+条目校验、作用域重新绑定、幂等性、容量与恢复历史均由数据所属 Source 负责。快照不能导入本机权限、文件系统根目录、运行时对象或另一 Source 的版本号。记录类 Source 可通过 `dsh-mnemon/source-sdk` 的 `transfer: true` 选用此协议；会话轨道不参与，删除由明确状态表达，缺少条目会保留本机内容。独立同步 Source 仅使用公开客户端、自有计划和 Git 裸仓库；Host 与 Strategy 无需维护同步业务注册表。
+
+### 可选的操作观察
+
+`observeMemoryOperations(ctx, observer)` 订阅 Core 在成功派发操作后生成的不可变元数据，生命周期绑定安装插件的 Fiber。事件包含作用域、Source 与操作标识、受限的记录标识，以及实际写入回执中的状态和完成程度；不包含输入、提示词、记录正文或授权凭据，也不授予执行权限。读取只表示内容被提供，不能证明已被使用或有帮助；管理操作完成也不代表产生了已提交的记忆回执。观察者应将持久化工作放入自己的受限队列并处理失败，不得使已经完成的操作失效。业务含义与反馈策略由可选的 Source 和 Strategy 插件负责。
+
+Source 可在管理结果或写入回执详情中返回受限的 `records: [{ id, revision, state }]` 元数据，包括采纳修订时自动归档原版等连带变更。Core 只转发这些元数据字段，状态的含义由 Source 定义。观察者失败，包括异步 Promise 拒绝，不会使已经完成的操作失效。
+
+可选插件页面使用 `dsh-mnemon/client` 的 `MemoryPluginSurface`、`MemoryPluginNotice`、`MemoryPluginMetrics` 与 `memoryPluginStyles`。自定义布局可将 `memoryPluginTokens` 中的 CSS 声明放到自身根节点，使用其中的 `--mc-*` 语义主题色。这些浏览器控件沿用 DSH 主题和键盘焦点样式，不包含 Source 执行权限。策略配置字段支持 `input: 'boolean'`，纯工厂执行前会校验布尔类型。
+
+`MemoryMarkdown` 使用 DSH 的公开 Markdown 渲染器。`MemoryMarkdownEditor` 提供预览、未保存提示、显式放弃修改和 ⌘/Ctrl+S 保存。传入 `value`、`savedValue`、`locale`、`label`、`onChange`、`onSave`，也可用 `dirty` 纳入同一次保存中的其他字段。Source 仍负责作用域、版本校验、持久化与错误处理；保存成功前保留打开文档时的版本，失败时保留草稿，切换工作区后丢弃旧响应。
+
+参见[结构化上下文访问](context-access.md)，了解公共访问、操作、资源与策略契约。

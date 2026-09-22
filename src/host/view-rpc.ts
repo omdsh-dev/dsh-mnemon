@@ -21,7 +21,7 @@ function optionalId(value: unknown): string | undefined {
 export function createViewHandler(runtime: LiveMnemonRuntime, engine: MemoryRuntime, management: MemoryPluginManagement, access: 'read' | 'write', lifecycle?: MnemonLifecycle, installation?: MemoryPluginInstallation): HostRpcHandler {
   return async (endpoint, input, signal) => {
     try {
-      if (access === 'read' ? !['dashboard', 'preview', 'inspect-plugin'].includes(endpoint) : !['apply', 'install-plugin'].includes(endpoint)) throw new Error('View operation is not available on this channel')
+      if (access === 'read' ? !['dashboard', 'preview', 'inspect-plugin', 'plan-plugin'].includes(endpoint) : !['apply', 'install-plugin'].includes(endpoint)) throw new Error('View operation is not available on this channel')
       const payload = object(input)
       if (endpoint === 'inspect-plugin') {
         if (installation === undefined || typeof payload.packageName !== 'string') throw new Error('Plugin discovery is unavailable')
@@ -42,6 +42,10 @@ export function createViewHandler(runtime: LiveMnemonRuntime, engine: MemoryRunt
       const config = management.resolveConfig(runtime.config)
       const scope: MemoryOperationScope = { storage: config.storageScope,
         ...(workspaceId === undefined ? {} : { workspaceId }), ...(sessionId === undefined ? {} : { sessionId, agentId: sessionId }) }
+      if (endpoint === 'plan-plugin') {
+        if (typeof payload.entryId !== 'string' || typeof payload.enabled !== 'boolean' || typeof payload.expectedRevision !== 'string') throw new Error('Plugin planning requires an Entry, state and revision')
+        return { ok: true, value: await management.plan(config.memoryTopology.strategyId, payload.entryId, payload.enabled, payload.expectedRevision) }
+      }
       if (endpoint === 'dashboard') {
         const catalog = await management.catalog()
         const current = sessionId === undefined || !aligned ? undefined : lifecycle?.memoryView(sessionId, workspaceId)
@@ -54,7 +58,14 @@ export function createViewHandler(runtime: LiveMnemonRuntime, engine: MemoryRunt
           ...(activity === undefined ? {} : { activity }),
           sources: snapshot.sources.map(source => ({ sourceInstanceKey: source.instanceKey, sourceTypeId: source.definition.manifest.typeId,
             packageName: source.definition.manifest.packageName, role: source.definition.manifest.role,
-            label: source.definition.manifest.management?.label ?? source.definition.manifest.typeId })),
+            label: source.definition.manifest.management?.label ?? source.definition.manifest.typeId,
+            ...(source.definition.manifest.context ? { context: source.definition.manifest.context } : {}),
+            operations: {
+              reads: (source.definition.manifest.routes ?? []).map(({ id, description, access }) => ({ id, description, ...(access ? { access } : {}) })),
+              actions: (source.definition.manifest.actions ?? []).map(({ id, description, operation, authority }) => ({ id, description, requiresApproval: authority !== undefined, ...(operation ? { operation } : {}) })),
+            },
+            ...(source.definition.manifest.management?.operations ? { managementOperations: source.definition.manifest.management.operations } : {}),
+          })),
           pluginInstallation: installation?.environment() ?? { supported: false, reason: 'loader-unavailable', suggestions: [] },
         }
         return { ok: true, value }

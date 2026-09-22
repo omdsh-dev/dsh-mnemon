@@ -4,11 +4,13 @@
 
 ## Environment and commands
 
-The plugin's Node engine floor is 20. The pinned complete DSH development profile is the published 0.1.5-rc.1 release and needs Node `^22.19.0 || >=24.0.0`; use Node 24 for development. Root, Source Client tests and the external artifact consumer use that rc.1 cohort. `dsh-invariants` closes its peer graph, while `dsh-client-store` owns the public selector type used by the subagent projection adapter. Public Node entries are also smoke-tested on Node 20 in CI; a source-overlay helper remains available for explicitly requested investigations.
+The plugin's Node engine floor is 20. The pinned complete DSH development profile uses the published npm 0.1.5-rc.1 release and needs Node `^22.19.0 || >=24.0.0`; use Node 24 for development. Root and the explicitly configured Source/consumer Client tests use that rc.1 cohort. `dsh-invariants` closes its peer graph, while `dsh-client-store` owns the public selector type used by the subagent projection adapter. Public Node entries are also smoke-tested on Node 20 in CI; a source-overlay helper remains available for explicitly requested investigations.
 
 DSH 0.1.5 UI primitives import Markdown/highlighting dependencies that its published manifest lists as development dependencies. Root, the three Source packages and the external consumer declare that complete cohort explicitly for standalone Client tests; Host artifacts still use DSH’s provided UI module. Tests use the public async Agent factory and durable `assistant/message` events. `tests/legacy-session-repair.spec.ts` runs the real released Session v0 → v3 migration over synthetic historical logs in plain and compressed form, checking explicit copy recovery, cold reopen and timed stream replay. Its audited cases cover all three old Mnemon summaries, compatible v2 descriptors, packed-placeholder expansion, null-to-empty delta names and closed tool chains with a previously recorded provider ID. It checks multi-call provenance, owner-reference refusal and original/plugin preservation. `pnpm e2e:serve --legacy-session-replay` additionally makes the actual WebUI's loopback continuation server verify the historical wire call/result IDs and payload before returning success.
 
 The reviewed rc.1 cohort is enumerated with exact versions under `minimumReleaseAgeExclude` because pnpm 11 may encounter the packages while they are inside its release-age quarantine. A composition test requires that list to equal the rc.1 packages in the lockfile and rejects a scope wildcard, so later `@deepseek-ai` publications remain quarantined.
+
+Plugin projects using DSH Agent/Session APIs also declare their required transitive DSH peers with exact versions in `devDependencies`. This keeps standalone npm installs on the tested development cohort when another prerelease becomes available. Public `peerDependencies` retain their declared compatibility ranges; the exact pins configure development and tests.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -17,6 +19,8 @@ pnpm run verify:plugins
 ```
 
 `verify` checks types, deterministic Root builds, independent plugin builds, the full test suite, a real isolated DSH Headless profile and package exports/contents. Independent plugin checks run as separate type/test phases after building all public artifacts. Do not mix `pnpm -r verify` clean builds with tests reading sibling artifacts; use `pnpm verify` for the whole workspace. `verify:plugins` repeats verification **outside** the workspace against semver-installed tarballs and an external Source/Strategy/Provider/Client consumer. It also installs only the packed Root into real DSH, resolving all sixteen official plugins from a loopback registry without workspace links or manifest rewrites, then separately verifies the three shipped enhancements moving from disabled defaults to simultaneous activation. The external consumer compiles its own Strategy extension against the owning Strategy's packed SDK.
+
+On a clean checkout, Root declarations start from Root sources and follow their imported contracts; independent plugin implementations are not declaration roots. `verify` and CI build Root, then every plugin in public dependency order, before integrated type checking. This lets optional SDKs bootstrap without relying on a previous build's `lib/` files.
 
 ## Repository ownership
 

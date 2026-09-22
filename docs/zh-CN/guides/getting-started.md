@@ -248,3 +248,7 @@ dsh --profile headless "回答前先检查持久化的项目上下文。"
 - 用[存储模型](../reference/storage-model.md)决定信息应进入运行时、档案还是记忆空间。
 - 用[配置参考](../reference/configuration.md)设置工作区范围、只读模式或生命周期开关。
 - 用[运维指南](./operations.md)导出第一份 ZIP 备份并建立升级前检查流程。
+
+## 可选工作区服务
+
+独立 Source、策略、启用方式、数据职责及验收证据见[可组合的工作区服务](workspace-services.md)。

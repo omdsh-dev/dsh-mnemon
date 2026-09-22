@@ -1,0 +1,55 @@
+- id: mnemon-strategy-default-three-tier
+  disabled: true
+- id: mnemon-source-project-context
+  disabled: false
+- id: mnemon-source-journal
+  disabled: false
+  config:
+    captureTurns: false
+    writeReminderTurns: 2
+    captureFeedback: true
+    captureJobResults: true
+- id: mnemon-source-tasks
+  disabled: false
+- id: mnemon-source-playbooks
+  disabled: false
+- id: mnemon-strategy-workspace
+  disabled: false
+- id: mnemon-strategy-journal-capture
+  disabled: false
+- id: mnemon-strategy-review-cycle
+  disabled: false
+- id: mnemon-strategy-prompt-schedule
+  disabled: false
+- id: mnemon-strategy-team-coordination
+  disabled: false
+- id: mnemon-source-files
+  disabled: false
+- id: mnemon-source-sessions
+  disabled: false
+- id: mnemon-source-review
+  disabled: false
+- id: mnemon-source-collaboration
+  disabled: false
+  config:
+    writeConflictPolicy: deny
+    captureWrites: true
+    notifyPresence: true
+- id: mnemon-source-canvas
+  disabled: false
+
+- id: mnemon-source-sync
+  disabled: false
+  config:
+    allowLocalRemotes: true
+- id: mnemon-source-learning
+  disabled: false
+- id: mnemon-strategy-learning-cycle
+  disabled: false
+- id: mnemon-source-agent-jobs
+  disabled: false
+- id: mnemon-source-notifications
+  disabled: false
+
+- id: mnemon-strategy-skill-refinement
+  disabled: false

@@ -1,4 +1,4 @@
-import type { MemoryPluginDescriptor, MemorySourceDefinition, MemoryStrategyDefinition, MemoryStrategyExtensionDefinition } from '../core/contracts/index.ts'
+import type { MemoryOperationObserver, MemoryPluginDescriptor, MemorySourceDefinition, MemoryStrategyDefinition, MemoryStrategyExtensionDefinition } from '../core/contracts/index.ts'
 
 export interface MemoryInstallContribution {
   /** Optional peer-plugin identity and dependency metadata, available to Core. */
@@ -23,6 +23,8 @@ export interface InstallMemoryOptions {
  * and bind the returned registration disposer to its Fiber.
  */
 export interface MnemonMemoryService {
+  /** Read-only operation metadata. An observer cannot change a result or obtain another Source's data. */
+  observeOperations?(observer: MemoryOperationObserver): () => void
   installContributions(
     contribution: MemoryInstallContribution,
     options: InstallMemoryOptions & { instanceId: string },

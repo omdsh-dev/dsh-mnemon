@@ -173,9 +173,13 @@ The 390 × 844 captures cover [directory navigation](../../assets/webui-v0.5.4/e
 
 ## 5. Settings: services are not Memory Space instances
 
+Settings follows DSH’s compact rows, segmented choices, switches, separators and theme colors. Expand **Composition settings** to choose a Strategy and inspect each enhancement directly. Enhancement switches in this editor update a draft: **Preview composition**, then **Save this composition** applies it to new turns. Editing a field invalidates the old preview. Source details and plugin identifiers stay folded until needed.
+
+When the host navigation leaves less than 260 pixels for content, **Open memory settings** opens the full form in DSH’s public dialog. Its title and close control stay visible while scrolling. Escape returns to the host settings and restores focus; the basic settings draft is retained.
+
 Settings centralizes stable user choices and reusable **service configuration**:
 
-- Memory Source cards come from the live Catalog. Runtime, Documents, and Memory Spaces each have one master switch, with no additional participation-mode controls;
+- Memory Source rows come from the live Catalog. Runtime, Documents, and Memory Spaces each have one master switch, with no additional participation-mode controls;
 - Memory enhancements provide three shipped switches—Active capture, Light context, and Scoped composition—disabled by default and applied immediately to future turns;
 - every external Provider has its own switch and is off by default;
 - endpoint, API Key, and Provider-specific fields appear only after enabling;
@@ -238,6 +242,10 @@ Remote Provider workspaces, users, banks, projects, containers, and URIs are ind
 - The workbench defaults to Sidebar; Builtin puts the same UI in the owning conversation. Turn memory and Save to memory remain conversation shortcuts.
 
 Next: [Capability map](./capabilities.md) · [Getting Started](./getting-started.md) · [Provider guide](./memory-providers.md) · [Configuration](../reference/configuration.md)
+
+## Optional workspace services
+
+See [Composable workspace services](workspace-services.md) for independent Sources, policies, activation, data ownership and retained acceptance evidence.
 
 ## Idle review controls
 

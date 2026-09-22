@@ -83,7 +83,7 @@ describe('Memory enhancement settings', () => {
       expect((screen.getByRole('checkbox', { name: label }) as HTMLInputElement).checked).toBe(false)
     }
     expect(screen.queryByText(/dsh-mnemon-strategy-/u)).toBeNull()
-    expect(screen.queryByText(/插件/u)).toBeNull()
+    expect(screen.getByText('记忆插件').closest('details')?.open).toBe(false)
     expect(screen.queryByRole('button', { name: /安装|发现/u })).toBeNull()
   })
 

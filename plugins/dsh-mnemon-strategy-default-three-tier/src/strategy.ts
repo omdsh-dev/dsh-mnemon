@@ -30,7 +30,7 @@ export const DEFAULT_THREE_TIER_VIEW_STRATEGY = defineMemoryStrategy({
     extensionSlots: ['selection', 'projection', 'capture'],
   },
   compose(request, sources, contributions = []) {
-    if (contributions.length === 0) return composeThreeTier(request, sources)
+    if (contributions.length === 0) return boundOperations(composeThreeTier(request, sources), request)
     const policies = threeTierContributions(contributions)
     const boundedRequest = policies.projection === undefined ? request : { ...request, budget: { ...request.budget,
       maxProjectionCharacters: Math.min(request.budget.maxProjectionCharacters, policies.projection.maxProjectionCharacters) } }
@@ -49,7 +49,7 @@ export const DEFAULT_THREE_TIER_VIEW_STRATEGY = defineMemoryStrategy({
         spec.guidance = { ...spec.guidance, system: [spec.guidance?.system, capture].filter(Boolean).join('\n\n') }
       }
     }
-    return spec
+    return boundOperations(spec, request)
   },
 })
 
@@ -122,4 +122,16 @@ function composeSelected(request: MemoryViewRequest, sources: readonly MemoryAva
       }
     }),
   }
+}
+
+/** Each eligible Source gets a turn before the remaining operation budget is spent. */
+function boundOperations(spec: MemoryViewSpec, request: MemoryViewRequest): MemoryViewSpec {
+  let routes = Math.min(32, request.budget.maxRoutes), actions = Math.min(32, request.budget.maxActions)
+  const sources = spec.sources.map(source => ({ ...source, routeIds: [] as string[], actionIds: [] as string[] }))
+  for (let round = 0; round < 32 && (routes || actions); round++) for (let index = 0; index < sources.length; index++) {
+    const input = spec.sources[index]!, output = sources[index]!
+    if (routes && input.routeIds?.[round]) { output.routeIds.push(input.routeIds[round]!); routes-- }
+    if (actions && input.actionIds?.[round]) { output.actionIds.push(input.actionIds[round]!); actions-- }
+  }
+  return { ...spec, sources }
 }

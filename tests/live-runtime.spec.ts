@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs'
+import { existsSync, readFileSync, mkdtempSync, rmSync, readdirSync, symlinkSync } from 'node:fs'
+import * as tasksPlugin from 'dsh-mnemon-source-tasks'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -63,6 +64,39 @@ describe('default Host scope over the Composable Runtime', () => {
     }
     expect(subagents.run).not.toHaveBeenCalled()
     expect(subagents.start).not.toHaveBeenCalled()
+  })
+
+  it('pins configured read and write budgets across a settings change', async () => {
+    const { graph, config, workspace, extensions, live } = await fixture({ memoryTopology: { viewBudget: { maxRoutes: 1, maxActions: 1 } } })
+    const turn = await graph.composableTurns.beginTurn('budget:1', { storage: 'custom', workspaceId: workspace })
+    expect(turn.view.routes).toHaveLength(1)
+    expect(turn.view.actionOffers).toHaveLength(1)
+    const next = createRuntimeGraph(resolveConfig({ ...config, memoryTopology: { viewBudget: { maxRoutes: 8, maxActions: 8 } } }), workspace, extensions)
+    const release = live.bindAgentRuntime('budget-owner', graph)
+    live.swap(next)
+    const later = await next.composableTurns.beginTurn('budget:2', { storage: 'custom', workspaceId: workspace })
+    expect(later.view.routes.length).toBeGreaterThan(1)
+    expect(later.view.actionOffers.length).toBeGreaterThan(1)
+    expect(turn.view.routes).toHaveLength(1)
+    expect(turn.view.actionOffers).toHaveLength(1)
+    graph.composableTurns.endTurn(turn.turnId); next.composableTurns.endTurn(later.turnId); release()
+  })
+
+  it('gives independently installed Sources the selected storage root and honors their explicit override', async () => {
+    const ambient = directory(), override = directory()
+    vi.stubEnv('MNEMON_DATA_DIR', ambient)
+    const { graph, mount } = await fixture()
+    for (const dataDir of [undefined, override]) {
+      const unmount = await mount(tasksPlugin, { instanceId: 'custom-task-entry', config: dataDir ? { dataDir } : {} })
+      const source = graph.source('tasks')
+      await source.mutate('create', { title: 'Isolated task', kind: 'personal', scope: 'global', data: { status: 'pending', important: false, urgent: false } })
+      const selected = join(dataDir ?? graph.directory, 'sources', 'tasks')
+      const children = readdirSync(selected)
+      expect(children).toHaveLength(1)
+      expect(readFileSync(join(selected, children[0]!, 'records.json'), 'utf8')).toContain('Isolated task')
+      expect(readdirSync(ambient)).toEqual([])
+      await unmount()
+    }
   })
 
   it('has one composition and no duplicate controllers, catalog or kernel', async () => {

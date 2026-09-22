@@ -60,6 +60,14 @@ function snapshot(revision: number, sources: InstalledMemorySource[], strategies
 }
 
 describe('Memory generation lifecycle', () => {
+  it('allows observers to unsubscribe and rejects subscriptions after shutdown', async () => {
+    const runtime = new MemoryRuntime()
+    const unsubscribe = runtime.service.observeOperations!(vi.fn())
+    unsubscribe(); unsubscribe()
+    await runtime.dispose()
+    expect(() => runtime.service.observeOperations!(vi.fn())).toThrow('disposed')
+  })
+
   it('reports cleanup failures even after a Host attachment has detached', async () => {
     const runtime = new MemoryRuntime()
     runtime.installContributions({ sources: [source('failure', () => { throw new Error('provider close failed') })], strategies: [strategy()] })

@@ -1,4 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { satisfies, validRange } from 'semver'
 import { dirname, isAbsolute, join, normalize, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { HostContextShape } from './dsh.ts'
@@ -8,11 +10,6 @@ import { parseSemver, resolveExecutable } from './version-updates.ts'
 import type { MemoryPluginInstallResult, MemoryPluginInstallationEnvironment, MemoryPluginInspection, MemoryPluginKind } from './view-protocol.ts'
 
 const PACKAGE = /^(?:@[a-z0-9._-]+\/)?dsh-mnemon-(source|strategy)-[a-z0-9][a-z0-9._-]*$/u
-const SUGGESTIONS = [
-  'dsh-mnemon-strategy-scoped',
-  'dsh-mnemon-strategy-light-context',
-  'dsh-mnemon-strategy-auto-capture',
-] as const
 const FETCH_TIMEOUT_MS = 10_000
 const INSTALL_TIMEOUT_MS = 10 * 60_000
 
@@ -23,6 +20,7 @@ interface PackageManifest {
   dependencies?: Record<string, string>
   devDependencies?: Record<string, string>
   peerDependencies?: Record<string, string>
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>
   dsh?: { bundle?: { patch?: unknown }; profile?: { bundles?: unknown } }
 }
 
@@ -38,6 +36,7 @@ export interface MemoryPluginInstallationDependencies {
   fetchPackage?: (packageName: string, tag: string) => Promise<unknown>
   resolveDshCommand?: () => DshCommand | undefined
   currentVersion?: string
+  resolveInstalledVersion?: (packageName: string) => string | undefined
 }
 
 function manifest(path: string): PackageManifest | undefined {
@@ -109,18 +108,29 @@ function profileFrom(ctx: HostContextShape): Profile | undefined {
   return { name: value.name.slice('dsh-profile-'.length), directory, dshHome: dirname(profilesDirectory) }
 }
 
-function installed(profile: Profile | undefined, packageName: string): boolean {
-  if (profile === undefined) return false
-  const value = manifest(join(profile.directory, 'package.json'))
-  return value?.dependencies?.[packageName] !== undefined || value?.devDependencies?.[packageName] !== undefined
+function resolvedVersion(anchor: string, packageName: string): string | undefined {
+  const require = createRequire(anchor)
+  try { const value = manifest(require.resolve(packageName + '/package.json')); if (value?.name === packageName) return value.version } catch {}
+  try {
+    let directory = dirname(require.resolve(packageName))
+    for (let depth = 0; depth < 8; depth++) {
+      const value = manifest(join(directory, 'package.json'))
+      if (value?.name === packageName) return value.version
+      const parent = dirname(directory)
+      if (parent === directory) break
+      directory = parent
+    }
+  } catch {}
+  return undefined
 }
 
 export class MemoryPluginInstallation {
-  readonly suggestions = [...SUGGESTIONS]
+  readonly suggestions = Object.keys(PACKAGE_MANIFEST?.dependencies ?? {}).filter(name => PACKAGE.test(name)).sort()
   private readonly runner: ProcessRunner
   private readonly fetcher: (packageName: string, tag: string) => Promise<unknown>
   private readonly command: () => DshCommand | undefined
   private readonly currentVersion: string
+  private readonly resolveVersion: (packageName: string) => string | undefined
   private queue: Promise<unknown> = Promise.resolve()
 
   constructor(private readonly ctx: HostContextShape, dependencies: MemoryPluginInstallationDependencies = {}) {
@@ -128,9 +138,23 @@ export class MemoryPluginInstallation {
     this.fetcher = dependencies.fetchPackage ?? fetchPackage
     this.command = dependencies.resolveDshCommand ?? dshCommand
     this.currentVersion = dependencies.currentVersion ?? PACKAGE_MANIFEST?.version ?? '0.0.0'
+    this.resolveVersion = dependencies.resolveInstalledVersion ?? (packageName => {
+      const profile = profileFrom(this.ctx)
+      const registered = this.registered(packageName)
+      const declared = profile && manifest(join(profile.directory, 'package.json'))
+      if (PACKAGE.test(packageName) && !registered && !declared?.dependencies?.[packageName] && !declared?.devDependencies?.[packageName]) return undefined
+      const local = profile && resolvedVersion(join(profile.directory, 'package.json'), packageName)
+      return local ?? (this.registered(packageName) || !PACKAGE.test(packageName) ? resolvedVersion(fileURLToPath(import.meta.url), packageName) : undefined)
+    })
+  }
+
+  private registered(packageName: string): boolean {
+    const loader = this.ctx.get('loader') as Partial<MemoryPluginLoader> | undefined
+    return typeof loader?.entries === 'function' && [...loader.entries()].some(entry => !entry.options.group && entry.options.name === packageName)
   }
 
   environment(): MemoryPluginInstallationEnvironment {
+    if (this.ctx.settings?.writable === false) return { supported: false, reason: 'read-only', suggestions: this.suggestions }
     const loader = this.ctx.get('loader') as Partial<MemoryPluginLoader> | undefined
     if (loader === undefined || typeof loader.entries !== 'function') return { supported: false, reason: 'loader-unavailable', suggestions: this.suggestions }
     const profile = profileFrom(this.ctx)
@@ -150,12 +174,23 @@ export class MemoryPluginInstallation {
         if (typeof raw !== 'object' || raw === null) throw new Error('Registry returned an invalid package manifest')
         const value = raw as PackageManifest
         if (value.name !== packageName || typeof value.version !== 'string' || parseSemver(value.version) === undefined) throw new Error('Registry returned a mismatched package identity or version')
-        if (!safeBundlePatch(value.dsh?.bundle?.patch)) throw new Error('Package does not declare a safe DSH bundle patch')
+        const registered = this.registered(packageName)
+        if (value.dsh?.bundle !== undefined ? !safeBundlePatch(value.dsh.bundle.patch) : !registered) throw new Error('Package does not declare a safe DSH bundle patch and is not registered by the active Starter')
         const peer = value.peerDependencies?.['dsh-mnemon']
         if (typeof peer !== 'string' || peer.trim() === '') throw new Error('Package does not declare its dsh-mnemon peer compatibility')
-        return { packageName, version: value.version, kind, mnemonPeerRange: peer,
+        const peerChecks = Object.entries(value.peerDependencies ?? {}).map(([name, range]) => {
+          const installedVersion = name === 'dsh-mnemon' ? this.currentVersion : this.resolveVersion(name)
+          const compatible = validRange(range) !== null && (installedVersion === undefined
+            ? value.peerDependenciesMeta?.[name]?.optional === true
+            : satisfies(installedVersion, range))
+          return { packageName: name, range, ...(installedVersion === undefined ? {} : { installedVersion }), compatible }
+        })
+        const installedVersion = this.resolveVersion(packageName)
+        return { packageName, version: value.version, kind, mnemonPeerRange: peer, registered,
+          compatible: peerChecks.every(check => check.compatible), peerChecks,
+          ...(installedVersion === undefined ? {} : { installedVersion }),
           ...(typeof value.description === 'string' && value.description.trim() !== '' ? { description: value.description.slice(0, 500) } : {}),
-          installed: installed(profileFrom(this.ctx), packageName) }
+          installed: installedVersion !== undefined }
       } catch (error) { lastError = error }
     }
     throw lastError instanceof Error ? lastError : new Error('Package could not be inspected')
@@ -167,6 +202,7 @@ export class MemoryPluginInstallation {
       if (!environment.supported || environment.profileName === undefined) throw new Error('This DSH Profile cannot install plugins from the Web UI')
       const inspected = await this.inspect(packageName)
       if (inspected.version !== version) throw new Error('Package version changed after inspection; inspect it again before installing')
+      if (!inspected.compatible) throw new Error('Plugin dependencies are incompatible: ' + inspected.peerChecks.filter(check => !check.compatible).map(check => check.packageName + ' requires ' + check.range).join('; '))
       const profile = profileFrom(this.ctx)
       const command = this.command()
       if (profile === undefined || command === undefined) throw new Error('The active DSH Profile or CLI is no longer available')
@@ -178,7 +214,7 @@ export class MemoryPluginInstallation {
       const value = manifest(join(profile.directory, 'package.json'))
       const dependency = value?.dependencies?.[packageName] ?? value?.devDependencies?.[packageName]
       const bundles = value?.dsh?.profile?.bundles
-      if (dependency === undefined || !Array.isArray(bundles) || !bundles.includes(packageName)) throw new Error('DSH completed without registering the package as a Profile bundle')
+      if (dependency === undefined || !inspected.registered && (!Array.isArray(bundles) || !bundles.includes(packageName))) throw new Error('DSH completed without registering the package as a Profile bundle')
       return { packageName, version, profileName: profile.name, installed: true, restartRequired: true }
     })
   }

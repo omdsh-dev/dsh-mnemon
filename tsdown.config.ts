@@ -20,7 +20,7 @@ const host: UserConfig = {
   name: PLUGIN_ID,
   entry: {
     index: 'src/index.ts', core: 'src/core/plugin.ts', contracts: 'src/core/contracts/index.ts',
-    'extension-sdk': 'src/sdk/index.ts', testing: 'src/sdk/testing.ts',
+    'extension-sdk': 'src/sdk/index.ts', 'source-sdk': 'src/sdk/source/index.ts', testing: 'src/sdk/testing.ts',
   },
   outDir: 'lib',
   format: ['esm'],

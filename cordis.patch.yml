@@ -86,3 +86,68 @@
         - id: mnemon-strategy-scoped
           name: dsh-mnemon-strategy-scoped
           disabled: true
+        # Optional workspace Sources and their explicit complete Strategy.
+        - id: mnemon-source-project-context
+          name: dsh-mnemon-source-project-context
+          disabled: true
+        - id: mnemon-source-journal
+          name: dsh-mnemon-source-journal
+          disabled: true
+        - id: mnemon-source-tasks
+          name: dsh-mnemon-source-tasks
+          disabled: true
+        - id: mnemon-source-playbooks
+          name: dsh-mnemon-source-playbooks
+          disabled: true
+        - id: mnemon-source-files
+          name: dsh-mnemon-source-files
+          disabled: true
+        - id: mnemon-source-sessions
+          name: dsh-mnemon-source-sessions
+          disabled: true
+        - id: mnemon-strategy-workspace
+          name: dsh-mnemon-strategy-workspace
+          disabled: true
+        - id: mnemon-strategy-journal-capture
+          name: dsh-mnemon-strategy-journal-capture
+          disabled: true
+        - id: mnemon-strategy-review-cycle
+          name: dsh-mnemon-strategy-review-cycle
+          disabled: true
+        - id: mnemon-strategy-prompt-schedule
+          name: dsh-mnemon-strategy-prompt-schedule
+          disabled: true
+        - id: mnemon-strategy-team-coordination
+          name: dsh-mnemon-strategy-team-coordination
+          disabled: true
+        - id: mnemon-source-agent-jobs
+          name: dsh-mnemon-source-agent-jobs
+          disabled: true
+        - id: mnemon-source-review
+          name: dsh-mnemon-source-review
+          disabled: true
+        - id: mnemon-source-collaboration
+          name: dsh-mnemon-source-collaboration
+          disabled: true
+        - id: mnemon-source-notifications
+          name: dsh-mnemon-source-notifications
+          disabled: true
+        - id: mnemon-strategy-focus
+          name: dsh-mnemon-strategy-focus
+          disabled: true
+        - id: mnemon-source-canvas
+          name: dsh-mnemon-source-canvas
+          disabled: true
+
+        - id: mnemon-source-sync
+          name: dsh-mnemon-source-sync
+          disabled: true
+        - id: mnemon-source-learning
+          name: dsh-mnemon-source-learning
+          disabled: true
+        - id: mnemon-strategy-skill-refinement
+          name: dsh-mnemon-strategy-skill-refinement
+          disabled: true
+        - id: mnemon-strategy-learning-cycle
+          name: dsh-mnemon-strategy-learning-cycle
+          disabled: true

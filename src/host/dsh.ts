@@ -53,6 +53,8 @@ export interface HostSettingsService {
 
 export interface ToolExecution {
   signal: AbortSignal
+  /** Public DSH call identity, used to bind an external-action approval to its displayed call. */
+  callId?: string
   agent?: HostAgent
   name?: string
   /** Parsed tool arguments, available on the authoritative tools/result event. */

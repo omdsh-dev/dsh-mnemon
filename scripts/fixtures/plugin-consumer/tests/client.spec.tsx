@@ -24,6 +24,15 @@ const spacesClient = loadMemoryClientArtifact<typeof import('dsh-mnemon-source-m
 afterEach(cleanup)
 
 describe('compiled Source clients with compiled Core and no source aliases', () => {
+  it('uses the packed shared editor with the host Markdown renderer', () => {
+    const save = vi.fn()
+    render(<core.MemoryMarkdownEditor label="Skill content" locale="en" value="# Reviewed procedure" savedValue="" onChange={() => {}} onSave={save} />)
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Skill content' }), { key: 's', metaKey: true })
+    expect(save).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Preview Markdown' }))
+    expect(screen.getByRole('heading', { name: 'Reviewed procedure' })).not.toBeNull()
+  })
+
   it('loads Source copy and styles even when the shared kit has stale business presentation', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'source-presentation-'))
     const runner = new MemoryCompositionRunner()

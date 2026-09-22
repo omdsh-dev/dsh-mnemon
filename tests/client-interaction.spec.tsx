@@ -57,7 +57,7 @@ function makeCtx(initialValue: unknown, coreValue: Record<string, unknown> = {},
         let dispose: (() => void) | undefined
         dispose = factory() as (() => void) | undefined
         const disposer = () => { dispose?.(); dispose = undefined }
-        injectDisposers.set(slot, disposer)
+        injectDisposers.add(disposer)
         return disposer
       },
       register: (options: SlotOptions, component: unknown) => {
@@ -104,7 +104,8 @@ function makeCtx(initialValue: unknown, coreValue: Record<string, unknown> = {},
     }),
   }
 
-  const injectDisposers = new Map<string, () => void>()
+  // Each injection owns a lifetime, even when several target the same slot.
+  const injectDisposers = new Set<() => void>()
   const effectDisposers: Array<() => void> = []
   const activeRegistrations = () => [...active].map(options => options.key ?? options.id ?? options.name)
   const dispose = () => {
@@ -159,11 +160,13 @@ describe('interaction surfaces binding', () => {
 
     dispose()
     expect(core.entriesOfSlot(slot)).toEqual(peers)
+    expect(core.entriesOfSlot('shell.overlay')).toHaveLength(0)
     apply(ctx)
     await waitFor(() => expect(ids()).toEqual(['dsh-mnemon/turn-tail', ...peerIds]))
     expect(core.entries(slot)).toHaveLength(3)
     dispose()
     expect(core.entriesOfSlot(slot)).toEqual(peers)
+    expect(core.entriesOfSlot('shell.overlay')).toHaveLength(0)
   })
 
   it('registers both remaining interaction surfaces by default', async () => {

@@ -9,7 +9,7 @@ import type { MnemonSourcePageOwnerProps } from "../src/client/dsh-context.ts"
 import { MnemonWorkbench } from '../src/client/MnemonWorkbench.tsx'
 import { translateEn } from '../src/client/locales.ts'
 import {
-  createMemorySourcePageDirectory,
+  createMemorySourcePageDirectory, createMemorySourceOverlayDirectory, installMemorySourceOverlayUI, MNEMON_SOURCE_OVERLAY_SLOT,
   installMemorySourceUI,
   MNEMON_SOURCE_PAGE_SLOT,
   type MemorySourcePageProps,
@@ -22,12 +22,12 @@ class TestSlots {
     return (this.core.register as (options: unknown, component: unknown) => () => void)(options, component)
   }
 
-  inject(_name: string, factory: () => (() => void)): () => void {
+  inject(name: string, factory: () => (() => void)): () => void {
     let active: (() => void) | undefined
     let disposed = false
     const reconcile = (): void => {
       if (disposed) return
-      const declared = this.core.specDynamic(MNEMON_SOURCE_PAGE_SLOT) !== undefined
+      const declared = this.core.specDynamic(name) !== undefined
       if (!declared) {
         active?.()
         active = undefined
@@ -35,7 +35,7 @@ class TestSlots {
         active = factory()
       }
     }
-    const unsubscribe = this.core.subscribeDeclaration(MNEMON_SOURCE_PAGE_SLOT, reconcile)
+    const unsubscribe = this.core.subscribeDeclaration(name, reconcile)
     try {
       reconcile()
     } catch (error) {
@@ -96,16 +96,29 @@ describe('Source Client presentation conformance', () => {
   it('rejects duplicate page owners and lets a replacement install after unload', () => {
     const slots = new TestSlots()
     const owner = declareSourcePageSlot(slots)
-    const first = installMemorySourceUI({ slots } as never, { sourceTypeId: 'runtime', pages: [{ id: 'entries', label: 'First', component: Page }] })
+    const first = installMemorySourceUI({ slots } as never, { sourceTypeId: 'runtime', pages: [{ id: 'entries', label: 'First', localizedLabel: { en: 'First', 'zh-CN': '第一页' }, coordinateSources: true, component: Page }] })
     const directory = createMemorySourcePageDirectory({ slots } as never)
     expect(() => installMemorySourceUI({ slots } as never, { sourceTypeId: 'runtime', pages: [{ id: 'entries', label: 'Duplicate', component: Page }] })).toThrow()
     expect(directory.getSnapshot().map(entry => entry.label)).toEqual(['First'])
+    expect(directory.getSnapshot()[0]).toMatchObject({ coordinateSources: true, localizedLabel: { en: 'First', 'zh-CN': '第一页' } })
     first()
     const second = installMemorySourceUI({ slots } as never, { sourceTypeId: 'runtime', pages: [{ id: 'entries', label: 'Second', component: Page }] })
     expect(directory.getSnapshot().map(entry => entry.label)).toEqual(['Second'])
     second()
     expect(directory.getSnapshot()).toEqual([])
     owner()
+  })
+
+  it('keeps shell overlays in a separate additive slot with ordinary Source ownership', () => {
+    const slots = new TestSlots()
+    const owner = slots.register({ name: 'root', children: { [MNEMON_SOURCE_PAGE_SLOT]: { kind: 'list', scope: 'root' }, [MNEMON_SOURCE_OVERLAY_SLOT]: { kind: 'list', scope: 'root' } } }, Page)
+    const stopPage = installMemorySourceUI({ slots } as never, { sourceTypeId: 'inbox', pages: [{ id: 'main', label: 'Inbox', component: Page }] })
+    const stopOverlay = installMemorySourceOverlayUI({ slots } as never, { sourceTypeId: 'inbox', overlays: [{ id: 'bell', label: 'Inbox status', component: Page }] })
+    expect(createMemorySourcePageDirectory({slots} as never).getSnapshot().map(entry=>entry.id)).toEqual(['inbox/main'])
+    const directory = createMemorySourceOverlayDirectory({slots} as never)
+    expect(directory.getSnapshot().map(entry=>entry.id)).toEqual(['inbox/bell'])
+    stopOverlay(); expect(directory.getSnapshot()).toEqual([])
+    stopPage();owner()
   })
 
   afterEach(cleanup)
@@ -199,7 +212,7 @@ describe('Source Client presentation conformance', () => {
     page(); owner()
   })
 
-  it('routes one type-level page across authorized instances without exposing the raw transport', async () => {
+  it.each([false, true])('routes authorized instances with optional human coordination (%s) and no raw transport', async coordinateSources => {
     const calls: Array<{ channel: string; endpoint: string; payload: Record<string, unknown> }> = []
     const sourceCatalog = {
       generationId: 'generation:one',
@@ -224,7 +237,7 @@ describe('Source Client presentation conformance', () => {
       if (endpoint === 'source-management-mutate') return { ok: true, value: { revision: 'write-r2', value: { updated: true } } }
       return { ok: false, error: { code: 'bad-request', message: `unexpected ${endpoint}`, details: { issues: [] } } }
     }) } }
-    const directorySnapshot = [{ id: 'git/repository', sourceTypeId: 'git', pageId: 'repository', label: 'Repository', order: 1 }] as const
+    const directorySnapshot = [{ id: 'git/repository', sourceTypeId: 'git', pageId: 'repository', label: 'Repository', coordinateSources, order: 1 }, { id: 'git/changes', sourceTypeId: 'git', pageId: 'changes', label: 'Changes', coordinateSources, order: 2 }] as const
     const directory = {
       getSnapshot: () => directorySnapshot,
       subscribe: () => () => {},
@@ -254,11 +267,19 @@ describe('Source Client presentation conformance', () => {
     />)
 
     fireEvent.click(await screen.findByRole('tab', { name: 'Repository' }))
+    expect(screen.getByRole('tab', { name: 'Repository' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('tab', { name: 'Changes' }).getAttribute('aria-selected')).toBe('false')
     expect((await screen.findByTestId('selected-source')).textContent).toBe('source:git-work')
     expect(lastProps).toMatchObject({
       sourceTypeId: 'git', sourceInstanceKey: 'source:git-work', sessionId: 'session-1', workspaceId: 'workspace-1', locale: 'en-US',
     })
     expect(lastProps).not.toHaveProperty('connection')
+    if (coordinateSources) {
+      expect(lastProps?.managementDirectory?.sources.map(source => source.sourceInstanceKey)).toEqual(['source:git-work', 'source:git-personal'])
+      expect(lastProps?.managementDirectory?.client('source:unknown')).toBeUndefined()
+      await lastProps?.managementDirectory?.client('source:git-personal')?.read('inspect', { ref: 'other' })
+      expect(calls.at(-1)?.payload).toMatchObject({ sourceInstanceKey: 'source:git-personal', sessionId: 'session-1', workspaceId: 'workspace-1' })
+    } else expect(lastProps).not.toHaveProperty('managementDirectory')
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Select Source instance' }), { target: { value: 'source:git-personal' } })
     await waitFor(() => expect(screen.getByTestId('selected-source').textContent).toBe('source:git-personal'))

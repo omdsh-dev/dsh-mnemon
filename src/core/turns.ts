@@ -6,6 +6,7 @@ import type {
   MemoryMutationReceipt,
   MemoryOperationScope,
   MemoryWake,
+  MemoryViewBudget,
 } from "./contracts/index.ts"
 import { DEFAULT_MEMORY_VIEW_BUDGET, type MemoryGenerationHost, type MemoryGenerationLease } from "./index.ts"
 
@@ -52,8 +53,8 @@ export function createMemoryWake(view: ComposableMemoryView, bindings: MemoryWak
     return {
       source: sourceInstanceKey,
       ...(cover === undefined ? {} : { cover }),
-      routes: view.routes.filter(route => route.sourceInstanceKey === sourceInstanceKey && !bindings.routes?.[route.id]).map(route => ({ id: route.id, description: route.description, inputSchema: route.inputSchema })),
-      actions: view.actionOffers.filter(offer => offer.sourceInstanceKey === sourceInstanceKey && !bindings.actions?.[offer.id]).map(offer => ({ id: offer.id, description: offer.description, inputSchema: offer.inputSchema })),
+      routes: view.routes.filter(route => route.sourceInstanceKey === sourceInstanceKey && !bindings.routes?.[route.id]).map(route => ({ id: route.id, description: route.description, inputSchema: route.inputSchema, ...(route.access ? { access: route.access } : {}) })),
+      actions: view.actionOffers.filter(offer => offer.sourceInstanceKey === sourceInstanceKey && !bindings.actions?.[offer.id]).map(offer => ({ id: offer.id, description: offer.description, inputSchema: offer.inputSchema, ...(offer.operation ? { operation: offer.operation } : {}) })),
     }
   }).filter(source => source.routes.length > 0 || source.actions.length > 0 || (source.cover !== undefined && !view.routes.some(route => route.sourceInstanceKey === source.source && bindings.routes?.[route.id])))
   const namedTools = [...new Set([
@@ -79,7 +80,10 @@ export class ComposableMemoryTurnManager {
   private readonly beginnings = new Map<string, { scope: MemoryOperationScope; controller: AbortController; promise: Promise<ComposableMemoryTurn> }>()
   private closed = false
 
-  constructor(private readonly generations: MemoryGenerationHost) {}
+  private readonly budget: Readonly<MemoryViewBudget>
+  constructor(private readonly generations: MemoryGenerationHost, budget: Readonly<MemoryViewBudget> = DEFAULT_MEMORY_VIEW_BUDGET) {
+    this.budget = Object.freeze({ ...budget })
+  }
 
   async beginTurn(turnId: string, scope: MemoryOperationScope, scenario = 'agent.root-turn', signal?: AbortSignal): Promise<ComposableMemoryTurn> {
     if (this.closed) throw new Error('Composable Memory turn manager is disposed')
@@ -101,7 +105,7 @@ export class ComposableMemoryTurnManager {
     this.beginnings.set(id, pending)
     pending.promise = (async () => {
       try {
-        const view = await lease.generation.compose({ scope: pending.scope, scenario, budget: { ...DEFAULT_MEMORY_VIEW_BUDGET } }, pending.controller.signal)
+        const view = await lease.generation.compose({ scope: pending.scope, scenario, budget: { ...this.budget } }, pending.controller.signal)
         pending.controller.signal.throwIfAborted()
         const context = Object.freeze({ turnId: id, view, scope: Object.freeze(pending.scope), startedAt: new Date().toISOString() })
         this.turns.set(id, { context, lease })
@@ -181,7 +185,7 @@ export class ComposableMemoryTurnManager {
   async executeRoute(turnId: string, routeId: string, input: MemoryJsonValue, signal?: AbortSignal): Promise<MemoryEvidence> {
     const stored = this.requireTurn(turnId)
     const operation = this.generations.acquire(stored.lease.id)
-    try { return await operation.generation.executeRoute(stored.context.view, routeId, input, signal, DEFAULT_MEMORY_VIEW_BUDGET, stored.context) }
+    try { return await operation.generation.executeRoute(stored.context.view, routeId, input, signal, this.budget, stored.context) }
     finally { operation.release() }
   }
 

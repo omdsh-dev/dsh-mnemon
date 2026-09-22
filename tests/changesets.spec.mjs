@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
-import { assertVersionedReleaseIntent } from '../scripts/check-release-intent.mjs'
+import { assertVersionedReleaseIntent, createReleaseIntentPlan, assertReleaseIntentCoverage } from '../scripts/check-release-intent.mjs'
 import { createReleasePlan } from '../scripts/release.mjs'
 
 const execute = promisify(execFile)
@@ -23,6 +23,19 @@ function published(name, version, extra = {}) {
 }
 
 describe('independent package versioning', () => {
+  it('requires pending changeset coverage for a new plugin without treating it as an already versioned release', () => {
+    const name = 'dsh-mnemon-source-new'
+    const packages = [
+      { directory: '/fixture', manifest: published('dsh-mnemon', '0.5.5', { dependencies: { [name]: '0.1.0' } }) },
+      { directory: '/fixture/plugins/' + name, manifest: published(name, '0.1.0', { peerDependencies: { 'dsh-mnemon': '^0.5.0' } }) },
+    ]
+    const plan = createReleaseIntentPlan(packages, new Map([['dsh-mnemon', '0.5.5']]))
+    expect(plan.selectionComputed).toBe(false)
+    expect(() => assertReleaseIntentCoverage(new Set(['dsh-mnemon', name]), [{ name: 'dsh-mnemon' }])).toThrow(name)
+    expect(() => assertReleaseIntentCoverage(new Set(['dsh-mnemon', name]), [{ name: 'dsh-mnemon' }, { name }])).not.toThrow()
+    packages[0].manifest.version = '0.5.6'
+    expect(createReleaseIntentPlan(packages, new Map([['dsh-mnemon', '0.5.5']])).selectionComputed).toBe(true)
+  })
   it('bumps one changed plugin and the exact aggregate without republishing compatible peers', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'mnemon-changesets-'))
     const sourceName = 'dsh-mnemon-source-memory-spaces'

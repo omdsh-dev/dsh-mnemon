@@ -76,7 +76,7 @@ The same public contracts serve the default plugins and external repositories. S
 
 ## Official plugins
 
-The Starter ships **3 Sources, 1 default Strategy, 3 optional Strategy contributions and 9 Providers**. Packages are independently versioned and published; the Starter pins an exact tested combination.
+The default configuration enables three core Sources and the default three-tier Strategy. Optional workspace plugins remain off until explicitly enabled and selected. Packages are independently versioned and published; the Starter pins exact dependency versions.
 
 | Package | Responsibility | Default |
 |---|---|---|
@@ -89,6 +89,34 @@ The Starter ships **3 Sources, 1 default Strategy, 3 optional Strategy contribut
 | [dsh-mnemon-strategy-scoped](https://github.com/omdsh-dev/dsh-mnemon/blob/main/plugins/dsh-mnemon-strategy-scoped/README.md) | Ordered Source selection and a writable subset | Off |
 
 The three enhancements occupy different slots of the default Strategy and can coexist. They still produce one View. Capture is guidance, not an autonomous recorder; a projection ceiling is not token accounting or delta injection; scoped selection does not create storage.
+
+The workspace composition adds these independent plugins:
+
+| Package | Responsibility | Default |
+|---|---|---|
+| [dsh-mnemon-source-project-context](plugins/dsh-mnemon-source-project-context/README.md) | Project facts, decisions and branch-aware notes | Off |
+| [dsh-mnemon-source-journal](plugins/dsh-mnemon-source-journal/README.md) | Project/day journals and exact feedback | Off |
+| [dsh-mnemon-source-tasks](plugins/dsh-mnemon-source-tasks/README.md) | Scoped tasks, deadlines and completion history | Off |
+| [dsh-mnemon-source-playbooks](plugins/dsh-mnemon-source-playbooks/README.md) | Reviewed skills, file skills and prompt schedules | Off |
+| [dsh-mnemon-source-files](plugins/dsh-mnemon-source-files/README.md) | Bounded file discovery and content search | Off |
+| [dsh-mnemon-source-sessions](plugins/dsh-mnemon-source-sessions/README.md) | Visible history, bookmarks and completed-turn forks | Off |
+| [dsh-mnemon-source-collaboration](plugins/dsh-mnemon-source-collaboration/README.md) | Session rooms, directed messages and file reservations | Off |
+| [dsh-mnemon-source-agent-jobs](plugins/dsh-mnemon-source-agent-jobs/README.md) | Reviewed CLI plans, background runs and durable logs | Off |
+| [dsh-mnemon-source-review](plugins/dsh-mnemon-source-review/README.md) | Independent conversation reviews and layered constraints | Off |
+| [dsh-mnemon-source-notifications](plugins/dsh-mnemon-source-notifications/README.md) | Personal inbox, registered attachments and channel receipts | Off |
+| [dsh-mnemon-source-learning](plugins/dsh-mnemon-source-learning/README.md) | Evidence-backed proposals, learning history and outcome feedback | Off |
+| [dsh-mnemon-source-canvas](plugins/dsh-mnemon-source-canvas/README.md) | Scoped notes, live file references and a spatial media board | Off |
+| [dsh-mnemon-source-sync](plugins/dsh-mnemon-source-sync/README.md) | Reviewed snapshots, cross-device merge and explicit Git push | Off |
+| [dsh-mnemon-strategy-focus](plugins/dsh-mnemon-strategy-focus/README.md) | Source selection, writable subsets and a context budget | Off |
+| [dsh-mnemon-strategy-learning-cycle](plugins/dsh-mnemon-strategy-learning-cycle/README.md) | Review learning by human turns, feedback and outcome thresholds | Off |
+| [dsh-mnemon-strategy-skill-refinement](plugins/dsh-mnemon-strategy-skill-refinement/README.md) | Reviewed native skill creation, resource tests and feedback-driven revisions | Off |
+| [dsh-mnemon-strategy-workspace](plugins/dsh-mnemon-strategy-workspace/README.md) | Compose available workspace Sources into one View | Off |
+| [dsh-mnemon-strategy-journal-capture](plugins/dsh-mnemon-strategy-journal-capture/README.md) | Guidance for deliberate, attributed capture | Off |
+| [dsh-mnemon-strategy-prompt-schedule](plugins/dsh-mnemon-strategy-prompt-schedule/README.md) | Policy for scheduled prompt use | Off |
+| [dsh-mnemon-strategy-review-cycle](plugins/dsh-mnemon-strategy-review-cycle/README.md) | Policy for review cadence and explicit completion | Off |
+| [dsh-mnemon-strategy-team-coordination](plugins/dsh-mnemon-strategy-team-coordination/README.md) | Policy for scoped session collaboration | Off |
+
+Workspace enhancements use their Strategy’s public extension slots and receive no Source storage or execution authority. See the [workspace validation record](docs/workspace-context-validation.md) for the development instance and actual evidence.
 
 Memory Spaces can use these Provider plugins:
 
@@ -124,3 +152,7 @@ pnpm verify:plugins
 ```
 
 Use Node.js `^22.19.0 || >=24.0.0` and pnpm 10.13.1. Package-level checks run independently; WebUI captures use disposable data and a real DSH Host. Tests of mechanics are not claims of LLM accuracy or live cloud-Provider conformance. [Development](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/development/README.md) · [Media provenance](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/webui-v0.5.4/README.md).
+
+## Optional workspace services
+
+[Composable workspace services](docs/en/guides/workspace-services.md) adds independently installable project context, journals, tasks, playbooks, files, sessions, collaboration, jobs, review, canvas, notifications and synchronization, coordinated through an explicit Workspace Strategy and independent enhancements. These entries are opt-in.

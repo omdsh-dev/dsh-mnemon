@@ -27,15 +27,15 @@ export class SessionReads extends SessionQueryEngine {
 class FlashAdapter extends LlmAdapter {
   private active = 0
   private readonly sessionLabels = new Map<string, string>()
-  constructor(private readonly inner: LlmAdapter, private readonly report: FlashAudit, private readonly maxCalls: number) { super() }
+  constructor(private readonly inner: LlmAdapter, private readonly report: FlashAudit, private readonly maxCalls: number, private readonly selectedModel = MODEL) { super() }
   override providerInfo(provider: string) { return this.inner.providerInfo(provider) }
   override listModels(provider: string) { return this.inner.listModels(provider) }
   override resolveModel(provider: string, model: string, signal?: AbortSignal) {
-    if (model !== MODEL) throw new Error('Stress test permits DeepSeek V4 Flash only')
+    if (model !== this.selectedModel) throw new Error('Only the selected Flash model is permitted')
     return this.inner.resolveModel(provider, model, signal)
   }
   override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
-    if (options.model !== MODEL) throw new Error('Stress test permits DeepSeek V4 Flash only')
+    if (options.model !== this.selectedModel) throw new Error('Only the selected Flash model is permitted')
     if (this.report.modelCalls.length >= this.maxCalls) throw new Error('Stress test exceeded its bounded model-call budget')
     const sessionId = String(options.sessionId ?? 'unknown')
     if (!this.sessionLabels.has(sessionId)) this.sessionLabels.set(sessionId, `session-${this.sessionLabels.size + 1}`)
@@ -57,7 +57,8 @@ class FlashAdapter extends LlmAdapter {
 }
 
 
-export async function liveFlash(report: FlashAudit, maxCalls = 600) {
+export async function liveFlash(report: FlashAudit, maxCalls = 600, selectedModel = MODEL) {
+  if (!['deepseek-v4-flash', 'deepseek-flash'].includes(selectedModel)) throw new Error('Choose a Flash model')
   const key = process.env.DEEPSEEK_API_KEY
   if (!key) throw new Error('Explicit DEEPSEEK_API_KEY is required')
   // Load dependencies before installing the request observer, so setup failure cannot leave it installed.
@@ -70,7 +71,7 @@ export async function liveFlash(report: FlashAudit, maxCalls = 600) {
   globalThis.fetch = async (input, init) => {
     if (String(input) !== ENDPOINT || typeof init?.body !== 'string') throw new Error('Unexpected network request in isolated Flash stress test')
     const body = JSON.parse(init.body) as { model: string }
-    if (body.model !== MODEL) throw new Error('Blocked a non-Flash request before network dispatch')
+    if (body.model !== selectedModel) throw new Error('Blocked a non-Flash request before network dispatch')
     const response = await originalFetch(input, init)
     audits.push((async () => {
       const reader = response.clone().body!.getReader()
@@ -90,7 +91,7 @@ export async function liveFlash(report: FlashAudit, maxCalls = 600) {
             if (value.model === undefined) continue
             sawModel = true
             if (!report.modelsReturned.includes(value.model)) report.modelsReturned.push(value.model)
-            if (value.model !== MODEL) throw new Error('Provider returned a non-Flash model')
+            if (value.model !== selectedModel) throw new Error('Provider returned a non-Flash model')
           }
         }
       } catch (error) {
@@ -105,7 +106,7 @@ export async function liveFlash(report: FlashAudit, maxCalls = 600) {
   const options = deepseek.resolveAdapterOptions({ baseURL: 'https://api.deepseek.com', thinking: 'disabled', reasoningEffort: 'off', maxTokens: 8192, streamIdleTimeoutMs: 60000 })
   const adapter = new FlashAdapter(new deepseek.DeepSeekAdapter({ options: () => options,
     resolveApiKey: async () => key, resolveUserId: () => 'mnemon-synthetic-quality-acceptance',
-    prepareExtensions: async () => ({ fields: {}, accept: async () => {} }) }), report, maxCalls)
+    prepareExtensions: async () => ({ fields: {}, accept: async () => {} }) }), report, maxCalls, selectedModel)
   return { adapter, fork, async drain() { await Promise.all(audits); return wireErrors }, async dispose() {
     try { await Promise.all(audits); report.toolErrors.push(...wireErrors) } finally { globalThis.fetch = originalFetch }
   } }

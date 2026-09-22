@@ -245,3 +245,7 @@ Ordinary conversation should not force recall. Current requests, repository file
 - Use the [storage model](../reference/storage-model.md) to choose Runtime, Documents, or Memory Spaces.
 - Use the [configuration reference](../reference/configuration.md) for Workspace scope, read-only behavior, and lifecycle switches.
 - Use the [operations guide](./operations.md) to export your first ZIP backup and establish a pre-upgrade checklist.
+
+## Optional workspace services
+
+See [Composable workspace services](workspace-services.md) for independent Sources, policies, activation, data ownership and retained acceptance evidence.

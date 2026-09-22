@@ -13,6 +13,7 @@ const definition = (): Omit<MemoryStrategyConfiguration, 'apiVersion'> => ({
   fields: [
     { key: 'budget', input: 'number', label: { ...label }, defaultValue: 512, minimum: 1, maximum: 4096 },
     { key: 'sources', input: 'source-list', label: { ...label } },
+    { key: 'feedback', input: 'boolean', label: { ...label }, defaultValue: true },
     { key: 'instruction', input: 'textarea', label: { ...label } },
   ],
   create: () => ({ strategies: [strategy] }),
@@ -35,7 +36,7 @@ describe('Strategy configuration author contract', () => {
     { budget: 0 }, { budget: 1.5 }, { budget: 4097 },
     { sources: ['source:work', 'source:work'] },
     { sources: [''] }, { sources: Array.from({ length: 33 }, (_, i) => 'source:' + i) },
-    { instruction: 'x'.repeat(4001) }, { unknown: true },
+    { feedback: 'true' }, { feedback: 1 }, { instruction: 'x'.repeat(4001) }, { unknown: true },
   ])('rejects invalid input before calling the factory (%#)', input => {
     const create = vi.fn(definition().create)
     const configured = defineMemoryStrategyConfiguration({ ...definition(), create })

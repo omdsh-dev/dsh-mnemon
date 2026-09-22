@@ -156,13 +156,7 @@ let succeeded = false
 try {
   if (!args.has('--skip-build')) {
     await run('pnpm', ['build'], root, 'build default distribution and public SDK')
-    await Promise.all([
-      parallel(names.filter(name => name.startsWith('dsh-mnemon-source-')), concurrency,
-        name => run('pnpm', ['build'], join(root, 'plugins', name), `build ${name}`)),
-      run('pnpm', ['build'], join(root, 'plugins/dsh-mnemon-strategy-default-three-tier'), 'build Strategy-owned extension SDK'),
-    ])
-    await parallel(names.filter(name => !name.startsWith('dsh-mnemon-source-') && name !== 'dsh-mnemon-strategy-default-three-tier'), concurrency,
-      name => run('pnpm', ['build'], join(root, 'plugins', name), `build ${name}`))
+    await run(process.execPath, [join(root, 'scripts/build-plugin-packages.mjs')], root, 'build plugins in public dependency order')
   }
   await mkdir(join(temporary, 'tarballs'))
   const packages = [

@@ -358,3 +358,23 @@ describe('View configuration with the real pinned DSH Cordis Loader', () => {
     expect(current).not.toHaveProperty('activity')
   })
 })
+
+it('plans an enhancement with its disabled Source before applying one dependency transaction', async () => {
+  const f = await fixture()
+  await f.management.apply(f.config, scope(f), await request(f, { 'mnemon-source-memory-spaces': { enabled: false, config: {} } }))
+  const catalog = await f.management.catalog(), before = f.engine.contributionSnapshot().revision
+  const plan = await f.management.plan('default-three-tier', 'capture', true, catalog.revision)
+  expect(plan.changes).toEqual(expect.arrayContaining([
+    expect.objectContaining({ entryId: 'capture', enabled: true, reason: 'requested' }),
+    expect.objectContaining({ entryId: 'mnemon-source-memory-spaces', enabled: true, reason: 'requirement' }),
+  ]))
+  expect(f.engine.contributionSnapshot().revision).toBe(before)
+  expect(f.loader.resolve('mnemon-source-memory-spaces').disabled).toBe(true)
+  await f.management.apply(f.config, scope(f), plan.configuration)
+  const next = await f.management.catalog()
+  expect(next.entries.find(entry => entry.entryId === 'capture')).toMatchObject({ enabled: true, active: true })
+  const removal = await f.management.plan('default-three-tier', 'mnemon-source-memory-spaces', false, next.revision)
+  expect(removal.changes).toContainEqual(expect.objectContaining({ entryId: 'capture', enabled: false, reason: 'dependent' }))
+  await expect(f.management.plan('default-three-tier', 'capture', false, catalog.revision)).rejects.toThrow('changed')
+  expect(f.treeWrite).not.toHaveBeenCalled()
+})

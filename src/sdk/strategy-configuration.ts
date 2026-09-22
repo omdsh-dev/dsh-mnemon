@@ -10,7 +10,7 @@ export interface MemoryStrategyConfigurationField {
   label: MemoryLocalizedText
   description?: MemoryLocalizedText
   /** Numbers are finite integers; lists have at most 32 unique, nonempty strings. */
-  input: 'number' | 'text' | 'textarea' | 'string-list' | 'source-list'
+  input: 'boolean' | 'number' | 'text' | 'textarea' | 'string-list' | 'source-list'
   defaultValue?: MemoryJsonValue
   minimum?: number
   maximum?: number
@@ -48,7 +48,7 @@ export function readMemoryStrategyConfiguration(value: MemoryStrategyConfigurati
     || !['strategy', 'strategy-extension'].includes(value.kind) || !/^[a-z][a-z0-9-]{0,127}$/u.test(value.typeId)
     || !Array.isArray(value.fields) || value.fields.length > 16
     || value.fields.some(field => !field || !/^[a-zA-Z][a-zA-Z0-9]{0,99}$/u.test(field.key)
-      || !['number', 'text', 'textarea', 'string-list', 'source-list'].includes(field.input)
+      || !['boolean', 'number', 'text', 'textarea', 'string-list', 'source-list'].includes(field.input)
       || !text(field.label) || field.description !== undefined && !text(field.description)
       || [field.minimum, field.maximum].some(bound => bound !== undefined && (typeof bound !== 'number' || !Number.isFinite(bound)))
       || field.sourceRoles !== undefined && (!Array.isArray(field.sourceRoles) || field.sourceRoles.length > 32
@@ -91,7 +91,9 @@ export function memoryStrategyConfigurationValues(definition: MemoryStrategyConf
     if (['__proto__', 'prototype', 'constructor'].includes(key)) throw new Error('Unsafe plugin configuration key')
     const field = fields.get(key)
     if (!field) throw new Error(`Plugin field is not declared for management: ${key}`)
-    if (field.input === 'number') {
+    if (field.input === 'boolean') {
+      if (typeof value !== 'boolean') throw new Error(`Plugin setting ${field.key} must be boolean`)
+    } else if (field.input === 'number') {
       if (typeof value !== 'number' || !Number.isFinite(value) || !Number.isInteger(value)
         || field.minimum !== undefined && value < field.minimum || field.maximum !== undefined && value > field.maximum) throw new Error(`Invalid numeric plugin field: ${key}`)
     } else if (field.input === 'source-list' || field.input === 'string-list') {

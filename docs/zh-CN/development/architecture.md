@@ -24,7 +24,7 @@ flowchart TB
 
 Memory Spaces **自己定义内部 Fiber 与 Provider 协议**。每个 Provider 都来自明确安装并配置的子模块；两个 Source 实例可以使用同名子节点，各自持有独立目录和凭据。不存在扫描依赖自动选择实现、全局 Provider 注册表等隐式装配。
 
-借鉴 Spring Boot Starter，默认发行包负责选依赖、给默认配置，不把 Source 业务收回 Core。用户仍只安装 `dsh-mnemon`；16 个插件包可独立开发、测试与发布。Starter 安装全部官方包，其中三个策略增强以停用 Entry 随附，只有设置开关打开后才参与 View；完整 Strategy 的替换仍需显式选择。
+借鉴 Spring Boot Starter，默认发行包负责选依赖、给默认配置，不把 Source 业务收回 Core。用户仍只安装 `dsh-mnemon`；38 个插件包可独立开发、测试与发布。Starter 安装全部官方包，默认只启用原始 Runtime、Documents 与 Memory Spaces 三层组合；新增 Source、完整 Strategy 和增强插件均以可选 Entry 随附，启用后才参与 View；完整 Strategy 的替换仍需显式选择。
 
 | 归属 | 负责 | 不负责 |
 |---|---|---|
@@ -119,3 +119,5 @@ Host 交给页面的是限定实例的管理客户端与脱敏元信息，不是
 默认 Starter 保留存储选择、持久格式、具名工具及使用流程。`displayMode` 选择默认的 `sidebar` 或 `builtin`；Host 接受旧 `buildin`，并在配置可写时通过 DSH 带修订栅栏的设置写入器保存规范拼写。这只修改一项偏好，不改变记忆数据或 Core/Source 契约；其他配置键保留原有语义。这**不意味着**保留私有控制器、旧根包 `kernel/layers/provider-sdk` 入口和历史包装包。当前公开入口见[扩展开发](./extensions.md)。
 
 RSI 的边界保持简洁：产出候选 Source/Strategy 制品，用固定 facts/request 测试与回放，审查权限，再按正常装配方式安装和选择。运行代支持验证后的替换与排空，不是自动执行生成代码或自动晋升服务。Cordis 的归属/隔离并非安全沙箱；高风险外部操作仍需单独的授权边界，不能以“记忆”之名自动获得权限。
+
+参见[结构化上下文访问](context-access.md)，了解公共访问、操作、资源与策略契约。
