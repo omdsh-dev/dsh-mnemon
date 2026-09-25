@@ -279,7 +279,7 @@ export function registerTools(ctx: HostContextShape, runtimeSource: MnemonAgentR
         content: { type: 'string', description: 'Compact entry content. Required for add and replace.' },
         old_text: { type: 'string', description: 'Full content of the existing entry, or a unique substring. A unique full-content match takes precedence within the selected target. Required for replace and remove.' },
         importance: { type: 'string', enum: ['critical', 'normal', 'low'], description: 'critical for explicit must/always/never rules; low for transient facts; normal by default.' },
-        branches: { type: 'array', items: { type: 'string' }, description: 'Optional git branch names restricting where a target=memory entry is injected. Omit for cross-branch facts; on replace an empty list clears the scope and an omitted list keeps it. Never accepted for target=user.' },
+        branches: { type: 'array', items: { type: 'string' }, description: 'Optional git branch names restricting where a target=memory entry is injected. Omit for cross-branch facts; on replace an empty list clears the scope and an omitted list keeps it. For target=user, omit or pass []; non-empty branches are rejected.' },
       },
       required: ['action', 'target'],
     },
@@ -295,7 +295,7 @@ export function registerTools(ctx: HostContextShape, runtimeSource: MnemonAgentR
         ...(args.content === undefined ? {} : { content: args.content }),
         ...(args.old_text === undefined ? {} : { oldText: args.old_text }),
         ...(args.importance === undefined ? {} : { importance: args.importance }),
-        ...(args.branches === undefined ? {} : { branches: args.branches }),
+        ...(args.branches === undefined || (args.target === 'user' && Array.isArray(args.branches) && args.branches.length === 0) ? {} : { branches: args.branches }),
       }
       return coordinator.runtime(requireAgent(exec), request, exec.signal)
     },

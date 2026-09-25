@@ -76,6 +76,8 @@ Spaces created by the current conversation View, or known spaces activated durin
 
 Runtime items should be compact, independent, and repeatedly useful. Working Memory items can carry an optional branch scope (comma-separated git branch names in the add and edit forms): scoped items show a branch badge and are projected into the model context only while the session workspace is checked out on a listed branch; leaving the field empty keeps an item visible on every branch. The scope never affects this page or the on-disk `USER.md`/`MEMORY.md` projections. Identity, preferences, and explicit collaboration rules belong in User Profile. Project facts, environment, decisions, and tool lessons belong in Working Memory. Temporary progress and raw logs do not.
 
+When the agent uses `mnemon_runtime_memory` for User Profile (`target=user`), `branches` may be omitted or supplied as `[]`. Non-empty branch scopes remain invalid for User Profile. For Working Memory, replacing an entry with `branches: []` clears its scope; omitting the field preserves it.
+
 ## 3. Documents: preserve complete project narratives
 
 ![Imported project document directory and Markdown reader](../../assets/webui-v0.5.4/en/documents.jpg)
