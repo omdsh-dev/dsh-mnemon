@@ -68,6 +68,8 @@ pnpm --filter dsh-mnemon-source-runtime verify
 
 工作区身份、Client 平台边界和委派工作区范围测试还会在 Windows 的 Node 22.19 与 24 上运行。它们覆盖真实文件系统错误和 junction 别名，并包含模拟 Windows 对文件后代返回 `ENOENT` 的跨平台回归；该模拟不能替代真实 Windows 运行。
 
+`tests/bundle-activation.spec.mjs` 用正式发布的 DSH Loader 启动临时激活计数器，覆盖 Starter 的全部十七个包。锁定的宿主验证旧版 `mnemon` 配置／停用目标及组件独立选择。设置 `MNEMON_BUNDLE_TEST_PROFILE=/absolute/profile` 后，还会调用该安装的正式插件管理器（已在 `0.1.7-rc.2` 验证）：真实组件和 bundle 开关必须在重载、重启后保持，核心总开关必须停止全部运行中的子项，任何包都不能留下重复实例。夹具创建自己的临时 profile，不修改所提供的安装。它验证生命周期契约；真实 Mnemon 行为仍由制品 Headless 和 WebUI 检查负责。执行 `node --expose-internals tests/fixtures/bundle-activation.mjs /absolute/profile manager --check-declared-rows` 可额外要求每个声明的 bundle 组件都可由管理器操作；该诊断会在[兼容性说明](../reference/compatibility.md#dsh-017-bundle-组件列表)中的 `0.1.7-rc.2` 原生 group 列表缺陷处失败。
+
 远程 Provider 使用可控 HTTP 响应；Native 进程测试使用可控命令 runner，另有可选 Windows 二进制冒烟。额外的 opt-in 测试接受经过官方 checksum 校验的 Native 二进制，创建临时记忆空间，通过 View 写入、召回并删除：
 
 ```sh

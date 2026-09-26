@@ -78,7 +78,7 @@ describe('Mnemon Web client composition', () => {
 
   it('keeps a locale-bound Sidebar with Source child-render authority and conversation actions', async () => {
     const { context, slots, scope, settingsEntry, setLocale } = workspaceContext({})
-    expect(inject).toEqual(['slots', 'sessions', 'workspaces', 'uiSession', 'connection', 'locale'])
+    expect(inject).toEqual(['slots', 'sessions', 'workspaces', 'uiSession', 'connection', 'locale', 'layout'])
     expect(context.locale.register).toHaveBeenCalledWith('mnemon', { zh, en })
     await vi.waitFor(() => expect(slots).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: 'shell.overlay', id: 'mnemon', children: { 'mnemon.source.page': { kind: 'list', scope: 'root' } } }),

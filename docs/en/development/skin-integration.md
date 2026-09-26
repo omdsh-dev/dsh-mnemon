@@ -18,6 +18,10 @@ This contract was introduced by [PR #284](https://github.com/omdsh-dev/dsh-mnemo
 
 Background integration belongs in the skin's Client styles. It needs no new Mnemon setting or changes to Host, Source, Strategy, Provider or storage formats. The root rule does not cover other plugins or dialogs portaled to `body`; dialogs retain their own surface styles.
 
+The native Sidebar entry is rendered by DSH through `sidebar.panellist`, just like Plugins. The skin's native panel-row rules therefore supply its color, typography, spacing, selection and collapsed presentation. Mnemon supplies only its label and size-responsive icon; the workbench background contract above applies to the opened page.
+
+The native main seat reserves DSH's `--dsh-frame-top-clearance` once at its outer boundary, keeping desktop window controls accessible. Its page layer sits above decorative body layers and below DSH window chrome; skins should not add another window-title offset to the inner workbench.
+
 ## Add an override to your skin
 
 1. Put the rule in a CSS file that the skin actually loads, installs, switches and removes. Do not edit Mnemon source or generated `lib/` files.

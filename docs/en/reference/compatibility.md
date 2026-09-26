@@ -33,6 +33,12 @@ In the affected `0.5.13` install, Desktop's fallback hides a missing `createVola
 
 See the [original Desktop reproduction and verification](../../pr-assets/issue-274-profile-generation/README.md).
 
+## DSH 0.1.7 bundle component list
+
+DSH `0.1.7-rc.2` can display `cordis:group` / `mnemon-bundle` as an off component while Mnemon is running. Toggling that row fails with `unknown-plugin`: the host includes native groups in its bundle declaration list but deliberately excludes them from its manageable plugin inventory. The row is an internal lifecycle container. Use the top-level `dsh-mnemon` bundle switch or the **Mnemon** component (`mnemon` entry) to stop and restore the composition. The extra container control remains an upstream defect in this host version.
+
+The Starter retains the stable group ID and the existing `mnemon` configuration target. Disabling the core stops its Sources, Strategies and private Provider children; re-enabling it restores their independent choices. Removing the group leaves enabled dependents waiting for the missing core, while making the group anonymous can leave old instances alive after a profile reload. Neither change is a supported workaround. No configuration or memory migration is needed. The [published lifecycle regression](../development/README.md#test-ownership-and-coverage) checks manager persistence, restarts and literal or expression-based legacy disable flags without changing the installed host.
+
 ## DSH 0.1.7 settings recovery
 
 DSH `0.1.7-alpha.1` replaces `settings.register()` and `settings-file` with Config-backed forms. Mnemon exposes live Config fields and persists its existing UI operations through the host's revision-checked profile writer. Changes to transport authority still require a normal plugin reload. DSH `0.1.5-rc.2` and `0.1.6-alpha.2` retain their existing settings path.

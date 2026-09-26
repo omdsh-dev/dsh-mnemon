@@ -20,8 +20,9 @@ import { MnemonBetterSidebarSeat } from './better-sidebar-seat.ts'
 import {
   MnemonSidebarWorkspaceHost,
   MnemonBuiltinWorkspaceHost,
-  mountMnemonSidebarLauncher,
 } from './workspace-mount.tsx'
+import { MnemonNativeSidebarSeat } from './native-sidebar-seat.ts'
+import { mountMnemonSidebarNavigation } from './native-sidebar.tsx'
 import { mountBetterSidebarTab } from './better-sidebar.tsx'
 import { MnemonWorkspaceController } from './workspace-controller.ts'
 import { MNEMON_ANCHOR_EVENT, type MnemonAnchor } from './anchor.ts'
@@ -29,7 +30,7 @@ import { mountSubagentTokenUsageOverride } from './subagent-token-usage.tsx'
 
 export * from './extension-sdk.ts'
 
-export const inject = ['slots', 'sessions', 'workspaces', 'uiSession', 'connection', 'locale']
+export const inject = ['slots', 'sessions', 'workspaces', 'uiSession', 'connection', 'locale', 'layout']
 
 /** Interaction surfaces: slot name, settings toggle, and the registrations it owns. */
 type MnemonNamespace = 'mnemon'
@@ -95,9 +96,14 @@ function enabledOf(value: unknown, key: 'turnBar' | 'saveAction'): boolean {
 
 function mountSidebarMemoryView(ctx: MnemonClientContext, settings: MnemonSettingsScope<Config>, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string): () => void {
   const controller = new MnemonWorkspaceController()
-  const navigation = { open: () => controller.open(), close: () => controller.close() }
+  let launcher: ReturnType<typeof mountMnemonSidebarNavigation> | undefined
+  const navigation = {
+    open: () => { if (launcher === undefined) controller.open(); else launcher.open() },
+    close: () => { if (launcher === undefined) controller.close(); else launcher.close() },
+  }
   const sourcePageDirectory = createMemorySourcePageDirectory(ctx)
   const betterSidebarSeat = new MnemonBetterSidebarSeat()
+  const nativeSidebarSeat = new MnemonNativeSidebarSeat()
   const slotName = 'shell.overlay'
   const disposeView = ctx.slots.inject(slotName, () => ctx.slots.register({
     name: slotName,
@@ -119,11 +125,11 @@ function mountSidebarMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
       navigation,
       controller,
       betterSidebarSeat,
+      nativeSidebarSeat,
       t: translate,
     }),
   }, MnemonSidebarWorkspaceHost))
   let disposeBetterSidebar: (() => void) | undefined
-  let disposeLauncher: (() => void) | undefined
   let listening = false
   let disposed = false
   const openMemoryView = (): void => { navigation.open() }
@@ -131,7 +137,7 @@ function mountSidebarMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
     if (disposed) return
     disposed = true
     try {
-      disposeLauncher?.()
+      launcher?.dispose()
     } finally {
       if (listening) window.removeEventListener(MNEMON_ANCHOR_EVENT, openMemoryView)
       try {
@@ -146,7 +152,7 @@ function mountSidebarMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
     if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       window.addEventListener(MNEMON_ANCHOR_EVENT, openMemoryView)
       listening = true
-      disposeLauncher = mountMnemonSidebarLauncher(ctx, translate, controller)
+      launcher = mountMnemonSidebarNavigation(ctx, translate, controller, nativeSidebarSeat)
     }
     return dispose
   } catch (error) {
