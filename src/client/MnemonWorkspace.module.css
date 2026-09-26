@@ -32,6 +32,17 @@
   flex: 1 1 auto;
 }
 
+.nativeWorkspace {
+  /* Keep the page above decorative body layers and below DSH window chrome. */
+  position: relative;
+  z-index: 2;
+}
+
+.nativeWorkspace[data-dsh-mnemon-main-seat] {
+  box-sizing: border-box;
+  padding-block-start: var(--dsh-frame-top-clearance, 0px);
+}
+
 .nativeWorkspace[hidden] {
   display: none;
 }
