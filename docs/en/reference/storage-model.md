@@ -68,7 +68,7 @@ The `workspaces` layout keeps all four areas under `<central-root>/workspaces/<w
 
 - `target=user`: identity, role, long-term preferences, habits, communication style, and explicit collaboration requirements.
 - `target=memory`: projects, environment, decisions, conventions, tool characteristics, and reusable experience.
-- `importance=critical|normal|low`: retention priority during maintenance.
+- `importance=critical|normal|low`: recorded importance, visible in the model projection and used for retention priority during maintenance.
 - `branches` (optional, `target=memory` only): a list of git branch names limiting where the entry is projected in the per-turn Runtime snapshot; entries without a branch list are visible on every branch.
 
 There is currently no `daily` target.
@@ -90,6 +90,17 @@ branches (optional)
 
 `USER.md` and `MEMORY.md` are deterministic derived files of the complete store. Each item is normalized to one line, and items are separated by a line containing only `§`; `§` is a reserved character. During startup and prompt assembly, the control layer repairs missing or manually modified projections from the JSON source. Branch filtering applies only to the prompt projection, never to these files.
 
+The Runtime Source adds a metadata line before each entry in the model-facing snapshot:
+
+```text
+[importance=critical; created=14d; updated=2d]
+Prefer concise replies.
+```
+
+`created` and `updated` are elapsed whole 24-hour days since the stored timestamps, computed once when the projection is captured. Ages below one day are `0d`; future timestamps show `future`, and unparseable timestamps show `unknown`. One capture time covers both roots when the user profile is global. The current turn retains its captured ages; the next turn recalculates them even if the storage revision has not changed.
+
+These lines annotate the unchanged entry content. `old_text` / `oldText` must match content only, excluding the metadata line. Recorded importance and age never outrank current instructions. JSON, on-disk Markdown, content matching, entry order and storage capacity remain unchanged. Annotations count toward the existing model projection character budget, so Strategies such as light-context may still truncate or omit entries.
+
 ### Operations
 
 - `add` writes an independent new fact; exactly identical content is not added twice.
@@ -106,7 +117,7 @@ branches (optional)
 
 With the default three-tier Strategy, capacity maintenance starts when an authorized write would exceed the limit. Named tools, generic Actions, background child Agents and browser management share the same Host workflow. Browser writes use the selected storage scope without requiring an open user conversation. Archive failures preserve hot memory and return an error. Standalone Sources retain their own storage semantics; custom Strategies do not implicitly inherit default archival.
 
-Capacity is measured from the actual UTF-8 bytes of the projection body. A single item is limited to 8 KiB. On an overflowing `add`, `replace`, or `remove`, the Host rechecks the source revision before any Provider write. With one eligible writable Memory Space it routes without a model; with several spaces, workers see only bounded routing excerpts and return destination ids, never rewritten memory. Mnemon Native reuses exact content from a readonly namespace snapshot, groups identical pending entries, and imports the remaining originals once per destination through a schema-v1 draft with `--no-diff`. Similar but distinct facts cannot be skipped or semantically replace each other during archival. Other Providers use their adapter write semantics. The Host requires one exact terminal receipt per source (and exact Recall evidence for a skipped duplicate), then selects the retained entries by importance within a byte budget and commits that remainder together with the pending mutation under the original revision fence. A Provider cannot share the local filesystem transaction, so a later revision conflict or concurrent external write may leave already archived duplicates; existing hot facts remain protected by the revision fence.
+Capacity is measured from the stored content and entry delimiters in UTF-8 bytes, excluding prompt-only metadata. A single item is limited to 8 KiB. On an overflowing `add`, `replace`, or `remove`, the Host rechecks the source revision before any Provider write. With one eligible writable Memory Space it routes without a model; with several spaces, workers see only bounded routing excerpts and return destination ids, never rewritten memory. Mnemon Native reuses exact content from a readonly namespace snapshot, groups identical pending entries, and imports the remaining originals once per destination through a schema-v1 draft with `--no-diff`. Similar but distinct facts cannot be skipped or semantically replace each other during archival. Other Providers use their adapter write semantics. The Host requires one exact terminal receipt per source (and exact Recall evidence for a skipped duplicate), then selects the retained entries by importance within a byte budget and commits that remainder together with the pending mutation under the original revision fence. A Provider cannot share the local filesystem transaction, so a later revision conflict or concurrent external write may leave already archived duplicates; existing hot facts remain protected by the revision fence.
 
 ## Project Documents
 

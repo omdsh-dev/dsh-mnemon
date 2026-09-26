@@ -201,6 +201,20 @@ function markdown(entries: readonly RuntimeMemoryEntry[], target: RuntimeMemoryT
   return content === '' ? '' : `${content}\n`
 }
 
+function age(timestamp: string, projectedAt: number): string {
+  const time = Date.parse(timestamp)
+  if (!Number.isFinite(time)) return 'unknown'
+  if (time > projectedAt) return 'future'
+  return `${Math.floor((projectedAt - time) / 86_400_000)}d`
+}
+
+/** Prompt-only annotations; stored content, matching and capacity stay unchanged. */
+function contextMarkdown(entries: readonly RuntimeMemoryEntry[], target: RuntimeMemoryTarget, projectedAt: number): string {
+  return entries.filter(entry => entry.target === target).map(entry =>
+    `[importance=${entry.importance}; created=${age(entry.created_at, projectedAt)}; updated=${age(entry.updated_at, projectedAt)}]\n${entry.content}`,
+  ).join(RUNTIME_ENTRY_DELIMITER)
+}
+
 function revision(file: RuntimeMemoryFile): string {
   return createHash('sha256').update(JSON.stringify(file)).digest('hex')
 }
@@ -343,7 +357,7 @@ function sleepSync(milliseconds: number): void {
 
 /**
  * Single authority for hot memory. JSON is the durable source of truth;
- * Markdown files are deterministic projections consumed by prompt assembly.
+ * Markdown files retain plain content; prompt projections add recorded metadata.
  */
 export class RuntimeMemoryController {
   readonly directory: string
@@ -410,8 +424,9 @@ export class RuntimeMemoryController {
    */
   contextProjection(branch?: string): RuntimeMemoryContextProjection {
     const branchScope = scopeBranch(branch)
-    const local = this.localContextProjection(branchScope)
-    const global = this.userController?.localContextProjection()
+    const projectedAt = this.now().getTime()
+    const local = this.localContextProjection(projectedAt, branchScope)
+    const global = this.userController?.localContextProjection(projectedAt)
     const user = global?.user ?? local.user
     const memory = local.memory
     const entries = global === undefined
@@ -428,7 +443,7 @@ export class RuntimeMemoryController {
           directory: this.directory,
           sourcePath: this.sourcePath,
           revision: revision({ version: RUNTIME_MEMORY_VERSION, entries }),
-          generatedAt: this.now().toISOString(),
+          generatedAt: new Date(projectedAt).toISOString(),
           entries,
           targets: {
             memory: { ...visibleMemory, markdownPath: this.memoryPath },
@@ -449,6 +464,7 @@ export class RuntimeMemoryController {
       totalEntries: entries.length,
       text: `MNEMON RUNTIME MEMORY SNAPSHOT
 Revision: ${snapshot.revision}${branchLine}
+Metadata lines are annotations; created/updated are ages at projection in whole days (future/unknown for future/invalid timestamps). Current instructions win. For old_text/oldText, use entry content only.
 
 Contents of USER.md (user profile; entries: ${visibleUser.entryCount}; UTF-8 bytes: ${storeUser.used}/${storeUser.limit})
 <runtime-memory-file name="USER.md">
@@ -462,7 +478,7 @@ ${memory || '(empty)'}
     }
   }
 
-  private localContextProjection(branch?: string): { snapshot: RuntimeMemorySnapshot; user: string; memory: string; hidden: number } {
+  private localContextProjection(projectedAt: number, branch?: string): { snapshot: RuntimeMemorySnapshot; user: string; memory: string; hidden: number } {
     const branchScope = scopeBranch(branch)
     return this.withLock(() => {
       const file = this.readSource()
@@ -476,15 +492,15 @@ ${memory || '(empty)'}
           directory: this.directory,
           sourcePath: this.sourcePath,
           revision: revision(file),
-          generatedAt: this.now().toISOString(),
+          generatedAt: new Date(projectedAt).toISOString(),
           entries,
           targets: {
             memory: this.targetView(visible, 'memory'),
             user: this.targetView(visible, 'user'),
           },
         } satisfies RuntimeMemorySnapshot,
-        user: readFileSync(this.localUserPath, 'utf8').trimEnd(),
-        memory: branchScope === undefined ? readFileSync(this.memoryPath, 'utf8').trimEnd() : markdown(visible, 'memory').trimEnd(),
+        user: contextMarkdown(visible, 'user', projectedAt),
+        memory: contextMarkdown(visible, 'memory', projectedAt),
         hidden: branchScope === undefined ? 0 : entries.length - visible.length,
       }
     })

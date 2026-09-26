@@ -129,6 +129,8 @@ mnemon:
 
 The defaults preserve the released 10240 / 4096 / 8192 behavior. Saving the block builds a new runtime generation, so subsequent Runtime reads, writes, capacity maintenance, and Mnemon Pack validation use the same limits. Existing entries and the `memories.json` format are unchanged. Lowering a byte limit below current usage does not delete data; the Runtime view reports the over-capacity state and further writes require compaction or a higher limit. Rollback only requires removing the block or restoring the defaults.
 
+Storage byte limits count entry content and delimiters. The model snapshot's importance and age annotations do not consume storage capacity; they do consume the Strategy's existing projection character budget. They add no ranking, relevance filter or separate configuration.
+
 These separate Light captures show the same 20 imported Runtime entries under v0.5.4. The first uses default USER 4 KB / MEMORY 10 KB limits; the second shows the saved USER 10 KB / MEMORY 20 KB configuration. Both filter the list to the two User Profile entries. The disposable environment was restored to its defaults after capture.
 
 ![Default USER 4 KB and MEMORY 10 KB limits](../../assets/webui-v0.5.4/en/runtime.jpg)

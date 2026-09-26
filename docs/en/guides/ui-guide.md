@@ -68,6 +68,8 @@ The header summarizes User Profile (`USER.md`) and Working Memory (`MEMORY.md`).
 
 Runtime entries display their creation time, newest first, across both targets and text filters. Editing an older entry keeps its original position. Show more continues in the same order.
 
+The model-facing Runtime snapshot also shows each projected entry's recorded importance and age since creation and last update, in whole days. These annotations are calculated for each new turn; stored text and the editor remain unchanged. Current instructions still take priority. See [projection format and limits](../reference/storage-model.md#source-of-truth-and-projections).
+
 Edit and Remove select the entry's full content within its target. A short entry such as `X` can be changed or removed while `EGO_LINUX_CHROME` remains intact. Identical entries in the same target are still ambiguous and are rejected without changing data.
 
 When Working Memory reaches capacity, the Host archives the exact original entries. If a routing batch fails or returns an invalid proposal, that entire batch uses the eligible default Memory Space (or the first eligible space when no default is available). Earlier valid batches keep their destinations, and the maintenance summary records the fallback reason. Caller cancellation still stops the operation.

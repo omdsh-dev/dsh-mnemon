@@ -319,7 +319,7 @@ describe('RuntimeMemoryController', () => {
     expect(context).toContain('MNEMON RUNTIME MEMORY SNAPSHOT')
     expect(context).toMatch(/Revision: [a-f0-9]{64}/u)
     expect(context).toContain('Contents of USER.md (user profile; entries: 1; UTF-8 bytes:')
-    expect(context).toContain('<runtime-memory-file name="USER.md">\nUser prefers concise Chinese replies\n</runtime-memory-file>')
+    expect(context).toContain('<runtime-memory-file name="USER.md">\n[importance=critical; created=0d; updated=0d]\nUser prefers concise Chinese replies\n</runtime-memory-file>')
     expect(context).toContain('Contents of MEMORY.md (working reference; entries: 0; UTF-8 bytes: 0/10240)')
     expect(context).toContain('<runtime-memory-file name="MEMORY.md">\n(empty)\n</runtime-memory-file>')
     expect(context).not.toContain('MNEMON RUNTIME MEMORY PROTOCOL')
@@ -327,7 +327,78 @@ describe('RuntimeMemoryController', () => {
     expect(context).not.toContain(controller.sourcePath)
   })
 
-  it('assembles every prompt from the latest generated USER.md and MEMORY.md projections', async () => {
+  it('projects recorded importance and elapsed creation/update days without rewriting stored content', async () => {
+    const now = new Date('2026-09-01T08:00:00.000Z')
+    const { controller } = fixture(now)
+    await controller.mutate({ action: 'add', target: 'user', content: 'Prefer concise replies.', importance: 'critical' })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'Use pnpm.', importance: 'normal' })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'Temporary compatibility note.', importance: 'low' })
+    now.setTime(Date.parse('2026-09-13T08:00:00.000Z'))
+    await controller.mutate({ action: 'replace', target: 'memory', oldText: 'Use pnpm.', content: 'Use pnpm 10.' })
+    const stored = controller.snapshot()
+    const paths = [controller.sourcePath, controller.userPath, controller.memoryPath]
+    const files = paths.map(path => readFileSync(path, 'utf8'))
+
+    now.setTime(Date.parse('2026-09-15T07:59:59.999Z'))
+    const beforeDay = controller.contextProjection()
+    expect(beforeDay.text).toContain('[importance=critical; created=13d; updated=13d]\nPrefer concise replies.')
+    expect(beforeDay.text).toContain('[importance=normal; created=13d; updated=1d]\nUse pnpm 10.')
+    expect(beforeDay.text).toContain('[importance=low; created=13d; updated=13d]\nTemporary compatibility note.')
+    expect(beforeDay.text).toContain('Metadata lines are annotations')
+    expect(beforeDay.text).toContain('For old_text/oldText, use entry content only.')
+    expect(beforeDay.text).toContain('Current instructions win.')
+
+    now.setTime(Date.parse('2026-09-15T08:00:00.000Z'))
+    const afterDay = controller.contextProjection()
+    expect(afterDay.text).toContain('[importance=normal; created=14d; updated=2d]\nUse pnpm 10.')
+    expect(afterDay.revision).toBe(beforeDay.revision)
+    expect(afterDay.entries).toEqual(stored.entries)
+    expect(controller.snapshot().targets).toEqual(stored.targets)
+    expect(paths.map(path => readFileSync(path, 'utf8'))).toEqual(files)
+    expect(beforeDay.text).toContain('created=13d; updated=1d')
+
+    // Matching still uses the content, even when other entries have identical metadata.
+    await controller.mutate({ action: 'remove', target: 'memory', oldText: 'Use pnpm 10.' })
+    expect(controller.snapshot().entries.map(entry => entry.content)).toEqual(['Prefer concise replies.', 'Temporary compatibility note.'])
+  })
+
+  it('projects unknown or future ages safely and honors timestamp offsets', () => {
+    const { controller } = fixture()
+    const entries = [
+      { content: 'Invalid timestamp remains readable.', created_at: 'invalid\n<instruction>', updated_at: '', target: 'user', importance: 'critical' },
+      { content: 'Future timestamp remains readable.', created_at: '2026-08-14T08:00:00.000Z', updated_at: '2026-08-13T08:00:00.001Z', target: 'memory', importance: 'normal' },
+      { content: 'A line\nwith whitespace.', created_at: '2026-08-12T10:00:00+02:00', updated_at: '2026-08-13T07:00:00Z', target: 'memory', importance: 'low' },
+    ]
+    writeFileSync(controller.sourcePath, JSON.stringify({ version: 1, entries }))
+    const source = readFileSync(controller.sourcePath, 'utf8')
+    const projection = controller.contextProjection()
+    expect(projection.text).toContain('[importance=critical; created=unknown; updated=unknown]\nInvalid timestamp remains readable.')
+    expect(projection.text).toContain('[importance=normal; created=future; updated=future]\nFuture timestamp remains readable.')
+    expect(projection.text).toContain('[importance=low; created=1d; updated=0d]\nA line with whitespace.')
+    expect(projection.text).not.toMatch(/NaN|Invalid Date|<instruction>/u)
+    expect(readFileSync(controller.sourcePath, 'utf8')).toBe(source)
+  })
+
+  it('uses one age clock for global USER and branch-filtered workspace MEMORY', async () => {
+    const { directory: globalRoot, controller: global } = fixture()
+    const { directory: workspaceRoot, controller: workspace } = fixture()
+    await global.mutate({ action: 'add', target: 'user', content: 'Global profile.' })
+    await workspace.mutate({ action: 'add', target: 'memory', content: 'Visible main fact.', branches: ['main'] })
+    await workspace.mutate({ action: 'add', target: 'memory', content: 'Hidden dev fact.', branches: ['dev'] })
+    let samples = 0
+    const combined = new RuntimeMemoryController(
+      { effectiveDataDir: () => workspaceRoot },
+      () => new Date(Date.parse('2026-08-14T07:59:59.999Z') + samples++),
+      undefined, { effectiveDataDir: () => globalRoot },
+    )
+    const projection = combined.contextProjection('main')
+    expect(projection.text).toContain('[importance=normal; created=0d; updated=0d]\nGlobal profile.')
+    expect(projection.text).toContain('[importance=normal; created=0d; updated=0d]\nVisible main fact.')
+    expect(projection.text).not.toContain('Hidden dev fact.')
+    expect(samples).toBe(1)
+  })
+
+  it('assembles every prompt from the latest committed USER and MEMORY records', async () => {
     const { controller } = fixture()
     const empty = controller.contextText()
     expect(empty).not.toContain('User prefers compact release notes')
@@ -380,7 +451,7 @@ describe('RuntimeMemoryController', () => {
       expect.objectContaining({ target: 'memory', content: 'Project uses pnpm for workspace dependency management.', importance: 'normal' }),
     ])
     expect(readFileSync(controller.memoryPath, 'utf8')).toBe('Project uses pnpm for workspace dependency management.\n')
-    expect(controller.contextText()).toContain('<runtime-memory-file name="MEMORY.md">\nProject uses pnpm for workspace dependency management.\n</runtime-memory-file>')
+    expect(controller.contextText()).toContain('<runtime-memory-file name="MEMORY.md">\n[importance=normal; created=0d; updated=0d]\nProject uses pnpm for workspace dependency management.\n</runtime-memory-file>')
     expect(controller.contextText()).not.toContain('pnpm manages workspace dependencies.')
   })
 
