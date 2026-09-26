@@ -1,5 +1,5 @@
 import { css, sidebarCss, useT } from './presentation.ts'
-import { useCallback, useEffect, useMemo, useState, type JSX, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type JSX, type ReactNode } from 'react'
 import type { MemoryJsonValue } from 'dsh-mnemon/contracts'
 import {
   createMemorySourcePageClient, installMemorySourceUI, MemorySourcePageFrame, translateEn, message, PageHeader,
@@ -59,6 +59,7 @@ function MemorySpacesSourceView(props: MemorySourcePageProps & { page: Page }): 
     setSeed(typeof value === 'object' && value !== null && !Array.isArray(value) && typeof value.seed === 'string' ? value.seed : '')
   }, [props.page, props.navigationInput])
   useEffect(() => { if (props.management !== undefined) rememberedPages.set(props.management, page) }, [props.management, page])
+  useLayoutEffect(() => { props.onResetScroll?.() }, [page, props.onResetScroll])
   useEffect(() => {
     let active = true
     setError(null)
@@ -106,6 +107,7 @@ export function installMemorySpacesUI(ctx: Parameters<typeof installMemorySource
   ] as const
   return installMemorySourceUI(ctx, { sourceTypeId: 'memory-spaces', pages: pages.map(page => ({
     id: page.id, order: page.order, label: () => t(page.key),
+    // This Source pins its compound title/tab header; nested page headings scroll with their content.
     navigation: { stickyHeader: false, group: page.id === 'spaces' ? 'storage' : 'tools', primary: page.id === 'spaces', glyph: page.glyph },
     component: props => <MemorySpacesSourcePage {...props} page={page.id} />,
   })) })

@@ -163,6 +163,8 @@ Provider 使用 Memory Spaces SDK 的 `defineMemorySpaceProvider`。模块只收
 
 可选的 `./client` 通过 `dsh-mnemon/client` 的 `installMemorySourceUI` 注册，由 DSH 作为普通 Client 插件加载。页面接收 `MemorySourcePageProps`：选中实例、locale、可写状态和限定范围的 `management.read/mutate`。用 `MemorySourcePageFrame` 复用 locale/appearance；React 不接收 Host Context、驱动、令牌、LLM grant 或传输层。缺少专属页面时有通用管理入口，重复归属和渲染失败局部诊断。
 
+工作台负责外层页面边距、最小高度与页面滚动容器。嵌套的 `memoryPageStyles.page` 内容复用这一层框架，不再重复增加视口高度或边距，经过 DSH renderer 包装层时也一样。Source 保留业务布局，可以提供有界阅读区或弹窗。内部页面变化时，在绘制前调用可选的 `onResetScroll` 回调；它只重置所属工作台的 canvas，不应滚动 DSH 祖先节点或其他插件。记忆空间这类包含固定标题与 Tab 组合头部的 Source，通过 `navigation.stickyHeader: false` 避免 Host 同时固定下级标题，并由 Source 自己负责组合头部的 sticky 布局。
+
 ## 独立仓库验收
 
 业务文案和布局应留在 Source 包内。默认 Source 使用公开、仅含数据的 `presentation/locales.json`、`presentation/page.module.css`、`presentation/sidebar.module.css`，以及私有 Client 呈现模块示范这一点；独立构建无需引用仓库中的构建脚本。默认 Source 保留既有页面工具的类名命名空间以维持使用兼容；第三方 Source 可使用自己的命名空间，不必向 Root 添加词条或选择器。
