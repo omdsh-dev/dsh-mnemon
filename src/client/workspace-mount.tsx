@@ -7,6 +7,7 @@ import type { MnemonTranslate } from './locales.ts'
 import { MnemonWorkbench, type MnemonWorkspaceSelection } from './MnemonWorkbench.tsx'
 import type { MemorySourcePageDirectory } from './source-pages.tsx'
 import type { MnemonBetterSidebarSeat } from './better-sidebar-seat.ts'
+import type { MnemonNativeSidebarSeat } from './native-sidebar-seat.ts'
 import { mountMnemonSidebarEntry } from './sidebar-entry.ts'
 import { MnemonWorkspaceController } from './workspace-controller.ts'
 import { useMnemonSessionId, type MnemonSessionBinding } from './session-binding.ts'
@@ -159,14 +160,17 @@ export function MnemonWorkspaceHost(props: MnemonWorkspaceHostProps): JSX.Elemen
 }
 
 /** Sidebar presentation in DSH's additive shell.overlay, also without a session. */
-export function MnemonSidebarWorkspaceHost(props: MnemonWorkspaceHostProps & { controller: MnemonWorkspaceController; betterSidebarSeat?: MnemonBetterSidebarSeat }): JSX.Element {
+export function MnemonSidebarWorkspaceHost(props: MnemonWorkspaceHostProps & { controller: MnemonWorkspaceController; betterSidebarSeat?: MnemonBetterSidebarSeat; nativeSidebarSeat?: MnemonNativeSidebarSeat }): JSX.Element {
   const state = useSyncExternalStore(props.controller.subscribe, props.controller.getSnapshot, props.controller.getSnapshot)
   const subscribeBetterSidebar = useCallback((listener: () => void) => props.betterSidebarSeat?.subscribe(listener) ?? (() => {}), [props.betterSidebarSeat])
   const getBetterSidebar = useCallback(() => props.betterSidebarSeat?.getSnapshot(), [props.betterSidebarSeat])
   const betterSidebar = useSyncExternalStore(subscribeBetterSidebar, getBetterSidebar, getBetterSidebar)
+  const subscribeNativeSidebar = useCallback((listener: () => void) => props.nativeSidebarSeat?.subscribe(listener) ?? (() => {}), [props.nativeSidebarSeat])
+  const getNativeSidebar = useCallback(() => props.nativeSidebarSeat?.getSnapshot(), [props.nativeSidebarSeat])
+  const nativeSidebar = useSyncExternalStore(subscribeNativeSidebar, getNativeSidebar, getNativeSidebar)
   const [bounds, setBounds] = useState<{ left: number; top: number; width: number; height: number }>()
   useEffect(() => {
-    if (!state.open) return
+    if (!state.open || nativeSidebar?.available) return
     let surface: MnemonWorkspaceSurface | undefined
     const previousInert = new Map<HTMLElement, boolean>()
     const update = (): void => {
@@ -204,18 +208,24 @@ export function MnemonSidebarWorkspaceHost(props: MnemonWorkspaceHostProps & { c
     const shell = new MutationObserver(connect)
     shell.observe(document.body, { childList: true, subtree: true })
     window.addEventListener('resize', update)
-    const escape = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape' && !event.defaultPrevented && document.querySelector('[role="dialog"]') === null) props.controller.close()
-    }
-    window.addEventListener('keydown', escape)
     return () => {
       shell.disconnect()
       observer?.disconnect()
       window.removeEventListener('resize', update)
-      window.removeEventListener('keydown', escape)
       detach()
     }
-  }, [state.open, props.controller])
+  }, [state.open, props.controller, nativeSidebar?.available])
+  useEffect(() => {
+    if (!state.open) return
+    const escape = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape' && !event.defaultPrevented && document.querySelector('[role="dialog"]') === null) {
+        if (props.navigation !== undefined) props.navigation.close()
+        else props.controller.close()
+      }
+    }
+    window.addEventListener('keydown', escape)
+    return () => { window.removeEventListener('keydown', escape) }
+  }, [state.open, props.controller, props.navigation])
   const betterSidebarView = betterSidebar === undefined ? null : createPortal(<MnemonWorkspaceHost
     connection={props.connection}
     settingsScope={props.settingsScope}
@@ -233,7 +243,10 @@ export function MnemonSidebarWorkspaceHost(props: MnemonWorkspaceHostProps & { c
   // Hide the existing DSH subtree so panel navigation retains Source page state.
   return <>
     {betterSidebarView}
-    {bounds !== undefined && <section data-dsh-mnemon-view hidden={!state.open} className={css.workspacePanel} style={{ ...bounds, display: state.open ? undefined : 'none' }} aria-label={props.t('tab.label')}>
+    {nativeSidebar?.target !== undefined && nativeSidebar.available && createPortal(<section data-dsh-mnemon-view className={css.nativeWorkspace} hidden={!state.open} aria-label={props.t('tab.label')}>
+      <MnemonWorkspaceHost {...props} active={state.open} />
+    </section>, nativeSidebar.target)}
+    {!nativeSidebar?.available && bounds !== undefined && <section data-dsh-mnemon-view hidden={!state.open} className={css.workspacePanel} style={{ ...bounds, display: state.open ? undefined : 'none' }} aria-label={props.t('tab.label')}>
       <MnemonWorkspaceHost {...props} active={state.open} />
     </section>}
   </>
@@ -252,7 +265,7 @@ export function mountMnemonSidebarLauncher(
 }
 
 /** Coordinate released peer panels; their DOM flags also cover lost events. */
-function coordinateSidebarPanels(controller: MnemonWorkspaceController): () => void {
+export function coordinateSidebarPanels(controller: MnemonWorkspaceController, close: () => void = () => controller.close()): () => void {
   let announcing = false
   const applyActive = (): void => {
     const html = document.documentElement
@@ -271,15 +284,15 @@ function coordinateSidebarPanels(controller: MnemonWorkspaceController): () => v
   const onActivate = (event: Event): void => {
     if (announcing || !controller.getSnapshot().open) return
     const detail = (event as CustomEvent<unknown>).detail
-    if (detail === 'taskboard' || detail === 'ssh') controller.close()
+    if (detail === 'taskboard' || detail === 'ssh') close()
   }
   const onContext = (event: MouseEvent): void => {
-    if (controller.getSnapshot().open && event.target instanceof Element && event.target.closest(SIDEBAR_CONTEXT_SELECTOR) !== null) controller.close()
+    if (controller.getSnapshot().open && event.target instanceof Element && event.target.closest(SIDEBAR_CONTEXT_SELECTOR) !== null) close()
   }
   const observer = new MutationObserver(() => {
     if (!controller.getSnapshot().open) return
     const html = document.documentElement
-    if (!html.hasAttribute(ACTIVE_ATTR) || html.hasAttribute(TASKBOARD_ACTIVE_ATTR) || html.hasAttribute(SSH_ACTIVE_ATTR)) controller.close()
+    if (!html.hasAttribute(ACTIVE_ATTR) || html.hasAttribute(TASKBOARD_ACTIVE_ATTR) || html.hasAttribute(SSH_ACTIVE_ATTR)) close()
   })
   observer.observe(document.documentElement, { attributes: true, attributeFilter: [ACTIVE_ATTR, TASKBOARD_ACTIVE_ATTR, SSH_ACTIVE_ATTR] })
   document.addEventListener('click', onContext, true)

@@ -381,7 +381,7 @@ routingGuidance=false
 
 Memory System defaults to Sidebar, opening a dedicated center-column workbench with a minimal, logo-free skin aligned with official DSH panels. Set `displayMode: builtin`, or select Builtin in Settings, to put that same workspace in the current conversation's `conversation.view` tab instead. Pages, navigation, dialogs, and styling remain shared; there is no separate builtin UI. Theme authors can use the [supported surface selectors and custom properties](../guides/ui-guide.md#theme-skin-overrides) in either placement.
 
-The sidebar entry is an explicit navigation action: clicking it again keeps the workspace open; use “Back to conversation” to close it. Switching to the task board or SSH synchronizes both visibility and entry state, so a missed peer activation notification cannot prevent reopening Memory System.
+The sidebar entry follows DSH's native Plugins row for styling, collapsed icons and selection. Clicking it again keeps the workspace open; “Back to conversation” or Escape returns to the current conversation. Selecting Plugins, another native panel or New Session switches the main panel. Switching to the task board or SSH synchronizes both visibility and entry state, so a missed peer activation notification cannot prevent reopening Memory System.
 
 Builtin omits the header's storage-mode badge, workspace picker, and alignment controls. Every read, write, and independent task request follows its owning session through the existing Host routing:
 

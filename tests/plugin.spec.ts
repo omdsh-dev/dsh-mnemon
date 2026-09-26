@@ -162,7 +162,7 @@ describe('dsh-mnemon plugin composition', () => {
     const releaseAgeExclusions = [...workspaceConfig.matchAll(/^  - '(@deepseek-ai\/dsh(?:-[a-z0-9-]+)?@0\.1\.5-rc\.1)'$/gm)]
       .map(match => match[1])
 
-    expect(directDshDependencies).toHaveLength(28)
+    expect(directDshDependencies).toHaveLength(29)
     expect(new Set(directDshDependencies.map(([, version]) => version))).toEqual(new Set(['0.1.5-rc.1']))
     expect(manifest.engines.node).toBe('>=20')
     for (const name of ['@deepseek-ai/dsh-client-ui-primitives', '@deepseek-ai/dsh-typert-protocol']) {
@@ -257,6 +257,8 @@ describe('dsh-mnemon plugin composition', () => {
       inject: [
         '@deepseek-ai/dsh-client-connection',
         '@deepseek-ai/dsh-client-ui-conversation',
+        '@deepseek-ai/dsh-client-ui-layout',
+        '@deepseek-ai/dsh-client-ui-sidebar',
         '@deepseek-ai/dsh-client-ui-renderer',
         '@deepseek-ai/dsh-client-ui-settings',
         '@deepseek-ai/dsh-client-ui-session',
