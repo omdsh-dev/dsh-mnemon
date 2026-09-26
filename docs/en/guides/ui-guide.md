@@ -236,6 +236,8 @@ Remote Provider workspaces, users, banks, projects, containers, and URIs are ind
 
 ## Theme and skin overrides
 
+Skin authors can start with [Skin development and Mnemon integration](../development/skin-integration.md) for a dsh-web example, migration from generated classes and real WebUI verification. This section defines the supported surface contract.
+
 Sidebar and Builtin expose the same supported workspace root selector: `[data-dsh-plugin="dsh-mnemon"][data-dsh-part="mnemon-view"]`. Theme authors can set these supported custom properties directly on that element; assignments on an ancestor are shadowed by the workspace defaults. Generated CSS-module class names are not public selectors.
 
 | Property | Accepted value and purpose | Default |

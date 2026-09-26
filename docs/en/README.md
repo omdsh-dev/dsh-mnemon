@@ -30,6 +30,7 @@ Start with the default three-tier workflow. The implementation is composable; yo
 |---|---|
 | Understand Source, Strategy, View and ownership | [Architecture](./development/architecture.md) |
 | Create a Source, Strategy or Provider | [Plugin development](./development/extensions.md) |
+| Adapt a skin to Mnemon backgrounds and transparency | [Skin development](./development/skin-integration.md) |
 | Build, test and capture a real WebUI | [Development and verification](./development/README.md) |
 | Version and release independent packages | [Release process](./development/releasing.md) |
 

@@ -110,6 +110,8 @@ MNEMON_RUN_FLASH_QUALITY=1 MNEMON_FLASH_QUALITY_WAVES=24 MNEMON_FLASH_QUALITY_RE
 
 ## 真实 WebUI
 
+皮肤作者的接入位置、稳定选择器、作用域、旧类名迁移与验收步骤见[皮肤开发与 Mnemon 适配](./skin-integration.md)。
+
 ```sh
 pnpm build
 pnpm --workspace-concurrency=1 -r build

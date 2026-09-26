@@ -244,6 +244,8 @@ Builtin 模式下，自动快捷跳转要求主对话中只有一个可明确识
 
 ## 主题与皮肤覆盖
 
+皮肤作者可从[皮肤开发与 Mnemon 适配](../development/skin-integration.md)开始，查看 dsh-web 接入示例、旧类名迁移和真实 WebUI 验证流程。本节定义受支持的表面约定。
+
 Sidebar 与 Builtin 提供同一个受支持的工作台根选择器：`[data-dsh-plugin="dsh-mnemon"][data-dsh-part="mnemon-view"]`。主题作者可直接在该元素上设置下列受支持的自定义属性；只在祖先元素上赋值会被工作台自身的默认值覆盖。构建生成的 CSS-module 类名不属于公开选择器。
 
 | 属性 | 接受的值与用途 | 默认值 |
