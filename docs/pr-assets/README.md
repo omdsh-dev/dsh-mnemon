@@ -12,6 +12,7 @@ For new evaluations, commit the reusable harness, workload generator, concise bi
 
 | Record / 记录 | Scope / 范围 |
 |---|---|
+| [Composable memory naming](./composable-naming-20260927/README.md) / [中文](./composable-naming-20260927/README.zh-CN.md) | Packed Chinese/English metadata and real plugin-page display / 制品中英文元数据与真实插件页面展示 |
 | [v0.5.16 release](./release-v0.5.16/README.md) / [中文](./release-v0.5.16/README.zh-CN.md) | Real Flash, versioned seventeen-package composition, Native CLI, archival and cold-restart persistence / 真实 Flash、十七个版本化包组合、Native CLI、归档与冷重启数据保留 |
 | [Chinese plugin metadata — PR #286](./pr-286-plugin-metadata/README.md) / [中文](./pr-286-plugin-metadata/README.zh-CN.md) | Packed locale validation, real DSH metadata reader and Chinese/English plugin display / 打包 locale 验证、真实 DSH 元数据读取与中英文插件展示 |
 | [Native Sidebar and bundle diagnostic](./sidebar-native-20260926/README.md) / [中文](./sidebar-native-20260926/README.zh-CN.md) | Native panel alignment, real skins, CLI/WebUI and isolated group-list candidate / 原生导航对齐、真实皮肤、CLI/WebUI 与隔离的分组清单候选补丁 |

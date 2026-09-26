@@ -12,8 +12,8 @@
   <a href="https://dshfind.com/zh/plugins/omdsh-dev/dsh-mnemon?ref=badge"><img alt="dshfind 下载量" src="https://dshfind.com/api/badge/omdsh-dev/dsh-mnemon?metric=downloads&amp;lang=zh" /></a>
 </p>
 
-<p align="center"><strong>DeepSeek Harness 的可组合记忆系统。</strong></p>
-<p align="center">默认三层记忆 · 来源与策略可组合 · 每回合一个上下文视图</p>
+<p align="center"><strong>面向 DeepSeek Harness 的可组合视图记忆。</strong></p>
+<p align="center">记忆来源与策略可插拔，开箱即用提供三层记忆。</p>
 
 <p align="center">
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/ui-guide.md">
