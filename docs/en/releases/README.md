@@ -6,6 +6,7 @@ For an existing installation, start with [Compatibility and upgrades](../referen
 
 ## v0.5
 
+- [v0.5.16: Chinese Metadata, Native Sidebar and Source Scrolling](./v0.5.16.md)
 - [v0.5.15: USER Tool Writes, Runtime Metadata and Skin Hooks](./v0.5.15.md)
 - [v0.5.14: Desktop Loading, OpenViking User Keys and Agent Teams Review](./v0.5.14.md)
 - [v0.5.13: Workspace, Builtin and DSH 0.1.7 Compatibility](./v0.5.13.md)
