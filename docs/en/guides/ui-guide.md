@@ -236,6 +236,34 @@ You may inspect project B while staying in project A's conversation. The convers
 
 Remote Provider workspaces, users, banks, projects, containers, and URIs are independent namespaces and never change implicitly with the DSH workspace. `global` and `custom` resolve to one explicit root and need no inspection/execution alignment.
 
+<a id="theme-skin-overrides"></a>
+
+## Theme and skin overrides
+
+Skin authors can start with [Skin development and Mnemon integration](../development/skin-integration.md) for a dsh-web example, migration from generated classes and real WebUI verification. This section defines the supported surface contract.
+
+Sidebar and Builtin expose the same supported workspace root selector: `[data-dsh-plugin="dsh-mnemon"][data-dsh-part="mnemon-view"]`. Theme authors can set these supported custom properties directly on that element; assignments on an ancestor are shadowed by the workspace defaults. Generated CSS-module class names are not public selectors.
+
+| Property | Accepted value and purpose | Default |
+|---|---|---|
+| `--mn-bg` | CSS color for the base surface | `var(--dsw-alias-bg-base)` |
+| `--mn-backdrop` | CSS color behind the base in the default layered surface | `var(--dsw-alias-bg-overlay, var(--mn-bg))` |
+| `--mn-surface` | CSS `background` value consumed by the workspace, header and canvas | Base gradient over backdrop gradient, backed by the base color |
+
+The default surface remains `linear-gradient(var(--mn-bg), var(--mn-bg)), linear-gradient(var(--mn-backdrop), var(--mn-backdrop)) var(--mn-bg)`. Its layered backing preserves readability when a skin makes the host base transparent; the official theme stays opaque. A skin can explicitly replace that composition, for example:
+
+```css
+[data-dsh-plugin="dsh-mnemon"][data-dsh-part="mnemon-view"] {
+  --mn-bg: rgb(232 241 249 / 74%);
+  --mn-backdrop: var(--mn-bg);
+  --mn-surface: var(--mn-bg);
+}
+```
+
+Use the paired selector in an unlayered stylesheet as shown. Its specificity `(0,2,0)` exceeds the default custom-property declarations `(0,1,0)`, so the override works whether the skin stylesheet loads before or after Mnemon. A lone `[data-dsh-part="mnemon-view"]` ties the defaults and depends on stylesheet order; a normal declaration inside `@layer` ranks below the unlayered defaults. Add your skin's own ancestor selector when it needs an activation scope.
+
+These properties inherit into workspace descendants that consume them. Body-portaled dialogs and other plugins' roots are outside this selector's scope. Replacing `--mn-surface` chooses the skin's own readability and transparency; it does not change settings, memory data, or Provider behavior.
+
 ## Common rules
 
 - Solid blue means primary action; blue outline usually means Edit; red is reserved for Delete, Disconnect, Archive, or Forget; neutral actions are View, Copy, and Cancel.

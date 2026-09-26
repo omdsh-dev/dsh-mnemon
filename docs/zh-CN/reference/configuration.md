@@ -381,7 +381,7 @@ routingGuidance=false
 
 ## 入口位置：`displayMode` 与 `tabEnabled`
 
-记忆系统默认使用 Sidebar：从 DSH 左侧栏打开独立主内容区工作台，使用无 Mnemon Logo 的 DSH 官方风格极简皮肤。设置 `displayMode: builtin`，或在设置页选择 Builtin，即可把同一个工作台放进当前会话的 `conversation.view` 标签页。页面、导航、弹窗和样式全部共用，不维护另一套 builtin 界面。
+记忆系统默认使用 Sidebar：从 DSH 左侧栏打开独立主内容区工作台，使用无 Mnemon Logo 的 DSH 官方风格极简皮肤。设置 `displayMode: builtin`，或在设置页选择 Builtin，即可把同一个工作台放进当前会话的 `conversation.view` 标签页。页面、导航、弹窗和样式全部共用，不维护另一套 builtin 界面。主题作者可在两种位置使用[受支持的表面选择器与自定义属性](../guides/ui-guide.md#theme-skin-overrides)。
 
 侧栏“记忆系统”是打开工作台的导航入口，重复点击仍保持打开；请使用“返回会话”关闭。与任务看板、SSH 切换时，同时同步面板可见性和入口状态，即使其他插件的激活通知遗漏，点击也能重新打开记忆系统。
 

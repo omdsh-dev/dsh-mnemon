@@ -110,6 +110,8 @@ records coexistence, independent artifacts, real Headless activation and limits.
 
 ## Real WebUI
 
+For stylesheet placement, stable selectors, activation scope, migration from generated classes and acceptance steps, see [Skin development and Mnemon integration](./skin-integration.md).
+
 ```sh
 pnpm build
 pnpm --workspace-concurrency=1 -r build

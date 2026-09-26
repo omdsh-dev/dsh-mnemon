@@ -30,6 +30,7 @@
 |---|---|
 | 理解 Source、Strategy、View 与归属 | [架构设计](./development/architecture.md) |
 | 开发 Source、Strategy 或 Provider | [插件开发](./development/extensions.md) |
+| 让皮肤适配 Mnemon 背景与透明度 | [皮肤开发](./development/skin-integration.md) |
 | 构建、测试与真实 WebUI 截图 | [开发与验证](./development/README.md) |
 | 为独立包管理版本和发布 | [发布流程](./development/releasing.md) |
 

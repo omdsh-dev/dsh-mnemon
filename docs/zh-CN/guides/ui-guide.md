@@ -244,6 +244,34 @@ Builtin 模式下，自动快捷跳转要求主对话中只有一个可明确识
 
 远程 Provider 的 workspace、user、bank、project、container 和 URI 是独立命名空间，不会跟随 DSH 工作区被隐式改写。`global` 与 `custom` 只有一个明确根，不需要查看/执行对齐。
 
+<a id="theme-skin-overrides"></a>
+
+## 主题与皮肤覆盖
+
+皮肤作者可从[皮肤开发与 Mnemon 适配](../development/skin-integration.md)开始，查看 dsh-web 接入示例、旧类名迁移和真实 WebUI 验证流程。本节定义受支持的表面约定。
+
+Sidebar 与 Builtin 提供同一个受支持的工作台根选择器：`[data-dsh-plugin="dsh-mnemon"][data-dsh-part="mnemon-view"]`。主题作者可直接在该元素上设置下列受支持的自定义属性；只在祖先元素上赋值会被工作台自身的默认值覆盖。构建生成的 CSS-module 类名不属于公开选择器。
+
+| 属性 | 接受的值与用途 | 默认值 |
+|---|---|---|
+| `--mn-bg` | 基础表面的 CSS 颜色 | `var(--dsw-alias-bg-base)` |
+| `--mn-backdrop` | 默认叠层表面中，基础颜色背后的 CSS 颜色 | `var(--dsw-alias-bg-overlay, var(--mn-bg))` |
+| `--mn-surface` | 工作台、页眉和画布使用的 CSS `background` 值 | 基础颜色渐变叠加在背衬渐变之上，并以基础颜色托底 |
+
+默认表面仍为 `linear-gradient(var(--mn-bg), var(--mn-bg)), linear-gradient(var(--mn-backdrop), var(--mn-backdrop)) var(--mn-bg)`。皮肤把宿主基础颜色改为透明时，叠层背衬仍保障可读性；官方主题保持不透明。皮肤可以显式替换这套合成，例如：
+
+```css
+[data-dsh-plugin="dsh-mnemon"][data-dsh-part="mnemon-view"] {
+  --mn-bg: rgb(232 241 249 / 74%);
+  --mn-backdrop: var(--mn-bg);
+  --mn-surface: var(--mn-bg);
+}
+```
+
+请像示例一样，在未分层的样式表中使用这两个属性组成的选择器。其优先级 `(0,2,0)` 高于默认自定义属性声明的 `(0,1,0)`，因此无论皮肤样式表在 Mnemon 之前还是之后加载，都能覆盖默认值。单独的 `[data-dsh-part="mnemon-view"]` 与默认值优先级相同，会依赖样式表顺序；`@layer` 内的普通声明低于未分层的默认声明。如需限制皮肤生效范围，可在前面加上皮肤自己的祖先选择器。
+
+这些属性会被使用它们的工作台后代元素继承。通过 portal 挂载到 `body` 的弹窗，以及其他插件的根元素，不在此选择器的范围内。替换 `--mn-surface` 后，表面的可读性与透明度由皮肤决定；不会改变设置、记忆数据或 Provider 行为。
+
 ## 常见规则
 
 - 蓝色实心表示主动作；蓝色描边通常用于编辑；红色只用于删除、断开、归档或遗忘；中性按钮用于查看、复制和取消。
