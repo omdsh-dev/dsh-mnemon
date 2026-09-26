@@ -1,5 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { localeExport, readPackageLocales } from './package-locales.mjs'
 
 const result = spawnSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], {
   encoding: 'utf8',
@@ -18,14 +20,15 @@ const parsedPack = JSON.parse(result.stdout)
 const pack = Array.isArray(parsedPack) ? parsedPack[0] : Object.values(parsedPack)[0]
 const paths = pack.files.map(file => file.path)
 const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+const locales = readPackageLocales(fileURLToPath(new URL('../', import.meta.url)), manifest).map(asset => asset.path)
 const executables = Object.values(manifest.bin ?? {})
-const required = [...executables, 'package.json', 'cordis.patch.yml', 'lib/client.js', ...Object.entries(manifest.exports)
-  .filter(([name]) => name !== './package.json')
+const required = [...executables, ...locales, 'package.json', 'cordis.patch.yml', 'lib/client.js', ...Object.entries(manifest.exports)
+  .filter(([name]) => name !== './package.json' && name !== localeExport)
   .flatMap(([, value]) => [value.default.slice(2), value.types.slice(2)])]
 
 const allowedRootFiles = new Set(['package.json', 'cordis.patch.yml', 'LICENSE', 'README.md', 'README.zh-CN.md', 'SECURITY.md', 'THIRD_PARTY_NOTICES.md'])
 const missing = required.filter(path => !paths.includes(path))
-const unexpected = paths.filter(path => !allowedRootFiles.has(path) && !executables.includes(path) && !(/^lib\/.+\.(?:js|d\.ts)$/.test(path)))
+const unexpected = paths.filter(path => !allowedRootFiles.has(path) && !executables.includes(path) && !locales.includes(path) && !(/^lib\/.+\.(?:js|d\.ts)$/.test(path)))
 const clientBundle = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
 const hostLeaks = ['require("node:', "require('node:", '#region src/host/version-updates.ts', '#region src/host/rpc.ts']
   .filter(pattern => clientBundle.includes(pattern))
