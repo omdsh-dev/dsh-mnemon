@@ -261,6 +261,7 @@ HTTP 403 可能来自 Host/Origin 不匹配，或旧远程 Client 仍调用独�
 
 | 现象 | 检查与处理 |
 |---|---|
+| 插件详情中 `cordis:group` / `mnemon-bundle` 显示“已关闭”，点击提示“找不到该插件” | DSH `0.1.7-rc.2` 的已知容器展示问题。先检查“记忆系统 → 状态”和实际组件；正常时可继续使用。整套组合用顶层 bundle 或 `mnemon` 核心组件开关，不要重置数据或删除分组。参见[原因、处理步骤与修复边界](../reference/compatibility.md#dsh-017-bundle-组件列表)和[上游 #649](https://github.com/dsh-external/issues/issues/649)。 |
 | Windows 切换会话时终端窗口闪现 | 更新 Starter，或独立安装的 Runtime Source，然后重启 DSH Host。Runtime 的 Git 分支检测会隐藏控制台窗口；Git 失败、超时或 HEAD 分离时仍回退到不按分支筛选的 Runtime 视图。 |
 | Mnemon 不可用 | macOS/Linux 运行 `command -v mnemon`、`mnemon --version`；Windows PowerShell 运行 `Get-Command mnemon`、`Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"`。设置 `MNEMON_CLI_PATH` 或 `mnemon.cliPath` 后重启 |
 | Electron 桌面 Host 无法运行 npm CLI 脚本 | 经过验证的 npm 启动器仅在子进程中设置 `ELECTRON_RUN_AS_NODE=1`。如果桌面壳关闭了 [Electron `runAsNode` fuse](https://www.electronjs.org/docs/latest/tutorial/fuses#runasnode)，该变量会被忽略；请将 `mnemon.cliPath` 指向官方原生二进制（Windows 为 `mnemon.exe`）。npm 自动更新仍需要 Host 能够运行 JavaScript 启动器 |
