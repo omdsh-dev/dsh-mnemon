@@ -19,6 +19,8 @@ Choose an existing data authority deliberately. Without `dataDir`, each stable S
 
 Disabling participation does not delete stored entries. Source data remains separate from the current turn's projection and access grants.
 
+Model projections annotate each entry with its recorded importance and elapsed whole-day ages, for example `[importance=critical; created=14d; updated=2d]`, followed by the exact content. Future timestamps show `future`; unparseable ones show `unknown`. Ages are captured once per projection and remain fixed for that turn. Annotations count toward the Strategy's projection budget, but do not change stored JSON/Markdown, content matching or storage capacity. For replacement/removal, use only the entry content. Current instructions retain priority.
+
 ## Source-owned UI and tests
 
 The optional `./client` entry is an ordinary DSH Client plugin. This package owns its pages and `presentation/` resources and uses `dsh-mnemon/client` for the shared frame and scoped management client. It never receives a Host Context, credentials or another Source's controller.

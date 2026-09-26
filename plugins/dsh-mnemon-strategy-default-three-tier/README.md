@@ -48,6 +48,9 @@ names and value schemas belong to this Strategy, not to Core. External authors
 use `defineThreeTierExtension` and `installMemory(ctx, { strategyExtensions: [...] })`.
 
 All Sources share the existing turn's read quotas and one projection budget.
+Runtime guidance describes snapshots as budget-limited even without extensions:
+metadata on many short entries can exceed the projection budget while stored
+content remains within capacity. An omitted entry is not evidence of deletion.
 Replay and Related admission include the exact Source instance identity. Writes
 still require an offered Action and Host authorization, including implicit
 capacity maintenance. Explicit operator management is a separate channel.

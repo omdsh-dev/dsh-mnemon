@@ -3,12 +3,47 @@ import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
+import { DEFAULT_MEMORY_VIEW_BUDGET } from 'dsh-mnemon/contracts'
 import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
 import * as plugin from '../src/index.ts'
+import { RuntimeMemoryController } from '../src/controller.ts'
 
 describe('standalone runtime Source', () => {
+  it('pins metadata and content together between facts and projection across an age boundary', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-runtime-age-'))
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(new Date('2026-08-12T08:00:00.000Z'))
+      const controller = new RuntimeMemoryController({ effectiveDataDir: () => directory })
+      await controller.mutate({ action: 'add', target: 'memory', content: 'Original fact.', importance: 'critical' })
+      const sourceInstanceKey = 'source:work'
+      const source = plugin.createRuntimeMemorySource({ dataDir: directory }).create({ sourceInstanceKey,
+        provenance: { packageName: plugin.name, entryId: 'work' } })
+      const scope = { storage: 'custom' as const }
+      const request = { scope, scenario: 'turn', budget: DEFAULT_MEMORY_VIEW_BUDGET }
+      vi.setSystemTime(new Date('2026-08-13T07:59:59.999Z'))
+      const facts = await source.facts(request)
+      vi.setSystemTime(new Date('2026-08-13T08:00:00.000Z'))
+      await controller.mutate({ action: 'replace', target: 'memory', oldText: 'Original fact.', content: 'Corrected fact.', importance: 'low' })
+      const project = { scope, sourceInstanceKey, expectedRevision: facts.revision, includeProjection: true, mode: 'eager' as const, maxCharacters: 2048 }
+      const pinned = await source.project(project)
+      expect(pinned.fragments[0]?.text).toContain('[importance=critical; created=0d; updated=0d]\nOriginal fact.')
+      expect(pinned.fragments[0]?.text).not.toContain('Corrected fact.')
+
+      const nextScope = { ...scope }
+      const nextFacts = await source.facts({ ...request, scope: nextScope })
+      const next = await source.project({ ...project, scope: nextScope, expectedRevision: nextFacts.revision })
+      expect(next.fragments[0]?.text).toContain('[importance=low; created=1d; updated=0d]\nCorrected fact.')
+      expect(next.fragments[0]?.revision).not.toBe(pinned.fragments[0]?.revision)
+      expect(next.presentation?.items).toMatchObject([{ title: 'Corrected fact.' }])
+    } finally {
+      vi.useRealTimers()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
   it('owns capacity planning and revision-fenced compaction behind its management protocol', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'mnemon-runtime-maintenance-'))
     const runner = new MemoryCompositionRunner()
@@ -76,7 +111,8 @@ describe('standalone runtime Source', () => {
       expect(receipt.committedAt).toEqual(expect.any(String))
       first.release()
       const next = await runner.beginTurn({ scope: { storage: 'custom', workspaceId: workspace } })
-      expect(next.view.projection.find(value => value.sourceInstanceKey === 'source:work')?.text).toContain('work-only sentinel')
+      expect(next.view.projection.find(value => value.sourceInstanceKey === 'source:work')?.text)
+        .toContain('[importance=normal; created=0d; updated=0d]\nwork-only sentinel')
       expect(next.view.sourcePresentations?.find(value => value.sourceInstanceKey === 'source:work')).toMatchObject({
         mode: 'eager', visibleItems: 1, totalItems: 1, items: [{ title: 'work-only sentinel' }],
       })

@@ -1,7 +1,7 @@
 import { defineMemoryStrategy, type MemorySourceFacts } from 'dsh-mnemon/extension-sdk'
 import { COMPOSABLE_MEMORY_API_VERSION, type MemoryAvailableSource, type MemoryViewRequest, type MemoryViewSpec } from 'dsh-mnemon/contracts'
 import { createThreeTierTurn } from './retrieval.ts'
-import { BOUNDED_RUNTIME_MEMORY_PROTOCOL, ROUTING_GUIDANCE, RUNTIME_MEMORY_PROTOCOL, SCOPED_RUNTIME_MEMORY_PROTOCOL, THREE_TIER_REMINDERS } from './guidance.ts'
+import { BOUNDED_RUNTIME_MEMORY_PROTOCOL, ROUTING_GUIDANCE, SCOPED_RUNTIME_MEMORY_PROTOCOL, THREE_TIER_REMINDERS } from './guidance.ts'
 import { threeTierContributions, type ThreeTierExtensionValues } from './extension-sdk.ts'
 
 const VIEW_ROLES = ['working-context', 'narrative', 'durable-evidence'] as const
@@ -35,9 +35,6 @@ export const DEFAULT_THREE_TIER_VIEW_STRATEGY = defineMemoryStrategy({
     const boundedRequest = policies.projection === undefined ? request : { ...request, budget: { ...request.budget,
       maxProjectionCharacters: Math.min(request.budget.maxProjectionCharacters, policies.projection.maxProjectionCharacters) } }
     const spec = policies.selection === undefined ? composeThreeTier(boundedRequest, sources) : composeSelected(boundedRequest, sources, policies.selection)
-    if (boundedRequest.budget.maxProjectionCharacters < request.budget.maxProjectionCharacters && spec.guidance?.system === RUNTIME_MEMORY_PROTOCOL) {
-      spec.guidance.system = BOUNDED_RUNTIME_MEMORY_PROTOCOL
-    }
     if (policies.capture !== undefined) {
       const targets = spec.sources.filter(selected => (policies.capture!.sourceKeys === undefined || policies.capture!.sourceKeys.includes(selected.sourceInstanceKey))
         && sources.some(source => source.sourceInstanceKey === selected.sourceInstanceKey && source.actions.some(action => selected.actionIds?.includes(action.id) && policies.capture!.actionIds.includes(action.id) && action.authority === undefined && ['write', 'maintain'].includes(action.capability))))
@@ -73,7 +70,7 @@ function composeThreeTier(request: MemoryViewRequest, sources: readonly MemorySo
       strategyTypeId: 'default-three-tier',
       guidance: {
         ...(classicSources ? { routing: ROUTING_GUIDANCE, reminders: THREE_TIER_REMINDERS } : {}),
-        ...(runtime?.sourceTypeId === 'runtime' && runtime.capabilities.includes('project') ? { system: RUNTIME_MEMORY_PROTOCOL } : {}),
+        ...(runtime?.sourceTypeId === 'runtime' && runtime.capabilities.includes('project') ? { system: BOUNDED_RUNTIME_MEMORY_PROTOCOL } : {}),
       },
       sources: selected.map(source => ({
         sourceInstanceKey: source.sourceInstanceKey,

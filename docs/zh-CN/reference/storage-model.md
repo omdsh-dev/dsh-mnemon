@@ -70,7 +70,7 @@ follow an exact cold reference when full text is required
 
 - `target=user`：身份、角色、长期偏好、习惯、沟通风格和明确协作要求。
 - `target=memory`：项目、环境、决策、约定、工具特性和可复用经验。
-- `importance=critical|normal|low`：用于整理时的保留优先级。
+- `importance=critical|normal|low`：记录的重要性，在模型投影中可见，也用于整理时的保留优先级。
 - `branches`（可选，仅 `target=memory`）：限定该条目在每回合 Runtime 快照中投影到的 git 分支名列表；没有分支列表的条目在所有分支可见。
 
 当前不实现 `daily` target。
@@ -92,6 +92,17 @@ branches（可选）
 
 `USER.md` 和 `MEMORY.md` 是完整事实源的确定性派生文件。每个条目被归一成单行，条目之间使用单独一行的 `§` 分隔；`§` 是保留字符。启动和 prompt 组装时，控制层会从 JSON 修复缺失或被手工修改的投影。分支过滤只作用于 prompt 投影，不作用于这两个文件。
 
+Runtime Source 会在面向模型的快照中，为每条正文添加一行元数据：
+
+```text
+[importance=critical; created=14d; updated=2d]
+偏好简洁回复。
+```
+
+`created` 和 `updated` 表示距存储时间戳经过的完整 24 小时天数，在捕获投影时统一计算。不到一天显示 `0d`；未来时间戳显示 `future`，无法解析的时间戳显示 `unknown`。用户档案位于全局根时，两个根使用同一个捕获时间。当前回合保持已捕获的天数；下一回合会重新计算，即使存储 revision 没有变化。
+
+这些行是正文之外的注释。`old_text` / `oldText` 只能匹配正文，不包含元数据行。记录的重要性和时间跨度不会覆盖当前指令。JSON、磁盘 Markdown、正文匹配、条目顺序和存储容量均保持不变。注释计入已有的模型投影字符预算，因此短条目较多时，即使默认 Strategy 也可能截断或省略条目。其指引明确说明快照受预算限制，缺失不代表删除；light-context 可以进一步降低预算。
+
 ### 操作
 
 - `add` 写入独立新事实，完全相同的内容不会重复添加。
@@ -108,7 +119,7 @@ branches（可选）
 
 默认三层策略下，合法写入超过上限时才触发容量维护。具名工具、通用 Action、后台子 Agent 和 Web 管理共用同一 Host 流程；Web 写入按所选存储范围执行，不要求打开用户会话。归档失败会保留热记忆并返回错误。底层 Source 独立使用时仍只执行自己的存储操作，自定义 Strategy 不会隐式继承默认归档。
 
-容量按投影正文的实际 UTF-8 字节计算。单条内容最大 8 KiB。当 `add`、`replace` 或 `remove` 遇到容量溢出时，Host 会在任何 Provider 写入前重新检查源 revision。只有一个可写 Memory Space 时完全不调用模型；存在多个空间时，worker 只读取有界路由摘录并返回目标 id，不重写记忆内容。Mnemon Native 先从只读命名空间快照复用完全相同的原文，合并批内相同条目，再按目标空间通过 schema-v1 draft 和 `--no-diff` 各导入一次剩余原文，避免内容相似但不同的事实被跳过或相互覆盖。其他 Provider 继续使用适配器定义的写入语义。Host 要求每个源条目都有一条精确终态回执（跳过的重复项还必须有精确 Recall 证据），随后按重要性和字节预算选择热记忆保留项，并在原 revision fence 下把余量与待处理变更一次提交。Provider 无法与本地文件共享同一事务，因此稍后的 revision 冲突或并发外部写入可能留下已经归档的重复项；现有热记忆仍受修订检查保护。
+容量按存储正文和条目分隔符的实际 UTF-8 字节计算，不包含仅用于 prompt 的元数据。单条内容最大 8 KiB。当 `add`、`replace` 或 `remove` 遇到容量溢出时，Host 会在任何 Provider 写入前重新检查源 revision。只有一个可写 Memory Space 时完全不调用模型；存在多个空间时，worker 只读取有界路由摘录并返回目标 id，不重写记忆内容。Mnemon Native 先从只读命名空间快照复用完全相同的原文，合并批内相同条目，再按目标空间通过 schema-v1 draft 和 `--no-diff` 各导入一次剩余原文，避免内容相似但不同的事实被跳过或相互覆盖。其他 Provider 继续使用适配器定义的写入语义。Host 要求每个源条目都有一条精确终态回执（跳过的重复项还必须有精确 Recall 证据），随后按重要性和字节预算选择热记忆保留项，并在原 revision fence 下把余量与待处理变更一次提交。Provider 无法与本地文件共享同一事务，因此稍后的 revision 冲突或并发外部写入可能留下已经归档的重复项；现有热记忆仍受修订检查保护。
 
 <a id="project-documents"></a>
 
