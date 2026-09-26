@@ -1,5 +1,5 @@
 import { css, sidebarCss, useT } from './presentation.ts'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type JSX, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX, type ReactNode } from 'react'
 import type { MemoryJsonValue } from 'dsh-mnemon/contracts'
 import {
   createMemorySourcePageClient, installMemorySourceUI, MemorySourcePageFrame, translateEn, message, PageHeader,
@@ -51,6 +51,10 @@ function MemorySpacesSourceView(props: MemorySourcePageProps & { page: Page }): 
   const [rememberOpen, setRememberOpen] = useState(props.page === 'remember')
   const [strategyOpen, setStrategyOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const headerRef = useRef<HTMLElement | null>(null)
+  const revealElement = useCallback((element: HTMLElement) => {
+    props.onRevealElement?.(element, (headerRef.current?.getBoundingClientRect().height ?? 0) + 14)
+  }, [props.onRevealElement])
   const refresh = useCallback(() => { setRevision(value => value + 1); props.onRefresh?.() }, [props.onRefresh])
   useEffect(() => {
     setPage(props.management !== undefined && props.navigationInput === undefined ? rememberedPages.get(props.management) ?? (props.page === 'remember' ? 'spaces' : props.page) : props.page === 'remember' ? 'spaces' : props.page)
@@ -77,12 +81,12 @@ function MemorySpacesSourceView(props: MemorySourcePageProps & { page: Page }): 
   const preferences = props.preferences
   return <>
     {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
-    {<section className={sidebarCss.memoryWorkspace}>
+    {<section className={sidebarCss.memoryWorkspace} ref={headerRef}>
       <PageHeader title={t('nav.spaces')} description={t('overview.description')} meta={writable ? t('common.agentSupervised') : activationEnabled ? t('common.activationOnly') : t('common.readOnly')} action={<div className={css.memoryHeaderActions}><button type="button" className={appearanceClass(css.primaryButton, sidebarCss.memoryWriteButton)} disabled={!writable} onClick={() => remember()}>{t('nav.rememberAction')}</button>{preferences !== undefined && <button type="button" className={css.secondaryButton} onClick={() => setStrategyOpen(true)}>{t('strategy.action')}</button>}</div>} />
       <div className={sidebarCss.memoryNavigation}><div className={sidebarCss.memoryTabs} role="tablist" aria-label={t('nav.memory.aria')}>{TABS.map(tab => <button key={tab.id} type="button" role="tab" aria-selected={page === tab.id} data-active={page === tab.id ? '' : undefined} onClick={() => setPage(tab.id)}>{t(tab.key)}</button>)}</div></div>
     </section>}
     {page === 'spaces' && <OverviewPage client={client} metadataClient={client} revision={revision} activationEnabled={activationEnabled} writeEnabled={writable} agentAvailable={agentAvailable} fallbackBodies={bodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={status?.memoryBodies !== undefined} onMutate={refresh} onAgentRefresh={refresh} onBodyReconnect={refresh} onBodyMetadata={refresh} onExplore={explore} />}
-    {page === 'explore' && <ExplorePage client={client} agentClient={client} agentAvailable={client.canAssist('agent-search')} status={status} seed={seed} writeEnabled={writable} onForget={forget} />}
+    {page === 'explore' && <ExplorePage client={client} agentClient={client} agentAvailable={client.canAssist('agent-search')} status={status} seed={seed} writeEnabled={writable} onForget={forget} onRevealElement={revealElement} />}
     {page === 'entities' && <EntitiesPage client={client} revision={revision} writeEnabled={writable} onForget={forget} onExplore={explore} />}
     {page === 'content' && <ListPage client={client} revision={revision} writeEnabled={writable} onForget={forget} onClone={insight => remember(insight.content)} onExplore={explore} />}
     {rememberOpen && <RememberPage client={client} agentAvailable={agentAvailable} memoryBodies={bodies} writeEnabled={writable} seed={seed} onMutate={refresh} onClose={() => setRememberOpen(false)} onComplete={() => setRememberOpen(false)} />}

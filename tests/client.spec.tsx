@@ -1640,6 +1640,79 @@ describe('MnemonWorkbench', () => {
     expect(screen.queryByText('已经过期的关联响应')).toBeNull()
   })
 
+  function queueAnimationFrames() {
+    let next = 0
+    const pending = new Map<number, FrameRequestCallback>()
+    const request = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => { pending.set(++next, callback); return next })
+    const cancel = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(frame => { pending.delete(frame) })
+    return {
+      pending,
+      flush: () => { const frames = [...pending.values()]; pending.clear(); for (const frame of frames) frame(0) },
+      restore: () => { request.mockRestore(); cancel.mockRestore() },
+    }
+  }
+
+  it.each([120, 210])('reveals Related below a %ipx Source header without scrolling DSH or peer plugins', async headerHeight => {
+    const { connection } = createConnection({ relatedDeferred: true })
+    const frames = queueAnimationFrames()
+    try {
+      render(<div data-testid="dsh-host-scrollport"><div data-testid="peer-plugin-scrollport" /><MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" /></div>)
+      await selectWorkspaceTab('检索')
+      fireEvent.change(screen.getByRole('textbox', { name: '记忆查询' }), { target: { value: 'SQLite' } })
+      fireEvent.click(screen.getByRole('button', { name: '直接检索' }))
+      await screen.findByText('项目选择 SQLite，因为需要单文件部署。')
+      const canvas = screen.getByTestId('mnemon-canvas')
+      const host = screen.getByTestId('dsh-host-scrollport'), peer = screen.getByTestId('peer-plugin-scrollport')
+      host.scrollTop = 240; peer.scrollTop = 180; canvas.scrollTop = 473.5
+      const header = screen.getByRole('heading', { name: '记忆空间' }).closest('section')!
+      vi.spyOn(canvas, 'getBoundingClientRect').mockImplementation(() => new DOMRect(280, 87, 1000, 633))
+      vi.spyOn(header, 'getBoundingClientRect').mockImplementation(() => new DOMRect(280, 87, 1000, headerHeight))
+      fireEvent.click(screen.getByRole('button', { name: '查看关联' }))
+      const close = screen.getByRole('button', { name: '关闭关联记忆' }), pane = close.closest('aside')!
+      const contentTop = canvas.scrollTop + 108
+      vi.spyOn(pane, 'getBoundingClientRect').mockImplementation(() => new DOMRect(800, contentTop - canvas.scrollTop, 360, 400))
+      vi.spyOn(close, 'getBoundingClientRect').mockImplementation(() => new DOMRect(1130, contentTop - canvas.scrollTop + 13.625, 26, 26))
+      expect(close.getBoundingClientRect().bottom).toBeLessThan(header.getBoundingClientRect().bottom)
+      act(() => frames.flush())
+      expect(pane.getBoundingClientRect().top).toBeGreaterThanOrEqual(header.getBoundingClientRect().bottom + 14)
+      expect(close.getBoundingClientRect().top).toBeGreaterThan(header.getBoundingClientRect().bottom)
+      expect(host.scrollTop).toBe(240)
+      expect(peer.scrollTop).toBe(180)
+    } finally { cleanup(); frames.restore() }
+  })
+
+  it.each(['close', 'unmount'] as const)('cancels a pending Related reveal on %s without disturbing another Source', async action => {
+    const first = createConnection({ relatedDeferred: true }), second = createConnection({ relatedDeferred: true })
+    const frames = queueAnimationFrames()
+    try {
+      const owner = render(<MnemonWorkbench connection={first.connection} settingsScope={settingsScope} sessionId="first" />)
+      const peer = render(<MnemonWorkbench connection={second.connection} settingsScope={settingsScope} sessionId="second" />)
+      const openRelated = async (container: HTMLElement) => {
+        const view = within(container)
+        fireEvent.click(await view.findByRole('tab', { name: '记忆空间' }))
+        fireEvent.click(await view.findByRole('tab', { name: '检索' }))
+        fireEvent.change(view.getByRole('textbox', { name: '记忆查询' }), { target: { value: 'SQLite' } })
+        fireEvent.click(view.getByRole('button', { name: '直接检索' }))
+        await view.findByText('项目选择 SQLite，因为需要单文件部署。')
+        const canvas = view.getByTestId('mnemon-canvas')
+        canvas.scrollTop = 600
+        vi.spyOn(view.getByRole('heading', { name: '记忆空间' }).closest('section')!, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 0, 500, 120))
+        fireEvent.click(view.getByRole('button', { name: '查看关联' }))
+        vi.spyOn(view.getByRole('button', { name: '关闭关联记忆' }).closest('aside')!, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 30, 300, 400))
+        return canvas
+      }
+      const ownCanvas = await openRelated(owner.container), peerCanvas = await openRelated(peer.container)
+      expect(frames.pending.size).toBe(2)
+      if (action === 'close') fireEvent.click(within(owner.container).getByRole('button', { name: '关闭关联记忆' }))
+      else owner.unmount()
+      expect(frames.pending.size).toBe(1)
+      act(() => frames.flush())
+      expect(ownCanvas.scrollTop).toBe(600)
+      expect(peerCanvas.scrollTop).toBe(496)
+      expect(within(peer.container).getByRole('button', { name: '关闭关联记忆' })).toBeTruthy()
+    } finally { cleanup(); frames.restore() }
+  })
+
   it.each(['sidebar', 'builtin'] as const)('shows an Agent answer using the %s task context', async surface => {
     const { connection, call } = createConnection()
     render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" surface={surface} />)

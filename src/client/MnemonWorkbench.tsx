@@ -410,6 +410,10 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
     const canvas = canvasRef.current
     if (canvas !== null) canvas.scrollTop = 0
   }, [])
+  const revealElement = useCallback((element: HTMLElement, topInset = 0) => {
+    const canvas = canvasRef.current
+    if (canvas !== null && canvas.contains(element)) canvas.scrollTop = Math.max(0, canvas.scrollTop + element.getBoundingClientRect().top - canvas.getBoundingClientRect().top - topInset)
+  }, [])
 
   // Reset before paint so a newly selected page never flashes at the previous
   // page's scroll offset for one frame. The host still owns every ancestor.
@@ -562,7 +566,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       ...(management === undefined ? {} : { management }),
       ...(sessionId === undefined ? {} : { sessionId }), ...(workspaceId === undefined ? {} : { workspaceId }),
       ...(navigationInput?.page === entryId ? { navigationInput: navigationInput.value } : {}),
-      ...(preferences === undefined ? {} : { preferences }), onRefresh: mutate, onResetScroll: resetViewportScroll,
+      ...(preferences === undefined ? {} : { preferences }), onRefresh: mutate, onResetScroll: resetViewportScroll, onRevealElement: revealElement,
     }, { only: entryId })
   }
   const activeSourcePageId = sourcePageEntryId(page)

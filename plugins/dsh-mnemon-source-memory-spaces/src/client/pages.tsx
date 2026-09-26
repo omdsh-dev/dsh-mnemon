@@ -1011,7 +1011,7 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; metadataCl
   )
 }
 
-export function ExplorePage(props: { client: MemorySpacesPageClient; agentClient: MemorySpacesPageClient; agentAvailable: boolean; status: MemorySpacesPageStatus | null; seed: string; writeEnabled: boolean; onForget: (insight: Insight) => Promise<void> }): JSX.Element {
+export function ExplorePage(props: { client: MemorySpacesPageClient; agentClient: MemorySpacesPageClient; agentAvailable: boolean; status: MemorySpacesPageStatus | null; seed: string; writeEnabled: boolean; onForget: (insight: Insight) => Promise<void>; onRevealElement?(element: HTMLElement): void }): JSX.Element {
   const t = useT()
   const pageSize = 6
   const [query, setQuery] = useState(props.seed)
@@ -1023,7 +1023,8 @@ export function ExplorePage(props: { client: MemorySpacesPageClient; agentClient
   const [agentAnswer, setAgentAnswer] = useState<{ answer: string; citations: string[]; runId: string } | null>(null)
   const [searched, setSearched] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [relatedTo, setRelatedTo] = useState<Insight | null>(null)
+  const [relatedTo, setRelatedTo] = useState<{ insight: Insight; request: number } | null>(null)
+  const relatedPaneRef = useRef<HTMLElement | null>(null)
   const [related, setRelated] = useState<Insight[]>([])
   const [relatedLoading, setRelatedLoading] = useState(false)
   const [visibleResultLimit, setVisibleResultLimit] = useState(pageSize)
@@ -1031,6 +1032,15 @@ export function ExplorePage(props: { client: MemorySpacesPageClient; agentClient
   const relatedRequests = useRequestVersion()
 
   useEffect(() => { if (props.seed !== '') setQuery(props.seed) }, [props.seed])
+  useEffect(() => {
+    if (relatedTo === null || props.onRevealElement === undefined) return
+    const reveal = () => {
+      if (relatedPaneRef.current !== null && relatedRequests.isCurrent(relatedTo.request)) props.onRevealElement?.(relatedPaneRef.current)
+    }
+    if (typeof window.requestAnimationFrame !== 'function') { reveal(); return }
+    const frame = window.requestAnimationFrame(reveal)
+    return () => { if (typeof window.cancelAnimationFrame === 'function') window.cancelAnimationFrame(frame) }
+  }, [relatedTo, relatedRequests, props.onRevealElement])
 
   const runSearch = async (withAgent: boolean) => {
     if (query.trim() === '') return
@@ -1060,8 +1070,7 @@ export function ExplorePage(props: { client: MemorySpacesPageClient; agentClient
 
   const showRelated = async (insight: Insight) => {
     const request = relatedRequests.begin()
-    setRelatedTo(insight); setRelated([]); setRelatedLoading(true); setError(null); setVisibleRelatedLimit(pageSize)
-    if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(() => document.getElementById('mnemon-related-pane')?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }))
+    setRelatedTo({ insight, request }); setRelated([]); setRelatedLoading(true); setError(null); setVisibleRelatedLimit(pageSize)
     try {
       const response = await props.client.related(insight.id, insight.memoryBodyId)
       if (relatedRequests.isCurrent(request)) setRelated(response)
@@ -1076,7 +1085,7 @@ export function ExplorePage(props: { client: MemorySpacesPageClient; agentClient
     await props.onForget(insight)
     setResults(items => items.filter(item => insightKey(item) !== insightKey(insight)))
     setRelated(items => items.filter(item => insightKey(item) !== insightKey(insight)))
-    if (relatedTo !== null && insightKey(relatedTo) === insightKey(insight)) setRelatedTo(null)
+    if (relatedTo !== null && insightKey(relatedTo.insight) === insightKey(insight)) setRelatedTo(null)
   }
   const visibleResults = results.slice(0, visibleResultLimit)
   const visibleRelated = related.slice(0, visibleRelatedLimit)
@@ -1102,7 +1111,7 @@ export function ExplorePage(props: { client: MemorySpacesPageClient; agentClient
       {results.length > 0 && (
         <div className={relatedTo === null ? css.singleColumn : css.resultLayout}>
           <section className={css.results}><div className={css.sectionHeading}><div><h3>{t('search.results')}</h3></div><strong>{results.length}</strong></div>{visibleResults.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onRelated={item => void showRelated(item)} />)}{<ProgressiveFooter visible={visibleResults.length} total={results.length} pageSize={pageSize} onMore={() => setVisibleResultLimit(value => value + pageSize)} />}</section>
-          {relatedTo !== null && <aside id="mnemon-related-pane" className={css.relatedPane}><div className={css.sectionHeading}><div><h3>{t('search.related')}</h3></div><button type="button" onClick={() => { relatedRequests.begin(); setRelatedTo(null); setRelatedLoading(false) }} aria-label={t('search.closeRelated')}>×</button></div><p className={css.relatedSource}>{relatedTo.content}</p>{relatedLoading && <div className={css.loading}>{t('search.traversing')}</div>}{!relatedLoading && related.length === 0 && <div className={css.muted}>{t('search.noRelated')}</div>}{visibleRelated.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onRelated={item => void showRelated(item)} />)}{!relatedLoading && <ProgressiveFooter visible={visibleRelated.length} total={related.length} pageSize={pageSize} onMore={() => setVisibleRelatedLimit(value => value + pageSize)} />}</aside>}
+          {relatedTo !== null && <aside ref={relatedPaneRef} className={css.relatedPane}><div className={css.sectionHeading}><div><h3>{t('search.related')}</h3></div><button type="button" onClick={() => { relatedRequests.begin(); setRelatedTo(null); setRelatedLoading(false) }} aria-label={t('search.closeRelated')}>×</button></div><p className={css.relatedSource}>{relatedTo.insight.content}</p>{relatedLoading && <div className={css.loading}>{t('search.traversing')}</div>}{!relatedLoading && related.length === 0 && <div className={css.muted}>{t('search.noRelated')}</div>}{visibleRelated.map(insight => <InsightCard key={insightKey(insight)} insight={insight} writeEnabled={props.writeEnabled} onForget={forget} onRelated={item => void showRelated(item)} />)}{!relatedLoading && <ProgressiveFooter visible={visibleRelated.length} total={related.length} pageSize={pageSize} onMore={() => setVisibleRelatedLimit(value => value + pageSize)} />}</aside>}
         </div>
       )}
       </div>

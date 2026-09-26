@@ -165,6 +165,8 @@ Provider 使用 Memory Spaces SDK 的 `defineMemorySpaceProvider`。模块只收
 
 工作台负责外层页面边距、最小高度与页面滚动容器。嵌套的 `memoryPageStyles.page` 内容复用这一层框架，不再重复增加视口高度或边距，经过 DSH renderer 包装层时也一样。Source 保留业务布局，可以提供有界阅读区或弹窗。内部页面变化时，在绘制前调用可选的 `onResetScroll` 回调；它只重置所属工作台的 canvas，不应滚动 DSH 祖先节点或其他插件。记忆空间这类包含固定标题与 Tab 组合头部的 Source，通过 `navigation.stickyHeader: false` 避免 Host 同时固定下级标题，并由 Source 自己负责组合头部的 sticky 布局。
 
+需要在 Source 固定头部下方显示内容时，将 Source 自有 ref 中的元素及实测顶部留白传给可选的 `onRevealElement(element, topInset)` 回调。Host 只滚动所属 canvas，并忽略区域外的元素；不要使用全局 ID 或会移动 DSH 祖先节点的 `scrollIntoView`。关闭选择或卸载 Source 时取消待执行的动画帧。两个滚动回调均为可选：新 Source 仍支持现有 Root peer 最低版本，旧 Host 不提供回调时可手动滚动。
+
 ## 独立仓库验收
 
 业务文案和布局应留在 Source 包内。默认 Source 使用公开、仅含数据的 `presentation/locales.json`、`presentation/page.module.css`、`presentation/sidebar.module.css`，以及私有 Client 呈现模块示范这一点；独立构建无需引用仓库中的构建脚本。默认 Source 保留既有页面工具的类名命名空间以维持使用兼容；第三方 Source 可使用自己的命名空间，不必向 Root 添加词条或选择器。
