@@ -6,6 +6,7 @@
 
 ## v0.5
 
+- [v0.5.15：USER 工具写入、Runtime 元数据与皮肤接口](./v0.5.15.md)
 - [v0.5.14：Desktop 加载、OpenViking User Key 与 Agent Teams 审查](./v0.5.14.md)
 - [v0.5.13：工作区、Builtin 与 DSH 0.1.7 兼容修复](./v0.5.13.md)
 - [v0.5.12：兼容 DSH RC 与 Alpha](./v0.5.12.md)
