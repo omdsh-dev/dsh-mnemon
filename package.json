@@ -88,9 +88,11 @@
       "types": "./lib/types/src/sdk/testing.d.ts",
       "default": "./lib/testing.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "files": [
+    "locale",
     "lib",
     "bin/repair-legacy-session.mjs",
     "cordis.patch.yml",

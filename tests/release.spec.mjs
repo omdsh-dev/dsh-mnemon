@@ -177,6 +177,18 @@ describe('selective, channel-safe official release', () => {
     ])
   })
 
+  it('requires release intent and a Starter version bump for locale-only changes', () => {
+    const packages = fixture()
+    const plan = createReleasePlan(packages, { baseVersions: previousVersions(packages) })
+    const paths = ['locale/zh.json']
+    const changed = publicationInputsChanged(plan, paths)
+    expect(changed).toEqual(new Set(['dsh-mnemon']))
+    expect(() => assertReleaseIntentCoverage(changed, [])).toThrow('dsh-mnemon')
+    expect(() => assertVersionedPublicationChanges(plan, paths)).toThrow('dsh-mnemon')
+    const release = createReleasePlan(packages, { baseVersions: previousVersions(packages, { 'dsh-mnemon': '0.5.1' }) })
+    expect(() => assertVersionedPublicationChanges(release, paths)).not.toThrow()
+  })
+
   it('requires a changeset for every package with changed publication inputs', () => {
     const changed = new Set(['dsh-mnemon', 'dsh-mnemon-provider-example'])
     expect(() => assertReleaseIntentCoverage(changed, [{ name: 'dsh-mnemon', type: 'patch' }]))

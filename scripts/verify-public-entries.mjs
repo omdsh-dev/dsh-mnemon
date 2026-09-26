@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import ts from 'typescript'
+import { localeExport, readPackageLocales } from './package-locales.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const excluded = new Set(['./client', './package.json'])
@@ -48,6 +49,10 @@ for (const directory of [root, resolve(root, 'plugins/dsh-mnemon-source-memory-s
   for (const [subpath, descriptor] of Object.entries(manifest.exports)) {
     if (excluded.has(subpath)) continue
     const label = manifest.name + (subpath === '.' ? '' : subpath.slice(1))
+    if (subpath === localeExport) {
+      readPackageLocales(directory, manifest)
+      continue
+    }
     if (subpath.startsWith('./presentation/') && typeof descriptor === 'string') {
       const asset = readFileSync(resolve(directory, descriptor), 'utf8')
       if (subpath.endsWith('.json')) JSON.parse(asset)

@@ -204,7 +204,7 @@ export async function devOnlyManifestChanges(plan, paths, baseRevision, revision
 export function publicationInputsChanged(plan, paths, { ignoredPackageJson = new Set() } = {}) {
   const packageNames = new Set(plan.composition.map(item => item.manifest.name))
   const changed = new Set()
-  const rootInputs = /^(?:package\.json|cordis\.patch\.yml|README(?:\.zh-CN)?\.md|LICENSE|SECURITY\.md|THIRD_PARTY_NOTICES\.md|tsconfig(?:\.types)?\.json|tsdown\.config\.ts|scripts\/link-bundle-declarations\.mjs|src\/|lib\/)/u
+  const rootInputs = /^(?:package\.json|cordis\.patch\.yml|README(?:\.zh-CN)?\.md|LICENSE|SECURITY\.md|THIRD_PARTY_NOTICES\.md|tsconfig(?:\.types)?\.json|tsdown\.config\.ts|scripts\/link-bundle-declarations\.mjs|src\/|lib\/|locale\/)/u
   for (const path of paths) {
     const plugin = /^plugins\/(dsh-mnemon-(?:source|strategy|provider)-[a-z0-9-]+)\/(.+)$/u.exec(path)
     if (plugin) {

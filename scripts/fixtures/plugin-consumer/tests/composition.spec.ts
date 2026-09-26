@@ -1,7 +1,7 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
 import { MemoryCompositionRunner, type MemoryTestTurn } from 'dsh-mnemon/testing'
@@ -74,6 +74,17 @@ describe('external consumer of packed artifacts', () => {
       for (const subpath of Object.keys(manifest.exports)) {
         if (subpath === './client' || subpath === './package.json') continue
         const specifier = name + (subpath === '.' ? '' : subpath.slice(1))
+        if (subpath === './locale/*.json') {
+          const directory = join(dirname(require.resolve(name + '/package.json')), 'locale')
+          const files = readdirSync(directory).filter(file => file.endsWith('.json'))
+          expect(files).toContain('en.json')
+          for (const file of files) {
+            const resolved = require.resolve(name + '/locale/' + file)
+            expect(resolved).toBe(join(directory, file))
+            expect(JSON.parse(readFileSync(resolved, 'utf8'))).toEqual(expect.any(Object))
+          }
+          continue
+        }
         if (subpath.startsWith('./presentation/')) {
           const asset = readFileSync(require.resolve(specifier), 'utf8')
           if (subpath.endsWith('.json')) expect(Object.keys(JSON.parse(asset)).sort()).toEqual(['en', 'zh'])
@@ -83,6 +94,18 @@ describe('external consumer of packed artifacts', () => {
         expect(Object.keys(await import(specifier)).length, specifier).toBeGreaterThan(0)
       }
     }
+  })
+
+  it('ships Chinese plugin metadata and keeps manifest fallback for English', () => {
+    const require = createRequire(import.meta.url)
+    const english = JSON.parse(readFileSync(require.resolve('dsh-mnemon/locale/en.json'), 'utf8'))
+    const chinese = JSON.parse(readFileSync(require.resolve('dsh-mnemon/locale/zh.json'), 'utf8'))
+    const manifest = JSON.parse(readFileSync(require.resolve('dsh-mnemon/package.json'), 'utf8'))
+    expect(english.meta).toEqual({})
+    expect(manifest.name).toBe('dsh-mnemon')
+    expect(manifest.description).toMatch(/Composable three-tier memory/)
+    expect(chinese.meta.title).toBe('三级记忆 (dsh-mnemon)')
+    expect(chinese.meta.description).toMatch(/三级记忆/)
   })
 
   it('supports a new Source and Strategy, authority checks, exact grants and explicit replacement', async () => {
