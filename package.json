@@ -1,6 +1,6 @@
 {
   "name": "dsh-mnemon",
-  "version": "0.5.15",
+  "version": "0.5.16",
   "description": "Composable three-tier memory control plane for DeepSeek Harness: persistent runtime context, searchable project documents, pluggable long-term memory, guarded strategies, WebUI, and headless tools.",
   "keywords": [
     "deepseek-harness",
@@ -155,7 +155,7 @@
     "dsh-mnemon-provider-retaindb": "0.5.4",
     "dsh-mnemon-provider-supermemory": "0.5.4",
     "dsh-mnemon-source-documents": "0.5.6",
-    "dsh-mnemon-source-memory-spaces": "0.5.9",
+    "dsh-mnemon-source-memory-spaces": "0.5.10",
     "dsh-mnemon-source-runtime": "0.5.9",
     "dsh-mnemon-strategy-auto-capture": "0.5.4",
     "dsh-mnemon-strategy-default-three-tier": "0.5.6",
