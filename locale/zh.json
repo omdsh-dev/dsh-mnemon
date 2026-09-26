@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "三级记忆 (dsh-mnemon)",
+    "description": "三级记忆系统：召回 / 写入 / 记忆页签（策略配置在 profile patch 层）"
+  }
+}
