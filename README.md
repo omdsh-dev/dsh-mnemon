@@ -12,8 +12,8 @@
   <a href="https://dshfind.com/en/plugins/omdsh-dev/dsh-mnemon?ref=badge"><img alt="dshfind downloads" src="https://dshfind.com/api/badge/omdsh-dev/dsh-mnemon?metric=downloads&amp;lang=en" /></a>
 </p>
 
-<p align="center"><strong>Composable memory for DeepSeek Harness.</strong></p>
-<p align="center">Three tiers by default · Your Sources and Strategies · One View per turn</p>
+<p align="center"><strong>Composable, view-based memory for DeepSeek Harness.</strong></p>
+<p align="center">Pluggable sources and strategies, with three-tier memory out of the box.</p>
 
 <p align="center">
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/ui-guide.md">
