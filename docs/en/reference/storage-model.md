@@ -99,7 +99,7 @@ Prefer concise replies.
 
 `created` and `updated` are elapsed whole 24-hour days since the stored timestamps, computed once when the projection is captured. Ages below one day are `0d`; future timestamps show `future`, and unparseable timestamps show `unknown`. One capture time covers both roots when the user profile is global. The current turn retains its captured ages; the next turn recalculates them even if the storage revision has not changed.
 
-These lines annotate the unchanged entry content. `old_text` / `oldText` must match content only, excluding the metadata line. Recorded importance and age never outrank current instructions. JSON, on-disk Markdown, content matching, entry order and storage capacity remain unchanged. Annotations count toward the existing model projection character budget, so Strategies such as light-context may still truncate or omit entries.
+These lines annotate the unchanged entry content. `old_text` / `oldText` must match content only, excluding the metadata line. Recorded importance and age never outrank current instructions. JSON, on-disk Markdown, content matching, entry order and storage capacity remain unchanged. Annotations count toward the existing model projection character budget, so even the default Strategy can truncate or omit entries when there are many short records. Its guidance states that snapshots are budget-limited and that absence does not mean deletion; light-context can impose a smaller budget.
 
 ### Operations
 

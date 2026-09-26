@@ -51,10 +51,11 @@ describe('three-tier owned extension contracts', () => {
     expect(strategy.compose(request, facts.map(source => ({ ...source, actionIds: [], actions: [] })), [capture]).guidance?.system).toBeUndefined()
   })
 
-  it('keeps runtime semantics but never claims a narrowed or multi-Source projection is the entire store', () => {
+  it('keeps runtime semantics without claiming default, narrowed or multi-Source projections are the entire store', () => {
     const facts = sources().map((source, index) => ({ ...source, sourceTypeId: ['runtime', 'documents', 'memory-spaces'][index]! }))
     const original = strategy.compose(request, facts)
-    expect(original.guidance?.system).toContain('complete projection')
+    expect(original.guidance?.system).toContain('budget-limited projection')
+    expect(original.guidance?.system).not.toContain('complete projection')
     const limited = strategy.compose(request, facts, [contribution('projection', { maxProjectionCharacters: 100 })])
     expect(limited.guidance?.system).toContain('budget-limited projection')
     expect(limited.guidance?.system).not.toContain('complete projection')

@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { writeFileSync } from 'node:fs'
+import type { RuntimeMemorySnapshot } from 'dsh-mnemon-source-runtime/contracts'
 import * as scoped from 'dsh-mnemon-strategy-scoped'
 import * as light from 'dsh-mnemon-strategy-light-context'
 import * as capture from 'dsh-mnemon-strategy-auto-capture'
@@ -9,6 +11,31 @@ async function fixture() { const value = await compositionFixture(); fixtures.pu
 afterEach(async () => { for (const value of fixtures.splice(0)) await value.dispose() })
 
 describe('LLM View publication boundary', () => {
+  it('describes default projections as bounded when metadata clips a store within both byte limits', async () => {
+    const { graph, workspace } = await fixture()
+    const source = graph.source('runtime')
+    const empty = await source.read<RuntimeMemorySnapshot>('snapshot')
+    const entries = (['user', 'memory'] as const).flatMap(target =>
+      Array.from({ length: target === 'user' ? 500 : 1200 }, (_, index) => ({
+        content: `${target === 'user' ? 'u' : 'm'}${index}`, target, importance: 'normal',
+        created_at: '2026-09-01T00:00:00.000Z', updated_at: '2026-09-01T00:00:00.000Z',
+      })),
+    )
+    writeFileSync(empty.sourcePath, JSON.stringify({ version: 1, entries }))
+    const stored = await source.read<RuntimeMemorySnapshot>('snapshot')
+    expect(stored.targets.user.used).toBeLessThanOrEqual(stored.targets.user.limit)
+    expect(stored.targets.memory.used).toBeLessThanOrEqual(stored.targets.memory.limit)
+    const turn = await graph.composableTurns.beginTurn('metadata:dense', { storage: 'custom', workspaceId: workspace })
+    const wake = modelMemoryWake(graph, turn)
+    expect(wake.text).toContain('[importance=normal;')
+    expect(wake.text).not.toContain('\nm1199\n')
+    expect(wake.guidance?.system).toContain('budget-limited projection')
+    expect(wake.guidance?.system).toContain('absence is not evidence that an entry was deleted')
+    expect(wake.guidance?.system).not.toContain('complete projection')
+    expect((await source.read<RuntimeMemorySnapshot>('snapshot')).entries).toEqual(entries)
+    graph.composableTurns.endTurn(turn.turnId)
+  })
+
   it.each([false, true])('preserves Runtime metadata in model context and immutable turns (extensions=%s)', async extensions => {
     vi.useFakeTimers({ toFake: ['Date'] })
     try {
