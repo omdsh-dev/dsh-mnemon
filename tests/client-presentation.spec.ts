@@ -25,6 +25,7 @@ describe('default Source presentation migration', () => {
   })
 
   it('preserves bilingual memory space terminology while Sources own their copy', () => {
+    expect(Object.keys(en).sort()).toEqual(Object.keys(zh).sort())
     expect(copyFingerprint(zh)).toEqual(baseline.openVikingUserDiscoveryAndScopedReview.zh)
     expect(copyFingerprint(en)).toEqual(baseline.openVikingUserDiscoveryAndScopedReview.en)
     for (const source of sources) {

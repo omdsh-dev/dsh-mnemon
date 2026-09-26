@@ -549,7 +549,7 @@ export const zh = {
 
 export type MnemonKey = keyof typeof zh
 
-export const en = {
+export const en: Record<MnemonKey, string> = {
   ...runtimeCopy.en, ...documentsCopy.en, ...spacesCopy.en,
   'tab.label': 'Memory System',
   'nav.aria': 'Mnemon pages',
@@ -1090,7 +1090,7 @@ export const en = {
   'config.packZipReady': 'Verified · {components} components · {items} items · {size}',
   'config.packImportZipAction': 'Safe import',
   'config.packImportedWhole': 'Safely merged the ZIP into {root}.',
-} satisfies Record<MnemonKey, string>
+}
 
 export type MnemonTranslate = (key: MnemonKey, params?: Record<string, unknown>) => string
 
