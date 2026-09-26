@@ -12,6 +12,7 @@ For new evaluations, commit the reusable harness, workload generator, concise bi
 
 | Record / 记录 | Scope / 范围 |
 |---|---|
+| [Native Sidebar and bundle diagnostic](./sidebar-native-20260926/README.md) / [中文](./sidebar-native-20260926/README.zh-CN.md) | Native panel alignment, real skins, CLI/WebUI and isolated group-list candidate / 原生导航对齐、真实皮肤、CLI/WebUI 与隔离的分组清单候选补丁 |
 | [v0.5.15 release](./release-v0.5.15/README.md) / [中文](./release-v0.5.15/README.zh-CN.md) | Versioned composition, actual USER tool write, model projection metadata and reload persistence / 版本化组合、真实 USER 工具写入、模型投影元数据与刷新保留 |
 | [USER empty branches — issue #281](./issue-281-user-branches/README.md) / [中文](./issue-281-user-branches/README.zh-CN.md) | Published rc.2 WebUI before/after, strict scope boundaries, CLI and three-tier workflows / 正式 rc.2 WebUI 前后对比、严格范围边界、CLI 与三层基础流程 |
 | [v0.5.14 release](./release-v0.5.14/README.md) / [中文](./release-v0.5.14/README.zh-CN.md) | Versioned artifacts, real CLI, packed WebUI Runtime edits and cold-restart settings / 版本化制品、真实 CLI、制品 WebUI Runtime 编辑与冷启动设置 |
