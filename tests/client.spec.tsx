@@ -357,6 +357,32 @@ describe('MnemonWorkbench', () => {
     }
   }
 
+  it.each(['sidebar', 'builtin'] as const)('accepts scoped skin variables on the %s workspace without styling peer views', async surface => {
+    const selector = '[data-dsh-plugin="dsh-mnemon"][data-dsh-part="mnemon-view"]'
+    const skin = document.createElement('style')
+    skin.textContent = `${selector} { --mn-bg: rgb(232, 241, 249); --mn-backdrop: rgb(217, 232, 245); --mn-surface: rgba(232, 241, 249, 0.74); }`
+    document.head.append(skin)
+    try {
+      const { connection } = createConnection()
+      const { container } = render(<>
+        <section data-dsh-plugin="peer-plugin" data-dsh-part="peer-view">Peer view</section>
+        <MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" surface={surface} />
+      </>)
+      await screen.findByText('已连接')
+      const workbench = screen.getByRole('main')
+      expect(container.querySelectorAll(selector)).toHaveLength(1)
+      expect(container.querySelector(selector)).toBe(workbench)
+      expect(workbench.getAttribute('data-mnemon-surface')).toBe(surface)
+      const style = getComputedStyle(workbench)
+      expect(style.getPropertyValue('--mn-bg')).toBe('rgb(232, 241, 249)')
+      expect(style.getPropertyValue('--mn-backdrop')).toBe('rgb(217, 232, 245)')
+      expect(style.getPropertyValue('--mn-surface')).toBe('rgba(232, 241, 249, 0.74)')
+      expect(getComputedStyle(screen.getByText('Peer view')).getPropertyValue('--mn-surface')).toBe('')
+    } finally {
+      skin.remove()
+    }
+  })
+
   it.each(['sidebar', 'builtin'] as const)('renders all eight Source switch combinations as reversible %s states', async surface => {
     const ids = ['runtime', 'documents', 'memory-spaces'] as const
     const labels = { runtime: '运行时', documents: '档案', 'memory-spaces': '记忆空间' }
@@ -535,9 +561,9 @@ describe('MnemonWorkbench', () => {
     expect(within(nativeStatus).getByText('项目记忆空间: Mnemon Store 无法打开')).toBeTruthy()
   })
 
-  it('activates an additional memory space through the narrow control route without crashing the live graph', async () => {
+  it.each(['sidebar', 'builtin'] as const)('activates an additional memory space through the narrow %s control route without crashing the live graph', async surface => {
     const { connection, call } = createConnection({ withInactiveBody: true })
-    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" surface={surface} />)
 
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
     await selectWorkspaceTab('记忆空间')
@@ -554,9 +580,9 @@ describe('MnemonWorkbench', () => {
     expect(screen.getByRole('button', { name: '实体: DSH' })).toBeTruthy()
   })
 
-  it('keeps only activation controls writable when remote management is not authorized', async () => {
+  it.each(['sidebar', 'builtin'] as const)('keeps only %s activation controls writable when remote management is not authorized', async surface => {
     const { connection, call } = createConnection({ isLoopback: false, withInactiveBody: true })
-    render(<MnemonWorkbench connection={connection} settingsScope={readOnlySettingsScope} sessionId="session-1" />)
+    render(<MnemonWorkbench connection={connection} settingsScope={readOnlySettingsScope} sessionId="session-1" surface={surface} />)
 
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
     fireEvent.click(await screen.findByRole('button', { name: '检查版本' }))
