@@ -24,7 +24,7 @@ function sourcePages(t: MnemonTranslate) {
     sourcePageDirectory: createMemorySourcePageDirectory(ctx as never),
     renderSlot: ((_name: string, props: MemorySourcePageProps, options: { only?: string }) => {
       const entry = slots.entriesOfSlot(MNEMON_SOURCE_PAGE_SLOT).find(entry => entry.options.id === options.only)
-      return entry === undefined ? null : createElement(entry.component as ComponentType<MemorySourcePageProps>, props)
+      return entry === undefined ? null : <div data-slot={MNEMON_SOURCE_PAGE_SLOT} style={{ display: 'contents' }}>{createElement(entry.component as ComponentType<MemorySourcePageProps>, props)}</div>
     }) as NonNullable<ComponentProps<typeof MnemonWorkbench>['renderSlot']>,
     dispose: () => { for (const release of releases.reverse()) release() },
   }

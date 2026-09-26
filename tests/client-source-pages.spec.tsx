@@ -277,6 +277,33 @@ describe('Source Client presentation conformance', () => {
     ])))
   })
 
+  it('reveals only a connected Source element inside the owning canvas', async () => {
+    const source = { sourceInstanceKey: 'source:git', sourceTypeId: 'git', packageName: 'dsh-mnemon-source-git', role: 'repository', availability: 'ready', revision: 'r1', capabilities: ['read'], management: { label: 'Repository' } }
+    const connection = { rpc: { call: vi.fn(async (_channel: string, endpoint: string) => ({ ok: true, value: endpoint === 'source-management-catalog' ? { generationId: 'g1', sources: [source] } : status })) } }
+    const pages = [{ id: 'git/repository', sourceTypeId: 'git', pageId: 'repository', label: 'Repository', order: 1 }]
+    let owner: MemorySourcePageProps | undefined
+    const renderSlot = ((_name: string, props: MemorySourcePageProps) => { owner = props; return <div data-testid="source-target">Source content</div> }) as never
+    render(<div data-testid="host"><div data-testid="peer" /><MnemonWorkbench connection={connection as never} settingsScope={settings} t={translateEn} locale="en" sourcePageDirectory={{ getSnapshot: () => pages, subscribe: () => () => {} }} renderSlot={renderSlot} /></div>)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Repository' }))
+    const target = await screen.findByTestId('source-target'), canvas = screen.getByTestId('mnemon-canvas')
+    const host = screen.getByTestId('host'), peer = screen.getByTestId('peer')
+    canvas.scrollTop = 500; host.scrollTop = 200; peer.scrollTop = 300
+    vi.spyOn(canvas, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 80, 800, 600))
+    vi.spyOn(target, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 100, 400, 100))
+    expect(owner?.onRevealElement).toBeTypeOf('function')
+    owner?.onRevealElement?.(peer, 120)
+    owner?.onRevealElement?.(document.createElement('div'), 120)
+    expect(canvas.scrollTop).toBe(500)
+    owner?.onRevealElement?.(target, 120)
+    expect(canvas.scrollTop).toBe(400)
+    expect(host.scrollTop).toBe(200)
+    expect(peer.scrollTop).toBe(300)
+    fireEvent.click(screen.getByRole('tab', { name: 'Status' }))
+    canvas.scrollTop = 250
+    owner?.onRevealElement?.(target, 120)
+    expect(canvas.scrollTop).toBe(250)
+  })
+
   it('selects additional built-in Source instances without injecting a hidden default page', async () => {
     const sources = ['source:extra-runtime', 'source:mnemon-source-runtime'].map(sourceInstanceKey => ({
       sourceInstanceKey, sourceTypeId: 'runtime', packageName: 'dsh-mnemon-source-runtime', role: 'working-context',

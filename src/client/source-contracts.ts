@@ -32,6 +32,10 @@ export interface MemorySourcePageProps {
   /** Opaque navigation data owned by this Source page. */
   navigationInput?: MemoryJsonValue
   onRefresh?(): void
+  /** Reset only this workbench's page scroll when Source-owned navigation changes. */
+  onResetScroll?(): void
+  /** Reveal a descendant in this canvas only, below the Source's measured sticky header. */
+  onRevealElement?(element: HTMLElement, topInset?: number): void
   /** Optional, Source-bound product preferences; no raw settings service or secrets. */
   preferences?: { value: MemoryJsonValue; writable: boolean; replace(value: MemoryJsonValue): Promise<void> }
 }

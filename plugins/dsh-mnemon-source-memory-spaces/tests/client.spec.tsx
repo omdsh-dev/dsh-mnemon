@@ -72,6 +72,20 @@ describe('independent Memory Spaces Source client', () => {
     } finally { cleanup(); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
   })
 
+  it('opens related memories when an older Host supplies no scroll callbacks', async () => {
+    const read = vi.fn(async (operation: string) => ({ revision: 'r1', value: operation === 'status-summary'
+      ? { writeEnabled: false, memoryBodies: [], defaultRecallLimit: 12 }
+      : operation === 'search' ? { results: [{ id: 'first', content: 'Related compatibility evidence', memoryCapabilities: { related: true } }], sources: [] }
+      : [] }))
+    render(<MemorySpacesSourcePage page="explore" sourceTypeId="memory-spaces" sourceInstanceKey="source:old-host" sourceInstances={[]} locale="en" management={{ sourceInstanceKey: 'source:old-host', revision: 'r1', read, mutate: vi.fn() }} />)
+    fireEvent.change(await screen.findByRole('textbox', { name: t('search.queryAria') }), { target: { value: 'compatibility' } })
+    fireEvent.click(screen.getByRole('button', { name: t('search.action') }))
+    fireEvent.click(await screen.findByRole('button', { name: t('card.related') }))
+    expect(await screen.findByText(t('search.noRelated'))).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: t('search.closeRelated') }))
+    expect(screen.queryByRole('heading', { name: t('search.related') })).toBeNull()
+  })
+
   it('owns five pages with one rollback/disposal boundary', () => {
     const entries = new Set<string>()
     const release = installMemorySpacesUI({ slots: {

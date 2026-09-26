@@ -156,5 +156,19 @@
       "keys": 1000,
       "sha256": "de4c8d1e3807da170bea67398920d7eb8fbeeced96f0b8fcbf12346ffcc4e9ca"
     }
+  },
+  "sourcePageFrames": {
+    "page": {
+      "rules": 1071,
+      "rulesSha256": "182e2196441eeddf996fc664c04fc9e0df2879041e5657ccd4a680f531148abe",
+      "classes": 276,
+      "classesSha256": "d8439033262749395ace4b6df2a5b87fbd2361d453a648332de61f5e2e773eee"
+    },
+    "sidebar": {
+      "rules": 288,
+      "rulesSha256": "e4f34ee6d1d8e2766e52a3df4075933908230df664fa425de28c96f4a1c06b62",
+      "classes": 29,
+      "classesSha256": "c2eeeb8d1e00063d29bfe2949339820184f3e8b22f631c362edd85aad8bfe573"
+    }
   }
 }

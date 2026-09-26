@@ -1,10 +1,16 @@
 .shell .memoryWorkspace {
+  position: sticky;
+  z-index: 12;
+  top: 0;
   flex: 0 0 auto;
-  padding: 12px 16px 0;
+  margin: -14px -16px 12px;
+  padding: 14px 16px 0;
   border-bottom: 1px solid var(--dsw-alias-border-l1);
   background: var(--mn-surface);
 }
 .shell .memoryWorkspace > [class*='pageHeader'] { margin-bottom: 8px; }
+/* Keep secondary controls in flow beneath the one pinned Source header. */
+.shell [class*='relatedPane'], .shell [class*='entityRail'] { position: static; }
 
 .shell .memoryNavigation {
   display: flex;
@@ -270,7 +276,7 @@
 }
 
 @media (max-width: 760px) {
-  .shell .memoryNavigation { padding-inline: 12px; }
+  .shell .memoryWorkspace { margin-inline: -12px; padding-inline: 12px; }
   .shell .memoryTabs button { padding-inline: 10px; }
 }
 

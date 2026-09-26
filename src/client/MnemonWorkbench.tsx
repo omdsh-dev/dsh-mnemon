@@ -410,6 +410,10 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
     const canvas = canvasRef.current
     if (canvas !== null) canvas.scrollTop = 0
   }, [])
+  const revealElement = useCallback((element: HTMLElement, topInset = 0) => {
+    const canvas = canvasRef.current
+    if (canvas !== null && canvas.contains(element)) canvas.scrollTop = Math.max(0, canvas.scrollTop + element.getBoundingClientRect().top - canvas.getBoundingClientRect().top - topInset)
+  }, [])
 
   // Reset before paint so a newly selected page never flashes at the previous
   // page's scroll offset for one frame. The host still owns every ancestor.
@@ -562,7 +566,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       ...(management === undefined ? {} : { management }),
       ...(sessionId === undefined ? {} : { sessionId }), ...(workspaceId === undefined ? {} : { workspaceId }),
       ...(navigationInput?.page === entryId ? { navigationInput: navigationInput.value } : {}),
-      ...(preferences === undefined ? {} : { preferences }), onRefresh: mutate,
+      ...(preferences === undefined ? {} : { preferences }), onRefresh: mutate, onResetScroll: resetViewportScroll, onRevealElement: revealElement,
     }, { only: entryId })
   }
   const activeSourcePageId = sourcePageEntryId(page)
@@ -570,7 +574,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const activeSourceInstances = activeSourcePage === undefined ? [] : instancesFor(activeSourcePage.sourceTypeId)
   const activeSelectedKey = activeSourcePage === undefined ? undefined : selectedSourceInstances[activeSourcePage.sourceTypeId]
   const activeSelectedInstance = activeSourceInstances.find(instance => instance.sourceInstanceKey === activeSelectedKey) ?? activeSourceInstances.find(instance => isDefaultSourceInstance(instance.sourceInstanceKey, activeSourcePage?.sourceTypeId ?? '')) ?? activeSourceInstances[0]
-  const customSourcePage = activeSourcePage === undefined || activeSelectedInstance === undefined ? null : <div data-source-page={activeSourcePage.id}>
+  const customSourcePage = activeSourcePage === undefined || activeSelectedInstance === undefined ? null : <div className={css.page} data-source-page={activeSourcePage.id}>
     {activeSourceInstances.length > 1 && <label className={css.workspacePicker}><span>{t('sourcePage.instance')}</span><select aria-label={t('sourcePage.instanceAria')} value={activeSelectedInstance.sourceInstanceKey} onChange={event => setSelectedSourceInstances(current => ({ ...current, [activeSourcePage.sourceTypeId]: event.target.value }))}>{activeSourceInstances.map(instance => <option key={instance.sourceInstanceKey} value={instance.sourceInstanceKey}>{instance.management.label} · {instance.sourceInstanceKey}</option>)}</select></label>}
     {renderSourceContribution(activeSourcePage.id)}
   </div>

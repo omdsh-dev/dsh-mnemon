@@ -492,3 +492,7 @@
   .modalBackdrop, .modal { animation: none !important; }
   .flowConnector[data-active] i::before { display: none; }
 }
+
+/* Hosted Source content reuses one outer frame at every viewport, including through renderer wrappers. */
+.page[data-source-page] > .workspacePicker { margin-bottom: 14px; }
+.page[data-source-page] .page { width: 100%; min-height: 0; margin: 0; padding: 0; }

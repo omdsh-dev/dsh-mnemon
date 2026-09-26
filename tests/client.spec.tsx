@@ -7,6 +7,8 @@ import type { Config } from "../src/host/config.ts"
 import { ComposedMnemonWorkbench as MnemonWorkbench } from './fixtures/client.tsx'
 import { translateEn } from '../src/client/locales.ts'
 import { TEST_PROVIDERS as MEMORY_PROVIDER_CATALOG } from './fixtures/providers.ts'
+import { memoryPageStyles } from '../src/client/page-kit.tsx'
+import { installClientFrameStyles } from './helpers/client-frame-styles.ts'
 
 describe('MnemonWorkbench', () => {
   afterEach(cleanup)
@@ -1428,14 +1430,78 @@ describe('MnemonWorkbench', () => {
     expect(document.activeElement).toBe(eye)
   })
 
+  it.each([1280, 700])('shares Status page insets and scroll ownership across Source pages at %ipx', async width => {
+    const disposeStyles = installClientFrameStyles(width)
+    try {
+      const { connection } = createConnection()
+      render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+      await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
+      const canvas = screen.getByTestId('mnemon-canvas')
+      const ancestors = (element: HTMLElement): HTMLElement[] => {
+        const result: HTMLElement[] = []
+        for (let current: HTMLElement | null = element; current !== null && current !== canvas; current = current.parentElement) result.push(current)
+        return result
+      }
+      const nonzero = (value: string) => value !== '' && value !== '0px' && value !== '0' && value !== 'auto'
+      const frame = () => {
+        const page = Array.from(canvas.getElementsByClassName(memoryPageStyles.page!)).at(-1) as HTMLElement
+        expect(page).toBeTruthy()
+        const styles = ancestors(page).map(element => getComputedStyle(element))
+        return {
+          top: styles.map(style => style.paddingTop).filter(nonzero),
+          left: styles.map(style => style.paddingLeft).filter(nonzero),
+          right: styles.map(style => style.paddingRight).filter(nonzero),
+          bottom: styles.map(style => style.paddingBottom).filter(nonzero),
+          minimumHeights: styles.map(style => style.minHeight).filter(nonzero),
+          innerScrollports: styles.filter(style => /auto|scroll/u.test(style.overflow + style.overflowY)).length,
+        }
+      }
+      const statusFrame = frame()
+      expect(statusFrame.top).toEqual(['14px'])
+      expect(statusFrame.left).toEqual([width <= 760 ? '12px' : '16px'])
+      expect(statusFrame.minimumHeights).toEqual(['100%'])
+      expect(statusFrame.innerScrollports).toBe(0)
+      expect(getComputedStyle(canvas).overflow).toBe('auto')
+      const checkHeader = (heading: HTMLElement) => {
+        const styles = ancestors(heading).map(element => getComputedStyle(element))
+        const sticky = styles.filter(style => style.position === 'sticky')
+        expect(sticky).toHaveLength(1)
+        expect(sticky[0]!.top).toBe('0px')
+        const offset = (padding: 'paddingTop' | 'paddingLeft', margin: 'marginTop' | 'marginLeft') => styles.reduce((sum, style) => sum + (Number.parseFloat(style[padding]) || 0) + (Number.parseFloat(style[margin]) || 0), 0)
+        expect(offset('paddingTop', 'marginTop')).toBe(14)
+        expect(offset('paddingLeft', 'marginLeft')).toBe(width <= 760 ? 12 : 16)
+      }
+      checkHeader(within(canvas).getAllByRole('heading', { level: 2 })[0]!)
+      for (const tab of ['运行时', '档案', '记忆空间']) {
+        await selectWorkspaceTab(tab)
+        await waitFor(() => expect(within(canvas).getAllByRole('heading', { level: 2 }).length).toBeGreaterThan(0))
+        expect(frame()).toEqual(statusFrame)
+        checkHeader(within(canvas).getAllByRole('heading', { level: 2 })[0]!)
+      }
+      const memoryNavigation = screen.getByRole('tablist', { name: '记忆空间页面' })
+      expect(ancestors(memoryNavigation).filter(element => getComputedStyle(element).position === 'sticky')).toHaveLength(1)
+      expect(getComputedStyle(memoryNavigation.parentElement!).paddingInline).toBe('')
+      for (const tab of ['检索', '内容', '实体', '概览']) {
+        fireEvent.click(within(memoryNavigation).getByRole('tab', { name: tab }))
+        expect(frame()).toEqual(statusFrame)
+        const headings = within(canvas).getAllByRole('heading', { level: 2 })
+        checkHeader(headings[0]!)
+        expect(ancestors(headings[1]!).filter(element => getComputedStyle(element).position === 'sticky')).toHaveLength(0)
+        expect(Array.from(canvas.querySelectorAll<HTMLElement>('*')).filter(element => getComputedStyle(element).position === 'sticky')).toHaveLength(1)
+      }
+    } finally { disposeStyles() }
+  })
+
   it('resets the shared canvas scroll position when switching pages', async () => {
     const { connection } = createConnection()
-    render(<div data-testid="dsh-host-scrollport"><MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" /></div>)
+    render(<div data-testid="dsh-host-scrollport"><div data-testid="peer-plugin-scrollport" /><MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" /></div>)
 
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
     const canvas = screen.getByTestId('mnemon-canvas')
     const hostScrollport = screen.getByTestId('dsh-host-scrollport')
+    const peerScrollport = screen.getByTestId('peer-plugin-scrollport')
     hostScrollport.scrollTop = 240
+    peerScrollport.scrollTop = 180
     canvas.scrollTop = 900
     await selectWorkspaceTab('运行时')
     expect(canvas.scrollTop).toBe(0)
@@ -1444,6 +1510,14 @@ describe('MnemonWorkbench', () => {
     await selectWorkspaceTab('记忆空间')
     expect(canvas.scrollTop).toBe(0)
     expect(hostScrollport.scrollTop).toBe(240)
+    const memoryNavigation = screen.getByRole('tablist', { name: '记忆空间页面' })
+    for (const tab of ['检索', '内容', '实体', '概览']) {
+      canvas.scrollTop = 900
+      fireEvent.click(within(memoryNavigation).getByRole('tab', { name: tab }))
+      expect(canvas.scrollTop).toBe(0)
+      expect(hostScrollport.scrollTop).toBe(240)
+      expect(peerScrollport.scrollTop).toBe(180)
+    }
   })
 
   it('progressively renders long content lists instead of mounting every card', async () => {
@@ -1564,6 +1638,79 @@ describe('MnemonWorkbench', () => {
     await act(async () => { resolveRelated(0, '已经过期的关联响应') })
     expect(screen.getByText('较新的关联响应')).toBeTruthy()
     expect(screen.queryByText('已经过期的关联响应')).toBeNull()
+  })
+
+  function queueAnimationFrames() {
+    let next = 0
+    const pending = new Map<number, FrameRequestCallback>()
+    const request = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => { pending.set(++next, callback); return next })
+    const cancel = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(frame => { pending.delete(frame) })
+    return {
+      pending,
+      flush: () => { const frames = [...pending.values()]; pending.clear(); for (const frame of frames) frame(0) },
+      restore: () => { request.mockRestore(); cancel.mockRestore() },
+    }
+  }
+
+  it.each([120, 210])('reveals Related below a %ipx Source header without scrolling DSH or peer plugins', async headerHeight => {
+    const { connection } = createConnection({ relatedDeferred: true })
+    const frames = queueAnimationFrames()
+    try {
+      render(<div data-testid="dsh-host-scrollport"><div data-testid="peer-plugin-scrollport" /><MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" /></div>)
+      await selectWorkspaceTab('检索')
+      fireEvent.change(screen.getByRole('textbox', { name: '记忆查询' }), { target: { value: 'SQLite' } })
+      fireEvent.click(screen.getByRole('button', { name: '直接检索' }))
+      await screen.findByText('项目选择 SQLite，因为需要单文件部署。')
+      const canvas = screen.getByTestId('mnemon-canvas')
+      const host = screen.getByTestId('dsh-host-scrollport'), peer = screen.getByTestId('peer-plugin-scrollport')
+      host.scrollTop = 240; peer.scrollTop = 180; canvas.scrollTop = 473.5
+      const header = screen.getByRole('heading', { name: '记忆空间' }).closest('section')!
+      vi.spyOn(canvas, 'getBoundingClientRect').mockImplementation(() => new DOMRect(280, 87, 1000, 633))
+      vi.spyOn(header, 'getBoundingClientRect').mockImplementation(() => new DOMRect(280, 87, 1000, headerHeight))
+      fireEvent.click(screen.getByRole('button', { name: '查看关联' }))
+      const close = screen.getByRole('button', { name: '关闭关联记忆' }), pane = close.closest('aside')!
+      const contentTop = canvas.scrollTop + 108
+      vi.spyOn(pane, 'getBoundingClientRect').mockImplementation(() => new DOMRect(800, contentTop - canvas.scrollTop, 360, 400))
+      vi.spyOn(close, 'getBoundingClientRect').mockImplementation(() => new DOMRect(1130, contentTop - canvas.scrollTop + 13.625, 26, 26))
+      expect(close.getBoundingClientRect().bottom).toBeLessThan(header.getBoundingClientRect().bottom)
+      act(() => frames.flush())
+      expect(pane.getBoundingClientRect().top).toBeGreaterThanOrEqual(header.getBoundingClientRect().bottom + 14)
+      expect(close.getBoundingClientRect().top).toBeGreaterThan(header.getBoundingClientRect().bottom)
+      expect(host.scrollTop).toBe(240)
+      expect(peer.scrollTop).toBe(180)
+    } finally { cleanup(); frames.restore() }
+  })
+
+  it.each(['close', 'unmount'] as const)('cancels a pending Related reveal on %s without disturbing another Source', async action => {
+    const first = createConnection({ relatedDeferred: true }), second = createConnection({ relatedDeferred: true })
+    const frames = queueAnimationFrames()
+    try {
+      const owner = render(<MnemonWorkbench connection={first.connection} settingsScope={settingsScope} sessionId="first" />)
+      const peer = render(<MnemonWorkbench connection={second.connection} settingsScope={settingsScope} sessionId="second" />)
+      const openRelated = async (container: HTMLElement) => {
+        const view = within(container)
+        fireEvent.click(await view.findByRole('tab', { name: '记忆空间' }))
+        fireEvent.click(await view.findByRole('tab', { name: '检索' }))
+        fireEvent.change(view.getByRole('textbox', { name: '记忆查询' }), { target: { value: 'SQLite' } })
+        fireEvent.click(view.getByRole('button', { name: '直接检索' }))
+        await view.findByText('项目选择 SQLite，因为需要单文件部署。')
+        const canvas = view.getByTestId('mnemon-canvas')
+        canvas.scrollTop = 600
+        vi.spyOn(view.getByRole('heading', { name: '记忆空间' }).closest('section')!, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 0, 500, 120))
+        fireEvent.click(view.getByRole('button', { name: '查看关联' }))
+        vi.spyOn(view.getByRole('button', { name: '关闭关联记忆' }).closest('aside')!, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, 30, 300, 400))
+        return canvas
+      }
+      const ownCanvas = await openRelated(owner.container), peerCanvas = await openRelated(peer.container)
+      expect(frames.pending.size).toBe(2)
+      if (action === 'close') fireEvent.click(within(owner.container).getByRole('button', { name: '关闭关联记忆' }))
+      else owner.unmount()
+      expect(frames.pending.size).toBe(1)
+      act(() => frames.flush())
+      expect(ownCanvas.scrollTop).toBe(600)
+      expect(peerCanvas.scrollTop).toBe(496)
+      expect(within(peer.container).getByRole('button', { name: '关闭关联记忆' })).toBeTruthy()
+    } finally { cleanup(); frames.restore() }
   })
 
   it.each(['sidebar', 'builtin'] as const)('shows an Agent answer using the %s task context', async surface => {
