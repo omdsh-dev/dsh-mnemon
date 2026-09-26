@@ -33,6 +33,12 @@ Desktop 可能删除插件 generation 内的私有 `@deepseek-ai/*` 包，改用
 
 参见[原版 Desktop 复现与验收记录](../../pr-assets/issue-274-profile-generation/README.zh-CN.md)。
 
+## DSH 0.1.7 bundle 组件列表
+
+DSH `0.1.7-rc.2` 可能在 Mnemon 正常运行时，将 `cordis:group` / `mnemon-bundle` 显示为关闭的组件。切换该行会报 `unknown-plugin`：宿主的 bundle 声明列表包含原生 group，但可管理插件清单明确排除了 group。该行是内部生命周期容器。要停用并恢复整套组合，请使用顶层 `dsh-mnemon` bundle 开关，或 **Mnemon** 组件（`mnemon` 条目）。额外显示的容器开关仍是该宿主版本的上游缺陷。
+
+Starter 保留稳定的 group ID 和已有 `mnemon` 配置目标。停用核心会停止其 Source、Strategy 和私有 Provider 子项；重新启用后，各组件恢复各自的独立选择。移除 group 会让仍启用的依赖项等待缺失的核心；将 group 改为匿名条目则可能在 profile 重载后留下旧实例。两者都不是受支持的规避方式。不需要迁移配置或记忆。[正式宿主生命周期回归](../development/README.md#测试归属与覆盖)在不修改已安装宿主的前提下，验证管理器持久化、重启及旧版字面值／表达式停用标志。
+
 ## DSH 0.1.7 设置恢复
 
 DSH `0.1.7-alpha.1` 用基于 Config 的表单替代了 `settings.register()` 和 `settings-file`。Mnemon 提供动态 Config 字段，现有界面操作通过宿主检查 revision 的 profile 写入器持久化；修改传输权限仍需正常重载插件。DSH `0.1.5-rc.2` 和 `0.1.6-alpha.2` 继续沿用原设置路径。
