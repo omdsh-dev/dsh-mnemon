@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { SlotCore } from '@deepseek-ai/dsh-client-ui-slots'
+import { Context } from '@deepseek-ai/cordis'
 import { createContext, createElement, useContext, useSyncExternalStore, type ComponentType } from 'react'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -16,6 +17,7 @@ import { MnemonNativeSidebarSeat } from '../src/client/native-sidebar-seat.ts'
 import { MNEMON_MAIN_PANEL_ID, mountMnemonSidebarNavigation } from '../src/client/native-sidebar.tsx'
 import { MnemonSidebarWorkspaceHost } from '../src/client/workspace-mount.tsx'
 import { MnemonWorkspaceController } from '../src/client/workspace-controller.ts'
+import { inject } from '../src/client/index.ts'
 
 const releases: Array<() => void> = []
 afterEach(() => {
@@ -117,7 +119,7 @@ function fixture(initiallyDeclared = true, layoutReady = true) {
     return () => { stopIcon(); stopMain() }
   }
   return {
-    core, controller, seat, navigation, mount, selectPanel, getPanel, NativeFrame, Host, registerPeer,
+    core, ctx, controller, seat, navigation, mount, selectPanel, getPanel, NativeFrame, Host, registerPeer,
     rename: (value: string) => { label = value },
     declare: () => { stopOwner = declare() },
     removeOwner: () => { stopOwner?.(); stopOwner = undefined },
@@ -129,6 +131,35 @@ function fixture(initiallyDeclared = true, layoutReady = true) {
 }
 
 describe('native Sidebar panel integration', () => {
+  it('authorizes native layout access through the real Cordis Client inject contract', async () => {
+    const f = fixture()
+    f.navigation.dispose()
+    const root = new Context()
+    let navigation: ReturnType<typeof mountMnemonSidebarNavigation> | undefined
+    const failures: unknown[] = []
+    for (const name of inject) root.provide(name, {})
+    root.set('slots', f.ctx.slots)
+    root.set('locale', f.ctx.locale)
+    // Providing a service does not authorize child access: the exported Client
+    // inject list must also contain layout, as on the actual WebUI runtime.
+    if (inject.includes('layout')) root.set('layout', f.ctx.layout)
+    else root.provide('layout', f.ctx.layout)
+    try {
+      await root.plugin({ inject, apply(ctx: Context) {
+        try { navigation = mountMnemonSidebarNavigation(ctx as never, () => 'Memory System', f.controller, f.seat) }
+        catch (error) { failures.push(error) }
+      } })
+      expect(failures).toEqual([])
+      expect(f.core.entriesOfSlot('sidebar.panellist')).toHaveLength(1)
+      expect(navigation).toBeDefined()
+      act(() => navigation!.open())
+      expect(f.selectPanel).toHaveBeenCalledWith(MNEMON_MAIN_PANEL_ID)
+    } finally {
+      navigation?.dispose()
+      await root.fiber.dispose()
+    }
+  })
+
   it('adds a native panel beside Plugins, follows native icon sizes and locale labels, and retains Source ownership and editor state', () => {
     const f = fixture()
     releases.push(f.registerPeer())

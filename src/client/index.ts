@@ -30,7 +30,7 @@ import { mountSubagentTokenUsageOverride } from './subagent-token-usage.tsx'
 
 export * from './extension-sdk.ts'
 
-export const inject = ['slots', 'sessions', 'workspaces', 'uiSession', 'connection', 'locale']
+export const inject = ['slots', 'sessions', 'workspaces', 'uiSession', 'connection', 'locale', 'layout']
 
 /** Interaction surfaces: slot name, settings toggle, and the registrations it owns. */
 type MnemonNamespace = 'mnemon'
