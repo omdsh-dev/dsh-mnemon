@@ -69,7 +69,7 @@ mnemon:
     mode: inherit # inherit | fixed
     # provider: deepseek # fixed 时必填
     # model: deepseek-chat # fixed 时必填
-  remoteAccess: read-only # 远程管理：read-only | trusted-host
+  remoteAccess: trusted-host # 远程管理：read-only | trusted-host
 ```
 
 ## 选项
@@ -111,7 +111,7 @@ mnemon:
 | `tabEnabled` | `true` | boolean | 是否挂载所选入口和工作台；关闭后 Host RPC、命令和 Agent 工具保持注册 |
 | `writeEnabled` | `true` | boolean | 是否暴露语义写工具、写 RPC 和写命令 |
 | `taskAgentModel` | `{ mode: inherit }` | `inherit` / `fixed` | AI 元信息、Agent 查询、记忆沉淀和档案归档使用的独立任务 Agent，以及空闲复盘 worker 的模型路由；`fixed` 必须同时保存 `provider` 与 `model`，并会钉住对应的写入、证据问答、Provider 选择、迁移、压缩、归档和元信息维护 worker。对话中的 Recall 与 Related 是 Host 直接读取，不使用该路由 |
-| `remoteAccess` | `read-only` | `read-only` / `trusted-host` | 非 loopback Mnemon 管理授权，仅启动时读取；由 API Gateway 映射执行，并保留旧 DSH 0.1.1-rc.2 通道策略 |
+| `remoteAccess` | `trusted-host` | `read-only` / `trusted-host` | 非 loopback Mnemon 管理授权，仅启动时读取；由 API Gateway 映射执行，并保留旧 DSH 0.1.1-rc.2 通道策略。默认 `trusted-host`，让本地管理在任何设置段写入之前即可工作；确需只读部署时显式设为 `read-only` |
 | `mnemon-ui.turnBar` | `true` | boolean | 回合尾记忆活动条；默认开启，**保存后实时生效** |
 | `mnemon-ui.saveAction` | `true` | boolean | 已定稿助手回复旁的「存入记忆」图标与确认弹窗；默认开启，**保存后实时生效** |
 
@@ -191,7 +191,7 @@ WebUI 从实时管理目录读取 Source 实例，新增 Source 无须修改前�
 
 DSH 负责浏览器认证或配对，以及 Host/Origin 校验。从 dsh-mnemon v0.5.5 起，远程页面使用命名空间 API Gateway，本地回环客户端保留旧通道。Mnemon 网关映射单独执行 `remoteAccess`：`read-only` 允许普通读取、小范围激活和设置查看，但拒绝写入、ZIP 操作、View mutation 和设置修改；未授予 `trusted-host` 时，设置快照返回 `writable: false`。此策略仅启动时读取，修改后需重启 DSH。DSH `trustedHosts` 不能替代 HTTPS 或部署层访问控制。
 
-在 DSH 0.1.1-rc.2 上，`remoteAccess` 仍是真实的启动时安全边界，不能通过 Web settings 修改。默认 `read-only` 会把设置、ZIP 备份、Provider 连接和宽泛 mutation 限制在 loopback；只有部署层已经提供可靠认证时，才可使用 `trusted-host` 将三个管理通道整体提升。所有受支持版本中的 `writeEnabled=false` 都只是产品级只读模式，不能替代 transport 身份认证。
+在 DSH 0.1.1-rc.2 上，`remoteAccess` 仍是真实的启动时安全边界，不能通过 Web settings 修改。默认 `trusted-host` 会为通过 DSH 受信主机判定的来源整体提升三个管理通道，使本地管理在任何设置段写入之前即可工作；确需把设置、ZIP 备份、Provider 连接和宽泛 mutation 保持在 loopback 内时，请显式设为 `read-only`，且仅在部署层已提供可靠认证时使用 `trusted-host`。所有受支持版本中的 `writeEnabled=false` 都只是产品级只读模式，不能替代 transport 身份认证。
 
 完整的代理、启动 token、可信 authority、rc.2 回滚 patch、重启与验证流程见[云端 WebUI](../guides/operations.md#cloud-hosted-webui)。
 

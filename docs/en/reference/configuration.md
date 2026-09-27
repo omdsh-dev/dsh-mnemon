@@ -67,7 +67,7 @@ mnemon:
     mode: inherit # inherit | fixed
     # provider: deepseek # required for fixed
     # model: deepseek-chat # required for fixed
-  remoteAccess: read-only # remote management: read-only | trusted-host
+  remoteAccess: trusted-host # remote management: read-only | trusted-host
 ```
 
 ## Options
@@ -109,7 +109,7 @@ mnemon:
 | `tabEnabled` | `true` | boolean | Whether to mount the selected entry and workbench; Host RPC, commands, and Agent tools remain registered when off |
 | `writeEnabled` | `true` | boolean | Whether to expose semantic write tools, write RPC, and write commands |
 | `taskAgentModel` | `{ mode: inherit }` | `inherit` / `fixed` | Model route for independent task Agents used by AI metadata, Agent Query, memory distillation, and Document archiving, plus the idle-review worker; `fixed` requires both `provider` and `model` and also pins their bounded workers for write, answer, provider placement, migration, compaction, archive, and metadata maintenance. Conversation Recall and Related are direct Host reads and do not use this route |
-| `remoteAccess` | `read-only` | `read-only` / `trusted-host` | Startup-only grant for non-loopback Mnemon management; enforced by the API Gateway projection and retained for legacy DSH 0.1.1-rc.2 channels |
+| `remoteAccess` | `trusted-host` | `read-only` / `trusted-host` | Startup-only grant for non-loopback Mnemon management; enforced by the API Gateway projection and retained for legacy DSH 0.1.1-rc.2 channels. Defaults to `trusted-host` so local management keeps working before any settings segment exists; set `read-only` explicitly to close management writes |
 | `mnemon-ui.turnBar` | `true` | boolean | Turn-tail memory activity bar; on by default, **applies live after saving** |
 | `mnemon-ui.saveAction` | `true` | boolean | “Save to memory” icon and confirmation on finalized assistant replies; on by default, **applies live after saving** |
 
@@ -189,7 +189,7 @@ Legacy channel registration supports the stable DSH 0.1.2-rc.1 baseline, its alp
 
 DSH owns browser authentication or pairing and Host/Origin validation. Since dsh-mnemon v0.5.5, remote pages use the namespaced API Gateway; local loopback clients retain legacy channels. Mnemon's Gateway projection separately enforces `remoteAccess`: `read-only` allows ordinary reads, narrow activation and settings inspection, but rejects writes, ZIP operations, View mutations and settings changes. Settings snapshots report `writable: false` without the `trusted-host` grant. Restart DSH after changing this startup-only policy. DSH `trustedHosts` does not replace HTTPS or deployment access controls.
 
-On DSH 0.1.1-rc.2, `remoteAccess` remains a real startup security boundary and cannot be changed through Web settings. The default `read-only` mode keeps settings, ZIP backups, Provider connections, and broad mutations loopback-only; `trusted-host` promotes all three management channels together and must be used only behind reliable deployment authentication. `writeEnabled=false` is a product-level read-only mode on every supported version; it is not a substitute for transport authentication.
+On DSH 0.1.1-rc.2, `remoteAccess` remains a real startup security boundary and cannot be changed through Web settings. The default `trusted-host` mode promotes all three management channels together for hosts that pass DSH's trusted-host verdict, so local management keeps working before any settings segment exists; set `read-only` explicitly to keep settings, ZIP backups, Provider connections, and broad mutations loopback-only, and use `trusted-host` only behind reliable deployment authentication. `writeEnabled=false` is a product-level read-only mode on every supported version; it is not a substitute for transport authentication.
 
 For the complete proxy, launch-token, trusted-authority, rc.2 rollback-patch, restart, and verification workflow, see [Cloud-hosted WebUI](../guides/operations.md#cloud-hosted-webui).
 

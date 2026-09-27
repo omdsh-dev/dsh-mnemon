@@ -49,7 +49,7 @@ describe('Mnemon config and resolution', () => {
       displayMode: 'sidebar',
       tabEnabled: true,
       writeEnabled: true,
-      remoteAccess: 'read-only',
+      remoteAccess: 'trusted-host',
       conversationInteraction: { turnBar: true, saveAction: true },
       persistenceStrategy: {
         mode: 'manual',

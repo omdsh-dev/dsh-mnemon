@@ -168,15 +168,15 @@ describe('View configuration with the real pinned DSH Cordis Loader', () => {
     expect(f.treeWrite).not.toHaveBeenCalled()
   })
 
-  it('isolates Profiles sharing one settings document, and restores only the matching Loader anchor', async () => {
+  it('shares one settings document across Profiles because the memory store is host-global', async () => {
     const webAnchor = 'file:///isolated/profiles/web/cordis.yml'
     const first = await fixture(undefined, webAnchor)
     await first.management.apply(first.config, scope(first), await request(first, { light: { enabled: true, config: { maxProjectionCharacters: 700 } } }))
     const namespace = first.management.settingsNamespace
     const stored = { [namespace]: first.settingsDocuments.get(namespace)!.value as MemoryViewPreferences }
     const headless = await fixture(undefined, 'file:///isolated/profiles/headless/cordis.yml', stored)
-    expect(headless.management.settingsNamespace).not.toBe(namespace)
-    expect(headless.loader.resolve('light').disabled).toBe(true)
+    expect(headless.management.settingsNamespace).toBe(namespace)
+    await vi.waitFor(async () => expect((await headless.management.catalog()).entries.find(entry => entry.entryId === 'light')).toMatchObject({ active: true, config: { maxProjectionCharacters: 700 } }))
     const restarted = await fixture(undefined, webAnchor, stored)
     expect(restarted.management.settingsNamespace).toBe(namespace)
     await vi.waitFor(async () => expect((await restarted.management.catalog()).entries.find(entry => entry.entryId === 'light')).toMatchObject({ active: true, config: { maxProjectionCharacters: 700 } }))
