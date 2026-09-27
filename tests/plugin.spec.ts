@@ -276,7 +276,7 @@ describe('dsh-mnemon plugin composition', () => {
 
   it('registers the full tool surface, guidance, and split RPC channels', () => {
     const fixture = context()
-    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
+    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir(), remoteAccess: 'read-only' })
     expect(fixture.tools.map(tool => (tool as { name: string }).name)).toEqual([
       'mnemon_subagent_result',
       'mnemon_view_route',
@@ -328,7 +328,7 @@ describe('dsh-mnemon plugin composition', () => {
 
   it('preserves rc.2 channel authorities with one call shape accepted by the authenticated alpha API', () => {
     const fixture = context()
-    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
+    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir(), remoteAccess: 'read-only' })
     for (const channel of ['/dsh-mnemon-write', '/dsh-mnemon-settings', '/dsh-mnemon-pack', '/dsh-mnemon-view-settings']) {
       expect(fixture.channels).toEqual(expect.arrayContaining([
         [channel, expect.anything(), { authority: 'loopback' }],
@@ -352,7 +352,7 @@ describe('dsh-mnemon plugin composition', () => {
 
   it('keeps stable live surfaces while fencing every mutation in read-only mode', async () => {
     const fixture = context()
-    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir(), writeEnabled: false })
+    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir(), writeEnabled: false, remoteAccess: 'read-only' })
     expect(fixture.tools).toHaveLength(17)
     const runtimeTool = fixture.tools.find(tool => (tool as { name: string }).name === 'mnemon_runtime_memory') as {
       execute: (args: unknown, execution: unknown) => Promise<unknown>

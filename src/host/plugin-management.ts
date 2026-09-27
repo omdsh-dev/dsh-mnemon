@@ -155,16 +155,18 @@ export class MemoryPluginManagement {
   private restorePending = false
 
   constructor(private readonly ctx: HostContextShape, private readonly engine: MemoryRuntime, private readonly settingsService: HostSettingsService = ctx.settings as HostSettingsService) {
-    const loader = this.loader()
-    const anchor = loader?.config?.baseUrl ?? loader?.ctx?.baseUrl ?? loader?.context?.baseUrl
-    const suffix = anchor ? `-${hash(anchor).slice(0, 16)}` : ''
-    this.settingsNamespace = `${MNEMON_VIEW_SETTINGS_NAMESPACE}${suffix}`
+    // The default memory store (~/.mnemon) is host-global and profile-independent,
+    // so the settings namespaces stay host-global too instead of hashing the
+    // profile base URL. Profile separation belongs to memory routing, not to
+    // configuration access: one host's legacy backup must migrate on every
+    // profile of that host.
+    this.settingsNamespace = MNEMON_VIEW_SETTINGS_NAMESPACE
     this.settings = settingsService.register<MemoryViewPreferences>(this.settingsNamespace, schema, {
       base: { entries: {} }, applies: 'live', validate: value => { preferences(value) },
     })
     // Read the previously published Source overlay only as an input migration.
     // New writes always use the unified mnemon-view document above.
-    this.legacySettings = settingsService.register<LegacySourcePreferences>(`mnemon-plugins${suffix}`, legacySchema, {
+    this.legacySettings = settingsService.register<LegacySourcePreferences>('mnemon-plugins', legacySchema, {
       base: { sources: {} }, applies: 'live', validate: value => { legacyPreferences(value) },
     })
   }

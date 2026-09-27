@@ -198,10 +198,21 @@ export function planLegacySettingsImport(options: LegacySettingsImportOptions): 
       if (key.startsWith('mnemon-view-') && !VIEW_NAMESPACE.test(key)
         || key.startsWith('mnemon-plugins-') && !LEGACY_NAMESPACE.test(key)) throw new Error('Legacy settings document contains an invalid Mnemon namespace.')
     }
-    const relevant = ['mnemon', 'mnemon-ui', options.viewNamespace, options.legacyNamespace]
-    if (!relevant.some(key => Object.hasOwn(sections, key))) return { patch: {}, diagnostics }
-    for (const key of relevant) {
-      if (Object.hasOwn(sections, key) && containsExpression(copiedObject(sections[key], key))) {
+    // The memory store is host-global, so any well-formed view namespace in the
+    // backup belongs to this host: accept profile-suffixed historical keys and
+    // migrate them instead of silently refusing a sibling profile's backup.
+    const viewKeys = Object.keys(sections).filter(key => VIEW_NAMESPACE.test(key))
+    const legacyKeys = Object.keys(sections).filter(key => LEGACY_NAMESPACE.test(key))
+    const relevant = ['mnemon', 'mnemon-ui', ...viewKeys, ...legacyKeys]
+    if (!relevant.some(key => Object.hasOwn(sections, key))) {
+      return { patch: {}, diagnostics: ['Legacy backup holds no Mnemon view namespace for this host; defaults stay in effect and no import marker is written.'] }
+    }
+    const viewKey = Object.hasOwn(sections, options.viewNamespace) ? options.viewNamespace : viewKeys[0] ?? undefined
+    const legacyKey = Object.hasOwn(sections, options.legacyNamespace) ? options.legacyNamespace : legacyKeys[0] ?? undefined
+    // Expression safety applies only to the sections this plan will consume;
+    // foreign profile sections are ignored, never validated and never read.
+    for (const key of ['mnemon', 'mnemon-ui', viewKey, legacyKey]) {
+      if (key !== undefined && Object.hasOwn(sections, key) && containsExpression(copiedObject(sections[key], key))) {
         throw new Error(`${key} contains an expression; legacy settings must contain only literal data.`)
       }
     }
@@ -220,13 +231,13 @@ export function planLegacySettingsImport(options: LegacySettingsImportOptions): 
       patch.conversationInteraction = { ...inheritedInteraction, ...currentInteraction }
     }
     const currentView = Object.hasOwn(current, 'memoryView') ? view(current.memoryView, 'Current memoryView') : {}
-    if (Object.hasOwn(sections, options.viewNamespace) || Object.hasOwn(sections, options.legacyNamespace)) {
+    if (viewKey !== undefined || legacyKey !== undefined) {
       if (!Array.isArray(options.sourceEntryIds)) throw new Error('Source Entry ids must be an array')
       for (const id of options.sourceEntryIds) entryId(id, 'Source Entry ids')
       const sourceEntryIds = new Set(options.sourceEntryIds)
-      const oldSources = Object.hasOwn(sections, options.legacyNamespace)
-        ? sources(sections[options.legacyNamespace], options.legacyNamespace, sourceEntryIds, diagnostics) : {}
-      const oldView = Object.hasOwn(sections, options.viewNamespace) ? view(sections[options.viewNamespace], options.viewNamespace) : {}
+      const oldSources = legacyKey !== undefined
+        ? sources(sections[legacyKey], legacyKey, sourceEntryIds, diagnostics) : {}
+      const oldView = viewKey !== undefined ? view(sections[viewKey], viewKey) : {}
       const entries = { ...oldSources, ...oldView.entries }
       applyEntryOverrides(entries, options.entryOverrides, sourceEntryIds, diagnostics)
       const migratedView: MemoryViewPreferences = { ...oldView, entries, ...currentView }

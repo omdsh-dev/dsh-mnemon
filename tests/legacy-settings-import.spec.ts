@@ -38,13 +38,11 @@ describe('pure legacy settings import planning', () => {
     } })
   })
 
-  it('never imports another profile hash or an unsuffixed fallback into a hashed profile', () => {
+  it('imports a sibling profile namespace because the memory store is host-shared', () => {
     expect(plan({
       'mnemon-view-fedcba9876543210': { entries: { [light]: { enabled: true, config: {} } } },
-      'mnemon-plugins-fedcba9876543210': { sources: { [documents]: { enabled: false } } },
-      'mnemon-view': { entries: { [light]: { enabled: true, config: {} } } },
       unrelated: ['untouched', { anything: true }],
-    })).toEqual({ patch: {}, diagnostics: [] })
+    })).toEqual({ patch: { memoryView: { entries: { [light]: { enabled: true, config: {} } } }, legacySettingsImported: true }, diagnostics: [] })
   })
 
   it('supports the exact unsuffixed historical namespace only when requested', () => {

@@ -39,7 +39,7 @@ describe('View overlays across full profile reconciliation', () => {
       get: () => ({ entries: () => f.loader.entries(), ...anchor }),
     } as unknown as HostContextShape, f.engine).settingsNamespace
     const expected = namespace({ config: { baseUrl } })
-    expect(expected).toMatch(/^mnemon-view-[a-f0-9]{16}$/u)
+    expect(expected).toBe('mnemon-view')
     expect(namespace({ ctx: { baseUrl } })).toBe(expected)
     expect(namespace({ context: { baseUrl } })).toBe(expected)
     expect(namespace({ ctx: { baseUrl }, context: { baseUrl: 'file:///different/' } })).toBe(expected)

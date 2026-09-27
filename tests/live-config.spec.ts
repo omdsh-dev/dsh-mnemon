@@ -25,14 +25,14 @@ describe('live Host configuration', () => {
       const fiber = await root.plugin({
         Config: LiveConfig,
         apply(_ctx: Context, config: unknown) { received = config },
-      }, { displayMode: 'builtin', remoteAccess: 'trusted-host' })
+      }, { displayMode: 'builtin', remoteAccess: 'read-only' })
       const config = received as ReturnType<typeof LiveConfig>
       expect(isVolatile(config.displayMode)).toBe(true)
       if (!isVolatile(config.displayMode)) throw new Error('The live schema must provide references on this host')
       expect(config.displayMode.get()).toBe('builtin')
       expect(isVolatile(config.remoteAccess)).toBe(false)
-      expect(config.remoteAccess).toBe('trusted-host')
-      expect(LiveConfig.simplify(fiber.config)).toEqual({ displayMode: 'builtin', remoteAccess: 'trusted-host' })
+      expect(config.remoteAccess).toBe('read-only')
+      expect(LiveConfig.simplify(fiber.config)).toEqual({ displayMode: 'builtin', remoteAccess: 'read-only' })
     } finally {
       await root.fiber.dispose()
     }

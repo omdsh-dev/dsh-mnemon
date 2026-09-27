@@ -191,7 +191,12 @@ export const Config: z<Config> = z.object({
   displayMode: z.union(['sidebar', 'builtin', 'buildin'] as const).default('sidebar'),
   tabEnabled: z.boolean().default(true),
   writeEnabled: z.boolean().default(true),
-  remoteAccess: z.union(['read-only', 'trusted-host'] as const).default('read-only'),
+  // Local management (settings writes, ZIP) must keep working even when no
+  // settings segment has been persisted yet, so configuration timing can never
+  // gate features. trusted-host still passes remote peers through DSH's
+  // trusted-host verdict; untrusted hosts remain rejected, so read-only
+  // deployments can still opt in explicitly.
+  remoteAccess: z.union(['read-only', 'trusted-host'] as const).default('trusted-host'),
   lifecycleEnabled: z.boolean().default(true),
   recallMode: z.union(['guided', 'off'] as const).default('guided'),
   writebackMode: z.union(['guided', 'off'] as const).default('guided'),
@@ -356,7 +361,7 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     displayMode: normalizeDisplayMode(config.displayMode),
     tabEnabled: config.tabEnabled ?? true,
     writeEnabled: config.writeEnabled ?? true,
-    remoteAccess: config.remoteAccess ?? 'read-only',
+    remoteAccess: config.remoteAccess ?? 'trusted-host',
     lifecycleEnabled: config.lifecycleEnabled ?? true,
     recallMode: config.recallMode ?? 'guided',
     writebackMode: config.writebackMode ?? 'guided',
