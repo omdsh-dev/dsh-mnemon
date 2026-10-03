@@ -6,6 +6,7 @@ For an existing installation, start with [Compatibility and upgrades](../referen
 
 ## v0.5
 
+- [v0.5.24: Complete Entity Counts and Related Memories on Demand](./v0.5.24.md)
 - [v0.5.23: Faster Memory Compaction, Queries and Multi-Space Recall](./v0.5.23.md)
 - [v0.5.22: In-App Updates, Conversation Tabs and Ollama Subagents](./v0.5.22.md)
 - [v0.5.21: Large Native Spaces and Leaner Hot Memory](./v0.5.21.md)

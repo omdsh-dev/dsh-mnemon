@@ -45,7 +45,7 @@ importers:
         specifier: 0.5.9
         version: link:plugins/dsh-mnemon-source-documents
       dsh-mnemon-source-memory-spaces:
-        specifier: 0.5.15
+        specifier: 0.5.16
         version: link:plugins/dsh-mnemon-source-memory-spaces
       dsh-mnemon-source-runtime:
         specifier: 0.5.12
@@ -651,7 +651,7 @@ importers:
         specifier: ^9.0.0
         version: 9.0.0
       dsh-mnemon:
-        specifier: ^0.5.23
+        specifier: ^0.5.24
         version: link:../..
       dsh-mnemon-provider-byterover:
         specifier: ^0.5.5
