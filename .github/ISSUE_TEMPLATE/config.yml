@@ -1,1 +1,5 @@
 blank_issues_enabled: false
+contact_links:
+  - name: dsh-mnemon issues now live in mnemon-dev/mnemon / dsh-mnemon 的 Issue 已迁移到 mnemon-dev/mnemon
+    url: https://github.com/mnemon-dev/mnemon/issues/new/choose
+    about: Report bugs and request features in mnemon-dev/mnemon. / 请在 mnemon-dev/mnemon 提交缺陷和需求。

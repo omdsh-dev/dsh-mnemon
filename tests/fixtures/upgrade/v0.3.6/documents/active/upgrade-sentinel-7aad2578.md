@@ -1,19 +1,5 @@
----
-id: "7aad2578-c1ac-404d-9a4d-2c6c090cbdd8"
-title: "Upgrade sentinel"
-description: "Synthetic old-format Document."
-status: "active"
-created_at: "2026-08-20T10:00:00.000Z"
-updated_at: "2026-08-20T10:00:00.000Z"
-content_hash: "1e6af6fd6c00f4098605d1bc65726d450f54dea1a28b86343a0b88d20a3624a6"
-source_paths:
-  - "README.md"
-session_ids:
-  - "legacy-session"
-memory_body_ids:
-  []
----
+# Moved / 已迁移
 
-# Upgrade sentinel
+This page now lives in [mnemon-dev/mnemon](https://github.com/mnemon-dev/mnemon/blob/master/dsh/tests/fixtures/upgrade/v0.3.6/documents/active/upgrade-sentinel-7aad2578.md), where dsh-mnemon is developed.
 
-upgradesentinel preserves narrative evidence across plugin extraction.
+本页已迁移到 [mnemon-dev/mnemon](https://github.com/mnemon-dev/mnemon/blob/master/dsh/tests/fixtures/upgrade/v0.3.6/documents/active/upgrade-sentinel-7aad2578.md)，dsh-mnemon 现在在那里开发。
