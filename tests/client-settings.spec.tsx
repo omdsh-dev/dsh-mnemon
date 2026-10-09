@@ -495,6 +495,28 @@ describe('MnemonSettingsCard', () => {
     expect(screen.getByText('openai / gpt-5')).toBeTruthy()
   })
 
+  it('asks for the route of the conversation the page was opened from', async () => {
+    const scope = liveSettingsScope<Config>({ status: 'ready' as const, value: { storageScope: 'global' as const }, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const }, vi.fn(async () => {}))
+    const call = vi.fn(async (channel: string, endpoint: string, _payload: unknown) => {
+      if (channel === '/dsh-mnemon-read' && endpoint === 'task-agent-models') return {
+        ok: true as const,
+        value: {
+          effective: { provider: 'ai', model: 'space-bunny', source: 'session' as const },
+          defaultSelection: { provider: 'deepseek', model: 'deepseek-chat' },
+          groups: [{ id: 'deepseek', name: 'DeepSeek', models: [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }] }],
+          failures: [],
+        },
+      }
+      throw new Error(`unexpected ${channel} ${endpoint}`)
+    })
+
+    render(threeTier(scope, { rpc: { call }, isLoopback: true } as ClientConnectionHandle, { sessionId: 'session-7', workspaceId: 'workspace-3' }))
+
+    // The conversation's own model wins over the DSH-wide default the profile saved.
+    expect(await screen.findByText('ai / space-bunny')).toBeTruthy()
+    expect(call).toHaveBeenCalledWith('/dsh-mnemon-read', 'task-agent-models', { includeCatalog: false, sessionId: 'session-7', workspaceId: 'workspace-3' })
+  })
+
   it('keeps rapid route-mode switches stable while model requests finish out of order', async () => {
     const mutate = vi.fn(async () => {})
     const scope = liveSettingsScope<Config>({ status: 'ready' as const, value: { storageScope: 'global' as const }, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const }, mutate)

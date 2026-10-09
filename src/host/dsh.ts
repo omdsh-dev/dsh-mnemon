@@ -146,6 +146,12 @@ export interface HostSession {
   header?: { origin?: 'subagent'; parentSession?: string; delegationDepth?: number; cwd?: string; agentPreset?: string }
   snapshotEvents(fromSeq?: number, toSeqExclusive?: number): readonly HostSessionEvent[]
   eventAt(seq: number): HostSessionEvent | undefined
+  /**
+   * The model this Session last asked DSH for. A task Agent that follows the
+   * conversation reads it before the profile-wide default, so the model chosen
+   * for one conversation is the model its background work runs on.
+   */
+  requestHeader?(): { config?: { provider?: string; model?: string } } | undefined
   /** Model-visible event sequences, in order; rewinds and compaction replace them. */
   surface: { readonly nodes: readonly number[] }
   /** DSH's append, as its own request-error recoveries use it before retrying a step. */

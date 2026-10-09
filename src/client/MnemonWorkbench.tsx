@@ -30,6 +30,7 @@ import { Callout, Reveal, useToast } from './feedback.tsx'
 import feedbackCss from './MnemonFeedback.module.css'
 import { Button, StateDot, type StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SelectField } from './page-controls.tsx'
+import { TaskAgentModelRows, useTaskAgentModel, type TaskAgentRoute } from './task-agent-model.tsx'
 import { isRecord } from './is-record.ts'
 import sidebarCss from './MnemonSidebarView.module.css'
 import css from "./MnemonView.module.css"
@@ -340,6 +341,38 @@ function SourceManagementPage(props: {
   </div>
 }
 
+/** What the background task card needs: the route, its directory, and the writes that change it. */
+interface BackgroundTaskSettings {
+  route: TaskAgentRoute
+  catalog: ReturnType<typeof useTaskAgentModel>['catalog']
+  choosing: boolean
+  failed: string | null
+  retry: () => void
+  setMode: (mode: TaskAgentRoute['mode']) => void
+  setRoute: (route: { provider: string; model: string }) => void
+  /** A page whose settings are not writable shows the route without offering the choice. */
+  disabled: boolean
+}
+
+/**
+ * The route the background tasks take, on the page a reader opens first: what
+ * the next capture, archive or review will run on, and the choice itself.
+ */
+function BackgroundTaskCard(props: { settings: BackgroundTaskSettings }): JSX.Element {
+  const t = useT()
+  const { settings } = props
+  return <section className={css.backgroundTask} aria-labelledby="mnemon-status-background">
+    <div className={css.statusSectionHeader}>
+      <h3 id="mnemon-status-background">{t('config.backgroundTitle')}</h3>
+      <p>{t('status.backgroundHint')}</p>
+    </div>
+    <TaskAgentModelRows mode={settings.choosing ? 'fixed' : settings.route.mode} route={settings.route} choosing={settings.choosing}
+      catalog={settings.catalog.value} state={settings.catalog.state} error={settings.catalog.error} retry={settings.retry}
+      disabled={settings.disabled} onMode={settings.setMode} onRoute={settings.setRoute} t={t} />
+    {settings.failed !== null && <p className={css.statusHint}>{t('config.saveFailed', { error: settings.failed })}</p>}
+  </section>
+}
+
 function StatusPage(props: {
   client: MnemonClient
   status: StatusView | null
@@ -355,6 +388,8 @@ function StatusPage(props: {
   onRefresh: () => void
   /** Where Providers that are off can be turned on. */
   onOpenConfiguration?: (() => void) | undefined
+  /** The route the background task Agents take, and where to change it. */
+  background: BackgroundTaskSettings
 }): JSX.Element {
   const t = useT()
   // DSH swapped this client in during a Starter update started here: show how it ended.
@@ -398,6 +433,7 @@ function StatusPage(props: {
 
       <div className={css.asyncStatusBlock}>{status !== null && (status.providerServices !== undefined || (status.memoryBodies !== undefined && nativeInUse(status))) && <ProviderHealth status={status} services={status.providerServices ?? []} onOpenConfiguration={props.onOpenConfiguration} />}</div>
       <div className={css.asyncStatusBlock}><StorageDomains catalog={storage} selected={selectedScope} selectedKind={selectedScopeKind} areaName={props.areaName} /></div>
+      <div className={css.asyncStatusBlock}><BackgroundTaskCard settings={props.background} /></div>
       {versionsOpen && <VersionDialog client={props.client} writeEnabled={props.writeEnabled} resumedUpdate={resumedUpdate} onClose={() => { setResumedUpdate(undefined); setVersionsOpen(false) }} onRefreshStatus={props.onRefresh} />}
     </div>
   )
@@ -563,6 +599,8 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const storageContext = settingsSnapshot.revision === undefined ? 'loading'
     : JSON.stringify([settingsSnapshot.value?.storageScope ?? null, settingsSnapshot.value?.dataDir ?? null, settingsSnapshot.value?.runtimeUserScope ?? null])
   const viewContextKey = `${clientContextKey}\u0000${storageContext}`
+  // The card reads and writes the task Agent route here, where the page already knows its conversation.
+  const background = useTaskAgentModel({ scope: settingsScope, connection, sessionId, workspaceId })
   const [page, setPage] = useState<Page>('status')
   const workspaceToast = useToast()
   const showWorkspaceToast = workspaceToast.show
@@ -780,6 +818,8 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   }, [settingsSnapshot.revision, viewContextKey, refreshAll])
   const activationEnabled = status?.writeEnabled === true
   const writeEnabled = activationEnabled && settingsSnapshot.status === 'ready' && settingsSnapshot.writable
+  // The task Agent route is a setting, so it follows the settings grant rather than the memory write grant.
+  const backgroundWritable = settingsSnapshot.status === 'ready' && settingsSnapshot.writable
   // A remote page without the management grant says why it cannot write.
   const remoteReadOnly = activationEnabled && settingsSnapshot.status === 'ready' && !settingsSnapshot.writable && isRemoteConnection(connection)
   const workspaceContext = status?.workspaceContext
@@ -929,7 +969,8 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
         <section key={viewContextKey} className={appearanceClass(css.canvas, sidebarCss.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={(activeSourcePage?.navigation?.stickyHeader !== false) ? '' : undefined}>
           {page === 'status' && <WorkbenchStatusContext.Provider value={status}>
             <StatusPage client={client} status={status} loading={statusLoading} writeEnabled={writeEnabled} attention={notice !== undefined}
-              components={componentCards} renderCard={renderCard} areaName={areaName} onRefresh={() => void loadStatus()} onOpenConfiguration={openConfiguration} />
+              components={componentCards} renderCard={renderCard} areaName={areaName} onRefresh={() => void loadStatus()} onOpenConfiguration={openConfiguration}
+              background={{ ...background, disabled: !backgroundWritable }} />
           </WorkbenchStatusContext.Provider>}
           {activeManagedSourceInstance !== undefined && managedSourcePageContent}
           {activeSourcePage !== undefined && customSourcePage}

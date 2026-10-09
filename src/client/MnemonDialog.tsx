@@ -280,12 +280,17 @@ export function MnemonDialog(props: MnemonDialogProps): JSX.Element | null {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
+      // A menu portaled out of the dialog owns the keyboard while it is open: it
+      // closes itself on Escape and moves its own focus on Tab, so the dialog
+      // must not steal either one.
       if (event.key === 'Escape') {
+        if (event.defaultPrevented) return
         event.preventDefault()
         requestClose()
         return
       }
       if (event.key !== 'Tab' || closingRef.current) return
+      if (document.activeElement?.closest('[role="menu"]') !== null) return
       const controls = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])') ?? []).filter(control => control.getAttribute('aria-hidden') !== 'true')
       const first = controls[0]
       const last = controls.at(-1)

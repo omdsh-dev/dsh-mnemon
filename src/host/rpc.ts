@@ -221,7 +221,10 @@ export function createReadHandler(input: LiveMnemonRuntime, lifecycle?: MnemonLi
       }
       if (endpoint === 'task-agent-models') {
         if (lifecycle === undefined) throw new Error('Mnemon task Agent model directory is unavailable')
-        return success(await lifecycle.taskAgentModels(payload.includeCatalog !== false))
+        // The settings page asks from one conversation, so its effective route
+        // is that conversation's route rather than a session-less guess.
+        const requested = requestedScope(payload)
+        return success(await lifecycle.taskAgentModels(payload.includeCatalog !== false, requested.sessionId))
       }
       const runtime = scoped(input, payload, lifecycle)
       if (Object.hasOwn(SPACE_READ_CAPABILITIES, endpoint)) {

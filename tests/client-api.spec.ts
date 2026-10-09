@@ -295,6 +295,19 @@ describe('MnemonClient product transport', () => {
     expect(call).toHaveBeenCalledWith(expect.any(String), 'task-agent-models', {})
   })
 
+  it('asks for the route of the conversation the settings page belongs to', async () => {
+    const catalog = {
+      effective: { provider: 'ai', model: 'space-bunny', source: 'session' as const },
+      groups: [],
+      failures: [],
+    }
+    const call = vi.fn(async () => ({ ok: true as const, value: catalog }))
+    const client = new MnemonClient({ rpc: { call }, isLoopback: true } as ClientConnectionHandle, 'session-9', 'workspace-2')
+
+    await expect(client.taskAgentModels(false)).resolves.toEqual(catalog)
+    expect(call).toHaveBeenCalledWith(expect.any(String), 'task-agent-models', { includeCatalog: false, sessionId: 'session-9', workspaceId: 'workspace-2' })
+  })
+
   it('checks Mnemon embedding status in the selected runtime scope', async () => {
     const status = { available: true, model: 'qwen3-embedding:0.6b', totalInsights: 5, embedded: 4, coverage: '80%' }
     const call = vi.fn(async () => ({ ok: true as const, value: status }))

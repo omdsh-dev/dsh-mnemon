@@ -32,7 +32,7 @@ The page shows, in order: state and switch; origin (shipped or installed package
 
 - **Runtime Memory** contributes where its user profile (USER.md) lives.
 - **Memory Spaces** contributes Memory providers and embedding. They leave the page's top level.
-- **Layered strategy** contributes the background tasks it drives: the task Agent model and idle review.
+- **Layered strategy** contributes the background tasks it drives: the task Agent model and idle review. The task Agent model is a route the reader changes while working, so the status page also states it and offers the same choice; the component page keeps it for readers who arrive from the board.
 - The Sources contribute their Status cards; the Memory System names tabs, cards, storage areas, the header's main Strategy and layers from declarations rather than a table of shipped names. Every Source component has a card, a component that is off included.
 - dsh-mnemon keeps what belongs to no component: storage, backup, interface, versions. Storage names the components that keep their data in its directory, from the Sources a backup carries.
 

@@ -306,7 +306,7 @@ export interface TaskAgentModelCatalogFailure {
 }
 
 export interface TaskAgentModelCatalog {
-  effective?: { provider: string; model: string; source: 'fixed' | 'dsh-default' | 'active-agent' }
+  effective?: { provider: string; model: string; source: 'fixed' | 'session' | 'dsh-default' | 'active-agent' }
   defaultSelection?: { provider: string; model: string }
   groups: TaskAgentModelCatalogGroup[]
   failures: TaskAgentModelCatalogFailure[]

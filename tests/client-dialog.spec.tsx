@@ -252,4 +252,40 @@ describe('MnemonDialog', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
     expect(calls).toHaveLength(0)
   })
+
+  it('still closes on Escape when nothing else handled the key', () => {
+    // Reduced motion makes the close synchronous, so a missed close cannot hide behind the exit animation.
+    setMedia({ reduced: true })
+    installAnimationMock()
+    const { onClose } = renderDialog()
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves Escape and Tab to a menu that is open above it', () => {
+    setMedia({ reduced: true })
+    installAnimationMock()
+    const { onClose } = renderDialog()
+    // Menus are portaled to the body, so they are never inside the dialog.
+    const menu = document.createElement('div')
+    menu.setAttribute('role', 'menu')
+    const item = document.createElement('button')
+    item.type = 'button'
+    item.textContent = '第一项'
+    menu.append(item)
+    document.body.append(menu)
+    item.focus()
+
+    const handled = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    handled.preventDefault()
+    window.dispatchEvent(handled)
+    expect(onClose).not.toHaveBeenCalled()
+
+    fireEvent.keyDown(window, { key: 'Tab' })
+    expect(document.activeElement).toBe(item)
+
+    menu.remove()
+  })
 })

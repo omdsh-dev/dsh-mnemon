@@ -636,9 +636,9 @@ export class MnemonLifecycle {
     }
   }
 
-  /** Provider/model directory used by Settings without requiring a live session. */
-  async taskAgentModels(includeCatalog = true): Promise<TaskAgentModelCatalog> {
-    const route = this.taskAgentModelRoute('', undefined)
+  /** Provider/model directory used by Settings; a session id makes the effective route that conversation's. */
+  async taskAgentModels(includeCatalog = true, sessionId?: string): Promise<TaskAgentModelCatalog> {
+    const route = this.taskAgentModelRoute(sessionId ?? '', undefined)
     let defaultSelection: { provider: string; model: string } | undefined
     try {
       const selected = modelService(this.ctx.get('agentDefaultModel'))?.currentSelection()
@@ -761,7 +761,7 @@ export class MnemonLifecycle {
   }
 
   runRuntimeMaintenanceTask<T>(scope: import('../core/contracts/index.ts').MemoryOperationScope, signal: AbortSignal, operation: (agent: HostAgent) => Promise<T>): Promise<T> {
-    return this.runTaskAgent('', scope.workspaceId, signal, operation)
+    return this.runTaskAgent(scope.sessionId ?? '', scope.workspaceId, signal, operation)
   }
 
   /**
@@ -981,7 +981,7 @@ export class MnemonLifecycle {
   }
 
   /** Resolve a complete task route for both status admission and actual creation. */
-  private taskAgentModelRoute(fallbackSessionId: string, workspaceRoot: string | undefined): { options: NonNullable<CreateHostAgentOptions['agentOptions']>; source: 'fixed' | 'dsh-default' | 'active-agent' } | undefined {
+  private taskAgentModelRoute(fallbackSessionId: string, workspaceRoot: string | undefined): { options: NonNullable<CreateHostAgentOptions['agentOptions']>; source: 'fixed' | 'session' | 'dsh-default' | 'active-agent' } | undefined {
     const fallback = this.ctx.agents.get(fallbackSessionId.trim()) ?? this.availableAgent(workspaceRoot) ?? this.availableAgent()
     if (this.config.taskAgentModel.mode === 'fixed') {
       const provider = this.config.taskAgentModel.provider?.trim()
@@ -992,14 +992,25 @@ export class MnemonLifecycle {
         options: { provider, model, ...(fallback?.options?.maxTokens === undefined ? {} : { maxTokens: fallback.options.maxTokens }) },
       }
     }
+    // An inherited route follows the conversation the work belongs to: the model
+    // that conversation last asked DSH for wins over the profile-wide default,
+    // which only a session-less caller (Settings, a task with no session) uses.
+    const sessionConfig = fallback?.session.requestHeader?.()?.config
+    const sessionProvider = sessionConfig?.provider?.trim()
+    const sessionModel = sessionConfig?.model?.trim()
+    const sessionRoute = sessionProvider !== undefined && sessionProvider !== '' && sessionModel !== undefined && sessionModel !== ''
     let selected: { provider: string; model: string } | undefined
-    try { selected = modelService(this.ctx.get('agentDefaultModel'))?.currentSelection() } catch {}
+    if (!sessionRoute) {
+      try { selected = modelService(this.ctx.get('agentDefaultModel'))?.currentSelection() } catch {}
+    }
     const selectedProvider = selected?.provider.trim()
     const selectedModel = selected?.model.trim()
-    const provider = selectedProvider || fallback?.options?.provider?.trim()
-    const model = selectedModel || fallback?.options?.model?.trim()
+    // A half-filled header is no route at all, so both halves travel together.
+    const provider = (sessionRoute ? sessionProvider : undefined) || selectedProvider || fallback?.options?.provider?.trim()
+    const model = (sessionRoute ? sessionModel : undefined) || selectedModel || fallback?.options?.model?.trim()
     if (provider === undefined || provider === '' || model === undefined || model === '') return undefined
-    return { source: selectedProvider !== undefined && selectedProvider !== '' && selectedModel !== undefined && selectedModel !== '' ? 'dsh-default' : 'active-agent', options: { provider, model, ...(fallback?.options?.maxTokens === undefined ? {} : { maxTokens: fallback.options.maxTokens }) } }
+    const source = sessionRoute ? 'session' : selectedProvider !== undefined && selectedProvider !== '' && selectedModel !== undefined && selectedModel !== '' ? 'dsh-default' : 'active-agent'
+    return { source, options: { provider, model, ...(fallback?.options?.maxTokens === undefined ? {} : { maxTokens: fallback.options.maxTokens }) } }
   }
 
   private taskAgentModelOptions(fallbackSessionId: string, workspaceRoot: string | undefined): NonNullable<CreateHostAgentOptions['agentOptions']> | undefined {

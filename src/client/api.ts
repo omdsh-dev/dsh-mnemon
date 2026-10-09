@@ -142,8 +142,9 @@ export class MnemonClient {
     return this.call(operation === 'activation' ? MNEMON_ACTIVATION_CHANNEL : confirmed ? MNEMON_WRITE_CHANNEL : MNEMON_READ_CHANNEL, 'source-assistance', this.scoped({ sourceInstanceKey, operation, input, expectedRevision, confirmed }))
   }
 
+  /** A session-scoped call reports the route that conversation's background work uses. */
   taskAgentModels(includeCatalog?: boolean): Promise<TaskAgentModelCatalog> {
-    return this.call(MNEMON_READ_CHANNEL, 'task-agent-models', includeCatalog === undefined ? {} : { includeCatalog })
+    return this.call(MNEMON_READ_CHANNEL, 'task-agent-models', this.scoped(includeCatalog === undefined ? {} : { includeCatalog }))
   }
 
   versions(): Promise<VersionStatus> {

@@ -385,6 +385,9 @@
 .storageUnavailable strong { font-size: 13px; font-weight: 500; }
 .storageUnavailable p { max-width: 520px; margin: 0; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
 .storageFootnote { margin: 12px 0 0; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
+/* The background task route: the same card shell as the storage domains, on the page a reader opens first. */
+.backgroundTask { margin-bottom: 16px; padding: 16px; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); }
+.statusHint { margin: 8px 0 0; color: var(--mn-danger); font-size: 12px; line-height: 18px; }
 .statusSectionHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .statusSectionHeader h3 { margin: 0; font-size: 14px; font-weight: 500; line-height: 22px; }
 .statusSectionHeader p { max-width: 640px; margin: 2px 0 0; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
