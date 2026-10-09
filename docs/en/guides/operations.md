@@ -201,6 +201,8 @@ no automatic delete
 
 Recommended migration: export from the old scope → switch and confirm the new root → import → verify. In Workspace mode, confirm both inspection and execution targets.
 
+The **data directory** field on the settings page is the one exception to that rule: once a directory is chosen and the move is confirmed, the Host copies the whole directory to the new path, verifies every file by SHA-256, records the new path as the `custom` data directory and rebuilds its runtime on it, and only then removes the original. Calls that follow a completed move — the Pack backup above all — therefore read the new directory without a Host restart. A profile that cannot be written refuses the move before any file is copied. With `runtimeUserScope: global` the User Profile stays in the global root, so the move covers the selected data directory only: the Host keeps writing that root's own `runtime` projections beside it, and a `~/.mnemon/runtime` left after a move is that exception rather than a move that failed.
+
 With `workspaces`, back up the complete central directory for every workspace, or export a Pack for the selected workspace only. A renamed/moved workspace receives a new path hash; restoring its old data is an explicit operator action.
 
 

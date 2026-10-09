@@ -592,7 +592,7 @@ describe('MnemonSettingsCard', () => {
     // Moving the storage says what it does and waits for its own Apply.
     choose('存储范围', '工作区')
     expect(mutate).toHaveBeenCalledTimes(1)
-    expect(screen.getByText('应用后读写新位置，已有数据不会迁移')).toBeTruthy()
+    expect(screen.getByText('应用后读写新位置；选好目录后可以一并迁移已有数据')).toBeTruthy()
     fireEvent.click(apply())
     await waitFor(() => expect(mutate).toHaveBeenLastCalledWith([{ op: 'set', path: ['storageScope'], value: 'workspace' }]))
   })
@@ -661,7 +661,7 @@ describe('MnemonSettingsCard', () => {
 
     expect(selector('Storage scope').textContent).toBe('Global')
     choose('Storage scope', 'Workspace')
-    expect(screen.getByText('Memory moves to the new location; existing data stays where it is')).toBeTruthy()
+    expect(screen.getByText('Memory reads and writes the new location; a chosen directory can carry the existing data over')).toBeTruthy()
     expect(apply('Apply')).toBeTruthy()
   })
 
@@ -736,7 +736,7 @@ describe('MnemonSettingsCard', () => {
     ]))
   })
 
-  it('returns to the default directory by choosing it, not by emptying the field', async () => {
+  it('keeps the chosen directory when the default one is chosen again', async () => {
     const snapshot = {
       status: 'ready' as const,
       value: { storageScope: 'global' as const },
@@ -763,10 +763,13 @@ describe('MnemonSettingsCard', () => {
     expect(screen.queryByRole('alert')).toBeNull()
     fireEvent.click(apply())
 
-    await waitFor(() => expect(mutate).toHaveBeenCalledWith([
-      { op: 'set', path: ['storageScope'], value: 'global' },
-      { op: 'unset', path: ['dataDir'] },
-    ]))
+    // Choosing the default only changes which directory memory uses: the one
+    // that was chosen stays saved, or it could never be chosen again.
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['storageScope'], value: 'global' }]))
+
+    // Switching back offers the saved directory rather than an empty field.
+    fireEvent.click(directoryChoice('自定义'))
+    expect((screen.getByRole('textbox', { name: '数据目录' }) as HTMLInputElement).value).toBe('/data/mnemon')
   })
 
   it('accepts Windows drive and UNC paths in the browser form', () => {
@@ -1235,6 +1238,7 @@ describe('MnemonSettingsCard', () => {
     fireEvent.click(screen.getByRole('button', { name: '安全导入' }))
     await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-pack', 'import', {
       base64: 'cGFjaw==',
+      mode: 'merge',
     }))
     expect(screen.getByText('已将 ZIP 安全合并到 /active/.mnemon。')).toBeTruthy()
   })
@@ -1269,6 +1273,8 @@ describe('centralized workspace storage settings', () => {
     expect(screen.getByRole('alert').textContent).toContain('absolute')
     fireEvent.click(directoryChoice('Default', 'Data directory'))
     fireEvent.click(apply('Apply'))
+    // A central root stores the directory it uses, so its default is no
+    // directory at all: the Host falls back to the default root.
     await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['dataDir'], value: '' }]))
   })
   it('disables the new scope and its root when settings are read-only', () => {
@@ -1314,6 +1320,6 @@ describe('centralized workspace storage settings', () => {
     expect(screen.queryByTitle('/data/mnemon')).toBeNull()
     fireEvent.click(directoryChoice('默认'))
     expect(screen.getByTitle('/home/me/.mnemon')).toBeTruthy()
-    expect(screen.getByText('应用后读写新位置，已有数据不会迁移')).toBeTruthy()
+    expect(screen.getByText('应用后读写新位置；选好目录后可以一并迁移已有数据')).toBeTruthy()
   })
 })

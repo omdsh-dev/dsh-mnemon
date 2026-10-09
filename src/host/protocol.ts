@@ -1092,6 +1092,17 @@ export interface MnemonSyncDiff {
   remoteTombstones: MnemonTombstone[]
 }
 
+/** Moving the data directory: what was moved, and how. */
+export interface MnemonStorageMigration {
+  from: string
+  to: string
+  source: 'rename' | 'copy'
+  files: number
+  bytes: number
+  /** Whether the old directory was removed after the copy verified. */
+  removed: boolean
+}
+
 export type VersionPackageId = `dsh-mnemon-${'source' | 'strategy' | 'provider'}-${string}`
 export type VersionComponentId = 'mnemon' | 'dsh-mnemon' | VersionPackageId
 export type VersionInstallMode = 'homebrew' | 'go' | 'npm' | 'link' | 'manual' | 'missing'

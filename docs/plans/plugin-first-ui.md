@@ -52,7 +52,7 @@ The same control behaves the same way everywhere, on the configuration and on ev
 | A component's name: a row title, a relation chip, a name on a page, a Storage chip | Opens that component's page too, underlined on hover. A name on a page opens its page in place, with a way back. |
 | A switch or a selector | Applies when it changes. It shows the new value at once, and the saved one again beside the reason if the write fails. |
 | Typed values (text, numbers, lists) | Wait for their group's Apply, which appears only once something changed and says what to fix while a value is refused. Discard puts the saved values back. The page stays open after Apply. |
-| A change that moves data (the storage location) | Waits for Apply, and the Apply line says what applying does. |
+| A change that moves data (the storage location) | Waits for Apply, and the Apply line says what applying does. Apply records the directory memory will use; it never copies or deletes anything. Moving what is already there is a second, explicit step: choosing a directory opens a confirmation that reads the source, names both paths and states what is kept, and only its confirm button moves data. |
 | Buttons, focus, hover | DSH's Button and focus ring; no control of dsh-mnemon's own shape. |
 
 Every dialog body carries the page's box model (`.surface`), since DSH renders dialogs outside the page; field grids fit as many columns as their width allows.

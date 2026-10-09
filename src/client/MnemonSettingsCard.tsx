@@ -21,6 +21,7 @@ import { isRecord } from './is-record.ts'
 import { translateZh, type MnemonTranslate } from './locales.ts'
 import { usePackTarget } from './MnemonPackSection.tsx'
 import { MnemonStorageSection } from './MnemonStorageSection.tsx'
+import type { MnemonDirectoryPicker } from './picker.ts'
 import type { MnemonChangeSignal } from './change-signal.ts'
 
 /** How the page reaches the settings components contribute to their own pages. */
@@ -40,6 +41,8 @@ export interface MnemonSettingsCardProps {
   sessionId?: string
   workspaceId?: string
   workspaceLabel?: string
+  /** The shell's own directory chooser, passed through to where memory lives. */
+  pickDirectory?: MnemonDirectoryPicker
   t?: MnemonTranslate
   /** Active DSH locale id for installed Strategies that bring their own text. */
   language?: string
@@ -63,7 +66,7 @@ const NO_CHANGE_SIGNAL: Pick<MnemonChangeSignal, 'subscribe' | 'getSnapshot'> = 
  * Typed values wait for their group's Apply; the storage location waits too,
  * because it moves where every component reads and writes.
  */
-export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractionScope, connection, sessionId, workspaceId, workspaceLabel, t = translateZh, language = 'zh', componentChanges = NO_CHANGE_SIGNAL, componentSettings, component }: MnemonSettingsCardProps): JSX.Element | null {
+export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractionScope, connection, sessionId, workspaceId, workspaceLabel, pickDirectory, t = translateZh, language = 'zh', componentChanges = NO_CHANGE_SIGNAL, componentSettings, component }: MnemonSettingsCardProps): JSX.Element | null {
   const interactionScope = suppliedInteractionScope ?? scope as unknown as ClientSettingsScope<InteractionConfig>
   const coreSnapshot = useScope(scope)
   const interactionSnapshot = useScope(interactionScope)
@@ -163,6 +166,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
 
         <MnemonStorageSection scope={scope} value={coreSnapshot.value} user={coreUser} disabled={coreDisabled} dashboard={view.state.dashboard} target={target}
           {...(connection === undefined ? {} : { connection })} {...(sessionId === undefined ? {} : { sessionId })} {...(workspaceId === undefined ? {} : { workspaceId })}
+          {...(pickDirectory === undefined ? {} : { pickDirectory })}
           language={language} t={t} onOpen={entry => pages.open(entry.entryId, 'configuration')} onSaved={() => setTargetRevision(revision => revision + 1)} />
 
         <section className={css.section} aria-labelledby="mnemon-interface-heading">

@@ -8,7 +8,7 @@ import { registerGuidance } from './guidance.ts'
 import { createRuntimeGraph, LiveMnemonRuntime } from './runtime.ts'
 import { MnemonLifecycle } from './lifecycle.ts'
 import { registerRpc } from './rpc.ts'
-import { migrateLegacyDisplayMode, registerSettingsRpc } from './settings.ts'
+import { migrateLegacyDisplayMode, MNEMON_SETTINGS_NAMESPACE, registerSettingsRpc } from './settings.ts'
 import { MnemonSubagentCoordinator } from './subagent.ts'
 import { registerTools } from './tools.ts'
 import { registerMnemonSubagentTokenUsageProjection } from './subagent-token-usage.ts'
@@ -188,7 +188,21 @@ export function apply(rawContext: unknown, rawConfig: MnemonConfig | LiveHostCon
         return typeof profile?.dir === 'string' ? { dir: profile.dir, packageManager: profile.packageManager !== undefined } : undefined
       },
     })
-    const rpc = registerRpc(connection, runtime, lifecycle, versions, () => autoBackup.refresh())
+    // A completed data-directory move has to reach the live runtime, or every
+    // later call keeps reading the directory that was just removed. Writing the
+    // location back through the settings service is what does it: the write
+    // publishes a new 'mnemon' generation, and the subscription above swaps in
+    // a graph built on the new root.
+    const relocation = {
+      get writable(): boolean { return hostSettings.writable },
+      relocate: async (directory: string): Promise<void> => {
+        await hostSettings.mutate(MNEMON_SETTINGS_NAMESPACE, [
+          { op: 'set', path: ['storageScope'], value: 'custom' },
+          { op: 'set', path: ['dataDir'], value: directory },
+        ])
+      },
+    }
+    const rpc = registerRpc(connection, runtime, lifecycle, versions, () => autoBackup.refresh(), relocation)
     const settings = registerSettingsRpc(connection, hostSettings)
     const view = registerViewRpc(connection, runtime, extensions, memoryPlugins, lifecycle, pluginInstallation)
     if (Context.is(webContext)) {

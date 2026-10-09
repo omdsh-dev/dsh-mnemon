@@ -582,6 +582,17 @@ details[open] > summary .providerChevron { transform: rotate(180deg); }
 .syncPlan > p { margin: 0; font-size: 13px; line-height: 20px; overflow-wrap: anywhere; }
 .syncPlan > .rowActions { justify-content: flex-start; }
 
+/* The chosen directory: the field and the shell's chooser beside it. */
+.directoryRow { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* The field keeps a readable width and the row wraps before the button's own label
+   does: a chooser whose text breaks across two lines reads as a different control. */
+.directoryRow > .directoryInput { flex: 1 1 200px; min-width: 0; }
+.directoryRow > button { flex: none; white-space: nowrap; }
+
+/* Moving memory to another directory: what leaves, what arrives, and what stops it. */
+.moveSummary { display: grid; gap: 8px; }
+.moveSummary p { display: flex; min-width: 0; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 0; font-size: 13px; line-height: 20px; overflow-wrap: anywhere; }
+.moveSummary strong { color: var(--dsw-alias-label-secondary); font-weight: 500; }
 .selector:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
@@ -599,6 +610,8 @@ details[open] > summary .providerChevron { transform: rotate(180deg); }
   .syncFormActions button { flex: 1; }
   .reviewOpinionForm { flex-wrap: wrap; }
   .reviewOpinionForm > input { flex: 1 1 100%; }
+  .directoryRow { flex-wrap: wrap; }
+  .directoryRow > button { flex: 1; }
   .inlineChoices { width: 100%; }
   .inlineChoices label { flex: 1; }
   .inlineChoices span { width: 100%; justify-content: center; }

@@ -13,6 +13,8 @@ import type { DocumentMutation } from 'dsh-mnemon-source-documents/contracts'
 import { MNEMON_ACTIVATION_CHANNEL, MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_REVIEW_CHANNEL, MNEMON_SYNC_CHANNEL, MNEMON_WRITE_CHANNEL, type MemoryCompositionStatus, type MnemonPackComponent, type MnemonPackImportMode } from './protocol.ts'
 import { MNEMON_PACK_COMPONENTS } from './protocol.ts'
 import { applyReconcileOperations, selectReconcileOperations, sourceApplier, type MnemonReconcileSessions } from './reconcile.ts'
+import { migrateStorageRoot, planMigration } from './storage-migration.ts'
+import { withMemoryStorageLock } from '../sdk/storage-lock.ts'
 export { MNEMON_ACTIVATION_CHANNEL, MNEMON_PACK_CHANNEL, MNEMON_READ_CHANNEL, MNEMON_REVIEW_CHANNEL, MNEMON_SYNC_CHANNEL, MNEMON_WRITE_CHANNEL } from './protocol.ts'
 
 function object(value: unknown): Record<string, unknown> {
@@ -408,19 +410,67 @@ export function createWriteHandler(input: LiveMnemonRuntime, lifecycle?: MnemonL
   }
 }
 
+/**
+ * What follows a completed data-directory move. The Pack handler owns the files
+ * and the settings service owns the recorded location, so the Host wires the
+ * two together here: it is asked whether a new location could be persisted
+ * before anything is copied, and it is what rebuilds the live runtime on it.
+ */
+export interface MnemonStorageRelocation {
+  /** Whether the profile can record a new location; asked before any file moves. */
+  readonly writable: boolean
+  /** Record the new location and rebuild the live runtime on it. */
+  relocate(directory: string): Promise<void>
+}
+
 /** Pack data stays inside the selected storage root and DSH authentication. */
-export function createPackHandler(input: LiveMnemonRuntime): HostRpcHandler {
+export function createPackHandler(input: LiveMnemonRuntime, relocation?: MnemonStorageRelocation): HostRpcHandler {
   return async (endpoint, rawPayload) => {
     try {
       const payload = object(rawPayload)
       const runtime = scoped(input, payload)
       const manager = runtime.graph.packs
       if (endpoint === 'target') return success(manager.target())
+      // Moving the data directory is the same kind of operation as Pack: it acts
+      // on the storage root itself, so it takes that root's lock and nothing else.
+      if (endpoint === 'storage-plan') {
+        const to = String(payload.dataDir ?? '').trim()
+        if (to === '') throw new Error('dataDir must be a non-empty directory')
+        return success(planMigration(runtime.graph.directory, to))
+      }
+      if (endpoint === 'storage-migrate') {
+        requireWritable(runtime)
+        const to = String(payload.dataDir ?? '').trim()
+        if (to === '') throw new Error('dataDir must be a non-empty directory')
+        const from = runtime.graph.directory
+        const plan = planMigration(from, to)
+        if (plan.blocked !== undefined) throw new Error('cannot move the Mnemon data directory: ' + plan.blocked)
+        if (payload.confirmed !== true) throw new Error('Moving the Mnemon data directory requires confirmation')
+        // Refuse before the original directory is removed: a Host that cannot
+        // record the new location would keep reading a path that no longer
+        // exists, which is worse than not moving at all.
+        if (relocation !== undefined && !relocation.writable) throw new Error('DSH settings are read-only, so the Mnemon data directory was not moved')
+        const moved = await withMemoryStorageLock(from, () => migrateStorageRoot(from, to, { remove: true }))
+        if (relocation !== undefined) {
+          try {
+            await relocation.relocate(to)
+          } catch (reason) {
+            // The files are already at the new root and the old one is gone, so
+            // this is the one failure the user has to finish by hand. Say which
+            // directory to set instead of reporting a plain move failure.
+            const detail = reason instanceof Error ? reason.message : String(reason)
+            throw new Error(`the data directory was moved to ${to}, but the new location could not be recorded (${detail}); set it as the data directory to keep using this memory`)
+          }
+        }
+        return success(moved)
+      }
       if (endpoint === 'export') return success(await manager.exportPack('full'))
       if (endpoint === 'inspect') return success(manager.inspectPack(String(payload.base64 ?? ''), payload.fileName === undefined ? undefined : String(payload.fileName)))
       if (endpoint === 'import') {
         requireWritable(runtime)
-        const result = await manager.importPack(String(payload.base64 ?? ''), { mode: 'merge' })
+        const mode: MnemonPackImportMode = payload.mode === 'replace' ? 'replace' : 'merge'
+        const components = requestedComponents(payload.components)
+        const result = await manager.importPack(String(payload.base64 ?? ''), { mode, ...(components === undefined ? {} : { components }) })
         if ((await catalog(runtime)).sources.some(source => source.sourceTypeId === 'memory-spaces')) await runtime.source('memory-spaces').mutate('reload', {})
         return success(result)
       }
@@ -584,7 +634,7 @@ export function createReviewHandler(input: LiveMnemonRuntime, lifecycle?: Mnemon
   }
 }
 
-export function registerRpc(connection: HostConnectionHandle, input: LiveMnemonRuntime, lifecycle?: MnemonLifecycle, versions?: VersionUpdateManager, onSyncConfigured?: () => void): {
+export function registerRpc(connection: HostConnectionHandle, input: LiveMnemonRuntime, lifecycle?: MnemonLifecycle, versions?: VersionUpdateManager, onSyncConfigured?: () => void, relocation?: MnemonStorageRelocation): {
   read: HostRpcHandler
   activation: HostRpcHandler
   write: HostRpcHandler
@@ -598,7 +648,7 @@ export function registerRpc(connection: HostConnectionHandle, input: LiveMnemonR
   const writeHandler = createWriteHandler(input, lifecycle, versionManager)
   const syncHandler = createSyncHandler(input, onSyncConfigured)
   const reviewHandler = createReviewHandler(input, lifecycle)
-  const packHandler = createPackHandler(input)
+  const packHandler = createPackHandler(input, relocation)
   connection.rpc.handle(MNEMON_READ_CHANNEL, readHandler)
   connection.rpc.handle(MNEMON_ACTIVATION_CHANNEL, activationHandler)
   connection.rpc.handle(MNEMON_WRITE_CHANNEL, writeHandler)

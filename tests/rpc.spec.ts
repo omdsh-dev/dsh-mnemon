@@ -443,7 +443,7 @@ describe('Host assistance and channels', () => {
     expect(f.graph.packs.exportPack).toHaveBeenCalledWith('full')
     expect(await handler('inspect', { base64: 'eA==', fileName: 'backup.zip' })).toMatchObject({ ok: true })
     expect(await handler('import', { base64: 'eA==', mode: 'replace', components: ['runtime'] })).toMatchObject({ ok: true })
-    expect(f.graph.packs.importPack).toHaveBeenCalledWith('eA==', { mode: 'merge' })
+    expect(f.graph.packs.importPack).toHaveBeenCalledWith('eA==', { mode: 'replace', components: ['runtime'] })
     expect(f.sources['memory-spaces']!.mutate).toHaveBeenCalledWith('reload', {})
     const readonly = protocolFixture({ writeEnabled: false })
     expect(await createPackHandler(readonly.runtime)('import', { base64: 'eA==' })).toMatchObject({ ok: false })

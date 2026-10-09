@@ -200,6 +200,8 @@ Gateway 通过 Mnemon 在 `dshMnemon` 命名空间下的 `mnemonRemote` Typert �
 | `export` | 导出完整、带 manifest 与 SHA-256 校验的 ZIP |
 | `inspect` | 解析并校验待导入 ZIP，返回组件与占用预览 |
 | `import` | 把 ZIP 安全合并到当前有效根；只读模式拒绝。结果里的 `runtime` 回报合并新增了几条、又有几条因为本机记录过删除而留在原处，可选 `revive: true` 表示这次导入推翻这些删除 |
+| `storage-plan` | 检查拟用的数据目录：目标现状、将迁移的文件数与字节数，以及无法迁移的原因；只读，且从不要求 `writeEnabled` |
+| `storage-migrate` | 把整个数据目录复制到目标路径，逐文件 SHA-256 校验通过后才删除原目录；成功后 Host 会把新路径记为 `custom` 数据目录并据此重建运行图，之后调用不会再读已删除的旧目录；需要 `confirmed: true`、`writeEnabled`，以及可写的设置档案——后者在任何文件被复制前先校验 |
 
 备份包含私有记忆；调用方必须把已认证 DSH 浏览器会话视为完整 Host 权限，并单独保护导出的归档。
 
