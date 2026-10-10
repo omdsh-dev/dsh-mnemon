@@ -30,6 +30,64 @@ describe('standalone retaindb data plane', () => {
     ])
   })
 
+  it('only falls back to the legacy surface when the endpoint is missing', async () => {
+    const requests: string[] = []
+    const fetchMock = vi.fn<typeof fetch>(async (url, init) => {
+      requests.push(`${init?.method ?? 'GET'} ${new URL(String(url)).pathname}`)
+      return response({ message: 'upstream exploded' }, 500)
+    })
+    const { registry, body } = await providerBody('retaindb', {
+      endpoint: 'https://api.retaindb.com', apiKey: 'retain-secret', project: 'launch', userId: 'alice',
+    })
+    const provider = new RetainDbProvider(registry, { fetch: fetchMock })
+
+    // A 5xx must reach the caller. Retrying remember's POST after an ambiguous
+    // failure would store the memory twice on the legacy surface.
+    await expect(provider.remember(body, { content: 'Canary before production.' })).rejects.toThrow(/HTTP 500/u)
+    await expect(provider.forget(body, 'ret-1')).rejects.toThrow(/HTTP 500/u)
+
+    expect(requests).toEqual(['POST /v1/memory', 'DELETE /v1/memory/ret-1'])
+  })
+
+  it('lists a project-wide scope on the collection endpoint without probing the profile endpoint', async () => {
+    const requests: string[] = []
+    const fetchMock = vi.fn<typeof fetch>(async (url, init) => {
+      const path = new URL(String(url)).pathname
+      requests.push(`${init?.method ?? 'GET'} ${path}`)
+      if (path === '/v1/memories') return response({ memories: [{ id: 'ret-9', content: 'Project wide.' }] })
+      throw new Error(`unexpected ${init?.method ?? 'GET'} ${path}`)
+    })
+    const { registry, body } = await providerBody('retaindb', {
+      endpoint: 'https://api.retaindb.com', apiKey: 'retain-secret', project: 'launch', userId: '*',
+    })
+    const provider = new RetainDbProvider(registry, { fetch: fetchMock })
+
+    await expect(provider.list(body, {})).resolves.toEqual([
+      expect.objectContaining({ id: 'ret-9', content: 'Project wide.' }),
+    ])
+    expect(requests).toEqual(['GET /v1/memories'])
+  })
+
+  it('falls back from the profile endpoint to the collection endpoint on 404', async () => {
+    const requests: string[] = []
+    const fetchMock = vi.fn<typeof fetch>(async (url, init) => {
+      const path = new URL(String(url)).pathname
+      requests.push(`${init?.method ?? 'GET'} ${path}`)
+      if (path.startsWith('/v1/memory/profile/')) return response({ message: 'missing' }, 404)
+      if (path === '/v1/memories') return response({ memories: [{ id: 'ret-3', content: 'Fallback.' }] })
+      throw new Error(`unexpected ${init?.method ?? 'GET'} ${path}`)
+    })
+    const { registry, body } = await providerBody('retaindb', {
+      endpoint: 'https://api.retaindb.com', apiKey: 'retain-secret', project: 'launch', userId: 'alice',
+    })
+    const provider = new RetainDbProvider(registry, { fetch: fetchMock })
+
+    await expect(provider.list(body, {})).resolves.toEqual([
+      expect.objectContaining({ id: 'ret-3', content: 'Fallback.' }),
+    ])
+    expect(requests).toEqual(['GET /v1/memory/profile/alice', 'GET /v1/memories'])
+  })
+
   it('preserves RetainDB project/user/session scope and current-to-legacy fallbacks', async () => {
     const requests: Array<{ url: string; init?: RequestInit }> = []
     const fetchMock = vi.fn<typeof fetch>(async (url, init) => {
