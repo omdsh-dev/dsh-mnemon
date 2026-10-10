@@ -22,6 +22,18 @@ function insight(value: unknown): Insight | undefined {
   }
 }
 
+/**
+ * Whether a request failed because this deployment does not serve the endpoint.
+ *
+ * RetainDB exposes a current and a legacy surface, and only a missing endpoint
+ * may fall through to the legacy one. Everything else - a 5xx, a timeout, or a
+ * caller abort - must reach the caller untouched: the timeout in particular is
+ * ambiguous, so retrying `remember`'s POST on it can store the memory twice.
+ */
+function isEndpointMissing(error: unknown): boolean {
+  return error instanceof Error && /HTTP 404\b/u.test(error.message)
+}
+
 export class RetainDbProvider extends HttpMemoryProvider implements MemoryProviderAdapter {
   readonly id = 'retaindb' as const
   readonly scoreSemantics = NORMALIZED_RELEVANCE_SCORE
@@ -75,16 +87,21 @@ export class RetainDbProvider extends HttpMemoryProvider implements MemoryProvid
     const connection = this.connection(body)
     const params = new URLSearchParams({ project: String(connection.project), include_pending: 'true' })
     let payload: unknown
-    try {
-      if (String(connection.userId) === '*') throw new Error('project-wide scope uses the collection endpoint')
-      payload = await this.request(body, `/v1/memory/profile/${encodeURIComponent(String(connection.userId))}?${params}`, {
-        headers: this.headers(connection, '/v1/memory/profile'),
-        signal,
-      })
-    } catch {
-      if (String(connection.userId) !== '*') params.set('user_id', String(connection.userId))
+    if (String(connection.userId) === '*') {
       params.set('limit', String(Math.min(Math.max(request.limit ?? 200, 1), 200)))
       payload = await this.request(body, `/v1/memories?${params}`, { headers: this.headers(connection, '/v1/memories'), signal })
+    } else {
+      try {
+        payload = await this.request(body, `/v1/memory/profile/${encodeURIComponent(String(connection.userId))}?${params}`, {
+          headers: this.headers(connection, '/v1/memory/profile'),
+          signal,
+        })
+      } catch (error) {
+        if (!isEndpointMissing(error)) throw error
+        params.set('user_id', String(connection.userId))
+        params.set('limit', String(Math.min(Math.max(request.limit ?? 200, 1), 200)))
+        payload = await this.request(body, `/v1/memories?${params}`, { headers: this.headers(connection, '/v1/memories'), signal })
+      }
     }
     return firstArray(payload, 'memories', 'results').map(insight).filter((item): item is Insight => item !== undefined)
       .filter(item => request.category === undefined || item.category === request.category)
@@ -105,7 +122,8 @@ export class RetainDbProvider extends HttpMemoryProvider implements MemoryProvid
     let payload: unknown
     try {
       payload = await this.request(body, '/v1/memory', { headers: this.headers(connection, '/v1/memory'), json, signal })
-    } catch {
+    } catch (error) {
+      if (!isEndpointMissing(error)) throw error
       const { write_mode: _writeMode, ...legacy } = json
       payload = await this.request(body, '/v1/memories', { headers: this.headers(connection, '/v1/memories'), json: legacy, signal })
     }
@@ -122,7 +140,8 @@ export class RetainDbProvider extends HttpMemoryProvider implements MemoryProvid
     const connection = this.connection(body)
     try {
       await this.request(body, `/v1/memory/${encodeURIComponent(id)}`, { method: 'DELETE', headers: this.headers(connection, '/v1/memory'), signal })
-    } catch {
+    } catch (error) {
+      if (!isEndpointMissing(error)) throw error
       await this.request(body, `/v1/memories/${encodeURIComponent(id)}`, { method: 'DELETE', headers: this.headers(connection, '/v1/memories'), signal })
     }
     return { action: 'deleted', provider: this.id, id }
