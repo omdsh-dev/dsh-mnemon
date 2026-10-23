@@ -63,6 +63,18 @@ A Memory Space can be **Read only**. DSH still recalls it as before, through Rec
 - **Where the choice is kept.** It is kept for this data directory in `<storageRoot>/state/memory-provider-write-policy.json`, next to the Provider connections. Packs and Git sync do not carry the file, and restoring a Pack or syncing leaves it in place. The choice governs DSH's own writes; it does not govern the stores that a Pack or Git sync copies.
 - **If the file cannot be read**, every space is read only until the file is fixed or removed; recall still works. dsh-mnemon versions before this one ignore the file.
 
+## Provider views and vendor plugins
+
+A space whose Provider keeps more than memories gets **Browse** on its card. It opens the Provider's views as tabs, read through the space's own connection; nothing in them writes. OpenViking shows three:
+
+- **viking:// hierarchy**: the space user's directory and the account's `resources` and `agent` directories, with the abstracts the server keeps. A file opens with a preview: text, or an image up to 2.5 MB.
+- **Resources**: what the server or OpenViking's own plugin stored under `viking://resources`, such as images and attachments (#453), with the abstract the server generated for each.
+- **Server changes**: what OpenViking's memory extraction added, updated or deleted, one entry per committed session, newest first, each opening to its before and after. It reads the `memory_diff.json` the server keeps beside each session archive, for the newest 20 sessions.
+
+**OpenViking's official plugin.** When `@openviking/dsh-memory-plugin` runs in the same DSH profile, the OpenViking space's card names it with its version and whether it captures automatically, and **Browse** shows it in full: automatic recall, automatic capture, whether it skips task Agent sessions, where it connects (without credentials), and whether that is the space's own namespace (the same server, account and user). dsh-mnemon only reads what the plugin reports about itself. It never changes the plugin: its tools stay visible to the model, its skills, recall and capture run as OpenViking designed them, and its configuration is left as it is.
+
+**Making the space read only beside it.** When the plugin captures into the space's own namespace on its own, the same memory can be stored twice: once by the plugin's capture and once by dsh-mnemon. The card and **Browse** then suggest making the space read only for dsh-mnemon, so that the plugin's capture is the only writer there while dsh-mnemon still recalls the space. Nothing changes until you press **Make read only**, which sets the space's write policy described above; **Edit** turns it back. The suggestion does not appear when the plugin's automatic capture is off, when it connects to another namespace or does not say which, or when the space is already read only.
+
 ## Manual and smart placement
 
 Manual placement preserves the existing workflow: create a Memory Space, choose one engine, configure it, and continue to use the same Recall, Content, Entities, and Remember surfaces.
