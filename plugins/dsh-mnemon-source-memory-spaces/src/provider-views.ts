@@ -1,7 +1,11 @@
-import type { MemoryProviderChange, MemoryProviderViewEntry, MemoryProviderViewResult, MemorySpaceIntegration } from './contracts.ts'
+import type { MemoryProviderChange, MemoryProviderViewEntry, MemoryProviderViewResult, MemorySpaceIntegration, MemorySpaceIntegrationNote } from './contracts.ts'
 
 /** The most a view lists, and the longest text or image it carries to the page. */
 export const PROVIDER_VIEW_LIMITS = Object.freeze({ entries: 500, changes: 50, operations: 200, text: 64_000, change: 8_000, dataUrl: 4_000_000 })
+
+/** The most notes a Provider states about a vendor plugin, and the longest one. */
+const INTEGRATION_NOTES = 6
+const INTEGRATION_NOTE_CHARACTERS = 300
 
 const IMAGE_DATA_URL = /^data:image\/(?:png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+=*$/u
 
@@ -94,11 +98,18 @@ export function boundIntegration(value: MemorySpaceIntegration): MemorySpaceInte
   const endpoint = text(value.endpoint, 500)
   const account = text(value.account, 200)
   const user = text(value.user, 200)
+  const notes = (Array.isArray(value.notes) ? value.notes : []).flatMap((note): MemorySpaceIntegrationNote[] => {
+    if (typeof note?.id !== 'string' || note.id === '' || typeof note.text !== 'string' || note.text === '') return []
+    const key = text(note.textI18nKey, 200)
+    return [{ id: note.id.slice(0, 100), tone: note.tone === 'caution' ? 'caution' : 'info', text: note.text.slice(0, INTEGRATION_NOTE_CHARACTERS), ...(key === undefined ? {} : { textI18nKey: key }) }]
+  }).slice(0, INTEGRATION_NOTES)
   return {
     packageName: value.packageName.slice(0, 214), label: value.label.slice(0, 100),
     ...(version === undefined ? {} : { version }),
     automation: { ...flag('autoRecall'), ...flag('autoCapture'), ...flag('skipSubagentSessions') },
     ...(endpoint === undefined ? {} : { endpoint }), ...(account === undefined ? {} : { account }), ...(user === undefined ? {} : { user }),
     ...(typeof value.sameNamespace === 'boolean' ? { sameNamespace: value.sameNamespace } : {}),
+    ...(value.state === 'active' || value.state === 'unavailable' ? { state: value.state } : {}),
+    ...(notes.length === 0 ? {} : { notes }),
   }
 }

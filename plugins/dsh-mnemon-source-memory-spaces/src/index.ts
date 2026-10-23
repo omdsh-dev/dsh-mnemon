@@ -5,6 +5,7 @@ import { createMemorySpacesSource } from './source.ts'
 import { PrivateMemorySpaceProviderHost } from './providers/host.ts'
 import { defineMemorySpaceProvider, type MemorySpaceProviderEntry, type MemorySpaceProviderModule } from './providers/definitions.ts'
 import { createMemorySpaceProviderPlugin } from './providers/plugin.ts'
+import { createProviderProfile } from './providers/profile.ts'
 import { MemorySpacesConfig, resolveMemorySpacesConfig, type MemorySpacesConfig as SourceConfig } from './config.ts'
 
 export { resolveEmbedding, resolvePersistenceStrategy, resolveRecallQuality } from './config.ts'
@@ -116,7 +117,7 @@ export async function installMemorySpaces(
     for (const entry of entries) {
       if (!privateHost.has(entry.instanceId)) throw new Error(`Memory Space Provider child did not install a definition: ${entry.instanceId}`)
     }
-    const snapshot = privateHost.snapshot()
+    const snapshot = privateHost.snapshot(createProviderProfile(ctx))
     installMemory(ctx, { plugin: memoryPlugin, sources: [createMemorySpacesSource(snapshot, options.config)] }, {
       instanceId: entryId,
       effectiveDigest: 'providers:' + memoryConfigurationDigest({ providers: snapshot.digest, config: options.config ?? {} }).slice('config:'.length),

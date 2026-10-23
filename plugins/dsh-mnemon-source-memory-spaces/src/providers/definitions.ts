@@ -9,6 +9,7 @@ import type {
 } from '../contracts.ts'
 import type { MemoryProviderAdapter } from './adapter.ts'
 import type { MemoryProviderAdapterFactoryContext } from './adapter.ts'
+import type { MemorySpaceProviderProfile } from './profile.ts'
 
 export const MEMORY_SPACE_PROVIDER_API_VERSION = 'dsh-mnemon.memory-space-provider/v1' as const
 
@@ -46,6 +47,8 @@ export interface MemorySpaceProviderRuntimeContext extends MemoryProviderAdapter
   /** Stable identity of this child mount inside one Memory Spaces Source. */
   providerInstanceId: string
   manifest: MemorySpaceProviderManifest
+  /** What the Provider may read of the DSH profile, to recognize its vendor's own plugin; absent on older Source hosts. */
+  profile?: MemorySpaceProviderProfile
 }
 
 export interface MemorySpaceProviderDefinition {

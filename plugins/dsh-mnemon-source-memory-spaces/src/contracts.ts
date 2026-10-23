@@ -223,6 +223,18 @@ export interface MemorySpaceIntegration {
   user?: string
   /** True when it reads and writes this space's namespace, false when another one, absent when that cannot be told. */
   sameNamespace?: boolean
+  /** `unavailable` when the plugin is configured but not running or cannot be installed; running otherwise. */
+  state?: 'active' | 'unavailable'
+  /** Facts the Provider states about the plugin, at most six, each at most 300 characters. */
+  notes?: MemorySpaceIntegrationNote[]
+}
+
+export interface MemorySpaceIntegrationNote {
+  id: string
+  tone: 'info' | 'caution'
+  text: string
+  /** Optional Host-provided translation key; clients fall back to text. */
+  textI18nKey?: string
 }
 
 export interface MemoryProviderServiceView {

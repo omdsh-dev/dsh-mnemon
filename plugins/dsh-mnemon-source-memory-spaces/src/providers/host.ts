@@ -2,6 +2,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { MemoryProviderDescriptor } from '../contracts.ts'
 import type { MemoryProviderAdapter } from './adapter.ts'
 import { MemoryProviderAdapterRegistry } from './registry.ts'
+import type { MemorySpaceProviderProfile } from './profile.ts'
 import { defineMemorySpaceProviderDefinition, digest, requiredId, type MemorySpaceProviderDefinition, type MemorySpaceProviderDisposer, type MemorySpaceProviderHost, type MemorySpaceProviderManifest } from './definitions.ts'
 
 const SOURCE_INSTANCE_ID = /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,299}$/u
@@ -84,8 +85,11 @@ function instanceAdapter(adapter: MemoryProviderAdapter, instanceId: string): Me
 export class MemorySpaceProviderSnapshot {
   readonly digest: string
   readonly entries: readonly MemorySpaceProviderSnapshotEntry[]
+  /** What the Providers may read of the DSH profile; not part of the digest. */
+  private readonly profile: MemorySpaceProviderProfile | undefined
 
-  constructor(entries: readonly MemorySpaceProviderSnapshotEntry[]) {
+  constructor(entries: readonly MemorySpaceProviderSnapshotEntry[], profile?: MemorySpaceProviderProfile) {
+    this.profile = profile
     const sorted = [...entries].sort((left, right) => left.childKey.localeCompare(right.childKey))
     this.entries = Object.freeze(sorted.map(entry => Object.freeze({ ...entry })))
     this.digest = digest(sorted.map(entry => ({
@@ -122,6 +126,7 @@ export class MemorySpaceProviderSnapshot {
           ...context,
           providerInstanceId: instanceId,
           manifest: definition.manifest,
+          ...(this.profile === undefined ? {} : { profile: this.profile }),
         })
         assertRuntime(definition, adapter)
         return instanceAdapter(adapter, instanceId)
@@ -181,7 +186,7 @@ export class PrivateMemorySpaceProviderHost {
     return this.registrations.has(`${this.sourceInstanceId}/provider:${instanceId}`)
   }
 
-  snapshot(): MemorySpaceProviderSnapshot {
-    return new MemorySpaceProviderSnapshot([...this.registrations.values()])
+  snapshot(profile?: MemorySpaceProviderProfile): MemorySpaceProviderSnapshot {
+    return new MemorySpaceProviderSnapshot([...this.registrations.values()], profile)
   }
 }

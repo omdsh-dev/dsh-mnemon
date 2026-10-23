@@ -17,8 +17,9 @@ export interface OfficialPluginSnapshot {
 
 /**
  * Read the official plugin's effective settings from its running service, one named field at a
- * time. Mnemon never writes to it, never calls it and never reads its key: its tools, recall and
- * capture stay as OpenViking designed them.
+ * time, through the read-only view the Memory Spaces Source lends. Mnemon never writes to it,
+ * never calls it and never reads its key: its tools, recall and capture stay as OpenViking
+ * designed them.
  */
 export function readOfficialPlugin(lookup: () => unknown): OfficialPluginSnapshot | undefined {
   let config: unknown
@@ -74,5 +75,11 @@ export function officialPluginIntegration(snapshot: OfficialPluginSnapshot, spac
     ...(snapshot.account === undefined ? {} : { account: snapshot.account }),
     ...(snapshot.user === undefined ? {} : { user: snapshot.user }),
     ...(sameNamespace === undefined ? {} : { sameNamespace }),
+    state: 'active',
+    ...(snapshot.skipSubagentSessions === false ? { notes: [{
+      id: 'captures-task-agents', tone: 'caution',
+      text: 'It also captures the sessions of task Agents, dsh-mnemon\'s included, unless skipSubagentSessions is set.',
+      textI18nKey: 'providerViews.openviking.capturesTaskAgents',
+    }] } : {}),
   }
 }
