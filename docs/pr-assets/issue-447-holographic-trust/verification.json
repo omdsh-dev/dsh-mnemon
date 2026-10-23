@@ -1,0 +1,178 @@
+{
+  "issue": 447,
+  "date": "2026-10-23",
+  "baseline": "main a7e3bc54",
+  "environment": {
+    "os": "macOS arm64 (Darwin 24.6.0)",
+    "node": "24.19.0",
+    "pnpm": "10.13.1"
+  },
+  "probe": {
+    "script": "trust.probe.mjs",
+    "path": "MemoryCompositionRunner with the real Memory Spaces Source and Holographic Provider; space connection defaultTrust 0.5, minTrust 0.3, then minTrust 0.5",
+    "writes": [
+      {
+        "content": "Release notes are drafted on Monday",
+        "importance": 1
+      },
+      {
+        "content": "Release approvals need a completed canary",
+        "importance": 5
+      },
+      {
+        "content": "Release branches are cut from main",
+        "importance": "none (the Source sends 3)"
+      }
+    ],
+    "main": {
+      "stored": [
+        {
+          "content": "Release notes are drafted on Monday",
+          "trustScore": 1,
+          "importance": null
+        },
+        {
+          "content": "Release approvals need a completed canary",
+          "trustScore": 1,
+          "importance": null
+        },
+        {
+          "content": "Release branches are cut from main",
+          "trustScore": 1,
+          "importance": null
+        }
+      ],
+      "search": {
+        "minTrust 0.3": [
+          {
+            "content": "Release notes are drafted on Monday",
+            "score": 0.9,
+            "importance": 1
+          },
+          {
+            "content": "Release approvals need a completed canary",
+            "score": 0.9,
+            "importance": 1
+          },
+          {
+            "content": "Release branches are cut from main",
+            "score": 0.9,
+            "importance": 1
+          }
+        ],
+        "minTrust 0.5": [
+          {
+            "content": "Release notes are drafted on Monday",
+            "score": 0.9,
+            "importance": 1
+          },
+          {
+            "content": "Release approvals need a completed canary",
+            "score": 0.9,
+            "importance": 1
+          },
+          {
+            "content": "Release branches are cut from main",
+            "score": 0.9,
+            "importance": 1
+          }
+        ]
+      }
+    },
+    "fix": {
+      "stored": [
+        {
+          "content": "Release notes are drafted on Monday",
+          "trustScore": 0.3,
+          "importance": 1
+        },
+        {
+          "content": "Release approvals need a completed canary",
+          "trustScore": 0.7,
+          "importance": 5
+        },
+        {
+          "content": "Release branches are cut from main",
+          "trustScore": 0.5,
+          "importance": 3
+        }
+      ],
+      "search": {
+        "minTrust 0.3": [
+          {
+            "content": "Release notes are drafted on Monday",
+            "score": 0.9,
+            "importance": 1
+          },
+          {
+            "content": "Release approvals need a completed canary",
+            "score": 0.9,
+            "importance": 5
+          },
+          {
+            "content": "Release branches are cut from main",
+            "score": 0.9,
+            "importance": 3
+          }
+        ],
+        "minTrust 0.5": [
+          {
+            "content": "Release approvals need a completed canary",
+            "score": 0.9,
+            "importance": 5
+          },
+          {
+            "content": "Release branches are cut from main",
+            "score": 0.9,
+            "importance": 3
+          }
+        ]
+      }
+    }
+  },
+  "mapping": {
+    "rule": "trust = clamp(defaultTrust + (importance - 3) * 0.1, 0, 1), rounded to 1e-6; no importance at the Provider: defaultTrust",
+    "defaults": {
+      "defaultTrust": 0.5,
+      "minTrust": 0.3,
+      "importance 1..5": [
+        0.3,
+        0.4,
+        0.5,
+        0.6,
+        0.7
+      ]
+    },
+    "score": "search and related scores are relevance only; trust orders equal scores and gates recall through minTrust (compared with a 1e-9 tolerance)",
+    "readBack": "Insight.importance is the stored 1..5 importance; facts written before the fix have none and report none",
+    "existingFacts": "left unchanged: trust 1.0, no importance field",
+    "gate": "search, browse (list), graph, the Entities page (built from list) and related reads leave out facts below minTrust; a minTrust above defaultTrust + 0.2 hides every new fact, while older facts at trust 1.0 stay visible",
+    "receipts": "a stored fact below minTrust keeps action stored and adds hiddenByMinTrust, trustScore, minTrust and a hint; a duplicate of a hidden fact is skipped with a summary saying it is hidden; Status counts every stored fact"
+  },
+  "unitTests": {
+    "holographic": {
+      "main": "11 failed, 9 passed (the 11 new tests fail)",
+      "fix": "20 passed"
+    }
+  },
+  "otherTests": {
+    "root files exercising Holographic (9)": "441 passed, 1 skipped",
+    "dsh-mnemon-source-memory-spaces": "296 passed, 2 skipped"
+  },
+  "otherProviders": {
+    "mnemon-native": "passes the 1..5 importance to the CLI (--imp)",
+    "openviking": "tags importance=<1..5>",
+    "mem0": "passes importance as given (1..5)",
+    "supermemory": "passes importance as given (1..5)",
+    "retaindb": "sends importance: request.importance ?? 0.7. The Source always sends 1..5, so the 0.7 default never applies; the default suggests a 0..1 API scale. Not verified against a RetainDB server; reported, not changed here",
+    "hindsight, honcho, byterover": "do not send importance"
+  },
+  "rollback": {
+    "data": "every fact is kept; an earlier driver ignores the importance field",
+    "scores": "an earlier driver multiplies new facts by their trust: a 0.9 phrase match becomes 0.63, 0.54, 0.45, 0.36, 0.27 for importance 5..1; an importance-1 entity match at 0.8 becomes 0.24 and is dropped under the 0.25 floor",
+    "importance": "reads back as the trust, 0.3..0.7"
+  },
+  "knownEffects": {
+    "entitiesOrder": "the Source orders an entity's memories by importance ?? 0, so older facts without importance sort last in a mixed store; cosmetic, the Source is not changed"
+  }
+}

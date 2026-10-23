@@ -207,6 +207,8 @@ Provider 使用 Memory Spaces SDK 的 `defineMemorySpaceProvider`。模块只收
 
 **Source 自己定义 Provider Fiber**；Core 不提供 Provider factory registry 或第二个 Context 服务。能力声明必须真实：查询型后端不能伪造全量浏览或图关系。
 
+importance 只有一种量纲。Source 调用每个 Provider 的 `remember` 时，`importance` 都是 1（最低）到 5（最高）的整数，写入方没有给出时为 3。后端使用其他量纲（例如 0..1 的可信度或权重）时，应把重要度映射到自己的量纲上，而不是直接透传或截断这个数（#447）。Provider 读回时如果报告 `importance`，也使用同一个 1..5 量纲，否则就不报告。
+
 声明 `entities` 的 Provider 会为实体页提供数据。默认情况下，Source 用 `list()` 为每个空间建立实体索引：请在请求的上限内返回全部记忆及其 `entities`，一个实体的计数就是列出的记忆中带有它的条数，也就是实体页列出的那些记忆。如果 Provider 的 `list()` 取不全整个空间（例如受服务端分页大小限制），或者不能列举，请实现可选的 `entityIndex(body, signal)`，返回 `{ memories, complete }`：带有实体的记忆，以及是否已包含全部。索引不完整时，实体页会标为部分。声明了 `entities`、但既不能列举也没有 `entityIndex` 的 Provider 显示为仅查询，它的记忆只会作为召回找到的相关记忆出现在实体页。只要空间的 `status()` 统计不变，Source 就沿用该空间的索引，因此统计应随每次写入变化。
 
 Provider 还可以实现可选的 `get(body, id, signal)`：返回空间中这个精确 id 对应的记忆，没有时返回 `undefined`，读取时不能有副作用。实现后，遗忘、建立关联和相关记忆遍历都可以接受当前 View 没有返回过的 id，例如 Agent 刚写入的记忆，或委派请求中点名的记忆：Source 会在 View 可读的空间中查找这个 id，只有恰好一个空间持有它时才执行。没有 `get` 时，即使指明空间，这样的 id 也要等 View 把它作为证据返回后才能使用：Provider 自己的遗忘或建立关联调用未必限定在该空间内。

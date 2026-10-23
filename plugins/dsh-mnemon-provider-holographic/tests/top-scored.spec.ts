@@ -18,6 +18,14 @@ describe('bounded score selection', () => {
     }
   })
 
+  it('orders equal scores by tie, then input order, in both selection paths', () => {
+    for (const n of [10, 64, 65, 100, 1000]) {
+      const values = Array.from({ length: n }, (_, id) => ({ id, score: id % 3 === 0 ? 0.9 : 0.5, tie: (id * 7) % 5 }))
+      const expected = [...values].sort((a, b) => b.score - a.score || b.tie - a.tie)
+      for (const limit of [1, 5, 30, n]) expect(topScored([...values], limit)).toEqual(expected.slice(0, limit))
+    }
+  })
+
   it('retains the legacy sort result for non-finite scores', () => {
     for (const score of [NaN, Infinity, -Infinity]) for (const position of [0, 37, 99]) {
       const values = Array.from({ length: 100 }, (_, i) => ({ id: i, score: i === position ? score : i % 7 }))
