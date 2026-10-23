@@ -8,6 +8,7 @@ Plans written before a larger change, kept for the reasoning behind it. The guid
 
 | Plan | Status |
 |---|---|
+| [Hermes-aligned memory providers](./hermes-aligned-providers.md) | Planned on 2026-10-23: one primary Provider with Hermes-named verbs, vendor DSH plugins bridged, automation off by default; step 0 is the adapter fixes for #452, #454 and #455 |
 | [Gaps from the October 2026 review](./review-gaps-2026-10.md) | Planned; item 12 is done ([record](../pr-assets/neutral-vector-note/README.md)), and the [roadmap](../en/roadmap.md#next-gaps-from-the-october-2026-review) lists the others |
 | [Skill management and self-evolution](./skill-management.md) | Implemented (experimental): the Skills page, self-evolution, evidence, evals, and a market of skills.sh, GitHub repositories, Agent Skills sites and catalogs |
 | [Git repository sync](./git-sync.md) | Shipped with Git sync ([#335](https://github.com/omdsh-dev/dsh-mnemon/pull/335)); [Operations](../en/guides/operations.md#git-repository-sync) describes it. Its open questions for maintainers, such as where the credentials live and how long remote history is kept, remain open |
