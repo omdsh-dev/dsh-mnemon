@@ -465,6 +465,8 @@ describe('conversation interaction surfaces', () => {
 
   it('lists a place only while its layer is on, its Source runs and it takes writes', async () => {
     const dormant = { ...lumen, id: 'dormant', name: 'Dormant space', active: false }
+    // An active space that is recalled and takes no writes is never a place to save to (#434).
+    const legacy = { ...lumen, id: 'legacy', name: 'Legacy bank', writePolicy: 'read-only' as const }
     const cases: Array<{ system: ReturnType<typeof memorySystem>; taskAgent: boolean; places: string[] }> = [
       { system: memorySystem(), taskAgent: true, places: ['agent', 'memory', 'user', 'Lumen project'] },
       // Runtime Memory switched off by its old layer flag, or its component stopped.
@@ -477,7 +479,7 @@ describe('conversation interaction surfaces', () => {
     ]
     for (const { system, taskAgent, places } of cases) {
       const rpcCall = vi.fn(async (_channel: string, endpoint: string) => {
-        if (endpoint === 'status') return { ok: true as const, value: { writeEnabled: true, commandFound: true, memoryBodies: [lumen, dormant], lifecycle: { taskAgentAvailable: taskAgent }, memorySystem: system } }
+        if (endpoint === 'status') return { ok: true as const, value: { writeEnabled: true, commandFound: true, memoryBodies: [lumen, dormant, legacy], lifecycle: { taskAgentAvailable: taskAgent }, memorySystem: system } }
         if (endpoint === 'assistant-message') return { ok: true as const, value: { messageId: 'message-1', text: 'A durable project decision.' } }
         if (endpoint === 'source-management-read') return emptyRuntime
         throw new Error(`unexpected endpoint: ${endpoint}`)

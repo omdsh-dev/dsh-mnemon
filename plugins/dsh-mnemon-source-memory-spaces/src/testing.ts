@@ -5,6 +5,7 @@ import type { MemorySpaceAuthority, MemoryProviderAdapter, MemoryProviderAdapter
 import { deepFreeze, type MemorySpaceProviderManifest, type MemorySpaceProviderModule } from './providers/definitions.ts'
 import { PrivateMemorySpaceProviderHost } from './providers/host.ts'
 import { createMemorySpaceProviderPlugin } from './providers/plugin.ts'
+import type { MemorySpaceProviderProfile } from './providers/profile.ts'
 
 export interface MemorySpaceProviderTest {
   readonly registered: boolean
@@ -17,7 +18,7 @@ export interface MemorySpaceProviderTest {
 /** Real private-child registration and factory validation, without exposing its Host/Registry. */
 export async function mountMemorySpaceProvider<C>(
   module: MemorySpaceProviderModule<C>,
-  options: { instanceId?: string; sourceInstanceId?: string; config: C },
+  options: { instanceId?: string; sourceInstanceId?: string; config: C; profile?: MemorySpaceProviderProfile },
 ): Promise<MemorySpaceProviderTest> {
   const context = new Context()
   const host = new PrivateMemorySpaceProviderHost(options.sourceInstanceId ?? 'test-memory-spaces')
@@ -28,7 +29,7 @@ export async function mountMemorySpaceProvider<C>(
   try {
     await child.await()
     if (!host.has(instanceId)) throw new Error(`Memory Space Provider child did not install a definition: ${instanceId}`)
-    const snapshot = host.snapshot()
+    const snapshot = host.snapshot(options.profile)
     const adapters = new Set<MemoryProviderAdapter>()
     let closing: Promise<void> | undefined
     return Object.freeze({

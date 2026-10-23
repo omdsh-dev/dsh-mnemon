@@ -1,5 +1,5 @@
 import type { JsonValue } from '../contracts.ts'
-import type { MemorySpaceAuthority } from './adapter.ts'
+import { endpointKey, type MemorySpaceAuthority } from './adapter.ts'
 import type {
   Insight,
   MemorySpace,
@@ -85,6 +85,11 @@ export abstract class HttpMemoryProvider {
       edges: [],
       generatedAt: new Date().toISOString(),
     }
+  }
+
+  /** The service endpoint as a namespace key names it (#434). */
+  protected endpointKey(connection: MemoryProviderConnection): string {
+    return endpointKey(connection.endpoint)
   }
 
   protected connection(body: MemorySpace): MemoryProviderConnection {

@@ -7,16 +7,21 @@ import type {
   MemoryGraphSnapshot,
   MemoryListRequest,
   MemoryProviderConnection,
+  MemoryProviderViewRequest,
+  MemoryProviderViewResult,
+  MemorySpaceIntegration,
   OpenVikingBodyConnection as OpenVikingSpaceConnection,
   RememberRequest,
   SearchRequest,
 } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import { CATEGORIES, NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter, type ProviderBodyStatus as ProviderSpaceStatus, type ProviderMemorySpace, type ProviderSearchResult } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
+import { officialPluginIntegration, type OfficialPluginSnapshot } from './official-plugin.ts'
+import { openVikingView } from './views.ts'
 
 interface OpenVikingEnvelope {
   status?: string
   result?: unknown
-  error?: { code?: string; message?: string; trace_id?: string }
+  error?: { code?: string; message?: string; trace_id?: string; details?: { resource?: unknown } }
   trace_id?: string
 }
 
@@ -28,6 +33,8 @@ interface OpenVikingRequestOptions {
 interface OpenVikingProviderOptions {
   fetch?: typeof fetch
   requestTimeoutMs?: number
+  /** What OpenViking's own DeepSeek Harness plugin reports, when it runs in this profile. */
+  officialPlugin?: () => OfficialPluginSnapshot | undefined
 }
 
 type OpenVikingConnection = OpenVikingSpaceConnection & { discoveryUser?: string }
@@ -127,15 +134,53 @@ function refused(error: unknown): boolean {
   return typeof status === 'number' && status >= 400 && status < 500 && status !== 408 && status !== 409
 }
 
+/** OpenViking's error envelope as an Error carrying the status, code and the resource it names. */
+function failure(response: Response, envelope: OpenVikingEnvelope): Error {
+  const trace = envelope.error?.trace_id ?? envelope.trace_id
+  return Object.assign(new Error(`${envelope.error?.message ?? `OpenViking HTTP ${response.status}`}${trace === undefined ? '' : ` (trace ${trace})`}`), {
+    status: response.status, code: envelope.error?.code, resource: string(envelope.error?.details?.resource),
+  })
+}
+
+/** A file's bytes, stopping as soon as it passes `maxBytes`. */
+async function readBytes(response: Response, maxBytes: number): Promise<Uint8Array> {
+  if (!response.ok) throw failure(response, await response.json().catch(() => ({})) as OpenVikingEnvelope)
+  const tooLarge = () => new Error(`This file is larger than the ${Math.round(maxBytes / 1_000_000)} MB a preview shows`)
+  if (Number(response.headers.get('content-length') ?? 0) > maxBytes) throw tooLarge()
+  const reader = response.body?.getReader()
+  if (reader === undefined) return new Uint8Array(0)
+  const chunks: Uint8Array[] = []
+  let total = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    total += value.byteLength
+    if (total > maxBytes) {
+      await reader.cancel()
+      throw tooLarge()
+    }
+    chunks.push(value)
+  }
+  const bytes = new Uint8Array(total)
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return bytes
+}
+
 export class OpenVikingProvider implements MemoryProviderAdapter {
   readonly id = 'openviking' as const
   readonly scoreSemantics = NORMALIZED_RELEVANCE_SCORE
   private readonly requestFetch: typeof fetch
   private readonly requestTimeoutMs: number
+  private readonly officialPlugin: (() => OfficialPluginSnapshot | undefined) | undefined
 
   constructor(private readonly memorySpaces: MemorySpaceAuthority, options: OpenVikingProviderOptions = {}) {
     this.requestFetch = options.fetch ?? globalThis.fetch
     this.requestTimeoutMs = options.requestTimeoutMs ?? 15_000
+    this.officialPlugin = options.officialPlugin
   }
 
   async discover(connection: MemoryProviderConnection, signal?: AbortSignal): Promise<ProviderMemorySpace[]> {
@@ -177,6 +222,7 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
   }
 
   async status(body: MemorySpace, signal?: AbortSignal): Promise<ProviderSpaceStatus> {
+    const integration = this.integration(body)
     try {
       const connection = this.connection(body)
       const selectedUser = discoveryUser(connection)
@@ -185,10 +231,31 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
         await this.memoryRoot(body, signal)
         await this.validateUserNamespace(connection, selectedUser, signal)
       }
-      return { healthy: true }
+      return { healthy: true, ...integration }
     } catch (error) {
-      return { healthy: false, error: error instanceof Error ? error.message : String(error) }
+      return { healthy: false, error: error instanceof Error ? error.message : String(error), ...integration }
     }
+  }
+
+  /** OpenViking's own DeepSeek Harness plugin beside this space, as it reports itself; nothing when it is not installed. */
+  private integration(body: MemorySpace): { integration?: MemorySpaceIntegration } {
+    const snapshot = this.officialPlugin?.()
+    if (snapshot === undefined) return {}
+    let key: readonly string[]
+    try { key = this.namespaceKey({ ...this.connection(body) }) } catch { return {} }
+    // Where this space's writes land, as the write policy keys them: server, account and memory root.
+    const user = /^viking:\/\/user\/([^/]+)\/memories$/u.exec(key[2] ?? '')?.[1] ?? ''
+    return { integration: officialPluginIntegration(snapshot, { endpoint: key[0] ?? '', account: key[1] ?? '', user }) }
+  }
+
+  /** The hierarchy, Resources and server changes of this space's OpenViking namespace, read only. */
+  async view(body: MemorySpace, request: MemoryProviderViewRequest, signal?: AbortSignal): Promise<MemoryProviderViewResult> {
+    const user = (await this.memoryRoot(body, signal)).split('/')[3]!
+    return openVikingView({
+      user,
+      get: (path, scoped) => this.request(body, path, {}, { signal: scoped }),
+      bytes: (path, maxBytes, scoped) => this.exchange(this.connection(body), path, {}, { signal: scoped }, response => readBytes(response, maxBytes)),
+    }, request, signal)
   }
 
   async search(body: MemorySpace, request: SearchRequest, signal?: AbortSignal): Promise<ProviderSearchResult> {
@@ -359,6 +426,16 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
     }
   }
 
+  /**
+   * Writes land under one user's memory root of one account (#434). A root whose owner only the server
+   * knows names no root, so it covers every root of the account.
+   */
+  namespaceKey(connection: MemoryProviderConnection): readonly string[] {
+    const root = String(connection.targetUri ?? '').trim().replace(/\/+$/u, '')
+    const user = discoveryUser(connection) ?? /^viking:\/\/user\/([^/]+)\/memories$/u.exec(root)?.[1] ?? (String(connection.user ?? '').trim() || undefined)
+    return [String(connection.endpoint ?? '').trim().replace(/\/+$/u, ''), String(connection.account ?? '').trim(), ...(user === undefined ? [] : [`viking://user/${user}/memories`])]
+  }
+
   private connection(body: MemorySpace): OpenVikingConnection {
     if ((body.provider.typeId ?? body.provider.id) !== this.id) throw new Error(`OpenViking cannot serve provider ${body.provider.id}`)
     const connection = this.memorySpaces.providerConnection(body.id, body.provider.id)
@@ -410,6 +487,15 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
   }
 
   private async requestConnection(connection: MemoryProviderConnection | OpenVikingConnection, path: string, init: RequestInit = {}, options: OpenVikingRequestOptions = {}): Promise<unknown> {
+    return this.exchange(connection, path, init, options, async response => {
+      const envelope = await response.json().catch(() => ({})) as OpenVikingEnvelope
+      if (!response.ok || envelope.status === 'error') throw failure(response, envelope)
+      return envelope.result ?? envelope
+    })
+  }
+
+  /** One request with the space's headers and deadline; `read` takes the response before the deadline ends. */
+  private async exchange<T>(connection: MemoryProviderConnection | OpenVikingConnection, path: string, init: RequestInit, options: OpenVikingRequestOptions, read: (response: Response) => Promise<T>): Promise<T> {
     options.signal?.throwIfAborted()
     // In api_key mode the backend binds the account/user to the key and
     // rejects trusted identity overrides. Preserve old discovery by default.
@@ -431,12 +517,7 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
         },
         signal: controller.signal,
       })
-      const envelope = await response.json().catch(() => ({})) as OpenVikingEnvelope
-      if (!response.ok || envelope.status === 'error') {
-        const trace = envelope.error?.trace_id ?? envelope.trace_id
-        throw Object.assign(new Error(`${envelope.error?.message ?? `OpenViking HTTP ${response.status}`}${trace === undefined ? '' : ` (trace ${trace})`}`), { status: response.status })
-      }
-      return envelope.result ?? envelope
+      return await read(response)
     } catch (error) {
       if (controller.signal.aborted && options.signal?.aborted !== true) throw new Error(`OpenViking request timed out after ${options.timeoutMs ?? this.requestTimeoutMs}ms`)
       throw error

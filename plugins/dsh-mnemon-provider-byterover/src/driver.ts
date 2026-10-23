@@ -117,16 +117,22 @@ export class ByteRoverProvider implements MemoryProviderAdapter {
     return this.memorySpaces.providerConnection(body.id, body.provider.id)
   }
 
+  /** Writes land in the folder ByteRover runs in (#434). */
+  namespaceKey(connection: Record<string, string | number | boolean>): readonly string[] {
+    return [this.directory(connection)]
+  }
+
+  /** The space's folder, else the service's, else this data directory's default; a relative one is under the data directory. */
+  private directory(connection: Record<string, string | number | boolean>): string {
+    const configuredDirectory = String(connection.workingDirectory ?? connection.defaultDirectory ?? '').trim()
+    const dataDir = this.memorySpaces.runner.effectiveDataDir()
+    return configuredDirectory === '' ? join(dataDir, 'state', 'byterover', 'default') : isAbsolute(configuredDirectory) ? configuredDirectory : resolve(dataDir, configuredDirectory)
+  }
+
   private async run(body: MemorySpace, args: string[], timeoutMs: number, signal?: AbortSignal): Promise<string> {
     const connection = this.connection(body)
     const command = String(connection.cliPath ?? 'brv')
-    const configuredDirectory = String(connection.workingDirectory ?? connection.defaultDirectory ?? '').trim()
-    const defaultDirectory = join(this.memorySpaces.runner.effectiveDataDir(), 'state', 'byterover', 'default')
-    const cwd = configuredDirectory === ''
-      ? defaultDirectory
-      : isAbsolute(configuredDirectory)
-        ? configuredDirectory
-        : resolve(this.memorySpaces.runner.effectiveDataDir(), configuredDirectory)
+    const cwd = this.directory(connection)
     mkdirSync(cwd, { recursive: true, mode: 0o700 })
     const apiKey = String(connection.apiKey ?? '').trim()
     const result = await this.process(command, args, {

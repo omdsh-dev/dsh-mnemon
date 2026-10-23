@@ -1,6 +1,6 @@
 import { css, useT } from './presentation.ts'
 import type { JSX } from 'react'
-import { useEffect, useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, useMemo, useState, type FormEvent } from 'react'
 import { CATEGORIES, type Category, type MemorySpaceView } from '../contracts.ts'
 import type { MemorySpacesPageClient } from './api.ts'
 import { message, SidebarModal, EmptyState, SelectField, TaskAgentTag, WriteReceipt } from 'dsh-mnemon/client'
@@ -20,11 +20,15 @@ export function RememberPage(props: { client: MemorySpacesPageClient; agentAvail
   const [supervising, setSupervising] = useState(false)
   const [saving, setSaving] = useState(false)
   const [outcome, setOutcome] = useState<{ content: string; action?: string; summary?: string; unembedded?: boolean; embeddingManaged?: boolean | undefined; error?: string } | null>(null)
+  // A read-only space is recalled and takes no writes, so it is no place to save to (#434).
+  const targets = useMemo(() => props.memoryBodies.filter(body => body.writePolicy !== 'read-only'), [props.memoryBodies])
   useEffect(() => { if (props.seed !== '') setContent(props.seed) }, [props.seed])
   useEffect(() => {
-    if (memoryBodyId === '' && props.memoryBodies.length > 0) setMemoryBodyId((props.memoryBodies.find(body => body.active) ?? props.memoryBodies[0])!.id)
-  }, [memoryBodyId, props.memoryBodies])
-  const selectedMemoryBody = props.memoryBodies.find(body => body.id === memoryBodyId)
+    // A target made read only while the dialog is open is chosen again.
+    if (props.memoryBodies.some(body => body.id === memoryBodyId && body.writePolicy === 'read-only')) setMemoryBodyId('')
+    else if (memoryBodyId === '' && targets.length > 0) setMemoryBodyId((targets.find(body => body.active) ?? targets[0])!.id)
+  }, [memoryBodyId, props.memoryBodies, targets])
+  const selectedMemoryBody = targets.find(body => body.id === memoryBodyId)
   const candidate = content.trim()
   // A receipt answers one text: sending the same text again waits for an edit.
   const answered = outcome !== null && outcome.content === candidate
@@ -65,7 +69,7 @@ export function RememberPage(props: { client: MemorySpacesPageClient; agentAvail
       <form className={css.manualForm} onSubmit={event => void manualSave(event)}>
         <div className={css.formGrid}>
           <div className={css.fieldWide}>
-            <SelectField label={t('remember.target')} value={memoryBodyId} options={props.memoryBodies.map(body => ({ value: body.id, label: `${body.name} · ${body.provider.label}${body.active ? ` · ${t('common.active')}` : ''}` }))} onChange={setMemoryBodyId} />
+            <SelectField label={t('remember.target')} value={memoryBodyId} options={targets.map(body => ({ value: body.id, label: `${body.name} · ${body.provider.label}${body.active ? ` · ${t('common.active')}` : ''}` }))} onChange={setMemoryBodyId} />
             {selectedMemoryBody?.provider.capabilities.writeMode === 'async-extracting' && <small className={css.providerWriteHint}>{t('remember.asyncProviderHint')}</small>}
           </div>
           <SelectField label={t('common.category')} value={category} options={CATEGORIES.map(value => ({ value, label: categoryLabel(t, value) }))} onChange={setCategory} />

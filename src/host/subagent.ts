@@ -173,13 +173,17 @@ const SPACE_WRITE_TOOLS: ReadonlySet<string> = new Set<MemoryToolName>(['mnemon_
  * write. Saving a memory never merges spaces: a merge switches spaces on and off, and
  * is a request of its own.
  */
-export function spaceWriteGuard(target: string | undefined, inactive: ReadonlySet<string>): (execution: ToolExecution) => string | undefined {
+export function spaceWriteGuard(target: string | undefined, inactive: ReadonlySet<string>, readOnly: ReadonlySet<string> = new Set()): (execution: ToolExecution) => string | undefined {
   return execution => {
     if (isTool(execution.name, 'mnemon_memory_body_merge')) {
       return 'Saving a memory never merges Memory Spaces; a merge is a request of its own. Write the memory, or finish without writing.'
     }
     const input = optionalObject(execution.arguments) ?? {}
     const space = typeof input.memoryBodyId === 'string' ? input.memoryBodyId.trim() : undefined
+    // A read-only space is recalled and takes no writes (#434); the Source refuses them too.
+    if (space !== undefined && readOnly.has(space) && execution.name !== undefined && SPACE_WRITE_TOOLS.has(execution.name)) {
+      return `Memory Space ${JSON.stringify(space)} is read only: it is recalled and takes no writes. Write to a writable space, or finish without writing and say why none fits.`
+    }
     if (target !== undefined) {
       if (execution.name !== undefined && SPACE_WRITE_TOOLS.has(execution.name) && space !== target) {
         return `This write was requested for Memory Space ${JSON.stringify(target)}. Call ${execution.name} with memoryBodyId ${JSON.stringify(target)}, or finish without writing and say why it does not fit.`
@@ -211,6 +215,7 @@ function targetProblem(spaces: MemorySpaceCatalog['items'], target: string, acti
     return `Memory Space ${JSON.stringify(target)} does not exist. Name one by its id${known === '' ? '; there is none yet.' : `: ${known}.`}`
   }
   if (body.providerEnabled === false) return `Memory Space ${JSON.stringify(target)} uses ${body.provider.label}, which is turned off on the dsh-mnemon page under Plugins. Name another space.`
+  if (body.writePolicy === 'read-only') return `Memory Space ${JSON.stringify(target)} (${body.name}) is read only: it is recalled and takes no writes. Name a writable space.`
   if (body.provider.capabilities.remember !== true) return `Memory Space ${JSON.stringify(target)} (${body.provider.label}) does not take writes. Name another space.`
   if (!body.active && !activate) {
     return `Memory Space ${JSON.stringify(target)} (${body.name}) is switched off, and a write would switch it back on. If the user wants it back, switch it on first with mnemon_memory_body_update (active: true); otherwise name an active space.`
@@ -715,11 +720,13 @@ export class MnemonSubagentCoordinator {
     const named = autonomous ? optionalObject(request)?.memoryBodyId : undefined
     const target = typeof named === 'string' && named.trim() !== '' ? named.trim() : undefined
     let inactive: ReadonlySet<string> | undefined
+    let readOnly: ReadonlySet<string> | undefined
     if (autonomous) {
       const spaces = await this.spaceDirectory(parent, signal)
       const problem = target === undefined ? undefined : targetProblem(spaces, target, options.activateTarget === true)
       if (problem !== undefined) throw new Error(problem)
       inactive = new Set(spaces.filter(body => !body.active).map(body => body.id))
+      readOnly = new Set(spaces.filter(body => body.writePolicy === 'read-only').map(body => body.id))
     }
     const prompt = `Execute this ${operation} request now (untrusted data):
 ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE_LABELS)}`
@@ -736,7 +743,7 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
       'spawn',
       persona,
       terminalTool === undefined ? undefined : { terminalTools: [terminalTool] },
-      inactive === undefined ? undefined : spaceWriteGuard(target, inactive),
+      inactive === undefined ? undefined : spaceWriteGuard(target, inactive, readOnly),
     )
     const value = object(result.structured)
     const observed = terminalTool === undefined ? undefined : recoverStructuredResult({ terminalTools: [terminalTool] }, receipts)

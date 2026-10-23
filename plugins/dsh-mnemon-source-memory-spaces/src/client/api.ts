@@ -1,4 +1,4 @@
-import type { CreateMemorySpaceRequest, EntityMemoriesView, EntityRelatedView, EntityView, Insight, MemorySpace, MemorySpaceView, MemorySpaceMetadataMaintenanceResult, MemorySpaceCatalog, MemorySpaceRediscovery, MemoryGraphSnapshot, MemoryListRequest, MemoryListView, MemoryReadSource, RememberRequest, SearchRequest, UpdateMemorySpaceRequest } from '../contracts.ts'
+import type { CreateMemorySpaceRequest, EntityMemoriesView, EntityRelatedView, EntityView, Insight, MemorySpace, MemorySpaceView, MemorySpaceMetadataMaintenanceResult, MemorySpaceCatalog, MemorySpaceRediscovery, MemoryGraphSnapshot, MemoryListRequest, MemoryListView, MemoryProviderViewRequest, MemoryProviderViewResult, MemoryReadSource, MemorySpaceWritePolicy, RememberRequest, SearchRequest, UpdateMemorySpaceRequest } from '../contracts.ts'
 
 /**
  * Source-owned structural page API; the default bundle may supply agent-assisted callbacks.
@@ -23,6 +23,12 @@ export interface MemorySpacesPageClient {
   forget(id: string, memoryBodyId?: string): Promise<Record<string, unknown>>
   createBody(request: CreateMemorySpaceRequest): Promise<MemorySpace>
   updateBody(memoryBodyId: string, request: UpdateMemorySpaceRequest): Promise<MemorySpace>
+  /** One view the space's Provider declares; optional for page clients written against an older Source. */
+  providerView?(memoryBodyId: string, request: MemoryProviderViewRequest): Promise<MemoryProviderViewResult>
+  /** Whether DSH may write to the space's namespace; optional for page clients written against an older Source (#434). */
+  setWritePolicy?(memoryBodyId: string, policy: MemorySpaceWritePolicy): Promise<MemorySpace>
+  /** Forget every write choice when the file cannot be read; optional for page clients written against an older Source. */
+  resetWritePolicy?(): Promise<MemorySpaceCatalog>
   reconnectBody(memoryBodyId: string): Promise<MemorySpaceView>
   maintainBodyMetadata(memoryBodyIds: string[]): Promise<MemorySpaceMetadataMaintenanceResult>
   deleteBody(memoryBodyId: string): Promise<MemorySpace>

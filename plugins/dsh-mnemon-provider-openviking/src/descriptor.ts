@@ -1,5 +1,12 @@
-import type { MemoryProviderDescriptor } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
+import type { MemoryProviderDescriptor, MemoryProviderView } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import { ICON } from './icon.ts'
+
+/** The views of a space's OpenViking data that the Memory Spaces page draws; driver.ts serves them. */
+export const OPENVIKING_VIEWS: MemoryProviderView[] = [
+  { id: 'hierarchy', kind: 'files', label: 'viking://', labelI18nKey: 'providerViews.openviking.hierarchy' },
+  { id: 'resources', kind: 'files', label: 'Resources', labelI18nKey: 'providerViews.openviking.resources' },
+  { id: 'changes', kind: 'changes', label: 'Server changes', labelI18nKey: 'providerViews.openviking.changes' },
+]
 
 /** Browser-safe metadata owned by this Provider. */
 export const descriptor: MemoryProviderDescriptor = {
@@ -94,5 +101,6 @@ export const descriptor: MemoryProviderDescriptor = {
       "defaultValue": "dsh",
       "i18nKey": "overview.providerActorPeer"
     }
-  ]
+  ],
+  "views": OPENVIKING_VIEWS
 }

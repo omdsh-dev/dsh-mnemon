@@ -5,9 +5,11 @@ import type {
   MemoryProviderConfigField,
   MemoryProviderDescriptor,
   MemoryProviderIcon,
+  MemoryProviderView,
 } from '../contracts.ts'
 import type { MemoryProviderAdapter } from './adapter.ts'
 import type { MemoryProviderAdapterFactoryContext } from './adapter.ts'
+import type { MemorySpaceProviderProfile } from './profile.ts'
 
 export const MEMORY_SPACE_PROVIDER_API_VERSION = 'dsh-mnemon.memory-space-provider/v1' as const
 
@@ -37,12 +39,16 @@ export interface MemorySpaceProviderManifest {
   fields: MemoryProviderConfigField[]
   secrets: string[]
   scoreSemantics: MemorySpaceProviderScoreSemantics
+  /** Views of the Provider's own data for the Memory Spaces page; the runtime then implements view(). */
+  views?: MemoryProviderView[]
 }
 
 export interface MemorySpaceProviderRuntimeContext extends MemoryProviderAdapterFactoryContext {
   /** Stable identity of this child mount inside one Memory Spaces Source. */
   providerInstanceId: string
   manifest: MemorySpaceProviderManifest
+  /** What the Provider may read of the DSH profile, to recognize its vendor's own plugin; absent on older Source hosts. */
+  profile?: MemorySpaceProviderProfile
 }
 
 export interface MemorySpaceProviderDefinition {
@@ -251,7 +257,23 @@ function captureManifest(value: MemorySpaceProviderManifest): MemorySpaceProvide
     throw new Error('Memory Space Provider secrets must exactly match secret config fields')
   }
   manifest.secrets = secrets
+  if (manifest.views !== undefined) manifest.views = captureViews(manifest.views)
   return deepFreeze(manifest)
+}
+
+function captureViews(value: MemoryProviderView[]): MemoryProviderView[] {
+  if (!Array.isArray(value) || value.length > 8) throw new Error('Memory Space Provider views must be an array of at most 8')
+  const ids = new Set<string>()
+  return value.map(view => {
+    const id = requiredId(view?.id ?? '', 'Memory Space Provider view id')
+    if (ids.has(id)) throw new Error(`duplicate Memory Space Provider view: ${id}`)
+    ids.add(id)
+    if (view.kind !== 'files' && view.kind !== 'changes') throw new Error(`unsupported Memory Space Provider view kind: ${String(view.kind)}`)
+    return {
+      id, kind: view.kind, label: requiredText(view.label ?? '', `Memory Space Provider view ${id} label`, 100),
+      ...(view.labelI18nKey === undefined ? {} : { labelI18nKey: requiredText(view.labelI18nKey, `Memory Space Provider view ${id} labelI18nKey`, 200) }),
+    }
+  })
 }
 
 function captureDefinition(value: MemorySpaceProviderDefinition): MemorySpaceProviderDefinition {

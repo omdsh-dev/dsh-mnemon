@@ -342,6 +342,39 @@ describe('MnemonSettingsCard', () => {
     expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'embedding-status')).toHaveLength(2)
   })
 
+  it('fills in no vector of a read-only space, and says it is one (#434)', async () => {
+    const snapshot = {
+      status: 'ready' as const,
+      value: { storageScope: 'global' as const },
+      base: {}, user: {}, revision: 1, writable: true, mode: 'host' as const,
+    }
+    const scope = settingsScope(snapshot)
+    const space = (memoryBodyId: string, name: string, totalInsights: number, embedded: number, coverage: string) => ({ memoryBodyId, name, active: true, totalInsights, embedded, coverage })
+    let listed = [{ ...space('legacy', '旧知识库', 40, 10, '25%'), writePolicy: 'read-only' as const }, space('work', '工作记忆', 10, 5, '50%')]
+    const call = vi.fn(async (channel: string, endpoint: string) => {
+      if (channel === '/dsh-mnemon-read' && endpoint === 'embedding-status') return {
+        ok: true as const,
+        value: { available: true, model: 'nomic-embed-text', totalInsights: 50, embedded: 15, coverage: '30%', spaces: listed },
+      }
+      if (channel === '/dsh-mnemon-read' && endpoint === 'task-agent-models') return { ok: true as const, value: { groups: [], failures: [] } }
+      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [], items: [], generatedAt: '' } }
+      if (channel === '/dsh-mnemon-pack' && endpoint === 'target') return { ok: true as const, value: { root: '/root/.mnemon', scope: 'global' as const } }
+      throw new Error(`unexpected ${channel} ${endpoint}`)
+    })
+
+    render(spaces(scope, { rpc: { call }, isLoopback: true } as ClientConnectionHandle))
+    fireEvent.click(screen.getByRole('button', { name: '测试状态' }))
+    const rows = async () => within(await screen.findByRole('list', { name: '各 Mnemon Native 空间' })).getAllByRole('listitem')
+    expect((await rows()).map(item => item.textContent)).toEqual(['旧知识库只读已嵌入 10/40（25%）', '工作记忆已嵌入 5/10（50%）补齐'])
+    expect(screen.queryByRole('button', { name: '补齐「旧知识库」的向量' })).toBeNull()
+    expect(screen.getByText('没有向量的记忆不参与语义匹配；点空间旁的「补齐」即可生成缺少的向量。')).toBeTruthy()
+    // With only a read-only space missing vectors, nothing here can fill them in, and the line does not say it can.
+    listed = [listed[0]!]
+    fireEvent.click(screen.getByRole('button', { name: '测试状态' }))
+    await waitFor(async () => expect((await rows()).map(item => item.textContent)).toEqual(['旧知识库只读已嵌入 10/40（25%）']))
+    expect(screen.getByText('没有向量的记忆不参与语义匹配。')).toBeTruthy()
+  })
+
   it('says why a fill failed, and offers none while the embedding service is down (#392)', async () => {
     const snapshot = {
       status: 'ready' as const,

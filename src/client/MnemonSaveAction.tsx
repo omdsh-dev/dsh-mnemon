@@ -76,8 +76,9 @@ function saveDestinations(status: Partial<StatusView> | undefined, taskAgent: bo
   }
   const runtimeOn = takes('runtime')
   const spacesOn = takes('memory-spaces')
-  // Active spaces, as the Agent sees them. A Mnemon Native space takes writes only while its CLI is found.
-  const spaces = spacesOn ? (status?.memoryBodies ?? []).filter(body => body.active !== false && body.providerEnabled !== false && body.provider.capabilities.remember
+  // Active spaces, as the Agent sees them. A Mnemon Native space takes writes only while its CLI is found;
+  // a read-only space takes none (#434).
+  const spaces = spacesOn ? (status?.memoryBodies ?? []).filter(body => body.active !== false && body.writePolicy !== 'read-only' && body.providerEnabled !== false && body.provider.capabilities.remember
     && ((body.provider.typeId ?? body.provider.id) !== NATIVE_PROVIDER_ID || status?.commandFound !== false)) : []
   // The task Agent writes to Memory Spaces only: it needs one, or a ready Provider to create one with.
   const providerReady = spaces.length > 0 || status?.commandFound !== false || (status?.providerServices ?? []).some(provider => provider.enabled && provider.configured)

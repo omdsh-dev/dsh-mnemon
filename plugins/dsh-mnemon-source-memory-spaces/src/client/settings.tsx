@@ -347,6 +347,8 @@ function EmbeddingSpaces(props: {
   const css = memorySettingsStyles
   const missing = (space: MnemonEmbeddingSpaceStatus): boolean => space.error === undefined && space.embedded < space.totalInsights
   const fillable = props.available && props.canFill
+  // A read-only space takes no vectors from here (#434).
+  const fills = (space: MnemonEmbeddingSpaceStatus): boolean => missing(space) && space.writePolicy !== 'read-only'
   const running = fill?.state === 'running' ? fill.memoryBodyId : undefined
   return <div className={css.embeddingSpaces}>
     <small id="mnemon-embedding-spaces">{t('config.embeddingSpaces')}</small>
@@ -354,15 +356,16 @@ function EmbeddingSpaces(props: {
       {props.spaces.map(space => <li key={space.memoryBodyId} data-missing={missing(space) ? '' : undefined} data-failed={space.error === undefined ? undefined : ''}>
         <span className={css.embeddingSpaceName} title={space.name}>{space.name}</span>
         {!space.active && <span className={css.embeddingSpaceState}>{t('common.inactive')}</span>}
+        {space.writePolicy === 'read-only' && <span className={css.embeddingSpaceState}>{t('common.readOnlySpace')}</span>}
         <span className={css.embeddingSpaceCount}>{space.error === undefined
           ? t('config.embeddingSpaceCounts', { embedded: space.embedded, total: space.totalInsights, coverage: space.coverage })
           : t('config.embeddingSpaceFailed', { error: space.error })}</span>
-        {fillable && missing(space) && <Button variant="ghost" size="sm" disabled={running !== undefined || props.counting} aria-busy={running === space.memoryBodyId}
+        {fillable && fills(space) && <Button variant="ghost" size="sm" disabled={running !== undefined || props.counting} aria-busy={running === space.memoryBodyId}
           aria-label={t(running === space.memoryBodyId ? 'config.embeddingFillingLabel' : 'config.embeddingFillLabel', { name: space.name })}
           onClick={() => props.onFill(space)}>{running === space.memoryBodyId ? t('config.embeddingFilling') : t('config.embeddingFill')}</Button>}
       </li>)}
     </ul>
-    {props.spaces.some(missing) && <p>{t(!props.canFill ? 'config.embeddingMissing' : props.available ? 'config.embeddingMissingFill' : 'config.embeddingMissingOffline')}</p>}
+    {props.spaces.some(missing) && <p>{t(!props.canFill || !props.spaces.some(fills) ? 'config.embeddingMissing' : props.available ? 'config.embeddingMissingFill' : 'config.embeddingMissingOffline')}</p>}
     {props.spaces.some(space => space.error !== undefined) && <p>{t('config.embeddingSpacesUnread')}</p>}
   </div>
 }

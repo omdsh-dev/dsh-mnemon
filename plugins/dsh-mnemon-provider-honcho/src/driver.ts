@@ -93,6 +93,11 @@ export class HonchoProvider extends HttpMemoryProvider implements MemoryProvider
     return firstArray(payload, 'items', 'results').map(insight).filter((item): item is Insight => item !== undefined)
   }
 
+  /** Writes land as one peer's conclusions about another, in one workspace (#434). */
+  namespaceKey(connection: Record<string, string | number | boolean>): readonly string[] {
+    return [this.endpointKey(connection), String(connection.workspace), String(connection.agentId) === '*' ? 'dsh' : String(connection.agentId), String(connection.userId) === '*' ? 'dsh-user' : String(connection.userId)]
+  }
+
   async remember(body: MemorySpace, request: RememberRequest, signal?: AbortSignal): Promise<JsonValue> {
     const connection = this.connection(body)
     const payload = await this.request(body, `${this.basePath(connection)}/conclusions`, {

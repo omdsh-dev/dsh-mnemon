@@ -18,10 +18,14 @@ export function modelSpaceCatalog(catalog: MemorySpaceCatalog) {
         ? 'provider-disabled'
         : body.statusLoading === true ? 'not-probed' : body.healthy ? 'healthy' : 'unhealthy',
       ...(body.error === undefined ? {} : { error: boundedToolText(body.error, 500) }),
+      // A read-only space is recalled and takes no writes (#434); its capabilities say what it takes now.
+      ...(body.writePolicy === undefined ? {} : { writePolicy: body.writePolicy }),
       provider: {
         id: body.provider.id,
         label: boundedToolText(body.provider.label, 120),
-        capabilities: structuredClone(body.provider.capabilities),
+        capabilities: body.writePolicy === 'read-only'
+          ? { ...structuredClone(body.provider.capabilities), remember: false, link: false, forget: false }
+          : structuredClone(body.provider.capabilities),
       },
     })),
     persistenceStrategy: catalog.persistenceStrategy,

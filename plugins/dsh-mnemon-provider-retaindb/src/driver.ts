@@ -108,6 +108,11 @@ export class RetainDbProvider extends HttpMemoryProvider implements MemoryProvid
       .slice(0, Math.min(Math.max(request.limit ?? 200, 1), 200))
   }
 
+  /** Writes land under one user of one project (#434). */
+  namespaceKey(connection: Record<string, string | number | boolean>): readonly string[] {
+    return [this.endpointKey(connection), String(connection.project), String(connection.userId) === '*' ? 'dsh-user' : String(connection.userId)]
+  }
+
   async remember(body: MemorySpace, request: RememberRequest, signal?: AbortSignal): Promise<JsonValue> {
     const connection = this.connection(body)
     const json = {

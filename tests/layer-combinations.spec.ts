@@ -23,16 +23,18 @@ const pending = 'Pending durable fact. '.repeat(15).trim()
 const fixtures: Awaited<ReturnType<typeof compositionFixture>>[] = []
 afterEach(async () => { for (const f of fixtures.splice(0)) await f.dispose() })
 
-type SpacesState = 'ready' | 'inactive-space' | 'no-provider' | 'layer-off' | 'component-off'
+type SpacesState = 'ready' | 'inactive-space' | 'read-only-space' | 'no-provider' | 'layer-off' | 'component-off'
 
 async function fixture(state: SpacesState, config: Config = {}, documentsLimitBytes?: number) {
   const topology = state === 'layer-off' ? { memoryTopology: { layers: { 'memory-spaces': { enabled: false } } } } : {}
   const f = await compositionFixture({ runtimeMemory: { memoryLimitBytes: 512, userLimitBytes: 512 }, ...topology, ...config } as Config,
     documentsLimitBytes === undefined ? {} : { documentsLimitBytes })
   fixtures.push(f)
-  if (state === 'ready' || state === 'inactive-space') {
+  if (state === 'ready' || state === 'inactive-space' || state === 'read-only-space') {
     const body = await f.memorySpace()
     if (state === 'inactive-space') await f.graph.source('memory-spaces').mutate('body-update', { memoryBodyId: body.id, active: false })
+    // An active space that is recalled and takes no writes (#434).
+    if (state === 'read-only-space') await f.graph.source('memory-spaces').mutate('body-write-policy', { memoryBodyId: body.id, policy: 'read-only' })
   }
   if (state === 'component-off') await f.releases[2]!()
   const start = vi.fn()
@@ -55,7 +57,7 @@ async function fixture(state: SpacesState, config: Config = {}, documentsLimitBy
 }
 
 describe('memory layer combinations at their capacity limits (issue 336)', () => {
-  it.each(['ready', 'inactive-space', 'no-provider', 'layer-off', 'component-off'] as const)('keeps MEMORY.md writable when Memory Spaces is %s, through the Agent tool and the web page', async state => {
+  it.each(['ready', 'inactive-space', 'read-only-space', 'no-provider', 'layer-off', 'component-off'] as const)('keeps MEMORY.md writable when Memory Spaces is %s, through the Agent tool and the web page', async state => {
     for (const entry of ['tool', 'web'] as const) {
       const f = await fixture(state)
       await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: saved })
@@ -84,7 +86,7 @@ describe('memory layer combinations at their capacity limits (issue 336)', () =>
     }
   })
 
-  it.each(['ready', 'inactive-space', 'no-provider', 'layer-off', 'component-off'] as const)('keeps MEMORY.md writable outside a turn when Memory Spaces is %s', async state => {
+  it.each(['ready', 'inactive-space', 'read-only-space', 'no-provider', 'layer-off', 'component-off'] as const)('keeps MEMORY.md writable outside a turn when Memory Spaces is %s', async state => {
     const f = await fixture(state)
     await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: saved })
     // No turn is begun: the write takes the Host's own path, without a View.
@@ -98,7 +100,7 @@ describe('memory layer combinations at their capacity limits (issue 336)', () =>
     expect(f.start).not.toHaveBeenCalled()
   })
 
-  it.each(['ready', 'inactive-space', 'no-provider', 'layer-off', 'component-off'] as const)('names only what the View offers when Memory Spaces is %s', async state => {
+  it.each(['ready', 'inactive-space', 'read-only-space', 'no-provider', 'layer-off', 'component-off'] as const)('names only what the View offers when Memory Spaces is %s', async state => {
     const f = await fixture(state)
     const turn = await f.begin()
     const offers = turn.view.actionOffers.filter(offer => offer.sourceInstanceKey === spacesKey).map(offer => offer.sourceActionId)
@@ -106,6 +108,13 @@ describe('memory layer combinations at their capacity limits (issue 336)', () =>
     if (state === 'ready') {
       expect(system).toContain('call mnemon_recall')
       expect(offers).toEqual(expect.arrayContaining(['remember', 'manage-spaces']))
+    } else if (state === 'read-only-space') {
+      // Recalled as before; nothing archives into it, and nothing in it can be linked or forgotten.
+      expect(system).toContain('call mnemon_recall')
+      expect(system).toContain('to a local archive file')
+      expect(offers).toEqual(expect.arrayContaining(['remember', 'manage-spaces']))
+      expect(offers).not.toContain('forget')
+      expect(offers).not.toContain('link')
     } else {
       // No recall to call and no Memory Space to archive into: the protocol says so.
       expect(system).not.toContain('mnemon_recall')
@@ -113,7 +122,7 @@ describe('memory layer combinations at their capacity limits (issue 336)', () =>
     }
     // Documents routing and the write rules stay while Memory Spaces is there to read.
     const routing = turn.view.guidance?.routing
-    if (state === 'ready') expect(routing).toContain('Call mnemon_recall')
+    if (state === 'ready' || state === 'read-only-space') expect(routing).toContain('Call mnemon_recall')
     else if (state === 'inactive-space' || state === 'no-provider') {
       expect(routing).toContain('Search Mnemon Documents for substantial project records')
       expect(routing).not.toContain('mnemon_recall')
@@ -123,7 +132,7 @@ describe('memory layer combinations at their capacity limits (issue 336)', () =>
     f.graph.composableTurns.endTurn(turn.turnId)
   })
 
-  it.each(['inactive-space', 'no-provider', 'layer-off', 'component-off'] as const)('archives a Project Document locally, without model work, when Memory Spaces is %s', async state => {
+  it.each(['inactive-space', 'read-only-space', 'no-provider', 'layer-off', 'component-off'] as const)('archives a Project Document locally, without model work, when Memory Spaces is %s', async state => {
     const f = await fixture(state)
     await f.begin()
     const documents = f.graph.source('documents')
@@ -135,7 +144,7 @@ describe('memory layer combinations at their capacity limits (issue 336)', () =>
     expect(f.start).not.toHaveBeenCalled()
   })
 
-  it.each(['inactive-space', 'no-provider', 'layer-off', 'component-off'] as const)('makes room in full Project Documents by archiving locally when Memory Spaces is %s', async state => {
+  it.each(['inactive-space', 'read-only-space', 'no-provider', 'layer-off', 'component-off'] as const)('makes room in full Project Documents by archiving locally when Memory Spaces is %s', async state => {
     const f = await fixture(state, {}, 1_200)
     await f.begin()
     const documents = f.graph.source('documents')

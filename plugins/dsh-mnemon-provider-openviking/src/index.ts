@@ -1,6 +1,7 @@
 import { MEMORY_SPACE_PROVIDER_API_VERSION, defineMemorySpaceProvider, defineMemorySpaceProviderDefinition } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import { OpenVikingProvider } from './driver.ts'
 import { descriptor } from './descriptor.ts'
+import { OFFICIAL_PLUGIN_SERVICE, readOfficialPlugin } from './official-plugin.ts'
 
 export { OpenVikingProvider, descriptor }
 
@@ -14,8 +15,13 @@ export const definition = defineMemorySpaceProviderDefinition({
     capabilities: descriptor.capabilities, fields: descriptor.fields,
     secrets: descriptor.fields.filter(field => field.input === 'secret').map(field => field.key),
     scoreSemantics: 'normalized-relevance',
+    ...(descriptor.views === undefined ? {} : { views: descriptor.views }),
   },
-  create: context => new OpenVikingProvider(context.memorySpaces ?? context.memoryBodies, { requestTimeoutMs: context.config.timeoutMs }),
+  create: context => new OpenVikingProvider(context.memorySpaces ?? context.memoryBodies, {
+    requestTimeoutMs: context.config.timeoutMs,
+    // Read when a space's status is asked for, so the official plugin is found whichever loads first.
+    ...(context.profile === undefined ? {} : { officialPlugin: () => readOfficialPlugin(() => context.profile!.service(OFFICIAL_PLUGIN_SERVICE)) }),
+  }),
 })
 
 export default defineMemorySpaceProvider<undefined>({

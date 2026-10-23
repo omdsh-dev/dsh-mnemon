@@ -18,12 +18,13 @@ export interface MigrationSource {
 }
 
 /**
- * A space that can take a MEMORY.md archive or a Document's index: active, its
+ * A space that can take a MEMORY.md archive or a Document's index: active, writable, its
  * Provider enabled and ready, with exact writes and safe forget. A Mnemon Native
  * space stays listed, and active, while its CLI is missing; it takes no writes then.
+ * A read-only space is recalled but takes no archive (#434).
  */
 export function archivableSpace(directory: MemorySpaceCatalog, body: MemorySpaceCatalog['items'][number]): boolean {
-  return body.active && body.providerEnabled !== false && body.provider.capabilities.remember === true
+  return body.active && body.writePolicy !== 'read-only' && body.providerEnabled !== false && body.provider.capabilities.remember === true
     && body.provider.capabilities.writeMode === 'exact' && body.provider.capabilities.forget === true
     && directory.providers?.find(provider => provider.id === body.provider.id)?.serviceConfigured !== false
 }

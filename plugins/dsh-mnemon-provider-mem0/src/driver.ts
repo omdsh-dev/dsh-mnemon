@@ -112,6 +112,11 @@ export class Mem0Provider extends HttpMemoryProvider implements MemoryProviderAd
     return firstArray(payload, 'results', 'memories').map(insight).filter((item): item is Insight => item !== undefined)
   }
 
+  /** Writes land under one user and agent, a wildcard writing as the defaults below (#434). */
+  namespaceKey(connection: Record<string, string | number | boolean>): readonly string[] {
+    return [this.endpointKey(connection), String(connection.userId) === '*' ? 'dsh-user' : String(connection.userId), String(connection.agentId) === '*' ? 'dsh' : String(connection.agentId)]
+  }
+
   async remember(body: MemorySpace, request: RememberRequest, signal?: AbortSignal): Promise<JsonValue> {
     const connection = this.connection(body)
     const mode = String(connection.mode ?? 'platform')
