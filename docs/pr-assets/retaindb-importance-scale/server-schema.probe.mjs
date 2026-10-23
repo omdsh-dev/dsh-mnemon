@@ -7,7 +7,9 @@
 //   POST /v1/memory    packages/server/src/api/memory.ts:63-80 (memory types) and :921-941
 //   POST /v1/memories  packages/server/src/api/routes.ts:2581-2595
 // The Server validates them with @hono/zod-validator 0.4.3, which answers a failed parse with HTTP 400, on zod 3;
-// `zod/v3` from this repository's zod 4 is that API.
+// `zod/v3` from this repository's zod 4 is that API. For an accepted body, `path` is how the Server then writes it:
+// /v1/memory stores it before answering unless `write_mode` or `async` asks to queue (memory.ts:1027-1033); the
+// legacy endpoint queues it and answers 202 unless `async` is false (routes.ts:2606).
 //
 // Run from the repository after `pnpm build && pnpm -r build`:
 //   node docs/pr-assets/retaindb-importance-scale/server-schema.probe.mjs <out.json>
@@ -32,6 +34,7 @@ const currentSchema = z.object({
   user_id: z.string().optional(),
   session_id: z.string().optional(),
   importance: z.number().min(0).max(1).optional().default(0.5),
+  async: z.boolean().optional(),
   write_mode: z.enum(['async', 'sync']).optional(),
 })
 const legacySchema = z.object({
@@ -41,10 +44,19 @@ const legacySchema = z.object({
   user_id: z.string().optional(),
   session_id: z.string().optional(),
   importance: z.number().min(0).max(1).optional().default(0.5),
+  async: z.boolean().optional().default(true),
 })
+const writePath = {
+  current: data => (data.write_mode ?? (data.async === false ? 'sync' : data.async === true ? 'async' : 'sync')) === 'sync' ? 'stored' : 'queued',
+  legacy: data => data.async !== false ? 'queued' : 'stored',
+}
 const verdict = (schema, body) => {
   const result = schema.safeParse(body)
   return result.success ? 'accepted' : `400: ${[...new Set(result.error.issues.map(issue => issue.path.join('.')))].join(', ')}`
+}
+const pathFor = (endpoint, schema, body) => {
+  const result = schema.safeParse(body)
+  return result.success ? writePath[endpoint](result.data) : 'refused'
 }
 
 let mode = 'current'
@@ -93,12 +105,18 @@ try {
     sent[pass] = requests.slice(first).filter(request => request.path === (pass === 'current' ? '/v1/memory' : '/v1/memories')).map(request => request.body)
     if (sent[pass].length !== writes.length) throw new Error(`expected ${writes.length} ${pass} writes, saw ${sent[pass].length}`)
   }
+  const rowFor = (endpoint, schema, body) => ({ memory_type: body.memory_type, importance: body.importance, verdict: verdict(schema, body), path: pathFor(endpoint, schema, body) })
   const rows = writes.map(({ category, importance }, index) => ({
     category, importance,
-    current: { memory_type: sent.current[index].memory_type, importance: sent.current[index].importance, verdict: verdict(currentSchema, sent.current[index]) },
-    legacy: { memory_type: sent.legacy[index].memory_type, importance: sent.legacy[index].importance, verdict: verdict(legacySchema, sent.legacy[index]) },
+    current: rowFor('current', currentSchema, sent.current[index]),
+    legacy: rowFor('legacy', legacySchema, sent.legacy[index]),
   }))
-  const count = endpoint => ({ accepted: rows.filter(row => row[endpoint].verdict === 'accepted').length, refused: rows.filter(row => row[endpoint].verdict !== 'accepted').length })
+  const count = endpoint => ({
+    accepted: rows.filter(row => row[endpoint].verdict === 'accepted').length,
+    refused: rows.filter(row => row[endpoint].verdict !== 'accepted').length,
+    storedBeforeAnswer: rows.filter(row => row[endpoint].path === 'stored').length,
+    queued: rows.filter(row => row[endpoint].path === 'queued').length,
+  })
   const out = {
     rows,
     counts: { '/v1/memory': count('current'), '/v1/memories': count('legacy') },
@@ -106,7 +124,8 @@ try {
     sampleBodies: { '/v1/memory': sent.current[0], '/v1/memories': sent.legacy[0] },
   }
   writeFileSync(process.argv[2], `${JSON.stringify(out, null, 2)}\n`)
-  for (const row of rows) console.log(`${row.category.padEnd(10)} ${row.importance}  /v1/memory ${String(row.current.memory_type).padEnd(10)} ${String(row.current.importance).padEnd(4)} ${row.current.verdict.padEnd(32)}  /v1/memories ${String(row.legacy.memory_type).padEnd(10)} ${String(row.legacy.importance).padEnd(4)} ${row.legacy.verdict}`)
+  const cell = row => `${String(row.memory_type).padEnd(10)} ${String(row.importance).padEnd(4)} ${row.verdict.padEnd(28)} ${row.path.padEnd(7)}`
+  for (const row of rows) console.log(`${row.category.padEnd(10)} ${row.importance}  /v1/memory ${cell(row.current)}  /v1/memories ${cell(row.legacy)}`)
   console.log(JSON.stringify(out.counts))
 } finally {
   await runner.dispose?.()

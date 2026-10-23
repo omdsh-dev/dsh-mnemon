@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createMemorySpaceProviderFixture } from 'dsh-mnemon-source-memory-spaces/testing'
-import type { MemoryProviderConnection, MemoryProviderId } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
+import type { Category, MemoryProviderConnection, MemoryProviderId } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import { RetainDbProvider, descriptor } from '../src/index.ts'
 
 const temporaryDirectories: string[] = []
@@ -163,5 +163,99 @@ describe('standalone retaindb data plane', () => {
       const { sent } = await remember(5, { currentMissing: true })
       expect(sent.map(request => [request.path, request.json.importance])).toEqual([['/v1/memory', 0.9], ['/v1/memories', 0.9]])
     })
+  })
+
+  describe('memory types RetainDB Server accepts', () => {
+    // RetainDB Server answers a memory_type outside its list with HTTP 400. POST /v1/memory takes preference and
+    // decision but not fact, insight, context or general; the legacy POST /v1/memories takes only factual, episodic,
+    // semantic and procedural. The Source always sends a category, general by default.
+    async function sentTypes(category: Category | undefined) {
+      const sent: Array<[string, unknown]> = []
+      const fetchMock = vi.fn<typeof fetch>(async (url, init) => {
+        const path = new URL(String(url)).pathname
+        sent.push([path, (JSON.parse(String(init?.body)) as Record<string, unknown>).memory_type])
+        return path === '/v1/memory' ? response({ message: 'missing' }, 404) : response({ id: 'ret-8' })
+      })
+      const { registry, body } = await providerBody('retaindb', {
+        endpoint: 'https://api.retaindb.com', apiKey: 'retain-secret', project: 'launch', userId: 'alice',
+      })
+      await new RetainDbProvider(registry, { fetch: fetchMock })
+        .remember(body, { content: 'Canary before production.', importance: 3, ...(category === undefined ? {} : { category }) })
+      return sent
+    }
+
+    it.each([
+      ['preference', 'preference'],
+      ['decision', 'decision'],
+      ['fact', 'factual'],
+      ['insight', 'factual'],
+      ['context', 'factual'],
+      ['general', 'factual'],
+    ] as const)('sends category %s as %s, and as factual to the legacy endpoint', async (category, type) => {
+      expect(await sentTypes(category)).toEqual([['/v1/memory', type], ['/v1/memories', 'factual']])
+    })
+
+    it('sends factual on both endpoints when the request carries no category', async () => {
+      expect(await sentTypes(undefined)).toEqual([['/v1/memory', 'factual'], ['/v1/memories', 'factual']])
+    })
+  })
+
+  describe('receipts for what RetainDB stored', () => {
+    // RetainDB Server's legacy POST /v1/memories queues a write and answers 202 with a job unless `async` is false.
+    // Its POST /v1/memory answers a synchronous write with `memory_id`, the legacy endpoint with the stored `memory`.
+    async function rememberWith(replies: { current?: unknown; legacy?: unknown }) {
+      const sent: Array<{ path: string; json: Record<string, unknown> }> = []
+      const reply = (payload: unknown) => payload === undefined ? response({ message: 'missing' }, 404)
+        : response(payload, (payload as { mode?: string }).mode === 'async' ? 202 : 201)
+      const fetchMock = vi.fn<typeof fetch>(async (url, init) => {
+        const path = new URL(String(url)).pathname
+        sent.push({ path, json: JSON.parse(String(init?.body)) as Record<string, unknown> })
+        return reply(path === '/v1/memory' ? replies.current : replies.legacy)
+      })
+      const { registry, body } = await providerBody('retaindb', {
+        endpoint: 'https://api.retaindb.com', apiKey: 'retain-secret', project: 'launch', userId: 'alice',
+      })
+      const receipt = await new RetainDbProvider(registry, { fetch: fetchMock }).remember(body, { content: 'Canary before production.', importance: 3 })
+      return { receipt, sent, sessionId: `dsh-${body.id}` }
+    }
+
+    it('asks the legacy endpoint to store the memory before it answers', async () => {
+      const { sent, sessionId } = await rememberWith({ legacy: { mode: 'sync', memory: { id: 'mem-9' }, write_outcome: 'created' } })
+      expect(sent[1]).toEqual({ path: '/v1/memories', json: {
+        project: 'launch', content: 'Canary before production.', memory_type: 'factual', user_id: 'alice',
+        session_id: sessionId, importance: 0.7, async: false,
+      } })
+    })
+
+    it('reports a write the server queued anyway as queued, not stored', async () => {
+      const legacy = await rememberWith({ legacy: { success: true, mode: 'async', jobId: 'job-1', status: 'PROCESSING', statusUrl: '/v1/jobs/job-1' } })
+      expect(legacy.receipt).toEqual({ action: 'queued', provider: 'retaindb', summary: 'RetainDB queued the memory; it is not stored yet.', jobId: 'job-1' })
+      const current = await rememberWith({ current: { success: true, mode: 'async', job_id: 'job-2', status_url: '/v1/memory/jobs/job-2' } })
+      expect(current.receipt).toMatchObject({ action: 'queued', jobId: 'job-2' })
+    })
+
+    it('names the memory RetainDB Server stored, whichever endpoint answered', async () => {
+      const current = await rememberWith({ current: { mode: 'sync', memory_id: 'mem-8', memory: { id: 'mem-8' } } })
+      expect(current.receipt).toMatchObject({ action: 'stored', id: 'mem-8' })
+      const legacy = await rememberWith({ legacy: { mode: 'sync', memory: { id: 'mem-9' }, write_outcome: 'created' } })
+      expect(legacy.receipt).toMatchObject({ action: 'stored', id: 'mem-9' })
+    })
+  })
+
+  it('reads preference and decision back from either type key, and any other type as general', async () => {
+    // RetainDB Local's search result carries the type as `type` beside the stored `memory`; its lists use `memory_type`.
+    const local = (id: string, type: string) => ({
+      id, score: 11.08, content: `Memory ${id}`, memory: { id, content: `Memory ${id}`, memory_type: type, importance: 0.86 },
+      metadata: { quality: 0.27 }, source: 'local-memory', document: 'dsh-space', type, retrieval_source: 'local_rrf', scores: { bm25: 1.1 },
+    })
+    const fetchMock = vi.fn<typeof fetch>(async url => new URL(String(url)).pathname === '/v1/memory/search'
+      ? response({ results: [local('mem-1', 'preference'), local('mem-2', 'workflow'), local('mem-3', 'decision')], count: 3 })
+      : response({ memories: [{ id: 'mem-4', content: 'Memory mem-4', memory_type: 'decision' }, { id: 'mem-5', content: 'Memory mem-5', memory_type: 'factual' }] }))
+    const { registry, body } = await providerBody('retaindb', {
+      endpoint: 'http://127.0.0.1:18990', apiKey: 'local-lab', project: 'launch', userId: 'alice',
+    })
+    const provider = new RetainDbProvider(registry, { fetch: fetchMock })
+    expect((await provider.search(body, { query: 'memory' })).results.map(row => row.category)).toEqual(['preference', 'general', 'decision'])
+    expect((await provider.list(body, {})).map(row => row.category)).toEqual(['decision', 'general'])
   })
 })

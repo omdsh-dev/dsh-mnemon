@@ -1,0 +1,796 @@
+{
+  "record": "retaindb-memory-type",
+  "fixes": [
+    "memory types (8817e539)",
+    "legacy writes and receipts (4f337fc0)",
+    "reading types back (60922fd7)"
+  ],
+  "date": "2026-10-24",
+  "baseline": "claude/fix-retaindb-importance-scale c841066f (#462)",
+  "environment": {
+    "os": "macOS 15.6 arm64 (Darwin 24.6.0)",
+    "node": "24.19.0",
+    "pnpm": "10.13.1"
+  },
+  "servers": {
+    "retainDbServer": "not run; its verdicts come from its own request schema (serverReplay)",
+    "retainDbLocal": "RetainDB Local 0.2.2 from the provider lab, run live on loopback (live)",
+    "cloud": "not observed"
+  },
+  "contract": {
+    "source": "RetainDB/RetainDB 2ad2cc4d (Apache-2.0)",
+    "POST /v1/memory": "https://github.com/RetainDB/RetainDB/blob/2ad2cc4d6d58145eca1a6cbbce66dfc5b5380f38/packages/server/src/api/memory.ts#L924: memory_type z.enum(MEMORY_TYPE_VALUES).optional(); https://github.com/RetainDB/RetainDB/blob/2ad2cc4d6d58145eca1a6cbbce66dfc5b5380f38/packages/server/src/api/memory.ts#L63-L80: factual, episodic, semantic, procedural, preference, event, relationship, opinion, goal, instruction, decision, constraint, solution, project_state, correction, workflow",
+    "POST /v1/memories": "https://github.com/RetainDB/RetainDB/blob/2ad2cc4d6d58145eca1a6cbbce66dfc5b5380f38/packages/server/src/api/routes.ts#L2584: memory_type z.enum([\"factual\", \"episodic\", \"semantic\", \"procedural\"]).optional().default(\"factual\")",
+    "validator": "@hono/zod-validator 0.4.3 answers a failed parse with HTTP 400",
+    "serverFallback": "https://github.com/RetainDB/RetainDB/blob/2ad2cc4d6d58145eca1a6cbbce66dfc5b5380f38/packages/server/src/engine/memory/write.ts#L140-L161 and https://github.com/RetainDB/RetainDB/blob/2ad2cc4d6d58145eca1a6cbbce66dfc5b5380f38/packages/server/src/api/memory.ts#L104-L107: semantic -> factual, episodic -> event, procedural -> instruction, any other name -> factual",
+    "localFallback": "https://github.com/RetainDB/RetainDB/blob/2ad2cc4d6d58145eca1a6cbbce66dfc5b5380f38/packages/local/src/cli.ts#L173-L201 and https://github.com/RetainDB/RetainDB/blob/2ad2cc4d6d58145eca1a6cbbce66dfc5b5380f38/packages/local/src/cli.ts#L302-L316: infer from the text, else the type sent, with fact and unknown names read as factual"
+  },
+  "sourceCategories": {
+    "list": "preference, decision, fact, insight, context, general (plugins/dsh-mnemon-source-memory-spaces/src/contracts.ts)",
+    "default": "general (prepareRemember)",
+    "context": "Runtime archives (src/host/runtime-capacity.ts) and document archives (src/host/document-archive.ts)"
+  },
+  "mapping": {
+    "/v1/memory": {
+      "preference": "preference",
+      "decision": "decision",
+      "fact": "factual",
+      "insight": "factual",
+      "context": "factual",
+      "general": "factual",
+      "none": "factual"
+    },
+    "/v1/memories": "factual for every category and for none",
+    "reason": "factual is the type RetainDB Server and RetainDB Local fall back to, and what the Provider already sent without a category",
+    "readBack": "see readBack"
+  },
+  "serverReplay": {
+    "script": "../retaindb-importance-scale/server-schema.probe.mjs",
+    "main": {
+      "counts": {
+        "/v1/memory": {
+          "accepted": 2,
+          "refused": 16
+        },
+        "/v1/memories": {
+          "accepted": 0,
+          "refused": 18
+        }
+      }
+    },
+    "before": {
+      "counts": {
+        "/v1/memory": {
+          "accepted": 6,
+          "refused": 12
+        },
+        "/v1/memories": {
+          "accepted": 0,
+          "refused": 18
+        }
+      },
+      "rows": [
+        {
+          "category": "preference",
+          "importance": 1,
+          "/v1/memory": "preference 0.5: accepted",
+          "/v1/memories": "preference 0.5: 400: memory_type"
+        },
+        {
+          "category": "preference",
+          "importance": 3,
+          "/v1/memory": "preference 0.7: accepted",
+          "/v1/memories": "preference 0.7: 400: memory_type"
+        },
+        {
+          "category": "preference",
+          "importance": 5,
+          "/v1/memory": "preference 0.9: accepted",
+          "/v1/memories": "preference 0.9: 400: memory_type"
+        },
+        {
+          "category": "decision",
+          "importance": 1,
+          "/v1/memory": "decision 0.5: accepted",
+          "/v1/memories": "decision 0.5: 400: memory_type"
+        },
+        {
+          "category": "decision",
+          "importance": 3,
+          "/v1/memory": "decision 0.7: accepted",
+          "/v1/memories": "decision 0.7: 400: memory_type"
+        },
+        {
+          "category": "decision",
+          "importance": 5,
+          "/v1/memory": "decision 0.9: accepted",
+          "/v1/memories": "decision 0.9: 400: memory_type"
+        },
+        {
+          "category": "fact",
+          "importance": 1,
+          "/v1/memory": "fact 0.5: 400: memory_type",
+          "/v1/memories": "fact 0.5: 400: memory_type"
+        },
+        {
+          "category": "fact",
+          "importance": 3,
+          "/v1/memory": "fact 0.7: 400: memory_type",
+          "/v1/memories": "fact 0.7: 400: memory_type"
+        },
+        {
+          "category": "fact",
+          "importance": 5,
+          "/v1/memory": "fact 0.9: 400: memory_type",
+          "/v1/memories": "fact 0.9: 400: memory_type"
+        },
+        {
+          "category": "insight",
+          "importance": 1,
+          "/v1/memory": "insight 0.5: 400: memory_type",
+          "/v1/memories": "insight 0.5: 400: memory_type"
+        },
+        {
+          "category": "insight",
+          "importance": 3,
+          "/v1/memory": "insight 0.7: 400: memory_type",
+          "/v1/memories": "insight 0.7: 400: memory_type"
+        },
+        {
+          "category": "insight",
+          "importance": 5,
+          "/v1/memory": "insight 0.9: 400: memory_type",
+          "/v1/memories": "insight 0.9: 400: memory_type"
+        },
+        {
+          "category": "context",
+          "importance": 1,
+          "/v1/memory": "context 0.5: 400: memory_type",
+          "/v1/memories": "context 0.5: 400: memory_type"
+        },
+        {
+          "category": "context",
+          "importance": 3,
+          "/v1/memory": "context 0.7: 400: memory_type",
+          "/v1/memories": "context 0.7: 400: memory_type"
+        },
+        {
+          "category": "context",
+          "importance": 5,
+          "/v1/memory": "context 0.9: 400: memory_type",
+          "/v1/memories": "context 0.9: 400: memory_type"
+        },
+        {
+          "category": "general",
+          "importance": 1,
+          "/v1/memory": "general 0.5: 400: memory_type",
+          "/v1/memories": "general 0.5: 400: memory_type"
+        },
+        {
+          "category": "general",
+          "importance": 3,
+          "/v1/memory": "general 0.7: 400: memory_type",
+          "/v1/memories": "general 0.7: 400: memory_type"
+        },
+        {
+          "category": "general",
+          "importance": 5,
+          "/v1/memory": "general 0.9: 400: memory_type",
+          "/v1/memories": "general 0.9: 400: memory_type"
+        }
+      ]
+    },
+    "after": {
+      "counts": {
+        "/v1/memory": {
+          "accepted": 18,
+          "refused": 0
+        },
+        "/v1/memories": {
+          "accepted": 18,
+          "refused": 0
+        }
+      },
+      "rows": [
+        {
+          "category": "preference",
+          "importance": 1,
+          "/v1/memory": "preference 0.5: accepted",
+          "/v1/memories": "factual 0.5: accepted"
+        },
+        {
+          "category": "preference",
+          "importance": 3,
+          "/v1/memory": "preference 0.7: accepted",
+          "/v1/memories": "factual 0.7: accepted"
+        },
+        {
+          "category": "preference",
+          "importance": 5,
+          "/v1/memory": "preference 0.9: accepted",
+          "/v1/memories": "factual 0.9: accepted"
+        },
+        {
+          "category": "decision",
+          "importance": 1,
+          "/v1/memory": "decision 0.5: accepted",
+          "/v1/memories": "factual 0.5: accepted"
+        },
+        {
+          "category": "decision",
+          "importance": 3,
+          "/v1/memory": "decision 0.7: accepted",
+          "/v1/memories": "factual 0.7: accepted"
+        },
+        {
+          "category": "decision",
+          "importance": 5,
+          "/v1/memory": "decision 0.9: accepted",
+          "/v1/memories": "factual 0.9: accepted"
+        },
+        {
+          "category": "fact",
+          "importance": 1,
+          "/v1/memory": "factual 0.5: accepted",
+          "/v1/memories": "factual 0.5: accepted"
+        },
+        {
+          "category": "fact",
+          "importance": 3,
+          "/v1/memory": "factual 0.7: accepted",
+          "/v1/memories": "factual 0.7: accepted"
+        },
+        {
+          "category": "fact",
+          "importance": 5,
+          "/v1/memory": "factual 0.9: accepted",
+          "/v1/memories": "factual 0.9: accepted"
+        },
+        {
+          "category": "insight",
+          "importance": 1,
+          "/v1/memory": "factual 0.5: accepted",
+          "/v1/memories": "factual 0.5: accepted"
+        },
+        {
+          "category": "insight",
+          "importance": 3,
+          "/v1/memory": "factual 0.7: accepted",
+          "/v1/memories": "factual 0.7: accepted"
+        },
+        {
+          "category": "insight",
+          "importance": 5,
+          "/v1/memory": "factual 0.9: accepted",
+          "/v1/memories": "factual 0.9: accepted"
+        },
+        {
+          "category": "context",
+          "importance": 1,
+          "/v1/memory": "factual 0.5: accepted",
+          "/v1/memories": "factual 0.5: accepted"
+        },
+        {
+          "category": "context",
+          "importance": 3,
+          "/v1/memory": "factual 0.7: accepted",
+          "/v1/memories": "factual 0.7: accepted"
+        },
+        {
+          "category": "context",
+          "importance": 5,
+          "/v1/memory": "factual 0.9: accepted",
+          "/v1/memories": "factual 0.9: accepted"
+        },
+        {
+          "category": "general",
+          "importance": 1,
+          "/v1/memory": "factual 0.5: accepted",
+          "/v1/memories": "factual 0.5: accepted"
+        },
+        {
+          "category": "general",
+          "importance": 3,
+          "/v1/memory": "factual 0.7: accepted",
+          "/v1/memories": "factual 0.7: accepted"
+        },
+        {
+          "category": "general",
+          "importance": 5,
+          "/v1/memory": "factual 0.9: accepted",
+          "/v1/memories": "factual 0.9: accepted"
+        }
+      ]
+    }
+  },
+  "live": {
+    "script": "live-types.probe.mjs",
+    "server": {
+      "container": "dsh-mnemon-provider-lab-retaindb-1 (provider-lab/docker-compose.yml service retaindb), @retaindb/local 0.2.2, hash embeddings, http://127.0.0.1:18990",
+      "lifecycle": "stopped before; started 2026-10-23T16:43:09Z, stopped 2026-10-23T16:43:32Z; volume dsh-mnemon-provider-lab_retaindb-data kept",
+      "storeBefore": {
+        "projects": 4,
+        "memories": 14,
+        "sessions": 3
+      },
+      "storeAfter": {
+        "projects": 6,
+        "memories": 50,
+        "sessions": 5,
+        "dsh-lab memories": 6
+      }
+    },
+    "texts": "The staging cluster keeps replica set <category[0..3]>-<importance>: none of the words RetainDB Local infers a type from",
+    "storedTypeAndImportanceUnchanged": true,
+    "before": {
+      "project": "rv462-type-before",
+      "userId": "rv462",
+      "spaceId": "retaindb-ba1b8b9e-acb8-4495-b0a3-5c074fef5897",
+      "stored": [
+        {
+          "category": "preference",
+          "importance": 1,
+          "sentType": "preference",
+          "storedType": "preference",
+          "storedImportance": 0.6363333333333334,
+          "quality": 0.17833333333333334,
+          "id": "mem_4cd90b27-0449-4f53-8224-286f628b6bd3"
+        },
+        {
+          "category": "preference",
+          "importance": 3,
+          "sentType": "preference",
+          "storedType": "preference",
+          "storedImportance": 0.8363333333333334,
+          "quality": 0.17833333333333334,
+          "id": "mem_c6811f89-f0a3-474a-a88a-cdd7dc89c92e"
+        },
+        {
+          "category": "preference",
+          "importance": 5,
+          "sentType": "preference",
+          "storedType": "preference",
+          "storedImportance": 0.99,
+          "quality": 0.17833333333333334,
+          "id": "mem_51ad1c73-2bb5-4cf5-b834-9976b6a8b0d2"
+        },
+        {
+          "category": "decision",
+          "importance": 1,
+          "sentType": "decision",
+          "storedType": "decision",
+          "storedImportance": 0.6435333333333334,
+          "quality": 0.17833333333333334,
+          "id": "mem_a1a1ebf9-2127-4f5e-86b0-88ab6fc34ada"
+        },
+        {
+          "category": "decision",
+          "importance": 3,
+          "sentType": "decision",
+          "storedType": "decision",
+          "storedImportance": 0.8435333333333334,
+          "quality": 0.17833333333333334,
+          "id": "mem_04b5ea93-8ac8-4525-8d63-1cd514376d68"
+        },
+        {
+          "category": "decision",
+          "importance": 5,
+          "sentType": "decision",
+          "storedType": "decision",
+          "storedImportance": 0.99,
+          "quality": 0.17833333333333334,
+          "id": "mem_af01b906-6fa6-473e-90d4-de26df55cf19"
+        },
+        {
+          "category": "fact",
+          "importance": 1,
+          "sentType": "fact",
+          "storedType": "factual",
+          "storedImportance": 0.6003333333333334,
+          "quality": 0.17833333333333334,
+          "id": "mem_c8e22021-e46a-4df2-8023-f2d6b40dbe5c"
+        },
+        {
+          "category": "fact",
+          "importance": 3,
+          "sentType": "fact",
+          "storedType": "factual",
+          "storedImportance": 0.8003333333333333,
+          "quality": 0.17833333333333334,
+          "id": "mem_f33ff624-d131-417e-933d-30ec746ab74e"
+        },
+        {
+          "category": "fact",
+          "importance": 5,
+          "sentType": "fact",
+          "storedType": "factual",
+          "storedImportance": 0.99,
+          "quality": 0.17833333333333334,
+          "id": "mem_83fe9f6b-b534-4331-8a4c-128d9aacbae5"
+        },
+        {
+          "category": "insight",
+          "importance": 1,
+          "sentType": "insight",
+          "storedType": "factual",
+          "storedImportance": 0.6003333333333334,
+          "quality": 0.17833333333333334,
+          "id": "mem_4849be2f-1c94-4707-a985-a63a2488f757"
+        },
+        {
+          "category": "insight",
+          "importance": 3,
+          "sentType": "insight",
+          "storedType": "factual",
+          "storedImportance": 0.8003333333333333,
+          "quality": 0.17833333333333334,
+          "id": "mem_08815ab9-90e5-4e90-a39c-1d2f1f70be9b"
+        },
+        {
+          "category": "insight",
+          "importance": 5,
+          "sentType": "insight",
+          "storedType": "factual",
+          "storedImportance": 0.99,
+          "quality": 0.17833333333333334,
+          "id": "mem_cc920d5e-1732-4156-9c22-530198df375d"
+        },
+        {
+          "category": "context",
+          "importance": 1,
+          "sentType": "context",
+          "storedType": "factual",
+          "storedImportance": 0.6003333333333334,
+          "quality": 0.17833333333333334,
+          "id": "mem_13ad7e37-0b4c-43f1-a5d7-3e93705f14af"
+        },
+        {
+          "category": "context",
+          "importance": 3,
+          "sentType": "context",
+          "storedType": "factual",
+          "storedImportance": 0.8003333333333333,
+          "quality": 0.17833333333333334,
+          "id": "mem_f66676f4-802f-4ce6-8433-4a0d0dfec596"
+        },
+        {
+          "category": "context",
+          "importance": 5,
+          "sentType": "context",
+          "storedType": "factual",
+          "storedImportance": 0.99,
+          "quality": 0.17833333333333334,
+          "id": "mem_63641e8f-8428-46c9-be95-f5f7a0a9a564"
+        },
+        {
+          "category": "general",
+          "importance": 1,
+          "sentType": "general",
+          "storedType": "factual",
+          "storedImportance": 0.6003333333333334,
+          "quality": 0.17833333333333334,
+          "id": "mem_76850060-5fa1-40d9-b763-81fd1f0fece4"
+        },
+        {
+          "category": "general",
+          "importance": 3,
+          "sentType": "general",
+          "storedType": "factual",
+          "storedImportance": 0.8003333333333333,
+          "quality": 0.17833333333333334,
+          "id": "mem_de2b9998-993d-445a-9a19-3c02b7610166"
+        },
+        {
+          "category": "general",
+          "importance": 5,
+          "sentType": "general",
+          "storedType": "factual",
+          "storedImportance": 0.99,
+          "quality": 0.17833333333333334,
+          "id": "mem_58dd3952-cd00-4d4c-9830-1afd53768df7"
+        }
+      ]
+    },
+    "after": {
+      "project": "rv462-type-after",
+      "userId": "rv462",
+      "spaceId": "retaindb-308845e0-ca09-48bc-97e6-23157113c6f4",
+      "stored": [
+        {
+          "category": "preference",
+          "importance": 1,
+          "sentType": "preference",
+          "storedType": "preference",
+          "storedImportance": 0.6363333333333334,
+          "quality": 0.17833333333333334,
+          "id": "mem_7fbc26c9-f0af-45a7-8fa9-b8bd03810f0d"
+        },
+        {
+          "category": "preference",
+          "importance": 3,
+          "sentType": "preference",
+          "storedType": "preference",
+          "storedImportance": 0.8363333333333334,
+          "quality": 0.17833333333333334,
+          "id": "mem_672f0746-f6c7-4cee-a19c-e4abcf22e1e1"
+        },
+        {
+          "category": "preference",
+          "importance": 5,
+          "sentType": "preference",
+          "storedType": "preference",
+          "storedImportance": 0.99,
+          "quality": 0.17833333333333334,
+          "id": "mem_ac318f45-9fb2-44fe-a71f-32b7fc15c120"
+        },
+        {
+          "category": "decision",
+          "importance": 1,
+          "sentType": "decision",
+          "storedType": "decision",
+          "storedImportance": 0.6435333333333334,
+          "quality": 0.17833333333333334,
+          "id": "mem_081f1c36-7919-4025-ba71-15d83273e308"
+        },
+        {
+          "category": "decision",
+          "importance": 3,
+          "sentType": "decision",
+          "storedType": "decision",
+          "storedImportance": 0.8435333333333334,
+          "quality": 0.17833333333333334,
+          "id": "mem_43810729-2981-40fc-bef1-5bd2dfd29ee0"
+        },
+        {
+          "category": "decision",
+          "importance": 5,
+          "sentType": "decision",
+          "storedType": "decision",
+          "storedImportance": 0.99,
+          "quality": 0.17833333333333334,
+          "id": "mem_7bb672b4-96a9-4d54-94e9-f41aed271499"
+        },
+        {
+          "category": "fact",
+          "importance": 1,
+          "sentType": "factual",
+          "storedType": "factual",
+          "storedImportance": 0.6003333333333334,
+          "quality": 0.17833333333333334,
+          "id": "mem_be68a1ee-b900-4022-ac59-94ac8ad46757"
+        },
+        {
+          "category": "fact",
+          "importance": 3,
+          "sentType": "factual",
+          "storedType": "factual",
+          "storedImportance": 0.8003333333333333,
+          "quality": 0.17833333333333334,
+          "id": "mem_e58d6996-e493-4b71-96fe-c25457699561"
+        },
+        {
+          "category": "fact",
+          "importance": 5,
+          "sentType": "factual",
+          "storedType": "factual",
+          "storedImportance": 0.99,
+          "quality": 0.17833333333333334,
+          "id": "mem_2737890c-5170-4a69-ba5d-9fd19b926c1b"
+        },
+        {
+          "category": "insight",
+          "importance": 1,
+          "sentType": "factual",
+          "storedType": "factual",
+          "storedImportance": 0.6003333333333334,
+          "quality": 0.17833333333333334,
+          "id": "mem_95448c04-0187-4305-880e-eabe32756d88"
+        },
+        {
+          "category": "insight",
+          "importance": 3,
+          "sentType": "factual",
+          "storedType": "factual",
+          "storedImportance": 0.8003333333333333,
+          "quality": 0.17833333333333334,
+          "id": "mem_b51a6a6b-a8d8-46d6-9d58-83faa54d6a20"
+        },
+        {
+          "category": "insight",
+          "importance": 5,
+          "sentType": "factual",
+          "storedType": "factual",
+          "storedImportance": 0.99,
+          "quality": 0.17833333333333334,
+          "id": "mem_7987f5b3-0ae2-4330-a409-5b5799518c71"
+        },
+        {
+          "category": "context",
+          "importance": 1,
+          "sentType": "factual",
+          "storedType": "factual",
+          "storedImportance": 0.6003333333333334,
+          "quality": 0.17833333333333334,
+          "id": "mem_aca91017-b6f7-4c17-b5ef-f85a89532eb2"
+        },
+        {
+          "category": "context",
+          "importance": 3,
+          "sentType": "factual",
+          "storedType": "factual",
+          "storedImportance": 0.8003333333333333,
+          "quality": 0.17833333333333334,
+          "id": "mem_b23758fb-8644-423c-86af-4a4d44bb0cb4"
+        },
+        {
+          "category": "context",
+          "importance": 5,
+          "sentType": "factual",
+          "storedType": "factual",
+          "storedImportance": 0.99,
+          "quality": 0.17833333333333334,
+          "id": "mem_7bb497a7-7a4a-4e61-afb5-3bdc8593231e"
+        },
+        {
+          "category": "general",
+          "importance": 1,
+          "sentType": "factual",
+          "storedType": "factual",
+          "storedImportance": 0.6003333333333334,
+          "quality": 0.17833333333333334,
+          "id": "mem_2a435ece-c474-4664-a752-a9ec8b312ede"
+        },
+        {
+          "category": "general",
+          "importance": 3,
+          "sentType": "factual",
+          "storedType": "factual",
+          "storedImportance": 0.8003333333333333,
+          "quality": 0.17833333333333334,
+          "id": "mem_80655bd6-33b8-4c87-9bb1-534d6d187dd7"
+        },
+        {
+          "category": "general",
+          "importance": 5,
+          "sentType": "factual",
+          "storedType": "factual",
+          "storedImportance": 0.99,
+          "quality": 0.17833333333333334,
+          "id": "mem_d696af92-348f-4d20-9de2-17e41d36b7de"
+        }
+      ]
+    }
+  },
+  "legacyWrites": {
+    "cause": {
+      "schema": "https://github.com/RetainDB/RetainDB/blob/2ad2cc4d6d58145eca1a6cbbce66dfc5b5380f38/packages/server/src/api/routes.ts#L2594: async z.boolean().optional().default(true)",
+      "queue": "https://github.com/RetainDB/RetainDB/blob/2ad2cc4d6d58145eca1a6cbbce66dfc5b5380f38/packages/server/src/api/routes.ts#L2606-L2638: unless async is false, the write is queued and answered 202 with { success: true, mode: \"async\", jobId, status: \"PROCESSING\", statusUrl }",
+      "receipt": "the Provider never sent async and still answered action \"stored\", \"RetainDB stored the memory synchronously.\"",
+      "currentEndpoint": "https://github.com/RetainDB/RetainDB/blob/2ad2cc4d6d58145eca1a6cbbce66dfc5b5380f38/packages/server/src/api/memory.ts#L1027-L1033: write_mode \"sync\", which the Provider sends, stores before answering"
+    },
+    "fix": {
+      "legacyBody": "async: false, declared by the legacy schema",
+      "queuedAnswer": "mode \"async\" or a job id (jobId on the legacy endpoint, job_id on /v1/memory) gives { action: \"queued\", jobId }; the Source counts \"queued\" as accepted, not committed (mutationResultCompletion, PENDING_MUTATION_STATES)",
+      "storedId": "id, then memory_id (RetainDB Server /v1/memory), then memory.id (RetainDB Server legacy); before, only id, which only RetainDB Local sends"
+    },
+    "replay": {
+      "#462": {
+        "counts": {
+          "/v1/memory": {
+            "accepted": 6,
+            "refused": 12,
+            "storedBeforeAnswer": 6,
+            "queued": 0
+          },
+          "/v1/memories": {
+            "accepted": 0,
+            "refused": 18,
+            "storedBeforeAnswer": 0,
+            "queued": 0
+          }
+        },
+        "legacyPaths": [
+          "refused"
+        ],
+        "currentPaths": [
+          "stored",
+          "refused"
+        ]
+      },
+      "this PR, types only (b406e30c)": {
+        "counts": {
+          "/v1/memory": {
+            "accepted": 18,
+            "refused": 0,
+            "storedBeforeAnswer": 18,
+            "queued": 0
+          },
+          "/v1/memories": {
+            "accepted": 18,
+            "refused": 0,
+            "storedBeforeAnswer": 0,
+            "queued": 18
+          }
+        },
+        "legacyPaths": [
+          "queued"
+        ],
+        "currentPaths": [
+          "stored"
+        ]
+      },
+      "this PR": {
+        "counts": {
+          "/v1/memory": {
+            "accepted": 18,
+            "refused": 0,
+            "storedBeforeAnswer": 18,
+            "queued": 0
+          },
+          "/v1/memories": {
+            "accepted": 18,
+            "refused": 0,
+            "storedBeforeAnswer": 18,
+            "queued": 0
+          }
+        },
+        "legacyPaths": [
+          "stored"
+        ],
+        "currentPaths": [
+          "stored"
+        ]
+      }
+    }
+  },
+  "readBack": {
+    "cause": "categories were memory_type passed through (factual, workflow, ...), and RetainDB Local search results carry the type as type (https://github.com/RetainDB/RetainDB/blob/2ad2cc4d6d58145eca1a6cbbce66dfc5b5380f38/packages/local/src/cli.ts#L916-L933), so recall read every memory as general",
+    "fix": "type = memory_type ?? type ?? category; preference and decision map back to those categories, any other type reads as general",
+    "examples": {
+      "list item, memory_type decision": {
+        "before": "decision",
+        "now": "decision"
+      },
+      "list item, memory_type factual": {
+        "before": "factual",
+        "now": "general"
+      },
+      "RetainDB Local search result, type preference": {
+        "before": "general",
+        "now": "preference"
+      },
+      "RetainDB Local search result, type workflow": {
+        "before": "general",
+        "now": "general"
+      }
+    }
+  },
+  "unitTests": {
+    "retaindb": {
+      "before": "10 failed, 17 passed (the new tests against #462's driver.ts)",
+      "after": "27 passed",
+      "failingBefore": [
+        "sends category preference as preference, and as factual to the legacy endpoint",
+        "sends category decision as decision, and as factual to the legacy endpoint",
+        "sends category fact as factual, and as factual to the legacy endpoint",
+        "sends category insight as factual, and as factual to the legacy endpoint",
+        "sends category context as factual, and as factual to the legacy endpoint",
+        "sends category general as factual, and as factual to the legacy endpoint",
+        "asks the legacy endpoint to store the memory before it answers",
+        "reports a write the server queued anyway as queued, not stored",
+        "names the memory RetainDB Server stored, whichever endpoint answered",
+        "reads preference and decision back from either type key, and any other type as general"
+      ],
+      "passingBefore": {
+        "sends factual on both endpoints when the request carries no category": "the Provider already sent factual without a category"
+      }
+    }
+  },
+  "otherChecks": {
+    "dsh-mnemon-provider-retaindb typecheck": "pass",
+    "dsh-mnemon-provider-retaindb build": "pass",
+    "dsh-mnemon-source-memory-spaces tests": "296 passed, 2 skipped",
+    "node scripts/verify-docs.mjs": "pass"
+  },
+  "liveDriver": "the live runs used the driver at b406e30c, before the receipt and read-back fixes; neither changes what RetainDB Local stores: its answers carry id and no job, and the Provider never falls back to the legacy endpoint there"
+}
