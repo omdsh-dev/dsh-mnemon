@@ -5,39 +5,17 @@ import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it } from 'vitest'
 import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
 import { installMemorySpaces } from '../src/index.ts'
-import { defineMemorySpaceProvider, defineMemorySpaceProviderDefinition, MEMORY_SPACE_PROVIDER_API_VERSION, NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter } from '../src/provider-sdk.ts'
-import type { MemoryProviderViewResult, MemorySpaceCatalog, MemorySpaceIntegration } from '../src/contracts.ts'
-import { createProviderProfile, readOnlyView, type MemorySpaceProviderProfile } from '../src/providers/profile.ts'
+import { defineMemorySpaceProviderDefinition, MEMORY_SPACE_PROVIDER_API_VERSION } from '../src/provider-sdk.ts'
+import type { MemoryProviderViewResult, MemorySpaceCatalog } from '../src/contracts.ts'
+import { createProviderProfile, readOnlyView } from '../src/providers/profile.ts'
 import { strategy } from './fixture.ts'
 import { bankProvider, capabilities, fields } from './bank-provider.ts'
+import { SHELF_VIEWS, shelfProvider } from './shelf-provider.ts'
 
 const directories: string[] = []
 afterEach(() => { for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true }) })
 
-const VIEWS = [{ id: 'shelf', kind: 'files' as const, label: 'Shelf' }, { id: 'log', kind: 'changes' as const, label: 'Log' }]
-
-/** A Provider that declares views, says more than it may, and records the profile it was lent. */
-function shelfProvider(result: MemoryProviderViewResult, integration?: MemorySpaceIntegration & Record<string, unknown>) {
-  const lent: Array<MemorySpaceProviderProfile | undefined> = []
-  const manifest = { apiVersion: MEMORY_SPACE_PROVIDER_API_VERSION, kind: 'provider' as const, typeId: 'shelf',
-    packageName: 'dsh-mnemon-provider-shelf-test', version: '1.0.0', label: 'Shelf fixture', summary: 'One namespace per shelf.',
-    origin: 'third-party' as const, locality: 'remote' as const, workspaceBinding: 'provider-global' as const, fields, secrets: [],
-    scoreSemantics: 'normalized-relevance' as const, capabilities, views: VIEWS }
-  const module = defineMemorySpaceProvider<undefined>({ id: 'shelf', apply(ctx, host) {
-    host.install(ctx, { manifest, create: context => {
-      lent.push(context.profile)
-      const adapter: MemoryProviderAdapter = { id: 'shelf', scoreSemantics: NORMALIZED_RELEVANCE_SCORE,
-        discover: async () => [{ externalId: 'main', name: 'main', description: 'The main shelf', connection: { bankId: 'main' } }],
-        status: async () => ({ healthy: true, ...(integration === undefined ? {} : { integration }) }),
-        list: async () => [], search: async () => ({ results: [] }), graph: async () => ({ nodes: [], edges: [], generatedAt: new Date().toISOString() }),
-        related: async () => [], remember: async () => ({ action: 'stored' }), link: async () => ({ action: 'linked' }), forget: async () => ({ action: 'deleted' }),
-        view: async () => structuredClone(result),
-      }
-      return adapter
-    } })
-  } })
-  return { module, lent }
-}
+const VIEWS = SHELF_VIEWS
 
 async function mount(module: ReturnType<typeof shelfProvider>['module'] | ReturnType<typeof bankProvider>['module'], providerId: string) {
   const directory = mkdtempSync(join(tmpdir(), 'mnemon-provider-views-'))
@@ -56,7 +34,7 @@ async function mount(module: ReturnType<typeof shelfProvider>['module'] | Return
 describe('Provider views on the Memory Spaces page', () => {
   it('serves a declared view through the Source, in the declared shapes and bounded', async () => {
     const entries = Array.from({ length: 600 }, (_, index) => ({ uri: `shelf://main/${index}`, name: `item ${index}`, directory: false, size: index, secret: 'x' }))
-    const { module, lent } = shelfProvider({ kind: 'entries', uri: 'shelf://main', entries } as MemoryProviderViewResult)
+    const { module, lent } = shelfProvider(() => ({ kind: 'entries', uri: 'shelf://main', entries }) as MemoryProviderViewResult)
     const f = await mount(module, 'shelf')
     try {
       expect(f.catalog.providers.find(provider => provider.id === 'shelf')?.views).toEqual(VIEWS)
@@ -74,7 +52,7 @@ describe('Provider views on the Memory Spaces page', () => {
 
   it('passes images only as png, jpeg, gif or webp data URLs, and text up to its bound', async () => {
     const script = { kind: 'file', uri: 'shelf://main/a.svg', name: 'a.svg', dataUrl: 'data:image/svg+xml;base64,PHN2Zy8+', text: 'x'.repeat(70_000) } as MemoryProviderViewResult
-    const f = await mount(shelfProvider(script).module, 'shelf')
+    const f = await mount(shelfProvider(() => script).module, 'shelf')
     try {
       const view = (await f.client.read('provider-view', { memoryBodyId: f.space.id, view: 'shelf' })).value as unknown as Record<string, unknown>
       expect(view).not.toHaveProperty('dataUrl')
@@ -87,7 +65,7 @@ describe('Provider views on the Memory Spaces page', () => {
     const notes = Array.from({ length: 8 }, (_, index) => ({ id: `note-${index}`, tone: index === 0 ? 'caution' as const : 'info' as const, text: 'n'.repeat(400) }))
     const integration = { packageName: '@vendor/dsh-plugin', label: 'Vendor', version: '1.2.3', automation: { autoCapture: true, extra: 1 },
       endpoint: 'http://127.0.0.1:1', sameNamespace: true, state: 'active' as const, notes, apiKey: 'synthetic-only-key' }
-    const f = await mount(shelfProvider({ kind: 'changes', changes: [] }, integration as never).module, 'shelf')
+    const f = await mount(shelfProvider(() => ({ kind: 'changes', changes: [] }), integration as never).module, 'shelf')
     try {
       const space = ((await f.client.read('bodies')).value as unknown as MemorySpaceCatalog).items.find(item => item.id === f.space.id)!
       expect(space.integration).toEqual({ packageName: '@vendor/dsh-plugin', label: 'Vendor', version: '1.2.3', automation: { autoCapture: true },

@@ -29,6 +29,7 @@ export function memorySpacesPageClient(management: MnemonSourceManagementClient)
     search: request => client.read('search', input({ ...request, inspect: true })),
     related: (id, memoryBodyId) => client.read('related', input({ id, memoryBodyId })),
     reconnectBody: memoryBodyId => client.read('body-reconnect', { memoryBodyId }),
+    providerView: (memoryBodyId, request) => client.read('provider-view', input({ memoryBodyId, ...request })),
     remember: request => client.mutate('remember', input(request), true),
     forget: (id, memoryBodyId) => client.mutate('forget', input({ id, memoryBodyId }), true),
     createBody: request => request.placement !== undefined && client.canAssist('body-create') ? client.assist('body-create', input(request), true) : client.mutate('body-create', input(request), true),

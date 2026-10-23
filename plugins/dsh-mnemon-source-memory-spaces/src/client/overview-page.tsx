@@ -9,6 +9,7 @@ import { providerSummary } from './provider-presentation.ts'
 import { appearanceClass, useLocale, humanBytes, message, PageHeader, SidebarModal, EmptyState } from 'dsh-mnemon/client'
 import { MemoryProviderBadge, ProviderMemoryFields, ReadSourcePanel, categoryLabel, mergeProviderDefaults, nativeSpaceProvider, providerDraftComplete, providerUnavailableKey, readyFirst, readyProviderId, type ProviderDrafts } from './widgets.tsx'
 import { MemoryGraph, enrichMultiSpaceGraph, graphKindLabel, graphNodeKey, graphNodeKind } from './memory-graph.tsx'
+import { ProviderViewsDialog, ReadOnlySuggestion, suggestsReadOnly } from './provider-views.tsx'
 
 /** Full-text popup for a selected graph node whose inspector preview is clamped. */
 function ContentPreview(props: { node: MemoryGraphNode; kind: string; onClose: () => void }): JSX.Element {
@@ -51,6 +52,9 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; metadataCl
   const [savingSpace, setSavingSpace] = useState<string | null>(null)
   const [confirmingDeleteSpace, setConfirmingDeleteSpace] = useState<string | null>(null)
   const [deletingSpace, setDeletingSpace] = useState<string | null>(null)
+  const [browsingSpace, setBrowsingSpace] = useState<string | null>(null)
+  const [readOnlySaving, setReadOnlySaving] = useState<string | null>(null)
+  const [readOnlyError, setReadOnlyError] = useState<{ id: string; message: string } | null>(null)
   const [preview, setPreview] = useState<MemoryGraphNode | null>(null)
   const [metadataOpen, setMetadataOpen] = useState(false)
   const [metadataSelection, setMetadataSelection] = useState<string[]>([])
@@ -220,6 +224,20 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; metadataCl
     } catch (reason) { setError(message(reason)) } finally { setSavingSpace(null) }
   }
 
+  // The read-only suggestion's one action: #434's write policy, set only when the user presses it.
+  const makeReadOnly = async (body: MemorySpaceView) => {
+    if (props.client.setWritePolicy === undefined) return
+    setReadOnlySaving(body.id); setReadOnlyError(null)
+    try {
+      await props.client.setWritePolicy(body.id, 'read-only')
+      await load(true)
+      props.onMutate()
+    } catch (reason) { setReadOnlyError({ id: body.id, message: message(reason) }) } finally { setReadOnlySaving(null) }
+  }
+  const readOnlySuggestion = (body: MemorySpaceView) => props.writeEnabled && props.client.setWritePolicy !== undefined && suggestsReadOnly(body)
+    ? <ReadOnlySuggestion busy={readOnlySaving === body.id} error={readOnlyError?.id === body.id ? readOnlyError.message : null} onAccept={() => void makeReadOnly(body)} />
+    : undefined
+
   const create = async (event: FormEvent) => {
     event.preventDefault()
     const providers = catalog?.providers ?? []
@@ -302,6 +320,15 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; metadataCl
   const selectedKind = selected === null ? null : graphNodeKind(selected)
   const editingSpaceView = editingSpace === null ? undefined : catalog?.items.find(body => body.id === editingSpace)
   const deletingSpaceView = confirmingDeleteSpace === null ? undefined : catalog?.items.find(body => body.id === confirmingDeleteSpace)
+  const browsingSpaceView = browsingSpace === null ? undefined : catalog?.items.find(body => body.id === browsingSpace)
+  const browsable = (body: MemorySpaceView) => body.integration !== undefined
+    || (props.client.providerView !== undefined && (catalog?.providers.find(provider => provider.id === body.provider.id)?.views?.length ?? 0) > 0)
+  // The vendor's own plugin, as the Provider reports it; the full card opens with Browse.
+  const integrationLine = (body: MemorySpaceView) => body.integration === undefined ? null : <div className={css.integrationLine}>
+    <span className={css.categoryChip}>{t('integration.chip', { label: body.integration.label })}{body.integration.version === undefined ? '' : ` ${body.integration.version}`}</span>
+    <small>{body.integration.state === 'unavailable' ? t('integration.unavailableShort') : t(body.integration.automation.autoCapture === false ? 'integration.captureOff' : body.integration.automation.autoCapture === true ? 'integration.captureOn' : 'integration.captureUnknown')}</small>
+    {readOnlySuggestion(body)}
+  </div>
   const providers = catalog?.providers ?? []
   // The status summary already carries the non-blocking control-plane
   // directory. Keep metadata maintenance usable while the richer Memory page
@@ -427,7 +454,7 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; metadataCl
               if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return
               event.preventDefault(); void reconnect(body)
             }}>
-              {<><div className={sidebarCss.bodyCardHeader}><div className={sidebarCss.bodyCardIdentity}><span className={css.bodySignal} /><div><strong title={body.id}>{body.name}</strong><div className={sidebarCss.bodyCardMeta}><MemoryProviderBadge providerId={body.provider.id} label={body.provider.label} /><small className={css.bodyHealth}>{reconnectingSpace === body.id ? t('overview.reconnecting') : body.statusLoading ? t('overview.storageChecking') : body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small>{body.mnemonDefault && <small className={css.mnemonDefaultBadge}>{t('overview.mnemonDefault')}</small>}{body.writePolicy === 'read-only' && <small className={css.readOnlyBadge} title={t('overview.readOnlyHint')}>{t('common.readOnlySpace')}</small>}{newSpaceIds.has(body.id) && <small className={css.newSpaceBadge}>{t('overview.newSpace')}</small>}</div></div></div>{spaceToggle(body)}</div><p title={body.description || t('overview.noDescription')}>{body.description || t('overview.noDescription')}</p>{placementReceipt(body)}<footer className={sidebarCss.bodyCardFooter}><div className={sidebarCss.bodyCardStats}>{!nativeSpaceProvider(body.provider) ? <><span className={css.bodyFooterBlock} title={t(body.provider.kind === 'remote' ? 'overview.providerRemote' : 'overview.providerLocal')}>{t(body.provider.kind === 'remote' ? 'overview.providerRemote' : 'overview.providerLocal')}</span><span className={`${css.bodyFooterBlock} ${css.bodyFooterGrow}`} title={body.provider.location || body.provider.label}>{body.provider.location || body.provider.label}</span></> : <><span className={css.bodyFooterBlock} title={t('common.memories', { count: body.stats?.totalInsights ?? 0 })}>{t('common.memories', { count: body.stats?.totalInsights ?? 0 })}</span><span className={css.bodyFooterBlock} title={t('common.edges', { count: body.stats?.edgeCount ?? 0 })}>{t('common.edges', { count: body.stats?.edgeCount ?? 0 })}</span><span className={css.bodyFooterBlock} title={humanBytes(body.stats?.dbSizeBytes ?? 0)}>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></>}</div><div className={css.bodyCardActions}><button type="button" className={spaceEditActionClass} aria-label={t('overview.editSpaceAria', { name: body.name })} disabled={!props.writeEnabled || deletingSpace === body.id} onClick={() => beginEdit(body)}>{t('overview.editSpace')}</button><button type="button" className={spaceDeleteActionClass} aria-label={t(!nativeSpaceProvider(body.provider) ? 'overview.disconnectSpaceAria' : 'overview.deleteSpaceAria', { name: body.name })} title={deleteBlocked(body)} disabled={!props.writeEnabled || deletingSpace === body.id || !canDeleteSpace(body)} onClick={() => setConfirmingDeleteSpace(body.id)}>{!nativeSpaceProvider(body.provider) ? t('overview.disconnectSpace') : t('overview.deleteSpace')}</button></div></footer></>}
+              {<><div className={sidebarCss.bodyCardHeader}><div className={sidebarCss.bodyCardIdentity}><span className={css.bodySignal} /><div><strong title={body.id}>{body.name}</strong><div className={sidebarCss.bodyCardMeta}><MemoryProviderBadge providerId={body.provider.id} label={body.provider.label} /><small className={css.bodyHealth}>{reconnectingSpace === body.id ? t('overview.reconnecting') : body.statusLoading ? t('overview.storageChecking') : body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small>{body.mnemonDefault && <small className={css.mnemonDefaultBadge}>{t('overview.mnemonDefault')}</small>}{body.writePolicy === 'read-only' && <small className={css.readOnlyBadge} title={t('overview.readOnlyHint')}>{t('common.readOnlySpace')}</small>}{newSpaceIds.has(body.id) && <small className={css.newSpaceBadge}>{t('overview.newSpace')}</small>}</div></div></div>{spaceToggle(body)}</div><p title={body.description || t('overview.noDescription')}>{body.description || t('overview.noDescription')}</p>{placementReceipt(body)}{integrationLine(body)}<footer className={sidebarCss.bodyCardFooter}><div className={sidebarCss.bodyCardStats}>{!nativeSpaceProvider(body.provider) ? <><span className={css.bodyFooterBlock} title={t(body.provider.kind === 'remote' ? 'overview.providerRemote' : 'overview.providerLocal')}>{t(body.provider.kind === 'remote' ? 'overview.providerRemote' : 'overview.providerLocal')}</span><span className={`${css.bodyFooterBlock} ${css.bodyFooterGrow}`} title={body.provider.location || body.provider.label}>{body.provider.location || body.provider.label}</span></> : <><span className={css.bodyFooterBlock} title={t('common.memories', { count: body.stats?.totalInsights ?? 0 })}>{t('common.memories', { count: body.stats?.totalInsights ?? 0 })}</span><span className={css.bodyFooterBlock} title={t('common.edges', { count: body.stats?.edgeCount ?? 0 })}>{t('common.edges', { count: body.stats?.edgeCount ?? 0 })}</span><span className={css.bodyFooterBlock} title={humanBytes(body.stats?.dbSizeBytes ?? 0)}>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></>}</div><div className={css.bodyCardActions}>{browsable(body) && <button type="button" className={spaceEditActionClass} aria-label={t('providerViews.browseAria', { name: body.name })} onClick={() => setBrowsingSpace(body.id)}>{t('providerViews.browse')}</button>}<button type="button" className={spaceEditActionClass} aria-label={t('overview.editSpaceAria', { name: body.name })} disabled={!props.writeEnabled || deletingSpace === body.id} onClick={() => beginEdit(body)}>{t('overview.editSpace')}</button><button type="button" className={spaceDeleteActionClass} aria-label={t(!nativeSpaceProvider(body.provider) ? 'overview.disconnectSpaceAria' : 'overview.deleteSpaceAria', { name: body.name })} title={deleteBlocked(body)} disabled={!props.writeEnabled || deletingSpace === body.id || !canDeleteSpace(body)} onClick={() => setConfirmingDeleteSpace(body.id)}>{!nativeSpaceProvider(body.provider) ? t('overview.disconnectSpace') : t('overview.deleteSpace')}</button></div></footer></>}
             </article>
           ))}
           {catalog?.total === 0 && <div className={css.bodyDirectoryEmpty}><span>◇</span><div><strong>{catalogUnavailable ? t('overview.unsyncedTitle') : t('overview.emptyTitle')}</strong><p>{catalogUnavailable ? t('overview.unsyncedShort') : t('overview.emptyShort')}</p></div></div>}
@@ -446,6 +473,7 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; metadataCl
         })}</div>
       </div></SidebarModal>}
       {editingSpaceView !== undefined && <SidebarModal title={t('overview.editSpaceAria', { name: editingSpaceView.name })} description={editingSpaceView.id} busy={savingSpace === editingSpaceView.id} onClose={() => setEditingSpace(null)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close className={css.secondaryButton} disabled={savingSpace === editingSpaceView.id} onClick={() => setEditingSpace(null)}>{t('common.cancel')}</button><button type="submit" form={spaceEditFormId} className={css.primaryButton} disabled={savingSpace === editingSpaceView.id || editName.trim() === ''}>{savingSpace === editingSpaceView.id ? t('overview.savingSpace') : t('overview.saveSpace')}</button></div>}>{spaceEditForm(editingSpaceView)}</SidebarModal>}
+      {browsingSpaceView !== undefined && <ProviderViewsDialog client={props.client} space={browsingSpaceView} descriptor={catalog?.providers.find(provider => provider.id === browsingSpaceView.provider.id)} suggestion={readOnlySuggestion(browsingSpaceView)} onClose={() => setBrowsingSpace(null)} />}
       {deletingSpaceView !== undefined && <SidebarModal title={t(!nativeSpaceProvider(deletingSpaceView.provider) ? 'overview.disconnectTitle' : 'overview.deleteTitle', { name: deletingSpaceView.name })} description={deletingSpaceView.id} busy={deletingSpace === deletingSpaceView.id} onClose={() => setConfirmingDeleteSpace(null)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close data-autofocus className={css.secondaryButton} disabled={deletingSpace === deletingSpaceView.id} onClick={() => setConfirmingDeleteSpace(null)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} title={deleteBlocked(deletingSpaceView)} disabled={deletingSpace === deletingSpaceView.id || !canDeleteSpace(deletingSpaceView)} onClick={() => void deleteBody(deletingSpaceView)}>{deletingSpace === deletingSpaceView.id ? t('overview.deletingSpace') : t(!nativeSpaceProvider(deletingSpaceView.provider) ? 'overview.disconnectAction' : 'overview.deleteAction')}</button></div>}><div className={css.bodyDeleteConfirm}><p>{t(!nativeSpaceProvider(deletingSpaceView.provider) ? 'overview.disconnectWarning' : 'overview.deleteWarning', { provider: deletingSpaceView.provider.label })}</p><div className={css.bodyDeleteSummary}><strong>{deletingSpaceView.name}</strong><span>{deletingSpaceView.provider.label} · {deletingSpaceView.provider.location || t('common.memories', { count: deletingSpaceView.stats?.totalInsights ?? 0 })}</span></div></div></SidebarModal>}
       {!catalogUnavailable && graph !== null && graph.nodes.length > 0 ? (
         <div className={css.graphLayout}>
