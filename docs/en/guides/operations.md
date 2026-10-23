@@ -268,6 +268,7 @@ For authenticated remote clients, `remoteAccess: trusted-host` grants management
          candidateMultiplier: 3
          maxMediumResults: 4
          maxUnknownResults: 2
+         maxRankedResults: 2
    ```
 
    A profile patch replaces the targeted row's complete `config` instead of deep-merging one field. Preserve existing customizations, and compare it with `dsh web --dump-default-config` after a plugin upgrade so new bundled defaults are not masked.

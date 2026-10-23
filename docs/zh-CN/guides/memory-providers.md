@@ -26,6 +26,11 @@
 
 Host 只暴露适配器能够兑现的能力；UI 与 Agent 工具不会伪造缺失的图谱、关联、链接、浏览或删除语义。
 
+**召回分数。** 召回用 `recallQuality` 的阈值为每个 Provider 的分数分档，只有两个例外（#454）：
+
+- Hindsight 的最终分数叠加了 reranker 与时效加成，相关记忆可能超过 1；这样的分数按 1 计。
+- OpenViking 透传其服务端所用 embedding 模型的相似度，默认阈值并不适用。检索同时覆盖其他 Provider 时，它的结果保留 OpenViking 自己的顺序，排在高相关度结果之后，最多 `recallQuality.maxRankedResults` 条（默认两条），不带分数的关键词匹配也计入其中。只检索 OpenViking，或把任一阈值改离默认值时，OpenViking 的结果仍按原方式分档。WebUI 的检索使用同一策略，所以跨空间检索最多显示这么多条 OpenViking 结果，正如它已经限制中相关与未知量纲结果的条数；只检索 OpenViking 空间即可看到全部结果。
+
 <a id="服务与记忆体字段"></a>
 
 ## 服务与记忆空间字段

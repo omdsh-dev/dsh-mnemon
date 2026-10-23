@@ -895,7 +895,7 @@ export class MemorySpacesService {
       candidates.sort((left, right) => heterogeneous
         ? (right.insight.federatedScore ?? 0) - (left.insight.federatedScore ?? 0) || left.bodyOrder - right.bodyOrder
         : (right.insight.score ?? 0) - (left.insight.score ?? 0))
-      return { hints, quality: applyRecallQualityPolicy(preparedPolicy, candidates, qualityContext) }
+      return { hints, quality: applyRecallQualityPolicy(preparedPolicy, candidates, heterogeneous ? { ...qualityContext, mixedProviders: true } : qualityContext) }
     }
     let evaluation = evaluate(batches)
     const hasRecoveryEvidence = recoveryPlan !== undefined && evaluation.quality.selected.some(candidate => (
@@ -953,7 +953,7 @@ export class MemorySpacesService {
         if (decision.reason === 'invalid-score') stats.droppedInvalidScore += 1
       }
       if (decision.reason === 'unscored') stats.unscored += 1
-      if (decision.reason === 'unscaled-score') stats.unscaled += 1
+      if (decision.reason === 'unscaled-score' || decision.reason === 'uncalibrated-score') stats.unscaled += 1
     }
     for (const { candidate } of quality.selected) {
       const stats = qualityStats.get(candidate.memoryBodyId)

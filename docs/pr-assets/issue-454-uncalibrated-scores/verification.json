@@ -1,0 +1,1084 @@
+{
+  "issue": 454,
+  "date": "2026-10-24",
+  "baseline": "main a7e3bc54",
+  "environment": {
+    "os": "macOS arm64 (Darwin 24.6.0)",
+    "node": "24.19.0",
+    "pnpm": "10.13.1",
+    "mnemonCli": "0.2.12",
+    "hindsight": "ghcr.io/vectorize-io/hindsight 0.10.1 from provider-lab (local embeddings and reranker), bank dsh-lab seeded with the lab facts",
+    "openviking": "v0.4.21 Docker image, API key auth, text-embedding-ada-002; account wp454 with four unrelated synthetic notes, and LoCoMo conv-26 under a separate user for the rank study",
+    "path": "MemoryCompositionRunner with dsh-mnemon-source-memory-spaces, the three-tier strategy and the real Mnemon Native, Hindsight and OpenViking Providers; Source search in smart mode, then one Agent recall in a fresh turn",
+    "note": "Each run creates a fresh Mnemon Native store with the same six facts, so Native ids differ between runs and its medium scores by about 0.01; Hindsight boosts depend on the time of the query."
+  },
+  "hindsightFinalScores": {
+    "relevantQuery": [
+      1.0907302,
+      1.0850208
+    ],
+    "unrelatedQuery": [
+      0.00002805,
+      0.00001979
+    ],
+    "note": "Top two scores.final for the #454 query and for the unrelated query, measured on 2026-10-23 against the same bank; the reranker and recency boosts carry relevant rows past 1"
+  },
+  "openVikingRankStudy": {
+    "server": "OpenViking v0.4.21, text-embedding-ada-002",
+    "sample": "LoCoMo conv-26, one memory per dialog turn",
+    "turns": 419,
+    "request": "the find request the OpenViking adapter sends in smart mode, limit 20",
+    "answerable": 152,
+    "unanswerable": 47,
+    "firstEvidenceRank": {
+      "1": 60,
+      "2": 14,
+      "3": 17,
+      "4": 5,
+      "5-10": 21,
+      "11-20": 14,
+      "missing": 21
+    },
+    "withinRank": {
+      "1": 60,
+      "2": 74,
+      "3": 91,
+      "4": 96,
+      "6": 106,
+      "10": 117,
+      "20": 131
+    },
+    "byCategory": {
+      "multi-hop": {
+        "questions": 32,
+        "withinOne": 5,
+        "withinTwo": 8,
+        "withinFour": 14,
+        "withinTen": 22
+      },
+      "temporal": {
+        "questions": 37,
+        "withinOne": 24,
+        "withinTwo": 30,
+        "withinFour": 33,
+        "withinTen": 34
+      },
+      "open-domain": {
+        "questions": 13,
+        "withinOne": 4,
+        "withinTwo": 4,
+        "withinFour": 7,
+        "withinTen": 8
+      },
+      "single-hop": {
+        "questions": 70,
+        "withinOne": 27,
+        "withinTwo": 32,
+        "withinFour": 42,
+        "withinTen": 53
+      }
+    },
+    "scores": {
+      "evidenceHit": {
+        "n": 131,
+        "min": 0.7633314728736877,
+        "p25": 0.8163782954216003,
+        "median": 0.8414703011512756,
+        "p75": 0.8578120470046997,
+        "max": 0.9091517329216003
+      },
+      "topRowAnswerable": {
+        "n": 152,
+        "min": 0.784925639629364,
+        "p25": 0.8338174819946289,
+        "median": 0.8507167100906372,
+        "p75": 0.8665039539337158,
+        "max": 0.9091517329216003
+      },
+      "topRowUnanswerable": {
+        "n": 47,
+        "min": 0.7945820093154907,
+        "p25": 0.8296551704406738,
+        "median": 0.8414246439933777,
+        "p75": 0.8582914471626282,
+        "max": 0.8974891901016235
+      }
+    },
+    "reading": "Every row scores 0.76 or more, so the default bands call all of them high; the top row of an unanswerable question scores as high as the evidence of an answerable one."
+  },
+  "scenarios": {
+    "issue-454": {
+      "query": "新建记忆空间时，由谁、按什么规则选择 Provider？",
+      "limit": 4,
+      "providers": [
+        "hindsight",
+        "openviking"
+      ],
+      "main": {
+        "rows": [
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "score": 0.68676,
+            "normalizedScore": 0.68676,
+            "content": "The desk lamp in room 204 takes an E27 bulb."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "score": 0.680836,
+            "normalizedScore": 0.680836,
+            "content": "The office printer on floor 3 needs the PCL6 driver."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "score": 0.674407,
+            "normalizedScore": 0.674407,
+            "content": "The nightly backup job copies the wiki to cold storage at 01:00."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "score": 0.663511,
+            "normalizedScore": 0.663511,
+            "content": "The lab VPN profile is called lab-tunnel and uses WireGuard."
+          }
+        ],
+        "agent": [
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "content": "The desk lamp in room 204 takes an E27 bulb."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "content": "The office printer on floor 3 needs the PCL6 driver."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "content": "The nightly backup job copies the wiki to cold storage at 01:00."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "content": "The lab VPN profile is called lab-tunnel and uses WireGuard."
+          }
+        ],
+        "quality": {
+          "hindsight": {
+            "policyId": "strict-v1",
+            "fetched": 8,
+            "retained": 8,
+            "selected": 0,
+            "droppedLowScore": 0,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 6
+          },
+          "openviking": {
+            "policyId": "strict-v1",
+            "fetched": 4,
+            "retained": 4,
+            "selected": 4,
+            "droppedLowScore": 0,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 0
+          }
+        }
+      },
+      "fix": {
+        "rows": [
+          {
+            "provider": "hindsight",
+            "tier": "high",
+            "score": 1.0907,
+            "normalizedScore": 1,
+            "content": "用户可以使用规则和Prompt描述数据边界、共享倾向和能力要求，由LLM在允许的Provider候选中作出可解释选择。"
+          },
+          {
+            "provider": "hindsight",
+            "tier": "high",
+            "score": 1.084991,
+            "normalizedScore": 1,
+            "content": "WebUI 不把所有 Provider 伪装成相同数据库：概览区分真实关系图与内容投影，内容区分可枚举与仅查询，实体页只展示真实实体索引"
+          },
+          {
+            "provider": "hindsight",
+            "tier": "high",
+            "score": 1.084081,
+            "normalizedScore": 1,
+            "content": "DSH 记忆系统采用三层结构：运行时热记忆、项目档案、可替换的长期记忆 Provider。"
+          },
+          {
+            "provider": "hindsight",
+            "tier": "high",
+            "score": 1.067416,
+            "normalizedScore": 1,
+            "content": "dsh-mnemon 仍以既有记忆空间心智为主，并保留 Mnemon Native 的官方优先级"
+          }
+        ],
+        "agent": [
+          {
+            "provider": "hindsight",
+            "tier": "high",
+            "content": "用户可以使用规则和Prompt描述数据边界、共享倾向和能力要求，由LLM在允许的Provider候选中作出可解释选择。"
+          },
+          {
+            "provider": "hindsight",
+            "tier": "high",
+            "content": "WebUI 不把所有 Provider 伪装成相同数据库：概览区分真实关系图与内容投影，内容区分可枚举与仅查询，实体页只展示真实实体索引"
+          },
+          {
+            "provider": "hindsight",
+            "tier": "high",
+            "content": "DSH 记忆系统采用三层结构：运行时热记忆、项目档案、可替换的长期记忆 Provider。"
+          },
+          {
+            "provider": "hindsight",
+            "tier": "high",
+            "content": "dsh-mnemon 仍以既有记忆空间心智为主，并保留 Mnemon Native 的官方优先级"
+          }
+        ],
+        "quality": {
+          "hindsight": {
+            "policyId": "strict-v1",
+            "fetched": 8,
+            "retained": 8,
+            "selected": 4,
+            "droppedLowScore": 0,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 0
+          },
+          "openviking": {
+            "policyId": "strict-v1",
+            "fetched": 4,
+            "retained": 4,
+            "selected": 0,
+            "droppedLowScore": 0,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 4
+          }
+        }
+      }
+    },
+    "unrelated": {
+      "query": "Which espresso machine does the kitchen use?",
+      "limit": 4,
+      "providers": [
+        "hindsight",
+        "openviking"
+      ],
+      "main": {
+        "rows": [
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "score": 0.74056,
+            "normalizedScore": 0.74056,
+            "content": "The office printer on floor 3 needs the PCL6 driver."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "score": 0.735794,
+            "normalizedScore": 0.735794,
+            "content": "The desk lamp in room 204 takes an E27 bulb."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "score": 0.672759,
+            "normalizedScore": 0.672759,
+            "content": "The lab VPN profile is called lab-tunnel and uses WireGuard."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "score": 0.672628,
+            "normalizedScore": 0.672628,
+            "content": "The nightly backup job copies the wiki to cold storage at 01:00."
+          }
+        ],
+        "agent": [
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "content": "The office printer on floor 3 needs the PCL6 driver."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "content": "The desk lamp in room 204 takes an E27 bulb."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "content": "The lab VPN profile is called lab-tunnel and uses WireGuard."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "content": "The nightly backup job copies the wiki to cold storage at 01:00."
+          }
+        ],
+        "quality": {
+          "hindsight": {
+            "policyId": "strict-v1",
+            "fetched": 8,
+            "retained": 0,
+            "selected": 0,
+            "droppedLowScore": 8,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 0
+          },
+          "openviking": {
+            "policyId": "strict-v1",
+            "fetched": 4,
+            "retained": 4,
+            "selected": 4,
+            "droppedLowScore": 0,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 0
+          }
+        }
+      },
+      "fix": {
+        "rows": [
+          {
+            "provider": "openviking",
+            "tier": "ranked",
+            "score": 0.74056,
+            "content": "The office printer on floor 3 needs the PCL6 driver."
+          },
+          {
+            "provider": "openviking",
+            "tier": "ranked",
+            "score": 0.735794,
+            "content": "The desk lamp in room 204 takes an E27 bulb."
+          }
+        ],
+        "agent": [
+          {
+            "provider": "openviking",
+            "tier": "ranked",
+            "content": "The office printer on floor 3 needs the PCL6 driver."
+          },
+          {
+            "provider": "openviking",
+            "tier": "ranked",
+            "content": "The desk lamp in room 204 takes an E27 bulb."
+          }
+        ],
+        "quality": {
+          "hindsight": {
+            "policyId": "strict-v1",
+            "fetched": 8,
+            "retained": 0,
+            "selected": 0,
+            "droppedLowScore": 8,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 0
+          },
+          "openviking": {
+            "policyId": "strict-v1",
+            "fetched": 4,
+            "retained": 4,
+            "selected": 2,
+            "droppedLowScore": 0,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 4
+          }
+        }
+      }
+    },
+    "native-hindsight": {
+      "query": "Which espresso machine does the kitchen use?",
+      "limit": 6,
+      "providers": [
+        "mnemon-native",
+        "hindsight"
+      ],
+      "main": {
+        "rows": [
+          {
+            "provider": "mnemon-native",
+            "tier": "medium",
+            "score": 0.481,
+            "normalizedScore": 0.481,
+            "content": "Use the Ethiopian beans on the second shelf for the kitchen espresso machine."
+          },
+          {
+            "provider": "mnemon-native",
+            "tier": "high",
+            "score": 0.638,
+            "normalizedScore": 0.638,
+            "content": "The kitchen espresso machine is a Breville Barista Express."
+          },
+          {
+            "provider": "mnemon-native",
+            "tier": "high",
+            "score": 0.638,
+            "normalizedScore": 0.638,
+            "content": "The kitchen espresso machine grinder is set to 8 for a double shot."
+          },
+          {
+            "provider": "mnemon-native",
+            "tier": "medium",
+            "score": 0.368,
+            "normalizedScore": 0.368,
+            "content": "Descale the kitchen espresso machine every two months with the citric acid in the drawer."
+          }
+        ],
+        "agent": [
+          {
+            "provider": "mnemon-native",
+            "tier": "medium",
+            "content": "Use the Ethiopian beans on the second shelf for the kitchen espresso machine."
+          },
+          {
+            "provider": "mnemon-native",
+            "tier": "high",
+            "content": "The kitchen espresso machine grinder is set to 8 for a double shot."
+          },
+          {
+            "provider": "mnemon-native",
+            "tier": "high",
+            "content": "The kitchen espresso machine is a Breville Barista Express."
+          }
+        ],
+        "quality": {
+          "mnemon-native": {
+            "policyId": "strict-v1",
+            "fetched": 6,
+            "retained": 4,
+            "selected": 4,
+            "droppedLowScore": 2,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 0
+          },
+          "hindsight": {
+            "policyId": "strict-v1",
+            "fetched": 8,
+            "retained": 0,
+            "selected": 0,
+            "droppedLowScore": 8,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 0
+          }
+        }
+      },
+      "fix": {
+        "rows": [
+          {
+            "provider": "mnemon-native",
+            "tier": "medium",
+            "score": 0.491,
+            "normalizedScore": 0.491,
+            "content": "Use the Ethiopian beans on the second shelf for the kitchen espresso machine."
+          },
+          {
+            "provider": "mnemon-native",
+            "tier": "high",
+            "score": 0.638,
+            "normalizedScore": 0.638,
+            "content": "The kitchen espresso machine grinder is set to 8 for a double shot."
+          },
+          {
+            "provider": "mnemon-native",
+            "tier": "high",
+            "score": 0.638,
+            "normalizedScore": 0.638,
+            "content": "The kitchen espresso machine is a Breville Barista Express."
+          },
+          {
+            "provider": "mnemon-native",
+            "tier": "medium",
+            "score": 0.379,
+            "normalizedScore": 0.379,
+            "content": "Descale the kitchen espresso machine every two months with the citric acid in the drawer."
+          }
+        ],
+        "agent": [
+          {
+            "provider": "mnemon-native",
+            "tier": "medium",
+            "content": "Use the Ethiopian beans on the second shelf for the kitchen espresso machine."
+          },
+          {
+            "provider": "mnemon-native",
+            "tier": "high",
+            "content": "The kitchen espresso machine grinder is set to 8 for a double shot."
+          },
+          {
+            "provider": "mnemon-native",
+            "tier": "high",
+            "content": "The kitchen espresso machine is a Breville Barista Express."
+          }
+        ],
+        "quality": {
+          "mnemon-native": {
+            "policyId": "strict-v1",
+            "fetched": 6,
+            "retained": 4,
+            "selected": 4,
+            "droppedLowScore": 2,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 0
+          },
+          "hindsight": {
+            "policyId": "strict-v1",
+            "fetched": 8,
+            "retained": 0,
+            "selected": 0,
+            "droppedLowScore": 8,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 0
+          }
+        }
+      }
+    },
+    "native-hindsight-openviking": {
+      "query": "Which espresso machine does the kitchen use?",
+      "limit": 6,
+      "providers": [
+        "mnemon-native",
+        "hindsight",
+        "openviking"
+      ],
+      "main": {
+        "rows": [
+          {
+            "provider": "mnemon-native",
+            "tier": "high",
+            "score": 0.638,
+            "normalizedScore": 0.638,
+            "content": "The kitchen espresso machine grinder is set to 8 for a double shot."
+          },
+          {
+            "provider": "mnemon-native",
+            "tier": "high",
+            "score": 0.638,
+            "normalizedScore": 0.638,
+            "content": "The kitchen espresso machine is a Breville Barista Express."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "score": 0.74056,
+            "normalizedScore": 0.74056,
+            "content": "The office printer on floor 3 needs the PCL6 driver."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "score": 0.735794,
+            "normalizedScore": 0.735794,
+            "content": "The desk lamp in room 204 takes an E27 bulb."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "score": 0.672759,
+            "normalizedScore": 0.672759,
+            "content": "The lab VPN profile is called lab-tunnel and uses WireGuard."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "score": 0.672628,
+            "normalizedScore": 0.672628,
+            "content": "The nightly backup job copies the wiki to cold storage at 01:00."
+          }
+        ],
+        "agent": [
+          {
+            "provider": "mnemon-native",
+            "tier": "high",
+            "content": "The kitchen espresso machine is a Breville Barista Express."
+          },
+          {
+            "provider": "mnemon-native",
+            "tier": "high",
+            "content": "The kitchen espresso machine grinder is set to 8 for a double shot."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "content": "The office printer on floor 3 needs the PCL6 driver."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "content": "The desk lamp in room 204 takes an E27 bulb."
+          }
+        ],
+        "quality": {
+          "mnemon-native": {
+            "policyId": "strict-v1",
+            "fetched": 6,
+            "retained": 4,
+            "selected": 2,
+            "droppedLowScore": 2,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 0
+          },
+          "hindsight": {
+            "policyId": "strict-v1",
+            "fetched": 8,
+            "retained": 0,
+            "selected": 0,
+            "droppedLowScore": 8,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 0
+          },
+          "openviking": {
+            "policyId": "strict-v1",
+            "fetched": 4,
+            "retained": 4,
+            "selected": 4,
+            "droppedLowScore": 0,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 0
+          }
+        }
+      },
+      "fix": {
+        "rows": [
+          {
+            "provider": "mnemon-native",
+            "tier": "medium",
+            "score": 0.464,
+            "normalizedScore": 0.464,
+            "content": "Use the Ethiopian beans on the second shelf for the kitchen espresso machine."
+          },
+          {
+            "provider": "mnemon-native",
+            "tier": "high",
+            "score": 0.638,
+            "normalizedScore": 0.638,
+            "content": "The kitchen espresso machine grinder is set to 8 for a double shot."
+          },
+          {
+            "provider": "mnemon-native",
+            "tier": "high",
+            "score": 0.638,
+            "normalizedScore": 0.638,
+            "content": "The kitchen espresso machine is a Breville Barista Express."
+          },
+          {
+            "provider": "mnemon-native",
+            "tier": "medium",
+            "score": 0.351,
+            "normalizedScore": 0.351,
+            "content": "Descale the kitchen espresso machine every two months with the citric acid in the drawer."
+          },
+          {
+            "provider": "openviking",
+            "tier": "ranked",
+            "score": 0.74056,
+            "content": "The office printer on floor 3 needs the PCL6 driver."
+          },
+          {
+            "provider": "openviking",
+            "tier": "ranked",
+            "score": 0.735794,
+            "content": "The desk lamp in room 204 takes an E27 bulb."
+          }
+        ],
+        "agent": [
+          {
+            "provider": "mnemon-native",
+            "tier": "medium",
+            "content": "Use the Ethiopian beans on the second shelf for the kitchen espresso machine."
+          },
+          {
+            "provider": "mnemon-native",
+            "tier": "high",
+            "content": "The kitchen espresso machine grinder is set to 8 for a double shot."
+          },
+          {
+            "provider": "mnemon-native",
+            "tier": "high",
+            "content": "The kitchen espresso machine is a Breville Barista Express."
+          },
+          {
+            "provider": "openviking",
+            "tier": "ranked",
+            "content": "The office printer on floor 3 needs the PCL6 driver."
+          }
+        ],
+        "quality": {
+          "mnemon-native": {
+            "policyId": "strict-v1",
+            "fetched": 6,
+            "retained": 4,
+            "selected": 4,
+            "droppedLowScore": 2,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 0
+          },
+          "hindsight": {
+            "policyId": "strict-v1",
+            "fetched": 8,
+            "retained": 0,
+            "selected": 0,
+            "droppedLowScore": 8,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 0
+          },
+          "openviking": {
+            "policyId": "strict-v1",
+            "fetched": 4,
+            "retained": 4,
+            "selected": 2,
+            "droppedLowScore": 0,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 4
+          }
+        }
+      }
+    },
+    "reporter-thresholds": {
+      "query": "新建记忆空间时，由谁、按什么规则选择 Provider？",
+      "limit": 4,
+      "providers": [
+        "hindsight",
+        "openviking"
+      ],
+      "recallQuality": {
+        "lowScoreThreshold": 0.67,
+        "highScoreThreshold": 0.78
+      },
+      "main": {
+        "rows": [
+          {
+            "provider": "openviking",
+            "tier": "medium",
+            "score": 0.68676,
+            "normalizedScore": 0.68676,
+            "content": "The desk lamp in room 204 takes an E27 bulb."
+          },
+          {
+            "provider": "openviking",
+            "tier": "medium",
+            "score": 0.680836,
+            "normalizedScore": 0.680836,
+            "content": "The office printer on floor 3 needs the PCL6 driver."
+          },
+          {
+            "provider": "openviking",
+            "tier": "medium",
+            "score": 0.674407,
+            "normalizedScore": 0.674407,
+            "content": "The nightly backup job copies the wiki to cold storage at 01:00."
+          },
+          {
+            "provider": "hindsight",
+            "tier": "medium",
+            "score": 0.718786,
+            "normalizedScore": 0.718786,
+            "content": "模型与向量计算通过本机 Ollama 完成 | When: 2026-09-27"
+          }
+        ],
+        "agent": [
+          {
+            "provider": "openviking",
+            "tier": "medium",
+            "content": "The desk lamp in room 204 takes an E27 bulb."
+          },
+          {
+            "provider": "hindsight",
+            "tier": "not in the search above (from the strategy's six-row recall)",
+            "content": "用户可以使用规则和Prompt描述数据边界、共享倾向和能力要求，由LLM在允许的Provider候选中作出可解释选择。"
+          }
+        ],
+        "quality": {
+          "hindsight": {
+            "policyId": "strict-v1",
+            "fetched": 8,
+            "retained": 8,
+            "selected": 1,
+            "droppedLowScore": 0,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 6
+          },
+          "openviking": {
+            "policyId": "strict-v1",
+            "fetched": 4,
+            "retained": 3,
+            "selected": 3,
+            "droppedLowScore": 1,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 0
+          }
+        }
+      },
+      "fix": {
+        "rows": [
+          {
+            "provider": "hindsight",
+            "tier": "high",
+            "score": 1.0907,
+            "normalizedScore": 1,
+            "content": "用户可以使用规则和Prompt描述数据边界、共享倾向和能力要求，由LLM在允许的Provider候选中作出可解释选择。"
+          },
+          {
+            "provider": "hindsight",
+            "tier": "high",
+            "score": 1.084991,
+            "normalizedScore": 1,
+            "content": "WebUI 不把所有 Provider 伪装成相同数据库：概览区分真实关系图与内容投影，内容区分可枚举与仅查询，实体页只展示真实实体索引"
+          },
+          {
+            "provider": "hindsight",
+            "tier": "high",
+            "score": 1.084081,
+            "normalizedScore": 1,
+            "content": "DSH 记忆系统采用三层结构：运行时热记忆、项目档案、可替换的长期记忆 Provider。"
+          },
+          {
+            "provider": "hindsight",
+            "tier": "high",
+            "score": 1.067416,
+            "normalizedScore": 1,
+            "content": "dsh-mnemon 仍以既有记忆空间心智为主，并保留 Mnemon Native 的官方优先级"
+          }
+        ],
+        "agent": [
+          {
+            "provider": "hindsight",
+            "tier": "high",
+            "content": "用户可以使用规则和Prompt描述数据边界、共享倾向和能力要求，由LLM在允许的Provider候选中作出可解释选择。"
+          },
+          {
+            "provider": "hindsight",
+            "tier": "high",
+            "content": "WebUI 不把所有 Provider 伪装成相同数据库：概览区分真实关系图与内容投影，内容区分可枚举与仅查询，实体页只展示真实实体索引"
+          },
+          {
+            "provider": "hindsight",
+            "tier": "high",
+            "content": "DSH 记忆系统采用三层结构：运行时热记忆、项目档案、可替换的长期记忆 Provider。"
+          },
+          {
+            "provider": "hindsight",
+            "tier": "high",
+            "content": "dsh-mnemon 仍以既有记忆空间心智为主，并保留 Mnemon Native 的官方优先级"
+          }
+        ],
+        "quality": {
+          "hindsight": {
+            "policyId": "strict-v1",
+            "fetched": 8,
+            "retained": 8,
+            "selected": 4,
+            "droppedLowScore": 0,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 0
+          },
+          "openviking": {
+            "policyId": "strict-v1",
+            "fetched": 4,
+            "retained": 3,
+            "selected": 0,
+            "droppedLowScore": 1,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 0
+          }
+        }
+      }
+    },
+    "openviking-alone": {
+      "query": "新建记忆空间时，由谁、按什么规则选择 Provider？",
+      "limit": 4,
+      "providers": [
+        "openviking"
+      ],
+      "main": {
+        "rows": [
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "score": 0.68676,
+            "normalizedScore": 0.68676,
+            "content": "The desk lamp in room 204 takes an E27 bulb."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "score": 0.680836,
+            "normalizedScore": 0.680836,
+            "content": "The office printer on floor 3 needs the PCL6 driver."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "score": 0.674407,
+            "normalizedScore": 0.674407,
+            "content": "The nightly backup job copies the wiki to cold storage at 01:00."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "score": 0.663511,
+            "normalizedScore": 0.663511,
+            "content": "The lab VPN profile is called lab-tunnel and uses WireGuard."
+          }
+        ],
+        "agent": [
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "content": "The desk lamp in room 204 takes an E27 bulb."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "content": "The office printer on floor 3 needs the PCL6 driver."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "content": "The nightly backup job copies the wiki to cold storage at 01:00."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "content": "The lab VPN profile is called lab-tunnel and uses WireGuard."
+          }
+        ],
+        "quality": {
+          "openviking": {
+            "policyId": "strict-v1",
+            "fetched": 4,
+            "retained": 4,
+            "selected": 4,
+            "droppedLowScore": 0,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 0
+          }
+        }
+      },
+      "fix": {
+        "rows": [
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "score": 0.68676,
+            "normalizedScore": 0.68676,
+            "content": "The desk lamp in room 204 takes an E27 bulb."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "score": 0.680836,
+            "normalizedScore": 0.680836,
+            "content": "The office printer on floor 3 needs the PCL6 driver."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "score": 0.674407,
+            "normalizedScore": 0.674407,
+            "content": "The nightly backup job copies the wiki to cold storage at 01:00."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "score": 0.663511,
+            "normalizedScore": 0.663511,
+            "content": "The lab VPN profile is called lab-tunnel and uses WireGuard."
+          }
+        ],
+        "agent": [
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "content": "The desk lamp in room 204 takes an E27 bulb."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "content": "The office printer on floor 3 needs the PCL6 driver."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "content": "The nightly backup job copies the wiki to cold storage at 01:00."
+          },
+          {
+            "provider": "openviking",
+            "tier": "high",
+            "content": "The lab VPN profile is called lab-tunnel and uses WireGuard."
+          }
+        ],
+        "quality": {
+          "openviking": {
+            "policyId": "strict-v1",
+            "fetched": 4,
+            "retained": 4,
+            "selected": 4,
+            "droppedLowScore": 0,
+            "droppedNonPositiveScore": 0,
+            "droppedInvalidScore": 0,
+            "unscored": 0,
+            "unscaled": 0
+          }
+        }
+      }
+    }
+  },
+  "unitTests": {
+    "memorySpacesOnMainSources": "8 failed, 300 passed, 2 skipped: the new policy, Source, Provider semantics and configuration tests; the Host precedence test passes there, as it pins main's behavior",
+    "strategyOnMainSources": "24 passed: the ranked admission test pins behavior main already has",
+    "byteIdentity": "400 deterministic recalls without Hindsight scores above 1 or ranked OpenViking rows: identical candidate limit, decisions with reasons, and selection to a frozen copy of main's three policies"
+  }
+}

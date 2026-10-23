@@ -272,7 +272,8 @@ export const EDGE_TYPES = ['temporal', 'semantic', 'causal', 'entity'] as const 
 export type Intent = 'WHY' | 'WHEN' | 'ENTITY' | 'GENERAL'
 export const INTENTS = ['WHY', 'WHEN', 'ENTITY', 'GENERAL'] as const satisfies readonly Intent[]
 
-export type RecallRelevanceTier = 'high' | 'medium' | 'low' | 'unknown'
+/** `ranked`: a row kept by its Provider's order rather than banded by score (#454). */
+export type RecallRelevanceTier = 'high' | 'medium' | 'low' | 'unknown' | 'ranked'
 
 /**
  * One spelling-insensitive key per entity. The Host's entity index and the Client's graph
@@ -478,6 +479,7 @@ export interface RecallQualityStats {
   droppedNonPositiveScore: number
   droppedInvalidScore: number
   unscored: number
+  /** Rows whose scores are not on the bands' scale, including embedding similarity kept by rank. */
   unscaled: number
 }
 
@@ -550,6 +552,8 @@ export interface RecallQualityConfig {
   maxMediumResults?: number
   /** Maximum unknown-scale or unscored rows admitted by the strict policy. */
   maxUnknownResults?: number
+  /** Maximum rows the strict policy keeps in their Provider's order per search: embedding similarity beside other Providers, under the default thresholds. */
+  maxRankedResults?: number
 }
 
 
@@ -560,6 +564,7 @@ export interface ResolvedRecallQualityConfig {
   candidateMultiplier: number
   maxMediumResults: number
   maxUnknownResults: number
+  maxRankedResults: number
 }
 
 

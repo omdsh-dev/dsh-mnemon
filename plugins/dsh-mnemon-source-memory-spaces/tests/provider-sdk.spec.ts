@@ -82,6 +82,24 @@ describe('Provider SDK and independent module fixture', () => {
     } finally { await mounted.dispose() }
   })
 
+  it('refuses a manifest\'s normalized claim its runtime does not make, and lets a runtime\'s own claim stand', async () => {
+    const { authority } = createMemorySpaceProviderFixture(descriptor, {}, { dataDir: '/unused' })
+    const runtimeOmits = adapted(definition => ({
+      ...definition,
+      create: context => ({ ...definition.create(context), scoreSemantics: undefined } as unknown as sdk.MemoryProviderAdapter),
+    }))
+    const omitted = await mountMemorySpaceProvider(runtimeOmits, { config: undefined })
+    try {
+      expect(() => omitted.createAdapter({ memoryBodies: authority, config: { timeoutMs: 100 } })).toThrow('declares normalized scores but its runtime does not')
+    } finally { await omitted.dispose() }
+    // An installed Provider that works today keeps loading: recall reads the runtime's semantics.
+    const manifestOmits = adapted(definition => ({ ...definition, manifest: { ...definition.manifest, scoreSemantics: 'provider-native' } }))
+    const claimed = await mountMemorySpaceProvider(manifestOmits, { config: undefined })
+    try {
+      expect(claimed.createAdapter({ memoryBodies: authority, config: { timeoutMs: 100 } }).scoreSemantics).toEqual(sdk.NORMALIZED_RELEVANCE_SCORE)
+    } finally { await claimed.dispose() }
+  })
+
   it('cleans up failed or missing registrations through the real child Fiber', async () => {
     const released = vi.fn()
     const missing = sdk.defineMemorySpaceProvider<undefined>({ id: 'missing', apply(ctx) { ctx.effect(() => released) } })

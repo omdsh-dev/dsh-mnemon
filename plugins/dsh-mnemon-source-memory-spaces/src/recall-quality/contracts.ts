@@ -9,6 +9,8 @@ export type RecallQualityDecisionReason =
   | 'non-positive-score'
   | 'invalid-score'
   | 'unscaled-score'
+  /** Embedding similarity kept in its Provider's order beside other Providers, under the default thresholds (#454). */
+  | 'uncalibrated-score'
   | 'unscored'
 
 export interface RecallQualityCandidate {
@@ -22,7 +24,8 @@ export interface RecallQualityCandidate {
 
 export interface RecallQualityDecision {
   action: 'keep' | 'drop'
-  tier: 'high' | 'medium' | 'low' | 'unknown'
+  /** `ranked`: kept by the Provider's order, not banded by score; see `maxRankedResults`. */
+  tier: 'high' | 'medium' | 'low' | 'unknown' | 'ranked'
   reason: RecallQualityDecisionReason
   normalizedScore?: number
 }
@@ -35,6 +38,8 @@ export interface EvaluatedRecallQualityCandidate {
 export interface RecallQualityPolicyContext {
   requestedLimit: number
   config: ResolvedRecallQualityConfig
+  /** More than one Provider answers the search, so candidates are ordered by rank rather than by score. */
+  mixedProviders?: boolean
 }
 
 /** Pure, bounded policy applied before recall rows are serialized to an Agent. */

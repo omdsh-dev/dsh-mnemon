@@ -159,6 +159,30 @@ describe('Memory Spaces Provider child-module conformance', () => {
     }
   })
 
+  it('pins every bundled Provider\'s score semantics, which its manifest and runtime both declare (#454)', async () => {
+    // Hindsight's final score adds boosts; OpenViking reports its server's embedding similarity; Honcho reports no comparable score.
+    const expected: Record<string, { manifest: string; runtime: unknown }> = {
+      'mnemon-native': { manifest: 'normalized-relevance', runtime: { kind: 'normalized-relevance' } },
+      openviking: { manifest: 'normalized-relevance', runtime: { kind: 'normalized-relevance', scale: 'embedding-similarity' } },
+      honcho: { manifest: 'provider-native', runtime: undefined },
+      mem0: { manifest: 'normalized-relevance', runtime: { kind: 'normalized-relevance' } },
+      hindsight: { manifest: 'normalized-relevance', runtime: { kind: 'normalized-relevance', scale: 'boosted' } },
+      holographic: { manifest: 'normalized-relevance', runtime: { kind: 'normalized-relevance' } },
+      retaindb: { manifest: 'normalized-relevance', runtime: { kind: 'normalized-relevance' } },
+      byterover: { manifest: 'normalized-relevance', runtime: { kind: 'normalized-relevance' } },
+      supermemory: { manifest: 'normalized-relevance', runtime: { kind: 'normalized-relevance' } },
+    }
+    expect(providerEntries.map(entry => entry.instanceId).sort()).toEqual(Object.keys(expected).sort())
+    for (const entry of providerEntries) {
+      const { fiber, snapshot } = await mountedSnapshot(entry, `memory-spaces-${entry.instanceId}`)
+      try {
+        // Both sides are pinned, so changing either one fails here; recall reads the runtime's.
+        const adapter = snapshot.adapterRegistry().create({ memoryBodies: {} as never, config: resolveMemorySpacesConfig({}), nativeRunner: {} as never }).get(entry.instanceId)
+        expect({ manifest: snapshot.entries[0]!.definition.manifest.scoreSemantics, runtime: adapter?.scoreSemantics }).toEqual(expected[entry.instanceId])
+      } finally { await fiber.dispose() }
+    }
+  })
+
   it('binds definition lifetime to the actual child Fiber and keeps separate parents isolated', async () => {
     const entry = fixtureEntry({ endpoint: 'https://vector.example', apiKey: 'secret-a' })
     const first = await mountedSnapshot(entry, 'memory-spaces-first')

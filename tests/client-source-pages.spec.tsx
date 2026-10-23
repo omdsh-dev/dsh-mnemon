@@ -88,7 +88,7 @@ const status: StatusView = {
   defaultRecallLimit: 10,
   recallQuality: {
     policy: 'strict-v1', lowScoreThreshold: 0.25, highScoreThreshold: 0.6,
-    candidateMultiplier: 3, maxMediumResults: 4, maxUnknownResults: 2,
+    candidateMultiplier: 3, maxMediumResults: 4, maxUnknownResults: 2, maxRankedResults: 2,
   },
   memoryBodyDirectory: '/tmp/mnemon/data',
   memoryBodies: [],

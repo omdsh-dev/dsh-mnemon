@@ -61,6 +61,7 @@ mnemon:
     candidateMultiplier: 3
     maxMediumResults: 4
     maxUnknownResults: 2
+    maxRankedResults: 2
   routingGuidance: true
   lifecycleEnabled: true
   recallMode: guided
@@ -112,6 +113,7 @@ mnemon:
 | `recallQuality.candidateMultiplier` | `3` | 1–5 | 在过滤前扩大各 Provider 候选请求，最多不超过服务的 50 条上限 |
 | `recallQuality.maxMediumResults` | `4` | 0–50 | `strict-v1` 在全部高相关度结果之后最多接纳的中相关度条数 |
 | `recallQuality.maxUnknownResults` | `2` | 0–50 | `strict-v1` 在有分数证据之后最多接纳的无 score 或未知量纲条数 |
+| `recallQuality.maxRankedResults` | `2` | 0–50 | 检索同时覆盖其他 Provider、且两个阈值都是默认值时，`strict-v1` 每次检索按 OpenViking 自己的顺序最多保留的 OpenViking 条数；它们排在高相关度结果之后。见[召回质量策略](#召回质量策略) |
 | `routingGuidance` | `true` | boolean | 是否注册额外的分层路由 system section |
 | `lifecycleEnabled` | `true` | boolean | 是否启用 pre-step cue 和评分空闲审查 |
 | `recallMode` | `guided` | `guided` / `off` | 是否在每个会话注入一次可持续复用的按需 recall cue；不移除显式召回 |
@@ -198,7 +200,12 @@ WebUI 从实时管理目录读取 Source 实例，新增 Source 无须修改前�
 
 ### 召回质量策略
 
-`strict-v1` 是面向 Agent 的安全默认值：仅对明确声明为 0–1 标准化相关度的 Provider，在正文进入 Agent 前移除非正分和低于阈值的结果；随后在请求上限内保留全部高相关度结果，默认最多保留 4 条中相关度结果和 2 条无 score 或未知量纲结果，不再用较弱证据补满 limit。`balanced-v1` 把低分结果放在主要证据之后，`exhaustive-v1` 为直接检查保留有限分数结果。超出声明范围的分数按未知量纲处理，不伪造成置信度。跨 Provider 排序继续使用倒数排名融合。
+`strict-v1` 是面向 Agent 的安全默认值，对声明为 0–1 相关度的 Provider 按分数分档：在正文进入 Agent 前移除非正分和低于阈值的结果；随后在请求上限内保留全部高相关度结果，默认最多保留 4 条中相关度结果和 2 条无 score 或未知量纲结果，不再用较弱证据补满 limit。有两个 Provider 的分数另行解读（#454）：
+
+- **Hindsight** 的最终分数叠加了 reranker 与时效加成，相关记忆可能超过 1。这样的分数在所有策略中都按 1 计。
+- **OpenViking** 报告其服务端所用 embedding 模型的原始相似度，默认阈值并不适用。检索同时覆盖其他 Provider、且两个阈值都是默认值时，`strict-v1` 按 OpenViking 自己的顺序保留它的结果（`relevanceTier: ranked`）。这些结果排在高相关度结果之后、中相关度结果之前，每次检索最多 `maxRankedResults` 条（默认两条），不带分数的关键词匹配也计入其中。只检索 OpenViking，或把任一阈值改离默认值时，OpenViking 的结果仍按原方式分档。WebUI 的检索使用同一策略，所以跨空间检索最多显示 `maxRankedResults` 条 OpenViking 结果，正如中相关与未知量纲结果也受各自的条数限制；只检索 OpenViking 空间时会显示全部结果。
+
+`balanced-v1` 把低分结果放在主要证据之后，`exhaustive-v1` 为直接检查保留有限分数结果；两者都对 OpenViking 的结果分档。其他超过 1 的分数按未知量纲处理，不伪造成置信度。跨 Provider 排序继续使用倒数排名融合。
 
 这些是 Memory Spaces Source 自己维护的纯函数召回质量策略，配置只能选择已随该 Source 提供的策略 ID。内部注册函数不是公开插件 API；自定义检索实现应通过 Source/Provider 的公开契约接入。非法候选上限、决策或选择会回退到 `strict-v1`；配置未知 ID 会拒绝候选运行图。过滤计数通过结构化的 `source.quality` 返回，不会拼接进 Agent hint。
 

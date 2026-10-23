@@ -14,6 +14,7 @@ import type { MnemonRunner } from '../src/runner.ts'
 import { parseMemoryGraph } from 'dsh-mnemon-provider-mnemon-native'
 import { createService } from './providers.ts'
 import { RecallQualityPolicyRegistry, STRICT_RECALL_QUALITY_POLICY, type RecallQualityPolicy } from '../src/recall-quality/index.ts'
+import type { RecallQualityConfig } from '../src/contracts.ts'
 
 // The runner sees an installed Mnemon CLI; each test fakes the process it starts.
 const FAKE_CLI = installedCliStub()
@@ -40,7 +41,7 @@ function populatedDataDir(): string {
   return dataDir
 }
 
-function fixture(writeEnabled = true, embedding?: { enabled: boolean; endpoint?: string }): { service: MemorySpacesService; process: ReturnType<typeof vi.fn<ProcessRunner>>; dataDir: string } {
+function fixture(writeEnabled = true, embedding?: { enabled: boolean; endpoint?: string }, recallQuality?: RecallQualityConfig): { service: MemorySpacesService; process: ReturnType<typeof vi.fn<ProcessRunner>>; dataDir: string } {
   const process = vi.fn<ProcessRunner>(async (_command, args) => {
     if (args.includes('--version')) return { stdout: 'mnemon version 0.1.2\n', stderr: '', exitCode: 0 }
     if (args.includes('status')) return {
@@ -81,6 +82,7 @@ function fixture(writeEnabled = true, embedding?: { enabled: boolean; endpoint?:
     defaultRecallLimit: 7,
     writeEnabled,
     ...(embedding === undefined ? {} : { embedding }),
+    ...(recallQuality === undefined ? {} : { recallQuality }),
   })
   const runner = createRunner(config, process)
   return { service: createService(runner, config, createRegistry(runner, true)), process, dataDir }
@@ -1240,6 +1242,102 @@ describe('MemorySpacesService', () => {
       results: [expect.objectContaining({ memoryProviderId: 'mnemon-native' })],
       hint: expect.stringContaining('团队 OpenViking: unavailable: remote offline'),
       sources: expect.arrayContaining([expect.objectContaining({ providerId: 'openviking', status: 'unavailable' })]),
+    })
+  })
+
+  describe('recall across Providers whose scores use other scales (#454)', () => {
+    const query = 'Docker engine and Compose versions'
+    const openVikingRows = [
+      { uri: 'viking://user/team/memories/entities/a.md', text: 'Weak clue about the office printer.', score: 0.7107269167900085 },
+      { uri: 'viking://user/team/memories/entities/b.md', text: 'Weak clue about a backup job.', score: 0.7017678022384644 },
+      { uri: 'viking://user/team/memories/entities/c.md', text: 'Weak clue about a VPN profile.', score: 0.685615599155426 },
+      { uri: 'viking://user/team/memories/entities/d.md', text: 'Weak clue about a desk lamp.', score: 0.6702136397361755 },
+    ]
+    const answer = { id: 'docker-versions', text: 'Docker Engine 29.8.0 and Compose v5.5.1 on this machine.', final: 1.0379764538482916 }
+    const unrelated = Array.from({ length: 18 }, (_, index) => ({ id: `h${index + 1}`, text: `Unrelated Hindsight fact ${index + 1}.`, final: 0.00002 }))
+
+    /** Hindsight and OpenViking on stubbed HTTP; Hindsight's final score adds reranker and recency boosts. */
+    function remote(hindsightRows: ReadonlyArray<{ id: string; text: string; final: number }>) {
+      vi.stubGlobal('fetch', vi.fn<typeof fetch>(async url => {
+        const target = new URL(String(url))
+        const reply = (result: unknown) => new Response(JSON.stringify(result), { status: 200, headers: { 'Content-Type': 'application/json' } })
+        if (target.pathname.endsWith('/memories/recall')) return reply({ results: hindsightRows.map(row => ({ id: row.id, text: row.text, scores: { final: row.final } })) })
+        if (target.pathname === '/api/v1/content/read') return reply({ status: 'ok', result: openVikingRows.find(row => row.uri === target.searchParams.get('uri'))?.text })
+        if (target.pathname === '/api/v1/search/find') return reply({ status: 'ok', result: { memories: openVikingRows.map(({ uri, score }) => ({ uri, overview: 'Summary', score })) } })
+        throw new Error('unexpected request ' + target.pathname)
+      }))
+    }
+
+    async function spaces(service: MemorySpacesService) {
+      const hindsight = await service.createSpace({
+        name: 'Machine notes', description: 'Facts about this machine.', active: true, providerId: 'hindsight',
+        connection: { endpoint: 'https://hindsight.example', bankId: 'machine' },
+      })
+      const openViking = await service.createSpace({
+        name: 'Team notes', description: 'Shared team memory.', active: true, providerId: 'openviking',
+        openViking: { endpoint: 'https://memory.example.com', targetUri: 'viking://user/team/memories' },
+      })
+      return { hindsight, openViking }
+    }
+
+    /** Mnemon Native answers recall with these rows. */
+    function nativeAnswers(process: ReturnType<typeof fixture>['process'], rows: ReadonlyArray<{ id: string; score: number }>) {
+      const original = process.getMockImplementation()!
+      process.mockImplementation(async (command, args, options) => args.includes('recall') && !args.includes('--basic')
+        ? { stdout: JSON.stringify({ results: rows.map(row => ({ id: row.id, content: `Native answer ${row.id}.`, category: 'fact', score: row.score })) }), stderr: '', exitCode: 0 }
+        : original(command, args, options))
+    }
+
+    const tiers = (result: Awaited<ReturnType<MemorySpacesService['search']>>) => result.results.map(item => `${item.id}:${item.relevanceTier}`)
+
+    it('puts the boosted Hindsight answer first and OpenViking\'s similarity after it, in its order', async () => {
+      remote([answer])
+      const { service } = fixture()
+      const { hindsight, openViking } = await spaces(service)
+      // On main the weak OpenViking rows were banded high and filled the four places; the answer, unknown, was left out.
+      const result = await service.search({ query, limit: 4, memoryBodyIds: [hindsight.id, openViking.id] })
+
+      expect(tiers(result)).toEqual(['docker-versions:high', `${openVikingRows[0]!.uri}:ranked`, `${openVikingRows[1]!.uri}:ranked`])
+      expect(result.results[0]).toMatchObject({ score: answer.final, normalizedScore: 1 })
+      expect(result.results.slice(1).every(item => item.normalizedScore === undefined)).toBe(true)
+      expect(result.sources).toEqual([
+        expect.objectContaining({ memoryBodyId: hindsight.id, quality: expect.objectContaining({ fetched: 1, retained: 1, selected: 1, unscaled: 0 }) }),
+        expect.objectContaining({ memoryBodyId: openViking.id, quality: expect.objectContaining({ fetched: 4, retained: 4, selected: 2, unscaled: 4 }) }),
+      ])
+    })
+
+    it('bands OpenViking by thresholds the user set, as before, and keeps the boosted answer high', async () => {
+      remote([answer])
+      // The reporter's thresholds, tuned to their OpenViking scale.
+      const { service } = fixture(true, undefined, { lowScoreThreshold: 0.67, highScoreThreshold: 0.78 })
+      const { hindsight, openViking } = await spaces(service)
+      const result = await service.search({ query, limit: 4, memoryBodyIds: [hindsight.id, openViking.id] })
+
+      expect(tiers(result)).toEqual(['docker-versions:high', ...openVikingRows.slice(0, 3).map(row => `${row.uri}:medium`)])
+      expect(result.sources[1]).toMatchObject({ quality: { fetched: 4, retained: 4, selected: 3, unscaled: 0 } })
+    })
+
+    it('drops Hindsight rows that are unrelated on its own scale, beside Native evidence or alone', async () => {
+      remote(unrelated)
+      const { service, process } = fixture()
+      nativeAnswers(process, [0.92, 0.88, 0.81, 0.77, 0.7, 0.66].map((score, index) => ({ id: `n${index + 1}`, score })))
+      const { hindsight } = await spaces(service)
+
+      const mixedResult = await service.search({ query: 'database choice', limit: 6, memoryBodyIds: ['work', hindsight.id] })
+      expect(tiers(mixedResult)).toEqual(['n1:high', 'n2:high', 'n3:high', 'n4:high', 'n5:high', 'n6:high'])
+      expect(mixedResult.sources.find(source => source.memoryBodyId === hindsight.id)).toMatchObject({ quality: { fetched: 18, retained: 0, droppedLowScore: 18, selected: 0 } })
+
+      const alone = await service.search({ query: 'espresso machine', limit: 6, memoryBodyIds: [hindsight.id] })
+      expect(alone.results).toEqual([])
+      expect(alone.sources[0]).toMatchObject({ quality: { fetched: 18, droppedLowScore: 18, selected: 0 } })
+    })
+
+    it('keeps a calibrated Provider\'s score above 1 unknown-scale, as before', async () => {
+      const { service, process } = fixture()
+      nativeAnswers(process, [{ id: 'n1', score: 1.2 }, { id: 'n2', score: 0.7 }])
+      const result = await service.search({ query: 'database choice', limit: 6, memoryBodyIds: ['work'] })
+      expect(tiers(result)).toEqual(['n2:high', 'n1:unknown'])
+      expect(result.sources[0]).toMatchObject({ quality: { unscaled: 1, selected: 2 } })
     })
   })
 

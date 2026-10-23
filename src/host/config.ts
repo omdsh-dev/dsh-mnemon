@@ -18,6 +18,7 @@ import {
   DEFAULT_RECALL_LOW_SCORE_THRESHOLD,
   DEFAULT_RECALL_MAX_MEDIUM_RESULTS,
   DEFAULT_RECALL_MAX_UNKNOWN_RESULTS,
+  DEFAULT_RECALL_MAX_RANKED_RESULTS,
   DEFAULT_RECALL_QUALITY_POLICY,
   DEFAULT_RUNTIME_MAINTENANCE_MAX_TOKENS,
   DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES,
@@ -54,6 +55,7 @@ export {
   DEFAULT_RECALL_LOW_SCORE_THRESHOLD,
   DEFAULT_RECALL_MAX_MEDIUM_RESULTS,
   DEFAULT_RECALL_MAX_UNKNOWN_RESULTS,
+  DEFAULT_RECALL_MAX_RANKED_RESULTS,
   DEFAULT_RECALL_QUALITY_POLICY,
   DEFAULT_RUNTIME_MAINTENANCE_MAX_TOKENS,
   DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES,
@@ -128,6 +130,7 @@ const RecallQualitySchema: z<RecallQualityConfig> = z.object({
   candidateMultiplier: z.number().step(1).min(1).max(5).default(DEFAULT_RECALL_CANDIDATE_MULTIPLIER),
   maxMediumResults: z.number().step(1).min(0).max(50).default(DEFAULT_RECALL_MAX_MEDIUM_RESULTS),
   maxUnknownResults: z.number().step(1).min(0).max(50).default(DEFAULT_RECALL_MAX_UNKNOWN_RESULTS),
+  maxRankedResults: z.number().step(1).min(0).max(50).default(DEFAULT_RECALL_MAX_RANKED_RESULTS),
 })
 
 const RuntimeMemorySchema: z<RuntimeMemoryConfig> = z.object({
@@ -209,6 +212,7 @@ export const Config: z<Config> = z.object({
     candidateMultiplier: DEFAULT_RECALL_CANDIDATE_MULTIPLIER,
     maxMediumResults: DEFAULT_RECALL_MAX_MEDIUM_RESULTS,
     maxUnknownResults: DEFAULT_RECALL_MAX_UNKNOWN_RESULTS,
+    maxRankedResults: DEFAULT_RECALL_MAX_RANKED_RESULTS,
   }),
   routingGuidance: z.boolean().default(true),
   // Retain the raw alias here so startup can migrate the exact stored field.

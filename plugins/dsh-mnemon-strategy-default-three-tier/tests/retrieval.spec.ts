@@ -134,6 +134,22 @@ describe('independent three-tier execution policy', () => {
     } finally { await runner.dispose() }
   })
 
+  it('admits ranked rows like high ones, bounded by the result limit only (issue 454)', async () => {
+    const { runner, query } = await fixture('memory-spaces')
+    const tiers = ['ranked', 'unknown', 'ranked', 'unknown', 'ranked', 'ranked', 'ranked']
+    query.mockImplementation(request => ({ id: 'evidence:ranked', viewId: request.view.id, routeId: request.route.id,
+      sourceInstanceKey: request.route.sourceInstanceKey, observedAt: '2026-08-31T00:00:00.000Z', truncated: false,
+      items: tiers.map((tier, index) => ({ id: `${tier}-${index}`, text: `${tier} evidence ${index}`,
+        provenance: { memoryBodyId: 'project', relevanceTier: tier } })) as never, metadata: { total: tiers.length } }))
+    try {
+      const turn = await runner.beginTurn()
+      const route = turn.view.routes.find(route => route.sourceRouteId === 'recall')!.id
+      // One unknown row per attempt; ranked rows fill the rest of the first attempt's four results.
+      expect(output(await turn.executeRoute(route, { query: 'docker versions' })).results.map(item => item.id))
+        .toEqual(['ranked-0', 'unknown-1', 'ranked-2', 'ranked-4'])
+    } finally { await runner.dispose() }
+  })
+
   it('never answers a read past the turn budget with another one\'s evidence (issue 389)', async () => {
     const { runner, query } = await fixture('memory-spaces')
     try {

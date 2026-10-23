@@ -59,6 +59,15 @@ export interface ProviderSearchResult {
 export interface ProviderScoreSemantics {
   /** Provider promises a finite relevance score in 0..1 where larger is better. */
   kind: 'normalized-relevance'
+  /**
+   * How the score departs from calibrated relevance, when it does (#454):
+   * - `boosted`: the engine adds boosts to relevance, so a relevant result can pass 1; such a score counts as 1.
+   * - `embedding-similarity`: raw similarity from whichever embedding model the server uses. In a search
+   *   that also covers another Provider, under the default thresholds, strict recall keeps these rows in
+   *   the Provider's order after calibrated high rows, at most `maxRankedResults` of them. Searched alone,
+   *   or with thresholds a user set, they are banded as declared.
+   */
+  scale?: 'boosted' | 'embedding-similarity'
 }
 
 export type MemoryProviderScoreSemantics = 'normalized-relevance' | 'provider-native' | 'none'

@@ -47,6 +47,7 @@ describe('Mnemon config and resolution', () => {
         candidateMultiplier: 3,
         maxMediumResults: 4,
         maxUnknownResults: 2,
+        maxRankedResults: 2,
       },
       routingGuidance: true,
       lifecycleEnabled: true,

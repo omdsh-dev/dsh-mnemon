@@ -41,6 +41,7 @@
               candidateMultiplier: 3
               maxMediumResults: 4
               maxUnknownResults: 2
+              maxRankedResults: 2
         - id: mnemon-source-runtime
           name: dsh-mnemon-source-runtime
         - id: mnemon-source-documents

@@ -193,6 +193,13 @@ Every mutation receipt declares `completion`: `accepted`, `candidate`, `committe
 
 Provider authors use `defineMemorySpaceProvider` from Memory Spaces' SDK. A module receives only its bound `host.install(ctx, definition)` capability; the private parent Host, Snapshot and Registry are not SDK exports. `installMemorySpaces` mounts explicit children and returns `Promise<void>`, not a parent handle. [external-provider.ts](../../../scripts/fixtures/plugin-consumer/src/external-provider.ts) is tested in two independent parent Sources with identical child ids.
 
+Declare `scoreSemantics: 'normalized-relevance'` in the manifest, with `NORMALIZED_RELEVANCE_SCORE` on the adapter, for relevance scores in 0–1; `recallQuality` bands them with its thresholds. Two adapter-only refinements describe scores that depart from that:
+
+- `{ kind: 'normalized-relevance', scale: 'boosted' }`: the engine adds boosts that can carry a relevant result past 1. Such a score counts as 1.
+- `{ kind: 'normalized-relevance', scale: 'embedding-similarity' }`: the scores are raw similarity from the server's embedding model. In a search that also covers another Provider, with both thresholds at their defaults, `strict-v1` keeps these rows in your order after the high-relevance rows, at most `maxRankedResults`.
+
+Declare `provider-native` for any other scale, whose rows count as unknown-scale, and `none` when results carry no score. Declare the same kind in both places: recall reads the adapter's, and the Host refuses a manifest that declares normalized scores its adapter does not report.
+
 Use `mountMemorySpaceProvider` from the Source's `/testing` entry to test real child registration, aliased adapter creation and cleanup. It returns frozen descriptor/manifest metadata, `registered`, `createAdapter` and `dispose`. `createMemorySpaceProviderFixture` separately supplies validated connection data and a scoped driver authority. The [published API test](../../../scripts/fixtures/plugin-consumer/tests/public-api.spec.ts) combines both without private imports.
 
 ```yaml

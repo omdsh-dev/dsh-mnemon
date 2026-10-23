@@ -268,6 +268,7 @@ HTTP 403 可能来自 Host/Origin 不匹配，或旧远程 Client 仍调用独�
          candidateMultiplier: 3
          maxMediumResults: 4
          maxUnknownResults: 2
+         maxRankedResults: 2
    ```
 
    Profile patch 会替换目标行的完整 `config`，不会只深度合并一个字段。请保留已有自定义项；插件升级后用 `dsh web --dump-default-config` 对照它，避免遮蔽新增的包内默认值。

@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import type { MemoryPersistenceStrategy, ResolvedMemoryPersistenceStrategy, MemoryPlacementCapability, MemoryPlacementPreference, MemoryProviderId, MemoryProviderConnection, MnemonEmbeddingConfig, ResolvedMnemonEmbeddingConfig, RecallQualityConfig, ResolvedRecallQualityConfig } from './contracts.ts'
 import { DEFAULT_EMBEDDING_ENDPOINT, DEFAULT_EMBEDDING_MODEL, DEFAULT_EMBEDDING_PROTOCOL, MEMORY_PLACEMENT_CAPABILITIES, MEMORY_SPACE_ID_PATTERN, MNEMON_EMBEDDING_PROTOCOLS, NATIVE_PROVIDER_ID } from './contracts.ts'
-import { DEFAULT_TIMEOUT_MS, DEFAULT_RECALL_LIMIT, DEFAULT_RECALL_QUALITY_POLICY, DEFAULT_RECALL_LOW_SCORE_THRESHOLD, DEFAULT_RECALL_HIGH_SCORE_THRESHOLD, DEFAULT_RECALL_CANDIDATE_MULTIPLIER, DEFAULT_RECALL_MAX_MEDIUM_RESULTS, DEFAULT_RECALL_MAX_UNKNOWN_RESULTS } from './defaults.ts'
+import { DEFAULT_TIMEOUT_MS, DEFAULT_RECALL_LIMIT, DEFAULT_RECALL_QUALITY_POLICY, DEFAULT_RECALL_LOW_SCORE_THRESHOLD, DEFAULT_RECALL_HIGH_SCORE_THRESHOLD, DEFAULT_RECALL_CANDIDATE_MULTIPLIER, DEFAULT_RECALL_MAX_MEDIUM_RESULTS, DEFAULT_RECALL_MAX_UNKNOWN_RESULTS, DEFAULT_RECALL_MAX_RANKED_RESULTS } from './defaults.ts'
 
 export interface MemorySpacesConfig {
   dataDir?: string
@@ -112,13 +112,15 @@ export function resolveRecallQuality(value: RecallQualityConfig | undefined): Re
   const candidateMultiplier = value?.candidateMultiplier ?? DEFAULT_RECALL_CANDIDATE_MULTIPLIER
   const maxMediumResults = value?.maxMediumResults ?? DEFAULT_RECALL_MAX_MEDIUM_RESULTS
   const maxUnknownResults = value?.maxUnknownResults ?? DEFAULT_RECALL_MAX_UNKNOWN_RESULTS
+  const maxRankedResults = value?.maxRankedResults ?? DEFAULT_RECALL_MAX_RANKED_RESULTS
   if (!Number.isFinite(lowScoreThreshold) || lowScoreThreshold < 0 || lowScoreThreshold > 1) throw new Error('dsh-mnemon: recall low score threshold must be within 0..1')
   if (!Number.isFinite(highScoreThreshold) || highScoreThreshold < 0 || highScoreThreshold > 1) throw new Error('dsh-mnemon: recall high score threshold must be within 0..1')
   if (lowScoreThreshold >= highScoreThreshold) throw new Error('dsh-mnemon: recall low score threshold must be less than the high score threshold')
   if (!Number.isInteger(candidateMultiplier) || candidateMultiplier < 1 || candidateMultiplier > 5) throw new Error('dsh-mnemon: recall candidate multiplier must be an integer within 1..5')
   if (!Number.isInteger(maxMediumResults) || maxMediumResults < 0 || maxMediumResults > 50) throw new Error('dsh-mnemon: recall max medium results must be an integer within 0..50')
   if (!Number.isInteger(maxUnknownResults) || maxUnknownResults < 0 || maxUnknownResults > 50) throw new Error('dsh-mnemon: recall max unknown results must be an integer within 0..50')
-  return { policy, lowScoreThreshold, highScoreThreshold, candidateMultiplier, maxMediumResults, maxUnknownResults }
+  if (!Number.isInteger(maxRankedResults) || maxRankedResults < 0 || maxRankedResults > 50) throw new Error('dsh-mnemon: recall max ranked results must be an integer within 0..50')
+  return { policy, lowScoreThreshold, highScoreThreshold, candidateMultiplier, maxMediumResults, maxUnknownResults, maxRankedResults }
 }
 
 
