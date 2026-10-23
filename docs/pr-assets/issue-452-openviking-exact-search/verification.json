@@ -1,7 +1,11 @@
 {
   "issue": 452,
-  "date": "2026-10-23",
+  "date": "2026-10-23; reruns after the review 2026-10-24",
   "baseline": "main a7e3bc54",
+  "revisions": {
+    "before": "0dc3fe63 (this PR's first head: all terms in one grep, edges checked against ASCII letters and digits)",
+    "fix": "the review fixes on top of it"
+  },
   "environment": {
     "os": "macOS arm64 (Darwin 24.6.0)",
     "node": "24.19.0",
@@ -16,7 +20,21 @@
     "notes": 64,
     "kinds": "a PostgreSQL install path and service name, a Redis note, a laptop Docker note, a document archive index carrying a SHA-256, and 60 hosts fleet-000..fleet-059 that differ only in numbers (Docker Engine 29.8.<n>)",
     "layout": "v0.4.21: all under entities/; 0.5.1.1: entities/machines and entities/fleet-<k> folders of at most 8 notes, because 0.5.x embeds a folder overview on each write and a long one exceeded the embedding window",
-    "synthetic": true
+    "synthetic": true,
+    "reviewSet": {
+      "namespaces": {
+        "v0.4.21": "viking://user/rv460/memories (seeded by the review through the provider)",
+        "0.5.1.1": "viking://user/wp452atlas/memories"
+      },
+      "notes": "six 50-line \"Atlas sprint log\" notes, then \"Atlas rollout: fleet-777 was upgraded to Docker Engine 29.9.1 on 2026-10-20.\", plus notes holding v5.2.2 and Python3.12, a Chinese and a Russian sentence, and a document carrying a SHA-256"
+    },
+    "costSpace": {
+      "namespace": "viking://user/wp452big/memories",
+      "server": "0.5.1.1",
+      "notes": 512,
+      "layout": "entities/bulk-<k> folders of 8 one-line notes, each holding \"shard q-<n>\""
+    },
+    "writes": "0.5.1.1 refuses the provider's own write because WriteContentRequest has no timeout field there (#455), so the 0.5.1.1 sets were written through content/write directly, with the provider's file names"
   },
   "grepRequestFields": {
     "0.4.16": [
@@ -60,7 +78,19 @@
       "files_scanned": "int"
     },
     "missingRoot": "404 NOT_FOUND with details.resource = the URI",
-    "missingRoute": "404 NOT_FOUND \"Not Found\" without a resource"
+    "missingRoute": "404 NOT_FOUND \"Not Found\" without a resource",
+    "walk": "files in name order, which is oldest first for Mnemon's <yyyymmddhhmmss>-<slug>_<category>-<uuid>.md names; the server stops after node_limit matching lines, and files_scanned counts the files read (all of them for a term that matches nothing)",
+    "observed": {
+      "v0.4.21 rv460, \"atlas\"": {
+        "matches": 256,
+        "files_scanned": 6
+      },
+      "v0.4.21 rv460, \"fleet-777\"": {
+        "matches": 1,
+        "files_scanned": 16
+      }
+    },
+    "metadata": "0.5.1.1 FSService.grep passes content_transform=_visible_grep_content for memory URIs, which forces the Python fs engine and removes the MEMORY_FIELDS comment before matching"
   },
   "providerKeywordSearch": {
     "v0.4.21": [
@@ -84,7 +114,7 @@
             "postgres"
           ],
           "scored": false,
-          "ms": 54
+          "ms": 44
         }
       },
       {
@@ -107,7 +137,7 @@
             "fleet-037"
           ],
           "scored": false,
-          "ms": 15
+          "ms": 14
         }
       },
       {
@@ -130,7 +160,7 @@
             "fleet-042"
           ],
           "scored": false,
-          "ms": 16
+          "ms": 15
         }
       },
       {
@@ -153,7 +183,7 @@
             "archive"
           ],
           "scored": false,
-          "ms": 18
+          "ms": 15
         }
       },
       {
@@ -176,7 +206,7 @@
             "postgres"
           ],
           "scored": false,
-          "ms": 13
+          "ms": 12
         }
       }
     ],
@@ -201,7 +231,7 @@
             "postgres"
           ],
           "scored": false,
-          "ms": 21
+          "ms": 11
         }
       },
       {
@@ -268,7 +298,7 @@
             "archive"
           ],
           "scored": false,
-          "ms": 13
+          "ms": 132
         }
       },
       {
@@ -291,7 +321,627 @@
             "postgres"
           ],
           "scored": false,
+          "ms": 11
+        }
+      }
+    ]
+  },
+  "reviewCases": {
+    "v0.4.21": [
+      {
+        "query": "Atlas fleet-777",
+        "sought": "atlas-rollout-fleet-777",
+        "main": {
+          "n": 8,
+          "rank": 1,
+          "top": [
+            "atlas-rollout-fleet-777-was-up",
+            "atlas-sprint-log-6",
+            "atlas-sprint-log-2"
+          ],
+          "ms": 1374
+        },
+        "before": {
+          "n": 6,
+          "rank": null,
+          "top": [
+            "atlas-sprint-log-1",
+            "atlas-sprint-log-2",
+            "atlas-sprint-log-3"
+          ],
+          "ms": 56
+        },
+        "fix": {
+          "n": 7,
+          "rank": 1,
+          "top": [
+            "atlas-rollout-fleet-777-was-up",
+            "atlas-sprint-log-6",
+            "atlas-sprint-log-5"
+          ],
+          "ms": 66,
+          "hint": "\"Atlas\" matched 256 lines, where OpenViking's exact-text search stops, so other memories holding it may be missing; a rarer term finds them."
+        }
+      },
+      {
+        "query": "Atlas",
+        "sought": "atlas-rollout-fleet-777",
+        "main": {
+          "n": 8,
+          "rank": null,
+          "top": [
+            "atlas-sprint-log-1",
+            "atlas-sprint-log-4",
+            "atlas-sprint-log-2"
+          ],
+          "ms": 867
+        },
+        "before": {
+          "n": 6,
+          "rank": null,
+          "top": [
+            "atlas-sprint-log-1",
+            "atlas-sprint-log-2",
+            "atlas-sprint-log-3"
+          ],
+          "ms": 14
+        },
+        "fix": {
+          "n": 6,
+          "rank": null,
+          "top": [
+            "atlas-sprint-log-6",
+            "atlas-sprint-log-5",
+            "atlas-sprint-log-4"
+          ],
+          "ms": 18,
+          "hint": "\"Atlas\" matched 256 lines, where OpenViking's exact-text search stops, so other memories holding it may be missing; a rarer term finds them."
+        }
+      },
+      {
+        "query": "the fleet-777",
+        "sought": "atlas-rollout-fleet-777",
+        "main": {
+          "n": 7,
+          "rank": 1,
+          "top": [
+            "atlas-rollout-fleet-777-was-up",
+            "atlas-sprint-log-6",
+            "atlas-sprint-log-2"
+          ],
+          "ms": 918
+        },
+        "before": {
+          "n": 6,
+          "rank": null,
+          "top": [
+            "atlas-sprint-log-1",
+            "atlas-sprint-log-2",
+            "atlas-sprint-log-3"
+          ],
           "ms": 12
+        },
+        "fix": {
+          "n": 7,
+          "rank": 1,
+          "top": [
+            "atlas-rollout-fleet-777-was-up",
+            "atlas-sprint-log-6",
+            "atlas-sprint-log-5"
+          ],
+          "ms": 27,
+          "hint": "\"the\" matched 256 lines, where OpenViking's exact-text search stops, so other memories holding it may be missing; a rarer term finds them."
+        }
+      },
+      {
+        "query": "fleet-777",
+        "sought": "atlas-rollout-fleet-777",
+        "main": {
+          "n": 8,
+          "rank": 1,
+          "top": [
+            "atlas-rollout-fleet-777-was-up",
+            "atlas-sprint-log-6",
+            "atlas-sprint-log-2"
+          ],
+          "ms": 858
+        },
+        "before": {
+          "n": 1,
+          "rank": 1,
+          "top": [
+            "atlas-rollout-fleet-777-was-up"
+          ],
+          "ms": 7
+        },
+        "fix": {
+          "n": 1,
+          "rank": 1,
+          "top": [
+            "atlas-rollout-fleet-777-was-up"
+          ],
+          "ms": 9
+        }
+      },
+      {
+        "query": "Which Docker version runs on fleet-777?",
+        "sought": "atlas-rollout-fleet-777",
+        "main": {
+          "n": 9,
+          "rank": 1,
+          "top": [
+            "atlas-rollout-fleet-777-was-up",
+            "docker-compose-v5-2-2-runs-on-",
+            "atlas-sprint-log-1"
+          ],
+          "ms": 847
+        },
+        "before": {
+          "n": 2,
+          "rank": 2,
+          "top": [
+            "docker-compose-v5-2-2-runs-on-",
+            "atlas-rollout-fleet-777-was-up"
+          ],
+          "ms": 8
+        },
+        "fix": {
+          "n": 2,
+          "rank": 1,
+          "top": [
+            "atlas-rollout-fleet-777-was-up",
+            "docker-compose-v5-2-2-runs-on-"
+          ],
+          "ms": 10
+        }
+      },
+      {
+        "query": "5.2.2",
+        "sought": "docker-compose-v5-2-2",
+        "main": {
+          "n": 6,
+          "rank": 4,
+          "top": [
+            "document-rv460-design",
+            "symbols-note-c-and-c-builds-x8",
+            "the-config-file-path-is-etc-rv"
+          ],
+          "ms": 854
+        },
+        "before": {
+          "n": 0,
+          "rank": null,
+          "top": [],
+          "ms": 5
+        },
+        "fix": {
+          "n": 1,
+          "rank": 1,
+          "top": [
+            "docker-compose-v5-2-2-runs-on-"
+          ],
+          "ms": 9
+        }
+      },
+      {
+        "query": "3.12",
+        "sought": "docker-compose-v5-2-2",
+        "main": {
+          "n": 9,
+          "rank": 3,
+          "top": [
+            "the-connection-failed-with-err",
+            "document-rv460-design",
+            "docker-compose-v5-2-2-runs-on-"
+          ],
+          "ms": 862
+        },
+        "before": {
+          "n": 0,
+          "rank": null,
+          "top": [],
+          "ms": 5
+        },
+        "fix": {
+          "n": 1,
+          "rank": 1,
+          "top": [
+            "docker-compose-v5-2-2-runs-on-"
+          ],
+          "ms": 11
+        }
+      },
+      {
+        "query": "猫 狗",
+        "sought": "我家的猫叫咪咪",
+        "main": {
+          "n": 6,
+          "rank": 1,
+          "top": [
+            "我家的猫叫咪咪-狗叫旺财",
+            "это-который-час-спросил-кот",
+            "symbols-note-c-and-c-builds-x8"
+          ],
+          "ms": 849
+        },
+        "before": {
+          "n": 0,
+          "rank": null,
+          "top": [],
+          "ms": 0
+        },
+        "fix": {
+          "n": 1,
+          "rank": 1,
+          "top": [
+            "我家的猫叫咪咪-狗叫旺财"
+          ],
+          "ms": 15
+        }
+      },
+      {
+        "query": "ad6d3cdaa810",
+        "sought": "document-",
+        "main": {
+          "n": 8,
+          "rank": 1,
+          "top": [
+            "document-rv460-design",
+            "symbols-note-c-and-c-builds-x8",
+            "atlas-sprint-log-6"
+          ],
+          "ms": 909
+        },
+        "before": {
+          "n": 0,
+          "rank": null,
+          "top": [],
+          "ms": 4
+        },
+        "fix": {
+          "n": 1,
+          "rank": 1,
+          "top": [
+            "document-rv460-design"
+          ],
+          "ms": 9
+        }
+      },
+      {
+        "query": "ad6d3cd",
+        "sought": "document-",
+        "main": {
+          "n": 8,
+          "rank": 1,
+          "top": [
+            "document-rv460-design",
+            "symbols-note-c-and-c-builds-x8",
+            "atlas-sprint-log-6"
+          ],
+          "ms": 855
+        },
+        "before": {
+          "n": 0,
+          "rank": null,
+          "top": [],
+          "ms": 4
+        },
+        "fix": {
+          "n": 1,
+          "rank": 1,
+          "top": [
+            "document-rv460-design"
+          ],
+          "ms": 9
+        }
+      }
+    ],
+    "0.5.1.1": [
+      {
+        "query": "Atlas fleet-777",
+        "sought": "atlas-rollout-fleet-777",
+        "main": {
+          "n": 8,
+          "rank": 1,
+          "top": [
+            "atlas-rollout-fleet-777-was-up",
+            "document-atlas-design",
+            "atlas-sprint-log-6"
+          ],
+          "ms": 1389
+        },
+        "before": {
+          "n": 6,
+          "rank": null,
+          "top": [
+            "atlas-sprint-log-1",
+            "atlas-sprint-log-2",
+            "atlas-sprint-log-3"
+          ],
+          "ms": 11
+        },
+        "fix": {
+          "n": 7,
+          "rank": 1,
+          "top": [
+            "atlas-rollout-fleet-777-was-up",
+            "atlas-sprint-log-6",
+            "atlas-sprint-log-5"
+          ],
+          "ms": 19,
+          "hint": "\"Atlas\" matched 256 lines, where OpenViking's exact-text search stops, so other memories holding it may be missing; a rarer term finds them."
+        }
+      },
+      {
+        "query": "Atlas",
+        "sought": "atlas-rollout-fleet-777",
+        "main": {
+          "n": 8,
+          "rank": null,
+          "top": [
+            "document-atlas-design",
+            "atlas-sprint-log-1",
+            "atlas-sprint-log-4"
+          ],
+          "ms": 882
+        },
+        "before": {
+          "n": 6,
+          "rank": null,
+          "top": [
+            "atlas-sprint-log-1",
+            "atlas-sprint-log-2",
+            "atlas-sprint-log-3"
+          ],
+          "ms": 8
+        },
+        "fix": {
+          "n": 6,
+          "rank": null,
+          "top": [
+            "atlas-sprint-log-6",
+            "atlas-sprint-log-5",
+            "atlas-sprint-log-4"
+          ],
+          "ms": 12,
+          "hint": "\"Atlas\" matched 256 lines, where OpenViking's exact-text search stops, so other memories holding it may be missing; a rarer term finds them."
+        }
+      },
+      {
+        "query": "the fleet-777",
+        "sought": "atlas-rollout-fleet-777",
+        "main": {
+          "n": 8,
+          "rank": 1,
+          "top": [
+            "atlas-rollout-fleet-777-was-up",
+            "atlas-sprint-log-6",
+            "atlas-sprint-log-2"
+          ],
+          "ms": 900
+        },
+        "before": {
+          "n": 6,
+          "rank": null,
+          "top": [
+            "atlas-sprint-log-1",
+            "atlas-sprint-log-2",
+            "atlas-sprint-log-3"
+          ],
+          "ms": 9
+        },
+        "fix": {
+          "n": 7,
+          "rank": 1,
+          "top": [
+            "atlas-rollout-fleet-777-was-up",
+            "atlas-sprint-log-6",
+            "atlas-sprint-log-5"
+          ],
+          "ms": 20,
+          "hint": "\"the\" matched 256 lines, where OpenViking's exact-text search stops, so other memories holding it may be missing; a rarer term finds them."
+        }
+      },
+      {
+        "query": "fleet-777",
+        "sought": "atlas-rollout-fleet-777",
+        "main": {
+          "n": 8,
+          "rank": 1,
+          "top": [
+            "atlas-rollout-fleet-777-was-up",
+            "atlas-sprint-log-6",
+            "atlas-sprint-log-2"
+          ],
+          "ms": 907
+        },
+        "before": {
+          "n": 1,
+          "rank": 1,
+          "top": [
+            "atlas-rollout-fleet-777-was-up"
+          ],
+          "ms": 5
+        },
+        "fix": {
+          "n": 1,
+          "rank": 1,
+          "top": [
+            "atlas-rollout-fleet-777-was-up"
+          ],
+          "ms": 8
+        }
+      },
+      {
+        "query": "Which Docker version runs on fleet-777?",
+        "sought": "atlas-rollout-fleet-777",
+        "main": {
+          "n": 9,
+          "rank": 1,
+          "top": [
+            "atlas-rollout-fleet-777-was-up",
+            "docker-compose-v5-2-2-runs-on-",
+            "atlas-sprint-log-1"
+          ],
+          "ms": 839
+        },
+        "before": {
+          "n": 2,
+          "rank": 2,
+          "top": [
+            "docker-compose-v5-2-2-runs-on-",
+            "atlas-rollout-fleet-777-was-up"
+          ],
+          "ms": 6
+        },
+        "fix": {
+          "n": 2,
+          "rank": 1,
+          "top": [
+            "atlas-rollout-fleet-777-was-up",
+            "docker-compose-v5-2-2-runs-on-"
+          ],
+          "ms": 8
+        }
+      },
+      {
+        "query": "5.2.2",
+        "sought": "docker-compose-v5-2-2",
+        "main": {
+          "n": 8,
+          "rank": 1,
+          "top": [
+            "docker-compose-v5-2-2-runs-on-",
+            "document-atlas-design",
+            "atlas-sprint-log-5"
+          ],
+          "ms": 733
+        },
+        "before": {
+          "n": 0,
+          "rank": null,
+          "top": [],
+          "ms": 3
+        },
+        "fix": {
+          "n": 1,
+          "rank": 1,
+          "top": [
+            "docker-compose-v5-2-2-runs-on-"
+          ],
+          "ms": 7
+        }
+      },
+      {
+        "query": "3.12",
+        "sought": "docker-compose-v5-2-2",
+        "main": {
+          "n": 8,
+          "rank": 2,
+          "top": [
+            "document-atlas-design",
+            "docker-compose-v5-2-2-runs-on-",
+            "atlas-sprint-log-3"
+          ],
+          "ms": 934
+        },
+        "before": {
+          "n": 0,
+          "rank": null,
+          "top": [],
+          "ms": 3
+        },
+        "fix": {
+          "n": 1,
+          "rank": 1,
+          "top": [
+            "docker-compose-v5-2-2-runs-on-"
+          ],
+          "ms": 7
+        }
+      },
+      {
+        "query": "猫 狗",
+        "sought": "我家的猫叫咪咪",
+        "main": {
+          "n": 8,
+          "rank": 1,
+          "top": [
+            "我家的猫叫咪咪-狗叫旺财",
+            "это-который-час-спросил-кот",
+            "docker-compose-v5-2-2-runs-on-"
+          ],
+          "ms": 1110
+        },
+        "before": {
+          "n": 0,
+          "rank": null,
+          "top": [],
+          "ms": 0
+        },
+        "fix": {
+          "n": 1,
+          "rank": 1,
+          "top": [
+            "我家的猫叫咪咪-狗叫旺财"
+          ],
+          "ms": 8
+        }
+      },
+      {
+        "query": "a7536b337f5d",
+        "sought": "document-",
+        "main": {
+          "n": 8,
+          "rank": 1,
+          "top": [
+            "document-atlas-design",
+            "atlas-rollout-fleet-777-was-up",
+            "atlas-sprint-log-6"
+          ],
+          "ms": 870
+        },
+        "before": {
+          "n": 0,
+          "rank": null,
+          "top": [],
+          "ms": 3
+        },
+        "fix": {
+          "n": 1,
+          "rank": 1,
+          "top": [
+            "document-atlas-design"
+          ],
+          "ms": 7
+        }
+      },
+      {
+        "query": "a7536b3",
+        "sought": "document-",
+        "main": {
+          "n": 8,
+          "rank": 1,
+          "top": [
+            "document-atlas-design",
+            "atlas-rollout-fleet-777-was-up",
+            "atlas-sprint-log-6"
+          ],
+          "ms": 881
+        },
+        "before": {
+          "n": 0,
+          "rank": null,
+          "top": [],
+          "ms": 3
+        },
+        "fix": {
+          "n": 1,
+          "rank": 1,
+          "top": [
+            "document-atlas-design"
+          ],
+          "ms": 7
         }
       }
     ]
@@ -812,7 +1462,7 @@
         "inTop10": 60,
         "missing": 0,
         "meanResults": 1.02,
-        "meanMs": 17
+        "meanMs": 13
       }
     },
     "0.5.1.1": {
@@ -834,13 +1484,67 @@
       }
     }
   },
+  "cost": {
+    "method": "medians of 7 provider keyword searches with limit 10; terms match nothing except \"shard\", which all 512 notes hold",
+    "queries": {
+      "oneTerm": "zzqx-none",
+      "eightTerms": "zzqa zzqb zzqc zzqd zzqe zzqf zzqg zzqh",
+      "commonPlusRare": "shard q-0137",
+      "commonPlusSeven": "shard zzqa zzqb zzqc zzqd zzqe zzqf zzqg"
+    },
+    "rows": [
+      {
+        "server": "0.5.1.1",
+        "space": "wp452atlas",
+        "filesScanned": 11,
+        "rawGrepMs": 5,
+        "oneTermMs": 4,
+        "eightTermsMs": 4
+      },
+      {
+        "server": "0.5.1.1",
+        "space": "wp452",
+        "filesScanned": 64,
+        "rawGrepMs": 9,
+        "oneTermMs": 9,
+        "eightTermsMs": 9
+      },
+      {
+        "server": "0.5.1.1",
+        "space": "wp452big",
+        "filesScanned": 512,
+        "rawGrepMs": 47,
+        "oneTermMs": 47,
+        "eightTermsMs": 47,
+        "commonPlusRareMs": 113,
+        "commonPlusSevenMs": 402
+      },
+      {
+        "server": "v0.4.21",
+        "space": "rv460",
+        "filesScanned": 16,
+        "rawGrepMs": 6,
+        "oneTermMs": 6,
+        "eightTermsMs": 5
+      },
+      {
+        "server": "v0.4.21",
+        "space": "wp452",
+        "filesScanned": 64,
+        "rawGrepMs": 9,
+        "oneTermMs": 9,
+        "eightTermsMs": 9
+      }
+    ]
+  },
   "tests": {
     "provider": {
-      "main": "13 failed, 84 passed, 1 skipped (13 of the 14 new keyword tests fail; the one that keeps smart, basic and unspecified searches semantic passes on both)",
-      "fix": "97 passed, 1 skipped"
+      "main": "32 failed, 84 passed, 1 skipped (32 of the 33 keyword tests fail; the one that keeps smart, basic and unspecified searches semantic passes)",
+      "before": "13 of the 33 keyword tests fail on 0dc3fe63",
+      "fix": "116 passed, 1 skipped"
     },
-    "hostOpenViking": "4 passed; the protocol fixture now answers search/grep as OpenViking does, and the document archive test makes 3 grep calls by content hash",
-    "root": "2818 passed, 10 skipped"
+    "hostOpenViking": "4 passed; the protocol fixture answers search/grep as OpenViking does, files in name order up to node_limit, and the document archive test makes 3 grep calls by content hash",
+    "root": "2836 passed, 10 skipped; plugins/dsh-mnemon-source-documents/tests/excerpt-cache.spec.ts \"does not cycle the whole cache at 4096 documents\" timed out at 5 s under load and passed when its file was rerun alone (6 passed)"
   },
   "emptySpace": {
     "server": "0.5.1.1",
@@ -852,5 +1556,8 @@
       "results": []
     },
     "note": "grep answers 404 NOT_FOUND naming the root; the provider returns no results"
+  },
+  "related": {
+    "461": "ranks rows from Providers without calibrated scores, OpenViking's included, at their federated position (tier ranked) instead of unknown; the review checked on a local merge that this PR's rows then arrive as ranked. It should land first or together with this PR."
   }
 }

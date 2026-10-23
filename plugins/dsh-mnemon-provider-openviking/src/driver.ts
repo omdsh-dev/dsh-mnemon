@@ -114,45 +114,80 @@ function queueFailed(value: unknown): boolean {
   })
 }
 
-/** Most matched lines a keyword search asks `search/grep` for: memory files are short, so this covers many files. */
+/**
+ * Most matched lines one `search/grep` call returns. The server walks files in name order, which is
+ * oldest first for the files Mnemon writes, and stops here.
+ */
 const GREP_NODE_LIMIT = 256
+/** Most terms one keyword search looks up: when one grep for all of them fills up, each gets its own. */
+const KEYWORD_TERM_LIMIT = 8
+
+/** Scripts written without spaces between words, where a word sits inside a longer run of letters. */
+const UNSPACED = /[\p{scx=Han}\p{scx=Hiragana}\p{scx=Katakana}\p{scx=Hangul}\p{scx=Thai}\p{scx=Lao}\p{scx=Khmer}\p{scx=Myanmar}]/u
+/** A commit, digest or other ID in hexadecimal, which people cite by its first characters. */
+const HEX_ID = /^(?=[0-9a-f]*[0-9])(?=[0-9a-f]*[a-f])[0-9a-f]{7,}$/u
+/** Punctuation that ends a sentence or a clause, as a question puts after its last word. */
+const CLOSING_PUNCTUATION = /[.,;:!?…。，、；：！？]+$/u
 
 /**
- * The literal terms of a keyword query, each matched as written (#452): whitespace-separated, with a
- * double-quoted phrase kept whole, once each whatever their case. A one-character term would match
- * nearly every memory, so it counts only alone.
+ * The literal terms of a keyword query (#452): words split at whitespace, each without the punctuation
+ * that ends a sentence, and phrases in straight or curly double quotes kept whole, once each whatever
+ * their case. A one-character word of a spaced script, such as "a" or "5", would match nearly every
+ * memory, so it counts only when nothing else is asked for; a Chinese or Japanese character is a word.
  */
 function keywordTerms(query: string): string[] {
   const seen = new Set<string>()
-  const terms = [...query.matchAll(/"([^"]+)"|(\S+)/gu)].map(([, phrase, word]) => (phrase ?? word ?? '').trim()).filter(term => {
-    const key = term.toLocaleLowerCase()
+  const terms = [...query.matchAll(/"([^"]+)"|“([^”]+)”|(\S+)/gu)].map(([, straight, curly, word]) => (
+    word === undefined ? (straight ?? curly ?? '').trim() : word.replace(CLOSING_PUNCTUATION, '')
+  )).filter(term => {
+    const key = term.toLowerCase()
     if (term === '' || seen.has(key)) return false
     seen.add(key)
     return true
   })
-  return terms.length > 1 ? terms.filter(term => Array.from(term).length > 1) : terms
+  const words = terms.filter(term => Array.from(term).length > 1 || (/\p{L}/u.test(term) && UNSPACED.test(term)))
+  return words.length > 0 ? words : terms
 }
 
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
 }
 
-const ASCII_WORD = /[A-Za-z0-9]/u
+/** Digits continue a number, and letters a word in a script written with spaces; nothing else continues. */
+function wordClass(character: string | undefined): 'digit' | 'letter' | undefined {
+  if (character === undefined) return undefined
+  if (/\p{Nd}/u.test(character)) return 'digit'
+  return /[\p{L}\p{M}]/u.test(character) && !UNSPACED.test(character) ? 'letter' : undefined
+}
 
 /**
- * Whether a line holds the term as a whole word: where the term starts or ends with a letter or a digit,
- * the character beside it may not be one, so 29.8.5 does not match 29.8.50, nor fleet-04 match fleet-042.
- * Text in scripts without spaces, such as Chinese, matches anywhere. Both arguments are lowercase.
+ * Whether a line holds the term as written. The term may not start or end inside a number or a word:
+ * a digit beside a digit, or a letter beside a letter of a spaced script, so `29.8.5` does not match
+ * `29.8.50`, `fleet-04` does not match `fleet-042` and `кот` does not match `который`, while `5.2.2`
+ * matches `v5.2.2` and `3.12` matches `Python3.12`. Text in scripts written without spaces, such as
+ * Chinese, matches anywhere. A hexadecimal ID of seven or more characters with both digits and
+ * letters matches by its start, so `9f86d08` finds `9f86d081884c…`, but not from the middle of a
+ * longer one. Both arguments are lowercase.
  */
 function holdsTerm(line: string, term: string): boolean {
-  const startsWord = ASCII_WORD.test(term[0]!)
-  const endsWord = ASCII_WORD.test(term[term.length - 1]!)
+  const characters = Array.from(term)
+  const hexId = HEX_ID.test(term)
+  const first = wordClass(characters[0])
+  const last = wordClass(characters.at(-1))
   for (let at = line.indexOf(term); at >= 0; at = line.indexOf(term, at + 1)) {
-    const before = at === 0 ? '' : line[at - 1]!
-    const after = line[at + term.length] ?? ''
-    if ((!startsWord || !ASCII_WORD.test(before)) && (!endsWord || !ASCII_WORD.test(after))) return true
+    const before = Array.from(line.slice(Math.max(0, at - 2), at)).at(-1)
+    const next = line.codePointAt(at + term.length)
+    const after = next === undefined ? undefined : String.fromCodePoint(next)
+    const starts = hexId ? before === undefined || !/[0-9a-f]/u.test(before) : first === undefined || wordClass(before) !== first
+    const ends = hexId || last === undefined || wordClass(after) !== last
+    if (starts && ends) return true
   }
   return false
+}
+
+/** When Mnemon wrote a memory, from the time at the start of its file name; other files carry none. */
+function writtenAt(uri: string): string {
+  return /\/(\d{14})-[^/]*\.md$/u.exec(uri)?.[1] ?? ''
 }
 
 /** OpenViking's answer when the URI asked for does not exist yet, as an empty space's memory root: a 404 naming it. */
@@ -169,6 +204,11 @@ function missingRoute(error: unknown): boolean {
 
 function unreadHint(skipped: number): string {
   return `${skipped} OpenViking ${skipped === 1 ? 'result' : 'results'} could not be read and ${skipped === 1 ? 'was' : 'were'} left out; the server's index can list a file it no longer holds.`
+}
+
+function truncatedHint(terms: string[]): string {
+  const named = terms.map(term => `"${term}"`).join(', ')
+  return `${named} ${terms.length === 1 ? 'matched' : 'each matched'} ${GREP_NODE_LIMIT} lines, where OpenViking's exact-text search stops, so other memories holding ${terms.length === 1 ? 'it' : 'them'} may be missing; a rarer term finds them.`
 }
 
 /** What a folder holds, for files written before the category was in the name or by OpenViking itself. */
@@ -355,22 +395,30 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
 
   /**
    * Keyword search through OpenViking's exact-text channel (#452). Its local vector backend has no BM25,
-   * so `search/grep` is the one way to find an ID, a version or a path by its exact text. Each term is
-   * a literal, matched in any case and as a whole word; a memory that holds more of the terms comes first,
-   * otherwise grep's order is kept, and no score is made up. The server is asked for the plain terms, which
-   * its keyword recall can read, and the word check runs here. A server without the endpoint answers
-   * semantically, and says so.
+   * so `search/grep` is the one way to find an ID, a version or a path by its exact text. Terms are
+   * literals. One grep asks for all of them; when it fills up, each term gets a grep of its own, so a
+   * common term cannot use up the lines a rare one needs. The word check runs here, on every line
+   * returned, against every term. A memory holding rarer terms, and more of them, comes first; among
+   * memories holding the same terms the one Mnemon wrote last comes first, so an update beats what it
+   * replaced, and files without a time in their name follow in grep's order. No score is made up.
+   * A server without the endpoint answers semantically, and says so.
    */
   private async keywordSearch(body: MemorySpace, memoryRoot: string, request: SearchRequest, signal?: AbortSignal): Promise<ProviderSearchResult> {
-    const terms = keywordTerms(request.query)
-    if (terms.length === 0) return { results: [] }
-    let found: Record<string, unknown> | undefined
+    const asked = keywordTerms(request.query)
+    if (asked.length === 0) return { results: [] }
+    const terms = asked.slice(0, KEYWORD_TERM_LIMIT)
+    const grep = async (pattern: string) => object(await this.request(body, '/api/v1/search/grep', {
+      method: 'POST',
+      // Every GrepRequest from 0.4.16 to 0.5.2 declares these.
+      body: JSON.stringify({ uri: memoryRoot, pattern, case_insensitive: true, node_limit: GREP_NODE_LIMIT }),
+    }, { signal }))
+    const full = (result: Record<string, unknown> | undefined) => Array.isArray(result?.matches) && result.matches.length >= GREP_NODE_LIMIT
+    let found: Array<{ result: Record<string, unknown> | undefined; term?: string }>
     try {
-      found = object(await this.request(body, '/api/v1/search/grep', {
-        method: 'POST',
-        // Every GrepRequest from 0.4.16 to 0.5.2 declares these.
-        body: JSON.stringify({ uri: memoryRoot, pattern: terms.map(escapeRegExp).join('|'), case_insensitive: true, node_limit: GREP_NODE_LIMIT }),
-      }, { signal }))
+      const all = await grep(terms.map(escapeRegExp).join('|'))
+      found = terms.length === 1 ? [{ result: all, term: terms[0]! }]
+        : !full(all) ? [{ result: all }]
+          : await Promise.all(terms.map(async term => ({ result: await grep(escapeRegExp(term)), term })))
     } catch (error) {
       // No memory has been written under this root yet.
       if (missingResource(error)) return { results: [] }
@@ -379,19 +427,31 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
       const fallback = 'This OpenViking server has no exact-text search (search/grep), so these keyword results are semantic.'
       return { ...semantic, hint: semantic.hint === undefined ? fallback : `${fallback} ${semantic.hint}` }
     }
-    const lowered = terms.map(term => term.toLocaleLowerCase())
-    const matched = new Map<string, Set<string>>()
-    for (const value of Array.isArray(found?.matches) ? found.matches : []) {
-      const match = object(value)
-      const uri = string(match?.uri)
-      if (uri === undefined || !isMemoryFile(uri, memoryRoot)) continue
-      const line = (string(match?.content) ?? '').toLocaleLowerCase()
-      const hits = matched.get(uri) ?? new Set<string>()
-      for (const term of lowered) if (holdsTerm(line, term)) hits.add(term)
-      if (hits.size > 0) matched.set(uri, hits)
+    const lowered = terms.map(term => term.toLowerCase())
+    const held = new Map<string, Set<number>>()
+    const truncated: string[] = []
+    for (const { result, term } of found) {
+      const matches = result?.matches
+      if (!Array.isArray(matches)) continue
+      if (term !== undefined && full(result)) truncated.push(term)
+      for (const value of matches) {
+        const match = object(value)
+        const uri = string(match?.uri)
+        if (uri === undefined || !isMemoryFile(uri, memoryRoot)) continue
+        const line = (string(match?.content) ?? '').toLowerCase()
+        const hits = held.get(uri) ?? new Set<number>()
+        lowered.forEach((word, at) => { if (holdsTerm(line, word)) hits.add(at) })
+        if (hits.size > 0) held.set(uri, hits)
+      }
     }
-    const ranked = [...matched].map(([uri, hits], order) => ({ uri, order, count: hits.size }))
-      .sort((left, right) => right.count - left.count || left.order - right.order)
+    // A term held by fewer of the matched memories tells them apart more: BM25's inverse document frequency.
+    const holders = lowered.map((_, at) => [...held.values()].filter(hits => hits.has(at)).length)
+    const rarity = holders.map(count => Math.log(1 + (held.size - count + 0.5) / (count + 0.5)))
+    const ranked = [...held].map(([uri, hits], order) => ({
+      uri, order, written: writtenAt(uri), weight: rarity.reduce((sum, value, at) => hits.has(at) ? sum + value : sum, 0),
+    })).sort((left, right) => right.weight - left.weight
+      || (left.written === right.written ? 0 : left.written < right.written ? 1 : -1)
+      || left.order - right.order)
       .slice(0, request.limit)
     const { read, skipped } = await this.readAll(body, ranked.map(({ uri }): Insight => ({
       id: uri,
@@ -400,9 +460,14 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
       category: categoryFromUri(uri),
       source: 'external',
     })), signal)
+    const hints = [
+      ...(asked.length > terms.length ? [`Only the first ${KEYWORD_TERM_LIMIT} terms were looked up.`] : []),
+      ...(truncated.length === 0 ? [] : [truncatedHint(truncated)]),
+      ...(skipped === 0 ? [] : [unreadHint(skipped)]),
+    ]
     return {
       results: read,
-      ...(skipped === 0 ? {} : { hint: unreadHint(skipped) }),
+      ...(hints.length === 0 ? {} : { hint: hints.join(' ') }),
     }
   }
 

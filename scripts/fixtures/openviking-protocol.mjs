@@ -80,10 +80,12 @@ export function openVikingProtocolFixture() {
       result = { memories: [...files.values()].filter(file => file.account === account && file.uri.startsWith(requestedRoot + '/') && file.content.includes(body.query))
         .map(file => ({ uri: file.uri, abstract: 'Synthetic summary', score: 0.99 })) }
     } else if (url.pathname === '/api/v1/search/grep') {
-      // As every OpenViking since 0.4.16 answers: each line under the URI that the pattern matches, in file order.
+      // As every OpenViking since 0.4.16 answers: each line under the URI that the pattern matches,
+      // files in name order, until node_limit lines.
       const requestedRoot = canonical(body.uri)
       const pattern = new RegExp(String(body.pattern), body.case_insensitive === true ? 'iu' : 'u')
       const under = [...files.values()].filter(file => file.account === account && file.uri.startsWith(requestedRoot + '/'))
+        .sort((left, right) => left.uri < right.uri ? -1 : 1)
       const matches = under.flatMap(file => file.content.split('\n').flatMap((line, index) => pattern.test(line) ? [{ line: index + 1, uri: file.uri, content: line }] : []))
         .slice(0, body.node_limit ?? 256)
       result = { matches, count: matches.length, match_count: matches.length, files_scanned: under.length }
