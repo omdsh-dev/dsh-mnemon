@@ -359,6 +359,16 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
     }
   }
 
+  /**
+   * Writes land under one user's memory root of one account (#434). A root whose owner only the server
+   * knows names no root, so it covers every root of the account.
+   */
+  namespaceKey(connection: MemoryProviderConnection): readonly string[] {
+    const root = String(connection.targetUri ?? '').trim().replace(/\/+$/u, '')
+    const user = discoveryUser(connection) ?? /^viking:\/\/user\/([^/]+)\/memories$/u.exec(root)?.[1] ?? (String(connection.user ?? '').trim() || undefined)
+    return [String(connection.endpoint ?? '').trim().replace(/\/+$/u, ''), String(connection.account ?? '').trim(), ...(user === undefined ? [] : [`viking://user/${user}/memories`])]
+  }
+
   private connection(body: MemorySpace): OpenVikingConnection {
     if ((body.provider.typeId ?? body.provider.id) !== this.id) throw new Error(`OpenViking cannot serve provider ${body.provider.id}`)
     const connection = this.memorySpaces.providerConnection(body.id, body.provider.id)

@@ -69,6 +69,7 @@ follow an exact cold reference when full text is required
     +-- runtime-index.json        # 上次导出携带的 Runtime 条目，不进入 Mnemon Pack
     +-- review-ledger.json        # 待决策的整理建议，0600，不进入 Mnemon Pack
     +-- memory-providers.json     # 第三方连接控制面，0600，不进入 Mnemon Pack
+    +-- memory-provider-write-policy.json  # DSH 不写入的命名空间，不进入 Mnemon Pack
     +-- sync-git.json             # Git 同步配置；含 token 时 0600；不进入 Mnemon Pack
     +-- sync/
         +-- git/                  # 同步分支的可丢弃 Git 镜像；不属于任何数据组件
@@ -79,6 +80,7 @@ follow an exact cold reference when full text is required
 `state/` 下的文件：
 
 - `memory-providers.json` 保存第三方 endpoint、目标 URI、身份和可选凭据；文件权限为 `0600`，Host 只返回已配置字段名，不回传凭据值。
+- `memory-provider-write-policy.json` 列出设为[只读](../guides/memory-providers.md#只读空间)的落点：每项由 Provider 类型、其服务以及 Provider 在其中指明的位置（例如 bank 或目录）组成，从不含凭据。只有存在只读落点时才有这个文件，最多记录 1,000 个。文件或其中的条目无法读取时，所有空间都按只读处理，直到修复文件或在记忆空间页面重置写入选择；召回不受影响。
 - `sync-git.json` 保存 Git 同步配置：仓库地址、分支、远端目录、提交身份、自动同步间隔（分钟，`autoBackupMinutes`，`0` 为关闭），以及供 HTTPS 远端使用的可选令牌。它遵循同样的 `0600` 权限与脱敏规则，既不属于 Config，也不进入 Mnemon Pack。
 - `sync/git` 下的镜像是同步分支的可丢弃 Git 工作树：push 与 pull 都在其中工作，存储根本身永远不会成为 Git 工作树；删除镜像只多一次 fetch，不会丢数据。镜像在自己的 Git 配置里记录它取自哪个仓库（`mnemon.origin`），换成另一个仓库时会重建，因此一个仓库的历史不会进入另一个仓库。
 - `sync/last-run.json` 记录上一次同步或合并完成的时间，重启后页面仍能说明。
@@ -266,6 +268,7 @@ Mnemon Native 保留 `temporal`、`semantic`、`causal` 和 `entity` 关系；Hi
 | Documents | `documents/index.json` + 托管 Markdown | excerpt、搜索排序、状态聚合 |
 | Mnemon Native 目录 | `data/.dsh-memory-bodies.json` + 磁盘 Store | Web 状态聚合 |
 | 第三方 Provider 连接 | `state/memory-providers.json` | 脱敏的 Provider 能力与状态 |
+| 只读命名空间 | `state/memory-provider-write-policy.json` | 目录与状态中每个只读空间的 `writePolicy` |
 | Git 同步配置 | `state/sync-git.json` | `state/sync/git` 镜像与所配置的远端分支 |
 | 机器标识 | `state/machine.json`：id、名称与 `labelSource`（`hostname` 跟随主机名，`custom` 为手动填写） | 导出包与同步状态中的 `machine` 字段 |
 | 跨机删除 | `state/tombstones.json` | `state/runtime-index.json`，后续导出以它作为比对基准 |

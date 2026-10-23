@@ -119,6 +119,18 @@ export interface MemoryProviderAdapter {
   forget?(body: MemorySpace, id: string, signal?: AbortSignal): Promise<JsonValue>
   /** Release generation-owned clients, timers, pools, or subprocess handles. */
   dispose?(): void | Promise<void>
+  /**
+   * Where a space's writes land, given its settings with defaults filled in: plain parts such as an
+   * endpoint and a bank, this Provider's runtime fallbacks resolved, never a secret (#434). Spaces with
+   * the same parts are one namespace for the write policy; without it, all on one service location are.
+   */
+  namespaceKey?(connection: MemoryProviderConnection): readonly string[]
+}
+
+/** An endpoint as a namespace key names it: scheme, host and path, letter case and trailing slashes aside. */
+export function endpointKey(value: unknown): string {
+  const text = String(value ?? '').trim()
+  try { const url = new URL(text); return `${url.protocol}//${url.host}${url.pathname.replace(/\/+$/u, '')}` } catch { return text.replace(/\/+$/u, '') }
 }
 
 /** @deprecated Use ProviderSpaceStatus. */

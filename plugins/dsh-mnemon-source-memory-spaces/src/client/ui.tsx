@@ -34,6 +34,8 @@ export function memorySpacesPageClient(management: MnemonSourceManagementClient)
     createBody: request => request.placement !== undefined && client.canAssist('body-create') ? client.assist('body-create', input(request), true) : client.mutate('body-create', input(request), true),
     updateBody: (memoryBodyId, request) => typeof request.active === 'boolean' && Object.keys(request).every(key => key === 'active') && client.canAssist('activation')
       ? client.assist('activation', { memoryBodyId, active: request.active }, true) : client.mutate('body-update', input({ memoryBodyId, ...request }), true),
+    setWritePolicy: (memoryBodyId, policy) => client.mutate('body-write-policy', { memoryBodyId, policy }, true),
+    resetWritePolicy: () => client.mutate('body-write-policy-reset', {}, true),
     deleteBody: memoryBodyId => client.mutate('body-delete', { memoryBodyId }, true),
     rediscoverBodies: () => client.mutate('provider-rediscover', { trigger: 'manual' }, true),
     agentSearch: request => client.assist('agent-search', input(request), false),

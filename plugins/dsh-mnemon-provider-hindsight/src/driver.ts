@@ -200,6 +200,11 @@ export class HindsightProvider extends HttpMemoryProvider implements MemoryProvi
     return graph.nodes.filter(node => node.id !== id && visited.has(node.id)).map(({ color: _color, ...node }) => node)
   }
 
+  /** Writes land in one bank of one server (#434). */
+  namespaceKey(connection: Record<string, string | number | boolean>): readonly string[] {
+    return [this.endpointKey(connection), String(connection.bankId ?? '').trim()]
+  }
+
   async remember(body: MemorySpace, request: RememberRequest, signal?: AbortSignal): Promise<JsonValue> {
     const connection = this.connection(body)
     const operationId = randomUUID()

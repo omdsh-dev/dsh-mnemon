@@ -1689,6 +1689,45 @@ describe('Mnemon memory subagent coordinator', () => {
     }
   })
 
+  it('names no read-only space as a write target, and its tool guard keeps the writer off one (#434)', async () => {
+    const spaces = service()
+    const catalog = spaces.bodyDirectory()
+    const legacy = { ...catalog.items[0]!, id: 'legacy', name: 'Legacy bank', writePolicy: 'read-only' as const }
+    vi.mocked(spaces.bodyDirectory).mockReturnValue({ ...catalog, items: [...catalog.items, legacy] } as never)
+    const host = subagents({ action: 'stored', summary: 'Saved.', memoryBodyIds: ['project'] })
+    const registry = toolRegistry()
+    let guard: ((execution: ToolExecution) => string | undefined) | undefined
+    const published: HostSubagentsService = { ...host.value, async start(provider, request) {
+      const run = await host.value.start!(provider, request)
+      const child = { ...parent('subagent'), id: run.id, ctx: { tools: { guard: (callback: typeof guard) => { guard = callback; return () => {} } } } } as unknown as HostAgent
+      registry.publish(child, request.parent)
+      return { ...run, localAgent: child }
+    } }
+    const coordinator = new MnemonSubagentCoordinator(published, runtimeSource(undefined, spaces), registry.value)
+    const signal = new AbortController().signal
+    const refused = 'Memory Space "legacy" (Legacy bank) is read only: it is recalled and takes no writes. Name a writable space.'
+    await expect(coordinator.remember(parent(), { content: 'x', memoryBodyId: 'legacy' }, signal)).rejects.toThrow(refused)
+    await expect(coordinator.remember(parent(), { content: 'x', memoryBodyId: 'legacy' }, signal, { activateTarget: true })).rejects.toThrow(refused)
+    expect(host.start).not.toHaveBeenCalled()
+    // A writer that chooses its space is held off the read-only one, and reads it as before.
+    await coordinator.remember(parent(), { content: 'x' }, signal)
+    const call = (name: string, args: unknown) => guard!({ name, arguments: args, signal })
+    expect(call('mnemon_remember', { content: 'x', memoryBodyId: 'legacy' })).toBe(
+      'Memory Space "legacy" is read only: it is recalled and takes no writes. Write to a writable space, or finish without writing and say why none fits.')
+    expect(call('mnemon_link', { sourceId: 'a', targetId: 'b', memoryBodyId: 'legacy' })).toContain('"legacy" is read only')
+    expect(call('mnemon_remember', { content: 'x', memoryBodyId: 'project' })).toBeUndefined()
+    expect(call('mnemon_recall', { query: 'x', memoryBodyIds: ['legacy'] })).toBeUndefined()
+  })
+
+  it('holds a writer to nothing new when no space is read only (#434)', () => {
+    const call = (name: string, args: Record<string, unknown>) => ({ name, arguments: args }) as unknown as ToolExecution
+    const before = spaceWriteGuard(undefined, new Set(['archive']))
+    const after = spaceWriteGuard(undefined, new Set(['archive']), new Set())
+    for (const [name, args] of [['mnemon_remember', { memoryBodyId: 'project' }], ['mnemon_remember', { memoryBodyId: 'archive' }], ['mnemon_link', { memoryBodyId: 'legacy' }], ['mnemon_memory_body_update', { memoryBodyId: 'archive', active: true }]] as const) {
+      expect(after(call(name, args))).toBe(before(call(name, args)))
+    }
+  })
+
   it('does not recover partial or failed child runs from unrelated successful tools', async () => {
     const resultTools = toolRegistry()
     const partial = observedSubagents(resultTools, child => {

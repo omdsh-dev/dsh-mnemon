@@ -216,6 +216,12 @@ export interface OpenVikingSpaceConnection {
   actorPeerId?: string
 }
 
+/**
+ * Whether DSH may write to a space's namespace (#434). A read-only namespace is recalled as before
+ * and takes no write: no remember, forget, link, capture, archive or merge reaches its Provider.
+ */
+export type MemorySpaceWritePolicy = 'writable' | 'read-only'
+
 export interface MemorySpace {
   id: string
   name: string
@@ -224,6 +230,8 @@ export interface MemorySpace {
   dbPath: string
   provider: MemorySpaceProvider
   placement?: MemoryPlacementDecision
+  /** Present only for a read-only namespace; every other space is writable. */
+  writePolicy?: 'read-only'
   createdAt: string
   updatedAt: string
 }
@@ -388,6 +396,8 @@ export interface MemorySpaceCatalog {
   writeScope?: MemorySpaceWriteScope
   /** Provider namespaces asked for again in this process: whether a pass is running, and the last one. Older Sources omit it. */
   rediscovery?: { running: boolean; last?: MemorySpaceRediscovery }
+  /** Why every space is read only: the write-policy file cannot be read (#434). Present only then. */
+  writePolicyProblem?: string
 }
 
 /** What one Provider answered when its namespaces were asked for again. */
@@ -603,6 +613,8 @@ export interface MnemonEmbeddingSpaceStatus {
   memoryBodyId: string
   name: string
   active: boolean
+  /** Present only for a read-only space, whose vectors are not filled in (#434). */
+  writePolicy?: 'read-only'
   totalInsights: number
   embedded: number
   coverage: string

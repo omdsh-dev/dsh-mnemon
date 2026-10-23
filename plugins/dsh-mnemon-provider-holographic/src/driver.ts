@@ -214,8 +214,17 @@ export class HolographicProvider implements MemoryProviderAdapter {
     return this.memorySpaces.providerConnection(body.id, body.provider.id)
   }
 
+  /** Every space of one store file is one namespace: writes land in the file (#434). */
+  namespaceKey(connection: Record<string, string | number | boolean>): readonly string[] {
+    return [this.storePath(connection)]
+  }
+
   private path(body: MemorySpace): string {
-    const configured = String(this.connection(body).dataPath ?? '').trim()
+    return this.storePath(this.connection(body))
+  }
+
+  private storePath(connection: Record<string, string | number | boolean>): string {
+    const configured = String(connection.dataPath ?? '').trim()
     if (configured === '') return join(this.memorySpaces.runner.effectiveDataDir(), 'state', 'holographic', 'store.json')
     return isAbsolute(configured) ? configured : resolve(this.memorySpaces.runner.effectiveDataDir(), configured)
   }
