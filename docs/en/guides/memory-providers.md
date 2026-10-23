@@ -52,6 +52,17 @@ The start-up pass runs once per data directory per Host process. It does not run
 
 DSH workspace mode does not rewrite every provider namespace. Mnemon Native follows the workspace automatically. Holographic and ByteRover default to workspace-local paths but allow explicit path overrides. Remote providers continue to use the URI, workspace, user, bank, project, or container configured on the Memory Space; switching DSH workspaces never rewrites those identities implicitly.
 
+## Read-only spaces
+
+A Memory Space can be **Read only**. DSH still recalls it as before, through Recall, Related, Content, Entities and Direct search, but writes nothing to it. This keeps an existing namespace readable, such as a Hindsight bank that another tool also writes, while new memories go to a space of their own. To set it, open the space's **Edit** dialog and choose **Read only** under **Writes**. The space's card then shows **Read only**.
+
+- **No write reaches its Provider.** Remember (single or batch), forget, link, the task Agent's writes, archiving MEMORY.md or a Document's index, and merging into the space are all refused before the Provider is called. The error names the space. A read-only Mnemon Native space also keeps its Store, which cannot be deleted while the space is read only, and **Fill in** adds no vectors to it.
+- **Writes that name no space.** Such a write goes to the one active writable space. If there is none, or more than one, the write asks for a space; it never falls back to a read-only one. If every space is read only, a full MEMORY.md archives to the local archive file.
+- **The choice follows the namespace, not the card.** A space made by hand for the same bank, workspace, user, tag, URI or folder is read only too, and so is the namespace after a reconnect, a rediscovery, or switching a space on. Making any of these spaces writable makes the whole namespace writable. A space whose settings are changed to point at another namespace takes that namespace's choice.
+- **Each write is checked when it is made.** A turn that began before the change cannot write to the space.
+- **Where the choice is kept.** It is kept for this data directory in `<storageRoot>/state/memory-provider-write-policy.json`, next to the Provider connections. Packs and Git sync do not carry the file, and restoring a Pack or syncing leaves it in place. The choice governs DSH's own writes; it does not govern the stores that a Pack or Git sync copies.
+- **If the file cannot be read**, every space is read only until the file is fixed or removed; recall still works. dsh-mnemon versions before this one ignore the file.
+
 ## Manual and smart placement
 
 Manual placement preserves the existing workflow: create a Memory Space, choose one engine, configure it, and continue to use the same Recall, Content, Entities, and Remember surfaces.

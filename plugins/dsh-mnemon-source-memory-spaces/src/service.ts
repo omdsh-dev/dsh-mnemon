@@ -46,6 +46,7 @@ import {
   type MemorySpaceStats,
   type MemorySpaceMetadataSample,
   type MemorySpaceMetadataUpdate,
+  type MemorySpaceWritePolicy,
   type MemorySpaceRediscovery,
   type MemorySpaceRediscoveryResult,
   type MemorySpaceView,
@@ -573,6 +574,8 @@ export class MemorySpacesService {
         providerId: body.provider.id,
         updatedAt: body.updatedAt,
         capabilities: body.provider.capabilities,
+        // Only a read-only space adds a field, so a directory without the policy keeps its revision (#434).
+        ...(body.writePolicy === undefined ? {} : { writePolicy: body.writePolicy }),
       }))
     const services = serviceItems
       .map(service => ({ providerId: service.providerId, enabled: service.enabled, configured: service.configured }))
@@ -637,7 +640,7 @@ export class MemorySpacesService {
     let runtime: MnemonEmbeddingStatus | undefined
     const spaces: MnemonEmbeddingSpaceStatus[] = []
     for (const body of native) {
-      const space = { memoryBodyId: body.id, name: body.name, active: body.active }
+      const space = { memoryBodyId: body.id, name: body.name, active: body.active, ...(body.writePolicy === undefined ? {} : { writePolicy: body.writePolicy }) }
       try {
         const counts = embeddingCounts(await this.runner.runJson(['embed', '--status'], { store: body.id, database: body.dbPath, ...(signal === undefined ? {} : { signal }) }))
         runtime ??= counts
@@ -680,6 +683,8 @@ export class MemorySpacesService {
     this.assertWritable()
     const body = this.memorySpaces.get(validateMemorySpaceId(memoryBodyId))
     if (!this.isNativeSpace(body)) throw new Error(`${body.provider.label} keeps no Mnemon vectors to fill in`)
+    // Vectors from this Host's embedding settings would go into a store another tool may own (#434).
+    this.assertSpaceWritable(body, 'no vectors were filled in', ' Make it writable first to fill them in.')
     const options = { store: body.id, database: body.dbPath, ...(signal === undefined ? {} : { signal }) }
     const failed = (error: unknown): Error => new Error(cliFailure(error, 'no-database') ? `Memory Space ${body.name} has no database` : cliReason(error), { cause: error })
     const count = async (): Promise<MnemonEmbeddingStatus> => {
@@ -1320,6 +1325,8 @@ export class MemorySpacesService {
 
     for (const group of groups.values()) {
       const body = group[0]!.body
+      // The policy may have changed while an earlier destination was written (#434).
+      this.assertSpaceWritable(body)
       const provider = this.providerFor(body)
       let providerChanged = false
       const batchWriter = provider.rememberMany
@@ -1338,6 +1345,7 @@ export class MemorySpacesService {
       const batched = new Set(batch)
       for (const entry of group) {
         if (batched.has(entry)) continue
+        this.assertSpaceWritable(body)
         const result = await provider.remember(body, entry.request, signal)
         results[entry.index] = this.annotateResult(result, body)
         providerChanged ||= mutationResultCommitted(result)
@@ -1540,6 +1548,16 @@ export class MemorySpacesService {
     return this.memorySpaces.update(id, request)
   }
 
+  /** Whether a write may go to this space now; an id this directory no longer holds is left to the write to refuse. */
+  takesWrites(id: string): boolean {
+    return !this.memorySpaces.isReadOnly(id)
+  }
+
+  /** A person's choice on the Memory Spaces page: whether DSH may write to this space's namespace (#434). */
+  setWritePolicy(id: string, policy: MemorySpaceWritePolicy): MemorySpace {
+    return this.memorySpaces.setWritePolicy(id, policy)
+  }
+
   updateSpaceMetadata(updates: readonly MemorySpaceMetadataUpdate[]): MemorySpace[] {
     this.assertWritable()
     return this.memorySpaces.updateMetadata(updates)
@@ -1547,6 +1565,9 @@ export class MemorySpacesService {
 
   async deleteSpace(id: string, signal?: AbortSignal): Promise<MemorySpace> {
     this.assertWritable()
+    // Deleting a Mnemon Native space removes its Store; any other space is only disconnected here (#434).
+    const body = this.memorySpaces.get(id)
+    if (this.isNativeSpace(body)) this.assertSpaceWritable(body, 'its Mnemon Store was not deleted', ' Make it writable first to delete it.')
     return await this.memorySpaces.remove(id, signal)
   }
 
@@ -1554,6 +1575,7 @@ export class MemorySpacesService {
     this.assertWritable()
     const target = this.memorySpaces.get(targetSpaceId)
     if (!this.isNativeSpace(target)) throw new Error('memory-space merge currently requires a Mnemon Native target')
+    this.assertSpaceWritable(target)
     const sourceIds = [...new Set(sourceSpaceIds.map(id => id.trim()).filter(id => id !== ''))]
     if (sourceIds.length === 0) throw new Error('sourceMemoryBodyIds requires at least one memory space')
     if (sourceIds.includes(target.id)) throw new Error('target memory space cannot also be a merge source')
@@ -1653,15 +1675,37 @@ export class MemorySpacesService {
     return active[0]!
   }
 
+  /**
+   * The space a write goes to, read from the live directory when the write is dispatched, so a
+   * stale View or a policy changed during async work cannot write to a read-only namespace (#434).
+   * Without an id the only active writable space is chosen; none, or several, is an error, never a
+   * fallback to a read-only space.
+   */
   private writeSpace(id?: string): MemorySpace {
     if (id !== undefined && id.trim() !== '') {
       const body = this.memorySpaces.get(id)
       if (!this.isNativeSpace(body) && !this.memorySpaces.providerServiceEnabled(body.provider.id)) throw new Error(`${body.provider.label} is disabled on the dsh-mnemon page under Plugins`)
+      this.assertSpaceWritable(body)
       return body
     }
     const active = this.memorySpaces.active()
-    if (active.length !== 1) throw new Error('memoryBodyId is required when the number of active memory spaces is not exactly one')
-    return active[0]!
+    const writable = active.filter(body => body.writePolicy !== 'read-only')
+    if (writable.length === active.length) {
+      if (active.length !== 1) throw new Error('memoryBodyId is required when the number of active memory spaces is not exactly one')
+      return active[0]!
+    }
+    if (writable.length === 0) throw new Error(`no active memory space takes writes: ${active.map(body => `${body.name} (${body.id})`).join(', ')} ${active.length === 1 ? 'is' : 'are'} read only`)
+    if (writable.length !== 1) throw new Error('memoryBodyId is required when the number of active writable memory spaces is not exactly one')
+    return writable[0]!
+  }
+
+  /** Refuse a write to a read-only namespace before its Provider is called, by the live policy. */
+  private assertSpaceWritable(body: MemorySpace, refused = 'nothing was written', next = ' Choose a writable space.'): void {
+    if (!this.memorySpaces.isReadOnly(body.id)) return
+    const problem = this.memorySpaces.writePolicyProblem()
+    throw new Error(problem !== undefined
+      ? `${problem}. Until then ${body.name} (${body.id}) takes no writes, so ${refused}.`
+      : `Memory Space ${body.name} (${body.id}) is read only: it is recalled and takes no writes, so ${refused}.${next}`)
   }
 
   private prepareRemember(request: RememberRequest, destinations?: Map<string, MemorySpace>): PreparedRemember {

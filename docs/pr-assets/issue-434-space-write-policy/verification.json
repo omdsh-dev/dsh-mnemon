@@ -1,0 +1,273 @@
+{
+  "issue": 434,
+  "branch": "claude/feat-434-space-write-policy",
+  "base": "a7e3bc54 (main, v0.5.34)",
+  "date": "2026-10-23 (Asia/Shanghai)",
+  "environment": {
+    "platform": "macOS arm64",
+    "node": "24.19.0",
+    "pnpm": "10.13.1",
+    "hindsight": "provider-lab official GHCR standalone image at 127.0.0.1:18889, embeddings and reranker local, LLM unused",
+    "proxy": "counting proxy on 127.0.0.1:19660 logging every request (scratchpad script, not committed)",
+    "banks": {
+      "wp434-legacy": "seeded directly through the Hindsight API with two memories, as another tool would write them",
+      "wp434-dsh": "empty bank for DSH writes"
+    },
+    "bankConfig": {
+      "retain_extraction_mode": "chunks",
+      "enable_observations": false
+    },
+    "mutationRule": "a request to a bank whose method is not GET, except POST /memories/recall",
+    "order": "branch first, then main, against the same banks"
+  },
+  "runs": {
+    "branch": {
+      "ranAt": "2026-10-23T15:52:28.093Z",
+      "spaces": {
+        "legacy": {
+          "id": "hindsight-d3eeea3b09da68fe54f8a41e",
+          "writePolicy": "read-only"
+        },
+        "dsh": {
+          "id": "hindsight-780cf951ce33cb1812c6c1b6",
+          "writePolicy": "writable"
+        }
+      },
+      "banksBefore": {
+        "legacy": {
+          "memories": 2,
+          "operations": 0
+        },
+        "dsh": {
+          "memories": 2,
+          "operations": 4
+        }
+      },
+      "banksAfter": {
+        "legacy": {
+          "memories": 2,
+          "operations": 0
+        },
+        "dsh": {
+          "memories": 4,
+          "operations": 8
+        }
+      },
+      "mutationTotals": {
+        "wp434-legacy": 0,
+        "wp434-dsh": 2
+      },
+      "steps": [
+        {
+          "step": "remember naming the legacy space",
+          "outcome": "refused",
+          "error": "Memory Space wp434 legacy bank (hindsight-d3eeea3b09da68fe54f8a41e) is read only: it is recalled and takes no writes, so nothing was written. Choose a writable space.",
+          "hindsightMutations": {
+            "wp434-legacy": [],
+            "wp434-dsh": []
+          }
+        },
+        {
+          "step": "rememberMany naming the legacy space",
+          "outcome": "refused",
+          "error": "Memory Space wp434 legacy bank (hindsight-d3eeea3b09da68fe54f8a41e) is read only: it is recalled and takes no writes, so nothing was written. Choose a writable space.",
+          "hindsightMutations": {
+            "wp434-legacy": [],
+            "wp434-dsh": []
+          }
+        },
+        {
+          "step": "forget a legacy memory",
+          "outcome": "refused",
+          "error": "Memory Space wp434 legacy bank (hindsight-d3eeea3b09da68fe54f8a41e) is read only: it is recalled and takes no writes, so nothing was written. Choose a writable space.",
+          "hindsightMutations": {
+            "wp434-legacy": [],
+            "wp434-dsh": []
+          }
+        },
+        {
+          "step": "capture naming no space, the legacy space the only active one",
+          "outcome": "refused",
+          "error": "no active memory space takes writes: wp434 legacy bank (hindsight-d3eeea3b09da68fe54f8a41e) is read only",
+          "hindsightMutations": {
+            "wp434-legacy": [],
+            "wp434-dsh": []
+          }
+        },
+        {
+          "step": "remember naming the DSH space",
+          "outcome": "written",
+          "completion": "accepted",
+          "receiptAction": "queued",
+          "hindsightMutations": {
+            "wp434-legacy": [],
+            "wp434-dsh": [
+              "POST /memories 200"
+            ]
+          }
+        },
+        {
+          "step": "remember naming no space, both active",
+          "outcome": "written",
+          "completion": "accepted",
+          "receiptAction": "queued",
+          "hindsightMutations": {
+            "wp434-legacy": [],
+            "wp434-dsh": [
+              "POST /memories 200"
+            ]
+          }
+        },
+        {
+          "step": "recall across both spaces",
+          "outcome": "read",
+          "hindsightMutations": {
+            "wp434-legacy": [],
+            "wp434-dsh": []
+          },
+          "results": [
+            {
+              "space": "wp434-legacy",
+              "content": "Legacy fact (wp434): the Orion billing bank predates DSH and is still written by the legac"
+            },
+            {
+              "space": "wp434-legacy",
+              "content": "Legacy decision (wp434): the Orion service deploys only after a green canary build."
+            },
+            {
+              "space": "wp434-dsh",
+              "content": "wp434 fix: the Orion team moved deploy reviews to Thursdays."
+            }
+          ]
+        }
+      ]
+    },
+    "main": {
+      "ranAt": "2026-10-23T15:53:07.266Z",
+      "spaces": {
+        "legacy": {
+          "id": "hindsight-d3eeea3b09da68fe54f8a41e",
+          "writePolicy": "writable"
+        },
+        "dsh": {
+          "id": "hindsight-780cf951ce33cb1812c6c1b6",
+          "writePolicy": "writable"
+        }
+      },
+      "banksBefore": {
+        "legacy": {
+          "memories": 2,
+          "operations": 0
+        },
+        "dsh": {
+          "memories": 4,
+          "operations": 8
+        }
+      },
+      "banksAfter": {
+        "legacy": {
+          "memories": 4,
+          "operations": 8
+        },
+        "dsh": {
+          "memories": 5,
+          "operations": 10
+        }
+      },
+      "mutationTotals": {
+        "wp434-legacy": 4,
+        "wp434-dsh": 1
+      },
+      "steps": [
+        {
+          "step": "remember naming the legacy space",
+          "outcome": "written",
+          "completion": "accepted",
+          "receiptAction": "queued",
+          "hindsightMutations": {
+            "wp434-legacy": [
+              "POST /memories 200"
+            ],
+            "wp434-dsh": []
+          }
+        },
+        {
+          "step": "rememberMany naming the legacy space",
+          "outcome": "written",
+          "completion": [
+            "accepted"
+          ],
+          "hindsightMutations": {
+            "wp434-legacy": [
+              "POST /memories 200"
+            ],
+            "wp434-dsh": []
+          }
+        },
+        {
+          "step": "forget a legacy memory",
+          "outcome": "written",
+          "completion": "committed",
+          "receiptAction": "invalidated",
+          "hindsightMutations": {
+            "wp434-legacy": [
+              "PATCH /memories/b640899a-3354-45be-847e-15d1ed17ab67 200"
+            ],
+            "wp434-dsh": []
+          }
+        },
+        {
+          "step": "capture naming no space, the legacy space the only active one",
+          "outcome": "written",
+          "completion": "accepted",
+          "receiptAction": "queued",
+          "hindsightMutations": {
+            "wp434-legacy": [
+              "POST /memories 200"
+            ],
+            "wp434-dsh": []
+          }
+        },
+        {
+          "step": "remember naming the DSH space",
+          "outcome": "written",
+          "completion": "accepted",
+          "receiptAction": "queued",
+          "hindsightMutations": {
+            "wp434-legacy": [],
+            "wp434-dsh": [
+              "POST /memories 200"
+            ]
+          }
+        },
+        {
+          "step": "remember naming no space, both active",
+          "outcome": "refused",
+          "error": "memoryBodyId is required when the number of active memory spaces is not exactly one",
+          "hindsightMutations": {
+            "wp434-legacy": [],
+            "wp434-dsh": []
+          }
+        },
+        {
+          "step": "recall across both spaces",
+          "outcome": "read",
+          "hindsightMutations": {
+            "wp434-legacy": [],
+            "wp434-dsh": []
+          },
+          "results": [
+            {
+              "space": "wp434-legacy",
+              "content": "Legacy decision (wp434): the Orion service deploys only after a green canary build."
+            },
+            {
+              "space": "wp434-dsh",
+              "content": "wp434 main: the Orion team moved deploy reviews to Thursdays."
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

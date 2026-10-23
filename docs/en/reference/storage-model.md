@@ -69,6 +69,7 @@ Sharing does not broadcast conversations or files. Mnemon-enabled agents can sha
     +-- runtime-index.json        # the runtime entries the last export carried; excluded from Mnemon Packs
     +-- review-ledger.json        # reconciliation proposals awaiting a decision; 0600; excluded from Mnemon Packs
     +-- memory-providers.json     # third-party connection control plane; 0600; excluded from Mnemon Packs
+    +-- memory-provider-write-policy.json  # the namespaces DSH does not write to; excluded from Mnemon Packs
     +-- sync-git.json             # Git sync configuration; 0600 when it holds a token; excluded from Mnemon Packs
     +-- sync/
         +-- git/                  # disposable Git mirror of the sync branch; never a Pack component
@@ -79,6 +80,7 @@ Sharing does not broadcast conversations or files. Mnemon-enabled agents can sha
 The files under `state/`:
 
 - `memory-providers.json` stores third-party endpoints, target URIs, identities, and optional credentials. Its mode is `0600`; the Host returns configured field names, never saved credential values.
+- `memory-provider-write-policy.json` lists the namespaces made [read only](../guides/memory-providers.md#read-only-spaces), each by the settings that name it (never a secret) or, for a Mnemon Native Store, its id. It exists only while one is read only. A file that cannot be read makes every space read only until it is fixed or removed; recall is unaffected.
 - `sync-git.json` holds the Git sync configuration: repository URL, branch, remote directory, commit identity, the automatic sync interval in minutes (`autoBackupMinutes`, `0` is off) and an optional token that HTTPS remotes use. It follows the same mode `0600` rule and the same redaction, and it is part of neither Config nor a Mnemon Pack.
 - The mirror under `sync/git` is a disposable Git work tree of the sync branch: push and pull work there so the storage root is never made a Git work tree, and deleting the mirror costs one fetch, never data. The mirror names the repository it was filled from in its own Git config (`mnemon.origin`) and is rebuilt for another one, so one repository's history never reaches another.
 - `sync/last-run.json` records when the last sync or merge finished, so the page can still say so after a restart.
@@ -258,6 +260,7 @@ Mnemon Native preserves `temporal`, `semantic`, `causal`, and `entity` relations
 | Documents | `documents/index.json` + managed Markdown | excerpts, search ranking, status aggregation |
 | Mnemon Native catalog | `data/.dsh-memory-bodies.json` + on-disk Stores | Web status aggregation |
 | Third-party connections | `state/memory-providers.json` | redacted provider capabilities and status |
+| Read-only namespaces | `state/memory-provider-write-policy.json` | `writePolicy` on each read-only space in the directory and status |
 | Git sync configuration | `state/sync-git.json` | `state/sync/git` mirror; the configured remote branch |
 | Machine identity | `state/machine.json`: the id, the name, and `labelSource` (`hostname` follows the host name, `custom` was typed) | the `machine` field of an export and of a sync status |
 | Cross-machine deletions | `state/tombstones.json` | `state/runtime-index.json`, which is what a later export diffs against |

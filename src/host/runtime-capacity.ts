@@ -197,9 +197,10 @@ export async function runtimeLocked(counters: SubagentCounters, context: Runtime
   // A Source that predates writeScope retains the narrower pinned read namespace.
   // An empty scope always denies every destination; never replace it with the live catalog.
   // A Mnemon Native space stays listed, and active, while its CLI is missing; it takes no writes then.
+  // A read-only space is recalled and takes no archive (#434).
   const ready = (body: MemorySpaceCatalog['items'][number]) => catalog.providers?.find(provider => provider.id === body.provider.id)?.serviceConfigured !== false
   const writable = (body: MemorySpaceCatalog['items'][number]) => (
-    body.active && body.providerEnabled !== false && body.provider.capabilities.remember === true && ready(body)
+    body.active && body.writePolicy !== 'read-only' && body.providerEnabled !== false && body.provider.capabilities.remember === true && ready(body)
     && (allowed === undefined || allowed.has(body.id))
   )
   const exact = (body: MemorySpaceCatalog['items'][number]) => body.provider.capabilities.writeMode === 'exact' && body.provider.capabilities.forget === true
@@ -210,7 +211,7 @@ export async function runtimeLocked(counters: SubagentCounters, context: Runtime
     const unsupported = writableBodies.map(body => `${body.id} (provider=${body.provider.id}, writeMode=${body.provider.capabilities.writeMode}, forget=${body.provider.capabilities.forget})`).join(', ')
     const reason = catalog.items.length === 0 ? 'Memory Space body-directory is empty'
       : allowed?.size === 0 ? 'current View write scope is empty'
-      : allowed !== undefined && catalog.items.some(body => body.active && body.providerEnabled !== false && body.provider.capabilities.remember && !allowed?.has(body.id)) && writableBodies.length === 0
+      : allowed !== undefined && catalog.items.some(body => body.active && body.writePolicy !== 'read-only' && body.providerEnabled !== false && body.provider.capabilities.remember && !allowed?.has(body.id)) && writableBodies.length === 0
         ? 'current View write scope excludes the active writable Memory Spaces'
         : writableBodies.length === 0 ? 'no active writable Memory Space in the authorized scope' : 'authorized destinations lack exact writes or safe forget'
     // With no Memory Space at all that could take this archive, MEMORY.md archives

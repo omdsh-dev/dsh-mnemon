@@ -73,6 +73,7 @@ button.readSourceCard:hover { background: var(--mn-hover); }
 .bodyCard[data-status-loading] .bodyHealth { color: var(--mn-faint); }
 .mnemonDefaultBadge { width: fit-content; padding: 1px 8px; border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 10%, transparent); font-size: 11px; font-weight: 500; line-height: 17px; white-space: nowrap; }
 .newSpaceBadge { width: fit-content; padding: 1px 8px; border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 10%, transparent); font-size: 11px; font-weight: 500; line-height: 17px; white-space: nowrap; }
+.readOnlyBadge { width: fit-content; padding: 1px 8px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; font-weight: 500; line-height: 17px; white-space: nowrap; }
 /* What asking the Providers again found: one row, as a write receipt reads. */
 .rediscoveryNotice { display: flex; min-width: 0; align-items: flex-start; gap: 8px 12px; margin: 0 0 12px; padding: 10px 12px; border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-module-platform); }
 .rediscoveryNotice > div { display: grid; flex: 1 1 auto; min-width: 0; gap: 2px; }
@@ -156,17 +157,27 @@ button.readSourceCard:hover { background: var(--mn-hover); }
 .strategyLoading { position: relative; display: flex; min-height: 88px; align-items: center; justify-content: center; border-radius: var(--dsw-radius-md); color: var(--mn-faint); background: var(--mn-fill); font-size: 12px; }
 .strategyLoading .sectionSpinner { top: 10px; right: 10px; }
 /* Choice tiles, as the DSH appearance choice: hairline, filled when selected. */
-.placementMode { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; border: 0; }
-.placementMode legend { margin-bottom: 6px; color: var(--mn-muted); font-size: 12px; font-weight: 500; line-height: 18px; }
-.placementMode label { position: relative; display: grid; min-width: 0; grid-template-columns: 16px minmax(0, 1fr); align-items: center; gap: 10px; padding: 12px; border: .5px solid var(--mn-line-strong); border-radius: var(--dsw-radius-md); cursor: pointer; }
-.placementMode label:hover { background: var(--mn-hover); }
-.placementMode label[data-selected] { border-color: var(--mn-field-line); background: var(--mn-fill); }
-.placementMode label[data-disabled] { cursor: not-allowed; opacity: .5; }
-.placementMode input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
-.placementMode span { display: grid; gap: 2px; }
-.placementMode strong { color: var(--mn-text); font-size: 13px; font-weight: 500; line-height: 20px; }
+.placementMode,
+.writePolicy { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; border: 0; }
+.placementMode legend,
+.writePolicy legend { margin-bottom: 6px; color: var(--mn-muted); font-size: 12px; font-weight: 500; line-height: 18px; }
+.placementMode label,
+.writePolicy label { position: relative; display: grid; min-width: 0; grid-template-columns: 16px minmax(0, 1fr); align-items: center; gap: 10px; padding: 12px; border: .5px solid var(--mn-line-strong); border-radius: var(--dsw-radius-md); cursor: pointer; }
+.placementMode label:hover,
+.writePolicy label:hover { background: var(--mn-hover); }
+.placementMode label[data-selected],
+.writePolicy label[data-selected] { border-color: var(--mn-field-line); background: var(--mn-fill); }
+.placementMode label[data-disabled],
+.writePolicy label[data-disabled] { cursor: not-allowed; opacity: .5; }
+.placementMode input,
+.writePolicy input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.placementMode span,
+.writePolicy span { display: grid; gap: 2px; }
+.placementMode strong,
+.writePolicy strong { color: var(--mn-text); font-size: 13px; font-weight: 500; line-height: 20px; }
 .placementMode strong em { margin-left: 6px; padding: 1px 8px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; font-style: normal; font-weight: 500; line-height: 17px; }
-.placementMode small { color: var(--mn-faint); font-size: 12px; line-height: 18px; }
+.placementMode small,
+.writePolicy small { color: var(--mn-faint); font-size: 12px; line-height: 18px; }
 .placementPolicy { display: grid; gap: 10px; margin: 0; padding: 12px 14px; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-md); }
 .placementPolicyHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .placementPolicyHeading > div { display: grid; gap: 2px; }
@@ -226,6 +237,7 @@ button.readSourceCard:hover { background: var(--mn-hover); }
 [data-selected] > .choiceControl[data-kind='radio']::after { width: 6px; height: 6px; border-radius: 50%; content: ''; background: var(--dsw-alias-label-primary-foreground); }
 /* Keyboard focus only: a dialog that focuses its first choice on open shows no ring. */
 .placementMode label:has(input:focus-visible),
+.writePolicy label:has(input:focus-visible),
 .providerChoice label:has(input:focus-visible),
 .capabilityRules label:has(input:focus-visible),
 .placementCandidates label:has(input:focus-visible) { outline: var(--dsw-focus-ring-width, 2px) solid var(--mn-focus); outline-offset: 1px; }
@@ -487,6 +499,7 @@ button.readSourceCard:hover { background: var(--mn-hover); }
   .bodyDirectoryControls { flex-wrap: wrap; justify-content: flex-start; padding-right: 0; }
   .createIdentityGrid,
 .placementMode,
+.writePolicy,
 .placementRuleGrid,
 .placementCandidates,
 .providerChoice,

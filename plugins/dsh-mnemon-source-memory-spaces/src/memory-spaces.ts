@@ -18,6 +18,7 @@ import type {
   MemoryProviderConnection,
   MemoryProviderId,
   MemorySpaceMetadataUpdate,
+  MemorySpaceWritePolicy,
   OpenVikingSpaceConnection,
   UpdateMemorySpaceRequest,
 } from './contracts.ts'
@@ -33,6 +34,9 @@ const PROVIDER_ID_PATTERN = /^[a-z][a-z0-9-]{0,127}$/u
 const DISCONNECTS_VERSION = 1
 /** Disconnected namespaces remembered per Provider; the oldest go first past this. */
 const MAX_DISCONNECTED = 1_000
+const WRITE_POLICY_VERSION = 1
+/** Read-only namespaces remembered per Provider; the oldest go first past this. */
+const MAX_READ_ONLY = 1_000
 /** Settings whose value can name a namespace: a bank, workspace, user, tag, URI or folder. */
 const IDENTITY_INPUTS: ReadonlySet<MemoryProviderConfigField['input']> = new Set(['text', 'url', 'path'])
 
@@ -57,6 +61,42 @@ interface DisconnectedNamespace {
 interface DisconnectsFile {
   version: typeof DISCONNECTS_VERSION
   providers: Partial<Record<MemoryProviderId, DisconnectedNamespace[]>>
+}
+
+/**
+ * A namespace a person made read only (#434). It is named as a disconnect is, by the externalId
+ * its Provider reported and the settings that name it (defaults filled in, never a secret), or,
+ * when no setting names it, by the space it was set on. Any space that names it the same way is
+ * read only too, so a space made by hand for the same bank, a reconnect or a rediscovery gains no
+ * write authority.
+ */
+interface ReadOnlyNamespace {
+  spaceId?: string
+  externalId?: string
+  identity?: Record<string, string>
+}
+
+/** Read-only namespaces, kept beside the Provider registry for the reason disconnects are. */
+interface WritePolicyFile {
+  version: typeof WRITE_POLICY_VERSION
+  readOnly: Partial<Record<MemoryProviderId, ReadOnlyNamespace[]>>
+}
+
+/** Read-only namespaces as a file holds them: sound entries only, newest last. */
+function storedReadOnly(value: unknown): ReadOnlyNamespace[] {
+  if (!Array.isArray(value)) return []
+  const text = (item: unknown, max: number): string | undefined => typeof item === 'string' && item.trim() !== '' && item.trim().length <= max ? item.trim() : undefined
+  return value.flatMap((item): ReadOnlyNamespace[] => {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) return []
+    const fields = item as Record<string, unknown>
+    const spaceId = text(fields.spaceId, 300)
+    const externalId = text(fields.externalId, 2000)
+    const identity = typeof fields.identity === 'object' && fields.identity !== null && !Array.isArray(fields.identity)
+      ? Object.fromEntries(Object.entries(fields.identity as Record<string, unknown>).flatMap(([key, entry]) => /^[a-z][a-zA-Z0-9_-]{0,127}$/u.test(key) && text(entry, 8_000) !== undefined ? [[key, text(entry, 8_000)!]] : []))
+      : {}
+    const entry = { ...(spaceId === undefined ? {} : { spaceId }), ...(externalId === undefined ? {} : { externalId }), ...(Object.keys(identity).length === 0 ? {} : { identity }) }
+    return Object.keys(entry).length === 0 ? [] : [entry]
+  }).slice(-MAX_READ_ONLY)
 }
 
 /** Disconnected namespaces as a file holds them: sound entries only, newest last. */
@@ -269,12 +309,17 @@ export class MemorySpaceRegistry {
   readonly providerRegistryPath: string
   /** The namespaces a person disconnected, which asking a Provider again leaves out (#373). */
   readonly disconnectsPath: string
+  /** The namespaces a person made read only, which take no writes from DSH (#434). */
+  readonly writePolicyPath: string
   private refreshing = false
   private readonly state: {
     spaces: StoredMemorySpace[]
     services: Partial<Record<MemoryProviderId, MemoryProviderConnection>>
     serviceEnabled: Partial<Record<MemoryProviderId, boolean>>
     disconnected: Partial<Record<MemoryProviderId, DisconnectedNamespace[]>>
+    readOnly: Partial<Record<MemoryProviderId, ReadOnlyNamespace[]>>
+    /** Why the write-policy file could not be read; every space is then read only. */
+    writePolicyProblem?: string
     diskRevision?: string
   }
 
@@ -288,12 +333,13 @@ export class MemorySpaceRegistry {
     private readonly providerCatalog: MemoryProviderCatalog = EMPTY_MEMORY_PROVIDER_CATALOG,
     sharedState?: MemorySpaceRegistry['state'],
   ) {
-    this.state = sharedState ?? { spaces: [], services: {}, serviceEnabled: {}, disconnected: {} }
+    this.state = sharedState ?? { spaces: [], services: {}, serviceEnabled: {}, disconnected: {}, readOnly: {} }
     this.directory = join(runner.effectiveDataDir(), MEMORY_SPACES_DIRECTORY)
     // Keep the published v1 filename and serialized bodies key for existing stores and Packs.
     this.registryPath = join(this.directory, MEMORY_SPACE_REGISTRY_FILE)
     this.providerRegistryPath = join(runner.effectiveDataDir(), 'state', MEMORY_PROVIDER_REGISTRY_FILE)
     this.disconnectsPath = join(runner.effectiveDataDir(), 'state', 'memory-provider-disconnects.json')
+    this.writePolicyPath = join(runner.effectiveDataDir(), 'state', 'memory-provider-write-policy.json')
     if (sharedState === undefined) this.reload()
   }
 
@@ -616,6 +662,88 @@ export class MemorySpaceRegistry {
     return reported.whole !== undefined && this.wholeConnection(providerId, service, held.connection) === reported.whole
   }
 
+  /** Why every space is read only because the write-policy file cannot be read, if it cannot. */
+  writePolicyProblem(): string | undefined {
+    this.refreshIfChanged()
+    return this.state.writePolicyProblem
+  }
+
+  /** What names a space's namespace for its write policy: its settings with defaults filled in. */
+  private writeIdentity(body: StoredMemorySpace): Record<string, string> | undefined {
+    if (this.isNative(body.providerId)) return undefined
+    let connection = body.connection
+    try {
+      connection = this.providerCatalog.normalizeMemory(body.providerId, body.connection ?? {})
+    } catch {
+      // A space whose settings no longer validate is named by what it holds.
+    }
+    return this.namespaceIdentity(body.providerId, connection)
+  }
+
+  /**
+   * Whether a read-only entry names this space's namespace: the same externalId, or every setting
+   * that names the namespace, so a new space or a rediscovered mount for it is read only too, and a
+   * space whose settings now name another namespace is not. A wildcard (`*`) in the space's own
+   * settings reads every value, the protected one included, so it is read only too. A namespace
+   * with no such settings, a Mnemon Native Store among them, is named by its space id.
+   */
+  private namesSpace(entry: ReadOnlyNamespace, body: StoredMemorySpace, identity: Record<string, string> | undefined): boolean {
+    if (entry.externalId !== undefined && body.externalId !== undefined && entry.externalId === body.externalId) return true
+    if (entry.identity === undefined) return entry.spaceId !== undefined && entry.spaceId === body.id
+    const wildcards = new Set(Object.entries(body.connection ?? {}).filter(([, value]) => typeof value === 'string' && value.trim() === '*').map(([key]) => key))
+    return Object.entries(entry.identity).every(([key, value]) => wildcards.has(key) || identity?.[key] === value)
+  }
+
+  /** Whether a space takes no writes now, by the policy on disk; an id this directory does not hold is left to the write to refuse. */
+  isReadOnly(id: string): boolean {
+    this.refreshIfChanged()
+    const body = this.spaces.find(entry => entry.id === id && this.providerCatalog.has(entry.providerId))
+    return body !== undefined && this.readOnly(body)
+  }
+
+  private readOnly(body: StoredMemorySpace): boolean {
+    if (this.state.writePolicyProblem !== undefined) return true
+    const entries = this.state.readOnly[body.providerId]
+    if (entries === undefined || entries.length === 0) return false
+    const identity = this.writeIdentity(body)
+    return entries.some(entry => this.namesSpace(entry, body, identity))
+  }
+
+  /**
+   * Make a space's namespace read only, or writable again (#434). The policy follows the
+   * namespace, not this local projection: every space that names it changes with it. Recall,
+   * activation and the space's settings are unchanged. A disconnect keeps the entry, so mounting
+   * the namespace again does not make it writable.
+   */
+  setWritePolicy(id: string, policy: MemorySpaceWritePolicy): MemorySpace {
+    this.refreshIfChanged()
+    const normalized = validateMemorySpaceId(id)
+    const body = this.spaces.find(entry => entry.id === normalized && this.providerCatalog.has(entry.providerId))
+    if (body === undefined) throw new Error(`unknown memory space: ${normalized}`)
+    if (policy !== 'writable' && policy !== 'read-only') throw new Error(`unsupported write policy: ${String(policy)}`)
+    if (this.state.writePolicyProblem !== undefined) throw new Error(this.state.writePolicyProblem)
+    const entries = this.state.readOnly[body.providerId] ?? []
+    const identity = this.writeIdentity(body)
+    if (policy === 'read-only') {
+      if (!this.readOnly(body)) {
+        this.state.readOnly[body.providerId] = [...entries, {
+          spaceId: body.id,
+          ...(body.externalId === undefined ? {} : { externalId: body.externalId }),
+          ...(identity === undefined ? {} : { identity }),
+        }].slice(-MAX_READ_ONLY)
+        this.saveWritePolicy()
+      }
+    } else {
+      const kept = entries.filter(entry => !this.namesSpace(entry, body, identity))
+      if (kept.length !== entries.length) {
+        if (kept.length === 0) delete this.state.readOnly[body.providerId]
+        else this.state.readOnly[body.providerId] = kept
+        this.saveWritePolicy()
+      }
+    }
+    return this.view(body)
+  }
+
   /** Remember a namespace a person disconnected, so asking its Provider again leaves it out. */
   private rememberDisconnected(providerId: MemoryProviderId, body: StoredMemorySpace): void {
     const connection = body.connection === undefined ? {} : this.providerCatalog.publicScoped(providerId, 'memory', body.connection).settings
@@ -851,6 +979,8 @@ export class MemorySpaceRegistry {
       this.services = {}
       this.serviceEnabled = {}
       this.disconnected = {}
+      this.state.readOnly = {}
+      delete this.state.writePolicyProblem
       this.loadAndReconcile()
       this.state.diskRevision = this.diskRevision()
     } finally { this.refreshing = false }
@@ -858,7 +988,7 @@ export class MemorySpaceRegistry {
 
   private diskRevision(): string {
     if (!this.persistent) return 'ephemeral'
-    return [this.registryPath, this.providerRegistryPath, this.disconnectsPath].map(path => {
+    return [this.registryPath, this.providerRegistryPath, this.disconnectsPath, this.writePolicyPath].map(path => {
       try {
         const stat = statSync(path, { bigint: true })
         return `${stat.ino}:${stat.mtimeNs}:${stat.size}`
@@ -1018,6 +1148,23 @@ export class MemorySpaceRegistry {
         // An unreadable list remembers nothing; the next disconnect writes it again.
       }
     }
+    if (this.persistent && existsSync(this.writePolicyPath)) {
+      // Fail closed: a file that cannot be read may hold any space, so every space is read only
+      // until it is fixed or removed. Recall is unaffected.
+      try {
+        const parsed = JSON.parse(readFileSync(this.writePolicyPath, 'utf8')) as Partial<WritePolicyFile>
+        if (parsed.version !== WRITE_POLICY_VERSION || typeof parsed.readOnly !== 'object' || parsed.readOnly === null || Array.isArray(parsed.readOnly)) {
+          this.state.writePolicyProblem = `Memory Space write policy ${this.writePolicyPath} has an unsupported format; fix or remove it`
+        } else {
+          for (const [providerId, entries] of Object.entries(parsed.readOnly)) {
+            const remembered = storedReadOnly(entries)
+            if (storedProviderId(providerId) && remembered.length > 0) this.state.readOnly[providerId] = remembered
+          }
+        }
+      } catch (error) {
+        this.state.writePolicyProblem = `Memory Space write policy ${this.writePolicyPath} is unreadable (${error instanceof Error ? error.message : String(error)}); fix or remove it`
+      }
+    }
     const retainedBodies = this.spaces.filter(body => !this.providerCatalog.has(body.providerId)
       || this.isNative(body.providerId)
       || this.providerServiceEnabled(body.providerId))
@@ -1097,7 +1244,7 @@ export class MemorySpaceRegistry {
       capabilities: descriptor.capabilities,
     }
     const { providerId: _providerId, externalId: _externalId, metadataSource: _metadataSource, connection: _connection, openViking: _openViking, ...metadata } = body
-    return { ...metadata, dbPath: nativeProvider ? provider.location : '', provider }
+    return { ...metadata, dbPath: nativeProvider ? provider.location : '', provider, ...(this.readOnly(body) ? { writePolicy: 'read-only' as const } : {}) }
   }
 
   private save(): void {
@@ -1130,7 +1277,18 @@ export class MemorySpaceRegistry {
     this.state.diskRevision = this.diskRevision()
   }
 
-  private writeRegistry(path: string, file: NativeRegistryFile | ProviderRegistryFile | DisconnectsFile): void {
+  private saveWritePolicy(): void {
+    if (!this.persistent) return
+    const readOnly = Object.fromEntries(Object.entries(this.state.readOnly).filter(([, entries]) => entries !== undefined && entries.length > 0))
+    if (Object.keys(readOnly).length === 0) rmSync(this.writePolicyPath, { force: true })
+    else {
+      mkdirSync(dirname(this.writePolicyPath), { recursive: true, mode: 0o700 })
+      this.writeRegistry(this.writePolicyPath, { version: WRITE_POLICY_VERSION, readOnly })
+    }
+    this.state.diskRevision = this.diskRevision()
+  }
+
+  private writeRegistry(path: string, file: NativeRegistryFile | ProviderRegistryFile | DisconnectsFile | WritePolicyFile): void {
     const temporary = join(dirname(path), `.${basename(path)}.${process.pid}.tmp`)
     writeFileSync(temporary, `${JSON.stringify(file, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
     renameSync(temporary, path)

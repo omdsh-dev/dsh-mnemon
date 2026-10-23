@@ -1,10 +1,10 @@
 {
   "clientDebtCleanup": {
     "page": {
-      "rules": 1059,
-      "rulesSha256": "459891bfd5b1123ed9a4f1197d355df0933ece10130ac4a0b47712155c4a1262",
-      "classes": 289,
-      "classesSha256": "59713c331c11a7852d468532bb6c9c8b5dd1ce2ceb583f0d00dfe643ff9992b3"
+      "rules": 1072,
+      "rulesSha256": "fa22c75f3c478fd57a8b687a9f707bfcf14c6adc80c59e0a1fe4ee55c54666dd",
+      "classes": 291,
+      "classesSha256": "854d4125ffc9fa5002588cd786322e469ff6b5311536c8f3ac9015c5cb176647"
     },
     "sidebar": {
       "rules": 116,
@@ -13,12 +13,12 @@
       "classesSha256": "1023db19fca62acf746f435b5185a5247017e30b0c2f5cf1c9be98e3415eb793"
     },
     "zh": {
-      "keys": 1376,
-      "sha256": "b759c0d00227b01bced80f4f0382217440cb93a10684217d54b2695630edcd53"
+      "keys": 1382,
+      "sha256": "9b3b30a8fc92aaf4ec58f67113a41be3247d2733f72868b3f1a531ec8d0dbf1b"
     },
     "en": {
-      "keys": 1376,
-      "sha256": "33d3e6f3ee5b157b7bfd73370e8a16059eb563241a4012299b65489d2dc5fd35"
+      "keys": 1382,
+      "sha256": "e8d4699aa65de58c7f40901f1962c801ca57dc135abc95de3853659c55c07b4d"
     }
   }
 }

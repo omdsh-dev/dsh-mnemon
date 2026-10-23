@@ -278,6 +278,12 @@ async function manageMemorySpaces(service: MemorySpacesService, request: MemoryS
       const parsed = updateSpaceRequest(request.input)
       return managementResult(service, service.updateSpace(parsed.memoryBodyId, parsed.request))
     }
+    // A person's choice on the Memory Spaces page; no Agent tool reaches it (#434).
+    case 'body-write-policy': {
+      const policy = text(input.policy, 'policy', 20)
+      if (policy !== 'writable' && policy !== 'read-only') throw new Error(`unsupported write policy: ${String(policy)}`)
+      return managementResult(service, service.setWritePolicy(text(input.memoryBodyId, 'memoryBodyId', 300)!, policy))
+    }
     case 'remember-many': {
       if (!Array.isArray(input.requests) || input.requests.length > 1_000) throw new Error('remember-many requires at most 1000 requests')
       return managementResult(service, await service.rememberMany(input.requests.map(value => record(value, 'remember request') as unknown as RememberRequest), request.signal))
@@ -503,8 +509,9 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
         const actionIds: string[] = service.config.writeEnabled ? [
           ...(providerReady ? ['manage-spaces'] : []),
           ...(canRemember && providerReady ? ['remember'] : []),
-          ...(active.some(body => body.provider.capabilities.link) ? ['link'] : []),
-          ...(active.some(body => body.provider.capabilities.forget) ? ['forget'] : []),
+          // A link or a forget goes to a space that holds the memory, so a read-only one offers neither (#434).
+          ...(active.some(body => body.provider.capabilities.link && body.writePolicy !== 'read-only') ? ['link'] : []),
+          ...(active.some(body => body.provider.capabilities.forget && body.writePolicy !== 'read-only') ? ['forget'] : []),
         ] : []
         const capabilities: MemoryCapability[] = ['status', 'project']
         if (routeIds.includes('recall')) capabilities.push('recall')
@@ -518,7 +525,8 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
           hints: {
             activeCount: active.length, providerCount: new Set(active.map(body => body.provider.id)).size,
             // Spaces that can take a MEMORY.md archive or a Document's index: exact writes and safe forget.
-            archivableCount: active.filter(body => body.provider.capabilities.remember && body.provider.capabilities.forget && body.provider.capabilities.writeMode === 'exact').length,
+            archivableCount: active.filter(body => body.writePolicy !== 'read-only'
+              && body.provider.capabilities.remember && body.provider.capabilities.forget && body.provider.capabilities.writeMode === 'exact').length,
           },
         }
       },
@@ -641,8 +649,14 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
         } else if (request.offer.sourceActionId === 'remember') {
           bodyId = text(input.memoryBodyId, 'memoryBodyId', 300, false)
           if (bodyId === undefined) {
-            const defaults = [...new Set([...allowedBodies, ...created])]
-            if (defaults.length !== 1) throw new Error('remember requires an explicit Memory Space in this View scope')
+            // A read-only space is never the default destination (#434).
+            const candidates = [...new Set([...allowedBodies, ...created])]
+            const defaults = candidates.filter(id => service.takesWrites(id))
+            if (defaults.length !== 1) {
+              throw new Error(defaults.length === 0 && candidates.length > 0
+                ? 'remember requires a writable Memory Space: the ones in this View scope are read only; name a writable one, or create one'
+                : 'remember requires an explicit Memory Space in this View scope')
+            }
             bodyId = defaults[0]!
           }
           if (!writableBodies.includes(bodyId)) throw new Error('remember destination is outside this View scope')
@@ -695,7 +709,7 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
             const viewId = text(scope.viewId, 'write scope viewId', 300)!
             const grant = record(scope.grant ?? null, 'Memory Spaces write scope grant') as unknown as MemoryReadGrant
             return managementResult(service, { ...service.spaceDirectory(), writeScope: {
-              viewId, sourceInstanceKey: context.sourceInstanceKey, memoryBodyIds: writeBodies(viewId, grant),
+              viewId, sourceInstanceKey: context.sourceInstanceKey, memoryBodyIds: writeBodies(viewId, grant).filter(id => service.takesWrites(id)),
             } })
           }
         }
