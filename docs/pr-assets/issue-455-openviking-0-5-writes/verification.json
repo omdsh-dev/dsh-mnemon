@@ -1,0 +1,164 @@
+{
+  "issue": 455,
+  "date": "2026-10-23",
+  "baseline": "main a7e3bc54",
+  "environment": {
+    "os": "macOS arm64 (Darwin 24.6.0)",
+    "node": "24.19.0",
+    "pnpm": "10.13.1",
+    "servers": {
+      "openviking-0.5.1.1": "PyPI wheel openviking==0.5.1.1 on Python 3.12.13, loopback 127.0.0.1, dev auth, text-embedding-ada-002 (1536 dimensions)",
+      "openviking-0.4.21": "Docker image v0.4.21 on loopback, API key auth, text-embedding-ada-002 (1536 dimensions)"
+    }
+  },
+  "serverModels": {
+    "WriteContentRequest": {
+      "0.4.16": [
+        "uri",
+        "content",
+        "mode",
+        "wait",
+        "timeout",
+        "telemetry",
+        "processing_mode"
+      ],
+      "0.4.21": [
+        "uri",
+        "content",
+        "mode",
+        "wait",
+        "timeout",
+        "telemetry",
+        "processing_mode",
+        "tags",
+        "tag_mode"
+      ],
+      "0.5.0": [
+        "uri",
+        "content",
+        "mode",
+        "wait",
+        "timeout",
+        "telemetry",
+        "processing_mode",
+        "tags",
+        "tag_mode",
+        "acl"
+      ],
+      "0.5.1.1": [
+        "uri",
+        "content",
+        "mode",
+        "wait",
+        "telemetry",
+        "processing_mode",
+        "tags",
+        "tag_mode",
+        "acl"
+      ],
+      "0.5.2": [
+        "uri",
+        "content",
+        "mode",
+        "wait",
+        "telemetry",
+        "processing_mode",
+        "tags",
+        "tag_mode",
+        "acl",
+        "edit_source"
+      ],
+      "extra": "forbid in every release"
+    },
+    "written_bytes": {
+      "0.4.21": "len(content.encode(\"utf-8\"))",
+      "0.5.1.1": "len(final_bytes): the text plus the reserved MEMORY_FIELDS trailer"
+    }
+  },
+  "probe0511": {
+    "requestedBytes": 26,
+    "reportedWrittenBytes": 69,
+    "storedFileBytes": 69,
+    "trailerBytes": 43,
+    "readbackEqualsText": true
+  },
+  "integration": {
+    "0.5.1.1": {
+      "main": "fails: OpenViking refused the write ... body.timeout: Extra inputs are not permitted",
+      "timeoutRemovedOnly": "fails: OpenViking write was not verified ... content API did not confirm this exact memory and completed indexing (written_bytes counts the trailer)",
+      "fix": {
+        "receipt": {
+          "action": "stored",
+          "vectorStatus": "complete",
+          "tagsApplied": true,
+          "writtenBytes": 137
+        },
+        "checks": {
+          "exactReadback": true,
+          "recalled": true,
+          "browsed": true,
+          "deleted": true
+        },
+        "requests": [
+          "POST /api/v1/content/write",
+          "GET /api/v1/content/read",
+          "POST /api/v1/content/set_tags",
+          "POST /api/v1/search/find",
+          "GET /api/v1/content/read",
+          "GET /api/v1/content/read",
+          "GET /api/v1/content/read",
+          "GET /api/v1/content/read",
+          "GET /api/v1/fs/ls",
+          "GET /api/v1/content/read",
+          "GET /api/v1/content/read",
+          "GET /api/v1/content/read",
+          "GET /api/v1/content/read",
+          "DELETE /api/v1/fs",
+          "GET /api/v1/fs/ls",
+          "GET /api/v1/content/read",
+          "GET /api/v1/content/read",
+          "GET /api/v1/content/read"
+        ]
+      }
+    },
+    "0.4.21": {
+      "fix": {
+        "receipt": {
+          "action": "stored",
+          "vectorStatus": "complete",
+          "tagsApplied": true,
+          "writtenBytes": 137
+        },
+        "checks": {
+          "exactReadback": true,
+          "recalled": true,
+          "browsed": true,
+          "deleted": true
+        },
+        "requests": [
+          "POST /api/v1/content/write",
+          "GET /api/v1/content/read",
+          "POST /api/v1/content/set_tags",
+          "POST /api/v1/search/find",
+          "GET /api/v1/content/read",
+          "GET /api/v1/fs/ls",
+          "GET /api/v1/content/read",
+          "DELETE /api/v1/fs",
+          "GET /api/v1/fs/ls"
+        ]
+      }
+    }
+  },
+  "unitTests": {
+    "provider": {
+      "main": "4 failed, 81 passed, 1 skipped",
+      "fix": "85 passed, 1 skipped"
+    },
+    "failingOnMain": [
+      "writes the memory through the content API and returns an exact write receipt",
+      "writes only the fields OpenViking 0.5.1.1 accepts, then tags the memory in its own call (#353, #455)",
+      "accepts a byte count that includes OpenViking 0.5's trailer only when the text reads back exactly (#455)",
+      "bounds the write by the configured timeout without telling the server one (#455)"
+    ]
+  }
+}

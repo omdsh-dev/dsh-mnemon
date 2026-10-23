@@ -137,7 +137,7 @@ describe('standalone OpenViking data plane', () => {
 
     // The write carries only what OpenViking's content API accepts; the tags follow in their own call.
     expect(requests.map(request => request.path)).toEqual(['/api/v1/content/write', '/api/v1/content/set_tags'])
-    expect(Object.keys(requests[0]!.body).sort()).toEqual(['content', 'mode', 'timeout', 'uri', 'wait'])
+    expect(Object.keys(requests[0]!.body).sort()).toEqual(['content', 'mode', 'uri', 'wait'])
     expect(requests[0]?.body).toMatchObject({ mode: 'create', wait: true, content: '发布必须先通过灰度验证。' })
     expect(requests[1]?.body).toEqual({ uri: requests[0]?.body.uri, tags: ['source=mnemon', 'category=decision', 'importance=4'], mode: 'replace' })
     expect(String(requests[0]?.body.uri)).toMatch(/^viking:\/\/user\/team\/memories\/experiences\/.*_decision-[0-9a-f-]{36}\.md$/u)

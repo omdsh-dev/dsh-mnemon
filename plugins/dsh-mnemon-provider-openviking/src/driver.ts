@@ -288,15 +288,18 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
     try {
       written = object(await this.request(body, '/api/v1/content/write', {
         method: 'POST',
-        // WriteContentRequest takes these fields alone and refuses any other with HTTP 400 (OpenViking 0.4.16, #353).
-        body: JSON.stringify({ uri, content: request.content, mode: 'create', wait: true, timeout: this.requestTimeoutMs / 1000 }),
+        // Every WriteContentRequest from 0.4.16 to 0.5.2 declares these four and refuses any other field with
+        // HTTP 400 (#353). 0.5.1 removed `timeout` (#455); the request's own deadline bounds the wait instead.
+        body: JSON.stringify({ uri, content: request.content, mode: 'create', wait: true }),
       }, { signal }))
     } catch (error) {
       if (refused(error)) throw new Error(`OpenViking refused the write at ${uri}; nothing was stored. ${error instanceof Error ? error.message : String(error)}`, { cause: error })
       throw new Error(`OpenViking write was not verified at ${uri}; remote content may remain. Inspect this URI before retrying. ${error instanceof Error ? error.message : String(error)}`, { cause: error })
     }
     try {
-      if (written?.uri !== uri || written.content_updated !== true || written.written_bytes !== writtenBytes
+      // 0.5.1 counts the reserved MEMORY_FIELDS trailer it appends to a memory file (#455); earlier releases
+      // count the text alone. Fewer bytes than the text is a short write; the exact readback below proves the rest.
+      if (written?.uri !== uri || written.content_updated !== true || (number(written.written_bytes) ?? -1) < writtenBytes
         || written.mode !== 'create' || written.context_type !== 'memory'
         || written.vector_status !== 'complete' || !['complete', 'skipped'].includes(String(written.semantic_status))
         || queueFailed(written.queue_status)) {

@@ -6,7 +6,8 @@ import { realpathSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { pathToFileURL } from 'node:url'
 
-export const WRITE_FIELDS = ['uri', 'content', 'mode', 'wait', 'timeout', 'telemetry', 'processing_mode']
+// The write fields every release from 0.4.16 to 0.5.2 accepts: 0.5.1 removed `timeout` (#455).
+export const WRITE_FIELDS = ['uri', 'content', 'mode', 'wait', 'telemetry', 'processing_mode']
 export const TAG_FIELDS = ['uri', 'tags', 'mode', 'recursive', 'telemetry']
 
 /** OpenViking 0.4.16's answer to a body with undeclared fields, or undefined when it has none. */
