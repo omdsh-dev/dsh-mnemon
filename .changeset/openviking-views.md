@@ -1,0 +1,7 @@
+---
+"dsh-mnemon-provider-openviking": patch
+---
+
+OpenViking spaces show their namespace beyond its memories (#453). **Browse** on an OpenViking space opens the `viking://` hierarchy of the space's user and of the account's resources and agent directories, **Resources** with previews of the images and attachments the server or OpenViking's own plugin stored, and **Server changes**: what OpenViking's memory extraction added, updated or deleted for each committed session, read from the `memory_diff.json` the server keeps. All of it is read through the space's own connection, and nothing is written. When OpenViking's official DeepSeek Harness plugin (`@openviking/dsh-memory-plugin`) runs in the profile, the space names it with its version, its automatic recall and capture, whether it skips task Agent sessions, and whether it serves the same server, account and user as the space. Its settings are read from its running service field by field, never its key, and nothing about it is changed.
+
+OpenViking 空间可以展示记忆之外的命名空间内容（#453）。在 OpenViking 空间上点**浏览**，可以查看该空间用户以及账号的资源与 agent 目录下的 `viking://` 层级；**资源**中可以预览服务端或 OpenViking 官方插件保存的图片与附件；**服务端改动**列出每个已提交会话中 OpenViking 的记忆抽取新增、更新或删除了什么，内容读取自服务端保存的 `memory_diff.json`。这些都通过空间自己的连接读取，不做任何写入。当 OpenViking 官方 DeepSeek Harness 插件（`@openviking/dsh-memory-plugin`）在配置中运行时，空间会写明它的版本、自动召回与自动捕获、是否跳过任务 Agent 会话，以及它是否与该空间使用同一服务端、账号与用户。它的设置从运行中的服务逐项读取，从不读取密钥，也不修改它的任何内容。
