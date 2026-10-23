@@ -12,6 +12,7 @@ import { finalizeLlmPlacement, prepareMemoryPlacement, rulesOnlyPlacement } from
 import { EMPTY_MEMORY_PROVIDER_CATALOG, MemoryProviderCatalog } from './providers/catalog.ts'
 import { type MemoryProviderAdapter, type ProviderSpaceStatus, type ProviderSearchResult } from './providers/adapter.ts'
 import { MemoryProviderAdapterRegistry } from './providers/registry.ts'
+import { boundIntegration, boundProviderView } from './provider-views.ts'
 import { lexicalRequiredMatchCount, lexicalSearchTokens, lexicalTokenMatchCount } from './search-tokens.ts'
 import { ENTITY_INDEX_LIST_LIMIT, ENTITY_RAIL_LIMIT, buildSpaceEntityIndex, memoriesWithEntity, mergeEntityCounts, type SpaceEntityIndex } from './entity-index.ts'
 import {
@@ -55,6 +56,8 @@ import {
   type MemoryGraphSnapshot,
   type MemoryListRequest,
   type MemoryListView,
+  type MemoryProviderViewRequest,
+  type MemoryProviderViewResult,
   type MnemonEmbeddingFill,
   type MnemonEmbeddingSpaceStatus,
   type MnemonEmbeddingStatus,
@@ -410,6 +413,14 @@ function cliFailure(error: unknown, reason: MnemonCliError['reason']): boolean {
   return error instanceof MnemonCliError && error.reason === reason
 }
 
+/** A Provider's status as a space shows it; what it says of a vendor plugin is bounded first. */
+function spaceStatus(status: ProviderSpaceStatus): ProviderSpaceStatus {
+  if (status.integration === undefined) return status
+  const { integration, ...rest } = status
+  const bounded = boundIntegration(integration)
+  return bounded === undefined ? rest : { ...rest, integration: bounded }
+}
+
 export class MemorySpacesService {
   readonly memorySpaces: MemorySpaceRegistry
   private readonly providers: Map<MemorySpace['provider']['id'], MemoryProviderAdapter>
@@ -504,7 +515,7 @@ export class MemorySpacesService {
           status = { healthy: false, error: error instanceof Error ? error.message : String(error) }
       }
       const { statusLoading: _statusLoading, ...metadata } = body
-      return { ...metadata, ...status }
+      return { ...metadata, ...spaceStatus(status) }
     }))
     return {
       ...directory,
@@ -828,8 +839,23 @@ export class MemorySpacesService {
       ...body,
       providerEnabled: true,
       mnemonDefault: this.isNativeSpace(body) && body.id === this.runner.persistedStore(),
-      ...status,
+      ...spaceStatus(status),
     }
+  }
+
+  /**
+   * One view the space's Provider declares, for the page: read through the Provider's own
+   * connection, whether or not the space is switched on, and bounded before it leaves the Source.
+   */
+  async providerView(id: string, request: MemoryProviderViewRequest, signal?: AbortSignal): Promise<MemoryProviderViewResult> {
+    const body = this.memorySpaces.list().find(candidate => candidate.id === id)
+    if (body === undefined) throw new Error(`unknown memory space: ${id}`)
+    if (!this.isNativeSpace(body) && !this.memorySpaces.providerServiceEnabled(body.provider.id)) throw new Error(`${body.provider.label} is disabled on the dsh-mnemon page under Plugins`)
+    const declared = this.providerCatalog.providers.find(provider => provider.id === body.provider.id)?.views ?? []
+    if (!declared.some(view => view.id === request.view)) throw new Error(`${body.provider.label} has no view ${JSON.stringify(request.view)}`)
+    const provider = this.providerFor(body)
+    if (provider.view === undefined) throw new Error(`${body.provider.label} has no view ${JSON.stringify(request.view)}`)
+    return boundProviderView(await provider.view(body, request, signal))
   }
 
   /** exclude: memoryKey()s to leave out before the quality policy selects. */

@@ -7,6 +7,8 @@ export type {
   MemoryProviderId, MemoryProviderConnection, MemoryProviderConnectionValue,
   MemoryProviderIcon, MemoryProviderConfigField, MemoryProviderConfigOption,
   MemoryProviderCapabilities, MemoryProviderDescriptor,
+  MemoryProviderView, MemoryProviderViewRequest, MemoryProviderViewResult, MemoryProviderViewEntry, MemoryProviderChange,
+  MemorySpaceIntegration,
 } from './contracts.ts'
 export * from './providers/adapter.ts'
 export { MEMORY_SPACE_PROVIDER_API_VERSION, defineMemorySpaceProvider, defineMemorySpaceProviderDefinition } from './providers/definitions.ts'

@@ -149,8 +149,80 @@ export interface MemoryProviderDescriptor {
   origin: 'native' | 'third-party'
   capabilities: MemoryProviderCapabilities
   fields: MemoryProviderConfigField[]
+  /** Views of the Provider's own data that the Memory Spaces page draws for its spaces. */
+  views?: MemoryProviderView[]
   /** Runtime projection: whether this scope has a usable saved service configuration. */
   serviceConfigured?: boolean
+}
+
+/**
+ * A view of a Provider's own data, beside the memories it shares with every Provider: `files`
+ * browses a hierarchy the Provider keeps, previews included; `changes` lists what the Provider
+ * itself changed and when. The Provider serves it through `view()`; the page draws it.
+ */
+export interface MemoryProviderView {
+  /** Stable within the Provider, such as `resources`. */
+  id: string
+  kind: 'files' | 'changes'
+  label: string
+  /** Optional Host-provided translation key; clients fall back to label. */
+  labelI18nKey?: string
+}
+
+/** What the page asks of a Provider view: the view, and for `files` the location to open. */
+export interface MemoryProviderViewRequest {
+  view: string
+  /** A location the view returned; omitted for the view's own start. */
+  uri?: string
+}
+
+/** One item a `files` view lists. */
+export interface MemoryProviderViewEntry {
+  uri: string
+  name: string
+  directory: boolean
+  size?: number
+  modifiedAt?: string
+  /** One line the Provider keeps about it, such as a generated abstract. */
+  summary?: string
+}
+
+/** One change a `changes` view lists: what one of the Provider's own runs changed. */
+export interface MemoryProviderChange {
+  id: string
+  at?: string
+  /** What made the change, such as the session the Provider committed. */
+  origin?: string
+  operations: Array<{ action: 'add' | 'update' | 'delete'; uri: string; kind?: string; before?: string; after?: string }>
+  /** Operations the Provider decided against. */
+  skipped?: number
+}
+
+export type MemoryProviderViewResult =
+  /** A location's contents, children first in the Provider's order. */
+  | { kind: 'entries'; uri: string; entries: MemoryProviderViewEntry[]; truncated?: boolean }
+  /** One file: its text, or an image as a data URL. */
+  | { kind: 'file'; uri: string; name: string; size?: number; mediaType?: string; text?: string; dataUrl?: string; summary?: string; truncated?: boolean }
+  /** The newest changes first. */
+  | { kind: 'changes'; changes: MemoryProviderChange[]; truncated?: boolean }
+
+/**
+ * A vendor's own DeepSeek Harness plugin found beside a space's Provider. Mnemon reads what it
+ * reports and changes nothing: its tools, recall and capture run as the vendor designed them.
+ */
+export interface MemorySpaceIntegration {
+  /** The vendor plugin's package, such as `@openviking/dsh-memory-plugin`. */
+  packageName: string
+  label: string
+  version?: string
+  /** Its effective automation, as the plugin reports it; absent when it does not say. */
+  automation: { autoRecall?: boolean; autoCapture?: boolean; skipSubagentSessions?: boolean }
+  /** Where it connects, without credentials. */
+  endpoint?: string
+  account?: string
+  user?: string
+  /** True when it reads and writes this space's namespace, false when another one, absent when that cannot be told. */
+  sameNamespace?: boolean
 }
 
 export interface MemoryProviderServiceView {
@@ -368,6 +440,8 @@ export interface MemorySpaceView extends MemorySpace {
   statusLoading?: boolean
   error?: string
   stats?: MemorySpaceStats
+  /** The vendor's own DeepSeek Harness plugin, when the Provider finds one beside it. */
+  integration?: MemorySpaceIntegration
 }
 
 /** Optional Host-only body-directory input; the Host binds the grant to its initiating View and exact Source. */

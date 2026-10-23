@@ -58,6 +58,7 @@ function assertRuntime(definition: MemorySpaceProviderDefinition, adapter: Memor
     [manifest.capabilities.remember, 'remember'],
     [manifest.capabilities.link, 'link'],
     [manifest.capabilities.forget, 'forget'],
+    [(manifest.views ?? []).length > 0, 'view'],
   ]
   for (const [required, method] of requiredMethods) {
     if (required && typeof adapter[method] !== 'function') {
@@ -109,6 +110,7 @@ export class MemorySpaceProviderSnapshot {
       origin: definition.manifest.origin,
       capabilities: structuredClone(definition.manifest.capabilities),
       fields: structuredClone(definition.manifest.fields),
+      ...(definition.manifest.views === undefined ? {} : { views: structuredClone(definition.manifest.views) }),
     }))
   }
 

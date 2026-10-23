@@ -3,10 +3,13 @@ import type {
   EdgeType,
   Insight,
   MemorySpace,
+  MemorySpaceIntegration,
   MemorySpaceStats,
   MemoryGraphSnapshot,
   MemoryListRequest,
   MemoryProviderConnection,
+  MemoryProviderViewRequest,
+  MemoryProviderViewResult,
   RememberRequest,
   SearchRequest,
 } from '../contracts.ts'
@@ -49,6 +52,8 @@ export interface ProviderSpaceStatus {
   healthy: boolean
   error?: string
   stats?: MemorySpaceStats
+  /** The vendor's own DeepSeek Harness plugin, when one runs beside this Provider: read, never changed. */
+  integration?: MemorySpaceIntegration
 }
 
 export interface ProviderSearchResult {
@@ -117,6 +122,11 @@ export interface MemoryProviderAdapter {
   related?(body: MemorySpace, id: string, depth: number, edge?: EdgeType, signal?: AbortSignal): Promise<Insight[]>
   link?(body: MemorySpace, sourceId: string, targetId: string, type: EdgeType, weight: number, reason?: string, signal?: AbortSignal): Promise<JsonValue>
   forget?(body: MemorySpace, id: string, signal?: AbortSignal): Promise<JsonValue>
+  /**
+   * Required when the descriptor declares views: one view of this space's data for the page,
+   * read through the Provider's own connection. Reads only; the Source bounds what it returns.
+   */
+  view?(body: MemorySpace, request: MemoryProviderViewRequest, signal?: AbortSignal): Promise<MemoryProviderViewResult>
   /** Release generation-owned clients, timers, pools, or subprocess handles. */
   dispose?(): void | Promise<void>
 }

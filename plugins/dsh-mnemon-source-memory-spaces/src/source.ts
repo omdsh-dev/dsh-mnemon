@@ -216,6 +216,10 @@ async function manageMemorySpaces(service: MemorySpacesService, request: MemoryS
         text(input.memoryBodyId, 'memoryBodyId', 300, false),
       ))
       case 'body-reconnect': return managementResult(service, await service.reconnectSpace(text(input.memoryBodyId, 'memoryBodyId', 300)!, request.signal))
+      case 'provider-view': return managementResult(service, await service.providerView(text(input.memoryBodyId, 'memoryBodyId', 300)!, {
+        view: text(input.view, 'view', 128)!,
+        ...(text(input.uri, 'uri', 2_000, false) === undefined ? {} : { uri: text(input.uri, 'uri', 2_000, false)! }),
+      }, request.signal))
       case 'prepare-body-placement': return managementResult(service, service.prepareSpacePlacement(createSpaceRequest(request.input)))
       case 'finalize-placement': {
         const prepared = record(input.prepared!, 'prepared placement') as unknown as PreparedMemoryPlacement
