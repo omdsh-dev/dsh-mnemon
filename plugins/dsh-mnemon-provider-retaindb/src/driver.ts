@@ -34,6 +34,36 @@ function isEndpointMissing(error: unknown): boolean {
   return error instanceof Error && /HTTP 404\b/u.test(error.message)
 }
 
+/**
+ * The importance sent for the Source's default 3: the middle of the 0.5..0.9 band
+ * RetainDB's own writers use. Its SDK's extraction keeps importance within 0.5..1,
+ * falling back to 0.7, and RetainDB Local writes 0.55 to 0.92.
+ */
+const IMPORTANCE_AT_DEFAULT = 0.7
+
+/** How far one step of the Source's 1..5 importance moves the importance sent. */
+const IMPORTANCE_PER_STEP = 0.1
+
+/** The 1..5 importance a request carries, if any, read as the Holographic Provider reads it. */
+function importanceLevel(value: unknown): number | undefined {
+  const level = Number(value)
+  return value === undefined || value === null || !Number.isFinite(level) ? undefined : Math.min(5, Math.max(1, Math.round(level)))
+}
+
+/**
+ * The importance sent to RetainDB, which takes 0..1. RetainDB Server refuses a
+ * value above 1 with HTTP 400 and defaults to 0.5; RetainDB Local defaults to 0.62.
+ * The Source's integer 1..5 (3 when the writer gives none) maps onto 0.5..0.9:
+ * 3 is sent as 0.7, and each step above or below moves it by 0.1. A request
+ * without a usable importance is sent as 0.7. The 1..5 value used to be sent as is.
+ */
+function retainDbImportance(importance: unknown): number {
+  const level = importanceLevel(importance)
+  const steps = level === undefined ? 0 : level - 3
+  // Two decimals, so 1 is sent as 0.5 rather than 0.49999999999999994.
+  return Math.round((IMPORTANCE_AT_DEFAULT + steps * IMPORTANCE_PER_STEP) * 100) / 100
+}
+
 export class RetainDbProvider extends HttpMemoryProvider implements MemoryProviderAdapter {
   readonly id = 'retaindb' as const
   readonly scoreSemantics = NORMALIZED_RELEVANCE_SCORE
@@ -116,7 +146,7 @@ export class RetainDbProvider extends HttpMemoryProvider implements MemoryProvid
       memory_type: request.category ?? 'factual',
       user_id: String(connection.userId) === '*' ? 'dsh-user' : String(connection.userId),
       session_id: `dsh-${body.id}`,
-      importance: request.importance ?? 0.7,
+      importance: retainDbImportance(request.importance),
       write_mode: 'sync',
     } as const
     let payload: unknown

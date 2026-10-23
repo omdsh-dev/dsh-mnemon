@@ -77,6 +77,7 @@ DSH 的“工作区”模式不会统一重写所有 Provider 命名空间。Mne
 - “断开”三方记忆空间只删除本地目录登记，不删除底层数据。单条记忆的“遗忘”是另一项按能力开放的操作。
 - Holographic 是对本地结构化事实语义的 TypeScript 适配，使用原子 JSON 存储，并保持独立的数据格式与生命周期实现。
 - Hindsight 使用轻量存活检查，并从 Provider 的 bank stats、实体目录与图谱响应读取真实统计、实体和关系；旧版缺少统计接口时仍可使用召回与图谱表面。
+- RetainDB 的重要度取 0 到 1：RetainDB Server 拒绝大于 1 的值，默认 0.5；RetainDB Local 默认 0.62。Memory Spaces Source 给每条记忆的重要度是 1 到 5（写入方没有给出时为 3），Provider 把它映射到 RetainDB 自身写入方使用的 0.5 到 0.9：重要度 3 发送为 0.7，每高或低一档加减 0.1。到达 Provider 时没有重要度的写入按 0.7 发送。RetainDB Local 会按正文的质量与类型再加上一个加成，并把结果封顶为 0.99，因此内容丰富的正文在较高的几档重要度上可能存下相同的值。更早的版本直接发送 1 到 5 的原值，RetainDB Server 会拒绝其中大于 1 的值，RetainDB Local 则一律存为 0.99；已经写入的记忆保持不变。
 - ByteRover 只开放聚焦的 `status`、`query` 与 `curate`；不会虚构广域知识树浏览和删除能力。
 - Supermemory 的浏览结果合并已抽取 memory entries 与仍可浏览的 ingested documents，并按 Provider ID 去重；文档未完成抽取时也不会从“内容”页消失。
 - Mnemon Native 会记录使用。Agent、`/mnemon recall` 或 **Agent 查询**发起的召回，会把查询写入存储的操作日志（`mnemon log`，保留最近 5,000 条操作），并把返回的记忆计为已访问；Mnemon 的保留策略会参考访问次数（`mnemon gc` 不会建议清理访问过三次的记忆）。记忆系统自身的检索（记忆空间页上的**直接检索**和实体页上的**查找相关记忆**）改为用 `mnemon --readonly` 读取快照，与它的列表和图谱一样，不做任何改动。Host 归档时核验自身写入的检查读取实时存储，因为其他进程写入期间，快照不一定与存储一致。

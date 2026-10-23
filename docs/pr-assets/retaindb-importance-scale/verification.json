@@ -1,0 +1,876 @@
+{
+  "record": "retaindb-importance-scale",
+  "dates": [
+    "2026-10-23",
+    "2026-10-24"
+  ],
+  "baseline": "main a7e3bc54",
+  "environment": {
+    "os": "macOS 15.6 arm64 (Darwin 24.6.0)",
+    "node": "24.19.0",
+    "pnpm": "10.13.1"
+  },
+  "servers": {
+    "retainDbServer": "not run; its verdicts come from its own request schema (serverReplay)",
+    "retainDbLocal": "RetainDB Local 0.2.2 from the provider lab, run live on loopback (live)",
+    "cloud": "not observed; RetainDB's README presents Server and Cloud together, as one API layer around the same memory model (README.md:23, :200)"
+  },
+  "contract": {
+    "source": "RetainDB/RetainDB 2ad2cc4d (Apache-2.0), read from a clean checkout and on GitHub",
+    "server": {
+      "requestSchema": {
+        "POST /v1/memory": "https://github.com/RetainDB/RetainDB/blob/2ad2cc4d6d58145eca1a6cbbce66dfc5b5380f38/packages/server/src/api/memory.ts#L932: importance z.number().min(0).max(1).optional().default(0.5)",
+        "POST /v1/memories": "https://github.com/RetainDB/RetainDB/blob/2ad2cc4d6d58145eca1a6cbbce66dfc5b5380f38/packages/server/src/api/routes.ts#L2588: the same",
+        "validator": "@hono/zod-validator 0.4.3 (packages/server/package.json ^0.4.0, pnpm-lock.yaml) answers a failed parse with c.json(result, 400); zod ^3.24.0 (3.25.76)"
+      },
+      "defaults": {
+        "database": "https://github.com/RetainDB/RetainDB/blob/2ad2cc4d6d58145eca1a6cbbce66dfc5b5380f38/packages/server/prisma/schema.prisma#L230: importance Float @default(0.5)",
+        "writePath": "https://github.com/RetainDB/RetainDB/blob/2ad2cc4d6d58145eca1a6cbbce66dfc5b5380f38/packages/server/src/engine/memory/write.ts#L707: importance: input.importance ?? 0.5"
+      },
+      "registry": "https://github.com/RetainDB/RetainDB/blob/2ad2cc4d6d58145eca1a6cbbce66dfc5b5380f38/packages/server/src/contracts/registry.mjs#L351: \"importance must be between 0 and 1 when provided.\""
+    },
+    "local": {
+      "package": "@retaindb/local 0.2.2",
+      "stored": "https://github.com/RetainDB/RetainDB/blob/2ad2cc4d6d58145eca1a6cbbce66dfc5b5380f38/packages/local/src/cli.ts#L728: clamp((input.importance ?? 0.62) + quality * 0.28 + (MEMORY_TYPE_WEIGHT[type] || 0.3) * 0.12, 0.1, 0.99)",
+      "recall": "https://github.com/RetainDB/RetainDB/blob/2ad2cc4d6d58145eca1a6cbbce66dfc5b5380f38/packages/local/src/cli.ts#L904: each recall score adds the memory's importance",
+      "consequence": "any importance of 1 or more is stored at 0.99"
+    },
+    "retainDbWriters": {
+      "sdkExtraction": "https://github.com/RetainDB/RetainDB/blob/2ad2cc4d6d58145eca1a6cbbce66dfc5b5380f38/packages/sdk/src/whisper-agent.ts#L284: importance: Math.max(0.5, Math.min(1, m.confidence || 0.7))",
+      "localSessionWrites": "https://github.com/RetainDB/RetainDB/blob/2ad2cc4d6d58145eca1a6cbbce66dfc5b5380f38/packages/local/src/cli.ts#L804: 0.75 for user messages, 0.55 otherwise",
+      "localHandoffWrites": "https://github.com/RetainDB/RetainDB/blob/2ad2cc4d6d58145eca1a6cbbce66dfc5b5380f38/packages/local/src/cli.ts#L1838: 0.92 for handoffs and decisions, 0.72 otherwise",
+      "band": "about 0.5 to 0.9"
+    },
+    "otherClients": {
+      "hermesAgent": "https://github.com/NousResearch/hermes-agent/blob/419e6627aaeda9c87e0b17bcc013484a2bfdb194/plugins/memory/retaindb/__init__.py#L148: add_memory(..., importance: float = 0.7); also sends 0.7 by default"
+    }
+  },
+  "memorySpacesSource": {
+    "prepareRemember": "plugins/dsh-mnemon-source-memory-spaces/src/service.ts: importance = integer(request.importance, 3, 1, 5), for remember and rememberMany",
+    "integer": "src/sdk/input.ts: an absent value becomes the fallback 3; anything but an integer within 1..5 is refused"
+  },
+  "mapping": {
+    "rule": "level = round(importance) clamped to 1..5, as the Holographic Provider reads it (#459); no importance, or one that is not a finite number: 0.7; otherwise 0.7 + (level - 3) * 0.1, rounded to 2 decimals",
+    "importance 1..5": [
+      0.5,
+      0.6,
+      0.7,
+      0.8,
+      0.9
+    ],
+    "no importance, NaN or infinity": 0.7,
+    "examples": {
+      "9": 0.9,
+      "-9": 0.5,
+      "2.4": 0.6,
+      "3.6": 0.8
+    },
+    "band": "0.5..0.9, the band RetainDB's own writers use",
+    "legacyFallback": "POST /v1/memories carries the same importance: it is the same body without write_mode",
+    "readBack": "search and list read id, content, score or similarity, memory_type or category, and created_at; no importance is read back, so nothing maps back",
+    "existingMemories": "not rewritten; on RetainDB Local they keep the stored 0.99, which recall still adds to their scores"
+  },
+  "probe": {
+    "script": "importance.probe.mjs",
+    "path": "MemoryCompositionRunner with the real Memory Spaces Source and the RetainDB Provider; provider-service-update discovers one project on a loopback recorder, then three remember calls into that space",
+    "writes": [
+      {
+        "content": "Release notes are drafted on Monday",
+        "importance": 1
+      },
+      {
+        "content": "Release approvals need a completed canary",
+        "importance": 5
+      },
+      {
+        "content": "Release branches are cut from main",
+        "importance": null
+      }
+    ],
+    "main": {
+      "requests": [
+        "GET /v1/projects",
+        "GET /v1/memories",
+        "POST /v1/memory",
+        "POST /v1/memory",
+        "POST /v1/memory"
+      ],
+      "sent": [
+        {
+          "project": "launch",
+          "content": "Release notes are drafted on Monday",
+          "memory_type": "general",
+          "user_id": "dsh-user",
+          "session_id": "dsh-retaindb-a33e35d302125bbd8e647043",
+          "importance": 1,
+          "write_mode": "sync"
+        },
+        {
+          "project": "launch",
+          "content": "Release approvals need a completed canary",
+          "memory_type": "general",
+          "user_id": "dsh-user",
+          "session_id": "dsh-retaindb-a33e35d302125bbd8e647043",
+          "importance": 5,
+          "write_mode": "sync"
+        },
+        {
+          "project": "launch",
+          "content": "Release branches are cut from main",
+          "memory_type": "general",
+          "user_id": "dsh-user",
+          "session_id": "dsh-retaindb-a33e35d302125bbd8e647043",
+          "importance": 3,
+          "write_mode": "sync"
+        }
+      ]
+    },
+    "fix": {
+      "requests": [
+        "GET /v1/projects",
+        "GET /v1/memories",
+        "POST /v1/memory",
+        "POST /v1/memory",
+        "POST /v1/memory"
+      ],
+      "sent": [
+        {
+          "project": "launch",
+          "content": "Release notes are drafted on Monday",
+          "memory_type": "general",
+          "user_id": "dsh-user",
+          "session_id": "dsh-retaindb-a33e35d302125bbd8e647043",
+          "importance": 0.5,
+          "write_mode": "sync"
+        },
+        {
+          "project": "launch",
+          "content": "Release approvals need a completed canary",
+          "memory_type": "general",
+          "user_id": "dsh-user",
+          "session_id": "dsh-retaindb-a33e35d302125bbd8e647043",
+          "importance": 0.9,
+          "write_mode": "sync"
+        },
+        {
+          "project": "launch",
+          "content": "Release branches are cut from main",
+          "memory_type": "general",
+          "user_id": "dsh-user",
+          "session_id": "dsh-retaindb-a33e35d302125bbd8e647043",
+          "importance": 0.7,
+          "write_mode": "sync"
+        }
+      ]
+    }
+  },
+  "serverReplay": {
+    "script": "server-schema.probe.mjs",
+    "path": "the real Source and the built Provider write every category at importance 1, 3 and 5 to a loopback recorder, once answering POST /v1/memory and once refusing it with 404 so the Provider falls back to POST /v1/memories; each body is parsed with the Server's schema for that endpoint (fields the Provider sends, copied from packages/server/src/api/memory.ts:63-80 and :921-941 and api/routes.ts:2581-2595), on zod/v3",
+    "serverDefaultImportance": 0.5,
+    "sampleBodies": {
+      "/v1/memory": {
+        "project": "launch",
+        "content": "Canary before production (current, preference, 1)",
+        "memory_type": "preference",
+        "user_id": "dsh-user",
+        "session_id": "dsh-retaindb-a33e35d302125bbd8e647043",
+        "importance": 0.5,
+        "write_mode": "sync"
+      },
+      "/v1/memories": {
+        "project": "launch",
+        "content": "Canary before production (legacy, preference, 1)",
+        "memory_type": "preference",
+        "user_id": "dsh-user",
+        "session_id": "dsh-retaindb-a33e35d302125bbd8e647043",
+        "importance": 0.5
+      }
+    },
+    "main": {
+      "counts": {
+        "/v1/memory": {
+          "accepted": 2,
+          "refused": 16
+        },
+        "/v1/memories": {
+          "accepted": 0,
+          "refused": 18
+        }
+      },
+      "rows": [
+        {
+          "category": "preference",
+          "importance": 1,
+          "/v1/memory": "preference 1: accepted",
+          "/v1/memories": "preference 1: 400: memory_type"
+        },
+        {
+          "category": "preference",
+          "importance": 3,
+          "/v1/memory": "preference 3: 400: importance",
+          "/v1/memories": "preference 3: 400: memory_type, importance"
+        },
+        {
+          "category": "preference",
+          "importance": 5,
+          "/v1/memory": "preference 5: 400: importance",
+          "/v1/memories": "preference 5: 400: memory_type, importance"
+        },
+        {
+          "category": "decision",
+          "importance": 1,
+          "/v1/memory": "decision 1: accepted",
+          "/v1/memories": "decision 1: 400: memory_type"
+        },
+        {
+          "category": "decision",
+          "importance": 3,
+          "/v1/memory": "decision 3: 400: importance",
+          "/v1/memories": "decision 3: 400: memory_type, importance"
+        },
+        {
+          "category": "decision",
+          "importance": 5,
+          "/v1/memory": "decision 5: 400: importance",
+          "/v1/memories": "decision 5: 400: memory_type, importance"
+        },
+        {
+          "category": "fact",
+          "importance": 1,
+          "/v1/memory": "fact 1: 400: memory_type",
+          "/v1/memories": "fact 1: 400: memory_type"
+        },
+        {
+          "category": "fact",
+          "importance": 3,
+          "/v1/memory": "fact 3: 400: memory_type, importance",
+          "/v1/memories": "fact 3: 400: memory_type, importance"
+        },
+        {
+          "category": "fact",
+          "importance": 5,
+          "/v1/memory": "fact 5: 400: memory_type, importance",
+          "/v1/memories": "fact 5: 400: memory_type, importance"
+        },
+        {
+          "category": "insight",
+          "importance": 1,
+          "/v1/memory": "insight 1: 400: memory_type",
+          "/v1/memories": "insight 1: 400: memory_type"
+        },
+        {
+          "category": "insight",
+          "importance": 3,
+          "/v1/memory": "insight 3: 400: memory_type, importance",
+          "/v1/memories": "insight 3: 400: memory_type, importance"
+        },
+        {
+          "category": "insight",
+          "importance": 5,
+          "/v1/memory": "insight 5: 400: memory_type, importance",
+          "/v1/memories": "insight 5: 400: memory_type, importance"
+        },
+        {
+          "category": "context",
+          "importance": 1,
+          "/v1/memory": "context 1: 400: memory_type",
+          "/v1/memories": "context 1: 400: memory_type"
+        },
+        {
+          "category": "context",
+          "importance": 3,
+          "/v1/memory": "context 3: 400: memory_type, importance",
+          "/v1/memories": "context 3: 400: memory_type, importance"
+        },
+        {
+          "category": "context",
+          "importance": 5,
+          "/v1/memory": "context 5: 400: memory_type, importance",
+          "/v1/memories": "context 5: 400: memory_type, importance"
+        },
+        {
+          "category": "general",
+          "importance": 1,
+          "/v1/memory": "general 1: 400: memory_type",
+          "/v1/memories": "general 1: 400: memory_type"
+        },
+        {
+          "category": "general",
+          "importance": 3,
+          "/v1/memory": "general 3: 400: memory_type, importance",
+          "/v1/memories": "general 3: 400: memory_type, importance"
+        },
+        {
+          "category": "general",
+          "importance": 5,
+          "/v1/memory": "general 5: 400: memory_type, importance",
+          "/v1/memories": "general 5: 400: memory_type, importance"
+        }
+      ]
+    },
+    "fix": {
+      "counts": {
+        "/v1/memory": {
+          "accepted": 6,
+          "refused": 12
+        },
+        "/v1/memories": {
+          "accepted": 0,
+          "refused": 18
+        }
+      },
+      "rows": [
+        {
+          "category": "preference",
+          "importance": 1,
+          "/v1/memory": "preference 0.5: accepted",
+          "/v1/memories": "preference 0.5: 400: memory_type"
+        },
+        {
+          "category": "preference",
+          "importance": 3,
+          "/v1/memory": "preference 0.7: accepted",
+          "/v1/memories": "preference 0.7: 400: memory_type"
+        },
+        {
+          "category": "preference",
+          "importance": 5,
+          "/v1/memory": "preference 0.9: accepted",
+          "/v1/memories": "preference 0.9: 400: memory_type"
+        },
+        {
+          "category": "decision",
+          "importance": 1,
+          "/v1/memory": "decision 0.5: accepted",
+          "/v1/memories": "decision 0.5: 400: memory_type"
+        },
+        {
+          "category": "decision",
+          "importance": 3,
+          "/v1/memory": "decision 0.7: accepted",
+          "/v1/memories": "decision 0.7: 400: memory_type"
+        },
+        {
+          "category": "decision",
+          "importance": 5,
+          "/v1/memory": "decision 0.9: accepted",
+          "/v1/memories": "decision 0.9: 400: memory_type"
+        },
+        {
+          "category": "fact",
+          "importance": 1,
+          "/v1/memory": "fact 0.5: 400: memory_type",
+          "/v1/memories": "fact 0.5: 400: memory_type"
+        },
+        {
+          "category": "fact",
+          "importance": 3,
+          "/v1/memory": "fact 0.7: 400: memory_type",
+          "/v1/memories": "fact 0.7: 400: memory_type"
+        },
+        {
+          "category": "fact",
+          "importance": 5,
+          "/v1/memory": "fact 0.9: 400: memory_type",
+          "/v1/memories": "fact 0.9: 400: memory_type"
+        },
+        {
+          "category": "insight",
+          "importance": 1,
+          "/v1/memory": "insight 0.5: 400: memory_type",
+          "/v1/memories": "insight 0.5: 400: memory_type"
+        },
+        {
+          "category": "insight",
+          "importance": 3,
+          "/v1/memory": "insight 0.7: 400: memory_type",
+          "/v1/memories": "insight 0.7: 400: memory_type"
+        },
+        {
+          "category": "insight",
+          "importance": 5,
+          "/v1/memory": "insight 0.9: 400: memory_type",
+          "/v1/memories": "insight 0.9: 400: memory_type"
+        },
+        {
+          "category": "context",
+          "importance": 1,
+          "/v1/memory": "context 0.5: 400: memory_type",
+          "/v1/memories": "context 0.5: 400: memory_type"
+        },
+        {
+          "category": "context",
+          "importance": 3,
+          "/v1/memory": "context 0.7: 400: memory_type",
+          "/v1/memories": "context 0.7: 400: memory_type"
+        },
+        {
+          "category": "context",
+          "importance": 5,
+          "/v1/memory": "context 0.9: 400: memory_type",
+          "/v1/memories": "context 0.9: 400: memory_type"
+        },
+        {
+          "category": "general",
+          "importance": 1,
+          "/v1/memory": "general 0.5: 400: memory_type",
+          "/v1/memories": "general 0.5: 400: memory_type"
+        },
+        {
+          "category": "general",
+          "importance": 3,
+          "/v1/memory": "general 0.7: 400: memory_type",
+          "/v1/memories": "general 0.7: 400: memory_type"
+        },
+        {
+          "category": "general",
+          "importance": 5,
+          "/v1/memory": "general 0.9: 400: memory_type",
+          "/v1/memories": "general 0.9: 400: memory_type"
+        }
+      ]
+    },
+    "remaining": "the refusals left with the fix are memory_type: the Provider sends the Source category, and the Server takes neither fact, insight, context nor general on /v1/memory, and only factual, episodic, semantic and procedural on /v1/memories; fixed in the pull request stacked on this one"
+  },
+  "live": {
+    "script": "live.probe.mjs",
+    "server": {
+      "container": "dsh-mnemon-provider-lab-retaindb-1 (provider-lab/docker-compose.yml service retaindb)",
+      "image": "dsh-mnemon-provider-lab-retaindb, built 2026-09-26 from the provider lab RetainDB checkout: @retaindb/local 0.2.2",
+      "endpoint": "http://127.0.0.1:18990 (container port 3111)",
+      "environment": "RETAINDB_HOME=/opt/retaindb/data, RETAINDB_EMBEDDING_PROVIDER=hash",
+      "volume": "dsh-mnemon-provider-lab_retaindb-data, kept",
+      "lifecycle": "stopped before (exited 2026-10-14); started 2026-10-23T15:56:06Z, stopped 2026-10-23T15:58:33Z",
+      "storeBefore": {
+        "projects": [
+          "default",
+          "dsh-lab"
+        ],
+        "memories": 6,
+        "sessions": 1
+      },
+      "storeAfter": {
+        "projects": [
+          "default",
+          "dsh-lab",
+          "rv462-main",
+          "rv462-fix"
+        ],
+        "memories": 14,
+        "sessions": 3,
+        "dsh-lab memories": 6
+      }
+    },
+    "fixDriver": "the fix as of d3af33a4; for integer importance it sends the same values as the fix with rounding and clamping (unit tests)",
+    "path": "MemoryCompositionRunner with the real Memory Spaces Source and the RetainDB Provider; provider-service-update (endpoint, apiKey), body-create (project, userId), four remember calls; then GET /v1/memories, POST /v1/memory/search with the request the Provider sends, and the Source search (default strict-v1 recall)",
+    "query": "release step check before tagging the version",
+    "writes": [
+      {
+        "content": "Release step one: check the changelog before tagging the version",
+        "importance": 1
+      },
+      {
+        "content": "Release step two: check the licenses before tagging the version",
+        "importance": 3
+      },
+      {
+        "content": "Release step three: check the canary before tagging the version",
+        "importance": 5
+      },
+      {
+        "content": "Release step four: check the translations before tagging the version",
+        "importance": "none (the Source sends 3)"
+      }
+    ],
+    "storedImportance": {
+      "rule": "RetainDB Local stores clamp(received + quality * 0.28 + typeWeight * 0.12, 0.1, 0.99); here quality 0.275 and type workflow (weight 0.7), so received + 0.161, capped at 0.99",
+      "main": {
+        "1": 0.99,
+        "3": 0.99,
+        "5": 0.99,
+        "none": 0.99
+      },
+      "fix": {
+        "1": 0.661,
+        "3": 0.861,
+        "5": 0.99,
+        "none": 0.861
+      }
+    },
+    "recallOrder": {
+      "main": [
+        "3",
+        "5",
+        "1",
+        "none"
+      ],
+      "fix": [
+        "5",
+        "3",
+        "none",
+        "1"
+      ],
+      "throughSourceMain": [
+        "3",
+        "5"
+      ],
+      "throughSourceFix": [
+        "5",
+        "3"
+      ],
+      "throughSourceNote": "strict-v1 keeps at most two results whose score lies outside 0..1 (maxUnknownResults 2); RetainDB Local scores are about 11",
+      "sourceScoreOffset": "the Source search scores 0.3386 more than the direct search, which ran first and raised each access count: log1p(1) / 5 + 1 / sqrt(max(1, hours since access)) / 5 = 0.1386 + 0.2 (packages/local/src/cli.ts reinforcement)"
+    },
+    "main": {
+      "project": "rv462-main",
+      "userId": "rv462",
+      "spaceId": "retaindb-0cd37920-df17-40f4-9aba-ff70163b7d56",
+      "stored": [
+        {
+          "content": "Release step one: check the changelog before tagging the version",
+          "importanceWritten": 1,
+          "id": "mem_fd8bd76c-a302-49a4-b1fe-524e5eca71d5",
+          "type": "workflow",
+          "importance": 0.99,
+          "confidence": 0.8640000000000001,
+          "strength": 0.855,
+          "quality": 0.275
+        },
+        {
+          "content": "Release step two: check the licenses before tagging the version",
+          "importanceWritten": 3,
+          "id": "mem_53ca727e-df40-463d-b50b-9fdc82e103e6",
+          "type": "workflow",
+          "importance": 0.99,
+          "confidence": 0.8640000000000001,
+          "strength": 1,
+          "quality": 0.275
+        },
+        {
+          "content": "Release step three: check the canary before tagging the version",
+          "importanceWritten": 5,
+          "id": "mem_a3d8a6cf-3a1d-460a-b489-b8dfb7ea4b67",
+          "type": "workflow",
+          "importance": 0.99,
+          "confidence": 0.8640000000000001,
+          "strength": 1,
+          "quality": 0.275
+        },
+        {
+          "content": "Release step four: check the translations before tagging the version",
+          "importanceWritten": null,
+          "id": "mem_70d3fcab-7cd2-40e7-85e6-a9ea69f771e1",
+          "type": "workflow",
+          "importance": 0.99,
+          "confidence": 0.8640000000000001,
+          "strength": 1,
+          "quality": 0.275
+        }
+      ],
+      "recall": [
+        {
+          "importanceWritten": "3",
+          "score": 11.1374,
+          "importance": 0.99,
+          "scores": {
+            "bm25": 1.1397,
+            "vector": 0.8731,
+            "graph": 26,
+            "type_intent": 0,
+            "quality": 0.275
+          }
+        },
+        {
+          "importanceWritten": "5",
+          "score": 11.1118,
+          "importance": 0.99,
+          "scores": {
+            "bm25": 1.1397,
+            "vector": 0.8746,
+            "graph": 26,
+            "type_intent": 0,
+            "quality": 0.275
+          }
+        },
+        {
+          "importanceWritten": "1",
+          "score": 11.0614,
+          "importance": 0.99,
+          "scores": {
+            "bm25": 1.1339,
+            "vector": 0.868,
+            "graph": 26,
+            "type_intent": 0,
+            "quality": 0.275
+          }
+        },
+        {
+          "importanceWritten": "none",
+          "score": 10.9846,
+          "importance": 0.99,
+          "scores": {
+            "bm25": 1.1397,
+            "vector": 0.8482,
+            "graph": 26,
+            "type_intent": 0,
+            "quality": 0.275
+          }
+        }
+      ],
+      "throughSource": [
+        {
+          "importanceWritten": "3",
+          "score": 11.476
+        },
+        {
+          "importanceWritten": "5",
+          "score": 11.4504
+        }
+      ]
+    },
+    "fix": {
+      "project": "rv462-fix",
+      "userId": "rv462",
+      "spaceId": "retaindb-60e46370-2248-481f-ad9c-49ca54740f91",
+      "stored": [
+        {
+          "content": "Release step one: check the changelog before tagging the version",
+          "importanceWritten": 1,
+          "id": "mem_10ce511b-ddd8-4365-8121-80819b6c4336",
+          "type": "workflow",
+          "importance": 0.6609999999999999,
+          "confidence": 0.8640000000000001,
+          "strength": 0.605,
+          "quality": 0.275
+        },
+        {
+          "content": "Release step two: check the licenses before tagging the version",
+          "importanceWritten": 3,
+          "id": "mem_07b69789-7ee9-4c03-953c-1fbcd8b289a5",
+          "type": "workflow",
+          "importance": 0.8609999999999999,
+          "confidence": 0.8640000000000001,
+          "strength": 0.705,
+          "quality": 0.275
+        },
+        {
+          "content": "Release step three: check the canary before tagging the version",
+          "importanceWritten": 5,
+          "id": "mem_d43e9d5e-8e52-4a84-91d1-ac6346a9df8d",
+          "type": "workflow",
+          "importance": 0.99,
+          "confidence": 0.8640000000000001,
+          "strength": 0.805,
+          "quality": 0.275
+        },
+        {
+          "content": "Release step four: check the translations before tagging the version",
+          "importanceWritten": null,
+          "id": "mem_7927a671-ba33-4d7a-b9dd-217d1e08c4fe",
+          "type": "workflow",
+          "importance": 0.8609999999999999,
+          "confidence": 0.8640000000000001,
+          "strength": 0.705,
+          "quality": 0.275
+        }
+      ],
+      "recall": [
+        {
+          "importanceWritten": "5",
+          "score": 11.0862,
+          "importance": 0.99,
+          "scores": {
+            "bm25": 1.1383,
+            "vector": 0.8746,
+            "graph": 26,
+            "type_intent": 0,
+            "quality": 0.275
+          }
+        },
+        {
+          "importanceWritten": "3",
+          "score": 10.982,
+          "importance": 0.8609999999999999,
+          "scores": {
+            "bm25": 1.1383,
+            "vector": 0.8731,
+            "graph": 26,
+            "type_intent": 0,
+            "quality": 0.275
+          }
+        },
+        {
+          "importanceWritten": "none",
+          "score": 10.8307,
+          "importance": 0.8609999999999999,
+          "scores": {
+            "bm25": 1.1383,
+            "vector": 0.8482,
+            "graph": 26,
+            "type_intent": 0,
+            "quality": 0.275
+          }
+        },
+        {
+          "importanceWritten": "1",
+          "score": 10.8092,
+          "importance": 0.6609999999999999,
+          "scores": {
+            "bm25": 1.1383,
+            "vector": 0.868,
+            "graph": 26,
+            "type_intent": 0,
+            "quality": 0.275
+          }
+        }
+      ],
+      "throughSource": [
+        {
+          "importanceWritten": "5",
+          "score": 11.4248
+        },
+        {
+          "importanceWritten": "3",
+          "score": 11.3206
+        }
+      ]
+    }
+  },
+  "localLimits": {
+    "saturation": {
+      "script": "local-saturation.mjs",
+      "basis": "RetainDB Local's quality, type and stored-importance rules transcribed from packages/local/src/cli.ts (lines 73-95, 117-119, 145-171, 173-201, 302-324, 728); the first text reproduces the live run",
+      "rows": [
+        {
+          "text": "Release step one: check the changelog before tagging the version",
+          "type": "workflow",
+          "quality": 0.275,
+          "bonus": 0.161,
+          "main": [
+            0.99,
+            0.99,
+            0.99,
+            0.99,
+            0.99
+          ],
+          "fix": [
+            0.661,
+            0.761,
+            0.861,
+            0.961,
+            0.99
+          ]
+        },
+        {
+          "text": "The user prefers concise answers in Chinese.",
+          "type": "preference",
+          "quality": 0.178,
+          "bonus": 0.136,
+          "main": [
+            0.99,
+            0.99,
+            0.99,
+            0.99,
+            0.99
+          ],
+          "fix": [
+            0.636,
+            0.736,
+            0.836,
+            0.936,
+            0.99
+          ]
+        },
+        {
+          "text": "Use pnpm 10 for installs because npm breaks the lockfile in CI.",
+          "type": "decision",
+          "quality": 0.55,
+          "bonus": 0.248,
+          "main": [
+            0.99,
+            0.99,
+            0.99,
+            0.99,
+            0.99
+          ],
+          "fix": [
+            0.748,
+            0.848,
+            0.948,
+            0.99,
+            0.99
+          ]
+        },
+        {
+          "text": "We decided to keep plain chunk retrieval and only add semantic signal where information is lost; the hybrid test passed on LoCoMo and LME.",
+          "type": "decision",
+          "quality": 0.822,
+          "bonus": 0.324,
+          "main": [
+            0.99,
+            0.99,
+            0.99,
+            0.99,
+            0.99
+          ],
+          "fix": [
+            0.824,
+            0.924,
+            0.99,
+            0.99,
+            0.99
+          ]
+        },
+        {
+          "text": "Never push to main without a reviewed PR; the release workflow in .github/workflows/publish.yml must pass first.",
+          "type": "constraint",
+          "quality": 0.685,
+          "bonus": 0.282,
+          "main": [
+            0.99,
+            0.99,
+            0.99,
+            0.99,
+            0.99
+          ],
+          "fix": [
+            0.782,
+            0.882,
+            0.982,
+            0.99,
+            0.99
+          ]
+        }
+      ],
+      "richDecision": "importance 3, 4 and 5 all store 0.99"
+    },
+    "earlierMemories": "memories main wrote carry 0.99, which recall adds to their scores, so they outrank new memories of similar relevance"
+  },
+  "unitTests": {
+    "retaindb": {
+      "main": "8 failed, 8 passed",
+      "fix": "16 passed",
+      "mainRun": "the new tests against main's driver.ts",
+      "failingOnMain": [
+        "sends importance 1 as 0.5",
+        "sends importance 2 as 0.6",
+        "sends importance 3 as 0.7",
+        "sends importance 4 as 0.8",
+        "sends importance 5 as 0.9",
+        "rounds the importance to a whole step and clamps it to 1..5, as the Holographic Provider does",
+        "treats an importance that is not a finite number as none",
+        "sends the same importance to the legacy endpoint"
+      ],
+      "passingOnMain": {
+        "sends 0.7, the middle of the band, when the request carries no importance": "main also sent 0.7 when no importance reached the Provider; through the Source one always does"
+      }
+    }
+  },
+  "otherChecks": {
+    "dsh-mnemon-provider-retaindb typecheck": "pass",
+    "dsh-mnemon-provider-retaindb build": "pass",
+    "dsh-mnemon-source-memory-spaces tests": "296 passed, 2 skipped",
+    "node scripts/verify-docs.mjs": "pass"
+  }
+}
