@@ -1,0 +1,856 @@
+{
+  "issue": 452,
+  "date": "2026-10-23",
+  "baseline": "main a7e3bc54",
+  "environment": {
+    "os": "macOS arm64 (Darwin 24.6.0)",
+    "node": "24.19.0",
+    "pnpm": "10.13.1",
+    "servers": {
+      "v0.4.21": "Docker image v0.4.21 on loopback, API key auth, text-embedding-ada-002 (1536 dimensions)",
+      "0.5.1.1": "PyPI wheel openviking==0.5.1.1 on Python 3.12.13, loopback, dev auth, text-embedding-ada-002 (1536 dimensions)"
+    }
+  },
+  "data": {
+    "namespace": "viking://user/wp452/memories",
+    "notes": 64,
+    "kinds": "a PostgreSQL install path and service name, a Redis note, a laptop Docker note, a document archive index carrying a SHA-256, and 60 hosts fleet-000..fleet-059 that differ only in numbers (Docker Engine 29.8.<n>)",
+    "layout": "v0.4.21: all under entities/; 0.5.1.1: entities/machines and entities/fleet-<k> folders of at most 8 notes, because 0.5.x embeds a folder overview on each write and a long one exceeded the embedding window",
+    "synthetic": true
+  },
+  "grepRequestFields": {
+    "0.4.16": [
+      "uri",
+      "exclude_uri",
+      "pattern",
+      "case_insensitive",
+      "node_limit",
+      "level_limit"
+    ],
+    "0.5.1.1": [
+      "uri",
+      "exclude_uri",
+      "pattern",
+      "case_insensitive",
+      "node_limit",
+      "level_limit",
+      "tags",
+      "include_tags",
+      "before_context",
+      "after_context"
+    ],
+    "sent": [
+      "uri",
+      "pattern",
+      "case_insensitive",
+      "node_limit"
+    ]
+  },
+  "grepReply": {
+    "shape": {
+      "matches": [
+        {
+          "line": "int",
+          "uri": "viking://...",
+          "content": "the matching line"
+        }
+      ],
+      "count": "int",
+      "match_count": "int",
+      "files_scanned": "int"
+    },
+    "missingRoot": "404 NOT_FOUND with details.resource = the URI",
+    "missingRoute": "404 NOT_FOUND \"Not Found\" without a resource"
+  },
+  "providerKeywordSearch": {
+    "v0.4.21": [
+      {
+        "query": "postgresql-x64-18",
+        "main": {
+          "rank": 1,
+          "results": 10,
+          "top": [
+            "postgres",
+            "fleet-018",
+            "fleet-034"
+          ],
+          "scored": true,
+          "ms": 1331
+        },
+        "fix": {
+          "rank": 1,
+          "results": 1,
+          "top": [
+            "postgres"
+          ],
+          "scored": false,
+          "ms": 54
+        }
+      },
+      {
+        "query": "29.8.37",
+        "main": {
+          "rank": 3,
+          "results": 10,
+          "top": [
+            "fleet-031",
+            "fleet-036",
+            "fleet-037"
+          ],
+          "scored": true,
+          "ms": 901
+        },
+        "fix": {
+          "rank": 1,
+          "results": 1,
+          "top": [
+            "fleet-037"
+          ],
+          "scored": false,
+          "ms": 15
+        }
+      },
+      {
+        "query": "fleet-042",
+        "main": {
+          "rank": 1,
+          "results": 10,
+          "top": [
+            "fleet-042",
+            "fleet-043",
+            "fleet-034"
+          ],
+          "scored": true,
+          "ms": 875
+        },
+        "fix": {
+          "rank": 1,
+          "results": 1,
+          "top": [
+            "fleet-042"
+          ],
+          "scored": false,
+          "ms": 16
+        }
+      },
+      {
+        "query": "0aaf813311de5c76…",
+        "main": {
+          "rank": 1,
+          "results": 9,
+          "top": [
+            "archive",
+            "fleet-034",
+            "fleet-046"
+          ],
+          "scored": true,
+          "ms": 855
+        },
+        "fix": {
+          "rank": 1,
+          "results": 1,
+          "top": [
+            "archive"
+          ],
+          "scored": false,
+          "ms": 18
+        }
+      },
+      {
+        "query": "\"D:\\Program Files (x86)\\PostgreSQL\\18\"",
+        "main": {
+          "rank": 1,
+          "results": 9,
+          "top": [
+            "postgres",
+            "redis",
+            "fleet-018"
+          ],
+          "scored": true,
+          "ms": 904
+        },
+        "fix": {
+          "rank": 1,
+          "results": 1,
+          "top": [
+            "postgres"
+          ],
+          "scored": false,
+          "ms": 13
+        }
+      }
+    ],
+    "0.5.1.1": [
+      {
+        "query": "postgresql-x64-18",
+        "main": {
+          "rank": 1,
+          "results": 10,
+          "top": [
+            "postgres",
+            "fleet-018",
+            "fleet-034"
+          ],
+          "scored": true,
+          "ms": 1907
+        },
+        "fix": {
+          "rank": 1,
+          "results": 1,
+          "top": [
+            "postgres"
+          ],
+          "scored": false,
+          "ms": 21
+        }
+      },
+      {
+        "query": "29.8.37",
+        "main": {
+          "rank": 3,
+          "results": 8,
+          "top": [
+            "fleet-031",
+            "fleet-036",
+            "fleet-037"
+          ],
+          "scored": true,
+          "ms": 1031
+        },
+        "fix": {
+          "rank": 1,
+          "results": 1,
+          "top": [
+            "fleet-037"
+          ],
+          "scored": false,
+          "ms": 13
+        }
+      },
+      {
+        "query": "fleet-042",
+        "main": {
+          "rank": 1,
+          "results": 2,
+          "top": [
+            "fleet-042",
+            "fleet-043"
+          ],
+          "scored": true,
+          "ms": 994
+        },
+        "fix": {
+          "rank": 1,
+          "results": 1,
+          "top": [
+            "fleet-042"
+          ],
+          "scored": false,
+          "ms": 11
+        }
+      },
+      {
+        "query": "0aaf813311de5c76…",
+        "main": {
+          "rank": 1,
+          "results": 2,
+          "top": [
+            "archive",
+            "fleet-034"
+          ],
+          "scored": true,
+          "ms": 1523
+        },
+        "fix": {
+          "rank": 1,
+          "results": 1,
+          "top": [
+            "archive"
+          ],
+          "scored": false,
+          "ms": 13
+        }
+      },
+      {
+        "query": "\"D:\\Program Files (x86)\\PostgreSQL\\18\"",
+        "main": {
+          "rank": 1,
+          "results": 9,
+          "top": [
+            "postgres",
+            "redis",
+            "fleet-018"
+          ],
+          "scored": true,
+          "ms": 965
+        },
+        "fix": {
+          "rank": 1,
+          "results": 1,
+          "top": [
+            "postgres"
+          ],
+          "scored": false,
+          "ms": 12
+        }
+      }
+    ]
+  },
+  "directSearchThroughSource": {
+    "main": {
+      "v0.4.21": [
+        {
+          "query": "postgresql-x64-18",
+          "mode": "keyword",
+          "rank": 1,
+          "results": 10,
+          "tiers": [
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high"
+          ],
+          "top": [
+            "postgres",
+            "fleet-018",
+            "fleet-034"
+          ]
+        },
+        {
+          "query": "postgresql-x64-18",
+          "mode": "smart",
+          "rank": 1,
+          "results": 10,
+          "tiers": [
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high"
+          ],
+          "top": [
+            "postgres",
+            "fleet-018",
+            "fleet-034"
+          ]
+        },
+        {
+          "query": "29.8.37",
+          "mode": "keyword",
+          "rank": 3,
+          "results": 10,
+          "tiers": [
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high"
+          ],
+          "top": [
+            "fleet-031",
+            "fleet-036",
+            "fleet-037"
+          ]
+        },
+        {
+          "query": "29.8.37",
+          "mode": "smart",
+          "rank": 3,
+          "results": 10,
+          "tiers": [
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high"
+          ],
+          "top": [
+            "fleet-031",
+            "fleet-036",
+            "fleet-037"
+          ]
+        },
+        {
+          "query": "fleet-042",
+          "mode": "keyword",
+          "rank": 1,
+          "results": 10,
+          "tiers": [
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high"
+          ],
+          "top": [
+            "fleet-042",
+            "fleet-043",
+            "fleet-034"
+          ]
+        },
+        {
+          "query": "fleet-042",
+          "mode": "smart",
+          "rank": 1,
+          "results": 10,
+          "tiers": [
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high"
+          ],
+          "top": [
+            "fleet-042",
+            "fleet-043",
+            "fleet-034"
+          ]
+        }
+      ],
+      "0.5.1.1": [
+        {
+          "query": "postgresql-x64-18",
+          "mode": "keyword",
+          "rank": 1,
+          "results": 10,
+          "tiers": [
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high"
+          ],
+          "top": [
+            "postgres",
+            "fleet-018",
+            "fleet-034"
+          ]
+        },
+        {
+          "query": "postgresql-x64-18",
+          "mode": "smart",
+          "rank": 1,
+          "results": 10,
+          "tiers": [
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high"
+          ],
+          "top": [
+            "postgres",
+            "fleet-018",
+            "fleet-034"
+          ]
+        },
+        {
+          "query": "29.8.37",
+          "mode": "keyword",
+          "rank": 3,
+          "results": 10,
+          "tiers": [
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high"
+          ],
+          "top": [
+            "fleet-031",
+            "fleet-036",
+            "fleet-037"
+          ]
+        },
+        {
+          "query": "29.8.37",
+          "mode": "smart",
+          "rank": 3,
+          "results": 10,
+          "tiers": [
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high"
+          ],
+          "top": [
+            "fleet-031",
+            "fleet-036",
+            "fleet-037"
+          ]
+        },
+        {
+          "query": "fleet-042",
+          "mode": "keyword",
+          "rank": 1,
+          "results": 10,
+          "tiers": [
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high"
+          ],
+          "top": [
+            "fleet-042",
+            "fleet-043",
+            "fleet-034"
+          ]
+        },
+        {
+          "query": "fleet-042",
+          "mode": "smart",
+          "rank": 1,
+          "results": 10,
+          "tiers": [
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high"
+          ],
+          "top": [
+            "fleet-042",
+            "fleet-043",
+            "fleet-034"
+          ]
+        }
+      ]
+    },
+    "fix": {
+      "v0.4.21": [
+        {
+          "query": "postgresql-x64-18",
+          "mode": "keyword",
+          "rank": 1,
+          "results": 1,
+          "tiers": [
+            "unknown"
+          ],
+          "top": [
+            "postgres"
+          ]
+        },
+        {
+          "query": "postgresql-x64-18",
+          "mode": "smart",
+          "rank": 1,
+          "results": 10,
+          "tiers": [
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high"
+          ],
+          "top": [
+            "postgres",
+            "fleet-018",
+            "fleet-034"
+          ]
+        },
+        {
+          "query": "29.8.37",
+          "mode": "keyword",
+          "rank": 1,
+          "results": 1,
+          "tiers": [
+            "unknown"
+          ],
+          "top": [
+            "fleet-037"
+          ]
+        },
+        {
+          "query": "29.8.37",
+          "mode": "smart",
+          "rank": 3,
+          "results": 10,
+          "tiers": [
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high"
+          ],
+          "top": [
+            "fleet-031",
+            "fleet-036",
+            "fleet-037"
+          ]
+        },
+        {
+          "query": "fleet-042",
+          "mode": "keyword",
+          "rank": 1,
+          "results": 1,
+          "tiers": [
+            "unknown"
+          ],
+          "top": [
+            "fleet-042"
+          ]
+        },
+        {
+          "query": "fleet-042",
+          "mode": "smart",
+          "rank": 1,
+          "results": 10,
+          "tiers": [
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high"
+          ],
+          "top": [
+            "fleet-042",
+            "fleet-043",
+            "fleet-034"
+          ]
+        }
+      ],
+      "0.5.1.1": [
+        {
+          "query": "postgresql-x64-18",
+          "mode": "keyword",
+          "rank": 1,
+          "results": 1,
+          "tiers": [
+            "unknown"
+          ],
+          "top": [
+            "postgres"
+          ]
+        },
+        {
+          "query": "postgresql-x64-18",
+          "mode": "smart",
+          "rank": 1,
+          "results": 10,
+          "tiers": [
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high"
+          ],
+          "top": [
+            "postgres",
+            "fleet-018",
+            "fleet-034"
+          ]
+        },
+        {
+          "query": "29.8.37",
+          "mode": "keyword",
+          "rank": 1,
+          "results": 1,
+          "tiers": [
+            "unknown"
+          ],
+          "top": [
+            "fleet-037"
+          ]
+        },
+        {
+          "query": "29.8.37",
+          "mode": "smart",
+          "rank": 3,
+          "results": 10,
+          "tiers": [
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high"
+          ],
+          "top": [
+            "fleet-031",
+            "fleet-036",
+            "fleet-037"
+          ]
+        },
+        {
+          "query": "fleet-042",
+          "mode": "keyword",
+          "rank": 1,
+          "results": 1,
+          "tiers": [
+            "unknown"
+          ],
+          "top": [
+            "fleet-042"
+          ]
+        },
+        {
+          "query": "fleet-042",
+          "mode": "smart",
+          "rank": 1,
+          "results": 10,
+          "tiers": [
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high",
+            "high"
+          ],
+          "top": [
+            "fleet-042",
+            "fleet-043",
+            "fleet-034"
+          ]
+        }
+      ]
+    }
+  },
+  "versionSweep": {
+    "v0.4.21": {
+      "main": {
+        "versions": 60,
+        "rank1": 34,
+        "inTop10": 56,
+        "missing": 4,
+        "meanResults": 10,
+        "meanMs": 942
+      },
+      "fix": {
+        "versions": 60,
+        "rank1": 60,
+        "inTop10": 60,
+        "missing": 0,
+        "meanResults": 1.02,
+        "meanMs": 17
+      }
+    },
+    "0.5.1.1": {
+      "main": {
+        "versions": 60,
+        "rank1": 34,
+        "inTop10": 56,
+        "missing": 4,
+        "meanResults": 9.03,
+        "meanMs": 901
+      },
+      "fix": {
+        "versions": 60,
+        "rank1": 60,
+        "inTop10": 60,
+        "missing": 0,
+        "meanResults": 1.02,
+        "meanMs": 12
+      }
+    }
+  },
+  "tests": {
+    "provider": {
+      "main": "13 failed, 84 passed, 1 skipped (13 of the 14 new keyword tests fail; the one that keeps smart, basic and unspecified searches semantic passes on both)",
+      "fix": "97 passed, 1 skipped"
+    },
+    "hostOpenViking": "4 passed; the protocol fixture now answers search/grep as OpenViking does, and the document archive test makes 3 grep calls by content hash",
+    "root": "2818 passed, 10 skipped"
+  },
+  "emptySpace": {
+    "server": "0.5.1.1",
+    "namespace": "viking://user/wp452empty/memories",
+    "keyword": {
+      "results": []
+    },
+    "smart": {
+      "results": []
+    },
+    "note": "grep answers 404 NOT_FOUND naming the root; the provider returns no results"
+  }
+}

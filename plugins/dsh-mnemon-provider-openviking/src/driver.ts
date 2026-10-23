@@ -16,7 +16,7 @@ import { CATEGORIES, NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter, typ
 interface OpenVikingEnvelope {
   status?: string
   result?: unknown
-  error?: { code?: string; message?: string; trace_id?: string }
+  error?: { code?: string; message?: string; trace_id?: string; details?: { resource?: unknown } }
   trace_id?: string
 }
 
@@ -107,6 +107,63 @@ function queueFailed(value: unknown): boolean {
   })
 }
 
+/** Most matched lines a keyword search asks `search/grep` for: memory files are short, so this covers many files. */
+const GREP_NODE_LIMIT = 256
+
+/**
+ * The literal terms of a keyword query, each matched as written (#452): whitespace-separated, with a
+ * double-quoted phrase kept whole, once each whatever their case. A one-character term would match
+ * nearly every memory, so it counts only alone.
+ */
+function keywordTerms(query: string): string[] {
+  const seen = new Set<string>()
+  const terms = [...query.matchAll(/"([^"]+)"|(\S+)/gu)].map(([, phrase, word]) => (phrase ?? word ?? '').trim()).filter(term => {
+    const key = term.toLocaleLowerCase()
+    if (term === '' || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+  return terms.length > 1 ? terms.filter(term => Array.from(term).length > 1) : terms
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+}
+
+const ASCII_WORD = /[A-Za-z0-9]/u
+
+/**
+ * Whether a line holds the term as a whole word: where the term starts or ends with a letter or a digit,
+ * the character beside it may not be one, so 29.8.5 does not match 29.8.50, nor fleet-04 match fleet-042.
+ * Text in scripts without spaces, such as Chinese, matches anywhere. Both arguments are lowercase.
+ */
+function holdsTerm(line: string, term: string): boolean {
+  const startsWord = ASCII_WORD.test(term[0]!)
+  const endsWord = ASCII_WORD.test(term[term.length - 1]!)
+  for (let at = line.indexOf(term); at >= 0; at = line.indexOf(term, at + 1)) {
+    const before = at === 0 ? '' : line[at - 1]!
+    const after = line[at + term.length] ?? ''
+    if ((!startsWord || !ASCII_WORD.test(before)) && (!endsWord || !ASCII_WORD.test(after))) return true
+  }
+  return false
+}
+
+/** OpenViking's answer when the URI asked for does not exist yet, as an empty space's memory root: a 404 naming it. */
+function missingResource(error: unknown): boolean {
+  const failure = object(error)
+  return failure?.status === 404 && failure.resource !== undefined
+}
+
+/** A server without the endpoint: a 404 that names no resource, or a method the route does not take. */
+function missingRoute(error: unknown): boolean {
+  const failure = object(error)
+  return failure?.status === 405 || (failure?.status === 404 && failure.resource === undefined)
+}
+
+function unreadHint(skipped: number): string {
+  return `${skipped} OpenViking ${skipped === 1 ? 'result' : 'results'} could not be read and ${skipped === 1 ? 'was' : 'were'} left out; the server's index can list a file it no longer holds.`
+}
+
 /** What a folder holds, for files written before the category was in the name or by OpenViking itself. */
 const FOLDER_CATEGORIES: Record<string, string> = { preferences: 'preference', experiences: 'insight', events: 'context', entities: 'fact' }
 
@@ -193,6 +250,10 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
 
   async search(body: MemorySpace, request: SearchRequest, signal?: AbortSignal): Promise<ProviderSearchResult> {
     const memoryRoot = await this.memoryRoot(body, signal)
+    return request.mode === 'keyword' ? this.keywordSearch(body, memoryRoot, request, signal) : this.semanticSearch(body, memoryRoot, request, signal)
+  }
+
+  private async semanticSearch(body: MemorySpace, memoryRoot: string, request: SearchRequest, signal?: AbortSignal): Promise<ProviderSearchResult> {
     const result = await this.request(body, '/api/v1/search/find', {
       method: 'POST',
       body: JSON.stringify({
@@ -221,7 +282,60 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
     const { read, skipped } = await this.readAll(body, matches, signal)
     return {
       results: read,
-      ...(skipped === 0 ? {} : { hint: `${skipped} OpenViking ${skipped === 1 ? 'result' : 'results'} could not be read and ${skipped === 1 ? 'was' : 'were'} left out; the server's index can list a file it no longer holds.` }),
+      ...(skipped === 0 ? {} : { hint: unreadHint(skipped) }),
+    }
+  }
+
+  /**
+   * Keyword search through OpenViking's exact-text channel (#452). Its local vector backend has no BM25,
+   * so `search/grep` is the one way to find an ID, a version or a path by its exact text. Each term is
+   * a literal, matched in any case and as a whole word; a memory that holds more of the terms comes first,
+   * otherwise grep's order is kept, and no score is made up. The server is asked for the plain terms, which
+   * its keyword recall can read, and the word check runs here. A server without the endpoint answers
+   * semantically, and says so.
+   */
+  private async keywordSearch(body: MemorySpace, memoryRoot: string, request: SearchRequest, signal?: AbortSignal): Promise<ProviderSearchResult> {
+    const terms = keywordTerms(request.query)
+    if (terms.length === 0) return { results: [] }
+    let found: Record<string, unknown> | undefined
+    try {
+      found = object(await this.request(body, '/api/v1/search/grep', {
+        method: 'POST',
+        // Every GrepRequest from 0.4.16 to 0.5.2 declares these.
+        body: JSON.stringify({ uri: memoryRoot, pattern: terms.map(escapeRegExp).join('|'), case_insensitive: true, node_limit: GREP_NODE_LIMIT }),
+      }, { signal }))
+    } catch (error) {
+      // No memory has been written under this root yet.
+      if (missingResource(error)) return { results: [] }
+      if (!missingRoute(error)) throw error
+      const semantic = await this.semanticSearch(body, memoryRoot, request, signal)
+      const fallback = 'This OpenViking server has no exact-text search (search/grep), so these keyword results are semantic.'
+      return { ...semantic, hint: semantic.hint === undefined ? fallback : `${fallback} ${semantic.hint}` }
+    }
+    const lowered = terms.map(term => term.toLocaleLowerCase())
+    const matched = new Map<string, Set<string>>()
+    for (const value of Array.isArray(found?.matches) ? found.matches : []) {
+      const match = object(value)
+      const uri = string(match?.uri)
+      if (uri === undefined || !isMemoryFile(uri, memoryRoot)) continue
+      const line = (string(match?.content) ?? '').toLocaleLowerCase()
+      const hits = matched.get(uri) ?? new Set<string>()
+      for (const term of lowered) if (holdsTerm(line, term)) hits.add(term)
+      if (hits.size > 0) matched.set(uri, hits)
+    }
+    const ranked = [...matched].map(([uri, hits], order) => ({ uri, order, count: hits.size }))
+      .sort((left, right) => right.count - left.count || left.order - right.order)
+      .slice(0, request.limit)
+    const { read, skipped } = await this.readAll(body, ranked.map(({ uri }): Insight => ({
+      id: uri,
+      externalUri: uri,
+      content: uri,
+      category: categoryFromUri(uri),
+      source: 'external',
+    })), signal)
+    return {
+      results: read,
+      ...(skipped === 0 ? {} : { hint: unreadHint(skipped) }),
     }
   }
 
@@ -437,7 +551,9 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
       const envelope = await response.json().catch(() => ({})) as OpenVikingEnvelope
       if (!response.ok || envelope.status === 'error') {
         const trace = envelope.error?.trace_id ?? envelope.trace_id
-        throw Object.assign(new Error(`${envelope.error?.message ?? `OpenViking HTTP ${response.status}`}${trace === undefined ? '' : ` (trace ${trace})`}`), { status: response.status })
+        throw Object.assign(new Error(`${envelope.error?.message ?? `OpenViking HTTP ${response.status}`}${trace === undefined ? '' : ` (trace ${trace})`}`), {
+          status: response.status, code: envelope.error?.code, resource: string(envelope.error?.details?.resource),
+        })
       }
       return envelope.result ?? envelope
     } catch (error) {

@@ -79,6 +79,14 @@ export function openVikingProtocolFixture() {
       const requestedRoot = canonical(body.target_uri)
       result = { memories: [...files.values()].filter(file => file.account === account && file.uri.startsWith(requestedRoot + '/') && file.content.includes(body.query))
         .map(file => ({ uri: file.uri, abstract: 'Synthetic summary', score: 0.99 })) }
+    } else if (url.pathname === '/api/v1/search/grep') {
+      // As every OpenViking since 0.4.16 answers: each line under the URI that the pattern matches, in file order.
+      const requestedRoot = canonical(body.uri)
+      const pattern = new RegExp(String(body.pattern), body.case_insensitive === true ? 'iu' : 'u')
+      const under = [...files.values()].filter(file => file.account === account && file.uri.startsWith(requestedRoot + '/'))
+      const matches = under.flatMap(file => file.content.split('\n').flatMap((line, index) => pattern.test(line) ? [{ line: index + 1, uri: file.uri, content: line }] : []))
+        .slice(0, body.node_limit ?? 256)
+      result = { matches, count: matches.length, match_count: matches.length, files_scanned: under.length }
     } else if (url.pathname === '/api/v1/fs' && method === 'DELETE') {
       const uri = canonical(url.searchParams.get('uri'))
       if (state.failDelete) status = 503
