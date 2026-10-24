@@ -890,9 +890,10 @@ export class MemorySpacesService {
         })))
         if (result.hint !== undefined) hints.push(`${body.name}: ${result.hint}`)
       }
-      const heterogeneous = new Set(spaces.map(body => body.provider.id)).size > 1
-      if (heterogeneous) for (const candidate of candidates) candidate.insight.federatedScore = 1 / (60 + candidate.providerRank)
-      candidates.sort((left, right) => heterogeneous
+      const ranked = new Set(candidates.map(candidate => candidate.providerId)).size > 1
+        || candidates.some(candidate => candidate.scoreSemantics?.kind === 'provider-native')
+      if (ranked) for (const candidate of candidates) candidate.insight.federatedScore = 1 / (60 + candidate.providerRank)
+      candidates.sort((left, right) => ranked
         ? (right.insight.federatedScore ?? 0) - (left.insight.federatedScore ?? 0) || left.bodyOrder - right.bodyOrder
         : (right.insight.score ?? 0) - (left.insight.score ?? 0))
       return { hints, quality: applyRecallQualityPolicy(preparedPolicy, candidates, qualityContext) }
@@ -952,8 +953,8 @@ export class MemorySpacesService {
         if (decision.reason === 'non-positive-score') stats.droppedNonPositiveScore += 1
         if (decision.reason === 'invalid-score') stats.droppedInvalidScore += 1
       }
-      if (decision.reason === 'unscored') stats.unscored += 1
-      if (decision.reason === 'unscaled-score') stats.unscaled += 1
+      if (candidate.insight.score === undefined) stats.unscored += 1
+      if (['unscaled-score', 'out-of-range-score', 'provider-ranked'].includes(decision.reason)) stats.unscaled += 1
     }
     for (const { candidate } of quality.selected) {
       const stats = qualityStats.get(candidate.memoryBodyId)

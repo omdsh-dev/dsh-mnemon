@@ -13,7 +13,7 @@ export const definition = defineMemorySpaceProviderDefinition({
     origin: descriptor.origin, locality: descriptor.kind, workspaceBinding: descriptor.workspaceBinding,
     capabilities: descriptor.capabilities, fields: descriptor.fields,
     secrets: descriptor.fields.filter(field => field.input === 'secret').map(field => field.key),
-    scoreSemantics: 'normalized-relevance',
+    scoreSemantics: 'provider-native',
   },
   create: context => new OpenVikingProvider(context.memorySpaces ?? context.memoryBodies, { requestTimeoutMs: context.config.timeoutMs }),
 })

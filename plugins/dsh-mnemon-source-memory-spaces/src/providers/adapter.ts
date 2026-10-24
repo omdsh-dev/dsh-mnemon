@@ -57,8 +57,12 @@ export interface ProviderSearchResult {
 }
 
 export interface ProviderScoreSemantics {
-  /** Provider promises a finite relevance score in 0..1 where larger is better. */
-  kind: 'normalized-relevance'
+  /**
+   * normalized-relevance: finite 0..1 relevance on the configured threshold scale.
+   * provider-native: only the returned order is comparable; scores may be boosted,
+   * model-dependent, negative, or absent (for example literal search).
+   */
+  kind: 'normalized-relevance' | 'provider-native'
 }
 
 export type MemoryProviderScoreSemantics = 'normalized-relevance' | 'provider-native' | 'none'

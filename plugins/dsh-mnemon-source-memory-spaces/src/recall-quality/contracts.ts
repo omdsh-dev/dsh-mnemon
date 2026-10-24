@@ -9,6 +9,8 @@ export type RecallQualityDecisionReason =
   | 'non-positive-score'
   | 'invalid-score'
   | 'unscaled-score'
+  | 'provider-ranked'
+  | 'out-of-range-score'
   | 'unscored'
 
 export interface RecallQualityCandidate {
@@ -22,7 +24,7 @@ export interface RecallQualityCandidate {
 
 export interface RecallQualityDecision {
   action: 'keep' | 'drop'
-  tier: 'high' | 'medium' | 'low' | 'unknown'
+  tier: 'high' | 'medium' | 'low' | 'unknown' | 'ranked'
   reason: RecallQualityDecisionReason
   normalizedScore?: number
 }

@@ -29,6 +29,32 @@ function candidate(id: string, score?: number, normalized = true): RecallQuality
 }
 
 describe('recall quality policies', () => {
+  it.each([STRICT_RECALL_QUALITY_POLICY, BALANCED_RECALL_QUALITY_POLICY, EXHAUSTIVE_RECALL_QUALITY_POLICY])('preserves native ranks without interpreting their score scale in $id (#454)', policy => {
+    const policyContext = context(policy.id, 6)
+    const rows = [1.038, 0.71, undefined, -2, 0, 99].map((score, index) => ({
+      ...candidate(`rank-${index}`, score), scoreSemantics: { kind: 'provider-native' as const },
+    }))
+    const result = applyRecallQualityPolicy(prepareRecallQualityPolicy(policy, policyContext), rows, policyContext)
+    expect(result.selected.map(row => row.candidate.insight.id)).toEqual(rows.map(row => row.insight.id))
+    expect(result.selected.every(row => row.decision.tier === 'ranked' && row.decision.normalizedScore === undefined)).toBe(true)
+  })
+
+  it('keeps the fused order across ranked and calibrated results while retaining limits (#454)', () => {
+    const policyContext = context('strict-v1', 5)
+    policyContext.config.maxMediumResults = 1
+    policyContext.config.maxUnknownResults = 1
+    const rows = [
+      { ...candidate('native-answer', 1.038), scoreSemantics: { kind: 'provider-native' as const } },
+      candidate('calibrated-high', 0.9), candidate('medium', 0.5), candidate('medium-over-budget', 0.4),
+      { ...candidate('native-unscored'), scoreSemantics: { kind: 'provider-native' as const } },
+      candidate('unknown'), candidate('unknown-over-budget'), candidate('low', 0.1),
+      { ...candidate('invalid', Number.NaN), scoreSemantics: { kind: 'provider-native' as const } },
+    ]
+    const result = applyRecallQualityPolicy(prepareRecallQualityPolicy(STRICT_RECALL_QUALITY_POLICY, policyContext), rows, policyContext)
+    expect(result.selected.map(row => row.candidate.insight.id)).toEqual(['native-answer', 'calibrated-high', 'medium', 'native-unscored', 'unknown'])
+    expect(result.evaluated.at(-1)?.decision).toMatchObject({ action: 'drop', reason: 'invalid-score' })
+  })
+
   it('strict-v1 enforces score boundaries while retaining unscored and unknown-scale ranks', () => {
     const policyContext = context()
     const prepared = prepareRecallQualityPolicy(STRICT_RECALL_QUALITY_POLICY, policyContext)
@@ -51,7 +77,7 @@ describe('recall quality policies', () => {
       ['medium-lower', expect.objectContaining({ action: 'keep', tier: 'medium', normalizedScore: 0.25 })],
       ['low', expect.objectContaining({ action: 'drop', reason: 'low-score' })],
       ['zero', expect.objectContaining({ action: 'drop', reason: 'non-positive-score' })],
-      ['unscaled', expect.objectContaining({ action: 'keep', tier: 'unknown', reason: 'unscaled-score' })],
+      ['unscaled', expect.objectContaining({ action: 'keep', tier: 'unknown', reason: 'out-of-range-score' })],
       ['provider-unknown', expect.objectContaining({ action: 'keep', tier: 'unknown', reason: 'unscaled-score' })],
     ]))
     expect(prepared.candidateLimit).toBe(30)

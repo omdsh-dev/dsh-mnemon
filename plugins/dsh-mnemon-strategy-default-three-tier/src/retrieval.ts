@@ -8,7 +8,7 @@ interface RecallInsight {
   category?: string; importance?: number; tags?: string[]; entities?: string[]; source?: string; createdAt?: string
   depth?: number; edgeType?: string; memoryBodyId?: string; memoryBodyName?: string
   memoryProviderId?: string; memoryCapabilities?: MemoryJsonValue; externalUri?: string
-  relevanceTier?: 'high' | 'medium' | 'low' | 'unknown'
+  relevanceTier?: 'high' | 'medium' | 'low' | 'unknown' | 'ranked'
 }
 type Insight = RecallInsight
 interface SearchRequest { query: string; mode?: string; limit?: number; memoryBodyIds?: string[] }
@@ -127,6 +127,8 @@ function boundedModelInsights(results: readonly RecallInsight[], admission: Mode
   for (const result of results) {
     if (admitted.length >= resultLimit || result.id.length === 0 || result.id.length > 1_000) continue
     const tier = result.relevanceTier ?? 'unknown'
+    // Provider-ranked evidence is already bounded by the Source. Its native
+    // score is not an unknown-confidence signal; apply only the shared budgets.
     if (tier === 'low') continue
     if (tier === 'medium' && mediumCount >= mediumLimit) continue
     if (tier === 'unknown' && unknownCount >= unknownLimit) continue

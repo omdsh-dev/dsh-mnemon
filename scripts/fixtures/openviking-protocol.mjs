@@ -6,7 +6,8 @@ import { realpathSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { pathToFileURL } from 'node:url'
 
-export const WRITE_FIELDS = ['uri', 'content', 'mode', 'wait', 'timeout', 'telemetry', 'processing_mode']
+// The write fields every release from 0.4.16 to 0.5.2 accepts: 0.5.1 removed `timeout` (#455).
+export const WRITE_FIELDS = ['uri', 'content', 'mode', 'wait', 'telemetry', 'processing_mode']
 export const TAG_FIELDS = ['uri', 'tags', 'mode', 'recursive', 'telemetry']
 
 /** OpenViking 0.4.16's answer to a body with undeclared fields, or undefined when it has none. */
@@ -74,6 +75,13 @@ export function openVikingProtocolFixture() {
       const requestedRoot = canonical(url.searchParams.get('uri'))
       result = [...files.values()].filter(file => file.account === account && file.uri.startsWith(requestedRoot + '/'))
         .map(file => ({ uri: file.uri, isDir: false, abstract: 'Synthetic summary; the Provider must read the full body.' }))
+    } else if (url.pathname === '/api/v1/search/grep') {
+      const requestedRoot = canonical(body.uri)
+      const pattern = new RegExp(body.pattern, body.case_insensitive ? 'iu' : 'u')
+      result = { matches: [...files.values()]
+        .filter(file => file.account === account && file.uri.startsWith(requestedRoot + '/'))
+        .flatMap(file => file.content.split('\n').filter(line => pattern.test(line)).map(content => ({ uri: file.uri, content })))
+        .slice(0, body.node_limit ?? 256) }
     } else if (url.pathname === '/api/v1/search/find') {
       const requestedRoot = canonical(body.target_uri)
       result = { memories: [...files.values()].filter(file => file.account === account && file.uri.startsWith(requestedRoot + '/') && file.content.includes(body.query))

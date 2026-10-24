@@ -1243,6 +1243,63 @@ describe('MemorySpacesService', () => {
     })
   })
 
+  it('keeps Provider ordering and unscored keyword matches through Source quality limits (#452, #454)', async () => {
+    const root = 'viking://user/team/memories'
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>(async url => {
+      const path = new URL(String(url))
+      if (path.pathname === '/api/v1/content/read') return new Response(JSON.stringify({ result: `Canary ${path.searchParams.get('uri')}` }))
+      if (path.pathname === '/api/v1/search/grep') return new Response(JSON.stringify({ result: {
+        matches: Array.from({ length: 5 }, (_, i) => ({ uri: `${root}/entities/${i}.md`, content: 'Canary' })),
+      } }))
+      return new Response(JSON.stringify({ result: { memories: [
+        { uri: `${root}/entities/first.md`, score: 1.038 },
+        { uri: `${root}/entities/second.md`, score: 99 },
+        { uri: `${root}/entities/third.md`, score: 0.05 },
+      ] } }))
+    }))
+    const { service } = fixture()
+    const space = await service.createSpace({ name: 'OpenViking', description: 'Provider rank fixture', active: true, providerId: 'openviking',
+      openViking: { endpoint: 'https://memory.example', targetUri: root } })
+    const semantic = await service.search({ query: 'Canary', memoryBodyIds: [space.id], limit: 5 })
+    expect(semantic.results.map(row => row.score)).toEqual([1.038, 99, 0.05])
+    expect(semantic.results.every(row => row.relevanceTier === 'ranked' && row.normalizedScore === undefined)).toBe(true)
+    const keyword = await service.search({ query: 'Canary', mode: 'keyword', memoryBodyIds: [space.id], limit: 5 })
+    expect(keyword.results).toHaveLength(5)
+    expect(keyword.results.map(row => row.id)).toEqual(Array.from({ length: 5 }, (_, i) => `${root}/entities/${i}.md`))
+    expect(keyword.results.every(row => row.relevanceTier === 'ranked' && row.score === undefined)).toBe(true)
+  })
+
+  it('keeps Hindsight boosted answers beside OpenViking results without score-band priority (#454)', async () => {
+    const root = 'viking://user/team/memories'
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>(async url => {
+      const path = new URL(String(url))
+      if (path.hostname === 'hindsight.example') return new Response(JSON.stringify({ results: [
+        { id: 'docker-answer', text: 'Docker Engine 29.8.0 / Compose v5.5.1', scores: { final: 1.038 } },
+        { id: 'docker-backup', text: 'Docker installation notes', scores: { final: 1.02 } },
+      ] }))
+      return new Response(JSON.stringify({ result: path.pathname === '/api/v1/content/read' ? 'Container project notes'
+        : { memories: Array.from({ length: 5 }, (_, i) => ({ uri: `${root}/entities/${i}.md`, score: 0.71 - i * 0.01 })) } }))
+    }))
+    const { service } = fixture()
+    const ov = await service.createSpace({ name: 'OpenViking', description: 'Semantic memory', active: true, providerId: 'openviking',
+      openViking: { endpoint: 'https://memory.example', targetUri: root } })
+    const hs = await service.createSpace({ name: 'Hindsight', description: 'Version facts', active: true, providerId: 'hindsight',
+      connection: { endpoint: 'https://hindsight.example', bankId: 'team', budget: 'mid' } })
+    const result = await service.search({ query: 'Docker versions', memoryBodyIds: [ov.id, hs.id], limit: 4 })
+    expect(result.results.map(row => row.id)).toEqual([`${root}/entities/0.md`, 'docker-answer', `${root}/entities/1.md`, 'docker-backup'])
+    expect(result.results.every(row => row.relevanceTier === 'ranked')).toBe(true)
+    expect(result.results.find(row => row.id === 'docker-answer')).toMatchObject({ score: 1.038 })
+  })
+
+  it('honors Holographic default trust through Source importance normalization (#447)', async () => {
+    const { service, dataDir } = fixture()
+    const dataPath = join(dataDir, 'holographic.json')
+    const space = await service.createSpace({ name: 'Local facts', description: 'Trust fixture', active: true, providerId: 'holographic',
+      connection: { dataPath, defaultTrust: 0.8, minTrust: 0 } })
+    await service.remember({ memoryBodyId: space.id, content: 'Canary omitted importance' })
+    expect(JSON.parse(readFileSync(dataPath, 'utf8')).facts[0]).toMatchObject({ importance: 3, trustScore: 0.8 })
+  })
+
   it('reports query-only providers without pretending they expose an enumerable content list', async () => {
     const { service } = fixture()
     const provider = {

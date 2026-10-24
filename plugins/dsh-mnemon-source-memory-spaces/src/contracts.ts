@@ -272,7 +272,7 @@ export const EDGE_TYPES = ['temporal', 'semantic', 'causal', 'entity'] as const 
 export type Intent = 'WHY' | 'WHEN' | 'ENTITY' | 'GENERAL'
 export const INTENTS = ['WHY', 'WHEN', 'ENTITY', 'GENERAL'] as const satisfies readonly Intent[]
 
-export type RecallRelevanceTier = 'high' | 'medium' | 'low' | 'unknown'
+export type RecallRelevanceTier = 'high' | 'medium' | 'low' | 'unknown' | 'ranked'
 
 /**
  * One spelling-insensitive key per entity. The Host's entity index and the Client's graph

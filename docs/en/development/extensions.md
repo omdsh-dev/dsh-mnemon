@@ -191,6 +191,8 @@ Every mutation receipt declares `completion`: `accepted`, `candidate`, `committe
 
 ## Provider child and Client page
 
+`ProviderScoreSemantics.kind` distinguishes `normalized-relevance` (0..1 scores usable with the configured thresholds) from `provider-native` (ordered results with engine-specific or absent scores). Match the manifest declaration to the runtime adapter. Native-ranked rows receive `relevanceTier: "ranked"` and no fabricated `normalizedScore`; custom recall policies should preserve their rank and apply total count budgets.
+
 Provider authors use `defineMemorySpaceProvider` from Memory Spaces' SDK. A module receives only its bound `host.install(ctx, definition)` capability; the private parent Host, Snapshot and Registry are not SDK exports. `installMemorySpaces` mounts explicit children and returns `Promise<void>`, not a parent handle. [external-provider.ts](../../../scripts/fixtures/plugin-consumer/src/external-provider.ts) is tested in two independent parent Sources with identical child ids.
 
 Use `mountMemorySpaceProvider` from the Source's `/testing` entry to test real child registration, aliased adapter creation and cleanup. It returns frozen descriptor/manifest metadata, `registered`, `createAdapter` and `dispose`. `createMemorySpaceProviderFixture` separately supplies validated connection data and a scoped driver authority. The [published API test](../../../scripts/fixtures/plugin-consumer/tests/public-api.spec.ts) combines both without private imports.

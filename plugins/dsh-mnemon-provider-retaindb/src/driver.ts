@@ -3,19 +3,21 @@ import type { JsonValue } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import type { MemorySpaceAuthority } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import type { Insight, MemoryBody as MemorySpace, MemoryListRequest, RememberRequest, SearchRequest } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import { HttpMemoryProvider, firstArray, jsonNumber, jsonObject, jsonString, type HttpProviderOptions } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
-import { NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter, type ProviderBodyStatus as ProviderSpaceStatus, type ProviderMemorySpace, type ProviderSearchResult } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
+import { type MemoryProviderAdapter, type ProviderBodyStatus as ProviderSpaceStatus, type ProviderMemorySpace, type ProviderSearchResult } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 
 function insight(value: unknown): Insight | undefined {
-  const item = jsonObject(value)
+  const row = jsonObject(value)
+  // Server search wraps the memory; Local and list responses return it directly.
+  const item = jsonObject(row?.memory) ?? row
   const id = jsonString(item?.id) ?? jsonString(item?.memory_id)
   const content = jsonString(item?.content) ?? jsonString(item?.memory) ?? jsonString(item?.text)
   if (id === undefined || content === undefined) return undefined
-  const score = jsonNumber(item?.score) ?? jsonNumber(item?.similarity)
+  const score = jsonNumber(row?.score) ?? jsonNumber(row?.similarity) ?? jsonNumber(item?.score) ?? jsonNumber(item?.similarity)
   const createdAt = jsonString(item?.created_at) ?? jsonString(item?.createdAt) ?? jsonString(item?.updated_at)
   return {
     id,
     content,
-    category: jsonString(item?.memory_type) ?? jsonString(item?.category) ?? 'general',
+    category: categoryOf(item),
     source: 'external',
     ...(score === undefined ? {} : { score }),
     ...(createdAt === undefined ? {} : { createdAt }),
@@ -34,9 +36,65 @@ function isEndpointMissing(error: unknown): boolean {
   return error instanceof Error && /HTTP 404\b/u.test(error.message)
 }
 
+/**
+ * The importance sent for the Source's default 3: the middle of the 0.5..0.9 band
+ * RetainDB's own writers use. Its SDK's extraction keeps importance within 0.5..1,
+ * falling back to 0.7, and RetainDB Local writes 0.55 to 0.92.
+ */
+const IMPORTANCE_AT_DEFAULT = 0.7
+
+/** How far one step of the Source's 1..5 importance moves the importance sent. */
+const IMPORTANCE_PER_STEP = 0.1
+
+/** The 1..5 importance a request carries, if any, read as the Holographic Provider reads it. */
+function importanceLevel(value: unknown): number | undefined {
+  const level = Number(value)
+  return value === undefined || value === null || !Number.isFinite(level) ? undefined : Math.min(5, Math.max(1, Math.round(level)))
+}
+
+/**
+ * The importance sent to RetainDB, which takes 0..1. RetainDB Server refuses a
+ * value above 1 with HTTP 400 and defaults to 0.5; RetainDB Local defaults to 0.62.
+ * The Source's integer 1..5 (3 when the writer gives none) maps onto 0.5..0.9:
+ * 3 is sent as 0.7, and each step above or below moves it by 0.1. A request
+ * without a usable importance is sent as 0.7. The 1..5 value used to be sent as is.
+ */
+function retainDbImportance(importance: unknown): number {
+  const level = importanceLevel(importance)
+  const steps = level === undefined ? 0 : level - 3
+  // Two decimals, so 1 is sent as 0.5 rather than 0.49999999999999994.
+  return Math.round((IMPORTANCE_AT_DEFAULT + steps * IMPORTANCE_PER_STEP) * 100) / 100
+}
+
+/** The Memory Spaces categories RetainDB Server's POST /v1/memory takes under the same name. */
+const SHARED_MEMORY_TYPES: ReadonlySet<string> = new Set(['preference', 'decision'])
+
+/**
+ * RetainDB's memory type for a Memory Spaces category. RetainDB Server answers a
+ * type outside its list with HTTP 400. POST /v1/memory takes `preference` and
+ * `decision`, but neither `fact`, `insight`, `context` nor `general`; those are sent
+ * as `factual`, the type RetainDB itself falls back to. The legacy POST /v1/memories
+ * takes only factual, episodic, semantic and procedural, so it gets `factual` for
+ * every category. RetainDB Local takes any type and infers its own from the text;
+ * where it finds none, it already fell back to `factual` for those four.
+ */
+function memoryType(category: string | undefined, endpoint: '/v1/memory' | '/v1/memories'): string {
+  return endpoint === '/v1/memory' && category !== undefined && SHARED_MEMORY_TYPES.has(category) ? category : 'factual'
+}
+
+/**
+ * The Memory Spaces category of a memory RetainDB returns. Its type comes as
+ * `memory_type`, or as `type` in RetainDB Local's search results; `preference`
+ * and `decision` map back to those categories, and any other type reads as general.
+ */
+function categoryOf(item: ReturnType<typeof jsonObject>): string {
+  const type = jsonString(item?.memory_type) ?? jsonString(item?.type) ?? jsonString(item?.category)
+  return type !== undefined && SHARED_MEMORY_TYPES.has(type) ? type : 'general'
+}
+
 export class RetainDbProvider extends HttpMemoryProvider implements MemoryProviderAdapter {
   readonly id = 'retaindb' as const
-  readonly scoreSemantics = NORMALIZED_RELEVANCE_SCORE
+  readonly scoreSemantics = Object.freeze({ kind: 'provider-native' as const })
 
   constructor(memorySpaces: MemorySpaceAuthority, options: HttpProviderOptions = {}) {
     super(memorySpaces, { label: descriptor.label, ...options })
@@ -113,10 +171,10 @@ export class RetainDbProvider extends HttpMemoryProvider implements MemoryProvid
     const json = {
       project: String(connection.project),
       content: request.content,
-      memory_type: request.category ?? 'factual',
+      memory_type: memoryType(request.category, '/v1/memory'),
       user_id: String(connection.userId) === '*' ? 'dsh-user' : String(connection.userId),
       session_id: `dsh-${body.id}`,
-      importance: request.importance ?? 0.7,
+      importance: retainDbImportance(request.importance),
       write_mode: 'sync',
     } as const
     let payload: unknown
@@ -124,15 +182,31 @@ export class RetainDbProvider extends HttpMemoryProvider implements MemoryProvid
       payload = await this.request(body, '/v1/memory', { headers: this.headers(connection, '/v1/memory'), json, signal })
     } catch (error) {
       if (!isEndpointMissing(error)) throw error
-      const { write_mode: _writeMode, ...legacy } = json
+      const { write_mode: _writeMode, ...current } = json
+      // The legacy endpoint queues a write unless `async` is false; ask it to store before it answers.
+      const legacy = { ...current, memory_type: memoryType(request.category, '/v1/memories'), async: false }
       payload = await this.request(body, '/v1/memories', { headers: this.headers(connection, '/v1/memories'), json: legacy, signal })
     }
     const result = jsonObject(payload) ?? {}
+    const status = String(result.status).toLowerCase()
+    if (result.success === false || ['error', 'failed'].includes(status)) {
+      throw new Error('RetainDB did not confirm a stored memory; check the server before retrying.')
+    }
+    // A server that queued the write anyway answers with a job, not a memory: report it as queued, not stored.
+    const jobId = jsonString(result.jobId) ?? jsonString(result.job_id)
+    if (jsonString(result.mode) === 'async' || ['queued', 'pending', 'processing'].includes(status) || jobId !== undefined) {
+      return { action: 'queued', provider: this.id, summary: 'RetainDB queued the memory; it is not stored yet.', ...(jobId === undefined ? {} : { jobId }) }
+    }
+    // RetainDB Local answers with `id`; RetainDB Server with `memory_id`, or only the stored `memory`.
+    const id = jsonString(result.id) ?? jsonString(result.memory_id) ?? jsonString(jsonObject(result.memory)?.id)
+    if (id === undefined) {
+      throw new Error('RetainDB did not confirm a stored memory; the write outcome is unknown. Check the server before retrying.')
+    }
     return {
       action: 'stored',
       provider: this.id,
       summary: 'RetainDB stored the memory synchronously.',
-      ...(jsonString(result.id) === undefined ? {} : { id: jsonString(result.id)! }),
+      id,
     }
   }
 

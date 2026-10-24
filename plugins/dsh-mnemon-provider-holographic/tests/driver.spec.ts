@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, statSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -9,6 +9,39 @@ const temporaryDirectories: string[] = []
 afterEach(() => { for (const directory of temporaryDirectories.splice(0)) rmSync(directory, { recursive: true, force: true }) })
 
 describe('standalone holographic data plane', () => {
+  it('uses defaultTrust for default importance and separates the 1..5 importance from trust (#447)', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'mnemon-holographic-trust-'))
+    temporaryDirectories.push(dataDir)
+    const dataPath = join(dataDir, 'facts.json')
+    const { authority, body } = createMemorySpaceProviderFixture(descriptor, { dataPath, defaultTrust: 0.5, minTrust: 0.4 }, { dataDir })
+    const provider = new HolographicProvider(authority)
+    for (const importance of [1, 3, 5]) await provider.remember(body, { content: `Canary level ${importance}`, importance, entities: ['Canary'] })
+    await provider.remember(body, { content: 'Canary omitted importance', entities: ['Canary'] })
+    const facts = JSON.parse(readFileSync(dataPath, 'utf8')).facts
+    expect(facts.map((fact: { trustScore: number }) => fact.trustScore)).toEqual([0.3, 0.5, 0.7, 0.5])
+    const results = (await provider.search(body, { query: 'Canary' })).results
+    expect(results.map(row => row.importance)).toEqual([5, 3, undefined])
+    expect(results.map(row => row.score)).toEqual([0.63, 0.45, 0.45])
+    expect((await provider.list(body, {})).map(row => row.id)).not.toContain(facts[0].id)
+    expect((await provider.related(body, facts[2].id, 1)).map(row => row.id)).not.toContain(facts[0].id)
+    await expect(provider.remember(body, { content: 'Canary level 1', importance: 5 })).resolves.toMatchObject({ action: 'skipped', hiddenByMinTrust: true })
+  })
+
+  it('keeps old stored trust and preserves an exact configured default (#447)', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'mnemon-holographic-legacy-'))
+    temporaryDirectories.push(dataDir)
+    const dataPath = join(dataDir, 'facts.json')
+    const { authority, body } = createMemorySpaceProviderFixture(descriptor, { dataPath, defaultTrust: 0.33333337, minTrust: 0.33333337 }, { dataDir })
+    writeFileSync(dataPath, JSON.stringify({ version: 1, facts: [{ id: 'legacy', content: 'Canary legacy', category: 'fact', trustScore: 1, tags: [], entities: [], createdAt: '', updatedAt: '' }] }))
+    const provider = new HolographicProvider(authority)
+    await provider.remember(body, { content: 'Canary default', importance: 3 })
+    const facts = JSON.parse(readFileSync(dataPath, 'utf8')).facts
+    expect(facts.map((fact: { trustScore: number }) => fact.trustScore)).toEqual([1, 0.33333337])
+    const results = (await provider.search(body, { query: 'Canary' })).results
+    expect(results).toHaveLength(2)
+    expect(results[0]).not.toHaveProperty('importance')
+  })
+
   it('preserves exact Jaccard scores for unequal token sets and Unicode', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'dsh-mnemon-holographic-score-'))
     temporaryDirectories.push(dataDir)

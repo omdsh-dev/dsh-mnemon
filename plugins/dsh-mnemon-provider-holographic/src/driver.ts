@@ -23,6 +23,8 @@ interface HolographicFact {
   tags: string[]
   entities: string[]
   trustScore: number
+  /** The writer's 1..5 importance. Facts written before #447 have none. */
+  importance?: number
   createdAt: string
   updatedAt: string
 }
@@ -39,6 +41,49 @@ const CAPITALIZED = /\b([A-Z][\p{L}\p{N}_-]+(?:\s+[A-Z][\p{L}\p{N}_-]+)*)\b/gu
 
 function clampTrust(value: number): number {
   return Math.min(1, Math.max(0, value))
+}
+
+/** How far one importance step moves a fact's trust from the space's default. */
+const TRUST_PER_IMPORTANCE_STEP = 0.1
+
+/** The 1..5 importance a request carries, if any. */
+function importanceLevel(value: unknown): number | undefined {
+  const level = Number(value)
+  return value === undefined || value === null || !Number.isFinite(level) ? undefined : Math.min(5, Math.max(1, Math.round(level)))
+}
+
+/**
+ * The trust a new fact starts with (#447). Importance 3, which the Memory Spaces Source sends when
+ * a writer gives none, starts at the space's default trust; each step above or below moves it by
+ * 0.1, within 0..1. Before, the 1..5 importance was clamped as if it were a trust, so every fact
+ * started at 1.0 and neither the default nor the minimum trust took effect.
+ */
+function initialTrust(importance: number | undefined, defaultTrust: unknown): number {
+  const configured = Number(defaultTrust ?? 0.5)
+  const base = Number.isFinite(configured) ? clampTrust(configured) : 0.5
+  const steps = importance === undefined ? 0 : importance - 3
+  // A fine step only removes float noise such as 0.30000000000000004; it never moves a configured
+  // default (0.333 stays 0.333), so a default-importance fact is never hidden by its own default.
+  return steps === 0 ? base : Math.round(clampTrust(base + steps * TRUST_PER_IMPORTANCE_STEP) * 1e6) / 1e6
+}
+
+/** The minimum recall trust a space sets, within 0..1. */
+function minimumTrust(connection: Record<string, string | number | boolean>): number {
+  const configured = Number(connection.minTrust ?? 0.3)
+  return Number.isFinite(configured) ? clampTrust(configured) : 0.3
+}
+
+/** Whether recall, browse and related reads leave a fact out, with a tolerance for float noise. */
+function belowMinimum(fact: HolographicFact, minTrust: number): boolean {
+  return fact.trustScore < minTrust - 1e-9
+}
+
+/** What a receipt adds when the fact it names stays stored but hidden by the space's minimum trust. */
+function hiddenNotice(fact: HolographicFact, minTrust: number): Record<string, JsonValue> {
+  return belowMinimum(fact, minTrust)
+    ? { hiddenByMinTrust: true, trustScore: fact.trustScore, minTrust,
+        hint: `Its trust ${fact.trustScore} is below this space's minimum recall trust ${minTrust}, so search, browse and related reads leave it out until the minimum is lowered.` }
+    : {}
 }
 
 function terms(value: string): Set<string> {
@@ -71,7 +116,8 @@ function insight(fact: HolographicFact, score?: number): Insight {
     id: fact.id,
     content: fact.content,
     category: fact.category,
-    importance: fact.trustScore,
+    // Importance is on the 1..5 scale every Provider reports; trust is a separate 0..1 value.
+    ...(fact.importance === undefined ? {} : { importance: fact.importance }),
     tags: fact.tags,
     entities: fact.entities,
     source: 'external',
@@ -113,13 +159,12 @@ export class HolographicProvider implements MemoryProviderAdapter {
 
   async search(body: MemorySpace, request: SearchRequest): Promise<ProviderSearchResult> {
     const store = this.load(body)
-    const connection = this.connection(body)
-    const minTrust = clampTrust(Number(connection.minTrust ?? 0.3))
+    const minTrust = minimumTrust(this.connection(body))
     const queryTerms = terms(request.query)
     const query = request.query.toLocaleLowerCase()
     const limit = Math.min(Math.max(request.limit ?? 10, 1), 50)
     const results = topScored(store.facts.flatMap(fact => {
-      if (fact.trustScore < minTrust || (request.category !== undefined && fact.category !== request.category)) return []
+      if (belowMinimum(fact, minTrust) || (request.category !== undefined && fact.category !== request.category)) return []
       const lexical = overlap(queryTerms, terms(`${fact.content} ${fact.tags.join(' ')} ${fact.entities.join(' ')}`))
       const phrase = fact.content.toLocaleLowerCase().includes(query) ? 1 : 0
       const entity = fact.entities.some(value => query.includes(value.toLocaleLowerCase())) ? 1 : 0
@@ -138,9 +183,9 @@ export class HolographicProvider implements MemoryProviderAdapter {
       })).results
     }
     const store = this.load(body)
-    const minTrust = clampTrust(Number(this.connection(body).minTrust ?? 0.3))
+    const minTrust = minimumTrust(this.connection(body))
     return store.facts
-      .filter(fact => fact.trustScore >= minTrust && (request.category === undefined || fact.category === request.category))
+      .filter(fact => !belowMinimum(fact, minTrust) && (request.category === undefined || fact.category === request.category))
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
       .slice(0, Math.min(Math.max(request.limit ?? 200, 1), 1000))
       .map(fact => insight(fact))
@@ -169,10 +214,12 @@ export class HolographicProvider implements MemoryProviderAdapter {
     const store = this.load(body)
     const source = store.facts.find(fact => fact.id === id)
     if (source === undefined) return []
+    const minTrust = minimumTrust(this.connection(body))
     const sourceEntities = new Set(source.entities.map(value => value.toLocaleLowerCase()))
     const sourceTerms = terms(source.content)
     return topScored(store.facts.flatMap(fact => {
-      if (fact.id === id) return []
+      // The same gate as search and browse: a related read never surfaces a fact they hide.
+      if (fact.id === id || belowMinimum(fact, minTrust)) return []
       const sharedEntities = fact.entities.filter(value => sourceEntities.has(value.toLocaleLowerCase())).length
       const score = Math.max(sharedEntities === 0 ? 0 : Math.min(1, 0.5 + sharedEntities * 0.2), overlap(sourceTerms, terms(fact.content))) * fact.trustScore
       return score <= 0 ? [] : [{ fact, score }]
@@ -181,23 +228,32 @@ export class HolographicProvider implements MemoryProviderAdapter {
 
   async remember(body: MemorySpace, request: RememberRequest): Promise<JsonValue> {
     const store = this.load(body)
-    const existing = store.facts.find(fact => fact.content === request.content.trim())
-    if (existing !== undefined) return { action: 'skipped', provider: this.id, id: existing.id, summary: 'Holographic already contains this fact.' }
-    const now = new Date().toISOString()
     const connection = this.connection(body)
+    const minTrust = minimumTrust(connection)
+    const existing = store.facts.find(fact => fact.content === request.content.trim())
+    if (existing !== undefined) {
+      const hidden = belowMinimum(existing, minTrust)
+      return { action: 'skipped', provider: this.id, id: existing.id, ...hiddenNotice(existing, minTrust),
+        summary: hidden ? 'Holographic already contains this fact; its trust is below this space\'s minimum recall trust, so it is hidden.' : 'Holographic already contains this fact.' }
+    }
+    const now = new Date().toISOString()
+    const importance = importanceLevel(request.importance)
     const fact: HolographicFact = {
       id: `holo-${randomUUID()}`,
       content: request.content.trim(),
       category: request.category ?? 'general',
       tags: [...new Set(request.tags ?? [])],
       entities: extractEntities(request.content, request.entities),
-      trustScore: clampTrust(Number(request.importance ?? connection.defaultTrust ?? 0.5)),
+      trustScore: initialTrust(importance, connection.defaultTrust),
+      ...(importance === undefined ? {} : { importance }),
       createdAt: now,
       updatedAt: now,
     }
     store.facts.push(fact)
     this.save(body, store)
-    return { action: 'stored', provider: this.id, id: fact.id, summary: 'Holographic stored the structured fact.' }
+    const hidden = belowMinimum(fact, minTrust)
+    return { action: 'stored', provider: this.id, id: fact.id, ...hiddenNotice(fact, minTrust),
+      summary: hidden ? 'Holographic stored the structured fact; its trust is below this space\'s minimum recall trust, so it is hidden.' : 'Holographic stored the structured fact.' }
   }
 
   async forget(body: MemorySpace, id: string): Promise<JsonValue> {

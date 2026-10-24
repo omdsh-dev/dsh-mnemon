@@ -14,7 +14,7 @@ import type {
   SearchRequest,
 } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import { HttpMemoryProvider, firstArray, jsonArray, jsonNumber, jsonObject, jsonString, type HttpProviderOptions } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
-import { NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter, type ProviderBodyStatus as ProviderSpaceStatus, type ProviderMemorySpace, type ProviderSearchResult } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
+import { type MemoryProviderAdapter, type ProviderBodyStatus as ProviderSpaceStatus, type ProviderMemorySpace, type ProviderSearchResult } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 
 /**
  * An entity name without the note Hindsight may append in parentheses, `Alice (person)`. The same
@@ -63,7 +63,7 @@ function edgeType(value: unknown): EdgeType | undefined {
 
 export class HindsightProvider extends HttpMemoryProvider implements MemoryProviderAdapter {
   readonly id = 'hindsight' as const
-  readonly scoreSemantics = NORMALIZED_RELEVANCE_SCORE
+  readonly scoreSemantics = Object.freeze({ kind: 'provider-native' as const })
 
   constructor(memorySpaces: MemorySpaceAuthority, options: HttpProviderOptions = {}) {
     super(memorySpaces, { label: descriptor.label, ...options })

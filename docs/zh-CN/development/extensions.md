@@ -191,6 +191,8 @@ Core 仅约束投影字符数、证据字符数/条数及已分派调用次数�
 
 ## Provider 子模块与 Client 页面
 
+`ProviderScoreSemantics.kind` 区分 `normalized-relevance`（可用于配置阈值的 0..1 分数）与 `provider-native`（按引擎原生顺序返回，分数尺度自有或无分数）。manifest 与运行时适配器应使用一致声明。原生排名结果标记为 `relevanceTier: "ranked"`，不虚构 `normalizedScore`；自定义召回策略应保留其排名并执行总条数预算。
+
 Provider 使用 Memory Spaces SDK 的 `defineMemorySpaceProvider`。模块只收到限定子节点的 `host.install(ctx, definition)` 能力；私有父 Host、Snapshot 和 Registry 不从 SDK 导出。`installMemorySpaces` 挂载显式子模块，返回 `Promise<void>`，不返回父对象句柄。[external-provider.ts](../../../scripts/fixtures/plugin-consumer/src/external-provider.ts) 会在两个独立父 Source 内以同名子节点测试。
 
 通过 Source 的 `/testing` 入口使用 `mountMemorySpaceProvider`，测试真实子节点注册、带实例别名的驱动创建和清理；返回值只有冻结的 descriptor/manifest 元信息、`registered`、`createAdapter` 与 `dispose`。`createMemorySpaceProviderFixture` 单独提供经过验证的连接及限定范围的驱动权限。[发布 API 测试](../../../scripts/fixtures/plugin-consumer/tests/public-api.spec.ts) 展示如何组合二者，不导入私有实现。

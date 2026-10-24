@@ -11,12 +11,12 @@ import type {
   RememberRequest,
   SearchRequest,
 } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
-import { CATEGORIES, NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter, type ProviderBodyStatus as ProviderSpaceStatus, type ProviderMemorySpace, type ProviderSearchResult } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
+import { CATEGORIES, type MemoryProviderAdapter, type ProviderBodyStatus as ProviderSpaceStatus, type ProviderMemorySpace, type ProviderSearchResult } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 
 interface OpenVikingEnvelope {
   status?: string
   result?: unknown
-  error?: { code?: string; message?: string; trace_id?: string }
+  error?: { code?: string; message?: string; trace_id?: string; details?: { resource?: unknown } }
   trace_id?: string
 }
 
@@ -129,7 +129,7 @@ function refused(error: unknown): boolean {
 
 export class OpenVikingProvider implements MemoryProviderAdapter {
   readonly id = 'openviking' as const
-  readonly scoreSemantics = NORMALIZED_RELEVANCE_SCORE
+  readonly scoreSemantics = Object.freeze({ kind: 'provider-native' as const })
   private readonly requestFetch: typeof fetch
   private readonly requestTimeoutMs: number
 
@@ -193,6 +193,7 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
 
   async search(body: MemorySpace, request: SearchRequest, signal?: AbortSignal): Promise<ProviderSearchResult> {
     const memoryRoot = await this.memoryRoot(body, signal)
+    if (request.mode === 'keyword') return this.keywordSearch(body, memoryRoot, request, signal)
     const result = await this.request(body, '/api/v1/search/find', {
       method: 'POST',
       body: JSON.stringify({
@@ -223,6 +224,43 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
       results: read,
       ...(skipped === 0 ? {} : { hint: `${skipped} OpenViking ${skipped === 1 ? 'result' : 'results'} could not be read and ${skipped === 1 ? 'was' : 'were'} left out; the server's index can list a file it no longer holds.` }),
     }
+  }
+
+  /** Literal, case-insensitive search in the selected namespace (#452). */
+  private async keywordSearch(body: MemorySpace, memoryRoot: string, request: SearchRequest, signal?: AbortSignal): Promise<ProviderSearchResult> {
+    const query = request.query.trim()
+    if (query === '') return { results: [] }
+    const nodeLimit = 256
+    let result: Record<string, unknown> | undefined
+    try {
+      result = object(await this.request(body, '/api/v1/search/grep', {
+        method: 'POST',
+        body: JSON.stringify({ uri: memoryRoot, pattern: query.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), case_insensitive: true, node_limit: nodeLimit }),
+      }, { signal }))
+    } catch (error) {
+      const failure = object(error)
+      if (failure?.status === 404 && failure.resource === memoryRoot) return { results: [] }
+      if (failure?.status === 405 || (failure?.status === 404 && failure.resource === undefined)) {
+        throw new Error('This OpenViking server does not support keyword search (search/grep).', { cause: error })
+      }
+      throw error
+    }
+    const matches = Array.isArray(result?.matches) ? result.matches : []
+    const seen = new Set<string>()
+    const candidates = matches.flatMap((value): Insight[] => {
+      const uri = string(object(value)?.uri)
+      if (uri === undefined || !isMemoryFile(uri, memoryRoot) || seen.has(uri)) return []
+      seen.add(uri)
+      const category = categoryFromUri(uri)
+      if (request.category !== undefined && request.category !== category) return []
+      return [{ id: uri, externalUri: uri, content: uri, category, source: 'external' }]
+    }).slice(0, Math.min(Math.max(request.limit ?? 10, 1), 50))
+    const { read, skipped } = await this.readAll(body, candidates, signal)
+    const hints = [
+      ...(matches.length >= nodeLimit ? ['OpenViking keyword search reached its 256-line limit; narrow the query to find other matches.'] : []),
+      ...(skipped > 0 ? [`${skipped} OpenViking keyword results could not be read and were left out.`] : []),
+    ]
+    return { results: read, ...(hints.length === 0 ? {} : { hint: hints.join(' ') }) }
   }
 
   async graph(body: MemorySpace, signal?: AbortSignal): Promise<MemoryGraphSnapshot> {
@@ -288,15 +326,18 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
     try {
       written = object(await this.request(body, '/api/v1/content/write', {
         method: 'POST',
-        // WriteContentRequest takes these fields alone and refuses any other with HTTP 400 (OpenViking 0.4.16, #353).
-        body: JSON.stringify({ uri, content: request.content, mode: 'create', wait: true, timeout: this.requestTimeoutMs / 1000 }),
+        // Every WriteContentRequest from 0.4.16 to 0.5.2 declares these four and refuses any other field with
+        // HTTP 400 (#353). 0.5.1 removed `timeout` (#455); the request's own deadline bounds the wait instead.
+        body: JSON.stringify({ uri, content: request.content, mode: 'create', wait: true }),
       }, { signal }))
     } catch (error) {
       if (refused(error)) throw new Error(`OpenViking refused the write at ${uri}; nothing was stored. ${error instanceof Error ? error.message : String(error)}`, { cause: error })
       throw new Error(`OpenViking write was not verified at ${uri}; remote content may remain. Inspect this URI before retrying. ${error instanceof Error ? error.message : String(error)}`, { cause: error })
     }
     try {
-      if (written?.uri !== uri || written.content_updated !== true || written.written_bytes !== writtenBytes
+      // 0.5.1 counts the reserved MEMORY_FIELDS trailer it appends to a memory file (#455); earlier releases
+      // count the text alone. Fewer bytes than the text is a short write; the exact readback below proves the rest.
+      if (written?.uri !== uri || written.content_updated !== true || (number(written.written_bytes) ?? -1) < writtenBytes
         || written.mode !== 'create' || written.context_type !== 'memory'
         || written.vector_status !== 'complete' || !['complete', 'skipped'].includes(String(written.semantic_status))
         || queueFailed(written.queue_status)) {
@@ -434,7 +475,9 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
       const envelope = await response.json().catch(() => ({})) as OpenVikingEnvelope
       if (!response.ok || envelope.status === 'error') {
         const trace = envelope.error?.trace_id ?? envelope.trace_id
-        throw Object.assign(new Error(`${envelope.error?.message ?? `OpenViking HTTP ${response.status}`}${trace === undefined ? '' : ` (trace ${trace})`}`), { status: response.status })
+        throw Object.assign(new Error(`${envelope.error?.message ?? `OpenViking HTTP ${response.status}`}${trace === undefined ? '' : ` (trace ${trace})`}`), {
+          status: response.status, resource: string(envelope.error?.details?.resource),
+        })
       }
       return envelope.result ?? envelope
     } catch (error) {
