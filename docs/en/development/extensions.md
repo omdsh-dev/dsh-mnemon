@@ -31,6 +31,23 @@ Following the DSH service/Slot pattern, the public extension point is a small co
 
 The engine, installed records, registry, generations and leases stay internal. Neither `extension-sdk`, `contracts` nor the Core plugin exports them. `MemorySourceRuntime` is intentionally public: it describes the callbacks **your Source implements**, not an engine handle. Definitions/factories are Host-side executable contracts; metadata, operation inputs and results are JSON-safe. This service boundary is not a sandbox for arbitrary JavaScript.
 
+## Workspace identity helpers
+
+Host-side tools can import `canonicalWorkspacePath` and `workspaceStorageId` from `dsh-mnemon/extension-sdk`. These are the same synchronous functions used by the built-in Host, not browser APIs:
+
+```ts
+import { resolve } from 'node:path'
+import { canonicalWorkspacePath, workspaceStorageId } from 'dsh-mnemon/extension-sdk'
+
+const workspace = resolve(process.argv[2] ?? '.')
+const canonical = canonicalWorkspacePath(workspace)
+const id = workspaceStorageId(workspace)
+```
+
+Both require an absolute path without NUL characters. Canonicalization resolves existing symlinks/junctions and retains not-yet-created descendants under their nearest existing ancestor. Filesystem errors other than a missing path propagate; a file cannot be an ancestor of a missing descendant. An existing file path retains its existing identity, so these helpers are not directory validators.
+
+`workspaceStorageId` returns the lowercase SHA-256 hex digest of the canonical path. In the built-in `storageScope: "workspaces"` layout it identifies the directory under `<central root>/workspaces/`. It depends on this machine's resolved path, not a portable project ID: moving a workspace can select a different ID. Neither helper creates, migrates or deletes files, discovers the configured storage root, or grants access to another Source. Per-component storage scope and migration remain separate features.
+
 ## Source lifecycle
 
 Define a `MemorySourceDefinition` with `defineMemorySource`. Its manifest declares API version, type id, package name, role, consistency and supported routes/actions. Its factory receives stable instance provenance and immutable configuration.

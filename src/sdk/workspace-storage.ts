@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { realpathSync, statSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 
-/** Host workspace identity, including aliases with not-yet-created descendants. */
+/** Local workspace identity, including aliases with not-yet-created descendants. */
 export function canonicalWorkspacePath(workspacePath: string): string {
   if (!isAbsolute(workspacePath) || workspacePath.includes('\0')) throw new Error('Workspace path must be absolute')
   let parent = resolve(workspacePath)

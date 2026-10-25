@@ -1,4 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import * as core from 'dsh-mnemon/core'
 import * as sdk from 'dsh-mnemon/extension-sdk'
@@ -17,6 +21,23 @@ import type { InstalledMemorySource } from 'dsh-mnemon/contracts'
 import type { PrivateMemorySpaceProviderHost } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 
 describe('published author API', () => {
+  it('resolves workspace identities through the packed SDK without writing storage', () => {
+    const root = mkdtempSync(join(tmpdir(), 'mnemon-sdk-workspace-'))
+    try {
+      const workspace = join(root, 'project')
+      const alias = join(root, 'alias')
+      mkdirSync(workspace)
+      symlinkSync(workspace, alias, process.platform === 'win32' ? 'junction' : 'dir')
+      const missing = join(alias, 'not-created', '项目')
+      const canonical = join(realpathSync.native(workspace), 'not-created', '项目')
+      expect(sdk.canonicalWorkspacePath(missing)).toBe(canonical)
+      expect(sdk.workspaceStorageId(missing)).toBe(createHash('sha256').update(canonical).digest('hex'))
+      expect(sdk.workspaceStorageId(alias)).toBe(sdk.workspaceStorageId(workspace))
+      expect(() => sdk.workspaceStorageId('../relative')).toThrow('must be absolute')
+      expect(existsSync(missing)).toBe(false)
+      expect(readdirSync(workspace)).toEqual([])
+    } finally { rmSync(root, { recursive: true, force: true }) }
+  })
   it('resolves Source configuration through the packed package without a Host', () => {
     expect(resolveRecallQuality(undefined)).toMatchObject({ policy: 'strict-v1', candidateMultiplier: 3 })
     expect(resolveEmbedding({ endpoint: ' https://embedding.example.test/// ' }).endpoint).toBe('https://embedding.example.test')

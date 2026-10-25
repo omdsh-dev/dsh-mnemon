@@ -31,6 +31,23 @@ Source 不需要再实现 Provider；Provider 不需要理解 View 组合；Stra
 
 引擎、已安装记录、注册表、运行代和租约留在内部，`extension-sdk`、`contracts` 与 Core 插件均不导出这些对象。`MemorySourceRuntime` 则有意公开：它描述**你的 Source 要实现的回调**，不是引擎句柄。定义/factory 属于 Host 侧可执行契约；元信息、操作输入和结果保持 JSON 安全。这个服务边界不等于任意 JavaScript 的安全沙箱。
 
+## 工作区标识工具
+
+Host 侧工具可从 `dsh-mnemon/extension-sdk` 导入 `canonicalWorkspacePath` 和 `workspaceStorageId`。它们与内置 Host 使用同一套同步函数，不属于浏览器 API：
+
+```ts
+import { resolve } from 'node:path'
+import { canonicalWorkspacePath, workspaceStorageId } from 'dsh-mnemon/extension-sdk'
+
+const workspace = resolve(process.argv[2] ?? '.')
+const canonical = canonicalWorkspacePath(workspace)
+const id = workspaceStorageId(workspace)
+```
+
+两者都要求不含 NUL 字符的绝对路径。规范化会解析已有的符号链接／junction，并在最近存在的祖先目录下保留尚未创建的后代路径。除路径不存在外的文件系统错误会继续抛出；文件不能成为缺失后代的祖先。已有文件路径仍保留其现有标识，因此这两个函数不是目录校验器。
+
+`workspaceStorageId` 返回规范化路径的 SHA-256 小写十六进制摘要。在内置 `storageScope: "workspaces"` 布局中，它标识 `<中心根目录>/workspaces/` 下的目录。该值取决于本机解析后的路径，不是可跨机器移植的项目 ID；移动工作区可能得到不同 ID。两个函数都不创建、迁移或删除文件，不查找已配置的存储根，也不授予对其他 Source 的访问权限。按组件选择存储范围和迁移仍是独立功能。
+
 ## Source 生命周期
 
 用 `defineMemorySource` 定义 `MemorySourceDefinition`。manifest 声明 API 版本、type id、包名、角色、一致性和 route/action；factory 接收稳定的实例来源及不可变配置。

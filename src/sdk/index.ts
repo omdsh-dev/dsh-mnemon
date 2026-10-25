@@ -7,6 +7,7 @@ export { defineMemoryStrategyConfiguration } from './strategy-configuration.ts'
 export { defineMemoryViewExtension, memoryViewExtensionValues, validateMemoryViewExtension } from './view-extensions.ts'
 export type { MemoryStrategyConfiguration, MemoryStrategyConfigurationField, MemoryLocalizedText } from './strategy-configuration.ts'
 export { withMemoryStorageLock } from './storage-lock.ts'
+export { canonicalWorkspacePath, workspaceStorageId } from './workspace-storage.ts'
 export type {
   ComposableMemoryView,
   MemoryActionOffer,

@@ -2,7 +2,7 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { ResolvedConfig } from './config.ts'
 import { withMemoryStorageLock } from '../sdk/storage-lock.ts'
-import { workspaceStorageId } from './workspace-storage.ts'
+import { workspaceStorageId } from '../sdk/workspace-storage.ts'
 
 export interface StorageRoot {
   effectiveDataDir(): string
