@@ -344,19 +344,29 @@ export class SkillEvolution {
     const settings = this.host.settings()
     const cases = (await source.read<EvalCase[]>('cases', { skill: input.skillName })).filter(entry => entry.enabled && (input.caseIds === undefined || input.caseIds.includes(entry.id))).slice(0, settings.casesPerRun)
     if (cases.length === 0) throw new Error(`${input.skillName} has no enabled eval case to run`)
+    if (cases.some(entry => entry.requiresVision !== undefined && typeof entry.requiresVision !== 'boolean')) throw new Error('requiresVision must be a boolean')
     const resolved = await source.read<{ content?: string; target: RunTarget }>('target-content', { skillName: input.skillName, target: input.target })
     const run = await source.mutate<BacktestRun>('run-start', { skillName: input.skillName, target: resolved.target, caseIds: cases.map(entry => entry.id) })
     this.background('skill backtest', async signal => {
       try {
-        await this.host.runTask(workspace, signal, async task => {
-          const queue = [...cases]
+        // Record missing-input cases without asking either a model or a task Agent to guess.
+        for (const entry of cases.filter(entry => entry.requiresVision === true)) {
+          signal.throwIfAborted()
+          await source.mutate('run-progress', { id: run.id, result: {
+            caseId: entry.id, title: entry.title, verdict: 'error', score: 0,
+            unmeasuredReason: 'requires-vision', checks: [], steps: [], answer: '',
+            error: 'Not measured: this case requires image input, which text-only backtests cannot receive.',
+          } })
+        }
+        const queue = cases.filter(entry => entry.requiresVision !== true)
+        if (queue.length > 0) await this.host.runTask(workspace, signal, async task => {
           const worker = async () => {
             for (let entry = queue.shift(); entry !== undefined; entry = queue.shift()) {
               signal.throwIfAborted()
               await source.mutate('run-progress', { id: run.id, result: await this.runCase(task, entry, input.skillName, resolved.content, signal) })
             }
           }
-          await Promise.all(Array.from({ length: Math.min(BACKTEST_CONCURRENCY, cases.length) }, worker))
+          await Promise.all(Array.from({ length: Math.min(BACKTEST_CONCURRENCY, queue.length) }, worker))
         })
         await source.mutate('run-finish', { id: run.id, status: 'completed' })
       } catch (error) {

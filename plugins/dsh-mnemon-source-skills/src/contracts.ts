@@ -224,6 +224,8 @@ export interface EvalCase {
   title: string
   prompt: string
   context?: string
+  /** Explicitly depends on image input unavailable to the text-only simulator. */
+  requiresVision?: boolean
   checks: EvalCheck[]
   origin: { kind: 'review' | 'trajectory' | 'manual'; trajectoryId?: string; steps?: number[]; suggestionId?: string }
   enabled: boolean
@@ -252,6 +254,8 @@ export interface CaseResult {
   answer: string
   summary?: string
   error?: string
+  /** Kept under verdict=error so older readers also exclude it from scores. */
+  unmeasuredReason?: 'requires-vision'
 }
 
 export type RunStatus = 'running' | 'completed' | 'failed' | 'interrupted'

@@ -67,6 +67,10 @@ Every skill's tests in one place. The list shows the skills with cases first, ea
 
 A backtest is a simulation: an executor follows the skill without tools and writes what it would do, and a judge grades each check. A case passes when every **Must** check passes, and the score counts **Must** checks twice. A case that could not run counts in neither score of a comparison.
 
+For a case that needs a screenshot, scan or chart, select **Requires image input** when adding or editing it. Text-only backtests cannot receive images: the marked case shows **Not measured**, makes no executor or judge calls, and is excluded from the run's score and the draft/baseline comparison. If every selected case is marked, the run completes without a score. This is an explicit marker, not automatic image detection or attachment support.
+
+Existing cases remain text-only and previous runs are unchanged; mark image-dependent cases and backtest again. To test a text transcription instead, put it in **Context** and clear the marker. Before downgrading to a Host without this support, turn off marked cases so the older Host does not try to simulate them.
+
 ### Market
 
 ![Market: searching changelog finds a skill in the listed sources and 30 on skills.sh](../../assets/skills-v0.5.34/en/skills-market.jpg)

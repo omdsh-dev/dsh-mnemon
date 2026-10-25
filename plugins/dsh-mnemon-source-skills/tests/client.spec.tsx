@@ -24,7 +24,7 @@ import { installSkillsMemoryUI, SkillsSourcePage } from '../src/client.ts'
 import { draftWithSkill, installSkillUseBridge, SKILL_USE_SLOT, SkillUseBridge } from '../src/client/use-skill.tsx'
 import { translate } from '../src/client/presentation.ts'
 import { compareRuns } from '../src/client/evolution-page.tsx'
-import type { BacktestRun, CaseResult, ReviewRecordInput, SkillSummary, TrashEntry } from '../src/contracts.ts'
+import type { BacktestRun, CaseResult, EvalCase, ReviewRecordInput, SkillSummary, TrashEntry } from '../src/contracts.ts'
 
 const t = translate('en')
 /** An accessible name made of these parts in order, however its markup spaces them. */
@@ -293,9 +293,37 @@ describe('Skills page', () => {
     fireEvent.change(within(dialog).getByLabelText(t('tests.caseTitle')), { target: { value: 'Breaking first' } })
     fireEvent.change(within(dialog).getByLabelText(t('tests.prompt')), { target: { value: 'Notes with a breaking change' } })
     fireEvent.change(within(dialog).getByPlaceholderText(t('tests.checkPlaceholder')), { target: { value: 'Breaking change listed first' } })
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: t('tests.requiresVision') }))
     fireEvent.click(within(dialog).getByRole('button', { name: t('common.save') }))
     expect(await screen.findByText('Breaking first')).not.toBeNull()
     expect((await management.read('cases', { skill: 'release-notes' })).value).toHaveLength(2)
+    expect((await management.read('cases', { skill: 'release-notes' })).value).toEqual(expect.arrayContaining([expect.objectContaining({ title: 'Breaking first', requiresVision: true })]))
+    expect(screen.getByText(t('tests.requiresVision'))).not.toBeNull()
+  })
+
+  it.each([false, true])('shows image-dependent cases as unmeasured, separately from execution errors (mixed=%s)', async mixed => {
+    const vision = await mutate('case-save', { case: { skillName: 'release-notes', title: 'Read a screenshot', prompt: 'Read the number in the image', requiresVision: true, checks: [{ text: 'The number is 7', must: true }] } }) as unknown as EvalCase
+    const text = await mutate('case-save', { case: { skillName: 'release-notes', title: 'Text', prompt: 'Write notes', checks: [{ text: 'Has notes', must: true }] } }) as unknown as EvalCase
+    const failed = await mutate('case-save', { case: { skillName: 'release-notes', title: 'Broken', prompt: 'Write notes', checks: [{ text: 'Has notes', must: true }] } }) as unknown as EvalCase
+    const run = await mutate('run-start', { skillName: 'release-notes', target: { kind: 'current' }, caseIds: mixed ? [vision.id, text.id, failed.id] : [vision.id] }) as unknown as BacktestRun
+    await mutate('run-progress', { id: run.id, result: { caseId: vision.id, title: vision.title, verdict: 'error', score: 0, unmeasuredReason: 'requires-vision', checks: [], steps: [], answer: '', error: 'Persisted English explanation' } })
+    if (mixed) {
+      await mutate('run-progress', { id: run.id, result: { caseId: text.id, title: text.title, verdict: 'pass', score: 1, checks: [], steps: [], answer: 'Notes' } })
+      await mutate('run-progress', { id: run.id, result: { caseId: failed.id, title: failed.title, verdict: 'error', score: 0, checks: [], steps: [], answer: '', error: 'Model unavailable' } })
+    }
+    await mutate('run-finish', { id: run.id, status: 'completed' })
+    render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable={false} management={management} navigationInput={{ seed: 'name:release-notes', nonce: 1 }} />)
+    fireEvent.click(await screen.findByRole('button', { name: named(t('tests.title'), t('tests.count', { count: 3 })) }))
+    const summary = mixed ? [t('tests.score', { score: '100' }), t('tests.unmeasured', { count: 1 }), t('tests.errors', { count: 1 })].join(' · ') : t('tests.unmeasured', { count: 1 })
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp(summary.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u') }))
+    expect(await screen.findByText(t('run.verdict.unmeasured'))).not.toBeNull()
+    expect(screen.getByText(t('run.requiresVision'))).not.toBeNull()
+    expect(screen.queryByText('Persisted English explanation')).toBeNull()
+    expect(screen.queryByText('0')).toBeNull()
+    expect((screen.getByRole('button', { name: t('tests.add') }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('switch', { name: t('tests.enabled', { title: vision.title }) }) as HTMLButtonElement).disabled).toBe(true)
+    if (mixed) expect(screen.getByText('Model unavailable')).not.toBeNull()
+    else expect(screen.queryByText(t('run.verdict.error'))).toBeNull()
   })
 
   it('marks only the copy DSH loads as waiting for an improvement, not the one it shadows', async () => {
@@ -424,6 +452,9 @@ describe('Skills page', () => {
     const baseline = run('current', [result('a', 'fail', 0.5), result('b', 'pass', 1)])
     expect(compareRuns(baseline, run('draft', [result('a', 'pass', 1), result('b', 'error', 0)]))).toEqual({ baseline: 0.5, candidate: 1, excluded: 1 })
     expect(compareRuns(baseline, run('draft', [result('a', 'error', 0), result('b', 'error', 0)]))).toEqual({ excluded: 2 })
+    const unmeasured = { ...result('b', 'error', 0), unmeasuredReason: 'requires-vision' as const }
+    expect(compareRuns(baseline, run('draft', [result('a', 'pass', 1), unmeasured]))).toEqual({ baseline: 0.5, candidate: 1, excluded: 1 })
+    expect(compareRuns(run('current', [result('b', 'pass', 1)]), run('draft', [unmeasured]))).toEqual({ excluded: 1 })
     expect(compareRuns(baseline, { ...run('draft', []), status: 'running' })).toEqual({ excluded: 0 })
   })
 

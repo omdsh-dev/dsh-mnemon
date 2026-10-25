@@ -1,0 +1,63 @@
+{
+  "modelRequests": {
+    "before": 0,
+    "after": 0
+  },
+  "cases": [
+    {
+      "id": "c63c14dd-7e24-43a4-bfc2-c5971f3a8755",
+      "skillName": "read-scan",
+      "title": "读取合成图片中的数字",
+      "prompt": "读取所附图片，只输出图中的数字。",
+      "requiresVision": true,
+      "checks": [
+        {
+          "id": "be3b31c5-3004-4198-914c-a4501e59d38c",
+          "text": "答案写出图中的数字 7。",
+          "must": true
+        }
+      ],
+      "origin": {
+        "kind": "manual"
+      },
+      "enabled": true,
+      "createdAt": "2026-10-25T21:05:14.805Z",
+      "updatedAt": "2026-10-25T21:05:14.805Z"
+    }
+  ],
+  "runs": [
+    {
+      "id": "805b9251-a753-440f-baca-647615950a0c",
+      "skillName": "read-scan",
+      "target": {
+        "kind": "current",
+        "hash": "293224271f10da980b4a123f1652105d86611633d5be2db1c6d3f56577792967",
+        "skillKey": "user-dsh:read-scan"
+      },
+      "status": "completed",
+      "progress": {
+        "done": 1,
+        "total": 1
+      },
+      "caseIds": [
+        "c63c14dd-7e24-43a4-bfc2-c5971f3a8755"
+      ],
+      "results": [
+        {
+          "caseId": "c63c14dd-7e24-43a4-bfc2-c5971f3a8755",
+          "title": "读取合成图片中的数字",
+          "verdict": "error",
+          "score": 0,
+          "checks": [],
+          "steps": [],
+          "answer": "",
+          "error": "Not measured: this case requires image input, which text-only backtests cannot receive.",
+          "unmeasuredReason": "requires-vision"
+        }
+      ],
+      "startedAt": "2026-10-25T21:05:22.450Z",
+      "finishedAt": "2026-10-25T21:05:22.454Z",
+      "errors": 1
+    }
+  ]
+}

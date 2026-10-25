@@ -5,11 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
 import * as skillsPlugin from 'dsh-mnemon-source-skills'
 import * as generalStrategy from 'dsh-mnemon-strategy-general'
-import type { BacktestRun, SkillDraft, SkillSuggestion, Trajectory } from 'dsh-mnemon-source-skills/contracts'
+import type { BacktestRun, EvalCase, EvidencePack, SkillDraft, SkillSuggestion, Trajectory } from 'dsh-mnemon-source-skills/contracts'
 import type { HostAgent, HostAgentContext, HostSessionEvent } from '../src/host/dsh.ts'
 import { DEFAULT_SKILLS_CONFIG, type ResolvedSkillsConfig } from '../src/host/protocol.ts'
 import { SkillEvolution, type SkillsSourcePort } from '../src/host/skill-evolution.ts'
-import { gradeCase, parseSkillDraft, parseSkillReview, renderSteps, skillReviewPrompt, SKILL_REVIEW_PERSONA } from '../src/host/skill-review.ts'
+import { gradeCase, parseSkillDraft, parseSkillReview, renderSteps, skillDraftPrompt, skillReviewPrompt, SKILL_REVIEW_PERSONA } from '../src/host/skill-review.ts'
 import { captureTurn, redact, sessionTitle, TrajectoryWindow, turnSkillUses } from '../src/host/skill-trajectory.ts'
 import { sessionLog } from './fixtures/session-log.ts'
 
@@ -309,6 +309,62 @@ describe('skill evolution in the Host', () => {
     expect(Object.fromEntries(run.results.map(result => [result.title, result.verdict]))).toEqual({ Flaky: 'pass', Broken: 'error' })
     expect(run.results.find(result => result.title === 'Broken')?.error).toContain('max-tokens')
     expect(run).toMatchObject({ passRate: 1, score: 1, errors: 1 })
+  })
+
+  it('records image-only cases as unmeasured without creating a task Agent or calling a model', async () => {
+    const entry = await source.mutate<EvalCase>('case-save', { case: { skillName: 'release-notes', title: 'Read a screenshot', prompt: 'Read the attached screenshot', requiresVision: true, checks: [{ text: 'The number is 7', must: true }] } })
+    const { skills, skillTask, runTask } = evolution([])
+    for (const kind of ['current', 'none'] as const) {
+      const { runId } = await skills.backtest(source, undefined, { skillName: 'release-notes', target: { kind } })
+      await vi.runAllTimersAsync()
+      await vi.waitFor(async () => expect((await source.read<BacktestRun>('run', { id: runId })).status).toBe('completed'))
+      const run = await source.read<BacktestRun>('run', { id: runId })
+      expect(run.results).toMatchObject([{ caseId: entry.id, verdict: 'error', unmeasuredReason: 'requires-vision', checks: [], steps: [], answer: '' }])
+      expect(run.progress).toEqual({ done: 1, total: 1 })
+      expect(run.score).toBeUndefined()
+      expect(run.passRate).toBeUndefined()
+    }
+    expect(runTask).not.toHaveBeenCalled()
+    expect(skillTask).not.toHaveBeenCalled()
+    expect((await source.read<EvalCase[]>('cases'))[0]?.requiresVision).toBe(true)
+    skills.dispose()
+  })
+
+  it('grades only text cases in a mixed run and allows a vision flag to be cleared', async () => {
+    const vision = await source.mutate<EvalCase>('case-save', { case: { skillName: 'release-notes', title: 'Image', prompt: 'Read an image', requiresVision: true, checks: [{ text: 'Has number', must: true }] } })
+    await source.mutate('case-save', { case: { skillName: 'release-notes', title: 'Text', prompt: 'Write notes', checks: [{ text: 'Has notes', must: true }] } })
+    const { skills, host } = evolution([])
+    host.skillTask.mockImplementation(async (_parent, label, prompt) => {
+      expect(prompt).not.toContain('Read an image')
+      return { structured: label.startsWith('Mnemon skill eval') ? { steps: ['read'], answer: 'notes' } : { checks: [{ index: 1, pass: true, note: 'ok' }], summary: 'ok' } }
+    })
+    const { runId } = await skills.backtest(source, undefined, { skillName: 'release-notes', target: { kind: 'current' } })
+    await vi.runAllTimersAsync()
+    await vi.waitFor(async () => expect((await source.read<BacktestRun>('run', { id: runId })).status).toBe('completed'))
+    expect(await source.read('run', { id: runId })).toMatchObject({ score: 1, passRate: 1, progress: { done: 2, total: 2 } })
+    expect(host.skillTask).toHaveBeenCalledTimes(2)
+    // Edits from an older client preserve the marker when the field is omitted.
+    const { requiresVision: _flag, ...legacyEdit } = vision
+    expect(await source.mutate('case-save', { case: legacyEdit })).toMatchObject({ requiresVision: true })
+    await expect(source.mutate('case-save', { case: { ...vision, requiresVision: 'false' } })).rejects.toThrow('requiresVision must be a boolean')
+    const cleared = await source.mutate<EvalCase>('case-save', { case: { ...vision, requiresVision: false, prompt: 'The image has been transcribed: 7' } })
+    expect(cleared.requiresVision ?? false).toBe(false)
+    skills.dispose()
+  })
+
+  it('does not use a historical image failure as evidence of a skill failure when drafting', async () => {
+    const entry = await source.mutate<EvalCase>('case-save', { case: { skillName: 'release-notes', title: 'Image', prompt: 'Read an image', requiresVision: true, checks: [{ text: 'The number is 7', must: true }] } })
+    const run = await source.mutate<BacktestRun>('run-start', { skillName: 'release-notes', target: { kind: 'current' }, caseIds: [entry.id] })
+    const result = { caseId: entry.id, title: entry.title, verdict: 'fail', score: 0, checks: [{ checkId: entry.checks[0]!.id, pass: false, note: 'Fabricated wrong number' }], steps: [], answer: '' }
+    await source.mutate('run-progress', { id: run.id, result })
+    await source.mutate('run-finish', { id: run.id, status: 'completed' })
+    const pack = await source.read<EvidencePack>('evidence-pack', { skill: 'release-notes' })
+    const prompt = skillDraftPrompt(pack, [], 'user-dsh')
+    expect(prompt).toContain('Not measured: requires image input')
+    expect(prompt).not.toContain('Fabricated wrong number')
+    expect(prompt).not.toContain('last result: fail')
+    await expect(source.mutate('run-progress', { id: run.id, result: { ...result, unmeasuredReason: 'requires-vision' } })).rejects.toThrow('unmeasuredReason')
+    await expect(source.mutate('run-progress', { id: run.id, result: { ...result, verdict: 'error', unmeasuredReason: 'other' } })).rejects.toThrow('unmeasuredReason')
   })
 
   it('derives cases from a trajectory and reviews a session on request', async () => {

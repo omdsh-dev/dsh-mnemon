@@ -11,6 +11,7 @@ export interface CaseDraft {
   title: string
   prompt: string
   context?: string
+  requiresVision?: boolean
   checks: Array<{ id?: string; text: string; must: boolean }>
   enabled?: boolean
 }

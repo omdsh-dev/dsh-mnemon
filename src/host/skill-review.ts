@@ -237,11 +237,14 @@ export const SKILL_DRAFT_SCHEMA = {
 
 function caseText(entry: EvalCase, failure?: { verdict: string; notes: string[] }): string {
   const checks = entry.checks.map(check => `  - [${check.must ? 'must' : 'should'}] ${check.text}`).join('\n')
-  return `- ${entry.title}\n  task: ${entry.prompt.replace(/\n/gu, ' ').slice(0, 600)}\n${checks}${failure === undefined ? '' : `\n  last result: ${failure.verdict}${failure.notes.length === 0 ? '' : ' — ' + failure.notes.join('; ')}`}`
+  const result = entry.requiresVision === true
+    ? '\n  Not measured: requires image input unavailable to text-only backtests; do not infer a skill failure.'
+    : failure === undefined ? '' : `\n  last result: ${failure.verdict}${failure.notes.length === 0 ? '' : ' — ' + failure.notes.join('; ')}`
+  return `- ${entry.title}\n  task: ${entry.prompt.replace(/\n/gu, ' ').slice(0, 600)}\n${checks}${result}`
 }
 
 export function skillDraftPrompt(pack: EvidencePack, guidance: readonly string[], targetRoot: string): string {
-  const failures = new Map((pack.lastRun?.results ?? []).map(result => [result.caseId, {
+  const failures = new Map((pack.lastRun?.results ?? []).filter(result => result.unmeasuredReason === undefined).map(result => [result.caseId, {
     verdict: result.verdict,
     notes: result.checks.filter(check => !check.pass).map(check => check.note).filter(Boolean).slice(0, 4),
   }]))

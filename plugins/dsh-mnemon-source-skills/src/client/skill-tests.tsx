@@ -3,12 +3,22 @@ import { Button, Checkbox, Switch, Tag } from '@deepseek-ai/dsh-client-ui-primit
 import { SidebarModal } from 'dsh-mnemon/client'
 import type { BacktestRun, EvalCase } from '../contracts.ts'
 import type { CaseDraft } from './api.ts'
-import { css, errorText, points, relative, useT } from './presentation.ts'
+import { css, errorText, points, relative, useT, type SkillsTranslate } from './presentation.ts'
 import { Busy, Confirm, Field, MoreMenu, RunStatusDot } from './shared.tsx'
 import type { SkillsPageContext } from './ui.tsx'
 
 /** How many earlier backtests the history keeps on screen. */
 const HISTORY = 6
+
+function completedRunSummary(run: BacktestRun, t: SkillsTranslate): string {
+  const unmeasured = run.results.filter(result => result.unmeasuredReason === 'requires-vision').length
+  const errors = run.results.filter(result => result.verdict === 'error' && result.unmeasuredReason === undefined).length
+  return [
+    ...(run.score === undefined && unmeasured > 0 ? [] : [t('tests.score', { score: points(run.score) })]),
+    ...(unmeasured > 0 ? [t('tests.unmeasured', { count: unmeasured })] : []),
+    ...(errors > 0 ? [t('tests.errors', { count: errors })] : []),
+  ].join(' · ')
+}
 
 /**
  * A skill's test cases and its backtests: the cases with a switch each, one
@@ -61,7 +71,7 @@ export function SkillTests(props: { context: SkillsPageContext; skillName: strin
       ? <p className={css.skMuted}>{t('tests.empty')}</p>
       : <ul className={css.skCases}>{cases.map(entry => <li key={entry.id} data-off={entry.enabled ? undefined : ''}>
           <details>
-            <summary><strong>{entry.title}</strong><small>{t('tests.checks', { count: entry.checks.length })}</small></summary>
+            <summary><strong>{entry.title}</strong>{entry.requiresVision === true && <Tag tone="quiet">{t('tests.requiresVision')}</Tag>}<small>{t('tests.checks', { count: entry.checks.length })}</small></summary>
             <p>{entry.prompt}</p>
             <ul>{entry.checks.map(check => <li key={check.id}><Tag tone={check.must ? 'neutral' : 'quiet'}>{check.must ? t('tests.must') : t('tests.should')}</Tag><span>{check.text}</span></li>)}</ul>
             {entry.origin.trajectoryId !== undefined && <button type="button" className={css.skLink}
@@ -77,7 +87,7 @@ export function SkillTests(props: { context: SkillsPageContext; skillName: strin
         <button type="button" aria-expanded={openRun === entry.id} onClick={() => setOpenRun(openRun === entry.id ? undefined : entry.id)}>
           <RunStatusDot status={entry.status} />
           <span>{entry.status === 'running' ? t('tests.progress', { done: entry.progress.done, total: entry.progress.total })
-            : entry.status === 'completed' ? [t('tests.score', { score: points(entry.score) }), ...(entry.errors ? [t('tests.errors', { count: entry.errors })] : [])].join(' · ')
+            : entry.status === 'completed' ? completedRunSummary(entry, t)
               : t(`run.status.${entry.status}`)}</span>
           {entry.target.kind === 'none' && <Tag tone="quiet">{t('tests.withoutSkill')}</Tag>}
           <time>{relative(t, entry.startedAt)}</time>
@@ -100,11 +110,12 @@ export function RunDetail(props: { run: BacktestRun }): JSX.Element {
   return <div className={css.skRunDetail}>
     {props.run.results.map(result => <details key={result.caseId}>
       <summary>
-        <Tag tone={result.verdict === 'pass' ? 'success' : result.verdict === 'error' ? 'danger' : 'warning'}>{t(`run.verdict.${result.verdict}`)}</Tag>
+        <Tag tone={result.unmeasuredReason === 'requires-vision' ? 'quiet' : result.verdict === 'pass' ? 'success' : result.verdict === 'error' ? 'danger' : 'warning'}>{t(`run.verdict.${result.unmeasuredReason === 'requires-vision' ? 'unmeasured' : result.verdict}`)}</Tag>
         <strong>{result.title}</strong>
         {result.verdict !== 'error' && <span>{points(result.score)}</span>}
       </summary>
-      {result.error !== undefined && <p className={css.inlineError}>{result.error}</p>}
+      {result.unmeasuredReason === 'requires-vision' ? <p className={css.skMuted}>{t('run.requiresVision')}</p>
+        : result.error !== undefined && <p className={css.inlineError}>{result.error}</p>}
       {result.checks.length > 0 && <ul className={css.skVerdicts}>{result.checks.map(check => <li key={check.checkId} data-pass={check.pass ? '' : undefined}><b aria-hidden="true">{check.pass ? '✓' : '✕'}</b><span>{check.note}</span></li>)}</ul>}
       {result.steps.length > 0 && <><h6>{t('run.steps')}</h6><ol className={css.skRunSteps}>{result.steps.map((step, index) => <li key={index}>{step}</li>)}</ol></>}
       {result.answer !== '' && <><h6>{t('run.answer')}</h6><pre className={css.skAnswer}>{result.answer}</pre></>}
@@ -128,6 +139,10 @@ function CaseEditor(props: { initial: CaseDraft; busy: boolean; onClose: () => v
       <Field label={t('tests.caseTitle')}>{control => <input {...control} value={value.title} onChange={event => setValue({ ...value, title: event.target.value })} />}</Field>
       <Field label={t('tests.prompt')} hint={t('tests.promptHint')}>{control => <textarea {...control} rows={4} value={value.prompt} onChange={event => setValue({ ...value, prompt: event.target.value })} />}</Field>
       <Field label={t('tests.context')}>{control => <textarea {...control} rows={3} value={value.context ?? ''} onChange={event => setValue({ ...value, context: event.target.value })} />}</Field>
+      <div>
+        <Checkbox checked={value.requiresVision ?? false} label={t('tests.requiresVision')} disabled={props.busy} onChange={requiresVision => setValue({ ...value, requiresVision })} />
+        <p className={css.skMuted}>{t('tests.requiresVisionHint')}</p>
+      </div>
       <fieldset className={css.skChecks}>
         <legend>{t('tests.checksLabel')}</legend>
         {value.checks.map((check, index) => <div key={index}>

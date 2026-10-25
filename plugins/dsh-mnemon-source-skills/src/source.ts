@@ -59,6 +59,7 @@ function caseInput(value: MemoryJsonValue, skillName?: string): CaseInput {
       return { ...(typeof check.id === 'string' ? { id: check.id } : {}), text: text(check.text, 'check', 600)!, must: check.must === true }
     }),
     ...(typeof input.enabled === 'boolean' ? { enabled: input.enabled } : {}),
+    ...(input.requiresVision === undefined ? {} : { requiresVision: bool(input.requiresVision, 'requiresVision') }),
   }
 }
 
@@ -79,6 +80,8 @@ function caseResult(value: MemoryJsonValue): CaseResult {
   const input = record(value, 'result')
   const verdict = input.verdict
   if (verdict !== 'pass' && verdict !== 'fail' && verdict !== 'error') throw new Error('verdict must be pass, fail or error')
+  const unmeasuredReason = input.unmeasuredReason
+  if (unmeasuredReason !== undefined && (unmeasuredReason !== 'requires-vision' || verdict !== 'error')) throw new Error('unmeasuredReason requires requires-vision and an ungraded error verdict')
   const score = typeof input.score === 'number' && Number.isFinite(input.score) ? Math.min(1, Math.max(0, input.score)) : 0
   const checks = Array.isArray(input.checks) ? input.checks.slice(0, 8).map(item => {
     const check = record(item, 'check result')
@@ -90,6 +93,7 @@ function caseResult(value: MemoryJsonValue): CaseResult {
     answer: typeof input.answer === 'string' ? input.answer : '',
     ...(typeof input.summary === 'string' ? { summary: input.summary } : {}),
     ...(typeof input.error === 'string' ? { error: input.error } : {}),
+    ...(unmeasuredReason === undefined ? {} : { unmeasuredReason }),
   }
 }
 

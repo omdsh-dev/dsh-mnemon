@@ -29,6 +29,7 @@ export interface CaseInput {
   title: string
   prompt: string
   context?: string
+  requiresVision?: boolean
   checks: Array<{ id?: string; text: string; must: boolean }>
   enabled?: boolean
 }
@@ -557,6 +558,7 @@ export class SkillsService {
   }
 
   private normalizeCase(input: CaseInput, existing: EvalCase | undefined, origin: EvalCase['origin']): EvalCase {
+    if (input.requiresVision !== undefined && typeof input.requiresVision !== 'boolean') throw new Error('requiresVision must be a boolean')
     if (!isSkillName(input.skillName)) throw new Error('a case belongs to a skill with a valid name')
     const title = clip(input.title, 120)
     const prompt = clip(input.prompt, 4_000)
@@ -568,6 +570,7 @@ export class SkillsService {
     return {
       id: existing?.id ?? randomUUID(), skillName: input.skillName, title, prompt,
       ...(input.context === undefined || input.context.trim() === '' ? {} : { context: clip(input.context, 4_000) }),
+      ...((input.requiresVision ?? existing?.requiresVision) === true ? { requiresVision: true } : {}),
       checks, origin: existing?.origin ?? origin, enabled: input.enabled ?? existing?.enabled ?? true,
       createdAt: existing?.createdAt ?? now, updatedAt: now,
     }
