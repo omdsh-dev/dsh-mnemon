@@ -18,10 +18,10 @@ importers:
         specifier: 0.5.5
         version: link:plugins/dsh-mnemon-provider-byterover
       dsh-mnemon-provider-hindsight:
-        specifier: 0.5.6
+        specifier: 0.5.7
         version: link:plugins/dsh-mnemon-provider-hindsight
       dsh-mnemon-provider-holographic:
-        specifier: 0.5.6
+        specifier: 0.5.7
         version: link:plugins/dsh-mnemon-provider-holographic
       dsh-mnemon-provider-honcho:
         specifier: 0.5.5
@@ -30,10 +30,10 @@ importers:
         specifier: 0.5.5
         version: link:plugins/dsh-mnemon-provider-mem0
       dsh-mnemon-provider-mnemon-native:
-        specifier: 0.5.9
+        specifier: 0.5.10
         version: link:plugins/dsh-mnemon-provider-mnemon-native
       dsh-mnemon-provider-openviking:
-        specifier: 0.5.8
+        specifier: 0.5.9
         version: link:plugins/dsh-mnemon-provider-openviking
       dsh-mnemon-provider-retaindb:
         specifier: 0.5.6
@@ -45,19 +45,19 @@ importers:
         specifier: 0.5.11
         version: link:plugins/dsh-mnemon-source-documents
       dsh-mnemon-source-memory-spaces:
-        specifier: 0.5.22
+        specifier: 0.5.23
         version: link:plugins/dsh-mnemon-source-memory-spaces
       dsh-mnemon-source-runtime:
-        specifier: 0.5.15
+        specifier: 0.5.16
         version: link:plugins/dsh-mnemon-source-runtime
       dsh-mnemon-source-skills:
-        specifier: 0.5.1
+        specifier: 0.5.2
         version: link:plugins/dsh-mnemon-source-skills
       dsh-mnemon-strategy-auto-capture:
         specifier: 0.5.5
         version: link:plugins/dsh-mnemon-strategy-auto-capture
       dsh-mnemon-strategy-default-three-tier:
-        specifier: 0.5.10
+        specifier: 0.5.11
         version: link:plugins/dsh-mnemon-strategy-default-three-tier
       dsh-mnemon-strategy-general:
         specifier: 0.5.1
@@ -318,7 +318,7 @@ importers:
         specifier: ^22.0.0
         version: 22.20.1
       dsh-mnemon-source-memory-spaces:
-        specifier: ^0.5.19
+        specifier: ^0.5.23
         version: link:../dsh-mnemon-source-memory-spaces
       tsdown:
         specifier: ^0.22.0
@@ -340,7 +340,7 @@ importers:
         specifier: ^22.0.0
         version: 22.20.1
       dsh-mnemon-source-memory-spaces:
-        specifier: ^0.5.15
+        specifier: ^0.5.23
         version: link:../dsh-mnemon-source-memory-spaces
       tsdown:
         specifier: ^0.22.0
@@ -406,7 +406,7 @@ importers:
         specifier: ^22.0.0
         version: 22.20.1
       dsh-mnemon-source-memory-spaces:
-        specifier: ^0.5.17
+        specifier: ^0.5.23
         version: link:../dsh-mnemon-source-memory-spaces
       tsdown:
         specifier: ^0.22.0
@@ -428,7 +428,7 @@ importers:
         specifier: ^22.0.0
         version: 22.20.1
       dsh-mnemon-source-memory-spaces:
-        specifier: ^0.5.19
+        specifier: ^0.5.23
         version: link:../dsh-mnemon-source-memory-spaces
       tsdown:
         specifier: ^0.22.0
@@ -651,16 +651,16 @@ importers:
         specifier: ^9.0.0
         version: 9.0.0
       dsh-mnemon:
-        specifier: ^0.5.32
+        specifier: ^0.5.35
         version: link:../..
       dsh-mnemon-provider-byterover:
         specifier: ^0.5.5
         version: link:../dsh-mnemon-provider-byterover
       dsh-mnemon-provider-hindsight:
-        specifier: ^0.5.6
+        specifier: ^0.5.7
         version: link:../dsh-mnemon-provider-hindsight
       dsh-mnemon-provider-holographic:
-        specifier: ^0.5.6
+        specifier: ^0.5.7
         version: link:../dsh-mnemon-provider-holographic
       dsh-mnemon-provider-honcho:
         specifier: ^0.5.5
@@ -669,10 +669,10 @@ importers:
         specifier: ^0.5.5
         version: link:../dsh-mnemon-provider-mem0
       dsh-mnemon-provider-mnemon-native:
-        specifier: ^0.5.9
+        specifier: ^0.5.10
         version: link:../dsh-mnemon-provider-mnemon-native
       dsh-mnemon-provider-openviking:
-        specifier: ^0.5.8
+        specifier: ^0.5.9
         version: link:../dsh-mnemon-provider-openviking
       dsh-mnemon-provider-retaindb:
         specifier: ^0.5.5
@@ -796,7 +796,7 @@ importers:
         specifier: ^9.0.0
         version: 9.0.0
       dsh-mnemon:
-        specifier: ^0.5.32
+        specifier: ^0.5.35
         version: link:../..
       immer:
         specifier: ^10.1.1
@@ -917,7 +917,7 @@ importers:
         specifier: ^9.0.0
         version: 9.0.0
       dsh-mnemon:
-        specifier: ^0.5.34
+        specifier: ^0.5.35
         version: link:../..
       immer:
         specifier: ^10.1.1
@@ -1024,7 +1024,7 @@ importers:
         specifier: ^22.0.0
         version: 22.20.1
       dsh-mnemon:
-        specifier: ^0.5.32
+        specifier: ^0.5.35
         version: link:../..
       tsdown:
         specifier: ^0.22.0

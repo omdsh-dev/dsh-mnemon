@@ -1,0 +1,252 @@
+{
+  "date": "2026-10-26",
+  "timezone": "Asia/Shanghai",
+  "sourceMain": "36f3105e0d2a9c87316898328cdcf940360f957c",
+  "candidateChanges": "release:version plus release metadata and documentation",
+  "node": "22.22.0",
+  "pnpm": "10.13.1",
+  "dsh": [
+    "0.2.1-rc.2",
+    "0.2.0-rc.2"
+  ],
+  "candidates": [
+    {
+      "name": "dsh-mnemon-source-memory-spaces",
+      "version": "0.5.23",
+      "filename": "dsh-mnemon-source-memory-spaces-0.5.23.tgz",
+      "integrity": "sha512-aGG+mefPSTFFE0ShtIvSPasZpEN3Ttwx5nO0TsXxONXRTBmfLOUOevYSNZz+KrqqRjGUoOkfnpN/jIHwfsNX7Q==",
+      "size": 194180,
+      "sha256": "7e00a3a94914a1deecec8712d177ef4fef29bdcc2f67e897d3045e37b199fcae"
+    },
+    {
+      "name": "dsh-mnemon-source-runtime",
+      "version": "0.5.16",
+      "filename": "dsh-mnemon-source-runtime-0.5.16.tgz",
+      "integrity": "sha512-ePPEShN5jdgyAIcn6DGaD/XNC0gb1yHExuC3t4pageyLfGE2u5ihLWjqYB/Bfw5QyavhN5gBSX0ct6zvxTwMdQ==",
+      "size": 32091,
+      "sha256": "52121dc692aeababbd24b7d84654d1f49b9d5866feda218de7a8288525cb4c8c"
+    },
+    {
+      "name": "dsh-mnemon-source-skills",
+      "version": "0.5.2",
+      "filename": "dsh-mnemon-source-skills-0.5.2.tgz",
+      "integrity": "sha512-n11YTKbriZhfF48Z0+OZbvur8WHJJ5wqmODHQlW7PyAB5JA8N3zdzxIhCz/rzHuMZ3KBUNvVcOQzhxNE44BUIg==",
+      "size": 144826,
+      "sha256": "8404c56aa04b40e480035a1242e97cfb5c2f20862af9e44aaacac88c5e307acd"
+    },
+    {
+      "name": "dsh-mnemon-strategy-default-three-tier",
+      "version": "0.5.11",
+      "filename": "dsh-mnemon-strategy-default-three-tier-0.5.11.tgz",
+      "integrity": "sha512-0Bcbq4skgkjTiOjuLaqOUb7KoPF1aF0qKUSM9ky2f0VHUbJfFlSRGXZW2/VpXnmOkLJ+xWENUTPxQHWrYgv8WQ==",
+      "size": 15844,
+      "sha256": "827e95cddef436d45ba1076ad69991d738c1f8d4fb2a4689a4d7a80b153d9361"
+    },
+    {
+      "name": "dsh-mnemon-provider-hindsight",
+      "version": "0.5.7",
+      "filename": "dsh-mnemon-provider-hindsight-0.5.7.tgz",
+      "integrity": "sha512-sOEThpl56k6DuqSvOrma9ZFMAFmfll/XuUOLZkJ/4nB4M5z/fYvKMTMAmJ2PXUhWPO3KEnOj5m+V5axmrZefbg==",
+      "size": 15070,
+      "sha256": "7b46307095ec4ce251376258cf470a065445de0fa27d2f4cd6f1bea692775bbd"
+    },
+    {
+      "name": "dsh-mnemon-provider-holographic",
+      "version": "0.5.7",
+      "filename": "dsh-mnemon-provider-holographic-0.5.7.tgz",
+      "integrity": "sha512-WFzAILBve6zhG1+ZFOxHBNRacMdKyeh3VebfARhQglKRqXYiw4JQAFEFaPwqYx7dZfL6XYySQN/EiLF0idMn9Q==",
+      "size": 7513,
+      "sha256": "1bc3c88846bf9e6285bb040849e06423ee3996d41252c50631272906c405427f"
+    },
+    {
+      "name": "dsh-mnemon-provider-mnemon-native",
+      "version": "0.5.10",
+      "filename": "dsh-mnemon-provider-mnemon-native-0.5.10.tgz",
+      "integrity": "sha512-5UXVMlgcOPGuhl4SOFY6GoG2a1Wq6m644wlvvM9dOXMv78AGchLD3bTotmCn4eu99r1nUWgEcJqzTtdeEpUJZg==",
+      "size": 8015,
+      "sha256": "d44b5de3cef34464ddfb8dd26cf5bb9865eec28608471fb32cb65c4baf459015"
+    },
+    {
+      "name": "dsh-mnemon-provider-openviking",
+      "version": "0.5.9",
+      "filename": "dsh-mnemon-provider-openviking-0.5.9.tgz",
+      "integrity": "sha512-IYNB74QLn18QVOPgCe6EhrOMEDxyJhCCZ7nnghrdS1A8f9zeQf+eT/CaXvztLXTwyvHNEIqC+IJ4tRkBcomWxg==",
+      "size": 17626,
+      "sha256": "2912168d0172692c85ac10db57092612f2bcc0663b93c5478bbefbabdc77a8d6"
+    },
+    {
+      "name": "dsh-mnemon",
+      "version": "0.5.35",
+      "filename": "dsh-mnemon-0.5.35.tgz",
+      "integrity": "sha512-E+Tzi1Zmbo/viNrEdAty9RU60SaXlvX/qsf+KARLX495wh4oiFJ4eynGbAse+VrWYBqdTbI53aQPaYVJX8SMhA==",
+      "size": 514831,
+      "sha256": "f221db10719a4f77d3c0be7d4b19c7c3150475211c8dc66fc2c18e00920eaab4"
+    }
+  ],
+  "profiles": {
+    "fresh021": {
+      "composition": {
+        "dsh-mnemon": "0.5.35",
+        "dsh-mnemon-provider-byterover": "0.5.5",
+        "dsh-mnemon-provider-hindsight": "0.5.7",
+        "dsh-mnemon-provider-holographic": "0.5.7",
+        "dsh-mnemon-provider-honcho": "0.5.5",
+        "dsh-mnemon-provider-mem0": "0.5.5",
+        "dsh-mnemon-provider-mnemon-native": "0.5.10",
+        "dsh-mnemon-provider-openviking": "0.5.9",
+        "dsh-mnemon-provider-retaindb": "0.5.6",
+        "dsh-mnemon-provider-supermemory": "0.5.5",
+        "dsh-mnemon-source-documents": "0.5.11",
+        "dsh-mnemon-source-memory-spaces": "0.5.23",
+        "dsh-mnemon-source-runtime": "0.5.16",
+        "dsh-mnemon-source-skills": "0.5.2",
+        "dsh-mnemon-strategy-auto-capture": "0.5.5",
+        "dsh-mnemon-strategy-default-three-tier": "0.5.11",
+        "dsh-mnemon-strategy-general": "0.5.1",
+        "dsh-mnemon-strategy-light-context": "0.5.6",
+        "dsh-mnemon-strategy-scoped": "0.5.5"
+      },
+      "mismatches": {},
+      "artifactBytes": {
+        "packages": 9,
+        "files": 202,
+        "exactBytes": true
+      }
+    },
+    "fresh020": {
+      "composition": {
+        "dsh-mnemon": "0.5.35",
+        "dsh-mnemon-provider-byterover": "0.5.5",
+        "dsh-mnemon-provider-hindsight": "0.5.7",
+        "dsh-mnemon-provider-holographic": "0.5.7",
+        "dsh-mnemon-provider-honcho": "0.5.5",
+        "dsh-mnemon-provider-mem0": "0.5.5",
+        "dsh-mnemon-provider-mnemon-native": "0.5.10",
+        "dsh-mnemon-provider-openviking": "0.5.9",
+        "dsh-mnemon-provider-retaindb": "0.5.6",
+        "dsh-mnemon-provider-supermemory": "0.5.5",
+        "dsh-mnemon-source-documents": "0.5.11",
+        "dsh-mnemon-source-memory-spaces": "0.5.23",
+        "dsh-mnemon-source-runtime": "0.5.16",
+        "dsh-mnemon-source-skills": "0.5.2",
+        "dsh-mnemon-strategy-auto-capture": "0.5.5",
+        "dsh-mnemon-strategy-default-three-tier": "0.5.11",
+        "dsh-mnemon-strategy-general": "0.5.1",
+        "dsh-mnemon-strategy-light-context": "0.5.6",
+        "dsh-mnemon-strategy-scoped": "0.5.5"
+      },
+      "mismatches": {},
+      "artifactBytes": {
+        "packages": 9,
+        "files": 202,
+        "exactBytes": true
+      }
+    },
+    "upgrade021": {
+      "composition": {
+        "dsh-mnemon": "0.5.35",
+        "dsh-mnemon-provider-byterover": "0.5.5",
+        "dsh-mnemon-provider-hindsight": "0.5.7",
+        "dsh-mnemon-provider-holographic": "0.5.7",
+        "dsh-mnemon-provider-honcho": "0.5.5",
+        "dsh-mnemon-provider-mem0": "0.5.5",
+        "dsh-mnemon-provider-mnemon-native": "0.5.10",
+        "dsh-mnemon-provider-openviking": "0.5.9",
+        "dsh-mnemon-provider-retaindb": "0.5.6",
+        "dsh-mnemon-provider-supermemory": "0.5.5",
+        "dsh-mnemon-source-documents": "0.5.11",
+        "dsh-mnemon-source-memory-spaces": "0.5.23",
+        "dsh-mnemon-source-runtime": "0.5.16",
+        "dsh-mnemon-source-skills": "0.5.2",
+        "dsh-mnemon-strategy-auto-capture": "0.5.5",
+        "dsh-mnemon-strategy-default-three-tier": "0.5.11",
+        "dsh-mnemon-strategy-general": "0.5.1",
+        "dsh-mnemon-strategy-light-context": "0.5.6",
+        "dsh-mnemon-strategy-scoped": "0.5.5"
+      },
+      "mismatches": {},
+      "artifactBytes": {
+        "packages": 9,
+        "files": 202,
+        "exactBytes": true
+      }
+    },
+    "upgrade020": {
+      "composition": {
+        "dsh-mnemon": "0.5.35",
+        "dsh-mnemon-provider-byterover": "0.5.5",
+        "dsh-mnemon-provider-hindsight": "0.5.7",
+        "dsh-mnemon-provider-holographic": "0.5.7",
+        "dsh-mnemon-provider-honcho": "0.5.5",
+        "dsh-mnemon-provider-mem0": "0.5.5",
+        "dsh-mnemon-provider-mnemon-native": "0.5.10",
+        "dsh-mnemon-provider-openviking": "0.5.9",
+        "dsh-mnemon-provider-retaindb": "0.5.6",
+        "dsh-mnemon-provider-supermemory": "0.5.5",
+        "dsh-mnemon-source-documents": "0.5.11",
+        "dsh-mnemon-source-memory-spaces": "0.5.23",
+        "dsh-mnemon-source-runtime": "0.5.16",
+        "dsh-mnemon-source-skills": "0.5.2",
+        "dsh-mnemon-strategy-auto-capture": "0.5.5",
+        "dsh-mnemon-strategy-default-three-tier": "0.5.11",
+        "dsh-mnemon-strategy-general": "0.5.1",
+        "dsh-mnemon-strategy-light-context": "0.5.6",
+        "dsh-mnemon-strategy-scoped": "0.5.5"
+      },
+      "mismatches": {},
+      "artifactBytes": {
+        "packages": 9,
+        "files": 202,
+        "exactBytes": true
+      }
+    }
+  },
+  "checks": {
+    "workspace": {
+      "passed": 2192,
+      "skipped": 7
+    },
+    "installedDsh020": {
+      "passed": 2189,
+      "skipped": 10,
+      "layout": "documented global npm prefix"
+    },
+    "independentPluginRepositories": 18,
+    "packedArtifacts": 19,
+    "headlessUpgradeFrom": "0.5.29",
+    "headlessRuntimeBytesPreserved": true,
+    "webUiUpgradeFrom": "0.5.34",
+    "visionCase": {
+      "requiresVision": true,
+      "result": "1 not measured",
+      "scoreDisplayed": false,
+      "modelAccountConfigured": false
+    },
+    "skillTrashRestore": true,
+    "starterPackage": {
+      "files": 67,
+      "unpackedBytes": 2163228,
+      "ceilingBytes": 2500000
+    }
+  },
+  "limitations": [
+    "No paid-model or external-provider benchmark was performed.",
+    "Candidate version checks use a loopback registry; production registry checks belong to publication."
+  ],
+  "screenshots": {
+    "fresh020-install.png": "8f126b1a1ce5e7b439349566bb4d6b3c55efda7bae2add788cebf2bff5ef343b",
+    "fresh020-status.png": "7312b7b9332aff3e621d64cb597f13e64b442cf128c16c366e7ebfbd31ede6c7",
+    "fresh021-install.png": "6d6dbac0a65186d9514580d8cb8d63b3112e531eea3aa675b05055b3dee44467",
+    "fresh021-status.png": "d21d0265258d7a16a716bc1fb79ff82b4b70baf46d4063fd9879dc0fb47b7d9e",
+    "skills-restored.png": "f1c5fd4bb0430016ecac3e3f1a963ad15c0a52f83e7a0c4f68a8b4be065f0e67",
+    "skills-trash.png": "3c66a9b386c9384402c7b8d574de167697490577d36c7162ec7b34ae10e26d55",
+    "upgrade020-offered.png": "3b566c1edaa3c00bb0bb616c841a061345c9398e80e0645064a982bdb36bc2ca",
+    "upgrade020-status.png": "d4f15c086f96e9379dd7954a482a6f92737fadb91dbc317b8385f663cdcee404",
+    "upgrade020-updated.png": "38a44c913ce3006286577da6f8779623cc92a30d7dcc5ecfbc6cff3ca16e99cc",
+    "upgrade021-offered.png": "fe264eae6889fdfa23dba8e40c3d921a92cfde5e94447c485e6f80621e1be47f",
+    "upgrade021-status.png": "1bece5ed989809b7c6d6515452965e4171f85cffeafc775a173c5df041b5ea43",
+    "upgrade021-updated.png": "9a5e4055ae1db2919a7a18818e029aec36427eccfa2cf79cfe53c4098116a2e0",
+    "vision-case.png": "5898592516aa4fcddeae5bc772682b002769a726cbbb65245a474cfbb46c1fb2",
+    "vision-unmeasured.png": "8563f3db1cfd99ec5d27474a8e9d2b86817a34444cff9af71f54d92db3a74154"
+  }
+}

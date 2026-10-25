@@ -41,6 +41,6 @@ dsh-mnemon 为 DeepSeek Harness 提供三类记忆：每一轮都会用到的**�
 
 ## 最新变化
 
-[v0.5.34](./releases/v0.5.34.md) 新增实验性组件技能管理：管理工作区加载的 DSH 技能，从你的对话中改进技能（草案先回测、再由你采纳），为每个技能保存测试用例，并能从 skills.sh、GitHub 和 Agent Skills 网站安装更多技能。[v0.5.33](./releases/v0.5.33.md) 让 Git 同步无论 Git 怎样配置都能找到令牌，为 gitee.com 使用它接受的用户名，让记忆任务不再在 DSH 的会话列表中留下空会话，并写明在 DSH 0.2.1 的桌面版中从 0.5.30 及更早版本更新的方法。[全部版本](./releases/README.md) · [路线图](./roadmap.md) · [历史验收证据](../pr-assets/README.md)
+[v0.5.35](./releases/v0.5.35.md) 改进技能回收站与纯文本评测，保留运行时重要性与同步溢出记录，修复 Provider 写入和分数处理，并公开工作区身份辅助函数。[v0.5.34](./releases/v0.5.34.md) 新增实验性组件技能管理：管理工作区加载的 DSH 技能，从你的对话中改进技能（草案先回测、再由你采纳），为每个技能保存测试用例，并能从 skills.sh、GitHub 和 Agent Skills 网站安装更多技能。[v0.5.33](./releases/v0.5.33.md) 让 Git 同步无论 Git 怎样配置都能找到令牌，为 gitee.com 使用它接受的用户名，让记忆任务不再在 DSH 的会话列表中留下空会话，并写明在 DSH 0.2.1 的桌面版中从 0.5.30 及更早版本更新的方法。[全部版本](./releases/README.md) · [路线图](./roadmap.md) · [历史验收证据](../pr-assets/README.md)
 
 指南描述当前版本。截图与录屏来自 [v0.5.32 图集](../assets/webui-v0.5.32/README.md)，技能管理的截图来自 [v0.5.34 技能管理图集](../assets/skills-v0.5.34/README.md)，安装步骤来自[安装图集](../assets/install-v0.5.19/README.md)；带日期的 PR 记录只证明其标注的代码修订与环境。内部 Host RPC 不属于对外插件 SDK。

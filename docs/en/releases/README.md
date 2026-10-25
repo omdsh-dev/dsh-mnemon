@@ -6,6 +6,7 @@ For an existing installation, start with [Compatibility and upgrades](../referen
 
 ## v0.5
 
+- [v0.5.35: Safer Memory Updates and Skill Evals](./v0.5.35.md)
 - [v0.5.34: Skills That Improve With Use](./v0.5.34.md)
 - [v0.5.33: Git Sync Finds Its Token, and Memory Tasks Leave No Empty Conversations](./v0.5.33.md)
 - [v0.5.32: A Clearer Save Receipt and Memory Spaces' Own Settings](./v0.5.32.md)
