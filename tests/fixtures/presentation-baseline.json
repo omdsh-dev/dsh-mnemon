@@ -1,8 +1,8 @@
 {
   "clientDebtCleanup": {
     "page": {
-      "rules": 1059,
-      "rulesSha256": "bd4cf11ba9b29d98ea7083bd43d11484ca10dddb488ae2b668b391cd9f259628",
+      "rules": 1069,
+      "rulesSha256": "12a331e27ac8969ae711be9e586d5aea922a70ae59e6e245f0e35b853bd73585",
       "classes": 289,
       "classesSha256": "59713c331c11a7852d468532bb6c9c8b5dd1ce2ceb583f0d00dfe643ff9992b3"
     },
