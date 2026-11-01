@@ -130,7 +130,7 @@ export class ByteRoverProvider implements MemoryProviderAdapter {
         : resolve(this.memorySpaces.runner.effectiveDataDir(), configuredDirectory)
     mkdirSync(cwd, { recursive: true, mode: 0o700 })
     const apiKey = String(connection.apiKey ?? '').trim()
-    const invocation = resolveByteRoverInvocation(command, args, { ...process.env, ...(apiKey === '' ? {} : { BRV_API_KEY: apiKey }) })
+    const invocation = resolveByteRoverInvocation(command, args, { ...process.env, ...(apiKey === '' ? {} : { BRV_API_KEY: apiKey }) }, cwd)
     const result = await this.process(invocation.command, invocation.args, {
       timeoutMs,
       maxOutputBytes: 256 * 1024,
