@@ -21,7 +21,7 @@ function ContentPreview(props: { node: MemoryGraphNode; kind: string; onClose: (
   )
 }
 
-export function OverviewPage(props: { client: MemorySpacesPageClient; metadataClient: MemorySpacesPageClient; revision: number; reloadKey?: number; activationEnabled: boolean; writeEnabled: boolean; agentAvailable: boolean; fallbackBodies: MemorySpaceView[]; fallbackDirectory: string | undefined; catalogKnown: boolean; onMutate: () => void; onAgentRefresh: () => void; onBodyReconnect: (body: MemorySpaceView) => void; onBodyMetadata: (updates: readonly MemorySpaceMetadataUpdate[]) => void; onExplore: (query: string) => void }): JSX.Element {
+export function OverviewPage(props: { client: MemorySpacesPageClient; active?: boolean; metadataClient: MemorySpacesPageClient; revision: number; reloadKey?: number; activationEnabled: boolean; writeEnabled: boolean; agentAvailable: boolean; fallbackBodies: MemorySpaceView[]; fallbackDirectory: string | undefined; catalogKnown: boolean; onMutate: () => void; onAgentRefresh: () => void; onBodyReconnect: (body: MemorySpaceView) => void; onBodyMetadata: (updates: readonly MemorySpaceMetadataUpdate[]) => void; onExplore: (query: string) => void }): JSX.Element {
   const t = useT()
   const locale = useLocale()
   const spaceCreateFormId = useId()
@@ -131,16 +131,17 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; metadataCl
     void load(true)
   }, [catalogUnavailable, load, props.catalogKnown])
   useEffect(() => {
+    if (props.active === false) return
     const timer = window.setInterval(() => setSyncClock(Date.now()), 1_000)
     return () => window.clearInterval(timer)
-  }, [])
+  }, [props.active])
   // A new space starts with a provider that can take it now.
   useEffect(() => { setSpaceProviderId(current => readyProviderId(catalog?.providers ?? [], current) ?? current) }, [catalog])
   // A pass the Host started while this page is open: read the directory again until it ends, then
   // show what it found. The read also brings the Source's new revision, so the switches keep working.
   const hostRediscovering = catalog?.rediscovery?.running === true && !rediscovering
   useEffect(() => {
-    if (!hostRediscovering) return
+    if (!hostRediscovering || props.active === false) return
     let active = true
     const timer = window.setInterval(() => {
       void props.client.bodyDirectory().then(next => {
@@ -152,7 +153,7 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; metadataCl
       }).catch(() => {})
     }, REDISCOVERY_POLL_MS)
     return () => { active = false; window.clearInterval(timer) }
-  }, [hostRediscovering, load, props.client, props.onMutate])
+  }, [hostRediscovering, load, props.active, props.client, props.onMutate])
 
   const toggle = async (body: MemorySpaceView) => {
     setChanging(body.id); setError(null)

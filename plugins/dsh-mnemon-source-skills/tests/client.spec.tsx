@@ -211,6 +211,31 @@ describe('Skills page', () => {
     expect(screen.getByText(t('versions.reason.original'))).not.toBeNull()
   })
 
+  it('pauses busy polling and focus refreshes while its retained panel is hidden', async () => {
+    await mutate('review-record', review())
+    const [suggestion] = (await management.read('suggestions', null)).value as Array<{ id: string }>
+    await mutate('suggestion-status', { id: suggestion!.id, status: 'drafting' })
+    const read = vi.spyOn(management, 'read')
+    const intervals = vi.spyOn(globalThis, 'setInterval')
+    const clear = vi.spyOn(globalThis, 'clearInterval')
+    const props = { sourceTypeId: 'skills', sourceInstanceKey: 'source:skills', sourceInstances: [], locale: 'en', writable: true, management, navigationInput: { seed: `suggestion:${suggestion!.id}`, nonce: 1 } }
+    const view = render(<SkillsSourcePage {...props} />)
+    await screen.findByText(t('evolution.drafting'))
+    const polling = intervals.mock.results[intervals.mock.calls.map(([, delay]) => delay).lastIndexOf(3_000)]!.value
+    clear.mockClear()
+    view.rerender(<SkillsSourcePage {...props} active={false} />)
+    expect(clear).toHaveBeenCalledWith(polling)
+    const hiddenReads = read.mock.calls.length
+    fireEvent.focus(window)
+    fireEvent(document, new Event('visibilitychange'))
+    await act(async () => {})
+    expect(read.mock.calls).toHaveLength(hiddenReads)
+    view.rerender(<SkillsSourcePage {...props} active />)
+    const before = read.mock.calls.length
+    fireEvent.focus(window)
+    await waitFor(() => expect(read.mock.calls.length).toBeGreaterThan(before))
+  })
+
   it('refreshes stale cards once more when the overview finishes, and again on focus (#448)', async () => {
     await mutate('review-record', review())
     const [suggestion] = (await management.read('suggestions', null)).value as Array<{ id: string }>

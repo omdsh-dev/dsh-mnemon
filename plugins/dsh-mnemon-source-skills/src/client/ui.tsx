@@ -111,6 +111,7 @@ function SkillsView(props: MemorySourcePageProps & { management: NonNullable<Mem
   const busy = overview !== null && (overview.counts.runsRunning > 0 || overview.counts.drafting > 0)
   const wasBusy = useRef(false)
   useEffect(() => {
+    if (props.active === false) return
     // The overview and each tab read separately. Once completion stops polling,
     // fetch the cards again so a pre-completion response cannot remain on screen.
     if (wasBusy.current && !busy) refresh()
@@ -118,8 +119,9 @@ function SkillsView(props: MemorySourcePageProps & { management: NonNullable<Mem
     if (!busy) return
     const timer = setInterval(refresh, POLL_MS)
     return () => clearInterval(timer)
-  }, [busy, refresh])
+  }, [busy, refresh, props.active])
   useEffect(() => {
+    if (props.active === false) return
     const resume = (): void => { if (document.visibilityState !== 'hidden') refresh() }
     window.addEventListener('focus', resume)
     document.addEventListener('visibilitychange', resume)
@@ -127,7 +129,7 @@ function SkillsView(props: MemorySourcePageProps & { management: NonNullable<Mem
       window.removeEventListener('focus', resume)
       document.removeEventListener('visibilitychange', resume)
     }
-  }, [refresh])
+  }, [refresh, props.active])
   useEffect(() => {
     if (notice === null) return
     const timer = setTimeout(() => setNotice(null), NOTICE_MS)

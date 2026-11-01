@@ -31,6 +31,8 @@ export interface MemorySourcePageProps {
   management?: MnemonSourceManagementClient
   /** Presentation hint only; the Host still authenticates every mutation. */
   writable?: boolean
+  /** False while a retained panel is hidden; pause polling and focus refreshes. Defaults to true. */
+  active?: boolean
   sessionId?: string
   workspaceId?: string
   locale: string

@@ -36,7 +36,7 @@ describe('MnemonWorkbench', () => {
   const settingsScope = staticSettingsScope<Config>(settingsSnapshot)
   const readOnlySettingsScope = staticSettingsScope<Config>({ status: 'unavailable', writable: false, mode: 'host' })
 
-  function createConnection(options: { reviewWatermark?: 'ready' | 'error'; reviewPartial?: boolean; reviewTeam?: boolean; reviewError?: string; isLoopback?: boolean; withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; runtimeBranch?: boolean; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; summaryWithoutVersion?: boolean; restartPending?: VersionRestartStatus; directoryPending?: boolean; reconnectPending?: boolean; relatedDeferred?: boolean; versionsDeferred?: boolean; layerSwitches?: Record<'runtime' | 'documents' | 'memory-spaces', boolean>; componentsOff?: string[]; composition?: { serving: boolean; state: 'ready' | 'incomplete' | 'rejected'; diagnostics: Array<{ code: string; message: string }> } } = {}) {
+  function createConnection(options: { rediscoveryRunning?: boolean; reviewWatermark?: 'ready' | 'error'; reviewPartial?: boolean; reviewTeam?: boolean; reviewError?: string; isLoopback?: boolean; withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; runtimeBranch?: boolean; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; summaryWithoutVersion?: boolean; restartPending?: VersionRestartStatus; directoryPending?: boolean; reconnectPending?: boolean; relatedDeferred?: boolean; versionsDeferred?: boolean; layerSwitches?: Record<'runtime' | 'documents' | 'memory-spaces', boolean>; componentsOff?: string[]; composition?: { serving: boolean; state: 'ready' | 'incomplete' | 'rejected'; diagnostics: Array<{ code: string; message: string }> } } = {}) {
     const body = {
       id: 'project',
       provider: MEMORY_PROVIDER_CATALOG.find(item => item.id === 'mnemon-native')!, providerId: 'mnemon-native', providerEnabled: true, providerSettings: {}, configuredSecrets: [],
@@ -278,7 +278,7 @@ describe('MnemonWorkbench', () => {
         return { ok: true, value: { component: payload?.component, previousVersion: '0.1.2', currentVersion: '0.2.0', updated: true, restartRequired: false } }
       }
       if (endpoint === 'body-directory' && options.directoryPending === true) return await new Promise<never>(() => {})
-      if (endpoint === 'bodies' || endpoint === 'body-directory') return { ok: true, value: { items: bodies, providers: MEMORY_PROVIDER_CATALOG, total: bodies.length, activeCount: bodies.filter(item => item.active).length, directory: '/tmp/mnemon/data', generatedAt: '2026-08-13T03:00:00.000Z' } }
+      if (endpoint === 'bodies' || endpoint === 'body-directory') return { ok: true, value: { ...(options.rediscoveryRunning ? { rediscovery: { running: true } } : {}), items: bodies, providers: MEMORY_PROVIDER_CATALOG, total: bodies.length, activeCount: bodies.filter(item => item.active).length, directory: '/tmp/mnemon/data', generatedAt: '2026-08-13T03:00:00.000Z' } }
       if (endpoint === 'body-reconnect') {
         if (options.reconnectPending === true) return await new Promise<never>(() => {})
         return { ok: true, value: bodies.find(item => item.id === payload?.memoryBodyId) ?? body }
@@ -1284,6 +1284,34 @@ describe('MnemonWorkbench', () => {
     expect(card.hasAttribute('data-reconnecting')).toBe(true)
     expect(within(card).getByText('重连中')).toBeTruthy()
     expect(card.querySelector('[class*="bodySignal"]')).toBeTruthy()
+  })
+
+  it('pauses Memory Spaces polling and session reads while the retained panel is hidden (#526)', async () => {
+    const intervals = vi.spyOn(window, 'setInterval')
+    const clear = vi.spyOn(window, 'clearInterval')
+    try {
+      const { connection, call } = createConnection({ rediscoveryRunning: true })
+      const view = render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="A" />)
+      await selectWorkspaceTab('记忆空间')
+      await screen.findByText('项目记忆空间')
+      await waitFor(() => expect(intervals.mock.calls.some(([, delay]) => delay === 2_000)).toBe(true))
+      const polling = intervals.mock.results[intervals.mock.calls.map(([, delay]) => delay).lastIndexOf(2_000)]!.value
+      const canvas = screen.getByTestId('mnemon-canvas')
+      const before = call.mock.calls.length
+      clear.mockClear()
+      const timers = intervals.mock.calls.length
+      view.rerender(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="B" active={false} />)
+      expect(clear).toHaveBeenCalledWith(polling)
+      expect(intervals.mock.calls).toHaveLength(timers)
+      view.rerender(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="A" active={false} />)
+      await act(async () => {})
+      expect(call.mock.calls).toHaveLength(before)
+      expect(screen.getByTestId('mnemon-canvas')).toBe(canvas)
+      view.rerender(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="A" />)
+      await waitFor(() => expect(call.mock.calls.length).toBeGreaterThan(before))
+      expect(screen.getByTestId('mnemon-canvas')).toBe(canvas)
+      expect(screen.getByRole('heading', { name: '记忆空间' })).toBeTruthy()
+    } finally { intervals.mockRestore(); clear.mockRestore() }
   })
 
   it('runs one full entry sync and keeps later card sync scoped to one Memory Space', async () => {

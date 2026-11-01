@@ -43,7 +43,7 @@ interface MnemonWorkbenchProps {
   workspaceSelection?: MnemonWorkspaceSelection
   /** Placement changes scope controls, not Source pages or their visual skin. */
   surface?: MnemonDisplayMode
-  /** Sidebar retains its subtree while hidden; refresh View when reopened. */
+  /** Retain page state while hidden, pause automatic refreshes, and refresh when reopened. */
   active?: boolean
   /**
    * The header is the top edge of the window, as in DSH's main column. DSH Desktop then
@@ -206,8 +206,12 @@ function storageAreaLabel(t: MnemonTranslate, kind: StorageAreaInventory['kind']
 }
 
 export function MnemonWorkbench(props: MnemonWorkbenchProps): JSX.Element {
+  // A retained panel follows conversation context only while visible. Keeping the
+  // last visible props also keeps Source drafts mounted during hidden A/B/A switches.
+  const visibleProps = useRef(props)
+  if (props.active !== false) visibleProps.current = props
   const t = props.t ?? translateZh
-  return <I18nContext.Provider value={t}><LocaleContext.Provider value={props.locale ?? 'zh'}><MnemonWorkspace {...props} /></LocaleContext.Provider></I18nContext.Provider>
+  return <I18nContext.Provider value={t}><LocaleContext.Provider value={props.locale ?? 'zh'}><MnemonWorkspace {...visibleProps.current} active={props.active ?? true} /></LocaleContext.Provider></I18nContext.Provider>
 }
 
 function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, workspaceSelection, surface = 'sidebar', active = true, titleBar = false, onClose, configuration, componentChanges, sourcePageDirectory = EMPTY_SOURCE_PAGE_DIRECTORY, renderSlot, focus, hiddenSourceTypes, skillsScope }: MnemonWorkbenchProps): JSX.Element {
@@ -219,7 +223,10 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const componentRevision = useSyncExternalStore(componentSignal.subscribe, componentSignal.getSnapshot, componentSignal.getSnapshot)
   const subscribeSettings = useCallback((listener: () => void) => settingsScope.subscribe(listener), [settingsScope])
   const getSettingsSnapshot = useCallback(() => settingsScope.getSnapshot(), [settingsScope])
-  const settingsSnapshot = useSyncExternalStore(subscribeSettings, getSettingsSnapshot, getSettingsSnapshot)
+  const liveSettingsSnapshot = useSyncExternalStore(subscribeSettings, getSettingsSnapshot, getSettingsSnapshot)
+  const visibleSettings = useRef(liveSettingsSnapshot)
+  if (active) visibleSettings.current = liveSettingsSnapshot
+  const settingsSnapshot = visibleSettings.current
   const subscribeSourcePages = useCallback((listener: () => void) => sourcePageDirectory.subscribe(listener), [sourcePageDirectory])
   const getSourcePages = useCallback(() => sourcePageDirectory.getSnapshot(), [sourcePageDirectory])
   const allSourcePageEntries = useSyncExternalStore(subscribeSourcePages, getSourcePages, getSourcePages)
@@ -234,7 +241,9 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const sourcePageEntries = useMemo(() => allSourcePageEntries.filter(entry => shows(entry.sourceTypeId)), [allSourcePageEntries, shows])
   const client = useMemo(() => new MnemonClient(connection, sessionId, workspaceId), [connection, sessionId, workspaceId])
   const taskClient = useMemo(() => surface === 'builtin' ? client : new MnemonClient(connection, undefined, workspaceId), [client, connection, surface, workspaceId])
-  const clientContextKey = `${sessionId ?? ''}\u0000${workspaceId ?? ''}`
+  const connectionContext = useRef({ connection, revision: 0 })
+  if (connectionContext.current.connection !== connection) connectionContext.current = { connection, revision: connectionContext.current.revision + 1 }
+  const clientContextKey = `${connectionContext.current.revision}\u0000${sessionId ?? ''}\u0000${workspaceId ?? ''}`
   // Pages remount only when they would show other data: another storage scope
   // or directory. Any other save re-reads in place and keeps page drafts.
   const storageContext = settingsSnapshot.revision === undefined ? 'loading'
@@ -258,9 +267,9 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
     canvas.scrollTop = Math.max(0, canvas.scrollTop + element.getBoundingClientRect().top - canvas.getBoundingClientRect().top - inset)
   }, [])
 
-  const { status, statusLoading, statusError, loadStatus } = useWorkspaceStatus(client, viewContextKey)
+  const { status, statusLoading, statusError, loadStatus } = useWorkspaceStatus(client, viewContextKey, active)
   const [revision, setRevision] = useState(0)
-  const { sourceCatalogState, sourceCatalog, sourceInstances, sourceManagementClients, visibleSourcePages, managedSourceTypes: allManagedSourceTypes } = useSourceCatalog(client, taskClient, revision, viewContextKey, sourcePageEntries)
+  const { sourceCatalogState, sourceCatalog, sourceInstances, sourceManagementClients, visibleSourcePages, managedSourceTypes: allManagedSourceTypes } = useSourceCatalog(client, taskClient, revision, viewContextKey, sourcePageEntries, active)
   const managedSourceTypes = useMemo(() => allManagedSourceTypes.filter(([sourceTypeId]) => shows(sourceTypeId)), [allManagedSourceTypes, shows])
   const [selectedSourceInstances, setSelectedSourceInstances] = useState<Record<string, string>>({})
   // Configured layers whose Source is not running keep a diagnostic tab unless
@@ -275,11 +284,12 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   // component's own declaration, the way the configuration shows it.
   const [dashboard, setDashboard] = useState<MemoryViewDashboard | null>(null)
   useEffect(() => {
+    if (!active) return
     let current = true
     // Names are a courtesy: an unreadable dashboard leaves the pages' own labels.
     client.viewDashboard().then(value => { if (current) setDashboard(Array.isArray(value?.entries) ? value : null) }, () => { if (current) setDashboard(null) })
     return () => { current = false }
-  }, [client, revision, componentRevision])
+  }, [active, client, revision, componentRevision])
   const sourceName = useCallback((sourceTypeId: string, fallback?: string): string => {
     const component = dashboard === null ? undefined : sourceOf(dashboard, sourceTypeId)
     return component === undefined ? fallback ?? sourceTypeId : componentCopy(component, locale).label
@@ -314,38 +324,41 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
     sessionId, viewContextKey, resetViewportScroll, sourceCatalog, sourcePageEntries, visibleSourcePages, managedSourceTypes, stoppedTypes, disabledTypes, dashboard, sourceName, showWorkspaceToast, accepts, home,
   })
   // Runs after the catalog and component-name reads, so the three requests keep their order.
-  useEffect(() => { void loadStatus() }, [loadStatus])
+  useEffect(() => { if (active) void loadStatus() }, [active, loadStatus])
 
-  const mutate = useCallback(() => { setRevision(value => value + 1); void loadStatus() }, [loadStatus])
+  const currentView = useRef({ active, client, viewContextKey })
+  currentView.current = { active, client, viewContextKey }
+  const viewMounted = useRef(true)
+  useEffect(() => { viewMounted.current = true; return () => { viewMounted.current = false } }, [])
+  const isBoundView = useCallback(() => viewMounted.current && currentView.current.client === client && currentView.current.viewContextKey === viewContextKey, [client, viewContextKey])
+  const isCurrentView = useCallback(() => currentView.current.active && isBoundView(), [isBoundView])
+  const assertCurrentView = () => { if (!isBoundView()) throw new Error('Source page is unmounted or its view context changed') }
+  const mutate = useCallback(() => { if (!isCurrentView()) return; setRevision(value => value + 1); void loadStatus() }, [isCurrentView, loadStatus])
   const refreshAll = mutate
   // The header's refresh also asks the open Source page to reload its data.
   const [refreshKey, setRefreshKey] = useState(0)
   const refreshPage = useCallback(() => { setRefreshKey(value => value + 1); refreshAll() }, [refreshAll])
   // The configuration lives on another page: re-read when the Sidebar
-  // reopens the workspace and when a component is switched elsewhere. A
-  // component switch or a Provider saved under Plugins also reloads the open
-  // page, so Memory Spaces lists the Providers a new space can use, and so
+  // reopens the workspace and when a component is switched elsewhere. The
+  // active-gated effects above refresh on reopening. A component switch or a
+  // Provider saved under Plugins also reloads the open page, so Memory Spaces lists the Providers a new space can use, and so
   // does a sync, a merge, an import or an applied plan there, so the page
   // shows the memory it brought in.
-  const shown = useRef(active)
-  useEffect(() => {
-    if (active && !shown.current) refreshAll()
-    shown.current = active
-  }, [active, refreshAll])
   const seenComponents = useRef(componentRevision)
   useEffect(() => {
-    if (componentRevision === seenComponents.current) return
+    if (!active || componentRevision === seenComponents.current) return
     seenComponents.current = componentRevision
     refreshPage()
-  }, [componentRevision, refreshPage])
+  }, [active, componentRevision, refreshPage])
   // A save that keeps the storage re-reads in place; one that changes it
   // moves the context key, which reloads everything by itself.
   const seenSettings = useRef({ revision: settingsSnapshot.revision, context: viewContextKey })
   useEffect(() => {
+    if (!active) return
     const seen = seenSettings.current
     seenSettings.current = { revision: settingsSnapshot.revision, context: viewContextKey }
     if (seen.revision !== settingsSnapshot.revision && seen.context === viewContextKey) refreshAll()
-  }, [settingsSnapshot.revision, viewContextKey, refreshAll])
+  }, [active, settingsSnapshot.revision, viewContextKey, refreshAll])
   const activationEnabled = status?.writeEnabled === true
   const writeEnabled = activationEnabled && settingsSnapshot.status === 'ready' && settingsSnapshot.writable
   // A remote page without the management grant says why it cannot write.
@@ -388,6 +401,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       value: { evolution: skillsSnapshot.value?.evolution ?? DEFAULT_SKILLS_CONFIG.evolution } as JsonValue,
       writable: skillsSnapshot.writable,
       replace: async (value: JsonValue) => {
+        assertCurrentView()
         const evolution = jsonRecord(value)?.evolution
         if (typeof evolution !== 'boolean') throw new Error('Skills preferences take evolution as a boolean')
         await skillsScope.mutate([{ op: 'set', path: ['evolution'], value: evolution }])
@@ -398,6 +412,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       value: JSON.parse(JSON.stringify({ persistenceStrategy: { ...settingsSnapshot.value?.persistenceStrategy, providerConnections: {} } })) as JsonValue,
       writable: settingsSnapshot.writable,
       replace: async (value: JsonValue) => {
+        assertCurrentView()
         const requested = jsonRecord(value)?.persistenceStrategy
         const strategy = requested === undefined ? undefined : jsonRecord(requested)
         if (strategy === undefined) throw new Error('Persistence strategy preferences must be an object')
@@ -408,7 +423,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       },
     })
     return renderSlot(MNEMON_SOURCE_PAGE_SLOT, {
-      sourceTypeId, sourceInstanceKey: selected.sourceInstanceKey, sourceInstances: instances, writable: writeEnabled, locale,
+      sourceTypeId, sourceInstanceKey: selected.sourceInstanceKey, sourceInstances: instances, writable: writeEnabled, locale, active,
       ...(management === undefined ? {} : { management }),
       ...(sessionId === undefined ? {} : { sessionId }), ...(workspaceId === undefined ? {} : { workspaceId }),
       ...(navigationInput?.page === entryId ? { navigationInput: navigationInput.value } : {}),
