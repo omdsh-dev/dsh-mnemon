@@ -17,7 +17,7 @@ async function fixture(options: Config = {}) {
   const child = { id: 'review-child', session: { header: { cwd: f.workspace, origin: 'subagent', parentSession: root.id } } } as HostAgent
   const registered: ToolDefinition[] = []
   const coordinator = { document: vi.fn(), archiveDocument: vi.fn() } as unknown as MnemonSubagentCoordinator
-  registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as unknown as HostContextShape, f.live, coordinator)
+  registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool); return () => {} } } } as unknown as HostContextShape, f.live, coordinator, f.extensions)
   const documents = f.graph.source('documents')
   const turn = async () => {
     const pinned = await f.graph.composableTurns.beginTurn('root:documents', agentScope(root, f.config), 'test')

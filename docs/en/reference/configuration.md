@@ -196,6 +196,10 @@ The endpoint must be an absolute HTTP(S) URL without credentials, query paramete
 
 Each memory Source has one switch in **Memory composition**. It turns the Source's DSH Entry on or off through DSH's plugin manager, which saves the choice as the Entry's `disabled` row in the profile patch. On permits the main strategy to use the Source when needed; it does not force recall or writes on every turn. Off stops that Source's context injection, tools, background work and data-plane Web and RPC operations together.
 
+The Host registers a named tool family while at least one live Source with that `manifest.typeId` is registered globally. Removing the last `memory-spaces`, `documents`, or `runtime` instance removes its 10, 3, or 1 named tools; registering that type again restores them. With all three types the Mnemon inventory has 17 tools; without Memory Spaces it has 7. The two generic View tools and `mnemon_subagent_result` stay registered independently. A workspace's narrower View or the legacy layer flag still controls execution authority and does not remove another workspace's global tools.
+
+Configuration transactions publish only their final Source set, including rollback, so intermediate unload/reload steps do not change model schemas. Existing Agents observe the ordinary DSH tool-registry updates on their next model request. Delegated children allow only currently registered task tools; idle review skips when no applicable Runtime or Documents write target remains.
+
 ![Memory composition with one switch per memory Source and enhancement](../../assets/webui-v0.5.32/en/plugin-composition.jpg)
 
 Turning a Source off is reversible routing state, not deletion. Its Memory System page stays, marked **Not running**, and does not read the data plane; Status and the management directories stay observable. Turning it on again uses the original directories and data. The last running Source cannot be turned off. The legacy `memoryTopology.layers.<id>.enabled` flag is turned back on with the Source and is used only when the components cannot be read.

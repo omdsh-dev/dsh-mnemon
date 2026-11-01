@@ -196,6 +196,10 @@ Endpoint 必须是不含凭据、查询参数或片段的 HTTP(S) 绝对 URL。M
 
 每个记忆 Source 在**记忆组合**中有一个开关。它通过 DSH 插件管理器打开或关闭该 Source 的 DSH Entry，并在 profile patch 中保存为对应 Entry 的 `disabled` 行。打开表示允许主策略在需要时使用该 Source，并不强制每一轮召回或写入；关闭会同时停止它的上下文注入、工具、后台任务与数据面 Web/RPC 操作。
 
+只要全局还注册着至少一个具有相同 `manifest.typeId` 的活动 Source，Host 就保留对应的命名工具族。移除最后一个 `memory-spaces`、`documents` 或 `runtime` 实例，分别移除其 10、3 或 1 个命名工具；重新注册该类型会恢复工具。三类齐全时 Mnemon 共注册 17 个工具，缺少 Memory Spaces 时为 7 个。两个通用 View 工具与 `mnemon_subagent_result` 独立保留。工作区更窄的 View 或旧版分层标记仍控制执行授权，不会移除其他工作区的全局工具。
+
+配置事务只发布最终 Source 集合，回滚也遵循这一边界，中间的卸载与重载不会改变模型 schema。已有 Agent 在下一次模型请求时收到正常的 DSH 工具目录更新。委派子 Agent 的任务允许列表只包含当前已注册的工具；没有适用的 Runtime 或 Documents 写入目标时，空闲审查会跳过。
+
 ![记忆组合：每个记忆来源与增强各有一个开关](../../assets/webui-v0.5.32/zh-CN/plugin-composition.jpg)
 
 关闭是可逆的路由状态，不是删除。它在记忆系统中的页面会保留并标记为**未运行**，不读取数据面；状态页与管理目录仍可查看。重新打开后使用原来的目录与数据。最后一个运行中的 Source 不能关闭。旧版的 `memoryTopology.layers.<id>.enabled` 标记会随 Source 一起恢复，只在读不到组件时使用。

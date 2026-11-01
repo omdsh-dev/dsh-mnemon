@@ -234,9 +234,10 @@ describe('dsh-mnemon plugin composition', () => {
     expect(user).toEqual({ displayMode: 'buildin' })
   })
 
-  it('mounts its complete Agent surface without Web-only Host services', () => {
+  it('mounts its complete Agent surface without Web-only Host services', async () => {
     const fixture = context({ connection: false, workspaceRegistry: false })
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
+    await installStarter(fixture)
 
     expect(fixture.tools).toHaveLength(17)
     expect(fixture.sections).toEqual([expect.objectContaining({ name: 'mnemon:routing' })])
@@ -293,7 +294,8 @@ describe('dsh-mnemon plugin composition', () => {
   it('registers the full tool surface, guidance, and split RPC channels', async () => {
     const fixture = context()
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
-    expect(fixture.tools.map(tool => (tool as { name: string }).name)).toEqual([
+    await installStarter(fixture)
+    expect(fixture.tools.map(tool => (tool as { name: string }).name).sort()).toEqual([
       'mnemon_subagent_result',
       'mnemon_view_route',
       'mnemon_view_action',
@@ -311,7 +313,7 @@ describe('dsh-mnemon plugin composition', () => {
       'mnemon_memory_body_create',
       'mnemon_memory_body_update',
       'mnemon_memory_body_merge',
-    ])
+    ].sort())
     expect(fixture.tools).toEqual(expect.arrayContaining([
       expect.objectContaining({ output: expect.objectContaining({ schema: { type: 'object', additionalProperties: true } }) }),
     ]))
@@ -342,6 +344,7 @@ describe('dsh-mnemon plugin composition', () => {
   it('keeps stable live surfaces while fencing every mutation in read-only mode', async () => {
     const fixture = context()
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir(), writeEnabled: false })
+    await installStarter(fixture)
     expect(fixture.tools).toHaveLength(17)
     const runtimeTool = fixture.tools.find(tool => (tool as { name: string }).name === 'mnemon_runtime_memory') as {
       execute: (args: unknown, execution: unknown) => Promise<unknown>
@@ -363,7 +366,7 @@ describe('dsh-mnemon plugin composition', () => {
     await f.graph.composableTurns.beginTurn('root:documents', agentScope(root, f.config), 'test')
     const tools: ToolDefinition[] = []
     const coordinator = new MnemonSubagentCoordinator({ list: () => [], getProvider: () => undefined, start: vi.fn() } as never, f.live)
-    registerTools({ tools: { register: (tool: ToolDefinition) => { tools.push(tool) } } } as never, f.live, coordinator)
+    registerTools({ tools: { register: (tool: ToolDefinition) => { tools.push(tool); return () => {} } } } as never, f.live, coordinator, f.extensions)
     const result = await tools.find(tool => tool.name === 'mnemon_document_search')!.execute({ query: '冷归档不变量' } as never, { agent: root, signal: new AbortController().signal }) as { results: unknown[]; suggestions: unknown[]; suggestionHint: string }
     expect(result.results).toEqual([])
     expect(result.suggestions).toEqual([expect.objectContaining({
@@ -386,7 +389,7 @@ describe('dsh-mnemon plugin composition', () => {
     await f.graph.composableTurns.beginTurn('root:documents', agentScope(root, f.config), 'test')
     const tools: ToolDefinition[] = []
     const coordinator = new MnemonSubagentCoordinator({ list: () => [], getProvider: () => undefined, start: vi.fn() } as never, f.live)
-    registerTools({ tools: { register: (tool: ToolDefinition) => { tools.push(tool) } } } as never, f.live, coordinator)
+    registerTools({ tools: { register: (tool: ToolDefinition) => { tools.push(tool); return () => {} } } } as never, f.live, coordinator, f.extensions)
     const result = await tools.find(tool => tool.name === 'mnemon_document_search')!.execute({ query: needle } as never, { agent: root, signal: new AbortController().signal }) as { results: Array<{ content: string }> }
     expect(result.results).toHaveLength(1)
     expect(result.results[0]!.content).toContain(needle)
@@ -405,7 +408,7 @@ describe('dsh-mnemon plugin composition', () => {
     const execute = vi.spyOn(f.graph.memoryComposition.current()!.sourceRuntime(route.sourceInstanceKey)!, 'query')
     const tools: ToolDefinition[] = []
     const coordinator = new MnemonSubagentCoordinator({ list: () => [], getProvider: () => undefined, start: vi.fn() } as never, f.live)
-    registerTools({ tools: { register: (tool: ToolDefinition) => { tools.push(tool) } } } as never, f.live, coordinator)
+    registerTools({ tools: { register: (tool: ToolDefinition) => { tools.push(tool); return () => {} } } } as never, f.live, coordinator, f.extensions)
     const tool = tools.find(candidate => candidate.name === 'mnemon_document_search')!
     const execution = { agent: root, signal: new AbortController().signal }
     expect(await tool.execute({ query: 'ORCHID-47 root cause' } as never, execution)).not.toHaveProperty('notRun')

@@ -32,6 +32,8 @@ export class MemoryRuntime {
   private readonly disposalFailures: unknown[] = []
   private batchDepth = 0
   private batchSnapshot: MemoryContributionSnapshot | undefined
+  private readonly committedListeners = new Set<MemoryContributionListener>()
+  private contributionsPending = false
   private readonly reconciliations = new Map<MemoryGenerationHost, MemoryContributionSnapshot>()
 
   /** Host assembly transaction: existing leases stay served until all Fibers settle. */
@@ -45,13 +47,23 @@ export class MemoryRuntime {
         const pending = [...this.reconciliations]
         this.reconciliations.clear()
         for (const [host, snapshot] of pending) host.reconcile(snapshot)
+        if (this.contributionsPending) {
+          this.contributionsPending = false
+          this.notifyCommitted()
+        }
       }
     }
   }
 
   installContributions(value: MemoryContributionInstall): () => void {
     if (this.closed) throw new Error('Memory Runtime is disposed')
-    return this.contributions.install(value)
+    const release = this.contributions.install(value)
+    this.notifyCommitted()
+    return () => {
+      const revision = this.contributions.snapshot().revision
+      release()
+      if (this.contributions.snapshot().revision !== revision) this.notifyCommitted()
+    }
   }
 
   contributionSnapshot(): MemoryContributionSnapshot {
@@ -60,6 +72,23 @@ export class MemoryRuntime {
 
   onContributionsChanged(listener: MemoryContributionListener): () => void {
     return this.contributions.subscribe(listener)
+  }
+
+  /** Global Host consumers see the baseline until the assembly transaction settles. */
+  committedContributionSnapshot(): MemoryContributionSnapshot {
+    return this.batchSnapshot ?? this.contributions.snapshot()
+  }
+
+  onCommittedContributionsChanged(listener: MemoryContributionListener): () => void {
+    this.committedListeners.add(listener)
+    return () => { this.committedListeners.delete(listener) }
+  }
+
+  private notifyCommitted(): void {
+    if (this.closed) return
+    if (this.batchDepth) { this.contributionsPending = true; return }
+    const snapshot = this.contributions.snapshot()
+    for (const listener of [...this.committedListeners]) listener(snapshot)
   }
 
   /** Attach one Host runtime graph to the current definition set. */
@@ -103,6 +132,7 @@ export class MemoryRuntime {
   dispose(): Promise<void> {
     if (this.disposal !== undefined) return this.disposal
     this.closed = true
+    this.committedListeners.clear()
     this.disposal = Promise.allSettled([...this.generationAttachments].map(attachment => attachment.dispose())).then(() => {
       if (this.disposalFailures.length > 0) throw new AggregateError(this.disposalFailures, 'Memory Runtime cleanup failed')
     })

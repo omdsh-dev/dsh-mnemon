@@ -47,7 +47,7 @@ describe('OpenViking writes through composed Host and Sources', () => {
   it('writes through a Host tool and retains Provider instance, account, and Source isolation', async () => {
     const f = await fixture()
     const tools = new Map()
-    registerTools({ tools: { register: tool => tools.set(tool.name, tool) } }, f.live, f.coordinator)
+    registerTools({ tools: { register: tool => { tools.set(tool.name, tool); return () => { tools.delete(tool.name) } } } }, f.live, f.coordinator, f.extensions)
     const child = { id: 'openviking-child', session: { header: { cwd: f.workspace, origin: 'subagent', parentSession: f.agent.id }, ...sessionLog() } }
     const turn = await f.graph.composableTurns.beginTurn(f.agent.id + ':1', agentScope(f.agent, f.config))
     f.graph.composableTurns.pinTurn(child.id + ':1', agentScope(child, f.config), turn.view.id)

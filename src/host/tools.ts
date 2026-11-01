@@ -1,3 +1,5 @@
+import type { MemoryRuntime } from '../core/runtime.ts'
+import { memoryTool } from './memory-tools.ts'
 import type { HostContextShape, ToolDefinition, ToolExecution } from './dsh.ts'
 import type { DocumentMutation } from 'dsh-mnemon-source-documents/contracts'
 import type { RuntimeMemoryImportance, RuntimeMemoryTarget } from 'dsh-mnemon-source-runtime/contracts'
@@ -65,13 +67,40 @@ function documentActionReceipt(receipt: MemoryMutationReceipt): MemoryMutationRe
  * order the model has always been given them, which puts Memory Spaces' reads before the Documents tools and its
  * writes after the runtime memory tool.
  */
-export function registerTools(ctx: HostContextShape, runtimeSource: MnemonAgentRuntimeSource, coordinator: MnemonSubagentCoordinator): void {
+export function registerTools(ctx: HostContextShape, runtimeSource: MnemonAgentRuntimeSource, coordinator: MnemonSubagentCoordinator, contributions: MemoryRuntime): () => void {
+  const definitions: ToolDefinition[] = []
+  const catalog = { tools: { register: (tool: ToolDefinition) => { definitions.push(tool) } } } as unknown as HostContextShape
   const helpers = toolHelpers(runtimeSource)
-  registerViewTools(ctx, helpers, coordinator)
-  registerMemorySpaceReadTools(ctx, helpers, coordinator)
-  registerDocumentTools(ctx, helpers, coordinator)
-  registerRuntimeTools(ctx, helpers, coordinator)
-  registerMemorySpaceWriteTools(ctx, helpers, coordinator)
+  registerViewTools(catalog, helpers, coordinator)
+  registerMemorySpaceReadTools(catalog, helpers, coordinator)
+  registerDocumentTools(catalog, helpers, coordinator)
+  registerRuntimeTools(catalog, helpers, coordinator)
+  registerMemorySpaceWriteTools(catalog, helpers, coordinator)
+  const registered = new Map<string, () => unknown>()
+  const reconcile = (snapshot: ReturnType<MemoryRuntime['contributionSnapshot']>) => {
+    const types = new Set(snapshot.sources.map(source => source.definition.manifest.typeId))
+    for (const tool of definitions) {
+      const type = memoryTool(tool.name)?.sourceTypeId
+      const available = type === undefined || types.has(type)
+      if (!available) {
+        registered.get(tool.name)?.()
+        registered.delete(tool.name)
+      } else if (!registered.has(tool.name)) {
+        const dispose = ctx.tools.register(tool)
+        if (typeof dispose !== 'function') throw new Error('dsh-mnemon tool registration did not return a disposer: ' + tool.name)
+        registered.set(tool.name, dispose as () => unknown)
+      }
+    }
+  }
+  const unsubscribe = contributions.onCommittedContributionsChanged(reconcile)
+  const dispose = () => {
+    unsubscribe()
+    for (const release of registered.values()) release()
+    registered.clear()
+  }
+  try { reconcile(contributions.committedContributionSnapshot()) }
+  catch (error) { dispose(); throw error }
+  return dispose
 }
 
 /** What the handlers of every family share: the calling Agent's runtime graph and Sources, its checks, and a Source Action call. */

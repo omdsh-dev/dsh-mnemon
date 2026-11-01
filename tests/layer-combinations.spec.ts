@@ -38,7 +38,7 @@ async function fixture(state: SpacesState, config: Config = {}, documentsLimitBy
   const start = vi.fn()
   const coordinator = new MnemonSubagentCoordinator({ start } as unknown as HostSubagentsService, f.live)
   const tools = new Map<string, ToolDefinition>()
-  registerTools({ tools: { register: (tool: ToolDefinition) => tools.set(tool.name, tool) } } as unknown as HostContextShape, f.live, coordinator)
+  registerTools({ tools: { register: (tool: ToolDefinition) => { tools.set(tool.name, tool); return () => { tools.delete(tool.name) } } } } as unknown as HostContextShape, f.live, coordinator, f.extensions)
   const lifecycle = { manageSource: coordinator.manageSource.bind(coordinator), workspaceRoot: () => f.workspace,
     snapshot: () => ({ taskAgentAvailable: false }) } as unknown as MnemonLifecycle
   const write = createWriteHandler(f.live, lifecycle)

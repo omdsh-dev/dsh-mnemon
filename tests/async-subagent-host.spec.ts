@@ -125,7 +125,7 @@ async function harness(respond: (options: GenerateOptions) => Response | Promise
   const host = ctx as unknown as HostContextShape
   const coordinator = new MnemonSubagentCoordinator(host.subagents, runtime)
   const lifecycle = new MnemonLifecycle(host, coordinator, memory.graph.config, runtime)
-  registerTools(host, runtime, coordinator)
+  registerTools(host, runtime, coordinator, memory.extensions)
   stop = lifecycle.start()
   const children: Agent[] = []
   const recalls: ToolExecutionResult[] = []

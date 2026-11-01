@@ -468,6 +468,7 @@ class MnemonAgentLifecycle {
       && this.config.idleReview.enabled && this.idleReviewAttempts < this.config.idleReview.maxPerSession
       && idleReviewBlockReason(this.agent, this.config.idleReview.agentTeams) === undefined
       && this.strategyDrivesIdleReview()
+      && this.coordinator.canReview(this.agent)
   }
 
   private async runIdleReview(): Promise<void> {

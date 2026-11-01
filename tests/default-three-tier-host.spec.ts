@@ -85,7 +85,7 @@ describe('default three-tier Host presentation and shared execution', () => {
     await f.memorySpace()
     const agent = { id: 'root', session: { header: { cwd: f.workspace }, ...sessionLog() } } as unknown as HostAgent
     const registered = new Map<string, ToolDefinition>()
-    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.set(tool.name, tool) } } } as unknown as HostContextShape, f.live, new MnemonSubagentCoordinator({} as never, f.live))
+    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.set(tool.name, tool); return () => { registered.delete(tool.name) } } } } as unknown as HostContextShape, f.live, new MnemonSubagentCoordinator({} as never, f.live), f.extensions)
     const turn = await f.graph.composableTurns.beginTurn('root:ids', agentScope(agent, f.config))
     const exec = { agent, signal: new AbortController().signal }
     const route = (args: object) => (registered.get('mnemon_view_route')!.execute as Function)(args, exec) as Promise<unknown>
@@ -135,7 +135,7 @@ describe('default three-tier Host presentation and shared execution', () => {
     await f.graph.source('documents').mutate<DocumentMutationResult>('mutate', { action: 'create', title: 'Existing record', content: '# Existing' })
     const agent = { id: 'root', session: { header: { cwd: f.workspace }, ...sessionLog() } } as unknown as HostAgent
     const registered = new Map<string, ToolDefinition>()
-    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.set(tool.name, tool) } } } as unknown as HostContextShape, f.live, new MnemonSubagentCoordinator({} as never, f.live))
+    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.set(tool.name, tool); return () => { registered.delete(tool.name) } } } } as unknown as HostContextShape, f.live, new MnemonSubagentCoordinator({} as never, f.live), f.extensions)
     const turn = await f.graph.composableTurns.beginTurn('root:generic-document', agentScope(agent, f.config))
     const create = turn.view.actionOffers.find(offer => offer.sourceActionId === 'create' && offer.sourceInstanceKey.includes('documents'))!
     const receipt = await (registered.get('mnemon_view_action')!.execute as Function)(
@@ -154,7 +154,7 @@ describe('default three-tier Host presentation and shared execution', () => {
     const agent = { id: 'root', session: { header: { cwd: f.workspace }, ...sessionLog() } } as unknown as HostAgent
     const registered = new Map<string, ToolDefinition>()
     const coordinator = new MnemonSubagentCoordinator({} as never, f.live)
-    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.set(tool.name, tool) } } } as unknown as HostContextShape, f.live, coordinator)
+    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.set(tool.name, tool); return () => { registered.delete(tool.name) } } } } as unknown as HostContextShape, f.live, coordinator, f.extensions)
     const turn = await f.graph.composableTurns.beginTurn('root:tools', agentScope(agent, f.config))
     const route = turn.view.routes.find(route => route.sourceRouteId === 'search')!
     const read = vi.spyOn(f.graph.memoryComposition.current()!.sourceRuntime(route.sourceInstanceKey)!, 'query')
@@ -182,7 +182,7 @@ describe('default three-tier Host presentation and shared execution', () => {
     const agent = { id: 'root', session: { header: { cwd: f.workspace }, ...sessionLog() } } as unknown as HostAgent
     const registered = new Map<string, ToolDefinition>()
     const coordinator = new MnemonSubagentCoordinator({} as never, f.live)
-    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.set(tool.name, tool) } } } as unknown as HostContextShape, f.live, coordinator)
+    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.set(tool.name, tool); return () => { registered.delete(tool.name) } } } } as unknown as HostContextShape, f.live, coordinator, f.extensions)
     const turn = await f.graph.composableTurns.beginTurn('root:recall', agentScope(agent, f.config))
     const route = turn.view.routes.find(route => route.sourceRouteId === 'recall')!
     const read = vi.spyOn(f.graph.memoryComposition.current()!.sourceRuntime(route.sourceInstanceKey)!, 'query')
