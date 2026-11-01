@@ -195,6 +195,16 @@ try {
   const required = ['mnemon_status', 'mnemon_recall', 'mnemon_document_search', 'mnemon_document_create', 'mnemon_runtime_memory', 'mnemon_remember', 'mnemon_view_route', 'mnemon_view_action']
   const missing = required.filter(name => !toolNames.has(name))
   if (missing.length > 0) throw new Error(`Headless model request is missing Mnemon tools: ${missing.join(', ')}`)
+  // SystemPrompt sorts wire schemas lexicographically by default; registry
+  // insertion order is checked separately by the Host-first bootstrap tests.
+  const mnemonWireOrder = [
+    'mnemon_document_create', 'mnemon_document_manage', 'mnemon_document_search', 'mnemon_forget', 'mnemon_link',
+    'mnemon_memory_bodies', 'mnemon_memory_body_create', 'mnemon_memory_body_merge', 'mnemon_memory_body_update',
+    'mnemon_recall', 'mnemon_related', 'mnemon_remember', 'mnemon_runtime_memory', 'mnemon_status',
+    'mnemon_subagent_result', 'mnemon_view_action', 'mnemon_view_route',
+  ]
+  const mnemonOrder = toolRequest.tools.map(tool => tool?.name).filter(name => typeof name === 'string' && name.startsWith('mnemon_'))
+  if (JSON.stringify(mnemonOrder) !== JSON.stringify(mnemonWireOrder)) throw new Error(`Headless Mnemon wire tool order changed: ${mnemonOrder.join(', ')}`)
   if (extensionsEnabled) {
     const prompt = JSON.stringify([toolRequest.system, toolRequest.messages])
     for (const expected of ['Source order expresses preference', 'MNEMON OPTIONAL AUTO CAPTURE']) {

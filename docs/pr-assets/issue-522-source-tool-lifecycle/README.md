@@ -25,6 +25,8 @@ Host fixture 组合已发布的 Cordis、Agent、AgentLoop、ToolRuntime、Sessi
 | Runtime absent / 无 Runtime | 16 |
 | All built-ins absent / 无内置 Source | 3 |
 
+- Host-first Starter loading preserves historical unsorted registry order after public Loader readiness. Pending-readiness disposal cannot resurrect tools; readiness reads the latest committed Source set. Contexts without Loader update immediately. Later family reactivation appends only that family. / Host 先加载的 Starter 在公共 Loader 就绪后保留原有未排序的目录顺序；就绪前销毁不会恢复工具，就绪时读取最新已提交 Source 集合；无 Loader 的上下文立即更新，后续重新激活仅追加对应工具族。
+- The real Headless model request keeps DSH's historical alphabetical wire order; this is separate from registry insertion order. / 真实 Headless 模型请求保留 DSH 原有的按名称排序顺序，与目录注册顺序分别验证。
 - Last-instance removal and three disable/enable cycles remove and restore the family. Another same-type instance, including a third-party definition, keeps it alive. / 最后一个实例移除以及三轮关闭/恢复会移除和恢复工具族；其他同类型实例（包含第三方定义）仍可维持工具族。
 - Nested transactions, compensated rollback and Host bootstrap during a transaction retain committed schemas; disposal removes the subscriber and leaves the independent result tool intact. / 嵌套事务、补偿回滚和事务中 Host 启动均保留已提交 schema；销毁清理订阅，独立结果工具不受影响。
 - One already loaded Agent receives 7 -> 17 -> 7 tools over ordinary model requests. With Memory Spaces absent it successfully writes a Runtime entry and creates a Document. / 同一个已加载 Agent 的正常模型请求依次收到 7 -> 17 -> 7 个工具；缺少 Memory Spaces 时仍成功写入 Runtime 条目和创建 Document。
@@ -33,6 +35,6 @@ Host fixture 组合已发布的 Cordis、Agent、AgentLoop、ToolRuntime、Sessi
 - A workspace View selecting only Runtime keeps all 17 global tools. / 仅选择 Runtime 的工作区 View 仍保留全部 17 个全局工具。
 - A held Runtime call stays uncancelled when Memory Spaces is removed and commits its synthetic fact after release. / 暂停中的 Runtime 调用在 Memory Spaces 移除后没有被取消，恢复后成功提交合成条目。
 
-Local acceptance on the pinned published DSH 0.2.1-rc.2: 19 tests passed across the two focused files. The lifecycle suite also covers admission. Supported alternative DSH installations are checked by PR CI; these local fixtures make no claim about live Provider accounts.
+Local acceptance on the pinned published DSH 0.2.1-rc.2: 21 tests passed across the two focused files. The lifecycle suite also covers admission, and `tests/plugin.spec.ts` checks unsorted Host-first bootstrap against the historical definition fixture. Supported alternative DSH installations are checked by PR CI; these local fixtures make no claim about live Provider accounts.
 
-本地在固定的已发布 DSH 0.2.1-rc.2 上验收：两个专门测试文件共 19 个测试通过，生命周期测试另行覆盖调度准入。其他受支持 DSH 安装由 PR CI 检查；这些本地 fixture 不证明真实 Provider 账号的行为。
+本地在固定的已发布 DSH 0.2.1-rc.2 上验收：两个专门测试文件共 21 个测试通过，生命周期测试另行覆盖调度准入，`tests/plugin.spec.ts` 对照原有定义 fixture 检查 Host 先加载的未排序目录。其他受支持 DSH 安装由 PR CI 检查；这些本地 fixture 不证明真实 Provider 账号的行为。

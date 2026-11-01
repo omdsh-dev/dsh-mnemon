@@ -247,6 +247,23 @@ describe('dsh-mnemon plugin composition', () => {
     expect(fixture.channels).toEqual([])
   })
 
+  it('keeps the historical unsorted tool order after Host-first Starter loading settles', async () => {
+    const fixture = context({ connection: false, workspaceRegistry: false })
+    const ready = Promise.withResolvers<void>()
+    const awaitLoader = vi.fn(() => ready.promise)
+    fixture.ctx.provide('loader', { await: awaitLoader })
+    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
+    const names = () => fixture.tools.map(tool => (tool as { name: string }).name)
+    expect(names()).toEqual(['mnemon_subagent_result', 'mnemon_view_route', 'mnemon_view_action'])
+    // The Starter declares Host before Runtime, Documents and Memory Spaces.
+    await installStarter(fixture)
+    expect(names()).toEqual(['mnemon_subagent_result', 'mnemon_view_route', 'mnemon_view_action'])
+    ready.resolve()
+    const historical = JSON.parse(readFileSync(new URL('./fixtures/model-tools.json', import.meta.url), 'utf8')) as Array<{ name: string }>
+    await vi.waitFor(() => expect(names()).toEqual(historical.map(tool => tool.name)))
+    expect(awaitLoader).toHaveBeenCalled()
+  })
+
   it('discovers a Web workspace registry that becomes available after core activation', async () => {
     const fixture = context({ workspaceRegistry: false })
     const workspace = dataDir()
@@ -295,6 +312,8 @@ describe('dsh-mnemon plugin composition', () => {
     const fixture = context()
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
     await installStarter(fixture)
+    // This context has no Loader and activates Sources incrementally; the
+    // Host-first Loader test above separately asserts the unsorted bootstrap order.
     expect(fixture.tools.map(tool => (tool as { name: string }).name).sort()).toEqual([
       'mnemon_subagent_result',
       'mnemon_view_route',

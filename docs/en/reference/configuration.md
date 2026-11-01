@@ -198,6 +198,8 @@ Each memory Source has one switch in **Memory composition**. It turns the Source
 
 The Host registers a named tool family while at least one live Source with that `manifest.typeId` is registered globally. Removing the last `memory-spaces`, `documents`, or `runtime` instance removes its 10, 3, or 1 named tools; registering that type again restores them. With all three types the Mnemon inventory has 17 tools; without Memory Spaces it has 7. The two generic View tools and `mnemon_subagent_result` stay registered independently. A workspace's narrower View or the legacy layer flag still controls execution authority and does not remove another workspace's global tools.
 
+On initial Loader-managed startup, named families wait for `Loader.await()` and publish in historical registration order. Generic View and result tools are available immediately. Later activation appends the returning family without restarting surviving registrations. DSH independently orders the model wire schemas.
+
 Configuration transactions publish only their final Source set, including rollback, so intermediate unload/reload steps do not change model schemas. Existing Agents observe the ordinary DSH tool-registry updates on their next model request. Delegated children allow only currently registered task tools; idle review skips when no applicable Runtime or Documents write target remains.
 
 ![Memory composition with one switch per memory Source and enhancement](../../assets/webui-v0.5.32/en/plugin-composition.jpg)

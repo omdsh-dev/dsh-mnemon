@@ -22,7 +22,7 @@ function source(typeId: string) {
   })
 }
 
-async function fixture(types = ['runtime', 'documents', 'memory-spaces']) {
+async function fixture(types = ['runtime', 'documents', 'memory-spaces'], initialReady?: Promise<unknown>) {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
@@ -32,7 +32,7 @@ async function fixture(types = ['runtime', 'documents', 'memory-spaces']) {
   const host = ctx as unknown as HostContextShape
   const coordinator = new MnemonSubagentCoordinator({} as never, {} as never, host)
   // The fourth argument supplies global definitions, independent of any selected View.
-  const stop = registerTools(host, {} as never, coordinator, runtime)
+  const stop = registerTools(host, {} as never, coordinator, runtime, initialReady)
   cleanups.push(async () => { if (typeof stop === 'function') stop(); coordinator.dispose(); await runtime.dispose(); await ctx.fiber.dispose() })
   return { ctx, runtime, mount, releases, stop, names: () => ctx.tools.schemas().map(tool => tool.name) }
 }
@@ -115,7 +115,7 @@ describe('global Source tool lifecycle (issue 522)', () => {
       f.releases['memory-spaces']!()
       const ctx = new Context()
       await ctx.plugin(SystemPrompt)
-  await ctx.plugin(ToolRuntime)
+      await ctx.plugin(ToolRuntime)
       cleanups.push(() => ctx.fiber.dispose())
       stop = registerTools(ctx as unknown as HostContextShape, {} as never, {} as never, f.runtime)
       expect(ctx.tools.schemas()).toHaveLength(16)
@@ -123,6 +123,38 @@ describe('global Source tool lifecycle (issue 522)', () => {
       expect(ctx.tools.schemas()).toHaveLength(16)
     })
     stop?.()
+  })
+
+  it('publishes the latest committed Source set when initial Loader readiness settles', async () => {
+    const ready = Promise.withResolvers<void>()
+    const f = await fixture([], ready.promise)
+    const independent = f.names().map(name => f.ctx.tools.get(name))
+    f.mount('runtime')
+    const documents = f.mount('documents')
+    f.mount('memory-spaces')
+    documents()
+    expect(f.names()).toEqual(['mnemon_subagent_result', 'mnemon_view_route', 'mnemon_view_action'])
+    await f.runtime.batch(async () => {
+      f.mount('documents')
+      // Readiness inside a transaction must still see the committed baseline.
+      ready.resolve()
+      await ready.promise
+      await Promise.resolve()
+      expect(f.names()).not.toContain('mnemon_document_create')
+    })
+    expect(f.names()).toHaveLength(17)
+    for (const tool of independent) expect(f.ctx.tools.get(tool!.name)).toBe(tool)
+  })
+
+  it('does not resurrect tools after disposal while Loader readiness is pending', async () => {
+    const ready = Promise.withResolvers<void>()
+    const f = await fixture(['runtime', 'documents', 'memory-spaces'], ready.promise)
+    expect(f.names()).toHaveLength(3)
+    f.stop()
+    ready.resolve()
+    await ready.promise
+    await Promise.resolve()
+    expect(f.names()).toEqual(['mnemon_subagent_result'])
   })
 
   it('unsubscribes and disposes its tools without disposing the independent result tool', async () => {

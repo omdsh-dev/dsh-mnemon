@@ -16,7 +16,7 @@ DSH 0.2.1-rc.3 会联网获取官方 API Key 的模型目录。任务 Agent 模�
 
 dsh-mnemon 支持 `>=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.1 <0.3.0-0`：DSH 0.2.0 从 0.2.0-rc.2 起，DSH 0.2.1 及之后的 0.2 版本从 0.2.1-rc.1 起，正式版也在其中。DSH 0.2.1 从 Starter 的 `engines.dsh` 读取这个范围；DSH 0.2.0 从 Starter 的 DSH peer（可选的 `dsh-app-boot` 与 `dsh-typert-protocol`）读取，两者写的是同一个范围。DSH 在安装插件前，以及每次启动 profile 时，都会用自身版本检查这个范围，预发布版本也参与比较；不包含当前 DSH 的版本会被拒绝安装或停用。`tests/dsh-host-compatibility.spec.ts` 对全部 19 个包的清单执行 DSH 自己的检查，既覆盖受支持的版本，也覆盖已不再支持的版本。五个 Strategy 包使用新的扩展 SDK，要求 `dsh-mnemon ^0.5.17`；三个 Source 要求 `^0.5.19`，Provider 则依赖记忆空间 Source。
 
-Source 工具激活使用受支持的 0.2.0/0.2.1 Host 已发布的 `tools.register()` disposer 与作用域 `tools.get()` 契约。DSH 应用 `restrict()` 前，子 Agent 允许列表会剔除未注册的可选工具。Source 配置事务保留原有工具目录，直到发布最终提交状态。[合成 Host 证据](../../pr-assets/issue-522-source-tool-lifecycle/README.md)记录本地 schema 更新、Documents/Runtime 保留写入与 spawn/fork 审查覆盖；PR 当前 head 仍需远程兼容性 CI。存储格式、Provider 契约和既有 View 授权检查保持不变。
+Source 工具激活使用受支持的 0.2.0/0.2.1 Host 已发布的 `tools.register()` disposer 与作用域 `tools.get()` 契约。DSH 应用 `restrict()` 前，子 Agent 允许列表会剔除未注册的可选工具。首次通过 Loader 启动时，命名工具族在 `Loader.await()` 就绪后按原有目录顺序发布；后续恢复会追加工具族，不重新注册仍在运行的工具。DSH 默认独立排序请求中的工具 schema。Source 配置事务保留原有工具目录，直到发布最终提交状态。[合成 Host 证据](../../pr-assets/issue-522-source-tool-lifecycle/README.md)记录本地 schema 更新、Documents/Runtime 保留写入与 spawn/fork 审查覆盖；PR 当前 head 仍需远程兼容性 CI。存储格式、Provider 契约和既有 View 授权检查保持不变。
 
 <a id="首次安装时的宿主行为"></a>
 

@@ -198,6 +198,8 @@ Endpoint 必须是不含凭据、查询参数或片段的 HTTP(S) 绝对 URL。M
 
 只要全局还注册着至少一个具有相同 `manifest.typeId` 的活动 Source，Host 就保留对应的命名工具族。移除最后一个 `memory-spaces`、`documents` 或 `runtime` 实例，分别移除其 10、3 或 1 个命名工具；重新注册该类型会恢复工具。三类齐全时 Mnemon 共注册 17 个工具，缺少 Memory Spaces 时为 7 个。两个通用 View 工具与 `mnemon_subagent_result` 独立保留。工作区更窄的 View 或旧版分层标记仍控制执行授权，不会移除其他工作区的全局工具。
 
+首次通过 Loader 启动时，命名工具族等待 `Loader.await()` 就绪后按原有注册顺序发布；通用 View 工具和结果工具立即可用。后续重新启用会追加恢复的工具族，不会重新注册仍在运行的工具。DSH 独立决定模型请求中的工具 schema 顺序。
+
 配置事务只发布最终 Source 集合，回滚也遵循这一边界，中间的卸载与重载不会改变模型 schema。已有 Agent 在下一次模型请求时收到正常的 DSH 工具目录更新。委派子 Agent 的任务允许列表只包含当前已注册的工具；没有适用的 Runtime 或 Documents 写入目标时，空闲审查会跳过。
 
 ![记忆组合：每个记忆来源与增强各有一个开关](../../assets/webui-v0.5.32/zh-CN/plugin-composition.jpg)
