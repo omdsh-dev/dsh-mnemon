@@ -4,10 +4,12 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MnemonChangeSignal } from '../src/client/change-signal.ts'
 import { MnemonWorkbench } from '../src/client/MnemonWorkbench.tsx'
+import { SkillTurnTail } from '../src/client/SkillTurnTail.tsx'
+import { translateEn as t } from '../src/client/locales.ts'
 import type { MemorySourcePageProps, MemorySourcePageDirectory } from '../src/client/source-pages.tsx'
 import type { MnemonSourceManagementClient } from '../src/client/source-contracts.ts'
 import { DEFAULT_SKILLS_CONFIG } from '../src/host/protocol.ts'
-import type { ClientConnectionHandle, Config, SkillsConfig } from '../src/host/protocol.ts'
+import type { ClientConnectionHandle, Config, SkillActivitySnapshot, SkillsConfig } from '../src/host/protocol.ts'
 import { settingsScope } from './helpers/settings-scope.ts'
 
 const scope = settingsScope<Config>({ status: 'ready', value: { storageScope: 'custom' }, base: {}, user: {}, revision: 0, writable: true, mode: 'host' })
@@ -23,10 +25,11 @@ function SourcePage(props: MemorySourcePageProps) {
   const [draft, setDraft] = useState('')
   retained = props.management
   useEffect(() => {
+    if (props.active === false) return
     let current = true
     void props.management!.read('context').then(result => { if (current) setContext(String(result.value)) }, () => {})
     return () => { current = false }
-  }, [props.management])
+  }, [props.active, props.management, props.refreshKey])
   return <><output aria-label="Source context">{context}</output><textarea aria-label="Draft" value={draft} onChange={event => setDraft(event.target.value)} /></>
 }
 const renderSlot = (() => <></>) as NonNullable<Parameters<typeof MnemonWorkbench>[0]['renderSlot']>
@@ -38,14 +41,249 @@ function transport() {
     if (endpoint === 'status-summary') return { ok: true, value: { healthy: true, writeEnabled: true, version: 'test', memoryBodies: [] } }
     if (endpoint === 'source-management-read') return { ok: true, value: { revision: 'r1', value: `${input.sessionId}/${input.workspaceId}` } }
     if (endpoint === 'task-agent-models') return { ok: true, value: { models: [] } }
+    if (endpoint === 'skill-activity') return { ok: true, value: { available: true, turns: [], reviews: [] } as SkillActivitySnapshot }
     if (endpoint === 'source-assistance') return { ok: true, value: { revision: 'r2', value: null } }
     if (endpoint === 'source-management-mutate') return { ok: true, value: { revision: 'r2', value: null } }
     throw new Error('Unexpected read: ' + endpoint)
   })
   return { call, connection: { rpc: { call }, isLoopback: true } as unknown as ClientConnectionHandle }
 }
-afterEach(cleanup)
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers() })
 describe('retained hidden workbench', () => {
+  it.each(['mutate', 'assistance'] as const)('refreshes empty skill history after a successful %s without a new conversation event', async mode => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const { connection, call } = transport()
+    let reviewed = false
+    let denied = false
+    const original = call.getMockImplementation()!
+    call.mockImplementation(async (channel, endpoint, input) => {
+      if (endpoint === 'skill-activity') return { ok: true, value: { available: true, turns: [], reviews: reviewed ? [{ turn: 1, state: 'suggested', suggestions: [{ id: 's1', skillName: 'new-skill', action: 'create', status: 'pending' }] }] : [] } as SkillActivitySnapshot }
+      if (endpoint === 'source-management-mutate' || endpoint === 'source-assistance') {
+        if (denied) throw new Error('Denied')
+        reviewed = true
+      }
+      return original(channel, endpoint, input)
+    })
+    const locale = { active: 'en' as const, locales: [], revision: 0 }
+    const localeRuntime = { getSnapshot: () => locale, subscribe: () => () => {} }
+    const content = (open: boolean) => <>
+      <MnemonWorkbench connection={connection} settingsScope={scope} sourcePageDirectory={directory} renderSlot={sourceSlot} focus={focus} sessionId="A" active={open} />
+      {!open && <SkillTurnTail turn={{ turn: 1, status: 'closed' }} seq={10} sessionId="A" connection={connection} localeRuntime={localeRuntime} t={t} />}
+    </>
+    const view = render(content(false))
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+    const before = call.mock.calls.filter(([, endpoint]) => endpoint === 'skill-activity').length
+    view.rerender(content(true))
+    await screen.findByText('A/undefined')
+    const write = () => mode === 'mutate' ? retained!.mutate('suggestion-update', {}, { confirmed: true })
+      : retained!.assistance!.execute('skill-review-now', {}, { expectedRevision: 'r1', confirmed: true })
+    denied = true
+    await act(async () => { await expect(write()).rejects.toThrow('Denied') })
+    view.rerender(content(false))
+    await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'skill-activity')).toHaveLength(before)
+    view.rerender(content(true))
+    await screen.findByText('A/undefined')
+    denied = false
+    await act(async () => { await write() })
+    await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'skill-activity')).toHaveLength(before)
+    view.rerender(content(false))
+    await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+    expect(await screen.findByRole('button', { name: t('skillTail.suggested', { count: 1 }) })).not.toBeNull()
+    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'skill-activity')).toHaveLength(before + 1)
+  })
+
+  it('does no background document reads and resumes on the latest context when the document becomes visible', async () => {
+    const visible = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    const { connection, call } = transport()
+    const props = { connection, settingsScope: scope, sourcePageDirectory: directory, renderSlot: sourceSlot, focus }
+    const view = render(<MnemonWorkbench {...props} sessionId="A" workspaceId="one" />)
+    view.rerender(<MnemonWorkbench {...props} sessionId="B" workspaceId="two" />)
+    await act(async () => {})
+    expect(call).not.toHaveBeenCalled()
+    await act(async () => { visible.mockReturnValue('visible'); document.dispatchEvent(new Event('visibilitychange')) })
+    await screen.findByText('B/two')
+    expect(call.mock.calls.every(([, , input]) => input?.sessionId === 'B')).toBe(true)
+    await act(async () => { visible.mockReturnValue('hidden'); document.dispatchEvent(new Event('visibilitychange')) })
+    const before = call.mock.calls.length
+    view.rerender(<MnemonWorkbench {...props} sessionId="C" workspaceId="three" />)
+    await act(async () => {})
+    expect(call.mock.calls).toHaveLength(before)
+  })
+
+  it('refreshes a reopened Source once when the catalog still reports the same revision', async () => {
+    const { connection, call } = transport()
+    const props = { connection, settingsScope: scope, sourcePageDirectory: directory, renderSlot: sourceSlot, focus, sessionId: 'A' }
+    const view = render(<MnemonWorkbench {...props} />)
+    await screen.findByText('A/undefined')
+    const initial = call.mock.calls.filter(([, endpoint]) => endpoint === 'source-management-read').length
+    view.rerender(<MnemonWorkbench {...props} active={false} />)
+    view.rerender(<MnemonWorkbench {...props} />)
+    await act(async () => {})
+    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'source-management-read')).toHaveLength(initial + 1)
+  })
+
+  it('shares only pending equal Source reads and does not share response mutations', async () => {
+    const { connection, call } = transport()
+    render(<MnemonWorkbench connection={connection} settingsScope={scope} sourcePageDirectory={directory} renderSlot={sourceSlot} focus={focus} sessionId="A" />)
+    await screen.findByText('A/undefined')
+    let finish!: (value: any) => void
+    const original = call.getMockImplementation()!
+    call.mockImplementation((channel, endpoint, input) => endpoint === 'source-management-read' ? new Promise(resolve => { finish = resolve }) : original(channel, endpoint, input))
+    const before = call.mock.calls.length
+    const first = retained!.read('list', { query: 'one' }, { coalesce: true })
+    const second = retained!.read('list', { query: 'one' }, { coalesce: true })
+    expect(call.mock.calls).toHaveLength(before + 1)
+    finish({ ok: true, value: { revision: 'r1', value: ['one'] } })
+    const [a, b] = await Promise.all([first, second])
+    ;(a.value as string[]).push('changed')
+    expect(b.value).toEqual(['one'])
+    const fresh = retained!.read('list', { query: 'one' }, { coalesce: true })
+    expect(call.mock.calls).toHaveLength(before + 2)
+    finish({ ok: true, value: { revision: 'r2', value: ['two'] } })
+    expect(await fresh).toEqual({ revision: 'r2', value: ['two'] })
+  })
+
+  it.each(['mutate', 'assistance'] as const)('does not reuse a read from before or during %s after the write finishes', async mode => {
+    const { connection, call } = transport()
+    render(<MnemonWorkbench connection={connection} settingsScope={scope} sourcePageDirectory={directory} renderSlot={sourceSlot} focus={focus} sessionId="A" />)
+    await screen.findByText('A/undefined')
+    const finishes: Array<(value: any) => void> = []
+    let finishWrite!: (value: any) => void
+    const original = call.getMockImplementation()!
+    call.mockImplementation((channel, endpoint, input) => {
+      if (endpoint === 'source-management-read') return new Promise(resolve => { finishes.push(resolve) })
+      if (endpoint === 'source-management-mutate' || endpoint === 'source-assistance') return new Promise(resolve => { finishWrite = resolve })
+      return original(channel, endpoint, input)
+    })
+    const before = retained!.read('list', null, { coalesce: true })
+    const write = mode === 'mutate' ? retained!.mutate('save', null, { confirmed: true }) : retained!.assistance!.execute('task', null, { confirmed: true, expectedRevision: 'r1' })
+    const during = retained!.read('list', null, { coalesce: true })
+    expect(finishes).toHaveLength(2)
+    finishWrite({ ok: true, value: { revision: 'r2', value: null } })
+    await write
+    const after = retained!.read('list', null, { coalesce: true })
+    expect(finishes).toHaveLength(3)
+    finishes[0]!({ ok: true, value: { revision: 'r1', value: 'before' } })
+    await before
+    const sharedAfter = retained!.read('list', null, { coalesce: true })
+    expect(finishes).toHaveLength(3)
+    finishes[1]!({ ok: true, value: { revision: 'r1', value: 'during' } })
+    finishes[2]!({ ok: true, value: { revision: 'r2', value: 'after' } })
+    expect(await during).toMatchObject({ value: 'during' })
+    expect(await after).toMatchObject({ value: 'after' })
+    expect(await sharedAfter).toMatchObject({ value: 'after' })
+  })
+
+  it('does not retain failed reads or merge different operations and inputs', async () => {
+    const { connection, call } = transport()
+    render(<MnemonWorkbench connection={connection} settingsScope={scope} sourcePageDirectory={directory} renderSlot={sourceSlot} focus={focus} sessionId="A" />)
+    await screen.findByText('A/undefined')
+    const original = call.getMockImplementation()!
+    call.mockImplementation((channel, endpoint, input) => endpoint === 'source-management-read'
+      ? Promise.resolve({ ok: false, error: { message: 'denied' } }) as never
+      : original(channel, endpoint, input))
+    await expect(retained!.read('list', null, { coalesce: true })).rejects.toThrow('denied')
+    call.mockImplementation(original)
+    await expect(retained!.read('list', null, { coalesce: true })).resolves.toMatchObject({ value: 'A/undefined' })
+    const before = call.mock.calls.length
+    await Promise.all([retained!.read('list', 'first', { coalesce: true }), retained!.read('list', 'second', { coalesce: true }), retained!.read('detail', 'first', { coalesce: true })])
+    expect(call.mock.calls).toHaveLength(before + 3)
+  })
+
+  it('keeps manual reads independent and starts a fresh automatic read after explicit refresh', async () => {
+    const { connection, call } = transport()
+    render(<MnemonWorkbench connection={connection} settingsScope={scope} sourcePageDirectory={directory} renderSlot={sourceSlot} focus={focus} sessionId="A" />)
+    await screen.findByText('A/undefined')
+    const finishes: Array<(value: any) => void> = []
+    const original = call.getMockImplementation()!
+    call.mockImplementation((channel, endpoint, input) => endpoint === 'source-management-read' && input?.operation === 'list'
+      ? new Promise(resolve => { finishes.push(resolve) }) : original(channel, endpoint, input))
+    const manual = [retained!.read('list'), retained!.read('list')]
+    expect(finishes).toHaveLength(2)
+    const before = retained!.read('list', null, { coalesce: true })
+    expect(finishes).toHaveLength(3)
+    fireEvent.click(screen.getByRole('button', { name: '刷新' }))
+    await act(async () => {})
+    const after = retained!.read('list', null, { coalesce: true })
+    expect(finishes).toHaveLength(4)
+    finishes.forEach((finish, index) => finish({ ok: true, value: { revision: 'r1', value: index } }))
+    expect(await Promise.all([...manual, before, after])).toEqual([0, 1, 2, 3].map(value => ({ revision: 'r1', value })))
+  })
+
+  it('does not let an automatic reader join an older read after a fresh manual inspection', async () => {
+    const { connection, call } = transport()
+    render(<MnemonWorkbench connection={connection} settingsScope={scope} sourcePageDirectory={directory} renderSlot={sourceSlot} focus={focus} sessionId="A" />)
+    await screen.findByText('A/undefined')
+    const finishes: Array<(value: any) => void> = []
+    const original = call.getMockImplementation()!
+    call.mockImplementation((channel, endpoint, input) => endpoint === 'source-management-read' && input?.operation === 'list'
+      ? new Promise(resolve => { finishes.push(resolve) }) : original(channel, endpoint, input))
+    const before = retained!.read('list', null, { coalesce: true })
+    const manual = retained!.read('list')
+    finishes[1]!({ ok: true, value: { revision: 'r2', value: 'fresh' } })
+    await manual
+    const after = retained!.read('list', null, { coalesce: true })
+    expect(finishes).toHaveLength(3)
+    finishes[0]!({ ok: true, value: { revision: 'r1', value: 'old' } })
+    finishes[2]!({ ok: true, value: { revision: 'r2', value: 'fresh' } })
+    expect(await before).toMatchObject({ value: 'old' })
+    expect(await after).toMatchObject({ value: 'fresh' })
+  })
+
+  it('keeps pending automatic reads isolated across workspaces and connections', async () => {
+    const first = transport()
+    const second = transport()
+    const finishes: Array<() => void> = []
+    for (const [name, fixture] of [['first', first], ['second', second]] as const) {
+      const original = fixture.call.getMockImplementation()!
+      fixture.call.mockImplementation((channel, endpoint, input) => endpoint === 'source-management-read' && input?.operation === 'list'
+        ? new Promise(resolve => { finishes.push(() => resolve({ ok: true, value: { revision: 'r1', value: `${name}/${input.workspaceId}` } })) })
+        : original(channel, endpoint, input))
+    }
+    const props = { settingsScope: scope, sourcePageDirectory: directory, renderSlot: sourceSlot, focus, sessionId: 'A' }
+    const view = render(<MnemonWorkbench {...props} connection={first.connection} workspaceId="one" />)
+    await screen.findByText('A/one')
+    const a = retained!.read('list', null, { coalesce: true })
+    view.rerender(<MnemonWorkbench {...props} connection={first.connection} workspaceId="two" />)
+    await screen.findByText('A/two')
+    const b = retained!.read('list', null, { coalesce: true })
+    view.rerender(<MnemonWorkbench {...props} connection={second.connection} workspaceId="two" />)
+    await screen.findByText('A/two')
+    const c = retained!.read('list', null, { coalesce: true })
+    expect(finishes).toHaveLength(3)
+    finishes.forEach(finish => finish())
+    expect(await Promise.all([a, b, c])).toEqual([
+      { revision: 'r1', value: 'first/one' }, { revision: 'r1', value: 'first/two' }, { revision: 'r1', value: 'second/two' },
+    ])
+  })
+
+  it.each(['revision', 'availability', 'assistance', 'capabilities', 'management', 'generationId'])('rebinds when a catalog changes %s even if its source identity stays the same', async field => {
+    const { connection, call } = transport()
+    const original = call.getMockImplementation()!
+    let changed = false
+    call.mockImplementation(async (channel, endpoint, input) => {
+      const result = await original(channel, endpoint, input)
+      if (changed && endpoint === 'source-management-catalog') {
+        const catalog = result.value as any
+        if (field === 'generationId') catalog.generationId = 'test-next'
+        else catalog.sources[0][field] = { revision: 'r2', availability: 'degraded', assistance: [], capabilities: ['read'], management: { label: 'Changed', description: '' } }[field]
+      }
+      return result
+    })
+    const props = { connection, settingsScope: scope, sourcePageDirectory: directory, renderSlot: sourceSlot, focus, sessionId: 'A' }
+    const view = render(<MnemonWorkbench {...props} />)
+    await screen.findByText('A/undefined')
+    const old = retained!
+    view.rerender(<MnemonWorkbench {...props} active={false} />)
+    changed = true
+    view.rerender(<MnemonWorkbench {...props} />)
+    await act(async () => {})
+    expect(retained).not.toBe(old)
+    if (field === 'assistance') expect(retained!.assistance).toBeUndefined()
+  })
+
   it('defers hidden context reads until reopening, then binds the latest context and rejects stale edits', async () => {
     const { connection, call } = transport()
     const props = { connection, settingsScope: scope, sourcePageDirectory: directory, renderSlot: sourceSlot, focus }

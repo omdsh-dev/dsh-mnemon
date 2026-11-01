@@ -235,6 +235,8 @@ Provider 还可以实现可选的 `get(body, id, signal)`：返回空间中这�
 
 可选的 `./client` 通过 `dsh-mnemon/client` 的 `installMemorySourceUI` 注册，由 DSH 作为普通 Client 插件加载。页面接收 `MemorySourcePageProps`：选中实例、locale、可写状态和限定范围的 `management.read/mutate`。用 `MemorySourcePageFrame` 复用 locale/appearance；React 不接收 Host Context、驱动、令牌、LLM grant 或传输层。缺少专属页面时有通用管理入口，重复归属和渲染失败局部诊断。
 
+保留的面板或其浏览器文档隐藏时，`active` 为 false。此时暂停自动读取与轮询，重新激活后再读取；已经开始的用户流程仍绑定原范围，直到范围变化或卸载。目录修订与描述未变时，management 客户端保持同一身份。自动检查可显式使用 `management.read(operation, input, { coalesce: true })`，`createMemorySourcePageClient().read` 也接受这个选项：只有同一绑定与读取周期内、参数相同且尚未完成的请求才共用工作。人工刷新、可见性变化与写操作分隔读取周期；写操作开始和结束时都会清除待合并的读取。每位调用者得到独立副本，完成或失败的结果均不保留。不传选项的读取各自发出，保留检索和重复用户操作的先后关系。旧 management 客户端可以忽略这个可选提示；它不授予权限，也不改变 Host 校验。
+
 工作台负责外层页面边距、最小高度与页面滚动容器。嵌套的 `memoryPageStyles.page` 内容复用这一层框架，不再重复增加视口高度或边距，经过 DSH renderer 包装层时也一样。Source 保留业务布局，可以提供有界阅读区或弹窗。内部页面变化时，在绘制前调用可选的 `onResetScroll` 回调；它只重置所属工作台的 canvas，不应滚动 DSH 祖先节点或其他插件。记忆空间这类包含固定标题与 Tab 组合头部的 Source，通过 `navigation.stickyHeader: false` 避免 Host 同时固定下级标题，并由 Source 自己负责组合头部的 sticky 布局。
 
 需要显示某个元素时，将 Source 自有 ref 中的元素传给可选的 `onRevealElement(element, topInset)` 回调。不传 `topInset` 时，元素会停在锁定的页面标题下方；自己固定头部的 Source 则传入实测的头部高度。Host 只滚动所属 canvas，并忽略区域外的元素；不要使用全局 ID 或会移动 DSH 祖先节点的 `scrollIntoView`。关闭选择或卸载 Source 时取消待执行的动画帧。两个滚动回调均为可选：新 Source 仍支持现有 Root peer 最低版本，旧 Host 不提供回调时可手动滚动。

@@ -12,6 +12,7 @@ import { StatusPage, storageScopeLabel, type ComponentCard, type LayerState } fr
 import { SourceManagementPage } from './SourceManagementPage.tsx'
 import { useWorkspaceStatus } from './use-workspace-status.ts'
 import { useSourceCatalog } from './use-source-catalog.ts'
+import { invalidateSkillActivity } from './SkillTurnTail.tsx'
 import { managedSourceTypeId, sourcePageEntryId, stoppedSourceTypeId, useWorkspaceNavigation, type Page, type SourceNavigationEntry } from './use-workspace-navigation.ts'
 import { requestComponentPage } from './component-page-request.ts'
 import { translateZh, type MnemonTranslate } from "./locales.ts"
@@ -25,6 +26,7 @@ import { compositionNotice } from './composition-notice.ts'
 import { layerOf, sourceOf } from './component-model.ts'
 import { componentCopy } from './component-copy.ts'
 import { WorkbenchStatusContext } from './component-status.tsx'
+import { useDocumentVisible } from './document-visibility.ts'
 import { MNEMON_COMPONENT_STATUS_SLOT } from './component-ui.tsx'
 import { Callout, Reveal, useToast } from './feedback.tsx'
 import feedbackCss from './MnemonFeedback.module.css'
@@ -206,12 +208,14 @@ function storageAreaLabel(t: MnemonTranslate, kind: StorageAreaInventory['kind']
 }
 
 export function MnemonWorkbench(props: MnemonWorkbenchProps): JSX.Element {
+  const visible = useDocumentVisible()
+  const active = props.active !== false && visible
   // A retained panel follows conversation context only while visible. Keeping the
   // last visible props also keeps Source drafts mounted during hidden A/B/A switches.
   const visibleProps = useRef(props)
-  if (props.active !== false) visibleProps.current = props
+  if (active) visibleProps.current = props
   const t = props.t ?? translateZh
-  return <I18nContext.Provider value={t}><LocaleContext.Provider value={props.locale ?? 'zh'}><MnemonWorkspace {...visibleProps.current} active={props.active ?? true} /></LocaleContext.Provider></I18nContext.Provider>
+  return <I18nContext.Provider value={t}><LocaleContext.Provider value={props.locale ?? 'zh'}><MnemonWorkspace {...visibleProps.current} active={active} /></LocaleContext.Provider></I18nContext.Provider>
 }
 
 function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, workspaceSelection, surface = 'sidebar', active = true, titleBar = false, onClose, configuration, componentChanges, sourcePageDirectory = EMPTY_SOURCE_PAGE_DIRECTORY, renderSlot, focus, hiddenSourceTypes, skillsScope }: MnemonWorkbenchProps): JSX.Element {
@@ -269,7 +273,10 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
 
   const { status, statusLoading, statusError, loadStatus } = useWorkspaceStatus(client, viewContextKey, active)
   const [revision, setRevision] = useState(0)
-  const { sourceCatalogState, sourceCatalog, sourceInstances, sourceManagementClients, visibleSourcePages, managedSourceTypes: allManagedSourceTypes } = useSourceCatalog(client, taskClient, revision, viewContextKey, sourcePageEntries, active)
+  const sourceChanged = useCallback((sourceTypeId: string) => {
+    if (sourceTypeId === 'skills') invalidateSkillActivity(connection)
+  }, [connection])
+  const { sourceCatalogState, sourceCatalog, sourceInstances, sourceManagementClients, visibleSourcePages, managedSourceTypes: allManagedSourceTypes } = useSourceCatalog(client, taskClient, revision, viewContextKey, sourcePageEntries, active, sourceChanged)
   const managedSourceTypes = useMemo(() => allManagedSourceTypes.filter(([sourceTypeId]) => shows(sourceTypeId)), [allManagedSourceTypes, shows])
   const [selectedSourceInstances, setSelectedSourceInstances] = useState<Record<string, string>>({})
   // Configured layers whose Source is not running keep a diagnostic tab unless

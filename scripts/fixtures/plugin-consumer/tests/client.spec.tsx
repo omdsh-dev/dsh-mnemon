@@ -73,6 +73,10 @@ describe('compiled Source clients with compiled Core and no source aliases', () 
       for (const id of ['work', 'personal']) await runner.mount(runtime, { instanceId: id, config: { dataDir: join(directory, id) } })
       const work = await runner.managementClient('source:work')
       const personal = await runner.managementClient('source:personal')
+      // A Source written against the original two-argument read contract keeps
+      // working when a newer page opts into automatic read coalescing.
+      const pageClient = core.createMemorySourcePageClient(work)
+      expect(await pageClient.read('snapshot', null, { coalesce: true })).toMatchObject({ entries: [] })
       const base = { sourceTypeId: 'runtime', sourceInstances: [], locale: 'en', writable: true }
       const Page = runtimeClient.RuntimeSourcePage
       const view = render(<Page {...base} sourceInstanceKey="source:work" management={work} />)

@@ -9,7 +9,8 @@ import type { ProcessRunner } from '../src/providers/process.ts'
 const temporary: string[] = []
 afterEach(() => {
   vi.unstubAllEnvs()
-  for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true })
+  // Windows can briefly retain a lock on the copied executable after child exit.
+  for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
 })
 
 function npmFixture(nested = false) {

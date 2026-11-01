@@ -9,7 +9,7 @@ import type { DocumentsPageClient } from './api.ts'
 export function documentsPageClient(management: MnemonSourceManagementClient): DocumentsPageClient {
   const client = createMemorySourcePageClient(management)
   return {
-    documents: () => client.read('snapshot'),
+    documents: () => client.read('snapshot', null, { coalesce: true }),
     document: id => client.read('document', { id }),
     searchDocuments: (query, includeArchived = false, limit = 50) => client.read('search', { query, includeArchived, limit }),
     mutateDocument: input => client.canAssist('mutate') ? client.assist('mutate', { ...input }, true) : client.mutate('mutate', { ...input }, true),

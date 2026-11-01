@@ -107,7 +107,7 @@ const CONFLICT = /revision conflict|changed since it was read; reload/u
  * carries its own precondition, so retrying never applies one twice.
  */
 export function skillsPageClient(management: MnemonSourceManagementClient): SkillsPageClient {
-  const read = async <T,>(operation: string, input: unknown = null): Promise<T> => (await management.read(operation, json(input))).value as T
+  const read = async <T,>(operation: string, input: unknown = null, coalesce = false): Promise<T> => (await management.read(operation, json(input), { coalesce })).value as T
   const fresh = async () => (await management.read('revision', null)).revision
   const retry = async <T,>(attempt: (revision: string) => Promise<{ value: MemoryJsonValue }>): Promise<T> => {
     for (let count = 1; ; count++) {
@@ -131,19 +131,19 @@ export function skillsPageClient(management: MnemonSourceManagementClient): Skil
     return key !== undefined && Object.hasOwn(overrides, key) ? overrides[key] : slot === 'draft' ? preferences.model : preferences.runModel
   }
   return {
-    overview: () => read('overview'),
-    catalog: () => read('catalog'),
+    overview: () => read('overview', null, true),
+    catalog: () => read('catalog', null, true),
     skill: key => read('skill', { key }),
     version: (key, id) => read('version', { key, id }),
-    suggestions: status => read('suggestions', status === undefined ? {} : { status }),
+    suggestions: status => read('suggestions', status === undefined ? {} : { status }, true),
     suggestion: id => read('suggestion', { id }),
-    trajectories: filter => read('trajectories', filter ?? {}),
+    trajectories: filter => read('trajectories', filter ?? {}, true),
     trajectory: id => read('trajectory', { id }),
-    cases: skill => read('cases', skill === undefined ? {} : { skill }),
-    runs: skill => read('runs', skill === undefined ? {} : { skill }),
+    cases: skill => read('cases', skill === undefined ? {} : { skill }, true),
+    runs: skill => read('runs', skill === undefined ? {} : { skill }, true),
     run: id => read('run', { id }),
     draft: id => read('draft', { id }),
-    reviews: filter => read('reviews', filter ?? {}),
+    reviews: filter => read('reviews', filter ?? {}, true),
     evidencePack: input => read('evidence-pack', input),
 
     createSkill: input => mutate('skill-create', input),

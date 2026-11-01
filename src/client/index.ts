@@ -479,6 +479,7 @@ export function apply(rawContext: unknown): void {
         inject: (sessionId: unknown) => ({
           ...(typeof sessionId === 'string' && sessionId !== '' ? { sessionId } : {}),
           connection: ctx.connection,
+          componentChanges: seats.components,
           localeRuntime: ctx.locale,
           t: translate as (key: MnemonKey, params?: Record<string, unknown>) => string,
         }),
