@@ -69,7 +69,7 @@ export function useSourceCatalog(client: MnemonClient, taskClient: MnemonClient,
   const sourceInstances = sourceCatalog?.sources ?? []
   const sourceManagementClients = useMemo(() => new Map(sourceInstances
     .map(source => [source.sourceInstanceKey, bindSourceManagementClient(client, source, taskClient, () => {
-      if (!mounted.current || current.current?.active !== true || current.current.client !== client || current.current.viewContextKey !== viewContextKey) throw new Error('Source page is inactive or its view context changed')
+      if (!mounted.current || current.current?.client !== client || current.current.viewContextKey !== viewContextKey) throw new Error('Source page is unmounted or its view context changed')
     })])), [client, sourceInstances, taskClient, viewContextKey])
   const visibleSourcePages = useMemo(() => {
     const visibleTypes = new Set(sourceInstances.map(source => source.sourceTypeId))

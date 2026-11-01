@@ -4,4 +4,4 @@
 "dsh-mnemon-source-memory-spaces": patch
 ---
 
-Suspend retained Memory System and Skills panel reads while hidden, defer context changes until reopening, and pause their background polling without losing same-context page state.
+Pause automatic refreshes in retained Memory System and Skills panels while hidden, defer context changes until reopening, and pause polling in the official Sources while preserving same-context page state. Existing same-context Source workflows may finish while hidden.

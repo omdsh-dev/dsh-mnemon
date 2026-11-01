@@ -43,7 +43,7 @@ interface MnemonWorkbenchProps {
   workspaceSelection?: MnemonWorkspaceSelection
   /** Placement changes scope controls, not Source pages or their visual skin. */
   surface?: MnemonDisplayMode
-  /** Retain page state while hidden, suspend reads, and refresh when reopened. */
+  /** Retain page state while hidden, pause automatic refreshes, and refresh when reopened. */
   active?: boolean
   /**
    * The header is the top edge of the window, as in DSH's main column. DSH Desktop then
@@ -294,8 +294,11 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
 
   const currentView = useRef({ active, client, viewContextKey })
   currentView.current = { active, client, viewContextKey }
-  const isCurrentView = useCallback(() => currentView.current.active && currentView.current.client === client && currentView.current.viewContextKey === viewContextKey, [client, viewContextKey])
-  const assertCurrentView = () => { if (!isCurrentView()) throw new Error('Source page is inactive or its view context changed') }
+  const viewMounted = useRef(true)
+  useEffect(() => { viewMounted.current = true; return () => { viewMounted.current = false } }, [])
+  const isBoundView = useCallback(() => viewMounted.current && currentView.current.client === client && currentView.current.viewContextKey === viewContextKey, [client, viewContextKey])
+  const isCurrentView = useCallback(() => currentView.current.active && isBoundView(), [isBoundView])
+  const assertCurrentView = () => { if (!isBoundView()) throw new Error('Source page is unmounted or its view context changed') }
   const mutate = useCallback(() => { if (!isCurrentView()) return; setRevision(value => value + 1); void loadStatus() }, [isCurrentView, loadStatus])
   const refreshAll = mutate
   // The header's refresh also asks the open Source page to reload its data.
