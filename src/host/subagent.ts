@@ -1,3 +1,4 @@
+import { memoryTool } from './memory-tools.ts'
 import { randomUUID } from 'node:crypto'
 import type { HostAgent, HostSubagentResult, HostSubagentRun, HostSubagentsService, ToolDefinition, ToolExecution } from "./dsh.ts"
 import type { DocumentMutation, DocumentSearchResult, DocumentSnapshot, DocumentView } from 'dsh-mnemon-source-documents/contracts'
@@ -780,9 +781,31 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
     }
   }
 
-  async review(parent: HostAgent, signal: AbortSignal): Promise<DelegatedWriteResult | { delegated: false; action: 'skipped'; summary: string; documentIds: string[] }> {
+  /** Cheap scheduler admission: no model task when every review write target is unavailable. */
+  canReview(parent: HostAgent): boolean {
+    return this.reviewTools(parent).some(tool => tool !== 'mnemon_document_search')
+  }
+
+  private availableTools(parent: HostAgent, tools: readonly string[]): string[] {
+    const registry = parent.ctx?.tools
+    return typeof registry?.get === 'function' ? tools.filter(name => registry.get!(name, parent) !== undefined) : [...tools]
+  }
+
+  private reviewTools(parent: HostAgent): string[] {
+    const config = this.runtimeSource.config
+    if (!config.writeEnabled) return []
+    return this.availableTools(parent, REVIEW_TOOLS).filter(tool => {
+      if (tool === 'mnemon_document_search') return true
+      const type = memoryTool(tool)!.sourceTypeId!
+      return (tool !== 'mnemon_runtime_memory' || config.idleReview.runtimeMemory) && allowsParticipation(config, type, 'write', 'automatic')
+    })
+  }
+
+  async review(parent: HostAgent, signal: AbortSignal, admission?: () => void): Promise<DelegatedWriteResult | { delegated: false; action: 'skipped'; summary: string; documentIds: string[] }> {
     const config = this.runtimeSource.config.idleReview
     if (idleReviewBlockReason(parent, config.agentTeams) !== undefined) return { delegated: false, action: 'skipped', summary: 'Idle review is paused by the Agent Teams compatibility setting.', documentIds: [] }
+    const skipped = { delegated: false as const, action: 'skipped' as const, summary: 'Idle review has no applicable writable Source target.', documentIds: [] }
+    if (!this.canReview(parent)) return skipped
     let preferred = config.provider
     if (preferred === 'fork') {
       try { this.provider('fork') } catch (error) {
@@ -790,23 +813,34 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
         preferred = 'spawn'
       }
     }
-    const prompt = preferred === 'fork' ? 'Review the inherited completed checkpoint now.' : reviewCheckpoint(parent.session, config.maxContextChars)
-    const base = reviewPersona(config.runtimeMemory)
-    const persona = preferred === 'fork' ? base : base.replaceAll('inherited', 'supplied bounded')
-    // With runtime memory off the tool is withheld, not merely discouraged.
-    const tools = config.runtimeMemory ? REVIEW_TOOLS : REVIEW_TOOLS.filter(tool => tool !== 'mnemon_runtime_memory')
-    const writers = tools.filter(tool => tool !== 'mnemon_document_search')
-    const { provider, runId, result } = await this.delegate(parent, 'review', 'Mnemon idle checkpoint review', prompt, tools, WRITE_SCHEMA, signal, preferred, persona, { terminalTools: writers })
-    const value = object(result.structured)
-    return {
-      delegated: true,
-      runId,
-      provider,
-      summary: typeof value.summary === 'string' ? value.summary : '',
-      action: typeof value.action === 'string' ? value.action : 'failed',
-      memoryBodyIds: strings(value.memoryBodyIds),
-      documentIds: strings(value.documentIds),
-    }
+    const execution = await this.runtimeSource.executions.workflow(parent, 'review', signal)
+    try {
+      if (admission !== undefined) { execution.signal.throwIfAborted(); admission() }
+      const view = execution.context.view
+      const instances = execution.graph.memoryComposition.generation(view.runtimeGeneration)!.sourceInstances()
+      const tools = this.reviewTools(parent).filter(tool => {
+        if (tool === 'mnemon_document_search') return true
+        const entry = memoryTool(tool)!
+        return view.actionOffers.some(offer => offer.authority === undefined && offer.sourceActionId === entry.operation
+          && instances.some(instance => instance.sourceInstanceKey === offer.sourceInstanceKey && instance.sourceTypeId === entry.sourceTypeId))
+      })
+      const writers = tools.filter(tool => tool !== 'mnemon_document_search')
+      if (writers.length === 0) return skipped
+      const prompt = preferred === 'fork' ? 'Review the inherited completed checkpoint now.' : reviewCheckpoint(parent.session, config.maxContextChars)
+      const base = reviewPersona(tools.includes('mnemon_runtime_memory'))
+      const persona = preferred === 'fork' ? base : base.replaceAll('inherited', 'supplied bounded')
+      const { provider, runId, result } = await this.delegate(parent, 'review', 'Mnemon idle checkpoint review', prompt, tools, WRITE_SCHEMA, execution.signal, preferred, persona, { terminalTools: writers }, undefined, undefined, admission)
+      const value = object(result.structured)
+      return {
+        delegated: true,
+        runId,
+        provider,
+        summary: typeof value.summary === 'string' ? value.summary : '',
+        action: typeof value.action === 'string' ? value.action : 'failed',
+        memoryBodyIds: strings(value.memoryBodyIds),
+        documentIds: strings(value.documentIds),
+      }
+    } finally { execution.release() }
   }
 
   private async delegate(
@@ -822,6 +856,7 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
     recovery?: ToolReceiptRecovery,
     guard?: (execution: ToolExecution) => string | undefined,
     route?: ModelRoute,
+    admission?: () => void,
   ): Promise<{ provider: string; runId: string; result: HostSubagentResult; receipts: CapturedToolReceipt[]; writes: CapturedToolReceipt[] }> {
     if (this.disposed) throw new Error('dsh-mnemon subagent coordinator is disposed')
     const provider = this.provider(preferredProvider)
@@ -938,16 +973,21 @@ This is the only completion channel for this run. Do not finish with a plain-tex
       const resolvedAgentOptions = fixed === undefined ? baseAgentOptions : { ...(baseAgentOptions ?? {}), provider: fixed.provider, model: fixed.model }
       const host = this.resultRuntime
       // Every tool continuation ends with a user turn, which strict chat templates require (#327).
-      const start = () => startWithContinuationTurns(host, parent, () => startSubagent(this.subagents, host.agents, provider, {
-        label,
-        prompt: [{ type: 'text', text: `${delegatedTaskLine(operation)}\n${prompt}` }],
-        parent,
-        signal,
-        ...(resolvedAgentOptions === undefined ? {} : { agentOptions: resolvedAgentOptions }),
-        maxDepth: 1,
-        toolFilter: { allow: [...tools, resultToolName] },
-        persona: completionPersona,
-      }, host))
+      const start = () => startWithContinuationTurns(host, parent, () => {
+        // Automatic admission is revocable across workflow preparation and guard
+        // setup; manual workflows do not carry this lifecycle-only callback.
+        if (operation === 'review') { signal.throwIfAborted(); admission?.() }
+        return startSubagent(this.subagents, host.agents, provider, {
+          label,
+          prompt: [{ type: 'text', text: `${delegatedTaskLine(operation)}\n${prompt}` }],
+          parent,
+          signal,
+          ...(resolvedAgentOptions === undefined ? {} : { agentOptions: resolvedAgentOptions }),
+          maxDepth: 1,
+          toolFilter: { allow: [...this.availableTools(parent, tools), resultToolName] },
+          persona: completionPersona,
+        }, host)
+      })
       run = operation === 'review'
         ? await startGuardedReview(this.resultRuntime, parent, [...tools, resultToolName], start, child => { reviewChildId = child.id }, reviewLayerPolicy())
         // A DSH without Agent ownership or scoped tool guards runs the child as before.

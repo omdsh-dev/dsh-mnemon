@@ -3,9 +3,10 @@ import { Context } from '@deepseek-ai/cordis'
 import { evaluatePluginCompatibility } from '@deepseek-ai/dsh-app-boot'
 import { HostConnectionService } from '@deepseek-ai/dsh-client-connection'
 import { tmpdir } from 'node:os'
+import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ToolDefinition, HostAgent } from "../src/host/dsh.ts"
+import type { ToolDefinition, HostAgent, HostSessionEvent } from "../src/host/dsh.ts"
 import { apply, inject } from '../src/index.ts'
 import { MnemonSubagentCoordinator } from "../src/host/subagent.ts"
 import { registerTools } from "../src/host/tools.ts"
@@ -234,9 +235,10 @@ describe('dsh-mnemon plugin composition', () => {
     expect(user).toEqual({ displayMode: 'buildin' })
   })
 
-  it('mounts its complete Agent surface without Web-only Host services', () => {
+  it('mounts its complete Agent surface without Web-only Host services', async () => {
     const fixture = context({ connection: false, workspaceRegistry: false })
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
+    await installStarter(fixture)
 
     expect(fixture.tools).toHaveLength(17)
     expect(fixture.sections).toEqual([expect.objectContaining({ name: 'mnemon:routing' })])
@@ -244,6 +246,23 @@ describe('dsh-mnemon plugin composition', () => {
     expect(fixture.variables).toEqual([])
     expect(fixture.commands).toEqual([expect.objectContaining({ name: 'mnemon' })])
     expect(fixture.channels).toEqual([])
+  })
+
+  it('keeps the historical unsorted tool order after Host-first Starter loading settles', async () => {
+    const fixture = context({ connection: false, workspaceRegistry: false })
+    const ready = Promise.withResolvers<void>()
+    const awaitLoader = vi.fn(() => ready.promise)
+    fixture.ctx.provide('loader', { await: awaitLoader })
+    apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
+    const names = () => fixture.tools.map(tool => (tool as { name: string }).name)
+    expect(names()).toEqual(['mnemon_subagent_result', 'mnemon_view_route', 'mnemon_view_action'])
+    // The Starter declares Host before Runtime, Documents and Memory Spaces.
+    await installStarter(fixture)
+    expect(names()).toEqual(['mnemon_subagent_result', 'mnemon_view_route', 'mnemon_view_action'])
+    ready.resolve()
+    const historical = JSON.parse(readFileSync(new URL('./fixtures/model-tools.json', import.meta.url), 'utf8')) as Array<{ name: string }>
+    await vi.waitFor(() => expect(names()).toEqual(historical.map(tool => tool.name)))
+    expect(awaitLoader).toHaveBeenCalled()
   })
 
   it('discovers a Web workspace registry that becomes available after core activation', async () => {
@@ -293,7 +312,10 @@ describe('dsh-mnemon plugin composition', () => {
   it('registers the full tool surface, guidance, and split RPC channels', async () => {
     const fixture = context()
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
-    expect(fixture.tools.map(tool => (tool as { name: string }).name)).toEqual([
+    await installStarter(fixture)
+    // This context has no Loader and activates Sources incrementally; the
+    // Host-first Loader test above separately asserts the unsorted bootstrap order.
+    expect(fixture.tools.map(tool => (tool as { name: string }).name).sort()).toEqual([
       'mnemon_subagent_result',
       'mnemon_view_route',
       'mnemon_view_action',
@@ -311,7 +333,7 @@ describe('dsh-mnemon plugin composition', () => {
       'mnemon_memory_body_create',
       'mnemon_memory_body_update',
       'mnemon_memory_body_merge',
-    ])
+    ].sort())
     expect(fixture.tools).toEqual(expect.arrayContaining([
       expect.objectContaining({ output: expect.objectContaining({ schema: { type: 'object', additionalProperties: true } }) }),
     ]))
@@ -342,6 +364,7 @@ describe('dsh-mnemon plugin composition', () => {
   it('keeps stable live surfaces while fencing every mutation in read-only mode', async () => {
     const fixture = context()
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir(), writeEnabled: false })
+    await installStarter(fixture)
     expect(fixture.tools).toHaveLength(17)
     const runtimeTool = fixture.tools.find(tool => (tool as { name: string }).name === 'mnemon_runtime_memory') as {
       execute: (args: unknown, execution: unknown) => Promise<unknown>
@@ -363,7 +386,7 @@ describe('dsh-mnemon plugin composition', () => {
     await f.graph.composableTurns.beginTurn('root:documents', agentScope(root, f.config), 'test')
     const tools: ToolDefinition[] = []
     const coordinator = new MnemonSubagentCoordinator({ list: () => [], getProvider: () => undefined, start: vi.fn() } as never, f.live)
-    registerTools({ tools: { register: (tool: ToolDefinition) => { tools.push(tool) } } } as never, f.live, coordinator)
+    registerTools({ tools: { register: (tool: ToolDefinition) => { tools.push(tool); return () => {} } } } as never, f.live, coordinator, f.extensions)
     const result = await tools.find(tool => tool.name === 'mnemon_document_search')!.execute({ query: '冷归档不变量' } as never, { agent: root, signal: new AbortController().signal }) as { results: unknown[]; suggestions: unknown[]; suggestionHint: string }
     expect(result.results).toEqual([])
     expect(result.suggestions).toEqual([expect.objectContaining({
@@ -386,7 +409,7 @@ describe('dsh-mnemon plugin composition', () => {
     await f.graph.composableTurns.beginTurn('root:documents', agentScope(root, f.config), 'test')
     const tools: ToolDefinition[] = []
     const coordinator = new MnemonSubagentCoordinator({ list: () => [], getProvider: () => undefined, start: vi.fn() } as never, f.live)
-    registerTools({ tools: { register: (tool: ToolDefinition) => { tools.push(tool) } } } as never, f.live, coordinator)
+    registerTools({ tools: { register: (tool: ToolDefinition) => { tools.push(tool); return () => {} } } } as never, f.live, coordinator, f.extensions)
     const result = await tools.find(tool => tool.name === 'mnemon_document_search')!.execute({ query: needle } as never, { agent: root, signal: new AbortController().signal }) as { results: Array<{ content: string }> }
     expect(result.results).toHaveLength(1)
     expect(result.results[0]!.content).toContain(needle)
@@ -405,7 +428,7 @@ describe('dsh-mnemon plugin composition', () => {
     const execute = vi.spyOn(f.graph.memoryComposition.current()!.sourceRuntime(route.sourceInstanceKey)!, 'query')
     const tools: ToolDefinition[] = []
     const coordinator = new MnemonSubagentCoordinator({ list: () => [], getProvider: () => undefined, start: vi.fn() } as never, f.live)
-    registerTools({ tools: { register: (tool: ToolDefinition) => { tools.push(tool) } } } as never, f.live, coordinator)
+    registerTools({ tools: { register: (tool: ToolDefinition) => { tools.push(tool); return () => {} } } } as never, f.live, coordinator, f.extensions)
     const tool = tools.find(candidate => candidate.name === 'mnemon_document_search')!
     const execution = { agent: root, signal: new AbortController().signal }
     expect(await tool.execute({ query: 'ORCHID-47 root cause' } as never, execution)).not.toHaveProperty('notRun')
@@ -438,6 +461,54 @@ describe('dsh-mnemon plugin composition', () => {
     fixture.commit(next)
 
     await expect(packRegistration[1]('target', {})).resolves.toMatchObject({ ok: true, value: { root: next.dataDir } })
+  })
+
+  it('persists a newly enabled watermark through the normal settings update before immediate recreation', async () => {
+    const directory = dataDir()
+    const initial = { cliPath: '/fake/mnemon', storageScope: 'custom' as const, dataDir: directory, idleReviewMs: 5_000,
+      idleReview: { maxPerSession: 1, minIntervalMs: 30_000 } }
+    const review = vi.spyOn(MnemonSubagentCoordinator.prototype, 'review').mockResolvedValue({ delegated: false, action: 'skipped', summary: 'Synthetic reviewer.', documentIds: [] })
+    const mount = async (config: typeof initial & { idleReview: typeof initial.idleReview & { persistWatermark?: boolean } }) => {
+      const f = context()
+      const hooks = new Map<string, Array<(...args: any[]) => any>>()
+      const events: HostSessionEvent[] = []
+      const agent = { id: 'settings-parent', status: 'idle', session: { header: { cwd: directory }, ...sessionLog(events) },
+        ctx: { on: (name: string, hook: (...args: any[]) => any) => { const list = hooks.get(name) ?? []; list.push(hook); hooks.set(name, list); return () => { const index = list.indexOf(hook); if (index >= 0) list.splice(index, 1) } },
+          get: () => undefined, effect: (callback: () => unknown) => { const cleanup = callback(); return typeof cleanup === 'function' ? cleanup : () => {} } },
+        followup: vi.fn(), steer: vi.fn(), inject: vi.fn() } as unknown as HostAgent
+      f.ctx.agents.roots.mockReturnValue([agent] as never)
+      f.ctx.agents.get.mockImplementation(id => id === agent.id ? agent : undefined)
+      f.fiber.config = config
+      apply(f.ctx as never, config)
+      await installStarter(f)
+      const run = async (turn: number) => {
+        events.push({ type: 'turn/start', data: { turn } })
+        await hooks.get('system-prompt/assemble')![0]!({ sections: [], contexts: [] }, { agent, signal: new AbortController().signal }, async () => ({ sections: [], contexts: [] }))
+        const messages = [{ id: `message-${turn}`, role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: 'Please remember this synthetic decision: ' + 'SQLite. '.repeat(40) }] }]
+        const payload = { agent, messages, turn, step: 1, signal: new AbortController().signal }
+        await hooks.get('agent/pre-step')!.reduceRight<() => Promise<unknown>>((next, hook) => () => hook(payload, next), async () => ({ kind: 'enter', messages }))()
+        await hooks.get('agent/turn-stopping')![0]!({ agent, turn, signal: new AbortController().signal })
+        const event = { type: 'turn/end', data: { turn } }
+        events.push(event); for (const hook of hooks.get('session/event')!) hook(agent.session, event)
+      }
+      return { ...f, run, stop: async () => { for (const cleanup of f.effectCleanups.splice(0).reverse()) await cleanup() } }
+    }
+    const first = await mount(initial)
+    vi.useFakeTimers(); vi.setSystemTime(1_000_000)
+    try {
+      await first.run(1); await first.run(2); await vi.advanceTimersByTimeAsync(5_000)
+      expect(review).toHaveBeenCalledOnce()
+      const enabled = { ...initial, idleReview: { ...initial.idleReview, persistWatermark: true } }
+      first.commit(enabled)
+      await first.stop()
+      // No lifecycle status read or new turn occurs between commit and teardown.
+      const reopened = await mount(enabled)
+      const filename = join(directory, 'state', 'idle-review', createHash('sha256').update('settings-parent').digest('hex') + '.json')
+      expect(JSON.parse(readFileSync(filename, 'utf8'))).toMatchObject({ attempts: 1, lastReviewAttemptAt: 1_005_000 })
+      await reopened.run(1); await reopened.run(2); await vi.advanceTimersByTimeAsync(5_000)
+      expect(review).toHaveBeenCalledOnce()
+      await reopened.stop()
+    } finally { vi.useRealTimers(); await first.stop() }
   })
 
   it('rejects an uninitializable live root before the active graph can move', async () => {

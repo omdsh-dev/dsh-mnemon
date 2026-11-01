@@ -68,6 +68,7 @@ mnemon:
   writebackMode: guided
   idleReviewMs: 30000
   idleReview:
+    persistWatermark: false
     enabled: true
     runtimeMemory: true # false：只建项目档案
     provider: spawn
@@ -121,11 +122,12 @@ mnemon:
 | `idleReviewMs` | `30000` | 5000–600000 ms | 达标后需要连续空闲的时间 |
 | `idleReview.enabled` | `true` | boolean | 自动审查独立开关 |
 | `idleReview.runtimeMemory` | `true` | boolean | 允许审查修改运行时记忆（USER.md 与 MEMORY.md）；`false` 时只创建项目档案 |
+| `idleReview.persistWatermark` | `false` | boolean | 在实际运行时存储根目录中，为同一持久父会话保留尝试限额和冷却时间 |
 | `idleReview.provider` | `spawn` | `spawn` / `fork` | 有界检查点或继承父上下文 |
 | `idleReview.fallback` | `spawn` | `spawn` / `skip` | 仅启动前处理 fork 缺失/不兼容 |
 | `idleReview.agentTeams` | `pause` | `pause` / `scoped` | 安装 Team 工具时暂停，或显式启用受 guard 保护的审查；已在每个受支持的 DSH 及其官方 Teams 上验证 |
 | `idleReview.minIntervalMs` | `300000` | 5000–86400000 ms | 两次尝试的最短间隔 |
-| `idleReview.maxPerSession` | `20` | 0–200 | 当前加载父 Agent 的尝试上限；包括失败/取消 |
+| `idleReview.maxPerSession` | `20` | 0–200 | 当前加载父 Agent 的尝试上限；显式启用持久化后按父会话保留；包括失败/取消 |
 | `idleReview.maxContextChars` | `24000` | 1000–1000000 | spawn 检查点字符上限 |
 | `idleReview.maxTokens` | `4096` | 128–131072 | 每次模型响应输出上限 |
 | `displayMode` | `sidebar` | `sidebar` / `builtin`；兼容旧值 `buildin` | 记忆系统入口：独立 Sidebar 或会话内标签页，共用同一工作台；旧拼写自动迁移为 `builtin` |
@@ -195,6 +197,12 @@ Endpoint 必须是不含凭据、查询参数或片段的 HTTP(S) 绝对 URL。M
 ### 记忆来源开关
 
 每个记忆 Source 在**记忆组合**中有一个开关。它通过 DSH 插件管理器打开或关闭该 Source 的 DSH Entry，并在 profile patch 中保存为对应 Entry 的 `disabled` 行。打开表示允许主策略在需要时使用该 Source，并不强制每一轮召回或写入；关闭会同时停止它的上下文注入、工具、后台任务与数据面 Web/RPC 操作。
+
+只要全局还注册着至少一个具有相同 `manifest.typeId` 的活动 Source，Host 就保留对应的命名工具族。移除最后一个 `memory-spaces`、`documents` 或 `runtime` 实例，分别移除其 10、3 或 1 个命名工具；重新注册该类型会恢复工具。三类齐全时 Mnemon 共注册 17 个工具，缺少 Memory Spaces 时为 7 个。两个通用 View 工具与 `mnemon_subagent_result` 独立保留。工作区更窄的 View 或旧版分层标记仍控制执行授权，不会移除其他工作区的全局工具。
+
+首次通过 Loader 启动时，命名工具族等待 `Loader.await()` 就绪后按原有注册顺序发布；通用 View 工具和结果工具立即可用。后续重新启用会追加恢复的工具族，不会重新注册仍在运行的工具。DSH 独立决定模型请求中的工具 schema 顺序。
+
+配置事务只发布最终 Source 集合，回滚也遵循这一边界，中间的卸载与重载不会改变模型 schema。已有 Agent 在下一次模型请求时收到正常的 DSH 工具目录更新。委派子 Agent 的任务允许列表只包含当前已注册的工具；没有适用的 Runtime 或 Documents 写入目标时，空闲审查会跳过。
 
 ![记忆组合：每个记忆来源与增强各有一个开关](../../assets/webui-v0.5.32/zh-CN/plugin-composition.jpg)
 
@@ -390,7 +398,13 @@ mnemon:
 
 **审查写入什么。**每条知识只进一层。项目记录（设计、实现细节、路径、端口、范围约定、交接说明等）最多写成一份项目档案。工作记忆（MEMORY.md）只收用户明确说过的简短规则，例如约定、纠正、环境事实或工具特性，且项目档案和已有条目都未涵盖；USER.md 收身份与偏好。guard 让每轮审查只写一层：建了项目档案后，修改工作记忆会被拒绝；修改工作记忆后，新建项目档案会被拒绝；USER.md 的修改不受影响。`idleReview.runtimeMemory: false` 会从审查中收回 `mnemon_runtime_memory`，审查只创建项目档案。审查从不写入记忆空间：工作记忆在容量整理时归档进去，项目档案在冷归档时建立索引；**存入记忆**与 `mnemon_remember` 则直接写入。
 
-`idleReviewMs` 仍是连续空闲防抖时间。独立的 `minIntervalMs` 限制尝试间隔，失败与取消也计入；`maxPerSession` 限制当前加载的父 Agent 的尝试次数，零表示暂停。清空或压缩上下文时 DSH 会替换该 Agent；这与重启 Host、卸载后重新打开 Agent 一样，都会获得新的内存内预算。运行结束通过 DSH 公开 API dispose。持久会话历史保留：已发布 Host 没有插件范围的归档/TTL 契约，Mnemon 不删除会话文件或其他插件的 Agent。
+`idleReviewMs` 仍是连续空闲防抖时间。`minIntervalMs` 限制尝试间隔，失败与取消也计入；`maxPerSession` 限制尝试次数，零表示暂停。默认情况下，新的父 Agent（包括重启 Host 或重新打开会话）获得新的内存内预算。
+
+在分层策略的空闲审查设置中启用**重新打开会话后保留审查限额**，或设置 `idleReview.persistWatermark: true`，即可恢复同一持久父会话的尝试次数和剩余冷却时间。身份由实际运行时存储根目录与父会话 ID 共同决定；新会话或其他根目录使用独立预算，选择 Source/View 或使用全局 USER.md 不改变身份。重建 Agent 或回退 surface 不重置已保留的额度；若 DSH 在清空/压缩时分配新会话 ID，则按新会话处理。在运行中的 Agent 打开此开关后，会立即合并该根目录已用的次数和上次尝试时间作为持久基线，不额外计次或启动工作。关闭后新增内存内尝试、再重新启用时会再次合并，不携带其他根目录的用量。每次尝试在启动子代理前先写入磁盘，失败和取消也计次；预约后崩溃可能消耗一次额度而未启动子代理。重启不重放工作、不补跑审查，仍需新的合格检查点。系统时钟回拨导致的未来时间仍保留冷却约束，并以有界定时器等待。
+
+工作区显示本会话尝试次数、配置上限、恢复次数和最早下次时间；它们是会话准入次数，不是全局完成总量。状态损坏/版本不受支持、读写失败或锁冲突会明确暂停自动审查，普通对话、召回与手动操作仍可使用。停止使用此根目录的所有 Host，检查 `state/idle-review/` 中该会话的 JSON 或废弃 `.lock` 目录，修复/恢复状态，仅删除确认已废弃的锁，然后重新打开会话。删除水位文件会明确重置预算。关闭 `persistWatermark` 会恢复内存内限额但保留文件；重新启用时可恢复已有状态。回滚到旧版本会忽略这些文件。水位仅保存在本机，不进入 Pack/Git 同步，直到手动删除前一直保留；不增加自动清理、重放或 Skills 演进状态。见[存储模型](./storage-model.md#统一根目录)。
+
+审查 worker 结束后通过 DSH 公开 API dispose。持久会话历史保留：已发布 Host 没有插件范围的归档/TTL 契约，Mnemon 不删除会话文件或其他插件的 Agent。
 
 **Agent Teams 兼容：**现有配置默认保留 `idleReview.agentTeams: pause`。同时检测到公开 `agentTeams` 服务与父 Agent 作用域的 `spawn_teammate` 工具时，在创建子代理前暂停。仅加载 TeamService 不会暂停审查。
 

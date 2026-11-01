@@ -30,8 +30,9 @@ import type { MemoryWake } from "../core/contracts/index.ts"
 import { agentScope, type MnemonAgentRuntimeSource } from './runtime.ts'
 import { createPluginMessage, MNEMON_PLUGIN_SOURCE } from './plugin-message.ts'
 import type { SkillEvolution } from './skill-evolution.ts'
+import { IdleReviewWatermarkStore } from './idle-review-watermark.ts'
 
-type AgentRuntimeSource = Pick<MnemonAgentRuntimeSource, 'forAgent' | 'executions'>
+type AgentRuntimeSource = Pick<MnemonAgentRuntimeSource, 'forAgent' | 'executions' | 'onChanged'>
 
 interface HostDefaultModelService {
   currentSelection(): { provider: string; model: string; reasoningEffort?: string }
@@ -225,13 +226,23 @@ class MnemonAgentLifecycle {
   private lastReviewAction: string | undefined
   private lastReviewScore: number | undefined
   private lastReviewDocumentIds: string[] | undefined
+  private disposed = false
+  private reviewEpoch = 0
+  private observedReviewPolicy: string | undefined
+  private watermarkEnabled = false
+  /** Only this Agent's observed usage, attributed to the graph that composed each checkpoint. */
+  private readonly reviewUsage = new Map<string, { attempts: number; lastReviewAttemptAt: number | null }>()
+  private watermarkKey: string | undefined
+  private watermarkStore: IdleReviewWatermarkStore | undefined
+  private watermarkError: string | undefined
+  private restoredAttempts = 0
   private idleReviewAttempts = 0
   private lastReviewAttemptAt: number | undefined
   private lastReviewFailure: LifecycleAgentSnapshot['lastReviewFailure']
   private lastPhase: LifecyclePhase = 'idle'
   private lastAt: string | undefined
   private lastError: string | undefined
-  private composedTurn: { turn: number; typeId: string; idleReview: boolean } | undefined
+  private composedTurn: { turn: number; typeId: string; idleReview: boolean; directory?: string } | undefined
 
   constructor(
     readonly agent: HostAgent,
@@ -240,11 +251,14 @@ class MnemonAgentLifecycle {
     private readonly counters: LifecycleCounters,
     source: LifecycleAgentSnapshot['startSource'],
     private readonly memoryTurn?: AgentMemoryTurn,
+    private readonly runtimeDirectory?: () => string | undefined,
   ) {
     this.startSource = source
   }
 
   start(): () => void {
+    this.restoreWatermark()
+    this.observedReviewPolicy = this.reviewPolicy()
     const disposers = [
       this.agent.ctx.on('session/event', ((session: HostAgent['session'], event: HostSessionEvent) => this.sessionEvent(session, event)) as never),
       this.agent.ctx.on('system-prompt/assemble', ((assembly: PromptAssembly, context: PromptAssemblyContext, next: () => Promise<PromptAssembly>) => this.assemblePrompt(assembly, context, next)) as never),
@@ -257,6 +271,7 @@ class MnemonAgentLifecycle {
       this.agent.ctx.on('agent/turn-stopping', ((payload: TurnStoppingPayload) => this.finishTurn(payload)) as never),
     ]
     return () => {
+      this.disposed = true
       this.releaseView()
       this.cancelIdleReview(true)
       for (const dispose of disposers.reverse()) dispose()
@@ -264,6 +279,7 @@ class MnemonAgentLifecycle {
   }
 
   snapshot(): LifecycleAgentSnapshot {
+    this.restoreWatermark()
     return {
       sessionId: this.agent.id,
       status: this.agent.status,
@@ -275,8 +291,13 @@ class MnemonAgentLifecycle {
       reviewRunning: this.reviewRunning,
       reviewActivity: this.reviewActivity(),
       idleReviewAttempts: this.idleReviewAttempts,
+      ...(this.config.idleReview.persistWatermark ? { idleReviewWatermark: {
+        state: this.watermarkError === undefined ? 'ready' as const : 'error' as const,
+        restoredAttempts: this.restoredAttempts, maxPerSession: this.config.idleReview.maxPerSession,
+        ...(this.watermarkError === undefined ? {} : { error: this.watermarkError }),
+      } } : {}),
       ...(idleReviewBlockReason(this.agent, this.config.idleReview.agentTeams) === undefined ? {} : { idleReviewBlocked: 'agent-team' as const }),
-      ...(this.lastReviewAttemptAt === undefined ? {} : { nextReviewAt: new Date(this.lastReviewAttemptAt + this.config.idleReview.minIntervalMs).toISOString() }),
+      ...(this.lastReviewAttemptAt === undefined ? {} : { nextReviewAt: new Date(Math.min(8_640_000_000_000_000, this.lastReviewAttemptAt + this.config.idleReview.minIntervalMs)).toISOString() }),
       ...(this.lastReviewFailure === undefined ? {} : { lastReviewFailure: this.lastReviewFailure }),
       lastPhase: this.lastPhase,
       ...(this.lastReviewAt === undefined ? {} : { lastReviewAt: this.lastReviewAt }),
@@ -419,15 +440,17 @@ class MnemonAgentLifecycle {
   private scheduleIdleReview(turn: number): void {
     this.cancelIdleReview(true)
     this.recordComposedTurn(turn)
-    if (!this.idleReviewAllowed()) return
+    if (!this.restoreWatermark() || !this.idleReviewAllowed()) return
     const activity = this.ensureTurnActivity(turn)
     const tools = completedToolActivity(this.agent.session.snapshotEvents(), turn)
     activity.toolCallCount = tools.count
     activity.toolNames = tools.names
     if (!this.reviewActivity().eligible || !this.reviewAdmitted(turn)) return
+    const epoch = this.reviewEpoch
+    const policy = this.reviewPolicy()
     this.idleReviewTimer = setTimeout(() => {
       this.idleReviewTimer = undefined
-      if (!this.idleReviewAllowed() || this.reviewRunning) return
+      if (epoch !== this.reviewEpoch || policy !== this.reviewPolicy() || !this.idleReviewAllowed() || this.reviewRunning) return
       if (this.lastReviewAttemptAt !== undefined && Date.now() < this.lastReviewAttemptAt + this.config.idleReview.minIntervalMs) {
         this.scheduleIdleReview(turn)
         return
@@ -436,7 +459,59 @@ class MnemonAgentLifecycle {
       const completed = this.agent.session.snapshotEvents().some(event => event.type === 'turn/end' && eventTurn(event) === turn)
       if (!completed || !this.reviewActivity().eligible || !this.reviewAdmitted(turn)) return
       void this.runIdleReview()
-    }, Math.max(this.config.idleReviewMs, (this.lastReviewAttemptAt ?? -Infinity) + this.config.idleReview.minIntervalMs - Date.now()))
+    }, Math.min(2_147_483_647, Math.max(this.config.idleReviewMs, (this.lastReviewAttemptAt ?? -Infinity) + this.config.idleReview.minIntervalMs - Date.now())))
+  }
+
+  /** Resolve only the graph actually serving this parent, never a selected View or startup cwd. */
+  private restoreWatermark(): boolean {
+    if (!this.config.idleReview.persistWatermark) { this.watermarkEnabled = false; return true }
+    try {
+      const directory = this.runtimeDirectory?.()
+      if (directory === undefined || directory.trim() === '') throw new Error('runtime storage unavailable')
+      const key = JSON.stringify([resolve(directory), this.agent.id])
+      if (this.watermarkKey === key && this.watermarkEnabled) return this.watermarkError === undefined
+      const sameRoot = this.watermarkKey === key
+      this.watermarkEnabled = true
+      this.watermarkKey = key
+      this.watermarkStore = new IdleReviewWatermarkStore(directory, this.agent.id)
+      this.watermarkError = undefined
+      this.restoredAttempts = 0
+      const floor = this.reviewUsage.get(resolve(directory))
+      if (!sameRoot) {
+        this.idleReviewAttempts = floor?.attempts ?? 0
+        this.lastReviewAttemptAt = floor?.lastReviewAttemptAt ?? undefined
+      }
+      const state = this.watermarkStore.restore(floor)
+      this.restoredAttempts = state.attempts
+      this.idleReviewAttempts = state.attempts
+      this.lastReviewAttemptAt = state.lastReviewAttemptAt ?? undefined
+      this.reviewUsage.set(resolve(directory), state)
+      return true
+    } catch (error) { this.pauseWatermark(error); return false }
+  }
+
+  configurationChanged(): void {
+    const policy = this.reviewPolicy()
+    if (policy !== this.observedReviewPolicy) this.cancelIdleReview(true)
+    this.observedReviewPolicy = policy
+    this.restoreWatermark()
+  }
+
+  private pauseWatermark(error: unknown): void {
+    // Never display a raw filesystem error: it can contain a private root/id.
+    const message = error instanceof Error && error.message.startsWith('Idle review watermark unavailable')
+      ? error.message
+      : "Idle review watermark unavailable. Automatic review is paused. Stop Hosts using this storage root, repair this session's state or lock under state/idle-review, then reopen the session."
+    this.watermarkError = message
+  }
+
+  /** Policy/root changes invalidate an already queued checkpoint instead of catching up. */
+  private reviewPolicy(): string | undefined {
+    try { return JSON.stringify([this.config.idleReview.persistWatermark ? this.runtimeDirectory?.() : undefined, this.config.lifecycleEnabled, this.config.writeEnabled,
+      this.config.storageScope, this.config.dataDir, this.config.writebackMode, this.config.idleReviewMs, this.config.idleReview, this.config.taskAgentModel, mainStrategyTypeId(this.config)]) } catch (error) {
+      if (this.config.idleReview.persistWatermark) this.pauseWatermark(error)
+      return undefined
+    }
   }
 
   /** Which Strategy composed the turn, while its View is still pinned, and whether it declares idle review. */
@@ -445,7 +520,7 @@ class MnemonAgentLifecycle {
     const pinned = this.memoryTurn.current
     if (pinned?.turn === turn) {
       const strategy = viewStrategy(pinned.graph.memoryComposition.generation(pinned.context.view.runtimeGeneration), pinned.context.view)
-      this.composedTurn = { turn, typeId: strategy.typeId, idleReview: strategyDrives(strategy, 'idle-review') }
+      this.composedTurn = { turn, typeId: strategy.typeId, idleReview: strategyDrives(strategy, 'idle-review'), directory: pinned.graph.directory }
     } else if (this.composedTurn?.turn !== turn) this.composedTurn = undefined
   }
 
@@ -463,23 +538,52 @@ class MnemonAgentLifecycle {
     return this.composedTurn?.typeId === typeId && this.composedTurn.idleReview
   }
 
-  private idleReviewAllowed(): boolean {
-    return this.config.lifecycleEnabled && this.config.writeEnabled && this.config.writebackMode === 'guided'
-      && this.config.idleReview.enabled && this.idleReviewAttempts < this.config.idleReview.maxPerSession
+  private idleReviewAllowed(reserved = false): boolean {
+    return !this.disposed && (!this.config.idleReview.persistWatermark || this.watermarkError === undefined)
+      && this.config.lifecycleEnabled && this.config.writeEnabled && this.config.writebackMode === 'guided'
+      && this.config.idleReview.enabled && (reserved || this.idleReviewAttempts < this.config.idleReview.maxPerSession)
       && idleReviewBlockReason(this.agent, this.config.idleReview.agentTeams) === undefined
       && this.strategyDrivesIdleReview()
+      && this.coordinator.canReview(this.agent)
   }
 
   private async runIdleReview(): Promise<void> {
     const controller = new AbortController()
     const triggeredScore = this.reviewActivity().score
-    this.idleReviewAttempts += 1
-    this.lastReviewAttemptAt = Date.now()
+    const epoch = this.reviewEpoch
+    const policy = this.reviewPolicy()
+    if (this.config.idleReview.persistWatermark) {
+      try {
+        if (!this.restoreWatermark() || this.watermarkStore === undefined || !this.idleReviewAllowed()) return
+        const reserved = this.watermarkStore.reserve({ ...this.config.idleReview, now: Date.now(),
+          floor: { attempts: this.idleReviewAttempts, lastReviewAttemptAt: this.lastReviewAttemptAt ?? null } })
+        const state = reserved ?? this.watermarkStore.load()
+        this.idleReviewAttempts = Math.max(this.idleReviewAttempts, state.attempts)
+        this.lastReviewAttemptAt = Math.max(this.lastReviewAttemptAt ?? -Infinity, state.lastReviewAttemptAt ?? -Infinity)
+        if (this.lastReviewAttemptAt === -Infinity) this.lastReviewAttemptAt = undefined
+        const directory = this.runtimeDirectory?.()
+        if (directory !== undefined) this.reviewUsage.set(resolve(directory), { attempts: this.idleReviewAttempts, lastReviewAttemptAt: this.lastReviewAttemptAt ?? null })
+        if (reserved === undefined) return
+      } catch (error) { this.pauseWatermark(error); return }
+    } else {
+      this.idleReviewAttempts += 1
+      this.lastReviewAttemptAt = Date.now()
+      const directory = this.composedTurn?.directory
+      if (directory !== undefined) {
+        const key = resolve(directory)
+        this.reviewUsage.set(key, { attempts: (this.reviewUsage.get(key)?.attempts ?? 0) + 1, lastReviewAttemptAt: this.lastReviewAttemptAt })
+      }
+    }
     this.reviewRunning = true
     this.reviewController = controller
     this.mark('review')
     try {
-      const result = await this.coordinator.review(this.agent, controller.signal)
+      const result = await this.coordinator.review(this.agent, controller.signal, () => {
+        if (epoch !== this.reviewEpoch || policy !== this.reviewPolicy() || !this.idleReviewAllowed(true)) {
+          controller.abort(new Error('Automatic idle review admission changed'))
+        }
+        controller.signal.throwIfAborted()
+      })
       if (controller.signal.aborted) return
       this.lastReviewAt = new Date().toISOString()
       this.lastReviewAction = result.action
@@ -503,6 +607,7 @@ class MnemonAgentLifecycle {
   }
 
   private cancelIdleReview(abortRunning: boolean): void {
+    this.reviewEpoch += 1
     if (this.idleReviewTimer !== undefined) clearTimeout(this.idleReviewTimer)
     this.idleReviewTimer = undefined
     if (abortRunning) this.reviewController?.abort()
@@ -683,9 +788,13 @@ export class MnemonLifecycle {
 
   start(): () => void {
     // DSH creates a new Agent for startup, resume, clear and compaction alike.
+    const stopChanged = this.runtimeSource?.onChanged?.(() => {
+      for (const { lifecycle } of this.owners.values()) lifecycle.configurationChanged()
+    })
     const stopCreated = this.ctx.on('agent/created', (({ agent, source }: SessionStartPayload) => { this.install(agent, source) }) as never)
     for (const agent of this.ctx.agents.roots()) this.install(agent, 'adopted')
     return () => {
+      stopChanged?.()
       stopCreated()
       for (const dispose of [...this.children.values()].reverse()) dispose()
       for (const owner of [...this.owners.values()].reverse()) owner.dispose()
@@ -1198,7 +1307,7 @@ export class MnemonLifecycle {
     }
     if (!this.ctx.agents.roots().includes(agent)) return
     const memoryTurn = this.runtimeSource === undefined ? undefined : new AgentMemoryTurn(agent, this.runtimeSource)
-    const lifecycle = new MnemonAgentLifecycle(agent, this.coordinator, this.config, this.counters, source, memoryTurn)
+    const lifecycle = new MnemonAgentLifecycle(agent, this.coordinator, this.config, this.counters, source, memoryTurn, () => this.runtimeSource?.forAgent(agent).directory)
     let dispose: () => unknown
     dispose = agent.ctx.effect(() => {
       const stop = lifecycle.start()

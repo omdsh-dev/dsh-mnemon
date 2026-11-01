@@ -224,7 +224,7 @@ async function harness(scenario: string, multipleDestinations: boolean) {
     () => ({ provider: PROVIDER, model: MODEL }), () => 8192,
     (scope, signal, operation) => lifecycle.runRuntimeMaintenanceTask(scope, signal, operation))
   const lifecycle = new MnemonLifecycle(host, coordinator, f.config, f.live)
-  registerTools(host, f.live, coordinator)
+  registerTools(host, f.live, coordinator, f.extensions)
   ctx.tools.register({ name: DONE, description: 'Finish this synthetic test batch; the harness verifies every requested write and reports any failure.',
     parameters: { type: 'object', properties: {} },
     output: { schema: { type: 'object', properties: { done: { type: 'boolean' } } }, render: () => [{ type: 'text', text: 'Batch complete.' }] },

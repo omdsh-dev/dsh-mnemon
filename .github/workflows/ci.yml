@@ -37,8 +37,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Test workspace identities and platform paths
-        run: pnpm exec vitest run tests/workspace-storage.spec.ts tests/client-platform-boundary.spec.ts tests/async-subagent-memory.spec.ts
+      - name: Test workspace identities, platform paths and ByteRover CLI
+        run: pnpm exec vitest run tests/workspace-storage.spec.ts tests/client-platform-boundary.spec.ts tests/async-subagent-memory.spec.ts plugins/dsh-mnemon-provider-byterover/tests/windows-cli.spec.ts
 
       - name: Test desktop CLI process ownership and hidden native launches
         run: >-

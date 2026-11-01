@@ -40,7 +40,7 @@ async function fixture(options: { strategy?: 'general' | 'layered'; prefix?: str
   const start = vi.fn()
   const coordinator = new MnemonSubagentCoordinator({ start } as unknown as HostSubagentsService, f.live)
   const tools = new Map<string, ToolDefinition>()
-  registerTools({ tools: { register: (tool: ToolDefinition) => tools.set(tool.name, tool) } } as unknown as HostContextShape, f.live, coordinator)
+  registerTools({ tools: { register: (tool: ToolDefinition) => { tools.set(tool.name, tool); return () => { tools.delete(tool.name) } } } } as unknown as HostContextShape, f.live, coordinator, f.extensions)
   const agent = { id: 'instances-root', session: { header: { cwd: f.workspace }, ...sessionLog() } } as unknown as HostAgent
   const begin = async () => {
     const graph = f.live.snapshot()

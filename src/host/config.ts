@@ -144,6 +144,7 @@ const RuntimeMemorySchema: z<RuntimeMemoryConfig> = z.object({
 const IdleReviewSchema = z.object({
   enabled: z.boolean().default(DEFAULT_IDLE_REVIEW.enabled),
   runtimeMemory: z.boolean().default(DEFAULT_IDLE_REVIEW.runtimeMemory),
+  persistWatermark: z.boolean().default(DEFAULT_IDLE_REVIEW.persistWatermark),
   provider: z.union(['spawn', 'fork'] as const).default(DEFAULT_IDLE_REVIEW.provider),
   fallback: z.union(['spawn', 'skip'] as const).default(DEFAULT_IDLE_REVIEW.fallback),
   agentTeams: z.union(['pause', 'scoped'] as const).default(DEFAULT_IDLE_REVIEW.agentTeams),

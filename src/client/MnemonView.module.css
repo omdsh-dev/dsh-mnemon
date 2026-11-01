@@ -579,3 +579,16 @@
   .noticeGroup[data-expanded] .noticeContents { display: flex; }
   .noticeGroup[data-expanded] .noticeToggle > svg { transform: rotate(90deg); }
 }
+
+/* Coarse pointers: a phone has no hover and no pointer precision, so the navigation tabs,
+   header controls and form fields that were sized for a mouse become 44px hit areas
+   without changing their visual weight. The canvas also keeps its scroll instead of
+   handing the gesture to the page behind it. */
+@media (pointer: coarse) {
+  .masthead :is(button, select), .noticeToggle { min-height: 44px; }
+  .nav button { min-height: 44px; }
+  .sectionHeading button { min-height: 44px; min-width: 44px; }
+  .primaryButton, .secondaryButton, .ghostButton, .dangerButton, .dangerSolidButton { min-height: 44px; }
+  .page :is(input:not([type='checkbox']):not([type='radio']), select, textarea) { min-height: 44px; }
+  .canvas { overscroll-behavior: contain; }
+}

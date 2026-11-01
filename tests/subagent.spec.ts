@@ -263,7 +263,10 @@ function capacityError(target: string, used: number, projected: number, limit: n
   return Object.assign(new Error('Runtime capacity exceeded'), { code: 'runtime-capacity', target, used, projected, limit })
 }
 function pinnedTurn(turnId: string, viewId: string, memoryBodyIds: string[] = ['project']): ComposableMemoryTurn {
-  return { turnId, view: { id: viewId, readGrants: [{
+  return { turnId, view: { id: viewId, actionOffers: [
+    { sourceInstanceKey: 'source:mnemon-source-runtime', sourceActionId: 'mutate' },
+    { sourceInstanceKey: 'source:mnemon-source-documents', sourceActionId: 'create' },
+  ], readGrants: [{
     id: 'space-grant', sourceInstanceKey: 'source:mnemon-source-memory-spaces', schema: 'dsh-mnemon.memory-spaces/v1', value: { memoryBodyIds },
   }] } } as unknown as ComposableMemoryTurn
 }
@@ -354,8 +357,12 @@ function runtimeSource(
   } }) }
   // The serving generation composes with the configured Strategy.
   const generation = { strategy: { definition: { manifest: { typeId: config.memoryTopology.strategyId } } },
-    sourceInstances: () => [{ sourceInstanceKey: 'source:mnemon-source-memory-spaces', sourceTypeId: 'memory-spaces' }] }
-  const graph = { config, memoryComposition: { acquire: () => ({ generation, release: () => {} }) }, composableTurns: turns, source: (type: string) => type === 'runtime' ? runtimeSession : type === 'documents' ? documentSession : spaceSession } as unknown as MnemonRuntimeGraph
+    sourceInstances: () => [
+      { sourceInstanceKey: 'source:mnemon-source-memory-spaces', sourceTypeId: 'memory-spaces' },
+      { sourceInstanceKey: 'source:mnemon-source-runtime', sourceTypeId: 'runtime' },
+      { sourceInstanceKey: 'source:mnemon-source-documents', sourceTypeId: 'documents' },
+    ] }
+  const graph = { config, memoryComposition: { generation: () => generation, acquire: () => ({ generation, release: () => {} }) }, composableTurns: turns, source: (type: string) => type === 'runtime' ? runtimeSession : type === 'documents' ? documentSession : spaceSession } as unknown as MnemonRuntimeGraph
   const source = { config, forAgent: vi.fn((_agent: HostAgent) => graph), bindAgentRuntime: vi.fn(() => () => {}) }
   return { ...source, executions: new MemoryExecutions(source) }
 }
@@ -2294,7 +2301,7 @@ describe('Mnemon memory subagent coordinator', () => {
     const original = graph.source.bind(graph)
     const spaces = { ...own, forGeneration() { return this }, forInstance: (key: string) => key === extraKey ? other : spaces }
     Object.assign(graph, {
-      memoryComposition: { acquire: () => ({ generation, release: () => {} }) },
+      memoryComposition: { generation: () => generation, acquire: () => ({ generation, release: () => {} }) },
       source: (type: string, scope?: never) => type === 'memory-spaces' ? spaces : original(type, scope),
     })
     vi.mocked(source.forAgent).mockReturnValue(graph)
@@ -3060,7 +3067,7 @@ describe('Mnemon root/child tool split', () => {
     const dispatch = await f.graph.composableTurns.beginTurn('root:tools', scope, 'test')
     f.graph.composableTurns.pinTurn('child:tools', agentScope(child, f.config), dispatch.view.id)
     const coordinator = { recall: vi.fn(async () => ({ results: [] })), related: vi.fn(async () => ({ results: [] })), runtime: vi.fn() } as unknown as MnemonSubagentCoordinator
-    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as unknown as HostContextShape, f.live, coordinator)
+    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool); return () => {} } } } as unknown as HostContextShape, f.live, coordinator, f.extensions)
     const signal = new AbortController().signal
     const hot = registered.find(tool => tool.name === 'mnemon_runtime_memory')!
     await hot.execute({ action: 'add', target: 'user', content: 'Concise' } as never, { agent: root, signal })
@@ -3088,7 +3095,7 @@ describe('Mnemon root/child tool split', () => {
     root.session.header!.cwd = f.workspace
     await f.graph.composableTurns.beginTurn('root:health', agentScope(root, f.config), 'test')
     const registered: ToolDefinition[] = []
-    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as unknown as HostContextShape, f.live, {} as MnemonSubagentCoordinator)
+    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool); return () => {} } } } as unknown as HostContextShape, f.live, {} as MnemonSubagentCoordinator, f.extensions)
     const status = await registered.find(tool => tool.name === 'mnemon_status')!.execute({} as never, { agent: root, signal: new AbortController().signal })
     expect(status).toMatchObject({ memorySpaces: { active: 1 }, healthy: true })
     expect(JSON.stringify(status)).not.toMatch(/cliPath|dataDir|memoryBodyDirectory|dbPath|byCategory|topEntities|apiKey/)
@@ -3101,7 +3108,7 @@ describe('Mnemon root/child tool split', () => {
     releases.push(f.dispose)
     const registered: ToolDefinition[] = []
     const coordinator = { recall: vi.fn(), runtime: vi.fn() } as unknown as MnemonSubagentCoordinator
-    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool) } } } as unknown as HostContextShape, f.live, coordinator)
+    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool); return () => {} } } } as unknown as HostContextShape, f.live, coordinator, f.extensions)
     const signal = new AbortController().signal
     await expect(registered.find(tool => tool.name === 'mnemon_recall')!.execute({ query: 'blocked' } as never, { agent: parent(), signal })).rejects.toThrow('does not allow automatic recall')
     expect(() => registered.find(tool => tool.name === 'mnemon_runtime_memory')!.execute({ action: 'add', target: 'memory', content: 'blocked' } as never, { agent: parent(), signal })).toThrow('does not allow automatic write')

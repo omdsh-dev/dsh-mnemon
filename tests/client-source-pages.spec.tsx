@@ -399,6 +399,37 @@ describe('Source Client presentation conformance', () => {
     await waitFor(() => expect(received.at(-1)).toEqual({ page: 'git/repository', input: undefined }))
   })
 
+  it.each(['page', 'focused', 'management'] as const)('does not mount a disabled third-party Source through its %s route', async mode => {
+    const source = { sourceInstanceKey: 'source:git', sourceTypeId: 'git', packageName: 'dsh-mnemon-source-git', role: 'repository', availability: 'ready', revision: 'r1', capabilities: ['read'], management: { label: 'Repository' } }
+    const call = vi.fn(async (_channel: string, endpoint: string) => ({ ok: true, value: endpoint === 'source-management-catalog' ? { generationId: 'g1', sources: [source] } : status }))
+    const connection = { rpc: { call }, isLoopback: true }
+    const pages = mode === 'management' ? [] : [{ id: 'git/repository', sourceTypeId: 'git', pageId: 'repository', label: 'Repository', order: 1 }]
+    const disabledSettings = settingsScope<Config>({ ...settingsSnapshot, value: { memoryTopology: { layers: { git: { enabled: false } } } } as Config })
+    const renderSlot = vi.fn(() => <div>Disabled Source content</div>)
+    render(<MnemonWorkbench connection={connection as never} settingsScope={disabledSettings} t={translateEn} locale="en"
+      {...(mode === 'focused' ? { focus: { sourceTypeId: 'git', title: 'Repository' } } : {})}
+      sourcePageDirectory={{ getSnapshot: () => pages, subscribe: () => () => {} }} renderSlot={renderSlot as never} />)
+    await screen.findByRole('heading', { name: mode === 'focused' ? /Repository.*off/ : 'System Status' })
+    act(() => dispatchMnemonAnchor({ page: 'git/repository', seed: 'disabled anchor' }))
+    expect(screen.queryByRole('tab', { name: 'Repository' })).toBeNull()
+    expect(screen.queryByText('Disabled Source content')).toBeNull()
+    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'source-management-read')).toHaveLength(0)
+  })
+
+  it('keeps a running unmanaged replacement reachable when the shipped Source component is off', async () => {
+    const source = { sourceInstanceKey: 'source:custom-runtime', sourceTypeId: 'runtime', packageName: 'acme-runtime', role: 'working-context', availability: 'ready', revision: 'r1', capabilities: ['read'], management: { label: 'Runtime' } }
+    const dashboard = { revision: 'v1', writable: true, strategyTypeId: 'general', diagnostics: [], pluginInstallation: { supported: false, suggestions: [] }, entries: [{ entryId: 'mnemon-source-runtime', packageName: 'dsh-mnemon-source-runtime', roles: ['source'], label: { en: 'Runtime memory' }, description: { en: '' }, enabled: false, active: false, writable: true, fields: [], provides: [], requires: [], requiredBy: [], config: {} }], sources: [source] }
+    const connection = { rpc: { call: vi.fn(async (_channel: string, endpoint: string) => ({ ok: true, value: endpoint === 'source-management-catalog' ? { generationId: 'g1', sources: [source] } : endpoint === 'dashboard' ? dashboard : status })) }, isLoopback: true }
+    const pages = [{ id: 'runtime/entries', sourceTypeId: 'runtime', pageId: 'entries', label: 'Runtime', order: 1 }]
+    const renderSlot = (() => <div>Replacement runtime content</div>) as never
+    render(<MnemonWorkbench connection={connection as never} settingsScope={settings} t={translateEn} locale="en" sourcePageDirectory={{ getSnapshot: () => pages, subscribe: () => () => {} }} renderSlot={renderSlot} />)
+    fireEvent.click(await screen.findByRole('tab', { name: 'Runtime memory' }))
+    expect(await screen.findByText('Replacement runtime content')).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: 'Status' }))
+    act(() => dispatchMnemonAnchor({ page: 'runtime/entries' }))
+    expect(await screen.findByText('Replacement runtime content')).toBeTruthy()
+  })
+
   it('selects additional built-in Source instances without injecting a hidden default page', async () => {
     const sources = ['source:extra-runtime', 'source:mnemon-source-runtime'].map(sourceInstanceKey => ({
       sourceInstanceKey, sourceTypeId: 'runtime', packageName: 'dsh-mnemon-source-runtime', role: 'working-context',

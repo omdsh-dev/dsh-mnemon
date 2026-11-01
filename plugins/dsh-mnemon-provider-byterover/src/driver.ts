@@ -6,6 +6,7 @@ import type { MemorySpaceAuthority } from 'dsh-mnemon-source-memory-spaces/provi
 import { runProcess, type ProcessRunner } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import type { Insight, MemoryBody as MemorySpace, MemoryGraphSnapshot, MemoryListRequest, MemoryProviderConnection, RememberRequest, SearchRequest } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import { NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter, type ProviderBodyStatus as ProviderSpaceStatus, type ProviderMemorySpace, type ProviderSearchResult } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
+import { resolveByteRoverInvocation } from './cli.ts'
 
 interface ByteRoverProviderOptions {
   process?: ProcessRunner
@@ -129,13 +130,14 @@ export class ByteRoverProvider implements MemoryProviderAdapter {
         : resolve(this.memorySpaces.runner.effectiveDataDir(), configuredDirectory)
     mkdirSync(cwd, { recursive: true, mode: 0o700 })
     const apiKey = String(connection.apiKey ?? '').trim()
-    const result = await this.process(command, args, {
+    const invocation = resolveByteRoverInvocation(command, args, { ...process.env, ...(apiKey === '' ? {} : { BRV_API_KEY: apiKey }) }, cwd)
+    const result = await this.process(invocation.command, invocation.args, {
       timeoutMs,
       maxOutputBytes: 256 * 1024,
       ...(signal === undefined ? {} : { signal }),
       cwd,
       label: 'ByteRover',
-      env: { ...process.env, ...(apiKey === '' ? {} : { BRV_API_KEY: apiKey }) },
+      env: invocation.env,
     })
     const stdout = result.stdout.trim()
     const stderr = result.stderr.trim()

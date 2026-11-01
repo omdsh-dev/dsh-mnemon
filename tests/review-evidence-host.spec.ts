@@ -150,7 +150,7 @@ it.each(['native', 'ptc'].flatMap(mode => ['fork', 'spawn'].map(provider => ({ m
     }
     const coordinator = new MnemonSubagentCoordinator(service, f.live, host)
     const lifecycle = new MnemonLifecycle(host, coordinator, f.config, f.live)
-    registerTools(host, f.live, coordinator)
+    registerTools(host, f.live, coordinator, f.extensions)
     stop = lifecycle.start()
     const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' }, { cwd: f.workspace })
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'Read the full synthetic overview once.' }], source: { kind: 'user' } }))

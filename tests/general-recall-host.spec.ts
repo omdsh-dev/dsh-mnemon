@@ -38,7 +38,7 @@ describe('General strategy named reads at the Host JSON boundary', () => {
       })
       const registered = new Map<string, ToolDefinition>()
       const coordinator = new MnemonSubagentCoordinator({} as never, f.live)
-      registerTools({ tools: { register: (tool: ToolDefinition) => { registered.set(tool.name, tool) } } } as unknown as HostContextShape, f.live, coordinator)
+      registerTools({ tools: { register: (tool: ToolDefinition) => { registered.set(tool.name, tool); return () => { registered.delete(tool.name) } } } } as unknown as HostContextShape, f.live, coordinator, f.extensions)
       const execute = (name: string, args: object) => (registered.get(name)!.execute as Function)(args, { agent, signal: new AbortController().signal })
       const recall = await execute('mnemon_recall', { query: 'General recall transport sentinel', mode: 'keyword' })
       expect(recall.results).toHaveLength(1)

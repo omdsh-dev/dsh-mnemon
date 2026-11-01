@@ -263,8 +263,8 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const { sourceCatalogState, sourceCatalog, sourceInstances, sourceManagementClients, visibleSourcePages, managedSourceTypes: allManagedSourceTypes } = useSourceCatalog(client, taskClient, revision, viewContextKey, sourcePageEntries)
   const managedSourceTypes = useMemo(() => allManagedSourceTypes.filter(([sourceTypeId]) => shows(sourceTypeId)), [allManagedSourceTypes, shows])
   const [selectedSourceInstances, setSelectedSourceInstances] = useState<Record<string, string>>({})
-  // Configured layers whose Source is not running: its component is off, or
-  // nothing is composed. They keep a tab that says so instead of vanishing.
+  // Configured layers whose Source is not running keep a diagnostic tab unless
+  // the user explicitly switched the layer or its component off.
   const stoppedLayers = status?.memorySystem?.configuration.layers
   const stoppedTypes = useMemo(() => {
     if (sourceCatalog === null || stoppedLayers === undefined) return new Set<string>()
@@ -288,15 +288,30 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
     const component = dashboard?.entries.find(entry => entry.roles.includes('strategy') && entry.typeId === typeId)
     return component === undefined ? typeId : componentCopy(component, locale).label
   }
-  // A stopped layer whose Source component is switched off is off: the
-  // configuration shows that component as the layer's own switch.
-  const switchedOff = useMemo(() => new Set(dashboard === null ? [] : [...stoppedTypes].filter(id => sourceOf(dashboard, id)?.enabled === false)), [dashboard, stoppedTypes])
+  // A Source type stays reachable while any of its components is enabled.
+  const switchedOff = useMemo(() => {
+    const entries = dashboard?.entries ?? []
+    const enabled = new Set(entries.filter(entry => entry.enabled).map(layerOf))
+    // An independently installed Source can replace a switched-off shipped
+    // component without having a plugin-manager entry of its own.
+    const managedPackages = new Set(entries.map(entry => entry.packageName))
+    for (const source of dashboard?.sources ?? []) {
+      if (!managedPackages.has(source.packageName)) enabled.add(source.sourceTypeId)
+    }
+    return new Set(entries.filter(entry => !entry.enabled).map(layerOf)
+      .filter((id): id is string => id !== undefined && !enabled.has(id)))
+  }, [dashboard])
+  // Saved settings take effect immediately, before status finishes reloading.
+  const savedLayers = settingsSnapshot.value?.memoryTopology?.layers
+  const configuredLayers = status?.memorySystem?.configuration.layers
+  const disabledTypes = useMemo(() => new Set([...new Set([...Object.keys(configuredLayers ?? {}), ...Object.keys(savedLayers ?? {}), ...switchedOff])]
+    .filter(id => (savedLayers?.[id]?.enabled ?? configuredLayers?.[id]?.enabled) === false || switchedOff.has(id))), [configuredLayers, savedLayers, switchedOff])
   // A focused view opens its Source's first page and stays there; anchors for other pages are another view's.
-  const focusPage = focusType === undefined ? undefined : sourcePageEntries.find(entry => entry.navigation?.primary ?? true)
+  const focusPage = focusType === undefined || disabledTypes.has(focusType) ? undefined : sourcePageEntries.find(entry => entry.navigation?.primary ?? true)
   const home: Page = focusPage === undefined ? 'status' : `source:${focusPage.id}`
   const accepts = useCallback((target: string): boolean => target === 'status' ? focusType === undefined : shows(target.split('/')[0]!), [focusType, shows])
   const { page, navigationInput, openTab, sourceNavigationEntries } = useWorkspaceNavigation({
-    sessionId, viewContextKey, resetViewportScroll, sourceCatalog, sourcePageEntries, visibleSourcePages, managedSourceTypes, stoppedTypes, dashboard, sourceName, showWorkspaceToast, accepts, home,
+    sessionId, viewContextKey, resetViewportScroll, sourceCatalog, sourcePageEntries, visibleSourcePages, managedSourceTypes, stoppedTypes, disabledTypes, dashboard, sourceName, showWorkspaceToast, accepts, home,
   })
   // Runs after the catalog and component-name reads, so the three requests keep their order.
   useEffect(() => { void loadStatus() }, [loadStatus])
@@ -345,11 +360,6 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
     ? ''
     : `${t('workspace.selectedRoot', { root: workspaceContext.selectedRoot })}; ${t('workspace.effectiveRoot', { root: workspaceContext.effectiveRoot })}`
   const workspacePicker = showWorkspacePicker && <SelectField inline size="sm" className={appearanceClass(css.workspacePicker, sidebarCss.workspacePicker)} label={t('workspace.viewing')} ariaLabel={t('workspace.selectorAria')} value={workspaceSelection.selectedWorkspaceId ?? ''} options={workspaceSelection.options.map(workspace => ({ value: workspace.id, label: workspace.title }))} onChange={workspaceSelection.onSelect} />
-  // The saved settings answer at once; the status catches up after it reloads.
-  const savedLayers = settingsSnapshot.value?.memoryTopology?.layers
-  const configuredLayers = status?.memorySystem?.configuration.layers
-  const disabledTypes = new Set([...new Set([...Object.keys(configuredLayers ?? {}), ...Object.keys(savedLayers ?? {})])]
-    .filter(id => (savedLayers?.[id]?.enabled ?? configuredLayers?.[id]?.enabled) === false || switchedOff.has(id)))
   const notice = compositionNotice(status?.memorySystem, t)
   const memoryOff = status?.memorySystem !== undefined && !status.memorySystem.serving
   const composingType = status?.memorySystem?.serving === true ? status.memorySystem.strategyTypeId : undefined
@@ -484,6 +494,13 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       <Reveal className={css.notice}>{status?.restartPending !== undefined && <RestartReminder pending={status.restartPending} />}</Reveal>
       {workspaceToast.element}
       <OrdinaryNotices remoteReadOnly={remoteReadOnly} reviewPaused={!focused && status?.lifecycle?.current?.idleReviewBlocked === 'agent-team'} />
+      {!focused && status?.lifecycle?.current?.idleReviewWatermark !== undefined && <div className={css.alert} role={status.lifecycle.current.idleReviewWatermark.state === 'error' ? 'alert' : 'status'}>
+        <span>{t('status.reviewWatermarkUsage', { attempts: status.lifecycle.current.idleReviewAttempts ?? 0, max: status.lifecycle.current.idleReviewWatermark.maxPerSession, restored: status.lifecycle.current.idleReviewWatermark.restoredAttempts })}</span>
+        {status.lifecycle.current.idleReviewWatermark.state === 'error' ? <>
+          <strong>{t('status.reviewWatermarkPaused')}</strong>
+          <span>{t('status.reviewWatermarkRecovery')}</span>
+        </> : status.lifecycle.current.nextReviewAt !== undefined && <span>{t('status.reviewWatermarkNext', { time: new Date(status.lifecycle.current.nextReviewAt).toLocaleString(locale) })}</span>}
+      </div>}
       {!focused && status?.lifecycle?.current?.lastError !== undefined && <div className={css.alert} role="alert" aria-label={t('status.reviewFailed')}>
         <strong>{t('status.reviewFailed')}</strong>
         <span>{status.lifecycle.current.lastError}</span>
@@ -498,6 +515,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       <div className={css.workspace}>
         {!focused && <WorkspaceNavigation page={page} onSelect={openTab} sourcePages={sourceNavigationEntries} disabledTypes={disabledTypes} memoryOff={memoryOff} />}
         <section key={viewContextKey} className={appearanceClass(css.canvas, sidebarCss.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={(activeSourcePage?.navigation?.stickyHeader !== false) ? '' : undefined}>
+          {page === 'status' && focus !== undefined && disabledTypes.has(focus.sourceTypeId) && <SourceDisabledPage title={focus.title} onOpenConfiguration={openConfiguration} />}
           {page === 'status' && !focused && <WorkbenchStatusContext.Provider value={status}>
             <StatusPage client={client} status={status} loading={statusLoading} writeEnabled={writeEnabled} attention={notice !== undefined}
               components={componentCards} renderCard={renderCard} areaName={areaName} onRefresh={() => void loadStatus()} onOpenConfiguration={openConfiguration} />

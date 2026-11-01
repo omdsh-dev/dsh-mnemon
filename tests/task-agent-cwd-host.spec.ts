@@ -80,7 +80,7 @@ async function host(registry?: (fixture: { root: string; workspace: string }) =>
   const dsh = ctx as unknown as HostContextShape
   const coordinator = new MnemonSubagentCoordinator(dsh.subagents, f.live, dsh)
   const lifecycle = new MnemonLifecycle(dsh, coordinator, f.config, f.live)
-  registerTools(dsh, f.live, coordinator)
+  registerTools(dsh, f.live, coordinator, f.extensions)
   stop = lifecycle.start()
   // An ordinary conversation supplies the task Agent's model route.
   const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'scripted', model: 'fixture' }, { cwd: f.workspace })
