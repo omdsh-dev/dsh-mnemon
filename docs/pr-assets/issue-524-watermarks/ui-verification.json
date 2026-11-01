@@ -1,0 +1,19 @@
+{
+  "fixture": "Disposable local DSH WebUI with scripted model; synthetic data only",
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "screenshots": "Unmodified actual settings dialogs and a clipped workbench header/status region",
+  "checks": {
+    "defaultOff": true,
+    "enabledByUserInteraction": true,
+    "enabledAfterBrowserReload": true,
+    "actualSessionStatus": {
+      "attempts": 0,
+      "budget": 1,
+      "restoredAttempts": 0
+    }
+  },
+  "externalModelCalls": 0
+}

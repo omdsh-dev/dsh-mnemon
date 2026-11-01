@@ -801,7 +801,7 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
     })
   }
 
-  async review(parent: HostAgent, signal: AbortSignal): Promise<DelegatedWriteResult | { delegated: false; action: 'skipped'; summary: string; documentIds: string[] }> {
+  async review(parent: HostAgent, signal: AbortSignal, admission?: () => void): Promise<DelegatedWriteResult | { delegated: false; action: 'skipped'; summary: string; documentIds: string[] }> {
     const config = this.runtimeSource.config.idleReview
     if (idleReviewBlockReason(parent, config.agentTeams) !== undefined) return { delegated: false, action: 'skipped', summary: 'Idle review is paused by the Agent Teams compatibility setting.', documentIds: [] }
     const skipped = { delegated: false as const, action: 'skipped' as const, summary: 'Idle review has no applicable writable Source target.', documentIds: [] }
@@ -815,6 +815,7 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
     }
     const execution = await this.runtimeSource.executions.workflow(parent, 'review', signal)
     try {
+      if (admission !== undefined) { execution.signal.throwIfAborted(); admission() }
       const view = execution.context.view
       const instances = execution.graph.memoryComposition.generation(view.runtimeGeneration)!.sourceInstances()
       const tools = this.reviewTools(parent).filter(tool => {
@@ -828,7 +829,7 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
       const prompt = preferred === 'fork' ? 'Review the inherited completed checkpoint now.' : reviewCheckpoint(parent.session, config.maxContextChars)
       const base = reviewPersona(tools.includes('mnemon_runtime_memory'))
       const persona = preferred === 'fork' ? base : base.replaceAll('inherited', 'supplied bounded')
-      const { provider, runId, result } = await this.delegate(parent, 'review', 'Mnemon idle checkpoint review', prompt, tools, WRITE_SCHEMA, execution.signal, preferred, persona, { terminalTools: writers })
+      const { provider, runId, result } = await this.delegate(parent, 'review', 'Mnemon idle checkpoint review', prompt, tools, WRITE_SCHEMA, execution.signal, preferred, persona, { terminalTools: writers }, undefined, undefined, admission)
       const value = object(result.structured)
       return {
         delegated: true,
@@ -855,6 +856,7 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
     recovery?: ToolReceiptRecovery,
     guard?: (execution: ToolExecution) => string | undefined,
     route?: ModelRoute,
+    admission?: () => void,
   ): Promise<{ provider: string; runId: string; result: HostSubagentResult; receipts: CapturedToolReceipt[]; writes: CapturedToolReceipt[] }> {
     if (this.disposed) throw new Error('dsh-mnemon subagent coordinator is disposed')
     const provider = this.provider(preferredProvider)
@@ -971,16 +973,21 @@ This is the only completion channel for this run. Do not finish with a plain-tex
       const resolvedAgentOptions = fixed === undefined ? baseAgentOptions : { ...(baseAgentOptions ?? {}), provider: fixed.provider, model: fixed.model }
       const host = this.resultRuntime
       // Every tool continuation ends with a user turn, which strict chat templates require (#327).
-      const start = () => startWithContinuationTurns(host, parent, () => startSubagent(this.subagents, host.agents, provider, {
-        label,
-        prompt: [{ type: 'text', text: `${delegatedTaskLine(operation)}\n${prompt}` }],
-        parent,
-        signal,
-        ...(resolvedAgentOptions === undefined ? {} : { agentOptions: resolvedAgentOptions }),
-        maxDepth: 1,
-        toolFilter: { allow: [...this.availableTools(parent, tools), resultToolName] },
-        persona: completionPersona,
-      }, host))
+      const start = () => startWithContinuationTurns(host, parent, () => {
+        // Automatic admission is revocable across workflow preparation and guard
+        // setup; manual workflows do not carry this lifecycle-only callback.
+        if (operation === 'review') { signal.throwIfAborted(); admission?.() }
+        return startSubagent(this.subagents, host.agents, provider, {
+          label,
+          prompt: [{ type: 'text', text: `${delegatedTaskLine(operation)}\n${prompt}` }],
+          parent,
+          signal,
+          ...(resolvedAgentOptions === undefined ? {} : { agentOptions: resolvedAgentOptions }),
+          maxDepth: 1,
+          toolFilter: { allow: [...this.availableTools(parent, tools), resultToolName] },
+          persona: completionPersona,
+        }, host)
+      })
       run = operation === 'review'
         ? await startGuardedReview(this.resultRuntime, parent, [...tools, resultToolName], start, child => { reviewChildId = child.id }, reviewLayerPolicy())
         // A DSH without Agent ownership or scoped tool guards runs the child as before.

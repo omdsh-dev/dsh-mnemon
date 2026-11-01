@@ -68,6 +68,7 @@ mnemon:
   writebackMode: guided
   idleReviewMs: 30000
   idleReview:
+    persistWatermark: false
     enabled: true
     runtimeMemory: true # false: Documents only
     provider: spawn
@@ -121,11 +122,12 @@ mnemon:
 | `idleReviewMs` | `30000` | 5000–600000 ms | Required continuous idle time after the threshold is reached |
 | `idleReview.enabled` | `true` | boolean | Independent automatic-review switch |
 | `idleReview.runtimeMemory` | `true` | boolean | Lets review change runtime memory (USER.md and MEMORY.md); `false` limits it to creating Documents |
+| `idleReview.persistWatermark` | `false` | boolean | Retain attempt quota and cooling time for the same persisted parent session in its runtime storage root |
 | `idleReview.provider` | `spawn` | `spawn` / `fork` | Bounded checkpoint or inherited parent context |
 | `idleReview.fallback` | `spawn` | `spawn` / `skip` | Missing/incompatible fork handling before startup only |
 | `idleReview.agentTeams` | `pause` | `pause` / `scoped` | Pause while Team tools are installed or explicitly allow guarded review; verified with each supported DSH and its official Teams |
 | `idleReview.minIntervalMs` | `300000` | 5000–86400000 ms | Minimum interval between attempts |
-| `idleReview.maxPerSession` | `20` | 0–200 | Attempt cap per loaded parent Agent; includes failures/cancellations |
+| `idleReview.maxPerSession` | `20` | 0–200 | Attempt cap per loaded parent Agent, or persisted parent session when opted in; includes failures/cancellations |
 | `idleReview.maxContextChars` | `24000` | 1000–1000000 | Spawn checkpoint character limit |
 | `idleReview.maxTokens` | `4096` | 128–131072 | Per-response model output limit |
 | `displayMode` | `sidebar` | `sidebar` / `builtin`; legacy `buildin` accepted | Where the Memory System opens: standalone Sidebar or a conversation tab using the same workspace UI; legacy spelling is migrated to `builtin` |
@@ -396,7 +398,13 @@ Review requires local child publication, `agents.isOwnedBy`, and `agent.ctx.tool
 
 **What review writes.** Each piece of knowledge goes to one layer. Project records, such as a design, implementation details, paths, ports, scope agreements or a handoff, go to at most one Document. Working memory (MEMORY.md) takes only a compact rule the user stated, such as a convention, a correction, an environment fact or a tool quirk, that no Document or existing entry already covers; USER.md takes identity and preferences. The guard holds each pass to one layer: after a Document, working-memory changes are refused, and after a working-memory change, a Document is refused; USER.md changes stay independent. `idleReview.runtimeMemory: false` withholds `mnemon_runtime_memory` from review, so it only creates Documents. Review never writes Memory Spaces: working memory reaches them through capacity archiving and Documents through cold archiving, while **Save to memory** and `mnemon_remember` write them directly.
 
-`idleReviewMs` remains the continuous-idle debounce. A separate `minIntervalMs` spaces attempts, including failures and cancellations. `maxPerSession` caps attempts for the loaded parent Agent; zero suspends review. Clearing or compacting the context (DSH replaces the Agent), restarting the Host, or unloading and reopening the Agent starts a new in-memory budget. Completed runs are disposed through DSH's public API. Persisted session history is retained: the published Host provides no plugin-scoped archive/TTL contract, and Mnemon never deletes session files or other plugins' agents.
+`idleReviewMs` remains the continuous-idle debounce. `minIntervalMs` limits the interval between attempts, including failed and cancelled attempts; `maxPerSession` caps them, with zero pausing review. By default, a new parent Agent (including Host restart or reopening) receives a fresh in-memory budget.
+
+Enable **Keep review limits after reopening** in the Layered strategy's Idle review settings, or set `idleReview.persistWatermark: true`, to restore the same persisted parent session's attempts and remaining cooldown. Identity is the actual runtime storage root plus the parent session ID; another session or another root has its own budget, and selecting a Source/View or globally scoped USER.md does not change identity. Recreating an Agent or rewinding its surface does not reset a retained quota; if DSH assigns a new session ID on clear/compaction, that is a new session. Turning persistence on during a live Agent immediately merges that root’s already used attempts and last-attempt time into the retained baseline without consuming another attempt or starting work. Disabling, using another in-memory attempt, and re-enabling merges again; usage from another root is never carried over. Every attempt is reserved on disk before a child starts, including failed or cancelled work; a crash after reservation can consume an attempt without a child. Restart never replays work or schedules catch-up review: a new eligible checkpoint is required. Future timestamps after a backwards clock change retain their cooldown, using bounded timer waits.
+
+The workspace shows this session's attempts, configured maximum, restored attempts and earliest next time. These are session admission counts, not lifetime completion totals. Damaged/unsupported state, failed reads/writes or a busy lock visibly pause automatic review while conversation, recall and manual actions continue. Stop every Host using this root, inspect the affected session's JSON or abandoned `.lock` directory under `state/idle-review/`, repair/restore the state and remove only a confirmed abandoned lock, then reopen the session. Deleting a watermark explicitly resets its budget. Disabling `persistWatermark` returns to in-memory limits without deleting retained files; re-enabling can restore them. Rollback to an older release leaves these files unused. Watermarks are local-only, excluded from Packs/Git sync and retained until manually removed; no cleanup, replay or Skills evolution state is added. See [Storage model](./storage-model.md#unified-root-directory).
+
+Finished review workers are disposed through DSH's public API. Persisted session history remains: the published Host has no plugin-scoped archive/TTL contract, and Mnemon does not remove session files or another plugin's Agents.
 
 **Agent Teams compatibility:** `idleReview.agentTeams: pause` remains the default for existing profiles. It pauses before child creation when both the public `agentTeams` service and parent-scoped `spawn_teammate` tool are present. TeamService alone does not pause review.
 

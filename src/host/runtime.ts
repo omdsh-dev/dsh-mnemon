@@ -39,6 +39,8 @@ export interface MnemonAgentRuntimeSource {
   readonly executions: MemoryExecutions
   forAgent(agent: HostAgent): MnemonRuntimeGraph
   bindAgentRuntime(agentId: string, graph: MnemonRuntimeGraph): () => void
+  /** Synchronous notification after a committed live configuration swap. */
+  onChanged?(listener: () => void): () => void
 }
 
 export function agentScope(agent: HostAgent, config: ResolvedConfig): MemoryOperationScope {
@@ -156,6 +158,7 @@ export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
   private githubAuth: MnemonGitHubAuth | undefined
   private autoBackupView: (() => MnemonSyncAutoBackup | undefined) | undefined
   private closed = false
+  private readonly changeListeners = new Set<() => void>()
 
   readonly config: ResolvedConfig
   readonly storage: StorageScopeInspector
@@ -201,6 +204,11 @@ export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
     if (this.autoBackupView !== undefined) graph.sync.useAutoBackup(this.autoBackupView)
   }
 
+  onChanged(listener: () => void): () => void {
+    this.changeListeners.add(listener)
+    return () => { this.changeListeners.delete(listener) }
+  }
+
   swap(next: MnemonRuntimeGraph): void {
     if (this.closed) {
       next.dispose()
@@ -214,6 +222,7 @@ export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
     this.retireGraph(previous)
     for (const graph of this.workspaceGraphs.values()) this.retireGraph(graph)
     this.workspaceGraphs.clear()
+    for (const listener of this.changeListeners) listener()
   }
 
   snapshot(): MnemonRuntimeGraph {
@@ -238,6 +247,7 @@ export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
   dispose(): void {
     if (this.closed) return
     this.executions.dispose()
+    this.changeListeners.clear()
     this.closed = true
     const graphs = new Set<MnemonRuntimeGraph>([
       this.current,
