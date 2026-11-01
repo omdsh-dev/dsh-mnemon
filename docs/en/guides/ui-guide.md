@@ -70,6 +70,8 @@ A turn that used a skill, or earned a review, ends with a **Turn skills** line: 
 
 The Memory System has five pages, named by the components that provide them: **Status**, **Runtime memory**, **Project Documents**, **Memory Spaces** and **Skills**. An installed Source adds its own page the same way. Turning off a Source or its memory layer hides its tabs; turning it back on restores them. If the open page is turned off, the view returns to Status. The configuration entry stays available, and an enabled Source that fails to run keeps its diagnostic tab. The header shows the connection and the composing main strategy, for example *Connected · Layered strategy*, the storage scope, **Refresh** and a gear that opens the Plugins page. **Refresh** reloads the open page, so pages carry no refresh or sync buttons of their own.
 
+When the panel is at most 520px wide, the title and actions share the first row and the workspace selector uses a second row. The connection dot, refresh, gear and any Back to chat action remain available. Remote read-only and paused idle-review guidance share a **Notices** summary: select it to expand the full text, or select it again to collapse it. This choice stays while switching pages. Errors, composition diagnostics and restart reminders remain visible. Wider panels show the full notices as before.
+
 By default the Memory System is a sidebar entry that keeps its page when you come back. Opened from a turn's item, a page lands on that item; a tab in the header opens the page fresh. Under **Interface → Memory System opens in**, choose **Conversation tab** to open it inside a conversation instead; the pages are the same. **Back to chat** and Escape return to the conversation.
 
 ### Status

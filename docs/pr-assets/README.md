@@ -12,6 +12,7 @@ For new evaluations, commit the reusable harness and workload generator to [`scr
 
 | Record / 记录 | Scope / 范围 |
 |---|---|
+| [Compact panel chrome](./issue-521-mobile-chrome/README.md) / [中文](./issue-521-mobile-chrome/README.zh-CN.md) | Issue #521 actual React rendering with synthetic RPC data, narrow before/after and wide screenshots, panel-width interaction checks and limits / Issue #521 实际 React 与合成 RPC 数据的窄面板前后对比、宽面板截图、面板宽度交互检查与限制 |
 | [v0.5.37 release](./release-v0.5.37/README.md) / [中文](./release-v0.5.37/README.zh-CN.md) | Candidate verification, installation and upgrade acceptance for Skills models, Runtime capacity and embedding status / 技能模型、运行时容量与 embedding 状态的候选验证、安装与升级验收 |
 | [v0.5.36 release](./release-v0.5.36/README.md) / [中文](./release-v0.5.36/README.zh-CN.md) | Three candidate packages, fresh installs and updates from v0.5.35 on DSH 0.2.0-rc.2, 0.2.1-rc.2 and 0.2.1-rc.3, exact bytes and retained Runtime data / 三个候选包、三种宿主的全新安装与 v0.5.35 更新、制品字节和 Runtime 数据保留 |
 | [Directory chooser with existing storage semantics](./storage-directory-picker/README.md) / [中文](./storage-directory-picker/README.zh-CN.md) | Narrowed PR #355: native capability gating, staged paths, unchanged data and storage scopes, supported-host regressions and actual WebUI fallback / 收敛 #355：原生能力判定、路径草稿、数据与存储范围保持、受支持宿主回归及真实 WebUI 回退 |
