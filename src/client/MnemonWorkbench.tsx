@@ -12,6 +12,7 @@ import { StatusPage, storageScopeLabel, type ComponentCard, type LayerState } fr
 import { SourceManagementPage } from './SourceManagementPage.tsx'
 import { useWorkspaceStatus } from './use-workspace-status.ts'
 import { useSourceCatalog } from './use-source-catalog.ts'
+import { invalidateSkillActivity } from './SkillTurnTail.tsx'
 import { managedSourceTypeId, sourcePageEntryId, stoppedSourceTypeId, useWorkspaceNavigation, type Page, type SourceNavigationEntry } from './use-workspace-navigation.ts'
 import { requestComponentPage } from './component-page-request.ts'
 import { translateZh, type MnemonTranslate } from "./locales.ts"
@@ -272,7 +273,10 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
 
   const { status, statusLoading, statusError, loadStatus } = useWorkspaceStatus(client, viewContextKey, active)
   const [revision, setRevision] = useState(0)
-  const { sourceCatalogState, sourceCatalog, sourceInstances, sourceManagementClients, visibleSourcePages, managedSourceTypes: allManagedSourceTypes } = useSourceCatalog(client, taskClient, revision, viewContextKey, sourcePageEntries, active)
+  const sourceChanged = useCallback((sourceTypeId: string) => {
+    if (sourceTypeId === 'skills') invalidateSkillActivity(connection)
+  }, [connection])
+  const { sourceCatalogState, sourceCatalog, sourceInstances, sourceManagementClients, visibleSourcePages, managedSourceTypes: allManagedSourceTypes } = useSourceCatalog(client, taskClient, revision, viewContextKey, sourcePageEntries, active, sourceChanged)
   const managedSourceTypes = useMemo(() => allManagedSourceTypes.filter(([sourceTypeId]) => shows(sourceTypeId)), [allManagedSourceTypes, shows])
   const [selectedSourceInstances, setSelectedSourceInstances] = useState<Record<string, string>>({})
   // Configured layers whose Source is not running keep a diagnostic tab unless

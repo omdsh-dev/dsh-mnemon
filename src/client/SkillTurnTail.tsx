@@ -28,6 +28,7 @@ interface Entry {
   checkedCursor: number
   requestedCursor: number
   revision: number
+  componentRevision: number
   listeners: Set<() => void>
 }
 
@@ -42,7 +43,7 @@ function entryOf(connection: ClientConnectionHandle, sessionId: string): Entry {
   }
   let entry = sessions.get(sessionId)
   if (entry === undefined) {
-    entry = { settle: 0, checkedCursor: -1, requestedCursor: -1, revision: 0, listeners: new Set() }
+    entry = { settle: 0, checkedCursor: -1, requestedCursor: -1, revision: 0, componentRevision: 0, listeners: new Set() }
     sessions.set(sessionId, entry)
   }
   return entry
@@ -55,6 +56,21 @@ function waiting(snapshot: SkillActivitySnapshot | undefined): boolean {
 function cancelScheduled(entry: Entry): void {
   entry.cancelScheduled?.()
   delete entry.cancelScheduled
+}
+
+function invalidate(entry: Entry): void {
+  entry.revision += 1
+  entry.checkedCursor = -1
+  entry.settle = SETTLE_CHECKS
+  cancelScheduled(entry)
+}
+
+/** Skills writes may add or remove suggestions without changing the conversation's event cursor. */
+export function invalidateSkillActivity(connection: ClientConnectionHandle): void {
+  for (const [sessionId, entry] of entries.get(connection) ?? []) {
+    invalidate(entry)
+    schedule(connection, sessionId, entry, 0, true)
+  }
 }
 
 /** History renders before an optional skills scan; all its tails share this job. */
@@ -78,7 +94,10 @@ function load(connection: ClientConnectionHandle, sessionId: string, entry: Entr
   entry.loading = new MnemonClient(connection, sessionId).skillActivity()
     .then(snapshot => {
       if (revision !== entry.revision) return
-      entry.snapshot = snapshot; entry.checkedCursor = cursor; succeeded = true
+      entry.snapshot = snapshot
+      // The Host also returns unavailable when history cannot currently be read.
+      entry.checkedCursor = snapshot.available ? cursor : -1
+      succeeded = true
     }, () => undefined)
     .finally(() => {
       delete entry.loading
@@ -109,11 +128,9 @@ function useSkillActivity(connection: ClientConnectionHandle, sessionId: string 
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
   useEffect(() => {
     if (entry === undefined || sessionId === undefined || cursor === undefined || !visible) return
-    if (entry.revision !== revision) {
-      entry.revision = revision
-      entry.checkedCursor = -1
-      entry.settle = SETTLE_CHECKS
-      cancelScheduled(entry)
+    if (entry.componentRevision !== revision) {
+      entry.componentRevision = revision
+      invalidate(entry)
     }
     if (cursor > entry.requestedCursor) {
       entry.requestedCursor = cursor

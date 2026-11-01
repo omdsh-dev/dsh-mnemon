@@ -6,4 +6,4 @@
 "dsh-mnemon-source-skills": patch
 ---
 
-Pause memory inspection in hidden browser documents, retain unchanged Source management bindings, and coalesce opted-in automatic reads within their context and revision. Keep explicit refreshes and manual actions fresh. Schedule skill activity after history rendering and retain empty results at their closing event cursor across conversation switches.
+Pause memory inspection in hidden browser documents, retain unchanged Source management bindings, and coalesce opted-in automatic reads within their context and revision. Keep explicit refreshes and manual actions fresh. Schedule skill activity after history rendering and retain empty results at their closing event cursor across conversation switches. Successful Skills writes invalidate the turn cache, and temporarily unavailable history remains retryable.

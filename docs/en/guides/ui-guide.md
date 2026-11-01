@@ -74,7 +74,7 @@ When the panel is at most 520px wide, the title and actions share the first row 
 
 By default the Memory System is a sidebar entry that keeps its page when you come back. Opened from a turn's item, a page lands on that item; a tab in the header opens the page fresh. Under **Interface → Memory System opens in**, choose **Conversation tab** to open it inside a conversation instead; the pages are the same. **Back to chat** and Escape return to the conversation.
 
-Leaving the panel or hiding its browser tab pauses automatic inspection and polling. Returning refreshes the visible context while preserving a draft that still belongs to it; an operation you already started can finish. The skills line lets the conversation render first, shares one activity read across its turns, and keeps an empty result when you switch away and back without a new turn. Pending reviews resume when their conversation is visible again.
+Leaving the panel or hiding its browser tab pauses automatic inspection and polling. Returning refreshes the visible context while preserving a draft that still belongs to it; an operation you already started can finish. The skills line lets the conversation render first, shares one activity read across its turns, and keeps an empty result when you switch away and back without a new turn. Pending reviews resume when their conversation is visible again. Skill edits and manual reviews update existing turn bars; temporarily unavailable history is retried when you return.
 
 ### Status
 

@@ -5,7 +5,7 @@ import type { ClientConnectionHandle } from '../src/host/dsh.ts'
 import type { SkillActivitySnapshot, SkillsConfig } from '../src/host/protocol.ts'
 import { subscribeMnemonAnchor } from '../src/client/anchor.ts'
 import { translateEn as t } from '../src/client/locales.ts'
-import { SKILLS_PAGE, SkillTurnTail } from '../src/client/SkillTurnTail.tsx'
+import { SKILLS_PAGE, SkillTurnTail, invalidateSkillActivity } from '../src/client/SkillTurnTail.tsx'
 import { SKILLS_PACKAGE, SkillsSettings } from '../src/client/skills-settings.tsx'
 import { MnemonChangeSignal } from '../src/client/change-signal.ts'
 import { liveSettingsScope } from './helpers/settings-scope.ts'
@@ -85,9 +85,9 @@ describe('the skills line under a turn', () => {
     return { call, handle: { rpc: { call }, isLoopback: true } as unknown as ClientConnectionHandle }
   }
 
-  it.each([true, false])('remembers an empty activity result across A/B/A at the same closing cursor (available=%s)', async available => {
+  it('remembers an empty activity result across A/B/A at the same closing cursor', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
-    const { call, handle } = connection(() => ({ available, turns: [], reviews: [] }))
+    const { call, handle } = connection(() => ({ available: true, turns: [], reviews: [] }))
     const tail = (sessionId: string, seq = 10) => <SkillTurnTail turn={{ turn: 1, status: 'closed' }} seq={seq} sessionId={sessionId} connection={handle} localeRuntime={localeRuntime} t={t} />
     const view = render(tail('A'))
     await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
@@ -100,6 +100,47 @@ describe('the skills line under a turn', () => {
     view.rerender(tail('A', 20))
     await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
     expect(call.mock.calls.length).toBeGreaterThan(before)
+  })
+
+  it.each([false, true])('retries temporarily unavailable history on return after settling (previous success=%s)', async succeeded => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    let snapshot: SkillActivitySnapshot = { available: succeeded, turns: [], reviews: [] }
+    const { call, handle } = connection(() => snapshot)
+    const tail = <SkillTurnTail turn={{ turn: 1, status: 'closed' }} seq={10} sessionId="A" connection={handle} localeRuntime={localeRuntime} t={t} />
+    const view = render(tail)
+    await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+    snapshot = { available: false, turns: [], reviews: [] }
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+    const before = call.mock.calls.length
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000) })
+    expect(call).toHaveBeenCalledTimes(before)
+    view.rerender(<></>)
+    snapshot = { available: true, turns: [{ turn: 1, skills: [{ name: 'recovered', by: 'model' }] }], reviews: [] }
+    view.rerender(tail)
+    await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+    expect(await screen.findByRole('button', { name: 'recovered' })).not.toBeNull()
+  })
+
+  it('ignores a pending history result from before a skill write while preserving other connections', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const { call, handle } = connection(() => ({ available: true, turns: [], reviews: [] }))
+    const finishes: Array<(value: any) => void> = []
+    call.mockImplementation(() => new Promise(resolve => { finishes.push(resolve) }))
+    const other = connection(() => ({ available: true, turns: [], reviews: [] }))
+    render(<>
+      <SkillTurnTail turn={{ turn: 1, status: 'closed' }} seq={10} sessionId="A" connection={handle} localeRuntime={localeRuntime} t={t} />
+      <SkillTurnTail turn={{ turn: 1, status: 'closed' }} seq={10} sessionId="A" connection={other.handle} localeRuntime={localeRuntime} t={t} />
+    </>)
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+    const otherReads = other.call.mock.calls.length
+    act(() => invalidateSkillActivity(handle))
+    await act(async () => { finishes[0]!({ ok: true, value: { available: true, turns: [{ turn: 1, skills: [{ name: 'obsolete', by: 'model' }] }], reviews: [] } }) })
+    expect(screen.queryByRole('button', { name: 'obsolete' })).toBeNull()
+    await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+    expect(finishes).toHaveLength(2)
+    await act(async () => { finishes[1]!({ ok: true, value: { available: true, turns: [{ turn: 1, skills: [{ name: 'latest', by: 'model' }] }], reviews: [] } }) })
+    expect(screen.getByRole('button', { name: 'latest' })).not.toBeNull()
+    expect(other.call).toHaveBeenCalledTimes(otherReads)
   })
 
   it('defers the first activity read until idle and cancels it if its conversation leaves first', async () => {
