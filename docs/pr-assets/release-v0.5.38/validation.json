@@ -1,0 +1,594 @@
+{
+  "date": "2026-11-02",
+  "timezone": "Asia/Shanghai",
+  "sourceMainRevision": "5a5c5f8909d68f520110d271d566b77bbcf94b70",
+  "candidateRevision": "53c00f6963bfc46738aa523e968c58a90f351805",
+  "previousReleaseRevision": "7cbdefc64c019a073cfdb493b0b516b5b7177bb6",
+  "sourceNote": "Artifacts were built and packed from the committed candidate revision after the product merges and release version preparation. This acceptance record and screenshots were added afterwards without changing packed artifacts.",
+  "node": "22.22.0",
+  "pnpm": "10.13.1",
+  "platform": "macOS arm64",
+  "browser": {
+    "name": "Google Chrome",
+    "version": "156.0.8078.74",
+    "headless": true,
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "isolatedContexts": true
+  },
+  "starter": "0.5.38",
+  "previousStarter": "0.5.37",
+  "artifacts": [
+    {
+      "name": "dsh-mnemon-source-documents",
+      "version": "0.5.12",
+      "filename": "dsh-mnemon-source-documents-0.5.12.tgz",
+      "integrity": "sha512-wP8/zE+TUvbTCKoAZzJyIXAhy1SGX9vD9sgYbxCfiBuy7IdhbOCWO8zrK8+YfZWLXcJIo9fcAt7nUxWzcfYxHQ==",
+      "size": 42092,
+      "unpackedSize": 168263,
+      "files": 19,
+      "sha256": "28f9c396e13f7476177622f20f8ecab0a4e435b78465a6b5da5d6ffca0ef2f45"
+    },
+    {
+      "name": "dsh-mnemon-source-memory-spaces",
+      "version": "0.5.25",
+      "filename": "dsh-mnemon-source-memory-spaces-0.5.25.tgz",
+      "integrity": "sha512-L8Lc6SE3LEMs5YWtw4hdZ8a2HIPv84ff7iZnngQ/6B3MhW+phrpz/zONe41IBtPdwqqjPyb4gkiNC3Qbnhe1VA==",
+      "size": 194498,
+      "unpackedSize": 872979,
+      "files": 45,
+      "sha256": "ed5047c82214f3d92302e26930c60957dcf8ef13a03322e2650fd00c7cf378c0"
+    },
+    {
+      "name": "dsh-mnemon-source-runtime",
+      "version": "0.5.17",
+      "filename": "dsh-mnemon-source-runtime-0.5.17.tgz",
+      "integrity": "sha512-wxvDEQQzVpyuG3yNvMkC6o9viWLBDhJ0h5YpmWUA06FkXCg7e/Qn/PJx7gUHA2KYOeoCLFzobZLJDJEXJtWILw==",
+      "size": 32109,
+      "unpackedSize": 129700,
+      "files": 21,
+      "sha256": "bb078997a76bc0b23cf4056eb4210c2a920bd6ddc2de015a543bd9415279ffe4"
+    },
+    {
+      "name": "dsh-mnemon-source-skills",
+      "version": "0.5.5",
+      "filename": "dsh-mnemon-source-skills-0.5.5.tgz",
+      "integrity": "sha512-TA++1Xl1VsxXViEneaFFeDk8dGLI1MEhtLrQ9KmlhYpGUUfVqnFDXSQznNVeTXLHfETwzf6kzJGzUosMOSFThQ==",
+      "size": 151907,
+      "unpackedSize": 658389,
+      "files": 30,
+      "sha256": "06529c10e4ed4a8e64f8e5124946db18efa0601fdfee4630a0e5528787768e45"
+    },
+    {
+      "name": "dsh-mnemon-provider-byterover",
+      "version": "0.5.6",
+      "filename": "dsh-mnemon-provider-byterover-0.5.6.tgz",
+      "integrity": "sha512-cr0vyl5c3Ia+FZNhx9tgtswrLTLWApM6EF0BmO2zAnxLp2hlbi9T3gg5NPaTxqXANuPmOBChQ6iDc+6/QYIvaA==",
+      "size": 7386,
+      "unpackedSize": 18290,
+      "files": 8,
+      "sha256": "14459d92217185cb5f7b85fcffe9323ac34c4ad9b858ca7c9f2314eb3db2d8b8"
+    },
+    {
+      "name": "dsh-mnemon",
+      "version": "0.5.38",
+      "filename": "dsh-mnemon-0.5.38.tgz",
+      "integrity": "sha512-l4bMjd6djyFeN57DiUslsaMhVIsx8Dut2dxstXu5D1We53O6uLPrZnkzOM5IRANEvOUndvB5zN/sb8SaAmVzug==",
+      "size": 528306,
+      "unpackedSize": 2220816,
+      "files": 68,
+      "sha256": "0bf598ca3f58f53d2df2c68ab8d546b5e9cdd7cc1953d23f09580ee74142a981"
+    }
+  ],
+  "composition": {
+    "dsh-mnemon-provider-byterover": "0.5.6",
+    "dsh-mnemon-provider-hindsight": "0.5.7",
+    "dsh-mnemon-provider-holographic": "0.5.7",
+    "dsh-mnemon-provider-honcho": "0.5.5",
+    "dsh-mnemon-provider-mem0": "0.5.5",
+    "dsh-mnemon-provider-mnemon-native": "0.5.10",
+    "dsh-mnemon-provider-openviking": "0.5.10",
+    "dsh-mnemon-provider-retaindb": "0.5.6",
+    "dsh-mnemon-provider-supermemory": "0.5.5",
+    "dsh-mnemon-source-documents": "0.5.12",
+    "dsh-mnemon-source-memory-spaces": "0.5.25",
+    "dsh-mnemon-source-runtime": "0.5.17",
+    "dsh-mnemon-source-skills": "0.5.5",
+    "dsh-mnemon-strategy-auto-capture": "0.5.5",
+    "dsh-mnemon-strategy-default-three-tier": "0.5.11",
+    "dsh-mnemon-strategy-general": "0.5.1",
+    "dsh-mnemon-strategy-light-context": "0.5.6",
+    "dsh-mnemon-strategy-scoped": "0.5.5",
+    "dsh-mnemon": "0.5.38"
+  },
+  "installations": [
+    {
+      "scenario": "fresh",
+      "dsh": "0.2.0-rc.2",
+      "previousStarter": null,
+      "all19VersionsMatch": true,
+      "selectedPackageFilesMatch": 191,
+      "fileContentAndExecutableBitsMatch": true,
+      "realWebUi": "passed",
+      "runningVersion": "0.5.38",
+      "status": "System nominal",
+      "hostRestartedAfterUpdate": false,
+      "restartCount": 0,
+      "runtimeCanaryRetained": false,
+      "browserPageErrors": [],
+      "fixtureStopped": true,
+      "screenshots": [
+        "fresh020-install.png",
+        "fresh020-status.png"
+      ],
+      "steps": [
+        {
+          "label": "Starting isolated official DSH host",
+          "at": "2026-11-01T17:13:20.273Z"
+        },
+        {
+          "label": "No-key onboarding dismissed",
+          "at": "2026-11-01T17:13:23.333Z"
+        },
+        {
+          "label": "Submitted Add plugin for dsh-mnemon@0.5.38",
+          "at": "2026-11-01T17:13:23.514Z"
+        },
+        {
+          "label": "Fresh candidate running with System nominal",
+          "at": "2026-11-01T17:13:28.822Z"
+        }
+      ]
+    },
+    {
+      "scenario": "fresh",
+      "dsh": "0.2.1-rc.2",
+      "previousStarter": null,
+      "all19VersionsMatch": true,
+      "selectedPackageFilesMatch": 191,
+      "fileContentAndExecutableBitsMatch": true,
+      "realWebUi": "passed",
+      "runningVersion": "0.5.38",
+      "status": "System nominal",
+      "hostRestartedAfterUpdate": false,
+      "restartCount": 0,
+      "runtimeCanaryRetained": false,
+      "browserPageErrors": [],
+      "fixtureStopped": true,
+      "screenshots": [
+        "fresh021-install.png",
+        "fresh021-status.png"
+      ],
+      "steps": [
+        {
+          "label": "Starting isolated official DSH host",
+          "at": "2026-11-01T17:14:05.257Z"
+        },
+        {
+          "label": "No-key onboarding dismissed",
+          "at": "2026-11-01T17:14:08.728Z"
+        },
+        {
+          "label": "Submitted Add plugin for dsh-mnemon@0.5.38",
+          "at": "2026-11-01T17:14:09.144Z"
+        },
+        {
+          "label": "Fresh candidate running with System nominal",
+          "at": "2026-11-01T17:14:14.950Z"
+        }
+      ]
+    },
+    {
+      "scenario": "fresh",
+      "dsh": "0.2.1-rc.3",
+      "previousStarter": null,
+      "all19VersionsMatch": true,
+      "selectedPackageFilesMatch": 191,
+      "fileContentAndExecutableBitsMatch": true,
+      "realWebUi": "passed",
+      "runningVersion": "0.5.38",
+      "status": "System nominal",
+      "hostRestartedAfterUpdate": false,
+      "restartCount": 0,
+      "runtimeCanaryRetained": false,
+      "browserPageErrors": [],
+      "fixtureStopped": true,
+      "screenshots": [
+        "freshrc3-install.png",
+        "freshrc3-status.png"
+      ],
+      "steps": [
+        {
+          "label": "Starting isolated official DSH host",
+          "at": "2026-11-01T17:14:05.256Z"
+        },
+        {
+          "label": "No-key onboarding dismissed",
+          "at": "2026-11-01T17:14:09.094Z"
+        },
+        {
+          "label": "Submitted Add plugin for dsh-mnemon@0.5.38",
+          "at": "2026-11-01T17:14:09.509Z"
+        },
+        {
+          "label": "Fresh candidate running with System nominal",
+          "at": "2026-11-01T17:14:15.315Z"
+        }
+      ]
+    },
+    {
+      "scenario": "upgrade",
+      "dsh": "0.2.0-rc.2",
+      "previousStarter": "0.5.37",
+      "all19VersionsMatch": true,
+      "selectedPackageFilesMatch": 191,
+      "fileContentAndExecutableBitsMatch": true,
+      "realWebUi": "passed",
+      "runningVersion": "0.5.38",
+      "status": "System nominal",
+      "hostRestartedAfterUpdate": true,
+      "restartCount": 1,
+      "runtimeCanaryRetained": true,
+      "browserPageErrors": [],
+      "fixtureStopped": true,
+      "screenshots": [
+        "upgrade020-offered.png",
+        "upgrade020-updated.png",
+        "upgrade020-status.png",
+        "upgrade020-memory-preserved.png"
+      ],
+      "steps": [
+        {
+          "label": "Starting isolated official DSH host",
+          "at": "2026-11-01T17:16:48.066Z"
+        },
+        {
+          "label": "No-key onboarding dismissed",
+          "at": "2026-11-01T17:17:04.837Z"
+        },
+        {
+          "label": "Previous npm 0.5.37 running with System nominal",
+          "at": "2026-11-01T17:17:04.905Z"
+        },
+        {
+          "label": "Synthetic Runtime canary added and SHA-256 baseline saved",
+          "at": "2026-11-01T17:17:05.299Z"
+        },
+        {
+          "label": "Check versions offered v0.5.38",
+          "at": "2026-11-01T17:17:06.193Z"
+        },
+        {
+          "label": "Update installed candidate and requested restart",
+          "at": "2026-11-01T17:17:08.343Z"
+        },
+        {
+          "label": "Restarted candidate nominal; Runtime canary and all three file hashes retained",
+          "at": "2026-11-01T17:17:10.896Z"
+        }
+      ]
+    },
+    {
+      "scenario": "upgrade",
+      "dsh": "0.2.1-rc.2",
+      "previousStarter": "0.5.37",
+      "all19VersionsMatch": true,
+      "selectedPackageFilesMatch": 191,
+      "fileContentAndExecutableBitsMatch": true,
+      "realWebUi": "passed",
+      "runningVersion": "0.5.38",
+      "status": "System nominal",
+      "hostRestartedAfterUpdate": true,
+      "restartCount": 1,
+      "runtimeCanaryRetained": true,
+      "browserPageErrors": [],
+      "fixtureStopped": true,
+      "screenshots": [
+        "upgrade021-offered.png",
+        "upgrade021-updated.png",
+        "upgrade021-status.png",
+        "upgrade021-memory-preserved.png"
+      ],
+      "steps": [
+        {
+          "label": "Starting isolated official DSH host",
+          "at": "2026-11-01T17:14:59.023Z"
+        },
+        {
+          "label": "No-key onboarding dismissed",
+          "at": "2026-11-01T17:15:05.468Z"
+        },
+        {
+          "label": "Previous npm 0.5.37 running with System nominal",
+          "at": "2026-11-01T17:15:05.543Z"
+        },
+        {
+          "label": "Synthetic Runtime canary added and SHA-256 baseline saved",
+          "at": "2026-11-01T17:15:05.937Z"
+        },
+        {
+          "label": "Check versions offered v0.5.38",
+          "at": "2026-11-01T17:15:07.324Z"
+        },
+        {
+          "label": "Update installed candidate and requested restart",
+          "at": "2026-11-01T17:15:09.189Z"
+        },
+        {
+          "label": "Restarted candidate nominal; Runtime canary and all three file hashes retained",
+          "at": "2026-11-01T17:15:12.003Z"
+        }
+      ]
+    },
+    {
+      "scenario": "upgrade",
+      "dsh": "0.2.1-rc.3",
+      "previousStarter": "0.5.37",
+      "all19VersionsMatch": true,
+      "selectedPackageFilesMatch": 191,
+      "fileContentAndExecutableBitsMatch": true,
+      "realWebUi": "passed",
+      "runningVersion": "0.5.38",
+      "status": "System nominal",
+      "hostRestartedAfterUpdate": true,
+      "restartCount": 1,
+      "runtimeCanaryRetained": true,
+      "browserPageErrors": [],
+      "fixtureStopped": true,
+      "screenshots": [
+        "upgraderc3-offered.png",
+        "upgraderc3-updated.png",
+        "upgraderc3-status.png",
+        "upgraderc3-memory-preserved.png"
+      ],
+      "steps": [
+        {
+          "label": "Starting isolated official DSH host",
+          "at": "2026-11-01T17:14:05.256Z"
+        },
+        {
+          "label": "No-key onboarding dismissed",
+          "at": "2026-11-01T17:14:13.818Z"
+        },
+        {
+          "label": "Previous npm 0.5.37 running with System nominal",
+          "at": "2026-11-01T17:14:13.890Z"
+        },
+        {
+          "label": "Synthetic Runtime canary added and SHA-256 baseline saved",
+          "at": "2026-11-01T17:14:14.356Z"
+        },
+        {
+          "label": "Check versions offered v0.5.38",
+          "at": "2026-11-01T17:14:15.237Z"
+        },
+        {
+          "label": "Update installed candidate and requested restart",
+          "at": "2026-11-01T17:14:17.622Z"
+        },
+        {
+          "label": "Restarted candidate nominal; Runtime canary and all three file hashes retained",
+          "at": "2026-11-01T17:14:20.878Z"
+        }
+      ]
+    }
+  ],
+  "runtimeRetention": [
+    {
+      "dsh": "0.2.0-rc.2",
+      "canary": "Release acceptance v0.5.38 (0.2.0-rc.2): synthetic project fact survives the v0.5.37 update and restart.",
+      "filesBefore": {
+        "MEMORY.md": "d146dea896d2fa45cea866831aca7b6a22364179bcad17bae0ff499e4021a9b5",
+        "USER.md": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "memories.json": "cf20d453443eef824eea78d80c780b795d435d44fe22e3d55c82be42938c7d58"
+      },
+      "filesAfter": {
+        "MEMORY.md": "d146dea896d2fa45cea866831aca7b6a22364179bcad17bae0ff499e4021a9b5",
+        "USER.md": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "memories.json": "cf20d453443eef824eea78d80c780b795d435d44fe22e3d55c82be42938c7d58"
+      },
+      "sha256Unchanged": true,
+      "uiReadbackAfterRestart": "passed",
+      "screenshot": "upgrade020-memory-preserved.png"
+    },
+    {
+      "dsh": "0.2.1-rc.2",
+      "canary": "Release acceptance v0.5.38 (0.2.1-rc.2): synthetic project fact survives the v0.5.37 update and restart.",
+      "filesBefore": {
+        "MEMORY.md": "d382ab918eb6b42bf18f3b24244e210d3ebafc5b769198d87dcf94daf3818f0c",
+        "USER.md": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "memories.json": "8501ee8eb57d0672392e390aa6c42d44f91d84723ede3ba61d312f622557e13f"
+      },
+      "filesAfter": {
+        "MEMORY.md": "d382ab918eb6b42bf18f3b24244e210d3ebafc5b769198d87dcf94daf3818f0c",
+        "USER.md": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "memories.json": "8501ee8eb57d0672392e390aa6c42d44f91d84723ede3ba61d312f622557e13f"
+      },
+      "sha256Unchanged": true,
+      "uiReadbackAfterRestart": "passed",
+      "screenshot": "upgrade021-memory-preserved.png"
+    },
+    {
+      "dsh": "0.2.1-rc.3",
+      "canary": "Release acceptance v0.5.38 (0.2.1-rc.3): synthetic project fact survives the v0.5.37 update and restart.",
+      "filesBefore": {
+        "MEMORY.md": "547564e4932e72d984aa6d7dbd6b12193bc54251bc4f5b9a163c069ca3ed3cb1",
+        "USER.md": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "memories.json": "cb58b113f6b2a8ca290a532802abec6aa2668d131cbbb180fe3e201de10dcc6e"
+      },
+      "filesAfter": {
+        "MEMORY.md": "547564e4932e72d984aa6d7dbd6b12193bc54251bc4f5b9a163c069ca3ed3cb1",
+        "USER.md": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "memories.json": "cb58b113f6b2a8ca290a532802abec6aa2668d131cbbb180fe3e201de10dcc6e"
+      },
+      "sha256Unchanged": true,
+      "uiReadbackAfterRestart": "passed",
+      "screenshot": "upgraderc3-memory-preserved.png"
+    }
+  ],
+  "checks": {
+    "verify": {
+      "command": "pnpm run verify",
+      "passed": true,
+      "rootPassed": 2387,
+      "rootSkipped": 7,
+      "pluginPassed": 745,
+      "pluginSkipped": 3,
+      "headlessActivation": "passed",
+      "legacySettingsRecoveryAndIdempotence": "passed"
+    },
+    "independentPlugins": {
+      "command": "pnpm run verify:plugins --skip-build",
+      "repositories": 18,
+      "artifacts": 19,
+      "passed": true,
+      "standaloneVitestWorkers": 1,
+      "outerWorkers": 4,
+      "publicSdkConsumer": "passed",
+      "packedStarterActivationAndUpgrade": "passed",
+      "threeOptionalStrategiesTogether": "passed"
+    },
+    "starterSize": {
+      "packedBytes": 528306,
+      "unpackedBytes": 2220816,
+      "ceilingBytes": 2500000
+    },
+    "releaseCheck": {
+      "command": "pnpm run release:check",
+      "passed": true,
+      "channel": "latest",
+      "selectedPackages": 6,
+      "compositionMatchesManifest": true
+    },
+    "screenshotReview": {
+      "reviewed": 18,
+      "authUrlsOrCredentialsPresent": false,
+      "syntheticDataOnly": true,
+      "pageViewportOnly": true
+    },
+    "fixtureCleanup": {
+      "allAcceptanceHostsStopped": true,
+      "supersededFixturesStopped": true,
+      "userDesktopProfileTouched": false,
+      "ambientBrowserTouched": false
+    }
+  },
+  "provenance": {
+    "webUiAndInstalledFiles": "Independently executed against the supplied immutable tarballs using the repository acceptance server and a temporary Playwright harness. Every final installation was audited against the candidate manifest and all tarball file bytes and executable bits.",
+    "workspaceChecks": "Executed by the release-root task; totals and completion messages were read from the local logs when synthesizing this record.",
+    "releaseManifestSha256": "ab8679d6a0e532b84a08499817843ad004e1d862d40a761c0d087bc6da0cada1",
+    "localCheckLogDigests": [
+      {
+        "name": "dsh-release-538-verify.log",
+        "sha256": "b61810c911859e8eceec17c5b8ee055b2a14f8eb0032023e39464f295caedb52"
+      },
+      {
+        "name": "dsh-release-538-plugins.log",
+        "sha256": "7525c2251f51c8835f1b0ff07dfb55234553c02737fb2ec9ddae8ca526d5740d"
+      },
+      {
+        "name": "dsh-release-538-check.log",
+        "sha256": "64658cb2e5008480e69d7624f12bba495da6924baf75b06b9bc8100b786cb4b2"
+      },
+      {
+        "name": "dsh-release-538-pack.log",
+        "sha256": "119130ad2185390e96977852c99066b753096b8de7ef8292580a9044c13e231f"
+      }
+    ],
+    "acceptanceRunnerSha256": "7ab4ec4f8acdf92bc0855229350a1310fc51fbbc6a4be52b0263653697aa3c57",
+    "installedFileAuditSha256": "14db74b07289ecd7c63f32f0a75348b2b3edadad4ac53a274d52723cee29eb27",
+    "harnessNotes": [
+      "The restart notice appears more than once; the final wait targets the Restart needed state.",
+      "The retention baseline is captured only after the Add memory dialog has closed and the saved entry is visible. Earlier premature samples were discarded and the affected isolated scenarios repeated."
+    ]
+  },
+  "reproduction": {
+    "fixtureScript": "scripts/serve-release-acceptance.mjs",
+    "freshCommand": "node scripts/serve-release-acceptance.mjs --dsh <official-dsh>/lib/bin.js --artifacts <candidate-tarballs> --state <empty-disposable-state>",
+    "upgradeCommand": "node scripts/serve-release-acceptance.mjs --dsh <official-dsh>/lib/bin.js --artifacts <candidate-tarballs> --state <empty-disposable-state> --previous dsh-mnemon@0.5.37",
+    "restart": "Send SIGUSR2 to the fixture parent after the UI reports Restart needed; reconnect using the new private metadata.",
+    "isolation": "Each fixture has its own HOME, DSH_HOME, workspace, profile, pnpm store and MNEMON_DATA_DIR. The launcher environment contains no model or registry credentials.",
+    "registryOverlay": "The loopback fixture overlays only the six candidate packages on public npm metadata. Its selected-package fetch preload and old publication timestamps expose unpublished candidates to the existing version UI; production release-age rules are unchanged."
+  },
+  "screenshots": [
+    {
+      "filename": "fresh020-install.png",
+      "sha256": "3d970797bb19dae9a9a6a191fe05a375bbe038894e43cabb907d7161d5140f79"
+    },
+    {
+      "filename": "fresh020-status.png",
+      "sha256": "c11b0459785223325117316af70d725acc0de5444bb8c9cfaa17f51168d8bb0c"
+    },
+    {
+      "filename": "fresh021-install.png",
+      "sha256": "4628dce2aefb3525840ea6e38af8b7b26bed7513e0a4b61cea2034291d3a2a4a"
+    },
+    {
+      "filename": "fresh021-status.png",
+      "sha256": "1646132046c252c1128e39cb53b944ff12691e66dcbaeffe250baf8997309064"
+    },
+    {
+      "filename": "freshrc3-install.png",
+      "sha256": "3c9dca8873794749c4deb82687948fbb8c4c999459369178fe95069bf3b325b5"
+    },
+    {
+      "filename": "freshrc3-status.png",
+      "sha256": "54049b516bb6fa09f941f496be02deff0b57c0cd24e0dc4cd49c044269c5b945"
+    },
+    {
+      "filename": "upgrade020-offered.png",
+      "sha256": "9b75e7c8c88726d9cc2200b7e6fcaf6651147c8fa24bc637ce9284c47190587c"
+    },
+    {
+      "filename": "upgrade020-updated.png",
+      "sha256": "27c158eb307b4636fec4ec084816b7a7f449bf2fad3734550cfba001b9d981c5"
+    },
+    {
+      "filename": "upgrade020-status.png",
+      "sha256": "f2fd7ba7fb5348f166e23eedba0b2687332cb1afe0ed2a1d53b577d12c4e9f01"
+    },
+    {
+      "filename": "upgrade020-memory-preserved.png",
+      "sha256": "63b3f97b1c690246c3ab8acc1642fa2f1643f9201f53516570b28dacf4c1ed3c"
+    },
+    {
+      "filename": "upgrade021-offered.png",
+      "sha256": "184d16c1c016239bad37bcef2d25be7858cf0317a213de3be7a1effedb4f77e7"
+    },
+    {
+      "filename": "upgrade021-updated.png",
+      "sha256": "dafe1be93d33aaf1e678ff0eedb6074927582c01cd699ef7344f451276449b4f"
+    },
+    {
+      "filename": "upgrade021-status.png",
+      "sha256": "8571bfa7fb41a7c3245bbde8c7844c2c2214fea8174cb9543418a209ff106072"
+    },
+    {
+      "filename": "upgrade021-memory-preserved.png",
+      "sha256": "f9a190f91b54bc85f24081ef63f823f6e0ed3b0b6d254b9b42dc6df45b89d1ff"
+    },
+    {
+      "filename": "upgraderc3-offered.png",
+      "sha256": "46cbf5a76ad1f37380f97a747d079301168042efc32a155eed2368f1a66985a9"
+    },
+    {
+      "filename": "upgraderc3-updated.png",
+      "sha256": "92be87a60284d6946e89502fd76c903a1b234f8a513bd6d694f5713af8bb956f"
+    },
+    {
+      "filename": "upgraderc3-status.png",
+      "sha256": "bd6b5550ec8a04cf6d37174ba20905334fc8b00c38936ac761fec76c22608d2e"
+    },
+    {
+      "filename": "upgraderc3-memory-preserved.png",
+      "sha256": "a66fe0a6e34e2155b6cfca3c2693a09a5c12b16202a61413871be98ddfb6887a"
+    }
+  ],
+  "limitations": [
+    "The six WebUI scenarios cover installation, update, restart and one synthetic Runtime canary per upgrade; this is not exhaustive historical-data migration coverage.",
+    "No live model API or external Provider service calls were used. Model behavior is not evaluated by these UI scenarios.",
+    "Interactive Windows and Linux Desktop installation was not manually tested. Windows latency from issue reports was not remeasured."
+  ]
+}
