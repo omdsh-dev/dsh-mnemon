@@ -33,6 +33,7 @@ it.each([
   const f = await compositionFixture({ idleReviewMs: 5_000, idleReview: { persistWatermark: true, minIntervalMs: 5_000, maxPerSession: 1 } })
   const ctx = new Context()
   let stop: (() => void) | undefined
+  let stopTools: (() => void) | undefined
   let childCalls = 0
   let childStarts = 0
   let parentCalls = 0
@@ -79,7 +80,7 @@ it.each([
     ctx.llm.registerAdapter(['scripted'], new Model())
     const host = ctx as unknown as HostContextShape
     const coordinator = new MnemonSubagentCoordinator(host.subagents, f.live, host)
-    registerTools(host, f.live, coordinator)
+    stopTools = registerTools(host, f.live, coordinator, f.extensions)
     let lifecycle = new MnemonLifecycle(host, coordinator, f.live.config, f.live)
     stop = lifecycle.start()
     let parent = await ctx.agents.create({ sessionId: SessionId('persistent-parent'), agentOptions: { provider: 'scripted', model: 'fixture' }, meta: { cwd: f.workspace } })
@@ -141,6 +142,7 @@ it.each([
   } finally {
     gate.resolve()
     stop?.()
+    stopTools?.()
     vi.useRealTimers()
     await ctx.fiber.dispose()
     await f.dispose()

@@ -8,3 +8,5 @@ Actual DSH WebUI screenshots captured from a disposable local fixture at a 1440 
 - [UI verification](ui-verification.json): redacted capture checks.
 
 The model name displayed by DSH is fixture configuration text; the fixture replaces its execution with a local scripted response. These captures establish settings/status appearance and configuration retention. Restarted-session admission, failure counting, corruption handling, and competing-process admission are verified separately by the automated Host, lifecycle, and store tests.
+
+This remains a separate PR, stacked on #531 (`codex/source-tool-lifecycle`). Merge #531 first, then the #524 watermark PR; combined-head tests retain the parent’s Source tool lifecycle checks.
