@@ -128,6 +128,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
   } satisfies HostAgent
   const coordinator = {
     canReview: vi.fn(() => true),
+    checkReviewAccess: vi.fn(async () => true),
     recall: vi.fn(async (_agent, request) => ({ query: request.query, mode: 'smart', results: [] })),
     write: vi.fn(async () => ({ delegated: true, runId: 'write-child', provider: 'spawn', summary: 'No durable memory', action: 'skipped', memoryBodyIds: [] })),
     answer: vi.fn(async () => ({ answer: 'SQLite.', citations: [], delegation: { runId: 'answer-child', provider: 'spawn' } })),
@@ -1168,6 +1169,27 @@ describe('Mnemon DSH lifecycle integration', () => {
       }
       await vi.advanceTimersByTimeAsync(5_000)
       expect(value.coordinator.review).not.toHaveBeenCalled()
+    } finally { value.stop() }
+  })
+
+  it.each(['turn', 'policy', 'dispose'] as const)('cancels admission before reserving an attempt when %s changes', async change => {
+    vi.useFakeTimers()
+    const config = resolveConfig({ idleReviewMs: 5_000 })
+    const value = fixture(config)
+    let finish: ((available: boolean) => void) | undefined
+    vi.mocked(value.coordinator.checkReviewAccess).mockImplementationOnce(() => new Promise<boolean>(resolve => { finish = resolve }))
+    try {
+      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(value.lifecycle.snapshot('session-1').current?.reviewRunning).toBe(true)
+      expect(value.lifecycle.snapshot('session-1').current?.idleReviewAttempts).toBe(0)
+      if (change === 'turn') await value.preStep([userMessage('New foreground turn')], 3)
+      if (change === 'policy') config.idleReview.enabled = false
+      if (change === 'dispose') value.stop()
+      finish?.(true)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(value.coordinator.review).not.toHaveBeenCalled()
+      if (change !== 'dispose') expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ reviewRunning: false, idleReviewAttempts: 0 })
     } finally { value.stop() }
   })
 

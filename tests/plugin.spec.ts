@@ -468,6 +468,7 @@ describe('dsh-mnemon plugin composition', () => {
     const initial = { cliPath: '/fake/mnemon', storageScope: 'custom' as const, dataDir: directory, idleReviewMs: 5_000,
       idleReview: { maxPerSession: 1, minIntervalMs: 30_000 } }
     const review = vi.spyOn(MnemonSubagentCoordinator.prototype, 'review').mockResolvedValue({ delegated: false, action: 'skipped', summary: 'Synthetic reviewer.', documentIds: [] })
+    vi.spyOn(MnemonSubagentCoordinator.prototype, 'checkReviewAccess').mockResolvedValue(true)
     const mount = async (config: typeof initial & { idleReview: typeof initial.idleReview & { persistWatermark?: boolean } }) => {
       const f = context()
       const hooks = new Map<string, Array<(...args: any[]) => any>>()
