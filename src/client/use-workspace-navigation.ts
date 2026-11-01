@@ -66,6 +66,7 @@ export function useWorkspaceNavigation(options: {
   visibleSourcePages: readonly MemorySourcePageEntry[]
   managedSourceTypes: ReadonlyArray<readonly [string, readonly MemorySourceManagementInstance[]]>
   stoppedTypes: ReadonlySet<string>
+  disabledTypes: ReadonlySet<string>
   dashboard: MemoryViewDashboard | null
   sourceName: (sourceTypeId: string, fallback?: string) => string
   showWorkspaceToast: (toast: MnemonToast) => void
@@ -80,9 +81,13 @@ export function useWorkspaceNavigation(options: {
   openTab: (next: Page) => void
   sourceNavigationEntries: SourceNavigationEntry[]
 } {
-  const { sessionId, viewContextKey, resetViewportScroll, sourceCatalog, sourcePageEntries, visibleSourcePages, managedSourceTypes, stoppedTypes, dashboard, sourceName, showWorkspaceToast, accepts, home = 'status' } = options
+  const { sessionId, viewContextKey, resetViewportScroll, sourceCatalog, sourcePageEntries, visibleSourcePages, managedSourceTypes, stoppedTypes, disabledTypes, dashboard, sourceName, showWorkspaceToast, accepts, home = 'status' } = options
   const t = useT()
   const [page, setPage] = useState<Page>(home)
+  const isDisabled = useCallback((target: Page) => {
+    const type = sourcePageEntryId(target)?.split('/')[0] ?? managedSourceTypeId(target) ?? stoppedSourceTypeId(target)
+    return type !== undefined && disabledTypes.has(type)
+  }, [disabledTypes])
   // A view with a home of its own goes there once its page is known, and stays.
   useEffect(() => { if (page === 'status' && home !== 'status') setPage(home) }, [home, page])
 
@@ -129,12 +134,17 @@ export function useWorkspaceNavigation(options: {
       id: 'management:' + sourceTypeId, page: managedSourcePage(sourceTypeId), sourceTypeId,
       label: sourceName(sourceTypeId, instances[0]!.management.label), detail: sourceTypeId, group: 'sources' as const, glyph: '◇', primary: true,
     })))
-    return entries
-  }, [dashboard, managedSourceTypes, sourceName, sourcePageEntries, stoppedTypes, visibleSourcePages])
+    return entries.filter(entry => entry.sourceTypeId === undefined || !disabledTypes.has(entry.sourceTypeId))
+  }, [dashboard, disabledTypes, managedSourceTypes, sourceName, sourcePageEntries, stoppedTypes, visibleSourcePages])
 
   // A page follows its layer: to the stopped page when its Source stops, and
   // back to the layer's own page when it runs again.
   useEffect(() => {
+    if (isDisabled(page)) {
+      setPage(home)
+      setNavigationInput(undefined)
+      return
+    }
     if (sourceCatalog === null) return
     const entryId = sourcePageEntryId(page)
     const managedTypeId = managedSourceTypeId(page)
@@ -150,19 +160,24 @@ export function useWorkspaceNavigation(options: {
         : managedSourceTypes.some(([sourceTypeId]) => sourceTypeId === stoppedTypeId) ? managedSourcePage(stoppedTypeId) : home)
       showWorkspaceToast({ text: t('feedback.layerResumed', { layer: sourceName(stoppedTypeId, resumed?.label) }), tone: 'success' })
     }
-  }, [managedSourceTypes, page, sourcePageEntries, stoppedTypes, visibleSourcePages, sourceCatalog, showWorkspaceToast, sourceName, t, home])
+  }, [isDisabled, managedSourceTypes, page, sourcePageEntries, stoppedTypes, visibleSourcePages, sourceCatalog, showWorkspaceToast, sourceName, t, home])
 
   useLayoutEffect(() => { setNavigationInput(undefined) }, [viewContextKey])
 
   /** Anchors address Source page ids; no Source component is imported here. */
   const applyAnchor = useCallback((anchor: MnemonAnchor) => {
+    if (anchor.page !== 'status' && isDisabled(sourcePage(anchor.page))) {
+      setNavigationInput(undefined)
+      selectPage(home)
+      return
+    }
     setNavigationInput({ page: anchor.page, value: { seed: anchor.seed ?? '', nonce: Date.now() } })
     selectPage(anchor.page === 'status' ? 'status' : sourcePage(anchor.page))
-  }, [selectPage])
+  }, [home, isDisabled, selectPage])
   useEffect(() => {
     const held = consumeMnemonAnchor(sessionId, accepts)
     if (held !== null) applyAnchor(held)
     return subscribeMnemonAnchor(sessionId, applyAnchor, accepts)
   }, [sessionId, applyAnchor, accepts])
-  return { page, navigationInput, openTab, sourceNavigationEntries }
+  return { page: isDisabled(page) ? home : page, navigationInput, openTab, sourceNavigationEntries }
 }

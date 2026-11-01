@@ -13,7 +13,8 @@ import { translateEn } from '../src/client/locales.ts'
 import { TEST_PROVIDERS as MEMORY_PROVIDER_CATALOG } from './fixtures/providers.ts'
 import { memoryPageStyles } from '../src/client/page-kit.tsx'
 import { installClientFrameStyles } from './helpers/client-frame-styles.ts'
-import { settingsScope as staticSettingsScope } from './helpers/settings-scope.ts'
+import { liveSettingsScope, settingsScope as staticSettingsScope } from './helpers/settings-scope.ts'
+import { dispatchMnemonAnchor } from '../src/client/anchor.ts'
 
 describe('MnemonWorkbench', () => {
   afterEach(cleanup)
@@ -409,26 +410,17 @@ describe('MnemonWorkbench', () => {
   it.each(['sidebar', 'builtin'] as const)('renders all eight Source switch combinations as reversible %s states', async surface => {
     const ids = ['runtime', 'documents', 'memory-spaces'] as const
     const labels = { runtime: '运行时记忆', documents: '项目档案', 'memory-spaces': '记忆空间' }
-    const disabledTitles = { runtime: '运行时记忆 已关闭', documents: '项目档案 已关闭', 'memory-spaces': '记忆空间 已关闭' }
-    const endpoints = { runtime: ['runtime-memory'], documents: ['documents'], 'memory-spaces': ['bodies', 'body-directory', 'graph'] }
 
     for (let mask = 0; mask < 8; mask += 1) {
       const layerSwitches = Object.fromEntries(ids.map((id, index) => [id, (mask & (1 << index)) !== 0])) as Record<typeof ids[number], boolean>
-      const { connection, call } = createConnection({ layerSwitches })
+      const { connection } = createConnection({ layerSwitches })
       render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" surface={surface} />)
       await screen.findByText('已连接')
       const navigation = screen.getByRole('tablist', { name: 'Mnemon 页面' })
 
       for (const id of ids) {
-        const item = within(navigation).getByRole('tab', { name: layerSwitches[id] ? labels[id] : `${labels[id]} · 已关闭` })
-        expect(item.hasAttribute('data-layer-disabled')).toBe(!layerSwitches[id])
-        if (layerSwitches[id]) continue
-
-        const before = call.mock.calls.filter(([, endpoint]) => endpoints[id].includes(endpoint)).length
-        fireEvent.click(item)
-        await screen.findByRole('heading', { name: disabledTitles[id] })
-        expect(screen.getByText('已有数据完整保留；在“插件 → 可组合记忆”页面中重新开启后，即可恢复读取、写入与按需调用。')).toBeTruthy()
-        expect(call.mock.calls.filter(([, endpoint]) => endpoints[id].includes(endpoint))).toHaveLength(before)
+        if (layerSwitches[id]) expect(within(navigation).getByRole('tab', { name: labels[id] }).hasAttribute('data-layer-disabled')).toBe(false)
+        else expect(within(navigation).queryByRole('tab', { name: new RegExp(labels[id]) })).toBeNull()
       }
       cleanup()
     }
@@ -446,10 +438,7 @@ describe('MnemonWorkbench', () => {
     act(() => { withdraw = configuration.provide(open) })
     fireEvent.click(screen.getByRole('button', { name: '配置' }))
     expect(open).toHaveBeenCalledTimes(1)
-    fireEvent.click(within(screen.getByRole('tablist', { name: 'Mnemon 页面' })).getByRole('tab', { name: '运行时记忆 · 已关闭' }))
-    await screen.findByRole('heading', { name: '运行时记忆 已关闭' })
-    fireEvent.click(screen.getByRole('button', { name: '前往配置' }))
-    expect(open).toHaveBeenCalledTimes(2)
+    expect(within(screen.getByRole('tablist', { name: 'Mnemon 页面' })).queryByRole('tab', { name: /运行时记忆/ })).toBeNull()
 
     act(() => withdraw())
     expect(screen.queryByRole('button', { name: '配置' })).toBeNull()
@@ -469,7 +458,7 @@ describe('MnemonWorkbench', () => {
     expect(embedded.container.querySelector('[data-dsh-part="mnemon-view"] > header')?.hasAttribute('data-window-drag')).toBe(false)
   })
 
-  it('keeps the tab of a layer whose component is off and says why', async () => {
+  it('hides a switched-off Source tab while retaining its status and configuration entry', async () => {
     const { connection, call } = createConnection({ layerSwitches: { runtime: true, documents: true, 'memory-spaces': true }, componentsOff: ['documents'] })
     const configuration = new MnemonActionSeat()
     const open = vi.fn()
@@ -477,20 +466,37 @@ describe('MnemonWorkbench', () => {
     render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" configuration={configuration} runningSources={['runtime', 'memory-spaces']} />)
     await screen.findByText('已连接')
     const navigation = screen.getByRole('tablist', { name: 'Mnemon 页面' })
-    // Documents keeps its place between the other two layers. Its component is
-    // the layer's switch in the configuration, so the layer reads as off.
-    await waitFor(() => expect(within(navigation).getAllByRole('tab').map(tab => tab.getAttribute('aria-label') ?? tab.textContent)).toEqual(['状态', '运行时记忆', '项目档案 · 已关闭', '记忆空间']))
+    await waitFor(() => expect(within(navigation).getAllByRole('tab').map(tab => tab.textContent)).toEqual(['状态', '运行时记忆', '记忆空间']))
     const cards = screen.getByRole('region', { name: 'Mnemon 运行状态' })
     expect(within(cards).getByText('在配置中重新开启后恢复')).toBeTruthy()
     expect(within(cards).queryByText('等待工作区')).toBeNull()
 
     const before = call.mock.calls.filter(([, endpoint]) => endpoint === 'documents').length
-    fireEvent.click(within(navigation).getByRole('tab', { name: '项目档案 · 已关闭' }))
-    await screen.findByRole('heading', { name: '项目档案 已关闭' })
-    expect(screen.getByText('已有数据完整保留；在“插件 → 可组合记忆”页面中重新开启后，即可恢复读取、写入与按需调用。')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: '前往配置' }))
+    fireEvent.click(screen.getByRole('button', { name: '配置' }))
     expect(open).toHaveBeenCalledOnce()
     expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'documents')).toHaveLength(before)
+  })
+
+  it('returns to Status on disabling the selected Source, rejects its anchors, and restores its tab on re-enable', async () => {
+    const { connection, call } = createConnection({ layerSwitches: { runtime: true, documents: true, 'memory-spaces': true } })
+    const live = liveSettingsScope<Config>(settingsSnapshot)
+    render(<MnemonWorkbench connection={connection} settingsScope={live} sessionId="session-1" />)
+    await screen.findByText('已连接')
+    await selectWorkspaceTab('运行时记忆')
+    await screen.findByRole('heading', { name: '运行时记忆' })
+    await act(() => live.mutate([{ op: 'set', path: ['memoryTopology', 'layers', 'runtime', 'enabled'], value: false }]))
+    const navigation = screen.getByRole('tablist', { name: 'Mnemon 页面' })
+    await waitFor(() => expect(within(navigation).getByRole('tab', { name: '状态' }).getAttribute('aria-selected')).toBe('true'))
+    expect(within(navigation).queryByRole('tab', { name: /运行时记忆/ })).toBeNull()
+    const before = call.mock.calls.filter(([, endpoint]) => endpoint === 'runtime-memory').length
+    act(() => dispatchMnemonAnchor({ page: 'runtime/entries', sessionId: 'session-1', seed: 'must not open' }))
+    expect(within(navigation).getByRole('tab', { name: '状态' }).getAttribute('aria-selected')).toBe('true')
+    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'runtime-memory')).toHaveLength(before)
+    await act(() => live.mutate([{ op: 'set', path: ['memoryTopology', 'layers', 'runtime', 'enabled'], value: true }]))
+    await waitFor(() => expect(within(navigation).getAllByRole('tab').map(tab => tab.textContent)).toEqual(['状态', '运行时记忆', '项目档案', '记忆空间']))
+    expect(within(navigation).getByRole('tab', { name: '状态' }).getAttribute('aria-selected')).toBe('true')
+    await selectWorkspaceTab('运行时记忆')
+    await screen.findByRole('heading', { name: '运行时记忆' })
   })
 
   it('says a layer whose component is on but not running is not running', async () => {
