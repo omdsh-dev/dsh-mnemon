@@ -127,6 +127,25 @@ function CompositionStatus(props: { tone: StateDotState; label: string; strategy
   </span>
 }
 
+/** Only low-frequency guidance folds; errors, composition diagnostics and restart reminders stay visible. */
+function OrdinaryNotices(props: { remoteReadOnly: boolean; reviewPaused: boolean }): JSX.Element | null {
+  const t = useT()
+  const [expanded, setExpanded] = useState(false)
+  const contentsId = useId()
+  const labels = [props.remoteReadOnly ? t('header.noticeRemoteReadOnly') : undefined, props.reviewPaused ? t('header.noticeIdleReview') : undefined].filter((label): label is string => label !== undefined)
+  if (labels.length === 0) return null
+  return <div className={css.noticeGroup} data-expanded={expanded || undefined}>
+    <button type="button" className={css.noticeToggle} aria-expanded={expanded} aria-controls={contentsId} onClick={() => setExpanded(value => !value)}>
+      <span>{t('header.noticeSummary', { count: labels.length, labels: labels.join(' / ') })}</span>
+      <IconChevronLeftOutline14 size={14} />
+    </button>
+    <div id={contentsId} className={css.noticeContents}>
+      {props.remoteReadOnly && <div className={css.alert} role="status">{t('workspace.remoteReadOnly')}</div>}
+      {props.reviewPaused && <div className={css.alert} role="status">{t('status.reviewTeamPaused')}</div>}
+    </div>
+  </div>
+}
+
 function SourceDisabledPage(props: { title: string; onOpenConfiguration: (() => void) | undefined }): JSX.Element {
   const t = useT()
   return <div className={css.page}>
@@ -464,8 +483,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       </Callout>}</Reveal>
       <Reveal className={css.notice}>{status?.restartPending !== undefined && <RestartReminder pending={status.restartPending} />}</Reveal>
       {workspaceToast.element}
-      {remoteReadOnly && <div className={css.alert} role="status">{t('workspace.remoteReadOnly')}</div>}
-      {!focused && status?.lifecycle?.current?.idleReviewBlocked === 'agent-team' && <div className={css.alert} role="status">{t('status.reviewTeamPaused')}</div>}
+      <OrdinaryNotices remoteReadOnly={remoteReadOnly} reviewPaused={!focused && status?.lifecycle?.current?.idleReviewBlocked === 'agent-team'} />
       {!focused && status?.lifecycle?.current?.lastError !== undefined && <div className={css.alert} role="alert" aria-label={t('status.reviewFailed')}>
         <strong>{t('status.reviewFailed')}</strong>
         <span>{status.lifecycle.current.lastError}</span>

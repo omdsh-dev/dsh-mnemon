@@ -798,12 +798,42 @@ describe('MnemonWorkbench', () => {
     expect(screen.getByText(/^远程访问为只读：在 profile 的 mnemon 配置中设置 remoteAccess: trusted-host/)).toBeTruthy()
   })
 
+  it('keeps complete ordinary notices behind a reversible summary across pages', async () => {
+    const { connection, call } = createConnection({ isLoopback: false, reviewTeam: true })
+    render(<MnemonWorkbench connection={connection} settingsScope={staticSettingsScope<Config>({ ...settingsSnapshot, writable: false })} sessionId="session-1" />)
+
+    const toggle = await screen.findByRole('button', { name: '提示 2 条 · 远程只读 / 空闲审查' })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    const contents = document.getElementById(toggle.getAttribute('aria-controls')!)!
+    expect(contents.textContent).toContain('remoteAccess: trusted-host')
+    expect(contents.textContent).toContain('Agent Teams 工具在役时')
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    await selectWorkspaceTab('运行时记忆')
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(call.mock.calls.some(([channel]) => channel === '/dsh-mnemon-write')).toBe(false)
+  })
+
+  it('keeps review failures and restart warnings outside the ordinary notice summary', async () => {
+    const { connection } = createConnection({ isLoopback: false, reviewTeam: true, reviewError: 'Synthetic review failure', restartPending: { running: '0.1.2', installed: '0.1.3' } })
+    render(<MnemonWorkbench connection={connection} settingsScope={staticSettingsScope<Config>({ ...settingsSnapshot, writable: false })} sessionId="session-1" />)
+
+    const toggle = await screen.findByRole('button', { name: '提示 2 条 · 远程只读 / 空闲审查' })
+    const contents = document.getElementById(toggle.getAttribute('aria-controls')!)!
+    expect(contents.contains(screen.getByRole('alert', { name: '空闲审查失败' }))).toBe(false)
+    expect(contents.contains(screen.getByRole('status', { name: 'dsh-mnemon 0.1.3 已安装' }))).toBe(false)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+  })
+
   it('does not show the remote read-only reason on a local page', async () => {
     const { connection } = createConnection()
     render(<MnemonWorkbench connection={connection} settingsScope={staticSettingsScope<Config>({ ...settingsSnapshot, writable: false })} sessionId="session-1" />)
 
     await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
     expect(screen.queryByText(/^远程访问为只读/)).toBeNull()
+    expect(screen.queryByRole('button', { name: /^提示 \d+ 条/ })).toBeNull()
   })
 
   it('enables memory management controls from a writable authenticated Host snapshot', async () => {
