@@ -251,6 +251,8 @@ Keep business copy and layout inside the Source package. The default Sources dem
 
 A plugin directory owns `package.json`, exports, `src/`, `tests/`, TypeScript/build/test configuration and README. Declare compatible public peers and development dependencies. Publish built Host/Client artifacts and declarations; never depend on sibling paths, workspace source aliases, root test helpers or implicit hoisting.
 
+Named built-in tool families follow committed global Source registrations by `manifest.typeId`, including multiple instances or a third-party implementation of the same type. A plugin package name or Starter instance key does not determine family lifetime. Per-Agent/View selection continues to govern each operation through its existing grants and offers; it never unregisters the global family. Families keep their existing definitions and schemas. Initial Loader-managed startup waits for `Loader.await()` so Host-first Starter loading retains historical registry order. Later reactivation appends the returning family through the published registration API without replacing surviving registrations; default model wire ordering is independently applied by DSH. Generic View tools and the delegated result tool are independent of these families.
+
 The default Starter alone mounts defaults. Source/Strategy packages do not ship self-activating default patches. A user's profile, bundle or explicit parent composition controls activation and replacement.
 
 ```ts

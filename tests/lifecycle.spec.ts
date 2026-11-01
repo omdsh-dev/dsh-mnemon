@@ -125,6 +125,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
     inject: vi.fn(),
   } satisfies HostAgent
   const coordinator = {
+    canReview: vi.fn(() => true),
     recall: vi.fn(async (_agent, request) => ({ query: request.query, mode: 'smart', results: [] })),
     write: vi.fn(async () => ({ delegated: true, runId: 'write-child', provider: 'spawn', summary: 'No durable memory', action: 'skipped', memoryBodyIds: [] })),
     answer: vi.fn(async () => ({ answer: 'SQLite.', citations: [], delegation: { runId: 'answer-child', provider: 'spawn' } })),
@@ -928,6 +929,29 @@ describe('Mnemon DSH lifecycle integration', () => {
       lastReviewScore: 5,
       reviewActivity: { score: 0, eligible: false, turnCount: 0 },
     })
+  })
+
+  it('keeps review attempts available while no registered write target can accept the task', async () => {
+    vi.useFakeTimers()
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
+    vi.mocked(value.coordinator.canReview).mockReturnValue(false)
+    await value.preStep([durableCandidate(300)], 1)
+    value.events.push({ type: 'turn/end', data: { turn: 1 } })
+    await value.turnStopping(1)
+    expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ idleReviewPending: false, idleReviewAttempts: 0 })
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(value.coordinator.review).not.toHaveBeenCalled()
+    vi.mocked(value.coordinator.canReview).mockReturnValue(true)
+    await value.preStep([durableCandidate(300)], 2)
+    value.events.push({ type: 'turn/end', data: { turn: 2 } })
+    await value.turnStopping(2)
+    expect(value.lifecycle.snapshot('session-1').current?.idleReviewPending).toBe(true)
+    // The last target can disappear after scheduling but before child startup.
+    vi.mocked(value.coordinator.canReview).mockReturnValue(false)
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(value.coordinator.review).not.toHaveBeenCalled()
+    expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ idleReviewPending: false, idleReviewAttempts: 0 })
+    value.stop()
   })
 
   it('bounds idle review attempts across a long session, including failed runs (issues 100/255)', async () => {

@@ -108,7 +108,7 @@ it.skipIf(!dsh021)('refuses memory tools to a USER.md compaction child its conve
     const host = ctx as unknown as HostContextShape
     const coordinator = new MnemonSubagentCoordinator(host.subagents, f.live, host)
     const lifecycle = new MnemonLifecycle(host, coordinator, f.config, f.live)
-    registerTools(host, f.live, coordinator)
+    registerTools(host, f.live, coordinator, f.extensions)
     stop = lifecycle.start()
     const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' }, { cwd: f.workspace })
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'Remember how I like answers.' }], source: { kind: 'user' } }))

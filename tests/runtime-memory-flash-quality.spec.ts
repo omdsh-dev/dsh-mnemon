@@ -151,7 +151,7 @@ async function runScenario(multipleSpaces: boolean) {
       () => ({ provider: PROVIDER, model: MODEL }), () => 8192,
       (scope, signal, operation) => lifecycle.runRuntimeMaintenanceTask(scope, signal, operation))
     const lifecycle = new MnemonLifecycle(host, coordinator, f.config, f.live)
-    registerTools(host, f.live, coordinator)
+    registerTools(host, f.live, coordinator, f.extensions)
 
     const parameters = { type: 'object', properties: { domain: { type: 'string', enum: [...domains] }, key: { type: 'string' }, value: { type: 'string' } }, required: ['domain'] }
     const output = { schema: { type: 'object' as const, additionalProperties: true }, render: (value: unknown) => [{ type: 'text' as const, text: JSON.stringify(value) }] }

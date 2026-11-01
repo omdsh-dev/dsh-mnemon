@@ -133,7 +133,7 @@ it('runs guarded Team review against the published DSH cohort (issue 275)', asyn
         const host = ctx as HostContextShape
         const coordinator = new MnemonSubagentCoordinator(host.subagents, f.live, host)
         const lifecycle = new MnemonLifecycle(host, coordinator, f.config, f.live)
-        registerTools(host, f.live, coordinator)
+        registerTools(host, f.live, coordinator, f.extensions)
         stop = lifecycle.start()
         const parent = await ctx.agentLoop.create(session.SessionId('parent'), { provider: 'fixture', model: 'fixture' }, { cwd: f.workspace })
         parent.followup(llm.createUserMessage({ content: [{ type: 'text', text: memory }], source: { kind: 'user' } }))

@@ -1,3 +1,4 @@
+import { toolContributions } from './fixtures/tool-contributions.ts'
 import { describe, expect, it } from 'vitest'
 import type { HostContextShape, ToolDefinition } from '../src/host/dsh.ts'
 import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
@@ -13,7 +14,7 @@ describe('memory tool cards', () => {
   it('shows every memory tool call and result with the card it always had, in registration order', () => {
     const tools: ToolDefinition[] = []
     const register = (tool: ToolDefinition) => { tools.push(tool); return () => {} }
-    registerTools({ tools: { register } } as unknown as HostContextShape, {} as never, new MnemonSubagentCoordinator({} as never, {} as never))
+    registerTools({ tools: { register } } as unknown as HostContextShape, {} as never, new MnemonSubagentCoordinator({} as never, {} as never), toolContributions())
     const args = { routeId: 'documents/search', offerId: 'runtime/mutate', query: 'release gates', id: 'm1', title: 'Release design', action: 'add', target: 'memory' }
     const cards = tools.map(tool => [tool.name, (tool as ToolCards).presentCall?.(args), (tool as ToolCards).presentResult?.(args, {})])
     expect(cards).toEqual([

@@ -251,6 +251,8 @@ Provider 还可以实现可选的 `get(body, id, signal)`：返回空间中这�
 
 每个插件拥有自己的 `package.json`、exports、`src/`、`tests/`、TypeScript/构建/测试配置及 README。声明公开 peer 与开发依赖，发布 Host/Client 制品和类型，不依赖兄弟路径、工作区源码别名、根测试夹具或隐式依赖提升。
 
+内置命名工具族按已提交的全局 Source 注册记录中的 `manifest.typeId` 联动，包含多个实例和相同类型的第三方实现。插件包名或 Starter 实例 key 不决定工具族的生命周期。每个 Agent/View 的选择仍通过既有 grant 与 offer 约束操作，不会注销全局工具族。工具定义与 schema 保持原样。首次通过 Loader 启动时等待 `Loader.await()`，让 Host 先加载的 Starter 保留原有目录注册顺序。后续重新激活通过已发布的注册 API 追加恢复的工具族，不替换仍在运行的注册；模型请求中的默认顺序由 DSH 独立决定。通用 View 工具和委派结果工具独立于这些工具族。
+
 只有默认 Starter 挂载默认组合；Source/Strategy 包不携带自动激活默认实例的 patch。用户 Profile、Bundle 或明确的父组合负责激活和替换。
 
 ```ts
