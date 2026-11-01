@@ -17,10 +17,10 @@ export function memorySpacesPageClient(management: MnemonSourceManagementClient)
   const input = (value: unknown): MemoryJsonValue => JSON.parse(JSON.stringify(value)) as MemoryJsonValue
   return {
     canAssist: client.canAssist,
-    status: () => client.read('status-summary'),
-    bodies: () => client.read('bodies'),
-    bodyDirectory: () => client.read('body-directory'),
-    graph: memoryBodyIds => client.read('graph', input({ memoryBodyIds })),
+    status: () => client.read('status-summary', null, { coalesce: true }),
+    bodies: () => client.read('bodies', null, { coalesce: true }),
+    bodyDirectory: () => client.read('body-directory', null, { coalesce: true }),
+    graph: memoryBodyIds => client.read('graph', input({ memoryBodyIds }), { coalesce: true }),
     list: request => client.read('list', input(request ?? {})),
     entities: (entity, limit) => client.read('entities', input({ entity, limit })),
     entityMemories: (entity, offset, limit) => client.read('entity-memories', input({ entity, offset, limit })),

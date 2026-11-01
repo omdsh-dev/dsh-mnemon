@@ -7,10 +7,13 @@ import { subscribeMnemonAnchor } from '../src/client/anchor.ts'
 import { translateEn as t } from '../src/client/locales.ts'
 import { SKILLS_PAGE, SkillTurnTail } from '../src/client/SkillTurnTail.tsx'
 import { SKILLS_PACKAGE, SkillsSettings } from '../src/client/skills-settings.tsx'
+import { MnemonChangeSignal } from '../src/client/change-signal.ts'
 import { liveSettingsScope } from './helpers/settings-scope.ts'
 
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   vi.useRealTimers()
 })
 
@@ -76,11 +79,99 @@ describe('技能管理 settings under Plugins', () => {
 
 describe('the skills line under a turn', () => {
   function connection(read: () => SkillActivitySnapshot) {
-    const call = vi.fn(async (_channel: string, endpoint: string) => endpoint === 'skill-activity'
+    const call = vi.fn(async (_channel: string, endpoint: string, _payload: { sessionId?: string }) => endpoint === 'skill-activity'
       ? { ok: true as const, value: read() }
       : { ok: false as const, error: { message: 'unexpected' } })
     return { call, handle: { rpc: { call }, isLoopback: true } as unknown as ClientConnectionHandle }
   }
+
+  it.each([true, false])('remembers an empty activity result across A/B/A at the same closing cursor (available=%s)', async available => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const { call, handle } = connection(() => ({ available, turns: [], reviews: [] }))
+    const tail = (sessionId: string, seq = 10) => <SkillTurnTail turn={{ turn: 1, status: 'closed' }} seq={seq} sessionId={sessionId} connection={handle} localeRuntime={localeRuntime} t={t} />
+    const view = render(tail('A'))
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+    view.rerender(tail('B'))
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+    const before = call.mock.calls.length
+    view.rerender(tail('A'))
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+    expect(call).toHaveBeenCalledTimes(before)
+    view.rerender(tail('A', 20))
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+    expect(call.mock.calls.length).toBeGreaterThan(before)
+  })
+
+  it('defers the first activity read until idle and cancels it if its conversation leaves first', async () => {
+    const idle = new Map<number, IdleRequestCallback>()
+    let next = 0
+    vi.stubGlobal('requestIdleCallback', (callback: IdleRequestCallback) => { idle.set(++next, callback); return next })
+    vi.stubGlobal('cancelIdleCallback', (id: number) => idle.delete(id))
+    const { call, handle } = connection(() => ({ available: true, turns: [], reviews: [] }))
+    const tail = (sessionId: string) => <SkillTurnTail turn={{ turn: 1, status: 'closed' }} seq={10} sessionId={sessionId} connection={handle} localeRuntime={localeRuntime} t={t} />
+    const view = render(tail('A'))
+    await act(async () => {})
+    expect(call).not.toHaveBeenCalled()
+    view.rerender(tail('B'))
+    expect(idle.size).toBe(1)
+    await act(async () => { for (const callback of idle.values()) callback({ didTimeout: false, timeRemaining: () => 20 }) })
+    expect(call.mock.calls).toEqual([['/dsh-mnemon-read', 'skill-activity', { sessionId: 'B' }]])
+  })
+
+  it('keeps the settling cadence during fast A/B/A switches instead of restarting a read', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const { call, handle } = connection(() => ({ available: true, turns: [], reviews: [] }))
+    const tail = (sessionId: string) => <SkillTurnTail turn={{ turn: 1, status: 'closed' }} seq={10} sessionId={sessionId} connection={handle} localeRuntime={localeRuntime} t={t} />
+    const view = render(tail('A'))
+    await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+    view.rerender(tail('B'))
+    await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+    view.rerender(tail('A'))
+    await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+    expect(call.mock.calls.filter(([, , payload]) => payload.sessionId === 'A')).toHaveLength(1)
+    await act(async () => { await vi.advanceTimersByTimeAsync(3_000) })
+    expect(call.mock.calls.filter(([, , payload]) => payload.sessionId === 'A')).toHaveLength(2)
+  })
+
+  it('refreshes an empty cached result after a component switch or reconnect', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const changes = new MnemonChangeSignal()
+    let snapshot: SkillActivitySnapshot = { available: false, turns: [], reviews: [] }
+    const { handle } = connection(() => snapshot)
+    render(<SkillTurnTail turn={{ turn: 1, status: 'closed' }} seq={10} sessionId="A" connection={handle} localeRuntime={localeRuntime} t={t} componentChanges={changes} />)
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+    snapshot = { available: true, turns: [{ turn: 1, skills: [{ name: 'newly-enabled', by: 'model' }] }], reviews: [] }
+    act(() => changes.bump())
+    await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+    expect(await screen.findByRole('button', { name: 'newly-enabled' })).not.toBeNull()
+  })
+
+  it('reads one snapshot for all newly rendered history tails', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const { call, handle } = connection(() => ({ available: true, turns: [], reviews: [] }))
+    render(<>{[1, 2, 3, 4, 5].map(turn => <SkillTurnTail key={turn} turn={{ turn, status: 'closed' }} seq={turn * 10} sessionId="A" connection={handle} localeRuntime={localeRuntime} t={t} />)}</>)
+    await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+    expect(call).toHaveBeenCalledOnce()
+  })
+
+  it('pauses activity reads while the browser document is hidden and resumes pending reviews', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const visible = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    const { call, handle } = connection(() => ({ available: true, turns: [], reviews: [{ turn: 1, state: 'reviewing', suggestions: [] }] }))
+    render(<SkillTurnTail turn={{ turn: 1, status: 'closed' }} seq={10} sessionId="A" connection={handle} localeRuntime={localeRuntime} t={t} />)
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+    expect(call).not.toHaveBeenCalled()
+    await act(async () => { visible.mockReturnValue('visible'); document.dispatchEvent(new Event('visibilitychange')) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+    expect(await screen.findByText(t('skillTail.reviewing'))).not.toBeNull()
+    await act(async () => { visible.mockReturnValue('hidden'); document.dispatchEvent(new Event('visibilitychange')) })
+    const before = call.mock.calls.length
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+    expect(call).toHaveBeenCalledTimes(before)
+    await act(async () => { visible.mockReturnValue('visible'); document.dispatchEvent(new Event('visibilitychange')) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+    expect(call.mock.calls.length).toBeGreaterThan(before)
+  })
 
   it('names the skills a turn used, follows its review, and opens what it left on the Skills page', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })

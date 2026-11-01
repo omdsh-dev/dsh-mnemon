@@ -9,7 +9,7 @@ import type { RuntimePageClient } from './api.ts'
 export function runtimePageClient(management: MnemonSourceManagementClient): RuntimePageClient {
   const client = createMemorySourcePageClient(management)
   return {
-    runtimeMemory: () => client.read('snapshot'),
+    runtimeMemory: () => client.read('snapshot', null, { coalesce: true }),
     mutateRuntimeMemory: input => client.canAssist('mutate') ? client.assist('mutate', { ...input, ...(input.old_text === undefined ? {} : { oldText: input.old_text }) }, true) : client.mutate('mutate', { ...input }, true),
   }
 }

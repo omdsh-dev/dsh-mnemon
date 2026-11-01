@@ -9,7 +9,8 @@ export interface MnemonSourceManagementClient {
     readonly operations: readonly string[]
     execute(operation: string, input: MemoryJsonValue, options: { expectedRevision: string; confirmed: boolean }): Promise<MemorySourceManagementResult>
   }
-  read(operation: string, input?: MemoryJsonValue): Promise<MemorySourceManagementResult>
+  /** Automatic inspections may share an identical pending read; explicit actions remain fresh by default. */
+  read(operation: string, input?: MemoryJsonValue, options?: { coalesce?: boolean }): Promise<MemorySourceManagementResult>
   mutate(operation: string, input: MemoryJsonValue, options: { expectedRevision?: string; confirmed: true }): Promise<MemorySourceManagementResult>
   /**
    * The routes and model directory a page may offer as a per-run choice. Absent

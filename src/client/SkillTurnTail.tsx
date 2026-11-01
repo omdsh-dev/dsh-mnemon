@@ -5,6 +5,8 @@ import { MnemonClient } from './api.ts'
 import { dispatchMnemonAnchor } from './anchor.ts'
 import type { MnemonClientContext } from './dsh-context.ts'
 import type { MnemonKey } from './locales.ts'
+import { useDocumentVisible } from './document-visibility.ts'
+import { MnemonChangeSignal } from './change-signal.ts'
 import css from './SkillTurnTail.module.css'
 
 /** The Skills page every link here opens; its seed says what to show. */
@@ -13,13 +15,19 @@ export const SKILLS_PAGE = 'skills/library'
 const POLL_MS = 3_000
 /** After a turn ends, the bar looks a few more times for the review it may have earned. */
 const SETTLE_CHECKS = 2
+const NO_CHANGES = new MnemonChangeSignal()
 
 interface Entry {
   snapshot?: SkillActivitySnapshot
   loading?: Promise<void>
-  timer?: ReturnType<typeof setTimeout>
+  cancelScheduled?: () => void
+  nextReadAt?: number
   /** Re-reads left to catch a review scheduled just after the turn ended. */
   settle: number
+  /** Closing event cursor read successfully, including turns with no skill activity. */
+  checkedCursor: number
+  requestedCursor: number
+  revision: number
   listeners: Set<() => void>
 }
 
@@ -34,7 +42,7 @@ function entryOf(connection: ClientConnectionHandle, sessionId: string): Entry {
   }
   let entry = sessions.get(sessionId)
   if (entry === undefined) {
-    entry = { settle: 0, listeners: new Set() }
+    entry = { settle: 0, checkedCursor: -1, requestedCursor: -1, revision: 0, listeners: new Set() }
     sessions.set(sessionId, entry)
   }
   return entry
@@ -44,42 +52,77 @@ function waiting(snapshot: SkillActivitySnapshot | undefined): boolean {
   return snapshot?.reviews.some(review => review.state === 'scheduled' || review.state === 'reviewing') === true
 }
 
+function cancelScheduled(entry: Entry): void {
+  entry.cancelScheduled?.()
+  delete entry.cancelScheduled
+}
+
+/** History renders before an optional skills scan; all its tails share this job. */
+function schedule(connection: ClientConnectionHandle, sessionId: string, entry: Entry, delay = 0, idle = false): void {
+  if (entry.loading !== undefined || entry.cancelScheduled !== undefined || entry.listeners.size === 0) return
+  const run = (): void => { delete entry.cancelScheduled; load(connection, sessionId, entry) }
+  if (idle && typeof requestIdleCallback === 'function') {
+    const id = requestIdleCallback(run, { timeout: 1_000 })
+    entry.cancelScheduled = () => cancelIdleCallback(id)
+  } else {
+    const timer = setTimeout(run, delay)
+    entry.cancelScheduled = () => clearTimeout(timer)
+  }
+}
+
 function load(connection: ClientConnectionHandle, sessionId: string, entry: Entry): void {
-  if (entry.loading !== undefined) return
-  if (entry.timer !== undefined) { clearTimeout(entry.timer); delete entry.timer }
+  if (entry.loading !== undefined || entry.listeners.size === 0) return
+  const cursor = entry.requestedCursor
+  const revision = entry.revision
+  let succeeded = false
   entry.loading = new MnemonClient(connection, sessionId).skillActivity()
-    .then(snapshot => { entry.snapshot = snapshot }, () => undefined)
+    .then(snapshot => {
+      if (revision !== entry.revision) return
+      entry.snapshot = snapshot; entry.checkedCursor = cursor; succeeded = true
+    }, () => undefined)
     .finally(() => {
       delete entry.loading
       for (const listener of [...entry.listeners]) listener()
-      // Follow a review only while some bar is on screen to show it.
-      if (entry.listeners.size === 0) return
-      if (waiting(entry.snapshot)) entry.timer = setTimeout(() => load(connection, sessionId, entry), POLL_MS)
-      else if (entry.settle > 0) { entry.settle -= 1; entry.timer = setTimeout(() => load(connection, sessionId, entry), POLL_MS) }
+      // A closing event that arrived during the read still needs its own snapshot.
+      if (revision !== entry.revision || succeeded && entry.requestedCursor > cursor) entry.nextReadAt = Date.now()
+      else if (waiting(entry.snapshot)) entry.nextReadAt = Date.now() + POLL_MS
+      else if (entry.settle > 0) { entry.settle -= 1; entry.nextReadAt = Date.now() + POLL_MS }
+      else delete entry.nextReadAt
+      // Keep the due time when a conversation leaves, without a background timer.
+      if (entry.nextReadAt !== undefined) schedule(connection, sessionId, entry, Math.max(0, entry.nextReadAt - Date.now()))
     })
 }
 
 /** The conversation's skills activity, read again when a newer turn's bar appears. */
-function useSkillActivity(connection: ClientConnectionHandle, sessionId: string | undefined, turn: number | undefined): SkillActivitySnapshot | undefined {
+function useSkillActivity(connection: ClientConnectionHandle, sessionId: string | undefined, cursor: number | undefined, revision: number): SkillActivitySnapshot | undefined {
+  const visible = useDocumentVisible()
   const entry = sessionId === undefined ? undefined : entryOf(connection, sessionId)
   const subscribe = useCallback((listener: () => void) => {
-    if (entry === undefined) return () => {}
+    if (entry === undefined || !visible || cursor === undefined) return () => {}
     entry.listeners.add(listener)
     return () => {
       entry.listeners.delete(listener)
-      if (entry.listeners.size === 0 && entry.timer !== undefined) { clearTimeout(entry.timer); delete entry.timer }
+      if (entry.listeners.size === 0) cancelScheduled(entry)
     }
-  }, [entry])
+  }, [entry, visible, cursor])
   const getSnapshot = useCallback(() => entry?.snapshot, [entry])
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
   useEffect(() => {
-    if (entry === undefined || sessionId === undefined || turn === undefined) return
-    const newest = entry.snapshot === undefined ? undefined : Math.max(-1, ...entry.snapshot.turns.map(item => item.turn), ...entry.snapshot.reviews.map(item => item.turn))
-    if (entry.snapshot !== undefined && newest !== undefined && turn <= newest && !waiting(entry.snapshot)) return
-    // A turn newer than what was read: its uses and any review it earned are not known yet.
-    entry.settle = SETTLE_CHECKS
-    load(connection, sessionId, entry)
-  }, [connection, entry, sessionId, turn])
+    if (entry === undefined || sessionId === undefined || cursor === undefined || !visible) return
+    if (entry.revision !== revision) {
+      entry.revision = revision
+      entry.checkedCursor = -1
+      entry.settle = SETTLE_CHECKS
+      cancelScheduled(entry)
+    }
+    if (cursor > entry.requestedCursor) {
+      entry.requestedCursor = cursor
+      entry.settle = SETTLE_CHECKS
+      cancelScheduled(entry)
+    }
+    if (entry.snapshot === undefined || cursor > entry.checkedCursor) schedule(connection, sessionId, entry, 0, true)
+    else if (entry.nextReadAt !== undefined) schedule(connection, sessionId, entry, Math.max(0, entry.nextReadAt - Date.now()))
+  }, [connection, entry, sessionId, cursor, visible, revision])
   return snapshot
 }
 
@@ -90,6 +133,7 @@ interface SkillTurnTailProps {
   /** Injected by the slot host: the session this tail belongs to. */
   sessionId?: string
   connection: ClientConnectionHandle
+  componentChanges?: MnemonChangeSignal
   localeRuntime: Pick<MnemonClientContext['locale'], 'getSnapshot' | 'subscribe'>
   t: (key: MnemonKey, params?: Record<string, unknown>) => string
 }
@@ -108,13 +152,14 @@ function isClosedTurn(turn: unknown): boolean {
  * on the Skills page, and the review that followed it — waiting or running,
  * then the suggestions it left. Hidden when the turn has nothing to say.
  */
-export const SkillTurnTail = memo(function SkillTurnTail({ turn, sessionId, connection, localeRuntime, t }: SkillTurnTailProps): JSX.Element | null {
+export const SkillTurnTail = memo(function SkillTurnTail({ turn, seq, sessionId, connection, componentChanges = NO_CHANGES, localeRuntime, t }: SkillTurnTailProps): JSX.Element | null {
   const subscribeLocale = useCallback((listener: () => void) => localeRuntime.subscribe(listener), [localeRuntime])
   const getLocale = useCallback(() => localeRuntime.getSnapshot(), [localeRuntime])
   useSyncExternalStore(subscribeLocale, getLocale, getLocale)
   const number = turnNumber(turn)
   const closed = isClosedTurn(turn)
-  const snapshot = useSkillActivity(connection, sessionId, closed ? number : undefined)
+  const revision = useSyncExternalStore(componentChanges.subscribe, componentChanges.getSnapshot, componentChanges.getSnapshot)
+  const snapshot = useSkillActivity(connection, sessionId, closed && number !== undefined ? seq : undefined, revision)
   if (!closed || number === undefined || snapshot?.available !== true) return null
   const used = snapshot.turns.find(entry => entry.turn === number)?.skills ?? []
   const review = snapshot.reviews.find(entry => entry.turn === number)

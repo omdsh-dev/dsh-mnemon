@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { JsonValue, MemorySourceManagementCatalog, MemorySourceManagementInstance } from '../host/protocol.ts'
+import type { JsonValue, MemorySourceManagementCatalog, MemorySourceManagementInstance, MemorySourceManagementResult } from '../host/protocol.ts'
 import type { MnemonClient } from './api.ts'
 import type { MnemonSourceManagementClient } from './dsh-context.ts'
 import { message } from './page-kit.tsx'
 import type { MemorySourcePageEntry } from './source-pages.tsx'
 
-function bindSourceManagementClient(client: MnemonClient, instance: MemorySourceManagementInstance, taskClient: MnemonClient, assertCurrent: () => void): MnemonSourceManagementClient {
+function bindSourceManagementClient(client: MnemonClient, instance: MemorySourceManagementInstance, taskClient: MnemonClient, assertCurrent: () => void, readEpoch: () => number): MnemonSourceManagementClient {
+  const pending = new Map<string, Promise<MemorySourceManagementResult>>()
+  const independent = async (run: () => Promise<MemorySourceManagementResult>): Promise<MemorySourceManagementResult> => {
+    assertCurrent()
+    pending.clear()
+    try { return await run() } finally { pending.clear() }
+  }
   return {
     sourceInstanceKey: instance.sourceInstanceKey,
     revision: instance.revision,
@@ -16,17 +22,30 @@ function bindSourceManagementClient(client: MnemonClient, instance: MemorySource
         // These clean task-Agent workflows follow the inspected Sidebar root;
         // normal Source edits keep their existing session-aware write path.
         const task = ['agent-search', 'supervise', 'body-create', 'body-metadata-maintain'].includes(operation)
-        return (task ? taskClient : client).assistSource(instance.sourceInstanceKey, operation, input, options.expectedRevision, options.confirmed)
+        return independent(() => (task ? taskClient : client).assistSource(instance.sourceInstanceKey, operation, input, options.expectedRevision, options.confirmed))
       },
     } }),
-    read: async (operation, input = null) => { assertCurrent(); return client.readSourceManagement(instance.sourceInstanceKey, operation, input) },
-    mutate: async (operation, input, options) => { assertCurrent(); return client.mutateSourceManagement(
+    read: async (operation, input = null, options) => {
+      assertCurrent()
+      if (options?.coalesce !== true) return independent(() => client.readSourceManagement(instance.sourceInstanceKey, operation, input))
+      const key = JSON.stringify([readEpoch(), operation, input])
+      let request = pending.get(key)
+      if (request === undefined) {
+        request = client.readSourceManagement(instance.sourceInstanceKey, operation, input).finally(() => {
+          if (pending.get(key) === request) pending.delete(key)
+        })
+        pending.set(key, request)
+      }
+      // Do not retain completed data or share mutable response objects between pages.
+      return structuredClone(await request)
+    },
+    mutate: (operation, input, options) => independent(() => client.mutateSourceManagement(
       instance.sourceInstanceKey,
       operation,
       input,
       options.expectedRevision ?? instance.revision,
       options.confirmed,
-    ) },
+    )),
     // The catalog a page offers as a per-run choice is the task Agent's own
     // directory, asked through the task-scoped client so a session's route is
     // reported from the conversation that will actually run the work.
@@ -49,8 +68,10 @@ export function useSourceCatalog(client: MnemonClient, taskClient: MnemonClient,
 } {
   const [sourceCatalogState, setSourceCatalogState] = useState<{ contextKey: string; value: MemorySourceManagementCatalog | null; error: string | null }>(() => ({ contextKey: viewContextKey, value: null, error: null }))
 
-  const current = useRef<{ client: MnemonClient; viewContextKey: string; active: boolean }>()
-  current.current = { client, viewContextKey, active }
+  const current = useRef<{ client: MnemonClient; viewContextKey: string; active: boolean; revision: number; epoch: number }>()
+  const previousRead = current.current
+  const changed = previousRead?.client !== client || previousRead.viewContextKey !== viewContextKey || previousRead.active !== active || previousRead.revision !== revision
+  current.current = { client, viewContextKey, active, revision, epoch: (previousRead?.epoch ?? 0) + Number(changed) }
   const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
 
@@ -67,10 +88,23 @@ export function useSourceCatalog(client: MnemonClient, taskClient: MnemonClient,
 
   const sourceCatalog = sourceCatalogState.contextKey === viewContextKey ? sourceCatalogState.value : null
   const sourceInstances = sourceCatalog?.sources ?? []
-  const sourceManagementClients = useMemo(() => new Map(sourceInstances
-    .map(source => [source.sourceInstanceKey, bindSourceManagementClient(client, source, taskClient, () => {
-      if (!mounted.current || current.current?.client !== client || current.current.viewContextKey !== viewContextKey) throw new Error('Source page is unmounted or its view context changed')
-    })])), [client, sourceInstances, taskClient, viewContextKey])
+  const bindings = useRef<{ client: MnemonClient; taskClient: MnemonClient; context: string; generation?: string; values: Map<string, { signature: string; management: MnemonSourceManagementClient }> }>()
+  const sourceManagementClients = useMemo(() => {
+    const previous = bindings.current
+    const reusable = previous?.client === client && previous.taskClient === taskClient && previous.context === viewContextKey && previous.generation === sourceCatalog?.generationId
+    const values = new Map<string, { signature: string; management: MnemonSourceManagementClient }>()
+    for (const source of sourceInstances) {
+      // Re-reading an unchanged catalog must not restart every Source page. Include
+      // the whole descriptor so revisions, authority hints and extension changes count.
+      const signature = JSON.stringify(source)
+      const prior = reusable ? previous.values.get(source.sourceInstanceKey) : undefined
+      values.set(source.sourceInstanceKey, prior?.signature === signature ? prior : { signature, management: bindSourceManagementClient(client, source, taskClient, () => {
+        if (!mounted.current || current.current?.client !== client || current.current.viewContextKey !== viewContextKey) throw new Error('Source page is unmounted or its view context changed')
+      }, () => current.current!.epoch) })
+    }
+    bindings.current = { client, taskClient, context: viewContextKey, ...(sourceCatalog === null ? {} : { generation: sourceCatalog.generationId }), values }
+    return new Map([...values].map(([key, value]) => [key, value.management]))
+  }, [client, sourceCatalog, sourceInstances, taskClient, viewContextKey])
   const visibleSourcePages = useMemo(() => {
     const visibleTypes = new Set(sourceInstances.map(source => source.sourceTypeId))
     return sourcePageEntries.filter(entry => visibleTypes.has(entry.sourceTypeId))
