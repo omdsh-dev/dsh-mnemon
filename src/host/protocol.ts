@@ -248,6 +248,7 @@ export type MnemonDisplayMode = 'sidebar' | 'builtin'
 export const DEFAULT_IDLE_REVIEW = {
   enabled: true,
   runtimeMemory: true,
+  persistWatermark: false,
   provider: 'spawn',
   fallback: 'spawn',
   agentTeams: 'pause',
@@ -261,6 +262,8 @@ export interface ResolvedIdleReviewConfig {
   enabled: boolean
   /** Whether review may change USER.md and MEMORY.md; it can create Documents either way. */
   runtimeMemory: boolean
+  /** Preserve attempt quota and cooling time for the same persisted parent session. */
+  persistWatermark: boolean
   provider: 'spawn' | 'fork'
   /** Applies only before a child starts; a failed run is never replayed. */
   fallback: 'spawn' | 'skip'
@@ -665,6 +668,7 @@ export interface LifecycleAgentSnapshot {
   lastReviewDocumentIds?: string[]
   idleReviewAttempts?: number
   idleReviewBlocked?: 'agent-team'
+  idleReviewWatermark?: { state: 'ready' | 'error'; restoredAttempts: number; maxPerSession: number; error?: string }
   nextReviewAt?: string
   lastReviewFailure?: IdleReviewFailure
   lastAt?: string

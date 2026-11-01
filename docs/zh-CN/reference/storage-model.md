@@ -68,6 +68,7 @@ follow an exact cold reference when full text is required
     +-- tombstones.json           # 本机已导出过的删除记录，不进入 Mnemon Pack
     +-- runtime-index.json        # 上次导出携带的 Runtime 条目，不进入 Mnemon Pack
     +-- review-ledger.json        # 待决策的整理建议，0600，不进入 Mnemon Pack
+    +-- idle-review/              # 显式启用的本机会话尝试/冷却水位；不进入 Pack 或同步
     +-- memory-providers.json     # 第三方连接控制面，0600，不进入 Mnemon Pack
     +-- sync-git.json             # Git 同步配置；含 token 时 0600；不进入 Mnemon Pack
     +-- sync/
@@ -89,6 +90,11 @@ follow an exact cold reference when full text is required
 `machine.json`、`tombstones.json`、`runtime-index.json` 与 `review-ledger.json` 都不属于任何 Pack 组件，因此都不会同步：机器的身份与审查历史留在产生它的机器上。
 
 <a id="runtime-memory"></a>
+
+
+`state/idle-review/<sha256(parentSessionId)>.json` 是独立的 Host 版本 1 文件，包含原始会话 ID、安全整数 `attempts` 与 `lastReviewAttemptAt`（毫秒，空状态为 `null`）。根目录来自实际服务父会话的运行时图，与 Source/View 选择和全局 USER.md 选项无关。文件不存在时从空状态开始；JSON 损坏、未知版本、ID/数字非法、超过 16 KiB 或非 ENOENT 读写失败会暂停自动审查。支持的平台上新文件使用 `0600`，目录使用 `0700`。
+
+预约在短暂的同步读取/检查/原子替换临界区中完成，并以每会话独占的 `<hash>.json.lock` 目录保护。共享本机根目录的独立 Host 不会同时重复预约额度；锁冲突立即暂停竞争失败一方的自动审查。不会自动抢占锁。崩溃可能已消耗预约，或遗留废弃锁；修复状态/删除废弃锁前必须停止所有相关 Host，然后重新打开会话。此保证基于本机文件系统；网络文件系统必须提供等效的独占建目录与原子替换语义。替换失败保留旧文件。水位和临时文件不进入 Pack 或 Git 同步，不含对话内容或完成重放记录，不自动清理。关闭设置或回滚不会删除文件；手动删除会话文件会重置额度。
 
 ## 运行时记忆
 

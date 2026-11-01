@@ -1,5 +1,7 @@
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
+import { mkdtempSync, realpathSync, rmSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -54,7 +56,7 @@ function composedBy(typeId: string): { strategyTypeId: string; strategyInstanceK
   return { strategyTypeId: typeId, strategyInstanceKey: `strategy:${typeId}`, runtimeGeneration: `fixture-generation:${typeId}` }
 }
 
-function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: { taskModelRoute?: boolean; workspaces?: Array<{ path: string }>; sessionModel?: { provider: string; model: string; reasoningEffort?: string }; conversationOptions?: { provider: string; model: string; reasoningEffort?: string }; workingDirectory?: { set: (agent: HostAgent, path: string, signal?: AbortSignal) => Promise<string> }; strategyWorkflows?: Partial<Record<string, readonly MemoryStrategyWorkflow[]>> | undefined } = {}) {
+function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: { directory?: string; sessionId?: string; taskModelRoute?: boolean; workspaces?: Array<{ path: string }>; sessionModel?: { provider: string; model: string; reasoningEffort?: string }; conversationOptions?: { provider: string; model: string; reasoningEffort?: string }; workingDirectory?: { set: (agent: HostAgent, path: string, signal?: AbortSignal) => Promise<string> }; strategyWorkflows?: Partial<Record<string, readonly MemoryStrategyWorkflow[]>> | undefined } = {}) {
   const agentListeners = new Map<string, Listener>()
   const rootListeners = new Map<string, Listener>()
   const agentSections: Array<{ name: string; order: number; text: () => string }> = []
@@ -112,7 +114,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
       : undefined),
   } as unknown as HostAgentContext
   const agent = {
-    id: 'session-1',
+    id: options.sessionId ?? 'session-1',
     status: 'idle',
     ...(options.conversationOptions !== undefined ? { options: options.conversationOptions } : taskModelRoute ? { options: { provider: 'deepseek', model: 'deepseek-chat' } } : {}),
     session: {
@@ -207,7 +209,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
   const runtimeBinding = {
     // Each generation holds the definition of the Strategy that composed its Views, as Core's does;
     // a Strategy without a declaration in the test declares none, as the Layered one before 0.5.10.
-    forAgent: vi.fn((_agent: HostAgent) => ({ config, composableTurns, memoryComposition: { generation: (id: string) => {
+    forAgent: vi.fn((_agent: HostAgent) => ({ config, directory: options.directory, composableTurns, memoryComposition: { generation: (id: string) => {
       const typeId = id.slice('fixture-generation:'.length)
       const workflows = options.strategyWorkflows?.[typeId]
       return { sourceInstances: () => [], strategy: { instanceKey: `strategy:${typeId}`, definition: { manifest: { typeId, ...(workflows === undefined ? {} : { workflows: [...workflows] }) } } } }
@@ -893,6 +895,280 @@ describe('Mnemon DSH lifecycle integration', () => {
       totalUserTextLength: 'Inspect this diagram.'.length,
       turnCount: 1,
     })
+  })
+
+  it('restores a persisted session budget before scheduling another idle review', async () => {
+    vi.useFakeTimers()
+    const directory = mkdtempSync(join(directories, 'watermark-'))
+    const stateDirectory = join(directory, 'state', 'idle-review')
+    mkdirSync(stateDirectory, { recursive: true })
+    const filename = join(stateDirectory, createHash('sha256').update('session-1').digest('hex') + '.json')
+    writeFileSync(filename, JSON.stringify({ version: 1, sessionId: 'session-1', attempts: 2, lastReviewAttemptAt: Date.now() - 60_000 }))
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark: true, maxPerSession: 2 } } as never), { directory })
+    try {
+      await value.preStep([durableCandidate(300)], 1)
+      await value.turnStopping(1)
+      await value.preStep([durableCandidate(300)], 2)
+      await value.turnStopping(2)
+      await vi.advanceTimersByTimeAsync(600_000)
+      expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ idleReviewAttempts: 2, idleReviewPending: false })
+      expect(value.coordinator.review).not.toHaveBeenCalled()
+    } finally { value.stop() }
+  })
+
+  it('does not spin timers when a backwards clock leaves a far-future cooling watermark', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const directory = mkdtempSync(join(directories, 'future-watermark-'))
+    const stateDirectory = join(directory, 'state', 'idle-review')
+    mkdirSync(stateDirectory, { recursive: true })
+    writeFileSync(join(stateDirectory, createHash('sha256').update('session-1').digest('hex') + '.json'), JSON.stringify({ version: 1, sessionId: 'session-1', attempts: 1, lastReviewAttemptAt: 3_000_000_000_000 }))
+    const timer = vi.spyOn(globalThis, 'setTimeout')
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark: true } }), { directory })
+    try {
+      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(value.coordinator.review).not.toHaveBeenCalled()
+      expect(value.lifecycle.snapshot('session-1').current?.idleReviewPending).toBe(true)
+      expect(timer).toHaveBeenCalledTimes(1)
+    } finally { value.stop(); timer.mockRestore() }
+  })
+
+  it('retains cooling time and attempts across Agent recreation without running catch-up work', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000_000)
+    const directory = mkdtempSync(join(directories, 'restart-'))
+    const config = resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark: true, minIntervalMs: 30_000, maxPerSession: 2 } })
+    const first = fixture(config, { directory })
+    const eligible = async (value: ReturnType<typeof fixture>) => {
+      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+    }
+    await eligible(first)
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(first.coordinator.review).toHaveBeenCalledOnce()
+    first.stop()
+    const resumed = fixture(config, { directory })
+    try {
+      expect(resumed.lifecycle.snapshot('session-1').current).toMatchObject({ idleReviewAttempts: 1, idleReviewPending: false, idleReviewWatermark: { state: 'ready', restoredAttempts: 1 } })
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(resumed.coordinator.review).not.toHaveBeenCalled()
+      await eligible(resumed)
+      await vi.advanceTimersByTimeAsync(19_999)
+      expect(resumed.coordinator.review).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(resumed.coordinator.review).toHaveBeenCalledOnce()
+      expect(resumed.lifecycle.snapshot('session-1').current?.idleReviewAttempts).toBe(2)
+    } finally { resumed.stop() }
+  })
+
+  it('isolates persistent budgets by parent id and actual runtime root', async () => {
+    vi.useFakeTimers()
+    const directory = mkdtempSync(join(directories, 'identity-'))
+    const config = resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark: true, maxPerSession: 1 } })
+    const first = fixture(config, { directory })
+    for (let turn = 1; turn <= 2; turn++) { await first.preStep([durableCandidate(300)], turn); await first.turnStopping(turn) }
+    await vi.advanceTimersByTimeAsync(5_000); first.stop()
+    for (const options of [{ directory, sessionId: 'new-parent' }, { directory: join(directory, 'other-root') }]) {
+      const value = fixture(config, options)
+      try {
+        expect(value.lifecycle.snapshot(options.sessionId ?? 'session-1').current?.idleReviewAttempts).toBe(0)
+        for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+        await vi.advanceTimersByTimeAsync(5_000)
+        expect(value.coordinator.review).toHaveBeenCalledOnce()
+      } finally { value.stop() }
+    }
+  })
+
+  it('drops the previous root snapshot when the replacement root watermark is corrupt', () => {
+    const directory = mkdtempSync(join(directories, 'root-snapshot-'))
+    const other = join(directory, 'other-root')
+    const filename = createHash('sha256').update('session-1').digest('hex') + '.json'
+    for (const root of [directory, other]) mkdirSync(join(root, 'state', 'idle-review'), { recursive: true })
+    writeFileSync(join(directory, 'state', 'idle-review', filename), JSON.stringify({ version: 1, sessionId: 'session-1', attempts: 1, lastReviewAttemptAt: 1_000 }))
+    writeFileSync(join(other, 'state', 'idle-review', filename), '{')
+    const value = fixture(resolveConfig({ idleReview: { persistWatermark: true } }), { directory })
+    try {
+      expect(value.lifecycle.snapshot('session-1').current?.idleReviewWatermark?.restoredAttempts).toBe(1)
+      const graph = value.runtimeSource.forAgent(value.agent)
+      value.runtimeSource.forAgent.mockReturnValue({ ...graph, directory: other })
+      expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ idleReviewAttempts: 0, idleReviewWatermark: { state: 'error', restoredAttempts: 0 } })
+    } finally { value.stop() }
+  })
+
+  it('keeps normal turns available while corrupt watermarks or a missing graph root pause automatic review', async () => {
+    vi.useFakeTimers()
+    const directory = mkdtempSync(join(directories, 'corrupt-'))
+    const stateDirectory = join(directory, 'state', 'idle-review')
+    mkdirSync(stateDirectory, { recursive: true })
+    writeFileSync(join(stateDirectory, createHash('sha256').update('session-1').digest('hex') + '.json'), '{private-session-content')
+    for (const options of [{ directory }, {}]) {
+      const value = fixture(resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark: true } }), options)
+      try {
+        for (let turn = 1; turn <= 2; turn++) {
+          expect((await value.preStep([durableCandidate(300)], turn)).kind).toBe('enter')
+          await value.turnStopping(turn)
+        }
+        await vi.advanceTimersByTimeAsync(600_000)
+        expect(value.coordinator.review).not.toHaveBeenCalled()
+        const state = value.lifecycle.snapshot('session-1').current
+        expect(state).toMatchObject({ idleReviewWatermark: { state: 'error' }, idleReviewPending: false })
+        expect(state?.idleReviewWatermark?.error).not.toContain(directory)
+        expect(state?.idleReviewWatermark?.error).not.toContain('private-session-content')
+      } finally { value.stop() }
+    }
+  })
+
+  it('starts no child when atomic persistence fails and leaves the old budget intact', async () => {
+    vi.useFakeTimers()
+    const directory = mkdtempSync(join(directories, 'write-failure-'))
+    const filename = join(directory, 'state', 'idle-review', createHash('sha256').update('session-1').digest('hex') + '.json')
+    mkdirSync(join(directory, 'state', 'idle-review'), { recursive: true })
+    const previous = JSON.stringify({ version: 1, sessionId: 'session-1', attempts: 0, lastReviewAttemptAt: null })
+    writeFileSync(filename, previous)
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark: true } }), { directory })
+    const rename = vi.spyOn(fs, 'renameSync').mockImplementationOnce(() => { throw Object.assign(new Error('sensitive-path'), { code: 'EACCES' }) })
+    try {
+      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(value.coordinator.review).not.toHaveBeenCalled()
+      expect(readFileSync(filename, 'utf8')).toBe(previous)
+      expect(value.lifecycle.snapshot('session-1').current?.idleReviewWatermark).toMatchObject({ state: 'error', error: expect.stringContaining('EACCES') })
+    } finally { rename.mockRestore(); value.stop() }
+  })
+
+  it('writes the reservation before starting a reviewer and retains it when the next turn cancels review', async () => {
+    vi.useFakeTimers()
+    const directory = mkdtempSync(join(directories, 'cancel-watermark-'))
+    const filename = join(directory, 'state', 'idle-review', createHash('sha256').update('session-1').digest('hex') + '.json')
+    const config = resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark: true, maxPerSession: 1 } })
+    const value = fixture(config, { directory })
+    let signal: AbortSignal | undefined
+    vi.mocked(value.coordinator.review).mockImplementation(async (_agent, controller) => {
+      expect(JSON.parse(readFileSync(filename, 'utf8')).attempts).toBe(1)
+      signal = controller
+      return await new Promise((_resolve, reject) => controller.addEventListener('abort', () => reject(new Error('cancelled')), { once: true }))
+    })
+    try {
+      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(value.lifecycle.snapshot('session-1').current?.reviewRunning).toBe(true)
+      await value.preStep([userMessage('continue')], 3)
+      expect(signal?.aborted).toBe(true)
+    } finally { value.stop() }
+    const resumed = fixture(config, { directory })
+    expect(resumed.lifecycle.snapshot('session-1').current?.idleReviewAttempts).toBe(1)
+    resumed.stop()
+  })
+
+  it.each([1, 2])('persists existing disabled-mode usage immediately on opt-in (max: %s)', async maxPerSession => {
+    vi.useFakeTimers(); vi.setSystemTime(1_000_000)
+    const directory = mkdtempSync(join(directories, 'baseline-'))
+    const config = resolveConfig({ idleReviewMs: 5_000, idleReview: { maxPerSession, minIntervalMs: 30_000 } })
+    const first = fixture(config, { directory })
+    for (let turn = 1; turn <= 2; turn++) { await first.preStep([durableCandidate(300)], turn); await first.turnStopping(turn) }
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(first.coordinator.review).toHaveBeenCalledOnce()
+    config.idleReview.persistWatermark = true
+    expect(first.lifecycle.snapshot('session-1').current?.idleReviewAttempts).toBe(1)
+    first.stop()
+    const resumed = fixture(config, { directory })
+    try {
+      expect(resumed.lifecycle.snapshot('session-1').current).toMatchObject({ idleReviewAttempts: 1, nextReviewAt: '1970-01-01T00:17:15.000Z' })
+      for (let turn = 1; turn <= 2; turn++) { await resumed.preStep([durableCandidate(300)], turn); await resumed.turnStopping(turn) }
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(resumed.coordinator.review).not.toHaveBeenCalled()
+    } finally { resumed.stop() }
+  })
+
+  it('keeps the in-memory quota exhausted if persisting the opt-in baseline fails', async () => {
+    vi.useFakeTimers()
+    const directory = mkdtempSync(join(directories, 'baseline-failure-'))
+    const config = resolveConfig({ idleReviewMs: 5_000, idleReview: { minIntervalMs: 5_000, maxPerSession: 1 } })
+    const value = fixture(config, { directory })
+    let rename: ReturnType<typeof vi.spyOn> | undefined
+    try {
+      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await vi.advanceTimersByTimeAsync(5_000)
+      rename = vi.spyOn(fs, 'renameSync').mockImplementationOnce(() => { throw Object.assign(new Error('baseline refused'), { code: 'EACCES' }) })
+      config.idleReview.persistWatermark = true
+      expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ idleReviewAttempts: 1, idleReviewWatermark: { state: 'error' } })
+      config.idleReview.persistWatermark = false
+      for (let turn = 3; turn <= 4; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(value.coordinator.review).toHaveBeenCalledOnce()
+    } finally { rename?.mockRestore(); value.stop() }
+  })
+
+  it('merges additional disabled-mode usage on re-enable in the same Agent', async () => {
+    vi.useFakeTimers()
+    const directory = mkdtempSync(join(directories, 're-enable-'))
+    const config = resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark: true, minIntervalMs: 5_000, maxPerSession: 2 } })
+    const value = fixture(config, { directory })
+    try {
+      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await vi.advanceTimersByTimeAsync(5_000)
+      config.idleReview.persistWatermark = false
+      for (let turn = 3; turn <= 4; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(value.coordinator.review).toHaveBeenCalledTimes(2)
+      config.idleReview.persistWatermark = true
+      expect(value.lifecycle.snapshot('session-1').current?.idleReviewAttempts).toBe(2)
+    } finally { value.stop() }
+    const resumed = fixture(config, { directory })
+    expect(resumed.lifecycle.snapshot('session-1').current?.idleReviewAttempts).toBe(2)
+    resumed.stop()
+  })
+
+  it('never merges disabled-mode usage from another runtime root into a newly enabled root', async () => {
+    vi.useFakeTimers()
+    const directory = mkdtempSync(join(directories, 'baseline-root-'))
+    const config = resolveConfig({ idleReviewMs: 5_000, idleReview: { maxPerSession: 1 } })
+    const value = fixture(config, { directory })
+    try {
+      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await vi.advanceTimersByTimeAsync(5_000)
+      const graph = value.runtimeSource.forAgent(value.agent)
+      value.runtimeSource.forAgent.mockReturnValue({ ...graph, directory: join(directory, 'new-root') })
+      config.idleReview.persistWatermark = true
+      expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ idleReviewAttempts: 0, idleReviewWatermark: { restoredAttempts: 0 } })
+    } finally { value.stop() }
+  })
+
+  it('does no watermark I/O by default, and keeps earlier in-process attempts on opt-in', async () => {
+    vi.useFakeTimers()
+    const directory = mkdtempSync(join(directories, 'opt-in-'))
+    const config = resolveConfig({ idleReviewMs: 5_000, idleReview: { minIntervalMs: 5_000, maxPerSession: 2 } })
+    const value = fixture(config, { directory })
+    try {
+      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(value.coordinator.review).toHaveBeenCalledOnce()
+      expect(() => readFileSync(join(directory, 'state', 'idle-review', createHash('sha256').update('session-1').digest('hex') + '.json'))).toThrow()
+      config.idleReview.persistWatermark = true
+      for (let turn = 3; turn <= 4; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(value.coordinator.review).toHaveBeenCalledTimes(2)
+      const persisted = JSON.parse(readFileSync(join(directory, 'state', 'idle-review', createHash('sha256').update('session-1').digest('hex') + '.json'), 'utf8'))
+      expect(persisted.attempts).toBe(2)
+    } finally { value.stop() }
+  })
+
+  it.each(['root', 'disable', 'dispose'] as const)('invalidates queued persistent review when %s changes before dispatch', async change => {
+    vi.useFakeTimers()
+    const directory = mkdtempSync(join(directories, 'queued-watermark-'))
+    const config = resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark: true } })
+    const value = fixture(config, { directory })
+    try {
+      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      if (change === 'disable') config.idleReview.persistWatermark = false
+      if (change === 'dispose') value.stop()
+      if (change === 'root') {
+        const graph = value.runtimeSource.forAgent(value.agent)
+        value.runtimeSource.forAgent.mockReturnValue({ ...graph, directory: join(directory, 'changed-root') })
+      }
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(value.coordinator.review).not.toHaveBeenCalled()
+    } finally { value.stop() }
   })
 
   it('waits for the review score threshold, then debounces a full-checkpoint review', async () => {

@@ -149,6 +149,22 @@ describe('MnemonSettingsCard', () => {
     expect(screen.queryByRole('button', { name: /^Agent Teams 兼容模式 / })).toBeNull()
   })
 
+  it.each([false, true])('persists the review watermark choice only with a writable settings scope (read-only: %s)', async readOnly => {
+    const mutate = vi.fn(async () => {})
+    const scope = liveSettingsScope<Config>({ status: 'ready', value: { idleReview: { maxPerSession: 3 } }, revision: 0, writable: !readOnly, mode: 'host' }, mutate)
+    render(threeTier(scope, undefined, {}, translateEn))
+    const choice = screen.getByRole('switch', { name: 'Keep review limits after reopening' })
+    expect(checked(choice)).toBe(false)
+    fireEvent.click(choice)
+    if (readOnly) {
+      expect(choice.hasAttribute('disabled')).toBe(true)
+      expect(mutate).not.toHaveBeenCalled()
+    } else {
+      await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['idleReview'], value: { maxPerSession: 3, persistWatermark: true } }]))
+      expect(checked(screen.getByRole('switch', { name: 'Keep review limits after reopening' }))).toBe(true)
+    }
+  })
+
   it('switches runtime memory writes for idle review at once (#319)', async () => {
     const mutate = vi.fn(async () => {})
     const scope = liveSettingsScope<Config>({ status: 'ready' as const, value: {}, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const }, mutate)

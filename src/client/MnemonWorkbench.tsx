@@ -466,6 +466,13 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       {workspaceToast.element}
       {remoteReadOnly && <div className={css.alert} role="status">{t('workspace.remoteReadOnly')}</div>}
       {!focused && status?.lifecycle?.current?.idleReviewBlocked === 'agent-team' && <div className={css.alert} role="status">{t('status.reviewTeamPaused')}</div>}
+      {!focused && status?.lifecycle?.current?.idleReviewWatermark !== undefined && <div className={css.alert} role={status.lifecycle.current.idleReviewWatermark.state === 'error' ? 'alert' : 'status'}>
+        <span>{t('status.reviewWatermarkUsage', { attempts: status.lifecycle.current.idleReviewAttempts ?? 0, max: status.lifecycle.current.idleReviewWatermark.maxPerSession, restored: status.lifecycle.current.idleReviewWatermark.restoredAttempts })}</span>
+        {status.lifecycle.current.idleReviewWatermark.state === 'error' ? <>
+          <strong>{t('status.reviewWatermarkPaused')}</strong>
+          <span>{t('status.reviewWatermarkRecovery')}</span>
+        </> : status.lifecycle.current.nextReviewAt !== undefined && <span>{t('status.reviewWatermarkNext', { time: new Date(status.lifecycle.current.nextReviewAt).toLocaleString(locale) })}</span>}
+      </div>}
       {!focused && status?.lifecycle?.current?.lastError !== undefined && <div className={css.alert} role="alert" aria-label={t('status.reviewFailed')}>
         <strong>{t('status.reviewFailed')}</strong>
         <span>{status.lifecycle.current.lastError}</span>

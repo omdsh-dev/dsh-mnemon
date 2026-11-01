@@ -35,7 +35,7 @@ describe('MnemonWorkbench', () => {
   const settingsScope = staticSettingsScope<Config>(settingsSnapshot)
   const readOnlySettingsScope = staticSettingsScope<Config>({ status: 'unavailable', writable: false, mode: 'host' })
 
-  function createConnection(options: { reviewPartial?: boolean; reviewTeam?: boolean; reviewError?: string; isLoopback?: boolean; withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; runtimeBranch?: boolean; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; summaryWithoutVersion?: boolean; restartPending?: VersionRestartStatus; directoryPending?: boolean; reconnectPending?: boolean; relatedDeferred?: boolean; versionsDeferred?: boolean; layerSwitches?: Record<'runtime' | 'documents' | 'memory-spaces', boolean>; componentsOff?: string[]; composition?: { serving: boolean; state: 'ready' | 'incomplete' | 'rejected'; diagnostics: Array<{ code: string; message: string }> } } = {}) {
+  function createConnection(options: { reviewWatermark?: 'ready' | 'error'; reviewPartial?: boolean; reviewTeam?: boolean; reviewError?: string; isLoopback?: boolean; withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; runtimeBranch?: boolean; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; summaryWithoutVersion?: boolean; restartPending?: VersionRestartStatus; directoryPending?: boolean; reconnectPending?: boolean; relatedDeferred?: boolean; versionsDeferred?: boolean; layerSwitches?: Record<'runtime' | 'documents' | 'memory-spaces', boolean>; componentsOff?: string[]; composition?: { serving: boolean; state: 'ready' | 'incomplete' | 'rejected'; diagnostics: Array<{ code: string; message: string }> } } = {}) {
     const body = {
       id: 'project',
       provider: MEMORY_PROVIDER_CATALOG.find(item => item.id === 'mnemon-native')!, providerId: 'mnemon-native', providerEnabled: true, providerSettings: {}, configuredSecrets: [],
@@ -130,6 +130,7 @@ describe('MnemonWorkbench', () => {
           lastReviewAction: 'skipped',
           lastPhase: 'writeback',
           ...(options.reviewError === undefined ? {} : { lastError: options.reviewError }),
+          ...(options.reviewWatermark ? { idleReviewAttempts: 3, nextReviewAt: '2026-08-13T03:05:00.000Z', idleReviewWatermark: { state: options.reviewWatermark, restoredAttempts: 2, maxPerSession: 4, ...(options.reviewWatermark === 'error' ? { error: 'Idle review watermark unavailable.' } : {}) } } : {}),
           ...(options.reviewTeam ? { idleReviewBlocked: 'agent-team' } : {}),
           ...(options.reviewPartial ? { lastReviewFailure: { status: 'partial', runId: 'review-run-255', provider: 'spawn', receipts: [
             { tool: 'mnemon_document_create', action: 'created', documentId: 'committed-document-255' },
@@ -615,6 +616,18 @@ describe('MnemonWorkbench', () => {
     expect(await screen.findByText(/Idle review is paused by the Agent Teams compatibility setting/)).toBeTruthy()
     expect(screen.getByText(/select “Scoped task Agent review”/u)).toBeTruthy()
     expect(screen.queryByRole('alert', { name: 'Idle review failed' })).toBeNull()
+  })
+
+  it.each(['ready', 'error'] as const)('shows same-session persisted review usage and recovery state (%s)', async state => {
+    const { connection } = createConnection({ reviewWatermark: state })
+    render(<MnemonWorkbench connection={connection} sessionId="session-1" t={translateEn} locale="en" settingsScope={settingsScope} />)
+    expect(await screen.findByText('Session review attempts: 3 / 4 (2 restored).')).toBeTruthy()
+    if (state === 'error') {
+      expect(await screen.findByText('Automatic review paused: persistent limits are unavailable.')).toBeTruthy()
+      expect(screen.getByText(/Stop Hosts using this storage root/)).toBeTruthy()
+    } else {
+      expect(await screen.findByText(/Next review no earlier than/)).toBeTruthy()
+    }
   })
 
   it('shows the live graph, sidebar pages, and memory write dialog by default', async () => {
