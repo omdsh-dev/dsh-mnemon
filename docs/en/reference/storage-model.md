@@ -273,4 +273,4 @@ Mnemon Native preserves `temporal`, `semantic`, `causal`, and `entity` relations
 | Long-term memory | Mnemon `mnemon.db` or remote provider | graph projection and cross-provider rank fusion |
 | Skills | The `SKILL.md` folders in DSH's skill roots | the catalog the Skills page shows; `skills/` versions, installs and market caches |
 | Skill evolution | `skills/ledger.json`, `skills/evals.json`, `skills/trajectories/` | the Evolution count, the Status card and the line under each turn |
-| Review watermark | Host process memory | status-page snapshot; not yet persisted |
+| Review quota and cooldown watermarks | Host process memory by default; `state/idle-review/` when persistence is enabled | status-page snapshot; never Packed or synced |

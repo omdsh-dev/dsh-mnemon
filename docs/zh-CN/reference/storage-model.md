@@ -281,4 +281,4 @@ Mnemon Native 保留 `temporal`、`semantic`、`causal` 和 `entity` 关系；Hi
 | 技能 | DSH 技能目录中的 `SKILL.md` 文件夹 | 技能管理页面展示的目录；`skills/` 中的版本、安装记录与市场缓存 |
 | 技能进化 | `skills/ledger.json`、`skills/evals.json`、`skills/trajectories/` | “进化”上的计数、状态卡片与回合下方的提示行 |
 | 长期记忆 | Mnemon `mnemon.db` 或远程 Provider | 图谱投影、跨 Provider 排名融合 |
-| 审查水位 | Host 进程内存 | 状态页快照；尚未持久化 |
+| 审查配额与冷却水位 | 默认在 Host 进程内存中；启用持久化时存入 `state/idle-review/` | 状态页快照；不进入 Pack 或同步 |
