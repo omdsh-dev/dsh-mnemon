@@ -33,6 +33,7 @@
   --mn-focus: var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   --mn-code: var(--ds-font-family-code, "SFMono-Regular", Consolas, monospace);
   --mn-sans: var(--dsw-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  container: mnemon-workbench / inline-size;
   box-sizing: border-box;
   display: flex;
   height: 100%;
@@ -116,6 +117,8 @@
 .alert { display: flex; flex: 0 0 auto; flex-direction: column; gap: 2px; margin: 8px 24px 0; }
 .alert ul { margin: 4px 0 0; padding-left: 18px; }
 .alert[role="status"] { color: var(--dsw-alias-state-warn-label, var(--mn-text)); background: var(--dsw-alias-state-warn-tertiary, color-mix(in srgb, var(--mn-warn) 12%, transparent)); }
+.noticeGroup, .noticeContents { display: flex; flex: 0 0 auto; flex-direction: column; }
+.noticeToggle { display: none; }
 /* How memory is composed, above the pages; it slides in and out. */
 .notice { flex: 0 0 auto; margin: 8px 24px 0; }
 /* The connection, then the main Strategy composing memory; hover shows each layer. */
@@ -550,3 +553,42 @@
 /* Hosted Source content reuses one outer frame at every viewport, including through renderer wrappers. */
 .page[data-source-page] > .workspacePicker { margin-bottom: 16px; }
 .page[data-source-page] .page { width: 100%; min-height: 0; margin: 0; padding: 0; }
+
+/* Use the panel width: a narrow desktop sidebar needs the same chrome as a phone. */
+@container mnemon-workbench (max-width: 520px) {
+  .masthead { min-height: 0; flex-wrap: wrap; gap: 4px 8px; padding: 8px 16px 2px; }
+  .shell .brand { display: contents; }
+  .brand h1 { min-width: 0; flex: 1 1 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .backButton > span, .storageMode { display: none; }
+  .backButton { min-width: 28px; padding-inline: 4px; }
+  .shell .masthead .headerActions { margin-left: auto; }
+  .shell .masthead .compositionStatus > span:not([data-state]) { display: none; }
+  .shell .masthead .statusCluster > .iconButton { display: inline-flex; }
+  .shell .masthead .workspacePicker { order: 1; flex: 1 0 100%; }
+  .shell .masthead .workspacePicker > [data-part='label'] { display: none; }
+  .shell .masthead .workspacePicker > :last-child { min-width: 0; flex: 1; }
+  .shell .masthead .workspacePicker button { width: 100%; min-width: 0; }
+  .shell .masthead .workspaceMismatch { order: 2; flex: 1 0 100%; }
+  .shell .masthead .workspaceMismatch > span { display: inline; }
+  .alert, .notice { margin-inline: 16px; }
+  .topNavigation { padding-inline: 16px; }
+  .noticeToggle { display: flex; min-width: 0; min-height: 28px; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 16px 0; padding: 4px 12px; border: 0; border-radius: var(--dsw-radius-md); color: var(--dsw-alias-state-warn-label, var(--mn-text)); background: var(--dsw-alias-state-warn-tertiary, color-mix(in srgb, var(--mn-warn) 12%, transparent)); text-align: left; cursor: pointer; font-size: 12px; line-height: 18px; }
+  .noticeToggle > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .noticeToggle > svg { flex: 0 0 auto; transform: rotate(-90deg); }
+  .noticeContents { display: none; }
+  .noticeGroup[data-expanded] .noticeContents { display: flex; }
+  .noticeGroup[data-expanded] .noticeToggle > svg { transform: rotate(90deg); }
+}
+
+/* Coarse pointers: a phone has no hover and no pointer precision, so the navigation tabs,
+   header controls and form fields that were sized for a mouse become 44px hit areas
+   without changing their visual weight. The canvas also keeps its scroll instead of
+   handing the gesture to the page behind it. */
+@media (pointer: coarse) {
+  .masthead :is(button, select), .noticeToggle { min-height: 44px; }
+  .nav button { min-height: 44px; }
+  .sectionHeading button { min-height: 44px; min-width: 44px; }
+  .primaryButton, .secondaryButton, .ghostButton, .dangerButton, .dangerSolidButton { min-height: 44px; }
+  .page :is(input:not([type='checkbox']):not([type='radio']), select, textarea) { min-height: 44px; }
+  .canvas { overscroll-behavior: contain; }
+}

@@ -47,7 +47,7 @@ describe('additive Strategy plugins through the real Host', () => {
 
     const tools = new Map<string, ToolDefinition>()
     const coordinator = new MnemonSubagentCoordinator({} as HostSubagentsService, f.live)
-    registerTools({ tools: { register: (tool: ToolDefinition) => { tools.set(tool.name, tool) } } } as unknown as HostContextShape, f.live, coordinator)
+    registerTools({ tools: { register: (tool: ToolDefinition) => { tools.set(tool.name, tool); return () => { tools.delete(tool.name) } } } } as unknown as HostContextShape, f.live, coordinator, f.extensions)
     const execute = (name: string, args: object) => (tools.get(name)!.execute as Function)(args, { agent: parent, signal: new AbortController().signal })
     await expect(execute('mnemon_runtime_memory', { action: 'add', target: 'memory', content: 'must not write' })).rejects.toThrow('not offered')
     const remember = turn.view.actionOffers.find(offer => offer.sourceActionId === 'remember')!

@@ -1,3 +1,4 @@
+import { toolContributions } from './fixtures/tool-contributions.ts'
 import { readFileSync } from 'node:fs'
 import { afterEach, describe, expect, expectTypeOf, it } from 'vitest'
 import type { MnemonAnchorPage } from '../src/client/anchor.ts'
@@ -18,7 +19,7 @@ function registered(): ToolDefinition[] {
   const tools: ToolDefinition[] = []
   const register = (tool: ToolDefinition) => { tools.push(tool); return () => {} }
   const coordinator = new MnemonSubagentCoordinator({} as never, {} as never, { tools: { register }, on: () => () => {} } as never)
-  registerTools({ tools: { register } } as unknown as HostContextShape, {} as never, coordinator)
+  registerTools({ tools: { register } } as unknown as HostContextShape, {} as never, coordinator, toolContributions())
   return tools
 }
 

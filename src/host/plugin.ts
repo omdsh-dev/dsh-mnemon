@@ -182,7 +182,10 @@ export function apply(rawContext: unknown, rawConfig: MnemonConfig | LiveHostCon
       runtime.dispose()
     }
   }, 'dsh-mnemon.lifecycle-root()')
-  registerTools(ctx, runtime, coordinator)
+  ctx.effect(() => {
+    const loader = ctx.get('loader') as { await?(): Promise<unknown> } | undefined
+    return registerTools(ctx, runtime, coordinator, extensions, loader?.await?.())
+  }, 'dsh-mnemon: Source tool lifecycle')
   registerCommands(ctx.commands, runtime, coordinator)
   registerGuidance(ctx, resolved)
   ctx.inject(['connection', 'webServer'], (webContext) => {

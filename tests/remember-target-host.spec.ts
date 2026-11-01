@@ -115,7 +115,7 @@ async function host(attempts: () => string[], options: { query?: boolean } = {})
   const dshHost = ctx as unknown as HostContextShape
   const coordinator = new MnemonSubagentCoordinator(dshHost.subagents, f.live, dshHost)
   const lifecycle = new MnemonLifecycle(dshHost, coordinator, f.config, f.live)
-  registerTools(dshHost, f.live, coordinator)
+  registerTools(dshHost, f.live, coordinator, f.extensions)
   const stop = lifecycle.start()
   disposers.push(async () => { stop(); await ctx.fiber.dispose(); await f.dispose() })
   const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'scripted', model: 'fixture' }, { cwd: f.workspace })

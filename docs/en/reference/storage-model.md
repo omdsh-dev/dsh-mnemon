@@ -68,6 +68,7 @@ Sharing does not broadcast conversations or files. Mnemon-enabled agents can sha
     +-- tombstones.json           # deletions this machine has already exported; excluded from Mnemon Packs
     +-- runtime-index.json        # the runtime entries the last export carried; excluded from Mnemon Packs
     +-- review-ledger.json        # reconciliation proposals awaiting a decision; 0600; excluded from Mnemon Packs
+    +-- idle-review/              # local per-session attempt/cooldown watermarks; opt-in; never Packed or synced
     +-- memory-providers.json     # third-party connection control plane; 0600; excluded from Mnemon Packs
     +-- sync-git.json             # Git sync configuration; 0600 when it holds a token; excluded from Mnemon Packs
     +-- sync/
@@ -87,6 +88,11 @@ The files under `state/`:
 - `review-ledger.json` holds reconciliation proposals and the opinions left on them, newest first, and is capped at 200 entries.
 
 None of `machine.json`, `tombstones.json`, `runtime-index.json` and `review-ledger.json` is a Pack component, so none of them syncs: a machine's identity and its review history stay on the machine that produced them.
+
+
+`state/idle-review/<sha256(parentSessionId)>.json` is a separate version-1 Host file containing the original session ID, safe integer `attempts`, and `lastReviewAttemptAt` (milliseconds, or `null` for an empty state). The root is the runtime graph actually serving that parent, independent of Source/View selection and the global USER.md option. Missing files start empty; malformed JSON, unknown versions, invalid IDs/numbers, files over 16 KiB and non-ENOENT I/O failures pause automatic review. New files use `0600` and the directory `0700` where supported.
+
+Reservations use a short synchronous read/check/atomic-replace critical section guarded by an exclusive per-session `<hash>.json.lock` directory. Independent Hosts sharing a local root cannot both reserve the same budget: contention immediately pauses the losing automatic review. Locks are never stolen automatically. A crash can leave a reservation consumed or a lock abandoned; stop all affected Hosts before repairing state/removing an abandoned lock, then reopen the session. This is a local-filesystem guarantee; network filesystems must provide equivalent exclusive-directory creation and atomic replacement semantics. A failed replacement preserves the previous file. Watermarks and temporary files stay out of Packs and Git sync. They contain no conversation content or completion replay and have no automatic retention cleanup. Disabling the setting or rolling back does not delete them; manually deleting a session file resets its quota.
 
 ## Runtime Memory
 

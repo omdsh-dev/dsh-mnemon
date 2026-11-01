@@ -91,6 +91,7 @@ OpenViking 适配器目前通过 `RememberRequest.content` 接收文本，并保
 - Holographic 是对本地结构化事实语义的 TypeScript 适配，使用原子 JSON 存储，并保持独立的数据格式与生命周期实现。
 - Holographic 将显式写入重要度视为 1 到 5 的整数，并以 `importance / 5` 保存可信度；省略重要度时使用 `defaultTrust`。搜索、浏览和关联读取均排除低于 `minTrust` 的事实，隐藏的事实仍然保留。已有事实的可信度保持原值：旧值 1 无法还原原始重要度，因此不会自动重写。新事实单独保留显式重要度，旧版本读取器会忽略该可选字段。其他 Provider 也会收到未被补齐的重要度并使用各自默认值（Mnemon Native 仍为 3）。
 - Hindsight 使用轻量存活检查，并从 Provider 的 bank stats、实体目录与图谱响应读取真实统计、实体和关系；旧版缺少统计接口时仍可使用召回与图谱表面。
+- 在 Windows 上，ByteRover 从 `PATH` 或显式 `cliPath` 解析 npm 全局或本地安装的 `brv.cmd`，再通过 Node 运行经验证的 `byterover-cli/bin/run.js` 入口。相对 `PATH` 条目与显式相对 `cliPath` 均以知识库工作目录为基准解析，JavaScript 入口在启动前转换为绝对路径。查询与 curate 内容保持为字面参数，不经过 shell。请先用 `npm install -g byterover-cli` 单独安装 CLI；自定义可执行文件继续直接运行。无法识别的 `.cmd` 包装会被拒绝，并显示配置指引。
 - ByteRover 只开放聚焦的 `status`、`query` 与 `curate`；不会虚构广域知识树浏览和删除能力。
 - Supermemory 的浏览结果合并已抽取 memory entries 与仍可浏览的 ingested documents，并按 Provider ID 去重；文档未完成抽取时也不会从“内容”页消失。
 - Mnemon Native 会记录使用。Agent、`/mnemon recall` 或 **Agent 查询**发起的召回，会把查询写入存储的操作日志（`mnemon log`，保留最近 5,000 条操作），并把返回的记忆计为已访问；Mnemon 的保留策略会参考访问次数（`mnemon gc` 不会建议清理访问过三次的记忆）。记忆系统自身的检索（记忆空间页上的**直接检索**和实体页上的**查找相关记忆**）改为用 `mnemon --readonly` 读取快照，与它的列表和图谱一样，不做任何改动。Host 归档时核验自身写入的检查读取实时存储，因为其他进程写入期间，快照不一定与存储一致。

@@ -27,7 +27,7 @@ async function fixture(enhanced = false, child = false) {
     : root
   const tools = new Map<string, ToolDefinition>()
   const coordinator = new MnemonSubagentCoordinator({} as never, f.live)
-  registerTools({ tools: { register: (tool: ToolDefinition) => tools.set(tool.name, tool) } } as unknown as HostContextShape, f.live, coordinator)
+  registerTools({ tools: { register: (tool: ToolDefinition) => { tools.set(tool.name, tool); return () => { tools.delete(tool.name) } } } } as unknown as HostContextShape, f.live, coordinator, f.extensions)
   const turn = await f.graph.composableTurns.beginTurn('root:1', agentScope(root, f.config))
   if (child) f.graph.composableTurns.pinTurn('child:1', agentScope(agent, f.config), turn.view.id)
   const execute = (input: object, name = 'mnemon_runtime_memory') => tools.get(name)!.execute(input as never, { agent, signal: new AbortController().signal })

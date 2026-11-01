@@ -17,6 +17,12 @@ describe('Mnemon config and resolution', () => {
     expect(() => resolveSkillsConfig({ allowCreate: 'false' } as never)).toThrow()
     expect(() => resolveSkillsConfig({ allowUpdate: 0 } as never)).toThrow()
   })
+  it('defaults persistent review watermarks off and accepts an explicit opt-in', () => {
+    expect(resolveConfig({}).idleReview.persistWatermark).toBe(false)
+    expect(resolveConfig({ idleReview: { persistWatermark: true } } as never).idleReview.persistWatermark).toBe(true)
+    expect(() => resolveConfig({ idleReview: { persistWatermark: 'yes' } } as never)).toThrow()
+  })
+
   it.each([{ maxPerSession: -1 }, { maxPerSession: 201 }, { minIntervalMs: 0 }, { maxContextChars: 1 }, { maxTokens: 0 }, { provider: 'unisolated' }, { agentTeams: 'unrestricted' }, { runtimeMemory: 'documents' }])('rejects invalid idle review policy %j', idleReview => {
     expect(() => resolveConfig({ idleReview } as never)).toThrow()
   })
@@ -62,7 +68,7 @@ describe('Mnemon config and resolution', () => {
       recallMode: 'guided',
       writebackMode: 'guided',
       idleReviewMs: 30_000,
-      idleReview: { enabled: true, runtimeMemory: true, provider: 'spawn', fallback: 'spawn', agentTeams: 'pause', minIntervalMs: 300_000, maxPerSession: 20, maxContextChars: 24_000, maxTokens: 4_096 },
+      idleReview: { enabled: true, runtimeMemory: true, persistWatermark: false, provider: 'spawn', fallback: 'spawn', agentTeams: 'pause', minIntervalMs: 300_000, maxPerSession: 20, maxContextChars: 24_000, maxTokens: 4_096 },
       displayMode: 'sidebar',
       tabEnabled: true,
       writeEnabled: true,

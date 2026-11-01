@@ -86,7 +86,7 @@ it.each(['fork', 'spawn'] as const)('starts the idle review a %s child runs with
     const host = ctx as unknown as HostContextShape
     const coordinator = new MnemonSubagentCoordinator(host.subagents, f.live, host)
     const lifecycle = new MnemonLifecycle(host, coordinator, f.config, f.live)
-    registerTools(host, f.live, coordinator)
+    registerTools(host, f.live, coordinator, f.extensions)
     stop = lifecycle.start()
     const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'scripted', model: 'fixture' }, { cwd: f.workspace })
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'Decide where the fixture project keeps its review checkpoints.' }], source: { kind: 'user' } }))
