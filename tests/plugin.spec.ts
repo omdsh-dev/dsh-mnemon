@@ -3,9 +3,10 @@ import { Context } from '@deepseek-ai/cordis'
 import { evaluatePluginCompatibility } from '@deepseek-ai/dsh-app-boot'
 import { HostConnectionService } from '@deepseek-ai/dsh-client-connection'
 import { tmpdir } from 'node:os'
+import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ToolDefinition, HostAgent } from "../src/host/dsh.ts"
+import type { ToolDefinition, HostAgent, HostSessionEvent } from "../src/host/dsh.ts"
 import { apply, inject } from '../src/index.ts'
 import { MnemonSubagentCoordinator } from "../src/host/subagent.ts"
 import { registerTools } from "../src/host/tools.ts"
@@ -460,6 +461,54 @@ describe('dsh-mnemon plugin composition', () => {
     fixture.commit(next)
 
     await expect(packRegistration[1]('target', {})).resolves.toMatchObject({ ok: true, value: { root: next.dataDir } })
+  })
+
+  it('persists a newly enabled watermark through the normal settings update before immediate recreation', async () => {
+    const directory = dataDir()
+    const initial = { cliPath: '/fake/mnemon', storageScope: 'custom' as const, dataDir: directory, idleReviewMs: 5_000,
+      idleReview: { maxPerSession: 1, minIntervalMs: 30_000 } }
+    const review = vi.spyOn(MnemonSubagentCoordinator.prototype, 'review').mockResolvedValue({ delegated: false, action: 'skipped', summary: 'Synthetic reviewer.', documentIds: [] })
+    const mount = async (config: typeof initial & { idleReview: typeof initial.idleReview & { persistWatermark?: boolean } }) => {
+      const f = context()
+      const hooks = new Map<string, Array<(...args: any[]) => any>>()
+      const events: HostSessionEvent[] = []
+      const agent = { id: 'settings-parent', status: 'idle', session: { header: { cwd: directory }, ...sessionLog(events) },
+        ctx: { on: (name: string, hook: (...args: any[]) => any) => { const list = hooks.get(name) ?? []; list.push(hook); hooks.set(name, list); return () => { const index = list.indexOf(hook); if (index >= 0) list.splice(index, 1) } },
+          get: () => undefined, effect: (callback: () => unknown) => { const cleanup = callback(); return typeof cleanup === 'function' ? cleanup : () => {} } },
+        followup: vi.fn(), steer: vi.fn(), inject: vi.fn() } as unknown as HostAgent
+      f.ctx.agents.roots.mockReturnValue([agent] as never)
+      f.ctx.agents.get.mockImplementation(id => id === agent.id ? agent : undefined)
+      f.fiber.config = config
+      apply(f.ctx as never, config)
+      await installStarter(f)
+      const run = async (turn: number) => {
+        events.push({ type: 'turn/start', data: { turn } })
+        await hooks.get('system-prompt/assemble')![0]!({ sections: [], contexts: [] }, { agent, signal: new AbortController().signal }, async () => ({ sections: [], contexts: [] }))
+        const messages = [{ id: `message-${turn}`, role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: 'Please remember this synthetic decision: ' + 'SQLite. '.repeat(40) }] }]
+        const payload = { agent, messages, turn, step: 1, signal: new AbortController().signal }
+        await hooks.get('agent/pre-step')!.reduceRight<() => Promise<unknown>>((next, hook) => () => hook(payload, next), async () => ({ kind: 'enter', messages }))()
+        await hooks.get('agent/turn-stopping')![0]!({ agent, turn, signal: new AbortController().signal })
+        const event = { type: 'turn/end', data: { turn } }
+        events.push(event); for (const hook of hooks.get('session/event')!) hook(agent.session, event)
+      }
+      return { ...f, run, stop: async () => { for (const cleanup of f.effectCleanups.splice(0).reverse()) await cleanup() } }
+    }
+    const first = await mount(initial)
+    vi.useFakeTimers(); vi.setSystemTime(1_000_000)
+    try {
+      await first.run(1); await first.run(2); await vi.advanceTimersByTimeAsync(5_000)
+      expect(review).toHaveBeenCalledOnce()
+      const enabled = { ...initial, idleReview: { ...initial.idleReview, persistWatermark: true } }
+      first.commit(enabled)
+      await first.stop()
+      // No lifecycle status read or new turn occurs between commit and teardown.
+      const reopened = await mount(enabled)
+      const filename = join(directory, 'state', 'idle-review', createHash('sha256').update('settings-parent').digest('hex') + '.json')
+      expect(JSON.parse(readFileSync(filename, 'utf8'))).toMatchObject({ attempts: 1, lastReviewAttemptAt: 1_005_000 })
+      await reopened.run(1); await reopened.run(2); await vi.advanceTimersByTimeAsync(5_000)
+      expect(review).toHaveBeenCalledOnce()
+      await reopened.stop()
+    } finally { vi.useRealTimers(); await first.stop() }
   })
 
   it('rejects an uninitializable live root before the active graph can move', async () => {

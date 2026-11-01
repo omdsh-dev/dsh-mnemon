@@ -32,7 +32,7 @@ import { createPluginMessage, MNEMON_PLUGIN_SOURCE } from './plugin-message.ts'
 import type { SkillEvolution } from './skill-evolution.ts'
 import { IdleReviewWatermarkStore } from './idle-review-watermark.ts'
 
-type AgentRuntimeSource = Pick<MnemonAgentRuntimeSource, 'forAgent' | 'executions'>
+type AgentRuntimeSource = Pick<MnemonAgentRuntimeSource, 'forAgent' | 'executions' | 'onChanged'>
 
 interface HostDefaultModelService {
   currentSelection(): { provider: string; model: string; reasoningEffort?: string }
@@ -228,6 +228,7 @@ class MnemonAgentLifecycle {
   private lastReviewDocumentIds: string[] | undefined
   private disposed = false
   private reviewEpoch = 0
+  private observedReviewPolicy: string | undefined
   private watermarkEnabled = false
   /** Only this Agent's observed usage, attributed to the graph that composed each checkpoint. */
   private readonly reviewUsage = new Map<string, { attempts: number; lastReviewAttemptAt: number | null }>()
@@ -257,6 +258,7 @@ class MnemonAgentLifecycle {
 
   start(): () => void {
     this.restoreWatermark()
+    this.observedReviewPolicy = this.reviewPolicy()
     const disposers = [
       this.agent.ctx.on('session/event', ((session: HostAgent['session'], event: HostSessionEvent) => this.sessionEvent(session, event)) as never),
       this.agent.ctx.on('system-prompt/assemble', ((assembly: PromptAssembly, context: PromptAssemblyContext, next: () => Promise<PromptAssembly>) => this.assemblePrompt(assembly, context, next)) as never),
@@ -488,6 +490,13 @@ class MnemonAgentLifecycle {
     } catch (error) { this.pauseWatermark(error); return false }
   }
 
+  configurationChanged(): void {
+    const policy = this.reviewPolicy()
+    if (policy !== this.observedReviewPolicy) this.cancelIdleReview(true)
+    this.observedReviewPolicy = policy
+    this.restoreWatermark()
+  }
+
   private pauseWatermark(error: unknown): void {
     // Never display a raw filesystem error: it can contain a private root/id.
     const message = error instanceof Error && error.message.startsWith('Idle review watermark unavailable')
@@ -499,7 +508,7 @@ class MnemonAgentLifecycle {
   /** Policy/root changes invalidate an already queued checkpoint instead of catching up. */
   private reviewPolicy(): string | undefined {
     try { return JSON.stringify([this.config.idleReview.persistWatermark ? this.runtimeDirectory?.() : undefined, this.config.lifecycleEnabled, this.config.writeEnabled,
-      this.config.writebackMode, this.config.idleReviewMs, this.config.idleReview, mainStrategyTypeId(this.config)]) } catch (error) {
+      this.config.storageScope, this.config.dataDir, this.config.writebackMode, this.config.idleReviewMs, this.config.idleReview, this.config.taskAgentModel, mainStrategyTypeId(this.config)]) } catch (error) {
       if (this.config.idleReview.persistWatermark) this.pauseWatermark(error)
       return undefined
     }
@@ -529,10 +538,10 @@ class MnemonAgentLifecycle {
     return this.composedTurn?.typeId === typeId && this.composedTurn.idleReview
   }
 
-  private idleReviewAllowed(): boolean {
+  private idleReviewAllowed(reserved = false): boolean {
     return !this.disposed && (!this.config.idleReview.persistWatermark || this.watermarkError === undefined)
       && this.config.lifecycleEnabled && this.config.writeEnabled && this.config.writebackMode === 'guided'
-      && this.config.idleReview.enabled && this.idleReviewAttempts < this.config.idleReview.maxPerSession
+      && this.config.idleReview.enabled && (reserved || this.idleReviewAttempts < this.config.idleReview.maxPerSession)
       && idleReviewBlockReason(this.agent, this.config.idleReview.agentTeams) === undefined
       && this.strategyDrivesIdleReview()
       && this.coordinator.canReview(this.agent)
@@ -541,6 +550,8 @@ class MnemonAgentLifecycle {
   private async runIdleReview(): Promise<void> {
     const controller = new AbortController()
     const triggeredScore = this.reviewActivity().score
+    const epoch = this.reviewEpoch
+    const policy = this.reviewPolicy()
     if (this.config.idleReview.persistWatermark) {
       try {
         if (!this.restoreWatermark() || this.watermarkStore === undefined || !this.idleReviewAllowed()) return
@@ -567,7 +578,12 @@ class MnemonAgentLifecycle {
     this.reviewController = controller
     this.mark('review')
     try {
-      const result = await this.coordinator.review(this.agent, controller.signal)
+      const result = await this.coordinator.review(this.agent, controller.signal, () => {
+        if (epoch !== this.reviewEpoch || policy !== this.reviewPolicy() || !this.idleReviewAllowed(true)) {
+          controller.abort(new Error('Automatic idle review admission changed'))
+        }
+        controller.signal.throwIfAborted()
+      })
       if (controller.signal.aborted) return
       this.lastReviewAt = new Date().toISOString()
       this.lastReviewAction = result.action
@@ -772,9 +788,13 @@ export class MnemonLifecycle {
 
   start(): () => void {
     // DSH creates a new Agent for startup, resume, clear and compaction alike.
+    const stopChanged = this.runtimeSource?.onChanged?.(() => {
+      for (const { lifecycle } of this.owners.values()) lifecycle.configurationChanged()
+    })
     const stopCreated = this.ctx.on('agent/created', (({ agent, source }: SessionStartPayload) => { this.install(agent, source) }) as never)
     for (const agent of this.ctx.agents.roots()) this.install(agent, 'adopted')
     return () => {
+      stopChanged?.()
       stopCreated()
       for (const dispose of [...this.children.values()].reverse()) dispose()
       for (const owner of [...this.owners.values()].reverse()) owner.dispose()

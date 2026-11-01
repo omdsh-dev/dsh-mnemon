@@ -1197,7 +1197,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     await vi.advanceTimersByTimeAsync(4_999)
     expect(value.coordinator.review).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
-    expect(value.coordinator.review).toHaveBeenCalledWith(value.agent, expect.any(AbortSignal))
+    expect(value.coordinator.review).toHaveBeenCalledWith(value.agent, expect.any(AbortSignal), expect.any(Function))
     expect(value.coordinator.write).not.toHaveBeenCalled()
     expect(value.lifecycle.snapshot('session-1').current).toMatchObject({
       idleReviewPending: false,
