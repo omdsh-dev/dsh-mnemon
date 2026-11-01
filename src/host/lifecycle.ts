@@ -222,6 +222,7 @@ class MnemonAgentLifecycle {
   private idleReviewTimer: ReturnType<typeof setTimeout> | undefined
   private reviewController: AbortController | undefined
   private reviewRunning = false
+  private reviewAccessBlocked = false
   private lastReviewAt: string | undefined
   private lastReviewAction: string | undefined
   private lastReviewScore: number | undefined
@@ -296,7 +297,8 @@ class MnemonAgentLifecycle {
         restoredAttempts: this.restoredAttempts, maxPerSession: this.config.idleReview.maxPerSession,
         ...(this.watermarkError === undefined ? {} : { error: this.watermarkError }),
       } } : {}),
-      ...(idleReviewBlockReason(this.agent, this.config.idleReview.agentTeams) === undefined ? {} : { idleReviewBlocked: 'agent-team' as const }),
+      ...(idleReviewBlockReason(this.agent, this.config.idleReview.agentTeams) !== undefined
+        ? { idleReviewBlocked: 'agent-team' as const } : this.reviewAccessBlocked ? { idleReviewBlocked: 'tool-access' as const } : {}),
       ...(this.lastReviewAttemptAt === undefined ? {} : { nextReviewAt: new Date(Math.min(8_640_000_000_000_000, this.lastReviewAttemptAt + this.config.idleReview.minIntervalMs)).toISOString() }),
       ...(this.lastReviewFailure === undefined ? {} : { lastReviewFailure: this.lastReviewFailure }),
       lastPhase: this.lastPhase,
@@ -492,7 +494,10 @@ class MnemonAgentLifecycle {
 
   configurationChanged(): void {
     const policy = this.reviewPolicy()
-    if (policy !== this.observedReviewPolicy) this.cancelIdleReview(true)
+    if (policy !== this.observedReviewPolicy) {
+      this.cancelIdleReview(true)
+      this.reviewAccessBlocked = false
+    }
     this.observedReviewPolicy = policy
     this.restoreWatermark()
   }
@@ -552,32 +557,39 @@ class MnemonAgentLifecycle {
     const triggeredScore = this.reviewActivity().score
     const epoch = this.reviewEpoch
     const policy = this.reviewPolicy()
-    if (this.config.idleReview.persistWatermark) {
-      try {
-        if (!this.restoreWatermark() || this.watermarkStore === undefined || !this.idleReviewAllowed()) return
-        const reserved = this.watermarkStore.reserve({ ...this.config.idleReview, now: Date.now(),
-          floor: { attempts: this.idleReviewAttempts, lastReviewAttemptAt: this.lastReviewAttemptAt ?? null } })
-        const state = reserved ?? this.watermarkStore.load()
-        this.idleReviewAttempts = Math.max(this.idleReviewAttempts, state.attempts)
-        this.lastReviewAttemptAt = Math.max(this.lastReviewAttemptAt ?? -Infinity, state.lastReviewAttemptAt ?? -Infinity)
-        if (this.lastReviewAttemptAt === -Infinity) this.lastReviewAttemptAt = undefined
-        const directory = this.runtimeDirectory?.()
-        if (directory !== undefined) this.reviewUsage.set(resolve(directory), { attempts: this.idleReviewAttempts, lastReviewAttemptAt: this.lastReviewAttemptAt ?? null })
-        if (reserved === undefined) return
-      } catch (error) { this.pauseWatermark(error); return }
-    } else {
-      this.idleReviewAttempts += 1
-      this.lastReviewAttemptAt = Date.now()
-      const directory = this.composedTurn?.directory
-      if (directory !== undefined) {
-        const key = resolve(directory)
-        this.reviewUsage.set(key, { attempts: (this.reviewUsage.get(key)?.attempts ?? 0) + 1, lastReviewAttemptAt: this.lastReviewAttemptAt })
-      }
-    }
     this.reviewRunning = true
     this.reviewController = controller
-    this.mark('review')
     try {
+      const available = await this.coordinator.checkReviewAccess(this.agent, controller.signal)
+      if (epoch !== this.reviewEpoch || policy !== this.reviewPolicy() || !this.idleReviewAllowed()) {
+        controller.abort(new Error('Automatic idle review admission changed'))
+      }
+      controller.signal.throwIfAborted()
+      this.reviewAccessBlocked = !available
+      if (!available) return
+      if (this.config.idleReview.persistWatermark) {
+        try {
+          if (!this.restoreWatermark() || this.watermarkStore === undefined || !this.idleReviewAllowed()) return
+          const reserved = this.watermarkStore.reserve({ ...this.config.idleReview, now: Date.now(),
+            floor: { attempts: this.idleReviewAttempts, lastReviewAttemptAt: this.lastReviewAttemptAt ?? null } })
+          const state = reserved ?? this.watermarkStore.load()
+          this.idleReviewAttempts = Math.max(this.idleReviewAttempts, state.attempts)
+          this.lastReviewAttemptAt = Math.max(this.lastReviewAttemptAt ?? -Infinity, state.lastReviewAttemptAt ?? -Infinity)
+          if (this.lastReviewAttemptAt === -Infinity) this.lastReviewAttemptAt = undefined
+          const directory = this.runtimeDirectory?.()
+          if (directory !== undefined) this.reviewUsage.set(resolve(directory), { attempts: this.idleReviewAttempts, lastReviewAttemptAt: this.lastReviewAttemptAt ?? null })
+          if (reserved === undefined) return
+        } catch (error) { this.pauseWatermark(error); return }
+      } else {
+        this.idleReviewAttempts += 1
+        this.lastReviewAttemptAt = Date.now()
+        const directory = this.composedTurn?.directory
+        if (directory !== undefined) {
+          const key = resolve(directory)
+          this.reviewUsage.set(key, { attempts: (this.reviewUsage.get(key)?.attempts ?? 0) + 1, lastReviewAttemptAt: this.lastReviewAttemptAt })
+        }
+      }
+      this.mark('review')
       const result = await this.coordinator.review(this.agent, controller.signal, () => {
         if (epoch !== this.reviewEpoch || policy !== this.reviewPolicy() || !this.idleReviewAllowed(true)) {
           controller.abort(new Error('Automatic idle review admission changed'))

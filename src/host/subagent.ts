@@ -26,6 +26,7 @@ import { isTool, object, optionalObject, recoverStructuredResult, reviewReceipt,
 import { archivableElsewhere } from './archive-destinations.ts'
 import { runtimeArchiveSource, runtimeLocked, type RuntimeModelResult, type RuntimeWriteContext } from './runtime-capacity.ts'
 import { archiveDocumentLocked, documentLocked, type DocumentWorkflowHost } from './document-archive.ts'
+import { AutomaticReviewAdmission } from './review-admission.ts'
 
 export type { CoordinatedDocumentResult, CoordinatedRuntimeMemoryResult, DelegatedAnswerResult, DelegatedWriteResult, SubagentCounters } from "./protocol.ts"
 export { assertDshOutputSchema } from './subagent-output-schema.ts'
@@ -243,6 +244,7 @@ export class MnemonSubagentCoordinator {
   /** Delegated children whose run has ended, newest last, at most FINISHED_CHILDREN. */
   private readonly finishedChildren = new Set<string>()
   private disposed = false
+  private readonly reviewAdmission = new AutomaticReviewAdmission()
 
   constructor(
     private readonly subagents: HostSubagentsService,
@@ -262,6 +264,7 @@ export class MnemonSubagentCoordinator {
         render: () => [{ type: 'text', text: 'Mnemon subagent result recorded.' }],
       },
       execute: async (args: never, execution: ToolExecution) => {
+        if (this.reviewAdmission.acknowledge(args, execution)) return { recorded: true }
         if (!isSubagent(execution.agent)) throw new Error('Mnemon subagent result tools are restricted to delegated children')
         execution.signal.throwIfAborted()
         assertDshOutputValue(RESULT_TOOL_INPUT_SCHEMA, args)
@@ -277,6 +280,7 @@ export class MnemonSubagentCoordinator {
 
   dispose(): unknown {
     this.disposed = true
+    this.reviewAdmission.dispose()
     this.resultRequests.clear()
     const resumeGuard = this.disposeResumeGuard
     this.disposeResumeGuard = undefined
@@ -784,6 +788,11 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
   /** Cheap scheduler admission: no model task when every review write target is unavailable. */
   canReview(parent: HostAgent): boolean {
     return this.reviewTools(parent).some(tool => tool !== 'mnemon_document_search')
+  }
+
+  /** Automatic review admission; explicit user-requested reviews are unchanged. */
+  checkReviewAccess(parent: HostAgent, signal: AbortSignal): Promise<boolean> {
+    return this.reviewAdmission.check(parent, signal)
   }
 
   private availableTools(parent: HostAgent, tools: readonly string[]): string[] {

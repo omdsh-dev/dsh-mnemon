@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExtern
 import { IconChevronLeftOutline14, IconRefreshOutlineRegular, IconSettingsOutlineRegular } from './ui-icons.ts'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 
-import { DEFAULT_SKILLS_CONFIG, type ClientConnectionHandle, type ClientSettingsScope, type ClientSettingsSnapshot, type Config, type JsonValue, type MemorySourceManagementInstance, type SkillsConfig, type StorageAreaInventory, type StorageScopeKind, type VersionRestartStatus } from "../host/protocol.ts"
+import { DEFAULT_SKILLS_CONFIG, type ClientConnectionHandle, type ClientSettingsScope, type ClientSettingsSnapshot, type Config, type JsonValue, type LifecycleAgentSnapshot, type MemorySourceManagementInstance, type SkillsConfig, type StorageAreaInventory, type StorageScopeKind, type VersionRestartStatus } from "../host/protocol.ts"
 import type { MemoryPluginEntryView, MemoryViewDashboard } from '../host/view-protocol.ts'
 import { MnemonClient } from "./api.ts"
 import { isRemoteConnection } from "./remote-rpc.ts"
@@ -128,7 +128,7 @@ function CompositionStatus(props: { tone: StateDotState; label: string; strategy
 }
 
 /** Only low-frequency guidance folds; errors, composition diagnostics and restart reminders stay visible. */
-function OrdinaryNotices(props: { remoteReadOnly: boolean; reviewPaused: boolean }): JSX.Element | null {
+function OrdinaryNotices(props: { remoteReadOnly: boolean; reviewPaused: LifecycleAgentSnapshot['idleReviewBlocked'] }): JSX.Element | null {
   const t = useT()
   const [expanded, setExpanded] = useState(false)
   const contentsId = useId()
@@ -141,7 +141,7 @@ function OrdinaryNotices(props: { remoteReadOnly: boolean; reviewPaused: boolean
     </button>
     <div id={contentsId} className={css.noticeContents}>
       {props.remoteReadOnly && <div className={css.alert} role="status">{t('workspace.remoteReadOnly')}</div>}
-      {props.reviewPaused && <div className={css.alert} role="status">{t('status.reviewTeamPaused')}</div>}
+      {props.reviewPaused && <div className={css.alert} role="status">{t(props.reviewPaused === 'tool-access' ? 'status.reviewToolAccessPaused' : 'status.reviewTeamPaused')}</div>}
     </div>
   </div>
 }
@@ -508,7 +508,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       </Callout>}</Reveal>
       <Reveal className={css.notice}>{status?.restartPending !== undefined && <RestartReminder pending={status.restartPending} />}</Reveal>
       {workspaceToast.element}
-      <OrdinaryNotices remoteReadOnly={remoteReadOnly} reviewPaused={!focused && status?.lifecycle?.current?.idleReviewBlocked === 'agent-team'} />
+      <OrdinaryNotices remoteReadOnly={remoteReadOnly} reviewPaused={focused ? undefined : status?.lifecycle?.current?.idleReviewBlocked} />
       {!focused && status?.lifecycle?.current?.idleReviewWatermark !== undefined && <div className={css.alert} role={status.lifecycle.current.idleReviewWatermark.state === 'error' ? 'alert' : 'status'}>
         <span>{t('status.reviewWatermarkUsage', { attempts: status.lifecycle.current.idleReviewAttempts ?? 0, max: status.lifecycle.current.idleReviewWatermark.maxPerSession, restored: status.lifecycle.current.idleReviewWatermark.restoredAttempts })}</span>
         {status.lifecycle.current.idleReviewWatermark.state === 'error' ? <>

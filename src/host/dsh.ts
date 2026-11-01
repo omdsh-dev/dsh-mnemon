@@ -45,6 +45,8 @@ export interface HostSettingsService {
 }
 
 export interface ToolExecution {
+  callId?: string
+  rootCallId?: string
   signal: AbortSignal
   agent?: HostAgent
   name?: string
@@ -164,6 +166,8 @@ export type HostPreStepDecision = { kind: 'reject' } | { kind: 'enter'; messages
 export interface HostAgentContext {
   /** DSH's monotonic guard also covers tools registered in this Agent's scope. */
   tools?: {
+    /** Public execution pipeline, including presentation, policy and guards. */
+    execute?(input: { callId: string; name: string; arguments: unknown; agent: HostAgent; signal: AbortSignal }): Promise<{ isError: boolean }>
     guard?(guard: (execution: ToolExecution) => string | undefined): unknown
     /** Public presentation-agnostic lookup in the exact Agent scope. */
     get?(name: string, scope?: HostAgent): unknown
