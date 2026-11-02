@@ -75,7 +75,7 @@ async function harness(respond: (options: GenerateOptions) => Reply, configure?:
       parent.followup(createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } }))
       await parent.whenIdle()
     }
-    return { ...f, ctx, coordinator, parent: parent as unknown as HostAgent, turn, dispose }
+    return { ...f, ctx, coordinator, parent: parent as unknown as HostAgent, session: parent.session, turn, dispose }
   } catch (error) { await dispose(); throw error }
 }
 
@@ -107,6 +107,49 @@ it('updates an already loaded Agent schema and keeps Documents/Runtime usable wi
     await f.turn('Inspect the schema after disabling the Source again.')
     expect(requests.at(-1)).toHaveLength(7)
   } finally { await f.dispose() }
+}, 20_000)
+
+it.each(['add', 'replace'] as const)('persists well-formed Runtime %s metadata and continues the same conversation (#548)', async action => {
+  const content = 'x'.repeat(158) + '\u{1F600}' + ' retained memory'
+  const requests: GenerateOptions[] = []
+  const f = await harness(options => {
+    requests.push(options)
+    if (requests.length === 1) return { name: 'mnemon_runtime_memory', args: {
+      action, target: 'memory', content, ...(action === 'replace' ? { old_text: 'Synthetic original.' } : {}),
+    } }
+    return 'The synthetic memory is retained.'
+  }, async f => {
+    if (action === 'replace') await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: 'Synthetic original.' })
+  })
+  const reader = new Context()
+  try {
+    await f.turn('Save this synthetic memory.')
+    await f.turn('Continue this same conversation.')
+    expect(requests).toHaveLength(3)
+    expect(await f.graph.source('runtime').read('snapshot')).toMatchObject({ entries: [expect.objectContaining({ content })] })
+    const events = f.parent.session.snapshotEvents()
+    const results = events.filter(event => event.type === 'tool/result')
+    expect(results).toHaveLength(1)
+    expect(results[0]).toMatchObject({ data: { meta: { committed: true, item: { title: 'x'.repeat(158) + '…', excerpt: content } } } })
+
+    // JSON.stringify escapes lone surrogates instead of rejecting them. Validate
+    // decoded strings too: strict request decoders reject those escaped values.
+    const assertStrings = (value: unknown): void => {
+      if (typeof value === 'string') expect(value.isWellFormed()).toBe(true)
+      else if (value !== null && typeof value === 'object') Object.values(value).forEach(assertStrings)
+    }
+    requests.forEach(request => assertStrings(request.messages))
+    await reader.plugin(JsonlSessionPersistence, { root: join(f.root, 'unicode-reload'), compression: 'none' })
+    const session = f.session
+    const writer = await reader.sessionPersistence.create({ ...session.header, delegationDepth: session.header.delegationDepth ?? 0 })
+    try { await writer.append(session.snapshotEvents()); await writer.flush() } finally { await writer.close() }
+    const handle = await reader.sessionPersistence.open(session.id, 'read')
+    try {
+      const restored = await handle.read()
+      expect(restored.events).toEqual(events)
+      assertStrings(restored.events)
+    } finally { await handle.close() }
+  } finally { await reader.fiber.dispose(); await f.dispose() }
 }, 20_000)
 
 it.each(['spawn', 'fork'] as const)('starts a %s review with only registered optional tools', async provider => {
