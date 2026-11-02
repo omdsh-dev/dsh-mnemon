@@ -12,6 +12,7 @@ For new evaluations, commit the reusable harness and workload generator to [`scr
 
 | Record / 记录 | Scope / 范围 |
 |---|---|
+| [Current-turn View recovery — issue #542](./issue-542-turn-view/README.md) / [中文](./issue-542-turn-view/README.zh-CN.md) | Published Agent-turn reproduction with prompt interception, native/PTC reads, resumed turns, late registration, child guidance and retained authority / 正式 Agent 回合中的提示词拦截复现、原生/PTC 读取、恢复回合、晚注册、子 Agent 引导语及权限保留 |
 | [v0.5.38 release](./release-v0.5.38/README.md) / [中文](./release-v0.5.38/README.zh-CN.md) | Candidate digests, fresh installs, upgrades and retained data for conversation switching and idle review fixes / 会话切换与空闲审查修复的候选包摘要、安装、升级及数据保留验收 |
 | [Compact panel chrome](./issue-521-mobile-chrome/README.md) / [中文](./issue-521-mobile-chrome/README.zh-CN.md) | Issue #521 actual React rendering with synthetic RPC data, narrow before/after and wide screenshots, panel-width interaction checks and limits / Issue #521 实际 React 与合成 RPC 数据的窄面板前后对比、宽面板截图、面板宽度交互检查与限制 |
 | [v0.5.37 release](./release-v0.5.37/README.md) / [中文](./release-v0.5.37/README.zh-CN.md) | Candidate verification, installation and upgrade acceptance for Skills models, Runtime capacity and embedding status / 技能模型、运行时容量与 embedding 状态的候选验证、安装与升级验收 |

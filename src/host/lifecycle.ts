@@ -377,6 +377,10 @@ class MnemonAgentLifecycle {
       this.releaseView(payload.turn)
       return decision
     }
+    // Prompt middleware can return its assembly without visiting later hooks,
+    // or Mnemon can load while that waterfall is already running. The accepted
+    // Agent step still needs its own durable turn's View before tools or Wake.
+    if (!this.disposed && openAgentTurn(this.agent) === payload.turn) await this.memoryTurn?.begin(payload.turn, payload.signal)
     if (!this.config.lifecycleEnabled) return decision
     if (this.config.writeEnabled && this.config.writebackMode === 'guided') {
       this.recordTurnMessages(payload.turn, decision.messages)
@@ -1383,7 +1387,20 @@ export class MnemonLifecycle {
         }) as never))
         stops.push(agent.ctx.on('agent/pre-step', (async (payload: PreStepPayload, next: () => Promise<HostPreStepDecision>) => {
           const decision = await next()
-          if (decision.kind === 'reject' || payload.signal.aborted) memory.end(payload.turn)
+          if (decision.kind === 'reject' || payload.signal.aborted) {
+            memory.end(payload.turn)
+            return decision
+          }
+          if (openAgentTurn(agent) !== payload.turn) return decision
+          const recovering = memory.current?.turn !== payload.turn
+          await memory.begin(payload.turn, payload.signal)
+          // A recovered child pin needs the same actionable ids as its View;
+          // keep ordinary delegated context unchanged when assembly ran.
+          const pinned = memory.current
+          if (recovering && payload.step === 1 && this.config.lifecycleEnabled && pinned !== undefined) {
+            const wake = modelMemoryWake(pinned.graph, pinned.context)
+            if (wake.text.trim() !== '') return { kind: 'enter', messages: [...decision.messages, createPluginMessage(wake.text, 'recall')] }
+          }
           return decision
         }) as never))
         stops.push(agent.ctx.on('session/event', ((session: HostAgent['session'], event: HostSessionEvent) => {
