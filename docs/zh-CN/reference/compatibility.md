@@ -126,6 +126,23 @@ Mnemon 消息使用 Session V3、V4 均接受的生产者专属来源 `dsh-mnemo
 
 回滚到这样的旧宿主时，保留 profile patch 和旧设置备份，并重新安装支持该宿主的 dsh-mnemon 版本（见[更早的 DSH](#更早的-dsh)）。此后修改的设置不会自动反向导出到旧设置文件，需要恢复对应备份或在旧宿主重新设置；Runtime、档案、记忆空间与 Provider 数据不受影响。参见 [DSH 0.1.7 设置验证](../../pr-assets/issue-267-settings-migration/README.zh-CN.md)。
 
+<a id="ptc-idle-review-history-recovery"></a>
+
+## PTC 空闲审查历史恢复
+
+v0.5.38 的自动审查可能在 `turn/end` 之后执行 PTC 可用性探测。DSH v4 读取器随后会以 `tool/ptc-dispatch-start is outside an open turn` 拒绝整个会话。修复将检查及其收尾放在可等待的回合停止钩子内；升级可防止新增问题，但不会改写已经损坏的历史。
+
+对于受影响的**未继承历史的 v4 根会话**，包内恢复 CLI 可以生成单独副本。先停止 DSH，备份整个会话目录，并在已存在的备份目录中选择新输出路径：
+
+```bash
+dsh-mnemon-repair-session --input /backup/session.v4.jsonl.zstd
+dsh-mnemon-repair-session --input /backup/session.v4.jsonl.zstd --output /recovered/session.v4.jsonl.zstd
+```
+
+第一条命令仅预览。生成副本时只识别回合外成对出现、保留原始 UUID 关联且结果参数为空的 `mnemon_subagent_result` 探测，并将完整审计数据保留为可忽略的 Mnemon 恢复记录。所有事件位置、时间戳、对话消息和无关原始行均保留，不截断历史，也不修改记忆存储。支持普通 JSONL 和带校验和的 Zstandard；从不覆盖输入或已有输出。继承/子会话、孤立探测、写工具调用、非空结果、歧义字段及被其他事件引用的探测记录都会被拒绝。
+
+`migrationValidated: false` 表示 CLI 不为会话的其余部分提供有效性保证。请先用同一 DSH 版本在隔离会话存储中加载恢复副本，验证后在 DSH 停止时替换这一代文件，并离线保留原件。若 DSH 仍拒绝读取或 CLI 提示形状不受支持，保留原件请求诊断，不要删除记录。[合成复现与验证记录](../../pr-assets/issue-541-idle-probe-history/README.zh-CN.md)覆盖正式读取器、消息保持和恢复拒绝场景。
+
 ## 旧版 DSH 宿主
 
 以下内容只适用于[上表](#更早的-dsh)中由较早 dsh-mnemon 版本支持的宿主。

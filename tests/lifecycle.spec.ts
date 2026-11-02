@@ -1179,15 +1179,19 @@ describe('Mnemon DSH lifecycle integration', () => {
     let finish: ((available: boolean) => void) | undefined
     vi.mocked(value.coordinator.checkReviewAccess).mockImplementationOnce(() => new Promise<boolean>(resolve => { finish = resolve }))
     try {
-      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
-      await vi.advanceTimersByTimeAsync(5_000)
+      await value.preStep([durableCandidate(300)], 1)
+      await value.turnStopping(1)
+      await value.preStep([durableCandidate(300)], 2)
+      const stopping = value.turnStopping(2)
+      await vi.waitFor(() => expect(finish).toBeDefined())
       expect(value.lifecycle.snapshot('session-1').current?.reviewRunning).toBe(true)
       expect(value.lifecycle.snapshot('session-1').current?.idleReviewAttempts).toBe(0)
       if (change === 'turn') await value.preStep([userMessage('New foreground turn')], 3)
       if (change === 'policy') config.idleReview.enabled = false
       if (change === 'dispose') value.stop()
       finish?.(true)
-      await vi.advanceTimersByTimeAsync(0)
+      await stopping
+      await vi.advanceTimersByTimeAsync(5_000)
       expect(value.coordinator.review).not.toHaveBeenCalled()
       if (change !== 'dispose') expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ reviewRunning: false, idleReviewAttempts: 0 })
     } finally { value.stop() }
