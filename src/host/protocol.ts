@@ -51,7 +51,7 @@ export const MNEMON_SYNC_CHANNEL = '/dsh-mnemon-sync'
 export const MNEMON_SYNC_TOKEN_ENV = 'MNEMON_SYNC_GIT_TOKEN'
 /**
  * What a storage root publishes before anyone configures it: the branch, the
- * directory inside it, and the commit identity used when no author is set. They
+ * directory inside it, and the fallback when no author or Git identity is set. They
  * are declared with the wire constants because the settings form shows the same
  * defaults the Host would apply to an empty field.
  */

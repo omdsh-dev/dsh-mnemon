@@ -142,6 +142,8 @@ mnemon:
 
 所有值都保存在 `mnemon` 条目下并实时生效：界面的 `mnemon-ui` 设置范围保存为 `conversationInteraction`，`mnemon-view` 设置范围保存为 `memoryView`，`mnemon-skills` 设置范围保存为 `skills`。存储根只会在新运行图初始化成功后原子切换。
 
+Git 同步的默认提交者跟随 Host 在 `state/sync/git` 中解析的 Git 身份；`state/sync-git.json` 中的自定义身份优先。旧的占位姓名/邮箱组合也跟随 Git，只有未配置的字段才使用占位值。优先级与作者被拒绝后的恢复步骤见 [Git 仓库同步](../guides/operations.md#git-仓库同步)。
+
 ### Runtime Memory 容量与维护预算
 
 在**插件 → 可组合记忆 → 运行时记忆 → 容量上限**中，以字节填写用户画像和工作记忆的上限，再点击**应用**。两项均接受 1–1048576 之间的整数；**放弃修改**恢复已保存的值。默认仍为 4096 字节（4 KiB）和 10240 字节（10 KiB）。此表单保留单独配置的维护 token 预算。

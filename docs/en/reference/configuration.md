@@ -142,6 +142,8 @@ mnemon:
 
 Every value is saved under the `mnemon` entry and applies live. The UI's `mnemon-ui` settings scope is stored as `conversationInteraction`, its `mnemon-view` scope as `memoryView`, and its `mnemon-skills` scope as `skills`. The storage root switches atomically only after the new runtime graph initializes successfully.
 
+Git sync's default author follows the Host's Git identity as resolved in `state/sync/git`; a custom author in `state/sync-git.json` overrides it. The legacy placeholder pair also follows Git, with the placeholder used only for unconfigured fields. See [Git repository sync](../guides/operations.md#git-repository-sync) for precedence and recovery after an author rejection.
+
 ### Runtime Memory budgets
 
 In **Plugins → dsh-mnemon → Runtime memory → Capacity limits**, set the user-profile and working-memory limits in bytes, then choose **Apply**. Each accepts an integer from 1 to 1048576; **Discard changes** restores the saved values. The defaults remain 4096 bytes (4 KiB) and 10240 bytes (10 KiB). This form preserves the separate maintenance-token budget.
