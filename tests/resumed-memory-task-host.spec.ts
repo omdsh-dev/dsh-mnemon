@@ -7,7 +7,6 @@ import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { expect, it, vi } from 'vitest'
 import type { HostContextShape } from '../src/host/dsh.ts'
 import { MnemonLifecycle } from '../src/host/lifecycle.ts'
@@ -15,7 +14,7 @@ import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
 import { registerTools } from '../src/host/tools.ts'
 import { compositionFixture } from './fixtures/composition.ts'
 import { JsonlSessionPersistence } from './helpers/dsh-plugins.ts'
-import { dsh021, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
+import { dsh021, loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
 
 // DSH 0.2.1 lists every local child among its conversation's subagents and resumes a finished one
 // from its saved state when a message reaches it, with the conversation's tools and instructions
@@ -73,7 +72,7 @@ it.skipIf(!dsh021)('refuses memory tools to a USER.md compaction child its conve
     // Resuming a finished child reads its Session through Session query, as in a profile.
     await ctx.plugin((await import(requireDsh.resolve('@deepseek-ai/dsh-session-query'))).default)
     await ctx.plugin(SystemPrompt)
-    await ctx.plugin(ToolRuntime, { mode: 'native' })
+    await loadTools(ctx)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(AgentLoop, { agents: [] })
     await loadWorkingDirectory(ctx)

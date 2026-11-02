@@ -6,14 +6,17 @@
 // and the real-host specs compose it through tests/helpers/installed-dsh.ts. Its packages are
 // inlined, so a bare import they make that the installation lacks (zustand and clsx: DSH ships its
 // client prebuilt) falls back to this repository's copy.
-import { readFileSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vitest/config'
 import shared from '../vitest.config.ts'
 
-const host = process.env.DSH_HOST_ROOT
-if (!host) throw new Error('Set DSH_HOST_ROOT to the @deepseek-ai/dsh package of an installed DSH')
+const configuredHost = process.env.DSH_HOST_ROOT
+if (!configuredHost) throw new Error('Set DSH_HOST_ROOT to the @deepseek-ai/dsh package of an installed DSH')
+// Vite canonicalizes importer paths (including macOS /tmp -> /private/tmp).
+// Compare the same form so undeclared upstream UI dependencies can fall back.
+const host = realpathSync(configuredHost)
 const hostAnchor = join(host, 'package.json')
 if ((JSON.parse(readFileSync(hostAnchor, 'utf8')) as { name?: string }).name !== '@deepseek-ai/dsh') {
   throw new Error(`DSH_HOST_ROOT names no @deepseek-ai/dsh package: ${host}`)

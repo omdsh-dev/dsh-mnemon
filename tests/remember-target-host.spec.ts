@@ -8,7 +8,6 @@ import { JsonlSessionPersistence } from './helpers/dsh-plugins.ts'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { afterEach, expect, it } from 'vitest'
 import type { MemorySpaceCatalog, MemorySpaceView } from 'dsh-mnemon-source-memory-spaces/contracts'
 import type { HostAgent, HostContextShape } from '../src/host/dsh.ts'
@@ -16,7 +15,7 @@ import { MnemonLifecycle } from '../src/host/lifecycle.ts'
 import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
 import { registerTools } from '../src/host/tools.ts'
 import { compositionFixture } from './fixtures/composition.ts'
-import { loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
+import { loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
 
 // Issue #387: mnemon_remember named a Memory Space, and the delegated writer put the
 // memory into another one whose description matched it better, switching that space
@@ -105,7 +104,7 @@ async function host(attempts: () => string[], options: { query?: boolean } = {})
   await ctx.plugin(SessionProjectionRegistry)
   if (options.query === true) await ctx.plugin((await import(requireDsh.resolve('@deepseek-ai/dsh-session-query'))).default)
   await ctx.plugin(SystemPrompt)
-  await ctx.plugin(ToolRuntime, { mode: 'native' })
+  await loadTools(ctx)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   await loadWorkingDirectory(ctx)

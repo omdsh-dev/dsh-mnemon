@@ -1,6 +1,8 @@
 import { realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
+import type { Context } from '@deepseek-ai/cordis'
+import type { ToolExecutionInput, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 
 /**
  * The DSH a real-host spec composes: the repository's pinned one, or the installation
@@ -25,6 +27,44 @@ export function isDsh021(version: string): boolean {
 
 /** Whether the DSH the specs compose is 0.2.1 or later. */
 export const dsh021 = isDsh021(dshVersion)
+
+/**
+ * Compose the published tool stack, including the separate executor plugins introduced in
+ * DSH 0.2.2-alpha.2. Return the scoped PTC selection used by native/PTC real-host fixtures.
+ * This changes test composition only: shipped DSH profiles own their executor selection.
+ */
+export async function loadTools(ctx: Context, mode: 'native' | 'both' = 'native', host: NodeJS.Require = requireDsh): Promise<(scope: Context) => Promise<void>> {
+  const { default: ToolRuntime } = await import(host.resolve('@deepseek-ai/dsh-tools'))
+  if (typeof ToolRuntime.prototype.setExecutor !== 'function') {
+    await ctx.plugin(ToolRuntime, { mode })
+    return async scope => { scope.tools.presentAs('ptc') }
+  }
+  const [native, ptc] = await Promise.all([
+    import(host.resolve('@deepseek-ai/dsh-tool-executor-native')),
+    import(host.resolve('@deepseek-ai/dsh-tool-executor-ptc')),
+  ])
+  await ctx.plugin(ToolRuntime)
+  await ctx.plugin(native)
+  return async scope => { await scope.plugin(ptc) }
+}
+
+/** Execute a single fixture probe through the Host's real guarded execution pipeline. */
+export async function executeTool(ctx: Context, input: ToolExecutionInput): Promise<ToolExecutionResult> {
+  const tools = ctx.tools as typeof ctx.tools & { setExecutor?: unknown }
+  if (typeof tools.setExecutor !== 'function') return tools.execute(input)
+  // The executor-based Host accepts model-call batches, including for calls outside a turn.
+  const batchTools = tools as unknown as {
+    execute(input: unknown): Promise<{ results: { callId: string; result: ToolExecutionResult }[] }>
+  }
+  const batch = await batchTools.execute({
+    calls: [{ type: 'tool-call', id: input.callId, name: input.name, arguments: JSON.stringify(input.arguments) }],
+    agent: input.agent,
+    signal: input.signal,
+  })
+  const result = batch.results.find(result => result.callId === input.callId)
+  if (!result) throw new Error(`DSH omitted the result of fixture call ${input.callId}`)
+  return result.result
+}
 
 /**
  * DSH 0.2.1's subagent runtime needs the working directory service, which needs fs; DSH 0.2.0 has neither.

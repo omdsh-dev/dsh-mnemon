@@ -7,7 +7,6 @@ import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { expect, it, vi } from 'vitest'
 import type { HostAgent, HostContextShape } from '../src/host/dsh.ts'
 import { MnemonLifecycle } from '../src/host/lifecycle.ts'
@@ -15,7 +14,7 @@ import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
 import { registerTools } from '../src/host/tools.ts'
 import { compositionFixture } from './fixtures/composition.ts'
 import { JsonlSessionPersistence } from './helpers/dsh-plugins.ts'
-import { loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
+import { loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
 
 const spawn = await import(requireDsh.resolve('@deepseek-ai/dsh-subagent-spawn-in-process'))
 const fork = await import(requireDsh.resolve('@deepseek-ai/dsh-subagent-fork-in-process'))
@@ -61,7 +60,7 @@ async function fixture(provider: 'spawn' | 'fork' = 'spawn', persistWatermark = 
       ['dsh-sandbox-policy', { mode: 'read-only', workspaceRoot: f.workspace }], ['dsh-ptc-runtime-node', {}],
     ] as const) await ctx.plugin((await import(requireDsh.resolve(`@deepseek-ai/${name}`))).default, config)
   }
-  await ctx.plugin(ToolRuntime, { mode: 'native' })
+  const selectPtc = await loadTools(ctx)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   await loadWorkingDirectory(ctx)
@@ -76,7 +75,7 @@ async function fixture(provider: 'spawn' | 'fork' = 'spawn', persistWatermark = 
   const lifecycle = new MnemonLifecycle(host, coordinator, f.live.config, f.live)
   const stop = lifecycle.start()
   const parent = await ctx.agentLoop.create(SessionId('parent-denied'), { provider: 'fixture', model: 'synthetic' }, { cwd: f.workspace })
-  if (codeMode) parent.ctx.tools.presentAs('ptc')
+  if (codeMode) await selectPtc(parent.ctx)
   const turn = async () => {
     parent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'Please remember this project decision: ' + 'Checkpoints stay in SQLite. '.repeat(20) }] }))
     await parent.whenIdle()
