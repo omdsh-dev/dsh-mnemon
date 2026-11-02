@@ -18,8 +18,8 @@ import { FeedbackLine, type Feedback } from './sync-feedback.tsx'
 /**
  * What this computer is called, where on the branch the memory goes and whose name
  * its commits carry. Each field shows the value in use; the computer's name is the
- * host name or a typed one, and the author an explicit choice between the channel's
- * own identity, this computer's Git identity, and a typed one.
+ * host name or a typed one. The default author follows this computer's Git
+ * identity with a placeholder fallback; a custom author overrides it.
  */
 export function AdvancedSettings({ client, status, disabled, t, onSaved }: { client: MnemonClient; status: MnemonSyncStatus; disabled: boolean; t: MnemonTranslate; onSaved: () => Promise<void> }): JSX.Element {
   const [open, setOpen] = useState(false)
