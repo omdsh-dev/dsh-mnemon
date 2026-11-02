@@ -12,6 +12,7 @@ For new evaluations, commit the reusable harness and workload generator to [`scr
 
 | Record / 记录 | Scope / 范围 |
 |---|---|
+| [Current DSH compatibility](./current-dsh-compat/README.md) / [中文](./current-dsh-compat/README.zh-CN.md) | DSH rc.5 and separate alpha.2 contracts, installed-host suites, packed Starter upgrades, real Web presets and the verified macOS Node 24 toolchain / DSH rc.5 与独立 alpha.2 契约、已安装宿主测试、打包 Starter 升级、真实 Web 预设与已验证的 macOS Node 24 工具链 |
 | [Idle PTC history integrity](./issue-541-idle-probe-history/README.md) / [中文](./issue-541-idle-probe-history/README.zh-CN.md) | Real Agent reproduction, durable reload and copy-only history recovery / 真实 Agent 复现、持久化重读与仅副本历史恢复 |
 | [v0.5.38 release](./release-v0.5.38/README.md) / [中文](./release-v0.5.38/README.zh-CN.md) | Candidate digests, fresh installs, upgrades and retained data for conversation switching and idle review fixes / 会话切换与空闲审查修复的候选包摘要、安装、升级及数据保留验收 |
 | [Compact panel chrome](./issue-521-mobile-chrome/README.md) / [中文](./issue-521-mobile-chrome/README.zh-CN.md) | Issue #521 actual React rendering with synthetic RPC data, narrow before/after and wide screenshots, panel-width interaction checks and limits / Issue #521 实际 React 与合成 RPC 数据的窄面板前后对比、宽面板截图、面板宽度交互检查与限制 |

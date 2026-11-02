@@ -4,7 +4,7 @@
 
 ## Environment and commands
 
-The plugin's Node engine floor is 20. The pinned complete DSH development profile is the published 0.2.1-rc.2 release and needs Node `^22.19.0 || >=24.0.0`; use Node 24 for development. Root, Source Client tests and the external artifact consumer use that cohort, and `dsh-client-store` owns the public selector type used by the subagent projection adapter. Public Node entries are also smoke-tested on Node 20 in CI. DSH 0.2.0-rc.2 is supported as well: `tests/dsh-host-compatibility.spec.ts` runs DSH's own pre-install compatibility check over all 19 package manifests for the supported and unsupported releases, and CI runs the root tests against installed 0.2.0-rc.2 and 0.2.1-rc.3 packages. To run them against another installation yourself:
+The plugin's Node engine floor is 20. The pinned complete DSH development profile is the published 0.2.1-rc.5 release candidate; that profile and the build tooling together need Node `^22.19.0 || >=24.11.0`. Use Node 24.22.2 for the verified macOS alpha toolchain. Root, Source Client tests and the external artifact consumer use that cohort, and `dsh-client-store` owns the public selector type used by the subagent projection adapter. Public Node entries are also smoke-tested on Node 20 in CI. DSH 0.2.0-rc.2 is supported as well: `tests/dsh-host-compatibility.spec.ts` runs DSH's own pre-install compatibility check over all 19 package manifests for the supported and unsupported releases, and CI runs the root tests against installed 0.2.0-rc.2, 0.2.1-rc.3 and 0.2.1-rc.5 packages on Node 22.19.0. The separate 0.2.2-alpha.2 CI target uses the verified Node 24.22.2 toolchain; the published Host itself needs Node 24.9.0 or later. The alpha track does not replace the RC baseline. To run them against another installation yourself:
 
 ```sh
 npm install --global --prefix <directory> @deepseek-ai/dsh@0.2.0-rc.2
@@ -13,7 +13,7 @@ DSH_HOST_ROOT=<directory>/lib/node_modules/@deepseek-ai/dsh pnpm run test:instal
 
 Every `@deepseek-ai/*` import, subpaths included, then resolves from that installation (`scripts/installed-dsh.config.ts`), and the real-host specs compose it through `tests/helpers/installed-dsh.ts`. Build first, as for `pnpm run test`. [Compatibility](../reference/compatibility.md#dsh-020-and-021) lists where the two releases differ. A spec of behavior only DSH 0.2.1 has skips on 0.2.0 through the helper's `dsh021`, as `tests/task-agent-cwd-host.spec.ts` does for a task Agent whose workspace folder is gone and `tests/resumed-memory-task-host.spec.ts` for a finished memory task its conversation resumes.
 
-DSH's UI primitives import Markdown/highlighting dependencies that their published manifest lists as development dependencies. Root, the three Source packages and the external consumer declare that complete cohort explicitly for standalone Client tests; Host artifacts still use DSH’s provided UI module. Tests use the public async Agent factory and durable `assistant/message` events.
+DSH's UI primitives import Markdown/highlighting dependencies that their published manifest lists as development dependencies. Root, the four Source packages and the external consumer declare that complete cohort explicitly for standalone Client tests; Host artifacts still use DSH’s provided UI module. Tests use the public async Agent factory and durable `assistant/message` events.
 
 ```sh
 pnpm install --frozen-lockfile

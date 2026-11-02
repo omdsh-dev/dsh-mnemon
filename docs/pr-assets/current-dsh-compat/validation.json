@@ -1,0 +1,206 @@
+{
+  "checkedAt": "2026-11-02T12:25:09.521179+00:00",
+  "mainBase": "a4ad2d6955172b936ff9328f39cc5873c3ec9c55",
+  "stackBase": {
+    "revision": "eea8c306c9e7cb5fb2408696b7dc6bfa52a86ef9",
+    "pr": "https://github.com/omdsh-dev/dsh-mnemon/pull/545",
+    "branch": "codex/fix-541-idle-ptc-history"
+  },
+  "productionRevision": "e130786085dfb93d006c8769ccaaff72c6b0764e",
+  "distTags": {
+    "latest": "0.2.1-rc.5",
+    "alpha": "0.2.2-alpha.2",
+    "next": "0.2.1-rc.5"
+  },
+  "npmPublicationUtc": {
+    "0.2.1-rc.5": "2026-10-29T14:15:23.355Z",
+    "0.2.2-alpha.2": "2026-10-27T19:10:28.529Z"
+  },
+  "sources": [
+    "https://registry.npmjs.org/@deepseek-ai%2Fdsh",
+    "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.1-rc.5",
+    "https://github.com/deepseek-ai/deepseek-harness/releases/tag/dsh-v0.2.2-alpha.2"
+  ],
+  "platform": {
+    "os": "macOS",
+    "arch": "arm64",
+    "developmentNode": "22.22.0",
+    "alphaUpstreamNodeEngine": ">=24.9.0",
+    "alphaVerifiedFullNode": "24.22.2",
+    "pnpm": "10.13.1"
+  },
+  "fullVerify": {
+    "command": "pnpm run verify",
+    "dsh": "0.2.1-rc.5",
+    "node": "22.22.0",
+    "exitCode": 0,
+    "rootPassed": 2417,
+    "rootSkipped": 7,
+    "componentPassed": 745,
+    "componentSkipped": 3,
+    "includes": [
+      "documentation links",
+      "type checks",
+      "deterministic double build",
+      "all component builds and tests",
+      "real Headless activation and restart",
+      "package contents",
+      "public entries",
+      "publint",
+      "attw"
+    ]
+  },
+  "installedHosts": [
+    {
+      "dsh": "0.2.0-rc.2",
+      "node": "22.22.0",
+      "passed": 2414,
+      "skipped": 10
+    },
+    {
+      "dsh": "0.2.1-rc.3",
+      "node": "22.22.0",
+      "passed": 2417,
+      "skipped": 7
+    },
+    {
+      "dsh": "0.2.1-rc.5",
+      "node": "22.22.0",
+      "passed": 2417,
+      "skipped": 7
+    },
+    {
+      "dsh": "0.2.2-alpha.2",
+      "node": "24.9.0",
+      "passed": 2417,
+      "skipped": 7,
+      "scope": "Root suite only; not a full macOS Source verification recommendation"
+    },
+    {
+      "dsh": "0.2.2-alpha.2",
+      "node": "24.22.2",
+      "passed": 2417,
+      "skipped": 7
+    }
+  ],
+  "alphaAdmissionRegression": {
+    "before": {
+      "failed": 16,
+      "passed": 4
+    },
+    "after": {
+      "failed": 0,
+      "passed": 20
+    },
+    "includes": [
+      "14 real native/PTC access, cancellation, turn drain and durable reload tests",
+      "6 real Host watermark tests"
+    ],
+    "adapterContractTests": 11
+  },
+  "packedArtifacts": [
+    {
+      "dsh": "0.2.1-rc.5",
+      "node": "22.22.0",
+      "independentRepositories": 18,
+      "artifacts": 19,
+      "exitCode": 0
+    },
+    {
+      "dsh": "0.2.2-alpha.2",
+      "node": "24.22.2",
+      "independentRepositories": 18,
+      "artifacts": 19,
+      "exitCode": 0,
+      "seededUpgradeBase": "0.5.29"
+    }
+  ],
+  "seededUpgrades": [
+    {
+      "dsh": "0.2.1-rc.5",
+      "node": "22.22.0",
+      "from": "0.5.37",
+      "candidateVersion": "0.5.38",
+      "syntheticMemoryReadBeforeAndAfter": true,
+      "runtimeBytesUnchanged": true,
+      "settingsAndRestart": true
+    },
+    {
+      "dsh": "0.2.2-alpha.2",
+      "node": "24.9.0",
+      "from": "0.5.37",
+      "candidateVersion": "0.5.38",
+      "syntheticMemoryReadBeforeAndAfter": true,
+      "runtimeBytesUnchanged": true,
+      "settingsAndRestart": true
+    },
+    {
+      "dsh": "0.2.2-alpha.2",
+      "node": "24.22.2",
+      "from": "0.5.37",
+      "candidateVersion": "0.5.38",
+      "syntheticMemoryReadBeforeAndAfter": true,
+      "runtimeBytesUnchanged": true,
+      "settingsAndRestart": true
+    }
+  ],
+  "webProfiles": [
+    "stock-web-rc5.json",
+    "stock-web-alpha2.json",
+    "packed-web-alpha2.json"
+  ],
+  "modelDirectory": [
+    "model-directory-rc3.json",
+    "model-directory-rc5.json",
+    "model-directory-alpha2.json"
+  ],
+  "resolvedFailures": [
+    {
+      "stage": "initial rc5 dependency install",
+      "failure": "pnpm retained rc2 auto-installed peers; strict cohort test failed",
+      "resolution": "Re-resolved only DSH package and snapshot entries; final lock contains only 0.2.1-rc.5 DSH versions"
+    },
+    {
+      "stage": "initial installed alpha suite",
+      "failure": "ToolRuntime mode removed and explicit executors required; direct tools.execute input changed to model-call batches",
+      "resolution": "Published executor plugins in fixtures; production adapter preserves guards and authoritative outcomes"
+    },
+    {
+      "stage": "initial installed 0.2.0 suite",
+      "failure": "27 UI suites could not resolve upstream undeclared dependencies through a /tmp symlink",
+      "resolution": "Canonicalized the configured Host path to match Vite importer paths"
+    },
+    {
+      "stage": "Node 24.9 independent artifact build",
+      "failure": "3 Source typechecks selected tsdown 0.22.2 and rejected current neverBundle typing",
+      "resolution": "Current tsdown requires Node >=24.11 on the 24 line; final verification uses 24.22.2"
+    },
+    {
+      "stage": "Node 24.11 independent artifact tests",
+      "failure": "Runtime archive symlink removal, Memory Spaces native-package symlink replacement and Skills Trash symlink restoration failed",
+      "resolution": "The standalone Node reproducer fails on 24.9/24.11 and passes on 24.22.2; final full artifact run passes on 24.22.2",
+      "evidence": "node-symlink.json"
+    }
+  ],
+  "limits": [
+    "Both current DSH tags are prereleases; no guarantee for future alpha releases",
+    "No personal Desktop profile, credentials, private memory or paid model calls",
+    "Web evidence drives shipped presets through the Host API; no visual browser/UI interaction acceptance",
+    "Headless smoke disables unrelated shell/permission/PTC entries; real PTC behavior is separately checked in Host tests and Web presets",
+    "No claim that #542 is fixed; this branch depends on the separate #545 fix for #541",
+    "Early Node 24.9 and 24.11 on macOS are not the fully verified alpha toolchain; use tested Node 24.22.2",
+    "Remote GitHub Actions have not run for this unpushed compatibility branch"
+  ],
+  "node20Imports": {
+    "node": "20.20.0",
+    "nodeEntries": 15,
+    "publicTypeDependencies": 37,
+    "browserClientDeclarations": 22,
+    "executableHelpEntries": 1,
+    "exitCode": 0
+  },
+  "frozenInputs": {
+    "sourceTree": "d32a58c6af163dd7aad48b6952c34d78f6067cb4",
+    "lockfileSha256": "2ca44cc2f67d419bebc9908139be14f6b33d06994b2ba1f9cb16e01b9c0d7510"
+  }
+}

@@ -12,6 +12,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // Set MNEMON_E2E_DSH to another DSH installation's lib/bin.js to verify Headless on that release.
 const dshBin = process.env.MNEMON_E2E_DSH ? resolve(process.env.MNEMON_E2E_DSH) : join(root, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
 const marker = 'HEADLESS_MNEMON_READY'
+const upgradeMemoryMarker = 'Synthetic upgrade fixture: project checkpoints stay in SQLite.'
 const arguments_ = process.argv.slice(2)
 const options = new Map()
 for (let index = 0; index < arguments_.length; index += 2) {
@@ -124,7 +125,16 @@ try {
     const initialExecution = await run(['--profile', 'headless', 'Initialize isolated memory before upgrading Mnemon.'], { cwd: workspaceRoot, env })
     assertSuccess('running the pre-upgrade Headless profile', initialExecution)
     if (!initialExecution.stdout.includes(marker)) throw new Error(`Pre-upgrade Headless output did not contain ${marker}:\n${initialExecution.stdout}`)
-    upgradeMemory = await readFile(join(storageRoot, 'runtime', 'memories.json'), 'utf8')
+    const memoryPath = join(storageRoot, 'runtime', 'memories.json')
+    const memory = JSON.parse(await readFile(memoryPath, 'utf8'))
+    memory.entries.push({ content: upgradeMemoryMarker, target: 'memory', importance: 'normal',
+      created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z' })
+    await writeFile(memoryPath, JSON.stringify(memory, null, 2) + '\n')
+    requests.length = 0
+    const seededExecution = await run(['--profile', 'headless', 'Verify the retained synthetic project memory before upgrading.'], { cwd: workspaceRoot, env })
+    assertSuccess('reading synthetic memory on the pre-upgrade Headless profile', seededExecution)
+    if (!JSON.stringify(requests).includes(upgradeMemoryMarker)) throw new Error('Pre-upgrade Headless did not read the synthetic Runtime entry')
+    upgradeMemory = await readFile(memoryPath, 'utf8')
     requests.length = 0
   }
 
@@ -213,6 +223,7 @@ try {
   }
   if (!existsSync(join(storageRoot, 'runtime', 'memories.json'))) throw new Error('Headless plugin did not initialize isolated runtime memory')
   if (upgradeMemory !== undefined && await readFile(join(storageRoot, 'runtime', 'memories.json'), 'utf8') !== upgradeMemory) throw new Error('Package upgrade changed existing Runtime Memory bytes')
+  if (upgradeMemory !== undefined && !JSON.stringify(toolRequest).includes(upgradeMemoryMarker)) throw new Error('Upgraded Headless did not read the retained synthetic Runtime entry')
 
   // DSH imports the legacy settings file into the profile and keeps it unchanged as a backup.
   if (existsSync(settingsPath) || await readFile(`${settingsPath}.imported`, 'utf8') !== legacySettings) throw new Error('DSH did not retain the legacy settings file as its import backup')

@@ -1,0 +1,40 @@
+{
+  "dsh": "0.2.1-rc.5",
+  "node": "v22.22.0",
+  "profile": "web",
+  "linkedBuiltStarter": true,
+  "syntheticModel": true,
+  "realModelRequests": 0,
+  "presets": [
+    {
+      "preset": "standard",
+      "modelRequests": 3,
+      "guide": true,
+      "memorySnapshot": true,
+      "toolsRead": [
+        "mnemon_status",
+        "mnemon_document_search"
+      ],
+      "toolErrors": [
+        false,
+        false
+      ],
+      "completedTurn": true
+    },
+    {
+      "preset": "ptc",
+      "modelRequests": 3,
+      "guide": true,
+      "memorySnapshot": true,
+      "toolsRead": [
+        "mnemon_status",
+        "mnemon_document_search"
+      ],
+      "toolErrors": [
+        false,
+        false
+      ],
+      "completedTurn": true
+    }
+  ]
+}

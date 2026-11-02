@@ -4,7 +4,7 @@
 
 ## 环境与命令
 
-插件的 Node engine 下限为 20；锁定的完整 DSH 开发 Profile 是正式发布的 0.2.1-rc.2，需要 Node `^22.19.0 || >=24.0.0`，建议开发使用 Node 24。Root、Source Client 测试和外部制品消费者均使用该依赖族，`dsh-client-store` 提供子 Agent projection 适配器使用的公开 selector 类型。CI 另在 Node 20 冒烟导入公开 Node 入口。DSH 0.2.0-rc.2 同样受支持：`tests/dsh-host-compatibility.spec.ts` 对全部 19 个包的清单执行 DSH 自己的安装前兼容检查，覆盖受支持与不受支持的版本；CI 还会在已安装的 0.2.0-rc.2 和 0.2.1-rc.3 上运行根测试。要自己在另一个安装上运行：
+插件的 Node engine 下限为 20；锁定的完整 DSH 开发 Profile 是已发布的 0.2.1-rc.5 候选版；该 Profile 与构建工具组合需要 Node `^22.19.0 || >=24.11.0`。macOS alpha 验收建议使用已验证的 Node 24.22.2。Root、Source Client 测试和外部制品消费者均使用该依赖族，`dsh-client-store` 提供子 Agent projection 适配器使用的公开 selector 类型。CI 另在 Node 20 冒烟导入公开 Node 入口。DSH 0.2.0-rc.2 同样受支持：`tests/dsh-host-compatibility.spec.ts` 对全部 19 个包的清单执行 DSH 自己的安装前兼容检查，覆盖受支持与不受支持的版本；CI 还会在 Node 22.19.0 上使用已安装的 0.2.0-rc.2、0.2.1-rc.3 和 0.2.1-rc.5 运行根测试。独立的 0.2.2-alpha.2 CI 目标使用已验证的 Node 24.22.2 以满足构建工具要求；Host 本身要求 Node 24.9.0 或以上，与已发布 Host 的 engine 一致。alpha 通道不替代 RC 开发基线。要自己在另一个安装上运行：
 
 ```sh
 npm install --global --prefix <目录> @deepseek-ai/dsh@0.2.0-rc.2
@@ -13,7 +13,7 @@ DSH_HOST_ROOT=<目录>/lib/node_modules/@deepseek-ai/dsh pnpm run test:installed
 
 此时所有 `@deepseek-ai/*` 导入（包括子路径）都从该安装解析（`scripts/installed-dsh.config.ts`），真实宿主测试通过 `tests/helpers/installed-dsh.ts` 组合它。与 `pnpm run test` 一样，先完成构建。两个版本的差异见[兼容性说明](../reference/compatibility.md#dsh-020-与-021)。只有 DSH 0.2.1 才有的行为，其测试通过该辅助模块的 `dsh021` 在 0.2.0 上跳过，例如 `tests/task-agent-cwd-host.spec.ts`（工作区文件夹已不存在时的任务 Agent）与 `tests/resumed-memory-task-host.spec.ts`（会话恢复已结束的记忆任务）。
 
-DSH 的 UI primitives 在制品中导入 Markdown/高亮依赖，但其已发布 manifest 将这些包列为开发依赖。Root、三个 Source 与外部消费者显式声明完整依赖族，使独立 Client 测试可执行；Host 制品仍使用 DSH 提供的 UI 模块。测试同步使用公开的异步 Agent 工厂及持久化 `assistant/message` 事件。
+DSH 的 UI primitives 在制品中导入 Markdown/高亮依赖，但其已发布 manifest 将这些包列为开发依赖。Root、四个 Source 与外部消费者显式声明完整依赖族，使独立 Client 测试可执行；Host 制品仍使用 DSH 提供的 UI 模块。测试同步使用公开的异步 Agent 工厂及持久化 `assistant/message` 事件。
 
 ```sh
 pnpm install --frozen-lockfile

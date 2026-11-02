@@ -6,15 +6,19 @@ Starter 固定经过测试的官方插件组合。下表记录验证范围，不
 
 | 组件 | 基线 | 已验证的范围 |
 |---|---|---|
-| DSH | `0.2.1-rc.2`, `0.2.1-rc.3`, `0.2.0-rc.2` | 0.2.1-rc.2 仍为锁定的开发基线。CI 还会在已安装的 0.2.0-rc.2 和 0.2.1-rc.3 包上运行全部根测试。版本差异见 [DSH 0.2.0 与 0.2.1](#dsh-020-与-021)；支持范围也包含 0.2.1-rc.1。 |
-| Node.js | `22.19`、`24` | 分别用于源码 CI 与打包制品 CI；开发要求 `^22.19.0 \|\| >=24.0.0` |
+| DSH 当前 RC | `0.2.1-rc.5` | 锁定的开发基线，同时进入已安装宿主 CI。2026-11-02 核对时 npm 的 `latest` 和 `next` 标签均指向此版本；它仍是预发布版。 |
+| DSH 早期受支持宿主 | `0.2.0-rc.2`, `0.2.1-rc.3` | CI 在这些已安装包上运行全部根测试。版本差异见 [DSH 0.2.0 与 0.2.1](#dsh-020-与-021)；支持范围仍包含 0.2.1-rc.1 和 rc.2。 |
+| DSH alpha 通道 | `0.2.2-alpha.2` | 独立的已安装宿主 CI 使用已验证的 Node 24.22.2，以满足构建工具要求；已发布 alpha Host 本身要求 Node 24.9.0 或以上。此版本是 2026-11-02 核对的 npm `alpha` 标签，不作为默认开发宿主，也不保证之后的 alpha 版本。 |
+| Node.js | `22.19`、`24` | 分别用于源码 CI 与打包制品 CI；开发要求 `^22.19.0 \|\| >=24.11.0` |
 | Node.js 20 | 仅公开包入口导入 | 不代表 DSH Host 能在 Node 20 运行 |
 | Mnemon Native CLI | `0.2.9`；嵌入模型检测要求 `0.2.13+` | 用真实 CLI 和临时数据执行可选测试，CLI 单独安装。旧版的其他命令仍可使用，但“测试状态”会提示升级，因为旧版可用性字段只证明 Provider 可达 |
 | 三方 Provider | 适配契约与夹具 | 不代表真实云账号一致性或上游服务可用性已验证 |
 
-DSH 0.2.1-rc.3 会联网获取官方 API Key 的模型目录。任务 Agent 模型选择列表为该 Provider 保留最多六秒，覆盖 DSH 默认的五秒请求预算；其他 Provider 仍为三秒。此调整仅影响目录加载，不改变模型选择、推理超时或已保存配置。
+DSH 0.2.1-rc.3 及当前 RC/alpha 验证目标会联网获取官方 API Key 的模型目录。任务 Agent 模型选择列表为该 Provider 保留最多六秒，覆盖 DSH 默认的五秒请求预算；其他 Provider 仍为三秒。此调整仅影响目录加载，不改变模型选择、推理超时或已保存配置。
 
-dsh-mnemon 支持 `>=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.1 <0.3.0-0`：DSH 0.2.0 从 0.2.0-rc.2 起，DSH 0.2.1 及之后的 0.2 版本从 0.2.1-rc.1 起，正式版也在其中。DSH 0.2.1 从 Starter 的 `engines.dsh` 读取这个范围；DSH 0.2.0 从 Starter 的 DSH peer（可选的 `dsh-app-boot` 与 `dsh-typert-protocol`）读取，两者写的是同一个范围。DSH 在安装插件前，以及每次启动 profile 时，都会用自身版本检查这个范围，预发布版本也参与比较；不包含当前 DSH 的版本会被拒绝安装或停用。`tests/dsh-host-compatibility.spec.ts` 对全部 19 个包的清单执行 DSH 自己的检查，既覆盖受支持的版本，也覆盖已不再支持的版本。五个 Strategy 包使用新的扩展 SDK，要求 `dsh-mnemon ^0.5.17`；三个 Source 要求 `^0.5.19`，Provider 则依赖记忆空间 Source。
+dsh-mnemon 支持 `>=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.1 <0.3.0-0`：DSH 0.2.0 从 0.2.0-rc.2 起，DSH 0.2.1 及之后的 0.2 版本从 0.2.1-rc.1 起，正式版也在其中。DSH 0.2.1 从 Starter 的 `engines.dsh` 读取这个范围；DSH 0.2.0 从 Starter 的 DSH peer（可选的 `dsh-app-boot` 与 `dsh-typert-protocol`）读取，两者写的是同一个范围。DSH 在安装插件前，以及每次启动 profile 时，都会用自身版本检查这个范围，预发布版本也参与比较；不包含当前 DSH 的版本会被拒绝安装或停用。`tests/dsh-host-compatibility.spec.ts` 对全部 19 个包的清单执行 DSH 自己的检查，既覆盖受支持的版本，也覆盖已不再支持的版本。五个 Strategy 包使用新的扩展 SDK，要求 `dsh-mnemon ^0.5.17`；四个 Source 要求 `^0.5.19`，Provider 则依赖记忆空间 Source。
+
+DSH 0.2.2-alpha.2 将工具执行拆为独立的 native/PTC executor 插件，并将 `tools.execute()` 改为批量 API。Mnemon 根据已发布的 `setExecutor()` 能力提交一次关联调用，只接受调用 ID 匹配的最终结果。Host 仍负责 guard、执行前后策略及 PTC 调度。自动准入还依赖 [#541](https://github.com/omdsh-dev/dsh-mnemon/issues/541) 的轮内审计修复；[#542](https://github.com/omdsh-dev/dsh-mnemon/issues/542) 的 View 缺失问题独立修复。本次兼容适配使用已发布 npm 包和隔离的合成 profile，不修改 DSH 源码、存储格式或支持版本范围。验证范围与上游来源见[当前 DSH 证据](../../pr-assets/current-dsh-compat/README.zh-CN.md)。
 
 Source 工具激活使用受支持的 0.2.0/0.2.1 Host 已发布的 `tools.register()` disposer 与作用域 `tools.get()` 契约。DSH 应用 `restrict()` 前，子 Agent 允许列表会剔除未注册的可选工具。首次通过 Loader 启动时，命名工具族在 `Loader.await()` 就绪后按原有目录顺序发布；后续恢复会追加工具族，不重新注册仍在运行的工具。DSH 默认独立排序请求中的工具 schema。Source 配置事务保留原有工具目录，直到发布最终提交状态。[合成 Host 证据](../../pr-assets/issue-522-source-tool-lifecycle/README.md)记录本地 schema 更新、Documents/Runtime 保留写入与 spawn/fork 审查覆盖；PR 当前 head 仍需远程兼容性 CI。存储格式、Provider 契约和既有 View 授权检查保持不变。
 

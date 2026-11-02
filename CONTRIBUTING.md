@@ -18,7 +18,7 @@ Documentation-only PRs from external contributors are not accepted directly. Ope
 
 ## Prerequisites
 
-- Node.js `^22.19.0 || >=24.0.0`, which the pinned DSH development profile needs (published entries still import on Node 20); CI covers Node.js 22.19 plus 24 with pnpm 10.13.1;
+- Node.js `^22.19.0 || >=24.11.0` for the pinned DSH development profile and build tooling (published entries still import on Node 20); CI covers Node.js 22.19 plus 24 with pnpm 10.13.1;
 - use only published `@deepseek-ai/*` NPM contracts; do not modify DSH source or point tsconfig at a DSH source checkout;
 - do not commit tokens, credentials, private memory, sensitive paths, or unredacted logs in repository configuration, fixtures, screenshots, or PR descriptions;
 - `lib/` is generated build output and must not be committed or edited manually.

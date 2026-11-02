@@ -1,0 +1,32 @@
+[
+  {
+    "node": "v22.22.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "linkRemoved": true,
+    "targetRetained": true
+  },
+  {
+    "node": "v24.9.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "linkRemoved": false,
+    "errorCode": "ERR_FS_EISDIR",
+    "targetRetained": true
+  },
+  {
+    "node": "v24.11.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "linkRemoved": false,
+    "errorCode": "ERR_FS_EISDIR",
+    "targetRetained": true
+  },
+  {
+    "node": "v24.22.2",
+    "platform": "darwin",
+    "arch": "arm64",
+    "linkRemoved": true,
+    "targetRetained": true
+  }
+]
