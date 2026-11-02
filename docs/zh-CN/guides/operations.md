@@ -134,7 +134,11 @@ Go 更新还要求当前执行文件确实位于本机 Go 的安装输出位置�
 - 载荷只承载记忆内容：runtime、documents 与 memory-spaces，用户画像包含在 runtime 中。配置属于 profile 层，不会随载荷传递，因此第二台机器保留自己的设置，不会继承本机的设置。同步总是携带完整的包，原因见[同步通道](../reference/interfaces.md#同步通道)。
 - `state/sync/git` 下的镜像是可丢弃的，且不属于任何数据组件，因此镜像不会同步自己；删除它只多一次 fetch。每次同步（包括检查远端与备份历史）都会把镜像中的同步目录恢复为分支的内容，所以 Git 不跟踪的文件（例如在原地打开数据库时 SQLite 留下的 `-wal` 与 `-shm`）会被删除，而不会被当作载荷读取；不要在那里存放自己的文件。无论这台设备有什么忽略规则（例如全局的 `*.db`），载荷中的每个文件都会被发布。较早版本因此漏掉文件后发布的分支，在每台设备上都通不过校验：在远端删除该分支，或在**高级设置**中换一个目录，再同步一次即可。
 
-**高级设置**包含这台电脑的名称、分支、仓库内目录与提交者，每项都显示当前使用的值；保存新的分支或目录时会说明下次同步会写到那里。**这台电脑的名称**会显示在备份历史与**检查远端**的“来自 …”里，并随每次同步一起发布：**主机名**使用这台电脑当前的主机名，主机名改变时跟着改变；**自定义**填写不超过 120 个字符、只占一行的名称。新名称从下一次同步起使用，那次同步会为它留下一个版本；之前的版本保留发布时的名称。提交者是明确的选择：**默认**以 `dsh-mnemon sync <mnemon@localhost>` 提交；**本机 Git** 使用这台机器 Git 配置的 `user.name` 与 `user.email`，没有配置时使用默认身份，而不是让提交失败，或发布 Git 根据账号与主机名猜出的身份；**自定义**填写姓名与邮箱。
+**高级设置**包含这台电脑的名称、分支、仓库内目录与提交者，每项都显示已保存的选择；保存新的分支或目录时会说明下次同步会写到那里。**这台电脑的名称**会显示在备份历史与**检查远端**的“来自 …”里，并随每次同步一起发布：**主机名**使用这台电脑当前的主机名，主机名改变时跟着改变；**自定义**填写不超过 120 个字符、只占一行的名称。新名称从下一次同步起使用，那次同步会为它留下一个版本；之前的版本保留发布时的名称。
+
+**默认**与**本机 Git** 使用运行同步的 Host 上配置的 Git 身份。Git 从同步镜像目录解析 `user.name` 与 `user.email`，包括仓库/worktree 配置、全局配置以及 `include`/`includeIf` 规则；Git 的 author/committer 环境变量仍然生效。未配置的字段才回退到 `dsh-mnemon sync <mnemon@localhost>`，不会发布 Git 根据账号或主机名猜出的身份。**自定义**填写姓名与邮箱，仅为这次提交覆盖 Git 配置与继承的 author/committer 环境变量。保存的 `dsh-mnemon sync` / `mnemon@localhost` 这一完整组合表示**默认**，包括旧版本写入的配置；其他显式组合保留原值，即使其中一个字段与占位值相同。读取身份不会重写设置文件或 Git 配置。
+
+**服务器拒绝提交者身份。** 在**同步 > 高级设置 > 自定义**填写服务器接受的账号名与邮箱，保存后点击**立即同步**；也可以保留**默认**，在该 Host 上配置 Git。用 `git -C <mirrorPath> config --get user.name` 与 `git -C <mirrorPath> config --get user.email` 查看生效配置，其中镜像路径使用同步状态返回的值。此前被拒绝的同步提交会在获取远端分支后，从当前本机记忆重新生成，并采用修正后的身份；已发布提交的哈希保持不变，仍使用普通 push。不要修改已发布历史或强制推送。镜像可以随时重建，不要在其中保留手工修改；再次收集的是实际 Mnemon 存储。通用的远端策略拒绝会保留 hook 详情并提示作者设置入口；分支权限、签名或其他服务器策略仍需分别处理。认证 token 不会改变提交者身份。
 
 **凭据。** 凭据不进入载荷、DSH profile 配置、浏览器、响应、错误信息与日志；它们按什么顺序解析、由哪些字段描述，见[同步通道](../reference/interfaces.md#同步通道)。
 
@@ -309,6 +313,7 @@ Host 调用 Mnemon CLI 时不经过 shell，限制每次调用的时间与输出
 |---|---|
 | 插件详情中 `mnemon-bundle` 容器行（0.5.20 起名为 `dsh-mnemon/bundle`，此前为 `cordis:group`）显示“已关闭”，点击提示“找不到该插件” | DSH 0.2.0 的已知容器展示问题，与 0.1.7 相同；DSH 0.2.1 不再列出该行，配置页也随之不再显示相应说明。先检查“记忆系统 → 状态”和实际组件；正常时可继续使用。整套组合用顶层 bundle 或 `mnemon` 核心组件开关，不要重置数据或删除分组。参见[原因、处理步骤与修复边界](../reference/compatibility.md#dsh-020-上的-bundle-组件列表)和[上游 #649](https://github.com/dsh-external/issues/issues/649)。 |
 | Windows 切换会话时终端窗口闪现 | 更新 Starter，或独立安装的 Runtime Source，然后重启 DSH Host。Runtime 的 Git 分支检测会隐藏控制台窗口；Git 失败、超时或 HEAD 分离时仍回退到不按分支筛选的 Runtime 视图。 |
+| 写入含补充 Unicode 字符的长 Runtime 记忆后，同一会话每次请求都返回 HTTP 400 | 检查历史 `tool/result.data.meta.item.title` 或 `excerpt` 中是否有不成对的代理字符（[#548](https://github.com/omdsh-dev/dsh-mnemon/issues/548)）。修复会在原有活动摘要长度限制内保留完整码点，存储的记忆正文不变。更新到包含修复的构建并重启 DSH。已有会话记录不会被改写：可在新会话中继续使用同一份记忆，并保留受影响的会话供单独恢复。仅凭通用 400 错误不能确认此原因。 |
 | Mnemon 不可用 | macOS/Linux 运行 `command -v mnemon`、`mnemon --version`；Windows PowerShell 运行 `Get-Command mnemon`、`Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"`。设置 `MNEMON_CLI_PATH` 或 `mnemon.cliPath` 后重启 |
 | Electron 桌面 Host 无法运行 npm CLI 脚本 | 经过验证的 npm 启动器仅在子进程中设置 `ELECTRON_RUN_AS_NODE=1`。如果桌面壳关闭了 [Electron `runAsNode` fuse](https://www.electronjs.org/docs/latest/tutorial/fuses#runasnode)，该变量会被忽略；请将 `mnemon.cliPath` 指向官方原生二进制（Windows 为 `mnemon.exe`）。npm 自动更新仍需要 Host 能够运行 JavaScript 启动器 |
 | Headless Agent 没有 Mnemon 工具 | 插件按 profile 独立安装；运行 `dsh plugin --profile headless add dsh-mnemon`，Web profile 的安装不会自动带入 |

@@ -2,7 +2,7 @@
 
 [简体中文](./README.zh-CN.md) | **English**
 
-Checked on 2026-11-02, on macOS arm64. Production code is frozen at `e130786085dfb93d006c8769ccaaff72c6b0764e`, on top of the independent [#541 fix, PR #545](https://github.com/omdsh-dev/dsh-mnemon/pull/545) at `eea8c306c9e7cb5fb2408696b7dc6bfa52a86ef9`. Its base is main `a4ad2d6955172b936ff9328f39cc5873c3ec9c55`. Later changes add verification, documentation and the CI runtime pin; they do not change the frozen production code. [validation.json](./validation.json) records exact versions, counts and limits; [artifacts.json](./artifacts.json) freezes the 19 candidate tarball SHA-256 values and sizes. These local candidates retain existing version numbers; they are not a release or Registry publication.
+Checked on 2026-11-02, on macOS arm64. The compatibility adapter is frozen at `e130786085dfb93d006c8769ccaaff72c6b0764e`, on top of the independent [#541 fix, PR #545](https://github.com/omdsh-dev/dsh-mnemon/pull/545) at `eea8c306c9e7cb5fb2408696b7dc6bfa52a86ef9`. Its base is main `a4ad2d6955172b936ff9328f39cc5873c3ec9c55`. The initial evidence below precedes merge integration; the integration addendum records the combined fixes without changing the compatibility adapter. [validation.json](./validation.json) records exact versions, counts and limits; [artifacts.json](./artifacts.json) freezes the 19 candidate tarball SHA-256 values and sizes. These local candidates retain existing version numbers; they are not a release or Registry publication.
 
 ## Upstream and contract
 
@@ -51,3 +51,9 @@ node scripts/observe-node-symlink.mjs
 Use Node 24.22.2 for the alpha commands. The packed Web form expects a disposable candidate registry serving the frozen component tarballs; the Headless pack verifier creates its own loopback registry. All profiles, settings and memories used here are disposable synthetic fixtures. Raw logs stay local because DSH prints temporary loopback authentication URLs; committed receipts contain no tokens, private paths, private data or model credentials. Fixtures are disposed after checks.
 
 This is protocol and package acceptance, not a visual browser/UI walkthrough. The Web fixture disables the unrelated native directory chooser and automatic idle review; real guarded automatic admission and PTC history are covered separately by the full Host tests. The Headless smoke disables unrelated shell/permission/PTC entries and does not substitute for Web PTC coverage. No personal Desktop profile, paid inference or third-party Provider account was used. Remote GitHub Actions must still pass on the submitted PR head; later alpha versions and other untested platforms are not established by this record.
+
+## Merge integration
+
+Before release, #543, #544, #545 and #549 were integrated through preserved merge ancestry. The new #544 real-Host fixture initially failed all seven cases on alpha.2 because it used the removed ToolRuntime mode configuration. Migrating only that fixture to the existing `loadTools()` and `executeTool()` helpers made all seven pass. Its Agent-created listener awaits PTC presentation.
+
+Full rc.5 verification of the combination passed: **2,445 root tests / 7 skipped** and **745 component tests / 3 skipped**, plus all build, type, documentation, Headless and package checks. The focused alpha.2 / Node 24.22.2 combination passed **49 tests across five files**, covering View binding, guarded idle admission, durable PTC history and Unicode activity. This addendum does not supersede the original 19-artifact digests: final release acceptance must use only newly selected release tarballs and real Registry versions for unchanged components.

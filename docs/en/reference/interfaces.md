@@ -254,6 +254,8 @@ Backups contain private memory, so callers must treat the authenticated DSH brow
 
 The sync payload is always a full Mnemon Pack: a pack manifest's `scope` is either `full` or exactly one component, so a persistent component selection cannot be represented. Component filtering exists only as the optional `pull` parameter. A repository URL is the only configuration value without a default: a blank `branch`, `subdir`, `authorName` or `authorEmail` is answered with the default branch, the default directory, or the commit identity this machine's Git already carries. `configure`, `push`, `pull` and every `github-` endpoint that changes something require `writeEnabled: true` and otherwise answer the same read-only refusal pack import uses.
 
+`config.authorName` / `authorEmail` report the saved choice, not the resolved commit identity. Both blank fields and the exact default pair `dsh-mnemon sync` / `mnemon@localhost` defer to Git in the mirror; a custom pair's nonempty fields override Git, including inherited author/committer environment variables. Missing Git identity fields fall back to the placeholder. Reading or using this choice does not migrate the saved file.
+
 Credentials and the network:
 
 - Tokens never appear in a response or an error message. The channel resolves one credential per network operation, in this order: `MNEMON_SYNC_GIT_TOKEN`, the token stored in `state/sync-git.json` (mode `0600`), then the grant GitHub sign-in wrote into DSH's credentials store under the key `dsh-mnemon/github`.

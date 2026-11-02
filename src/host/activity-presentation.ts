@@ -1,5 +1,6 @@
 import { MEMORY_TOOLS, type JsonValue, type MemoryActivityItem, type MemoryActivityRead, type MemoryActivityWriteback, type MemoryToolName } from './protocol.ts'
 import { mutationResultCommitted } from './receipts.ts'
+import { truncate } from '../sdk/input.ts'
 
 export const MNEMON_ACTIVITY_SCHEMA = 'dsh-mnemon.activity/v1' as const
 
@@ -33,7 +34,7 @@ function bounded(value: unknown, maximum: number): string | undefined {
   if (typeof value !== 'string') return undefined
   const normalized = value.replace(/\s+/gu, ' ').trim()
   if (normalized === '') return undefined
-  return normalized.length <= maximum ? normalized : normalized.slice(0, maximum - 1) + '…'
+  return truncate(normalized, maximum)
 }
 
 function item(value: unknown, index: number): MemoryActivityItem | undefined {

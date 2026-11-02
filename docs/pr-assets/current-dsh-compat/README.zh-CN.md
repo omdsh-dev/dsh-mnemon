@@ -2,7 +2,7 @@
 
 **简体中文** | [English](./README.md)
 
-2026-11-02 在 macOS arm64 上核验。生产代码冻结于 `e130786085dfb93d006c8769ccaaff72c6b0764e`，叠加在独立的 [#541 修复 PR #545](https://github.com/omdsh-dev/dsh-mnemon/pull/545)（`eea8c306c9e7cb5fb2408696b7dc6bfa52a86ef9`）之上；其 main 基线为 `a4ad2d6955172b936ff9328f39cc5873c3ec9c55`。后续改动只补充验证、文档和 CI 运行时版本，不改变已冻结的生产代码。[validation.json](./validation.json) 记录精确版本、数量与限制；[artifacts.json](./artifacts.json) 固定 19 个候选 tarball 的 SHA-256 和大小。这些本地候选仍沿用现有版本号，不代表发版或发布到 Registry。
+2026-11-02 在 macOS arm64 上核验。兼容适配器冻结于 `e130786085dfb93d006c8769ccaaff72c6b0764e`，叠加在独立的 [#541 修复 PR #545](https://github.com/omdsh-dev/dsh-mnemon/pull/545)（`eea8c306c9e7cb5fb2408696b7dc6bfa52a86ef9`）之上；其 main 基线为 `a4ad2d6955172b936ff9328f39cc5873c3ec9c55`。下方初始证据采集于合并整合之前；末尾的整合补充记录组合修复的验证，不改变兼容适配器。[validation.json](./validation.json) 记录精确版本、数量与限制；[artifacts.json](./artifacts.json) 固定 19 个候选 tarball 的 SHA-256 和大小。这些本地候选仍沿用现有版本号，不代表发版或发布到 Registry。
 
 ## 上游与契约
 
@@ -51,3 +51,9 @@ node scripts/observe-node-symlink.mjs
 Alpha 命令使用 Node 24.22.2。打包 Web 形式需要提供冻结组件 tarball 的临时候选 Registry；Headless 制品验证器会自行创建回环 Registry。全部 profile、设置和记忆都是临时合成夹具。DSH 会打印临时回环认证 URL，因此原始日志只保留本地；已提交回执不含 token、私有路径、私有数据或模型凭据。检查结束后销毁夹具。
 
 这些是协议与包验收，不是浏览器视觉/UI 操作验收。Web 夹具关闭无关的原生目录选择器和自动空闲审查；真实 guard 准入与 PTC 历史另由完整 Host 测试覆盖。Headless 冒烟关闭无关 shell、权限、PTC 入口，不能代替 Web PTC 检查。未使用个人 Desktop profile、付费推理或第三方 Provider 账号。提交后的 PR head 仍须通过远程 GitHub Actions；本记录不证明未来 alpha 或其他未测平台的兼容性。
+
+## 合并整合
+
+发布前通过保留历史的正常合并整合了 #543、#544、#545 和 #549。#544 新增的真实 Host 夹具最初在 alpha.2 上七项全部失败，原因是使用了已移除的 ToolRuntime mode 配置。仅将该夹具迁移到已有 `loadTools()`、`executeTool()` 辅助函数后，七项全部通过；Agent 创建监听器会等待 PTC 呈现配置完成。
+
+组合代码的完整 rc.5 验证通过：**根测试 2,445 通过 / 7 跳过**，**组件测试 745 通过 / 3 跳过**，以及全部构建、类型、文档、Headless 和包检查。alpha.2 / Node 24.22.2 的组合定向验证为**五个文件 49 项通过**，覆盖 View 绑定、受守卫约束的空闲准入、PTC 持久历史与 Unicode 活动。此补充不替代原始 19 个制品的摘要；最终发布验收必须只使用新选择发布的 tarball，其余组件使用真实 Registry 版本。

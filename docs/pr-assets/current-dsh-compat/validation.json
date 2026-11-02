@@ -202,5 +202,30 @@
   "frozenInputs": {
     "sourceTree": "d32a58c6af163dd7aad48b6952c34d78f6067cb4",
     "lockfileSha256": "2ca44cc2f67d419bebc9908139be14f6b33d06994b2ba1f9cb16e01b9c0d7510"
+  },
+  "mergeIntegration": {
+    "compatibilityHead": "39125155e8e774c337aedd4b9661d5fa49721fe9",
+    "combinedFixesHead": "71f6737fbd19b1334e6eac02a25e2658f494961f",
+    "alphaViewBefore": {
+      "failed": 7,
+      "cause": "Removed ToolRuntime mode configuration in newly added View test fixture"
+    },
+    "fixtureOnlyChange": "Use shared loadTools and executeTool; await PTC selection in agent-created listener",
+    "fullVerify": {
+      "exitCode": 0,
+      "dsh": "0.2.1-rc.5",
+      "rootPassed": 2445,
+      "rootSkipped": 7,
+      "componentPassed": 745,
+      "componentSkipped": 3
+    },
+    "alphaFocused": {
+      "dsh": "0.2.2-alpha.2",
+      "node": "24.22.2",
+      "exitCode": 0,
+      "files": 5,
+      "passed": 49
+    },
+    "releaseAcceptanceComposition": "Only selected new frozen tarballs; unchanged versions from real npm"
   }
 }
