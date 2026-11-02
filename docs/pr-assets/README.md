@@ -12,6 +12,7 @@ For new evaluations, commit the reusable harness and workload generator to [`scr
 
 | Record / 记录 | Scope / 范围 |
 |---|---|
+| [Current-turn View recovery — issue #542](./issue-542-turn-view/README.md) / [中文](./issue-542-turn-view/README.zh-CN.md) | Published Agent-turn reproduction with prompt interception, native/PTC reads, resumed turns, late registration, child guidance and retained authority / 正式 Agent 回合中的提示词拦截复现、原生/PTC 读取、恢复回合、晚注册、子 Agent 引导语及权限保留 |
 | [Idle PTC history integrity](./issue-541-idle-probe-history/README.md) / [中文](./issue-541-idle-probe-history/README.zh-CN.md) | Real Agent reproduction, durable reload and copy-only history recovery / 真实 Agent 复现、持久化重读与仅副本历史恢复 |
 | [Git sync author identity — issue #539](./issue-539-sync-author/README.md) / [中文](./issue-539-sync-author/README.zh-CN.md) | Real rejecting hooks, Git configuration precedence and recovery without rewriting published history / 真实拒绝 hook、Git 配置优先级与保留已发布历史的恢复 |
 | [v0.5.38 release](./release-v0.5.38/README.md) / [中文](./release-v0.5.38/README.zh-CN.md) | Candidate digests, fresh installs, upgrades and retained data for conversation switching and idle review fixes / 会话切换与空闲审查修复的候选包摘要、安装、升级及数据保留验收 |
