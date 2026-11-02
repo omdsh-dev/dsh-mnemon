@@ -204,7 +204,7 @@ describe('Memory enhancement settings', () => {
     expect((screen.getByLabelText('分支') as HTMLInputElement).value).toBe('mnemon-sync')
     expect((screen.getByLabelText('仓库内目录') as HTMLInputElement).value).toBe('mnemon/')
     expect((within(screen.getByRole('radiogroup', { name: '提交者' })).getByRole('radio', { name: '默认' }) as HTMLInputElement).checked).toBe(true)
-    expect(screen.getByText('以 dsh-mnemon sync <mnemon@localhost> 提交')).toBeTruthy()
+    expect(screen.getByText('优先使用本机 Git 身份；没有配置时以 dsh-mnemon sync <mnemon@localhost> 提交')).toBeTruthy()
     cleanup()
 
     const signedIn = fixture({ github: { available: true, signedIn: true, writable: true, login: 'octocat' } })

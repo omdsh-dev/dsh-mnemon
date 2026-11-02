@@ -20,6 +20,8 @@ Source tool activation uses the published DSH `tools.register()` disposer and sc
 
 <a id="host-behavior-on-a-first-install"></a>
 
+Git sync keeps its existing settings and payload formats. The saved default author pair now follows the mirror's Git identity before using the placeholder; other custom pairs retain precedence. Retrying an author-rejected sync rebuilds only the unpublished mirror commit from current memory and preserves published history. On rollback to 0.5.38 or earlier, select **This computer's Git** (blank author fields) or **Custom** to retain the real identity; those releases interpret the default pair literally. See [Git repository sync](../guides/operations.md#git-repository-sync).
+
 Installing for the first time? How DSH chooses the registry, and why its result card shows the package's English description, is in [Install and start](../guides/installation.md#3-install-and-enable-dsh-mnemon); why a release younger than 24 hours can install an earlier one is under [Common problems](../guides/installation.md#common-problems).
 
 <a id="older-dsh-releases"></a>

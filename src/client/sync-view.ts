@@ -83,7 +83,7 @@ export function repositoryNameValid(value: string): boolean {
   return githubRepositoryNameValid(value.trim())
 }
 
-/** Who a sync commit names: the channel's identity, this computer's Git identity, or a typed one. */
+/** Default and blank settings follow Git; a custom pair supplies explicit fields. */
 export type AuthorMode = 'default' | 'machine' | 'custom'
 
 export function authorModeOf(name: string, email: string): AuthorMode {

@@ -254,6 +254,8 @@ Gateway 通过 Mnemon 在 `dshMnemon` 命名空间下的 `mnemonRemote` Typert �
 
 同步载荷始终是完整的 Mnemon Pack：Pack manifest 的 `scope` 只能是 `full` 或恰好一个组件，因此无法表示持久化的组件选择，组件筛选只作为 `pull` 的一次性参数存在。仓库地址是唯一没有默认值的配置项：分支、远端目录、提交者姓名或邮箱留空时，分别回落到默认分支、默认目录，或本机 Git 已有的提交身份。`configure`、`push`、`pull` 以及每个会改动状态的 `github-` endpoint 都要求 `writeEnabled: true`，否则返回与 pack 导入相同的只读拒绝。
 
+`config.authorName` / `authorEmail` 返回保存的选择，而不是解析后的实际提交身份。字段留空或完整的默认组合 `dsh-mnemon sync` / `mnemon@localhost` 都使用镜像中的 Git 身份；自定义组合的非空字段优先于 Git 配置及继承的 author/committer 环境变量。Git 身份缺失的字段才回退到占位值。读取或使用此选择不会迁移保存的文件。
+
 凭据与网络：
 
 - token 不会出现在任何响应或错误信息中。通道在每次网络操作时解析一个凭据，顺序为：环境变量 `MNEMON_SYNC_GIT_TOKEN`、`state/sync-git.json`（权限 `0600`）中保存的 token，最后是 GitHub 登录写入 DSH 凭据存储（键 `dsh-mnemon/github`）的凭据。

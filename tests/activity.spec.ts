@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { TurnActivityProjection } from "../src/host/activity.ts"
-import { memoryReadPresentation, memoryWritePresentation } from '../src/host/activity-presentation.ts'
+import { memoryReadPresentation, memoryWritePresentation, namedToolPresentation, parseMnemonActivityMeta } from '../src/host/activity-presentation.ts'
 import type { HostSessionEvent } from "../src/host/dsh.ts"
 
 function call(seq: number, turn: number, callId: string, name: string): HostSessionEvent {
@@ -105,5 +105,55 @@ describe('TurnActivityProjection', () => {
       writes: 1, names: ['mnemon_document_create'], writebacks: [{ toolName: 'mnemon_document_create', sourceTypeId: 'documents',
         operationId: 'create', item: { title: 'Rollout follow-up', excerpt: 'Separate new evidence.' } }],
     })
+  })
+})
+
+describe('Unicode-safe activity summaries (#548)', () => {
+  it.each(['add', 'replace', 'remove'])('keeps a runtime %s title well formed at a supplementary-character boundary', action => {
+    const content = 'x'.repeat(158) + '\u{1F600}' + ' retained memory'
+    const args = { action, target: 'memory', ...(action === 'remove' ? { old_text: content } : { content }) }
+    const meta = namedToolPresentation('mnemon_runtime_memory')(args, { success: true })
+
+    expect(meta).toMatchObject({ item: { title: 'x'.repeat(158) + '…', excerpt: content } })
+    expect(parseMnemonActivityMeta(JSON.parse(JSON.stringify(meta)), 'write', 'mnemon_runtime_memory').writeback?.item.title.isWellFormed()).toBe(true)
+  })
+
+  it.each([undefined, 'routeId'] as const)('bounds read metadata without splitting surrogate pairs (reference: %s)', referenceKey => {
+    const entry = {
+      id: 'i'.repeat(298) + '\u{20000}' + ' rest',
+      title: 't'.repeat(158) + '\u{1F600}' + ' rest',
+      content: 'c'.repeat(498) + '\u{1F600}' + ' rest',
+    }
+    const meta = memoryReadPresentation('documents', 'search', referenceKey)({ routeId: 'r'.repeat(598) + '\u{1F600}' + ' rest' }, { results: [entry] })
+    expect(meta).toMatchObject({ items: [{ id: 'i'.repeat(298) + '…', title: 't'.repeat(158) + '…', excerpt: 'c'.repeat(498) + '…' }] })
+    if (referenceKey !== undefined) expect(meta).toMatchObject({ reference: 'r'.repeat(598) + '…' })
+    expect(parseMnemonActivityMeta(JSON.parse(JSON.stringify(meta)), 'read', 'mnemon_document_search').read?.items).toHaveLength(1)
+  })
+
+  it('bounds generic View write metadata using the same safe limits', () => {
+    const meta = memoryWritePresentation(undefined, 'view-action', 'offerId')({
+      offerId: 'o'.repeat(598) + '\u{1F600}' + ' rest',
+      input: {
+        id: 'i'.repeat(298) + '\u{20000}' + ' rest',
+        title: 't'.repeat(158) + '\u{1F600}' + ' rest',
+        content: 'c'.repeat(498) + '\u{1F600}' + ' rest',
+      },
+    }, { memoryReceipt: { status: 'succeeded', completion: 'committed', committedAt: '2026-11-02T00:00:00.000Z' } })
+    expect(meta).toMatchObject({
+      reference: 'o'.repeat(598) + '…',
+      item: { id: 'i'.repeat(298) + '…', title: 't'.repeat(158) + '…', excerpt: 'c'.repeat(498) + '…' },
+    })
+    expect(parseMnemonActivityMeta(JSON.parse(JSON.stringify(meta)), 'write', 'mnemon_view_action').writeback).toBeDefined()
+  })
+
+  it.each([
+    { title: 'a'.repeat(161), expected: 'a'.repeat(159) + '…' },
+    { title: '文'.repeat(161), expected: '文'.repeat(159) + '…' },
+    { title: 'a'.repeat(158) + '\u{1F600}', expected: 'a'.repeat(158) + '\u{1F600}' },
+    { title: 'a'.repeat(157) + '\u{1F600}' + ' rest', expected: 'a'.repeat(157) + '\u{1F600}' + '…' },
+  ])('preserves existing bounds and complete code points: %#', ({ title, expected }) => {
+    const meta = memoryReadPresentation('documents', 'search')({}, { results: [{ id: 'document', title }] })
+    expect(meta).toMatchObject({ items: [{ id: 'document', title: expected }] })
+    expect(expected.length).toBeLessThanOrEqual(160)
   })
 })
