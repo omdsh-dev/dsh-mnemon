@@ -51,7 +51,7 @@ importers:
         specifier: 0.5.17
         version: link:plugins/dsh-mnemon-source-runtime
       dsh-mnemon-source-skills:
-        specifier: 0.5.5
+        specifier: 0.5.6
         version: link:plugins/dsh-mnemon-source-skills
       dsh-mnemon-strategy-auto-capture:
         specifier: 0.5.5
@@ -917,7 +917,7 @@ importers:
         specifier: ^9.0.0
         version: 9.0.0
       dsh-mnemon:
-        specifier: ^0.5.38
+        specifier: ^0.5.39
         version: link:../..
       immer:
         specifier: ^10.1.1

@@ -140,10 +140,15 @@ Skills has its own page under **Plugins → dsh-mnemon**, like every component, 
 | **Self-evolution** | Off | Review conversations and suggest skills. Task and subagent sessions are saved locally; Mnemon does not automatically delete them. |
 | **Suggest new skills** | On | Allow reviews to propose skills that do not exist yet |
 | **Suggest skill improvements** | On | Allow reviews to improve existing skills; reviews pause when both suggestion types are off |
+| **New skill destination** | User | Choose User, Project or Follow storage; saved with **Apply**, reset with **Discard**. Existing skill improvements keep their original file |
 | **Backtest drafts** | On | Compare each new draft with the current version on its test cases |
 | **Review parameters** | — | The thresholds above, folded, applied together with **Apply** |
 | **In the conversation** | On | Show the **Turn skills** line under each turn |
 | **Sidebar entry** | Off | Show Skills as its own sidebar entry instead of in the Memory System |
+
+`skills.targetScope` defaults to `user` to preserve existing installations: upgrading or changing storage scope does not move new skill writes to another root. Choose `storage` explicitly to follow storage scope. New suggestions record their resolved destination; drafts and redrafts keep that destination, and adoption uses the draft unless you explicitly choose another root. Suggestions from older versions without a destination use the current setting when drafted; existing drafts retain their recorded root. Improvements always write back to their original `baseKey`, regardless of this setting or a destination override.
+
+Project roots come from the Skills Source catalog for the selected workspace, following DSH discovery (nearest `.git` ancestor, or the workspace itself); the model task's working directory is not used. A missing workspace/project or an unwritable destination produces a visible review/draft error. Mnemon does not silently fall back to user skills. Adoption checks the final selected project again: a project removed after drafting is not recreated, and you can explicitly select a user root instead. Later filesystem failures are also reported. No skills are migrated, discovery precedence is unchanged, and adoption remains an explicit user action.
 
 The [configuration reference](../reference/configuration.md#skills-settings) lists every key, its range and where it is saved.
 

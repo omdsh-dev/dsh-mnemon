@@ -6,6 +6,7 @@ For an existing installation, start with [Compatibility and upgrades](../referen
 
 ## v0.5
 
+- [v0.5.39: Reliable Memory Turns and Current DSH Support](./v0.5.39.md)
 - [v0.5.38: Quieter Conversation Switching and Reliable Idle Review](./v0.5.38.md)
 - [v0.5.37: Skill Models, Runtime Limits and Reliable Status](./v0.5.37.md)
 - [v0.5.36: Skill Review Fixes and Settings Controls](./v0.5.36.md)

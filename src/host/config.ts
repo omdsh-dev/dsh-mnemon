@@ -80,6 +80,7 @@ export const SkillsConfig: z<Partial<ResolvedSkillsConfig>, ResolvedSkillsConfig
   evolution: z.boolean().default(DEFAULT_SKILLS_CONFIG.evolution),
   allowCreate: z.boolean().default(DEFAULT_SKILLS_CONFIG.allowCreate),
   allowUpdate: z.boolean().default(DEFAULT_SKILLS_CONFIG.allowUpdate),
+  targetScope: z.union(['storage', 'user', 'project'] as const).default(DEFAULT_SKILLS_CONFIG.targetScope),
   autoBacktest: z.boolean().default(DEFAULT_SKILLS_CONFIG.autoBacktest),
   hints: z.boolean().default(DEFAULT_SKILLS_CONFIG.hints),
   sidebar: z.boolean().default(DEFAULT_SKILLS_CONFIG.sidebar),
