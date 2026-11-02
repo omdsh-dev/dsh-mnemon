@@ -16,7 +16,7 @@ Starter 固定经过测试的官方插件组合。下表记录验证范围，不
 
 DSH 0.2.1-rc.3 及当前 RC/alpha 验证目标会联网获取官方 API Key 的模型目录。任务 Agent 模型选择列表为该 Provider 保留最多六秒，覆盖 DSH 默认的五秒请求预算；其他 Provider 仍为三秒。此调整仅影响目录加载，不改变模型选择、推理超时或已保存配置。
 
-dsh-mnemon 支持 `>=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.1 <0.3.0-0`：DSH 0.2.0 从 0.2.0-rc.2 起，DSH 0.2.1 及之后的 0.2 版本从 0.2.1-rc.1 起，正式版也在其中。DSH 0.2.1 从 Starter 的 `engines.dsh` 读取这个范围；DSH 0.2.0 从 Starter 的 DSH peer（可选的 `dsh-app-boot` 与 `dsh-typert-protocol`）读取，两者写的是同一个范围。DSH 在安装插件前，以及每次启动 profile 时，都会用自身版本检查这个范围，预发布版本也参与比较；不包含当前 DSH 的版本会被拒绝安装或停用。`tests/dsh-host-compatibility.spec.ts` 对全部 19 个包的清单执行 DSH 自己的检查，既覆盖受支持的版本，也覆盖已不再支持的版本。五个 Strategy 包使用新的扩展 SDK，要求 `dsh-mnemon ^0.5.17`；四个 Source 要求 `^0.5.19`，Provider 则依赖记忆空间 Source。
+dsh-mnemon 支持 `>=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.1 <0.3.0-0`：DSH 0.2.0 从 0.2.0-rc.2 起，DSH 0.2.1 及之后的 0.2 版本从 0.2.1-rc.1 起，正式版也在其中。DSH 0.2.1 从 Starter 的 `engines.dsh` 读取这个范围；DSH 0.2.0 从 Starter 的 DSH peer（可选的 `dsh-app-boot` 与 `dsh-typert-protocol`）读取，两者写的是同一个范围。DSH 在安装插件前，以及每次启动 profile 时，都会用自身版本检查这个范围，预发布版本也参与比较；不包含当前 DSH 的版本会被拒绝安装或停用。`tests/dsh-host-compatibility.spec.ts` 对全部 19 个包的清单执行 DSH 自己的检查，既覆盖受支持的版本，也覆盖已不再支持的版本。五个 Strategy 包使用新的扩展 SDK，要求 `dsh-mnemon ^0.5.17`；Documents、Memory Spaces 与 Runtime 三个 Source 要求 `^0.5.19`，Skills Source 要求 `^0.5.37`；Provider 则依赖记忆空间 Source。
 
 DSH 0.2.2-alpha.2 将工具执行拆为独立的 native/PTC executor 插件，并将 `tools.execute()` 改为批量 API。Mnemon 根据已发布的 `setExecutor()` 能力提交一次关联调用，只接受调用 ID 匹配的最终结果。Host 仍负责 guard、执行前后策略及 PTC 调度。自动准入还依赖 [#541](https://github.com/omdsh-dev/dsh-mnemon/issues/541) 的轮内审计修复；[#542](https://github.com/omdsh-dev/dsh-mnemon/issues/542) 的 View 缺失问题独立修复。本次兼容适配使用已发布 npm 包和隔离的合成 profile，不修改 DSH 源码、存储格式或支持版本范围。验证范围与上游来源见[当前 DSH 证据](../../pr-assets/current-dsh-compat/README.zh-CN.md)。
 
