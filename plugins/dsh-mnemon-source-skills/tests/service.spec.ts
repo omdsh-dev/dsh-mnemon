@@ -255,6 +255,28 @@ describe('evolution drafts and backtests', () => {
     expect(readdirSync(join(agents, 'skills'))).toEqual(['weekly-report'])
   })
 
+  it.each([
+    { targetRoot: 'project-dsh', root: undefined },
+    { targetRoot: 'project-agents', root: undefined },
+    { targetRoot: 'user-dsh', root: 'project-dsh' },
+    { targetRoot: 'user-dsh', root: 'project-agents' },
+  ] as const)('does not recreate a removed project at adoption: %j', async choice => {
+    const store = service()
+    const draft = await store.recordDraft(workspace, {
+      skillName: 'weekly-report', content: skill('weekly-report'), notes: 'New', changes: [], guidance: [], targetRoot: choice.targetRoot,
+    })
+    const project = join(root, 'project')
+    rmSync(project, { recursive: true })
+    await expect(store.adoptDraft(workspace, draft.id, choice.root === undefined ? {} : { root: choice.root })).rejects.toThrow(/project.*unavailable/i)
+    expect(existsSync(project)).toBe(false)
+    expect(store.draft(workspace, draft.id).draft.status).toBe('ready')
+    // A deliberate user-root override remains available after that refusal.
+    const adopted = await store.adoptDraft(workspace, draft.id, { root: 'user-agents' })
+    expect(adopted.skill.key).toBe('user-agents:weekly-report')
+    expect(readFileSync(join(agents, 'skills', 'weekly-report', 'SKILL.md'), 'utf8')).toBe(skill('weekly-report'))
+    expect(existsSync(project)).toBe(false)
+  })
+
   it('scores a run from its case results', async () => {
     write(join(home, 'skills', 'release-notes', 'SKILL.md'), skill('release-notes'))
     const store = service()

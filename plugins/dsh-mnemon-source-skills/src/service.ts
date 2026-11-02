@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { withMemoryStorageLock } from 'dsh-mnemon/extension-sdk'
 import {
@@ -754,7 +754,15 @@ export class SkillsService {
       } else {
         const root = input.root ?? draft.targetRoot ?? DEFAULT_ROOT
         if (activeSkill(catalog, draft.skillName) !== undefined) throw new Error(`${draft.skillName} exists now; draft it again as an update`)
-        const directory = join(rootPath(catalog, root), draft.skillName)
+        const target = rootPath(catalog, root)
+        // The project may have disappeared since drafting. Validate the final
+        // adoption choice before recursive mkdir can recreate that project.
+        if (root.startsWith('project-')) {
+          try {
+            if (catalog.projectRoot === undefined || !statSync(catalog.projectRoot).isDirectory()) throw new Error('not a directory')
+          } catch { throw new Error('The selected workspace project is unavailable; select an existing workspace or explicitly choose a user skill root.') }
+        }
+        const directory = join(target, draft.skillName)
         if (existsSync(directory) || existsSync(directory + '.md')) throw new Error(`${draft.skillName} already exists in this root`)
         writeFileAtomic(join(directory, 'SKILL.md'), draft.content)
         key = `${root}:${draft.skillName}`

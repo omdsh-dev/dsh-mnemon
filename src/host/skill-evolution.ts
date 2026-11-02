@@ -1,7 +1,7 @@
 import { accessSync, constants, statSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type {
-  BacktestRun, EvalCase, EvidencePack, ReviewLogEntry, ReviewRecordInput, ReviewRecordResult, RunTarget, SkillCatalog, SkillDocument, SkillDraft, SkillRootKind, SkillSuggestion, Trajectory,
+  BacktestRun, DraftView, EvalCase, EvidencePack, ReviewLogEntry, ReviewRecordInput, ReviewRecordResult, RunTarget, SkillCatalog, SkillDocument, SkillDraft, SkillRootKind, SkillSuggestion, Trajectory,
   ModelRoute,
 } from 'dsh-mnemon-source-skills/contracts'
 import type { HostAgent, HostPreStepDecision, HostSessionEvent } from './dsh.ts'
@@ -359,15 +359,20 @@ export class SkillEvolution {
   async draft(port: SkillsSourcePort, workspace: string | undefined, input: { suggestionId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; route?: ModelRoute }): Promise<{ started: true; suggestionId?: string }> {
     const source = retryingSource(port)
     const pack = await source.read<EvidencePack>('evidence-pack', { ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }), ...(input.skill === undefined ? {} : { skill: input.skill }) })
-    const previous = pack.drafts.find(draft => input.suggestionId === undefined ? draft.suggestionId === undefined : draft.suggestionId === input.suggestionId)
+    // The evidence window contains only three recent drafts across this skill.
+    // Resolve this flow's own prior draft independently of that bounded context.
+    const previous = pack.suggestion?.draftId === undefined
+      ? (await source.read<SkillDraft[]>('drafts', { skill: pack.skillName, ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }) })).find(draft => draft.suggestionId === input.suggestionId)
+      : (await source.read<DraftView>('draft', { id: pack.suggestion.draftId })).draft
     // An improvement always keeps the file the Source loaded. For a creation,
     // freeze one choice before model work and use it for both prompt and record.
     const targetRoot = pack.action === 'update' ? pack.skill!.root
       : newSkillRoot(this.host.settings(), source, await source.read<SkillCatalog>('catalog'), input.targetRoot ?? previous?.targetRoot ?? pack.suggestion?.targetRoot)
+    const guidance = [...(previous?.guidance ?? []), ...(input.guidance?.trim() ? [input.guidance.trim()] : [])].slice(-8)
     if (input.suggestionId !== undefined) await source.mutate('suggestion-status', { id: input.suggestionId, status: 'drafting' })
     this.background('skill draft', async signal => {
       try {
-        await this.writeDraft(source, workspace, input, pack, targetRoot, signal)
+        await this.writeDraft(source, workspace, input, { pack, targetRoot, guidance }, signal)
       } catch (error) {
         if (input.suggestionId !== undefined) await source.mutate('suggestion-status', { id: input.suggestionId, status: 'pending', error: message(error) }).catch(() => undefined)
         throw error
@@ -376,10 +381,9 @@ export class SkillEvolution {
     return { started: true, ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }) }
   }
 
-  private async writeDraft(source: SkillsSourcePort, workspace: string | undefined, input: { suggestionId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; route?: ModelRoute }, pack: EvidencePack, targetRoot: SkillRootKind, signal: AbortSignal): Promise<SkillDraft> {
+  private async writeDraft(source: SkillsSourcePort, workspace: string | undefined, input: { suggestionId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; route?: ModelRoute }, prepared: { pack: EvidencePack; targetRoot: SkillRootKind; guidance: string[] }, signal: AbortSignal): Promise<SkillDraft> {
     const settings = this.host.settings()
-    const previous = pack.drafts.find(draft => input.suggestionId === undefined ? draft.suggestionId === undefined : draft.suggestionId === input.suggestionId)
-    const guidance = [...(previous?.guidance ?? []), ...(input.guidance?.trim() ? [input.guidance.trim()] : [])].slice(-8)
+    const { pack, targetRoot, guidance } = prepared
     let prompt = skillDraftPrompt(pack, guidance, targetRoot)
     let draft: SkillDraft | undefined
     for (let attempt = 0; draft === undefined; attempt++) {

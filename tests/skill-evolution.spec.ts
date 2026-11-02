@@ -227,6 +227,35 @@ describe('skill evolution in the Host', () => {
     expect(existsSync(join(directory, 'agents', 'skills', 'incident-triage'))).toBe(false)
   })
 
+  it.each(['suggestion', 'direct'] as const)('keeps the %s draft destination when newer drafts fill its evidence window', async origin => {
+    config = { ...config, targetScope: 'project', evolution: true, autoBacktest: false, idleSeconds: 3600 }
+    const content = '---\nname: incident-triage\ndescription: Capture incident logs.\n---\n\n1. Read the logs.\n'
+    const prompts: string[] = []
+    const answer = (_label: string, prompt: string) => { prompts.push(prompt); return { content, notes: '', changes: [] } }
+    const { skills } = evolution([mixedReview, answer, answer])
+    const stop = skills.watch(agent)
+    await endTurn(1, 'Capture incident logs and group release notes.')
+    await skills.reviewNow(agent)
+    const suggestion = (await source.read<SkillSuggestion[]>('suggestions')).find(entry => entry.action === 'create')!
+    expect(suggestion.targetRoot).toBe('project-dsh')
+    const input = origin === 'suggestion' ? { suggestionId: suggestion.id } : { skill: 'incident-triage' }
+    await skills.draft(source, undefined, { ...input, targetRoot: 'user-agents', guidance: 'Preserve the log order.' })
+    await vi.waitFor(async () => expect(await source.read<SkillDraft[]>('drafts')).toHaveLength(1))
+    const [first] = await source.read<SkillDraft[]>('drafts')
+    for (let index = 0; index < 3; index++) await source.mutate('draft-record', {
+      ...(origin === 'direct' ? { suggestionId: suggestion.id } : {}),
+      skillName: 'incident-triage', content, notes: `Another draft ${index}`, changes: [], guidance: [], targetRoot: 'project-dsh',
+    })
+    const pack = await source.read<EvidencePack>('evidence-pack', input)
+    expect(pack.drafts.some(draft => draft.id === first!.id)).toBe(false)
+    await skills.draft(source, undefined, { ...input, guidance: 'Explain the checks.' })
+    await vi.waitFor(async () => expect(await source.read<SkillDraft[]>('drafts')).toHaveLength(5))
+    const [redraft] = await source.read<SkillDraft[]>('drafts')
+    expect(prompts[1]).toContain('It will be written to user-agents.')
+    expect(redraft).toMatchObject({ targetRoot: 'user-agents', guidance: ['Preserve the log order.', 'Explain the checks.'] })
+    stop()
+  })
+
   it('rejects an unavailable project before model work instead of falling back to user skills', async () => {
     config = { ...config, targetScope: 'project', autoBacktest: false }
     const read = source.read
