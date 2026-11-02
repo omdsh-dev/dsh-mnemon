@@ -163,11 +163,21 @@ export interface HostSession {
 
 export type HostPreStepDecision = { kind: 'reject' } | { kind: 'enter'; messages: HostUserMessage[] }
 
+export interface HostToolExecutionInput {
+  callId: string
+  name: string
+  arguments: unknown
+  agent: HostAgent
+  signal: AbortSignal
+}
+
 export interface HostAgentContext {
   /** DSH's monotonic guard also covers tools registered in this Agent's scope. */
   tools?: {
     /** Public execution pipeline, including presentation, policy and guards. */
-    execute?(input: { callId: string; name: string; arguments: unknown; agent: HostAgent; signal: AbortSignal }): Promise<{ isError: boolean }>
+    execute?(input: HostToolExecutionInput): Promise<{ isError: boolean }>
+    /** Public executor registration identifies Hosts whose execute() takes model-call batches. */
+    setExecutor?(executor: unknown): unknown
     guard?(guard: (execution: ToolExecution) => string | undefined): unknown
     /** Public presentation-agnostic lookup in the exact Agent scope. */
     get?(name: string, scope?: HostAgent): unknown

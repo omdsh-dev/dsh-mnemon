@@ -1,0 +1,119 @@
+{
+  "productionRevision": "e130786085dfb93d006c8769ccaaff72c6b0764e",
+  "packages": [
+    {
+      "name": "dsh-mnemon",
+      "version": "0.5.38",
+      "sha256": "58bc9739a751d87fe6c522a6fabe64d95a3ef7e8da1e420bd431d5383d9b601b",
+      "bytes": 529929
+    },
+    {
+      "name": "dsh-mnemon-provider-byterover",
+      "version": "0.5.6",
+      "sha256": "14459d92217185cb5f7b85fcffe9323ac34c4ad9b858ca7c9f2314eb3db2d8b8",
+      "bytes": 7386
+    },
+    {
+      "name": "dsh-mnemon-provider-hindsight",
+      "version": "0.5.7",
+      "sha256": "7b46307095ec4ce251376258cf470a065445de0fa27d2f4cd6f1bea692775bbd",
+      "bytes": 15070
+    },
+    {
+      "name": "dsh-mnemon-provider-holographic",
+      "version": "0.5.7",
+      "sha256": "1bc3c88846bf9e6285bb040849e06423ee3996d41252c50631272906c405427f",
+      "bytes": 7513
+    },
+    {
+      "name": "dsh-mnemon-provider-honcho",
+      "version": "0.5.5",
+      "sha256": "4b742ab24408b0b2a391a92e47cc10bba7f6e8f6cdf30fd687c6a1bf227a194b",
+      "bytes": 7613
+    },
+    {
+      "name": "dsh-mnemon-provider-mem0",
+      "version": "0.5.5",
+      "sha256": "96a01ddd47d198ee318c7b9f4b5bfc989e5b123f7cf819621e61ae7fd04b44c7",
+      "bytes": 8200
+    },
+    {
+      "name": "dsh-mnemon-provider-mnemon-native",
+      "version": "0.5.10",
+      "sha256": "d44b5de3cef34464ddfb8dd26cf5bb9865eec28608471fb32cb65c4baf459015",
+      "bytes": 8015
+    },
+    {
+      "name": "dsh-mnemon-provider-openviking",
+      "version": "0.5.10",
+      "sha256": "4693f4f0433dc1164de69efe7861088e83b704cd08130766e91bfbb10c769f7c",
+      "bytes": 17910
+    },
+    {
+      "name": "dsh-mnemon-provider-retaindb",
+      "version": "0.5.6",
+      "sha256": "2e2e0868e59f5a2c0b29d3a605f9a747194b1d808a73c7c953d283b7dd3e7505",
+      "bytes": 5697
+    },
+    {
+      "name": "dsh-mnemon-provider-supermemory",
+      "version": "0.5.5",
+      "sha256": "fe74e5dcfe591124ae8c75e5335f12f4b3e47ff18fcfa29eae07c5ad31589664",
+      "bytes": 5707
+    },
+    {
+      "name": "dsh-mnemon-source-documents",
+      "version": "0.5.12",
+      "sha256": "a0c71477b2ea573498cb5607b0cab26d68f75689230eaa2012451ed15ba3546f",
+      "bytes": 42096
+    },
+    {
+      "name": "dsh-mnemon-source-memory-spaces",
+      "version": "0.5.25",
+      "sha256": "6fe36790f0e4a009468febf41460e886a2bf2956843f3703165631c4583422f2",
+      "bytes": 194493
+    },
+    {
+      "name": "dsh-mnemon-source-runtime",
+      "version": "0.5.17",
+      "sha256": "4bb1fc752d1bad30521e2d41c4208b1d91a2f27ff945fc0bd92ac8706ba03c4e",
+      "bytes": 32105
+    },
+    {
+      "name": "dsh-mnemon-source-skills",
+      "version": "0.5.5",
+      "sha256": "10a7b4a8394238b80d787dcc07e59edf6fed06118a41397d83c8b0e945741098",
+      "bytes": 151898
+    },
+    {
+      "name": "dsh-mnemon-strategy-auto-capture",
+      "version": "0.5.5",
+      "sha256": "cfe19f1c940e3f8adda8fcd973993a682410ae167987384615736d254207605c",
+      "bytes": 3955
+    },
+    {
+      "name": "dsh-mnemon-strategy-default-three-tier",
+      "version": "0.5.11",
+      "sha256": "827e95cddef436d45ba1076ad69991d738c1f8d4fb2a4689a4d7a80b153d9361",
+      "bytes": 15844
+    },
+    {
+      "name": "dsh-mnemon-strategy-general",
+      "version": "0.5.1",
+      "sha256": "98ebf4bf9c764e37098017fb3d01489dc4124af89ec222e4b0a59e2ee1767942",
+      "bytes": 6250
+    },
+    {
+      "name": "dsh-mnemon-strategy-light-context",
+      "version": "0.5.6",
+      "sha256": "19286d707553902dd4ea31d3f7b5f02b45f332ebd643cd6d06e0e3f459d2d813",
+      "bytes": 3388
+    },
+    {
+      "name": "dsh-mnemon-strategy-scoped",
+      "version": "0.5.5",
+      "sha256": "dae822c84e7965f7e3aa6af92406da75705622a868b5931bf70e1257c0990477",
+      "bytes": 3812
+    }
+  ]
+}

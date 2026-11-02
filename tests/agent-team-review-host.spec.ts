@@ -3,11 +3,12 @@ import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { expect, it } from 'vitest'
+import type { ToolExecutionInput } from '@deepseek-ai/dsh-tools'
 import * as scoped from 'dsh-mnemon-strategy-scoped'
 import * as light from 'dsh-mnemon-strategy-light-context'
 import * as capture from 'dsh-mnemon-strategy-auto-capture'
 import type { HostAgent, HostContextShape } from '../src/host/dsh.ts'
-import { isDsh021, loadWorkingDirectory } from './helpers/installed-dsh.ts'
+import { isDsh021, executeTool, loadTools, loadWorkingDirectory } from './helpers/installed-dsh.ts'
 import { MnemonLifecycle } from '../src/host/lifecycle.ts'
 import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
 import { registerTools } from '../src/host/tools.ts'
@@ -87,7 +88,7 @@ it('runs guarded Team review against the published DSH cohort (issue 275)', asyn
         }
         if (mode === 'ptc') await ctx.plugin(ptc.default)
         // DSH 0.2.0 presents Code Mode beside the native tools; DSH 0.2.1 keeps the root native and each child in Code Mode.
-        await ctx.plugin(tools.default, { mode: mode === 'ptc' && !dsh021 ? 'both' : 'native' })
+        const selectPtc = await loadTools(ctx, mode === 'ptc' && !dsh021 ? 'both' : 'native', require)
         await ctx.plugin(agent.default)
         await ctx.plugin(loop.default, { agents: [] })
         await loadWorkingDirectory(ctx, require)
@@ -122,10 +123,10 @@ it('runs guarded Team review against the published DSH cohort (issue 275)', asyn
           const result = { action: 'added', summary: 'Committed the explicit synthetic project decision.', memoryBodyIds: [], documentIds: [] }
           return call(terminal, requestId === undefined ? result : { requestId, result })
         }))
-        ctx.on('agent/created', ({ agent: child }: { agent: any }) => {
+        ctx.on('agent/created', async ({ agent: child }: { agent: any }) => {
           if (child.session.header.origin !== 'subagent') return
           children.push(child)
-          if (mode === 'ptc') child.ctx.tools.presentAs('ptc')
+          if (mode === 'ptc') await selectPtc(child.ctx)
         })
         ctx.on('tools/result', (execution: any, result: any) => {
           if (execution.agent?.session.header.origin === 'subagent') receipts.push({ name: execution.name, isError: result.isError })
@@ -169,8 +170,8 @@ it('runs guarded Team review against the published DSH cohort (issue 275)', asyn
           for (const child of children) expect(ctx.agents.get(child.id)).toBeUndefined()
         }
         if (teams === 'tools') {
-          const result = await parent.ctx.tools.execute({ name: 'team_task_create', arguments: { subject: 'Parent Teams remains available', description: 'Synthetic official Team preservation probe.' },
-            agent: parent, callId: 'team-preservation', signal: new AbortController().signal })
+          const result = await executeTool(parent.ctx, { name: 'team_task_create', arguments: { subject: 'Parent Teams remains available', description: 'Synthetic official Team preservation probe.' },
+            agent: parent, callId: 'team-preservation' as ToolExecutionInput['callId'], signal: new AbortController().signal })
           expect(result.isError).toBe(false)
           expect(ctx.agentTeams.listTasks(parent)).toHaveLength(1)
         }

@@ -8,14 +8,14 @@ import { JsonlSessionPersistence } from './helpers/dsh-plugins.ts'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { type ToolExecutionInput } from '@deepseek-ai/dsh-tools'
+import { type ToolExecutionInput } from '@deepseek-ai/dsh-tools'
 import { expect, it } from 'vitest'
 import type { HostAgent, HostContextShape } from '../src/host/dsh.ts'
 import { MnemonLifecycle } from '../src/host/lifecycle.ts'
 import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
 import { registerTools } from '../src/host/tools.ts'
 import { compositionFixture } from './fixtures/composition.ts'
-import { dsh021, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
+import { dsh021, executeTool, loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
 
 const fork = await import(requireDsh.resolve('@deepseek-ai/dsh-subagent-fork-in-process'))
 const spawn = await import(requireDsh.resolve('@deepseek-ai/dsh-subagent-spawn-in-process'))
@@ -74,7 +74,7 @@ it.each(['native', 'ptc'].flatMap(mode => ['fork', 'spawn'].map(provider => ({ m
       await ctx.plugin(ptc.default)
     }
     // DSH 0.2.0 presents Code Mode beside the native tools; DSH 0.2.1 keeps the root native and each child in Code Mode.
-    await ctx.plugin(ToolRuntime, { mode: (mode === 'ptc' && !dsh021 ? 'both' : 'native') as 'native' })
+    const selectPtc = await loadTools(ctx, mode === 'ptc' && !dsh021 ? 'both' : 'native')
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(AgentLoop, { agents: [] })
     await loadWorkingDirectory(ctx)
@@ -104,10 +104,10 @@ it.each(['native', 'ptc'].flatMap(mode => ['fork', 'spawn'].map(provider => ({ m
     }))
     // An independently composed plugin attaches its capability to EVERY Agent.
     // Such own-scope tools intentionally survive DSH's inherited-tool restrict().
-    ctx.on('agent/created', ({ agent }): undefined => {
+    ctx.on('agent/created', async ({ agent }) => {
       if (agent.session.header.origin === 'subagent') {
         children.push(agent)
-        if (mode === 'ptc') agent.ctx.tools.presentAs('ptc')
+        if (mode === 'ptc') await selectPtc(agent.ctx)
       }
       agent.ctx.tools.register({
         name: foreignTool, description: 'Read one complete synthetic overview chunk.',
@@ -167,7 +167,7 @@ it.each(['native', 'ptc'].flatMap(mode => ['fork', 'spawn'].map(provider => ({ m
     ])
     if (mode === 'ptc') expect(childReceipts.filter(receipt => receipt.name === 'run_code').map(receipt => receipt.isError)).toEqual([true, false, false])
     expect(coordinator.snapshot().reviews).toBe(1)
-    const parentResult = await ctx.tools.execute({ name: foreignTool, arguments: { chunk: 0 }, agent: parent,
+    const parentResult = await executeTool(ctx, { name: foreignTool, arguments: { chunk: 0 }, agent: parent,
       callId: 'after-review' as ToolExecutionInput['callId'], signal: new AbortController().signal })
     expect(parentResult.isError).toBe(false)
     expect(executions.filter(id => id === 'parent')).toHaveLength(6)

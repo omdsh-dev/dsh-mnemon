@@ -7,7 +7,6 @@ import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
 import * as documents from 'dsh-mnemon-source-documents'
 import * as runtime from 'dsh-mnemon-source-runtime'
 import * as scoped from 'dsh-mnemon-strategy-scoped'
@@ -18,7 +17,7 @@ import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
 import { registerTools } from '../src/host/tools.ts'
 import { compositionFixture } from './fixtures/composition.ts'
 import { JsonlSessionPersistence } from './helpers/dsh-plugins.ts'
-import { dsh021, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
+import { dsh021, executeTool, loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
 
 type Mode = 'native' | 'ptc'
 type Reply = string | { name: string; args: Record<string, unknown> }
@@ -72,7 +71,7 @@ async function fixture(mode: Mode, start = true) {
         ['dsh-sandbox-policy', { mode: 'read-only', workspaceRoot: f.workspace }], ['dsh-ptc-runtime-node', {}],
       ] as const) await ctx.plugin((await import(requireDsh.resolve(`@deepseek-ai/${name}`))).default, config)
     }
-    await ctx.plugin(ToolRuntime, { mode: (mode === 'ptc' && !dsh021 ? 'both' : 'native') as 'native' })
+    const selectPtc = await loadTools(ctx, mode === 'ptc' && !dsh021 ? 'both' : 'native')
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(AgentLoop, { agents: [] })
     await loadWorkingDirectory(ctx)
@@ -105,7 +104,7 @@ async function fixture(mode: Mode, start = true) {
     ctx.on('tools/result', (execution, result) => {
       if (execution.name?.startsWith('mnemon_')) receipts.push({ sessionId: String(execution.agent?.id), name: execution.name, isError: result.isError, text: JSON.stringify(result.content) })
     })
-    ctx.on('agent/created', ({ agent }) => { if (mode === 'ptc') agent.ctx.tools.presentAs('ptc'); return undefined })
+    ctx.on('agent/created', async ({ agent }) => { if (mode === 'ptc') await selectPtc(agent.ctx); return undefined })
     const create = () => ctx.agents.create({ sessionId: SessionId('turn-view-parent'), meta: { cwd: f.workspace }, agentOptions: { provider: 'fixture', model: 'fixture' } })
     const turn = async (agent: Agent) => {
       agent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'Read synthetic memory status and documents.' }] }))
@@ -156,7 +155,7 @@ it.each(['native', 'ptc'] as const)('pins first, later and resumed %s turns when
     expect(f.requests[3]!.viewId).not.toBe(f.requests[0]!.viewId)
     expect(f.graph.composableTurns.activeTurn(handle.agent.id)).toBeUndefined()
     if (mode === 'native') {
-      const outside = await handle.agent.ctx.tools.execute({ agent: handle.agent, signal: new AbortController().signal, callId: ToolCallId('outside-turn'), name: 'mnemon_status', arguments: {} })
+      const outside = await executeTool(handle.agent.ctx, { agent: handle.agent, signal: new AbortController().signal, callId: ToolCallId('outside-turn'), name: 'mnemon_status', arguments: {} })
       expect(outside.isError).toBe(true)
       expect(JSON.stringify(outside.content)).toContain('View pinned to the current turn')
     }

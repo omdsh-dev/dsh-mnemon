@@ -1,0 +1,47 @@
+{
+  "dsh": "0.2.2-alpha.2",
+  "simulatedNetworkMs": 3600,
+  "firstMs": 3605,
+  "first": {
+    "groups": [
+      {
+        "id": "deepseek-official",
+        "name": "DeepSeek",
+        "models": [
+          {
+            "id": "deepseek-flash",
+            "name": "DeepSeek-V4.1-Flash",
+            "inputModalities": [
+              "text"
+            ]
+          }
+        ]
+      }
+    ],
+    "failures": []
+  },
+  "hostFinishedMs": 3606,
+  "hostModels": [
+    "deepseek-flash"
+  ],
+  "retry": {
+    "groups": [
+      {
+        "id": "deepseek-official",
+        "name": "DeepSeek",
+        "models": [
+          {
+            "id": "deepseek-flash",
+            "name": "DeepSeek-V4.1-Flash",
+            "inputModalities": [
+              "text"
+            ]
+          }
+        ]
+      }
+    ],
+    "failures": []
+  },
+  "networkRequests": 1,
+  "realNetworkRequests": 0
+}

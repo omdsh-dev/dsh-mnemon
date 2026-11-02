@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { HostAgent, ToolExecution } from './dsh.ts'
 import { openAgentTurn } from './agent-memory-turn.ts'
+import { executeHostTool, usesToolBatchExecution } from './tool-execution.ts'
 
 const RESULT_TOOL = 'mnemon_subagent_result'
 const CHECK_TIMEOUT_MS = 5_000
@@ -69,7 +70,7 @@ export class AutomaticReviewAdmission {
             ? { kind: 'cancel' } : decision
         }) as never, { prepend: true }))
         const args = { requestId, result: {} }
-        const pending = tools.execute!({
+        const pending = executeHostTool(tools, {
           callId, agent, signal: combined,
           name: codeMode ? 'run_code' : RESULT_TOOL,
           arguments: codeMode ? {
@@ -97,7 +98,9 @@ export class AutomaticReviewAdmission {
       // denied. Pure Code Mode rejects native dispatch before policy; fallback
       // uses a real run_code execution, never a fabricated parent token.
       if (await attempt(false)) return true
-      return tools.get?.('run_code', agent) !== undefined && await attempt(true)
+      // Executor-based Hosts keep run_code outside the registered capability
+      // inventory. The selected executor still decides whether it may run.
+      return (usesToolBatchExecution(tools) || tools.get?.('run_code', agent) !== undefined) && await attempt(true)
     } catch {
       signal.throwIfAborted()
       return false

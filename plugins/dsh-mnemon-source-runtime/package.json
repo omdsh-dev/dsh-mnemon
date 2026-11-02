@@ -55,7 +55,7 @@
     "react": "^18.2.0"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-client-ui-primitives": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-primitives": "0.2.1-rc.5",
     "@testing-library/react": "^16.3.0",
     "@types/node": "^22.0.0",
     "@types/react": "^18.3.0",
@@ -84,9 +84,9 @@
     "micromark-util-sanitize-uri": "^2.0.1",
     "micromark-util-symbol": "^2.0.1",
     "shiki": "^4.3.1",
-    "@deepseek-ai/dsh-client-store": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-util-code-language": "0.2.1-rc.2",
-    "@deepseek-ai/dsh-util-workspace-path": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-store": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-util-code-language": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-util-workspace-path": "0.2.1-rc.5",
     "diff": "^9.0.0",
     "immer": "^10.1.1",
     "simple-icons": "16.31.0",

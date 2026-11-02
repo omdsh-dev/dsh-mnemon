@@ -110,16 +110,21 @@ jobs:
       - name: Import every public entry on Node.js 20
         run: node scripts/verify-public-entries.mjs
 
-  # The pinned development baseline is DSH 0.2.1; the root tests also run against the
-  # older supported release and the next 0.2.1 candidate, installed from npm.
+  # The pinned development baseline is the current DSH RC. Keep older supported
+  # hosts and exercise both the current RC and the separate alpha track from npm.
   verify-installed-dsh:
-    name: Verify on installed DSH ${{ matrix.dsh }} (Node 22.19)
+    name: Verify on installed DSH ${{ matrix.dsh }} (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        dsh: ['0.2.0-rc.2', '0.2.1-rc.3']
+        include:
+          - { dsh: '0.2.0-rc.2', node: '22.19.0' }
+          - { dsh: '0.2.1-rc.3', node: '22.19.0' }
+          - { dsh: '0.2.1-rc.5', node: '22.19.0' }
+          # The alpha Host needs >=24.9.0; pin the verified current Node 24 toolchain.
+          - { dsh: '0.2.2-alpha.2', node: '24.22.2' }
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -127,7 +132,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 22.19.0
+          node-version: ${{ matrix.node }}
           package-manager-cache: false
 
       - name: Install pnpm
@@ -156,8 +161,8 @@ jobs:
           DSH_HOST_ROOT: ${{ runner.temp }}/dsh/lib/node_modules/@deepseek-ai/dsh
         run: pnpm run test:installed-dsh
 
-      - name: Verify delayed first-party model discovery on rc.3
-        if: matrix.dsh == '0.2.1-rc.3'
+      - name: Verify delayed first-party model discovery
+        if: matrix.dsh != '0.2.0-rc.2'
         run: node --experimental-transform-types scripts/verify-task-model-directory.mjs "$RUNNER_TEMP/dsh/lib/node_modules/@deepseek-ai/dsh/package.json"
 
   verify-artifacts:

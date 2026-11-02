@@ -7,7 +7,6 @@ import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { afterEach, expect, it } from 'vitest'
 import type { HostContextShape, HostSession } from '../src/host/dsh.ts'
 import { MnemonLifecycle } from '../src/host/lifecycle.ts'
@@ -16,7 +15,7 @@ import { startSubagent } from '../src/host/subagent-start.ts'
 import { registerTools } from '../src/host/tools.ts'
 import { compositionFixture } from './fixtures/composition.ts'
 import { JsonlSessionPersistence } from './helpers/dsh-plugins.ts'
-import { loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
+import { loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
 
 // Issue #435: DSH persists the session of every task Agent Mnemon runs outside a conversation. Its
 // sidebar and ACP session list leave out a session whose header has `origin: 'subagent'`, the origin
@@ -119,7 +118,7 @@ async function host() {
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(sessionQuery.default)
   await ctx.plugin(SystemPrompt)
-  await ctx.plugin(ToolRuntime, { mode: 'native' })
+  await loadTools(ctx)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   await loadWorkingDirectory(ctx)

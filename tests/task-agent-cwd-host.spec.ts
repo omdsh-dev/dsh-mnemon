@@ -8,7 +8,6 @@ import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { afterEach, expect, it } from 'vitest'
 import type { HostContextShape } from '../src/host/dsh.ts'
 import { MnemonLifecycle } from '../src/host/lifecycle.ts'
@@ -17,7 +16,7 @@ import { startSubagent } from '../src/host/subagent-start.ts'
 import { registerTools } from '../src/host/tools.ts'
 import { compositionFixture } from './fixtures/composition.ts'
 import { JsonlSessionPersistence } from './helpers/dsh-plugins.ts'
-import { dsh021, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
+import { dsh021, loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
 
 // A task Agent runs background memory work, such as Runtime maintenance, outside any conversation,
 // and Mnemon reads from its cwd which workspace's memory it works on. DSH 0.2.1 checks an Agent's
@@ -65,7 +64,7 @@ async function host(registry?: (fixture: { root: string; workspace: string }) =>
   await ctx.plugin(JsonlSessionPersistence, { root: join(f.root, 'sessions'), compression: 'none' })
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
-  await ctx.plugin(ToolRuntime, { mode: 'native' })
+  await loadTools(ctx)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   await loadWorkingDirectory(ctx)

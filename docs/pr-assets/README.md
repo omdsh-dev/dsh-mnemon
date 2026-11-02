@@ -12,6 +12,7 @@ For new evaluations, commit the reusable harness and workload generator to [`scr
 
 | Record / 记录 | Scope / 范围 |
 |---|---|
+| [Current DSH compatibility](./current-dsh-compat/README.md) / [中文](./current-dsh-compat/README.zh-CN.md) | DSH rc.5 and separate alpha.2 contracts, installed-host suites, packed Starter upgrades, real Web presets and the verified macOS Node 24 toolchain / DSH rc.5 与独立 alpha.2 契约、已安装宿主测试、打包 Starter 升级、真实 Web 预设与已验证的 macOS Node 24 工具链 |
 | [Current-turn View recovery — issue #542](./issue-542-turn-view/README.md) / [中文](./issue-542-turn-view/README.zh-CN.md) | Published Agent-turn reproduction with prompt interception, native/PTC reads, resumed turns, late registration, child guidance and retained authority / 正式 Agent 回合中的提示词拦截复现、原生/PTC 读取、恢复回合、晚注册、子 Agent 引导语及权限保留 |
 | [Idle PTC history integrity](./issue-541-idle-probe-history/README.md) / [中文](./issue-541-idle-probe-history/README.zh-CN.md) | Real Agent reproduction, durable reload and copy-only history recovery / 真实 Agent 复现、持久化重读与仅副本历史恢复 |
 | [Git sync author identity — issue #539](./issue-539-sync-author/README.md) / [中文](./issue-539-sync-author/README.zh-CN.md) | Real rejecting hooks, Git configuration precedence and recovery without rewriting published history / 真实拒绝 hook、Git 配置优先级与保留已发布历史的恢复 |

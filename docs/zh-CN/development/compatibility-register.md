@@ -8,6 +8,7 @@
 
 | 兼容项 | 所在位置 | 存在原因 | 移除条件 |
 |---|---|---|---|
+| DSH 工具执行契约 | `src/host/tool-execution.ts` 与 `src/host/review-admission.ts`；真实宿主组合见 `tests/helpers/installed-dsh.ts` | 旧 Host 调度一次已解析调用。DSH 0.2.2-alpha.2 提供 `setExecutor()` 并调度原始模型调用批次；适配器保留当前 executor，要求恰好一个匹配的结果。alpha executor 在 capability 目录之外管理 `run_code`。准入仍在真实轮次内等待执行落盘 | 旧单次调用 Host 退出支持范围后，改为必需的公开 executor 契约 |
 | 0.5.18 与 0.5.19 的就绪条目 | `src/starter.ts`：`./starter` 导出，即提供 `mnemonStarterReady` 的条目 `dsh-mnemon-starter` | 0.5.18 与 0.5.19 组合了单独的 `dsh-mnemon/starter` 行，组件组要等待它。0.5.20 起组件组（`dsh-mnemon/bundle`）自己完成准备，Starter 的 patch 也不再插入这一行；仍插入它的组合照常加载（[详情](../reference/compatibility.md#安装后直接启用-starter)） | 移除公开 `./starter` 导出的主版本发布 |
 | `buildin` 显示方式 | `src/host/display-mode.ts` 的 `normalizeDisplayMode`；`src/host/config.ts` 中的 `displayMode` schema；`src/host/settings.ts` 的 `migrateLegacyDisplayMode` 与设置描述 | dsh-mnemon 0.3 把会话标签页入口写作 `buildin`。0.4.2 起 Host 把它读作 `builtin`，并在 profile 可写时通过 DSH 检查 revision 的写入器保存一次 `builtin`；只读 profile 保留旧写法 | 不再支持升级最后由 0.3 保存的 profile 的主版本发布 |
 | `mnemon-plugins` 设置命名空间 | `src/host/settings-service.ts` 中只读的 `mnemon-plugins[-<hash>]` 注册；`src/host/plugin-management.ts` 的 `legacySettings`（`restore` 与 `moveEnablement`）；`src/host/legacy-settings-import.ts` | 0.5.0 的 beta 版本把 Source 开关保存在这里。0.5.0-rc.1 起改由 `mnemon-view[-<hash>]` 文档（现为 profile Config 中的 `memoryView`）保存，0.5.17 起开关由 DSH 插件管理器记录在 profile patch 中。在 Host 自己的设置服务上，这个命名空间总是读到空值，因此只有下面的 `settings.yaml.imported` 恢复还可能带回它的旧值 | `plugin-management.ts` 中的这些读取现在就可以连同测试一起移除：它们在受支持的宿主上读不到任何值。导入映射随下面的恢复一起移除 |

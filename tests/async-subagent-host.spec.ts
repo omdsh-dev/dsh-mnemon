@@ -12,14 +12,14 @@ import SessionQueryEngine from '@deepseek-ai/dsh-session-query'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime, { type ToolExecutionResult } from '@deepseek-ai/dsh-tools'
+import { type ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HostAgent, HostContextShape } from '../src/host/dsh.ts'
 import { MnemonLifecycle } from '../src/host/lifecycle.ts'
 import { LiveMnemonRuntime } from '../src/host/runtime.ts'
 import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
 import { registerTools } from '../src/host/tools.ts'
-import { loadWorkingDirectory } from './helpers/installed-dsh.ts'
+import { loadTools, loadWorkingDirectory } from './helpers/installed-dsh.ts'
 import { memoryGraphFixture } from './helpers/memory-graph.ts'
 
 type Response = string | { name: string; args: Record<string, unknown> }
@@ -115,7 +115,7 @@ async function harness(respond: (options: GenerateOptions) => Response | Promise
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SessionReads)
   await ctx.plugin(SystemPrompt)
-  await ctx.plugin(ToolRuntime)
+  await loadTools(ctx)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   await loadWorkingDirectory(ctx)
