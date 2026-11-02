@@ -614,6 +614,89 @@ function encodeFrames(text) {
   return Buffer.concat([text.slice(0, end), text.slice(end)].filter(Boolean).map(part => zlib.zstdCompressSync(part, options)))
 }
 
+async function writeRepairCopy(input, output, result) {
+  if (resolve(input) === resolve(output)) throw new Error('Output must be a new copy; the input cannot be overwritten.')
+  const temporary = await mkdtemp(join(dirname(resolve(output)), '.mnemon-repair-'))
+  try {
+    const path = join(temporary, 'session')
+    const file = await open(path, 'wx', 0o600)
+    try { await file.writeFile(result); await file.sync() } finally { await file.close() }
+    // Publish exclusively, including when output is a symlink or hard link.
+    await link(path, output)
+  } finally { await rm(temporary, { recursive: true, force: true }) }
+}
+
+/** Preserve the complete audit payload and all offsets; never truncate history. */
+async function repairIdleProbeSession(entries, original, compressed, input, output) {
+  const header = entries[0].row
+  assertUniqueJson(entries[0].line, header)
+  if (header.type !== 'session' || header.version !== 4 || header.isSeeded !== false || header.delegationDepth !== 0 ||
+      header.parentSession !== undefined || header.origin !== undefined) throw new Error('Idle probe recovery requires an unseeded v4 root Session.')
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
+  const recovered = new Set()
+  const pending = new Map()
+  const roots = new Set()
+  let openTurn
+  let completed = false
+  const refuse = () => { throw new Error('Unrecognized or incomplete out-of-turn PTC audit; no output written.') }
+  for (const entry of entries.slice(1)) {
+    const row = entry.row
+    if (row.type === 'turn/start' || row.type === 'turn/end') {
+      assertUniqueJson(entry.line, row)
+      if (pending.size || !count(row.data?.turn)) refuse()
+      if (row.type === 'turn/start') {
+        if (openTurn !== undefined) refuse()
+        openTurn = row.data.turn
+      } else {
+        if (openTurn !== row.data.turn) refuse()
+        openTurn = undefined
+        completed = true
+      }
+    }
+    if (!['tool/ptc-dispatch-start', 'tool/ptc-dispatch'].includes(row.type) || openTurn !== undefined) continue
+    assertUniqueJson(entry.line, row)
+    const data = row.data
+    const start = row.type === 'tool/ptc-dispatch-start'
+    if (!completed || !exactKeys(row, ['type', 'seq', 'time', 'data']) || !count(row.seq) || !integer(row.time) ||
+        !exactKeys(data, ['rootCallId', 'parentCallId', 'subCallId', 'name', 'arguments', ...(start ? [] : ['isError', 'content'])], start ? [] : ['error', 'meta']) ||
+        !uuid.test(data.rootCallId) || data.parentCallId !== data.rootCallId || data.subCallId !== `${data.rootCallId}:ptc:1` ||
+        data.name !== 'mnemon_subagent_result' || !exactKeys(data.arguments, ['requestId', 'result']) ||
+        !uuid.test(data.arguments.requestId) || !exactKeys(data.arguments.result, [])) refuse()
+    if (start) {
+      if (roots.has(data.rootCallId)) refuse()
+      roots.add(data.rootCallId)
+      pending.set(data.rootCallId, entry)
+    } else {
+      const previous = pending.get(data.rootCallId)
+      if (!previous || !isDeepStrictEqual(previous.row.data.arguments, data.arguments) || previous.row.seq >= row.seq ||
+          typeof data.isError !== 'boolean' || !Array.isArray(data.content) ||
+          !data.isError && !isDeepStrictEqual(data.content, [{ type: 'text', text: 'Mnemon subagent result recorded.' }])) refuse()
+      pending.delete(data.rootCallId)
+      recovered.add(previous)
+      recovered.add(entry)
+    }
+  }
+  if (pending.size) refuse()
+  const changedSeqs = new Set([...recovered].map(entry => entry.row.seq))
+  for (const { row } of entries.slice(1)) {
+    for (const range of row.sourceEventSeqs ?? []) {
+      if (typeof range === 'number' ? changedSeqs.has(range) : Array.isArray(range) && [...changedSeqs].some(seq => seq >= range[0] && seq <= range[1])) refuse()
+    }
+  }
+  const text = entries.map(entry => recovered.has(entry)
+    ? JSON.stringify({ type: 'dsh-mnemon/recovered-idle-probe', seq: entry.row.seq, time: entry.row.time, ignorable: true,
+      data: { originalType: entry.row.type, originalData: entry.row.data } }) + '\n'
+    : entry.line).join('')
+  const plain = Buffer.from(text)
+  if (plain.length > maximumBytes) throw new Error('Repaired Session exceeds the 128 MiB repair limit; no output written.')
+  const result = recovered.size === 0 ? original : compressed ? encodeFrames(text) : plain
+  if (result.length > maximumBytes) throw new Error('Repaired Session exceeds the 128 MiB repair limit; no output written.')
+  if (output !== undefined) await writeRepairCopy(input, output, result)
+  return { mode: output === undefined ? 'preview' : 'copy', format: 4, encoding: compressed ? 'zstd' : 'jsonl',
+    recoveredIdleProbeEvents: recovered.size, inputSha256: sha256(original), outputSha256: sha256(result),
+    originalPreserved: true, migrationValidated: false, blockers: [] }
+}
+
 export async function repairLegacySession(input, output) {
   const original = await readBounded(input)
   const compressed = original.subarray(0, 4).equals(Buffer.from([0x28, 0xb5, 0x2f, 0xfd]))
@@ -627,6 +710,7 @@ export async function repairLegacySession(input, output) {
   const entries = lines.map((line, index) => {
     try { return { line, index, row: JSON.parse(line) } } catch { throw new Error(`Invalid JSON at line ${index + 1}; no output written.`) }
   })
+  if (entries[0]?.row?.version === 4) return repairIdleProbeSession(entries, original, compressed, input, output)
   const recovery = recoverRecordedToolIdentities(entries)
   let changes = 0
   let descriptors = 0
@@ -681,15 +765,7 @@ export async function repairLegacySession(input, output) {
   if (result.length > maximumBytes) throw new Error('Repaired Session exceeds the 128 MiB repair limit; no output written.')
   const blockers = diagnostics.report()
   if (output !== undefined && blockers.length === 0) {
-    if (resolve(input) === resolve(output)) throw new Error('Output must be a new copy; the input cannot be overwritten.')
-    const temporary = await mkdtemp(join(dirname(resolve(output)), '.mnemon-repair-'))
-    try {
-      const path = join(temporary, 'session')
-      const file = await open(path, 'wx', 0o600)
-      try { await file.writeFile(result); await file.sync() } finally { await file.close() }
-      // Publish exclusively, including when output is a symlink or hard link.
-      await link(path, output)
-    } finally { await rm(temporary, { recursive: true, force: true }) }
+    await writeRepairCopy(input, output, result)
   }
   return {
     mode: output === undefined ? 'preview' : blockers.length === 0 ? 'copy' : 'refused',
@@ -712,7 +788,7 @@ export async function repairLegacySession(input, output) {
 }
 
 async function main(args) {
-  const usage = 'Usage: dsh-mnemon-repair-session --input FILE [--output NEW_FILE]\nWithout --output, preview the three known Mnemon v0 summary repairs, exact compatible v2 subagent descriptors, packed deltas with empty IDs/names, property-preserving null-to-empty delta names and proven DeepSeek chains with a previously recorded provider ID. Unsupported descriptor/tool shapes are reported with exit status 1 and prevent output. DSH must still validate the repaired copy. Stop DSH and work on a backup copy. The input and existing output files are never overwritten.'
+  const usage = 'Usage: dsh-mnemon-repair-session --input FILE [--output NEW_FILE]\nWithout --output, preview recognized v4 idle-review probe audit recovery or the three known Mnemon v0 summary repairs, exact compatible v2 subagent descriptors, packed deltas with empty IDs/names, property-preserving null-to-empty delta names and proven DeepSeek chains with a previously recorded provider ID. Unsupported descriptor/tool shapes are reported with exit status 1 and prevent output. DSH must still validate the repaired copy. Stop DSH and work on a backup copy. The input and existing output files are never overwritten.'
   if (args.length === 1 && args[0] === '--help') { console.log(usage); return }
   const options = new Map()
   for (let index = 0; index < args.length; index += 2) {

@@ -124,6 +124,23 @@ If the original `settings.yaml` still exists when Mnemon starts, DSH owns that i
 
 When rolling back to such an older host, keep a copy of the profile patch and retained settings backup, and reinstall the dsh-mnemon release that supports it (see [Older DSH releases](#older-dsh-releases)). Settings edited since are not automatically exported back to the older settings file; restore the matching backup or reapply those preferences in the older host. Runtime, Documents, Memory Spaces, and Provider data are unaffected. See the [DSH 0.1.7 settings verification](../../pr-assets/issue-267-settings-migration/README.md).
 
+<a id="ptc-idle-review-history-recovery"></a>
+
+## PTC idle review history recovery
+
+In v0.5.38, automatic review could execute its PTC availability probe after `turn/end`. DSH's v4 reader then rejects the whole session with `tool/ptc-dispatch-start is outside an open turn`. The fix performs and drains that check inside the awaited stopping hook; upgrading prevents new occurrences but does not rewrite already damaged history.
+
+For an affected **unseeded root v4 session**, the bundled recovery CLI can produce a separate copy. Stop DSH, back up the entire session directory, and use a new output path in an existing backup directory:
+
+```bash
+dsh-mnemon-repair-session --input /backup/session.v4.jsonl.zstd
+dsh-mnemon-repair-session --input /backup/session.v4.jsonl.zstd --output /recovered/session.v4.jsonl.zstd
+```
+
+The first command only previews. The copy step recognizes paired out-of-turn `mnemon_subagent_result` probes with the original UUID correlation and empty result payload; it retains their complete audit data as ignorable Mnemon recovery records. It preserves every event offset, timestamp, conversation message and unrelated row. It neither truncates history nor changes memory storage. Plain JSONL and checksummed Zstandard are supported; existing input/output files are never overwritten. Seeded/child sessions, orphan probes, write-tool calls, nonempty results, ambiguous fields and referenced probe records are refused.
+
+`migrationValidated: false` means the CLI does not certify the rest of the session. Load the recovered copy through the same DSH version in an isolated session store before replacing that one generation file with DSH stopped; retain the original offline. If DSH still refuses it or the CLI reports an unsupported shape, keep the original and request diagnosis rather than deleting records. [Synthetic reproduction and validation](../../pr-assets/issue-541-idle-probe-history/README.md) cover the published reader, unchanged messages and recovery refusal cases.
+
 ## Older DSH hosts
 
 These notes describe hosts that only the older dsh-mnemon releases in the [table above](#older-dsh-releases) support.
