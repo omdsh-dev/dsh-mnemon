@@ -313,6 +313,7 @@ Host 调用 Mnemon CLI 时不经过 shell，限制每次调用的时间与输出
 |---|---|
 | 插件详情中 `mnemon-bundle` 容器行（0.5.20 起名为 `dsh-mnemon/bundle`，此前为 `cordis:group`）显示“已关闭”，点击提示“找不到该插件” | DSH 0.2.0 的已知容器展示问题，与 0.1.7 相同；DSH 0.2.1 不再列出该行，配置页也随之不再显示相应说明。先检查“记忆系统 → 状态”和实际组件；正常时可继续使用。整套组合用顶层 bundle 或 `mnemon` 核心组件开关，不要重置数据或删除分组。参见[原因、处理步骤与修复边界](../reference/compatibility.md#dsh-020-上的-bundle-组件列表)和[上游 #649](https://github.com/dsh-external/issues/issues/649)。 |
 | Windows 切换会话时终端窗口闪现 | 更新 Starter，或独立安装的 Runtime Source，然后重启 DSH Host。Runtime 的 Git 分支检测会隐藏控制台窗口；Git 失败、超时或 HEAD 分离时仍回退到不按分支筛选的 Runtime 视图。 |
+| 写入含补充 Unicode 字符的长 Runtime 记忆后，同一会话每次请求都返回 HTTP 400 | 检查历史 `tool/result.data.meta.item.title` 或 `excerpt` 中是否有不成对的代理字符（[#548](https://github.com/omdsh-dev/dsh-mnemon/issues/548)）。修复会在原有活动摘要长度限制内保留完整码点，存储的记忆正文不变。更新到包含修复的构建并重启 DSH。已有会话记录不会被改写：可在新会话中继续使用同一份记忆，并保留受影响的会话供单独恢复。仅凭通用 400 错误不能确认此原因。 |
 | Mnemon 不可用 | macOS/Linux 运行 `command -v mnemon`、`mnemon --version`；Windows PowerShell 运行 `Get-Command mnemon`、`Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"`。设置 `MNEMON_CLI_PATH` 或 `mnemon.cliPath` 后重启 |
 | Electron 桌面 Host 无法运行 npm CLI 脚本 | 经过验证的 npm 启动器仅在子进程中设置 `ELECTRON_RUN_AS_NODE=1`。如果桌面壳关闭了 [Electron `runAsNode` fuse](https://www.electronjs.org/docs/latest/tutorial/fuses#runasnode)，该变量会被忽略；请将 `mnemon.cliPath` 指向官方原生二进制（Windows 为 `mnemon.exe`）。npm 自动更新仍需要 Host 能够运行 JavaScript 启动器 |
 | Headless Agent 没有 Mnemon 工具 | 插件按 profile 独立安装；运行 `dsh plugin --profile headless add dsh-mnemon`，Web profile 的安装不会自动带入 |
