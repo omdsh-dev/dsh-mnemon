@@ -19,6 +19,7 @@ const nullFixture = await readFile(new URL('./fixtures/issue-251-null-name-v0.js
 const packedNullFixture = await readFile(new URL('./fixtures/issue-251-null-name-packed-v0.jsonl', import.meta.url), 'utf8')
 const identityFixture = await readFile(new URL('./fixtures/issue-251-existing-id-v0.jsonl', import.meta.url), 'utf8')
 const allLegacyFixture = await readFile(new URL('./fixtures/issue-251-all-legacy-v0.jsonl', import.meta.url), 'utf8')
+const idleProbeFixture = await readFile(new URL('./fixtures/issue-541-idle-probe-v4.jsonl', import.meta.url), 'utf8')
 const roots: string[] = []
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }) })
 async function directory() {
@@ -88,10 +89,10 @@ function resequenceIdentityRows(rows: any[], pairs?: any[][]) {
 }
 
 async function publishedLoad(root: string, text: string, mode: 'read' | 'write' = 'read') {
-  const { id, cwd }: { id: string; cwd: string } = JSON.parse(text.split('\n')[0]!)
+  const { id, cwd, version }: { id: string; cwd: string; version: number } = JSON.parse(text.split('\n')[0]!)
   const sessionDir = join(root, `--${cwd.slice(1).replaceAll('/', '-')}--`, id)
   await mkdir(sessionDir, { recursive: true })
-  await writeFile(join(sessionDir, 'session.jsonl'), text)
+  await writeFile(join(sessionDir, version === 0 ? 'session.jsonl' : `session.v${version}.jsonl`), text)
   const ctx = new Context()
   await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
   try {
@@ -101,6 +102,80 @@ async function publishedLoad(root: string, text: string, mode: 'read' | 'write' 
 }
 
 describe('legacy Session copy repair', () => {
+  it.each([false, true])('recovers only obsolete idle probe audit records and preserves readable history (zstd=%s)', async compressed => {
+    const root = await directory()
+    await expect(publishedLoad(join(root, 'before'), idleProbeFixture)).rejects.toThrow('outside an open turn')
+    const original = compressed ? compressFrames(idleProbeFixture) : Buffer.from(idleProbeFixture)
+    const input = join(root, 'broken-session')
+    const output = join(root, 'recovered-session')
+    await writeFile(input, original)
+    const preview = cli('--input', input)
+    expect(preview.status, preview.stderr).toBe(0)
+    expect(JSON.parse(preview.stdout)).toMatchObject({ mode: 'preview', format: 4, recoveredIdleProbeEvents: 2, originalPreserved: true })
+    const result = cli('--input', input, '--output', output)
+    expect(result.status, result.stderr).toBe(0)
+    expect(await readFile(input)).toEqual(original)
+    const bytes = await readFile(output)
+    const text = compressed ? decompressFrames(bytes) : bytes.toString()
+    const before = idleProbeFixture.trim().split('\n').map(line => JSON.parse(line))
+    const after = text.trim().split('\n').map(line => JSON.parse(line))
+    expect(after).toHaveLength(before.length)
+    for (const [index, row] of before.entries()) {
+      if (row.type.startsWith('tool/ptc-dispatch')) {
+        expect(after[index]).toEqual({ type: 'dsh-mnemon/recovered-idle-probe', seq: row.seq, time: row.time, ignorable: true,
+          data: { originalType: row.type, originalData: row.data } })
+      } else expect(after[index]).toEqual(row)
+    }
+    const restored = await publishedLoad(join(root, 'after'), text)
+    expect(restored.events).toHaveLength(before.length - 1)
+    expect(restored.events.filter(event => event.type === 'user/message').map(event => event.data))
+      .toEqual(before.filter(row => row.type === 'user/message').map(row => row.data))
+    // Already recovered data remains byte-identical, including compression.
+    const copy = join(root, 'second-copy')
+    expect(cli('--input', output, '--output', copy).status).toBe(0)
+    expect(await readFile(copy)).toEqual(bytes)
+  })
+
+  it('preserves denied probe evidence while recovering its out-of-turn framing', async () => {
+    const root = await directory()
+    const rows = idleProbeFixture.trim().split('\n').map(line => JSON.parse(line))
+    const end = rows.find(row => row.type === 'tool/ptc-dispatch')
+    end.data.isError = true
+    end.data.content = [{ type: 'text', text: 'Synthetic session guard denied this probe.' }]
+    const input = join(root, 'denied-session')
+    const output = join(root, 'recovered-session')
+    await writeFile(input, serializeRows(rows))
+    const result = cli('--input', input, '--output', output)
+    expect(result.status, result.stderr).toBe(0)
+    const restored = await publishedLoad(join(root, 'after'), await readFile(output, 'utf8'))
+    expect(restored.events.find(event => event.seq === end.seq)?.data).toEqual({ originalType: end.type, originalData: end.data })
+  })
+
+  it.each(['orphan', 'writer', 'nonempty-result', 'wrong-root', 'surface', 'duplicate-key', 'seeded', 'cross-turn', 'referenced'] as const)(
+    'refuses ambiguous v4 probe recovery (%s)', async variant => {
+      const root = await directory()
+      const rows = idleProbeFixture.trim().split('\n').map(line => JSON.parse(line))
+      const start = rows.find(row => row.type === 'tool/ptc-dispatch-start')
+      const end = rows.find(row => row.type === 'tool/ptc-dispatch')
+      if (variant === 'orphan') rows.splice(rows.indexOf(end), 1)
+      if (variant === 'writer') start.data.name = end.data.name = 'mnemon_runtime_memory'
+      if (variant === 'nonempty-result') start.data.arguments.result = end.data.arguments.result = { action: 'created' }
+      if (variant === 'wrong-root') end.data.rootCallId = 'other'
+      if (variant === 'surface') start.surfaceOp = 'append'
+      if (variant === 'seeded') rows[0].isSeeded = true
+      if (variant === 'cross-turn') rows.splice(rows.indexOf(end), 0, { type: 'turn/start', seq: end.seq, time: end.time, data: { turn: 3 } })
+      if (variant === 'referenced') rows.at(-1).sourceEventSeqs = [[start.seq, end.seq + 1]]
+      let text = serializeRows(rows)
+      if (variant === 'duplicate-key') text = text.replace('"result":{}', '"result":{"x":1},"result":{}')
+      const input = join(root, 'broken-session')
+      const output = join(root, 'must-not-exist')
+      await writeFile(input, text)
+      expect(cli('--input', input, '--output', output).status).toBe(1)
+      expect(await readFile(input, 'utf8')).toBe(text)
+      await expect(readFile(output)).rejects.toThrow('ENOENT')
+    },
+  )
+
   it.each(['absent-result-provenance', 'early-placeholder', 'partial-core-ids', 'nonidentity-metadata'] as const)('restores a uniquely proven provider identity with %s', async variant => {
     const root = await directory()
     const rows = identityRawRows()

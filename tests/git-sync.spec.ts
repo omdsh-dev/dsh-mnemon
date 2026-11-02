@@ -158,6 +158,37 @@ async function repository(label: string): Promise<string> {
   return directory
 }
 
+/** A synthetic global config; no author or config from the test runner participates. */
+async function withGitConfiguration(run: (global: string) => Promise<void>): Promise<void> {
+  const global = join(temporary('sync-author-config'), 'gitconfig')
+  writeFileSync(global, '')
+  await withEnvironment({
+    GIT_CONFIG_GLOBAL: global, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_COUNT: undefined, GIT_CONFIG_PARAMETERS: undefined,
+    EMAIL: undefined, GIT_AUTHOR_NAME: undefined, GIT_AUTHOR_EMAIL: undefined,
+    GIT_COMMITTER_NAME: undefined, GIT_COMMITTER_EMAIL: undefined,
+  }, async () => run(global))
+}
+
+/** A real remote policy: every new commit must carry the approved synthetic author. */
+function requireCorporateAuthor(origin: string): void {
+  writeFileSync(join(origin, 'hooks', 'pre-receive'), `#!/bin/sh
+while read old new ref; do
+  if test "$old" = 0000000000000000000000000000000000000000; then
+    commits=$(git rev-list "$new")
+  else
+    commits=$(git rev-list "$old..$new")
+  fi
+  for commit in $commits; do
+    author=$(git show -s --format='%an <%ae>' "$commit")
+    if test "$author" != 'Corporate User <employee@company.example>'; then
+      echo "Commit author rejected by policy: $author" >&2
+      exit 1
+    fi
+  done
+done
+`, { mode: 0o700 })
+}
+
 afterEach(async () => {
   for (const release of releases.splice(0)) await release()
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
@@ -251,6 +282,98 @@ describe.skipIf(!available)('Mnemon Git sync', { timeout: 90_000 }, () => {
       const pushed = await machineA.sync.push({ message: 'Sync without an author' })
       expect(pushed).toMatchObject({ committed: true, pushed: true })
       expect(await git(['log', '-1', '--format=%an <%ae>', 'mnemon-sync'], origin)).toBe(expected + '\n')
+    })
+  })
+
+  it.each(['fresh', 'saved default'] as const)('uses configured Git identity for %s settings on an author-validating remote (#539)', async (kind) => {
+    await withGitConfiguration(async (global) => {
+      await git(['config', '--file', global, 'user.name', 'Corporate User'])
+      await git(['config', '--file', global, 'user.email', 'employee@company.example'])
+      const origin = await repository('sync-author-policy-remote')
+      requireCorporateAuthor(origin)
+      const machineA = await machine('sync-author-policy', origin)
+      if (kind === 'saved default') {
+        // v0.5.38 wrote this pair even when the user only supplied a repository.
+        const path = machineA.sync.settings().path()
+        const saved = JSON.parse(readFileSync(path, 'utf8'))
+        writeFileSync(path, JSON.stringify({ ...saved, authorName: 'dsh-mnemon sync', authorEmail: 'mnemon@localhost' }))
+      }
+      const pushed = await machineA.sync.push({ message: 'Approved identity' })
+      expect(pushed, pushed.reason).toMatchObject({ committed: true, pushed: true })
+      expect(await git(['log', '-1', '--format=%an <%ae>|%cn <%ce>', 'mnemon-sync'], origin))
+        .toBe('Corporate User <employee@company.example>|Corporate User <employee@company.example>\n')
+    })
+  })
+
+  it.each(['local', 'include', 'conditional include', 'worktree'] as const)('resolves the sync mirror identity through Git %s configuration (#539)', async (kind) => {
+    await withGitConfiguration(async (global) => {
+      await git(['config', '--file', global, 'user.name', 'Global User'])
+      await git(['config', '--file', global, 'user.email', 'global@example.com'])
+      const origin = await repository('sync-author-scope-remote')
+      const machineA = await machine('sync-author-scope', origin)
+      const mirror = machineA.sync.settings().mirror()
+      await git(['init', '--quiet', mirror])
+      await git(['config', 'mnemon.origin', origin], mirror)
+      if (kind === 'include' || kind === 'conditional include') {
+        const included = join(mirror, '.git', 'identity.config')
+        await git(['config', '--file', included, 'user.name', 'Mirror User'])
+        await git(['config', '--file', included, 'user.email', 'mirror@example.com'])
+        if (kind === 'include') await git(['config', 'include.path', 'identity.config'], mirror)
+        else {
+          const gitdir = (await git(['rev-parse', '--absolute-git-dir'], mirror)).trim()
+          await git(['config', '--file', global, 'includeIf.gitdir:' + gitdir + '.path', included])
+        }
+      } else {
+        if (kind === 'worktree') await git(['config', 'extensions.worktreeConfig', 'true'], mirror)
+        const scope = kind === 'worktree' ? '--worktree' : '--local'
+        await git(['config', scope, 'user.name', 'Mirror User'], mirror)
+        await git(['config', scope, 'user.email', 'mirror@example.com'], mirror)
+      }
+      expect(await machineA.sync.push({ message: 'Mirror identity' })).toMatchObject({ pushed: true })
+      expect(await git(['log', '-1', '--format=%an <%ae>', 'mnemon-sync'], origin)).toBe('Mirror User <mirror@example.com>\n')
+    })
+  })
+
+  it('keeps explicit sync author fields ahead of Git configuration and inherited author variables (#539)', async () => {
+    await withGitConfiguration(async (global) => {
+      await git(['config', '--file', global, 'user.name', 'Global User'])
+      await git(['config', '--file', global, 'user.email', 'global@example.com'])
+      await withGitIdentity('Environment User', 'environment@example.com', async () => {
+        const origin = await repository('sync-author-explicit-remote')
+        const machineA = await machine('sync-author-explicit', origin)
+        // One field matching the old default is still part of an explicit custom pair.
+        await machineA.sync.configure({ authorName: 'dsh-mnemon sync', authorEmail: 'approved@example.com' })
+        expect(await machineA.sync.push({ message: 'Explicit identity' })).toMatchObject({ pushed: true })
+        expect(await git(['log', '-1', '--format=%an <%ae>', 'mnemon-sync'], origin)).toBe('dsh-mnemon sync <approved@example.com>\n')
+        expect(machineA.sync.settings().read()).toMatchObject({ authorName: 'dsh-mnemon sync', authorEmail: 'approved@example.com' })
+      })
+    })
+  })
+
+  it.each([false, true])('recovers an author-rejected local commit with published history=%s without rewriting remote history (#539)', async (published) => {
+    await withGitConfiguration(async (global) => {
+      const origin = await repository('sync-author-recovery-remote')
+      const machineA = await machine('sync-author-recovery', origin)
+      let original: string | undefined
+      if (published) {
+        await machineA.sync.configure({ authorName: 'Corporate User', authorEmail: 'employee@company.example' })
+        original = (await machineA.sync.push({ message: 'Published history' })).commit
+        await machineA.sync.configure({ authorName: 'dsh-mnemon sync', authorEmail: 'mnemon@localhost' })
+      }
+      requireCorporateAuthor(origin)
+      await machineA.sources.runtime.mutate('mutate', { action: 'add', target: 'user', content: 'Keep this pending memory', importance: 'normal' }, { confirmed: true })
+      const rejected = await machineA.sync.push({ message: 'Pending memory' })
+      expect(rejected).toMatchObject({ committed: true, pushed: false })
+      expect(rejected.reason).toContain('Commit author rejected by policy: dsh-mnemon sync <mnemon@localhost>')
+      expect(rejected.reason).not.toContain('no token')
+      expect(rejected.reason).toContain('Sync > Advanced')
+      await git(['config', '--file', global, 'user.name', 'Corporate User'])
+      await git(['config', '--file', global, 'user.email', 'employee@company.example'])
+      const recovered = await machineA.sync.push({ message: 'Recovered memory' })
+      expect(recovered, recovered.reason).toMatchObject({ committed: true, pushed: true })
+      expect(await git(['show', 'mnemon-sync:mnemon/payload/runtime/USER.md'], origin)).toContain('Keep this pending memory')
+      expect((await git(['rev-list', '--count', 'mnemon-sync'], origin)).trim()).toBe(published ? '2' : '1')
+      if (original !== undefined) expect((await git(['rev-parse', 'mnemon-sync^'], origin)).trim()).toBe(original)
     })
   })
 

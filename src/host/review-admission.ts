@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import type { HostAgent, ToolExecution } from './dsh.ts'
+import { openAgentTurn } from './agent-memory-turn.ts'
 
 const RESULT_TOOL = 'mnemon_subagent_result'
 const CHECK_TIMEOUT_MS = 5_000
 interface Challenge { agent: HostAgent; execution?: ToolExecution; accepted: boolean }
 
-/** A no-op challenge through the same mandatory completion channel as review.
+/** An in-turn no-op challenge through the mandatory review completion channel.
  * Inventory alone cannot see execution-time guards. No errors are classified as
  * permission failures, and an unavailable checkpoint is never a permanent ban.
  */
@@ -34,23 +35,22 @@ export class AutomaticReviewAdmission {
   async check(agent: HostAgent, signal: AbortSignal): Promise<boolean> {
     signal.throwIfAborted()
     const tools = agent.ctx.tools
-    if (this.disposed || tools?.execute === undefined || this.draining.has(agent)) return false
+    // PTC records durable dispatch events on this Agent. They are valid only
+    // inside a real turn, whose stopping hook must await this entire check.
+    if (this.disposed || tools?.execute === undefined || this.draining.has(agent) || openAgentTurn(agent) === undefined) return false
     const controller = new AbortController()
     this.controllers.add(controller)
     const combined = AbortSignal.any([signal, controller.signal])
     const timeout = setTimeout(() => controller.abort(), CHECK_TIMEOUT_MS)
     timeout.unref?.()
-    let rejectAbort: (() => void) | undefined
-    const aborted = new Promise<never>((_resolve, reject) => {
-      rejectAbort = () => reject(combined.reason)
-      combined.addEventListener('abort', rejectAbort, { once: true })
-    })
     const attempt = async (codeMode: boolean): Promise<boolean> => {
       combined.throwIfAborted()
       const requestId = randomUUID()
       const callId = randomUUID()
       const challenge: Challenge = { agent, accepted: false }
       this.challenges.set(requestId, challenge)
+      const revoke = () => this.challenges.delete(requestId)
+      combined.addEventListener('abort', revoke, { once: true })
       const stops: (() => unknown)[] = []
       let executing = false
       const cleanup = () => {
@@ -61,7 +61,7 @@ export class AutomaticReviewAdmission {
         stops.push(agent.ctx.on('tools/result', ((execution: ToolExecution, result: { isError?: boolean }) => {
           if (execution === challenge.execution) challenge.accepted = result.isError === false
         }) as never))
-        // Background admission must not open an approval prompt. Preserve all
+        // Automatic admission must not open an approval prompt. Preserve all
         // other decisions and guards; an approval requirement means skip now.
         stops.push(agent.ctx.on('tools/pre-execute', (async (execution: ToolExecution, next: () => Promise<{ kind: string }>) => {
           const decision = await next()
@@ -79,17 +79,16 @@ export class AutomaticReviewAdmission {
         })
         executing = true
         this.draining.add(agent)
-        // A cancelled run_code wrapper can still issue a late nested call if
-        // extension middleware ignores its signal. Keep approval suppression
-        // until that execution settles, and admit no concurrent probe for the
-        // Agent while it drains. The challenge itself is revoked immediately.
-        const settled = pending.finally(cleanup)
-        const outcome = await Promise.race([settled, aborted])
+        // Cancellation requests a stop, never abandons PTC's dispatch/log
+        // drain. Letting turn-stopping return early would append turn/end
+        // before a delayed settle event and make the whole Session unreadable.
+        const outcome = await pending.finally(cleanup)
         combined.throwIfAborted()
         return challenge.execution !== undefined && challenge.accepted && outcome.isError === false
       } finally {
         // Revoke even if an extension ignores cancellation and returns later.
         this.challenges.delete(requestId)
+        combined.removeEventListener('abort', revoke)
         if (!executing) cleanup()
       }
     }
@@ -104,7 +103,6 @@ export class AutomaticReviewAdmission {
       return false
     } finally {
       clearTimeout(timeout)
-      if (rejectAbort !== undefined) combined.removeEventListener('abort', rejectAbort)
       this.controllers.delete(controller)
     }
   }

@@ -431,7 +431,38 @@ class MnemonAgentLifecycle {
   }
 
   private async finishTurn(payload: TurnStoppingPayload): Promise<void> {
-    this.scheduleIdleReview(payload.turn)
+    this.cancelIdleReview(true)
+    this.recordComposedTurn(payload.turn)
+    if (payload.signal.aborted || !this.restoreWatermark() || !this.idleReviewAllowed()) return
+    const activity = this.ensureTurnActivity(payload.turn)
+    const tools = completedToolActivity(this.agent.session.snapshotEvents(), payload.turn)
+    activity.toolCallCount = tools.count
+    activity.toolNames = tools.names
+    if (!this.reviewActivity().eligible || !this.reviewAdmitted(payload.turn)) return
+    // DSH awaits turn-stopping before writing turn/end. The parent's PTC
+    // availability check must finish here, including cancellation/log drains;
+    // the later idle timer is never allowed to execute parent tools.
+    const controller = new AbortController()
+    const signal = AbortSignal.any([payload.signal, controller.signal])
+    const epoch = this.reviewEpoch
+    const policy = this.reviewPolicy()
+    this.reviewController = controller
+    this.reviewRunning = true
+    let admitted = false
+    try {
+      const available = await this.coordinator.checkReviewAccess(this.agent, signal)
+      if (signal.aborted || epoch !== this.reviewEpoch || policy !== this.reviewPolicy() || !this.idleReviewAllowed()) return
+      this.reviewAccessBlocked = !available
+      admitted = available
+    } catch (error) {
+      if (!signal.aborted) this.fail(error)
+    } finally {
+      if (this.reviewController === controller) {
+        this.reviewRunning = false
+        this.reviewController = undefined
+      }
+    }
+    if (admitted) this.scheduleIdleReview(payload.turn)
   }
 
   private sessionEvent(session: HostAgent['session'], event: HostSessionEvent): void {
@@ -445,12 +476,7 @@ class MnemonAgentLifecycle {
 
   private scheduleIdleReview(turn: number): void {
     this.cancelIdleReview(true)
-    this.recordComposedTurn(turn)
     if (!this.restoreWatermark() || !this.idleReviewAllowed()) return
-    const activity = this.ensureTurnActivity(turn)
-    const tools = completedToolActivity(this.agent.session.snapshotEvents(), turn)
-    activity.toolCallCount = tools.count
-    activity.toolNames = tools.names
     if (!this.reviewActivity().eligible || !this.reviewAdmitted(turn)) return
     const epoch = this.reviewEpoch
     const policy = this.reviewPolicy()
@@ -564,13 +590,10 @@ class MnemonAgentLifecycle {
     this.reviewRunning = true
     this.reviewController = controller
     try {
-      const available = await this.coordinator.checkReviewAccess(this.agent, controller.signal)
       if (epoch !== this.reviewEpoch || policy !== this.reviewPolicy() || !this.idleReviewAllowed()) {
         controller.abort(new Error('Automatic idle review admission changed'))
       }
       controller.signal.throwIfAborted()
-      this.reviewAccessBlocked = !available
-      if (!available) return
       if (this.config.idleReview.persistWatermark) {
         try {
           if (!this.restoreWatermark() || this.watermarkStore === undefined || !this.idleReviewAllowed()) return

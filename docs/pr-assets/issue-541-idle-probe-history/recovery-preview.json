@@ -1,0 +1,11 @@
+{
+  "mode": "preview",
+  "format": 4,
+  "encoding": "jsonl",
+  "recoveredIdleProbeEvents": 2,
+  "inputSha256": "66f57871e0cd203063fa101f9970ac52972f66783b268a7dbea642fceed4ead1",
+  "outputSha256": "c8aeb19fb3c24e6c4906d57fc85beb8e16a9107b73e6ffc1a2ca58e37a7ae077",
+  "originalPreserved": true,
+  "migrationValidated": false,
+  "blockers": []
+}

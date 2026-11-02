@@ -221,6 +221,8 @@ function rejectedPush(output: string): boolean {
 interface GitOptions {
   cwd?: string | undefined
   signal?: AbortSignal | undefined
+  /** Per-command identity overrides; never written into the mirror's Git configuration. */
+  env?: NodeJS.ProcessEnv | undefined
   token?: string | undefined
   authenticated?: boolean | undefined
   /** Raised for the one command that legitimately prints a whole payload file back out of a commit. */
@@ -854,8 +856,8 @@ export class MnemonGitSync {
     if (committed) {
       const identity = await this.commitIdentity(settings, signal)
       const result = await this.git(
-        [...identity, 'commit', '--quiet', '-m', message, '--', settings.subdir],
-        { cwd: this.store.mirror(), signal },
+        [...identity.args, 'commit', '--quiet', '-m', message, '--', settings.subdir],
+        { cwd: this.store.mirror(), signal, env: identity.env },
       )
       if (result.exitCode !== 0) throw new Error('git commit failed: ' + tail(result.stderr || result.stdout))
     }
@@ -883,15 +885,23 @@ export class MnemonGitSync {
   }
 
   /**
-   * The identity a sync commit is recorded under: the one configured here, else the
-   * Git identity this machine has. A machine without one gets the channel's own
-   * rather than a failed commit, and rather than the account and host names Git
-   * would otherwise guess and publish.
+   * The saved default pair also appears in older settings that never selected an
+   * author. Like blank fields, it defers to Git in the mirror's directory; only a
+   * machine without a configured identity uses the channel's placeholder. Any
+   * other pair keeps its explicit fields, even when one matches a default value.
    */
-  private async commitIdentity(settings: MnemonSyncSettings, signal?: AbortSignal): Promise<string[]> {
-    const name = settings.authorName !== '' ? settings.authorName : await this.configured('user.name', signal) ?? MNEMON_SYNC_DEFAULT_AUTHOR_NAME
-    const email = settings.authorEmail !== '' ? settings.authorEmail : await this.configured('user.email', signal) ?? MNEMON_SYNC_DEFAULT_AUTHOR_EMAIL
-    return ['-c', 'user.name=' + name, '-c', 'user.email=' + email]
+  private async commitIdentity(settings: MnemonSyncSettings, signal?: AbortSignal): Promise<{ args: string[]; env: NodeJS.ProcessEnv }> {
+    const defaults = settings.authorName === MNEMON_SYNC_DEFAULT_AUTHOR_NAME && settings.authorEmail === MNEMON_SYNC_DEFAULT_AUTHOR_EMAIL
+    const authorName = defaults ? '' : settings.authorName
+    const authorEmail = defaults ? '' : settings.authorEmail
+    const name = authorName !== '' ? authorName : await this.configured('user.name', signal) ?? MNEMON_SYNC_DEFAULT_AUTHOR_NAME
+    const email = authorEmail !== '' ? authorEmail : await this.configured('user.email', signal) ?? MNEMON_SYNC_DEFAULT_AUTHOR_EMAIL
+    // Git's author/committer environment wins over -c user.*. An explicit sync
+    // identity must win over the launching process too, for this commit alone.
+    const env: NodeJS.ProcessEnv = {}
+    if (authorName !== '') { env.GIT_AUTHOR_NAME = authorName; env.GIT_COMMITTER_NAME = authorName }
+    if (authorEmail !== '') { env.GIT_AUTHOR_EMAIL = authorEmail; env.GIT_COMMITTER_EMAIL = authorEmail }
+    return { args: ['-c', 'user.name=' + name, '-c', 'user.email=' + email], env }
   }
 
   /** One Git setting as this machine resolves it, or nothing when no config sets it. */
@@ -1445,9 +1455,12 @@ export class MnemonGitSync {
     const output = this.mask(result.stdout + '\n' + result.stderr, credential)
     const reason = this.mask(tail(result.stderr || result.stdout), credential) || 'git push failed'
     const failure = rejectedPush(output) ? 'push-rejected' : REMOTE_FAILURE[remoteIssueOf(output)]
+    const remoteRejected = /\[remote rejected\]/iu.test(output)
     return {
       pushed: false,
-      reason: credential.token === undefined && failure !== 'push-rejected' ? 'the commit stays local because no token is available: ' + reason : reason,
+      reason: remoteRejected
+        ? 'the remote rejected this push; check its policy and the commit author in Sync > Advanced, then sync again: ' + reason
+        : credential.token === undefined && failure !== 'push-rejected' ? 'the commit stays local because no token is available: ' + reason : reason,
       ...(failure === undefined ? {} : { failure }),
     }
   }
@@ -1585,7 +1598,7 @@ export class MnemonGitSync {
     try {
       const result = await this.run(GIT_LABEL, prepared.args, {
         timeoutMs: options.timeoutMs ?? MNEMON_SYNC_GIT_TIMEOUT_MS,
-        env: gitEnvironment(),
+        env: gitEnvironment({ ...process.env, ...options.env }),
         ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
         ...(options.signal === undefined ? {} : { signal: options.signal }),
         ...(options.maxOutputBytes === undefined ? {} : { maxOutputBytes: options.maxOutputBytes }),

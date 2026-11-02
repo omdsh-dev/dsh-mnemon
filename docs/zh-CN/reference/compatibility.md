@@ -20,6 +20,8 @@ Source 工具激活使用受支持的 0.2.0/0.2.1 Host 已发布的 `tools.regis
 
 <a id="首次安装时的宿主行为"></a>
 
+Git 同步保留原有设置与载荷格式。保存的默认提交者组合现在优先使用镜像中的 Git 身份，缺失时才使用占位值；其他自定义组合仍然优先。重试作者被拒绝的同步时，只从当前记忆重建镜像中未发布的提交，已发布历史保持不变。回滚到 0.5.38 或更早版本时，选择**本机 Git**（作者字段留空）或**自定义**以保留真实身份；这些版本会按默认组合的字面值提交。见 [Git 仓库同步](../guides/operations.md#git-仓库同步)。
+
 第一次安装？DSH 如何选择安装源、安装结果卡片为什么显示软件包的英文简介，见[安装与启动](../guides/installation.md#3-安装并启用-dsh-mnemon)；发布不足 24 小时的版本为什么会装成较早的版本，见[常见问题](../guides/installation.md#常见问题)。
 
 <a id="更早的-dsh"></a>
@@ -123,6 +125,23 @@ Mnemon 消息使用 Session V3、V4 均接受的生产者专属来源 `dsh-mnemo
 若 Mnemon 启动时原 `settings.yaml` 仍存在，由 DSH 执行导入；完成后再重启一次该 profile，恢复 Mnemon 专属偏好。DSH 未公开导入完成信号，因此 Mnemon 等待新宿主进程，避免并发写入。只读或归属不明确的根条目不会被修改；相关旧设置节损坏时，不做部分导入，也不标记完成。请保留备份，参考启动诊断后再修复；不会猜测自定义根 ID 或其他 profile 的 hash。
 
 回滚到这样的旧宿主时，保留 profile patch 和旧设置备份，并重新安装支持该宿主的 dsh-mnemon 版本（见[更早的 DSH](#更早的-dsh)）。此后修改的设置不会自动反向导出到旧设置文件，需要恢复对应备份或在旧宿主重新设置；Runtime、档案、记忆空间与 Provider 数据不受影响。参见 [DSH 0.1.7 设置验证](../../pr-assets/issue-267-settings-migration/README.zh-CN.md)。
+
+<a id="ptc-idle-review-history-recovery"></a>
+
+## PTC 空闲审查历史恢复
+
+v0.5.38 的自动审查可能在 `turn/end` 之后执行 PTC 可用性探测。DSH v4 读取器随后会以 `tool/ptc-dispatch-start is outside an open turn` 拒绝整个会话。修复将检查及其收尾放在可等待的回合停止钩子内；升级可防止新增问题，但不会改写已经损坏的历史。
+
+对于受影响的**未继承历史的 v4 根会话**，包内恢复 CLI 可以生成单独副本。先停止 DSH，备份整个会话目录，并在已存在的备份目录中选择新输出路径：
+
+```bash
+dsh-mnemon-repair-session --input /backup/session.v4.jsonl.zstd
+dsh-mnemon-repair-session --input /backup/session.v4.jsonl.zstd --output /recovered/session.v4.jsonl.zstd
+```
+
+第一条命令仅预览。生成副本时只识别回合外成对出现、保留原始 UUID 关联且结果参数为空的 `mnemon_subagent_result` 探测，并将完整审计数据保留为可忽略的 Mnemon 恢复记录。所有事件位置、时间戳、对话消息和无关原始行均保留，不截断历史，也不修改记忆存储。支持普通 JSONL 和带校验和的 Zstandard；从不覆盖输入或已有输出。继承/子会话、孤立探测、写工具调用、非空结果、歧义字段及被其他事件引用的探测记录都会被拒绝。
+
+`migrationValidated: false` 表示 CLI 不为会话的其余部分提供有效性保证。请先用同一 DSH 版本在隔离会话存储中加载恢复副本，验证后在 DSH 停止时替换这一代文件，并离线保留原件。若 DSH 仍拒绝读取或 CLI 提示形状不受支持，保留原件请求诊断，不要删除记录。[合成复现与验证记录](../../pr-assets/issue-541-idle-probe-history/README.zh-CN.md)覆盖正式读取器、消息保持和恢复拒绝场景。
 
 ## 旧版 DSH 宿主
 
