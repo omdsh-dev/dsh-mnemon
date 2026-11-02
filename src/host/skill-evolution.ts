@@ -1,9 +1,11 @@
+import { accessSync, constants, statSync } from 'node:fs'
+import { dirname } from 'node:path'
 import type {
-  BacktestRun, EvalCase, EvidencePack, ReviewLogEntry, ReviewRecordInput, ReviewRecordResult, RunTarget, SkillCatalog, SkillDocument, SkillDraft, SkillRootKind, SkillSuggestion, Trajectory,
+  BacktestRun, DraftView, EvalCase, EvidencePack, ReviewLogEntry, ReviewRecordInput, ReviewRecordResult, RunTarget, SkillCatalog, SkillDocument, SkillDraft, SkillRootKind, SkillSuggestion, Trajectory,
   ModelRoute,
 } from 'dsh-mnemon-source-skills/contracts'
 import type { HostAgent, HostPreStepDecision, HostSessionEvent } from './dsh.ts'
-import type { ResolvedSkillsConfig, SkillActivitySnapshot, TurnSkillReview } from './protocol.ts'
+import type { ResolvedSkillsConfig, SkillActivitySnapshot, StorageScopeKind, TurnSkillReview } from './protocol.ts'
 import {
   gradeCase, parseCases, parseExecution, parseSkillDraft, parseSkillReview, SKILL_CASES_PERSONA, SKILL_CASES_SCHEMA, SKILL_DRAFT_PERSONA, SKILL_DRAFT_SCHEMA,
   SKILL_EXECUTOR_PERSONA, SKILL_EXECUTOR_SCHEMA, SKILL_JUDGE_PERSONA, SKILL_JUDGE_SCHEMA, SKILL_REVIEW_PERSONA, SKILL_REVIEW_SCHEMA,
@@ -13,6 +15,8 @@ import { captureTurn, redact, sessionTitle, TrajectoryWindow, turnSkillUses } fr
 
 /** The Skills Source's management protocol, as the Host calls it. */
 export interface SkillsSourcePort {
+  /** The Source session's effective storage scope, including pinned workspace graphs. */
+  readonly scope?: { readonly storage: StorageScopeKind }
   read<T>(operation: string, input?: unknown, signal?: AbortSignal): Promise<T>
   mutate<T>(operation: string, input: unknown, signal?: AbortSignal): Promise<T>
 }
@@ -41,8 +45,6 @@ interface SessionState {
   failures: number
 }
 
-/** A new skill goes to the user's own DSH skills unless the page chose another root. */
-const DEFAULT_TARGET_ROOT: SkillRootKind = 'user-dsh'
 /** A conversation's turn bars read at most this many of its reviews. */
 const ACTIVITY_REVIEWS = 50
 const WAITING_STATUSES: ReadonlySet<string> = new Set(['pending', 'drafting', 'review'])
@@ -64,6 +66,7 @@ interface PreStepPayload { step: number; signal: AbortSignal }
  */
 export function retryingSource(source: SkillsSourcePort, attempts = 4): SkillsSourcePort {
   return {
+    ...(source.scope === undefined ? {} : { scope: source.scope }),
     read: (operation, input, signal) => source.read(operation, input, signal),
     mutate: async <T>(operation: string, input: unknown, signal?: AbortSignal): Promise<T> => {
       for (let attempt = 1; ; attempt++) {
@@ -77,6 +80,39 @@ export function retryingSource(source: SkillsSourcePort, attempts = 4): SkillsSo
 
 function message(error: unknown): string {
   return redact(error instanceof Error ? error.message : String(error))
+}
+
+/** Resolve only roots supplied by this Source's scoped catalog, never the task's cwd. */
+function newSkillRoot(settings: ResolvedSkillsConfig, source: SkillsSourcePort, catalog: SkillCatalog, explicit?: SkillRootKind): SkillRootKind {
+  let root = explicit
+  if (root === undefined) {
+    if (settings.targetScope === 'storage' && source.scope === undefined) throw new Error('The skill destination needs a known storage scope; select User or Project in Skills settings.')
+    const project = settings.targetScope === 'project' || (settings.targetScope === 'storage' && (source.scope?.storage === 'workspace' || source.scope?.storage === 'workspaces'))
+    root = project ? 'project-dsh' : 'user-dsh'
+  }
+  const directory = catalog.roots.find(candidate => candidate.kind === root)?.path
+  if (directory === undefined || (root.startsWith('project-') && catalog.projectRoot === undefined)) throw new Error('Project skill roots need a selected workspace; select a workspace or choose User in Skills settings.')
+  if (root.startsWith('project-')) {
+    try {
+      if (!statSync(catalog.projectRoot!).isDirectory()) throw new Error('not a directory')
+    } catch { throw new Error('The selected workspace project is unavailable; select an existing workspace or choose User in Skills settings.') }
+  }
+  // The root may not exist until adoption. Check its nearest existing parent
+  // without creating directories; adoption still reports any later I/O failure.
+  let parent = directory
+  try {
+    for (;;) {
+      try {
+        if (!statSync(parent).isDirectory()) throw new Error('not a directory')
+        accessSync(parent, constants.W_OK | constants.X_OK)
+        break
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || dirname(parent) === parent) throw error
+        parent = dirname(parent)
+      }
+    }
+  } catch { throw new Error(`Cannot create a skill in ${root}: its directory is not writable. Choose another destination or fix its permissions.`) }
+  return root
 }
 
 /**
@@ -276,9 +312,13 @@ export class SkillEvolution {
         ...allowedTypes(),
         minConfidence: current.minConfidence, expiryDays: current.expiryDays, maxPendingPerSession: current.maxPendingPerSession,
       }
+      const targetRoot = policy.allowCreate && parsed.suggestions.some(suggestion => suggestion.action === 'create' && !active.some(skill => skill.name === suggestion.skillName))
+        ? newSkillRoot(current, source, catalog) : undefined
       const result = await source.mutate<ReviewRecordResult>('review-record', {
         review: { ...base, durationMs: this.now().getTime() - started.getTime(), outcome: parsed.suggestions.length > 0 ? 'suggested' : 'nothing', summary: parsed.summary },
-        trajectory, annotations: parsed.annotations, suggestions: parsed.suggestions, cases: parsed.cases, policy,
+        trajectory, annotations: parsed.annotations,
+        suggestions: parsed.suggestions.map(suggestion => suggestion.action === 'create' && targetRoot !== undefined ? { ...suggestion, targetRoot } : suggestion),
+        cases: parsed.cases, policy,
       } satisfies ReviewRecordInput)
       state.failures = 0
       state.lastReviewAt = this.now().getTime()
@@ -318,10 +358,21 @@ export class SkillEvolution {
    */
   async draft(port: SkillsSourcePort, workspace: string | undefined, input: { suggestionId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; route?: ModelRoute }): Promise<{ started: true; suggestionId?: string }> {
     const source = retryingSource(port)
+    const pack = await source.read<EvidencePack>('evidence-pack', { ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }), ...(input.skill === undefined ? {} : { skill: input.skill }) })
+    // The evidence window contains only three recent drafts across this skill.
+    // Resolve this flow's own prior draft independently of that bounded context.
+    const previous = pack.suggestion?.draftId === undefined
+      ? (await source.read<SkillDraft[]>('drafts', { skill: pack.skillName, ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }) })).find(draft => draft.suggestionId === input.suggestionId)
+      : (await source.read<DraftView>('draft', { id: pack.suggestion.draftId })).draft
+    // An improvement always keeps the file the Source loaded. For a creation,
+    // freeze one choice before model work and use it for both prompt and record.
+    const targetRoot = pack.action === 'update' ? pack.skill!.root
+      : newSkillRoot(this.host.settings(), source, await source.read<SkillCatalog>('catalog'), input.targetRoot ?? previous?.targetRoot ?? pack.suggestion?.targetRoot)
+    const guidance = [...(previous?.guidance ?? []), ...(input.guidance?.trim() ? [input.guidance.trim()] : [])].slice(-8)
     if (input.suggestionId !== undefined) await source.mutate('suggestion-status', { id: input.suggestionId, status: 'drafting' })
     this.background('skill draft', async signal => {
       try {
-        await this.writeDraft(source, workspace, input, signal)
+        await this.writeDraft(source, workspace, input, { pack, targetRoot, guidance }, signal)
       } catch (error) {
         if (input.suggestionId !== undefined) await source.mutate('suggestion-status', { id: input.suggestionId, status: 'pending', error: message(error) }).catch(() => undefined)
         throw error
@@ -330,12 +381,9 @@ export class SkillEvolution {
     return { started: true, ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }) }
   }
 
-  private async writeDraft(source: SkillsSourcePort, workspace: string | undefined, input: { suggestionId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; route?: ModelRoute }, signal: AbortSignal): Promise<SkillDraft> {
-    const pack = await source.read<EvidencePack>('evidence-pack', { ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }), ...(input.skill === undefined ? {} : { skill: input.skill }) }, signal)
+  private async writeDraft(source: SkillsSourcePort, workspace: string | undefined, input: { suggestionId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; route?: ModelRoute }, prepared: { pack: EvidencePack; targetRoot: SkillRootKind; guidance: string[] }, signal: AbortSignal): Promise<SkillDraft> {
     const settings = this.host.settings()
-    const previous = pack.drafts.find(draft => input.suggestionId === undefined ? draft.suggestionId === undefined : draft.suggestionId === input.suggestionId)
-    const guidance = [...(previous?.guidance ?? []), ...(input.guidance?.trim() ? [input.guidance.trim()] : [])].slice(-8)
-    const targetRoot = input.targetRoot ?? DEFAULT_TARGET_ROOT
+    const { pack, targetRoot, guidance } = prepared
     let prompt = skillDraftPrompt(pack, guidance, targetRoot)
     let draft: SkillDraft | undefined
     for (let attempt = 0; draft === undefined; attempt++) {

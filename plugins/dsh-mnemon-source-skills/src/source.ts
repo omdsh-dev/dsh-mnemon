@@ -190,6 +190,7 @@ function reviewRecord(value: MemoryJsonValue): ReviewRecordInput {
       const suggestion = record(item, 'suggestion')
       return {
         skillName: text(suggestion.skillName, 'skillName', 120)!, action: suggestion.action === 'update' ? 'update' : 'create',
+        ...(rootKind(suggestion.targetRoot) === undefined ? {} : { targetRoot: rootKind(suggestion.targetRoot)! }),
         summary: text(suggestion.summary, 'summary', 2_000)!,
         ...(optionalText(suggestion.rationale, 'rationale', 4_000) === undefined ? {} : { rationale: optionalText(suggestion.rationale, 'rationale', 4_000)! }),
         confidence: Number(suggestion.confidence),

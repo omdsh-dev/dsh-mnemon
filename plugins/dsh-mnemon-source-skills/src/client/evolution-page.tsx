@@ -195,6 +195,7 @@ function SuggestionDetail(props: { context: SkillsPageContext; id: string; model
     ...(suggestion.sourceSessionTitle === undefined ? [] : [t('evolution.from', { session: suggestion.sourceSessionTitle })]),
     relative(t, suggestion.createdAt),
     t('evolution.confidence', { value: Math.round(suggestion.confidence * 100) }),
+    ...(suggestion.action === 'create' && suggestion.targetRoot !== undefined ? [t('evolution.targetRoot', { root: t(`root.${suggestion.targetRoot}`) })] : []),
   ]
   return <article className={css.skDetail}>
     <header className={css.skDetailHead}>
