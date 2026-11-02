@@ -1,0 +1,96 @@
+{
+  "checkedAt": "2026-11-02T15:10:42.061598+00:00",
+  "candidateRevision": "9dd950228e34fb08467d0ec1f3ae591f04ee3c79",
+  "mainRevision": "75d9ab175250376b2bdbd12316da55c90cf8486b",
+  "previousReleaseRevision": "a4ad2d6955172b936ff9328f39cc5873c3ec9c55",
+  "fullVerify": {
+    "command": "pnpm run verify",
+    "exitCode": 0,
+    "node": "22.22.0",
+    "dsh": "0.2.1-rc.5",
+    "rootPassed": 2463,
+    "rootSkipped": 7,
+    "componentPassed": 749,
+    "componentSkipped": 3,
+    "checks": [
+      "bilingual documentation links",
+      "types",
+      "deterministic double build",
+      "workspace builds and tests",
+      "real Headless installation and restart",
+      "package contents and public imports",
+      "publint",
+      "attw"
+    ]
+  },
+  "installedRc2": {
+    "node": "22.22.0",
+    "dsh": "0.2.1-rc.2",
+    "passed": 2463,
+    "skipped": 7,
+    "exitCode": 0,
+    "resolution": "Canonical physical package path; NODE_PATH removed from test process",
+    "initialAttempt": "A noncanonical pnpm symlink resolved one Team dependency through the current development cohort; the strict coherence assertion rejected the fixture. The canonical rerun requires every cohort version to match. No product change or assertion relaxation."
+  },
+  "independentPlugins": {
+    "command": "pnpm run verify:plugins --skip-build --keep",
+    "exitCode": 0,
+    "repositories": 18,
+    "artifacts": 19,
+    "note": "Independent development-artifact verification is separate from selected release package acceptance."
+  },
+  "actualPackedWeb": {
+    "hosts": [
+      "0.2.1-rc.5",
+      "0.2.2-alpha.2"
+    ],
+    "node": "24.22.2",
+    "composition": "Two selected release tarballs plus unchanged packages from real npm",
+    "presetsPerHost": [
+      "standard",
+      "ptc"
+    ],
+    "completedTurns": 4,
+    "externalModelCalls": 0,
+    "receipts": [
+      "packed-web-rc5.json",
+      "packed-web-alpha2.json"
+    ]
+  },
+  "releaseIntent": {
+    "baseRevision": "75d9ab175250376b2bdbd12316da55c90cf8486b",
+    "candidateRevision": "9dd950228e34fb08467d0ec1f3ae591f04ee3c79",
+    "exitCode": 0,
+    "selected": [
+      "dsh-mnemon@0.5.39",
+      "dsh-mnemon-source-skills@0.5.6"
+    ]
+  },
+  "starterSize": {
+    "files": 68,
+    "packedBytes": 531612,
+    "unpackedBytes": 2233414,
+    "previousCeilingBytes": 2500000,
+    "newCeilingBytes": 3000000,
+    "reason": "Measured size approximately89percent of prior ceiling; release guide requires renewed headroom."
+  },
+  "independentReview": {
+    "candidateRevision": "9dd950228e34fb08467d0ec1f3ae591f04ee3c79",
+    "noBlockingFindings": true,
+    "verified": [
+      "all six original PR heads preserved in ancestry",
+      "exact18component pins",
+      "exactly two selected version bumps",
+      "tarball SHA512 and bytes",
+      "embedded frozen package manifests",
+      "recovery CLI mode0755",
+      "release notes and scope"
+    ]
+  },
+  "limits": [
+    "No live model or third-party Provider account used",
+    "The issue reporter exact Windows/plugin setup was not reproduced",
+    "Old corrupted histories are not automatically repaired",
+    "Future DSH alpha versions and untested Node versions/platforms are not established"
+  ]
+}
