@@ -54,8 +54,8 @@ const relativeReadmeImages = readmeFiles.flatMap((path) => {
 // This ceiling only catches an accident, such as a dependency bundled into
 // lib/client.js. Pull requests leave it alone; a release raises it once the
 // measured package comes within about 10% of it. The release branch measured
-// 1,851,881 bytes at v0.5.26.
-const maximumUnpackedBytes = 2_500_000
+// 2,233,414 bytes at v0.5.39 (about 89% of the previous 2.5 MB ceiling).
+const maximumUnpackedBytes = 3_000_000
 
 if (missing.length > 0 || unexpected.length > 0 || hostLeaks.length > 0 || relativeReadmeImages.length > 0 || pack.unpackedSize > maximumUnpackedBytes) {
   if (missing.length > 0) console.error(`Missing package files:\n${missing.map(path => `- ${path}`).join('\n')}`)

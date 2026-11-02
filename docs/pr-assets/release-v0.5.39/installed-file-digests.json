@@ -1,0 +1,497 @@
+{
+  "candidateRevision": "9dd950228e34fb08467d0ec1f3ae591f04ee3c79",
+  "installedOnAllTenScenarios": true,
+  "byteContentAndExecutableBitsMatch": true,
+  "files": [
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "LICENSE",
+      "sha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "presentation/page.module.css",
+      "sha256": "3792db202233fb57c292c2b96c8faa157a088c9e2b891a0d525bcdc94b7f45c8"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "lib/client.js",
+      "sha256": "26b867734956fc3929baeb3611206d431f862c07e456dbdfe33d56365f30e793"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "lib/contracts.js",
+      "sha256": "9b85fdd38eea3e19e29b332822732db379d4990cf061f1f7dcf591aafcbb2af3"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "lib/index.js",
+      "sha256": "0f2a8b5ea64aef5b85b258589fe49d8f88a9d06ccc41236269c26058a658f50c"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "locale/en.json",
+      "sha256": "0b5276b77a752fb47c67765847e261a6a7041a885213f760c4ad3670d694baed"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "presentation/locales.json",
+      "sha256": "b30e7ef71b5c178174aba7632ae64442abd989fb038520b3a1be7fc074be35e1"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "market/official.json",
+      "sha256": "6d011e5817727fb545dd385df8bb7316bff59d803f05c956bf64138956d90acc"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "package.json",
+      "sha256": "fbba4a16fd6dda7caaf83e3dc71ad0b3d85e1e1fc64addacaf699fbb413669ab"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "locale/zh.json",
+      "sha256": "9dce17a7602534ea20b6027988f3b18cc3bce7f6b6bffe4f64b635291ffedf28"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "README.md",
+      "sha256": "b318027075420db6f97a9149f3938118bdff5d05fccd1a0861d9b82ba041684d"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "lib/types/client/api.d.ts",
+      "sha256": "e21407187655e1e62bcb3ce0776bb0e81fc2c95a00382f5a51e033fa0a2fe4c1"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "lib/types/client.d.ts",
+      "sha256": "99720ccb1ef2991d3d08923a54b3b64a165692fe94acadff7b9e5cee2963bc3f"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "lib/contracts.d.ts",
+      "sha256": "75dabb87607a665d76c885db1d823e3ed9e4667591d1f85466460f3ae390cb65"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "lib/types/contracts.d.ts",
+      "sha256": "b30893f3034903ddb66f560339939a4a06d35ab12de636acf4ff7531fd507531"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "lib/types/client/evals-page.d.ts",
+      "sha256": "69c36a11a11d4f6b91554ea1b3e6218428bb8c0e3bb0a2568c1467987ff6ab8b"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "lib/types/client/evidence-page.d.ts",
+      "sha256": "c3a0c84f77f1b8464158b3bbdbff33abdb7b79777f7083a184598ea42b7f5791"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "lib/types/client/evolution-page.d.ts",
+      "sha256": "974b260d4696e68368f0ca91313c17d96057e5cdc4dd6e1c6ca65ffd0789dce4"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "lib/types/fence.d.ts",
+      "sha256": "2522959dfc2203f5cb4219029f78321f6cf036bc8f2e972a07d01a6ef6d9104f"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "lib/index.d.ts",
+      "sha256": "61413bc1929df4ba1f2c561c0fc7207ee7b2b38f1ebbc3f7fa403c1c088d0d00"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "lib/types/client/market-page.d.ts",
+      "sha256": "fa00338ddd8a6f8bc2347628078b11008209ce363f600042cf1fcbee33c69053"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "lib/types/client/model-choice.d.ts",
+      "sha256": "5bd926d57442c01ecbf222bdf4cec6358f932e5cc8ef4d8dc9fa2dd81c38215b"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "lib/types/client/presentation.d.ts",
+      "sha256": "d7d80eccdf90c7ec939b67802c559d00614ed9285e6a756212a473cfe556c1c1"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "lib/types/client/shared.d.ts",
+      "sha256": "34ba2da4c08ce51bee17ea09a3cf992c8fe06446c54f0f017026ae8639927881"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "lib/types/client/skill-tests.d.ts",
+      "sha256": "d9de27a957b8e9dc9493878620cf39d2e9dbaec7a52daf7ed92ab292f8b2c8ab"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "lib/types/client/skills-page.d.ts",
+      "sha256": "157a6d855ec4b0bb5b43c6777c969e7972ea699b8e89f572e36f445b83f56c15"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "lib/types/source-kind.d.ts",
+      "sha256": "609250d77c7950a206b00be65de4b33b62dec50ffaff6f13d0fa411d970d2eeb"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "lib/types/client/trash-page.d.ts",
+      "sha256": "ef3f280cab983adb716c2602d50debda1bfb9dd531b5c4842afd4849fc9bac80"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "lib/types/client/ui.d.ts",
+      "sha256": "0c211a77d3376aeb4a381d82d76ed50945b70bc5b8a32f0306dbfbfdf03ce6c4"
+    },
+    {
+      "package": "dsh-mnemon-source-skills",
+      "path": "lib/types/client/use-skill.d.ts",
+      "sha256": "2078894ccb534939aa8cc58567421c451cda72a2ab44f31eba90d9e26d37bcfe"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "LICENSE",
+      "sha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/bundle.js",
+      "sha256": "f09c16465f758e471132f5d94a637bf28466abb15021885cb688b5031637c51a"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/client.js",
+      "sha256": "1ea2821715b8ef3592c0f79941fcee7c50e96173c8aba36606b85245b35b4207"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/contracts.js",
+      "sha256": "024ad7318227336ef8816b48457b63593bc56e20bb74c6ffd59244425d23a779"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/core.js",
+      "sha256": "299ae21193b1dbab2e8c677dd6813a56c7adeddcda7edfd70f8adcca26115dc2"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/definitions-DU7MLBhu.js",
+      "sha256": "510cd51f4b1dfe1ffbd47ba8fb1cbbdbf87002531014c3dc462dec1a8ebcbcb2"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/extension-sdk.js",
+      "sha256": "b70c0c276f4fb8926c88dc84e2374f4ca98f0cbe5b289624a33c976dca286a11"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/index.js",
+      "sha256": "57d7a54b3450215263b81f1646929795e24e72630c60bf1209bc70356c8bb23d"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/runtime-0u6dOiF9.js",
+      "sha256": "8767c6d73b963bf0ca98a1770e557dd9020754cf577e35ec7ba524bab5804452"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/starter-resolution-C3yJawlA.js",
+      "sha256": "d0e6aab9b45fdc57eda56181076b4da515648461d58af9679164312cddee9336"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/starter.js",
+      "sha256": "3776a897c37d92a74cb84f30206ad4512ff38acea933d8642f53dd8f7c8e6cdc"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/strategy-configuration-CKP2kRss.js",
+      "sha256": "a06fab7d856de5689df29d29be768e1730f14eee1d6736c346240e8b27680d21"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/testing.js",
+      "sha256": "6c4fb72305e6ed66ecc95eaf701f013c39e3bbd8bb3561be0b363ea787feb87d"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "locale/en.json",
+      "sha256": "53b4411680fd544bed77843c3356a8e115801fbc0e4f10f28226c821835b5f1d"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "package.json",
+      "sha256": "e8e4c0f57926eb367aaed99a764ef117a265dd10b16587fa10021565a67faf09"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "locale/zh.json",
+      "sha256": "f1f60f2c2b7ac12b52b9fb91b6ecc564798536611879ce4c3329a4f9e4bafd85"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "README.md",
+      "sha256": "63b1991a3bf817d042fd56f3eddceaf7f4dce4b1897b434ad9ca6c108a9aed62"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "README.zh-CN.md",
+      "sha256": "37085bd30a43b88f605c2d7dbc52a4dfc788446a4fc926b4d6194ef06a60427e"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "SECURITY.md",
+      "sha256": "700562eaa915d083050a30b6f58292c8ce5c06dd83fde6cd7cfadef228dd3fb1"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "THIRD_PARTY_NOTICES.md",
+      "sha256": "32ebd32c67f4316e33e4214a0504ebe6dabeb1fef00106de05e457a97cb80926"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "bin/repair-legacy-session.mjs",
+      "sha256": "2465c57aead1426a520db45e231278a0fb7d5afecb01f4c4c114b1b3814cf4eb"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/bundle.d.ts",
+      "sha256": "602028377ee0735110c68e0807aeea407a05b021b5c87ec66af3e4b4d83e9033"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/client/component-ui.d.ts",
+      "sha256": "b8b2137b5e9eab1bbcaed491ab2edbcb23e71e1d18eadf1068cb10f4efdfb800"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/host/config-values.d.ts",
+      "sha256": "d6d51c8288cf72085bd7b3194e79ffe3e2ed9675604efb3706dfd74b24169a98"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/host/config.d.ts",
+      "sha256": "e89b437600120c86b8dcd6720c7b99a26561f5512125dc2a2ca6f6454ebc39f4"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/core/definitions.d.ts",
+      "sha256": "c1426396948e63015b25a8e5aaccdf65c43ddf33055de833ae90a33cb76a2fec"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/host/display-mode.d.ts",
+      "sha256": "9cfd641ad2162703dea794b613f98a6a42b3007c8aeb4e0f6b65b82ad5a4d678"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/client/extension-sdk.d.ts",
+      "sha256": "ac6e9034bbcfad7dfd877c6b9298bce500ad75d5e095568eca29f5bf29a56473"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/client/feedback.d.ts",
+      "sha256": "e532a8e2e0d60d0da5d8e63238e6eca88da3244d2560a749a3380e662b543792"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/client/GlobalLocationSetting.d.ts",
+      "sha256": "3cf62d774fa8406057c3406682a8a87a61ab62232f87b85163e20351c2e4d131"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/client/index.d.ts",
+      "sha256": "d43c82958f8bb83ef5cff5524813d65e3e0b25b688914b04283d238ce8e13f6f"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/core/contracts/index.d.ts",
+      "sha256": "861b85070c37483c4c578fd2f37ddb616cb70522eb409fbeb391ee2850058b4e"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/index.d.ts",
+      "sha256": "a30ee3bce8e37249b8461b925cc0e626942d4a0cf6233c13a3f0d010f6d5ad47"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/sdk/index.d.ts",
+      "sha256": "b46d181e8677f404f0dceade0573bc7d349834d7076fed3d2243876b7e6b8237"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/sdk/input.d.ts",
+      "sha256": "3264d99270796e102939d3d412f4c38c220e8c4f79ac6d001bf5fb374248d246"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/sdk/install.d.ts",
+      "sha256": "2b3e0903128d4b79861233772966fce157bd18bd8234beadcbdef4bcfc7ca93e"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/host/live-config.d.ts",
+      "sha256": "e58b26ffaa6b08d5bd10e3678554f99d38880a8bc3e1b7c21c42040cc46f496f"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/client/locales.d.ts",
+      "sha256": "a3f063f1ba7e865de9c264ea1a9b723c0a0cf73933e94eee6ce5b317a58230ed"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/host/memory-tools.d.ts",
+      "sha256": "57f4e231607ef98e5cc6311758a55af25a5608007c9ac2c839c154390ee5b162"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/client/MnemonDialog.d.ts",
+      "sha256": "cf9de6f80a98d6e527860d7077ce5cc5098b2beda55aecf25790403974bd1c34"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/client/MnemonLogo.d.ts",
+      "sha256": "c1532a4f925703354772392d59b767cba82db7cfa0ede0ed2c0c4ad7f952a405"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/client/page-client.d.ts",
+      "sha256": "263491e8acfd741b24da984325ad144f529121a660cc45768a427b64a5298945"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/client/page-controls.d.ts",
+      "sha256": "819a7ada7ad3cf04dc10786b2c91bd1ab2593af9925b24ceaf8b9f267c89d423"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/client/page-kit.d.ts",
+      "sha256": "ce40c66a2409f540adea88e82183bd17cbcbd20d7e0a3796d150283f34082b12"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/core/contracts/plugin.d.ts",
+      "sha256": "430b6c765482d75525a62c8515118e2926eb218704a1ebee73743d347f63e406"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/core/plugin.d.ts",
+      "sha256": "73a8b54a714b0f680507a4c935a3fc9b17918e106bf901883d1226d69729d6a2"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/host/plugin.d.ts",
+      "sha256": "348d0015c748f9678607d3e033d940fab89eae9dfd6aa453f7e5eec1ed5f4a3c"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/host/protocol.d.ts",
+      "sha256": "e5259faac94b9a36d20aad5774343237a10f9d1032727b9eab71ef87cb56def3"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/sdk/service.d.ts",
+      "sha256": "7ef3753a9dc3537e852c483bd00055de83c207d7cd2e327d05a9517787cac15d"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/client/settings-controls.d.ts",
+      "sha256": "6de7ad44140d60914cf7bf7e4183d91d77e5d9710ee40dd6c0b83f8f3ad6c872"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/client/settings-panel.d.ts",
+      "sha256": "3d3ee92739b1c245996f84ff186170c505999a5d286c7e85f8b4e1ecc2eaae85"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/client/source-contracts.d.ts",
+      "sha256": "253309b6697bfb45e6560bcebb4c873c7b4980916350f35bdd40fde303b916a0"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/client/source-pages.d.ts",
+      "sha256": "9093041163fccc7afddb86f30d6434a14e29f030e887e24ee400023f97969430"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/host/starter-components.d.ts",
+      "sha256": "72df6416c208396e53788880b3fd7cbed249320584d207c8928dc949c9320458"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/starter.d.ts",
+      "sha256": "e2f3f8e56d03afd711f883db3784a47930c59b2985a9ce4918bce1f06c4e3a51"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/sdk/storage-lock.d.ts",
+      "sha256": "9072c9369822413d48c46c929530e950cdc07cc03a05342e05a0730cea4e44f9"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/sdk/strategy-configuration.d.ts",
+      "sha256": "e87fea784b5b29bfcffaabe448fec056eaa3a0a64baf315b3a9f0a647d83308a"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/host/sync-rules.d.ts",
+      "sha256": "d80282ed5b12128678dc93215260b07e79932d95c68825d6279fb12d60ed7a8b"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/core/contracts/task-agent-model.d.ts",
+      "sha256": "0532a52be00c9fd7e941d29041c4d5dd96e4d42cac30f387088a18a3a14f0c41"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/sdk/testing.d.ts",
+      "sha256": "a157befcd6231af9e0915f26243f8c86178ddc99114c5d135ee04c85dc0f3279"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/client/ui-icons.d.ts",
+      "sha256": "65262c80dee9a62195eda0e79166449bff062bc1ee48595e54d50ab3955535e9"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/client/use-request-version.d.ts",
+      "sha256": "65bb1a8eddc167bdd3c730024b589792e2fe0535a6f770b81585ff85653cd78e"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/sdk/view-extensions.d.ts",
+      "sha256": "59e9242a069ade7b301aea496573162f3543cf36385cd3345ad93a35ab747ed8"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/host/view-protocol.d.ts",
+      "sha256": "e5a76a65a89454cf08c915a904e4e024af3937cae3a65a6f6d3419ffacfd7d71"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/client/view-styles.d.ts",
+      "sha256": "cebd26c73d5ba1bf720d201402380e3c47767141436d6d06b09db29566298637"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/core/contracts/view.d.ts",
+      "sha256": "9aa3685c07fdbb36651f342add4afc49f2574ca2b451b5ea53f638c734310913"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "lib/types/src/sdk/workspace-storage.d.ts",
+      "sha256": "f28d2e65efb5a9f213e242926386b4f4765ea7e344bb8b6dbe10b5a61becb469"
+    },
+    {
+      "package": "dsh-mnemon",
+      "path": "cordis.patch.yml",
+      "sha256": "889c12eec043d8a8394cfd59d1c18920d7e96905025ed053a5f11fbb6d54648a"
+    }
+  ]
+}
