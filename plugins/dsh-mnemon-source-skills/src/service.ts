@@ -705,7 +705,7 @@ export class SkillsService {
         ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }),
         skillName: input.skillName,
         action: loaded === undefined ? 'create' : 'update',
-        ...(loaded === undefined ? { targetRoot: input.targetRoot ?? DEFAULT_ROOT } : { baseKey: loaded.key, baseHash: loaded.hash }),
+        ...(loaded === undefined ? { targetRoot: input.targetRoot ?? suggestion?.targetRoot ?? DEFAULT_ROOT } : { baseKey: loaded.key, baseHash: loaded.hash }),
         content: input.content,
         notes: clip(input.notes, 2_000),
         changes: input.changes.map(change => clip(change, 300)).filter(Boolean).slice(0, 12),

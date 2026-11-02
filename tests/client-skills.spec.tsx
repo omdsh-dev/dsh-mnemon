@@ -22,6 +22,31 @@ const locale = { active: 'en' as const, locales: [], revision: 0 }
 const localeRuntime = { getSnapshot: () => locale, subscribe: () => () => {} }
 
 describe('技能管理 settings under Plugins', () => {
+  it('stages the new-skill destination until Apply and restores it on Discard', async () => {
+    const writes = vi.fn(async () => {})
+    const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: { evolution: true }, revision: 1, writable: true, mode: 'host' }, writes)
+    render(<SkillsSettings scope={scope} page={page} t={t} />)
+    const destination = screen.getByRole('button', { name: `${t('skills.targetScope')} ${t('skills.targetScope.user')}` })
+    expect(destination.textContent).toContain(t('skills.targetScope.user'))
+    fireEvent.click(destination)
+    fireEvent.click(screen.getByRole('menuitem', { name: t('skills.targetScope.project') }))
+    expect(writes).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: t('config.discard') }))
+    expect(destination.textContent).toContain(t('skills.targetScope.user'))
+    fireEvent.click(destination)
+    fireEvent.click(screen.getByRole('menuitem', { name: t('skills.targetScope.storage') }))
+    fireEvent.click(screen.getByRole('button', { name: t('options.apply') }))
+    await waitFor(() => expect(scope.getSnapshot().value?.targetScope).toBe('storage'))
+  })
+
+  it.each(['page', 'scope'] as const)('keeps the destination read-only when %s refuses writes', blocked => {
+    const writes = vi.fn(async () => {})
+    const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: { evolution: true }, revision: 1, writable: blocked !== 'scope', mode: 'host' }, writes)
+    render(<SkillsSettings scope={scope} page={{ ...page, writable: blocked !== 'page' }} t={t} />)
+    expect(screen.getByRole('button', { name: `${t('skills.targetScope')} ${t('skills.targetScope.user')}` })).toHaveProperty('disabled', true)
+    expect(writes).not.toHaveBeenCalled()
+  })
+
   it('shows self-evolution\'s own settings only while it is on, and applies each switch at once', async () => {
     const writes = vi.fn(async () => {})
     const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: {}, revision: 1, writable: true, mode: 'host' }, writes)

@@ -1,11 +1,11 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
 import * as skillsPlugin from 'dsh-mnemon-source-skills'
 import * as generalStrategy from 'dsh-mnemon-strategy-general'
-import type { BacktestRun, EvalCase, EvidencePack, SkillDraft, SkillSuggestion, Trajectory } from 'dsh-mnemon-source-skills/contracts'
+import type { BacktestRun, EvalCase, EvidencePack, SkillCatalog, SkillDraft, SkillSuggestion, Trajectory } from 'dsh-mnemon-source-skills/contracts'
 import type { HostAgent, HostAgentContext, HostSessionEvent } from '../src/host/dsh.ts'
 import { DEFAULT_SKILLS_CONFIG, type ResolvedSkillsConfig } from '../src/host/protocol.ts'
 import { SkillEvolution, type SkillsSourcePort } from '../src/host/skill-evolution.ts'
@@ -126,6 +126,7 @@ describe('skill evolution in the Host', () => {
     const scope = { storage: 'custom' as const, workspaceId: join(directory, 'workspace') }
     const base = { sourceInstanceKey: 'source:skills', scope }
     source = {
+      scope,
       read: async (operation, input = null) => (await runner.executeManagement({ ...base, mode: 'read', operation, input: input as never, confirmed: false })).value as never,
       mutate: async (operation, input) => {
         const { revision } = await runner.executeManagement({ ...base, mode: 'read', operation: 'revision', input: null, confirmed: false })
@@ -176,6 +177,104 @@ describe('skill evolution in the Host', () => {
       cases: ['incident-triage', 'release-notes'].map(skillName => ({ skillName, title: 'Workflow', prompt: 'Follow the workflow', checks: [{ text: 'Follows the workflow', must: true }], steps: [1] })),
     }
   }
+
+  it.each([
+    [undefined, 'workspaces', 'user-dsh'],
+    ['user', 'workspaces', 'user-dsh'], ['project', 'global', 'project-dsh'],
+    ['storage', 'global', 'user-dsh'], ['storage', 'custom', 'user-dsh'],
+    ['storage', 'workspace', 'project-dsh'], ['storage', 'workspaces', 'project-dsh'],
+  ] as const)('records and drafts a new skill in %s scope with %s storage', async (targetScope, storage, expectedRoot) => {
+    config = { ...config, ...(targetScope === undefined ? {} : { targetScope }), evolution: true, autoBacktest: false, idleSeconds: 3600 }
+    source = { ...source, scope: { storage } }
+    // The Source catalog, not the model task's cwd, owns the project root.
+    mkdirSync(join(directory, '.git'))
+    const content = '---\nname: incident-triage\ndescription: Capture incident logs.\n---\n\n1. Read the logs.\n'
+    const { skills } = evolution([mixedReview, (_label, prompt) => {
+      expect(prompt).toContain(`It will be written to ${expectedRoot}.`)
+      return { content, notes: '', changes: [] }
+    }])
+    const stop = skills.watch(agent)
+    await endTurn(1, 'Capture incident logs and group release notes.')
+    await skills.reviewNow(agent)
+    const suggestion = (await source.read<SkillSuggestion[]>('suggestions')).find(entry => entry.action === 'create')!
+    expect(suggestion.targetRoot).toBe(expectedRoot)
+    // A stored proposal keeps its destination when the preference later changes.
+    config = { ...config, targetScope: expectedRoot === 'user-dsh' ? 'project' : 'user' }
+    await skills.draft(source, join(directory, 'unrelated-task-cwd'), { suggestionId: suggestion.id })
+    await vi.waitFor(async () => expect(await source.read<SkillDraft[]>('drafts')).toHaveLength(1))
+    const [draft] = await source.read<SkillDraft[]>('drafts')
+    expect(draft).toMatchObject({ action: 'create', targetRoot: expectedRoot })
+    expect(existsSync(join(directory, '.dsh', 'skills', 'incident-triage'))).toBe(false)
+    await source.mutate('draft-adopt', { id: draft!.id })
+    const path = expectedRoot === 'user-dsh' ? join(directory, 'dsh', 'skills') : join(directory, '.dsh', 'skills')
+    expect(readFileSync(join(path, 'incident-triage', 'SKILL.md'), 'utf8')).toBe(content)
+    stop()
+  })
+
+  it('uses the explicit draft root and lets adoption override it for a new skill', async () => {
+    config = { ...config, targetScope: 'project', autoBacktest: false }
+    const content = '---\nname: incident-triage\ndescription: Capture incident logs.\n---\n\n1. Read the logs.\n'
+    const { skills } = evolution([(_label, prompt) => {
+      expect(prompt).toContain('It will be written to user-agents.')
+      return { content, notes: '', changes: [] }
+    }])
+    await skills.draft(source, undefined, { skill: 'incident-triage', targetRoot: 'user-agents' })
+    await vi.waitFor(async () => expect(await source.read<SkillDraft[]>('drafts')).toHaveLength(1))
+    const [draft] = await source.read<SkillDraft[]>('drafts')
+    expect(draft!.targetRoot).toBe('user-agents')
+    await source.mutate('draft-adopt', { id: draft!.id, root: 'project-agents' })
+    expect(readFileSync(join(directory, 'workspace', '.agents', 'skills', 'incident-triage', 'SKILL.md'), 'utf8')).toBe(content)
+    expect(existsSync(join(directory, 'agents', 'skills', 'incident-triage'))).toBe(false)
+  })
+
+  it('rejects an unavailable project before model work instead of falling back to user skills', async () => {
+    config = { ...config, targetScope: 'project', autoBacktest: false }
+    const read = source.read
+    const scoped: SkillsSourcePort = { ...source, read: async <T>(operation: string, input?: unknown): Promise<T> => {
+      const value = await read<T>(operation, input)
+      if (operation !== 'catalog') return value
+      const catalog = value as SkillCatalog
+      return { roots: catalog.roots.filter(root => root.kind.startsWith('user-')), skills: catalog.skills, problems: [] } as T
+    } }
+    const { skills, skillTask } = evolution([])
+    await expect(skills.draft(scoped, directory, { skill: 'incident-triage' })).rejects.toThrow(/project.*selected workspace/i)
+    expect(skillTask).not.toHaveBeenCalled()
+    expect(await source.read<SkillDraft[]>('drafts')).toEqual([])
+  })
+
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('rejects an unwritable destination before model work without changing scope', async () => {
+    config = { ...config, autoBacktest: false }
+    chmodSync(join(directory, 'dsh', 'skills'), 0o555)
+    try {
+      const { skills, skillTask } = evolution([])
+      await expect(skills.draft(source, directory, { skill: 'incident-triage' })).rejects.toThrow(/user-dsh.*not writable/i)
+      expect(skillTask).not.toHaveBeenCalled()
+      expect(await source.read<SkillDraft[]>('drafts')).toEqual([])
+    } finally { chmodSync(join(directory, 'dsh', 'skills'), 0o755) }
+  })
+
+  it('rejects a removed project rather than recreating it from an unrelated task cwd', async () => {
+    config = { ...config, targetScope: 'project', autoBacktest: false }
+    rmSync(join(directory, 'workspace'), { recursive: true })
+    const { skills, skillTask } = evolution([])
+    await expect(skills.draft(source, directory, { skill: 'incident-triage' })).rejects.toThrow(/selected workspace.*unavailable/i)
+    expect(skillTask).not.toHaveBeenCalled()
+    expect(existsSync(join(directory, 'workspace'))).toBe(false)
+  })
+
+  it('keeps improvements in their original root despite settings and explicit destination overrides', async () => {
+    config = { ...config, targetScope: 'project', autoBacktest: false }
+    const content = '---\nname: release-notes\ndescription: Group release notes.\n---\n\n1. Group by component.\n'
+    const { skills } = evolution([() => ({ content, notes: '', changes: [] })])
+    await skills.draft(source, undefined, { skill: 'release-notes', targetRoot: 'project-agents' })
+    await vi.waitFor(async () => expect(await source.read<SkillDraft[]>('drafts')).toHaveLength(1))
+    const [draft] = await source.read<SkillDraft[]>('drafts')
+    expect(draft).toMatchObject({ action: 'update', baseKey: 'user-dsh:release-notes' })
+    expect(draft!.targetRoot).toBeUndefined()
+    await source.mutate('draft-adopt', { id: draft!.id, root: 'project-agents' })
+    expect(readFileSync(join(directory, 'dsh', 'skills', 'release-notes', 'SKILL.md'), 'utf8')).toBe(content)
+    expect(existsSync(join(directory, 'workspace', '.agents', 'skills', 'release-notes'))).toBe(false)
+  })
 
   it('stays out of the way until evolution is turned on', async () => {
     const { skills, skillTask } = evolution([])

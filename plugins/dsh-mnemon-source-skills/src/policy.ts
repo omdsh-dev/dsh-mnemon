@@ -209,6 +209,7 @@ export function admitReview(context: AdmissionContext, input: ReviewRecordInput)
       id: context.id(),
       skillName: proposal.skillName,
       action: proposal.action,
+      ...(proposal.action === 'create' && proposal.targetRoot !== undefined ? { targetRoot: proposal.targetRoot } : {}),
       summary: clip(proposal.summary, 600),
       ...(proposal.rationale === undefined || proposal.rationale.trim() === '' ? {} : { rationale: clip(proposal.rationale, 2_000) }),
       confidence,

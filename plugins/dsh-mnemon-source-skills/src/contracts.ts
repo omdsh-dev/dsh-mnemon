@@ -170,6 +170,8 @@ export interface SkillSuggestion {
   id: string
   skillName: string
   action: 'create' | 'update'
+  /** For new skills, the Host-resolved destination; absent on older suggestions. */
+  targetRoot?: SkillRootKind
   summary: string
   rationale?: string
   confidence: number
@@ -407,6 +409,7 @@ export interface ReviewRecordInput {
   suggestions: Array<{
     skillName: string
     action: 'create' | 'update'
+    targetRoot?: SkillRootKind
     summary: string
     rationale?: string
     confidence: number

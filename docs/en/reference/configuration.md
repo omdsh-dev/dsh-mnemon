@@ -354,13 +354,14 @@ DSH's live catalog reports each model's input modalities, and the picker labels 
 
 ## Skills settings
 
-Skills keeps its settings under `skills` in the `mnemon` entry, edited on its own page under **Plugins → dsh-mnemon** through the `mnemon-skills` settings scope. Each key applies at once: a change reaches the running self-evolution and the client without rebuilding the memory runtime. The [Skills guide](../guides/skills.md#self-evolution) explains what each does.
+Skills keeps its settings under `skills` in the `mnemon` entry, edited on its own page under **Plugins → dsh-mnemon** through the `mnemon-skills` settings scope. Settings apply live once saved, without rebuilding the memory runtime; the destination selector and review parameters wait for **Apply** or **Discard**. The [Skills guide](../guides/skills.md#self-evolution) explains what each does.
 
 | Key | Default | Range | Meaning |
 |---|---:|---|---|
 | `skills.evolution` | `false` | boolean | **Self-evolution**: review conversations and suggest skills. Task and subagent sessions are saved locally; Mnemon does not automatically delete them. |
 | `skills.allowCreate` | `true` | boolean | **Suggest new skills**: allow reviews to propose skills that do not exist yet |
 | `skills.allowUpdate` | `true` | boolean | **Suggest skill improvements**: allow reviews to improve existing skills |
+| `skills.targetScope` | `user` | `storage` / `user` / `project` | **New skill destination**: `user` → `user-dsh`; `project` → `project-dsh`; `storage` follows `storageScope` (`global` / `custom` → user, `workspace` / `workspaces` → project). Apply or Discard on the settings page |
 | `skills.autoBacktest` | `true` | boolean | **Backtest drafts**: compare each new draft with the current version on its test cases |
 | `skills.hints` | `true` | boolean | **In the conversation**: the **Turn skills** line under each turn |
 | `skills.sidebar` | `false` | boolean | **Sidebar entry**: Skills as its own sidebar entry, out of the Memory System |
@@ -371,6 +372,10 @@ Skills keeps its settings under `skills` in the `mnemon` entry, edited on its ow
 | `skills.expiryDays` | `7` | 1–90 days | **Suggestion expiry**: an untouched suggestion expires after this long |
 | `skills.maxPendingPerSession` | `5` | 1–20 | **Pending per conversation**: past this, the least confident pending suggestions of a conversation expire |
 | `skills.casesPerRun` | `8` | 1–20 | **Cases per backtest**: the most cases one automatic backtest runs |
+
+`skills.targetScope` defaults to `user` to preserve existing installations: upgrading or changing storage scope does not move new skill writes to another root. Choose `storage` explicitly to follow storage scope. New suggestions record their resolved destination; drafts and redrafts keep that destination, and adoption uses the draft unless you explicitly choose another root. Suggestions from older versions without a destination use the current setting when drafted; existing drafts retain their recorded root. Improvements always write back to their original `baseKey`, regardless of this setting or a destination override.
+
+Project roots come from the Skills Source catalog for the selected workspace, following DSH discovery (nearest `.git` ancestor, or the workspace itself); the model task's working directory is not used. A missing workspace/project or an unwritable destination produces a visible review/draft error. Mnemon does not silently fall back to user skills. Adoption still reports later filesystem failures. No skills are migrated, discovery precedence is unchanged, and adoption remains an explicit user action.
 
 Both suggestion switches default to `true`, preserving old configurations. Turn either off independently; turning both off pauses automatic and manual conversation reviews without starting a model call. The switches also filter matching eval cases and results from reviews already running. Existing suggestions and explicit draft, backtest and adopt actions remain available. `skills.evolution` remains the master switch for automatic reviews.
 

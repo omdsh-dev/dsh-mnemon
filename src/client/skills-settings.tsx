@@ -4,7 +4,7 @@ import { DEFAULT_SKILLS_CONFIG, type ClientSettingsScope, type ResolvedSkillsCon
 import type { MemoryComponentSettingsProps } from './component-ui.tsx'
 import type { MnemonTranslate } from './locales.ts'
 import css from './MnemonSettingsCard.module.css'
-import { ToggleRow } from './settings-controls.tsx'
+import { SelectRow, ToggleRow } from './settings-controls.tsx'
 import { PanelActions, useLive, useScope, useStaged, WriteFailure } from './settings-panel.tsx'
 
 /** The package 技能管理 ships as; its page under Plugins carries these settings. */
@@ -39,14 +39,14 @@ function parameterValue(field: typeof PARAMETERS[number], text: string): number 
 const parametersOf = (settings: ResolvedSkillsConfig): Record<Parameter, string> =>
   Object.fromEntries(PARAMETERS.map(field => [field.key, String(settings[field.key])])) as Record<Parameter, string>
 
-function set(key: keyof ResolvedSkillsConfig, value: boolean | number): SettingsOperation {
+function set(key: keyof ResolvedSkillsConfig, value: boolean | number | string): SettingsOperation {
   return { op: 'set', path: [key], value }
 }
 
 /**
  * 技能管理's settings on its page under Plugins. Switches apply at once; the
- * review parameters wait, folded, for their own Apply. Evolution's own
- * switches show only while it is on.
+ * destination and folded review parameters wait for their own Apply. The
+ * destination also applies to manual drafts while evolution is off.
  */
 export function SkillsSettings(props: { scope: ClientSettingsScope<SkillsConfig>; page: MemoryComponentSettingsProps; t: MnemonTranslate }): JSX.Element {
   const { scope, page, t } = props
@@ -59,6 +59,9 @@ export function SkillsSettings(props: { scope: ClientSettingsScope<SkillsConfig>
   const autoBacktest = useLive(saved.autoBacktest, write('autoBacktest'))
   const hints = useLive(saved.hints, write('hints'))
   const sidebar = useLive(saved.sidebar, write('sidebar'))
+  const destination = useStaged({ targetScope: saved.targetScope }, async draft => {
+    await scope.mutate([set('targetScope', draft.targetScope)])
+  })
   const parameters = useStaged(parametersOf(saved), async draft => {
     const changed = PARAMETERS.filter(field => parameterValue(field, draft[field.key]) !== saved[field.key])
     if (changed.length > 0) await scope.mutate(changed.map(field => set(field.key, parameterValue(field, draft[field.key])!)))
@@ -70,6 +73,11 @@ export function SkillsSettings(props: { scope: ClientSettingsScope<SkillsConfig>
       <ToggleRow id="mnemon-skills-evolution" label={t('skills.evolution')} hint={t('skills.evolutionHint')} checked={evolution.value} disabled={disabled} onChange={evolution.set} />
       {evolution.value && <ToggleRow id="mnemon-skills-create" label={t('skills.allowCreate')} hint={t('skills.allowCreateHint')} checked={allowCreate.value} disabled={disabled} onChange={allowCreate.set} />}
       {evolution.value && <ToggleRow id="mnemon-skills-update" label={t('skills.allowUpdate')} hint={t('skills.allowUpdateHint')} checked={allowUpdate.value} disabled={disabled} onChange={allowUpdate.set} />}
+      <SelectRow id="mnemon-skills-target" label={t('skills.targetScope')} hint={t('skills.targetScopeHint')} value={destination.draft.targetScope}
+        options={(['user', 'project', 'storage'] as const).map(value => ({ value, label: t(`skills.targetScope.${value}`) }))}
+        disabled={disabled || destination.saving} onChange={targetScope => destination.edit({ targetScope })} />
+      <PanelActions dirty={destination.dirty} saving={destination.saving} applied={destination.applied} failed={destination.failed} disabled={disabled} invalid={null} t={t}
+        onDiscard={destination.discard} onApply={() => { void destination.apply() }} />
       {evolution.value && <ToggleRow id="mnemon-skills-backtest" label={t('skills.autoBacktest')} hint={t('skills.autoBacktestHint')} checked={autoBacktest.value} disabled={disabled} onChange={autoBacktest.set} />}
       {evolution.value && <details className={css.advanced}>
         <summary>{t('skills.parameters')}<IconChevronDownOutlineRegular size={12} /></summary>

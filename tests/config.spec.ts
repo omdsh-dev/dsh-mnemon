@@ -9,6 +9,12 @@ import { Config, resolveConfig, resolveSkillsConfig } from "../src/host/config.t
 afterEach(() => vi.unstubAllEnvs())
 
 describe('Mnemon config and resolution', () => {
+  it('preserves the user skill destination for existing settings and validates explicit scopes', () => {
+    expect(resolveSkillsConfig().targetScope).toBe('user')
+    expect(resolveSkillsConfig({ evolution: true }).targetScope).toBe('user')
+    for (const targetScope of ['storage', 'user', 'project'] as const) expect(resolveSkillsConfig({ targetScope }).targetScope).toBe(targetScope)
+    expect(() => resolveSkillsConfig({ targetScope: 'cwd' } as never)).toThrow()
+  })
   it('keeps both skill suggestion types enabled for old configurations and resolves each switch independently', () => {
     expect(resolveSkillsConfig()).toMatchObject({ evolution: false, allowCreate: true, allowUpdate: true })
     expect(resolveSkillsConfig({ evolution: true })).toMatchObject({ evolution: true, allowCreate: true, allowUpdate: true })

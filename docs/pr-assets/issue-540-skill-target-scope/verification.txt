@@ -1,0 +1,13 @@
+Command: pnpm run verify
+Exit code: 0
+Node: 22.22.0; pnpm: 10.13.1
+
+Verified deterministic output for 58 files.
+ Test Files  164 passed | 2 skipped (166)
+      Tests  2403 passed | 7 skipped (2410)
+Verified Headless profile activation with 38 total tools and 8 representative Mnemon tools.
+Verified the legacy settings import with buildin-to-builtin persistence, unrelated settings, retained-backup recovery and an idempotent Headless restart.
+Verified that disabling the legacy mnemon Entry disables the complete Starter without blocking DSH startup.
+Verified package contents: 68 files, 529497 packed bytes, 2225566 unpacked bytes.
+Imported 15 Node-compatible entries; verified 37 public type dependencies, 22 browser-side client declarations and 1 executable help entry on v22.22.0.
+All good!
