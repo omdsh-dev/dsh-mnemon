@@ -69,6 +69,19 @@ the same role, the original ambiguity check applies rather than silently
 choosing a Source. Projection limits are not token limits or delta injection;
 capture guidance is not a background worker or a guarantee of model behavior.
 
+## Sources with another role
+
+An installed Source whose role is not `working-context`, `narrative` or
+`durable-evidence` is not a failure and is not admitted either: the strategy
+keeps composing the three tiers and returns one `unsupported-source-role`
+entry per such Source in `ViewSpec.diagnostics`. The Host validates those
+entries and merges them into `view.diagnostics`, so the turn's
+`MNEMON VIEW AVAILABILITY` line and the View inspection name the Source and its
+role. A diagnostic is an explanation, never authority: the Source still gets no
+projection, Route or ActionOffer. Select the general Strategy, or name the
+Source in an explicit `selection`, to compose it. An unavailable Source keeps
+the Host's own diagnostic instead.
+
 Its own directory is a standalone project: install its declared dependencies,
 then run `pnpm verify`. When developing against an unreleased Mnemon, install a
 packed `dsh-mnemon` artifact as the peer instead of linking its source tree.

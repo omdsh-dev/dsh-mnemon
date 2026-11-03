@@ -291,8 +291,30 @@ function normalizeViewSpec(value: MemoryViewSpec, strategy: InstalledMemoryStrat
       }
     }
   }
+  // A Strategy may explain an absence (#504). Diagnostics carry no authority, so
+  // they are bounded and sanitized like the Host's own, and never reject a View.
+  const diagnostics = value.diagnostics === undefined ? undefined : normalizeSpecDiagnostics(value.diagnostics)
   return deepFreeze({ strategyTypeId: value.strategyTypeId, sources: normalizedSources, explanation: requiredText(value.explanation, 'memory ViewSpec explanation', 4_000),
     ...(guidance === undefined ? {} : { guidance }),
+    ...(diagnostics === undefined ? {} : { diagnostics }),
+  })
+}
+
+const MAX_SPEC_DIAGNOSTICS = 32
+
+function normalizeSpecDiagnostics(value: unknown): MemoryCompositionDiagnostic[] {
+  if (!Array.isArray(value)) throw new Error('memory ViewSpec diagnostics must be an array')
+  if (value.length > MAX_SPEC_DIAGNOSTICS) throw new Error(`memory ViewSpec diagnostics must be at most ${MAX_SPEC_DIAGNOSTICS} entries`)
+  return value.map(diagnostic => {
+    const input = jsonClone(diagnostic, 'memory ViewSpec diagnostic')
+    if (input === null || typeof input !== 'object' || Array.isArray(input)) throw new Error('memory ViewSpec diagnostic must be an object')
+    const entry = input as Record<string, unknown>
+    const contributionInstanceKey = entry.contributionInstanceKey === undefined ? undefined : requiredText(entry.contributionInstanceKey, 'memory ViewSpec diagnostic contributionInstanceKey', 300)
+    return deepFreeze({
+      code: id(entry.code, 'memory ViewSpec diagnostic code'),
+      message: requiredText(entry.message, 'memory ViewSpec diagnostic message', 1_000),
+      ...(contributionInstanceKey === undefined ? {} : { contributionInstanceKey }),
+    })
   })
 }
 
@@ -669,6 +691,7 @@ export class MemoryCompositionGeneration {
     const sourceRevisions = Object.fromEntries([...facts].map(([key, value]) => [key, value.revision]))
     const modes = new Set(successful.map(({ source }) => source.installed.definition.manifest.consistency))
     const consistency = { mode: modes.size === 1 ? [...modes][0]! : 'mixed' as const, sourceRevisions }
+    const allDiagnostics = [...diagnostics, ...(spec.diagnostics ?? [])]
     const body = {
       runtimeGeneration: this.id,
       strategyInstanceKey: this.strategy.instanceKey,
@@ -683,7 +706,7 @@ export class MemoryCompositionGeneration {
       consistency,
       explanation: spec.explanation,
       ...(spec.guidance === undefined ? {} : { guidance: spec.guidance }),
-      ...(diagnostics.length === 0 ? {} : { diagnostics: diagnostics.sort((a, b) =>
+      ...(allDiagnostics.length === 0 ? {} : { diagnostics: allDiagnostics.sort((a, b) =>
         (a.contributionInstanceKey ?? '').localeCompare(b.contributionInstanceKey ?? '') || a.code.localeCompare(b.code)) }),
     }
     const viewDigest = digest(body)

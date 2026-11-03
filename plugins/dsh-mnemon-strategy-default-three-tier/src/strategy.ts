@@ -1,10 +1,12 @@
 import { defineMemoryStrategy, type MemorySourceFacts } from 'dsh-mnemon/extension-sdk'
-import { COMPOSABLE_MEMORY_API_VERSION, type MemoryAvailableSource, type MemoryViewRequest, type MemoryViewSpec } from 'dsh-mnemon/contracts'
+import { COMPOSABLE_MEMORY_API_VERSION, type MemoryAvailableSource, type MemoryCompositionDiagnostic, type MemoryViewRequest, type MemoryViewSpec } from 'dsh-mnemon/contracts'
 import { createThreeTierTurn } from './retrieval.ts'
 import { boundedRuntimeMemoryProtocol, ROUTING_GUIDANCE, ROUTING_GUIDANCE_WITHOUT_RECALL, SCOPED_RUNTIME_MEMORY_PROTOCOL, THREE_TIER_REMINDERS, THREE_TIER_REMINDERS_WITHOUT_RECALL } from './guidance.ts'
 import { threeTierContributions, type ThreeTierExtensionValues } from './extension-sdk.ts'
 
 const VIEW_ROLES = ['working-context', 'narrative', 'durable-evidence'] as const
+/** The Host accepts at most 32 ViewSpec diagnostics; the summary keeps us inside it. */
+const MAX_DIAGNOSTICS = 32
 
 function soleSource(sources: readonly MemorySourceFacts[], role: typeof VIEW_ROLES[number]): MemorySourceFacts | undefined {
   const matches = sources
@@ -12,6 +14,29 @@ function soleSource(sources: readonly MemorySourceFacts[], role: typeof VIEW_ROL
     .sort((left, right) => left.sourceInstanceKey.localeCompare(right.sourceInstanceKey))
   if (matches.length > 1) throw new Error(`default-three-tier View Strategy found ambiguous ${role} Sources; select an explicit Strategy`)
   return matches[0]
+}
+
+/**
+ * Why an installed Source stays out of this View (#504). A custom role is not a
+ * failure, so it is explained instead of silently dropped; an unavailable Source
+ * already carries the Host's own diagnostic. Sorted by instance key so repeated
+ * composition stays deterministic.
+ */
+function unsupportedRoleDiagnostics(sources: readonly MemorySourceFacts[]): MemoryCompositionDiagnostic[] {
+  const unsupported = sources
+    .filter(source => source.availability !== 'unavailable' && !VIEW_ROLES.includes(source.role as typeof VIEW_ROLES[number]))
+    .sort((left, right) => left.sourceInstanceKey.localeCompare(right.sourceInstanceKey))
+  const reported = unsupported.length <= MAX_DIAGNOSTICS ? unsupported : unsupported.slice(0, MAX_DIAGNOSTICS - 1)
+  return [
+    ...reported.map(source => ({
+      code: 'unsupported-source-role',
+      message: `Installed Source ${source.sourceInstanceKey} declares the role "${source.role}", which the default-three-tier Strategy does not admit, so it contributes no projection, Routes or Actions to this View. Use the general Strategy, or name it in an explicit selection, to compose it.`,
+    })),
+    ...(reported.length === unsupported.length ? [] : [{
+      code: 'unsupported-source-role',
+      message: `${unsupported.length - reported.length} more installed Sources declare a role the default-three-tier Strategy does not admit.`,
+    }]),
+  ]
 }
 
 /** Pure View composition; no dependency on any Source implementation. */
@@ -31,11 +56,13 @@ export const DEFAULT_THREE_TIER_VIEW_STRATEGY = defineMemoryStrategy({
     workflows: ['idle-review', 'runtime-capacity'],
   },
   compose(request, sources, contributions = []) {
-    if (contributions.length === 0) return composeThreeTier(request, sources)
+    const diagnostics = unsupportedRoleDiagnostics(sources)
+    const explained = (spec: MemoryViewSpec): MemoryViewSpec => diagnostics.length === 0 ? spec : { ...spec, diagnostics }
+    if (contributions.length === 0) return explained(composeThreeTier(request, sources))
     const policies = threeTierContributions(contributions)
     const boundedRequest = policies.projection === undefined ? request : { ...request, budget: { ...request.budget,
       maxProjectionCharacters: Math.min(request.budget.maxProjectionCharacters, policies.projection.maxProjectionCharacters) } }
-    const spec = policies.selection === undefined ? composeThreeTier(boundedRequest, sources) : composeSelected(boundedRequest, sources, policies.selection)
+    const spec = explained(policies.selection === undefined ? composeThreeTier(boundedRequest, sources) : composeSelected(boundedRequest, sources, policies.selection))
     if (policies.capture !== undefined) {
       const targets = spec.sources.filter(selected => (policies.capture!.sourceKeys === undefined || policies.capture!.sourceKeys.includes(selected.sourceInstanceKey))
         && sources.some(source => source.sourceInstanceKey === selected.sourceInstanceKey && source.actions.some(action => selected.actionIds?.includes(action.id) && policies.capture!.actionIds.includes(action.id) && action.authority === undefined && ['write', 'maintain'].includes(action.capability))))
@@ -101,7 +128,8 @@ function composeSelected(request: MemoryViewRequest, sources: readonly MemoryAva
   const selected = selection.sourceKeys.map(key => {
     const source = sources.find(source => source.sourceInstanceKey === key)
     if (source === undefined) throw new Error(`scoped three-tier Source is not installed: ${key}`)
-    if (!VIEW_ROLES.includes(source.role as typeof VIEW_ROLES[number])) throw new Error(`unsupported scoped three-tier Source role: ${source.role}`)
+    // Rejecting is unchanged; the message now names the Source and the way out.
+    if (!VIEW_ROLES.includes(source.role as typeof VIEW_ROLES[number])) throw new Error(`unsupported scoped three-tier Source role: ${source.role} (${source.sourceInstanceKey}); default-three-tier admits ${VIEW_ROLES.join(', ')} only, so remove it from the selection or select the general Strategy`)
     return source
   }).filter(source => source.availability !== 'unavailable')
   const projected = selected.filter(source => source.capabilities.includes('project'))
