@@ -8,11 +8,13 @@ The Starter pins a tested combination of official plugins. The table records ver
 |---|---|---|
 | DSH current RC | `0.2.1-rc.5` | Pinned development baseline and an installed-host CI target. The npm `latest` and `next` tags pointed here on 2026-11-02; this is still a prerelease. |
 | DSH earlier supported hosts | `0.2.0-rc.2`, `0.2.1-rc.3` | CI runs every root test against these installed packages. See [DSH 0.2.0 and 0.2.1](#dsh-020-and-021) for version differences; the supported range still admits 0.2.1-rc.1 and rc.2. |
-| DSH alpha track | `0.2.2-alpha.2` | Separate installed-host CI target on the verified Node 24.22.2 toolchain; the published alpha Host itself requires Node 24.9.0 or later. This is the npm `alpha` tag checked on 2026-11-02, not the default development host or a guarantee for later alphas. |
+| DSH alpha track | `0.2.2-alpha.3` | Separate installed-host CI target on the verified Node 24.22.2 toolchain; the published alpha Host itself requires Node 24.9.0 or later. This is the npm `alpha` tag checked on 2026-11-04, not the default development host or a guarantee for later alphas. |
 | Node.js | `22.19` and `24` | Source CI and packed-artifact CI respectively; development requires `^22.19.0 \|\| >=24.11.0` |
 | Node.js 20 | Public package imports only | Does not establish that the DSH Host runs on Node 20 |
 | Mnemon Native CLI | `0.2.9`; embedding model checks require `0.2.13+` | Opt-in tests against a real CLI and disposable data; install the CLI separately. Older versions retain their other commands, but Test status asks for an upgrade because their availability fields only establish provider reachability |
 | Third-party Providers | Adapter contracts and fixtures | Does not establish live cloud-account conformance or upstream availability |
+
+The earlier alpha.2 acceptance used Cordis `4.0.6-alpha.1` and Loader `1.0.7-alpha.1`. Fresh alpha.2 installations now resolve their newer alpha.2 dependencies, which are incompatible with that Host's fixed app-boot package: settings updates fail even without Mnemon. Use alpha.3 for the current alpha validation target; changing the CI target does not repair existing alpha.2 installations. [Isolated Host evidence](../../pr-assets/issue-554-alpha-host/README.md) separates this upstream failure from the test fixture's Loader selection and legacy-reader adaptation.
 
 DSH 0.2.1-rc.3 and the current RC/alpha targets fetch the official API-key model directory over the network. The task Agent model selector allows that Provider up to six seconds, covering DSH's default five-second request budget; other Providers retain their three-second bound. This changes directory loading only, not model selection, inference timeouts or saved configuration.
 

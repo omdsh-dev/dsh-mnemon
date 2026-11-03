@@ -124,7 +124,7 @@ jobs:
           - { dsh: '0.2.1-rc.3', node: '22.19.0' }
           - { dsh: '0.2.1-rc.5', node: '22.19.0' }
           # The alpha Host needs >=24.9.0; pin the verified current Node 24 toolchain.
-          - { dsh: '0.2.2-alpha.2', node: '24.22.2' }
+          - { dsh: '0.2.2-alpha.3', node: '24.22.2' }
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
