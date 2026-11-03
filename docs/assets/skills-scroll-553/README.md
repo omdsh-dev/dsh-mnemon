@@ -27,4 +27,6 @@ Validation / 验证：`pnpm run verify` passed: 2463 root tests and 751 componen
 
 `pnpm run verify` 通过：根测试 2463 项、组件测试 751 项通过，分别条件跳过 7 项和 3 项；类型检查、可复现构建、隔离 Headless 激活及包检查通过。新增回归修复前两项失败，修复后可写和只读两条路径均通过。独立代码审查未发现 P1/P2 问题。
 
+Packed validation / 打包验证：after allowing the filesystem-backed UI read to settle under concurrent package tests, `verify-plugin-artifacts.mjs --skip-build --keep` passed for all 18 independent repositories and 19 artifacts on Node 24.22.2. / 为并行包测试中的真实文件读取留出加载时间后，Node 24.22.2 下 18 个独立仓库和 19 个打包制品全部通过验证。
+
 Platform limit / 平台范围：tested on macOS Chrome WebUI; no Windows-native Desktop run was performed. / 实测环境为 macOS Chrome WebUI，未运行 Windows 原生桌面端。

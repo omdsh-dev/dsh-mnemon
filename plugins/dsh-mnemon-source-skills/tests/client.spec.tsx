@@ -92,10 +92,11 @@ describe('Skills page', () => {
     const style = document.createElement('style')
     style.textContent = readFileSync(new NodeURL('../presentation/page.module.css', import.meta.url), 'utf8')
       .replace(/\.(sk[A-Za-z0-9]+)/gu, (selector, name: string) => css[name] === undefined ? selector : `.${css[name]}`)
-    document.head.append(style)
     try {
       const view = render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable={writable} management={management} navigationInput={{ seed: 'skill:user-dsh:release-notes', nonce: 1 }} />)
-      await screen.findByRole('heading', { name: 'release-notes' })
+      // The real filesystem-backed detail can take longer while isolated packages test concurrently.
+      await screen.findByRole('heading', { name: 'release-notes', level: 3 }, { timeout: 5_000 })
+      document.head.append(style)
       const list = screen.getByRole('complementary')
       const pane = view.container.querySelector<HTMLElement>(`.${css.skPane}`)!
       expect(getComputedStyle(list).overflowY).toBe('auto')
@@ -103,7 +104,7 @@ describe('Skills page', () => {
       list.scrollTop = 240
       pane.scrollTop = 180
       fireEvent.click(within(list).getByRole('button', { name: /^release-checks\s/u }))
-      await screen.findByRole('heading', { name: 'release-checks' })
+      await screen.findByRole('heading', { name: 'release-checks', level: 3 }, { timeout: 5_000 })
       expect(list.scrollTop).toBe(240)
       expect(view.container.querySelector<HTMLElement>(`.${css.skPane}`)!.scrollTop).toBe(0)
       expect((screen.getByRole('button', { name: t('common.edit') }) as HTMLButtonElement).disabled).toBe(!writable)
