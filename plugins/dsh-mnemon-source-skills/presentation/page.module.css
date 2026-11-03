@@ -180,10 +180,14 @@
 .skList { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 6px; }
 .skPane { padding: clamp(16px, 2vw, 24px); overflow: hidden; }
 
-/* Keep the evolution inbox beside its detail while browsing long lists. */
+/* Keep each list beside its detail while browsing long skills or suggestions. */
+.skSkillsSplit,
 .skEvolutionSplit { height: max(320px, calc(100dvh - 320px)); min-height: 0; }
+.skSkillsSplit > .skList,
+.skSkillsSplit > .skPane,
 .skEvolutionSplit > .skList,
 .skEvolutionSplit > .skPane { min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; }
+.skSkillsSplit > .skList > *,
 .skEvolutionSplit > .skList > * { flex-shrink: 0; }
 
 .skListBar { display: flex; align-items: center; gap: 8px; padding: 10px; border-bottom: .5px solid var(--mn-line); }
@@ -580,7 +584,9 @@
 @media (max-width: 860px) {
   .skSplit { grid-template-columns: minmax(0, 1fr); }
   .skList { max-height: 360px; overflow-y: auto; }
+  .skSkillsSplit,
   .skEvolutionSplit { height: auto; }
+  .skSkillsSplit > .skPane,
   .skEvolutionSplit > .skPane { overflow: visible; overscroll-behavior-y: auto; }
 }
 

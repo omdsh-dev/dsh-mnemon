@@ -85,6 +85,34 @@ function page(navigationInput: { seed: string; nonce: number } = { seed: 'skill:
 }
 
 describe('Skills page', () => {
+  it.each([true, false])('keeps the skill list in place and opens each detail at the top (writable=%s)', async writable => {
+    const other = join(directory, 'dsh', 'skills', 'release-checks')
+    mkdirSync(other)
+    writeFileSync(join(other, 'SKILL.md'), SKILL.replaceAll('release-notes', 'release-checks'))
+    const style = document.createElement('style')
+    style.textContent = readFileSync(new NodeURL('../presentation/page.module.css', import.meta.url), 'utf8')
+      .replace(/\.(sk[A-Za-z0-9]+)/gu, (selector, name: string) => css[name] === undefined ? selector : `.${css[name]}`)
+    document.head.append(style)
+    try {
+      const view = render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable={writable} management={management} navigationInput={{ seed: 'skill:user-dsh:release-notes', nonce: 1 }} />)
+      await screen.findByRole('heading', { name: 'release-notes' })
+      const list = screen.getByRole('complementary')
+      const pane = view.container.querySelector<HTMLElement>(`.${css.skPane}`)!
+      expect(getComputedStyle(list).overflowY).toBe('auto')
+      expect(getComputedStyle(pane).overflowY).toBe('auto')
+      list.scrollTop = 240
+      pane.scrollTop = 180
+      fireEvent.click(within(list).getByRole('button', { name: /^release-checks\s/u }))
+      await screen.findByRole('heading', { name: 'release-checks' })
+      expect(list.scrollTop).toBe(240)
+      expect(view.container.querySelector<HTMLElement>(`.${css.skPane}`)!.scrollTop).toBe(0)
+      expect((screen.getByRole('button', { name: t('common.edit') }) as HTMLButtonElement).disabled).toBe(!writable)
+      expect((screen.getByRole('switch', { name: t('skills.toggle', { name: 'release-checks' }) }) as HTMLButtonElement).disabled).toBe(!writable)
+    } finally {
+      style.remove()
+    }
+  })
+
   it.each([true, false])('keeps evolution lists and details independently scrollable (writable=%s)', async writable => {
     for (let index = 1; index <= 10; index++) {
       const input = review()

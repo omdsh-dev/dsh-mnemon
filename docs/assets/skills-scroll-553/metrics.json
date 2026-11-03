@@ -1,0 +1,425 @@
+{
+  "before": {
+    "phase": "before",
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "before": {
+      "list": {
+        "top": 0,
+        "height": 4608,
+        "content": 4608,
+        "y": 217,
+        "width": 340,
+        "overflow": "hidden"
+      },
+      "pane": {
+        "top": 0,
+        "height": 4608,
+        "content": 4608,
+        "y": 217,
+        "width": 760,
+        "overflow": "hidden"
+      },
+      "canvas": {
+        "top": 0,
+        "height": 915,
+        "content": 4881,
+        "y": 85.5,
+        "width": 1160,
+        "overflow": "auto"
+      }
+    },
+    "afterDetail": {
+      "list": {
+        "top": 0,
+        "height": 4608,
+        "content": 4608,
+        "y": -223,
+        "width": 340,
+        "overflow": "hidden"
+      },
+      "pane": {
+        "top": 0,
+        "height": 4608,
+        "content": 4608,
+        "y": -223,
+        "width": 760,
+        "overflow": "hidden"
+      },
+      "canvas": {
+        "top": 440,
+        "height": 915,
+        "content": 4881,
+        "y": 85.5,
+        "width": 1160,
+        "overflow": "auto"
+      }
+    },
+    "afterList": {
+      "list": {
+        "top": 0,
+        "height": 4608,
+        "content": 4608,
+        "y": -223,
+        "width": 340,
+        "overflow": "hidden"
+      },
+      "pane": {
+        "top": 0,
+        "height": 4608,
+        "content": 4608,
+        "y": -223,
+        "width": 760,
+        "overflow": "hidden"
+      },
+      "canvas": {
+        "top": 440,
+        "height": 915,
+        "content": 4881,
+        "y": 85.5,
+        "width": 1160,
+        "overflow": "auto"
+      }
+    },
+    "detailIndependent": false,
+    "listIndependent": false
+  },
+  "fixed": {
+    "phase": "fixed",
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "before": {
+      "list": {
+        "top": 0,
+        "height": 678,
+        "content": 1459,
+        "y": 217,
+        "width": 340,
+        "overflow": "auto"
+      },
+      "pane": {
+        "top": 0,
+        "height": 678,
+        "content": 4608,
+        "y": 217,
+        "width": 760,
+        "overflow": "auto"
+      },
+      "canvas": {
+        "top": 0,
+        "height": 915,
+        "content": 952,
+        "y": 85.5,
+        "width": 1160,
+        "overflow": "auto"
+      }
+    },
+    "afterDetail": {
+      "list": {
+        "top": 0,
+        "height": 678,
+        "content": 1459,
+        "y": 217,
+        "width": 340,
+        "overflow": "auto"
+      },
+      "pane": {
+        "top": 440,
+        "height": 678,
+        "content": 4608,
+        "y": 217,
+        "width": 760,
+        "overflow": "auto"
+      },
+      "canvas": {
+        "top": 0,
+        "height": 915,
+        "content": 952,
+        "y": 85.5,
+        "width": 1160,
+        "overflow": "auto"
+      }
+    },
+    "afterList": {
+      "list": {
+        "top": 360,
+        "height": 678,
+        "content": 1459,
+        "y": 217,
+        "width": 340,
+        "overflow": "auto"
+      },
+      "pane": {
+        "top": 440,
+        "height": 678,
+        "content": 4608,
+        "y": 217,
+        "width": 760,
+        "overflow": "auto"
+      },
+      "canvas": {
+        "top": 0,
+        "height": 915,
+        "content": 952,
+        "y": 85.5,
+        "width": 1160,
+        "overflow": "auto"
+      }
+    },
+    "detailIndependent": true,
+    "listIndependent": true,
+    "selection": {
+      "before": {
+        "list": {
+          "top": 745,
+          "height": 678,
+          "content": 1459,
+          "y": 217,
+          "width": 340,
+          "overflow": "auto"
+        },
+        "pane": {
+          "top": 440,
+          "height": 678,
+          "content": 4608,
+          "y": 217,
+          "width": 760,
+          "overflow": "auto"
+        },
+        "canvas": {
+          "top": 0,
+          "height": 915,
+          "content": 952,
+          "y": 85.5,
+          "width": 1160,
+          "overflow": "auto"
+        }
+      },
+      "after": {
+        "list": {
+          "top": 745,
+          "height": 678,
+          "content": 1459,
+          "y": 217,
+          "width": 340,
+          "overflow": "auto"
+        },
+        "pane": {
+          "top": 0,
+          "height": 678,
+          "content": 4608,
+          "y": 217,
+          "width": 760,
+          "overflow": "auto"
+        },
+        "canvas": {
+          "top": 0,
+          "height": 915,
+          "content": 952,
+          "y": 85.5,
+          "width": 1160,
+          "overflow": "auto"
+        }
+      }
+    },
+    "boundary": {
+      "before": {
+        "list": {
+          "top": 745,
+          "height": 678,
+          "content": 1459,
+          "y": 217,
+          "width": 340,
+          "overflow": "auto"
+        },
+        "pane": {
+          "top": 3930,
+          "height": 678,
+          "content": 4608,
+          "y": 217,
+          "width": 760,
+          "overflow": "auto"
+        },
+        "canvas": {
+          "top": 0,
+          "height": 915,
+          "content": 952,
+          "y": 85.5,
+          "width": 1160,
+          "overflow": "auto"
+        }
+      },
+      "after": {
+        "list": {
+          "top": 745,
+          "height": 678,
+          "content": 1459,
+          "y": 217,
+          "width": 340,
+          "overflow": "auto"
+        },
+        "pane": {
+          "top": 3930,
+          "height": 678,
+          "content": 4608,
+          "y": 217,
+          "width": 760,
+          "overflow": "auto"
+        },
+        "canvas": {
+          "top": 0,
+          "height": 915,
+          "content": 952,
+          "y": 85.5,
+          "width": 1160,
+          "overflow": "auto"
+        }
+      }
+    }
+  },
+  "narrow": {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "before": {
+      "list": {
+        "top": 0,
+        "height": 358,
+        "content": 1459,
+        "y": 217,
+        "bottom": 577,
+        "width": 300,
+        "scrollWidth": 300,
+        "overflow": "auto"
+      },
+      "pane": {
+        "top": 0,
+        "height": 6683,
+        "content": 6683,
+        "y": 589,
+        "bottom": 7274.21875,
+        "width": 300,
+        "scrollWidth": 300,
+        "overflow": "visible"
+      },
+      "canvas": {
+        "top": 0,
+        "height": 765,
+        "content": 7365,
+        "y": 79.5,
+        "bottom": 844,
+        "width": 334,
+        "scrollWidth": 334,
+        "overflow": "auto"
+      }
+    },
+    "afterList": {
+      "list": {
+        "top": 300,
+        "height": 358,
+        "content": 1459,
+        "y": 217,
+        "bottom": 577,
+        "width": 300,
+        "scrollWidth": 300,
+        "overflow": "auto"
+      },
+      "pane": {
+        "top": 0,
+        "height": 6683,
+        "content": 6683,
+        "y": 589,
+        "bottom": 7274.21875,
+        "width": 300,
+        "scrollWidth": 300,
+        "overflow": "visible"
+      },
+      "canvas": {
+        "top": 0,
+        "height": 765,
+        "content": 7365,
+        "y": 79.5,
+        "bottom": 844,
+        "width": 334,
+        "scrollWidth": 334,
+        "overflow": "auto"
+      }
+    },
+    "end": {
+      "list": {
+        "top": 300,
+        "height": 358,
+        "content": 1459,
+        "y": -6358,
+        "bottom": -5998,
+        "width": 300,
+        "scrollWidth": 300,
+        "overflow": "auto"
+      },
+      "pane": {
+        "top": 0,
+        "height": 6683,
+        "content": 6683,
+        "y": -5986,
+        "bottom": 699.21875,
+        "width": 300,
+        "scrollWidth": 300,
+        "overflow": "visible"
+      },
+      "canvas": {
+        "top": 6575,
+        "height": 765,
+        "content": 7365,
+        "y": 79.5,
+        "bottom": 844,
+        "width": 334,
+        "scrollWidth": 334,
+        "overflow": "auto"
+      },
+      "last": {
+        "x": 89,
+        "y": 452.015625,
+        "width": 268,
+        "height": 20.015625
+      }
+    }
+  },
+  "adjacent": {
+    "keyboard": {
+      "list": 0,
+      "pane": 638,
+      "canvas": 0
+    },
+    "listBoundary": {
+      "before": {
+        "list": 781,
+        "pane": 638,
+        "canvas": 0
+      },
+      "after": {
+        "list": 781,
+        "pane": 638,
+        "canvas": 0
+      }
+    },
+    "editor": "opened and cancelled without saving",
+    "search": "narrowed to skill 18; detail starts at top",
+    "evolution": {
+      "afterDetail": {
+        "list": 0,
+        "pane": 250,
+        "canvas": 0
+      },
+      "afterList": {
+        "list": 215,
+        "pane": 250,
+        "canvas": 0
+      }
+    }
+  }
+}
