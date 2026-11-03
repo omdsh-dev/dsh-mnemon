@@ -1,8 +1,9 @@
+import { hasAgentOwnership, isAgentOwnedBy, observeAgentPublication, type AgentPublicationHost } from './agent-ownership.ts'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { HostAgent, HostSubagentRun, ToolExecution } from './dsh.ts'
 import type { MemoryToolName } from './protocol.ts'
 
-export interface ReviewToolHost {
+export interface ReviewToolHost extends AgentPublicationHost {
   agents?: { isOwnedBy?(id: string, parent: HostAgent): boolean; get?(id: string): HostAgent | undefined }
   on(name: string, listener: (...args: never[]) => unknown): unknown
 }
@@ -106,7 +107,7 @@ export async function startGuardedChild(
 ): Promise<HostSubagentRun> {
   const { purpose, published } = options
   const agents = host.agents
-  if (typeof agents?.isOwnedBy !== 'function') {
+  if (!hasAgentOwnership(host)) {
     if (options.optional === true) return start()
     throw new Error(`Mnemon ${purpose} requires DSH Agent ownership and scoped tool guard support`)
   }
@@ -114,8 +115,8 @@ export async function startGuardedChild(
   const guards = new Map<HostAgent, () => unknown>()
   let attachmentError: unknown
   let run: HostSubagentRun | undefined
-  const listener = host.on('agent/created', (({ agent }: { agent: HostAgent }) => {
-    if (startingChild.getStore() !== pending || !agents.isOwnedBy!(agent.id, parent)) return
+  const listener = observeAgentPublication(host, agent => {
+    if (startingChild.getStore() !== pending || !isAgentOwnedBy(host, agent, parent)) return
     try {
       const tools = agent.ctx?.tools
       if (typeof tools?.guard !== 'function') {
@@ -131,7 +132,7 @@ export async function startGuardedChild(
       // Synchronous publication failure lets the provider roll back the child.
       throw error
     }
-  }) as never)
+  })
   if (typeof listener !== 'function') throw new Error(`Mnemon ${purpose} creation observer did not return a disposer`)
   let disposeObserver: (() => unknown) | undefined = listener as () => unknown
   const closeObserver = async () => {
@@ -154,7 +155,7 @@ export async function startGuardedChild(
     const child = run.localAgent ?? [...guards.keys()].find(agent => agent.id === runId)
     if (child === undefined || !guards.has(child)) {
       // Only a child that cannot be guarded runs as before; a guardable one published out of sight fails closed.
-      const local = run.localAgent ?? agents.get?.(runId)
+      const local = run.localAgent ?? agents?.get?.(runId)
       if (options.optional === true && guards.size === 0 && typeof local?.ctx?.tools?.guard !== 'function') {
         await closeObserver()
         return run

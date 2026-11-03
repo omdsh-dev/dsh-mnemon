@@ -8,6 +8,7 @@
 
 | 兼容项 | 所在位置 | 存在原因 | 移除条件 |
 |---|---|---|---|
+| DSH 存活 Agent 归属 | `src/host/agent-ownership.ts`、lifecycle、review、continuation 和 subagent startup | 已发布 Host 提供注册表根级与归属 API；源码 DSH 提供确切存活实例的 `rootOf()` / `lineageOf()`。延迟发布回调失败会在 prompt 入队前取消。源码版没有隐藏独立根的等效能力，独立任务在创建 Session 前拒绝 | 所有受支持 Host 均提供统一的发布时归属契约及公开的隐藏独立任务能力后 |
 | DSH 工具执行契约 | `src/host/tool-execution.ts` 与 `src/host/review-admission.ts`；真实宿主组合见 `tests/helpers/installed-dsh.ts` | 旧 Host 调度一次已解析调用。DSH 0.2.2-alpha.2 提供 `setExecutor()` 并调度原始模型调用批次；适配器保留当前 executor，要求恰好一个匹配的结果。alpha executor 在 capability 目录之外管理 `run_code`。准入仍在真实轮次内等待执行落盘 | 旧单次调用 Host 退出支持范围后，改为必需的公开 executor 契约 |
 | 0.5.18 与 0.5.19 的就绪条目 | `src/starter.ts`：`./starter` 导出，即提供 `mnemonStarterReady` 的条目 `dsh-mnemon-starter` | 0.5.18 与 0.5.19 组合了单独的 `dsh-mnemon/starter` 行，组件组要等待它。0.5.20 起组件组（`dsh-mnemon/bundle`）自己完成准备，Starter 的 patch 也不再插入这一行；仍插入它的组合照常加载（[详情](../reference/compatibility.md#安装后直接启用-starter)） | 移除公开 `./starter` 导出的主版本发布 |
 | `buildin` 显示方式 | `src/host/display-mode.ts` 的 `normalizeDisplayMode`；`src/host/config.ts` 中的 `displayMode` schema；`src/host/settings.ts` 的 `migrateLegacyDisplayMode` 与设置描述 | dsh-mnemon 0.3 把会话标签页入口写作 `buildin`。0.4.2 起 Host 把它读作 `builtin`，并在 profile 可写时通过 DSH 检查 revision 的写入器保存一次 `builtin`；只读 profile 保留旧写法 | 不再支持升级最后由 0.3 保存的 profile 的主版本发布 |

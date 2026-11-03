@@ -57,6 +57,7 @@ function fixture() {
   const memory = graphFixture()
   const runtime = new LiveMnemonRuntime(memory.graph, undefined, undefined, memory.extensions)
   const registry = new Map<string, HostAgent>()
+  const owners = new Map<HostAgent, HostAgent>()
   const controls = new Map<HostAgent, ReturnType<typeof events>>()
   const logs = new Map<HostAgent, HostSessionEvent[]>()
   const hostEvents = events()
@@ -64,7 +65,9 @@ function fixture() {
     ...hostEvents,
     agents: {
       get: (id: string) => registry.get(id),
-      roots: () => [...registry.values()].filter(agent => agent.session.header?.origin !== 'subagent'),
+      roots: () => [...registry.values()].filter(agent => owners.get(agent) === agent),
+      list: () => [...registry.values()],
+      isOwnedBy: (id: string, parent: HostAgent) => registry.get(parent.id) === parent && owners.get(registry.get(id)!) === parent,
     },
   } as unknown as HostContextShape
   const coordinator = new MnemonSubagentCoordinator({} as never, runtime)
@@ -89,6 +92,7 @@ function fixture() {
     controls.set(agent, ctx)
     logs.set(agent, log)
     registry.set(id, agent)
+    owners.set(agent, parent ?? agent)
     hostEvents.emit('agent/created', { agent, source: 'startup' })
     return agent
   }
@@ -272,6 +276,19 @@ describe('asynchronous child memory authority', () => {
     value.dispose(child)
     value.setIds(['later'])
     await value.begin(value.root, 2)
+    await value.begin(grandchild, 1)
+    expect((await value.recall(grandchild, 'nested task')).results.map(row => row.memoryBodyId)).toEqual(['project'])
+  })
+
+  it('delegates a nested child from its exact creator rather than the root newer View', async () => {
+    const value = fixture()
+    await value.begin(value.root, 1)
+    const child = value.create('child', value.root)
+    await value.end(value.root, 1)
+    value.setIds(['later-root-space'])
+    await value.begin(value.root, 2)
+    await value.begin(child, 1)
+    const grandchild = value.create('grandchild', child)
     await value.begin(grandchild, 1)
     expect((await value.recall(grandchild, 'nested task')).results.map(row => row.memoryBodyId)).toEqual(['project'])
   })

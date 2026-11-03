@@ -40,6 +40,14 @@ Installing for the first time? How DSH chooses the registry, and why its result 
 
 What those hosts needed is kept under [Older DSH hosts](#older-dsh-hosts). How each release was verified, and the earlier Headless and WebUI records that remain historical evidence, are under [Verification and evidence](#verification-and-evidence).
 
+### Source DSH 0.2.2 ownership compatibility (#554)
+
+The source build at `8bd073392eef6f54e921a093b95076248eb08cbb` differs from npm `0.2.2-alpha.3`: the published package still exposes `agents.roots()` and `agents.isOwnedBy()`. The source build instead exposes `subagents.rootOf()`, flattens `startActivation()` arguments and removes provider enumeration. Mnemon uses exact live Host ownership for root adoption and guarded spawn/fork delegation. It does not infer authority from Session headers. Hosts exposing `lineageOf()` use their publication-time binding; the earlier `rootOf()` contract uses `subagent/start` before prompt admission and cancels startup if composition or guard installation fails. Without provider enumeration, only the official `spawn` and `fork` names are probed.
+
+**This is a scoped startup and conversation-delegation fix, not full compatibility with every source DSH 0.2.2 feature.** This source Host has no public equivalent of Mnemon's hidden standalone task Agent: it rejects a standalone Agent marked as a subagent, while an ordinary root can leave an unwanted conversation in history. Mnemon therefore refuses standalone management before creating any Session. Affected operations are standalone Skills tasks, the Memory page's evidence answers and Save to memory, Runtime maintenance, Document creation/archive, Provider placement, and Memory Space metadata maintenance. Conversation-bound memory and guarded spawn/fork delegation remain available. Use the verified published `@deepseek-ai/dsh@0.2.1-rc.5` when these standalone operations are required; existing published Hosts keep their task behavior and stored data.
+
+The source build, synthetic-model checks, npm alpha.3 checks and unresolved full-suite/profile results are recorded in [issue #554 evidence](../../pr-assets/issue-554-agent-ownership/README.md). No DSH source, development dependency baseline, configuration format or stored Session is rewritten.
+
 ## Upgrade the default installation
 
 1. Export a Mnemon Pack and protect any required Provider connection backup as described in [Operations](../guides/operations.md#backup-and-recovery).

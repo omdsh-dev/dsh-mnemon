@@ -1,5 +1,6 @@
+import { hasAgentOwnership, isAgentOwnedBy, observeAgentPublication, withAgentStart, type AgentOwnershipHost } from './agent-ownership.ts'
 import { AsyncLocalStorage } from 'node:async_hooks'
-import type { HostAgent, HostSubagentProvider, HostSubagentRun, HostSubagentStartRequest, HostSubagentsService } from './dsh.ts'
+import type { HostAgent, HostSubagentActivation, HostSubagentProvider, HostSubagentRun, HostSubagentStartRequest, HostSubagentsService } from './dsh.ts'
 
 /** The Agent registry lookups that find an activation's local child. */
 export interface SubagentStartAgents {
@@ -62,13 +63,26 @@ export async function startSubagent(
   request: HostSubagentStartRequest & { label: string },
   publications?: SubagentPublications,
 ): Promise<HostSubagentRun> {
+  if (typeof agents?.isOwnedBy === 'function' || typeof subagents.lineageOf === 'function' || typeof subagents.rootOf !== 'function') {
+    return startWithSignal(subagents, agents, provider, request, publications)
+  }
+  return withAgentStart(request.signal, signal => startWithSignal(subagents, agents, provider, { ...request, signal }, publications))
+}
+
+async function startWithSignal(
+  subagents: HostSubagentsService,
+  agents: SubagentStartAgents | undefined,
+  provider: string,
+  request: HostSubagentStartRequest & { label: string },
+  publications?: SubagentPublications,
+): Promise<HostSubagentRun> {
   const { toolFilter, persona, ...task } = request
   if ((toolFilter === undefined && persona === undefined) || childComposition(subagents, subagents.getProvider(provider)) !== 'publication') {
     return startOnHost(subagents, agents, provider, request)
   }
   if (publications === undefined) throw new Error('This DSH takes no subagent persona or tool filter at start, and dsh-mnemon cannot observe the child it publishes')
   const composition: ChildComposition = { ...(toolFilter === undefined ? {} : { toolFilter }), ...(persona === undefined ? {} : { persona }) }
-  return startComposed(publications, agents, request.parent, composition, () => startOnHost(subagents, agents, provider, task))
+  return startComposed(publications, { agents, subagents }, request.parent, composition, () => startOnHost(subagents, agents, provider, task))
 }
 
 async function startOnHost(
@@ -79,7 +93,10 @@ async function startOnHost(
 ): Promise<HostSubagentRun> {
   if (typeof subagents.startActivation === 'function') {
     const { label, signal, ...task } = request
-    const activation = await subagents.startActivation({ provider, label, request: task, signal, delivery: 'caller' })
+    // The source Host that exposes rootOf also flattens activation task fields.
+    const activation = typeof subagents.rootOf === 'function'
+      ? await (subagents as unknown as { startActivation(spec: Omit<HostSubagentStartRequest, 'label'> & { provider: string; label: string; delivery: 'caller' }): Promise<HostSubagentActivation> }).startActivation({ provider, label, ...task, signal, delivery: 'caller' })
+      : await subagents.startActivation({ provider, label, request: task, signal, delivery: 'caller' })
     // A second dispose from the caller reports any failure of this one.
     const stop = () => { activation.dispose().catch(() => {}) }
     try {
@@ -89,7 +106,7 @@ async function startOnHost(
       if (signal.aborted) stop()
       // The child is resident until the activation settles, which takes at least one model turn.
       const child = agents?.get?.(activation.childId)
-      const localAgent = child !== undefined && (typeof agents?.isOwnedBy !== 'function' || agents.isOwnedBy(child.id, request.parent)) ? child : undefined
+      const localAgent = child !== undefined && (!hasAgentOwnership({ agents, subagents }) || isAgentOwnedBy({ agents, subagents }, child, request.parent)) ? child : undefined
       return {
         id: activation.childId,
         ...(localAgent === undefined ? {} : { localAgent }),
@@ -134,7 +151,7 @@ function compose(agent: HostAgent, { toolFilter, persona }: ChildComposition): v
  */
 async function startComposed(
   publications: SubagentPublications,
-  agents: SubagentStartAgents | undefined,
+  host: AgentOwnershipHost,
   parent: HostAgent,
   composition: ChildComposition,
   start: () => Promise<HostSubagentRun>,
@@ -142,9 +159,9 @@ async function startComposed(
   const pending = Symbol('Mnemon child composition')
   const composed = new Set<string>()
   let failure: unknown
-  const listener = publications.on('agent/created', (({ agent }: { agent: HostAgent }) => {
+  const listener = observeAgentPublication({ ...host, on: publications.on.bind(publications) }, agent => {
     if (composingChild.getStore() !== pending) return
-    if (typeof agents?.isOwnedBy === 'function' && !agents.isOwnedBy(agent.id, parent)) return
+    if (hasAgentOwnership(host) && !isAgentOwnedBy(host, agent, parent)) return
     try {
       compose(agent, composition)
       composed.add(agent.id)
@@ -152,7 +169,7 @@ async function startComposed(
       failure = error
       throw error
     }
-  }) as never, { prepend: true })
+  }, { prepend: true })
   if (typeof listener !== 'function') throw new Error('dsh-mnemon could not observe the memory subagent DSH creates, so it does not start one')
   let stopObserving: (() => unknown) | undefined = listener as () => unknown
   const closeObserver = async () => {

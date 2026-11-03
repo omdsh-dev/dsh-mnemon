@@ -1,0 +1,70 @@
+Issue #554 ownership acceptance record
+Base: 54cca5fc2e552483ae13e68565564149fd03a1df
+Node: 24.22.2
+Official source build: 8bd073392eef6f54e921a093b95076248eb08cbb (git status empty)
+Source build is NOT the npm 0.2.2-alpha.3 package despite the same package version.
+All fixtures use disposable synthetic data, no external model API or personal profile.
+Installed-host commands unset NODE_PATH and use canonical physical DSH_HOST_ROOT.
+
+RED, BEFORE PRODUCTION ADAPTER
+  Exact source Host, six original real-Host cases:
+    Tests: 6 failed (6)
+    TypeError: this.ctx.agents.roots is not a function or its return value is not iterable
+  Follow-up repro: nested activation-request shape has no source parent.
+  Coordinator repro before provider lookup fix: this.subagents.list is not a function.
+  Standalone preflight repro: expected rejection, but operation resolved and stored a Session.
+  Legacy nested dispatch View repro: a grandchild lacked its direct creator's original View.
+  Stale legacy object repro: an old object could receive the replacement instance's guard.
+  Real source nested creator repro: did not see memory subagent created for composition.
+  Same-start indirect descendant repro, rootOf and lineageOf: unrelated guard called once.
+
+GREEN, OWNERSHIP CHECKPOINT
+  env -u NODE_PATH pnpm run verify
+    Exit: 0
+    Root suite: 168 files passed, 2 skipped; 2487 tests passed, 10 skipped (2497).
+    Workspace tests, typechecks, deterministic build, documentation checks passed.
+    Headless activation: 38 total tools, 8 representative Mnemon tools.
+    Legacy settings import, retained-backup recovery, idempotent restart and disabled Starter passed.
+    Package contents: 68 files. Public-entry imports, publint and attw passed.
+
+  Source Host:
+    env -u NODE_PATH DSH_HOST_ROOT=<physical-source>/apps/cli node node_modules/vitest/vitest.mjs run --config scripts/installed-dsh.config.ts tests/agent-ownership-host.spec.ts tests/agent-ownership.spec.ts
+    2 files passed; 26 tests passed.
+    Real Host (13): existing/new roots, spawn/fork guards and persona before work;
+    running-child abort; guard/persona publication failure with zero queued prompts/model calls;
+    coordinator result; source standalone refusal with unchanged stored Session inventory;
+    native retain/on failure: ordinary model can run, but pinned-View reads/Actions reject,
+    no fallback to root active View, and no retained child binding/pin after cleanup;
+    nested creator supported by internal adapter, while coordinator depth cap rejects before
+    creating a grandchild or calling another model.
+    Contract cases (13): rootOf-only and lineageOf publication, unmanaged/ordinary-fork
+    classification, same-scope indirect descendants, foreign/stale ownership and disposal.
+
+  Published Hosts, same command with <physical-package> as DSH_HOST_ROOT, and these files:
+    tests/agent-ownership-host.spec.ts tests/agent-ownership.spec.ts
+    tests/idle-review-tool-access-host.spec.ts tests/async-subagent-host.spec.ts
+    tests/task-agent-cwd-host.spec.ts tests/task-agent-session-host.spec.ts
+    0.2.0-rc.2: 41 passed, 5 skipped (46), 5 files passed / 1 skipped.
+    0.2.1-rc.3: 43 passed, 3 skipped (46), 6 files passed.
+    0.2.1-rc.5: 43 passed, 3 skipped (46), 6 files passed.
+    0.2.2-alpha.2 (existing installed cohort): 43 passed, 3 skipped (46), 6 files passed.
+    0.2.2-alpha.3 (fresh official install): 43 passed, 3 skipped (46), 6 files passed.
+    Three source-only assertions skip on published Hosts. Two existing asynchronous
+    continuable-child cases additionally skip on the older one-shot 0.2.0 Host.
+    These are targeted acceptance results, not claims that every npm alpha suite passes.
+
+BROADER FAILURES PRESERVED, NOT HIDDEN
+  alpha.3 full root suite at unchanged base:
+    35 failed, 2428 passed, 7 skipped (2470); 4 failed files / 162 passed / 2 skipped.
+  alpha.3 full root suite at an intermediate ownership checkpoint, before the last
+  stale/nested/native regression tests were added:
+    Same 35 failed, 2447 passed, 8 skipped (2490); 4 failed files / 164 passed / 2 skipped.
+    31 View-management failures (17 main, 9 profile, 5 plugin-manager), and 4 legacy
+    descriptor assertions expecting rejection where alpha.3 now accepts the inputs.
+    Fresh physical Host resolution and rebuilt independent packages did not remove them.
+    Separate fixture/alpha dependency-cohort changes address these failures; these counts
+    are historical evidence, not a final all-alpha passing claim.
+  Exact source Headless script:
+    Enabled checks reached successfully, then disabled-profile completeness failed:
+    typert-loader remained pending, waiting for service typert.
+    NOT a passing full source-profile verification.

@@ -1,3 +1,4 @@
+import { hasAgentOwnership, isAgentOwnedBy, observeAgentPublication, type AgentPublicationHost } from './agent-ownership.ts'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { HostAgent, HostPreStepDecision, HostSubagentRun, HostUserMessage } from './dsh.ts'
 import { createPluginMessage } from './plugin-message.ts'
@@ -8,8 +9,7 @@ export const CONTINUATION_TEXT = 'Continue from the tool results above.'
 /** How a server reports a chat template that found no user query (Ollama, vLLM and others). */
 const NO_USER_QUERY = /no user query found in messages/iu
 
-export interface ContinuationHost {
-  agents?: { isOwnedBy?(id: string, parent: HostAgent): boolean }
+export interface ContinuationHost extends AgentPublicationHost {
   on(name: string, listener: (...args: never[]) => unknown): unknown
 }
 
@@ -84,11 +84,11 @@ function continueAfterRefusal(agent: HostAgent): Array<() => unknown> {
 export async function startWithContinuationTurns(host: ContinuationHost, parent: HostAgent, start: () => Promise<HostSubagentRun>): Promise<HostSubagentRun> {
   const pending = Symbol('Mnemon delegated start')
   const stops: Array<() => unknown> = []
-  const listener = host.on('agent/created', (({ agent }: { agent: HostAgent }) => {
+  const listener = observeAgentPublication(host, agent => {
     if (startingChild.getStore() !== pending) return
-    if (typeof host.agents?.isOwnedBy === 'function' && !host.agents.isOwnedBy(agent.id, parent)) return
+    if (hasAgentOwnership(host) && !isAgentOwnedBy(host, agent, parent)) return
     for (const stop of continueAfterRefusal(agent)) if (typeof stop === 'function') stops.push(stop)
-  }) as never)
+  })
   const release = async () => { for (const stop of stops.splice(0)) await stop() }
   let run: HostSubagentRun
   try {

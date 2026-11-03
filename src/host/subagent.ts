@@ -1073,7 +1073,9 @@ This is the only completion channel for this run. Do not finish with a plain-tex
   }
 
   private provider(preferred: 'spawn' | 'fork'): string {
-    const names = this.subagents.list()
+    // New source Hosts expose provider lookup without enumeration. Probe the official providers;
+    // never inspect their private registry or infer a third-party provider's capabilities.
+    const names = typeof this.subagents.list === 'function' ? this.subagents.list() : ['spawn', 'fork'].filter(name => this.subagents.getProvider(name) !== undefined)
     const compatible = (name: string): boolean => {
       const provider = this.subagents.getProvider(name)
       return provider?.capabilities.depthLimit === true && childComposition(this.subagents, provider) !== undefined
