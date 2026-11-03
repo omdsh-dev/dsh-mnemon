@@ -68,3 +68,21 @@ BROADER FAILURES PRESERVED, NOT HIDDEN
     Enabled checks reached successfully, then disabled-profile completeness failed:
     typert-loader remained pending, waiting for service typert.
     NOT a passing full source-profile verification.
+
+INTEGRATED FINAL GATE
+  Ownership production commit: dc3ffea62ab80667a89f4e33729f924ef3eebd0b.
+  Matching-Host fixture/CI change: 1c60ccd855ca6111cbc3f6fa03a715b43ccf24ce,
+  integrated as 5b6b9c64bbb6699097640173ed22692e4ae6eb3f.
+  pnpm run verify: exit 0.
+    Root: 2487 passed, 10 skipped (2497); 168 passed files, 2 skipped.
+    All component tests, type checks, reproducible builds, published-baseline
+    Headless activation and package checks passed.
+  env -u NODE_PATH DSH_HOST_ROOT=<physical official alpha.3 package>
+    node24 node_modules/vitest/vitest.mjs run --config scripts/installed-dsh.config.ts:
+    exit 0, 2487 passed, 10 skipped (2497); 168 passed files, 2 skipped.
+    Node 24.22.2, official npm DSH 0.2.2-alpha.3.
+    The previous 31 View fixture and 4 descriptor expectation failures are resolved.
+  Independent read-only review of the final direct-creator, cancellation and
+  degraded-native boundaries found no P1/P2 finding.
+  These passes do not waive the source-only standalone-management restriction
+  or the exact source disabled-profile limitation recorded above.

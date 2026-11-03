@@ -52,7 +52,8 @@ The same fixture runs against a published `@deepseek-ai/dsh` installation by cha
 - The coordinator provider test failed with `this.subagents.list is not a function` before the provider-lookup adaptation.
 - The standalone-management rejection test initially resolved successfully and created a task Session. The final preflight rejects before the callback, with unchanged persisted Session inventory and zero model calls.
 - A real nested creator initially failed composition; same-scope indirect descendants initially received an unrelated root review guard. Direct-creator publication evidence now distinguishes them while validating both exact live instances and their tree root. The production coordinator keeps `maxDepth: 1` and rejects a resident child's further delegation before creating another child or calling a model.
-- Final results are summarized in `results.txt`; the broader alpha/profile limitations below are part of the acceptance record.
+- Integrated final verification: `pnpm run verify` and the official npm alpha.3 full root suite both pass with 2487 tests passed and 10 conditional skips. / 整合后的默认完整验证与官方 npm alpha.3 根测试均为 2487 项通过、10 项条件跳过。
+- Final results are summarized in [results.txt](./results.txt); the broader alpha/profile limitations below are part of the acceptance record.
 
 ## Known limits / 已知限制
 
@@ -60,9 +61,9 @@ Source-only standalone management is unavailable: standalone Skills tasks, Memor
 
 源码版上述独立管理入口明确拒绝，并提示需要这些功能的用户使用已验证的发布包 `@deepseek-ai/dsh@0.2.1-rc.5`；已发布 Host 的隐藏任务行为保持不变，不迁移、改写或删除 Session。
 
-The full npm alpha.3 root suite already failed on the unchanged base: 31 View-management tests across three files, plus four legacy descriptor-repair tests. Rebuilding both root and independent plugins did not remove them. These results are not attributed to ownership changes or all dismissed as test drift. The descriptor failures assert upstream rejection, but alpha.3 now accepts those inputs; the View-management failures are tracked separately from ownership acceptance for matching-Loader fixture/cohort investigation. Baseline and final commands use canonical physical Host paths and unset `NODE_PATH`.
+Historical baseline: the full npm alpha.3 root suite failed before the fixture adaptation: 31 View-management tests across three files, plus four legacy descriptor-repair tests. Rebuilding both root and independent plugins did not remove them. These results are not attributed to ownership changes or all dismissed as test drift. The descriptor failures assert upstream rejection, but alpha.3 now accepts those inputs; the View-management failures are tracked separately from ownership acceptance for matching-Loader fixture/cohort investigation. The integrated matching-Loader and legacy-reader test adaptation resolves these failures without changing production behavior; see [the alpha Host record](../issue-554-alpha-host/README.md). Baseline and final commands use canonical physical Host paths and unset `NODE_PATH`.
 
-The source Headless verification passes its enabled-plugin checks, then fails the disabled-profile completeness assertion because upstream `typert-loader` remains pending on `typert`. It is not recorded as a passing full profile verification. Existing published RC verification remains required and unchanged.
+The source Headless verification passes its enabled-plugin checks, then fails the disabled-profile completeness assertion because the Host's `typert-loader` remains pending on `typert`. It is not recorded as a passing full profile verification. Existing published RC verification remains required and unchanged.
 
 The no-first-prompt guarantee for publication hook failures applies to activations started by Mnemon, whose startup scope can cancel admission. Native Host activations bypass that scope: source DSH contains child-memory installation failures and can run the ordinary model without memory. Real-host retain/hook failure tests verify that the child's pinned-View reads and Actions reject, never borrow the root's active View, and leave no retained child runtime binding or pin. This is an explicit degraded native path, not a claim that Mnemon can cancel every Host activation.
 

@@ -44,11 +44,11 @@ Git 同步保留原有设置与载荷格式。保存的默认提交者组合现�
 
 ### DSH 0.2.2 源码版的归属兼容（#554）
 
-`8bd073392eef6f54e921a093b95076248eb08cbb` 源码构建与 npm `0.2.2-alpha.3` 不同：已发布包仍提供 `agents.roots()` 和 `agents.isOwnedBy()`；源码版改为 `subagents.rootOf()`，展开 `startActivation()` 的任务参数，并移除了 Provider 枚举。Mnemon 按 Host 的确切存活实例归属接管根 Agent、启动带守卫的 spawn/fork 委派，不从 Session header 推断权限。提供 `lineageOf()` 的 Host 使用发布时的绑定；较早的 `rootOf()` 契约则在 prompt 入队前的 `subagent/start` 安装子级组合与守卫，安装失败会取消启动。没有 Provider 枚举时，仅探测官方 `spawn` 和 `fork` 名称。
+`8bd073392eef6f54e921a093b95076248eb08cbb` 源码构建与 npm `0.2.2-alpha.3` 不同：已发布包仍提供 `agents.roots()` 和 `agents.isOwnedBy()`；源码版改为 `subagents.rootOf()`，展开 `startActivation()` 的任务参数，并移除了 Provider 枚举。Mnemon 按 Host 的确切存活实例归属接管根 Agent、启动带守卫的 spawn/fork 委派，不从 Session header 推断权限。提供 `lineageOf()` 的 Host 使用发布时的绑定；较早的 `rootOf()` 契约则在 prompt 入队前的 `subagent/start` 安装子级组合与守卫，组合或守卫安装失败时，会取消 Mnemon 发起的激活。Host 原生启动在子级记忆安装失败后仍可能继续，但 Mnemon 读取和 Action 会因缺少该子级的 View pin 而拒绝。没有 Provider 枚举时，仅探测官方 `spawn` 和 `fork` 名称。
 
 **这是启动及对话委派的限定兼容修复，不代表 DSH 0.2.2 源码版的所有功能均已兼容。** 该源码 Host 没有 Mnemon 隐藏独立任务 Agent 的公开等效能力：它拒绝标为 subagent 的独立 Agent，而普通根 Agent 可能在历史列表留下不需要的会话。因此 Mnemon 在创建任何 Session 前明确拒绝独立管理任务。受影响入口包括独立 Skills 任务、记忆页面的证据回答和保存到记忆、Runtime 维护、Document 创建与归档、Provider 放置，以及记忆空间元数据维护。对话内记忆及带守卫的 spawn/fork 委派仍可使用。需要上述独立操作时，请使用已验证的正式发布包 `@deepseek-ai/dsh@0.2.1-rc.5`；现有已发布 Host 的任务行为和数据保持不变。
 
-源码构建、合成模型验证、npm alpha.3 检查及尚未通过的完整测试和 Profile 检查见 [issue #554 验证记录](../../pr-assets/issue-554-agent-ownership/README.md)。本修复不修改 DSH 源码、开发依赖基线、配置格式或已存储的 Session。
+源码构建、合成模型验证、npm alpha.3 检查及剩余的源码 Profile 验证限制见 [issue #554 验证记录](../../pr-assets/issue-554-agent-ownership/README.md)。本修复不修改 DSH 源码、开发依赖基线、配置格式或已存储的 Session。
 
 ## 升级默认安装
 
