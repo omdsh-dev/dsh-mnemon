@@ -39,7 +39,7 @@ export function SkillsPage(props: { context: SkillsPageContext; location: Skills
   if (catalog === null) return <Busy label={t('common.loading')} />
   const groups = catalog.roots.map(root => ({ root, skills: visible.filter(skill => skill.root === root.kind) }))
   const current = catalog.skills.find(skill => skill.key === selected)
-  return <div className={css.skSplit}>
+  return <div className={`${css.skSplit} ${css.skSkillsSplit}`}>
     <aside className={css.skList}>
       <header className={css.skListBar}>
         <SearchField label={t('skills.search')} placeholder={t('skills.search')} value={query} onChange={event => setQuery(event.target.value)} />
@@ -55,7 +55,7 @@ export function SkillsPage(props: { context: SkillsPageContext; location: Skills
         <ul>{catalog.problems.map(problem => <li key={problem.path}><code title={problem.path}>{problem.path.split(/[\\/]/u).slice(-2).join('/')}</code><span>{problem.reason}</span></li>)}</ul>
       </details>}
     </aside>
-    <div className={css.skPane}>
+    <div className={css.skPane} key={current?.key ?? 'empty'}>
       {catalog.skills.length === 0
         ? <Empty glyph="✦" title={t('skills.empty')} action={<>
             <Button variant="primary" size="sm" disabled={!context.writable} onClick={() => setCreating(true)}>{t('skills.new')}</Button>
