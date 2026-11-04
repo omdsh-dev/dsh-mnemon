@@ -9,7 +9,7 @@ import { ComposedMnemonWorkbench as MnemonWorkbench } from './fixtures/client.ts
 import { MnemonActionSeat } from '../src/client/action-seat.ts'
 import { MnemonChangeSignal } from '../src/client/change-signal.ts'
 import { clearStarterUpdate, pendingStarterUpdate, recordStarterUpdate } from '../src/client/starter-update.ts'
-import { translateEn, zh } from '../src/client/locales.ts'
+import { translateZh, translateEn, zh } from '../src/client/locales.ts'
 import { TEST_PROVIDERS as MEMORY_PROVIDER_CATALOG } from './fixtures/providers.ts'
 import { memoryPageStyles } from '../src/client/page-kit.tsx'
 import { installClientFrameStyles } from './helpers/client-frame-styles.ts'
@@ -36,7 +36,7 @@ describe('MnemonWorkbench', () => {
   const settingsScope = staticSettingsScope<Config>(settingsSnapshot)
   const readOnlySettingsScope = staticSettingsScope<Config>({ status: 'unavailable', writable: false, mode: 'host' })
 
-  function createConnection(options: { rediscoveryRunning?: boolean; reviewWatermark?: 'ready' | 'error'; reviewPartial?: boolean; reviewTeam?: boolean; reviewToolAccess?: boolean; reviewError?: string; isLoopback?: boolean; withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; runtimeBranch?: boolean; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; summaryWithoutVersion?: boolean; restartPending?: VersionRestartStatus; directoryPending?: boolean; reconnectPending?: boolean; relatedDeferred?: boolean; versionsDeferred?: boolean; layerSwitches?: Record<'runtime' | 'documents' | 'memory-spaces', boolean>; componentsOff?: string[]; composition?: { serving: boolean; state: 'ready' | 'incomplete' | 'rejected'; diagnostics: Array<{ code: string; message: string }> } } = {}) {
+  function createConnection(options: { rediscoveryRunning?: boolean; reviewWatermark?: 'ready' | 'error'; reviewPartial?: boolean; reviewTeam?: boolean; reviewToolAccess?: boolean; reviewError?: string; isLoopback?: boolean; withInactiveBody?: boolean; withSecondActiveBody?: boolean; metadataFailureBodyId?: string; withPlacement?: boolean; withProviderSources?: boolean; listCount?: number; searchCount?: number; entityCount?: number; entityInsightCount?: number; documentCount?: number; runtimeCount?: number; runtimeBranch?: boolean; longContent?: boolean; workspaceMismatch?: boolean; nativeUnhealthy?: boolean; graphPending?: boolean; statusPending?: boolean; summaryWithoutVersion?: boolean; restartPending?: VersionRestartStatus; directoryPending?: boolean; reconnectPending?: boolean; relatedDeferred?: boolean; versionsDeferred?: boolean; layerSwitches?: Record<'runtime' | 'documents' | 'memory-spaces', boolean>; componentsOff?: string[]; composition?: { workflows?: { idleReview: boolean; runtimeCapacity: boolean }; serving: boolean; state: 'ready' | 'incomplete' | 'rejected'; diagnostics: Array<{ code: string; message: string }> } } = {}) {
     const body = {
       id: 'project',
       provider: MEMORY_PROVIDER_CATALOG.find(item => item.id === 'mnemon-native')!, providerId: 'mnemon-native', providerEnabled: true, providerSettings: {}, configuredSecrets: [],
@@ -144,6 +144,7 @@ describe('MnemonWorkbench', () => {
       ...(options.layerSwitches === undefined && options.composition === undefined ? {} : {
         memorySystem: {
           serving: options.composition?.serving ?? true,
+          get workflows() { return options.composition?.workflows === undefined ? undefined : { ...options.composition.workflows } },
           evaluation: { state: options.composition?.state ?? 'ready', contributionRevision: 1, sourceInstanceKeys: [], diagnostics: options.composition?.diagnostics ?? [] },
           sources: [],
           configuration: {
@@ -615,6 +616,25 @@ describe('MnemonWorkbench', () => {
     expect(within(warning).getByText(/committed-document-255/)).toBeTruthy()
     expect(within(warning).getByText(/committed-runtime-revision/)).toBeTruthy()
     expect(within(warning).queryByRole('button')).toBeNull()
+  })
+
+  it.each([
+    { t: translateEn, locale: 'en', title: 'Background maintenance unavailable', idle: false, capacity: false, missing: 'Idle review / Runtime capacity maintenance' },
+    { t: translateZh, locale: 'zh', title: '后台维护未运行', idle: false, capacity: false, missing: '空闲审查 / 运行时容量维护' },
+    { t: translateEn, locale: 'en', title: 'Background maintenance unavailable', idle: true, capacity: false, missing: 'Runtime capacity maintenance' },
+    { t: translateEn, locale: 'en', title: 'Background maintenance unavailable', idle: false, capacity: true, missing: 'Idle review' },
+  ])('shows unsupported workflows without a selected conversation and clears on strategy change ($locale/$idle/$capacity)', async ({ t, locale, title, idle, capacity, missing }) => {
+    const workflows = { idleReview: idle, runtimeCapacity: capacity }
+    const { connection } = createConnection({ composition: { serving: true, state: 'ready', diagnostics: [], workflows } })
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} t={t} locale={locale} />)
+    const notice = await screen.findByRole('status', { name: title })
+    expect(notice.textContent).toContain(missing)
+    if (idle) expect(notice.textContent).not.toContain('Idle review')
+    if (capacity) expect(notice.textContent).not.toContain('Runtime capacity maintenance')
+    workflows.idleReview = true
+    workflows.runtimeCapacity = true
+    fireEvent.click(screen.getByRole('button', { name: locale === 'en' ? 'Refresh' : '刷新' }))
+    await waitFor(() => expect(screen.queryByRole('status', { name: title })).toBeNull())
   })
 
   it('explains an automatic-review Team pause without presenting a failed child', async () => {

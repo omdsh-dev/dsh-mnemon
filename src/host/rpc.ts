@@ -5,6 +5,8 @@ import type { LiveMnemonRuntime } from './runtime.ts'
 import type { MnemonGitHubAuth } from './github-auth.ts'
 import { assertParticipation } from './access.ts'
 import { sourceFailure } from './source-session.ts'
+import { mainStrategyTypeId } from './main-strategy.ts'
+import { strategyDrives } from './strategy-workflows.ts'
 import { isVersionComponentId, VersionUpdateManager } from './version-updates.ts'
 import type { MemoryCapability, MemoryJsonValue, MemoryOperationScope, MemorySourceManagementInstance, MemorySourceManagementRequest } from '../core/contracts/index.ts'
 import type { CreateMemorySpaceRequest, Insight, MemorySpaceCatalog, PreparedMemoryPlacement, RememberRequest } from 'dsh-mnemon-source-memory-spaces/contracts'
@@ -127,10 +129,14 @@ async function catalog(runtime: ScopedRuntime, lifecycle?: MnemonLifecycle) {
 }
 async function compositionStatus(runtime: ScopedRuntime): Promise<MemoryCompositionStatus> {
   const composition = runtime.graph.memoryComposition.inspect()
-  const strategyTypeId = runtime.graph.memoryComposition.current()?.strategy.definition.manifest.typeId
+  const strategy = runtime.graph.memoryComposition.current()?.strategy.definition.manifest
   return {
     serving: composition.servingGenerationId !== undefined,
-    ...(strategyTypeId === undefined ? {} : { strategyTypeId }),
+    ...(strategy === undefined ? {} : { strategyTypeId: strategy.typeId, workflows: {
+      // Like lifecycle review, a fallback must not opt the selected Strategy into automatic review.
+      idleReview: strategy.typeId === mainStrategyTypeId(runtime.graph.config) && strategyDrives(strategy, 'idle-review'),
+      runtimeCapacity: strategyDrives(strategy, 'runtime-capacity'),
+    } }),
     evaluation: composition.evaluation, sources: (await catalog(runtime)).sources, configuration: runtime.graph.config.memoryTopology,
   }
 }

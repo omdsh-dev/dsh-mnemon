@@ -354,6 +354,8 @@ mnemon:
 
 DSH's live catalog reports each model's input modalities, and the picker labels image-capable models **Image input**. Choosing one does not make Mnemon background jobs ingest images: Tidy names and descriptions, Ask Agent, Save to memory, smart selection and document archiving still submit text and bounded evidence. In the main conversation, DSH-owned image blocks keep their attachment references when dsh-mnemon adds lifecycle guidance, while activity thresholds count text blocks only. Raw image bytes are never copied into runtime memory, documents or memory spaces.
 
+When the active Strategy does not drive idle review or runtime capacity maintenance, **Memory System** names the unavailable workflows even without a selected conversation. The General Strategy drives neither. The settings page explains this dependency and retains your choices for switching back to a supporting Strategy; enabling the review switch alone cannot opt a Strategy into these workflows. Manual actions keep their existing permissions.
+
 ## Skills settings
 
 Skills keeps its settings under `skills` in the `mnemon` entry, edited on its own page under **Plugins → dsh-mnemon** through the `mnemon-skills` settings scope. Settings apply live once saved, without rebuilding the memory runtime; the destination selector and review parameters wait for **Apply** or **Discard**. The [Skills guide](../guides/skills.md#self-evolution) explains what each does.
