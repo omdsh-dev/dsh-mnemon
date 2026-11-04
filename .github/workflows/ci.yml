@@ -110,8 +110,8 @@ jobs:
       - name: Import every public entry on Node.js 20
         run: node scripts/verify-public-entries.mjs
 
-  # The pinned development baseline is the current DSH RC. Keep older supported
-  # hosts and exercise both the current RC and the separate alpha track from npm.
+  # Keep the pinned development baseline and older supported DSH releases,
+  # and exercise both the current RC and the separate alpha track from npm.
   verify-installed-dsh:
     name: Verify on installed DSH ${{ matrix.dsh }} (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
@@ -123,8 +123,9 @@ jobs:
           - { dsh: '0.2.0-rc.2', node: '22.19.0' }
           - { dsh: '0.2.1-rc.3', node: '22.19.0' }
           - { dsh: '0.2.1-rc.5', node: '22.19.0' }
-          # The alpha Host needs >=24.9.0; pin the verified current Node 24 toolchain.
-          - { dsh: '0.2.2-alpha.2', node: '24.22.2' }
+          # DSH 0.2.2 requires >=24.9.0; keep Node 22 coverage for earlier Hosts.
+          - { dsh: '0.2.2-rc.1', node: '24.22.2' }
+          - { dsh: '0.2.2-alpha.3', node: '24.22.2' }
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -166,9 +167,13 @@ jobs:
         run: node --experimental-transform-types scripts/verify-task-model-directory.mjs "$RUNNER_TEMP/dsh/lib/node_modules/@deepseek-ai/dsh/package.json"
 
   verify-artifacts:
-    name: Verify packed plugins (Node 24)
+    name: Verify packed plugins on DSH ${{ matrix.dsh }} (Node 24)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        dsh: ['baseline', '0.2.2-rc.1']
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -185,7 +190,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install published RC for packed Starter acceptance
+        id: installed_dsh
+        if: matrix.dsh != 'baseline'
+        env:
+          DSH_RELEASE: ${{ matrix.dsh }}
+        run: |
+          npm install --global --prefix "$RUNNER_TEMP/dsh" "@deepseek-ai/dsh@$DSH_RELEASE" --no-fund --no-audit
+          echo "binary=$RUNNER_TEMP/dsh/lib/node_modules/@deepseek-ai/dsh/lib/bin.js" >> "$GITHUB_OUTPUT"
+
       - name: Verify packed and independently installed plugins
         env:
           MNEMON_PLUGIN_VERIFY_CONCURRENCY: '4'
+          MNEMON_E2E_DSH: ${{ steps.installed_dsh.outputs.binary }}
         run: pnpm run verify:plugins

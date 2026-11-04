@@ -1,7 +1,6 @@
-import { mkdtempSync, mkdirSync, realpathSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createRequire } from 'node:module'
 import { Context, type Plugin } from '@deepseek-ai/cordis'
 import { vi } from 'vitest'
 import * as runtime from 'dsh-mnemon-source-runtime'
@@ -19,15 +18,16 @@ import { createRuntimeGraph, LiveMnemonRuntime } from '../../src/host/runtime.ts
 import { MemoryPluginManagement, type MemoryPluginLoader, type MemoryPluginLoaderEntry } from '../../src/host/plugin-management.ts'
 import type { HostContextShape, HostSettingsService } from '../../src/host/dsh.ts'
 import type { MemoryViewPreferences } from '../../src/host/view-protocol.ts'
+import { requireDsh } from '../helpers/installed-dsh.ts'
 
-// Use the Loader shipped with the pinned DSH, not a lifecycle simulator.
-const requireDsh = createRequire(realpathSync(new URL('../../node_modules/@deepseek-ai/dsh/package.json', import.meta.url)))
+// Keep Loader and Cordis in the same installed Host, including the development baseline.
 const { Loader } = await import(requireDsh.resolve('@deepseek-ai/cordis-plugin-loader')) as { Loader: Plugin }
 interface TestLoader extends MemoryPluginLoader {
   import(name: string): Promise<unknown>
   root: { update(entries: object[]): Promise<void>; stop(): void }
   resolve(id: string): MemoryPluginLoaderEntry
-  write(): void
+  write?(): void
+  commit?(change: unknown): void
 }
 
 /** pluginManager simulates DSH's official manager: it writes the profile row, then reconciles. */
@@ -108,7 +108,8 @@ export async function viewManagementFixture(saved?: MemoryViewPreferences, ancho
   }
   await loader.root.update(structuredClone(profileEntries))
   if (options.pluginManager) ctx.provide('pluginManager', pluginManager)
-  const treeWrite = vi.spyOn(loader, 'write')
+  // New Loader releases publish persistence through commit; older Hosts use write.
+  const treeWrite = vi.spyOn(loader, typeof loader.commit === 'function' ? 'commit' : 'write')
   const graph = createRuntimeGraph(management.resolveConfig(config), workspace, engine)
   const live = new LiveMnemonRuntime(graph, {
     list: () => [{ id: 'workspace', path: workspace, title: 'Fixture' }],

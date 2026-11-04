@@ -20,6 +20,8 @@ The page has five tabs: **Skills**, **Evolution**, **Evals**, **Market** and **T
 
 ### Skills
 
+On wide screens, the skill list and the selected document scroll independently. Selecting another skill opens its detail at the top while keeping your place in the list. Narrow screens keep the scrollable list above the document.
+
 ![Skills: every skill by where it lives, one shadowed; release-notes with an improvement waiting](../../assets/skills-v0.5.34/en/skills-library.jpg)
 
 The list groups every `SKILL.md` DSH can load by where it lives, in DSH's order of precedence: the project's `.dsh/skills` and `.agents/skills`, then your `~/.dsh/skills` and `~/.agents/skills`. When two skills share a name, DSH loads the first, and the other is marked **Shadowed**. Files DSH would refuse are counted under the list (*N files cannot load*) and open to their reasons.

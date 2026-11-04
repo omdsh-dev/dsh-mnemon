@@ -4,7 +4,7 @@
 
 ## Environment and commands
 
-The plugin's Node engine floor is 20. The pinned complete DSH development profile is the published 0.2.1-rc.5 release candidate; that profile and the build tooling together need Node `^22.19.0 || >=24.11.0`. Use Node 24.22.2 for the verified macOS alpha toolchain. Root, Source Client tests and the external artifact consumer use that cohort, and `dsh-client-store` owns the public selector type used by the subagent projection adapter. Public Node entries are also smoke-tested on Node 20 in CI. DSH 0.2.0-rc.2 is supported as well: `tests/dsh-host-compatibility.spec.ts` runs DSH's own pre-install compatibility check over all 19 package manifests for the supported and unsupported releases, and CI runs the root tests against installed 0.2.0-rc.2, 0.2.1-rc.3 and 0.2.1-rc.5 packages on Node 22.19.0. The separate 0.2.2-alpha.2 CI target uses the verified Node 24.22.2 toolchain; the published Host itself needs Node 24.9.0 or later. The alpha track does not replace the RC baseline. To run them against another installation yourself:
+The plugin's Node engine floor is 20. The pinned complete DSH development profile is the published 0.2.1-rc.5 release candidate; that profile and the build tooling together need Node `^22.19.0 || >=24.11.0`. Use Node 24.22.2 for DSH 0.2.2 RC/alpha acceptance. Root, Source Client tests and the external artifact consumer use that cohort, and `dsh-client-store` owns the public selector type used by the subagent projection adapter. Public Node entries are also smoke-tested on Node 20 in CI. DSH 0.2.0-rc.2 is supported as well: `tests/dsh-host-compatibility.spec.ts` runs DSH's own pre-install compatibility check over all 19 package manifests for the supported and unsupported releases, and CI runs the root tests against installed 0.2.0-rc.2, 0.2.1-rc.3 and 0.2.1-rc.5 packages on Node 22.19.0. The published 0.2.2-rc.1 and separate 0.2.2-alpha.3 CI targets use Node 24.22.2; these Hosts require Node 24.9.0 or later. Packed Starter acceptance covers both the pinned baseline and RC1, including installation, data-preserving upgrade, settings save/restart, disabling the Starter and enabling all optional strategies. The pinned development baseline stays on 0.2.1-rc.5 to retain Node 22 and older-Host coverage. To run them against another installation yourself:
 
 ```sh
 npm install --global --prefix <directory> @deepseek-ai/dsh@0.2.0-rc.2
@@ -145,6 +145,8 @@ To serve the WebUI on another DSH release, install it with `npm install -g --pre
 ### Fixture options
 
 `--evolution-scroll` seeds ten synthetic skill suggestions, one with a long detail, to check independent scrolling and selection on wide and narrow screens. It calls no model.
+
+`--skills-scroll` seeds 24 synthetic skills, including two long documents, for the Skills tab's list/detail scrolling regression. Check independent wheel scrolling, scroll containment at each column's boundary, and detail reset on selection at desktop width; at narrow width, check that the list stays bounded and the entire document remains reachable. It calls no model and can be combined with `--evolution-scroll`.
 
 `pnpm e2e:serve` takes the options below, of two kinds:
 

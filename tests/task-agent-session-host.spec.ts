@@ -8,7 +8,9 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, expect, it } from 'vitest'
-import type { HostContextShape, HostSession } from '../src/host/dsh.ts'
+import type { HostAgent, HostContextShape, HostSession } from '../src/host/dsh.ts'
+import type { DocumentView } from 'dsh-mnemon-source-documents/contracts'
+import type { Insight, PreparedMemoryPlacement } from 'dsh-mnemon-source-memory-spaces/contracts'
 import { MnemonLifecycle } from '../src/host/lifecycle.ts'
 import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
 import { startSubagent } from '../src/host/subagent-start.ts'
@@ -91,24 +93,25 @@ async function acpSessionList(ctx: Context): Promise<() => Promise<string[]>> {
 }
 
 /**
- * A real DSH host with Mnemon's lifecycle, DSH's spawn provider, Session query and ACP agent, one open
- * conversation, and `plain`: a finished session created as main created a task Agent's, through
+ * A real DSH host with Mnemon's lifecycle, DSH's spawn provider, Session query and ACP agent, no live
+ * conversations, and `plain`: a finished session created as main created a task Agent's, through
  * `agents.create` with only a cwd, which ACP lists. ACP leaves out a session that is still attached.
  */
-async function host() {
-  const f = await compositionFixture()
+async function host(reply?: (project: string) => Record<string, unknown>) {
+  const f = await compositionFixture({ taskAgentModel: { mode: 'fixed', provider: 'scripted', model: 'fixture' } })
   const project = (await f.memorySpace()).id
   const ctx = new Context()
   let stop: (() => void) | undefined
   disposers.push(async () => { stop?.(); await ctx.fiber.dispose(); await f.dispose() })
   const adapter = new ScriptedAdapter(options => {
-    if (options.sessionId === 'parent' || options.sessionId === 'plain') return 'Noted.'
+    if (options.sessionId === 'plain') return 'Noted.'
     if (options.messages.some(message => message.role === 'user' && text(message).includes(CHILD_STEP))) return 'Maintenance step done.'
     // The Save to memory writer stores the candidate in the project space, then reports.
     const system = JSON.stringify(options.messages.filter(message => message.role === 'system'))
     const terminal = system.match(/Completion protocol: call `([^`]+)`/u)?.[1]
     const requestId = system.match(/requestId `([^`]+)`/u)?.[1]
     if (terminal === undefined || requestId === undefined) throw new Error('writer completion capability is missing')
+    if (reply !== undefined) return { name: terminal, args: { requestId, result: reply(project) } }
     if (!options.messages.some(message => message.role === 'tool')) return { name: 'mnemon_remember', args: { content: CANDIDATE, memoryBodyId: project } }
     return { name: terminal, args: { requestId, result: { summary: 'Saved the release checklist.', action: 'stored', memoryBodyIds: [project] } } }
   })
@@ -130,10 +133,6 @@ async function host() {
   const lifecycle = new MnemonLifecycle(dsh, coordinator, f.config, f.live)
   registerTools(dsh, f.live, coordinator, f.extensions)
   stop = lifecycle.start()
-  // An ordinary conversation, which also supplies the task Agent's model route.
-  const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'scripted', model: 'fixture' }, { cwd: f.workspace })
-  parent.followup(createUserMessage({ content: [{ type: 'text', text: 'What is our release process?' }], source: { kind: 'user' } }))
-  await parent.whenIdle()
   const agents = (ctx as unknown as { agents: { create(options: object): Promise<{ agent: { followup(message: unknown): void; whenIdle(): Promise<void> }; dispose(): Promise<void> }> } }).agents
   const plain = await agents.create({ sessionId: SessionId('plain'), meta: { cwd: f.workspace }, agentOptions: { provider: 'scripted', model: 'fixture' } })
   plain.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Hello.' }], source: { kind: 'user' } }))
@@ -143,7 +142,8 @@ async function host() {
   const query = (ctx as unknown as { sessionQuery: { listSessions(): Promise<ReadonlyArray<{ header: Header }>> } }).sessionQuery
   /** Every stored session's header by id, as Session query reads them. */
   const sessions = async () => new Map((await query.listSessions()).map(record => [record.header.id, record.header]))
-  return { f, dsh, lifecycle, project, sessions, listed }
+  expect(ctx.agents.list()).toEqual([])
+  return { f, ctx, dsh, lifecycle, project, sessions, listed }
 }
 
 it("keeps a Save to memory task Agent out of DSH's ACP session list and any lineage, and its writer still saves", async () => {
@@ -163,18 +163,22 @@ it("keeps a Save to memory task Agent out of DSH's ACP session list and any line
   // Its writer is its child, one level deep, as before.
   expect([...sessions.values()].filter(header => header.parentSession === result.sessionId))
     .toEqual([expect.objectContaining({ id: result.runId, origin: 'subagent', delegationDepth: 1 })])
+  expect(h.ctx.agents.list()).toEqual([])
 }, 30_000)
 
-it("keeps a Runtime maintenance task Agent out of DSH's ACP session list, and its child still runs under it", async () => {
+it.each(['runtime', 'skills'] as const)("keeps a standalone %s task out of DSH's ACP session list, and its child still runs under it", async kind => {
   const h = await host()
   const signal = new AbortController().signal
 
-  const outcome = await h.lifecycle.runRuntimeMaintenanceTask({ storage: 'workspace', workspaceId: h.f.workspace }, signal, async task => {
+  const operation = async (task: HostAgent) => {
     const run = await startSubagent(h.dsh.subagents, h.dsh.agents, 'spawn', { label: 'Mnemon test child', prompt: [{ type: 'text', text: CHILD_STEP }], parent: task, signal })
     const result = await run.result
     await run.dispose()
     return { task: task.id, child: run.id, result }
-  })
+  }
+  const outcome = kind === 'runtime'
+    ? await h.lifecycle.runRuntimeMaintenanceTask({ storage: 'workspace', workspaceId: h.f.workspace }, signal, operation)
+    : await h.lifecycle.runSkillTask(h.f.workspace, signal, operation)
 
   expect(outcome.result).toMatchObject({ output: [{ type: 'text', text: 'Maintenance step done.' }], stopReason: 'completed' })
   expect(await h.listed()).toEqual(['plain'])
@@ -182,4 +186,57 @@ it("keeps a Runtime maintenance task Agent out of DSH's ACP session list, and it
   expect(sessions.get(outcome.task)).toMatchObject({ origin: 'subagent', cwd: h.f.workspace })
   expect(sessions.get(outcome.task)?.parentSession).toBeUndefined()
   expect(sessions.get(outcome.child)).toMatchObject({ origin: 'subagent', parentSession: outcome.task, delegationDepth: 1 })
+  expect(h.ctx.agents.list()).toEqual([])
+}, 30_000)
+
+it('answers evidence queries without a conversation and cleans up its hidden task and child', async () => {
+  const h = await host(() => ({ answer: 'Run the staged rollout first.', citations: [] }))
+  const result = await h.lifecycle.answerTask('', 'What should run first?', [], h.f.workspace)
+  expect(result).toMatchObject({ answer: 'Run the staged rollout first.', citations: [], delegation: { provider: 'spawn' } })
+  expect(await h.listed()).toEqual(['plain'])
+  expect(h.ctx.agents.list()).toEqual([])
+  expect((await h.sessions()).get(result.delegation.runId)).toMatchObject({ origin: 'subagent', delegationDepth: 1 })
+}, 30_000)
+
+it('proposes Memory Space metadata without a conversation or extra visible sessions', async () => {
+  const h = await host(project => ({ summary: 'Prepared release metadata.', updates: [
+    { memoryBodyId: project, title: 'Release planning', description: 'Release decisions and staged rollout checklists.' },
+  ] }))
+  const result = await h.lifecycle.maintainMetadata('', [h.project], h.f.workspace)
+  expect(result).toMatchObject({ delegated: true, provider: 'spawn', updates: [
+    { memoryBodyId: h.project, title: 'Release planning', description: 'Release decisions and staged rollout checklists.' },
+  ] })
+  expect(await h.listed()).toEqual(['plain'])
+  expect(h.ctx.agents.list()).toEqual([])
+}, 30_000)
+
+it('creates and archives a Document without a conversation, retaining its content and memory index', async () => {
+  const h = await host(project => ({ action: 'planned', summary: 'Release checklist archive.', memoryBodyId: project }))
+  const created = await h.lifecycle.mutateDocumentTask('', { action: 'create', title: 'Release checklist', content: CANDIDATE }, h.f.workspace)
+  expect(created.success).toBe(true)
+  const id = created.document!.id
+  const archived = await h.lifecycle.archiveDocument('', id, h.f.workspace)
+  expect(archived).toMatchObject({ success: true, document: { id, status: 'archived' } })
+  const scope = { storage: 'workspace' as const, workspaceId: h.f.workspace }
+  const stored = await h.f.graph.source('documents', scope).read<DocumentView>('document', { id })
+  expect(stored.content).toBe(CANDIDATE)
+  const recalled = await h.f.graph.source('memory-spaces', scope).read<{ results: Insight[] }>('search', {
+    query: stored.contentHash, mode: 'keyword', memoryBodyIds: [h.project], limit: 10,
+  })
+  expect(recalled.results.some(item => item.content.includes(stored.contentHash) && item.content.includes('.mnemon/documents/archived/'))).toBe(true)
+  expect(await h.listed()).toEqual(['plain'])
+  expect(h.ctx.agents.list()).toEqual([])
+}, 30_000)
+
+it('chooses an eligible Memory Space Provider without a conversation or extra visible sessions', async () => {
+  const h = await host(() => ({ providerId: 'holographic', reason: 'Keep synthetic release records local.', confidence: 'high' }))
+  const body = { name: 'Release planning', description: 'Release decisions and staged rollout checklists.' }
+  const prepared = await h.f.graph.source('memory-spaces').read<PreparedMemoryPlacement>('prepare-body-placement', {
+    ...body, placement: { mode: 'automatic', rules: { allowedProviderIds: ['holographic'] } },
+  })
+  const result = await h.lifecycle.placeProviderTask('', body, prepared, h.f.workspace)
+  expect(prepared.candidates.map(candidate => candidate.id)).toContain(result.providerId)
+  expect(result.providerId).toBe('holographic')
+  expect(await h.listed()).toEqual(['plain'])
+  expect(h.ctx.agents.list()).toEqual([])
 }, 30_000)

@@ -818,7 +818,20 @@ describe('legacy Session copy repair', () => {
     const input = join(root, 'input')
     const output = join(root, 'output')
     await writeFile(input, text)
-    await expect(publishedLoad(join(root, 'before'), text)).rejects.toThrow('uses unsupported descriptor version 2')
+    // New Hosts can read historical v2 descriptors themselves. The copy repair
+    // still has to produce the exact v3 composition for older supported Hosts.
+    const legacy = JSON.parse(text.trim().split('\n').at(-1)!)
+    let readable = true
+    try { assertReleasedEventPayload(legacy, 0) } catch (error) {
+      expect((error as Error).message).toContain('uses unsupported descriptor version 2')
+      readable = false
+    }
+    if (readable) {
+      const original = await publishedLoad(join(root, 'before'), text)
+      expect(original.events.find(event => event.type === 'subagent/descriptor')!.data).toEqual(descriptor)
+    } else {
+      await expect(publishedLoad(join(root, 'before'), text)).rejects.toThrow('uses unsupported descriptor version 2')
+    }
     const result = cli('--input', input, '--output', output)
     expect(result.status).toBe(0)
     expect(JSON.parse(result.stdout)).toMatchObject({ repairedMessages: 0, repairedDescriptors: 1, blockers: [] })
