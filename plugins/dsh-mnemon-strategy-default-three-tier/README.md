@@ -78,8 +78,8 @@ entry per such Source in `ViewSpec.diagnostics`. The Host validates those
 entries and merges them into `view.diagnostics`, so the turn's
 `MNEMON VIEW AVAILABILITY` line and the View inspection name the Source and its
 role. A diagnostic is an explanation, never authority: the Source still gets no
-projection, Route or ActionOffer. Select the general Strategy, or name the
-Source in an explicit `selection`, to compose it. An unavailable Source keeps
+projection, Route or ActionOffer. Select the general Strategy to compose it;
+an explicit `selection` still rejects unsupported roles. An unavailable Source keeps
 the Host's own diagnostic instead.
 
 Its own directory is a standalone project: install its declared dependencies,

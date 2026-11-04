@@ -78,6 +78,7 @@ describe('default three-tier diagnostics for a Source role it does not admit (#5
     expect(turn.view.diagnostics![0]!.message).toContain('source:todo')
     expect(turn.view.diagnostics![0]!.message).toContain('"todo"')
     expect(turn.view.diagnostics![0]!.message).toContain('general Strategy')
+    expect(turn.view.diagnostics![0]!.message).not.toContain('explicit selection')
     // Explanation only: no projection, Route or ActionOffer is granted, and the
     // three standard Sources offer exactly what they offer without it.
     expect(turn.view.projection.some(fragment => fragment.sourceInstanceKey === 'source:todo')).toBe(false)

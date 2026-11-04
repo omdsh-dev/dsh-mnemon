@@ -30,7 +30,7 @@ function unsupportedRoleDiagnostics(sources: readonly MemorySourceFacts[]): Memo
   return [
     ...reported.map(source => ({
       code: 'unsupported-source-role',
-      message: `Installed Source ${source.sourceInstanceKey} declares the role "${source.role}", which the default-three-tier Strategy does not admit, so it contributes no projection, Routes or Actions to this View. Use the general Strategy, or name it in an explicit selection, to compose it.`,
+      message: `Installed Source ${source.sourceInstanceKey} declares the role "${source.role}", which the default-three-tier Strategy does not admit, so it contributes no projection, Routes or Actions to this View. Use the general Strategy to compose it.`,
     })),
     ...(reported.length === unsupported.length ? [] : [{
       code: 'unsupported-source-role',
