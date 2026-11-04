@@ -179,6 +179,7 @@ export function ThreeTierSettings(props: ShippedSettingsServices & { page: Memor
       <p>{t('config.backgroundDescription')}</p>
       {taskAgent.catalog.state === 'loading' && <span className={css.miniSpinner} aria-hidden="true" />}
     </div>
+    <p className={css.panelNote}>{t('config.strategyWorkflowNote')}</p>
     {!page.component.enabled && <p className={css.panelNote}>{t('threeTier.offNote')}</p>}
     <div className={css.rows}>
       <TaskAgentModelRows mode={taskAgent.choosing ? 'fixed' : taskAgent.route.mode} route={taskAgent.route} settled={taskAgent.settled} choosing={taskAgent.choosing}
