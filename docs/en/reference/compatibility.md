@@ -6,13 +6,16 @@ The Starter pins a tested combination of official plugins. The table records ver
 
 | Component | Baseline | What is verified |
 |---|---|---|
-| DSH current RC | `0.2.1-rc.5` | Pinned development baseline and an installed-host CI target. The npm `latest` and `next` tags pointed here on 2026-11-02; this is still a prerelease. |
+| DSH current RC | `0.2.2-rc.1` | Published npm `next` on 2026-11-04. Full installed-Host tests and packed Starter installation/upgrade checks run on Node 24.22.2; the Host requires Node >=24.9.0. |
+| DSH development baseline | `0.2.1-rc.5` | Pinned development dependencies and an installed-Host CI target on Node 22.19. The npm `latest` tag still pointed here on 2026-11-04. |
 | DSH earlier supported hosts | `0.2.0-rc.2`, `0.2.1-rc.3` | CI runs every root test against these installed packages. See [DSH 0.2.0 and 0.2.1](#dsh-020-and-021) for version differences; the supported range still admits 0.2.1-rc.1 and rc.2. |
-| DSH alpha track | `0.2.2-alpha.2` | Separate installed-host CI target on the verified Node 24.22.2 toolchain; the published alpha Host itself requires Node 24.9.0 or later. This is the npm `alpha` tag checked on 2026-11-02, not the default development host or a guarantee for later alphas. |
+| DSH alpha track | `0.2.2-alpha.3` | Separate installed-host CI target on the verified Node 24.22.2 toolchain; the published alpha Host itself requires Node 24.9.0 or later. This is the npm `alpha` tag checked on 2026-11-04, not the default development host or a guarantee for later alphas. |
 | Node.js | `22.19` and `24` | Source CI and packed-artifact CI respectively; development requires `^22.19.0 \|\| >=24.11.0` |
 | Node.js 20 | Public package imports only | Does not establish that the DSH Host runs on Node 20 |
 | Mnemon Native CLI | `0.2.9`; embedding model checks require `0.2.13+` | Opt-in tests against a real CLI and disposable data; install the CLI separately. Older versions retain their other commands, but Test status asks for an upgrade because their availability fields only establish provider reachability |
 | Third-party Providers | Adapter contracts and fixtures | Does not establish live cloud-account conformance or upstream availability |
+
+The earlier alpha.2 acceptance used Cordis `4.0.6-alpha.1` and Loader `1.0.7-alpha.1`. Fresh alpha.2 installations now resolve their newer alpha.2 dependencies, which are incompatible with that Host's fixed app-boot package: settings updates fail even without Mnemon. Use alpha.3 for the current alpha validation target; changing the CI target does not repair existing alpha.2 installations. [Isolated Host evidence](../../pr-assets/issue-554-alpha-host/README.md) separates this upstream failure from the test fixture's Loader selection and legacy-reader adaptation.
 
 DSH 0.2.1-rc.3 and the current RC/alpha targets fetch the official API-key model directory over the network. The task Agent model selector allows that Provider up to six seconds, covering DSH's default five-second request budget; other Providers retain their three-second bound. This changes directory loading only, not model selection, inference timeouts or saved configuration.
 
@@ -39,6 +42,14 @@ Installing for the first time? How DSH chooses the registry, and why its result 
 | `0.1.5-rc.1` to `0.1.7-alpha.1` | `0.5.16` |
 
 What those hosts needed is kept under [Older DSH hosts](#older-dsh-hosts). How each release was verified, and the earlier Headless and WebUI records that remain historical evidence, are under [Verification and evidence](#verification-and-evidence).
+
+### Published DSH 0.2.2 RC1 and issue #554
+
+Use the published `@deepseek-ai/dsh@0.2.2-rc.1` package. Its public Agent registry still provides `roots()` and `isOwnedBy()`, its subagent runtime retains provider enumeration and the nested activation request, and hidden standalone task Agents remain supported. The source build `8bd073392eef6f54e921a093b95076248eb08cbb` reported in #554 has different contracts and is not the published RC; its source-only adapter is not shipped.
+
+All existing task paths stay available: standalone Skills work, evidence answers and Save to memory, Runtime maintenance, Document creation/archive, Provider placement and Memory Space metadata maintenance. Real-Host regression tests cover successful standalone operations, retained Document content and archive indexes, hidden ACP task Sessions, guarded spawn/fork, cancellation and rejection before the first model request when composition fails. The runtime, storage, configuration and supported-version range are unchanged; no feature is disabled for RC compatibility.
+
+The installed RC and packed Starter use the Host's own dependencies. Tests resolve Loader from that same installation and observe its actual persistence method. Historical Session checks preserve valid legacy descriptors while respecting the Host's published validator. Commands, package identity, acceptance results and limits are in [RC1 compatibility evidence](../../pr-assets/dsh-022-rc1/README.md).
 
 ## Upgrade the default installation
 
