@@ -286,3 +286,7 @@ Test at least: valid composition; missing/ambiguous dependencies; two instances;
 Run each plugin's `pnpm verify`. At repository level, `pnpm verify:plugins` packs all 18 artifacts, installs every plugin outside the workspace through ordinary semver manifests, then type-checks/tests/builds each and compiles the external consumer. No source aliases, manifest overrides or workspace links are permitted in that gate.
 
 For RSI, keep candidate inputs/artifacts reproducible, compare against a known composition, and promote only through an explicit installation/selection decision. Passing a Strategy replay does not sandbox arbitrary JavaScript or grant permission to trade, send messages or delete external data.
+
+## Execution-local Source state
+
+`query` and `mutate` receive a frozen `MemorySourceViewContext`. Since dsh-mnemon 0.5.40 its object identity is stable for one Source within an execution, so a Source can use it as a `WeakMap` key for transient state. Separate executions receive different objects even when they pin the exact same View. Do not key transient authority by `view.id` or a ReadGrant id: these are deterministic and can repeat. The context exposes only View identity and scope; it does not grant additional reads or bypass Action authorization. A Source relying on this identity must declare a dsh-mnemon peer floor of 0.5.40.

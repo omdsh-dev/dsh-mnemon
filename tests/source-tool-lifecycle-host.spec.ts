@@ -11,6 +11,8 @@ import { expect, it } from 'vitest'
 import holographic from 'dsh-mnemon-provider-holographic'
 import * as spaces from 'dsh-mnemon-source-memory-spaces'
 import * as scoped from 'dsh-mnemon-strategy-scoped'
+import * as general from 'dsh-mnemon-strategy-general'
+import type { DocumentSnapshot } from 'dsh-mnemon-source-documents/contracts'
 import type { HostAgent, HostContextShape } from '../src/host/dsh.ts'
 import { MnemonLifecycle } from '../src/host/lifecycle.ts'
 import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
@@ -22,11 +24,12 @@ import { loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed
 const spawn = await import(requireDsh.resolve('@deepseek-ai/dsh-subagent-spawn-in-process'))
 const fork = await import(requireDsh.resolve('@deepseek-ai/dsh-subagent-fork-in-process'))
 type Reply = string | { name: string; args: Record<string, unknown> }
+type Respond = (options: GenerateOptions) => Reply | Promise<Reply>
 class ScriptedAdapter extends LlmAdapter {
   private calls = 0
-  constructor(private readonly respond: (options: GenerateOptions) => Reply) { super() }
+  constructor(private readonly respond: Respond) { super() }
   override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
-    const reply = this.respond(options)
+    const reply = await this.respond(options)
     const id = `lifecycle-${++this.calls}` as Extract<StreamChunk, { type: 'tool-call-delta' }>['id']
     if (typeof reply === 'string') {
       yield { type: 'block-start', index: 0, blockType: 'text' }
@@ -43,7 +46,7 @@ class ScriptedAdapter extends LlmAdapter {
   }
 }
 
-async function harness(respond: (options: GenerateOptions) => Reply, configure?: (f: Awaited<ReturnType<typeof compositionFixture>>) => Promise<void>) {
+async function harness(respond: Respond, configure?: (f: Awaited<ReturnType<typeof compositionFixture>>) => Promise<void>) {
   const f = await compositionFixture()
   const ctx = new Context()
   let stop: (() => void) | undefined
@@ -77,6 +80,32 @@ async function harness(respond: (options: GenerateOptions) => Reply, configure?:
     return { ...f, ctx, coordinator, parent: parent as unknown as HostAgent, session: parent.session, turn, dispose }
   } catch (error) { await dispose(); throw error }
 }
+
+it('creates and immediately updates a Document through real Host tools in one General-strategy turn (#559)', async () => {
+  let calls = 0
+  let id = ''
+  const f = await harness(async options => {
+    if (calls++ === 0) return { name: 'mnemon_document_create', args: { title: 'Same-turn correction', content: 'Synthetic first draft.' } }
+    if (calls === 2) {
+      const snapshot = await f.graph.source('documents').read<DocumentSnapshot>('snapshot')
+      id = snapshot.documents.find(document => document.title === 'Same-turn correction')!.id
+      expect(JSON.stringify(options.messages)).toContain(id)
+      return { name: 'mnemon_document_manage', args: { action: 'update', id, content: 'Synthetic corrected draft.' } }
+    }
+    return 'Corrected.'
+  }, async f => {
+    f.config.memoryTopology.strategyId = 'general'
+    await f.mount(general, { instanceId: 'general' })
+  })
+  try {
+    await f.turn('Create the synthetic draft, then correct it immediately.')
+    expect(calls).toBe(3)
+    expect(await f.graph.source('documents').read('document', { id })).toMatchObject({ content: 'Synthetic corrected draft.', revision: 2 })
+    const receipts = f.parent.session.snapshotEvents().filter(event => event.type === 'tool/result')
+    expect(receipts).toHaveLength(2)
+    expect(JSON.stringify(receipts)).not.toContain('"isError":true')
+  } finally { await f.dispose() }
+}, 20_000)
 
 it('updates an already loaded Agent schema and keeps Documents/Runtime usable with Memory Spaces absent', async () => {
   const requests: string[][] = []

@@ -286,3 +286,7 @@ try {
 插件运行自己的 `pnpm verify`。仓库级 `pnpm verify:plugins` 打包全部 18 个制品，用正常 semver manifest 在工作区外逐个安装、检查、测试和构建，再编译外部消费者；禁止源码 alias、manifest override 和工作区软链接。
 
 RSI 应保存可复现候选输入/制品，对照已知组合评估，经明确安装/选择决策晋升。Strategy 回放通过，不代表任意 JavaScript 已被沙箱隔离，也不授予交易、发消息或删除外部数据的权限。
+
+## Source 的执行内状态
+
+`query` 与 `mutate` 接收冻结的 `MemorySourceViewContext`。从 dsh-mnemon 0.5.40 起，同一个 Source 在同一次执行中得到稳定的对象引用，可用作 `WeakMap` 键保存临时状态。独立执行即使固定了完全相同的 View，也会获得不同对象。不要用 `view.id` 或 ReadGrant id 保存临时授权：这些确定性标识可以重复。上下文仅含 View 身份与范围，不扩大读取权限，也不绕过 Action 授权。依赖此对象身份的 Source 应声明 dsh-mnemon peer 下限为 0.5.40。
