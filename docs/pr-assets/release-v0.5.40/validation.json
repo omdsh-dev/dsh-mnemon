@@ -1,0 +1,359 @@
+{
+  "schemaVersion": 1,
+  "version": "0.5.40",
+  "previousVersion": "0.5.39",
+  "date": "2026-11-04",
+  "timezone": "Asia/Shanghai",
+  "mergedFeatureRevision": "9d1fbc8b2e6535ff285cae1209f2ac9b81fa0333",
+  "buildNode": "22.22.0",
+  "uiAcceptanceNode": "24.22.2",
+  "composition": {
+    "dsh-mnemon": "0.5.40",
+    "dsh-mnemon-provider-byterover": "0.5.6",
+    "dsh-mnemon-provider-hindsight": "0.5.7",
+    "dsh-mnemon-provider-holographic": "0.5.7",
+    "dsh-mnemon-provider-honcho": "0.5.5",
+    "dsh-mnemon-provider-mem0": "0.5.5",
+    "dsh-mnemon-provider-mnemon-native": "0.5.10",
+    "dsh-mnemon-provider-openviking": "0.5.10",
+    "dsh-mnemon-provider-retaindb": "0.5.6",
+    "dsh-mnemon-provider-supermemory": "0.5.5",
+    "dsh-mnemon-source-documents": "0.5.13",
+    "dsh-mnemon-source-memory-spaces": "0.5.25",
+    "dsh-mnemon-source-runtime": "0.5.17",
+    "dsh-mnemon-source-skills": "0.5.7",
+    "dsh-mnemon-strategy-auto-capture": "0.5.5",
+    "dsh-mnemon-strategy-default-three-tier": "0.5.12",
+    "dsh-mnemon-strategy-general": "0.5.1",
+    "dsh-mnemon-strategy-light-context": "0.5.6",
+    "dsh-mnemon-strategy-scoped": "0.5.5"
+  },
+  "frozenCandidates": [
+    {
+      "name": "dsh-mnemon",
+      "version": "0.5.40",
+      "filename": "dsh-mnemon-0.5.40.tgz",
+      "sha256": "6e1bb673f1b3ddd15a4a8debe0eeedf001e33d350d8ac6f348fa2b2d5f1683f7",
+      "integrity": "sha512-KVdCq9kfQFdxNqPi45UbJTjbv3qjFuhFnYjZeHVVG/3ayLRxpvilIOXatTAU+D1AnbT/G12utDJcY9+zKdbA4Q==",
+      "files": {
+        "LICENSE": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+        "lib/bundle.js": "1a84e5ef956ad565355cbd69cf2345a15018b415cd38d72cd699a5844075399e",
+        "lib/client.js": "a0d65402839e2ee12f584b184b8fabf571cea93c37d4beeee306192d22a91af5",
+        "lib/contracts.js": "024ad7318227336ef8816b48457b63593bc56e20bb74c6ffd59244425d23a779",
+        "lib/core.js": "e2d32e8fe8c16ce90d0bcade5782feb4ce20bc9b716faa95e8c5432e768b03db",
+        "lib/definitions-DU7MLBhu.js": "510cd51f4b1dfe1ffbd47ba8fb1cbbdbf87002531014c3dc462dec1a8ebcbcb2",
+        "lib/extension-sdk.js": "b70c0c276f4fb8926c88dc84e2374f4ca98f0cbe5b289624a33c976dca286a11",
+        "lib/index.js": "add0501cd6b9f3c3889abee0fcefac5a1401767d3ef79474f1f7fdf79ef1f678",
+        "lib/runtime-DmL0It3P.js": "74d762eb906c2989a584df63dfe823f490f4e2a9a152ef0f310ab3a2d81985a1",
+        "lib/starter-resolution-C5nNk-cs.js": "9815dbdd980a1011399a7bebb22abd8e2f2ca8b6e781148f399f98d752c87835",
+        "lib/starter.js": "ba31dbc9fd2f3adafbb9fbc4a6dd3bfb87bfe6d45dc1020e3b38650d9de159f8",
+        "lib/strategy-configuration-CKP2kRss.js": "a06fab7d856de5689df29d29be768e1730f14eee1d6736c346240e8b27680d21",
+        "lib/testing.js": "aecc89be6ddd5537f386b0a56fb285ec2bf894052fb1e27d9eb8689b26cd0bbb",
+        "locale/en.json": "53b4411680fd544bed77843c3356a8e115801fbc0e4f10f28226c821835b5f1d",
+        "package.json": "fb60d1257fb2b52307f6d8d31c1e7a3a514b7d75ec869f87d3b0d14082134a6b",
+        "locale/zh.json": "f1f60f2c2b7ac12b52b9fb91b6ecc564798536611879ce4c3329a4f9e4bafd85",
+        "README.md": "2fd04e73a58de02dcb6b7a37a8827328677cfb97b4b30b3a56504aec9286b4cb",
+        "README.zh-CN.md": "21f708115fae73e481cbc6c86e8c94235e4b0492af159d326583b07bbcc50a11",
+        "SECURITY.md": "700562eaa915d083050a30b6f58292c8ce5c06dd83fde6cd7cfadef228dd3fb1",
+        "THIRD_PARTY_NOTICES.md": "32ebd32c67f4316e33e4214a0504ebe6dabeb1fef00106de05e457a97cb80926",
+        "bin/repair-legacy-session.mjs": "2465c57aead1426a520db45e231278a0fb7d5afecb01f4c4c114b1b3814cf4eb",
+        "lib/types/src/bundle.d.ts": "602028377ee0735110c68e0807aeea407a05b021b5c87ec66af3e4b4d83e9033",
+        "lib/types/src/client/component-ui.d.ts": "b8b2137b5e9eab1bbcaed491ab2edbcb23e71e1d18eadf1068cb10f4efdfb800",
+        "lib/types/src/host/config-values.d.ts": "d6d51c8288cf72085bd7b3194e79ffe3e2ed9675604efb3706dfd74b24169a98",
+        "lib/types/src/host/config.d.ts": "e89b437600120c86b8dcd6720c7b99a26561f5512125dc2a2ca6f6454ebc39f4",
+        "lib/types/src/core/definitions.d.ts": "c1426396948e63015b25a8e5aaccdf65c43ddf33055de833ae90a33cb76a2fec",
+        "lib/types/src/host/display-mode.d.ts": "9cfd641ad2162703dea794b613f98a6a42b3007c8aeb4e0f6b65b82ad5a4d678",
+        "lib/types/src/client/extension-sdk.d.ts": "ac6e9034bbcfad7dfd877c6b9298bce500ad75d5e095568eca29f5bf29a56473",
+        "lib/types/src/client/feedback.d.ts": "e532a8e2e0d60d0da5d8e63238e6eca88da3244d2560a749a3380e662b543792",
+        "lib/types/src/client/GlobalLocationSetting.d.ts": "3cf62d774fa8406057c3406682a8a87a61ab62232f87b85163e20351c2e4d131",
+        "lib/types/src/client/index.d.ts": "d43c82958f8bb83ef5cff5524813d65e3e0b25b688914b04283d238ce8e13f6f",
+        "lib/types/src/core/contracts/index.d.ts": "861b85070c37483c4c578fd2f37ddb616cb70522eb409fbeb391ee2850058b4e",
+        "lib/types/src/index.d.ts": "a30ee3bce8e37249b8461b925cc0e626942d4a0cf6233c13a3f0d010f6d5ad47",
+        "lib/types/src/sdk/index.d.ts": "b46d181e8677f404f0dceade0573bc7d349834d7076fed3d2243876b7e6b8237",
+        "lib/types/src/sdk/input.d.ts": "3264d99270796e102939d3d412f4c38c220e8c4f79ac6d001bf5fb374248d246",
+        "lib/types/src/sdk/install.d.ts": "2b3e0903128d4b79861233772966fce157bd18bd8234beadcbdef4bcfc7ca93e",
+        "lib/types/src/host/live-config.d.ts": "e58b26ffaa6b08d5bd10e3678554f99d38880a8bc3e1b7c21c42040cc46f496f",
+        "lib/types/src/client/locales.d.ts": "ef88d8a075f7917083391607b4b4a34421d4f27ebc2b2018b747d50a2ebf58c4",
+        "lib/types/src/host/memory-tools.d.ts": "57f4e231607ef98e5cc6311758a55af25a5608007c9ac2c839c154390ee5b162",
+        "lib/types/src/client/MnemonDialog.d.ts": "cf9de6f80a98d6e527860d7077ce5cc5098b2beda55aecf25790403974bd1c34",
+        "lib/types/src/client/MnemonLogo.d.ts": "c1532a4f925703354772392d59b767cba82db7cfa0ede0ed2c0c4ad7f952a405",
+        "lib/types/src/client/page-client.d.ts": "263491e8acfd741b24da984325ad144f529121a660cc45768a427b64a5298945",
+        "lib/types/src/client/page-controls.d.ts": "819a7ada7ad3cf04dc10786b2c91bd1ab2593af9925b24ceaf8b9f267c89d423",
+        "lib/types/src/client/page-kit.d.ts": "ce40c66a2409f540adea88e82183bd17cbcbd20d7e0a3796d150283f34082b12",
+        "lib/types/src/core/contracts/plugin.d.ts": "430b6c765482d75525a62c8515118e2926eb218704a1ebee73743d347f63e406",
+        "lib/types/src/core/plugin.d.ts": "73a8b54a714b0f680507a4c935a3fc9b17918e106bf901883d1226d69729d6a2",
+        "lib/types/src/host/plugin.d.ts": "348d0015c748f9678607d3e033d940fab89eae9dfd6aa453f7e5eec1ed5f4a3c",
+        "lib/types/src/host/protocol.d.ts": "0885cedfb61cf2ec8eecd69196a8fa2fdb6288efb5fe3d0ad871f1a3d002b489",
+        "lib/types/src/sdk/service.d.ts": "7ef3753a9dc3537e852c483bd00055de83c207d7cd2e327d05a9517787cac15d",
+        "lib/types/src/client/settings-controls.d.ts": "6de7ad44140d60914cf7bf7e4183d91d77e5d9710ee40dd6c0b83f8f3ad6c872",
+        "lib/types/src/client/settings-panel.d.ts": "3d3ee92739b1c245996f84ff186170c505999a5d286c7e85f8b4e1ecc2eaae85",
+        "lib/types/src/client/source-contracts.d.ts": "253309b6697bfb45e6560bcebb4c873c7b4980916350f35bdd40fde303b916a0",
+        "lib/types/src/client/source-pages.d.ts": "9093041163fccc7afddb86f30d6434a14e29f030e887e24ee400023f97969430",
+        "lib/types/src/host/starter-components.d.ts": "72df6416c208396e53788880b3fd7cbed249320584d207c8928dc949c9320458",
+        "lib/types/src/starter.d.ts": "e2f3f8e56d03afd711f883db3784a47930c59b2985a9ce4918bce1f06c4e3a51",
+        "lib/types/src/sdk/storage-lock.d.ts": "9072c9369822413d48c46c929530e950cdc07cc03a05342e05a0730cea4e44f9",
+        "lib/types/src/sdk/strategy-configuration.d.ts": "e87fea784b5b29bfcffaabe448fec056eaa3a0a64baf315b3a9f0a647d83308a",
+        "lib/types/src/host/sync-rules.d.ts": "d80282ed5b12128678dc93215260b07e79932d95c68825d6279fb12d60ed7a8b",
+        "lib/types/src/core/contracts/task-agent-model.d.ts": "0532a52be00c9fd7e941d29041c4d5dd96e4d42cac30f387088a18a3a14f0c41",
+        "lib/types/src/sdk/testing.d.ts": "a157befcd6231af9e0915f26243f8c86178ddc99114c5d135ee04c85dc0f3279",
+        "lib/types/src/client/ui-icons.d.ts": "65262c80dee9a62195eda0e79166449bff062bc1ee48595e54d50ab3955535e9",
+        "lib/types/src/client/use-request-version.d.ts": "65bb1a8eddc167bdd3c730024b589792e2fe0535a6f770b81585ff85653cd78e",
+        "lib/types/src/sdk/view-extensions.d.ts": "59e9242a069ade7b301aea496573162f3543cf36385cd3345ad93a35ab747ed8",
+        "lib/types/src/host/view-protocol.d.ts": "e5a76a65a89454cf08c915a904e4e024af3937cae3a65a6f6d3419ffacfd7d71",
+        "lib/types/src/client/view-styles.d.ts": "cebd26c73d5ba1bf720d201402380e3c47767141436d6d06b09db29566298637",
+        "lib/types/src/core/contracts/view.d.ts": "3103553bc207dbc950c4f2d84dfa40dddf09c779a664c266b4bde8218c8ef1c9",
+        "lib/types/src/sdk/workspace-storage.d.ts": "f28d2e65efb5a9f213e242926386b4f4765ea7e344bb8b6dbe10b5a61becb469",
+        "cordis.patch.yml": "889c12eec043d8a8394cfd59d1c18920d7e96905025ed053a5f11fbb6d54648a"
+      }
+    },
+    {
+      "name": "dsh-mnemon-source-documents",
+      "version": "0.5.13",
+      "filename": "dsh-mnemon-source-documents-0.5.13.tgz",
+      "sha256": "6e8cce1fd20be2c692f3053c9fbfe68d4f8fd26ba4071b6a17a7b3a1aa72710b",
+      "integrity": "sha512-Sg2yk+APSlS2h3zNERaVCowDFPYJJTfRgM/SNyM/S8U2fWX7d/w7D6hI1+H84ikppQ47HxWB/wWY0dl/dYnxFA==",
+      "files": {
+        "LICENSE": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+        "presentation/page.module.css": "16bea256da399cc5c6f8fcfa8fc721e2677f01ac5254ddba4eb18dcd498d1cd6",
+        "presentation/sidebar.module.css": "7ca556bb614331ebd23371e207fb3cce3547642df3f0c289dc2584323f8b88fd",
+        "lib/client.js": "524e3d805fa2849f7f31c105229695f2031cd86a617187d4eb392254f818afc7",
+        "lib/contracts.js": "f4115421719a39b9b65da6b3ce959545b1c03aaae4738ca06546818aad759d44",
+        "lib/index.js": "32e360aeec411f005334c0bbc66b7bbe15487909d70a03db29b14f525844f805",
+        "locale/en.json": "d30552d57460df8d884514e354cc6df986f958e371d9413fba189c41fb225d30",
+        "presentation/locales.json": "80adb93c36b15b71872bd367096a321507b1fde41e62f5d1c99dc0f9c02dd1be",
+        "package.json": "57dd4dcff46f32f30d10f70101659c1b3b1484c83d8f21f2bc169e0b551061ef",
+        "locale/zh.json": "b72b8c572460006983556a77d27fb08ae6e9c1c9be7728a3cd22a2c16c5f0fa9",
+        "README.md": "dcd1871f513f389bcb1033889cf840fc2b50871d1469180be9fbe7fdca6bbc2b",
+        "lib/types/client/api.d.ts": "c905ac0c16dc99097b30b4fa5cea9ee0d291c48408494dd11540919e7fdd66af",
+        "lib/types/client.d.ts": "acc1d11738f4e6e2087d478c3bf16ec62acfcc764776a8689232daafa64c50c3",
+        "lib/contracts.d.ts": "c18eec2f40b48a42cf5833da1d42b4610689d942898f6327f9276bf5eda84974",
+        "lib/types/contracts.d.ts": "8db0a681b40c1beda4ecdaaaaf08adf14715f9ae7ca0fb2ea244d225191fce45",
+        "lib/index.d.ts": "9c1db4713dccda8ea66570f732e663af5a65db00ddfcc2b2049dc1fd9bd4cada",
+        "lib/types/client/pages.d.ts": "22fdc777f3aa63cba96534b1262ea923c9f2edec8b9d6370c91942decb5129d0",
+        "lib/types/client/presentation.d.ts": "ab2d60fadb757382ebca11cbf58bab83daa35a22dd26aab8378071c0b6e9dd8a",
+        "lib/types/client/ui.d.ts": "90228c61b5b4fe8e87a67922014235e5bba3839cf8562fbf9aed2f2972e52ed4"
+      }
+    },
+    {
+      "name": "dsh-mnemon-source-skills",
+      "version": "0.5.7",
+      "filename": "dsh-mnemon-source-skills-0.5.7.tgz",
+      "sha256": "96f0dbb2c0613551891a29224e333154df51e81ebaa5eaa18d739b8b29aa59c2",
+      "integrity": "sha512-juWnIaGsVid0SUm5McsKWrYvL+swrt9O+ARG10WvefO/zyKcUHfhu/sHMvGAFnGbE0jUgf21yuyUA5cb44RQXA==",
+      "files": {
+        "LICENSE": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+        "presentation/page.module.css": "89e9fbdcfcc8c29dcca8e310cede4d4b898da39e6cdc9d40ae06eb87ec135a83",
+        "lib/client.js": "30c74bc6ef852fc9e556d490ee0c7246245d465c68308a74d2042c2b236c7161",
+        "lib/contracts.js": "9b85fdd38eea3e19e29b332822732db379d4990cf061f1f7dcf591aafcbb2af3",
+        "lib/index.js": "0f2a8b5ea64aef5b85b258589fe49d8f88a9d06ccc41236269c26058a658f50c",
+        "locale/en.json": "0b5276b77a752fb47c67765847e261a6a7041a885213f760c4ad3670d694baed",
+        "presentation/locales.json": "b30e7ef71b5c178174aba7632ae64442abd989fb038520b3a1be7fc074be35e1",
+        "market/official.json": "6d011e5817727fb545dd385df8bb7316bff59d803f05c956bf64138956d90acc",
+        "package.json": "316272aba870340e0a842e58b7646d837d8800d83f6909e372cdb675e49ab09b",
+        "locale/zh.json": "9dce17a7602534ea20b6027988f3b18cc3bce7f6b6bffe4f64b635291ffedf28",
+        "README.md": "b318027075420db6f97a9149f3938118bdff5d05fccd1a0861d9b82ba041684d",
+        "lib/types/client/api.d.ts": "e21407187655e1e62bcb3ce0776bb0e81fc2c95a00382f5a51e033fa0a2fe4c1",
+        "lib/types/client.d.ts": "99720ccb1ef2991d3d08923a54b3b64a165692fe94acadff7b9e5cee2963bc3f",
+        "lib/contracts.d.ts": "75dabb87607a665d76c885db1d823e3ed9e4667591d1f85466460f3ae390cb65",
+        "lib/types/contracts.d.ts": "b30893f3034903ddb66f560339939a4a06d35ab12de636acf4ff7531fd507531",
+        "lib/types/client/evals-page.d.ts": "69c36a11a11d4f6b91554ea1b3e6218428bb8c0e3bb0a2568c1467987ff6ab8b",
+        "lib/types/client/evidence-page.d.ts": "c3a0c84f77f1b8464158b3bbdbff33abdb7b79777f7083a184598ea42b7f5791",
+        "lib/types/client/evolution-page.d.ts": "974b260d4696e68368f0ca91313c17d96057e5cdc4dd6e1c6ca65ffd0789dce4",
+        "lib/types/fence.d.ts": "2522959dfc2203f5cb4219029f78321f6cf036bc8f2e972a07d01a6ef6d9104f",
+        "lib/index.d.ts": "61413bc1929df4ba1f2c561c0fc7207ee7b2b38f1ebbc3f7fa403c1c088d0d00",
+        "lib/types/client/market-page.d.ts": "fa00338ddd8a6f8bc2347628078b11008209ce363f600042cf1fcbee33c69053",
+        "lib/types/client/model-choice.d.ts": "5bd926d57442c01ecbf222bdf4cec6358f932e5cc8ef4d8dc9fa2dd81c38215b",
+        "lib/types/client/presentation.d.ts": "d7d80eccdf90c7ec939b67802c559d00614ed9285e6a756212a473cfe556c1c1",
+        "lib/types/client/shared.d.ts": "34ba2da4c08ce51bee17ea09a3cf992c8fe06446c54f0f017026ae8639927881",
+        "lib/types/client/skill-tests.d.ts": "d9de27a957b8e9dc9493878620cf39d2e9dbaec7a52daf7ed92ab292f8b2c8ab",
+        "lib/types/client/skills-page.d.ts": "157a6d855ec4b0bb5b43c6777c969e7972ea699b8e89f572e36f445b83f56c15",
+        "lib/types/source-kind.d.ts": "609250d77c7950a206b00be65de4b33b62dec50ffaff6f13d0fa411d970d2eeb",
+        "lib/types/client/trash-page.d.ts": "ef3f280cab983adb716c2602d50debda1bfb9dd531b5c4842afd4849fc9bac80",
+        "lib/types/client/ui.d.ts": "0c211a77d3376aeb4a381d82d76ed50945b70bc5b8a32f0306dbfbfdf03ce6c4",
+        "lib/types/client/use-skill.d.ts": "2078894ccb534939aa8cc58567421c451cda72a2ab44f31eba90d9e26d37bcfe"
+      }
+    },
+    {
+      "name": "dsh-mnemon-strategy-default-three-tier",
+      "version": "0.5.12",
+      "filename": "dsh-mnemon-strategy-default-three-tier-0.5.12.tgz",
+      "sha256": "4c7a7227756644399bca879370a3fed89d18b3fd3f38b768cc80f4799ac28210",
+      "integrity": "sha512-OcM7qCIpZsT3tmlBz4WKFCrlgzv8aDJbNEhEWP5JHZtPCJKrdifx0Z53xJqLViz/4Vc+ihcyyg/PoacP06ZSnw==",
+      "files": {
+        "LICENSE": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+        "lib/extension-sdk.js": "7d16a3923bbb1a74c0d717210a7371be18a4674eaf919d0fd9563861f8532dad",
+        "lib/index.js": "35ed421228becdcab2e4d1b0a7e98be938ba93a7eed04a536173eb19572f5a7b",
+        "locale/en.json": "7908db6a2ba440d3e3b10a5d71adc647c2e91c02fdaa654057751ee8a0ba5fbd",
+        "package.json": "44add398a1061bb32e3aebb30c4cdc2d1ea500f438634d7d1e3bf4b1d0c3bc86",
+        "locale/zh.json": "570a75db45cf64aebe9ac13d312e92379b4056e7d50846d3d900df7f891b606d",
+        "README.md": "33d63470e4a05b2c33ed4eeb54fed4dc0acf285624b3e4527921de23d37e81bd",
+        "lib/extension-sdk.d.ts": "ee9a2e5c9906287eb9ff7c14ff19809b2b9d41baf782ba7eb29c47674024db27",
+        "lib/index.d.ts": "cd2db8293103bca305ce1a9d1c3fc9c4222ab546aefef7c29748826ebbb5a665"
+      }
+    }
+  ],
+  "unchangedComponents": "15 immutable published npm versions; candidate registry overlays only four changed packages",
+  "verification": {
+    "workspace": {
+      "rootPassed": 2498,
+      "rootSkipped": 7,
+      "componentPassed": 753,
+      "componentSkipped": 3,
+      "skipReason": "Opt-in external CLI, live model and Provider integration cases; no paid model calls"
+    },
+    "independentPlugins": {
+      "repositories": 18,
+      "packedArtifacts": 19,
+      "result": "passed"
+    },
+    "manifestGateAfterRcOnlyPolicy": {
+      "passed": 20
+    },
+    "rootPackage": {
+      "files": 68,
+      "packedBytes": 533063,
+      "unpackedBytes": 2239100,
+      "ceilingBytes": 3000000,
+      "ceilingChanged": false
+    },
+    "uiScenariosPassed": 10,
+    "screenshots": 30,
+    "postAcceptanceReadOnlyAudit": [
+      {
+        "host": "0.2.0-rc.2",
+        "scenario": "fresh",
+        "pinnedVersionsMatched": 19,
+        "candidateFilesAndExecutableBitsMatched": 126
+      },
+      {
+        "host": "0.2.0-rc.2",
+        "scenario": "upgrade",
+        "pinnedVersionsMatched": 19,
+        "candidateFilesAndExecutableBitsMatched": 126
+      },
+      {
+        "host": "0.2.1-rc.2",
+        "scenario": "fresh",
+        "pinnedVersionsMatched": 19,
+        "candidateFilesAndExecutableBitsMatched": 126
+      },
+      {
+        "host": "0.2.1-rc.2",
+        "scenario": "upgrade",
+        "pinnedVersionsMatched": 19,
+        "candidateFilesAndExecutableBitsMatched": 126
+      },
+      {
+        "host": "0.2.1-rc.3",
+        "scenario": "fresh",
+        "pinnedVersionsMatched": 19,
+        "candidateFilesAndExecutableBitsMatched": 126
+      },
+      {
+        "host": "0.2.1-rc.3",
+        "scenario": "upgrade",
+        "pinnedVersionsMatched": 19,
+        "candidateFilesAndExecutableBitsMatched": 126
+      },
+      {
+        "host": "0.2.1-rc.5",
+        "scenario": "fresh",
+        "pinnedVersionsMatched": 19,
+        "candidateFilesAndExecutableBitsMatched": 126
+      },
+      {
+        "host": "0.2.1-rc.5",
+        "scenario": "upgrade",
+        "pinnedVersionsMatched": 19,
+        "candidateFilesAndExecutableBitsMatched": 126
+      },
+      {
+        "host": "0.2.2-rc.1",
+        "scenario": "fresh",
+        "pinnedVersionsMatched": 19,
+        "candidateFilesAndExecutableBitsMatched": 126
+      },
+      {
+        "host": "0.2.2-rc.1",
+        "scenario": "upgrade",
+        "pinnedVersionsMatched": 19,
+        "candidateFilesAndExecutableBitsMatched": 126
+      }
+    ]
+  },
+  "hostEvidence": [
+    {
+      "dsh": "0.2.0-rc.2",
+      "record": "020-validation.json",
+      "fresh": "passed",
+      "upgrade": "passed"
+    },
+    {
+      "dsh": "0.2.1-rc.2",
+      "record": "rc2-validation.json",
+      "fresh": "passed",
+      "upgrade": "passed"
+    },
+    {
+      "dsh": "0.2.1-rc.3",
+      "record": "rc3-validation.json",
+      "fresh": "passed",
+      "upgrade": "passed"
+    },
+    {
+      "dsh": "0.2.1-rc.5",
+      "record": "rc5-validation.json",
+      "fresh": "passed",
+      "upgrade": "passed"
+    },
+    {
+      "dsh": "0.2.2-rc.1",
+      "record": "rc1-validation.json",
+      "fresh": "passed",
+      "upgrade": "passed"
+    }
+  ],
+  "screenshots": [
+    "020-fresh-status.jpg",
+    "020-upgrade-memory-before.jpg",
+    "020-upgrade-memory-preserved.jpg",
+    "020-upgrade-offered.jpg",
+    "020-upgrade-restarted-status.jpg",
+    "020-upgrade-updated.jpg",
+    "rc1-fresh-status.jpg",
+    "rc1-upgrade-memory-before.jpg",
+    "rc1-upgrade-memory-preserved.jpg",
+    "rc1-upgrade-offered.jpg",
+    "rc1-upgrade-status.jpg",
+    "rc1-upgrade-updated.jpg",
+    "rc2-fresh-status.jpg",
+    "rc2-upgrade-memory-before.jpg",
+    "rc2-upgrade-memory-preserved.jpg",
+    "rc2-upgrade-offered.jpg",
+    "rc2-upgrade-restarted-status.jpg",
+    "rc2-upgrade-updated.jpg",
+    "rc3-fresh-status.jpg",
+    "rc3-upgrade-memory-before.jpg",
+    "rc3-upgrade-memory-preserved.jpg",
+    "rc3-upgrade-offered.jpg",
+    "rc3-upgrade-restarted-status.jpg",
+    "rc3-upgrade-updated.jpg",
+    "rc5-fresh-status.jpg",
+    "rc5-upgrade-memory-before.jpg",
+    "rc5-upgrade-memory-preserved.jpg",
+    "rc5-upgrade-offered.jpg",
+    "rc5-upgrade-restarted-status.jpg",
+    "rc5-upgrade-updated.jpg"
+  ],
+  "observations": [
+    "The first RC1 version check returned a transient metadata fetch error; UI retry succeeded after connectivity returned, without a product change.",
+    "Restart disconnect warnings are expected. Final browser console error counts were zero."
+  ],
+  "limits": [
+    "DSH 0.2.2 alpha releases are no longer compatibility or CI targets. Historical alpha evidence is not current release acceptance.",
+    "Official published Hosts in isolated Web profiles; native Desktop OS integrations and arbitrary source checkouts are outside scope.",
+    "Providers use fixtures; live cloud-account quality is not claimed.",
+    "Candidate metadata timestamps are aged only in the disposable registry; npm minimum-release-age policy is not tested.",
+    "Pipeline publication repacks the final frozen main revision; these digests describe pre-publication UI candidates. Published artifacts are separately integrity-gated by the release workflow."
+  ]
+}

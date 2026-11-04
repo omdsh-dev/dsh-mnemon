@@ -12,6 +12,7 @@ For new evaluations, commit the reusable harness and workload generator to [`scr
 
 | Record / 记录 | Scope / 范围 |
 |---|---|
+| [v0.5.40 release](./release-v0.5.40/README.md) / [中文](./release-v0.5.40/README.zh-CN.md) | Frozen candidates, published RC1, retained Hosts, fresh installs and upgrades / 冻结候选、正式 RC1、保留宿主、全新安装与升级 |
 | [v0.5.39 release](./release-v0.5.39/README.md) / [中文](./release-v0.5.39/README.zh-CN.md) | Frozen candidates, five DSH hosts, fresh installs, upgrades and retained Runtime data / 冻结候选、五个 DSH 宿主、全新安装、升级及 Runtime 数据保留 |
 | [Current DSH compatibility](./current-dsh-compat/README.md) / [中文](./current-dsh-compat/README.zh-CN.md) | DSH rc.5 and separate alpha.2 contracts, installed-host suites, packed Starter upgrades, real Web presets and the verified macOS Node 24 toolchain / DSH rc.5 与独立 alpha.2 契约、已安装宿主测试、打包 Starter 升级、真实 Web 预设与已验证的 macOS Node 24 工具链 |
 | [Current-turn View recovery — issue #542](./issue-542-turn-view/README.md) / [中文](./issue-542-turn-view/README.zh-CN.md) | Published Agent-turn reproduction with prompt interception, native/PTC reads, resumed turns, late registration, child guidance and retained authority / 正式 Agent 回合中的提示词拦截复现、原生/PTC 读取、恢复回合、晚注册、子 Agent 引导语及权限保留 |

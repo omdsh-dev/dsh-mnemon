@@ -1,0 +1,373 @@
+{
+  "schemaVersion": 1,
+  "node": "v24.22.2",
+  "platform": "macOS-27.0.1-arm64-arm-64bit",
+  "result": "passed",
+  "uiAutomation": "mcp__cua_repl, in-app browser tabs; default background visibility. Second explicit visible:false creation was rejected as unsupported in a subagent, then created with default background setting.",
+  "scope": "Fresh Add plugin and real npm 0.5.39 UI upgrade on two official DSH Hosts; 19 pinned packages and four candidates containing 126 files verified for each installation; both upgrades audited again after restart.",
+  "limitations": [
+    "No external model requests or external Provider accounts used.",
+    "Does not cover all historical data migrations or model quality.",
+    "No personal Desktop profile changes."
+  ],
+  "updatedAt": "2026-11-04T15:09:28.153684+00:00",
+  "completedAt": "2026-11-04T15:11:00.086275+00:00",
+  "host": {
+    "dshVersion": "0.2.1-rc.2",
+    "upgrade": {
+      "previousVersion": "0.5.39",
+      "previousPinnedVersions": {
+        "dsh-mnemon": "0.5.39",
+        "dsh-mnemon-provider-byterover": "0.5.6",
+        "dsh-mnemon-provider-hindsight": "0.5.7",
+        "dsh-mnemon-provider-holographic": "0.5.7",
+        "dsh-mnemon-provider-honcho": "0.5.5",
+        "dsh-mnemon-provider-mem0": "0.5.5",
+        "dsh-mnemon-provider-mnemon-native": "0.5.10",
+        "dsh-mnemon-provider-openviking": "0.5.10",
+        "dsh-mnemon-provider-retaindb": "0.5.6",
+        "dsh-mnemon-provider-supermemory": "0.5.5",
+        "dsh-mnemon-source-documents": "0.5.12",
+        "dsh-mnemon-source-memory-spaces": "0.5.25",
+        "dsh-mnemon-source-runtime": "0.5.17",
+        "dsh-mnemon-source-skills": "0.5.6",
+        "dsh-mnemon-strategy-auto-capture": "0.5.5",
+        "dsh-mnemon-strategy-default-three-tier": "0.5.11",
+        "dsh-mnemon-strategy-general": "0.5.1",
+        "dsh-mnemon-strategy-light-context": "0.5.6",
+        "dsh-mnemon-strategy-scoped": "0.5.5"
+      },
+      "runtimeBefore": {
+        "memories.json": "b983c80d170a4e075854c614a2d9b8741e523064c122599a56eae86ae53c0323",
+        "MEMORY.md": "97a89924dfeed70dec981de46a0dc2a2ab5c5f65b1eee202ca2d8b87e12b1eef",
+        "USER.md": "45f4e5e4e0b7c175c5eacbb6ddf52a97b35fa2b7301282856070b23fdaa1ce1b"
+      },
+      "canary": "work-memory and user-profile rc2-20261104",
+      "screenshots": {
+        "memoryBefore": "docs/pr-assets/release-v0.5.40/rc2-upgrade-memory-before.jpg",
+        "offered": "docs/pr-assets/release-v0.5.40/rc2-upgrade-offered.jpg",
+        "updated": "docs/pr-assets/release-v0.5.40/rc2-upgrade-updated.jpg",
+        "restartedStatus": "docs/pr-assets/release-v0.5.40/rc2-upgrade-restarted-status.jpg",
+        "memoryPreserved": "docs/pr-assets/release-v0.5.40/rc2-upgrade-memory-preserved.jpg"
+      },
+      "baselineStableBeforeUpdate": true,
+      "installed": {
+        "verifiedAt": "2026-11-04T15:06:06.152348+00:00",
+        "pinnedCount": 19,
+        "pinnedVersions": {
+          "dsh-mnemon": "0.5.40",
+          "dsh-mnemon-provider-byterover": "0.5.6",
+          "dsh-mnemon-provider-hindsight": "0.5.7",
+          "dsh-mnemon-provider-holographic": "0.5.7",
+          "dsh-mnemon-provider-honcho": "0.5.5",
+          "dsh-mnemon-provider-mem0": "0.5.5",
+          "dsh-mnemon-provider-mnemon-native": "0.5.10",
+          "dsh-mnemon-provider-openviking": "0.5.10",
+          "dsh-mnemon-provider-retaindb": "0.5.6",
+          "dsh-mnemon-provider-supermemory": "0.5.5",
+          "dsh-mnemon-source-documents": "0.5.13",
+          "dsh-mnemon-source-memory-spaces": "0.5.25",
+          "dsh-mnemon-source-runtime": "0.5.17",
+          "dsh-mnemon-source-skills": "0.5.7",
+          "dsh-mnemon-strategy-auto-capture": "0.5.5",
+          "dsh-mnemon-strategy-default-three-tier": "0.5.12",
+          "dsh-mnemon-strategy-general": "0.5.1",
+          "dsh-mnemon-strategy-light-context": "0.5.6",
+          "dsh-mnemon-strategy-scoped": "0.5.5"
+        },
+        "selectedCandidates": [
+          {
+            "name": "dsh-mnemon",
+            "version": "0.5.40",
+            "installedRealpath": "/private/tmp/mnemon-0540-rc2-upgrade/dsh-home/profiles/web/node_modules/dsh-mnemon",
+            "tarballSha256": "6e1bb673f1b3ddd15a4a8debe0eeedf001e33d350d8ac6f348fa2b2d5f1683f7",
+            "fileCount": 68,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          },
+          {
+            "name": "dsh-mnemon-source-documents",
+            "version": "0.5.13",
+            "installedRealpath": "/private/tmp/mnemon-0540-rc2-upgrade/dsh-home/profiles/web/node_modules/dsh-mnemon-source-documents",
+            "tarballSha256": "6e8cce1fd20be2c692f3053c9fbfe68d4f8fd26ba4071b6a17a7b3a1aa72710b",
+            "fileCount": 19,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          },
+          {
+            "name": "dsh-mnemon-source-skills",
+            "version": "0.5.7",
+            "installedRealpath": "/private/tmp/mnemon-0540-rc2-upgrade/dsh-home/profiles/web/node_modules/dsh-mnemon-source-skills",
+            "tarballSha256": "96f0dbb2c0613551891a29224e333154df51e81ebaa5eaa18d739b8b29aa59c2",
+            "fileCount": 30,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          },
+          {
+            "name": "dsh-mnemon-strategy-default-three-tier",
+            "version": "0.5.12",
+            "installedRealpath": "/private/tmp/mnemon-0540-rc2-upgrade/dsh-home/profiles/web/node_modules/dsh-mnemon-strategy-default-three-tier",
+            "tarballSha256": "4c7a7227756644399bca879370a3fed89d18b3fd3f38b768cc80f4799ac28210",
+            "fileCount": 9,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          }
+        ],
+        "selectedFileCount": 126,
+        "allPinnedVersionsMatch": true,
+        "runtimeHashes": {
+          "memories.json": "b983c80d170a4e075854c614a2d9b8741e523064c122599a56eae86ae53c0323",
+          "MEMORY.md": "97a89924dfeed70dec981de46a0dc2a2ab5c5f65b1eee202ca2d8b87e12b1eef",
+          "USER.md": "45f4e5e4e0b7c175c5eacbb6ddf52a97b35fa2b7301282856070b23fdaa1ce1b"
+        },
+        "runtimeMatchesBefore": true
+      },
+      "restarted": {
+        "verifiedAt": "2026-11-04T15:08:41.564400+00:00",
+        "pinnedCount": 19,
+        "pinnedVersions": {
+          "dsh-mnemon": "0.5.40",
+          "dsh-mnemon-provider-byterover": "0.5.6",
+          "dsh-mnemon-provider-hindsight": "0.5.7",
+          "dsh-mnemon-provider-holographic": "0.5.7",
+          "dsh-mnemon-provider-honcho": "0.5.5",
+          "dsh-mnemon-provider-mem0": "0.5.5",
+          "dsh-mnemon-provider-mnemon-native": "0.5.10",
+          "dsh-mnemon-provider-openviking": "0.5.10",
+          "dsh-mnemon-provider-retaindb": "0.5.6",
+          "dsh-mnemon-provider-supermemory": "0.5.5",
+          "dsh-mnemon-source-documents": "0.5.13",
+          "dsh-mnemon-source-memory-spaces": "0.5.25",
+          "dsh-mnemon-source-runtime": "0.5.17",
+          "dsh-mnemon-source-skills": "0.5.7",
+          "dsh-mnemon-strategy-auto-capture": "0.5.5",
+          "dsh-mnemon-strategy-default-three-tier": "0.5.12",
+          "dsh-mnemon-strategy-general": "0.5.1",
+          "dsh-mnemon-strategy-light-context": "0.5.6",
+          "dsh-mnemon-strategy-scoped": "0.5.5"
+        },
+        "selectedCandidates": [
+          {
+            "name": "dsh-mnemon",
+            "version": "0.5.40",
+            "installedRealpath": "/private/tmp/mnemon-0540-rc2-upgrade/dsh-home/profiles/web/node_modules/dsh-mnemon",
+            "tarballSha256": "6e1bb673f1b3ddd15a4a8debe0eeedf001e33d350d8ac6f348fa2b2d5f1683f7",
+            "fileCount": 68,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          },
+          {
+            "name": "dsh-mnemon-source-documents",
+            "version": "0.5.13",
+            "installedRealpath": "/private/tmp/mnemon-0540-rc2-upgrade/dsh-home/profiles/web/node_modules/dsh-mnemon-source-documents",
+            "tarballSha256": "6e8cce1fd20be2c692f3053c9fbfe68d4f8fd26ba4071b6a17a7b3a1aa72710b",
+            "fileCount": 19,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          },
+          {
+            "name": "dsh-mnemon-source-skills",
+            "version": "0.5.7",
+            "installedRealpath": "/private/tmp/mnemon-0540-rc2-upgrade/dsh-home/profiles/web/node_modules/dsh-mnemon-source-skills",
+            "tarballSha256": "96f0dbb2c0613551891a29224e333154df51e81ebaa5eaa18d739b8b29aa59c2",
+            "fileCount": 30,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          },
+          {
+            "name": "dsh-mnemon-strategy-default-three-tier",
+            "version": "0.5.12",
+            "installedRealpath": "/private/tmp/mnemon-0540-rc2-upgrade/dsh-home/profiles/web/node_modules/dsh-mnemon-strategy-default-three-tier",
+            "tarballSha256": "4c7a7227756644399bca879370a3fed89d18b3fd3f38b768cc80f4799ac28210",
+            "fileCount": 9,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          }
+        ],
+        "selectedFileCount": 126,
+        "allPinnedVersionsMatch": true,
+        "runtimeHashes": {
+          "memories.json": "b983c80d170a4e075854c614a2d9b8741e523064c122599a56eae86ae53c0323",
+          "MEMORY.md": "97a89924dfeed70dec981de46a0dc2a2ab5c5f65b1eee202ca2d8b87e12b1eef",
+          "USER.md": "45f4e5e4e0b7c175c5eacbb6ddf52a97b35fa2b7301282856070b23fdaa1ce1b"
+        },
+        "runtimeMatchesBefore": true
+      },
+      "result": "passed",
+      "previousInstallSpec": "dsh-mnemon@0.5.39",
+      "uiSteps": [
+        "Save one synthetic working memory",
+        "Save one synthetic user-profile memory",
+        "Status > Check versions: 0.5.39 -> 0.5.40 with 3 component updates",
+        "Update: installed 0.5.40 / restart needed / running 0.5.39",
+        "Read-only installed audit and unchanged Runtime hashes",
+        "SIGUSR2 fixture restart",
+        "Status: running 0.5.40 / System nominal",
+        "Runtime: both synthetic canaries retained"
+      ],
+      "restartCount": 1
+    },
+    "fresh": {
+      "installed": {
+        "verifiedAt": "2026-11-04T15:07:54.424714+00:00",
+        "pinnedCount": 19,
+        "pinnedVersions": {
+          "dsh-mnemon": "0.5.40",
+          "dsh-mnemon-provider-byterover": "0.5.6",
+          "dsh-mnemon-provider-hindsight": "0.5.7",
+          "dsh-mnemon-provider-holographic": "0.5.7",
+          "dsh-mnemon-provider-honcho": "0.5.5",
+          "dsh-mnemon-provider-mem0": "0.5.5",
+          "dsh-mnemon-provider-mnemon-native": "0.5.10",
+          "dsh-mnemon-provider-openviking": "0.5.10",
+          "dsh-mnemon-provider-retaindb": "0.5.6",
+          "dsh-mnemon-provider-supermemory": "0.5.5",
+          "dsh-mnemon-source-documents": "0.5.13",
+          "dsh-mnemon-source-memory-spaces": "0.5.25",
+          "dsh-mnemon-source-runtime": "0.5.17",
+          "dsh-mnemon-source-skills": "0.5.7",
+          "dsh-mnemon-strategy-auto-capture": "0.5.5",
+          "dsh-mnemon-strategy-default-three-tier": "0.5.12",
+          "dsh-mnemon-strategy-general": "0.5.1",
+          "dsh-mnemon-strategy-light-context": "0.5.6",
+          "dsh-mnemon-strategy-scoped": "0.5.5"
+        },
+        "selectedCandidates": [
+          {
+            "name": "dsh-mnemon",
+            "version": "0.5.40",
+            "installedRealpath": "/private/tmp/mnemon-0540-rc2-fresh/dsh-home/profiles/web/node_modules/dsh-mnemon",
+            "tarballSha256": "6e1bb673f1b3ddd15a4a8debe0eeedf001e33d350d8ac6f348fa2b2d5f1683f7",
+            "fileCount": 68,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          },
+          {
+            "name": "dsh-mnemon-source-documents",
+            "version": "0.5.13",
+            "installedRealpath": "/private/tmp/mnemon-0540-rc2-fresh/dsh-home/profiles/web/node_modules/dsh-mnemon-source-documents",
+            "tarballSha256": "6e8cce1fd20be2c692f3053c9fbfe68d4f8fd26ba4071b6a17a7b3a1aa72710b",
+            "fileCount": 19,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          },
+          {
+            "name": "dsh-mnemon-source-skills",
+            "version": "0.5.7",
+            "installedRealpath": "/private/tmp/mnemon-0540-rc2-fresh/dsh-home/profiles/web/node_modules/dsh-mnemon-source-skills",
+            "tarballSha256": "96f0dbb2c0613551891a29224e333154df51e81ebaa5eaa18d739b8b29aa59c2",
+            "fileCount": 30,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          },
+          {
+            "name": "dsh-mnemon-strategy-default-three-tier",
+            "version": "0.5.12",
+            "installedRealpath": "/private/tmp/mnemon-0540-rc2-fresh/dsh-home/profiles/web/node_modules/dsh-mnemon-strategy-default-three-tier",
+            "tarballSha256": "4c7a7227756644399bca879370a3fed89d18b3fd3f38b768cc80f4799ac28210",
+            "fileCount": 9,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          }
+        ],
+        "selectedFileCount": 126,
+        "allPinnedVersionsMatch": true
+      },
+      "result": "passed",
+      "uiInstallInput": "dsh-mnemon",
+      "uiSteps": [
+        "Plugins > Add plugin",
+        "Install",
+        "Installed version 0.5.40",
+        "Enable now",
+        "Memory System > Status: dsh-mnemon 0.5.40 / System nominal"
+      ],
+      "screenshots": {
+        "status": "docs/pr-assets/release-v0.5.40/rc2-fresh-status.jpg"
+      }
+    },
+    "nodeExecutable": "${NODE24_BIN}/node",
+    "dshBinary": "${DSH_BIN}",
+    "browserConsole": {
+      "observedConsoleErrors": [],
+      "warnings": [
+        {
+          "level": "warn",
+          "message": "[connection] connection lost, retry #1",
+          "timestamp": "2026-11-04T15:06:19.231Z",
+          "origin": "http://127.0.0.1:53442"
+        },
+        {
+          "level": "warn",
+          "message": "[connection] connection lost, retry #2",
+          "timestamp": "2026-11-04T15:06:20.075Z",
+          "origin": "http://127.0.0.1:53442"
+        },
+        {
+          "level": "warn",
+          "message": "[connection] connection lost, retry #3",
+          "timestamp": "2026-11-04T15:06:21.440Z",
+          "origin": "http://127.0.0.1:53442"
+        },
+        {
+          "level": "warn",
+          "message": "[connection] connection lost, retry #4",
+          "timestamp": "2026-11-04T15:06:24.841Z",
+          "origin": "http://127.0.0.1:53442"
+        }
+      ],
+      "warningExplanation": "Four connection-lost retries at the planned Host SIGUSR2 restart before navigating to its new private URL; no console error entries observed."
+    },
+    "screenshots": [
+      {
+        "path": "docs/pr-assets/release-v0.5.40/rc2-fresh-status.jpg",
+        "sha256": "3490c95831b1833171b13fc05635edb525dd54dff924b5bab063acc524dfef1c",
+        "bytes": 126451,
+        "sourcePngVisuallyReviewed": true,
+        "convertedBy": "macOS sips JPEG quality 88, no resize or crop",
+        "jpegVisuallyReviewed": true
+      },
+      {
+        "path": "docs/pr-assets/release-v0.5.40/rc2-upgrade-memory-before.jpg",
+        "sha256": "f3964b86be1c8f9f61fa54540edb3760d223de2dbb6249e4e2704afb0da8b4ab",
+        "bytes": 130892,
+        "sourcePngVisuallyReviewed": true,
+        "convertedBy": "macOS sips JPEG quality 88, no resize or crop",
+        "jpegVisuallyReviewed": true
+      },
+      {
+        "path": "docs/pr-assets/release-v0.5.40/rc2-upgrade-offered.jpg",
+        "sha256": "c8725332c499a9e0d708fcad2131e65dd2e7191df8bf9af5dccb3d8449866d80",
+        "bytes": 115233,
+        "sourcePngVisuallyReviewed": true,
+        "convertedBy": "macOS sips JPEG quality 88, no resize or crop",
+        "jpegVisuallyReviewed": true
+      },
+      {
+        "path": "docs/pr-assets/release-v0.5.40/rc2-upgrade-updated.jpg",
+        "sha256": "938d545053c135b8ba662572f630b8e5a25c4a60b706bbbccbdff7333dbcc737",
+        "bytes": 117180,
+        "sourcePngVisuallyReviewed": true,
+        "convertedBy": "macOS sips JPEG quality 88, no resize or crop",
+        "jpegVisuallyReviewed": true
+      },
+      {
+        "path": "docs/pr-assets/release-v0.5.40/rc2-upgrade-restarted-status.jpg",
+        "sha256": "7eb59dfa75f3b1e764027418cef50fd2362f6c347c91e766b2bce70b2522a450",
+        "bytes": 126945,
+        "sourcePngVisuallyReviewed": true,
+        "convertedBy": "macOS sips JPEG quality 88, no resize or crop",
+        "jpegVisuallyReviewed": true
+      },
+      {
+        "path": "docs/pr-assets/release-v0.5.40/rc2-upgrade-memory-preserved.jpg",
+        "sha256": "1d73fd485e98b24502b7c47addf737f9633aa327db36731a05a7ef8f0c95647b",
+        "bytes": 129641,
+        "sourcePngVisuallyReviewed": true,
+        "convertedBy": "macOS sips JPEG quality 88, no resize or crop",
+        "jpegVisuallyReviewed": true
+      }
+    ]
+  },
+  "cleanup": true
+}
