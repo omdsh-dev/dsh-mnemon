@@ -194,7 +194,7 @@ export class ComposableMemoryTurnManager {
   ): Promise<MemoryMutationReceipt> {
     const stored = this.requireTurn(turnId)
     const operation = this.generations.acquire(stored.lease.id)
-    try { return await operation.generation.executeAction(stored.context.view, offerId, input, authorize, signal) }
+    try { return await operation.generation.executeAction(stored.context.view, offerId, input, authorize, signal, stored.context) }
     finally { operation.release() }
   }
 

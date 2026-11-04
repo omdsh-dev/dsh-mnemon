@@ -426,7 +426,12 @@ export interface MemorySourceRuntimeContext {
   configuration?: Readonly<Record<string, MemoryJsonValue>>
 }
 
-/** Operation identity only; never the complete View or another Source's data. */
+/**
+ * Operation identity only; never the complete View or another Source's data.
+ * The object is stable for this Source within one execution, and can key weak
+ * execution-local state. Independent executions never share it, even when they
+ * pin the exact same immutable View. Requires dsh-mnemon 0.5.40 or later.
+ */
 export interface MemorySourceViewContext {
   id: string
   scope: MemoryOperationScope

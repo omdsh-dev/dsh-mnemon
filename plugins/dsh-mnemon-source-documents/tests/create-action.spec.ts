@@ -31,6 +31,17 @@ async function fixture(limitBytes = 10 * 1024 * 1024) {
 }
 
 describe('create-only Documents Action', () => {
+  it.each(['create', 'manage'])('can update a document committed by the %s Action in the same execution', async action => {
+    const f = await fixture()
+    const manage = f.turn.view.actionOffers.find(offer => offer.sourceActionId === 'manage')!
+    const created = await f.turn.executeAction(action === 'create' ? f.create!.id : manage.id,
+      { title: 'New draft', content: 'Initial content.', ...(action === 'manage' ? { action: 'create' } : {}) }, () => true)
+    const id = (created.details as unknown as plugin.DocumentMutationResult).document.id
+    await expect(f.turn.executeAction(manage.id, { action: 'update', id, content: 'Corrected content.' }, () => true))
+      .resolves.toMatchObject({ completion: 'committed', details: { action: 'updated', document: { id, revision: 2, content: 'Corrected content.' } } })
+    expect((await f.read()).value).toMatchObject({ content: f.document.content, revision: f.document.revision })
+  })
+
   it('creates a separate document even with the same title and preserves the existing original', async () => {
     const f = await fixture()
     expect(f.create).toBeDefined()

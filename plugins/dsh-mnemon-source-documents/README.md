@@ -36,3 +36,9 @@ The optional `./client` entry is an ordinary DSH Client plugin. This package own
 From a source checkout, install the declared dependencies and run `pnpm verify` to check Host behavior, Source-backed page interactions and Host/browser artifacts. Unreleased SDK work consumes a packed `dsh-mnemon` peer, not repository aliases or copied root tests.
 
 [Plugin development](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/development/extensions.md) · [中文指南](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/development/extensions.md)
+
+## Editing a document created in the same execution
+
+With dsh-mnemon 0.5.40 or later, an authorized `manage` Action can immediately update a document successfully created by `create` or `manage` in that same execution. The create-only Action itself still cannot update. This does not expand the pinned search/read grant or admit documents created by management, another workspace or another delegated execution, even when executions share the same View. Saved documents and indexes need no migration.
+
+使用 dsh-mnemon 0.5.40 及以后版本时，获准的 `manage` Action 可立即更新同一次执行中由 `create` 或 `manage` 成功新建的档案；仅创建 Action 本身仍不能更新。读取与检索范围保持固定，不接纳管理页面、其他工作区或其他委派执行新建的档案，即使执行共享同一个 View。已有档案与索引无需迁移。

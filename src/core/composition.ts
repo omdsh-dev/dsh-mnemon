@@ -18,6 +18,7 @@ import type {
   MemorySourceManagementRequest,
   MemorySourceManagementResult,
   MemorySourceRuntime,
+  MemorySourceViewContext,
   MemorySourcePresentation,
   MemoryViewSourcePresentation,
   MemoryStrategyTurn,
@@ -461,6 +462,7 @@ export class MemoryCompositionGeneration {
   private readonly now: () => Date
   private routeCalls = new WeakMap<object, Map<string, number>>()
   private strategyTurns = new WeakMap<object, MemoryStrategyTurn>()
+  private sourceContexts = new WeakMap<object, Map<string, MemorySourceViewContext>>()
   private readonly sourceTimeoutMs: number
   private disposed = false
 
@@ -824,7 +826,7 @@ export class MemoryCompositionGeneration {
       ledger.set(counter, calls + 1)
       // A dispatched failure consumed a call; Core never guesses safe retry.
       const value = await source.runtime.query!({
-        view: deepFreeze({ id: view.id, scope: view.scope }), route: selectedRoute, grant,
+        view: this.sourceView(view, route.sourceInstanceKey, execution), route: selectedRoute, grant,
         input: jsonClone(selectedInput, 'memory Route input'), ...(signal === undefined ? {} : { signal }),
       })
       return normalizeEvidence(value, view, selectedRoute, executionBudget, this.now)
@@ -844,7 +846,19 @@ export class MemoryCompositionGeneration {
     } finally { active = false }
   }
 
-  async executeAction(view: ComposableMemoryView, offerId: string, input: MemoryJsonValue, authorize: (offer: MemoryActionOffer) => boolean | Promise<boolean>, signal?: AbortSignal): Promise<MemoryMutationReceipt> {
+  private sourceView(view: ComposableMemoryView, sourceInstanceKey: string, execution: object): MemorySourceViewContext {
+    let contexts = this.sourceContexts.get(execution)
+    if (contexts === undefined) { contexts = new Map(); this.sourceContexts.set(execution, contexts) }
+    const key = `${view.id}\u0000${sourceInstanceKey}`
+    let context = contexts.get(key)
+    if (context === undefined) {
+      context = deepFreeze({ id: view.id, scope: view.scope })
+      contexts.set(key, context)
+    }
+    return context
+  }
+
+  async executeAction(view: ComposableMemoryView, offerId: string, input: MemoryJsonValue, authorize: (offer: MemoryActionOffer) => boolean | Promise<boolean>, signal?: AbortSignal, execution: object = view): Promise<MemoryMutationReceipt> {
     this.assertOpen()
     if (view.runtimeGeneration !== this.id) throw new Error('memory View belongs to a different runtime generation')
     const offer = view.actionOffers.find(candidate => candidate.id === offerId)
@@ -856,7 +870,7 @@ export class MemoryCompositionGeneration {
     signal?.throwIfAborted()
     const grant = view.readGrants.find(candidate => candidate.sourceInstanceKey === offer.sourceInstanceKey)
     const receipt = await source.runtime.mutate({
-      view: deepFreeze({ id: view.id, scope: view.scope }), offer,
+      view: this.sourceView(view, offer.sourceInstanceKey, execution), offer,
       ...(grant === undefined ? {} : { grant }),
       input: jsonClone(input, 'memory Action input'), ...(signal === undefined ? {} : { signal }),
     })
@@ -880,6 +894,7 @@ export class MemoryCompositionGeneration {
     this.disposed = true
     this.routeCalls = new WeakMap()
     this.strategyTurns = new WeakMap()
+    this.sourceContexts = new WeakMap()
     const failures: unknown[] = []
     for (const source of [...this.sources.values()].reverse()) {
       try {

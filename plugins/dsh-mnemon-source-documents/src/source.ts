@@ -90,7 +90,7 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
     }],
     actions: [{
       id: 'manage',
-      description: 'Create a project Document or update a Document pinned into this View.',
+      description: 'Create a project Document, or update one pinned into this View or created in this execution.',
       capability: 'write',
       inputSchema: {
         type: 'object',
@@ -120,6 +120,9 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
     const documents = new DocumentManager(effective.limitBytes, undefined, () => effective.dataDir)
     const snapshot = (workspaceId: string | undefined) => workspaceId === undefined ? undefined : documents.forWorkspace(workspaceId).catalog()
     const prepared = new WeakMap<object, NonNullable<ReturnType<typeof snapshot>>>()
+    // Source- and execution-local successful writes, not a broader read grant.
+    // Weak keys avoid retaining completed turns; View ids and grant ids can repeat.
+    const created = new WeakMap<object, Set<string>>()
     return {
       facts(request) {
         const root = workspace(request.scope)
@@ -259,8 +262,13 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
         const grant = request.grant
         const mutation = request.offer.sourceActionId === 'create'
           ? documentCreation(request.input)
-          : documentMutation(request.input, grant === undefined ? [] : grantIds(grant))
+          : documentMutation(request.input, [...(grant === undefined ? [] : grantIds(grant)), ...(created.get(request.view) ?? [])])
         const result = await documents.forWorkspace(root).mutate(mutation)
+        if (mutation.action === 'create') {
+          let ids = created.get(request.view)
+          if (ids === undefined) { ids = new Set(); created.set(request.view, ids) }
+          ids.add(result.document.id)
+        }
         return receipt(request.view.id, request.offer.id, context.sourceInstanceKey, result.snapshot.revision, result as unknown as MemoryJsonValue, 'committed')
       },
     }
