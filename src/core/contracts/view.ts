@@ -260,6 +260,12 @@ export interface MemoryViewSpec {
   explanation: string
   /** Trusted Strategy instructions, separate from quoted Source data. */
   guidance?: MemoryViewGuidance
+  /**
+   * Why this composition deliberately left an installed Source out (#504).
+   * The Host validates each entry and merges it into `view.diagnostics`; a
+   * diagnostic explains an absence, never grants a Source projection or routes.
+   */
+  diagnostics?: MemoryCompositionDiagnostic[]
 }
 
 export interface MemoryViewGuidance {

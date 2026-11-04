@@ -6,6 +6,7 @@ import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 
 import { DEFAULT_SKILLS_CONFIG, type ClientConnectionHandle, type ClientSettingsScope, type ClientSettingsSnapshot, type Config, type JsonValue, type LifecycleAgentSnapshot, type MemorySourceManagementInstance, type SkillsConfig, type StorageAreaInventory, type StorageScopeKind, type VersionRestartStatus } from "../host/protocol.ts"
 import type { MemoryPluginEntryView, MemoryViewDashboard } from '../host/view-protocol.ts'
+import type { MemoryCompositionStatus } from '../host/protocol.ts'
 import { MnemonClient } from "./api.ts"
 import { isRemoteConnection } from "./remote-rpc.ts"
 import { StatusPage, storageScopeLabel, type ComponentCard, type LayerState } from './StatusPage.tsx'
@@ -145,6 +146,20 @@ function OrdinaryNotices(props: { remoteReadOnly: boolean; reviewPaused: Lifecyc
       {props.remoteReadOnly && <div className={css.alert} role="status">{t('workspace.remoteReadOnly')}</div>}
       {props.reviewPaused && <div className={css.alert} role="status">{t(props.reviewPaused === 'tool-access' ? 'status.reviewToolAccessPaused' : 'status.reviewTeamPaused')}</div>}
     </div>
+  </div>
+}
+
+function BackgroundWorkflowNotice(props: { workflows: MemoryCompositionStatus['workflows'] }): JSX.Element | null {
+  const t = useT()
+  if (props.workflows === undefined) return null
+  const missing = [
+    !props.workflows.idleReview ? t('status.workflowIdleReview') : undefined,
+    !props.workflows.runtimeCapacity ? t('status.workflowRuntimeCapacity') : undefined,
+  ].filter((label): label is string => label !== undefined)
+  if (missing.length === 0) return null
+  return <div className={css.alert} role="status" aria-label={t('status.workflowUnavailable')}>
+    <strong>{t('status.workflowUnavailable')}</strong>
+    <span>{t('status.workflowUnsupported', { workflows: missing.join(' / ') })}</span>
   </div>
 }
 
@@ -516,6 +531,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       <Reveal className={css.notice}>{status?.restartPending !== undefined && <RestartReminder pending={status.restartPending} />}</Reveal>
       {workspaceToast.element}
       <OrdinaryNotices remoteReadOnly={remoteReadOnly} reviewPaused={focused ? undefined : status?.lifecycle?.current?.idleReviewBlocked} />
+      {!focused && <BackgroundWorkflowNotice workflows={status?.memorySystem?.workflows} />}
       {!focused && status?.lifecycle?.current?.idleReviewWatermark !== undefined && <div className={css.alert} role={status.lifecycle.current.idleReviewWatermark.state === 'error' ? 'alert' : 'status'}>
         <span>{t('status.reviewWatermarkUsage', { attempts: status.lifecycle.current.idleReviewAttempts ?? 0, max: status.lifecycle.current.idleReviewWatermark.maxPerSession, restored: status.lifecycle.current.idleReviewWatermark.restoredAttempts })}</span>
         {status.lifecycle.current.idleReviewWatermark.state === 'error' ? <>

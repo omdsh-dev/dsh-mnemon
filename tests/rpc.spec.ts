@@ -79,6 +79,19 @@ function lifecycle(methods: Record<string, unknown> = {}): MnemonLifecycle {
 }
 
 describe('Mnemon RPC Source boundaries', () => {
+  it.each([
+    { selected: 'general', manifest: { typeId: 'general' }, expected: { idleReview: false, runtimeCapacity: false } },
+    { selected: 'notes', manifest: { typeId: 'notes', workflows: ['idle-review'] }, expected: { idleReview: true, runtimeCapacity: false } },
+    { selected: 'default-three-tier', manifest: { typeId: 'default-three-tier' }, expected: { idleReview: true, runtimeCapacity: true } },
+    { selected: 'default-three-tier', manifest: { typeId: 'default-three-tier', workflows: [] }, expected: { idleReview: false, runtimeCapacity: false } },
+    { selected: 'general', manifest: { typeId: 'default-three-tier' }, expected: { idleReview: false, runtimeCapacity: true } },
+  ])('reports effective strategy maintenance without a conversation: $selected / $manifest', async ({ selected, manifest, expected }) => {
+    const f = protocolFixture({ memoryTopology: { strategyId: selected } })
+    Object.assign(f.generation.strategy.definition.manifest, manifest)
+    const read = createReadHandler(f.runtime)
+    expect(await read('memory-system', {})).toMatchObject({ ok: true, value: { workflows: expected } })
+  })
+
   it('provides default assistance for include-qualified Sources without rewriting their identity', async () => {
     const f = await compositionFixture({}, { entryPrefix: 'include' })
     cleanup.push(f.dispose)

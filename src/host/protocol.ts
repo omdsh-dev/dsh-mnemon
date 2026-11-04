@@ -18,6 +18,8 @@ export interface MemoryCompositionStatus {
   serving: boolean
   /** The main Strategy composing the serving composition, which a fallback can make differ from the selected one. */
   strategyTypeId?: string
+  /** Strategy support only; session policy and review settings can still prevent a run. */
+  workflows?: { idleReview: boolean; runtimeCapacity: boolean }
   evaluation: import('../core/contracts/index.ts').MemoryCompositionEvaluationReport
   sources: MemorySourceManagementInstance[]
   configuration: ResolvedMemoryTopologyConfig
