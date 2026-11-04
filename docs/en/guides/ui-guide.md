@@ -211,6 +211,9 @@ A change saved from another window, or an edit of the profile, shows up without 
 ![The main strategy selector: Layered strategy and General strategy](../../assets/webui-v0.5.32/en/plugin-strategy-menu.jpg)
 
 - **Main strategy** is one selector listing each installed main strategy with its description. The **Layered strategy** keeps runtime memory resident, reads Documents and Memory Spaces on demand and runs the background maintenance. The **General strategy** offers every available source in one budget and lets the model decide, without automatic review or capacity maintenance.
+
+When the active Strategy does not drive idle review or runtime capacity maintenance, **Memory System** names the unavailable workflows even without a selected conversation. The General Strategy drives neither. The settings page explains this dependency and retains your choices for switching back to a supporting Strategy; enabling the review switch alone cannot opt a Strategy into these workflows. Manual actions keep their existing permissions.
+
 - **Memory sources** and **Enhancements** follow, one row per component with its state, a switch, and a gear when it has settings. Chips name the components a row needs or that depend on it; each opens that page.
 - A problem line appears only while memory is not composed as chosen, with the one switch that fixes it.
 

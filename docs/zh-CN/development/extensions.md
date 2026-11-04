@@ -91,7 +91,7 @@ Entry id 标识实例，type id 标识实现。不能剥掉 Loader 的 include �
 
 ## 完整 Strategy 与可叠加贡献
 
-用 `defineMemoryStrategy` 定义，再以 `{ strategies: [definition] }` 安装。声明确定性、支持角色与上限（与角色无关的 Strategy 只列出 `ANY_MEMORY_SOURCE_ROLE`，即 `'*'`）；纯 `compose` 返回 `MemoryViewSpec`，选择准确的 Source key、eager/routed 投影预算和 Source 本地 route/action id。组合阶段不执行网络、存储或凭据访问。
+用 `defineMemoryStrategy` 定义，再以 `{ strategies: [definition] }` 安装。声明确定性、支持角色与上限（与角色无关的 Strategy 只列出 `ANY_MEMORY_SOURCE_ROLE`，即 `'*'`）；纯 `compose` 返回 `MemoryViewSpec`，选择准确的 Source key、eager/routed 投影预算和 Source 本地 route/action id。组合阶段不执行网络、存储或凭据访问。Strategy 还可以在 spec 里返回有界的 `diagnostics`，说明它有意排除的 Source；Host 会逐条校验并合并进 `view.diagnostics`，诊断本身不授予投影或路由。
 
 可以同时安装多个主策略，每个 View 只由其中一个组合：`memoryView.strategyTypeId` 负责选择；所选主策略被停用且只剩另一个主策略时，Host 改用那一个并报告 `strategy-fallback` 诊断。完整 Strategy 用可选 `extensionSlots` 声明自有的独占扩展槽。小插件使用 `defineMemoryStrategyExtension`，以 `{ strategyExtensions: [definition] }` 安装。启用后向目标 Strategy 的一个槽贡献有界 JSON，停用只撤销自身贡献；不同槽同时参与一个 View，同一目标的重复槽会拒绝注册，不按安装顺序覆盖。目标 Strategy 未被选择时，贡献保持可观察但不执行；不支持的槽会拒绝候选运行代，并保留已有 Serving。
 
