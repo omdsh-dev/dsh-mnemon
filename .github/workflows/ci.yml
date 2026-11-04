@@ -111,7 +111,7 @@ jobs:
         run: node scripts/verify-public-entries.mjs
 
   # Keep the pinned development baseline and older supported DSH releases,
-  # and exercise both the current RC and the separate alpha track from npm.
+  # and exercise the published 0.2.2 RC from npm. Alpha releases are not support targets.
   verify-installed-dsh:
     name: Verify on installed DSH ${{ matrix.dsh }} (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
@@ -125,7 +125,6 @@ jobs:
           - { dsh: '0.2.1-rc.5', node: '22.19.0' }
           # DSH 0.2.2 requires >=24.9.0; keep Node 22 coverage for earlier Hosts.
           - { dsh: '0.2.2-rc.1', node: '24.22.2' }
-          - { dsh: '0.2.2-alpha.3', node: '24.22.2' }
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
