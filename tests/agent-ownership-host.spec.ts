@@ -10,7 +10,7 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { expect, it, vi } from 'vitest'
-import type { HostAgent, HostContextShape, HostSubagentActivation, HostSubagentRun } from '../src/host/dsh.ts'
+import type { HostAgent, HostContextShape, HostSubagentRun } from '../src/host/dsh.ts'
 import { MnemonLifecycle } from '../src/host/lifecycle.ts'
 import { LiveMnemonRuntime } from '../src/host/runtime.ts'
 import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
@@ -183,64 +183,4 @@ it('selects the official spawn provider and records the coordinator result on th
     expect(f.counts().modelCalls).toBe(1)
     expect(f.host.agents.get(result.delegation.runId)).toBeUndefined()
   } finally { await f.close() }
-})
-
-it.skipIf(typeof AgentRegistry.prototype.roots === 'function')('refuses standalone management before creating a stored Session on source Hosts', async () => {
-  const f = await fixture('spawn')
-  try {
-    f.begin()
-    const before = await f.ctx.sessionPersistence.list()
-    const operation = vi.fn(async () => undefined)
-    await expect(f.lifecycle.runRuntimeMaintenanceTask({ storage: 'global' }, new AbortController().signal, operation))
-      .rejects.toThrow('hidden standalone task')
-    expect(await f.ctx.sessionPersistence.list()).toEqual(before)
-    expect(operation).not.toHaveBeenCalled()
-    expect(f.children).toEqual([])
-    expect(f.counts().modelCalls).toBe(0)
-  } finally { await f.close() }
-})
-
-it.skipIf(typeof AgentRegistry.prototype.roots === 'function' || typeof (SubagentRuntime.prototype as { lineageOf?: unknown }).lineageOf === 'function').each(['retain', 'on'] as const)('fails memory access closed when native source activation contains a child %s failure', async failure => {
-  const f = await fixture('spawn', true)
-  let activation: HostSubagentActivation | undefined
-  let releaseRoot: (() => void) | undefined
-  try {
-    f.begin()
-    const pin = await f.runtime.executions.turn(f.parent as unknown as HostAgent, 1, new AbortController().signal)
-    releaseRoot = pin.release
-    expect(f.memory.views.activeTurn(f.parent.id)).toBeDefined()
-    if (failure === 'retain') vi.spyOn(f.runtime.executions, 'retain').mockImplementation(() => { throw new Error('Synthetic child retain failure') })
-    else f.ctx.on('agent/created', ({ agent }) => {
-      const on = agent.ctx.on.bind(agent.ctx)
-      vi.spyOn(agent.ctx, 'on').mockImplementation(((name: string, ...args: unknown[]) => {
-        if (name === 'system-prompt/assemble') throw new Error('Synthetic child hook failure')
-        return (on as (...args: unknown[]) => unknown)(name, ...args)
-      }) as typeof agent.ctx.on)
-      return undefined
-    }, { prepend: true })
-    // A native caller bypasses Mnemon's cancellation scope. Source DSH contains
-    // publication exceptions and can admit the ordinary model without memory.
-    activation = await (f.host.subagents as unknown as { startActivation(spec: Record<string, unknown>): Promise<HostSubagentActivation> }).startActivation({
-      provider: 'spawn', parent: f.parent, label: 'Synthetic native activation',
-      prompt: [{ type: 'text', text: 'Synthetic task without memory.' }],
-      signal: new AbortController().signal, delivery: 'caller',
-    })
-    await vi.waitFor(() => expect(f.counts().modelCalls).toBe(1))
-    const child = f.host.agents.get(activation.childId)!
-    expect(f.memory.views.activeTurn(child.id)).toBeUndefined()
-    await expect(f.coordinator.recall(child, { query: 'Synthetic memory read' }, new AbortController().signal, { requirePinnedView: true }))
-      .rejects.toThrow('View pinned to the current turn')
-    expect(() => f.coordinator.action(child, 'synthetic-action', {}, new AbortController().signal))
-      .toThrow('View pinned to the current turn')
-    expect(f.memory.search).not.toHaveBeenCalled()
-    releaseRoot()
-    releaseRoot = undefined
-    const replacement = memoryGraphFixture(['replacement'])
-    f.runtime.swap(replacement.graph)
-    expect(f.runtime.forAgent(child)).toBe(replacement.graph)
-    await activation.dispose()
-    await activation.result
-    expect(f.host.agents.get(child.id)).toBeUndefined()
-    expect(f.memory.views.activeTurn(child.id)).toBeUndefined()
-  } finally { vi.restoreAllMocks(); releaseRoot?.(); await activation?.dispose(); await f.close() }
 })

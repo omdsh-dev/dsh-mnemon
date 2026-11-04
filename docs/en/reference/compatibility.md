@@ -6,7 +6,8 @@ The Starter pins a tested combination of official plugins. The table records ver
 
 | Component | Baseline | What is verified |
 |---|---|---|
-| DSH current RC | `0.2.1-rc.5` | Pinned development baseline and an installed-host CI target. The npm `latest` and `next` tags pointed here on 2026-11-02; this is still a prerelease. |
+| DSH current RC | `0.2.2-rc.1` | Published npm `next` on 2026-11-04. Full installed-Host tests and packed Starter installation/upgrade checks run on Node 24.22.2; the Host requires Node >=24.9.0. |
+| DSH development baseline | `0.2.1-rc.5` | Pinned development dependencies and an installed-Host CI target on Node 22.19. The npm `latest` tag still pointed here on 2026-11-04. |
 | DSH earlier supported hosts | `0.2.0-rc.2`, `0.2.1-rc.3` | CI runs every root test against these installed packages. See [DSH 0.2.0 and 0.2.1](#dsh-020-and-021) for version differences; the supported range still admits 0.2.1-rc.1 and rc.2. |
 | DSH alpha track | `0.2.2-alpha.3` | Separate installed-host CI target on the verified Node 24.22.2 toolchain; the published alpha Host itself requires Node 24.9.0 or later. This is the npm `alpha` tag checked on 2026-11-04, not the default development host or a guarantee for later alphas. |
 | Node.js | `22.19` and `24` | Source CI and packed-artifact CI respectively; development requires `^22.19.0 \|\| >=24.11.0` |
@@ -42,13 +43,13 @@ Installing for the first time? How DSH chooses the registry, and why its result 
 
 What those hosts needed is kept under [Older DSH hosts](#older-dsh-hosts). How each release was verified, and the earlier Headless and WebUI records that remain historical evidence, are under [Verification and evidence](#verification-and-evidence).
 
-### Source DSH 0.2.2 ownership compatibility (#554)
+### Published DSH 0.2.2 RC1 and issue #554
 
-The source build at `8bd073392eef6f54e921a093b95076248eb08cbb` differs from npm `0.2.2-alpha.3`: the published package still exposes `agents.roots()` and `agents.isOwnedBy()`. The source build instead exposes `subagents.rootOf()`, flattens `startActivation()` arguments and removes provider enumeration. Mnemon uses exact live Host ownership for root adoption and guarded spawn/fork delegation. It does not infer authority from Session headers. Hosts exposing `lineageOf()` use their publication-time binding; the earlier `rootOf()` contract uses `subagent/start` before prompt admission and cancels Mnemon-started activations if composition or guard installation fails. Native Host starts can continue without memory after a child-memory installation failure; Mnemon reads and Actions reject without that child's View pin. Without provider enumeration, only the official `spawn` and `fork` names are probed.
+Use the published `@deepseek-ai/dsh@0.2.2-rc.1` package. Its public Agent registry still provides `roots()` and `isOwnedBy()`, its subagent runtime retains provider enumeration and the nested activation request, and hidden standalone task Agents remain supported. The source build `8bd073392eef6f54e921a093b95076248eb08cbb` reported in #554 has different contracts and is not the published RC; its source-only adapter is not shipped.
 
-**This is a scoped startup and conversation-delegation fix, not full compatibility with every source DSH 0.2.2 feature.** This source Host has no public equivalent of Mnemon's hidden standalone task Agent: it rejects a standalone Agent marked as a subagent, while an ordinary root can leave an unwanted conversation in history. Mnemon therefore refuses standalone management before creating any Session. Affected operations are standalone Skills tasks, the Memory page's evidence answers and Save to memory, Runtime maintenance, Document creation/archive, Provider placement, and Memory Space metadata maintenance. Conversation-bound memory and guarded spawn/fork delegation remain available. Use the verified published `@deepseek-ai/dsh@0.2.1-rc.5` when these standalone operations are required; existing published Hosts keep their task behavior and stored data.
+All existing task paths stay available: standalone Skills work, evidence answers and Save to memory, Runtime maintenance, Document creation/archive, Provider placement and Memory Space metadata maintenance. Real-Host regression tests cover successful standalone operations, retained Document content and archive indexes, hidden ACP task Sessions, guarded spawn/fork, cancellation and rejection before the first model request when composition fails. The runtime, storage, configuration and supported-version range are unchanged; no feature is disabled for RC compatibility.
 
-The source build, synthetic-model checks, npm alpha.3 checks and the remaining source-profile limitation are recorded in [issue #554 evidence](../../pr-assets/issue-554-agent-ownership/README.md). No DSH source, development dependency baseline, configuration format or stored Session is rewritten.
+The installed RC and packed Starter use the Host's own dependencies. Tests resolve Loader from that same installation and observe its actual persistence method. Historical Session checks preserve valid legacy descriptors while respecting the Host's published validator. Commands, package identity, acceptance results and limits are in [RC1 compatibility evidence](../../pr-assets/dsh-022-rc1/README.md).
 
 ## Upgrade the default installation
 

@@ -229,8 +229,7 @@ export interface HostAgentsService {
   get(id: string): HostAgent | undefined
   /** Public DSH runtime ownership, independent of persisted session lineage. */
   isOwnedBy?(id: string, parent: HostAgent): boolean
-  roots?(): HostAgent[]
-  list?(): HostAgent[]
+  roots(): HostAgent[]
   /** Factory for an owned, clean top-level Agent. */
   create(options: CreateHostAgentOptions): Promise<HostAgentHandle>
 }
@@ -293,9 +292,6 @@ export interface HostSubagentActivation {
 }
 
 export interface HostSubagentsService {
-  /** Source DSH 0.2.2 moves exact live ownership out of AgentRegistry. */
-  rootOf?(agent: HostAgent): HostAgent
-  lineageOf?(agent: HostAgent): { readonly root: HostAgent; readonly ancestors: readonly string[] } | undefined
   list(): string[]
   getProvider(name: string): HostSubagentProvider | undefined
   /** One-shot runs, on DSH 0.2.0. */

@@ -6,7 +6,8 @@ Starter 固定经过测试的官方插件组合。下表记录验证范围，不
 
 | 组件 | 基线 | 已验证的范围 |
 |---|---|---|
-| DSH 当前 RC | `0.2.1-rc.5` | 锁定的开发基线，同时进入已安装宿主 CI。2026-11-02 核对时 npm 的 `latest` 和 `next` 标签均指向此版本；它仍是预发布版。 |
+| DSH 当前 RC | `0.2.2-rc.1` | 2026-11-04 已发布到 npm `next`。Node 24.22.2 上运行完整已安装宿主测试及打包 Starter 安装、升级检查；Host 要求 Node >=24.9.0。 |
+| DSH 开发基线 | `0.2.1-rc.5` | 保持锁定的开发依赖，并在 Node 22.19 的已安装宿主 CI 中验证。2026-11-04 npm `latest` 仍指向此版本。 |
 | DSH 早期受支持宿主 | `0.2.0-rc.2`, `0.2.1-rc.3` | CI 在这些已安装包上运行全部根测试。版本差异见 [DSH 0.2.0 与 0.2.1](#dsh-020-与-021)；支持范围仍包含 0.2.1-rc.1 和 rc.2。 |
 | DSH alpha 通道 | `0.2.2-alpha.3` | 独立的已安装宿主 CI 使用已验证的 Node 24.22.2，以满足构建工具要求；已发布 alpha Host 本身要求 Node 24.9.0 或以上。此版本是 2026-11-04 核对的 npm `alpha` 标签，不作为默认开发宿主，也不保证之后的 alpha 版本。 |
 | Node.js | `22.19`、`24` | 分别用于源码 CI 与打包制品 CI；开发要求 `^22.19.0 \|\| >=24.11.0` |
@@ -42,13 +43,13 @@ Git 同步保留原有设置与载荷格式。保存的默认提交者组合现�
 
 这些宿主需要的内容保留在[旧版 DSH 宿主](#旧版-dsh-宿主)。各版本如何验证，以及仅保留为历史证据的较早 Headless 和 WebUI 记录，见[验证与证据](#验证与证据)。
 
-### DSH 0.2.2 源码版的归属兼容（#554）
+### 已发布的 DSH 0.2.2 RC1 与 issue #554
 
-`8bd073392eef6f54e921a093b95076248eb08cbb` 源码构建与 npm `0.2.2-alpha.3` 不同：已发布包仍提供 `agents.roots()` 和 `agents.isOwnedBy()`；源码版改为 `subagents.rootOf()`，展开 `startActivation()` 的任务参数，并移除了 Provider 枚举。Mnemon 按 Host 的确切存活实例归属接管根 Agent、启动带守卫的 spawn/fork 委派，不从 Session header 推断权限。提供 `lineageOf()` 的 Host 使用发布时的绑定；较早的 `rootOf()` 契约则在 prompt 入队前的 `subagent/start` 安装子级组合与守卫，组合或守卫安装失败时，会取消 Mnemon 发起的激活。Host 原生启动在子级记忆安装失败后仍可能继续，但 Mnemon 读取和 Action 会因缺少该子级的 View pin 而拒绝。没有 Provider 枚举时，仅探测官方 `spawn` 和 `fork` 名称。
+请使用已发布的 `@deepseek-ai/dsh@0.2.2-rc.1` 包。它的公开 Agent 注册表仍提供 `roots()`、`isOwnedBy()`，子 Agent 运行时保留 Provider 枚举及嵌套的 activation 请求，隐藏的独立任务 Agent 也仍受支持。#554 报告的源码构建 `8bd073392eef6f54e921a093b95076248eb08cbb` 使用不同契约，不等同于已发布 RC；其源码专用适配器不进入发布制品。
 
-**这是启动及对话委派的限定兼容修复，不代表 DSH 0.2.2 源码版的所有功能均已兼容。** 该源码 Host 没有 Mnemon 隐藏独立任务 Agent 的公开等效能力：它拒绝标为 subagent 的独立 Agent，而普通根 Agent 可能在历史列表留下不需要的会话。因此 Mnemon 在创建任何 Session 前明确拒绝独立管理任务。受影响入口包括独立 Skills 任务、记忆页面的证据回答和保存到记忆、Runtime 维护、Document 创建与归档、Provider 放置，以及记忆空间元数据维护。对话内记忆及带守卫的 spawn/fork 委派仍可使用。需要上述独立操作时，请使用已验证的正式发布包 `@deepseek-ai/dsh@0.2.1-rc.5`；现有已发布 Host 的任务行为和数据保持不变。
+既有任务入口保持可用：独立 Skills 任务、证据回答与保存到记忆、Runtime 维护、Document 创建与归档、Provider 放置及记忆空间元数据整理。真实宿主回归覆盖独立任务成功执行、Document 原文与归档索引保留、ACP 不显示任务会话、spawn/fork 工具守卫、取消清理，以及组合失败时在首次模型请求前拒绝。运行时、存储、配置及支持版本范围均未改变，没有为兼容 RC 关闭功能。
 
-源码构建、合成模型验证、npm alpha.3 检查及剩余的源码 Profile 验证限制见 [issue #554 验证记录](../../pr-assets/issue-554-agent-ownership/README.md)。本修复不修改 DSH 源码、开发依赖基线、配置格式或已存储的 Session。
+已安装 RC 和打包 Starter 使用宿主自己的依赖。测试从同一安装解析 Loader，并观察其实际持久化方法。历史会话检查保留合法旧 descriptor，同时尊重宿主公开的校验器。包身份、命令、验收结果与边界见 [RC1 兼容验证记录](../../pr-assets/dsh-022-rc1/README.zh-CN.md)。
 
 ## 升级默认安装
 

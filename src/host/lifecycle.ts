@@ -1,4 +1,3 @@
-import { agentMemoryParent, agentRoot, rootAgents, observeAgentPublication } from './agent-ownership.ts'
 import { randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
@@ -832,14 +831,10 @@ export class MnemonLifecycle {
       for (const { lifecycle } of this.owners.values()) lifecycle.configurationChanged()
     })
     const stopCreated = this.ctx.on('agent/created', (({ agent, source }: SessionStartPayload) => { this.install(agent, source) }) as never)
-    const stopPublished = typeof this.ctx.agents.roots !== 'function'
-      ? observeAgentPublication(this.ctx, (agent, creatorId) => this.install(agent, 'startup', creatorId)) as (() => void) | undefined
-      : undefined
-    for (const agent of rootAgents(this.ctx)) this.install(agent, 'adopted')
+    for (const agent of this.ctx.agents.roots()) this.install(agent, 'adopted')
     return () => {
       stopChanged?.()
       stopCreated()
-      stopPublished?.()
       for (const dispose of [...this.children.values()].reverse()) dispose()
       for (const owner of [...this.owners.values()].reverse()) owner.dispose()
       this.children.clear()
@@ -1166,9 +1161,6 @@ export class MnemonLifecycle {
     operation: (agent: HostAgent) => Promise<T>,
     route?: RoutedPick,
   ): Promise<T> {
-    if (typeof this.ctx.agents.roots !== 'function' && typeof this.ctx.subagents.rootOf === 'function') {
-      throw new Error('This source DSH Host has no supported hidden standalone task Agents. Use the verified published @deepseek-ai/dsh@0.2.1-rc.5 for standalone memory management; ordinary conversation memory and guarded subagents remain available.')
-    }
     const sessionId = randomUUID()
     this.taskAgentIds.add(sessionId)
     let handle: HostAgentHandle | undefined
@@ -1346,15 +1338,13 @@ export class MnemonLifecycle {
     return this.taskAgentModelRoute(fallbackSessionId, workspaceRoot)?.options
   }
 
-  private install(agent: HostAgent, source: LifecycleAgentSnapshot['startSource'], creatorId?: string): void {
+  private install(agent: HostAgent, source: LifecycleAgentSnapshot['startSource']): void {
     if (this.taskAgentIds.has(agent.id) || this.owners.has(agent) || this.children.has(agent)) return
-    const root = agentRoot(this.ctx, agent)
-    if (root === undefined) return
-    if (root !== agent) {
-      const parent = agentMemoryParent(this.ctx, agent, creatorId)
-      if (parent !== undefined) this.installChild(agent, parent)
+    if (agent.session.header?.origin === 'subagent') {
+      this.installChild(agent)
       return
     }
+    if (!this.ctx.agents.roots().includes(agent)) return
     const memoryTurn = this.runtimeSource === undefined ? undefined : new AgentMemoryTurn(agent, this.runtimeSource)
     const lifecycle = new MnemonAgentLifecycle(agent, this.coordinator, this.config, this.counters, source, memoryTurn, () => this.runtimeSource?.forAgent(agent).directory)
     let dispose: () => unknown
@@ -1377,9 +1367,12 @@ export class MnemonLifecycle {
   }
 
   /** Child memory ownership is independent of root-only reminders and idle review. */
-  private installChild(agent: HostAgent, parent: HostAgent): void {
+  private installChild(agent: HostAgent): void {
     const runtime = this.runtimeSource
-    if (runtime === undefined) return
+    const parentId = agent.session.header?.parentSession?.trim()
+    const parent = parentId === undefined || parentId === '' ? undefined : this.ctx.agents.get(parentId)
+    // A lineage string alone is not authority. Orphans get no model Recall pin.
+    if (runtime === undefined || parent === undefined || parent === agent) return
     const parentMemory = this.memoryTurns.get(parent)
     let delegation: DelegatedMemoryView
     if (parentMemory !== undefined) {
