@@ -19,6 +19,20 @@ Choose an existing data authority deliberately. Without `dataDir`, each stable S
 
 Manual management can create a document without a model, but it still needs a workspace in the request scope. Standalone archiving retains content locally; cross-Source LLM distillation is an optional Host workflow.
 
+## Workspace ownership / 工作区归属
+
+Conversation tools use the session workspace (`agent.session.header.cwd`) as the Documents request scope. A shell `cd`, a Source file path, or a delegated task's initial command directory does not rebind that session workspace. Ordinary DSH subagents inherit the parent session's workspace, and delegated memory work retains the parent's pinned workspace authority.
+
+For example, a conversation opened in project A that delegates work with an initial command directory in project B still creates Documents in A's configured storage. To create a Document for B, start a conversation in B's DSH workspace, or select B in Memory System and use its manual Project Documents management. Check the selected workspace before writing; the command's current directory is not the destination selector.
+
+`workspace` and `workspaces` storage modes isolate data by that workspace identity. `global` and `custom` may share the physical directory, but Documents operations still require a workspace. This documents the current behavior; it adds no `workspace` argument to the conversation tool and requires no migration.
+
+对话工具以会话工作区（`agent.session.header.cwd`）作为项目档案的请求范围。Shell 中的 `cd`、来源文件路径或委派任务执行命令时的初始目录，都不会重新绑定会话工作区。普通 DSH 子代理继承父会话工作区，委派记忆任务也保留父级固定 View 的工作区权限。
+
+例如，在项目 A 的会话中委派任务，即使命令初始目录设为项目 B，新建档案仍进入 A 对应的存储。要为 B 建档，请在 B 的 DSH 工作区新开会话，或在记忆系统中选择 B 后使用项目档案的手动管理。写入前核对所选工作区；命令当前目录不是档案目标选择器。
+
+`workspace` 与 `workspaces` 按该工作区身份隔离数据；`global` 与 `custom` 可能共用物理目录，但档案操作仍要求工作区身份。本说明不增加对话工具的 `workspace` 参数，也不涉及数据迁移。
+
 ## Create-only Action / 仅创建操作
 
 The `create` Action accepts `title`, `content`, and optional `description`, `sourcePaths`, and `sessionIds`. It always creates a separate document, rejects mutation selectors such as `action` or `id`, and fails at capacity without updating or archiving existing documents. The existing `manage` Action remains available for create/update workflows. Mnemon idle review receives only the create-only document tool and skips already-covered candidates. No document format migration is required.

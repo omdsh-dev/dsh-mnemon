@@ -116,6 +116,8 @@ When the Agent writes the user profile, `branches` must be omitted or empty. For
 
 Documents hold complete narratives: designs, investigations, procedures and handoffs. Select a DSH workspace first; documents belong to a workspace even when storage is global.
 
+Conversation tools bind Project Documents to the session workspace (`session.header.cwd`). Ordinary subagents inherit the parent workspace: changing a command directory, including a delegated task's initial directory, does not move the Documents destination. If a conversation in project A delegates commands in project B, its Documents still belong to A's selected storage. To create a Document for B, open a conversation in B's DSH workspace or select B in Memory System and use manual Documents management. With `workspace` / `workspaces`, this identity selects the separate store; `global` / `custom` can share one physical store.
+
 - Switch between **Active** and **Archived**. The reader keeps the title, retrieval description, provenance, revision, hash, size and full Markdown.
 - Search matches the title, description and body. Lists are newest first; updating an older document does not move it.
 - Source files in your project are never modified; a document is a managed copy.
