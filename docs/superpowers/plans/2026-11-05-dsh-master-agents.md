@@ -63,7 +63,7 @@
 - [x] Keep existing CI coverage; add reproducible pinned-source validation without depending on unavailable private-repository CI credentials.
 - [x] Run appropriate full verification, official rc.1 and source-Host checks; record exact results and limitations.
 - [x] Obtain a fresh whole-branch review using superpowers:requesting-code-review; fix important findings with regression tests.
-- [ ] Push `codex/compat-dsh-master-agents` and open one PR with linked screenshots and compatibility scope. Do not merge or publish.
+- [x] Push `codex/compat-dsh-master-agents` and open one PR with linked screenshots and compatibility scope: [PR #567](https://github.com/omdsh-dev/dsh-mnemon/pull/567). Do not merge or publish.
 
 ## Execution record
 
