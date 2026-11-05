@@ -52,6 +52,8 @@ On wide screens, the Pending and Done lists scroll independently of the selected
 
 **Pending** lists what waits for you: suggestions, and drafts written for a skill directly. **Done** keeps what was adopted, dismissed, expired or invalidated. **Evidence** lists the conversations reviews read. The sparkle button, **Review this conversation**, reviews the current conversation now instead of waiting for it to pause.
 
+Deleting a suggestion removes its links from review records and evidence, while keeping the recorded conversation and test cases. Old records with deleted suggestion links are filtered automatically when read. If a suggestion is deleted while its page is open, the detail shows a deleted notice; other loading failures can be retried.
+
 | A suggestion and its evidence | Its draft, backtested |
 |---|---|
 | ![Evolution, Pending: the suggestion to update release-notes, with its evidence folded out](../../assets/skills-v0.5.34/en/skills-suggestion.jpg) | ![The draft under the suggestion: its notes and changes, the backtest Current 40 → Draft 93 +53, and the diff](../../assets/skills-v0.5.34/en/skills-draft.jpg) |

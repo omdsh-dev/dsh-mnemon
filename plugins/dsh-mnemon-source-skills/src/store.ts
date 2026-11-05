@@ -107,6 +107,21 @@ function trashStamp(id: string): string | undefined {
   return match === null ? undefined : `${match[1]}T${match[2]}:${match[3]}:${match[4]}.${match[5]}Z`
 }
 
+/** References are navigation links, not evidence: keep the records when a suggestion is deleted. */
+function pruneSuggestionLinks(ledger: LedgerFile): LedgerFile {
+  const ids = new Set(ledger.suggestions.map(suggestion => suggestion.id))
+  for (const review of ledger.reviews) {
+    if (review.suggestionIds === undefined) continue
+    const kept = review.suggestionIds.filter(id => ids.has(id))
+    // A review can strengthen evidence without counting an inserted/updated suggestion.
+    if (kept.length !== review.suggestionIds.length) review.suggestions = Math.min(review.suggestions, kept.length)
+    if (kept.length === 0) delete review.suggestionIds
+    else review.suggestionIds = kept
+  }
+  for (const trajectory of ledger.trajectories) trajectory.suggestionIds = trajectory.suggestionIds.filter(id => ids.has(id))
+  return ledger
+}
+
 /**
  * The Skills Source's own files under `<dataDir>/skills`. Every file is
  * replaced atomically; callers serialize writes with the storage lock.
@@ -159,7 +174,8 @@ export class SkillsStore {
   ledger(): LedgerFile {
     const value = object(this.readJson('ledger.json'))
     if (value === undefined) return emptyLedger()
-    return {
+    // Normalize legacy links in memory; reads must not write or invalidate management revisions.
+    return pruneSuggestionLinks({
       version: 1,
       generation: typeof value.generation === 'number' ? value.generation : 0,
       suggestions: array(value.suggestions),
@@ -168,7 +184,7 @@ export class SkillsStore {
       versions: array(value.versions),
       trajectories: array(value.trajectories),
       installs: array(value.installs),
-    }
+    })
   }
 
   /**
@@ -208,6 +224,7 @@ export class SkillsStore {
   }
 
   saveLedger(ledger: LedgerFile): void {
+    pruneSuggestionLinks(ledger)
     ledger.generation += 1
     ledger.reviews = ledger.reviews.slice(0, MAX_REVIEWS)
     const kept = new Set<string>()
@@ -239,7 +256,16 @@ export class SkillsStore {
     if (!/^[a-z0-9-]{1,80}$/u.test(id)) throw new Error('invalid trajectory id')
     const value = object(this.readJson(join('trajectories', `${id}.json`)))
     if (value === undefined) throw new Error('trajectory not found: ' + id)
-    return value as unknown as Trajectory
+    const trajectory = value as unknown as Trajectory
+    const ids = new Set(this.ledger().suggestions.map(suggestion => suggestion.id))
+    trajectory.suggestionIds = trajectory.suggestionIds.filter(id => ids.has(id))
+    for (const annotation of trajectory.annotations) {
+      if (annotation.suggestionIds === undefined) continue
+      const kept = annotation.suggestionIds.filter(id => ids.has(id))
+      if (kept.length === 0) delete annotation.suggestionIds
+      else annotation.suggestionIds = kept
+    }
+    return trajectory
   }
 
   saveTrajectory(trajectory: Trajectory): void {
