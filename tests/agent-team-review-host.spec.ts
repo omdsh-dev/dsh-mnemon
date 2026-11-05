@@ -1,5 +1,5 @@
 import { readFileSync, realpathSync } from 'node:fs'
-import { createRequire } from 'node:module'
+import { createDshHostRequire } from '../scripts/dsh-host-packages.ts'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { expect, it } from 'vitest'
@@ -23,18 +23,24 @@ const hostRoot = profile === undefined
   : resolve(profile)
 
 it('runs guarded Team review against the published DSH cohort (issue 275)', async () => {
-  const require = createRequire(join(hostRoot, 'package.json'))
+  const require = createDshHostRequire(join(hostRoot, 'package.json'))
+  const teamPackage = (() => {
+    try { require.resolve('@deepseek-ai/dsh-agent-team'); return 'dsh-agent-team' } catch { return 'dsh-experimental-agent-team' }
+  })()
+  const currentTeam = teamPackage === 'dsh-agent-team'
+  const forbiddenTeamTool = currentTeam ? 'team_task_create' : 'spawn_teammate'
+  const teamToolsPackage = teamPackage.replace('agent-team', 'tool-agent-team')
   const load = async (name: string) => import(pathToFileURL(require.resolve(`@deepseek-ai/${name}`)).href)
   const [cordis, agent, loop, llm, session, persistence, projection, query, subagent, fork, spawn, prompt, tools, team, teamTools, ptc] = await Promise.all([
     'cordis', 'dsh-agent', 'dsh-agent-loop', 'dsh-llm', 'dsh-session', 'dsh-session-persistence-jsonl',
     'dsh-session-projection', 'dsh-session-query-sqlite', 'dsh-subagent', 'dsh-subagent-fork-in-process',
-    'dsh-subagent-spawn-in-process', 'dsh-system-prompt', 'dsh-tools', 'dsh-experimental-agent-team',
-    'dsh-experimental-tool-agent-team', 'dsh-ptc-runtime-node',
+    'dsh-subagent-spawn-in-process', 'dsh-system-prompt', 'dsh-tools', teamPackage,
+    teamToolsPackage, 'dsh-ptc-runtime-node',
   ].map(load))
   // Every package of the cohort comes from the host's own release.
   const release = JSON.parse(readFileSync(require.resolve('@deepseek-ai/dsh/package.json'), 'utf8')).version as string
   const dsh021 = isDsh021(release)
-  const versions = Object.fromEntries(['dsh', 'dsh-agent', 'dsh-tools', 'dsh-subagent', 'dsh-experimental-agent-team', 'dsh-experimental-tool-agent-team'].map(name => {
+  const versions = Object.fromEntries(['dsh', 'dsh-agent', 'dsh-tools', 'dsh-subagent', teamPackage, teamToolsPackage].map(name => {
     const version = JSON.parse(readFileSync(require.resolve(`@deepseek-ai/${name}/package.json`), 'utf8')).version
     expect(version).toBe(release)
     return [name, version]
@@ -117,7 +123,7 @@ it('runs guarded Team review against the published DSH cohort (issue 275)', asyn
             name: 'run_code', args: { description: 'Exercise bounded Team review.', code: `return await tools[${JSON.stringify(name)}](${JSON.stringify(args)})` },
           }
           const step = childCalls++
-          if (step === 0) return call('spawn_teammate', { name: 'forbidden-review-teammate', description: 'Must never run.', prompt: 'Must never run.' })
+          if (step === 0) return call(forbiddenTeamTool, currentTeam ? { subject: 'Forbidden review task', description: 'Must never run.' } : { name: 'forbidden-review-teammate', description: 'Must never run.', prompt: 'Must never run.' })
           if (step === 1) return call('mnemon_runtime_memory', { action: 'add', target: 'memory', content: memory, importance: 'normal' })
           if (step === 2) return call('mnemon_document_search', { query: 'synthetic Team review project', limit: 1 })
           const result = { action: 'added', summary: 'Committed the explicit synthetic project decision.', memoryBodyIds: [], documentIds: [] }
@@ -137,6 +143,7 @@ it('runs guarded Team review against the published DSH cohort (issue 275)', asyn
         registerTools(host, f.live, coordinator, f.extensions)
         stop = lifecycle.start()
         const parent = await ctx.agentLoop.create(session.SessionId('parent'), { provider: 'fixture', model: 'fixture' }, { cwd: f.workspace })
+        if (currentTeam && teams === 'tools') await ctx.agentTeams.setEnabled(parent, true)
         parent.followup(llm.createUserMessage({ content: [{ type: 'text', text: memory }], source: { kind: 'user' } }))
         await parent.whenIdle()
         const review = coordinator.review(parent as HostAgent, AbortSignal.timeout(10_000))
@@ -162,17 +169,17 @@ it('runs guarded Team review against the published DSH cohort (issue 275)', asyn
           }
         }
         if (policy === 'scoped') {
-          expect(receipts.filter(receipt => receipt.name === 'spawn_teammate').every(receipt => receipt.isError)).toBe(true)
+          expect(receipts.filter(receipt => receipt.name === forbiddenTeamTool).every(receipt => receipt.isError)).toBe(true)
           // In Code Mode DSH 0.2.1 refuses the filtered tool inside run_code before dispatch, so the failed attempt
           // is the run_code call; the Team tool never runs either way.
-          if (teams === 'tools') expect(receipts).toContainEqual(mode === 'ptc' && dsh021 ? { name: 'run_code', isError: true } : { name: 'spawn_teammate', isError: true })
+          if (teams === 'tools') expect(receipts).toContainEqual(mode === 'ptc' && dsh021 ? { name: 'run_code', isError: true } : { name: forbiddenTeamTool, isError: true })
           expect(children).toHaveLength(cancelled ? 2 : 1)
           for (const child of children) expect(ctx.agents.get(child.id)).toBeUndefined()
         }
         if (teams === 'tools') {
           const result = await executeTool(parent.ctx, { name: 'team_task_create', arguments: { subject: 'Parent Teams remains available', description: 'Synthetic official Team preservation probe.' },
             agent: parent, callId: 'team-preservation' as ToolExecutionInput['callId'], signal: new AbortController().signal })
-          expect(result.isError).toBe(false)
+          expect(result.isError, JSON.stringify({ provider, teams, mode, policy, enabled: currentTeam && ctx.agentTeams.isEnabled(parent), result })).toBe(false)
           expect(ctx.agentTeams.listTasks(parent)).toHaveLength(1)
         }
         reports.push({ provider, teams, mode, policy, strategyExtensions: ['scoped', 'light-context', 'auto-capture'], childCalls, children: children.length, cancelled, receipts })

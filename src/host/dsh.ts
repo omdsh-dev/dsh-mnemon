@@ -145,6 +145,7 @@ export interface HostSessionEvent {
 
 /** Minimum DSH Session surface: immutable header, range snapshots and indexed reads. */
 export interface HostSession {
+  inheritedEventCount?: number
   header?: { origin?: 'subagent'; parentSession?: string; delegationDepth?: number; cwd?: string; agentPreset?: string }
   snapshotEvents(fromSeq?: number, toSeqExclusive?: number): readonly HostSessionEvent[]
   eventAt(seq: number): HostSessionEvent | undefined
@@ -203,7 +204,7 @@ export interface HostAgentContext {
 export interface HostAgent {
   id: string
   status: 'idle' | 'running'
-  options?: { provider?: string; model?: string; maxTokens?: number; reasoningEffort?: string }
+  options?: { provider?: string; model?: string; maxTokens?: number; reasoningEffort?: string; subagentDepth?: number }
   session: HostSession
   ctx: HostAgentContext
   followup(message: HostUserMessage): void
@@ -229,7 +230,8 @@ export interface HostAgentsService {
   get(id: string): HostAgent | undefined
   /** Public DSH runtime ownership, independent of persisted session lineage. */
   isOwnedBy?(id: string, parent: HostAgent): boolean
-  roots(): HostAgent[]
+  roots?(): HostAgent[]
+  list?(): HostAgent[]
   /** Factory for an owned, clean top-level Agent. */
   create(options: CreateHostAgentOptions): Promise<HostAgentHandle>
 }
@@ -292,7 +294,9 @@ export interface HostSubagentActivation {
 }
 
 export interface HostSubagentsService {
-  list(): string[]
+  list?(): string[]
+  /** Activation-owned trees on post-rc.1 master; absent from the official rc.1 package. */
+  rootOf?(agent: HostAgent): HostAgent
   getProvider(name: string): HostSubagentProvider | undefined
   /** One-shot runs, on DSH 0.2.0. */
   start?(name: string, request: HostSubagentStartRequest): Promise<HostSubagentRun>
@@ -302,6 +306,7 @@ export interface HostSubagentsService {
    * delivery returns the result without notifying the parent conversation.
    */
   startActivation?(spec: {
+    childId?: string
     provider: string
     label: string
     request: Omit<HostSubagentStartRequest, 'label' | 'signal'>

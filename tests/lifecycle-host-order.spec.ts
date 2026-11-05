@@ -54,7 +54,7 @@ function setup() {
     bindAgentRuntime: vi.fn(() => vi.fn()),
   }
   const runtimeSource = { ...binding, executions: new MemoryExecutions(binding as never) }
-  const coordinator = { snapshot: vi.fn(() => ({ recalls: 0, writes: 0, answers: 0, reviews: 0, failures: 0 })) } as unknown as MnemonSubagentCoordinator
+  const coordinator = { isFinishedTask: () => false, snapshot: vi.fn(() => ({ recalls: 0, writes: 0, answers: 0, reviews: 0, failures: 0 })) } as unknown as MnemonSubagentCoordinator
   const host = {
     agents: { get: (id: string) => id === agent.id ? agent : undefined, roots: () => [agent] },
     on: vi.fn(() => vi.fn()),

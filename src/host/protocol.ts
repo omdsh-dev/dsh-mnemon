@@ -321,6 +321,8 @@ export interface Config {
   persistenceStrategy?: MemoryPersistenceStrategy
   /** Model route used by clean, session-independent maintenance Agents. */
   taskAgentModel?: TaskAgentModelConfig
+  /** Additional provider names for Hosts without enumeration and opaque provider plugins. */
+  subagentProviderNames?: string[]
   /**
    * Whether this profile runs Git repository sync at all. It lives here rather than
    * in the data directory because the settings page has to draw the block without
@@ -390,6 +392,7 @@ export interface ResolvedConfig {
   }
   persistenceStrategy: ResolvedMemoryPersistenceStrategy
   taskAgentModel: ResolvedTaskAgentModelConfig
+  subagentProviderNames: string[]
   syncEnabled: boolean
 }
 

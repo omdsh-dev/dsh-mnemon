@@ -1,9 +1,11 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { HostAgent, HostSubagentRun, ToolExecution } from './dsh.ts'
 import type { MemoryToolName } from './protocol.ts'
+import { activationOwned, isReservedChild, reservedChildId, withReservedChild, type ActivationOwnership } from './agent-compat.ts'
 
 export interface ReviewToolHost {
   agents?: { isOwnedBy?(id: string, parent: HostAgent): boolean; get?(id: string): HostAgent | undefined }
+  subagents?: ActivationOwnership
   on(name: string, listener: (...args: never[]) => unknown): unknown
 }
 
@@ -17,8 +19,13 @@ const startingChild = new AsyncLocalStorage<symbol>()
  * still requires startGuardedReview; it never removes another plugin's policy.
  */
 export function idleReviewBlockReason(parent: HostAgent, agentTeams: 'pause' | 'scoped' = 'pause'): 'agent-team' | undefined {
-  return agentTeams !== 'scoped' && parent.ctx?.get?.('agentTeams') !== undefined
-    && parent.ctx.tools?.get?.('spawn_teammate', parent) !== undefined ? 'agent-team' : undefined
+  if (agentTeams === 'scoped') return undefined
+  const teams = parent.ctx?.get?.('agentTeams') as { isEnabled?(agent: HostAgent): boolean } | undefined
+  if (teams === undefined) return undefined
+  const tools = parent.ctx.tools
+  const active = tools?.get?.('spawn_teammate', parent) !== undefined
+    || typeof teams?.isEnabled === 'function' && teams.isEnabled(parent) && tools?.get?.('team_task_create', parent) !== undefined
+  return active ? 'agent-team' : undefined
 }
 
 export type ReviewToolPolicy = (execution: Readonly<ToolExecution>) => string | undefined
@@ -106,20 +113,24 @@ export async function startGuardedChild(
 ): Promise<HostSubagentRun> {
   const { purpose, published } = options
   const agents = host.agents
-  if (typeof agents?.isOwnedBy !== 'function') {
+  const reserved = activationOwned(host.subagents)
+  if (reserved && typeof agents?.get !== 'function') throw new Error(`Mnemon ${purpose} requires exact live Agent lookup`)
+  if (!reserved && typeof agents?.isOwnedBy !== 'function') {
     if (options.optional === true) return start()
     throw new Error(`Mnemon ${purpose} requires DSH Agent ownership and scoped tool guard support`)
   }
   const pending = Symbol(`Mnemon ${purpose} publication`)
   const guards = new Map<HostAgent, () => unknown>()
   let attachmentError: unknown
+  let expectedChildId: string | undefined
   let run: HostSubagentRun | undefined
   const listener = host.on('agent/created', (({ agent }: { agent: HostAgent }) => {
-    if (startingChild.getStore() !== pending || !agents.isOwnedBy!(agent.id, parent)) return
+    if (startingChild.getStore() !== pending) return
+    if (reserved ? agent.id !== expectedChildId || !isReservedChild(agents, parent, agent) : !agents!.isOwnedBy!(agent.id, parent)) return
     try {
       const tools = agent.ctx?.tools
       if (typeof tools?.guard !== 'function') {
-        if (options.optional === true) return
+        if (options.optional === true && !reserved) return
         throw new Error(`Mnemon ${purpose} requires DSH scoped tool guard support`)
       }
       const dispose = tools.guard(guard)
@@ -147,15 +158,18 @@ export async function startGuardedChild(
     if (failed.length) throw new AggregateError(failed.map(outcome => outcome.reason), `Mnemon ${purpose} guard cleanup failed`)
   }
   try {
-    run = await startingChild.run(pending, start)
+    run = await startingChild.run(pending, () => reserved ? withReservedChild(parent, () => {
+      expectedChildId = reservedChildId(parent)
+      return start()
+    }, true) : start())
     if (attachmentError !== undefined) throw attachmentError
     const runId = run.id
     // A DSH 0.2.1 activation names its child only by id; the guard attached at publication still holds it.
     const child = run.localAgent ?? [...guards.keys()].find(agent => agent.id === runId)
     if (child === undefined || !guards.has(child)) {
       // Only a child that cannot be guarded runs as before; a guardable one published out of sight fails closed.
-      const local = run.localAgent ?? agents.get?.(runId)
-      if (options.optional === true && guards.size === 0 && typeof local?.ctx?.tools?.guard !== 'function') {
+      const local = run.localAgent ?? agents?.get?.(runId)
+      if (!reserved && options.optional === true && guards.size === 0 && typeof local?.ctx?.tools?.guard !== 'function') {
         await closeObserver()
         return run
       }

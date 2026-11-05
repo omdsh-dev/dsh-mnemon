@@ -52,6 +52,7 @@ export class AgentMemoryTurn {
     private readonly agent: HostAgent,
     private readonly runtime: Pick<MnemonAgentRuntimeSource, 'forAgent' | 'executions'>,
     private readonly delegation?: DelegatedMemoryView,
+    private readonly independent = false,
   ) {
     if (delegation === undefined) return
     this.releaseDelegation = runtime.executions.retain(agent, delegation)
@@ -135,7 +136,7 @@ export class AgentMemoryTurn {
   }
 
   private async pin(turn: number, generation: number, signal: AbortSignal): Promise<void> {
-    const execution = await this.runtime.executions.turn(this.agent, turn, signal, this.delegation)
+    const execution = await this.runtime.executions.turn(this.agent, turn, signal, this.delegation, this.independent)
     const { graph, context } = execution
     try {
       if (this.closed || this.generation !== generation) throw new Error('memory turn ended during View preparation')

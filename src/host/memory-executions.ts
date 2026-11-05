@@ -28,9 +28,9 @@ export class MemoryExecutions {
 
   constructor(private readonly runtime: Pick<MnemonAgentRuntimeSource, 'forAgent' | 'bindAgentRuntime'>) {}
 
-  async turn(agent: HostAgent, turn: number, signal: AbortSignal, delegation?: DelegatedMemoryView): Promise<MemoryExecution> {
+  async turn(agent: HostAgent, turn: number, signal: AbortSignal, delegation?: DelegatedMemoryView, independent = false): Promise<MemoryExecution> {
     signal.throwIfAborted()
-    const slot = this.open(agent, 'turn', `${agent.id}:${turn}`, 'agent.root-turn', delegation)
+    const slot = this.open(agent, 'turn', `${agent.id}:${turn}`, 'agent.root-turn', delegation, independent)
     const abort = () => slot.controller.abort(signal.reason)
     signal.addEventListener('abort', abort, { once: true })
     try {
@@ -91,7 +91,7 @@ export class MemoryExecutions {
     }
   }
 
-  private open(agent: HostAgent, kind: ExecutionSlot['kind'], turnId: string, purpose: string, delegation?: DelegatedMemoryView): ExecutionSlot {
+  private open(agent: HostAgent, kind: ExecutionSlot['kind'], turnId: string, purpose: string, delegation?: DelegatedMemoryView, independent = false): ExecutionSlot {
     this.assertOpen()
     const previous = this.slots.get(agent.id)
     const done = deferred<void>()
@@ -119,7 +119,7 @@ export class MemoryExecutions {
       await previous?.done
       slot.controller.signal.throwIfAborted()
       this.assertOpen()
-      const graph = delegation?.graph ?? this.runtime.forAgent(agent)
+      const graph = delegation?.graph ?? (independent ? this.runtime.forAgent(agent, { independent: true }) : this.runtime.forAgent(agent))
       const manager = graph.composableTurns
       const scope = delegation === undefined ? agentScope(agent, graph.config)
         : { ...delegation.scope, sessionId: agent.id, agentId: agent.id }

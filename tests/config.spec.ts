@@ -20,6 +20,14 @@ describe('Mnemon config and resolution', () => {
       }
     }
   })
+  it('defaults explicit subagent providers off and validates their configured names', () => {
+    expect(resolveConfig({}).subagentProviderNames).toEqual([])
+    expect(Config({ subagentProviderNames: ['custom'] }).subagentProviderNames).toEqual(['custom'])
+    expect(resolveConfig({ subagentProviderNames: [' custom ', 'custom', 'second'] }).subagentProviderNames).toEqual(['custom', 'second'])
+    for (const value of ['custom', [''], [12], Array.from({ length: 33 }, (_, index) => `provider-${index}`)]) {
+      expect(() => resolveConfig({ subagentProviderNames: value } as never)).toThrow('subagentProviderNames')
+    }
+  })
   it('preserves the user skill destination for existing settings and validates explicit scopes', () => {
     expect(resolveSkillsConfig().targetScope).toBe('user')
     expect(resolveSkillsConfig({ evolution: true }).targetScope).toBe('user')
