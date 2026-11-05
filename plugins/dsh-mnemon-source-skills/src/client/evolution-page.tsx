@@ -165,11 +165,14 @@ function SuggestionDetail(props: { context: SkillsPageContext; id: string; model
   // none at all asks it to use the task Agent's own route.
   const route = props.model === null || props.model === undefined ? {} : { provider: props.model.provider, model: props.model.model }
   const [view, setView] = useState<SuggestionView | null>(null)
+  const [loadError, setLoadError] = useState<'missing' | 'failed' | null>(null)
+  const [reload, setReload] = useState(0)
   const [trajectories, setTrajectories] = useState<Map<string, Trajectory | null>>(new Map())
   const [busy, setBusy] = useState(false)
   const [deleting, setDeleting] = useState(false)
   useEffect(() => {
     let active = true
+    setLoadError(null)
     void context.client.suggestion(props.id).then(async value => {
       if (!active) return
       setView(value)
@@ -179,9 +182,16 @@ function SuggestionDetail(props: { context: SkillsPageContext; id: string; model
         loaded.set(reference.trajectoryId, await context.client.trajectory(reference.trajectoryId).catch(() => null))
       }
       if (active) setTrajectories(loaded)
-    }).catch(context.fail)
+    }).catch(error => {
+      if (!active) return
+      setView(null)
+      if ((error instanceof Error ? error.message : String(error)) === 'suggestion not found: ' + props.id) setLoadError('missing')
+      else { setLoadError('failed'); context.fail(error) }
+    })
     return () => { active = false }
-  }, [context.client, props.id, context.revision])
+  }, [context.client, props.id, context.revision, reload])
+  if (loadError !== null) return <Empty glyph="?" title={t(loadError === 'missing' ? 'evolution.missing' : 'evolution.loadFailed')}
+    action={<Button variant="ghost" onClick={() => setReload(value => value + 1)}>{t('common.retry')}</Button>}>{t(loadError === 'missing' ? 'evolution.missingBody' : 'evolution.loadFailedBody')}</Empty>
   if (view === null) return <Busy label={t('common.loading')} />
   const { suggestion } = view
   const canDraft = context.client.canAssist('skill-draft') && !(suggestion.action === 'update' && view.skill === undefined)
