@@ -18,6 +18,7 @@ import type { ComposableMemoryTurn } from '../core/turns.ts'
 import { idleReviewBlockReason, reviewLayerPolicy, startGuardedChild, startGuardedReview, type ReviewToolHost } from './review-tools.ts'
 import { reviewCheckpoint } from './review-checkpoint.ts'
 import { startWithContinuationTurns } from './continuation-turn.ts'
+import { configuredProviderNames, type ProviderConfigurationHost } from './agent-compat.ts'
 import { childComposition, startSubagent, type SubagentStartAgents } from './subagent-start.ts'
 import type { IdleReviewFailure, MemoryToolName } from './protocol.ts'
 import { assertDshOutputSchema, assertDshOutputValue } from './subagent-output-schema.ts'
@@ -115,7 +116,7 @@ interface HostToolRegistry {
   register(definition: ToolDefinition): unknown
 }
 
-interface HostResultToolRuntime extends ReviewToolHost {
+interface HostResultToolRuntime extends ReviewToolHost, ProviderConfigurationHost {
   tools: HostToolRegistry
   agents?: SubagentStartAgents
   on(name: string, listener: (...args: never[]) => unknown): unknown
@@ -877,7 +878,7 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
     admission?: () => void,
   ): Promise<{ provider: string; runId: string; result: HostSubagentResult; receipts: CapturedToolReceipt[]; writes: CapturedToolReceipt[] }> {
     if (this.disposed) throw new Error('dsh-mnemon subagent coordinator is disposed')
-    const provider = this.provider(preferredProvider)
+    const provider = this.provider(preferredProvider, this.runtimeSource.forAgent(parent).config.subagentProviderNames)
     assertDshOutputSchema(outputSchema)
     if (this.resultRuntime === undefined) throw new Error('dsh-mnemon subagent result tool runtime is unavailable')
     // Keep the inherited tool inventory byte-stable. Only the child prompt
@@ -1081,10 +1082,13 @@ This is the only completion channel for this run. Do not finish with a plain-tex
     return completed
   }
 
-  private provider(preferred: 'spawn' | 'fork'): string {
-    // Master removed enumeration. Its documented local providers remain queryable by
-    // name; registration events also admit subsequently installed alternatives.
-    const names = this.subagents.list?.() ?? [...this.providerNames].filter(name => this.subagents.getProvider(name) !== undefined)
+  private provider(preferred: 'spawn' | 'fork', explicitNames: readonly string[] = []): string {
+    // Master removed enumeration. Resolve preloaded/reconfigured plugin names each
+    // time; events cover later registrations, explicit names cover opaque plugins.
+    // All are candidates only: live registration and isolation still decide admission.
+    const names = this.subagents.list?.() ?? [...new Set([
+      ...this.providerNames, ...configuredProviderNames(this.resultRuntime), ...explicitNames,
+    ])].filter(name => this.subagents.getProvider(name) !== undefined)
     const compatible = (name: string): boolean => {
       const provider = this.subagents.getProvider(name)
       return provider?.capabilities.depthLimit === true && childComposition(this.subagents, provider) !== undefined

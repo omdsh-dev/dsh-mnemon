@@ -7,6 +7,7 @@ Starter 固定经过测试的官方插件组合。下表记录验证范围，不
 | 组件 | 基线 | 已验证的范围 |
 |---|---|---|
 | DSH 当前 RC | `0.2.2-rc.1` | 2026-11-04 已发布到 npm `next`。Node 24.22.2 上运行完整已安装宿主测试及打包 Starter 安装、升级检查；Host 要求 Node >=24.9.0。 |
+| 单独检查的 DSH 源码快照 | `fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159` | 使用未经修改的源码构建，在 Node 24 上单独验证完整测试与真实模型 WebUI 任务。只代表这一 master commit，不代表所有源码构建或 alpha。见[新版 Host 验收](../../pr-assets/dsh-master-agents/README.zh-CN.md)。 |
 | DSH 开发基线 | `0.2.1-rc.5` | 保持锁定的开发依赖，并在 Node 22.19 的已安装宿主 CI 中验证。2026-11-04 npm `latest` 仍指向此版本。 |
 | DSH 早期受支持宿主 | `0.2.0-rc.2`, `0.2.1-rc.3` | CI 在这些已安装包上运行全部根测试。版本差异见 [DSH 0.2.0 与 0.2.1](#dsh-020-与-021)；支持范围仍包含 0.2.1-rc.1 和 rc.2。 |
 | Node.js | `22.19`、`24` | 分别用于源码 CI 与打包制品 CI；开发要求 `^22.19.0 \|\| >=24.11.0` |
@@ -44,9 +45,15 @@ Git 同步保留原有设置与载荷格式。保存的默认提交者组合现�
 
 ### 已发布的 DSH 0.2.2 RC1 与 issue #554
 
-请使用已发布的 `@deepseek-ai/dsh@0.2.2-rc.1` 包。它的公开 Agent 注册表仍提供 `roots()`、`isOwnedBy()`，子 Agent 运行时保留 Provider 枚举及嵌套的 activation 请求，隐藏的独立任务 Agent 也仍受支持。#554 报告的源码构建 `8bd073392eef6f54e921a093b95076248eb08cbb` 使用不同契约，不等同于已发布 RC；其源码专用适配器不进入发布制品。
+官方发布的 `@deepseek-ai/dsh@0.2.2-rc.1` 仍提供 `agents.roots()`、`agents.isOwnedBy()`、Provider 枚举、嵌套的 activation 请求及隐藏独立任务 Agent 的能力。官方 RC 继续使用这些路径。源码构建可能显示相同版本号，却提供不同契约；#554 最初报告的是 `8bd073392eef6f54e921a093b95076248eb08cbb`。
 
-既有任务入口保持可用：独立 Skills 任务、证据回答与保存到记忆、Runtime 维护、Document 创建与归档、Provider 放置及记忆空间元数据整理。真实宿主回归覆盖独立任务成功执行、Document 原文与归档索引保留、ACP 不显示任务会话、spawn/fork 工具守卫、取消清理，以及组合失败时在首次模型请求前拒绝。运行时、存储、配置及支持版本范围均未改变，没有为兼容 RC 关闭功能。
+master commit `fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159` 改为由 Subagent 管理子 Agent 归属，提供 `rootOf()` 和扁平 activation 请求，并移除了公开的隐藏独立根 Agent 路径。Mnemon 按能力适配，在首个模型步骤前预留并校验子 Agent，独立任务改用普通根 Agent。**该 Host 的 ACP 列表可发现已完成的内部任务根**，标题为 `Mnemon · …`。标准 WebUI 会隐藏列表元数据标记为尚未开始对话轮次、且不是当前打开项的任务根；本次真实侧栏仍只显示用户会话。其他客户端、主动打开记录或列表元数据缺失时仍可能显示，不能保证始终静默。任务不会占用当前对话。完成的记录在重启后仍能识别，重新打开不能恢复 Mnemon 写入工具。浏览已有记忆、直接检索等不启动 Agent 的读取不会创建任务会话。
+
+标准 Provider 的 `providerName` 从公开的、已解析的插件配置中发现，覆盖先于 Mnemon 加载以及重载后的 Provider。第三方子 Agent Provider 如果把注册名隐藏在代码中，可在 Mnemon 插件配置中填写可选的 `subagentProviderNames: [my-local-provider]`。这些名称只作为候选，仍需通过实时注册状态、隔离与能力检查；`spawn` 优先级及显式选择 `fork` 审查的语义保留。此项控制子 Agent 执行，与 Memory Space Provider 选择无关。
+
+这一固定 master 快照的[测试、真实 DeepSeek 截图与限制](../../pr-assets/dsh-master-agents/README.zh-CN.md)单独记录，不改变官方 RC 支持边界，也不恢复 alpha 支持。对上游显式后台任务 API 的诉求见 [dsh-external/issues#681](https://github.com/dsh-external/issues/issues/681)。
+
+既有任务入口保持可用：独立 Skills 任务、证据回答与保存到记忆、Runtime 维护、Document 创建与归档、Provider 放置及记忆空间元数据整理。真实宿主回归覆盖独立任务成功执行、Document 原文与归档索引保留、按 Host 区分的 ACP 任务可见性、spawn/fork 工具守卫、取消清理，以及组合失败时在首次模型请求前拒绝。既有存储数据和已保存配置保持兼容，支持版本范围不变，没有为兼容 RC 关闭功能。
 
 已安装 RC 和打包 Starter 使用宿主自己的依赖。测试从同一安装解析 Loader，并观察其实际持久化方法。历史会话检查保留合法旧 descriptor，同时尊重宿主公开的校验器。包身份、命令、验收结果与边界见 [RC1 兼容验证记录](../../pr-assets/dsh-022-rc1/README.zh-CN.md)。
 

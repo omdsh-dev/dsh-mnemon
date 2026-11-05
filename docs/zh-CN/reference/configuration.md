@@ -135,6 +135,7 @@ mnemon:
 | `writeEnabled` | `true` | boolean | 是否暴露语义写工具、写 RPC 和写命令 |
 | `syncEnabled` | `false` | boolean | 本机是否同步到 Git 仓库。默认关闭，关闭时保持沉默：存储页那一行只有标题与开关，不读取状态，也不执行 Git 命令。仓库、分支、目录、提交身份、令牌与自动同步间隔（`autoBackupMinutes`）保存在 `state/sync-git.json`，不在这里 |
 | `taskAgentModel` | `{ mode: inherit }` | `inherit` / `fixed`；`followConversation`：boolean | 独立任务 Agent 与空闲审查 worker 的模型路由：`inherit`（**跟随全局**）、`inherit` 加 `followConversation: true`（**跟随会话**），或必须同时保存 `provider` 与 `model` 的 `fixed`（**自定义**）。见[后台任务 Agent 的模型路由](#后台任务-agent-的模型路由) |
+| `subagentProviderNames` | `[]` | 最多 32 个非空名称，每个最多 128 字符 | Host 不再支持枚举且自定义插件把名称隐藏在代码中时，提供额外子 Agent Provider 候选。在 Mnemon 插件配置中填写，隔离检查仍然有效；标准 `providerName` 配置会自动发现。 |
 | `remoteAccess` | `read-only` | `read-only` / `trusted-host` | 非 loopback Mnemon 管理授权，仅启动时读取，由 API Gateway 映射执行 |
 | `conversationInteraction.turnBar` | `true` | boolean | 回复下方的回合记忆栏，立即生效 |
 | `conversationInteraction.saveAction` | `true` | boolean | 已完成回复上的**存入记忆**操作及其确认框，立即生效 |
@@ -334,7 +335,7 @@ Memory Space 目录建立后，长期语义操作使用明确的记忆空间 ID�
 
 ## 后台任务 Agent 的模型路由
 
-整理名称与说明、Agent 查询、记忆系统与对话中的存入记忆和档案归档会创建一个不继承主对话历史的独立顶层任务 Agent。它使用当前查看工作区作为 cwd；即使没有选中主 Agent session，也能落到左上角选定工作区。任务完成后释放的是 Agent 实例，DSH 已保存的本地会话记录会保留；Mnemon 不自动删除这些记录。DSH 保存它的会话时带着 DSH 给自身子代理的来源标记，侧栏和 ACP 会话列表都不会把它当作对话列出（[#435](https://github.com/omdsh-dev/dsh-mnemon/issues/435)）。
+整理名称与说明、Agent 查询、记忆系统与对话中的存入记忆和档案归档会创建一个不继承主对话历史的独立顶层任务 Agent。它使用当前查看工作区作为 cwd；即使没有选中主 Agent session，也能落到左上角选定工作区。任务完成后释放的是 Agent 实例，DSH 已保存的本地会话记录会保留；Mnemon 不自动删除这些记录。官方 DSH 0.2.2-rc.1 及更早的受支持 Host 保留子代理来源标记，侧栏和 ACP 对话列表不会显示这些记录（[#435](https://github.com/omdsh-dev/dsh-mnemon/issues/435)）。已检查的 master 快照移除了这一公开创建路径，因此 ACP 可列出带 `Mnemon · …` 标题的任务根；标准 WebUI 当前仍隐藏未开始对话轮次且不是当前打开项的根会话。其他客户端或列表元数据缺失时仍可能显示。重新打开已完成记录不能恢复 Mnemon 工具，重启后同样如此。详见[Host 兼容说明](./compatibility.md#已发布的-dsh-022-rc1-与-issue-554)。
 
 “分层策略”页面的“后台任务 → 任务 Agent 模型”为这些任务 Agent 与空闲审查 worker 提供三个选项：
 

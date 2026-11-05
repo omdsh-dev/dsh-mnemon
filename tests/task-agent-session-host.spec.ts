@@ -11,6 +11,7 @@ import { afterEach, expect, it } from 'vitest'
 import type { ToolExecutionInput } from '@deepseek-ai/dsh-tools'
 import type { HostAgent, HostContextShape, HostSession } from '../src/host/dsh.ts'
 import type { DocumentView } from 'dsh-mnemon-source-documents/contracts'
+import type { RuntimeMemorySnapshot } from 'dsh-mnemon-source-runtime/contracts'
 import type { Insight, PreparedMemoryPlacement } from 'dsh-mnemon-source-memory-spaces/contracts'
 import { MnemonLifecycle } from '../src/host/lifecycle.ts'
 import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
@@ -21,8 +22,8 @@ import { JsonlSessionPersistence } from './helpers/dsh-plugins.ts'
 import { executeTool, loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
 
 // The released Host hides detached task sessions (#435). Activation-owned master requires
-// ordinary task roots: ACP and the sidebar may list those roots, but child ownership and
-// memory results must remain the same. Exercise DSH's real persisted-session query and ACP.
+// ordinary task roots, discoverable through ACP. The WebUI hides non-current blank roots;
+// do not inject conversation turns to force visibility. Exercise persistence and ACP.
 const activationTrees = typeof (SubagentRuntime.prototype as unknown as { rootOf?: unknown }).rootOf === 'function'
 
 const spawn = await import(requireDsh.resolve('@deepseek-ai/dsh-subagent-spawn-in-process'))
@@ -276,14 +277,16 @@ it.skipIf(!activationTrees)('keeps a titled completed task outside conversation 
     expect(h.lifecycle.snapshot()).toMatchObject({ activeAgents: 0, sessionAvailable: false })
     const title = task.agent.session.snapshotEvents().findLast(event => event.type === 'session/title')
     expect(title?.data).toMatchObject({ title: 'Mnemon · Save to memory' })
+    expect(task.agent.session.snapshotEvents().some(event => event.type === 'turn/start')).toBe(false)
     const runtime = h.f.graph.source('runtime')
-    const before = await runtime.read('snapshot')
+    const before = await runtime.read<RuntimeMemorySnapshot>('snapshot')
     const attempt = await executeTool(task.agent.ctx, { name: 'mnemon_runtime_memory',
       arguments: { action: 'add', target: 'user', content: 'A completed task must not write this.' },
       agent: task.agent, callId: 'finished-task-probe' as ToolExecutionInput['callId'], signal: new AbortController().signal })
     expect(attempt.isError).toBe(true)
     expect(JSON.stringify(attempt)).toContain('This Mnemon task has finished')
-    expect(await runtime.read('snapshot')).toEqual(before)
+    // Snapshot generation time changes even when the persisted revision/data do not.
+    expect(await runtime.read('snapshot')).toEqual({ ...before, generatedAt: expect.any(String) })
   } finally { await task.dispose() }
   await expectTaskVisibility(h, 1)
 })

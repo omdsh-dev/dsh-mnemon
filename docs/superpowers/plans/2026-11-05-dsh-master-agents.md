@@ -50,19 +50,19 @@
 
 ## Task 3: Real-Host UI and model acceptance
 
-**Files:** Acceptance harness and sanitized evidence under `docs/pr-assets/issue-554-master-agents/`; installed/source Host test helpers if needed.
+**Files:** Acceptance harness and sanitized evidence under `docs/pr-assets/dsh-master-agents/`; installed/source Host test helpers if needed.
 
-- [ ] Run the same built Mnemon packages on official rc.1 and fixed master with isolated profiles.
-- [ ] Capture actual desktop-width WebUI screenshots for ordinary chat recall, AI save, Ask Agent, idle review, Skills generation/backtest, and visible master task sessions; compare rc.1 behavior.
-- [ ] Use the authorized DeepSeek key for bounded live checks; verify tool receipts/data and cancellation in addition to screenshots. Report controlled-model and live-model evidence separately.
-- [ ] Restart each Host and verify data/task identity/session visibility. Sanitize and inspect every committed screenshot.
+- [x] Run the same built Mnemon packages on official rc.1 and fixed master with isolated profiles.
+- [x] Capture actual desktop-width WebUI screenshots for ordinary chat recall, AI save, Ask Agent, idle review, Skills generation/backtest, and actual master session visibility; compare rc.1 behavior.
+- [x] Use the authorized DeepSeek key for bounded live checks; verify tool receipts/data and cancellation in addition to screenshots. Report controlled-model and live-model evidence separately.
+- [x] Restart each Host and verify data/task identity/session visibility. Sanitize and inspect every committed screenshot.
 
 ## Task 4: Documentation, verification and PR
 
-- [ ] Add a root patch changeset and bilingual compatibility documentation stating official rc.1 did not remove these methods; the fixed master did.
-- [ ] Keep existing CI coverage; add reproducible pinned-source validation without depending on unavailable private-repository CI credentials.
-- [ ] Run appropriate full verification, official rc.1 and source-Host checks; record exact results and limitations.
-- [ ] Obtain a fresh whole-branch review using superpowers:requesting-code-review; fix important findings with regression tests.
+- [x] Add a root patch changeset and bilingual compatibility documentation stating official rc.1 did not remove these methods; the fixed master did.
+- [x] Keep existing CI coverage; add reproducible pinned-source validation without depending on unavailable private-repository CI credentials.
+- [x] Run appropriate full verification, official rc.1 and source-Host checks; record exact results and limitations.
+- [x] Obtain a fresh whole-branch review using superpowers:requesting-code-review; fix important findings with regression tests.
 - [ ] Push `codex/compat-dsh-master-agents` and open one PR with linked screenshots and compatibility scope. Do not merge or publish.
 
 ## Execution record
@@ -74,3 +74,7 @@
 - Core validation: `pnpm run verify` passed (2,506 root tests and 753 workspace tests; 8 root and 3 workspace skips). The same branch passed official rc.1 (2,506 passed / 8 skipped) and pinned master (2,507 passed / 7 skipped).
 - Source test resolution now indexes the selected workspace instead of accidentally falling back through pnpm NODE_PATH to the old development cohort. No DSH source was modified.
 - The graduated Team package requires per-session enablement and per-step conditional tool admission. Mnemon preserves its pause/scoped policies; the real Team matrix passes with spawn/fork, native/PTC, cancellation and intact parent Team tools.
+
+- Final verification: 2,515 root tests / 8 skips plus 753 workspace tests / 3 skips; official rc.1 2,515 / 8; fixed master 2,516 / 7. Provider preloading/recreation/rename/removal regression passes; old Cordis fixtures wait for the public reload barrier. Snapshot comparisons ignore read-time timestamps.
+- Live acceptance: 53 HTTP-200 DeepSeek requests. Both Hosts completed recall, Save, Ask, idle review and Skills draft generation. rc.1 Skills backtest remains partial: 1 scored case execution, 3 malformed-input execution failures (6 attempts); both Host parsers reject the same inputs offline. No skill was adopted.
+- Real sidebar discovery refined the visibility assumption: master ACP exposes task roots, while its WebUI filters blank non-current roots. Both screenshots show only user conversations. Full Host restarts retained all session IDs/data; a real resumed-task write was denied with no sentinel insight or new automatic task.

@@ -6,6 +6,24 @@ export interface ActivationOwnership {
   rootOf?(agent: HostAgent): HostAgent
 }
 
+/** Cordis exposes resolved plugin configuration even when Subagent has no list(). */
+export interface ProviderConfigurationHost {
+  registry?: { values(): Iterable<{ fibers: Iterable<{ readonly effectiveConfig?: unknown }> }> }
+}
+
+export function configuredProviderNames(host: ProviderConfigurationHost | undefined): string[] {
+  const names = new Set<string>()
+  for (const runtime of host?.registry?.values() ?? []) {
+    for (const fiber of runtime.fibers) {
+      const config = fiber.effectiveConfig
+      if (config && typeof config === 'object' && 'providerName' in config && typeof config.providerName === 'string') {
+        names.add(config.providerName)
+      }
+    }
+  }
+  return [...names]
+}
+
 /** Official 0.2.2-rc.1 has registry ownership; master fcc0ad4 moved it into Subagent. */
 export function activationOwned(subagents: ActivationOwnership | undefined): boolean {
   return typeof subagents?.rootOf === 'function'
