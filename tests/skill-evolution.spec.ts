@@ -591,6 +591,33 @@ describe('skill evolution in the Host', () => {
     expect(await source.read('drafts', { skill: 'release-notes' })).toEqual([])
   })
 
+  it('does not start a third attempt when file-validation repair then hits max-tokens', async () => {
+    const { skills, host, runTask } = evolution([
+      () => ({ content: '# missing frontmatter', notes: '', changes: [] }),
+      () => new SubagentStoppedError('max-tokens', 32_768),
+    ])
+    await skills.draft(source, undefined, { skill: 'release-notes' })
+    await vi.waitFor(() => expect(host.warn).toHaveBeenCalledOnce())
+    expect(runTask).toHaveBeenCalledTimes(2)
+    expect(host.skillTask.mock.calls.map(call => call[7])).toEqual([32_768, 32_768])
+    expect(await source.read('drafts', { skill: 'release-notes' })).toEqual([])
+  })
+
+  it('does not save a completed model result after user cancellation', async () => {
+    const { skills, host, runTask } = evolution([])
+    const file = join(directory, 'dsh', 'skills', 'release-notes', 'SKILL.md')
+    const original = readFileSync(file, 'utf8')
+    host.skillTask.mockImplementation(async () => {
+      skills.dispose()
+      return { structured: { content: original + '2. Group by component\n', notes: '', changes: [] } }
+    })
+    await skills.draft(source, undefined, { skill: 'release-notes' })
+    await vi.waitFor(() => expect(host.warn).toHaveBeenCalledOnce())
+    expect(runTask).toHaveBeenCalledOnce()
+    expect(await source.read('drafts', { skill: 'release-notes' })).toEqual([])
+    expect(readFileSync(file, 'utf8')).toBe(original)
+  })
+
   it.each([
     new SubagentStoppedError('cancelled', 32_768),
     new Error('provider rejected max_tokens'),
