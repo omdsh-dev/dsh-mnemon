@@ -46,7 +46,7 @@
 - [x] Update old finished-task screenshot claims to historical behavior and explain the new user-directed behavior in both languages.
 - [x] Run `pnpm run verify`, official rc.1 and pinned-master installed-Host suites; inspect failures and record exact counts/limits.
 - [x] Obtain independent whole-branch review, fix important findings, and verify affected paths.
-- [ ] Push to `codex/compat-dsh-master-agents`, update PR #567 around its final behavior, and check remote CI.
+- [x] Push to `codex/compat-dsh-master-agents`, update PR #567 around its final behavior, and check remote CI.
 
 ## Execution record
 
@@ -55,3 +55,5 @@
 - Fixed master records direct browser prompts as source `user`, Agent relays as `agent-message`, and task notices as `subagent-settled`. Existing Mnemon synthetic continuation prompts use their plugin source.
 
 - Follow-up runtime commit: d2cbef138d1821aa68ad1105eaafb24ed0975545. Real UI rehearsal exposed old-parent settlement replay; final Host tests and live readback verify no parent model steps after a new child request. Legacy child recognition, later-step human steer and fresh delegated Document archive are covered. Three complete suites each passed 2534 tests / 8 conditional skips on Node 24; workspace suite passed 753 / 3.
+
+- Runtime and evidence pushed; PR #567 description and screenshots updated. Contribution validation passed and the compatibility matrix was inspected after publication. The PR checks show the current CI result for the final head. No merge or release is part of this change.
