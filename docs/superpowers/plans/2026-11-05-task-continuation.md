@@ -57,3 +57,5 @@
 - Follow-up runtime commit: d2cbef138d1821aa68ad1105eaafb24ed0975545. Real UI rehearsal exposed old-parent settlement replay; final Host tests and live readback verify no parent model steps after a new child request. Legacy child recognition, later-step human steer and fresh delegated Document archive are covered. Three complete suites each passed 2534 tests / 8 conditional skips on Node 24; workspace suite passed 753 / 3.
 
 - Runtime and evidence pushed; PR #567 description and screenshots updated. Contribution validation passed and the compatibility matrix was inspected after publication. The PR checks show the current CI result for the final head. No merge or release is part of this change.
+
+- Final matrix exposed four managed-child tests applied to DSH 0.2.0 one-shot sessions. Capability-gated only those tests, retaining original task and root archive assertions. Fresh official 0.2.0 full suite passed 2527/15; rc1 and master continuation files each passed 26/1. No runtime changes; independent follow-up review passed.

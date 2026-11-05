@@ -28,6 +28,9 @@ import { executeTool, loadTools, loadWorkingDirectory, requireDsh } from './help
 // ordinary task roots, discoverable through ACP. The WebUI hides non-current blank roots;
 // do not inject conversation turns to force visibility. Exercise persistence and ACP.
 const activationTrees = typeof (SubagentRuntime.prototype as unknown as { rootOf?: unknown }).rootOf === 'function'
+// DSH 0.2.0's one-shot children have no managed continuation descriptor or public
+// activation start. Keep their original task coverage; cold-child prompt cases need 0.2.1+.
+const managedActivations = typeof (SubagentRuntime.prototype as unknown as { startActivation?: unknown }).startActivation === 'function'
 
 const spawn = await import(requireDsh.resolve('@deepseek-ai/dsh-subagent-spawn-in-process'))
 const sessionQuery = await import(requireDsh.resolve('@deepseek-ai/dsh-session-query'))
@@ -541,7 +544,7 @@ it.each(['root', 'child'] as const)('continues a completed %s task on a new user
   } finally { await task.dispose() }
 }, 30_000)
 
-it.each([false, true])('isolates task completion notices while preserving concurrent parent input (%s)', async concurrentInput => {
+it.skipIf(!managedActivations).each([false, true])('isolates task completion notices while preserving concurrent parent input (%s)', async concurrentInput => {
   let target = ''
   let parentCalls = 0
   const h = await host(undefined, options => {
@@ -582,7 +585,7 @@ it.each([false, true])('isolates task completion notices while preserving concur
 
 
 
-it.skipIf(activationTrees)('an unmarked legacy child cannot gain memory from automatic cold resume', async () => {
+it.skipIf(!managedActivations || activationTrees)('an unmarked legacy child cannot gain memory from automatic cold resume', async () => {
   let target = ''
   const replies: string[] = []
   const h = await host(undefined, options => {
@@ -664,43 +667,45 @@ it('a continued child can delegate a new human request', async () => {
 
 
 
-it.each(['root', 'child'] as const)('direct human continuation can archive a Document from %s', async kind => {
-  let target = ''
-  let project = ''
-  let documentId = ''
-  const replies: string[] = []
-  const h = await host(undefined, options => {
-    if (options.sessionId === target) {
-      const at = options.messages.findLastIndex(message => message.role === 'user' && text(message).startsWith('ARCHIVE_NEW'))
-      if (at < 0) return 'No request.'
-      const calls = options.messages.slice(at + 1).filter(message => message.role === 'tool')
-      if (calls.length === 0) return { name: 'mnemon_document_manage', args: { action: 'archive', id: documentId } }
-      replies.push(...calls.map(text))
-      return 'Settled.'
-    }
-    if (!options.messages.some(message => message.role === 'user' && text(message).includes('[dsh-mnemon:delegated document-archive]'))) return undefined
-    const system = JSON.stringify(options.messages.filter(message => message.role === 'system'))
-    const requestId = system.match(/requestId `([^`]+)`/u)?.[1]
-    return { name: 'mnemon_subagent_result', args: { requestId, result: { action: 'planned', summary: 'Requested archive.', memoryBodyId: project } } }
-  })
-  project = h.project
-  const created = await h.lifecycle.mutateDocumentTask('', { action: 'create', title: 'Archive request', content: CANDIDATE }, h.f.workspace)
-  documentId = created.document!.id
-  const saved = await h.lifecycle.superviseTask('', CANDIDATE, undefined, h.f.workspace)
-  target = kind === 'root' ? saved.sessionId : saved.runId!
-  const task = await h.ctx.agents.resume({ resumeSessionId: SessionId(kind === 'child' ? saved.sessionId : target), agentOptions: { provider: 'scripted', model: 'fixture' } })
-  try {
-    const content = [{ type: 'text' as const, text: 'ARCHIVE_NEW: archive this Document now.' }]
-    if (kind === 'child') {
-      const subagents = h.ctx.subagents as unknown as { prompt(request: object, signal: AbortSignal): Promise<unknown>; waitForTreeWork?(agent: unknown): Promise<boolean>; waitForChildren?(agent: unknown): Promise<boolean> }
-      await subagents.prompt({ parentSessionId: task.agent.id, childSessionId: target, mode: 'continuable', requestId: 'archive-continuation', content, delivery: 'queue' }, new AbortController().signal)
-      await (subagents.waitForTreeWork?.(task.agent) ?? subagents.waitForChildren!(task.agent))
-    } else task.agent.followup(createUserMessage({ content, source: { kind: 'user' } }))
-    await task.agent.whenIdle()
-    const stored = await h.f.graph.source('documents', { storage: 'workspace', workspaceId: h.f.workspace }).read<DocumentView>('document', { id: documentId })
-    expect(stored.status, replies.join('\n')).toBe('archived')
-  } finally { await task.dispose() }
-}, 30_000)
+for (const kind of ['root', 'child'] as const) {
+  it.skipIf(kind === 'child' && !managedActivations)(`direct human continuation can archive a Document from ${kind}`, async () => {
+    let target = ''
+    let project = ''
+    let documentId = ''
+    const replies: string[] = []
+    const h = await host(undefined, options => {
+      if (options.sessionId === target) {
+        const at = options.messages.findLastIndex(message => message.role === 'user' && text(message).startsWith('ARCHIVE_NEW'))
+        if (at < 0) return 'No request.'
+        const calls = options.messages.slice(at + 1).filter(message => message.role === 'tool')
+        if (calls.length === 0) return { name: 'mnemon_document_manage', args: { action: 'archive', id: documentId } }
+        replies.push(...calls.map(text))
+        return 'Settled.'
+      }
+      if (!options.messages.some(message => message.role === 'user' && text(message).includes('[dsh-mnemon:delegated document-archive]'))) return undefined
+      const system = JSON.stringify(options.messages.filter(message => message.role === 'system'))
+      const requestId = system.match(/requestId `([^`]+)`/u)?.[1]
+      return { name: 'mnemon_subagent_result', args: { requestId, result: { action: 'planned', summary: 'Requested archive.', memoryBodyId: project } } }
+    })
+    project = h.project
+    const created = await h.lifecycle.mutateDocumentTask('', { action: 'create', title: 'Archive request', content: CANDIDATE }, h.f.workspace)
+    documentId = created.document!.id
+    const saved = await h.lifecycle.superviseTask('', CANDIDATE, undefined, h.f.workspace)
+    target = kind === 'root' ? saved.sessionId : saved.runId!
+    const task = await h.ctx.agents.resume({ resumeSessionId: SessionId(kind === 'child' ? saved.sessionId : target), agentOptions: { provider: 'scripted', model: 'fixture' } })
+    try {
+      const content = [{ type: 'text' as const, text: 'ARCHIVE_NEW: archive this Document now.' }]
+      if (kind === 'child') {
+        const subagents = h.ctx.subagents as unknown as { prompt(request: object, signal: AbortSignal): Promise<unknown>; waitForTreeWork?(agent: unknown): Promise<boolean>; waitForChildren?(agent: unknown): Promise<boolean> }
+        await subagents.prompt({ parentSessionId: task.agent.id, childSessionId: target, mode: 'continuable', requestId: 'archive-continuation', content, delivery: 'queue' }, new AbortController().signal)
+        await (subagents.waitForTreeWork?.(task.agent) ?? subagents.waitForChildren!(task.agent))
+      } else task.agent.followup(createUserMessage({ content, source: { kind: 'user' } }))
+      await task.agent.whenIdle()
+      const stored = await h.f.graph.source('documents', { storage: 'workspace', workspaceId: h.f.workspace }).read<DocumentView>('document', { id: documentId })
+      expect(stored.status, replies.join('\n')).toBe('archived')
+    } finally { await task.dispose() }
+  }, 30_000)
+}
 
 
 it('first human steer receives fresh View guidance after an automatic first step', async () => {

@@ -36,6 +36,8 @@ The browser's normal viewports were left unchanged. The source Host and npm Host
 
 ## User-directed continuation after restart
 
+Cold-child continuation requires managed activations (DSH 0.2.1 and later); DSH 0.2.0 retains its original one-shot memory tasks.
+
 A direct human message in a completed task history now gets a fresh View from current configuration, workspace and Memory Space policy. It can read, write and delegate new work, including Document archive. A fresh delegation allows one descendant level from the current persisted/runtime depth; it does not relax automatic worker recursion. Merely viewing history, restarting, receiving an Agent message or a completion notice does not grant memory access. The original result request stays closed. Turns release authority after completion, cancellation or failed preparation.
 
 A second live cohort reused completed writer histories on both Hosts. Both processes were restarted with the final runtime changes, retaining all five sessions each. The standard Host requires the parent to be loaded before sending to a cold child: rc.1 displays a read-only hint; the fixed master returns a temporary delivery error. Opening the parent, then its child, restored sending without a new parent prompt.

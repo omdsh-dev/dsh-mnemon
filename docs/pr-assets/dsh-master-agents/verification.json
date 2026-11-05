@@ -57,6 +57,25 @@
       "exitCode": 0,
       "passed": 2534,
       "skipped": 8
+    },
+    {
+      "host": "official 0.2.0-rc.2",
+      "node": "22.22.0",
+      "command": "DSH_HOST_ROOT=<fresh official global-prefix installation> node node_modules/vitest/vitest.mjs run --config scripts/installed-dsh.config.ts",
+      "exitCode": 0,
+      "passed": 2527,
+      "skipped": 15,
+      "scope": "Full root suite after restricting four managed cold-child tests to Hosts with startActivation. Original one-shot task and root archive coverage remains enabled."
+    },
+    {
+      "host": "official rc1 and fixed master",
+      "command": "installed-Host tests/task-agent-session-host.spec.ts after test applicability correction",
+      "exitCode": 0,
+      "perHost": {
+        "passed": 26,
+        "skipped": 1
+      },
+      "runtimeChanges": false
     }
   ],
   "live": {
