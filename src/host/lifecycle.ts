@@ -31,6 +31,7 @@ import { agentScope, type MnemonAgentRuntimeSource } from './runtime.ts'
 import { createPluginMessage, MNEMON_PLUGIN_SOURCE } from './plugin-message.ts'
 import type { SkillEvolution } from './skill-evolution.ts'
 import { IdleReviewWatermarkStore } from './idle-review-watermark.ts'
+import { activationOwned, isCreatingChild, isRootAgent, isTaskRecord, rootAgents, titleTask } from './agent-compat.ts'
 
 type AgentRuntimeSource = Pick<MnemonAgentRuntimeSource, 'forAgent' | 'executions' | 'onChanged'>
 
@@ -796,7 +797,7 @@ export class MnemonLifecycle {
 
   /** Model work for skill evolution under a fresh task Agent, outside any conversation. */
   runSkillTask<T>(workspaceRoot: string | undefined, signal: AbortSignal, operation: (agent: HostAgent) => Promise<T>, route?: RoutedPick): Promise<T> {
-    return this.runTaskAgent('', workspaceRoot, signal, operation, route)
+    return this.runTaskAgent('', workspaceRoot, signal, operation, route, 'Mnemon · Skills')
   }
 
   /**
@@ -831,7 +832,7 @@ export class MnemonLifecycle {
       for (const { lifecycle } of this.owners.values()) lifecycle.configurationChanged()
     })
     const stopCreated = this.ctx.on('agent/created', (({ agent, source }: SessionStartPayload) => { this.install(agent, source) }) as never)
-    for (const agent of this.ctx.agents.roots()) this.install(agent, 'adopted')
+    for (const agent of rootAgents(this.ctx.agents, this.ctx.subagents)) this.install(agent, 'adopted')
     return () => {
       stopChanged?.()
       stopCreated()
@@ -984,7 +985,7 @@ export class MnemonLifecycle {
   /** Synthesize a Web Agent Query without borrowing a conversation Agent or its history. */
   answerTask(sessionId: string, query: string, evidence: Insight[], workspaceRoot?: string, signal = new AbortController().signal) {
     const root = workspaceRoot?.trim() || this.workspaceRoot(sessionId)
-    return this.runTaskAgent(sessionId, root, signal, agent => this.coordinator.answer(agent, query, evidence, signal))
+    return this.runTaskAgent(sessionId, root, signal, agent => this.coordinator.answer(agent, query, evidence, signal), undefined, 'Mnemon · Ask Agent')
   }
 
   /** A write the user sent from the page: a space they picked that is switched off comes back on (#387). */
@@ -1001,7 +1002,7 @@ export class MnemonLifecycle {
   }
 
   runRuntimeMaintenanceTask<T>(scope: import('../core/contracts/index.ts').MemoryOperationScope, signal: AbortSignal, operation: (agent: HostAgent) => Promise<T>): Promise<T> {
-    return this.runTaskAgent(scope.sessionId ?? '', scope.workspaceId, signal, operation)
+    return this.runTaskAgent(scope.sessionId ?? '', scope.workspaceId, signal, operation, undefined, 'Mnemon · Memory maintenance')
   }
 
   /**
@@ -1036,13 +1037,13 @@ export class MnemonLifecycle {
   mutateDocumentTask(sessionId: string, request: DocumentMutation, workspaceRoot?: string, signal = new AbortController().signal) {
     const root = workspaceRoot?.trim() || this.workspaceRoot(sessionId)
     if (root === undefined || root.trim() === '') throw new Error('a selected DSH workspace is required to write a Mnemon Document')
-    return this.runTaskAgent(sessionId, root, signal, agent => this.coordinator.document(agent, request, signal))
+    return this.runTaskAgent(sessionId, root, signal, agent => this.coordinator.document(agent, request, signal), undefined, 'Mnemon · Document')
   }
 
   archiveDocument(sessionId: string, id: string, workspaceRoot?: string, signal = new AbortController().signal) {
     const root = workspaceRoot?.trim() || this.workspaceRoot(sessionId)
     if (root === undefined || root.trim() === '') throw new Error('a selected DSH workspace is required to archive a Mnemon Document')
-    return this.runTaskAgent(sessionId, root, signal, agent => this.coordinator.archiveDocument(agent, id, signal))
+    return this.runTaskAgent(sessionId, root, signal, agent => this.coordinator.archiveDocument(agent, id, signal), undefined, 'Mnemon · Archive Document')
   }
 
   mutate(sessionId: string, operation: string, request: unknown, signal = new AbortController().signal) {
@@ -1056,12 +1057,12 @@ export class MnemonLifecycle {
   /** Choose a new Memory Space's Provider under a fresh task Agent, as Ask Agent does without a loaded conversation Agent. */
   placeProviderTask(sessionId: string, body: { name: string; description: string }, prepared: PreparedMemoryPlacement, workspaceRoot?: string, signal = new AbortController().signal) {
     const root = workspaceRoot?.trim() || this.workspaceRoot(sessionId)
-    return this.runTaskAgent(sessionId, root, signal, agent => this.coordinator.placeProvider(agent, body, prepared, signal))
+    return this.runTaskAgent(sessionId, root, signal, agent => this.coordinator.placeProvider(agent, body, prepared, signal), undefined, 'Mnemon · Choose memory provider')
   }
 
   maintainMetadata(sessionId: string, memoryBodyIds: readonly string[], workspaceRoot?: string, signal = new AbortController().signal) {
     const root = workspaceRoot?.trim() || this.workspaceRoot(sessionId)
-    return this.runTaskAgent(sessionId, root, signal, agent => this.coordinator.maintainMetadata(agent, memoryBodyIds, signal))
+    return this.runTaskAgent(sessionId, root, signal, agent => this.coordinator.maintainMetadata(agent, memoryBodyIds, signal), undefined, 'Mnemon · Memory metadata')
   }
 
   async supervise(sessionId: string, content: string, idempotencyKey?: string, signal = new AbortController().signal): Promise<SupervisedWritebackResult> {
@@ -1088,7 +1089,7 @@ export class MnemonLifecycle {
       content,
       idempotencyKey,
       signal,
-      operation => this.runTaskAgent(normalizedSessionId, root, signal, operation),
+      operation => this.runTaskAgent(normalizedSessionId, root, signal, operation, undefined, 'Mnemon · Save to memory'),
     )
   }
 
@@ -1160,8 +1161,10 @@ export class MnemonLifecycle {
     signal: AbortSignal,
     operation: (agent: HostAgent) => Promise<T>,
     route?: RoutedPick,
+    title = 'Mnemon · Background task',
   ): Promise<T> {
-    const sessionId = randomUUID()
+    const modern = activationOwned(this.ctx.subagents)
+    const sessionId = `${modern ? 'mnemon-task-v1-' : ''}${randomUUID()}`
     this.taskAgentIds.add(sessionId)
     let handle: HostAgentHandle | undefined
     let failure: unknown
@@ -1172,6 +1175,7 @@ export class MnemonLifecycle {
         ...creation,
         signal,
       })
+      if (modern) titleTask(handle.agent, title)
       // The Agent carries the route it was created with, so skill work it
       // delegates passes the same pick down instead of asking the resolver again.
       if (route !== undefined) {
@@ -1198,7 +1202,9 @@ export class MnemonLifecycle {
    * a turn only while DSH's projection cache holds a record of it, so a finished task
    * could stay listed as an untitled Ungrouped conversation (#435). No `parentSession`
    * or `delegationDepth`: the task belongs to no conversation, and its children stay
-   * one level deep.
+   * one level deep. Activation-owned master requires an ordinary root instead;
+   * its persistent task ID and title identify the visible record without enrolling
+   * it in conversation automation. Official rc.1 retains the hidden metadata.
    */
   private async taskAgentCreation(
     fallbackSessionId: string,
@@ -1222,7 +1228,7 @@ export class MnemonLifecycle {
     const presets = presetService(this.ctx.get('agentPresets'))
     const presetId = presets === undefined ? undefined : (await presets.resolve()).id
     const workingDirectory = workFrom === undefined ? undefined : this.ctx.get('workingDirectory') as WorkingDirectoryService | undefined
-    const meta = { cwd, origin: 'subagent' as const, ...(presetId === undefined ? {} : { agentPreset: presetId }) }
+    const meta = { cwd, ...(activationOwned(this.ctx.subagents) ? {} : { origin: 'subagent' as const }), ...(presetId === undefined ? {} : { agentPreset: presetId }) }
     if (presets === undefined && typeof workingDirectory?.set !== 'function') return { meta, agentOptions }
     return {
       meta,
@@ -1340,11 +1346,17 @@ export class MnemonLifecycle {
 
   private install(agent: HostAgent, source: LifecycleAgentSnapshot['startSource']): void {
     if (this.taskAgentIds.has(agent.id) || this.owners.has(agent) || this.children.has(agent)) return
+    if (isTaskRecord(agent.id) && !isCreatingChild(this.ctx.agents, agent)) {
+      // Reopening a finished task is inspection, never a new memory review or writeback run.
+      agent.ctx.tools?.guard?.(execution => execution.name?.startsWith('mnemon_') === true
+        ? 'This Mnemon task has finished, so it no longer reads or changes memory. Start a new task from the Mnemon workbench.' : undefined)
+      return
+    }
     if (agent.session.header?.origin === 'subagent') {
       this.installChild(agent)
       return
     }
-    if (!this.ctx.agents.roots().includes(agent)) return
+    if (!isRootAgent(this.ctx.agents, this.ctx.subagents, agent)) return
     const memoryTurn = this.runtimeSource === undefined ? undefined : new AgentMemoryTurn(agent, this.runtimeSource)
     const lifecycle = new MnemonAgentLifecycle(agent, this.coordinator, this.config, this.counters, source, memoryTurn, () => this.runtimeSource?.forAgent(agent).directory)
     let dispose: () => unknown

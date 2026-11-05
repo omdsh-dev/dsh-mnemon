@@ -8,6 +8,7 @@ import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import { afterEach, expect, it } from 'vitest'
+import type { ToolExecutionInput } from '@deepseek-ai/dsh-tools'
 import type { HostAgent, HostContextShape, HostSession } from '../src/host/dsh.ts'
 import type { DocumentView } from 'dsh-mnemon-source-documents/contracts'
 import type { Insight, PreparedMemoryPlacement } from 'dsh-mnemon-source-memory-spaces/contracts'
@@ -17,14 +18,12 @@ import { startSubagent } from '../src/host/subagent-start.ts'
 import { registerTools } from '../src/host/tools.ts'
 import { compositionFixture } from './fixtures/composition.ts'
 import { JsonlSessionPersistence } from './helpers/dsh-plugins.ts'
-import { loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
+import { executeTool, loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
 
-// Issue #435: DSH persists the session of every task Agent Mnemon runs outside a conversation. Its
-// sidebar and ACP session list leave out a session whose header has `origin: 'subagent'`, the origin
-// DSH gives its own subagents. Without it, a finished task stayed listed as an untitled conversation
-// under Ungrouped wherever DSH had no projection-cache record of it, and ACP always listed it. Here
-// DSH's own ACP agent lists the stored sessions, as `dsh acp` serves them to an editor, and Session
-// query reads their headers.
+// The released Host hides detached task sessions (#435). Activation-owned master requires
+// ordinary task roots: ACP and the sidebar may list those roots, but child ownership and
+// memory results must remain the same. Exercise DSH's real persisted-session query and ACP.
+const activationTrees = typeof (SubagentRuntime.prototype as unknown as { rootOf?: unknown }).rootOf === 'function'
 
 const spawn = await import(requireDsh.resolve('@deepseek-ai/dsh-subagent-spawn-in-process'))
 const sessionQuery = await import(requireDsh.resolve('@deepseek-ai/dsh-session-query'))
@@ -124,14 +123,15 @@ async function host(reply?: (project: string) => Record<string, unknown>) {
   await loadTools(ctx)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
+  if (activationTrees) await ctx.plugin((await import(requireDsh.resolve('@deepseek-ai/dsh-session-title'))).default, { fallbackMaxWords: 12, fallbackMaxBytes: 120, maxTitleBytes: 512 })
   await loadWorkingDirectory(ctx)
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(spawn, { providerName: 'spawn' })
   ctx.llm.registerAdapter(['scripted'], adapter)
   const dsh = ctx as unknown as HostContextShape
-  const coordinator = new MnemonSubagentCoordinator(dsh.subagents, f.live, dsh)
-  const lifecycle = new MnemonLifecycle(dsh, coordinator, f.config, f.live)
-  registerTools(dsh, f.live, coordinator, f.extensions)
+  let coordinator = new MnemonSubagentCoordinator(dsh.subagents, f.live, dsh)
+  let lifecycle = new MnemonLifecycle(dsh, coordinator, f.config, f.live)
+  let stopTools = registerTools(dsh, f.live, coordinator, f.extensions)
   stop = lifecycle.start()
   const agents = (ctx as unknown as { agents: { create(options: object): Promise<{ agent: { followup(message: unknown): void; whenIdle(): Promise<void> }; dispose(): Promise<void> }> } }).agents
   const plain = await agents.create({ sessionId: SessionId('plain'), meta: { cwd: f.workspace }, agentOptions: { provider: 'scripted', model: 'fixture' } })
@@ -143,21 +143,29 @@ async function host(reply?: (project: string) => Record<string, unknown>) {
   /** Every stored session's header by id, as Session query reads them. */
   const sessions = async () => new Map((await query.listSessions()).map(record => [record.header.id, record.header]))
   expect(ctx.agents.list()).toEqual([])
-  return { f, ctx, dsh, lifecycle, project, sessions, listed }
+  const restartMnemon = () => {
+    stop?.(); stopTools(); coordinator.dispose()
+    coordinator = new MnemonSubagentCoordinator(dsh.subagents, f.live, dsh)
+    lifecycle = new MnemonLifecycle(dsh, coordinator, f.config, f.live)
+    stopTools = registerTools(dsh, f.live, coordinator, f.extensions)
+    stop = lifecycle.start()
+  }
+  return { f, ctx, dsh, get lifecycle() { return lifecycle }, project, sessions, listed, restartMnemon }
 }
 
-it("keeps a Save to memory task Agent out of DSH's ACP session list and any lineage, and its writer still saves", async () => {
+it("preserves Save to memory and task visibility on the active Host without borrowing a conversation", async () => {
   const h = await host()
   expect(await h.listed()).toEqual(['plain'])
 
   const result = await h.lifecycle.superviseTask('', CANDIDATE, undefined, h.f.workspace)
 
   expect(result).toMatchObject({ delegated: true, action: 'stored', memoryBodyIds: [h.project] })
-  expect(await h.listed()).toEqual(['plain'])
+  await expectTaskVisibility(h, 1)
   const sessions = await h.sessions()
   // With no conversation, the receipt names the task Agent: a session of its own, outside any lineage.
   const task = sessions.get(result.sessionId)
-  expect(task).toMatchObject({ origin: 'subagent', cwd: h.f.workspace })
+  expect(task).toMatchObject({ cwd: h.f.workspace })
+  expect(task?.origin).toBe(activationTrees ? undefined : 'subagent')
   expect(task?.parentSession).toBeUndefined()
   expect(task?.delegationDepth ?? 0).toBe(0)
   // Its writer is its child, one level deep, as before.
@@ -166,7 +174,7 @@ it("keeps a Save to memory task Agent out of DSH's ACP session list and any line
   expect(h.ctx.agents.list()).toEqual([])
 }, 30_000)
 
-it.each(['runtime', 'skills'] as const)("keeps a standalone %s task out of DSH's ACP session list, and its child still runs under it", async kind => {
+it.each(['runtime', 'skills'] as const)("runs a standalone %s task and its owned child with the active Host session visibility", async kind => {
   const h = await host()
   const signal = new AbortController().signal
 
@@ -181,24 +189,25 @@ it.each(['runtime', 'skills'] as const)("keeps a standalone %s task out of DSH's
     : await h.lifecycle.runSkillTask(h.f.workspace, signal, operation)
 
   expect(outcome.result).toMatchObject({ output: [{ type: 'text', text: 'Maintenance step done.' }], stopReason: 'completed' })
-  expect(await h.listed()).toEqual(['plain'])
+  await expectTaskVisibility(h, 1)
   const sessions = await h.sessions()
-  expect(sessions.get(outcome.task)).toMatchObject({ origin: 'subagent', cwd: h.f.workspace })
+  expect(sessions.get(outcome.task)).toMatchObject({ cwd: h.f.workspace })
+  expect(sessions.get(outcome.task)?.origin).toBe(activationTrees ? undefined : 'subagent')
   expect(sessions.get(outcome.task)?.parentSession).toBeUndefined()
   expect(sessions.get(outcome.child)).toMatchObject({ origin: 'subagent', parentSession: outcome.task, delegationDepth: 1 })
   expect(h.ctx.agents.list()).toEqual([])
 }, 30_000)
 
-it('answers evidence queries without a conversation and cleans up its hidden task and child', async () => {
+it('answers evidence queries without a conversation and cleans up its task and child', async () => {
   const h = await host(() => ({ answer: 'Run the staged rollout first.', citations: [] }))
   const result = await h.lifecycle.answerTask('', 'What should run first?', [], h.f.workspace)
   expect(result).toMatchObject({ answer: 'Run the staged rollout first.', citations: [], delegation: { provider: 'spawn' } })
-  expect(await h.listed()).toEqual(['plain'])
+  await expectTaskVisibility(h, 1)
   expect(h.ctx.agents.list()).toEqual([])
   expect((await h.sessions()).get(result.delegation.runId)).toMatchObject({ origin: 'subagent', delegationDepth: 1 })
 }, 30_000)
 
-it('proposes Memory Space metadata without a conversation or extra visible sessions', async () => {
+it('proposes Memory Space metadata without a conversation and respects Host task visibility', async () => {
   const h = await host(project => ({ summary: 'Prepared release metadata.', updates: [
     { memoryBodyId: project, title: 'Release planning', description: 'Release decisions and staged rollout checklists.' },
   ] }))
@@ -206,7 +215,7 @@ it('proposes Memory Space metadata without a conversation or extra visible sessi
   expect(result).toMatchObject({ delegated: true, provider: 'spawn', updates: [
     { memoryBodyId: h.project, title: 'Release planning', description: 'Release decisions and staged rollout checklists.' },
   ] })
-  expect(await h.listed()).toEqual(['plain'])
+  await expectTaskVisibility(h, 1)
   expect(h.ctx.agents.list()).toEqual([])
 }, 30_000)
 
@@ -224,11 +233,11 @@ it('creates and archives a Document without a conversation, retaining its conten
     query: stored.contentHash, mode: 'keyword', memoryBodyIds: [h.project], limit: 10,
   })
   expect(recalled.results.some(item => item.content.includes(stored.contentHash) && item.content.includes('.mnemon/documents/archived/'))).toBe(true)
-  expect(await h.listed()).toEqual(['plain'])
+  await expectTaskVisibility(h, 2)
   expect(h.ctx.agents.list()).toEqual([])
 }, 30_000)
 
-it('chooses an eligible Memory Space Provider without a conversation or extra visible sessions', async () => {
+it('chooses an eligible Memory Space Provider without a conversation and respects Host task visibility', async () => {
   const h = await host(() => ({ providerId: 'holographic', reason: 'Keep synthetic release records local.', confidence: 'high' }))
   const body = { name: 'Release planning', description: 'Release decisions and staged rollout checklists.' }
   const prepared = await h.f.graph.source('memory-spaces').read<PreparedMemoryPlacement>('prepare-body-placement', {
@@ -237,6 +246,44 @@ it('chooses an eligible Memory Space Provider without a conversation or extra vi
   const result = await h.lifecycle.placeProviderTask('', body, prepared, h.f.workspace)
   expect(prepared.candidates.map(candidate => candidate.id)).toContain(result.providerId)
   expect(result.providerId).toBe('holographic')
-  expect(await h.listed()).toEqual(['plain'])
+  await expectTaskVisibility(h, 1)
   expect(h.ctx.agents.list()).toEqual([])
 }, 30_000)
+
+async function expectTaskVisibility(h: Awaited<ReturnType<typeof host>>, count: number) {
+  const listed = await h.listed()
+  if (!activationTrees) {
+    expect(listed).toEqual(['plain'])
+    return
+  }
+  expect(listed).toContain('plain')
+  const tasks = listed.filter(id => id !== 'plain')
+  expect(tasks).toHaveLength(count)
+  for (const id of tasks) {
+    expect(id).toMatch(/^mnemon-task-v1-/)
+    const header = (await h.sessions()).get(id)
+    expect(header?.origin).toBeUndefined()
+    expect(header?.parentSession).toBeUndefined()
+  }
+}
+
+it.skipIf(!activationTrees)('keeps a titled completed task outside conversation automation after Mnemon is recreated', async () => {
+  const h = await host()
+  const saved = await h.lifecycle.superviseTask('', CANDIDATE, undefined, h.f.workspace)
+  h.restartMnemon()
+  const task = await h.ctx.agents.resume({ resumeSessionId: SessionId(saved.sessionId), agentOptions: { provider: 'scripted', model: 'fixture' } })
+  try {
+    expect(h.lifecycle.snapshot()).toMatchObject({ activeAgents: 0, sessionAvailable: false })
+    const title = task.agent.session.snapshotEvents().findLast(event => event.type === 'session/title')
+    expect(title?.data).toMatchObject({ title: 'Mnemon · Save to memory' })
+    const runtime = h.f.graph.source('runtime')
+    const before = await runtime.read('snapshot')
+    const attempt = await executeTool(task.agent.ctx, { name: 'mnemon_runtime_memory',
+      arguments: { action: 'add', target: 'user', content: 'A completed task must not write this.' },
+      agent: task.agent, callId: 'finished-task-probe' as ToolExecutionInput['callId'], signal: new AbortController().signal })
+    expect(attempt.isError).toBe(true)
+    expect(JSON.stringify(attempt)).toContain('This Mnemon task has finished')
+    expect(await runtime.read('snapshot')).toEqual(before)
+  } finally { await task.dispose() }
+  await expectTaskVisibility(h, 1)
+})

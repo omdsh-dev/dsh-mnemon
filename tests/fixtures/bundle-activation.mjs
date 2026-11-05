@@ -8,6 +8,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { createDshHostRequire } from '../../scripts/dsh-host-packages.ts'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const require = createRequire(join(process.argv[2] ?? root, 'package.json'))
@@ -16,7 +17,7 @@ const dsh = JSON.parse(await readFile(installAnchor, 'utf8')).version
 const [major, minor, patch] = dsh.split(/[.-]/u).map(Number)
 // From 0.2.1 the plugin manager recomputes package routes after each enable.
 const recomputesRoutes = major > 0 || minor > 2 || (minor === 2 && patch >= 1)
-const runtimeRequire = createRequire(installAnchor)
+const runtimeRequire = createDshHostRequire(installAnchor)
 const load = name => import(pathToFileURL(runtimeRequire.resolve(name)).href)
 const app = await load('@deepseek-ai/dsh-app-boot')
 const temporary = await mkdtemp(join(tmpdir(), 'mnemon-bundle-activation-'))

@@ -93,7 +93,7 @@ async function assertReloadable(f: Awaited<ReturnType<typeof fixture>>) {
   const session = f.parent.session
   const header = { ...session.header, delegationDepth: session.header.delegationDepth ?? 0 }
   const events = session.snapshotEvents()
-  expect(() => format.restoreReleasedV4Artifact({ header, inheritedEventCount: 0, events }, sessionApi.KNOWN_SESSION_EVENT_TYPES)).not.toThrow()
+  format.restoreReleasedV4Artifact({ header, inheritedEventCount: 0, events }, sessionApi.KNOWN_SESSION_EVENT_TYPES)
   // Exercise the actual persisted reader too: an empty surface assertion
   // misses invalid PTC audit records, which can reject the entire history.
   const reader = new Context()

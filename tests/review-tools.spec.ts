@@ -42,6 +42,12 @@ function fixture() {
 }
 
 describe('review publication and execution boundary', () => {
+  it.each([false, true])('respects the enabled Team task-board API without the retired teammate tool: %s', enabled => {
+    const team = { isEnabled: vi.fn(() => enabled) }
+    const parent = { ctx: { get: () => team, tools: { get: (name: string) => name === 'team_task_create' ? {} : undefined } } } as unknown as HostAgent
+    expect(idleReviewBlockReason(parent)).toBe(enabled ? 'agent-team' : undefined)
+    expect(idleReviewBlockReason(parent, 'scoped')).toBeUndefined()
+  })
   it.each([[false, false], [true, false], [false, true], [true, true]])('checks scoped Team tools together with the public service: %s/%s', (service, capability) => {
     const get = vi.fn(() => capability ? {} : undefined)
     const parent = { ctx: { get: (name: string) => service && name === 'agentTeams' ? {} : undefined, tools: { get } } } as unknown as HostAgent

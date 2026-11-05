@@ -243,6 +243,8 @@ export class MnemonSubagentCoordinator {
   private disposeResumeGuard: (() => unknown) | undefined
   /** Delegated children whose run has ended, newest last, at most FINISHED_CHILDREN. */
   private readonly finishedChildren = new Set<string>()
+  private readonly providerNames = new Set(['spawn', 'fork'])
+  private readonly providerObservers: Array<() => unknown> = []
   private disposed = false
   private readonly reviewAdmission = new AutomaticReviewAdmission()
 
@@ -276,12 +278,19 @@ export class MnemonSubagentCoordinator {
     })
     if (typeof registration !== 'function') throw new Error('dsh-mnemon subagent result tool registration did not return a disposer')
     this.disposeResultTool = registration as () => unknown
+    if (typeof subagents.list !== 'function') {
+      for (const stop of [
+        resultRuntime.on('subagent/provider-added', ((provider: { name: string }) => { this.providerNames.add(provider.name) }) as never),
+        resultRuntime.on('subagent/provider-removed', ((name: string) => { this.providerNames.delete(name) }) as never),
+      ]) if (typeof stop === 'function') this.providerObservers.push(stop as () => unknown)
+    }
   }
 
   dispose(): unknown {
     this.disposed = true
     this.reviewAdmission.dispose()
     this.resultRequests.clear()
+    for (const stop of this.providerObservers.splice(0)) stop()
     const resumeGuard = this.disposeResumeGuard
     this.disposeResumeGuard = undefined
     resumeGuard?.()
@@ -1073,7 +1082,9 @@ This is the only completion channel for this run. Do not finish with a plain-tex
   }
 
   private provider(preferred: 'spawn' | 'fork'): string {
-    const names = this.subagents.list()
+    // Master removed enumeration. Its documented local providers remain queryable by
+    // name; registration events also admit subsequently installed alternatives.
+    const names = this.subagents.list?.() ?? [...this.providerNames].filter(name => this.subagents.getProvider(name) !== undefined)
     const compatible = (name: string): boolean => {
       const provider = this.subagents.getProvider(name)
       return provider?.capabilities.depthLimit === true && childComposition(this.subagents, provider) !== undefined

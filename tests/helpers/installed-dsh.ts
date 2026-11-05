@@ -1,16 +1,17 @@
 import { realpathSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ToolExecutionInput, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
+import { createDshHostRequire } from '../../scripts/dsh-host-packages.ts'
 
 /**
  * The DSH a real-host spec composes: the repository's pinned one, or the installation
  * DSH_HOST_ROOT names when `pnpm run test:installed-dsh` runs the root tests against it.
  */
-export const requireDsh = createRequire(process.env.DSH_HOST_ROOT === undefined
+const hostAnchor = process.env.DSH_HOST_ROOT === undefined
   ? realpathSync(new URL('../../node_modules/@deepseek-ai/dsh/package.json', import.meta.url))
-  : process.env.DSH_HOST_ROOT + '/package.json')
+  : realpathSync(process.env.DSH_HOST_ROOT + '/package.json')
+export const requireDsh = createDshHostRequire(hostAnchor)
 
 /** The version of the DSH the specs compose. */
 export const dshVersion = (requireDsh('@deepseek-ai/dsh/package.json') as { version: string }).version
@@ -55,15 +56,24 @@ export async function executeTool(ctx: Context, input: ToolExecutionInput): Prom
   // The executor-based Host accepts model-call batches, including for calls outside a turn.
   const batchTools = tools as unknown as {
     execute(input: unknown): Promise<{ results: { callId: string; result: ToolExecutionResult }[] }>
+    resolve?(input: unknown): Promise<{ dispose(): void }>
   }
-  const batch = await batchTools.execute({
-    calls: [{ type: 'tool-call', id: input.callId, name: input.name, arguments: JSON.stringify(input.arguments) }],
-    agent: input.agent,
-    signal: input.signal,
+  // Master admits conditional Team tools per model step. Reproduce that admission
+  // for this synthetic call; an unadmitted out-of-turn call correctly rejects them.
+  const toolSet = input.agent === undefined ? undefined : await batchTools.resolve?.({
+    agent: input.agent, modelSelection: input.agent.options, signal: input.signal,
   })
-  const result = batch.results.find(result => result.callId === input.callId)
-  if (!result) throw new Error(`DSH omitted the result of fixture call ${input.callId}`)
-  return result.result
+  try {
+    const batch = await batchTools.execute({
+      calls: [{ type: 'tool-call', id: input.callId, name: input.name, arguments: JSON.stringify(input.arguments) }],
+      agent: input.agent,
+      signal: input.signal,
+      ...(toolSet === undefined ? {} : { toolSet }),
+    })
+    const result = batch.results.find(result => result.callId === input.callId)
+    if (!result) throw new Error(`DSH omitted the result of fixture call ${input.callId}`)
+    return result.result
+  } finally { toolSet?.dispose() }
 }
 
 /**

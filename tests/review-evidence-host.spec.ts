@@ -140,7 +140,9 @@ it.each(['native', 'ptc'].flatMap(mode => ['fork', 'spawn'].map(provider => ({ m
       return run
     }
     const service = {
-      list: () => host.subagents.list(), getProvider: (name: string) => host.subagents.getProvider(name),
+      ...(typeof host.subagents.list === 'function' ? { list: () => host.subagents.list!() } : {}),
+      ...(typeof host.subagents.rootOf === 'function' ? { rootOf: (agent: HostAgent) => host.subagents.rootOf!(agent) } : {}),
+      getProvider: (name: string) => host.subagents.getProvider(name),
       ...(typeof host.subagents.start === 'function'
         ? { start: (...args: Parameters<NonNullable<typeof host.subagents.start>>) => holdBack(host.subagents.start!(...args)) }
         : {}),
