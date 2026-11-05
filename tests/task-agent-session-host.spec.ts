@@ -7,7 +7,7 @@ import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import type { ToolExecutionInput } from '@deepseek-ai/dsh-tools'
 import type { HostAgent, HostContextShape, HostSession } from '../src/host/dsh.ts'
 import type { DocumentView } from 'dsh-mnemon-source-documents/contracts'
@@ -17,6 +17,9 @@ import { MnemonLifecycle } from '../src/host/lifecycle.ts'
 import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
 import { startSubagent } from '../src/host/subagent-start.ts'
 import { registerTools } from '../src/host/tools.ts'
+import { createPluginMessage } from '../src/host/plugin-message.ts'
+import { createRuntimeGraph } from '../src/host/runtime.ts'
+import { resolveConfig } from '../src/host/config.ts'
 import { compositionFixture } from './fixtures/composition.ts'
 import { JsonlSessionPersistence } from './helpers/dsh-plugins.ts'
 import { executeTool, loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
@@ -97,13 +100,16 @@ async function acpSessionList(ctx: Context): Promise<() => Promise<string[]>> {
  * conversations, and `plain`: a finished session created as main created a task Agent's, through
  * `agents.create` with only a cwd, which ACP lists. ACP leaves out a session that is still attached.
  */
-async function host(reply?: (project: string) => Record<string, unknown>) {
+async function host(reply?: (project: string) => Record<string, unknown>, followup?: (options: GenerateOptions) => Reply | undefined) {
   const f = await compositionFixture({ taskAgentModel: { mode: 'fixed', provider: 'scripted', model: 'fixture' } })
   const project = (await f.memorySpace()).id
   const ctx = new Context()
   let stop: (() => void) | undefined
+  const completionRequests = new Map<string, string>()
   disposers.push(async () => { stop?.(); await ctx.fiber.dispose(); await f.dispose() })
   const adapter = new ScriptedAdapter(options => {
+    const next = followup?.(options)
+    if (next !== undefined) return next
     if (options.sessionId === 'plain') return 'Noted.'
     if (options.messages.some(message => message.role === 'user' && text(message).includes(CHILD_STEP))) return 'Maintenance step done.'
     // The Save to memory writer stores the candidate in the project space, then reports.
@@ -111,6 +117,7 @@ async function host(reply?: (project: string) => Record<string, unknown>) {
     const terminal = system.match(/Completion protocol: call `([^`]+)`/u)?.[1]
     const requestId = system.match(/requestId `([^`]+)`/u)?.[1]
     if (terminal === undefined || requestId === undefined) throw new Error('writer completion capability is missing')
+    completionRequests.set(options.sessionId!, requestId)
     if (reply !== undefined) return { name: terminal, args: { requestId, result: reply(project) } }
     if (!options.messages.some(message => message.role === 'tool')) return { name: 'mnemon_remember', args: { content: CANDIDATE, memoryBodyId: project } }
     return { name: terminal, args: { requestId, result: { summary: 'Saved the release checklist.', action: 'stored', memoryBodyIds: [project] } } }
@@ -151,7 +158,7 @@ async function host(reply?: (project: string) => Record<string, unknown>) {
     stopTools = registerTools(dsh, f.live, coordinator, f.extensions)
     stop = lifecycle.start()
   }
-  return { f, ctx, dsh, get lifecycle() { return lifecycle }, project, sessions, listed, restartMnemon }
+  return { f, ctx, dsh, get lifecycle() { return lifecycle }, project, sessions, listed, restartMnemon, completionRequests }
 }
 
 it("preserves Save to memory and task visibility on the active Host without borrowing a conversation", async () => {
@@ -173,6 +180,221 @@ it("preserves Save to memory and task visibility on the active Host without borr
   expect([...sessions.values()].filter(header => header.parentSession === result.sessionId))
     .toEqual([expect.objectContaining({ id: result.runId, origin: 'subagent', delegationDepth: 1 })])
   expect(h.ctx.agents.list()).toEqual([])
+}, 30_000)
+
+it.each(['root', 'child'] as const)('ends a continued %s task grant before an automatic message and permits the next user request', async kind => {
+  let target = ''
+  const results: string[] = []
+  const h = await host(undefined, options => {
+    if (options.sessionId !== target) return undefined
+    const at = options.messages.findLastIndex(message => message.role === 'user' && text(message).startsWith('FOLLOWUP_'))
+    if (at < 0) return 'No request.'
+    const replies = options.messages.slice(at + 1).filter(message => message.role === 'tool')
+    if (replies.length === 0) return { name: 'mnemon_runtime_memory', args: { action: 'add', target: 'memory', content: text(options.messages[at]!) } }
+    results.push(...replies.map(text))
+    return 'Settled.'
+  })
+  const saved = await h.lifecycle.superviseTask('', CANDIDATE, undefined, h.f.workspace)
+  target = kind === 'root' ? saved.sessionId : saved.runId!
+  const task = await h.ctx.agents.resume({ resumeSessionId: SessionId(target), agentOptions: { provider: 'scripted', model: 'fixture' } })
+  try {
+    for (const [content, human] of [['FOLLOWUP_FIRST: rollback threshold is 0.5%.', true], ['FOLLOWUP_AUTO_MUST_NOT_WRITE', false], ['FOLLOWUP_SECOND: retain images for 48 hours.', true]] as const) {
+      task.agent.followup(human ? createUserMessage({ content: [{ type: 'text', text: content }], source: { kind: 'user' } }) : createPluginMessage(content, 'instructions') as never)
+      await task.agent.whenIdle()
+    }
+    const snapshot = JSON.stringify((await h.f.graph.source('runtime').read<RuntimeMemorySnapshot>('snapshot')).entries)
+    expect(snapshot).toContain('FOLLOWUP_FIRST')
+    expect(snapshot).not.toContain('FOLLOWUP_AUTO_MUST_NOT_WRITE')
+    expect(snapshot).toContain('FOLLOWUP_SECOND')
+    expect(results).toHaveLength(3)
+    expect(results[1]).toContain('This Mnemon task has finished')
+    expect(h.f.graph.composableTurns.activeTurn(target)).toBeUndefined()
+    expect(h.lifecycle.snapshot()).toMatchObject({ activeAgents: 0 })
+  } finally { await task.dispose() }
+}, 30_000)
+
+it('uses the current memory storage when a resumed child has a parent pinned to an older runtime', async () => {
+  let target = ''
+  const h = await host(undefined, options => {
+    if (options.sessionId !== target) return undefined
+    const at = options.messages.findLastIndex(message => message.role === 'user' && text(message).includes('NEW_STORAGE'))
+    if (options.messages.slice(at + 1).some(message => message.role === 'tool')) return 'Done.'
+    return { name: 'mnemon_runtime_memory', args: { action: 'add', target: 'memory', content: 'NEW_STORAGE: use the current storage root.' } }
+  })
+  const saved = await h.lifecycle.superviseTask('', CANDIDATE, undefined, h.f.workspace)
+  const parent = await h.ctx.agents.resume({ resumeSessionId: SessionId(saved.sessionId), agentOptions: { provider: 'scripted', model: 'fixture' } })
+  const lease = await h.f.live.executions.workflow(parent.agent as unknown as HostAgent, 'scope-test', new AbortController().signal)
+  const current = createRuntimeGraph(resolveConfig({ ...h.f.config, dataDir: join(h.f.root, 'new-memory-root') }), h.f.workspace, h.f.extensions)
+  h.f.live.swap(current)
+  target = saved.runId!
+  const task = await h.ctx.agents.resume({ resumeSessionId: SessionId(target), agentOptions: { provider: 'scripted', model: 'fixture' } })
+  try {
+    task.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'NEW_STORAGE: save the decision here.' }], source: { kind: 'user' } }))
+    await task.agent.whenIdle()
+    expect(JSON.stringify((await current.source('runtime').read<RuntimeMemorySnapshot>('snapshot')).entries)).toContain('NEW_STORAGE')
+    expect(JSON.stringify((await h.f.graph.source('runtime').read<RuntimeMemorySnapshot>('snapshot')).entries)).not.toContain('NEW_STORAGE')
+  } finally { await task.dispose(); lease.release(); await parent.dispose() }
+}, 30_000)
+
+it('does not let an automatic continuation obtain memory tools through a fresh delegated child', async () => {
+  const results: string[] = []
+  const h = await host(undefined, options => {
+    const at = options.messages.findLastIndex(message => message.role === 'user' && text(message).includes('AUTO_DELEGATE'))
+    if (at < 0) return undefined
+    const replies = options.messages.slice(at + 1).filter(message => message.role === 'tool')
+    if (replies.length === 0) return { name: 'mnemon_runtime_memory', args: { action: 'add', target: 'memory', content: 'AUTO_DELEGATE_MUST_NOT_WRITE' } }
+    results.push(...replies.map(text))
+    return 'Done.'
+  })
+  const saved = await h.lifecycle.superviseTask('', CANDIDATE, undefined, h.f.workspace)
+  const task = await h.ctx.agents.resume({ resumeSessionId: SessionId(saved.sessionId), agentOptions: { provider: 'scripted', model: 'fixture' } })
+  try {
+    const run = await startSubagent(h.dsh.subagents, h.dsh.agents, 'spawn', { label: 'Automatic relay', prompt: [{ type: 'text', text: 'AUTO_DELEGATE: write another decision.' }], parent: task.agent as unknown as HostAgent, signal: new AbortController().signal })
+    try { await run.result } finally { await run.dispose() }
+    expect(JSON.stringify((await h.f.graph.source('runtime').read<RuntimeMemorySnapshot>('snapshot')).entries)).not.toContain('AUTO_DELEGATE_MUST_NOT_WRITE')
+    expect(results.join('\n')).toContain('This Mnemon task has finished')
+  } finally { await task.dispose() }
+}, 30_000)
+
+it('saves fresh memory from a continued task without reopening the original result', async () => {
+  const followupFact = 'Fresh followup: deployment images are retained for 48 hours.'
+  let target = ''
+  let project = ''
+  const results: string[] = []
+  const h = await host(undefined, options => {
+    if (options.sessionId === target) {
+      const at = options.messages.findLastIndex(message => message.role === 'user' && text(message).startsWith('NEW_SAVE'))
+      const replies = options.messages.slice(at + 1).filter(message => message.role === 'tool')
+      if (replies.length === 0) return { name: 'mnemon_remember', args: { content: followupFact, memoryBodyId: project } }
+      results.push(...replies.map(text))
+      return 'The followup is saved.'
+    }
+    if (!options.messages.some(message => message.role === 'user' && text(message).includes(followupFact))) return undefined
+    if (!options.messages.some(message => message.role === 'tool')) return { name: 'mnemon_remember', args: { content: followupFact, memoryBodyId: project } }
+    const requestId = JSON.stringify(options.messages.filter(message => message.role === 'system')).match(/requestId `([^`]+)`/u)?.[1]
+    if (requestId === undefined) throw new Error('new task completion request is missing')
+    return { name: 'mnemon_subagent_result', args: { requestId, result: { summary: 'Saved the followup.', action: 'stored', memoryBodyIds: [project] } } }
+  })
+  project = h.project
+  const saved = await h.lifecycle.superviseTask('', CANDIDATE, undefined, h.f.workspace)
+  const original = structuredClone(saved)
+  const originalSessions = await h.sessions()
+  target = saved.sessionId
+  const task = await h.ctx.agents.resume({ resumeSessionId: SessionId(target), agentOptions: { provider: 'scripted', model: 'fixture' } })
+  try {
+    task.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'NEW_SAVE: save the deployment image retention decision.' }], source: { kind: 'user' } }))
+    await task.agent.whenIdle()
+    const matches = await h.f.graph.source('memory-spaces', { storage: 'workspace', workspaceId: h.f.workspace }).read<{ results: Insight[] }>('search', { query: 'retained', mode: 'keyword', memoryBodyIds: [project], limit: 10 })
+    expect(matches.results.map(item => item.content), results.join('\n')).toContain(followupFact)
+    expect(saved).toEqual(original)
+    expect(results.join('\n')).not.toMatch(/Error:|task has finished/)
+    const fresh = [...await h.sessions()].filter(([id]) => !originalSessions.has(id))
+    // Released Hosts identify detached task roots as subagents, so their normal
+    // Remember path writes directly. Activation-owned roots delegate a new writer.
+    expect(fresh).toHaveLength(activationTrees ? 1 : 0)
+    if (fresh[0] !== undefined) expect(fresh[0][1].parentSession).toBe(target)
+  } finally { await task.dispose() }
+}, 30_000)
+
+it.each(['root', 'child'] as const)('allows current-policy reads but refuses disabled writes in a continued %s task', async kind => {
+  let target = ''
+  const results: string[] = []
+  const h = await host(undefined, options => {
+    if (options.sessionId !== target) return undefined
+    const at = options.messages.findLastIndex(message => message.role === 'user' && text(message).startsWith('READ_ONLY_CONTINUE'))
+    const replies = options.messages.slice(at + 1).filter(message => message.role === 'tool')
+    if (replies.length === 0) return { name: 'mnemon_recall', args: { query: 'Release checklist', mode: 'keyword' } }
+    if (replies.length === 1) return { name: 'mnemon_runtime_memory', args: { action: 'add', target: 'memory', content: 'READ_ONLY_MUST_NOT_WRITE' } }
+    results.push(...replies.map(text))
+    return 'Read complete; write refused.'
+  })
+  const saved = await h.lifecycle.superviseTask('', CANDIDATE, undefined, h.f.workspace)
+  const current = createRuntimeGraph(resolveConfig({ ...h.f.config, writeEnabled: false }), h.f.workspace, h.f.extensions)
+  h.f.live.swap(current)
+  target = kind === 'root' ? saved.sessionId : saved.runId!
+  const task = await h.ctx.agents.resume({ resumeSessionId: SessionId(target), agentOptions: { provider: 'scripted', model: 'fixture' } })
+  try {
+    task.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'READ_ONLY_CONTINUE: read the checklist and try a new write.' }], source: { kind: 'user' } }))
+    await task.agent.whenIdle()
+    expect(results).toHaveLength(2)
+    expect(results[0]).toContain(CANDIDATE)
+    expect(results[1]).toContain('read-only')
+    expect(results.join('\n')).not.toContain('This Mnemon task has finished')
+    expect(JSON.stringify((await current.source('runtime').read<RuntimeMemorySnapshot>('snapshot')).entries)).not.toContain('READ_ONLY_MUST_NOT_WRITE')
+  } finally { await task.dispose() }
+}, 30_000)
+
+it('rejects the expired completion request while allowing a new user write in the same child history', async () => {
+  let target = ''
+  let expired = ''
+  const results: string[] = []
+  const h = await host(undefined, options => {
+    if (options.sessionId !== target) return undefined
+    const at = options.messages.findLastIndex(message => message.role === 'user' && text(message).startsWith('EXPIRED_COMPLETION'))
+    const replies = options.messages.slice(at + 1).filter(message => message.role === 'tool')
+    if (replies.length === 0) return { name: 'mnemon_subagent_result', args: { requestId: expired, result: { summary: 'Overwrite the old result', action: 'stored', memoryBodyIds: [] } } }
+    if (replies.length === 1) return { name: 'mnemon_runtime_memory', args: { action: 'add', target: 'memory', content: 'New user decision after the old task settled.' } }
+    results.push(...replies.map(text))
+    return 'New decision saved.'
+  })
+  const saved = await h.lifecycle.superviseTask('', CANDIDATE, undefined, h.f.workspace)
+  target = saved.runId!
+  expired = h.completionRequests.get(target)!
+  expect(expired).toBeTruthy()
+  h.restartMnemon()
+  const task = await h.ctx.agents.resume({ resumeSessionId: SessionId(target), agentOptions: { provider: 'scripted', model: 'fixture' } })
+  try {
+    task.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'EXPIRED_COMPLETION: continue with a new memory decision.' }], source: { kind: 'user' } }))
+    await task.agent.whenIdle()
+    expect(results).toHaveLength(2)
+    expect(results[0]).toMatch(/already settled|no longer active/)
+    expect(JSON.stringify((await h.f.graph.source('runtime').read<RuntimeMemorySnapshot>('snapshot')).entries), results[1]).toContain('New user decision after the old task settled.')
+    expect(saved).toMatchObject({ action: 'stored', summary: 'Saved the release checklist.', memoryBodyIds: [h.project] })
+  } finally { await task.dispose() }
+}, 30_000)
+
+it.each(['cancel', 'prepare failure'] as const)('releases continuation authority after %s and accepts the next user turn', async fault => {
+  let target = ''
+  const h = await host(undefined, options => {
+    if (options.sessionId !== target) return undefined
+    const at = options.messages.findLastIndex(message => message.role === 'user' && text(message).startsWith('RECOVER_'))
+    const request = options.messages[at]!
+    if (options.messages.slice(at + 1).some(message => message.role === 'tool')) return 'Saved.'
+    return { name: 'mnemon_runtime_memory', args: { action: 'add', target: 'memory', content: text(request) } }
+  })
+  const saved = await h.lifecycle.superviseTask('', CANDIDATE, undefined, h.f.workspace)
+  target = saved.sessionId
+  const task = await h.ctx.agents.resume({ resumeSessionId: SessionId(target), agentOptions: { provider: 'scripted', model: 'fixture' } })
+  let release: (() => void) | undefined
+  let entered: (() => void) | undefined
+  const pending = new Promise<void>(resolve => { entered = resolve })
+  const gate = new Promise<void>(resolve => { release = resolve })
+  let armed = fault === 'cancel'
+  const stop = task.agent.ctx.on('agent/pre-step', async (step, next) => {
+    const decision = await next()
+    if (step.agent === task.agent && armed) { armed = false; entered!(); await gate }
+    return decision
+  }, { prepend: true })
+  const prepare = fault === 'prepare failure' ? vi.spyOn(h.f.live.executions, 'turn').mockRejectedValueOnce(new Error('Fixture View preparation failed')) : undefined
+  try {
+    task.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'RECOVER_FAILED_REQUEST' }], source: { kind: 'user' } }))
+    if (fault === 'cancel') {
+      await pending
+      expect(h.f.live.forAgent(task.agent as unknown as HostAgent).composableTurns.activeTurn(target)).toBeDefined()
+      task.agent.cancel({ kind: 'user' })
+      release!()
+    }
+    await task.agent.whenIdle()
+    expect(h.f.live.forAgent(task.agent as unknown as HostAgent).composableTurns.activeTurn(target)).toBeUndefined()
+    task.agent.followup(createPluginMessage('RECOVER_AUTO_REQUEST', 'instructions') as never)
+    await task.agent.whenIdle()
+    task.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'RECOVER_NEW_USER_REQUEST' }], source: { kind: 'user' } }))
+    await task.agent.whenIdle()
+    const snapshot = JSON.stringify((await h.f.graph.source('runtime').read<RuntimeMemorySnapshot>('snapshot')).entries)
+    expect(snapshot).not.toContain('RECOVER_FAILED_REQUEST')
+    expect(snapshot).not.toContain('RECOVER_AUTO_REQUEST')
+    expect(snapshot).toContain('RECOVER_NEW_USER_REQUEST')
+  } finally { release?.(); prepare?.mockRestore(); stop(); await task.dispose() }
 }, 30_000)
 
 it.each(['runtime', 'skills'] as const)("runs a standalone %s task and its owned child with the active Host session visibility", async kind => {
@@ -290,3 +512,31 @@ it.skipIf(!activationTrees)('keeps a titled completed task outside conversation 
   } finally { await task.dispose() }
   await expectTaskVisibility(h, 1)
 })
+
+it.each(['root', 'child'] as const)('continues a completed %s task on a new user turn after Mnemon recreation', async kind => {
+  const results: string[] = []
+  let target = ''
+  const h = await host(undefined, options => {
+    if (options.sessionId !== target) return undefined
+    const at = options.messages.findLastIndex(message => message.role === 'user' && text(message).includes('Continue this task:'))
+    if (at < 0) return 'No new request.'
+    const calls = options.messages.slice(at + 1).filter(message => message.role === 'tool')
+    if (calls.length === 0) return { name: 'mnemon_runtime_memory', args: { action: 'add', target: 'memory', content: 'Manual continuation: retain the deployment image for 48 hours.' } }
+    results.push(...calls.map(text))
+    return 'The new request is complete.'
+  })
+  const saved = await h.lifecycle.superviseTask('', CANDIDATE, undefined, h.f.workspace)
+  target = kind === 'root' ? saved.sessionId : saved.runId!
+  h.restartMnemon()
+  const task = await h.ctx.agents.resume({ resumeSessionId: SessionId(target), agentOptions: { provider: 'scripted', model: 'fixture' } })
+  try {
+    task.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Continue this task: add the image retention decision.' }], source: { kind: 'user' } }))
+    await task.agent.whenIdle()
+    expect(results).toHaveLength(1)
+    expect(results.join('\n')).not.toContain('This Mnemon task has finished')
+    const snapshot = await h.f.graph.source('runtime').read<RuntimeMemorySnapshot>('snapshot')
+    expect(JSON.stringify(snapshot.entries), results.join('\n')).toContain('Manual continuation: retain the deployment image for 48 hours.')
+    expect(h.lifecycle.snapshot()).toMatchObject({ activeAgents: 0, sessionAvailable: false })
+    expect(saved).toMatchObject({ action: 'stored', memoryBodyIds: [h.project] })
+  } finally { await task.dispose() }
+}, 30_000)

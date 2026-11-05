@@ -63,7 +63,7 @@ export async function startSubagent(
   request: HostSubagentStartRequest & { label: string },
   publications?: SubagentPublications,
 ): Promise<HostSubagentRun> {
-  if (activationOwned(subagents) && reservedChildId(request.parent) === undefined) {
+  if (typeof subagents.startActivation === 'function' && reservedChildId(request.parent) === undefined) {
     return withReservedChild(request.parent, () => startSubagent(subagents, agents, provider, request, publications))
   }
   const { toolFilter, persona, ...task } = request
@@ -84,7 +84,7 @@ async function startOnHost(
   if (typeof subagents.startActivation === 'function') {
     const { label, signal, ...task } = request
     const modern = activationOwned(subagents)
-    const childId = modern ? claimReservedChild(request.parent) : undefined
+    const childId = claimReservedChild(request.parent)
     if (modern && (childId === undefined || agents?.get?.(request.parent.id) !== request.parent)) {
       throw new Error('Mnemon requires an exact live parent and reserved child identity on an activation-owned DSH')
     }
@@ -93,7 +93,7 @@ async function startOnHost(
     const startCurrent = subagents.startActivation as unknown as (spec: Omit<HostSubagentStartRequest, 'label'> & { provider: string; label: string; childId: string; delivery: 'caller' }) => ReturnType<NonNullable<HostSubagentsService['startActivation']>>
     const activation = modern
       ? await startCurrent.call(subagents, { ...task, provider, label, signal, childId: childId!, delivery: 'caller' })
-      : await subagents.startActivation({ provider, label, request: task, signal, delivery: 'caller' })
+      : await subagents.startActivation({ provider, label, ...(childId === undefined ? {} : { childId }), request: task, signal, delivery: 'caller' })
     // A second dispose from the caller reports any failure of this one.
     const stop = () => { activation.dispose().catch(() => {}) }
     try {

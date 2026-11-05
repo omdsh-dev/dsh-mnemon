@@ -1164,7 +1164,7 @@ export class MnemonLifecycle {
     title = 'Mnemon · Background task',
   ): Promise<T> {
     const modern = activationOwned(this.ctx.subagents)
-    const sessionId = `${modern ? 'mnemon-task-v1-' : ''}${randomUUID()}`
+    const sessionId = `mnemon-task-v1-${randomUUID()}`
     this.taskAgentIds.add(sessionId)
     let handle: HostAgentHandle | undefined
     let failure: unknown
@@ -1346,10 +1346,10 @@ export class MnemonLifecycle {
 
   private install(agent: HostAgent, source: LifecycleAgentSnapshot['startSource']): void {
     if (this.taskAgentIds.has(agent.id) || this.owners.has(agent) || this.children.has(agent)) return
-    if (isTaskRecord(agent.id) && !isCreatingChild(this.ctx.agents, agent)) {
-      // Reopening a finished task is inspection, never a new memory review or writeback run.
-      agent.ctx.tools?.guard?.(execution => execution.name?.startsWith('mnemon_') === true
-        ? 'This Mnemon task has finished, so it no longer reads or changes memory. Start a new task from the Mnemon workbench.' : undefined)
+    if ((isTaskRecord(agent.id) || this.coordinator.isFinishedTask(agent.id)) && !isCreatingChild(this.ctx.agents, agent)) {
+      // Only fresh user turns can continue a completed task; never register its
+      // history with conversation automation or revive the old result callback.
+      this.coordinator.continueTask(agent)
       return
     }
     if (agent.session.header?.origin === 'subagent') {
@@ -1385,6 +1385,7 @@ export class MnemonLifecycle {
     const parent = parentId === undefined || parentId === '' ? undefined : this.ctx.agents.get(parentId)
     // A lineage string alone is not authority. Orphans get no model Recall pin.
     if (runtime === undefined || parent === undefined || parent === agent) return
+    this.coordinator.inheritTaskContinuation(parent, agent)
     const parentMemory = this.memoryTurns.get(parent)
     let delegation: DelegatedMemoryView
     if (parentMemory !== undefined) {

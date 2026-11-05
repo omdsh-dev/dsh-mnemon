@@ -28,6 +28,7 @@ import { archivableElsewhere } from './archive-destinations.ts'
 import { runtimeArchiveSource, runtimeLocked, type RuntimeModelResult, type RuntimeWriteContext } from './runtime-capacity.ts'
 import { archiveDocumentLocked, documentLocked, type DocumentWorkflowHost } from './document-archive.ts'
 import { AutomaticReviewAdmission } from './review-admission.ts'
+import { FINISHED_TASK_REFUSAL, TaskContinuation } from './task-continuation.ts'
 
 export type { CoordinatedDocumentResult, CoordinatedRuntimeMemoryResult, DelegatedAnswerResult, DelegatedWriteResult, SubagentCounters } from "./protocol.ts"
 export { assertDshOutputSchema } from './subagent-output-schema.ts'
@@ -86,7 +87,6 @@ const REVIEW_TOOLS: MemoryToolName[] = [...DOCUMENT_READ_TOOLS, 'mnemon_runtime_
 const RESULT_TOOL_NAME = 'mnemon_subagent_result'
 /** How many finished delegated children stay refused memory tools if DSH resumes one. */
 const FINISHED_CHILDREN = 1_000
-const FINISHED_CHILD_REFUSAL = 'This Mnemon task has finished, so it no longer reads or changes memory. Reply without memory tools.'
 const RESULT_TOOL_INPUT_SCHEMA = {
   type: 'object',
   properties: {
@@ -244,6 +244,8 @@ export class MnemonSubagentCoordinator {
   private disposeResumeGuard: (() => unknown) | undefined
   /** Delegated children whose run has ended, newest last, at most FINISHED_CHILDREN. */
   private readonly finishedChildren = new Set<string>()
+  private readonly continuations = new Map<HostAgent, () => unknown>()
+  private readonly continuationOwners = new WeakMap<HostAgent, TaskContinuation>()
   private readonly providerNames = new Set(['spawn', 'fork'])
   private readonly providerObservers: Array<() => unknown> = []
   private disposed = false
@@ -291,6 +293,7 @@ export class MnemonSubagentCoordinator {
     this.disposed = true
     this.reviewAdmission.dispose()
     this.resultRequests.clear()
+    for (const stop of [...this.continuations.values()].reverse()) stop()
     for (const stop of this.providerObservers.splice(0)) stop()
     const resumeGuard = this.disposeResumeGuard
     this.disposeResumeGuard = undefined
@@ -304,10 +307,53 @@ export class MnemonSubagentCoordinator {
     return { ...this.counters }
   }
 
+  isFinishedTask(id: string): boolean { return this.finishedChildren.has(id) }
+
+  /** User continuation is a fresh scoped turn, never revival of a delegated run. */
+  continueTask(agent: HostAgent): void {
+    if (this.continuations.has(agent) || this.disposed) return
+    if (typeof agent.ctx.effect !== 'function' || this.resultRuntime?.agents?.get === undefined) {
+      agent.ctx.tools?.guard?.(execution => execution.name?.startsWith('mnemon_') ? FINISHED_TASK_REFUSAL : undefined)
+      return
+    }
+    const continuation = new TaskContinuation(agent, this.runtimeSource, id => this.resultRuntime?.agents?.get?.(id))
+    let dispose: () => unknown
+    dispose = agent.ctx.effect(() => {
+      const stop = continuation.start()
+      this.continuationOwners.set(agent, continuation)
+      return () => {
+        try { stop() } finally {
+          if (this.continuations.get(agent) === dispose) this.continuations.delete(agent)
+          this.continuationOwners.delete(agent)
+        }
+      }
+    }, 'dsh-mnemon.task-continuation()')
+    this.continuations.set(agent, dispose)
+  }
+
+  /** Spawn may use an independent tool scope, so transfer the turn guard explicitly. */
+  inheritTaskContinuation(parent: HostAgent, child: HostAgent): void {
+    const owner = this.continuationOwners.get(parent)
+    if (owner === undefined || this.continuations.has(child)) return
+    let dispose: () => unknown
+    dispose = child.ctx.effect(() => {
+      const stop = child.ctx.tools?.guard?.(execution => owner.guard(execution))
+      if (typeof stop !== 'function') throw new Error('A continued task child requires a scoped memory tool guard')
+      this.continuationOwners.set(child, owner)
+      return () => {
+        try { stop() } finally {
+          if (this.continuations.get(child) === dispose) this.continuations.delete(child)
+          this.continuationOwners.delete(child)
+        }
+      }
+    }, 'dsh-mnemon.task-delegation()')
+    this.continuations.set(child, dispose)
+  }
+
   /**
    * DSH 0.2.1 can resume a finished child from its saved state when another Agent sends it a
-   * message: with its persona and tools, but without the guard its run held. A delegated child
-   * never reads or changes memory once its run has ended (#387).
+   * message: with its persona and tools, but without the guard its run held. Only a fresh
+   * human turn may acquire new authority; automatic continuations remain denied (#387).
    */
   private finished(id: string): void {
     this.finishedChildren.delete(id)
@@ -316,9 +362,7 @@ export class MnemonSubagentCoordinator {
     if (this.disposeResumeGuard !== undefined || this.disposed || this.resultRuntime === undefined) return
     const resumed = this.resultRuntime.on('agent/created', (({ agent }: { agent: HostAgent }) => {
       if (!this.finishedChildren.has(agent.id)) return
-      try {
-        agent.ctx?.tools?.guard?.(execution => execution.name?.startsWith('mnemon_') === true ? FINISHED_CHILD_REFUSAL : undefined)
-      } catch { /* Never fail another plugin's publication. */ }
+      this.continueTask(agent)
     }) as never)
     if (typeof resumed === 'function') this.disposeResumeGuard = resumed as () => unknown
   }

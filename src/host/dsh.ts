@@ -305,6 +305,7 @@ export interface HostSubagentsService {
    * delivery returns the result without notifying the parent conversation.
    */
   startActivation?(spec: {
+    childId?: string
     provider: string
     label: string
     request: Omit<HostSubagentStartRequest, 'label' | 'signal'>
