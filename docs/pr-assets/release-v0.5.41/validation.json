@@ -1,0 +1,162 @@
+{
+  "schemaVersion": 1,
+  "version": "0.5.41",
+  "status": "passed",
+  "verificationDate": "2026-11-05",
+  "timezone": "Asia/Shanghai",
+  "candidateRevision": "444473f839759961573a922474c9398c1bb42663",
+  "baseRevision": "cce2ab186db2edba30fda25d8b64b1750f0835f0",
+  "candidateManifestSha256": "e213627458480a7d2e9e3dc681697a3b3d7dff5d6f962644171deefc5d80bdb5",
+  "composition": {
+    "dsh-mnemon-provider-byterover": "0.5.6",
+    "dsh-mnemon-provider-hindsight": "0.5.7",
+    "dsh-mnemon-provider-holographic": "0.5.7",
+    "dsh-mnemon-provider-honcho": "0.5.5",
+    "dsh-mnemon-provider-mem0": "0.5.5",
+    "dsh-mnemon-provider-mnemon-native": "0.5.10",
+    "dsh-mnemon-provider-openviking": "0.5.10",
+    "dsh-mnemon-provider-retaindb": "0.5.6",
+    "dsh-mnemon-provider-supermemory": "0.5.5",
+    "dsh-mnemon-source-documents": "0.5.13",
+    "dsh-mnemon-source-memory-spaces": "0.5.25",
+    "dsh-mnemon-source-runtime": "0.5.17",
+    "dsh-mnemon-source-skills": "0.5.8",
+    "dsh-mnemon-strategy-auto-capture": "0.5.5",
+    "dsh-mnemon-strategy-default-three-tier": "0.5.12",
+    "dsh-mnemon-strategy-general": "0.5.1",
+    "dsh-mnemon-strategy-light-context": "0.5.6",
+    "dsh-mnemon-strategy-scoped": "0.5.5",
+    "dsh-mnemon": "0.5.41"
+  },
+  "selectedCandidates": [
+    {
+      "name": "dsh-mnemon-source-skills",
+      "version": "0.5.8",
+      "filename": "dsh-mnemon-source-skills-0.5.8.tgz",
+      "integrity": "sha512-M38/7SKUqQlAn0KoJnFYhCUXun3YCY3Mi5YitZygXt2B1VmpnrE4PufZMpwFk/Rw/fxvpT9OujZycD8xm6X/jA==",
+      "size": 153175,
+      "sha256": "d7bb33264423caf42f5f4750941e901bec3256babc174407cb554ee9d2bc7338",
+      "fileCount": 30,
+      "unpackedBytes": 663638
+    },
+    {
+      "name": "dsh-mnemon",
+      "version": "0.5.41",
+      "filename": "dsh-mnemon-0.5.41.tgz",
+      "integrity": "sha512-Rk9vSADMwnjTQVZ348dTp6taycjwGGWiLzE4erLDHZ4p6DywrqwOm3KW2uddvcUPdJTPuVo7M04GZlBuspdHAA==",
+      "size": 539290,
+      "sha256": "a731019afc67b414ae41f288c85d8465998e686cace033259620222d492acfab",
+      "fileCount": 68,
+      "unpackedBytes": 2262379
+    }
+  ],
+  "hosts": [
+    {
+      "id": "020",
+      "versionOrCommit": "0.2.0-rc.2",
+      "officialNpm": true,
+      "record": "020-validation.json",
+      "recordSha256": "301911a018945f41dc4f4172608b489c06bb187570708862247e58d329905ee4",
+      "scenariosPassed": 2,
+      "finalPinnedVersionsVerified": 38,
+      "finalCandidateFilesAndModesVerified": 196,
+      "allThreeRuntimeHashesPreserved": true,
+      "screenshotCount": 6
+    },
+    {
+      "id": "rc2",
+      "versionOrCommit": "0.2.1-rc.2",
+      "officialNpm": true,
+      "record": "rc2-validation.json",
+      "recordSha256": "ccc42232c84cb4b22d631477bf92767e7221c5e2aacde4f2135b6d90c74a35eb",
+      "scenariosPassed": 2,
+      "finalPinnedVersionsVerified": 38,
+      "finalCandidateFilesAndModesVerified": 196,
+      "allThreeRuntimeHashesPreserved": true,
+      "screenshotCount": 6
+    },
+    {
+      "id": "rc3",
+      "versionOrCommit": "0.2.1-rc.3",
+      "officialNpm": true,
+      "record": "rc3-validation.json",
+      "recordSha256": "74069ce2c1847d855411171a74bbb9cf11779bd95b5c870c3234186dc003585e",
+      "scenariosPassed": 2,
+      "finalPinnedVersionsVerified": 38,
+      "finalCandidateFilesAndModesVerified": 196,
+      "allThreeRuntimeHashesPreserved": true,
+      "screenshotCount": 6
+    },
+    {
+      "id": "rc5",
+      "versionOrCommit": "0.2.1-rc.5",
+      "officialNpm": true,
+      "record": "rc5-validation.json",
+      "recordSha256": "ae82d4faf59ecbcc4075afd446a011ac88c7c858bf17ce7dc3c59c2f4986c1f1",
+      "scenariosPassed": 2,
+      "finalPinnedVersionsVerified": 38,
+      "finalCandidateFilesAndModesVerified": 196,
+      "allThreeRuntimeHashesPreserved": true,
+      "screenshotCount": 6
+    },
+    {
+      "id": "rc1",
+      "versionOrCommit": "0.2.2-rc.1",
+      "officialNpm": true,
+      "record": "rc1-validation.json",
+      "recordSha256": "65e6329613b38cdacb5d57c7413b6ea9973d0afdfa8b83f75243d008232664f5",
+      "scenariosPassed": 2,
+      "finalPinnedVersionsVerified": 38,
+      "finalCandidateFilesAndModesVerified": 196,
+      "allThreeRuntimeHashesPreserved": true,
+      "screenshotCount": 6
+    },
+    {
+      "id": "master",
+      "versionOrCommit": "fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159",
+      "officialNpm": false,
+      "record": "master-validation.json",
+      "recordSha256": "7e07d0d460841942fa36ae3a724bb961396d432d660208a478935c0880e62c09",
+      "scenariosPassed": 2,
+      "finalPinnedVersionsVerified": 38,
+      "finalCandidateFilesAndModesVerified": 196,
+      "allThreeRuntimeHashesPreserved": true,
+      "screenshotCount": 5
+    }
+  ],
+  "scenarioCount": 12,
+  "officialHostScenarioCount": 10,
+  "additionalFixedMasterScenarioCount": 2,
+  "screenshotCount": 35,
+  "finalPinnedVersionsVerified": 228,
+  "finalCandidateFilesAndModesVerified": 1176,
+  "allSixUpgradesRetainRuntimeHashes": true,
+  "localVerification": {
+    "node": "24.22.2",
+    "rootPassed": 2550,
+    "rootSkipped": 8,
+    "workspacePassed": 759,
+    "workspaceSkipped": 3,
+    "independentPluginRepositories": 18,
+    "packedArtifacts": 19,
+    "fixedMasterRootPassed": 2550,
+    "fixedMasterRootSkipped": 8,
+    "docsTypesBuildHeadlessPackageChecks": "passed"
+  },
+  "rootSize": {
+    "fileCount": 68,
+    "packedBytes": 539290,
+    "unpackedBytes": 2262379,
+    "maximumUnpackedBytes": 3000000,
+    "fractionOfCeiling": 0.7541263333333333,
+    "ceilingChanged": false
+  },
+  "externalModelCalls": 0,
+  "limits": [
+    "Official Host UI scenarios use macOS and Node24; platform CI covers Windows workspace paths but not native Desktop OS integration.",
+    "Additional source acceptance targets only fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159; the original reporter machine and other source/alpha revisions are not claimed.",
+    "Candidate registry aging is test-only; live-model/provider quality is not re-evaluated in release acceptance.",
+    "All fixture and Host processes are stopped. Normal test tabs were closed; generated browser error-page tabs rejected close under the tool URL policy and rely on normal turn-end cleanup."
+  ],
+  "publication": "These are pre-publication candidates. The publish workflow separately freezes the final merged revision and verifies actual Registry installation and upgrade before creating the GitHub Release."
+}
