@@ -4,7 +4,8 @@
   "packageUnderTest": {
     "label": "0.5.40 plus this PR",
     "branch": "codex/compat-dsh-master-agents",
-    "baseCommit": "cce2ab186db2edba30fda25d8b64b1750f0835f0"
+    "baseCommit": "cce2ab186db2edba30fda25d8b64b1750f0835f0",
+    "runtimeCommit": "d2cbef138d1821aa68ad1105eaafb24ed0975545"
   },
   "hosts": {
     "official": {
@@ -23,9 +24,9 @@
     {
       "command": "pnpm run verify",
       "exitCode": 0,
-      "node": "22.22.0",
+      "node": "24.22.2",
       "root": {
-        "passed": 2515,
+        "passed": 2534,
         "skipped": 8
       },
       "workspace": {
@@ -47,22 +48,15 @@
       "host": "official rc1",
       "command": "DSH_HOST_ROOT=<official npm installation> node24 node_modules/vitest/vitest.mjs run --config scripts/installed-dsh.config.ts",
       "exitCode": 0,
-      "passed": 2515,
+      "passed": 2534,
       "skipped": 8
     },
     {
       "host": "fixed master",
       "command": "DSH_HOST_ROOT=<source checkout>/apps/cli node24 node_modules/vitest/vitest.mjs run --config scripts/installed-dsh.config.ts",
       "exitCode": 0,
-      "passed": 2516,
-      "skipped": 7
-    },
-    {
-      "host": "official rc1",
-      "scope": "final provider and task lifecycle files",
-      "exitCode": 0,
-      "passed": 18,
-      "skipped": 1
+      "passed": 2534,
+      "skipped": 8
     }
   ],
   "live": {
@@ -123,7 +117,8 @@
         "offlineReplay": "Both actual Host translators reject all 6 saved incomplete inputs identically; 5 also lack result.answer"
       }
     },
-    "skillsAdopted": 0
+    "skillsAdopted": 0,
+    "phase": "initial capability cohort before manual continuation policy"
   },
   "processRestart": {
     "master": {
@@ -151,7 +146,9 @@
     "expectedSentinel": "COMPAT_MUST_NOT_WRITE",
     "toolResult": "Error: This Mnemon task has finished, so it no longer reads or changes memory. Start a new task from the Mnemon workbench.",
     "sentinelInsights": 0,
-    "method": "query_only SELECT from actual Mnemon Native insights tables; both saved acceptance records read back through WebUI"
+    "method": "query_only SELECT from actual Mnemon Native insights tables; both saved acceptance records read back through WebUI",
+    "historicalSuperseded": true,
+    "currentPolicy": "A new direct human message gets fresh current-policy authority; history viewing and automatic input do not."
   },
   "visibility": {
     "masterTaskRoots": 6,
@@ -204,6 +201,18 @@
       "sha256": "c4e24fa78cb71432f3f1bb8e7a81c210571b3796ac02385c06020b1b1814b0c1"
     },
     {
+      "file": "master-task-before-continuation.jpg",
+      "sha256": "990490d6f5495aee7f88a88b0f97752183739e44c57446a838535dc7b90dda90"
+    },
+    {
+      "file": "master-task-continuation-readback.jpg",
+      "sha256": "fb6cd666d9bfd3a67089dfe7e5ae112989d0a56cab1fc276167d0a7a8d6028e4"
+    },
+    {
+      "file": "master-task-user-continuation.jpg",
+      "sha256": "6f107b045d1d35e9d4d10860dc81bc7d890003fafb02a9e673d51a232d13e4ef"
+    },
+    {
       "file": "rc1-after-restart-memory.jpg",
       "sha256": "62188e83acb0cd97deec0d1aaddd1b972cdf6c75587f7554d8c85d9cb89b3f73"
     },
@@ -238,6 +247,14 @@
     {
       "file": "rc1-stored-memory.jpg",
       "sha256": "0c0c5ac6ce7c98a34b13d36fbadee605084618046b06ccd6a518c4822dd3940f"
+    },
+    {
+      "file": "rc1-task-continuation-readback.jpg",
+      "sha256": "1a1dcb582c2938069575c870ddc524af2276f1047b4f227def32b39ce38f09d0"
+    },
+    {
+      "file": "rc1-task-user-continuation.jpg",
+      "sha256": "90a06ac0328fdb82b0f3177feee683efb80462ba3769ca952b2581624adf8747"
     }
   ],
   "limitations": [
@@ -245,6 +262,86 @@
     "live rc1 Skills backtest is partial, not a pass",
     "model quality is not established by execution completion",
     "no live cloud Memory Space provider certification",
-    "Host-preserved model stream, not independent raw upstream HTTP capture"
-  ]
+    "Host-preserved model stream, not independent raw upstream HTTP capture",
+    "Cold child sending still requires a loaded parent under the Host public delivery contract."
+  ],
+  "continuation": {
+    "runtimeCommit": "d2cbef138d1821aa68ad1105eaafb24ed0975545",
+    "model": "deepseek-flash",
+    "effort": "high",
+    "requests": 38,
+    "finalRequestLimit": 64,
+    "priorLocalLimit": 32,
+    "priorLocalLimitReached": true,
+    "postRestartRequests": 6,
+    "cohorts": {
+      "master": {
+        "requests": 21,
+        "httpStatuses": {
+          "200": 21
+        },
+        "usage": {
+          "input_tokens": 33555,
+          "cache_read_input_tokens": 171520,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 5594
+        },
+        "postRestartRequests": 3
+      },
+      "rc1": {
+        "requests": 17,
+        "httpStatuses": {
+          "200": 17
+        },
+        "usage": {
+          "input_tokens": 28685,
+          "cache_read_input_tokens": 141184,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 3392
+        },
+        "postRestartRequests": 3
+      }
+    },
+    "readback": {
+      "master": {
+        "sessionCountBefore": 5,
+        "sessionCountAfter": 5,
+        "newSessions": 0,
+        "lostSessions": 0,
+        "originalMemoryUnchanged": true,
+        "originalMemory": "Lumen 的回滚归档标识为 CONT-57A，归档保留 72 小时。",
+        "newMemory": "Lumen 重启后发布检查标识为 CONT-AFTER-RESTART-88。",
+        "activeAcceptanceRecords": 3,
+        "parentModelStepsAfterRestart": 0,
+        "parentEventsAfterRestart": {
+          "session/end-seed": 1,
+          "agent/inbox/spliced": 2,
+          "turn/start": 1,
+          "turn/end": 1
+        }
+      },
+      "rc1": {
+        "sessionCountBefore": 5,
+        "sessionCountAfter": 5,
+        "newSessions": 0,
+        "lostSessions": 0,
+        "originalMemoryUnchanged": true,
+        "originalMemory": "Lumen 的回滚归档标识为 CONT-57A，保留 72 小时。",
+        "newMemory": "Lumen 重启后发布检查标识为 CONT-AFTER-RESTART-88。",
+        "activeAcceptanceRecords": 2,
+        "parentModelStepsAfterRestart": 0,
+        "parentEventsAfterRestart": {
+          "session/end-seed": 1,
+          "agent/inbox/spliced": 2,
+          "turn/start": 1,
+          "turn/end": 1
+        }
+      }
+    },
+    "parentEvidenceCutoffUtc": "2026-11-05T11:35:00Z",
+    "readbackMethod": "Read-only Node SQLite queries of actual Native insights; WebUI content view; parent session step/start and assistant/message event counts.",
+    "legacyIdentification": "Only own persisted descriptor, first human-source delegated prompt and Host-recorded completion protocol; no origin-only inference.",
+    "coldChildHostBehavior": "Load the parent before sending to a cold child. rc1 gives a read-only hint; fixed master gives delivery-unavailable.",
+    "rehearsalFailure": "Before settlement isolation the rc1 parent soft-deleted CONT-HUMAN-72. Final new CONT-AFTER-RESTART-88 remains active on both Hosts; the historical record is not counted as retained."
+  }
 }

@@ -47,7 +47,7 @@ Git 同步保留原有设置与载荷格式。保存的默认提交者组合现�
 
 官方发布的 `@deepseek-ai/dsh@0.2.2-rc.1` 仍提供 `agents.roots()`、`agents.isOwnedBy()`、Provider 枚举、嵌套的 activation 请求及隐藏独立任务 Agent 的能力。官方 RC 继续使用这些路径。源码构建可能显示相同版本号，却提供不同契约；#554 最初报告的是 `8bd073392eef6f54e921a093b95076248eb08cbb`。
 
-master commit `fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159` 改为由 Subagent 管理子 Agent 归属，提供 `rootOf()` 和扁平 activation 请求，并移除了公开的隐藏独立根 Agent 路径。Mnemon 按能力适配，在首个模型步骤前预留并校验子 Agent，独立任务改用普通根 Agent。**该 Host 的 ACP 列表可发现已完成的内部任务根**，标题为 `Mnemon · …`。标准 WebUI 会隐藏列表元数据标记为尚未开始对话轮次、且不是当前打开项的任务根；本次真实侧栏仍只显示用户会话。其他客户端、主动打开记录或列表元数据缺失时仍可能显示，不能保证始终静默。任务不会占用当前对话。完成的记录在重启后仍能识别，重新打开不能恢复 Mnemon 写入工具。浏览已有记忆、直接检索等不启动 Agent 的读取不会创建任务会话。
+master commit `fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159` 改为由 Subagent 管理子 Agent 归属，提供 `rootOf()` 和扁平 activation 请求，并移除了公开的隐藏独立根 Agent 路径。Mnemon 按能力适配，在首个模型步骤前预留并校验子 Agent，独立任务改用普通根 Agent。**该 Host 的 ACP 列表可发现已完成的内部任务根**，标题为 `Mnemon · …`。标准 WebUI 会隐藏列表元数据标记为尚未开始对话轮次、且不是当前打开项的任务根；本次真实侧栏仍只显示用户会话。其他客户端、主动打开记录或列表元数据缺失时仍可能显示，不能保证始终静默。任务不会占用当前对话。完成的记录在重启后仍能识别。查看历史或收到 Agent 自动消息不会恢复记忆权限；用户直接发送新消息，则在同一历史中开启新的记忆轮次，按当前工作区、Source、Memory Space 和写入策略执行，原任务结果保持结束。续办的完成通知不会唤醒旧父会话继续执行旧请求。浏览已有记忆、直接检索等不启动 Agent 的读取不会创建任务会话。
 
 标准 Provider 的 `providerName` 从公开的、已解析的插件配置中发现，覆盖先于 Mnemon 加载以及重载后的 Provider。第三方子 Agent Provider 如果把注册名隐藏在代码中，可在 Mnemon 插件配置中填写可选的 `subagentProviderNames: [my-local-provider]`。这些名称只作为候选，仍需通过实时注册状态、隔离与能力检查；`spawn` 优先级及显式选择 `fork` 审查的语义保留。此项控制子 Agent 执行，与 Memory Space Provider 选择无关。
 
@@ -90,7 +90,7 @@ dsh-mnemon 在两个版本上运行方式相同，使用同一份记忆数据。
 
 - **记忆子 Agent。** DSH 0.2.0 用一次性的 `subagents.start` 启动子 Agent，它的 spawn 与 fork provider 从启动请求中接受子 Agent 的指令和工具过滤。DSH 0.2.1 把所有子 Agent 都作为托管 activation 启动（`startActivation`，[#356](https://github.com/omdsh-dev/dsh-mnemon/issues/356)），两者都不再接受：子 Agent 要么沿用父 Agent 的工具与指令，要么使用为它指定的 Agent 预设。在 DSH 0.2.1 上，dsh-mnemon 以 caller 方式交付每个记忆子 Agent 的结果，所以结果回到 Mnemon，对话不会收到完成通知；并在 DSH 发布子 Agent 时、它的第一步之前，也在其他插件看到它之前，把它的指令和工具清单注册在它自己的作用域里。无论哪个版本，子 Agent 都只看到记忆工具和结果工具。这涵盖存入记忆、`mnemon_remember` 等记忆空间写入、USER.md 压缩、工作记忆归档、空闲审查、项目档案归档以及 Git 同步的核对审查。在 DSH 0.2.1 上，只有由 DSH 在本进程中创建子 Agent 的 provider（例如它的 spawn 与 fork）才会这样使用；其他 provider 在启动前就被拒绝，所以记忆任务不会带着对话的工具运行。
 - **DSH 0.2.1 上可续接的记忆任务。** 在那里所有本地子 Agent 都可以续接：
-  - 在对话之下启动的子 Agent，例如委派写入或空闲审查，会以“可继续”出现在对话的子 Agent 列表中。之后模型发来的消息，或你在该列表中发给它的消息，会在 Mnemon 的委派之外续接它，并带着对话自己的工具和指令。任务结束后，Mnemon 拒绝它使用任何记忆工具，它只能回复（[#387](https://github.com/omdsh-dev/dsh-mnemon/issues/387)）。Mnemon 无法移除这些条目，请不要续接它们，有需要时直接在对话中提出；
+  - 在对话之下启动的子 Agent，例如委派写入或空闲审查，会以“可继续”出现在对话的子 Agent 列表中。之后模型发来的消息，或你在该列表中发给它的消息，会在 Mnemon 的委派之外续接它，并带着对话自己的工具和指令。任务结束后，自动续接仍不能使用记忆工具（[#387](https://github.com/omdsh-dev/dsh-mnemon/issues/387)）；你直接发送新的消息则可按当前配置继续读写，原任务的结果回调不会恢复。重启后若 Host 提示父会话不在线或暂时无法发送，请先打开父会话，再进入子会话；
   - 它运行期间会占用对话的一个子 Agent 名额（`maxActiveSubagents`，默认 8 个）。名额用满时，记忆任务会因 `subagent limit reached` 失败。
 
   在 DSH 0.2.0 上，记忆任务无法续接。

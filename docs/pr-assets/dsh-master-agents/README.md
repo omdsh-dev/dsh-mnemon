@@ -16,7 +16,7 @@ Acceptance date: 2026-11-05. These screenshots use the built PR packages, still 
 
 Master task roots retain `mnemon-task-v1-…` IDs and `Mnemon · …` titles and are discoverable by ACP after completion. The standard WebUI hides non-current roots whose `sessionListMetadata.blank` is true. The six task roots in this live run had titles and child catalogs but no root conversation turn: **both actual sidebars showed only the two user conversations**. Workspaces use explicit session membership, not cwd equality. Missing list metadata, a different client or explicit opening can expose a task record; master is not guaranteed silent. No synthetic user turn was inserted to make a screenshot look different.
 
-The completed idle-review child is accessible through its parent's subagent menu on both versions. This is distinct from independent task roots. Direct reads and direct search do not start an Agent or create task sessions. Durable task/run identity prevents reopened completed master records from joining conversation automation or obtaining Mnemon write tools.
+The completed idle-review child is accessible through its parent's subagent menu on both versions. This is distinct from independent task roots. Direct reads and direct search do not start an Agent or create task sessions. Durable task/run identity keeps reopened completed records out of conversation automation. New direct user input can start a fresh memory turn, while automatic messages cannot acquire memory authority. The original task and its completion callback remain finished.
 
 | Surface | Fixed master | Official rc.1 |
 |---|---|---|
@@ -32,9 +32,28 @@ The completed idle-review child is accessible through its parent's subagent menu
 
 The browser's normal viewports were left unchanged. The source Host and npm Host have upstream UI differences; screenshots establish actual behavior, not pixel-identical layouts.
 
-After full process restarts, all 23 master and 21 rc.1 session records remained, with zero new task sessions from reopening/reading. Each Host retained exactly one acceptance memory. Reopening the completed master idle-review child and actually calling `mnemon_remember` returned the finished-task guard error; the sentinel was absent from all Native insight tables. The initial `mnemon_runtime_memory` probe was unavailable in that tool set, so it is not counted as a guard invocation. [Actual rejected call](./master-after-restart-guard.jpg).
+**Historical initial-policy probe:** after full process restarts, all 23 master and 21 rc.1 session records remained, with zero new task sessions from reopening/reading. Each Host retained exactly one acceptance memory. Reopening the completed master idle-review child and actually calling `mnemon_remember` returned the finished-task guard error; the sentinel was absent from all Native insight tables. The initial `mnemon_runtime_memory` probe was unavailable in that tool set, so it is not counted as a guard invocation. [Actual rejected call](./master-after-restart-guard.jpg). That screenshot predates the user-approved continuation policy below; it is not the current behavior for a new human request.
 
-## Real-model results and limits
+## User-directed continuation after restart
+
+A direct human message in a completed task history now gets a fresh View from current configuration, workspace and Memory Space policy. It can read, write and delegate new work, including Document archive. A fresh delegation allows one descendant level from the current persisted/runtime depth; it does not relax automatic worker recursion. Merely viewing history, restarting, receiving an Agent message or a completion notice does not grant memory access. The original result request stays closed. Turns release authority after completion, cancellation or failed preparation.
+
+A second live cohort reused completed writer histories on both Hosts. Both processes were restarted with the final runtime changes, retaining all five sessions each. The standard Host requires the parent to be loaded before sending to a cold child: rc.1 displays a read-only hint; the fixed master returns a temporary delivery error. Opening the parent, then its child, restored sending without a new parent prompt.
+
+Each child queried the original `CONT-57A` memory, then wrote `CONT-AFTER-RESTART-88` on an explicit new user request. Independent read-only Native database queries and the content page confirmed the new record and the unchanged original. No parent model step ran after these continuations, and no new session was created. Six final model requests (three per Host) returned HTTP 200.
+
+| Evidence | Fixed master | Official rc.1 |
+|---|---|---|
+| Human continuation in the same completed task, after process restart | [Screenshot](./master-task-user-continuation.jpg) | [Screenshot](./rc1-task-user-continuation.jpg) |
+| Stored records read back independently | [Screenshot](./master-task-continuation-readback.jpg) | [Screenshot](./rc1-task-continuation-readback.jpg) |
+
+The live rehearsal caught an additional failure: before notice isolation, the old rc.1 parent interpreted a child's new human-directed write as unrelated to its old request and soft-deleted it. The final runtime consumes only Mnemon task settlement notices; it preserves concurrent genuine user input and awaited original task results. Both real-Host regressions and the post-restart live readback verify this fix. The old rehearsal record is not counted as retained data, even though the model reported success.
+
+Controlled-model tests using the actual Host cover automatic refusal after cold resume, root/child read/write, changed storage and disabled writes, expired callbacks, cancellation, fresh delegation/archive, the first human steer at a later step, legacy child history and concurrent parent input. Automatic refusal is test evidence, not a fabricated live UI conversation. Independent review additionally checked concurrent workspaces on each Host. Unmarked historical children require their own persisted Mnemon descriptor, first task prompt and Host-recorded completion contract; origin alone is insufficient. Old hidden roots without those durable markers cannot be identified as Mnemon continuations and are outside this cold-continuation guarantee. Their existing Host classification and behavior remain unchanged.
+
+The continuation relay forwarded 38 requests within a final 64-request bound, including the earlier rehearsal. A temporary 32-request bound was reached while diagnosing the old parent behavior; those locally rejected attempts are not upstream model failures or successful results. The original 53-request capability cohort below remains separate. Credentials and raw sessions are excluded.
+
+## Initial real-model results and limits
 
 The relay recorded 53 HTTP-200 model requests within a 64-request bound; HTTP success includes the malformed outputs described below. Exact usage counters are in the verification record.
 

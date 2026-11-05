@@ -42,10 +42,10 @@
 
 **Files:** bilingual compatibility docs/register, existing changeset, `docs/pr-assets/dsh-master-agents/`, PR description.
 
-- [ ] Capture real Host continuation in the same task conversation, stored readback and a refused automatic continuation, including after restart; label controlled/live evidence accurately.
-- [ ] Update old finished-task screenshot claims to historical behavior and explain the new user-directed behavior in both languages.
-- [ ] Run `pnpm run verify`, official rc.1 and pinned-master installed-Host suites; inspect failures and record exact counts/limits.
-- [ ] Obtain independent whole-branch review, fix important findings, and verify affected paths.
+- [x] Capture real Host continuation in the same task conversation, stored readback and a refused automatic continuation, including after restart; label controlled/live evidence accurately.
+- [x] Update old finished-task screenshot claims to historical behavior and explain the new user-directed behavior in both languages.
+- [x] Run `pnpm run verify`, official rc.1 and pinned-master installed-Host suites; inspect failures and record exact counts/limits.
+- [x] Obtain independent whole-branch review, fix important findings, and verify affected paths.
 - [ ] Push to `codex/compat-dsh-master-agents`, update PR #567 around its final behavior, and check remote CI.
 
 ## Execution record
@@ -53,3 +53,5 @@
 - Initial PR head: c2d2445ec9c379a016e4dba469e768a2f6f4ae98. Worktree clean; existing PR CI had 10 passing checks.
 - Existing coordinator revokes completion request IDs and releases workflow Views in `finally`; the new path must acquire fresh authority.
 - Fixed master records direct browser prompts as source `user`, Agent relays as `agent-message`, and task notices as `subagent-settled`. Existing Mnemon synthetic continuation prompts use their plugin source.
+
+- Follow-up runtime commit: d2cbef138d1821aa68ad1105eaafb24ed0975545. Real UI rehearsal exposed old-parent settlement replay; final Host tests and live readback verify no parent model steps after a new child request. Legacy child recognition, later-step human steer and fresh delegated Document archive are covered. Three complete suites each passed 2534 tests / 8 conditional skips on Node 24; workspace suite passed 753 / 3.
