@@ -1346,7 +1346,7 @@ export class MnemonLifecycle {
 
   private install(agent: HostAgent, source: LifecycleAgentSnapshot['startSource']): void {
     if (this.taskAgentIds.has(agent.id) || this.owners.has(agent) || this.children.has(agent)) return
-    if ((isTaskRecord(agent.id) || this.coordinator.isFinishedTask(agent.id)) && !isCreatingChild(this.ctx.agents, agent)) {
+    if ((isTaskRecord(agent.id) || this.coordinator.isFinishedTask(agent.id, agent)) && !isCreatingChild(this.ctx.agents, agent)) {
       // Only fresh user turns can continue a completed task; never register its
       // history with conversation automation or revive the old result callback.
       this.coordinator.continueTask(agent)

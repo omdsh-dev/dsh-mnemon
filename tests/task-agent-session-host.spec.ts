@@ -540,3 +540,193 @@ it.each(['root', 'child'] as const)('continues a completed %s task on a new user
     expect(saved).toMatchObject({ action: 'stored', memoryBodyIds: [h.project] })
   } finally { await task.dispose() }
 }, 30_000)
+
+it.each([false, true])('isolates task completion notices while preserving concurrent parent input (%s)', async concurrentInput => {
+  let target = ''
+  let parentCalls = 0
+  const h = await host(undefined, options => {
+    if (options.sessionId === 'old-parent-notice') {
+      parentCalls++
+      expect(options.messages.some(message => message.role === 'user' && message.source?.kind === 'subagent-settled')).toBe(false)
+      if (options.messages.some(message => message.role === 'user' && text(message).startsWith('PARENT_NEW_USER'))) return 'New parent request handled.'
+      if (options.messages.some(message => message.role === 'tool')) return 'Old task corrected.'
+      return { name: 'mnemon_runtime_memory', args: { action: 'remove', target: 'memory', old_text: 'CHILD_OWN_NEW_DECISION' } }
+    }
+    if (options.sessionId !== target) return undefined
+    const at = options.messages.findLastIndex(message => message.role === 'user' && text(message).startsWith('CHILD_OWN'))
+    if (at < 0) return 'No request.'
+    if (options.messages.slice(at + 1).some(message => message.role === 'tool')) return 'CHILD_OWN_NEW_DECISION stored.'
+    return { name: 'mnemon_runtime_memory', args: { action: 'add', target: 'memory', content: 'CHILD_OWN_NEW_DECISION' } }
+  })
+  const parent = await h.ctx.agents.create({ sessionId: SessionId('old-parent-notice'), meta: { cwd: h.f.workspace }, agentOptions: { provider: 'scripted', model: 'fixture' } })
+  const saved = await h.lifecycle.supervise(parent.agent.id, CANDIDATE)
+  target = saved.runId!
+  let submitted = false
+  const stop = h.ctx.on('agent/inbox/inserted', ({ message }) => {
+    const source = message.source as { kind: string; senderSessionId?: string }
+    if (concurrentInput && source.kind === 'subagent-settled' && source.senderSessionId === target) {
+      submitted = true
+      parent.agent.steer(createUserMessage({ content: [{ type: 'text', text: 'PARENT_NEW_USER: say hello.' }], source: { kind: 'user' } }))
+    }
+  })
+  try {
+    const subagents = h.ctx.subagents as unknown as { prompt(request: object, signal: AbortSignal): Promise<unknown>; waitForTreeWork?(agent: unknown): Promise<boolean>; waitForChildren?(agent: unknown): Promise<boolean> }
+    await subagents.prompt({ parentSessionId: parent.agent.id, childSessionId: target, mode: 'continuable', requestId: 'review-parent-notice', content: [{ type: 'text', text: 'CHILD_OWN: save my new decision in this child conversation.' }], delivery: 'queue' }, new AbortController().signal)
+    await (subagents.waitForTreeWork?.(parent.agent) ?? subagents.waitForChildren!(parent.agent))
+    await parent.agent.whenIdle()
+    expect(submitted).toBe(concurrentInput)
+    expect(parentCalls).toBe(concurrentInput ? 1 : 0)
+    expect(JSON.stringify((await h.f.graph.source('runtime').read<RuntimeMemorySnapshot>('snapshot')).entries)).toContain('CHILD_OWN_NEW_DECISION')
+  } finally { stop(); await parent.dispose() }
+}, 30_000)
+
+
+
+it.skipIf(activationTrees)('an unmarked legacy child cannot gain memory from automatic cold resume', async () => {
+  let target = ''
+  const replies: string[] = []
+  const h = await host(undefined, options => {
+    if (options.sessionId !== target) return undefined
+    const at = options.messages.findLastIndex(message => message.role === 'user' && text(message).startsWith('LEGACY_AUTO'))
+    if (at < 0) return 'No request.'
+    const calls = options.messages.slice(at + 1).filter(message => message.role === 'tool')
+    if (calls.length === 0) return { name: 'mnemon_runtime_memory', args: { action: 'add', target: 'memory', content: 'LEGACY_AUTO_MUST_NOT_WRITE' } }
+    replies.push(...calls.map(text))
+    return 'Done.'
+  })
+  const originalStart = h.dsh.subagents.startActivation!.bind(h.dsh.subagents)
+  h.dsh.subagents.startActivation = (spec) => {
+    const { childId: _id, ...legacy } = spec
+    return originalStart(legacy)
+  }
+  const legacyRoot = await h.ctx.agents.create({ sessionId: SessionId('legacy-root-before-upgrade'), meta: { origin: 'subagent', cwd: h.f.workspace }, agentOptions: { provider: 'scripted', model: 'fixture' } })
+  const saved = await h.lifecycle.supervise(legacyRoot.agent.id, CANDIDATE)
+  await legacyRoot.dispose()
+  await h.sessions()
+  target = saved.runId!
+  expect(target).not.toMatch(/^mnemon-/)
+  h.restartMnemon()
+  const parent = await h.ctx.agents.resume({ resumeSessionId: SessionId(saved.sessionId), agentOptions: { provider: 'scripted', model: 'fixture' } })
+  const task = await h.ctx.agents.resume({ resumeSessionId: SessionId(target), agentOptions: { provider: 'scripted', model: 'fixture' } })
+  try {
+    task.agent.followup(createPluginMessage('LEGACY_AUTO: write again.', 'instructions') as never)
+    await task.agent.whenIdle()
+    expect(JSON.stringify((await h.f.graph.source('runtime').read<RuntimeMemorySnapshot>('snapshot')).entries), replies.join('\n')).not.toContain('LEGACY_AUTO_MUST_NOT_WRITE')
+  } finally { await task.dispose(); await parent.dispose() }
+}, 30_000)
+
+
+
+it('a continued child can delegate a new human request', async () => {
+  let target = ''
+  const h = await host(undefined, options => {
+    if (options.sessionId === target) return 'New request complete.'
+    if (!options.messages.some(message => message.role === 'user' && text(message).includes('FRESH_DELEGATE'))) return undefined
+    const system = JSON.stringify(options.messages.filter(message => message.role === 'system'))
+    const requestId = system.match(/requestId `([^`]+)`/u)?.[1]
+    if (requestId === undefined) throw new Error('new task result request missing')
+    return { name: 'mnemon_subagent_result', args: { requestId, result: { answer: 'The new task completed.', citations: [] } } }
+  })
+  const saved = await h.lifecycle.superviseTask('', CANDIDATE, undefined, h.f.workspace)
+  target = saved.runId!
+  let outcome: unknown
+  let stop: (() => void) | undefined
+  const attach = (agent: HostAgent) => {
+    stop = agent.ctx.on('agent/pre-step', (async (step: { agent: HostAgent; step: number }, next: () => Promise<unknown>) => {
+      const decision = await next()
+      if (step.agent === agent && step.step === 1) {
+        expect(h.f.live.forAgent(agent).composableTurns.activeTurn(target)).toBeDefined()
+        try { outcome = await h.lifecycle.answer(target, 'FRESH_DELEGATE: answer this new question.', []) }
+        catch (error) { outcome = error }
+      }
+      return decision
+    }) as never, { prepend: true })
+  }
+  const message = 'Please delegate a fresh answer task.'
+  if (activationTrees) {
+    const parent = await h.ctx.agents.resume({ resumeSessionId: SessionId(saved.sessionId), agentOptions: { provider: 'scripted', model: 'fixture' } })
+    const observe = h.ctx.on('agent/created', ({ agent }) => { if (agent.id === target) attach(agent as unknown as HostAgent); return undefined })
+    try {
+      await (h.ctx.subagents as unknown as { prompt(request: object, signal: AbortSignal): Promise<unknown> }).prompt({ childSessionId: target, requestId: 'review-delegate', content: [{ type: 'text', text: message }], delivery: 'queue' }, new AbortController().signal)
+      await (h.ctx.subagents as unknown as { waitForTreeWork(agent: unknown): Promise<boolean> }).waitForTreeWork(parent.agent)
+      expect(outcome).toMatchObject({ answer: 'The new task completed.' })
+    } finally { observe(); stop?.(); await parent.dispose() }
+  } else {
+    const task = await h.ctx.agents.resume({ resumeSessionId: SessionId(target), agentOptions: { provider: 'scripted', model: 'fixture' } })
+    attach(task.agent as unknown as HostAgent)
+    try {
+      task.agent.followup(createUserMessage({ content: [{ type: 'text', text: message }], source: { kind: 'user' } }))
+      await task.agent.whenIdle()
+      expect(outcome).toMatchObject({ answer: 'The new task completed.' })
+    } finally { stop?.(); await task.dispose() }
+  }
+}, 30_000)
+
+
+
+it.each(['root', 'child'] as const)('direct human continuation can archive a Document from %s', async kind => {
+  let target = ''
+  let project = ''
+  let documentId = ''
+  const replies: string[] = []
+  const h = await host(undefined, options => {
+    if (options.sessionId === target) {
+      const at = options.messages.findLastIndex(message => message.role === 'user' && text(message).startsWith('ARCHIVE_NEW'))
+      if (at < 0) return 'No request.'
+      const calls = options.messages.slice(at + 1).filter(message => message.role === 'tool')
+      if (calls.length === 0) return { name: 'mnemon_document_manage', args: { action: 'archive', id: documentId } }
+      replies.push(...calls.map(text))
+      return 'Settled.'
+    }
+    if (!options.messages.some(message => message.role === 'user' && text(message).includes('[dsh-mnemon:delegated document-archive]'))) return undefined
+    const system = JSON.stringify(options.messages.filter(message => message.role === 'system'))
+    const requestId = system.match(/requestId `([^`]+)`/u)?.[1]
+    return { name: 'mnemon_subagent_result', args: { requestId, result: { action: 'planned', summary: 'Requested archive.', memoryBodyId: project } } }
+  })
+  project = h.project
+  const created = await h.lifecycle.mutateDocumentTask('', { action: 'create', title: 'Archive request', content: CANDIDATE }, h.f.workspace)
+  documentId = created.document!.id
+  const saved = await h.lifecycle.superviseTask('', CANDIDATE, undefined, h.f.workspace)
+  target = kind === 'root' ? saved.sessionId : saved.runId!
+  const task = await h.ctx.agents.resume({ resumeSessionId: SessionId(kind === 'child' ? saved.sessionId : target), agentOptions: { provider: 'scripted', model: 'fixture' } })
+  try {
+    const content = [{ type: 'text' as const, text: 'ARCHIVE_NEW: archive this Document now.' }]
+    if (kind === 'child') {
+      const subagents = h.ctx.subagents as unknown as { prompt(request: object, signal: AbortSignal): Promise<unknown>; waitForTreeWork?(agent: unknown): Promise<boolean>; waitForChildren?(agent: unknown): Promise<boolean> }
+      await subagents.prompt({ parentSessionId: task.agent.id, childSessionId: target, mode: 'continuable', requestId: 'archive-continuation', content, delivery: 'queue' }, new AbortController().signal)
+      await (subagents.waitForTreeWork?.(task.agent) ?? subagents.waitForChildren!(task.agent))
+    } else task.agent.followup(createUserMessage({ content, source: { kind: 'user' } }))
+    await task.agent.whenIdle()
+    const stored = await h.f.graph.source('documents', { storage: 'workspace', workspaceId: h.f.workspace }).read<DocumentView>('document', { id: documentId })
+    expect(stored.status, replies.join('\n')).toBe('archived')
+  } finally { await task.dispose() }
+}, 30_000)
+
+
+it('first human steer receives fresh View guidance after an automatic first step', async () => {
+  let target = ''
+  let humanPrompt = ''
+  const h = await host(undefined, options => {
+    if (options.sessionId !== target) return undefined
+    if (options.messages.some(message => message.role === 'user' && text(message).startsWith('HUMAN_STEER'))) {
+      humanPrompt = JSON.stringify(options.messages)
+      return 'Fresh user request handled.'
+    }
+    return { name: 'mnemon_recall', args: { query: 'Automatic query must refuse', mode: 'keyword' } }
+  })
+  const saved = await h.lifecycle.superviseTask('', CANDIDATE, undefined, h.f.workspace)
+  target = saved.runId!
+  const task = await h.ctx.agents.resume({ resumeSessionId: SessionId(target), agentOptions: { provider: 'scripted', model: 'fixture' } })
+  let steered = false
+  const stop = h.ctx.on('tools/result', (execution) => {
+    if (execution.agent?.id !== target || steered) return
+    steered = true
+    task.agent.steer(createUserMessage({ content: [{ type: 'text', text: 'HUMAN_STEER: handle this fresh request.' }], source: { kind: 'user' } }))
+  })
+  try {
+    task.agent.followup(createPluginMessage('Automatic first step.', 'instructions') as never)
+    await task.agent.whenIdle()
+    expect(steered).toBe(true)
+    expect(humanPrompt).toContain('This is a new user request in a completed Mnemon task conversation.')
+  } finally { stop(); await task.dispose() }
+}, 30_000)

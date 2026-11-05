@@ -1,6 +1,6 @@
 import { memoryTool } from './memory-tools.ts'
 import { randomUUID } from 'node:crypto'
-import type { HostAgent, HostSubagentResult, HostSubagentRun, HostSubagentsService, ToolDefinition, ToolExecution } from "./dsh.ts"
+import type { HostAgent, HostPreStepDecision, HostSubagentResult, HostSubagentRun, HostSubagentsService, HostUserMessage, ToolDefinition, ToolExecution } from "./dsh.ts"
 import type { DocumentMutation, DocumentSearchResult, DocumentSnapshot, DocumentView } from 'dsh-mnemon-source-documents/contracts'
 import type { RuntimeMemoryMutation, RuntimeMemoryMutationResult, RuntimeMemorySnapshot } from 'dsh-mnemon-source-runtime/contracts'
 import type { ModelRoute } from 'dsh-mnemon-source-skills/contracts'
@@ -18,7 +18,7 @@ import type { ComposableMemoryTurn } from '../core/turns.ts'
 import { idleReviewBlockReason, reviewLayerPolicy, startGuardedChild, startGuardedReview, type ReviewToolHost } from './review-tools.ts'
 import { reviewCheckpoint } from './review-checkpoint.ts'
 import { startWithContinuationTurns } from './continuation-turn.ts'
-import { configuredProviderNames, type ProviderConfigurationHost } from './agent-compat.ts'
+import { configuredProviderNames, isTaskRecord, type ProviderConfigurationHost } from './agent-compat.ts'
 import { childComposition, startSubagent, type SubagentStartAgents } from './subagent-start.ts'
 import type { IdleReviewFailure, MemoryToolName } from './protocol.ts'
 import { assertDshOutputSchema, assertDshOutputValue } from './subagent-output-schema.ts'
@@ -28,7 +28,7 @@ import { archivableElsewhere } from './archive-destinations.ts'
 import { runtimeArchiveSource, runtimeLocked, type RuntimeModelResult, type RuntimeWriteContext } from './runtime-capacity.ts'
 import { archiveDocumentLocked, documentLocked, type DocumentWorkflowHost } from './document-archive.ts'
 import { AutomaticReviewAdmission } from './review-admission.ts'
-import { FINISHED_TASK_REFUSAL, TaskContinuation } from './task-continuation.ts'
+import { FINISHED_TASK_REFUSAL, isLegacyMemoryTask, TaskContinuation } from './task-continuation.ts'
 
 export type { CoordinatedDocumentResult, CoordinatedRuntimeMemoryResult, DelegatedAnswerResult, DelegatedWriteResult, SubagentCounters } from "./protocol.ts"
 export { assertDshOutputSchema } from './subagent-output-schema.ts'
@@ -119,7 +119,7 @@ interface HostToolRegistry {
 interface HostResultToolRuntime extends ReviewToolHost, ProviderConfigurationHost {
   tools: HostToolRegistry
   agents?: SubagentStartAgents
-  on(name: string, listener: (...args: never[]) => unknown): unknown
+  on(name: string, listener: (...args: never[]) => unknown, options?: { prepend?: boolean }): unknown
 }
 
 export class IdleReviewError extends Error {
@@ -242,6 +242,7 @@ export class MnemonSubagentCoordinator {
   private readonly resultRequests = new Map<string, (value: unknown, execution: ToolExecution) => Promise<unknown>>()
   private disposeResultTool: (() => unknown) | undefined
   private disposeResumeGuard: (() => unknown) | undefined
+  private disposeTaskNotices: (() => unknown) | undefined
   /** Delegated children whose run has ended, newest last, at most FINISHED_CHILDREN. */
   private readonly finishedChildren = new Set<string>()
   private readonly continuations = new Map<HostAgent, () => unknown>()
@@ -281,6 +282,23 @@ export class MnemonSubagentCoordinator {
     })
     if (typeof registration !== 'function') throw new Error('dsh-mnemon subagent result tool registration did not return a disposer')
     this.disposeResultTool = registration as () => unknown
+    // A direct user continuation belongs to its own conversation. DSH's cold
+    // resume defaults to parent delivery; replaying that settlement to the old
+    // caller can make it undo the new user's changes to satisfy its old request.
+    const notices = resultRuntime.on('agent/pre-step', (async (step: { agent: HostAgent; step: number; messages: HostUserMessage[] }, next: () => Promise<HostPreStepDecision>) => {
+      const ignored = new Set(step.messages.filter(message => {
+        const source = message.source as { kind: string; senderSessionId?: string }
+        return source.kind === 'subagent-settled' && typeof source.senderSessionId === 'string'
+          && (isTaskRecord(source.senderSessionId) || this.finishedChildren.has(source.senderSessionId))
+      }).map(message => message.id))
+      if (ignored.size === 0) return next()
+      // Empty first-step entry consumes this notice without a model call or a
+      // blocked/error turn. Preserve concurrent human/other task messages.
+      if (step.step === 1 && ignored.size === step.messages.length) return { kind: 'enter', messages: [] }
+      const decision = await next()
+      return decision.kind === 'reject' ? decision : { ...decision, messages: decision.messages.filter(message => !ignored.has(message.id)) }
+    }) as never, { prepend: true })
+    if (typeof notices === 'function') this.disposeTaskNotices = notices as () => unknown
     if (typeof subagents.list !== 'function') {
       for (const stop of [
         resultRuntime.on('subagent/provider-added', ((provider: { name: string }) => { this.providerNames.add(provider.name) }) as never),
@@ -293,6 +311,8 @@ export class MnemonSubagentCoordinator {
     this.disposed = true
     this.reviewAdmission.dispose()
     this.resultRequests.clear()
+    this.disposeTaskNotices?.()
+    this.disposeTaskNotices = undefined
     for (const stop of [...this.continuations.values()].reverse()) stop()
     for (const stop of this.providerObservers.splice(0)) stop()
     const resumeGuard = this.disposeResumeGuard
@@ -307,7 +327,27 @@ export class MnemonSubagentCoordinator {
     return { ...this.counters }
   }
 
-  isFinishedTask(id: string): boolean { return this.finishedChildren.has(id) }
+  isFinishedTask(id: string, agent?: HostAgent): boolean {
+    if (this.finishedChildren.has(id)) return true
+    if (agent === undefined || agent.id !== id || !isLegacyMemoryTask(agent)) return false
+    this.finished(id)
+    return true
+  }
+
+  isUserContinuation(agent: HostAgent): boolean {
+    return this.continuationOwners.get(agent)?.ownsHumanTurn(agent) === true
+  }
+
+  private delegationLimit(parent: HostAgent): number {
+    if (!this.isUserContinuation(parent)) return 1
+    const depths = [parent.session.header?.delegationDepth ?? 0, parent.options?.subagentDepth ?? 0]
+    if (depths.some(depth => !Number.isSafeInteger(depth) || depth < 0 || Object.is(depth, -0) || depth === Number.MAX_SAFE_INTEGER)) {
+      throw new Error('Cannot determine a safe delegation depth for this continued task')
+    }
+    // Host maxDepth is an absolute per-start cap. A fresh human request may
+    // start one worker below its saved depth; that worker retains the normal cap.
+    return Math.max(...depths) + 1
+  }
 
   /** User continuation is a fresh scoped turn, never revival of a delegated run. */
   continueTask(agent: HostAgent): void {
@@ -1046,7 +1086,7 @@ This is the only completion channel for this run. Do not finish with a plain-tex
           parent,
           signal,
           ...(resolvedAgentOptions === undefined ? {} : { agentOptions: resolvedAgentOptions }),
-          maxDepth: 1,
+          maxDepth: this.delegationLimit(parent),
           toolFilter: { allow: [...this.availableTools(parent, tools), resultToolName] },
           persona: completionPersona,
         }, host)

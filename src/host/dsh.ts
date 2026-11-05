@@ -145,6 +145,7 @@ export interface HostSessionEvent {
 
 /** Minimum DSH Session surface: immutable header, range snapshots and indexed reads. */
 export interface HostSession {
+  inheritedEventCount?: number
   header?: { origin?: 'subagent'; parentSession?: string; delegationDepth?: number; cwd?: string; agentPreset?: string }
   snapshotEvents(fromSeq?: number, toSeqExclusive?: number): readonly HostSessionEvent[]
   eventAt(seq: number): HostSessionEvent | undefined
@@ -203,7 +204,7 @@ export interface HostAgentContext {
 export interface HostAgent {
   id: string
   status: 'idle' | 'running'
-  options?: { provider?: string; model?: string; maxTokens?: number; reasoningEffort?: string }
+  options?: { provider?: string; model?: string; maxTokens?: number; reasoningEffort?: string; subagentDepth?: number }
   session: HostSession
   ctx: HostAgentContext
   followup(message: HostUserMessage): void

@@ -767,7 +767,8 @@ describe('Mnemon memory subagent coordinator', () => {
     const host = subagents({ summary: 'No write needed.', action: 'skipped', memoryBodyIds: [] })
     host.dispose.mockImplementation(() => childCleanup.promise)
     const tools = toolRegistry()
-    tools.on.mockImplementationOnce(() => vi.fn(() => toolCleanup.promise))
+    const observe = tools.on.getMockImplementation()!
+    tools.on.mockImplementation((name, ...args) => name === 'tools/result' ? vi.fn(() => toolCleanup.promise) : observe(name, ...args))
     const coordinator = new MnemonSubagentCoordinator(host.value, f.live, tools.value)
     const background = coordinator.remember(root, { content: 'first' }, new AbortController().signal)
     await vi.waitFor(() => expect(host.dispose).toHaveBeenCalledOnce())
@@ -1397,7 +1398,7 @@ describe('Mnemon memory subagent coordinator', () => {
     await rejected
     expect(host.start).not.toHaveBeenCalled()
     expect(release).toHaveBeenCalledOnce()
-    expect(resultTools.on).not.toHaveBeenCalled()
+    expect(resultTools.on).not.toHaveBeenCalledWith('tools/result', expect.any(Function))
   })
 
   it('revokes every outstanding capability when the coordinator is disposed', async () => {

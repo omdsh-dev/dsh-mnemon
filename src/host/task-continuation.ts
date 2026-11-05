@@ -22,6 +22,26 @@ interface Assembly {
 
 const CONTINUATION_GUIDANCE = 'This is a new user request in a completed Mnemon task conversation. The previous task stays completed. Use the current memory View and ordinary memory tools for this request; require receipts for changes. Do not repeat the previous task or submit its expired completion request.'
 
+/** Older workers have no reserved ID: require their own Host descriptor and task contract. */
+export function isLegacyMemoryTask(agent: HostAgent): boolean {
+  if (agent.session.header?.origin !== 'subagent') return false
+  const events = agent.session.snapshotEvents(agent.session.inheritedEventCount ?? 0)
+  const descriptor = events.findLastIndex(event => event.type === 'subagent/descriptor')
+  if (descriptor < 0 || typeof events[descriptor]!.data.label !== 'string' || !events[descriptor]!.data.label.startsWith('Mnemon ')) return false
+  const own = events.slice(descriptor + 1)
+  const textOf = (value: unknown): string => {
+    const message = value as { content?: Array<{ type?: string; text?: string }> } | undefined
+    return message?.content?.filter(block => block.type === 'text').map(block => block.text ?? '').join('\n') ?? ''
+  }
+  const prompt = own.find(event => event.type === 'user/message'
+    && ((event.data.message ?? event.data) as { source?: { kind?: string } }).source?.kind === 'user')
+  if (prompt === undefined || !/^\[dsh-mnemon:delegated [a-z-]+\](?:\n|$)/u.test(textOf(prompt.data.message ?? prompt.data))) return false
+  // This is a Host-recorded system instruction, not a quoted user message. It
+  // also identifies interrupted workers and PTC runs whose visible tool is an executor.
+  return own.some(event => event.type === 'system/message'
+    && textOf(event.data.message).includes('Completion protocol: call `mnemon_subagent_result` exactly once with requestId `'))
+}
+
 /** A resumed task receives memory authority only for a newly accepted human turn. */
 export class TaskContinuation {
   private readonly memory: AgentMemoryTurn
@@ -53,6 +73,12 @@ export class TaskContinuation {
     } catch (error) { this.dispose(); throw error }
   }
 
+  ownsHumanTurn(actor: HostAgent): boolean {
+    return !this.closed && actor === this.agent && this.liveAgent(actor.id) === actor
+      && this.authorizedTurn !== undefined && this.memory.current?.turn === this.authorizedTurn
+      && openAgentTurn(actor) === this.authorizedTurn
+  }
+
   guard(execution: ToolExecution): string | undefined {
     if (!execution.name?.startsWith('mnemon_')) return undefined
     const actor = execution.agent
@@ -80,7 +106,8 @@ export class TaskContinuation {
       this.end()
       return decision
     }
-    if (this.authorizedTurn !== step.turn) this.end()
+    const starting = this.authorizedTurn !== step.turn
+    if (starting) this.end()
     if (decision.messages.some(message => message.source.kind === 'user'
       && message.content.some(block => block.type !== 'text' || (block.text?.trim().length ?? 0) > 0))) this.authorizedTurn = step.turn
     if (this.authorizedTurn !== step.turn || openAgentTurn(this.agent) !== step.turn) return decision
@@ -88,7 +115,7 @@ export class TaskContinuation {
     const pin = this.memory.current
     for (const [id, graph] of this.views) if (graph.composableTurns.get(id) === undefined) this.views.delete(id)
     if (pin !== undefined) this.views.set(pin.context.view.id, pin.graph)
-    if (step.step !== 1) return decision
+    if (!starting && step.step !== 1) return decision
     const wake = pin === undefined ? '' : modelMemoryWake(pin.graph, pin.context).text
     return { ...decision, messages: [...decision.messages, createPluginMessage(`${CONTINUATION_GUIDANCE}\n\n${wake}`, 'instructions')] }
   }
