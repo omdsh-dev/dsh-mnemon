@@ -144,9 +144,12 @@ Skills has its own page under **Plugins → dsh-mnemon**, like every component, 
 | **Suggest skill improvements** | On | Allow reviews to improve existing skills; reviews pause when both suggestion types are off |
 | **New skill destination** | User | Choose User, Project or Follow storage; saved with **Apply**, reset with **Discard**. Existing skill improvements keep their original file |
 | **Backtest drafts** | On | Compare each new draft with the current version on its test cases |
+| **Draft generation** | 32,768 / 65,536 tokens | First attempt / one larger retry after truncation; saved with **Apply** and available with self-evolution off |
 | **Review parameters** | — | The thresholds above, folded, applied together with **Apply** |
 | **In the conversation** | On | Show the **Turn skills** line under each turn |
 | **Sidebar entry** | Off | Show Skills as its own sidebar entry instead of in the Memory System |
+
+Under **Draft generation**, set **Draft output token limit** and **Retry output token limit** to budgets your model provider supports, including reasoning and the complete `SKILL.md`. They are separate so retries never silently double your chosen limit. A retry limit equal to or below the first disables the truncation retry. There are at most two attempts, shared with the existing file-validation repair. Truncated output is discarded; only a complete, validated draft is saved, and the installed skill changes only after adoption. If generation fails, the error gives the attempted budgets and source file size. Lower a budget rejected by your provider; for a file that still cannot fit, shorten the skill or choose a model with a larger output limit. See [Skills settings](../reference/configuration.md#skills-settings) for the exact keys and ranges.
 
 `skills.targetScope` defaults to `user` to preserve existing installations: upgrading or changing storage scope does not move new skill writes to another root. Choose `storage` explicitly to follow storage scope. New suggestions record their resolved destination; drafts and redrafts keep that destination, and adoption uses the draft unless you explicitly choose another root. Suggestions from older versions without a destination use the current setting when drafted; existing drafts retain their recorded root. Improvements always write back to their original `baseKey`, regardless of this setting or a destination override.
 
