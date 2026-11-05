@@ -13,12 +13,12 @@
       "classesSha256": "1023db19fca62acf746f435b5185a5247017e30b0c2f5cf1c9be98e3415eb793"
     },
     "zh": {
-      "keys": 1409,
-      "sha256": "844ea5efa91dea78a8f71a84b86cba03d34b7bef5667094ac60883b09ff3849b"
+      "keys": 1410,
+      "sha256": "279f692c82da92e94a6cf2c8ae9d16b08b793ba9fa5329ce736f6d45eeed1f39"
     },
     "en": {
-      "keys": 1409,
-      "sha256": "cccb97f68b3768dcbb8c933a759416faa43048b96c3d681330dcc2ae959ca732"
+      "keys": 1410,
+      "sha256": "a105939cf6b1c1661e4152d4bc2522eceebcf92c9ad424a2b5c18cec7b67dee6"
     }
   }
 }

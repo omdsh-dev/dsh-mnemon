@@ -116,7 +116,7 @@ export function ComponentOptions(props: ComponentOptionsProps): JSX.Element {
             : <span className={css.optionDefault}>{t('options.default')}</span>}
         </div>
         {field.input === 'source-list'
-          ? <SourceChoice field={field} value={value} sources={props.dashboard.sources} name={sourceName} labelledBy={`${control}-label`} disabled={locked} t={t} onChange={sources => edit(field, { sources })} />
+          ? <SourceChoice field={field} value={value} defaultAll={entry.typeId === 'scoped' && field.key === 'sourceKeys'} sources={props.dashboard.sources} name={sourceName} labelledBy={`${control}-label`} disabled={locked} t={t} onChange={sources => edit(field, { sources })} />
           : field.input === 'textarea' || field.input === 'string-list'
             ? <textarea id={control} className={css.optionInput} rows={field.input === 'string-list' ? 3 : 4} value={value.text} disabled={locked}
               aria-invalid={error !== undefined} aria-describedby={describedBy} onChange={event => edit(field, { text: event.target.value })} />
@@ -127,22 +127,30 @@ export function ComponentOptions(props: ComponentOptionsProps): JSX.Element {
     })}
     {/* A refused save keeps the edits; the page's notice says why. */}
     <PanelActions dirty={edited} saving={props.pending} invalid={invalid ? t('options.fix') : null} failed={null} applied={false}
-      disabled={props.disabled} t={t} onDiscard={() => setDraft(initial(entry))} onApply={() => { void props.onApply(config) }} />
+      disabled={props.disabled} t={t} onDiscard={() => setDraft(initial(entry))} onApply={() => {
+        if (entry.typeId === 'scoped' && Array.isArray(config.sourceKeys) && config.sourceKeys.length === 0
+          && !window.confirm(t('options.emptySourcesConfirm'))) return
+        void props.onApply(config)
+      }} />
   </div>
 }
 
 /** Sources a Strategy may use, in the order chosen; ones no longer running stay listed so they can be removed. */
-function SourceChoice(props: { field: Field; value: Staged; sources: MemoryViewDashboard['sources']; name: (sourceTypeId: string, fallback: string) => string; labelledBy: string; disabled: boolean; t: MnemonTranslate; onChange: (sources: string[]) => void }): JSX.Element {
+function SourceChoice(props: { field: Field; value: Staged; defaultAll?: boolean; sources: MemoryViewDashboard['sources']; name: (sourceTypeId: string, fallback: string) => string; labelledBy: string; disabled: boolean; t: MnemonTranslate; onChange: (sources: string[]) => void }): JSX.Element {
   const { field, value, t } = props
-  const eligible = props.sources.filter(source => field.sourceRoles === undefined || field.sourceRoles.length === 0 || field.sourceRoles.includes(source.role))
-  const missing = value.sources.filter(key => !eligible.some(source => source.sourceInstanceKey === key))
+  const eligible = props.sources.filter(source => (field.sourceRoles === undefined || field.sourceRoles.length === 0 || field.sourceRoles.includes(source.role))
+    && (!props.defaultAll || ['working-context', 'narrative', 'durable-evidence'].includes(source.role)))
+  // Unset is inherited policy, not an explicit empty selection. Keep `own` false
+  // until an edit so saving another option does not freeze these defaults.
+  const selected = !value.own && props.defaultAll ? eligible.map(source => source.sourceInstanceKey) : value.sources
+  const missing = selected.filter(key => !eligible.some(source => source.sourceInstanceKey === key))
   const several = (sourceTypeId: string): boolean => eligible.filter(source => source.sourceTypeId === sourceTypeId).length > 1
-  const toggle = (key: string, on: boolean): void => props.onChange(on ? [...value.sources, key] : value.sources.filter(item => item !== key))
+  const toggle = (key: string, on: boolean): void => props.onChange(on ? [...selected, key] : selected.filter(item => item !== key))
   if (eligible.length === 0 && missing.length === 0) return <p className={css.optionEmpty}>{t('options.noSources')}</p>
   return <div className={css.optionChoices} role="group" aria-labelledby={props.labelledBy}>
     {eligible.map(source => {
       const label = props.name(source.sourceTypeId, source.label)
-      return <Checkbox key={source.sourceInstanceKey} checked={value.sources.includes(source.sourceInstanceKey)} disabled={props.disabled}
+      return <Checkbox key={source.sourceInstanceKey} checked={selected.includes(source.sourceInstanceKey)} disabled={props.disabled}
         label={several(source.sourceTypeId) ? `${label} · ${source.sourceInstanceKey}` : label} onChange={on => toggle(source.sourceInstanceKey, on)} />
     })}
     {missing.map(key => <Checkbox key={key} checked disabled={props.disabled} label={t('options.sourceUnavailable', { source: key })} onChange={on => toggle(key, on)} />)}

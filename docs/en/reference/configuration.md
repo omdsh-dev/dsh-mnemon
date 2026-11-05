@@ -542,3 +542,7 @@ Disable only background writeback decisions:
 mnemon:
   writebackMode: off
 ```
+
+## Scoped source selection
+
+In Scoped composition, leaving `sourceKeys` unset inherits the eligible Runtime, Documents and Memory Spaces sources. The picker shows that effective selection, and the first edit starts from it. Reset to default removes the override rather than saving `[]`. Saving an explicit empty selection asks for confirmation because the resulting View offers none of those sources. Cancelling leaves the saved configuration unchanged. Existing `writableSourceKeys: []` continues to mean read-only; this UI safeguard does not change Host authorization or migrate stored preferences.
