@@ -21,7 +21,7 @@ import { JsonlSessionPersistence } from './helpers/dsh-plugins.ts'
 import { loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
 import { memoryGraphFixture } from './helpers/memory-graph.ts'
 
-async function fixture(provider: 'spawn' | 'fork', hold: boolean | ((options: GenerateOptions) => boolean) = false, answer = false) {
+async function fixture(provider: 'spawn' | 'fork', hold: boolean | ((options: GenerateOptions) => boolean) = false, answer = false, providerName = provider as string) {
   const directory = await mkdtemp(join(tmpdir(), 'mnemon-ownership-host-'))
   const ctx = new Context()
   const memory = memoryGraphFixture()
@@ -65,7 +65,7 @@ async function fixture(provider: 'spawn' | 'fork', hold: boolean | ((options: Ge
   await ctx.plugin(AgentLoop, { agents: [] })
   await loadWorkingDirectory(ctx)
   await ctx.plugin(SubagentRuntime)
-  await ctx.plugin(await import(requireDsh.resolve(`@deepseek-ai/dsh-subagent-${provider}-in-process`)), { providerName: provider })
+  const providerFiber = await ctx.plugin(await import(requireDsh.resolve(`@deepseek-ai/dsh-subagent-${provider}-in-process`)), { providerName })
   ctx.llm.registerAdapter(['fixture'], new Model())
   for (const name of ['allowed', 'outside']) ctx.tools.register({ name, description: name, parameters: { type: 'object', properties: {} }, output: { schema: { type: 'object' }, render: () => [{ type: 'text', text: 'ok' }] }, async execute() {
     if (name === 'allowed') allowedCalls++; else outsideCalls++
@@ -83,7 +83,7 @@ async function fixture(provider: 'spawn' | 'fork', hold: boolean | ((options: Ge
     parent: creator, label: 'Synthetic ownership review', prompt: [{ type: 'text', text: 'Perform a synthetic review.' }], signal,
     toolFilter: { allow: ['allowed'] }, persona: 'Synthetic isolated reviewer.',
   }, host)))
-  return { ctx, host, parent, coordinator, lifecycle, runtime, memory, children, begin, start, counts: () => ({ modelCalls, allowedCalls, outsideCalls }), async close() {
+  return { ctx, host, parent, coordinator, lifecycle, runtime, memory, children, begin, start, providerFiber, counts: () => ({ modelCalls, allowedCalls, outsideCalls }), async close() {
     stop?.(); coordinator.dispose(); runtime.dispose(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true })
   } }
 }
@@ -183,4 +183,24 @@ it('selects the official spawn provider and records the coordinator result on th
     expect(f.counts().modelCalls).toBe(1)
     expect(f.host.agents.get(result.delegation.runId)).toBeUndefined()
   } finally { await f.close() }
+})
+
+it('discovers a preloaded custom provider after Mnemon recreation and configuration changes on the real Host', async () => {
+  const f = await fixture('spawn', false, true, 'preloaded-local')
+  let coordinator = f.coordinator
+  const ask = () => coordinator.answer(f.parent as unknown as HostAgent, 'Synthetic question', [], new AbortController().signal)
+  try {
+    f.begin()
+    await expect(ask()).resolves.toMatchObject({ answer: 'Synthetic answer.', delegation: { provider: 'preloaded-local' } })
+    coordinator.dispose()
+    coordinator = new MnemonSubagentCoordinator(f.host.subagents, f.runtime, f.host)
+    await expect(ask()).resolves.toMatchObject({ delegation: { provider: 'preloaded-local' } })
+    await f.providerFiber.update({ providerName: 'renamed-local' })
+    // Older Cordis update() schedules its reload but returns void.
+    await f.providerFiber.await()
+    await expect(ask()).resolves.toMatchObject({ delegation: { provider: 'renamed-local' } })
+    await f.providerFiber.dispose()
+    await expect(ask()).rejects.toThrow('requires a non-inheriting DSH subagent provider')
+    expect(f.counts().modelCalls).toBe(3)
+  } finally { coordinator.dispose(); await f.close() }
 })

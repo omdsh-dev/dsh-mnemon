@@ -133,11 +133,10 @@ it.skipIf(!dsh021)('refuses memory tools to a USER.md compaction child its conve
     const after = await runtime.read<{ revision: string; entries: unknown[] }>('snapshot')
     expect(after.revision).toBe(before.revision)
     expect(after.entries).toEqual(before.entries)
-    // Once the resumed child settles, DSH's notice of it wakes the conversation for a fifth request;
-    // let that turn end too before teardown.
+    // The child's settlement must not wake the old conversation for another model request.
     await vi.waitFor(() => expect(ctx.agents.get(child.id)?.status ?? 'idle').toBe('idle'), { timeout: 10_000 })
-    await vi.waitFor(() => expect(parentCalls).toBe(5), { timeout: 10_000 })
     await parent.whenIdle()
+    expect(parentCalls).toBe(4)
   } finally {
     stop?.()
     await ctx.fiber.dispose()

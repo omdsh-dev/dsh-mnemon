@@ -138,6 +138,49 @@ function subagents(structured: unknown, stopReason = 'completed', providers = ['
 
 type HostActivationSpec = Parameters<NonNullable<HostSubagentsService['startActivation']>>[0]
 
+it('discovers effective provider configuration without enumeration and rechecks live registration', async () => {
+  const names = ['preloaded-local']
+  const host = subagents({ answer: 'Found.', citations: [] }, 'completed', names)
+  delete host.value.list
+  const effectiveConfig = { providerName: 'preloaded-local' }
+  const resultTools = Object.assign(toolRegistry().value, {
+    registry: { values: () => [{ fibers: [{ get effectiveConfig() { return effectiveConfig } }] }] },
+  })
+  let coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(), resultTools)
+  const ask = () => coordinator.answer(parent(), 'Question', [], new AbortController().signal)
+  try {
+    await expect(ask()).resolves.toMatchObject({ delegation: { provider: 'preloaded-local' } })
+    coordinator.dispose()
+    coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(), resultTools)
+    await expect(ask()).resolves.toMatchObject({ delegation: { provider: 'preloaded-local' } })
+    effectiveConfig.providerName = 'renamed-local'
+    names.splice(0, names.length, 'renamed-local')
+    await expect(ask()).resolves.toMatchObject({ delegation: { provider: 'renamed-local' } })
+    names.length = 0
+    await expect(ask()).rejects.toThrow('requires a non-inheriting DSH subagent provider')
+    expect(host.start).toHaveBeenCalledTimes(3)
+  } finally { coordinator.dispose() }
+})
+
+it.each(['opaque', 'inheriting', 'unisolated', 'missing', 'spawn-first', 'legacy-order'] as const)('validates explicit provider candidates and preserves selection policy: %s', async scenario => {
+  const names = scenario === 'missing' ? [] : scenario === 'spawn-first' ? ['opaque', 'spawn'] : scenario === 'legacy-order' ? ['first', 'opaque'] : ['opaque']
+  const host = subagents({ answer: 'Found.', citations: [] }, 'completed', names)
+  if (scenario !== 'legacy-order') delete host.value.list
+  if (scenario === 'inheriting' || scenario === 'unisolated') vi.mocked(host.value.getProvider).mockImplementation(name => name === 'opaque' ? {
+    capabilities: { ...capabilities, depthLimit: scenario !== 'unisolated' }, inheritsParentContext: scenario === 'inheriting',
+  } : undefined)
+  const source = runtimeSource()
+  Object.assign(source.forAgent(parent()).config, { subagentProviderNames: ['opaque'] })
+  const coordinator = new MnemonSubagentCoordinator(host.value, source, toolRegistry().value)
+  try {
+    const answer = coordinator.answer(parent(), 'Question', [], new AbortController().signal)
+    if (['inheriting', 'unisolated', 'missing'].includes(scenario)) {
+      await expect(answer).rejects.toThrow('requires a non-inheriting DSH subagent provider')
+      expect(host.start).not.toHaveBeenCalled()
+    } else await expect(answer).resolves.toMatchObject({ delegation: { provider: scenario === 'spawn-first' ? 'spawn' : scenario === 'legacy-order' ? 'first' : 'opaque' } })
+  } finally { coordinator.dispose() }
+})
+
 /** DSH 0.2.1's providers: none takes a persona or tool filter. */
 const DSH_021_CAPABILITIES = { agentOptions: true, agentPreset: true, outputSchema: true, depthLimit: true }
 
@@ -724,7 +767,8 @@ describe('Mnemon memory subagent coordinator', () => {
     const host = subagents({ summary: 'No write needed.', action: 'skipped', memoryBodyIds: [] })
     host.dispose.mockImplementation(() => childCleanup.promise)
     const tools = toolRegistry()
-    tools.on.mockImplementationOnce(() => vi.fn(() => toolCleanup.promise))
+    const observe = tools.on.getMockImplementation()!
+    tools.on.mockImplementation((name, ...args) => name === 'tools/result' ? vi.fn(() => toolCleanup.promise) : observe(name, ...args))
     const coordinator = new MnemonSubagentCoordinator(host.value, f.live, tools.value)
     const background = coordinator.remember(root, { content: 'first' }, new AbortController().signal)
     await vi.waitFor(() => expect(host.dispose).toHaveBeenCalledOnce())
@@ -1354,7 +1398,7 @@ describe('Mnemon memory subagent coordinator', () => {
     await rejected
     expect(host.start).not.toHaveBeenCalled()
     expect(release).toHaveBeenCalledOnce()
-    expect(resultTools.on).not.toHaveBeenCalled()
+    expect(resultTools.on).not.toHaveBeenCalledWith('tools/result', expect.any(Function))
   })
 
   it('revokes every outstanding capability when the coordinator is disposed', async () => {

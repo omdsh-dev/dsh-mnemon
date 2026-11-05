@@ -243,6 +243,7 @@ export const Config: z<Config> = z.object({
   skills: SkillsConfig.default({ ...DEFAULT_SKILLS_CONFIG }),
   persistenceStrategy: MemoryPersistenceStrategySchema,
   taskAgentModel: TaskAgentModelSchema,
+  subagentProviderNames: z.array(z.string()).default([]),
   // Git sync is off until a user switches it on: the block stays a title and a
   // switch, and nothing about Git is probed while it is off.
   syncEnabled: z.boolean().default(false),
@@ -292,6 +293,14 @@ function resolveCustomPacks(value: CustomPackConfig[] | undefined, legacyDataDir
     packs.push({ id, name: 'Custom Pack', dataDir: validateCustomDataDir(legacyDataDir) })
   }
   return packs
+}
+
+function resolveSubagentProviderNames(value: string[] | undefined): string[] {
+  if (value === undefined) return []
+  if (!Array.isArray(value) || value.length > 32 || value.some(name => typeof name !== 'string' || !name.trim() || name.length > 128)) {
+    throw new Error('dsh-mnemon: subagentProviderNames must contain at most 32 nonempty provider names of at most 128 characters')
+  }
+  return [...new Set(value.map(name => name.trim()))]
 }
 
 function resolveTaskAgentModel(value: TaskAgentModelConfig | undefined): ResolvedTaskAgentModelConfig {
@@ -412,6 +421,7 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
     },
     persistenceStrategy: resolvePersistenceStrategy(config.persistenceStrategy),
     taskAgentModel: resolveTaskAgentModel(config.taskAgentModel),
+    subagentProviderNames: resolveSubagentProviderNames(config.subagentProviderNames),
     syncEnabled: config.syncEnabled ?? false,
   }
 }
