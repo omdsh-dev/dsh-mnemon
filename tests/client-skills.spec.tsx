@@ -22,6 +22,27 @@ const locale = { active: 'en' as const, locales: [], revision: 0 }
 const localeRuntime = { getSnapshot: () => locale, subscribe: () => () => {} }
 
 describe('技能管理 settings under Plugins', () => {
+  it('stages both draft budgets while evolution is off and rejects invalid values', async () => {
+    const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: {}, revision: 1, writable: true, mode: 'host' })
+    const view = render(<SkillsSettings scope={scope} page={page} t={t} />)
+    fireEvent.click(screen.getByText('Draft generation'))
+    const first = screen.getByLabelText('Draft output token limit')
+    const retry = screen.getByLabelText('Retry output token limit')
+    expect(first).toHaveProperty('value', '32768')
+    expect(retry).toHaveProperty('value', '65536')
+    fireEvent.change(first, { target: { value: '49152' } })
+    fireEvent.change(retry, { target: { value: '131073' } })
+    expect(screen.getByRole('button', { name: t('options.apply') })).toHaveProperty('disabled', true)
+    expect(scope.getSnapshot().value?.draftMaxTokens).toBeUndefined()
+    fireEvent.change(retry, { target: { value: '49152' } })
+    fireEvent.click(screen.getByRole('button', { name: t('options.apply') }))
+    await waitFor(() => expect(scope.getSnapshot().value).toMatchObject({ draftMaxTokens: 49152, draftRetryMaxTokens: 49152 }))
+    view.unmount()
+    render(<SkillsSettings scope={scope} page={page} t={t} />)
+    expect(screen.getByLabelText('Draft output token limit')).toHaveProperty('value', '49152')
+    expect(screen.getByLabelText('Retry output token limit')).toHaveProperty('value', '49152')
+  })
+
   it('stages the new-skill destination until Apply and restores it on Discard', async () => {
     const writes = vi.fn(async () => {})
     const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: { evolution: true }, revision: 1, writable: true, mode: 'host' }, writes)
@@ -44,6 +65,8 @@ describe('技能管理 settings under Plugins', () => {
     const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: { evolution: true }, revision: 1, writable: blocked !== 'scope', mode: 'host' }, writes)
     render(<SkillsSettings scope={scope} page={{ ...page, writable: blocked !== 'page' }} t={t} />)
     expect(screen.getByRole('button', { name: `${t('skills.targetScope')} ${t('skills.targetScope.user')}` })).toHaveProperty('disabled', true)
+    expect(screen.getByLabelText('Draft output token limit')).toHaveProperty('disabled', true)
+    expect(screen.getByLabelText('Retry output token limit')).toHaveProperty('disabled', true)
     expect(writes).not.toHaveBeenCalled()
   })
 

@@ -28,6 +28,7 @@ import { archivableElsewhere } from './archive-destinations.ts'
 import { runtimeArchiveSource, runtimeLocked, type RuntimeModelResult, type RuntimeWriteContext } from './runtime-capacity.ts'
 import { archiveDocumentLocked, documentLocked, type DocumentWorkflowHost } from './document-archive.ts'
 import { AutomaticReviewAdmission } from './review-admission.ts'
+import { SubagentStoppedError } from './subagent-errors.ts'
 import { FINISHED_TASK_REFUSAL, isLegacyMemoryTask, TaskContinuation } from './task-continuation.ts'
 
 export type { CoordinatedDocumentResult, CoordinatedRuntimeMemoryResult, DelegatedAnswerResult, DelegatedWriteResult, SubagentCounters } from "./protocol.ts"
@@ -787,8 +788,8 @@ export class MnemonSubagentCoordinator {
    * One tool-less structured run for skill evolution: a review, a draft, a
    * backtest step or a case derivation. The child sees only the prompt.
    */
-  async skillTask(parent: HostAgent, label: string, prompt: string, schema: Record<string, unknown>, persona: string, signal: AbortSignal, route?: ModelRoute): Promise<{ provider: string; runId: string; structured: unknown }> {
-    const { provider, runId, result } = await this.delegate(parent, 'skill', label, prompt, [], schema, signal, 'spawn', persona, undefined, undefined, route)
+  async skillTask(parent: HostAgent, label: string, prompt: string, schema: Record<string, unknown>, persona: string, signal: AbortSignal, route?: ModelRoute, maxTokens?: number): Promise<{ provider: string; runId: string; structured: unknown }> {
+    const { provider, runId, result } = await this.delegate(parent, 'skill', label, prompt, [], schema, signal, 'spawn', persona, undefined, undefined, route, undefined, maxTokens)
     return { provider, runId, structured: result.structured }
   }
 
@@ -960,6 +961,7 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
     guard?: (execution: ToolExecution) => string | undefined,
     route?: ModelRoute,
     admission?: () => void,
+    skillMaxTokens?: number,
   ): Promise<{ provider: string; runId: string; result: HostSubagentResult; receipts: CapturedToolReceipt[]; writes: CapturedToolReceipt[] }> {
     if (this.disposed) throw new Error('dsh-mnemon subagent coordinator is disposed')
     const provider = this.provider(preferredProvider, this.runtimeSource.forAgent(parent).config.subagentProviderNames)
@@ -1067,7 +1069,7 @@ This is the only completion channel for this run. Do not finish with a plain-tex
         : operation === 'document-archive' ? 8_192
         : operation === 'metadata-maintenance' ? 4_096
         : operation === 'review' ? this.runtimeSource.config.idleReview.maxTokens
-        : operation === 'skill' ? 16_384
+        : operation === 'skill' ? skillMaxTokens ?? 16_384
         : undefined
       // A route the caller picked is the model the user asked this run to use,
       // so it wins over the resolver rather than being added to it.
@@ -1105,11 +1107,11 @@ This is the only completion channel for this run. Do not finish with a plain-tex
         // tool receipt is already the host's authoritative commit evidence.
         structured = recoverStructuredResult(recovery, committedReceipts.filter(receipt => receipt.agentId === activeRun.id))
       }
-      if (structured !== undefined) assertDshOutputValue(outputSchema, structured)
       if (result.stopReason !== 'completed') {
         const detail = subagentFailureDetail(activeRun, result)
-        throw new Error(`memory subagent stopped with ${result.stopReason}${detail === undefined ? '' : `: ${detail}`}`)
+        throw new SubagentStoppedError(result.stopReason, perOpMaxTokens, detail)
       }
+      if (structured !== undefined) assertDshOutputValue(outputSchema, structured)
       if (structured === undefined) throw new Error('memory subagent completed without recording its result')
       if (operation === 'review' && ['failed', 'partial', 'unknown'].includes(String(object(structured).action))) throw new Error(`memory review reported ${object(structured).action}`)
       completed = {

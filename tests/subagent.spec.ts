@@ -3036,6 +3036,29 @@ describe('Mnemon memory subagent coordinator', () => {
     }))
   })
 
+  it('passes a draft-specific output budget without changing other skill work', async () => {
+    const host = subagents({ answer: 'done' })
+    const resultTools = toolRegistry()
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(), resultTools.value)
+    const route = { provider: 'chosen-provider', model: 'chosen-model' }
+    const schema = { type: 'object', properties: { answer: { type: 'string' } }, required: ['answer'], additionalProperties: false }
+    await coordinator.skillTask(parent(), 'Skill draft', 'Write a draft', schema, 'Write skills.', new AbortController().signal, route, 49_152)
+    await coordinator.skillTask(parent(), 'Skill judge', 'Judge the result', schema, 'Judge skills.', new AbortController().signal)
+    expect(host.start.mock.calls.map(([, request]) => request?.agentOptions)).toEqual([
+      { ...route, maxTokens: 49_152 }, { maxTokens: 16_384 },
+    ])
+  })
+
+  it('reports truncation with its actual budget before parsing an incomplete skill result', async () => {
+    const host = subagents({ incomplete: true }, 'max-tokens')
+    const resultTools = toolRegistry()
+    const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(), resultTools.value)
+    const schema = { type: 'object', properties: { answer: { type: 'string' } }, required: ['answer'], additionalProperties: false }
+    await expect(coordinator.skillTask(parent(), 'Skill draft', 'Write a draft', schema, 'Write skills.', new AbortController().signal, undefined, 32_768))
+      .rejects.toMatchObject({ stopReason: 'max-tokens', maxTokens: 32_768 })
+    expect(host.dispose).toHaveBeenCalledOnce()
+  })
+
   it('pins a fixed task Agent model onto the bounded idle review delegation', async () => {
     const host = subagents({ summary: 'No mutation needed.', action: 'skipped', memoryBodyIds: [] }, 'completed', ['spawn', 'fork'])
     const resultTools = toolRegistry()

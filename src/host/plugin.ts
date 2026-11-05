@@ -164,7 +164,7 @@ export function apply(rawContext: unknown, rawConfig: MnemonConfig | LiveHostCon
     settings: () => skillSettings.get(),
     source: agent => skillsSourceFor(runtime, agent),
     runTask: (workspaceRoot, signal, operation, route) => lifecycle.runSkillTask(workspaceRoot, signal, operation, route),
-    skillTask: (parent, label, prompt, schema, persona, signal) => coordinator.skillTask(parent, label, prompt, schema, persona, signal, taskRoute(parent)),
+    skillTask: (parent, label, prompt, schema, persona, signal, _route, maxTokens) => coordinator.skillTask(parent, label, prompt, schema, persona, signal, taskRoute(parent), maxTokens),
   })
   lifecycle.useSkillEvolution(skills)
   // Registered before the lifecycle root so teardown runs the other way round:

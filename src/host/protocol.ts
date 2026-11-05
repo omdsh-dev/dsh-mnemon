@@ -415,6 +415,10 @@ export interface ResolvedSkillsConfig {
   targetScope: 'storage' | 'user' | 'project'
   /** Backtest a draft against the current version as soon as it is written. */
   autoBacktest: boolean
+  /** Output budget for a complete skill draft, including model reasoning. */
+  draftMaxTokens: number
+  /** One fresh attempt after truncation, only when larger than draftMaxTokens. */
+  draftRetryMaxTokens: number
   /** The one-line skills bar under a finished turn. */
   hints: boolean
   /** 技能管理 as a sidebar entry of its own instead of a Memory System page. */
@@ -441,6 +445,8 @@ export const DEFAULT_SKILLS_CONFIG: Readonly<ResolvedSkillsConfig> = Object.free
   allowUpdate: true,
   targetScope: 'user',
   autoBacktest: true,
+  draftMaxTokens: 32_768,
+  draftRetryMaxTokens: 65_536,
   hints: true,
   sidebar: false,
   reviewThreshold: 5,

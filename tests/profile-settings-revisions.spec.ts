@@ -1,10 +1,11 @@
 import { Context, type Fiber } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { Config, InteractionConfig } from '../src/host/config.ts'
+import { Config, InteractionConfig, SkillsConfig } from '../src/host/config.ts'
 import type { HostContextShape, HostSettingsService } from '../src/host/dsh.ts'
 import type { SettingsOperation } from '../src/host/protocol.ts'
 import { ProfileMnemonSettings } from '../src/host/settings-service.ts'
 import { schema as ViewSchema } from '../src/host/view-preferences.ts'
+import { createSettingsHandler } from '../src/host/settings.ts'
 
 type Data = Record<string, unknown>
 type Layer = 'value' | 'base' | 'user'
@@ -135,6 +136,27 @@ const uiWrite: SettingsOperation[] = [{ op: 'set', path: ['turnBar'], value: fal
 const viewWrite: SettingsOperation[] = [{ op: 'set', path: ['strategyTypeId'], value: 'scoped' }]
 
 describe('profile settings virtual namespace revision fences', () => {
+  it('persists both draft budgets through the Skills bridge and rejects invalid writes before saving', async () => {
+    const f = await fixture()
+    f.settings.register('mnemon-skills', SkillsConfig, { applies: 'live' })
+    const handler = createSettingsHandler(f.settings)
+    const ops: SettingsOperation[] = [
+      { op: 'set', path: ['draftMaxTokens'], value: 49_152 },
+      { op: 'set', path: ['draftRetryMaxTokens'], value: 98_304 },
+    ]
+    expect(await handler('mutate', { namespace: 'mnemon-skills', expectedRevision: 0, ops })).toMatchObject({ ok: true })
+    expect(f.state.user).toMatchObject({ skills: { draftMaxTokens: 49_152, draftRetryMaxTokens: 98_304 } })
+    expect(Config(JSON.parse(JSON.stringify(f.state.user))).skills).toMatchObject({ draftMaxTokens: 49_152, draftRetryMaxTokens: 98_304 })
+    expect(f.read('mnemon-skills').value).toMatchObject({ draftMaxTokens: 49_152, draftRetryMaxTokens: 98_304 })
+    const before = structuredClone(f.state.user)
+    expect(await handler('mutate', {
+      namespace: 'mnemon-skills', expectedRevision: 1,
+      ops: [{ op: 'set', path: ['draftRetryMaxTokens'], value: 131_073 }],
+    })).toMatchObject({ ok: false })
+    expect(f.state.user).toEqual(before)
+    expect(f.state.revision).toBe(1)
+  })
+
   it.each(['core-first', 'ui-first'] as const)('saves concurrent Core and UI changes with one shared observed revision (%s)', async order => {
     const f = await fixture()
     const revision = f.read().revision

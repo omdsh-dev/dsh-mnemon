@@ -8,7 +8,8 @@ import * as generalStrategy from 'dsh-mnemon-strategy-general'
 import type { BacktestRun, EvalCase, EvidencePack, SkillCatalog, SkillDraft, SkillSuggestion, Trajectory } from 'dsh-mnemon-source-skills/contracts'
 import type { HostAgent, HostAgentContext, HostSessionEvent } from '../src/host/dsh.ts'
 import { DEFAULT_SKILLS_CONFIG, type ResolvedSkillsConfig } from '../src/host/protocol.ts'
-import { SkillEvolution, type SkillsSourcePort } from '../src/host/skill-evolution.ts'
+import { SkillEvolution, type SkillEvolutionHost, type SkillsSourcePort } from '../src/host/skill-evolution.ts'
+import { SubagentStoppedError } from '../src/host/subagent-errors.ts'
 import { gradeCase, parseSkillDraft, parseSkillReview, renderSteps, skillDraftPrompt, skillReviewPrompt, SKILL_REVIEW_PERSONA } from '../src/host/skill-review.ts'
 import { captureTurn, redact, sessionTitle, TrajectoryWindow, turnSkillUses } from '../src/host/skill-trajectory.ts'
 import { sessionLog } from './fixtures/session-log.ts'
@@ -149,7 +150,7 @@ describe('skill evolution in the Host', () => {
   })
 
   function evolution(answers: Array<(label: string, prompt: string) => unknown>) {
-    const skillTask = vi.fn(async (_parent: HostAgent, label: string, prompt: string) => {
+    const skillTask = vi.fn<SkillEvolutionHost['skillTask']>(async (_parent, label, prompt) => {
       const next = answers.shift()
       if (next === undefined) throw new Error('unexpected model call: ' + label)
       const value = next(label, prompt)
@@ -501,6 +502,132 @@ describe('skill evolution in the Host', () => {
     expect(view.runs.map(run => [run.target.kind, run.passRate])).toEqual([['draft', 1], ['current', 0]])
     await source.mutate('draft-adopt', { id: draft!.id })
     expect(readFileSync(join(directory, 'dsh', 'skills', 'release-notes', 'SKILL.md'), 'utf8')).toBe(next)
+  })
+
+  it('regenerates a truncated draft under a fresh task with the configured larger budget', async () => {
+    config = { ...config, autoBacktest: false, draftMaxTokens: 32_768, draftRetryMaxTokens: 65_536 }
+    const file = join(directory, 'dsh', 'skills', 'release-notes', 'SKILL.md')
+    const original = readFileSync(file, 'utf8') + '发布说明：保留完整工作流。\n'.repeat(1_000)
+    writeFileSync(file, original)
+    const { skills, host, runTask } = evolution([])
+    const tasks: string[] = []
+    runTask.mockImplementation(async (_root, _signal, operation) => operation({ ...agent, id: `task-${runTask.mock.calls.length}` }))
+    const route = { provider: 'chosen-provider', model: 'chosen-model' }
+    host.skillTask.mockImplementation(async (task, _label, prompt, _schema, _persona, _signal, selected, maxTokens) => {
+      tasks.push(task.id)
+      expect(selected).toEqual(route)
+      expect(prompt.match(/发布说明：保留完整工作流。/gu)).toHaveLength(1_000)
+      expect(await source.read('drafts', { skill: 'release-notes' })).toEqual([])
+      if (maxTokens === 32_768) throw new SubagentStoppedError('max-tokens', maxTokens)
+      expect(maxTokens).toBe(65_536)
+      return { structured: { content: original + '2. Group by component\n', notes: '', changes: ['Group by component'] } }
+    })
+    await skills.draft(source, undefined, { skill: 'release-notes', route })
+    await vi.waitFor(async () => expect(await source.read('drafts', { skill: 'release-notes' })).toHaveLength(1))
+    expect(tasks).toEqual(['task-1', 'task-2'])
+    expect(readFileSync(file, 'utf8')).toBe(original)
+    expect(host.warn).not.toHaveBeenCalled()
+  })
+
+  it.each(['truncation', 'invalid-file'] as const)('preserves the saved draft and ledger when the final attempt ends in %s', async final => {
+    config = { ...config, autoBacktest: false, draftMaxTokens: 24_576, draftRetryMaxTokens: 49_152 }
+    const file = join(directory, 'dsh', 'skills', 'release-notes', 'SKILL.md')
+    const original = readFileSync(file, 'utf8') + '\n按组件分组。\n'
+    writeFileSync(file, original)
+    await source.mutate('draft-record', { skillName: 'release-notes', content: original, notes: 'Saved draft', changes: [], guidance: [] })
+    const ledgerPath = join(directory, 'data', 'skills', 'ledger.json')
+    const ledger = readFileSync(ledgerPath, 'utf8')
+    const { skills, host, runTask } = evolution([])
+    host.skillTask.mockImplementation(async (_task, _label, _prompt, _schema, _persona, _signal, _route, maxTokens) => {
+      if (maxTokens === 24_576 || final === 'truncation') throw new SubagentStoppedError('max-tokens', maxTokens)
+      return { structured: { content: '# incomplete skill file', notes: '', changes: [] } }
+    })
+    await skills.draft(source, undefined, { skill: 'release-notes' })
+    await vi.waitFor(() => expect(host.warn).toHaveBeenCalledOnce())
+    expect(runTask).toHaveBeenCalledTimes(2)
+    expect(host.skillTask.mock.calls.map(call => call[7])).toEqual([24_576, 49_152])
+    expect(readFileSync(ledgerPath, 'utf8')).toBe(ledger)
+    expect(readFileSync(file, 'utf8')).toBe(original)
+    if (final === 'truncation') {
+      const error = host.warn.mock.calls[0]![1] as Error
+      expect(error.message).toContain('24576, 49152')
+      expect(error.message).toContain(`${Buffer.byteLength(original, 'utf8')} bytes`)
+      expect(error.message).toContain('skills.draftMaxTokens')
+      expect(error.message).toContain('skills.draftRetryMaxTokens')
+      expect(error.message).toContain('provider')
+    }
+  })
+
+  it.each([16_384, 32_768])('leaves a suggestion pending without retry when the retry budget is %s', async retryBudget => {
+    config = { ...config, autoBacktest: false, draftRetryMaxTokens: retryBudget }
+    const { skills, host, runTask } = evolution([mixedReview])
+    turn(events, 1, 'Group release notes by component.')
+    await skills.reviewNow(agent)
+    const suggestion = (await source.read<SkillSuggestion[]>('suggestions')).find(entry => entry.action === 'update')!
+    runTask.mockClear()
+    host.skillTask.mockImplementation(async () => { throw new SubagentStoppedError('max-tokens', 32_768, 'upstream detail '.repeat(40)) })
+    await skills.draft(source, undefined, { suggestionId: suggestion.id })
+    await vi.waitFor(() => expect(host.warn).toHaveBeenCalledOnce())
+    expect(runTask).toHaveBeenCalledOnce()
+    const saved = (await source.read<SkillSuggestion[]>('suggestions')).find(entry => entry.id === suggestion.id)!
+    expect(saved).toMatchObject({ status: 'pending', lastError: expect.stringContaining('32768') })
+    expect(saved.lastError).toContain('skills.draftRetryMaxTokens')
+    expect(saved.lastError).toContain('lower')
+    expect(saved.lastError).toContain('shorten the skill')
+    expect(saved.lastError).toMatch(/model with a (?:larger|higher)/u)
+    expect(saved.draftId).toBeUndefined()
+    expect(await source.read('drafts', { skill: 'release-notes' })).toEqual([])
+  })
+
+  it('does not retry a truncated draft after user cancellation', async () => {
+    const { skills, host, runTask } = evolution([])
+    host.skillTask.mockImplementation(async () => {
+      skills.dispose()
+      throw new SubagentStoppedError('max-tokens', 32_768)
+    })
+    await skills.draft(source, undefined, { skill: 'release-notes' })
+    await vi.waitFor(() => expect(host.warn).toHaveBeenCalledOnce())
+    expect(runTask).toHaveBeenCalledOnce()
+    expect(await source.read('drafts', { skill: 'release-notes' })).toEqual([])
+  })
+
+  it('does not start a third attempt when file-validation repair then hits max-tokens', async () => {
+    const { skills, host, runTask } = evolution([
+      () => ({ content: '# missing frontmatter', notes: '', changes: [] }),
+      () => new SubagentStoppedError('max-tokens', 32_768),
+    ])
+    await skills.draft(source, undefined, { skill: 'release-notes' })
+    await vi.waitFor(() => expect(host.warn).toHaveBeenCalledOnce())
+    expect(runTask).toHaveBeenCalledTimes(2)
+    expect(host.skillTask.mock.calls.map(call => call[7])).toEqual([32_768, 32_768])
+    expect(await source.read('drafts', { skill: 'release-notes' })).toEqual([])
+  })
+
+  it('does not save a completed model result after user cancellation', async () => {
+    const { skills, host, runTask } = evolution([])
+    const file = join(directory, 'dsh', 'skills', 'release-notes', 'SKILL.md')
+    const original = readFileSync(file, 'utf8')
+    host.skillTask.mockImplementation(async () => {
+      skills.dispose()
+      return { structured: { content: original + '2. Group by component\n', notes: '', changes: [] } }
+    })
+    await skills.draft(source, undefined, { skill: 'release-notes' })
+    await vi.waitFor(() => expect(host.warn).toHaveBeenCalledOnce())
+    expect(runTask).toHaveBeenCalledOnce()
+    expect(await source.read('drafts', { skill: 'release-notes' })).toEqual([])
+    expect(readFileSync(file, 'utf8')).toBe(original)
+  })
+
+  it.each([
+    new SubagentStoppedError('cancelled', 32_768),
+    new Error('provider rejected max_tokens'),
+    new Error('memory subagent stopped with max-tokens'),
+  ])('does not retry a draft error without a real max-tokens stop: %s', async error => {
+    const { skills, host, runTask } = evolution([() => error])
+    await skills.draft(source, undefined, { skill: 'release-notes' })
+    await vi.waitFor(() => expect(host.warn).toHaveBeenCalledOnce())
+    expect(runTask).toHaveBeenCalledOnce()
+    expect(await source.read('drafts', { skill: 'release-notes' })).toEqual([])
   })
 
   it.each([false, true])('uses a fresh comparison baseline when a draft picks a model (picked=%s)', async picked => {

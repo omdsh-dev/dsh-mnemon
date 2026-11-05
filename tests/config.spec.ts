@@ -9,6 +9,17 @@ import { Config, resolveConfig, resolveSkillsConfig } from "../src/host/config.t
 afterEach(() => vi.unstubAllEnvs())
 
 describe('Mnemon config and resolution', () => {
+  it('defaults and validates explicit draft budgets without forcing a larger retry budget', () => {
+    expect(resolveSkillsConfig()).toMatchObject({ draftMaxTokens: 32_768, draftRetryMaxTokens: 65_536 })
+    expect(Config({ skills: { draftMaxTokens: 98_304, draftRetryMaxTokens: 32_768 } }).skills)
+      .toMatchObject({ draftMaxTokens: 98_304, draftRetryMaxTokens: 32_768 })
+    for (const key of ['draftMaxTokens', 'draftRetryMaxTokens'] as const) {
+      for (const value of [128, 131_072]) expect(resolveSkillsConfig({ [key]: value })[key]).toBe(value)
+      for (const value of [0, 127, 131_073, 1.5, NaN, Infinity, '32768']) {
+        expect(() => resolveSkillsConfig({ [key]: value } as never)).toThrow()
+      }
+    }
+  })
   it('defaults explicit subagent providers off and validates their configured names', () => {
     expect(resolveConfig({}).subagentProviderNames).toEqual([])
     expect(Config({ subagentProviderNames: ['custom'] }).subagentProviderNames).toEqual(['custom'])
