@@ -861,6 +861,27 @@ describe('skill evolution in the Host', () => {
     await skills.reviewNow(agent)
     expect(await source.read('suggestions', { status: ['pending'] })).toMatchObject([{ skillName: 'release-notes', action: 'update' }])
   })
+
+  it('returns a suggestion to pending when its draft task outlives the deadline', async () => {
+    config = { ...config, evolution: true, autoBacktest: false, idleSeconds: 3600 }
+    const { skills, runTask } = evolution([mixedReview])
+    const stop = skills.watch(agent)
+    await endTurn(1, 'Capture incident logs and group release notes.')
+    await skills.reviewNow(agent)
+    const suggestion = (await source.read<SkillSuggestion[]>('suggestions'))[0]!
+    // A task that stops reporting settles only when the draft deadline aborts it.
+    runTask.mockImplementation((_root, signal: AbortSignal) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+    }))
+    await skills.draft(source, join(directory, 'workspace'), { suggestionId: suggestion.id })
+    await vi.advanceTimersByTimeAsync(16 * 60 * 1000)
+    await vi.waitFor(async () => {
+      const after = (await source.read<SkillSuggestion[]>('suggestions')).find(entry => entry.id === suggestion.id)!
+      expect(after.status).toBe('pending')
+      expect(after.lastError).toBe('skill draft did not finish within 15 minutes')
+    })
+    stop()
+  })
 })
 
 describe('bounded skill review context', () => {
