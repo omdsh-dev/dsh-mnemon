@@ -83,6 +83,21 @@ function message(error: unknown): string {
   return redact(error instanceof Error ? error.message : String(error))
 }
 
+/**
+ * A draft task that stops reporting is abandoned here. The subagent behind it
+ * can die without settling, and the suggestion would otherwise stay `drafting`
+ * - blocking dismiss, delete and a retry - until the Host restarts.
+ */
+const DRAFT_DEADLINE_MS = 15 * 60 * 1000
+
+/** Distinguishes a deadline abort from the plain abort a Host shutdown sends. */
+class DraftDeadlineError extends Error {}
+
+/** The deadline error a task ran into, so the Source records why the draft ended. */
+function deadlineReason(signal: AbortSignal): DraftDeadlineError | undefined {
+  return signal.reason instanceof DraftDeadlineError ? signal.reason : undefined
+}
+
 /** Resolve only roots supplied by this Source's scoped catalog, never the task's cwd. */
 function newSkillRoot(settings: ResolvedSkillsConfig, source: SkillsSourcePort, catalog: SkillCatalog, explicit?: SkillRootKind): SkillRootKind {
   let root = explicit
@@ -347,10 +362,17 @@ export class SkillEvolution {
 
   // ---- page assistance -----------------------------------------------------
 
-  private background(name: string, work: (signal: AbortSignal) => Promise<void>): void {
+  private background(name: string, work: (signal: AbortSignal) => Promise<void>, deadlineMs?: number): void {
     const controller = new AbortController()
     this.jobs.add(controller)
-    void work(controller.signal).catch(error => this.warn(`${name} failed`, error)).finally(() => this.jobs.delete(controller))
+    const timer = deadlineMs === undefined ? undefined : setTimeout(() => {
+      controller.abort(new DraftDeadlineError(`${name} did not finish within ${Math.round(deadlineMs / 60_000)} minutes`))
+    }, deadlineMs)
+    timer?.unref?.()
+    void work(controller.signal).catch(error => this.warn(`${name} failed`, deadlineReason(controller.signal) ?? error)).finally(() => {
+      if (timer !== undefined) clearTimeout(timer)
+      this.jobs.delete(controller)
+    })
   }
 
   /**
@@ -375,10 +397,10 @@ export class SkillEvolution {
       try {
         await this.writeDraft(source, workspace, input, { pack, targetRoot, guidance }, signal)
       } catch (error) {
-        if (input.suggestionId !== undefined) await source.mutate('suggestion-status', { id: input.suggestionId, status: 'pending', error: message(error) }).catch(() => undefined)
+        if (input.suggestionId !== undefined) await source.mutate('suggestion-status', { id: input.suggestionId, status: 'pending', error: message(deadlineReason(signal) ?? error) }).catch(() => undefined)
         throw error
       }
-    })
+    }, DRAFT_DEADLINE_MS)
     return { started: true, ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }) }
   }
 
