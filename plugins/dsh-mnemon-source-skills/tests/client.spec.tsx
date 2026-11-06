@@ -333,13 +333,15 @@ describe('Skills page', () => {
     await mutate('draft-record', { suggestionId: suggestion!.id, skillName: 'release-notes', content: next, notes: 'Project improvement.', changes: [], guidance: [] })
     management = await runner.managementClient('source:skills', { storage: 'global' })
     render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable={writable} management={management} navigationInput={{ seed: `suggestion:${suggestion!.id}`, nonce: 1 }} />)
-    const current = await screen.findByRole('button', { name: /^Current skill file/u })
+    // Locate these known labels directly: a full-page role query repeatedly
+    // recomputes visibility across the installed Host's complete stylesheet.
+    const current = (await screen.findByText(t('evolution.currentSkill'))).closest('button')!
     fireEvent.click(current)
     expect(screen.getByText('Original project instructions.', { selector: 'p' })).not.toBeNull()
     expect(screen.queryByText('This skill no longer exists.')).toBeNull()
     // A same-key catalog link here would open a different file in the current scope.
-    expect(screen.queryByRole('button', { name: 'release-notes' })).toBeNull()
-    const adopt = await screen.findByRole('button', { name: t('draft.adopt') }) as HTMLButtonElement
+    expect(screen.getByText('release-notes', { selector: 'h3' }).querySelector('button')).toBeNull()
+    const adopt = await screen.findByText(t('draft.adopt'), { selector: 'button' }) as HTMLButtonElement
     expect(adopt.disabled).toBe(!writable)
     if (writable) {
       fireEvent.click(adopt)
@@ -359,7 +361,7 @@ describe('Skills page', () => {
     writeFileSync(ledgerPath, JSON.stringify(ledger))
     page({ seed: `draft:${draft.id}`, nonce: 1 })
     expect(await screen.findByText(/The original workspace was not recorded reliably/u)).not.toBeNull()
-    expect((screen.getByRole('button', { name: t('draft.adopt') }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByText(t('draft.adopt'), { selector: 'button' }) as HTMLButtonElement).disabled).toBe(true)
     expect(screen.getByText(/Legacy improvement/u)).not.toBeNull()
     expect(readFileSync(path, 'utf8')).toBe(SKILL)
   })
