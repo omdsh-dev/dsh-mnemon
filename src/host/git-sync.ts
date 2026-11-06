@@ -587,10 +587,28 @@ function readFiles(root: string, limit = MAX_PAYLOAD_BYTES): Record<string, Uint
   return files
 }
 
-function unpack(archive: Uint8Array): Unzipped {
+export function unpack(archive: Uint8Array): Unzipped {
   let entries: Unzipped
   try {
-    entries = unzipSync(archive)
+    if (archive.byteLength > MNEMON_PACK_MAX_EXPANDED_BYTES) throw new Error('compressed archive exceeds safety limit')
+    let expandedBytes = 0
+    let fileCount = 0
+    entries = unzipSync(archive, { filter(info) {
+      const path = info.name
+      const normalized = path.endsWith('/') ? path.slice(0, -1) : path
+      if (path.includes('\\') || path.startsWith('/') || /^[a-z]:/i.test(path) || path.includes('\0')
+        || normalized.split('/').some(part => !part || part === '.' || part === '..')) {
+        throw new Error('unsafe archive path')
+      }
+      if (path.endsWith('/')) return false
+      // Stored entries copy `size` bytes directly, so both sizes must agree before allocation.
+      if (info.compression === 0 && info.size !== info.originalSize) throw new Error('invalid stored archive entry size')
+      expandedBytes += info.originalSize
+      fileCount += 1
+      if (!Number.isSafeInteger(info.originalSize) || info.originalSize < 0 || info.originalSize > 128 * 1024 * 1024
+        || expandedBytes > MNEMON_PACK_MAX_EXPANDED_BYTES || fileCount > 4096) throw new Error('expanded archive exceeds safety limit')
+      return true
+    } })
   } catch {
     throw new Error('the Mnemon payload is not a readable archive')
   }
