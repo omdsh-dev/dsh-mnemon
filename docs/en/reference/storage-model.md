@@ -256,6 +256,8 @@ Skills manages files DSH already reads; it never joins a turn's View. The skills
 
 The folder is written under the storage lock with atomic replacement, and it follows the storage scope like the other Sources. It is not part of a Mnemon Pack, so neither ZIP backup nor Git sync carries it; the skills themselves are ordinary files in their roots. Its settings are configuration, under `skills` in the `mnemon` entry; see [Skills settings](./configuration.md#skills-settings).
 
+Update suggestions and drafts add an optional `origin` to version-1 `ledger.json`: the absolute skill-file `path` and, for project skills, the owning `workspace`. These local paths come from the Source catalog, not model or browser input. Older project records use the exact cited review trajectory when its workspace is unambiguous; unresolved records retain their content and show recovery instructions. Reads do not rewrite the ledger, and no skill files are moved. Older releases can read the additive fields but do not enforce their binding, so downgrading restores the previous cross-workspace limitation. Human management still requires confirmation and revision checks; this metadata grants no model View access.
+
 ## Four Relationship Types
 
 Mnemon Native preserves `temporal`, `semantic`, `causal`, and `entity` relationships. Hindsight projects its provider graph, and Holographic derives local entity/semantic relationships. Providers without graph edges contribute bounded disconnected nodes; adapters never invent unsupported relationships. The UI hides Related, Link, Browse, and Forget where the selected provider does not support them.

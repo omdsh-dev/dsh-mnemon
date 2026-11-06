@@ -219,6 +219,163 @@ describe('review admission', () => {
 })
 
 describe('evolution drafts and backtests', () => {
+  it('keeps a project improvement bound to its origin across scopes and restarts', async () => {
+    const path = join(root, 'project', '.dsh', 'skills', 'release-notes', 'SKILL.md')
+    const other = join(root, 'other-project')
+    const otherPath = join(other, '.dsh', 'skills', 'release-notes', 'SKILL.md')
+    write(path, skill('release-notes', 'Original project.'))
+    write(otherPath, skill('release-notes', 'Other project.'))
+    write(join(home, 'skills', 'release-notes', 'SKILL.md'), skill('release-notes', 'User copy.'))
+    const store = service()
+    await store.recordReview(workspace, review())
+    const suggestion = store.suggestions()[0]!
+    for (const scope of [undefined, other, workspace]) {
+      const reopened = service()
+      expect(reopened.suggestion(scope, suggestion.id).skill?.path).toBe(path)
+      expect(reopened.evidencePack(scope, { suggestionId: suggestion.id }).skill?.content).toBe(skill('release-notes', 'Original project.'))
+    }
+    const next = skill('release-notes', 'Improved original.')
+    const draft = await service().recordDraft(other, { suggestionId: suggestion.id, skillName: 'release-notes', content: next, notes: '', changes: [], guidance: [] })
+    expect(service().draft(undefined, draft.id).base?.path).toBe(path)
+    expect(service().targetContent(other, 'release-notes', { kind: 'current', draftId: draft.id }).content).toBe(skill('release-notes', 'Original project.'))
+    expect((await service().adoptDraft(other, draft.id)).skill.path).toBe(path)
+    expect(readFileSync(path, 'utf8')).toBe(next)
+    expect(readFileSync(otherPath, 'utf8')).toBe(skill('release-notes', 'Other project.'))
+  })
+
+  it('does not merge suggestions or supersede manual drafts for same-name project files', async () => {
+    const first = join(root, 'project', '.dsh', 'skills', 'release-notes', 'SKILL.md')
+    const other = join(root, 'other-project')
+    write(first, skill('release-notes'))
+    write(join(other, '.dsh', 'skills', 'release-notes', 'SKILL.md'), skill('release-notes'))
+    const store = service()
+    await store.recordReview(workspace, review())
+    await store.recordReview(other, review())
+    expect(store.suggestions()).toHaveLength(2)
+    const input = { skillName: 'release-notes', content: skill('release-notes', 'Draft.'), notes: '', changes: [], guidance: [] }
+    const one = await store.recordDraft(workspace, input)
+    const two = await store.recordDraft(other, input)
+    expect(service().draft(undefined, one.id).draft.status).toBe('ready')
+    expect(service().draft(undefined, two.id).base?.path).not.toBe(first)
+    expect(store.evidencePack(workspace, { skill: 'release-notes' }).drafts.map(draft => draft.id)).toEqual([one.id])
+  })
+
+  it('keeps a user suggestion on its exact root when a project or higher-priority copy appears', async () => {
+    const path = join(agents, 'skills', 'release-notes', 'SKILL.md')
+    write(path, skill('release-notes'))
+    const store = service()
+    await store.recordReview(workspace, review())
+    const suggestion = store.suggestions()[0]!
+    write(join(home, 'skills', 'release-notes', 'SKILL.md'), skill('release-notes', 'DSH copy.'))
+    write(join(root, 'project', '.dsh', 'skills', 'release-notes', 'SKILL.md'), skill('release-notes', 'Project copy.'))
+    expect(store.suggestion(workspace, suggestion.id).skill?.path).toBe(path)
+    const draft = await store.recordDraft(workspace, { suggestionId: suggestion.id, skillName: 'release-notes', content: skill('release-notes', 'Improved.'), notes: '', changes: [], guidance: [] })
+    expect((await store.adoptDraft(workspace, draft.id)).skill.path).toBe(path)
+  })
+
+  it('does not turn a removed or moved original into a creation or another same-name update', async () => {
+    const path = join(root, 'project', '.dsh', 'skills', 'release-notes', 'SKILL.md')
+    write(path, skill('release-notes'))
+    const store = service()
+    await store.recordReview(workspace, review())
+    const suggestion = store.suggestions()[0]!
+    const input = { suggestionId: suggestion.id, skillName: 'release-notes', content: skill('release-notes', 'Improved.'), notes: '', changes: [], guidance: [] }
+    const draft = await store.recordDraft(workspace, input)
+    rmSync(path)
+    write(join(root, 'project', '.dsh', 'skills', 'moved.md'), skill('release-notes'))
+    write(join(home, 'skills', 'release-notes', 'SKILL.md'), skill('release-notes'))
+    expect(store.suggestion(workspace, suggestion.id)).toMatchObject({ resolution: 'missing', hashCurrent: false })
+    expect(store.suggestion(workspace, suggestion.id).skill).toBeUndefined()
+    expect(store.draft(workspace, draft.id).base).toBeUndefined()
+    expect(() => store.evidencePack(workspace, { suggestionId: suggestion.id })).toThrow(/deleted|moved/i)
+    await expect(store.recordDraft(workspace, input)).rejects.toThrow(/deleted|moved/i)
+    await expect(store.adoptDraft(workspace, draft.id)).rejects.toThrow(/deleted|moved/i)
+  })
+
+  it('recovers a legacy project suggestion and its draft from the exact review trajectory', async () => {
+    const path = join(root, 'project', '.dsh', 'skills', 'release-notes', 'SKILL.md')
+    const other = join(root, 'other-project')
+    write(path, skill('release-notes'))
+    write(join(other, '.dsh', 'skills', 'release-notes', 'SKILL.md'), skill('release-notes'))
+    const store = service()
+    const input = review()
+    await store.recordReview(workspace, { ...input, trajectory: { ...input.trajectory, workspace } })
+    const suggestion = store.suggestions()[0]!
+    const draft = await store.recordDraft(workspace, { suggestionId: suggestion.id, skillName: 'release-notes', content: skill('release-notes', 'Improved.'), notes: '', changes: [], guidance: [] })
+    const ledger = store.store.ledger()
+    delete ledger.suggestions[0]!.origin
+    delete ledger.drafts[0]!.origin
+    store.store.saveLedger(ledger)
+    expect(service().suggestion(undefined, suggestion.id).skill?.path).toBe(path)
+    expect(service().draft(other, draft.id).base?.path).toBe(path)
+    expect((await service().adoptDraft(other, draft.id)).skill.path).toBe(path)
+  })
+
+  it('does not infer a missing legacy origin from same-name files or matching hashes', async () => {
+    const path = join(root, 'project', '.dsh', 'skills', 'release-notes', 'SKILL.md')
+    write(path, skill('release-notes'))
+    const store = service()
+    await store.recordReview(workspace, review())
+    const suggestion = store.suggestions()[0]!
+    const draft = await store.recordDraft(workspace, { suggestionId: suggestion.id, skillName: 'release-notes', content: skill('release-notes', 'Improved.'), notes: '', changes: [], guidance: [] })
+    const ledger = store.store.ledger()
+    delete ledger.suggestions[0]!.origin
+    delete ledger.drafts[0]!.origin
+    store.store.saveLedger(ledger)
+    expect(service().suggestion(workspace, suggestion.id)).toMatchObject({ resolution: 'origin-unavailable', hashCurrent: false })
+    expect(service().draft(workspace, draft.id)).toMatchObject({ resolution: 'origin-unavailable' })
+    await expect(service().adoptDraft(workspace, draft.id)).rejects.toThrow(/original workspace.*recorded/i)
+    expect(readFileSync(path, 'utf8')).toBe(skill('release-notes'))
+  })
+
+  it.each([true, false])('uses the exact legacy review origin and refuses mixed evidence without it (reviewId=%s)', async keepsReviewId => {
+    const other = join(root, 'other-project')
+    write(join(root, 'project', '.dsh', 'skills', 'release-notes', 'SKILL.md'), skill('release-notes'))
+    const path = join(other, '.dsh', 'skills', 'release-notes', 'SKILL.md')
+    write(path, skill('release-notes'))
+    const store = service()
+    const input = review()
+    await store.recordReview(workspace, { ...input, trajectory: { ...input.trajectory, workspace } })
+    await store.recordReview(other, { ...input, trajectory: { ...input.trajectory, workspace: other } })
+    const ledger = store.store.ledger()
+    const [latest, earlier] = ledger.suggestions
+    latest!.evidence.push(...earlier!.evidence)
+    delete latest!.origin
+    if (!keepsReviewId) delete latest!.reviewId
+    store.store.saveLedger(ledger)
+    const view = service().suggestion(workspace, latest!.id)
+    if (keepsReviewId) expect(view.skill?.path).toBe(path)
+    else expect(view.resolution).toBe('origin-unavailable')
+  })
+
+  it('keeps a manual redraft on the original file from another workspace', async () => {
+    const path = join(root, 'project', '.dsh', 'skills', 'release-notes', 'SKILL.md')
+    const other = join(root, 'other-project')
+    write(path, skill('release-notes', 'Original.'))
+    write(join(other, '.dsh', 'skills', 'release-notes', 'SKILL.md'), skill('release-notes', 'Other.'))
+    const store = service()
+    const input = { skillName: 'release-notes', content: skill('release-notes', 'First draft.'), notes: '', changes: [], guidance: [] }
+    const first = await store.recordDraft(workspace, input)
+    expect(store.evidencePack(other, { draftId: first.id }).skill?.path).toBe(path)
+    const second = await store.recordDraft(other, { ...input, draftId: first.id, content: skill('release-notes', 'Second draft.') })
+    expect(store.draft(undefined, second.id).base?.path).toBe(path)
+    expect(store.draft(undefined, first.id).draft.status).toBe('discarded')
+  })
+
+  it.each([null, { path: 'relative/SKILL.md', workspace: '/project' }, { path: '/project/SKILL.md', workspace: 'relative' }])('rejects damaged persisted origin %j without reading the selected copy', async origin => {
+    const path = join(root, 'project', '.dsh', 'skills', 'release-notes', 'SKILL.md')
+    write(path, skill('release-notes'))
+    const store = service()
+    await store.recordReview(workspace, review())
+    const suggestion = store.suggestions()[0]!
+    const ledger = store.store.ledger()
+    Object.assign(ledger.suggestions[0]!, { origin })
+    store.store.saveLedger(ledger)
+    expect(store.suggestion(workspace, suggestion.id).resolution).toBe('origin-unavailable')
+    expect(() => store.evidencePack(workspace, { suggestionId: suggestion.id })).toThrow(/original workspace.*recorded/i)
+    expect(readFileSync(path, 'utf8')).toBe(skill('release-notes'))
+  })
+
   it('adopts an update draft under the base hash and records an evolution version', async () => {
     const path = join(home, 'skills', 'release-notes', 'SKILL.md')
     write(path, skill('release-notes'))

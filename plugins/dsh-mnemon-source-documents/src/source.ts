@@ -57,6 +57,10 @@ function documentMutation(value: MemoryJsonValue, allowedIds?: readonly string[]
       ...(input.sourcePaths === undefined ? {} : { sourcePaths: stringArray(input.sourcePaths, 'sourcePaths') ?? [] }),
       ...(input.sessionIds === undefined ? {} : { sessionIds: stringArray(input.sessionIds, 'sessionIds', 20) ?? [] }),
     }
+  } else if (action === 'delete') {
+    const id = text(input.id, 'id', 300)!
+    if (allowedIds !== undefined && !allowedIds.includes(id)) throw new Error('Documents delete target is outside this View ReadGrant')
+    mutation = { action, id, ...(input.fileRevision === undefined ? {} : { fileRevision: text(input.fileRevision, 'fileRevision', 100)! }) }
   } else {
     throw new Error(`unsupported Documents action: ${action}`)
   }
@@ -90,15 +94,16 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
     }],
     actions: [{
       id: 'manage',
-      description: 'Create a project Document, or update one pinned into this View or created in this execution.',
+      description: 'Create a project Document, update one pinned into this View or created in this execution, or permanently delete a pinned active/archived managed copy after explicit user confirmation. Delete requires confirmed: true, expectedRevision from the latest Documents search metadata.indexRevision, and fileRevision from the target item provenance (or management document read). It does not archive or change project originals.',
       capability: 'write',
       inputSchema: {
         type: 'object',
         required: ['action'],
         additionalProperties: false,
         properties: {
-          action: { type: 'string', enum: ['create', 'update'] },
+          action: { type: 'string', enum: ['create', 'update', 'delete'] },
           id: { type: 'string' }, ...CREATE_PROPERTIES,
+          confirmed: { type: 'boolean' }, expectedRevision: { type: 'string' }, fileRevision: { type: 'string' },
         },
       },
     }, {
@@ -206,7 +211,8 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
           items.push({
             id: document.id, text: content, score: document.score, revision: String(document.revision),
             provenance: { kind: 'match', documentId: document.id, title: document.title, description: document.description,
-              status: document.status, relativePath: document.relativePath, sourcePaths: document.sourcePaths.slice(0, 8) },
+              status: document.status, relativePath: document.relativePath, sourcePaths: document.sourcePaths.slice(0, 8),
+              ...(document.fileRevision === undefined ? {} : { fileRevision: document.fileRevision }) },
           })
         }
         for (const document of suggestions) {
@@ -217,7 +223,7 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
             provenance: { kind: 'suggestion', documentId: document.id, title: document.title, description: document.description, status: document.status } })
         }
         return {
-          metadata: { query: result.query, includeArchived: result.includeArchived, total: result.total },
+          metadata: { query: result.query, includeArchived: result.includeArchived, total: result.total, indexRevision: controller.revision() },
           id: `evidence:${randomUUID()}`, viewId: request.view.id, routeId: request.route.id, sourceInstanceKey: context.sourceInstanceKey,
           observedAt: new Date().toISOString(), truncated, items,
         }
@@ -240,8 +246,9 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
             default: throw new Error('unsupported Documents management read operation: ' + request.operation)
           }
         } else {
-          if (!request.confirmed) throw new Error('Documents management mutation requires explicit confirmation')
+          if (request.confirmed !== true) throw new Error('Documents management mutation requires explicit confirmation')
           if (request.operation === 'mutate') value = await controller.mutate(documentMutation(request.input), request.expectedRevision)
+          else if (request.operation === 'delete') value = await controller.deleteDocument(text(input.id, 'id', 300)!, text(request.expectedRevision, 'expectedRevision', 100)!, text(input.fileRevision, 'fileRevision', 100)!)
           else if (request.operation === 'archive') {
             const document = controller.get(text(input.id, 'id', 300)!)
             const revision = input.documentRevision === undefined ? document.revision : input.documentRevision
@@ -260,10 +267,16 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
         const root = workspace(request.view.scope)
         if (root === undefined) throw new Error('Documents Action requires a workspace-scoped View')
         const grant = request.grant
+        const input = record(request.input, 'Documents Action')
+        const deleting = request.offer.sourceActionId === 'manage' && input.action === 'delete'
+        if (deleting && input.confirmed !== true) throw new Error('Documents deletion requires explicit user confirmation')
         const mutation = request.offer.sourceActionId === 'create'
           ? documentCreation(request.input)
-          : documentMutation(request.input, [...(grant === undefined ? [] : grantIds(grant)), ...(created.get(request.view) ?? [])])
-        const result = await documents.forWorkspace(root).mutate(mutation)
+          : documentMutation(request.input, deleting
+            ? (grant === undefined ? [] : grantIds(grant, true))
+            : [...(grant === undefined ? [] : grantIds(grant)), ...(created.get(request.view) ?? [])])
+        const expectedRevision = deleting ? text(input.expectedRevision, 'expectedRevision', 100)! : undefined
+        const result = await documents.forWorkspace(root).mutate(mutation, expectedRevision)
         if (mutation.action === 'create') {
           let ids = created.get(request.view)
           if (ids === undefined) { ids = new Set(); created.set(request.view, ids) }

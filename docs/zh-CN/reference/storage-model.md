@@ -264,6 +264,8 @@ location      本地 Store/CLI 作用域，或远程 endpoint + Provider 作用�
 
 该文件夹在存储锁内以原子替换方式写入，和其他 Source 一样跟随存储范围。它不属于 Mnemon Pack，因此 ZIP 备份和 Git 同步都不包含它；技能本身就是各技能目录里的普通文件。它的设置属于配置，保存在 `mnemon` 条目的 `skills` 下，见[技能管理设置](./configuration.md#技能管理设置)。
 
+改进建议和草案在版本 1 的 `ledger.json` 中新增可选 `origin`：技能文件的绝对 `path`，以及项目技能所属的 `workspace`。本地路径来自 Source 目录，不接受模型或浏览器传入的来源。旧项目记录在所引用的准确复盘轨迹能确定唯一工作区时恢复来源；无法确定时保留正文并显示恢复步骤。读取不会重写账本，也不移动技能文件。旧版本能读取新增字段，但不执行来源绑定，因此降级会恢复原来的跨工作区限制。人工管理继续要求确认和版本检查，这些元数据不授予模型 View 访问权。
+
 ## 四类关系
 
 Mnemon Native 保留 `temporal`、`semantic`、`causal` 和 `entity` 关系；Hindsight 投影 Provider 图谱，Holographic 生成本地实体/语义关系。没有图谱边的 Provider 只贡献有界无边节点，适配器不会伪造关系。记忆空间页会按能力隐藏不适用的关联、链接、浏览与遗忘动作。

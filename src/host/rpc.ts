@@ -251,8 +251,9 @@ async function skillAssistance(runtime: ScopedRuntime, lifecycle: MnemonLifecycl
       const root = optionalString(input.targetRoot, 'targetRoot')
       if (root !== undefined && !['project-dsh', 'project-agents', 'user-dsh', 'user-agents'].includes(root)) throw new Error('unknown skill root: ' + root)
       const suggestionId = optionalString(input.suggestionId, 'suggestionId')
+      const draftId = optionalString(input.draftId, 'draftId')
       const skill = optionalString(input.skill, 'skill')
-      if (suggestionId === undefined && skill === undefined) throw new Error('a draft needs a suggestion or a skill')
+      if (suggestionId === undefined && draftId === undefined && skill === undefined) throw new Error('a draft needs a suggestion, a draft, or a skill')
       const guidance = optionalString(input.guidance, 'guidance')
       if (guidance !== undefined && guidance.length > 4_000) throw new Error('guidance is too long (max 4000 characters)')
       // The pick is a Provider and a model together, or neither: half a route
@@ -260,6 +261,7 @@ async function skillAssistance(runtime: ScopedRuntime, lifecycle: MnemonLifecycl
       const draftRoute = modelRoute(input)
       return skills.draft(source, workspaceRoot, {
         ...(suggestionId === undefined ? {} : { suggestionId }), ...(skill === undefined ? {} : { skill }),
+        ...(draftId === undefined ? {} : { draftId }),
         ...(guidance === undefined ? {} : { guidance }), ...(root === undefined ? {} : { targetRoot: root as never }),
         ...(draftRoute === undefined ? {} : { route: draftRoute }),
       })

@@ -504,6 +504,45 @@ describe('skill evolution in the Host', () => {
     expect(readFileSync(join(directory, 'dsh', 'skills', 'release-notes', 'SKILL.md'), 'utf8')).toBe(next)
   })
 
+  it('redrafts and backtests the recorded project file from global management', async () => {
+    const path = join(directory, 'workspace', '.dsh', 'skills', 'release-notes', 'SKILL.md')
+    mkdirSync(join(path, '..'), { recursive: true })
+    const original = '---\nname: release-notes\ndescription: Original project workflow.\n---\n\n1. Follow original project checks.\n'
+    writeFileSync(path, original)
+    const first = await source.mutate<SkillDraft>('draft-record', { skillName: 'release-notes', content: original, notes: '', changes: [], guidance: ['Keep project checks.'] })
+    await source.mutate('case-save', { case: { skillName: 'release-notes', title: 'Project checks', prompt: 'Write notes', checks: [{ text: 'Keeps project checks', must: true }] } })
+    const management = await runner.managementClient('source:skills', { storage: 'global' })
+    const global: SkillsSourcePort = {
+      scope: { storage: 'global' },
+      read: async (operation, input = null) => (await management.read(operation, input as never)).value as never,
+      mutate: async (operation, input) => {
+        const { revision } = await management.read('revision', null)
+        return (await management.mutate(operation, input as never, { confirmed: true, expectedRevision: revision })).value as never
+      },
+    }
+    const { skills, host } = evolution([])
+    const execution: string[] = []
+    host.skillTask.mockImplementation(async (_parent: HostAgent, label: string, prompt: string) => {
+      if (label === 'Mnemon skill draft') {
+        expect(prompt).toContain('Follow original project checks')
+        expect(prompt).toContain('Keep project checks.')
+        return { structured: { content: original + '\n2. Include the release date.\n', notes: '', changes: [] } }
+      }
+      if (label.startsWith('Mnemon skill eval')) { execution.push(prompt); return { structured: { steps: ['Checked project'], answer: 'Ready' } } }
+      return { structured: { checks: [{ index: 1, pass: true, note: 'checked' }], summary: 'good' } }
+    })
+    await skills.draft(global, undefined, { draftId: first.id })
+    await vi.runAllTimersAsync()
+    await vi.waitFor(async () => expect((await global.read<BacktestRun[]>('runs')).map(run => run.status)).toEqual(['completed', 'completed']))
+    expect(execution).toHaveLength(2)
+    expect(execution.every(prompt => prompt.includes('Follow original project checks'))).toBe(true)
+    const [next] = await global.read<SkillDraft[]>('drafts')
+    expect(next!.origin?.path).toBe(path)
+    await global.mutate('draft-adopt', { id: next!.id })
+    expect(readFileSync(path, 'utf8')).toContain('Include the release date')
+    expect(readFileSync(join(directory, 'dsh', 'skills', 'release-notes', 'SKILL.md'), 'utf8')).not.toContain('Include the release date')
+  })
+
   it('regenerates a truncated draft under a fresh task with the configured larger budget', async () => {
     config = { ...config, autoBacktest: false, draftMaxTokens: 32_768, draftRetryMaxTokens: 65_536 }
     const file = join(directory, 'dsh', 'skills', 'release-notes', 'SKILL.md')

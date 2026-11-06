@@ -5,6 +5,7 @@ import {
 } from 'dsh-mnemon/client'
 import { DocumentsPage } from './pages.tsx'
 import type { DocumentsPageClient } from './api.ts'
+import type { DocumentMutationResult } from '../contracts.ts'
 
 export function documentsPageClient(management: MnemonSourceManagementClient): DocumentsPageClient {
   const client = createMemorySourcePageClient(management)
@@ -12,8 +13,13 @@ export function documentsPageClient(management: MnemonSourceManagementClient): D
     documents: () => client.read('snapshot', null, { coalesce: true }),
     document: id => client.read('document', { id }),
     searchDocuments: (query, includeArchived = false, limit = 50) => client.read('search', { query, includeArchived, limit }),
-    mutateDocument: input => client.canAssist('mutate') ? client.assist('mutate', { ...input }, true) : client.mutate('mutate', { ...input }, true),
+    mutateDocument: input => input.action === 'delete'
+      ? client.mutate('delete', { id: input.id, ...(input.fileRevision === undefined ? {} : { fileRevision: input.fileRevision }) }, true)
+      : client.canAssist('mutate') ? client.assist('mutate', { ...input }, true) : client.mutate('mutate', { ...input }, true),
     archiveDocument: id => client.canAssist('archive') ? client.assist('archive', { id }, true) : client.mutate('archive', { id }, true),
+    // Keep the revision shown by the confirmation, even if another read has
+    // refreshed the shared page client while the dialog was open.
+    deleteDocument: async (id, expectedRevision, fileRevision) => (await management.mutate('delete', { id, fileRevision }, { confirmed: true, expectedRevision })).value as unknown as DocumentMutationResult,
   }
 }
 
