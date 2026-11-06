@@ -37,7 +37,7 @@ export interface MnemonRuntimeGraph {
 export interface MnemonAgentRuntimeSource {
   readonly config: ResolvedConfig
   readonly executions: MemoryExecutions
-  forAgent(agent: HostAgent): MnemonRuntimeGraph
+  forAgent(agent: HostAgent, options?: { independent?: boolean }): MnemonRuntimeGraph
   bindAgentRuntime(agentId: string, graph: MnemonRuntimeGraph): () => void
   /** Synchronous notification after a committed live configuration swap. */
   onChanged?(listener: () => void): () => void
@@ -264,13 +264,17 @@ export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
   }
 
   /** Resolve the runtime that must serve one Agent execution. */
-  forAgent(agent: HostAgent): MnemonRuntimeGraph {
+  forAgent(agent: HostAgent, options: { independent?: boolean } = {}): MnemonRuntimeGraph {
     this.assertOpen()
-    const pinned = this.agentGraphs.get(agent.id)
-    if (pinned !== undefined) return pinned.graph
-    const parentSession = agent.session.header?.origin === 'subagent' ? agent.session.header.parentSession?.trim() : undefined
-    const inherited = parentSession === undefined || parentSession === '' ? undefined : this.agentGraphs.get(parentSession)
-    if (inherited !== undefined) return inherited.graph
+    // User continuation in old task history starts against current configuration;
+    // a historical parent link must not borrow an unrelated retained generation.
+    if (!options.independent) {
+      const pinned = this.agentGraphs.get(agent.id)
+      if (pinned !== undefined) return pinned.graph
+      const parentSession = agent.session.header?.origin === 'subagent' ? agent.session.header.parentSession?.trim() : undefined
+      const inherited = parentSession === undefined || parentSession === '' ? undefined : this.agentGraphs.get(parentSession)
+      if (inherited !== undefined) return inherited.graph
+    }
     if (!isWorkspaceStorageScope(this.current.config.storageScope)) return this.current
     const cwd = agent.session.header?.cwd?.trim()
     if (cwd === undefined || cwd === '') throw new Error('the current DSH session has no workspace for Mnemon')

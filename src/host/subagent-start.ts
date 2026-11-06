@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { HostAgent, HostSubagentProvider, HostSubagentRun, HostSubagentStartRequest, HostSubagentsService } from './dsh.ts'
+import { activationOwned, claimReservedChild, isReservedChild, reservedChildId, titleTask, withReservedChild } from './agent-compat.ts'
 
 /** The Agent registry lookups that find an activation's local child. */
 export interface SubagentStartAgents {
@@ -62,13 +63,16 @@ export async function startSubagent(
   request: HostSubagentStartRequest & { label: string },
   publications?: SubagentPublications,
 ): Promise<HostSubagentRun> {
+  if (typeof subagents.startActivation === 'function' && reservedChildId(request.parent) === undefined) {
+    return withReservedChild(request.parent, () => startSubagent(subagents, agents, provider, request, publications))
+  }
   const { toolFilter, persona, ...task } = request
   if ((toolFilter === undefined && persona === undefined) || childComposition(subagents, subagents.getProvider(provider)) !== 'publication') {
     return startOnHost(subagents, agents, provider, request)
   }
   if (publications === undefined) throw new Error('This DSH takes no subagent persona or tool filter at start, and dsh-mnemon cannot observe the child it publishes')
   const composition: ChildComposition = { ...(toolFilter === undefined ? {} : { toolFilter }), ...(persona === undefined ? {} : { persona }) }
-  return startComposed(publications, agents, request.parent, composition, () => startOnHost(subagents, agents, provider, task))
+  return startComposed(publications, agents, request.parent, composition, () => startOnHost(subagents, agents, provider, task), activationOwned(subagents))
 }
 
 async function startOnHost(
@@ -79,7 +83,17 @@ async function startOnHost(
 ): Promise<HostSubagentRun> {
   if (typeof subagents.startActivation === 'function') {
     const { label, signal, ...task } = request
-    const activation = await subagents.startActivation({ provider, label, request: task, signal, delivery: 'caller' })
+    const modern = activationOwned(subagents)
+    const childId = claimReservedChild(request.parent)
+    if (modern && (childId === undefined || agents?.get?.(request.parent.id) !== request.parent)) {
+      throw new Error('Mnemon requires an exact live parent and reserved child identity on an activation-owned DSH')
+    }
+    // This source snapshot reports the same version as the published rc.1. Select the
+    // contract before dispatch; never retry a potentially accepted start with another shape.
+    const startCurrent = subagents.startActivation as unknown as (spec: Omit<HostSubagentStartRequest, 'label'> & { provider: string; label: string; childId: string; delivery: 'caller' }) => ReturnType<NonNullable<HostSubagentsService['startActivation']>>
+    const activation = modern
+      ? await startCurrent.call(subagents, { ...task, provider, label, signal, childId: childId!, delivery: 'caller' })
+      : await subagents.startActivation({ provider, label, ...(childId === undefined ? {} : { childId }), request: task, signal, delivery: 'caller' })
     // A second dispose from the caller reports any failure of this one.
     const stop = () => { activation.dispose().catch(() => {}) }
     try {
@@ -89,7 +103,11 @@ async function startOnHost(
       if (signal.aborted) stop()
       // The child is resident until the activation settles, which takes at least one model turn.
       const child = agents?.get?.(activation.childId)
-      const localAgent = child !== undefined && (typeof agents?.isOwnedBy !== 'function' || agents.isOwnedBy(child.id, request.parent)) ? child : undefined
+      if (modern && (activation.childId !== childId || child === undefined || !isReservedChild(agents, request.parent, child))) {
+        throw new Error('DSH did not return the reserved live Mnemon child')
+      }
+      if (modern && child !== undefined) titleTask(child, label.startsWith('Mnemon ') ? label : `Mnemon · ${label}`)
+      const localAgent = child !== undefined && (modern || typeof agents?.isOwnedBy !== 'function' || agents.isOwnedBy(child.id, request.parent)) ? child : undefined
       return {
         id: activation.childId,
         ...(localAgent === undefined ? {} : { localAgent }),
@@ -138,12 +156,15 @@ async function startComposed(
   parent: HostAgent,
   composition: ChildComposition,
   start: () => Promise<HostSubagentRun>,
+  reserved = false,
 ): Promise<HostSubagentRun> {
   const pending = Symbol('Mnemon child composition')
+  const expectedChildId = reserved ? reservedChildId(parent) : undefined
   const composed = new Set<string>()
   let failure: unknown
   const listener = publications.on('agent/created', (({ agent }: { agent: HostAgent }) => {
     if (composingChild.getStore() !== pending) return
+    if (reserved && (agent.id !== expectedChildId || !isReservedChild(agents, parent, agent))) return
     if (typeof agents?.isOwnedBy === 'function' && !agents.isOwnedBy(agent.id, parent)) return
     try {
       compose(agent, composition)

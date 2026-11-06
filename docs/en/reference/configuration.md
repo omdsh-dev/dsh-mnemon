@@ -135,6 +135,7 @@ mnemon:
 | `writeEnabled` | `true` | boolean | Whether to expose semantic write tools, write RPC, and write commands |
 | `syncEnabled` | `false` | boolean | Whether this installation syncs to a Git repository at all. Off by default, and off is silent: the Storage row is a title and a switch, no status is read and no Git command runs. Repository, branch, directory, commit identity, token and automatic sync interval (`autoBackupMinutes`) stay in `state/sync-git.json`, never here |
 | `taskAgentModel` | `{ mode: inherit }` | `inherit` / `fixed`; `followConversation`: boolean | Model route for independent task Agents and the idle review worker: `inherit` (**Follow global**), `inherit` with `followConversation: true` (**Follow the conversation**), or `fixed` (**Custom**) with both `provider` and `model`. See [Background Task Agent Model Route](#background-task-agent-model-route) |
+| `subagentProviderNames` | `[]` | Up to 32 nonempty names, 128 characters each | Extra subagent-provider candidates when the Host has no enumeration and a custom plugin hides its name in code. Set in the Mnemon plugin configuration; all isolation checks still apply. Standard `providerName` configurations are discovered automatically. |
 | `remoteAccess` | `read-only` | `read-only` / `trusted-host` | Startup-only grant for non-loopback Mnemon management, enforced by the API Gateway projection |
 | `conversationInteraction.turnBar` | `true` | boolean | The turn memory bar under replies; applies at once |
 | `conversationInteraction.saveAction` | `true` | boolean | The **Save to memory** action and confirmation on finished replies; applies at once |
@@ -334,7 +335,7 @@ After the Memory Space directory has been established, long-term semantic operat
 
 ## Background Task Agent Model Route
 
-Tidy names and descriptions, Ask Agent, Save to memory in the Memory System and in conversations, and document archiving create a clean independent top-level task Agent. It uses the selected workspace as its cwd, works even when no main Agent session is selected, and does not inherit the main conversation history. Finishing the task disposes the Agent instance; session records already saved by DSH remain on disk, and Mnemon does not automatically delete them. DSH keeps its session with the origin it gives its own subagents, so neither the sidebar nor the ACP session list shows it as a conversation ([#435](https://github.com/omdsh-dev/dsh-mnemon/issues/435)).
+Tidy names and descriptions, Ask Agent, Save to memory in the Memory System and in conversations, and document archiving create a clean independent top-level task Agent. It uses the selected workspace as its cwd, works even when no main Agent session is selected, and does not inherit the main conversation history. Finishing the task disposes the Agent instance; session records already saved by DSH remain on disk, and Mnemon does not automatically delete them. Official DSH 0.2.2-rc.1 and earlier supported Hosts retain the subagent origin, so these records stay out of the sidebar and ACP conversation list ([#435](https://github.com/omdsh-dev/dsh-mnemon/issues/435)). The inspected master snapshot removed that public creation path: there, ACP can list these titled `Mnemon · …` task roots, while the standard WebUI currently hides non-current roots with no conversation turn. Other clients or missing list metadata can still expose them. Finished task records cannot regain Mnemon tools when reopened, including after restart. See [the Host compatibility details](./compatibility.md#published-dsh-022-rc1-and-issue-554).
 
 **Background tasks → Task Agent model** on the Layered strategy's page offers three choices for these task Agents and the idle review worker:
 
@@ -358,7 +359,7 @@ When the active Strategy does not drive idle review or runtime capacity maintena
 
 ## Skills settings
 
-Skills keeps its settings under `skills` in the `mnemon` entry, edited on its own page under **Plugins → dsh-mnemon** through the `mnemon-skills` settings scope. Settings apply live once saved, without rebuilding the memory runtime; the destination selector and review parameters wait for **Apply** or **Discard**. The [Skills guide](../guides/skills.md#self-evolution) explains what each does.
+Skills keeps its settings under `skills` in the `mnemon` entry, edited on its own page under **Plugins → dsh-mnemon** through the `mnemon-skills` settings scope. Settings apply live once saved, without rebuilding the memory runtime; the destination selector, draft budgets and review parameters wait for **Apply** or **Discard**. Draft budgets are read at the start of each draft. The [Skills guide](../guides/skills.md#self-evolution) explains what each does.
 
 | Key | Default | Range | Meaning |
 |---|---:|---|---|
@@ -367,6 +368,8 @@ Skills keeps its settings under `skills` in the `mnemon` entry, edited on its ow
 | `skills.allowUpdate` | `true` | boolean | **Suggest skill improvements**: allow reviews to improve existing skills |
 | `skills.targetScope` | `user` | `storage` / `user` / `project` | **New skill destination**: `user` → `user-dsh`; `project` → `project-dsh`; `storage` follows `storageScope` (`global` / `custom` → user, `workspace` / `workspaces` → project). Apply or Discard on the settings page |
 | `skills.autoBacktest` | `true` | boolean | **Backtest drafts**: compare each new draft with the current version on its test cases |
+| `skills.draftMaxTokens` | `32768` | integer, 128–131072 | **Draft output token limit**: budget for the first complete draft, including reasoning |
+| `skills.draftRetryMaxTokens` | `65536` | integer, 128–131072 | **Retry output token limit**: one fresh attempt after `max-tokens`, only when this is greater than `draftMaxTokens`; an equal or lower value disables the truncation retry |
 | `skills.hints` | `true` | boolean | **In the conversation**: the **Turn skills** line under each turn |
 | `skills.sidebar` | `false` | boolean | **Sidebar entry**: Skills as its own sidebar entry, out of the Memory System |
 | `skills.reviewThreshold` | `5` | 1–50 | **Review threshold**: the activity score a conversation's window must reach before a review |
@@ -376,6 +379,10 @@ Skills keeps its settings under `skills` in the `mnemon` entry, edited on its ow
 | `skills.expiryDays` | `7` | 1–90 days | **Suggestion expiry**: an untouched suggestion expires after this long |
 | `skills.maxPendingPerSession` | `5` | 1–20 | **Pending per conversation**: past this, the least confident pending suggestions of a conversation expire |
 | `skills.casesPerRun` | `8` | 1–20 | **Cases per backtest**: the most cases one automatic backtest runs |
+
+**Draft generation** is available even with self-evolution off. The two budgets explicitly bound each attempt instead of silently doubling a user's limit. A draft gets at most two attempts total, shared with the existing retry for a rejected skill file. Only a `max-tokens` stop can use the larger budget; cancellation and other model failures do not retry. A truncated result is discarded before parsing or saving, and a retry starts a fresh task and child. Successful drafts still require the existing schema and content checks and explicit adoption; generating a draft does not change the installed skill. Reviews, case generation, executors and judges retain their existing budgets.
+
+Keep both values within the selected provider/model's output limit. If generation still truncates, the error reports the attempted budgets and source `SKILL.md` size in UTF-8 bytes (zero for a new skill), and points to these settings. Raise the budgets only within the model's supported limit; if the provider rejects a requested budget, lower it. If the complete file cannot fit that limit, shorten the skill or select a model with a larger output limit.
 
 `skills.targetScope` defaults to `user` to preserve existing installations: upgrading or changing storage scope does not move new skill writes to another root. Choose `storage` explicitly to follow storage scope. New suggestions record their resolved destination; drafts and redrafts keep that destination, and adoption uses the draft unless you explicitly choose another root. Suggestions from older versions without a destination use the current setting when drafted; existing drafts retain their recorded root. Improvements always write back to their original `baseKey`, regardless of this setting or a destination override.
 

@@ -135,6 +135,7 @@ mnemon:
 | `writeEnabled` | `true` | boolean | 是否暴露语义写工具、写 RPC 和写命令 |
 | `syncEnabled` | `false` | boolean | 本机是否同步到 Git 仓库。默认关闭，关闭时保持沉默：存储页那一行只有标题与开关，不读取状态，也不执行 Git 命令。仓库、分支、目录、提交身份、令牌与自动同步间隔（`autoBackupMinutes`）保存在 `state/sync-git.json`，不在这里 |
 | `taskAgentModel` | `{ mode: inherit }` | `inherit` / `fixed`；`followConversation`：boolean | 独立任务 Agent 与空闲审查 worker 的模型路由：`inherit`（**跟随全局**）、`inherit` 加 `followConversation: true`（**跟随会话**），或必须同时保存 `provider` 与 `model` 的 `fixed`（**自定义**）。见[后台任务 Agent 的模型路由](#后台任务-agent-的模型路由) |
+| `subagentProviderNames` | `[]` | 最多 32 个非空名称，每个最多 128 字符 | Host 不再支持枚举且自定义插件把名称隐藏在代码中时，提供额外子 Agent Provider 候选。在 Mnemon 插件配置中填写，隔离检查仍然有效；标准 `providerName` 配置会自动发现。 |
 | `remoteAccess` | `read-only` | `read-only` / `trusted-host` | 非 loopback Mnemon 管理授权，仅启动时读取，由 API Gateway 映射执行 |
 | `conversationInteraction.turnBar` | `true` | boolean | 回复下方的回合记忆栏，立即生效 |
 | `conversationInteraction.saveAction` | `true` | boolean | 已完成回复上的**存入记忆**操作及其确认框，立即生效 |
@@ -334,7 +335,7 @@ Memory Space 目录建立后，长期语义操作使用明确的记忆空间 ID�
 
 ## 后台任务 Agent 的模型路由
 
-整理名称与说明、Agent 查询、记忆系统与对话中的存入记忆和档案归档会创建一个不继承主对话历史的独立顶层任务 Agent。它使用当前查看工作区作为 cwd；即使没有选中主 Agent session，也能落到左上角选定工作区。任务完成后释放的是 Agent 实例，DSH 已保存的本地会话记录会保留；Mnemon 不自动删除这些记录。DSH 保存它的会话时带着 DSH 给自身子代理的来源标记，侧栏和 ACP 会话列表都不会把它当作对话列出（[#435](https://github.com/omdsh-dev/dsh-mnemon/issues/435)）。
+整理名称与说明、Agent 查询、记忆系统与对话中的存入记忆和档案归档会创建一个不继承主对话历史的独立顶层任务 Agent。它使用当前查看工作区作为 cwd；即使没有选中主 Agent session，也能落到左上角选定工作区。任务完成后释放的是 Agent 实例，DSH 已保存的本地会话记录会保留；Mnemon 不自动删除这些记录。官方 DSH 0.2.2-rc.1 及更早的受支持 Host 保留子代理来源标记，侧栏和 ACP 对话列表不会显示这些记录（[#435](https://github.com/omdsh-dev/dsh-mnemon/issues/435)）。已检查的 master 快照移除了这一公开创建路径，因此 ACP 可列出带 `Mnemon · …` 标题的任务根；标准 WebUI 当前仍隐藏未开始对话轮次且不是当前打开项的根会话。其他客户端或列表元数据缺失时仍可能显示。重新打开已完成记录不能恢复 Mnemon 工具，重启后同样如此。详见[Host 兼容说明](./compatibility.md#已发布的-dsh-022-rc1-与-issue-554)。
 
 “分层策略”页面的“后台任务 → 任务 Agent 模型”为这些任务 Agent 与空闲审查 worker 提供三个选项：
 
@@ -358,7 +359,7 @@ DSH 的实时模型目录会报告各模型的输入模态，选择器为支持�
 
 ## 技能管理设置
 
-技能管理的设置保存在 `mnemon` 条目的 `skills` 下，通过 `mnemon-skills` 设置范围在**插件 → 可组合记忆**里它自己的页面上编辑。设置保存后立即作用于运行中的自进化和客户端，不重建记忆运行图；目标选择与复盘参数需要点击**应用**或**放弃**。各项含义见[技能管理指南](../guides/skills.md#自进化)。
+技能管理的设置保存在 `mnemon` 条目的 `skills` 下，通过 `mnemon-skills` 设置范围在**插件 → 可组合记忆**里它自己的页面上编辑。设置保存后实时生效，不重建记忆运行图；目标选择、草案预算与复盘参数需要点击**应用**或**放弃**。草案预算在每次起草开始时读取。各项含义见[技能管理指南](../guides/skills.md#自进化)。
 
 | 键 | 默认值 | 范围 | 含义 |
 |---|---:|---|---|
@@ -367,6 +368,8 @@ DSH 的实时模型目录会报告各模型的输入模态，选择器为支持�
 | `skills.allowUpdate` | `true` | boolean | **改进已有技能**：允许复盘提出已有技能的改进 |
 | `skills.targetScope` | `user` | `storage` / `user` / `project` | **新技能写入位置**：`user` → `user-dsh`；`project` → `project-dsh`；`storage` 跟随 `storageScope`（`global` / `custom` → 用户，`workspace` / `workspaces` → 项目）。设置页面支持应用或放弃 |
 | `skills.autoBacktest` | `true` | boolean | **草案自动回测**：草案写好后用测试用例与当前版本对比 |
+| `skills.draftMaxTokens` | `32768` | 整数，128–131072 | **草案输出 token 上限**：首次生成完整草案的预算，包含推理 token |
+| `skills.draftRetryMaxTokens` | `65536` | 整数，128–131072 | **重试输出 token 上限**：仅在 `max-tokens` 且此值大于 `draftMaxTokens` 时重新生成一次；相同或更小值关闭截断重试 |
 | `skills.hints` | `true` | boolean | **对话提示**：在每个回合下方显示**本回合技能** |
 | `skills.sidebar` | `false` | boolean | **侧边栏入口**：技能管理单独显示在侧边栏，不再放在记忆系统里 |
 | `skills.reviewThreshold` | `5` | 1–50 | **复盘阈值**：对话窗口的活动积分达到它才会复盘 |
@@ -376,6 +379,10 @@ DSH 的实时模型目录会报告各模型的输入模态，选择器为支持�
 | `skills.expiryDays` | `7` | 1–90 天 | **建议有效期**：未处理的建议超过这个时间即过期 |
 | `skills.maxPendingPerSession` | `5` | 1–20 | **单个对话待处理上限**：超出后，这段对话里置信度最低的待处理建议过期 |
 | `skills.casesPerRun` | `8` | 1–20 | **每次回测用例数**：一次自动回测最多运行的用例数 |
+
+关闭自进化时也可以配置**草案生成**。两项预算分别明确限制每次尝试，避免隐性翻倍用户设置的上限。每份草案最多尝试两次，与原有的文件校验失败修正共用一次重试机会。只有 `max-tokens` 才可使用较大的预算；取消和其他模型错误不重试。截断结果在解析和保存前丢弃，重试使用新的任务与子代理。成功草案仍通过原有 schema、内容校验和用户明确采纳；生成草案不会改动已安装技能。复盘、用例生成、执行和评分仍使用原有预算。
+
+两项均应符合所选提供方/模型的输出上限。若仍被截断，错误会列出实际尝试的预算、原 `SKILL.md` 的 UTF-8 字节数（新技能为零）以及设置位置。只在模型支持的范围内提高预算；提供方拒绝请求预算时应调低。如果完整文件无法容纳于该上限，需要缩短技能或选择输出上限更高的模型。
 
 `skills.targetScope` 默认保留 `user`，兼容现有安装：升级或修改存储范围不会把新技能写到另一个根目录。需要跟随存储范围时显式选择 `storage`。新建议记录解析后的目标；草案及重新起草保留该目标，采纳沿用草案的目标，除非用户手动选择其他位置。旧版本中没有目标字段的建议在起草时使用当前设置；已有草案保留记录的目标。改进已有技能始终写回原 `baseKey`，不受设置或目标覆盖影响。
 

@@ -46,6 +46,7 @@ describe('Starting a delegated child on the running DSH (#356)', () => {
     const run = await startSubagent(host.subagents, agents, 'spawn', input)
 
     expect(host.startActivation).toHaveBeenCalledWith({
+      childId: expect.stringMatching(/^mnemon-run-v1-[0-9a-f-]{36}$/),
       provider: 'spawn',
       label: 'Consolidate local user profile',
       request: {

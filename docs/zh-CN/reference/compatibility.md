@@ -7,6 +7,7 @@ Starter 固定经过测试的官方插件组合。下表记录验证范围，不
 | 组件 | 基线 | 已验证的范围 |
 |---|---|---|
 | DSH 当前 RC | `0.2.2-rc.1` | 2026-11-04 已发布到 npm `next`。Node 24.22.2 上运行完整已安装宿主测试及打包 Starter 安装、升级检查；Host 要求 Node >=24.9.0。 |
+| 单独检查的 DSH 源码快照 | `fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159` | 使用未经修改的源码构建，在 Node 24 上单独验证完整测试与真实模型 WebUI 任务。只代表这一 master commit，不代表所有源码构建或 alpha。见[新版 Host 验收](../../pr-assets/dsh-master-agents/README.zh-CN.md)。 |
 | DSH 开发基线 | `0.2.1-rc.5` | 保持锁定的开发依赖，并在 Node 22.19 的已安装宿主 CI 中验证。2026-11-04 npm `latest` 仍指向此版本。 |
 | DSH 早期受支持宿主 | `0.2.0-rc.2`, `0.2.1-rc.3` | CI 在这些已安装包上运行全部根测试。版本差异见 [DSH 0.2.0 与 0.2.1](#dsh-020-与-021)；支持范围仍包含 0.2.1-rc.1 和 rc.2。 |
 | Node.js | `22.19`、`24` | 分别用于源码 CI 与打包制品 CI；开发要求 `^22.19.0 \|\| >=24.11.0` |
@@ -44,9 +45,15 @@ Git 同步保留原有设置与载荷格式。保存的默认提交者组合现�
 
 ### 已发布的 DSH 0.2.2 RC1 与 issue #554
 
-请使用已发布的 `@deepseek-ai/dsh@0.2.2-rc.1` 包。它的公开 Agent 注册表仍提供 `roots()`、`isOwnedBy()`，子 Agent 运行时保留 Provider 枚举及嵌套的 activation 请求，隐藏的独立任务 Agent 也仍受支持。#554 报告的源码构建 `8bd073392eef6f54e921a093b95076248eb08cbb` 使用不同契约，不等同于已发布 RC；其源码专用适配器不进入发布制品。
+官方发布的 `@deepseek-ai/dsh@0.2.2-rc.1` 仍提供 `agents.roots()`、`agents.isOwnedBy()`、Provider 枚举、嵌套的 activation 请求及隐藏独立任务 Agent 的能力。官方 RC 继续使用这些路径。源码构建可能显示相同版本号，却提供不同契约；#554 最初报告的是 `8bd073392eef6f54e921a093b95076248eb08cbb`。
 
-既有任务入口保持可用：独立 Skills 任务、证据回答与保存到记忆、Runtime 维护、Document 创建与归档、Provider 放置及记忆空间元数据整理。真实宿主回归覆盖独立任务成功执行、Document 原文与归档索引保留、ACP 不显示任务会话、spawn/fork 工具守卫、取消清理，以及组合失败时在首次模型请求前拒绝。运行时、存储、配置及支持版本范围均未改变，没有为兼容 RC 关闭功能。
+master commit `fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159` 改为由 Subagent 管理子 Agent 归属，提供 `rootOf()` 和扁平 activation 请求，并移除了公开的隐藏独立根 Agent 路径。Mnemon 按能力适配，在首个模型步骤前预留并校验子 Agent，独立任务改用普通根 Agent。**该 Host 的 ACP 列表可发现已完成的内部任务根**，标题为 `Mnemon · …`。标准 WebUI 会隐藏列表元数据标记为尚未开始对话轮次、且不是当前打开项的任务根；本次真实侧栏仍只显示用户会话。其他客户端、主动打开记录或列表元数据缺失时仍可能显示，不能保证始终静默。任务不会占用当前对话。完成的记录在重启后仍能识别。查看历史或收到 Agent 自动消息不会恢复记忆权限；用户直接发送新消息，则在同一历史中开启新的记忆轮次，按当前工作区、Source、Memory Space 和写入策略执行，原任务结果保持结束。续办的完成通知不会唤醒旧父会话继续执行旧请求。浏览已有记忆、直接检索等不启动 Agent 的读取不会创建任务会话。
+
+标准 Provider 的 `providerName` 从公开的、已解析的插件配置中发现，覆盖先于 Mnemon 加载以及重载后的 Provider。第三方子 Agent Provider 如果把注册名隐藏在代码中，可在 Mnemon 插件配置中填写可选的 `subagentProviderNames: [my-local-provider]`。这些名称只作为候选，仍需通过实时注册状态、隔离与能力检查；`spawn` 优先级及显式选择 `fork` 审查的语义保留。此项控制子 Agent 执行，与 Memory Space Provider 选择无关。
+
+这一固定 master 快照的[测试、真实 DeepSeek 截图与限制](../../pr-assets/dsh-master-agents/README.zh-CN.md)单独记录，不改变官方 RC 支持边界，也不恢复 alpha 支持。对上游显式后台任务 API 的诉求见 [dsh-external/issues#681](https://github.com/dsh-external/issues/issues/681)。
+
+既有任务入口保持可用：独立 Skills 任务、证据回答与保存到记忆、Runtime 维护、Document 创建与归档、Provider 放置及记忆空间元数据整理。真实宿主回归覆盖独立任务成功执行、Document 原文与归档索引保留、按 Host 区分的 ACP 任务可见性、spawn/fork 工具守卫、取消清理，以及组合失败时在首次模型请求前拒绝。既有存储数据和已保存配置保持兼容，支持版本范围不变，没有为兼容 RC 关闭功能。
 
 已安装 RC 和打包 Starter 使用宿主自己的依赖。测试从同一安装解析 Loader，并观察其实际持久化方法。历史会话检查保留合法旧 descriptor，同时尊重宿主公开的校验器。包身份、命令、验收结果与边界见 [RC1 兼容验证记录](../../pr-assets/dsh-022-rc1/README.zh-CN.md)。
 
@@ -83,7 +90,7 @@ dsh-mnemon 在两个版本上运行方式相同，使用同一份记忆数据。
 
 - **记忆子 Agent。** DSH 0.2.0 用一次性的 `subagents.start` 启动子 Agent，它的 spawn 与 fork provider 从启动请求中接受子 Agent 的指令和工具过滤。DSH 0.2.1 把所有子 Agent 都作为托管 activation 启动（`startActivation`，[#356](https://github.com/omdsh-dev/dsh-mnemon/issues/356)），两者都不再接受：子 Agent 要么沿用父 Agent 的工具与指令，要么使用为它指定的 Agent 预设。在 DSH 0.2.1 上，dsh-mnemon 以 caller 方式交付每个记忆子 Agent 的结果，所以结果回到 Mnemon，对话不会收到完成通知；并在 DSH 发布子 Agent 时、它的第一步之前，也在其他插件看到它之前，把它的指令和工具清单注册在它自己的作用域里。无论哪个版本，子 Agent 都只看到记忆工具和结果工具。这涵盖存入记忆、`mnemon_remember` 等记忆空间写入、USER.md 压缩、工作记忆归档、空闲审查、项目档案归档以及 Git 同步的核对审查。在 DSH 0.2.1 上，只有由 DSH 在本进程中创建子 Agent 的 provider（例如它的 spawn 与 fork）才会这样使用；其他 provider 在启动前就被拒绝，所以记忆任务不会带着对话的工具运行。
 - **DSH 0.2.1 上可续接的记忆任务。** 在那里所有本地子 Agent 都可以续接：
-  - 在对话之下启动的子 Agent，例如委派写入或空闲审查，会以“可继续”出现在对话的子 Agent 列表中。之后模型发来的消息，或你在该列表中发给它的消息，会在 Mnemon 的委派之外续接它，并带着对话自己的工具和指令。任务结束后，Mnemon 拒绝它使用任何记忆工具，它只能回复（[#387](https://github.com/omdsh-dev/dsh-mnemon/issues/387)）。Mnemon 无法移除这些条目，请不要续接它们，有需要时直接在对话中提出；
+  - 在对话之下启动的子 Agent，例如委派写入或空闲审查，会以“可继续”出现在对话的子 Agent 列表中。之后模型发来的消息，或你在该列表中发给它的消息，会在 Mnemon 的委派之外续接它，并带着对话自己的工具和指令。任务结束后，自动续接仍不能使用记忆工具（[#387](https://github.com/omdsh-dev/dsh-mnemon/issues/387)）；你直接发送新的消息则可按当前配置继续读写，原任务的结果回调不会恢复。重启后若 Host 提示父会话不在线或暂时无法发送，请先打开父会话，再进入子会话；
   - 它运行期间会占用对话的一个子 Agent 名额（`maxActiveSubagents`，默认 8 个）。名额用满时，记忆任务会因 `subagent limit reached` 失败。
 
   在 DSH 0.2.0 上，记忆任务无法续接。

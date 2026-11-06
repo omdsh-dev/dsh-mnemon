@@ -1,0 +1,366 @@
+{
+  "date": "2026-11-05",
+  "status": "local verification complete; official rc1 live backtest partial",
+  "packageUnderTest": {
+    "label": "0.5.40 plus this PR",
+    "branch": "codex/compat-dsh-master-agents",
+    "baseCommit": "cce2ab186db2edba30fda25d8b64b1750f0835f0",
+    "runtimeCommit": "d2cbef138d1821aa68ad1105eaafb24ed0975545"
+  },
+  "hosts": {
+    "official": {
+      "package": "@deepseek-ai/dsh@0.2.2-rc.1",
+      "tagCommit": "66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db"
+    },
+    "source": {
+      "commit": "fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159",
+      "sourceModified": false,
+      "buildNode": "25.6.1",
+      "buildGatesPassed": 10
+    },
+    "runtimeNode": "24.22.2"
+  },
+  "checks": [
+    {
+      "command": "pnpm run verify",
+      "exitCode": 0,
+      "node": "24.22.2",
+      "root": {
+        "passed": 2534,
+        "skipped": 8
+      },
+      "workspace": {
+        "passed": 753,
+        "skipped": 3
+      },
+      "includes": [
+        "documentation",
+        "typecheck",
+        "build",
+        "workspace checks",
+        "Headless",
+        "public package checks",
+        "publint",
+        "attw"
+      ]
+    },
+    {
+      "host": "official rc1",
+      "command": "DSH_HOST_ROOT=<official npm installation> node24 node_modules/vitest/vitest.mjs run --config scripts/installed-dsh.config.ts",
+      "exitCode": 0,
+      "passed": 2534,
+      "skipped": 8
+    },
+    {
+      "host": "fixed master",
+      "command": "DSH_HOST_ROOT=<source checkout>/apps/cli node24 node_modules/vitest/vitest.mjs run --config scripts/installed-dsh.config.ts",
+      "exitCode": 0,
+      "passed": 2534,
+      "skipped": 8
+    },
+    {
+      "host": "official 0.2.0-rc.2",
+      "node": "22.22.0",
+      "command": "DSH_HOST_ROOT=<fresh official global-prefix installation> node node_modules/vitest/vitest.mjs run --config scripts/installed-dsh.config.ts",
+      "exitCode": 0,
+      "passed": 2527,
+      "skipped": 15,
+      "scope": "Full root suite after restricting four managed cold-child tests to Hosts with startActivation. Original one-shot task and root archive coverage remains enabled."
+    },
+    {
+      "host": "official rc1 and fixed master",
+      "command": "installed-Host tests/task-agent-session-host.spec.ts after test applicability correction",
+      "exitCode": 0,
+      "perHost": {
+        "passed": 26,
+        "skipped": 1
+      },
+      "runtimeChanges": false
+    }
+  ],
+  "live": {
+    "model": "deepseek-flash",
+    "effort": "high",
+    "fixture": "fictional Lumen records in two disposable Hosts",
+    "requestLimit": 64,
+    "http200Requests": 53,
+    "initialWrongEndpoint404Requests": 4,
+    "cohorts": {
+      "master": {
+        "requests": 31,
+        "httpStatuses": {
+          "200": 31
+        },
+        "usage": {
+          "input_tokens": 73392,
+          "cache_read_input_tokens": 133120,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 23164
+        }
+      },
+      "rc1": {
+        "requests": 22,
+        "httpStatuses": {
+          "200": 22
+        },
+        "usage": {
+          "input_tokens": 58753,
+          "cache_read_input_tokens": 50816,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 19554
+        }
+      }
+    },
+    "completedOnBoth": [
+      "chat recall",
+      "Document search",
+      "Save to memory",
+      "stored record readback",
+      "cited Ask Agent",
+      "idle review",
+      "Skills proposal",
+      "Skills draft"
+    ],
+    "backtest": {
+      "master": {
+        "scoredCaseExecutions": 4,
+        "executionErrors": 0,
+        "contentQualityAccepted": false
+      },
+      "officialRc1": {
+        "scoredCaseExecutions": 1,
+        "executionErrors": 3,
+        "failedAttempts": 6,
+        "contentQualityAccepted": false,
+        "error": "MALFORMED_RESPONSE: DeepSeek Messages stream: tool input is invalid JSON",
+        "offlineReplay": "Both actual Host translators reject all 6 saved incomplete inputs identically; 5 also lack result.answer"
+      }
+    },
+    "skillsAdopted": 0,
+    "phase": "initial capability cohort before manual continuation policy"
+  },
+  "processRestart": {
+    "master": {
+      "sessionCountBefore": 23,
+      "sessionCountAfter": 23,
+      "newSessionCount": 0,
+      "lostSessionCount": 0,
+      "sentinelInsights": 0,
+      "savedAcceptanceRecords": 1
+    },
+    "rc1": {
+      "sessionCountBefore": 21,
+      "sessionCountAfter": 21,
+      "newSessionCount": 0,
+      "lostSessionCount": 0,
+      "sentinelInsights": 0,
+      "savedAcceptanceRecords": 1
+    }
+  },
+  "completedTaskProbe": {
+    "host": "master",
+    "kind": "reopened completed idle-review child after full Host restart",
+    "initialRuntimeToolProbe": "mnemon_runtime_memory not exposed; no call made",
+    "actualTool": "mnemon_remember",
+    "expectedSentinel": "COMPAT_MUST_NOT_WRITE",
+    "toolResult": "Error: This Mnemon task has finished, so it no longer reads or changes memory. Start a new task from the Mnemon workbench.",
+    "sentinelInsights": 0,
+    "method": "query_only SELECT from actual Mnemon Native insights tables; both saved acceptance records read back through WebUI",
+    "historicalSuperseded": true,
+    "currentPolicy": "A new direct human message gets fresh current-policy authority; history viewing and automatic input do not."
+  },
+  "visibility": {
+    "masterTaskRoots": 6,
+    "masterAcpDiscoverable": true,
+    "masterRootListMetadataBlank": true,
+    "masterSidebarUserConversations": 2,
+    "officialSidebarUserConversations": 2,
+    "syntheticTurnsInjectedIntoTaskRoots": 0,
+    "guaranteedSilentOnMaster": false
+  },
+  "screenshots": [
+    {
+      "file": "master-after-restart-guard.jpg",
+      "sha256": "411efa505609143760c929abfaac15be452b06b30bfe719d4d917175caf2bcb6"
+    },
+    {
+      "file": "master-after-restart-memory.jpg",
+      "sha256": "c4e24fa78cb71432f3f1bb8e7a81c210571b3796ac02385c06020b1b1814b0c1"
+    },
+    {
+      "file": "master-live-ask-agent.jpg",
+      "sha256": "afb15bd575da7584920ccc8da5acda07482d3c2cffd1fc50620fbad33fc7b8a3"
+    },
+    {
+      "file": "master-live-backtest.jpg",
+      "sha256": "d43c516a2932d411abc3f7edea823b0e08ac7655524591428fb7dbf389bda209"
+    },
+    {
+      "file": "master-live-idle-review.jpg",
+      "sha256": "2719a4594bdf13ab3fa0d4f57137b2a30753cdfd8a70f2b41844ec3831e0c178"
+    },
+    {
+      "file": "master-live-recall.jpg",
+      "sha256": "a359d0ed5bcbc46ee09628203fb96764fa43bf890ffcd1f2e09568d7706cdd69"
+    },
+    {
+      "file": "master-live-save.jpg",
+      "sha256": "f83fd213dd5e05c7d35c8fbbccfb9f468ca0c8a4f7e1903c0fa765f44d870c41"
+    },
+    {
+      "file": "master-live-skills.jpg",
+      "sha256": "1c1fe6999ff9b0dbd6fc5127dc8aed0a5630314b499ef4cdcf1fbaffdad46827"
+    },
+    {
+      "file": "master-session-list.jpg",
+      "sha256": "88194e1c97b3a1346c95b2ca8e849ef021229be76114412a05ec8515d9e1219b"
+    },
+    {
+      "file": "master-stored-memory.jpg",
+      "sha256": "c4e24fa78cb71432f3f1bb8e7a81c210571b3796ac02385c06020b1b1814b0c1"
+    },
+    {
+      "file": "master-task-before-continuation.jpg",
+      "sha256": "990490d6f5495aee7f88a88b0f97752183739e44c57446a838535dc7b90dda90"
+    },
+    {
+      "file": "master-task-continuation-readback.jpg",
+      "sha256": "fb6cd666d9bfd3a67089dfe7e5ae112989d0a56cab1fc276167d0a7a8d6028e4"
+    },
+    {
+      "file": "master-task-user-continuation.jpg",
+      "sha256": "6f107b045d1d35e9d4d10860dc81bc7d890003fafb02a9e673d51a232d13e4ef"
+    },
+    {
+      "file": "rc1-after-restart-memory.jpg",
+      "sha256": "62188e83acb0cd97deec0d1aaddd1b972cdf6c75587f7554d8c85d9cb89b3f73"
+    },
+    {
+      "file": "rc1-live-ask-agent.jpg",
+      "sha256": "c555f7d13ef67e84f6dd5ec1cee67912d37ec7a0fb509aeb0dcd22040f7d9df8"
+    },
+    {
+      "file": "rc1-live-backtest-error.jpg",
+      "sha256": "a21358468eae204bc13fdbf875a70aad3e7ab5d0804b208ff14920fd8d4a3242"
+    },
+    {
+      "file": "rc1-live-idle-review.jpg",
+      "sha256": "21e41d5112f84c91a13d2714e8d7613c3c70fe310a81c8c889a84df260f16953"
+    },
+    {
+      "file": "rc1-live-recall.jpg",
+      "sha256": "a49f5fe9091a67d5f873c69b1aa87a4868dcc7d266c456c247eaee81fd8016dc"
+    },
+    {
+      "file": "rc1-live-save.jpg",
+      "sha256": "82990efd658b061d1b050c5ba9f7faeb0849992ae22a226775c3bbe38e0a951d"
+    },
+    {
+      "file": "rc1-live-skills.jpg",
+      "sha256": "4439dcb4b5f49c90041fbbc7cc27a02593e9d249ceb364244a5e2840c7822b93"
+    },
+    {
+      "file": "rc1-session-list.jpg",
+      "sha256": "e9ee2d0060a16d0c46c26713c4e82a3ee138697ad4b92f0155d49fca5b02a2c7"
+    },
+    {
+      "file": "rc1-stored-memory.jpg",
+      "sha256": "0c0c5ac6ce7c98a34b13d36fbadee605084618046b06ccd6a518c4822dd3940f"
+    },
+    {
+      "file": "rc1-task-continuation-readback.jpg",
+      "sha256": "1a1dcb582c2938069575c870ddc524af2276f1047b4f227def32b39ce38f09d0"
+    },
+    {
+      "file": "rc1-task-user-continuation.jpg",
+      "sha256": "90a06ac0328fdb82b0f3177feee683efb80462ba3769ca952b2581624adf8747"
+    }
+  ],
+  "limitations": [
+    "fixed source snapshot only; no alpha or arbitrary master promise",
+    "live rc1 Skills backtest is partial, not a pass",
+    "model quality is not established by execution completion",
+    "no live cloud Memory Space provider certification",
+    "Host-preserved model stream, not independent raw upstream HTTP capture",
+    "Cold child sending still requires a loaded parent under the Host public delivery contract."
+  ],
+  "continuation": {
+    "runtimeCommit": "d2cbef138d1821aa68ad1105eaafb24ed0975545",
+    "model": "deepseek-flash",
+    "effort": "high",
+    "requests": 38,
+    "finalRequestLimit": 64,
+    "priorLocalLimit": 32,
+    "priorLocalLimitReached": true,
+    "postRestartRequests": 6,
+    "cohorts": {
+      "master": {
+        "requests": 21,
+        "httpStatuses": {
+          "200": 21
+        },
+        "usage": {
+          "input_tokens": 33555,
+          "cache_read_input_tokens": 171520,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 5594
+        },
+        "postRestartRequests": 3
+      },
+      "rc1": {
+        "requests": 17,
+        "httpStatuses": {
+          "200": 17
+        },
+        "usage": {
+          "input_tokens": 28685,
+          "cache_read_input_tokens": 141184,
+          "cache_creation_input_tokens": 0,
+          "output_tokens": 3392
+        },
+        "postRestartRequests": 3
+      }
+    },
+    "readback": {
+      "master": {
+        "sessionCountBefore": 5,
+        "sessionCountAfter": 5,
+        "newSessions": 0,
+        "lostSessions": 0,
+        "originalMemoryUnchanged": true,
+        "originalMemory": "Lumen 的回滚归档标识为 CONT-57A，归档保留 72 小时。",
+        "newMemory": "Lumen 重启后发布检查标识为 CONT-AFTER-RESTART-88。",
+        "activeAcceptanceRecords": 3,
+        "parentModelStepsAfterRestart": 0,
+        "parentEventsAfterRestart": {
+          "session/end-seed": 1,
+          "agent/inbox/spliced": 2,
+          "turn/start": 1,
+          "turn/end": 1
+        }
+      },
+      "rc1": {
+        "sessionCountBefore": 5,
+        "sessionCountAfter": 5,
+        "newSessions": 0,
+        "lostSessions": 0,
+        "originalMemoryUnchanged": true,
+        "originalMemory": "Lumen 的回滚归档标识为 CONT-57A，保留 72 小时。",
+        "newMemory": "Lumen 重启后发布检查标识为 CONT-AFTER-RESTART-88。",
+        "activeAcceptanceRecords": 2,
+        "parentModelStepsAfterRestart": 0,
+        "parentEventsAfterRestart": {
+          "session/end-seed": 1,
+          "agent/inbox/spliced": 2,
+          "turn/start": 1,
+          "turn/end": 1
+        }
+      }
+    },
+    "parentEvidenceCutoffUtc": "2026-11-05T11:35:00Z",
+    "readbackMethod": "Read-only Node SQLite queries of actual Native insights; WebUI content view; parent session step/start and assistant/message event counts.",
+    "legacyIdentification": "Only own persisted descriptor, first human-source delegated prompt and Host-recorded completion protocol; no origin-only inference.",
+    "coldChildHostBehavior": "Load the parent before sending to a cold child. rc1 gives a read-only hint; fixed master gives delivery-unavailable.",
+    "rehearsalFailure": "Before settlement isolation the rc1 parent soft-deleted CONT-HUMAN-72. Final new CONT-AFTER-RESTART-88 remains active on both Hosts; the historical record is not counted as retained."
+  }
+}

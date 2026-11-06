@@ -1,0 +1,34 @@
+{
+  "codeRevision": "3475288406b68e005f6e69afc67922542cf8bc12",
+  "host": "@deepseek-ai/dsh@0.2.2-rc.1",
+  "node": "24.22.2",
+  "locale": "zh-CN",
+  "fixture": "scripts/serve-e2e.mjs --without-mnemon-cli",
+  "defaultBudgets": {
+    "draftMaxTokens": 32768,
+    "draftRetryMaxTokens": 65536
+  },
+  "savedBudgets": {
+    "draftMaxTokens": 49152,
+    "draftRetryMaxTokens": 98304
+  },
+  "afterPageReload": {
+    "draftMaxTokens": 49152,
+    "draftRetryMaxTokens": 98304
+  },
+  "selfEvolutionEnabled": false,
+  "paidProviderCalls": 0,
+  "screenshots": {
+    "settings-applied.png": {
+      "sha256": "dcfc861b3925d72f523bba4db0c175c1d62fd27361730bf4b392c6f661dc7356",
+      "bytes": 82099
+    },
+    "settings-defaults.png": {
+      "sha256": "abfb78e2eb8570c188f5b7372e6592003b0d48b60b8f4e6d1054b20db1955f66",
+      "bytes": 79561
+    }
+  },
+  "limits": [
+    "Settings UI and profile persistence only; no real gateway generation was run."
+  ]
+}
