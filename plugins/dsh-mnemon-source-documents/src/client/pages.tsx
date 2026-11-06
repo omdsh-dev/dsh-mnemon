@@ -59,6 +59,8 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
   const [composing, setComposing] = useState(false)
   const [editing, setEditing] = useState(false)
   const [confirmArchive, setConfirmArchive] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<{ document: DocumentView; revision: string } | null>(null)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [content, setContent] = useState('')
@@ -69,10 +71,11 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
     const request = displayRequests.begin()
     setLoading(true); setError(null); setVisibleLimit(pageSize)
     try {
+      // Searching updates access metadata. Read the index afterward so a
+      // subsequent confirmed deletion uses the displayed, current revision.
+      const searched = nextQuery.trim() === '' ? undefined : (await props.client.searchDocuments(nextQuery, nextStatus === 'archived')).results
       const current = await props.client.documents()
-      const records = nextQuery.trim() === ''
-        ? current.documents
-        : (await props.client.searchDocuments(nextQuery, nextStatus === 'archived')).results
+      const records = searched ?? current.documents
       const filtered = records.filter(record => record.status === nextStatus)
         .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
       if (!displayRequests.isCurrent(request)) return
@@ -90,11 +93,11 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
   useEffect(() => { void display(query, status) }, [display, props.revision, status])
   useEffect(() => {
     setSelected(null)
-    if (selectedId === null) return
+    if (selectedId === null || !snapshot?.documents.some(document => document.id === selectedId)) return
     let active = true
     void props.client.document(selectedId).then(value => { if (active) setSelected(value) }).catch(reason => { if (active) setError(message(reason)) })
     return () => { active = false }
-  }, [props.client, selectedId, props.revision])
+  }, [props.client, selectedId, snapshot])
   useLayoutEffect(() => {
     if (readerRef.current !== null) readerRef.current.scrollTop = 0
   }, [selectedId])
@@ -145,9 +148,24 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
     } catch (reason) { setError(message(reason)) } finally { setSaving(false) }
   }
 
+  const remove = async () => {
+    if (!props.writeEnabled || deleteTarget?.document.fileRevision === undefined || props.client.deleteDocument === undefined) return
+    setSaving(true); setDeleteError(null); setError(null); setNotice(null)
+    try {
+      await props.client.deleteDocument(deleteTarget.document.id, deleteTarget.revision, deleteTarget.document.fileRevision)
+      setDeleteTarget(null); setSelected(null); setSelectedId(null)
+      setNotice(t('documents.deleted'))
+      props.onMutate()
+      await display(query, status)
+    } catch (reason) { setDeleteError(message(reason)) } finally { setSaving(false) }
+  }
+
   const usage = snapshot === null ? 0 : Math.min(100, snapshot.activeBytes / snapshot.limitBytes * 100)
   const activeCount = snapshot?.activeCount ?? 0
   const archivedCount = snapshot?.archivedCount ?? 0
+  const selectedRecord = snapshot?.documents.find(document => document.id === selected?.id)
+  const selectedIsCurrent = selected?.fileRevision !== undefined && selectedRecord?.revision === selected.revision
+    && selectedRecord.contentHash === selected.contentHash && selectedRecord.status === selected.status
   const composer = <form id={documentCreateFormId} className={css.documentEditor} onSubmit={event => void create(event)}>
     <header><div><h3>{t('documents.newTitle')}</h3><p>{t('documents.editorHint')}</p></div><span>{t('documents.managedCopy')}</span></header>
     <div className={css.documentEditorMeta}><label>{t('documents.name')}<input value={title} onChange={event => setTitle(event.target.value)} required /></label><label>{t('documents.routing')}<input value={description} onChange={event => setDescription(event.target.value)} /></label></div>
@@ -168,6 +186,7 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
     setSelectedId(documentId)
     setEditing(false)
     setConfirmArchive(false)
+    setDeleteTarget(null)
   }
 
   return (
@@ -201,7 +220,7 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
 
         <section ref={readerRef} className={css.documentReader} aria-label={t('documents.reader')} data-scroll-region={''}>
           {selected === null ? <EmptyState glyph="▤" title={t('documents.selectTitle')}>{t('documents.selectText')}</EmptyState> : (<article className={css.documentDetail}>
-            <header><div><span>{selected.status === 'active' ? t('documents.active') : t('documents.coldArchive')}</span><h3>{selected.title}</h3><p>{selected.description || t('documents.noDescription')}</p></div><div>{props.writeEnabled && selected.status === 'active' && <button type="button" className={documentEditActionClass} onClick={beginEdit}>{t('documents.edit')}</button>}</div></header>
+            <header><div><span>{selected.status === 'active' ? t('documents.active') : t('documents.coldArchive')}</span><h3>{selected.title}</h3><p>{selected.description || t('documents.noDescription')}</p></div><div className={css.documentActions}>{props.writeEnabled && selected.status === 'active' && <button type="button" className={documentEditActionClass} onClick={beginEdit}>{t('documents.edit')}</button>}{props.writeEnabled && props.client.deleteDocument !== undefined && snapshot !== null && <button type="button" className={documentArchiveActionClass} disabled={!selectedIsCurrent} onClick={() => { setDeleteError(null); setDeleteTarget({ document: selected, revision: snapshot.revision }) }}>{t('documents.delete')}</button>}</div></header>
             <dl><div><dt>{t('documents.path')}</dt><dd><code>{selected.relativePath}</code></dd></div><div><dt>{t('documents.revision')}</dt><dd>{selected.revision}</dd></div><div><dt>{t('documents.hash')}</dt><dd><code>{selected.contentHash.slice(0, 16)}</code></dd></div><div><dt>{t('documents.size')}</dt><dd>{humanBytes(selected.sizeBytes)}</dd></div></dl>
             {selected.sourcePaths.length > 0 && <div className={css.documentSources}><span>{t('documents.sources')}</span>{selected.sourcePaths.map(path => <code key={path}>{path}</code>)}</div>}
             {selected.status === 'archived' && <div className={css.documentArchiveReceipt}><strong>{t(selected.memoryBodyIds.length === 0 ? 'documents.archiveNote' : 'documents.archiveReceipt')}</strong><p>{selected.archiveSummary}</p><div>{selected.memoryBodyIds.map(id => <code key={id}>{id}</code>)}</div></div>}
@@ -214,6 +233,7 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
       {composing && <SidebarModal title={t('documents.newTitle')} description={t('documents.editorHint')} busy={saving} onClose={resetComposer} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close className={css.secondaryButton} disabled={saving} onClick={resetComposer}>{t('common.cancel')}</button><button type="submit" form={documentCreateFormId} className={css.primaryButton} disabled={saving || title.trim() === '' || content.trim() === ''}>{saving ? t('documents.saving') : t('documents.create')}</button></div>}>{composer}</SidebarModal>}
       {editing && selected !== null && <SidebarModal title={t('documents.editTitle')} description={selected.title} busy={saving} onClose={() => setEditing(false)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close className={css.secondaryButton} disabled={saving} onClick={() => setEditing(false)}>{t('common.cancel')}</button><button type="submit" form={documentEditFormId} className={css.primaryButton} disabled={saving}>{saving ? t('documents.saving') : t('documents.save')}</button></div>}>{editComposer}</SidebarModal>}
       {confirmArchive && selected !== null && <SidebarModal title={t('documents.archiveConfirm')} description={selected.title} busy={saving} onClose={() => setConfirmArchive(false)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close data-autofocus className={css.secondaryButton} disabled={saving} onClick={() => setConfirmArchive(false)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void archive()}>{saving ? t('documents.archiving') : t('documents.archiveNow')}</button></div>}><div className={css.bodyDeleteConfirm}><p>{t('documents.archiveDescription')}</p><div className={css.bodyDeleteSummary}><strong>{selected.title}</strong><span>{selected.relativePath} · {humanBytes(selected.sizeBytes)}</span></div></div></SidebarModal>}
+      {deleteTarget !== null && props.writeEnabled && <SidebarModal title={t('documents.deleteConfirm')} description={deleteTarget.document.title} busy={saving} onClose={() => setDeleteTarget(null)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close data-autofocus className={css.secondaryButton} disabled={saving} onClick={() => setDeleteTarget(null)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void remove()}>{saving ? t('documents.deleting') : t('documents.deleteNow')}</button></div>}><div className={css.bodyDeleteConfirm}>{deleteError !== null && <div className={css.inlineError} role="alert">{deleteError}</div>}<p>{t('documents.deleteDescription')}</p><div className={css.bodyDeleteSummary}><strong>{deleteTarget.document.title}</strong><span>{deleteTarget.document.relativePath} · {humanBytes(deleteTarget.document.sizeBytes)}</span></div></div></SidebarModal>}
     </div>
   )
 }

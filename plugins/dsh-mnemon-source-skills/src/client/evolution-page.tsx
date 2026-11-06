@@ -4,7 +4,7 @@ import { appearanceClass, SelectField } from 'dsh-mnemon/client'
 import type { BacktestRun, DraftView, ModelRoute, SkillDraft, SkillRootKind, SkillSuggestion, SuggestionStatus, SuggestionView, Trajectory } from '../contracts.ts'
 import { modelOptionPick, modelOptionValue, useModelChoice } from './model-choice.tsx'
 import { css, points, relative, stamp, useT } from './presentation.ts'
-import { ActionTag, Busy, Clamp, Confirm, diffLabels, Empty, Fold, MoreList, MoreMenu, StatusTag, StepTimeline, useLink } from './shared.tsx'
+import { ActionTag, Busy, Clamp, Confirm, diffLabels, Empty, Fold, MoreList, MoreMenu, SkillMarkdown, StatusTag, StepTimeline, useLink } from './shared.tsx'
 import { EvidenceView } from './evidence-page.tsx'
 import { RunDetail } from './skill-tests.tsx'
 import type { EvolutionFilter, SkillsLocation, SkillsPageContext } from './ui.tsx'
@@ -211,7 +211,7 @@ function SuggestionDetail(props: { context: SkillsPageContext; id: string; model
     <header className={css.skDetailHead}>
       <div>
         <span className={css.skKicker}><ActionTag action={suggestion.action} />{suggestion.status !== 'pending' && <StatusTag status={suggestion.status} />}</span>
-        <h3>{view.skill === undefined ? suggestion.skillName : <button type="button" className={css.skTitleLink} onClick={() => context.navigate({ tab: 'skills', skillKey: view.skill!.key })}>{suggestion.skillName}</button>}</h3>
+        <h3>{view.skill === undefined || view.skillInCatalog === false ? suggestion.skillName : <button type="button" className={css.skTitleLink} onClick={() => context.navigate({ tab: 'skills', skillKey: view.skill!.key })}>{suggestion.skillName}</button>}</h3>
         <p>{suggestion.summary}</p>
         <span className={css.skMeta}>{meta.map(part => <span key={part}>{part}</span>)}</span>
       </div>
@@ -225,13 +225,17 @@ function SuggestionDetail(props: { context: SkillsPageContext; id: string; model
       onClose={() => setDeleting(false)}
       onConfirm={() => void act(async () => { await context.client.deleteSuggestion(suggestion.id); setDeleting(false); context.notice(t('evolution.deleted')) })} />}
     {suggestion.rationale !== undefined && <Clamp text={suggestion.rationale} />}
-    {suggestion.action === 'update' && view.skill === undefined && <p className={css.skWarn}>{t('evolution.skillGone')}</p>}
+    {suggestion.action === 'update' && view.skill === undefined && <p className={css.skWarn}>{t(view.resolution === 'origin-unavailable' ? 'evolution.originUnavailable' : 'evolution.skillGone')}</p>}
     {suggestion.action === 'update' && view.skill !== undefined && !view.hashCurrent && suggestion.status === 'pending' && <p className={css.skWarn}>{t('evolution.skillChanged')}</p>}
     {suggestion.status === 'drafting' && <Busy label={t('evolution.drafting')} />}
     {suggestion.lastError !== undefined && suggestion.status === 'pending' && <p className={css.inlineError}>{t('evolution.draftFailed', { error: suggestion.lastError })}</p>}
     {suggestion.status === 'review' && suggestion.draftId !== undefined && <DraftReview context={context} draftId={suggestion.draftId} model={props.model ?? null} />}
-    {suggestion.status === 'adopted' && view.skill !== undefined && <p className={css.skSuccess}>{t('evolution.adopted')} <button type="button" className={css.skLink} onClick={() => context.navigate({ tab: 'skills', skillKey: view.skill!.key })}>{t('evolution.openSkill')} ›</button></p>}
+    {suggestion.status === 'adopted' && view.skill !== undefined && <p className={css.skSuccess}>{t('evolution.adopted')} {view.skillInCatalog !== false && <button type="button" className={css.skLink} onClick={() => context.navigate({ tab: 'skills', skillKey: view.skill!.key })}>{t('evolution.openSkill')} ›</button>}</p>}
     <div className={css.skFolds}>
+      {view.skill !== undefined && <Fold title={t('evolution.currentSkill')} meta={t(`root.${view.skill.root}`)}>
+        <p className={css.skMuted}>{view.skill.path}</p>
+        <SkillMarkdown body={view.skill.body} />
+      </Fold>}
       <Fold title={t('evolution.evidence')} meta={t('evolution.evidenceMeta', { conversations: references.length, steps: cited })}>
         {references.map((reference, index) => {
           const trajectory = trajectories.get(reference.trajectoryId)
@@ -320,11 +324,12 @@ function DraftReview(props: { context: SkillsPageContext; draftId: string; model
   }, () => setConfirmAdopt(false))
   const backtest = () => act(async () => {
     await context.client.backtest({ skillName: draft.skillName, target: { kind: 'draft', draftId: draft.id } })
-    const started = await context.client.backtest({ skillName: draft.skillName, target: { kind: draft.action === 'update' ? 'current' : 'none' } })
+    const started = await context.client.backtest({ skillName: draft.skillName, target: { kind: draft.action === 'update' ? 'current' : 'none', ...(draft.action === 'update' ? { draftId: draft.id } : {}) } })
     await context.client.linkRun(draft.id, started.runId)
   })
-  const redraft = (note: string) => act(() => context.client.generateDraft({ ...(draft.suggestionId === undefined ? { skill: draft.skillName } : { suggestionId: draft.suggestionId }), guidance: note, ...route }), () => setRedrafting(null))
+  const redraft = (note: string) => act(() => context.client.generateDraft({ draftId: draft.id, ...(draft.suggestionId === undefined ? {} : { suggestionId: draft.suggestionId }), guidance: note, ...route }), () => setRedrafting(null))
   const ready = draft.status === 'ready'
+  const originalAvailable = draft.action !== 'update' || view.base !== undefined
   const progress = (run: BacktestRun | undefined) => run === undefined ? 0 : run.progress.done
   const total = (candidate?.progress.total ?? 0) + (baseline?.progress.total ?? 0)
   const results = new Map<string, { title: string; base?: BacktestRun['results'][number]; next?: BacktestRun['results'][number] }>()
@@ -336,12 +341,13 @@ function DraftReview(props: { context: SkillsPageContext; draftId: string; model
       {ready && <div>
         {draft.action === 'create' && roots.length > 1 && <SelectField inline size="sm" label={t('draft.writeTo')} value={root} disabled={busy} onChange={setRoot}
           options={roots.map(kind => ({ value: kind, label: t(`root.${kind}`) }))} />}
-        <Button variant="primary" size="sm" disabled={!context.writable || busy || editing !== null || running} onClick={() => regressed ? setConfirmAdopt(true) : void adopt()}>{t('draft.adopt')}</Button>
+        <Button variant="primary" size="sm" disabled={!context.writable || busy || editing !== null || running || !originalAvailable} onClick={() => regressed ? setConfirmAdopt(true) : void adopt()}>{t('draft.adopt')}</Button>
         <Button variant="ghost" size="sm" disabled={!context.writable || busy} onClick={() => void act(() => context.client.discardDraft(draft.id))}>{t('draft.discard')}</Button>
         <MoreMenu label={t('common.more')} disabled={!context.writable || busy} onSelect={id => id === 'edit' ? setEditing(draft.content) : setRedrafting('')}
-          items={[{ id: 'edit', label: t('draft.edit') }, ...(context.client.canAssist('skill-draft') ? [{ id: 'redraft', label: t('draft.redraft') }] : [])]} />
+          items={[{ id: 'edit', label: t('draft.edit') }, ...(originalAvailable && context.client.canAssist('skill-draft') ? [{ id: 'redraft', label: t('draft.redraft') }] : [])]} />
       </div>}
     </header>
+    {!originalAvailable && <p className={css.skWarn}>{t(view.resolution === 'origin-unavailable' ? 'evolution.originUnavailable' : 'evolution.skillGone')}</p>}
     {draft.notes !== '' && <Clamp text={draft.notes} />}
     {draft.changes.length > 0 && <MoreList items={draft.changes} shown={3} />}
     <div className={css.skBacktest} data-tone={regressed ? 'bad' : candidateScore !== undefined && baselineScore !== undefined && candidateScore > baselineScore ? 'good' : undefined}>
@@ -354,7 +360,7 @@ function DraftReview(props: { context: SkillsPageContext; draftId: string; model
               <em>{candidateScore === baselineScore ? t('draft.same') : `${candidateScore > baselineScore ? '+' : '−'}${Math.round(Math.abs(candidateScore - baselineScore) * 100)}`}</em>
             </button>
           : <span className={css.skMuted}>{cases === 0 ? t('draft.noTests') : view.runs.length === 0 ? t('draft.notTested') : t('draft.notComparable')}</span>}
-      {!running && (cases ?? 0) > 0 && context.client.canAssist('skill-backtest') && ready && <Button variant="ghost" size="sm" disabled={!context.writable || busy} onClick={() => void backtest()}>{view.runs.length === 0 ? t('draft.runBacktest') : t('draft.rerun')}</Button>}
+      {!running && (cases ?? 0) > 0 && context.client.canAssist('skill-backtest') && ready && <Button variant="ghost" size="sm" disabled={!context.writable || busy || !originalAvailable} onClick={() => void backtest()}>{view.runs.length === 0 ? t('draft.runBacktest') : t('draft.rerun')}</Button>}
     </div>
     {excluded > 0 && !running && <p className={css.skMuted}>{t('draft.excluded', { count: excluded })}</p>}
     {details && results.size > 0 && <table className={css.skTable}>
