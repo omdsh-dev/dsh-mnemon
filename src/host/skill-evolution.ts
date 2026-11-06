@@ -357,14 +357,15 @@ export class SkillEvolution {
    * Write a draft for a suggestion (or for a skill directly) in the
    * background; the suggestion shows `drafting` until it is recorded.
    */
-  async draft(port: SkillsSourcePort, workspace: string | undefined, input: { suggestionId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; route?: ModelRoute }): Promise<{ started: true; suggestionId?: string }> {
+  async draft(port: SkillsSourcePort, workspace: string | undefined, input: { suggestionId?: string; draftId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; route?: ModelRoute }): Promise<{ started: true; suggestionId?: string }> {
     const source = retryingSource(port)
-    const pack = await source.read<EvidencePack>('evidence-pack', { ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }), ...(input.skill === undefined ? {} : { skill: input.skill }) })
+    const pack = await source.read<EvidencePack>('evidence-pack', { ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }), ...(input.draftId === undefined ? {} : { draftId: input.draftId }), ...(input.skill === undefined ? {} : { skill: input.skill }) })
     // The evidence window contains only three recent drafts across this skill.
     // Resolve this flow's own prior draft independently of that bounded context.
-    const previous = pack.suggestion?.draftId === undefined
-      ? (await source.read<SkillDraft[]>('drafts', { skill: pack.skillName, ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }) })).find(draft => draft.suggestionId === input.suggestionId)
-      : (await source.read<DraftView>('draft', { id: pack.suggestion.draftId })).draft
+    const previousId = input.draftId ?? pack.suggestion?.draftId
+    const previous = previousId === undefined
+      ? (await source.read<SkillDraft[]>('drafts', { skill: pack.skillName, ...(pack.skill === undefined ? {} : { path: pack.skill.path }), ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }) })).find(draft => draft.suggestionId === input.suggestionId)
+      : (await source.read<DraftView>('draft', { id: previousId })).draft
     // An improvement always keeps the file the Source loaded. For a creation,
     // freeze one choice before model work and use it for both prompt and record.
     const targetRoot = pack.action === 'update' ? pack.skill!.root
@@ -382,7 +383,7 @@ export class SkillEvolution {
     return { started: true, ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }) }
   }
 
-  private async writeDraft(source: SkillsSourcePort, workspace: string | undefined, input: { suggestionId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; route?: ModelRoute }, prepared: { pack: EvidencePack; targetRoot: SkillRootKind; guidance: string[] }, signal: AbortSignal): Promise<SkillDraft> {
+  private async writeDraft(source: SkillsSourcePort, workspace: string | undefined, input: { suggestionId?: string; draftId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; route?: ModelRoute }, prepared: { pack: EvidencePack; targetRoot: SkillRootKind; guidance: string[] }, signal: AbortSignal): Promise<SkillDraft> {
     const settings = this.host.settings()
     const { pack, targetRoot, guidance } = prepared
     let prompt = skillDraftPrompt(pack, guidance, targetRoot)
@@ -416,6 +417,7 @@ export class SkillEvolution {
         signal.throwIfAborted()
         draft = await source.mutate<SkillDraft>('draft-record', {
           ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }),
+          ...(input.draftId === undefined ? {} : { draftId: input.draftId }),
           skillName: pack.skillName, content: parsed.content, notes: parsed.notes, changes: parsed.changes, guidance,
           ...(pack.action === 'create' ? { targetRoot } : {}),
         }, signal)
@@ -433,7 +435,7 @@ export class SkillEvolution {
       const baselineKnown = input.route === undefined && pack.action === 'update' && pack.lastRun !== undefined && pack.lastRun.target.hash === pack.skill?.hash
       if (baselineKnown) await source.mutate('run-link', { draftId: draft.id, runId: pack.lastRun!.id })
       else {
-        const baseline = await this.backtest(source, workspace, { skillName: pack.skillName, target: { kind: pack.action === 'update' ? 'current' : 'none' }, ...(input.route === undefined ? {} : { route: input.route }) })
+        const baseline = await this.backtest(source, workspace, { skillName: pack.skillName, target: { kind: pack.action === 'update' ? 'current' : 'none', ...(pack.action === 'update' ? { draftId: draft.id } : {}) }, ...(input.route === undefined ? {} : { route: input.route }) })
         await source.mutate('run-link', { draftId: draft.id, runId: baseline.runId })
       }
     }

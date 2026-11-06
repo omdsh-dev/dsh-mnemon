@@ -31,7 +31,7 @@ export interface SkillsPageClient {
   run(id: string): Promise<BacktestRun>
   draft(id: string): Promise<DraftView>
   reviews(filter?: { sessionId?: string; limit?: number }): Promise<ReviewLogEntry[]>
-  evidencePack(input: { suggestionId?: string; skill?: string }): Promise<EvidencePack>
+  evidencePack(input: { suggestionId?: string; draftId?: string; skill?: string }): Promise<EvidencePack>
 
   createSkill(input: { name: string; description: string; root?: SkillRootKind }): Promise<SkillSummary>
   saveSkill(key: string, content: string, expectedHash: string): Promise<SkillSummary>
@@ -88,7 +88,7 @@ export interface SkillsPageClient {
 
   /** Whether the Host offers a task Agent for this model work. */
   canAssist(operation: 'skill-draft' | 'skill-backtest' | 'skill-derive-cases' | 'skill-review-now'): boolean
-  generateDraft(input: { suggestionId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; provider?: string; model?: string }): Promise<{ started: true }>
+  generateDraft(input: { suggestionId?: string; draftId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; provider?: string; model?: string }): Promise<{ started: true }>
   backtest(input: { skillName: string; target: RunTarget; caseIds?: string[]; provider?: string; model?: string }): Promise<{ runId: string }>
   deriveCases(input: { trajectoryId: string; skillName: string; steps?: number[] }): Promise<{ added: EvalCase[]; skipped: number }>
   reviewNow(): Promise<ReviewRecordResult>

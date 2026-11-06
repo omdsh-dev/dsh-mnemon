@@ -7,9 +7,10 @@ import {
   type BacktestRun, type CaseResult, type CatalogView, type DraftPreferencesView, type DraftView, type EvalCase, type EvidencePack, type ModelRoute, type SuggestionView,
   type MarketEntry, type MarketInstall, type MarketInstallState, type MarketItem, type MarketPreview, type MarketRegistry, type MarketRegistryFile, type MarketSearchResult,
   type MarketSourceKind, type MarketView, type ReviewRecordInput, type ReviewRecordResult, type RunTarget, type SkillCatalog, type SkillDocument,
-  type SkillDraft, type SkillRootKind, type SkillSuggestion, type SkillSummary, type SkillVersion, type SkillVersionReason, type SkillsOverview, type Trajectory, type TrajectorySummary, type TrashEntry, type TrashRestoreInput, type TrashRestorePreview,
+  type SkillDraft, type SkillOrigin, type SkillResolution, type SkillRootKind, type SkillSuggestion, type SkillSummary, type SkillVersion, type SkillVersionReason, type SkillsOverview, type Trajectory, type TrajectorySummary, type TrashEntry, type TrashRestoreInput, type TrashRestorePreview,
 } from './contracts.ts'
 import { activeSkill, catalogFingerprint, findSkill, readCatalog, readSkillDocument, rootPath, sha256, type SkillRootOptions } from './catalog.ts'
+import { legacySuggestionWorkspace, skillOrigin, validOrigin } from './identity.ts'
 import { isSkillName, setFrontmatterKey, skillTemplate, validateSkillContent, withInvocation } from './frontmatter.ts'
 import { admitReview, expireSuggestions, OPEN_STATUSES, policyFrom, similarCase, trajectorySummary } from './policy.ts'
 import { entryExists, MAX_CASES_PER_SKILL, MAX_VERSIONS_PER_SKILL, SkillsStore, type EvalsFile, type LedgerFile, type RegistryRecord } from './store.ts'
@@ -93,6 +94,31 @@ export class SkillsService {
 
   catalog(workspace: string | undefined): SkillCatalog {
     return readCatalog(this.options(workspace))
+  }
+
+  private original(key: string | undefined, origin: SkillOrigin | undefined, legacyWorkspace?: string): { resolution: SkillResolution; skill?: SkillSummary; origin?: SkillOrigin } {
+    if (key === undefined || (origin !== undefined && !validOrigin(key, origin))
+      || (key.startsWith('project-') && origin === undefined && legacyWorkspace === undefined)) return { resolution: 'origin-unavailable' }
+    const catalog = this.catalog(origin?.workspace ?? legacyWorkspace)
+    const skill = catalog.skills.find(candidate => candidate.key === key && (origin === undefined || resolve(candidate.path) === resolve(origin.path)))
+    return skill === undefined ? { resolution: 'missing' } : { resolution: 'available', skill, origin: skillOrigin(catalog, skill) }
+  }
+
+  private suggestionOriginal(ledger: LedgerFile, suggestion: SkillSuggestion) {
+    return this.original(suggestion.skillKey, suggestion.origin, suggestion.origin === undefined ? legacySuggestionWorkspace(ledger, suggestion) : undefined)
+  }
+
+  private draftOriginal(ledger: LedgerFile, draft: SkillDraft) {
+    if (draft.origin !== undefined) return this.original(draft.baseKey, draft.origin)
+    const suggestion = ledger.suggestions.find(candidate => candidate.id === draft.suggestionId && candidate.skillKey === draft.baseKey)
+    return suggestion === undefined ? this.original(draft.baseKey, undefined) : this.suggestionOriginal(ledger, suggestion)
+  }
+
+  private requireOriginal(original: { resolution: SkillResolution; skill?: SkillSummary; origin?: SkillOrigin }): SkillSummary {
+    if (original.skill !== undefined) return original.skill
+    throw new Error(original.resolution === 'origin-unavailable'
+      ? 'The original workspace was not recorded reliably. Open the skill in its original workspace and generate a new draft; the existing draft and evidence are kept.'
+      : 'The original skill file was deleted, moved, or cannot be read. Restore it or open the skill at its new location and generate a new draft.')
   }
 
   // ---- reads ---------------------------------------------------------------
@@ -180,13 +206,16 @@ export class SkillsService {
     expireSuggestions(ledger, this.clock())
     const suggestion = ledger.suggestions.find(candidate => candidate.id === id)
     if (suggestion === undefined) throw new Error('suggestion not found: ' + id)
-    const skill = activeSkill(this.catalog(workspace), suggestion.skillName)
+    const original = suggestion.action === 'update' ? this.suggestionOriginal(ledger, suggestion) : undefined
+    const catalog = this.catalog(workspace)
+    const skill = original === undefined ? activeSkill(catalog, suggestion.skillName) : original.skill
     const draft = suggestion.draftId === undefined ? undefined : ledger.drafts.find(candidate => candidate.id === suggestion.draftId)
     const cited = new Set(suggestion.evidence.map(reference => reference.trajectoryId))
     return {
       suggestion,
       hashCurrent: suggestion.action === 'create' ? skill === undefined : skill !== undefined && skill.hash === suggestion.skillFileHash,
-      ...(skill === undefined ? {} : { skill }),
+      ...(original === undefined ? {} : { resolution: original.resolution }),
+      ...(skill === undefined ? {} : { skill: readSkillDocument(skill), skillInCatalog: catalog.skills.some(candidate => candidate.key === skill.key && candidate.path === skill.path) }),
       ...(draft === undefined ? {} : { draft }),
       trajectories: ledger.trajectories.filter(entry => cited.has(entry.id)),
     }
@@ -223,17 +252,21 @@ export class SkillsService {
     return staleRun(run, this.clock().getTime())
   }
 
-  drafts(filter: { suggestionId?: string; skill?: string } = {}): SkillDraft[] {
-    return this.store.ledger().drafts.filter(draft => (filter.suggestionId === undefined || draft.suggestionId === filter.suggestionId) && (filter.skill === undefined || draft.skillName === filter.skill))
+  drafts(filter: { suggestionId?: string; skill?: string; path?: string } = {}): SkillDraft[] {
+    const ledger = this.store.ledger()
+    return ledger.drafts.filter(draft => (filter.suggestionId === undefined || draft.suggestionId === filter.suggestionId)
+      && (filter.skill === undefined || draft.skillName === filter.skill)
+      && (filter.path === undefined || this.draftOriginal(ledger, draft).skill?.path === filter.path))
   }
 
-  draft(workspace: string | undefined, id: string): DraftView {
-    const draft = this.store.ledger().drafts.find(candidate => candidate.id === id)
+  draft(_workspace: string | undefined, id: string): DraftView {
+    const ledger = this.store.ledger()
+    const draft = ledger.drafts.find(candidate => candidate.id === id)
     if (draft === undefined) throw new Error('draft not found: ' + id)
-    const catalog = this.catalog(workspace)
-    const base = draft.baseKey === undefined ? undefined : catalog.skills.find(skill => skill.key === draft.baseKey)
+    const original = draft.action === 'update' ? this.draftOriginal(ledger, draft) : undefined
+    const base = original?.skill
     const now = this.clock().getTime()
-    return { draft, ...(base === undefined ? {} : { base: readSkillDocument(base) }), runs: draft.runIds.flatMap(id => { const run = this.store.evals().runs.find(candidate => candidate.id === id); return run === undefined ? [] : [staleRun(run, now)] }) }
+    return { draft, ...(original === undefined ? {} : { resolution: original.resolution }), ...(base === undefined ? {} : { base: readSkillDocument(base) }), runs: draft.runIds.flatMap(id => { const run = this.store.evals().runs.find(candidate => candidate.id === id); return run === undefined ? [] : [staleRun(run, now)] }) }
   }
 
   reviews(filter: { sessionId?: string; limit?: number } = {}): LedgerFile['reviews'] {
@@ -242,15 +275,19 @@ export class SkillsService {
   }
 
   /** What a draft or a case derivation needs, gathered once. */
-  evidencePack(workspace: string | undefined, input: { suggestionId?: string; skill?: string; action?: 'create' | 'update' }): EvidencePack {
+  evidencePack(workspace: string | undefined, input: { suggestionId?: string; draftId?: string; skill?: string; action?: 'create' | 'update' }): EvidencePack {
     const ledger = this.store.ledger()
     const evals = this.store.evals()
     const catalog = this.catalog(workspace)
+    const prior = input.draftId === undefined ? undefined : ledger.drafts.find(candidate => candidate.id === input.draftId)
+    if (input.draftId !== undefined && prior === undefined) throw new Error('draft not found: ' + input.draftId)
+    if (prior !== undefined && input.suggestionId !== undefined && prior.suggestionId !== input.suggestionId) throw new Error('draft is for another suggestion')
     const suggestion = input.suggestionId === undefined ? undefined : ledger.suggestions.find(candidate => candidate.id === input.suggestionId)
     if (input.suggestionId !== undefined && suggestion === undefined) throw new Error('suggestion not found: ' + input.suggestionId)
-    const skillName = suggestion?.skillName ?? input.skill
+    const skillName = prior?.skillName ?? suggestion?.skillName ?? input.skill
     if (skillName === undefined || !isSkillName(skillName)) throw new Error('a skill name or a suggestion is required')
-    const loaded = activeSkill(catalog, skillName)
+    const loaded = prior?.action === 'update' ? this.requireOriginal(this.draftOriginal(ledger, prior))
+      : suggestion?.action === 'update' ? this.requireOriginal(this.suggestionOriginal(ledger, suggestion)) : activeSkill(catalog, skillName)
     const action = loaded === undefined ? 'create' : 'update'
     const references = suggestion?.evidence ?? ledger.trajectories.filter(entry => entry.stats.skills.includes(skillName) || entry.suggestionIds.some(id => ledger.suggestions.find(candidate => candidate.id === id)?.skillName === skillName)).slice(0, 3).map(entry => ({ trajectoryId: entry.id, steps: [] as number[] }))
     const excerpts: EvidencePack['excerpts'] = []
@@ -278,7 +315,8 @@ export class SkillsService {
       cases,
       ...(lastRun === undefined ? {} : { lastRun }),
       catalog: catalog.skills.filter(skill => skill.shadowedBy === undefined).slice(0, 80).map(skill => ({ name: skill.name, description: clip(skill.description, 200), root: skill.root })),
-      drafts: ledger.drafts.filter(draft => draft.skillName === skillName).slice(0, 3),
+      drafts: ledger.drafts.filter(draft => draft.skillName === skillName
+        && (loaded === undefined ? draft.action === 'create' : this.draftOriginal(ledger, draft).skill?.path === loaded.path)).slice(0, 3),
     }
   }
 
@@ -688,24 +726,31 @@ export class SkillsService {
     })
   }
 
-  recordDraft(workspace: string | undefined, input: { suggestionId?: string; skillName: string; content: string; notes: string; changes: string[]; guidance: string[]; targetRoot?: SkillRootKind }): Promise<SkillDraft> {
+  recordDraft(workspace: string | undefined, input: { suggestionId?: string; draftId?: string; skillName: string; content: string; notes: string; changes: string[]; guidance: string[]; targetRoot?: SkillRootKind }): Promise<SkillDraft> {
     return this.write(() => {
       validateSkillContent(input.content, input.skillName)
       const ledger = this.store.ledger()
       const catalog = this.catalog(workspace)
-      const loaded = activeSkill(catalog, input.skillName)
       const now = this.clock().toISOString()
+      const prior = input.draftId === undefined ? undefined : ledger.drafts.find(candidate => candidate.id === input.draftId)
+      if (input.draftId !== undefined && prior === undefined) throw new Error('draft not found: ' + input.draftId)
+      if (prior !== undefined && (prior.skillName !== input.skillName || prior.suggestionId !== input.suggestionId)) throw new Error('draft is for another skill or suggestion')
       const suggestion = input.suggestionId === undefined ? undefined : ledger.suggestions.find(candidate => candidate.id === input.suggestionId)
       if (input.suggestionId !== undefined && suggestion === undefined) throw new Error('suggestion not found: ' + input.suggestionId)
+      if (suggestion !== undefined && suggestion.skillName !== input.skillName) throw new Error('suggestion is for another skill')
+      const original = prior?.action === 'update' ? this.draftOriginal(ledger, prior) : suggestion?.action === 'update' ? this.suggestionOriginal(ledger, suggestion) : undefined
+      const loaded = original === undefined ? activeSkill(catalog, input.skillName) : this.requireOriginal(original)
+      const origin = loaded === undefined ? undefined : original?.origin ?? skillOrigin(catalog, loaded)
       for (const draft of ledger.drafts) {
-        if (draft.status === 'ready' && draft.skillName === input.skillName && draft.suggestionId === input.suggestionId) { draft.status = 'discarded'; draft.updatedAt = now }
+        if (draft.status === 'ready' && draft.skillName === input.skillName && draft.suggestionId === input.suggestionId
+          && (loaded === undefined ? draft.action === 'create' : this.draftOriginal(ledger, draft).skill?.path === loaded.path)) { draft.status = 'discarded'; draft.updatedAt = now }
       }
       const draft: SkillDraft = {
         id: randomUUID(),
         ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }),
         skillName: input.skillName,
         action: loaded === undefined ? 'create' : 'update',
-        ...(loaded === undefined ? { targetRoot: input.targetRoot ?? suggestion?.targetRoot ?? DEFAULT_ROOT } : { baseKey: loaded.key, baseHash: loaded.hash }),
+        ...(loaded === undefined ? { targetRoot: input.targetRoot ?? suggestion?.targetRoot ?? DEFAULT_ROOT } : { baseKey: loaded.key, baseHash: loaded.hash, origin: origin! }),
         content: input.content,
         notes: clip(input.notes, 2_000),
         changes: input.changes.map(change => clip(change, 300)).filter(Boolean).slice(0, 12),
@@ -745,12 +790,14 @@ export class SkillsService {
       const catalog = this.catalog(workspace)
       let key: string
       let previous: string | undefined
+      let updated: SkillSummary | undefined
       if (draft.action === 'update') {
-        const base = catalog.skills.find(skill => skill.key === draft.baseKey)
-        if (base === undefined) throw new Error(`${draft.skillName} is no longer in ${draft.baseKey?.split(':')[0]}; draft it again`)
+        const original = this.draftOriginal(ledger, draft)
+        const base = this.requireOriginal(original)
         previous = this.requireHash(base, draft.baseHash)
         writeFileAtomic(base.path, draft.content)
         key = base.key
+        updated = findSkill(this.catalog(original.origin?.workspace), key)
       } else {
         const root = input.root ?? draft.targetRoot ?? DEFAULT_ROOT
         if (activeSkill(catalog, draft.skillName) !== undefined) throw new Error(`${draft.skillName} exists now; draft it again as an update`)
@@ -774,7 +821,7 @@ export class SkillsService {
       const suggestion = draft.suggestionId === undefined ? undefined : ledger.suggestions.find(candidate => candidate.id === draft.suggestionId)
       if (suggestion !== undefined) { suggestion.status = 'adopted'; suggestion.updatedAt = now }
       this.store.saveLedger(ledger)
-      return { skill: findSkill(this.catalog(workspace), key), version }
+      return { skill: updated ?? findSkill(this.catalog(workspace), key), version }
     })
   }
 
@@ -842,10 +889,12 @@ export class SkillsService {
       if (version === undefined) throw new Error('version not found: ' + target.versionId)
       return { content: this.store.versionContent(version), target: { kind: 'version', versionId: version.id, skillKey: version.skillKey, hash: version.hash } }
     }
-    const loaded = activeSkill(this.catalog(workspace), skillName)
+    const draft = target.draftId === undefined ? undefined : this.store.ledger().drafts.find(candidate => candidate.id === target.draftId && candidate.skillName === skillName)
+    if (target.draftId !== undefined && draft === undefined) throw new Error('draft not found for this skill')
+    const loaded = draft === undefined ? activeSkill(this.catalog(workspace), skillName) : this.requireOriginal(this.draftOriginal(this.store.ledger(), draft))
     if (loaded === undefined) throw new Error(`${skillName} has no file to test; test a draft or no skill`)
     const document = readSkillDocument(loaded)
-    return { content: document.content, target: { kind: 'current', skillKey: loaded.key, hash: document.hash } }
+    return { content: document.content, target: { kind: 'current', skillKey: loaded.key, hash: document.hash, ...(draft === undefined ? {} : { draftId: draft.id }) } }
   }
 
   startRun(input: { skillName: string; target: RunTarget; caseIds: string[] }): Promise<BacktestRun> {

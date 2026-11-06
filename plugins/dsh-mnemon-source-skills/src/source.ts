@@ -284,12 +284,14 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
                 case 'drafts': return service.drafts({
                   ...(optionalText(fields.suggestionId, 'suggestionId', 100) === undefined ? {} : { suggestionId: optionalText(fields.suggestionId, 'suggestionId', 100)! }),
                   ...(optionalText(fields.skill, 'skill', 64) === undefined ? {} : { skill: optionalText(fields.skill, 'skill', 64)! }),
+                  ...(optionalText(fields.path, 'path', 4_096) === undefined ? {} : { path: optionalText(fields.path, 'path', 4_096)! }),
                 })
                 case 'draft': return service.draft(root, text(fields.id, 'id', 100)!)
                 case 'draft-preferences': return service.draftPreferences()
                 case 'reviews': return service.reviews({ ...(typeof fields.sessionId === 'string' ? { sessionId: fields.sessionId } : {}), ...(typeof fields.limit === 'number' ? { limit: fields.limit } : {}) })
                 case 'evidence-pack': return service.evidencePack(root, {
                   ...(optionalText(fields.suggestionId, 'suggestionId', 100) === undefined ? {} : { suggestionId: optionalText(fields.suggestionId, 'suggestionId', 100)! }),
+                  ...(optionalText(fields.draftId, 'draftId', 100) === undefined ? {} : { draftId: optionalText(fields.draftId, 'draftId', 100)! }),
                   ...(optionalText(fields.skill, 'skill', 64) === undefined ? {} : { skill: optionalText(fields.skill, 'skill', 64)! }),
                 })
                 case 'target-content': return service.targetContent(root, text(fields.skillName, 'skillName', 64)!, runTarget(fields.target!))
@@ -360,6 +362,7 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
             }
             case 'draft-record': value = await service.recordDraft(root, {
               ...(optionalText(fields.suggestionId, 'suggestionId', 100) === undefined ? {} : { suggestionId: optionalText(fields.suggestionId, 'suggestionId', 100)! }),
+              ...(optionalText(fields.draftId, 'draftId', 100) === undefined ? {} : { draftId: optionalText(fields.draftId, 'draftId', 100)! }),
               skillName: text(fields.skillName, 'skillName', 64)!, content: typeof fields.content === 'string' ? fields.content : '',
               notes: typeof fields.notes === 'string' ? fields.notes : '', changes: stringArray(fields.changes, 'changes', 20) ?? [], guidance: stringArray(fields.guidance, 'guidance', 20) ?? [],
               ...(rootKind(fields.targetRoot) === undefined ? {} : { targetRoot: rootKind(fields.targetRoot)! }),
