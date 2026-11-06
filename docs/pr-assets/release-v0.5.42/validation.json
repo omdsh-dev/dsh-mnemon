@@ -488,5 +488,17 @@
     "allOwnedFixturesAndHostsStopped": true,
     "allOwnedBrowserTabsClosed": true,
     "userPreviewUntouched": true
+  },
+  "releaseCiObservation": {
+    "failedRevision": "6e4188072874982bee47550576ee0861134aa213",
+    "job": "https://github.com/omdsh-dev/dsh-mnemon/actions/runs/42239749839/job/127967282309",
+    "skillsAssertionsPassed": 111,
+    "skillsTotalSeconds": 187.92,
+    "commandDeadlineSeconds": 180,
+    "terminationSignal": "SIGTERM",
+    "previousPackageConcurrency": 4,
+    "ciAndPublicationPackageConcurrency": 2,
+    "testsAssertionsOrTimeoutsChanged": false,
+    "frozenArtifactInputsChanged": false
   }
 }

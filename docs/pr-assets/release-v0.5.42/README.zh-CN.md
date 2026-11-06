@@ -46,4 +46,6 @@ node scripts/serve-release-acceptance.mjs --dsh "$DSH_BIN" --artifacts "$ARTIFAC
 
 #579 功能 CI 的既有子 Agent 测试清理 hook 曾达到十秒上限。该 fixture 不启动快照生命周期；同一 head 的该文件在本地 159 项通过，随后只重跑原 Linux/Node 22.19 RC3 任务并通过。未确定究竟哪个清理子步骤超时，没有为此修改产品代码或超时设置。
 
+发布 PR 的基线独立插件任务在四包并行时触及验证脚本的 180 秒命令总时限。技能测试报告 111 项断言全部通过，但总耗时 187.92 秒，父进程被终止。CI 与发布现改为与本地验收一致的两包并行，保留全部测试、断言和超时设置；该调度调整不改变已冻结的 npm 制品。
+
 这里验证的是 macOS Web profile，未覆盖原生 Desktop OS 集成或报告者的 Windows 环境；源码验收仅针对上述 commit，不代表任意 master/alpha。未重新评估云端模型质量或提供方的缓存持久性。夹具只对候选元数据调整发布时间，因此不覆盖真实 npm 最小发布年龄策略。正式发布另行冻结最终 main revision，按依赖层发布，验证真实 Registry 安装与升级，全部通过后才创建 GitHub Release。

@@ -200,6 +200,6 @@ jobs:
 
       - name: Verify packed and independently installed plugins
         env:
-          MNEMON_PLUGIN_VERIFY_CONCURRENCY: '4'
+          MNEMON_PLUGIN_VERIFY_CONCURRENCY: '2'
           MNEMON_E2E_DSH: ${{ steps.installed_dsh.outputs.binary }}
         run: pnpm run verify:plugins
