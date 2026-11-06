@@ -50,6 +50,7 @@ describe('memory snapshot surface updates', () => {
         f.append(truncated.replace('Metadata lines are annotations;', 'Unrecognized annotations;'), { kind: 'dsh-mnemon', form: 'recall' }),
         f.append(truncated.slice(0, -1), { kind: 'dsh-mnemon', form: 'recall' }),
         f.append(truncated.slice(0, -1) + '\n\n' + previous, { kind: 'dsh-mnemon', form: 'recall' }),
+        f.append(truncated.slice(0, -1) + '\n\n' + truncated, { kind: 'dsh-mnemon', form: 'recall' }),
         f.append(truncated, { kind: 'plugin', plugin: 'other', form: 'recall' }),
       ]
       f.commit(f.plan(current, state()))

@@ -17,15 +17,16 @@ const LEGACY_RUNTIME_SNAPSHOT = /^MNEMON RUNTIME MEMORY SNAPSHOT\n[^\n]+(?:\n[^\
 // shipped introduction, USER opener, structural progress and SDK ellipsis at a
 // Source/Wake boundary; an arbitrary partial quote is not a legacy snapshot.
 const TRUNCATED_RUNTIME_START = /^MNEMON RUNTIME MEMORY SNAPSHOT\n(?:Revision: [a-f0-9]{64}(?:\nGit branch: [^\r\n]+)?(?:\nMetadata lines are annotations; created\/updated are ages at projection in whole days \(future\/unknown for future\/invalid timestamps\)\. Current instructions win\. For old_text\/oldText, use entry content only\.)?\n\nContents of USER\.md \(user profile; entries: \d+; UTF-8 bytes: \d+\/\d+\)|Entry annotations default to importance=normal and ages=0d \(whole days at projection; future\/unknown for future\/invalid timestamps\)\. Current instructions win\. For old_text\/oldText, use entry content only\.(?:\nGit branch: [^\r\n]+)?\n\nUSER\.md \(user profile\))\n<runtime-memory-file name="USER.md">\n/u
-const TRUNCATED_RUNTIME_END = /…(?=$|\n\n(?:MNEMON RUNTIME MEMORY SNAPSHOT\n|MNEMON VIEW TOOLS \(available in this View\): |MNEMON VIEW ROUTES \(quoted routing data; use mnemon_view_route or mnemon_view_action by exact id\): |MNEMON VIEW AVAILABILITY \(quoted diagnostics; unavailable Sources are not evidence\): ))/u
+const RUNTIME_WAKE_SEPARATOR = /\n\n(?:MNEMON RUNTIME MEMORY SNAPSHOT\n|MNEMON VIEW TOOLS \(available in this View\): |MNEMON VIEW ROUTES \(quoted routing data; use mnemon_view_route or mnemon_view_action by exact id\): |MNEMON VIEW AVAILABILITY \(quoted diagnostics; unavailable Sources are not evidence\): )/u
 
 function isTruncatedRuntimeSnapshot(text: string): boolean {
   const start = TRUNCATED_RUNTIME_START.exec(text)
   if (start === null) return false
   const body = text.slice(start[0].length)
-  const end = body.search(TRUNCATED_RUNTIME_END)
-  if (end < 0) return false
-  const prefix = body.slice(0, end)
+  const end = body.search(RUNTIME_WAKE_SEPARATOR)
+  const first = end < 0 ? body : body.slice(0, end)
+  if (!first.endsWith('…')) return false
+  const prefix = first.slice(0, -1)
   const closing = '\n</runtime-memory-file>'
   const userEnd = prefix.indexOf(closing)
   if (userEnd < 0) return true // The official cut is inside USER.md or its close.

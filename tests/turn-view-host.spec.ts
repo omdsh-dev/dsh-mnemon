@@ -592,6 +592,30 @@ it.each(['cancel', 'dispose'] as const)('drops a queued checkpoint when the acce
   } finally { await handle.dispose(); await f.close() }
 })
 
+it.each(['earlier', 'later'] as const)('finishes an accepted checkpoint when an %s step observer unloads the lifecycle', async order => {
+  const f = await fixture('native', false)
+  const handle = await f.create()
+  let armed = false
+  const install = () => f.ctx.on('session/event', (session, event) => {
+    if (armed && session === handle.agent.session && event.type === 'step/start') f.stopLifecycle()
+  })
+  let stop: (() => void) | undefined
+  try {
+    if (order === 'earlier') stop = install()
+    f.startLifecycle()
+    await f.turn(handle.agent)
+    await f.graph.source('runtime').mutate('mutate', { action: 'remove', target: 'memory', oldText: 'Synthetic turn-view retained fact.' })
+    if (order === 'later') stop = install()
+    armed = true
+    await f.turn(handle.agent)
+    expect(f.requests.slice(3)).toHaveLength(3)
+    for (const request of f.requests.slice(3)) {
+      expect(snapshots(request.messages)).toHaveLength(1)
+      expect(request.text).not.toContain('Synthetic turn-view retained fact.')
+    }
+  } finally { stop?.(); await handle.dispose(); await f.close() }
+})
+
 it.each([
   { kind: 'dsh-mnemon', form: 'recall' },
   { kind: 'plugin:dsh-mnemon', form: 'recall' },

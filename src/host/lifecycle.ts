@@ -81,6 +81,13 @@ interface PreStepPayload extends AgentEventPayload {
   signal: AbortSignal
 }
 
+interface PendingMemorySnapshot {
+  turn: number
+  step: number
+  signal: AbortSignal
+  update: ReturnType<typeof prepareMemorySnapshot>
+}
+
 interface TurnStoppingPayload extends AgentEventPayload {
   turn: number
   signal: AbortSignal
@@ -196,7 +203,7 @@ class MnemonAgentLifecycle {
   private primePending = true
   private startSource: LifecycleAgentSnapshot['startSource']
   private readonly guidedTurns = new Set<number>()
-  private pendingSnapshot: { turn: number; step: number; signal: AbortSignal; update: ReturnType<typeof prepareMemorySnapshot> } | undefined
+  private pendingSnapshot: PendingMemorySnapshot | undefined
   private readonly memoryActivity = new TurnActivityProjection()
   private readonly turnActivity = new Map<number, {
     messageIds: Set<string>
@@ -260,7 +267,14 @@ class MnemonAgentLifecycle {
     ]
     return () => {
       this.disposed = true
+      const pending = this.pendingSnapshot
       this.pendingSnapshot = undefined
+      // An earlier Session observer may unload us during step/start publication,
+      // before our own observer runs. Finish only this already accepted plan.
+      const started = pending === undefined ? undefined : this.agent.session.snapshotEvents().findLast(event => event.type === 'step/start')
+      if (pending !== undefined && started !== undefined && eventTurn(started) === pending.turn && started.data.step === pending.step) {
+        this.queueSnapshotRetirement(pending)
+      }
       this.releaseView()
       this.cancelIdleReview(true)
       for (const dispose of disposers.reverse()) dispose()
@@ -446,24 +460,7 @@ class MnemonAgentLifecycle {
       const pending = this.pendingSnapshot
       if (pending === undefined || pending.turn !== turn || pending.step !== event.data.step) return
       this.pendingSnapshot = undefined
-      // Session observers cannot append reentrantly. Its durable step boundary
-      // queues this before the Host's awaited request preparation resumes, even
-      // when an agent/request middleware returns without visiting later hooks.
-      queueMicrotask(() => {
-        if (this.disposed || pending.signal.aborted || openAgentTurn(this.agent) !== pending.turn) return
-        try { pending.update.retire(pending.turn, pending.step) }
-        catch {
-          // Fail closed without an unhandled microtask exception or raw Source
-          // details. keepInbox avoids further log appends while cancelling.
-          const reason = 'Memory snapshot checkpoint failed; model request cancelled.'
-          this.counters.failures += 1
-          this.lastPhase = 'error'
-          this.lastAt = new Date().toISOString()
-          this.lastError = reason
-          this.agent.cancel({ kind: 'hook', reason }, { keepInbox: true })
-          console.warn('[dsh-mnemon] ' + reason)
-        }
-      })
+      this.queueSnapshotRetirement(pending)
       return
     }
     if (event.type !== 'turn/end') return
@@ -472,6 +469,28 @@ class MnemonAgentLifecycle {
     const pinned = turn === undefined || current?.turn !== turn ? undefined : current
     if (pinned === undefined) return
     this.releaseView(turn)
+  }
+
+  private queueSnapshotRetirement(pending: PendingMemorySnapshot): void {
+    // Session observers cannot append reentrantly. This runs after publication,
+    // before awaited request preparation resumes, even if request hooks short
+    // circuit. The captured plan only uses the public Session, never a released
+    // View/Source; lifecycle unloading does not abandon an accepted checkpoint.
+    queueMicrotask(() => {
+      if (pending.signal.aborted || openAgentTurn(this.agent) !== pending.turn) return
+      try { pending.update.retire(pending.turn, pending.step) }
+      catch {
+        // Fail closed without an unhandled microtask exception or raw Source
+        // details. keepInbox avoids further log appends while cancelling.
+        const reason = 'Memory snapshot checkpoint failed; model request cancelled.'
+        this.counters.failures += 1
+        this.lastPhase = 'error'
+        this.lastAt = new Date().toISOString()
+        this.lastError = reason
+        this.agent.cancel({ kind: 'hook', reason }, { keepInbox: true })
+        console.warn('[dsh-mnemon] ' + reason)
+      }
+    })
   }
 
   private scheduleIdleReview(turn: number): void {
