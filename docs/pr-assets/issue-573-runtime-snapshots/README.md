@@ -26,13 +26,29 @@ Old unmarked snapshots migrate once. Legacy `recall` rows require this producer'
 
 ## Verification
 
-At the review checkpoint: root typecheck passed; targeted lifecycle, guidance, state, Session and real Host suites passed **183 tests**; Runtime Source provenance suite passed **6 tests**. Complete verification and the installed-Host matrix are being recorded separately before submission.
+Production code verified at `c3508f58dda18e8656e620ebbd015e49e52d2435`; the following commit only records these results. Independent review repeated the short-circuit, unload and cross-fragment regressions and reported no remaining blocker.
+
+`pnpm run verify` passed: documentation, root/workspace typechecks, deterministic build (58 files), all workspace builds/tests, root tests, Headless activation and package validation. Root tests: **2,625 passed / 8 conditional skips** across 174 passing files; workspace plugin tests: **792 passed / 3 conditional skips**. The skips are opt-in paid Flash runs (5), Native CLI integrations (3 across root/plugins), Windows smoke (1), OpenViking endpoint integration (1), and a Host-capability-specific legacy scenario (1). None was enabled with live credentials. Targeted lifecycle/guidance/state/Session/Host tests passed **183/183**, including **34 real Host cases**; Runtime Source provenance tests passed **6/6**.
+
+The three snapshot suites (12 Session, 13 state, 34 real Host tests) passed against every selected Host:
+
+| Host | Result |
+| --- | --- |
+| 0.2.0-rc.2 | 59/59 |
+| 0.2.1-rc.3 | 59/59 |
+| 0.2.1-rc.5 (pinned; included in full verification) | 59/59 |
+| 0.2.2-rc.1 | 59/59 |
+| Existing built master `fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159` | 59/59 |
+
+Headless verification activated 38 tools, including 8 representative Mnemon tools, and checked legacy-settings migration/restart. Package checks verified 68 packed files, 15 Node entries, 37 public type dependencies, 22 browser declarations and one executable entry. `publint --strict` and `attw` passed. No DSH source was edited or substituted into tsconfig. No credentials or real user memory was used.
 
 Installed-Host command (each published release uses its own installation):
 
 ```sh
 DSH_HOST_ROOT=<installed-dsh-package> pnpm exec vitest run --config scripts/installed-dsh.config.ts tests/memory-snapshot.spec.ts tests/memory-snapshot-state.spec.ts tests/turn-view-host.spec.ts
 pnpm run verify
+pnpm run verify:docs
+git diff --check
 ```
 
 No provider hit-rate measurement is claimed. [DeepSeek's cache documentation](https://api-docs.deepseek.com/guides/kv_cache/) requires matching persisted prefixes and describes caching as best-effort. These tests establish request-prefix stability, not remote cache persistence, token savings or model reasoning quality. They reload real JSONL persistence but do not claim a Windows Electron process restart or recreation of the reporter's private 1,206-turn conversation. Audit records and empty surface nodes continue to grow append-only.

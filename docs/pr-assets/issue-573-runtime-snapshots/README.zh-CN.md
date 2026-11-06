@@ -26,13 +26,29 @@ Host 快照元数据只包含版本 1、授权边界摘要和可见条目摘要�
 
 ## 验证
 
-审查节点：根 typecheck 通过；lifecycle、guidance、state、Session 和真实 Host 定向套件共 **183 项通过**；Runtime Source provenance 套件 **6 项通过**。完整验证与已安装 Host 矩阵将在提交前另行记录。
+产品代码验证于 `c3508f58dda18e8656e620ebbd015e49e52d2435`；后续提交只记录验证结果。独立复审重跑了短路、卸载和跨 fragment 回归，确认没有剩余阻塞项。
+
+`pnpm run verify` 全部通过：文档、根/工作区类型检查、确定性构建（58 个文件）、工作区构建/测试、根测试、Headless 激活和包验证。根测试 **2,625 通过 / 8 项条件跳过**，174 个文件通过；插件工作区测试 **792 通过 / 3 项条件跳过**。跳过项为需显式启用的付费 Flash 测试（5）、Native CLI 集成（根/插件合计 3）、Windows smoke（1）、OpenViking endpoint 集成（1），以及一个按 Host 能力限定的 legacy 场景（1）。没有使用真实凭据启用这些测试。lifecycle/guidance/state/Session/Host 定向套件 **183/183**，其中 **34 项真实 Host 场景**；Runtime Source provenance 套件 **6/6**。
+
+三份快照套件（Session 12、state 13、真实 Host 34）在所有指定 Host 上通过：
+
+| Host | 结果 |
+| --- | --- |
+| 0.2.0-rc.2 | 59/59 |
+| 0.2.1-rc.3 | 59/59 |
+| 0.2.1-rc.5（仓库固定版，包含在完整验证中） | 59/59 |
+| 0.2.2-rc.1 | 59/59 |
+| 已有构建 master `fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159` | 59/59 |
+
+Headless 验证激活 38 个工具，含 8 个代表性 Mnemon 工具，并检查旧设置迁移与重启。包验证覆盖 68 个打包文件、15 个 Node 入口、37 个公共类型依赖、22 个浏览器声明和 1 个可执行入口；`publint --strict` 与 `attw` 均通过。没有修改 DSH 源码、将 tsconfig 指向 checkout、使用凭据或真实用户记忆。
 
 已安装 Host 命令（每个已发布版本使用独立安装）：
 
 ```sh
 DSH_HOST_ROOT=<installed-dsh-package> pnpm exec vitest run --config scripts/installed-dsh.config.ts tests/memory-snapshot.spec.ts tests/memory-snapshot-state.spec.ts tests/turn-view-host.spec.ts
 pnpm run verify
+pnpm run verify:docs
+git diff --check
 ```
 
 不声称测得 Provider 命中率。[DeepSeek 缓存文档](https://api-docs.deepseek.com/guides/kv_cache/)要求匹配已持久化前缀，并明确缓存为 best-effort。测试证明的是请求前缀稳定性，不是远端缓存持久化、节省 token 数或模型推理质量。测试重新加载真实 JSONL，但不声称完成 Windows Electron 进程重启，也没有复刻报告者私有的 1,206 回合会话。审计记录与空 surface 节点仍按追加方式增长。
