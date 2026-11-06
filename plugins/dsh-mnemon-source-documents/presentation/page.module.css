@@ -46,6 +46,7 @@
 .documentDetail > header span { color: var(--mn-faint); font-size: 12px; line-height: 18px; }
 .documentDetail > header h3 { margin: 2px 0; font-size: 16px; font-weight: 500; line-height: 24px; }
 .documentDetail > header p { margin: 0; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
+.documentActions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .documentDetail > dl { display: grid; grid-template-columns: 2fr .45fr .8fr .55fr; margin: 12px 0; border: .5px solid var(--mn-line); border-radius: var(--dsw-radius-md); overflow: hidden; }
 .documentDetail > dl > div { min-width: 0; padding: 8px 10px; }
 .documentDetail > dl > div + div { border-left: .5px solid var(--mn-line); }

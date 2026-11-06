@@ -2,19 +2,22 @@ import { createHash } from 'node:crypto'
 import {
   closeSync,
   existsSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs'
 import type { BigIntStats } from 'node:fs'
-import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { DocumentCapacityPlan, DocumentIndex, DocumentMutation, DocumentMutationResult, DocumentRecord, DocumentSearchResult, DocumentSnapshot, DocumentStatus, DocumentView } from './contracts.ts'
 import { lexicalRequiredMatchCount, lexicalSearchTokens } from './search-tokens.ts'
-import { DOCUMENTS_VERSION, DOCUMENTS_ACTIVE_LIMIT_BYTES, DOCUMENTS_DIRECTORY, DOCUMENTS_INDEX_FILE, DOCUMENTS_LOCK_FILE, DOCUMENTS_LOCK_STALE_MS } from './contracts.ts'
+import { DOCUMENTS_VERSION, DOCUMENTS_ACTIVE_LIMIT_BYTES, DOCUMENTS_DIRECTORY, DOCUMENTS_INDEX_FILE, DOCUMENTS_LOCK_FILE, DOCUMENTS_LOCK_STALE_MS, DOCUMENT_FILENAME_PATTERN } from './contracts.ts'
 
 const MAX_DOCUMENT_BYTES = 2 * 1024 * 1024
 const LOCK_TIMEOUT_MS = 5_000
@@ -36,7 +39,7 @@ export class DocumentCapacityError extends Error {
 export class DocumentConflictError extends Error {
   readonly code = 'revision-conflict' as const
   constructor() {
-    super('document changed while archival was running; the active copy was preserved')
+    super('document index or content changed; reload before retrying')
     this.name = 'DocumentConflictError'
   }
 }
@@ -65,12 +68,13 @@ function unique(values: readonly string[], maximum: number): string[] {
   return [...new Set(values.map(value => value.trim()).filter(Boolean))].slice(0, maximum)
 }
 
-function hash(value: string): string {
+function hash(value: string | Uint8Array): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
 function indexRevision(index: DocumentIndex): string {
-  return hash(JSON.stringify(index))
+  // Archive adds optional fields; hash the same field order a disk read uses.
+  return hash(JSON.stringify({ version: index.version, documents: index.documents.map(parseRecord) }))
 }
 
 function copyIndex(index: DocumentIndex): DocumentIndex {
@@ -233,6 +237,10 @@ export class DocumentController {
           contentHash: hash(content), sizeBytes: 0, memoryBodyIds: [],
         }
         projected = used + Buffer.byteLength(renderDocument(record, content), 'utf8')
+      } else if (request.action === 'delete') {
+        const current = this.requireDocument(index, request.id)
+        // Deletion never needs archival, including when a lowered limit is exceeded.
+        return { projected: used - (current.status === 'active' ? current.sizeBytes : 0), limit: this.limitBytes, fits: true, candidates: [] }
       } else {
         const current = this.requireDocument(index, request.id)
         if (current.status !== 'active') throw new Error('archived documents are immutable; create a new active revision instead')
@@ -306,6 +314,10 @@ export class DocumentController {
     return operation
   }
 
+  deleteDocument(id: string, expectedRevision: string, fileRevision: string): Promise<DocumentMutationResult> {
+    return this.mutate({ action: 'delete', id, fileRevision }, expectedRevision)
+  }
+
   archive(id: string, expectedRevision: number, details: { summary: string; memoryBodyIds: string[] }): Promise<DocumentMutationResult> {
     const operation: Promise<DocumentMutationResult> = this.queue.then(() => this.withLock((): DocumentMutationResult => {
       const index = this.readIndex()
@@ -338,7 +350,7 @@ export class DocumentController {
         if (existsSync(destination)) renameSync(destination, source)
         throw error
       }
-      return { success: true, action: 'archived', document: { ...updated, content }, snapshot: this.snapshotUnlocked(index) }
+      return { success: true, action: 'archived', document: { ...updated, content, fileRevision: hash(rendered) }, snapshot: this.snapshotUnlocked(index) }
     }))
     this.queue = operation.catch(() => undefined)
     return operation
@@ -347,6 +359,35 @@ export class DocumentController {
   private mutateLocked(request: DocumentMutation, expectedRevision?: string): DocumentMutationResult {
     const index = this.readIndex()
     if (expectedRevision !== undefined && this.revisionOf(index) !== expectedRevision) throw new DocumentConflictError()
+    if (request.action === 'delete') {
+      if (expectedRevision === undefined || expectedRevision === '') throw new Error('Documents deletion requires an index revision')
+      const current = this.requireDocument(index, request.id)
+      const path = this.pathFor(current)
+      const root = realpathSync(this.storageRoot)
+      // A damaged index must not redirect a destructive operation to another
+      // managed file, a project original, or a symlink outside the store.
+      if (!DOCUMENT_FILENAME_PATTERN.test(current.filename)
+        || path !== join(this.directory, current.status, current.filename)
+        || index.documents.some(record => record !== current && this.pathFor(record) === path)
+        || realpathSync(dirname(path)) !== join(root, DOCUMENTS_DIRECTORY, current.status)) {
+        throw new Error('document index contains an unsafe managed path')
+      }
+      if (!lstatSync(path).isFile()) throw new Error('Documents deletion requires a regular managed file')
+      const original = readFileSync(path)
+      if (typeof request.fileRevision !== 'string' || request.fileRevision === '') throw new Error('Documents deletion requires the current file revision')
+      const fileRevision = hash(original)
+      if (fileRevision !== request.fileRevision) throw new DocumentConflictError()
+      unlinkSync(path)
+      index.documents = index.documents.filter(record => record.id !== current.id)
+      try {
+        this.persistIndex(index)
+      } catch (error) {
+        this.atomicWrite(path, original)
+        throw error
+      }
+      this.excerpts.delete(path)
+      return { success: true, action: 'deleted', document: { ...current, content: documentBody(original.toString('utf8')), fileRevision }, snapshot: this.snapshotUnlocked(index) }
+    }
     const now = this.now().toISOString()
     if (request.action === 'create') {
       const title = normalizeLine(request.title, 'document title', 160, true)
@@ -368,7 +409,7 @@ export class DocumentController {
       this.persistDocument(record, content)
       index.documents.push(record)
       this.persistIndex(index)
-      return { success: true, action: 'created', document: { ...record, content }, snapshot: this.snapshotUnlocked(index) }
+      return { success: true, action: 'created', document: { ...record, content, fileRevision: hash(rendered) }, snapshot: this.snapshotUnlocked(index) }
     }
 
     const current = this.requireDocument(index, request.id)
@@ -391,7 +432,7 @@ export class DocumentController {
     this.persistDocument(updated, content)
     index.documents = index.documents.map(record => record.id === current.id ? updated : record)
     this.persistIndex(index)
-    return { success: true, action: 'updated', document: { ...updated, content }, snapshot: this.snapshotUnlocked(index) }
+    return { success: true, action: 'updated', document: { ...updated, content, fileRevision: hash(rendered) }, snapshot: this.snapshotUnlocked(index) }
   }
 
   private initialize(): void {
@@ -524,12 +565,13 @@ export class DocumentController {
     return path
   }
 
-  private readBody(record: DocumentRecord): string {
-    return documentBody(readFileSync(this.pathFor(record), 'utf8'))
+  private readBody(record: DocumentRecord, raw = readFileSync(this.pathFor(record))): string {
+    return documentBody(raw.toString('utf8'))
   }
 
   private view(record: DocumentRecord): DocumentView {
-    return { ...record, content: this.readBody(record) }
+    const raw = readFileSync(this.pathFor(record))
+    return { ...record, content: this.readBody(record, raw), fileRevision: hash(raw) }
   }
 
   private persistDocument(record: DocumentRecord, content: string): void {
@@ -544,7 +586,7 @@ export class DocumentController {
     this.atomicWrite(this.indexPath, `${JSON.stringify(index, null, 2)}\n`)
   }
 
-  private atomicWrite(path: string, content: string): void {
+  private atomicWrite(path: string, content: string | Uint8Array): void {
     const temporary = `${path}.${process.pid}.${crypto.randomUUID()}.tmp`
     writeFileSync(temporary, content, { encoding: 'utf8', mode: 0o600 })
     renameSync(temporary, path)
