@@ -1,0 +1,36 @@
+{
+  "base": "0db25213d128dfeb420163de20fd41a787366c87",
+  "node": "v24.22.2",
+  "host": "0.2.1-rc.5",
+  "scope": "global",
+  "displayedWorkspace": "default-workspace",
+  "skill": "workspace-audit",
+  "originWorkspace": "origin-project",
+  "draftOriginMatches": true,
+  "adoptedThroughBrowser": true,
+  "originalChanged": true,
+  "otherProjectUnchanged": true,
+  "userCopyUnchanged": true,
+  "files": [
+    {
+      "path": "<fixture>/origin-project/.dsh/skills/workspace-audit/SKILL.md",
+      "before": "4d0a73194b1ec2036d7e087bf8789ad1967408602a298caed4424b84ff9b5e69",
+      "after": "a146bf7c02678ec417491b79ee58063fef76493f6194e7a163b2cf783eee1762"
+    },
+    {
+      "path": "<fixture>/other-project/.dsh/skills/workspace-audit/SKILL.md",
+      "before": "a05b3bcd6f582a6970d8aeaeae6e2734f25c49eb035263f5be803835492d945c",
+      "after": "a05b3bcd6f582a6970d8aeaeae6e2734f25c49eb035263f5be803835492d945c"
+    },
+    {
+      "path": "<fixture>/dsh-home/skills/workspace-audit/SKILL.md",
+      "before": "679f29916baa314d6389882dd99e240d5eba446d71e0f83855d1476387f69ceb",
+      "after": "679f29916baa314d6389882dd99e240d5eba446d71e0f83855d1476387f69ceb"
+    }
+  ],
+  "limitations": [
+    "Synthetic records and draft seeded through the production management API; browser performs adoption.",
+    "Host model workflow is covered by deterministic tests, not a live paid model.",
+    "The reporter Windows installation was not available for local reproduction."
+  ]
+}

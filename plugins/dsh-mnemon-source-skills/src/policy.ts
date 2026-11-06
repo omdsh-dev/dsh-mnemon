@@ -1,5 +1,6 @@
 import { DEFAULT_SKILLS_POLICY, EVOLUTION_SIGNALS, type EvalCase, type EvolutionSignal, type ReviewLogEntry, type ReviewRecordInput, type ReviewRecordResult, type SkillCatalog, type SkillSuggestion, type SkillsPolicy, type Trajectory, type TrajectoryAnnotation, type TrajectorySummary } from './contracts.ts'
 import { activeSkill } from './catalog.ts'
+import { sameSuggestionSkill, skillOrigin } from './identity.ts'
 import { isSkillName } from './frontmatter.ts'
 import { MAX_CASES_PER_SKILL, MAX_TRAJECTORIES, type EvalsFile, type LedgerFile } from './store.ts'
 
@@ -182,11 +183,13 @@ export function admitReview(context: AdmissionContext, input: ReviewRecordInput)
     const cited = steps(proposal.steps)
     const evidence = { trajectoryId, steps: cited }
     if (confidence < policy.minConfidence) { skipped.push({ skillName: proposal.skillName, action: proposal.action, reason: 'low_confidence' }); continue }
-    const dismissed = ledger.suggestions.find(suggestion => suggestion.skillName === proposal.skillName && suggestion.action === proposal.action
+    const skill = activeSkill(catalog, proposal.skillName)
+    const sameSkill = (suggestion: SkillSuggestion) => suggestion.skillName === proposal.skillName && suggestion.action === proposal.action
+      && (skill === undefined || sameSuggestionSkill(ledger, suggestion, catalog, skill))
+    const dismissed = ledger.suggestions.find(suggestion => sameSkill(suggestion)
       && suggestion.status === 'dismissed' && suggestion.sourceSessionId === input.review.sessionId && now.getTime() - Date.parse(suggestion.updatedAt) < DISMISSED_COOLDOWN_MS)
     if (dismissed !== undefined) { skipped.push({ skillName: proposal.skillName, action: proposal.action, reason: 'recently_dismissed' }); continue }
-    const skill = activeSkill(catalog, proposal.skillName)
-    const open = ledger.suggestions.find(suggestion => suggestion.skillName === proposal.skillName && suggestion.action === proposal.action && OPEN_STATUSES.has(suggestion.status))
+    const open = ledger.suggestions.find(suggestion => sameSkill(suggestion) && OPEN_STATUSES.has(suggestion.status))
     if (open !== undefined) {
       // More evidence for an open suggestion is never lost, even when its wording stays.
       open.evidence = [...open.evidence, evidence].slice(-12)
@@ -196,7 +199,7 @@ export function admitReview(context: AdmissionContext, input: ReviewRecordInput)
         if (proposal.rationale !== undefined && proposal.rationale.trim() !== '') open.rationale = clip(proposal.rationale, 2_000)
         open.confidence = confidence
         open.reviewId = reviewId
-        if (skill !== undefined) { open.skillKey = skill.key; open.skillFileHash = skill.hash }
+        if (skill !== undefined) { open.skillKey = skill.key; open.skillFileHash = skill.hash; open.origin = skillOrigin(catalog, skill) }
         updated++
       } else {
         skipped.push({ skillName: proposal.skillName, action: proposal.action, reason: open.status === 'pending' ? 'duplicate_lower_confidence' : 'in_progress' })
@@ -215,7 +218,7 @@ export function admitReview(context: AdmissionContext, input: ReviewRecordInput)
       confidence,
       signals: signals(proposal.signals),
       evidence: [evidence],
-      ...(skill === undefined ? {} : { skillKey: skill.key, skillFileHash: skill.hash }),
+      ...(skill === undefined ? {} : { skillKey: skill.key, skillFileHash: skill.hash, origin: skillOrigin(catalog, skill) }),
       sourceSessionId: input.review.sessionId,
       ...(input.review.sessionTitle === undefined ? {} : { sourceSessionTitle: input.review.sessionTitle }),
       reviewId,

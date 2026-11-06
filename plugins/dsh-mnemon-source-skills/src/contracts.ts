@@ -166,6 +166,15 @@ export interface EvidenceReference {
 export type SuggestionStatus = 'pending' | 'drafting' | 'review' | 'adopted' | 'dismissed' | 'expired' | 'invalidated'
 export const SUGGESTION_STATUSES: readonly SuggestionStatus[] = ['pending', 'drafting', 'review', 'adopted', 'dismissed', 'expired', 'invalidated']
 
+/** A file selected by the Source catalog, independent of the page's storage scope. */
+export interface SkillOrigin {
+  path: string
+  /** The owning project root; absent for user skills. */
+  workspace?: string
+}
+
+export type SkillResolution = 'available' | 'missing' | 'origin-unavailable'
+
 export interface SkillSuggestion {
   id: string
   skillName: string
@@ -180,6 +189,8 @@ export interface SkillSuggestion {
   /** For `update`: the SKILL.md the reviewer read, so a later edit invalidates it. */
   skillKey?: string
   skillFileHash?: string
+  /** Absent on legacy records; never supplied by the model. */
+  origin?: SkillOrigin
   sourceSessionId?: string
   sourceSessionTitle?: string
   reviewId?: string
@@ -201,6 +212,8 @@ export interface SkillDraft {
   /** For `update`, the SKILL.md hash the draft was written against. */
   baseKey?: string
   baseHash?: string
+  /** The file this update replaces; absent on legacy records. */
+  origin?: SkillOrigin
   /** For `create`, where adopting writes the new bundle. */
   targetRoot?: SkillRootKind
   content: string
@@ -458,7 +471,10 @@ export interface SuggestionView {
   suggestion: SkillSuggestion
   /** The loaded file is still the one the reviewer read. */
   hashCurrent: boolean
-  skill?: SkillSummary
+  skill?: SkillDocument
+  resolution?: SkillResolution
+  /** Whether the selected scope's catalog offers this same file for navigation. */
+  skillInCatalog?: boolean
   draft?: SkillDraft
   trajectories: TrajectorySummary[]
 }
@@ -467,6 +483,7 @@ export interface DraftView {
   draft: SkillDraft
   /** The file the draft replaces, as it is now. */
   base?: SkillDocument
+  resolution?: SkillResolution
   runs: BacktestRun[]
 }
 
