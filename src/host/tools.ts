@@ -368,7 +368,7 @@ function registerDocumentTools(ctx: HostContextShape, { requireSource, config, s
       if (args.action === 'archive') {
         // Without a Memory Spaces layer to index into, the coordinator archives locally (#336).
         requireSource(exec, 'documents', 'archive')
-        if (isSubagent(agent)) throw new Error('idle document workers cannot cold-archive directly')
+        if (isSubagent(agent) && !coordinator.isUserContinuation(agent)) throw new Error('idle document workers cannot cold-archive directly')
         if (args.id === undefined) throw new Error('document id is required for archive')
         return Promise.resolve(coordinator.archiveDocument(agent, args.id, exec.signal)).then(documentReceipt)
       }

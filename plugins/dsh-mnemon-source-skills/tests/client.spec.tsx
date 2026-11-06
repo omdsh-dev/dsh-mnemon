@@ -708,5 +708,43 @@ describe('model pickers', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: t('common.delete') }))
     expect(await screen.findByText(t('evolution.deleted'))).not.toBeNull()
     expect((await management.read('suggestions', null)).value).toEqual([])
+    fireEvent.click(screen.getByRole('tab', { name: t('evolution.evidence') }))
+    await screen.findByText('Group them by component from now on')
+    expect(screen.queryByRole('button', { name: /Suggestion 1/u })).toBeNull()
+    expect(screen.queryByText(t('records.suggested', { count: 1 }))).toBeNull()
+  })
+
+  it.each([{ writable: true, locale: 'en' }, { writable: false, locale: 'zh' }] as const)('ends loading with a localized notice when a suggestion is deleted after the list loads ($locale, writable=$writable)', async ({ writable, locale }) => {
+    await mutate('review-record', review())
+    const oldList = await management.read('suggestions', null)
+    const [suggestion] = oldList.value as Array<{ id: string }>
+    await mutate('suggestion-delete', { id: suggestion!.id })
+    const watched = new Proxy(management, {
+      get: (target, key, receiver) => key === 'read'
+        ? (operation: string, input: unknown) => operation === 'suggestions' ? Promise.resolve(oldList) : target.read(operation as never, input as never)
+        : Reflect.get(target, key, receiver),
+    })
+    render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale={locale} writable={writable} management={watched} navigationInput={{ seed: `suggestion:${suggestion!.id}`, nonce: 1 }} />)
+    await screen.findByText(locale === 'zh' ? '该建议已删除' : 'This suggestion has been deleted')
+    expect(screen.queryByText(translate(locale)('common.loading'))).toBeNull()
+    expect(screen.queryByText(/suggestion not found/u)).toBeNull()
+    expect(screen.queryByRole('button', { name: t('evolution.draft') })).toBeNull()
+  })
+
+  it('keeps other suggestion read failures visible and lets the user retry', async () => {
+    await mutate('review-record', review())
+    let reject = true
+    const watched = new Proxy(management, {
+      get: (target, key, receiver) => key === 'read'
+        ? (operation: string, input: unknown) => operation === 'suggestion' && reject ? Promise.reject(new Error('read access denied')) : target.read(operation as never, input as never)
+        : Reflect.get(target, key, receiver),
+    })
+    render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable management={watched} navigationInput={{ seed: 'evolution:pending', nonce: 1 }} />)
+    await screen.findByText('Could not load this suggestion')
+    expect(screen.getByText('read access denied')).not.toBeNull()
+    expect(screen.queryByText(t('common.loading'))).toBeNull()
+    reject = false
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await screen.findByRole('heading', { name: 'release-notes' })
   })
 })

@@ -6,6 +6,7 @@ For an existing installation, start with [Compatibility and upgrades](../referen
 
 ## v0.5
 
+- [v0.5.41: DSH Task Compatibility and Reliable Skill Drafts](./v0.5.41.md)
 - [v0.5.40: Same-turn Document Editing and Published RC1 Support](./v0.5.40.md)
 - [v0.5.39: Reliable Memory Turns and Current DSH Support](./v0.5.39.md)
 - [v0.5.38: Quieter Conversation Switching and Reliable Idle Review](./v0.5.38.md)

@@ -127,6 +127,8 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
     inject: vi.fn(),
   } satisfies HostAgent
   const coordinator = {
+    isFinishedTask: () => false,
+    inheritTaskContinuation: () => {},
     canReview: vi.fn(() => true),
     checkReviewAccess: vi.fn(async () => true),
     recall: vi.fn(async (_agent, request) => ({ query: request.query, mode: 'smart', results: [] })),

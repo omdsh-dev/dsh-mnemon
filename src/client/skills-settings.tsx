@@ -28,8 +28,13 @@ const PARAMETERS: ReadonlyArray<{ key: Parameter; min: number; max: number; inte
   { key: 'casesPerRun', min: 1, max: 20, integer: true },
 ]
 
+const DRAFT_PARAMETERS = [
+  { key: 'draftMaxTokens', min: 128, max: 131_072, integer: true },
+  { key: 'draftRetryMaxTokens', min: 128, max: 131_072, integer: true },
+] as const
+
 /** The value a parameter stores, or undefined when the Host would refuse it. */
-function parameterValue(field: typeof PARAMETERS[number], text: string): number | undefined {
+function parameterValue(field: { min: number; max: number; integer: boolean }, text: string): number | undefined {
   if (text.trim() === '') return undefined
   const value = Number(text)
   if (!Number.isFinite(value) || value < field.min || value > field.max) return undefined
@@ -66,8 +71,13 @@ export function SkillsSettings(props: { scope: ClientSettingsScope<SkillsConfig>
     const changed = PARAMETERS.filter(field => parameterValue(field, draft[field.key]) !== saved[field.key])
     if (changed.length > 0) await scope.mutate(changed.map(field => set(field.key, parameterValue(field, draft[field.key])!)))
   })
+  const draftBudgets = useStaged({ draftMaxTokens: String(saved.draftMaxTokens), draftRetryMaxTokens: String(saved.draftRetryMaxTokens) }, async draft => {
+    const changed = DRAFT_PARAMETERS.filter(field => parameterValue(field, draft[field.key]) !== saved[field.key])
+    if (changed.length > 0) await scope.mutate(changed.map(field => set(field.key, parameterValue(field, draft[field.key])!)))
+  })
   const disabled = !page.writable || snapshot.status === 'loading' || !snapshot.writable
   const invalid = PARAMETERS.find(field => parameterValue(field, parameters.draft[field.key]) === undefined)
+  const invalidDraft = DRAFT_PARAMETERS.find(field => parameterValue(field, draftBudgets.draft[field.key]) === undefined)
   return <section className={css.panelSection} aria-label={t('skills.label')}>
     <div className={css.rows}>
       <ToggleRow id="mnemon-skills-evolution" label={t('skills.evolution')} hint={t('skills.evolutionHint')} checked={evolution.value} disabled={disabled} onChange={evolution.set} />
@@ -78,6 +88,20 @@ export function SkillsSettings(props: { scope: ClientSettingsScope<SkillsConfig>
         disabled={disabled || destination.saving} onChange={targetScope => destination.edit({ targetScope })} />
       <PanelActions dirty={destination.dirty} saving={destination.saving} applied={destination.applied} failed={destination.failed} disabled={disabled} invalid={null} t={t}
         onDiscard={destination.discard} onApply={() => { void destination.apply() }} />
+      <details className={css.advanced}>
+        <summary>{t('skills.draftGeneration')}<IconChevronDownOutlineRegular size={12} /></summary>
+        <p className={css.panelNote}>{t('skills.draftBudgetHint')}</p>
+        <div className={css.fieldGrid}>
+          {DRAFT_PARAMETERS.map(field => <label key={field.key}>{t(`skills.${field.key}`)}
+            <input type="number" step={1} min={field.min} max={field.max} inputMode="numeric" value={draftBudgets.draft[field.key]} disabled={disabled || draftBudgets.saving}
+              aria-invalid={parameterValue(field, draftBudgets.draft[field.key]) === undefined}
+              onChange={event => draftBudgets.edit({ [field.key]: event.target.value })} />
+          </label>)}
+        </div>
+        <PanelActions dirty={draftBudgets.dirty} saving={draftBudgets.saving} applied={draftBudgets.applied} failed={draftBudgets.failed} disabled={disabled} t={t}
+          invalid={invalidDraft === undefined ? null : t('skills.invalid', { field: t(`skills.${invalidDraft.key}`), min: invalidDraft.min, max: invalidDraft.max })}
+          onDiscard={draftBudgets.discard} onApply={() => { void draftBudgets.apply() }} />
+      </details>
       {evolution.value && <ToggleRow id="mnemon-skills-backtest" label={t('skills.autoBacktest')} hint={t('skills.autoBacktestHint')} checked={autoBacktest.value} disabled={disabled} onChange={autoBacktest.set} />}
       {evolution.value && <details className={css.advanced}>
         <summary>{t('skills.parameters')}<IconChevronDownOutlineRegular size={12} /></summary>

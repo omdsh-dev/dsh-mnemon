@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { HostAgent, HostPreStepDecision, HostSubagentRun, HostUserMessage } from './dsh.ts'
 import { createPluginMessage } from './plugin-message.ts'
+import { activationOwned, isReservedChild, reservedChildId, withReservedChild, type ActivationOwnership } from './agent-compat.ts'
 
 /** The user turn that ends a refused delegated child's tool continuations. */
 export const CONTINUATION_TEXT = 'Continue from the tool results above.'
@@ -9,7 +10,8 @@ export const CONTINUATION_TEXT = 'Continue from the tool results above.'
 const NO_USER_QUERY = /no user query found in messages/iu
 
 export interface ContinuationHost {
-  agents?: { isOwnedBy?(id: string, parent: HostAgent): boolean }
+  agents?: { isOwnedBy?(id: string, parent: HostAgent): boolean; get?(id: string): HostAgent | undefined }
+  subagents?: ActivationOwnership
   on(name: string, listener: (...args: never[]) => unknown): unknown
 }
 
@@ -82,17 +84,23 @@ function continueAfterRefusal(agent: HostAgent): Array<() => unknown> {
  * that does not report creation leaves the child as it was.
  */
 export async function startWithContinuationTurns(host: ContinuationHost, parent: HostAgent, start: () => Promise<HostSubagentRun>): Promise<HostSubagentRun> {
+  const reserved = activationOwned(host.subagents)
   const pending = Symbol('Mnemon delegated start')
   const stops: Array<() => unknown> = []
+  let expectedChildId: string | undefined
   const listener = host.on('agent/created', (({ agent }: { agent: HostAgent }) => {
     if (startingChild.getStore() !== pending) return
+    if (reserved && (agent.id !== expectedChildId || !isReservedChild(host.agents, parent, agent))) return
     if (typeof host.agents?.isOwnedBy === 'function' && !host.agents.isOwnedBy(agent.id, parent)) return
     for (const stop of continueAfterRefusal(agent)) if (typeof stop === 'function') stops.push(stop)
   }) as never)
   const release = async () => { for (const stop of stops.splice(0)) await stop() }
   let run: HostSubagentRun
   try {
-    run = await startingChild.run(pending, start)
+    run = await startingChild.run(pending, () => reserved ? withReservedChild(parent, () => {
+      expectedChildId = reservedChildId(parent)
+      return start()
+    }) : start())
   } catch (error) {
     await release()
     throw error

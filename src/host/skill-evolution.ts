@@ -12,6 +12,7 @@ import {
   skillCasesPrompt, skillDraftPrompt, skillExecutorPrompt, skillJudgePrompt, skillReviewPrompt,
 } from './skill-review.ts'
 import { captureTurn, redact, sessionTitle, TrajectoryWindow, turnSkillUses } from './skill-trajectory.ts'
+import { SubagentStoppedError } from './subagent-errors.ts'
 
 /** The Skills Source's management protocol, as the Host calls it. */
 export interface SkillsSourcePort {
@@ -28,7 +29,7 @@ export interface SkillEvolutionHost {
   source(agent: HostAgent): SkillsSourcePort | undefined
   /** Run model work under a fresh task Agent in a workspace, outside any conversation. */
   runTask<T>(workspaceRoot: string | undefined, signal: AbortSignal, operation: (agent: HostAgent) => Promise<T>, route?: ModelRoute): Promise<T>
-  skillTask(parent: HostAgent, label: string, prompt: string, schema: Record<string, unknown>, persona: string, signal: AbortSignal, route?: ModelRoute): Promise<{ structured: unknown }>
+  skillTask(parent: HostAgent, label: string, prompt: string, schema: Record<string, unknown>, persona: string, signal: AbortSignal, route?: ModelRoute, maxTokens?: number): Promise<{ structured: unknown }>
   now?(): Date
   warn?(message: string, error?: unknown): void
 }
@@ -385,17 +386,41 @@ export class SkillEvolution {
     const settings = this.host.settings()
     const { pack, targetRoot, guidance } = prepared
     let prompt = skillDraftPrompt(pack, guidance, targetRoot)
+    let maxTokens = settings.draftMaxTokens
+    const attemptedBudgets: number[] = []
     let draft: SkillDraft | undefined
     for (let attempt = 0; draft === undefined; attempt++) {
-      const answer = await this.host.runTask(workspace, signal, task => this.host.skillTask(task, 'Mnemon skill draft', prompt, SKILL_DRAFT_SCHEMA as unknown as Record<string, unknown>, SKILL_DRAFT_PERSONA, signal, input.route), input.route)
+      signal.throwIfAborted()
+      attemptedBudgets.push(maxTokens)
+      let answer: { structured: unknown }
+      try {
+        answer = await this.host.runTask(workspace, signal, task => this.host.skillTask(task, 'Mnemon skill draft', prompt, SKILL_DRAFT_SCHEMA as unknown as Record<string, unknown>, SKILL_DRAFT_PERSONA, signal, input.route, maxTokens), input.route)
+        signal.throwIfAborted()
+      } catch (error) {
+        signal.throwIfAborted()
+        if (error instanceof SubagentStoppedError && error.maxTokens !== undefined) attemptedBudgets[attemptedBudgets.length - 1] = error.maxTokens
+        // Share the existing one-retry limit with file-validation repair. A
+        // fresh task discards truncated JSON and gets a new result capability.
+        if (error instanceof SubagentStoppedError && error.stopReason === 'max-tokens' && attempt === 0 && settings.draftRetryMaxTokens > maxTokens) {
+          maxTokens = settings.draftRetryMaxTokens
+          prompt += '\n\nThe previous attempt exhausted its output budget and was discarded. Return a complete SKILL.md from the beginning; keep notes and changes concise.'
+          continue
+        }
+        const bytes = Buffer.byteLength(pack.skill?.content ?? '', 'utf8')
+        // The Source retains 500 error characters. Put actionable context first
+        // and bound provider detail so the page keeps the complete guidance.
+        throw new Error(`Skill draft failed. Attempted budgets: ${attemptedBudgets.join(', ')} tokens; source SKILL.md: ${bytes} bytes (UTF-8). Adjust skills.draftMaxTokens / skills.draftRetryMaxTokens in Plugins → dsh-mnemon → Skills → Draft generation. Stay within provider/model caps: lower rejected budgets, shorten the skill or use a model with a higher output cap. Reason: ${message(error).slice(0, 100)}`, { cause: error })
+      }
       const parsed = parseSkillDraft(answer.structured)
       try {
+        signal.throwIfAborted()
         draft = await source.mutate<SkillDraft>('draft-record', {
           ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }),
           skillName: pack.skillName, content: parsed.content, notes: parsed.notes, changes: parsed.changes, guidance,
           ...(pack.action === 'create' ? { targetRoot } : {}),
         }, signal)
       } catch (error) {
+        signal.throwIfAborted()
         // One retry, told exactly why DSH would refuse the file.
         if (attempt > 0) throw error
         prompt += `\n\nYour previous SKILL.md was rejected: ${message(error)}. Return a corrected complete file.`

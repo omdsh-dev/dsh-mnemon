@@ -1,0 +1,3611 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "verificationDate": "2026-11-05",
+  "timezone": "Asia/Shanghai",
+  "scenarioCount": 2,
+  "candidateRevision": "444473f839759961573a922474c9398c1bb42663",
+  "baseRevision": "cce2ab186db2edba30fda25d8b64b1750f0835f0",
+  "candidateManifestSha256": "e213627458480a7d2e9e3dc681697a3b3d7dff5d6f962644171deefc5d80bdb5",
+  "unchangedComponentSource": "17 immutable pinned npm packages; fixture registry overlays only Starter 0.5.41 and Skills 0.5.8",
+  "environment": {
+    "host": {
+      "name": "@deepseek-ai/dsh",
+      "version": "0.2.1-rc.5",
+      "engines": {},
+      "manifestSha256": "b10673ea6c4e20cc10da6ef20130b6ece3142cba8003b50e0d5ded25fc388b5b",
+      "binSha256": "80112efe368efb1a39720c7ada0af00442e5131fb2744edaaff8a3e8bb499e6f"
+    },
+    "officialHostManifestAndBinUnchanged": true,
+    "node": "v24.22.2",
+    "platform": "darwin",
+    "architecture": "arm64",
+    "nodeExecutable": "${NODE24_BIN}/node",
+    "dshBin": "${DSH_BIN}",
+    "nodePathUnset": true,
+    "browser": "CUA in-app browser; default background visibility",
+    "uiDriver": "mcp__cua_repl accessibility actions and documented Playwright locators",
+    "acceptanceScriptSha256": "d119c9d6f19c509fe37fed08c706e3cf3633456bb1cba477e2f69a7b7c5ce506"
+  },
+  "fresh": {
+    "installed": {
+      "timestamp": "2026-11-05T15:17:21.403390+00:00",
+      "rootVersion": "0.5.41",
+      "versions": [
+        {
+          "name": "dsh-mnemon",
+          "expected": "0.5.41",
+          "actual": "0.5.41",
+          "match": true,
+          "source": "frozen candidate"
+        },
+        {
+          "name": "dsh-mnemon-provider-byterover",
+          "expected": "0.5.6",
+          "actual": "0.5.6",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-hindsight",
+          "expected": "0.5.7",
+          "actual": "0.5.7",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-holographic",
+          "expected": "0.5.7",
+          "actual": "0.5.7",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-honcho",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-mem0",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-mnemon-native",
+          "expected": "0.5.10",
+          "actual": "0.5.10",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-openviking",
+          "expected": "0.5.10",
+          "actual": "0.5.10",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-retaindb",
+          "expected": "0.5.6",
+          "actual": "0.5.6",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-supermemory",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-documents",
+          "expected": "0.5.13",
+          "actual": "0.5.13",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-memory-spaces",
+          "expected": "0.5.25",
+          "actual": "0.5.25",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-runtime",
+          "expected": "0.5.17",
+          "actual": "0.5.17",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-skills",
+          "expected": "0.5.8",
+          "actual": "0.5.8",
+          "match": true,
+          "source": "frozen candidate"
+        },
+        {
+          "name": "dsh-mnemon-strategy-auto-capture",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-default-three-tier",
+          "expected": "0.5.12",
+          "actual": "0.5.12",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-general",
+          "expected": "0.5.1",
+          "actual": "0.5.1",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-light-context",
+          "expected": "0.5.6",
+          "actual": "0.5.6",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-scoped",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        }
+      ],
+      "pinnedPackageCount": 19,
+      "versionMismatches": 0,
+      "candidatePackages": [
+        {
+          "name": "dsh-mnemon",
+          "version": "0.5.41",
+          "filename": "dsh-mnemon-0.5.41.tgz",
+          "sha256": "a731019afc67b414ae41f288c85d8465998e686cace033259620222d492acfab",
+          "integrity": "sha512-Rk9vSADMwnjTQVZ348dTp6taycjwGGWiLzE4erLDHZ4p6DywrqwOm3KW2uddvcUPdJTPuVo7M04GZlBuspdHAA==",
+          "fileCount": 68,
+          "fileSetMatches": true,
+          "extraFiles": [],
+          "missingFiles": [],
+          "allFilesMatch": true,
+          "executableBitsMatch": true,
+          "files": [
+            {
+              "file": "LICENSE",
+              "expectedSha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+              "installedSha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/bundle.js",
+              "expectedSha256": "781ec352510cc4bf66437f494b898118ebf8e47ae470e2d80d275957c079f64d",
+              "installedSha256": "781ec352510cc4bf66437f494b898118ebf8e47ae470e2d80d275957c079f64d",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/client.js",
+              "expectedSha256": "636731653985ef04b97e29454f9543d429d2d2a6d07f0cb9af50f38d1f621374",
+              "installedSha256": "636731653985ef04b97e29454f9543d429d2d2a6d07f0cb9af50f38d1f621374",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/contracts.js",
+              "expectedSha256": "024ad7318227336ef8816b48457b63593bc56e20bb74c6ffd59244425d23a779",
+              "installedSha256": "024ad7318227336ef8816b48457b63593bc56e20bb74c6ffd59244425d23a779",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/core.js",
+              "expectedSha256": "e2d32e8fe8c16ce90d0bcade5782feb4ce20bc9b716faa95e8c5432e768b03db",
+              "installedSha256": "e2d32e8fe8c16ce90d0bcade5782feb4ce20bc9b716faa95e8c5432e768b03db",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/definitions-DU7MLBhu.js",
+              "expectedSha256": "510cd51f4b1dfe1ffbd47ba8fb1cbbdbf87002531014c3dc462dec1a8ebcbcb2",
+              "installedSha256": "510cd51f4b1dfe1ffbd47ba8fb1cbbdbf87002531014c3dc462dec1a8ebcbcb2",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/extension-sdk.js",
+              "expectedSha256": "b70c0c276f4fb8926c88dc84e2374f4ca98f0cbe5b289624a33c976dca286a11",
+              "installedSha256": "b70c0c276f4fb8926c88dc84e2374f4ca98f0cbe5b289624a33c976dca286a11",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/index.js",
+              "expectedSha256": "8613c1381bcd1f5bd2f2e5bc3f852a9f11b29163756c128548737d939ac599e2",
+              "installedSha256": "8613c1381bcd1f5bd2f2e5bc3f852a9f11b29163756c128548737d939ac599e2",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/runtime-DmL0It3P.js",
+              "expectedSha256": "74d762eb906c2989a584df63dfe823f490f4e2a9a152ef0f310ab3a2d81985a1",
+              "installedSha256": "74d762eb906c2989a584df63dfe823f490f4e2a9a152ef0f310ab3a2d81985a1",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/starter-resolution-xVjONc6g.js",
+              "expectedSha256": "13009e9e1d7351d223fd67322cc6775081a11004ae67b3a0fe479a68132b16f6",
+              "installedSha256": "13009e9e1d7351d223fd67322cc6775081a11004ae67b3a0fe479a68132b16f6",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/starter.js",
+              "expectedSha256": "81cee2e00d5927026764560a360bf25116973e5f4619f6e984090e41ceefb31c",
+              "installedSha256": "81cee2e00d5927026764560a360bf25116973e5f4619f6e984090e41ceefb31c",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/strategy-configuration-CKP2kRss.js",
+              "expectedSha256": "a06fab7d856de5689df29d29be768e1730f14eee1d6736c346240e8b27680d21",
+              "installedSha256": "a06fab7d856de5689df29d29be768e1730f14eee1d6736c346240e8b27680d21",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/testing.js",
+              "expectedSha256": "aecc89be6ddd5537f386b0a56fb285ec2bf894052fb1e27d9eb8689b26cd0bbb",
+              "installedSha256": "aecc89be6ddd5537f386b0a56fb285ec2bf894052fb1e27d9eb8689b26cd0bbb",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "locale/en.json",
+              "expectedSha256": "53b4411680fd544bed77843c3356a8e115801fbc0e4f10f28226c821835b5f1d",
+              "installedSha256": "53b4411680fd544bed77843c3356a8e115801fbc0e4f10f28226c821835b5f1d",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "package.json",
+              "expectedSha256": "58e56eb20333990eae0ae1ae70b22354038357a27b188fa6926332c250379e6c",
+              "installedSha256": "58e56eb20333990eae0ae1ae70b22354038357a27b188fa6926332c250379e6c",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "locale/zh.json",
+              "expectedSha256": "f1f60f2c2b7ac12b52b9fb91b6ecc564798536611879ce4c3329a4f9e4bafd85",
+              "installedSha256": "f1f60f2c2b7ac12b52b9fb91b6ecc564798536611879ce4c3329a4f9e4bafd85",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "README.md",
+              "expectedSha256": "2fd04e73a58de02dcb6b7a37a8827328677cfb97b4b30b3a56504aec9286b4cb",
+              "installedSha256": "2fd04e73a58de02dcb6b7a37a8827328677cfb97b4b30b3a56504aec9286b4cb",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "README.zh-CN.md",
+              "expectedSha256": "21f708115fae73e481cbc6c86e8c94235e4b0492af159d326583b07bbcc50a11",
+              "installedSha256": "21f708115fae73e481cbc6c86e8c94235e4b0492af159d326583b07bbcc50a11",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "SECURITY.md",
+              "expectedSha256": "700562eaa915d083050a30b6f58292c8ce5c06dd83fde6cd7cfadef228dd3fb1",
+              "installedSha256": "700562eaa915d083050a30b6f58292c8ce5c06dd83fde6cd7cfadef228dd3fb1",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "THIRD_PARTY_NOTICES.md",
+              "expectedSha256": "32ebd32c67f4316e33e4214a0504ebe6dabeb1fef00106de05e457a97cb80926",
+              "installedSha256": "32ebd32c67f4316e33e4214a0504ebe6dabeb1fef00106de05e457a97cb80926",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "bin/repair-legacy-session.mjs",
+              "expectedSha256": "2465c57aead1426a520db45e231278a0fb7d5afecb01f4c4c114b1b3814cf4eb",
+              "installedSha256": "2465c57aead1426a520db45e231278a0fb7d5afecb01f4c4c114b1b3814cf4eb",
+              "match": true,
+              "expectedExecutableBits": "0o111",
+              "actualExecutableBits": "0o111",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/bundle.d.ts",
+              "expectedSha256": "602028377ee0735110c68e0807aeea407a05b021b5c87ec66af3e4b4d83e9033",
+              "installedSha256": "602028377ee0735110c68e0807aeea407a05b021b5c87ec66af3e4b4d83e9033",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/component-ui.d.ts",
+              "expectedSha256": "b8b2137b5e9eab1bbcaed491ab2edbcb23e71e1d18eadf1068cb10f4efdfb800",
+              "installedSha256": "b8b2137b5e9eab1bbcaed491ab2edbcb23e71e1d18eadf1068cb10f4efdfb800",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/config-values.d.ts",
+              "expectedSha256": "d6d51c8288cf72085bd7b3194e79ffe3e2ed9675604efb3706dfd74b24169a98",
+              "installedSha256": "d6d51c8288cf72085bd7b3194e79ffe3e2ed9675604efb3706dfd74b24169a98",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/config.d.ts",
+              "expectedSha256": "e89b437600120c86b8dcd6720c7b99a26561f5512125dc2a2ca6f6454ebc39f4",
+              "installedSha256": "e89b437600120c86b8dcd6720c7b99a26561f5512125dc2a2ca6f6454ebc39f4",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/core/definitions.d.ts",
+              "expectedSha256": "c1426396948e63015b25a8e5aaccdf65c43ddf33055de833ae90a33cb76a2fec",
+              "installedSha256": "c1426396948e63015b25a8e5aaccdf65c43ddf33055de833ae90a33cb76a2fec",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/display-mode.d.ts",
+              "expectedSha256": "9cfd641ad2162703dea794b613f98a6a42b3007c8aeb4e0f6b65b82ad5a4d678",
+              "installedSha256": "9cfd641ad2162703dea794b613f98a6a42b3007c8aeb4e0f6b65b82ad5a4d678",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/extension-sdk.d.ts",
+              "expectedSha256": "ac6e9034bbcfad7dfd877c6b9298bce500ad75d5e095568eca29f5bf29a56473",
+              "installedSha256": "ac6e9034bbcfad7dfd877c6b9298bce500ad75d5e095568eca29f5bf29a56473",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/feedback.d.ts",
+              "expectedSha256": "e532a8e2e0d60d0da5d8e63238e6eca88da3244d2560a749a3380e662b543792",
+              "installedSha256": "e532a8e2e0d60d0da5d8e63238e6eca88da3244d2560a749a3380e662b543792",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/GlobalLocationSetting.d.ts",
+              "expectedSha256": "3cf62d774fa8406057c3406682a8a87a61ab62232f87b85163e20351c2e4d131",
+              "installedSha256": "3cf62d774fa8406057c3406682a8a87a61ab62232f87b85163e20351c2e4d131",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/index.d.ts",
+              "expectedSha256": "d43c82958f8bb83ef5cff5524813d65e3e0b25b688914b04283d238ce8e13f6f",
+              "installedSha256": "d43c82958f8bb83ef5cff5524813d65e3e0b25b688914b04283d238ce8e13f6f",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/core/contracts/index.d.ts",
+              "expectedSha256": "861b85070c37483c4c578fd2f37ddb616cb70522eb409fbeb391ee2850058b4e",
+              "installedSha256": "861b85070c37483c4c578fd2f37ddb616cb70522eb409fbeb391ee2850058b4e",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/index.d.ts",
+              "expectedSha256": "a30ee3bce8e37249b8461b925cc0e626942d4a0cf6233c13a3f0d010f6d5ad47",
+              "installedSha256": "a30ee3bce8e37249b8461b925cc0e626942d4a0cf6233c13a3f0d010f6d5ad47",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/index.d.ts",
+              "expectedSha256": "b46d181e8677f404f0dceade0573bc7d349834d7076fed3d2243876b7e6b8237",
+              "installedSha256": "b46d181e8677f404f0dceade0573bc7d349834d7076fed3d2243876b7e6b8237",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/input.d.ts",
+              "expectedSha256": "3264d99270796e102939d3d412f4c38c220e8c4f79ac6d001bf5fb374248d246",
+              "installedSha256": "3264d99270796e102939d3d412f4c38c220e8c4f79ac6d001bf5fb374248d246",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/install.d.ts",
+              "expectedSha256": "2b3e0903128d4b79861233772966fce157bd18bd8234beadcbdef4bcfc7ca93e",
+              "installedSha256": "2b3e0903128d4b79861233772966fce157bd18bd8234beadcbdef4bcfc7ca93e",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/live-config.d.ts",
+              "expectedSha256": "e58b26ffaa6b08d5bd10e3678554f99d38880a8bc3e1b7c21c42040cc46f496f",
+              "installedSha256": "e58b26ffaa6b08d5bd10e3678554f99d38880a8bc3e1b7c21c42040cc46f496f",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/locales.d.ts",
+              "expectedSha256": "d40b55a975466939397ee64cff17b604a28ae7deb557d8a4acfb8c86e049e345",
+              "installedSha256": "d40b55a975466939397ee64cff17b604a28ae7deb557d8a4acfb8c86e049e345",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/memory-tools.d.ts",
+              "expectedSha256": "57f4e231607ef98e5cc6311758a55af25a5608007c9ac2c839c154390ee5b162",
+              "installedSha256": "57f4e231607ef98e5cc6311758a55af25a5608007c9ac2c839c154390ee5b162",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/MnemonDialog.d.ts",
+              "expectedSha256": "cf9de6f80a98d6e527860d7077ce5cc5098b2beda55aecf25790403974bd1c34",
+              "installedSha256": "cf9de6f80a98d6e527860d7077ce5cc5098b2beda55aecf25790403974bd1c34",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/MnemonLogo.d.ts",
+              "expectedSha256": "c1532a4f925703354772392d59b767cba82db7cfa0ede0ed2c0c4ad7f952a405",
+              "installedSha256": "c1532a4f925703354772392d59b767cba82db7cfa0ede0ed2c0c4ad7f952a405",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/page-client.d.ts",
+              "expectedSha256": "263491e8acfd741b24da984325ad144f529121a660cc45768a427b64a5298945",
+              "installedSha256": "263491e8acfd741b24da984325ad144f529121a660cc45768a427b64a5298945",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/page-controls.d.ts",
+              "expectedSha256": "819a7ada7ad3cf04dc10786b2c91bd1ab2593af9925b24ceaf8b9f267c89d423",
+              "installedSha256": "819a7ada7ad3cf04dc10786b2c91bd1ab2593af9925b24ceaf8b9f267c89d423",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/page-kit.d.ts",
+              "expectedSha256": "ce40c66a2409f540adea88e82183bd17cbcbd20d7e0a3796d150283f34082b12",
+              "installedSha256": "ce40c66a2409f540adea88e82183bd17cbcbd20d7e0a3796d150283f34082b12",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/core/contracts/plugin.d.ts",
+              "expectedSha256": "430b6c765482d75525a62c8515118e2926eb218704a1ebee73743d347f63e406",
+              "installedSha256": "430b6c765482d75525a62c8515118e2926eb218704a1ebee73743d347f63e406",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/core/plugin.d.ts",
+              "expectedSha256": "73a8b54a714b0f680507a4c935a3fc9b17918e106bf901883d1226d69729d6a2",
+              "installedSha256": "73a8b54a714b0f680507a4c935a3fc9b17918e106bf901883d1226d69729d6a2",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/plugin.d.ts",
+              "expectedSha256": "348d0015c748f9678607d3e033d940fab89eae9dfd6aa453f7e5eec1ed5f4a3c",
+              "installedSha256": "348d0015c748f9678607d3e033d940fab89eae9dfd6aa453f7e5eec1ed5f4a3c",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/protocol.d.ts",
+              "expectedSha256": "2c64bf3cff0353c73a00930a604a45b678a8a1df5e30d791c36add136916aed5",
+              "installedSha256": "2c64bf3cff0353c73a00930a604a45b678a8a1df5e30d791c36add136916aed5",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/service.d.ts",
+              "expectedSha256": "7ef3753a9dc3537e852c483bd00055de83c207d7cd2e327d05a9517787cac15d",
+              "installedSha256": "7ef3753a9dc3537e852c483bd00055de83c207d7cd2e327d05a9517787cac15d",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/settings-controls.d.ts",
+              "expectedSha256": "6de7ad44140d60914cf7bf7e4183d91d77e5d9710ee40dd6c0b83f8f3ad6c872",
+              "installedSha256": "6de7ad44140d60914cf7bf7e4183d91d77e5d9710ee40dd6c0b83f8f3ad6c872",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/settings-panel.d.ts",
+              "expectedSha256": "3d3ee92739b1c245996f84ff186170c505999a5d286c7e85f8b4e1ecc2eaae85",
+              "installedSha256": "3d3ee92739b1c245996f84ff186170c505999a5d286c7e85f8b4e1ecc2eaae85",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/source-contracts.d.ts",
+              "expectedSha256": "253309b6697bfb45e6560bcebb4c873c7b4980916350f35bdd40fde303b916a0",
+              "installedSha256": "253309b6697bfb45e6560bcebb4c873c7b4980916350f35bdd40fde303b916a0",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/source-pages.d.ts",
+              "expectedSha256": "9093041163fccc7afddb86f30d6434a14e29f030e887e24ee400023f97969430",
+              "installedSha256": "9093041163fccc7afddb86f30d6434a14e29f030e887e24ee400023f97969430",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/starter-components.d.ts",
+              "expectedSha256": "72df6416c208396e53788880b3fd7cbed249320584d207c8928dc949c9320458",
+              "installedSha256": "72df6416c208396e53788880b3fd7cbed249320584d207c8928dc949c9320458",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/starter.d.ts",
+              "expectedSha256": "e2f3f8e56d03afd711f883db3784a47930c59b2985a9ce4918bce1f06c4e3a51",
+              "installedSha256": "e2f3f8e56d03afd711f883db3784a47930c59b2985a9ce4918bce1f06c4e3a51",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/storage-lock.d.ts",
+              "expectedSha256": "9072c9369822413d48c46c929530e950cdc07cc03a05342e05a0730cea4e44f9",
+              "installedSha256": "9072c9369822413d48c46c929530e950cdc07cc03a05342e05a0730cea4e44f9",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/strategy-configuration.d.ts",
+              "expectedSha256": "e87fea784b5b29bfcffaabe448fec056eaa3a0a64baf315b3a9f0a647d83308a",
+              "installedSha256": "e87fea784b5b29bfcffaabe448fec056eaa3a0a64baf315b3a9f0a647d83308a",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/sync-rules.d.ts",
+              "expectedSha256": "d80282ed5b12128678dc93215260b07e79932d95c68825d6279fb12d60ed7a8b",
+              "installedSha256": "d80282ed5b12128678dc93215260b07e79932d95c68825d6279fb12d60ed7a8b",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/core/contracts/task-agent-model.d.ts",
+              "expectedSha256": "0532a52be00c9fd7e941d29041c4d5dd96e4d42cac30f387088a18a3a14f0c41",
+              "installedSha256": "0532a52be00c9fd7e941d29041c4d5dd96e4d42cac30f387088a18a3a14f0c41",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/testing.d.ts",
+              "expectedSha256": "a157befcd6231af9e0915f26243f8c86178ddc99114c5d135ee04c85dc0f3279",
+              "installedSha256": "a157befcd6231af9e0915f26243f8c86178ddc99114c5d135ee04c85dc0f3279",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/ui-icons.d.ts",
+              "expectedSha256": "65262c80dee9a62195eda0e79166449bff062bc1ee48595e54d50ab3955535e9",
+              "installedSha256": "65262c80dee9a62195eda0e79166449bff062bc1ee48595e54d50ab3955535e9",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/use-request-version.d.ts",
+              "expectedSha256": "65bb1a8eddc167bdd3c730024b589792e2fe0535a6f770b81585ff85653cd78e",
+              "installedSha256": "65bb1a8eddc167bdd3c730024b589792e2fe0535a6f770b81585ff85653cd78e",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/view-extensions.d.ts",
+              "expectedSha256": "59e9242a069ade7b301aea496573162f3543cf36385cd3345ad93a35ab747ed8",
+              "installedSha256": "59e9242a069ade7b301aea496573162f3543cf36385cd3345ad93a35ab747ed8",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/view-protocol.d.ts",
+              "expectedSha256": "e5a76a65a89454cf08c915a904e4e024af3937cae3a65a6f6d3419ffacfd7d71",
+              "installedSha256": "e5a76a65a89454cf08c915a904e4e024af3937cae3a65a6f6d3419ffacfd7d71",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/view-styles.d.ts",
+              "expectedSha256": "cebd26c73d5ba1bf720d201402380e3c47767141436d6d06b09db29566298637",
+              "installedSha256": "cebd26c73d5ba1bf720d201402380e3c47767141436d6d06b09db29566298637",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/core/contracts/view.d.ts",
+              "expectedSha256": "3103553bc207dbc950c4f2d84dfa40dddf09c779a664c266b4bde8218c8ef1c9",
+              "installedSha256": "3103553bc207dbc950c4f2d84dfa40dddf09c779a664c266b4bde8218c8ef1c9",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/workspace-storage.d.ts",
+              "expectedSha256": "f28d2e65efb5a9f213e242926386b4f4765ea7e344bb8b6dbe10b5a61becb469",
+              "installedSha256": "f28d2e65efb5a9f213e242926386b4f4765ea7e344bb8b6dbe10b5a61becb469",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "cordis.patch.yml",
+              "expectedSha256": "889c12eec043d8a8394cfd59d1c18920d7e96905025ed053a5f11fbb6d54648a",
+              "installedSha256": "889c12eec043d8a8394cfd59d1c18920d7e96905025ed053a5f11fbb6d54648a",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            }
+          ]
+        },
+        {
+          "name": "dsh-mnemon-source-skills",
+          "version": "0.5.8",
+          "filename": "dsh-mnemon-source-skills-0.5.8.tgz",
+          "sha256": "d7bb33264423caf42f5f4750941e901bec3256babc174407cb554ee9d2bc7338",
+          "integrity": "sha512-M38/7SKUqQlAn0KoJnFYhCUXun3YCY3Mi5YitZygXt2B1VmpnrE4PufZMpwFk/Rw/fxvpT9OujZycD8xm6X/jA==",
+          "fileCount": 30,
+          "fileSetMatches": true,
+          "extraFiles": [],
+          "missingFiles": [],
+          "allFilesMatch": true,
+          "executableBitsMatch": true,
+          "files": [
+            {
+              "file": "LICENSE",
+              "expectedSha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+              "installedSha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "presentation/page.module.css",
+              "expectedSha256": "89e9fbdcfcc8c29dcca8e310cede4d4b898da39e6cdc9d40ae06eb87ec135a83",
+              "installedSha256": "89e9fbdcfcc8c29dcca8e310cede4d4b898da39e6cdc9d40ae06eb87ec135a83",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/client.js",
+              "expectedSha256": "a4a187e79c11ab3b4ec2579eb9264cc1e331b0f8c1d6a7207e83026316308481",
+              "installedSha256": "a4a187e79c11ab3b4ec2579eb9264cc1e331b0f8c1d6a7207e83026316308481",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/contracts.js",
+              "expectedSha256": "9b85fdd38eea3e19e29b332822732db379d4990cf061f1f7dcf591aafcbb2af3",
+              "installedSha256": "9b85fdd38eea3e19e29b332822732db379d4990cf061f1f7dcf591aafcbb2af3",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/index.js",
+              "expectedSha256": "20a31033428db6b8123f428314bdbbbfbe3fa78259b6c1a684c692d21dd16fe1",
+              "installedSha256": "20a31033428db6b8123f428314bdbbbfbe3fa78259b6c1a684c692d21dd16fe1",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "locale/en.json",
+              "expectedSha256": "0b5276b77a752fb47c67765847e261a6a7041a885213f760c4ad3670d694baed",
+              "installedSha256": "0b5276b77a752fb47c67765847e261a6a7041a885213f760c4ad3670d694baed",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "presentation/locales.json",
+              "expectedSha256": "5578e2a79cd6680aa2bfb5c6d34ddcd7c8c1dd0dd3e4c74add0d8253e8ffbd40",
+              "installedSha256": "5578e2a79cd6680aa2bfb5c6d34ddcd7c8c1dd0dd3e4c74add0d8253e8ffbd40",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "market/official.json",
+              "expectedSha256": "6d011e5817727fb545dd385df8bb7316bff59d803f05c956bf64138956d90acc",
+              "installedSha256": "6d011e5817727fb545dd385df8bb7316bff59d803f05c956bf64138956d90acc",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "package.json",
+              "expectedSha256": "461504596dbe2809b1bd7464d7940bbd8a66f625ce2b5985482f57f064289e37",
+              "installedSha256": "461504596dbe2809b1bd7464d7940bbd8a66f625ce2b5985482f57f064289e37",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "locale/zh.json",
+              "expectedSha256": "9dce17a7602534ea20b6027988f3b18cc3bce7f6b6bffe4f64b635291ffedf28",
+              "installedSha256": "9dce17a7602534ea20b6027988f3b18cc3bce7f6b6bffe4f64b635291ffedf28",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "README.md",
+              "expectedSha256": "b318027075420db6f97a9149f3938118bdff5d05fccd1a0861d9b82ba041684d",
+              "installedSha256": "b318027075420db6f97a9149f3938118bdff5d05fccd1a0861d9b82ba041684d",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/api.d.ts",
+              "expectedSha256": "e21407187655e1e62bcb3ce0776bb0e81fc2c95a00382f5a51e033fa0a2fe4c1",
+              "installedSha256": "e21407187655e1e62bcb3ce0776bb0e81fc2c95a00382f5a51e033fa0a2fe4c1",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client.d.ts",
+              "expectedSha256": "99720ccb1ef2991d3d08923a54b3b64a165692fe94acadff7b9e5cee2963bc3f",
+              "installedSha256": "99720ccb1ef2991d3d08923a54b3b64a165692fe94acadff7b9e5cee2963bc3f",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/contracts.d.ts",
+              "expectedSha256": "75dabb87607a665d76c885db1d823e3ed9e4667591d1f85466460f3ae390cb65",
+              "installedSha256": "75dabb87607a665d76c885db1d823e3ed9e4667591d1f85466460f3ae390cb65",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/contracts.d.ts",
+              "expectedSha256": "b30893f3034903ddb66f560339939a4a06d35ab12de636acf4ff7531fd507531",
+              "installedSha256": "b30893f3034903ddb66f560339939a4a06d35ab12de636acf4ff7531fd507531",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/evals-page.d.ts",
+              "expectedSha256": "69c36a11a11d4f6b91554ea1b3e6218428bb8c0e3bb0a2568c1467987ff6ab8b",
+              "installedSha256": "69c36a11a11d4f6b91554ea1b3e6218428bb8c0e3bb0a2568c1467987ff6ab8b",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/evidence-page.d.ts",
+              "expectedSha256": "c3a0c84f77f1b8464158b3bbdbff33abdb7b79777f7083a184598ea42b7f5791",
+              "installedSha256": "c3a0c84f77f1b8464158b3bbdbff33abdb7b79777f7083a184598ea42b7f5791",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/evolution-page.d.ts",
+              "expectedSha256": "974b260d4696e68368f0ca91313c17d96057e5cdc4dd6e1c6ca65ffd0789dce4",
+              "installedSha256": "974b260d4696e68368f0ca91313c17d96057e5cdc4dd6e1c6ca65ffd0789dce4",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/fence.d.ts",
+              "expectedSha256": "2522959dfc2203f5cb4219029f78321f6cf036bc8f2e972a07d01a6ef6d9104f",
+              "installedSha256": "2522959dfc2203f5cb4219029f78321f6cf036bc8f2e972a07d01a6ef6d9104f",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/index.d.ts",
+              "expectedSha256": "61413bc1929df4ba1f2c561c0fc7207ee7b2b38f1ebbc3f7fa403c1c088d0d00",
+              "installedSha256": "61413bc1929df4ba1f2c561c0fc7207ee7b2b38f1ebbc3f7fa403c1c088d0d00",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/market-page.d.ts",
+              "expectedSha256": "fa00338ddd8a6f8bc2347628078b11008209ce363f600042cf1fcbee33c69053",
+              "installedSha256": "fa00338ddd8a6f8bc2347628078b11008209ce363f600042cf1fcbee33c69053",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/model-choice.d.ts",
+              "expectedSha256": "5bd926d57442c01ecbf222bdf4cec6358f932e5cc8ef4d8dc9fa2dd81c38215b",
+              "installedSha256": "5bd926d57442c01ecbf222bdf4cec6358f932e5cc8ef4d8dc9fa2dd81c38215b",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/presentation.d.ts",
+              "expectedSha256": "d7d80eccdf90c7ec939b67802c559d00614ed9285e6a756212a473cfe556c1c1",
+              "installedSha256": "d7d80eccdf90c7ec939b67802c559d00614ed9285e6a756212a473cfe556c1c1",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/shared.d.ts",
+              "expectedSha256": "34ba2da4c08ce51bee17ea09a3cf992c8fe06446c54f0f017026ae8639927881",
+              "installedSha256": "34ba2da4c08ce51bee17ea09a3cf992c8fe06446c54f0f017026ae8639927881",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/skill-tests.d.ts",
+              "expectedSha256": "d9de27a957b8e9dc9493878620cf39d2e9dbaec7a52daf7ed92ab292f8b2c8ab",
+              "installedSha256": "d9de27a957b8e9dc9493878620cf39d2e9dbaec7a52daf7ed92ab292f8b2c8ab",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/skills-page.d.ts",
+              "expectedSha256": "157a6d855ec4b0bb5b43c6777c969e7972ea699b8e89f572e36f445b83f56c15",
+              "installedSha256": "157a6d855ec4b0bb5b43c6777c969e7972ea699b8e89f572e36f445b83f56c15",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/source-kind.d.ts",
+              "expectedSha256": "609250d77c7950a206b00be65de4b33b62dec50ffaff6f13d0fa411d970d2eeb",
+              "installedSha256": "609250d77c7950a206b00be65de4b33b62dec50ffaff6f13d0fa411d970d2eeb",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/trash-page.d.ts",
+              "expectedSha256": "ef3f280cab983adb716c2602d50debda1bfb9dd531b5c4842afd4849fc9bac80",
+              "installedSha256": "ef3f280cab983adb716c2602d50debda1bfb9dd531b5c4842afd4849fc9bac80",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/ui.d.ts",
+              "expectedSha256": "0c211a77d3376aeb4a381d82d76ed50945b70bc5b8a32f0306dbfbfdf03ce6c4",
+              "installedSha256": "0c211a77d3376aeb4a381d82d76ed50945b70bc5b8a32f0306dbfbfdf03ce6c4",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/use-skill.d.ts",
+              "expectedSha256": "2078894ccb534939aa8cc58567421c451cda72a2ab44f31eba90d9e26d37bcfe",
+              "installedSha256": "2078894ccb534939aa8cc58567421c451cda72a2ab44f31eba90d9e26d37bcfe",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            }
+          ]
+        }
+      ],
+      "candidateFileCount": 98,
+      "contentMismatches": 0,
+      "executableBitMismatches": 0,
+      "fileSetMismatches": 0,
+      "hashes": {
+        "memories.json": {
+          "sha256": "7c1051f6e2bc3943b7c1dbe4da229694455681b8875a346c99279e555edb733f",
+          "bytes": 36
+        },
+        "MEMORY.md": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        },
+        "USER.md": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      }
+    },
+    "ui": {
+      "addPluginInput": "dsh-mnemon",
+      "installedVersion": "0.5.41",
+      "enabledVia": "Enable now",
+      "runningVersion": "0.5.41",
+      "systemNominal": true
+    }
+  },
+  "upgrade": {
+    "canary": "Release v0.5.41 RC5 upgrade canary 2026-11-05: synthetic Runtime fact survives 0.5.40 to 0.5.41 update and restart.",
+    "previousSource": "https://registry.npmjs.org",
+    "previousSpec": "dsh-mnemon@0.5.40",
+    "previousInstallLogSha256": "fa05e0f0cfaac46cf7cbd2a0a0dd4c9193f20c132f85999c9eadfcca78dbe9fe",
+    "before": {
+      "timestamp": "2026-11-05T15:18:59.459446+00:00",
+      "rootVersion": "0.5.40",
+      "versions": [
+        {
+          "name": "dsh-mnemon",
+          "expected": "0.5.40",
+          "actual": "0.5.40",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-byterover",
+          "expected": "0.5.6",
+          "actual": "0.5.6",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-hindsight",
+          "expected": "0.5.7",
+          "actual": "0.5.7",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-holographic",
+          "expected": "0.5.7",
+          "actual": "0.5.7",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-honcho",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-mem0",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-mnemon-native",
+          "expected": "0.5.10",
+          "actual": "0.5.10",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-openviking",
+          "expected": "0.5.10",
+          "actual": "0.5.10",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-retaindb",
+          "expected": "0.5.6",
+          "actual": "0.5.6",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-supermemory",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-documents",
+          "expected": "0.5.13",
+          "actual": "0.5.13",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-memory-spaces",
+          "expected": "0.5.25",
+          "actual": "0.5.25",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-runtime",
+          "expected": "0.5.17",
+          "actual": "0.5.17",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-skills",
+          "expected": "0.5.7",
+          "actual": "0.5.7",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-auto-capture",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-default-three-tier",
+          "expected": "0.5.12",
+          "actual": "0.5.12",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-general",
+          "expected": "0.5.1",
+          "actual": "0.5.1",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-light-context",
+          "expected": "0.5.6",
+          "actual": "0.5.6",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-scoped",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        }
+      ],
+      "pinnedPackageCount": 19,
+      "versionMismatches": 0,
+      "candidatePackages": [],
+      "candidateFileCount": 0,
+      "contentMismatches": 0,
+      "executableBitMismatches": 0,
+      "fileSetMismatches": 0,
+      "hashes": {
+        "memories.json": {
+          "sha256": "81e9185802f6b56a2220c0c98cc5e7552de23df6e6f4a50f3a7a07acaf037fb4",
+          "bytes": 338
+        },
+        "MEMORY.md": {
+          "sha256": "a855a858cc23b3dd4c821b6973268ef54ff61886b4a052321555ff854017f384",
+          "bytes": 116
+        },
+        "USER.md": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      }
+    },
+    "installed": {
+      "timestamp": "2026-11-05T15:20:13.557087+00:00",
+      "rootVersion": "0.5.41",
+      "versions": [
+        {
+          "name": "dsh-mnemon",
+          "expected": "0.5.41",
+          "actual": "0.5.41",
+          "match": true,
+          "source": "frozen candidate"
+        },
+        {
+          "name": "dsh-mnemon-provider-byterover",
+          "expected": "0.5.6",
+          "actual": "0.5.6",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-hindsight",
+          "expected": "0.5.7",
+          "actual": "0.5.7",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-holographic",
+          "expected": "0.5.7",
+          "actual": "0.5.7",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-honcho",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-mem0",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-mnemon-native",
+          "expected": "0.5.10",
+          "actual": "0.5.10",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-openviking",
+          "expected": "0.5.10",
+          "actual": "0.5.10",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-retaindb",
+          "expected": "0.5.6",
+          "actual": "0.5.6",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-supermemory",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-documents",
+          "expected": "0.5.13",
+          "actual": "0.5.13",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-memory-spaces",
+          "expected": "0.5.25",
+          "actual": "0.5.25",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-runtime",
+          "expected": "0.5.17",
+          "actual": "0.5.17",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-skills",
+          "expected": "0.5.8",
+          "actual": "0.5.8",
+          "match": true,
+          "source": "frozen candidate"
+        },
+        {
+          "name": "dsh-mnemon-strategy-auto-capture",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-default-three-tier",
+          "expected": "0.5.12",
+          "actual": "0.5.12",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-general",
+          "expected": "0.5.1",
+          "actual": "0.5.1",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-light-context",
+          "expected": "0.5.6",
+          "actual": "0.5.6",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-scoped",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        }
+      ],
+      "pinnedPackageCount": 19,
+      "versionMismatches": 0,
+      "candidatePackages": [
+        {
+          "name": "dsh-mnemon",
+          "version": "0.5.41",
+          "filename": "dsh-mnemon-0.5.41.tgz",
+          "sha256": "a731019afc67b414ae41f288c85d8465998e686cace033259620222d492acfab",
+          "integrity": "sha512-Rk9vSADMwnjTQVZ348dTp6taycjwGGWiLzE4erLDHZ4p6DywrqwOm3KW2uddvcUPdJTPuVo7M04GZlBuspdHAA==",
+          "fileCount": 68,
+          "fileSetMatches": true,
+          "extraFiles": [],
+          "missingFiles": [],
+          "allFilesMatch": true,
+          "executableBitsMatch": true,
+          "files": [
+            {
+              "file": "LICENSE",
+              "expectedSha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+              "installedSha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/bundle.js",
+              "expectedSha256": "781ec352510cc4bf66437f494b898118ebf8e47ae470e2d80d275957c079f64d",
+              "installedSha256": "781ec352510cc4bf66437f494b898118ebf8e47ae470e2d80d275957c079f64d",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/client.js",
+              "expectedSha256": "636731653985ef04b97e29454f9543d429d2d2a6d07f0cb9af50f38d1f621374",
+              "installedSha256": "636731653985ef04b97e29454f9543d429d2d2a6d07f0cb9af50f38d1f621374",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/contracts.js",
+              "expectedSha256": "024ad7318227336ef8816b48457b63593bc56e20bb74c6ffd59244425d23a779",
+              "installedSha256": "024ad7318227336ef8816b48457b63593bc56e20bb74c6ffd59244425d23a779",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/core.js",
+              "expectedSha256": "e2d32e8fe8c16ce90d0bcade5782feb4ce20bc9b716faa95e8c5432e768b03db",
+              "installedSha256": "e2d32e8fe8c16ce90d0bcade5782feb4ce20bc9b716faa95e8c5432e768b03db",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/definitions-DU7MLBhu.js",
+              "expectedSha256": "510cd51f4b1dfe1ffbd47ba8fb1cbbdbf87002531014c3dc462dec1a8ebcbcb2",
+              "installedSha256": "510cd51f4b1dfe1ffbd47ba8fb1cbbdbf87002531014c3dc462dec1a8ebcbcb2",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/extension-sdk.js",
+              "expectedSha256": "b70c0c276f4fb8926c88dc84e2374f4ca98f0cbe5b289624a33c976dca286a11",
+              "installedSha256": "b70c0c276f4fb8926c88dc84e2374f4ca98f0cbe5b289624a33c976dca286a11",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/index.js",
+              "expectedSha256": "8613c1381bcd1f5bd2f2e5bc3f852a9f11b29163756c128548737d939ac599e2",
+              "installedSha256": "8613c1381bcd1f5bd2f2e5bc3f852a9f11b29163756c128548737d939ac599e2",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/runtime-DmL0It3P.js",
+              "expectedSha256": "74d762eb906c2989a584df63dfe823f490f4e2a9a152ef0f310ab3a2d81985a1",
+              "installedSha256": "74d762eb906c2989a584df63dfe823f490f4e2a9a152ef0f310ab3a2d81985a1",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/starter-resolution-xVjONc6g.js",
+              "expectedSha256": "13009e9e1d7351d223fd67322cc6775081a11004ae67b3a0fe479a68132b16f6",
+              "installedSha256": "13009e9e1d7351d223fd67322cc6775081a11004ae67b3a0fe479a68132b16f6",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/starter.js",
+              "expectedSha256": "81cee2e00d5927026764560a360bf25116973e5f4619f6e984090e41ceefb31c",
+              "installedSha256": "81cee2e00d5927026764560a360bf25116973e5f4619f6e984090e41ceefb31c",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/strategy-configuration-CKP2kRss.js",
+              "expectedSha256": "a06fab7d856de5689df29d29be768e1730f14eee1d6736c346240e8b27680d21",
+              "installedSha256": "a06fab7d856de5689df29d29be768e1730f14eee1d6736c346240e8b27680d21",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/testing.js",
+              "expectedSha256": "aecc89be6ddd5537f386b0a56fb285ec2bf894052fb1e27d9eb8689b26cd0bbb",
+              "installedSha256": "aecc89be6ddd5537f386b0a56fb285ec2bf894052fb1e27d9eb8689b26cd0bbb",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "locale/en.json",
+              "expectedSha256": "53b4411680fd544bed77843c3356a8e115801fbc0e4f10f28226c821835b5f1d",
+              "installedSha256": "53b4411680fd544bed77843c3356a8e115801fbc0e4f10f28226c821835b5f1d",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "package.json",
+              "expectedSha256": "58e56eb20333990eae0ae1ae70b22354038357a27b188fa6926332c250379e6c",
+              "installedSha256": "58e56eb20333990eae0ae1ae70b22354038357a27b188fa6926332c250379e6c",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "locale/zh.json",
+              "expectedSha256": "f1f60f2c2b7ac12b52b9fb91b6ecc564798536611879ce4c3329a4f9e4bafd85",
+              "installedSha256": "f1f60f2c2b7ac12b52b9fb91b6ecc564798536611879ce4c3329a4f9e4bafd85",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "README.md",
+              "expectedSha256": "2fd04e73a58de02dcb6b7a37a8827328677cfb97b4b30b3a56504aec9286b4cb",
+              "installedSha256": "2fd04e73a58de02dcb6b7a37a8827328677cfb97b4b30b3a56504aec9286b4cb",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "README.zh-CN.md",
+              "expectedSha256": "21f708115fae73e481cbc6c86e8c94235e4b0492af159d326583b07bbcc50a11",
+              "installedSha256": "21f708115fae73e481cbc6c86e8c94235e4b0492af159d326583b07bbcc50a11",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "SECURITY.md",
+              "expectedSha256": "700562eaa915d083050a30b6f58292c8ce5c06dd83fde6cd7cfadef228dd3fb1",
+              "installedSha256": "700562eaa915d083050a30b6f58292c8ce5c06dd83fde6cd7cfadef228dd3fb1",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "THIRD_PARTY_NOTICES.md",
+              "expectedSha256": "32ebd32c67f4316e33e4214a0504ebe6dabeb1fef00106de05e457a97cb80926",
+              "installedSha256": "32ebd32c67f4316e33e4214a0504ebe6dabeb1fef00106de05e457a97cb80926",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "bin/repair-legacy-session.mjs",
+              "expectedSha256": "2465c57aead1426a520db45e231278a0fb7d5afecb01f4c4c114b1b3814cf4eb",
+              "installedSha256": "2465c57aead1426a520db45e231278a0fb7d5afecb01f4c4c114b1b3814cf4eb",
+              "match": true,
+              "expectedExecutableBits": "0o111",
+              "actualExecutableBits": "0o111",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/bundle.d.ts",
+              "expectedSha256": "602028377ee0735110c68e0807aeea407a05b021b5c87ec66af3e4b4d83e9033",
+              "installedSha256": "602028377ee0735110c68e0807aeea407a05b021b5c87ec66af3e4b4d83e9033",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/component-ui.d.ts",
+              "expectedSha256": "b8b2137b5e9eab1bbcaed491ab2edbcb23e71e1d18eadf1068cb10f4efdfb800",
+              "installedSha256": "b8b2137b5e9eab1bbcaed491ab2edbcb23e71e1d18eadf1068cb10f4efdfb800",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/config-values.d.ts",
+              "expectedSha256": "d6d51c8288cf72085bd7b3194e79ffe3e2ed9675604efb3706dfd74b24169a98",
+              "installedSha256": "d6d51c8288cf72085bd7b3194e79ffe3e2ed9675604efb3706dfd74b24169a98",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/config.d.ts",
+              "expectedSha256": "e89b437600120c86b8dcd6720c7b99a26561f5512125dc2a2ca6f6454ebc39f4",
+              "installedSha256": "e89b437600120c86b8dcd6720c7b99a26561f5512125dc2a2ca6f6454ebc39f4",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/core/definitions.d.ts",
+              "expectedSha256": "c1426396948e63015b25a8e5aaccdf65c43ddf33055de833ae90a33cb76a2fec",
+              "installedSha256": "c1426396948e63015b25a8e5aaccdf65c43ddf33055de833ae90a33cb76a2fec",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/display-mode.d.ts",
+              "expectedSha256": "9cfd641ad2162703dea794b613f98a6a42b3007c8aeb4e0f6b65b82ad5a4d678",
+              "installedSha256": "9cfd641ad2162703dea794b613f98a6a42b3007c8aeb4e0f6b65b82ad5a4d678",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/extension-sdk.d.ts",
+              "expectedSha256": "ac6e9034bbcfad7dfd877c6b9298bce500ad75d5e095568eca29f5bf29a56473",
+              "installedSha256": "ac6e9034bbcfad7dfd877c6b9298bce500ad75d5e095568eca29f5bf29a56473",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/feedback.d.ts",
+              "expectedSha256": "e532a8e2e0d60d0da5d8e63238e6eca88da3244d2560a749a3380e662b543792",
+              "installedSha256": "e532a8e2e0d60d0da5d8e63238e6eca88da3244d2560a749a3380e662b543792",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/GlobalLocationSetting.d.ts",
+              "expectedSha256": "3cf62d774fa8406057c3406682a8a87a61ab62232f87b85163e20351c2e4d131",
+              "installedSha256": "3cf62d774fa8406057c3406682a8a87a61ab62232f87b85163e20351c2e4d131",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/index.d.ts",
+              "expectedSha256": "d43c82958f8bb83ef5cff5524813d65e3e0b25b688914b04283d238ce8e13f6f",
+              "installedSha256": "d43c82958f8bb83ef5cff5524813d65e3e0b25b688914b04283d238ce8e13f6f",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/core/contracts/index.d.ts",
+              "expectedSha256": "861b85070c37483c4c578fd2f37ddb616cb70522eb409fbeb391ee2850058b4e",
+              "installedSha256": "861b85070c37483c4c578fd2f37ddb616cb70522eb409fbeb391ee2850058b4e",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/index.d.ts",
+              "expectedSha256": "a30ee3bce8e37249b8461b925cc0e626942d4a0cf6233c13a3f0d010f6d5ad47",
+              "installedSha256": "a30ee3bce8e37249b8461b925cc0e626942d4a0cf6233c13a3f0d010f6d5ad47",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/index.d.ts",
+              "expectedSha256": "b46d181e8677f404f0dceade0573bc7d349834d7076fed3d2243876b7e6b8237",
+              "installedSha256": "b46d181e8677f404f0dceade0573bc7d349834d7076fed3d2243876b7e6b8237",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/input.d.ts",
+              "expectedSha256": "3264d99270796e102939d3d412f4c38c220e8c4f79ac6d001bf5fb374248d246",
+              "installedSha256": "3264d99270796e102939d3d412f4c38c220e8c4f79ac6d001bf5fb374248d246",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/install.d.ts",
+              "expectedSha256": "2b3e0903128d4b79861233772966fce157bd18bd8234beadcbdef4bcfc7ca93e",
+              "installedSha256": "2b3e0903128d4b79861233772966fce157bd18bd8234beadcbdef4bcfc7ca93e",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/live-config.d.ts",
+              "expectedSha256": "e58b26ffaa6b08d5bd10e3678554f99d38880a8bc3e1b7c21c42040cc46f496f",
+              "installedSha256": "e58b26ffaa6b08d5bd10e3678554f99d38880a8bc3e1b7c21c42040cc46f496f",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/locales.d.ts",
+              "expectedSha256": "d40b55a975466939397ee64cff17b604a28ae7deb557d8a4acfb8c86e049e345",
+              "installedSha256": "d40b55a975466939397ee64cff17b604a28ae7deb557d8a4acfb8c86e049e345",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/memory-tools.d.ts",
+              "expectedSha256": "57f4e231607ef98e5cc6311758a55af25a5608007c9ac2c839c154390ee5b162",
+              "installedSha256": "57f4e231607ef98e5cc6311758a55af25a5608007c9ac2c839c154390ee5b162",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/MnemonDialog.d.ts",
+              "expectedSha256": "cf9de6f80a98d6e527860d7077ce5cc5098b2beda55aecf25790403974bd1c34",
+              "installedSha256": "cf9de6f80a98d6e527860d7077ce5cc5098b2beda55aecf25790403974bd1c34",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/MnemonLogo.d.ts",
+              "expectedSha256": "c1532a4f925703354772392d59b767cba82db7cfa0ede0ed2c0c4ad7f952a405",
+              "installedSha256": "c1532a4f925703354772392d59b767cba82db7cfa0ede0ed2c0c4ad7f952a405",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/page-client.d.ts",
+              "expectedSha256": "263491e8acfd741b24da984325ad144f529121a660cc45768a427b64a5298945",
+              "installedSha256": "263491e8acfd741b24da984325ad144f529121a660cc45768a427b64a5298945",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/page-controls.d.ts",
+              "expectedSha256": "819a7ada7ad3cf04dc10786b2c91bd1ab2593af9925b24ceaf8b9f267c89d423",
+              "installedSha256": "819a7ada7ad3cf04dc10786b2c91bd1ab2593af9925b24ceaf8b9f267c89d423",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/page-kit.d.ts",
+              "expectedSha256": "ce40c66a2409f540adea88e82183bd17cbcbd20d7e0a3796d150283f34082b12",
+              "installedSha256": "ce40c66a2409f540adea88e82183bd17cbcbd20d7e0a3796d150283f34082b12",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/core/contracts/plugin.d.ts",
+              "expectedSha256": "430b6c765482d75525a62c8515118e2926eb218704a1ebee73743d347f63e406",
+              "installedSha256": "430b6c765482d75525a62c8515118e2926eb218704a1ebee73743d347f63e406",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/core/plugin.d.ts",
+              "expectedSha256": "73a8b54a714b0f680507a4c935a3fc9b17918e106bf901883d1226d69729d6a2",
+              "installedSha256": "73a8b54a714b0f680507a4c935a3fc9b17918e106bf901883d1226d69729d6a2",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/plugin.d.ts",
+              "expectedSha256": "348d0015c748f9678607d3e033d940fab89eae9dfd6aa453f7e5eec1ed5f4a3c",
+              "installedSha256": "348d0015c748f9678607d3e033d940fab89eae9dfd6aa453f7e5eec1ed5f4a3c",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/protocol.d.ts",
+              "expectedSha256": "2c64bf3cff0353c73a00930a604a45b678a8a1df5e30d791c36add136916aed5",
+              "installedSha256": "2c64bf3cff0353c73a00930a604a45b678a8a1df5e30d791c36add136916aed5",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/service.d.ts",
+              "expectedSha256": "7ef3753a9dc3537e852c483bd00055de83c207d7cd2e327d05a9517787cac15d",
+              "installedSha256": "7ef3753a9dc3537e852c483bd00055de83c207d7cd2e327d05a9517787cac15d",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/settings-controls.d.ts",
+              "expectedSha256": "6de7ad44140d60914cf7bf7e4183d91d77e5d9710ee40dd6c0b83f8f3ad6c872",
+              "installedSha256": "6de7ad44140d60914cf7bf7e4183d91d77e5d9710ee40dd6c0b83f8f3ad6c872",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/settings-panel.d.ts",
+              "expectedSha256": "3d3ee92739b1c245996f84ff186170c505999a5d286c7e85f8b4e1ecc2eaae85",
+              "installedSha256": "3d3ee92739b1c245996f84ff186170c505999a5d286c7e85f8b4e1ecc2eaae85",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/source-contracts.d.ts",
+              "expectedSha256": "253309b6697bfb45e6560bcebb4c873c7b4980916350f35bdd40fde303b916a0",
+              "installedSha256": "253309b6697bfb45e6560bcebb4c873c7b4980916350f35bdd40fde303b916a0",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/source-pages.d.ts",
+              "expectedSha256": "9093041163fccc7afddb86f30d6434a14e29f030e887e24ee400023f97969430",
+              "installedSha256": "9093041163fccc7afddb86f30d6434a14e29f030e887e24ee400023f97969430",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/starter-components.d.ts",
+              "expectedSha256": "72df6416c208396e53788880b3fd7cbed249320584d207c8928dc949c9320458",
+              "installedSha256": "72df6416c208396e53788880b3fd7cbed249320584d207c8928dc949c9320458",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/starter.d.ts",
+              "expectedSha256": "e2f3f8e56d03afd711f883db3784a47930c59b2985a9ce4918bce1f06c4e3a51",
+              "installedSha256": "e2f3f8e56d03afd711f883db3784a47930c59b2985a9ce4918bce1f06c4e3a51",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/storage-lock.d.ts",
+              "expectedSha256": "9072c9369822413d48c46c929530e950cdc07cc03a05342e05a0730cea4e44f9",
+              "installedSha256": "9072c9369822413d48c46c929530e950cdc07cc03a05342e05a0730cea4e44f9",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/strategy-configuration.d.ts",
+              "expectedSha256": "e87fea784b5b29bfcffaabe448fec056eaa3a0a64baf315b3a9f0a647d83308a",
+              "installedSha256": "e87fea784b5b29bfcffaabe448fec056eaa3a0a64baf315b3a9f0a647d83308a",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/sync-rules.d.ts",
+              "expectedSha256": "d80282ed5b12128678dc93215260b07e79932d95c68825d6279fb12d60ed7a8b",
+              "installedSha256": "d80282ed5b12128678dc93215260b07e79932d95c68825d6279fb12d60ed7a8b",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/core/contracts/task-agent-model.d.ts",
+              "expectedSha256": "0532a52be00c9fd7e941d29041c4d5dd96e4d42cac30f387088a18a3a14f0c41",
+              "installedSha256": "0532a52be00c9fd7e941d29041c4d5dd96e4d42cac30f387088a18a3a14f0c41",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/testing.d.ts",
+              "expectedSha256": "a157befcd6231af9e0915f26243f8c86178ddc99114c5d135ee04c85dc0f3279",
+              "installedSha256": "a157befcd6231af9e0915f26243f8c86178ddc99114c5d135ee04c85dc0f3279",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/ui-icons.d.ts",
+              "expectedSha256": "65262c80dee9a62195eda0e79166449bff062bc1ee48595e54d50ab3955535e9",
+              "installedSha256": "65262c80dee9a62195eda0e79166449bff062bc1ee48595e54d50ab3955535e9",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/use-request-version.d.ts",
+              "expectedSha256": "65bb1a8eddc167bdd3c730024b589792e2fe0535a6f770b81585ff85653cd78e",
+              "installedSha256": "65bb1a8eddc167bdd3c730024b589792e2fe0535a6f770b81585ff85653cd78e",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/view-extensions.d.ts",
+              "expectedSha256": "59e9242a069ade7b301aea496573162f3543cf36385cd3345ad93a35ab747ed8",
+              "installedSha256": "59e9242a069ade7b301aea496573162f3543cf36385cd3345ad93a35ab747ed8",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/view-protocol.d.ts",
+              "expectedSha256": "e5a76a65a89454cf08c915a904e4e024af3937cae3a65a6f6d3419ffacfd7d71",
+              "installedSha256": "e5a76a65a89454cf08c915a904e4e024af3937cae3a65a6f6d3419ffacfd7d71",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/view-styles.d.ts",
+              "expectedSha256": "cebd26c73d5ba1bf720d201402380e3c47767141436d6d06b09db29566298637",
+              "installedSha256": "cebd26c73d5ba1bf720d201402380e3c47767141436d6d06b09db29566298637",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/core/contracts/view.d.ts",
+              "expectedSha256": "3103553bc207dbc950c4f2d84dfa40dddf09c779a664c266b4bde8218c8ef1c9",
+              "installedSha256": "3103553bc207dbc950c4f2d84dfa40dddf09c779a664c266b4bde8218c8ef1c9",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/workspace-storage.d.ts",
+              "expectedSha256": "f28d2e65efb5a9f213e242926386b4f4765ea7e344bb8b6dbe10b5a61becb469",
+              "installedSha256": "f28d2e65efb5a9f213e242926386b4f4765ea7e344bb8b6dbe10b5a61becb469",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "cordis.patch.yml",
+              "expectedSha256": "889c12eec043d8a8394cfd59d1c18920d7e96905025ed053a5f11fbb6d54648a",
+              "installedSha256": "889c12eec043d8a8394cfd59d1c18920d7e96905025ed053a5f11fbb6d54648a",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            }
+          ]
+        },
+        {
+          "name": "dsh-mnemon-source-skills",
+          "version": "0.5.8",
+          "filename": "dsh-mnemon-source-skills-0.5.8.tgz",
+          "sha256": "d7bb33264423caf42f5f4750941e901bec3256babc174407cb554ee9d2bc7338",
+          "integrity": "sha512-M38/7SKUqQlAn0KoJnFYhCUXun3YCY3Mi5YitZygXt2B1VmpnrE4PufZMpwFk/Rw/fxvpT9OujZycD8xm6X/jA==",
+          "fileCount": 30,
+          "fileSetMatches": true,
+          "extraFiles": [],
+          "missingFiles": [],
+          "allFilesMatch": true,
+          "executableBitsMatch": true,
+          "files": [
+            {
+              "file": "LICENSE",
+              "expectedSha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+              "installedSha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "presentation/page.module.css",
+              "expectedSha256": "89e9fbdcfcc8c29dcca8e310cede4d4b898da39e6cdc9d40ae06eb87ec135a83",
+              "installedSha256": "89e9fbdcfcc8c29dcca8e310cede4d4b898da39e6cdc9d40ae06eb87ec135a83",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/client.js",
+              "expectedSha256": "a4a187e79c11ab3b4ec2579eb9264cc1e331b0f8c1d6a7207e83026316308481",
+              "installedSha256": "a4a187e79c11ab3b4ec2579eb9264cc1e331b0f8c1d6a7207e83026316308481",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/contracts.js",
+              "expectedSha256": "9b85fdd38eea3e19e29b332822732db379d4990cf061f1f7dcf591aafcbb2af3",
+              "installedSha256": "9b85fdd38eea3e19e29b332822732db379d4990cf061f1f7dcf591aafcbb2af3",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/index.js",
+              "expectedSha256": "20a31033428db6b8123f428314bdbbbfbe3fa78259b6c1a684c692d21dd16fe1",
+              "installedSha256": "20a31033428db6b8123f428314bdbbbfbe3fa78259b6c1a684c692d21dd16fe1",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "locale/en.json",
+              "expectedSha256": "0b5276b77a752fb47c67765847e261a6a7041a885213f760c4ad3670d694baed",
+              "installedSha256": "0b5276b77a752fb47c67765847e261a6a7041a885213f760c4ad3670d694baed",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "presentation/locales.json",
+              "expectedSha256": "5578e2a79cd6680aa2bfb5c6d34ddcd7c8c1dd0dd3e4c74add0d8253e8ffbd40",
+              "installedSha256": "5578e2a79cd6680aa2bfb5c6d34ddcd7c8c1dd0dd3e4c74add0d8253e8ffbd40",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "market/official.json",
+              "expectedSha256": "6d011e5817727fb545dd385df8bb7316bff59d803f05c956bf64138956d90acc",
+              "installedSha256": "6d011e5817727fb545dd385df8bb7316bff59d803f05c956bf64138956d90acc",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "package.json",
+              "expectedSha256": "461504596dbe2809b1bd7464d7940bbd8a66f625ce2b5985482f57f064289e37",
+              "installedSha256": "461504596dbe2809b1bd7464d7940bbd8a66f625ce2b5985482f57f064289e37",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "locale/zh.json",
+              "expectedSha256": "9dce17a7602534ea20b6027988f3b18cc3bce7f6b6bffe4f64b635291ffedf28",
+              "installedSha256": "9dce17a7602534ea20b6027988f3b18cc3bce7f6b6bffe4f64b635291ffedf28",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "README.md",
+              "expectedSha256": "b318027075420db6f97a9149f3938118bdff5d05fccd1a0861d9b82ba041684d",
+              "installedSha256": "b318027075420db6f97a9149f3938118bdff5d05fccd1a0861d9b82ba041684d",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/api.d.ts",
+              "expectedSha256": "e21407187655e1e62bcb3ce0776bb0e81fc2c95a00382f5a51e033fa0a2fe4c1",
+              "installedSha256": "e21407187655e1e62bcb3ce0776bb0e81fc2c95a00382f5a51e033fa0a2fe4c1",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client.d.ts",
+              "expectedSha256": "99720ccb1ef2991d3d08923a54b3b64a165692fe94acadff7b9e5cee2963bc3f",
+              "installedSha256": "99720ccb1ef2991d3d08923a54b3b64a165692fe94acadff7b9e5cee2963bc3f",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/contracts.d.ts",
+              "expectedSha256": "75dabb87607a665d76c885db1d823e3ed9e4667591d1f85466460f3ae390cb65",
+              "installedSha256": "75dabb87607a665d76c885db1d823e3ed9e4667591d1f85466460f3ae390cb65",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/contracts.d.ts",
+              "expectedSha256": "b30893f3034903ddb66f560339939a4a06d35ab12de636acf4ff7531fd507531",
+              "installedSha256": "b30893f3034903ddb66f560339939a4a06d35ab12de636acf4ff7531fd507531",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/evals-page.d.ts",
+              "expectedSha256": "69c36a11a11d4f6b91554ea1b3e6218428bb8c0e3bb0a2568c1467987ff6ab8b",
+              "installedSha256": "69c36a11a11d4f6b91554ea1b3e6218428bb8c0e3bb0a2568c1467987ff6ab8b",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/evidence-page.d.ts",
+              "expectedSha256": "c3a0c84f77f1b8464158b3bbdbff33abdb7b79777f7083a184598ea42b7f5791",
+              "installedSha256": "c3a0c84f77f1b8464158b3bbdbff33abdb7b79777f7083a184598ea42b7f5791",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/evolution-page.d.ts",
+              "expectedSha256": "974b260d4696e68368f0ca91313c17d96057e5cdc4dd6e1c6ca65ffd0789dce4",
+              "installedSha256": "974b260d4696e68368f0ca91313c17d96057e5cdc4dd6e1c6ca65ffd0789dce4",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/fence.d.ts",
+              "expectedSha256": "2522959dfc2203f5cb4219029f78321f6cf036bc8f2e972a07d01a6ef6d9104f",
+              "installedSha256": "2522959dfc2203f5cb4219029f78321f6cf036bc8f2e972a07d01a6ef6d9104f",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/index.d.ts",
+              "expectedSha256": "61413bc1929df4ba1f2c561c0fc7207ee7b2b38f1ebbc3f7fa403c1c088d0d00",
+              "installedSha256": "61413bc1929df4ba1f2c561c0fc7207ee7b2b38f1ebbc3f7fa403c1c088d0d00",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/market-page.d.ts",
+              "expectedSha256": "fa00338ddd8a6f8bc2347628078b11008209ce363f600042cf1fcbee33c69053",
+              "installedSha256": "fa00338ddd8a6f8bc2347628078b11008209ce363f600042cf1fcbee33c69053",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/model-choice.d.ts",
+              "expectedSha256": "5bd926d57442c01ecbf222bdf4cec6358f932e5cc8ef4d8dc9fa2dd81c38215b",
+              "installedSha256": "5bd926d57442c01ecbf222bdf4cec6358f932e5cc8ef4d8dc9fa2dd81c38215b",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/presentation.d.ts",
+              "expectedSha256": "d7d80eccdf90c7ec939b67802c559d00614ed9285e6a756212a473cfe556c1c1",
+              "installedSha256": "d7d80eccdf90c7ec939b67802c559d00614ed9285e6a756212a473cfe556c1c1",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/shared.d.ts",
+              "expectedSha256": "34ba2da4c08ce51bee17ea09a3cf992c8fe06446c54f0f017026ae8639927881",
+              "installedSha256": "34ba2da4c08ce51bee17ea09a3cf992c8fe06446c54f0f017026ae8639927881",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/skill-tests.d.ts",
+              "expectedSha256": "d9de27a957b8e9dc9493878620cf39d2e9dbaec7a52daf7ed92ab292f8b2c8ab",
+              "installedSha256": "d9de27a957b8e9dc9493878620cf39d2e9dbaec7a52daf7ed92ab292f8b2c8ab",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/skills-page.d.ts",
+              "expectedSha256": "157a6d855ec4b0bb5b43c6777c969e7972ea699b8e89f572e36f445b83f56c15",
+              "installedSha256": "157a6d855ec4b0bb5b43c6777c969e7972ea699b8e89f572e36f445b83f56c15",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/source-kind.d.ts",
+              "expectedSha256": "609250d77c7950a206b00be65de4b33b62dec50ffaff6f13d0fa411d970d2eeb",
+              "installedSha256": "609250d77c7950a206b00be65de4b33b62dec50ffaff6f13d0fa411d970d2eeb",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/trash-page.d.ts",
+              "expectedSha256": "ef3f280cab983adb716c2602d50debda1bfb9dd531b5c4842afd4849fc9bac80",
+              "installedSha256": "ef3f280cab983adb716c2602d50debda1bfb9dd531b5c4842afd4849fc9bac80",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/ui.d.ts",
+              "expectedSha256": "0c211a77d3376aeb4a381d82d76ed50945b70bc5b8a32f0306dbfbfdf03ce6c4",
+              "installedSha256": "0c211a77d3376aeb4a381d82d76ed50945b70bc5b8a32f0306dbfbfdf03ce6c4",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/use-skill.d.ts",
+              "expectedSha256": "2078894ccb534939aa8cc58567421c451cda72a2ab44f31eba90d9e26d37bcfe",
+              "installedSha256": "2078894ccb534939aa8cc58567421c451cda72a2ab44f31eba90d9e26d37bcfe",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            }
+          ]
+        }
+      ],
+      "candidateFileCount": 98,
+      "contentMismatches": 0,
+      "executableBitMismatches": 0,
+      "fileSetMismatches": 0,
+      "hashes": {
+        "memories.json": {
+          "sha256": "81e9185802f6b56a2220c0c98cc5e7552de23df6e6f4a50f3a7a07acaf037fb4",
+          "bytes": 338
+        },
+        "MEMORY.md": {
+          "sha256": "a855a858cc23b3dd4c821b6973268ef54ff61886b4a052321555ff854017f384",
+          "bytes": 116
+        },
+        "USER.md": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      },
+      "retentionMatchesBaseline": true
+    },
+    "restarted": {
+      "timestamp": "2026-11-05T15:24:39.127175+00:00",
+      "rootVersion": "0.5.41",
+      "versions": [
+        {
+          "name": "dsh-mnemon",
+          "expected": "0.5.41",
+          "actual": "0.5.41",
+          "match": true,
+          "source": "frozen candidate"
+        },
+        {
+          "name": "dsh-mnemon-provider-byterover",
+          "expected": "0.5.6",
+          "actual": "0.5.6",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-hindsight",
+          "expected": "0.5.7",
+          "actual": "0.5.7",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-holographic",
+          "expected": "0.5.7",
+          "actual": "0.5.7",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-honcho",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-mem0",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-mnemon-native",
+          "expected": "0.5.10",
+          "actual": "0.5.10",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-openviking",
+          "expected": "0.5.10",
+          "actual": "0.5.10",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-retaindb",
+          "expected": "0.5.6",
+          "actual": "0.5.6",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-supermemory",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-documents",
+          "expected": "0.5.13",
+          "actual": "0.5.13",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-memory-spaces",
+          "expected": "0.5.25",
+          "actual": "0.5.25",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-runtime",
+          "expected": "0.5.17",
+          "actual": "0.5.17",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-skills",
+          "expected": "0.5.8",
+          "actual": "0.5.8",
+          "match": true,
+          "source": "frozen candidate"
+        },
+        {
+          "name": "dsh-mnemon-strategy-auto-capture",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-default-three-tier",
+          "expected": "0.5.12",
+          "actual": "0.5.12",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-general",
+          "expected": "0.5.1",
+          "actual": "0.5.1",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-light-context",
+          "expected": "0.5.6",
+          "actual": "0.5.6",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-scoped",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        }
+      ],
+      "pinnedPackageCount": 19,
+      "versionMismatches": 0,
+      "candidatePackages": [
+        {
+          "name": "dsh-mnemon",
+          "version": "0.5.41",
+          "filename": "dsh-mnemon-0.5.41.tgz",
+          "sha256": "a731019afc67b414ae41f288c85d8465998e686cace033259620222d492acfab",
+          "integrity": "sha512-Rk9vSADMwnjTQVZ348dTp6taycjwGGWiLzE4erLDHZ4p6DywrqwOm3KW2uddvcUPdJTPuVo7M04GZlBuspdHAA==",
+          "fileCount": 68,
+          "fileSetMatches": true,
+          "extraFiles": [],
+          "missingFiles": [],
+          "allFilesMatch": true,
+          "executableBitsMatch": true,
+          "files": [
+            {
+              "file": "LICENSE",
+              "expectedSha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+              "installedSha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/bundle.js",
+              "expectedSha256": "781ec352510cc4bf66437f494b898118ebf8e47ae470e2d80d275957c079f64d",
+              "installedSha256": "781ec352510cc4bf66437f494b898118ebf8e47ae470e2d80d275957c079f64d",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/client.js",
+              "expectedSha256": "636731653985ef04b97e29454f9543d429d2d2a6d07f0cb9af50f38d1f621374",
+              "installedSha256": "636731653985ef04b97e29454f9543d429d2d2a6d07f0cb9af50f38d1f621374",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/contracts.js",
+              "expectedSha256": "024ad7318227336ef8816b48457b63593bc56e20bb74c6ffd59244425d23a779",
+              "installedSha256": "024ad7318227336ef8816b48457b63593bc56e20bb74c6ffd59244425d23a779",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/core.js",
+              "expectedSha256": "e2d32e8fe8c16ce90d0bcade5782feb4ce20bc9b716faa95e8c5432e768b03db",
+              "installedSha256": "e2d32e8fe8c16ce90d0bcade5782feb4ce20bc9b716faa95e8c5432e768b03db",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/definitions-DU7MLBhu.js",
+              "expectedSha256": "510cd51f4b1dfe1ffbd47ba8fb1cbbdbf87002531014c3dc462dec1a8ebcbcb2",
+              "installedSha256": "510cd51f4b1dfe1ffbd47ba8fb1cbbdbf87002531014c3dc462dec1a8ebcbcb2",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/extension-sdk.js",
+              "expectedSha256": "b70c0c276f4fb8926c88dc84e2374f4ca98f0cbe5b289624a33c976dca286a11",
+              "installedSha256": "b70c0c276f4fb8926c88dc84e2374f4ca98f0cbe5b289624a33c976dca286a11",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/index.js",
+              "expectedSha256": "8613c1381bcd1f5bd2f2e5bc3f852a9f11b29163756c128548737d939ac599e2",
+              "installedSha256": "8613c1381bcd1f5bd2f2e5bc3f852a9f11b29163756c128548737d939ac599e2",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/runtime-DmL0It3P.js",
+              "expectedSha256": "74d762eb906c2989a584df63dfe823f490f4e2a9a152ef0f310ab3a2d81985a1",
+              "installedSha256": "74d762eb906c2989a584df63dfe823f490f4e2a9a152ef0f310ab3a2d81985a1",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/starter-resolution-xVjONc6g.js",
+              "expectedSha256": "13009e9e1d7351d223fd67322cc6775081a11004ae67b3a0fe479a68132b16f6",
+              "installedSha256": "13009e9e1d7351d223fd67322cc6775081a11004ae67b3a0fe479a68132b16f6",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/starter.js",
+              "expectedSha256": "81cee2e00d5927026764560a360bf25116973e5f4619f6e984090e41ceefb31c",
+              "installedSha256": "81cee2e00d5927026764560a360bf25116973e5f4619f6e984090e41ceefb31c",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/strategy-configuration-CKP2kRss.js",
+              "expectedSha256": "a06fab7d856de5689df29d29be768e1730f14eee1d6736c346240e8b27680d21",
+              "installedSha256": "a06fab7d856de5689df29d29be768e1730f14eee1d6736c346240e8b27680d21",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/testing.js",
+              "expectedSha256": "aecc89be6ddd5537f386b0a56fb285ec2bf894052fb1e27d9eb8689b26cd0bbb",
+              "installedSha256": "aecc89be6ddd5537f386b0a56fb285ec2bf894052fb1e27d9eb8689b26cd0bbb",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "locale/en.json",
+              "expectedSha256": "53b4411680fd544bed77843c3356a8e115801fbc0e4f10f28226c821835b5f1d",
+              "installedSha256": "53b4411680fd544bed77843c3356a8e115801fbc0e4f10f28226c821835b5f1d",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "package.json",
+              "expectedSha256": "58e56eb20333990eae0ae1ae70b22354038357a27b188fa6926332c250379e6c",
+              "installedSha256": "58e56eb20333990eae0ae1ae70b22354038357a27b188fa6926332c250379e6c",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "locale/zh.json",
+              "expectedSha256": "f1f60f2c2b7ac12b52b9fb91b6ecc564798536611879ce4c3329a4f9e4bafd85",
+              "installedSha256": "f1f60f2c2b7ac12b52b9fb91b6ecc564798536611879ce4c3329a4f9e4bafd85",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "README.md",
+              "expectedSha256": "2fd04e73a58de02dcb6b7a37a8827328677cfb97b4b30b3a56504aec9286b4cb",
+              "installedSha256": "2fd04e73a58de02dcb6b7a37a8827328677cfb97b4b30b3a56504aec9286b4cb",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "README.zh-CN.md",
+              "expectedSha256": "21f708115fae73e481cbc6c86e8c94235e4b0492af159d326583b07bbcc50a11",
+              "installedSha256": "21f708115fae73e481cbc6c86e8c94235e4b0492af159d326583b07bbcc50a11",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "SECURITY.md",
+              "expectedSha256": "700562eaa915d083050a30b6f58292c8ce5c06dd83fde6cd7cfadef228dd3fb1",
+              "installedSha256": "700562eaa915d083050a30b6f58292c8ce5c06dd83fde6cd7cfadef228dd3fb1",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "THIRD_PARTY_NOTICES.md",
+              "expectedSha256": "32ebd32c67f4316e33e4214a0504ebe6dabeb1fef00106de05e457a97cb80926",
+              "installedSha256": "32ebd32c67f4316e33e4214a0504ebe6dabeb1fef00106de05e457a97cb80926",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "bin/repair-legacy-session.mjs",
+              "expectedSha256": "2465c57aead1426a520db45e231278a0fb7d5afecb01f4c4c114b1b3814cf4eb",
+              "installedSha256": "2465c57aead1426a520db45e231278a0fb7d5afecb01f4c4c114b1b3814cf4eb",
+              "match": true,
+              "expectedExecutableBits": "0o111",
+              "actualExecutableBits": "0o111",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/bundle.d.ts",
+              "expectedSha256": "602028377ee0735110c68e0807aeea407a05b021b5c87ec66af3e4b4d83e9033",
+              "installedSha256": "602028377ee0735110c68e0807aeea407a05b021b5c87ec66af3e4b4d83e9033",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/component-ui.d.ts",
+              "expectedSha256": "b8b2137b5e9eab1bbcaed491ab2edbcb23e71e1d18eadf1068cb10f4efdfb800",
+              "installedSha256": "b8b2137b5e9eab1bbcaed491ab2edbcb23e71e1d18eadf1068cb10f4efdfb800",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/config-values.d.ts",
+              "expectedSha256": "d6d51c8288cf72085bd7b3194e79ffe3e2ed9675604efb3706dfd74b24169a98",
+              "installedSha256": "d6d51c8288cf72085bd7b3194e79ffe3e2ed9675604efb3706dfd74b24169a98",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/config.d.ts",
+              "expectedSha256": "e89b437600120c86b8dcd6720c7b99a26561f5512125dc2a2ca6f6454ebc39f4",
+              "installedSha256": "e89b437600120c86b8dcd6720c7b99a26561f5512125dc2a2ca6f6454ebc39f4",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/core/definitions.d.ts",
+              "expectedSha256": "c1426396948e63015b25a8e5aaccdf65c43ddf33055de833ae90a33cb76a2fec",
+              "installedSha256": "c1426396948e63015b25a8e5aaccdf65c43ddf33055de833ae90a33cb76a2fec",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/display-mode.d.ts",
+              "expectedSha256": "9cfd641ad2162703dea794b613f98a6a42b3007c8aeb4e0f6b65b82ad5a4d678",
+              "installedSha256": "9cfd641ad2162703dea794b613f98a6a42b3007c8aeb4e0f6b65b82ad5a4d678",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/extension-sdk.d.ts",
+              "expectedSha256": "ac6e9034bbcfad7dfd877c6b9298bce500ad75d5e095568eca29f5bf29a56473",
+              "installedSha256": "ac6e9034bbcfad7dfd877c6b9298bce500ad75d5e095568eca29f5bf29a56473",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/feedback.d.ts",
+              "expectedSha256": "e532a8e2e0d60d0da5d8e63238e6eca88da3244d2560a749a3380e662b543792",
+              "installedSha256": "e532a8e2e0d60d0da5d8e63238e6eca88da3244d2560a749a3380e662b543792",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/GlobalLocationSetting.d.ts",
+              "expectedSha256": "3cf62d774fa8406057c3406682a8a87a61ab62232f87b85163e20351c2e4d131",
+              "installedSha256": "3cf62d774fa8406057c3406682a8a87a61ab62232f87b85163e20351c2e4d131",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/index.d.ts",
+              "expectedSha256": "d43c82958f8bb83ef5cff5524813d65e3e0b25b688914b04283d238ce8e13f6f",
+              "installedSha256": "d43c82958f8bb83ef5cff5524813d65e3e0b25b688914b04283d238ce8e13f6f",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/core/contracts/index.d.ts",
+              "expectedSha256": "861b85070c37483c4c578fd2f37ddb616cb70522eb409fbeb391ee2850058b4e",
+              "installedSha256": "861b85070c37483c4c578fd2f37ddb616cb70522eb409fbeb391ee2850058b4e",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/index.d.ts",
+              "expectedSha256": "a30ee3bce8e37249b8461b925cc0e626942d4a0cf6233c13a3f0d010f6d5ad47",
+              "installedSha256": "a30ee3bce8e37249b8461b925cc0e626942d4a0cf6233c13a3f0d010f6d5ad47",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/index.d.ts",
+              "expectedSha256": "b46d181e8677f404f0dceade0573bc7d349834d7076fed3d2243876b7e6b8237",
+              "installedSha256": "b46d181e8677f404f0dceade0573bc7d349834d7076fed3d2243876b7e6b8237",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/input.d.ts",
+              "expectedSha256": "3264d99270796e102939d3d412f4c38c220e8c4f79ac6d001bf5fb374248d246",
+              "installedSha256": "3264d99270796e102939d3d412f4c38c220e8c4f79ac6d001bf5fb374248d246",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/install.d.ts",
+              "expectedSha256": "2b3e0903128d4b79861233772966fce157bd18bd8234beadcbdef4bcfc7ca93e",
+              "installedSha256": "2b3e0903128d4b79861233772966fce157bd18bd8234beadcbdef4bcfc7ca93e",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/live-config.d.ts",
+              "expectedSha256": "e58b26ffaa6b08d5bd10e3678554f99d38880a8bc3e1b7c21c42040cc46f496f",
+              "installedSha256": "e58b26ffaa6b08d5bd10e3678554f99d38880a8bc3e1b7c21c42040cc46f496f",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/locales.d.ts",
+              "expectedSha256": "d40b55a975466939397ee64cff17b604a28ae7deb557d8a4acfb8c86e049e345",
+              "installedSha256": "d40b55a975466939397ee64cff17b604a28ae7deb557d8a4acfb8c86e049e345",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/memory-tools.d.ts",
+              "expectedSha256": "57f4e231607ef98e5cc6311758a55af25a5608007c9ac2c839c154390ee5b162",
+              "installedSha256": "57f4e231607ef98e5cc6311758a55af25a5608007c9ac2c839c154390ee5b162",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/MnemonDialog.d.ts",
+              "expectedSha256": "cf9de6f80a98d6e527860d7077ce5cc5098b2beda55aecf25790403974bd1c34",
+              "installedSha256": "cf9de6f80a98d6e527860d7077ce5cc5098b2beda55aecf25790403974bd1c34",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/MnemonLogo.d.ts",
+              "expectedSha256": "c1532a4f925703354772392d59b767cba82db7cfa0ede0ed2c0c4ad7f952a405",
+              "installedSha256": "c1532a4f925703354772392d59b767cba82db7cfa0ede0ed2c0c4ad7f952a405",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/page-client.d.ts",
+              "expectedSha256": "263491e8acfd741b24da984325ad144f529121a660cc45768a427b64a5298945",
+              "installedSha256": "263491e8acfd741b24da984325ad144f529121a660cc45768a427b64a5298945",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/page-controls.d.ts",
+              "expectedSha256": "819a7ada7ad3cf04dc10786b2c91bd1ab2593af9925b24ceaf8b9f267c89d423",
+              "installedSha256": "819a7ada7ad3cf04dc10786b2c91bd1ab2593af9925b24ceaf8b9f267c89d423",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/page-kit.d.ts",
+              "expectedSha256": "ce40c66a2409f540adea88e82183bd17cbcbd20d7e0a3796d150283f34082b12",
+              "installedSha256": "ce40c66a2409f540adea88e82183bd17cbcbd20d7e0a3796d150283f34082b12",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/core/contracts/plugin.d.ts",
+              "expectedSha256": "430b6c765482d75525a62c8515118e2926eb218704a1ebee73743d347f63e406",
+              "installedSha256": "430b6c765482d75525a62c8515118e2926eb218704a1ebee73743d347f63e406",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/core/plugin.d.ts",
+              "expectedSha256": "73a8b54a714b0f680507a4c935a3fc9b17918e106bf901883d1226d69729d6a2",
+              "installedSha256": "73a8b54a714b0f680507a4c935a3fc9b17918e106bf901883d1226d69729d6a2",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/plugin.d.ts",
+              "expectedSha256": "348d0015c748f9678607d3e033d940fab89eae9dfd6aa453f7e5eec1ed5f4a3c",
+              "installedSha256": "348d0015c748f9678607d3e033d940fab89eae9dfd6aa453f7e5eec1ed5f4a3c",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/protocol.d.ts",
+              "expectedSha256": "2c64bf3cff0353c73a00930a604a45b678a8a1df5e30d791c36add136916aed5",
+              "installedSha256": "2c64bf3cff0353c73a00930a604a45b678a8a1df5e30d791c36add136916aed5",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/service.d.ts",
+              "expectedSha256": "7ef3753a9dc3537e852c483bd00055de83c207d7cd2e327d05a9517787cac15d",
+              "installedSha256": "7ef3753a9dc3537e852c483bd00055de83c207d7cd2e327d05a9517787cac15d",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/settings-controls.d.ts",
+              "expectedSha256": "6de7ad44140d60914cf7bf7e4183d91d77e5d9710ee40dd6c0b83f8f3ad6c872",
+              "installedSha256": "6de7ad44140d60914cf7bf7e4183d91d77e5d9710ee40dd6c0b83f8f3ad6c872",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/settings-panel.d.ts",
+              "expectedSha256": "3d3ee92739b1c245996f84ff186170c505999a5d286c7e85f8b4e1ecc2eaae85",
+              "installedSha256": "3d3ee92739b1c245996f84ff186170c505999a5d286c7e85f8b4e1ecc2eaae85",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/source-contracts.d.ts",
+              "expectedSha256": "253309b6697bfb45e6560bcebb4c873c7b4980916350f35bdd40fde303b916a0",
+              "installedSha256": "253309b6697bfb45e6560bcebb4c873c7b4980916350f35bdd40fde303b916a0",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/source-pages.d.ts",
+              "expectedSha256": "9093041163fccc7afddb86f30d6434a14e29f030e887e24ee400023f97969430",
+              "installedSha256": "9093041163fccc7afddb86f30d6434a14e29f030e887e24ee400023f97969430",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/starter-components.d.ts",
+              "expectedSha256": "72df6416c208396e53788880b3fd7cbed249320584d207c8928dc949c9320458",
+              "installedSha256": "72df6416c208396e53788880b3fd7cbed249320584d207c8928dc949c9320458",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/starter.d.ts",
+              "expectedSha256": "e2f3f8e56d03afd711f883db3784a47930c59b2985a9ce4918bce1f06c4e3a51",
+              "installedSha256": "e2f3f8e56d03afd711f883db3784a47930c59b2985a9ce4918bce1f06c4e3a51",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/storage-lock.d.ts",
+              "expectedSha256": "9072c9369822413d48c46c929530e950cdc07cc03a05342e05a0730cea4e44f9",
+              "installedSha256": "9072c9369822413d48c46c929530e950cdc07cc03a05342e05a0730cea4e44f9",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/strategy-configuration.d.ts",
+              "expectedSha256": "e87fea784b5b29bfcffaabe448fec056eaa3a0a64baf315b3a9f0a647d83308a",
+              "installedSha256": "e87fea784b5b29bfcffaabe448fec056eaa3a0a64baf315b3a9f0a647d83308a",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/sync-rules.d.ts",
+              "expectedSha256": "d80282ed5b12128678dc93215260b07e79932d95c68825d6279fb12d60ed7a8b",
+              "installedSha256": "d80282ed5b12128678dc93215260b07e79932d95c68825d6279fb12d60ed7a8b",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/core/contracts/task-agent-model.d.ts",
+              "expectedSha256": "0532a52be00c9fd7e941d29041c4d5dd96e4d42cac30f387088a18a3a14f0c41",
+              "installedSha256": "0532a52be00c9fd7e941d29041c4d5dd96e4d42cac30f387088a18a3a14f0c41",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/testing.d.ts",
+              "expectedSha256": "a157befcd6231af9e0915f26243f8c86178ddc99114c5d135ee04c85dc0f3279",
+              "installedSha256": "a157befcd6231af9e0915f26243f8c86178ddc99114c5d135ee04c85dc0f3279",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/ui-icons.d.ts",
+              "expectedSha256": "65262c80dee9a62195eda0e79166449bff062bc1ee48595e54d50ab3955535e9",
+              "installedSha256": "65262c80dee9a62195eda0e79166449bff062bc1ee48595e54d50ab3955535e9",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/use-request-version.d.ts",
+              "expectedSha256": "65bb1a8eddc167bdd3c730024b589792e2fe0535a6f770b81585ff85653cd78e",
+              "installedSha256": "65bb1a8eddc167bdd3c730024b589792e2fe0535a6f770b81585ff85653cd78e",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/view-extensions.d.ts",
+              "expectedSha256": "59e9242a069ade7b301aea496573162f3543cf36385cd3345ad93a35ab747ed8",
+              "installedSha256": "59e9242a069ade7b301aea496573162f3543cf36385cd3345ad93a35ab747ed8",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/host/view-protocol.d.ts",
+              "expectedSha256": "e5a76a65a89454cf08c915a904e4e024af3937cae3a65a6f6d3419ffacfd7d71",
+              "installedSha256": "e5a76a65a89454cf08c915a904e4e024af3937cae3a65a6f6d3419ffacfd7d71",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/client/view-styles.d.ts",
+              "expectedSha256": "cebd26c73d5ba1bf720d201402380e3c47767141436d6d06b09db29566298637",
+              "installedSha256": "cebd26c73d5ba1bf720d201402380e3c47767141436d6d06b09db29566298637",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/core/contracts/view.d.ts",
+              "expectedSha256": "3103553bc207dbc950c4f2d84dfa40dddf09c779a664c266b4bde8218c8ef1c9",
+              "installedSha256": "3103553bc207dbc950c4f2d84dfa40dddf09c779a664c266b4bde8218c8ef1c9",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/src/sdk/workspace-storage.d.ts",
+              "expectedSha256": "f28d2e65efb5a9f213e242926386b4f4765ea7e344bb8b6dbe10b5a61becb469",
+              "installedSha256": "f28d2e65efb5a9f213e242926386b4f4765ea7e344bb8b6dbe10b5a61becb469",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "cordis.patch.yml",
+              "expectedSha256": "889c12eec043d8a8394cfd59d1c18920d7e96905025ed053a5f11fbb6d54648a",
+              "installedSha256": "889c12eec043d8a8394cfd59d1c18920d7e96905025ed053a5f11fbb6d54648a",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            }
+          ]
+        },
+        {
+          "name": "dsh-mnemon-source-skills",
+          "version": "0.5.8",
+          "filename": "dsh-mnemon-source-skills-0.5.8.tgz",
+          "sha256": "d7bb33264423caf42f5f4750941e901bec3256babc174407cb554ee9d2bc7338",
+          "integrity": "sha512-M38/7SKUqQlAn0KoJnFYhCUXun3YCY3Mi5YitZygXt2B1VmpnrE4PufZMpwFk/Rw/fxvpT9OujZycD8xm6X/jA==",
+          "fileCount": 30,
+          "fileSetMatches": true,
+          "extraFiles": [],
+          "missingFiles": [],
+          "allFilesMatch": true,
+          "executableBitsMatch": true,
+          "files": [
+            {
+              "file": "LICENSE",
+              "expectedSha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+              "installedSha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "presentation/page.module.css",
+              "expectedSha256": "89e9fbdcfcc8c29dcca8e310cede4d4b898da39e6cdc9d40ae06eb87ec135a83",
+              "installedSha256": "89e9fbdcfcc8c29dcca8e310cede4d4b898da39e6cdc9d40ae06eb87ec135a83",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/client.js",
+              "expectedSha256": "a4a187e79c11ab3b4ec2579eb9264cc1e331b0f8c1d6a7207e83026316308481",
+              "installedSha256": "a4a187e79c11ab3b4ec2579eb9264cc1e331b0f8c1d6a7207e83026316308481",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/contracts.js",
+              "expectedSha256": "9b85fdd38eea3e19e29b332822732db379d4990cf061f1f7dcf591aafcbb2af3",
+              "installedSha256": "9b85fdd38eea3e19e29b332822732db379d4990cf061f1f7dcf591aafcbb2af3",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/index.js",
+              "expectedSha256": "20a31033428db6b8123f428314bdbbbfbe3fa78259b6c1a684c692d21dd16fe1",
+              "installedSha256": "20a31033428db6b8123f428314bdbbbfbe3fa78259b6c1a684c692d21dd16fe1",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "locale/en.json",
+              "expectedSha256": "0b5276b77a752fb47c67765847e261a6a7041a885213f760c4ad3670d694baed",
+              "installedSha256": "0b5276b77a752fb47c67765847e261a6a7041a885213f760c4ad3670d694baed",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "presentation/locales.json",
+              "expectedSha256": "5578e2a79cd6680aa2bfb5c6d34ddcd7c8c1dd0dd3e4c74add0d8253e8ffbd40",
+              "installedSha256": "5578e2a79cd6680aa2bfb5c6d34ddcd7c8c1dd0dd3e4c74add0d8253e8ffbd40",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "market/official.json",
+              "expectedSha256": "6d011e5817727fb545dd385df8bb7316bff59d803f05c956bf64138956d90acc",
+              "installedSha256": "6d011e5817727fb545dd385df8bb7316bff59d803f05c956bf64138956d90acc",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "package.json",
+              "expectedSha256": "461504596dbe2809b1bd7464d7940bbd8a66f625ce2b5985482f57f064289e37",
+              "installedSha256": "461504596dbe2809b1bd7464d7940bbd8a66f625ce2b5985482f57f064289e37",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "locale/zh.json",
+              "expectedSha256": "9dce17a7602534ea20b6027988f3b18cc3bce7f6b6bffe4f64b635291ffedf28",
+              "installedSha256": "9dce17a7602534ea20b6027988f3b18cc3bce7f6b6bffe4f64b635291ffedf28",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "README.md",
+              "expectedSha256": "b318027075420db6f97a9149f3938118bdff5d05fccd1a0861d9b82ba041684d",
+              "installedSha256": "b318027075420db6f97a9149f3938118bdff5d05fccd1a0861d9b82ba041684d",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/api.d.ts",
+              "expectedSha256": "e21407187655e1e62bcb3ce0776bb0e81fc2c95a00382f5a51e033fa0a2fe4c1",
+              "installedSha256": "e21407187655e1e62bcb3ce0776bb0e81fc2c95a00382f5a51e033fa0a2fe4c1",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client.d.ts",
+              "expectedSha256": "99720ccb1ef2991d3d08923a54b3b64a165692fe94acadff7b9e5cee2963bc3f",
+              "installedSha256": "99720ccb1ef2991d3d08923a54b3b64a165692fe94acadff7b9e5cee2963bc3f",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/contracts.d.ts",
+              "expectedSha256": "75dabb87607a665d76c885db1d823e3ed9e4667591d1f85466460f3ae390cb65",
+              "installedSha256": "75dabb87607a665d76c885db1d823e3ed9e4667591d1f85466460f3ae390cb65",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/contracts.d.ts",
+              "expectedSha256": "b30893f3034903ddb66f560339939a4a06d35ab12de636acf4ff7531fd507531",
+              "installedSha256": "b30893f3034903ddb66f560339939a4a06d35ab12de636acf4ff7531fd507531",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/evals-page.d.ts",
+              "expectedSha256": "69c36a11a11d4f6b91554ea1b3e6218428bb8c0e3bb0a2568c1467987ff6ab8b",
+              "installedSha256": "69c36a11a11d4f6b91554ea1b3e6218428bb8c0e3bb0a2568c1467987ff6ab8b",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/evidence-page.d.ts",
+              "expectedSha256": "c3a0c84f77f1b8464158b3bbdbff33abdb7b79777f7083a184598ea42b7f5791",
+              "installedSha256": "c3a0c84f77f1b8464158b3bbdbff33abdb7b79777f7083a184598ea42b7f5791",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/evolution-page.d.ts",
+              "expectedSha256": "974b260d4696e68368f0ca91313c17d96057e5cdc4dd6e1c6ca65ffd0789dce4",
+              "installedSha256": "974b260d4696e68368f0ca91313c17d96057e5cdc4dd6e1c6ca65ffd0789dce4",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/fence.d.ts",
+              "expectedSha256": "2522959dfc2203f5cb4219029f78321f6cf036bc8f2e972a07d01a6ef6d9104f",
+              "installedSha256": "2522959dfc2203f5cb4219029f78321f6cf036bc8f2e972a07d01a6ef6d9104f",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/index.d.ts",
+              "expectedSha256": "61413bc1929df4ba1f2c561c0fc7207ee7b2b38f1ebbc3f7fa403c1c088d0d00",
+              "installedSha256": "61413bc1929df4ba1f2c561c0fc7207ee7b2b38f1ebbc3f7fa403c1c088d0d00",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/market-page.d.ts",
+              "expectedSha256": "fa00338ddd8a6f8bc2347628078b11008209ce363f600042cf1fcbee33c69053",
+              "installedSha256": "fa00338ddd8a6f8bc2347628078b11008209ce363f600042cf1fcbee33c69053",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/model-choice.d.ts",
+              "expectedSha256": "5bd926d57442c01ecbf222bdf4cec6358f932e5cc8ef4d8dc9fa2dd81c38215b",
+              "installedSha256": "5bd926d57442c01ecbf222bdf4cec6358f932e5cc8ef4d8dc9fa2dd81c38215b",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/presentation.d.ts",
+              "expectedSha256": "d7d80eccdf90c7ec939b67802c559d00614ed9285e6a756212a473cfe556c1c1",
+              "installedSha256": "d7d80eccdf90c7ec939b67802c559d00614ed9285e6a756212a473cfe556c1c1",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/shared.d.ts",
+              "expectedSha256": "34ba2da4c08ce51bee17ea09a3cf992c8fe06446c54f0f017026ae8639927881",
+              "installedSha256": "34ba2da4c08ce51bee17ea09a3cf992c8fe06446c54f0f017026ae8639927881",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/skill-tests.d.ts",
+              "expectedSha256": "d9de27a957b8e9dc9493878620cf39d2e9dbaec7a52daf7ed92ab292f8b2c8ab",
+              "installedSha256": "d9de27a957b8e9dc9493878620cf39d2e9dbaec7a52daf7ed92ab292f8b2c8ab",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/skills-page.d.ts",
+              "expectedSha256": "157a6d855ec4b0bb5b43c6777c969e7972ea699b8e89f572e36f445b83f56c15",
+              "installedSha256": "157a6d855ec4b0bb5b43c6777c969e7972ea699b8e89f572e36f445b83f56c15",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/source-kind.d.ts",
+              "expectedSha256": "609250d77c7950a206b00be65de4b33b62dec50ffaff6f13d0fa411d970d2eeb",
+              "installedSha256": "609250d77c7950a206b00be65de4b33b62dec50ffaff6f13d0fa411d970d2eeb",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/trash-page.d.ts",
+              "expectedSha256": "ef3f280cab983adb716c2602d50debda1bfb9dd531b5c4842afd4849fc9bac80",
+              "installedSha256": "ef3f280cab983adb716c2602d50debda1bfb9dd531b5c4842afd4849fc9bac80",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/ui.d.ts",
+              "expectedSha256": "0c211a77d3376aeb4a381d82d76ed50945b70bc5b8a32f0306dbfbfdf03ce6c4",
+              "installedSha256": "0c211a77d3376aeb4a381d82d76ed50945b70bc5b8a32f0306dbfbfdf03ce6c4",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            },
+            {
+              "file": "lib/types/client/use-skill.d.ts",
+              "expectedSha256": "2078894ccb534939aa8cc58567421c451cda72a2ab44f31eba90d9e26d37bcfe",
+              "installedSha256": "2078894ccb534939aa8cc58567421c451cda72a2ab44f31eba90d9e26d37bcfe",
+              "match": true,
+              "expectedExecutableBits": "0o0",
+              "actualExecutableBits": "0o0",
+              "executableBitsMatch": true
+            }
+          ]
+        }
+      ],
+      "candidateFileCount": 98,
+      "contentMismatches": 0,
+      "executableBitMismatches": 0,
+      "fileSetMismatches": 0,
+      "hashes": {
+        "memories.json": {
+          "sha256": "81e9185802f6b56a2220c0c98cc5e7552de23df6e6f4a50f3a7a07acaf037fb4",
+          "bytes": 338
+        },
+        "MEMORY.md": {
+          "sha256": "a855a858cc23b3dd4c821b6973268ef54ff61886b4a052321555ff854017f384",
+          "bytes": 116
+        },
+        "USER.md": {
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      },
+      "retentionMatchesBaseline": true
+    },
+    "ui": {
+      "initialRunningVersion": "0.5.40",
+      "versionOffered": "0.5.41",
+      "componentUpdatesOffered": 1,
+      "installedVersion": "0.5.41",
+      "restartNeeded": true,
+      "restartCount": 1,
+      "runningVersionAfterRestart": "0.5.41",
+      "systemNominalAfterRestart": true,
+      "canaryVisibleAfterRestart": true,
+      "postRestartAuthority": "127.0.0.1"
+    },
+    "canaryInMemoriesJson": true,
+    "canaryInMemoryMd": true
+  },
+  "screenshots": [
+    {
+      "step": "fresh-status",
+      "path": "docs/pr-assets/release-v0.5.41/rc5-fresh-status.jpg",
+      "sha256": "0f2fd1eb78e9307ca77c647ae33b5a98cf50def625962632f8bd3acb6b54b8dc",
+      "bytes": 74354,
+      "format": "jpeg",
+      "width": 1280,
+      "height": 720,
+      "visuallyReviewed": true
+    },
+    {
+      "step": "upgrade-memory-before",
+      "path": "docs/pr-assets/release-v0.5.41/rc5-upgrade-memory-before.jpg",
+      "sha256": "5d6087cfb3baab39946e3b30aa89528ac7ddbdfbfb7e4b702c20346fc4bb8547",
+      "bytes": 68324,
+      "format": "jpeg",
+      "width": 1280,
+      "height": 720,
+      "visuallyReviewed": true
+    },
+    {
+      "step": "upgrade-offered",
+      "path": "docs/pr-assets/release-v0.5.41/rc5-upgrade-offered.jpg",
+      "sha256": "e3626db0b6f654fa74c1dcf6ae41a6e4271e76e7d24673b88eff0ce8884aaba2",
+      "bytes": 67705,
+      "format": "jpeg",
+      "width": 1280,
+      "height": 720,
+      "visuallyReviewed": true
+    },
+    {
+      "step": "upgrade-updated",
+      "path": "docs/pr-assets/release-v0.5.41/rc5-upgrade-updated.jpg",
+      "sha256": "adeafda59a213dfaf2f6f8dcbbbeed37f7b580528bc663704518ba64271aa792",
+      "bytes": 69232,
+      "format": "jpeg",
+      "width": 1280,
+      "height": 720,
+      "visuallyReviewed": true
+    },
+    {
+      "step": "upgrade-restarted-status",
+      "path": "docs/pr-assets/release-v0.5.41/rc5-upgrade-restarted-status.jpg",
+      "sha256": "f32845adadc879beddcbf2d846bde90450804567d2fb77ef83161583db93d952",
+      "bytes": 74676,
+      "format": "jpeg",
+      "width": 1280,
+      "height": 720,
+      "visuallyReviewed": true
+    },
+    {
+      "step": "upgrade-memory-preserved",
+      "path": "docs/pr-assets/release-v0.5.41/rc5-upgrade-memory-preserved.jpg",
+      "sha256": "26e4e904af5f982242101cfd1e63613a93515cb6a92d2a4c9729678d7c12bcb3",
+      "bytes": 65336,
+      "format": "jpeg",
+      "width": 1280,
+      "height": 720,
+      "visuallyReviewed": true
+    }
+  ],
+  "uiSteps": {
+    "fresh": [
+      "Open official Host with an empty isolated Web profile; acknowledge preview notice and close account prompt",
+      "Plugins > Add plugin > enter dsh-mnemon > Install",
+      "Observe version 0.5.41 > Enable now",
+      "Memory System > Status shows running dsh-mnemon 0.5.41 and system normal"
+    ],
+    "upgrade": [
+      "Install real npm dsh-mnemon@0.5.40 with official DSH plugin installer in a separate empty profile",
+      "Observe running 0.5.40; create synthetic Runtime memory through Add memory UI",
+      "Record memories.json, MEMORY.md and USER.md hashes",
+      "Status > Check versions offers 0.5.41 and one component update",
+      "Click Update; observe installed 0.5.41, still running 0.5.40 and restart needed",
+      "Audit 19 pinned versions and all 98 candidate files and executable modes; compare runtime hashes",
+      "Restart only the disposable fixture using SIGUSR2",
+      "Reconnect using the process-authenticated Host URL; observe running 0.5.41 and system normal",
+      "Runtime memory UI shows the original canary; audit candidate files and compare runtime hashes again"
+    ]
+  },
+  "console": {
+    "freshWarningCount": 0,
+    "freshErrorCount": 0,
+    "upgradeBeforeRestartWarningCount": 0,
+    "upgradeBeforeRestartErrorCount": 0,
+    "finalReconnectedTabErrorCount": 0,
+    "restartDisconnectWarnings": [
+      {
+        "level": "warn",
+        "message": "[connection] connection lost, retry #1",
+        "timestamp": "2026-11-05T15:20:31.903Z"
+      },
+      {
+        "level": "warn",
+        "message": "[connection] connection lost, retry #2",
+        "timestamp": "2026-11-05T15:20:32.731Z"
+      },
+      {
+        "level": "warn",
+        "message": "[connection] connection lost, retry #3",
+        "timestamp": "2026-11-05T15:20:34.120Z"
+      },
+      {
+        "level": "warn",
+        "message": "[connection] connection lost, retry #4",
+        "timestamp": "2026-11-05T15:20:37.141Z"
+      },
+      {
+        "level": "warn",
+        "message": "[connection] connection lost, retry #5",
+        "timestamp": "2026-11-05T15:20:44.349Z"
+      },
+      {
+        "level": "warn",
+        "message": "[connection] connection lost, retry #6",
+        "timestamp": "2026-11-05T15:20:49.910Z"
+      }
+    ]
+  },
+  "observations": [
+    {
+      "event": "Deliberate Host restart disconnected the old WebSocket",
+      "evidence": "Six warn-level reconnect messages on the old port; zero captured browser errors after successful reconnection."
+    }
+  ],
+  "limits": [
+    "Official published Hosts and disposable Web profiles only; native Desktop OS integration and unpublished source-build compatibility are outside scope.",
+    "One synthetic working-memory canary covered per Host; USER.md was empty and retained its exact empty-file hash.",
+    "No live model evaluation or external model calls.",
+    "Candidate metadata is aged only inside the fixture registry; npm minimum-release-age policy is outside scope.",
+    "These are pre-publication candidate digests; publication separately freezes and verifies the final merged revision."
+  ],
+  "externalModelCalls": 0,
+  "unresolvedProductIssues": [],
+  "commands": [
+    "env -u NODE_PATH ${NODE24_BIN}/node scripts/serve-release-acceptance.mjs --dsh ${DSH_BIN} --artifacts ${ARTIFACTS} --state ${FRESH_STATE}",
+    "env -u NODE_PATH ${NODE24_BIN}/node scripts/serve-release-acceptance.mjs --dsh ${DSH_BIN} --artifacts ${ARTIFACTS} --state ${UPGRADE_STATE} --previous dsh-mnemon@0.5.40",
+    "Read-only audit of each actual installed package manifest; compare candidate tar entries byte-for-byte and executable bits; SHA-256 runtime files before install, after install, and after restart",
+    "kill -USR2 ${UPGRADE_FIXTURE_PID}",
+    "kill -TERM ${FRESH_FIXTURE_PID} ${UPGRADE_FIXTURE_PID}"
+  ],
+  "cleanup": {
+    "tabsClosed": true,
+    "activeApplicationTabsClosed": true,
+    "allOwnedProcessesStopped": true,
+    "processes": [
+      {
+        "scenario": "fresh",
+        "pid": 72437,
+        "webPid": 72448,
+        "restarts": 0,
+        "signal": "SIGTERM",
+        "pidStopped": true,
+        "webPidStopped": true,
+        "fixtureExitCode": 0
+      },
+      {
+        "scenario": "upgrade",
+        "pid": 73474,
+        "webPid": 79100,
+        "restarts": 1,
+        "signal": "SIGTERM",
+        "pidStopped": true,
+        "webPidStopped": true,
+        "fixtureExitCode": 0
+      }
+    ],
+    "temporaryStateRetainedForAudit": true
+  },
+  "checkedAt": "2026-11-05T15:30:22.677895+00:00"
+}

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { ReviewRecordInput } from '../src/contracts.ts'
 import { setFrontmatterKey, withInvocation } from '../src/frontmatter.ts'
 import { SkillsService } from '../src/service.ts'
+import type { LedgerFile } from '../src/store.ts'
 
 let root: string
 let home: string
@@ -377,6 +378,93 @@ describe('model picks', () => {
     expect(store.suggestions().map(entry => entry.id)).toEqual([])
     expect(() => store.draft(workspace, draft.id)).toThrow()
     expect(store.draftPreferences().suggestionModels).toEqual({})
+  })
+
+  it('removes deleted suggestion links and counts from every review and trajectory without deleting evidence', async () => {
+    write(join(home, 'skills', 'release-notes', 'SKILL.md'), skill('release-notes'))
+    const store = service()
+    const input = review()
+    input.suggestions.push({ ...input.suggestions[0]!, skillName: 'release-checks', action: 'create' })
+    await store.recordReview(workspace, input)
+    await store.recordReview(workspace, input)
+    const [removed, kept] = store.suggestions()
+    expect(removed).toBeDefined()
+    expect(kept).toBeDefined()
+    const before = store.trajectories().map(entry => store.trajectory(entry.id))
+    const cases = store.cases()
+    for (const id of [removed!.id, kept!.id]) {
+      await store.deleteSuggestion(id)
+      const ids = id === removed!.id ? [kept!.id] : []
+      // Check persisted index cleanup as well as the public read paths.
+      const ledger = JSON.parse(readFileSync(join(data, 'skills', 'ledger.json'), 'utf8')) as LedgerFile
+      for (const review of [...ledger.reviews, ...store.reviews()]) {
+        expect(review.suggestions).toBe(ids.length)
+        expect(review.suggestionIds).toEqual(ids.length === 0 ? undefined : ids)
+      }
+      expect(ledger.trajectories.map(entry => entry.suggestionIds)).toEqual([ids, ids])
+      for (const [index, entry] of store.trajectories().entries()) {
+        expect(entry.suggestionIds).toEqual(ids)
+        const detail = store.trajectory(entry.id)
+        expect(detail.suggestionIds).toEqual(ids)
+        expect(detail.annotations.every(annotation => (annotation.suggestionIds ?? []).every(link => ids.includes(link)))).toBe(true)
+        expect(detail.steps).toEqual(before[index]!.steps)
+        expect(detail.annotations.map(({ suggestionIds: _, ...annotation }) => annotation)).toEqual(before[index]!.annotations.map(({ suggestionIds: _, ...annotation }) => annotation))
+      }
+      expect(store.cases()).toEqual(cases)
+    }
+  })
+
+  it('filters legacy dangling links on read without changing the revision or writing files', async () => {
+    write(join(home, 'skills', 'release-notes', 'SKILL.md'), skill('release-notes'))
+    const store = service()
+    const result = await store.recordReview(workspace, review())
+    const live = result.suggestionIds[0]!
+    const trajectoryId = result.trajectoryId!
+    const ledgerPath = join(data, 'skills', 'ledger.json')
+    const trajectoryPath = join(data, 'skills', 'trajectories', result.trajectoryId + '.json')
+    const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as LedgerFile
+    ledger.reviews[0]!.suggestionIds = [live, 'deleted-legacy']
+    ledger.reviews[0]!.suggestions = 2
+    ledger.trajectories[0]!.suggestionIds = [live, 'deleted-legacy']
+    const trajectory = store.trajectory(trajectoryId)
+    trajectory.suggestionIds = [live, 'deleted-legacy']
+    trajectory.annotations[0]!.suggestionIds = ['deleted-legacy']
+    writeFileSync(ledgerPath, JSON.stringify(ledger))
+    writeFileSync(trajectoryPath, JSON.stringify(trajectory))
+    const originalLedger = readFileSync(ledgerPath, 'utf8')
+    const originalTrajectory = readFileSync(trajectoryPath, 'utf8')
+    const revision = store.revision(workspace)
+    expect(store.reviews()[0]).toMatchObject({ suggestions: 1, suggestionIds: [live] })
+    expect(store.trajectories()[0]!.suggestionIds).toEqual([live])
+    expect(store.suggestion(workspace, live).trajectories[0]!.suggestionIds).toEqual([live])
+    expect(store.trajectory(trajectoryId).suggestionIds).toEqual([live])
+    expect(store.trajectory(trajectoryId).annotations[0]!.suggestionIds).toBeUndefined()
+    expect(store.evidencePack(workspace, { suggestionId: live }).excerpts[0]!.annotations[0]!.suggestionIds).toBeUndefined()
+    expect(store.revision(workspace)).toBe(revision)
+    expect(readFileSync(ledgerPath, 'utf8')).toBe(originalLedger)
+    expect(readFileSync(trajectoryPath, 'utf8')).toBe(originalTrajectory)
+    // The next ordinary locked write persists the normalized index.
+    await store.pinTrajectory(trajectoryId, true)
+    const saved = JSON.parse(readFileSync(ledgerPath, 'utf8')) as LedgerFile
+    expect(saved.reviews[0]).toMatchObject({ suggestions: 1, suggestionIds: [live] })
+    expect(saved.trajectories[0]!.suggestionIds).toEqual([live])
+  })
+
+  it('preserves evidence-only review counts and legacy reviews with no suggestion links', async () => {
+    write(join(home, 'skills', 'release-notes', 'SKILL.md'), skill('release-notes'))
+    const store = service()
+    await store.recordReview(workspace, review())
+    const input = review()
+    input.suggestions[0]!.confidence = 0.75
+    await store.recordReview(workspace, input)
+    expect(store.reviews()[0]).toMatchObject({ suggestions: 0, suggestionIds: [store.suggestions()[0]!.id] })
+    const ledgerPath = join(data, 'skills', 'ledger.json')
+    const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8')) as LedgerFile
+    delete ledger.reviews[1]!.suggestionIds
+    writeFileSync(ledgerPath, JSON.stringify(ledger))
+    expect(store.reviews()[1]).toMatchObject({ suggestions: 1 })
+    await store.deleteSuggestion(store.suggestions()[0]!.id)
+    expect(store.reviews().map(entry => entry.suggestions)).toEqual([0, 1])
   })
 
   it('puts a suggestion whose draft write died with the previous Host back to pending', async () => {

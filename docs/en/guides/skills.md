@@ -52,6 +52,8 @@ On wide screens, the Pending and Done lists scroll independently of the selected
 
 **Pending** lists what waits for you: suggestions, and drafts written for a skill directly. **Done** keeps what was adopted, dismissed, expired or invalidated. **Evidence** lists the conversations reviews read. The sparkle button, **Review this conversation**, reviews the current conversation now instead of waiting for it to pause.
 
+Deleting a suggestion removes its links from review records and evidence, while keeping the recorded conversation and test cases. Old records with deleted suggestion links are filtered automatically when read. If a suggestion is deleted while its page is open, the detail shows a deleted notice; other loading failures can be retried.
+
 | A suggestion and its evidence | Its draft, backtested |
 |---|---|
 | ![Evolution, Pending: the suggestion to update release-notes, with its evidence folded out](../../assets/skills-v0.5.34/en/skills-suggestion.jpg) | ![The draft under the suggestion: its notes and changes, the backtest Current 40 → Draft 93 +53, and the diff](../../assets/skills-v0.5.34/en/skills-draft.jpg) |
@@ -144,9 +146,12 @@ Skills has its own page under **Plugins → dsh-mnemon**, like every component, 
 | **Suggest skill improvements** | On | Allow reviews to improve existing skills; reviews pause when both suggestion types are off |
 | **New skill destination** | User | Choose User, Project or Follow storage; saved with **Apply**, reset with **Discard**. Existing skill improvements keep their original file |
 | **Backtest drafts** | On | Compare each new draft with the current version on its test cases |
+| **Draft generation** | 32,768 / 65,536 tokens | First attempt / one larger retry after truncation; saved with **Apply** and available with self-evolution off |
 | **Review parameters** | — | The thresholds above, folded, applied together with **Apply** |
 | **In the conversation** | On | Show the **Turn skills** line under each turn |
 | **Sidebar entry** | Off | Show Skills as its own sidebar entry instead of in the Memory System |
+
+Under **Draft generation**, set **Draft output token limit** and **Retry output token limit** to budgets your model provider supports, including reasoning and the complete `SKILL.md`. They are separate so retries never silently double your chosen limit. A retry limit equal to or below the first disables the truncation retry. There are at most two attempts, shared with the existing file-validation repair. Truncated output is discarded; only a complete, validated draft is saved, and the installed skill changes only after adoption. If generation fails, the error gives the attempted budgets and source file size. Lower a budget rejected by your provider; for a file that still cannot fit, shorten the skill or choose a model with a larger output limit. See [Skills settings](../reference/configuration.md#skills-settings) for the exact keys and ranges.
 
 `skills.targetScope` defaults to `user` to preserve existing installations: upgrading or changing storage scope does not move new skill writes to another root. Choose `storage` explicitly to follow storage scope. New suggestions record their resolved destination; drafts and redrafts keep that destination, and adoption uses the draft unless you explicitly choose another root. Suggestions from older versions without a destination use the current setting when drafted; existing drafts retain their recorded root. Improvements always write back to their original `baseKey`, regardless of this setting or a destination override.
 

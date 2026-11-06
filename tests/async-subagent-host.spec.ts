@@ -142,11 +142,13 @@ async function harness(respond: (options: GenerateOptions) => Response | Promise
     output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
     async execute(_args, execution) {
       if (execution.agent === undefined) throw new Error('test tool requires an Agent')
-      const subagents = ctx.subagents as unknown as { startContinuable?: (spec: unknown) => Promise<unknown>; startActivation?: (spec: unknown) => Promise<{ childId: string; messageId?: string }> }
+      const subagents = ctx.subagents as unknown as { rootOf?: unknown; startContinuable?: (spec: unknown) => Promise<unknown>; startActivation?: (spec: unknown) => Promise<{ childId: string; messageId?: string }> }
       const spec = { provider: 'spawn', label: 'Recall task', request: { parent: execution.agent, prompt: [{ type: 'text', text: 'Recall release history.' }] }, signal: execution.signal }
       // DSH 0.2.0 starts a continuable child; DSH 0.2.1 starts every child as an activation, here delivered to the parent.
       if (typeof subagents.startContinuable === 'function') return subagents.startContinuable(spec)
-      const activation = await subagents.startActivation!({ ...spec, delivery: 'parent' })
+      const activation = await subagents.startActivation!(typeof subagents.rootOf === 'function'
+        ? { provider: spec.provider, label: spec.label, ...spec.request, signal: spec.signal, delivery: 'parent' }
+        : { ...spec, delivery: 'parent' })
       return { childId: activation.childId, messageId: activation.messageId }
     },
   })
