@@ -12,6 +12,7 @@ For new evaluations, commit the reusable harness and workload generator to [`scr
 
 | Record / 记录 | Scope / 范围 |
 |---|---|
+| [v0.5.42 release](./release-v0.5.42/README.md) / [中文](./release-v0.5.42/README.zh-CN.md) | Frozen candidates, fresh installation, real npm upgrades and Runtime data retention on official Hosts and the fixed source commit / 冻结候选、官方 Host 与指定源码 commit 的全新安装、真实 npm 升级及 Runtime 数据保留 |
 | [v0.5.41 release](./release-v0.5.41/README.md) / [中文](./release-v0.5.41/README.zh-CN.md) | Five official Hosts and the reporter-identified source commit: twelve fresh/upgrade scenarios, exact package and data retention checks, and recovery from the #554 startup failure / 五个官方 Host 与报告者所指源码 commit 的十二个安装升级场景、包与数据保留核对，以及 #554 启动故障恢复 |
 | [v0.5.40 release](./release-v0.5.40/README.md) / [中文](./release-v0.5.40/README.zh-CN.md) | Frozen candidates, published RC1, retained Hosts, fresh installs and upgrades / 冻结候选、正式 RC1、保留宿主、全新安装与升级 |
 | [v0.5.39 release](./release-v0.5.39/README.md) / [中文](./release-v0.5.39/README.zh-CN.md) | Frozen candidates, five DSH hosts, fresh installs, upgrades and retained Runtime data / 冻结候选、五个 DSH 宿主、全新安装、升级及 Runtime 数据保留 |

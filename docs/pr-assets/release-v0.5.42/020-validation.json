@@ -1,0 +1,1227 @@
+{
+  "schemaVersion": 2,
+  "verificationDate": "2026-11-06",
+  "timezone": "Asia/Shanghai",
+  "completedAt": "2026-11-06T14:43:49.920619+00:00",
+  "result": "passed",
+  "scenarioCount": 2,
+  "node": "v24.22.2",
+  "platform": "macOS-27.0.1-arm64-arm-64bit",
+  "uiAutomation": "mcp__cua_repl via Chrome extension in dedicated tabs, with independent disposable DSH Web profiles",
+  "candidateRevision": "22357a693264ad88e50476e99af9c7ee60233bc3",
+  "baseReleaseRevision": "0db25213d128dfeb420163de20fd41a787366c87",
+  "candidateManifestSha256": "a8fb3b7cca6ca170754a465a9f53287165686ae46e61230e1c5fc14d3099adde",
+  "unchangedComponentSource": "Fifteen immutable npm package versions from the exact Starter composition",
+  "host": {
+    "dshVersion": "0.2.0-rc.2",
+    "npmPackage": "@deepseek-ai/dsh",
+    "hostManifestSha256": "0a85203e3e907dd2e3bec34324a2494758ca6cdee234b07090a7c8df0b11acac",
+    "hostDependencyProblems": 0,
+    "fresh": {
+      "ui": {
+        "runningVersion": "0.5.42",
+        "healthySystemStatus": true,
+        "addPlugin": true,
+        "enableNow": true,
+        "console": {
+          "totalErrors": 3,
+          "applicationOriginErrors": 0,
+          "nonApplicationBrowserExtensionErrors": 3
+        }
+      },
+      "installed": {
+        "verifiedAt": "2026-11-06T14:39:54.039364+00:00",
+        "pinnedCount": 19,
+        "pinnedVersions": {
+          "dsh-mnemon": "0.5.42",
+          "dsh-mnemon-provider-byterover": "0.5.6",
+          "dsh-mnemon-provider-hindsight": "0.5.7",
+          "dsh-mnemon-provider-holographic": "0.5.7",
+          "dsh-mnemon-provider-honcho": "0.5.5",
+          "dsh-mnemon-provider-mem0": "0.5.5",
+          "dsh-mnemon-provider-mnemon-native": "0.5.10",
+          "dsh-mnemon-provider-openviking": "0.5.10",
+          "dsh-mnemon-provider-retaindb": "0.5.6",
+          "dsh-mnemon-provider-supermemory": "0.5.5",
+          "dsh-mnemon-source-documents": "0.6.0",
+          "dsh-mnemon-source-memory-spaces": "0.5.25",
+          "dsh-mnemon-source-runtime": "0.5.18",
+          "dsh-mnemon-source-skills": "0.5.9",
+          "dsh-mnemon-strategy-auto-capture": "0.5.5",
+          "dsh-mnemon-strategy-default-three-tier": "0.5.12",
+          "dsh-mnemon-strategy-general": "0.5.1",
+          "dsh-mnemon-strategy-light-context": "0.5.6",
+          "dsh-mnemon-strategy-scoped": "0.5.5"
+        },
+        "allPinnedVersionsMatch": true,
+        "runtimeHashes": {
+          "memories.json": {
+            "sha256": "7c1051f6e2bc3943b7c1dbe4da229694455681b8875a346c99279e555edb733f",
+            "bytes": 36
+          },
+          "MEMORY.md": {
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "bytes": 0
+          },
+          "USER.md": {
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "bytes": 0
+          }
+        },
+        "selectedCandidates": [
+          {
+            "name": "dsh-mnemon",
+            "version": "0.5.42",
+            "filename": "dsh-mnemon-0.5.42.tgz",
+            "sha256": "4a0f618a26610e6a90b7c28f76bf127569c3b1e8d1a01ba95b1317e548fd4fda",
+            "integrity": "sha512-4nZjPMLKEKFd+lGSliSSBT/HjUHTbUDGxMluenQbSXdWn61N0DjjvfBSC5UAlxPaKpUs7Roon70WoQYWAgmd6Q==",
+            "bytes": 543227,
+            "fileCount": 68,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          },
+          {
+            "name": "dsh-mnemon-source-documents",
+            "version": "0.6.0",
+            "filename": "dsh-mnemon-source-documents-0.6.0.tgz",
+            "sha256": "314ecfabac1da79151353d08115df5288bb93084fb3b886353a91586a81fcae8",
+            "integrity": "sha512-1Yi5e42mXWmW3fdhDhyb+uPiObcWARSEBM/AGLKIRzqX5U8dOjOpkRfUqnzAlWAFNX6HP8x6m3thSxFaizHubw==",
+            "bytes": 46732,
+            "fileCount": 19,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          },
+          {
+            "name": "dsh-mnemon-source-runtime",
+            "version": "0.5.18",
+            "filename": "dsh-mnemon-source-runtime-0.5.18.tgz",
+            "sha256": "6401e4c69d00e8aabb2cffa0e1490045ac5f4c4511ddeabda47c5f38c0b1eab8",
+            "integrity": "sha512-jMZCt6fyDCUC23zTkWVUjri3D8M+7B2XYIoxvEKjKeuz8es3xLBPwqzyC6UqD+YxJmPwzgcIEy8hStfeEsdvPA==",
+            "bytes": 32248,
+            "fileCount": 21,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          },
+          {
+            "name": "dsh-mnemon-source-skills",
+            "version": "0.5.9",
+            "filename": "dsh-mnemon-source-skills-0.5.9.tgz",
+            "sha256": "ededfcd02f80c58b870fc79d7acaa3bfe6d529a3f7a2ca6cd0a8e1431d1c628b",
+            "integrity": "sha512-y2aPIoRSBmapbW/Z4Ez9Sw+ZtF0+zJnrYWWu5902rm/bZg3geKwoPNG6b2p/xX/Y8m9eQcvMIM933mGOlFNxtg==",
+            "bytes": 155433,
+            "fileCount": 30,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          }
+        ],
+        "selectedFileCount": 138
+      },
+      "screenshot": "docs/pr-assets/release-v0.5.42/020-fresh-status.jpg"
+    },
+    "upgrade": {
+      "previousVersion": "0.5.41",
+      "previousSource": "https://registry.npmjs.org",
+      "canary": "Synthetic Mnemon 0.5.42 020 working memory canary: retain this record through update and restart.",
+      "userProfileCanary": "Synthetic Mnemon 0.5.42 020 user profile canary: retain this record through update and restart.",
+      "before": {
+        "verifiedAt": "2026-11-06T14:39:53.921913+00:00",
+        "pinnedCount": 19,
+        "pinnedVersions": {
+          "dsh-mnemon": "0.5.41",
+          "dsh-mnemon-provider-byterover": "0.5.6",
+          "dsh-mnemon-provider-hindsight": "0.5.7",
+          "dsh-mnemon-provider-holographic": "0.5.7",
+          "dsh-mnemon-provider-honcho": "0.5.5",
+          "dsh-mnemon-provider-mem0": "0.5.5",
+          "dsh-mnemon-provider-mnemon-native": "0.5.10",
+          "dsh-mnemon-provider-openviking": "0.5.10",
+          "dsh-mnemon-provider-retaindb": "0.5.6",
+          "dsh-mnemon-provider-supermemory": "0.5.5",
+          "dsh-mnemon-source-documents": "0.5.13",
+          "dsh-mnemon-source-memory-spaces": "0.5.25",
+          "dsh-mnemon-source-runtime": "0.5.17",
+          "dsh-mnemon-source-skills": "0.5.8",
+          "dsh-mnemon-strategy-auto-capture": "0.5.5",
+          "dsh-mnemon-strategy-default-three-tier": "0.5.12",
+          "dsh-mnemon-strategy-general": "0.5.1",
+          "dsh-mnemon-strategy-light-context": "0.5.6",
+          "dsh-mnemon-strategy-scoped": "0.5.5"
+        },
+        "allPinnedVersionsMatch": true,
+        "runtimeHashes": {
+          "memories.json": {
+            "sha256": "6e6f4f75d4e62d133edf936dccf0d9bb9f5cbcc32b2a25970e464033fba8c457",
+            "bytes": 598
+          },
+          "MEMORY.md": {
+            "sha256": "235390de5199a48b75b6e2d93e628e336cc50f031a313306bb2a1f18b1fee571",
+            "bytes": 98
+          },
+          "USER.md": {
+            "sha256": "4677ce45e7be0cbb90a3ab75fd56dae1b65c207cfc2d7bafb97bc0442f54b74a",
+            "bytes": 96
+          }
+        },
+        "workingMemoryCanary": "Synthetic Mnemon 0.5.42 020 working memory canary: retain this record through update and restart.",
+        "userProfileCanary": "Synthetic Mnemon 0.5.42 020 user profile canary: retain this record through update and restart.",
+        "bothCanariesMatch": true,
+        "previousInstallLogSha256": "74fc9c926e4ec2e818f2c166f1f946700ddf95ffb5ce84025cf26b47b806f6d6"
+      },
+      "installed": {
+        "verifiedAt": "2026-11-06T14:40:59.099276+00:00",
+        "pinnedCount": 19,
+        "pinnedVersions": {
+          "dsh-mnemon": "0.5.42",
+          "dsh-mnemon-provider-byterover": "0.5.6",
+          "dsh-mnemon-provider-hindsight": "0.5.7",
+          "dsh-mnemon-provider-holographic": "0.5.7",
+          "dsh-mnemon-provider-honcho": "0.5.5",
+          "dsh-mnemon-provider-mem0": "0.5.5",
+          "dsh-mnemon-provider-mnemon-native": "0.5.10",
+          "dsh-mnemon-provider-openviking": "0.5.10",
+          "dsh-mnemon-provider-retaindb": "0.5.6",
+          "dsh-mnemon-provider-supermemory": "0.5.5",
+          "dsh-mnemon-source-documents": "0.6.0",
+          "dsh-mnemon-source-memory-spaces": "0.5.25",
+          "dsh-mnemon-source-runtime": "0.5.18",
+          "dsh-mnemon-source-skills": "0.5.9",
+          "dsh-mnemon-strategy-auto-capture": "0.5.5",
+          "dsh-mnemon-strategy-default-three-tier": "0.5.12",
+          "dsh-mnemon-strategy-general": "0.5.1",
+          "dsh-mnemon-strategy-light-context": "0.5.6",
+          "dsh-mnemon-strategy-scoped": "0.5.5"
+        },
+        "allPinnedVersionsMatch": true,
+        "runtimeHashes": {
+          "memories.json": {
+            "sha256": "6e6f4f75d4e62d133edf936dccf0d9bb9f5cbcc32b2a25970e464033fba8c457",
+            "bytes": 598
+          },
+          "MEMORY.md": {
+            "sha256": "235390de5199a48b75b6e2d93e628e336cc50f031a313306bb2a1f18b1fee571",
+            "bytes": 98
+          },
+          "USER.md": {
+            "sha256": "4677ce45e7be0cbb90a3ab75fd56dae1b65c207cfc2d7bafb97bc0442f54b74a",
+            "bytes": 96
+          }
+        },
+        "workingMemoryCanary": "Synthetic Mnemon 0.5.42 020 working memory canary: retain this record through update and restart.",
+        "userProfileCanary": "Synthetic Mnemon 0.5.42 020 user profile canary: retain this record through update and restart.",
+        "bothCanariesMatch": true,
+        "runtimeMatchesBefore": true,
+        "selectedCandidates": [
+          {
+            "name": "dsh-mnemon",
+            "version": "0.5.42",
+            "filename": "dsh-mnemon-0.5.42.tgz",
+            "sha256": "4a0f618a26610e6a90b7c28f76bf127569c3b1e8d1a01ba95b1317e548fd4fda",
+            "integrity": "sha512-4nZjPMLKEKFd+lGSliSSBT/HjUHTbUDGxMluenQbSXdWn61N0DjjvfBSC5UAlxPaKpUs7Roon70WoQYWAgmd6Q==",
+            "bytes": 543227,
+            "fileCount": 68,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          },
+          {
+            "name": "dsh-mnemon-source-documents",
+            "version": "0.6.0",
+            "filename": "dsh-mnemon-source-documents-0.6.0.tgz",
+            "sha256": "314ecfabac1da79151353d08115df5288bb93084fb3b886353a91586a81fcae8",
+            "integrity": "sha512-1Yi5e42mXWmW3fdhDhyb+uPiObcWARSEBM/AGLKIRzqX5U8dOjOpkRfUqnzAlWAFNX6HP8x6m3thSxFaizHubw==",
+            "bytes": 46732,
+            "fileCount": 19,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          },
+          {
+            "name": "dsh-mnemon-source-runtime",
+            "version": "0.5.18",
+            "filename": "dsh-mnemon-source-runtime-0.5.18.tgz",
+            "sha256": "6401e4c69d00e8aabb2cffa0e1490045ac5f4c4511ddeabda47c5f38c0b1eab8",
+            "integrity": "sha512-jMZCt6fyDCUC23zTkWVUjri3D8M+7B2XYIoxvEKjKeuz8es3xLBPwqzyC6UqD+YxJmPwzgcIEy8hStfeEsdvPA==",
+            "bytes": 32248,
+            "fileCount": 21,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          },
+          {
+            "name": "dsh-mnemon-source-skills",
+            "version": "0.5.9",
+            "filename": "dsh-mnemon-source-skills-0.5.9.tgz",
+            "sha256": "ededfcd02f80c58b870fc79d7acaa3bfe6d529a3f7a2ca6cd0a8e1431d1c628b",
+            "integrity": "sha512-y2aPIoRSBmapbW/Z4Ez9Sw+ZtF0+zJnrYWWu5902rm/bZg3geKwoPNG6b2p/xX/Y8m9eQcvMIM933mGOlFNxtg==",
+            "bytes": 155433,
+            "fileCount": 30,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          }
+        ],
+        "selectedFileCount": 138
+      },
+      "restarted": {
+        "verifiedAt": "2026-11-06T14:42:18.029995+00:00",
+        "pinnedCount": 19,
+        "pinnedVersions": {
+          "dsh-mnemon": "0.5.42",
+          "dsh-mnemon-provider-byterover": "0.5.6",
+          "dsh-mnemon-provider-hindsight": "0.5.7",
+          "dsh-mnemon-provider-holographic": "0.5.7",
+          "dsh-mnemon-provider-honcho": "0.5.5",
+          "dsh-mnemon-provider-mem0": "0.5.5",
+          "dsh-mnemon-provider-mnemon-native": "0.5.10",
+          "dsh-mnemon-provider-openviking": "0.5.10",
+          "dsh-mnemon-provider-retaindb": "0.5.6",
+          "dsh-mnemon-provider-supermemory": "0.5.5",
+          "dsh-mnemon-source-documents": "0.6.0",
+          "dsh-mnemon-source-memory-spaces": "0.5.25",
+          "dsh-mnemon-source-runtime": "0.5.18",
+          "dsh-mnemon-source-skills": "0.5.9",
+          "dsh-mnemon-strategy-auto-capture": "0.5.5",
+          "dsh-mnemon-strategy-default-three-tier": "0.5.12",
+          "dsh-mnemon-strategy-general": "0.5.1",
+          "dsh-mnemon-strategy-light-context": "0.5.6",
+          "dsh-mnemon-strategy-scoped": "0.5.5"
+        },
+        "allPinnedVersionsMatch": true,
+        "runtimeHashes": {
+          "memories.json": {
+            "sha256": "6e6f4f75d4e62d133edf936dccf0d9bb9f5cbcc32b2a25970e464033fba8c457",
+            "bytes": 598
+          },
+          "MEMORY.md": {
+            "sha256": "235390de5199a48b75b6e2d93e628e336cc50f031a313306bb2a1f18b1fee571",
+            "bytes": 98
+          },
+          "USER.md": {
+            "sha256": "4677ce45e7be0cbb90a3ab75fd56dae1b65c207cfc2d7bafb97bc0442f54b74a",
+            "bytes": 96
+          }
+        },
+        "workingMemoryCanary": "Synthetic Mnemon 0.5.42 020 working memory canary: retain this record through update and restart.",
+        "userProfileCanary": "Synthetic Mnemon 0.5.42 020 user profile canary: retain this record through update and restart.",
+        "bothCanariesMatch": true,
+        "runtimeMatchesBefore": true,
+        "selectedCandidates": [
+          {
+            "name": "dsh-mnemon",
+            "version": "0.5.42",
+            "filename": "dsh-mnemon-0.5.42.tgz",
+            "sha256": "4a0f618a26610e6a90b7c28f76bf127569c3b1e8d1a01ba95b1317e548fd4fda",
+            "integrity": "sha512-4nZjPMLKEKFd+lGSliSSBT/HjUHTbUDGxMluenQbSXdWn61N0DjjvfBSC5UAlxPaKpUs7Roon70WoQYWAgmd6Q==",
+            "bytes": 543227,
+            "fileCount": 68,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          },
+          {
+            "name": "dsh-mnemon-source-documents",
+            "version": "0.6.0",
+            "filename": "dsh-mnemon-source-documents-0.6.0.tgz",
+            "sha256": "314ecfabac1da79151353d08115df5288bb93084fb3b886353a91586a81fcae8",
+            "integrity": "sha512-1Yi5e42mXWmW3fdhDhyb+uPiObcWARSEBM/AGLKIRzqX5U8dOjOpkRfUqnzAlWAFNX6HP8x6m3thSxFaizHubw==",
+            "bytes": 46732,
+            "fileCount": 19,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          },
+          {
+            "name": "dsh-mnemon-source-runtime",
+            "version": "0.5.18",
+            "filename": "dsh-mnemon-source-runtime-0.5.18.tgz",
+            "sha256": "6401e4c69d00e8aabb2cffa0e1490045ac5f4c4511ddeabda47c5f38c0b1eab8",
+            "integrity": "sha512-jMZCt6fyDCUC23zTkWVUjri3D8M+7B2XYIoxvEKjKeuz8es3xLBPwqzyC6UqD+YxJmPwzgcIEy8hStfeEsdvPA==",
+            "bytes": 32248,
+            "fileCount": 21,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          },
+          {
+            "name": "dsh-mnemon-source-skills",
+            "version": "0.5.9",
+            "filename": "dsh-mnemon-source-skills-0.5.9.tgz",
+            "sha256": "ededfcd02f80c58b870fc79d7acaa3bfe6d529a3f7a2ca6cd0a8e1431d1c628b",
+            "integrity": "sha512-y2aPIoRSBmapbW/Z4Ez9Sw+ZtF0+zJnrYWWu5902rm/bZg3geKwoPNG6b2p/xX/Y8m9eQcvMIM933mGOlFNxtg==",
+            "bytes": 155433,
+            "fileCount": 30,
+            "allFileSha256Match": true,
+            "allExecutableBitsMatch": true
+          }
+        ],
+        "selectedFileCount": 138
+      },
+      "ui": {
+        "originalRunningVersion": "0.5.41",
+        "offeredVersion": "0.5.42",
+        "syntheticMemoriesCreatedInUi": 2,
+        "installedVersion": "0.5.42",
+        "restartRequiredVisible": true,
+        "runningBeforeRestart": "0.5.41",
+        "runningAfterRestart": "0.5.42",
+        "healthySystemStatusAfterRestart": true,
+        "memoryRetainedVisible": true,
+        "userProfileRetainedVisible": true,
+        "consoleAfterReopen": {
+          "totalErrors": 3,
+          "applicationOriginErrors": 0,
+          "nonApplicationBrowserExtensionErrors": 3
+        },
+        "reopenAuthority": "localhost"
+      },
+      "screenshots": {
+        "memoryBefore": "docs/pr-assets/release-v0.5.42/020-upgrade-memory-before.jpg",
+        "offered": "docs/pr-assets/release-v0.5.42/020-upgrade-offered.jpg",
+        "updated": "docs/pr-assets/release-v0.5.42/020-upgrade-updated.jpg",
+        "restartedStatus": "docs/pr-assets/release-v0.5.42/020-upgrade-restarted-status.jpg",
+        "memoryPreserved": "docs/pr-assets/release-v0.5.42/020-upgrade-memory-preserved.jpg"
+      }
+    },
+    "candidateContents": [
+      {
+        "name": "dsh-mnemon",
+        "version": "0.5.42",
+        "filename": "dsh-mnemon-0.5.42.tgz",
+        "sha256": "4a0f618a26610e6a90b7c28f76bf127569c3b1e8d1a01ba95b1317e548fd4fda",
+        "integrity": "sha512-4nZjPMLKEKFd+lGSliSSBT/HjUHTbUDGxMluenQbSXdWn61N0DjjvfBSC5UAlxPaKpUs7Roon70WoQYWAgmd6Q==",
+        "bytes": 543227,
+        "fileCount": 68,
+        "allFileSha256Match": true,
+        "allExecutableBitsMatch": true,
+        "files": [
+          {
+            "file": "LICENSE",
+            "sha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/bundle.js",
+            "sha256": "8d319822541d8bddac5d295f58a0cde0e3dc783068df0e5e4d49d8544af4a3ac",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/client.js",
+            "sha256": "123843782b64a8fdc7c5582fe1feba1e8f6191ab837f9c0dfce83da244ae71db",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/contracts.js",
+            "sha256": "024ad7318227336ef8816b48457b63593bc56e20bb74c6ffd59244425d23a779",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/core.js",
+            "sha256": "e2d32e8fe8c16ce90d0bcade5782feb4ce20bc9b716faa95e8c5432e768b03db",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/definitions-DU7MLBhu.js",
+            "sha256": "510cd51f4b1dfe1ffbd47ba8fb1cbbdbf87002531014c3dc462dec1a8ebcbcb2",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/extension-sdk.js",
+            "sha256": "b70c0c276f4fb8926c88dc84e2374f4ca98f0cbe5b289624a33c976dca286a11",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/index.js",
+            "sha256": "9c551f888b255b552a8728592e9ee1a826adac092c5278561974ce1a2006cf93",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/runtime-DmL0It3P.js",
+            "sha256": "74d762eb906c2989a584df63dfe823f490f4e2a9a152ef0f310ab3a2d81985a1",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/starter-resolution-B5mdKlvf.js",
+            "sha256": "145394c8864478d06e4763cb9c5bf051c0a37a8d4f3c325ef1f7f54cf4f23c74",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/starter.js",
+            "sha256": "52c7c447f1815e6774d3a648fa7a46d34e8cfc6f72e451bc213717ff1b47ea38",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/strategy-configuration-CKP2kRss.js",
+            "sha256": "a06fab7d856de5689df29d29be768e1730f14eee1d6736c346240e8b27680d21",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/testing.js",
+            "sha256": "aecc89be6ddd5537f386b0a56fb285ec2bf894052fb1e27d9eb8689b26cd0bbb",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "locale/en.json",
+            "sha256": "53b4411680fd544bed77843c3356a8e115801fbc0e4f10f28226c821835b5f1d",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "package.json",
+            "sha256": "da6670f24502b4487ddaa33549512b8f7761ce861baf6156159c725dd5cdd080",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "locale/zh.json",
+            "sha256": "f1f60f2c2b7ac12b52b9fb91b6ecc564798536611879ce4c3329a4f9e4bafd85",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "README.md",
+            "sha256": "2fd04e73a58de02dcb6b7a37a8827328677cfb97b4b30b3a56504aec9286b4cb",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "README.zh-CN.md",
+            "sha256": "21f708115fae73e481cbc6c86e8c94235e4b0492af159d326583b07bbcc50a11",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "SECURITY.md",
+            "sha256": "700562eaa915d083050a30b6f58292c8ce5c06dd83fde6cd7cfadef228dd3fb1",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "THIRD_PARTY_NOTICES.md",
+            "sha256": "32ebd32c67f4316e33e4214a0504ebe6dabeb1fef00106de05e457a97cb80926",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "bin/repair-legacy-session.mjs",
+            "sha256": "2465c57aead1426a520db45e231278a0fb7d5afecb01f4c4c114b1b3814cf4eb",
+            "executableBits": "0o111"
+          },
+          {
+            "file": "lib/types/src/bundle.d.ts",
+            "sha256": "602028377ee0735110c68e0807aeea407a05b021b5c87ec66af3e4b4d83e9033",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/client/component-ui.d.ts",
+            "sha256": "b8b2137b5e9eab1bbcaed491ab2edbcb23e71e1d18eadf1068cb10f4efdfb800",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/host/config-values.d.ts",
+            "sha256": "d6d51c8288cf72085bd7b3194e79ffe3e2ed9675604efb3706dfd74b24169a98",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/host/config.d.ts",
+            "sha256": "e89b437600120c86b8dcd6720c7b99a26561f5512125dc2a2ca6f6454ebc39f4",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/core/definitions.d.ts",
+            "sha256": "c1426396948e63015b25a8e5aaccdf65c43ddf33055de833ae90a33cb76a2fec",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/host/display-mode.d.ts",
+            "sha256": "9cfd641ad2162703dea794b613f98a6a42b3007c8aeb4e0f6b65b82ad5a4d678",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/client/extension-sdk.d.ts",
+            "sha256": "ac6e9034bbcfad7dfd877c6b9298bce500ad75d5e095568eca29f5bf29a56473",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/client/feedback.d.ts",
+            "sha256": "e532a8e2e0d60d0da5d8e63238e6eca88da3244d2560a749a3380e662b543792",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/client/GlobalLocationSetting.d.ts",
+            "sha256": "3cf62d774fa8406057c3406682a8a87a61ab62232f87b85163e20351c2e4d131",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/client/index.d.ts",
+            "sha256": "d43c82958f8bb83ef5cff5524813d65e3e0b25b688914b04283d238ce8e13f6f",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/core/contracts/index.d.ts",
+            "sha256": "861b85070c37483c4c578fd2f37ddb616cb70522eb409fbeb391ee2850058b4e",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/index.d.ts",
+            "sha256": "a30ee3bce8e37249b8461b925cc0e626942d4a0cf6233c13a3f0d010f6d5ad47",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/sdk/index.d.ts",
+            "sha256": "b46d181e8677f404f0dceade0573bc7d349834d7076fed3d2243876b7e6b8237",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/sdk/input.d.ts",
+            "sha256": "3264d99270796e102939d3d412f4c38c220e8c4f79ac6d001bf5fb374248d246",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/sdk/install.d.ts",
+            "sha256": "2b3e0903128d4b79861233772966fce157bd18bd8234beadcbdef4bcfc7ca93e",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/host/live-config.d.ts",
+            "sha256": "e58b26ffaa6b08d5bd10e3678554f99d38880a8bc3e1b7c21c42040cc46f496f",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/client/locales.d.ts",
+            "sha256": "c05548f29dc84acd2430d1dab4349257476577fb155e4d5d12eae61c0ab6f7c4",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/host/memory-tools.d.ts",
+            "sha256": "57f4e231607ef98e5cc6311758a55af25a5608007c9ac2c839c154390ee5b162",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/client/MnemonDialog.d.ts",
+            "sha256": "cf9de6f80a98d6e527860d7077ce5cc5098b2beda55aecf25790403974bd1c34",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/client/MnemonLogo.d.ts",
+            "sha256": "c1532a4f925703354772392d59b767cba82db7cfa0ede0ed2c0c4ad7f952a405",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/client/page-client.d.ts",
+            "sha256": "263491e8acfd741b24da984325ad144f529121a660cc45768a427b64a5298945",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/client/page-controls.d.ts",
+            "sha256": "819a7ada7ad3cf04dc10786b2c91bd1ab2593af9925b24ceaf8b9f267c89d423",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/client/page-kit.d.ts",
+            "sha256": "ce40c66a2409f540adea88e82183bd17cbcbd20d7e0a3796d150283f34082b12",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/core/contracts/plugin.d.ts",
+            "sha256": "430b6c765482d75525a62c8515118e2926eb218704a1ebee73743d347f63e406",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/core/plugin.d.ts",
+            "sha256": "73a8b54a714b0f680507a4c935a3fc9b17918e106bf901883d1226d69729d6a2",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/host/plugin.d.ts",
+            "sha256": "348d0015c748f9678607d3e033d940fab89eae9dfd6aa453f7e5eec1ed5f4a3c",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/host/protocol.d.ts",
+            "sha256": "2c64bf3cff0353c73a00930a604a45b678a8a1df5e30d791c36add136916aed5",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/sdk/service.d.ts",
+            "sha256": "7ef3753a9dc3537e852c483bd00055de83c207d7cd2e327d05a9517787cac15d",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/client/settings-controls.d.ts",
+            "sha256": "6de7ad44140d60914cf7bf7e4183d91d77e5d9710ee40dd6c0b83f8f3ad6c872",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/client/settings-panel.d.ts",
+            "sha256": "3d3ee92739b1c245996f84ff186170c505999a5d286c7e85f8b4e1ecc2eaae85",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/client/source-contracts.d.ts",
+            "sha256": "253309b6697bfb45e6560bcebb4c873c7b4980916350f35bdd40fde303b916a0",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/client/source-pages.d.ts",
+            "sha256": "9093041163fccc7afddb86f30d6434a14e29f030e887e24ee400023f97969430",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/host/starter-components.d.ts",
+            "sha256": "72df6416c208396e53788880b3fd7cbed249320584d207c8928dc949c9320458",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/starter.d.ts",
+            "sha256": "e2f3f8e56d03afd711f883db3784a47930c59b2985a9ce4918bce1f06c4e3a51",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/sdk/storage-lock.d.ts",
+            "sha256": "9072c9369822413d48c46c929530e950cdc07cc03a05342e05a0730cea4e44f9",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/sdk/strategy-configuration.d.ts",
+            "sha256": "e87fea784b5b29bfcffaabe448fec056eaa3a0a64baf315b3a9f0a647d83308a",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/host/sync-rules.d.ts",
+            "sha256": "d80282ed5b12128678dc93215260b07e79932d95c68825d6279fb12d60ed7a8b",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/core/contracts/task-agent-model.d.ts",
+            "sha256": "0532a52be00c9fd7e941d29041c4d5dd96e4d42cac30f387088a18a3a14f0c41",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/sdk/testing.d.ts",
+            "sha256": "a157befcd6231af9e0915f26243f8c86178ddc99114c5d135ee04c85dc0f3279",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/client/ui-icons.d.ts",
+            "sha256": "65262c80dee9a62195eda0e79166449bff062bc1ee48595e54d50ab3955535e9",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/client/use-request-version.d.ts",
+            "sha256": "65bb1a8eddc167bdd3c730024b589792e2fe0535a6f770b81585ff85653cd78e",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/sdk/view-extensions.d.ts",
+            "sha256": "59e9242a069ade7b301aea496573162f3543cf36385cd3345ad93a35ab747ed8",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/host/view-protocol.d.ts",
+            "sha256": "e5a76a65a89454cf08c915a904e4e024af3937cae3a65a6f6d3419ffacfd7d71",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/client/view-styles.d.ts",
+            "sha256": "cebd26c73d5ba1bf720d201402380e3c47767141436d6d06b09db29566298637",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/core/contracts/view.d.ts",
+            "sha256": "3103553bc207dbc950c4f2d84dfa40dddf09c779a664c266b4bde8218c8ef1c9",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/src/sdk/workspace-storage.d.ts",
+            "sha256": "f28d2e65efb5a9f213e242926386b4f4765ea7e344bb8b6dbe10b5a61becb469",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "cordis.patch.yml",
+            "sha256": "889c12eec043d8a8394cfd59d1c18920d7e96905025ed053a5f11fbb6d54648a",
+            "executableBits": "0o0"
+          }
+        ]
+      },
+      {
+        "name": "dsh-mnemon-source-documents",
+        "version": "0.6.0",
+        "filename": "dsh-mnemon-source-documents-0.6.0.tgz",
+        "sha256": "314ecfabac1da79151353d08115df5288bb93084fb3b886353a91586a81fcae8",
+        "integrity": "sha512-1Yi5e42mXWmW3fdhDhyb+uPiObcWARSEBM/AGLKIRzqX5U8dOjOpkRfUqnzAlWAFNX6HP8x6m3thSxFaizHubw==",
+        "bytes": 46732,
+        "fileCount": 19,
+        "allFileSha256Match": true,
+        "allExecutableBitsMatch": true,
+        "files": [
+          {
+            "file": "LICENSE",
+            "sha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "presentation/page.module.css",
+            "sha256": "d941f807f4223a61e3e2f3e20824a262abb0566f1f8f1491d10ad9f02b8ee105",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "presentation/sidebar.module.css",
+            "sha256": "7ca556bb614331ebd23371e207fb3cce3547642df3f0c289dc2584323f8b88fd",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/client.js",
+            "sha256": "f17bae9f3cc0234d94aa62bc19bd303a5d917227d716fc9f33adf8fbc4fd740a",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/contracts.js",
+            "sha256": "f4115421719a39b9b65da6b3ce959545b1c03aaae4738ca06546818aad759d44",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/index.js",
+            "sha256": "90bb85a5e2a37d14a35087c43f99ad05c196957e8dec564b246ef18b2544e2e2",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "locale/en.json",
+            "sha256": "d30552d57460df8d884514e354cc6df986f958e371d9413fba189c41fb225d30",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "presentation/locales.json",
+            "sha256": "2c3525078ea4b33ee5ace07d5759438da4c4307302cb964f0db9c17e8430a272",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "package.json",
+            "sha256": "d5a4159dd0bb5cfc1b6d845daec178edda20a5c6a48b76235d44ff725b6b93d4",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "locale/zh.json",
+            "sha256": "b72b8c572460006983556a77d27fb08ae6e9c1c9be7728a3cd22a2c16c5f0fa9",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "README.md",
+            "sha256": "e3025a431c504505c57b2ba4347f7226b65f58a5b5de9a876db5797ffb314800",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client/api.d.ts",
+            "sha256": "ea500fd8d38d65cc20961ec6feb3cf69d738f1181c96c291f49430abe4a90120",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client.d.ts",
+            "sha256": "acc1d11738f4e6e2087d478c3bf16ec62acfcc764776a8689232daafa64c50c3",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/contracts.d.ts",
+            "sha256": "5573daf087fd860978c5662c782a3e47929e73658dd908c109a8aef37c21ceee",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/contracts.d.ts",
+            "sha256": "88e7425dd59db25c4ad4f69838ef6766e0ce2dec451c62bf3649f4881dd53e63",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/index.d.ts",
+            "sha256": "9c1db4713dccda8ea66570f732e663af5a65db00ddfcc2b2049dc1fd9bd4cada",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client/pages.d.ts",
+            "sha256": "22fdc777f3aa63cba96534b1262ea923c9f2edec8b9d6370c91942decb5129d0",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client/presentation.d.ts",
+            "sha256": "ab2d60fadb757382ebca11cbf58bab83daa35a22dd26aab8378071c0b6e9dd8a",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client/ui.d.ts",
+            "sha256": "90228c61b5b4fe8e87a67922014235e5bba3839cf8562fbf9aed2f2972e52ed4",
+            "executableBits": "0o0"
+          }
+        ]
+      },
+      {
+        "name": "dsh-mnemon-source-runtime",
+        "version": "0.5.18",
+        "filename": "dsh-mnemon-source-runtime-0.5.18.tgz",
+        "sha256": "6401e4c69d00e8aabb2cffa0e1490045ac5f4c4511ddeabda47c5f38c0b1eab8",
+        "integrity": "sha512-jMZCt6fyDCUC23zTkWVUjri3D8M+7B2XYIoxvEKjKeuz8es3xLBPwqzyC6UqD+YxJmPwzgcIEy8hStfeEsdvPA==",
+        "bytes": 32248,
+        "fileCount": 21,
+        "allFileSha256Match": true,
+        "allExecutableBitsMatch": true,
+        "files": [
+          {
+            "file": "LICENSE",
+            "sha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "presentation/page.module.css",
+            "sha256": "4f2b72a00aa58023e6e7dc25efa4c67b1e51951b6370db1bbaabd4f6907c1720",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "presentation/sidebar.module.css",
+            "sha256": "b3d1e9804e012627bf44d94c2e183d64f972cb1cbe5ee07784a8060baaeca6f1",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/client.js",
+            "sha256": "684f8ee50e598b2e637da4a5ca1c740b9b4ee06da024c79abb7c5ccf7b8eb192",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/contracts-DycwaUv_.js",
+            "sha256": "6b1764cb0540b80917d841bcd94890361d2a37a2067c2577581fc313481561aa",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/contracts.js",
+            "sha256": "4ede59212861951d2ea0f763be8cd65693132d5913bb54e954630c030e060e9e",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/index.js",
+            "sha256": "57e837930ec5ee8c1cc2a781ec096e6b08abab8b78259682191fecf8edbb10e7",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "locale/en.json",
+            "sha256": "962b17e1d842d81f45240c90aa3b915e723fb68caeed31cc03a4099db99ce7e7",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "presentation/locales.json",
+            "sha256": "bd7a931ac919ae59a89d112e8a983a5100226c9464c3567dfc9ff8ff2236a94a",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "package.json",
+            "sha256": "0284383cd7b377a1bfd5b16b34c22119a14e45ef7ff6d2fc2e64ab23db8fe07d",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "locale/zh.json",
+            "sha256": "2d1442fb211c683f38349c4bff645727c8315b99890d9b47e1eaa27d441b5edc",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "README.md",
+            "sha256": "d0e385bf833466d0e1c7f51eee953f448dad943548819f70f9e327e4fad7eb26",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client/api.d.ts",
+            "sha256": "d21839ac68aab3ef84db5655c4a80d659ede8a97d177a7d717896fb6081830aa",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client.d.ts",
+            "sha256": "acc1d11738f4e6e2087d478c3bf16ec62acfcc764776a8689232daafa64c50c3",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/contracts.d.ts",
+            "sha256": "ca784d7ac9ab7c746d3d43dc2d846d7dbd5c8edeb85bf9293d3e7f9d42a8ca83",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/contracts.d.ts",
+            "sha256": "1a4e616a010791f27f91a8ac208032de51b49bc52f4070002d064e65f361d7e9",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/defaults.d.ts",
+            "sha256": "aeb6b83026cb4f6f2b4f268609b84ce44830da42baf304f373634465103fe111",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/index.d.ts",
+            "sha256": "fcf6da9a1f7da4914976225b089ddc4395c8934e733fab3a7d1063113dd0295b",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client/pages.d.ts",
+            "sha256": "4eff6d47eb34f0cc90f3cda83d5427c314d6a16cc5477c20ad7a18018889655c",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client/presentation.d.ts",
+            "sha256": "2ca4395592b3fe13e1a5efb0d652f25032ec0e5b9245c9f9f80ed7992a098169",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client/ui.d.ts",
+            "sha256": "1ebabe67e291194b1bb7d3afd11806590abd87bf50b329b51dd7825918515a08",
+            "executableBits": "0o0"
+          }
+        ]
+      },
+      {
+        "name": "dsh-mnemon-source-skills",
+        "version": "0.5.9",
+        "filename": "dsh-mnemon-source-skills-0.5.9.tgz",
+        "sha256": "ededfcd02f80c58b870fc79d7acaa3bfe6d529a3f7a2ca6cd0a8e1431d1c628b",
+        "integrity": "sha512-y2aPIoRSBmapbW/Z4Ez9Sw+ZtF0+zJnrYWWu5902rm/bZg3geKwoPNG6b2p/xX/Y8m9eQcvMIM933mGOlFNxtg==",
+        "bytes": 155433,
+        "fileCount": 30,
+        "allFileSha256Match": true,
+        "allExecutableBitsMatch": true,
+        "files": [
+          {
+            "file": "LICENSE",
+            "sha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "presentation/page.module.css",
+            "sha256": "89e9fbdcfcc8c29dcca8e310cede4d4b898da39e6cdc9d40ae06eb87ec135a83",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/client.js",
+            "sha256": "8e85d05c2bb32f731617e9ea494ef073efd8493c1de9e1ed95ecb199c1c04e74",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/contracts.js",
+            "sha256": "9b85fdd38eea3e19e29b332822732db379d4990cf061f1f7dcf591aafcbb2af3",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/index.js",
+            "sha256": "0646cd34861d700532455015e40037c1186417fc140a6f50ac74ab150cba435c",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "locale/en.json",
+            "sha256": "0b5276b77a752fb47c67765847e261a6a7041a885213f760c4ad3670d694baed",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "presentation/locales.json",
+            "sha256": "f5c4ee8369a43489db5408e9372dded9c1e882bdf97ba9f8ed1a321137430214",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "market/official.json",
+            "sha256": "6d011e5817727fb545dd385df8bb7316bff59d803f05c956bf64138956d90acc",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "package.json",
+            "sha256": "b5ac694d2c2b1fdf2a96f63b3e006b34484b7d71ed7cabf5501fb295eeae9fd7",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "locale/zh.json",
+            "sha256": "9dce17a7602534ea20b6027988f3b18cc3bce7f6b6bffe4f64b635291ffedf28",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "README.md",
+            "sha256": "b318027075420db6f97a9149f3938118bdff5d05fccd1a0861d9b82ba041684d",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client/api.d.ts",
+            "sha256": "757094dc5d8fcaa152b399d0ee11b6c3a08e3ce08cf3340261c3f79fb260f47e",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client.d.ts",
+            "sha256": "99720ccb1ef2991d3d08923a54b3b64a165692fe94acadff7b9e5cee2963bc3f",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/contracts.d.ts",
+            "sha256": "d9967a8ecb62f29006188ab916adc65fa07cb03e8890aa1850141d45afa1cdfc",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/contracts.d.ts",
+            "sha256": "c5384851333ed549d6601905784e517821698466c36652d24b7fd93c1e0b49be",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client/evals-page.d.ts",
+            "sha256": "69c36a11a11d4f6b91554ea1b3e6218428bb8c0e3bb0a2568c1467987ff6ab8b",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client/evidence-page.d.ts",
+            "sha256": "c3a0c84f77f1b8464158b3bbdbff33abdb7b79777f7083a184598ea42b7f5791",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client/evolution-page.d.ts",
+            "sha256": "974b260d4696e68368f0ca91313c17d96057e5cdc4dd6e1c6ca65ffd0789dce4",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/fence.d.ts",
+            "sha256": "2522959dfc2203f5cb4219029f78321f6cf036bc8f2e972a07d01a6ef6d9104f",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/index.d.ts",
+            "sha256": "61413bc1929df4ba1f2c561c0fc7207ee7b2b38f1ebbc3f7fa403c1c088d0d00",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client/market-page.d.ts",
+            "sha256": "fa00338ddd8a6f8bc2347628078b11008209ce363f600042cf1fcbee33c69053",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client/model-choice.d.ts",
+            "sha256": "5bd926d57442c01ecbf222bdf4cec6358f932e5cc8ef4d8dc9fa2dd81c38215b",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client/presentation.d.ts",
+            "sha256": "d7d80eccdf90c7ec939b67802c559d00614ed9285e6a756212a473cfe556c1c1",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client/shared.d.ts",
+            "sha256": "34ba2da4c08ce51bee17ea09a3cf992c8fe06446c54f0f017026ae8639927881",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client/skill-tests.d.ts",
+            "sha256": "d9de27a957b8e9dc9493878620cf39d2e9dbaec7a52daf7ed92ab292f8b2c8ab",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client/skills-page.d.ts",
+            "sha256": "157a6d855ec4b0bb5b43c6777c969e7972ea699b8e89f572e36f445b83f56c15",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/source-kind.d.ts",
+            "sha256": "609250d77c7950a206b00be65de4b33b62dec50ffaff6f13d0fa411d970d2eeb",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client/trash-page.d.ts",
+            "sha256": "ef3f280cab983adb716c2602d50debda1bfb9dd531b5c4842afd4849fc9bac80",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client/ui.d.ts",
+            "sha256": "0c211a77d3376aeb4a381d82d76ed50945b70bc5b8a32f0306dbfbfdf03ce6c4",
+            "executableBits": "0o0"
+          },
+          {
+            "file": "lib/types/client/use-skill.d.ts",
+            "sha256": "2078894ccb534939aa8cc58567421c451cda72a2ab44f31eba90d9e26d37bcfe",
+            "executableBits": "0o0"
+          }
+        ]
+      }
+    ],
+    "screenshots": [
+      {
+        "stage": "freshStatus",
+        "path": "docs/pr-assets/release-v0.5.42/020-fresh-status.jpg",
+        "sha256": "4aa890ba5f64dfbde14763b6d6b0f5ae6dbc18912b9f29665654d9f732038e2e",
+        "bytes": 49639,
+        "width": 1097,
+        "height": 531,
+        "capture": "Original CUA Chrome viewport JPEG",
+        "visuallyReviewed": true,
+        "shows": "The fresh candidate is current at 0.5.42, with healthy system status behind the dialog."
+      },
+      {
+        "stage": "memoryBefore",
+        "path": "docs/pr-assets/release-v0.5.42/020-upgrade-memory-before.jpg",
+        "sha256": "c3406bc04ed73e8e837c5dafb0897eb25a7592192f1b87f2dbf3cc43e05d847f",
+        "bytes": 50084,
+        "width": 1097,
+        "height": 499,
+        "capture": "Original CUA Chrome viewport JPEG",
+        "visuallyReviewed": true,
+        "shows": "The pre-update Runtime page shows one user profile and one working memory. The viewport clips the card list. Both canaries were verified in the browser DOM and in their three Runtime files before the update."
+      },
+      {
+        "stage": "offered",
+        "path": "docs/pr-assets/release-v0.5.42/020-upgrade-offered.jpg",
+        "sha256": "6ea9fabe46f7188bf25b59ffb19c3182927cdfff25d47e469920c250d6a32a22",
+        "bytes": 46701,
+        "width": 1097,
+        "height": 499,
+        "capture": "Original CUA Chrome viewport JPEG",
+        "visuallyReviewed": true,
+        "shows": "The version dialog offers 0.5.42 to the running 0.5.41."
+      },
+      {
+        "stage": "updated",
+        "path": "docs/pr-assets/release-v0.5.42/020-upgrade-updated.jpg",
+        "sha256": "5ef3ce435ae05dc2598815f786dfd4977af5eeee34beee46e3800658b6308e66",
+        "bytes": 50398,
+        "width": 1097,
+        "height": 499,
+        "capture": "Original CUA Chrome viewport JPEG",
+        "visuallyReviewed": true,
+        "shows": "The dialog shows 0.5.42 installed and waiting for a restart."
+      },
+      {
+        "stage": "restartedStatus",
+        "path": "docs/pr-assets/release-v0.5.42/020-upgrade-restarted-status.jpg",
+        "sha256": "eae608729115d0caafbfcb895b99372cb8de1cf771b542239733b27aa1331896",
+        "bytes": 47636,
+        "width": 1097,
+        "height": 499,
+        "capture": "Original CUA Chrome viewport JPEG",
+        "visuallyReviewed": true,
+        "shows": "The reopened Host shows a healthy 0.5.42 and a current package version."
+      },
+      {
+        "stage": "memoryPreserved",
+        "path": "docs/pr-assets/release-v0.5.42/020-upgrade-memory-preserved.jpg",
+        "sha256": "975f0bd96db2d7c8783cbe898996597dc4d0b1452a9507b9946c9d35254b795e",
+        "bytes": 51344,
+        "width": 1097,
+        "height": 499,
+        "capture": "Original CUA Chrome viewport JPEG",
+        "visuallyReviewed": true,
+        "shows": "The reopened Runtime list shows both complete synthetic canaries."
+      }
+    ],
+    "cleanup": {
+      "fixtures": {
+        "fresh": {
+          "fixtureExited": true,
+          "webProcessExited": true,
+          "webPortClosed": true,
+          "registryPortClosed": true,
+          "restartCount": 0
+        },
+        "upgrade": {
+          "fixtureExited": true,
+          "webProcessExited": true,
+          "webPortClosed": true,
+          "registryPortClosed": true,
+          "restartCount": 1,
+          "previousWebProcessExited": true,
+          "previousWebPortClosed": true
+        }
+      },
+      "healthyTabsExplicitlyClosed": true,
+      "closedTabCount": 3
+    }
+  },
+  "observations": [
+    "CUA exposed Chrome for this run. Both fresh and restarted tabs reported three browser-extension-origin console errors and zero application-origin errors.",
+    "The fresh and restarted status screenshots open the version dialog to show the exact package version, which truncates in the background status tile at the native viewport width."
+  ],
+  "limitations": [
+    "Acceptance covers official published Host packages on macOS Web profiles.",
+    "Runtime canaries are synthetic and were entered manually in the UI. No model requests or external Provider accounts were used.",
+    "The disposable registry ages selected candidate metadata. The npm minimum-release-age policy is outside this acceptance.",
+    "This run verifies frozen pre-publication candidates. The release workflow separately verifies final merged artifacts and the public npm install and upgrade."
+  ],
+  "commands": [
+    "env -i PATH=\"${SAFE_PATH}\" \"${NODE24}\" scripts/serve-release-acceptance.mjs --dsh \"${DSH_BIN}\" --artifacts \"${ARTIFACTS}\" --state \"${FRESH_STATE}\"",
+    "env -i PATH=\"${SAFE_PATH}\" \"${NODE24}\" scripts/serve-release-acceptance.mjs --dsh \"${DSH_BIN}\" --artifacts \"${ARTIFACTS}\" --state \"${UPGRADE_STATE}\" --previous dsh-mnemon@0.5.41"
+  ]
+}
