@@ -17,9 +17,9 @@ function declaredSize(archive: Uint8Array, bytes: number): Uint8Array {
 }
 
 describe('Git sync ZIP pre-inflate validation', () => {
-  it('preserves ordinary files and ignores safe directory entries', () => {
+  it.each([0, 6] as const)('preserves ordinary files and ignores safe directory entries at compression level %s', level => {
     const bytes = new Uint8Array([1, 2, 3])
-    const result = unpack(zipSync({ 'payload/': new Uint8Array(), 'payload/runtime/memories.json': bytes }))
+    const result = unpack(zipSync({ 'payload/': new Uint8Array(), 'payload/runtime/memories.json': bytes }, { level }))
     expect(Object.keys(result)).toEqual(['payload/runtime/memories.json'])
     expect(result['payload/runtime/memories.json']).toEqual(bytes)
   })
@@ -31,6 +31,11 @@ describe('Git sync ZIP pre-inflate validation', () => {
   it('rejects a declared oversized entry before inflation', () => {
     const archive = zipSync({ 'payload/huge': new Uint8Array([1]) })
     expect(() => unpack(declaredSize(archive, 128 * 1024 * 1024 + 1))).toThrow('not a readable archive')
+  })
+
+  it.each([1, 1025])('rejects a stored entry whose declared size %s disagrees with the bytes copied', size => {
+    const archive = zipSync({ 'payload/stored': new Uint8Array(1024) }, { level: 0 })
+    expect(() => unpack(declaredSize(archive, size))).toThrow('not a readable archive')
   })
 
   it('rejects excess file counts even when every file is empty', () => {

@@ -601,6 +601,8 @@ export function unpack(archive: Uint8Array): Unzipped {
         throw new Error('unsafe archive path')
       }
       if (path.endsWith('/')) return false
+      // Stored entries copy `size` bytes directly, so both sizes must agree before allocation.
+      if (info.compression === 0 && info.size !== info.originalSize) throw new Error('invalid stored archive entry size')
       expandedBytes += info.originalSize
       fileCount += 1
       if (!Number.isSafeInteger(info.originalSize) || info.originalSize < 0 || info.originalSize > 128 * 1024 * 1024
