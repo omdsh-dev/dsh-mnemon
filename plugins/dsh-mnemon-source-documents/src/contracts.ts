@@ -22,6 +22,8 @@ export interface DocumentRecord {
 
 export interface DocumentView extends DocumentRecord {
   content: string
+  /** Digest of the exact managed file read; deletion also fences external edits. */
+  fileRevision?: string
 }
 
 export interface DocumentSnapshot {
@@ -49,10 +51,11 @@ export interface DocumentSearchResult {
 export type DocumentMutation =
   | { action: 'create'; title: string; description?: string; content: string; sourcePaths?: string[]; sessionIds?: string[] }
   | { action: 'update'; id: string; title?: string; description?: string; content?: string; sourcePaths?: string[]; sessionIds?: string[] }
+  | { action: 'delete'; id: string; fileRevision?: string }
 
 export interface DocumentMutationResult {
   success: true
-  action: 'created' | 'updated' | 'archived'
+  action: 'created' | 'updated' | 'archived' | 'deleted'
   document: DocumentView
   snapshot: DocumentSnapshot
   maintenance?: { runId: string; provider: string; summary: string; memoryBodyIds: string[]; archivedDocumentIds: string[] }

@@ -323,6 +323,49 @@ describe('Skills page', () => {
     expect(await screen.findByText(t('draft.adopted', { name: 'release-notes' }))).not.toBeNull()
   })
 
+  it.each([true, false])('shows the original project file in global evolution and fences adoption (writable=%s)', async writable => {
+    const path = join(directory, 'workspace', '.dsh', 'skills', 'release-notes', 'SKILL.md')
+    mkdirSync(join(path, '..'), { recursive: true })
+    writeFileSync(path, SKILL + '\nOriginal project instructions.\n')
+    await mutate('review-record', review())
+    const [suggestion] = (await management.read('suggestions', null)).value as Array<{ id: string }>
+    const next = SKILL + '\n2. Group by component\n'
+    await mutate('draft-record', { suggestionId: suggestion!.id, skillName: 'release-notes', content: next, notes: 'Project improvement.', changes: [], guidance: [] })
+    management = await runner.managementClient('source:skills', { storage: 'global' })
+    render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable={writable} management={management} navigationInput={{ seed: `suggestion:${suggestion!.id}`, nonce: 1 }} />)
+    // Locate these known labels directly: a full-page role query repeatedly
+    // recomputes visibility across the installed Host's complete stylesheet.
+    const current = (await screen.findByText(t('evolution.currentSkill'))).closest('button')!
+    fireEvent.click(current)
+    expect(screen.getByText('Original project instructions.', { selector: 'p' })).not.toBeNull()
+    expect(screen.queryByText('This skill no longer exists.')).toBeNull()
+    // A same-key catalog link here would open a different file in the current scope.
+    expect(screen.getByText('release-notes', { selector: 'h3' }).querySelector('button')).toBeNull()
+    const adopt = await screen.findByText(t('draft.adopt'), { selector: 'button' }) as HTMLButtonElement
+    expect(adopt.disabled).toBe(!writable)
+    if (writable) {
+      fireEvent.click(adopt)
+      await waitFor(() => expect(readFileSync(path, 'utf8')).toBe(next))
+      expect(readFileSync(skillPath(), 'utf8')).toBe(SKILL)
+    }
+  })
+
+  it('explains a legacy draft with no trustworthy origin and keeps it available to copy', async () => {
+    const path = join(directory, 'workspace', '.dsh', 'skills', 'release-notes', 'SKILL.md')
+    mkdirSync(join(path, '..'), { recursive: true })
+    writeFileSync(path, SKILL)
+    const draft = await mutate('draft-record', { skillName: 'release-notes', content: SKILL + '\n2. Legacy improvement\n', notes: '', changes: [], guidance: [] }) as { id: string }
+    const ledgerPath = join(directory, 'data', 'skills', 'ledger.json')
+    const ledger = JSON.parse(readFileSync(ledgerPath, 'utf8'))
+    delete ledger.drafts[0].origin
+    writeFileSync(ledgerPath, JSON.stringify(ledger))
+    page({ seed: `draft:${draft.id}`, nonce: 1 })
+    expect(await screen.findByText(/The original workspace was not recorded reliably/u)).not.toBeNull()
+    expect((screen.getByText(t('draft.adopt'), { selector: 'button' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText(/Legacy improvement/u)).not.toBeNull()
+    expect(readFileSync(path, 'utf8')).toBe(SKILL)
+  })
+
   it('follows a link once, keeping what the reader chose since when the page reloads', async () => {
     await mutate('review-record', review())
     const other = review()
@@ -606,7 +649,7 @@ describe('model pickers', () => {
     const override = { provider: 'trae', model: 'deepseek-v4.1-flash-1017' }
     if (selection !== 'default') await mutate('draft-preference', { slot: 'run', model: global })
     if (selection === 'skill') await mutate('draft-preference', { slot: 'run', skillName: 'release-notes', model: override })
-    await mutate('draft-record', { suggestionId: suggestion!.id, skillName: 'release-notes', content: SKILL, notes: 'Draft to compare', changes: [], guidance: [] })
+    const draft = await mutate('draft-record', { suggestionId: suggestion!.id, skillName: 'release-notes', content: SKILL, notes: 'Draft to compare', changes: [], guidance: [] }) as { id: string }
     const execute = vi.fn(async (_operation: string, input: unknown) => {
       const { skillName, target } = input as { skillName: string; target: unknown }
       const cases = (await management.read('cases', { skill: skillName })).value as Array<{ id: string }>
@@ -619,8 +662,8 @@ describe('model pickers', () => {
     await waitFor(() => expect(execute).toHaveBeenCalledTimes(2))
     const route = selection === 'skill' ? override : selection === 'global' ? global : {}
     expect(execute.mock.calls.map(([, input]) => input)).toEqual([
-      { skillName: 'release-notes', target: { kind: 'draft', draftId: expect.any(String) }, ...route },
-      { skillName: 'release-notes', target: { kind: 'current' }, ...route },
+      { skillName: 'release-notes', target: { kind: 'draft', draftId: draft.id }, ...route },
+      { skillName: 'release-notes', target: { kind: 'current', draftId: draft.id }, ...route },
     ])
   })
 
@@ -631,7 +674,7 @@ describe('model pickers', () => {
     const override = { provider: 'trae', model: 'deepseek-v4.1-flash-1017' }
     if (selection !== 'default') await mutate('draft-preference', { model: global })
     if (selection === 'suggestion') await mutate('draft-preference', { suggestionId: suggestion!.id, model: override })
-    await mutate('draft-record', { suggestionId: suggestion!.id, skillName: 'release-notes', content: SKILL, notes: 'Draft to revise', changes: [], guidance: [] })
+    const draft = await mutate('draft-record', { suggestionId: suggestion!.id, skillName: 'release-notes', content: SKILL, notes: 'Draft to revise', changes: [], guidance: [] }) as { id: string }
     const execute = vi.fn(async () => ({ ...await management.read('revision', null), value: { started: true } }))
     const assisted = Object.assign(withModels(management), { assistance: { operations: ['skill-draft'], execute } })
     render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable management={assisted} navigationInput={{ seed: `suggestion:${suggestion!.id}`, nonce: 1 }} />)
@@ -644,7 +687,7 @@ describe('model pickers', () => {
     fireEvent.change(screen.getByRole('textbox', { name: t('draft.redraftNote') }), { target: { value: 'Keep the component headings' } })
     fireEvent.click(screen.getByRole('button', { name: t('draft.redraftStart') }))
     await waitFor(() => expect(execute).toHaveBeenCalledWith('skill-draft', {
-      suggestionId: suggestion!.id, guidance: 'Keep the component headings',
+      suggestionId: suggestion!.id, draftId: draft.id, guidance: 'Keep the component headings',
       ...(selection === 'suggestion' ? override : selection === 'global' ? global : {}),
     }, expect.objectContaining({ confirmed: true })))
   })

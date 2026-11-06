@@ -44,7 +44,7 @@ describe('independent Documents Source client', () => {
       documents: async () => snapshot,
       document: async id => records.find(record => record.id === id)!,
       searchDocuments: async query => ({ query, includeArchived: true, total: records.length, generatedAt: snapshot.generatedAt, results: records.map(record => ({ ...record, score: 1 })) }),
-      mutateDocument: vi.fn(), archiveDocument: vi.fn(),
+      mutateDocument: vi.fn(), archiveDocument: vi.fn(), deleteDocument: vi.fn(),
     }
     const page = (writable: boolean) => <MemorySourcePageFrame locale="en"><DocumentsPage client={client} revision={0} writeEnabled={writable} onMutate={() => {}} /></MemorySourcePageFrame>
     const view = render(page(false))
@@ -117,6 +117,40 @@ describe('independent Documents Source client', () => {
     } finally { cleanup(); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
   })
 
+  it.each(['active', 'archived'] as const)('confirms deleting a %s document, refreshes the page and hides deletion when read-only', async status => {
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-documents-delete-ui-'))
+    const workspace = join(directory, 'workspace')
+    mkdirSync(workspace)
+    const runner = new MemoryCompositionRunner()
+    try {
+      await runner.mount(strategy, { instanceId: 'strategy' })
+      await runner.mount(plugin, { instanceId: 'notes', config: { dataDir: join(directory, 'data') } })
+      const management = await runner.managementClient('source:notes', { storage: 'custom', workspaceId: workspace })
+      const created = await management.mutate('mutate', { action: 'create', title: 'Disposable note', content: 'Synthetic temporary content.' }, { confirmed: true })
+      const id = (created.value as unknown as plugin.DocumentMutationResult).document.id
+      if (status === 'archived') await management.mutate('archive', { id }, { confirmed: true, expectedRevision: created.revision })
+      const view = render(<DocumentsSourcePage sourceTypeId="documents" sourceInstanceKey="source:notes" sourceInstances={[]} locale="en" writable management={management} />)
+      if (status === 'archived') fireEvent.click(within(await screen.findByLabelText(t('documents.scope'))).getByRole('button', { name: /Archive/ }))
+      fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+      const dialog = await screen.findByRole('dialog')
+      expect(within(dialog).getByText(/cannot be undone/i)).not.toBeNull()
+      expect(within(dialog).getByText(/Memory Space/i)).not.toBeNull()
+      fireEvent.click(within(dialog).getByRole('button', { name: t('common.cancel') }))
+      expect((await management.read('snapshot')).value).toMatchObject({ total: 1 })
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+      fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete permanently' }))
+      expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Document permanently deleted.')
+      await waitFor(() => expect(screen.queryByRole('heading', { name: 'Disposable note' })).toBeNull())
+      expect((await management.read('snapshot')).value).toMatchObject({ total: 0, activeCount: 0, archivedCount: 0, activeBytes: 0 })
+      await expect(management.read('document', { id })).rejects.toThrow('document not found')
+      await management.mutate('mutate', { action: 'create', title: 'Read-only note', content: 'Protected.' }, { confirmed: true })
+      view.rerender(<DocumentsSourcePage sourceTypeId="documents" sourceInstanceKey="source:notes" sourceInstances={[]} locale="en" writable={false} management={management} refreshKey={1} />)
+      fireEvent.click(screen.getByRole('button', { name: /Active/ }))
+      expect(await screen.findByRole('heading', { name: 'Read-only note' })).not.toBeNull()
+      expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull()
+    } finally { cleanup(); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
+  })
+
   it('owns its page registration and releases it', () => {
     const entries = new Set<string>()
     const release = installDocumentsMemoryUI({ slots: {
@@ -126,5 +160,72 @@ describe('independent Documents Source client', () => {
     expect([...entries]).toEqual(['documents/library'])
     release()
     expect(entries.size).toBe(0)
+  })
+
+  it('keeps a changed document when the confirmation is stale and shows the conflict inside the dialog', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-documents-delete-conflict-'))
+    const workspace = join(directory, 'workspace')
+    mkdirSync(workspace)
+    const runner = new MemoryCompositionRunner()
+    try {
+      await runner.mount(strategy, { instanceId: 'strategy' })
+      await runner.mount(plugin, { instanceId: 'notes', config: { dataDir: join(directory, 'data') } })
+      const management = await runner.managementClient('source:notes', { storage: 'custom', workspaceId: workspace })
+      const saved = await management.mutate('mutate', { action: 'create', title: 'Shared draft', content: 'Before review.' }, { confirmed: true })
+      const id = (saved.value as unknown as plugin.DocumentMutationResult).document.id
+      render(<DocumentsSourcePage sourceTypeId="documents" sourceInstanceKey="source:notes" sourceInstances={[]} locale="en" writable management={management} />)
+      fireEvent.click(await screen.findByRole('button', { name: 'Delete' }))
+      await management.mutate('mutate', { action: 'update', id, content: 'A concurrent correction.' }, { confirmed: true, expectedRevision: saved.revision })
+      fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete permanently' }))
+      expect((await within(screen.getByRole('dialog')).findByRole('alert')).textContent).toMatch(/revision conflict/i)
+      expect((await management.read('document', { id })).value).toMatchObject({ content: 'A concurrent correction.' })
+      expect((await management.read('snapshot')).value).toMatchObject({ total: 1 })
+    } finally { cleanup(); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
+  })
+
+  it('refreshes the selected detail when search observes a newer index before allowing deletion', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-documents-delete-search-'))
+    const workspace = join(directory, 'workspace')
+    mkdirSync(workspace)
+    const runner = new MemoryCompositionRunner()
+    try {
+      await runner.mount(strategy, { instanceId: 'strategy' })
+      await runner.mount(plugin, { instanceId: 'notes', config: { dataDir: join(directory, 'data') } })
+      const management = await runner.managementClient('source:notes', { storage: 'custom', workspaceId: workspace })
+      const saved = await management.mutate('mutate', { action: 'create', title: 'Shared draft', content: 'Before concurrent revision.' }, { confirmed: true })
+      const id = (saved.value as unknown as plugin.DocumentMutationResult).document.id
+      render(<DocumentsSourcePage sourceTypeId="documents" sourceInstanceKey="source:notes" sourceInstances={[]} locale="en" writable management={management} />)
+      expect(await screen.findByText('Before concurrent revision.')).not.toBeNull()
+      await management.mutate('mutate', { action: 'update', id, content: 'New content requiring review.' }, { confirmed: true, expectedRevision: saved.revision })
+      fireEvent.change(screen.getByLabelText(t('documents.searchAria')), { target: { value: 'Shared draft' } })
+      fireEvent.click(screen.getByRole('button', { name: t('documents.search') }))
+      expect(await within(screen.getByLabelText(t('documents.reader'))).findByText('New content requiring review.')).not.toBeNull()
+      expect(screen.queryByText('Before concurrent revision.')).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+      fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Delete permanently' }))
+      expect(await screen.findByRole('status')).toHaveProperty('textContent', 'Document permanently deleted.')
+      expect((await management.read('snapshot')).value).toMatchObject({ total: 0 })
+    } finally { cleanup(); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
+  })
+
+  it('refreshes cleanly when another authorized client deletes the selected document', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-documents-delete-refresh-'))
+    const workspace = join(directory, 'workspace')
+    mkdirSync(workspace)
+    const runner = new MemoryCompositionRunner()
+    try {
+      await runner.mount(strategy, { instanceId: 'strategy' })
+      await runner.mount(plugin, { instanceId: 'notes', config: { dataDir: join(directory, 'data') } })
+      const management = await runner.managementClient('source:notes', { storage: 'custom', workspaceId: workspace })
+      const saved = await management.mutate('mutate', { action: 'create', title: 'Shared draft', content: 'Selected temporary document.' }, { confirmed: true })
+      const doc = (saved.value as unknown as plugin.DocumentMutationResult).document
+      const page = (refreshKey: number) => <DocumentsSourcePage sourceTypeId="documents" sourceInstanceKey="source:notes" sourceInstances={[]} locale="en" writable management={management} refreshKey={refreshKey} />
+      const view = render(page(0))
+      expect(await screen.findByRole('heading', { name: 'Shared draft' })).not.toBeNull()
+      await management.mutate('delete', { id: doc.id, fileRevision: doc.fileRevision! }, { confirmed: true, expectedRevision: saved.revision })
+      view.rerender(page(1))
+      expect(await screen.findByRole('heading', { name: t('documents.selectTitle') })).not.toBeNull()
+      expect(screen.queryByRole('alert')).toBeNull()
+    } finally { cleanup(); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
   })
 })

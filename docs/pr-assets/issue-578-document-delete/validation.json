@@ -1,0 +1,18 @@
+{
+  "scenario": "Disposable docs-demo archive deletion via built Source management API",
+  "before": {
+    "active": 5,
+    "archived": 1,
+    "total": 6
+  },
+  "after": {
+    "active": 5,
+    "archived": 0,
+    "total": 5
+  },
+  "deletedFileAbsent": true,
+  "deletedReadRejected": true,
+  "otherActiveFilesUnchanged": true,
+  "fileRevisionRequired": true,
+  "browserSteps": "Opened active confirmation and cancelled; observed archive before; refresh after API deletion."
+}
