@@ -2,6 +2,7 @@ import { strategy } from './fixture.ts'
 import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { execFileSync } from 'node:child_process'
 
 import { describe, expect, it, vi } from 'vitest'
 
@@ -11,6 +12,51 @@ import * as plugin from '../src/index.ts'
 import { RuntimeMemoryController } from '../src/controller.ts'
 
 describe('standalone runtime Source', () => {
+  it('owns stable scope and visible-entry digests, separating additions and ages from retractions', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-runtime-snapshot-scope-'))
+    const workspace = join(directory, 'workspace')
+    mkdirSync(workspace)
+    execFileSync('git', ['init', '--quiet', '-b', 'main', workspace])
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(new Date('2026-08-12T08:00:00.000Z'))
+      const controller = new RuntimeMemoryController({ effectiveDataDir: () => directory })
+      await controller.mutate({ action: 'add', target: 'memory', content: 'Original fact.', importance: 'critical' })
+      const sourceInstanceKey = 'source:work'
+      const source = plugin.createRuntimeMemorySource({ dataDir: directory }).create({ sourceInstanceKey,
+        provenance: { packageName: plugin.name, entryId: 'work' } })
+      const project = async (maxCharacters = 2048) => {
+        const scope = { storage: 'custom' as const, workspaceId: workspace }
+        const facts = await source.facts({ scope, scenario: 'turn', budget: DEFAULT_MEMORY_VIEW_BUDGET })
+        return source.project({ scope, sourceInstanceKey, expectedRevision: facts.revision, includeProjection: true, mode: 'eager', maxCharacters })
+      }
+      const metadata = (value: Awaited<ReturnType<typeof project>>) =>
+        (value.fragments[0]!.provenance as { snapshot: { version: number; scope: string; entries: string[] } }).snapshot
+      const first = await project()
+      expect(metadata(first)).toEqual({ version: 1, scope: expect.stringMatching(/^[a-f0-9]{64}$/u), entries: [expect.stringMatching(/^[a-f0-9]{64}$/u)] })
+      vi.setSystemTime(new Date('2026-08-13T08:00:00.000Z'))
+      const aged = await project()
+      expect(aged.fragments[0]!.text).not.toBe(first.fragments[0]!.text)
+      expect(metadata(aged)).toEqual(metadata(first))
+      await controller.mutate({ action: 'add', target: 'memory', content: 'Additional fact.' })
+      const added = metadata(await project())
+      expect(added.scope).toBe(metadata(first).scope)
+      expect(added.entries).toHaveLength(2)
+      expect(added.entries).toContain(metadata(first).entries[0])
+      await controller.mutate({ action: 'replace', target: 'memory', oldText: 'Original fact.', content: 'Corrected fact.' })
+      const corrected = metadata(await project())
+      expect(corrected.entries).not.toContain(metadata(first).entries[0])
+      execFileSync('git', ['symbolic-ref', 'HEAD', 'refs/heads/other'], { cwd: workspace })
+      const other = metadata(await project())
+      expect(other.entries).toEqual(corrected.entries)
+      expect(other.scope).not.toBe(corrected.scope)
+      expect((await project(20)).fragments[0]!.provenance).not.toHaveProperty('snapshot')
+    } finally {
+      vi.useRealTimers()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
   it('pins metadata and content together between facts and projection across an age boundary', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'mnemon-runtime-age-'))
     vi.useFakeTimers({ toFake: ['Date'] })

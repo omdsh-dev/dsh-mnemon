@@ -141,6 +141,8 @@ export interface HostSessionEvent {
   seq?: number
   time?: number
   data: Record<string, unknown>
+  surfaceOp?: 'append' | { op: 'replace'; startSeq: number; endSeq: number }
+  sourceEventSeqs?: readonly number[]
 }
 
 /** Minimum DSH Session surface: immutable header, range snapshots and indexed reads. */
@@ -158,8 +160,8 @@ export interface HostSession {
   requestHeader?(): { config?: { provider?: string; model?: string; reasoningEffort?: string } } | undefined
   /** Model-visible event sequences, in order; rewinds and compaction replace them. */
   surface: { readonly nodes: readonly number[] }
-  /** DSH's append, as its own request-error recoveries use it before retrying a step. */
-  append?(type: string, data: unknown, options?: { surfaceOp?: 'append' }): unknown
+  /** Public Session append; replacements preserve the original events for audit. */
+  append?(type: string, data: unknown, options?: { surfaceOp?: HostSessionEvent['surfaceOp']; sourceEventSeqs?: readonly number[] }): unknown
 }
 
 export type HostPreStepDecision = { kind: 'reject' } | { kind: 'enter'; messages: HostUserMessage[] }
@@ -210,6 +212,7 @@ export interface HostAgent {
   followup(message: HostUserMessage): void
   steer(message: HostUserMessage): void
   inject(message: HostUserMessage): void
+  cancel(cause: { kind: 'hook'; reason: string }, options?: { keepInbox?: boolean }): void
 }
 
 export interface HostAgentHandle {

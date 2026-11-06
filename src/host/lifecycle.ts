@@ -28,7 +28,9 @@ import type { AssistantMessageText, LifecycleAgentSnapshot, LifecycleCounters, L
 import type { PreparedMemoryPlacement } from 'dsh-mnemon-source-memory-spaces/contracts'
 import type { MemoryWake } from "../core/contracts/index.ts"
 import { agentScope, type MnemonAgentRuntimeSource } from './runtime.ts'
-import { createPluginMessage, MNEMON_PLUGIN_SOURCE } from './plugin-message.ts'
+import { createPluginMessage, isMnemonMessageSource, MNEMON_PLUGIN_SOURCE } from './plugin-message.ts'
+import { prepareMemorySnapshot } from './memory-snapshot.ts'
+import { memorySnapshotState } from './memory-snapshot-state.ts'
 import type { SkillEvolution } from './skill-evolution.ts'
 import { IdleReviewWatermarkStore } from './idle-review-watermark.ts'
 import { activationOwned, isCreatingChild, isRootAgent, isTaskRecord, rootAgents, titleTask } from './agent-compat.ts'
@@ -79,6 +81,13 @@ interface PreStepPayload extends AgentEventPayload {
   signal: AbortSignal
 }
 
+interface PendingMemorySnapshot {
+  turn: number
+  step: number
+  signal: AbortSignal
+  update: ReturnType<typeof prepareMemorySnapshot>
+}
+
 interface TurnStoppingPayload extends AgentEventPayload {
   turn: number
   signal: AbortSignal
@@ -93,15 +102,6 @@ interface PromptAssembly {
 interface PromptAssemblyContext {
   agent?: HostAgent
   signal?: AbortSignal
-}
-
-function isMnemonMessageSource(source: unknown): boolean {
-  if (typeof source !== 'object' || source === null) return false
-  const { kind, plugin } = source as { kind?: unknown; plugin?: unknown }
-  // V3-to-V4 migrates the legacy plugin wrapper to `plugin:dsh-mnemon`.
-  return kind === MNEMON_PLUGIN_SOURCE
-    || kind === `plugin:${MNEMON_PLUGIN_SOURCE}`
-    || (kind === 'plugin' && plugin === MNEMON_PLUGIN_SOURCE)
 }
 
 /**
@@ -203,6 +203,7 @@ class MnemonAgentLifecycle {
   private primePending = true
   private startSource: LifecycleAgentSnapshot['startSource']
   private readonly guidedTurns = new Set<number>()
+  private pendingSnapshot: PendingMemorySnapshot | undefined
   private readonly memoryActivity = new TurnActivityProjection()
   private readonly turnActivity = new Map<number, {
     messageIds: Set<string>
@@ -212,14 +213,6 @@ class MnemonAgentLifecycle {
     explicitCandidate: boolean
     noMaintenance: boolean
   }>()
-  /**
-   * Text of the runtime memory snapshot most recently injected as this
-   * plugin's own message. `.context()` used to get supersede-on-change for free
-   * from the host's runtime-context projection; carrying the snapshot as an own
-   * message means re-emitting on change is this plugin's responsibility, and
-   * the rendered text (which carries the revision digest) is the key.
-   */
-  private injectedMemoryText: string | undefined
   private idleReviewTimer: ReturnType<typeof setTimeout> | undefined
   private reviewController: AbortController | undefined
   private reviewRunning = false
@@ -274,6 +267,14 @@ class MnemonAgentLifecycle {
     ]
     return () => {
       this.disposed = true
+      const pending = this.pendingSnapshot
+      this.pendingSnapshot = undefined
+      // An earlier Session observer may unload us during step/start publication,
+      // before our own observer runs. Finish only this already accepted plan.
+      const started = pending === undefined ? undefined : this.agent.session.snapshotEvents().findLast(event => event.type === 'step/start')
+      if (pending !== undefined && started !== undefined && eventTurn(started) === pending.turn && started.data.step === pending.step) {
+        this.queueSnapshotRetirement(pending)
+      }
       this.releaseView()
       this.cancelIdleReview(true)
       for (const dispose of disposers.reverse()) dispose()
@@ -352,26 +353,8 @@ class MnemonAgentLifecycle {
     return false
   }
 
-  /**
-   * The runtime memory snapshot, as this plugin's own message, when it changed.
-   *
-   * `.context()` used to carry this inside the host's shared runtime-context
-   * projection. Carrying it here instead attributes it to dsh-mnemon and keeps
-   * a memory write from re-emitting other contributors' sections; supersede
-   * stays intact because the block is still a complete state replacing its
-   * predecessor, keyed on the rendered text's revision digest.
-   */
-  private memorySnapshotMessage(): HostUserMessage | undefined {
-    const wake = this.memoryWake()
-    if (wake === undefined) return undefined
-    // This message bypasses SystemPrompt interpolation; Source text stays literal.
-    const text = wake.text
-    if (text.trim() === '' || text === this.injectedMemoryText) return undefined
-    this.injectedMemoryText = text
-    return createPluginMessage(text, 'recall')
-  }
-
   private async preStep(payload: PreStepPayload, next: () => Promise<HostPreStepDecision>): Promise<HostPreStepDecision> {
+    this.pendingSnapshot = undefined
     if (payload.step === 1) this.cancelIdleReview(true)
     const decision = await next()
     if (decision.kind === 'reject' || payload.signal.aborted) {
@@ -382,6 +365,12 @@ class MnemonAgentLifecycle {
     // or Mnemon can load while that waterfall is already running. The accepted
     // Agent step still needs its own durable turn's View before tools or Wake.
     if (!this.disposed && openAgentTurn(this.agent) === payload.turn) await this.memoryTurn?.begin(payload.turn, payload.signal)
+    // Retirement is independent of injection gates: a disabled/absent View or
+    // changed authority must not leave old snapshots in an accepted request.
+    const update = prepareMemorySnapshot(this.agent.session,
+      this.config.lifecycleEnabled ? this.memoryWake()?.text : undefined,
+      this.config.lifecycleEnabled ? memorySnapshotState(this.memoryTurn?.current?.context.view) : undefined)
+    this.pendingSnapshot = { turn: payload.turn, step: payload.step, signal: payload.signal, update }
     if (!this.config.lifecycleEnabled) return decision
     if (this.config.writeEnabled && this.config.writebackMode === 'guided') {
       this.recordTurnMessages(payload.turn, decision.messages)
@@ -393,10 +382,8 @@ class MnemonAgentLifecycle {
       return decision
     }
     if (decision.messages.length === 0) return decision
-    // Independent of the one-shot reminder gate below: memory can change at any
-    // point in a session, and each change must supersede the previous snapshot.
-    // Appended last so the snapshot sits at the bottom of this plugin's block.
-    const snapshot = this.memorySnapshotMessage()
+    // Appended last; normal additions preserve the preceding request prefix.
+    const snapshot = update.message
     const withSnapshot = (messages: HostUserMessage[]): HostUserMessage[] =>
       snapshot === undefined ? messages : [...messages, snapshot]
 
@@ -467,12 +454,43 @@ class MnemonAgentLifecycle {
   }
 
   private sessionEvent(session: HostAgent['session'], event: HostSessionEvent): void {
-    if (session !== this.agent.session || event.type !== 'turn/end') return
+    if (session !== this.agent.session) return
     const turn = eventTurn(event)
+    if (event.type === 'step/start') {
+      const pending = this.pendingSnapshot
+      if (pending === undefined || pending.turn !== turn || pending.step !== event.data.step) return
+      this.pendingSnapshot = undefined
+      this.queueSnapshotRetirement(pending)
+      return
+    }
+    if (event.type !== 'turn/end') return
+    if (this.pendingSnapshot?.turn === turn) this.pendingSnapshot = undefined
     const current = this.memoryTurn?.current
     const pinned = turn === undefined || current?.turn !== turn ? undefined : current
     if (pinned === undefined) return
     this.releaseView(turn)
+  }
+
+  private queueSnapshotRetirement(pending: PendingMemorySnapshot): void {
+    // Session observers cannot append reentrantly. This runs after publication,
+    // before awaited request preparation resumes, even if request hooks short
+    // circuit. The captured plan only uses the public Session, never a released
+    // View/Source; lifecycle unloading does not abandon an accepted checkpoint.
+    queueMicrotask(() => {
+      if (pending.signal.aborted || openAgentTurn(this.agent) !== pending.turn) return
+      try { pending.update.retire(pending.turn, pending.step) }
+      catch {
+        // Fail closed without an unhandled microtask exception or raw Source
+        // details. keepInbox avoids further log appends while cancelling.
+        const reason = 'Memory snapshot checkpoint failed; model request cancelled.'
+        this.counters.failures += 1
+        this.lastPhase = 'error'
+        this.lastAt = new Date().toISOString()
+        this.lastError = reason
+        this.agent.cancel({ kind: 'hook', reason }, { keepInbox: true })
+        console.warn('[dsh-mnemon] ' + reason)
+      }
+    })
   }
 
   private scheduleIdleReview(turn: number): void {

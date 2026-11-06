@@ -20,7 +20,7 @@ async function fixture(options: Parameters<typeof compositionFixture>[0] = {}) {
   const value = await compositionFixture(options); fixtures.push(value); return value
 }
 function agent(id: string, cwd: string): HostAgent {
-  return { id, status: 'idle', session: { header: { cwd }, ...sessionLog() }, ctx: { on: vi.fn(), effect: vi.fn() }, followup: vi.fn(), steer: vi.fn(), inject: vi.fn() }
+  return { id, status: 'idle', session: { header: { cwd }, ...sessionLog() }, ctx: { on: vi.fn(), effect: vi.fn() }, followup: vi.fn(), steer: vi.fn(), inject: vi.fn(), cancel: vi.fn() }
 }
 afterEach(async () => {
   for (const value of fixtures.splice(0)) await value.dispose()

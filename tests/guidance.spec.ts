@@ -1,10 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderContextSnapshot } from '@deepseek-ai/dsh-system-prompt'
 import type { HostContextShape } from '../src/host/dsh.ts'
-import { applyMemoryViewGuidance, withoutMemoryViewContext, registerGuidance, RUNTIME_MEMORY_CONTEXT_NAME } from '../src/host/guidance.ts'
+import { applyMemoryViewGuidance, withoutMemoryViewContext, registerGuidance, RUNTIME_MEMORY_CONTEXT_NAME, SNAPSHOT_GUIDANCE } from '../src/host/guidance.ts'
 import type { ComposableMemoryView } from '../src/core/contracts/index.ts'
 
 describe('Source-neutral View guidance', () => {
+  it('distinguishes the latest projected state from deletion in persistent storage', () => {
+    expect(SNAPSHOT_GUIDANCE).toContain('latest snapshot supersedes')
+    expect(SNAPSHOT_GUIDANCE).toContain('does not imply deletion from storage')
+  })
+
   it('uses pinned Strategy instructions and removes stale default instructions on a Strategy switch', () => {
     const assembly = {
       sections: [{ name: 'host', text: 'Host protocol' }, { name: 'mnemon:routing', text: 'stale routing' },
@@ -13,12 +18,13 @@ describe('Source-neutral View guidance', () => {
     }
     const selected = { guidance: { system: 'Trusted instruction {{model}}', routing: 'Selected routing' } } as ComposableMemoryView
     const result = applyMemoryViewGuidance(assembly, selected)
-    expect(result.sections).toEqual([{ name: 'host', text: 'Host protocol' },
+    expect(result.sections).toEqual([{ name: 'host', text: 'Host protocol' }, { name: 'mnemon:snapshot-history', text: SNAPSHOT_GUIDANCE },
       { name: 'mnemon:strategy', text: 'Trusted instruction {{model}}' }, { name: 'mnemon:routing', text: 'Selected routing' }])
     expect(result.contexts).toEqual([])
     expect(assembly.sections).toHaveLength(4)
     const custom = applyMemoryViewGuidance(result, {} as ComposableMemoryView, false)
-    expect(custom.sections).toEqual([{ name: 'host', text: 'Host protocol' }])
+    expect(custom.sections).toEqual([{ name: 'host', text: 'Host protocol' }, { name: 'mnemon:snapshot-history', text: SNAPSHOT_GUIDANCE }])
+    expect(applyMemoryViewGuidance(custom, undefined).sections).toEqual([{ name: 'host', text: 'Host protocol' }])
   })
 
   it('registers only View-based guidance and respects the existing preference', () => {

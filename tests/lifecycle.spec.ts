@@ -124,7 +124,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
     ctx: agentCtx,
     followup,
     steer,
-    inject: vi.fn(),
+    inject: vi.fn(), cancel: vi.fn(),
   } satisfies HostAgent
   const coordinator = {
     isFinishedTask: () => false,
@@ -157,7 +157,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
       ctx: taskCtx,
       followup: vi.fn(),
       steer: vi.fn(),
-      inject: vi.fn(),
+      inject: vi.fn(), cancel: vi.fn(),
     } satisfies HostAgent
     // DSH runs setup on the unpublished Agent, as setup(agent.ctx, agent).
     await options.setup?.(taskCtx, taskAgent)
@@ -196,7 +196,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
     beginTurn: vi.fn(async (turnId: string, scope: object) => {
       const turn = turnId.slice(turnId.lastIndexOf(':') + 1)
       const context = { turnId, view: { id: `view-${turn}`, digest: `digest-${turn}`, ...composedBy(config.memoryTopology.strategyId), createdAt: '2026-08-23T00:00:00.000Z',
-        projection: [], readGrants: [], routes: [], actionOffers: [] }, scope, startedAt: '2026-08-23T00:00:00.000Z' }
+        scope, projection: [], readGrants: [], routes: [], actionOffers: [] }, scope, startedAt: '2026-08-23T00:00:00.000Z' }
       pinnedTurns.set(turnId, context)
       return context
     }),
@@ -271,7 +271,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     const decision = await value.preStep([userMessage()], 1)
     if (decision.kind !== 'enter') throw new Error('unexpected rejection')
     const messages = decision.messages.filter(message => message.source.kind === 'dsh-mnemon')
-    expect(messages.map(message => message.source.form)).toEqual(['instructions', 'recall'])
+    expect(messages.map(message => message.source.form)).toEqual(['instructions', 'memory-snapshot'])
     for (const message of messages) {
       expect(message.source).not.toHaveProperty('plugin')
       expect(() => assertReleasedPayloadSemantics({
@@ -293,7 +293,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     const decision = await value.preStep([userMessage()], 1)
     if (decision.kind !== 'enter') throw new Error('unexpected rejection')
     const messages = decision.messages.slice(1)
-    expect(messages.map(message => message.source.form)).toEqual(['instructions', 'recall'])
+    expect(messages.map(message => message.source.form)).toEqual(['instructions', 'memory-snapshot'])
     for (const message of messages) {
       const event = session.append('user/message', message, { surfaceOp: 'append' })
       expect(format.releasedV4SessionFormatCodec.encodeEvent(event).data.source).toEqual(message.source)
@@ -327,7 +327,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     if (decision.kind !== 'enter') throw new Error('unexpected rejection')
     expect(decision.messages).toHaveLength(2)
     expect(decision.messages.some(message => message.source.form === 'instructions')).toBe(false)
-    expect(decision.messages.at(-1)?.source.form).toBe('recall')
+    expect(decision.messages.at(-1)?.source.form).toBe('memory-snapshot')
     value.stop()
   })
 
@@ -343,8 +343,8 @@ describe('Mnemon DSH lifecycle integration', () => {
     const decision = await value.preStep([other], 1)
     if (decision.kind !== 'enter') throw new Error('unexpected rejection')
     expect(decision.messages[0]).toEqual(other)
-    expect(decision.messages.slice(1).map(message => message.source)).toEqual([
-      { kind: 'dsh-mnemon', form: 'instructions' }, { kind: 'dsh-mnemon', form: 'recall' },
+    expect(decision.messages.slice(1).map(message => message.source)).toMatchObject([
+      { kind: 'dsh-mnemon', form: 'instructions' }, { kind: 'dsh-mnemon', form: 'memory-snapshot' },
     ])
     value.stop()
   })
@@ -363,7 +363,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     expect(decision.kind === 'enter' && decision.messages.slice(0, 2)).toEqual([user, shared])
     expect(decision.kind === 'enter' && decision.messages.at(-1)).toMatchObject({
       content: [{ type: 'text', text }],
-      source: { kind: 'dsh-mnemon', form: 'recall' },
+      source: { kind: 'dsh-mnemon', form: 'memory-snapshot' },
     })
     if (decision.kind === 'enter') expect(decision.messages.at(-1)?.source).not.toHaveProperty('summary')
     await value.turnStopping(1)
@@ -375,16 +375,16 @@ describe('Mnemon DSH lifecycle integration', () => {
   it('re-composes the guided reminder after a rewind drops it from the surface', async () => {
     const value = fixture()
     const forms = (decision: HostPreStepDecision) => decision.kind === 'enter' ? decision.messages.map(message => message.source.form) : []
-    expect(forms(await value.preStep([userMessage()], 1))).toEqual([undefined, 'instructions', 'recall'])
+    expect(forms(await value.preStep([userMessage()], 1))).toEqual([undefined, 'instructions', 'memory-snapshot'])
 
     // Still visible: a later first step must not duplicate it. The snapshot
     // rides along because this fixture's Wake text is turn-derived.
-    expect(forms(await value.preStep([userMessage()], 2))).toEqual([undefined, 'recall'])
+    expect(forms(await value.preStep([userMessage()], 2))).toEqual([undefined, 'memory-snapshot'])
 
     // Rewind replaces the surface and drops the reminder. The append-only event
     // log still contains it, which is why presence cannot be read from there.
     value.agent.session.surface = { nodes: [] }
-    expect(forms(await value.preStep([userMessage()], 3))).toEqual([undefined, 'instructions', 'recall'])
+    expect(forms(await value.preStep([userMessage()], 3))).toEqual([undefined, 'instructions', 'memory-snapshot'])
   })
 
   it('pins one immutable Wake across every model step and releases it at the turn boundary', async () => {
@@ -861,7 +861,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     // fixture derives Wake text from the turn, so turn 2 is a new revision.
     expect(second.messages).toHaveLength(2)
     expect(second.messages.some(message => (message.source as { form?: string }).form === 'instructions')).toBe(false)
-    expect(second.messages.at(-1)?.source).toMatchObject({ kind: 'dsh-mnemon', form: 'recall' })
+    expect(second.messages.at(-1)?.source).toMatchObject({ kind: 'dsh-mnemon', form: 'memory-snapshot' })
     expect(value.coordinator.recall).not.toHaveBeenCalled()
     expect(value.lifecycle.snapshot('session-1').counters).toMatchObject({ primes: 1, recallCues: 1, writebackCues: 1 })
   })

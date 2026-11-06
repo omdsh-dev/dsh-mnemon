@@ -1,4 +1,5 @@
 import type { MemoryJsonValue, MemorySourceDefinition } from 'dsh-mnemon/contracts'
+import { createHash } from 'node:crypto'
 import { COMPOSABLE_MEMORY_API_VERSION } from 'dsh-mnemon/contracts'
 import { defineMemorySource, createMemoryMutationReceipt as receipt, memoryInputRecord as record, memoryInputStringArray as stringArray, memoryInputText as text, truncateMemoryText as truncate } from 'dsh-mnemon/extension-sdk'
 import { resolveGitBranch } from './git-branch.ts'
@@ -69,7 +70,18 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
       { memory: effective.memoryLimitBytes, user: effective.userLimitBytes },
       { effectiveDataDir: () => effective.userDataDir },
     )
-    const projection = (workspaceId?: string) => controller.contextProjection(resolveGitBranch(workspaceId))
+    const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
+    const projection = (workspaceId?: string) => {
+      const branch = resolveGitBranch(workspaceId)
+      const current = controller.contextProjection(branch)
+      return { ...current, snapshot: {
+        version: 1,
+        scope: digest([effective.dataDir, effective.userDataDir, branch ?? null]),
+        // Ages are projection annotations. Content, importance and branch scope
+        // identify a fact; losing any old occurrence requires a checkpoint.
+        entries: current.entries.map(entry => digest([entry.target, entry.content, entry.importance, entry.branches ?? []])).sort(),
+      } }
+    }
     const prepared = new WeakMap<object, ReturnType<typeof projection>>()
     return {
       facts(request) {
@@ -102,7 +114,9 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
             mode: request.mode,
             text: truncate(current.text, request.maxCharacters),
             revision: current.revision,
-            provenance: { sourceTypeId: 'runtime' },
+            // A truncated projection cannot certify that all old facts remain
+            // visible. Hosts then conservatively compare the entire fragment.
+            provenance: { sourceTypeId: 'runtime', ...(current.text.length <= request.maxCharacters ? { snapshot: current.snapshot } : {}) },
           }],
           presentation: {
             visibleItems: current.entries.length,
