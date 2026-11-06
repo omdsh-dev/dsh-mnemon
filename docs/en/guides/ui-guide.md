@@ -121,6 +121,7 @@ Conversation tools bind Project Documents to the session workspace (`session.hea
 - Switch between **Active** and **Archived**. The reader keeps the title, retrieval description, provenance, revision, hash, size and full Markdown.
 - Search matches the title, description and body. Lists are newest first; updating an older document does not move it.
 - Source files in your project are never modified; a document is a managed copy.
+- **Delete** beside the detail title permanently removes an active or archived managed copy and its index record after confirmation. It runs without a model or archive task and creates no Memory Space index; existing Memory Space entries remain. The list and capacity refresh after deletion. If the document index or managed file changed while confirmation was open, cancel, refresh and review the latest copy before trying again.
 - Archiving indexes the document in a memory space before moving the original, so the cold copy stays findable. The destination must be active and support exact writes and safe forget. With no such memory space at all, the document is archived locally without an index and stays readable under **Archived**.
 
 <details>
