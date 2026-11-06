@@ -30,6 +30,7 @@ import type { MemoryWake } from "../core/contracts/index.ts"
 import { agentScope, type MnemonAgentRuntimeSource } from './runtime.ts'
 import { createPluginMessage, MNEMON_PLUGIN_SOURCE } from './plugin-message.ts'
 import { prepareMemorySnapshot } from './memory-snapshot.ts'
+import { memorySnapshotState } from './memory-snapshot-state.ts'
 import type { SkillEvolution } from './skill-evolution.ts'
 import { IdleReviewWatermarkStore } from './idle-review-watermark.ts'
 import { activationOwned, isCreatingChild, isRootAgent, isTaskRecord, rootAgents, titleTask } from './agent-compat.ts'
@@ -370,6 +371,12 @@ class MnemonAgentLifecycle {
     // or Mnemon can load while that waterfall is already running. The accepted
     // Agent step still needs its own durable turn's View before tools or Wake.
     if (!this.disposed && openAgentTurn(this.agent) === payload.turn) await this.memoryTurn?.begin(payload.turn, payload.signal)
+    // Retirement is independent of injection gates: a disabled/absent View or
+    // changed authority must not leave old snapshots in an accepted request.
+    const update = prepareMemorySnapshot(this.agent.session,
+      this.config.lifecycleEnabled ? this.memoryWake()?.text : undefined,
+      this.config.lifecycleEnabled ? memorySnapshotState(this.memoryTurn?.current?.context.view) : undefined)
+    this.pendingSnapshot = { turn: payload.turn, update }
     if (!this.config.lifecycleEnabled) return decision
     if (this.config.writeEnabled && this.config.writebackMode === 'guided') {
       this.recordTurnMessages(payload.turn, decision.messages)
@@ -381,11 +388,7 @@ class MnemonAgentLifecycle {
       return decision
     }
     if (decision.messages.length === 0) return decision
-    // Independent of the one-shot reminder gate below: memory can change at any
-    // point in a session, and each change must supersede the previous snapshot.
-    // Appended last so the snapshot sits at the bottom of this plugin's block.
-    const update = prepareMemorySnapshot(this.agent.session, this.memoryWake()?.text)
-    this.pendingSnapshot = { turn: payload.turn, update }
+    // Appended last; normal additions preserve the preceding request prefix.
     const snapshot = update.message
     const withSnapshot = (messages: HostUserMessage[]): HostUserMessage[] =>
       snapshot === undefined ? messages : [...messages, snapshot]

@@ -196,7 +196,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
     beginTurn: vi.fn(async (turnId: string, scope: object) => {
       const turn = turnId.slice(turnId.lastIndexOf(':') + 1)
       const context = { turnId, view: { id: `view-${turn}`, digest: `digest-${turn}`, ...composedBy(config.memoryTopology.strategyId), createdAt: '2026-08-23T00:00:00.000Z',
-        projection: [], readGrants: [], routes: [], actionOffers: [] }, scope, startedAt: '2026-08-23T00:00:00.000Z' }
+        scope, projection: [], readGrants: [], routes: [], actionOffers: [] }, scope, startedAt: '2026-08-23T00:00:00.000Z' }
       pinnedTurns.set(turnId, context)
       return context
     }),
@@ -343,7 +343,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     const decision = await value.preStep([other], 1)
     if (decision.kind !== 'enter') throw new Error('unexpected rejection')
     expect(decision.messages[0]).toEqual(other)
-    expect(decision.messages.slice(1).map(message => message.source)).toEqual([
+    expect(decision.messages.slice(1).map(message => message.source)).toMatchObject([
       { kind: 'dsh-mnemon', form: 'instructions' }, { kind: 'dsh-mnemon', form: 'memory-snapshot' },
     ])
     value.stop()

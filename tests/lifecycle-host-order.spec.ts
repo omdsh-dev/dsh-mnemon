@@ -32,7 +32,7 @@ function setup() {
           id: 'view-first-turn', digest: 'digest-first-turn', runtimeGeneration: 'generation:first',
           createdAt: '2026-08-23T00:00:00.000Z', strategyTypeId: 'default-three-tier', strategyInstanceKey: 'strategy:default',
           projection: [{ id: 'runtime:first', sourceInstanceKey: 'source:runtime', mode: 'eager', text: 'First-turn Wake', revision: 'r1' }],
-          routes: [], actionOffers: [], readGrants: [], diagnostics: [],
+          scope, routes: [], actionOffers: [], readGrants: [], diagnostics: [],
         },
         scope,
         startedAt: '2026-08-23T00:00:00.000Z',

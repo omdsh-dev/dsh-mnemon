@@ -1,4 +1,6 @@
 import { join } from 'node:path'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync } from 'node:fs'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
@@ -10,11 +12,13 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import * as documents from 'dsh-mnemon-source-documents'
 import * as runtime from 'dsh-mnemon-source-runtime'
 import * as scoped from 'dsh-mnemon-strategy-scoped'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import type { HostContextShape } from '../src/host/dsh.ts'
 import { MnemonLifecycle } from '../src/host/lifecycle.ts'
 import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
 import { registerTools } from '../src/host/tools.ts'
+import { createRuntimeGraph } from '../src/host/runtime.ts'
+import { resolveConfig } from '../src/host/config.ts'
 import { compositionFixture } from './fixtures/composition.ts'
 import { JsonlSessionPersistence } from './helpers/dsh-plugins.ts'
 import { dsh021, executeTool, loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
@@ -46,9 +50,9 @@ class ScriptedAdapter extends LlmAdapter {
 async function fixture(mode: Mode, start = true) {
   const f = await compositionFixture({ idleReview: { enabled: false } })
   // Both named tools and unbound, exact Route/Action ids must reach the model.
-  await f.mount(documents, { instanceId: 'extra-documents' })
-  await f.mount(runtime, { instanceId: 'extra-runtime' })
-  await f.mount(scoped, { instanceId: 'scoped', config: { sourceKeys: [
+  await f.mount(documents, { instanceId: 'extra-documents', config: { dataDir: join(f.root, 'extra-documents') } })
+  await f.mount(runtime, { instanceId: 'extra-runtime', config: { dataDir: join(f.root, 'extra-runtime') } })
+  const unmountScoped = await f.mount(scoped, { instanceId: 'scoped', config: { sourceKeys: [
     'source:mnemon-source-runtime', 'source:mnemon-source-documents', 'source:mnemon-source-memory-spaces',
     'source:extra-documents', 'source:extra-runtime',
   ] } })
@@ -82,7 +86,7 @@ async function fixture(mode: Mode, start = true) {
     const lifecycle = new MnemonLifecycle(host, coordinator, f.config, f.live)
     const startLifecycle = () => { stop?.(); stop = lifecycle.start() }
     if (start) startLifecycle()
-    const requests: Array<{ sessionId: string; turn: number | undefined; viewId: string | undefined; text: string; messages: GenerateOptions['messages'] }> = []
+    const requests: Array<{ sessionId: string; turn: number | undefined; viewId: string | undefined; strategyType: string | undefined; grantSources: string[]; text: string; messages: GenerateOptions['messages']; tools: GenerateOptions['tools'] }> = []
     const receipts: Array<{ sessionId: string; name: string; isError: boolean; text: string }> = []
     const errors: unknown[] = []
     ctx.on('agent/error', ({ error }) => { errors.push(error); return undefined })
@@ -90,7 +94,8 @@ async function fixture(mode: Mode, start = true) {
     ctx.llm.registerAdapter(['fixture'], new ScriptedAdapter(options => {
       const pin = f.graph.composableTurns.activeTurn(String(options.sessionId))
       requests.push({ sessionId: String(options.sessionId), turn: pin === undefined ? undefined : Number(pin.turnId.split(':').at(-1)), viewId: pin?.view.id,
-        text: JSON.stringify(options.messages.filter(message => message.role === 'user')), messages: options.messages })
+        strategyType: pin?.view.strategyTypeId, grantSources: pin?.view.readGrants.map(grant => grant.sourceInstanceKey) ?? [],
+        text: JSON.stringify(options.messages.filter(message => message.role === 'user')), messages: options.messages, tools: options.tools })
       const count = calls.get(String(options.sessionId)) ?? 0
       calls.set(String(options.sessionId), count + 1)
       const step = count % 3
@@ -106,12 +111,12 @@ async function fixture(mode: Mode, start = true) {
     })
     ctx.on('agent/created', async ({ agent }) => { if (mode === 'ptc') await selectPtc(agent.ctx); return undefined })
     const create = () => ctx.agents.create({ sessionId: SessionId('turn-view-parent'), meta: { cwd: f.workspace }, agentOptions: { provider: 'fixture', model: 'fixture' } })
-    const turn = async (agent: Agent) => {
-      agent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'Read synthetic memory status and documents.' }] }))
+    const turn = async (agent: Agent, ownRequest = false) => {
+      agent.followup(createUserMessage({ source: ownRequest ? { kind: 'dsh-mnemon', form: 'instructions' } : { kind: 'user' }, content: [{ type: 'text', text: 'Read synthetic memory status and documents.' }] }))
       await agent.whenIdle()
       if (errors.length > 0) throw errors.shift()
     }
-    return { ...f, ctx, lifecycle, requests, receipts, startLifecycle, create, turn, close }
+    return { ...f, ctx, lifecycle, requests, receipts, startLifecycle, create, turn, close, unmountScoped }
   } catch (error) { await close(); throw error }
 }
 
@@ -232,15 +237,20 @@ it('retains execution policy when a View is prepared by the accepted step', asyn
   } finally { await handle.dispose(); await f.close() }
 })
 
-it('keeps only the latest full memory snapshot model-visible across changes and resume', async () => {
-  const f = await fixture('native')
+it.each(['native', 'ptc'] as const)('preserves the full request prefix until the snapshot budget checkpoints, including %s resume', async mode => {
+  const f = await fixture(mode)
   let handle = await f.create()
   try {
     await f.turn(handle.agent)
+    const generation = handle.agent.session.surface.contentGeneration
+    expect(f.requests[0]!.strategyType).toBe('default-three-tier')
+    expect(f.requests[0]!.grantSources).toEqual(expect.arrayContaining(['source:mnemon-source-documents', 'source:mnemon-source-memory-spaces']))
     await f.graph.source('runtime').mutate('mutate', {
       action: 'add', target: 'memory', content: 'Synthetic revised snapshot fact.',
     })
     await f.turn(handle.agent)
+    expect(f.requests[3]!.messages.slice(0, f.requests[2]!.messages.length)).toEqual(f.requests[2]!.messages)
+    expect(handle.agent.session.surface.contentGeneration).toBe(generation)
     await f.graph.source('runtime').mutate('mutate', {
       action: 'add', target: 'memory', content: 'Synthetic latest snapshot fact.',
     })
@@ -252,7 +262,8 @@ it('keeps only the latest full memory snapshot model-visible across changes and 
 
     const counts = f.requests.map(request => request.text.match(/Synthetic turn-view retained fact\./gu)?.length ?? 0)
     console.info('Snapshot counts by model request:', counts.join(', '))
-    expect(counts).toEqual(Array(15).fill(1))
+    expect(counts).toEqual([1, 1, 1, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3])
+    expect(handle.agent.session.snapshotEvents().filter(event => event.type === 'request/header' && (event.data.reason === 'series' || event.data.startsSeries))).toHaveLength(0)
     for (const request of f.requests.slice(3)) expect(request.text).toContain('Synthetic revised snapshot fact.')
     for (const request of f.requests.slice(6)) expect(request.text).toContain('Synthetic latest snapshot fact.')
     for (const request of f.requests) {
@@ -262,6 +273,29 @@ it('keeps only the latest full memory snapshot model-visible across changes and 
     const audit = handle.agent.session.snapshotEvents().filter(event => event.type === 'user/message'
       && event.data.source.kind === 'dsh-mnemon' && event.data.source.form === 'memory-snapshot')
     expect(audit).toHaveLength(3)
+    for (const content of ['Synthetic fourth fact.', 'Synthetic fifth fact.']) {
+      await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content })
+      await f.turn(handle.agent)
+    }
+    expect(f.requests.slice(15).map(request => request.text.match(/Synthetic turn-view retained fact\./gu)?.length ?? 0)).toEqual([4, 4, 4, 1, 1, 1])
+    expect(handle.agent.session.surface.contentGeneration).toBeGreaterThan(generation)
+    expect(handle.agent.session.snapshotEvents().filter(event => event.type === 'request/header' && (event.data.reason === 'series' || event.data.startsSeries))).toHaveLength(1)
+    await handle.dispose()
+    handle = await f.ctx.agents.resume({ resumeSessionId: SessionId('turn-view-parent'), agentOptions: { provider: 'fixture', model: 'fixture' } })
+    await f.turn(handle.agent)
+    expect(f.requests.slice(21).map(request => snapshots(request.messages).length)).toEqual([1, 1, 1])
+    expect(handle.agent.session.snapshotEvents().filter(event => event.type === 'user/message' && event.data.source.kind === 'dsh-mnemon' && event.data.source.form === 'memory-snapshot')).toHaveLength(5)
+    const latest = f.requests.at(-1)!
+    expect(latest.text).toContain('Synthetic fifth fact.')
+    expect(latest.messages.some(message => message.role === 'developer' && message.source.kind === 'dsh-mnemon')).toBe(false)
+    for (let index = 1; index < f.requests.length; index++) {
+      if (index === 18) continue // Only the budget checkpoint may change the prefix.
+      const previous = f.requests[index - 1]!
+      const current = f.requests[index]!
+      expect(current.messages.slice(0, previous.messages.length)).toEqual(previous.messages)
+      expect(current.tools).toEqual(previous.tools)
+    }
+    console.info('Complete request prefixes stable across additive updates/resume; one budget checkpoint across 24 requests.')
   } finally { await handle.dispose(); await f.close() }
 }, 20_000)
 
@@ -312,3 +346,179 @@ it('retires a resumed legacy snapshot backlog without changing other producer me
     }
   } finally { await handle.dispose(); await f.close() }
 }, 20_000)
+
+function snapshots(messages: GenerateOptions['messages']) {
+  return messages.filter(message => message.role === 'user' && message.source?.kind === 'dsh-mnemon' && message.source.form === 'memory-snapshot')
+}
+
+it('immediately checkpoints corrected and deleted facts while preserving their audit', async () => {
+  const f = await fixture('native')
+  const handle = await f.create()
+  try {
+    await f.turn(handle.agent)
+    await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: 'Synthetic removable fact.' })
+    await f.turn(handle.agent)
+    expect(snapshots(f.requests.at(-1)!.messages)).toHaveLength(2)
+    await f.graph.source('runtime').mutate('mutate', { action: 'replace', target: 'memory', oldText: 'Synthetic turn-view retained fact.', content: 'Synthetic corrected fact.' })
+    await f.turn(handle.agent)
+    for (const request of f.requests.slice(6)) {
+      expect(snapshots(request.messages)).toHaveLength(1)
+      expect(request.text).not.toContain('Synthetic turn-view retained fact.')
+      expect(request.text).toContain('Synthetic corrected fact.')
+    }
+    await f.graph.source('runtime').mutate('mutate', { action: 'remove', target: 'memory', oldText: 'Synthetic removable fact.' })
+    await f.turn(handle.agent)
+    for (const request of f.requests.slice(9)) {
+      expect(snapshots(request.messages)).toHaveLength(1)
+      expect(request.text).not.toContain('Synthetic removable fact.')
+    }
+    expect(handle.agent.session.snapshotEvents().filter(event => event.type === 'user/message' && event.data.source.kind === 'dsh-mnemon' && event.data.source.form === 'memory-snapshot')).toHaveLength(4)
+  } finally { await handle.dispose(); await f.close() }
+})
+
+it('appends age annotations without changing the preceding model request', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-08-12T08:00:00.000Z'))
+  const f = await fixture('native')
+  const handle = await f.create()
+  try {
+    await f.turn(handle.agent)
+    const generation = handle.agent.session.surface.contentGeneration
+    vi.setSystemTime(new Date('2026-08-13T08:00:00.000Z'))
+    await f.turn(handle.agent)
+    expect(snapshots(f.requests[3]!.messages)).toHaveLength(2)
+    expect(f.requests[3]!.messages.slice(0, f.requests[2]!.messages.length)).toEqual(f.requests[2]!.messages)
+    expect(handle.agent.session.surface.contentGeneration).toBe(generation)
+    expect(f.requests[3]!.text).toContain('created=1d')
+  } finally { await handle.dispose(); await f.close(); vi.useRealTimers() }
+})
+
+it('checkpoints a withdrawn ReadGrant even when the full model snapshot is identical', async () => {
+  const f = await fixture('native')
+  const handle = await f.create()
+  try {
+    const created = await f.graph.source('documents').mutate<{ document: { id: string } }>('mutate', { action: 'create', title: 'Synthetic grant', content: 'Synthetic document.' })
+    await f.turn(handle.agent)
+    const previous = snapshots(f.requests[0]!.messages)[0]!
+    await f.graph.source('documents').mutate('archive', { id: created.document.id })
+    await f.turn(handle.agent)
+    for (const request of f.requests.slice(3)) {
+      const current = snapshots(request.messages)
+      expect(current).toHaveLength(1)
+      expect(current[0]!.content).toEqual(previous.content)
+      expect(current[0]!.id).not.toBe(previous.id)
+    }
+  } finally { await handle.dispose(); await f.close() }
+})
+
+it('checkpoints a branch switch before any request can see the previous branch fact', async () => {
+  const f = await fixture('native')
+  execFileSync('git', ['init', '--quiet', '-b', 'main', f.workspace])
+  const handle = await f.create()
+  try {
+    await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: 'Synthetic main-only fact.', branches: ['main'] })
+    await f.turn(handle.agent)
+    expect(f.requests[0]!.text).toContain('Synthetic main-only fact.')
+    execFileSync('git', ['symbolic-ref', 'HEAD', 'refs/heads/other'], { cwd: f.workspace })
+    await f.turn(handle.agent)
+    for (const request of f.requests.slice(3)) {
+      expect(snapshots(request.messages)).toHaveLength(1)
+      expect(request.text).not.toContain('Synthetic main-only fact.')
+      expect(request.text).toContain('Synthetic turn-view retained fact.')
+    }
+  } finally { await handle.dispose(); await f.close() }
+})
+
+it('checkpoints copied history on a workspace boundary even with identical visible memory', async () => {
+  const f = await fixture('native')
+  const handle = await f.create()
+  let other: Awaited<ReturnType<typeof f.create>> | undefined
+  try {
+    await f.turn(handle.agent)
+    const previous = snapshots(f.requests[0]!.messages)[0]!
+    const workspace = join(f.root, 'other-workspace')
+    mkdirSync(workspace)
+    other = await f.ctx.agents.create({ sessionId: SessionId('other-workspace'), meta: { cwd: workspace }, agentOptions: { provider: 'fixture', model: 'fixture' } })
+    other.agent.session.append('user/message', previous as never, { surfaceOp: 'append' })
+    await f.turn(other.agent)
+    for (const request of f.requests.slice(3)) {
+      const current = snapshots(request.messages)
+      expect(current).toHaveLength(1)
+      expect(current[0]!.content).toEqual(previous.content)
+      expect(current[0]!.id).not.toBe(previous.id)
+    }
+  } finally { await other?.dispose(); await handle.dispose(); await f.close() }
+})
+
+it('clears revoked Runtime projection permission before requests on the new generation', async () => {
+  const f = await fixture('native')
+  const handle = await f.create()
+  try {
+    await f.turn(handle.agent)
+    const next = resolveConfig({ ...f.config, memoryTopology: { ...f.config.memoryTopology,
+      layers: { ...f.config.memoryTopology.layers, runtime: { ...f.config.memoryTopology.layers.runtime,
+        participation: { ...f.config.memoryTopology.layers.runtime!.participation, projection: 'off' } } } } })
+    f.live.swap(createRuntimeGraph(next, f.workspace, f.extensions))
+    await f.turn(handle.agent)
+    for (const request of f.requests.slice(3)) expect(request.text).not.toContain('Synthetic turn-view retained fact.')
+  } finally { await handle.dispose(); await f.close() }
+})
+
+it.each(['disabled', 'own-request', 'no-view'] as const)('does not let the %s injection gate retain superseded snapshots', async gate => {
+  const f = await fixture('native')
+  const handle = await f.create()
+  try {
+    await f.turn(handle.agent)
+    await f.graph.source('runtime').mutate('mutate', { action: 'remove', target: 'memory', oldText: 'Synthetic turn-view retained fact.' })
+    if (gate === 'disabled') f.config.lifecycleEnabled = false
+    if (gate === 'no-view') { await f.unmountScoped(); await f.releases[3]!() }
+    await f.turn(handle.agent, gate === 'own-request')
+    expect(f.requests.slice(3)).toHaveLength(3)
+    for (const request of f.requests.slice(3)) {
+      expect(snapshots(request.messages)).toHaveLength(0)
+      expect(request.text).not.toContain('Synthetic turn-view retained fact.')
+    }
+  } finally { await handle.dispose(); await f.close() }
+})
+
+it('does not write retirements before step/start when an empty first batch defers the request', async () => {
+  const f = await fixture('native')
+  const handle = await f.create()
+  try {
+    await f.turn(handle.agent)
+    await f.graph.source('runtime').mutate('mutate', { action: 'remove', target: 'memory', oldText: 'Synthetic turn-view retained fact.' })
+    const stop = f.ctx.on('agent/pre-step', async (_payload, next) => {
+      const decision = await next()
+      return decision.kind === 'reject' ? decision : { kind: 'enter', messages: [] }
+    })
+    await f.turn(handle.agent)
+    expect(f.requests).toHaveLength(3)
+    expect(handle.agent.session.snapshotEvents().filter(event => event.type === 'developer/message' && event.data.message.source.kind === 'dsh-mnemon')).toHaveLength(0)
+    stop()
+    await f.turn(handle.agent)
+    for (const request of f.requests.slice(3)) {
+      expect(snapshots(request.messages)).toHaveLength(1)
+      expect(request.text).not.toContain('Synthetic turn-view retained fact.')
+    }
+  } finally { await handle.dispose(); await f.close() }
+})
+
+it.each(['reject', 'abort'] as const)('does not retire existing snapshots when a changed View will %s', async outcome => {
+  const f = await fixture('native')
+  const handle = await f.create()
+  try {
+    await f.turn(handle.agent)
+    await f.graph.source('runtime').mutate('mutate', { action: 'remove', target: 'memory', oldText: 'Synthetic turn-view retained fact.' })
+    const stop = f.ctx.on('agent/pre-step', async ({ agent }, next) => {
+      if (outcome === 'reject') return { kind: 'reject' }
+      agent.cancel({ kind: 'user' })
+      return next()
+    })
+    await f.turn(handle.agent)
+    expect(f.requests).toHaveLength(3)
+    expect(handle.agent.session.snapshotEvents().filter(event => event.type === 'developer/message' && event.data.message.source.kind === 'dsh-mnemon')).toHaveLength(0)
+    stop()
+    await f.turn(handle.agent)
+    for (const request of f.requests.slice(3)) expect(request.text).not.toContain('Synthetic turn-view retained fact.')
+  } finally { await handle.dispose(); await f.close() }
+})

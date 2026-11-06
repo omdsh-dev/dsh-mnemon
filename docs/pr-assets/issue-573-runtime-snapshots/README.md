@@ -1,35 +1,36 @@
-# Runtime snapshot history verification
+# Bounded Runtime snapshot history
 
-[简体中文](./README.zh-CN.md) | **English**
+**English** | [简体中文](./README.zh-CN.md)
 
-Issue: [#573](https://github.com/omdsh-dev/dsh-mnemon/issues/573). Base: `0db25213d128dfeb420163de20fd41a787366c87`, dsh-mnemon 0.5.41. Run on 2026-11-06 with Node 24.22.2. All data is synthetic; the adapter scripts model choices without an external model or paid API.
+Issue: [#573](https://github.com/omdsh-dev/dsh-mnemon/issues/573). Base: `20ab2b57f4c6241165b08c415bfa802354eea11f`, dsh-mnemon 0.5.41. Verified on 2026-11-06 with Node 24.22.2. All memory is synthetic; model choices are scripted without external or paid API calls.
 
-## Observed behavior
+## Behavior and evidence
 
-Before the fix, the real DSH adapter received snapshot counts `1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3` across a first turn, one changed projection, one unchanged turn and JSONL session resume. The regression failed because only one full snapshot should reach each request.
+The original fix retired the previous snapshot on every change. Its regression fails when the next request must retain the complete previous prefix. The revised policy appends Runtime additions and age changes within a group of at most **four complete snapshots or 64 KiB UTF-8 text**. Another snapshot that would exceed either limit checkpoints the group to the complete current snapshot. A current snapshot larger than 64 KiB is retained alone without truncation. These thresholds are initial engineering defaults, not measured cache optima.
 
-After the fix, three projection revisions, an unchanged turn and JSONL resume produced 15 requests with exactly one complete snapshot each. The append-only audit retained exactly three full snapshot messages. Unchanged text, including after resume, did not add another snapshot. Tool-driven continuation steps kept the same pinned View.
+The real Host test explicitly uses the default-three-tier Strategy with Runtime, Documents and Memory Spaces ReadGrants, plus extra Runtime/Documents instances. Both native and PTC runs exercise real status/search tools. Across eight turns and 24 model requests, snapshot counts per turn are `1, 2, 3, 3, 3, 4, 1, 1`. JSONL unload/resume occurs both within the group and after checkpoint. Every request except the checkpoint retains the complete preceding model-message prefix and unchanged tool definitions. There is exactly one new request series for the budget checkpoint. Ordinary Runtime writes do not change the authority boundary or surface content generation.
 
-A separate resumed backlog test retained user text, ordinary Mnemon recalls, guidance and another producer's full snapshot verbatim. It retired only the three eligible Mnemon snapshots and recorded a separate one-node replacement with `sourceEventSeqs` for each. The actual adapter requests contained no Mnemon developer message. Unit coverage also preserves partial/quoted legacy text and all 13,000-plus characters of a literal current projection.
+Real requests also verify immediate checkpoint after corrections, deletions, branch changes, copied history in another workspace, withdrawn Documents grants with identical rendered snapshot text, and revoked Runtime projection permission. Disabling lifecycle injection, an own-plugin request or an unavailable View cannot bypass retirement. A rejected, aborted or empty first batch emits no request and writes no premature retirement; the next applicable request removes the stale snapshot. Existing delegated View leases and tool authority tests remain intact.
 
-## Public Host contract
+Unit tests cover the exact UTF-8 byte boundary, oversized current content, metadata recovery, opaque grant narrowing, Source/mode/Route/Action/guidance changes, unknown provenance, and preservation of interleaved user, ordinary recall, guidance and other-producer messages. No Source content is interpreted as Host instructions. The latest snapshot is the current *projected* state; absence can mean filtering or budgets rather than storage deletion.
 
-The implementation uses published Session `append()` with `surfaceOp: { op: 'replace', startSeq, endSeq }` and `sourceEventSeqs`. Each replaced range contains exactly one owned snapshot. Empty `developer/message` content is a public Session representation that derives no model message. These records contain no instructions, memory text or tool changes; the current full snapshot remains user-role data.
+## Public Host contracts and persistence
 
-Retirements run inside the public `agent/request` waterfall, after `step/start` and before request construction. This ordering satisfies the persisted Session codec, which requires developer records to belong to an open step. Request objects and upstream source are not modified. On resume, the Host reconstructs the replacements from JSONL before the next adapter request.
+Normal updates append user-role snapshot messages. Checkpoints use published Session `append()`, single-node `surfaceOp: replace`, and `sourceEventSeqs`. Empty `developer/message` content is the public Session representation that derives no model message; it contains no Source text, instructions or tool changes. Retirement commits in `agent/request`, after `step/start` and before request construction. Full originals and provenance remain in the append-only audit; interleaved conversation is not rewritten.
 
-New snapshots use `source.kind: dsh-mnemon`, `source.form: memory-snapshot`. Older `recall` messages are eligible only when the same producer carries one text block containing the complete built-in Runtime envelope, including the revision/size headings emitted by 0.5.34 or the current headings. Arbitrary recalls and unrecognized historical shapes are preserved. No memory store, projection budget, grant or tool authority changes.
+Host snapshot metadata contains version 1, an authority-boundary digest and visible-entry digests, not raw ReadGrants, paths or memory content. The boundary conservatively includes generation, scope, Source/mode, routes/actions, opaque grants, guidance and non-Runtime projections. Runtime owns the branch/storage scope and entry digests in fragment provenance. Ages are excluded from entry identity; removed/corrected entries force checkpoint. Truncated or unknown Source provenance is compared in full rather than granted additive-history behavior.
 
-## Validation
+Old unmarked snapshots migrate once. Legacy `recall` rows are eligible only for this producer's complete built-in Runtime envelope, including the 0.5.34 headings. Arbitrary recall and unknown historical envelopes remain untouched. Stored Runtime JSON/Markdown and the existing projection budget are unchanged. Older Sources remain readable with conservative checkpoint behavior; rolling back the plugin leaves a valid audit but can restore snapshot accumulation. Cleanup requires the plugin to be active; unloading it removes its hooks. Already pinned/delegated View authority keeps its existing lifetime.
 
-| Host | Command scope | Result |
-|---|---|---|
-| Published 0.2.1-rc.5 | `pnpm run verify` | Passed; root 2557 passed, 8 conditional skips; workspace suites, deterministic builds, Headless activation/restart and package checks passed |
-| Published 0.2.0-rc.2 | `tests/memory-snapshot.spec.ts`, `tests/turn-view-host.spec.ts` through `scripts/installed-dsh.config.ts` | 14 passed |
-| Published 0.2.1-rc.3 | Same installed-Host tests | 14 passed |
-| Published 0.2.2-rc.1 | Same installed-Host tests | 14 passed |
-| Existing master build `fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159` | Same acceptance tests against its built packages | 14 passed; source checkout unchanged |
+## Verification
 
-The published packages emit missing source-map warnings in Vite; the PTC fixture also emits Node's TypeScript stripping experimental warning. Both are existing dependency diagnostics, with no failing tests. Conditional suites requiring external services, credentials, a native CLI or platform-specific behavior remain skipped by their existing gates.
+At the review checkpoint: root typecheck passed; targeted lifecycle, guidance, state, Session and real Host suites passed **168 tests**; Runtime Source provenance suite passed **6 tests**. Complete verification and the installed-Host matrix are being recorded separately before submission.
 
-No production memory, user preview profile or external API was used. This test exercises persistence unload/reload through the real JSONL codec; it does not claim a Windows Electron process restart or reproduce the reporter's private 1,206-turn session. Historical audit files and empty surface nodes remain append-only. Rolling back the plugin preserves the Host-readable log, but the older plugin can accumulate snapshots again.
+Installed-Host command (each published release uses its own installation):
+
+```sh
+DSH_HOST_ROOT=<installed-dsh-package> pnpm exec vitest run --config scripts/installed-dsh.config.ts tests/memory-snapshot.spec.ts tests/memory-snapshot-state.spec.ts tests/turn-view-host.spec.ts
+pnpm run verify
+```
+
+No provider hit-rate measurement is claimed. [DeepSeek's cache documentation](https://api-docs.deepseek.com/guides/kv_cache/) requires matching persisted prefixes and describes caching as best-effort. These tests establish request-prefix stability, not remote cache persistence, token savings or model reasoning quality. They reload real JSONL persistence but do not claim a Windows Electron process restart or recreation of the reporter's private 1,206-turn conversation. Audit records and empty surface nodes continue to grow append-only.

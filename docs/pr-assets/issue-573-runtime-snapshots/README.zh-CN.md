@@ -1,35 +1,36 @@
-# Runtime 快照历史验证
+# 有界 Runtime 快照历史
 
 **简体中文** | [English](./README.md)
 
-Issue：[#573](https://github.com/omdsh-dev/dsh-mnemon/issues/573)。基线：`0db25213d128dfeb420163de20fd41a787366c87`，dsh-mnemon 0.5.41。2026-11-06 使用 Node 24.22.2 执行。全部数据为合成数据，适配器只脚本化模型选择，不调用外部模型或付费 API。
+Issue：[#573](https://github.com/omdsh-dev/dsh-mnemon/issues/573)。基线：`20ab2b57f4c6241165b08c415bfa802354eea11f`，dsh-mnemon 0.5.41。2026-11-06 使用 Node 24.22.2 验证。记忆均为合成数据；只脚本化模型选择，没有调用外部或付费 API。
 
-## 观察结果
+## 行为与证据
 
-修复前，真实 DSH 适配器在首轮、一次投影更新、一次不变回合和 JSONL 会话恢复中，收到的快照数量依次为 `1, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3, 3`。回归测试因每次请求应只有一份完整快照而失败。
+原修复每次内容变化都会淘汰旧快照。当回归测试要求完整保留上一次请求前缀时，原实现失败。修订后的策略允许 Runtime 新增和年龄变化在一组中追加，最多保留**四份完整快照或 64 KiB UTF-8 文本**；再追加会越过任一预算时，将旧组 checkpoint 为当前完整快照。当前单份超过 64 KiB 时仍独立完整保留，不截断。这些阈值是初始工程默认值，不是实测最优缓存配置。
 
-修复后，三次投影修订、一个不变回合和 JSONL 恢复共生成 15 次请求，每次恰好一份完整快照；追加式审计日志恰好保留三份完整快照。内容不变时，包括恢复后，不再追加快照。工具续步维持同一个已固定的 View。
+真实 Host 测试显式使用 default-three-tier Strategy，同时包含 Runtime、Documents、Memory Spaces ReadGrant，以及额外 Runtime/Documents 实例。native 和 PTC 均执行真实 status/search 工具。八个回合、24 次模型请求中，每回合快照数量为 `1, 2, 3, 3, 3, 4, 1, 1`；组内和 checkpoint 后各执行一次 JSONL 卸载恢复。除 checkpoint 请求外，每次请求都逐字保留前一请求的完整模型消息前缀，工具定义也保持一致。预算 checkpoint 恰好产生一次新 request series。普通 Runtime 写入没有改变授权边界或 surface content generation。
 
-另一个旧快照积压恢复测试，逐字保留用户文本、普通 Mnemon 召回、指导和其他生产者的完整快照，只淘汰三份符合条件的 Mnemon 快照；每份对应一个带 `sourceEventSeqs` 的单节点替换。实际适配器请求中没有 Mnemon developer 消息。单元测试还覆盖不完整或被引用的旧文本保持原样，以及当前投影超过 13,000 个字符时仍完整保留字面内容。
+实际请求还覆盖事实修正、删除、分支切换、复制历史到另一工作区、渲染快照完全同文的 Documents grant 撤回，以及 Runtime 投影权限关闭。禁用 lifecycle 注入、自有插件请求或无 View 都不会绕过清理。被拒绝、取消或首批为空的回合不发请求，也不会提前写淘汰记录；下一次适用请求会清除旧快照。既有委派 View 租约和工具权限测试继续通过。
 
-## 公开 Host 契约
+单元测试覆盖精确 UTF-8 字节边界、超大当前内容、元数据恢复、不透明 grant 收窄、Source/mode/Route/Action/指引变化、未知 provenance，以及用户、普通召回、指引和其他生产者消息的原样保留。Source 正文不被解释为 Host 指令。最新快照表示当前“投影”状态；缺失可能来自过滤或预算，不代表存储删除。
 
-实现使用已发布的 Session `append()`、`surfaceOp: { op: 'replace', startSeq, endSeq }` 和 `sourceEventSeqs`；每个替换范围只包含一个属于本插件的快照。空内容 `developer/message` 是公开 Session 支持的、不会派生出模型消息的表示。这些记录不含指导、记忆文本或工具变更；当前完整快照仍是 user 角色的数据。
+## 公开 Host 契约与持久化
 
-淘汰记录在公开 `agent/request` waterfall 中提交，位于 `step/start` 之后、请求构建之前。这个顺序满足持久 Session codec 对 developer 记录必须属于已打开 step 的要求。实现不改写请求对象或上游源码。恢复时，Host 先从 JSONL 重建替换结果，再发出下一次适配器请求。
+普通更新追加 user 角色快照。checkpoint 使用已发布的 Session `append()`、单节点 `surfaceOp: replace` 和 `sourceEventSeqs`。空内容 `developer/message` 是公开 Session 支持的、不派生模型消息的表示；没有 Source 文本、指令或工具变更。淘汰记录在 `agent/request` 中提交，位于 `step/start` 之后、请求构建之前。完整原文与来源关系保留在追加式审计中，穿插的会话消息不被重写。
 
-新快照使用 `source.kind: dsh-mnemon`、`source.form: memory-snapshot`。旧 `recall` 消息只有在相同生产者的单个文本块中包含完整内置 Runtime 格式时才可被淘汰，包括 0.5.34 的 revision/容量标题和当前标题。任意召回及无法识别的历史格式保持原样。记忆存储、投影预算、grant 和工具权限不变。
+Host 快照元数据只包含版本 1、授权边界摘要和可见条目摘要，不含原始 ReadGrant、路径或记忆正文。边界保守涵盖 generation、范围、Source/mode、routes/actions、不透明 grants、指引和非 Runtime 投影。Runtime 通过 fragment provenance 自己提供分支/存储范围和条目摘要。年龄不参与条目身份；删除或修正旧条目会立即 checkpoint。已截断或未知 Source provenance 按全文比较，不启用追加历史优化。
+
+未标记旧快照只迁移一次。旧 `recall` 只有属于同一生产者且包含完整内置 Runtime 信封时才可清理，包含 0.5.34 的标题格式；任意召回和无法识别的旧信封保留。Runtime JSON/Markdown 存储与已有投影预算不变。旧 Source 仍可读取，采用保守 checkpoint；回滚插件后审计仍有效，但可能重新积累快照。清理要求插件仍在运行，完全卸载后已无其 hooks。已固定/委派 View 的权限生命周期保持原样。
 
 ## 验证
 
-| Host | 命令范围 | 结果 |
-|---|---|---|
-| 已发布 0.2.1-rc.5 | `pnpm run verify` | 通过；根测试 2557 通过、8 项条件跳过；工作区测试、确定性构建、Headless 激活/重启及发布包检查通过 |
-| 已发布 0.2.0-rc.2 | 经 `scripts/installed-dsh.config.ts` 运行 `tests/memory-snapshot.spec.ts`、`tests/turn-view-host.spec.ts` | 14 通过 |
-| 已发布 0.2.1-rc.3 | 同一组已安装 Host 测试 | 14 通过 |
-| 已发布 0.2.2-rc.1 | 同一组已安装 Host 测试 | 14 通过 |
-| 已有 master 构建 `fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159` | 对其已构建包运行相同验收测试 | 14 通过；源码 checkout 未修改 |
+审查节点：根 typecheck 通过；lifecycle、guidance、state、Session 和真实 Host 定向套件共 **168 项通过**；Runtime Source provenance 套件 **6 项通过**。完整验证与已安装 Host 矩阵将在提交前另行记录。
 
-Vite 对已发布包输出缺失 source-map 警告；PTC 夹具还输出 Node TypeScript stripping 实验性警告。这些是已有依赖诊断，测试没有失败。需要外部服务、凭据、原生 CLI 或特定平台行为的条件测试仍按原有开关跳过。
+已安装 Host 命令（每个已发布版本使用独立安装）：
 
-没有使用生产记忆、用户预览 profile 或外部 API。此测试验证真实 JSONL codec 的卸载/重新加载，不声称完成 Windows Electron 进程重启，也没有复刻报告者私有的 1,206 回合会话。历史审计文件及空 surface 节点仍是追加式记录。回滚插件后，Host 仍可读取日志，但旧插件可能再次积累快照。
+```sh
+DSH_HOST_ROOT=<installed-dsh-package> pnpm exec vitest run --config scripts/installed-dsh.config.ts tests/memory-snapshot.spec.ts tests/memory-snapshot-state.spec.ts tests/turn-view-host.spec.ts
+pnpm run verify
+```
+
+不声称测得 Provider 命中率。[DeepSeek 缓存文档](https://api-docs.deepseek.com/guides/kv_cache/)要求匹配已持久化前缀，并明确缓存为 best-effort。测试证明的是请求前缀稳定性，不是远端缓存持久化、节省 token 数或模型推理质量。测试重新加载真实 JSONL，但不声称完成 Windows Electron 进程重启，也没有复刻报告者私有的 1,206 回合会话。审计记录与空 surface 节点仍按追加方式增长。
