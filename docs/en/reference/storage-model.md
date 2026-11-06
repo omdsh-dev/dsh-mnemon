@@ -133,6 +133,8 @@ Prefer concise replies.
 
 The model-facing text omits the revision hash, entry counts and storage-quota statistics; revision checks remain in the Source protocol and monitoring stays available through management/UI. File boundaries and all visible entries, including low-importance entries, remain. This format change does not classify or defer memory content.
 
+Conversation history retains only the latest full Mnemon View snapshot in model input. A changed snapshot arrives as user-role quoted data; its earlier copies stay in DSH's append-only audit log but no longer consume model context. Reopening a session reuses its surviving snapshot when the text is unchanged. Upgrade cleanup recognizes older `recall` messages only when they contain the complete built-in Runtime snapshot envelope; ordinary recalls, guidance, user messages and other producers remain unchanged. This does not lower the View's projection budget or shorten its current content.
+
 These lines annotate the unchanged entry content. `old_text` / `oldText` must match content only, excluding the metadata line. Recorded importance and age never outrank current instructions. JSON, on-disk Markdown, content matching, entry order and storage capacity remain unchanged. Annotations count toward the existing model projection character budget, so even the default Strategy can truncate or omit entries when there are many short records. Its guidance states that snapshots are budget-limited and that absence does not mean deletion; light-context can impose a smaller budget.
 
 ### Operations

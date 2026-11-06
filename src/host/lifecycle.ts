@@ -29,6 +29,7 @@ import type { PreparedMemoryPlacement } from 'dsh-mnemon-source-memory-spaces/co
 import type { MemoryWake } from "../core/contracts/index.ts"
 import { agentScope, type MnemonAgentRuntimeSource } from './runtime.ts'
 import { createPluginMessage, MNEMON_PLUGIN_SOURCE } from './plugin-message.ts'
+import { prepareMemorySnapshot } from './memory-snapshot.ts'
 import type { SkillEvolution } from './skill-evolution.ts'
 import { IdleReviewWatermarkStore } from './idle-review-watermark.ts'
 import { activationOwned, isCreatingChild, isRootAgent, isTaskRecord, rootAgents, titleTask } from './agent-compat.ts'
@@ -203,6 +204,7 @@ class MnemonAgentLifecycle {
   private primePending = true
   private startSource: LifecycleAgentSnapshot['startSource']
   private readonly guidedTurns = new Set<number>()
+  private pendingSnapshot: { turn: number; update: ReturnType<typeof prepareMemorySnapshot> } | undefined
   private readonly memoryActivity = new TurnActivityProjection()
   private readonly turnActivity = new Map<number, {
     messageIds: Set<string>
@@ -212,14 +214,6 @@ class MnemonAgentLifecycle {
     explicitCandidate: boolean
     noMaintenance: boolean
   }>()
-  /**
-   * Text of the runtime memory snapshot most recently injected as this
-   * plugin's own message. `.context()` used to get supersede-on-change for free
-   * from the host's runtime-context projection; carrying the snapshot as an own
-   * message means re-emitting on change is this plugin's responsibility, and
-   * the rendered text (which carries the revision digest) is the key.
-   */
-  private injectedMemoryText: string | undefined
   private idleReviewTimer: ReturnType<typeof setTimeout> | undefined
   private reviewController: AbortController | undefined
   private reviewRunning = false
@@ -270,6 +264,18 @@ class MnemonAgentLifecycle {
       // context behind it, and `recordTurnMessages` sees the complete batch
       // rather than a partial one.
       this.agent.ctx.on('agent/pre-step', ((payload: PreStepPayload, next: () => Promise<HostPreStepDecision>) => this.preStep(payload, next)) as never, { prepend: true }),
+      // Session's durable codec requires an open step for developer/message.
+      // pre-step only plans; this boundary follows step/start and precedes the
+      // Host's request projection and admission of the new user-role snapshot.
+      this.agent.ctx.on('agent/request', (async (payload: Omit<PreStepPayload, 'messages'>, next: () => Promise<unknown>) => {
+        const config = await next()
+        const pending = this.pendingSnapshot
+        if (!payload.signal.aborted && pending?.turn === payload.turn) {
+          pending.update.retire(payload.turn, payload.step)
+          this.pendingSnapshot = undefined
+        }
+        return config
+      }) as never),
       this.agent.ctx.on('agent/turn-stopping', ((payload: TurnStoppingPayload) => this.finishTurn(payload)) as never),
     ]
     return () => {
@@ -352,26 +358,8 @@ class MnemonAgentLifecycle {
     return false
   }
 
-  /**
-   * The runtime memory snapshot, as this plugin's own message, when it changed.
-   *
-   * `.context()` used to carry this inside the host's shared runtime-context
-   * projection. Carrying it here instead attributes it to dsh-mnemon and keeps
-   * a memory write from re-emitting other contributors' sections; supersede
-   * stays intact because the block is still a complete state replacing its
-   * predecessor, keyed on the rendered text's revision digest.
-   */
-  private memorySnapshotMessage(): HostUserMessage | undefined {
-    const wake = this.memoryWake()
-    if (wake === undefined) return undefined
-    // This message bypasses SystemPrompt interpolation; Source text stays literal.
-    const text = wake.text
-    if (text.trim() === '' || text === this.injectedMemoryText) return undefined
-    this.injectedMemoryText = text
-    return createPluginMessage(text, 'recall')
-  }
-
   private async preStep(payload: PreStepPayload, next: () => Promise<HostPreStepDecision>): Promise<HostPreStepDecision> {
+    this.pendingSnapshot = undefined
     if (payload.step === 1) this.cancelIdleReview(true)
     const decision = await next()
     if (decision.kind === 'reject' || payload.signal.aborted) {
@@ -396,7 +384,9 @@ class MnemonAgentLifecycle {
     // Independent of the one-shot reminder gate below: memory can change at any
     // point in a session, and each change must supersede the previous snapshot.
     // Appended last so the snapshot sits at the bottom of this plugin's block.
-    const snapshot = this.memorySnapshotMessage()
+    const update = prepareMemorySnapshot(this.agent.session, this.memoryWake()?.text)
+    this.pendingSnapshot = { turn: payload.turn, update }
+    const snapshot = update.message
     const withSnapshot = (messages: HostUserMessage[]): HostUserMessage[] =>
       snapshot === undefined ? messages : [...messages, snapshot]
 

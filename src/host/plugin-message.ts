@@ -6,7 +6,7 @@ declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
     'dsh-mnemon': {
       kind: 'dsh-mnemon'
-      form: 'recall' | 'instructions'
+      form: 'recall' | 'instructions' | 'memory-snapshot' | 'memory-snapshot-retired'
     }
   }
 }
@@ -14,7 +14,7 @@ declare module '@deepseek-ai/dsh-llm' {
 export const MNEMON_PLUGIN_SOURCE = 'dsh-mnemon'
 
 /** A user-role message this plugin adds to a step, marked with its own source. */
-export function createPluginMessage(text: string, form: 'recall' | 'instructions'): HostUserMessage {
+export function createPluginMessage(text: string, form: 'recall' | 'instructions' | 'memory-snapshot'): HostUserMessage {
   return structuredClone({
     id: randomUUID(),
     role: 'user' as const,

@@ -82,7 +82,7 @@ async function fixture(mode: Mode, start = true) {
     const lifecycle = new MnemonLifecycle(host, coordinator, f.config, f.live)
     const startLifecycle = () => { stop?.(); stop = lifecycle.start() }
     if (start) startLifecycle()
-    const requests: Array<{ sessionId: string; turn: number | undefined; viewId: string | undefined; text: string }> = []
+    const requests: Array<{ sessionId: string; turn: number | undefined; viewId: string | undefined; text: string; messages: GenerateOptions['messages'] }> = []
     const receipts: Array<{ sessionId: string; name: string; isError: boolean; text: string }> = []
     const errors: unknown[] = []
     ctx.on('agent/error', ({ error }) => { errors.push(error); return undefined })
@@ -90,7 +90,7 @@ async function fixture(mode: Mode, start = true) {
     ctx.llm.registerAdapter(['fixture'], new ScriptedAdapter(options => {
       const pin = f.graph.composableTurns.activeTurn(String(options.sessionId))
       requests.push({ sessionId: String(options.sessionId), turn: pin === undefined ? undefined : Number(pin.turnId.split(':').at(-1)), viewId: pin?.view.id,
-        text: JSON.stringify(options.messages.filter(message => message.role === 'user')) })
+        text: JSON.stringify(options.messages.filter(message => message.role === 'user')), messages: options.messages })
       const count = calls.get(String(options.sessionId)) ?? 0
       calls.set(String(options.sessionId), count + 1)
       const step = count % 3
@@ -231,3 +231,84 @@ it('retains execution policy when a View is prepared by the accepted step', asyn
     expectWake(f.requests[0]!.text)
   } finally { await handle.dispose(); await f.close() }
 })
+
+it('keeps only the latest full memory snapshot model-visible across changes and resume', async () => {
+  const f = await fixture('native')
+  let handle = await f.create()
+  try {
+    await f.turn(handle.agent)
+    await f.graph.source('runtime').mutate('mutate', {
+      action: 'add', target: 'memory', content: 'Synthetic revised snapshot fact.',
+    })
+    await f.turn(handle.agent)
+    await f.graph.source('runtime').mutate('mutate', {
+      action: 'add', target: 'memory', content: 'Synthetic latest snapshot fact.',
+    })
+    await f.turn(handle.agent)
+    await f.turn(handle.agent)
+    await handle.dispose()
+    handle = await f.ctx.agents.resume({ resumeSessionId: SessionId('turn-view-parent'), agentOptions: { provider: 'fixture', model: 'fixture' } })
+    await f.turn(handle.agent)
+
+    const counts = f.requests.map(request => request.text.match(/Synthetic turn-view retained fact\./gu)?.length ?? 0)
+    console.info('Snapshot counts by model request:', counts.join(', '))
+    expect(counts).toEqual(Array(15).fill(1))
+    for (const request of f.requests.slice(3)) expect(request.text).toContain('Synthetic revised snapshot fact.')
+    for (const request of f.requests.slice(6)) expect(request.text).toContain('Synthetic latest snapshot fact.')
+    for (const request of f.requests) {
+      expectWake(request.text)
+      expect(request.messages.some(message => message.role === 'developer' && message.source.kind === 'dsh-mnemon')).toBe(false)
+    }
+    const audit = handle.agent.session.snapshotEvents().filter(event => event.type === 'user/message'
+      && event.data.source.kind === 'dsh-mnemon' && event.data.source.form === 'memory-snapshot')
+    expect(audit).toHaveLength(3)
+  } finally { await handle.dispose(); await f.close() }
+}, 20_000)
+
+it('retires a resumed legacy snapshot backlog without changing other producer messages', async () => {
+  const f = await fixture('native')
+  let handle = await f.create()
+  try {
+    await f.turn(handle.agent)
+    const snapshot = handle.agent.session.snapshotEvents().find(event => event.type === 'user/message'
+      && event.data.source.kind === 'dsh-mnemon' && event.data.source.form === 'memory-snapshot')
+    if (snapshot?.type !== 'user/message') throw new Error('Expected the first complete memory snapshot')
+    const block = snapshot.data.content[0]
+    if (block?.type !== 'text') throw new Error('Expected a text snapshot')
+    const append = (text: string, source: object) => handle.agent.session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text }], source: source as never,
+    }), { surfaceOp: 'append' }).data
+    const legacy = [append(block.text, { kind: 'dsh-mnemon', form: 'recall' })]
+    const keep = [
+      append('Synthetic user-authored text.', { kind: 'user' }),
+      append('Synthetic unrelated recall.', { kind: 'dsh-mnemon', form: 'recall' }),
+      append('Synthetic Source guidance.', { kind: 'dsh-mnemon', form: 'instructions' }),
+      append(block.text, { kind: 'other-source', form: 'memory-snapshot' }),
+    ]
+    legacy.push(append(block.text, { kind: 'dsh-mnemon', form: 'recall' }))
+    await handle.dispose()
+    handle = await f.ctx.agents.resume({ resumeSessionId: SessionId('turn-view-parent'), agentOptions: { provider: 'fixture', model: 'fixture' } })
+    await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: 'Synthetic post-upgrade fact.' })
+    await f.turn(handle.agent)
+    for (const request of f.requests.slice(3)) {
+      const ids = request.messages.flatMap(message => 'id' in message ? [message.id] : [])
+      for (const message of keep) expect(request.messages).toContainEqual(message)
+      for (const message of [snapshot.data, ...legacy]) expect(ids).not.toContain(message.id)
+      expect(request.messages.filter(message => message.role === 'user' && 'source' in message
+        && message.source.kind === 'dsh-mnemon' && message.source.form === 'memory-snapshot')).toHaveLength(1)
+      expect(request.messages.some(message => message.role === 'developer' && message.source.kind === 'dsh-mnemon')).toBe(false)
+      expect(request.text).toContain('Synthetic post-upgrade fact.')
+    }
+    const audit = handle.agent.session.snapshotEvents()
+    for (const message of [snapshot.data, ...legacy, ...keep]) {
+      expect(audit.some(event => event.type === 'user/message' && event.data.id === message.id)).toBe(true)
+    }
+    const retirements = audit.filter(event => event.type === 'developer/message')
+      .filter(event => event.data.message.source.kind === 'dsh-mnemon')
+    expect(retirements).toHaveLength(3)
+    for (const retirement of retirements) {
+      expect(retirement.data.message.content).toEqual([])
+      expect(retirement.sourceEventSeqs).toHaveLength(1)
+    }
+  } finally { await handle.dispose(); await f.close() }
+}, 20_000)
