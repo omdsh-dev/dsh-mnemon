@@ -138,11 +138,13 @@ export function ComponentOptions(props: ComponentOptionsProps): JSX.Element {
 /** Sources a Strategy may use, in the order chosen; ones no longer running stay listed so they can be removed. */
 function SourceChoice(props: { field: Field; value: Staged; defaultAll?: boolean; sources: MemoryViewDashboard['sources']; name: (sourceTypeId: string, fallback: string) => string; labelledBy: string; disabled: boolean; t: MnemonTranslate; onChange: (sources: string[]) => void }): JSX.Element {
   const { field, value, t } = props
-  const eligible = props.sources.filter(source => (field.sourceRoles === undefined || field.sourceRoles.length === 0 || field.sourceRoles.includes(source.role))
-    && (!props.defaultAll || ['working-context', 'narrative', 'durable-evidence'].includes(source.role)))
+  const eligible = props.sources.filter(source => field.sourceRoles === undefined || field.sourceRoles.length === 0 || field.sourceRoles.includes(source.role))
+  const defaultRoles = ['working-context', 'narrative', 'durable-evidence']
   // Unset is inherited policy, not an explicit empty selection. Keep `own` false
   // until an edit so saving another option does not freeze these defaults.
-  const selected = !value.own && props.defaultAll ? eligible.map(source => source.sourceInstanceKey) : value.sources
+  const selected = !value.own && props.defaultAll ? eligible.filter(source => defaultRoles.includes(source.role))
+    .sort((a, b) => defaultRoles.indexOf(a.role) - defaultRoles.indexOf(b.role) || a.sourceInstanceKey.localeCompare(b.sourceInstanceKey))
+    .map(source => source.sourceInstanceKey) : value.sources
   const missing = selected.filter(key => !eligible.some(source => source.sourceInstanceKey === key))
   const several = (sourceTypeId: string): boolean => eligible.filter(source => source.sourceTypeId === sourceTypeId).length > 1
   const toggle = (key: string, on: boolean): void => props.onChange(on ? [...selected, key] : selected.filter(item => item !== key))
