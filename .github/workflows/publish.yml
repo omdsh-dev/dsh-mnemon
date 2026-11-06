@@ -94,7 +94,7 @@ jobs:
 
       - name: Verify independent plugins and the packed upgrade E2E
         env:
-          MNEMON_PLUGIN_VERIFY_CONCURRENCY: '4'
+          MNEMON_PLUGIN_VERIFY_CONCURRENCY: '2'
         run: pnpm run verify:plugins --skip-build
 
       - name: Pack selected frozen artifacts
