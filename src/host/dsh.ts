@@ -212,6 +212,7 @@ export interface HostAgent {
   followup(message: HostUserMessage): void
   steer(message: HostUserMessage): void
   inject(message: HostUserMessage): void
+  cancel(cause: { kind: 'hook'; reason: string }, options?: { keepInbox?: boolean }): void
 }
 
 export interface HostAgentHandle {

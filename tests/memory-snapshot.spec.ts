@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import type { HostMessageSource, HostSession } from '../src/host/dsh.ts'
 import { prepareMemorySnapshot } from '../src/host/memory-snapshot.ts'
 import type { MemorySnapshotState } from '../src/host/memory-snapshot-state.ts'
+import { truncateMemoryText } from '../src/sdk/index.ts'
 
 const previous = 'MNEMON RUNTIME MEMORY SNAPSHOT\nRevision: synthetic-r1\nMetadata lines are annotations.\n\nContents of USER.md (user profile; entries: 1; UTF-8 bytes: 20/100)\n<runtime-memory-file name="USER.md">\nSynthetic preference.\n</runtime-memory-file>\n\nContents of MEMORY.md (working reference; entries: 1; UTF-8 bytes: 18/100)\n<runtime-memory-file name="MEMORY.md">\nSynthetic old fact.\n</runtime-memory-file>'
 const recent = 'MNEMON RUNTIME MEMORY SNAPSHOT\nEntry annotations default to importance=normal and ages=0d.\n\nUSER.md (user profile)\n<runtime-memory-file name="USER.md">\nSynthetic preference.\n</runtime-memory-file>\n\nMEMORY.md (working reference)\n<runtime-memory-file name="MEMORY.md">\nSynthetic recent fact.\n</runtime-memory-file>'
@@ -24,6 +25,37 @@ function fixture() {
 
 describe('memory snapshot surface updates', () => {
   const state = (entries = ['a'.repeat(64)], boundary = 'b'.repeat(64)): MemorySnapshotState => ({ version: 1, boundary, entries })
+
+  it.each([
+    { kind: 'plugin', plugin: 'dsh-mnemon', form: 'recall' },
+    { kind: 'plugin:dsh-mnemon', form: 'recall' },
+  ])('migrates complete legacy producer attribution %j without touching ordinary recall', source => {
+    const f = fixture()
+    f.append(previous, source)
+    const ordinary = f.append('Synthetic ordinary recall.', source)
+    f.commit(f.plan(current, state()))
+    expect(f.session.deriveMessages()).toEqual([ordinary.data, expect.objectContaining({ content: [{ type: 'text', text: current }] })])
+  })
+
+  it('recognizes official legacy truncation in either file or its structural headings, without crossing into another quote', () => {
+    const canonical = previous.replace('synthetic-r1', 'a'.repeat(64)).replace('Metadata lines are annotations.', 'Metadata lines are annotations; created/updated are ages at projection in whole days (future/unknown for future/invalid timestamps). Current instructions win. For old_text/oldText, use entry content only.')
+    const userEnd = canonical.indexOf('\n</runtime-memory-file>') + '\n</runtime-memory-file>'.length
+    for (const end of [canonical.indexOf('Synthetic preference.') + 5, userEnd + 1, userEnd + 7, canonical.indexOf('<runtime-memory-file name="MEMORY.md">') + 12, canonical.indexOf('Synthetic old fact.') + 8]) {
+      const f = fixture()
+      const truncated = truncateMemoryText(canonical, end + 1)
+      f.append(truncated, { kind: 'dsh-mnemon', form: 'recall' })
+      f.append(previous + '\n\n' + truncated, { kind: 'plugin:dsh-mnemon', form: 'recall' })
+      const keep = [
+        f.append('Quoted:\n' + truncated, { kind: 'dsh-mnemon', form: 'recall' }),
+        f.append(truncated.replace('Metadata lines are annotations;', 'Unrecognized annotations;'), { kind: 'dsh-mnemon', form: 'recall' }),
+        f.append(truncated.slice(0, -1), { kind: 'dsh-mnemon', form: 'recall' }),
+        f.append(truncated.slice(0, -1) + '\n\n' + previous, { kind: 'dsh-mnemon', form: 'recall' }),
+        f.append(truncated, { kind: 'plugin', plugin: 'other', form: 'recall' }),
+      ]
+      f.commit(f.plan(current, state()))
+      expect(f.session.deriveMessages()).toEqual([...keep.map(event => event.data), expect.objectContaining({ content: [{ type: 'text', text: current }] })])
+    }
+  })
 
   it('appends four complete revisions without changing the prefix, then checkpoints the fifth', () => {
     const f = fixture()

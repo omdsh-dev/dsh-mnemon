@@ -28,7 +28,7 @@ import type { AssistantMessageText, LifecycleAgentSnapshot, LifecycleCounters, L
 import type { PreparedMemoryPlacement } from 'dsh-mnemon-source-memory-spaces/contracts'
 import type { MemoryWake } from "../core/contracts/index.ts"
 import { agentScope, type MnemonAgentRuntimeSource } from './runtime.ts'
-import { createPluginMessage, MNEMON_PLUGIN_SOURCE } from './plugin-message.ts'
+import { createPluginMessage, isMnemonMessageSource, MNEMON_PLUGIN_SOURCE } from './plugin-message.ts'
 import { prepareMemorySnapshot } from './memory-snapshot.ts'
 import { memorySnapshotState } from './memory-snapshot-state.ts'
 import type { SkillEvolution } from './skill-evolution.ts'
@@ -95,15 +95,6 @@ interface PromptAssembly {
 interface PromptAssemblyContext {
   agent?: HostAgent
   signal?: AbortSignal
-}
-
-function isMnemonMessageSource(source: unknown): boolean {
-  if (typeof source !== 'object' || source === null) return false
-  const { kind, plugin } = source as { kind?: unknown; plugin?: unknown }
-  // V3-to-V4 migrates the legacy plugin wrapper to `plugin:dsh-mnemon`.
-  return kind === MNEMON_PLUGIN_SOURCE
-    || kind === `plugin:${MNEMON_PLUGIN_SOURCE}`
-    || (kind === 'plugin' && plugin === MNEMON_PLUGIN_SOURCE)
 }
 
 /**
@@ -205,7 +196,7 @@ class MnemonAgentLifecycle {
   private primePending = true
   private startSource: LifecycleAgentSnapshot['startSource']
   private readonly guidedTurns = new Set<number>()
-  private pendingSnapshot: { turn: number; update: ReturnType<typeof prepareMemorySnapshot> } | undefined
+  private pendingSnapshot: { turn: number; step: number; signal: AbortSignal; update: ReturnType<typeof prepareMemorySnapshot> } | undefined
   private readonly memoryActivity = new TurnActivityProjection()
   private readonly turnActivity = new Map<number, {
     messageIds: Set<string>
@@ -265,22 +256,11 @@ class MnemonAgentLifecycle {
       // context behind it, and `recordTurnMessages` sees the complete batch
       // rather than a partial one.
       this.agent.ctx.on('agent/pre-step', ((payload: PreStepPayload, next: () => Promise<HostPreStepDecision>) => this.preStep(payload, next)) as never, { prepend: true }),
-      // Session's durable codec requires an open step for developer/message.
-      // pre-step only plans; this boundary follows step/start and precedes the
-      // Host's request projection and admission of the new user-role snapshot.
-      this.agent.ctx.on('agent/request', (async (payload: Omit<PreStepPayload, 'messages'>, next: () => Promise<unknown>) => {
-        const config = await next()
-        const pending = this.pendingSnapshot
-        if (!payload.signal.aborted && pending?.turn === payload.turn) {
-          pending.update.retire(payload.turn, payload.step)
-          this.pendingSnapshot = undefined
-        }
-        return config
-      }) as never),
       this.agent.ctx.on('agent/turn-stopping', ((payload: TurnStoppingPayload) => this.finishTurn(payload)) as never),
     ]
     return () => {
       this.disposed = true
+      this.pendingSnapshot = undefined
       this.releaseView()
       this.cancelIdleReview(true)
       for (const dispose of disposers.reverse()) dispose()
@@ -376,7 +356,7 @@ class MnemonAgentLifecycle {
     const update = prepareMemorySnapshot(this.agent.session,
       this.config.lifecycleEnabled ? this.memoryWake()?.text : undefined,
       this.config.lifecycleEnabled ? memorySnapshotState(this.memoryTurn?.current?.context.view) : undefined)
-    this.pendingSnapshot = { turn: payload.turn, update }
+    this.pendingSnapshot = { turn: payload.turn, step: payload.step, signal: payload.signal, update }
     if (!this.config.lifecycleEnabled) return decision
     if (this.config.writeEnabled && this.config.writebackMode === 'guided') {
       this.recordTurnMessages(payload.turn, decision.messages)
@@ -460,8 +440,34 @@ class MnemonAgentLifecycle {
   }
 
   private sessionEvent(session: HostAgent['session'], event: HostSessionEvent): void {
-    if (session !== this.agent.session || event.type !== 'turn/end') return
+    if (session !== this.agent.session) return
     const turn = eventTurn(event)
+    if (event.type === 'step/start') {
+      const pending = this.pendingSnapshot
+      if (pending === undefined || pending.turn !== turn || pending.step !== event.data.step) return
+      this.pendingSnapshot = undefined
+      // Session observers cannot append reentrantly. Its durable step boundary
+      // queues this before the Host's awaited request preparation resumes, even
+      // when an agent/request middleware returns without visiting later hooks.
+      queueMicrotask(() => {
+        if (this.disposed || pending.signal.aborted || openAgentTurn(this.agent) !== pending.turn) return
+        try { pending.update.retire(pending.turn, pending.step) }
+        catch {
+          // Fail closed without an unhandled microtask exception or raw Source
+          // details. keepInbox avoids further log appends while cancelling.
+          const reason = 'Memory snapshot checkpoint failed; model request cancelled.'
+          this.counters.failures += 1
+          this.lastPhase = 'error'
+          this.lastAt = new Date().toISOString()
+          this.lastError = reason
+          this.agent.cancel({ kind: 'hook', reason }, { keepInbox: true })
+          console.warn('[dsh-mnemon] ' + reason)
+        }
+      })
+      return
+    }
+    if (event.type !== 'turn/end') return
+    if (this.pendingSnapshot?.turn === turn) this.pendingSnapshot = undefined
     const current = this.memoryTurn?.current
     const pinned = turn === undefined || current?.turn !== turn ? undefined : current
     if (pinned === undefined) return

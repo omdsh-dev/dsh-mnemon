@@ -124,7 +124,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
     ctx: agentCtx,
     followup,
     steer,
-    inject: vi.fn(),
+    inject: vi.fn(), cancel: vi.fn(),
   } satisfies HostAgent
   const coordinator = {
     isFinishedTask: () => false,
@@ -157,7 +157,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
       ctx: taskCtx,
       followup: vi.fn(),
       steer: vi.fn(),
-      inject: vi.fn(),
+      inject: vi.fn(), cancel: vi.fn(),
     } satisfies HostAgent
     // DSH runs setup on the unpublished Agent, as setup(agent.ctx, agent).
     await options.setup?.(taskCtx, taskAgent)

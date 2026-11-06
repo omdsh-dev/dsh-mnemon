@@ -12,19 +12,21 @@ Issue：[#573](https://github.com/omdsh-dev/dsh-mnemon/issues/573)。基线：`2
 
 实际请求还覆盖事实修正、删除、分支切换、复制历史到另一工作区、渲染快照完全同文的 Documents grant 撤回，以及 Runtime 投影权限关闭。禁用 lifecycle 注入、自有插件请求或无 View 都不会绕过清理。被拒绝、取消或首批为空的回合不发请求，也不会提前写淘汰记录；下一次适用请求会清除旧快照。既有委派 View 租约和工具权限测试继续通过。
 
+五种真实 Host middleware 顺序覆盖全局/agent 级 request 短路。已接受步骤的取消与释放不会提交排队中的淘汰；模拟追加失败会阻止模型请求、记录 hook 取消，下一轮可安全重试。真实默认 light-context 投影及 JSONL 恢复验证旧截断快照清理，同时保留普通 recall 与其他生产者。
+
 单元测试覆盖精确 UTF-8 字节边界、超大当前内容、元数据恢复、不透明 grant 收窄、Source/mode/Route/Action/指引变化、未知 provenance，以及用户、普通召回、指引和其他生产者消息的原样保留。Source 正文不被解释为 Host 指令。最新快照表示当前“投影”状态；缺失可能来自过滤或预算，不代表存储删除。
 
 ## 公开 Host 契约与持久化
 
-普通更新追加 user 角色快照。checkpoint 使用已发布的 Session `append()`、单节点 `surfaceOp: replace` 和 `sourceEventSeqs`。空内容 `developer/message` 是公开 Session 支持的、不派生模型消息的表示；没有 Source 文本、指令或工具变更。淘汰记录在 `agent/request` 中提交，位于 `step/start` 之后、请求构建之前。完整原文与来源关系保留在追加式审计中，穿插的会话消息不被重写。
+普通更新追加 user 角色快照。checkpoint 使用已发布的 Session `append()`、单节点 `surfaceOp: replace` 和 `sourceEventSeqs`。空内容 `developer/message` 是公开 Session 支持的、不派生模型消息的表示；没有 Source 文本、指令或工具变更。持久 `step/start` 事件排队一个 microtask，在同步 Session 发布结束后、Host 恢复异步请求准备前提交淘汰。因此后续 `agent/request` middleware 不调用 `next()` 也无法绕过清理。取消或释放会丢弃待提交计划；追加失败会保留 inbox，以可见 hook 错误取消请求。完整原文与来源关系保留在追加式审计中，穿插的会话消息不被重写。
 
 Host 快照元数据只包含版本 1、授权边界摘要和可见条目摘要，不含原始 ReadGrant、路径或记忆正文。边界保守涵盖 generation、范围、Source/mode、routes/actions、不透明 grants、指引和非 Runtime 投影。Runtime 通过 fragment provenance 自己提供分支/存储范围和条目摘要。年龄不参与条目身份；删除或修正旧条目会立即 checkpoint。已截断或未知 Source provenance 按全文比较，不启用追加历史优化。
 
-未标记旧快照只迁移一次。旧 `recall` 只有属于同一生产者且包含完整内置 Runtime 信封时才可清理，包含 0.5.34 的标题格式；任意召回和无法识别的旧信封保留。Runtime JSON/Markdown 存储与已有投影预算不变。旧 Source 仍可读取，采用保守 checkpoint；回滚插件后审计仍有效，但可能重新积累快照。清理要求插件仍在运行，完全卸载后已无其 hooks。已固定/委派 View 的权限生命周期保持原样。
+未标记旧快照只迁移一次。旧 `recall` 必须属于同一生产者，并具有完整内置 Runtime 信封，或可严格识别的官方截断：已发布的固定首部、文件结构，以及已知 Wake 边界处的 SDK `…` 标记。包含已发布 V3 的 `plugin` 归属及其 `plugin:dsh-mnemon` V4 迁移。过短或未知截断、普通召回、带引用前缀的文本及其他生产者保持不变；不会借用后续 fragment 的关闭标签，把部分引用误认为完整快照。Runtime JSON/Markdown 存储与已有投影预算不变。旧 Source 仍可读取，采用保守 checkpoint；回滚插件后审计仍有效，但可能重新积累快照。清理要求插件仍在运行，完全卸载后已无其 hooks。已固定/委派 View 的权限生命周期保持原样。
 
 ## 验证
 
-审查节点：根 typecheck 通过；lifecycle、guidance、state、Session 和真实 Host 定向套件共 **168 项通过**；Runtime Source provenance 套件 **6 项通过**。完整验证与已安装 Host 矩阵将在提交前另行记录。
+审查节点：根 typecheck 通过；lifecycle、guidance、state、Session 和真实 Host 定向套件共 **181 项通过**；Runtime Source provenance 套件 **6 项通过**。完整验证与已安装 Host 矩阵将在提交前另行记录。
 
 已安装 Host 命令（每个已发布版本使用独立安装）：
 

@@ -20,7 +20,7 @@ function setup() {
     ctx: agentContext as never,
     followup: vi.fn(),
     steer: vi.fn(),
-    inject: vi.fn(),
+    inject: vi.fn(), cancel: vi.fn(),
   } satisfies HostAgent
   const config = resolveConfig({ cliPath: '/fake/mnemon' })
   const pinnedTurns = new Map<string, object>()

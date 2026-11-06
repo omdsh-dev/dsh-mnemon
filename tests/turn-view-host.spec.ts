@@ -12,6 +12,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import * as documents from 'dsh-mnemon-source-documents'
 import * as runtime from 'dsh-mnemon-source-runtime'
 import * as scoped from 'dsh-mnemon-strategy-scoped'
+import * as lightContext from 'dsh-mnemon-strategy-light-context'
 import { expect, it, vi } from 'vitest'
 import type { HostContextShape } from '../src/host/dsh.ts'
 import { MnemonLifecycle } from '../src/host/lifecycle.ts'
@@ -84,7 +85,8 @@ async function fixture(mode: Mode, start = true) {
     coordinator = new MnemonSubagentCoordinator(host.subagents, f.live, host)
     stopTools = registerTools(host, f.live, coordinator, f.extensions)
     const lifecycle = new MnemonLifecycle(host, coordinator, f.config, f.live)
-    const startLifecycle = () => { stop?.(); stop = lifecycle.start() }
+    const stopLifecycle = () => { stop?.(); stop = undefined }
+    const startLifecycle = () => { stopLifecycle(); stop = lifecycle.start() }
     if (start) startLifecycle()
     const requests: Array<{ sessionId: string; turn: number | undefined; viewId: string | undefined; strategyType: string | undefined; grantSources: string[]; text: string; messages: GenerateOptions['messages']; tools: GenerateOptions['tools'] }> = []
     const receipts: Array<{ sessionId: string; name: string; isError: boolean; text: string }> = []
@@ -116,7 +118,7 @@ async function fixture(mode: Mode, start = true) {
       await agent.whenIdle()
       if (errors.length > 0) throw errors.shift()
     }
-    return { ...f, ctx, lifecycle, requests, receipts, startLifecycle, create, turn, close, unmountScoped }
+    return { ...f, ctx, lifecycle, requests, receipts, startLifecycle, stopLifecycle, create, turn, close, unmountScoped }
   } catch (error) { await close(); throw error }
 }
 
@@ -520,5 +522,108 @@ it.each(['reject', 'abort'] as const)('does not retire existing snapshots when a
     stop()
     await f.turn(handle.agent)
     for (const request of f.requests.slice(3)) expect(request.text).not.toContain('Synthetic turn-view retained fact.')
+  } finally { await handle.dispose(); await f.close() }
+})
+
+it.each(['earlier-normal', 'earlier-prepend', 'later-normal', 'later-prepend', 'later-scoped-prepend'] as const)('retires snapshots when %s request middleware returns without next', async priority => {
+  const f = await fixture('native')
+  const hook = async () => ({ provider: 'fixture', model: 'fixture' })
+  let stop: (() => void) | undefined
+  if (priority.startsWith('earlier')) stop = f.ctx.on('agent/request', hook, { prepend: priority === 'earlier-prepend' })
+  const handle = await f.create()
+  try {
+    await f.turn(handle.agent)
+    if (priority.startsWith('later')) {
+      const ctx = priority === 'later-scoped-prepend' ? handle.agent.ctx : f.ctx
+      stop = ctx.on('agent/request', hook, { prepend: priority !== 'later-normal' })
+    }
+    await f.graph.source('runtime').mutate('mutate', { action: 'remove', target: 'memory', oldText: 'Synthetic turn-view retained fact.' })
+    await f.turn(handle.agent)
+    for (const request of f.requests.slice(3)) {
+      expect(snapshots(request.messages)).toHaveLength(1)
+      expect(request.text).not.toContain('Synthetic turn-view retained fact.')
+    }
+  } finally { stop?.(); await handle.dispose(); await f.close() }
+})
+
+it('cancels the real Host request with a visible hook failure if a retirement cannot append', async () => {
+  const f = await fixture('native')
+  const handle = await f.create()
+  try {
+    await f.turn(handle.agent)
+    await f.graph.source('runtime').mutate('mutate', { action: 'remove', target: 'memory', oldText: 'Synthetic turn-view retained fact.' })
+    f.ctx.on('agent/request', async () => ({ provider: 'fixture', model: 'fixture' }), { prepend: true })
+    const session = handle.agent.session
+    const append = session.append.bind(session)
+    const failing = vi.spyOn(session, 'append').mockImplementation((...args) => {
+      if (args[0] === 'developer/message') throw new Error('Synthetic retirement append failure.')
+      return Reflect.apply(append, session, args)
+    })
+    await f.turn(handle.agent)
+    expect(f.requests).toHaveLength(3)
+    expect(f.lifecycle.snapshot(handle.agent.id).current?.lastError).toContain('snapshot checkpoint failed')
+    expect(session.snapshotEvents().findLast(event => event.type === 'turn/end')?.data).toMatchObject({
+      reason: { kind: 'aborted', reason: { kind: 'hook', reason: expect.stringContaining('snapshot checkpoint failed') } },
+    })
+    failing.mockRestore()
+    await f.turn(handle.agent)
+    for (const request of f.requests.slice(3)) expect(request.text).not.toContain('Synthetic turn-view retained fact.')
+  } finally { await handle.dispose(); await f.close() }
+})
+
+it.each(['cancel', 'dispose'] as const)('drops a queued checkpoint when the accepted step will %s before publication finishes', async outcome => {
+  const f = await fixture('native')
+  const handle = await f.create()
+  try {
+    await f.turn(handle.agent)
+    await f.graph.source('runtime').mutate('mutate', { action: 'remove', target: 'memory', oldText: 'Synthetic turn-view retained fact.' })
+    const stop = f.ctx.on('session/event', (session, event) => {
+      if (session !== handle.agent.session || event.type !== 'step/start') return
+      if (outcome === 'dispose') f.stopLifecycle()
+      handle.agent.cancel({ kind: 'hook', reason: 'Synthetic accepted-step cancellation.' }, { keepInbox: true })
+    })
+    await f.turn(handle.agent)
+    expect(f.requests).toHaveLength(3)
+    expect(handle.agent.session.snapshotEvents().filter(event => event.type === 'developer/message' && event.data.message.source.kind === 'dsh-mnemon')).toHaveLength(0)
+    stop()
+    if (outcome === 'dispose') f.startLifecycle()
+    await f.turn(handle.agent)
+    for (const request of f.requests.slice(3)) expect(request.text).not.toContain('Synthetic turn-view retained fact.')
+  } finally { await handle.dispose(); await f.close() }
+})
+
+it.each([
+  { kind: 'dsh-mnemon', form: 'recall' },
+  { kind: 'plugin:dsh-mnemon', form: 'recall' },
+])('retires an official light-context legacy snapshot from %j', async source => {
+  const f = await fixture('native')
+  await f.mount(lightContext, { instanceId: 'light-context' })
+  await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: 'Synthetic long fact. ' + 'x'.repeat(6_000) })
+  let handle = await f.create()
+  try {
+    await f.turn(handle.agent)
+    const snapshot = snapshots(f.requests[0]!.messages)[0]!
+    const block = snapshot.content[0]
+    if (block?.type !== 'text') throw new Error('Expected the real Source projection')
+    expect(block.text).toContain('…\n\n')
+    expect(block.text.split('MNEMON RUNTIME MEMORY SNAPSHOT')[1]!.match(/<\/runtime-memory-file>/gu)).toHaveLength(1)
+    const legacy = createUserMessage({ source: source as never, content: [{ type: 'text', text: block.text }] })
+    handle.agent.session.append('user/message', legacy, { surfaceOp: 'append' })
+    const keep = [
+      createUserMessage({ source: { kind: 'other-source', form: 'recall' } as never, content: legacy.content }),
+      createUserMessage({ source: source as never, content: [{ type: 'text', text: 'Quoted Source passage:\n' + block.text }] }),
+      createUserMessage({ source: source as never, content: [{ type: 'text', text: 'Synthetic ordinary recall…' }] }),
+    ]
+    for (const message of keep) handle.agent.session.append('user/message', message, { surfaceOp: 'append' })
+    await handle.dispose()
+    handle = await f.ctx.agents.resume({ resumeSessionId: SessionId('turn-view-parent'), agentOptions: { provider: 'fixture', model: 'fixture' } })
+    await f.graph.source('runtime').mutate('mutate', { action: 'remove', target: 'memory', oldText: 'Synthetic turn-view retained fact.' })
+    await f.turn(handle.agent)
+    for (const request of f.requests.slice(3)) {
+      expect(request.messages.some(message => message.id === legacy.id)).toBe(false)
+      for (const message of keep) expect(request.messages).toContainEqual(message)
+      expect(JSON.stringify(snapshots(request.messages))).not.toContain('Synthetic turn-view retained fact.')
+    }
+    expect(handle.agent.session.snapshotEvents().some(event => event.type === 'user/message' && event.data.id === legacy.id)).toBe(true)
   } finally { await handle.dispose(); await f.close() }
 })

@@ -140,7 +140,7 @@ describe('skill evolution in the Host', () => {
       on: (name: string, listener: Listener) => { listeners.set(name, listener); return () => listeners.delete(name) },
       effect: () => () => undefined,
     } as unknown as HostAgentContext
-    agent = { id: 'session-1', status: 'idle', session: { header: { cwd: join(directory, 'workspace') }, ...sessionLog(events) }, ctx, followup: vi.fn(), steer: vi.fn(), inject: vi.fn() }
+    agent = { id: 'session-1', status: 'idle', session: { header: { cwd: join(directory, 'workspace') }, ...sessionLog(events) }, ctx, followup: vi.fn(), steer: vi.fn(), inject: vi.fn(), cancel: vi.fn() }
   })
 
   afterEach(async () => {
