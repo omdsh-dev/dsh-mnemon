@@ -72,7 +72,7 @@ export function retryingSource(source: SkillsSourcePort, attempts = 4): SkillsSo
     mutate: async <T>(operation: string, input: unknown, signal?: AbortSignal): Promise<T> => {
       for (let attempt = 1; ; attempt++) {
         try { return await source.mutate<T>(operation, input, signal) } catch (error) {
-          if (attempt >= attempts || !/revision conflict|changed since it was read; reload/u.test(error instanceof Error ? error.message : String(error))) throw error
+          if (attempt >= attempts || !/revision conflict|Skills Source changed since it was read; reload/u.test(error instanceof Error ? error.message : String(error))) throw error
         }
       }
     },
@@ -96,6 +96,16 @@ class DraftDeadlineError extends Error {}
 /** The deadline error a task ran into, so the Source records why the draft ended. */
 function deadlineReason(signal: AbortSignal): DraftDeadlineError | undefined {
   return signal.reason instanceof DraftDeadlineError ? signal.reason : undefined
+}
+
+/** Cancellation settles the owner even when an underlying task ignores its signal. */
+function abortable<T>(signal: AbortSignal, work: () => Promise<T>): Promise<T> {
+  signal.throwIfAborted()
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(signal.reason)
+    signal.addEventListener('abort', abort, { once: true })
+    Promise.resolve().then(work).then(resolve, reject).finally(() => signal.removeEventListener('abort', abort))
+  })
 }
 
 /** Resolve only roots supplied by this Source's scoped catalog, never the task's cwd. */
@@ -141,6 +151,9 @@ export class SkillEvolution {
   private readonly sessions = new Map<string, SessionState>()
   private readonly jobs = new Set<AbortController>()
   private disposed = false
+  private activeBacktests = 0
+  private backtestJobs = 0
+  private readonly backtestWaiters = new Set<() => void>()
 
   constructor(private readonly host: SkillEvolutionHost) {}
 
@@ -362,24 +375,25 @@ export class SkillEvolution {
 
   // ---- page assistance -----------------------------------------------------
 
-  private background(name: string, work: (signal: AbortSignal) => Promise<void>, deadlineMs?: number): void {
+  private background(name: string, work: (signal: AbortSignal) => Promise<void>, deadlineMs?: number): Promise<void> {
     const controller = new AbortController()
     this.jobs.add(controller)
     const timer = deadlineMs === undefined ? undefined : setTimeout(() => {
       controller.abort(new DraftDeadlineError(`${name} did not finish within ${Math.round(deadlineMs / 60_000)} minutes`))
     }, deadlineMs)
     timer?.unref?.()
-    void work(controller.signal).catch(error => this.warn(`${name} failed`, deadlineReason(controller.signal) ?? error)).finally(() => {
+    const result = work(controller.signal).catch(error => this.warn(`${name} failed`, deadlineReason(controller.signal) ?? error)).finally(() => {
       if (timer !== undefined) clearTimeout(timer)
       this.jobs.delete(controller)
     })
+    return result
   }
 
   /**
    * Write a draft for a suggestion (or for a skill directly) in the
    * background; the suggestion shows `drafting` until it is recorded.
    */
-  async draft(port: SkillsSourcePort, workspace: string | undefined, input: { suggestionId?: string; draftId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; route?: ModelRoute }): Promise<{ started: true; suggestionId?: string }> {
+  async draft(port: SkillsSourcePort, workspace: string | undefined, input: { suggestionId?: string; draftId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; backtest?: boolean; route?: ModelRoute }): Promise<{ started: true; suggestionId?: string }> {
     const source = retryingSource(port)
     const pack = await source.read<EvidencePack>('evidence-pack', { ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }), ...(input.draftId === undefined ? {} : { draftId: input.draftId }), ...(input.skill === undefined ? {} : { skill: input.skill }) })
     // The evidence window contains only three recent drafts across this skill.
@@ -395,17 +409,23 @@ export class SkillEvolution {
     const guidance = [...(previous?.guidance ?? []), ...(input.guidance?.trim() ? [input.guidance.trim()] : [])].slice(-8)
     if (input.suggestionId !== undefined) await source.mutate('suggestion-status', { id: input.suggestionId, status: 'drafting' })
     this.background('skill draft', async signal => {
+      let recorded = false
       try {
-        await this.writeDraft(source, workspace, input, { pack, targetRoot, guidance }, signal)
+        await abortable(signal, () => this.writeDraft(source, workspace, input, { pack, targetRoot, guidance, onRecorded: () => { recorded = true } }, signal))
       } catch (error) {
-        if (input.suggestionId !== undefined) await source.mutate('suggestion-status', { id: input.suggestionId, status: 'pending', error: message(deadlineReason(signal) ?? error) }).catch(() => undefined)
+        if (!recorded && input.suggestionId !== undefined) {
+          const suggestions = await source.read<SkillSuggestion[]>('suggestions')
+          if (suggestions.find(item => item.id === input.suggestionId)?.status === 'drafting') {
+            await source.mutate('suggestion-status', { id: input.suggestionId, status: 'pending', error: message(deadlineReason(signal) ?? error) }).catch(() => undefined)
+          }
+        }
         throw error
       }
     }, DRAFT_DEADLINE_MS)
     return { started: true, ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }) }
   }
 
-  private async writeDraft(source: SkillsSourcePort, workspace: string | undefined, input: { suggestionId?: string; draftId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; route?: ModelRoute }, prepared: { pack: EvidencePack; targetRoot: SkillRootKind; guidance: string[] }, signal: AbortSignal): Promise<SkillDraft> {
+  private async writeDraft(source: SkillsSourcePort, workspace: string | undefined, input: { suggestionId?: string; draftId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; backtest?: boolean; route?: ModelRoute }, prepared: { pack: EvidencePack; targetRoot: SkillRootKind; guidance: string[]; onRecorded?: () => void }, signal: AbortSignal): Promise<SkillDraft> {
     const settings = this.host.settings()
     const { pack, targetRoot, guidance } = prepared
     let prompt = skillDraftPrompt(pack, guidance, targetRoot)
@@ -441,16 +461,19 @@ export class SkillEvolution {
           ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }),
           ...(input.draftId === undefined ? {} : { draftId: input.draftId }),
           skillName: pack.skillName, content: parsed.content, notes: parsed.notes, changes: parsed.changes, guidance,
+          expectedBaseHash: pack.skill?.hash ?? null,
           ...(pack.action === 'create' ? { targetRoot } : {}),
         }, signal)
+        prepared.onRecorded?.()
       } catch (error) {
         signal.throwIfAborted()
         // One retry, told exactly why DSH would refuse the file.
-        if (attempt > 0) throw error
+        if (attempt > 0 || /changed while this draft/.test(message(error))) throw error
         prompt += `\n\nYour previous SKILL.md was rejected: ${message(error)}. Return a corrected complete file.`
       }
     }
-    if (settings.autoBacktest && pack.cases.length > 0) {
+    signal.throwIfAborted()
+    if ((settings.autoBacktest || input.backtest) && pack.cases.length > 0) {
       await this.backtest(source, workspace, { skillName: pack.skillName, target: { kind: 'draft', draftId: draft.id }, ...(input.route === undefined ? {} : { route: input.route }) })
       // Older runs do not record their model, so they cannot be a baseline for
       // an explicitly selected route even when the skill content is unchanged.
@@ -465,42 +488,96 @@ export class SkillEvolution {
   }
 
   /** Start a backtest of one version of a skill against its enabled cases; it runs in the background. */
-  async backtest(port: SkillsSourcePort, workspace: string | undefined, input: { skillName: string; target: RunTarget; caseIds?: string[]; route?: ModelRoute }): Promise<{ runId: string }> {
-    const source = retryingSource(port)
-    const settings = this.host.settings()
-    const cases = (await source.read<EvalCase[]>('cases', { skill: input.skillName })).filter(entry => entry.enabled && (input.caseIds === undefined || input.caseIds.includes(entry.id))).slice(0, settings.casesPerRun)
-    if (cases.length === 0) throw new Error(`${input.skillName} has no enabled eval case to run`)
-    if (cases.some(entry => entry.requiresVision !== undefined && typeof entry.requiresVision !== 'boolean')) throw new Error('requiresVision must be a boolean')
-    const resolved = await source.read<{ content?: string; target: RunTarget }>('target-content', { skillName: input.skillName, target: input.target })
-    const run = await source.mutate<BacktestRun>('run-start', { skillName: input.skillName, target: resolved.target, caseIds: cases.map(entry => entry.id) })
-    this.background('skill backtest', async signal => {
-      try {
-        // Record missing-input cases without asking either a model or a task Agent to guess.
-        for (const entry of cases.filter(entry => entry.requiresVision === true)) {
-          signal.throwIfAborted()
-          await source.mutate('run-progress', { id: run.id, result: {
-            caseId: entry.id, title: entry.title, verdict: 'error', score: 0,
-            unmeasuredReason: 'requires-vision', checks: [], steps: [], answer: '',
-            error: 'Not measured: this case requires image input, which text-only backtests cannot receive.',
-          } })
-        }
-        const queue = cases.filter(entry => entry.requiresVision !== true)
-        if (queue.length > 0) await this.host.runTask(workspace, signal, async task => {
-          const worker = async () => {
-            for (let entry = queue.shift(); entry !== undefined; entry = queue.shift()) {
-              signal.throwIfAborted()
-              await source.mutate('run-progress', { id: run.id, result: await this.runCase(task, entry, input.skillName, resolved.content, signal) })
-            }
-          }
-          await Promise.all(Array.from({ length: Math.min(BACKTEST_CONCURRENCY, queue.length) }, worker))
-        }, input.route)
-        await source.mutate('run-finish', { id: run.id, status: 'completed' })
-      } catch (error) {
-        await source.mutate('run-finish', { id: run.id, status: 'failed', error: message(error) }).catch(() => undefined)
-        throw error
+  private backtestSlot(signal: AbortSignal): Promise<() => void> {
+    signal.throwIfAborted()
+    return new Promise((resolve, reject) => {
+      const abort = () => { this.backtestWaiters.delete(acquire); reject(signal.reason) }
+      const acquire = () => {
+        if (signal.aborted) { abort(); return }
+        if (this.activeBacktests >= 2) return
+        this.backtestWaiters.delete(acquire)
+        signal.removeEventListener('abort', abort)
+        this.activeBacktests++
+        resolve(() => {
+          this.activeBacktests--
+          for (const waiter of [...this.backtestWaiters]) waiter()
+        })
       }
+      this.backtestWaiters.add(acquire)
+      signal.addEventListener('abort', abort, { once: true })
+      acquire()
     })
-    return { runId: run.id }
+  }
+
+  async backtest(port: SkillsSourcePort, workspace: string | undefined, input: { skillName: string; target: RunTarget; caseIds?: string[]; route?: ModelRoute }): Promise<{ runId: string }> {
+    if (this.disposed) throw new Error('Skill evolution has stopped')
+    if (this.backtestJobs >= 16) throw new Error('The skill backtest queue is full. Cancel a run or retry after it finishes.')
+    this.backtestJobs++
+    const source = retryingSource(port)
+    try {
+      const settings = this.host.settings()
+      const cases = (await source.read<EvalCase[]>('cases', { skill: input.skillName })).filter(entry => entry.enabled && (input.caseIds === undefined || input.caseIds.includes(entry.id))).slice(0, settings.casesPerRun)
+      if (cases.length === 0) throw new Error(`${input.skillName} has no enabled eval case to run`)
+      if (cases.some(entry => entry.requiresVision !== undefined && typeof entry.requiresVision !== 'boolean')) throw new Error('requiresVision must be a boolean')
+      const resolved = await source.read<{ content?: string; target: RunTarget }>('target-content', { skillName: input.skillName, target: input.target })
+      const run = await source.mutate<BacktestRun>('run-start', { skillName: input.skillName, target: resolved.target, caseIds: cases.map(entry => entry.id) })
+      void this.background('skill backtest', async deadline => {
+        const controller = new AbortController()
+        const abort = () => controller.abort(deadline.reason)
+        deadline.addEventListener('abort', abort, { once: true })
+        if (deadline.aborted) abort()
+        const signal = controller.signal
+        // Cancellation is a Source-owned mutation and works even after a restart.
+        let checking = false
+        const watcher = setInterval(() => {
+          if (checking || signal.aborted) return
+          checking = true
+          void source.read<BacktestRun>('run', { id: run.id }).then(current => {
+            if (current.status !== 'running') controller.abort(new Error(current.error ?? 'Backtest interrupted'))
+          }).catch(error => controller.abort(error)).finally(() => { checking = false })
+        }, 1_000)
+        watcher.unref?.()
+        try {
+          await abortable(signal, async () => {
+            const release = await this.backtestSlot(signal)
+            try {
+              for (const entry of cases.filter(entry => entry.requiresVision === true)) {
+                signal.throwIfAborted()
+                await source.mutate('run-progress', { id: run.id, result: {
+                  caseId: entry.id, title: entry.title, verdict: 'error', score: 0,
+                  unmeasuredReason: 'requires-vision', checks: [], steps: [], answer: '',
+                  error: 'Not measured: this case requires image input, which text-only backtests cannot receive.',
+                } }, signal)
+              }
+              const queue = cases.filter(entry => entry.requiresVision !== true)
+              if (queue.length > 0) await abortable(signal, () => this.host.runTask(workspace, signal, async task => {
+                const worker = async () => {
+                  for (let entry = queue.shift(); entry !== undefined; entry = queue.shift()) {
+                    signal.throwIfAborted()
+                    const result = await this.runCase(task, entry, input.skillName, resolved.content, signal)
+                    signal.throwIfAborted()
+                    await source.mutate('run-progress', { id: run.id, result }, signal)
+                  }
+                }
+                await Promise.all(Array.from({ length: Math.min(BACKTEST_CONCURRENCY, queue.length) }, worker))
+              }, input.route))
+              signal.throwIfAborted()
+              await source.mutate('run-finish', { id: run.id, status: 'completed' }, signal)
+            } finally { release() }
+          })
+        } catch (error) {
+          await source.mutate('run-finish', { id: run.id, status: signal.aborted ? 'interrupted' : 'failed', error: message(signal.aborted ? signal.reason : error) }).catch(() => undefined)
+          throw error
+        } finally {
+          clearInterval(watcher)
+          deadline.removeEventListener('abort', abort)
+        }
+      }, 45 * 60 * 1000).finally(() => { this.backtestJobs-- })
+      return { runId: run.id }
+    } catch (error) {
+      this.backtestJobs--
+      throw error
+    }
   }
 
   /**
@@ -513,6 +590,7 @@ export class SkillEvolution {
     for (let attempt = 0; attempt < CASE_ATTEMPTS; attempt++) {
       try {
         const executed = parseExecution((await this.host.skillTask(task, `Mnemon skill eval: ${entry.title}`.slice(0, 120), skillExecutorPrompt(entry, { name: skillName, ...(content === undefined ? {} : { content }) }), SKILL_EXECUTOR_SCHEMA as unknown as Record<string, unknown>, SKILL_EXECUTOR_PERSONA, signal)).structured)
+        signal.throwIfAborted()
         const judged = await this.host.skillTask(task, `Mnemon skill judge: ${entry.title}`.slice(0, 120), skillJudgePrompt(entry, executed.steps, executed.answer), SKILL_JUDGE_SCHEMA as unknown as Record<string, unknown>, SKILL_JUDGE_PERSONA, signal)
         const grade = gradeCase(entry, judged.structured)
         return { caseId: entry.id, title: entry.title, verdict: grade.verdict, score: grade.score, checks: grade.checks, steps: executed.steps, answer: executed.answer, summary: grade.summary }

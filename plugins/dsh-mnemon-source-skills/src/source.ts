@@ -241,6 +241,9 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
       // A Host that went away mid-write left its suggestion stuck in `drafting`
       // and refuses both a retry and a delete; put those back before anything reads.
       void service.reclaimOrphanDrafts().catch(() => void 0)
+      const recovery = service.reclaimStaleRuns()
+      const reaper = setInterval(() => { void service.reclaimStaleRuns().catch(() => void 0) }, 60_000)
+      reaper.unref?.()
       const facts = (scope: { workspaceId?: string }, management: boolean): MemorySourceFacts => management ? {
         sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: SKILLS_SOURCE_TYPE_ID, role: SKILLS_SOURCE_ROLE, availability: 'ready',
         revision: service.revision(workspace(scope)), capabilities: [...CAPABILITIES], routeIds: [], actionIds: [],
@@ -250,6 +253,7 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
         revision: 'management-only', capabilities: ['status'], routeIds: [], actionIds: [], hints: { reason: 'management-only' },
       }
       return {
+        dispose() { clearInterval(reaper) },
         facts(request) {
           return facts(request.scope, request.scenario.startsWith('management.'))
         },
@@ -257,6 +261,7 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
           return { fragments: [] }
         },
         async manage(request) {
+          await recovery
           const root = workspace(request.scope)
           const input = (request.input ?? {}) as MemoryJsonValue
           const fields = typeof input === 'object' && input !== null && !Array.isArray(input) ? input : {}
@@ -361,6 +366,7 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
               break
             }
             case 'draft-record': value = await service.recordDraft(root, {
+              ...(fields.expectedBaseHash === undefined ? {} : { expectedBaseHash: fields.expectedBaseHash === null ? null : text(fields.expectedBaseHash, 'expectedBaseHash', 100)! }),
               ...(optionalText(fields.suggestionId, 'suggestionId', 100) === undefined ? {} : { suggestionId: optionalText(fields.suggestionId, 'suggestionId', 100)! }),
               ...(optionalText(fields.draftId, 'draftId', 100) === undefined ? {} : { draftId: optionalText(fields.draftId, 'draftId', 100)! }),
               skillName: text(fields.skillName, 'skillName', 64)!, content: typeof fields.content === 'string' ? fields.content : '',
@@ -387,8 +393,9 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
             case 'run-start': value = await service.startRun({ skillName: text(fields.skillName, 'skillName', 64)!, target: runTarget(fields.target!), caseIds: stringArray(fields.caseIds, 'caseIds', 20) ?? [] }); break
             case 'run-link': value = await service.linkRun(text(fields.draftId, 'draftId', 100)!, text(fields.runId, 'runId', 100)!); break
             case 'run-progress': value = await service.progressRun({ id: text(fields.id, 'id', 100)!, result: caseResult(fields.result!) }); break
+            case 'run-cancel': value = await service.finishRun({ id: text(fields.id, 'id', 100)!, status: 'interrupted', error: 'Backtest cancelled by the user.' }); break
             case 'run-finish': {
-              const status = fields.status === 'completed' ? 'completed' : 'failed'
+              const status = fields.status === 'completed' ? 'completed' : fields.status === 'interrupted' ? 'interrupted' : 'failed'
               value = await service.finishRun({ id: text(fields.id, 'id', 100)!, status, ...(typeof fields.error === 'string' ? { error: fields.error } : {}) })
               break
             }

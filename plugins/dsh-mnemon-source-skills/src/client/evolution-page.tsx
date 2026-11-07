@@ -197,7 +197,7 @@ function SuggestionDetail(props: { context: SkillsPageContext; id: string; model
   const canDraft = context.client.canAssist('skill-draft') && !(suggestion.action === 'update' && view.skill === undefined)
   const act = async (operation: () => Promise<unknown>) => {
     setBusy(true)
-    try { await operation(); context.refresh() } catch (error) { context.fail(error) } finally { setBusy(false) }
+    try { await operation(); context.refresh() } catch (error) { context.fail(error); context.refresh() } finally { setBusy(false) }
   }
   const references = suggestion.evidence.slice(-4)
   const cited = references.reduce((sum, reference) => sum + reference.steps.length, 0)
@@ -316,7 +316,7 @@ function DraftReview(props: { context: SkillsPageContext; draftId: string; model
   const running = view.runs.some(run => run.status === 'running')
   const act = async (operation: () => Promise<unknown>, after?: () => void) => {
     setBusy(true)
-    try { await operation(); after?.(); context.refresh() } catch (error) { context.fail(error) } finally { setBusy(false) }
+    try { await operation(); after?.(); context.refresh() } catch (error) { context.fail(error); context.refresh() } finally { setBusy(false) }
   }
   const adopt = () => act(async () => {
     const result = await context.client.adoptDraft(draft.id, draft.action === 'create' ? root : undefined)
@@ -327,7 +327,7 @@ function DraftReview(props: { context: SkillsPageContext; draftId: string; model
     const started = await context.client.backtest({ skillName: draft.skillName, target: { kind: draft.action === 'update' ? 'current' : 'none', ...(draft.action === 'update' ? { draftId: draft.id } : {}) } })
     await context.client.linkRun(draft.id, started.runId)
   })
-  const redraft = (note: string) => act(() => context.client.generateDraft({ draftId: draft.id, ...(draft.suggestionId === undefined ? {} : { suggestionId: draft.suggestionId }), guidance: note, ...route }), () => setRedrafting(null))
+  const redraft = (note: string, backtest = false) => act(() => context.client.generateDraft({ ...(backtest ? { backtest: true } : {}), draftId: draft.id, ...(draft.suggestionId === undefined ? {} : { suggestionId: draft.suggestionId }), guidance: note, ...route }), () => setRedrafting(null))
   const ready = draft.status === 'ready'
   const originalAvailable = draft.action !== 'update' || view.base !== undefined
   const progress = (run: BacktestRun | undefined) => run === undefined ? 0 : run.progress.done
@@ -341,13 +341,17 @@ function DraftReview(props: { context: SkillsPageContext; draftId: string; model
       {ready && <div>
         {draft.action === 'create' && roots.length > 1 && <SelectField inline size="sm" label={t('draft.writeTo')} value={root} disabled={busy} onChange={setRoot}
           options={roots.map(kind => ({ value: kind, label: t(`root.${kind}`) }))} />}
-        <Button variant="primary" size="sm" disabled={!context.writable || busy || editing !== null || running || !originalAvailable} onClick={() => regressed ? setConfirmAdopt(true) : void adopt()}>{t('draft.adopt')}</Button>
+        <Button variant="primary" size="sm" disabled={!context.writable || busy || editing !== null || running || view.conflict !== undefined || !originalAvailable} onClick={() => regressed ? setConfirmAdopt(true) : void adopt()}>{t('draft.adopt')}</Button>
         <Button variant="ghost" size="sm" disabled={!context.writable || busy} onClick={() => void act(() => context.client.discardDraft(draft.id))}>{t('draft.discard')}</Button>
         <MoreMenu label={t('common.more')} disabled={!context.writable || busy} onSelect={id => id === 'edit' ? setEditing(draft.content) : setRedrafting('')}
           items={[{ id: 'edit', label: t('draft.edit') }, ...(originalAvailable && context.client.canAssist('skill-draft') ? [{ id: 'redraft', label: t('draft.redraft') }] : [])]} />
       </div>}
     </header>
     {!originalAvailable && <p className={css.skWarn}>{t(view.resolution === 'origin-unavailable' ? 'evolution.originUnavailable' : 'evolution.skillGone')}</p>}
+    {view.conflict !== undefined && ready && <div className={css.skWarn} role="status">
+      <p>{t(view.conflict === 'target-exists' ? 'draft.targetExists' : 'draft.baseChanged')}</p>
+      {originalAvailable && context.client.canAssist('skill-draft') && <Button size="sm" disabled={!context.writable || busy || running} onClick={() => void redraft(t('draft.refreshGuidance'), true)}>{t('draft.regenerate')}</Button>}
+    </div>}
     {draft.notes !== '' && <Clamp text={draft.notes} />}
     {draft.changes.length > 0 && <MoreList items={draft.changes} shown={3} />}
     <div className={css.skBacktest} data-tone={regressed ? 'bad' : candidateScore !== undefined && baselineScore !== undefined && candidateScore > baselineScore ? 'good' : undefined}>
@@ -360,6 +364,10 @@ function DraftReview(props: { context: SkillsPageContext; draftId: string; model
               <em>{candidateScore === baselineScore ? t('draft.same') : `${candidateScore > baselineScore ? '+' : '−'}${Math.round(Math.abs(candidateScore - baselineScore) * 100)}`}</em>
             </button>
           : <span className={css.skMuted}>{cases === 0 ? t('draft.noTests') : view.runs.length === 0 ? t('draft.notTested') : t('draft.notComparable')}</span>}
+      {running && <Button variant="ghost" size="sm" disabled={!context.writable || busy} onClick={() => void act(async () => {
+        for (const run of view.runs.filter(item => item.status === 'running')) await context.client.cancelRun(run.id)
+      })}>{t('draft.cancelBacktest')}</Button>}
+      {!running && (candidate?.status === 'interrupted' || baseline?.status === 'interrupted') && <p role="status">{t('draft.interrupted')}</p>}
       {!running && (cases ?? 0) > 0 && context.client.canAssist('skill-backtest') && ready && <Button variant="ghost" size="sm" disabled={!context.writable || busy || !originalAvailable} onClick={() => void backtest()}>{view.runs.length === 0 ? t('draft.runBacktest') : t('draft.rerun')}</Button>}
     </div>
     {excluded > 0 && !running && <p className={css.skMuted}>{t('draft.excluded', { count: excluded })}</p>}

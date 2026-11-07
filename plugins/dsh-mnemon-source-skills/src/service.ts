@@ -259,14 +259,17 @@ export class SkillsService {
       && (filter.path === undefined || this.draftOriginal(ledger, draft).skill?.path === filter.path))
   }
 
-  draft(_workspace: string | undefined, id: string): DraftView {
+  draft(workspace: string | undefined, id: string): DraftView {
     const ledger = this.store.ledger()
     const draft = ledger.drafts.find(candidate => candidate.id === id)
     if (draft === undefined) throw new Error('draft not found: ' + id)
     const original = draft.action === 'update' ? this.draftOriginal(ledger, draft) : undefined
     const base = original?.skill
+    const conflict = draft.action === 'update'
+      ? base !== undefined && base.hash !== draft.baseHash ? 'base-changed' as const : undefined
+      : activeSkill(this.catalog(workspace), draft.skillName) !== undefined ? 'target-exists' as const : undefined
     const now = this.clock().getTime()
-    return { draft, ...(original === undefined ? {} : { resolution: original.resolution }), ...(base === undefined ? {} : { base: readSkillDocument(base) }), runs: draft.runIds.flatMap(id => { const run = this.store.evals().runs.find(candidate => candidate.id === id); return run === undefined ? [] : [staleRun(run, now)] }) }
+    return { draft, ...(conflict === undefined ? {} : { conflict }), ...(original === undefined ? {} : { resolution: original.resolution }), ...(base === undefined ? {} : { base: readSkillDocument(base) }), runs: draft.runIds.flatMap(id => { const run = this.store.evals().runs.find(candidate => candidate.id === id); return run === undefined ? [] : [staleRun(run, now)] }) }
   }
 
   reviews(filter: { sessionId?: string; limit?: number } = {}): LedgerFile['reviews'] {
@@ -726,7 +729,7 @@ export class SkillsService {
     })
   }
 
-  recordDraft(workspace: string | undefined, input: { suggestionId?: string; draftId?: string; skillName: string; content: string; notes: string; changes: string[]; guidance: string[]; targetRoot?: SkillRootKind }): Promise<SkillDraft> {
+  recordDraft(workspace: string | undefined, input: { suggestionId?: string; draftId?: string; skillName: string; content: string; notes: string; changes: string[]; guidance: string[]; targetRoot?: SkillRootKind; expectedBaseHash?: string | null }): Promise<SkillDraft> {
     return this.write(() => {
       validateSkillContent(input.content, input.skillName)
       const ledger = this.store.ledger()
@@ -740,6 +743,7 @@ export class SkillsService {
       if (suggestion !== undefined && suggestion.skillName !== input.skillName) throw new Error('suggestion is for another skill')
       const original = prior?.action === 'update' ? this.draftOriginal(ledger, prior) : suggestion?.action === 'update' ? this.suggestionOriginal(ledger, suggestion) : undefined
       const loaded = original === undefined ? activeSkill(catalog, input.skillName) : this.requireOriginal(original)
+      if (input.expectedBaseHash !== undefined && (loaded?.hash ?? null) !== input.expectedBaseHash) throw new Error('The skill changed while this draft was being generated; regenerate it from the current file')
       const origin = loaded === undefined ? undefined : original?.origin ?? skillOrigin(catalog, loaded)
       for (const draft of ledger.drafts) {
         if (draft.status === 'ready' && draft.skillName === input.skillName && draft.suggestionId === input.suggestionId
@@ -876,6 +880,24 @@ export class SkillsService {
     })
   }
 
+  /** Persist terminal state so expired tasks cannot later revive themselves. */
+  reclaimStaleRuns(): Promise<{ reclaimed: number }> {
+    return this.write(() => {
+      const evals = this.store.evals()
+      const now = this.clock()
+      let reclaimed = 0
+      for (const run of evals.runs) {
+        if (run.status !== 'running' || Number.isFinite(Date.parse(run.startedAt)) && now.getTime() - Date.parse(run.startedAt) <= RUN_STALE_MS) continue
+        run.status = 'interrupted'
+        run.finishedAt = now.toISOString()
+        run.error = 'Backtest exceeded its 45 minute deadline; run it again.'
+        reclaimed++
+      }
+      if (reclaimed > 0) { this.store.saveEvals(evals); this.touch() }
+      return { reclaimed }
+    })
+  }
+
   /** The content a run tests, resolved from its target. */
   targetContent(workspace: string | undefined, skillName: string, target: RunTarget): { content?: string; target: RunTarget } {
     if (target.kind === 'none') return { target: { kind: 'none' } }
@@ -950,11 +972,12 @@ export class SkillsService {
     })
   }
 
-  finishRun(input: { id: string; status: 'completed' | 'failed'; error?: string }): Promise<BacktestRun> {
+  finishRun(input: { id: string; status: 'completed' | 'failed' | 'interrupted'; error?: string }): Promise<BacktestRun> {
     return this.write(() => {
       const evals = this.store.evals()
       const run = evals.runs.find(candidate => candidate.id === input.id)
       if (run === undefined) throw new Error('run not found: ' + input.id)
+      if (run.status !== 'running') return run
       run.status = input.status
       run.finishedAt = this.clock().toISOString()
       if (input.error !== undefined) run.error = clip(input.error, 500)

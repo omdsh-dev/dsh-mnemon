@@ -641,3 +641,52 @@ describe('model picks', () => {
     expect(store.suggestion(workspace, suggestion.id).suggestion.status).toBe('dismissed')
   })
 })
+
+
+describe('draft and backtest recovery', () => {
+  it('reports a changed original before adoption and regenerates from its current hash', async () => {
+    const path = join(home, 'skills', 'release-notes', 'SKILL.md')
+    write(path, skill('release-notes'))
+    const store = service()
+    const input = { skillName: 'release-notes', content: skill('release-notes', 'Candidate.'), notes: '', changes: [], guidance: [] }
+    const draft = await store.recordDraft(workspace, input)
+    write(path, skill('release-notes', 'New current file.'))
+    expect(store.draft(workspace, draft.id).conflict).toBe('base-changed')
+    await expect(store.adoptDraft(workspace, draft.id)).rejects.toThrow('changed since it was read')
+    await store.updateDraft({ id: draft.id, content: input.content })
+    expect(store.draft(workspace, draft.id).conflict).toBe('base-changed')
+    const current = store.evidencePack(workspace, { draftId: draft.id }).skill!
+    await expect(store.recordDraft(workspace, { ...input, draftId: draft.id, expectedBaseHash: draft.baseHash! })).rejects.toThrow('changed while')
+    const next = await store.recordDraft(workspace, { ...input, draftId: draft.id, expectedBaseHash: current.hash })
+    expect(store.draft(workspace, next.id).conflict).toBeUndefined()
+    await store.adoptDraft(workspace, next.id)
+    expect(readFileSync(path, 'utf8')).toBe(input.content)
+  })
+
+  it('shows a newly existing target and converts a regenerated creation into an update', async () => {
+    const store = service()
+    const input = { skillName: 'release-notes', content: skill('release-notes'), notes: '', changes: [], guidance: [] }
+    const draft = await store.recordDraft(workspace, input)
+    write(join(home, 'skills', 'release-notes', 'SKILL.md'), skill('release-notes', 'Installed elsewhere.'))
+    expect(store.draft(workspace, draft.id).conflict).toBe('target-exists')
+    await expect(store.recordDraft(workspace, { ...input, expectedBaseHash: null })).rejects.toThrow('changed while')
+    const pack = store.evidencePack(workspace, { draftId: draft.id })
+    const next = await store.recordDraft(workspace, { ...input, draftId: draft.id, expectedBaseHash: pack.skill!.hash })
+    expect(next.action).toBe('update')
+    expect(next.baseHash).toBe(pack.skill!.hash)
+  })
+
+  it('persists stale runs, preserves recent runs, and rejects late progress and settlement', async () => {
+    const store = service()
+    const entry = await store.saveCase({ skillName: 'release-notes', title: 'Case', prompt: 'Test', enabled: true, checks: [{ text: 'Pass', must: true }] })
+    const old = await store.startRun({ skillName: 'release-notes', target: { kind: 'none' }, caseIds: [entry.id] })
+    now = new Date(now.getTime() + 46 * 60_000)
+    const fresh = await store.startRun({ skillName: 'release-notes', target: { kind: 'none' }, caseIds: [entry.id] })
+    expect(await store.reclaimStaleRuns()).toEqual({ reclaimed: 1 })
+    expect(service().store.evals().runs.find(run => run.id === old.id)).toMatchObject({ status: 'interrupted', finishedAt: now.toISOString() })
+    expect(store.run(fresh.id).status).toBe('running')
+    expect((await store.finishRun({ id: old.id, status: 'completed' })).status).toBe('interrupted')
+    await expect(store.progressRun({ id: old.id, result: { caseId: entry.id, title: 'Case', verdict: 'pass', score: 1, checks: [], steps: [], answer: '' } })).rejects.toThrow('not running')
+    expect(await store.reclaimStaleRuns()).toEqual({ reclaimed: 0 })
+  })
+})

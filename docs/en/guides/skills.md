@@ -182,3 +182,10 @@ The [configuration reference](../reference/configuration.md#skills-settings) lis
 | *skills.sh is busy* or *can't search right now* | Search again in a moment; your other sources still work. The switch under **Sources** turns skills.sh off. |
 | *… publishes no Agent Skills index* | The site has no `/.well-known/agent-skills/index.json` under the address or at its root. |
 | A draft says *The backtests cannot be compared* | No case could run on both sides; check the per-case errors, then **Backtest again**. |
+
+
+### Recovering a draft or backtest
+
+Draft generation stops after 15 minutes; backtests after 45 minutes. At most two backtests run at once (each with at most two cases executing concurrently), with a bounded queue of at most 16 active or waiting runs. Waiting runs can also be cancelled and count toward the deadline. A hung task returns to a retryable state even if its model ignores cancellation. Cancel backtests on the draft card; cancellation keeps the draft, cases and partial results. Review the draft before manually adopting without a completed comparison.
+
+If the original skill changed or a creation now has a same-name target, the card explains the conflict and offers **Regenerate and backtest**. This reads the latest skill while preserving prior guidance. Editing an old draft does not bypass its file hash check. A file changed during generation is rejected before the old draft is replaced. Expired running records are persisted as interrupted at Source startup and by its minute reaper; late results cannot revive them.

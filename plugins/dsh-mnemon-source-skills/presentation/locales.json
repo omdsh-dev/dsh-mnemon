@@ -353,7 +353,13 @@
     "evolution.loadFailedBody": "请重试，或在左侧选择其他建议。",
     "tests.model": "全局模型",
     "tests.modelCard": "所选回测模型",
-    "tests.modelAuto": "跟随默认"
+    "tests.modelAuto": "跟随默认",
+    "draft.baseChanged": "原技能已变更，此草案已过期。请基于当前文件重新生成并回测。",
+    "draft.targetExists": "同名技能已存在。请重新生成为改进草案并回测，再确认采纳。",
+    "draft.refreshGuidance": "基于当前技能文件重新生成，保留最近的修改，并重新运行回测。",
+    "draft.regenerate": "重新生成并回测",
+    "draft.cancelBacktest": "取消回测",
+    "draft.interrupted": "回测已中断。可以重新回测，或在检查草案后手动采纳。"
   },
   "en": {
     "page.title": "Skills",
@@ -709,6 +715,12 @@
     "evolution.loadFailedBody": "Retry, or select another suggestion on the left.",
     "tests.model": "Global model",
     "tests.modelCard": "Selected model",
-    "tests.modelAuto": "Follow default"
+    "tests.modelAuto": "Follow default",
+    "draft.baseChanged": "The original skill changed. This draft is out of date; regenerate it against the current file and backtest it.",
+    "draft.targetExists": "A skill with this name now exists. Regenerate an update and backtest it before adopting.",
+    "draft.refreshGuidance": "Regenerate against the current skill file, preserving its latest changes, then run backtests.",
+    "draft.regenerate": "Regenerate and backtest",
+    "draft.cancelBacktest": "Cancel backtests",
+    "draft.interrupted": "Backtests were interrupted. Run them again, or review the draft before adopting manually."
   }
 }

@@ -260,6 +260,7 @@ async function skillAssistance(runtime: ScopedRuntime, lifecycle: MnemonLifecycl
       // cannot run, and a whole one is what the page's two pickers send.
       const draftRoute = modelRoute(input)
       return skills.draft(source, workspaceRoot, {
+        ...(input.backtest === true ? { backtest: true } : {}),
         ...(suggestionId === undefined ? {} : { suggestionId }), ...(skill === undefined ? {} : { skill }),
         ...(draftId === undefined ? {} : { draftId }),
         ...(guidance === undefined ? {} : { guidance }), ...(root === undefined ? {} : { targetRoot: root as never }),
