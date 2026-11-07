@@ -25,13 +25,14 @@ export function resolveByteRoverInvocation(command: string, args: readonly strin
   command: string; args: string[]; env: NodeJS.ProcessEnv
 } {
   if (process.platform !== 'win32') return { command, args: [...args], env }
-  if (/^brv(?:\.(?:cmd|exe))?$/i.test(command)) {
+  // Leave explicit executable names/paths on the existing process route.
+  if (/^brv(?:\.cmd)?$/i.test(command)) {
     const path = Object.entries(env).find(([key]) => key.toUpperCase() === 'PATH')?.[1] ?? ''
     let found: string | undefined
     for (const directory of [...path.split(';'), ...globalBins(env)]) {
       if (directory === '') continue
       const root = directory.replace(/^"(.*)"$/, '$1')
-      for (const name of /\.cmd$/i.test(command) ? ['brv.cmd'] : /\.exe$/i.test(command) ? ['brv.exe'] : ['brv.exe', 'brv.cmd']) {
+      for (const name of /\.cmd$/i.test(command) ? ['brv.cmd'] : ['brv.exe', 'brv.cmd']) {
         // Windows resolves relative PATH entries from the child's cwd.
         const candidate = resolve(cwd, root, name)
         if (isFile(candidate)) { found = candidate; break }

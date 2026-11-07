@@ -153,14 +153,14 @@ describe('Windows npm ByteRover launcher', () => {
     await expect(adapter.status(body)).resolves.toMatchObject({ healthy: false, error: expect.stringContaining('npm install -g byterover-cli') })
   })
 
-  it('preserves a custom executable and its argument boundaries on Windows', async () => {
+  it.each([process.execPath, 'brv.exe'])('preserves the explicit executable %s and its argument boundaries on Windows', async command => {
     const f = fixture()
     Object.defineProperty(process, 'platform', { ...platform, value: 'win32' })
-    const { authority, body } = createMemorySpaceProviderFixture(descriptor, { cliPath: process.execPath }, { dataDir: f.root })
+    const { authority, body } = createMemorySpaceProviderFixture(descriptor, { cliPath: command }, { dataDir: f.root })
     const calls: Array<{ command: string; args: readonly string[] }> = []
     const adapter = new ByteRoverProvider(authority, { process: async (command, args) => { calls.push({ command, args }); return { stdout: '', stderr: '', exitCode: 0 } } })
     await adapter.search(body, { query: 'literal & argument' })
-    expect(calls[0]).toEqual({ command: process.execPath, args: ['query', '--', 'literal & argument'] })
+    expect(calls[0]).toEqual({ command, args: ['query', '--', 'literal & argument'] })
   })
 
   it('keeps non-Windows commands on the existing direct process route', async () => {
