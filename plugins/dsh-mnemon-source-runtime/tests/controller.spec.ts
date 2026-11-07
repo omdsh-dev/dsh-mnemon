@@ -882,3 +882,63 @@ describe('RuntimeMemoryController branch scoping', () => {
     expect(projection.text).toContain('branch-scoped merged')
   })
 })
+
+describe('explicit Runtime pins', () => {
+  it('retains low-importance pins through repeated local capacity archives and keeps branch filtering', async () => {
+    const { directory } = fixture()
+    const controller = new RuntimeMemoryController({ effectiveDataDir: () => directory }, () => new Date('2026-08-13'), { memory: 130, user: 512 })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'Ask before deleting data.', importance: 'low', branches: ['main'] })
+    await controller.setPinned('memory', 'Ask before deleting data.', true)
+    for (let index = 0; index < 4; index++) {
+      const request = { action: 'add' as const, target: 'memory' as const, content: `Iteration ${index}: ` + 'ordinary '.repeat(6).trim(), importance: 'critical' as const }
+      const plan = await controller.planMaintenance(request)
+      await controller.compactAndMutate(plan.revision, request, plan.entries, 40, { archive: 'local' })
+      expect(controller.snapshot().entries.find(entry => entry.pinned)).toMatchObject({ content: 'Ask before deleting data.', importance: 'low', branches: ['main'] })
+      const projection = controller.contextProjection('main')
+      expect(projection.text.indexOf('Ask before deleting data.')).toBeLessThan(projection.text.indexOf(`Iteration ${index}`))
+      expect(controller.contextProjection('other').text).not.toContain('Ask before deleting data.')
+    }
+    const archive = readFileSync(join(directory, 'runtime', 'archived', 'memories.jsonl'), 'utf8')
+    expect(archive).not.toContain('Ask before deleting data.')
+    await controller.setPinned('memory', 'Ask before deleting data.', false)
+    expect(controller.snapshot().entries.find(entry => entry.content === 'Ask before deleting data.')?.pinned).toBe(false)
+  })
+
+  it('rejects omission, rewriting and pin-state injection during compaction without a partial commit', async () => {
+    const { controller } = fixture()
+    await controller.mutate({ action: 'add', target: 'user', content: 'Preserve this exact profile rule.', importance: 'critical' })
+    await controller.setPinned('user', 'Preserve this exact profile rule.', true)
+    const request = { action: 'add' as const, target: 'user' as const, content: 'New preference.' }
+    const plan = await controller.planMaintenance(request)
+    const before = controller.snapshot().entries
+    for (const candidates of [[], [{ content: 'Rewritten profile rule.', importance: 'critical' as const }], [{ ...plan.entries[0]!, pinned: false }], [{ ...plan.entries[0]!, importance: 'low' as const }]]) {
+      await expect(controller.compactAndMutate(plan.revision, request, candidates)).rejects.toThrow(/pinned|pin state/iu)
+      expect(controller.snapshot().entries).toEqual(before)
+    }
+    await controller.compactAndMutate(plan.revision, request, plan.entries)
+    expect(controller.snapshot().entries[0]).toEqual(before[0])
+  })
+
+  it('makes pin budget visible, rejects over-budget pins and preserves pins on manual replacement', async () => {
+    const { controller } = fixture()
+    await controller.mutate({ action: 'add', target: 'memory', content: 'Short rule' })
+    await controller.setPinned('memory', 'Short rule', true)
+    await controller.mutate({ action: 'replace', target: 'memory', oldText: 'Short rule', content: 'Updated rule' })
+    expect(controller.snapshot().entries[0]?.pinned).toBe(true)
+    expect(controller.snapshot().targets.memory.pinned).toMatchObject({ count: 1, limit: 1536, characters: expect.any(Number) })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'x'.repeat(1536) })
+    const before = controller.snapshot().entries
+    await expect(controller.setPinned('memory', 'x'.repeat(1536), true)).rejects.toThrow('projection requires')
+    expect(controller.snapshot().entries).toEqual(before)
+  })
+
+  it('refuses capacity packing below the pinned set even when all pins are low importance', async () => {
+    const { controller } = fixture()
+    await controller.mutate({ action: 'add', target: 'memory', content: 'Never silently drop me.', importance: 'low' })
+    await controller.setPinned('memory', 'Never silently drop me.', true)
+    const request = { action: 'add' as const, target: 'memory' as const, content: 'Pending' }
+    const plan = await controller.planMaintenance(request)
+    await expect(controller.compactAndMutate(plan.revision, request, plan.entries, 5, { archive: 'local' })).rejects.toThrow('Pinned runtime entries')
+    expect(controller.snapshot().entries.map(entry => entry.content)).toEqual(['Never silently drop me.'])
+  })
+})

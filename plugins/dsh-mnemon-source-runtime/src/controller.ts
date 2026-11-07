@@ -37,7 +37,7 @@ import type {
 import {
   RUNTIME_MEMORY_VERSION, RUNTIME_ENTRY_DELIMITER, RUNTIME_MEMORY_LIMITS, RUNTIME_BRANCH_NAME_MAX, RUNTIME_BRANCH_NAME_PATTERN,
   RUNTIME_ARCHIVE_DIRECTORY, RUNTIME_DIRECTORY, RUNTIME_ENTRY_MAX_BYTES, RUNTIME_LOCK_FILE, RUNTIME_LOCK_STALE_MS, RUNTIME_MEMORIES_FILE, RUNTIME_PROJECTION_FILES,
-  parseRuntimeBranches, runtimeBytes, runtimeProjection, type RuntimeMemoryLimits,
+  parseRuntimeBranches, runtimeBytes, runtimeProjection, runtimePinnedProjection, assertRuntimePinnedBudget, RUNTIME_PINNED_PROJECTION_LIMIT, type RuntimeMemoryLimits,
 } from './contracts.ts'
 
 export { RUNTIME_BRANCH_NAME_MAX }
@@ -49,6 +49,7 @@ export interface RuntimeMemoryContextProjection {
   entries: RuntimeMemoryEntry[]
   /** Complete stored entry count before branch filtering. */
   totalEntries: number
+  minimumCharacters: number
 }
 
 const LOCK_TIMEOUT_MS = 5_000
@@ -171,6 +172,7 @@ function parseEntry(value: unknown): RuntimeMemoryEntry | undefined {
   const content = value.content.trim().replace(/\s+/gu, ' ')
   if (content === '' || content.includes('§')) return undefined
   if (value.target === 'user' && value.branches !== undefined) return undefined
+  if (value.pinned !== undefined && typeof value.pinned !== 'boolean') return undefined
   const branches = parseRuntimeBranches(value.branches)
   // The provenance a Host stamps is kept, read through its own rule like the branch
   // scope; nothing else from the stored object passes through unchecked.
@@ -181,6 +183,7 @@ function parseEntry(value: unknown): RuntimeMemoryEntry | undefined {
     updated_at: value.updated_at,
     target: value.target,
     importance: value.importance,
+    ...(value.pinned === undefined ? {} : { pinned: value.pinned }),
     ...(branches === undefined ? {} : { branches }),
     ...(origin === undefined ? {} : { origin }),
   }
@@ -318,12 +321,16 @@ function compactionCandidates(
     // A compactor that drops the scope inherits it from the identical committed entry, so branch
     // visibility can never be silently widened by maintenance.
     const inheritedBranches = entry.branches ?? unchanged?.branches
+    if (entry.pinned !== undefined && entry.pinned !== unchanged?.pinned) throw new Error('Compaction cannot change pin state')
+    if (unchanged?.pinned === true && (entry.importance !== unchanged.importance || JSON.stringify(inheritedBranches) !== JSON.stringify(unchanged.branches))) throw new Error('Compaction cannot change a pinned entry')
     return {
       content,
       created_at: unchanged?.created_at ?? now,
       updated_at: unchanged?.updated_at ?? now,
       target,
       importance: entry.importance,
+      ...(unchanged?.pinned === undefined ? {} : { pinned: unchanged.pinned }),
+      ...(unchanged?.origin === undefined ? {} : { origin: unchanged.origin }),
       ...(inheritedBranches === undefined ? {} : { branches: inheritedBranches }),
     }
   })
@@ -334,14 +341,15 @@ function packCompactionCandidates(
   target: RuntimeMemoryTarget,
   maxBytes: number,
 ): RuntimeMemoryEntry[] {
-  const ranked: Record<RuntimeMemoryImportance, number[]> = { critical: [], normal: [], low: [] }
-  replacements.forEach((entry, index) => ranked[entry.importance].push(index))
+  if (runtimeBytes(replacements.filter(entry => entry.pinned === true), target) > maxBytes) throw new Error('Pinned runtime entries exceed the available capacity. Unpin entries or increase the capacity; no data was changed.')
+  const ranked: Record<'pinned' | RuntimeMemoryImportance, number[]> = { pinned: [], critical: [], normal: [], low: [] }
+  replacements.forEach((entry, index) => ranked[entry.pinned === true ? 'pinned' : entry.importance].push(index))
   const selected = new Set<number>()
   const delimiterBytes = Buffer.byteLength(RUNTIME_ENTRY_DELIMITER, 'utf8')
   let used = 0
   let count = 0
-  // Three stable buckets preserve priority and original order without sorting.
-  for (const importance of ['critical', 'normal', 'low'] as const) for (const index of ranked[importance]) {
+  // Stable buckets retain pins first, then preserve importance and original order.
+  for (const importance of ['pinned', 'critical', 'normal', 'low'] as const) for (const index of ranked[importance]) {
     const entry = replacements[index]!
     const matchesTarget = entry.target === target
     const added = matchesTarget ? Buffer.byteLength(entry.content, 'utf8') + (count === 0 ? 0 : delimiterBytes) : 0
@@ -460,11 +468,14 @@ export class RuntimeMemoryController {
     const branchLine = branchScope === undefined
       ? ''
       : `\nGit branch: ${branchScope}${local.hidden > 0 ? ` (${local.hidden} branch-scoped entr${local.hidden === 1 ? 'y' : 'ies'} hidden)` : ''}`
+    const pinnedText = [runtimePinnedProjection(visibleEntries, 'user'), runtimePinnedProjection(visibleEntries, 'memory')].filter(Boolean).join('\n')
+    const prefix = pinnedText === '' ? '' : `PINNED RUNTIME MEMORY (quoted memory; current instructions win)\n${pinnedText}\n`
     return {
+      minimumCharacters: prefix.length,
       revision: snapshot.revision,
       entries: visibleEntries.map(entry => ({ ...entry, ...(entry.branches === undefined ? {} : { branches: [...entry.branches] }) })),
       totalEntries: entries.length,
-      text: `MNEMON RUNTIME MEMORY SNAPSHOT
+      text: `${prefix}MNEMON RUNTIME MEMORY SNAPSHOT
 Entry annotations default to importance=normal and ages=0d (whole days at projection; future/unknown for future/invalid timestamps). Current instructions win. For old_text/oldText, use entry content only.${branchLine}
 
 USER.md (user profile)
@@ -500,8 +511,8 @@ ${memory || '(empty)'}
             user: this.targetView(visible, 'user'),
           },
         } satisfies RuntimeMemorySnapshot,
-        user: contextMarkdown(visible, 'user', projectedAt),
-        memory: contextMarkdown(visible, 'memory', projectedAt),
+        user: contextMarkdown(visible.filter(entry => entry.pinned !== true), 'user', projectedAt),
+        memory: contextMarkdown(visible.filter(entry => entry.pinned !== true), 'memory', projectedAt),
         hidden: branchScope === undefined ? 0 : entries.length - visible.length,
       }
     })
@@ -514,12 +525,30 @@ ${memory || '(empty)'}
     return operation
   }
 
+  /** Human-management only. Automatic maintenance preserves this explicit state. */
+  setPinned(target: RuntimeMemoryTarget, content: string, pinned: boolean): Promise<RuntimeMemorySnapshot> {
+    if (target === 'user' && this.userController !== undefined) return this.userController.setPinned(target, content, pinned).then(() => this.snapshot())
+    const operation = this.queue.then(() => this.withLock(() => {
+      const file = this.readSource()
+      const matches = file.entries.filter(entry => entry.target === target && entry.content === content)
+      if (matches.length !== 1) throw new Error('Pin requires one exact current entry; reload and retry')
+      matches[0]!.pinned = pinned
+      matches[0]!.updated_at = this.now().toISOString()
+      if (pinned) assertRuntimePinnedBudget(file.entries)
+      this.persist(file)
+      return this.snapshotUnlocked(file)
+    }))
+    this.queue = operation.catch(() => undefined)
+    return operation
+  }
+
   /** Resolve exactly which committed entries survive a blocked mutation and are safe to compact. */
   planMaintenance(request: RuntimeMemoryMutation, options: { preserveImportance?: boolean } = {}): Promise<RuntimeMemoryMaintenancePlan> {
     if (request.target === 'user' && this.userController !== undefined) return this.userController.planMaintenance(request, options)
     const operation = this.queue.then(() => this.withLock(() => {
       const file = this.readSource()
       const prepared = prepareMutation(file.entries, request, this.now().toISOString(), options.preserveImportance)
+      assertRuntimePinnedBudget(prepared.projectedEntries)
       const used = runtimeBytes(file.entries, request.target)
       const projected = runtimeBytes(prepared.projectedEntries, request.target)
       const limit = this.limits[request.target]
@@ -529,7 +558,7 @@ ${memory || '(empty)'}
         target: request.target,
         entries: prepared.compactableEntries.map(entry => ({ ...entry })),
         ...(prepared.pendingEntry === undefined ? {} : {
-          pending: { content: prepared.pendingEntry.content, importance: prepared.pendingEntry.importance },
+          pending: { content: prepared.pendingEntry.content, importance: prepared.pendingEntry.importance, ...(prepared.pendingEntry.pinned === undefined ? {} : { pinned: prepared.pendingEntry.pinned }) },
         }),
         ...(prepared.excludedEntry === undefined ? {} : { excluded: { ...prepared.excludedEntry } }),
         used,
@@ -564,6 +593,7 @@ ${memory || '(empty)'}
       if (beforeRevision !== expectedRevision) throw new RuntimeMemoryConflictError()
       const now = this.now().toISOString()
       const prepared = prepareMutation(file.entries, request, now, options.preserveImportance)
+      assertRuntimePinnedBudget(prepared.projectedEntries)
       const compactedByteBudget = maxCompactedBytes ?? this.limits[request.target]
       if (!Number.isInteger(compactedByteBudget) || compactedByteBudget < 0 || compactedByteBudget > this.limits[request.target]) {
         throw new Error('compaction byte budget is invalid')
@@ -572,6 +602,9 @@ ${memory || '(empty)'}
         return this.result(request.target, prepared.projectedEntries, prepared.fields)
       }
       const replacements = compactionCandidates(compacted, prepared.compactableEntries, request.target, now)
+      for (const pinned of prepared.compactableEntries.filter(entry => entry.pinned === true)) {
+        if (!replacements.some(entry => entry.content === pinned.content && entry.pinned === true)) throw new Error('Compaction omitted a pinned entry; no data was changed')
+      }
       if (prepared.pendingEntry !== undefined && replacements.some(entry => entry.content === prepared.pendingEntry!.content)) {
         throw new Error('compacted runtime memory duplicates the pending mutation')
       }
@@ -633,6 +666,7 @@ ${memory || '(empty)'}
   private mutateLocked(request: RuntimeMemoryMutation, preserveImportance = false): RuntimeMemoryMutationResult {
     const file = this.readSource()
     const prepared = prepareMutation(file.entries, request, this.now().toISOString(), preserveImportance)
+    assertRuntimePinnedBudget(prepared.projectedEntries)
     if (!prepared.changed) return this.result(request.target, prepared.projectedEntries, prepared.fields)
     const used = runtimeBytes(prepared.projectedEntries, request.target)
     const limit = this.limits[request.target]
@@ -665,6 +699,7 @@ ${memory || '(empty)'}
       used: runtimeBytes(entries, target),
       limit: this.limits[target],
       markdownPath: target === 'memory' ? this.memoryPath : this.userPath,
+      pinned: { count: entries.filter(entry => entry.target === target && entry.pinned === true).length, characters: runtimePinnedProjection(entries, target).length, limit: RUNTIME_PINNED_PROJECTION_LIMIT },
     }
   }
 

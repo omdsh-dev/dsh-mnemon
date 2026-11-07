@@ -44,7 +44,13 @@
     "runtime.result.localCompaction": "本地画像整理完成：未写入记忆空间，已更新{target} · 当前 {count} 条",
     "runtime.result.localArchive": "容量整理完成：没有可写的记忆空间，已先把 {archived} 条移入本地归档，再更新{target} · 当前 {count} 条",
     "runtime.readOnly": "当前为只读模式；运行时记忆仍会进入上下文，但不能在此修改。",
-    "runtime.footnote": "memories.json 是唯一事实源；两个 Markdown 文件由控制层生成，不应直接编辑。"
+    "runtime.footnote": "memories.json 是唯一事实源；两个 Markdown 文件由控制层生成，不应直接编辑。",
+    "runtime.pinned": "已固定",
+    "runtime.pin": "固定",
+    "runtime.unpin": "取消固定",
+    "runtime.pinnedNotice": "条目已固定，容量整理时会保留在运行时记忆中。",
+    "runtime.unpinnedNotice": "已取消固定，恢复通常的容量维护规则。",
+    "runtime.pinBudget": "固定：{count} 条 · 投影字符 {used} / {limit}"
   },
   "en": {
     "nav.runtime": "Runtime",
@@ -91,6 +97,12 @@
     "runtime.result.localCompaction": "Local profile compaction complete: no Memory Space write; updated {target} · {count} entries",
     "runtime.result.localArchive": "Capacity maintenance complete: with no Memory Space to write to, moved {archived} entries to the local archive, then updated {target} · {count} entries",
     "runtime.readOnly": "Read only here: runtime memory still enters context but cannot be changed on this page.",
-    "runtime.footnote": "memories.json is the only source of truth. The control plane generates both Markdown files; do not edit them directly."
+    "runtime.footnote": "memories.json is the only source of truth. The control plane generates both Markdown files; do not edit them directly.",
+    "runtime.pinned": "Pinned",
+    "runtime.pin": "Pin",
+    "runtime.unpin": "Unpin",
+    "runtime.pinnedNotice": "Entry pinned. It stays in hot memory during capacity maintenance.",
+    "runtime.unpinnedNotice": "Entry unpinned. Normal capacity rules apply.",
+    "runtime.pinBudget": "Pinned: {count} entries · {used} / {limit} projection characters"
   }
 }

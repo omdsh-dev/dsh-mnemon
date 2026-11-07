@@ -1,3 +1,4 @@
+import * as projectionSDK from 'dsh-mnemon/extension-sdk'
 import { defineMemoryStrategy, type MemorySourceFacts } from 'dsh-mnemon/extension-sdk'
 import { COMPOSABLE_MEMORY_API_VERSION, type MemoryAvailableSource, type MemoryCompositionDiagnostic, type MemoryViewRequest, type MemoryViewSpec } from 'dsh-mnemon/contracts'
 import { createThreeTierTurn } from './retrieval.ts'
@@ -57,12 +58,16 @@ export const DEFAULT_THREE_TIER_VIEW_STRATEGY = defineMemoryStrategy({
   },
   compose(request, sources, contributions = []) {
     const diagnostics = unsupportedRoleDiagnostics(sources)
-    const explained = (spec: MemoryViewSpec): MemoryViewSpec => diagnostics.length === 0 ? spec : { ...spec, diagnostics }
+    const explained = (spec: MemoryViewSpec, budget = request.budget.maxProjectionCharacters): MemoryViewSpec => {
+      if (typeof projectionSDK.reserveMemoryProjection !== 'function' && sources.some(source => source.hints && typeof source.hints === 'object' && !Array.isArray(source.hints) && Number(source.hints.minimumProjectionCharacters) > 0)) throw new Error('Pinned Runtime requires a newer dsh-mnemon Host; update the Host and official Strategies together.')
+      const reserved = projectionSDK.reserveMemoryProjection?.(spec, sources, budget) ?? spec
+      return diagnostics.length === 0 ? reserved : { ...reserved, diagnostics }
+    }
     if (contributions.length === 0) return explained(composeThreeTier(request, sources))
     const policies = threeTierContributions(contributions)
     const boundedRequest = policies.projection === undefined ? request : { ...request, budget: { ...request.budget,
       maxProjectionCharacters: Math.min(request.budget.maxProjectionCharacters, policies.projection.maxProjectionCharacters) } }
-    const spec = explained(policies.selection === undefined ? composeThreeTier(boundedRequest, sources) : composeSelected(boundedRequest, sources, policies.selection))
+    const spec = explained(policies.selection === undefined ? composeThreeTier(boundedRequest, sources) : composeSelected(boundedRequest, sources, policies.selection), boundedRequest.budget.maxProjectionCharacters)
     if (policies.capture !== undefined) {
       const targets = spec.sources.filter(selected => (policies.capture!.sourceKeys === undefined || policies.capture!.sourceKeys.includes(selected.sourceInstanceKey))
         && sources.some(source => source.sourceInstanceKey === selected.sourceInstanceKey && source.actions.some(action => selected.actionIds?.includes(action.id) && policies.capture!.actionIds.includes(action.id) && action.authority === undefined && ['write', 'maintain'].includes(action.capability))))

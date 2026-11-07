@@ -808,3 +808,42 @@ describe('Mnemon Pack', () => {
     }
   })
 })
+
+it('roundtrips pins and preserves them ahead of unpinned critical entries in a merge overflow', async () => {
+  const source = await fixture('pinned-pack-source', 93)
+  const target = await fixture('pinned-pack-target', 94)
+  const entry = (content: string, importance: string) => ({ target: 'memory', content, importance, created_at: now().toISOString(), updated_at: now().toISOString() })
+  const pinned = { ...entry('Pinned-' + 'p'.repeat(893), 'low'), pinned: true, branches: ['main'], origin: { machine: 'desk', label: 'Desktop', at: now().toISOString() } }
+  const local = entry('Local-' + 'l'.repeat(4994), 'normal')
+  const incoming = entry('Incoming-' + 'r'.repeat(4991), 'critical')
+  const write = (root: string, entries: unknown[]) => writeFileSync(join(root, 'runtime', 'memories.json'), JSON.stringify({ version: 1, entries }))
+  write(source.root, [pinned, incoming]); write(target.root, [local])
+  const pack = (await source.manager.exportPack('runtime')).base64
+  await target.manager.importPack(pack, { mode: 'merge' })
+  expect(JSON.parse(readFileSync(join(target.root, 'runtime', 'memories.json'), 'utf8')).entries).toEqual([pinned, incoming])
+  const restored = await fixture('pinned-pack-restore', 95)
+  await restored.manager.importPack((await target.manager.exportPack('runtime')).base64, { mode: 'replace' })
+  expect(JSON.parse(readFileSync(join(restored.root, 'runtime', 'memories.json'), 'utf8')).entries[0]).toEqual(pinned)
+  // A legacy copy with no pin field cannot erase an explicit local decision.
+  const { pinned: _flag, ...legacy } = pinned
+  write(source.root, [legacy])
+  await target.manager.importPack((await source.manager.exportPack('runtime')).base64, { mode: 'merge' })
+  expect(JSON.parse(readFileSync(join(target.root, 'runtime', 'memories.json'), 'utf8')).entries[0].pinned).toBe(true)
+  // An explicit later unpin is carried by the same merge path used by sync.
+  write(source.root, [{ ...pinned, pinned: false, updated_at: '2026-08-15T00:00:00.000Z' }])
+  await target.manager.importPack((await source.manager.exportPack('runtime')).base64, { mode: 'merge' })
+  expect(JSON.parse(readFileSync(join(target.root, 'runtime', 'memories.json'), 'utf8')).entries[0].pinned).toBe(false)
+})
+
+it('rejects a merge whose pins exceed capacity without changing hot memory or creating an overflow archive', async () => {
+  const source = await fixture('pin-capacity-source', 96)
+  const target = await fixture('pin-capacity-target', 97)
+  for (const [root, prefix] of [[source.root, 'remote'], [target.root, 'local']]) {
+    writeFileSync(join(root!, 'runtime', 'memories.json'), JSON.stringify({ version: 1, entries: [{ target: 'memory', content: prefix + 'x'.repeat(294), importance: 'low', pinned: true, created_at: now().toISOString(), updated_at: now().toISOString() }] }))
+  }
+  const before = readFileSync(join(target.root, 'runtime', 'memories.json'))
+  const manager = new MnemonPackManager(target.runner, { ...target.config, runtimeMemory: { ...target.config.runtimeMemory, memoryLimitBytes: 512 } }, undefined, now)
+  await expect(manager.importPack((await source.manager.exportPack('runtime')).base64, { mode: 'merge' })).rejects.toThrow('Pinned runtime entries exceed')
+  expect(readFileSync(join(target.root, 'runtime', 'memories.json'))).toEqual(before)
+  expect(existsSync(join(target.root, 'runtime', 'archived'))).toBe(false)
+})

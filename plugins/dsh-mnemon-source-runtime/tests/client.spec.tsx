@@ -40,7 +40,7 @@ describe('independent Runtime Source client', () => {
       })),
     }
     Object.freeze(snapshot.entries)
-    const client = { runtimeMemory: async () => snapshot, mutateRuntimeMemory: vi.fn() }
+    const client = { runtimeMemory: async () => snapshot, pinRuntimeMemory: vi.fn(), mutateRuntimeMemory: vi.fn() }
     const page = (writable: boolean) => <MemorySourcePageFrame locale="en"><RuntimePage client={client} revision={0} writeEnabled={writable} onMutate={() => {}} /></MemorySourcePageFrame>
     const view = render(page(false))
     const listElement = await screen.findByLabelText(t('runtime.entriesAria'))
@@ -74,7 +74,7 @@ describe('independent Runtime Source client', () => {
       entries,
     } as RuntimeMemorySnapshot
     const reveal = vi.fn()
-    render(<MemorySourcePageFrame locale="en"><RuntimePage client={{ runtimeMemory: async () => snapshot, mutateRuntimeMemory: vi.fn() }} revision={0} writeEnabled={false} focusText="Checkout p75 LCP is 2.4 s after…" onRevealElement={reveal} onMutate={() => {}} /></MemorySourcePageFrame>)
+    render(<MemorySourcePageFrame locale="en"><RuntimePage client={{ runtimeMemory: async () => snapshot, pinRuntimeMemory: vi.fn(), mutateRuntimeMemory: vi.fn() }} revision={0} writeEnabled={false} focusText="Checkout p75 LCP is 2.4 s after…" onRevealElement={reveal} onMutate={() => {}} /></MemorySourcePageFrame>)
     await waitFor(() => expect(reveal).toHaveBeenCalledTimes(1))
     const focused = document.querySelectorAll('article[data-focused]')
     expect(focused).toHaveLength(1)
@@ -99,6 +99,16 @@ describe('independent Runtime Source client', () => {
       fireEvent.click(screen.getByRole('button', { name: t('runtime.addAction') }))
       expect(await screen.findByText('Source-owned runtime entry')).not.toBeNull()
       expect((await work.read('snapshot')).value).toMatchObject({ entries: [expect.objectContaining({ content: 'Source-owned runtime entry' })] })
+      fireEvent.click(screen.getByRole('button', { name: 'Pin' }))
+      await screen.findByRole('button', { name: 'Unpin' })
+      expect((await work.read('snapshot')).value).toMatchObject({ entries: [expect.objectContaining({ pinned: true })] })
+      expect(screen.getByText(/Pinned: 1 entries/)).not.toBeNull()
+      view.rerender(<RuntimeSourcePage {...base} writable={false} sourceInstanceKey="source:work" management={work} />)
+      expect(screen.queryByRole('button', { name: 'Unpin' })).toBeNull()
+      view.rerender(<RuntimeSourcePage {...base} sourceInstanceKey="source:work" management={work} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Unpin' }))
+      await screen.findByRole('button', { name: 'Pin' })
+      expect((await work.read('snapshot')).value).toMatchObject({ entries: [expect.objectContaining({ pinned: false })] })
       view.rerender(<RuntimeSourcePage {...base} sourceInstanceKey="source:personal" management={personal} />)
       await waitFor(() => expect(screen.queryByText('Source-owned runtime entry')).toBeNull())
       expect((await personal.read('snapshot')).value).toMatchObject({ entries: [] })

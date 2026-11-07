@@ -144,3 +144,13 @@ describe('general main Strategy', () => {
     expect(general.GENERAL_VIEW_STRATEGY.manifest).toMatchObject({ typeId: 'general', supportedSourceRoles: ['*'], extensionSlots: ['selection', 'projection', 'capture'] })
   })
 })
+
+it('reserves pinned Runtime before ordinary projections within the general Strategy ceiling', () => {
+  const strategy = general.GENERAL_VIEW_STRATEGY
+  const facts = catalog.map((entry, index) => ({ sourceInstanceKey: `source:${index}`, sourceTypeId: entry.typeId, role: entry.role, availability: 'ready' as const, revision: 'r1', capabilities: ['project' as const], routes: [], actions: [], routeIds: [], actionIds: [], ...(index === 0 ? { hints: { minimumProjectionCharacters: 99 } } : {}) }))
+  const request = { scope: { storage: 'custom' as const }, scenario: 'turn', budget: { ...DEFAULT_MEMORY_VIEW_BUDGET, maxProjectionCharacters: 100 } }
+  const result = strategy.compose(request, facts)
+  expect(result.sources.find(source => source.sourceInstanceKey === 'source:0')).toMatchObject({ required: true, projection: { maxCharacters: 99 } })
+  expect(result.sources.reduce((sum, source) => sum + (source.projection?.maxCharacters ?? 0), 0)).toBeLessThanOrEqual(100)
+  expect(() => strategy.compose({ ...request, budget: { ...request.budget, maxProjectionCharacters: 98 } }, facts)).toThrow('Unpin entries or increase')
+})

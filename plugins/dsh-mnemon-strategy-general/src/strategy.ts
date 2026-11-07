@@ -1,3 +1,4 @@
+import * as projectionSDK from 'dsh-mnemon/extension-sdk'
 import { defineMemoryStrategy, memoryInputText, memoryViewExtensionValues } from 'dsh-mnemon/extension-sdk'
 import {
   ANY_MEMORY_SOURCE_ROLE, COMPOSABLE_MEMORY_API_VERSION, MEMORY_VIEW_EXTENSION_SLOTS,
@@ -131,7 +132,8 @@ export function createGeneralStrategy(config: GeneralStrategyConfig = {}): Memor
         system: [PROTOCOL, instruction, capture].filter(Boolean).join('\n\n'),
         routing: lines.length === 0 ? 'No memory Source is currently admitted; continue without memory.' : 'Admitted memory Sources:\n' + lines.join('\n'),
       }
-      return spec
+      if (typeof projectionSDK.reserveMemoryProjection !== 'function' && sources.some(source => source.hints && typeof source.hints === 'object' && !Array.isArray(source.hints) && Number(source.hints.minimumProjectionCharacters) > 0)) throw new Error('Pinned Runtime requires a newer dsh-mnemon Host; update the Host and official Strategies together.')
+      return projectionSDK.reserveMemoryProjection?.(spec, sources, characters) ?? spec
     },
   })
 }

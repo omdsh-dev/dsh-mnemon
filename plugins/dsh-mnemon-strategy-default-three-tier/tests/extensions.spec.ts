@@ -88,3 +88,18 @@ describe('three-tier owned extension contracts', () => {
     expect(() => strategy.compose(request, sources(), [contribution('selection', { sourceKeys: ['source:missing'] })])).toThrow('not installed')
   })
 })
+
+
+it('reserves all pinned content within a light/scoped budget and fails visibly if the budget cannot hold it', () => {
+  const facts = sources()
+  facts[0]!.hints = { minimumProjectionCharacters: 99 }
+  for (const selection of [[], [contribution('selection', { sourceKeys: facts.map(source => source.sourceInstanceKey) })]]) {
+    const policies = [contribution('projection', { maxProjectionCharacters: 100 }), ...selection]
+    const result = strategy.compose(request, facts, policies)
+    expect(result.sources[0]).toMatchObject({ required: true, projection: { maxCharacters: 99 } })
+    expect(result.sources.reduce((sum, source) => sum + (source.projection?.maxCharacters ?? 0), 0)).toBeLessThanOrEqual(100)
+    facts[0]!.hints = { minimumProjectionCharacters: 101 }
+    expect(() => strategy.compose(request, facts, policies)).toThrow('Unpin entries or increase')
+    facts[0]!.hints = { minimumProjectionCharacters: 99 }
+  }
+})

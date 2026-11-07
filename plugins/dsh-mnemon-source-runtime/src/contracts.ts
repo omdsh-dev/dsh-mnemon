@@ -15,6 +15,8 @@ export interface RuntimeMemoryEntry {
   updated_at: string
   target: RuntimeMemoryTarget
   importance: RuntimeMemoryImportance
+  /** Explicit human pin state; absent is the legacy unpinned state. */
+  pinned?: boolean
   /** Optional git branch names that limit where this entry is projected. Absent means every branch. */
   branches?: string[]
   /** Which installation wrote this entry, so a merge can tell two machines apart. */
@@ -30,6 +32,7 @@ export interface RuntimeMemoryTargetView extends RuntimeMemoryUsage {
   target: RuntimeMemoryTarget
   entryCount: number
   markdownPath: string
+  pinned?: { count: number; characters: number; limit: number }
 }
 
 export interface RuntimeMemorySnapshot {
@@ -44,6 +47,7 @@ export interface RuntimeMemorySnapshot {
 export interface RuntimeMemoryCompactedEntry {
   content: string
   importance: RuntimeMemoryImportance
+  pinned?: boolean
   /** Branch scope carried through compaction; absent means the entry is visible on every branch. */
   branches?: string[]
 }
@@ -96,6 +100,21 @@ export interface RuntimeMemoryMaintenancePlan {
 import { DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES, DEFAULT_RUNTIME_USER_LIMIT_BYTES, MAX_RUNTIME_MEMORY_LIMIT_BYTES } from './defaults.ts'
 export const RUNTIME_MEMORY_VERSION = 1
 export const RUNTIME_ENTRY_DELIMITER = '\n§\n'
+/** Per target, including labels and annotations. Fits both targets in the default light View. */
+export const RUNTIME_PINNED_PROJECTION_LIMIT = 1536
+
+export function runtimePinnedProjection(entries: readonly RuntimeMemoryEntry[], target: RuntimeMemoryTarget): string {
+  const pinned = entries.filter(entry => entry.target === target && entry.pinned === true)
+  if (pinned.length === 0) return ''
+  return `${target === 'user' ? 'USER.md' : 'MEMORY.md'} pinned entries:\n` + pinned.map(entry => `[pinned; importance=${entry.importance}]\n${entry.content}`).join(RUNTIME_ENTRY_DELIMITER) + '\n'
+}
+
+export function assertRuntimePinnedBudget(entries: readonly RuntimeMemoryEntry[]): void {
+  for (const target of ['user', 'memory'] as const) {
+    const characters = runtimePinnedProjection(entries, target).length
+    if (characters > RUNTIME_PINNED_PROJECTION_LIMIT) throw new Error(`Pinned ${target} projection requires ${characters} characters; limit ${RUNTIME_PINNED_PROJECTION_LIMIT}. Unpin or shorten entries before retrying; no data was changed.`)
+  }
+}
 export interface RuntimeMemoryLimits {
   readonly memory: number
   readonly user: number
