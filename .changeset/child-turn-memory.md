@@ -2,4 +2,4 @@
 "dsh-mnemon": patch
 ---
 
-Inject a delegated child's captured memory View on its first accepted step even when prompt assembly has already prepared the turn. Preserve per-turn injection, cancellation, lifecycle settings, and parent View isolation.
+Add an off-by-default Runtime setting for automatic memory inheritance by new subagents. When enabled, inject the captured Runtime memory once per child turn even after normal prompt assembly. Preserve other Source projections, explicit task inputs, tool authority, per-task settings, and parent View isolation.

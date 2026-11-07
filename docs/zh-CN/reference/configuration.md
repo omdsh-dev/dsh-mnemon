@@ -42,6 +42,7 @@ mnemon:
   timeoutMs: 10000
   defaultRecallLimit: 10
   runtimeMemory:
+    inheritToSubagents: false
     memoryLimitBytes: 10240
     userLimitBytes: 4096
     maintenanceMaxTokens: 8192
@@ -144,6 +145,12 @@ mnemon:
 所有值都保存在 `mnemon` 条目下并实时生效：界面的 `mnemon-ui` 设置范围保存为 `conversationInteraction`，`mnemon-view` 设置范围保存为 `memoryView`，`mnemon-skills` 设置范围保存为 `skills`。存储根只会在新运行图初始化成功后原子切换。
 
 Git 同步的默认提交者跟随 Host 在 `state/sync/git` 中解析的 Git 身份；`state/sync-git.json` 中的自定义身份优先。旧的占位姓名/邮箱组合也跟随 Git，只有未配置的字段才使用占位值。优先级与作者被拒绝后的恢复步骤见 [Git 仓库同步](../guides/operations.md#git-仓库同步)。
+
+### 子 Agent 的 Runtime 记忆继承
+
+在 **插件 → dsh-mnemon → 运行时记忆** 中，**子 Agent 自动继承 Runtime 记忆**控制是否自动注入用户画像与工作记忆。开关**默认关闭**；已有配置未设置该字段时也保持关闭。可以通过界面开启，或设置 `runtimeMemory.inheritToSubagents: true`。
+
+设置作用于新建子 Agent。每个子 Agent 在派发时捕获当前选择，并与委托记忆 View 一起保留，运行中切换设置不会改变该任务的选择。开启后，在每轮首个被接受的步骤追加捕获的 Runtime 投影，兼容原生工具与 PTC；后续工具步骤不重复追加，也不改写已有请求前缀。开关只过滤各个 Runtime Source 实例的投影，父任务明确提供的上下文、记忆工具访问、其他来源投影及后台维护的必要输入仍按原规则工作；不会移除任务或会话历史中已经包含的内容。
 
 ### Runtime Memory 容量与维护预算
 

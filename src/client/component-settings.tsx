@@ -53,7 +53,7 @@ export function installShippedComponentSettings(ctx: MemoryComponentUIContext & 
   return () => { for (const dispose of disposers.reverse()) dispose() }
 }
 
-// ---- Runtime Memory: user profile scope and file capacities ----
+// ---- Runtime Memory: user profile scope, child inheritance and file capacities ----
 
 const RUNTIME_LIMITS = ['userLimitBytes', 'memoryLimitBytes'] as const
 type RuntimeLimits = Record<typeof RUNTIME_LIMITS[number], string>
@@ -72,6 +72,9 @@ export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryC
   const profile = useLive(saved, async value => { await scope.mutate([{ op: 'set', path: ['runtimeUserScope'], value }]) })
   const disabled = !page.writable || snapshot.status === 'loading' || !snapshot.writable
   const configured = snapshot.value?.runtimeMemory
+  const inheritance = useLive(configured?.inheritToSubagents === true, async value => {
+    await scope.mutate([{ op: 'set', path: ['runtimeMemory'], value: { ...configured, inheritToSubagents: value } }])
+  })
   const savedLimits: RuntimeLimits = {
     userLimitBytes: String(configured?.userLimitBytes ?? RUNTIME_MEMORY_LIMITS.user),
     memoryLimitBytes: String(configured?.memoryLimitBytes ?? RUNTIME_MEMORY_LIMITS.memory),
@@ -91,6 +94,13 @@ export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryC
       ]} />
     </div>
     <WriteFailure error={profile.failed} t={t} />
+  </section>
+  <section className={css.panelSection} aria-label={t('config.runtimeInheritance')}>
+    <div className={css.rows}>
+      <ToggleRow id="mnemon-runtime-inherit-subagents" label={t('config.runtimeInheritance')}
+        hint={t('config.runtimeInheritanceHint')} checked={inheritance.value} disabled={disabled} onChange={inheritance.set} />
+    </div>
+    <WriteFailure error={inheritance.failed} t={t} />
   </section>
   <section className={css.panelSection} aria-labelledby="mnemon-runtime-limits">
     <div className={css.panelHeading}>

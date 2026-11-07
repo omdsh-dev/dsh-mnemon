@@ -34,12 +34,12 @@ describe('Mnemon settings bridge', () => {
       { op: 'set', path: ['tabEnabled'], value: false },
       { op: 'set', path: ['runtimeUserScope'], value: 'global' },
       { op: 'set', path: ['embedding'], value: { enabled: true, endpoint: 'http://127.0.0.1:11434', model: 'qwen3-embedding:0.6b' } },
-      { op: 'set', path: ['runtimeMemory'], value: { memoryLimitBytes: 20480, userLimitBytes: 10240, maintenanceMaxTokens: 32768 } },
+      { op: 'set', path: ['runtimeMemory'], value: { inheritToSubagents: true, memoryLimitBytes: 20480, userLimitBytes: 10240, maintenanceMaxTokens: 32768 } },
       { op: 'set', path: ['taskAgentModel'], value: { mode: 'fixed', provider: 'deepseek', model: 'deepseek-chat' } },
     ]
     const written = await handler('mutate', { expectedRevision: 2, ops })
     expect(mutate).toHaveBeenCalledWith('mnemon', ops, 2)
-    expect(written).toEqual(expect.objectContaining({ ok: true, value: expect.objectContaining({ revision: 3, user: { store: 'settings-store', idleReviewMs: 45000, tabEnabled: false, runtimeUserScope: 'global', embedding: { enabled: true, endpoint: 'http://127.0.0.1:11434', model: 'qwen3-embedding:0.6b' }, runtimeMemory: { memoryLimitBytes: 20480, userLimitBytes: 10240, maintenanceMaxTokens: 32768 }, taskAgentModel: { mode: 'fixed', provider: 'deepseek', model: 'deepseek-chat' } } }) }))
+    expect(written).toEqual(expect.objectContaining({ ok: true, value: expect.objectContaining({ revision: 3, user: { store: 'settings-store', idleReviewMs: 45000, tabEnabled: false, runtimeUserScope: 'global', embedding: { enabled: true, endpoint: 'http://127.0.0.1:11434', model: 'qwen3-embedding:0.6b' }, runtimeMemory: { inheritToSubagents: true, memoryLimitBytes: 20480, userLimitBytes: 10240, maintenanceMaxTokens: 32768 }, taskAgentModel: { mode: 'fixed', provider: 'deepseek', model: 'deepseek-chat' } } }) }))
   })
 
   it.each(['sidebar', 'builtin'] as const)('accepts live displayMode=%s and resetting the preference', async displayMode => {

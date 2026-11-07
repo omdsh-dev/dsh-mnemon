@@ -48,8 +48,8 @@ class ScriptedAdapter extends LlmAdapter {
   }
 }
 
-async function fixture(mode: Mode, start = true) {
-  const f = await compositionFixture({ idleReview: { enabled: false } })
+async function fixture(mode: Mode, start = true, inheritToSubagents?: boolean) {
+  const f = await compositionFixture({ idleReview: { enabled: false }, ...(inheritToSubagents === undefined ? {} : { runtimeMemory: { inheritToSubagents } }) })
   // Both named tools and unbound, exact Route/Action ids must reach the model.
   await f.mount(documents, { instanceId: 'extra-documents', config: { dataDir: join(f.root, 'extra-documents') } })
   await f.mount(runtime, { instanceId: 'extra-runtime', config: { dataDir: join(f.root, 'extra-runtime') } })
@@ -122,8 +122,9 @@ async function fixture(mode: Mode, start = true) {
   } catch (error) { await close(); throw error }
 }
 
-function expectWake(text: string) {
-  expect(text).toContain('Synthetic turn-view retained fact.')
+function expectWake(text: string, inheritRuntime = true) {
+  if (inheritRuntime) expect(text).toContain('Synthetic turn-view retained fact.')
+  else expect(text).not.toContain('Synthetic turn-view retained fact.')
   expect(text).toContain('MNEMON VIEW TOOLS (available in this View)')
   expect(text).toContain('MNEMON VIEW ROUTES (quoted routing data;')
   expect(text).toContain('source:extra-documents/search')
@@ -188,10 +189,8 @@ it('adopts an Agent when lifecycle registration arrives during its first prompt 
   } finally { await handle.dispose(); await f.close() }
 }, 20_000)
 
-it.each([
-  ['native', false], ['native', true], ['ptc', false], ['ptc', true],
-] as const)('injects a delegated child View once per %s turn (assembly bypass: %s)', async (mode, bypassAssembly) => {
-  const f = await fixture(mode)
+it.each((['native', 'ptc'] as const).flatMap(mode => [false, true].flatMap(bypassAssembly => [undefined, false, true].map(inheritToSubagents => ({ mode, bypassAssembly, inheritToSubagents })))))('presents a child View once per turn: %j', async ({ mode, bypassAssembly, inheritToSubagents }) => {
+  const f = await fixture(mode, true, inheritToSubagents)
   if (bypassAssembly) f.ctx.on('system-prompt/assemble', async assembly => assembly, { prepend: true })
   const parent = await f.create()
   const child = await f.ctx.agents.create({ sessionId: SessionId('turn-view-child'), parentAgent: parent.agent,
@@ -203,14 +202,14 @@ it.each([
     ])
     expect(f.requests.map(request => request.turn)).toEqual([1, 1, 1])
     for (const request of f.requests) {
-      expectWake(request.text)
+      expectWake(request.text, inheritToSubagents === true)
       expect(request.messages.filter(message => message.role === 'user'
         && message.source?.kind === 'dsh-mnemon' && message.source.form === 'recall')).toHaveLength(1)
     }
     await f.turn(child.agent)
     expect(f.requests.map(request => request.turn)).toEqual([1, 1, 1, 2, 2, 2])
     for (const request of f.requests.slice(3)) {
-      expectWake(request.text)
+      expectWake(request.text, inheritToSubagents === true)
       expect(request.messages.filter(message => message.role === 'user'
         && message.source?.kind === 'dsh-mnemon' && message.source.form === 'recall')).toHaveLength(2)
     }
@@ -218,11 +217,47 @@ it.each([
       && event.data.source.kind === 'dsh-mnemon' && event.data.source.form === 'recall')).toHaveLength(2)
     expect(f.graph.composableTurns.activeTurn(child.agent.id)).toBeUndefined()
     expect(f.graph.composableTurns.activeTurn(parent.agent.id)).toBeUndefined()
+    expectWake(f.lifecycle.memoryView(child.agent.id)!.memoryText, inheritToSubagents === true)
   } finally { await child.dispose(); await parent.dispose(); await f.close() }
 }, 20_000)
 
-it('injects the captured parent View after the parent finishes and newer memory is stored', async () => {
+it('captures the current inheritance choice for new children across live settings changes', async () => {
   const f = await fixture('native')
+  const parent = await f.create()
+  const children: Awaited<ReturnType<typeof f.ctx.agents.create>>[] = []
+  const create = async (name: string) => {
+    const child = await f.ctx.agents.create({ sessionId: SessionId(name), parentAgent: parent.agent,
+      meta: { origin: 'subagent', parentSession: parent.agent.id, cwd: f.workspace }, agentOptions: { provider: 'fixture', model: 'fixture' } })
+    children.push(child)
+    return child
+  }
+  const swap = (inheritToSubagents: boolean) => f.live.swap(createRuntimeGraph(resolveConfig({ ...f.config,
+    runtimeMemory: { ...f.config.runtimeMemory, inheritToSubagents },
+  }), f.workspace, f.extensions))
+  const check = async (child: typeof children[number], expected: boolean) => {
+    const start = f.requests.length
+    await f.turn(child.agent)
+    for (const request of f.requests.slice(start)) expectWake(request.text, expected)
+    expectWake(f.lifecycle.memoryView(child.agent.id)!.memoryText, expected)
+  }
+  try {
+    const before = await create('before-toggle')
+    await check(before, false)
+    swap(true)
+    const enabled = await create('enabled-child')
+    await check(enabled, true)
+    const prefix = f.requests.at(-1)!.messages
+    await check(before, false)
+    swap(false)
+    await check(await create('disabled-child'), false)
+    await check(enabled, true)
+    expect(f.requests.at(-1)!.messages.slice(0, prefix.length)).toEqual(prefix)
+    expect(f.receipts.every(receipt => !receipt.isError)).toBe(true)
+  } finally { for (const child of children.reverse()) await child.dispose(); await parent.dispose(); await f.close() }
+}, 20_000)
+
+it('injects the captured parent View after the parent finishes and newer memory is stored', async () => {
+  const f = await fixture('native', true, true)
   await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'user', content: 'Synthetic delegated user preference.' })
   const parent = await f.create()
   let child: Awaited<ReturnType<typeof f.ctx.agents.create>> | undefined
