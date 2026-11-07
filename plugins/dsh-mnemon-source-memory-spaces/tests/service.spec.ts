@@ -208,7 +208,30 @@ describe('MemorySpacesService', () => {
       }],
     })
     expect(JSON.stringify(result)).not.toContain('Weak clue')
-    expect(process).toHaveBeenCalledWith(FAKE_CLI, expect.arrayContaining(['--limit', '6']), expect.anything())
+    expect(process).toHaveBeenCalledWith(FAKE_CLI, expect.arrayContaining(['--limit', '24', '--verbose']), expect.anything())
+  })
+
+  it('applies strict-v1 thresholds to Native semantic similarity instead of the hybrid ranking score (#577)', async () => {
+    const process = vi.fn<ProcessRunner>(async () => ({
+      stdout: JSON.stringify({ results: [
+        { insight: { id: 'zero', content: 'No semantic relevance' }, score: 0.99, signals: { similarity: 0 } },
+        { insight: { id: 'low', content: 'Weak semantic clue' }, score: 0.98, signals: { similarity: 0.249 } },
+        { insight: { id: 'medium', content: 'Useful semantic evidence' }, score: 0.1, signals: { similarity: 0.25 } },
+        { insight: { id: 'high', content: 'Strong semantic evidence' }, score: 0.05, signals: { similarity: 0.6 } },
+      ], meta: { hint: 'Semantic fixture hint.' } }), stderr: '', exitCode: 0,
+    }))
+    const config = resolveMemorySpacesConfig({ cliPath: FAKE_CLI, dataDir: populatedDataDir(), store: 'work' })
+    const runner = createRunner(config, process)
+    const service = createService(runner, config, createRegistry(runner, true))
+    const result = await service.search({ query: 'meaning', limit: 2 })
+    expect(result.results).toMatchObject([
+      { id: 'high', score: 0.6, normalizedScore: 0.6, relevanceTier: 'high' },
+      { id: 'medium', score: 0.25, normalizedScore: 0.25, relevanceTier: 'medium' },
+    ])
+    expect(result.results).toHaveLength(2)
+    expect(result.sources[0]?.quality).toMatchObject({ policyId: 'strict-v1', fetched: 4, retained: 2, selected: 2,
+      droppedLowScore: 1, droppedNonPositiveScore: 1 })
+    expect(result.hint).toContain('Semantic fixture hint.')
   })
 
   it('resolves an injected recall quality policy without changing the service pipeline', async () => {
@@ -825,7 +848,7 @@ describe('MemorySpacesService', () => {
     expect(result.sources).toEqual([expect.objectContaining({ memoryBodyId: 'work', mode: 'search', status: 'ready', itemCount: 1 })])
     expect(process).toHaveBeenCalledWith(
       FAKE_CLI,
-      ['--data-dir', dataDir, '--store', 'work', 'recall', 'database choice', '--limit', '21'],
+      ['--data-dir', dataDir, '--store', 'work', 'recall', 'database choice', '--limit', '50', '--verbose'],
       expect.anything(),
     )
   })
@@ -1062,7 +1085,7 @@ describe('MemorySpacesService', () => {
     await expect(service.entities('SQLite', 5)).resolves.toMatchObject({ selected: 'SQLite', insights: [{ id: 'm1', content: 'Use SQLite for local-first storage.' }] })
     expect(process.mock.calls.filter(([, args]) => args.includes('recall')).every(([, args]) => args.includes('--readonly'))).toBe(true)
     await expect(service.entityRelated('SQLite', 5)).resolves.toMatchObject({ entity: 'SQLite', items: [] })
-    expect(process).toHaveBeenCalledWith(FAKE_CLI, expect.arrayContaining(['--intent', 'ENTITY', '--limit', '15']), expect.anything())
+    expect(process).toHaveBeenCalledWith(FAKE_CLI, expect.arrayContaining(['--intent', 'ENTITY', '--limit', '50', '--verbose']), expect.anything())
   })
 
   it('rejects malformed visualization output', () => {
