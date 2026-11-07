@@ -237,7 +237,11 @@ $mnemon = Join-Path $mnemonBin 'mnemon.exe'
 & $mnemon --version
 ```
 
-Windows 上，dsh-mnemon 会从 `PATH`、导出的 `GOBIN` 或 `GOPATH`、默认 `%USERPROFILE%\go\bin`、`%LOCALAPPDATA%\Programs\mnemon` 和 Program Files 中发现原生 `mnemon.exe`。同时支持官方 npm 的 `mnemon.cmd` 启动器：验证包身份后通过 Node 调用其 JavaScript 入口，全程不使用 shell。其他 `.cmd` 与 `.bat` wrapper 仍不受支持。
+Windows 上，dsh-mnemon 会从 `PATH`、导出的 `GOBIN` 或 `GOPATH`、默认 `%USERPROFILE%\go\bin`、`%LOCALAPPDATA%\Programs\mnemon` 和 Program Files 中发现原生 `mnemon.exe`，随后检查 `PNPM_HOME` 及其 `bin` 子目录、`NVM_SYMLINK`、`%LOCALAPPDATA%\pnpm` 及其 `bin` 子目录、`%APPDATA%\npm`。查找这些全局 bin 目录时，缺少 AppData 环境变量会使用用户目录下的标准 `AppData\Local` / `AppData\Roaming` 路径。Windows 环境变量名称不区分大小写，PATH 目录可以带引号。既有 PATH 命中和显式 `mnemon.cliPath` / `MNEMON_CLI_PATH` 选择仍优先。
+
+也可以用 `pnpm add -g @mnemon-dev/mnemon@latest` 安装。npm 与 pnpm 的 `mnemon.cmd` 启动器均受支持，包括带版本的全局目录和包链接：验证包身份与静态 JavaScript 目标后，普通命令优先直接调用匹配的原生二进制，继续隐藏 Windows 控制台；缺少匹配二进制时通过 Node 调用已验证的入口，不通过 shell 执行 batch 内容。pnpm 安装请用 `pnpm add -g @mnemon-dev/mnemon@latest` 更新；包不属于 npm 已验证的全局目录时，状态页不会提供 npm 更新操作。
+
+若自定义 `global-bin-dir` 既不在 DSH 的 PATH 中，也没有通过 `PNPM_HOME` 暴露，则无法自动推断。改变环境后重启 DSH，或将 `cliPath` 明确指向生成的启动器或原生可执行文件。`pnpm bin -g` 和 PowerShell 的 `Get-Command mnemon` 可以核对终端选中的目录与命令；桌面进程继承的环境可能不同。任意其他 `.cmd` / `.bat` wrapper 仍不受支持。
 
 DSH 内嵌在 Electron 桌面主进程时，经过验证的 npm 启动器会在子进程中以 `ELECTRON_RUN_AS_NODE=1` 运行，覆盖记忆命令、版本检查和 npm 更新，并保留已保存的 embedding 设置。桌面应用自身的环境变量不变。如果桌面壳关闭了 Electron 的 `runAsNode` fuse，请将 `mnemon.cliPath` 指向当前平台的 Mnemon 原生二进制，详见[故障排查](./operations.md#故障排查)。
 

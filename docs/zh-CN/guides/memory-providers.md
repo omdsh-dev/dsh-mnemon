@@ -28,6 +28,12 @@ Host 只暴露适配器能够兑现的能力；UI 与 Agent 工具不会伪造�
 
 <a id="服务与记忆体字段"></a>
 
+## Windows CLI 安装
+
+Mnemon 和 ByteRover 都可以通过 npm 或 pnpm 全局安装（`pnpm add -g @mnemon-dev/mnemon@latest` / `pnpm add -g byterover-cli`）。ByteRover 先检查 PATH，再检查 `PNPM_HOME` 及其 `bin` 子目录、当前 `NVM_SYMLINK`、`%LOCALAPPDATA%\pnpm` 及其 `bin` 子目录、`%APPDATA%\npm`；缺少环境变量时使用用户目录下的标准 AppData 路径。同一目录中优先选择原生 `.exe`。经过验证的 npm/pnpm 启动器通过 Node 调用实际包入口，参数按原值传递；知识目录、API Key 和 Provider 能力沿用现有行为。
+
+自定义全局目录未暴露给 DSH 时，请在 Provider 的 `cliPath` 中填写 `brv.cmd` 或可执行文件的绝对路径，显式路径仍优先。任意 batch wrapper 不会被执行。环境检查及 pnpm 更新方式见 [CLI 安装与发现](./installation.md#mnemon-cli-的其他安装方式)。
+
 ## 服务与记忆空间字段
 
 | Provider | 工作区行为 | 记忆空间页面中的服务配置 | 记忆空间中的实例配置 |

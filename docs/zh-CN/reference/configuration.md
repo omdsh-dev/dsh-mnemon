@@ -314,13 +314,16 @@ config.cliPath
               first GOPATH/bin/mnemon.exe, or ~/go/bin/mnemon.exe
               %LOCALAPPDATA%/Programs/mnemon/mnemon.exe
               %ProgramFiles%/mnemon/mnemon.exe
+              PNPM_HOME, PNPM_HOME/bin, NVM_SYMLINK
+              %LOCALAPPDATA%/pnpm, %LOCALAPPDATA%/pnpm/bin, %APPDATA%/npm
+              (mnemon.exe or verified mnemon.cmd in these global bin directories)
   -> Unix: ~/.local/bin/mnemon
            /opt/homebrew/bin/mnemon
            /usr/local/bin/mnemon
            /usr/bin/mnemon
 ```
 
-显式 `cliPath` 会被采用；既可以填写完整路径，也可以填写 PATH 中的命令名（例如 `mnemon`）。状态检查与实际调用使用同一套发现规则，并在重新检查时识别安装或移除的 CLI，无需重启 DSH。若显式指定的命令不可执行，实际调用会返回启动错误，不会悄悄改用其他 CLI。Windows 自动发现接受普通 `.exe` 文件及经过验证的官方 npm `mnemon.cmd` 启动器。npm 启动器通过 Node 调用，全程不使用 shell；任意其他 `.cmd` 与 `.bat` wrapper 仍被排除。迁移至 npm 后，请将显式 CLI 配置指向 npm 启动器，并在“状态 → 检查版本”核对可执行文件路径。
+显式 `cliPath` 会被采用；既可以填写完整路径，也可以填写 PATH 中的命令名（例如 `mnemon`）。状态检查与实际调用使用同一套发现规则，并在重新检查时识别安装或移除的 CLI，无需重启 DSH。若显式指定的命令不可执行，实际调用会返回启动错误，不会悄悄改用其他 CLI。Windows 自动发现接受普通 `.exe` 文件及经过验证的官方 npm/pnpm `mnemon.cmd` 启动器。包管理器启动器通过 Node 调用，全程不使用 shell；任意其他 `.cmd` 与 `.bat` wrapper 仍被排除。迁移至 npm 后，请将显式 CLI 配置指向 npm 启动器，并在“状态 → 检查版本”核对可执行文件路径。
 
 ## 兼容 Store 提示优先级
 

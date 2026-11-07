@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, win32 } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -15,7 +15,7 @@ afterEach(() => {
 })
 
 function temporaryDirectory(): string {
-  const directory = mkdtempSync(join(tmpdir(), 'dsh-mnemon-runner-'))
+  const directory = realpathSync(mkdtempSync(join(tmpdir(), 'dsh-mnemon-runner-')))
   temporaryDirectories.push(directory)
   return directory
 }
@@ -107,6 +107,12 @@ describe('Mnemon CLI discovery', () => {
   })
 
   it.each([
+    { name: 'PNPM_HOME', env: { pNpM_hOmE: '"D:\\pnpm home"' }, expected: 'D:\\pnpm home\\mnemon.exe' },
+    { name: 'PNPM_HOME bin', env: { PNPM_HOME: 'D:\\pnpm' }, expected: 'D:\\pnpm\\bin\\mnemon.exe' },
+    { name: 'default pnpm home', env: {}, expected: 'C:\\Users\\alice\\AppData\\Local\\pnpm\\mnemon.exe' },
+    { name: 'LOCALAPPDATA pnpm bin', env: { LOCALAPPDATA: 'D:\\Local' }, expected: 'D:\\Local\\pnpm\\bin\\mnemon.exe' },
+    { name: 'npm global directory', env: { APPDATA: 'D:\\Roaming' }, expected: 'D:\\Roaming\\npm\\mnemon.exe' },
+    { name: 'active nvm symlink', env: { NVM_SYMLINK: 'D:\\active node' }, expected: 'D:\\active node\\mnemon.exe' },
     {
       name: 'GOBIN',
       env: { GOBIN: 'D:\\go-bin', GOPATH: 'E:\\go-work' },
