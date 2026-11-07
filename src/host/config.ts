@@ -139,6 +139,7 @@ const RecallQualitySchema: z<RecallQualityConfig> = z.object({
 })
 
 const RuntimeMemorySchema: z<RuntimeMemoryConfig> = z.object({
+  inheritToSubagents: z.boolean().default(false),
   memoryLimitBytes: z.number().step(1).min(1).max(MAX_RUNTIME_MEMORY_LIMIT_BYTES).default(DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES),
   userLimitBytes: z.number().step(1).min(1).max(MAX_RUNTIME_MEMORY_LIMIT_BYTES).default(DEFAULT_RUNTIME_USER_LIMIT_BYTES),
   maintenanceMaxTokens: z.number().step(1).min(1).max(MAX_RUNTIME_MAINTENANCE_MAX_TOKENS).default(DEFAULT_RUNTIME_MAINTENANCE_MAX_TOKENS),
@@ -197,6 +198,7 @@ export const Config: z<Config> = z.object({
   timeoutMs: z.number().step(1).min(100).max(120_000).default(DEFAULT_TIMEOUT_MS),
   defaultRecallLimit: z.number().step(1).min(1).max(50).default(DEFAULT_RECALL_LIMIT),
   runtimeMemory: RuntimeMemorySchema.default({
+    inheritToSubagents: false,
     memoryLimitBytes: DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES,
     userLimitBytes: DEFAULT_RUNTIME_USER_LIMIT_BYTES,
     maintenanceMaxTokens: DEFAULT_RUNTIME_MAINTENANCE_MAX_TOKENS,
@@ -320,6 +322,8 @@ function resolveTaskAgentModel(value: TaskAgentModelConfig | undefined): Resolve
 }
 
 function resolveRuntimeMemory(value: RuntimeMemoryConfig | undefined): SharedResolvedConfig['runtimeMemory'] {
+  const inheritToSubagents = value?.inheritToSubagents ?? false
+  if (typeof inheritToSubagents !== 'boolean') throw new Error('dsh-mnemon: Runtime inheritToSubagents must be a boolean')
   const memoryLimitBytes = value?.memoryLimitBytes ?? DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES
   const userLimitBytes = value?.userLimitBytes ?? DEFAULT_RUNTIME_USER_LIMIT_BYTES
   const maintenanceMaxTokens = value?.maintenanceMaxTokens ?? DEFAULT_RUNTIME_MAINTENANCE_MAX_TOKENS
@@ -332,7 +336,7 @@ function resolveRuntimeMemory(value: RuntimeMemoryConfig | undefined): SharedRes
   if (!Number.isInteger(maintenanceMaxTokens) || maintenanceMaxTokens < 1 || maintenanceMaxTokens > MAX_RUNTIME_MAINTENANCE_MAX_TOKENS) {
     throw new Error(`dsh-mnemon: Runtime maintenance maxTokens must be an integer within 1..${MAX_RUNTIME_MAINTENANCE_MAX_TOKENS}`)
   }
-  return { memoryLimitBytes, userLimitBytes, maintenanceMaxTokens }
+  return { inheritToSubagents, memoryLimitBytes, userLimitBytes, maintenanceMaxTokens }
 }
 
 const MEMORY_COMPONENT_ID = /^[a-z][a-z0-9-]{0,127}$/u

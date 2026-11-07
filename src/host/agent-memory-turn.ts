@@ -47,19 +47,28 @@ export class AgentMemoryTurn {
   private lastInspection: MemoryViewInspection | undefined
   private lastWorkspace: string | undefined
   private readonly releaseDelegation: (() => void) | undefined
+  private readonly includeRuntime: boolean
 
   constructor(
     private readonly agent: HostAgent,
-    private readonly runtime: Pick<MnemonAgentRuntimeSource, 'forAgent' | 'executions'>,
+    private readonly runtime: Pick<MnemonAgentRuntimeSource, 'config' | 'forAgent' | 'executions'>,
     private readonly delegation?: DelegatedMemoryView,
     private readonly independent = false,
   ) {
+    // Capture the current preference at dispatch. An existing child retains its
+    // presentation across live config swaps, just as it retains its memory View.
+    this.includeRuntime = delegation === undefined || runtime.config.runtimeMemory.inheritToSubagents
     if (delegation === undefined) return
     this.releaseDelegation = runtime.executions.retain(agent, delegation)
   }
 
   get current(): PinnedAgentMemoryTurn | undefined {
     return this.pinned
+  }
+
+  modelWake() {
+    const pinned = this.pinned
+    return pinned === undefined ? undefined : modelMemoryWake(pinned.graph, pinned.context, this.includeRuntime)
   }
 
   /** Why the current turn has no View, when memory could not be composed for it. */
@@ -141,7 +150,7 @@ export class AgentMemoryTurn {
     try {
       if (this.closed || this.generation !== generation) throw new Error('memory turn ended during View preparation')
       signal?.throwIfAborted()
-      const inspection = inspectMemoryView(graph.memoryComposition.generation(context.view.runtimeGeneration)!, context.view, 'active', turn, modelMemoryWake(graph, context).text)
+      const inspection = inspectMemoryView(graph.memoryComposition.generation(context.view.runtimeGeneration)!, context.view, 'active', turn, modelMemoryWake(graph, context, this.includeRuntime).text)
       this.pinned = { turn, graph, context, release: execution.release }
       this.warned = undefined
       this.lastInspection = inspection

@@ -157,6 +157,7 @@ describe('Mnemon config and resolution', () => {
         maintenanceMaxTokens: 32_768,
       },
     }).runtimeMemory).toEqual({
+      inheritToSubagents: false,
       memoryLimitBytes: 20_480,
       userLimitBytes: 10_240,
       maintenanceMaxTokens: 32_768,
@@ -164,6 +165,23 @@ describe('Mnemon config and resolution', () => {
     expect(() => resolveConfig({ runtimeMemory: { memoryLimitBytes: 0 } })).toThrow('MEMORY.md limit')
     expect(() => resolveConfig({ runtimeMemory: { userLimitBytes: 1.5 } })).toThrow('USER.md limit')
     expect(() => resolveConfig({ runtimeMemory: { maintenanceMaxTokens: 1_000_001 } })).toThrow('maintenance maxTokens')
+  })
+
+  it('defaults child Runtime inheritance off and accepts only explicit booleans', () => {
+    expect(resolveConfig({}).runtimeMemory.inheritToSubagents).toBe(false)
+    expect(Config({}).runtimeMemory?.inheritToSubagents).toBe(false)
+    expect(resolveConfig({ runtimeMemory: { memoryLimitBytes: 20480 } }).runtimeMemory.inheritToSubagents).toBe(false)
+    for (const inheritToSubagents of [false, true]) {
+      expect(resolveConfig({ runtimeMemory: { inheritToSubagents } }).runtimeMemory.inheritToSubagents).toBe(inheritToSubagents)
+      expect(Config({ runtimeMemory: { inheritToSubagents } }).runtimeMemory?.inheritToSubagents).toBe(inheritToSubagents)
+    }
+    for (const inheritToSubagents of ['true', 1]) {
+      expect(() => resolveConfig({ runtimeMemory: { inheritToSubagents } } as never)).toThrow('inheritToSubagents must be a boolean')
+      expect(() => Config({ runtimeMemory: { inheritToSubagents } } as never)).toThrow()
+    }
+    // DSH's schema treats null as resetting a field to its default.
+    expect(Config({ runtimeMemory: { inheritToSubagents: null } } as never).runtimeMemory?.inheritToSubagents).toBe(false)
+    expect(resolveConfig({ runtimeMemory: { inheritToSubagents: null } } as never).runtimeMemory.inheritToSubagents).toBe(false)
   })
 
   it('defaults and bounds the Runtime limits as the Runtime Source does', () => {
