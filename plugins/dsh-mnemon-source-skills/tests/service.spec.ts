@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { withMemoryStorageLock } from 'dsh-mnemon/extension-sdk'
-import type { ReviewRecordInput } from '../src/contracts.ts'
+import { sha256 } from '../src/catalog.ts'
+import { skillCaseSignature, type RunTarget, type ReviewRecordInput } from '../src/contracts.ts'
 import { setFrontmatterKey, withInvocation } from '../src/frontmatter.ts'
 import { SkillsService } from '../src/service.ts'
 import type { LedgerFile } from '../src/store.ts'
@@ -689,6 +690,110 @@ describe('draft and backtest recovery', () => {
     expect((await store.finishRun({ id: old.id, status: 'completed' })).status).toBe('interrupted')
     await expect(store.progressRun({ id: old.id, result: { caseId: entry.id, title: 'Case', verdict: 'pass', score: 1, checks: [], steps: [], answer: '' } })).rejects.toThrow('not running')
     expect(await store.reclaimStaleRuns()).toEqual({ reclaimed: 0 })
+  })
+})
+
+describe('Source-owned automatic adoption', () => {
+  async function measured() {
+    now = new Date()
+    const store = service()
+    const path = join(home, 'skills', 'release-notes', 'SKILL.md')
+    const original = skill('release-notes')
+    write(path, original)
+    const record = await store.recordReview(workspace, review())
+    const suggestion = store.suggestions()[0]!
+    const draft = await store.recordDraft(workspace, { suggestionId: suggestion.id, skillName: 'release-notes', content: original + '\n2. Group by component.\n', notes: '', changes: [], guidance: [] })
+    const cases = store.cases('release-notes')
+    const casesHash = sha256(skillCaseSignature(cases))
+    const model = { provider: 'test', model: 'test-model', reasoningEffort: 'high' }
+    const run = async (target: RunTarget) => {
+      const current = await store.startRun({ skillName: draft.skillName, target: store.targetContent(workspace, draft.skillName, target).target, caseIds: cases.map(entry => entry.id), model, expectedCasesHash: casesHash })
+      for (const entry of cases) await store.progressRun({ id: current.id, result: { caseId: entry.id, title: entry.title, verdict: 'pass', score: 1, fullyGraded: true, checks: entry.checks.map(check => ({ checkId: check.id, pass: true, note: 'measured' })), steps: ['Read changelog'], answer: 'Grouped notes' } })
+      return store.finishRun({ id: current.id, status: 'completed' })
+    }
+    const baseline = await run({ kind: 'current', draftId: draft.id })
+    const candidate = await run({ kind: 'draft', draftId: draft.id })
+    const automatic = { draftHash: sha256(draft.content), baselineRunId: baseline.id, draftRunId: candidate.id, casesHash, attempt: 1 }
+    return { store, path, original, record, suggestion, draft, cases, baseline, candidate, automatic }
+  }
+
+  it('returns only newly created suggestions for automatic admission', async () => {
+    const state = await measured()
+    expect(state.record.createdSuggestionIds).toEqual([state.suggestion.id])
+    const next = await state.store.recordReview(workspace, review())
+    expect(next.createdSuggestionIds).toEqual([])
+    expect(next.suggestionIds).toContain(state.suggestion.id)
+  })
+
+  it('adopts through the existing version path and records both scores in the review log', async () => {
+    const state = await measured()
+    await state.store.adoptDraft(workspace, state.draft.id, { automatic: state.automatic })
+    expect(readFileSync(state.path, 'utf8')).toBe(state.draft.content)
+    expect(state.store.versions('user-dsh:release-notes')).toHaveLength(2)
+    expect(state.store.suggestions()[0]?.autoAdoption?.at(-1)).toMatchObject({ stage: 'adopted', baselineScore: 1, draftScore: 1 })
+  })
+
+  it.each(['draft', 'case', 'file', 'missing-result', 'missing-grade', 'run-model', 'run-effort', 'wrong-target', 'partial-run', 'failed-check'] as const)('keeps the skill unchanged if %s changes before adoption', async kind => {
+    const state = await measured()
+    if (kind === 'draft') await state.store.updateDraft({ id: state.draft.id, content: state.draft.content + '\n3. A human edit.\n' })
+    if (kind === 'case') { const entry = state.cases[0]!; await state.store.saveCase({ ...entry, prompt: entry.prompt + ' A new requirement.' }) }
+    if (kind === 'file') write(state.path, state.original + '\n3. A human file edit.\n')
+    if (!['draft', 'case', 'file'].includes(kind)) {
+      const evals = state.store.store.evals()
+      const candidate = evals.runs.find(run => run.id === state.candidate.id)!
+      if (kind === 'missing-result') candidate.results = []
+      if (kind === 'missing-grade') delete candidate.results[0]!.fullyGraded
+      if (kind === 'run-model') candidate.model!.model = 'different'
+      if (kind === 'run-effort') candidate.model!.reasoningEffort = 'low'
+      if (kind === 'wrong-target') candidate.target = { kind: 'current', hash: state.automatic.draftHash }
+      if (kind === 'partial-run') candidate.status = 'running'
+      if (kind === 'failed-check') { candidate.results[0]!.checks[0]!.pass = false; candidate.results[0]!.score = 1 / 3; candidate.results[0]!.verdict = 'fail' }
+      state.store.store.saveEvals(evals)
+    }
+    const before = readFileSync(state.path, 'utf8')
+    await expect(state.store.adoptDraft(workspace, state.draft.id, { automatic: state.automatic })).rejects.toThrow(/changed|hash|modified|manual review/)
+    expect(readFileSync(state.path, 'utf8')).toBe(before)
+    expect(state.store.suggestions()[0]?.status).toBe('review')
+  })
+
+  it('honors cancellation after waiting for the Source write lock', async () => {
+    const state = await measured()
+    let unlock!: () => void
+    let entered!: () => void
+    const ready = new Promise<void>(resolve => { entered = resolve })
+    const lock = withMemoryStorageLock(state.store.store.directory, async () => {
+      entered()
+      await new Promise<void>(resolve => { unlock = resolve })
+    })
+    await ready
+    const controller = new AbortController()
+    const adoption = state.store.adoptDraft(workspace, state.draft.id, { automatic: state.automatic, signal: controller.signal })
+    controller.abort(new Error('automatic adoption disabled'))
+    unlock()
+    await expect(adoption).rejects.toThrow('automatic adoption disabled')
+    await lock
+    expect(readFileSync(state.path, 'utf8')).toBe(state.original)
+  })
+
+  it('marks abandoned automatic activity paused after restart without resuming adoption', async () => {
+    const state = await measured()
+    const ledger = state.store.store.ledger()
+    ledger.suggestions[0]!.autoAdoption = [{ at: '2000-01-01T00:00:00.000Z', stage: 'backtesting', attempt: 1 }]
+    state.store.store.saveLedger(ledger)
+    await service().reclaimOrphanDrafts()
+    const recovered = service().suggestions()[0]!
+    expect(recovered.status).toBe('review')
+    expect(recovered.autoAdoption?.at(-1)).toMatchObject({ stage: 'paused', reason: 'interrupted' })
+    expect(readFileSync(state.path, 'utf8')).toBe(state.original)
+  })
+
+  it('does not overwrite a manually edited draft when an automatic rewrite returns late', async () => {
+    const state = await measured()
+    const expectedDraft = { id: state.draft.id, hash: sha256(state.draft.content) }
+    await state.store.suggestionStatus({ id: state.suggestion.id, status: 'drafting', expectedDraft })
+    await state.store.updateDraft({ id: state.draft.id, content: state.draft.content + '\n3. Human instruction.\n' })
+    await expect(state.store.recordDraft(workspace, { suggestionId: state.suggestion.id, draftId: state.draft.id, skillName: state.draft.skillName, content: state.draft.content + '\n4. Late automatic rewrite.\n', notes: '', changes: [], guidance: [], expectedDraft })).rejects.toThrow('changed')
+    expect(state.store.draft(workspace, state.draft.id).draft.content).toContain('Human instruction')
   })
 })
 

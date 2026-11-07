@@ -1,8 +1,9 @@
+import { SkillAutoAdoption, AutomaticSkillStop, hashSkillCases, hashSkillDraft } from './skill-auto-adoption.ts'
 import { accessSync, constants, statSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type {
   BacktestRun, DraftView, EvalCase, EvidencePack, ReviewLogEntry, ReviewRecordInput, ReviewRecordResult, RunTarget, SkillCatalog, SkillDocument, SkillDraft, SkillRootKind, SkillSuggestion, Trajectory,
-  ModelRoute,
+  ModelRoute, DraftExpectation,
 } from 'dsh-mnemon-source-skills/contracts'
 import type { HostAgent, HostPreStepDecision, HostSessionEvent } from './dsh.ts'
 import type { ResolvedSkillsConfig, SkillActivitySnapshot, StorageScopeKind, TurnSkillReview } from './protocol.ts'
@@ -30,6 +31,7 @@ export interface SkillEvolutionHost {
   /** Run model work under a fresh task Agent in a workspace, outside any conversation. */
   runTask<T>(workspaceRoot: string | undefined, signal: AbortSignal, operation: (agent: HostAgent) => Promise<T>, route?: ModelRoute): Promise<T>
   skillTask(parent: HostAgent, label: string, prompt: string, schema: Record<string, unknown>, persona: string, signal: AbortSignal, route?: ModelRoute, maxTokens?: number): Promise<{ structured: unknown }>
+  taskRoute?(workspaceRoot: string | undefined): (ModelRoute & { reasoningEffort?: string }) | undefined
   now?(): Date
   warn?(message: string, error?: unknown): void
 }
@@ -155,7 +157,15 @@ export class SkillEvolution {
   private backtestJobs = 0
   private readonly backtestWaiters = new Set<() => void>()
 
-  constructor(private readonly host: SkillEvolutionHost) {}
+  private readonly automatic: SkillAutoAdoption
+  constructor(private readonly host: SkillEvolutionHost) {
+    this.automatic = new SkillAutoAdoption({ settings: () => host.settings(), route: workspace => host.taskRoute?.(workspace),
+      draft: (source, workspace, input, signal) => this.automaticDraft(source, workspace, input, signal),
+      backtest: (source, workspace, input) => this.backtest(source, workspace, input), warn: (text, error) => this.warn(text, error),
+    })
+  }
+
+  settingsChanged(): void { this.automatic.settingsChanged() }
 
   private source(agent: HostAgent): SkillsSourcePort | undefined {
     const source = this.host.source(agent)
@@ -351,6 +361,7 @@ export class SkillEvolution {
       } satisfies ReviewRecordInput)
       state.failures = 0
       state.lastReviewAt = this.now().getTime()
+      if (trigger === 'automatic' && result.createdSuggestionIds !== undefined) this.automatic.enqueue(source, workspace, result.createdSuggestionIds, () => this.host.source(agent) !== undefined)
       return result
     } catch (error) {
       state.failures += 1
@@ -425,7 +436,32 @@ export class SkillEvolution {
     return { started: true, ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }) }
   }
 
-  private async writeDraft(source: SkillsSourcePort, workspace: string | undefined, input: { suggestionId?: string; draftId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; backtest?: boolean; route?: ModelRoute }, prepared: { pack: EvidencePack; targetRoot: SkillRootKind; guidance: string[]; onRecorded?: () => void }, signal: AbortSignal): Promise<SkillDraft> {
+  private async automaticDraft(source: SkillsSourcePort, workspace: string | undefined, input: { suggestionId: string; action: 'create' | 'update'; previous?: SkillDraft; guidance: string; route: ModelRoute }, parentSignal: AbortSignal): Promise<SkillDraft> {
+    const controller = new AbortController()
+    const signal = AbortSignal.any([parentSignal, controller.signal])
+    const timer = setTimeout(() => controller.abort(new DraftDeadlineError('Automatic skill draft did not finish within 15 minutes')), DRAFT_DEADLINE_MS)
+    timer.unref?.()
+    const expectedDraft: DraftExpectation = input.previous === undefined ? null : { id: input.previous.id, hash: hashSkillDraft(input.previous) }
+    let recorded = false
+    let claimed = false
+    try {
+      return await abortable(signal, async () => {
+        const pack = await source.read<EvidencePack>('evidence-pack', { suggestionId: input.suggestionId }, signal)
+        signal.throwIfAborted()
+        if (pack.action !== input.action || (pack.action === 'update' && pack.suggestion?.skillFileHash !== pack.skill?.hash)) throw new AutomaticSkillStop('changed')
+        const targetRoot = pack.action === 'update' ? pack.skill!.root : newSkillRoot(this.host.settings(), source, await source.read<SkillCatalog>('catalog', null, signal), input.previous?.targetRoot ?? pack.suggestion?.targetRoot)
+        const guidance = [...(input.previous?.guidance ?? []), ...(input.guidance === '' ? [] : [input.guidance])].slice(-8)
+        await source.mutate('suggestion-status', { id: input.suggestionId, status: 'drafting', expectedDraft }, signal)
+        claimed = true
+        return this.writeDraft(source, workspace, { suggestionId: input.suggestionId, ...(input.previous === undefined ? {} : { draftId: input.previous.id }), route: input.route }, { pack, targetRoot, guidance, expectedDraft, deferBacktests: true, onRecorded: () => { recorded = true } }, signal)
+      })
+    } catch (error) {
+      if (claimed && !recorded) await source.mutate('suggestion-status', { id: input.suggestionId, status: 'pending', expectedDraft, ...(parentSignal.aborted ? {} : { error: message(signal.aborted ? signal.reason : error) }) }).catch(() => undefined)
+      throw signal.aborted ? signal.reason : error
+    } finally { clearTimeout(timer) }
+  }
+
+  private async writeDraft(source: SkillsSourcePort, workspace: string | undefined, input: { suggestionId?: string; draftId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; backtest?: boolean; route?: ModelRoute }, prepared: { pack: EvidencePack; targetRoot: SkillRootKind; guidance: string[]; onRecorded?: () => void; deferBacktests?: boolean; expectedDraft?: DraftExpectation }, signal: AbortSignal): Promise<SkillDraft> {
     const settings = this.host.settings()
     const { pack, targetRoot, guidance } = prepared
     let prompt = skillDraftPrompt(pack, guidance, targetRoot)
@@ -462,6 +498,7 @@ export class SkillEvolution {
           ...(input.draftId === undefined ? {} : { draftId: input.draftId }),
           skillName: pack.skillName, content: parsed.content, notes: parsed.notes, changes: parsed.changes, guidance,
           expectedBaseHash: pack.skill?.hash ?? null,
+          ...(prepared.expectedDraft === undefined ? {} : { expectedDraft: prepared.expectedDraft }),
           ...(pack.action === 'create' ? { targetRoot } : {}),
         }, signal)
         prepared.onRecorded?.()
@@ -473,7 +510,7 @@ export class SkillEvolution {
       }
     }
     signal.throwIfAborted()
-    if ((settings.autoBacktest || input.backtest) && pack.cases.length > 0) {
+    if (!prepared.deferBacktests && (settings.autoBacktest || input.backtest) && pack.cases.length > 0) {
       await this.backtest(source, workspace, { skillName: pack.skillName, target: { kind: 'draft', draftId: draft.id }, ...(input.route === undefined ? {} : { route: input.route }) })
       // Older runs do not record their model, so they cannot be a baseline for
       // an explicitly selected route even when the skill content is unchanged.
@@ -509,23 +546,26 @@ export class SkillEvolution {
     })
   }
 
-  async backtest(port: SkillsSourcePort, workspace: string | undefined, input: { skillName: string; target: RunTarget; caseIds?: string[]; route?: ModelRoute }): Promise<{ runId: string }> {
+  async backtest(port: SkillsSourcePort, workspace: string | undefined, input: { skillName: string; target: RunTarget; caseIds?: string[]; route?: ModelRoute & { reasoningEffort?: string }; expectedCasesHash?: string; signal?: AbortSignal }): Promise<{ runId: string }> {
     if (this.disposed) throw new Error('Skill evolution has stopped')
+    input.signal?.throwIfAborted()
     if (this.backtestJobs >= 16) throw new Error('The skill backtest queue is full. Cancel a run or retry after it finishes.')
     this.backtestJobs++
     const source = retryingSource(port)
     try {
       const settings = this.host.settings()
-      const cases = (await source.read<EvalCase[]>('cases', { skill: input.skillName })).filter(entry => entry.enabled && (input.caseIds === undefined || input.caseIds.includes(entry.id))).slice(0, settings.casesPerRun)
+      const cases = (await source.read<EvalCase[]>('cases', { skill: input.skillName }, input.signal)).filter(entry => entry.enabled && (input.caseIds === undefined || input.caseIds.includes(entry.id))).slice(0, settings.casesPerRun)
       if (cases.length === 0) throw new Error(`${input.skillName} has no enabled eval case to run`)
+      if (input.expectedCasesHash !== undefined && hashSkillCases(cases) !== input.expectedCasesHash) throw new Error('Eval cases changed before this backtest started')
       if (cases.some(entry => entry.requiresVision !== undefined && typeof entry.requiresVision !== 'boolean')) throw new Error('requiresVision must be a boolean')
-      const resolved = await source.read<{ content?: string; target: RunTarget }>('target-content', { skillName: input.skillName, target: input.target })
-      const run = await source.mutate<BacktestRun>('run-start', { skillName: input.skillName, target: resolved.target, caseIds: cases.map(entry => entry.id) })
+      const resolved = await source.read<{ content?: string; target: RunTarget }>('target-content', { skillName: input.skillName, target: input.target }, input.signal)
+      const run = await source.mutate<BacktestRun>('run-start', { skillName: input.skillName, target: resolved.target, caseIds: cases.map(entry => entry.id), ...(input.expectedCasesHash === undefined ? {} : { expectedCasesHash: input.expectedCasesHash }), ...(input.route === undefined ? {} : { model: input.route }) }, input.signal)
       void this.background('skill backtest', async deadline => {
         const controller = new AbortController()
-        const abort = () => controller.abort(deadline.reason)
+        const abort = () => controller.abort(deadline.aborted ? deadline.reason : input.signal?.reason)
         deadline.addEventListener('abort', abort, { once: true })
-        if (deadline.aborted) abort()
+        input.signal?.addEventListener('abort', abort, { once: true })
+        if (deadline.aborted || input.signal?.aborted) abort()
         const signal = controller.signal
         // Cancellation is a Source-owned mutation and works even after a restart.
         let checking = false
@@ -571,6 +611,7 @@ export class SkillEvolution {
         } finally {
           clearInterval(watcher)
           deadline.removeEventListener('abort', abort)
+          input.signal?.removeEventListener('abort', abort)
         }
       }, 45 * 60 * 1000).finally(() => { this.backtestJobs-- })
       return { runId: run.id }
@@ -593,7 +634,10 @@ export class SkillEvolution {
         signal.throwIfAborted()
         const judged = await this.host.skillTask(task, `Mnemon skill judge: ${entry.title}`.slice(0, 120), skillJudgePrompt(entry, executed.steps, executed.answer), SKILL_JUDGE_SCHEMA as unknown as Record<string, unknown>, SKILL_JUDGE_PERSONA, signal)
         const grade = gradeCase(entry, judged.structured)
-        return { caseId: entry.id, title: entry.title, verdict: grade.verdict, score: grade.score, checks: grade.checks, steps: executed.steps, answer: executed.answer, summary: grade.summary }
+        const raw = judged.structured as { checks?: Array<{ index?: unknown; pass?: unknown }> } | null
+        const checks = Array.isArray(raw?.checks) ? raw.checks : []
+        const fullyGraded = checks.length === entry.checks.length && entry.checks.every((_check, index) => checks.filter(check => check?.index === index + 1 && typeof check.pass === 'boolean').length === 1)
+        return { caseId: entry.id, fullyGraded, title: entry.title, verdict: grade.verdict, score: grade.score, checks: grade.checks, steps: executed.steps, answer: executed.answer, summary: grade.summary }
       } catch (error) {
         if (signal.aborted) throw error
         failure = error
@@ -656,6 +700,7 @@ export class SkillEvolution {
   }
 
   dispose(): void {
+    this.automatic.dispose()
     this.disposed = true
     for (const state of this.sessions.values()) if (state.timer !== undefined) clearTimeout(state.timer)
     this.sessions.clear()

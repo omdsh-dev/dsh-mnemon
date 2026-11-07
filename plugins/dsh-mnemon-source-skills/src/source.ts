@@ -2,7 +2,7 @@ import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { COMPOSABLE_MEMORY_API_VERSION, type MemoryJsonValue, type MemorySourceDefinition, type MemorySourceFacts } from 'dsh-mnemon/contracts'
 import { defineMemorySource, memoryInputRecord as record, memoryInputStringArray as stringArray, memoryInputText as text } from 'dsh-mnemon/extension-sdk'
-import { EVOLUTION_SIGNALS, SKILL_ROOT_KINDS, type CaseResult, type EvolutionSignal, type ModelRoute, type ReviewRecordInput, type RunTarget, type SkillRootKind, type SkillsPolicy, type TrajectoryStep } from './contracts.ts'
+import { AUTO_ADOPTION_STAGES, AUTO_ADOPTION_REASONS, type AutoAdoptionEvent, type DraftExpectation, type AutomaticAdoption, EVOLUTION_SIGNALS, SKILL_ROOT_KINDS, type CaseResult, type EvolutionSignal, type ModelRoute, type ReviewRecordInput, type RunTarget, type SkillRootKind, type SkillsPolicy, type TrajectoryStep } from './contracts.ts'
 import { SkillsService, type CaseInput } from './service.ts'
 
 export const SKILLS_SOURCE_TYPE_ID = 'skills'
@@ -50,6 +50,40 @@ function draftModelInput(value: MemoryJsonValue | undefined): ModelRoute | null 
   if (typeof value !== 'object' || Array.isArray(value)) throw new Error('model must be an object or null')
   const picked = value as Record<string, MemoryJsonValue>
   return { provider: text(picked.provider, 'model.provider', 100)!, model: text(picked.model, 'model.model', 200)! }
+}
+
+function backtestModel(value: MemoryJsonValue | undefined): { model?: ModelRoute & { reasoningEffort?: string } } {
+  if (value === undefined) return {}
+  const model = draftModelInput(value)
+  if (model === null) throw new Error('a backtest model must name its provider and model')
+  const input = record(value, 'model')
+  return { model: { ...model, ...(typeof input.reasoningEffort === 'string' ? { reasoningEffort: text(input.reasoningEffort, 'reasoningEffort', 100)! } : {}) } }
+}
+
+function draftExpectation(value: MemoryJsonValue | undefined): { expectedDraft?: DraftExpectation } {
+  if (value === undefined) return {}
+  if (value === null) return { expectedDraft: null }
+  const expected = record(value, 'expectedDraft')
+  return { expectedDraft: { id: text(expected.id, 'expectedDraft.id', 100)!, hash: text(expected.hash, 'expectedDraft.hash', 100)! } }
+}
+
+function automaticAdoption(value: MemoryJsonValue | undefined): { automatic?: AutomaticAdoption } {
+  if (value === undefined) return {}
+  const input = record(value, 'automatic')
+  if (!Number.isInteger(input.attempt) || Number(input.attempt) < 1 || Number(input.attempt) > 3) throw new Error('automatic adoption attempt must be 1..3')
+  return { automatic: { attempt: Number(input.attempt), draftHash: text(input.draftHash, 'draftHash', 100)!, baselineRunId: text(input.baselineRunId, 'baselineRunId', 100)!, draftRunId: text(input.draftRunId, 'draftRunId', 100)!, casesHash: text(input.casesHash, 'casesHash', 100)! } }
+}
+
+function autoAdoptionEvent(value: Record<string, MemoryJsonValue>): Omit<AutoAdoptionEvent, 'at'> {
+  if (!(AUTO_ADOPTION_STAGES as readonly unknown[]).includes(value.stage)) throw new Error('unknown automatic adoption stage')
+  if (value.reason !== undefined && !(AUTO_ADOPTION_REASONS as readonly unknown[]).includes(value.reason)) throw new Error('unknown automatic adoption reason')
+  if (!Number.isInteger(value.attempt) || Number(value.attempt) < 0 || Number(value.attempt) > 3) throw new Error('automatic adoption attempt must be 0..3')
+  const score = (key: 'baselineScore' | 'draftScore') => {
+    if (value[key] === undefined) return {}
+    if (typeof value[key] !== 'number' || !Number.isFinite(value[key]) || value[key] < 0 || value[key] > 1) throw new Error('invalid automatic adoption score')
+    return { [key]: value[key] }
+  }
+  return { stage: value.stage as AutoAdoptionEvent['stage'], attempt: Number(value.attempt), ...(value.reason === undefined ? {} : { reason: value.reason as NonNullable<AutoAdoptionEvent['reason']> }), ...(typeof value.detail === 'string' ? { detail: value.detail } : {}), ...score('baselineScore'), ...score('draftScore') }
 }
 
 function caseInput(value: MemoryJsonValue, skillName?: string): CaseInput {
@@ -102,6 +136,7 @@ function caseResult(value: MemoryJsonValue): CaseResult {
     ...(typeof input.summary === 'string' ? { summary: input.summary } : {}),
     ...(typeof input.error === 'string' ? { error: input.error } : {}),
     ...(unmeasuredReason === undefined ? {} : { unmeasuredReason }),
+    ...(typeof input.fullyGraded === 'boolean' ? { fullyGraded: input.fullyGraded } : {}),
   }
 }
 
@@ -348,9 +383,10 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
             case 'suggestion-status': {
               const status = fields.status
               if (status !== 'drafting' && status !== 'pending') throw new Error('status must be drafting or pending')
-              value = await service.suggestionStatus({ ...(request.signal === undefined ? {} : { signal: request.signal }), id: text(fields.id, 'id', 100)!, status, ...(typeof fields.error === 'string' ? { error: fields.error } : {}) })
+              value = await service.suggestionStatus({ ...(request.signal === undefined ? {} : { signal: request.signal }), id: text(fields.id, 'id', 100)!, status, ...draftExpectation(fields.expectedDraft), ...(typeof fields.error === 'string' ? { error: fields.error } : {}) })
               break
             }
+            case 'auto-adoption-record': value = await service.recordAutoAdoption(text(fields.id, 'id', 100)!, autoAdoptionEvent(fields)); break
             case 'trajectory-pin': value = await service.pinTrajectory(text(fields.id, 'id', 100)!, bool(fields.pinned, 'pinned')); break
             case 'trajectory-delete': value = await service.deleteTrajectory(text(fields.id, 'id', 100)!); break
             case 'case-save': value = await service.saveCase(caseInput(fields.case ?? fields)); break
@@ -367,6 +403,7 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
             }
             case 'draft-record': value = await service.recordDraft(root, {
               ...(request.signal === undefined ? {} : { signal: request.signal }),
+              ...draftExpectation(fields.expectedDraft),
               ...(fields.expectedBaseHash === undefined ? {} : { expectedBaseHash: fields.expectedBaseHash === null ? null : text(fields.expectedBaseHash, 'expectedBaseHash', 100)! }),
               ...(optionalText(fields.suggestionId, 'suggestionId', 100) === undefined ? {} : { suggestionId: optionalText(fields.suggestionId, 'suggestionId', 100)! }),
               ...(optionalText(fields.draftId, 'draftId', 100) === undefined ? {} : { draftId: optionalText(fields.draftId, 'draftId', 100)! }),
@@ -375,7 +412,7 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
               ...(rootKind(fields.targetRoot) === undefined ? {} : { targetRoot: rootKind(fields.targetRoot)! }),
             }); break
             case 'draft-update': value = await service.updateDraft({ id: text(fields.id, 'id', 100)!, content: typeof fields.content === 'string' ? fields.content : '' }); break
-            case 'draft-adopt': value = await service.adoptDraft(root, text(fields.id, 'id', 100)!, { ...(rootKind(fields.root) === undefined ? {} : { root: rootKind(fields.root)! }) }); break
+            case 'draft-adopt': value = await service.adoptDraft(root, text(fields.id, 'id', 100)!, { ...(request.signal === undefined ? {} : { signal: request.signal }), ...automaticAdoption(fields.automatic), ...(rootKind(fields.root) === undefined ? {} : { root: rootKind(fields.root)! }) }); break
             case 'draft-discard': value = await service.discardDraft(text(fields.id, 'id', 100)!); break
             case 'draft-delete': value = await service.deleteDraft(text(fields.id, 'id', 100)!); break
             case 'draft-preference': {
@@ -391,7 +428,10 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
               })
               break
             }
-            case 'run-start': value = await service.startRun({ ...(request.signal === undefined ? {} : { signal: request.signal }), skillName: text(fields.skillName, 'skillName', 64)!, target: runTarget(fields.target!), caseIds: stringArray(fields.caseIds, 'caseIds', 20) ?? [] }); break
+            case 'run-start': value = await service.startRun({ ...(request.signal === undefined ? {} : { signal: request.signal }), skillName: text(fields.skillName, 'skillName', 64)!, target: runTarget(fields.target!), caseIds: stringArray(fields.caseIds, 'caseIds', 40) ?? [],
+              ...(fields.expectedCasesHash === undefined ? {} : { expectedCasesHash: text(fields.expectedCasesHash, 'expectedCasesHash', 100)! }),
+              ...backtestModel(fields.model),
+            }); break
             case 'run-link': value = await service.linkRun(text(fields.draftId, 'draftId', 100)!, text(fields.runId, 'runId', 100)!); break
             case 'run-progress': value = await service.progressRun({ ...(request.signal === undefined ? {} : { signal: request.signal }), id: text(fields.id, 'id', 100)!, result: caseResult(fields.result!) }); break
             case 'run-cancel': value = await service.finishRun({ ...(request.signal === undefined ? {} : { signal: request.signal }), id: text(fields.id, 'id', 100)!, status: 'interrupted', error: 'Backtest cancelled by the user.' }); break

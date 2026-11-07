@@ -415,6 +415,8 @@ export interface ResolvedSkillsConfig {
   targetScope: 'storage' | 'user' | 'project'
   /** Backtest a draft against the current version as soon as it is written. */
   autoBacktest: boolean
+  /** Opt-in automatic drafting and evaluated adoption of new idle-review suggestions. */
+  autoAdopt: boolean
   /** Output budget for a complete skill draft, including model reasoning. */
   draftMaxTokens: number
   /** One fresh attempt after truncation, only when larger than draftMaxTokens. */
@@ -445,6 +447,7 @@ export const DEFAULT_SKILLS_CONFIG: Readonly<ResolvedSkillsConfig> = Object.free
   allowUpdate: true,
   targetScope: 'user',
   autoBacktest: true,
+  autoAdopt: false,
   draftMaxTokens: 32_768,
   draftRetryMaxTokens: 65_536,
   hints: true,

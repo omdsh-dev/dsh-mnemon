@@ -1358,6 +1358,13 @@ export class MnemonLifecycle {
     return { provider, model, ...(typeof effort === 'string' && effort !== '' ? { reasoningEffort: effort } : {}) }
   }
 
+  /** Freeze the effective task route for a paired skill evaluation. */
+  skillTaskRoute(workspaceRoot: string | undefined): RoutedPick | undefined {
+    const options = this.taskAgentModelOptions('', workspaceRoot)
+    if (!options?.provider || !options.model) return undefined
+    return { provider: options.provider, model: options.model, ...(options.reasoningEffort === undefined ? {} : { reasoningEffort: options.reasoningEffort }) }
+  }
+
   private taskAgentModelOptions(fallbackSessionId: string, workspaceRoot: string | undefined): NonNullable<CreateHostAgentOptions['agentOptions']> | undefined {
     return this.taskAgentModelRoute(fallbackSessionId, workspaceRoot)?.options
   }

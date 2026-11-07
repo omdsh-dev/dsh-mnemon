@@ -84,7 +84,7 @@
 | [![回复下方的本回合技能一行：release-notes · 建议 1](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/skills-v0.5.34/zh-CN/chat-skills.jpg)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/skills.md#对话中) | [![release-notes 的草案：回测“当前 40 → 草案 93 +53”与差异](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/skills-v0.5.34/zh-CN/skills-draft.jpg)](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/skills.md#进化) |
 
 - **管理。** 让技能不被模型加载或不出现在 `/` 菜单里，一键在对话中使用，直接编辑，并能回到任意历史版本。
-- **进化。** 开启自进化后，对话结束会在后台复盘，寻找多次纠正、“以后都这样做”的指示、工具失败和可复用的流程。每条建议都标出所依据的步骤；任务 Agent 写出新的 `SKILL.md`，先与当前版本回测对比，再由你采纳。没有你的**采纳**，什么都不会改。
+- **进化。** 开启自进化后，对话结束会在后台复盘，寻找多次纠正、“以后都这样做”的指示、工具失败和可复用的流程。每条建议都标出所依据的步骤；任务 Agent 写出新的 `SKILL.md`，先与当前版本回测对比，再由你采纳。默认仍须手动**采纳**；可显式开启自动采纳，让新的空闲审查建议在完整回测不退步时落地。
 - **测试。** 每个技能都有自己的用例，来自复盘、记录的对话或手写，任意版本都能在这些用例上回测打分。
 - **安装。** 市场可以搜索 skills.sh 的开放索引，读取任意 GitHub 仓库、任何按 Agent Skills 发现协议发布技能的网站，以及技能目录；每次安装前都能预览，有安全审核的会一并显示。
 - **对话中。** 每个回合下方的一行列出这一回合用到的技能和复盘提出的建议，点一下就能打开。

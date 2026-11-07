@@ -3,7 +3,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSy
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { withMemoryStorageLock } from 'dsh-mnemon/extension-sdk'
 import {
-  SKILL_ROOT_KINDS,
+  SKILL_ROOT_KINDS, skillCaseSignature, compareAutomaticSkillRuns, type AutoAdoptionEvent, type AutomaticAdoption, type DraftExpectation,
   type BacktestRun, type CaseResult, type CatalogView, type DraftPreferencesView, type DraftView, type EvalCase, type EvidencePack, type ModelRoute, type SuggestionView,
   type MarketEntry, type MarketInstall, type MarketInstallState, type MarketItem, type MarketPreview, type MarketRegistry, type MarketRegistryFile, type MarketSearchResult,
   type MarketSourceKind, type MarketView, type ReviewRecordInput, type ReviewRecordResult, type RunTarget, type SkillCatalog, type SkillDocument,
@@ -614,9 +614,10 @@ export class SkillsService {
   }
 
   /** The Host marks a suggestion `drafting` before a task Agent writes, and back to `pending` if it fails. */
-  suggestionStatus(input: { id: string; status: 'drafting' | 'pending'; error?: string; signal?: AbortSignal }): Promise<SkillSuggestion> {
-    return this.withSuggestion(input.id, suggestion => {
+  suggestionStatus(input: { id: string; status: 'drafting' | 'pending'; error?: string; expectedDraft?: DraftExpectation; signal?: AbortSignal }): Promise<SkillSuggestion> {
+    return this.withSuggestion(input.id, (suggestion, ledger) => {
       input.signal?.throwIfAborted()
+      this.requireExpectedDraft(ledger, suggestion, input.expectedDraft)
       if (input.status === 'drafting') {
         if (suggestion.status !== 'pending' && suggestion.status !== 'review') throw new Error('this suggestion is ' + suggestion.status + '; only an open suggestion can be drafted')
         suggestion.status = 'drafting'
@@ -626,6 +627,24 @@ export class SkillsService {
         suggestion.status = suggestion.draftId === undefined ? 'pending' : 'review'
         if (input.error !== undefined) suggestion.lastError = clip(input.error, 500)
       }
+      return suggestion
+    })
+  }
+
+  private requireExpectedDraft(ledger: LedgerFile, suggestion: SkillSuggestion | undefined, expected: DraftExpectation | undefined): void {
+    if (expected === undefined) return
+    const current = ledger.drafts.find(draft => draft.id === suggestion?.draftId)
+    const matches = expected === null ? suggestion !== undefined && suggestion.draftId === undefined
+      : current?.id === expected.id && current.status === 'ready' && sha256(current.content) === expected.hash
+    if (!matches) throw new Error('The suggestion or draft changed while this draft was being generated; leave it for manual review')
+  }
+
+  recordAutoAdoption(id: string, input: Omit<AutoAdoptionEvent, 'at'>): Promise<SkillSuggestion> {
+    return this.withSuggestion(id, (suggestion, ledger) => {
+      const event: AutoAdoptionEvent = { ...input, ...(input.detail === undefined ? {} : { detail: clip(input.detail, 500) }), at: this.clock().toISOString() }
+      suggestion.autoAdoption = [...(suggestion.autoAdoption ?? []), event].slice(-16)
+      const review = ledger.reviews.find(entry => entry.id === suggestion.reviewId)
+      if (review !== undefined) review.autoAdoptions = [...(review.autoAdoptions ?? []), { ...event, suggestionId: id, skillName: suggestion.skillName }].slice(-160)
       return suggestion
     })
   }
@@ -730,7 +749,7 @@ export class SkillsService {
     })
   }
 
-  recordDraft(workspace: string | undefined, input: { suggestionId?: string; draftId?: string; skillName: string; content: string; notes: string; changes: string[]; guidance: string[]; targetRoot?: SkillRootKind; expectedBaseHash?: string | null; signal?: AbortSignal }): Promise<SkillDraft> {
+  recordDraft(workspace: string | undefined, input: { suggestionId?: string; draftId?: string; skillName: string; content: string; notes: string; changes: string[]; guidance: string[]; targetRoot?: SkillRootKind; expectedBaseHash?: string | null; expectedDraft?: DraftExpectation; signal?: AbortSignal }): Promise<SkillDraft> {
     return this.write(() => {
       input.signal?.throwIfAborted()
       validateSkillContent(input.content, input.skillName)
@@ -743,6 +762,7 @@ export class SkillsService {
       const suggestion = input.suggestionId === undefined ? undefined : ledger.suggestions.find(candidate => candidate.id === input.suggestionId)
       if (input.suggestionId !== undefined && suggestion === undefined) throw new Error('suggestion not found: ' + input.suggestionId)
       if (suggestion !== undefined && suggestion.skillName !== input.skillName) throw new Error('suggestion is for another skill')
+      this.requireExpectedDraft(ledger, suggestion, input.expectedDraft)
       const original = prior?.action === 'update' ? this.draftOriginal(ledger, prior) : suggestion?.action === 'update' ? this.suggestionOriginal(ledger, suggestion) : undefined
       const loaded = original === undefined ? activeSkill(catalog, input.skillName) : this.requireOriginal(original)
       if (input.expectedBaseHash !== undefined && (loaded?.hash ?? null) !== input.expectedBaseHash) throw new Error('The skill changed while this draft was being generated; regenerate it from the current file')
@@ -787,11 +807,33 @@ export class SkillsService {
   }
 
   /** Adopt a draft; a new skill goes to `root` when given, else where the draft was meant to go. */
-  adoptDraft(workspace: string | undefined, id: string, input: { root?: SkillRootKind } = {}): Promise<{ skill: SkillSummary; version: SkillVersion }> {
+  adoptDraft(workspace: string | undefined, id: string, input: { root?: SkillRootKind; automatic?: AutomaticAdoption; signal?: AbortSignal } = {}): Promise<{ skill: SkillSummary; version: SkillVersion }> {
     return this.write(() => {
       const ledger = this.store.ledger()
       const draft = ledger.drafts.find(candidate => candidate.id === id)
       if (draft === undefined || draft.status !== 'ready') throw new Error('only a draft waiting for review can be adopted')
+      let automaticResult: ReturnType<typeof compareAutomaticSkillRuns> | undefined
+      if (input.automatic !== undefined) {
+        const proof = input.automatic
+        const suggestion = ledger.suggestions.find(entry => entry.id === draft.suggestionId)
+        const evals = this.store.evals()
+        const cases = evals.cases.filter(entry => entry.skillName === draft.skillName && entry.enabled)
+        const casesHash = sha256(skillCaseSignature(cases))
+        const before = evals.runs.find(run => run.id === proof.baselineRunId)
+        const after = evals.runs.find(run => run.id === proof.draftRunId)
+        automaticResult = compareAutomaticSkillRuns(cases, before, after, casesHash)
+        if (suggestion?.status !== 'review' || suggestion.draftId !== draft.id || Date.parse(suggestion.expiresAt) <= this.clock().getTime()
+          || proof.draftHash !== sha256(draft.content) || casesHash !== proof.casesHash
+          || before?.skillName !== draft.skillName || after?.skillName !== draft.skillName
+          || !(Date.parse(before.startedAt) >= Date.parse(draft.createdAt)) || !(Date.parse(after.startedAt) >= Date.parse(draft.createdAt))
+          || after.target.kind !== 'draft' || after.target.draftId !== draft.id || after.target.hash !== proof.draftHash
+          || (draft.action === 'update' ? before.target.kind !== 'current' || before.target.hash !== draft.baseHash : before.target.kind !== 'none')
+          || automaticResult.outcome !== 'not-worse') {
+          throw new Error('The draft, cases, or complete matching backtest results changed; automatic adoption requires manual review')
+        }
+      }
+      // Settings can be disabled while this operation waits for the Source lock.
+      input.signal?.throwIfAborted()
       validateSkillContent(draft.content, draft.skillName)
       const catalog = this.catalog(workspace)
       let key: string
@@ -825,7 +867,18 @@ export class SkillsService {
       draft.status = 'adopted'
       draft.updatedAt = now
       const suggestion = draft.suggestionId === undefined ? undefined : ledger.suggestions.find(candidate => candidate.id === draft.suggestionId)
-      if (suggestion !== undefined) { suggestion.status = 'adopted'; suggestion.updatedAt = now }
+      if (suggestion !== undefined) {
+        suggestion.status = 'adopted'; suggestion.updatedAt = now
+        if (input.automatic !== undefined && automaticResult !== undefined) {
+          const event: AutoAdoptionEvent = { at: now, stage: 'adopted', attempt: input.automatic.attempt,
+            ...(automaticResult.baselineScore === undefined ? {} : { baselineScore: automaticResult.baselineScore }),
+            ...(automaticResult.draftScore === undefined ? {} : { draftScore: automaticResult.draftScore }),
+          }
+          suggestion.autoAdoption = [...(suggestion.autoAdoption ?? []), event].slice(-16)
+          const review = ledger.reviews.find(entry => entry.id === suggestion.reviewId)
+          if (review !== undefined) review.autoAdoptions = [...(review.autoAdoptions ?? []), { ...event, suggestionId: suggestion.id, skillName: suggestion.skillName }].slice(-160)
+        }
+      }
       this.store.saveLedger(ledger)
       return { skill: updated ?? findSkill(this.catalog(workspace), key), version }
     })
@@ -921,15 +974,17 @@ export class SkillsService {
     return { content: document.content, target: { kind: 'current', skillKey: loaded.key, hash: document.hash, ...(draft === undefined ? {} : { draftId: draft.id }) } }
   }
 
-  startRun(input: { skillName: string; target: RunTarget; caseIds: string[]; signal?: AbortSignal }): Promise<BacktestRun> {
+  startRun(input: { skillName: string; target: RunTarget; caseIds: string[]; expectedCasesHash?: string; model?: BacktestRun['model']; signal?: AbortSignal }): Promise<BacktestRun> {
     return this.write(() => {
       input.signal?.throwIfAborted()
       const evals = this.store.evals()
       const cases = input.caseIds.map(id => evals.cases.find(entry => entry.id === id && entry.skillName === input.skillName))
       if (cases.length === 0 || cases.some(entry => entry === undefined)) throw new Error('a run needs at least one case of this skill')
+      const casesHash = sha256(skillCaseSignature(cases as EvalCase[]))
+      if (input.expectedCasesHash !== undefined && input.expectedCasesHash !== casesHash) throw new Error('Eval cases changed before this backtest started')
       const run: BacktestRun = {
         id: randomUUID(), skillName: input.skillName, target: input.target, status: 'running',
-        progress: { done: 0, total: cases.length }, caseIds: input.caseIds, results: [], startedAt: this.clock().toISOString(),
+        progress: { done: 0, total: cases.length }, caseIds: input.caseIds, casesHash, ...(input.model === undefined ? {} : { model: input.model }), results: [], startedAt: this.clock().toISOString(),
       }
       evals.runs.unshift(run)
       this.store.saveEvals(evals)
