@@ -92,6 +92,7 @@ jobs:
           --filter dsh-mnemon-source-memory-spaces
           --filter dsh-mnemon-source-documents
           --filter dsh-mnemon-source-runtime
+          --filter dsh-mnemon-source-skills
           --filter dsh-mnemon-strategy-default-three-tier
           --parallel run build
 
@@ -153,6 +154,7 @@ jobs:
           --filter dsh-mnemon-source-memory-spaces
           --filter dsh-mnemon-source-documents
           --filter dsh-mnemon-source-runtime
+          --filter dsh-mnemon-source-skills
           --filter dsh-mnemon-strategy-default-three-tier
           --parallel run build
 
