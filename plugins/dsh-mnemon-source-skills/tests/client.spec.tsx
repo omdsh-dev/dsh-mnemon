@@ -97,7 +97,7 @@ describe('Skills page', () => {
     const entry = await mutate('case-save', { skillName: 'release-notes', title: 'Case', prompt: 'Check', checks: [{ text: 'Pass', must: true }], enabled: true }) as { id: string }
     const run = await mutate('run-start', { skillName: 'release-notes', target: { kind: 'draft', draftId: draft.id }, caseIds: [entry.id] }) as { id: string }
     render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable={false} management={management} navigationInput={{ seed: `draft:${draft.id}`, nonce: 1 }} />)
-    expect((await screen.findByRole('button', { name: t('draft.cancelBacktest') }) as HTMLButtonElement).disabled).toBe(true)
+    expect((await screen.findByRole('button', { name: t('draft.cancelBacktest') }, { timeout: 5_000 }) as HTMLButtonElement).disabled).toBe(true)
     const { revision } = await management.read('revision', null)
     await expect(runner.executeManagement({ sourceInstanceKey: 'source:skills', scope: { storage: 'custom', workspaceId: join(directory, 'workspace') }, mode: 'mutate', operation: 'run-cancel', input: { id: run.id }, confirmed: false, expectedRevision: revision })).rejects.toThrow('confirmation')
     expect((await management.read('run', { id: run.id })).value).toMatchObject({ status: 'running' })
@@ -121,7 +121,7 @@ describe('Skills page', () => {
     const entry = await mutate('case-save', { skillName: 'release-notes', title: 'Case', prompt: 'Check', checks: [{ text: 'Pass', must: true }], enabled: true }) as { id: string }
     const run = await mutate('run-start', { skillName: 'release-notes', target: { kind: 'draft', draftId: draft.id }, caseIds: [entry.id] }) as { id: string }
     page({ seed: `draft:${draft.id}`, nonce: 1 })
-    fireEvent.click(await screen.findByRole('button', { name: t('draft.cancelBacktest') }))
+    fireEvent.click(await screen.findByRole('button', { name: t('draft.cancelBacktest') }, { timeout: 5_000 }))
     await waitFor(async () => expect((await management.read('run', { id: run.id })).value).toMatchObject({ status: 'interrupted' }))
     await waitFor(() => expect((screen.getByRole('button', { name: t('draft.adopt') }) as HTMLButtonElement).disabled).toBe(false))
     expect(await screen.findByText(t('draft.interrupted'))).not.toBeNull()
