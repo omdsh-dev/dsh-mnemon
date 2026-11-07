@@ -614,8 +614,9 @@ export class SkillsService {
   }
 
   /** The Host marks a suggestion `drafting` before a task Agent writes, and back to `pending` if it fails. */
-  suggestionStatus(input: { id: string; status: 'drafting' | 'pending'; error?: string }): Promise<SkillSuggestion> {
+  suggestionStatus(input: { id: string; status: 'drafting' | 'pending'; error?: string; signal?: AbortSignal }): Promise<SkillSuggestion> {
     return this.withSuggestion(input.id, suggestion => {
+      input.signal?.throwIfAborted()
       if (input.status === 'drafting') {
         if (suggestion.status !== 'pending' && suggestion.status !== 'review') throw new Error('this suggestion is ' + suggestion.status + '; only an open suggestion can be drafted')
         suggestion.status = 'drafting'
@@ -729,8 +730,9 @@ export class SkillsService {
     })
   }
 
-  recordDraft(workspace: string | undefined, input: { suggestionId?: string; draftId?: string; skillName: string; content: string; notes: string; changes: string[]; guidance: string[]; targetRoot?: SkillRootKind; expectedBaseHash?: string | null }): Promise<SkillDraft> {
+  recordDraft(workspace: string | undefined, input: { suggestionId?: string; draftId?: string; skillName: string; content: string; notes: string; changes: string[]; guidance: string[]; targetRoot?: SkillRootKind; expectedBaseHash?: string | null; signal?: AbortSignal }): Promise<SkillDraft> {
     return this.write(() => {
+      input.signal?.throwIfAborted()
       validateSkillContent(input.content, input.skillName)
       const ledger = this.store.ledger()
       const catalog = this.catalog(workspace)
@@ -919,8 +921,9 @@ export class SkillsService {
     return { content: document.content, target: { kind: 'current', skillKey: loaded.key, hash: document.hash, ...(draft === undefined ? {} : { draftId: draft.id }) } }
   }
 
-  startRun(input: { skillName: string; target: RunTarget; caseIds: string[] }): Promise<BacktestRun> {
+  startRun(input: { skillName: string; target: RunTarget; caseIds: string[]; signal?: AbortSignal }): Promise<BacktestRun> {
     return this.write(() => {
+      input.signal?.throwIfAborted()
       const evals = this.store.evals()
       const cases = input.caseIds.map(id => evals.cases.find(entry => entry.id === id && entry.skillName === input.skillName))
       if (cases.length === 0 || cases.some(entry => entry === undefined)) throw new Error('a run needs at least one case of this skill')
@@ -951,8 +954,9 @@ export class SkillsService {
     })
   }
 
-  progressRun(input: { id: string; result: CaseResult }): Promise<BacktestRun> {
+  progressRun(input: { id: string; result: CaseResult; signal?: AbortSignal }): Promise<BacktestRun> {
     return this.write(() => {
+      input.signal?.throwIfAborted()
       const evals = this.store.evals()
       const run = evals.runs.find(candidate => candidate.id === input.id)
       if (run === undefined || run.status !== 'running') throw new Error('run is not running: ' + input.id)
@@ -972,8 +976,9 @@ export class SkillsService {
     })
   }
 
-  finishRun(input: { id: string; status: 'completed' | 'failed' | 'interrupted'; error?: string }): Promise<BacktestRun> {
+  finishRun(input: { id: string; status: 'completed' | 'failed' | 'interrupted'; error?: string; signal?: AbortSignal }): Promise<BacktestRun> {
     return this.write(() => {
+      input.signal?.throwIfAborted()
       const evals = this.store.evals()
       const run = evals.runs.find(candidate => candidate.id === input.id)
       if (run === undefined) throw new Error('run not found: ' + input.id)

@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { withMemoryStorageLock } from 'dsh-mnemon/extension-sdk'
 import type { ReviewRecordInput } from '../src/contracts.ts'
 import { setFrontmatterKey, withInvocation } from '../src/frontmatter.ts'
 import { SkillsService } from '../src/service.ts'
@@ -688,5 +689,39 @@ describe('draft and backtest recovery', () => {
     expect((await store.finishRun({ id: old.id, status: 'completed' })).status).toBe('interrupted')
     await expect(store.progressRun({ id: old.id, result: { caseId: entry.id, title: 'Case', verdict: 'pass', score: 1, checks: [], steps: [], answer: '' } })).rejects.toThrow('not running')
     expect(await store.reclaimStaleRuns()).toEqual({ reclaimed: 0 })
+  })
+})
+
+describe('cancelled writes waiting for the Skills Source lock', () => {
+  it.each(['suggestion', 'draft', 'start', 'progress', 'finish'] as const)('does not publish a late %s after cancellation', async operation => {
+    now = new Date()
+    const store = service()
+    write(join(home, 'skills', 'release-notes', 'SKILL.md'), skill('release-notes'))
+    const record = await store.recordReview(workspace, review())
+    const entry = store.cases('release-notes')[0]!
+    const run = await store.startRun({ skillName: 'release-notes', target: { kind: 'none' }, caseIds: [entry.id] })
+    const beforeLedger = store.store.ledger()
+    const beforeEvals = store.store.evals()
+    let entered!: () => void
+    let unlock!: () => void
+    const ready = new Promise<void>(resolve => { entered = resolve })
+    const lock = withMemoryStorageLock(store.store.directory, async () => {
+      entered()
+      await new Promise<void>(resolve => { unlock = resolve })
+    })
+    await ready
+    const controller = new AbortController()
+    const signal = controller.signal
+    const pending = operation === 'suggestion' ? store.suggestionStatus({ id: record.suggestionIds[0]!, status: 'drafting', signal })
+      : operation === 'draft' ? store.recordDraft(workspace, { suggestionId: record.suggestionIds[0]!, skillName: 'release-notes', content: skill('release-notes', 'Late draft'), notes: '', changes: [], guidance: [], signal })
+      : operation === 'start' ? store.startRun({ skillName: 'release-notes', target: { kind: 'none' }, caseIds: [entry.id], signal })
+      : operation === 'progress' ? store.progressRun({ id: run.id, result: { caseId: entry.id, title: entry.title, verdict: 'pass', score: 1, checks: [], steps: [], answer: 'Late result' }, signal })
+      : store.finishRun({ id: run.id, status: 'completed', signal })
+    controller.abort(new Error('task cancelled before its write lock'))
+    unlock()
+    await expect(pending).rejects.toThrow('task cancelled before its write lock')
+    await lock
+    expect(store.store.ledger()).toEqual(beforeLedger)
+    expect(store.store.evals()).toEqual(beforeEvals)
   })
 })

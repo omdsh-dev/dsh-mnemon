@@ -348,7 +348,7 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
             case 'suggestion-status': {
               const status = fields.status
               if (status !== 'drafting' && status !== 'pending') throw new Error('status must be drafting or pending')
-              value = await service.suggestionStatus({ id: text(fields.id, 'id', 100)!, status, ...(typeof fields.error === 'string' ? { error: fields.error } : {}) })
+              value = await service.suggestionStatus({ ...(request.signal === undefined ? {} : { signal: request.signal }), id: text(fields.id, 'id', 100)!, status, ...(typeof fields.error === 'string' ? { error: fields.error } : {}) })
               break
             }
             case 'trajectory-pin': value = await service.pinTrajectory(text(fields.id, 'id', 100)!, bool(fields.pinned, 'pinned')); break
@@ -366,6 +366,7 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
               break
             }
             case 'draft-record': value = await service.recordDraft(root, {
+              ...(request.signal === undefined ? {} : { signal: request.signal }),
               ...(fields.expectedBaseHash === undefined ? {} : { expectedBaseHash: fields.expectedBaseHash === null ? null : text(fields.expectedBaseHash, 'expectedBaseHash', 100)! }),
               ...(optionalText(fields.suggestionId, 'suggestionId', 100) === undefined ? {} : { suggestionId: optionalText(fields.suggestionId, 'suggestionId', 100)! }),
               ...(optionalText(fields.draftId, 'draftId', 100) === undefined ? {} : { draftId: optionalText(fields.draftId, 'draftId', 100)! }),
@@ -390,13 +391,13 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
               })
               break
             }
-            case 'run-start': value = await service.startRun({ skillName: text(fields.skillName, 'skillName', 64)!, target: runTarget(fields.target!), caseIds: stringArray(fields.caseIds, 'caseIds', 20) ?? [] }); break
+            case 'run-start': value = await service.startRun({ ...(request.signal === undefined ? {} : { signal: request.signal }), skillName: text(fields.skillName, 'skillName', 64)!, target: runTarget(fields.target!), caseIds: stringArray(fields.caseIds, 'caseIds', 20) ?? [] }); break
             case 'run-link': value = await service.linkRun(text(fields.draftId, 'draftId', 100)!, text(fields.runId, 'runId', 100)!); break
-            case 'run-progress': value = await service.progressRun({ id: text(fields.id, 'id', 100)!, result: caseResult(fields.result!) }); break
-            case 'run-cancel': value = await service.finishRun({ id: text(fields.id, 'id', 100)!, status: 'interrupted', error: 'Backtest cancelled by the user.' }); break
+            case 'run-progress': value = await service.progressRun({ ...(request.signal === undefined ? {} : { signal: request.signal }), id: text(fields.id, 'id', 100)!, result: caseResult(fields.result!) }); break
+            case 'run-cancel': value = await service.finishRun({ ...(request.signal === undefined ? {} : { signal: request.signal }), id: text(fields.id, 'id', 100)!, status: 'interrupted', error: 'Backtest cancelled by the user.' }); break
             case 'run-finish': {
               const status = fields.status === 'completed' ? 'completed' : fields.status === 'interrupted' ? 'interrupted' : 'failed'
-              value = await service.finishRun({ id: text(fields.id, 'id', 100)!, status, ...(typeof fields.error === 'string' ? { error: fields.error } : {}) })
+              value = await service.finishRun({ ...(request.signal === undefined ? {} : { signal: request.signal }), id: text(fields.id, 'id', 100)!, status, ...(typeof fields.error === 'string' ? { error: fields.error } : {}) })
               break
             }
             case 'review-record': value = await service.recordReview(root, reviewRecord(fields)); break
