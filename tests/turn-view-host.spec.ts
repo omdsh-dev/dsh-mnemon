@@ -188,9 +188,11 @@ it('adopts an Agent when lifecycle registration arrives during its first prompt 
   } finally { await handle.dispose(); await f.close() }
 }, 20_000)
 
-it('pins a delegated child when prompt middleware omits later assembly listeners', async () => {
-  const f = await fixture('native')
-  f.ctx.on('system-prompt/assemble', async assembly => assembly, { prepend: true })
+it.each([
+  ['native', false], ['native', true], ['ptc', false], ['ptc', true],
+] as const)('injects a delegated child View once per %s turn (assembly bypass: %s)', async (mode, bypassAssembly) => {
+  const f = await fixture(mode)
+  if (bypassAssembly) f.ctx.on('system-prompt/assemble', async assembly => assembly, { prepend: true })
   const parent = await f.create()
   const child = await f.ctx.agents.create({ sessionId: SessionId('turn-view-child'), parentAgent: parent.agent,
     meta: { origin: 'subagent', parentSession: parent.agent.id, cwd: f.workspace }, agentOptions: { provider: 'fixture', model: 'fixture' } })
@@ -200,11 +202,79 @@ it('pins a delegated child when prompt middleware omits later assembly listeners
       { name: 'mnemon_status', isError: false }, { name: 'mnemon_document_search', isError: false },
     ])
     expect(f.requests.map(request => request.turn)).toEqual([1, 1, 1])
-    expectWake(f.requests[0]!.text)
+    for (const request of f.requests) {
+      expectWake(request.text)
+      expect(request.messages.filter(message => message.role === 'user'
+        && message.source?.kind === 'dsh-mnemon' && message.source.form === 'recall')).toHaveLength(1)
+    }
+    await f.turn(child.agent)
+    expect(f.requests.map(request => request.turn)).toEqual([1, 1, 1, 2, 2, 2])
+    for (const request of f.requests.slice(3)) {
+      expectWake(request.text)
+      expect(request.messages.filter(message => message.role === 'user'
+        && message.source?.kind === 'dsh-mnemon' && message.source.form === 'recall')).toHaveLength(2)
+    }
+    expect(child.agent.session.snapshotEvents().filter(event => event.type === 'user/message'
+      && event.data.source.kind === 'dsh-mnemon' && event.data.source.form === 'recall')).toHaveLength(2)
     expect(f.graph.composableTurns.activeTurn(child.agent.id)).toBeUndefined()
     expect(f.graph.composableTurns.activeTurn(parent.agent.id)).toBeUndefined()
   } finally { await child.dispose(); await parent.dispose(); await f.close() }
 }, 20_000)
+
+it('injects the captured parent View after the parent finishes and newer memory is stored', async () => {
+  const f = await fixture('native')
+  await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'user', content: 'Synthetic delegated user preference.' })
+  const parent = await f.create()
+  let child: Awaited<ReturnType<typeof f.ctx.agents.create>> | undefined
+  const stop = f.ctx.on('tools/execute', async (execution, next) => {
+    const result = await next()
+    if (execution.agent === parent.agent && execution.name === 'mnemon_status' && child === undefined) {
+      child = await f.ctx.agents.create({ sessionId: SessionId('captured-view-child'), parentAgent: parent.agent,
+        meta: { origin: 'subagent', parentSession: parent.agent.id, cwd: f.workspace }, agentOptions: { provider: 'fixture', model: 'fixture' } })
+    }
+    return result
+  })
+  try {
+    await f.turn(parent.agent)
+    expect(child).toBeDefined()
+    const capturedView = f.requests[0]!.viewId
+    await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: 'Synthetic parent-only later fact.' })
+    await f.turn(parent.agent)
+    expect(f.requests.at(-1)!.text).toContain('Synthetic parent-only later fact.')
+    await f.turn(child!.agent)
+    const childRequests = f.requests.filter(request => request.sessionId === child!.agent.id)
+    expect(childRequests).toHaveLength(3)
+    for (const request of childRequests) {
+      expectWake(request.text)
+      expect(request.text).toContain('Synthetic delegated user preference.')
+      expect(request.text).not.toContain('Synthetic parent-only later fact.')
+      expect(request.viewId).toBe(capturedView)
+    }
+  } finally { stop(); await child?.dispose(); await parent.dispose(); await f.close() }
+}, 20_000)
+
+it.each(['disabled', 'reject', 'abort'] as const)('does not inject child memory when the step is %s', async gate => {
+  const f = await fixture('native')
+  const parent = await f.create()
+  const child = await f.ctx.agents.create({ sessionId: SessionId('gated-view-child'), parentAgent: parent.agent,
+    meta: { origin: 'subagent', parentSession: parent.agent.id, cwd: f.workspace }, agentOptions: { provider: 'fixture', model: 'fixture' } })
+  if (gate === 'disabled') f.config.lifecycleEnabled = false
+  else child.agent.ctx.on('agent/pre-step', async ({ agent }, next) => {
+    if (gate === 'reject') return { kind: 'reject' }
+    agent.cancel({ kind: 'user' })
+    return next()
+  })
+  try {
+    await f.turn(child.agent)
+    if (gate === 'disabled') {
+      expect(f.requests).toHaveLength(3)
+      for (const request of f.requests) expect(request.text).not.toContain('Synthetic turn-view retained fact.')
+    } else expect(f.requests).toEqual([])
+    expect(child.agent.session.snapshotEvents().filter(event => event.type === 'user/message'
+      && event.data.source.kind === 'dsh-mnemon' && event.data.source.form === 'recall')).toHaveLength(0)
+    expect(f.graph.composableTurns.activeTurn(child.agent.id)).toBeUndefined()
+  } finally { await child.dispose(); await parent.dispose(); await f.close() }
+})
 
 it.each(['reject', 'abort'] as const)('does not create a View when a step will %s after prompt middleware replaces the assembly', async outcome => {
   const f = await fixture('native')

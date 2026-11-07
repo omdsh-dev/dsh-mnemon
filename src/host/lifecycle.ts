@@ -1446,12 +1446,11 @@ export class MnemonLifecycle {
             return decision
           }
           if (openAgentTurn(agent) !== payload.turn) return decision
-          const recovering = memory.current?.turn !== payload.turn
           await memory.begin(payload.turn, payload.signal)
-          // A recovered child pin needs the same actionable ids as its View;
-          // keep ordinary delegated context unchanged when assembly ran.
+          // Assembly prepares authority and guidance, not the projected memory
+          // body. Every accepted child turn needs its captured View at step 1.
           const pinned = memory.current
-          if (recovering && payload.step === 1 && this.config.lifecycleEnabled && pinned !== undefined) {
+          if (payload.step === 1 && this.config.lifecycleEnabled && pinned !== undefined) {
             const wake = modelMemoryWake(pinned.graph, pinned.context)
             if (wake.text.trim() !== '') return { kind: 'enter', messages: [...decision.messages, createPluginMessage(wake.text, 'recall')] }
           }
