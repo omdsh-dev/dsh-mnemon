@@ -69,6 +69,8 @@ DSH 的“工作区”模式不会统一重写所有 Provider 命名空间。Mne
 
 ## 召回评分语义
 
+Mnemon Native 的 `smart` 召回请求详细信号，先将 Source 的候选请求扩大为 `min(50, max(20, requested * 4))`，再应用返回数量限制。有正向向量相似度时，将相似度限制在 0–1、优先排序，并用于召回质量阈值。没有相似度的结果保持无分数，但已被替代的事实保留 CLI 的降权，且不会高于其原有分数。全部相似度缺失或非正时，保留 CLI 原有顺序和分数。`keyword` 与 `basic` 保留原有命令和分数。旧 CLI 拒绝 `--verbose` 时只去掉该参数重试一次，因为这些版本的默认响应已包含信号。这是在 CLI 候选内做有界重排，不是全库向量搜索，也不代表校准概率。普通召回会记录较大候选池的访问；检查仍使用 `--readonly`。
+
 Hindsight 的最终排名分包含加权项，OpenViking 的相似度也不等于经过校准的查询置信度。两者在 manifest 和驱动中均声明 `provider-native`。Memory Spaces 按原始排名与 `recallQuality.maxRankedResults` 配额接纳，不跨 Provider 比较原始分数，也不钳制到 1；参见[召回质量策略](../reference/configuration.md#召回质量策略)。
 
 ## OpenViking 内容支持范围

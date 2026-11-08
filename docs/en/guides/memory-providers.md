@@ -67,6 +67,8 @@ Connection secrets never enter the selector prompt. `local-only` excludes every 
 
 ## Recall score semantics
 
+Mnemon Native `smart` recall requests verbose signals and expands the Source's candidate request to `min(50, max(20, requested * 4))` before applying its result limit. When positive vector similarities are available, those similarities are bounded to 0–1, ranked first, and used by recall quality thresholds. Results without similarity stay unscored unless marked superseded; those retain the CLI demotion and never rise above their existing score. If every similarity is missing or nonpositive, the original CLI order and scores remain available. `keyword` and `basic` keep their original commands and scores. Older CLIs that reject `--verbose` are retried once without that flag, since their default response already contains signals. This is bounded reranking of CLI candidates, not an exhaustive vector search or a calibrated probability. Ordinary recall records access to the larger candidate pool; inspection still uses `--readonly`.
+
 Hindsight final ranking scores include boosts; OpenViking similarity scores are not calibrated query confidence. Both declare `provider-native` in the manifest and driver. Memory Spaces admits their original ranking under `recallQuality.maxRankedResults` without comparing raw scores or clamping them to 1; see [recall quality policies](../reference/configuration.md#recall-quality-policies).
 
 ## OpenViking content support

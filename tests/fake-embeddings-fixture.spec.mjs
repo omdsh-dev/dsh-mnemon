@@ -152,9 +152,11 @@ describe('fake embedding service', () => {
       const directory = await store()
       const endpoint = f.root + suffix
       expect(await cli(directory, endpoint, 'embed', '--status')).toMatchObject({ protocol: suffix === '' ? 'ollama' : 'openai', embedded: 0, total_insights: 2 })
+      const beforeBackfill = f.events.length
       expect(await cli(directory, endpoint, 'embed', '--all')).toMatchObject({ succeeded: 2, failed: 0 })
+      // Newer CLI status calls probe model availability; count only the backfill itself.
+      expect(f.events.slice(beforeBackfill).filter(event => event.protocol === (suffix === '' ? 'ollama' : 'openai'))).toHaveLength(2)
       expect(await cli(directory, endpoint, 'embed', '--status')).toMatchObject({ embedded: 2, total_insights: 2 })
-      expect(f.events.filter(event => event.protocol === (suffix === '' ? 'ollama' : 'openai'))).toHaveLength(2)
     }
     const missing = await serve({ missingModel: true })
     const directory = await store()
