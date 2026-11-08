@@ -1,3 +1,4 @@
+import * as projectionSDK from 'dsh-mnemon/extension-sdk'
 import type { MemoryJsonValue, MemorySourceDefinition } from 'dsh-mnemon/contracts'
 import { createHash } from 'node:crypto'
 import { COMPOSABLE_MEMORY_API_VERSION } from 'dsh-mnemon/contracts'
@@ -79,7 +80,7 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
         scope: digest([effective.dataDir, effective.userDataDir, branch ?? null]),
         // Ages are projection annotations. Content, importance and branch scope
         // identify a fact; losing any old occurrence requires a checkpoint.
-        entries: current.entries.map(entry => digest([entry.target, entry.content, entry.importance, entry.branches ?? []])).sort(),
+        entries: current.entries.map(entry => digest([entry.target, entry.content, entry.importance, entry.branches ?? [], ...(entry.pinned === true ? [true] : [])])).sort(),
       } }
     }
     const prepared = new WeakMap<object, ReturnType<typeof projection>>()
@@ -97,6 +98,7 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
           role: 'working-context',
           availability: 'ready',
           revision: current.revision,
+          ...(current.minimumCharacters === 0 ? {} : { hints: { minimumProjectionCharacters: current.minimumCharacters } }),
           capabilities: ['status', 'project', 'write'],
           routeIds: [],
           actionIds: ['mutate'],
@@ -107,6 +109,7 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
         const current = prepared.get(request.scope) ?? projection(request.scope.workspaceId)
         prepared.delete(request.scope)
         if (current.revision !== request.expectedRevision) throw new Error('Runtime projection revision changed during composition')
+        if (current.minimumCharacters > request.maxCharacters) throw new Error(`Pinned Runtime entries need ${current.minimumCharacters} projection characters, but the View grants ${request.maxCharacters}. Unpin entries or increase the View budget; pinned entries were not truncated.`)
         return {
           fragments: [{
             id: `${context.sourceInstanceKey}/projection`,
@@ -133,21 +136,31 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
         if (request.mode === 'read') {
           let value: unknown
           if (request.operation === 'snapshot') value = controller.snapshot()
-          else if (request.operation === 'maintenance-plan') value = await controller.planMaintenance(runtimeMutation(request.input), { preserveImportance: input.preserveImportance === true })
+          else if (request.operation === 'maintenance-plan') {
+            if (typeof projectionSDK.reserveMemoryProjection !== 'function' && controller.snapshot().entries.some(entry => entry.pinned === true)) throw new Error('Pinned Runtime maintenance requires a newer dsh-mnemon Host; update the Host before retrying.')
+            value = await controller.planMaintenance(runtimeMutation(request.input), { preserveImportance: input.preserveImportance === true })
+          }
           else throw new Error('unsupported Runtime management read operation: ' + request.operation)
           return { revision: controller.snapshot().revision, value: value as MemoryJsonValue }
         }
         if (!request.confirmed) throw new Error('Runtime management mutation requires explicit confirmation')
         let result: unknown
         if (request.operation === 'mutate') result = await controller.mutate(runtimeMutation(request.input), { preserveImportance: input.preserveImportance === true })
-        else if (request.operation === 'compact-and-mutate') {
+        else if (request.operation === 'pin') {
+          if (input.pinned === true && typeof projectionSDK.reserveMemoryProjection !== 'function') throw new Error('Pinned Runtime requires a newer dsh-mnemon Host; update the Host and official Strategies together.')
+          const target = text(input.target, 'target', 20)! as RuntimeMemoryTarget
+          if (!TARGETS.has(target) || typeof input.pinned !== 'boolean') throw new Error('Pin requires a valid target and boolean pinned state')
+          result = await controller.setPinned(target, text(input.content, 'content', 100_000)!, input.pinned)
+        } else if (request.operation === 'compact-and-mutate') {
           if (!Array.isArray(input.compacted)) throw new Error('compacted must be an array')
           const compacted = input.compacted.map(value => {
             const entry = record(value, 'compacted entry')
             const importance = text(entry.importance, 'importance', 20)! as RuntimeMemoryImportance
             if (!IMPORTANCE.has(importance)) throw new Error('invalid compacted importance')
+            if (entry.pinned !== undefined && typeof entry.pinned !== 'boolean') throw new Error('invalid compacted pin state')
             return {
               content: text(entry.content, 'content', 100_000)!, importance,
+              ...(entry.pinned === undefined ? {} : { pinned: entry.pinned as boolean }),
               ...(entry.branches === undefined ? {} : { branches: stringArray(entry.branches, 'branches', 100) ?? [] }),
             } satisfies RuntimeMemoryCompactedEntry
           })

@@ -179,3 +179,24 @@ describe('standalone runtime Source', () => {
     } finally { await runner.dispose() }
   })
 })
+
+it('keeps complete pins before ordinary USER content and rejects a projection smaller than its pin reservation', async () => {
+  const directory = mkdtempSync(join(tmpdir(), 'mnemon-runtime-pin-projection-'))
+  try {
+    const controller = new RuntimeMemoryController({ effectiveDataDir: () => directory })
+    await controller.mutate({ action: 'add', target: 'user', content: 'ordinary user '.repeat(120) })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'Pinned working rule.' })
+    await controller.setPinned('memory', 'Pinned working rule.', true)
+    const sourceInstanceKey = 'source:pin'
+    const source = plugin.createRuntimeMemorySource({ dataDir: directory }).create({ sourceInstanceKey, provenance: { packageName: plugin.name, entryId: 'pin' } })
+    const scope = { storage: 'custom' as const }
+    const facts = await source.facts({ scope, scenario: 'turn', budget: DEFAULT_MEMORY_VIEW_BUDGET })
+    const minimum = (facts.hints as { minimumProjectionCharacters: number }).minimumProjectionCharacters
+    const request = { scope, sourceInstanceKey, expectedRevision: facts.revision, includeProjection: true, mode: 'eager' as const, maxCharacters: minimum }
+    const projected = await source.project(request)
+    expect(projected.fragments[0]!.text).toContain('Pinned working rule.')
+    expect(projected.fragments[0]!.text).not.toContain('ordinary user')
+    await expect(Promise.resolve().then(() => source.project({ ...request, maxCharacters: minimum - 1 }))).rejects.toThrow('were not truncated')
+    await expect(source.manage!({ scope, sourceInstanceKey, expectedRevision: facts.revision, mode: 'mutate', operation: 'pin', confirmed: false, input: { target: 'memory', content: 'Pinned working rule.', pinned: false } })).rejects.toThrow('confirmation')
+  } finally { rmSync(directory, { recursive: true, force: true }) }
+})

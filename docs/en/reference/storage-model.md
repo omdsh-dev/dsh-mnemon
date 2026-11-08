@@ -116,6 +116,7 @@ updated_at
 target
 importance
 branches (optional)
+pinned (optional)
 ```
 
 `branches` holds an optional list of git branch names for `target=memory` entries. An entry without `branches` (or with an empty list) is visible on every branch. When a session's workspace is a git working tree on branch `B`, the per-turn Runtime snapshot hides `memory` entries whose `branches` list does not include `B`; in non-git workspaces and at detached HEAD, every entry is projected. `USER.md` entries never carry `branches`.
@@ -138,6 +139,16 @@ Conversation history keeps a bounded group of complete Mnemon View snapshots as 
 Removed or corrected Runtime facts, changed permissions, Sources, workspace, branch or opaque ReadGrants trigger a checkpoint before the next applicable model request, even if the rendered text is identical. Runtime supplies scope and visible-entry digests in Source-owned provenance; unknown or truncated projections are compared conservatively in full. The latest snapshot represents the current projected state, while absence can still mean filtering or a projection budget, not deletion from storage. Original snapshots and replacement provenance remain in DSH's append-only audit log. Upgrade cleanup recognizes this producer's older `recall` messages only when they contain the complete built-in Runtime snapshot envelope or a canonical official truncation with known structure and the SDK ellipsis; ordinary recalls, guidance, user messages and other producers remain unchanged. Cleanup requires the plugin to be active and preserves existing pinned View and delegated-agent leases.
 
 These lines annotate the unchanged entry content. `old_text` / `oldText` must match content only, excluding the metadata line. Recorded importance and age never outrank current instructions. JSON, on-disk Markdown, content matching, entry order and storage capacity remain unchanged. Annotations count toward the existing model projection character budget, so even the default Strategy can truncate or omit entries when there are many short records. Its guidance states that snapshots are budget-limited and that absence does not mean deletion; light-context can impose a smaller budget.
+
+### Pinned Runtime entries
+
+Use **Pin / Unpin** on the Runtime page. Pins are an explicit human setting, independent of importance; existing records without `pinned` remain unpinned. Each target shows its pinned count and projection usage. The reserved budget is **1,536 characters per target**, including pin labels and importance annotations. A pin that exceeds this quota is refused without changing data. Unpin remains available to recover an oversized imported or manually edited set.
+
+Visible pins from both USER and MEMORY precede all ordinary entries in a turn. The official layered and general Strategies reserve their complete text inside the existing View ceiling, including scoped and light-context configurations. If the ceiling cannot contain the pins, composition returns an explicit error asking to unpin or increase the View budget. A custom Strategy must honor the Source's `hints.minimumProjectionCharacters` (the public `reserveMemoryProjection` SDK helper can do this); Runtime refuses to truncate pins. An explicitly disabled/excluded Source, filtered branch or a subagent without Runtime inheritance does not acquire memory through pinning. Pins ensure presence in an admitted projection, not model obedience or authority over current instructions.
+
+Capacity maintenance retains pinned originals in hot memory before importance ranking, and sends only unpinned working-memory entries to Providers or the local archive. USER compaction receives only unpinned entries; the Host and Source retain pinned originals verbatim. If the pinned set and pending write cannot fit the hard storage limit, the operation fails before any model/Provider work. The usual 70% compaction target is soft and gives way to pins. Manual content edits preserve the flag; explicit removal still removes an entry.
+
+Packs, sync merge, overflow packing and metadata-based restore preserve the optional boolean. For identical text, an explicitly newer pin/unpin wins; a legacy copy without the field cannot clear a local decision. Keep all writing/syncing installations on a release with pin support: older versions can discard unknown fields, so downgrade roundtrips are not supported for pins. Updated Sources refuse to enable pins or run pinned maintenance with an older Host SDK; ordinary unpinned use remains available. Markdown exports remain plain derived text and do not carry pin metadata.
 
 ### Operations
 

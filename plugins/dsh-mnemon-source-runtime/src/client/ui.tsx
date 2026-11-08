@@ -10,6 +10,7 @@ export function runtimePageClient(management: MnemonSourceManagementClient): Run
   const client = createMemorySourcePageClient(management)
   return {
     runtimeMemory: () => client.read('snapshot', null, { coalesce: true }),
+    pinRuntimeMemory: input => client.mutate('pin', { ...input }, true),
     mutateRuntimeMemory: input => client.canAssist('mutate') ? client.assist('mutate', { ...input, ...(input.old_text === undefined ? {} : { oldText: input.old_text }) }, true) : client.mutate('mutate', { ...input }, true),
   }
 }
