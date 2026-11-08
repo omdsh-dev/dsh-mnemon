@@ -1,0 +1,573 @@
+{
+  "schemaVersion": 1,
+  "release": "v0.5.43",
+  "verificationDate": "2026-11-09",
+  "timezone": "Asia/Shanghai",
+  "candidateRevision": "601e4cb7f941dc102f6cf58d7f1a8ef8d6ee1691",
+  "baseRevision": "ee080a7371759928c97c581621713819f31507d4",
+  "integrationRevision": "67c4859f66ee4a53dc53f5f2b6bfb59aadb7e6f4",
+  "candidateManifest": {
+    "schemaVersion": 2,
+    "revision": "601e4cb7f941dc102f6cf58d7f1a8ef8d6ee1691",
+    "baseRevision": "ee080a7371759928c97c581621713819f31507d4",
+    "starter": {
+      "name": "dsh-mnemon",
+      "version": "0.5.43",
+      "distTag": "latest"
+    },
+    "composition": [
+      {
+        "name": "dsh-mnemon-provider-byterover",
+        "version": "0.5.7"
+      },
+      {
+        "name": "dsh-mnemon-provider-hindsight",
+        "version": "0.5.7"
+      },
+      {
+        "name": "dsh-mnemon-provider-holographic",
+        "version": "0.5.7"
+      },
+      {
+        "name": "dsh-mnemon-provider-honcho",
+        "version": "0.5.5"
+      },
+      {
+        "name": "dsh-mnemon-provider-mem0",
+        "version": "0.5.5"
+      },
+      {
+        "name": "dsh-mnemon-provider-mnemon-native",
+        "version": "0.5.11"
+      },
+      {
+        "name": "dsh-mnemon-provider-openviking",
+        "version": "0.5.10"
+      },
+      {
+        "name": "dsh-mnemon-provider-retaindb",
+        "version": "0.5.6"
+      },
+      {
+        "name": "dsh-mnemon-provider-supermemory",
+        "version": "0.5.5"
+      },
+      {
+        "name": "dsh-mnemon-source-documents",
+        "version": "0.6.0"
+      },
+      {
+        "name": "dsh-mnemon-source-memory-spaces",
+        "version": "0.5.26"
+      },
+      {
+        "name": "dsh-mnemon-source-runtime",
+        "version": "0.5.19"
+      },
+      {
+        "name": "dsh-mnemon-source-skills",
+        "version": "0.5.10"
+      },
+      {
+        "name": "dsh-mnemon-strategy-auto-capture",
+        "version": "0.5.5"
+      },
+      {
+        "name": "dsh-mnemon-strategy-default-three-tier",
+        "version": "0.5.13"
+      },
+      {
+        "name": "dsh-mnemon-strategy-general",
+        "version": "0.5.2"
+      },
+      {
+        "name": "dsh-mnemon-strategy-light-context",
+        "version": "0.5.6"
+      },
+      {
+        "name": "dsh-mnemon-strategy-scoped",
+        "version": "0.5.5"
+      },
+      {
+        "name": "dsh-mnemon",
+        "version": "0.5.43"
+      }
+    ],
+    "packages": [
+      {
+        "name": "dsh-mnemon-source-memory-spaces",
+        "version": "0.5.26",
+        "filename": "dsh-mnemon-source-memory-spaces-0.5.26.tgz",
+        "integrity": "sha512-6j/45/wkbKBM1VZyBYT8dFtxhjFlpxRjxO6l+0dlmJKarYok1cYUr3wBkgHu05O5xFj9xbFFjKZ8Aq8eJOddBw==",
+        "size": 194923
+      },
+      {
+        "name": "dsh-mnemon-source-runtime",
+        "version": "0.5.19",
+        "filename": "dsh-mnemon-source-runtime-0.5.19.tgz",
+        "integrity": "sha512-sQ4LUcGTqrPoIz2VfNOayXcEvwCCb8F4qkbb7PW4qIdSirFTCzewt53umySizNtaTe1RDgjuycpVGjVuBh0lnA==",
+        "size": 34536
+      },
+      {
+        "name": "dsh-mnemon-source-skills",
+        "version": "0.5.10",
+        "filename": "dsh-mnemon-source-skills-0.5.10.tgz",
+        "integrity": "sha512-UPMjEPtaPsuNseBDgscXCtm9i6bvSKXYSyQjUr1zIgKF2b5yWPn0Zsl9mpKMJBSgfxriGM/YtPUZmyO8F75vSw==",
+        "size": 163139
+      },
+      {
+        "name": "dsh-mnemon-strategy-default-three-tier",
+        "version": "0.5.13",
+        "filename": "dsh-mnemon-strategy-default-three-tier-0.5.13.tgz",
+        "integrity": "sha512-02/CEgd1fKqnD18nwxkiZsWXSmXIAuL/SlPOAioRPrqbB2py6lWhJEsgXZfmaGidwtUfwsyr/t6V04bA2noDPQ==",
+        "size": 16781
+      },
+      {
+        "name": "dsh-mnemon-strategy-general",
+        "version": "0.5.2",
+        "filename": "dsh-mnemon-strategy-general-0.5.2.tgz",
+        "integrity": "sha512-8pbutlZ9Lo4T5MY7rLf6zCbwUzRoDtYLxot/Vsb0KMirHc2Ec/Tckao/OPm9StxtJ71K5RRGexZQve17Yh6ZGA==",
+        "size": 6401
+      },
+      {
+        "name": "dsh-mnemon-provider-byterover",
+        "version": "0.5.7",
+        "filename": "dsh-mnemon-provider-byterover-0.5.7.tgz",
+        "integrity": "sha512-HSo1NbmLLh8PqWaVvsqbqh6Ay0uFmafq1ukCeAsdJ/IuzjUSu5cuKmKdlsoOD8vBhXCwzmnb96UgEb3cZUod0A==",
+        "size": 7718
+      },
+      {
+        "name": "dsh-mnemon-provider-mnemon-native",
+        "version": "0.5.11",
+        "filename": "dsh-mnemon-provider-mnemon-native-0.5.11.tgz",
+        "integrity": "sha512-rS/XVk6kd6JWXg+qM2zzm+ycRWQrTg9aBBSn56ZgJbL5y8l1+LTBTPslc1rJ4tWSHwtqYPBjWmeY9IYvRWMLMA==",
+        "size": 8578
+      },
+      {
+        "name": "dsh-mnemon",
+        "version": "0.5.43",
+        "filename": "dsh-mnemon-0.5.43.tgz",
+        "integrity": "sha512-rjEP5Ek6pgjQQXysuY0PWcnHpGOKP/o2HDLIfkgtOW4Jt+S+oKp/Oc2f4mwvUHb+i76zNVRPSLjags/pqe+nqw==",
+        "size": 550305
+      }
+    ]
+  },
+  "scenarioCount": 12,
+  "hosts": [
+    {
+      "id": "020",
+      "versionOrCommit": "0.2.0-rc.2",
+      "officialNpm": true,
+      "record": "020-validation.json",
+      "recordSha256": "ba71341d3cd01d2413a4d928c94fd431e83d3ec8df792a5ba6d3bf2f4435c330",
+      "scenariosPassed": 2,
+      "pinnedVersionsChecked": 38,
+      "candidateFilesAndModesChecked": 398,
+      "memoryHashesPreserved": true
+    },
+    {
+      "id": "rc2",
+      "versionOrCommit": "0.2.1-rc.2",
+      "officialNpm": true,
+      "record": "rc2-validation.json",
+      "recordSha256": "46ee0c8ad23c8c94f41afdd93c17079836a17086144d827fec635a3c0f3f9022",
+      "scenariosPassed": 2,
+      "pinnedVersionsChecked": 38,
+      "candidateFilesAndModesChecked": 398,
+      "memoryHashesPreserved": true
+    },
+    {
+      "id": "rc3",
+      "versionOrCommit": "0.2.1-rc.3",
+      "officialNpm": true,
+      "record": "rc3-validation.json",
+      "recordSha256": "9c4b45c277e4b444568abac4519abb0a137a629b583d00c403cd17790e9b2cfa",
+      "scenariosPassed": 2,
+      "pinnedVersionsChecked": 38,
+      "candidateFilesAndModesChecked": 398,
+      "memoryHashesPreserved": true
+    },
+    {
+      "id": "rc5",
+      "versionOrCommit": "0.2.1-rc.5",
+      "officialNpm": true,
+      "record": "rc5-validation.json",
+      "recordSha256": "5deeb55b9160d41f0681c820c5a60c83465ec139b4d69aeef2bf9387c0e6f784",
+      "scenariosPassed": 2,
+      "pinnedVersionsChecked": 38,
+      "candidateFilesAndModesChecked": 398,
+      "memoryHashesPreserved": true
+    },
+    {
+      "id": "rc1",
+      "versionOrCommit": "0.2.2-rc.1",
+      "officialNpm": true,
+      "record": "rc1-validation.json",
+      "recordSha256": "ba778d5fc3306db7f4fbe9d5f8f86ca9ee590ca4354dc87796521ed9d2fd2cb5",
+      "scenariosPassed": 2,
+      "pinnedVersionsChecked": 38,
+      "candidateFilesAndModesChecked": 398,
+      "memoryHashesPreserved": true
+    },
+    {
+      "id": "master",
+      "versionOrCommit": "fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159",
+      "officialNpm": false,
+      "record": "master-validation.json",
+      "recordSha256": "b2de01cf3099f87ded621e46f208318d119117452aff99a41167a333117a7021",
+      "scenariosPassed": 2,
+      "pinnedVersionsChecked": 38,
+      "candidateFilesAndModesChecked": 398,
+      "memoryHashesPreserved": true
+    }
+  ],
+  "totals": {
+    "finalPinnedVersionsChecked": 228,
+    "finalCandidateFilesAndModesChecked": 2388,
+    "retainedRuntimeBaselines": 6
+  },
+  "checks": {
+    "verify": {
+      "passed": true,
+      "rootPassed": 2671,
+      "rootConditionalSkips": 8,
+      "workspacePassed": 869,
+      "workspaceConditionalSkips": 4,
+      "logSha256": "206e80b56a76aef60fdabcd79ca91ae5021b3882916ec182f19f3ba84eef80bb"
+    },
+    "independentPlugins": {
+      "passed": true,
+      "repositories": 18,
+      "packedArtifacts": 19,
+      "workers": 2,
+      "logSha256": "eec0cc84bf897afd89cd48eecab73a40946709105680142d25472c4cda45e36d"
+    },
+    "fixedMasterRootSuite": {
+      "passed": 2671,
+      "conditionalSkips": 8,
+      "logSha256": "e2f56e12f1d32226bed3b041bad56823990f51ba06ae1b77a2e72da0716dd18a"
+    },
+    "starterSize": {
+      "files": 69,
+      "packedBytes": 550305,
+      "unpackedBytes": 2303047,
+      "ceilingBytes": 3000000,
+      "ceilingAdjustmentNeeded": false
+    }
+  },
+  "screenshots": [
+    {
+      "path": "020-fresh-add-plugin.jpg",
+      "sha256": "4345ccc11a2aa3aaab80c5bdca480ef0c6f77af679addc1739086a5c4d357126",
+      "bytes": 75439,
+      "width": 2256,
+      "height": 1233
+    },
+    {
+      "path": "020-fresh-status.jpg",
+      "sha256": "931c54d489353cff29ea4d838dc2a046e1be90bee1eb226cad9e932ba55c52f2",
+      "bytes": 112989,
+      "width": 2256,
+      "height": 1233
+    },
+    {
+      "path": "020-upgrade-memory-before.jpg",
+      "sha256": "8a371820b9f1dceb963cd36a26d079c18003eeecc8e07b837ba9534e4a0d4c28",
+      "bytes": 101839,
+      "width": 2256,
+      "height": 1233
+    },
+    {
+      "path": "020-upgrade-memory-preserved.jpg",
+      "sha256": "b48e8e8cdc2f39d76badf6ea3dec43baf7b538862d86488b414634aa87b41b26",
+      "bytes": 99704,
+      "width": 2256,
+      "height": 1233
+    },
+    {
+      "path": "020-upgrade-offered.jpg",
+      "sha256": "a35f93dc8885791cc125b5ccc2d4784c5cfbbbf7e8340f47383325e79c14b4b9",
+      "bytes": 136257,
+      "width": 2256,
+      "height": 1233
+    },
+    {
+      "path": "020-upgrade-restarted-status.jpg",
+      "sha256": "ac18069eebb81f949d975ba1bd12c4c17e709a3c757c112118dafe14427b5e57",
+      "bytes": 113843,
+      "width": 2256,
+      "height": 1233
+    },
+    {
+      "path": "020-upgrade-updated.jpg",
+      "sha256": "7a44e5986b46c66358709eb7fcb9e2199e9963ebee0da559f58ea3907af1ff0f",
+      "bytes": 146534,
+      "width": 2256,
+      "height": 1233
+    },
+    {
+      "path": "master-fresh-add-plugin.jpg",
+      "sha256": "b4e6af1220b87bb90deb575972151aed466d3bf87a16cb9e68629cf9732b9f99",
+      "bytes": 77360,
+      "width": 2256,
+      "height": 1233
+    },
+    {
+      "path": "master-fresh-status.jpg",
+      "sha256": "325124079fd439f6f8f9d5d3c77fa47bc7fdbafa867e24bbd7517b031a22ee88",
+      "bytes": 114497,
+      "width": 2256,
+      "height": 1233
+    },
+    {
+      "path": "master-upgrade-memory-before.jpg",
+      "sha256": "7da446e3e598898ab2c4379f69361593f03028b6cef29b4122a0b30501458c69",
+      "bytes": 102668,
+      "width": 2256,
+      "height": 1233
+    },
+    {
+      "path": "master-upgrade-memory-preserved.jpg",
+      "sha256": "f5c2f9ae4c04b9d2a501ad197752e7412b88b52646e32d5db1e8f5b73e26ff7c",
+      "bytes": 100703,
+      "width": 2256,
+      "height": 1233
+    },
+    {
+      "path": "master-upgrade-offered.jpg",
+      "sha256": "6d01d84090f3dad5bab5c16d1f80b3e3d741f50166917560c048b9ff24446827",
+      "bytes": 137335,
+      "width": 2256,
+      "height": 1233
+    },
+    {
+      "path": "master-upgrade-restarted-status.jpg",
+      "sha256": "c1c92188569c8d91f9d1d62cc18cbb3d2a8f8ba1ce10bfcae35fcbeb3515244a",
+      "bytes": 115234,
+      "width": 2256,
+      "height": 1233
+    },
+    {
+      "path": "master-upgrade-updated.jpg",
+      "sha256": "70c471be5d43f4d85f68d52eba2825059830c3d110f19ec23876f66e7ba3de7a",
+      "bytes": 147380,
+      "width": 2256,
+      "height": 1233
+    },
+    {
+      "path": "rc1-fresh-add-plugin.jpg",
+      "sha256": "b11c61a5b746209a6ac8ef5f91b02e9cf0ec51d0715132ad05205909bed7a1b5",
+      "bytes": 81404,
+      "width": 2256,
+      "height": 1289
+    },
+    {
+      "path": "rc1-fresh-status.jpg",
+      "sha256": "d084cc4e89f4cb03dd57d9e5bce5d8a6d2b8e9a8a15479f10416f89f9c6d3fcb",
+      "bytes": 115501,
+      "width": 2256,
+      "height": 1289
+    },
+    {
+      "path": "rc1-upgrade-memory-before.jpg",
+      "sha256": "44d7eb267bb5f510628524792adc248eee42cc00f38685dab499c8f59d1ef0ad",
+      "bytes": 104629,
+      "width": 2256,
+      "height": 1289
+    },
+    {
+      "path": "rc1-upgrade-memory-preserved.jpg",
+      "sha256": "34abf29a1b06da989b711eaf347d00e869c8f5fd03443dec3e00529fb9a72d86",
+      "bytes": 62626,
+      "width": 1300,
+      "height": 850
+    },
+    {
+      "path": "rc1-upgrade-offered.jpg",
+      "sha256": "425e487718e04edf2c50b64286834d01a3f37b95499bdbf3f7a79546893e6a3a",
+      "bytes": 139567,
+      "width": 2256,
+      "height": 1289
+    },
+    {
+      "path": "rc1-upgrade-restarted-status.jpg",
+      "sha256": "4daf1e24fbbb7ddd0fbfa0b614a6b95d34df95211e39fdd0aeb0394ada9c9902",
+      "bytes": 116336,
+      "width": 2256,
+      "height": 1289
+    },
+    {
+      "path": "rc1-upgrade-updated.jpg",
+      "sha256": "753bed80dd9c57e56ed6b5cc094bb7542e16c3e903f1ca56dfa7722de9ef9044",
+      "bytes": 147599,
+      "width": 2256,
+      "height": 1289
+    },
+    {
+      "path": "rc2-fresh-add-plugin.jpg",
+      "sha256": "cf5d666a975a757b3fda5e1d0cadb54a3c99796532d5d7c89e1f7c87f4f21fe3",
+      "bytes": 75825,
+      "width": 2256,
+      "height": 1289
+    },
+    {
+      "path": "rc2-fresh-status.jpg",
+      "sha256": "2d7a3e80c939989d71f132ce5e0837e1e3e9702572147f7abcdd01e09b8b04ad",
+      "bytes": 114513,
+      "width": 2256,
+      "height": 1289
+    },
+    {
+      "path": "rc2-upgrade-memory-before.jpg",
+      "sha256": "d0a1cfc97105193c5a69ae6c574e024c425845549eb79db3fbb1421ce39fd863",
+      "bytes": 103555,
+      "width": 2256,
+      "height": 1289
+    },
+    {
+      "path": "rc2-upgrade-memory-preserved.jpg",
+      "sha256": "80654c34ecc6c808a6ed85093ae4882c589b34fb8ef87d41988d9835519d3b37",
+      "bytes": 101513,
+      "width": 2256,
+      "height": 1289
+    },
+    {
+      "path": "rc2-upgrade-offered.jpg",
+      "sha256": "01aa51bb1ff404cd15ea78c46d0718619131e28c0d3fbbb7328e34fe54faba45",
+      "bytes": 138867,
+      "width": 2256,
+      "height": 1289
+    },
+    {
+      "path": "rc2-upgrade-restarted-status.jpg",
+      "sha256": "2b9b2239f6f777f41984cd9e4d10be3b85474b1d069c93b6f57f6cd99a9d77b2",
+      "bytes": 115482,
+      "width": 2256,
+      "height": 1289
+    },
+    {
+      "path": "rc2-upgrade-updated.jpg",
+      "sha256": "dc933c2637ced87d5e09b9fb4720b32263097dff76a85a42ccd9dc5305e0f366",
+      "bytes": 146499,
+      "width": 2256,
+      "height": 1289
+    },
+    {
+      "path": "rc3-fresh-add-plugin.jpg",
+      "sha256": "1aa62c24409459db93cc323dbb4006745242f91a0dbb997312ba77c332df24a8",
+      "bytes": 73390,
+      "width": 2256,
+      "height": 1233
+    },
+    {
+      "path": "rc3-fresh-status.jpg",
+      "sha256": "2b86e57768b73ba39484c629e07eb3c61baeb5174c29defd4cc5939dc43f652b",
+      "bytes": 114234,
+      "width": 2256,
+      "height": 1233
+    },
+    {
+      "path": "rc3-upgrade-memory-before.jpg",
+      "sha256": "fc69d31d5d2ce77aa6b74b870343468cd140b54a6972c789930739f8468d1259",
+      "bytes": 103201,
+      "width": 2256,
+      "height": 1233
+    },
+    {
+      "path": "rc3-upgrade-memory-preserved.jpg",
+      "sha256": "747aa7ae601856b46b4fc13828ac00defd828bcfda73b153490a8bfffd794dfb",
+      "bytes": 101143,
+      "width": 2256,
+      "height": 1233
+    },
+    {
+      "path": "rc3-upgrade-offered.jpg",
+      "sha256": "755099e251a7115e7196c4c8d8ab648247d604f39abad50cb74718bbba8e6e48",
+      "bytes": 137474,
+      "width": 2256,
+      "height": 1233
+    },
+    {
+      "path": "rc3-upgrade-restarted-status.jpg",
+      "sha256": "9fab32d6be09b14f7b5a2bd6b2598b87bc303904e64fcc24aea0144ad5857e67",
+      "bytes": 115128,
+      "width": 2256,
+      "height": 1233
+    },
+    {
+      "path": "rc3-upgrade-updated.jpg",
+      "sha256": "43fd599bbef1b2fd5b7d792501016081b3f0feb51b147866bb476a1b36fd1642",
+      "bytes": 147730,
+      "width": 2256,
+      "height": 1233
+    },
+    {
+      "path": "rc5-fresh-add-plugin.jpg",
+      "sha256": "d9429f08b3d70d0640d37f5ab24d81ef8ed7061848df9028516afe1c350c2ba5",
+      "bytes": 76646,
+      "width": 2256,
+      "height": 1289
+    },
+    {
+      "path": "rc5-fresh-status.jpg",
+      "sha256": "dc6adcd50921891ec26754a697186f7615ea912bb243af36e225f303f3a9caec",
+      "bytes": 115146,
+      "width": 2256,
+      "height": 1289
+    },
+    {
+      "path": "rc5-upgrade-memory-before.jpg",
+      "sha256": "afbe980fed315e7d7dff46778c4228257c414ad4d8cb818d65c01e0ff740eb75",
+      "bytes": 104157,
+      "width": 2256,
+      "height": 1289
+    },
+    {
+      "path": "rc5-upgrade-memory-preserved.jpg",
+      "sha256": "fe3976f990d766153572bd8249f043403223cc5a1ab4058c310b96aa7d7687da",
+      "bytes": 102036,
+      "width": 2256,
+      "height": 1289
+    },
+    {
+      "path": "rc5-upgrade-offered.jpg",
+      "sha256": "9a2c9e40af7493a0cbd091945d9d51f08d669d3ee51a282c685e6683628526fe",
+      "bytes": 139307,
+      "width": 2256,
+      "height": 1289
+    },
+    {
+      "path": "rc5-upgrade-restarted-status.jpg",
+      "sha256": "72ad3073c4b4e9d7b2ce4ce61e974a5a35bb63c33d15a0bc698847ae1e78fe64",
+      "bytes": 115961,
+      "width": 2256,
+      "height": 1289
+    },
+    {
+      "path": "rc5-upgrade-updated.jpg",
+      "sha256": "56f2b5d0d7e84746153ff3ed60359624696883089a754ebe37393e12dd3756b4",
+      "bytes": 147051,
+      "width": 2256,
+      "height": 1289
+    },
+    {
+      "path": "release-preview.jpg",
+      "sha256": "ba464ac938c13e187edc02af8432666263c71c54882f3a9e70194f9a212964ac",
+      "bytes": 45130,
+      "width": 1300,
+      "height": 500
+    }
+  ],
+  "externalModelCalls": 0,
+  "limits": [
+    "Web profiles on macOS arm64 with Node 24.22.2; native Desktop OS integration and live cloud-model quality are outside this acceptance.",
+    "Source-build verification covers only unmodified fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159, not arbitrary master/alpha revisions.",
+    "Candidate metadata was aged only in the loopback fixture; real npm minimum-release-age behavior is outside this acceptance.",
+    "The RC1 retained-memory image is cropped to focus on both records. All UI milestones were read from live DOM; all six fresh status images and the RC1 retained-memory image were visually reviewed."
+  ],
+  "cleanup": {
+    "allOwnedFixturesStopped": true,
+    "ownedBrowserTabsClosed": true,
+    "userDesktopAndPreviewUntouched": true
+  }
+}
