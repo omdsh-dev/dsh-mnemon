@@ -24,6 +24,7 @@ import * as plugin from '../src/index.ts'
 import { installSkillsMemoryUI, SkillsSourcePage } from '../src/client.ts'
 import { draftWithSkill, installSkillUseBridge, SKILL_USE_SLOT, SkillUseBridge } from '../src/client/use-skill.tsx'
 import { css, translate } from '../src/client/presentation.ts'
+import { skillsPageClient } from '../src/client/api.ts'
 import { compareRuns } from '../src/client/evolution-page.tsx'
 import type { BacktestRun, CaseResult, EvalCase, ReviewRecordInput, SkillSummary, TrashEntry } from '../src/contracts.ts'
 
@@ -85,6 +86,47 @@ function page(navigationInput: { seed: string; nonce: number } = { seed: 'skill:
 }
 
 describe('Skills page', () => {
+  it('does not retry a skill file hash conflict as a Source revision conflict', async () => {
+    const mutation = vi.spyOn(management, 'mutate').mockRejectedValue(new Error('release-notes changed since it was read; reload it and try again'))
+    await expect(skillsPageClient(management).adoptDraft('draft-id')).rejects.toThrow('changed since it was read')
+    expect(mutation).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps cancellation unavailable to a read-only page and rejects an unconfirmed write', async () => {
+    const draft = await mutate('draft-record', { skillName: 'release-notes', content: SKILL, notes: '', changes: [], guidance: [] }) as { id: string }
+    const entry = await mutate('case-save', { skillName: 'release-notes', title: 'Case', prompt: 'Check', checks: [{ text: 'Pass', must: true }], enabled: true }) as { id: string }
+    const run = await mutate('run-start', { skillName: 'release-notes', target: { kind: 'draft', draftId: draft.id }, caseIds: [entry.id] }) as { id: string }
+    render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable={false} management={management} navigationInput={{ seed: `draft:${draft.id}`, nonce: 1 }} />)
+    expect((await screen.findByRole('button', { name: t('draft.cancelBacktest') }, { timeout: 5_000 }) as HTMLButtonElement).disabled).toBe(true)
+    const { revision } = await management.read('revision', null)
+    await expect(runner.executeManagement({ sourceInstanceKey: 'source:skills', scope: { storage: 'custom', workspaceId: join(directory, 'workspace') }, mode: 'mutate', operation: 'run-cancel', input: { id: run.id }, confirmed: false, expectedRevision: revision })).rejects.toThrow('confirmation')
+    expect((await management.read('run', { id: run.id })).value).toMatchObject({ status: 'running' })
+  })
+
+  it('shows stale-file recovery and regenerates with backtests without overwriting the current file', async () => {
+    const draft = await mutate('draft-record', { skillName: 'release-notes', content: SKILL, notes: '', changes: [], guidance: [] }) as { id: string }
+    writeFileSync(skillPath(), SKILL + '\nKeep this new instruction.\n')
+    const execute = vi.fn(async () => ({ revision: '', value: { started: true } }))
+    management = Object.assign(management, { assistance: { operations: ['skill-draft'], execute } })
+    page({ seed: `draft:${draft.id}`, nonce: 1 })
+    await screen.findByText(t('draft.baseChanged'))
+    expect((screen.getByRole('button', { name: t('draft.adopt') }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(screen.getByRole('button', { name: t('draft.regenerate') }))
+    await waitFor(() => expect(execute).toHaveBeenCalledWith('skill-draft', expect.objectContaining({ draftId: draft.id, backtest: true }), expect.objectContaining({ confirmed: true })))
+    expect(readFileSync(skillPath(), 'utf8')).toContain('Keep this new instruction.')
+  })
+
+  it('cancels linked backtests and makes the reviewed draft actionable again', async () => {
+    const draft = await mutate('draft-record', { skillName: 'release-notes', content: SKILL, notes: '', changes: [], guidance: [] }) as { id: string }
+    const entry = await mutate('case-save', { skillName: 'release-notes', title: 'Case', prompt: 'Check', checks: [{ text: 'Pass', must: true }], enabled: true }) as { id: string }
+    const run = await mutate('run-start', { skillName: 'release-notes', target: { kind: 'draft', draftId: draft.id }, caseIds: [entry.id] }) as { id: string }
+    page({ seed: `draft:${draft.id}`, nonce: 1 })
+    fireEvent.click(await screen.findByRole('button', { name: t('draft.cancelBacktest') }, { timeout: 5_000 }))
+    await waitFor(async () => expect((await management.read('run', { id: run.id })).value).toMatchObject({ status: 'interrupted' }))
+    await waitFor(() => expect((screen.getByRole('button', { name: t('draft.adopt') }) as HTMLButtonElement).disabled).toBe(false))
+    expect(await screen.findByText(t('draft.interrupted'))).not.toBeNull()
+  })
+
   it.each([true, false])('keeps the skill list in place and opens each detail at the top (writable=%s)', async writable => {
     const other = join(directory, 'dsh', 'skills', 'release-checks')
     mkdirSync(other)

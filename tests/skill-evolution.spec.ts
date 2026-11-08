@@ -491,7 +491,7 @@ describe('skill evolution in the Host', () => {
     })
     const started = await skills.draft(source, join(directory, 'workspace'), { skill: 'release-notes', guidance: 'Group by component' })
     expect(started).toEqual({ started: true })
-    await vi.runAllTimersAsync()
+    await vi.advanceTimersByTimeAsync(0)
     await vi.waitFor(async () => {
       const runs = await source.read<BacktestRun[]>('runs', { skill: 'release-notes' })
       expect(runs.map(run => run.status)).toEqual(["completed", "completed"])
@@ -532,7 +532,7 @@ describe('skill evolution in the Host', () => {
       return { structured: { checks: [{ index: 1, pass: true, note: 'checked' }], summary: 'good' } }
     })
     await skills.draft(global, undefined, { draftId: first.id })
-    await vi.runAllTimersAsync()
+    await vi.advanceTimersByTimeAsync(0)
     await vi.waitFor(async () => expect((await global.read<BacktestRun[]>('runs')).map(run => run.status)).toEqual(['completed', 'completed']))
     expect(execution).toHaveLength(2)
     expect(execution.every(prompt => prompt.includes('Follow original project checks'))).toBe(true)
@@ -680,12 +680,12 @@ describe('skill evolution in the Host', () => {
       return { structured: { checks: [{ index: 1, pass: true, note: 'ok' }], summary: 'ok' } }
     })
     const baseline = await skills.backtest(source, undefined, { skillName: 'release-notes', target: { kind: 'current' } })
-    await vi.runAllTimersAsync()
+    await vi.advanceTimersByTimeAsync(0)
     await vi.waitFor(async () => expect((await source.read<BacktestRun>('run', { id: baseline.runId })).status).toBe('completed'))
     host.skillTask.mockClear()
 
     await skills.draft(source, undefined, { skill: 'release-notes', ...(picked ? { route: { provider: 'other-provider', model: 'other-model' } } : {}) })
-    await vi.runAllTimersAsync()
+    await vi.advanceTimersByTimeAsync(0)
     await vi.waitFor(async () => {
       const runs = await source.read<BacktestRun[]>('runs', { skill: 'release-notes' })
       expect(runs).toHaveLength(picked ? 3 : 2)
@@ -712,7 +712,7 @@ describe('skill evolution in the Host', () => {
       return { structured: { checks: [{ index: 1, pass: true, note: 'ok' }], summary: 'ok' } }
     })
     const { runId } = await skills.backtest(source, join(directory, 'workspace'), { skillName: 'release-notes', target: { kind: 'current' } })
-    await vi.runAllTimersAsync()
+    await vi.advanceTimersByTimeAsync(0)
     await vi.waitFor(async () => expect((await source.read<BacktestRun>('run', { id: runId })).status).toBe('completed'))
     const run = await source.read<BacktestRun>('run', { id: runId })
     expect(Object.fromEntries(run.results.map(result => [result.title, result.verdict]))).toEqual({ Flaky: 'pass', Broken: 'error' })
@@ -725,7 +725,7 @@ describe('skill evolution in the Host', () => {
     const { skills, skillTask, runTask } = evolution([])
     for (const kind of ['current', 'none'] as const) {
       const { runId } = await skills.backtest(source, undefined, { skillName: 'release-notes', target: { kind } })
-      await vi.runAllTimersAsync()
+      await vi.advanceTimersByTimeAsync(0)
       await vi.waitFor(async () => expect((await source.read<BacktestRun>('run', { id: runId })).status).toBe('completed'))
       const run = await source.read<BacktestRun>('run', { id: runId })
       expect(run.results).toMatchObject([{ caseId: entry.id, verdict: 'error', unmeasuredReason: 'requires-vision', checks: [], steps: [], answer: '' }])
@@ -748,7 +748,7 @@ describe('skill evolution in the Host', () => {
       return { structured: label.startsWith('Mnemon skill eval') ? { steps: ['read'], answer: 'notes' } : { checks: [{ index: 1, pass: true, note: 'ok' }], summary: 'ok' } }
     })
     const { runId } = await skills.backtest(source, undefined, { skillName: 'release-notes', target: { kind: 'current' } })
-    await vi.runAllTimersAsync()
+    await vi.advanceTimersByTimeAsync(0)
     await vi.waitFor(async () => expect((await source.read<BacktestRun>('run', { id: runId })).status).toBe('completed'))
     expect(await source.read('run', { id: runId })).toMatchObject({ score: 1, passRate: 1, progress: { done: 2, total: 2 } })
     expect(host.skillTask).toHaveBeenCalledTimes(2)
@@ -860,6 +860,69 @@ describe('skill evolution in the Host', () => {
     turn(events, 2, 'Write release notes, grouped by component.')
     await skills.reviewNow(agent)
     expect(await source.read('suggestions', { status: ['pending'] })).toMatchObject([{ skillName: 'release-notes', action: 'update' }])
+  })
+
+  it('settles a hung draft even if its task ignores cancellation, and rejects its late result', async () => {
+    config = { ...config, evolution: true, autoBacktest: false, idleSeconds: 3600 }
+    const { skills, runTask } = evolution([mixedReview])
+    const stop = skills.watch(agent)
+    await endTurn(1, 'Capture incident logs and group release notes.')
+    await skills.reviewNow(agent)
+    const suggestion = (await source.read<SkillSuggestion[]>('suggestions'))[0]!
+    let finish!: (value: unknown) => void
+    runTask.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    await skills.draft(source, undefined, { suggestionId: suggestion.id })
+    await vi.advanceTimersByTimeAsync(16 * 60_000)
+    expect((await source.read<SkillSuggestion[]>('suggestions')).find(item => item.id === suggestion.id)).toMatchObject({ status: 'pending', lastError: 'skill draft did not finish within 15 minutes' })
+    finish({ structured: { content: `---\nname: ${suggestion.skillName}\ndescription: New skill.\n---\nBody`, notes: '', changes: [] } })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(await source.read('drafts')).toEqual([])
+    skills.dispose()
+    stop()
+  })
+
+  it.each(['cancel', 'deadline'] as const)('settles a hung backtest on %s and frees its slot', async mode => {
+    const { skills, runTask } = evolution([])
+    const entry = await source.mutate<EvalCase>('case-save', { skillName: 'release-notes', title: 'Case', prompt: 'Check', checks: [{ text: 'Pass', must: true }], enabled: true })
+    const signals: AbortSignal[] = []
+    runTask.mockImplementation((_root, signal) => { signals.push(signal); return new Promise(() => undefined) })
+    const input = { skillName: 'release-notes', target: { kind: 'none' as const }, caseIds: [entry.id] }
+    const first = await skills.backtest(source, undefined, input)
+    await skills.backtest(source, undefined, input)
+    const queued = await skills.backtest(source, undefined, input)
+    expect(signals).toHaveLength(2)
+    if (mode === 'cancel') await source.mutate('run-cancel', { id: first.runId })
+    await vi.advanceTimersByTimeAsync(mode === 'cancel' ? 1_100 : 46 * 60_000)
+    expect((await source.read<BacktestRun>('run', { id: first.runId })).status).toBe('interrupted')
+    expect(signals[0]!.aborted).toBe(true)
+    if (mode === 'cancel') {
+      await vi.waitFor(() => expect(signals).toHaveLength(3))
+      expect((await source.read<BacktestRun>('run', { id: queued.runId })).status).toBe('running')
+    }
+    await expect(skills.backtest(source, undefined, input)).resolves.toHaveProperty('runId')
+    skills.dispose()
+    await vi.advanceTimersByTimeAsync(0)
+  })
+
+  it('returns a suggestion to pending when its draft task outlives the deadline', async () => {
+    config = { ...config, evolution: true, autoBacktest: false, idleSeconds: 3600 }
+    const { skills, runTask } = evolution([mixedReview])
+    const stop = skills.watch(agent)
+    await endTurn(1, 'Capture incident logs and group release notes.')
+    await skills.reviewNow(agent)
+    const suggestion = (await source.read<SkillSuggestion[]>('suggestions'))[0]!
+    // A task that stops reporting settles only when the draft deadline aborts it.
+    runTask.mockImplementation((_root, signal: AbortSignal) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+    }))
+    await skills.draft(source, join(directory, 'workspace'), { suggestionId: suggestion.id })
+    await vi.advanceTimersByTimeAsync(16 * 60 * 1000)
+    await vi.waitFor(async () => {
+      const after = (await source.read<SkillSuggestion[]>('suggestions')).find(entry => entry.id === suggestion.id)!
+      expect(after.status).toBe('pending')
+      expect(after.lastError).toBe('skill draft did not finish within 15 minutes')
+    })
+    stop()
   })
 })
 

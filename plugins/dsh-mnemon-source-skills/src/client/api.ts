@@ -62,6 +62,7 @@ export interface SkillsPageClient {
   discardDraft(id: string): Promise<SkillDraft>
   /** Attach a baseline run to the draft it is compared with. */
   linkRun(draftId: string, runId: string): Promise<void>
+  cancelRun(id: string): Promise<BacktestRun>
 
   /** The model each piece of model work follows: the two global picks and their per-item overrides. */
   draftPreferences(): Promise<DraftPreferencesView>
@@ -88,7 +89,7 @@ export interface SkillsPageClient {
 
   /** Whether the Host offers a task Agent for this model work. */
   canAssist(operation: 'skill-draft' | 'skill-backtest' | 'skill-derive-cases' | 'skill-review-now'): boolean
-  generateDraft(input: { suggestionId?: string; draftId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; provider?: string; model?: string }): Promise<{ started: true }>
+  generateDraft(input: { suggestionId?: string; draftId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; backtest?: boolean; provider?: string; model?: string }): Promise<{ started: true }>
   backtest(input: { skillName: string; target: RunTarget; caseIds?: string[]; provider?: string; model?: string }): Promise<{ runId: string }>
   deriveCases(input: { trajectoryId: string; skillName: string; steps?: number[] }): Promise<{ added: EvalCase[]; skipped: number }>
   reviewNow(): Promise<ReviewRecordResult>
@@ -98,7 +99,7 @@ function json(value: unknown): MemoryJsonValue {
   return JSON.parse(JSON.stringify(value ?? null)) as MemoryJsonValue
 }
 
-const CONFLICT = /revision conflict|changed since it was read; reload/u
+const CONFLICT = /revision conflict|Skills Source changed since it was read; reload/u
 
 /**
  * The Source's revision moves with every background review and run, so each
@@ -164,6 +165,7 @@ export function skillsPageClient(management: MnemonSourceManagementClient): Skil
     saveCase: input => mutate('case-save', { case: input }),
     deleteCase: id => mutate('case-delete', { id }),
     updateDraft: (id, content) => mutate('draft-update', { id, content }),
+    cancelRun: id => mutate('run-cancel', { id }),
     adoptDraft: (id, root) => mutate('draft-adopt', root === undefined ? { id } : { id, root }),
     discardDraft: id => mutate('draft-discard', { id }),
     linkRun: (draftId, runId) => mutate('run-link', { draftId, runId }),

@@ -481,6 +481,8 @@ export interface SuggestionView {
 
 export interface DraftView {
   draft: SkillDraft
+  /** File changes need a new draft, never a retry with a newer revision. */
+  conflict?: 'base-changed' | 'target-exists'
   /** The file the draft replaces, as it is now. */
   base?: SkillDocument
   resolution?: SkillResolution
