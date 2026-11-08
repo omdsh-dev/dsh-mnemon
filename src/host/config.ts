@@ -82,6 +82,7 @@ export const SkillsConfig: z<Partial<ResolvedSkillsConfig>, ResolvedSkillsConfig
   allowUpdate: z.boolean().default(DEFAULT_SKILLS_CONFIG.allowUpdate),
   targetScope: z.union(['storage', 'user', 'project'] as const).default(DEFAULT_SKILLS_CONFIG.targetScope),
   autoBacktest: z.boolean().default(DEFAULT_SKILLS_CONFIG.autoBacktest),
+  autoAdopt: z.boolean().default(DEFAULT_SKILLS_CONFIG.autoAdopt),
   draftMaxTokens: z.number().step(1).min(128).max(131_072).default(DEFAULT_SKILLS_CONFIG.draftMaxTokens),
   draftRetryMaxTokens: z.number().step(1).min(128).max(131_072).default(DEFAULT_SKILLS_CONFIG.draftRetryMaxTokens),
   hints: z.boolean().default(DEFAULT_SKILLS_CONFIG.hints),

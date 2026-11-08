@@ -163,9 +163,11 @@ export function apply(rawContext: unknown, rawConfig: MnemonConfig | LiveHostCon
   const skills = new SkillEvolution({
     settings: () => skillSettings.get(),
     source: agent => skillsSourceFor(runtime, agent),
+    taskRoute: workspace => lifecycle.skillTaskRoute(workspace),
     runTask: (workspaceRoot, signal, operation, route) => lifecycle.runSkillTask(workspaceRoot, signal, operation, route),
     skillTask: (parent, label, prompt, schema, persona, signal, _route, maxTokens) => coordinator.skillTask(parent, label, prompt, schema, persona, signal, taskRoute(parent), maxTokens),
   })
+  ctx.effect(() => hostSettings.onUpdated(() => skills.settingsChanged()), 'dsh-mnemon: automatic skill adoption settings')
   lifecycle.useSkillEvolution(skills)
   // Registered before the lifecycle root so teardown runs the other way round:
   // the timer stops first, and only then does the runtime it reads go away.

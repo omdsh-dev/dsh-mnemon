@@ -197,6 +197,7 @@ export interface SkillSuggestion {
   status: SuggestionStatus
   draftId?: string
   lastError?: string
+  autoAdoption?: AutoAdoptionEvent[]
   createdAt: string
   updatedAt: string
   expiresAt: string
@@ -298,6 +299,8 @@ export interface CaseResult {
   error?: string
   /** Kept under verdict=error so older readers also exclude it from scores. */
   unmeasuredReason?: 'requires-vision'
+  /** Every expected judge check was explicitly returned; absent on older runs. */
+  fullyGraded?: boolean
 }
 
 export type RunStatus = 'running' | 'completed' | 'failed' | 'interrupted'
@@ -309,6 +312,9 @@ export interface BacktestRun {
   status: RunStatus
   progress: { done: number; total: number }
   caseIds: string[]
+  /** Source-verified case inputs at start; absent on older runs. */
+  casesHash?: string
+  model?: ModelRoute & { reasoningEffort?: string }
   results: CaseResult[]
   /** Over the graded cases; absent when none could be graded. */
   passRate?: number
@@ -336,6 +342,7 @@ export interface ReviewLogEntry {
   error?: string
   /** The conversation turn the reviewed window ended with. */
   turn?: number
+  autoAdoptions?: Array<AutoAdoptionEvent & { suggestionId: string; skillName: string }>
   /** The suggestions this review created or strengthened. */
   suggestionIds?: string[]
 }
@@ -442,6 +449,8 @@ export interface ReviewRecordResult {
   reviewId: string
   trajectoryId?: string
   suggestionIds: string[]
+  /** Newly inserted ids only; older Sources omit this capability. */
+  createdSuggestionIds?: string[]
   inserted: number
   updated: number
   casesAdded: number
@@ -617,3 +626,25 @@ export interface MarketInstall {
   files: number
   installedAt: string
 }
+
+
+export const AUTO_ADOPTION_STAGES = ['queued', 'drafting', 'backtesting', 'rewriting', 'adopted', 'paused', 'review'] as const
+export const AUTO_ADOPTION_REASONS = ['disabled', 'no-cases', 'case-limit', 'unmeasured', 'regressed', 'changed', 'failed', 'queue-full', 'model-unavailable', 'interrupted'] as const
+export interface AutoAdoptionEvent {
+  at: string
+  stage: typeof AUTO_ADOPTION_STAGES[number]
+  attempt: number
+  reason?: typeof AUTO_ADOPTION_REASONS[number]
+  detail?: string
+  baselineScore?: number
+  draftScore?: number
+}
+export type DraftExpectation = { id: string; hash: string } | null
+export interface AutomaticAdoption {
+  attempt: number
+  draftHash: string
+  baselineRunId: string
+  draftRunId: string
+  casesHash: string
+}
+export { skillCaseSignature, compareAutomaticSkillRuns } from './auto-adoption.ts'

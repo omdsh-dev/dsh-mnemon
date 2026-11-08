@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type JSX } from 'react'
 import { Button, DiffBlock, IconSparkleRegular, SegmentedControl, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { appearanceClass, SelectField } from 'dsh-mnemon/client'
-import type { BacktestRun, DraftView, ModelRoute, SkillDraft, SkillRootKind, SkillSuggestion, SuggestionStatus, SuggestionView, Trajectory } from '../contracts.ts'
+import type { AutoAdoptionEvent, BacktestRun, DraftView, ModelRoute, SkillDraft, SkillRootKind, SkillSuggestion, SuggestionStatus, SuggestionView, Trajectory } from '../contracts.ts'
 import { modelOptionPick, modelOptionValue, useModelChoice } from './model-choice.tsx'
 import { css, points, relative, stamp, useT } from './presentation.ts'
 import { ActionTag, Busy, Clamp, Confirm, diffLabels, Empty, Fold, MoreList, MoreMenu, SkillMarkdown, StatusTag, StepTimeline, useLink } from './shared.tsx'
@@ -227,6 +227,7 @@ function SuggestionDetail(props: { context: SkillsPageContext; id: string; model
     {suggestion.rationale !== undefined && <Clamp text={suggestion.rationale} />}
     {suggestion.action === 'update' && view.skill === undefined && <p className={css.skWarn}>{t(view.resolution === 'origin-unavailable' ? 'evolution.originUnavailable' : 'evolution.skillGone')}</p>}
     {suggestion.action === 'update' && view.skill !== undefined && !view.hashCurrent && suggestion.status === 'pending' && <p className={css.skWarn}>{t('evolution.skillChanged')}</p>}
+    {suggestion.autoAdoption !== undefined && suggestion.autoAdoption.length > 0 && <AutoAdoptionHistory events={suggestion.autoAdoption} />}
     {suggestion.status === 'drafting' && <Busy label={t('evolution.drafting')} />}
     {suggestion.lastError !== undefined && suggestion.status === 'pending' && <p className={css.inlineError}>{t('evolution.draftFailed', { error: suggestion.lastError })}</p>}
     {suggestion.status === 'review' && suggestion.draftId !== undefined && <DraftReview context={context} draftId={suggestion.draftId} model={props.model ?? null} />}
@@ -398,5 +399,21 @@ function DraftReview(props: { context: SkillsPageContext; draftId: string; model
           </footer>
         </div>}
     {confirmAdopt && <Confirm title={t('draft.adoptAnyway')} body={t('draft.regressed')} confirmLabel={t('draft.adopt')} busy={busy} onClose={() => setConfirmAdopt(false)} onConfirm={() => void adopt()} />}
+  </section>
+}
+
+
+function AutoAdoptionHistory(props: { events: AutoAdoptionEvent[] }): JSX.Element {
+  const t = useT()
+  const latest = props.events[props.events.length - 1]!
+  const describe = (event: AutoAdoptionEvent) => <>
+    {t(`evolution.auto.stage.${event.stage}`)}{event.attempt > 0 ? ` · ${t('evolution.auto.attempt', { count: event.attempt })}` : ''}
+    {event.reason === undefined ? '' : ` · ${t(`evolution.auto.reason.${event.reason}`)}`}
+    {event.baselineScore === undefined || event.draftScore === undefined ? '' : ` · ${t('evolution.auto.scores', { baseline: points(event.baselineScore), draft: points(event.draftScore) })}`}
+    {event.detail === undefined ? '' : ` · ${event.detail}`}
+  </>
+  return <section aria-label={t('evolution.auto.title')}>
+    <p><strong>{t('evolution.auto.title')}</strong> · {describe(latest)}</p>
+    <Fold title={t('evolution.auto.history')}><ol>{props.events.map((event, index) => <li key={index}>{stamp(event.at)} · {describe(event)}</li>)}</ol></Fold>
   </section>
 }

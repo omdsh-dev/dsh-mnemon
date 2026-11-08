@@ -103,6 +103,23 @@ describe('Skills page', () => {
     expect((await management.read('run', { id: run.id })).value).toMatchObject({ status: 'running' })
   })
 
+  it('shows automatic adoption reasons and both scores on the retained review draft', async () => {
+    const result = await mutate('review-record', review()) as { suggestionIds: string[] }
+    const id = result.suggestionIds[0]!
+    await mutate('draft-record', { suggestionId: id, skillName: 'release-notes', content: SKILL, notes: '', changes: [], guidance: [] })
+    await mutate('auto-adoption-record', { id, stage: 'rewriting', attempt: 1, reason: 'regressed', baselineScore: 1, draftScore: 0.5 })
+    await mutate('auto-adoption-record', { id, stage: 'review', attempt: 3, reason: 'regressed', baselineScore: 1, draftScore: 0.5 })
+    page({ seed: `suggestion:${id}`, nonce: 1 })
+    const panel = await screen.findByRole('region', { name: t('evolution.auto.title') })
+    expect(panel.textContent).toContain(t('evolution.auto.stage.review'))
+    expect(panel.textContent).toContain('Baseline 100 / draft 50')
+    expect(panel.textContent).toContain('Attempt 3')
+    fireEvent.click(within(panel).getByRole('button', { name: t('evolution.auto.history') }))
+    expect(panel.textContent).toContain('Attempt 1')
+    expect(panel.textContent).toContain(t('evolution.auto.reason.regressed'))
+    expect(await screen.findByRole('button', { name: t('draft.adopt') })).not.toBeNull()
+  })
+
   it('shows stale-file recovery and regenerates with backtests without overwriting the current file', async () => {
     const draft = await mutate('draft-record', { skillName: 'release-notes', content: SKILL, notes: '', changes: [], guidance: [] }) as { id: string }
     writeFileSync(skillPath(), SKILL + '\nKeep this new instruction.\n')

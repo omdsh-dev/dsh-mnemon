@@ -158,7 +158,7 @@ describe('skill evolution in the Host', () => {
       return { structured: value }
     })
     const runTask = vi.fn(async (_root: string | undefined, _signal: AbortSignal, operation: (task: HostAgent) => Promise<unknown>) => operation(agent))
-    const host = { settings: () => config, source: () => source, runTask: runTask as never, skillTask, warn: vi.fn() }
+    const host = { settings: () => config, source: () => source, taskRoute: (): { provider: string; model: string; reasoningEffort?: string } | undefined => ({ provider: 'test-provider', model: 'test-model', reasoningEffort: 'high' }), runTask: runTask as never, skillTask, warn: vi.fn() }
     return { skills: new SkillEvolution(host), skillTask, runTask, host }
   }
 
@@ -470,6 +470,184 @@ describe('skill evolution in the Host', () => {
     expect(reviews.map(review => review.outcome)).toEqual(['error', 'error', 'error'])
     expect(reviews[0]!.error).toBe('model unavailable')
     expect(skills.pending('session-1')!.turns).toBe(3)
+  })
+
+  function automaticHarness(options: { regression?: boolean; incomplete?: boolean; noCases?: boolean; create?: boolean; onDraft?: () => void } = {}) {
+    config = { ...config, evolution: true, autoAdopt: true, autoBacktest: true, idleSeconds: 1, cooldownSeconds: 0, reviewThreshold: 1 }
+    const harness = evolution([])
+    const skillName = options.create ? 'incident-triage' : 'release-notes'
+    let drafts = 0
+    const prompts: string[] = []
+    harness.host.skillTask.mockImplementation(async (_parent, label, prompt) => {
+      if (label.includes('draft')) {
+        options.onDraft?.()
+        drafts++
+        prompts.push(prompt)
+        return { structured: { content: `---\nname: ${skillName}\ndescription: Group release notes.\n---\n\n1. Group by component. Candidate ${drafts}.\n`, notes: '', changes: ['Group by component'] } }
+      }
+      if (label.startsWith('Mnemon skill eval:')) return { structured: { steps: ['Read changelog'], answer: prompt.includes('Candidate') ? 'candidate' : 'baseline' } }
+      if (label.startsWith('Mnemon skill judge:')) return { structured: { checks: options.incomplete ? [] : [{ index: 1, pass: !options.regression || !prompt.includes('candidate'), note: 'measured' }], summary: 'Scored the simulated answer' } }
+      return { structured: {
+        outcome: 'suggest', summary: 'Group notes by component.',
+        suggestions: [{ skillName, action: options.create ? 'create' : 'update', summary: 'Group release notes by component.', confidence: 0.95, steps: [1] }],
+        cases: options.noCases ? [] : [{ skillName, title: 'Grouped notes', prompt: 'Write v2 notes', checks: [{ text: 'Grouped by component', must: true }], steps: [1] }],
+      } }
+    })
+    harness.skills.watch(agent)
+    return { ...harness, prompts, drafts: () => drafts,
+      start: async () => { await endTurn(1, 'Write release notes and group entries by component.'); await vi.advanceTimersByTimeAsync(1500) },
+      outcome: async () => { const [suggestion] = await source.read<SkillSuggestion[]>('suggestions'); return suggestion },
+    }
+  }
+
+  it('automatically adopts a fresh idle suggestion with full paired results and one frozen model', async () => {
+    const run = automaticHarness()
+    await run.start()
+    await vi.waitFor(async () => expect((await run.outcome())?.status).toBe('adopted'), { timeout: 5000 })
+    const suggestion = (await run.outcome())!
+    expect(suggestion.autoAdoption?.at(-1)).toMatchObject({ stage: 'adopted', attempt: 1, baselineScore: 1, draftScore: 1 })
+    expect(readFileSync(join(directory, 'dsh', 'skills', 'release-notes', 'SKILL.md'), 'utf8')).toContain('Candidate 1')
+    const runs = await source.read<BacktestRun[]>('runs')
+    expect(runs).toHaveLength(2)
+    expect(new Set(runs.map(entry => entry.casesHash)).size).toBe(1)
+    expect(runs.every(entry => entry.model?.provider === 'test-provider' && entry.model?.reasoningEffort === 'high')).toBe(true)
+    expect((await source.read<Array<{ autoAdoptions?: unknown[] }>>('reviews'))[0]?.autoAdoptions?.at(-1)).toMatchObject({ suggestionId: suggestion.id, stage: 'adopted' })
+    run.skills.dispose()
+  })
+
+  it('uses a no-skill baseline for creation and retains the configured user root', async () => {
+    const run = automaticHarness({ create: true })
+    await run.start()
+    await vi.waitFor(async () => expect((await run.outcome())?.status).toBe('adopted'), { timeout: 5000 })
+    expect(existsSync(join(directory, 'dsh', 'skills', 'incident-triage', 'SKILL.md'))).toBe(true)
+    expect((await source.read<BacktestRun[]>('runs')).map(entry => entry.target.kind).sort()).toEqual(['draft', 'none'])
+    run.skills.dispose()
+  })
+
+  it('does not turn a new-skill suggestion into an update when a user creates that skill while it is queued', async () => {
+    const run = automaticHarness({ create: true })
+    config = { ...config, allowUpdate: false }
+    const original = source
+    const path = join(directory, 'dsh', 'skills', 'incident-triage', 'SKILL.md')
+    const content = '---\nname: incident-triage\ndescription: Human workflow.\n---\n\nKeep this human instruction.\n'
+    source = { ...original, mutate: async (operation, input, signal) => {
+      const result = await original.mutate(operation, input, signal)
+      if (operation === 'review-record') { mkdirSync(join(path, '..'), { recursive: true }); writeFileSync(path, content) }
+      return result as never
+    } }
+    await run.start()
+    await vi.waitFor(async () => expect((await run.outcome())?.autoAdoption?.at(-1)).toMatchObject({ stage: 'review', reason: 'changed' }), { timeout: 5000 })
+    expect(run.drafts()).toBe(0)
+    expect(readFileSync(path, 'utf8')).toBe(content)
+    run.skills.dispose()
+  })
+
+  it('respects the separate create permission', async () => {
+    const run = automaticHarness({ create: true })
+    config = { ...config, allowCreate: false }
+    await run.start()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(run.drafts()).toBe(0)
+    expect(existsSync(join(directory, 'dsh', 'skills', 'incident-triage'))).toBe(false)
+    run.skills.dispose()
+  })
+
+  it.each(['vision', 'case-limit'] as const)('does not silently omit enabled cases: %s', async kind => {
+    const run = automaticHarness()
+    await source.mutate('case-save', { skillName: 'release-notes', title: kind === 'vision' ? 'Grouped notes' : 'Another case', prompt: kind === 'vision' ? 'Write v2 notes' : 'Check a different release', requiresVision: kind === 'vision', checks: [{ text: 'Grouped by component', must: true }] })
+    if (kind === 'case-limit') config = { ...config, casesPerRun: 1 }
+    await run.start()
+    await vi.waitFor(async () => expect((await run.outcome())?.autoAdoption?.at(-1)).toMatchObject({ stage: 'review', reason: kind === 'vision' ? 'unmeasured' : 'case-limit' }), { timeout: 5000 })
+    expect(run.drafts()).toBe(0)
+    run.skills.dispose()
+  })
+
+  it('respects the backtest model override independently of the draft model', async () => {
+    const run = automaticHarness()
+    await source.mutate('draft-preference', { slot: 'draft', model: { provider: 'draft-provider', model: 'draft-model' } })
+    await source.mutate('draft-preference', { slot: 'run', skillName: 'release-notes', model: { provider: 'eval-provider', model: 'eval-model' } })
+    await run.start()
+    await vi.waitFor(async () => expect((await run.outcome())?.status).toBe('adopted'), { timeout: 5000 })
+    expect(run.runTask.mock.calls.map(call => (call as unknown[])[3])).toEqual(expect.arrayContaining([{ provider: 'draft-provider', model: 'draft-model' }, { provider: 'eval-provider', model: 'eval-model' }]))
+    expect((await source.read<BacktestRun[]>('runs')).every(entry => entry.model?.model === 'eval-model')).toBe(true)
+    run.skills.dispose()
+  })
+
+  it('rewrites at most twice with the scores and retains a regressed draft for manual review', async () => {
+    const run = automaticHarness({ regression: true })
+    await run.start()
+    await vi.waitFor(async () => expect((await run.outcome())?.autoAdoption?.at(-1)).toMatchObject({ stage: 'review', attempt: 3, reason: 'regressed', baselineScore: 1, draftScore: 0 }), { timeout: 8000 })
+    expect(run.drafts()).toBe(3)
+    expect(run.prompts[1]).toContain('Baseline score: 1; previous draft score: 0')
+    expect((await run.outcome())?.status).toBe('review')
+    expect(readFileSync(join(directory, 'dsh', 'skills', 'release-notes', 'SKILL.md'), 'utf8')).not.toContain('Candidate')
+    expect(await source.read<BacktestRun[]>('runs')).toHaveLength(6)
+    run.skills.dispose()
+  })
+
+  it.each(['off', 'manual', 'disabled-backtest', 'disabled-update'] as const)('does not automatically draft when %s', async mode => {
+    const run = automaticHarness()
+    if (mode === 'off') config = { ...config, autoAdopt: false }
+    if (mode === 'disabled-backtest') config = { ...config, autoBacktest: false }
+    if (mode === 'disabled-update') config = { ...config, allowUpdate: false }
+    if (mode === 'manual') { await endTurn(1, 'Write release notes.'); await run.skills.reviewNow(agent) }
+    else await run.start()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(run.drafts()).toBe(0)
+    expect(await source.read<SkillDraft[]>('drafts')).toHaveLength(0)
+    run.skills.dispose()
+  })
+
+  it.each(['no-cases', 'unmeasured'] as const)('keeps a reason visible instead of adopting %s', async reason => {
+    const run = automaticHarness({ noCases: reason === 'no-cases', incomplete: reason === 'unmeasured' })
+    await run.start()
+    await vi.waitFor(async () => expect((await run.outcome())?.autoAdoption?.at(-1)).toMatchObject({ stage: 'review', reason }), { timeout: 5000 })
+    expect((await run.outcome())?.status).toBe(reason === 'no-cases' ? 'pending' : 'review')
+    expect(readFileSync(join(directory, 'dsh', 'skills', 'release-notes', 'SKILL.md'), 'utf8')).not.toContain('Candidate')
+    run.skills.dispose()
+  })
+
+  it('stops before recording a draft when automatic adoption is disabled during generation', async () => {
+    let skills: SkillEvolution
+    const run = automaticHarness({ onDraft: () => { config = { ...config, autoAdopt: false }; skills.settingsChanged() } })
+    skills = run.skills
+    await run.start()
+    await vi.waitFor(async () => expect((await run.outcome())?.autoAdoption?.at(-1)).toMatchObject({ stage: 'paused', reason: 'disabled' }), { timeout: 5000 })
+    expect(await source.read<SkillDraft[]>('drafts')).toHaveLength(0)
+    expect(await source.read<BacktestRun[]>('runs')).toHaveLength(0)
+    expect((await run.outcome())?.status).toBe('pending')
+    run.skills.dispose()
+  })
+
+  it('cancels non-cooperative backtests when the switch is disabled and keeps the draft reviewable', async () => {
+    const run = automaticHarness()
+    const model = run.host.skillTask.getMockImplementation()!
+    run.host.skillTask.mockImplementation(async (...args) => args[1].startsWith('Mnemon skill eval:') ? new Promise<never>(() => {}) : model(...args))
+    await run.start()
+    await vi.waitFor(async () => expect(await source.read<BacktestRun[]>('runs')).toHaveLength(2), { timeout: 5000 })
+    config = { ...config, autoAdopt: false }
+    run.skills.settingsChanged()
+    await vi.waitFor(async () => expect((await run.outcome())?.autoAdoption?.at(-1)).toMatchObject({ stage: 'paused', reason: 'disabled' }), { timeout: 5000 })
+    await vi.waitFor(async () => expect((await source.read<BacktestRun[]>('runs')).every(entry => entry.status === 'interrupted')).toBe(true))
+    expect((await run.outcome())?.status).toBe('review')
+    expect((await source.read<SkillDraft[]>('drafts'))[0]?.status).toBe('ready')
+    expect(readFileSync(join(directory, 'dsh', 'skills', 'release-notes', 'SKILL.md'), 'utf8')).not.toContain('Candidate')
+    run.skills.dispose()
+  })
+
+  it('does not sweep old suggestions or automatically process a reinforced suggestion', async () => {
+    const run = automaticHarness()
+    config = { ...config, autoAdopt: false }
+    await run.start()
+    const original = (await run.outcome())!
+    config = { ...config, autoAdopt: true }
+    run.skills.settingsChanged()
+    await endTurn(2, 'Again, group release notes by component.')
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(run.drafts()).toBe(0)
+    expect((await run.outcome())?.id).toBe(original.id)
+    expect((await run.outcome())?.status).toBe('pending')
+    run.skills.dispose()
   })
 
   it('drafts in the background, backtests draft and baseline, and adopts through the Source', async () => {

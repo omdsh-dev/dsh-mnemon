@@ -62,6 +62,7 @@ export function SkillsSettings(props: { scope: ClientSettingsScope<SkillsConfig>
   const allowCreate = useLive(saved.allowCreate, write('allowCreate'))
   const allowUpdate = useLive(saved.allowUpdate, write('allowUpdate'))
   const autoBacktest = useLive(saved.autoBacktest, write('autoBacktest'))
+  const autoAdopt = useLive(saved.autoAdopt, write('autoAdopt'))
   const hints = useLive(saved.hints, write('hints'))
   const sidebar = useLive(saved.sidebar, write('sidebar'))
   const destination = useStaged({ targetScope: saved.targetScope }, async draft => {
@@ -103,6 +104,7 @@ export function SkillsSettings(props: { scope: ClientSettingsScope<SkillsConfig>
           onDiscard={draftBudgets.discard} onApply={() => { void draftBudgets.apply() }} />
       </details>
       {evolution.value && <ToggleRow id="mnemon-skills-backtest" label={t('skills.autoBacktest')} hint={t('skills.autoBacktestHint')} checked={autoBacktest.value} disabled={disabled} onChange={autoBacktest.set} />}
+      {evolution.value && <ToggleRow id="mnemon-skills-auto-adopt" label={t('skills.autoAdopt')} hint={t('skills.autoAdoptHint')} checked={autoAdopt.value} disabled={disabled || !autoBacktest.value} onChange={autoAdopt.set} />}
       {evolution.value && <details className={css.advanced}>
         <summary>{t('skills.parameters')}<IconChevronDownOutlineRegular size={12} /></summary>
         <div className={css.fieldGrid}>
@@ -119,6 +121,6 @@ export function SkillsSettings(props: { scope: ClientSettingsScope<SkillsConfig>
       <ToggleRow id="mnemon-skills-hints" label={t('skills.hints')} hint={t('skills.hintsHint')} checked={hints.value} disabled={disabled} onChange={hints.set} />
       <ToggleRow id="mnemon-skills-sidebar" label={t('skills.sidebar')} hint={t('skills.sidebarHint')} checked={sidebar.value} disabled={disabled} onChange={sidebar.set} />
     </div>
-    <WriteFailure error={evolution.failed ?? allowCreate.failed ?? allowUpdate.failed ?? autoBacktest.failed ?? hints.failed ?? sidebar.failed} t={t} />
+    <WriteFailure error={evolution.failed ?? allowCreate.failed ?? allowUpdate.failed ?? autoBacktest.failed ?? autoAdopt.failed ?? hints.failed ?? sidebar.failed} t={t} />
   </section>
 }

@@ -1,4 +1,4 @@
-import { DEFAULT_SKILLS_POLICY, EVOLUTION_SIGNALS, type EvalCase, type EvolutionSignal, type ReviewLogEntry, type ReviewRecordInput, type ReviewRecordResult, type SkillCatalog, type SkillSuggestion, type SkillsPolicy, type Trajectory, type TrajectoryAnnotation, type TrajectorySummary } from './contracts.ts'
+import { DEFAULT_SKILLS_POLICY, EVOLUTION_SIGNALS, type AutoAdoptionEvent, type EvalCase, type EvolutionSignal, type ReviewLogEntry, type ReviewRecordInput, type ReviewRecordResult, type SkillCatalog, type SkillSuggestion, type SkillsPolicy, type Trajectory, type TrajectoryAnnotation, type TrajectorySummary } from './contracts.ts'
 import { activeSkill } from './catalog.ts'
 import { sameSuggestionSkill, skillOrigin } from './identity.ts'
 import { isSkillName } from './frontmatter.ts'
@@ -69,6 +69,15 @@ function orphanedDraft(suggestion: SkillSuggestion): boolean {
 export function expireSuggestions(ledger: LedgerFile, now: Date): boolean {
   let changed = false
   for (const suggestion of ledger.suggestions) {
+    const lastAuto = suggestion.autoAdoption?.at(-1)
+    if (lastAuto !== undefined && ['queued', 'drafting', 'backtesting', 'rewriting'].includes(lastAuto.stage)
+      && (!Number.isFinite(Date.parse(lastAuto.at)) || Date.parse(lastAuto.at) < PROCESS_STARTED_AT)) {
+      const event: AutoAdoptionEvent = { at: now.toISOString(), stage: 'paused', attempt: lastAuto.attempt, reason: 'interrupted' }
+      suggestion.autoAdoption = [...suggestion.autoAdoption!, event].slice(-16)
+      const review = ledger.reviews.find(entry => entry.id === suggestion.reviewId)
+      if (review !== undefined) review.autoAdoptions = [...(review.autoAdoptions ?? []), { ...event, suggestionId: suggestion.id, skillName: suggestion.skillName }].slice(-160)
+      changed = true
+    }
     if (suggestion.status === 'pending' && Date.parse(suggestion.expiresAt) < now.getTime()) {
       suggestion.status = 'expired'
       suggestion.updatedAt = now.toISOString()
@@ -154,6 +163,7 @@ export function admitReview(context: AdmissionContext, input: ReviewRecordInput)
   const steps = (values: readonly number[]) => [...new Set(values.filter(value => Number.isInteger(value) && stepIndexes.has(value)))].sort((a, b) => a - b)
   const skipped: ReviewRecordResult['skipped'] = []
   const allowed = (action: 'create' | 'update') => (action === 'create' ? policy.allowCreate : policy.allowUpdate) !== false
+  const createdSuggestionIds: string[] = []
   let inserted = 0
   let updated = 0
   let casesAdded = 0
@@ -228,6 +238,7 @@ export function admitReview(context: AdmissionContext, input: ReviewRecordInput)
       expiresAt: new Date(now.getTime() + policy.expiryDays * 24 * 60 * 60 * 1000).toISOString(),
     }
     ledger.suggestions.unshift(suggestion)
+    createdSuggestionIds.push(suggestion.id)
     touched.push(suggestion)
     inserted++
   }
@@ -296,7 +307,7 @@ export function admitReview(context: AdmissionContext, input: ReviewRecordInput)
   }
   ledger.reviews.unshift(log)
   const removedTrajectories = boundedTrajectories(ledger, evals)
-  return { result: { reviewId, trajectoryId, suggestionIds: touched.map(suggestion => suggestion.id), inserted, updated, casesAdded, skipped }, trajectory, removedTrajectories }
+  return { result: { reviewId, trajectoryId, suggestionIds: touched.map(suggestion => suggestion.id), createdSuggestionIds, inserted, updated, casesAdded, skipped }, trajectory, removedTrajectories }
 }
 
 export function trajectorySummary(trajectory: Trajectory): TrajectorySummary {

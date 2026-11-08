@@ -61,3 +61,5 @@ The optional `./client` entry is an ordinary DSH Client plugin. This package own
 From a source checkout, install the declared dependencies and run `pnpm verify` to check the Source's behavior, the market's parsers and archive reader, and Source-backed page interactions.
 
 [Plugin development](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/development/extensions.md) · [中文指南](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/development/extensions.md)
+
+The optional Host `skills.autoAdopt` setting is off by default. It queues only new idle-review suggestions, requires complete paired text backtests without per-case or per-check regression, retries at most two rewrites, and uses Source-owned adoption under the storage lock. Source checks the exact draft/cases/results and current file again; cancellation is checked inside queued writes. Automatic activity and manual-review reasons are visible on each suggestion. See the [Skills guide](../../docs/en/guides/skills.md#optional-automatic-adoption) for limits and the distinction from real external-action validation.
