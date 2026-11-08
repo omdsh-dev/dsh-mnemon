@@ -26,6 +26,12 @@ Each adapter is an independently published `dsh-mnemon-provider-*` package, inst
 
 The Host exposes only capabilities an adapter can honor. UI actions and Agent tools do not fabricate missing graph, related, link, browse, or deletion behavior.
 
+## Windows CLI installation
+
+Mnemon and ByteRover can be installed globally with npm or pnpm (`pnpm add -g @mnemon-dev/mnemon@latest` / `pnpm add -g byterover-cli`). ByteRover searches PATH, then `PNPM_HOME` and its `bin` child, the active `NVM_SYMLINK`, `%LOCALAPPDATA%\pnpm` and its `bin` child, and `%APPDATA%\npm`; standard home AppData directories are the fallback when those variables are missing. A native `.exe` wins over a `.cmd` in the same directory. Verified npm/pnpm shims use their actual package entry through Node with literal arguments; the knowledge directory, API key and provider capabilities retain their existing behavior.
+
+For a custom global directory unavailable to DSH, set the provider's `cliPath` to its absolute `brv.cmd` or executable path. Explicit paths remain authoritative. Arbitrary batch wrappers are rejected. See [CLI installation and discovery](./installation.md#other-ways-to-install-the-mnemon-cli) for environment checks and pnpm updates.
+
 ## Service and Memory Space fields
 
 | Provider | Workspace behavior | Service configuration on Memory Spaces' page | Instance configuration in Memory Spaces |
@@ -66,6 +72,8 @@ Smart placement builds an allowlist from the candidates selected by the user:
 Connection secrets never enter the selector prompt. `local-only` excludes every remote provider before model selection. Mnemon Native stays a local candidate while its CLI is available.
 
 ## Recall score semantics
+
+Mnemon Native `smart` recall requests verbose signals and expands the Source's candidate request to `min(50, max(20, requested * 4))` before applying its result limit. When positive vector similarities are available, those similarities are bounded to 0–1, ranked first, and used by recall quality thresholds. Results without similarity stay unscored unless marked superseded; those retain the CLI demotion and never rise above their existing score. If every similarity is missing or nonpositive, the original CLI order and scores remain available. `keyword` and `basic` keep their original commands and scores. Older CLIs that reject `--verbose` are retried once without that flag, since their default response already contains signals. This is bounded reranking of CLI candidates, not an exhaustive vector search or a calibrated probability. Ordinary recall records access to the larger candidate pool; inspection still uses `--readonly`.
 
 Hindsight final ranking scores include boosts; OpenViking similarity scores are not calibrated query confidence. Both declare `provider-native` in the manifest and driver. Memory Spaces admits their original ranking under `recallQuality.maxRankedResults` without comparing raw scores or clamping them to 1; see [recall quality policies](../reference/configuration.md#recall-quality-policies).
 

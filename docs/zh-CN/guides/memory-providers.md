@@ -28,6 +28,12 @@ Host 只暴露适配器能够兑现的能力；UI 与 Agent 工具不会伪造�
 
 <a id="服务与记忆体字段"></a>
 
+## Windows CLI 安装
+
+Mnemon 和 ByteRover 都可以通过 npm 或 pnpm 全局安装（`pnpm add -g @mnemon-dev/mnemon@latest` / `pnpm add -g byterover-cli`）。ByteRover 先检查 PATH，再检查 `PNPM_HOME` 及其 `bin` 子目录、当前 `NVM_SYMLINK`、`%LOCALAPPDATA%\pnpm` 及其 `bin` 子目录、`%APPDATA%\npm`；缺少环境变量时使用用户目录下的标准 AppData 路径。同一目录中优先选择原生 `.exe`。经过验证的 npm/pnpm 启动器通过 Node 调用实际包入口，参数按原值传递；知识目录、API Key 和 Provider 能力沿用现有行为。
+
+自定义全局目录未暴露给 DSH 时，请在 Provider 的 `cliPath` 中填写 `brv.cmd` 或可执行文件的绝对路径，显式路径仍优先。任意 batch wrapper 不会被执行。环境检查及 pnpm 更新方式见 [CLI 安装与发现](./installation.md#mnemon-cli-的其他安装方式)。
+
 ## 服务与记忆空间字段
 
 | Provider | 工作区行为 | 记忆空间页面中的服务配置 | 记忆空间中的实例配置 |
@@ -68,6 +74,8 @@ DSH 的“工作区”模式不会统一重写所有 Provider 命名空间。Mne
 连接凭据永远不会进入 selector Prompt。`local-only` 会在模型选择前排除全部远程 Provider。Mnemon CLI 可用时，Mnemon Native 始终是本地候选。
 
 ## 召回评分语义
+
+Mnemon Native 的 `smart` 召回请求详细信号，先将 Source 的候选请求扩大为 `min(50, max(20, requested * 4))`，再应用返回数量限制。有正向向量相似度时，将相似度限制在 0–1、优先排序，并用于召回质量阈值。没有相似度的结果保持无分数，但已被替代的事实保留 CLI 的降权，且不会高于其原有分数。全部相似度缺失或非正时，保留 CLI 原有顺序和分数。`keyword` 与 `basic` 保留原有命令和分数。旧 CLI 拒绝 `--verbose` 时只去掉该参数重试一次，因为这些版本的默认响应已包含信号。这是在 CLI 候选内做有界重排，不是全库向量搜索，也不代表校准概率。普通召回会记录较大候选池的访问；检查仍使用 `--readonly`。
 
 Hindsight 的最终排名分包含加权项，OpenViking 的相似度也不等于经过校准的查询置信度。两者在 manifest 和驱动中均声明 `provider-native`。Memory Spaces 按原始排名与 `recallQuality.maxRankedResults` 配额接纳，不跨 Provider 比较原始分数，也不钳制到 1；参见[召回质量策略](../reference/configuration.md#召回质量策略)。
 

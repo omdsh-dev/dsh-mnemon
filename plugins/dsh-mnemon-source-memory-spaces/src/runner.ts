@@ -65,7 +65,7 @@ function processFailureMessage(error: unknown, args: readonly string[]): string 
   if (reason === 'timeout' && command !== undefined) return detail.replace(/^mnemon /u, `mnemon ${command} `)
   if (reason !== 'launch') return detail
   const hint = process.platform === 'win32'
-    ? 'Install the official Mnemon Windows release, ensure mnemon.exe is on PATH or under %LOCALAPPDATA%\\Programs\\mnemon, or set MNEMON_CLI_PATH or mnemon.cliPath to its absolute path.'
+    ? 'Install Mnemon with npm install -g @mnemon-dev/mnemon or pnpm add -g @mnemon-dev/mnemon, or use the official Windows release. Ensure DSH can see PATH or PNPM_HOME, or set MNEMON_CLI_PATH or mnemon.cliPath to its absolute path.'
     : 'Install Mnemon and ensure "mnemon" is on PATH, or set MNEMON_CLI_PATH or mnemon.cliPath.'
   return `${detail}. ${hint}`
 }
