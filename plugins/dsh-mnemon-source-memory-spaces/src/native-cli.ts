@@ -1,9 +1,9 @@
 import { accessSync, constants, existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { createRequire } from 'node:module'
-import { dirname, join, posix, win32 } from 'node:path'
+import { dirname, isAbsolute, join, posix, resolve, win32 } from 'node:path'
 
-interface NpmManifest { name?: string; version?: string; optionalDependencies?: Record<string, string> }
+interface NpmManifest { name?: string; version?: string; bin?: string | { mnemon?: string }; optionalDependencies?: Record<string, string> }
 function manifest(path: string): NpmManifest | undefined {
   try { return JSON.parse(readFileSync(path, 'utf8')) as NpmManifest } catch { return undefined }
 }
@@ -11,6 +11,14 @@ function samePath(left: string, right: string): boolean {
   try { return realpathSync(left) === realpathSync(right) } catch { return false }
 }
 const MNEMON_NPM_PACKAGE = '@mnemon-dev/mnemon'
+
+function verifiedLauncher(path: string): string | undefined {
+  const root = dirname(dirname(path))
+  const pkg = manifest(join(root, 'package.json'))
+  const bin = typeof pkg?.bin === 'string' ? pkg.bin : pkg?.bin?.mnemon
+  if (pkg?.name !== MNEMON_NPM_PACKAGE || (pkg.bin !== undefined && (typeof bin !== 'string' || bin.replace(/^\.\//, '') !== 'bin/mnemon.js'))) return undefined
+  try { return samePath(path, join(root, 'bin/mnemon.js')) ? realpathSync(path) : undefined } catch { return undefined }
+}
 
 /** Execute JavaScript with the Host binary even when it is Electron's GUI executable. */
 export function nodeLauncherEnvironment(environment: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
@@ -23,16 +31,25 @@ export function nodeLauncherEnvironment(environment: NodeJS.ProcessEnv = process
 export function mnemonNpmLauncher(command: string): string | undefined {
   let realCommand = command
   try { realCommand = realpathSync(command) } catch {}
-  const root = dirname(dirname(realCommand))
-  if (manifest(join(root, 'package.json'))?.name === MNEMON_NPM_PACKAGE
-    && samePath(realCommand, join(root, 'bin/mnemon.js'))) return realCommand
-  // npm's Windows shim is a sibling of node_modules and cannot be spawned
-  // directly with shell:false. Validate it, then use the JavaScript launcher.
+  const direct = verifiedLauncher(realCommand)
+  if (direct !== undefined) return direct
+  // Read static targets from npm/pnpm shims, including versioned global
+  // directories and cross-drive absolute targets. Never interpret batch code.
   if (/\.cmd$/i.test(command)) {
-    const launcher = join(dirname(command), 'node_modules', MNEMON_NPM_PACKAGE, 'bin/mnemon.js')
     try {
-      if (manifest(join(dirname(dirname(launcher)), 'package.json'))?.name === MNEMON_NPM_PACKAGE
-        && existsSync(launcher) && readFileSync(command, 'utf8').replaceAll('\\', '/').includes('node_modules/@mnemon-dev/mnemon/bin/mnemon.js')) return launcher
+      const launchers = new Set<string>()
+      for (const match of readFileSync(command, 'utf8').replaceAll('\\', '/').matchAll(/"([^"\r\n]+)"/g)) {
+        let target = match[1]!
+        if (!target.endsWith('/bin/mnemon.js')) continue
+        if (/^%(?:dp0%|~dp0)\//i.test(target)) target = target.replace(/^%(?:dp0%|~dp0)\//i, '')
+        else if (!isAbsolute(target)) continue
+        if (target.includes('%')) continue
+        const launcher = verifiedLauncher(resolve(dirname(command), target))
+        // Canonicalize the package link so optional dependencies resolve from
+        // pnpm's actual virtual store, not from its public global symlink.
+        if (launcher !== undefined) launchers.add(launcher)
+      }
+      if (launchers.size === 1) return [...launchers][0]
     } catch {}
   }
   return undefined
@@ -136,6 +153,18 @@ function windowsCommonCliPaths(env: NodeJS.ProcessEnv, home: string): string[] {
   if (programFiles !== undefined && win32.isAbsolute(programFiles)) {
     candidates.push(win32.join(programFiles, 'mnemon', 'mnemon.exe'))
   }
+  const directory = (name: string): string | undefined => {
+    const value = envValue(env, name, 'win32')?.trim().replace(/^"(.*)"$/, '$1')
+    return value !== undefined && win32.isAbsolute(value) ? value : undefined
+  }
+  const pnpmHome = directory('PNPM_HOME')
+  const local = directory('LOCALAPPDATA') ?? win32.join(home, 'AppData', 'Local')
+  const roaming = directory('APPDATA') ?? win32.join(home, 'AppData', 'Roaming')
+  const globalBins = [pnpmHome, pnpmHome === undefined ? undefined : win32.join(pnpmHome, 'bin'), directory('NVM_SYMLINK'),
+    win32.join(local, 'pnpm'), win32.join(local, 'pnpm', 'bin'), win32.join(roaming, 'npm')]
+  for (const bin of globalBins) {
+    if (bin !== undefined && win32.isAbsolute(bin)) candidates.push(win32.join(bin, 'mnemon.exe'), win32.join(bin, 'mnemon.cmd'))
+  }
   return [...new Set(candidates)]
 }
 
@@ -163,7 +192,7 @@ export function findMnemonCommand(
     for (const directory of (envValue(env, 'PATH', platform) ?? '').split(paths.delimiter)) {
       if (directory === '') continue
       for (const name of names) {
-        const path = paths.join(directory, name)
+        const path = paths.join(platform === 'win32' ? directory.replace(/^"(.*)"$/, '$1') : directory, name)
         if (/\.cmd$/i.test(name) && mnemonNpmLauncher(path) === undefined) continue
         if (isExecutable(path)) return path
       }
@@ -179,6 +208,7 @@ export function findMnemonCommand(
   const fromPath = resolveCommand('mnemon')
   if (fromPath !== undefined) return fromPath
   for (const path of commonCliPaths(platform, env, home)) {
+    if (/\.cmd$/i.test(path) && mnemonNpmLauncher(path) === undefined) continue
     if (isExecutable(path)) return path
   }
   return undefined

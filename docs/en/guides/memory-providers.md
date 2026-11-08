@@ -26,6 +26,12 @@ Each adapter is an independently published `dsh-mnemon-provider-*` package, inst
 
 The Host exposes only capabilities an adapter can honor. UI actions and Agent tools do not fabricate missing graph, related, link, browse, or deletion behavior.
 
+## Windows CLI installation
+
+Mnemon and ByteRover can be installed globally with npm or pnpm (`pnpm add -g @mnemon-dev/mnemon@latest` / `pnpm add -g byterover-cli`). ByteRover searches PATH, then `PNPM_HOME` and its `bin` child, the active `NVM_SYMLINK`, `%LOCALAPPDATA%\pnpm` and its `bin` child, and `%APPDATA%\npm`; standard home AppData directories are the fallback when those variables are missing. A native `.exe` wins over a `.cmd` in the same directory. Verified npm/pnpm shims use their actual package entry through Node with literal arguments; the knowledge directory, API key and provider capabilities retain their existing behavior.
+
+For a custom global directory unavailable to DSH, set the provider's `cliPath` to its absolute `brv.cmd` or executable path. Explicit paths remain authoritative. Arbitrary batch wrappers are rejected. See [CLI installation and discovery](./installation.md#other-ways-to-install-the-mnemon-cli) for environment checks and pnpm updates.
+
 ## Service and Memory Space fields
 
 | Provider | Workspace behavior | Service configuration on Memory Spaces' page | Instance configuration in Memory Spaces |

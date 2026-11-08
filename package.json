@@ -130,6 +130,7 @@
     }
   },
   "scripts": {
+    "verify:windows-pnpm": "node --experimental-strip-types scripts/verify-windows-pnpm.mjs",
     "build": "tsdown && tsc -p tsconfig.types.json && node scripts/link-bundle-declarations.mjs",
     "prepublishOnly": "pnpm run verify",
     "lint:package": "publint --strict && attw --pack . --profile esm-only --quiet",

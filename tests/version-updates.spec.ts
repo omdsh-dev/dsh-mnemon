@@ -385,7 +385,7 @@ describe('VersionUpdateManager', () => {
     writeFileSync(shim, '@"%dp0%\\node_modules\\@mnemon-dev\\mnemon\\bin\\mnemon.js" %*')
     const manager = new VersionUpdateManager({ ...f.options, mnemonCliPath: () => shim, resolveExecutable: name => name === shim ? shim : name === 'npm' ? '/fake/npm' : undefined })
     await expect(manager.update('mnemon')).resolves.toMatchObject({ updated: true })
-    expect(f.run).toHaveBeenCalledWith(process.execPath, [f.launcher, 'update'], expect.any(Object))
+    expect(f.run).toHaveBeenCalledWith(process.execPath, [realpathSync(f.launcher), 'update'], expect.any(Object))
   })
 
   it('rejects an npm update that leaves the active CLI at the old version', async () => {
@@ -417,7 +417,7 @@ describe('VersionUpdateManager', () => {
     expect((await manager.check()).components.find(item => item.id === 'mnemon')).toMatchObject({ current: '0.2.8', installMode: 'npm', updateSupported: true, updateHint: 'npm' })
     expect((await manager.check()).components.map(item => item.id)).toEqual(['dsh-mnemon', 'mnemon'])
     await expect(manager.update('mnemon')).resolves.toMatchObject({ previousVersion: '0.2.8', currentVersion: '0.2.9', updated: true })
-    const launcher = windowsShims ? f.launcher : realpathSync(f.launcher)
+    const launcher = realpathSync(f.launcher)
     const nodeCalls = f.run.mock.calls.filter(([command]) => command === process.execPath)
       // Windows preserves an inherited environment key's original casing.
       .map(([, args, options]) => ({ args, timeoutMs: options.timeoutMs, runAsNode: options.env?.ELECTRON_RUN_AS_NODE,
