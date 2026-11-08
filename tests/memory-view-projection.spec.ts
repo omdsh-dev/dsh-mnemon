@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import * as runtime from 'dsh-mnemon-source-runtime'
 import type { RuntimeMemorySnapshot } from 'dsh-mnemon-source-runtime/contracts'
 import * as scoped from 'dsh-mnemon-strategy-scoped'
 import * as light from 'dsh-mnemon-strategy-light-context'
@@ -11,6 +13,32 @@ async function fixture() { const value = await compositionFixture(); fixtures.pu
 afterEach(async () => { vi.useRealTimers(); for (const value of fixtures.splice(0)) await value.dispose() })
 
 describe('LLM View publication boundary', () => {
+  it('omits every Runtime instance from child presentation while retaining other Sources and authority', async () => {
+    const f = await fixture()
+    await f.mount(runtime, { instanceId: 'extra-runtime', config: { dataDir: join(f.root, 'extra-runtime') } })
+    await f.mount(scoped, { instanceId: 'scoped', config: { sourceKeys: [
+      'source:mnemon-source-runtime', 'source:extra-runtime', 'source:mnemon-source-documents', 'source:mnemon-source-memory-spaces',
+    ] } })
+    await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'user', content: 'Synthetic profile preference.' })
+    await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: 'Synthetic working memory.' })
+    const turn = await f.graph.composableTurns.beginTurn('filtered:1', { storage: 'custom', workspaceId: f.workspace })
+    const viewBefore = structuredClone(turn.view)
+    const root = modelMemoryWake(f.graph, turn)
+    expect(root.sections.filter(section => section.layerId === 'runtime')).toHaveLength(2)
+    const child = modelMemoryWake(f.graph, turn, false)
+    expect(child.text).not.toContain('Synthetic profile preference.')
+    expect(child.text).not.toContain('Synthetic working memory.')
+    expect(child.sections).toEqual(root.sections.filter(section => section.layerId !== 'runtime'))
+    expect(child.sections.length).toBeGreaterThan(0)
+    expect(child.text).toContain('mnemon_runtime_memory')
+    expect(child.text).toContain('source:extra-runtime/mutate')
+    expect(child.text).toContain('mnemon_document_search')
+    expect(child.viewId).toBe(root.viewId)
+    expect(child.viewDigest).toBe(root.viewDigest)
+    expect(turn.view).toEqual(viewBefore)
+    expect(modelMemoryWake(f.graph, turn)).toEqual(root)
+    f.graph.composableTurns.endTurn(turn.turnId)
+  })
   it('describes default projections as bounded when metadata clips a store within both byte limits', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date('2026-09-15T08:00:00.000Z'))

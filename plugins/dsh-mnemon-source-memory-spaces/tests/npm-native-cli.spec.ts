@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveMemorySpacesConfig } from '../src/config.ts'
 import { createRunner } from '../src/runner.ts'
 import type { ProcessRunner } from '../src/providers/process.ts'
+import { mnemonNpmLauncher } from '../src/native-cli.ts'
 
 const temporary: string[] = []
 afterEach(() => {
@@ -24,7 +25,7 @@ function npmFixture(nested = false) {
   const binary = join(nativeRoot, 'bin', process.platform === 'win32' ? 'mnemon.exe' : 'mnemon')
   const launcher = join(packageRoot, 'bin', 'mnemon.js')
   const shim = join(root, 'mnemon.cmd')
-  const metadata = { name, version: '0.2.9', type: 'module', optionalDependencies: { [alias]: `npm:${name}@0.2.9-${target}` } }
+  const metadata = { name, version: '0.2.9', type: 'module', bin: { mnemon: 'bin/mnemon.js' }, optionalDependencies: { [alias]: `npm:${name}@0.2.9-${target}` } }
   mkdirSync(join(packageRoot, 'bin'), { recursive: true })
   mkdirSync(join(nativeRoot, 'bin'), { recursive: true })
   writeFileSync(join(packageRoot, 'package.json'), JSON.stringify(metadata))
@@ -45,6 +46,37 @@ child.on('exit', code => { process.exitCode = code ?? 1 });\n`)
 }
 
 describe('npm native CLI in desktop Hosts', () => {
+  it.each(['global/5', 'global/6', '.tools/mnemon/0.2.9', 'absolute'])('resolves a pnpm %s shim through its real package and preserves direct native execution', async layout => {
+    const f = npmFixture()
+    const store = join(f.root, 'store', 'node_modules')
+    const packageRoot = join(store, '@mnemon-dev', 'mnemon')
+    const nativeRoot = join(store, `@mnemon-dev/mnemon-${process.platform}-${process.arch}`)
+    mkdirSync(join(store, '@mnemon-dev'), { recursive: true })
+    renameSync(f.packageRoot, packageRoot)
+    renameSync(f.nativeRoot, nativeRoot)
+    const publicRoot = join(f.root, layout === 'absolute' ? 'global/5' : layout, 'node_modules', '@mnemon-dev', 'mnemon')
+    mkdirSync(join(publicRoot, '..'), { recursive: true })
+    symlinkSync(packageRoot, publicRoot, 'junction')
+    const target = layout === 'absolute' ? join(publicRoot, 'bin/mnemon.js') : `%~dp0\\${layout}/node_modules/@mnemon-dev/mnemon/bin/mnemon.js`
+    writeFileSync(f.shim, `@"${target}" %*`)
+    const launcher = join(packageRoot, 'bin/mnemon.js')
+    expect(mnemonNpmLauncher(f.shim)).toBe(launcher)
+    const runner = createRunner(resolveMemorySpacesConfig({ cliPath: f.shim, dataDir: f.root }))
+    expect(await runner.runJson([f.probe, 'pnpm & literal %PATH%'], { globalFlags: false })).toMatchObject({ parent: process.pid, args: ['pnpm & literal %PATH%'] })
+    const run = vi.fn<ProcessRunner>(async () => ({ stdout: 'updated', stderr: '', exitCode: 0 }))
+    await createRunner(resolveMemorySpacesConfig({ cliPath: f.shim, dataDir: f.root }), run).runText(['update'], { globalFlags: false })
+    expect(run).toHaveBeenCalledWith(process.execPath, [launcher, 'update'], expect.anything())
+  })
+
+  it.each(['wrong-bin', 'lookalike', 'dynamic-target'])('rejects a %s launcher without interpreting its batch content', reason => {
+    const f = npmFixture()
+    if (reason === 'wrong-bin') writeFileSync(join(f.packageRoot, 'package.json'), JSON.stringify({ ...f.metadata, bin: { mnemon: 'bin/other.js' } }))
+    else writeFileSync(f.shim, reason === 'lookalike'
+      ? '@"%dp0%\\node_modules\\@mnemon-dev\\mnemon\\bin\\mnemon.jsx" %*'
+      : '@"%OTHER_HOME%\\node_modules\\@mnemon-dev\\mnemon\\bin\\mnemon.js" %*')
+    expect(mnemonNpmLauncher(f.shim)).toBeUndefined()
+  })
+
   it.each([false, true])('runs the native child directly instead of a wrapper that can open a console (nested: %s)', async nested => {
     const f = npmFixture(nested)
     vi.stubEnv('MNEMON_EMBED_PROTOCOL', 'ollama')

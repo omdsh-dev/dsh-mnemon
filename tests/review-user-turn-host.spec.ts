@@ -122,10 +122,11 @@ it.each([
           if (value.action === 'created') documentId = value.document?.id
         } catch { /* Search results are not receipts. */ }
       }
-      // The window holds this request from the delegated prompt on; the next tool round overflows it.
+      // Force the next tool round to retain only the system prompt and final
+      // tool result. A child now also receives a user-role memory snapshot;
+      // the fixture must evict that snapshot as well as the delegated prompt.
       const messages = options.messages
-      const prompt = promptIndex(messages)
-      if (truncates) ollama.numCtx = tokens(messages[0]!) + messages.slice(prompt).reduce((sum, message) => sum + tokens(message), 0)
+      if (truncates) ollama.numCtx = tokens(messages[0]!) + 1
       return { name: 'mnemon_document_search', args: { query: 'Review checkpoint storage', limit: 1 } }
     }
     return { name: terminal, args: { requestId, result: {
@@ -171,7 +172,8 @@ it.each([
       // A server that keeps the prompt never refuses, so every request stays as it was.
       expect(child.map(request => [request.userQuery, request.promptKept, request.continuations])).toEqual([[true, true, 0], [true, true, 0], [true, true, 0], [true, true, 0]])
     }
-    expect(child.slice(0, 4).map(request => request.last)).not.toContain('dsh-mnemon')
+    expect(child[0]!.last).toBe('dsh-mnemon') // The first-step memory snapshot, not a continuation.
+    expect(child.slice(1, 4).map(request => request.last)).not.toContain('dsh-mnemon')
     expect(ollama.requests.filter(request => request.session === 'parent').map(request => request.continuations)).toEqual([0])
   } finally {
     stop?.()

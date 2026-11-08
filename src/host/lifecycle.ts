@@ -35,7 +35,7 @@ import type { SkillEvolution } from './skill-evolution.ts'
 import { IdleReviewWatermarkStore } from './idle-review-watermark.ts'
 import { activationOwned, isCreatingChild, isRootAgent, isTaskRecord, rootAgents, titleTask } from './agent-compat.ts'
 
-type AgentRuntimeSource = Pick<MnemonAgentRuntimeSource, 'forAgent' | 'executions' | 'onChanged'>
+type AgentRuntimeSource = Pick<MnemonAgentRuntimeSource, 'config' | 'forAgent' | 'executions' | 'onChanged'>
 
 interface HostDefaultModelService {
   currentSelection(): { provider: string; model: string; reasoningEffort?: string }
@@ -1453,14 +1453,13 @@ export class MnemonLifecycle {
             return decision
           }
           if (openAgentTurn(agent) !== payload.turn) return decision
-          const recovering = memory.current?.turn !== payload.turn
           await memory.begin(payload.turn, payload.signal)
-          // A recovered child pin needs the same actionable ids as its View;
-          // keep ordinary delegated context unchanged when assembly ran.
+          // Assembly prepares authority and guidance, not the projected memory
+          // body. Child presentation respects the Runtime inheritance preference.
           const pinned = memory.current
-          if (recovering && payload.step === 1 && this.config.lifecycleEnabled && pinned !== undefined) {
-            const wake = modelMemoryWake(pinned.graph, pinned.context)
-            if (wake.text.trim() !== '') return { kind: 'enter', messages: [...decision.messages, createPluginMessage(wake.text, 'recall')] }
+          if (payload.step === 1 && this.config.lifecycleEnabled && pinned !== undefined) {
+            const wake = memory.modelWake()
+            if (wake !== undefined && wake.text.trim() !== '') return { kind: 'enter', messages: [...decision.messages, createPluginMessage(wake.text, 'recall')] }
           }
           return decision
         }) as never))

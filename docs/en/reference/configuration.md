@@ -42,6 +42,7 @@ mnemon:
   timeoutMs: 10000
   defaultRecallLimit: 10
   runtimeMemory:
+    inheritToSubagents: false
     memoryLimitBytes: 10240
     userLimitBytes: 4096
     maintenanceMaxTokens: 8192
@@ -144,6 +145,12 @@ mnemon:
 Every value is saved under the `mnemon` entry and applies live. The UI's `mnemon-ui` settings scope is stored as `conversationInteraction`, its `mnemon-view` scope as `memoryView`, and its `mnemon-skills` scope as `skills`. The storage root switches atomically only after the new runtime graph initializes successfully.
 
 Git sync's default author follows the Host's Git identity as resolved in `state/sync/git`; a custom author in `state/sync-git.json` overrides it. The legacy placeholder pair also follows Git, with the placeholder used only for unconfigured fields. See [Git repository sync](../guides/operations.md#git-repository-sync) for precedence and recovery after an author rejection.
+
+### Subagent Runtime inheritance
+
+In **Plugins → dsh-mnemon → Runtime memory**, **Automatically share Runtime memory with subagents** controls automatic injection of the user profile and working memory. It is **off by default**, including for existing configurations without this field. Enable it with the switch or `runtimeMemory.inheritToSubagents: true`.
+
+The setting applies to newly created subagents. Each child captures the current choice at dispatch and keeps it across live settings changes, alongside its delegated memory View. When enabled, the captured Runtime projection is appended once per accepted turn, including native and PTC tool modes; later tool steps do not append another copy or rewrite the request prefix. The setting filters Runtime projections from all Runtime Source instances only. Parent task context, explicit memory-tool access, other Source projections and required background maintenance inputs retain their existing behavior. It does not remove content already included in a task or its conversation history.
 
 ### Runtime Memory budgets
 
@@ -314,13 +321,16 @@ config.cliPath
               first GOPATH/bin/mnemon.exe, or ~/go/bin/mnemon.exe
               %LOCALAPPDATA%/Programs/mnemon/mnemon.exe
               %ProgramFiles%/mnemon/mnemon.exe
+              PNPM_HOME, PNPM_HOME/bin, NVM_SYMLINK
+              %LOCALAPPDATA%/pnpm, %LOCALAPPDATA%/pnpm/bin, %APPDATA%/npm
+              (mnemon.exe or verified mnemon.cmd in these global bin directories)
   -> Unix: ~/.local/bin/mnemon
            /opt/homebrew/bin/mnemon
            /usr/local/bin/mnemon
            /usr/bin/mnemon
 ```
 
-An explicit `cliPath` accepts either a path or a command name on PATH (for example, `mnemon`). Status checks and execution share the discovery rules and recognize CLI installation/removal on recheck without restarting DSH. If the explicitly configured command is unavailable, calls report a launch error rather than silently selecting another CLI. Windows discovery accepts regular `.exe` files and the verified official npm `mnemon.cmd` launcher. npm launchers are invoked through Node without a shell; arbitrary `.cmd` and `.bat` wrappers remain excluded. After migrating to npm, update any explicit CLI override to the npm launcher and verify the executable path in **Status → Check versions**.
+An explicit `cliPath` accepts either a path or a command name on PATH (for example, `mnemon`). Status checks and execution share the discovery rules and recognize CLI installation/removal on recheck without restarting DSH. If the explicitly configured command is unavailable, calls report a launch error rather than silently selecting another CLI. Windows discovery accepts regular `.exe` files and the verified official npm/pnpm `mnemon.cmd` launcher. Package launchers are invoked through Node without a shell; arbitrary `.cmd` and `.bat` wrappers remain excluded. After migrating to npm, update any explicit CLI override to the npm launcher and verify the executable path in **Status → Check versions**.
 
 ## Compatibility Store Hint Precedence
 

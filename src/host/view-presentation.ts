@@ -26,9 +26,16 @@ const NAMED_SOURCE_TYPES = [...new Set([...Object.keys(ROUTE_TOOLS), ...Object.k
 
 /** Use a short availability list only where the Host has the matching named binding.
  * Unbound external operations retain exact ids and schemas in the generic envelope. */
-export function modelMemoryWake(graph: MnemonRuntimeGraph, turn: ComposableMemoryTurn) {
+export function modelMemoryWake(graph: MnemonRuntimeGraph, turn: ComposableMemoryTurn, includeRuntime = true) {
   const generation = graph.memoryComposition.generation(turn.view.runtimeGeneration)
   if (generation === undefined) throw new Error('Cannot present an unpinned Memory generation')
+  if (!includeRuntime) {
+    const runtimeSources = new Set(generation.sourceInstances().filter(source => source.sourceTypeId === 'runtime').map(source => source.sourceInstanceKey))
+    // A presentation filter, not an authority change: retain the captured View,
+    // other Sources, and all explicit task/tool inputs. Identify actual Sources,
+    // including additional Runtime instances, rather than trusting fragment text.
+    return createMemoryWake({ ...turn.view, projection: turn.view.projection.filter(fragment => !runtimeSources.has(fragment.sourceInstanceKey)) }, memoryWakeBindings(generation, turn.view))
+  }
   return graph.composableTurns.memoryWake(turn.view.id, memoryWakeBindings(generation, turn.view))
 }
 

@@ -229,6 +229,8 @@ export interface CustomPackConfig {
 }
 
 export interface RuntimeMemoryConfig {
+  /** Automatically project Runtime memory into newly created child Agents; off by default. */
+  inheritToSubagents?: boolean
   /** Maximum UTF-8 bytes projected into MEMORY.md. */
   memoryLimitBytes?: number
   /** Maximum UTF-8 bytes projected into USER.md. */
@@ -238,6 +240,7 @@ export interface RuntimeMemoryConfig {
 }
 
 export interface ResolvedRuntimeMemoryConfig {
+  inheritToSubagents: boolean
   memoryLimitBytes: number
   userLimitBytes: number
   maintenanceMaxTokens: number

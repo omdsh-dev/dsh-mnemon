@@ -48,8 +48,8 @@ class ScriptedAdapter extends LlmAdapter {
   }
 }
 
-async function fixture(mode: Mode, start = true) {
-  const f = await compositionFixture({ idleReview: { enabled: false } })
+async function fixture(mode: Mode, start = true, inheritToSubagents?: boolean) {
+  const f = await compositionFixture({ idleReview: { enabled: false }, ...(inheritToSubagents === undefined ? {} : { runtimeMemory: { inheritToSubagents } }) })
   // Both named tools and unbound, exact Route/Action ids must reach the model.
   await f.mount(documents, { instanceId: 'extra-documents', config: { dataDir: join(f.root, 'extra-documents') } })
   await f.mount(runtime, { instanceId: 'extra-runtime', config: { dataDir: join(f.root, 'extra-runtime') } })
@@ -122,8 +122,9 @@ async function fixture(mode: Mode, start = true) {
   } catch (error) { await close(); throw error }
 }
 
-function expectWake(text: string) {
-  expect(text).toContain('Synthetic turn-view retained fact.')
+function expectWake(text: string, inheritRuntime = true) {
+  if (inheritRuntime) expect(text).toContain('Synthetic turn-view retained fact.')
+  else expect(text).not.toContain('Synthetic turn-view retained fact.')
   expect(text).toContain('MNEMON VIEW TOOLS (available in this View)')
   expect(text).toContain('MNEMON VIEW ROUTES (quoted routing data;')
   expect(text).toContain('source:extra-documents/search')
@@ -188,9 +189,9 @@ it('adopts an Agent when lifecycle registration arrives during its first prompt 
   } finally { await handle.dispose(); await f.close() }
 }, 20_000)
 
-it('pins a delegated child when prompt middleware omits later assembly listeners', async () => {
-  const f = await fixture('native')
-  f.ctx.on('system-prompt/assemble', async assembly => assembly, { prepend: true })
+it.each((['native', 'ptc'] as const).flatMap(mode => [false, true].flatMap(bypassAssembly => [undefined, false, true].map(inheritToSubagents => ({ mode, bypassAssembly, inheritToSubagents })))))('presents a child View once per turn: %j', async ({ mode, bypassAssembly, inheritToSubagents }) => {
+  const f = await fixture(mode, true, inheritToSubagents)
+  if (bypassAssembly) f.ctx.on('system-prompt/assemble', async assembly => assembly, { prepend: true })
   const parent = await f.create()
   const child = await f.ctx.agents.create({ sessionId: SessionId('turn-view-child'), parentAgent: parent.agent,
     meta: { origin: 'subagent', parentSession: parent.agent.id, cwd: f.workspace }, agentOptions: { provider: 'fixture', model: 'fixture' } })
@@ -200,11 +201,115 @@ it('pins a delegated child when prompt middleware omits later assembly listeners
       { name: 'mnemon_status', isError: false }, { name: 'mnemon_document_search', isError: false },
     ])
     expect(f.requests.map(request => request.turn)).toEqual([1, 1, 1])
-    expectWake(f.requests[0]!.text)
+    for (const request of f.requests) {
+      expectWake(request.text, inheritToSubagents === true)
+      expect(request.messages.filter(message => message.role === 'user'
+        && message.source?.kind === 'dsh-mnemon' && message.source.form === 'recall')).toHaveLength(1)
+    }
+    await f.turn(child.agent)
+    expect(f.requests.map(request => request.turn)).toEqual([1, 1, 1, 2, 2, 2])
+    for (const request of f.requests.slice(3)) {
+      expectWake(request.text, inheritToSubagents === true)
+      expect(request.messages.filter(message => message.role === 'user'
+        && message.source?.kind === 'dsh-mnemon' && message.source.form === 'recall')).toHaveLength(2)
+    }
+    expect(child.agent.session.snapshotEvents().filter(event => event.type === 'user/message'
+      && event.data.source.kind === 'dsh-mnemon' && event.data.source.form === 'recall')).toHaveLength(2)
     expect(f.graph.composableTurns.activeTurn(child.agent.id)).toBeUndefined()
     expect(f.graph.composableTurns.activeTurn(parent.agent.id)).toBeUndefined()
+    expectWake(f.lifecycle.memoryView(child.agent.id)!.memoryText, inheritToSubagents === true)
   } finally { await child.dispose(); await parent.dispose(); await f.close() }
 }, 20_000)
+
+it('captures the current inheritance choice for new children across live settings changes', async () => {
+  const f = await fixture('native')
+  const parent = await f.create()
+  const children: Awaited<ReturnType<typeof f.ctx.agents.create>>[] = []
+  const create = async (name: string) => {
+    const child = await f.ctx.agents.create({ sessionId: SessionId(name), parentAgent: parent.agent,
+      meta: { origin: 'subagent', parentSession: parent.agent.id, cwd: f.workspace }, agentOptions: { provider: 'fixture', model: 'fixture' } })
+    children.push(child)
+    return child
+  }
+  const swap = (inheritToSubagents: boolean) => f.live.swap(createRuntimeGraph(resolveConfig({ ...f.config,
+    runtimeMemory: { ...f.config.runtimeMemory, inheritToSubagents },
+  }), f.workspace, f.extensions))
+  const check = async (child: typeof children[number], expected: boolean) => {
+    const start = f.requests.length
+    await f.turn(child.agent)
+    for (const request of f.requests.slice(start)) expectWake(request.text, expected)
+    expectWake(f.lifecycle.memoryView(child.agent.id)!.memoryText, expected)
+  }
+  try {
+    const before = await create('before-toggle')
+    await check(before, false)
+    swap(true)
+    const enabled = await create('enabled-child')
+    await check(enabled, true)
+    const prefix = f.requests.at(-1)!.messages
+    await check(before, false)
+    swap(false)
+    await check(await create('disabled-child'), false)
+    await check(enabled, true)
+    expect(f.requests.at(-1)!.messages.slice(0, prefix.length)).toEqual(prefix)
+    expect(f.receipts.every(receipt => !receipt.isError)).toBe(true)
+  } finally { for (const child of children.reverse()) await child.dispose(); await parent.dispose(); await f.close() }
+}, 20_000)
+
+it('injects the captured parent View after the parent finishes and newer memory is stored', async () => {
+  const f = await fixture('native', true, true)
+  await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'user', content: 'Synthetic delegated user preference.' })
+  const parent = await f.create()
+  let child: Awaited<ReturnType<typeof f.ctx.agents.create>> | undefined
+  const stop = f.ctx.on('tools/execute', async (execution, next) => {
+    const result = await next()
+    if (execution.agent === parent.agent && execution.name === 'mnemon_status' && child === undefined) {
+      child = await f.ctx.agents.create({ sessionId: SessionId('captured-view-child'), parentAgent: parent.agent,
+        meta: { origin: 'subagent', parentSession: parent.agent.id, cwd: f.workspace }, agentOptions: { provider: 'fixture', model: 'fixture' } })
+    }
+    return result
+  })
+  try {
+    await f.turn(parent.agent)
+    expect(child).toBeDefined()
+    const capturedView = f.requests[0]!.viewId
+    await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: 'Synthetic parent-only later fact.' })
+    await f.turn(parent.agent)
+    expect(f.requests.at(-1)!.text).toContain('Synthetic parent-only later fact.')
+    await f.turn(child!.agent)
+    const childRequests = f.requests.filter(request => request.sessionId === child!.agent.id)
+    expect(childRequests).toHaveLength(3)
+    for (const request of childRequests) {
+      expectWake(request.text)
+      expect(request.text).toContain('Synthetic delegated user preference.')
+      expect(request.text).not.toContain('Synthetic parent-only later fact.')
+      expect(request.viewId).toBe(capturedView)
+    }
+  } finally { stop(); await child?.dispose(); await parent.dispose(); await f.close() }
+}, 20_000)
+
+it.each(['disabled', 'reject', 'abort'] as const)('does not inject child memory when the step is %s', async gate => {
+  const f = await fixture('native')
+  const parent = await f.create()
+  const child = await f.ctx.agents.create({ sessionId: SessionId('gated-view-child'), parentAgent: parent.agent,
+    meta: { origin: 'subagent', parentSession: parent.agent.id, cwd: f.workspace }, agentOptions: { provider: 'fixture', model: 'fixture' } })
+  if (gate === 'disabled') f.config.lifecycleEnabled = false
+  else child.agent.ctx.on('agent/pre-step', async ({ agent }, next) => {
+    if (gate === 'reject') return { kind: 'reject' }
+    agent.cancel({ kind: 'user' })
+    return next()
+  })
+  try {
+    await f.turn(child.agent)
+    if (gate === 'disabled') {
+      expect(f.requests).toHaveLength(3)
+      for (const request of f.requests) expect(request.text).not.toContain('Synthetic turn-view retained fact.')
+    } else expect(f.requests).toEqual([])
+    expect(child.agent.session.snapshotEvents().filter(event => event.type === 'user/message'
+      && event.data.source.kind === 'dsh-mnemon' && event.data.source.form === 'recall')).toHaveLength(0)
+    expect(f.graph.composableTurns.activeTurn(child.agent.id)).toBeUndefined()
+  } finally { await child.dispose(); await parent.dispose(); await f.close() }
+})
 
 it.each(['reject', 'abort'] as const)('does not create a View when a step will %s after prompt middleware replaces the assembly', async outcome => {
   const f = await fixture('native')

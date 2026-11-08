@@ -14,10 +14,10 @@ afterEach(() => {
   for (const path of temporary.splice(0)) rmSync(path, { recursive: true, force: true })
 })
 
-function fixture(local = false) {
+function fixture(local = false, prefix = '') {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'byterover npm path ')))
   temporary.push(root)
-  const packageRoot = join(root, 'node_modules', 'byterover-cli')
+  const packageRoot = join(root, prefix, 'node_modules', 'byterover-cli')
   mkdirSync(join(packageRoot, 'bin'), { recursive: true })
   writeFileSync(join(packageRoot, 'package.json'), JSON.stringify({ name: 'byterover-cli', bin: { brv: 'bin/run.js' } }))
   const launcher = join(packageRoot, 'bin', 'run.js')
@@ -25,7 +25,7 @@ function fixture(local = false) {
   const shimDirectory = local ? join(root, 'node_modules', '.bin') : root
   mkdirSync(shimDirectory, { recursive: true })
   const shim = join(shimDirectory, 'brv.cmd')
-  writeFileSync(shim, local ? '@"%dp0%\\..\\byterover-cli\\bin\\run.js" %*' : '@"%dp0%\\node_modules\\byterover-cli\\bin\\run.js" %*')
+  writeFileSync(shim, `@"%dp0%\\${relative(shimDirectory, launcher).replaceAll('/', '\\')}" %*`)
   return { root, packageRoot, launcher, shim }
 }
 
@@ -39,6 +39,33 @@ function provider(f: ReturnType<typeof fixture>, cliPath?: string) {
 // Changing the launch command or dropping the argument array breaks the real
 // child readback, including shell metacharacters, spaces, quotes and newlines.
 describe('Windows npm ByteRover launcher', () => {
+  it.each(['global/5', 'global/6', '.tools/byterover-cli/3.7.1'])('discovers pnpm %s outside PATH and runs literal query/curate arguments', async prefix => {
+    const f = fixture(false, prefix)
+    vi.stubEnv('PATH', '')
+    vi.stubEnv('PNPM_HOME', f.root)
+    Object.defineProperty(process, 'platform', { ...platform, value: 'win32' })
+    const { adapter, body } = provider(f)
+    const content = 'pnpm & | %PATH% !bang! "quoted"\nnext line'
+    expect(JSON.parse((await adapter.search(body, { query: content })).results[0]!.content).args).toEqual(['query', '--', content])
+    await adapter.remember(body, { content })
+    expect(JSON.parse(readFileSync(join(f.root, 'calls.jsonl'), 'utf8').trim().split('\n')[1]!).args).toEqual(['curate', '--', content])
+  })
+
+  it.each(['PNPM_HOME', 'PNPM_HOME/bin', 'LOCALAPPDATA', 'APPDATA', 'NVM_SYMLINK'])('uses the %s fallback with an absolute package target', location => {
+    const f = fixture()
+    const directory = join(f.root, 'fallback')
+    const suffix = location === 'PNPM_HOME/bin' ? 'bin' : location === 'LOCALAPPDATA' ? 'pnpm' : location === 'APPDATA' ? 'npm' : ''
+    const bin = join(directory, suffix)
+    mkdirSync(bin, { recursive: true })
+    writeFileSync(join(bin, 'brv.cmd'), `@"${f.launcher}" %*`)
+    Object.defineProperty(process, 'platform', { ...platform, value: 'win32' })
+    const env = { pAtH: '', [location.split('/')[0]!.toLowerCase()]: `"${directory}"` }
+    expect(resolveByteRoverInvocation('brv', ['status'], env).args).toEqual([f.launcher, 'status'])
+    writeFileSync(join(bin, 'brv.exe'), 'native fixture')
+    expect(resolveByteRoverInvocation('brv', ['status'], env).command).toBe(join(bin, 'brv.exe'))
+    expect(resolveByteRoverInvocation(f.shim, ['status'], env).args).toEqual([f.launcher, 'status'])
+  })
+
   it.each(['default', 'bare-cmd', 'explicit'] as const)('runs the %s npm shim through Node with literal query and curate arguments', async mode => {
     const f = fixture()
     vi.stubEnv('PATH', f.root)
@@ -126,14 +153,14 @@ describe('Windows npm ByteRover launcher', () => {
     await expect(adapter.status(body)).resolves.toMatchObject({ healthy: false, error: expect.stringContaining('npm install -g byterover-cli') })
   })
 
-  it('preserves a custom executable and its argument boundaries on Windows', async () => {
+  it.each([process.execPath, 'brv.exe'])('preserves the explicit executable %s and its argument boundaries on Windows', async command => {
     const f = fixture()
     Object.defineProperty(process, 'platform', { ...platform, value: 'win32' })
-    const { authority, body } = createMemorySpaceProviderFixture(descriptor, { cliPath: process.execPath }, { dataDir: f.root })
+    const { authority, body } = createMemorySpaceProviderFixture(descriptor, { cliPath: command }, { dataDir: f.root })
     const calls: Array<{ command: string; args: readonly string[] }> = []
     const adapter = new ByteRoverProvider(authority, { process: async (command, args) => { calls.push({ command, args }); return { stdout: '', stderr: '', exitCode: 0 } } })
     await adapter.search(body, { query: 'literal & argument' })
-    expect(calls[0]).toEqual({ command: process.execPath, args: ['query', '--', 'literal & argument'] })
+    expect(calls[0]).toEqual({ command, args: ['query', '--', 'literal & argument'] })
   })
 
   it('keeps non-Windows commands on the existing direct process route', async () => {

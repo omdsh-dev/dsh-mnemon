@@ -204,23 +204,69 @@ export class MnemonNativeProvider implements MemoryProviderAdapter {
 
   async search(body: MemorySpace, request: SearchRequest, signal?: AbortSignal): Promise<ProviderSearchResult> {
     const mode = request.mode ?? 'smart'
+    const semantic = mode === 'smart'
+    const limit = request.limit ?? this.config.defaultRecallLimit
+    // The CLI truncates by hybrid score. Keep a bounded wider pool before
+    // applying the similarity signal consumed by the Source's quality policy.
+    const candidateLimit = semantic ? Math.max(limit, Math.min(50, Math.max(20, limit * 4))) : limit
     // An inspection reads a snapshot: no access counts, no row in the store's operation log.
     const readonly = request.inspect === true ? ['--readonly'] : []
     const args = mode === 'keyword'
-      ? [...readonly, 'search', request.query, '--limit', String(request.limit ?? this.config.defaultRecallLimit)]
-      : [...readonly, 'recall', request.query, '--limit', String(request.limit ?? this.config.defaultRecallLimit)]
+      ? [...readonly, 'search', request.query, '--limit', String(candidateLimit)]
+      : [...readonly, 'recall', request.query, '--limit', String(candidateLimit)]
+    if (semantic) args.push('--verbose')
     if (mode === 'basic') args.push('--basic')
     if (mode !== 'keyword') {
       if (request.category !== undefined) args.push('--cat', request.category)
       if (request.source !== undefined) args.push('--source', request.source)
       if (request.intent !== undefined) args.push('--intent', request.intent)
     }
-    const payload = await this.runner.runJson(args, { ...(signal === undefined ? {} : { signal }), store: body.id })
+    const options = { ...(signal === undefined ? {} : { signal }), store: body.id }
+    let payload: JsonValue
+    try {
+      payload = await this.runner.runJson(args, options)
+    } catch (error) {
+      // Mnemon <=0.1.2 already returned the full signal-bearing response and
+      // rejects this newer flag before running a query. Do not retry I/O errors.
+      if (!semantic || signal?.aborted || !(error instanceof Error)) throw error
+      const prefix = `mnemon ${args.join(' ')} exited `
+      const detail = error.message.startsWith(prefix) ? error.message.slice(prefix.length) : error.message
+      if (!/^(?:[1-9]\d*:\s*)?(?:Error:\s*)?unknown flag: --verbose[ \t]*(?:\r?\n|$)/u.test(detail)) throw error
+      const legacyArgs = [...args]
+      legacyArgs.splice(readonly.length + 4, 1)
+      payload = await this.runner.runJson(legacyArgs, options)
+    }
     const wrapper = record(payload)
     const values = Array.isArray(payload) ? payload : Array.isArray(wrapper?.results) ? wrapper.results : []
-    const hint = text(wrapper?.hint)
+    const candidates = values.flatMap(value => {
+      const insight = normalizeInsight(value)
+      if (insight === undefined) return []
+      const item = record(value)
+      const similarity = number(record(item?.signals)?.similarity)
+      return [{ insight, similarity, superseded: item?.superseded === true }]
+    })
+    // Missing embeddings and unavailable embedding services emit absent or
+    // all-zero similarities. Preserve native order/scores in that fallback.
+    if (semantic && candidates.some(candidate => candidate.similarity !== undefined && candidate.similarity > 0)) {
+      for (const candidate of candidates) {
+        const { insight, similarity } = candidate
+        delete insight.confidence // A compact CLI label described the old hybrid score.
+        if (similarity === undefined) {
+          // Unknown relevance must not inherit an optimistic hybrid score;
+          // retain an explicit supersession demotion even without a vector.
+          if (!candidate.superseded) delete insight.score
+        } else {
+          const relevance = Math.min(1, Math.max(0, similarity))
+          // A corrected fact must retain the CLI's demotion, even when its
+          // old wording is the closest vector match to the new question.
+          insight.score = candidate.superseded ? Math.min(relevance, insight.score ?? 0) : relevance
+        }
+      }
+      candidates.sort((left, right) => (right.insight.score ?? -1) - (left.insight.score ?? -1))
+    }
+    const hint = text(wrapper?.hint) ?? text(record(wrapper?.meta)?.hint)
     return {
-      results: values.map(normalizeInsight).filter((entry): entry is Insight => entry !== undefined),
+      results: candidates.slice(0, limit).map(candidate => candidate.insight),
       ...(hint === undefined ? {} : { hint }),
     }
   }

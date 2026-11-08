@@ -47,6 +47,9 @@ jobs:
           plugins/dsh-mnemon-source-memory-spaces/tests/runner.spec.ts
           plugins/dsh-mnemon-source-memory-spaces/tests/process.spec.ts
 
+      - name: Verify real pnpm global shims outside the Desktop PATH
+        run: pnpm run verify:windows-pnpm
+
   verify-source:
     name: Verify source (Node 22.19)
     runs-on: ubuntu-latest
