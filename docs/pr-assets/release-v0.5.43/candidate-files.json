@@ -1,0 +1,1045 @@
+[
+  {
+    "name": "dsh-mnemon",
+    "version": "0.5.43",
+    "files": [
+      {
+        "file": "LICENSE",
+        "sha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/bundle.js",
+        "sha256": "187f4c22c20a9f8dab1a1efdc849799e4364de68dcaff56e53bc60696cab51eb",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/client.js",
+        "sha256": "05910198d0282a2ed0d36eded928ac5a052e5aad832c177389b98af37c174c4e",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/contracts.js",
+        "sha256": "024ad7318227336ef8816b48457b63593bc56e20bb74c6ffd59244425d23a779",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/core.js",
+        "sha256": "e2d32e8fe8c16ce90d0bcade5782feb4ce20bc9b716faa95e8c5432e768b03db",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/definitions-DU7MLBhu.js",
+        "sha256": "510cd51f4b1dfe1ffbd47ba8fb1cbbdbf87002531014c3dc462dec1a8ebcbcb2",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/extension-sdk.js",
+        "sha256": "e624d2fb2d7d8cf855418df198cda8f8e08834e78829488d2c2de67323e60827",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/index.js",
+        "sha256": "4b3bdaf741915d128f7ba3171c129d76e91e30b5046bd87ded6ff7d280df57db",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/runtime-DmL0It3P.js",
+        "sha256": "74d762eb906c2989a584df63dfe823f490f4e2a9a152ef0f310ab3a2d81985a1",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/starter-resolution-CTY14Exj.js",
+        "sha256": "fb9c5da17f7a5433ea38688d855d151bcbb1b8895d0f55a1ea0a2b25fa91adc5",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/starter.js",
+        "sha256": "b4c3c198bc48bbe67964089101e67148060b0c5e18323bccaead30302560d8db",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/strategy-configuration-CKP2kRss.js",
+        "sha256": "a06fab7d856de5689df29d29be768e1730f14eee1d6736c346240e8b27680d21",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/testing.js",
+        "sha256": "aecc89be6ddd5537f386b0a56fb285ec2bf894052fb1e27d9eb8689b26cd0bbb",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "locale/en.json",
+        "sha256": "53b4411680fd544bed77843c3356a8e115801fbc0e4f10f28226c821835b5f1d",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "package.json",
+        "sha256": "c3cf14b4580f9bd9ab2e1bfeacded6029369a39c177514f14b8022032b55561e",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "locale/zh.json",
+        "sha256": "f1f60f2c2b7ac12b52b9fb91b6ecc564798536611879ce4c3329a4f9e4bafd85",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "README.md",
+        "sha256": "b6620e6f8c7b6ef4cf0051c2914b7a45a57c026555f3e4ea51a892177b8c426d",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "README.zh-CN.md",
+        "sha256": "fe0de5e93f186aca3e39eff306c9a43560da71c202bf9bb9e4a004d07d6daabd",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "SECURITY.md",
+        "sha256": "700562eaa915d083050a30b6f58292c8ce5c06dd83fde6cd7cfadef228dd3fb1",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "THIRD_PARTY_NOTICES.md",
+        "sha256": "32ebd32c67f4316e33e4214a0504ebe6dabeb1fef00106de05e457a97cb80926",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "bin/repair-legacy-session.mjs",
+        "sha256": "2465c57aead1426a520db45e231278a0fb7d5afecb01f4c4c114b1b3814cf4eb",
+        "executableBits": "0o111"
+      },
+      {
+        "file": "lib/types/src/bundle.d.ts",
+        "sha256": "602028377ee0735110c68e0807aeea407a05b021b5c87ec66af3e4b4d83e9033",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/component-ui.d.ts",
+        "sha256": "b8b2137b5e9eab1bbcaed491ab2edbcb23e71e1d18eadf1068cb10f4efdfb800",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/host/config-values.d.ts",
+        "sha256": "d6d51c8288cf72085bd7b3194e79ffe3e2ed9675604efb3706dfd74b24169a98",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/host/config.d.ts",
+        "sha256": "e89b437600120c86b8dcd6720c7b99a26561f5512125dc2a2ca6f6454ebc39f4",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/core/definitions.d.ts",
+        "sha256": "c1426396948e63015b25a8e5aaccdf65c43ddf33055de833ae90a33cb76a2fec",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/host/display-mode.d.ts",
+        "sha256": "9cfd641ad2162703dea794b613f98a6a42b3007c8aeb4e0f6b65b82ad5a4d678",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/extension-sdk.d.ts",
+        "sha256": "ac6e9034bbcfad7dfd877c6b9298bce500ad75d5e095568eca29f5bf29a56473",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/feedback.d.ts",
+        "sha256": "e532a8e2e0d60d0da5d8e63238e6eca88da3244d2560a749a3380e662b543792",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/GlobalLocationSetting.d.ts",
+        "sha256": "3cf62d774fa8406057c3406682a8a87a61ab62232f87b85163e20351c2e4d131",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/index.d.ts",
+        "sha256": "d43c82958f8bb83ef5cff5524813d65e3e0b25b688914b04283d238ce8e13f6f",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/core/contracts/index.d.ts",
+        "sha256": "861b85070c37483c4c578fd2f37ddb616cb70522eb409fbeb391ee2850058b4e",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/index.d.ts",
+        "sha256": "a30ee3bce8e37249b8461b925cc0e626942d4a0cf6233c13a3f0d010f6d5ad47",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/sdk/index.d.ts",
+        "sha256": "80cbbcf8583530fc1993763bad6550e55851b87bf9c867ffc5783d921fa73366",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/sdk/input.d.ts",
+        "sha256": "3264d99270796e102939d3d412f4c38c220e8c4f79ac6d001bf5fb374248d246",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/sdk/install.d.ts",
+        "sha256": "2b3e0903128d4b79861233772966fce157bd18bd8234beadcbdef4bcfc7ca93e",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/host/live-config.d.ts",
+        "sha256": "e58b26ffaa6b08d5bd10e3678554f99d38880a8bc3e1b7c21c42040cc46f496f",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/locales.d.ts",
+        "sha256": "28cb64f3269598328d8f2c9a463b55c21e4c9f653879abf1236673249d649b8e",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/host/memory-tools.d.ts",
+        "sha256": "57f4e231607ef98e5cc6311758a55af25a5608007c9ac2c839c154390ee5b162",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/MnemonDialog.d.ts",
+        "sha256": "cf9de6f80a98d6e527860d7077ce5cc5098b2beda55aecf25790403974bd1c34",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/MnemonLogo.d.ts",
+        "sha256": "c1532a4f925703354772392d59b767cba82db7cfa0ede0ed2c0c4ad7f952a405",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/page-client.d.ts",
+        "sha256": "263491e8acfd741b24da984325ad144f529121a660cc45768a427b64a5298945",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/page-controls.d.ts",
+        "sha256": "819a7ada7ad3cf04dc10786b2c91bd1ab2593af9925b24ceaf8b9f267c89d423",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/page-kit.d.ts",
+        "sha256": "ce40c66a2409f540adea88e82183bd17cbcbd20d7e0a3796d150283f34082b12",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/core/contracts/plugin.d.ts",
+        "sha256": "430b6c765482d75525a62c8515118e2926eb218704a1ebee73743d347f63e406",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/core/plugin.d.ts",
+        "sha256": "73a8b54a714b0f680507a4c935a3fc9b17918e106bf901883d1226d69729d6a2",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/host/plugin.d.ts",
+        "sha256": "348d0015c748f9678607d3e033d940fab89eae9dfd6aa453f7e5eec1ed5f4a3c",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/sdk/projection-reservation.d.ts",
+        "sha256": "29f5eca751c614cc334d13f863ae3c23ad935aac771122a4d17b728ca2c9f417",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/host/protocol.d.ts",
+        "sha256": "4bc37dc9cd8347f68bc748133220b9996f5f8bd7e5fea679f511c24590acb8a9",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/sdk/service.d.ts",
+        "sha256": "7ef3753a9dc3537e852c483bd00055de83c207d7cd2e327d05a9517787cac15d",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/settings-controls.d.ts",
+        "sha256": "6de7ad44140d60914cf7bf7e4183d91d77e5d9710ee40dd6c0b83f8f3ad6c872",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/settings-panel.d.ts",
+        "sha256": "3d3ee92739b1c245996f84ff186170c505999a5d286c7e85f8b4e1ecc2eaae85",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/source-contracts.d.ts",
+        "sha256": "253309b6697bfb45e6560bcebb4c873c7b4980916350f35bdd40fde303b916a0",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/source-pages.d.ts",
+        "sha256": "9093041163fccc7afddb86f30d6434a14e29f030e887e24ee400023f97969430",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/host/starter-components.d.ts",
+        "sha256": "72df6416c208396e53788880b3fd7cbed249320584d207c8928dc949c9320458",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/starter.d.ts",
+        "sha256": "e2f3f8e56d03afd711f883db3784a47930c59b2985a9ce4918bce1f06c4e3a51",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/sdk/storage-lock.d.ts",
+        "sha256": "9072c9369822413d48c46c929530e950cdc07cc03a05342e05a0730cea4e44f9",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/sdk/strategy-configuration.d.ts",
+        "sha256": "e87fea784b5b29bfcffaabe448fec056eaa3a0a64baf315b3a9f0a647d83308a",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/host/sync-rules.d.ts",
+        "sha256": "d80282ed5b12128678dc93215260b07e79932d95c68825d6279fb12d60ed7a8b",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/core/contracts/task-agent-model.d.ts",
+        "sha256": "0532a52be00c9fd7e941d29041c4d5dd96e4d42cac30f387088a18a3a14f0c41",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/sdk/testing.d.ts",
+        "sha256": "a157befcd6231af9e0915f26243f8c86178ddc99114c5d135ee04c85dc0f3279",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/ui-icons.d.ts",
+        "sha256": "65262c80dee9a62195eda0e79166449bff062bc1ee48595e54d50ab3955535e9",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/use-request-version.d.ts",
+        "sha256": "65bb1a8eddc167bdd3c730024b589792e2fe0535a6f770b81585ff85653cd78e",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/sdk/view-extensions.d.ts",
+        "sha256": "59e9242a069ade7b301aea496573162f3543cf36385cd3345ad93a35ab747ed8",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/host/view-protocol.d.ts",
+        "sha256": "e5a76a65a89454cf08c915a904e4e024af3937cae3a65a6f6d3419ffacfd7d71",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/view-styles.d.ts",
+        "sha256": "cebd26c73d5ba1bf720d201402380e3c47767141436d6d06b09db29566298637",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/core/contracts/view.d.ts",
+        "sha256": "3103553bc207dbc950c4f2d84dfa40dddf09c779a664c266b4bde8218c8ef1c9",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/sdk/workspace-storage.d.ts",
+        "sha256": "f28d2e65efb5a9f213e242926386b4f4765ea7e344bb8b6dbe10b5a61becb469",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "cordis.patch.yml",
+        "sha256": "889c12eec043d8a8394cfd59d1c18920d7e96905025ed053a5f11fbb6d54648a",
+        "executableBits": "0o0"
+      }
+    ]
+  },
+  {
+    "name": "dsh-mnemon-provider-byterover",
+    "version": "0.5.7",
+    "files": [
+      {
+        "file": "LICENSE",
+        "sha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/descriptor-BCPFZAYz.js",
+        "sha256": "2750c798fff6e8a422424bc0b67ac2840f1a3f328b28f2094a970f6158717ac0",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/descriptor.js",
+        "sha256": "803ebf27e9e4efef6dd3699d65b9d24850eb1a1146ce7ca62a4f40ed1c1fe27b",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/index.js",
+        "sha256": "e5ddd9724e4b2dfe9a13e8121d4fb1bdcd0f9fbb81673d08c6ba3e143078506a",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "package.json",
+        "sha256": "6e505a6bf4a601ee0c572891a19998c210976b853e5d98f33825168739ea0b1e",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "README.md",
+        "sha256": "030981b32e9f1bf1dfb8ec60fda47601493f06ef0a7e07c4ee072e9b89f29976",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/descriptor.d.ts",
+        "sha256": "35341eabbdc0e258108180200acba900d0234a61b50e9dbcb73453d19c3d40f3",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/index.d.ts",
+        "sha256": "92693d6bbb97345428cfb6237ccdc11ff227c7b3b9ded68e81b1602a9cdf2a21",
+        "executableBits": "0o0"
+      }
+    ]
+  },
+  {
+    "name": "dsh-mnemon-provider-mnemon-native",
+    "version": "0.5.11",
+    "files": [
+      {
+        "file": "LICENSE",
+        "sha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/descriptor.js",
+        "sha256": "78f653c863a533f50974d3f74d232a58982cc085ca528f9aa369e1e7b2373c00",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/index.js",
+        "sha256": "d2d7817654321ef2d9eb1d9bd504238a34b1efdca5b51fe845a1dbd8e7377645",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "package.json",
+        "sha256": "e9b7add604e992b8e2b9fd58270ef70ea250bb70e0ff896b9611fb7fd9899b49",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "README.md",
+        "sha256": "01e8bed49de6ed725231a3c7e3bd0618ef5bcc94e6c20617e0b079d599950410",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/descriptor.d.ts",
+        "sha256": "c16f5f14b4eda121b0daa8db39b730fe81b9d5c38d196487755fea82a753b5b1",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/index.d.ts",
+        "sha256": "3276543cb9c09f146c062b2229b623c2bfbd36a056663ea69d47e25cedf78811",
+        "executableBits": "0o0"
+      }
+    ]
+  },
+  {
+    "name": "dsh-mnemon-source-memory-spaces",
+    "version": "0.5.26",
+    "files": [
+      {
+        "file": "LICENSE",
+        "sha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "presentation/page.module.css",
+        "sha256": "7bf666b3eeca30f4cf7d85533f852a3317c49779e718061def14cf44cb818324",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "presentation/sidebar.module.css",
+        "sha256": "bee61e25b486c684ea8960d99c76e98856c3c2fd0646b1967de15318f899950f",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/adapter-D-BnWkko.js",
+        "sha256": "0afce9282a3f523d677d72d6bb1587c766c33a4378847e89583ac5fab3414e73",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/client.js",
+        "sha256": "09d6d574eb76d77396d5907df9fb12e6fccf3cd77fac7e2b0ec1be9dd99176a8",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/contracts.js",
+        "sha256": "c8c89d48b1b015c6982c1d88c1e37253dfe4b8ce3d1fd3bd4f7cd4899d30f2d8",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/definitions-DfmOqJjR.js",
+        "sha256": "3c6250879f47ca7316216f8a3294307b3a776cd2c0c09f3a019f2ab7f6f79b38",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/index.js",
+        "sha256": "08c37ea0574d2fe673826cdf382ae0ca3be746fe572da12cf9857e160519ab0d",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/native-cli.js",
+        "sha256": "4a6163b24a6e2cca567cc1bbf2005f4f563569b4adc4acfe4e4c9889b326d6c1",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/plugin-m1PeU1IE.js",
+        "sha256": "686dcb94257672666d17b289124e3db4737c55ff960d0e9054e57d3bcafecc00",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/provider-sdk.js",
+        "sha256": "43a8e84faac9fbad8699ebc39f9ef4bb10829a447d0b6c36024d14be7cd55da4",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/space-identity.js",
+        "sha256": "b01ba669e30dffcda61842ad11c64d11b3a708464d5c7f3b73386d2c2a13cabe",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/testing.js",
+        "sha256": "3fe7d1cacf97ca32b979ad6a4978877eb868f450a8f7c5015ae8a45a8f65a8f5",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "locale/en.json",
+        "sha256": "07f6399e871b511bcb2829d7f6cff07f62d675f9d9cff06e02485c34808ba14d",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "presentation/locales.json",
+        "sha256": "8e3c86b8b083e58f9f7641f144b4fb64c28d2d69f377f24ca291b89181a9d3ff",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "package.json",
+        "sha256": "315d417da0441e961b8aa763a50375e98c93eeae4347be9ccd30b377fa3d84e4",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "locale/zh.json",
+        "sha256": "c5909893130cdfc23092b2485eb31bebfa7db13fe1d8b32aa48fb273dae1db4b",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "README.md",
+        "sha256": "216cbfe8730deb13086a4ef141734bf9d2e4d90402165961151c8145ba36bbc0",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/api.d.ts",
+        "sha256": "09af92d9e4a2c3e2a77da05880edaa5745aee89df5aacdfc8343d85e1ef74c9d",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client.d.ts",
+        "sha256": "ae7a36f5ac12534af8b15d2b7196be6ebb90653d9e2670a83e5b07f381f3763a",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/contracts.d.ts",
+        "sha256": "28ffea4542104a602307926e255bd79a0cc4ce6273623dcc5e70d9126ba142e7",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/contracts.d.ts",
+        "sha256": "512071fe49fcbeaab8b728bf27e6e699f5bb302db1e16106ecb9682f553ba9f1",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/definitions-BNmfQoWk.d.ts",
+        "sha256": "06b23e844c7c374e18883143d56555d85ea6ec17859e2b1555e9278013cd61e5",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/entities-page.d.ts",
+        "sha256": "caec8b1440d861023318dc04838fa9257f3f455270fc684a6a828a160ff32ac1",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/explore-page.d.ts",
+        "sha256": "94be562bb9c1f4198a9c6b1247ebf7c5ffb000947d58bc28a16c8fcb9813538c",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/index.d.ts",
+        "sha256": "94a0ada457f11c37af96d3ba856627fca043062f1ca44176bc442e5426e4b217",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/list-page.d.ts",
+        "sha256": "e32741b7a8a2d2591aa1a504fe22ea770d66566b74b5581681680f9618a7ccb4",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/memory-graph.d.ts",
+        "sha256": "61a24db2863d357f73b9dd0d514267a2e0ebd1933110a219e993c07eb2b68983",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/native-cli.d.ts",
+        "sha256": "01ee9b84bf7742c4294180fe52d7934ea984d21f24b27a9ad86154a5ec3c02f7",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/overview-page.d.ts",
+        "sha256": "f251d324737f0b55b2d8f96114f32c159437a5bd3c9082c8fa2384baee7d0050",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/pages.d.ts",
+        "sha256": "906e68dec07d06296fe991e874fb06f59ac7e3b6ff5874050d1c4f940807d143",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/persistence-strategy-dialog.d.ts",
+        "sha256": "f5c7c228f3e4ac85eeb52f2faf656f5484ca383e9716b17ea19d4ab84c47342f",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/presentation.d.ts",
+        "sha256": "a01ce4098f1993ccbcd83dd747e8c2129ddb69f750bb1561ee29d6021688d1dd",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/provider-field.d.ts",
+        "sha256": "308c317365d95649433502853a1e334a56645c1479ecf9b06de7b4f5c837e72b",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/provider-presentation.d.ts",
+        "sha256": "a10ade999e6872a8114c87d91ce775ad69b2180c009d2b7b2f8398e8d28ff729",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/provider-sdk.d.ts",
+        "sha256": "4d09eb924868003c4da2e8593835c7d5747719c2806653ce5511c2cb396469e0",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/provider-settings.d.ts",
+        "sha256": "a8c475aa09294831e942f75d4402482c95221c64273ae9aa25523651ba0da423",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/ProviderIcon.d.ts",
+        "sha256": "e275c00b58bbe824298f2152772af3a2d2df5949b7dce542e91cc163ed3073fc",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/remember-page.d.ts",
+        "sha256": "406e6d3c9d22b71c31aa92d57472e36f7cc00ff6d0f59e6ebed0add6cc69a809",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/settings-client.d.ts",
+        "sha256": "d04c695189a3536d936eccbaaf99346d437a37aad7918f9a4e2340b7743ce140",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/settings.d.ts",
+        "sha256": "9eef58a638ffde70a0ddfcecf18d57b35dd00486047583a1791d04feeaefb7d3",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/space-identity.d.ts",
+        "sha256": "d900fe413249e76fba7b036158d9a62422b094dbadbcab5b7a0d9445da35906e",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/testing.d.ts",
+        "sha256": "5a32680e45f0d0cc47989b6813a85f9168bc083440f204e492f1121ab2348a35",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/ui.d.ts",
+        "sha256": "16192182fefbd5f74172b70bef6f0ed8868f6a2433cf94a3e7c08b3af36a86fe",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/widgets.d.ts",
+        "sha256": "7ea04daf923aacefe7b167b1e666c87cd7fe6a39eee1ee5fa5e386308c8d0463",
+        "executableBits": "0o0"
+      }
+    ]
+  },
+  {
+    "name": "dsh-mnemon-source-runtime",
+    "version": "0.5.19",
+    "files": [
+      {
+        "file": "LICENSE",
+        "sha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "presentation/page.module.css",
+        "sha256": "4f2b72a00aa58023e6e7dc25efa4c67b1e51951b6370db1bbaabd4f6907c1720",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "presentation/sidebar.module.css",
+        "sha256": "b3d1e9804e012627bf44d94c2e183d64f972cb1cbe5ee07784a8060baaeca6f1",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/client.js",
+        "sha256": "e133228d27df6fa56835ee89c8c9d1ada6722292d6ab646240171d82dde1f206",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/contracts-DOx-4cU7.js",
+        "sha256": "f43bd49dd035801d3833e110b6b54478775032d83d79fbeefde75dc43cb6dd82",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/contracts.js",
+        "sha256": "d5ae24f2a9f3c842ef3c754204bf66c309a1d2e736cfe28f5ab68a221889918b",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/index.js",
+        "sha256": "752667da92c6c4e9db02e13a989b9c276763fc604697e6adeb07313f723e34c7",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "locale/en.json",
+        "sha256": "962b17e1d842d81f45240c90aa3b915e723fb68caeed31cc03a4099db99ce7e7",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "presentation/locales.json",
+        "sha256": "fb661ef2b354517c04f021b2c100462b4b9054381b179dd3c2cd80c37eed89c9",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "package.json",
+        "sha256": "9e1fb2106c1a645d2498b6e25c2083b4dcd42974b34ecfe0dd6bb3dbfb1e93da",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "locale/zh.json",
+        "sha256": "2d1442fb211c683f38349c4bff645727c8315b99890d9b47e1eaa27d441b5edc",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "README.md",
+        "sha256": "d0e385bf833466d0e1c7f51eee953f448dad943548819f70f9e327e4fad7eb26",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/api.d.ts",
+        "sha256": "ae02b82727106bba4f91707f8adb80222c46e4c66c2a1b3b80df2d8bc0f3f2b7",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client.d.ts",
+        "sha256": "acc1d11738f4e6e2087d478c3bf16ec62acfcc764776a8689232daafa64c50c3",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/contracts.d.ts",
+        "sha256": "faca47c67c642c8dab4e50be12dea9190d8e002d9763f4679712d0716195c07e",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/contracts.d.ts",
+        "sha256": "003270d3d8672f6f2d8c5fb7dc0e28ab1197f0ad90f165e25a11662df002492b",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/defaults.d.ts",
+        "sha256": "aeb6b83026cb4f6f2b4f268609b84ce44830da42baf304f373634465103fe111",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/index.d.ts",
+        "sha256": "b059e9fcff3a89d1579d23a8b819525e86ca8c68149d61cd449d1a70e0689ecd",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/pages.d.ts",
+        "sha256": "4eff6d47eb34f0cc90f3cda83d5427c314d6a16cc5477c20ad7a18018889655c",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/presentation.d.ts",
+        "sha256": "2ca4395592b3fe13e1a5efb0d652f25032ec0e5b9245c9f9f80ed7992a098169",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/ui.d.ts",
+        "sha256": "1ebabe67e291194b1bb7d3afd11806590abd87bf50b329b51dd7825918515a08",
+        "executableBits": "0o0"
+      }
+    ]
+  },
+  {
+    "name": "dsh-mnemon-source-skills",
+    "version": "0.5.10",
+    "files": [
+      {
+        "file": "LICENSE",
+        "sha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "presentation/page.module.css",
+        "sha256": "89e9fbdcfcc8c29dcca8e310cede4d4b898da39e6cdc9d40ae06eb87ec135a83",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/client.js",
+        "sha256": "df1ccfb28e9e7c247756beba26423d31af9f81fc40288e95393b41a20d96918e",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/contracts-CwhbQi-u.js",
+        "sha256": "6c8f96c628eae84ad8aa8b495c0631687c7a446a3fcc48ec7d96597799992bf7",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/contracts.js",
+        "sha256": "7b84863cfb298dd2928b504fd6857e5be7a47c7653c2de0ee18da8e01a78446c",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/index.js",
+        "sha256": "365855de11f71b04a605f44d200c61fc3cc9e0458e5ae897bc5253c42fe67d1e",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "locale/en.json",
+        "sha256": "0b5276b77a752fb47c67765847e261a6a7041a885213f760c4ad3670d694baed",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "presentation/locales.json",
+        "sha256": "1e0403aadf03a0ff64c25f1e1018b0b2e4209f079165ecc0b1d9589a3220d360",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "market/official.json",
+        "sha256": "6d011e5817727fb545dd385df8bb7316bff59d803f05c956bf64138956d90acc",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "package.json",
+        "sha256": "a565be8f8dfcd2783e97a4b351bf5d2bb347750c52a86ec5c3b038ca37443f87",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "locale/zh.json",
+        "sha256": "9dce17a7602534ea20b6027988f3b18cc3bce7f6b6bffe4f64b635291ffedf28",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "README.md",
+        "sha256": "e4351de6d7e38efc8880d2243a43220ca17c079995c9e29a3026f8753ce16733",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/api.d.ts",
+        "sha256": "e1fe111c0f4430dea921ce5c83a6074ff1608ec15972aed6902b85bf08566527",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/auto-adoption.d.ts",
+        "sha256": "fd98263224d92511601e3b666a61cfdc49268765769057eea0b5fb630a29ce02",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client.d.ts",
+        "sha256": "99720ccb1ef2991d3d08923a54b3b64a165692fe94acadff7b9e5cee2963bc3f",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/contracts.d.ts",
+        "sha256": "d0835cc73dbcd428acb7b9ac4e5fe36a956d3e9a6b5fee504495743d76d5540b",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/contracts.d.ts",
+        "sha256": "1b50fffb51c685c746c5d3bcd5c73e0b471d5ffa17d767450597ac957e609ce4",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/evals-page.d.ts",
+        "sha256": "69c36a11a11d4f6b91554ea1b3e6218428bb8c0e3bb0a2568c1467987ff6ab8b",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/evidence-page.d.ts",
+        "sha256": "c3a0c84f77f1b8464158b3bbdbff33abdb7b79777f7083a184598ea42b7f5791",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/evolution-page.d.ts",
+        "sha256": "974b260d4696e68368f0ca91313c17d96057e5cdc4dd6e1c6ca65ffd0789dce4",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/fence.d.ts",
+        "sha256": "2522959dfc2203f5cb4219029f78321f6cf036bc8f2e972a07d01a6ef6d9104f",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/index.d.ts",
+        "sha256": "61413bc1929df4ba1f2c561c0fc7207ee7b2b38f1ebbc3f7fa403c1c088d0d00",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/market-page.d.ts",
+        "sha256": "fa00338ddd8a6f8bc2347628078b11008209ce363f600042cf1fcbee33c69053",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/model-choice.d.ts",
+        "sha256": "5bd926d57442c01ecbf222bdf4cec6358f932e5cc8ef4d8dc9fa2dd81c38215b",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/presentation.d.ts",
+        "sha256": "d7d80eccdf90c7ec939b67802c559d00614ed9285e6a756212a473cfe556c1c1",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/shared.d.ts",
+        "sha256": "34ba2da4c08ce51bee17ea09a3cf992c8fe06446c54f0f017026ae8639927881",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/skill-tests.d.ts",
+        "sha256": "d9de27a957b8e9dc9493878620cf39d2e9dbaec7a52daf7ed92ab292f8b2c8ab",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/skills-page.d.ts",
+        "sha256": "157a6d855ec4b0bb5b43c6777c969e7972ea699b8e89f572e36f445b83f56c15",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/source-kind.d.ts",
+        "sha256": "609250d77c7950a206b00be65de4b33b62dec50ffaff6f13d0fa411d970d2eeb",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/trash-page.d.ts",
+        "sha256": "ef3f280cab983adb716c2602d50debda1bfb9dd531b5c4842afd4849fc9bac80",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/ui.d.ts",
+        "sha256": "0c211a77d3376aeb4a381d82d76ed50945b70bc5b8a32f0306dbfbfdf03ce6c4",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/use-skill.d.ts",
+        "sha256": "2078894ccb534939aa8cc58567421c451cda72a2ab44f31eba90d9e26d37bcfe",
+        "executableBits": "0o0"
+      }
+    ]
+  },
+  {
+    "name": "dsh-mnemon-strategy-default-three-tier",
+    "version": "0.5.13",
+    "files": [
+      {
+        "file": "LICENSE",
+        "sha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/extension-sdk.js",
+        "sha256": "7d16a3923bbb1a74c0d717210a7371be18a4674eaf919d0fd9563861f8532dad",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/index.js",
+        "sha256": "544537f9e49f94b7874979ca1d0cbefd1365b3a859bea162e72cc625a3493f60",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "locale/en.json",
+        "sha256": "7908db6a2ba440d3e3b10a5d71adc647c2e91c02fdaa654057751ee8a0ba5fbd",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "package.json",
+        "sha256": "1b5a75f36dd5ac3db83f7aa0f833567ca739f2f18ca1eedf10158d1cfc381f05",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "locale/zh.json",
+        "sha256": "570a75db45cf64aebe9ac13d312e92379b4056e7d50846d3d900df7f891b606d",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "README.md",
+        "sha256": "33d63470e4a05b2c33ed4eeb54fed4dc0acf285624b3e4527921de23d37e81bd",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/extension-sdk.d.ts",
+        "sha256": "ee9a2e5c9906287eb9ff7c14ff19809b2b9d41baf782ba7eb29c47674024db27",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/index.d.ts",
+        "sha256": "d1468dfdbb6bbbcc2511e7c90b8857584cb1a1770371f5e878895fc7d61ca385",
+        "executableBits": "0o0"
+      }
+    ]
+  },
+  {
+    "name": "dsh-mnemon-strategy-general",
+    "version": "0.5.2",
+    "files": [
+      {
+        "file": "LICENSE",
+        "sha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/index.js",
+        "sha256": "f30f112f252a35a309a0ed809edbb4bdaa20300a5b26c528004670ae575e33fc",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "locale/en.json",
+        "sha256": "b2e1cc09361141ed86712d3be37baecdc6b74bd9b4d9fed54d67477a6a3a97b5",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "package.json",
+        "sha256": "47d8930bab9cf199b63c8c27e44046dab12dfbf4f9c6986e112492617eb367bf",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "locale/zh.json",
+        "sha256": "613a35c7f4258a6cfa7e2fe8aa2070e22db693b0a1e362d86b59992c9f1ea3b9",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "README.md",
+        "sha256": "cfbaa6c34dad181da08b1eea25851bb207e23e9b103e64efe54296ff1539393c",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "lib/index.d.ts",
+        "sha256": "ddd8649452ad403b0bbd9f7ebb549683e13a3ce92d61667f952d7382512f345c",
+        "executableBits": "0o0"
+      },
+      {
+        "file": "cordis.patch.yml",
+        "sha256": "8edd992b75291b53b3a7708f44c95ce908d6f0ca0f8efba3447df35527fba59e",
+        "executableBits": "0o0"
+      }
+    ]
+  }
+]

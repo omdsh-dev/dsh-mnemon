@@ -1,0 +1,653 @@
+{
+  "host": "0.2.2-rc.1",
+  "officialNpm": true,
+  "platform": "darwin-arm64",
+  "node": "24.22.2",
+  "fresh": {
+    "timestamp": "2026-11-08T19:00:05.691792+00:00",
+    "rootVersion": "0.5.43",
+    "versions": [
+      {
+        "name": "dsh-mnemon",
+        "expected": "0.5.43",
+        "actual": "0.5.43",
+        "match": true,
+        "source": "frozen candidate"
+      },
+      {
+        "name": "dsh-mnemon-provider-byterover",
+        "expected": "0.5.7",
+        "actual": "0.5.7",
+        "match": true,
+        "source": "frozen candidate"
+      },
+      {
+        "name": "dsh-mnemon-provider-hindsight",
+        "expected": "0.5.7",
+        "actual": "0.5.7",
+        "match": true,
+        "source": "immutable npm version"
+      },
+      {
+        "name": "dsh-mnemon-provider-holographic",
+        "expected": "0.5.7",
+        "actual": "0.5.7",
+        "match": true,
+        "source": "immutable npm version"
+      },
+      {
+        "name": "dsh-mnemon-provider-honcho",
+        "expected": "0.5.5",
+        "actual": "0.5.5",
+        "match": true,
+        "source": "immutable npm version"
+      },
+      {
+        "name": "dsh-mnemon-provider-mem0",
+        "expected": "0.5.5",
+        "actual": "0.5.5",
+        "match": true,
+        "source": "immutable npm version"
+      },
+      {
+        "name": "dsh-mnemon-provider-mnemon-native",
+        "expected": "0.5.11",
+        "actual": "0.5.11",
+        "match": true,
+        "source": "frozen candidate"
+      },
+      {
+        "name": "dsh-mnemon-provider-openviking",
+        "expected": "0.5.10",
+        "actual": "0.5.10",
+        "match": true,
+        "source": "immutable npm version"
+      },
+      {
+        "name": "dsh-mnemon-provider-retaindb",
+        "expected": "0.5.6",
+        "actual": "0.5.6",
+        "match": true,
+        "source": "immutable npm version"
+      },
+      {
+        "name": "dsh-mnemon-provider-supermemory",
+        "expected": "0.5.5",
+        "actual": "0.5.5",
+        "match": true,
+        "source": "immutable npm version"
+      },
+      {
+        "name": "dsh-mnemon-source-documents",
+        "expected": "0.6.0",
+        "actual": "0.6.0",
+        "match": true,
+        "source": "immutable npm version"
+      },
+      {
+        "name": "dsh-mnemon-source-memory-spaces",
+        "expected": "0.5.26",
+        "actual": "0.5.26",
+        "match": true,
+        "source": "frozen candidate"
+      },
+      {
+        "name": "dsh-mnemon-source-runtime",
+        "expected": "0.5.19",
+        "actual": "0.5.19",
+        "match": true,
+        "source": "frozen candidate"
+      },
+      {
+        "name": "dsh-mnemon-source-skills",
+        "expected": "0.5.10",
+        "actual": "0.5.10",
+        "match": true,
+        "source": "frozen candidate"
+      },
+      {
+        "name": "dsh-mnemon-strategy-auto-capture",
+        "expected": "0.5.5",
+        "actual": "0.5.5",
+        "match": true,
+        "source": "immutable npm version"
+      },
+      {
+        "name": "dsh-mnemon-strategy-default-three-tier",
+        "expected": "0.5.13",
+        "actual": "0.5.13",
+        "match": true,
+        "source": "frozen candidate"
+      },
+      {
+        "name": "dsh-mnemon-strategy-general",
+        "expected": "0.5.2",
+        "actual": "0.5.2",
+        "match": true,
+        "source": "frozen candidate"
+      },
+      {
+        "name": "dsh-mnemon-strategy-light-context",
+        "expected": "0.5.6",
+        "actual": "0.5.6",
+        "match": true,
+        "source": "immutable npm version"
+      },
+      {
+        "name": "dsh-mnemon-strategy-scoped",
+        "expected": "0.5.5",
+        "actual": "0.5.5",
+        "match": true,
+        "source": "immutable npm version"
+      }
+    ],
+    "pinnedPackageCount": 19,
+    "versionMismatches": 0,
+    "candidateFileCount": 199,
+    "contentMismatches": 0,
+    "executableBitMismatches": 0,
+    "fileSetMismatches": 0,
+    "hashes": {
+      "memories.json": {
+        "sha256": "7c1051f6e2bc3943b7c1dbe4da229694455681b8875a346c99279e555edb733f",
+        "bytes": 36
+      },
+      "MEMORY.md": {
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      "USER.md": {
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      }
+    }
+  },
+  "upgrade": {
+    "from": "0.5.42",
+    "before": {
+      "timestamp": "2026-11-08T19:00:05.728432+00:00",
+      "rootVersion": "0.5.42",
+      "versions": [
+        {
+          "name": "dsh-mnemon",
+          "expected": "0.5.42",
+          "actual": "0.5.42",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-byterover",
+          "expected": "0.5.6",
+          "actual": "0.5.6",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-hindsight",
+          "expected": "0.5.7",
+          "actual": "0.5.7",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-holographic",
+          "expected": "0.5.7",
+          "actual": "0.5.7",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-honcho",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-mem0",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-mnemon-native",
+          "expected": "0.5.10",
+          "actual": "0.5.10",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-openviking",
+          "expected": "0.5.10",
+          "actual": "0.5.10",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-retaindb",
+          "expected": "0.5.6",
+          "actual": "0.5.6",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-supermemory",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-documents",
+          "expected": "0.6.0",
+          "actual": "0.6.0",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-memory-spaces",
+          "expected": "0.5.25",
+          "actual": "0.5.25",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-runtime",
+          "expected": "0.5.18",
+          "actual": "0.5.18",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-skills",
+          "expected": "0.5.9",
+          "actual": "0.5.9",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-auto-capture",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-default-three-tier",
+          "expected": "0.5.12",
+          "actual": "0.5.12",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-general",
+          "expected": "0.5.1",
+          "actual": "0.5.1",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-light-context",
+          "expected": "0.5.6",
+          "actual": "0.5.6",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-scoped",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        }
+      ],
+      "pinnedPackageCount": 19,
+      "versionMismatches": 0,
+      "candidateFileCount": 0,
+      "contentMismatches": 0,
+      "executableBitMismatches": 0,
+      "fileSetMismatches": 0,
+      "hashes": {
+        "memories.json": {
+          "sha256": "4691f0c53dba032cd5b94318f0e0de4a50bae8196b0dd9824aa141992280748c",
+          "bytes": 555
+        },
+        "MEMORY.md": {
+          "sha256": "0dd66344e7c9a65fdb8f663c04096d99d017a486bd65a3a59a0d1845ea638afc",
+          "bytes": 79
+        },
+        "USER.md": {
+          "sha256": "0bc07824f22307cf8db640d04bd92bc028391b3da83f5ab4d9c1cc9d5cae1650",
+          "bytes": 72
+        }
+      }
+    },
+    "installed": {
+      "timestamp": "2026-11-08T19:02:22.548929+00:00",
+      "rootVersion": "0.5.43",
+      "versions": [
+        {
+          "name": "dsh-mnemon",
+          "expected": "0.5.43",
+          "actual": "0.5.43",
+          "match": true,
+          "source": "frozen candidate"
+        },
+        {
+          "name": "dsh-mnemon-provider-byterover",
+          "expected": "0.5.7",
+          "actual": "0.5.7",
+          "match": true,
+          "source": "frozen candidate"
+        },
+        {
+          "name": "dsh-mnemon-provider-hindsight",
+          "expected": "0.5.7",
+          "actual": "0.5.7",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-holographic",
+          "expected": "0.5.7",
+          "actual": "0.5.7",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-honcho",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-mem0",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-mnemon-native",
+          "expected": "0.5.11",
+          "actual": "0.5.11",
+          "match": true,
+          "source": "frozen candidate"
+        },
+        {
+          "name": "dsh-mnemon-provider-openviking",
+          "expected": "0.5.10",
+          "actual": "0.5.10",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-retaindb",
+          "expected": "0.5.6",
+          "actual": "0.5.6",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-supermemory",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-documents",
+          "expected": "0.6.0",
+          "actual": "0.6.0",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-memory-spaces",
+          "expected": "0.5.26",
+          "actual": "0.5.26",
+          "match": true,
+          "source": "frozen candidate"
+        },
+        {
+          "name": "dsh-mnemon-source-runtime",
+          "expected": "0.5.19",
+          "actual": "0.5.19",
+          "match": true,
+          "source": "frozen candidate"
+        },
+        {
+          "name": "dsh-mnemon-source-skills",
+          "expected": "0.5.10",
+          "actual": "0.5.10",
+          "match": true,
+          "source": "frozen candidate"
+        },
+        {
+          "name": "dsh-mnemon-strategy-auto-capture",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-default-three-tier",
+          "expected": "0.5.13",
+          "actual": "0.5.13",
+          "match": true,
+          "source": "frozen candidate"
+        },
+        {
+          "name": "dsh-mnemon-strategy-general",
+          "expected": "0.5.2",
+          "actual": "0.5.2",
+          "match": true,
+          "source": "frozen candidate"
+        },
+        {
+          "name": "dsh-mnemon-strategy-light-context",
+          "expected": "0.5.6",
+          "actual": "0.5.6",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-scoped",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        }
+      ],
+      "pinnedPackageCount": 19,
+      "versionMismatches": 0,
+      "candidateFileCount": 199,
+      "contentMismatches": 0,
+      "executableBitMismatches": 0,
+      "fileSetMismatches": 0,
+      "hashes": {
+        "memories.json": {
+          "sha256": "4691f0c53dba032cd5b94318f0e0de4a50bae8196b0dd9824aa141992280748c",
+          "bytes": 555
+        },
+        "MEMORY.md": {
+          "sha256": "0dd66344e7c9a65fdb8f663c04096d99d017a486bd65a3a59a0d1845ea638afc",
+          "bytes": 79
+        },
+        "USER.md": {
+          "sha256": "0bc07824f22307cf8db640d04bd92bc028391b3da83f5ab4d9c1cc9d5cae1650",
+          "bytes": 72
+        }
+      },
+      "retentionMatchesBaseline": true
+    },
+    "restarted": {
+      "timestamp": "2026-11-08T19:06:03.491841+00:00",
+      "rootVersion": "0.5.43",
+      "versions": [
+        {
+          "name": "dsh-mnemon",
+          "expected": "0.5.43",
+          "actual": "0.5.43",
+          "match": true,
+          "source": "frozen candidate"
+        },
+        {
+          "name": "dsh-mnemon-provider-byterover",
+          "expected": "0.5.7",
+          "actual": "0.5.7",
+          "match": true,
+          "source": "frozen candidate"
+        },
+        {
+          "name": "dsh-mnemon-provider-hindsight",
+          "expected": "0.5.7",
+          "actual": "0.5.7",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-holographic",
+          "expected": "0.5.7",
+          "actual": "0.5.7",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-honcho",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-mem0",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-mnemon-native",
+          "expected": "0.5.11",
+          "actual": "0.5.11",
+          "match": true,
+          "source": "frozen candidate"
+        },
+        {
+          "name": "dsh-mnemon-provider-openviking",
+          "expected": "0.5.10",
+          "actual": "0.5.10",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-retaindb",
+          "expected": "0.5.6",
+          "actual": "0.5.6",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-provider-supermemory",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-documents",
+          "expected": "0.6.0",
+          "actual": "0.6.0",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-source-memory-spaces",
+          "expected": "0.5.26",
+          "actual": "0.5.26",
+          "match": true,
+          "source": "frozen candidate"
+        },
+        {
+          "name": "dsh-mnemon-source-runtime",
+          "expected": "0.5.19",
+          "actual": "0.5.19",
+          "match": true,
+          "source": "frozen candidate"
+        },
+        {
+          "name": "dsh-mnemon-source-skills",
+          "expected": "0.5.10",
+          "actual": "0.5.10",
+          "match": true,
+          "source": "frozen candidate"
+        },
+        {
+          "name": "dsh-mnemon-strategy-auto-capture",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-default-three-tier",
+          "expected": "0.5.13",
+          "actual": "0.5.13",
+          "match": true,
+          "source": "frozen candidate"
+        },
+        {
+          "name": "dsh-mnemon-strategy-general",
+          "expected": "0.5.2",
+          "actual": "0.5.2",
+          "match": true,
+          "source": "frozen candidate"
+        },
+        {
+          "name": "dsh-mnemon-strategy-light-context",
+          "expected": "0.5.6",
+          "actual": "0.5.6",
+          "match": true,
+          "source": "immutable npm version"
+        },
+        {
+          "name": "dsh-mnemon-strategy-scoped",
+          "expected": "0.5.5",
+          "actual": "0.5.5",
+          "match": true,
+          "source": "immutable npm version"
+        }
+      ],
+      "pinnedPackageCount": 19,
+      "versionMismatches": 0,
+      "candidateFileCount": 199,
+      "contentMismatches": 0,
+      "executableBitMismatches": 0,
+      "fileSetMismatches": 0,
+      "hashes": {
+        "memories.json": {
+          "sha256": "4691f0c53dba032cd5b94318f0e0de4a50bae8196b0dd9824aa141992280748c",
+          "bytes": 555
+        },
+        "MEMORY.md": {
+          "sha256": "0dd66344e7c9a65fdb8f663c04096d99d017a486bd65a3a59a0d1845ea638afc",
+          "bytes": 79
+        },
+        "USER.md": {
+          "sha256": "0bc07824f22307cf8db640d04bd92bc028391b3da83f5ab4d9c1cc9d5cae1650",
+          "bytes": 72
+        }
+      },
+      "retentionMatchesBaseline": true
+    }
+  },
+  "ui": {
+    "freshAddPluginAndEnableNow": true,
+    "checkVersionsUpdateAndRestart": true,
+    "bothRecordsVisibleAfterRestart": true
+  },
+  "externalModelCalls": 0
+}
