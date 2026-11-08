@@ -1,3 +1,4 @@
+export { reserveMemoryProjection } from './projection-reservation.ts'
 export { installMemory } from './install.ts'
 export type { MnemonMemoryService, InstallMemoryOptions, MemoryInstallContribution } from './service.ts'
 export { defineMemoryPlugin, defineMemorySource, defineMemoryStrategy, defineMemoryStrategyExtension } from '../core/definitions.ts'

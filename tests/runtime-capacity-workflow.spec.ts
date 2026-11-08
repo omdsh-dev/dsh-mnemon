@@ -507,3 +507,53 @@ describe('default Runtime capacity workflow across Host entry points', () => {
     expect(archived.results.some(entry => entry.content === saved + ' Second workspace.')).toBe(true)
   })
 })
+
+it('keeps pinned Runtime in every new View across repeated Provider archives', async () => {
+  const f = await fixture()
+  const runtime = f.graph.source('runtime')
+  const rule = 'Ask before deleting data.'
+  await runtime.mutate('mutate', { action: 'add', target: 'memory', content: rule, importance: 'low' })
+  await runtime.mutate('pin', { target: 'memory', content: rule, pinned: true })
+  const source = f.graph.memoryComposition.current()!.sourceRuntime(spacesKey)!
+  const writes = vi.spyOn(source as { manage: NonNullable<typeof source.manage> }, 'manage')
+  for (let index = 0; index < 3; index++) {
+    const content = `Round ${index}: ` + 'New ordinary detail. '.repeat(14).trim()
+    expect(await f.write('runtime-memory', { workspaceId: 'workspace', action: 'add', target: 'memory', content })).toMatchObject({ ok: true })
+    expect((await runtime.read<RuntimeMemorySnapshot>('snapshot')).entries.find(entry => entry.content === rule)).toMatchObject({ pinned: true, importance: 'low' })
+    const turn = await f.graph.composableTurns.beginTurn(`pin-check:${index}`, agentScope(f.root, f.graph.config))
+    expect(turn.view.projection.map(fragment => fragment.text).join('\n')).toContain(rule)
+  }
+  const archives = writes.mock.calls.filter(([request]) => request.mode === 'mutate' && request.operation === 'remember-many')
+  expect(archives).toHaveLength(3)
+  expect(JSON.stringify(archives)).not.toContain(rule)
+})
+
+it('fails a pinned-capacity conflict before any Provider archive or model work', async () => {
+  const task = vi.fn<RuntimeMaintenanceTaskRunner>()
+  const f = await fixture(task)
+  await f.graph.source('runtime').mutate('pin', { target: 'memory', content: saved, pinned: true })
+  const source = f.graph.memoryComposition.current()!.sourceRuntime(spacesKey)!
+  const writes = vi.spyOn(source as { manage: NonNullable<typeof source.manage> }, 'manage')
+  expect(await f.write('runtime-memory', { workspaceId: 'workspace', action: 'add', target: 'memory', content: pending })).toMatchObject({ ok: false, error: { message: expect.stringContaining('Unpin entries or increase') } })
+  expect(writes.mock.calls.filter(([request]) => request.mode === 'mutate')).toHaveLength(0)
+  expect(task).not.toHaveBeenCalled()
+  expect((await f.graph.source('runtime').read<RuntimeMemorySnapshot>('snapshot')).entries).toMatchObject([{ content: saved, pinned: true }])
+})
+
+it('copies pinned USER entries verbatim around model compaction of unpinned preferences', async () => {
+  const task = vi.fn<RuntimeMaintenanceTaskRunner>(async () => ({ provider: 'spawn', runId: 'pin-profile', result: {
+    output: [], stopReason: 'completed', structured: { action: 'compacted', summary: 'Consolidated ordinary preferences.', compactedEntries: [{ content: 'Be concise.', importance: 'normal', sourceIndexes: [1] }] },
+  } }))
+  const f = await fixture(task)
+  const runtime = f.graph.source('runtime')
+  const rule = 'Keep this exact profile instruction. '.repeat(2).trim()
+  await runtime.mutate('mutate', { action: 'add', target: 'user', content: rule, importance: 'critical' })
+  await runtime.mutate('pin', { target: 'user', content: rule, pinned: true })
+  const before = (await runtime.read<RuntimeMemorySnapshot>('snapshot')).entries.find(entry => entry.content === rule)
+  await runtime.mutate('mutate', { action: 'add', target: 'user', content: 'Ordinary preference. '.repeat(17).trim() })
+  const next = 'New user preference. '.repeat(10).trim()
+  expect(await f.write('runtime-memory', { workspaceId: 'workspace', action: 'add', target: 'user', content: next })).toMatchObject({ ok: true })
+  const entries = (await runtime.read<RuntimeMemorySnapshot>('snapshot')).entries.filter(entry => entry.target === 'user')
+  expect(entries[0]).toEqual(before)
+  expect(entries.map(entry => entry.content)).toEqual([rule, 'Be concise.', next])
+})

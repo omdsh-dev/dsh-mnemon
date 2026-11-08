@@ -104,6 +104,15 @@ export function RuntimePage(props: { client: RuntimePageClient; revision: number
       setRemoving(null)
     } catch (reason) { setError(message(reason)) } finally { setSaving(false) }
   }
+  const togglePin = async (entry: RuntimeMemoryEntry) => {
+    if (props.client.pinRuntimeMemory === undefined) return
+    setSaving(true); setError(null); setNotice(null)
+    try {
+      await props.client.pinRuntimeMemory({ target: entry.target, content: entry.content, pinned: entry.pinned !== true })
+      setNotice(t(entry.pinned === true ? 'runtime.unpinnedNotice' : 'runtime.pinnedNotice'))
+      await load(); props.onMutate()
+    } catch (reason) { setError(message(reason)) } finally { setSaving(false) }
+  }
   const runtimeEditActionClass = appearanceClass(css.ghostButton, appearanceClass(sidebarCss.itemActionButton, sidebarCss.itemEditAction))
   const runtimeRemoveActionClass = appearanceClass(css.dangerButton, appearanceClass(sidebarCss.itemActionButton, sidebarCss.itemDangerAction))
 
@@ -111,11 +120,11 @@ export function RuntimePage(props: { client: RuntimePageClient; revision: number
     const key = entryKey(entry)
     const isRemoving = removing === key
     return <article key={key} className={css.runtimeEntry} data-importance={entry.importance} data-target={entry.target} data-focused={focused(entry) || undefined}>
-      <div className={css.runtimeEntryMeta}>{showTarget ? <div className={css.runtimeEntryBadges}><span className={css.runtimeEntryTarget}>{entry.target === 'user' ? 'USER.md' : 'MEMORY.md'}</span><span>{t(`runtime.importance.${entry.importance}` as MnemonKey)}</span>{entry.branches !== undefined && entry.branches.length > 0 && <span className={css.runtimeEntryBranch} title={t('runtime.branchBadge')}>{entry.branches.join(', ')}</span>}</div> : <><span>{t(`runtime.importance.${entry.importance}` as MnemonKey)}</span>{entry.branches !== undefined && entry.branches.length > 0 && <span className={css.runtimeEntryBranch} title={t('runtime.branchBadge')}>{entry.branches.join(', ')}</span>}</>}<time dateTime={entry.created_at}>{new Date(entry.created_at).toLocaleString(locale)}</time></div>
+      <div className={css.runtimeEntryMeta}>{showTarget ? <div className={css.runtimeEntryBadges}><span className={css.runtimeEntryTarget}>{entry.target === 'user' ? 'USER.md' : 'MEMORY.md'}</span><span>{t(`runtime.importance.${entry.importance}` as MnemonKey)}</span>{entry.pinned === true && <span className={css.runtimeEntryBranch}>{t('runtime.pinned')}</span>}{entry.branches !== undefined && entry.branches.length > 0 && <span className={css.runtimeEntryBranch} title={t('runtime.branchBadge')}>{entry.branches.join(', ')}</span>}</div> : <><span>{t(`runtime.importance.${entry.importance}` as MnemonKey)}</span>{entry.pinned === true && <span className={css.runtimeEntryBranch}>{t('runtime.pinned')}</span>}{entry.branches !== undefined && entry.branches.length > 0 && <span className={css.runtimeEntryBranch} title={t('runtime.branchBadge')}>{entry.branches.join(', ')}</span>}</>}<time dateTime={entry.created_at}>{new Date(entry.created_at).toLocaleString(locale)}</time></div>
       {<p>{entry.content}</p>}
 
       <footer>
-        {(props.writeEnabled ? <><button type="button" className={runtimeEditActionClass} disabled={saving && isRemoving} onClick={() => beginEdit(entry)}>{t('runtime.editAction')}</button><button type="button" className={runtimeRemoveActionClass} disabled={saving && isRemoving} onClick={() => { setRemoving(key); setEditing(null) }}>{t('runtime.removeAction')}</button></> : null)}
+        {(props.writeEnabled ? <>{props.client.pinRuntimeMemory !== undefined && <button type="button" className={runtimeEditActionClass} disabled={saving} aria-pressed={entry.pinned === true} onClick={() => void togglePin(entry)}>{t(entry.pinned === true ? 'runtime.unpin' : 'runtime.pin')}</button>}<button type="button" className={runtimeEditActionClass} disabled={saving && isRemoving} onClick={() => beginEdit(entry)}>{t('runtime.editAction')}</button><button type="button" className={runtimeRemoveActionClass} disabled={saving && isRemoving} onClick={() => { setRemoving(key); setEditing(null) }}>{t('runtime.removeAction')}</button></> : null)}
       </footer>
     </article>
   }
@@ -123,7 +132,7 @@ export function RuntimePage(props: { client: RuntimePageClient; revision: number
   const targetSummary = (value: RuntimeMemoryTarget) => {
     const view = snapshot?.targets[value]
     const percentage = view === undefined || view.limit === 0 ? 0 : Math.min(100, Math.round(view.used / view.limit * 100))
-    return <section className={css.runtimeSummaryCard} aria-label={t(`runtime.target.${value}` as MnemonKey)}><header className={css.runtimeTargetHeader}><div><span>{value === 'user' ? 'USER.md' : 'MEMORY.md'}</span><h3>{t(`runtime.target.${value}` as MnemonKey)}</h3></div><strong>{view?.entryCount ?? 0}</strong></header><div className={css.capacityLine}><div><i style={{ width: `${percentage}%` }} /></div><span>{view === undefined ? '—' : `${humanBytes(view.used)} / ${humanBytes(view.limit)}`}</span></div><p className={css.runtimeTargetDescription}>{t(`runtime.target.${value}.description` as MnemonKey)}</p></section>
+    return <section className={css.runtimeSummaryCard} aria-label={t(`runtime.target.${value}` as MnemonKey)}><header className={css.runtimeTargetHeader}><div><span>{value === 'user' ? 'USER.md' : 'MEMORY.md'}</span><h3>{t(`runtime.target.${value}` as MnemonKey)}</h3></div><strong>{view?.entryCount ?? 0}</strong></header><div className={css.capacityLine}><div><i style={{ width: `${percentage}%` }} /></div><span>{view === undefined ? '—' : `${humanBytes(view.used)} / ${humanBytes(view.limit)}`}</span></div><p className={css.runtimeTargetDescription}>{t(`runtime.target.${value}.description` as MnemonKey)}</p>{view?.pinned !== undefined && <p className={css.runtimeTargetDescription}>{t('runtime.pinBudget', { count: view.pinned.count, used: view.pinned.characters, limit: view.pinned.limit })}</p>}</section>
   }
   const normalizedQuery = filterQuery.trim().toLocaleLowerCase()
   const filteredEntries = (snapshot?.entries ?? [])

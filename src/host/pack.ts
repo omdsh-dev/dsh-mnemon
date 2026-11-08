@@ -31,7 +31,7 @@ import { MemorySpaceIdentity } from 'dsh-mnemon-source-memory-spaces/space-ident
 import {
   RUNTIME_ARCHIVE_DIRECTORY, RUNTIME_DIRECTORY, RUNTIME_ENTRY_MAX_BYTES, RUNTIME_LOCK_FILE, RUNTIME_LOCK_STALE_MS, RUNTIME_MEMORIES_FILE,
   RUNTIME_MEMORY_LIMITS, RUNTIME_MEMORY_VERSION, RUNTIME_PROJECTION_FILES,
-  parseRuntimeBranches, runtimeBytes, runtimeProjection, type RuntimeMemoryEntry, type RuntimeMemoryLimits, type RuntimeMemoryTarget,
+  parseRuntimeBranches, runtimeBytes, runtimeProjection, assertRuntimePinnedBudget, type RuntimeMemoryEntry, type RuntimeMemoryLimits, type RuntimeMemoryTarget,
 } from 'dsh-mnemon-source-runtime/contracts'
 import { createStorageRoot, type StorageRoot } from './storage-root.ts'
 import { MNEMON_PACK_COMPONENTS, type MnemonEntryOrigin, type MnemonMachineIdentity, type MnemonPackComponent, type MnemonPackComponentSummary, type MnemonPackExport, type MnemonPackImportMode, type MnemonPackImportResult, type MnemonPackManifest, type MnemonPackPreview, type MnemonPackScope, type MnemonPackTarget, type MnemonRuntimeMergeReport, type MnemonTombstone, type MnemonTombstoneFile } from "./protocol.ts"
@@ -306,6 +306,7 @@ export function parseRuntime(value: unknown, limits: RuntimeMemoryLimits = RUNTI
       throw new Error('runtime memories.json contains an invalid entry')
     }
     if (typeof entry.created_at !== 'string' || typeof entry.updated_at !== 'string') throw new Error('runtime memories.json contains invalid timestamps')
+    if (entry.pinned !== undefined && typeof entry.pinned !== 'boolean') throw new Error('runtime memories.json contains invalid pin state')
     const content = entry.content.trim().replace(/\s+/gu, ' ')
     if (content === '' || content.includes('§') || Buffer.byteLength(content, 'utf8') > RUNTIME_ENTRY_MAX_BYTES) throw new Error('runtime memories.json contains invalid content')
     // A Pack carries provenance, not only text: the branch scope of a working-memory entry
@@ -317,10 +318,12 @@ export function parseRuntime(value: unknown, limits: RuntimeMemoryLimits = RUNTI
     return {
       content, target: entry.target, importance: entry.importance as RuntimeMemoryEntry['importance'],
       created_at: entry.created_at, updated_at: entry.updated_at,
+      ...(entry.pinned === undefined ? {} : { pinned: entry.pinned }),
       ...(branches === undefined ? {} : { branches }),
       ...(origin === undefined ? {} : { origin }),
     }
   })
+  assertRuntimePinnedBudget(entries)
   for (const target of ['user', 'memory'] as const) {
     const used = runtimeBytes(entries, target)
     if (used > limits[target]) throw new Error(`runtime ${target} memory holds ${used} bytes and exceeds its ${limits[target]} byte limit`)
@@ -517,11 +520,12 @@ function archiveRuntimeOverflow(stagedRuntime: string, entries: RuntimeMemoryEnt
 
 /** Retain the same hot set on both machines, without asking a model to rewrite evidence. */
 function fitMergedRuntime(entries: RuntimeMemoryEntry[], limits: RuntimeMemoryLimits): { entries: RuntimeMemoryEntry[]; archived: RuntimeMemoryEntry[] } {
+  if (runtimeBytes(entries.filter(entry => entry.pinned === true), 'memory') > limits.memory) throw new Error('Pinned runtime entries exceed the merge capacity. Unpin entries or increase the capacity; no data was changed.')
   if (runtimeBytes(entries, 'memory') <= limits.memory) return { entries, archived: [] }
   const importance = { critical: 2, normal: 1, low: 0 }
   const compare = (left: string, right: string): number => left < right ? -1 : left > right ? 1 : 0
   const ranked = entries.filter(entry => entry.target === 'memory').sort((left, right) =>
-    importance[right.importance] - importance[left.importance] || compare(right.updated_at, left.updated_at) || compare(entryKey(left), entryKey(right)))
+    Number(right.pinned === true) - Number(left.pinned === true) || importance[right.importance] - importance[left.importance] || compare(right.updated_at, left.updated_at) || compare(entryKey(left), entryKey(right)))
   const kept: RuntimeMemoryEntry[] = []
   const archived: RuntimeMemoryEntry[] = []
   for (const entry of ranked) {
@@ -815,7 +819,14 @@ function mergeRuntime(root: string, pack: ParsedPack, runtimeLimits: RuntimeMemo
       // tombstones that hid it go, or the next merge would hide it again.
       for (const tombstone of hidden) if (!revived.includes(tombstone)) revived.push(tombstone)
     }
-    if (keys.has(key)) continue
+    if (keys.has(key)) {
+      const existing = entries.find(candidate => entryKey(candidate) === key)!
+      if (entry.pinned !== undefined && (existing.pinned === undefined || entry.updated_at > existing.updated_at)) {
+        existing.pinned = entry.pinned
+        if (entry.updated_at > existing.updated_at) existing.updated_at = entry.updated_at
+      }
+      continue
+    }
     keys.add(key)
     entries.push(entry)
     incomingKeys.add(key)

@@ -86,7 +86,11 @@ function compactedBudget(plan: RuntimeMemoryMaintenancePlan): number {
   const separatorBytes = plan.pending === undefined || plan.entries.length === 0
     ? 0
     : Buffer.byteLength(RUNTIME_ENTRY_DELIMITER, 'utf8')
-  return Math.max(0, Math.floor(plan.limit * 0.7) - pendingBytes - separatorBytes)
+  const pinned = plan.entries.filter(entry => entry.pinned === true)
+  const pinnedBytes = Buffer.byteLength(pinned.map(entry => entry.content).join(RUNTIME_ENTRY_DELIMITER), 'utf8')
+  const available = plan.limit - pendingBytes - separatorBytes
+  if ((pinned.length > 0 || plan.pending?.pinned === true) && pinnedBytes > available) throw new Error('Pinned runtime entries leave no capacity for this write. Unpin entries or increase the capacity; no archive writes were attempted.')
+  return Math.max(pinnedBytes, Math.max(0, Math.floor(plan.limit * 0.7) - pendingBytes - separatorBytes))
 }
 
 function runtimeMigrationSources(
@@ -138,7 +142,7 @@ async function archiveRuntimeLocally(counters: SubagentCounters, context: Runtim
   }
   context.assertWritable?.()
   const runId = `host-${randomUUID()}`
-  const compacted = plan.entries.map(({ content, importance, branches }): RuntimeMemoryCompactedEntry => ({ content, importance, ...(branches === undefined ? {} : { branches }) }))
+  const compacted = plan.entries.map(({ content, importance, branches, pinned }): RuntimeMemoryCompactedEntry => ({ content, importance, ...(branches === undefined ? {} : { branches }), ...(pinned === undefined ? {} : { pinned }) }))
   const mutation = await context.runtime.mutateResult<RuntimeMemoryMutationResult>('compact-and-mutate', {
     revision: plan.revision, ...(context.preserveImportance ? { preserveImportance: true } : {}), mutation: request, compacted, maxBytes: compactedBudget(plan), archive: 'local',
   }, signal)
@@ -174,8 +178,10 @@ export async function runtimeLocked(counters: SubagentCounters, context: Runtime
   if (context.expectedRevision !== undefined && context.expectedRevision !== plan.revision) throw new Error('Runtime source revision conflict before capacity maintenance')
   if (!plan.requiresMaintenance) return context.commit()
   if (plan.entries.length === 0) throw new Error('runtime memory capacity was exceeded without entries available for maintenance')
+  compactedBudget(plan) // Fail before any model or Provider work if pins cannot fit.
   if (request.target === 'user') return compactUserAndCommit(context, request, plan, signal)
 
+  const archiveEntries = plan.entries.filter(entry => entry.pinned !== true)
   const archive = await context.memorySpaces()
   if (archive === undefined) return archiveRuntimeLocally(counters, context, request, plan, 'no Memory Space takes automatic writes here', signal)
   const memoryService = archive.source
@@ -229,7 +235,7 @@ export async function runtimeLocked(counters: SubagentCounters, context: Runtime
   let runId = `host-${randomUUID()}`
   let summary = 'Routed every entry to the only eligible Memory Space without model work.'
   if (eligibleBodies.length === 1) {
-    for (const index of plan.entries.keys()) routed.set(index + 1, eligibleBodies[0]!.id)
+    for (const index of archiveEntries.keys()) routed.set(index + 1, eligibleBodies[0]!.id)
   } else {
     const summaries: string[] = []
     // Deterministic fallback when the semantic router itself fails (for example
@@ -238,7 +244,7 @@ export async function runtimeLocked(counters: SubagentCounters, context: Runtime
     // The default store keeps the strongest "this memory belongs somewhere"
     // guarantee without inventing a destination.
     const fallbackBody = eligibleBodies.find(body => body.mnemonDefault) ?? eligibleBodies[0]!
-    const chunks = runtimeRouteChunks(plan.entries)
+    const chunks = runtimeRouteChunks(archiveEntries)
     for (const [chunkIndex, chunk] of chunks.entries()) {
       const prompt = `Route this bounded MEMORY.md archive batch now. The host retains and writes the exact source content; these excerpts exist only for destination selection.
 
@@ -298,8 +304,8 @@ ${chunk.context}
     }
     summary = summaries.join(' ')
   }
-  if (routed.size !== plan.entries.length) throw new Error('runtime memory migration omitted committed archive sources')
-  const compactedEntries = plan.entries.map(({ content, importance, branches }): RuntimeMemoryCompactedEntry => ({ content, importance, ...(branches === undefined ? {} : { branches }) }))
+  if (routed.size !== archiveEntries.length) throw new Error('runtime memory migration omitted committed archive sources')
+  const compactedEntries = plan.entries.map(({ content, importance, branches, pinned }): RuntimeMemoryCompactedEntry => ({ content, importance, ...(branches === undefined ? {} : { branches }), ...(pinned === undefined ? {} : { pinned }) }))
 
   // Re-check the local source before any Provider side effect. A later race is
   // still caught by compactAndMutate; Provider receipts are verified because
@@ -315,9 +321,9 @@ ${chunk.context}
   signal.throwIfAborted()
   context.assertWritable?.()
 
-  const sources = runtimeMigrationSources(plan.revision, plan.entries)
+  const sources = runtimeMigrationSources(plan.revision, archiveEntries)
   const requests = sources.map(source => {
-    const entry = plan.entries[source.index - 1]!
+    const entry = archiveEntries[source.index - 1]!
     return {
       content: entry.content,
       category: 'context' as const,
@@ -357,7 +363,7 @@ ${chunk.context}
       }
       if (written.length !== batch.length) throw new Error('runtime archive batch did not return one receipt per source entry')
       for (const source of batch) {
-        verified.set(source.index, await archiveRuntimeEntry(memoryService, memoryBodyId, plan.entries[source.index - 1]!, archiveResults.get(source.index), signal))
+        verified.set(source.index, await archiveRuntimeEntry(memoryService, memoryBodyId, archiveEntries[source.index - 1]!, archiveResults.get(source.index), signal))
       }
     }
     const lineage: MemoryMigrationLineage[] = []
@@ -426,11 +432,13 @@ async function compactUserAndCommit(
 ): Promise<CoordinatedRuntimeMemoryResult> {
   const runtimeMemory = context.runtime
   const budget = compactedBudget(plan)
+  const pinned = plan.entries.filter(entry => entry.pinned === true)
+  const mutable = plan.entries.filter(entry => entry.pinned !== true)
   const prompt = `Run local USER.md compaction now.
 Pending mutation (uncommitted; do not include in compaction):
 ${pendingMutationContext(plan)}
 
-${runtimeSnapshotContext('user', plan.entries)}`
+${runtimeSnapshotContext('user', mutable)}`
   const { provider, runId, result } = await context.model('compaction', 'Consolidate local user profile', prompt, USER_COMPACTION_SCHEMA, USER_COMPACTION_PERSONA)
   const value = object(result.structured)
   if (value.action !== 'compacted') throw new Error(typeof value.summary === 'string' && value.summary !== '' ? value.summary : 'USER.md compaction failed')
@@ -447,14 +455,14 @@ ${runtimeSnapshotContext('user', plan.entries)}`
     if (entry.sourceIndexes.length === 0) throw new Error('USER.md compaction returned an entry without a source')
     let requiredRank = 0
     for (const index of entry.sourceIndexes) {
-      if (index < 1 || index > plan.entries.length || seen.has(index)) throw new Error('USER.md compaction source coverage is invalid')
+      if (index < 1 || index > mutable.length || seen.has(index)) throw new Error('USER.md compaction source coverage is invalid')
       seen.add(index)
-      requiredRank = Math.max(requiredRank, importanceRank[plan.entries[index - 1]!.importance])
+      requiredRank = Math.max(requiredRank, importanceRank[mutable[index - 1]!.importance])
     }
     if (importanceRank[entry.importance] < requiredRank) throw new Error('USER.md compaction lowered source importance')
   }
-  if (seen.size !== plan.entries.length) throw new Error('USER.md compaction omitted committed entries')
-  const candidates = compactedEntries.map(({ content, importance }) => ({ content, importance }))
+  if (seen.size !== mutable.length) throw new Error('USER.md compaction omitted committed entries')
+  const candidates: RuntimeMemoryCompactedEntry[] = [...pinned.map(entry => ({ content: entry.content, importance: entry.importance, pinned: true })), ...compactedEntries.map(({ content, importance }) => ({ content, importance }))]
   const candidateBytes = Buffer.byteLength(candidates.map(entry => entry.content.trim().replace(/\s+/gu, ' ')).join(RUNTIME_ENTRY_DELIMITER), 'utf8')
   if (candidateBytes > budget) throw new Error(`USER.md compaction did not fit the host budget (${candidateBytes} > ${budget} bytes)`)
   signal.throwIfAborted()
