@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
+import { removeDisposableDirectory } from './disposable-directory.ts'
 import {
   MNEMON_SYNC_DEFAULT_AUTHOR_EMAIL, MNEMON_SYNC_DEFAULT_AUTHOR_NAME,
   MNEMON_SYNC_DEFAULT_BRANCH, MNEMON_SYNC_DEFAULT_SUBDIR,
@@ -249,6 +250,6 @@ export class MnemonSyncSettingsStore {
   }
 
   clearMirror(): void {
-    rmSync(this.mirror(), { recursive: true, force: true })
+    removeDisposableDirectory(this.mirror())
   }
 }

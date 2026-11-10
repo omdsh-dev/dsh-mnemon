@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { removeDisposableDirectory } from './disposable-directory.ts'
 import { join, relative, resolve, sep } from 'node:path'
 import { zipSync, unzipSync, type Unzipped } from 'fflate'
 import type { ResolvedConfig } from './config.ts'
@@ -1366,10 +1367,10 @@ export class MnemonGitSync {
     // branch would publish there, so it is rebuilt rather than reused.
     if (existsSync(join(mirror, '.git'))) {
       const origin = await this.git(['config', '--get', ORIGIN_KEY], { cwd: mirror, signal })
-      if (origin.exitCode !== 0 || origin.stdout.trim() !== settings.repoUrl) rmSync(mirror, { recursive: true, force: true })
+      if (origin.exitCode !== 0 || origin.stdout.trim() !== settings.repoUrl) removeDisposableDirectory(mirror)
     }
     if (!existsSync(join(mirror, '.git'))) {
-      rmSync(mirror, { recursive: true, force: true })
+      removeDisposableDirectory(mirror)
       // `--initial-branch` needs Git 2.28; HEAD is pointed at the branch just below instead.
       const initialized = await this.git(['init', '--quiet', mirror], { signal })
       if (initialized.exitCode !== 0) throw new Error('git init failed: ' + tail(initialized.stderr || initialized.stdout))
@@ -1449,7 +1450,7 @@ export class MnemonGitSync {
     if (root === mirror || !root.startsWith(mirror + (process.platform === 'win32' ? '\\' : '/'))) {
       throw new Error('sync directory escapes the mirror')
     }
-    rmSync(root, { recursive: true, force: true })
+    removeDisposableDirectory(root)
     for (const [path, bytes] of Object.entries(entries)) {
       const file = resolve(root, path)
       mkdirSync(join(file, '..'), { recursive: true, mode: 0o700 })
