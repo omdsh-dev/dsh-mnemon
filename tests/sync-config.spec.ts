@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -29,6 +29,19 @@ afterEach(() => {
 })
 
 describe('Mnemon sync configuration', () => {
+  it('clears a read-only disposable mirror without removing stored settings', () => {
+    const { settings } = store()
+    settings.write(settings.read())
+    const before = settings.read()
+    const directory = join(settings.mirror(), '.git', 'objects', 'pack')
+    mkdirSync(directory, { recursive: true })
+    const pack = join(directory, 'synthetic.pack')
+    writeFileSync(pack, 'pack')
+    chmodSync(pack, 0o444)
+    settings.clearMirror()
+    expect(existsSync(settings.mirror())).toBe(false)
+    expect(settings.read()).toEqual(before)
+  })
   it('defaults to the mnemon-sync branch and the mnemon directory', () => {
     const { root, settings } = store()
     expect(settings.read()).toEqual({

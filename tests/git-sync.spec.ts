@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -1505,6 +1505,32 @@ describe.skipIf(!available)('Mnemon Git sync', { timeout: 90_000 }, () => {
     const pushed = await machineA.sync.push({ message: 'After the deletion' })
     expect(pushed).toMatchObject({ committed: true, pushed: true })
     expect((await git(['log', '--format=%s', 'mnemon-sync'], origin)).trim()).toBe('After the deletion')
+  })
+
+  it.each(['missing origin', 'partial mirror', 'different repository'] as const)('rebuilds a read-only Git mirror after %s without losing memory', async reason => {
+    const first = await repository('read-only-first')
+    const second = await repository('read-only-second')
+    const machineA = await machine('read-only-sync', first)
+    await machineA.sources.runtime.mutate('mutate', { action: 'add', target: 'user', content: 'Synthetic retained preference', importance: 'normal' }, { confirmed: true })
+    await machineA.sync.push({ message: 'First repository history' })
+    const mirror = join(machineA.root, 'state', 'sync', 'git')
+    await git(['gc', '--prune=now'], mirror)
+    const packs = join(mirror, '.git', 'objects', 'pack')
+    expect(readdirSync(packs).some(name => name.endsWith('.pack'))).toBe(true)
+    for (const name of readdirSync(packs)) chmodSync(join(packs, name), 0o444)
+    if (reason === 'missing origin') await git(['config', '--unset', 'mnemon.origin'], mirror)
+    if (reason === 'partial mirror') renameSync(join(mirror, '.git'), join(mirror, 'incomplete-git'))
+    if (reason === 'different repository') await machineA.sync.configure({ repoUrl: second })
+    await machineA.sources.runtime.mutate('mutate', { action: 'add', target: 'user', content: 'Synthetic recovered update', importance: 'normal' }, { confirmed: true })
+    const result = await machineA.sync.push({ message: 'Recovered sync' })
+    expect(result.pushed).toBe(true)
+    expect(readFileSync(join(machineA.root, 'runtime', 'USER.md'), 'utf8')).toContain('Synthetic retained preference')
+    const destination = reason === 'different repository' ? second : first
+    expect(await git(['show', 'mnemon-sync:mnemon/payload/runtime/USER.md'], destination)).toContain('Synthetic retained preference')
+    if (reason === 'different repository') {
+      expect((await git(['rev-list', '--count', 'mnemon-sync'], second)).trim()).toBe('1')
+      expect(await git(['log', '--format=%s', 'mnemon-sync'], second)).not.toContain('First repository history')
+    }
   })
 
   it('folds in a branch that moved during the push and publishes again', async () => {
