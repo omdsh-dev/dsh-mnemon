@@ -18,7 +18,7 @@ Commands:
 
 ```sh
 pnpm run verify
-DSH_HOST_ROOT=<published-rc1-install>/node_modules/@deepseek-ai/dsh   pnpm exec vitest run --config scripts/installed-dsh.config.ts   tests/idle-review-tool-access-host.spec.ts tests/lifecycle.spec.ts   tests/legacy-session-repair.spec.ts tests/plugin.spec.ts
+DSH_HOST_ROOT=<published-rc1-install>/node_modules/@deepseek-ai/dsh   pnpm exec vitest run --config scripts/installed-dsh.config.ts   tests/idle-review-tool-access-host.spec.ts tests/lifecycle.spec.ts   tests/legacy-session-repair.spec.ts tests/source-tool-lifecycle.spec.ts
 ```
 
 The real Host tools and published Auto reviewer run in-process; the model and reviewer risk response are scripted to avoid network calls. Auto may still refuse a background admission probe because it has no model-authored root call. This fix does not bypass that policy: it prevents the refusal from corrupting later foreground tool review. Existing damaged histories require the documented preview-and-copy recovery command; no live session is rewritten automatically. This is a Host lifecycle change, with no UI layout changes.
