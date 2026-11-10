@@ -45,13 +45,13 @@ importers:
         specifier: 0.6.0
         version: link:plugins/dsh-mnemon-source-documents
       dsh-mnemon-source-memory-spaces:
-        specifier: 0.5.26
+        specifier: 0.5.27
         version: link:plugins/dsh-mnemon-source-memory-spaces
       dsh-mnemon-source-runtime:
         specifier: 0.5.19
         version: link:plugins/dsh-mnemon-source-runtime
       dsh-mnemon-source-skills:
-        specifier: 0.5.10
+        specifier: 0.5.11
         version: link:plugins/dsh-mnemon-source-skills
       dsh-mnemon-strategy-auto-capture:
         specifier: 0.5.5
@@ -651,7 +651,7 @@ importers:
         specifier: ^9.0.0
         version: 9.0.0
       dsh-mnemon:
-        specifier: ^0.5.43
+        specifier: ^0.5.44
         version: link:../..
       dsh-mnemon-provider-byterover:
         specifier: ^0.5.7
@@ -917,7 +917,7 @@ importers:
         specifier: ^9.0.0
         version: 9.0.0
       dsh-mnemon:
-        specifier: ^0.5.43
+        specifier: ^0.5.44
         version: link:../..
       immer:
         specifier: ^10.1.1

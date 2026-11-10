@@ -6,6 +6,7 @@ For an existing installation, start with [Compatibility and upgrades](../referen
 
 ## v0.5
 
+- [v0.5.44: Safer Skill Automation and Clearer Memory Controls](./v0.5.44.md)
 - [v0.5.43: Reliable Skill Automation and Pinned Runtime Memories](./v0.5.43.md)
 - [v0.5.42: Bounded Runtime Snapshots and Reliable Memory Management](./v0.5.42.md)
 - [v0.5.41: DSH Task Compatibility and Reliable Skill Drafts](./v0.5.41.md)
