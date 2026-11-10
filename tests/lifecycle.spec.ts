@@ -249,7 +249,9 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
   const turnStopping = async (turn: number) => {
     const listener = agentListeners.get('agent/turn-stopping')
     if (listener === undefined) throw new Error('turn-stopping listener missing')
-    await listener({ agent, turn, signal: new AbortController().signal })
+    const signal = new AbortController().signal
+    await agentListeners.get('agent/request')?.({ agent, turn, step: 1, signal }, async () => ({}))
+    await listener({ agent, turn, signal })
     if (!events.some(event => event.type === 'turn/end' && event.data.turn === turn)) {
       const event = { type: 'turn/end', data: { turn } }
       events.push(event)
@@ -1179,10 +1181,10 @@ describe('Mnemon DSH lifecycle integration', () => {
     const config = resolveConfig({ idleReviewMs: 5_000 })
     const value = fixture(config)
     let finish: ((available: boolean) => void) | undefined
-    vi.mocked(value.coordinator.checkReviewAccess).mockImplementationOnce(() => new Promise<boolean>(resolve => { finish = resolve }))
     try {
       await value.preStep([durableCandidate(300)], 1)
       await value.turnStopping(1)
+    vi.mocked(value.coordinator.checkReviewAccess).mockImplementationOnce(() => new Promise<boolean>(resolve => { finish = resolve }))
       await value.preStep([durableCandidate(300)], 2)
       const stopping = value.turnStopping(2)
       await vi.waitFor(() => expect(finish).toBeDefined())
