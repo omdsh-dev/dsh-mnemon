@@ -71,7 +71,7 @@ function automaticAdoption(value: MemoryJsonValue | undefined): { automatic?: Au
   if (value === undefined) return {}
   const input = record(value, 'automatic')
   if (!Number.isInteger(input.attempt) || Number(input.attempt) < 1 || Number(input.attempt) > 3) throw new Error('automatic adoption attempt must be 1..3')
-  return { automatic: { attempt: Number(input.attempt), draftHash: text(input.draftHash, 'draftHash', 100)!, baselineRunId: text(input.baselineRunId, 'baselineRunId', 100)!, draftRunId: text(input.draftRunId, 'draftRunId', 100)!, casesHash: text(input.casesHash, 'casesHash', 100)! } }
+  return { automatic: { ...(input.reservationId === undefined ? {} : { reservationId: text(input.reservationId, 'reservationId', 100)! }), attempt: Number(input.attempt), draftHash: text(input.draftHash, 'draftHash', 100)!, baselineRunId: text(input.baselineRunId, 'baselineRunId', 100)!, draftRunId: text(input.draftRunId, 'draftRunId', 100)!, casesHash: text(input.casesHash, 'casesHash', 100)! } }
 }
 
 function autoAdoptionEvent(value: Record<string, MemoryJsonValue>): Omit<AutoAdoptionEvent, 'at'> {
@@ -386,6 +386,7 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
               value = await service.suggestionStatus({ ...(request.signal === undefined ? {} : { signal: request.signal }), id: text(fields.id, 'id', 100)!, status, ...draftExpectation(fields.expectedDraft), ...(typeof fields.error === 'string' ? { error: fields.error } : {}) })
               break
             }
+            case 'auto-adoption-reserve': value = await service.reserveAutomatic(root, text(fields.id, 'id', 100)!, typeof fields.limit === 'number' ? fields.limit : NaN, text(fields.timeZone, 'timeZone', 100)!); break
             case 'auto-adoption-record': value = await service.recordAutoAdoption(text(fields.id, 'id', 100)!, autoAdoptionEvent(fields)); break
             case 'trajectory-pin': value = await service.pinTrajectory(text(fields.id, 'id', 100)!, bool(fields.pinned, 'pinned')); break
             case 'trajectory-delete': value = await service.deleteTrajectory(text(fields.id, 'id', 100)!); break

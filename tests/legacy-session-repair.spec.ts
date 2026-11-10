@@ -151,6 +151,53 @@ describe('legacy Session copy repair', () => {
     expect(restored.events.find(event => event.seq === end.seq)?.data).toEqual({ originalType: end.type, originalData: end.data })
   })
 
+  it.each([false, true])('recovers paired idle probes between step/end and turn/end (issue 602, zstd=%s)', async compressed => {
+    const root = await directory()
+    const rows = idleProbeFixture.trim().split('\n').map(line => JSON.parse(line))
+    const probes = rows.filter(row => row.type.startsWith('tool/ptc-dispatch'))
+    const shifted = rows.filter(row => !probes.includes(row))
+    const end = shifted.findIndex(row => row.type === 'turn/end' && row.data.turn === 2)
+    shifted.splice(end, 0, ...probes)
+    shifted.slice(1).forEach((row, seq) => { row.seq = seq; row.time = 1793619900000 + seq })
+    const text = serializeRows(shifted)
+    const original = compressed ? compressFrames(text) : Buffer.from(text)
+    const input = join(root, 'out-of-step')
+    const output = join(root, 'recovered')
+    await writeFile(input, original)
+    const result = cli('--input', input, '--output', output)
+    expect(result.status, result.stderr).toBe(0)
+    expect(JSON.parse(result.stdout).recoveredIdleProbeEvents).toBe(2)
+    expect(await readFile(input)).toEqual(original)
+    const bytes = await readFile(output)
+    const repaired = compressed ? decompressFrames(bytes) : bytes.toString()
+    const restored = await publishedLoad(join(root, 'after'), repaired)
+    expect(restored.events.some(event => event.type === 'tool/ptc-dispatch-start')).toBe(false)
+    const after = repaired.trim().split('\n').map(line => JSON.parse(line))
+    for (let index = 0; index < shifted.length; index++) {
+      const row = shifted[index]
+      expect(after[index]).toEqual(probes.includes(row)
+        ? { type: 'dsh-mnemon/recovered-idle-probe', seq: row.seq, time: row.time, ignorable: true, data: { originalType: row.type, originalData: row.data } }
+        : row)
+    }
+  })
+
+  it('does not rewrite a probe that has a real owning step', async () => {
+    const root = await directory()
+    const rows = idleProbeFixture.trim().split('\n').map(line => JSON.parse(line))
+    const probes = rows.filter(row => row.type.startsWith('tool/ptc-dispatch'))
+    const shifted = rows.filter(row => !probes.includes(row))
+    shifted.splice(shifted.findIndex(row => row.type === 'step/end' && row.data.turn === 2), 0, ...probes)
+    shifted.slice(1).forEach((row, seq) => { row.seq = seq; row.time = 1793619900000 + seq })
+    const text = serializeRows(shifted)
+    const input = join(root, 'in-step')
+    const output = join(root, 'unchanged')
+    await writeFile(input, text)
+    const result = cli('--input', input, '--output', output)
+    expect(result.status, result.stderr).toBe(0)
+    expect(JSON.parse(result.stdout).recoveredIdleProbeEvents).toBe(0)
+    expect(await readFile(output, 'utf8')).toBe(text)
+  })
+
   it.each(['orphan', 'writer', 'nonempty-result', 'wrong-root', 'surface', 'duplicate-key', 'seeded', 'cross-turn', 'referenced'] as const)(
     'refuses ambiguous v4 probe recovery (%s)', async variant => {
       const root = await directory()

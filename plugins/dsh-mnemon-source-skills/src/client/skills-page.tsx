@@ -103,6 +103,7 @@ function SkillRow(props: { context: SkillsPageContext; skill: SkillSummary; stat
         <strong>
           <span>{skill.name}</span>
           {skill.shadowedBy === undefined && (stats?.open ?? 0) > 0 && <i className={css.skDot} title={t('skills.waitingCount', { count: stats!.open })} />}
+          {skill.readOnly && <Tag tone="quiet">{t('skills.linked')}</Tag>}
           {skill.shadowedBy !== undefined ? <Tag tone="quiet">{t('skills.shadowed')}</Tag> : on && invocation !== 'both' && <Tag tone="outline">{t(`invocation.${invocation}Short`)}</Tag>}
         </strong>
         <small>{skill.description}</small>
@@ -110,7 +111,7 @@ function SkillRow(props: { context: SkillsPageContext; skill: SkillSummary; stat
     </button>
     <div className={css.skRowActions}>
       {usable && <Button variant="outline" size="sm" className={css.skUse} title={t('skills.useHint', { name: skill.name })} onClick={() => context.useSkill(skill.name)}>{t('skills.use')}</Button>}
-      <Switch checked={on} label={t('skills.toggle', { name: skill.name })} disabled={busy || !context.writable} onChange={next => void toggle(next)} />
+      <Switch checked={on} label={t('skills.toggle', { name: skill.name })} disabled={busy || !context.writable || skill.readOnly === true} onChange={next => void toggle(next)} />
     </div>
   </div>
 }
@@ -139,7 +140,7 @@ function SkillDetail(props: { context: SkillsPageContext; skillKey: string; stat
   const usable = invocation !== 'off' && skill.shadowedBy === undefined && skill.invocation.userInvocable
   const testsMeta = [t('tests.count', { count: stats?.cases ?? 0 }), ...(stats?.lastScore === undefined ? [] : [t('tests.lastScore', { score: points(stats.lastScore) })])].join(' · ')
   const more = [
-    ...(context.client.canAssist('skill-draft') ? [{ id: 'improve', label: t('skills.improve'), disabled: !context.writable }] : []),
+    ...(context.client.canAssist('skill-draft') ? [{ id: 'improve', label: t('skills.improve'), disabled: !context.writable || skill.readOnly === true }] : []),
     { id: 'remove', label: t('skills.remove'), danger: true, disabled: !context.writable },
   ]
   return <article className={css.skDetail}>
@@ -151,16 +152,17 @@ function SkillDetail(props: { context: SkillsPageContext; skillKey: string; stat
       </div>
       <div className={css.skDetailActions}>
         {usable && <Button variant="outline" size="sm" onClick={() => context.useSkill(skill.name)}>{t('skills.use')}</Button>}
-        <Button variant="outline" size="sm" disabled={!context.writable || busy} onClick={() => setEditing(skill.content)}>{t('common.edit')}</Button>
+        <Button variant="outline" size="sm" disabled={!context.writable || busy || skill.readOnly === true} onClick={() => setEditing(skill.content)}>{t('common.edit')}</Button>
         <MoreMenu label={t('common.more')} items={more} onSelect={id => id === 'improve' ? setImproving(true) : setDeleting(true)} />
       </div>
     </header>
+    {skill.readOnly && <p className={css.skWarn}>{t('skills.linkedReadOnly')}</p>}
     {skill.shadowedBy === undefined && (stats?.open ?? 0) > 0 && <button type="button" className={css.skCallout} onClick={() => context.navigate({ tab: 'evolution', filter: 'pending', skillName: skill.name })}>
       <span>{t('skills.waitingCount', { count: stats!.open })}</span><b>{t('common.view')} ›</b>
     </button>}
     {skill.shadowedBy !== undefined && <p className={css.skWarn}>{t('skills.shadowedBy', { key: skill.shadowedBy })}</p>}
     <div className={css.skInvocation}>
-      <SelectField inline size="sm" label={t('invocation.label')} value={invocation} disabled={!context.writable || busy}
+      <SelectField inline size="sm" label={t('invocation.label')} value={invocation} disabled={!context.writable || busy || skill.readOnly === true}
         options={(['both', 'slash', 'model', 'off'] as const).map(value => ({ value, label: t(`invocation.${value}`) }))}
         onChange={value => void write(() => context.client.setInvocation(skill.key, switchesOf(value), skill.hash))} />
     </div>
@@ -176,7 +178,7 @@ function SkillDetail(props: { context: SkillsPageContext; skillKey: string; stat
           <span />
           {version.hash !== skill.hash && <>
             <Button variant="ghost" size="sm" onClick={() => void context.client.version(skill.key, version.id).then(setComparing).catch(context.fail)}>{t('versions.compare')}</Button>
-            <Button variant="ghost" size="sm" disabled={!context.writable || busy} onClick={() => void write(() => context.client.restoreVersion(skill.key, version.id, skill.hash))}>{t('versions.restore')}</Button>
+            <Button variant="ghost" size="sm" disabled={!context.writable || busy || skill.readOnly === true} onClick={() => void write(() => context.client.restoreVersion(skill.key, version.id, skill.hash))}>{t('versions.restore')}</Button>
           </>}
         </li>)}</ul>}
       </Fold>

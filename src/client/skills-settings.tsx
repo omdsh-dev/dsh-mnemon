@@ -1,6 +1,6 @@
 import type { JSX } from 'react'
 import { IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
-import { DEFAULT_SKILLS_CONFIG, type ClientSettingsScope, type ResolvedSkillsConfig, type SkillsConfig, type SettingsOperation } from '../host/protocol.ts'
+import { DEFAULT_SKILLS_CONFIG, validSkillsTimeZone, type ClientSettingsScope, type ResolvedSkillsConfig, type SkillsConfig, type SettingsOperation } from '../host/protocol.ts'
 import type { MemoryComponentSettingsProps } from './component-ui.tsx'
 import type { MnemonTranslate } from './locales.ts'
 import css from './MnemonSettingsCard.module.css'
@@ -76,6 +76,11 @@ export function SkillsSettings(props: { scope: ClientSettingsScope<SkillsConfig>
     const changed = DRAFT_PARAMETERS.filter(field => parameterValue(field, draft[field.key]) !== saved[field.key])
     if (changed.length > 0) await scope.mutate(changed.map(field => set(field.key, parameterValue(field, draft[field.key])!)))
   })
+  const adoptionBudget = useStaged({ limit: String(saved.autoAdoptDailyLimit), timeZone: saved.autoAdoptTimeZone }, async draft => {
+    await scope.mutate([set('autoAdoptDailyLimit', Number(draft.limit)), set('autoAdoptTimeZone', draft.timeZone.trim())])
+  })
+  const invalidAdoption = parameterValue({ min: 0, max: 100, integer: true }, adoptionBudget.draft.limit) === undefined
+    || !validSkillsTimeZone(adoptionBudget.draft.timeZone.trim())
   const disabled = !page.writable || snapshot.status === 'loading' || !snapshot.writable
   const invalid = PARAMETERS.find(field => parameterValue(field, parameters.draft[field.key]) === undefined)
   const invalidDraft = DRAFT_PARAMETERS.find(field => parameterValue(field, draftBudgets.draft[field.key]) === undefined)
@@ -105,6 +110,17 @@ export function SkillsSettings(props: { scope: ClientSettingsScope<SkillsConfig>
       </details>
       {evolution.value && <ToggleRow id="mnemon-skills-backtest" label={t('skills.autoBacktest')} hint={t('skills.autoBacktestHint')} checked={autoBacktest.value} disabled={disabled} onChange={autoBacktest.set} />}
       {evolution.value && <ToggleRow id="mnemon-skills-auto-adopt" label={t('skills.autoAdopt')} hint={t('skills.autoAdoptHint')} checked={autoAdopt.value} disabled={disabled || !autoBacktest.value} onChange={autoAdopt.set} />}
+      {evolution.value && <div>
+        <p className={css.panelNote}>{t('skills.autoBudgetHint')}</p>
+        <div className={css.fieldGrid}>
+          <label>{t('skills.autoAdoptDailyLimit')}<input type="number" min={0} max={100} step={1} value={adoptionBudget.draft.limit} disabled={disabled || adoptionBudget.saving}
+            onChange={event => adoptionBudget.edit({ limit: event.target.value })} /></label>
+          <label>{t('skills.autoAdoptTimeZone')}<input type="text" value={adoptionBudget.draft.timeZone} placeholder="local / Asia/Shanghai" disabled={disabled || adoptionBudget.saving}
+            onChange={event => adoptionBudget.edit({ timeZone: event.target.value })} /></label>
+        </div>
+        <PanelActions dirty={adoptionBudget.dirty} saving={adoptionBudget.saving} applied={adoptionBudget.applied} failed={adoptionBudget.failed} disabled={disabled} t={t}
+          invalid={invalidAdoption ? t('skills.autoBudgetInvalid') : null} onDiscard={adoptionBudget.discard} onApply={() => { void adoptionBudget.apply() }} />
+      </div>}
       {evolution.value && <details className={css.advanced}>
         <summary>{t('skills.parameters')}<IconChevronDownOutlineRegular size={12} /></summary>
         <div className={css.fieldGrid}>

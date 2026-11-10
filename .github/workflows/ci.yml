@@ -39,6 +39,9 @@ jobs:
 
       - name: Test workspace identities, platform paths and ByteRover CLI
         run: pnpm exec vitest run tests/workspace-storage.spec.ts tests/client-platform-boundary.spec.ts tests/async-subagent-memory.spec.ts plugins/dsh-mnemon-provider-byterover/tests/windows-cli.spec.ts
+      - name: Test linked skill junction boundaries
+        run: pnpm exec vitest run tests/skill-evolution.spec.ts plugins/dsh-mnemon-source-skills/tests/service.spec.ts -t "linked"
+
 
       - name: Test desktop CLI process ownership and hidden native launches
         run: >-
@@ -49,6 +52,9 @@ jobs:
 
       - name: Verify real pnpm global shims outside the Desktop PATH
         run: pnpm run verify:windows-pnpm
+
+      - name: Test read-only Git mirror recovery and junction boundaries
+        run: pnpm exec vitest run tests/disposable-directory.spec.ts tests/git-sync.spec.ts tests/sync-config.spec.ts -t "read-only"
 
   verify-source:
     name: Verify source (Node 22.19)

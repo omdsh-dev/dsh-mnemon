@@ -420,6 +420,10 @@ export interface ResolvedSkillsConfig {
   autoBacktest: boolean
   /** Opt-in automatic drafting and evaluated adoption of new idle-review suggestions. */
   autoAdopt: boolean
+  /** Candidates admitted each calendar day, shared by the Skills storage root. */
+  autoAdoptDailyLimit: number
+  /** IANA time zone, or local for the Host process time zone. */
+  autoAdoptTimeZone: string
   /** Output budget for a complete skill draft, including model reasoning. */
   draftMaxTokens: number
   /** One fresh attempt after truncation, only when larger than draftMaxTokens. */
@@ -451,6 +455,8 @@ export const DEFAULT_SKILLS_CONFIG: Readonly<ResolvedSkillsConfig> = Object.free
   targetScope: 'user',
   autoBacktest: true,
   autoAdopt: false,
+  autoAdoptDailyLimit: 2,
+  autoAdoptTimeZone: 'local',
   draftMaxTokens: 32_768,
   draftRetryMaxTokens: 65_536,
   hints: true,
@@ -463,6 +469,13 @@ export const DEFAULT_SKILLS_CONFIG: Readonly<ResolvedSkillsConfig> = Object.free
   maxPendingPerSession: 5,
   casesPerRun: 8,
 })
+
+/** Shared validation without exposing Host environment values to the browser. */
+export function validSkillsTimeZone(value: string): boolean {
+  if (value === 'local') return true
+  if (!value || value.length > 100) return false
+  try { new Intl.DateTimeFormat('en', { timeZone: value }).format(0); return true } catch { return false }
+}
 
 /** One skill a turn used: the model loaded it, or the user asked for it with `/name`. */
 export interface TurnSkillUse {

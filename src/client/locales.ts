@@ -6,6 +6,9 @@ import spacesCopy from 'dsh-mnemon-source-memory-spaces/presentation/locales.jso
 
 export const zh = {
   ...runtimeCopy.zh, ...documentsCopy.zh, ...spacesCopy.zh,
+  'composer.expand': '展开输入框',
+  'composer.collapse': '收起输入框',
+  'composer.collapsed': '输入框已收起',
   'tab.label': '记忆系统',
   'nav.aria': 'Mnemon 页面',
   'nav.status': '状态',
@@ -800,6 +803,10 @@ export const zh = {
   'skills.targetScope.project': '项目',
   'skills.targetScope.storage': '跟随存储范围',
   'skills.evolutionHint': '后台复盘并建议改进技能；会创建落盘的任务及子代理会话，Mnemon 不自动删除这些记录',
+  'skills.autoAdoptDailyLimit': '每日自动处理候选数',
+  'skills.autoAdoptTimeZone': '每日额度时区',
+  'skills.autoBudgetHint': '默认每天 2 个候选，按所选时区的自然日计数；local 使用 Host 时区。同一存储目录共享额度，重启不会清零，失败与取消仍占用候选名额。0 暂停自动处理，手动起草与采纳不受限制。',
+  'skills.autoBudgetInvalid': '候选数须为 0–100 的整数；时区须为有效 IANA 名称或 local。',
   'skills.autoAdopt': '自动采纳新建议',
   'skills.autoAdoptHint': '默认关闭。需要自动回测：仅处理新的空闲审查建议，全部启用的文本用例不退步才采纳，最多重写两次；未测出或超出每轮用例上限时转人工审查。回测是文本模拟，不验证真实外部操作。',
   'skills.autoBacktest': '草案自动回测',
@@ -837,6 +844,9 @@ export type MnemonKey = keyof typeof zh
 
 export const en: Record<MnemonKey, string> = {
   ...runtimeCopy.en, ...documentsCopy.en, ...spacesCopy.en,
+  'composer.expand': 'Show message input',
+  'composer.collapse': 'Collapse message input',
+  'composer.collapsed': 'Message input collapsed',
   'tab.label': 'Memory System',
   'nav.aria': 'Mnemon pages',
   'nav.status': 'Status',
@@ -1631,6 +1641,10 @@ export const en: Record<MnemonKey, string> = {
   'skills.targetScope.project': 'Project',
   'skills.targetScope.storage': 'Follow storage',
   'skills.evolutionHint': 'Review conversations and suggest skills. Task and subagent sessions are saved locally; Mnemon does not automatically delete them.',
+  'skills.autoAdoptDailyLimit': 'Automatic candidates per day',
+  'skills.autoAdoptTimeZone': 'Daily quota time zone',
+  'skills.autoBudgetHint': 'Default: 2 candidates per calendar day in this time zone; local uses the Host time zone. The storage root shares a persistent quota. Failed or cancelled candidates still count. 0 pauses automatic processing; manual drafting and adoption remain available.',
+  'skills.autoBudgetInvalid': 'Use an integer from 0 to 100 and a valid IANA time zone or local.',
   'skills.autoAdopt': 'Automatically adopt new suggestions',
   'skills.autoAdoptHint': 'Off by default; requires automatic backtests. Draft new idle-review suggestions and adopt only with no regression on all enabled text cases, retrying at most twice. Unmeasured or over-limit cases need manual review. Text simulations do not verify real external actions.',
   'skills.autoBacktest': 'Backtest drafts',

@@ -1,3 +1,4 @@
+import { triageSuggestion } from './triage.ts'
 import { DEFAULT_SKILLS_POLICY, EVOLUTION_SIGNALS, type AutoAdoptionEvent, type EvalCase, type EvolutionSignal, type ReviewLogEntry, type ReviewRecordInput, type ReviewRecordResult, type SkillCatalog, type SkillSuggestion, type SkillsPolicy, type Trajectory, type TrajectoryAnnotation, type TrajectorySummary } from './contracts.ts'
 import { activeSkill } from './catalog.ts'
 import { sameSuggestionSkill, skillOrigin } from './identity.ts'
@@ -180,6 +181,7 @@ export function admitReview(context: AdmissionContext, input: ReviewRecordInput)
     // A proposal follows the file DSH actually loads: creating a skill that exists is an update.
     const existing = activeSkill(catalog, name)
     const action = existing !== undefined ? 'update' : 'create'
+    if (existing?.readOnly) { skipped.push({ skillName: name, action, reason: 'linked_skill' }); continue }
     if (!allowed(action)) { skipped.push({ skillName: name, action, reason: 'suggestion_type_disabled' }); continue }
     if (raw.action === 'update' && existing === undefined) { skipped.push({ skillName: name, action: raw.action, reason: 'unknown_skill' }); continue }
     const key = `${name}::${action}`
@@ -296,6 +298,7 @@ export function admitReview(context: AdmissionContext, input: ReviewRecordInput)
     ...(input.review.summary === undefined ? {} : { reviewSummary: clip(input.review.summary, 600) }),
   }
   ledger.trajectories.unshift(summaryOf(trajectory))
+  for (const suggestion of touched) suggestion.triage = triageSuggestion(suggestion, ledger.trajectories)
   const log: ReviewLogEntry = {
     ...input.review,
     id: reviewId,

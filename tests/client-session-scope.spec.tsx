@@ -17,6 +17,7 @@ vi.mock('../src/client/better-sidebar.tsx', () => ({ mountBetterSidebarTab: () =
 import { apply } from '../src/client/index.ts'
 import { consumeMnemonAnchor, dispatchMnemonAnchor } from '../src/client/anchor.ts'
 import { MnemonBuiltinWorkspaceHost, MnemonWorkspaceHost } from '../src/client/workspace-mount.tsx'
+import { MemoryComposer } from '../src/client/memory-composer.tsx'
 import type { Config } from '../src/host/protocol.ts'
 import { settingsScope } from './helpers/settings-scope.ts'
 
@@ -138,6 +139,22 @@ describe('published UI session binding', () => {
     render(<MnemonBuiltinWorkspaceHost {...f.workspaceProps} sessionId="session-b" />)
     act(() => f.current.publish(binding('session-a')))
     expect(screen.getByTestId('workspace').dataset.session).toBe('session-b')
+  })
+
+  it('acquires the composer only for the mounted Builtin owner and releases it on a tab change', () => {
+    const f = fixture()
+    const composer = new MemoryComposer()
+    composer.setCollapsed(true, false)
+    const active = new Set<string>()
+    composer.connect(id => { active.add(id); return () => { active.delete(id) } })
+    const view = render(<MnemonBuiltinWorkspaceHost {...f.workspaceProps} composer={composer} sessionId="session-b" />)
+    expect([...active]).toEqual(['session-b'])
+    act(() => f.current.publish(binding('session-a')))
+    expect([...active]).toEqual(['session-b'])
+    view.rerender(<MnemonBuiltinWorkspaceHost {...f.workspaceProps} composer={composer} sessionId="session-c" />)
+    expect([...active]).toEqual(['session-c'])
+    view.unmount()
+    expect(active.size).toBe(0)
   })
 
   it('does not replace an explicitly absent session scope with the main session', () => {

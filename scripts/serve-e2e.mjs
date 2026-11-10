@@ -33,6 +33,7 @@ import { recallBudgetModel } from './fixtures/recall-budget-model.mjs'
 import { archiveCopiesLimitBytes, archiveCopiesPending, seedArchiveCopies } from './fixtures/archive-copies.mjs'
 import { fakeEmbeddingServer } from './fixtures/fake-embeddings.mjs'
 import { describeModelRequest } from './fixtures/model-request-log.mjs'
+import { seedSkillBudgetTriage } from './fixtures/skill-budget-triage.mjs'
 import { seedEvolutionScroll } from './fixtures/evolution-scroll.mjs'
 import { seedSkillsScroll } from './fixtures/skills-scroll.mjs'
 
@@ -65,6 +66,7 @@ for (const flag of flags) {
   if (flag === '--evolution-scroll') continue
   if (flag === '--embedding-credentials') continue
   if (flag === '--skills-scroll') continue
+  if (flag === '--skill-budget-triage') continue
   if (flag === '--exact-id') continue
   if (flag === '--archive-copies') continue
   if (flag === '--save-action') continue
@@ -353,6 +355,7 @@ ${docsDemo === undefined ? '' : docsDemoTools}    - id: e2e-directory-picker
   await writeFile(join(dshHome, 'profiles/web/cordis.patch.yml'), disabled.map(id => `- id: ${id}\n  disabled: true\n`).join('') + browsePicker
     + '- id: workspace-controller\n  config:\n    documentsDirectory: ' + JSON.stringify(documents) + '\n'
     + (protectionModel === undefined && reviewModel === undefined && !reviewFailure ? '' : '- id: mnemon\n  config:\n    idleReviewMs: 5000\n')
+    + (flags.has('--skill-budget-triage') ? '- id: mnemon\n  config:\n    skills:\n      evolution: true\n      autoAdopt: true\n      autoAdoptDailyLimit: 2\n      autoAdoptTimeZone: Asia/Shanghai\n' : '')
     + (runtimeArchive ? '- id: mnemon\n  config:\n    persistenceStrategy:\n      mode: manual\n    runtimeMemory:\n      memoryLimitBytes: 300\n' : '')
     + (flags.has('--idle-review') || flags.has('--review-layers') || flags.has('--strict-template') ? '- id: mnemon\n  config:\n    idleReviewMs: 5000\n    idleReview:\n      minIntervalMs: 5000\n      maxPerSession: 1\n' : '')
     + (flags.has('--runtime-routing') ? '- id: mnemon\n  config:\n    runtimeMemory:\n      memoryLimitBytes: 1600\n' : '')
@@ -396,6 +399,7 @@ ${docsDemo === undefined ? '' : docsDemoTools}    - id: e2e-directory-picker
     console.log('Recall budget seeded; send recall-budget-check.')
   }
   if (flags.has('--evolution-scroll')) await seedEvolutionScroll({ dataDir, workspace, dshHome, agentsHome })
+  if (flags.has('--skill-budget-triage')) await seedSkillBudgetTriage({ dataDir, workspace, dshHome, agentsHome })
   if (flags.has('--skills-scroll')) await seedSkillsScroll({ dshHome })
   console.log('Fixture: ' + fixture)
   console.log('Workspace: ' + workspace)

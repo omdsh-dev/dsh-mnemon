@@ -1,3 +1,6 @@
+import { inQuotaDay, quota, retainedBudget, type BudgetEntry } from './auto-adoption-budget.ts'
+import { triageSuggestion } from './triage.ts'
+import type { AutoAdoptionReservation } from './contracts.ts'
 import { randomUUID } from 'node:crypto'
 import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
@@ -9,7 +12,7 @@ import {
   type MarketSourceKind, type MarketView, type ReviewRecordInput, type ReviewRecordResult, type RunTarget, type SkillCatalog, type SkillDocument,
   type SkillDraft, type SkillOrigin, type SkillResolution, type SkillRootKind, type SkillSuggestion, type SkillSummary, type SkillVersion, type SkillVersionReason, type SkillsOverview, type Trajectory, type TrajectorySummary, type TrashEntry, type TrashRestoreInput, type TrashRestorePreview,
 } from './contracts.ts'
-import { activeSkill, catalogFingerprint, findSkill, readCatalog, readSkillDocument, rootPath, sha256, type SkillRootOptions } from './catalog.ts'
+import { activeSkill, catalogFingerprint, findSkill, readCatalog, readSkillDocument, requireWritableRoot, requireWritableSkill, rootPath, sha256, type SkillRootOptions } from './catalog.ts'
 import { legacySuggestionWorkspace, skillOrigin, validOrigin } from './identity.ts'
 import { isSkillName, setFrontmatterKey, skillTemplate, validateSkillContent, withInvocation } from './frontmatter.ts'
 import { admitReview, expireSuggestions, OPEN_STATUSES, policyFrom, similarCase, trajectorySummary } from './policy.ts'
@@ -198,7 +201,8 @@ export class SkillsService {
   suggestions(statuses?: readonly string[]): SkillSuggestion[] {
     const ledger = this.store.ledger()
     expireSuggestions(ledger, this.clock())
-    return statuses === undefined || statuses.length === 0 ? ledger.suggestions : ledger.suggestions.filter(suggestion => statuses.includes(suggestion.status))
+    return ledger.suggestions.filter(suggestion => statuses === undefined || statuses.length === 0 || statuses.includes(suggestion.status))
+      .map(suggestion => ({ ...suggestion, triage: triageSuggestion(suggestion, ledger.trajectories) }))
   }
 
   suggestion(workspace: string | undefined, id: string): SuggestionView {
@@ -212,7 +216,7 @@ export class SkillsService {
     const draft = suggestion.draftId === undefined ? undefined : ledger.drafts.find(candidate => candidate.id === suggestion.draftId)
     const cited = new Set(suggestion.evidence.map(reference => reference.trajectoryId))
     return {
-      suggestion,
+      suggestion: { ...suggestion, triage: triageSuggestion(suggestion, ledger.trajectories) },
       hashCurrent: suggestion.action === 'create' ? skill === undefined : skill !== undefined && skill.hash === suggestion.skillFileHash,
       ...(original === undefined ? {} : { resolution: original.resolution }),
       ...(skill === undefined ? {} : { skill: readSkillDocument(skill), skillInCatalog: catalog.skills.some(candidate => candidate.key === skill.key && candidate.path === skill.path) }),
@@ -367,6 +371,7 @@ export class SkillsService {
       const catalog = this.catalog(workspace)
       const root = input.root ?? DEFAULT_ROOT
       if (!SKILL_ROOT_KINDS.includes(root)) throw new Error('unknown skill root: ' + root)
+      requireWritableRoot(rootPath(catalog, root))
       const directory = join(rootPath(catalog, root), input.name)
       if (catalog.skills.some(skill => skill.root === root && skill.name === input.name) || existsSync(directory) || existsSync(directory + '.md')) throw new Error(`${input.name} already exists in this root`)
       const content = input.content?.trim() ? input.content : skillTemplate(input.name, input.description)
@@ -382,6 +387,7 @@ export class SkillsService {
   saveSkill(workspace: string | undefined, input: { key: string; content: string; expectedHash: string }): Promise<SkillSummary> {
     return this.write(() => {
       const skill = findSkill(this.catalog(workspace), input.key)
+      requireWritableSkill(skill)
       const previous = this.requireHash(skill, input.expectedHash)
       validateSkillContent(input.content, skill.name)
       writeFileAtomic(skill.path, input.content)
@@ -395,6 +401,7 @@ export class SkillsService {
   setInvocation(workspace: string | undefined, input: { key: string; modelInvocable: boolean; userInvocable: boolean; expectedHash: string }): Promise<SkillSummary> {
     return this.write(() => {
       const skill = findSkill(this.catalog(workspace), input.key)
+      requireWritableSkill(skill)
       const previous = this.requireHash(skill, input.expectedHash)
       const content = withInvocation(previous, { modelInvocable: input.modelInvocable, userInvocable: input.userInvocable })
       validateSkillContent(content, skill.name)
@@ -556,6 +563,7 @@ export class SkillsService {
   restoreVersion(workspace: string | undefined, input: { key: string; versionId: string; expectedHash: string }): Promise<SkillSummary> {
     return this.write(() => {
       const skill = findSkill(this.catalog(workspace), input.key)
+      requireWritableSkill(skill)
       const previous = this.requireHash(skill, input.expectedHash)
       const ledger = this.store.ledger()
       const version = ledger.versions.find(candidate => candidate.skillKey === skill.key && candidate.id === input.versionId)
@@ -646,6 +654,58 @@ export class SkillsService {
       const review = ledger.reviews.find(entry => entry.id === suggestion.reviewId)
       if (review !== undefined) review.autoAdoptions = [...(review.autoAdoptions ?? []), { ...event, suggestionId: id, skillName: suggestion.skillName }].slice(-160)
       return suggestion
+    })
+  }
+
+  private automaticIdentity(workspace: string | undefined, suggestion: SkillSuggestion): string {
+    const target = suggestion.action === 'update'
+      ? this.requireOriginal(this.suggestionOriginal(this.store.ledger(), suggestion)).path
+      : join(rootPath(this.catalog(workspace), suggestion.targetRoot ?? DEFAULT_ROOT), suggestion.skillName, 'SKILL.md')
+    return sha256(resolve(target))
+  }
+
+  private budgetEntries(ledger: LedgerFile): BudgetEntry[] {
+    const stored = this.store.autoAdoptionBudget()
+    if (stored !== undefined) return retainedBudget(stored, this.clock())
+    // Preserve recorded work on upgrade, including suggestions since deleted.
+    const entries = new Map<string, BudgetEntry>()
+    for (const suggestion of ledger.suggestions) {
+      const at = suggestion.autoAdoption?.find(event => event.stage === 'queued' || event.stage === 'drafting' || event.stage === 'adopted')?.at
+      if (at !== undefined) {
+        let identity = 'legacy:' + sha256(suggestion.skillName)
+        try { identity = this.automaticIdentity(legacySuggestionWorkspace(ledger, suggestion), suggestion) } catch { /* Missing legacy targets still consume the quota. */ }
+        entries.set(suggestion.id, { id: randomUUID(), suggestionId: suggestion.id, identity, at })
+      }
+    }
+    for (const review of ledger.reviews) for (const event of review.autoAdoptions ?? []) {
+      if (!entries.has(event.suggestionId) && ['queued', 'drafting', 'adopted'].includes(event.stage)) entries.set(event.suggestionId, { id: randomUUID(), suggestionId: event.suggestionId, identity: 'legacy:' + sha256(event.skillName), at: event.at })
+    }
+    return retainedBudget([...entries.values()], this.clock())
+  }
+
+  private reserveBudget(ledger: LedgerFile, suggestion: SkillSuggestion, identity: string, limit: number, timeZone: string): AutoAdoptionReservation {
+    const entries = this.budgetEntries(ledger)
+    const value = quota(entries, this.clock(), limit, timeZone)
+    if (entries.some(entry => inQuotaDay(entry, value) && (entry.suggestionId === suggestion.id || entry.identity === identity || entry.identity === 'legacy:' + sha256(suggestion.skillName)))) {
+      this.store.saveAutoAdoptionBudget(entries)
+      return { ...value, allowed: false, reason: 'duplicate-skill' }
+    }
+    if (value.used >= value.limit) {
+      this.store.saveAutoAdoptionBudget(entries)
+      return { ...value, allowed: false, reason: 'daily-limit' }
+    }
+    const entry: BudgetEntry = { id: randomUUID(), suggestionId: suggestion.id, identity, at: this.clock().toISOString() }
+    this.store.saveAutoAdoptionBudget([...entries, entry])
+    return { ...value, used: value.used + 1, allowed: true, reservationId: entry.id }
+  }
+
+  reserveAutomatic(workspace: string | undefined, id: string, limit: number, timeZone: string): Promise<AutoAdoptionReservation> {
+    return this.write(() => {
+      const ledger = this.store.ledger()
+      expireSuggestions(ledger, this.clock())
+      const suggestion = ledger.suggestions.find(candidate => candidate.id === id)
+      if (suggestion?.status !== 'pending' || suggestion.draftId !== undefined) throw new Error('Suggestion changed; automatic adoption requires manual review')
+      return this.reserveBudget(ledger, suggestion, this.automaticIdentity(workspace, suggestion), limit, timeZone)
     })
   }
 
@@ -765,6 +825,7 @@ export class SkillsService {
       this.requireExpectedDraft(ledger, suggestion, input.expectedDraft)
       const original = prior?.action === 'update' ? this.draftOriginal(ledger, prior) : suggestion?.action === 'update' ? this.suggestionOriginal(ledger, suggestion) : undefined
       const loaded = original === undefined ? activeSkill(catalog, input.skillName) : this.requireOriginal(original)
+      if (loaded !== undefined) requireWritableSkill(loaded)
       if (input.expectedBaseHash !== undefined && (loaded?.hash ?? null) !== input.expectedBaseHash) throw new Error('The skill changed while this draft was being generated; regenerate it from the current file')
       const origin = loaded === undefined ? undefined : original?.origin ?? skillOrigin(catalog, loaded)
       for (const draft of ledger.drafts) {
@@ -832,6 +893,25 @@ export class SkillsService {
           throw new Error('The draft, cases, or complete matching backtest results changed; automatic adoption requires manual review')
         }
       }
+      if (input.automatic !== undefined) {
+        const suggestion = ledger.suggestions.find(entry => entry.id === draft.suggestionId)!
+        const identity = this.automaticIdentity(workspace, { ...suggestion, targetRoot: input.root ?? draft.targetRoot ?? DEFAULT_ROOT })
+        if (input.automatic.reservationId !== undefined) {
+          const entry = this.budgetEntries(ledger).find(candidate => candidate.id === input.automatic!.reservationId)
+          if (entry?.suggestionId !== suggestion.id || entry.identity !== identity) throw new Error('Automatic adoption reservation changed; manual review required')
+        } else {
+          // Older Hosts did not reserve before drafting; keep their flow working
+          // while applying the new default limit before any skill is written.
+          const entries = this.budgetEntries(ledger)
+          const value = quota(entries, this.clock(), 2, 'local')
+          const migrated = entries.find(entry => entry.suggestionId === suggestion.id && inQuotaDay(entry, value))
+          const reserved = migrated !== undefined && value.used <= value.limit
+            ? { allowed: true }
+            : this.reserveBudget(ledger, suggestion, identity, 2, 'local')
+          if (migrated !== undefined && reserved.allowed) this.store.saveAutoAdoptionBudget(entries)
+          if (!reserved.allowed) throw new Error('Automatic adoption daily budget requires manual review')
+        }
+      }
       // Settings can be disabled while this operation waits for the Source lock.
       input.signal?.throwIfAborted()
       validateSkillContent(draft.content, draft.skillName)
@@ -842,6 +922,7 @@ export class SkillsService {
       if (draft.action === 'update') {
         const original = this.draftOriginal(ledger, draft)
         const base = this.requireOriginal(original)
+        requireWritableSkill(base)
         previous = this.requireHash(base, draft.baseHash)
         writeFileAtomic(base.path, draft.content)
         key = base.key
@@ -850,6 +931,7 @@ export class SkillsService {
         const root = input.root ?? draft.targetRoot ?? DEFAULT_ROOT
         if (activeSkill(catalog, draft.skillName) !== undefined) throw new Error(`${draft.skillName} exists now; draft it again as an update`)
         const target = rootPath(catalog, root)
+        requireWritableRoot(target)
         // The project may have disappeared since drafting. Validate the final
         // adoption choice before recursive mkdir can recreate that project.
         if (root.startsWith('project-')) {
