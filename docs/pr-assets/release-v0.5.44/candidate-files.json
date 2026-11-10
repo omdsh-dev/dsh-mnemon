@@ -1,0 +1,772 @@
+[
+  {
+    "name": "dsh-mnemon",
+    "version": "0.5.44",
+    "filename": "dsh-mnemon-0.5.44.tgz",
+    "sha256": "ea59b72c15d45e9fe439d70d145acd64e3bef7a4ea6c607926970d7121ee0c6c",
+    "integrity": "sha512-iTrlJVuwtfTUVoyz7u97Ubjkrk5BDFTgti22FIbQ/FYBc1a97FzqXieK1eMQj7S+oPnHUHNlEZwp5DHNsfIbag==",
+    "fileCount": 71,
+    "files": [
+      {
+        "file": "LICENSE",
+        "expectedSha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/bundle.js",
+        "expectedSha256": "350fc08746a5efe65584b650e28d88433ce4776eb24975402ed34c921263d402",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/client.js",
+        "expectedSha256": "dc75b36119cc11de79276124f4806a597bf7f0890b6495c1fe77209ce152228e",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/contracts.js",
+        "expectedSha256": "024ad7318227336ef8816b48457b63593bc56e20bb74c6ffd59244425d23a779",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/core.js",
+        "expectedSha256": "e2d32e8fe8c16ce90d0bcade5782feb4ce20bc9b716faa95e8c5432e768b03db",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/definitions-DU7MLBhu.js",
+        "expectedSha256": "510cd51f4b1dfe1ffbd47ba8fb1cbbdbf87002531014c3dc462dec1a8ebcbcb2",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/extension-sdk.js",
+        "expectedSha256": "e624d2fb2d7d8cf855418df198cda8f8e08834e78829488d2c2de67323e60827",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/index.js",
+        "expectedSha256": "ff4403606a5b26d05993b4efff7dadc762b93493f8b9695a39e1732b6820f0cf",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/runtime-DmL0It3P.js",
+        "expectedSha256": "74d762eb906c2989a584df63dfe823f490f4e2a9a152ef0f310ab3a2d81985a1",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/starter-resolution-LTLQsJPW.js",
+        "expectedSha256": "a795965ce8c190b0bd72d2463abd5c0075594b9785f1c1b3218da70736de18be",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/starter.js",
+        "expectedSha256": "5a345699003306565940f0195cb298fc41d368b8710e569880dc4f23e7c9f4db",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/strategy-configuration-CKP2kRss.js",
+        "expectedSha256": "a06fab7d856de5689df29d29be768e1730f14eee1d6736c346240e8b27680d21",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/testing.js",
+        "expectedSha256": "aecc89be6ddd5537f386b0a56fb285ec2bf894052fb1e27d9eb8689b26cd0bbb",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "locale/en.json",
+        "expectedSha256": "5a4fad1f7b05bf6eae8e7bc51e5aed2b504f2f29f33492f1d4c9389731b4290a",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "package.json",
+        "expectedSha256": "a10d1f648dd50b82790f7938888767064957b401f2aba1e795e61e13716b313c",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "locale/zh.json",
+        "expectedSha256": "55ae3275d8a934224c65d901ac31f2230def6aa465e747fa030a4a83a90a1a82",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "locale/detail.en.md",
+        "expectedSha256": "16a31b5bb9c6065797eb731cb299a3c9cc6cf4dd972cd14ecf4c9eaf02c5b83e",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "locale/detail.zh.md",
+        "expectedSha256": "a15ba8fbd783a78ba0481db2b129e663db1712c238f51091e28bce5d23962047",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "README.md",
+        "expectedSha256": "b6620e6f8c7b6ef4cf0051c2914b7a45a57c026555f3e4ea51a892177b8c426d",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "README.zh-CN.md",
+        "expectedSha256": "fe0de5e93f186aca3e39eff306c9a43560da71c202bf9bb9e4a004d07d6daabd",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "SECURITY.md",
+        "expectedSha256": "700562eaa915d083050a30b6f58292c8ce5c06dd83fde6cd7cfadef228dd3fb1",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "THIRD_PARTY_NOTICES.md",
+        "expectedSha256": "32ebd32c67f4316e33e4214a0504ebe6dabeb1fef00106de05e457a97cb80926",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "bin/repair-legacy-session.mjs",
+        "expectedSha256": "63645b24b3e5b070150d5f59afa0c2d3f2da00448d23a9858efaf674ab775a34",
+        "expectedExecutableBits": "0o111"
+      },
+      {
+        "file": "lib/types/src/bundle.d.ts",
+        "expectedSha256": "602028377ee0735110c68e0807aeea407a05b021b5c87ec66af3e4b4d83e9033",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/component-ui.d.ts",
+        "expectedSha256": "b8b2137b5e9eab1bbcaed491ab2edbcb23e71e1d18eadf1068cb10f4efdfb800",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/host/config-values.d.ts",
+        "expectedSha256": "d6d51c8288cf72085bd7b3194e79ffe3e2ed9675604efb3706dfd74b24169a98",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/host/config.d.ts",
+        "expectedSha256": "e89b437600120c86b8dcd6720c7b99a26561f5512125dc2a2ca6f6454ebc39f4",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/core/definitions.d.ts",
+        "expectedSha256": "c1426396948e63015b25a8e5aaccdf65c43ddf33055de833ae90a33cb76a2fec",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/host/display-mode.d.ts",
+        "expectedSha256": "9cfd641ad2162703dea794b613f98a6a42b3007c8aeb4e0f6b65b82ad5a4d678",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/extension-sdk.d.ts",
+        "expectedSha256": "ac6e9034bbcfad7dfd877c6b9298bce500ad75d5e095568eca29f5bf29a56473",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/feedback.d.ts",
+        "expectedSha256": "e532a8e2e0d60d0da5d8e63238e6eca88da3244d2560a749a3380e662b543792",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/GlobalLocationSetting.d.ts",
+        "expectedSha256": "3cf62d774fa8406057c3406682a8a87a61ab62232f87b85163e20351c2e4d131",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/index.d.ts",
+        "expectedSha256": "d43c82958f8bb83ef5cff5524813d65e3e0b25b688914b04283d238ce8e13f6f",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/core/contracts/index.d.ts",
+        "expectedSha256": "861b85070c37483c4c578fd2f37ddb616cb70522eb409fbeb391ee2850058b4e",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/index.d.ts",
+        "expectedSha256": "a30ee3bce8e37249b8461b925cc0e626942d4a0cf6233c13a3f0d010f6d5ad47",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/sdk/index.d.ts",
+        "expectedSha256": "80cbbcf8583530fc1993763bad6550e55851b87bf9c867ffc5783d921fa73366",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/sdk/input.d.ts",
+        "expectedSha256": "3264d99270796e102939d3d412f4c38c220e8c4f79ac6d001bf5fb374248d246",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/sdk/install.d.ts",
+        "expectedSha256": "2b3e0903128d4b79861233772966fce157bd18bd8234beadcbdef4bcfc7ca93e",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/host/live-config.d.ts",
+        "expectedSha256": "e58b26ffaa6b08d5bd10e3678554f99d38880a8bc3e1b7c21c42040cc46f496f",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/locales.d.ts",
+        "expectedSha256": "3f19c9157afb116e56bc0229f6513e8aed5773940a46c3a65da2f70f08f91925",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/host/memory-tools.d.ts",
+        "expectedSha256": "57f4e231607ef98e5cc6311758a55af25a5608007c9ac2c839c154390ee5b162",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/MnemonDialog.d.ts",
+        "expectedSha256": "cf9de6f80a98d6e527860d7077ce5cc5098b2beda55aecf25790403974bd1c34",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/MnemonLogo.d.ts",
+        "expectedSha256": "c1532a4f925703354772392d59b767cba82db7cfa0ede0ed2c0c4ad7f952a405",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/page-client.d.ts",
+        "expectedSha256": "263491e8acfd741b24da984325ad144f529121a660cc45768a427b64a5298945",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/page-controls.d.ts",
+        "expectedSha256": "819a7ada7ad3cf04dc10786b2c91bd1ab2593af9925b24ceaf8b9f267c89d423",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/page-kit.d.ts",
+        "expectedSha256": "ce40c66a2409f540adea88e82183bd17cbcbd20d7e0a3796d150283f34082b12",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/core/contracts/plugin.d.ts",
+        "expectedSha256": "430b6c765482d75525a62c8515118e2926eb218704a1ebee73743d347f63e406",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/core/plugin.d.ts",
+        "expectedSha256": "73a8b54a714b0f680507a4c935a3fc9b17918e106bf901883d1226d69729d6a2",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/host/plugin.d.ts",
+        "expectedSha256": "348d0015c748f9678607d3e033d940fab89eae9dfd6aa453f7e5eec1ed5f4a3c",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/sdk/projection-reservation.d.ts",
+        "expectedSha256": "29f5eca751c614cc334d13f863ae3c23ad935aac771122a4d17b728ca2c9f417",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/host/protocol.d.ts",
+        "expectedSha256": "ee2313d40bad38b6bc9a85caf55774f41af50f8151d17177bc867a51dbc38c04",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/sdk/service.d.ts",
+        "expectedSha256": "7ef3753a9dc3537e852c483bd00055de83c207d7cd2e327d05a9517787cac15d",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/settings-controls.d.ts",
+        "expectedSha256": "6de7ad44140d60914cf7bf7e4183d91d77e5d9710ee40dd6c0b83f8f3ad6c872",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/settings-panel.d.ts",
+        "expectedSha256": "3d3ee92739b1c245996f84ff186170c505999a5d286c7e85f8b4e1ecc2eaae85",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/source-contracts.d.ts",
+        "expectedSha256": "253309b6697bfb45e6560bcebb4c873c7b4980916350f35bdd40fde303b916a0",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/source-pages.d.ts",
+        "expectedSha256": "9093041163fccc7afddb86f30d6434a14e29f030e887e24ee400023f97969430",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/host/starter-components.d.ts",
+        "expectedSha256": "72df6416c208396e53788880b3fd7cbed249320584d207c8928dc949c9320458",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/starter.d.ts",
+        "expectedSha256": "e2f3f8e56d03afd711f883db3784a47930c59b2985a9ce4918bce1f06c4e3a51",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/sdk/storage-lock.d.ts",
+        "expectedSha256": "9072c9369822413d48c46c929530e950cdc07cc03a05342e05a0730cea4e44f9",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/sdk/strategy-configuration.d.ts",
+        "expectedSha256": "e87fea784b5b29bfcffaabe448fec056eaa3a0a64baf315b3a9f0a647d83308a",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/host/sync-rules.d.ts",
+        "expectedSha256": "d80282ed5b12128678dc93215260b07e79932d95c68825d6279fb12d60ed7a8b",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/core/contracts/task-agent-model.d.ts",
+        "expectedSha256": "0532a52be00c9fd7e941d29041c4d5dd96e4d42cac30f387088a18a3a14f0c41",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/sdk/testing.d.ts",
+        "expectedSha256": "a157befcd6231af9e0915f26243f8c86178ddc99114c5d135ee04c85dc0f3279",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/ui-icons.d.ts",
+        "expectedSha256": "65262c80dee9a62195eda0e79166449bff062bc1ee48595e54d50ab3955535e9",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/use-request-version.d.ts",
+        "expectedSha256": "65bb1a8eddc167bdd3c730024b589792e2fe0535a6f770b81585ff85653cd78e",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/sdk/view-extensions.d.ts",
+        "expectedSha256": "59e9242a069ade7b301aea496573162f3543cf36385cd3345ad93a35ab747ed8",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/host/view-protocol.d.ts",
+        "expectedSha256": "e5a76a65a89454cf08c915a904e4e024af3937cae3a65a6f6d3419ffacfd7d71",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/client/view-styles.d.ts",
+        "expectedSha256": "cebd26c73d5ba1bf720d201402380e3c47767141436d6d06b09db29566298637",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/core/contracts/view.d.ts",
+        "expectedSha256": "3103553bc207dbc950c4f2d84dfa40dddf09c779a664c266b4bde8218c8ef1c9",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/src/sdk/workspace-storage.d.ts",
+        "expectedSha256": "f28d2e65efb5a9f213e242926386b4f4765ea7e344bb8b6dbe10b5a61becb469",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "cordis.patch.yml",
+        "expectedSha256": "889c12eec043d8a8394cfd59d1c18920d7e96905025ed053a5f11fbb6d54648a",
+        "expectedExecutableBits": "0o0"
+      }
+    ]
+  },
+  {
+    "name": "dsh-mnemon-source-memory-spaces",
+    "version": "0.5.27",
+    "filename": "dsh-mnemon-source-memory-spaces-0.5.27.tgz",
+    "sha256": "9e7de7ac7a19072d49dbfcb73e9cf715fde38ffbd624dd95c66f3eded4930d4e",
+    "integrity": "sha512-K15Nynykk9RUvFDdC+MsvnqcqvJB8nkwdG1k9lhKUUN8RmrVx1gdscfc968LnGVrnXW3UpqxStc1S7CSPwIubg==",
+    "fileCount": 45,
+    "files": [
+      {
+        "file": "LICENSE",
+        "expectedSha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "presentation/page.module.css",
+        "expectedSha256": "7bf666b3eeca30f4cf7d85533f852a3317c49779e718061def14cf44cb818324",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "presentation/sidebar.module.css",
+        "expectedSha256": "bee61e25b486c684ea8960d99c76e98856c3c2fd0646b1967de15318f899950f",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/adapter-D-BnWkko.js",
+        "expectedSha256": "0afce9282a3f523d677d72d6bb1587c766c33a4378847e89583ac5fab3414e73",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/client.js",
+        "expectedSha256": "fc5ff55c1b2d256f9376163df83c291f7c8a0ddd4f3e18428330da8693190876",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/contracts.js",
+        "expectedSha256": "f97ad6a40596231ed6b5c6f13567803cda964ed494b9276f26a6b1ecc1a39027",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/definitions-DfmOqJjR.js",
+        "expectedSha256": "3c6250879f47ca7316216f8a3294307b3a776cd2c0c09f3a019f2ab7f6f79b38",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/index.js",
+        "expectedSha256": "e2e697c001485344b6ea2beea948d706deb3695aa026b7dfbad218ee47dba248",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/native-cli.js",
+        "expectedSha256": "4a6163b24a6e2cca567cc1bbf2005f4f563569b4adc4acfe4e4c9889b326d6c1",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/plugin-m1PeU1IE.js",
+        "expectedSha256": "686dcb94257672666d17b289124e3db4737c55ff960d0e9054e57d3bcafecc00",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/provider-sdk.js",
+        "expectedSha256": "43a8e84faac9fbad8699ebc39f9ef4bb10829a447d0b6c36024d14be7cd55da4",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/space-identity.js",
+        "expectedSha256": "b01ba669e30dffcda61842ad11c64d11b3a708464d5c7f3b73386d2c2a13cabe",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/testing.js",
+        "expectedSha256": "3fe7d1cacf97ca32b979ad6a4978877eb868f450a8f7c5015ae8a45a8f65a8f5",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "locale/en.json",
+        "expectedSha256": "07f6399e871b511bcb2829d7f6cff07f62d675f9d9cff06e02485c34808ba14d",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "presentation/locales.json",
+        "expectedSha256": "eca582c82e8374337c076a36b1166c2745fe09a21b3e33b6a9c817eed5580f87",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "package.json",
+        "expectedSha256": "578d1161df372f370576cb43958108ffbb1468061a378dbdc60ffb3585cb5151",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "locale/zh.json",
+        "expectedSha256": "c5909893130cdfc23092b2485eb31bebfa7db13fe1d8b32aa48fb273dae1db4b",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "README.md",
+        "expectedSha256": "216cbfe8730deb13086a4ef141734bf9d2e4d90402165961151c8145ba36bbc0",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/api.d.ts",
+        "expectedSha256": "09af92d9e4a2c3e2a77da05880edaa5745aee89df5aacdfc8343d85e1ef74c9d",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client.d.ts",
+        "expectedSha256": "ae7a36f5ac12534af8b15d2b7196be6ebb90653d9e2670a83e5b07f381f3763a",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/contracts.d.ts",
+        "expectedSha256": "ba7ecb9fc8bb4a4d1c98f2ed490c7f63ac12c43f4a12f03531651dbc6f29d7d3",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/contracts.d.ts",
+        "expectedSha256": "d8abc75ed450b49d6aa95e0b041ab9ecf4950e92e9926859b24b3bbf9833e09f",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/definitions-BNmfQoWk.d.ts",
+        "expectedSha256": "06b23e844c7c374e18883143d56555d85ea6ec17859e2b1555e9278013cd61e5",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/entities-page.d.ts",
+        "expectedSha256": "caec8b1440d861023318dc04838fa9257f3f455270fc684a6a828a160ff32ac1",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/explore-page.d.ts",
+        "expectedSha256": "94be562bb9c1f4198a9c6b1247ebf7c5ffb000947d58bc28a16c8fcb9813538c",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/index.d.ts",
+        "expectedSha256": "e58b6acc8cfa97281f4395180477800a300499b43eeba3d70b33d5fb7fec9d51",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/list-page.d.ts",
+        "expectedSha256": "e32741b7a8a2d2591aa1a504fe22ea770d66566b74b5581681680f9618a7ccb4",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/memory-graph.d.ts",
+        "expectedSha256": "61a24db2863d357f73b9dd0d514267a2e0ebd1933110a219e993c07eb2b68983",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/native-cli.d.ts",
+        "expectedSha256": "01ee9b84bf7742c4294180fe52d7934ea984d21f24b27a9ad86154a5ec3c02f7",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/overview-page.d.ts",
+        "expectedSha256": "f251d324737f0b55b2d8f96114f32c159437a5bd3c9082c8fa2384baee7d0050",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/pages.d.ts",
+        "expectedSha256": "906e68dec07d06296fe991e874fb06f59ac7e3b6ff5874050d1c4f940807d143",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/persistence-strategy-dialog.d.ts",
+        "expectedSha256": "f5c7c228f3e4ac85eeb52f2faf656f5484ca383e9716b17ea19d4ab84c47342f",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/presentation.d.ts",
+        "expectedSha256": "a01ce4098f1993ccbcd83dd747e8c2129ddb69f750bb1561ee29d6021688d1dd",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/provider-field.d.ts",
+        "expectedSha256": "308c317365d95649433502853a1e334a56645c1479ecf9b06de7b4f5c837e72b",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/provider-presentation.d.ts",
+        "expectedSha256": "a10ade999e6872a8114c87d91ce775ad69b2180c009d2b7b2f8398e8d28ff729",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/provider-sdk.d.ts",
+        "expectedSha256": "4d09eb924868003c4da2e8593835c7d5747719c2806653ce5511c2cb396469e0",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/provider-settings.d.ts",
+        "expectedSha256": "a8c475aa09294831e942f75d4402482c95221c64273ae9aa25523651ba0da423",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/ProviderIcon.d.ts",
+        "expectedSha256": "e275c00b58bbe824298f2152772af3a2d2df5949b7dce542e91cc163ed3073fc",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/remember-page.d.ts",
+        "expectedSha256": "406e6d3c9d22b71c31aa92d57472e36f7cc00ff6d0f59e6ebed0add6cc69a809",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/settings-client.d.ts",
+        "expectedSha256": "d04c695189a3536d936eccbaaf99346d437a37aad7918f9a4e2340b7743ce140",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/settings.d.ts",
+        "expectedSha256": "9eef58a638ffde70a0ddfcecf18d57b35dd00486047583a1791d04feeaefb7d3",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/space-identity.d.ts",
+        "expectedSha256": "d900fe413249e76fba7b036158d9a62422b094dbadbcab5b7a0d9445da35906e",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/testing.d.ts",
+        "expectedSha256": "5a32680e45f0d0cc47989b6813a85f9168bc083440f204e492f1121ab2348a35",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/ui.d.ts",
+        "expectedSha256": "16192182fefbd5f74172b70bef6f0ed8868f6a2433cf94a3e7c08b3af36a86fe",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/widgets.d.ts",
+        "expectedSha256": "7ea04daf923aacefe7b167b1e666c87cd7fe6a39eee1ee5fa5e386308c8d0463",
+        "expectedExecutableBits": "0o0"
+      }
+    ]
+  },
+  {
+    "name": "dsh-mnemon-source-skills",
+    "version": "0.5.11",
+    "filename": "dsh-mnemon-source-skills-0.5.11.tgz",
+    "sha256": "835e0603ff983af4a608267b5909768c8bb229272874392a1b07687633f863da",
+    "integrity": "sha512-y3cXMrgD0gnv60TxQVVt7zRNRILPNrwtZh/tZeP37CncJkAixyJe0ABl0zRxQwrXH14/gjXnKZzZLFbFWBmqlA==",
+    "fileCount": 32,
+    "files": [
+      {
+        "file": "LICENSE",
+        "expectedSha256": "0bc72d9f737802b30a7e43d1b59912e81698e75948759ba07c276732aba0c7a2",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "presentation/page.module.css",
+        "expectedSha256": "89e9fbdcfcc8c29dcca8e310cede4d4b898da39e6cdc9d40ae06eb87ec135a83",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/client.js",
+        "expectedSha256": "2eaba709b6b7914229dbebb8fe08a6a055e9c6a93e6b995371cb1b3bc98d0977",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/contracts-CgBkFgJP.js",
+        "expectedSha256": "ff656fa4ecf539b4d0ff97afe5b6c5c03fa02a086b7adad6be0605c1c1bfa233",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/contracts.js",
+        "expectedSha256": "4a555e6d60794163688ae1d5aac08b669b154fa659c3afb64f290623c640f48b",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/index.js",
+        "expectedSha256": "a95177b67d082379874230afb0bf53117ece308815ed1be19a9569c4f5157920",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "locale/en.json",
+        "expectedSha256": "0b5276b77a752fb47c67765847e261a6a7041a885213f760c4ad3670d694baed",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "presentation/locales.json",
+        "expectedSha256": "8becce5dee5f6759e504408e32c796e0bfb13e32be6488f07e7ceb4a320a4465",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "market/official.json",
+        "expectedSha256": "6d011e5817727fb545dd385df8bb7316bff59d803f05c956bf64138956d90acc",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "package.json",
+        "expectedSha256": "fc4c38baa67e65465628b87790423e3e49084b05dec718bfb9fb41d7211a796d",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "locale/zh.json",
+        "expectedSha256": "9dce17a7602534ea20b6027988f3b18cc3bce7f6b6bffe4f64b635291ffedf28",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "README.md",
+        "expectedSha256": "e4351de6d7e38efc8880d2243a43220ca17c079995c9e29a3026f8753ce16733",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/api.d.ts",
+        "expectedSha256": "e1fe111c0f4430dea921ce5c83a6074ff1608ec15972aed6902b85bf08566527",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/auto-adoption.d.ts",
+        "expectedSha256": "fd98263224d92511601e3b666a61cfdc49268765769057eea0b5fb630a29ce02",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client.d.ts",
+        "expectedSha256": "99720ccb1ef2991d3d08923a54b3b64a165692fe94acadff7b9e5cee2963bc3f",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/contracts.d.ts",
+        "expectedSha256": "48835b2fef823cdbe2799a479ea5f5eb98e219c6a663db10c8472aac2a9f0265",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/contracts.d.ts",
+        "expectedSha256": "9f176d04d99e58ef99a11224c0344ee632054e877271436ece54dc81660a7966",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/evals-page.d.ts",
+        "expectedSha256": "69c36a11a11d4f6b91554ea1b3e6218428bb8c0e3bb0a2568c1467987ff6ab8b",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/evidence-page.d.ts",
+        "expectedSha256": "c3a0c84f77f1b8464158b3bbdbff33abdb7b79777f7083a184598ea42b7f5791",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/evolution-page.d.ts",
+        "expectedSha256": "974b260d4696e68368f0ca91313c17d96057e5cdc4dd6e1c6ca65ffd0789dce4",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/fence.d.ts",
+        "expectedSha256": "2522959dfc2203f5cb4219029f78321f6cf036bc8f2e972a07d01a6ef6d9104f",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/index.d.ts",
+        "expectedSha256": "61413bc1929df4ba1f2c561c0fc7207ee7b2b38f1ebbc3f7fa403c1c088d0d00",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/market-page.d.ts",
+        "expectedSha256": "fa00338ddd8a6f8bc2347628078b11008209ce363f600042cf1fcbee33c69053",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/model-choice.d.ts",
+        "expectedSha256": "5bd926d57442c01ecbf222bdf4cec6358f932e5cc8ef4d8dc9fa2dd81c38215b",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/presentation.d.ts",
+        "expectedSha256": "d7d80eccdf90c7ec939b67802c559d00614ed9285e6a756212a473cfe556c1c1",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/shared.d.ts",
+        "expectedSha256": "34ba2da4c08ce51bee17ea09a3cf992c8fe06446c54f0f017026ae8639927881",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/skill-tests.d.ts",
+        "expectedSha256": "d9de27a957b8e9dc9493878620cf39d2e9dbaec7a52daf7ed92ab292f8b2c8ab",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/skills-page.d.ts",
+        "expectedSha256": "157a6d855ec4b0bb5b43c6777c969e7972ea699b8e89f572e36f445b83f56c15",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/source-kind.d.ts",
+        "expectedSha256": "609250d77c7950a206b00be65de4b33b62dec50ffaff6f13d0fa411d970d2eeb",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/trash-page.d.ts",
+        "expectedSha256": "ef3f280cab983adb716c2602d50debda1bfb9dd531b5c4842afd4849fc9bac80",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/ui.d.ts",
+        "expectedSha256": "0c211a77d3376aeb4a381d82d76ed50945b70bc5b8a32f0306dbfbfdf03ce6c4",
+        "expectedExecutableBits": "0o0"
+      },
+      {
+        "file": "lib/types/client/use-skill.d.ts",
+        "expectedSha256": "2078894ccb534939aa8cc58567421c451cda72a2ab44f31eba90d9e26d37bcfe",
+        "expectedExecutableBits": "0o0"
+      }
+    ]
+  }
+]

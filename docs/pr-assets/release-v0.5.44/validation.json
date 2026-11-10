@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 1,
+  "release": "0.5.44",
+  "verificationDate": "2026-11-11",
+  "timezone": "Asia/Shanghai",
+  "candidateRevision": "629bf040e1b8c22cde2663e33866c6c1f207f545",
+  "baseRevision": "e9da7d1d717737defc088ac9afd32c4ca99ff9ef",
+  "integrationRevision": "2f65d9117678282198f9400fd20d1f34114c046d",
+  "candidateManifest": "candidate-manifest.json",
+  "candidateFiles": "candidate-files.json",
+  "hosts": [
+    {
+      "id": "020",
+      "version": "0.2.0-rc.2",
+      "record": "020-validation.json",
+      "recordSha256": "8f0639e3a252424e049274c6db9b092e5d54503d9f2c060c226f1005f9ea9cc8",
+      "scenariosPassed": 2,
+      "pinnedVersionsChecked": 38,
+      "candidateFilesAndModesChecked": 296,
+      "memoryHashesPreserved": true
+    },
+    {
+      "id": "rc2",
+      "version": "0.2.1-rc.2",
+      "record": "rc2-validation.json",
+      "recordSha256": "d7d8212883c9e16a8b0058d110a562bdee20a99f95f23e9ace4e88f15179d2a7",
+      "scenariosPassed": 2,
+      "pinnedVersionsChecked": 38,
+      "candidateFilesAndModesChecked": 296,
+      "memoryHashesPreserved": true
+    },
+    {
+      "id": "rc3",
+      "version": "0.2.1-rc.3",
+      "record": "rc3-validation.json",
+      "recordSha256": "a9b3142a1baf5150dfab7661890476377fc75cc411533176d8d8bfa8434966fb",
+      "scenariosPassed": 2,
+      "pinnedVersionsChecked": 38,
+      "candidateFilesAndModesChecked": 296,
+      "memoryHashesPreserved": true
+    },
+    {
+      "id": "rc5",
+      "version": "0.2.1-rc.5",
+      "record": "rc5-validation.json",
+      "recordSha256": "97c402167b66183842f1350dc3935c47669768de0cbca64832ea2417a9b2825a",
+      "scenariosPassed": 2,
+      "pinnedVersionsChecked": 38,
+      "candidateFilesAndModesChecked": 296,
+      "memoryHashesPreserved": true
+    },
+    {
+      "id": "rc1",
+      "version": "0.2.2-rc.1",
+      "record": "rc1-validation.json",
+      "recordSha256": "11adf261c41aeedea2db6ae59aa58bbecad4a457389c59d96ecb8ef3df5b735e",
+      "scenariosPassed": 2,
+      "pinnedVersionsChecked": 38,
+      "candidateFilesAndModesChecked": 296,
+      "memoryHashesPreserved": true
+    }
+  ],
+  "scenarioCount": 10,
+  "totals": {
+    "pinnedPackageVersions": 190,
+    "candidateFileAndModeChecks": 1480,
+    "unchangedRuntimeHashSets": 5,
+    "screenshots": 35
+  },
+  "checks": {
+    "root": {
+      "passed": 2706,
+      "skipped": 8
+    },
+    "workspace": {
+      "passed": 895,
+      "skipped": 4
+    },
+    "standalonePluginRepositories": 18,
+    "packedArtifacts": 19,
+    "docs": true,
+    "types": true,
+    "deterministicBuilds": true,
+    "headless": true,
+    "packageContents": true,
+    "releaseComposition": true
+  },
+  "externalModelCalls": 0,
+  "limits": [
+    "macOS arm64 Web profiles; native Desktop OS integration not retested",
+    "No paid models or cloud quality/cache claims",
+    "No fresh verification of arbitrary master or alpha; the previous source fixture was no longer available",
+    "Loopback registry serves frozen candidates and ages candidate metadata; real npm publication age is not tested here"
+  ]
+}
