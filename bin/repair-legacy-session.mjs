@@ -637,6 +637,8 @@ async function repairIdleProbeSession(entries, original, compressed, input, outp
   const pending = new Map()
   const roots = new Set()
   let openTurn
+  let openStep
+  let completedStep = false
   let completed = false
   const refuse = () => { throw new Error('Unrecognized or incomplete out-of-turn PTC audit; no output written.') }
   for (const entry of entries.slice(1)) {
@@ -647,17 +649,31 @@ async function repairIdleProbeSession(entries, original, compressed, input, outp
       if (row.type === 'turn/start') {
         if (openTurn !== undefined) refuse()
         openTurn = row.data.turn
+        completedStep = false
       } else {
         if (openTurn !== row.data.turn) refuse()
         openTurn = undefined
         completed = true
       }
+      openStep = undefined
     }
-    if (!['tool/ptc-dispatch-start', 'tool/ptc-dispatch'].includes(row.type) || openTurn !== undefined) continue
+    if (row.type === 'step/start' || row.type === 'step/end') {
+      assertUniqueJson(entry.line, row)
+      if (pending.size || openTurn !== row.data?.turn || !count(row.data?.step)) refuse()
+      if (row.type === 'step/start') {
+        if (openStep !== undefined) refuse()
+        openStep = row.data.step
+      } else {
+        if (openStep !== row.data.step) refuse()
+        openStep = undefined
+        completedStep = true
+      }
+    }
+    if (!['tool/ptc-dispatch-start', 'tool/ptc-dispatch'].includes(row.type) || openStep !== undefined) continue
     assertUniqueJson(entry.line, row)
     const data = row.data
     const start = row.type === 'tool/ptc-dispatch-start'
-    if (!completed || !exactKeys(row, ['type', 'seq', 'time', 'data']) || !count(row.seq) || !integer(row.time) ||
+    if (!(openTurn === undefined ? completed : completedStep) || !exactKeys(row, ['type', 'seq', 'time', 'data']) || !count(row.seq) || !integer(row.time) ||
         !exactKeys(data, ['rootCallId', 'parentCallId', 'subCallId', 'name', 'arguments', ...(start ? [] : ['isError', 'content'])], start ? [] : ['error', 'meta']) ||
         !uuid.test(data.rootCallId) || data.parentCallId !== data.rootCallId || data.subCallId !== `${data.rootCallId}:ptc:1` ||
         data.name !== 'mnemon_subagent_result' || !exactKeys(data.arguments, ['requestId', 'result']) ||
