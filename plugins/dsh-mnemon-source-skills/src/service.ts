@@ -1,3 +1,6 @@
+import { inQuotaDay, quota, retainedBudget, type BudgetEntry } from './auto-adoption-budget.ts'
+import { triageSuggestion } from './triage.ts'
+import type { AutoAdoptionReservation } from './contracts.ts'
 import { randomUUID } from 'node:crypto'
 import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
@@ -198,7 +201,8 @@ export class SkillsService {
   suggestions(statuses?: readonly string[]): SkillSuggestion[] {
     const ledger = this.store.ledger()
     expireSuggestions(ledger, this.clock())
-    return statuses === undefined || statuses.length === 0 ? ledger.suggestions : ledger.suggestions.filter(suggestion => statuses.includes(suggestion.status))
+    return ledger.suggestions.filter(suggestion => statuses === undefined || statuses.length === 0 || statuses.includes(suggestion.status))
+      .map(suggestion => ({ ...suggestion, triage: triageSuggestion(suggestion, ledger.trajectories) }))
   }
 
   suggestion(workspace: string | undefined, id: string): SuggestionView {
@@ -212,7 +216,7 @@ export class SkillsService {
     const draft = suggestion.draftId === undefined ? undefined : ledger.drafts.find(candidate => candidate.id === suggestion.draftId)
     const cited = new Set(suggestion.evidence.map(reference => reference.trajectoryId))
     return {
-      suggestion,
+      suggestion: { ...suggestion, triage: triageSuggestion(suggestion, ledger.trajectories) },
       hashCurrent: suggestion.action === 'create' ? skill === undefined : skill !== undefined && skill.hash === suggestion.skillFileHash,
       ...(original === undefined ? {} : { resolution: original.resolution }),
       ...(skill === undefined ? {} : { skill: readSkillDocument(skill), skillInCatalog: catalog.skills.some(candidate => candidate.key === skill.key && candidate.path === skill.path) }),
@@ -653,6 +657,58 @@ export class SkillsService {
     })
   }
 
+  private automaticIdentity(workspace: string | undefined, suggestion: SkillSuggestion): string {
+    const target = suggestion.action === 'update'
+      ? this.requireOriginal(this.suggestionOriginal(this.store.ledger(), suggestion)).path
+      : join(rootPath(this.catalog(workspace), suggestion.targetRoot ?? DEFAULT_ROOT), suggestion.skillName, 'SKILL.md')
+    return sha256(resolve(target))
+  }
+
+  private budgetEntries(ledger: LedgerFile): BudgetEntry[] {
+    const stored = this.store.autoAdoptionBudget()
+    if (stored !== undefined) return retainedBudget(stored, this.clock())
+    // Preserve recorded work on upgrade, including suggestions since deleted.
+    const entries = new Map<string, BudgetEntry>()
+    for (const suggestion of ledger.suggestions) {
+      const at = suggestion.autoAdoption?.find(event => event.stage === 'queued' || event.stage === 'drafting' || event.stage === 'adopted')?.at
+      if (at !== undefined) {
+        let identity = 'legacy:' + sha256(suggestion.skillName)
+        try { identity = this.automaticIdentity(legacySuggestionWorkspace(ledger, suggestion), suggestion) } catch { /* Missing legacy targets still consume the quota. */ }
+        entries.set(suggestion.id, { id: randomUUID(), suggestionId: suggestion.id, identity, at })
+      }
+    }
+    for (const review of ledger.reviews) for (const event of review.autoAdoptions ?? []) {
+      if (!entries.has(event.suggestionId) && ['queued', 'drafting', 'adopted'].includes(event.stage)) entries.set(event.suggestionId, { id: randomUUID(), suggestionId: event.suggestionId, identity: 'legacy:' + sha256(event.skillName), at: event.at })
+    }
+    return retainedBudget([...entries.values()], this.clock())
+  }
+
+  private reserveBudget(ledger: LedgerFile, suggestion: SkillSuggestion, identity: string, limit: number, timeZone: string): AutoAdoptionReservation {
+    const entries = this.budgetEntries(ledger)
+    const value = quota(entries, this.clock(), limit, timeZone)
+    if (entries.some(entry => inQuotaDay(entry, value) && (entry.suggestionId === suggestion.id || entry.identity === identity || entry.identity === 'legacy:' + sha256(suggestion.skillName)))) {
+      this.store.saveAutoAdoptionBudget(entries)
+      return { ...value, allowed: false, reason: 'duplicate-skill' }
+    }
+    if (value.used >= value.limit) {
+      this.store.saveAutoAdoptionBudget(entries)
+      return { ...value, allowed: false, reason: 'daily-limit' }
+    }
+    const entry: BudgetEntry = { id: randomUUID(), suggestionId: suggestion.id, identity, at: this.clock().toISOString() }
+    this.store.saveAutoAdoptionBudget([...entries, entry])
+    return { ...value, used: value.used + 1, allowed: true, reservationId: entry.id }
+  }
+
+  reserveAutomatic(workspace: string | undefined, id: string, limit: number, timeZone: string): Promise<AutoAdoptionReservation> {
+    return this.write(() => {
+      const ledger = this.store.ledger()
+      expireSuggestions(ledger, this.clock())
+      const suggestion = ledger.suggestions.find(candidate => candidate.id === id)
+      if (suggestion?.status !== 'pending' || suggestion.draftId !== undefined) throw new Error('Suggestion changed; automatic adoption requires manual review')
+      return this.reserveBudget(ledger, suggestion, this.automaticIdentity(workspace, suggestion), limit, timeZone)
+    })
+  }
+
   pinTrajectory(id: string, pinned: boolean): Promise<TrajectorySummary> {
     return this.write(() => {
       const ledger = this.store.ledger()
@@ -835,6 +891,25 @@ export class SkillsService {
           || (draft.action === 'update' ? before.target.kind !== 'current' || before.target.hash !== draft.baseHash : before.target.kind !== 'none')
           || automaticResult.outcome !== 'not-worse') {
           throw new Error('The draft, cases, or complete matching backtest results changed; automatic adoption requires manual review')
+        }
+      }
+      if (input.automatic !== undefined) {
+        const suggestion = ledger.suggestions.find(entry => entry.id === draft.suggestionId)!
+        const identity = this.automaticIdentity(workspace, { ...suggestion, targetRoot: input.root ?? draft.targetRoot ?? DEFAULT_ROOT })
+        if (input.automatic.reservationId !== undefined) {
+          const entry = this.budgetEntries(ledger).find(candidate => candidate.id === input.automatic!.reservationId)
+          if (entry?.suggestionId !== suggestion.id || entry.identity !== identity) throw new Error('Automatic adoption reservation changed; manual review required')
+        } else {
+          // Older Hosts did not reserve before drafting; keep their flow working
+          // while applying the new default limit before any skill is written.
+          const entries = this.budgetEntries(ledger)
+          const value = quota(entries, this.clock(), 2, 'local')
+          const migrated = entries.find(entry => entry.suggestionId === suggestion.id && inQuotaDay(entry, value))
+          const reserved = migrated !== undefined && value.used <= value.limit
+            ? { allowed: true }
+            : this.reserveBudget(ledger, suggestion, identity, 2, 'local')
+          if (migrated !== undefined && reserved.allowed) this.store.saveAutoAdoptionBudget(entries)
+          if (!reserved.allowed) throw new Error('Automatic adoption daily budget requires manual review')
         }
       }
       // Settings can be disabled while this operation waits for the Source lock.

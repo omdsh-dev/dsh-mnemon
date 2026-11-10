@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { publicEmbeddingSettings } from '../src/host/embedding-settings.ts'
 import { MnemonSettingsCard } from '../src/client/MnemonSettingsCard.tsx'
 import { MnemonChangeSignal } from '../src/client/change-signal.ts'
 import { MnemonComponentListSeat } from '../src/client/component-list-seat.ts'
@@ -191,7 +192,7 @@ describe('MnemonSettingsCard', () => {
   })
   it('applies DSH management of the embedding at once, and the typed connection from its Apply', async () => {
     const mutate = vi.fn(async () => {})
-    const scope = liveSettingsScope<Config>({ status: 'ready' as const, value: { storageScope: 'global' as const }, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const }, mutate)
+    const scope = liveSettingsScope<Config>({ status: 'ready' as const, value: { storageScope: 'global' as const }, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const }, mutate, value => publicEmbeddingSettings(value, value, true) as Config)
 
     render(spaces(scope))
 
@@ -201,7 +202,7 @@ describe('MnemonSettingsCard', () => {
     expect(screen.queryByRole('textbox', { name: '嵌入 Endpoint' })).toBeNull()
     fireEvent.click(managed)
     await waitFor(() => expect(mutate).toHaveBeenCalledWith([{
-      op: 'set', path: ['embedding'], value: { enabled: true, endpoint: 'http://localhost:11434', model: 'nomic-embed-text', apiKey: '', protocol: 'auto' },
+      op: 'set', path: ['embedding'], value: { enabled: true, endpoint: 'http://localhost:11434', model: 'nomic-embed-text', apiKey: '', apiKeyEnv: '', protocol: 'auto' },
     }]))
     const endpoint = await screen.findByRole('textbox', { name: '嵌入 Endpoint' }) as HTMLInputElement
     const model = screen.getByRole('textbox', { name: '嵌入模型' }) as HTMLInputElement
@@ -232,7 +233,7 @@ describe('MnemonSettingsCard', () => {
     await waitFor(() => expect(mutate).toHaveBeenLastCalledWith([{
       op: 'set',
       path: ['embedding'],
-      value: { enabled: true, endpoint: 'http://127.0.0.1:8080/api', model: 'qwen3-embedding:0.6b', apiKey: 'sk-secret', protocol: 'openai' },
+      value: { enabled: true, endpoint: 'http://127.0.0.1:8080/api', model: 'qwen3-embedding:0.6b', apiKey: 'sk-secret', apiKeyEnv: '', protocol: 'openai' },
     }]))
   })
 

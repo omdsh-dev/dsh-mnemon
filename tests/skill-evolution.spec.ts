@@ -500,6 +500,21 @@ describe('skill evolution in the Host', () => {
     }
   }
 
+  it('leaves a fresh suggestion actionable without drafting when its daily quota is exhausted', async () => {
+    const run = automaticHarness()
+    config = { ...config, autoAdoptDailyLimit: 0 }
+    await run.start()
+    await vi.waitFor(async () => expect((await run.outcome())?.autoAdoption?.at(-1)).toMatchObject({ stage: 'review', reason: 'daily-limit', attempt: 0, detail: expect.stringContaining('0/0') }))
+    expect((await run.outcome())?.status).toBe('pending')
+    expect(run.drafts()).toBe(0)
+    config = { ...config, autoAdopt: false }
+    await run.skills.draft(source, undefined, { suggestionId: (await run.outcome())!.id })
+    await vi.waitFor(async () => expect((await run.outcome())?.status).toBe('review'))
+    await source.mutate('draft-adopt', { id: (await run.outcome())!.draftId! })
+    expect(readFileSync(join(directory, 'dsh', 'skills', 'release-notes', 'SKILL.md'), 'utf8')).toContain('Candidate 1')
+    run.skills.dispose()
+  })
+
   it('never generates or adopts update drafts for a linked skill, manually or automatically', async () => {
     const location = join(directory, 'dsh', 'skills', 'release-notes')
     const upstream = join(directory, 'upstream')

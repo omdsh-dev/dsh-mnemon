@@ -189,6 +189,8 @@ export interface SkillSuggestion {
   confidence: number
   signals: EvolutionSignal[]
   evidence: EvidenceReference[]
+  /** Deterministic display guidance; never an adoption or deletion permission. */
+  triage?: SuggestionTriage
   /** For `update`: the SKILL.md the reviewer read, so a later edit invalidates it. */
   skillKey?: string
   skillFileHash?: string
@@ -632,7 +634,7 @@ export interface MarketInstall {
 
 
 export const AUTO_ADOPTION_STAGES = ['queued', 'drafting', 'backtesting', 'rewriting', 'adopted', 'paused', 'review'] as const
-export const AUTO_ADOPTION_REASONS = ['disabled', 'no-cases', 'case-limit', 'unmeasured', 'regressed', 'changed', 'failed', 'queue-full', 'model-unavailable', 'interrupted'] as const
+export const AUTO_ADOPTION_REASONS = ['disabled', 'no-cases', 'case-limit', 'unmeasured', 'regressed', 'changed', 'failed', 'queue-full', 'model-unavailable', 'interrupted', 'daily-limit', 'duplicate-skill'] as const
 export interface AutoAdoptionEvent {
   at: string
   stage: typeof AUTO_ADOPTION_STAGES[number]
@@ -644,6 +646,8 @@ export interface AutoAdoptionEvent {
 }
 export type DraftExpectation = { id: string; hash: string } | null
 export interface AutomaticAdoption {
+  /** Absent on older Hosts; the Source then applies its default quota at commit. */
+  reservationId?: string
   attempt: number
   draftHash: string
   baselineRunId: string
@@ -651,3 +655,21 @@ export interface AutomaticAdoption {
   casesHash: string
 }
 export { skillCaseSignature, compareAutomaticSkillRuns } from './auto-adoption.ts'
+
+export interface SuggestionTriage {
+  version: 1
+  classification: 'durable' | 'one-off' | 'uncertain'
+  windows: number
+  sessions: number
+  steps: number
+  confidence: number
+}
+export interface AutoAdoptionQuota {
+  date: string
+  timeZone: string
+  used: number
+  limit: number
+}
+export type AutoAdoptionReservation = AutoAdoptionQuota & (
+  { allowed: true; reservationId: string } | { allowed: false; reason: 'daily-limit' | 'duplicate-skill' }
+)

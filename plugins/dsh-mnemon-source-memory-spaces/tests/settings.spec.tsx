@@ -28,11 +28,11 @@ const field = (input: MemoryProviderConfigField['input'], values: Partial<Memory
   ({ key: 'apiKey', label: 'API key', scope: 'service', input, required: true, ...values })
 
 /** A host as dsh-mnemon lends one, over a configuration the test controls. */
-function host(value: Record<string, unknown>, operations: Partial<Record<'read' | 'write', (operation: string, input?: unknown) => Promise<unknown>>> = {}) {
+function host(value: Record<string, unknown>, operations: Partial<Record<'read' | 'write', (operation: string, input?: unknown) => Promise<unknown>>> = {}, readback?: (next: unknown) => unknown) {
   let snapshot: MemoryComponentConfigurationSnapshot = { status: 'ready', value, revision: 1, writable: true }
   const listeners = new Set<() => void>()
   const set = vi.fn(async (key: string, next: unknown) => {
-    snapshot = { ...snapshot, value: { ...snapshot.value, [key]: next }, revision: (snapshot.revision ?? 0) + 1 }
+    snapshot = { ...snapshot, value: { ...snapshot.value, [key]: readback?.(next) ?? next }, revision: (snapshot.revision ?? 0) + 1 }
     for (const listener of listeners) listener()
   })
   const changed = vi.fn()
@@ -222,5 +222,55 @@ describe('registering its own settings', () => {
       vi.doMock('dsh-mnemon/client', artifact)
       vi.resetModules()
     }
+  })
+})
+
+
+describe('write-only embedding credentials', () => {
+  const saved = { enabled: true, endpoint: 'https://embedding.example.test/v1', model: 'fixture', protocol: 'openai', apiKey: '', apiKeyStorage: 'credentials', apiKeyConfigured: true }
+  it('clears a typed key after saving and never uses a stored-key mask as the replacement', async () => {
+    const { lent, set } = host({ embedding: saved }, {}, () => saved)
+    render(settings(lent))
+    const keyInput = screen.getByRole('textbox', { name: t('config.embeddingEndpoint') })
+    expect(keyInput).toBeTruthy()
+    const password = screen.getByLabelText(t('config.embeddingApiKey')) as HTMLInputElement
+    expect(password.value).toBe('')
+    fireEvent.change(password, { target: { value: 'fixture-ui-key' } })
+    fireEvent.click(screen.getByRole('button', { name: t('options.apply') }))
+    await waitFor(() => expect(password.value).toBe(''))
+    expect(set).toHaveBeenCalledWith('embedding', expect.objectContaining({ apiKey: 'fixture-ui-key', apiKeyEnv: '' }))
+    expect(screen.getByText('A DSH credential reference is saved; the key is never returned to this page.')).toBeTruthy()
+  })
+
+  it('sends a variable name without a key, rejects invalid names, and provides explicit reference removal', async () => {
+    const { lent, set } = host({ embedding: saved }, {}, () => ({ ...saved, apiKeyStorage: 'none', apiKeyConfigured: false }))
+    render(settings(lent))
+    fireEvent.change(screen.getByLabelText('API key environment variable (optional)'), { target: { value: 'INVALID NAME' } })
+    expect((screen.getByRole('button', { name: t('options.apply') }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.change(screen.getByLabelText('API key environment variable (optional)'), { target: { value: 'FIXTURE_EMBED_KEY' } })
+    fireEvent.click(screen.getByRole('button', { name: t('options.apply') }))
+    await waitFor(() => expect(set).toHaveBeenCalledWith('embedding', expect.objectContaining({ apiKey: '', apiKeyEnv: 'FIXTURE_EMBED_KEY' })))
+    fireEvent.click(screen.getByRole('checkbox', { name: "Remove this connection's key and environment variable references" }))
+    fireEvent.click(screen.getByRole('button', { name: t('options.apply') }))
+    await waitFor(() => expect(set).toHaveBeenCalledWith('embedding', expect.objectContaining({ apiKey: '', apiKeyEnv: '', clearApiKey: true })))
+  })
+
+  it('migrates the Host-retained legacy key without sending it to the editor or back over the wire', async () => {
+    const { lent, set } = host({ embedding: { ...saved, apiKeyStorage: 'legacy' } }, {}, () => saved)
+    render(settings(lent))
+    expect((screen.getByLabelText(t('config.embeddingApiKey')) as HTMLInputElement).value).toBe('')
+    fireEvent.click(screen.getByRole('button', { name: 'Move the existing plaintext key to DSH credentials' }))
+    await waitFor(() => expect(set).toHaveBeenCalledWith('embedding', expect.objectContaining({ apiKey: '' })))
+    expect(screen.queryByRole('button', { name: 'Move the existing plaintext key to DSH credentials' })).toBeNull()
+  })
+
+  it('keeps an older Starter connection usable without accepting new plaintext secrets', async () => {
+    const { lent, set } = host({ embedding: { enabled: true, endpoint: saved.endpoint, model: 'fixture', apiKey: 'legacy-fixture' } })
+    render(settings(lent))
+    const password = screen.getByLabelText(t('config.embeddingApiKey')) as HTMLInputElement
+    expect(password.value).toBe('')
+    expect(password.disabled).toBe(true)
+    fireEvent.click(screen.getByRole('switch', { name: t('config.embeddingManaged') }))
+    await waitFor(() => expect(set).toHaveBeenCalledWith('embedding', expect.objectContaining({ enabled: false, apiKey: 'legacy-fixture' })))
   })
 })

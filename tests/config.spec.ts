@@ -9,6 +9,12 @@ import { Config, resolveConfig, resolveSkillsConfig } from "../src/host/config.t
 afterEach(() => vi.unstubAllEnvs())
 
 describe('Mnemon config and resolution', () => {
+  it('defaults automatic adoption off and validates its persistent daily budget settings', () => {
+    expect(resolveSkillsConfig()).toMatchObject({ autoAdopt: false, autoAdoptDailyLimit: 2, autoAdoptTimeZone: 'local' })
+    expect(resolveSkillsConfig({ autoAdoptDailyLimit: 0, autoAdoptTimeZone: 'Asia/Shanghai' })).toMatchObject({ autoAdoptDailyLimit: 0, autoAdoptTimeZone: 'Asia/Shanghai' })
+    for (const value of [-1, 101, 1.5, NaN, Infinity]) expect(() => resolveSkillsConfig({ autoAdoptDailyLimit: value })).toThrow()
+    for (const value of ['', 'not/a-zone']) expect(() => resolveSkillsConfig({ autoAdoptTimeZone: value })).toThrow()
+  })
   it('defaults and validates explicit draft budgets without forcing a larger retry budget', () => {
     expect(resolveSkillsConfig()).toMatchObject({ draftMaxTokens: 32_768, draftRetryMaxTokens: 65_536 })
     expect(Config({ skills: { draftMaxTokens: 98_304, draftRetryMaxTokens: 32_768 } }).skills)

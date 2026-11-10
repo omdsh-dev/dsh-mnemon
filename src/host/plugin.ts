@@ -212,7 +212,7 @@ export function apply(rawContext: unknown, rawConfig: MnemonConfig | LiveHostCon
       pluginCommand: () => dshPluginCommand(ctx.get('profileContext')),
     })
     const rpc = registerRpc(connection, runtime, lifecycle, versions, () => autoBackup.refresh(), () => hasNativeDirectoryPicker(ctx))
-    const settings = registerSettingsRpc(connection, hostSettings)
+    const settings = registerSettingsRpc(connection, hostSettings, () => (ctx.get('credentials') ?? ctx.credentials) as HostCredentialsService | undefined)
     const view = registerViewRpc(connection, runtime, extensions, memoryPlugins, lifecycle, pluginInstallation)
     if (Context.is(webContext)) {
       new MnemonRemoteService(webContext, {

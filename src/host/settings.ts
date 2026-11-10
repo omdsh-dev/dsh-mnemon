@@ -1,5 +1,6 @@
 import type { HostConnectionHandle, HostRpcHandler, HostSettingsService, RpcResult } from "./dsh.ts"
 import { DEFAULT_SKILLS_CONFIG, MNEMON_SETTINGS_CHANNEL, MNEMON_SETTINGS_NAMESPACE, MNEMON_SKILLS_SETTINGS_NAMESPACE, MNEMON_UI_SETTINGS_NAMESPACE } from "./protocol.ts"
+import { prepareEmbeddingSettings, publicEmbeddingSettings, type EmbeddingCredentialStore } from './embedding-settings.ts'
 import { normalizeDisplayMode } from './display-mode.ts'
 
 export { MNEMON_SETTINGS_CHANNEL, MNEMON_SETTINGS_NAMESPACE, MNEMON_SKILLS_SETTINGS_NAMESPACE, MNEMON_UI_SETTINGS_NAMESPACE } from "./protocol.ts"
@@ -26,13 +27,15 @@ function badRequest(message: string): RpcResult<unknown> {
 function descriptor(settings: HostSettingsService, namespace: string) {
   const view = settings.describe({ redactSecrets: true }).find(candidate => candidate.ns === namespace)
   if (view === undefined) throw new Error(`${namespace} settings namespace is unavailable`)
+  const raw = namespace === MNEMON_SETTINGS_NAMESPACE ? settings.describe({ redactSecrets: false }).find(candidate => candidate.ns === namespace) : undefined
+  const visible = namespace === MNEMON_SETTINGS_NAMESPACE ? publicEmbeddingSettings(view.value, raw?.value, true) : view.value
   return {
     status: 'ready' as const,
     value: namespace === MNEMON_SETTINGS_NAMESPACE && displayModeOf(view.value) === 'buildin'
-      ? { ...object(view.value), displayMode: 'builtin' }
-      : view.value,
-    base: view.base,
-    user: view.user,
+      ? { ...object(visible), displayMode: 'builtin' }
+      : visible,
+    base: namespace === MNEMON_SETTINGS_NAMESPACE ? publicEmbeddingSettings(view.base, raw?.base) : view.base,
+    user: namespace === MNEMON_SETTINGS_NAMESPACE ? publicEmbeddingSettings(view.user, raw?.user) : view.user,
     revision: view.revision,
     writable: settings.writable,
     mode: 'host' as const,
@@ -112,7 +115,7 @@ function mutablePath(namespace: string, path: string[]): boolean {
   return INTERACTION_PATHS.some(allowed => allowed.length === path.length && allowed.every((segment, index) => segment === path[index]))
 }
 
-export function createSettingsHandler(settings: HostSettingsService): HostRpcHandler {
+export function createSettingsHandler(settings: HostSettingsService, credentials?: EmbeddingCredentialStore): HostRpcHandler {
   return async (endpoint, rawPayload) => {
     let namespace = MNEMON_SETTINGS_NAMESPACE
     try {
@@ -132,7 +135,13 @@ export function createSettingsHandler(settings: HostSettingsService): HostRpcHan
         return { op: 'set' as const, path, value: namespace === MNEMON_SETTINGS_NAMESPACE && path[0] === 'displayMode' ? normalizeDisplayMode(op.value) : op.value }
       })
       const revision = payload.expectedRevision === undefined ? undefined : Number(payload.expectedRevision)
-      await settings.mutate(namespace, ops, revision)
+      const prepared = await prepareEmbeddingSettings(settings, namespace, ops, revision, credentials)
+      try {
+        await settings.mutate(namespace, prepared.operations, prepared.revision)
+      } catch (error) {
+        await prepared.rollback?.().catch(() => {})
+        throw error
+      }
       if (namespace === MNEMON_SETTINGS_NAMESPACE) await migrateLegacyDisplayMode(settings)
       return success(descriptor(settings, namespace))
     } catch (error) {
@@ -141,8 +150,8 @@ export function createSettingsHandler(settings: HostSettingsService): HostRpcHan
   }
 }
 
-export function registerSettingsRpc(connection: HostConnectionHandle, settings: HostSettingsService): HostRpcHandler {
-  const handler = createSettingsHandler(settings)
+export function registerSettingsRpc(connection: HostConnectionHandle, settings: HostSettingsService, credentials?: EmbeddingCredentialStore): HostRpcHandler {
+  const handler = createSettingsHandler(settings, credentials)
   connection.rpc.handle(MNEMON_SETTINGS_CHANNEL, handler)
   return handler
 }

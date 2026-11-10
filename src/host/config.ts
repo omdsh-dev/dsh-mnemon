@@ -83,6 +83,14 @@ export const SkillsConfig: z<Partial<ResolvedSkillsConfig>, ResolvedSkillsConfig
   targetScope: z.union(['storage', 'user', 'project'] as const).default(DEFAULT_SKILLS_CONFIG.targetScope),
   autoBacktest: z.boolean().default(DEFAULT_SKILLS_CONFIG.autoBacktest),
   autoAdopt: z.boolean().default(DEFAULT_SKILLS_CONFIG.autoAdopt),
+  autoAdoptDailyLimit: z.number().step(1).min(0).max(100).default(DEFAULT_SKILLS_CONFIG.autoAdoptDailyLimit),
+  autoAdoptTimeZone: z.transform(z.string(), value => {
+    // Cordis serializes transforms; this callback must not capture module bindings.
+    if (value === 'local') return value
+    if (!value || value.length > 100) throw new Error('skills.autoAdoptTimeZone must be an IANA time zone or local')
+    try { new Intl.DateTimeFormat('en', { timeZone: value }).format(0) } catch { throw new Error('skills.autoAdoptTimeZone must be an IANA time zone or local') }
+    return value
+  }).default(DEFAULT_SKILLS_CONFIG.autoAdoptTimeZone),
   draftMaxTokens: z.number().step(1).min(128).max(131_072).default(DEFAULT_SKILLS_CONFIG.draftMaxTokens),
   draftRetryMaxTokens: z.number().step(1).min(128).max(131_072).default(DEFAULT_SKILLS_CONFIG.draftRetryMaxTokens),
   hints: z.boolean().default(DEFAULT_SKILLS_CONFIG.hints),
@@ -125,7 +133,9 @@ const MnemonEmbeddingSchema = z.object({
   enabled: z.boolean().default(false),
   endpoint: z.string().default(DEFAULT_EMBEDDING_ENDPOINT),
   model: z.string().default(DEFAULT_EMBEDDING_MODEL),
-  apiKey: z.string().default(''),
+  apiKey: z.string().role('secret').default(''),
+  apiKeyEnv: z.string(),
+  apiKeyRef: z.string(),
   protocol: z.union(MNEMON_EMBEDDING_PROTOCOLS).default(DEFAULT_EMBEDDING_PROTOCOL),
 })
 
