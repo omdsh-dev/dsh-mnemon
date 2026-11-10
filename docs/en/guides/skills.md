@@ -14,6 +14,8 @@ A skill is a folder with a `SKILL.md`, in the [Agent Skills](https://agentskills
 
 The screens below come from the [v0.5.34 Skills gallery](../../assets/skills-v0.5.34/README.md), captured on the fictional Lumen project: the assistant wrote release notes with the `release-notes` skill, the user corrected the format, and self-evolution took it from there.
 
+Linked skill roots, bundle directories and `SKILL.md` files remain visible and usable, but are read-only in Mnemon. They do not produce update suggestions or improvement drafts; existing drafts cannot be adopted into a linked target. Edit the original repository, or replace the link with a local copy before evolving the skill. Mnemon rechecks the target when recording and adopting a draft; ordinary local skills keep their current workflow.
+
 ## The Skills page
 
 The page has five tabs: **Skills**, **Evolution**, **Evals**, **Market** and **Trash**. The count on **Evolution** is how many suggestions and drafts wait for you.

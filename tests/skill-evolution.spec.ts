@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -499,6 +499,23 @@ describe('skill evolution in the Host', () => {
       outcome: async () => { const [suggestion] = await source.read<SkillSuggestion[]>('suggestions'); return suggestion },
     }
   }
+
+  it('never generates or adopts update drafts for a linked skill, manually or automatically', async () => {
+    const location = join(directory, 'dsh', 'skills', 'release-notes')
+    const upstream = join(directory, 'upstream')
+    const original = readFileSync(join(location, 'SKILL.md'), 'utf8')
+    renameSync(location, upstream)
+    symlinkSync(upstream, location, process.platform === 'win32' ? 'junction' : 'dir')
+    const run = automaticHarness()
+    await expect(run.skills.draft(source, undefined, { skill: 'release-notes' })).rejects.toThrow('Linked skills are read-only')
+    expect(run.skillTask).not.toHaveBeenCalled()
+    await run.start()
+    expect(run.drafts()).toBe(0)
+    expect(await source.read('suggestions')).toEqual([])
+    expect(await source.read('drafts')).toEqual([])
+    expect(readFileSync(join(upstream, 'SKILL.md'), 'utf8')).toBe(original)
+    run.skills.dispose()
+  })
 
   it('automatically adopts a fresh idle suggestion with full paired results and one frozen model', async () => {
     const run = automaticHarness()

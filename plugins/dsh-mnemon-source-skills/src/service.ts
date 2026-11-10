@@ -9,7 +9,7 @@ import {
   type MarketSourceKind, type MarketView, type ReviewRecordInput, type ReviewRecordResult, type RunTarget, type SkillCatalog, type SkillDocument,
   type SkillDraft, type SkillOrigin, type SkillResolution, type SkillRootKind, type SkillSuggestion, type SkillSummary, type SkillVersion, type SkillVersionReason, type SkillsOverview, type Trajectory, type TrajectorySummary, type TrashEntry, type TrashRestoreInput, type TrashRestorePreview,
 } from './contracts.ts'
-import { activeSkill, catalogFingerprint, findSkill, readCatalog, readSkillDocument, rootPath, sha256, type SkillRootOptions } from './catalog.ts'
+import { activeSkill, catalogFingerprint, findSkill, readCatalog, readSkillDocument, requireWritableRoot, requireWritableSkill, rootPath, sha256, type SkillRootOptions } from './catalog.ts'
 import { legacySuggestionWorkspace, skillOrigin, validOrigin } from './identity.ts'
 import { isSkillName, setFrontmatterKey, skillTemplate, validateSkillContent, withInvocation } from './frontmatter.ts'
 import { admitReview, expireSuggestions, OPEN_STATUSES, policyFrom, similarCase, trajectorySummary } from './policy.ts'
@@ -367,6 +367,7 @@ export class SkillsService {
       const catalog = this.catalog(workspace)
       const root = input.root ?? DEFAULT_ROOT
       if (!SKILL_ROOT_KINDS.includes(root)) throw new Error('unknown skill root: ' + root)
+      requireWritableRoot(rootPath(catalog, root))
       const directory = join(rootPath(catalog, root), input.name)
       if (catalog.skills.some(skill => skill.root === root && skill.name === input.name) || existsSync(directory) || existsSync(directory + '.md')) throw new Error(`${input.name} already exists in this root`)
       const content = input.content?.trim() ? input.content : skillTemplate(input.name, input.description)
@@ -382,6 +383,7 @@ export class SkillsService {
   saveSkill(workspace: string | undefined, input: { key: string; content: string; expectedHash: string }): Promise<SkillSummary> {
     return this.write(() => {
       const skill = findSkill(this.catalog(workspace), input.key)
+      requireWritableSkill(skill)
       const previous = this.requireHash(skill, input.expectedHash)
       validateSkillContent(input.content, skill.name)
       writeFileAtomic(skill.path, input.content)
@@ -395,6 +397,7 @@ export class SkillsService {
   setInvocation(workspace: string | undefined, input: { key: string; modelInvocable: boolean; userInvocable: boolean; expectedHash: string }): Promise<SkillSummary> {
     return this.write(() => {
       const skill = findSkill(this.catalog(workspace), input.key)
+      requireWritableSkill(skill)
       const previous = this.requireHash(skill, input.expectedHash)
       const content = withInvocation(previous, { modelInvocable: input.modelInvocable, userInvocable: input.userInvocable })
       validateSkillContent(content, skill.name)
@@ -556,6 +559,7 @@ export class SkillsService {
   restoreVersion(workspace: string | undefined, input: { key: string; versionId: string; expectedHash: string }): Promise<SkillSummary> {
     return this.write(() => {
       const skill = findSkill(this.catalog(workspace), input.key)
+      requireWritableSkill(skill)
       const previous = this.requireHash(skill, input.expectedHash)
       const ledger = this.store.ledger()
       const version = ledger.versions.find(candidate => candidate.skillKey === skill.key && candidate.id === input.versionId)
@@ -765,6 +769,7 @@ export class SkillsService {
       this.requireExpectedDraft(ledger, suggestion, input.expectedDraft)
       const original = prior?.action === 'update' ? this.draftOriginal(ledger, prior) : suggestion?.action === 'update' ? this.suggestionOriginal(ledger, suggestion) : undefined
       const loaded = original === undefined ? activeSkill(catalog, input.skillName) : this.requireOriginal(original)
+      if (loaded !== undefined) requireWritableSkill(loaded)
       if (input.expectedBaseHash !== undefined && (loaded?.hash ?? null) !== input.expectedBaseHash) throw new Error('The skill changed while this draft was being generated; regenerate it from the current file')
       const origin = loaded === undefined ? undefined : original?.origin ?? skillOrigin(catalog, loaded)
       for (const draft of ledger.drafts) {
@@ -842,6 +847,7 @@ export class SkillsService {
       if (draft.action === 'update') {
         const original = this.draftOriginal(ledger, draft)
         const base = this.requireOriginal(original)
+        requireWritableSkill(base)
         previous = this.requireHash(base, draft.baseHash)
         writeFileAtomic(base.path, draft.content)
         key = base.key
@@ -850,6 +856,7 @@ export class SkillsService {
         const root = input.root ?? draft.targetRoot ?? DEFAULT_ROOT
         if (activeSkill(catalog, draft.skillName) !== undefined) throw new Error(`${draft.skillName} exists now; draft it again as an update`)
         const target = rootPath(catalog, root)
+        requireWritableRoot(target)
         // The project may have disappeared since drafting. Validate the final
         // adoption choice before recursive mkdir can recreate that project.
         if (root.startsWith('project-')) {

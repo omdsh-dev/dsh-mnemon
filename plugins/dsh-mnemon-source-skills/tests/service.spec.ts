@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -828,5 +828,58 @@ describe('cancelled writes waiting for the Skills Source lock', () => {
     await lock
     expect(store.store.ledger()).toEqual(beforeLedger)
     expect(store.store.evals()).toEqual(beforeEvals)
+  })
+})
+
+
+describe('linked skills are read-only', () => {
+  it.each(['bundle', 'document', 'flat', 'root'] as const)('reads a linked %s but rejects editing, review suggestions and update drafts', async layout => {
+    const original = skill('release-notes')
+    const upstream = join(root, 'upstream', 'release-notes')
+    const upstreamFile = join(upstream, 'SKILL.md')
+    write(upstreamFile, original)
+    const skillsRoot = join(home, 'skills')
+    const entry = join(skillsRoot, 'release-notes')
+    const directoryLink = process.platform === 'win32' ? 'junction' : 'dir'
+    mkdirSync(home, { recursive: true })
+    if (layout === 'root') symlinkSync(join(root, 'upstream'), skillsRoot, directoryLink)
+    else {
+      mkdirSync(skillsRoot, { recursive: true })
+      if (layout === 'bundle') symlinkSync(upstream, entry, directoryLink)
+      else if (layout === 'flat') symlinkSync(upstreamFile, entry + '.md', 'file')
+      else { mkdirSync(entry); symlinkSync(upstreamFile, join(entry, 'SKILL.md'), 'file') }
+    }
+    const store = service()
+    const loaded = store.catalog(undefined).skills[0]!
+    expect(loaded).toMatchObject({ name: 'release-notes', readOnly: true })
+    expect(store.evidencePack(undefined, { skill: loaded.name }).skill?.content).toBe(original)
+    const recorded = await store.recordReview(undefined, review())
+    expect(recorded.skipped).toContainEqual({ skillName: loaded.name, action: 'update', reason: 'linked_skill' })
+    expect(store.store.ledger().suggestions).toEqual([])
+    const changed = skill(loaded.name, 'Changed')
+    await expect(store.recordDraft(undefined, { skillName: loaded.name, content: changed, notes: '', changes: [], guidance: [] })).rejects.toThrow('Linked skills are read-only')
+    await expect(store.saveSkill(undefined, { key: loaded.key, expectedHash: loaded.hash, content: changed })).rejects.toThrow('Linked skills are read-only')
+    await expect(store.setInvocation(undefined, { key: loaded.key, expectedHash: loaded.hash, modelInvocable: false, userInvocable: false })).rejects.toThrow('Linked skills are read-only')
+    if (layout === 'root') {
+      await expect(store.createSkill(undefined, { name: 'new-skill', description: 'New' })).rejects.toThrow('Linked skill roots are read-only')
+      expect(existsSync(join(root, 'upstream', 'new-skill'))).toBe(false)
+    }
+    expect(readFileSync(upstreamFile, 'utf8')).toBe(original)
+  })
+
+  it('rejects an existing draft after its unchanged target becomes a linked directory', async () => {
+    const file = join(home, 'skills', 'release-notes', 'SKILL.md')
+    const original = skill('release-notes')
+    write(file, original)
+    const store = service()
+    const draft = await store.recordDraft(undefined, { skillName: 'release-notes', content: skill('release-notes', 'Changed'), notes: '', changes: [], guidance: [] })
+    const revision = store.revision(undefined)
+    const upstream = join(root, 'upstream')
+    renameSync(join(file, '..'), upstream)
+    symlinkSync(upstream, join(file, '..'), process.platform === 'win32' ? 'junction' : 'dir')
+    expect(store.revision(undefined)).not.toBe(revision)
+    await expect(store.adoptDraft(undefined, draft.id)).rejects.toThrow('Linked skills are read-only')
+    expect(store.store.ledger().drafts[0]?.status).toBe('ready')
+    expect(readFileSync(join(upstream, 'SKILL.md'), 'utf8')).toBe(original)
   })
 })

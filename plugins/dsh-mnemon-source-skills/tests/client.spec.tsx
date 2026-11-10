@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { URL as NodeURL } from 'node:url'
@@ -86,6 +86,26 @@ function page(navigationInput: { seed: string; nonce: number } = { seed: 'skill:
 }
 
 describe('Skills page', () => {
+  it.each(['skill', 'draft'] as const)('keeps a linked %s readable while disabling writes', async view => {
+    const draft = await mutate('draft-record', { skillName: 'release-notes', content: SKILL, notes: '', changes: [], guidance: [] }) as { id: string }
+    const entry = join(directory, 'dsh', 'skills', 'release-notes')
+    const upstream = join(directory, 'upstream')
+    renameSync(entry, upstream)
+    symlinkSync(upstream, entry, process.platform === 'win32' ? 'junction' : 'dir')
+    page(view === 'draft' ? { seed: `draft:${draft.id}`, nonce: 1 } : undefined)
+    await screen.findByText(t('skills.linkedReadOnly'))
+    if (view === 'skill') {
+      expect((screen.getByRole('button', { name: t('common.edit') }) as HTMLButtonElement).disabled).toBe(true)
+      expect((screen.getByRole('switch', { name: t('skills.toggle', { name: 'release-notes' }) }) as HTMLButtonElement).disabled).toBe(true)
+      expect(screen.getByRole('button', { name: /^release-notes\s/u }).textContent).not.toContain(t('skills.linkedReadOnly'))
+      expect(screen.getAllByRole('button', { name: t('skills.use') }).every(button => !(button as HTMLButtonElement).disabled)).toBe(true)
+    } else {
+      expect((screen.getByRole('button', { name: t('draft.adopt') }) as HTMLButtonElement).disabled).toBe(true)
+      expect((screen.getByRole('button', { name: t('draft.discard') }) as HTMLButtonElement).disabled).toBe(false)
+    }
+    expect(readFileSync(join(upstream, 'SKILL.md'), 'utf8')).toBe(SKILL)
+  })
+
   it('does not retry a skill file hash conflict as a Source revision conflict', async () => {
     const mutation = vi.spyOn(management, 'mutate').mockRejectedValue(new Error('release-notes changed since it was read; reload it and try again'))
     await expect(skillsPageClient(management).adoptDraft('draft-id')).rejects.toThrow('changed since it was read')

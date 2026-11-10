@@ -190,3 +190,4 @@ For new evaluations, commit the reusable harness and workload generator to [`scr
 A record's commands and links name files as they were at its tested revision; a script or fixture a record names may since have moved or gone. Image-only files also have references from GitHub PR bodies. A missing repository-local link is not sufficient evidence to delete them. Current Light product media is indexed in [the asset directory](../assets/README.md); keep historical paths stable for external readers.
 
 记录中的命令与链接指向其测试版本时的文件，记录提到的脚本或夹具此后可能已移动或删除。部分独立图片由 GitHub PR 正文引用，不能仅凭仓库内无引用就删除。当前浅色产品素材见[素材目录](../assets/README.md)，历史资源路径保留供外部引用。
+| [Issue #600: linked skills](./issue-600-linked-skills/README.md) / [中文](./issue-600-linked-skills/README.zh-CN.md) | Read-only linked skills, stale-draft rejection and real Web screenshots / 链接技能只读、旧草稿拒绝写回与真实 Web 截图 |
