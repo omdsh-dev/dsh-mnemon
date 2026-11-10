@@ -50,6 +50,9 @@ jobs:
       - name: Verify real pnpm global shims outside the Desktop PATH
         run: pnpm run verify:windows-pnpm
 
+      - name: Test read-only Git mirror recovery and junction boundaries
+        run: pnpm exec vitest run tests/disposable-directory.spec.ts tests/git-sync.spec.ts tests/sync-config.spec.ts -t "read-only"
+
   verify-source:
     name: Verify source (Node 22.19)
     runs-on: ubuntu-latest
