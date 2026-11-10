@@ -117,16 +117,21 @@ describe('external consumer of packed artifacts', () => {
     }
   })
 
-  it('ships Chinese plugin metadata and keeps manifest fallback for English', () => {
+  it('ships localized plugin details and keeps manifest title and description fallback for English', () => {
     const require = createRequire(import.meta.url)
     const english = JSON.parse(readFileSync(require.resolve('dsh-mnemon/locale/en.json'), 'utf8'))
     const chinese = JSON.parse(readFileSync(require.resolve('dsh-mnemon/locale/zh.json'), 'utf8'))
     const manifest = JSON.parse(readFileSync(require.resolve('dsh-mnemon/package.json'), 'utf8'))
-    expect(english.meta).toEqual({})
+    expect(english.meta).toEqual({ detail: 'locale/detail.en.md' })
     expect(manifest.name).toBe('dsh-mnemon')
     expect(manifest.description).toMatch(/Composable, view-based context/)
     expect(chinese.meta.title).toBe('可组合记忆 (dsh-mnemon)')
     expect(chinese.meta.description).toMatch(/可组合视图上下文/)
+    expect(chinese.meta.detail).toBe('locale/detail.zh.md')
+    const directory = dirname(require.resolve('dsh-mnemon/package.json'))
+    for (const locale of [english, chinese]) {
+      expect(readFileSync(join(directory, locale.meta.detail), 'utf8')).toMatch(/^# Mnemon\n/)
+    }
   })
 
   it('supports a new Source and Strategy, authority checks, exact grants and explicit replacement', async () => {
