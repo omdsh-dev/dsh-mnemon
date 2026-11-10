@@ -592,3 +592,10 @@
   .page :is(input:not([type='checkbox']):not([type='radio']), select, textarea) { min-height: 44px; }
   .canvas { overscroll-behavior: contain; }
 }
+
+/* The official composer chain keeps the resident editor mounted under this small control. */
+.composerNotice { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px 16px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.composerToggle { flex: 0 0 auto; padding: 5px 9px; border: .5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-md); color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-base); font: inherit; font-size: 12px; cursor: pointer; }
+.composerToggle:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
+
+:where(.shell[data-mnemon-composer]) .page { padding-bottom: var(--mn-composer-inset); }

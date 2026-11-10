@@ -14,6 +14,7 @@ import type { MnemonChangeSignal } from './change-signal.ts'
 import { MnemonWorkspaceController } from './workspace-controller.ts'
 import { useMnemonSessionId, type MnemonSessionBinding } from './session-binding.ts'
 import css from './MnemonWorkspace.module.css'
+import { MemoryComposerToggle, type MemoryComposer } from './memory-composer.tsx'
 
 const ACTIVE_ATTR = 'data-dsh-mnemon-active'
 const TASKBOARD_ACTIVE_ATTR = 'data-dsh-taskboard-active'
@@ -81,10 +82,12 @@ function useHiddenSourceTypes(panel: MnemonWorkspaceHostProps['skillsPanel']): r
 interface MnemonBuiltinWorkspaceHostProps extends Pick<MnemonWorkspaceHostProps,
   'connection' | 'settingsScope' | 'localeRuntime' | 'sourcePageDirectory' | 'configuration' | 'componentChanges' | 'renderSlot' | 't' | 'skillsScope' | 'skillsPanel'> {
   sessionId: string
+  composer?: MemoryComposer
 }
 
 /** Builtin follows its DSH slot session, never the Sidebar's workspace picker. */
 export function MnemonBuiltinWorkspaceHost(props: MnemonBuiltinWorkspaceHostProps): JSX.Element {
+  useEffect(() => props.composer?.mount(props.sessionId), [props.composer, props.sessionId])
   const subscribeLocale = useCallback((listener: () => void) => props.localeRuntime.subscribe(listener), [props.localeRuntime])
   const getLocale = useCallback(() => props.localeRuntime.getSnapshot(), [props.localeRuntime])
   const locale = useSyncExternalStore(subscribeLocale, getLocale, getLocale)
@@ -96,6 +99,7 @@ export function MnemonBuiltinWorkspaceHost(props: MnemonBuiltinWorkspaceHostProp
     {...(hiddenSourceTypes === undefined ? {} : { hiddenSourceTypes })}
     {...(props.skillsScope === undefined ? {} : { skillsScope: props.skillsScope })}
     surface="builtin"
+    headerActions={props.composer === undefined ? undefined : <MemoryComposerToggle composer={props.composer} t={props.t} />}
     t={props.t}
     locale={locale.active}
     sourcePageDirectory={props.sourcePageDirectory}

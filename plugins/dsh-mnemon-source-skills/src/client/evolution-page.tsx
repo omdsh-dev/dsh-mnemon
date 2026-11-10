@@ -226,7 +226,7 @@ function SuggestionDetail(props: { context: SkillsPageContext; id: string; model
         <span className={css.skMeta}>{meta.map(part => <span key={part}>{part}</span>)}</span>
       </div>
       {suggestion.status === 'pending' && <div className={css.skDetailActions}>
-        <Button variant="primary" size="sm" disabled={!context.writable || busy || !canDraft} title={canDraft ? undefined : t('evolution.noAgent')} onClick={() => void act(() => context.client.generateDraft({ suggestionId: suggestion.id, ...route }))}>{t('evolution.draft')}</Button>
+        <Button variant="primary" size="sm" disabled={!context.writable || busy || !canDraft || view.skill?.readOnly === true} title={canDraft ? undefined : t('evolution.noAgent')} onClick={() => void act(() => context.client.generateDraft({ suggestionId: suggestion.id, ...route }))}>{t('evolution.draft')}</Button>
         <Button variant="ghost" size="sm" disabled={!context.writable || busy} onClick={() => void act(async () => { await context.client.dismissSuggestion(suggestion.id); context.notice(t('evolution.dismissed')) })}>{t('evolution.dismiss')}</Button>
         <Button variant="ghost" size="sm" disabled={!context.writable || busy} onClick={() => setDeleting(true)}>{t('common.delete')}</Button>
       </div>}
@@ -239,6 +239,7 @@ function SuggestionDetail(props: { context: SkillsPageContext; id: string; model
       <p className={css.skMuted}>{t('triage.rules')} {t('triage.soft')}</p>
     </section>}
     {suggestion.rationale !== undefined && <Clamp text={suggestion.rationale} />}
+    {view.skill?.readOnly && <p className={css.skWarn}>{t('skills.linkedReadOnly')}</p>}
     {suggestion.action === 'update' && view.skill === undefined && <p className={css.skWarn}>{t(view.resolution === 'origin-unavailable' ? 'evolution.originUnavailable' : 'evolution.skillGone')}</p>}
     {suggestion.action === 'update' && view.skill !== undefined && !view.hashCurrent && suggestion.status === 'pending' && <p className={css.skWarn}>{t('evolution.skillChanged')}</p>}
     {suggestion.autoAdoption !== undefined && suggestion.autoAdoption.length > 0 && <AutoAdoptionHistory events={suggestion.autoAdoption} />}
@@ -356,16 +357,17 @@ function DraftReview(props: { context: SkillsPageContext; draftId: string; model
       {ready && <div>
         {draft.action === 'create' && roots.length > 1 && <SelectField inline size="sm" label={t('draft.writeTo')} value={root} disabled={busy} onChange={setRoot}
           options={roots.map(kind => ({ value: kind, label: t(`root.${kind}`) }))} />}
-        <Button variant="primary" size="sm" disabled={!context.writable || busy || editing !== null || running || view.conflict !== undefined || !originalAvailable} onClick={() => regressed ? setConfirmAdopt(true) : void adopt()}>{t('draft.adopt')}</Button>
+        <Button variant="primary" size="sm" disabled={!context.writable || busy || editing !== null || running || view.conflict !== undefined || !originalAvailable || view.base?.readOnly === true} onClick={() => regressed ? setConfirmAdopt(true) : void adopt()}>{t('draft.adopt')}</Button>
         <Button variant="ghost" size="sm" disabled={!context.writable || busy} onClick={() => void act(() => context.client.discardDraft(draft.id))}>{t('draft.discard')}</Button>
         <MoreMenu label={t('common.more')} disabled={!context.writable || busy} onSelect={id => id === 'edit' ? setEditing(draft.content) : setRedrafting('')}
-          items={[{ id: 'edit', label: t('draft.edit') }, ...(originalAvailable && context.client.canAssist('skill-draft') ? [{ id: 'redraft', label: t('draft.redraft') }] : [])]} />
+          items={[{ id: 'edit', label: t('draft.edit') }, ...(originalAvailable && !view.base?.readOnly && context.client.canAssist('skill-draft') ? [{ id: 'redraft', label: t('draft.redraft') }] : [])]} />
       </div>}
     </header>
+    {view.base?.readOnly && <p className={css.skWarn}>{t('skills.linkedReadOnly')}</p>}
     {!originalAvailable && <p className={css.skWarn}>{t(view.resolution === 'origin-unavailable' ? 'evolution.originUnavailable' : 'evolution.skillGone')}</p>}
     {view.conflict !== undefined && ready && <div className={css.skWarn} role="status">
       <p>{t(view.conflict === 'target-exists' ? 'draft.targetExists' : 'draft.baseChanged')}</p>
-      {originalAvailable && context.client.canAssist('skill-draft') && <Button size="sm" disabled={!context.writable || busy || running} onClick={() => void redraft(t('draft.refreshGuidance'), true)}>{t('draft.regenerate')}</Button>}
+      {originalAvailable && !view.base?.readOnly && context.client.canAssist('skill-draft') && <Button size="sm" disabled={!context.writable || busy || running} onClick={() => void redraft(t('draft.refreshGuidance'), true)}>{t('draft.regenerate')}</Button>}
     </div>}
     {draft.notes !== '' && <Clamp text={draft.notes} />}
     {draft.changes.length > 0 && <MoreList items={draft.changes} shown={3} />}

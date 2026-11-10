@@ -181,6 +181,7 @@ export function admitReview(context: AdmissionContext, input: ReviewRecordInput)
     // A proposal follows the file DSH actually loads: creating a skill that exists is an update.
     const existing = activeSkill(catalog, name)
     const action = existing !== undefined ? 'update' : 'create'
+    if (existing?.readOnly) { skipped.push({ skillName: name, action, reason: 'linked_skill' }); continue }
     if (!allowed(action)) { skipped.push({ skillName: name, action, reason: 'suggestion_type_disabled' }); continue }
     if (raw.action === 'update' && existing === undefined) { skipped.push({ skillName: name, action: raw.action, reason: 'unknown_skill' }); continue }
     const key = `${name}::${action}`

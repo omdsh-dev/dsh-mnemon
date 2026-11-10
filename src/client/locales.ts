@@ -6,6 +6,9 @@ import spacesCopy from 'dsh-mnemon-source-memory-spaces/presentation/locales.jso
 
 export const zh = {
   ...runtimeCopy.zh, ...documentsCopy.zh, ...spacesCopy.zh,
+  'composer.expand': '展开输入框',
+  'composer.collapse': '收起输入框',
+  'composer.collapsed': '输入框已收起',
   'tab.label': '记忆系统',
   'nav.aria': 'Mnemon 页面',
   'nav.status': '状态',
@@ -841,6 +844,9 @@ export type MnemonKey = keyof typeof zh
 
 export const en: Record<MnemonKey, string> = {
   ...runtimeCopy.en, ...documentsCopy.en, ...spacesCopy.en,
+  'composer.expand': 'Show message input',
+  'composer.collapse': 'Collapse message input',
+  'composer.collapsed': 'Message input collapsed',
   'tab.label': 'Memory System',
   'nav.aria': 'Mnemon pages',
   'nav.status': 'Status',

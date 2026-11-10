@@ -118,7 +118,9 @@ function newSkillRoot(settings: ResolvedSkillsConfig, source: SkillsSourcePort, 
     const project = settings.targetScope === 'project' || (settings.targetScope === 'storage' && (source.scope?.storage === 'workspace' || source.scope?.storage === 'workspaces'))
     root = project ? 'project-dsh' : 'user-dsh'
   }
-  const directory = catalog.roots.find(candidate => candidate.kind === root)?.path
+  const destination = catalog.roots.find(candidate => candidate.kind === root)
+  if (destination?.readOnly) throw new Error(`Cannot create a skill in ${root}: linked skill roots are read-only.`)
+  const directory = destination?.path
   if (directory === undefined || (root.startsWith('project-') && catalog.projectRoot === undefined)) throw new Error('Project skill roots need a selected workspace; select a workspace or choose User in Skills settings.')
   if (root.startsWith('project-')) {
     try {
@@ -407,6 +409,7 @@ export class SkillEvolution {
   async draft(port: SkillsSourcePort, workspace: string | undefined, input: { suggestionId?: string; draftId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; backtest?: boolean; route?: ModelRoute }): Promise<{ started: true; suggestionId?: string }> {
     const source = retryingSource(port)
     const pack = await source.read<EvidencePack>('evidence-pack', { ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }), ...(input.draftId === undefined ? {} : { draftId: input.draftId }), ...(input.skill === undefined ? {} : { skill: input.skill }) })
+    if (pack.skill?.readOnly) throw new Error('Linked skills are read-only; use a local copy before generating an improvement draft.')
     // The evidence window contains only three recent drafts across this skill.
     // Resolve this flow's own prior draft independently of that bounded context.
     const previousId = input.draftId ?? pack.suggestion?.draftId
@@ -448,6 +451,7 @@ export class SkillEvolution {
       return await abortable(signal, async () => {
         const pack = await source.read<EvidencePack>('evidence-pack', { suggestionId: input.suggestionId }, signal)
         signal.throwIfAborted()
+        if (pack.skill?.readOnly) throw new AutomaticSkillStop('changed')
         if (pack.action !== input.action || (pack.action === 'update' && pack.suggestion?.skillFileHash !== pack.skill?.hash)) throw new AutomaticSkillStop('changed')
         const targetRoot = pack.action === 'update' ? pack.skill!.root : newSkillRoot(this.host.settings(), source, await source.read<SkillCatalog>('catalog', null, signal), input.previous?.targetRoot ?? pack.suggestion?.targetRoot)
         const guidance = [...(input.previous?.guidance ?? []), ...(input.guidance === '' ? [] : [input.guidance])].slice(-8)

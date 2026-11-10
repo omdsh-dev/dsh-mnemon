@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { existsSync, readdirSync, readFileSync, statSync, type Dirent } from 'node:fs'
+import { existsSync, lstatSync, readdirSync, readFileSync, statSync, type Dirent } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
 import { SKILL_ROOT_KINDS, SKILL_ROOT_RANK, type SkillCatalog, type SkillDocument, type SkillProblem, type SkillRoot, type SkillRootKind, type SkillSummary } from './contracts.ts'
@@ -57,6 +57,24 @@ export function sha256(content: string | Buffer): string {
   return createHash('sha256').update(content).digest('hex')
 }
 
+/** Links at the skill root, bundle directory or document are readable, never writable.
+ * Do not resolve OS aliases (for example macOS /tmp) or compare path casing. */
+export function linkedSkill(rootPath: string, path: string): boolean {
+  return [rootPath, dirname(path), path].some(candidate => lstatSync(candidate).isSymbolicLink())
+}
+
+export function requireWritableRoot(path: string): void {
+  try {
+    if (lstatSync(path).isSymbolicLink()) throw new Error('Linked skill roots are read-only; select a local skill root.')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
+}
+
+export function requireWritableSkill(skill: Pick<SkillSummary, 'rootPath' | 'path'>): void {
+  if (linkedSkill(skill.rootPath, skill.path)) throw new Error('Linked skills are read-only; edit the original skill in its source repository or use a local copy.')
+}
+
 function entryKind(root: string, entry: Dirent): 'directory' | 'file' | undefined {
   if (entry.isDirectory()) return 'directory'
   if (entry.isFile()) return 'file'
@@ -90,10 +108,14 @@ export function readCatalog(options: SkillRootOptions): SkillCatalog {
   const problems: SkillProblem[] = []
   for (const root of roots) {
     const exists = existsSync(root.path)
-    listedRoots.push({ kind: root.kind, path: root.path, exists })
+    const listed: SkillRoot = { kind: root.kind, path: root.path, exists }
+    listedRoots.push(listed)
     if (!exists) continue
     let entries: Dirent[]
-    try { entries = readdirSync(root.path, { withFileTypes: true }) } catch (error) {
+    try {
+      entries = readdirSync(root.path, { withFileTypes: true })
+      if (lstatSync(root.path).isSymbolicLink()) listed.readOnly = true
+    } catch (error) {
       problems.push({ root: root.kind, path: root.path, reason: error instanceof Error ? error.message : String(error) })
       continue
     }
@@ -106,12 +128,14 @@ export function readCatalog(options: SkillRootOptions): SkillCatalog {
       const path = layout === 'bundle' ? join(root.path, entry.name, 'SKILL.md') : join(root.path, entry.name)
       let raw: Buffer
       let modifiedAt: string
+      let readOnly: boolean
       try {
         const info = statSync(path)
         if (!info.isFile()) continue
         if (info.size > MAX_FILE_BYTES) { problems.push({ root: root.kind, path, reason: 'file is larger than 1 MiB' }); continue }
         raw = readFileSync(path)
         modifiedAt = info.mtime.toISOString()
+        readOnly = linkedSkill(root.path, path)
       } catch { continue }
       const parsed = parseSkill(raw.toString('utf8'))
       if ('problem' in parsed) { problems.push({ root: root.kind, path, reason: parsed.problem }); continue }
@@ -126,6 +150,7 @@ export function readCatalog(options: SkillRootOptions): SkillCatalog {
         rootPath: root.path,
         path,
         layout,
+        ...(readOnly ? { readOnly: true } : {}),
         invocation: parsed.skill.invocation,
         hash: sha256(raw),
         bytes: raw.byteLength,
@@ -153,12 +178,15 @@ export function catalogFingerprint(options: SkillRootOptions): string {
   for (const root of skillRoots(options).roots) {
     hash.update(`${root.kind}\0${root.path}\0`)
     let entries: Dirent[]
-    try { entries = readdirSync(root.path, { withFileTypes: true }) } catch { hash.update('missing\0'); continue }
+    try {
+      entries = readdirSync(root.path, { withFileTypes: true })
+      hash.update(`${lstatSync(root.path).isSymbolicLink()}\0`)
+    } catch { hash.update('missing\0'); continue }
     for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
       const candidate = entry.name.endsWith('.md') ? join(root.path, entry.name) : join(root.path, entry.name, 'SKILL.md')
       try {
         const info = statSync(candidate)
-        hash.update(`${entry.name}\0${info.size}\0${info.mtimeMs}\0`)
+        hash.update(`${entry.name}\0${info.size}\0${info.mtimeMs}\0${linkedSkill(root.path, candidate)}\0`)
       } catch { hash.update(`${entry.name}\0-\0`) }
     }
   }

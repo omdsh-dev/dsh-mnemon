@@ -14,6 +14,7 @@ export interface SkillRoot {
   kind: SkillRootKind
   path: string
   exists: boolean
+  readOnly?: boolean
 }
 
 export interface SkillInvocation {
@@ -34,6 +35,8 @@ export interface SkillSummary {
   /** The SKILL.md of a bundle, or the flat Markdown file. */
   path: string
   layout: 'bundle' | 'flat'
+  /** A linked root, bundle or document may be read but never rewritten. */
+  readOnly?: boolean
   invocation: SkillInvocation
   /** SHA-256 of the file's exact content. */
   hash: string

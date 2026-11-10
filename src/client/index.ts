@@ -43,6 +43,7 @@ import { mountBetterSidebarTab } from './better-sidebar.tsx'
 import { MnemonWorkspaceController } from './workspace-controller.ts'
 import { MNEMON_ANCHOR_EVENT, type MnemonAnchor } from './anchor.ts'
 import { mountSubagentTokenUsageOverride } from './subagent-token-usage.tsx'
+import { installMemoryComposer } from './memory-composer.tsx'
 import { isRecord } from './is-record.ts'
 
 export * from './extension-sdk.ts'
@@ -225,6 +226,7 @@ function mountSidebarMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
 
 /** DSH supplies the owning session; Source pages retain the same render contract. */
 function mountBuiltinMemoryView(ctx: MnemonClientContext, settings: MnemonSettingsScope<Config>, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string, seats: MnemonSeats): () => void {
+  const composer = installMemoryComposer(ctx, translate)
   const sourcePageDirectory = createMemorySourcePageDirectory(ctx)
   const disposeView = ctx.slots.inject('conversation.view', () => ctx.slots.register({
     name: 'conversation.view',
@@ -240,6 +242,7 @@ function mountBuiltinMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
       connection: ctx.connection,
       settingsScope: settings,
       sessionId,
+      composer: composer.composer,
       localeRuntime: ctx.locale,
       sourcePageDirectory,
       configuration: seats.configuration,
@@ -249,7 +252,8 @@ function mountBuiltinMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
       t: translate,
     }),
   }, MnemonBuiltinWorkspaceHost))
-  if (typeof window === 'undefined' || typeof document === 'undefined') return disposeView
+  const dispose = () => { disposeView(); composer.dispose() }
+  if (typeof window === 'undefined' || typeof document === 'undefined') return dispose
   const selectMemoryTab = (): boolean => {
     const label = translate('tab.label').trim()
     const eligible = (candidate: HTMLElement): boolean => !candidate.hasAttribute('disabled')
@@ -306,7 +310,7 @@ function mountBuiltinMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
     withdrawWorkspace?.()
     if (frame !== undefined) cancelAnimationFrame(frame)
     window.removeEventListener(MNEMON_ANCHOR_EVENT, openView)
-    disposeView()
+    dispose()
   }
 }
 

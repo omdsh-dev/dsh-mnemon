@@ -13,6 +13,7 @@ For new evaluations, commit the reusable harness and workload generator to [`scr
 | Record / 记录 | Scope / 范围 |
 |---|---|
 | [v0.5.43 release](./release-v0.5.43/README.md) / [中文](./release-v0.5.43/README.zh-CN.md) | Twelve fresh/upgrade scenarios, exact candidate files and preserved Runtime data on five official Hosts and the fixed source commit / 五个官方 Host 与指定源码 commit 的十二个安装升级场景、制品文件及 Runtime 数据保留 |
+| [Compact plugin settings introduction](./compact-plugin-detail/README.md) / [中文](./compact-plugin-detail/README.zh-CN.md) | Localized meta.detail selection and a real Host screenshot / 本地化 meta.detail 选择及真实 Host 截图 |
 | [v0.5.42 release](./release-v0.5.42/README.md) / [中文](./release-v0.5.42/README.zh-CN.md) | Frozen candidates, fresh installation, real npm upgrades and Runtime data retention on official Hosts and the fixed source commit / 冻结候选、官方 Host 与指定源码 commit 的全新安装、真实 npm 升级及 Runtime 数据保留 |
 | [v0.5.41 release](./release-v0.5.41/README.md) / [中文](./release-v0.5.41/README.zh-CN.md) | Five official Hosts and the reporter-identified source commit: twelve fresh/upgrade scenarios, exact package and data retention checks, and recovery from the #554 startup failure / 五个官方 Host 与报告者所指源码 commit 的十二个安装升级场景、包与数据保留核对，以及 #554 启动故障恢复 |
 | [v0.5.40 release](./release-v0.5.40/README.md) / [中文](./release-v0.5.40/README.zh-CN.md) | Frozen candidates, published RC1, retained Hosts, fresh installs and upgrades / 冻结候选、正式 RC1、保留宿主、全新安装与升级 |
@@ -187,6 +188,7 @@ For new evaluations, commit the reusable harness and workload generator to [`scr
 | [Dialog surfaces](./dialog-surfaces/README.md) | Responsive dialogs and theme integration / 响应式对话框与主题集成 |
 | [Sidebar icon](./sidebar-icon/README.md) | Entry icon alignment / 入口图标对齐 |
 | [npm Sidebar / CLI — 2026-08-30](./npm-sidebar-cli/README.md) | Historical npm control and fault-injection results / 历史 npm 对照与故障注入结果 |
+| [Issue #600: linked skills](./issue-600-linked-skills/README.md) / [中文](./issue-600-linked-skills/README.zh-CN.md) | Read-only linked skills, stale-draft rejection and real Web screenshots / 链接技能只读、旧草稿拒绝写回与真实 Web 截图 |
 
 A record's commands and links name files as they were at its tested revision; a script or fixture a record names may since have moved or gone. Image-only files also have references from GitHub PR bodies. A missing repository-local link is not sufficient evidence to delete them. Current Light product media is indexed in [the asset directory](../assets/README.md); keep historical paths stable for external readers.
 
