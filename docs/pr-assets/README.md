@@ -187,6 +187,7 @@ For new evaluations, commit the reusable harness and workload generator to [`scr
 | [Dialog surfaces](./dialog-surfaces/README.md) | Responsive dialogs and theme integration / 响应式对话框与主题集成 |
 | [Sidebar icon](./sidebar-icon/README.md) | Entry icon alignment / 入口图标对齐 |
 | [npm Sidebar / CLI — 2026-08-30](./npm-sidebar-cli/README.md) | Historical npm control and fault-injection results / 历史 npm 对照与故障注入结果 |
+| [Issue #600: linked skills](./issue-600-linked-skills/README.md) / [中文](./issue-600-linked-skills/README.zh-CN.md) | Read-only linked skills, stale-draft rejection and real Web screenshots / 链接技能只读、旧草稿拒绝写回与真实 Web 截图 |
 
 A record's commands and links name files as they were at its tested revision; a script or fixture a record names may since have moved or gone. Image-only files also have references from GitHub PR bodies. A missing repository-local link is not sufficient evidence to delete them. Current Light product media is indexed in [the asset directory](../assets/README.md); keep historical paths stable for external readers.
 
