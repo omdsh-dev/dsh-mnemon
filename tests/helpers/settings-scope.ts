@@ -20,10 +20,10 @@ export function settingsScope<T>(snapshot: ClientSettingsSnapshot<T>, mutate: Cl
  * scopes do once the Host saves it, so a control that applies at once shows
  * what it saved. `mutate` sees every write first and can refuse it.
  */
-export function liveSettingsScope<T extends object>(snapshot: ClientSettingsSnapshot<T>, mutate: ClientSettingsScope<T>['mutate'] = vi.fn(async () => {})) {
+export function liveSettingsScope<T extends object>(snapshot: ClientSettingsSnapshot<T>, mutate: ClientSettingsScope<T>['mutate'] = vi.fn(async () => {}), readback?: (value: T) => T) {
   const listeners = new Set<() => void>()
   const scope = {
-    snapshot,
+    snapshot: snapshot.value === undefined || readback === undefined ? snapshot : { ...snapshot, value: readback(snapshot.value) },
     getSnapshot() { return this.snapshot },
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener) } },
     async mutate(operations: Parameters<ClientSettingsScope<T>['mutate']>[0]) {
@@ -36,7 +36,7 @@ export function liveSettingsScope<T extends object>(snapshot: ClientSettingsSnap
         if (operation.op === 'unset') delete target[last]
         else target[last] = structuredClone(operation.value)
       }
-      scope.snapshot = { ...scope.snapshot, value: value as T, revision: (scope.snapshot.revision ?? 0) + 1 }
+      scope.snapshot = { ...scope.snapshot, value: readback === undefined ? value as T : readback(value as T), revision: (scope.snapshot.revision ?? 0) + 1 }
       for (const listener of listeners) listener()
     },
   } satisfies ClientSettingsScope<T> & { snapshot: ClientSettingsSnapshot<T> }

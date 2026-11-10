@@ -63,6 +63,7 @@ for (const flag of flags) {
   if (flag === '--general-strategy') continue
   if (flag === '--second-runtime') continue
   if (flag === '--evolution-scroll') continue
+  if (flag === '--embedding-credentials') continue
   if (flag === '--skills-scroll') continue
   if (flag === '--exact-id') continue
   if (flag === '--archive-copies') continue
@@ -152,6 +153,9 @@ const embeddingDelayMs = Number(process.env.MNEMON_E2E_EMBEDDING_DELAY_MS ?? 12_
 const slowEmbedder = flags.has('--archive-copies') ? fakeEmbeddingServer({ model: 'fixture-embed', delayMs: embeddingDelayMs,
   report: ({ event, request, delayMs }) => console.log('Archive copies: ' + JSON.stringify({ event, request, delayMs })) }) : undefined
 if (slowEmbedder) await new Promise(resolveListen => slowEmbedder.listen(0, '127.0.0.1', resolveListen))
+const credentialEmbedder = flags.has('--embedding-credentials') ? fakeEmbeddingServer({ model: 'fixture-embed', requiredKey: 'fixture-embedding-key',
+  report: event => console.log('Embedding credentials: ' + JSON.stringify(event)) }) : undefined
+if (credentialEmbedder) await new Promise(resolveListen => credentialEmbedder.listen(0, '127.0.0.1', resolveListen))
 const protectionModel = flags.has('--document-protection') ? documentProtectionModel(event => console.log('Document protection: ' + JSON.stringify(event))) : undefined
 const reviewModel = flags.has('--review-evidence') ? reviewEvidenceModel(event => console.log('Review evidence: ' + JSON.stringify(event))) : undefined
 const scriptedModel = liveModel ? undefined : flags.has('--runtime-routing') ? runtimeRoutingModel(event => console.log('Runtime routing: ' + JSON.stringify(event)))
@@ -243,6 +247,7 @@ const env = {
   // A live run keeps the caller's key and endpoint; otherwise the loopback stub answers.
   ...(liveModel ? {} : { DEEPSEEK_API_KEY: 'isolated-test-key', DEEPSEEK_BASE_URL: `http://127.0.0.1:${model.address().port}` }),
   MNEMON_DATA_DIR: dataDir,
+  ...(credentialEmbedder === undefined ? {} : { MNEMON_TEST_EMBEDDING_KEY: 'fixture-embedding-key' }),
 }
 const dshBin = process.env.MNEMON_E2E_DSH ? resolve(process.env.MNEMON_E2E_DSH) : join(root, 'node_modules/@deepseek-ai/dsh/lib/bin.js')
 let web
@@ -284,6 +289,10 @@ async function stop() {
   if (slowEmbedder) {
     slowEmbedder.closeAllConnections()
     await new Promise(resolveClose => slowEmbedder.close(resolveClose))
+  }
+  if (credentialEmbedder) {
+    credentialEmbedder.closeAllConnections()
+    await new Promise(resolveClose => credentialEmbedder.close(resolveClose))
   }
   await rm(fixture, { recursive: true, force: true })
   console.log('Removed disposable WebUI fixture: ' + fixture)
@@ -353,6 +362,7 @@ ${docsDemo === undefined ? '' : docsDemoTools}    - id: e2e-directory-picker
     // Two short USER.md entries fill it, so the third write needs the compaction child.
     + (flags.has('--profile-compaction') ? '- id: mnemon\n  config:\n    runtimeMemory:\n      userLimitBytes: 100\n    idleReview:\n      enabled: false\n' : '')
     + (slowEmbedder === undefined ? '' : `- id: mnemon\n  config:\n    runtimeMemory:\n      memoryLimitBytes: ${archiveCopiesLimitBytes}\n    embedding:\n      enabled: true\n      endpoint: http://127.0.0.1:${slowEmbedder.address().port}/v1\n      model: fixture-embed\n      protocol: openai\n`)
+    + (credentialEmbedder === undefined ? '' : `- id: mnemon\n  config:\n    embedding:\n      enabled: true\n      endpoint: http://127.0.0.1:${credentialEmbedder.address().port}/v1\n      model: fixture-embed\n      protocol: openai\n      apiKey: fixture-embedding-key\n`)
     + (flags.has('--general-strategy') ? '- id: mnemon-strategy-general\n  disabled: false\n- id: mnemon-strategy-default-three-tier\n  disabled: true\n- id: mnemon\n  config:\n    memoryView:\n      strategyTypeId: general\n' : '')
     // A second runtime track beside the Starter's, with its own directory, as a profile can mount one (#397).
     + (flags.has('--second-runtime') ? '- insert:\n    - id: mnemon-source-runtime-global\n      name: dsh-mnemon-source-runtime\n      config:\n        dataDir: '

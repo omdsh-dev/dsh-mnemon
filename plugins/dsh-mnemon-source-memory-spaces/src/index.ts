@@ -117,7 +117,11 @@ export async function installMemorySpaces(
       if (!privateHost.has(entry.instanceId)) throw new Error(`Memory Space Provider child did not install a definition: ${entry.instanceId}`)
     }
     const snapshot = privateHost.snapshot()
-    installMemory(ctx, { plugin: memoryPlugin, sources: [createMemorySpacesSource(snapshot, options.config)] }, {
+    installMemory(ctx, { plugin: memoryPlugin, sources: [createMemorySpacesSource(snapshot, options.config, async reference => {
+      const credentials = ctx.get('credentials', false) as { readRecord(key: string): Promise<unknown> } | undefined
+      if (credentials === undefined) throw new Error('DSH credentials service is unavailable')
+      return credentials.readRecord(reference)
+    })] }, {
       instanceId: entryId,
       effectiveDigest: 'providers:' + memoryConfigurationDigest({ providers: snapshot.digest, config: options.config ?? {} }).slice('config:'.length),
     })

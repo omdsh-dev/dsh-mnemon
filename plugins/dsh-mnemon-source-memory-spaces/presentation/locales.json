@@ -436,7 +436,7 @@
     "config.embeddingProtocolInvalid": "协议必须是 自动 / Ollama / OpenAI 兼容 之一。",
     "config.embeddingEndpointInvalid": "嵌入 Endpoint 必须是不含凭据、查询参数或片段的 HTTP(S) 绝对 URL。",
     "config.embeddingModelInvalid": "嵌入模型必须包含 1–200 个字符，且不能包含控制字符。",
-    "config.embeddingSecurity": "Mnemon 会把记忆与查询正文发送到该 Endpoint；API Key 与其他设置一样保存在 DSH 设置文件中。远程 HTTP 会明文传输，请仅使用受信任的本地地址，或为远程服务配置 HTTPS。",
+    "config.embeddingSecurity": "Mnemon 会把记忆与查询正文发送到此 Endpoint。新密钥由 DSH 凭据库保管，设置中仅存引用；也可使用 Host 环境变量。留空保留已有密钥，移除引用不会删除凭据库中的记录。远程服务请使用 HTTPS。",
     "config.embeddingTest": "测试状态",
     "config.embeddingNotTested": "尚未检查嵌入服务的连接与各 Mnemon Native 空间的覆盖率。",
     "config.embeddingTesting": "正在通过 Mnemon 检查嵌入服务与覆盖率…",
@@ -487,7 +487,15 @@
     "config.loadingProviders": "正在读取 Provider 配置…",
     "config.providerLoadFailed": "读取 Provider 配置失败：{error}",
     "config.retryProviders": "重试",
-    "config.saving": "保存中…"
+    "config.saving": "保存中…",
+    "config.embeddingApiKeyEnv": "API Key 环境变量（可选）",
+    "config.embeddingEnvInvalid": "请输入有效的 Host 环境变量名，例如 MY_EMBEDDING_API_KEY。",
+    "config.embeddingAuthChoice": "请填写 API Key 或环境变量名，二选一。",
+    "config.embeddingKeyPlaceholder": "留空保留已有密钥",
+    "config.embeddingCredentialSaved": "已保存 DSH 凭据引用；密钥不会回传到此页面。",
+    "config.embeddingClearKey": "移除本连接的密钥和环境变量引用",
+    "config.embeddingMigrateKey": "将已有明文密钥迁入 DSH 凭据库",
+    "config.embeddingUpgradeHost": "升级 dsh-mnemon Starter 后即可管理凭据。现有连接仍可使用；此处暂不接受新的密钥。"
   },
   "en": {
     "term.space": "Memory Space",
@@ -926,7 +934,7 @@
     "config.embeddingProtocolInvalid": "The protocol must be one of Auto / Ollama / OpenAI-compatible.",
     "config.embeddingEndpointInvalid": "The embedding endpoint must be an absolute HTTP(S) URL without credentials, a query, or a fragment.",
     "config.embeddingModelInvalid": "The embedding model must contain 1–200 characters and no control characters.",
-    "config.embeddingSecurity": "Mnemon sends memory and query text to this endpoint; the API key is stored in the DSH settings file like other settings. Remote HTTP is unencrypted; use a trusted local address or HTTPS for a remote service.",
+    "config.embeddingSecurity": "Mnemon sends memory and query text to this endpoint. New keys are held by DSH credentials; settings contain only references. Host environment variables are also supported. Blank keeps the existing key; removing a reference does not delete stored records. Use HTTPS for remote services.",
     "config.embeddingTest": "Test status",
     "config.embeddingNotTested": "The embedding connection and the coverage of each Mnemon Native space have not been checked.",
     "config.embeddingTesting": "Checking the embedding server and coverage through Mnemon…",
@@ -977,6 +985,14 @@
     "config.loadingProviders": "Loading provider configurations…",
     "config.providerLoadFailed": "Could not load provider configurations: {error}",
     "config.retryProviders": "Retry",
-    "config.saving": "Saving…"
+    "config.saving": "Saving…",
+    "config.embeddingApiKeyEnv": "API key environment variable (optional)",
+    "config.embeddingEnvInvalid": "Enter a valid Host environment variable name, such as MY_EMBEDDING_API_KEY.",
+    "config.embeddingAuthChoice": "Provide an API key or an environment variable name, not both.",
+    "config.embeddingKeyPlaceholder": "Leave blank to keep the existing key",
+    "config.embeddingCredentialSaved": "A DSH credential reference is saved; the key is never returned to this page.",
+    "config.embeddingClearKey": "Remove this connection's key and environment variable references",
+    "config.embeddingMigrateKey": "Move the existing plaintext key to DSH credentials",
+    "config.embeddingUpgradeHost": "Upgrade dsh-mnemon Starter to manage credentials. The existing connection still works; new keys cannot be entered here yet."
   }
 }

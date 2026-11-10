@@ -289,6 +289,18 @@ HTTP 403 可能来自 Host/Origin 不匹配，或旧远程 Client 仍调用独�
 2. 运行 `dsh web --dump-config` 检查最终配置树。确认最后的 `mnemon` 行包含 `remoteAccess: trusted-host`，并且 stderr 没有报告无法匹配 `mnemon` 目标。
 3. 使用同一条 `--trusted-host` 命令启动 DSH。每次修改 `remoteAccess` 后都要重启，因为 Mnemon 只在启动时捕获该策略。最后通过已认证远程连接验证“状态”、设置加载和一次有意的小范围保存。
 
+<a id="embedding-credentials"></a>
+
+## 向量嵌入凭据
+
+在**插件 → dsh-mnemon → 记忆空间 → Mnemon Native**中，新 API Key 保存为 DSH 凭据库中与 Endpoint 绑定的记录，Profile 仅保留不透明的 `embedding.apiKeyRef`。设置页不会收到已保存的密钥。凭据库及其磁盘保护由 DSH 负责；这里承诺的是与主设置文件分离，不表示额外加密或使用系统钥匙串。
+
+升级后，已有的明文 `embedding.apiKey` 配置继续可用。点击**将已有明文密钥迁入 DSH 凭据库**，或保存嵌入连接，即可迁移。Host 先写入并读回校验新记录，再替换 Profile 中的值；保存失败保留原连接。密钥输入留空会保留当前密钥。修改 Endpoint 时，需要新密钥、明确配置环境变量，或移除旧引用。**移除本连接的密钥和环境变量引用**是显式操作，可通过恢复配置撤销；它不会删除凭据库记录，因此其他引用和回滚配置仍可使用这些记录。
+
+也可配置 `embedding.apiKeyEnv: MY_EMBEDDING_API_KEY`，并给 DSH 进程提供该环境变量。每次调用 CLI 时读取它，优先于凭据引用和旧明文密钥。变量缺失、为空或凭据不可读时，会明确报错，不会发出空密钥请求，也不会静默改用其他凭据。`embedding.enabled: false` 时，仍原样继承 Mnemon CLI 的环境变量。没有凭据服务的 Host 可使用环境变量方案。
+
+请一起升级 Starter 与 Memory Spaces Source。新 Source UI 搭配旧 Starter 时，现有连接仍可用，但页面不接受新的密钥。旧版插件不能解析 `apiKeyRef`；回滚前请准备已有的 CLI 环境变量方案（`embedding.enabled: false`，设置 `MNEMON_EMBED_ENDPOINT`、`MNEMON_EMBED_MODEL`、`MNEMON_EMBED_API_KEY`，按需设置 `MNEMON_EMBED_PROTOCOL`），或恢复适用的升级前配置。迁移可写 Profile 覆盖值不能删除继承/只读基础文件及历史备份里的旧密钥；确认迁移后连接正常，再自行清除这些原始副本。不要分享凭据文件或带密钥的备份。
+
 ## 安全边界
 
 <a id="进程"></a>

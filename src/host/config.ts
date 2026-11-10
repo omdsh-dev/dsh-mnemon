@@ -125,7 +125,9 @@ const MnemonEmbeddingSchema = z.object({
   enabled: z.boolean().default(false),
   endpoint: z.string().default(DEFAULT_EMBEDDING_ENDPOINT),
   model: z.string().default(DEFAULT_EMBEDDING_MODEL),
-  apiKey: z.string().default(''),
+  apiKey: z.string().role('secret').default(''),
+  apiKeyEnv: z.string(),
+  apiKeyRef: z.string(),
   protocol: z.union(MNEMON_EMBEDDING_PROTOCOLS).default(DEFAULT_EMBEDDING_PROTOCOL),
 })
 

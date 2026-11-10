@@ -38,7 +38,7 @@ export function fakeEmbedding(text, dimensions = 8) {
  * request answers 404, as Ollama does for a model it has not pulled. A request may ask for its own
  * `dimensions`. `report` receives each embedding request as it arrives.
  */
-export function fakeEmbeddingServer({ model = FAKE_EMBEDDING_MODEL, dimensions = 8, delayMs = 0, missingModel = false, report = () => {} } = {}) {
+export function fakeEmbeddingServer({ model = FAKE_EMBEDDING_MODEL, dimensions = 8, delayMs = 0, missingModel = false, requiredKey, report = () => {} } = {}) {
   let requests = 0
   return createServer(async (request, response) => {
     let input = ''
@@ -51,6 +51,11 @@ export function fakeEmbeddingServer({ model = FAKE_EMBEDDING_MODEL, dimensions =
     }
     const path = new URL(request.url ?? '/', 'http://127.0.0.1').pathname.replace(/\/+$/u, '')
     const ollama = path.startsWith('/api/')
+    if (requiredKey !== undefined) {
+      const authorized = request.headers.authorization === 'Bearer ' + requiredKey
+      report({ event: 'authorization', authorized })
+      if (!authorized) return answer(401, { error: 'fixture authorization missing or invalid' })
+    }
     if (request.method === 'GET' && path === '/api/tags') return answer(200, { models: missingModel ? [] : [{ name: model, model }] })
     if (request.method === 'GET' && !ollama && path.endsWith('/models')) {
       return answer(200, { object: 'list', data: missingModel ? [] : [{ id: model, object: 'model', owned_by: 'fixture' }] })

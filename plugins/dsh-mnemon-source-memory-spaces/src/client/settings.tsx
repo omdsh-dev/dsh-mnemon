@@ -6,7 +6,7 @@ import {
   type MemoryComponentHost, type MemoryComponentSettingsProps, type MemoryComponentUIContext,
 } from 'dsh-mnemon/client'
 import type { MemoryJsonValue } from 'dsh-mnemon/contracts'
-import { DEFAULT_EMBEDDING_ENDPOINT, DEFAULT_EMBEDDING_MODEL, DEFAULT_EMBEDDING_PROTOCOL, MNEMON_EMBEDDING_PROTOCOLS, NATIVE_PROVIDER_ID, type MnemonEmbeddingConfig, type MnemonEmbeddingFill, type MnemonEmbeddingSpaceStatus, type MnemonEmbeddingStatus } from '../contracts.ts'
+import { EMBEDDING_ENVIRONMENT_NAME, DEFAULT_EMBEDDING_ENDPOINT, DEFAULT_EMBEDDING_MODEL, DEFAULT_EMBEDDING_PROTOCOL, MNEMON_EMBEDDING_PROTOCOLS, NATIVE_PROVIDER_ID, type MnemonEmbeddingSettingsView, type MnemonEmbeddingFill, type MnemonEmbeddingSpaceStatus, type MnemonEmbeddingStatus } from '../contracts.ts'
 import { ProviderIcon } from './ProviderIcon.tsx'
 import { ProviderSettingsSection } from './provider-settings.tsx'
 import { memorySpacesSettingsClient } from './settings-client.ts'
@@ -33,7 +33,7 @@ export function installMemorySpacesSettings(ctx: MemoryComponentUIContext & { lo
 
 /** The configuration keys these settings read, as dsh-mnemon lends them. */
 interface SpacesConfiguration {
-  embedding?: MnemonEmbeddingConfig
+  embedding?: MnemonEmbeddingSettingsView
   storageScope?: string
   writeEnabled?: boolean
 }
@@ -43,6 +43,8 @@ interface EmbeddingDraft {
   endpoint: string
   model: string
   apiKey: string
+  apiKeyEnv: string
+  clearApiKey: boolean
   protocol: string
 }
 
@@ -51,7 +53,9 @@ function embeddingDraft(value: SpacesConfiguration | undefined): EmbeddingDraft 
   return {
     endpoint: embedding?.endpoint?.trim() || DEFAULT_EMBEDDING_ENDPOINT,
     model: embedding?.model?.trim() || DEFAULT_EMBEDDING_MODEL,
-    apiKey: embedding?.apiKey?.trim() ?? '',
+    apiKey: '',
+    apiKeyEnv: embedding?.apiKeyEnv ?? '',
+    clearApiKey: false,
     protocol: embedding?.protocol ?? DEFAULT_EMBEDDING_PROTOCOL,
   }
 }
@@ -87,20 +91,23 @@ function embeddingProblem(draft: EmbeddingDraft, t: Translate): string | null {
   if (!validEmbeddingEndpoint(draft.endpoint)) return t('config.embeddingEndpointInvalid')
   if (!validEmbeddingModel(draft.model)) return t('config.embeddingModelInvalid')
   if (!validEmbeddingApiKey(draft.apiKey)) return t('config.embeddingApiKeyInvalid')
+  if (draft.apiKeyEnv.trim() && !EMBEDDING_ENVIRONMENT_NAME.test(draft.apiKeyEnv.trim())) return t('config.embeddingEnvInvalid')
+  if (draft.apiKey.trim() && draft.apiKeyEnv.trim()) return t('config.embeddingAuthChoice')
   if (!validProtocol(draft.protocol)) return t('config.embeddingProtocolInvalid')
   return null
 }
 
 /** The stored value: a switched-off override keeps only the fields that are valid. */
-function embeddingValue(enabled: boolean, draft: EmbeddingDraft): MemoryJsonValue {
+function embeddingValue(enabled: boolean, draft: EmbeddingDraft, secure: boolean, legacyKey = ''): MemoryJsonValue {
+  const auth = secure ? { apiKey: draft.apiKey.trim(), apiKeyEnv: draft.apiKeyEnv.trim(), ...(draft.clearApiKey ? { clearApiKey: true } : {}) } : { apiKey: legacyKey };
   const endpoint = draft.endpoint.trim().replace(/\/+$/u, '')
-  if (enabled) return { enabled: true, endpoint, model: draft.model.trim(), protocol: draft.protocol, apiKey: draft.apiKey.trim() }
+  if (enabled) return { enabled: true, endpoint, model: draft.model.trim(), protocol: draft.protocol, ...auth }
   return {
     enabled: false,
     ...(validEmbeddingEndpoint(draft.endpoint) ? { endpoint } : {}),
     ...(validEmbeddingModel(draft.model) ? { model: draft.model.trim() } : {}),
     ...(validProtocol(draft.protocol) ? { protocol: draft.protocol } : {}),
-    ...(validEmbeddingApiKey(draft.apiKey) ? { apiKey: draft.apiKey.trim() } : {}),
+    ...(validEmbeddingApiKey(draft.apiKey) ? auth : {}),
   }
 }
 
@@ -146,11 +153,18 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
   const value = snapshot.value as SpacesConfiguration | undefined
   const client = useMemo(() => host.operations === undefined ? undefined : memorySpacesSettingsClient(host.operations), [host.operations])
   const saved = embeddingDraft(value)
+  const secure = value?.embedding?.apiKeyStorage !== undefined
+  const legacy = value?.embedding?.apiKeyStorage === 'legacy'
+  const connectionValue = (enabled: boolean, draft: EmbeddingDraft) => embeddingValue(enabled, draft, secure, value?.embedding?.apiKey)
   const managedSaved = value?.embedding?.enabled === true
   // Whether DSH manages the embedding is a switch: it applies at once, with the saved connection.
-  const managed = useLive(managedSaved, async enabled => { await configuration.set('embedding', embeddingValue(enabled, saved)) })
+  const managed = useLive(managedSaved, async enabled => { await configuration.set('embedding', connectionValue(enabled, saved)) })
   // The connection is typed, so it waits for its Apply.
-  const form = useStaged(saved, async draft => { await configuration.set('embedding', embeddingValue(managedSaved, draft)) })
+  const form = useStaged(saved, async draft => {
+    await configuration.set('embedding', connectionValue(managedSaved, draft))
+    // A saved key is write-only; never leave it in the staged editor after success.
+    form.edit({ apiKey: '', clearApiKey: false })
+  })
   const [nativeCliFound, setNativeCliFound] = useState<boolean | undefined>(() => (retained.get(RETAINED_CLI) as { commandFound?: boolean } | undefined)?.commandFound)
   const [status, setStatus] = useState<{ state: 'idle' | 'loading' | 'ready' | 'error'; value?: MnemonEmbeddingStatus; error?: string }>({ state: 'idle' })
   const [fill, setFill] = useState<EmbeddingFillState | undefined>(undefined)
@@ -217,12 +231,13 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
       onChanged={host.changed}
       {...(readOnly ? { notice: <Callout tone="warning" className={css.groupCallout} title={t('config.providersReadOnlyTitle')}>{t('config.providersReadOnlyDetail')}</Callout> } : {})}
       leading={<NativeProviderCard activeScope={activeScope} cliMissing={cliMissing} t={t}>
-        <EmbeddingEditor managed={managed.value} draft={form.draft} disabled={disabled} connectionAvailable={client !== undefined} cliMissing={cliMissing} changing={form.dirty}
+        <EmbeddingEditor secure={secure} credentialSaved={value?.embedding?.apiKeyStorage === 'credentials'} managed={managed.value} draft={form.draft} disabled={disabled} connectionAvailable={client !== undefined} cliMissing={cliMissing} changing={form.dirty}
           status={status} t={t} onEdit={form.edit} onTest={() => { setFill(undefined); test() }}
           canFill={!disabled && !readOnly} fill={fill} onFill={fillSpace}
           onManaged={on => { if (!on) form.discard(); managed.set(on) }}
           actions={<>
             <WriteFailure error={managed.failed} t={t} />
+            {legacy && !form.dirty && <Button variant="outline" size="sm" disabled={disabled || form.saving} onClick={() => { void form.apply() }}>{t('config.embeddingMigrateKey')}</Button>}
             <PanelActions dirty={form.dirty} saving={form.saving} invalid={embeddingProblem(form.draft, t)} failed={form.failed} applied={form.applied}
               disabled={disabled} t={t} onDiscard={form.discard} onApply={() => { void form.apply() }} />
           </>} />
@@ -257,6 +272,8 @@ function embeddingStatusText(t: Translate, status: MnemonEmbeddingStatus): strin
 
 /** The embedding runtime: the switch applies at once; the connection fields, shown while DSH manages it, wait for Apply. */
 function EmbeddingEditor(props: {
+  secure: boolean
+  credentialSaved: boolean
   managed: boolean
   draft: EmbeddingDraft
   disabled: boolean
@@ -283,9 +300,9 @@ function EmbeddingEditor(props: {
         : status.state === 'error' ? t('config.embeddingStatusFailed', { error: status.error ?? '' })
           : status.state === 'ready' && status.value !== undefined ? embeddingStatusText(t, status.value)
             : !props.connectionAvailable ? t('config.embeddingTestUnavailable') : t('config.embeddingNotTested')
-  const text = (field: 'endpoint' | 'model' | 'apiKey', type: string, label: string, valid: boolean, placeholder: string): JSX.Element => <label>
+  const text = (field: 'endpoint' | 'model' | 'apiKey' | 'apiKeyEnv', type: string, label: string, valid: boolean, placeholder: string): JSX.Element => <label>
     {label}
-    <input type={type} aria-label={label} aria-invalid={!valid} value={draft[field]} disabled={props.disabled}
+    <input type={type} aria-label={label} aria-invalid={!valid} value={draft[field]} disabled={props.disabled || ((field === 'apiKey' || field === 'apiKeyEnv') && (!props.secure || draft.clearApiKey))}
       autoComplete="off" spellCheck={false} autoCapitalize="none" autoCorrect="off" placeholder={placeholder}
       onChange={event => props.onEdit({ [field]: event.target.value })} />
   </label>
@@ -305,8 +322,13 @@ function EmbeddingEditor(props: {
           { value: 'ollama', label: t('config.embeddingProtocolOllama') },
           { value: 'openai', label: t('config.embeddingProtocolOpenai') },
         ]} onChange={protocol => props.onEdit({ protocol })} />
-        {text('apiKey', 'password', t('config.embeddingApiKey'), validEmbeddingApiKey(draft.apiKey), 'sk-…')}
+        {text('apiKey', 'password', t('config.embeddingApiKey'), validEmbeddingApiKey(draft.apiKey), t('config.embeddingKeyPlaceholder'))}
+        {props.secure && text('apiKeyEnv', 'text', t('config.embeddingApiKeyEnv'), !draft.apiKeyEnv.trim() || EMBEDDING_ENVIRONMENT_NAME.test(draft.apiKeyEnv.trim()), 'MY_EMBEDDING_API_KEY')}
       </div>
+      {props.secure ? <>
+        {props.credentialSaved && <p className={css.editorNote}>{t('config.embeddingCredentialSaved')}</p>}
+        <label className={css.providerBoolean}><input type="checkbox" checked={draft.clearApiKey} disabled={props.disabled} onChange={event => props.onEdit({ clearApiKey: event.target.checked, apiKey: '', apiKeyEnv: '' })} /><span>{t('config.embeddingClearKey')}</span></label>
+      </> : <p className={css.editorNote}>{t('config.embeddingUpgradeHost')}</p>}
       <p className={css.editorNote}>{t('config.embeddingSecurity')}</p>
     </>}
     {props.actions}
