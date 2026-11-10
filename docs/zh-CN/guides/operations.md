@@ -317,6 +317,7 @@ Host 调用 Mnemon CLI 时不经过 shell，限制每次调用的时间与输出
 | Mnemon 不可用 | macOS/Linux 运行 `command -v mnemon`、`mnemon --version`；Windows PowerShell 运行 `Get-Command mnemon`、`Test-Path "$env:LOCALAPPDATA\Programs\mnemon\mnemon.exe"`。设置 `MNEMON_CLI_PATH` 或 `mnemon.cliPath` 后重启 |
 | Electron 桌面 Host 无法运行 npm CLI 脚本 | 经过验证的 npm 启动器仅在子进程中设置 `ELECTRON_RUN_AS_NODE=1`。如果桌面壳关闭了 [Electron `runAsNode` fuse](https://www.electronjs.org/docs/latest/tutorial/fuses#runasnode)，该变量会被忽略；请将 `mnemon.cliPath` 指向官方原生二进制（Windows 为 `mnemon.exe`）。npm 自动更新仍需要 Host 能够运行 JavaScript 启动器 |
 | Headless Agent 没有 Mnemon 工具 | 插件按 profile 独立安装；运行 `dsh plugin --profile headless add dsh-mnemon`，Web profile 的安装不会自动带入 |
+| 会话中的记忆标签底部被输入框遮挡 | 记忆标签默认收起输入框，点击**展开输入框** / **收起输入框**可保存当前浏览器偏好；草稿与附件保留在 DSH 编辑器中。切回对话恢复输入框，待处理交互优先显示，技能的**使用**会展开输入框。多个会话分栏或 Host 不提供输入框插槽时保留正常输入框，记忆页面按实际高度留出滚动空间。 |
 | 找不到“记忆系统”入口 | 检查 `tabEnabled=true`；`displayMode=sidebar` 使用侧边栏，`displayMode=builtin` 使用已打开会话的标签页。本地 link 先 `pnpm run build` 再重启 profile |
 | 旧的 `buildin` 偏好打开了会话标签页 | 它会保存为 `builtin`；如需独立入口，请在**界面**中选择**侧边栏**。记忆范围与已存数据不变 |
 | 状态正常但召回为空 | 检查 active 记忆空间、存储范围、查看目录、会话实际目录和查询是否足够聚焦 |
