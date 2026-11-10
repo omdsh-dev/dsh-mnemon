@@ -10,6 +10,7 @@
 
 - `pnpm run verify` 通过：根测试 2671 项通过、8 项条件跳过，工作区测试、类型检查、构建、Headless 及包检查通过。
 - 打包清单明确要求和允许两个 Markdown 文件：共 71 个文件，公开入口及包 lint 通过。
+- 使用已发布 DSH 0.2.2-rc.1 的 `pnpm run verify:plugins --skip-build` 通过：18 个独立安装的插件仓库、19 个打包产物，以及外部消费者、Starter 升级和可选策略组合。消费者直接读取安装包中的两份说明文档，并保留英文标题、描述对 manifest 的回退。
 - 已发布 `@deepseek-ai/dsh-plugin-detail` 的真实读取器对 `zh-CN` 选择中文，对 `en-US` 选择英文，对 `fr` 回退到英文。
 - 真实插件页显示简短说明及其下方的正常配置。不识别此覆盖机制的 Host 仍可读取原有完整 README。
 

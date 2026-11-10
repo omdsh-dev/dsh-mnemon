@@ -10,6 +10,7 @@ Validation:
 
 - `pnpm run verify` passes: 2671 root tests pass, 8 conditional skips; workspace tests, typecheck, builds, Headless and package checks pass.
 - Packaging explicitly requires and permits both Markdown files: 71 packed files, public entries and package lint pass.
+- `pnpm run verify:plugins --skip-build` with the published DSH 0.2.2-rc.1 passes for 18 independently installed plugin repositories and 19 packed artifacts, including the external consumer, Starter upgrade and optional Strategy composition. The consumer reads both detail documents from the installed package and retains English manifest title/description fallbacks.
 - The actual published `@deepseek-ai/dsh-plugin-detail` reader selects Chinese for `zh-CN`, English for `en-US`, and English for the `fr` fallback.
 - The real Plugins page displays the short introduction and the normal settings beneath it. Hosts without this detail override continue to have the unchanged README available.
 

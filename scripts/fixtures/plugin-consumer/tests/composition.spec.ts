@@ -130,7 +130,7 @@ describe('external consumer of packed artifacts', () => {
     expect(chinese.meta.detail).toBe('locale/detail.zh.md')
     const directory = dirname(require.resolve('dsh-mnemon/package.json'))
     for (const locale of [english, chinese]) {
-      expect(readFileSync(join(directory, locale.meta.detail), 'utf8')).toMatch(/^# Mnemon\n/)
+      expect(readFileSync(join(directory, locale.meta.detail), 'utf8')).toMatch(/^# Mnemon\r?\n/)
     }
   })
 
