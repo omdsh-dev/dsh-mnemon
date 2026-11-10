@@ -15,6 +15,7 @@ import { defineMemorySource, memoryInputInteger as integer, createMemoryMutation
 import { modelSpaceCatalog, modelStatus, modelJson } from './view-model.ts'
 import { MemorySpacesService, mutationResultCompletion } from './service.ts'
 import { createRunner } from './runner.ts'
+import type { EmbeddingCredentialReader } from './embedding-credentials.ts'
 import { MemoryProviderCatalog } from './providers/catalog.ts'
 import { finalizeLlmPlacement, rulesOnlyPlacement } from './provider-placement.ts'
 import { resolveMemorySpacesConfig, type MemorySpacesConfig } from './config.ts'
@@ -311,7 +312,7 @@ async function manageMemorySpaces(service: MemorySpacesService, request: MemoryS
   }
 }
 
-export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSnapshot, config: MemorySpacesConfig = {}): MemorySourceDefinition {
+export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSnapshot, config: MemorySpacesConfig = {}, readCredential?: EmbeddingCredentialReader): MemorySourceDefinition {
   const capturedConfig = structuredClone(config)
   return defineMemorySource({
   manifest: {
@@ -389,7 +390,7 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
   },
   create(context) {
     const resolved = resolveMemorySpacesConfig({ ...context.configuration, ...capturedConfig }, context.sourceInstanceKey)
-    const service = new MemorySpacesService(createRunner(resolved), resolved, undefined, undefined, providerSnapshot.adapterRegistry(), new MemoryProviderCatalog(providerSnapshot.descriptors()))
+    const service = new MemorySpacesService(createRunner(resolved, undefined, readCredential), resolved, undefined, undefined, providerSnapshot.adapterRegistry(), new MemoryProviderCatalog(providerSnapshot.descriptors()))
     const canRemember = providerSnapshot.entries.some(entry => entry.definition.manifest.capabilities.remember)
     const prepared = new WeakMap<object, ReturnType<typeof service.memoryState>>()
     const sourceState = (scope: object) => {

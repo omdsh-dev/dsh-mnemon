@@ -578,8 +578,12 @@ export interface MnemonEmbeddingConfig {
   enabled?: boolean
   endpoint?: string
   model?: string
-  /** Optional Bearer token forwarded as MNEMON_EMBED_API_KEY for OpenAI-compatible endpoints. */
+  /** Legacy inline key. New settings writes move it to the Host credentials store. */
   apiKey?: string
+  /** Host environment variable resolved just before launching the CLI. */
+  apiKeyEnv?: string
+  /** Opaque reference to an endpoint-bound record in DSH's credentials store. */
+  apiKeyRef?: string
   /** Explicit wire-protocol override; 'auto' keeps Mnemon's /v1 auto-detection. */
   protocol?: MnemonEmbeddingProtocol
 }
@@ -589,7 +593,26 @@ export interface ResolvedMnemonEmbeddingConfig {
   endpoint: string
   model: string
   apiKey: string
+  apiKeyEnv?: string
+  apiKeyRef?: string
   protocol: MnemonEmbeddingProtocol
+}
+
+/** Settings readback metadata only; never persisted as embedding configuration. */
+export interface MnemonEmbeddingSettingsView extends MnemonEmbeddingConfig {
+  apiKeyStorage?: 'none' | 'legacy' | 'environment' | 'credentials'
+  apiKeyConfigured?: boolean
+}
+
+export const EMBEDDING_CREDENTIAL_PREFIX = 'dsh-mnemon/embedding-'
+export const EMBEDDING_CREDENTIAL_REFERENCE = /^dsh-mnemon\/embedding-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u
+export const EMBEDDING_ENVIRONMENT_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/u
+
+/** DSH owns persistence; this grant is private to Mnemon Native embedding. */
+export interface MnemonEmbeddingCredential {
+  version: 1
+  endpoint: string
+  apiKey: string
 }
 
 

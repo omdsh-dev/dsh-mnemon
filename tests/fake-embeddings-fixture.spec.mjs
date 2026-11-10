@@ -36,6 +36,13 @@ const cosine = (a, b) => a.reduce((sum, value, index) => sum + value * b[index],
 const request = (number, protocol, model, inputs, delayMs = 0) => ({ event: 'embedding-request', request: number, delayMs, protocol, model, inputs })
 
 describe('fake embedding service', () => {
+  it('can require a synthetic bearer key without logging its value', async () => {
+    const f = await serve({ requiredKey: 'fixture-bearer' })
+    expect((await f.post('/v1/embeddings', { input: 'fixture' })).status).toBe(401)
+    expect((await f.post('/v1/embeddings', { input: 'fixture' }, { headers: { authorization: 'Bearer fixture-bearer' } })).status).toBe(200)
+    expect(f.events.filter(event => event.event === 'authorization')).toEqual([{ event: 'authorization', authorized: false }, { event: 'authorization', authorized: true }])
+    expect(JSON.stringify(f.events)).not.toContain('fixture-bearer')
+  })
   it('speaks Ollama at its root: the model listed, and one vector per input', async () => {
     const f = await serve()
     expect(await (await f.get('/api/tags')).json()).toEqual({ models: [{ name: FAKE_EMBEDDING_MODEL, model: FAKE_EMBEDDING_MODEL }] })

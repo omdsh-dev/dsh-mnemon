@@ -289,6 +289,18 @@ For authenticated remote clients, `remoteAccess: trusted-host` grants management
 2. Inspect the effective tree with `dsh web --dump-config`. Confirm that the final `mnemon` row contains `remoteAccess: trusted-host` and that stderr reports no unmatched `mnemon` target.
 3. Start DSH with the same `--trusted-host` command, and restart after any `remoteAccess` change because Mnemon captures that policy at startup. Verify **Status**, settings loading, and one deliberate small save through the authenticated remote connection.
 
+<a id="embedding-credentials"></a>
+
+## Embedding credentials
+
+Under **Plugins → dsh-mnemon → Memory Spaces → Mnemon Native**, new API keys are saved as endpoint-bound records in DSH's credentials store. The profile keeps an opaque `embedding.apiKeyRef`; the settings page never receives the saved key. DSH owns the store and its disk protection: this is separation from the main settings file, not a promise of encryption or an OS keychain.
+
+Existing inline `embedding.apiKey` configurations continue to work after upgrading. Use **Move the existing plaintext key to DSH credentials**, or save the embedding connection, to migrate it. The Host writes and reads back a new record before replacing the profile value; a failed save retains the old connection. Empty key input preserves the current key. Changing an endpoint requires a new key, an explicit environment variable or removal of the old reference. **Remove this connection's key and environment variable references** is explicit and reversible by restoring the configuration; it does not delete stored records, so other references and rollback configurations keep working.
+
+Alternatively set `embedding.apiKeyEnv: MY_EMBEDDING_API_KEY` and provide that variable to the DSH process. It is resolved on every CLI invocation, before a credential reference or legacy inline key. A missing/empty variable or inaccessible credential reports a clear error instead of sending an empty-key request. Managed embedding overrides do not silently fall back to another credential. With `embedding.enabled: false`, Mnemon continues using its inherited CLI environment unchanged. A Host without the credentials service can use the environment-variable route.
+
+Upgrade Starter and Memory Spaces Source together. An older Starter keeps its existing connection usable with the new Source UI, but cannot accept new keys through that page. Older Mnemon plugin versions cannot interpret `apiKeyRef`; before rolling back, arrange the existing unmanaged CLI environment route (`embedding.enabled: false`, `MNEMON_EMBED_ENDPOINT`, `MNEMON_EMBED_MODEL`, `MNEMON_EMBED_API_KEY`, and optionally `MNEMON_EMBED_PROTOCOL`) or restore an appropriate pre-upgrade configuration. Migrating a writable profile override cannot erase an inline key from an inherited/read-only base file or older backups; remove such original copies yourself after verifying the migrated connection. Do not share credentials files or key-bearing backups.
+
 ## Security boundaries
 
 <a id="process"></a>
