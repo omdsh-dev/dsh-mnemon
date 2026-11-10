@@ -1,3 +1,4 @@
+import { triageSuggestion } from './triage.ts'
 import { DEFAULT_SKILLS_POLICY, EVOLUTION_SIGNALS, type AutoAdoptionEvent, type EvalCase, type EvolutionSignal, type ReviewLogEntry, type ReviewRecordInput, type ReviewRecordResult, type SkillCatalog, type SkillSuggestion, type SkillsPolicy, type Trajectory, type TrajectoryAnnotation, type TrajectorySummary } from './contracts.ts'
 import { activeSkill } from './catalog.ts'
 import { sameSuggestionSkill, skillOrigin } from './identity.ts'
@@ -296,6 +297,7 @@ export function admitReview(context: AdmissionContext, input: ReviewRecordInput)
     ...(input.review.summary === undefined ? {} : { reviewSummary: clip(input.review.summary, 600) }),
   }
   ledger.trajectories.unshift(summaryOf(trajectory))
+  for (const suggestion of touched) suggestion.triage = triageSuggestion(suggestion, ledger.trajectories)
   const log: ReviewLogEntry = {
     ...input.review,
     id: reviewId,

@@ -57,7 +57,12 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
   }, [filter, suggestions, drafts])
   if (suggestions === null) return <Busy label={t('common.loading')} />
   const pendingCount = suggestions.filter(entry => PENDING.includes(entry.status)).length + drafts.length
-  const current = items.find(item => item.id === selected) ?? items[0]
+  const oneOff = filter === 'pending' ? items.filter(item => item.kind === 'suggestion' && item.suggestion.status === 'pending' && item.suggestion.triage?.classification === 'one-off') : []
+  const folded = new Set(oneOff.map(item => item.id))
+  const prominent = items.filter(item => !folded.has(item.id)).sort((a, b) =>
+    Number(b.kind === 'suggestion' && b.suggestion.triage?.classification === 'durable') - Number(a.kind === 'suggestion' && a.suggestion.triage?.classification === 'durable'))
+  const current = items.find(item => item.id === selected) ?? prominent[0]
+  const selectedOneOff = selected !== undefined && folded.has(selected)
   const canReview = context.sessionId !== undefined && context.client.canAssist('skill-review-now')
   const reviewNow = async () => {
     setReviewing(true)
@@ -111,7 +116,11 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
     <div className={appearanceClass(css.skSplit, css.skEvolutionSplit)}>
     <aside className={css.skList}>
       {bar}
-      {items.map(item => <ListItem key={item.id} item={item} selected={current?.id === item.id} onSelect={() => setSelected(item.id)} />)}
+      {prominent.map(item => <ListItem key={item.id} item={item} selected={current?.id === item.id} onSelect={() => setSelected(item.id)} />)}
+      {oneOff.length > 0 && <Fold key={selectedOneOff ? selected : 'one-off'} defaultOpen={selectedOneOff} title={t('triage.fold', { count: oneOff.length })}>
+        <p className={css.skMuted}>{t('triage.soft')}</p>
+        {oneOff.map(item => <ListItem key={item.id} item={item} selected={current?.id === item.id} onSelect={() => setSelected(item.id)} />)}
+      </Fold>}
     </aside>
     <div key={current?.id ?? filter} className={css.skPane}>
       {current === undefined
@@ -120,7 +129,7 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
               {context.evolution?.enable !== undefined && <Button variant="primary" size="sm" disabled={!context.writable} onClick={() => void context.evolution!.enable!().then(context.refresh, context.fail)}>{t('evolution.turnOn')}</Button>}
               {context.openSettings !== undefined && <Button variant="outline" size="sm" onClick={context.openSettings}>{t('common.settings')}</Button>}
             </>}>{t('evolution.offBody')}</Empty>
-          : <Empty glyph="✧" title={t(`evolution.empty.${filter}`)}>{t(`evolution.emptyBody.${filter}`)}</Empty>
+          : <Empty glyph="✧" title={t(oneOff.length > 0 ? 'triage.choose' : `evolution.empty.${filter}`)}>{t(oneOff.length > 0 ? 'triage.soft' : `evolution.emptyBody.${filter}`)}</Empty>
         : current.kind === 'suggestion'
           ? <SuggestionDetail key={current.id} context={context} id={current.id} model={currentModel} />
           : <article className={css.skDetail}>
@@ -154,6 +163,7 @@ function ListItem(props: { item: Item; selected: boolean; onSelect: () => void }
   return <button {...common}>
     <div><ActionTag action={suggestion.action} /><strong>{suggestion.skillName}</strong>{suggestion.status !== 'pending' && <StatusTag status={suggestion.status} />}</div>
     <p>{suggestion.summary}</p>
+    {suggestion.triage !== undefined && <small>{t(`triage.${suggestion.triage.classification}`)} · {t('triage.facts', suggestion.triage as unknown as Record<string, unknown>)}</small>}
     <footer><time>{relative(t, suggestion.updatedAt)}</time>{suggestion.sourceSessionTitle !== undefined && <span title={suggestion.sourceSessionTitle}>{suggestion.sourceSessionTitle}</span>}</footer>
   </button>
 }
@@ -224,6 +234,10 @@ function SuggestionDetail(props: { context: SkillsPageContext; id: string; model
     {deleting && <Confirm danger title={t('evolution.deleteTitle')} body={t('evolution.deleteBody')} confirmLabel={t('common.delete')}
       onClose={() => setDeleting(false)}
       onConfirm={() => void act(async () => { await context.client.deleteSuggestion(suggestion.id); setDeleting(false); context.notice(t('evolution.deleted')) })} />}
+    {suggestion.triage !== undefined && <section aria-label={t('triage.title')}>
+      <p><strong>{t(`triage.${suggestion.triage.classification}`)}</strong> · {t('triage.facts', suggestion.triage as unknown as Record<string, unknown>)}</p>
+      <p className={css.skMuted}>{t('triage.rules')} {t('triage.soft')}</p>
+    </section>}
     {suggestion.rationale !== undefined && <Clamp text={suggestion.rationale} />}
     {suggestion.action === 'update' && view.skill === undefined && <p className={css.skWarn}>{t(view.resolution === 'origin-unavailable' ? 'evolution.originUnavailable' : 'evolution.skillGone')}</p>}
     {suggestion.action === 'update' && view.skill !== undefined && !view.hashCurrent && suggestion.status === 'pending' && <p className={css.skWarn}>{t('evolution.skillChanged')}</p>}

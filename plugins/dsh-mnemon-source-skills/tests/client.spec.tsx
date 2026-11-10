@@ -173,6 +173,31 @@ describe('Skills page', () => {
     }
   })
 
+  it('prioritizes reproducible durable evidence, folds one-off suggestions and opens their links', async () => {
+    const one = await mutate('review-record', review()) as unknown as { suggestionIds: string[] }
+    for (let window = 0; window < 3; window++) {
+      const input = review()
+      input.trajectory.sessionId = `repeat-session-${window}`
+      input.trajectory.steps = Array.from({ length: 7 }, (_, index) => ({ index: index + 1, turn: index + 1, kind: 'user' as const, text: 'A repeatable procedure.' }))
+      input.suggestions = [{ ...input.suggestions[0]!, action: 'create', skillName: 'repeatable-check', steps: [1, 2, 3, 4, 5, 6, 7] }]
+      input.cases = []
+      await mutate('review-record', input)
+    }
+    const view = page({ seed: 'evolution:pending', nonce: 1 })
+    await screen.findByRole('heading', { name: 'repeatable-check' })
+    expect(screen.queryByRole('button', { name: /release-notes/u })).toBeNull()
+    expect(screen.getAllByText(/3 evidence windows · 3 sessions · 21 cited steps/u).length).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole('button', { name: 'One-off candidates (1)' }))
+    fireEvent.click(await screen.findByRole('button', { name: /release-notes/u }))
+    await screen.findByRole('heading', { name: 'release-notes' })
+    expect(screen.getByRole('button', { name: t('evolution.dismiss') })).toHaveProperty('disabled', false)
+    view.unmount()
+    page({ seed: `suggestion:${one.suggestionIds[0]}`, nonce: 2 })
+    await screen.findByRole('heading', { name: 'release-notes' })
+    expect(screen.getByRole('button', { name: 'One-off candidates (1)' }).getAttribute('aria-expanded')).toBe('true')
+    expect((await management.read('suggestions', null)).value).toHaveLength(2)
+  })
+
   it.each([true, false])('keeps evolution lists and details independently scrollable (writable=%s)', async writable => {
     for (let index = 1; index <= 10; index++) {
       const input = review()
@@ -188,6 +213,7 @@ describe('Skills page', () => {
     document.head.append(style)
     try {
       const view = render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable={writable} management={management} navigationInput={{ seed: 'evolution:pending', nonce: 1 }} />)
+      fireEvent.click(await screen.findByRole('button', { name: /One-off candidates/u }))
       const eighth = await screen.findByRole('button', { name: /scroll-check-8/u })
       const list = screen.getByRole('complementary')
       const pane = view.container.querySelector<HTMLElement>(`.${css.skPane}`)!
@@ -842,6 +868,8 @@ describe('model pickers', () => {
         : Reflect.get(target, key, receiver),
     })
     render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable management={watched} navigationInput={{ seed: 'evolution:pending', nonce: 1 }} />)
+    fireEvent.click(await screen.findByRole('button', { name: /One-off candidates/u }))
+    fireEvent.click(await screen.findByRole('button', { name: /release-notes/u }))
     await screen.findByText('Could not load this suggestion')
     expect(screen.getByText('read access denied')).not.toBeNull()
     expect(screen.queryByText(t('common.loading'))).toBeNull()

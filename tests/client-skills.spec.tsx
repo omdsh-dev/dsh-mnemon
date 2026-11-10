@@ -22,6 +22,22 @@ const locale = { active: 'en' as const, locales: [], revision: 0 }
 const localeRuntime = { getSnapshot: () => locale, subscribe: () => () => {} }
 
 describe('技能管理 settings under Plugins', () => {
+  it('stages daily candidate and time zone settings and keeps invalid values off the Host', async () => {
+    const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: { evolution: true }, revision: 1, writable: true, mode: 'host' })
+    render(<SkillsSettings scope={scope} page={page} t={t} />)
+    const limit = screen.getByLabelText('Automatic candidates per day')
+    const zone = screen.getByLabelText('Daily quota time zone')
+    expect(limit).toHaveProperty('value', '2')
+    expect(zone).toHaveProperty('value', 'local')
+    fireEvent.change(limit, { target: { value: '3' } })
+    fireEvent.change(zone, { target: { value: 'not/a-zone' } })
+    expect(screen.getByRole('button', { name: t('options.apply') })).toHaveProperty('disabled', true)
+    expect(scope.getSnapshot().value?.autoAdoptDailyLimit).toBeUndefined()
+    fireEvent.change(zone, { target: { value: 'Asia/Shanghai' } })
+    fireEvent.click(screen.getByRole('button', { name: t('options.apply') }))
+    await waitFor(() => expect(scope.getSnapshot().value).toMatchObject({ autoAdoptDailyLimit: 3, autoAdoptTimeZone: 'Asia/Shanghai' }))
+  })
+
   it('stages both draft budgets while evolution is off and rejects invalid values', async () => {
     const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: {}, revision: 1, writable: true, mode: 'host' })
     const view = render(<SkillsSettings scope={scope} page={page} t={t} />)

@@ -694,7 +694,7 @@ describe('draft and backtest recovery', () => {
 })
 
 describe('Source-owned automatic adoption', () => {
-  async function measured() {
+  async function measured(reserve = false) {
     now = new Date()
     const store = service()
     const path = join(home, 'skills', 'release-notes', 'SKILL.md')
@@ -702,6 +702,7 @@ describe('Source-owned automatic adoption', () => {
     write(path, original)
     const record = await store.recordReview(workspace, review())
     const suggestion = store.suggestions()[0]!
+    const reservation = reserve ? await store.reserveAutomatic(workspace, suggestion.id, 2, 'UTC') : undefined
     const draft = await store.recordDraft(workspace, { suggestionId: suggestion.id, skillName: 'release-notes', content: original + '\n2. Group by component.\n', notes: '', changes: [], guidance: [] })
     const cases = store.cases('release-notes')
     const casesHash = sha256(skillCaseSignature(cases))
@@ -713,7 +714,7 @@ describe('Source-owned automatic adoption', () => {
     }
     const baseline = await run({ kind: 'current', draftId: draft.id })
     const candidate = await run({ kind: 'draft', draftId: draft.id })
-    const automatic = { draftHash: sha256(draft.content), baselineRunId: baseline.id, draftRunId: candidate.id, casesHash, attempt: 1 }
+    const automatic = { ...(reservation?.allowed === true ? { reservationId: reservation.reservationId } : {}), draftHash: sha256(draft.content), baselineRunId: baseline.id, draftRunId: candidate.id, casesHash, attempt: 1 }
     return { store, path, original, record, suggestion, draft, cases, baseline, candidate, automatic }
   }
 
@@ -723,6 +724,16 @@ describe('Source-owned automatic adoption', () => {
     const next = await state.store.recordReview(workspace, review())
     expect(next.createdSuggestionIds).toEqual([])
     expect(next.suggestionIds).toContain(state.suggestion.id)
+  })
+
+  it('requires the original reservation at commit without charging again', async () => {
+    const state = await measured(true)
+    expect(state.automatic.reservationId).toBeTruthy()
+    await expect(state.store.adoptDraft(workspace, state.draft.id, { automatic: { ...state.automatic, reservationId: 'wrong-reservation' } })).rejects.toThrow('reservation')
+    expect(readFileSync(state.path, 'utf8')).toBe(state.original)
+    await state.store.adoptDraft(workspace, state.draft.id, { automatic: state.automatic })
+    expect(state.store.store.autoAdoptionBudget()).toHaveLength(1)
+    expect(readFileSync(state.path, 'utf8')).toBe(state.draft.content)
   })
 
   it('adopts through the existing version path and records both scores in the review log', async () => {
@@ -828,5 +839,70 @@ describe('cancelled writes waiting for the Skills Source lock', () => {
     await lock
     expect(store.store.ledger()).toEqual(beforeLedger)
     expect(store.store.evals()).toEqual(beforeEvals)
+  })
+})
+
+
+describe('persistent automatic candidate quota', () => {
+  async function candidates(count = 3) {
+    const store = service()
+    const result = await store.recordReview(workspace, review({ suggestions: Array.from({ length: count }, (_, index) => ({
+      action: 'create' as const, skillName: `quota-candidate-${index}`, summary: 'Reusable fixture.', confidence: 0.9, signals: [], steps: [1, 4],
+    })) }))
+    return { store, ids: result.suggestionIds }
+  }
+
+  it('admits at most the daily limit under concurrent service instances and after restart', async () => {
+    const { ids } = await candidates()
+    const results = await Promise.all(ids.map(id => service().reserveAutomatic(workspace, id, 2, 'Asia/Shanghai')))
+    expect(results.filter(result => result.allowed)).toHaveLength(2)
+    expect(results.filter(result => !result.allowed)).toEqual([expect.objectContaining({ allowed: false, reason: 'daily-limit', used: 2 })])
+    const blocked = ids[results.findIndex(result => !result.allowed)]!
+    await expect(service().reserveAutomatic(workspace, blocked, 2, 'Pacific/Kiritimati')).resolves.toMatchObject({ allowed: false, reason: 'daily-limit' })
+    expect(service().suggestions().every(suggestion => suggestion.status === 'pending')).toBe(true)
+  })
+
+  it('persists deduplication after deleting a suggestion and permits a different target', async () => {
+    const { store, ids } = await candidates(1)
+    const first = store.suggestions()[0]!
+    await expect(store.reserveAutomatic(workspace, ids[0]!, 5, 'UTC')).resolves.toMatchObject({ allowed: true })
+    const ledger = store.store.ledger()
+    ledger.suggestions = [{ ...first, id: 'another-id' }]
+    store.store.saveLedger(ledger)
+    await expect(service().reserveAutomatic(workspace, 'another-id', 5, 'UTC')).resolves.toMatchObject({ allowed: false, reason: 'duplicate-skill' })
+    ledger.suggestions = [{ ...first, id: 'project-id', targetRoot: 'project-dsh' }]
+    store.store.saveLedger(ledger)
+    await expect(service().reserveAutomatic(workspace, 'project-id', 5, 'UTC')).resolves.toMatchObject({ allowed: true, used: 2 })
+  })
+
+  it('rolls over at midnight in the configured zone, without refunding cancelled candidates', async () => {
+    now = new Date('2026-10-21T15:59:59Z')
+    const { store, ids } = await candidates(2)
+    await expect(store.reserveAutomatic(workspace, ids[0]!, 1, 'Asia/Shanghai')).resolves.toMatchObject({ allowed: true, date: '2026-10-21' })
+    await store.recordAutoAdoption(ids[0]!, { stage: 'paused', attempt: 0, reason: 'disabled' })
+    await expect(store.reserveAutomatic(workspace, ids[1]!, 1, 'Asia/Shanghai')).resolves.toMatchObject({ allowed: false, reason: 'daily-limit' })
+    now = new Date('2026-10-21T16:00:00Z')
+    await expect(service().reserveAutomatic(workspace, ids[1]!, 1, 'Asia/Shanghai')).resolves.toMatchObject({ allowed: true, used: 1, date: '2026-10-22' })
+  })
+
+  it('accounts for retained automatic work on upgrade and keeps the quota separate from the suggestion history', async () => {
+    const { store, ids } = await candidates(3)
+    for (const id of ids.slice(0, 2)) await store.recordAutoAdoption(id, { stage: 'queued', attempt: 0 })
+    await expect(store.reserveAutomatic(workspace, ids[2]!, 2, 'UTC')).resolves.toMatchObject({ allowed: false, reason: 'daily-limit', used: 2 })
+    const ledger = store.store.ledger()
+    ledger.suggestions = ledger.suggestions.filter(suggestion => suggestion.id === ids[2])
+    ledger.reviews = []
+    store.store.saveLedger(ledger)
+    await expect(service().reserveAutomatic(workspace, ids[2]!, 2, 'UTC')).resolves.toMatchObject({ allowed: false, reason: 'daily-limit', used: 2 })
+  })
+
+  it('fails closed for corrupt budgets or invalid settings but keeps manual suggestions readable', async () => {
+    const { store, ids } = await candidates(1)
+    await expect(store.reserveAutomatic(workspace, ids[0]!, 0, 'UTC')).resolves.toMatchObject({ allowed: false, reason: 'daily-limit', used: 0 })
+    await expect(store.reserveAutomatic(workspace, ids[0]!, 1, 'invalid/timezone')).rejects.toThrow('IANA')
+    await expect(store.reserveAutomatic(workspace, ids[0]!, -1, 'UTC')).rejects.toThrow('0..100')
+    write(join(data, 'skills', 'auto-adoption-budget.json'), '{"version":9,"entries":[]}')
+    await expect(store.reserveAutomatic(workspace, ids[0]!, 2, 'UTC')).rejects.toThrow('unreadable')
+    expect(store.suggestions()).toHaveLength(1)
   })
 })

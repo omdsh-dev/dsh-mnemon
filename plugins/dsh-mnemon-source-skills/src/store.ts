@@ -1,3 +1,4 @@
+import { readBudget, type BudgetEntry } from './auto-adoption-budget.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
@@ -163,12 +164,20 @@ export class SkillsStore {
 
   /** Name, size and time of each file the revision depends on. */
   fingerprint(): string {
-    return ['ledger.json', 'evals.json'].map(name => {
+    return ['ledger.json', 'evals.json', 'auto-adoption-budget.json'].map(name => {
       try {
         const info = statSync(this.path(name))
         return `${name}:${info.size}:${info.mtimeMs}`
       } catch { return `${name}:-` }
     }).join('|')
+  }
+
+  autoAdoptionBudget(): BudgetEntry[] | undefined {
+    return readBudget(this.readJson('auto-adoption-budget.json'))
+  }
+
+  saveAutoAdoptionBudget(entries: BudgetEntry[]): void {
+    this.writeJson('auto-adoption-budget.json', { version: 1, entries })
   }
 
   ledger(): LedgerFile {

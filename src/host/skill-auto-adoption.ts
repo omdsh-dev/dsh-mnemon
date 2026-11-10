@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
 import * as SkillsContracts from 'dsh-mnemon-source-skills/contracts'
-import type { AutoAdoptionEvent, BacktestRun, DraftPreferencesView, DraftView, EvalCase, ModelRoute, SkillDraft, SkillSuggestion } from 'dsh-mnemon-source-skills/contracts'
+import type { AutoAdoptionReservation, AutoAdoptionEvent, BacktestRun, DraftPreferencesView, DraftView, EvalCase, ModelRoute, SkillDraft, SkillSuggestion } from 'dsh-mnemon-source-skills/contracts'
 import type { ResolvedSkillsConfig } from './protocol.ts'
 import type { SkillsSourcePort } from './skill-evolution.ts'
 
@@ -93,7 +93,10 @@ export class SkillAutoAdoption {
       if (suggestion?.status !== 'pending' || suggestion.draftId !== undefined) throw new AutomaticSkillStop('changed')
       job.action = suggestion.action
       this.checkpoint(job)
-      await this.record(job, { stage: 'queued', attempt })
+      const settings = this.host.settings()
+      const reserved = await job.source.mutate('auto-adoption-reserve', { id: job.id, limit: settings.autoAdoptDailyLimit, timeZone: settings.autoAdoptTimeZone }, job.controller.signal) as AutoAdoptionReservation
+      if (!reserved.allowed) throw new AutomaticSkillStop(reserved.reason, `${reserved.used}/${reserved.limit} · ${reserved.date} · ${reserved.timeZone}`)
+      await this.record(job, { stage: 'queued', attempt, detail: `${reserved.used}/${reserved.limit} · ${reserved.date} · ${reserved.timeZone}` })
       const cases = (await job.source.read<EvalCase[]>('cases', { skill: suggestion.skillName })).filter(entry => entry.enabled)
       if (cases.length === 0) throw new AutomaticSkillStop('no-cases')
       if (cases.some(entry => entry.requiresVision === true || entry.checks.length === 0)) throw new AutomaticSkillStop('unmeasured')
@@ -126,7 +129,7 @@ export class SkillAutoAdoption {
         if (comparison.outcome === 'unmeasured') throw new AutomaticSkillStop('unmeasured')
         if (comparison.outcome === 'not-worse') {
           this.checkpoint(job)
-          await job.source.mutate('draft-adopt', { id: draft.id, automatic: { draftHash: hashSkillDraft(draft), baselineRunId: baseline.runId, draftRunId: candidate.runId, casesHash, attempt } }, job.controller.signal)
+          await job.source.mutate('draft-adopt', { id: draft.id, automatic: { reservationId: reserved.reservationId, draftHash: hashSkillDraft(draft), baselineRunId: baseline.runId, draftRunId: candidate.runId, casesHash, attempt } }, job.controller.signal)
           return // The Source records adoption and its scores with the version.
         }
         if (attempt === 3) throw new AutomaticSkillStop('regressed')
@@ -138,7 +141,7 @@ export class SkillAutoAdoption {
       const failure = job.controller.signal.aborted ? job.controller.signal.reason : error
       const reason: Reason = failure instanceof AutomaticSkillStop ? failure.reason : 'failed'
       await this.record(job, { stage: reason === 'disabled' || reason === 'interrupted' ? 'paused' : 'review', attempt: Math.min(attempt, 3), reason, ...scores,
-        ...(failure instanceof AutomaticSkillStop ? {} : { detail: failure instanceof Error ? failure.message : String(failure) }),
+        ...(failure instanceof AutomaticSkillStop && failure.message === failure.reason ? {} : { detail: failure instanceof Error ? failure.message : String(failure) }),
       }).catch(recordError => this.host.warn('Could not record automatic adoption outcome', recordError))
     } finally {
       // Also stop the first run if starting the second run failed or was disabled.
