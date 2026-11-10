@@ -22,14 +22,15 @@ const pack = Array.isArray(parsedPack) ? parsedPack[0] : Object.values(parsedPac
 const paths = pack.files.map(file => file.path)
 const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 const locales = readPackageLocales(fileURLToPath(new URL('../', import.meta.url)), manifest).map(asset => asset.path)
+const details = ['locale/detail.en.md', 'locale/detail.zh.md']
 const executables = Object.values(manifest.bin ?? {})
-const required = [...executables, ...locales, 'package.json', 'cordis.patch.yml', 'lib/client.js', ...Object.entries(manifest.exports)
+const required = [...executables, ...locales, ...details, 'package.json', 'cordis.patch.yml', 'lib/client.js', ...Object.entries(manifest.exports)
   .filter(([name]) => name !== './package.json' && name !== localeExport)
   .flatMap(([, value]) => [value.default.slice(2), value.types.slice(2)])]
 
 const allowedRootFiles = new Set(['package.json', 'cordis.patch.yml', 'LICENSE', 'README.md', 'README.zh-CN.md', 'SECURITY.md', 'THIRD_PARTY_NOTICES.md'])
 const missing = required.filter(path => !paths.includes(path))
-const unexpected = paths.filter(path => !allowedRootFiles.has(path) && !executables.includes(path) && !locales.includes(path) && !(/^lib\/.+\.(?:js|d\.ts)$/.test(path)))
+const unexpected = paths.filter(path => !allowedRootFiles.has(path) && !executables.includes(path) && !locales.includes(path) && !details.includes(path) && !(/^lib\/.+\.(?:js|d\.ts)$/.test(path)))
 const clientBundle = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
 const hostLeaks = ['require("node:', "require('node:", '#region src/host/version-updates.ts', '#region src/host/rpc.ts',
   'login/device/code', 'login/oauth/access_token', 'api.github.com', 'Ov23liq4i7n8UsylGRfb']
