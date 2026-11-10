@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import type { HostAgent, ToolExecution } from './dsh.ts'
-import { openAgentTurn } from './agent-memory-turn.ts'
+import { openAgentStep } from './agent-memory-turn.ts'
 import { executeHostTool, usesToolBatchExecution } from './tool-execution.ts'
 
 const RESULT_TOOL = 'mnemon_subagent_result'
 const CHECK_TIMEOUT_MS = 5_000
 interface Challenge { agent: HostAgent; execution?: ToolExecution; accepted: boolean }
 
-/** An in-turn no-op challenge through the mandatory review completion channel.
+/** An in-step no-op challenge through the mandatory review completion channel.
  * Inventory alone cannot see execution-time guards. No errors are classified as
  * permission failures, and an unavailable checkpoint is never a permanent ban.
  */
@@ -37,8 +37,9 @@ export class AutomaticReviewAdmission {
     signal.throwIfAborted()
     const tools = agent.ctx.tools
     // PTC records durable dispatch events on this Agent. They are valid only
-    // inside a real turn, whose stopping hook must await this entire check.
-    if (this.disposed || tools?.execute === undefined || this.draining.has(agent) || openAgentTurn(agent) === undefined) return false
+    // inside a real step. The request hook awaits the entire check, including
+    // cancellation/log drains, before the Host can append step/end.
+    if (this.disposed || tools?.execute === undefined || this.draining.has(agent) || openAgentStep(agent) === undefined) return false
     const controller = new AbortController()
     this.controllers.add(controller)
     const combined = AbortSignal.any([signal, controller.signal])
@@ -81,8 +82,8 @@ export class AutomaticReviewAdmission {
         executing = true
         this.draining.add(agent)
         // Cancellation requests a stop, never abandons PTC's dispatch/log
-        // drain. Letting turn-stopping return early would append turn/end
-        // before a delayed settle event and make the whole Session unreadable.
+        // drain. Letting the request hook return early would close the step
+        // before a delayed dispatch settles and invalidate its audit scope.
         const outcome = await pending.finally(cleanup)
         combined.throwIfAborted()
         return challenge.execution !== undefined && challenge.accepted && outcome.isError === false

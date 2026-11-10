@@ -21,14 +21,36 @@ const fork = await import(requireDsh.resolve('@deepseek-ai/dsh-subagent-fork-in-
 const sessionApi = await import(requireDsh.resolve('@deepseek-ai/dsh-session'))
 const format = await import(requireDsh.resolve('@deepseek-ai/dsh-session-format-v3-to-v4'))
 
-async function fixture(provider: 'spawn' | 'fork' = 'spawn', persistWatermark = false, codeMode = false) {
+async function fixture(provider: 'spawn' | 'fork' = 'spawn', persistWatermark = false, codeMode = false, autoReview = false) {
   const f = await compositionFixture({ idleReviewMs: 5_000, idleReview: { provider, persistWatermark, minIntervalMs: 5_000, maxPerSession: 2 } })
   const ctx = new Context()
   const modelCalls: string[] = []
   const children: string[] = []
+  let foregroundCall = false
+  let foregroundExecutions = 0
+  let preset = 'danger-full-access'
   class Model extends LlmAdapter {
     override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
       modelCalls.push(String(options.sessionId))
+      if (autoReview && options.messages.some(message => message.role === 'user' && message.content.some(block => block.type === 'text' && block.text.startsWith('ENVIRONMENT\n')))) {
+        const text = '{"risk":"low","decision":"allow"}'
+        yield { type: 'block-start', index: 0, blockType: 'text' }
+        yield { type: 'text-delta', index: 0, text }
+        yield { type: 'block-end', index: 0, block: { type: 'text', text } }
+        yield { type: 'finish', reason: { kind: 'stop' } }
+        return
+      }
+      if (String(options.sessionId) === 'parent-denied' && foregroundCall) {
+        foregroundCall = false
+        const name = codeMode ? 'run_code' : 'fixture_echo'
+        const args = JSON.stringify(codeMode ? { code: 'return await tools.fixture_echo({})', description: 'Synthetic foreground action' } : {})
+        const id = `foreground-${modelCalls.length}` as Extract<StreamChunk, { type: 'tool-call-delta' }>['id']
+        yield { type: 'block-start', index: 0, blockType: 'tool-call' }
+        yield { type: 'tool-call-delta', index: 0, id, name, argumentsDelta: args }
+        yield { type: 'block-end', index: 0, block: { type: 'tool-call', id, name, arguments: args } }
+        yield { type: 'finish', reason: { kind: 'tool-calls' } }
+        return
+      }
       if (String(options.sessionId) !== 'parent-denied' && !options.messages.some(message => message.role === 'tool')) {
         const system = JSON.stringify(options.messages.filter(message => message.role === 'system'))
         const requestId = system.match(/requestId `([^`]+)`/u)?.[1]
@@ -68,6 +90,16 @@ async function fixture(provider: 'spawn' | 'fork' = 'spawn', persistWatermark = 
   await ctx.plugin(spawn, { providerName: 'spawn' })
   await ctx.plugin(fork, { providerName: 'fork' })
   ctx.llm.registerAdapter(['fixture'], new Model())
+  ctx.tools.register({ name: 'fixture_echo', description: 'Synthetic read-only foreground check.', parameters: { type: 'object', properties: {} },
+    output: { schema: { type: 'object' }, render: () => [{ type: 'text', text: 'ok' }] },
+    async execute() { foregroundExecutions++; return {} } })
+  if (autoReview) {
+    // Use the published Auto reviewer and real durable call history. Only its
+    // preset selection and risk-model output are deterministic local fixtures.
+    ctx.provide('permissionPresets', { current: () => preset, set: () => { preset = 'danger-full-access' }, registerAuto: () => () => undefined })
+    ctx.provide('approval', { overrideOf: () => 'never' })
+    await ctx.plugin(await import(requireDsh.resolve('@deepseek-ai/dsh-experimental-auto-review')))
+  }
   ctx.on('agent/created', ({ agent }) => { if (String(agent.id) !== 'parent-denied') children.push(agent.id); return undefined })
   const host = ctx as unknown as HostContextShape
   const coordinator = new MnemonSubagentCoordinator(host.subagents, f.live, host)
@@ -80,11 +112,14 @@ async function fixture(provider: 'spawn' | 'fork' = 'spawn', persistWatermark = 
     parent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: 'Please remember this project decision: ' + 'Checkpoints stay in SQLite. '.repeat(20) }] }))
     await parent.whenIdle()
   }
-  const duringTurn = async (run: () => Promise<void>) => {
-    const stop = parent.ctx.on('agent/turn-stopping', run)
+  const duringStep = async (run: () => Promise<void>) => {
+    const stop = parent.ctx.on('agent/request', async (_payload, next) => { await run(); return next() }, { prepend: true })
     try { await turn() } finally { stop() }
   }
-  return { ...f, ctx, coordinator, lifecycle, parent, turn, duringTurn, modelCalls, children, async close() {
+  return { ...f, ctx, coordinator, lifecycle, parent, turn, duringStep, modelCalls, children,
+    enableAuto: () => { preset = 'auto' },
+    foreground: async () => { foregroundCall = true; await turn(); return foregroundExecutions },
+    async close() {
     stop(); stopTools(); coordinator.dispose(); vi.useRealTimers(); await ctx.fiber.dispose(); await f.dispose()
   } }
 }
@@ -93,6 +128,12 @@ async function assertReloadable(f: Awaited<ReturnType<typeof fixture>>) {
   const session = f.parent.session
   const header = { ...session.header, delegationDepth: session.header.delegationDepth ?? 0 }
   const events = session.snapshotEvents()
+  let openStep = false
+  for (const event of events) {
+    if (event.type === 'turn/start' || event.type === 'turn/end' || event.type === 'step/end') openStep = false
+    if (event.type === 'step/start') openStep = true
+    if (event.type === 'tool/ptc-dispatch-start') expect(openStep, 'PTC dispatch must have an owning step (issue 602)').toBe(true)
+  }
   format.restoreReleasedV4Artifact({ header, inheritedEventCount: 0, events }, sessionApi.KNOWN_SESSION_EVENT_TYPES)
   // Exercise the actual persisted reader too: an empty surface assertion
   // misses invalid PTC audit records, which can reject the entire history.
@@ -131,7 +172,40 @@ it('never executes an admission probe outside a real open turn', async () => {
   } finally { await f.close() }
 })
 
-it('drains a timed-out PTC audit event before allowing turn/end', async () => {
+
+it.each([false, true])('never probes between step/end and turn/end (PTC=%s)', async codeMode => {
+  const f = await fixture('spawn', false, codeMode)
+  try {
+    f.live.config.idleReview.enabled = false
+    let checked = false
+    f.parent.ctx.on('agent/turn-stopping', async () => {
+      const before = f.parent.session.snapshotEvents()
+      expect(before.at(-1)?.type).toBe('step/end')
+      expect(await f.coordinator.checkReviewAccess(f.parent as unknown as HostAgent, new AbortController().signal)).toBe(false)
+      expect(f.parent.session.snapshotEvents()).toEqual(before)
+      checked = true
+    })
+    await f.turn()
+    expect(checked).toBe(true)
+    await assertReloadable(f)
+  } finally { await f.close() }
+})
+
+const hasAutoReview = (() => { try { requireDsh.resolve('@deepseek-ai/dsh-experimental-auto-review'); return true } catch { return false } })()
+it.skipIf(!hasAutoReview).each([false, true])('keeps foreground tools usable after switching to published Auto review (PTC=%s)', async codeMode => {
+  const f = await fixture('spawn', false, codeMode, true)
+  try {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    await f.turn()
+    await f.turn()
+    f.enableAuto()
+    expect(await f.foreground(), JSON.stringify(f.parent.session.snapshotEvents().filter(event => event.type === 'tool/result').map(event => event.data))).toBe(1)
+    expect(await f.foreground()).toBe(2)
+    await assertReloadable(f)
+  } finally { await f.close() }
+})
+
+it('drains a timed-out PTC audit event before allowing step/end', async () => {
   const f = await fixture('spawn', false, true)
   let release: (() => void) | undefined
   try {
@@ -192,7 +266,7 @@ it.each([false, true])('requires its exact handler and both authoritative tool o
   const f = await fixture('spawn', false, codeMode)
   try {
     f.live.config.idleReview.enabled = false
-    await f.duringTurn(async () => {
+    await f.duringStep(async () => {
       const agent = f.parent as unknown as HostAgent
       const signal = new AbortController().signal
       const schemas = JSON.stringify(f.parent.ctx.tools.schemas(f.parent))
@@ -219,7 +293,7 @@ it.each([false, true])('requires its exact handler and both authoritative tool o
       deny()
       expect(await f.coordinator.checkReviewAccess(agent, signal)).toBe(true)
       expect(f.children).toEqual([])
-      expect(f.modelCalls).toEqual(['parent-denied'])
+      expect(f.modelCalls).toEqual([])
       expect(f.parent.session.surface.nodes).toEqual(surface)
       expect(JSON.stringify(f.parent.ctx.tools.schemas(f.parent))).toBe(schemas)
     })
@@ -231,7 +305,7 @@ it('revokes a cancelled or timed-out challenge even when middleware ignores canc
   try {
     f.live.config.idleReview.enabled = false
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
-    await f.duringTurn(async () => {
+    await f.duringStep(async () => {
       const surface = [...f.parent.session.surface.nodes]
       let release: (() => void) | undefined
       let entered = false
@@ -258,7 +332,7 @@ it('revokes a cancelled or timed-out challenge even when middleware ignores canc
     await vi.advanceTimersByTimeAsync(0)
     stop()
     expect(await f.coordinator.checkReviewAccess(f.parent as unknown as HostAgent, new AbortController().signal)).toBe(true)
-    expect(f.modelCalls).toEqual(['parent-denied'])
+    expect(f.modelCalls).toEqual([])
     expect(f.parent.session.surface.nodes).toEqual(surface)
     })
   } finally { await f.close() }

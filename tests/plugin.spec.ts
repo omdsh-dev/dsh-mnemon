@@ -488,6 +488,7 @@ describe('dsh-mnemon plugin composition', () => {
         const messages = [{ id: `message-${turn}`, role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text: 'Please remember this synthetic decision: ' + 'SQLite. '.repeat(40) }] }]
         const payload = { agent, messages, turn, step: 1, signal: new AbortController().signal }
         await hooks.get('agent/pre-step')!.reduceRight<() => Promise<unknown>>((next, hook) => () => hook(payload, next), async () => ({ kind: 'enter', messages }))()
+        await hooks.get('agent/request')!.reduceRight<() => Promise<unknown>>((next, hook) => () => hook(payload, next), async () => ({}))()
         await hooks.get('agent/turn-stopping')![0]!({ agent, turn, signal: new AbortController().signal })
         const event = { type: 'turn/end', data: { turn } }
         events.push(event); for (const hook of hooks.get('session/event')!) hook(agent.session, event)

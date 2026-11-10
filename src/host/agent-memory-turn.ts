@@ -32,6 +32,26 @@ export function openAgentTurn(agent: HostAgent): number | undefined {
   return open
 }
 
+/** PTC dispatch records belong to a real open step, not just an open turn. */
+export function openAgentStep(agent: HostAgent): { turn: number; step: number } | undefined {
+  let turn: number | undefined
+  let open: { turn: number; step: number } | undefined
+  for (const event of agent.session.snapshotEvents()) {
+    if (event.type === 'turn/start') {
+      turn = typeof event.data.turn === 'number' ? event.data.turn : undefined
+      open = undefined
+    } else if (event.type === 'turn/end' && event.data.turn === turn) {
+      turn = undefined
+      open = undefined
+    } else if (event.type === 'step/start' && turn !== undefined && event.data.turn === turn && typeof event.data.step === 'number') {
+      open = { turn, step: event.data.step }
+    } else if (event.type === 'step/end' && open?.turn === event.data.turn && open?.step === event.data.step) {
+      open = undefined
+    }
+  }
+  return open
+}
+
 /**
  * One Agent owns each turn pin. A child additionally retains its delegation
  * across parent completion, collection, and runtime swaps until it is disposed.
