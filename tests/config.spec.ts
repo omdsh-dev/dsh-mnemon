@@ -63,6 +63,10 @@ describe('Mnemon config and resolution', () => {
   it('keeps idle review to Documents only when runtime memory is off', () => {
     expect(resolveConfig({ idleReview: { runtimeMemory: false } }).idleReview).toMatchObject({ enabled: true, runtimeMemory: false, provider: 'spawn' })
   })
+  it('gives idle review a comfortable output budget by default (regression: max-tokens stop)', () => {
+    expect(resolveConfig({}).idleReview.maxTokens).toBe(16_384)
+    expect(resolveConfig({ idleReview: { maxTokens: 8_192 } }).idleReview.maxTokens).toBe(8_192)
+  })
   it('materializes conservative defaults', () => {
     expect(resolveConfig({})).toMatchObject({
       storageScope: 'global',
@@ -102,7 +106,7 @@ describe('Mnemon config and resolution', () => {
       recallMode: 'guided',
       writebackMode: 'guided',
       idleReviewMs: 30_000,
-      idleReview: { enabled: true, runtimeMemory: true, persistWatermark: false, provider: 'spawn', fallback: 'spawn', agentTeams: 'pause', minIntervalMs: 300_000, maxPerSession: 20, maxContextChars: 24_000, maxTokens: 4_096 },
+      idleReview: { enabled: true, runtimeMemory: true, persistWatermark: false, provider: 'spawn', fallback: 'spawn', agentTeams: 'pause', minIntervalMs: 300_000, maxPerSession: 20, maxContextChars: 24_000, maxTokens: 16_384 },
       displayMode: 'sidebar',
       tabEnabled: true,
       writeEnabled: true,

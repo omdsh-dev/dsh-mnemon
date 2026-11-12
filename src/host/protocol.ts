@@ -260,7 +260,7 @@ export const DEFAULT_IDLE_REVIEW = {
   minIntervalMs: 300_000,
   maxPerSession: 20,
   maxContextChars: 24_000,
-  maxTokens: 4_096,
+  maxTokens: 16_384,
 } satisfies ResolvedIdleReviewConfig
 
 export interface ResolvedIdleReviewConfig {
