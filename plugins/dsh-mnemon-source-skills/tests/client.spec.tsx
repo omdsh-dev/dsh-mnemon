@@ -86,26 +86,6 @@ function page(navigationInput: { seed: string; nonce: number } = { seed: 'skill:
 }
 
 describe('Skills page', () => {
-  it('edits the original linked skill only when the Source explicitly allows updates (#611)', async () => {
-    const entry = join(directory, 'dsh', 'skills', 'release-notes')
-    const upstream = join(directory, 'upstream')
-    renameSync(entry, upstream)
-    symlinkSync(upstream, entry, process.platform === 'win32' ? 'junction' : 'dir')
-    await runner.dispose()
-    runner = new MemoryCompositionRunner()
-    await runner.mount(strategy, { instanceId: 'strategy' })
-    await runner.mount(plugin, { instanceId: 'skills', config: { dataDir: join(directory, 'data'), dshHome: join(directory, 'dsh'), agentsHome: join(directory, 'agents'), allowLinkedUpdates: true } })
-    management = await runner.managementClient('source:skills', { storage: 'custom', workspaceId: join(directory, 'workspace') })
-    page()
-    await screen.findByText(t('skills.linkedWritable'))
-    expect(screen.queryByText(t('skills.linked'))).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: t('common.edit') }))
-    const content = SKILL + '\n2. Group notes by component.\n'
-    fireEvent.change(screen.getByRole('textbox', { name: 'SKILL.md' }), { target: { value: content } })
-    fireEvent.click(screen.getByRole('button', { name: t('common.save') }))
-    await waitFor(() => expect(readFileSync(join(upstream, 'SKILL.md'), 'utf8')).toBe(content))
-  })
-
   it.each(['skill', 'draft'] as const)('keeps a linked %s readable while disabling writes', async view => {
     const draft = await mutate('draft-record', { skillName: 'release-notes', content: SKILL, notes: '', changes: [], guidance: [] }) as { id: string }
     const entry = join(directory, 'dsh', 'skills', 'release-notes')
@@ -124,6 +104,26 @@ describe('Skills page', () => {
       expect((screen.getByRole('button', { name: t('draft.discard') }) as HTMLButtonElement).disabled).toBe(false)
     }
     expect(readFileSync(join(upstream, 'SKILL.md'), 'utf8')).toBe(SKILL)
+  })
+
+  it('edits the original linked skill only when the Source explicitly allows updates (#611)', async () => {
+    const entry = join(directory, 'dsh', 'skills', 'release-notes')
+    const upstream = join(directory, 'upstream')
+    renameSync(entry, upstream)
+    symlinkSync(upstream, entry, process.platform === 'win32' ? 'junction' : 'dir')
+    await runner.dispose()
+    runner = new MemoryCompositionRunner()
+    await runner.mount(strategy, { instanceId: 'strategy' })
+    await runner.mount(plugin, { instanceId: 'skills', config: { dataDir: join(directory, 'data'), dshHome: join(directory, 'dsh'), agentsHome: join(directory, 'agents'), allowLinkedUpdates: true } })
+    management = await runner.managementClient('source:skills', { storage: 'custom', workspaceId: join(directory, 'workspace') })
+    page()
+    await screen.findByText(t('skills.linkedWritable'))
+    expect(screen.queryByText(t('skills.linked'))).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: t('common.edit') }))
+    const content = SKILL + '\n2. Group notes by component.\n'
+    fireEvent.change(screen.getByRole('textbox', { name: 'SKILL.md' }), { target: { value: content } })
+    fireEvent.click(screen.getByRole('button', { name: t('common.save') }))
+    await waitFor(() => expect(readFileSync(join(upstream, 'SKILL.md'), 'utf8')).toBe(content))
   })
 
   it('does not retry a skill file hash conflict as a Source revision conflict', async () => {
