@@ -15,6 +15,17 @@ export function SkillsPage(props: { context: SkillsPageContext; location: Skills
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<string | undefined>(location.skillKey)
   const [creating, setCreating] = useState(false)
+  const [collapsed, setCollapsed] = useState<ReadonlySet<SkillRootKind>>(() => new Set())
+  // A direct link or a newly created skill must be visible in its source group.
+  useEffect(() => {
+    const root = catalog?.skills.find(skill => skill.key === selected)?.root
+    if (root !== undefined) setCollapsed(current => {
+      if (!current.has(root)) return current
+      const next = new Set(current)
+      next.delete(root)
+      return next
+    })
+  }, [catalog, selected, location.nonce])
   useEffect(() => {
     let active = true
     void context.client.catalog().then(value => {
@@ -46,10 +57,23 @@ export function SkillsPage(props: { context: SkillsPageContext; location: Skills
         <Button variant="outline" size="sm" disabled={!context.writable} onClick={() => setCreating(true)}>{t('skills.new')}</Button>
       </header>
       {catalog.skills.length > 0 && visible.length === 0 && <p className={css.skListNote}>{t('skills.noMatch')}</p>}
-      {groups.filter(group => group.skills.length > 0).map(group => <section key={group.root.kind} className={css.skListGroup}>
-        <h5 title={group.root.path}>{t(`root.${group.root.kind}`)}</h5>
-        {group.skills.map(skill => <SkillRow key={skill.key} context={context} skill={skill} stats={catalog.stats[skill.name]} selected={selected === skill.key} onSelect={() => setSelected(skill.key)} />)}
-      </section>)}
+      {groups.filter(group => group.skills.length > 0).map(group => {
+        const expanded = query.trim() !== '' || !collapsed.has(group.root.kind)
+        return <section key={group.root.kind} className={css.skListGroup}>
+          <h5><button type="button" className={css.skGroupToggle} aria-expanded={expanded} disabled={query.trim() !== ''} title={group.root.path}
+            onClick={() => setCollapsed(current => {
+              const next = new Set(current)
+              if (next.has(group.root.kind)) next.delete(group.root.kind)
+              else next.add(group.root.kind)
+              return next
+            })}>
+            <span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
+            <span>{t(`root.${group.root.kind}`)}<small>{group.root.path}</small></span>
+            <span>{group.skills.length}</span>
+          </button></h5>
+          {expanded && group.skills.map(skill => <SkillRow key={skill.key} context={context} skill={skill} stats={catalog.stats[skill.name]} selected={selected === skill.key} onSelect={() => setSelected(skill.key)} />)}
+        </section>
+      })}
       {catalog.problems.length > 0 && <details className={css.skProblems}>
         <summary>{t('skills.problems', { count: catalog.problems.length })}</summary>
         <ul>{catalog.problems.map(problem => <li key={problem.path}><code title={problem.path}>{problem.path.split(/[\\/]/u).slice(-2).join('/')}</code><span>{problem.reason}</span></li>)}</ul>

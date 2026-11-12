@@ -86,6 +86,25 @@ function page(navigationInput: { seed: string; nonce: number } = { seed: 'skill:
 }
 
 describe('Skills page', () => {
+  it('folds source directories without hiding search results or a direct selection (#617)', async () => {
+    page()
+    const group = await screen.findByRole('button', { name: new RegExp(t('root.user-dsh'), 'u') })
+    expect(group.getAttribute('aria-expanded')).toBe('true')
+    expect(group.textContent).toContain(join(directory, 'dsh', 'skills'))
+    fireEvent.click(group)
+    expect(group.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('switch', { name: t('skills.toggle', { name: 'release-notes' }) })).toBeNull()
+    expect(screen.getByRole('heading', { name: 'release-notes' })).not.toBeNull()
+    const search = screen.getByRole('textbox', { name: t('skills.search') })
+    fireEvent.change(search, { target: { value: 'release' } })
+    expect(group.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByRole('switch', { name: t('skills.toggle', { name: 'release-notes' }) })).not.toBeNull()
+    fireEvent.change(search, { target: { value: '' } })
+    expect(group.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(group)
+    expect(group.getAttribute('aria-expanded')).toBe('true')
+  })
+
   it.each(['skill', 'draft'] as const)('keeps a linked %s readable while disabling writes', async view => {
     const draft = await mutate('draft-record', { skillName: 'release-notes', content: SKILL, notes: '', changes: [], guidance: [] }) as { id: string }
     const entry = join(directory, 'dsh', 'skills', 'release-notes')
