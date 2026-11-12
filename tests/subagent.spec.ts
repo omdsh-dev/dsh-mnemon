@@ -1947,7 +1947,7 @@ describe('Mnemon memory subagent coordinator', () => {
     const coordinator = createCoordinator(host.value)
     await expect(coordinator.review(parent(), new AbortController().signal)).resolves.toMatchObject({ provider: 'spawn', action: 'skipped' })
     expect(host.start).toHaveBeenCalledOnce()
-    expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({ agentOptions: { maxTokens: 4096 } }))
+    expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({ agentOptions: { maxTokens: 16384 } }))
   })
 
   it.each(['spawn', 'fork'] as const)('keeps scoped Team %s startup failures closed without replay (issue 275)', async provider => {
@@ -3071,7 +3071,7 @@ describe('Mnemon memory subagent coordinator', () => {
     })
     expect(host.start).toHaveBeenCalledWith('spawn', expect.objectContaining({
       toolFilter: { allow: expect.arrayContaining(['mnemon_document_search', 'mnemon_runtime_memory', 'mnemon_document_create']) },
-      agentOptions: { provider: 'pinned-provider', model: 'pinned-model', maxTokens: 4096 },
+      agentOptions: { provider: 'pinned-provider', model: 'pinned-model', maxTokens: 16384 },
     }))
   })
 
@@ -3085,7 +3085,22 @@ describe('Mnemon memory subagent coordinator', () => {
       provider: 'spawn',
     })
     const reviewCall = (host.start.mock.calls[0] as unknown as [string, { agentOptions?: unknown }])[1]
-    expect(reviewCall.agentOptions).toEqual({ maxTokens: 4096 })
+    expect(reviewCall.agentOptions).toEqual({ maxTokens: 16384 })
+  })
+
+  it('uses the configured idle-review maxTokens for the review child (regression: max-tokens stop)', async () => {
+    const host = subagents({ summary: 'No mutation needed.', action: 'skipped', memoryBodyIds: [] }, 'completed', ['spawn', 'fork'])
+    const resultTools = toolRegistry()
+    const runtime = runtimeSource()
+    runtime.config.idleReview.maxTokens = 24_576
+    const coordinator = new MnemonSubagentCoordinator(resultTools.withReviewPublication(host.value), runtime, resultTools.value)
+
+    await expect(coordinator.review(parent(), new AbortController().signal)).resolves.toMatchObject({
+      delegated: true,
+      provider: 'spawn',
+    })
+    const reviewCall = (host.start.mock.calls[0] as unknown as [string, { agentOptions?: unknown }])[1]
+    expect(reviewCall.agentOptions).toEqual({ maxTokens: 24_576 })
   })
 
   it('merges a fixed task Agent model with the configured Runtime maintenance maxTokens', async () => {
