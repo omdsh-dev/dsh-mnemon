@@ -77,6 +77,16 @@ function workspaceContext(initialValue: Record<string, unknown>, load: () => Pro
 }
 
 describe('Mnemon Web client composition', () => {
+  it('registers the retirement presentation only when the conversation service is present', () => {
+    const { provide } = workspaceContext({})
+    provide('uiConversation', {}) // Older Hosts can lack the event registry.
+    const register = vi.fn(() => () => {})
+    provide('uiConversation', { events: { register } })
+    expect(register).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'dsh-mnemon/retired-memory-snapshot', target: 'chat',
+    }))
+  })
+
   it('releases an acquired shell slot when a later Sidebar mount step throws', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mountBetterSidebar.mockImplementationOnce(() => { throw new Error('broken Sidebar integration') })
