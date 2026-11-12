@@ -6,16 +6,16 @@ The Starter pins a tested combination of official plugins. The table records ver
 
 | Component | Baseline | What is verified |
 |---|---|---|
-| DSH current RC | `0.2.2-rc.1` | Published npm `next` on 2026-11-04. Full installed-Host tests and packed Starter installation/upgrade checks run on Node 24.22.2; the Host requires Node >=24.9.0. |
+| DSH current RC | `0.2.2-rc.2` | Published npm `next` on 2026-11-11; RC1 remains a CI target. Full installed-Host tests and packed Starter installation/upgrade checks run on Node 24.22.2; the Host requires Node >=24.9.0. |
 | Inspected DSH source snapshot | `fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159` | Separate Node 24 verification against the unmodified source build, including live-model WebUI tasks. This identifies one master commit, not every source build or alpha. See [activation-owned Host evidence](../../pr-assets/dsh-master-agents/README.md). |
-| DSH development baseline | `0.2.1-rc.5` | Pinned development dependencies and an installed-Host CI target on Node 22.19. The npm `latest` tag still pointed here on 2026-11-04. |
+| DSH development baseline | `0.2.1-rc.5` | Pinned development dependencies and an installed-Host CI target on Node 22.19. |
 | DSH earlier supported hosts | `0.2.0-rc.2`, `0.2.1-rc.3` | CI runs every root test against these installed packages. See [DSH 0.2.0 and 0.2.1](#dsh-020-and-021) for version differences; the supported range still admits 0.2.1-rc.1 and rc.2. |
 | Node.js | `22.19` and `24` | Source CI and packed-artifact CI respectively; development requires `^22.19.0 \|\| >=24.11.0` |
 | Node.js 20 | Public package imports only | Does not establish that the DSH Host runs on Node 20 |
 | Mnemon Native CLI | `0.2.9`; embedding model checks require `0.2.13+` | Opt-in tests against a real CLI and disposable data; install the CLI separately. Older versions retain their other commands, but Test status asks for an upgrade because their availability fields only establish provider reachability |
 | Third-party Providers | Adapter contracts and fixtures | Does not establish live cloud-account conformance or upstream availability |
 
-DSH 0.2.2 support targets the official published **0.2.2-rc.1**. Alpha builds are no longer compatibility or CI targets; users on alpha should upgrade to the published RC. The broad manifest range is an installation gate, not a promise of alpha support. [Earlier isolated alpha Host evidence](../../pr-assets/issue-554-alpha-host/README.md) is retained as a historical record only.
+DSH 0.2.2 support targets the official published **0.2.2-rc.1 and 0.2.2-rc.2**. Alpha builds are no longer compatibility or CI targets; users on alpha should upgrade to the published RC. The broad manifest range is an installation gate, not a promise of alpha support. [Earlier isolated alpha Host evidence](../../pr-assets/issue-554-alpha-host/README.md) is retained as a historical record only.
 
 DSH 0.2.1-rc.3 and the current RC target fetch the official API-key model directory over the network. The task Agent model selector allows that Provider up to six seconds, covering DSH's default five-second request budget; other Providers retain their three-second bound. This changes directory loading only, not model selection, inference timeouts or saved configuration.
 
@@ -42,6 +42,12 @@ Installing for the first time? How DSH chooses the registry, and why its result 
 | `0.1.5-rc.1` to `0.1.7-alpha.1` | `0.5.16` |
 
 What those hosts needed is kept under [Older DSH hosts](#older-dsh-hosts). How each release was verified, and the earlier Headless and WebUI records that remain historical evidence, are under [Verification and evidence](#verification-and-evidence).
+
+### Published DSH 0.2.2 RC2
+
+RC2 uses the activation-owned Agent contracts previously handled for the inspected master snapshot: Subagent `rootOf()` and flat activation requests replace registry ownership methods. The existing Mnemon adapter preserves standalone tasks, guarded spawn/fork and user-directed continuation. Independent task sessions may be discoverable through ACP or the Host UI; this is the previously documented task-visibility trade-off, not a disabled memory capability. The RC2 suite exercises these paths against the actual published Host.
+
+RC2 displays developer context injections in Chat. Mnemon claims only its own empty `memory-snapshot-retired` developer messages through the public conversation registry, so these internal retirement markers do not become empty context cards. Ordinary memory snapshots, recall, instructions, nonempty messages and other producers remain visible under the Host's presentation rules. Audit events and model projection are unchanged, including the append-first snapshot policy for KV-cache reuse. Historical sessions use the same display filter without rewriting stored events. The contribution is optional on older Hosts and is disposed with the client plugin. See [RC2 acceptance evidence](../../pr-assets/dsh-022-rc2/README.md).
 
 ### Published DSH 0.2.2 RC1 and issue #554
 

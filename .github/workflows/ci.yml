@@ -121,7 +121,7 @@ jobs:
         run: node scripts/verify-public-entries.mjs
 
   # Keep the pinned development baseline and older supported DSH releases,
-  # and exercise the published 0.2.2 RC from npm. Alpha releases are not support targets.
+  # and exercise the published 0.2.2 RCs from npm. Alpha releases are not support targets.
   verify-installed-dsh:
     name: Verify on installed DSH ${{ matrix.dsh }} (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
@@ -135,6 +135,7 @@ jobs:
           - { dsh: '0.2.1-rc.5', node: '22.19.0' }
           # DSH 0.2.2 requires >=24.9.0; keep Node 22 coverage for earlier Hosts.
           - { dsh: '0.2.2-rc.1', node: '24.22.2' }
+          - { dsh: '0.2.2-rc.2', node: '24.22.2' }
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -183,7 +184,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        dsh: ['baseline', '0.2.2-rc.1']
+        dsh: ['baseline', '0.2.2-rc.1', '0.2.2-rc.2']
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -212,5 +213,7 @@ jobs:
       - name: Verify packed and independently installed plugins
         env:
           MNEMON_PLUGIN_VERIFY_CONCURRENCY: '2'
+          # 0.5.29 predates activation-owned Agents and cannot start on RC2.
+          MNEMON_PLUGIN_UPGRADE_BASE: ${{ matrix.dsh == '0.2.2-rc.2' && '0.5.43' || '0.5.29' }}
           MNEMON_E2E_DSH: ${{ steps.installed_dsh.outputs.binary }}
         run: pnpm run verify:plugins

@@ -45,6 +45,7 @@ import { MNEMON_ANCHOR_EVENT, type MnemonAnchor } from './anchor.ts'
 import { mountSubagentTokenUsageOverride } from './subagent-token-usage.tsx'
 import { installMemoryComposer } from './memory-composer.tsx'
 import { isRecord } from './is-record.ts'
+import { retiredMemorySnapshot } from './retired-memory-snapshot.ts'
 
 export * from './extension-sdk.ts'
 
@@ -327,6 +328,10 @@ export function apply(rawContext: unknown): void {
   const namespace: MnemonNamespace = 'mnemon'
   ctx.effect(() => ctx.locale.register(namespace, { zh, en }), 'dsh-mnemon: locale dictionaries')
   const translate = ctx.locale.bind(namespace)
+  // Optional on older Hosts; the registry owns cleanup and history rebuilds.
+  ctx.inject(['uiConversation'], inner => {
+    inner.uiConversation.events?.register(retiredMemorySnapshot)
+  })
   // The Plugins page provides its navigation while it lives; the memory
   // workspace links to its configuration only then.
   ctx.inject(['pluginNavigation'], inner => {

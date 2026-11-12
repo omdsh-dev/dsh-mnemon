@@ -45,7 +45,7 @@ npx @deepseek-ai/dsh web
 
 DSH starts at `http://127.0.0.1:3080` and opens a one-time link in your browser; the terminal prints the same link. Keep the terminal open while you use DSH, and press `Ctrl+C` to stop it.
 
-- This runs the DSH release tagged `latest` on npm, 0.2.1-rc.2 at the time of writing, which is also the one tagged `next`; `npx @deepseek-ai/dsh@0.2.0-rc.2 web` runs DSH 0.2.0-rc.2. dsh-mnemon supports both; see [Compatibility and upgrades](../reference/compatibility.md).
+- This runs the DSH release tagged `latest` on npm; `latest` and `next` can differ. To select RC2 explicitly, use `npx @deepseek-ai/dsh@0.2.2-rc.2 web` with Node >=24.9.0. Earlier supported Hosts remain listed in [Compatibility and upgrades](../reference/compatibility.md).
 - If you use DSH often, install it globally with `npm install --global @deepseek-ai/dsh` and then run `dsh web`; the [command line](#7-command-line-and-headless) needs the global `dsh` too.
 
 The first time you open it:
