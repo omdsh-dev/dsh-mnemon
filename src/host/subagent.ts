@@ -1084,6 +1084,9 @@ This is the only completion channel for this run. Do not finish with a plain-tex
         if (operation === 'review') { signal.throwIfAborted(); admission?.() }
         return startSubagent(this.subagents, host.agents, provider, {
           label,
+          // DSH permits 32 characters; the random suffix keeps concurrent and
+          // repeated operations distinct without putting memory text in names.
+          name: `mnemon-${operation}`.slice(0, 15).replace(/-$/u, '') + '-' + randomUUID().replaceAll('-', '').slice(0, 16),
           prompt: [{ type: 'text', text: `${delegatedTaskLine(operation)}\n${prompt}` }],
           parent,
           signal,

@@ -37,6 +37,14 @@ function activations() {
 }
 
 describe('Starting a delegated child on the running DSH (#356)', () => {
+  it('omits catalog names from the older nested activation contract', async () => {
+    const host = activations()
+    await startSubagent(host.subagents, undefined, 'spawn', { ...task(), name: 'mnemon-write-test' })
+    const spec = host.startActivation.mock.calls[0]![0]
+    expect(spec).not.toHaveProperty('name')
+    expect(spec.request).not.toHaveProperty('name')
+  })
+
   it('starts a caller-delivered activation where DSH has replaced start', async () => {
     const host = activations()
     const child = agent('child-1')
