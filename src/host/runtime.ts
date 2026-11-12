@@ -21,6 +21,7 @@ import { MemoryExecutions } from './memory-executions.ts'
 
 export interface MnemonRuntimeGraph {
   readonly config: ResolvedConfig
+  readonly allowLinkedSkillUpdates?: boolean
   readonly directory: string
   readonly storage: StorageScopeInspector
   readonly packs: MnemonPackManager
@@ -49,7 +50,7 @@ export function agentScope(agent: HostAgent, config: ResolvedConfig): MemoryOper
 }
 
 /** Shared by production graphs and read-only View previews. */
-export function memoryGenerationOptions(config: ResolvedConfig, workspaceRoot: string | undefined): CompileMemoryGenerationOptions {
+export function memoryGenerationOptions(config: ResolvedConfig, workspaceRoot: string | undefined, allowLinkedSkillUpdates = false): CompileMemoryGenerationOptions {
   const directory = createStorageRoot(config, workspaceRoot).effectiveDataDir()
   const userDirectory = config.runtimeUserScope === 'global' ? createStorageRoot({ storageScope: 'global' }).effectiveDataDir() : directory
   return {
@@ -66,7 +67,7 @@ export function memoryGenerationOptions(config: ResolvedConfig, workspaceRoot: s
       if (!isDefaultSourceInstance(installed.instanceKey, type)) return {}
       if (type === 'runtime') return { dataDir: directory, userDataDir: userDirectory, memoryLimitBytes: config.runtimeMemory.memoryLimitBytes, userLimitBytes: config.runtimeMemory.userLimitBytes }
       if (type === 'documents') return { dataDir: directory }
-      if (type === 'skills') return { dataDir: directory }
+      if (type === 'skills') return { dataDir: directory, allowLinkedUpdates: allowLinkedSkillUpdates }
       if (type === 'memory-spaces') return JSON.parse(JSON.stringify({
         dataDir: directory, cliPath: config.cliPath, store: config.store, timeoutMs: config.timeoutMs,
         defaultRecallLimit: config.defaultRecallLimit, writeEnabled: config.writeEnabled,
@@ -78,10 +79,10 @@ export function memoryGenerationOptions(config: ResolvedConfig, workspaceRoot: s
 }
 
 /** One default-product scope over the single Composable Runtime. */
-export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot: string | undefined, extensions: MemoryRuntime): MnemonRuntimeGraph {
+export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot: string | undefined, extensions: MemoryRuntime, allowLinkedSkillUpdates = false): MnemonRuntimeGraph {
   const root = createStorageRoot(config, workspaceRoot)
   const directory = root.effectiveDataDir()
-  const attachment = extensions.attachGeneration(memoryGenerationOptions(config, workspaceRoot))
+  const attachment = extensions.attachGeneration(memoryGenerationOptions(config, workspaceRoot, allowLinkedSkillUpdates))
   const evaluation = attachment.host.inspect().evaluation
   if (evaluation.state === 'rejected') {
     void attachment.dispose()
@@ -91,7 +92,7 @@ export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot: string
   const packs = new MnemonPackManager(root, config, () => {}, () => new Date())
   let disposed = false
   return {
-    config, directory, storage: new StorageScopeInspector(root, config), packs, sync: new MnemonGitSync(root, config, packs),
+    config, allowLinkedSkillUpdates, directory, storage: new StorageScopeInspector(root, config), packs, sync: new MnemonGitSync(root, config, packs),
     reviews: new MnemonReviewLedger(root),
     memoryComposition: attachment.host, composableTurns,
     source: (type, scope = { storage: config.storageScope, ...(workspaceRoot === undefined ? {} : { workspaceId: workspaceRoot }) }) => new SourceSession(attachment.host, composableTurns, type, scope),
@@ -331,7 +332,7 @@ export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
     const key = this.current.config.storageScope === 'workspaces' ? canonicalWorkspacePath(resolve(workspaceRoot)) : resolve(workspaceRoot)
     let graph = this.workspaceGraphs.get(key)
     if (graph === undefined) {
-      graph = createRuntimeGraph(this.current.config, key, this.extensions)
+      graph = createRuntimeGraph(this.current.config, key, this.extensions, this.current.allowLinkedSkillUpdates)
       this.applyGitHubAuth(graph)
       this.applyAutoBackup(graph)
       this.rediscoverProviders(graph)

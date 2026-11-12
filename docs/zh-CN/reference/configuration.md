@@ -369,13 +369,14 @@ DSH 的实时模型目录会报告各模型的输入模态，选择器为支持�
 
 ## 技能管理设置
 
-技能管理的设置保存在 `mnemon` 条目的 `skills` 下，通过 `mnemon-skills` 设置范围在**插件 → 可组合记忆**里它自己的页面上编辑。设置保存后实时生效，不重建记忆运行图；目标选择、草案预算与复盘参数需要点击**应用**或**放弃**。草案预算在每次起草开始时读取。各项含义见[技能管理指南](../guides/skills.md#自进化)。
+技能管理的设置保存在 `mnemon` 条目的 `skills` 下，通过 `mnemon-skills` 设置范围在**插件 → 可组合记忆**里它自己的页面上编辑。设置保存后实时生效；链接更新权限变更会刷新 Source 运行图，其他技能设置不重建运行图；目标选择、草案预算与复盘参数需要点击**应用**或**放弃**。草案预算在每次起草开始时读取。各项含义见[技能管理指南](../guides/skills.md#自进化)。
 
 | 键 | 默认值 | 范围 | 含义 |
 |---|---:|---|---|
 | `skills.evolution` | `false` | boolean | **自进化**：后台复盘并建议改进技能；会创建落盘的任务及子代理会话，Mnemon 不自动删除这些记录 |
 | `skills.allowCreate` | `true` | boolean | **新建技能建议**：允许复盘提出尚不存在的新技能 |
 | `skills.allowUpdate` | `true` | boolean | **改进已有技能**：允许复盘提出已有技能的改进 |
+| `skills.allowLinkedUpdates` | `false` | boolean | **允许更新链接技能**：更新已有符号链接或 junction 背后的原始文件，所有共享 Agent 都会受影响。创建、安装、移除规则不变，仅对可信目标开启。 |
 | `skills.targetScope` | `user` | `storage` / `user` / `project` | **新技能写入位置**：`user` → `user-dsh`；`project` → `project-dsh`；`storage` 跟随 `storageScope`（`global` / `custom` → 用户，`workspace` / `workspaces` → 项目）。设置页面支持应用或放弃 |
 | `skills.autoBacktest` | `true` | boolean | **草案自动回测**：草案写好后用测试用例与当前版本对比 |
 | `skills.autoAdopt` | `false` | boolean | 自动起草并采纳新的空闲审查建议；要求自进化与自动回测开启、完整文本回测不退步，最多重写两次。 |

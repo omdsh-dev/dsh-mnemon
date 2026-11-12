@@ -140,7 +140,7 @@ mnemon:
 | `remoteAccess` | `read-only` | `read-only` / `trusted-host` | Startup-only grant for non-loopback Mnemon management, enforced by the API Gateway projection |
 | `conversationInteraction.turnBar` | `true` | boolean | The turn memory bar under replies; applies at once |
 | `conversationInteraction.saveAction` | `true` | boolean | The **Save to memory** action and confirmation on finished replies; applies at once |
-| `skills` | see [Skills settings](#skills-settings) | the keys listed there | Skills' self-evolution, its review parameters, the conversation line and the sidebar entry; applies at once without rebuilding the memory runtime |
+| `skills` | see [Skills settings](#skills-settings) | the keys listed there | Skills' self-evolution, its review parameters, the conversation line and the sidebar entry; applies live; changing linked-update permission refreshes the Source runtime |
 
 Every value is saved under the `mnemon` entry and applies live. The UI's `mnemon-ui` settings scope is stored as `conversationInteraction`, its `mnemon-view` scope as `memoryView`, and its `mnemon-skills` scope as `skills`. The storage root switches atomically only after the new runtime graph initializes successfully.
 
@@ -369,13 +369,14 @@ When the active Strategy does not drive idle review or runtime capacity maintena
 
 ## Skills settings
 
-Skills keeps its settings under `skills` in the `mnemon` entry, edited on its own page under **Plugins → dsh-mnemon** through the `mnemon-skills` settings scope. Settings apply live once saved, without rebuilding the memory runtime; the destination selector, draft budgets and review parameters wait for **Apply** or **Discard**. Draft budgets are read at the start of each draft. The [Skills guide](../guides/skills.md#self-evolution) explains what each does.
+Skills keeps its settings under `skills` in the `mnemon` entry, edited on its own page under **Plugins → dsh-mnemon** through the `mnemon-skills` settings scope. Settings apply live once saved; changing linked-update permission refreshes the Source runtime, while other skill settings retain it; the destination selector, draft budgets and review parameters wait for **Apply** or **Discard**. Draft budgets are read at the start of each draft. The [Skills guide](../guides/skills.md#self-evolution) explains what each does.
 
 | Key | Default | Range | Meaning |
 |---|---:|---|---|
 | `skills.evolution` | `false` | boolean | **Self-evolution**: review conversations and suggest skills. Task and subagent sessions are saved locally; Mnemon does not automatically delete them. |
 | `skills.allowCreate` | `true` | boolean | **Suggest new skills**: allow reviews to propose skills that do not exist yet |
 | `skills.allowUpdate` | `true` | boolean | **Suggest skill improvements**: allow reviews to improve existing skills |
+| `skills.allowLinkedUpdates` | `false` | boolean | **Allow linked skill updates**: update original files behind existing symlinks/junctions; all sharing Agents see changes. Creation/install/removal rules stay unchanged. Enable only for trusted targets. |
 | `skills.targetScope` | `user` | `storage` / `user` / `project` | **New skill destination**: `user` → `user-dsh`; `project` → `project-dsh`; `storage` follows `storageScope` (`global` / `custom` → user, `workspace` / `workspaces` → project). Apply or Discard on the settings page |
 | `skills.autoBacktest` | `true` | boolean | **Backtest drafts**: compare each new draft with the current version on its test cases |
 | `skills.autoAdopt` | `false` | boolean | Automatically draft and adopt new idle-review suggestions only after complete, non-regressing text backtests; at most two rewrites. Requires evolution and automatic backtests. |

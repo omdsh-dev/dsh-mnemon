@@ -127,7 +127,7 @@ function SkillRow(props: { context: SkillsPageContext; skill: SkillSummary; stat
         <strong>
           <span>{skill.name}</span>
           {skill.shadowedBy === undefined && (stats?.open ?? 0) > 0 && <i className={css.skDot} title={t('skills.waitingCount', { count: stats!.open })} />}
-          {skill.readOnly && <Tag tone="quiet">{t('skills.linked')}</Tag>}
+          {(skill.linked || skill.readOnly) && <Tag tone="quiet">{t(skill.readOnly ? 'skills.linked' : 'skills.linkedEditable')}</Tag>}
           {skill.shadowedBy !== undefined ? <Tag tone="quiet">{t('skills.shadowed')}</Tag> : on && invocation !== 'both' && <Tag tone="outline">{t(`invocation.${invocation}Short`)}</Tag>}
         </strong>
         <small>{skill.description}</small>
@@ -180,7 +180,7 @@ function SkillDetail(props: { context: SkillsPageContext; skillKey: string; stat
         <MoreMenu label={t('common.more')} items={more} onSelect={id => id === 'improve' ? setImproving(true) : setDeleting(true)} />
       </div>
     </header>
-    {skill.readOnly && <p className={css.skWarn}>{t('skills.linkedReadOnly')}</p>}
+    {(skill.linked || skill.readOnly) && <p className={css.skWarn}>{t(skill.readOnly ? 'skills.linkedReadOnly' : 'skills.linkedWritable')}</p>}
     {skill.shadowedBy === undefined && (stats?.open ?? 0) > 0 && <button type="button" className={css.skCallout} onClick={() => context.navigate({ tab: 'evolution', filter: 'pending', skillName: skill.name })}>
       <span>{t('skills.waitingCount', { count: stats!.open })}</span><b>{t('common.view')} ›</b>
     </button>}

@@ -61,6 +61,7 @@ export function SkillsSettings(props: { scope: ClientSettingsScope<SkillsConfig>
   const evolution = useLive(saved.evolution, write('evolution'))
   const allowCreate = useLive(saved.allowCreate, write('allowCreate'))
   const allowUpdate = useLive(saved.allowUpdate, write('allowUpdate'))
+  const linkedUpdates = useLive(saved.allowLinkedUpdates, write('allowLinkedUpdates'))
   const autoBacktest = useLive(saved.autoBacktest, write('autoBacktest'))
   const autoAdopt = useLive(saved.autoAdopt, write('autoAdopt'))
   const hints = useLive(saved.hints, write('hints'))
@@ -94,6 +95,7 @@ export function SkillsSettings(props: { scope: ClientSettingsScope<SkillsConfig>
         disabled={disabled || destination.saving} onChange={targetScope => destination.edit({ targetScope })} />
       <PanelActions dirty={destination.dirty} saving={destination.saving} applied={destination.applied} failed={destination.failed} disabled={disabled} invalid={null} t={t}
         onDiscard={destination.discard} onApply={() => { void destination.apply() }} />
+      <ToggleRow id="mnemon-skills-linked-updates" label={t('skills.allowLinkedUpdates')} hint={t('skills.allowLinkedUpdatesHint')} checked={linkedUpdates.value} disabled={disabled} onChange={linkedUpdates.set} />
       <details className={css.advanced}>
         <summary>{t('skills.draftGeneration')}<IconChevronDownOutlineRegular size={12} /></summary>
         <p className={css.panelNote}>{t('skills.draftBudgetHint')}</p>
@@ -137,6 +139,6 @@ export function SkillsSettings(props: { scope: ClientSettingsScope<SkillsConfig>
       <ToggleRow id="mnemon-skills-hints" label={t('skills.hints')} hint={t('skills.hintsHint')} checked={hints.value} disabled={disabled} onChange={hints.set} />
       <ToggleRow id="mnemon-skills-sidebar" label={t('skills.sidebar')} hint={t('skills.sidebarHint')} checked={sidebar.value} disabled={disabled} onChange={sidebar.set} />
     </div>
-    <WriteFailure error={evolution.failed ?? allowCreate.failed ?? allowUpdate.failed ?? autoBacktest.failed ?? autoAdopt.failed ?? hints.failed ?? sidebar.failed} t={t} />
+    <WriteFailure error={evolution.failed ?? allowCreate.failed ?? allowUpdate.failed ?? linkedUpdates.failed ?? autoBacktest.failed ?? autoAdopt.failed ?? hints.failed ?? sidebar.failed} t={t} />
   </section>
 }

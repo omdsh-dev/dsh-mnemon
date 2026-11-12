@@ -414,6 +414,8 @@ export interface ResolvedSkillsConfig {
   allowCreate: boolean
   /** Allow reviews to suggest changes to existing skills. */
   allowUpdate: boolean
+  /** Opt in to editing the original targets of linked existing skills. */
+  allowLinkedUpdates: boolean
   /** Destination for new skill proposals; user preserves the pre-setting behavior. */
   targetScope: 'storage' | 'user' | 'project'
   /** Backtest a draft against the current version as soon as it is written. */
@@ -452,6 +454,7 @@ export const DEFAULT_SKILLS_CONFIG: Readonly<ResolvedSkillsConfig> = Object.free
   evolution: false,
   allowCreate: true,
   allowUpdate: true,
+  allowLinkedUpdates: false,
   targetScope: 'user',
   autoBacktest: true,
   autoAdopt: false,

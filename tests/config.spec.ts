@@ -36,6 +36,9 @@ describe('Mnemon config and resolution', () => {
   })
   it('preserves the user skill destination for existing settings and validates explicit scopes', () => {
     expect(resolveSkillsConfig().targetScope).toBe('user')
+    expect(resolveSkillsConfig().allowLinkedUpdates).toBe(false)
+    expect(resolveSkillsConfig({ allowLinkedUpdates: true }).allowLinkedUpdates).toBe(true)
+    expect(() => resolveSkillsConfig({ allowLinkedUpdates: 'true' } as never)).toThrow()
     expect(resolveSkillsConfig({ evolution: true }).targetScope).toBe('user')
     for (const targetScope of ['storage', 'user', 'project'] as const) expect(resolveSkillsConfig({ targetScope }).targetScope).toBe(targetScope)
     expect(() => resolveSkillsConfig({ targetScope: 'cwd' } as never)).toThrow()
