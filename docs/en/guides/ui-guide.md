@@ -64,6 +64,9 @@ Each finished reply has a brain-shaped **Save to memory** in its action strip, t
 
 A turn that used a skill, or earned a review, ends with a **Turn skills** line: the skills the turn used, then **Reviewing** while self-evolution reviews the conversation, and **suggested** with a count once the review left suggestions. Each item opens on the [Skills page](#skills). The line is on by default; **In the conversation** on Skills' page under Plugins turns it off. See [Skills in a conversation](./skills.md#in-a-conversation).
 
+Skill source directories are expandable groups showing their path and skill count. They start expanded; collapsing a group does not disable its skills or close the selected detail. Search temporarily reveals matching groups. On desktop the list fills its bounded pane and scrolls independently from the document; narrow screens retain a bounded list above the full document.
+
+
 ## The Memory System
 
 ![Status, runtime memory, a document, the Memory Spaces overview and graph, then an Agent answer with citations](../../assets/webui-v0.5.32/en/memory.gif)
