@@ -1,6 +1,25 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomUUID } from 'node:crypto'
-import type { HostAgent, HostAgentsService } from './dsh.ts'
+import type { HostAgent, HostAgentContext, HostAgentsService } from './dsh.ts'
+
+/** Cordis errors may be wrapped by the review coordinator. */
+export function isInactiveContextError(error: unknown): boolean {
+  const seen = new Set<unknown>()
+  while (error !== null && typeof error === 'object' && !seen.has(error)) {
+    seen.add(error)
+    const value = error as { code?: unknown; message?: unknown; cause?: unknown }
+    if (value.code === 'INACTIVE_EFFECT' || value.message === 'cannot create effect on inactive context') return true
+    error = value.cause
+  }
+  return false
+}
+
+export function contextIsActive(ctx: Pick<HostAgentContext, 'fiber'> | undefined): boolean {
+  try { ctx?.fiber?.assertActive(); return true } catch (error) {
+    if (isInactiveContextError(error)) return false
+    throw error
+  }
+}
 
 export interface ActivationOwnership {
   rootOf?(agent: HostAgent): HostAgent

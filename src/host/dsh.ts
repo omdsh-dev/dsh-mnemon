@@ -175,6 +175,8 @@ export interface HostToolExecutionInput {
 }
 
 export interface HostAgentContext {
+  /** Cordis lifetime check; optional for older Host adapters. */
+  readonly fiber?: { assertActive(): void }
   /** DSH's monotonic guard also covers tools registered in this Agent's scope. */
   tools?: {
     /** Public execution pipeline, including presentation, policy and guards. */

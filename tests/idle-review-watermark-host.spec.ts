@@ -23,6 +23,8 @@ const spawn = await import(requireDsh.resolve('@deepseek-ai/dsh-subagent-spawn-i
 
 it.each([
   { preparation: 'none', change: 'resume' },
+  { preparation: 'none', change: 'dispose' },
+  { preparation: 'begin', change: 'dispose' },
   { preparation: 'begin', change: 'root' },
   { preparation: 'begin', change: 'disable' },
   { preparation: 'drain', change: 'root' },
@@ -89,6 +91,22 @@ it.each([
       await parent.agent.whenIdle()
     }
     await run(); await run()
+    if (preparation === 'none' && change === 'dispose') {
+      await parent.dispose()
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(childStarts).toBe(0)
+      expect(childCalls).toBe(0)
+      expect(existsSync(watermark)).toBe(false)
+      expect(lifecycle.snapshot().counters.failures).toBe(0)
+      parent = await ctx.agents.resume({ resumeSessionId: SessionId('persistent-parent'), agentOptions: { provider: 'scripted', model: 'fixture' } })
+      expect(lifecycle.snapshot('persistent-parent').current?.idleReviewAttempts).toBe(0)
+      await run(); await run()
+      await vi.advanceTimersByTimeAsync(5_000)
+      await vi.waitFor(() => expect(childCalls).toBe(1))
+      await vi.waitFor(() => expect(lifecycle.snapshot('persistent-parent').current?.reviewRunning).toBe(false))
+      await parent.dispose()
+      return
+    }
     if (preparation !== 'none') {
       const original = f.graph.composableTurns.beginTurn.bind(f.graph.composableTurns)
       const begin = vi.spyOn(f.graph.composableTurns, 'beginTurn').mockImplementationOnce(async (...args) => {
@@ -110,14 +128,17 @@ it.each([
       if (change === 'root') f.live.swap(createRuntimeGraph({ ...f.config, dataDir: otherRoot }, f.workspace, f.extensions))
       // Direct mutable config is also supported by the lifecycle/coordinator;
       // this deliberately checks the final fence independently of swap notification.
+      if (change === 'dispose') await parent.dispose()
       if (change === 'disable') f.config.idleReview.enabled = false
       if (change === 'display') f.live.swap(createRuntimeGraph({ ...f.config, displayMode: 'builtin' }, f.workspace, f.extensions))
       gate.resolve()
-      await vi.waitFor(() => expect(lifecycle.snapshot('persistent-parent').current?.reviewRunning).toBe(false))
+      await vi.waitFor(() => expect(lifecycle.snapshot('persistent-parent').current?.reviewRunning ?? false).toBe(false))
+      expect(lifecycle.snapshot().counters.failures).toBe(0)
       expect(childCalls).toBe(change === 'display' ? 1 : 0)
       expect(childStarts).toBe(change === 'display' ? 1 : 0)
       expect(JSON.parse(readFileSync(watermark, 'utf8')).attempts).toBe(1)
       expect(existsSync(join(otherRoot, 'state', 'idle-review', createHash('sha256').update('persistent-parent').digest('hex') + '.json'))).toBe(false)
+      if (change === 'dispose') parent = await ctx.agents.resume({ resumeSessionId: SessionId('persistent-parent'), agentOptions: { provider: 'scripted', model: 'fixture' } })
       const before = parentCalls
       await run()
       expect(parentCalls).toBe(before + 1)

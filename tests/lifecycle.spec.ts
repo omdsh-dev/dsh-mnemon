@@ -56,7 +56,7 @@ function composedBy(typeId: string): { strategyTypeId: string; strategyInstanceK
   return { strategyTypeId: typeId, strategyInstanceKey: `strategy:${typeId}`, runtimeGeneration: `fixture-generation:${typeId}` }
 }
 
-function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: { directory?: string; sessionId?: string; taskModelRoute?: boolean; workspaces?: Array<{ path: string }>; sessionModel?: { provider: string; model: string; reasoningEffort?: string }; conversationOptions?: { provider: string; model: string; reasoningEffort?: string }; workingDirectory?: { set: (agent: HostAgent, path: string, signal?: AbortSignal) => Promise<string> }; strategyWorkflows?: Partial<Record<string, readonly MemoryStrategyWorkflow[]>> | undefined } = {}) {
+function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: { inactive?: boolean; directory?: string; sessionId?: string; taskModelRoute?: boolean; workspaces?: Array<{ path: string }>; sessionModel?: { provider: string; model: string; reasoningEffort?: string }; conversationOptions?: { provider: string; model: string; reasoningEffort?: string }; workingDirectory?: { set: (agent: HostAgent, path: string, signal?: AbortSignal) => Promise<string> }; strategyWorkflows?: Partial<Record<string, readonly MemoryStrategyWorkflow[]>> | undefined } = {}) {
   const agentListeners = new Map<string, Listener>()
   const rootListeners = new Map<string, Listener>()
   const agentSections: Array<{ name: string; order: number; text: () => string }> = []
@@ -91,7 +91,9 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
     }
     return decision
   }
+  let contextActive = !options.inactive
   const agentCtx = {
+    fiber: { assertActive() { if (!contextActive) throw Object.assign(new Error('cannot create effect on inactive context'), { code: 'INACTIVE_EFFECT' }) } },
     on: vi.fn((name: string, listener: Listener) => {
       agentListeners.set(name, name === 'agent/pre-step' ? admit(listener) : listener)
       return () => agentListeners.delete(name)
@@ -258,7 +260,7 @@ function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: {
       agentListeners.get('session/event')?.(agent.session, event)
     }
   }
-  return { agent, agentListeners, agentSections, agentContexts, promptAssemblies, events, followup, steer, lifecycle, coordinator, composableTurns, runtimeSource, createTaskAgent, disposedTaskAgents, defaultModel, llm, agentPresets, assemblePrompt, preStep, turnStopping, stop }
+  return { deactivateContext: () => { contextActive = false }, agent, agentListeners, agentSections, agentContexts, promptAssemblies, events, followup, steer, lifecycle, coordinator, composableTurns, runtimeSource, createTaskAgent, disposedTaskAgents, defaultModel, llm, agentPresets, assemblePrompt, preStep, turnStopping, stop }
 }
 
 // The DSH-owned Session codec, resolved exactly as the installed host resolves it.
@@ -1351,6 +1353,59 @@ describe('Mnemon DSH lifecycle integration', () => {
       await value.lifecycle.supervise('session-1', 'Explicit durable fact')
       expect(value.coordinator.write).toHaveBeenCalledOnce()
     } finally { value.stop() }
+  })
+
+  it('does not adopt an already disposed Agent context (issue 623)', () => {
+    const value = fixture(resolveConfig({}), { inactive: true })
+    try {
+      expect(value.agent.ctx.effect).not.toHaveBeenCalled()
+      expect(value.lifecycle.snapshot().activeAgents).toBe(0)
+    } finally { value.stop() }
+  })
+
+  it.each([false, true])('skips a stale idle timer without spending review quota (persist=%s)', async persistWatermark => {
+    vi.useFakeTimers()
+    const directory = mkdtempSync(join(directories, 'disposed-idle-'))
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark } }), { directory })
+    try {
+      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      expect(value.lifecycle.snapshot('session-1').current?.idleReviewPending).toBe(true)
+      value.deactivateContext()
+      await vi.advanceTimersByTimeAsync(5_000)
+      const state = value.lifecycle.snapshot('session-1')
+      expect(value.coordinator.review).not.toHaveBeenCalled()
+      expect(state.current).toMatchObject({ idleReviewPending: false, reviewRunning: false, idleReviewAttempts: 0 })
+      expect(state.current?.lastReviewFailure).toBeUndefined()
+      expect(state.current?.lastError).toBeUndefined()
+      expect(state.current?.nextReviewAt).toBeUndefined()
+      expect(state.counters.failures).toBe(0)
+    } finally { value.stop() }
+  })
+
+  it.each([false, true])('treats inactive-context rejection as cancellation, retaining partial receipts=%s', async committed => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
+    const cause = Object.assign(new Error('cannot create effect on inactive context'), { code: 'INACTIVE_EFFECT' })
+    vi.mocked(value.coordinator.review).mockRejectedValueOnce(new IdleReviewError('Review interrupted', {
+      status: committed ? 'partial' : 'failed', provider: 'fork',
+      receipts: committed ? [{ tool: 'mnemon_document_create', action: 'created', documentId: 'committed-document' }] : [],
+    }, { cause }))
+    try {
+      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await vi.advanceTimersByTimeAsync(5_000)
+      const state = value.lifecycle.snapshot('session-1')
+      expect(state.current?.reviewRunning).toBe(false)
+      // Reservation happened before asynchronous preparation; never rewind durable usage.
+      expect(state.current?.idleReviewAttempts).toBe(1)
+      expect(state.counters.failures).toBe(committed ? 1 : 0)
+      if (committed) expect(state.current?.lastReviewFailure).toMatchObject({ status: 'partial', receipts: [{ documentId: 'committed-document' }] })
+      else {
+        expect(state.current?.lastReviewFailure).toBeUndefined()
+        expect(state.current?.lastError).toBeUndefined()
+        expect(warn).not.toHaveBeenCalled()
+      }
+    } finally { value.stop(); warn.mockRestore() }
   })
 
   it('surfaces committed receipts without counting an incomplete review as success', async () => {

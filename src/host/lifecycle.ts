@@ -33,7 +33,7 @@ import { prepareMemorySnapshot } from './memory-snapshot.ts'
 import { memorySnapshotState } from './memory-snapshot-state.ts'
 import type { SkillEvolution } from './skill-evolution.ts'
 import { IdleReviewWatermarkStore } from './idle-review-watermark.ts'
-import { activationOwned, isCreatingChild, isRootAgent, isTaskRecord, rootAgents, titleTask } from './agent-compat.ts'
+import { activationOwned, contextIsActive, isInactiveContextError, isCreatingChild, isRootAgent, isTaskRecord, rootAgents, titleTask } from './agent-compat.ts'
 
 type AgentRuntimeSource = Pick<MnemonAgentRuntimeSource, 'config' | 'forAgent' | 'executions' | 'onChanged'>
 
@@ -606,7 +606,7 @@ class MnemonAgentLifecycle {
   }
 
   private idleReviewAllowed(reserved = false): boolean {
-    return !this.disposed && (!this.config.idleReview.persistWatermark || this.watermarkError === undefined)
+    return !this.disposed && contextIsActive(this.agent.ctx) && (!this.config.idleReview.persistWatermark || this.watermarkError === undefined)
       && this.config.lifecycleEnabled && this.config.writeEnabled && this.config.writebackMode === 'guided'
       && this.config.idleReview.enabled && (reserved || this.idleReviewAttempts < this.config.idleReview.maxPerSession)
       && idleReviewBlockReason(this.agent, this.config.idleReview.agentTeams) === undefined
@@ -615,6 +615,7 @@ class MnemonAgentLifecycle {
   }
 
   private async runIdleReview(): Promise<void> {
+    if (!contextIsActive(this.agent.ctx)) return
     const controller = new AbortController()
     const triggeredScore = this.reviewActivity().score
     const epoch = this.reviewEpoch
@@ -667,6 +668,11 @@ class MnemonAgentLifecycle {
     } catch (error) {
       // Cancellation after a commit still needs reconciliation. Never retry a
       // failed child here, even when a different provider is available.
+      const partial = error instanceof IdleReviewError && (error.review.status === 'partial' || error.review.receipts.length > 0)
+      if (!partial && (isInactiveContextError(error) || !contextIsActive(this.agent.ctx))) {
+        controller.abort(error)
+        return
+      }
       if (error instanceof IdleReviewError) this.lastReviewFailure = error.review
       if (!controller.signal.aborted || error instanceof IdleReviewError && error.review.status === 'partial') this.fail(error)
     } finally {
@@ -1383,6 +1389,7 @@ export class MnemonLifecycle {
   }
 
   private install(agent: HostAgent, source: LifecycleAgentSnapshot['startSource']): void {
+    if (!contextIsActive(agent.ctx)) return
     if (this.taskAgentIds.has(agent.id) || this.owners.has(agent) || this.children.has(agent)) return
     if ((isTaskRecord(agent.id) || this.coordinator.isFinishedTask(agent.id, agent)) && !isCreatingChild(this.ctx.agents, agent)) {
       // Only fresh user turns can continue a completed task; never register its
@@ -1422,7 +1429,7 @@ export class MnemonLifecycle {
     const parentId = agent.session.header?.parentSession?.trim()
     const parent = parentId === undefined || parentId === '' ? undefined : this.ctx.agents.get(parentId)
     // A lineage string alone is not authority. Orphans get no model Recall pin.
-    if (runtime === undefined || parent === undefined || parent === agent) return
+    if (runtime === undefined || parent === undefined || parent === agent || !contextIsActive(agent.ctx) || !contextIsActive(parent.ctx)) return
     this.coordinator.inheritTaskContinuation(parent, agent)
     const parentMemory = this.memoryTurns.get(parent)
     let delegation: DelegatedMemoryView

@@ -1,3 +1,4 @@
+import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import type { HostAgent, HostPreStepDecision, HostSubagentRun, HostUserMessage } from '../src/host/dsh.ts'
 import { CONTINUATION_TEXT, startWithContinuationTurns } from '../src/host/continuation-turn.ts'
@@ -62,6 +63,21 @@ async function started() {
 }
 
 describe('continuation turns for delegated children', () => {
+  it('does not install recovery listeners on a disposed published child', async () => {
+    const h = host(), parent = agent('parent').value, child = agent('disposed-child')
+    const ctx = new Context()
+    const fiber = await ctx.plugin({ name: 'mnemon-disposed-context', apply() {} })
+    await fiber.dispose()
+    Object.assign(child.value.ctx, { fiber })
+    const active = await startWithContinuationTurns(h.value, parent, async () => {
+      h.created(child.value, parent)
+      return run(child.value.id, child.value)
+    })
+    expect(child.value.ctx.on).not.toHaveBeenCalled()
+    expect(h.observers()).toBe(0)
+    await active.dispose()
+  })
+
   it('changes nothing until a server refuses a request without a user query', async () => {
     const { child, run: active } = await started()
     expect(active.localAgent).toBe(child.value)

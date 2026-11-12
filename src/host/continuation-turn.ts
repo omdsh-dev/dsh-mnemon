@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { HostAgent, HostPreStepDecision, HostSubagentRun, HostUserMessage } from './dsh.ts'
 import { createPluginMessage } from './plugin-message.ts'
-import { activationOwned, isReservedChild, reservedChildId, withReservedChild, type ActivationOwnership } from './agent-compat.ts'
+import { activationOwned, contextIsActive, isReservedChild, reservedChildId, withReservedChild, type ActivationOwnership } from './agent-compat.ts'
 
 /** The user turn that ends a refused delegated child's tool continuations. */
 export const CONTINUATION_TEXT = 'Continue from the tool results above.'
@@ -50,7 +50,7 @@ function hasUserText(message: HostUserMessage): boolean {
  * only after the last user query keeps the earlier steps' reasoning.
  */
 function continueAfterRefusal(agent: HostAgent): Array<() => unknown> {
-  if (typeof agent.ctx?.on !== 'function') return []
+  if (typeof agent.ctx?.on !== 'function' || !contextIsActive(agent.ctx)) return []
   let refused = false
   const retried = new Set<string>()
   const turn = () => createPluginMessage(CONTINUATION_TEXT, 'instructions')
@@ -84,12 +84,14 @@ function continueAfterRefusal(agent: HostAgent): Array<() => unknown> {
  * that does not report creation leaves the child as it was.
  */
 export async function startWithContinuationTurns(host: ContinuationHost, parent: HostAgent, start: () => Promise<HostSubagentRun>): Promise<HostSubagentRun> {
+  parent.ctx?.fiber?.assertActive()
   const reserved = activationOwned(host.subagents)
   const pending = Symbol('Mnemon delegated start')
   const stops: Array<() => unknown> = []
   let expectedChildId: string | undefined
   const listener = host.on('agent/created', (({ agent }: { agent: HostAgent }) => {
     if (startingChild.getStore() !== pending) return
+    if (!contextIsActive(parent.ctx) || !contextIsActive(agent.ctx)) return
     if (reserved && (agent.id !== expectedChildId || !isReservedChild(host.agents, parent, agent))) return
     if (typeof host.agents?.isOwnedBy === 'function' && !host.agents.isOwnedBy(agent.id, parent)) return
     for (const stop of continueAfterRefusal(agent)) if (typeof stop === 'function') stops.push(stop)
