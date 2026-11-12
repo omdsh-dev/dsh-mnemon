@@ -277,6 +277,8 @@ export interface HostSubagentProvider {
 
 export interface HostSubagentStartRequest {
   label?: string
+  /** Optional catalog name, forwarded only to Hosts with named-child support. */
+  name?: string
   prompt: Array<{ type: 'text'; text: string }>
   parent: HostAgent
   signal: AbortSignal

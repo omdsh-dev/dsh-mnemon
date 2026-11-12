@@ -80,6 +80,9 @@ Independent plugin authors use declared peer ranges and public exports. Old priv
 
 <a id="dsh-02"></a>
 
+On Hosts with named-child support (including DSH 0.2.2-rc.2), memory workers have catalog names such as `mnemon-write-<suffix>` and `mnemon-answer-<suffix>`. The suffix distinguishes repeated and concurrent runs without including memory contents. Existing labels, task isolation and completion behavior stay unchanged; older Hosts retain their own naming. This improves identification, not the number or cost of model calls.
+
+
 ## DSH 0.2.0 and 0.2.1
 
 dsh-mnemon runs the same on both releases, with the same memory data.

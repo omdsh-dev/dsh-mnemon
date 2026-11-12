@@ -82,7 +82,7 @@ async function startOnHost(
   request: HostSubagentStartRequest & { label: string },
 ): Promise<HostSubagentRun> {
   if (typeof subagents.startActivation === 'function') {
-    const { label, signal, ...task } = request
+    const { label, signal, name, ...task } = request
     const modern = activationOwned(subagents)
     const childId = claimReservedChild(request.parent)
     if (modern && (childId === undefined || agents?.get?.(request.parent.id) !== request.parent)) {
@@ -92,7 +92,9 @@ async function startOnHost(
     // contract before dispatch; never retry a potentially accepted start with another shape.
     const startCurrent = subagents.startActivation as unknown as (spec: Omit<HostSubagentStartRequest, 'label'> & { provider: string; label: string; childId: string; delivery: 'caller' }) => ReturnType<NonNullable<HostSubagentsService['startActivation']>>
     const activation = modern
-      ? await startCurrent.call(subagents, { ...task, provider, label, signal, childId: childId!, delivery: 'caller' })
+      ? await startCurrent.call(subagents, { ...task, provider, label, signal, childId: childId!, delivery: 'caller',
+        ...('resolveName' in subagents && typeof subagents.resolveName === 'function' && name !== undefined ? { name } : {}),
+      })
       : await subagents.startActivation({ provider, label, ...(childId === undefined ? {} : { childId }), request: task, signal, delivery: 'caller' })
     // A second dispose from the caller reports any failure of this one.
     const stop = () => { activation.dispose().catch(() => {}) }
@@ -120,7 +122,10 @@ async function startOnHost(
       throw error
     }
   }
-  if (typeof subagents.start === 'function') return subagents.start(provider, request)
+  if (typeof subagents.start === 'function') {
+    const { name: _name, ...legacy } = request
+    return subagents.start(provider, legacy)
+  }
   throw new Error('This DSH has neither subagents.startActivation nor subagents.start, so dsh-mnemon cannot start its memory subagent; install a dsh-mnemon release that supports this DSH version')
 }
 

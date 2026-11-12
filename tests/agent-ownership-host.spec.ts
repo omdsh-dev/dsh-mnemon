@@ -88,6 +88,29 @@ async function fixture(provider: 'spawn' | 'fork', hold: boolean | ((options: Ge
   } }
 }
 
+it.skipIf(typeof SubagentRuntime.prototype !== 'object' || !('resolveName' in SubagentRuntime.prototype))('keeps repeated memory workers recognizable and addressable after completion (#616)', async () => {
+  const f = await fixture('spawn', false, true)
+  try {
+    await f.ctx.plugin((await import(requireDsh.resolve('@deepseek-ai/dsh-session-query'))).default)
+    const caller = f.parent as unknown as HostAgent
+    const signal = new AbortController().signal
+    const runs = await Promise.all([1, 2].map(() => f.coordinator.answer(caller, 'Synthetic question', [], signal)))
+    const service = f.ctx.subagents as unknown as {
+      listDescendants(id: string): Promise<Array<{ id: string; name: string }>>
+      resolveName(agent: unknown, name: string, signal: AbortSignal): Promise<string>
+    }
+    const catalog = await service.listDescendants(f.parent.id)
+    expect(catalog).toHaveLength(2)
+    expect(new Set(catalog.map(child => child.name)).size).toBe(2)
+    for (const child of catalog) {
+      expect(child.name).toMatch(/^mnemon-answer-[a-f0-9]{16}$/u)
+      expect(await service.resolveName(f.parent, child.name, signal)).toBe(child.id)
+      expect(runs.some(run => run.delegation.runId === child.id)).toBe(true)
+      expect(f.host.agents.get(child.id)).toBeUndefined()
+    }
+  } finally { await f.close() }
+})
+
 it.each(['spawn', 'fork'] as const)('adopts roots and runs an isolated guarded %s child using real Host ownership', async provider => {
   const f = await fixture(provider)
   try {
