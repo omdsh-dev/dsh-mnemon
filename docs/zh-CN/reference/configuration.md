@@ -78,7 +78,7 @@ mnemon:
     minIntervalMs: 300000
     maxPerSession: 20
     maxContextChars: 24000
-    maxTokens: 4096
+    maxTokens: 16384
   tabEnabled: true
   writeEnabled: true
   taskAgentModel:
@@ -130,7 +130,7 @@ mnemon:
 | `idleReview.minIntervalMs` | `300000` | 5000–86400000 ms | 两次尝试的最短间隔 |
 | `idleReview.maxPerSession` | `20` | 0–200 | 当前加载父 Agent 的尝试上限；显式启用持久化后按父会话保留；包括失败/取消 |
 | `idleReview.maxContextChars` | `24000` | 1000–1000000 | spawn 检查点字符上限 |
-| `idleReview.maxTokens` | `4096` | 128–131072 | 每次模型响应输出上限 |
+| `idleReview.maxTokens` | `16384` | 128–131072 | 每次模型响应输出上限 |
 | `displayMode` | `sidebar` | `sidebar` / `builtin`；兼容旧值 `buildin` | 记忆系统入口：独立 Sidebar 或会话内标签页，共用同一工作台；旧拼写自动迁移为 `builtin` |
 | `tabEnabled` | `true` | boolean | 是否挂载所选入口和工作台；关闭后 Host RPC、命令和 Agent 工具保持注册 |
 | `writeEnabled` | `true` | boolean | 是否暴露语义写工具、写 RPC 和写命令 |

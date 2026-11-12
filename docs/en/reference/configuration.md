@@ -78,7 +78,7 @@ mnemon:
     minIntervalMs: 300000
     maxPerSession: 20
     maxContextChars: 24000
-    maxTokens: 4096
+    maxTokens: 16384
   tabEnabled: true
   writeEnabled: true
   taskAgentModel:
@@ -130,7 +130,7 @@ mnemon:
 | `idleReview.minIntervalMs` | `300000` | 5000–86400000 ms | Minimum interval between attempts |
 | `idleReview.maxPerSession` | `20` | 0–200 | Attempt cap per loaded parent Agent, or persisted parent session when opted in; includes failures/cancellations |
 | `idleReview.maxContextChars` | `24000` | 1000–1000000 | Spawn checkpoint character limit |
-| `idleReview.maxTokens` | `4096` | 128–131072 | Per-response model output limit |
+| `idleReview.maxTokens` | `16384` | 128–131072 | Per-response model output limit |
 | `displayMode` | `sidebar` | `sidebar` / `builtin`; legacy `buildin` accepted | Where the Memory System opens: standalone Sidebar or a conversation tab using the same workspace UI; legacy spelling is migrated to `builtin` |
 | `tabEnabled` | `true` | boolean | Whether to mount the selected entry and workbench; Host RPC, commands, and Agent tools remain registered when off |
 | `writeEnabled` | `true` | boolean | Whether to expose semantic write tools, write RPC, and write commands |
