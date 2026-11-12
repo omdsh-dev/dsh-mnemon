@@ -16,10 +16,12 @@ const configuredConcurrency = process.env.MNEMON_PLUGIN_VERIFY_CONCURRENCY ?? '4
 assert.match(configuredConcurrency, /^[1-9]\d*$/, 'MNEMON_PLUGIN_VERIFY_CONCURRENCY must be a positive integer')
 const concurrency = Math.min(Number(configuredConcurrency), names.length)
 const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
-// An earlier release that installs on both supported DSH releases is the
-// realistic upgrade base; upgrading to the same version would test nothing.
+// Keep the historical upgrade coverage on the pinned Host. A newer Host can
+// select an earlier Mnemon release that already supports its removed APIs.
 const upgradeBase = '0.5.29'
-assert.notEqual(upgradeBase, manifest.version, 'The upgrade base must be an earlier release than the packed version')
+const selectedUpgradeBase = process.env.MNEMON_PLUGIN_UPGRADE_BASE ?? upgradeBase
+assert.match(selectedUpgradeBase, /^\d+\.\d+\.\d+$/, 'MNEMON_PLUGIN_UPGRADE_BASE must be a pinned release version')
+assert.notEqual(selectedUpgradeBase, manifest.version, 'The upgrade base must be an earlier release than the packed version')
 const temporary = await mkdtemp(join(tmpdir(), 'mnemon-plugin-artifacts-'))
 assert(!inside(root, temporary), 'The consumer must be outside the development workspace')
 const artifacts = new Map()
@@ -204,7 +206,7 @@ try {
     { label: 'real DSH Starter upgrade', priority: 10, action: () => run(process.execPath, [
       join(root, 'scripts/verify-headless-profile.mjs'),
       '--package', 'file:' + artifacts.get(manifest.name), '--registry', registryUrl,
-      '--upgrade-from', `dsh-mnemon@${upgradeBase}`, '--upgrade-registry', 'https://registry.npmjs.org',
+      '--upgrade-from', `dsh-mnemon@${selectedUpgradeBase}`, '--upgrade-registry', 'https://registry.npmjs.org',
     ], root, 'real DSH: install only the packed Starter and activate its plugins') },
     { label: 'real DSH Strategy composition', priority: 10, action: () => run(process.execPath, [
       join(root, 'scripts/verify-headless-profile.mjs'),

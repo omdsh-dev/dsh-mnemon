@@ -4,7 +4,7 @@
 
 ## 环境与命令
 
-插件的 Node engine 下限为 20；锁定的完整 DSH 开发 Profile 是已发布的 0.2.1-rc.5 候选版；该 Profile 与构建工具组合需要 Node `^22.19.0 || >=24.11.0`。DSH 0.2.2 RC 验收使用 Node 24.22.2。Root、Source Client 测试和外部制品消费者均使用该依赖族，`dsh-client-store` 提供子 Agent projection 适配器使用的公开 selector 类型。CI 另在 Node 20 冒烟导入公开 Node 入口。DSH 0.2.0-rc.2 同样受支持：`tests/dsh-host-compatibility.spec.ts` 对全部 19 个包的清单执行 DSH 自己的安装前兼容检查，覆盖受支持与不受支持的版本；CI 还会在 Node 22.19.0 上使用已安装的 0.2.0-rc.2、0.2.1-rc.3 和 0.2.1-rc.5 运行根测试。已发布的 0.2.2-rc.1 和 0.2.2-rc.2 CI 目标使用 Node 24.22.2；该 Host 要求 Node 24.9.0 或以上。不再对 alpha 版本进行兼容适配或 CI 验证。打包 Starter 同时在锁定基线、RC1 与 RC2 上验收，覆盖安装、保留数据的升级、设置保存与重启、停用 Starter 以及同时启用所有可选策略。开发依赖仍锁定 0.2.1-rc.5，以保留 Node 22 和旧版宿主验证。要自己在另一个安装上运行：
+插件的 Node engine 下限为 20；锁定的完整 DSH 开发 Profile 是已发布的 0.2.1-rc.5 候选版；该 Profile 与构建工具组合需要 Node `^22.19.0 || >=24.11.0`。DSH 0.2.2 RC 验收使用 Node 24.22.2。Root、Source Client 测试和外部制品消费者均使用该依赖族，`dsh-client-store` 提供子 Agent projection 适配器使用的公开 selector 类型。CI 另在 Node 20 冒烟导入公开 Node 入口。DSH 0.2.0-rc.2 同样受支持：`tests/dsh-host-compatibility.spec.ts` 对全部 19 个包的清单执行 DSH 自己的安装前兼容检查，覆盖受支持与不受支持的版本；CI 还会在 Node 22.19.0 上使用已安装的 0.2.0-rc.2、0.2.1-rc.3 和 0.2.1-rc.5 运行根测试。已发布的 0.2.2-rc.1 和 0.2.2-rc.2 CI 目标使用 Node 24.22.2；该 Host 要求 Node 24.9.0 或以上。不再对 alpha 版本进行兼容适配或 CI 验证。打包 Starter 同时在锁定基线、RC1 与 RC2 上验收，覆盖安装、保留数据的升级、设置保存与重启、停用 Starter 以及同时启用所有可选策略。RC2 打包验收设置 `MNEMON_PLUGIN_UPGRADE_BASE=0.5.43`，使用已支持 activation 所有权的升级源；基线、RC1 和发布流程仍保留 `0.5.29` 升级路径。开发依赖仍锁定 0.2.1-rc.5，以保留 Node 22 和旧版宿主验证。要自己在另一个安装上运行：
 
 ```sh
 npm install --global --prefix <目录> @deepseek-ai/dsh@0.2.0-rc.2

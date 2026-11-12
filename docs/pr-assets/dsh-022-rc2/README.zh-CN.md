@@ -20,6 +20,8 @@
 
 完整 `pnpm run verify` 通过：双语文档、类型、确定性构建、各独立插件测试、2,721 项基线根测试、隔离 Headless 启动及公开包检查。首次执行与 RC2 根测试并行时，既有 hung-backtest 用例触发五秒超时；单独复跑及完整串行复跑均通过，未修改该用例。打包验收及远程 CI 结果以 PR 对应提交的检查记录为准。
 
+旧升级源 `0.5.29` 无法在 RC2 上登记记忆工具，因此 RC2 制品任务使用已包含 activation 所有权适配的 `0.5.43`。从已发布 `0.5.43` 升级到本次打包 Client 的隔离验证通过，运行时记忆字节不变。基线、RC1 和发布任务仍保留较长的 `0.5.29` 迁移路径。这调整的是验收夹具，不改变插件安装策略。
+
 ## 本地复现
 
 ```sh
@@ -27,7 +29,7 @@ pnpm install --frozen-lockfile
 pnpm run verify
 npm install --global --prefix /tmp/dsh-rc2-acceptance @deepseek-ai/dsh@0.2.2-rc.2
 DSH_HOST_ROOT=/tmp/dsh-rc2-acceptance/lib/node_modules/@deepseek-ai/dsh pnpm run test:installed-dsh
-MNEMON_E2E_DSH=/tmp/dsh-rc2-acceptance/lib/node_modules/@deepseek-ai/dsh/lib/bin.js pnpm run verify:plugins
+MNEMON_E2E_DSH=/tmp/dsh-rc2-acceptance/lib/node_modules/@deepseek-ai/dsh/lib/bin.js MNEMON_PLUGIN_UPGRADE_BASE=0.5.43 pnpm run verify:plugins
 MNEMON_E2E_DSH=/tmp/dsh-rc2-acceptance/lib/node_modules/@deepseek-ai/dsh/lib/bin.js node scripts/serve-e2e.mjs --docs-demo --log-model-requests
 ```
 

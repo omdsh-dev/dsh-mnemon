@@ -213,5 +213,7 @@ jobs:
       - name: Verify packed and independently installed plugins
         env:
           MNEMON_PLUGIN_VERIFY_CONCURRENCY: '2'
+          # 0.5.29 predates activation-owned Agents and cannot start on RC2.
+          MNEMON_PLUGIN_UPGRADE_BASE: ${{ matrix.dsh == '0.2.2-rc.2' && '0.5.43' || '0.5.29' }}
           MNEMON_E2E_DSH: ${{ steps.installed_dsh.outputs.binary }}
         run: pnpm run verify:plugins

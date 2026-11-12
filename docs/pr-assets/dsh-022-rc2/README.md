@@ -20,6 +20,8 @@ The updated RC2 root suite passes **2,721 tests**, with 8 conditional skips. The
 
 Full `pnpm run verify` passes: bilingual docs, types, deterministic builds, all independent plugin tests, 2,721 baseline root tests, isolated Headless startup and public package checks. An initial run overlapped the RC2 root suite and hit the existing hung-backtest test's five-second deadline; its focused rerun and the complete sequential rerun passed without changing that test. Packed acceptance and remote CI results are recorded against the PR commit.
 
+The old `0.5.29` upgrade seed cannot register its memory tools on RC2, so the RC2 artifact job uses `0.5.43`, which contains the activation-owned Host adapter. The isolated upgrade from published `0.5.43` to this packed Client passes with Runtime Memory bytes unchanged. The baseline, RC1 and publication jobs retain the longer `0.5.29` migration path. This changes the acceptance fixture, not the plugin’s install policy.
+
 ## Reproduce locally
 
 ```sh
@@ -27,7 +29,7 @@ pnpm install --frozen-lockfile
 pnpm run verify
 npm install --global --prefix /tmp/dsh-rc2-acceptance @deepseek-ai/dsh@0.2.2-rc.2
 DSH_HOST_ROOT=/tmp/dsh-rc2-acceptance/lib/node_modules/@deepseek-ai/dsh pnpm run test:installed-dsh
-MNEMON_E2E_DSH=/tmp/dsh-rc2-acceptance/lib/node_modules/@deepseek-ai/dsh/lib/bin.js pnpm run verify:plugins
+MNEMON_E2E_DSH=/tmp/dsh-rc2-acceptance/lib/node_modules/@deepseek-ai/dsh/lib/bin.js MNEMON_PLUGIN_UPGRADE_BASE=0.5.43 pnpm run verify:plugins
 MNEMON_E2E_DSH=/tmp/dsh-rc2-acceptance/lib/node_modules/@deepseek-ai/dsh/lib/bin.js node scripts/serve-e2e.mjs --docs-demo --log-model-requests
 ```
 
