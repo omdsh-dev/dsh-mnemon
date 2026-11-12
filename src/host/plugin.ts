@@ -91,14 +91,19 @@ export function apply(rawContext: unknown, rawConfig: MnemonConfig | LiveHostCon
   const memoryPlugins = new MemoryPluginManagement(ctx, extensions, hostSettings)
   const pluginInstallation = new MemoryPluginInstallation(ctx)
   const effectiveConfig = (value: MnemonConfig) => memoryPlugins.resolveConfig(resolveConfig(value), value.memoryView ?? { entries: {} })
+  // 技能管理's settings: read at every turn and review, so a change applies at once.
+  const skillSettings = hostSettings.register<ResolvedSkillsConfig>('mnemon-skills', SkillsConfig, {
+    base: { ...DEFAULT_SKILLS_CONFIG },
+    applies: 'live',
+  })
   const settings = hostSettings.register<MnemonConfig>('mnemon', PlainConfig, {
     base: config,
     applies: 'live',
     // Profile writes commit asynchronously. Check that the candidate composes
     // now, then build from the committed live references on volatile-update.
-    validate: value => createRuntimeGraph(effectiveConfig(value), undefined, extensions).dispose(),
+    validate: value => createRuntimeGraph(effectiveConfig(value), undefined, extensions, skillSettings.get().allowLinkedUpdates).dispose(),
   })
-  const runtime = new LiveMnemonRuntime(createRuntimeGraph(effectiveConfig(settings.get()), undefined, extensions), optionalWorkspaceRegistry(ctx), ctx.agents, extensions)
+  const runtime = new LiveMnemonRuntime(createRuntimeGraph(effectiveConfig(settings.get()), undefined, extensions, skillSettings.get().allowLinkedUpdates), optionalWorkspaceRegistry(ctx), ctx.agents, extensions)
   runtime.useGitHubAuth(optionalGitHubAuth(ctx))
   // The automatic Git backup is one timer for the whole Host, not one per
   // graph: a settings write builds and disposes a throwaway graph to validate
@@ -108,21 +113,22 @@ export function apply(rawContext: unknown, rawConfig: MnemonConfig | LiveHostCon
   runtime.useAutoBackup(() => autoBackup.snapshot())
   const resolved = runtime.config
   ctx.effect(() => hostSettings.onUpdated((namespace, value) => {
+    if (namespace === 'mnemon-skills') {
+      if (runtime.snapshot().allowLinkedSkillUpdates !== skillSettings.get().allowLinkedUpdates) {
+        runtime.swap(createRuntimeGraph(effectiveConfig(settings.get()), undefined, extensions, skillSettings.get().allowLinkedUpdates))
+      }
+      return
+    }
     if (namespace === memoryPlugins.settingsNamespace) {
-      runtime.swap(createRuntimeGraph(effectiveConfig(settings.get()), undefined, extensions))
+      runtime.swap(createRuntimeGraph(effectiveConfig(settings.get()), undefined, extensions, skillSettings.get().allowLinkedUpdates))
       return
     }
     if (namespace !== 'mnemon') return
-    runtime.swap(createRuntimeGraph(effectiveConfig(value as MnemonConfig), undefined, extensions))
+    runtime.swap(createRuntimeGraph(effectiveConfig(value as MnemonConfig), undefined, extensions, skillSettings.get().allowLinkedUpdates))
   }), 'dsh-mnemon: live runtime settings')
   ctx.effect(() => memoryPlugins.start(), 'dsh-mnemon: plugin graph settings')
   hostSettings.register('mnemon-ui', InteractionConfig, {
     base: resolveInteractionConfig(resolved.conversationInteraction),
-    applies: 'live',
-  })
-  // 技能管理's settings: read at every turn and review, so a change applies at once.
-  const skillSettings = hostSettings.register<ResolvedSkillsConfig>('mnemon-skills', SkillsConfig, {
-    base: { ...DEFAULT_SKILLS_CONFIG },
     applies: 'live',
   })
   ctx.effect(() => {

@@ -45,7 +45,7 @@
     "skills.noConversation": "打开一个对话后再使用技能",
     "skills.toggle": "启用 {name}",
     "skills.linked": "链接 · 只读",
-    "skills.linkedReadOnly": "此技能通过链接引入，仅供读取和使用。请在原仓库中编辑，或改用本地副本后再进行演进。",
+    "skills.linkedReadOnly": "此链接技能默认只读。如需更新原始文件，可在技能设置中对可信目标开启“允许更新链接技能”，或改用本地副本。",
     "skills.shadowed": "被覆盖",
     "skills.shadowedBy": "DSH 加载的是同名的 {key}，这个文件不会生效。",
     "skills.waitingCount": "{count} 条改进建议待处理",
@@ -393,7 +393,9 @@
     "triage.choose": "展开一次性候选以查看建议",
     "triage.facts": "{windows} 段证据 · {sessions} 个会话 · {steps} 个引用步骤",
     "triage.rules": "确定性规则：至少 3 段证据、20 个引用步骤且置信度不低于 0.8 时标为可复用；仅 1 段且不足 20 步时标为一次性，其余保留为需要判断。",
-    "triage.soft": "分类仅用于排序与折叠，不删除建议，也不限制手动处理；不确定的建议仍然显示。"
+    "triage.soft": "分类仅用于排序与折叠，不删除建议，也不限制手动处理；不确定的建议仍然显示。",
+    "skills.linkedWritable": "更新会写回链接技能的原始文件，影响所有共享它的 Agent。可在技能设置中关闭。",
+    "skills.linkedEditable": "链接"
   },
   "en": {
     "page.title": "Skills",
@@ -441,7 +443,7 @@
     "skills.noConversation": "Open a conversation to use a skill",
     "skills.toggle": "Turn on {name}",
     "skills.linked": "Linked · read-only",
-    "skills.linkedReadOnly": "This skill is linked and can be read and used. Edit it in its source repository, or use a local copy before evolving it.",
+    "skills.linkedReadOnly": "This linked skill is read-only. To update its original file, enable Allow linked skill updates in Skills settings for trusted targets, or use a local copy.",
     "skills.shadowed": "Shadowed",
     "skills.shadowedBy": "DSH loads {key} of the same name; this file has no effect.",
     "skills.waitingCount": "{count} {count:improvement|improvements} waiting",
@@ -789,6 +791,8 @@
     "triage.choose": "Expand one-off candidates to review suggestions",
     "triage.facts": "{windows} evidence windows · {sessions} sessions · {steps} cited steps",
     "triage.rules": "Deterministic rules: reusable at 3+ windows, 20+ cited steps and confidence 0.8+; one-off with 1 window and fewer than 20 steps. Everything else needs judgment.",
-    "triage.soft": "Grouping only changes ordering and folding. Suggestions and manual actions remain available, and uncertain suggestions stay visible."
+    "triage.soft": "Grouping only changes ordering and folding. Suggestions and manual actions remain available, and uncertain suggestions stay visible.",
+    "skills.linkedWritable": "Updates write to the original linked skill and affect every Agent sharing it. You can turn this off in Skills settings.",
+    "skills.linkedEditable": "Linked"
   }
 }

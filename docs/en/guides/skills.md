@@ -14,7 +14,7 @@ A skill is a folder with a `SKILL.md`, in the [Agent Skills](https://agentskills
 
 The screens below come from the [v0.5.34 Skills gallery](../../assets/skills-v0.5.34/README.md), captured on the fictional Lumen project: the assistant wrote release notes with the `release-notes` skill, the user corrected the format, and self-evolution took it from there.
 
-Linked skill roots, bundle directories and `SKILL.md` files remain visible and usable, but are read-only in Mnemon. They do not produce update suggestions or improvement drafts; existing drafts cannot be adopted into a linked target. Edit the original repository, or replace the link with a local copy before evolving the skill. Mnemon rechecks the target when recording and adopting a draft; ordinary local skills keep their current workflow.
+Linked skill roots, bundle directories and `SKILL.md` files stay visible and usable, and are read-only by default. To optimize a trusted shared skill, enable **Allow linked skill updates** in **Plugins → dsh-mnemon → Skills** (`skills.allowLinkedUpdates`, default `false`). Editing, invocation changes, version restoration and draft adoption then update the resolved original file without replacing the link, affecting every Agent sharing it. Content hashes and confirmed management revisions still reject stale writes. Self-evolution and automatic adoption still require their separate switches. Turning this off blocks later linked updates and adoption again; existing changes and version history remain. New skill creation or installation into linked roots, and trash/removal rules, do not change. Ordinary local skills keep their workflow. Independent Skills Source instances can set their own `allowLinkedUpdates` option.
 
 ## The Skills page
 

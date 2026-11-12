@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { existsSync, lstatSync, readdirSync, readFileSync, statSync, type Dirent } from 'node:fs'
+import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSync, type Dirent } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
 import { SKILL_ROOT_KINDS, SKILL_ROOT_RANK, type SkillCatalog, type SkillDocument, type SkillProblem, type SkillRoot, type SkillRootKind, type SkillSummary } from './contracts.ts'
@@ -12,6 +12,8 @@ export interface SkillRootOptions {
   agentsHome?: string
   /** The workspace whose project roots are read; none means user roots only. */
   workspace?: string
+  /** Explicit permission to update existing linked skill documents. Defaults off. */
+  allowLinkedUpdates?: boolean
 }
 
 const MAX_FILE_BYTES = 1024 * 1024
@@ -57,7 +59,7 @@ export function sha256(content: string | Buffer): string {
   return createHash('sha256').update(content).digest('hex')
 }
 
-/** Links at the skill root, bundle directory or document are readable, never writable.
+/** Detect links at the skill root, bundle directory or document.
  * Do not resolve OS aliases (for example macOS /tmp) or compare path casing. */
 export function linkedSkill(rootPath: string, path: string): boolean {
   return [rootPath, dirname(path), path].some(candidate => lstatSync(candidate).isSymbolicLink())
@@ -71,8 +73,12 @@ export function requireWritableRoot(path: string): void {
   }
 }
 
-export function requireWritableSkill(skill: Pick<SkillSummary, 'rootPath' | 'path'>): void {
-  if (linkedSkill(skill.rootPath, skill.path)) throw new Error('Linked skills are read-only; edit the original skill in its source repository or use a local copy.')
+export function requireWritableSkill(skill: Pick<SkillSummary, 'rootPath' | 'path'>, allowLinkedUpdates = false): string {
+  if (!linkedSkill(skill.rootPath, skill.path)) return skill.path
+  if (!allowLinkedUpdates) throw new Error('Linked skills are read-only; edit the original skill in its source repository or use a local copy.')
+  // Resolve before checking the hash and atomically replacing the document.
+  // Renaming onto the logical SKILL.md path would destroy a file symlink.
+  return realpathSync(skill.path)
 }
 
 function entryKind(root: string, entry: Dirent): 'directory' | 'file' | undefined {
@@ -150,7 +156,7 @@ export function readCatalog(options: SkillRootOptions): SkillCatalog {
         rootPath: root.path,
         path,
         layout,
-        ...(readOnly ? { readOnly: true } : {}),
+        ...(readOnly ? { linked: true, ...(options.allowLinkedUpdates === true ? {} : { readOnly: true }) } : {}),
         invocation: parsed.skill.invocation,
         hash: sha256(raw),
         bytes: raw.byteLength,
@@ -175,6 +181,7 @@ export function readCatalog(options: SkillRootOptions): SkillCatalog {
 /** A cheap fingerprint of the roots: names, sizes and times, no content. */
 export function catalogFingerprint(options: SkillRootOptions): string {
   const hash = createHash('sha256')
+  hash.update(`linked-updates:${options.allowLinkedUpdates === true}\0`)
   for (const root of skillRoots(options).roots) {
     hash.update(`${root.kind}\0${root.path}\0`)
     let entries: Dirent[]

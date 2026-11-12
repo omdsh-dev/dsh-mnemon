@@ -81,6 +81,7 @@ export const SkillsConfig: z<Partial<ResolvedSkillsConfig>, ResolvedSkillsConfig
   allowCreate: z.boolean().default(DEFAULT_SKILLS_CONFIG.allowCreate),
   allowUpdate: z.boolean().default(DEFAULT_SKILLS_CONFIG.allowUpdate),
   targetScope: z.union(['storage', 'user', 'project'] as const).default(DEFAULT_SKILLS_CONFIG.targetScope),
+  allowLinkedUpdates: z.boolean().default(DEFAULT_SKILLS_CONFIG.allowLinkedUpdates),
   autoBacktest: z.boolean().default(DEFAULT_SKILLS_CONFIG.autoBacktest),
   autoAdopt: z.boolean().default(DEFAULT_SKILLS_CONFIG.autoAdopt),
   autoAdoptDailyLimit: z.number().step(1).min(0).max(100).default(DEFAULT_SKILLS_CONFIG.autoAdoptDailyLimit),

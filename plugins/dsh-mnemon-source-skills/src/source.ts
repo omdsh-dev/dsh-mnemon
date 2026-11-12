@@ -16,6 +16,8 @@ export interface Config {
   dshHome?: string
   /** The shared agents home; defaults to `$DSH_AGENTS_HOME`, then `~/.agents`. */
   agentsHome?: string
+  /** Opt in to updating original files of existing symlink/junction skills. */
+  allowLinkedUpdates?: boolean
 }
 
 function workspace(scope: { workspaceId?: string }): string | undefined {
@@ -269,9 +271,11 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
     },
     create(context) {
       const effective = { ...context.configuration, ...configured } as Config
+      if (effective.allowLinkedUpdates !== undefined && typeof effective.allowLinkedUpdates !== 'boolean') throw new Error('Skills Source allowLinkedUpdates must be a boolean')
       const service = new SkillsService(skillsDataDir(effective, context.sourceInstanceKey), {
         ...(effective.dshHome === undefined ? {} : { dshHome: effective.dshHome }),
         ...(effective.agentsHome === undefined ? {} : { agentsHome: effective.agentsHome }),
+        allowLinkedUpdates: effective.allowLinkedUpdates === true,
       })
       // A Host that went away mid-write left its suggestion stuck in `drafting`
       // and refuses both a retry and a delete; put those back before anything reads.

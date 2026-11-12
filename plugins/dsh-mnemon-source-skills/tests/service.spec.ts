@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { lstatSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -25,8 +25,8 @@ function write(path: string, content: string): void {
   writeFileSync(path, content)
 }
 
-function service(): SkillsService {
-  return new SkillsService(data, { dshHome: home, agentsHome: agents }, () => now)
+function service(allowLinkedUpdates = false): SkillsService {
+  return new SkillsService(data, { dshHome: home, agentsHome: agents, allowLinkedUpdates }, () => now)
 }
 
 function review(overrides: Partial<ReviewRecordInput> = {}): ReviewRecordInput {
@@ -940,6 +940,29 @@ describe('linked skills are read-only', () => {
       expect(existsSync(join(root, 'upstream', 'new-skill'))).toBe(false)
     }
     expect(readFileSync(upstreamFile, 'utf8')).toBe(original)
+
+    const enabled = service(true)
+    expect(enabled.catalog(undefined).skills[0]).toMatchObject({ linked: true })
+    expect(enabled.catalog(undefined).skills[0]?.readOnly).toBeUndefined()
+    const saved = await enabled.saveSkill(undefined, { key: loaded.key, expectedHash: loaded.hash, content: changed })
+    expect(readFileSync(upstreamFile, 'utf8')).toBe(changed)
+    await expect(enabled.saveSkill(undefined, { key: loaded.key, expectedHash: loaded.hash, content: original })).rejects.toThrow('changed since it was read')
+    const toggled = await enabled.setInvocation(undefined, { key: saved.key, expectedHash: saved.hash, modelInvocable: false, userInvocable: true })
+    expect(readFileSync(upstreamFile, 'utf8')).toContain('disable-model-invocation: true')
+    const version = enabled.store.ledger().versions.find(version => version.hash === loaded.hash)!
+    const restored = await enabled.restoreVersion(undefined, { key: saved.key, expectedHash: toggled.hash, versionId: version.id })
+    expect(readFileSync(upstreamFile, 'utf8')).toBe(original)
+    const draft = await enabled.recordDraft(undefined, { skillName: loaded.name, content: changed, notes: '', changes: [], guidance: [] })
+    await expect(service().adoptDraft(undefined, draft.id)).rejects.toThrow('Linked skills are read-only')
+    expect(readFileSync(upstreamFile, 'utf8')).toBe(original)
+    await enabled.adoptDraft(undefined, draft.id)
+    expect(readFileSync(upstreamFile, 'utf8')).toBe(changed)
+    const link = layout === 'root' ? skillsRoot : layout === 'flat' ? entry + '.md' : layout === 'document' ? join(entry, 'SKILL.md') : entry
+    expect(lstatSync(link).isSymbolicLink()).toBe(true)
+    expect(restored.hash).toBe(loaded.hash)
+    const admitted = await enabled.recordReview(undefined, review())
+    expect(admitted.skipped.some(item => item.reason === 'linked_skill')).toBe(false)
+    if (layout === 'root') await expect(enabled.createSkill(undefined, { name: 'new-skill', description: 'New' })).rejects.toThrow('Linked skill roots are read-only')
   })
 
   it('rejects an existing draft after its unchanged target becomes a linked directory', async () => {

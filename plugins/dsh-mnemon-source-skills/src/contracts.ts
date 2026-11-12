@@ -35,7 +35,9 @@ export interface SkillSummary {
   /** The SKILL.md of a bundle, or the flat Markdown file. */
   path: string
   layout: 'bundle' | 'flat'
-  /** A linked root, bundle or document may be read but never rewritten. */
+  /** The root, bundle or document is a symbolic link or junction. */
+  linked?: boolean
+  /** Updating this skill is not permitted by the current Source configuration. */
   readOnly?: boolean
   invocation: SkillInvocation
   /** SHA-256 of the file's exact content. */

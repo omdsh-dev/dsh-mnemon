@@ -387,10 +387,10 @@ export class SkillsService {
   saveSkill(workspace: string | undefined, input: { key: string; content: string; expectedHash: string }): Promise<SkillSummary> {
     return this.write(() => {
       const skill = findSkill(this.catalog(workspace), input.key)
-      requireWritableSkill(skill)
-      const previous = this.requireHash(skill, input.expectedHash)
+      const path = requireWritableSkill(skill, this.roots.allowLinkedUpdates)
+      const previous = this.requireHash({ ...skill, path }, input.expectedHash)
       validateSkillContent(input.content, skill.name)
-      writeFileAtomic(skill.path, input.content)
+      writeFileAtomic(path, input.content)
       const ledger = this.store.ledger()
       this.recordVersion(ledger, skill.key, input.content, 'edit', previous)
       this.store.saveLedger(ledger)
@@ -401,11 +401,11 @@ export class SkillsService {
   setInvocation(workspace: string | undefined, input: { key: string; modelInvocable: boolean; userInvocable: boolean; expectedHash: string }): Promise<SkillSummary> {
     return this.write(() => {
       const skill = findSkill(this.catalog(workspace), input.key)
-      requireWritableSkill(skill)
-      const previous = this.requireHash(skill, input.expectedHash)
+      const path = requireWritableSkill(skill, this.roots.allowLinkedUpdates)
+      const previous = this.requireHash({ ...skill, path }, input.expectedHash)
       const content = withInvocation(previous, { modelInvocable: input.modelInvocable, userInvocable: input.userInvocable })
       validateSkillContent(content, skill.name)
-      writeFileAtomic(skill.path, content)
+      writeFileAtomic(path, content)
       const ledger = this.store.ledger()
       this.recordVersion(ledger, skill.key, content, 'invocation', previous)
       this.store.saveLedger(ledger)
@@ -563,14 +563,14 @@ export class SkillsService {
   restoreVersion(workspace: string | undefined, input: { key: string; versionId: string; expectedHash: string }): Promise<SkillSummary> {
     return this.write(() => {
       const skill = findSkill(this.catalog(workspace), input.key)
-      requireWritableSkill(skill)
-      const previous = this.requireHash(skill, input.expectedHash)
+      const path = requireWritableSkill(skill, this.roots.allowLinkedUpdates)
+      const previous = this.requireHash({ ...skill, path }, input.expectedHash)
       const ledger = this.store.ledger()
       const version = ledger.versions.find(candidate => candidate.skillKey === skill.key && candidate.id === input.versionId)
       if (version === undefined) throw new Error('version not found: ' + input.versionId)
       const content = this.store.versionContent(version)
       validateSkillContent(content, skill.name)
-      writeFileAtomic(skill.path, content)
+      writeFileAtomic(path, content)
       this.recordVersion(ledger, skill.key, content, 'restore', previous, { note: version.id })
       this.store.saveLedger(ledger)
       return findSkill(this.catalog(workspace), skill.key)
@@ -825,7 +825,7 @@ export class SkillsService {
       this.requireExpectedDraft(ledger, suggestion, input.expectedDraft)
       const original = prior?.action === 'update' ? this.draftOriginal(ledger, prior) : suggestion?.action === 'update' ? this.suggestionOriginal(ledger, suggestion) : undefined
       const loaded = original === undefined ? activeSkill(catalog, input.skillName) : this.requireOriginal(original)
-      if (loaded !== undefined) requireWritableSkill(loaded)
+      if (loaded !== undefined) requireWritableSkill(loaded, this.roots.allowLinkedUpdates)
       if (input.expectedBaseHash !== undefined && (loaded?.hash ?? null) !== input.expectedBaseHash) throw new Error('The skill changed while this draft was being generated; regenerate it from the current file')
       const origin = loaded === undefined ? undefined : original?.origin ?? skillOrigin(catalog, loaded)
       for (const draft of ledger.drafts) {
@@ -922,9 +922,9 @@ export class SkillsService {
       if (draft.action === 'update') {
         const original = this.draftOriginal(ledger, draft)
         const base = this.requireOriginal(original)
-        requireWritableSkill(base)
-        previous = this.requireHash(base, draft.baseHash)
-        writeFileAtomic(base.path, draft.content)
+        const path = requireWritableSkill(base, this.roots.allowLinkedUpdates)
+        previous = this.requireHash({ ...base, path }, draft.baseHash)
+        writeFileAtomic(path, draft.content)
         key = base.key
         updated = findSkill(this.catalog(original.origin?.workspace), key)
       } else {

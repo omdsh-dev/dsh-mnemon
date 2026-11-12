@@ -22,6 +22,17 @@ const locale = { active: 'en' as const, locales: [], revision: 0 }
 const localeRuntime = { getSnapshot: () => locale, subscribe: () => () => {} }
 
 describe('技能管理 settings under Plugins', () => {
+  it('keeps linked updates off by default and saves an explicit opt-in while evolution is off', async () => {
+    const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: {}, revision: 1, writable: true, mode: 'host' })
+    render(<SkillsSettings scope={scope} page={page} t={t} />)
+    const toggle = screen.getByRole('switch', { name: t('skills.allowLinkedUpdates') })
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(toggle)
+    await waitFor(() => expect(scope.getSnapshot().value?.allowLinkedUpdates).toBe(true))
+    fireEvent.click(toggle)
+    await waitFor(() => expect(scope.getSnapshot().value?.allowLinkedUpdates).toBe(false))
+  })
+
   it('stages daily candidate and time zone settings and keeps invalid values off the Host', async () => {
     const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: { evolution: true }, revision: 1, writable: true, mode: 'host' })
     render(<SkillsSettings scope={scope} page={page} t={t} />)
@@ -83,6 +94,7 @@ describe('技能管理 settings under Plugins', () => {
     expect(screen.getByRole('button', { name: `${t('skills.targetScope')} ${t('skills.targetScope.user')}` })).toHaveProperty('disabled', true)
     expect(screen.getByLabelText('Draft output token limit')).toHaveProperty('disabled', true)
     expect(screen.getByLabelText('Retry output token limit')).toHaveProperty('disabled', true)
+    expect(screen.getByRole('switch', { name: t('skills.allowLinkedUpdates') })).toHaveProperty('disabled', true)
     expect(writes).not.toHaveBeenCalled()
   })
 
