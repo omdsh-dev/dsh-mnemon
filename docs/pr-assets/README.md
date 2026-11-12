@@ -12,6 +12,7 @@ For new evaluations, commit the reusable harness and workload generator to [`scr
 
 | Record / 记录 | Scope / 范围 |
 |---|---|
+| [v0.5.45 release](./release-v0.5.45/README.md) / [中文](./release-v0.5.45/README.zh-CN.md) | Six published Hosts, 12 fresh/upgrade scenarios and preserved Runtime data / 六个正式 Host、12 个全新安装/升级场景与 Runtime 数据保留 |
 | [v0.5.44 release](./release-v0.5.44/README.md) / [中文](./release-v0.5.44/README.zh-CN.md) | Integrated regression, fresh installation and preserved-data upgrades / 整合回归、全新安装与保留数据升级 |
 | [v0.5.43 release](./release-v0.5.43/README.md) / [中文](./release-v0.5.43/README.zh-CN.md) | Twelve fresh/upgrade scenarios, exact candidate files and preserved Runtime data on five official Hosts and the fixed source commit / 五个官方 Host 与指定源码 commit 的十二个安装升级场景、制品文件及 Runtime 数据保留 |
 | [Compact plugin settings introduction](./compact-plugin-detail/README.md) / [中文](./compact-plugin-detail/README.zh-CN.md) | Localized meta.detail selection and a real Host screenshot / 本地化 meta.detail 选择及真实 Host 截图 |
