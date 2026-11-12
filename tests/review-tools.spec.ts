@@ -1,3 +1,4 @@
+import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import type { HostAgent, HostSubagentRun, ToolExecution } from '../src/host/dsh.ts'
 import { idleReviewBlockReason, reviewLayerPolicy, startGuardedChild, startGuardedReview, type ReviewToolHost } from '../src/host/review-tools.ts'
@@ -42,6 +43,20 @@ function fixture() {
 }
 
 describe('review publication and execution boundary', () => {
+  it.each(['parent', 'child'] as const)('refuses a disposed %s without installing a tool guard', async target => {
+    const f = fixture(), child = f.child('disposed-child')
+    const ctx = new Context()
+    const fiber = await ctx.plugin({ name: 'mnemon-disposed-context', apply() {} })
+    await fiber.dispose()
+    const agent = target === 'parent' ? f.parent : child.agent
+    Object.assign(agent, { ctx: { ...agent.ctx, fiber } })
+    const start = vi.fn(async () => { f.publish(child.agent); return child.run })
+    await expect(startGuardedReview(f.host, f.parent, ['allowed'], start)).rejects.toThrow('cannot create effect on inactive context')
+    expect(start).toHaveBeenCalledTimes(target === 'parent' ? 0 : 1)
+    expect(child.guards.size).toBe(0)
+    expect(f.listeners.size).toBe(0)
+  })
+
   it.each([false, true])('respects the enabled Team task-board API without the retired teammate tool: %s', enabled => {
     const team = { isEnabled: vi.fn(() => enabled) }
     const parent = { ctx: { get: () => team, tools: { get: (name: string) => name === 'team_task_create' ? {} : undefined } } } as unknown as HostAgent

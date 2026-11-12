@@ -111,6 +111,7 @@ export async function startGuardedChild(
   guard: (execution: ToolExecution) => string | undefined,
   options: GuardedChildOptions,
 ): Promise<HostSubagentRun> {
+  parent.ctx?.fiber?.assertActive()
   const { purpose, published } = options
   const agents = host.agents
   const reserved = activationOwned(host.subagents)
@@ -128,6 +129,9 @@ export async function startGuardedChild(
     if (startingChild.getStore() !== pending) return
     if (reserved ? agent.id !== expectedChildId || !isReservedChild(agents, parent, agent) : !agents!.isOwnedBy!(agent.id, parent)) return
     try {
+      // Never continue an unguarded child when publication races teardown.
+      parent.ctx?.fiber?.assertActive()
+      agent.ctx?.fiber?.assertActive()
       const tools = agent.ctx?.tools
       if (typeof tools?.guard !== 'function') {
         if (options.optional === true && !reserved) return

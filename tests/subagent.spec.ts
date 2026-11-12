@@ -1979,6 +1979,17 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(coordinator.snapshot().failures).toBe(0)
   })
 
+  it.each(['start', 'dispose'] as const)('does not count an inactive-context review %s as a failure', async phase => {
+    const host = subagents({ summary: 'No mutation.', action: 'skipped', memoryBodyIds: [] })
+    const error = Object.assign(new Error('cannot create effect on inactive context'), { code: 'INACTIVE_EFFECT' })
+    if (phase === 'start') host.start.mockRejectedValueOnce(error)
+    else host.dispose.mockRejectedValueOnce(error)
+    const coordinator = createCoordinator(host.value)
+    await expect(coordinator.review(parent(), new AbortController().signal)).rejects.toMatchObject({ cause: error, review: { status: 'failed', receipts: [] } })
+    expect(coordinator.snapshot()).toMatchObject({ failures: 0, reviews: 0 })
+    expect(host.start).toHaveBeenCalledOnce()
+  })
+
   it('does not report review success when child disposal fails', async () => {
     const host = subagents({ summary: 'No mutation.', action: 'skipped', memoryBodyIds: [] })
     host.dispose.mockRejectedValueOnce(new Error('child disposal failed'))

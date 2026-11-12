@@ -445,6 +445,8 @@ Bounded spawn reads live-user evidence from the public flat `user/message` event
 Failed reviews remain failures. The workspace shows the child run id and committed mutation receipt metadata when writes happened before failure, including a committed inner tool followed by a failed Code Mode wrapper. No rollback or automatic replay occurs. Inspect the run and the listed document ids or Runtime revisions before any manual retry. A later review still respects the cooldown and session budget. To disable only this maintenance pass, turn off **Idle review** on the Layered strategy's page, or set `idleReview.enabled: false`.
 
 
+When a conversation closes or switches away, an already disposed Agent cannot start idle review. A stale timer is skipped without reserving an attempt. If teardown races asynchronous preparation, an inactive-context error with no committed writes is cancellation and adds no failure banner; an already reserved attempt/cooldown is retained, consistently with crash and cancellation accounting above. Partial writes still produce reconciliation receipts and a warning, and no cancelled review is replayed automatically.
+
 ## Read-Only Configuration
 
 ```yaml

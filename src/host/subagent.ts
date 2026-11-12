@@ -18,7 +18,7 @@ import type { ComposableMemoryTurn } from '../core/turns.ts'
 import { idleReviewBlockReason, reviewLayerPolicy, startGuardedChild, startGuardedReview, type ReviewToolHost } from './review-tools.ts'
 import { reviewCheckpoint } from './review-checkpoint.ts'
 import { startWithContinuationTurns } from './continuation-turn.ts'
-import { configuredProviderNames, isTaskRecord, type ProviderConfigurationHost } from './agent-compat.ts'
+import { configuredProviderNames, contextIsActive, isInactiveContextError, isTaskRecord, type ProviderConfigurationHost } from './agent-compat.ts'
 import { childComposition, startSubagent, type SubagentStartAgents } from './subagent-start.ts'
 import type { IdleReviewFailure, MemoryToolName } from './protocol.ts'
 import { assertDshOutputSchema, assertDshOutputValue } from './subagent-output-schema.ts'
@@ -352,7 +352,7 @@ export class MnemonSubagentCoordinator {
 
   /** User continuation is a fresh scoped turn, never revival of a delegated run. */
   continueTask(agent: HostAgent): void {
-    if (this.continuations.has(agent) || this.disposed) return
+    if (this.continuations.has(agent) || this.disposed || !contextIsActive(agent.ctx)) return
     if (typeof agent.ctx.effect !== 'function' || this.resultRuntime?.agents?.get === undefined) {
       agent.ctx.tools?.guard?.(execution => execution.name?.startsWith('mnemon_') ? FINISHED_TASK_REFUSAL : undefined)
       return
@@ -375,7 +375,7 @@ export class MnemonSubagentCoordinator {
   /** Spawn may use an independent tool scope, so transfer the turn guard explicitly. */
   inheritTaskContinuation(parent: HostAgent, child: HostAgent): void {
     const owner = this.continuationOwners.get(parent)
-    if (owner === undefined || this.continuations.has(child)) return
+    if (owner === undefined || this.continuations.has(child) || !contextIsActive(parent.ctx) || !contextIsActive(child.ctx)) return
     let dispose: () => unknown
     dispose = child.ctx.effect(() => {
       const stop = child.ctx.tools?.guard?.(execution => owner.guard(execution))
@@ -1125,8 +1125,8 @@ This is the only completion channel for this run. Do not finish with a plain-tex
         writes: writeReceipts.filter(receipt => receipt.agentId === activeRun.id),
       }
     } catch (error) {
-      this.counters.failures += 1
       const receipts = reviewReceipts.map(reviewReceipt).filter((receipt): receipt is NonNullable<typeof receipt> => receipt !== undefined)
+      if (operation !== 'review' || receipts.length > 0 || !isInactiveContextError(error)) this.counters.failures += 1
       failure = operation === 'review' ? new IdleReviewError(error instanceof Error ? error.message : String(error), {
         status: receipts.length > 0 ? 'partial' : 'failed', provider,
         ...(reviewChildId === undefined ? {} : { runId: reviewChildId }), receipts,
@@ -1153,9 +1153,9 @@ This is the only completion channel for this run. Do not finish with a plain-tex
       }
       releaseWorkflow?.()
       if (cleanupFailure !== undefined) {
-        this.counters.failures += 1
-        if (operation !== 'review') throw cleanupFailure
         const receipts = reviewReceipts.map(reviewReceipt).filter((receipt): receipt is NonNullable<typeof receipt> => receipt !== undefined)
+        if (operation !== 'review' || receipts.length > 0 || !isInactiveContextError(cleanupFailure)) this.counters.failures += 1
+        if (operation !== 'review') throw cleanupFailure
         throw new IdleReviewError(cleanupFailure instanceof Error ? cleanupFailure.message : String(cleanupFailure), {
           status: receipts.length > 0 ? 'partial' : 'failed', provider,
           ...(reviewChildId === undefined ? {} : { runId: reviewChildId }), receipts,
