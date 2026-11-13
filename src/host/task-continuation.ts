@@ -1,4 +1,5 @@
 import { AgentMemoryTurn, openAgentTurn } from './agent-memory-turn.ts'
+import { findSessionEvent, sessionEvents } from './session-events.ts'
 import type { HostAgent, HostPreStepDecision, HostSession, HostSessionEvent, HostUserMessage, ToolExecution } from './dsh.ts'
 import { applyMemoryViewGuidance } from './guidance.ts'
 import { createPluginMessage } from './plugin-message.ts'
@@ -25,21 +26,24 @@ const CONTINUATION_GUIDANCE = 'This is a new user request in a completed Mnemon 
 /** Older workers have no reserved ID: require their own Host descriptor and task contract. */
 export function isLegacyMemoryTask(agent: HostAgent): boolean {
   if (agent.session.header?.origin !== 'subagent') return false
-  const events = agent.session.snapshotEvents(agent.session.inheritedEventCount ?? 0)
-  const descriptor = events.findLastIndex(event => event.type === 'subagent/descriptor')
-  if (descriptor < 0 || typeof events[descriptor]!.data.label !== 'string' || !events[descriptor]!.data.label.startsWith('Mnemon ')) return false
-  const own = events.slice(descriptor + 1)
+  const descriptor = findSessionEvent(agent.session, event => event.type === 'subagent/descriptor', agent.session.inheritedEventCount ?? 0)
+  if (descriptor === undefined || typeof descriptor.event.data.label !== 'string' || !descriptor.event.data.label.startsWith('Mnemon ')) return false
   const textOf = (value: unknown): string => {
     const message = value as { content?: Array<{ type?: string; text?: string }> } | undefined
     return message?.content?.filter(block => block.type === 'text').map(block => block.text ?? '').join('\n') ?? ''
   }
-  const prompt = own.find(event => event.type === 'user/message'
-    && ((event.data.message ?? event.data) as { source?: { kind?: string } }).source?.kind === 'user')
-  if (prompt === undefined || !/^\[dsh-mnemon:delegated [a-z-]+\](?:\n|$)/u.test(textOf(prompt.data.message ?? prompt.data))) return false
+  let prompt = false, instructions = false
   // This is a Host-recorded system instruction, not a quoted user message. It
   // also identifies interrupted workers and PTC runs whose visible tool is an executor.
-  return own.some(event => event.type === 'system/message'
-    && textOf(event.data.message).includes('Completion protocol: call `mnemon_subagent_result` exactly once with requestId `'))
+  for (const event of sessionEvents(agent.session, descriptor.seq + 1)) {
+    if (!prompt && event.type === 'user/message' && ((event.data.message ?? event.data) as { source?: { kind?: string } }).source?.kind === 'user') {
+      if (!/^\[dsh-mnemon:delegated [a-z-]+\](?:\n|$)/u.test(textOf(event.data.message ?? event.data))) return false
+      prompt = true
+    }
+    if (event.type === 'system/message' && textOf(event.data.message).includes('Completion protocol: call `mnemon_subagent_result` exactly once with requestId `')) instructions = true
+    if (prompt && instructions) return true
+  }
+  return false
 }
 
 /** A resumed task receives memory authority only for a newly accepted human turn. */

@@ -435,6 +435,25 @@ describe('Mnemon DSH lifecycle integration', () => {
     })
   })
 
+  it('pages old memory counters once and preserves them on repeated status refreshes (issue 632)', () => {
+    const value = fixture()
+    for (let seq = 0; seq < 2_000; seq++) value.events.push({ seq, type: seq === 5 ? 'tool/call' : 'fixture/padding', data: seq === 5 ? { turn: 1, name: 'mnemon_recall', callId: 'old' } : {} })
+    const snapshot = value.agent.session.snapshotEvents.bind(value.agent.session)
+    const read = vi.spyOn(value.agent.session, 'snapshotEvents').mockImplementation((from, to) => {
+      expect(from).toBeTypeOf('number'); expect(to).toBeTypeOf('number')
+      expect(to! - from!).toBeLessThanOrEqual(256)
+      return snapshot(from, to)
+    })
+    expect(value.lifecycle.snapshot('session-1').current?.memoryToolCalls).toBe(1)
+    read.mockClear()
+    expect(value.lifecycle.snapshot('session-1').current?.memoryToolCalls).toBe(1)
+    expect(read).not.toHaveBeenCalled()
+    value.events.push({ seq: 2_000, type: 'tool/call', data: { turn: 2, name: 'mnemon_remember', callId: 'new' } })
+    expect(value.lifecycle.snapshot('session-1').current?.memoryToolCalls).toBe(2)
+    expect(read.mock.calls).toEqual([[2_000, 2_001]])
+    value.stop()
+  })
+
   it('does not advertise task Agent actions when creation has no usable model route', async () => {
     const value = fixture(resolveConfig({ cliPath: '/fake/mnemon' }), { taskModelRoute: false })
 
