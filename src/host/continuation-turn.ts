@@ -12,7 +12,7 @@ const NO_USER_QUERY = /no user query found in messages/iu
 export interface ContinuationHost {
   agents?: { isOwnedBy?(id: string, parent: HostAgent): boolean; get?(id: string): HostAgent | undefined }
   subagents?: ActivationOwnership
-  on(name: string, listener: (...args: never[]) => unknown): unknown
+  on(name: string, listener: (...args: never[]) => unknown, options?: { prepend?: boolean }): unknown
 }
 
 interface PreStepPayload {
@@ -89,13 +89,15 @@ export async function startWithContinuationTurns(host: ContinuationHost, parent:
   const pending = Symbol('Mnemon delegated start')
   const stops: Array<() => unknown> = []
   let expectedChildId: string | undefined
+  // Like persona/tool composition and the guard, recovery must exist before
+  // ordinary publication observers can short-circuit DSH's serial dispatch.
   const listener = host.on('agent/created', (({ agent }: { agent: HostAgent }) => {
     if (startingChild.getStore() !== pending) return
     if (!contextIsActive(parent.ctx) || !contextIsActive(agent.ctx)) return
     if (reserved && (agent.id !== expectedChildId || !isReservedChild(host.agents, parent, agent))) return
     if (typeof host.agents?.isOwnedBy === 'function' && !host.agents.isOwnedBy(agent.id, parent)) return
     for (const stop of continueAfterRefusal(agent)) if (typeof stop === 'function') stops.push(stop)
-  }) as never)
+  }) as never, { prepend: true })
   const release = async () => { for (const stop of stops.splice(0)) await stop() }
   let run: HostSubagentRun
   try {

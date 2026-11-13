@@ -868,7 +868,9 @@ export class MnemonLifecycle {
     const stopChanged = this.runtimeSource?.onChanged?.(() => {
       for (const { lifecycle } of this.owners.values()) lifecycle.configurationChanged()
     })
-    const stopCreated = this.ctx.on('agent/created', (({ agent, source }: SessionStartPayload) => { this.install(agent, source) }) as never)
+    // A child's memory authority must exist before ordinary observers can
+    // short-circuit DSH's serial publication, just like its scoped tool guard.
+    const stopCreated = this.ctx.on('agent/created', (({ agent, source }: SessionStartPayload) => { this.install(agent, source) }) as never, { prepend: true })
     for (const agent of rootAgents(this.ctx.agents, this.ctx.subagents)) this.install(agent, 'adopted')
     return () => {
       stopChanged?.()
