@@ -665,6 +665,81 @@ describe('MnemonWorkbench', () => {
     }
   })
 
+  it('keeps quiet graph appearance local and preserves graph interaction in a read-only view', async () => {
+    const { connection, call } = createConnection({ withSecondActiveBody: true })
+    const open = async () => {
+      const view = render(<MnemonWorkbench connection={connection} settingsScope={readOnlySettingsScope} sessionId="session-1" />)
+      await screen.findByText('已连接')
+      await selectWorkspaceTab('记忆空间')
+      await screen.findByRole('button', { name: '实体: SQLite' })
+      return view
+    }
+    const preference = 'dsh-mnemon:graph-appearance'
+    localStorage.removeItem(preference)
+    try {
+      let view = await open()
+      const graph = screen.getByRole('img', { name: /Mnemon 实时记忆图谱/ })
+      const appearance = screen.getByRole('button', { name: '简洁显示' })
+      expect(appearance.getAttribute('aria-pressed')).toBe('false')
+      expect(graph.querySelector('rect[fill="url(#mnemon-grid)"]')).not.toBeNull()
+      const entity = screen.getByRole('button', { name: '实体: SQLite' })
+      const memory = screen.getByRole('button', { name: /决策: 项目选择 SQLite/ })
+      const other = screen.getByRole('button', { name: '记忆空间: 偏好记忆空间' })
+      fireEvent.click(appearance)
+      expect(appearance.getAttribute('aria-pressed')).toBe('true')
+      expect(graph.querySelector('rect[fill="url(#mnemon-grid)"]')).toBeNull()
+      // The entity's actual memory neighbor remains clear; a different space dims.
+      fireEvent.keyDown(entity, { key: 'Enter' })
+      expect(entity.hasAttribute('data-selected')).toBe(true)
+      expect(memory.hasAttribute('data-dimmed')).toBe(false)
+      expect(other.hasAttribute('data-dimmed')).toBe(true)
+      expect(graph.querySelector('path[data-edge="entity"][data-dimmed]')).not.toBeNull()
+      expect(screen.getByText('实体详情')).toBeTruthy()
+      // The graph consumes Escape so the containing Memory System stays open.
+      expect(fireEvent.keyDown(entity, { key: 'Escape' })).toBe(false)
+      expect(graph.querySelector('[data-dimmed], [data-selected]')).toBeNull()
+      fireEvent.click(entity)
+      fireEvent.click(graph.querySelector('rect')!)
+      expect(graph.querySelector('[data-dimmed], [data-selected]')).toBeNull()
+      fireEvent.click(entity)
+      // Empty margins outside the viewBox are still part of the graph canvas.
+      fireEvent.click(graph)
+      expect(graph.querySelector('[data-dimmed], [data-selected]')).toBeNull()
+      // Appearance never replaces the layout or keyboard movement controls.
+      fireEvent.click(screen.getByRole('button', { name: '均匀重置' }))
+      await waitFor(() => expect(graph.getAttribute('data-layout')).toBe('uniform'))
+      fireEvent.keyDown(memory, { key: 'ArrowRight' })
+      expect(graph.getAttribute('data-layout')).toBe('custom')
+      expect(localStorage.getItem(preference)).toBe('quiet')
+      view.unmount()
+      view = await open()
+      expect(screen.getByRole('button', { name: '简洁显示' }).getAttribute('aria-pressed')).toBe('true')
+      fireEvent.click(screen.getByRole('button', { name: '简洁显示' }))
+      view.unmount()
+      await open()
+      expect(screen.getByRole('button', { name: '简洁显示' }).getAttribute('aria-pressed')).toBe('false')
+      expect(localStorage.getItem(preference)).toBe('standard')
+      expect(call.mock.calls.some(([, endpoint]) => /mutate|assistance|settings/u.test(endpoint))).toBe(false)
+    } finally { localStorage.removeItem(preference) }
+  })
+
+  it('allows changing graph appearance when browser storage is blocked', async () => {
+    const read = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('Storage blocked') })
+    const write = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Storage blocked') })
+    try {
+      const { connection } = createConnection()
+      render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+      await screen.findByText('已连接')
+      await selectWorkspaceTab('记忆空间')
+      const appearance = await screen.findByRole('button', { name: '简洁显示' })
+      expect(appearance.getAttribute('aria-pressed')).toBe('false')
+      fireEvent.click(appearance)
+      expect(appearance.getAttribute('aria-pressed')).toBe('true')
+      fireEvent.click(appearance)
+      expect(appearance.getAttribute('aria-pressed')).toBe('false')
+    } finally { read.mockRestore(); write.mockRestore() }
+  })
+
   it('shows the live graph, sidebar pages, and memory write dialog by default', async () => {
     const { connection } = createConnection()
     const { container } = render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)

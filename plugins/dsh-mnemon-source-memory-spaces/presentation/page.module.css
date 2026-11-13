@@ -308,6 +308,20 @@ button.readSourceCard:hover { background: var(--mn-hover); }
 .graphNode:focus .nodeHalo,
 .graphNode[data-selected] .nodeHalo { fill: color-mix(in srgb, var(--node) 28%, var(--mn-layer-1)); stroke: var(--node); }
 .graphNode[data-selected] .nodeLabel { fill: var(--mn-text); font-weight: 500; }
+.graphPanel[data-quiet] .graphLegend { display: none; }
+.graphSvg[data-quiet] .graphNode { --node: var(--mn-muted); }
+.graphSvg[data-quiet] .graphNode[data-selected] { --node: var(--mn-accent); }
+.graphSvg[data-quiet] .graphNode[data-dimmed] { opacity: .4; }
+.graphSvg[data-quiet] .graphNode:hover,
+.graphSvg[data-quiet] .graphNode:focus { opacity: 1; }
+.graphSvg[data-quiet] .nodeHalo { filter: none; }
+.graphSvg[data-quiet] .graphEdge { stroke: var(--mn-faint); stroke-width: .8; stroke-dasharray: none; opacity: .4; pointer-events: none; }
+.graphSvg[data-quiet] .graphEdge[data-dimmed] { opacity: .18; }
+.graphSvg[data-quiet] .nodeLabel,
+.graphSvg[data-quiet] .nodeBodyLabel { visibility: hidden; pointer-events: none; }
+.graphSvg[data-quiet] .graphNode:hover text,
+.graphSvg[data-quiet] .graphNode:focus text,
+.graphSvg[data-quiet] .graphNode[data-selected] text { visibility: visible; }
 .graphFooter { min-height: 40px; border-top: .5px solid var(--mn-line); color: var(--mn-faint); }
 .graphInspector { min-width: 0; min-height: calc(clamp(390px, 42vw, 560px) + 84px); overflow: hidden; padding: 16px; }
 .inspectorEmpty { display: flex; height: 100%; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
