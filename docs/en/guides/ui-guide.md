@@ -146,6 +146,8 @@ A memory space is one named scope of long-term evidence on one Provider. **Overv
 
 Below the cards, the graph merges what the active spaces can show: memories, entities, and the links between them. Select a space, entity or memory to see its context on the right, here the ClickHouse entity with **Recall around this**. Layout, dragging and reset only change the picture. The footer counts spaces, memories and entities, and how many elements are drawn.
 
+**Quiet display** in the graph toolbar is off by default. Turn it on for neutral colors, thin edges and no grid; labels appear on hover, keyboard focus or selection. Selecting a node keeps its neighbors clear and dims the rest without hiding them. Click the background or press Escape while a node is focused to clear the selection. The choice is saved only in the current browser and does not change memory, relationships or provider settings. Layout, dragging and the detail panel work as before.
+
 Each space declares what its Provider can really supply. Mnemon Native gives typed relationships; Hindsight and Holographic give their own graphs; Providers without edges contribute content only; query-only Providers such as ByteRover wait for a question. Nothing unsupported is invented.
 
 - **Create Memory Space** always lets you pick the Provider, with ready Providers first; turn more on from [Memory Spaces' page](#memory-spaces-page).

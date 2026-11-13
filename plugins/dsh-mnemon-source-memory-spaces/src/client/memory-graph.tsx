@@ -264,7 +264,7 @@ function graphPoint(svg: SVGSVGElement, clientX: number, clientY: number): Graph
   return clampGraphPosition({ x: (clientX - bounds.left) * GRAPH_WIDTH / width, y: (clientY - bounds.top) * GRAPH_HEIGHT / height })
 }
 
-export function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | undefined; onSelect: (node: MemoryGraphNode) => void }): JSX.Element {
+export function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | undefined; onSelect: (node: MemoryGraphNode) => void; onClearSelection?: () => void; quiet?: boolean; onQuietChange?: (quiet: boolean) => void }): JSX.Element {
   const t = useT()
   const visibleNodes = useMemo(() => {
     const spaces = props.graph.nodes.filter(node => graphNodeKind(node) === 'space')
@@ -273,6 +273,15 @@ export function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: st
     return [...spaces, ...entities, ...memories].slice(0, 60)
   }, [props.graph.nodes])
   const visibleIds = useMemo(() => new Set(visibleNodes.map(graphNodeKey)), [visibleNodes])
+  const neighbors = useMemo(() => {
+    if (!props.quiet || props.selectedId === undefined || !visibleIds.has(props.selectedId)) return undefined
+    const result = new Set([props.selectedId])
+    for (const edge of props.graph.edges) {
+      if (edge.sourceId === props.selectedId) result.add(edge.targetId)
+      if (edge.targetId === props.selectedId) result.add(edge.sourceId)
+    }
+    return result
+  }, [props.quiet, props.selectedId, props.graph.edges, visibleIds])
   const visibleKinds = useMemo(() => new Map(visibleNodes.map(node => [graphNodeKey(node), graphNodeKind(node)])), [visibleNodes])
   const edges = useMemo(() => {
     const priority = new Map<string, number>([['entity', 0], ['scope', 1], ['causal', 2], ['semantic', 3], ['temporal', 4]])
@@ -388,16 +397,25 @@ export function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: st
     <>
       <div className={css.graphCanvasControls} role="toolbar" aria-label={t('graph.layoutAria')}>
         <span role="status" aria-label={t('graph.layoutStatus', { layout: layoutLabel })}><i />{t('graph.draggable', { layout: layoutLabel })}</span>
+        {props.onQuietChange !== undefined && <button type="button" aria-pressed={props.quiet === true} data-active={props.quiet || undefined} title={t('graph.quietHint')} onClick={() => props.onQuietChange?.(!props.quiet)}>{t('graph.quietAction')}</button>}
         <button type="button" data-active={layoutMode === 'natural' || undefined} onClick={() => animateTo(naturalGraphPositions(visibleNodes, edges), 'natural')}>{t('graph.naturalAction')}</button>
         <button type="button" data-active={layoutMode === 'uniform' || undefined} onClick={() => animateTo(uniformGraphPositions(visibleNodes), 'uniform')}>{t('graph.uniformAction')}</button>
       </div>
-      <svg className={css.graphSvg} viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`} role="img" data-layout={layoutMode} data-density={visibleNodes.length <= 12 ? 'sparse' : 'dense'} aria-label={t('graph.aria', { nodes: props.graph.nodes.length, edges: props.graph.edges.length })}>
+      <svg className={css.graphSvg} viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`} role="img" data-quiet={props.quiet || undefined} data-layout={layoutMode} data-density={visibleNodes.length <= 12 ? 'sparse' : 'dense'} aria-label={t('graph.aria', { nodes: props.graph.nodes.length, edges: props.graph.edges.length })}
+        onClick={() => { if (props.quiet) props.onClearSelection?.() }}
+        onKeyDown={event => {
+          if (props.quiet && props.selectedId !== undefined && event.key === 'Escape') {
+            event.preventDefault()
+            event.stopPropagation()
+            props.onClearSelection?.()
+          }
+        }}>
       <defs>
         <pattern id="mnemon-grid" width="26" height="26" patternUnits="userSpaceOnUse"><path d="M 26 0 L 0 0 0 26" className={css.graphGridLine} fill="none" /></pattern>
         <filter id="mnemon-glow" x="-100%" y="-100%" width="300%" height="300%"><feGaussianBlur stdDeviation="4" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
       </defs>
       <rect width={GRAPH_WIDTH} height={GRAPH_HEIGHT} className={css.graphBackdrop} />
-      <rect width={GRAPH_WIDTH} height={GRAPH_HEIGHT} fill="url(#mnemon-grid)" />
+      {!props.quiet && <rect width={GRAPH_WIDTH} height={GRAPH_HEIGHT} fill="url(#mnemon-grid)" />}
       {curvedEdges.map(({ edge, offset }, index) => {
         const source = positions.get(edge.sourceId) ?? naturalLayout.get(edge.sourceId) ?? { x: GRAPH_WIDTH / 2, y: GRAPH_HEIGHT / 2 }
         const target = positions.get(edge.targetId) ?? naturalLayout.get(edge.targetId) ?? { x: GRAPH_WIDTH / 2, y: GRAPH_HEIGHT / 2 }
@@ -407,7 +425,7 @@ export function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: st
         const direction = edge.sourceId.localeCompare(edge.targetId) <= 0 ? 1 : -1
         const controlX = (source.x + target.x) / 2 - (dy / distance) * offset * direction
         const controlY = (source.y + target.y) / 2 + (dx / distance) * offset * direction
-        return <path key={`${edge.sourceId}-${edge.targetId}-${index}`} d={`M ${source.x} ${source.y} Q ${controlX} ${controlY} ${target.x} ${target.y}`} className={css.graphEdge} data-edge={edge.type ?? 'temporal'} data-source-id={edge.sourceId} data-target-id={edge.targetId} data-source-kind={visibleKinds.get(edge.sourceId)} data-target-kind={visibleKinds.get(edge.targetId)} />
+        return <path key={`${edge.sourceId}-${edge.targetId}-${index}`} d={`M ${source.x} ${source.y} Q ${controlX} ${controlY} ${target.x} ${target.y}`} className={css.graphEdge} data-edge={edge.type ?? 'temporal'} data-dimmed={neighbors !== undefined && !(neighbors.has(edge.sourceId) && neighbors.has(edge.targetId)) || undefined} data-source-id={edge.sourceId} data-target-id={edge.targetId} data-source-kind={visibleKinds.get(edge.sourceId)} data-target-kind={visibleKinds.get(edge.targetId)} />
       })}
       {visibleNodes.map((node, index) => {
         const nodeKey = graphNodeKey(node)
@@ -415,11 +433,11 @@ export function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: st
         const selected = props.selectedId === nodeKey
         const showLabel = selected || visibleNodes.length < 22 || index % 3 === 0
         return (
-          <g key={nodeKey} className={css.graphNode} data-node-id={nodeKey} data-provider={node.memoryProviderId} data-category={node.category ?? 'general'} data-kind={graphNodeKind(node)} data-selected={selected || undefined}
+          <g key={nodeKey} className={css.graphNode} data-node-id={nodeKey} data-provider={node.memoryProviderId} data-category={node.category ?? 'general'} data-kind={graphNodeKind(node)} data-selected={selected || undefined} data-dimmed={neighbors !== undefined && !neighbors.has(nodeKey) || undefined}
             transform={`translate(${position.x} ${position.y})`} role="button" tabIndex={0} aria-label={`${graphKindLabel(t, node)}: ${short(node.content, 80)}`}
             data-dragging={dragRef.current?.nodeId === nodeKey || undefined}
             onPointerDown={event => beginDrag(event, nodeKey)} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={cancelDrag} onLostPointerCapture={cancelDrag}
-            onClick={() => props.onSelect(node)}
+            onClick={event => { if (props.quiet) event.stopPropagation(); props.onSelect(node) }}
             onKeyDown={event => {
               if (event.key === 'Enter' || event.key === ' ') props.onSelect(node)
               else if (event.key === 'ArrowLeft') { event.preventDefault(); nudge(nodeKey, -12, 0) }
@@ -432,8 +450,8 @@ export function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: st
               : graphNodeKind(node) === 'entity'
                 ? <><path d={selected ? 'M 0 -18 L 18 0 L 0 18 L -18 0 Z' : 'M 0 -14 L 14 0 L 0 14 L -14 0 Z'} className={css.nodeHalo} filter={selected ? 'url(#mnemon-glow)' : undefined} /><circle r={selected ? 5 : 4} className={css.nodeCore} /></>
                 : <><circle r={selected ? 17 : visibleNodes.length <= 12 ? 14 : 11} className={css.nodeHalo} filter={selected ? 'url(#mnemon-glow)' : undefined} /><circle r={selected ? 7 : visibleNodes.length <= 12 ? 6 : 4.5} className={css.nodeCore} /></>}
-            {(selected || visibleNodes.length <= 12) && graphNodeKind(node) === 'memory' && node.memoryBodyName !== undefined && <text x="0" y="-18" textAnchor="middle" className={css.nodeBodyLabel}>{short(node.memoryBodyName, 12)}</text>}
-            {showLabel && <text x={visibleNodes.length <= 12 ? 19 : 15} y="4" className={css.nodeLabel}>{short(node.content.replace(/\s+/gu, ' '), selected ? 34 : visibleNodes.length <= 12 ? 26 : 19)}</text>}
+            {(props.quiet || selected || visibleNodes.length <= 12) && graphNodeKind(node) === 'memory' && node.memoryBodyName !== undefined && <text x="0" y="-18" textAnchor="middle" className={css.nodeBodyLabel}>{short(node.memoryBodyName, 12)}</text>}
+            {(props.quiet || showLabel) && <text x={visibleNodes.length <= 12 ? 19 : 15} y="4" className={css.nodeLabel}>{short(node.content.replace(/\s+/gu, ' '), selected ? 34 : visibleNodes.length <= 12 ? 26 : 19)}</text>}
           </g>
         )
       })}

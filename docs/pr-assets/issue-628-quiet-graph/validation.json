@@ -1,0 +1,57 @@
+{
+  "host": "DSH 0.2.2-rc.3",
+  "mnemon": "0.2.13",
+  "fixture": "Synthetic docs-demo data; isolated loopback profile",
+  "defaultAppearance": "Unchanged; optional Quiet display is off until selected",
+  "selected": {
+    "dimmedNodes": 31,
+    "dimmedOpacity": "0.4",
+    "edgeColors": [
+      "rgb(129, 133, 140)"
+    ],
+    "gridRects": 0,
+    "nodes": 37,
+    "selected": 1
+  },
+  "keyboardFocus": {
+    "focusLabel": "visible",
+    "selected": "实体: ClickHouse"
+  },
+  "backgroundCleared": {
+    "dimmed": 0,
+    "selected": 0
+  },
+  "escape": {
+    "dimmed": 0,
+    "memorySystemOpen": true,
+    "selected": 0
+  },
+  "drag": {
+    "before": "translate(465.9396478431325 229.7571476500056)",
+    "after": "translate(507.72540283203125 187.97145080566406)",
+    "layout": "custom"
+  },
+  "narrow": {
+    "controls": [
+      {
+        "left": 140.953125,
+        "right": 209.96875,
+        "text": "简洁显示"
+      },
+      {
+        "left": 213.96875,
+        "right": 282.984375,
+        "text": "自然铺开"
+      },
+      {
+        "left": 286.984375,
+        "right": 356,
+        "text": "均匀重置"
+      }
+    ],
+    "document": 390,
+    "viewport": 390
+  },
+  "persistedAfterHostRestart": true,
+  "hostOrMemoryMutations": false
+}

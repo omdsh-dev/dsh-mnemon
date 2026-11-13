@@ -29,6 +29,13 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
   const [graph, setGraph] = useState<MemoryGraphSnapshot | null>(null)
   const [catalog, setCatalog] = useState<MemorySpaceCatalog | null>(null)
   const [selected, setSelected] = useState<MemoryGraphNode | null>(null)
+  const [quietGraph, setQuietGraph] = useState(() => {
+    try { return localStorage.getItem('dsh-mnemon:graph-appearance') === 'quiet' } catch { return false }
+  })
+  const changeGraphAppearance = (quiet: boolean): void => {
+    setQuietGraph(quiet)
+    try { localStorage.setItem('dsh-mnemon:graph-appearance', quiet ? 'quiet' : 'standard') } catch { /* Keep the choice for this view when browser storage is unavailable. */ }
+  }
   const [catalogLoading, setCatalogLoading] = useState(true)
   const [healthLoading, setHealthLoading] = useState(true)
   const [graphLoading, setGraphLoading] = useState(true)
@@ -439,12 +446,12 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
       {deletingSpaceView !== undefined && <SidebarModal title={t(!nativeSpaceProvider(deletingSpaceView.provider) ? 'overview.disconnectTitle' : 'overview.deleteTitle', { name: deletingSpaceView.name })} description={deletingSpaceView.id} busy={deletingSpace === deletingSpaceView.id} onClose={() => setConfirmingDeleteSpace(null)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close data-autofocus className={css.secondaryButton} disabled={deletingSpace === deletingSpaceView.id} onClick={() => setConfirmingDeleteSpace(null)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} title={canDeleteSpace(deletingSpaceView) ? undefined : t('overview.lastStoreDeleteHint')} disabled={deletingSpace === deletingSpaceView.id || !canDeleteSpace(deletingSpaceView)} onClick={() => void deleteBody(deletingSpaceView)}>{deletingSpace === deletingSpaceView.id ? t('overview.deletingSpace') : t(!nativeSpaceProvider(deletingSpaceView.provider) ? 'overview.disconnectAction' : 'overview.deleteAction')}</button></div>}><div className={css.bodyDeleteConfirm}><p>{t(!nativeSpaceProvider(deletingSpaceView.provider) ? 'overview.disconnectWarning' : 'overview.deleteWarning', { provider: deletingSpaceView.provider.label })}</p><div className={css.bodyDeleteSummary}><strong>{deletingSpaceView.name}</strong><span>{deletingSpaceView.provider.label} · {deletingSpaceView.provider.location || t('common.memories', { count: deletingSpaceView.stats?.totalInsights ?? 0 })}</span></div></div></SidebarModal>}
       {!catalogUnavailable && graph !== null && graph.nodes.length > 0 ? (
         <div className={css.graphLayout}>
-          <section className={css.graphPanel}>
+          <section className={css.graphPanel} data-quiet={quietGraph || undefined}>
             <div className={css.graphToolbar}>
               <div><span className={css.liveDot} />{t('overview.snapshot')} <small>{generated}</small></div>
               <div className={css.graphLegend}><span data-edge="scope">{t('overview.edgeScope')}</span><span data-edge="temporal">{t('overview.edgeTemporal')}</span><span data-edge="semantic">{t('overview.edgeSemantic')}</span><span data-edge="causal">{t('overview.edgeCausal')}</span><span data-edge="entity">{t('overview.edgeEntity')}</span></div>
             </div>
-            <div className={css.graphViewport}><MemoryGraph graph={graph} selectedId={selected === null ? undefined : graphNodeKey(selected)} onSelect={setSelected} /></div>
+            <div className={css.graphViewport}><MemoryGraph graph={graph} selectedId={selected === null ? undefined : graphNodeKey(selected)} onSelect={setSelected} onClearSelection={() => setSelected(null)} quiet={quietGraph} onQuietChange={changeGraphAppearance} /></div>
             <div className={css.graphFooter}><span>{t('overview.graphComposition', { spaces: graphSpaces, memories: graphMemories, entities: graphEntities })}</span><span>{t('overview.graphCount', { visible: Math.min(graph.nodes.length, 60), total: graph.nodes.length })} · {t('overview.graphEdges', { count: graph.edges.length })}</span></div>
           </section>
           <aside className={css.graphInspector} data-empty={selected === null || undefined}>
