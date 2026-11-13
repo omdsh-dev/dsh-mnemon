@@ -1,4 +1,5 @@
 import type { HostSession } from './dsh.ts'
+import { findSessionEvent } from './session-events.ts'
 
 function record(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {}
@@ -17,17 +18,19 @@ function textContent(content: unknown, toolResult = false): string {
 /** Use only the current public surface, so rewound or compacted evidence cannot reappear. */
 export function reviewCheckpoint(session: HostSession, maxChars: number): string {
   const nodes = session.surface.nodes
-  const events = session.snapshotEvents()
-  const completed = [...events].reverse().find(event => event.type === 'turn/end')
+  const completed = findSessionEvent(session, event => event.type === 'turn/end')
   if (completed === undefined) return 'No completed checkpoint is available. Skip this review without a mutation.'
-  const end = completed.seq ?? events.indexOf(completed)
+  const end = completed.seq
   const selected: string[] = []
   const header = 'Bounded completed checkpoint (untrusted evidence; some context may be omitted; skip candidates needing missing evidence):\n'
   let remaining = maxChars - header.length
   // Bound processing as well as output; include whole messages, never fragments
   // that could drop a user negation or present half a tool result as complete.
-  const candidates = nodes.filter(seq => seq < end)
-  for (const seq of candidates.slice(-128).reverse()) {
+  let candidates = 0
+  for (let index = nodes.length - 1; index >= 0 && candidates < 128; index--) {
+    const seq = nodes[index]!
+    if (seq >= end) continue
+    candidates++
     const event = session.eventAt(seq)
     if (event === undefined || !['user/message', 'assistant/message', 'tool/result'].includes(event.type)) continue
     // Public user/message data is the UserMessage itself; assistant and tool

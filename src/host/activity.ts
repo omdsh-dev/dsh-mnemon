@@ -1,4 +1,5 @@
-import type { HostSessionEvent } from "./dsh.ts"
+import { SessionEventCursor } from './session-events.ts'
+import type { HostSession, HostSessionEvent } from "./dsh.ts"
 import { memoryTool, type TurnMemoryActivity, type TurnMemoryActivitySnapshot } from "./protocol.ts"
 import { parseMnemonActivityMeta } from './activity-presentation.ts'
 
@@ -40,6 +41,7 @@ function emptyActivity(turn: number): TurnMemoryActivity {
  * appended since the previous snapshot instead of rescanning the full session.
  */
 export class TurnActivityProjection {
+  private readonly cursor = new SessionEventCursor()
   private eventCount = 0
   private lastEventSeq: number | undefined
   private readonly pending = new Map<string, PendingCall>()
@@ -60,8 +62,16 @@ export class TurnActivityProjection {
     this.eventCount = events.length
     this.lastEventSeq = currentLastSeq
 
+    return this.result(typeof currentLastSeq === 'number' ? currentLastSeq : events.length)
+  }
+
+  snapshotSession(session: HostSession): TurnMemoryActivitySnapshot {
+    return this.result(this.cursor.consume(session, event => this.consume(event), () => this.reset()))
+  }
+
+  private result(cursor: number): TurnMemoryActivitySnapshot {
     return {
-      cursor: typeof currentLastSeq === 'number' ? currentLastSeq : events.length,
+      cursor,
       activities: [...this.byTurn.values()]
         .sort((left, right) => left.turn - right.turn)
         .map(activity => ({ ...activity, names: [...activity.names],

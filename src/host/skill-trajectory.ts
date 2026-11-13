@@ -1,5 +1,6 @@
 import type { TrajectoryStep, TrajectoryStats } from 'dsh-mnemon-source-skills/contracts'
-import type { HostSessionEvent } from './dsh.ts'
+import { SessionEventCursor } from './session-events.ts'
+import type { HostSession, HostSessionEvent } from './dsh.ts'
 import { scoreReviewActivity } from './review-activity.ts'
 import type { ReviewActivityScore, TurnSkillUse } from './protocol.ts'
 
@@ -74,12 +75,9 @@ export interface CapturedTurn {
  * loads, tool calls with their result or error, and the assistant's text, in
  * log order. Nothing here calls a model.
  */
-export function captureTurn(events: readonly HostSessionEvent[], turn: number): CapturedTurn | undefined {
-  const start = events.findLastIndex(event => event.type === 'turn/start' && event.data.turn === turn)
-  if (start < 0) return undefined
-  const endIndex = events.findIndex((event, index) => index > start && event.type === 'turn/end' && event.data.turn === turn)
-  const window = events.slice(start + 1, endIndex < 0 ? events.length : endIndex)
-  const end = endIndex < 0 ? undefined : events[endIndex]
+export function captureTurn(events: Iterable<HostSessionEvent>, turn: number): CapturedTurn | undefined {
+  let started = false
+  let end: HostSessionEvent | undefined
   const steps: CapturedTurn['steps'] = []
   const calls = new Map<string, { name: string; input: string; skill?: string; at?: string }>()
   const skills = new Set<string>()
@@ -88,7 +86,16 @@ export function captureTurn(events: readonly HostSessionEvent[], turn: number): 
   let toolCalls = 0
   let toolFailures = 0
   const at = (event: HostSessionEvent) => typeof event.time === 'number' ? new Date(event.time).toISOString() : undefined
-  for (const event of window) {
+  for (const event of events) {
+    if (steps.length > TRAJECTORY_MAX_STEPS) steps.splice(0, steps.length - TRAJECTORY_MAX_STEPS)
+    if (event.type === 'turn/start' && event.data.turn === turn) {
+      started = true; end = undefined
+      steps.length = 0; calls.clear(); skills.clear(); toolNames.clear()
+      userCharacters = 0; toolCalls = 0; toolFailures = 0
+      continue
+    }
+    if (!started || end !== undefined) continue
+    if (event.type === 'turn/end' && event.data.turn === turn) { end = event; continue }
     if (event.type === 'user/message') {
       const source = record(event.data.source)
       if (source.kind === 'skill-invocation' && typeof source.name === 'string') {
@@ -139,6 +146,8 @@ export function captureTurn(events: readonly HostSessionEvent[], turn: number): 
       steps.push({ turn, kind: 'assistant', text: clip(text, TRAJECTORY_STEP_CHARACTERS), ...(at(event) === undefined ? {} : { at: at(event)! }) })
     }
   }
+  if (!started) return undefined
+  if (steps.length > TRAJECTORY_MAX_STEPS) steps.splice(0, steps.length - TRAJECTORY_MAX_STEPS)
   const reason = end === undefined ? undefined : record(end.data.reason).kind
   return { turn, steps, userCharacters, toolCalls, toolFailures, toolNames: [...toolNames], skills: [...skills], ...(typeof reason === 'string' ? { reason } : {}) }
 }
@@ -147,7 +156,7 @@ export function captureTurn(events: readonly HostSessionEvent[], turn: number): 
  * The skills each turn used, read once over the whole log: the user's `/name`
  * and the model's successful `skill` calls, each name once per turn.
  */
-export function turnSkillUses(events: readonly HostSessionEvent[]): Array<{ turn: number; skills: TurnSkillUse[] }> {
+function skillUseAccumulator() {
   const turns = new Map<number, TurnSkillUse[]>()
   const calls = new Map<string, { turn: number; name: string }>()
   let turn: number | undefined
@@ -156,30 +165,51 @@ export function turnSkillUses(events: readonly HostSessionEvent[]): Array<{ turn
     if (!list.some(existing => existing.name === skill.name)) list.push(skill)
     turns.set(at, list)
   }
-  for (const event of events) {
-    if (event.type === 'turn/start' && typeof event.data.turn === 'number') { turn = event.data.turn; continue }
-    if (event.type === 'turn/end') { turn = undefined; continue }
-    if (turn === undefined) continue
-    if (event.type === 'user/message') {
-      const source = record(event.data.source)
-      if (source.kind === 'skill-invocation' && typeof source.name === 'string' && source.name.trim() !== '') use(turn, { name: source.name.trim(), by: 'user' })
-      continue
-    }
-    if (event.type === 'tool/call' && event.data.name === 'skill' && typeof event.data.callId === 'string') {
-      const name = skillArgument(event.data.arguments)
-      if (name !== undefined) calls.set(event.data.callId, { turn, name })
-      continue
-    }
-    if (event.type === 'tool/result') {
-      const message = record(event.data.message)
-      const callId = typeof record(message.source).callId === 'string' ? String(record(message.source).callId) : typeof message.toolCallId === 'string' ? message.toolCallId : undefined
-      const call = callId === undefined ? undefined : calls.get(callId)
-      if (call === undefined) continue
-      calls.delete(callId!)
-      if (event.data.error === undefined && message.isError !== true) use(call.turn, { name: call.name, by: 'model' })
-    }
+  return {
+    consume(event: HostSessionEvent): void {
+      if (event.type === 'turn/start' && typeof event.data.turn === 'number') { turn = event.data.turn; return }
+      if (event.type === 'turn/end') { turn = undefined; return }
+      if (turn === undefined) return
+      if (event.type === 'user/message') {
+        const source = record(event.data.source)
+        if (source.kind === 'skill-invocation' && typeof source.name === 'string' && source.name.trim() !== '') use(turn, { name: source.name.trim(), by: 'user' })
+        return
+      }
+      if (event.type === 'tool/call' && event.data.name === 'skill' && typeof event.data.callId === 'string') {
+        const name = skillArgument(event.data.arguments)
+        if (name !== undefined) calls.set(event.data.callId, { turn, name })
+        return
+      }
+      if (event.type === 'tool/result') {
+        const message = record(event.data.message)
+        const callId = typeof record(message.source).callId === 'string' ? String(record(message.source).callId) : typeof message.toolCallId === 'string' ? message.toolCallId : undefined
+        const call = callId === undefined ? undefined : calls.get(callId)
+        if (call === undefined) return
+        calls.delete(callId!)
+        if (event.data.error === undefined && message.isError !== true) use(call.turn, { name: call.name, by: 'model' })
+      }
+    },
+    reset(): void { turns.clear(); calls.clear(); turn = undefined },
+    result(): Array<{ turn: number; skills: TurnSkillUse[] }> {
+      return [...turns].map(([number, skills]) => ({ turn: number, skills: skills.map(skill => ({ ...skill })) }))
+    },
   }
-  return [...turns].map(([number, skills]) => ({ turn: number, skills }))
+}
+
+export function turnSkillUses(events: Iterable<HostSessionEvent>): Array<{ turn: number; skills: TurnSkillUse[] }> {
+  const projection = skillUseAccumulator()
+  for (const event of events) projection.consume(event)
+  return projection.result()
+}
+
+export class TurnSkillUseProjection {
+  private readonly cursor = new SessionEventCursor()
+  private readonly projection = skillUseAccumulator()
+
+  snapshot(session: HostSession): Array<{ turn: number; skills: TurnSkillUse[] }> {
+    this.cursor.consume(session, event => this.projection.consume(event), () => this.projection.reset())
+    return this.projection.result()
+  }
 }
 
 /** The session's newest title, when DSH has one. */

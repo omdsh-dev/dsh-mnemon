@@ -1,3 +1,4 @@
+import { findSessionEvent, reverseSessionEvents, sessionTurnEvents } from './session-events.ts'
 import { SkillAutoAdoption, AutomaticSkillStop, hashSkillCases, hashSkillDraft } from './skill-auto-adoption.ts'
 import { accessSync, constants, statSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -12,7 +13,7 @@ import {
   SKILL_EXECUTOR_PERSONA, SKILL_EXECUTOR_SCHEMA, SKILL_JUDGE_PERSONA, SKILL_JUDGE_SCHEMA, SKILL_REVIEW_PERSONA, SKILL_REVIEW_SCHEMA,
   skillCasesPrompt, skillDraftPrompt, skillExecutorPrompt, skillJudgePrompt, skillReviewPrompt,
 } from './skill-review.ts'
-import { captureTurn, redact, sessionTitle, TrajectoryWindow, turnSkillUses } from './skill-trajectory.ts'
+import { captureTurn, redact, TrajectoryWindow, turnSkillUses, TurnSkillUseProjection } from './skill-trajectory.ts'
 import { SubagentStoppedError } from './subagent-errors.ts'
 
 /** The Skills Source's management protocol, as the Host calls it. */
@@ -229,7 +230,7 @@ export class SkillEvolution {
     const settings = this.host.settings()
     if (!settings.evolution || (!settings.allowCreate && !settings.allowUpdate)) { this.cancelTimer(agent.id); return }
     if (this.source(agent) === undefined) return
-    const captured = captureTurn(agent.session.snapshotEvents(), turn)
+    const captured = captureTurn(sessionTurnEvents(agent.session, turn), turn)
     if (captured === undefined || captured.steps.length === 0) return
     const state = this.state(agent)
     if (state.failures >= MAX_CONSECUTIVE_FAILURES) return
@@ -266,10 +267,14 @@ export class SkillEvolution {
     const state = this.state(agent)
     if (state.running !== undefined) await state.running
     if (state.window.size === 0) {
-      const events = agent.session.snapshotEvents()
-      const turns = [...new Set(events.filter(event => event.type === 'turn/end' && typeof event.data.turn === 'number').map(event => Number(event.data.turn)))].slice(-6)
+      const recent = new Set<number>()
+      for (const { event } of reverseSessionEvents(agent.session)) {
+        if (event.type === 'turn/end' && typeof event.data.turn === 'number') recent.add(event.data.turn)
+        if (recent.size === 6) break
+      }
+      const turns = [...recent].reverse()
       for (const turn of turns) {
-        const captured = captureTurn(events, turn)
+        const captured = captureTurn(sessionTurnEvents(agent.session, turn), turn)
         if (captured !== undefined && captured.steps.length > 0) state.window.add(captured, this.now())
       }
     }
@@ -302,12 +307,11 @@ export class SkillEvolution {
     state.window = new TrajectoryWindow()
     const turn = window.lastTurn
     if (turn !== undefined) state.reviewing = turn
-    const events = agent.session.snapshotEvents()
     const workspace = agent.session.header?.cwd?.trim() || undefined
     const steps = window.steps()
     const stats = window.stats()
     const score = window.score()
-    const title = sessionTitle(events)
+    const title = (findSessionEvent(agent.session, event => event.type === 'session/title' && typeof event.data.title === 'string' && event.data.title.trim() !== '')?.event.data.title as string | undefined)?.trim().slice(0, 200)
     const controller = new AbortController()
     this.jobs.add(controller)
     const base = {
@@ -673,10 +677,14 @@ export class SkillEvolution {
    * the recorded ones with the suggestions they left that still wait. A
    * conversation that is not live passes its stored log.
    */
+  private readonly skillUses = new WeakMap<HostAgent['session'], TurnSkillUseProjection>()
+
   async activity(agent: HostAgent, events?: readonly HostSessionEvent[]): Promise<SkillActivitySnapshot> {
     const port = this.host.source(agent)
     if (port === undefined) return { available: false, turns: [], reviews: [] }
-    const turns = turnSkillUses(events ?? agent.session.snapshotEvents())
+    let projection = this.skillUses.get(agent.session)
+    if (projection === undefined) { projection = new TurnSkillUseProjection(); this.skillUses.set(agent.session, projection) }
+    const turns = events === undefined ? projection.snapshot(agent.session) : turnSkillUses(events)
     const state = this.sessions.get(agent.id)
     const reviews: TurnSkillReview[] = []
     if (state?.reviewing !== undefined) reviews.push({ turn: state.reviewing, state: 'reviewing', suggestions: [] })
