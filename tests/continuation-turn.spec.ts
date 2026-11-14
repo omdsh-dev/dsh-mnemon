@@ -63,6 +63,33 @@ async function started() {
 }
 
 describe('continuation turns for delegated children', () => {
+  it('retries malformed completion arguments once per child, including its first step (issue 636)', async () => {
+    const { child } = await started()
+    const next = vi.fn(async () => undefined)
+    const failure = { code: 'MALFORMED_RESPONSE', message: 'Tool call "mnemon_subagent_result": Expected comma or closing brace at position 647' }
+    expect(await child.requestError()({ turn: 1, step: 1, failure, signal: live }, next)).toEqual({ kind: 'retry' })
+    expect(child.append).toHaveBeenCalledExactlyOnceWith('user/message', expect.objectContaining({
+      source: { kind: 'dsh-mnemon', form: 'instructions' },
+      content: [{ type: 'text', text: expect.stringContaining('Do not repeat completed writes') }],
+    }), { surfaceOp: 'append' })
+    // Neither the same request nor a later step receives another repair attempt.
+    for (const step of [1, 2]) await child.requestError()({ turn: 1, step, failure, signal: live }, next)
+    expect(next).toHaveBeenCalledTimes(2)
+    expect(child.append).toHaveBeenCalledOnce()
+  })
+
+  it.each([
+    { code: 'MALFORMED_RESPONSE', message: 'Tool call "mnemon_remember": Invalid JSON' },
+    { code: 'RATE_LIMITED', message: 'Tool call "mnemon_subagent_result": rate limit' },
+    { code: 'MALFORMED_RESPONSE', message: 'Other malformed provider response' },
+  ])('does not retry unrelated response failures ($code, $message)', async failure => {
+    const { child } = await started()
+    const next = vi.fn(async () => undefined)
+    await child.requestError()({ turn: 1, step: 1, failure, signal: live }, next)
+    expect(next).toHaveBeenCalledOnce()
+    expect(child.append).not.toHaveBeenCalled()
+  })
+
   it('does not install recovery listeners on a disposed published child', async () => {
     const h = host(), parent = agent('parent').value, child = agent('disposed-child')
     const ctx = new Context()
