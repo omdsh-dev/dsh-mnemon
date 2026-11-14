@@ -1,0 +1,61 @@
+{
+  "date": "2026-11-15",
+  "timezone": "Asia/Shanghai",
+  "issue": 641,
+  "codeRevision": "e440b3a003a3bb647422c52bf4bd56b62174957a",
+  "baseRevision": "36b341d7722efd2ceab80ba21e3f1c2c8924666b",
+  "displayedDevelopmentPackageVersion": "0.5.45",
+  "node": "24.22.2",
+  "platform": "darwin-arm64",
+  "verification": {
+    "fullVerify": true,
+    "root": {
+      "passed": 2801,
+      "skipped": 9
+    },
+    "workspacePlugins": {
+      "passed": 899,
+      "skipped": 4
+    },
+    "publishedHostFocusedRc1": {
+      "version": "0.2.2-rc.1",
+      "passed": 235,
+      "skipped": 1
+    },
+    "publishedHostFullRc3": {
+      "version": "0.2.2-rc.3",
+      "passed": 2802,
+      "skipped": 8
+    }
+  },
+  "ui": {
+    "host": "0.2.2-rc.3",
+    "isolated": true,
+    "liveModel": false,
+    "target": "user",
+    "capacityLimitBytes": 4096,
+    "rejectedContentBytes": 5625,
+    "entriesAfterRejection": 0,
+    "savedContentBytes": 93,
+    "entriesAfterRecovery": 1,
+    "snapshots": {
+      "before": {
+        "entries": 0,
+        "sha256": "7c1051f6e2bc3943b7c1dbe4da229694455681b8875a346c99279e555edb733f"
+      },
+      "after": {
+        "entries": 1,
+        "sha256": "42abc6f6e53f755aa97921a5e9ff068ae3915fafd6ddf4545a190bc6c9937552",
+        "hostBundleSha256": "22f758c4171ced62a5b38a2e492940c85a82d5105163ead1bb482ed9fca4cd67"
+      }
+    },
+    "screenshots": {
+      "capacity-error.jpg": "b05f3bf3f9e57f4146fddad6cf290e26c348e301e80096d7af6b2198f1a54421",
+      "save-recovered.jpg": "4afd8cf49291113b96e58e5420783975ad5bfa38e23b9c28a1daac1e632ad9a8"
+    }
+  },
+  "limitations": [
+    "Windows Desktop and the reporter model-specific missing routing result were not reproduced.",
+    "Existing deterministic routing fallback remains; the change does not guarantee a model will submit its result."
+  ]
+}
