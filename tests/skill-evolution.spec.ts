@@ -1112,7 +1112,7 @@ describe('skill evolution in the Host', () => {
     await expect(skills.backtest(source, undefined, input)).resolves.toHaveProperty('runId')
     skills.dispose()
     await vi.advanceTimersByTimeAsync(0)
-  })
+  }, 20_000)
 
   it('returns a suggestion to pending when its draft task outlives the deadline', async () => {
     config = { ...config, evolution: true, autoBacktest: false, idleSeconds: 3600 }

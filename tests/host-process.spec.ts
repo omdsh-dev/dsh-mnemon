@@ -49,8 +49,38 @@ describe('bounded subprocess UTF-8 output', () => {
         resolve({ code, signal })
       })
     })
-    expect(closed.signal).toBe('SIGKILL')
+    // Windows lacks POSIX signal trapping, so child.kill('SIGTERM') invokes TerminateProcess immediately.
+    expect(closed.signal).toBe(process.platform === 'win32' ? 'SIGTERM' : 'SIGKILL')
     expect(() => process.kill(spawned!.pid!, 0)).toThrow()
+  })
+
+  it('escalates from SIGTERM to SIGKILL after killGraceMs when the subprocess stays open', async () => {
+    vi.useFakeTimers()
+    try {
+      const child = subprocess()
+      child.kill.mockImplementation((signal: string) => {
+        if (signal === 'SIGKILL') child.signalCode = 'SIGKILL'
+        return true
+      })
+      const rejected = expect(
+        runProcess('test-cli', [], { timeoutMs: 80, killGraceMs: 60, label: 'hung-child' }),
+      ).rejects.toThrow('hung-child did not respond within 80ms')
+
+      await vi.advanceTimersByTimeAsync(80)
+      await rejected
+      expect(child.kill).toHaveBeenCalledTimes(1)
+      expect(child.kill).toHaveBeenLastCalledWith('SIGTERM')
+
+      await vi.advanceTimersByTimeAsync(59)
+      expect(child.kill).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(1)
+      expect(child.kill).toHaveBeenCalledTimes(2)
+      expect(child.kill).toHaveBeenLastCalledWith('SIGKILL')
+      child.emit('close', null)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('preserves interleaved stdout and stderr even when every multibyte character is split', async () => {

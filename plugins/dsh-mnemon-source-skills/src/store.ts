@@ -149,6 +149,8 @@ function fileStamp(path: string): string {
  * replaced atomically; callers serialize writes with the storage lock.
  */
 export class SkillsStore {
+  private readonly jsonCache = new Map<string, { stamp: string; value: unknown }>()
+
   constructor(readonly directory: string) {}
 
   private path(name: string): string {
@@ -162,10 +164,23 @@ export class SkillsStore {
 
   private readJson(name: string): unknown {
     const path = this.path(name)
-    if (!existsSync(path)) return undefined
-    try { return JSON.parse(readFileSync(path, 'utf8')) as unknown } catch (error) {
+    const stamp = fileStamp(path)
+    if (stamp === '-') {
+      this.jsonCache.delete(name)
+      return undefined
+    }
+    const cached = this.jsonCache.get(name)
+    if (cached !== undefined && cached.stamp === stamp) return structuredClone(cached.value)
+    let parsed: unknown
+    try { parsed = JSON.parse(readFileSync(path, 'utf8')) as unknown } catch (error) {
       throw new Error(`Skills Source file is unreadable: ${path}: ${error instanceof Error ? error.message : String(error)}`)
     }
+    if (this.jsonCache.size >= 32 && !this.jsonCache.has(name)) {
+      const oldest = this.jsonCache.keys().next().value
+      if (oldest !== undefined) this.jsonCache.delete(oldest)
+    }
+    this.jsonCache.set(name, { stamp, value: parsed })
+    return structuredClone(parsed)
   }
 
   private writeAtomic(path: string, content: string): void {
@@ -173,6 +188,7 @@ export class SkillsStore {
   }
 
   private writeJson(name: string, value: unknown): void {
+    this.jsonCache.delete(name)
     this.writeAtomic(this.path(name), `${JSON.stringify(value, null, 2)}\n`)
   }
 

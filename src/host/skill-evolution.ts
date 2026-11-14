@@ -584,21 +584,38 @@ export class SkillEvolution {
       const run = await source.mutate<BacktestRun>('run-start', { skillName: input.skillName, target: resolved.target, caseIds: cases.map(entry => entry.id), ...(input.expectedCasesHash === undefined ? {} : { expectedCasesHash: input.expectedCasesHash }), ...(input.route === undefined ? {} : { model: input.route }) }, input.signal)
       void this.background('skill backtest', async deadline => {
         const controller = new AbortController()
-        const abort = () => controller.abort(deadline.aborted ? deadline.reason : input.signal?.reason)
+        let watcher: NodeJS.Timeout | undefined
+        const stopWatcher = () => {
+          if (watcher !== undefined) {
+            clearTimeout(watcher)
+            watcher = undefined
+          }
+        }
+        const abort = () => {
+          stopWatcher()
+          controller.abort(deadline.aborted ? deadline.reason : input.signal?.reason)
+        }
         deadline.addEventListener('abort', abort, { once: true })
         input.signal?.addEventListener('abort', abort, { once: true })
         if (deadline.aborted || input.signal?.aborted) abort()
         const signal = controller.signal
         // Cancellation is a Source-owned mutation and works even after a restart.
-        let checking = false
-        const watcher = setInterval(() => {
-          if (checking || signal.aborted) return
-          checking = true
-          void source.read<BacktestRun>('run', { id: run.id }).then(current => {
-            if (current.status !== 'running') controller.abort(new Error(current.error ?? 'Backtest interrupted'))
-          }).catch(error => controller.abort(error)).finally(() => { checking = false })
-        }, 1_000)
-        watcher.unref?.()
+        let pollDelayMs = 1_000
+        const scheduleWatch = () => {
+          if (signal.aborted) return
+          watcher = setTimeout(() => {
+            watcher = undefined
+            if (signal.aborted) return
+            void source.read<BacktestRun>('run', { id: run.id }).then(current => {
+              if (current.status !== 'running') controller.abort(new Error(current.error ?? 'Backtest interrupted'))
+            }).catch(error => controller.abort(error)).finally(() => {
+              pollDelayMs = Math.min(5_000, Math.round(pollDelayMs * 1.5))
+              scheduleWatch()
+            })
+          }, pollDelayMs)
+          watcher.unref?.()
+        }
+        scheduleWatch()
         try {
           await abortable(signal, async () => {
             const release = await this.backtestSlot(signal)
@@ -631,7 +648,7 @@ export class SkillEvolution {
           await source.mutate('run-finish', { id: run.id, status: signal.aborted ? 'interrupted' : 'failed', error: message(signal.aborted ? signal.reason : error) }).catch(() => undefined)
           throw error
         } finally {
-          clearInterval(watcher)
+          stopWatcher()
           deadline.removeEventListener('abort', abort)
           input.signal?.removeEventListener('abort', abort)
         }
