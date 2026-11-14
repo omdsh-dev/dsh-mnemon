@@ -2,9 +2,9 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createMemorySpaceProviderFixture } from 'dsh-mnemon-source-memory-spaces/testing'
-import type { MemoryProviderConnection, MemoryProviderId } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
-import { HindsightProvider, descriptor, definition } from '../src/index.ts'
+import { createMemorySpaceProviderFixture, mountMemorySpaceProvider } from 'dsh-mnemon-source-memory-spaces/testing'
+import type { MemoryProviderConnection, MemoryProviderId, MemorySpaceAuthority } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
+import module, { HindsightProvider, descriptor, definition } from '../src/index.ts'
 
 const temporaryDirectories: string[] = []
 afterEach(() => { for (const directory of temporaryDirectories.splice(0)) rmSync(directory, { recursive: true, force: true }) })
@@ -99,5 +99,27 @@ describe('standalone hindsight data plane', () => {
       ['Alice', 'TypeScript', 'Node.js', 'Atlas', 'Beta (a)'],
       [notes],
     ])
+  })
+})
+
+describe('independent hindsight Provider', () => {
+  it('installs complete immutable metadata in one parent-owned child', async () => {
+    const mounted = await mountMemorySpaceProvider(module, { instanceId: 'work', config: undefined })
+    try {
+      expect(mounted.descriptor).toMatchObject({ id: 'work', typeId: 'hindsight', label: descriptor.label })
+      expect(Object.isFrozen(mounted.manifest)).toBe(true)
+      const authority: MemorySpaceAuthority = { runner: { effectiveDataDir: () => '/unused' }, list: () => [], providerConnection: () => ({}) }
+      expect(mounted.createAdapter({ memoryBodies: authority, config: { timeoutMs: 200 } }).id).toBe('work')
+      expect(mounted.registered).toBe(true)
+      expect(definition.manifest.secrets).toEqual(descriptor.fields.filter(field => field.input === 'secret').map(field => field.key).sort())
+    } finally { await mounted.dispose() }
+    expect(mounted.registered).toBe(false)
+  })
+
+  it('constructs its own driver from a structural authority, without the main repository', () => {
+    const authority: MemorySpaceAuthority = { runner: { effectiveDataDir: () => '/unused' }, list: () => [], providerConnection: () => ({}) }
+    const adapter = definition.create({ memoryBodies: authority, config: { timeoutMs: 200 }, providerInstanceId: 'hindsight', manifest: definition.manifest })
+    expect(adapter).toBeInstanceOf(HindsightProvider)
+    expect(adapter.id).toBe('hindsight')
   })
 })

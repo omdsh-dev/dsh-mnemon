@@ -1,12 +1,15 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { Worker } from 'node:worker_threads'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { strToU8, unzipSync, zipSync } from 'fflate'
 import { resolveConfig } from "../src/host/config.ts"
+import { MNEMON_MACHINE_DIRECTORY, MNEMON_MACHINE_FILE, MnemonMachineStore, defaultMachineLabel } from '../src/host/machine-identity.ts'
 import { MnemonPackManager, MNEMON_PACK_FORMAT, MNEMON_PACK_MIME, documentVersion } from "../src/host/pack.ts"
+import { MNEMON_MACHINE_LABEL_MAX, type MnemonMachineIdentity, type MnemonTombstoneFile } from '../src/host/protocol.ts'
 import { createStorageRoot } from '../src/host/storage-root.ts'
 import { sourceFixture } from './fixtures/sources.ts'
 import { withMemoryStorageLock } from 'dsh-mnemon/extension-sdk'
@@ -846,4 +849,523 @@ it('rejects a merge whose pins exceed capacity without changing hot memory or cr
   await expect(manager.importPack((await source.manager.exportPack('runtime')).base64, { mode: 'merge' })).rejects.toThrow('Pinned runtime entries exceed')
   expect(readFileSync(join(target.root, 'runtime', 'memories.json'))).toEqual(before)
   expect(existsSync(join(target.root, 'runtime', 'archived'))).toBe(false)
+})
+
+describe('pack tombstones and sync origin', () => {
+  const directories: string[] = []
+  const releases: Array<() => Promise<void>> = []
+
+  function temporary(label: string): string {
+    const directory = mkdtempSync(join(tmpdir(), `dsh-mnemon-${label}-`))
+    directories.push(directory)
+    return directory
+  }
+
+  /**
+   * Every read moves the clock forward so a later export outranks an earlier one. The start is far
+   * in the future because the Source stamps entries with the real clock: a deletion only hides an
+   * entry when the deletion happened at or after the entry was written.
+   */
+  function tickingClock(start = '2030-01-01T00:00:00.000Z'): () => Date {
+    let at = Date.parse(start)
+    return () => new Date((at += 1_000))
+  }
+
+  interface Machine {
+    root: string
+    manager: MnemonPackManager
+    runtime: Awaited<ReturnType<typeof sourceFixture>>['runtime']
+  }
+
+  async function machine(label: string, clock: () => Date = tickingClock()): Promise<Machine> {
+    const root = temporary(label)
+    const workspace = temporary(`${label}-workspace`)
+    const config = resolveConfig({ storageScope: 'custom', dataDir: root, cliPath: '/fake/mnemon' })
+    const runner = createStorageRoot(config)
+    const sources = await sourceFixture({ dataDir: root, workspace })
+    releases.push(sources.dispose)
+    return { root, manager: new MnemonPackManager(runner, config, undefined, clock), runtime: sources.runtime }
+  }
+
+  async function add(target: Machine, content: string, scope: 'memory' | 'user' = 'user'): Promise<void> {
+    await target.runtime.mutate('mutate', { action: 'add', target: scope, content, importance: 'normal' }, { confirmed: true })
+  }
+
+  async function remove(target: Machine, oldText: string, scope: 'memory' | 'user' = 'user'): Promise<void> {
+    await target.runtime.mutate('mutate', { action: 'remove', target: scope, oldText }, { confirmed: true })
+  }
+
+  interface StoredEntry {
+    content: string
+    target: string
+    updated_at: string
+    origin?: { machine: string; label: string; at: string }
+  }
+
+  function entries(root: string): StoredEntry[] {
+    return (JSON.parse(readFileSync(join(root, 'runtime', 'memories.json'), 'utf8')) as { entries: StoredEntry[] }).entries
+  }
+
+  interface StoredTombstone {
+    target: string
+    contentHash: string
+    deletedAt: string
+    machine?: string
+  }
+
+  function tombstones(root: string): StoredTombstone[] {
+    return (JSON.parse(readFileSync(join(root, 'state', 'tombstones.json'), 'utf8')) as { tombstones: StoredTombstone[] }).tombstones
+  }
+
+  function identity(root: string): MnemonMachineIdentity {
+    return JSON.parse(readFileSync(join(root, 'state', 'machine.json'), 'utf8')) as MnemonMachineIdentity
+  }
+
+  function archive(base64: string): Record<string, Uint8Array> {
+    return unzipSync(new Uint8Array(Buffer.from(base64, 'base64')))
+  }
+
+  function packed(base64: string, path: string): unknown {
+    const file = archive(base64)[path]
+    if (file === undefined) throw new Error(`the Pack is missing ${path}`)
+    return JSON.parse(new TextDecoder().decode(file)) as unknown
+  }
+
+  /** Replace one payload file and re-sign it, so the tampered Pack still passes its checksums. */
+  function forge(base64: string, path: string, text: string): string {
+    const files = archive(base64)
+    files[path] = strToU8(text)
+    const checksums = JSON.parse(new TextDecoder().decode(files['checksums.json']!)) as { algorithm: string; files: Record<string, string> }
+    checksums.files[path] = createHash('sha256').update(files[path]!).digest('hex')
+    files['checksums.json'] = strToU8(`${JSON.stringify(checksums, null, 2)}\n`)
+    return Buffer.from(zipSync(files, { level: 6, mtime: new Date(1980, 0, 1) })).toString('base64')
+  }
+
+  afterEach(async () => {
+    for (const release of releases.splice(0)) await release()
+    for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
+  })
+
+  describe('Mnemon Pack machine identity', () => {
+    it('stamps the entries the sync channel publishes, and keeps the identity out of the archive', async () => {
+      const source = await machine('pack-origin-source')
+      await add(source, 'Prefer concise answers')
+      const exported = await source.manager.exportPack('runtime', { stamp: true })
+
+      const me = identity(source.root)
+      expect(me.id).toMatch(/^[0-9a-f-]{36}$/u)
+      expect(me.label.length).toBeGreaterThan(0)
+      const stored = entries(source.root)[0]!
+      expect(packed(exported.base64, 'payload/runtime/memories.json')).toMatchObject({
+        entries: [{ content: 'Prefer concise answers', origin: { machine: me.id, label: me.label, at: stored.updated_at } }],
+      })
+      const manifest = packed(exported.base64, 'manifest.json') as Record<string, unknown>
+      expect(manifest).not.toHaveProperty('machine')
+      expect(manifest).not.toHaveProperty('sync')
+      expect(Object.keys(archive(exported.base64)).filter(path => path.startsWith('payload/state/'))).toEqual([])
+    })
+
+    it('exports the same entries byte for byte when nothing was written in between', async () => {
+      const source = await machine('pack-origin-stable')
+      await add(source, 'Prefer concise answers')
+      const first = await source.manager.exportPack('runtime', { stamp: true })
+      const second = await source.manager.exportPack('runtime', { stamp: true })
+
+      expect(first.manifest.exportedAt).not.toBe(second.manifest.exportedAt)
+      expect(Buffer.from(archive(second.base64)['payload/runtime/memories.json']!))
+        .toEqual(Buffer.from(archive(first.base64)['payload/runtime/memories.json']!))
+      const stored = entries(source.root)[0]!
+      expect(stored.origin).toBeUndefined()
+      expect(packed(second.base64, 'payload/runtime/memories.json')).toMatchObject({
+        entries: [{ content: 'Prefer concise answers', origin: { at: stored.updated_at } }],
+      })
+    })
+
+    it('never rewrites an origin that another installation already recorded', async () => {
+      const source = await machine('pack-origin-preserved')
+      mkdirSync(join(source.root, 'runtime'), { recursive: true })
+      writeFileSync(join(source.root, 'runtime', 'memories.json'), `${JSON.stringify({
+        version: 1,
+        entries: [{
+          content: 'Written on the desktop', target: 'memory', importance: 'normal',
+          created_at: '2026-08-14T09:00:00.000Z', updated_at: '2026-08-14T09:00:00.000Z',
+          origin: { machine: 'desktop-id', label: 'desktop', at: '2026-08-14T09:00:00.000Z' },
+        }],
+      }, null, 2)}\n`)
+
+      const exported = await source.manager.exportPack('runtime', { stamp: true })
+
+      expect(packed(exported.base64, 'payload/runtime/memories.json')).toMatchObject({
+        entries: [{ content: 'Written on the desktop', origin: { machine: 'desktop-id', label: 'desktop' } }],
+      })
+    })
+
+    it('leaves the identity and the ledger untouched for a backup that is only downloaded', async () => {
+      const source = await machine('pack-origin-not-payload')
+      await add(source, 'Prefer concise answers')
+      const exported = await source.manager.exportPack('full')
+
+      expect(existsSync(join(source.root, 'state', 'machine.json'))).toBe(false)
+      expect(existsSync(join(source.root, 'state', 'tombstones.json'))).toBe(false)
+      expect(archive(exported.base64)['payload/state/machine.json']).toBeUndefined()
+      expect(archive(exported.base64)['payload/runtime/tombstones.json']).toBeUndefined()
+    })
+  })
+
+  describe('Mnemon Pack deletion tombstones', () => {
+    it('records a deletion that happened between two exports', async () => {
+      const source = await machine('pack-tombstone-source')
+      await add(source, 'Keep the changelog short')
+      await add(source, 'Prefer concise answers')
+      await source.manager.exportPack('runtime', { stamp: true })
+      expect(tombstones(source.root)).toEqual([])
+
+      await remove(source, 'Keep the changelog short')
+      const exported = await source.manager.exportPack('runtime', { stamp: true })
+
+      const recorded = tombstones(source.root)
+      expect(recorded).toHaveLength(1)
+      expect(recorded[0]).toMatchObject({ target: 'user', deletedAt: '2030-01-01T00:00:02.000Z', machine: identity(source.root).id })
+      expect(recorded[0]?.contentHash).toMatch(/^[a-f0-9]{64}$/u)
+      expect(archive(exported.base64)['payload/runtime/tombstones.json']).toBeUndefined()
+      expect(packed(exported.base64, 'payload/runtime/memories.json')).toMatchObject({ entries: [{ content: 'Prefer concise answers' }] })
+    })
+
+    it('does not tombstone anything on the first export of a root', async () => {
+      const source = await machine('pack-tombstone-first')
+      await add(source, 'Prefer concise answers')
+      await source.manager.exportPack('runtime', { stamp: true })
+
+      expect(tombstones(source.root)).toEqual([])
+    })
+
+    it('keeps a deletion invisible when an older Pack arrives over the sync channel', async () => {
+      const desktop = await machine('pack-tombstone-desktop')
+      await add(desktop, 'Keep the changelog short')
+      const old = await desktop.manager.exportPack('runtime', { stamp: true })
+
+      const laptop = await machine('pack-tombstone-laptop')
+      await add(laptop, 'Keep the changelog short')
+      await laptop.manager.exportPack('runtime', { stamp: true })
+      await remove(laptop, 'Keep the changelog short')
+      await laptop.manager.exportPack('runtime', { stamp: true })
+      expect(entries(laptop.root)).toEqual([])
+
+      await laptop.manager.importPack(old.base64, { mode: 'merge', tombstones: laptop.manager.tombstones() })
+
+      expect(entries(laptop.root)).toEqual([])
+      expect(tombstones(laptop.root)).toHaveLength(1)
+    })
+
+    it('adds a deleted entry back on a safe import, which carries no ledger', async () => {
+      const source = await machine('pack-tombstone-safe-import')
+      await add(source, 'Keep the changelog short')
+      const older = await source.manager.exportPack('runtime', { stamp: true })
+      await remove(source, 'Keep the changelog short')
+      await source.manager.exportPack('runtime', { stamp: true })
+      expect(entries(source.root)).toEqual([])
+      const ledger = tombstones(source.root)
+      expect(ledger).toHaveLength(1)
+
+      const imported = await source.manager.importPack(older.base64, { mode: 'merge' })
+
+      expect(imported.runtime).toEqual({ added: 1, held: 0 })
+      expect(entries(source.root).map(entry => entry.content)).toEqual(['Keep the changelog short'])
+      expect(tombstones(source.root)).toEqual(ledger)
+    })
+
+    it('lets a deleted entry come back when it is added again later', async () => {
+      const source = await machine('pack-tombstone-revive')
+      await add(source, 'Keep the changelog short')
+      await source.manager.exportPack('runtime', { stamp: true })
+      await remove(source, 'Keep the changelog short')
+      await source.manager.exportPack('runtime', { stamp: true })
+      expect(entries(source.root)).toEqual([])
+
+      await add(source, 'Keep the changelog short')
+      const exported = await source.manager.exportPack('runtime', { stamp: true })
+
+      expect(entries(source.root)).toHaveLength(1)
+      expect(tombstones(source.root)).toHaveLength(1)
+      expect(packed(exported.base64, 'payload/runtime/memories.json')).toMatchObject({ entries: [{ content: 'Keep the changelog short' }] })
+    })
+
+    it('brings a deleted entry back on request, and stops hiding it afterwards', async () => {
+      const desktop = await machine('pack-tombstone-revive-desktop')
+      await add(desktop, 'Keep the changelog short')
+      const published = await desktop.manager.exportPack('runtime', { stamp: true })
+
+      const laptop = await machine('pack-tombstone-revive-laptop')
+      await add(laptop, 'Keep the changelog short')
+      await laptop.manager.exportPack('runtime', { stamp: true })
+      await remove(laptop, 'Keep the changelog short')
+      await laptop.manager.exportPack('runtime', { stamp: true })
+
+      const held = await laptop.manager.importPack(published.base64, { mode: 'merge', tombstones: laptop.manager.tombstones() })
+      expect(held.runtime).toEqual({ added: 0, held: 1 })
+      expect(entries(laptop.root)).toEqual([])
+      expect(tombstones(laptop.root)).toHaveLength(1)
+
+      const revived = await laptop.manager.importPack(published.base64, { mode: 'merge', revive: true, tombstones: laptop.manager.tombstones() })
+      expect(revived.runtime).toEqual({ added: 1, held: 0 })
+      expect(entries(laptop.root).map(entry => entry.content)).toEqual(['Keep the changelog short'])
+      expect(tombstones(laptop.root)).toEqual([])
+
+      const again = await laptop.manager.importPack(published.base64, { mode: 'merge', tombstones: laptop.manager.tombstones() })
+      expect(again.runtime).toEqual({ added: 0, held: 0 })
+      expect(entries(laptop.root).map(entry => entry.content)).toEqual(['Keep the changelog short'])
+    })
+
+    it('keeps the newest deletion when two installations deleted the same entry', async () => {
+      const desktop = await machine('pack-tombstone-newer-desktop')
+      await add(desktop, 'Keep the changelog short')
+      await desktop.manager.exportPack('runtime', { stamp: true })
+      await remove(desktop, 'Keep the changelog short')
+      const later = await desktop.manager.exportPack('runtime', { stamp: true })
+      expect(tombstones(desktop.root)[0]?.deletedAt).toBe('2030-01-01T00:00:02.000Z')
+
+      const laptop = await machine('pack-tombstone-newer-laptop', tickingClock('2029-01-01T00:00:00.000Z'))
+      await add(laptop, 'Keep the changelog short')
+      await laptop.manager.exportPack('runtime', { stamp: true })
+      await remove(laptop, 'Keep the changelog short')
+      await laptop.manager.exportPack('runtime', { stamp: true })
+      expect(tombstones(laptop.root)[0]?.deletedAt).toBe('2029-01-01T00:00:02.000Z')
+
+      await laptop.manager.importPack(later.base64, { mode: 'merge', tombstones: desktop.manager.tombstones() })
+
+      const merged = tombstones(laptop.root)
+      expect(merged).toHaveLength(1)
+      expect(merged[0]?.deletedAt).toBe('2030-01-01T00:00:02.000Z')
+      expect(entries(laptop.root)).toEqual([])
+    })
+
+    it('survives a corrupted runtime index by falling back to no deletions', async () => {
+      const source = await machine('pack-tombstone-corrupt-index')
+      await add(source, 'Keep the changelog short')
+      await source.manager.exportPack('runtime', { stamp: true })
+      writeFileSync(join(source.root, 'state', 'runtime-index.json'), '{ broken')
+
+      await remove(source, 'Keep the changelog short')
+      await source.manager.exportPack('runtime', { stamp: true })
+
+      expect(tombstones(source.root)).toEqual([])
+    })
+
+    it('refuses a removal ledger that is malformed', async () => {
+      const source = await machine('pack-tombstone-malformed')
+      await add(source, 'Keep the changelog short')
+      const exported = await source.manager.exportPack('runtime', { stamp: true })
+      const malformed = { version: 1, tombstones: [{ target: 'user', contentHash: 'nope', deletedAt: '2030-01-01T00:00:00.000Z' }] } as unknown as MnemonTombstoneFile
+
+      const target = await machine('pack-tombstone-malformed-target')
+      await expect(target.manager.importPack(exported.base64, { mode: 'merge', tombstones: malformed }))
+        .rejects.toThrow('runtime tombstones.json contains an invalid entry')
+    })
+
+    it('refuses a Pack whose runtime index cannot be read', async () => {
+      const source = await machine('pack-tombstone-broken-index')
+      await add(source, 'Keep the changelog short')
+      const exported = await source.manager.exportPack('runtime', { stamp: true })
+      const broken = forge(exported.base64, 'payload/runtime/memories.json', '{"version":1,"entries":[{"content":"x"}]}')
+
+      const target = await machine('pack-tombstone-broken-index-target')
+      await expect(target.manager.importPack(broken, { mode: 'merge' })).rejects.toThrow('runtime memories.json contains an invalid entry')
+    })
+  })
+})
+
+describe('Mnemon machine identity store', () => {
+  const directories: string[] = []
+
+  function temporary(): string {
+    const directory = mkdtempSync(join(tmpdir(), 'dsh-mnemon-identity-'))
+    directories.push(directory)
+    return directory
+  }
+
+  function store(root: string): MnemonMachineStore {
+    return new MnemonMachineStore({ effectiveDataDir: () => root })
+  }
+
+  afterEach(() => {
+    for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
+  })
+
+  it('mints one identity on first use and keeps it across later reads and instances', () => {
+    const root = temporary()
+    const first = store(root).read()
+    expect(first.id).toMatch(/^[0-9a-f-]{36}$/u)
+    expect(first.label.length).toBeGreaterThan(0)
+    expect(Number.isNaN(Date.parse(first.createdAt))).toBe(false)
+
+    const path = join(root, MNEMON_MACHINE_DIRECTORY, MNEMON_MACHINE_FILE)
+    expect(existsSync(path)).toBe(true)
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ version: 1, ...first, labelSource: 'hostname' })
+
+    expect(store(root).read()).toEqual(first)
+    expect(store(root).read().id).toBe(first.id)
+  })
+
+  it('labels the machine with its host name and never leaves the label empty', () => {
+    expect(defaultMachineLabel().trim()).toBe(defaultMachineLabel())
+    expect(defaultMachineLabel().length).toBeGreaterThan(0)
+  })
+
+  it('replaces a damaged record instead of failing', () => {
+    const root = temporary()
+    const path = join(root, MNEMON_MACHINE_DIRECTORY, MNEMON_MACHINE_FILE)
+    mkdirSync(dirname(path), { recursive: true })
+    for (const damaged of ['not json at all', JSON.stringify({ version: 2, id: 'a', label: 'b', createdAt: 'c' }), JSON.stringify({ version: 1, id: '', label: 'b', createdAt: 'c' }), JSON.stringify({ version: 1, id: 'a', label: 'b' })]) {
+      rmSync(path, { force: true })
+      writeFileSync(path, damaged)
+      const identity = store(root).read()
+      expect(identity.id).not.toBe('a')
+      expect(identity.label.length).toBeGreaterThan(0)
+      expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ version: 1, ...identity, labelSource: 'hostname' })
+    }
+  })
+
+  it('follows the host name until a person names the machine', () => {
+    const root = temporary()
+    const path = join(root, MNEMON_MACHINE_DIRECTORY, MNEMON_MACHINE_FILE)
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, JSON.stringify({ version: 1, id: 'kept-id', label: 'old-host', createdAt: '2026-10-01T00:00:00.000Z', labelSource: 'hostname' }))
+
+    expect(store(root).current()).toEqual({ identity: { id: 'kept-id', label: defaultMachineLabel(), createdAt: '2026-10-01T00:00:00.000Z' }, source: 'hostname' })
+    expect(JSON.parse(readFileSync(path, 'utf8')).label).toBe(defaultMachineLabel())
+  })
+
+  it('keeps a typed name for every reader and goes back to the host name on request', () => {
+    const root = temporary()
+    const first = store(root).read()
+    const named = store(root).rename('  Studio  ')
+    expect(named).toEqual({ identity: { ...first, label: 'Studio' }, source: 'custom' })
+    expect(store(root).read()).toEqual({ ...first, label: 'Studio' })
+    expect(JSON.parse(readFileSync(join(root, MNEMON_MACHINE_DIRECTORY, MNEMON_MACHINE_FILE), 'utf8')).labelSource).toBe('custom')
+
+    expect(store(root).rename(null)).toEqual({ identity: { ...first, label: defaultMachineLabel() }, source: 'hostname' })
+    expect(store(root).rename('')).toEqual({ identity: { ...first, label: defaultMachineLabel() }, source: 'hostname' })
+    expect(store(root).read().id).toBe(first.id)
+  })
+
+  it('reads a record from an earlier version by its label', () => {
+    const root = temporary()
+    const path = join(root, MNEMON_MACHINE_DIRECTORY, MNEMON_MACHINE_FILE)
+    mkdirSync(dirname(path), { recursive: true })
+    writeFileSync(path, JSON.stringify({ version: 1, id: 'a', label: defaultMachineLabel(), createdAt: 'c' }))
+    expect(store(root).current().source).toBe('hostname')
+    expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ version: 1, id: 'a', label: defaultMachineLabel(), createdAt: 'c', labelSource: 'hostname' })
+    writeFileSync(path, JSON.stringify({ version: 1, id: 'b', label: 'MacBook', createdAt: 'c' }))
+    expect(store(root).current()).toEqual({ identity: { id: 'b', label: 'MacBook', createdAt: 'c' }, source: 'custom' })
+    expect(JSON.parse(readFileSync(path, 'utf8')).labelSource).toBe('custom')
+  })
+
+  it('refuses a name that is blank, too long or more than one line, and keeps the old one', () => {
+    const root = temporary()
+    const named = store(root).rename('Laptop').identity
+    for (const bad of ['   ', 'x'.repeat(MNEMON_MACHINE_LABEL_MAX + 1), 'two\nlines', 'tab\tbed', 42, {}]) {
+      expect(() => store(root).rename(bad)).toThrow(/machine name/u)
+    }
+    expect(store(root).rename('x'.repeat(MNEMON_MACHINE_LABEL_MAX)).identity.label).toHaveLength(MNEMON_MACHINE_LABEL_MAX)
+    expect(store(root).read().id).toBe(named.id)
+  })
+
+  it('reads the identity from the effective data directory the runner reports', () => {
+    const root = temporary()
+    const identity = new MnemonMachineStore({ effectiveDataDir: () => join(root, 'nested', 'deeper') }).read()
+    expect(existsSync(join(root, 'nested', 'deeper', MNEMON_MACHINE_DIRECTORY, MNEMON_MACHINE_FILE))).toBe(true)
+    expect(identity.id.length).toBeGreaterThan(0)
+  })
+})
+
+describe('Documents index integrity', () => {
+  const directories: string[] = []
+  const releases: Array<() => Promise<void>> = []
+  const now = () => new Date('2026-10-14T01:49:04.859Z')
+  const DECLARED_VERSION = (JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8')) as { version: string }).version
+
+  function temporary(label: string): string {
+    const directory = mkdtempSync(join(tmpdir(), `dsh-mnemon-${label}-`))
+    directories.push(directory)
+    return directory
+  }
+
+  async function fixture(label: string) {
+    const root = temporary(label)
+    const workspace = temporary(`${label}-workspace`)
+    const config = resolveConfig({ storageScope: 'custom', dataDir: root, cliPath: '/fake/mnemon' })
+    const runner = createStorageRoot(config)
+    const sources = await sourceFixture({ dataDir: root, workspace })
+    releases.push(sources.dispose)
+    await sources.documents.mutate('mutate', { action: 'create', title: 'Hermes image generation', content: '# Hermes\n\nDirect upstream call.' }, { confirmed: true })
+    return { root, manager: new MnemonPackManager(runner, config, undefined, now) }
+  }
+
+  interface IndexDocument { id: string; relativePath: string; contentHash: string; sizeBytes: number }
+  interface DocumentsIndex { version: number; documents: IndexDocument[] }
+
+  function indexOf(root: string): DocumentsIndex {
+    return JSON.parse(readFileSync(join(root, 'documents', 'index.json'), 'utf8')) as DocumentsIndex
+  }
+
+  function damage(root: string, change: (document: IndexDocument) => IndexDocument): void {
+    const index = indexOf(root)
+    index.documents[0] = change(index.documents[0]!)
+    writeFileSync(join(root, 'documents', 'index.json'), `${JSON.stringify(index, null, 2)}\n`)
+  }
+
+  afterEach(async () => {
+    for (const release of releases.splice(0)) await release()
+    for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
+  })
+
+  it('records a sha256 digest for every document it indexes', async () => {
+    const source = await fixture('documents-hash-shape')
+    expect(indexOf(source.root).documents[0]!.contentHash).toMatch(/^[a-f0-9]{64}$/u)
+  })
+
+  it('refuses to publish a content hash one character too long, and still backs it up', async () => {
+    const source = await fixture('documents-hash-long')
+    damage(source.root, document => ({ ...document, contentHash: document.contentHash + '6' }))
+    expect(indexOf(source.root).documents[0]!.contentHash).toHaveLength(65)
+
+    await expect(source.manager.exportPack('documents', { stamp: true })).rejects.toThrow('Documents index records a content hash that is not a sha256 digest for documents/active/')
+    const backup = await source.manager.exportPack('documents')
+    expect(backup.bytes).toBeGreaterThan(0)
+    const target = await fixture('documents-hash-long-target')
+    await expect(target.manager.importPack(backup.base64, { mode: 'merge' })).rejects.toThrow('Documents index records a content hash that is not a sha256 digest for documents/active/')
+  })
+
+  it('refuses to publish a content hash that is the right length but not hexadecimal', async () => {
+    const source = await fixture('documents-hash-non-hex')
+    damage(source.root, document => ({ ...document, contentHash: 'Z'.repeat(64) }))
+
+    await expect(source.manager.exportPack('documents', { stamp: true })).rejects.toThrow('Documents index records a content hash that is not a sha256 digest for documents/active/')
+    await expect(source.manager.exportPack('documents')).resolves.toMatchObject({ bytes: expect.any(Number) })
+  })
+
+  it('refuses to publish a size the payload cannot hold', async () => {
+    const source = await fixture('documents-size')
+    damage(source.root, document => ({ ...document, sizeBytes: document.sizeBytes + 1 }))
+
+    await expect(source.manager.exportPack('documents', { stamp: true })).rejects.toThrow('Documents payload size does not match')
+  })
+
+  it('refuses to publish a digest that is well formed but is not this body', async () => {
+    const source = await fixture('documents-hash-wrong')
+    damage(source.root, document => ({ ...document, contentHash: '0'.repeat(64) }))
+
+    const downloaded = await source.manager.exportPack('documents')
+    expect(downloaded.bytes).toBeGreaterThan(0)
+    expect(downloaded.manifest.source.pluginVersion).toBe(DECLARED_VERSION)
+
+    await expect(source.manager.exportPack('documents', { stamp: true })).rejects.toThrow('Documents payload content hash does not match documents/active/')
+  })
+
+  it('publishes a scope that carries no Documents without reading one', async () => {
+    const source = await fixture('documents-absent')
+    damage(source.root, document => ({ ...document, contentHash: document.contentHash + '6' }))
+
+    await expect(source.manager.exportPack('runtime', { stamp: true })).resolves.toBeDefined()
+  })
 })

@@ -1,271 +1,34 @@
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, realpathSync, rmSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
-import { createHash } from 'node:crypto'
+import { mkdtempSync, readFileSync } from 'node:fs'
 import fs from 'node:fs'
-import { createRequire } from 'node:module'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { assertReleasedPayloadSemantics } from '@deepseek-ai/dsh-session-format-v0-to-v1'
-import { MemoryExecutions } from '../src/host/memory-executions.ts'
-import { resolveConfig } from "../src/host/config.ts"
+import { resolveConfig } from '../src/host/config.ts'
 import type {
-  CreateHostAgentOptions,
   HostAgent,
-  HostAgentContext,
-  HostContextShape,
   HostPreStepDecision,
-  HostSession,
-  HostSessionEvent,
   HostUserMessage,
-} from "../src/host/dsh.ts"
-import { MnemonLifecycle, taskRoute } from "../src/host/lifecycle.ts"
+} from '../src/host/dsh.ts'
+import { MnemonLifecycle, taskRoute } from '../src/host/lifecycle.ts'
 import { MemoryCompositionUnavailableError } from '../src/core/generation.ts'
-import type { MemoryStrategyWorkflow } from '../src/core/contracts/index.ts'
-import { IdleReviewError, type MnemonSubagentCoordinator } from "../src/host/subagent.ts"
-import { sessionLog } from './fixtures/session-log.ts'
+import { IdleReviewError } from '../src/host/subagent.ts'
+import {
+  LAYERED,
+  cleanupLifecycleDirectories,
+  completeDurableTurns,
+  composedBy,
+  directories,
+  durableCandidate,
+  fixture,
+  registryWorkspace,
+  requireDsh,
+  userMessage,
+  watermarkFile,
+  workspaceTwo,
+  writeWatermark,
+} from './fixtures/lifecycle.ts'
 
-type Listener = (...args: unknown[]) => unknown
-
-// A task Agent's directory must exist: DSH 0.2.1 checks it before every step.
-const directories = mkdtempSync(join(tmpdir(), 'mnemon-lifecycle-'))
-const workspaceTwo = mkdtempSync(join(directories, 'workspace-two-'))
-const registryWorkspace = mkdtempSync(join(directories, 'registry-workspace-'))
-afterAll(() => rmSync(directories, { recursive: true, force: true }))
-
-function userMessage(text = 'Continue the project'): HostUserMessage {
-  return {
-    id: crypto.randomUUID(),
-    role: 'user',
-    content: [{ type: 'text', text }],
-    source: { kind: 'user' },
-  }
-}
-
-function durableCandidate(filler = 97): HostUserMessage {
-  return userMessage(`Please remember this durable architecture rationale: ${'x'.repeat(filler)}`)
-}
-
-/** The Layered strategy as published before 0.5.10, declaring nothing, and as it ships now. */
-const LAYERED = [
-  ['undeclared', undefined],
-  ['declared', { 'default-three-tier': ['idle-review', 'runtime-capacity'] }],
-] as const satisfies ReadonlyArray<readonly [string, Partial<Record<string, readonly MemoryStrategyWorkflow[]>> | undefined]>
-
-/** The View fields Core takes from the Strategy that composed it, one generation per Strategy. */
-function composedBy(typeId: string): { strategyTypeId: string; strategyInstanceKey: string; runtimeGeneration: string } {
-  return { strategyTypeId: typeId, strategyInstanceKey: `strategy:${typeId}`, runtimeGeneration: `fixture-generation:${typeId}` }
-}
-
-function fixture(config = resolveConfig({ cliPath: '/fake/mnemon' }), options: { inactive?: boolean; directory?: string; sessionId?: string; taskModelRoute?: boolean; workspaces?: Array<{ path: string }>; sessionModel?: { provider: string; model: string; reasoningEffort?: string }; conversationOptions?: { provider: string; model: string; reasoningEffort?: string }; workingDirectory?: { set: (agent: HostAgent, path: string, signal?: AbortSignal) => Promise<string> }; strategyWorkflows?: Partial<Record<string, readonly MemoryStrategyWorkflow[]>> | undefined } = {}) {
-  const agentListeners = new Map<string, Listener>()
-  const rootListeners = new Map<string, Listener>()
-  const agentSections: Array<{ name: string; order: number; text: () => string }> = []
-  const agentContexts: Array<{ name: string; order: number; text: () => string }> = []
-  const promptAssemblies: Array<{ sections: Array<{ name: string; text: string }>; contexts: Array<{ name: string; text: string }> }> = []
-  const events: HostSessionEvent[] = []
-  const followup = vi.fn()
-  const steer = vi.fn()
-  const taskAgents: HostAgent[] = []
-  const disposedTaskAgents: string[] = []
-  const taskModelRoute = options.taskModelRoute !== false
-  const sessionModel = options.sessionModel
-  const defaultModel = { currentSelection: vi.fn((): { provider: string; model: string; reasoningEffort?: string } => ({ provider: 'deepseek', model: 'deepseek-chat' })) }
-  const llm = {
-    listProviders: vi.fn(() => [
-      { id: 'deepseek', name: 'DeepSeek' },
-      { id: 'openai', name: 'OpenAI' },
-    ]),
-    listModels: vi.fn(async (provider: string): Promise<Array<{ id: string; name: string; description?: string; inputModalities?: readonly string[] }>> => provider === 'openai'
-      ? [{ id: 'gpt-5', name: 'GPT-5', description: 'General reasoning' }]
-      : [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }]),
-  }
-  const agentPresets = {
-    resolve: vi.fn(async () => ({ id: 'default' })),
-    mount: vi.fn(async () => ({ id: 'default' })),
-  }
-  // DSH appends an admitted step batch to the Session log and its surface.
-  const admit = (listener: Listener): Listener => async (...args) => {
-    const decision = await listener(...args) as HostPreStepDecision
-    if (decision.kind === 'enter') {
-      for (const message of decision.messages) events.push({ type: 'user/message', seq: events.length, data: { ...message } })
-    }
-    return decision
-  }
-  let contextActive = !options.inactive
-  const agentCtx = {
-    fiber: { assertActive() { if (!contextActive) throw Object.assign(new Error('cannot create effect on inactive context'), { code: 'INACTIVE_EFFECT' }) } },
-    on: vi.fn((name: string, listener: Listener) => {
-      agentListeners.set(name, name === 'agent/pre-step' ? admit(listener) : listener)
-      return () => agentListeners.delete(name)
-    }),
-    effect: vi.fn((callback: () => (() => unknown) | void) => {
-      const cleanup = callback()
-      return () => cleanup?.()
-    }),
-    get: vi.fn((name: string) => name === 'systemPrompt'
-      ? {
-          section: (value: { name: string; order: number; text: () => string }) => {
-            agentSections.push(value)
-            return () => undefined
-          },
-          context: (value: { name: string; order: number; text: () => string }) => {
-            agentContexts.push(value)
-            return () => undefined
-          },
-        }
-      : undefined),
-  } as unknown as HostAgentContext
-  const agent = {
-    id: options.sessionId ?? 'session-1',
-    status: 'idle',
-    ...(options.conversationOptions !== undefined ? { options: options.conversationOptions } : taskModelRoute ? { options: { provider: 'deepseek', model: 'deepseek-chat' } } : {}),
-    session: {
-      ...sessionLog(events),
-      ...(sessionModel === undefined ? {} : { requestHeader: () => ({ config: sessionModel }) }),
-    },
-    ctx: agentCtx,
-    followup,
-    steer,
-    inject: vi.fn(), cancel: vi.fn(),
-  } satisfies HostAgent
-  const coordinator = {
-    isFinishedTask: () => false,
-    inheritTaskContinuation: () => {},
-    canReview: vi.fn(() => true),
-    checkReviewAccess: vi.fn(async () => true),
-    recall: vi.fn(async (_agent, request) => ({ query: request.query, mode: 'smart', results: [] })),
-    write: vi.fn(async () => ({ delegated: true, runId: 'write-child', provider: 'spawn', summary: 'No durable memory', action: 'skipped', memoryBodyIds: [] })),
-    answer: vi.fn(async () => ({ answer: 'SQLite.', citations: [], delegation: { runId: 'answer-child', provider: 'spawn' } })),
-    review: vi.fn(async () => ({ delegated: true, runId: 'review-child', provider: 'fork', summary: 'No durable change', action: 'skipped', memoryBodyIds: [] })),
-    maintainMetadata: vi.fn(async () => ({ delegated: true, runId: 'metadata-child', provider: 'spawn', summary: 'updated', updates: [] })),
-    archiveDocument: vi.fn(async () => ({ success: true, action: 'archived', document: { id: 'doc-1' } })),
-    document: vi.fn(async () => ({ success: true, action: 'created', document: { id: 'doc-2' } })),
-    placeProvider: vi.fn(async () => ({ providerId: 'mnemon-native', reason: 'local', confidence: 'high' })),
-    snapshot: vi.fn(() => ({ recalls: 0, writes: 0, answers: 0, reviews: 0, failures: 0 })),
-  } as unknown as MnemonSubagentCoordinator
-  const createTaskAgent = vi.fn(async (options: CreateHostAgentOptions) => {
-    const taskCtx = {
-      on: vi.fn(() => () => undefined),
-      effect: vi.fn((callback: () => (() => unknown) | void) => {
-        const cleanup = callback()
-        return () => cleanup?.()
-      }),
-    } as unknown as HostAgentContext
-    const taskAgent = {
-      id: options.sessionId,
-      status: 'idle' as const,
-      ...(options.agentOptions === undefined ? {} : { options: options.agentOptions }),
-      session: { header: options.meta ?? {}, ...sessionLog() },
-      ctx: taskCtx,
-      followup: vi.fn(),
-      steer: vi.fn(),
-      inject: vi.fn(), cancel: vi.fn(),
-    } satisfies HostAgent
-    // DSH runs setup on the unpublished Agent, as setup(agent.ctx, agent).
-    await options.setup?.(taskCtx, taskAgent)
-    taskAgents.push(taskAgent)
-    rootListeners.get('agent/created')?.({ agent: taskAgent })
-    return {
-      agent: taskAgent,
-      dispose: vi.fn(async () => {
-        disposedTaskAgents.push(taskAgent.id)
-        const index = taskAgents.indexOf(taskAgent)
-        if (index >= 0) taskAgents.splice(index, 1)
-      }),
-    }
-  })
-  const ctx = {
-    agents: { get: (id: string) => id === agent.id ? agent : taskAgents.find(candidate => candidate.id === id), roots: () => [agent, ...taskAgents], create: createTaskAgent },
-    get: vi.fn((name: string) => name === 'agentDefaultModel' && taskModelRoute
-      ? defaultModel
-      : name === 'agentPresets'
-        ? agentPresets
-        : name === 'llm'
-          ? llm
-          : name === 'workspaceRegistry' && options.workspaces !== undefined
-            ? { get: (id: string) => options.workspaces!.find(workspace => workspace.path === id), list: () => options.workspaces! }
-            : name === 'workingDirectory'
-              ? options.workingDirectory
-              : undefined),
-    on: vi.fn((name: string, listener: Listener) => {
-      rootListeners.set(name, listener)
-      return () => rootListeners.delete(name)
-    }),
-  } as unknown as HostContextShape
-  const pinnedTurns = new Map<string, object>()
-  const composableTurns = {
-    activeTurn: vi.fn(() => [...pinnedTurns.values()].at(-1)),
-    beginTurn: vi.fn(async (turnId: string, scope: object) => {
-      const turn = turnId.slice(turnId.lastIndexOf(':') + 1)
-      const context = { turnId, view: { id: `view-${turn}`, digest: `digest-${turn}`, ...composedBy(config.memoryTopology.strategyId), createdAt: '2026-08-23T00:00:00.000Z',
-        scope, projection: [], readGrants: [], routes: [], actionOffers: [] }, scope, startedAt: '2026-08-23T00:00:00.000Z' }
-      pinnedTurns.set(turnId, context)
-      return context
-    }),
-    turn: vi.fn((turnId: string) => pinnedTurns.get(turnId)),
-    memoryWake: vi.fn((viewId: string) => ({
-      viewId,
-      viewDigest: viewId.replace('view-', 'digest-'),
-      text: `Pinned Wake ${viewId}`,
-      sections: [{ layerId: 'runtime', mode: 'eager', text: `Pinned Wake ${viewId}` }],
-    })),
-    endTurn: vi.fn((turnId: string) => pinnedTurns.delete(turnId)),
-  }
-  const runtimeBinding = {
-    // Each generation holds the definition of the Strategy that composed its Views, as Core's does;
-    // a Strategy without a declaration in the test declares none, as the Layered one before 0.5.10.
-    forAgent: vi.fn((_agent: HostAgent) => ({ config, directory: options.directory, composableTurns, memoryComposition: { generation: (id: string) => {
-      const typeId = id.slice('fixture-generation:'.length)
-      const workflows = options.strategyWorkflows?.[typeId]
-      return { sourceInstances: () => [], strategy: { instanceKey: `strategy:${typeId}`, definition: { manifest: { typeId, ...(workflows === undefined ? {} : { workflows: [...workflows] }) } } } }
-    } } })),
-    bindAgentRuntime: vi.fn((_agentId: string, _graph: unknown): (() => void) => () => undefined),
-  }
-  const runtimeSource = { ...runtimeBinding, executions: new MemoryExecutions(runtimeBinding as never) }
-  const lifecycle = new MnemonLifecycle(ctx, coordinator, config, runtimeSource as never)
-  const stop = lifecycle.start()
-
-  const assemblePrompt = async (turn: number) => {
-    const hasOpenTurn = events.some(event => event.type === 'turn/start' && event.data.turn === turn)
-      && !events.some(event => event.type === 'turn/end' && event.data.turn === turn)
-    if (!hasOpenTurn) events.push({ type: 'turn/start', data: { turn } })
-    const listener = agentListeners.get('system-prompt/assemble')
-    if (listener === undefined) throw new Error('system-prompt/assemble listener missing')
-    const assembly = {
-      sections: agentSections.map(section => ({ name: section.name, text: section.text() })),
-      contexts: agentContexts.map(context => ({ name: context.name, text: context.text() })),
-      tools: [],
-      variables: {},
-    }
-    const assembled = await listener(assembly, { agent, signal: new AbortController().signal }, async () => assembly) as typeof assembly
-    promptAssemblies.push(assembled)
-    return assembled
-  }
-  const preStep = async (messages: HostUserMessage[], turn: number, step = 1): Promise<HostPreStepDecision> => {
-    // Match the real DSH order: turn/start -> systemPrompt.assemble -> agent/pre-step.
-    await assemblePrompt(turn)
-    const listener = agentListeners.get('agent/pre-step')
-    if (listener === undefined) throw new Error('pre-step listener missing')
-    return await listener({ agent, messages, turn, step, signal: new AbortController().signal }, async () => ({ kind: 'enter', messages })) as HostPreStepDecision
-  }
-  const turnStopping = async (turn: number) => {
-    const listener = agentListeners.get('agent/turn-stopping')
-    if (listener === undefined) throw new Error('turn-stopping listener missing')
-    const signal = new AbortController().signal
-    await agentListeners.get('agent/request')?.({ agent, turn, step: 1, signal }, async () => ({}))
-    await listener({ agent, turn, signal })
-    if (!events.some(event => event.type === 'turn/end' && event.data.turn === turn)) {
-      const event = { type: 'turn/end', data: { turn } }
-      events.push(event)
-      agentListeners.get('session/event')?.(agent.session, event)
-    }
-  }
-  return { deactivateContext: () => { contextActive = false }, agent, agentListeners, agentSections, agentContexts, promptAssemblies, events, followup, steer, lifecycle, coordinator, composableTurns, runtimeSource, createTaskAgent, disposedTaskAgents, defaultModel, llm, agentPresets, assemblePrompt, preStep, turnStopping, stop }
-}
-
-// The DSH-owned Session codec, resolved exactly as the installed host resolves it.
-const requireDsh = createRequire(realpathSync(new URL('../node_modules/@deepseek-ai/dsh/package.json', import.meta.url)))
-
+afterAll(cleanupLifecycleDirectories)
 afterEach(() => vi.useRealTimers())
 
 describe('Mnemon DSH lifecycle integration', () => {
@@ -926,16 +689,10 @@ describe('Mnemon DSH lifecycle integration', () => {
   it('restores a persisted session budget before scheduling another idle review', async () => {
     vi.useFakeTimers()
     const directory = mkdtempSync(join(directories, 'watermark-'))
-    const stateDirectory = join(directory, 'state', 'idle-review')
-    mkdirSync(stateDirectory, { recursive: true })
-    const filename = join(stateDirectory, createHash('sha256').update('session-1').digest('hex') + '.json')
-    writeFileSync(filename, JSON.stringify({ version: 1, sessionId: 'session-1', attempts: 2, lastReviewAttemptAt: Date.now() - 60_000 }))
+    writeWatermark(directory, { version: 1, sessionId: 'session-1', attempts: 2, lastReviewAttemptAt: Date.now() - 60_000 })
     const value = fixture(resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark: true, maxPerSession: 2 } } as never), { directory })
     try {
-      await value.preStep([durableCandidate(300)], 1)
-      await value.turnStopping(1)
-      await value.preStep([durableCandidate(300)], 2)
-      await value.turnStopping(2)
+      await completeDurableTurns(value)
       await vi.advanceTimersByTimeAsync(600_000)
       expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ idleReviewAttempts: 2, idleReviewPending: false })
       expect(value.coordinator.review).not.toHaveBeenCalled()
@@ -946,13 +703,11 @@ describe('Mnemon DSH lifecycle integration', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     const directory = mkdtempSync(join(directories, 'future-watermark-'))
-    const stateDirectory = join(directory, 'state', 'idle-review')
-    mkdirSync(stateDirectory, { recursive: true })
-    writeFileSync(join(stateDirectory, createHash('sha256').update('session-1').digest('hex') + '.json'), JSON.stringify({ version: 1, sessionId: 'session-1', attempts: 1, lastReviewAttemptAt: 3_000_000_000_000 }))
+    writeWatermark(directory, { version: 1, sessionId: 'session-1', attempts: 1, lastReviewAttemptAt: 3_000_000_000_000 })
     const timer = vi.spyOn(globalThis, 'setTimeout')
     const value = fixture(resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark: true } }), { directory })
     try {
-      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await completeDurableTurns(value)
       await vi.advanceTimersByTimeAsync(1_000)
       expect(value.coordinator.review).not.toHaveBeenCalled()
       expect(value.lifecycle.snapshot('session-1').current?.idleReviewPending).toBe(true)
@@ -966,10 +721,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     const directory = mkdtempSync(join(directories, 'restart-'))
     const config = resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark: true, minIntervalMs: 30_000, maxPerSession: 2 } })
     const first = fixture(config, { directory })
-    const eligible = async (value: ReturnType<typeof fixture>) => {
-      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
-    }
-    await eligible(first)
+    await completeDurableTurns(first)
     await vi.advanceTimersByTimeAsync(5_000)
     expect(first.coordinator.review).toHaveBeenCalledOnce()
     first.stop()
@@ -978,7 +730,7 @@ describe('Mnemon DSH lifecycle integration', () => {
       expect(resumed.lifecycle.snapshot('session-1').current).toMatchObject({ idleReviewAttempts: 1, idleReviewPending: false, idleReviewWatermark: { state: 'ready', restoredAttempts: 1 } })
       await vi.advanceTimersByTimeAsync(10_000)
       expect(resumed.coordinator.review).not.toHaveBeenCalled()
-      await eligible(resumed)
+      await completeDurableTurns(resumed)
       await vi.advanceTimersByTimeAsync(19_999)
       expect(resumed.coordinator.review).not.toHaveBeenCalled()
       await vi.advanceTimersByTimeAsync(1)
@@ -992,13 +744,13 @@ describe('Mnemon DSH lifecycle integration', () => {
     const directory = mkdtempSync(join(directories, 'identity-'))
     const config = resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark: true, maxPerSession: 1 } })
     const first = fixture(config, { directory })
-    for (let turn = 1; turn <= 2; turn++) { await first.preStep([durableCandidate(300)], turn); await first.turnStopping(turn) }
+    await completeDurableTurns(first)
     await vi.advanceTimersByTimeAsync(5_000); first.stop()
     for (const options of [{ directory, sessionId: 'new-parent' }, { directory: join(directory, 'other-root') }]) {
       const value = fixture(config, options)
       try {
         expect(value.lifecycle.snapshot(options.sessionId ?? 'session-1').current?.idleReviewAttempts).toBe(0)
-        for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+        await completeDurableTurns(value)
         await vi.advanceTimersByTimeAsync(5_000)
         expect(value.coordinator.review).toHaveBeenCalledOnce()
       } finally { value.stop() }
@@ -1008,10 +760,8 @@ describe('Mnemon DSH lifecycle integration', () => {
   it('drops the previous root snapshot when the replacement root watermark is corrupt', () => {
     const directory = mkdtempSync(join(directories, 'root-snapshot-'))
     const other = join(directory, 'other-root')
-    const filename = createHash('sha256').update('session-1').digest('hex') + '.json'
-    for (const root of [directory, other]) mkdirSync(join(root, 'state', 'idle-review'), { recursive: true })
-    writeFileSync(join(directory, 'state', 'idle-review', filename), JSON.stringify({ version: 1, sessionId: 'session-1', attempts: 1, lastReviewAttemptAt: 1_000 }))
-    writeFileSync(join(other, 'state', 'idle-review', filename), '{')
+    writeWatermark(directory, { version: 1, sessionId: 'session-1', attempts: 1, lastReviewAttemptAt: 1_000 })
+    writeWatermark(other, '{')
     const value = fixture(resolveConfig({ idleReview: { persistWatermark: true } }), { directory })
     try {
       expect(value.lifecycle.snapshot('session-1').current?.idleReviewWatermark?.restoredAttempts).toBe(1)
@@ -1024,9 +774,7 @@ describe('Mnemon DSH lifecycle integration', () => {
   it('keeps normal turns available while corrupt watermarks or a missing graph root pause automatic review', async () => {
     vi.useFakeTimers()
     const directory = mkdtempSync(join(directories, 'corrupt-'))
-    const stateDirectory = join(directory, 'state', 'idle-review')
-    mkdirSync(stateDirectory, { recursive: true })
-    writeFileSync(join(stateDirectory, createHash('sha256').update('session-1').digest('hex') + '.json'), '{private-session-content')
+    writeWatermark(directory, '{private-session-content')
     for (const options of [{ directory }, {}]) {
       const value = fixture(resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark: true } }), options)
       try {
@@ -1047,14 +795,12 @@ describe('Mnemon DSH lifecycle integration', () => {
   it('starts no child when atomic persistence fails and leaves the old budget intact', async () => {
     vi.useFakeTimers()
     const directory = mkdtempSync(join(directories, 'write-failure-'))
-    const filename = join(directory, 'state', 'idle-review', createHash('sha256').update('session-1').digest('hex') + '.json')
-    mkdirSync(join(directory, 'state', 'idle-review'), { recursive: true })
     const previous = JSON.stringify({ version: 1, sessionId: 'session-1', attempts: 0, lastReviewAttemptAt: null })
-    writeFileSync(filename, previous)
+    const filename = writeWatermark(directory, previous)
     const value = fixture(resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark: true } }), { directory })
     const rename = vi.spyOn(fs, 'renameSync').mockImplementationOnce(() => { throw Object.assign(new Error('sensitive-path'), { code: 'EACCES' }) })
     try {
-      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await completeDurableTurns(value)
       await vi.advanceTimersByTimeAsync(5_000)
       expect(value.coordinator.review).not.toHaveBeenCalled()
       expect(readFileSync(filename, 'utf8')).toBe(previous)
@@ -1065,7 +811,7 @@ describe('Mnemon DSH lifecycle integration', () => {
   it('writes the reservation before starting a reviewer and retains it when the next turn cancels review', async () => {
     vi.useFakeTimers()
     const directory = mkdtempSync(join(directories, 'cancel-watermark-'))
-    const filename = join(directory, 'state', 'idle-review', createHash('sha256').update('session-1').digest('hex') + '.json')
+    const filename = watermarkFile(directory)
     const config = resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark: true, maxPerSession: 1 } })
     const value = fixture(config, { directory })
     let signal: AbortSignal | undefined
@@ -1075,7 +821,7 @@ describe('Mnemon DSH lifecycle integration', () => {
       return await new Promise((_resolve, reject) => controller.addEventListener('abort', () => reject(new Error('cancelled')), { once: true }))
     })
     try {
-      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await completeDurableTurns(value)
       await vi.advanceTimersByTimeAsync(5_000)
       expect(value.lifecycle.snapshot('session-1').current?.reviewRunning).toBe(true)
       await value.preStep([userMessage('continue')], 3)
@@ -1086,23 +832,28 @@ describe('Mnemon DSH lifecycle integration', () => {
     resumed.stop()
   })
 
-  it.each([1, 2])('persists existing disabled-mode usage immediately on opt-in (max: %s)', async maxPerSession => {
+  it.each([1, 2])('does no watermark I/O by default and persists earlier in-process attempts on opt-in (max: %s)', async maxPerSession => {
     vi.useFakeTimers(); vi.setSystemTime(1_000_000)
     const directory = mkdtempSync(join(directories, 'baseline-'))
     const config = resolveConfig({ idleReviewMs: 5_000, idleReview: { maxPerSession, minIntervalMs: 30_000 } })
     const first = fixture(config, { directory })
-    for (let turn = 1; turn <= 2; turn++) { await first.preStep([durableCandidate(300)], turn); await first.turnStopping(turn) }
+    await completeDurableTurns(first)
     await vi.advanceTimersByTimeAsync(5_000)
     expect(first.coordinator.review).toHaveBeenCalledOnce()
+    expect(() => readFileSync(watermarkFile(directory))).toThrow()
     config.idleReview.persistWatermark = true
     expect(first.lifecycle.snapshot('session-1').current?.idleReviewAttempts).toBe(1)
+    expect(JSON.parse(readFileSync(watermarkFile(directory), 'utf8')).attempts).toBe(1)
     first.stop()
     const resumed = fixture(config, { directory })
     try {
       expect(resumed.lifecycle.snapshot('session-1').current).toMatchObject({ idleReviewAttempts: 1, nextReviewAt: '1970-01-01T00:17:15.000Z' })
-      for (let turn = 1; turn <= 2; turn++) { await resumed.preStep([durableCandidate(300)], turn); await resumed.turnStopping(turn) }
+      await completeDurableTurns(resumed)
       await vi.advanceTimersByTimeAsync(5_000)
       expect(resumed.coordinator.review).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(25_000)
+      expect(resumed.coordinator.review).toHaveBeenCalledTimes(maxPerSession === 2 ? 1 : 0)
+      expect(JSON.parse(readFileSync(watermarkFile(directory), 'utf8')).attempts).toBe(maxPerSession)
     } finally { resumed.stop() }
   })
 
@@ -1113,13 +864,13 @@ describe('Mnemon DSH lifecycle integration', () => {
     const value = fixture(config, { directory })
     let rename: ReturnType<typeof vi.spyOn> | undefined
     try {
-      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await completeDurableTurns(value)
       await vi.advanceTimersByTimeAsync(5_000)
       rename = vi.spyOn(fs, 'renameSync').mockImplementationOnce(() => { throw Object.assign(new Error('baseline refused'), { code: 'EACCES' }) })
       config.idleReview.persistWatermark = true
       expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ idleReviewAttempts: 1, idleReviewWatermark: { state: 'error' } })
       config.idleReview.persistWatermark = false
-      for (let turn = 3; turn <= 4; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await completeDurableTurns(value, 3, 4)
       await vi.advanceTimersByTimeAsync(5_000)
       expect(value.coordinator.review).toHaveBeenCalledOnce()
     } finally { rename?.mockRestore(); value.stop() }
@@ -1131,10 +882,10 @@ describe('Mnemon DSH lifecycle integration', () => {
     const config = resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark: true, minIntervalMs: 5_000, maxPerSession: 2 } })
     const value = fixture(config, { directory })
     try {
-      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await completeDurableTurns(value)
       await vi.advanceTimersByTimeAsync(5_000)
       config.idleReview.persistWatermark = false
-      for (let turn = 3; turn <= 4; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await completeDurableTurns(value, 3, 4)
       await vi.advanceTimersByTimeAsync(5_000)
       expect(value.coordinator.review).toHaveBeenCalledTimes(2)
       config.idleReview.persistWatermark = true
@@ -1151,31 +902,12 @@ describe('Mnemon DSH lifecycle integration', () => {
     const config = resolveConfig({ idleReviewMs: 5_000, idleReview: { maxPerSession: 1 } })
     const value = fixture(config, { directory })
     try {
-      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await completeDurableTurns(value)
       await vi.advanceTimersByTimeAsync(5_000)
       const graph = value.runtimeSource.forAgent(value.agent)
       value.runtimeSource.forAgent.mockReturnValue({ ...graph, directory: join(directory, 'new-root') })
       config.idleReview.persistWatermark = true
       expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ idleReviewAttempts: 0, idleReviewWatermark: { restoredAttempts: 0 } })
-    } finally { value.stop() }
-  })
-
-  it('does no watermark I/O by default, and keeps earlier in-process attempts on opt-in', async () => {
-    vi.useFakeTimers()
-    const directory = mkdtempSync(join(directories, 'opt-in-'))
-    const config = resolveConfig({ idleReviewMs: 5_000, idleReview: { minIntervalMs: 5_000, maxPerSession: 2 } })
-    const value = fixture(config, { directory })
-    try {
-      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
-      await vi.advanceTimersByTimeAsync(5_000)
-      expect(value.coordinator.review).toHaveBeenCalledOnce()
-      expect(() => readFileSync(join(directory, 'state', 'idle-review', createHash('sha256').update('session-1').digest('hex') + '.json'))).toThrow()
-      config.idleReview.persistWatermark = true
-      for (let turn = 3; turn <= 4; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
-      await vi.advanceTimersByTimeAsync(5_000)
-      expect(value.coordinator.review).toHaveBeenCalledTimes(2)
-      const persisted = JSON.parse(readFileSync(join(directory, 'state', 'idle-review', createHash('sha256').update('session-1').digest('hex') + '.json'), 'utf8'))
-      expect(persisted.attempts).toBe(2)
     } finally { value.stop() }
   })
 
@@ -1185,7 +917,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     const config = resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark: true } })
     const value = fixture(config, { directory })
     try {
-      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await completeDurableTurns(value)
       if (change === 'disable') config.idleReview.persistWatermark = false
       if (change === 'dispose') value.stop()
       if (change === 'root') {
@@ -1203,9 +935,8 @@ describe('Mnemon DSH lifecycle integration', () => {
     const value = fixture(config)
     let finish: ((available: boolean) => void) | undefined
     try {
-      await value.preStep([durableCandidate(300)], 1)
-      await value.turnStopping(1)
-    vi.mocked(value.coordinator.checkReviewAccess).mockImplementationOnce(() => new Promise<boolean>(resolve => { finish = resolve }))
+      await completeDurableTurns(value, 1, 1)
+      vi.mocked(value.coordinator.checkReviewAccess).mockImplementationOnce(() => new Promise<boolean>(resolve => { finish = resolve }))
       await value.preStep([durableCandidate(300)], 2)
       const stopping = value.turnStopping(2)
       await vi.waitFor(() => expect(finish).toBeDefined())
@@ -1226,8 +957,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     vi.useFakeTimers()
     const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
     try {
-      await value.preStep([durableCandidate(300)], 1)
-      await value.turnStopping(1)
+      await completeDurableTurns(value, 1, 1)
       await value.preStep([durableCandidate(300)], 2)
       const check = vi.mocked(value.coordinator.checkReviewAccess).mockReset().mockResolvedValue(false)
       check.mockResolvedValueOnce(false).mockResolvedValueOnce(recovers)
@@ -1250,14 +980,14 @@ describe('Mnemon DSH lifecycle integration', () => {
     const directory = mkdtempSync(join(directories, 'recovered-admission-'))
     const config = resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark: true, minIntervalMs: 5_000, maxPerSession: 2 } })
     const before = fixture(config, { directory })
-    for (const turn of [1, 2]) { await before.preStep([durableCandidate(300)], turn); await before.turnStopping(turn) }
+    await completeDurableTurns(before)
     await vi.advanceTimersByTimeAsync(5_000)
     expect(before.lifecycle.snapshot('session-1').current?.idleReviewAttempts).toBe(1)
     before.stop()
     const resumed = fixture(config, { directory })
     try {
       expect(resumed.lifecycle.snapshot('session-1').current?.idleReviewWatermark?.restoredAttempts).toBe(1)
-      await resumed.preStep([durableCandidate(300)], 3); await resumed.turnStopping(3)
+      await completeDurableTurns(resumed, 3, 3)
       await resumed.preStep([durableCandidate(300)], 4)
       vi.mocked(resumed.coordinator.checkReviewAccess).mockResolvedValueOnce(false).mockResolvedValueOnce(true)
       const request = resumed.agentListeners.get('agent/request')!
@@ -1265,9 +995,8 @@ describe('Mnemon DSH lifecycle integration', () => {
       await resumed.turnStopping(4)
       await vi.advanceTimersByTimeAsync(5_000)
       expect(resumed.coordinator.review).toHaveBeenCalledOnce()
-      const watermark = join(directory, 'state', 'idle-review', createHash('sha256').update('session-1').digest('hex') + '.json')
-      expect(JSON.parse(readFileSync(watermark, 'utf8')).attempts).toBe(2)
-      for (const turn of [5, 6]) { await resumed.preStep([durableCandidate(300)], turn); await resumed.turnStopping(turn) }
+      expect(JSON.parse(readFileSync(watermarkFile(directory), 'utf8')).attempts).toBe(2)
+      await completeDurableTurns(resumed, 5, 6)
       await vi.advanceTimersByTimeAsync(5_000)
       expect(resumed.coordinator.review).toHaveBeenCalledOnce()
     } finally { resumed.stop() }
@@ -1332,41 +1061,29 @@ describe('Mnemon DSH lifecycle integration', () => {
     value.stop()
   })
 
-  it('bounds idle review attempts across a long session, including failed runs (issues 100/255)', async () => {
+  it.each([
+    ['failed', 300_000, true],
+    ['successful', 5_000, false],
+  ] as const)('caps %s idle review attempts across a long session (issues 100/255)', async (_kind, minIntervalMs, failed) => {
     vi.useFakeTimers()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const value = fixture({ ...resolveConfig({ idleReviewMs: 5_000 }), idleReview: { enabled: true, provider: 'spawn', minIntervalMs: 300_000, maxPerSession: 2 } } as never)
-    vi.mocked(value.coordinator.review).mockRejectedValue(new Error('TeamError: reviewer failed'))
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000, idleReview: { provider: 'spawn', minIntervalMs, maxPerSession: 2 } }))
+    if (failed) vi.mocked(value.coordinator.review).mockRejectedValue(new Error('TeamError: reviewer failed'))
     try {
       for (let turn = 1; turn <= 30; turn += 1) {
-        await value.preStep([durableCandidate(300)], turn)
-        await value.turnStopping(turn)
+        await completeDurableTurns(value, turn, turn)
         await vi.advanceTimersByTimeAsync(5_000)
       }
-      expect(value.coordinator.review).toHaveBeenCalledTimes(1)
-      await vi.advanceTimersByTimeAsync(300_000)
-      expect(value.coordinator.review).toHaveBeenCalledTimes(2)
-      await value.preStep([durableCandidate(300)], 31)
-      await value.turnStopping(31)
-      await vi.advanceTimersByTimeAsync(600_000)
-      expect(value.coordinator.review).toHaveBeenCalledTimes(2)
-    } finally { value.stop(); warn.mockRestore() }
-  })
-
-  it('caps successful review children even when every later checkpoint is eligible (issue 100)', async () => {
-    vi.useFakeTimers()
-    const value = fixture(resolveConfig({ idleReviewMs: 5_000, idleReview: { minIntervalMs: 5_000, maxPerSession: 2 } }))
-    try {
-      for (let turn = 1; turn <= 30; turn += 1) {
-        await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn)
-        await vi.advanceTimersByTimeAsync(5_000)
+      if (failed) {
+        expect(value.coordinator.review).toHaveBeenCalledTimes(1)
+        await vi.advanceTimersByTimeAsync(300_000)
       }
       expect(value.coordinator.review).toHaveBeenCalledTimes(2)
       expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ idleReviewAttempts: 2, idleReviewPending: false })
-      await value.preStep([durableCandidate(300)], 31); await value.turnStopping(31)
-      await vi.advanceTimersByTimeAsync(300_000)
+      await completeDurableTurns(value, 31, 31)
+      await vi.advanceTimersByTimeAsync(600_000)
       expect(value.coordinator.review).toHaveBeenCalledTimes(2)
-    } finally { value.stop() }
+    } finally { value.stop(); warn.mockRestore() }
   })
 
   it('pauses review before creating a child while Team tools are installed and resumes after removal', async () => {
@@ -1377,13 +1094,12 @@ describe('Mnemon DSH lifecycle integration', () => {
     value.agent.ctx.get = name => name === 'agentTeams' ? {} : get(name)
     value.agent.ctx.tools = { get: name => teamTools && name === 'spawn_teammate' ? {} : undefined }
     try {
-      for (let turn = 1; turn <= 3; turn += 1) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await completeDurableTurns(value, 1, 3)
       await vi.advanceTimersByTimeAsync(600_000)
       expect(value.coordinator.review).not.toHaveBeenCalled()
       expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ idleReviewBlocked: 'agent-team', idleReviewAttempts: 0, idleReviewPending: false })
       teamTools = false
-      await value.preStep([durableCandidate(300)], 4)
-      await value.turnStopping(4)
+      await completeDurableTurns(value, 4, 4)
       await vi.advanceTimersByTimeAsync(5_000)
       expect(value.coordinator.review).toHaveBeenCalledOnce()
     } finally { value.stop() }
@@ -1397,11 +1113,11 @@ describe('Mnemon DSH lifecycle integration', () => {
     value.agent.ctx.get = name => name === 'agentTeams' ? {} : get(name)
     value.agent.ctx.tools = { get: name => name === 'spawn_teammate' ? {} : undefined }
     try {
-      for (let turn = 1; turn <= 2; turn += 1) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await completeDurableTurns(value)
       await vi.advanceTimersByTimeAsync(5_000)
       expect(value.coordinator.review).toHaveBeenCalledOnce()
       expect(value.lifecycle.snapshot('session-1').current?.idleReviewBlocked).toBeUndefined()
-      for (let turn = 3; turn <= 4; turn += 1) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await completeDurableTurns(value, 3, 4)
       Object.assign(config.idleReview, { agentTeams: 'pause' })
       await vi.advanceTimersByTimeAsync(5_000)
       expect(value.coordinator.review).toHaveBeenCalledOnce()
@@ -1414,8 +1130,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     const config = resolveConfig({ idleReviewMs: 5_000 })
     const value = fixture(config)
     try {
-      await value.preStep([durableCandidate(300)], 1); await value.turnStopping(1)
-      await value.preStep([durableCandidate(300)], 2); await value.turnStopping(2)
+      await completeDurableTurns(value)
       config.idleReview.enabled = false
       await vi.advanceTimersByTimeAsync(5_000)
       expect(value.coordinator.review).not.toHaveBeenCalled()
@@ -1438,7 +1153,7 @@ describe('Mnemon DSH lifecycle integration', () => {
     const directory = mkdtempSync(join(directories, 'disposed-idle-'))
     const value = fixture(resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark } }), { directory })
     try {
-      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await completeDurableTurns(value)
       expect(value.lifecycle.snapshot('session-1').current?.idleReviewPending).toBe(true)
       value.deactivateContext()
       await vi.advanceTimersByTimeAsync(5_000)
@@ -1462,7 +1177,7 @@ describe('Mnemon DSH lifecycle integration', () => {
       receipts: committed ? [{ tool: 'mnemon_document_create', action: 'created', documentId: 'committed-document' }] : [],
     }, { cause }))
     try {
-      for (let turn = 1; turn <= 2; turn++) { await value.preStep([durableCandidate(300)], turn); await value.turnStopping(turn) }
+      await completeDurableTurns(value)
       await vi.advanceTimersByTimeAsync(5_000)
       const state = value.lifecycle.snapshot('session-1')
       expect(state.current?.reviewRunning).toBe(false)
@@ -1486,8 +1201,7 @@ describe('Mnemon DSH lifecycle integration', () => {
       status: 'partial', runId: 'review-run', provider: 'fork', receipts: [{ tool: 'mnemon_document_create', action: 'created', documentId: 'committed-document' }],
     }))
     try {
-      await value.preStep([durableCandidate(300)], 1); await value.turnStopping(1)
-      await value.preStep([durableCandidate(300)], 2); await value.turnStopping(2)
+      await completeDurableTurns(value)
       await vi.advanceTimersByTimeAsync(5_000)
       expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ lastPhase: 'error', idleReviewAttempts: 1,
         lastReviewFailure: { status: 'partial', runId: 'review-run', receipts: [{ documentId: 'committed-document' }] } })

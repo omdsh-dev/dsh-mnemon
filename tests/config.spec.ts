@@ -5,6 +5,7 @@ import { MEMORY_PLACEMENT_CAPABILITIES } from 'dsh-mnemon-source-memory-spaces/c
 import { Config as RuntimeConfig } from 'dsh-mnemon-source-runtime'
 import { RUNTIME_MEMORY_LIMIT_MAX_BYTES, RUNTIME_MEMORY_LIMITS } from 'dsh-mnemon-source-runtime/contracts'
 import { Config, resolveConfig, resolveSkillsConfig } from "../src/host/config.ts"
+import { mainStrategyTypeId, withMainStrategy } from '../src/host/main-strategy.ts'
 
 afterEach(() => vi.unstubAllEnvs())
 
@@ -358,5 +359,22 @@ describe('centralized workspace configuration', () => {
     expect(() => resolveConfig({ storageScope: 'workspaces', dataDir: 'relative' })).toThrow('absolute')
     expect(() => resolveConfig({ storageScope: 'workspaces', dataDir: '/root\0' })).toThrow('null byte')
     expect(() => resolveConfig({ storageScope: 'unknown' as never })).toThrow('storageScope')
+  })
+})
+
+describe('the main Strategy id', () => {
+  it('takes the profile plugin choice over the legacy topology id', () => {
+    const legacy = resolveConfig({ memoryTopology: { strategyId: 'scoped' } })
+    expect(mainStrategyTypeId(resolveConfig({}))).toBe('default-three-tier')
+    expect(mainStrategyTypeId(legacy)).toBe('scoped')
+    const chosen = withMainStrategy(legacy, { strategyTypeId: 'general' })
+    expect(mainStrategyTypeId(chosen)).toBe('general')
+    expect(chosen).toEqual({ ...legacy, memoryTopology: { ...legacy.memoryTopology, strategyId: 'general' } })
+    expect(mainStrategyTypeId(legacy)).toBe('scoped')
+  })
+
+  it('returns the resolved config itself when the profile has no choice', () => {
+    const config = resolveConfig({ memoryTopology: { strategyId: 'scoped' } })
+    expect(withMainStrategy(config, {})).toBe(config)
   })
 })

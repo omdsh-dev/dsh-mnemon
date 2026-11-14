@@ -1,8 +1,43 @@
-import { describe, expect, it, vi } from 'vitest'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Context } from '@deepseek-ai/cordis'
-import { COMPOSABLE_MEMORY_API_VERSION, type MemoryJsonValue, type MemorySourceDefinition, type MemoryStrategyDefinition, type MemoryStrategyExtensionDefinition } from 'dsh-mnemon/contracts'
-import { defineMemorySource, defineMemoryStrategy, defineMemoryStrategyExtension, installMemory, createMemoryMutationReceipt } from 'dsh-mnemon/extension-sdk'
+import {
+  ANY_MEMORY_STRATEGY,
+  COMPOSABLE_MEMORY_API_VERSION,
+  MEMORY_STRATEGY_WORKFLOWS,
+  type MemoryJsonValue,
+  type MemorySourceDefinition,
+  type MemoryStrategyDefinition,
+  type MemoryStrategyExtensionDefinition,
+  type MemoryStrategyManifest,
+} from 'dsh-mnemon/contracts'
+import {
+  createMemoryMutationReceipt,
+  defineMemorySource,
+  defineMemoryStrategy,
+  defineMemoryStrategyConfiguration,
+  defineMemoryStrategyExtension,
+  defineMemoryViewExtension,
+  installMemory,
+  memoryViewExtensionValues,
+  validateMemoryViewExtension,
+  type MemoryStrategyConfiguration,
+} from 'dsh-mnemon/extension-sdk'
 import { DEFAULT_MEMORY_VIEW_BUDGET, MemoryCompositionRunner } from 'dsh-mnemon/testing'
+import * as documents from 'dsh-mnemon-source-documents'
+import type { DocumentMutationResult } from 'dsh-mnemon-source-documents/contracts'
+import type { RuntimeMemorySnapshot } from 'dsh-mnemon-source-runtime/contracts'
+import * as capture from 'dsh-mnemon-strategy-auto-capture'
+import * as lightPlugin from 'dsh-mnemon-strategy-light-context'
+import * as scoped from 'dsh-mnemon-strategy-scoped'
+import type { HostAgent, HostContextShape, HostSubagentsService, ToolDefinition } from '../src/host/dsh.ts'
+import { agentScope } from '../src/host/runtime.ts'
+import { runtimeCapacityWrite, strategyDrives, viewStrategy } from '../src/host/strategy-workflows.ts'
+import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
+import { registerTools } from '../src/host/tools.ts'
+import { modelMemoryWake } from '../src/host/view-presentation.ts'
+import { compositionFixture } from './fixtures/composition.ts'
+import { sessionLog } from './fixtures/session-log.ts'
 
 function plugin(contribution: Parameters<typeof installMemory>[1]) {
   return { inject: ['mnemonMemory'], apply(ctx: Context) { installMemory(ctx, contribution) } }
@@ -248,5 +283,363 @@ describe('additive Strategy plugins through the public Cordis SDK', () => {
       await runner.mount(plugin({ strategyExtensions: [extension('mutable', 'selection', () => { value.push('source:notes'); return value })] }), { instanceId: 'mutable' })
       await expect(runner.beginTurn()).rejects.toThrow('not deterministic')
     } finally { await runner.dispose() }
+  })
+})
+
+describe('Strategy configuration author contract', () => {
+  const label = { en: 'Test', 'zh-CN': '测试' }
+  const strategy = defineMemoryStrategy({
+    manifest: { apiVersion: COMPOSABLE_MEMORY_API_VERSION, kind: 'strategy', typeId: 'test', packageName: 'dsh-mnemon-strategy-test',
+      deterministic: true, supportedSourceRoles: ['working-context'], maxSources: 1, maxRoutes: 1, maxActions: 1 },
+    compose: () => ({ strategyTypeId: 'test', explanation: 'Test configuration.', sources: [] }),
+  })
+  const definition = (): Omit<MemoryStrategyConfiguration, 'apiVersion'> => ({
+    kind: 'strategy', typeId: 'test', label: { ...label }, description: { ...label },
+    fields: [
+      { key: 'budget', input: 'number', label: { ...label }, defaultValue: 512, minimum: 1, maximum: 4096 },
+      { key: 'sources', input: 'source-list', label: { ...label } },
+      { key: 'instruction', input: 'textarea', label: { ...label } },
+    ],
+    create: () => ({ strategies: [strategy] }),
+  })
+
+  it.each([
+    { label: { en: { invalid: true }, 'zh-CN': '错误' } },
+    { fields: [{ key: 'v', input: 'text', label: { en: 'Missing Chinese label' } }] },
+    { fields: [{ key: 'v', input: 'source-list', label, sourceRoles: {} }] },
+    { fields: [{ key: 'v', input: 'number', label, defaultValue: 'invalid' }] },
+    { fields: [{ key: 'v', input: 'number', label, defaultValue: () => 100 }] },
+    { fields: [{ key: 'v', input: 'number', label, defaultValue: 3.5 }] },
+    { fields: [{ key: 'v', input: 'text', label }, { key: 'v', input: 'text', label }] },
+  ])('rejects malformed metadata at definition time (%#)', overrides => {
+    expect(() => defineMemoryStrategyConfiguration({ ...definition(), ...overrides } as never)).toThrow()
+  })
+
+  it.each([
+    { budget: 0 }, { budget: 1.5 }, { budget: 4097 },
+    { sources: ['source:work', 'source:work'] },
+    { sources: [''] }, { sources: Array.from({ length: 33 }, (_, i) => 'source:' + i) },
+    { instruction: 'x'.repeat(4001) }, { unknown: true },
+  ])('rejects invalid input before calling the factory (%#)', input => {
+    const create = vi.fn(definition().create)
+    const configured = defineMemoryStrategyConfiguration({ ...definition(), create })
+    expect(() => configured.create(input)).toThrow()
+    expect(create).not.toHaveBeenCalled()
+  })
+
+  it('validates a snapshot without applying defaults or invoking a factory during discovery', () => {
+    const original = definition()
+    const create = vi.fn(original.create)
+    const configured = defineMemoryStrategyConfiguration({ ...original, create })
+    expect(create).not.toHaveBeenCalled()
+    original.label.en = 'Changed later'
+    original.fields[0]!.maximum = 0
+    expect(configured.label.en).toBe('Test')
+    expect(() => { configured.fields[0]!.maximum = 0 }).toThrow()
+    expect(configured.create({})).toEqual({ strategies: [strategy] })
+    expect(create).toHaveBeenCalledWith({})
+    expect(configured.create({ budget: 512 })).toEqual({ strategies: [strategy] })
+  })
+
+  it.each([
+    null,
+    {},
+    { strategies: [strategy, strategy] },
+    { strategyExtensions: [{ manifest: { kind: 'strategy-extension', typeId: 'test' } }] },
+    { strategies: [{ ...strategy, manifest: { ...strategy.manifest, typeId: 'another' } }] },
+    { strategies: [strategy], sources: [{}] },
+  ])('rejects a factory that does not return its declared contribution (%#)', contribution => {
+    const configured = defineMemoryStrategyConfiguration({ ...definition(), create: () => contribution as never })
+    expect(() => configured.create({})).toThrow('Plugin factory')
+  })
+})
+
+describe('Strategy workflow declarations and Host dispatch', () => {
+  const manifest: MemoryStrategyManifest = {
+    apiVersion: COMPOSABLE_MEMORY_API_VERSION, kind: 'strategy', typeId: 'personal-notes', packageName: 'personal-notes-strategy',
+    deterministic: true, supportedSourceRoles: ['*'], maxSources: 4, maxRoutes: 4, maxActions: 4,
+  }
+  const define = (value: Partial<MemoryStrategyManifest> & Record<string, unknown>) => defineMemoryStrategy({
+    manifest: { ...manifest, ...value } as MemoryStrategyManifest,
+    compose: () => ({ strategyTypeId: manifest.typeId, sources: [], explanation: 'none' }),
+  })
+
+  it('names the workflows a Host can run', () => {
+    expect(MEMORY_STRATEGY_WORKFLOWS).toEqual(['idle-review', 'runtime-capacity'])
+  })
+
+  it('keeps what a Strategy declares, and nothing when it declares nothing', () => {
+    expect(define({ workflows: ['runtime-capacity', 'idle-review'] }).manifest.workflows).toEqual(['runtime-capacity', 'idle-review'])
+    expect(define({ workflows: [] }).manifest.workflows).toEqual([])
+    expect('workflows' in define({}).manifest).toBe(false)
+  })
+
+  it('rejects a malformed or repeated workflow id but loads one this Core does not know', () => {
+    expect(() => define({ workflows: ['Idle Review'] as never })).toThrow(/memory Strategy workflow/)
+    expect(() => define({ workflows: 'idle-review' as never })).toThrow(/workflows must be a list/)
+    expect(() => define({ workflows: ['idle-review', 'idle-review'] })).toThrow(/duplicated: idle-review/)
+    const newer = define({ workflows: ['idle-review', 'nightly-digest'] as never })
+    expect(newer.manifest.workflows).toEqual(['idle-review', 'nightly-digest'])
+    expect(strategyDrives(newer.manifest, 'idle-review')).toBe(true)
+    expect(strategyDrives(newer.manifest, 'runtime-capacity')).toBe(false)
+  })
+
+  it('follows the declaration, for the Layered strategy too', () => {
+    expect(strategyDrives({ typeId: 'personal-notes', workflows: ['idle-review'] }, 'idle-review')).toBe(true)
+    expect(strategyDrives({ typeId: 'personal-notes', workflows: ['idle-review'] }, 'runtime-capacity')).toBe(false)
+    expect(strategyDrives({ typeId: 'default-three-tier', workflows: ['runtime-capacity'] }, 'idle-review')).toBe(false)
+    expect(strategyDrives({ typeId: 'default-three-tier', workflows: [] }, 'runtime-capacity')).toBe(false)
+  })
+
+  it('reads an undeclared Layered strategy, as a copy before 0.5.10 is, as driving both', () => {
+    for (const workflow of MEMORY_STRATEGY_WORKFLOWS) {
+      expect(strategyDrives({ typeId: 'default-three-tier' }, workflow)).toBe(true)
+      expect(strategyDrives({ typeId: 'personal-notes' }, workflow)).toBe(false)
+    }
+  })
+
+  it('takes over only the Runtime Source mutate Action for capacity maintenance', () => {
+    const strategy = { typeId: 'personal-notes', workflows: ['runtime-capacity' as const] }
+    expect(runtimeCapacityWrite(strategy, 'runtime', 'mutate')).toBe(true)
+    expect(runtimeCapacityWrite(strategy, 'runtime', 'import')).toBe(false)
+    expect(runtimeCapacityWrite(strategy, 'documents', 'mutate')).toBe(false)
+    expect(runtimeCapacityWrite({ typeId: 'personal-notes' }, 'runtime', 'mutate')).toBe(false)
+  })
+
+  it('reads the Strategy that composed a View from the generation holding its definition', () => {
+    const view = { strategyInstanceKey: 'strategy:notes', strategyTypeId: 'personal-notes' }
+    const declared = { ...manifest, workflows: ['idle-review' as const] }
+    expect(viewStrategy({ strategy: { instanceKey: 'strategy:notes', definition: { manifest: declared } } }, view)).toBe(declared)
+    expect(viewStrategy({ strategy: { instanceKey: 'strategy:other', definition: { manifest: declared } } }, view)).toEqual({ typeId: 'personal-notes' })
+    expect(viewStrategy(undefined, view)).toEqual({ typeId: 'personal-notes' })
+  })
+})
+
+describe('standard View extensions for any main Strategy', () => {
+  const notes = defineMemorySource({
+    manifest: { apiVersion: COMPOSABLE_MEMORY_API_VERSION, kind: 'source', typeId: 'notes', packageName: 'dsh-mnemon-source-notes',
+      role: 'notes', capabilities: ['project'], consistency: 'exact-snapshot' },
+    create: context => ({
+      facts: () => ({ sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: 'notes', role: 'notes', availability: 'ready',
+        revision: 'r1', capabilities: ['project'], routeIds: [], actionIds: [] }),
+      project: request => ({ fragments: request.includeProjection ? [{ id: 'note', sourceInstanceKey: context.sourceInstanceKey,
+        mode: request.mode, text: 'A durable note.'.slice(0, request.maxCharacters), revision: 'r1' }] : [] }),
+    }),
+  })
+
+  function viewStrategyDef(typeId: string, extensionSlots?: string[]): MemoryStrategyDefinition {
+    return defineMemoryStrategy({
+      manifest: { apiVersion: COMPOSABLE_MEMORY_API_VERSION, kind: 'strategy', typeId, packageName: `dsh-mnemon-strategy-${typeId}`,
+        deterministic: true, supportedSourceRoles: ['notes'], maxSources: 4, maxRoutes: 4, maxActions: 4,
+        ...(extensionSlots === undefined ? {} : { extensionSlots }) },
+      compose(request, sources, contributions = []) {
+        const { projection } = memoryViewExtensionValues(contributions)
+        const characters = Math.min(request.budget.maxProjectionCharacters, projection?.maxProjectionCharacters ?? Infinity)
+        return { strategyTypeId: typeId, explanation: 'Project every note within the standard projection ceiling.',
+          sources: sources.map(item => ({ sourceInstanceKey: item.sourceInstanceKey, projection: { mode: 'eager' as const, maxCharacters: characters } })) }
+      },
+    })
+  }
+
+  const light = (maxProjectionCharacters: number, typeId = 'light') => defineMemoryViewExtension({
+    typeId, packageName: `dsh-mnemon-strategy-${typeId}`, slot: 'projection', contribute: () => ({ maxProjectionCharacters }),
+  })
+
+  async function viewFixture(selected: string) {
+    const runner = new MemoryCompositionRunner({ strategyTypeId: selected })
+    await runner.mount(plugin({ sources: [notes] }), { instanceId: 'notes' })
+    await runner.mount(plugin({ strategies: [viewStrategyDef('first', ['selection', 'projection', 'capture']), viewStrategyDef('second')] }), { instanceId: 'strategies' })
+    return runner
+  }
+
+  it('follows whichever selected Strategy declares the standard slot', async () => {
+    for (const [selected, text] of [['first', 'A du'], ['second', 'A durable note.']] as const) {
+      const runner = await viewFixture(selected)
+      try {
+        await runner.mount(plugin({ strategyExtensions: [light(4)] }), { instanceId: 'light' })
+        const turn = await runner.beginTurn()
+        expect(turn.view.strategyTypeId).toBe(selected)
+        expect(turn.view.projection[0]?.text).toBe(text)
+        expect(turn.view.strategyExtensions?.map(item => item.typeId)).toEqual(selected === 'first' ? ['light'] : undefined)
+        if (selected === 'second') {
+          expect(runner.inspect().evaluation.diagnostics).toMatchObject([{ code: 'strategy-extension-inactive',
+            message: 'Selected Strategy second does not accept the projection slot.' }])
+        }
+        turn.release()
+      } finally { await runner.dispose() }
+    }
+  })
+
+  it('rejects a second owner of a slot at mount, whichever main Strategy it targets', async () => {
+    const runner = await viewFixture('first')
+    try {
+      await runner.mount(plugin({ strategyExtensions: [light(4)] }), { instanceId: 'light' })
+      const serving = runner.inspect().servingGenerationId
+      for (const strategyTypeId of ['first', 'second']) {
+        const targeted = defineMemoryStrategyExtension({
+          manifest: { apiVersion: COMPOSABLE_MEMORY_API_VERSION, kind: 'strategy-extension', typeId: 'narrow', packageName: 'dsh-mnemon-strategy-narrow',
+            strategyTypeId, slot: 'projection', deterministic: true },
+          contribute: () => ({ maxProjectionCharacters: 2 }),
+        })
+        await expect(runner.mount(plugin({ strategyExtensions: [targeted] }), { instanceId: 'narrow' })).rejects.toThrow(`slot conflict: ${strategyTypeId}/projection`)
+      }
+      expect(runner.inspect()).toMatchObject({ servingGenerationId: serving, evaluation: { state: 'ready' } })
+    } finally { await runner.dispose() }
+  })
+
+  it('keeps any-Strategy extensions on standard slots and validates their values', () => {
+    expect(() => defineMemoryStrategyExtension({
+      manifest: { apiVersion: COMPOSABLE_MEMORY_API_VERSION, kind: 'strategy-extension', typeId: 'custom', packageName: 'dsh-mnemon-strategy-custom',
+        strategyTypeId: ANY_MEMORY_STRATEGY, slot: 'guidance', deterministic: true },
+      contribute: () => null,
+    })).toThrow('must use a standard slot: guidance')
+    expect(light(8).manifest).toMatchObject({ strategyTypeId: '*', slot: 'projection' })
+    expect(() => validateMemoryViewExtension('projection', { maxProjectionCharacters: 8, extra: true })).toThrow('unsupported View projection field: extra')
+    expect(() => validateMemoryViewExtension('selection', { sourceKeys: ['source:a'], writableSourceKeys: ['source:b'] })).toThrow('within selected sourceKeys')
+    expect(() => validateMemoryViewExtension('capture', { instruction: 'Record.', actionIds: [] })).toThrow('capture actionIds')
+    const contribution = { instanceKey: 'strategy-extension:light', typeId: 'light', slot: 'projection', value: { maxProjectionCharacters: 8 } }
+    expect(memoryViewExtensionValues([contribution])).toEqual({ projection: { maxProjectionCharacters: 8 } })
+    expect(() => memoryViewExtensionValues([contribution, contribution])).toThrow('duplicate View extension slot: projection')
+  })
+
+  it('falls back to the only installed Strategy only when the Host asks for it', async () => {
+    for (const strategyFallback of [undefined, 'sole-strategy'] as const) {
+      const runner = new MemoryCompositionRunner({ strategyTypeId: 'first', ...(strategyFallback === undefined ? {} : { strategyFallback }) })
+      try {
+        await runner.mount(plugin({ sources: [notes] }), { instanceId: 'notes' })
+        await runner.mount(plugin({ strategies: [viewStrategyDef('second')] }), { instanceId: 'second' })
+        if (strategyFallback === undefined) {
+          expect(runner.inspect().evaluation).toMatchObject({ state: 'rejected', diagnostics: [{ message: expect.stringContaining('selected memory Strategy type is unavailable: first') }] })
+          continue
+        }
+        expect(runner.inspect().evaluation.diagnostics).toEqual([{ code: 'strategy-fallback', contributionInstanceKey: 'strategy:second',
+          message: 'Selected Strategy first is unavailable; composing with the only installed Strategy second.' }])
+        const turn = await runner.beginTurn()
+        expect(turn.view.strategyTypeId).toBe('second')
+        turn.release()
+      } finally { await runner.dispose() }
+    }
+  })
+
+  it('runs an any-Strategy extension only for the selected Strategy', async () => {
+    const contribute = vi.fn(() => ({ maxProjectionCharacters: 4 }))
+    const runner = await viewFixture('second')
+    try {
+      await runner.mount(plugin({ strategyExtensions: [defineMemoryViewExtension({ typeId: 'watched', packageName: 'dsh-mnemon-strategy-watched', slot: 'projection', contribute })] }), { instanceId: 'watched' })
+      const turn = await runner.beginTurn()
+      expect(contribute).not.toHaveBeenCalled()
+      turn.release()
+    } finally { await runner.dispose() }
+  })
+})
+
+describe('additive Strategy plugins through the real Host', () => {
+  const fixtures: Awaited<ReturnType<typeof compositionFixture>>[] = []
+  afterEach(async () => { for (const item of fixtures.splice(0)) await item.dispose() })
+  async function hostFixture(options: Parameters<typeof compositionFixture>[0] = {}) {
+    const value = await compositionFixture(options)
+    fixtures.push(value)
+    return value
+  }
+  function agent(f: Awaited<ReturnType<typeof hostFixture>>) {
+    return { id: 'root', session: { header: { cwd: f.workspace }, ...sessionLog() } } as unknown as HostAgent
+  }
+  const runtimeKey = 'source:mnemon-source-runtime'
+  const documentsKey = 'source:mnemon-source-documents'
+  const spacesKey = 'source:mnemon-source-memory-spaces'
+  const selectedKeys = [runtimeKey, documentsKey, spacesKey]
+
+  it('combines selection, a smaller projection and capture without replacing the default Strategy', async () => {
+    const f = await hostFixture()
+    const body = await f.memorySpace()
+    await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: 'Runtime sentinel. '.repeat(100) })
+    await f.mount(scoped, { instanceId: 'scoped', config: { sourceKeys: selectedKeys, writableSourceKeys: [spacesKey] } })
+    const removeLight = await f.mount(lightPlugin, { instanceId: 'light', config: { maxProjectionCharacters: 500 } })
+    await f.mount(capture, { instanceId: 'capture' })
+    const parent = agent(f)
+    const turn = await f.graph.composableTurns.beginTurn('additive:1', agentScope(parent, f.config))
+    expect(turn.view.strategyTypeId).toBe('default-three-tier')
+    expect(turn.view.strategyExtensions?.map(item => item.slot).sort()).toEqual(['capture', 'projection', 'selection'])
+    expect(turn.view.projection.reduce((sum, fragment) => sum + fragment.text.length, 0)).toBeLessThanOrEqual(500)
+    expect(turn.view.actionOffers.every(offer => offer.sourceInstanceKey === spacesKey)).toBe(true)
+    expect(modelMemoryWake(f.graph, turn).guidance?.system).toContain('MNEMON OPTIONAL AUTO CAPTURE')
+
+    const tools = new Map<string, ToolDefinition>()
+    const coordinator = new MnemonSubagentCoordinator({} as HostSubagentsService, f.live)
+    registerTools({ tools: { register: (tool: ToolDefinition) => { tools.set(tool.name, tool); return () => { tools.delete(tool.name) } } } } as unknown as HostContextShape, f.live, coordinator, f.extensions)
+    const execute = (name: string, args: object) => (tools.get(name)!.execute as Function)(args, { agent: parent, signal: new AbortController().signal })
+    await expect(execute('mnemon_runtime_memory', { action: 'add', target: 'memory', content: 'must not write' })).rejects.toThrow('not offered')
+    const remember = turn.view.actionOffers.find(offer => offer.sourceActionId === 'remember')!
+    await expect(execute('mnemon_view_action', { offerId: remember.id, input: { memoryBodyId: body.id, content: 'Additive plugin durable sentinel.' } })).resolves.toMatchObject({ completion: 'committed' })
+
+    await removeLight()
+    expect(turn.view.strategyExtensions).toHaveLength(3)
+    f.graph.composableTurns.endTurn(turn.turnId)
+    const next = await f.graph.composableTurns.beginTurn('additive:2', agentScope(parent, f.config))
+    expect(next.view.strategyExtensions?.map(item => item.slot).sort()).toEqual(['capture', 'selection'])
+    expect(next.view.projection.reduce((sum, fragment) => sum + fragment.text.length, 0)).toBeGreaterThan(500)
+    expect(next.view.actionOffers.every(offer => offer.sourceInstanceKey === spacesKey)).toBe(true)
+    const recall = next.view.routes.find(route => route.sourceRouteId === 'recall')!
+    const evidence = await f.graph.composableTurns.executeRoute(next.turnId, recall.id, { query: 'Additive plugin durable sentinel' })
+    expect(evidence.items[0]?.text).toContain('Additive plugin durable sentinel')
+  })
+
+  it('does not archive Runtime into a View-read-only Source on capacity overflow', async () => {
+    const f = await hostFixture({ runtimeMemory: { memoryLimitBytes: 512 } })
+    await f.memorySpace()
+    const runtime = f.graph.source('runtime')
+    await runtime.mutate('mutate', { action: 'add', target: 'memory', content: 'Saved durable fact. '.repeat(15) })
+    await f.mount(scoped, { instanceId: 'scoped', config: { sourceKeys: selectedKeys, writableSourceKeys: [runtimeKey] } })
+    const parent = agent(f)
+    await f.graph.composableTurns.beginTurn('readonly:1', agentScope(parent, f.config))
+    const before = await runtime.read<RuntimeMemorySnapshot>('snapshot')
+    const space = f.graph.memoryComposition.current()!.sourceRuntime(spacesKey)!
+    const management = vi.spyOn(space as { manage: NonNullable<typeof space.manage> }, 'manage')
+    const start = vi.fn()
+    const coordinator = new MnemonSubagentCoordinator({ start } as unknown as HostSubagentsService, f.live)
+    await expect(coordinator.runtime(parent, { action: 'add', target: 'memory', content: 'Pending durable fact. '.repeat(15) }, new AbortController().signal))
+      .rejects.toThrow('Source Action is not offered by the current View: memory-spaces/remember')
+    expect(management.mock.calls.filter(([request]) => request.mode === 'mutate')).toEqual([])
+    expect(start).not.toHaveBeenCalled()
+    expect(await runtime.read('snapshot')).toMatchObject({ revision: before.revision, entries: before.entries, targets: before.targets })
+  })
+
+  it('rejects a read-only Documents mutation before its archive preflight can start a worker', async () => {
+    const f = await hostFixture()
+    await f.releases[1]!()
+    await f.mount(documents, { instanceId: 'small-documents', config: { dataDir: join(f.root, 'small-documents'), limitBytes: 700 } })
+    const controller = f.graph.source('documents')
+    const initial = await controller.mutate<DocumentMutationResult>('mutate', { action: 'create', title: 'Saved', content: 'Old record. '.repeat(12) })
+    await f.mount(scoped, { instanceId: 'scoped', config: {
+      sourceKeys: [runtimeKey, 'source:small-documents', spacesKey], writableSourceKeys: [runtimeKey, spacesKey],
+    } })
+    const parent = agent(f)
+    await f.graph.composableTurns.beginTurn('readonly:documents', agentScope(parent, f.config))
+    const start = vi.fn()
+    const coordinator = new MnemonSubagentCoordinator({ start } as unknown as HostSubagentsService, f.live)
+    await expect(coordinator.document(parent, { action: 'create', title: 'New', content: 'New record. '.repeat(12) }, new AbortController().signal))
+      .rejects.toThrow('Source Action is not offered by the current View: documents/manage')
+    expect(start).not.toHaveBeenCalled()
+    expect(await controller.read('document', { id: initial.document.id })).toMatchObject({ status: 'active', content: initial.document.content })
+  })
+
+  it('retains automatic capacity archival when both Sources are offered as writable', async () => {
+    const f = await hostFixture({ runtimeMemory: { memoryLimitBytes: 512 } })
+    await f.memorySpace()
+    const saved = 'Saved durable fact. '.repeat(15).trim()
+    const pending = 'Pending durable fact. '.repeat(15).trim()
+    await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: saved })
+    await f.mount(scoped, { instanceId: 'scoped' })
+    const parent = agent(f)
+    const turn = await f.graph.composableTurns.beginTurn('writable:1', agentScope(parent, f.config))
+    const start = vi.fn()
+    const coordinator = new MnemonSubagentCoordinator({ start } as unknown as HostSubagentsService, f.live)
+    await expect(coordinator.runtime(parent, { action: 'add', target: 'memory', content: pending }, new AbortController().signal))
+      .resolves.toMatchObject({ added: pending, maintenance: { kind: 'mnemon-archive', provider: 'host' } })
+    expect(start).not.toHaveBeenCalled()
+    expect((await f.graph.source('runtime').read<RuntimeMemorySnapshot>('snapshot')).entries.map(entry => entry.content)).toEqual([pending])
+    const recall = turn.view.routes.find(route => route.sourceRouteId === 'recall')!
+    const evidence = await f.graph.composableTurns.executeRoute(turn.turnId, recall.id, { query: 'Saved durable fact' })
+    expect(evidence.items[0]?.text).toBe(saved)
   })
 })

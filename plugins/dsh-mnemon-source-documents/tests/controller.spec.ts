@@ -1,10 +1,19 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { DocumentCapacityError, DocumentConflictError, DocumentController, DocumentManager } from "../src/controller.ts"
+import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
+import {
+  DOCUMENT_FILENAME_PATTERN, DOCUMENTS_DIRECTORY, DOCUMENTS_INDEX_FILE, DOCUMENTS_LOCK_FILE,
+  parseDocumentIndex, summarizeDocumentIndex, type DocumentRecord,
+} from '../src/contracts.ts'
+import { DocumentCapacityError, DocumentConflictError, DocumentController, DocumentManager } from '../src/controller.ts'
+import { documentEvidence } from '../src/evidence.ts'
+import * as plugin from '../src/index.ts'
+import { strategy } from './fixture.ts'
 
 const directories: string[] = []
+const releases: Array<() => void | Promise<void>> = []
 
 function workspace(): string {
   const directory = mkdtempSync(join(tmpdir(), 'dsh-mnemon-documents-'))
@@ -12,7 +21,9 @@ function workspace(): string {
   return directory
 }
 
-afterEach(() => {
+afterEach(async () => {
+  vi.restoreAllMocks()
+  for (const release of releases.splice(0).reverse()) await release()
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
 })
 
@@ -205,5 +216,276 @@ describe('Mnemon Documents control plane', () => {
     expect(result.snapshot.directory).toBe(join(storageRoot, 'documents'))
     expect(existsSync(join(storageRoot, result.document.relativePath))).toBe(true)
     expect(existsSync(join(root, '.mnemon', 'documents'))).toBe(false)
+  })
+})
+
+describe('Source-owned query-local excerpts', () => {
+  it('keeps a matching window and explicitly omits surrounding text', () => {
+    const content = 'before '.repeat(1_000) + 'sentinel here ' + 'after '.repeat(1_000)
+    const excerpt = documentEvidence(content, 'sentinel', 1_000)
+    expect(excerpt).toContain('sentinel here')
+    expect(excerpt).toContain('[earlier content omitted]')
+    expect(excerpt).toContain('[later content omitted]')
+    expect(excerpt.length).toBeLessThanOrEqual(1_000)
+  })
+
+  it('never overflows tiny budgets with omission labels or broken Unicode', () => {
+    for (const content of ['a'.repeat(900) + 'sentinel', '\u{1F600}'.repeat(500), '中文'.repeat(500) + '\u{1F600} sentinel']) {
+      for (let limit = 0; limit < 70; limit++) {
+        const excerpt = documentEvidence(content, 'sentinel', limit)
+        expect(excerpt.length).toBeLessThanOrEqual(limit)
+        expect(/\p{Surrogate}/u.test(excerpt)).toBe(false)
+      }
+    }
+  })
+})
+
+describe('Documents storage contracts', () => {
+  /** A controller over a separate storage root, as the Starter mounts it, with one active and one archived document. */
+  async function stored(): Promise<{ root: string; controller: DocumentController; index: unknown }> {
+    const root = workspace()
+    const controller = new DocumentController(workspace(), undefined, () => new Date('2026-10-17T08:00:00.000Z'), root)
+    await controller.mutate({ action: 'create', title: 'Release checklist', description: 'Steps', content: '# Release\n\nTag, then publish.', sourcePaths: ['README.md'] })
+    const archived = await controller.mutate({ action: 'create', title: '旧的设计', content: 'Retired design' })
+    await controller.archive(archived.document.id, archived.document.revision, { summary: 'Superseded', memoryBodyIds: ['project'] })
+    return { root, controller, index: JSON.parse(readFileSync(join(root, DOCUMENTS_DIRECTORY, DOCUMENTS_INDEX_FILE), 'utf8')) as unknown }
+  }
+
+  function record(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      id: 'doc-1', title: 'Title', description: '', status: 'active', filename: 'title-doc1.md', relativePath: 'documents/active/title-doc1.md',
+      sourcePaths: [], sessionIds: [], createdAt: '2026-10-17T08:00:00.000Z', updatedAt: '2026-10-17T08:00:00.000Z',
+      lastAccessedAt: '2026-10-17T08:00:00.000Z', revision: 1, contentHash: 'a'.repeat(64), sizeBytes: 10, memoryBodyIds: [],
+      ...overrides,
+    }
+  }
+
+  it('name the files the controller reads, writes and locks', async () => {
+    const { root, controller } = await stored()
+    expect(controller.directory).toBe(join(root, DOCUMENTS_DIRECTORY))
+    expect(controller.indexPath).toBe(join(root, DOCUMENTS_DIRECTORY, DOCUMENTS_INDEX_FILE))
+    expect(controller.lockPath).toBe(join(root, DOCUMENTS_DIRECTORY, DOCUMENTS_LOCK_FILE))
+    // The names a Mnemon Pack has always carried them under.
+    expect([DOCUMENTS_DIRECTORY, DOCUMENTS_INDEX_FILE, DOCUMENTS_LOCK_FILE]).toEqual(['documents', 'index.json', '.index.lock'])
+  })
+
+  it('read the index the controller writes as it stands, each file name one it generates', async () => {
+    const { index, controller } = await stored()
+    const parsed = parseDocumentIndex(index)
+    expect(parsed).toEqual(index)
+    expect(parsed.documents.map(document => document.status)).toEqual(['active', 'archived'])
+    expect(parsed.documents.every(document => DOCUMENT_FILENAME_PATTERN.test(document.filename))).toBe(true)
+    for (const document of parsed.documents) expect(readFileSync(join(controller.storageRoot, document.relativePath), 'utf8')).toContain(`id: ${JSON.stringify(document.id)}`)
+  })
+
+  it('place a record where its status puts it, whatever path a copy names', async () => {
+    // Without a storage root the controller records the legacy `.mnemon/` prefix.
+    const root = workspace()
+    const controller = new DocumentController(root)
+    await controller.mutate({ action: 'create', title: 'Legacy layout', content: 'Body' })
+    const index = JSON.parse(readFileSync(controller.indexPath, 'utf8')) as { documents: DocumentRecord[] }
+    expect(index.documents[0]!.relativePath).toMatch(/^\.mnemon\/documents\/active\//u)
+    expect(parseDocumentIndex(index).documents[0]!.relativePath).toBe(`documents/active/${index.documents[0]!.filename}`)
+    expect(parseDocumentIndex({ version: 1, documents: [record({ status: 'archived', relativePath: '../../outside.md' })] }).documents[0]!.relativePath)
+      .toBe('documents/archived/title-doc1.md')
+  })
+
+  it('keep what a record holds and drop what it does not', () => {
+    const parsed = parseDocumentIndex({ version: 1, documents: [record({
+      sourcePaths: ['a.md', 7, null], sessionIds: ['s-1', {}], memoryBodyIds: ['project', false],
+      archivedAt: '2026-10-17T09:00:00.000Z', archiveSummary: 'Moved', healthy: true, excerpt: 'not stored',
+    }), record({ id: 'doc-2', archivedAt: 5, archiveSummary: null })] })
+    expect(parsed.documents[0]).toEqual({ ...record(), sourcePaths: ['a.md'], sessionIds: ['s-1'], memoryBodyIds: ['project'], archivedAt: '2026-10-17T09:00:00.000Z', archiveSummary: 'Moved' })
+    expect(parsed.documents[1]).not.toHaveProperty('archivedAt')
+    expect(parsed.documents[1]).not.toHaveProperty('archiveSummary')
+  })
+
+  it('refuse a whole index for one bad record, saying which rule it broke', () => {
+    const refusals: Array<[unknown, string]> = [
+      [null, 'Documents index.json is invalid'],
+      [{ version: 2, documents: [] }, 'Documents index.json is invalid'],
+      [{ version: 1, documents: {} }, 'Documents index.json is invalid'],
+      [{ version: 1, documents: ['doc-1'] }, 'Documents index contains an invalid or duplicate id'],
+      [{ version: 1, documents: [record({ id: '  ' })] }, 'Documents index contains an invalid or duplicate id'],
+      [{ version: 1, documents: [record(), record()] }, 'Documents index contains an invalid or duplicate id'],
+      [{ version: 1, documents: [record({ status: 'deleted' })] }, 'Documents index contains an invalid record'],
+      [{ version: 1, documents: [record({ title: 1 })] }, 'Documents index contains an invalid record'],
+      [{ version: 1, documents: [record({ revision: 1.5 })] }, 'Documents index contains invalid metadata'],
+      [{ version: 1, documents: [record({ sizeBytes: 2 ** 53 })] }, 'Documents index contains invalid metadata'],
+      [{ version: 1, documents: [record({ lastAccessedAt: undefined })] }, 'Documents index contains invalid metadata'],
+      [{ version: 1, documents: [record({ sessionIds: 's-1' })] }, 'Documents index contains invalid lists'],
+    ]
+    for (const filename of ['../escape.md', 'nested/file.md', 'back\\slash.md', 'notes.txt', '.md', 'space name.md', 'C:file.md']) {
+      refusals.push([{ version: 1, documents: [record({ filename })] }, 'Documents index contains an unsafe filename'])
+    }
+    for (const [value, message] of refusals) expect(() => parseDocumentIndex(value), JSON.stringify(value)).toThrow(message)
+    expect(DOCUMENT_FILENAME_PATTERN.test('..md')).toBe(true)
+  })
+
+  it('summarize a stored index for an inventory without judging its records, and never throw', async () => {
+    const { index } = await stored()
+    expect(summarizeDocumentIndex(index)).toEqual({ valid: true, documents: 2, active: 1, archived: 1 })
+    // A record that is an object counts whatever its status; anything else is skipped.
+    expect(summarizeDocumentIndex({ version: 7, documents: [{ status: 'active' }, { status: 'gone' }, 3, null, { status: 'archived' }] }))
+      .toEqual({ valid: true, documents: 3, active: 1, archived: 1 })
+    for (const value of [null, [], { documents: 'none' }, { version: 1 }]) {
+      expect(summarizeDocumentIndex(value)).toEqual({ valid: false, documents: 0, active: 0, archived: 0 })
+    }
+  })
+})
+
+function deleteFixture() {
+  const directory = workspace()
+  const workspaceDir = join(directory, 'workspace')
+  mkdirSync(workspaceDir)
+  const controller = new DocumentController(workspaceDir, 10 * 1024 * 1024, undefined, join(directory, 'data'))
+  return { directory, workspace: workspaceDir, controller }
+}
+
+describe('permanent managed Document deletion', () => {
+  it.each(['active', 'archived'] as const)('removes only the %s managed copy and releases its index entry', async status => {
+    const f = deleteFixture()
+    const original = join(f.workspace, 'notes.md')
+    writeFileSync(original, 'Original project file stays untouched.')
+    let saved = await f.controller.mutate({ action: 'create', title: 'Disposable draft', content: 'Temporary copy.', sourcePaths: ['notes.md'] })
+    if (status === 'archived') saved = await f.controller.archive(saved.document.id, saved.document.revision, { summary: 'Local archive.', memoryBodyIds: [] })
+    const path = join(f.controller.storageRoot, saved.document.relativePath)
+    expect(existsSync(path)).toBe(true)
+    const plan = f.controller.capacityPlan({ action: 'delete', id: saved.document.id, fileRevision: saved.document.fileRevision! })
+    expect(plan).toMatchObject({ projected: 0, fits: true, candidates: [] })
+    const deleted = await f.controller.mutate({ action: 'delete', id: saved.document.id, fileRevision: saved.document.fileRevision! }, saved.snapshot.revision)
+    expect(deleted).toMatchObject({ action: 'deleted', snapshot: { total: 0, activeCount: 0, archivedCount: 0, activeBytes: 0 } })
+    expect(existsSync(path)).toBe(false)
+    expect(JSON.parse(readFileSync(f.controller.indexPath, 'utf8')).documents).toEqual([])
+    expect(readFileSync(original, 'utf8')).toBe('Original project file stays untouched.')
+    expect(() => f.controller.get(saved.document.id)).toThrow('document not found')
+    expect(new DocumentController(f.workspace, undefined, undefined, f.controller.storageRoot).snapshot().total).toBe(0)
+  })
+
+  it('requires the index revision and checks it after queued writes before deleting', async () => {
+    const { controller } = deleteFixture()
+    const saved = await controller.mutate({ action: 'create', title: 'Protected', content: 'Original.' })
+    await expect(controller.mutate({ action: 'delete', id: saved.document.id, fileRevision: saved.document.fileRevision! })).rejects.toThrow(/revision/i)
+    const updating = controller.mutate({ action: 'update', id: saved.document.id, content: 'New content.' })
+    const deleting = controller.mutate({ action: 'delete', id: saved.document.id, fileRevision: saved.document.fileRevision! }, saved.snapshot.revision)
+    await updating
+    await expect(deleting).rejects.toBeInstanceOf(DocumentConflictError)
+    expect(controller.get(saved.document.id).content).toBe('New content.')
+  })
+
+  it('restores exact file bytes and index after an index commit fails, then allows a retry', async () => {
+    const { controller } = deleteFixture()
+    const saved = await controller.mutate({ action: 'create', title: 'Durable draft', content: '# Keep\n\nExact body.' })
+    const path = join(controller.storageRoot, saved.document.relativePath)
+    const before = readFileSync(path)
+    const index = readFileSync(controller.indexPath)
+    const writer = controller as unknown as { atomicWrite(path: string, content: string): void }
+    const atomicWrite = writer.atomicWrite.bind(controller)
+    const fault = vi.spyOn(writer, 'atomicWrite').mockImplementation((target, content) => {
+      if (target === controller.indexPath) throw new Error('simulated index write failure')
+      atomicWrite(target, content)
+    })
+    await expect(controller.mutate({ action: 'delete', id: saved.document.id, fileRevision: saved.document.fileRevision! }, saved.snapshot.revision)).rejects.toThrow('simulated index write failure')
+    expect(readFileSync(path)).toEqual(before)
+    expect(readFileSync(controller.indexPath)).toEqual(index)
+    expect(controller.snapshot()).toMatchObject({ revision: saved.snapshot.revision, total: 1 })
+    fault.mockRestore()
+    await expect(controller.mutate({ action: 'delete', id: saved.document.id, fileRevision: saved.document.fileRevision! }, saved.snapshot.revision)).resolves.toMatchObject({ action: 'deleted' })
+  })
+
+  it('rejects an index path that names another managed file', async () => {
+    const { controller } = deleteFixture()
+    const first = await controller.mutate({ action: 'create', title: 'First', content: 'First body.' })
+    const second = await controller.mutate({ action: 'create', title: 'Second', content: 'Second body.' })
+    const index = JSON.parse(readFileSync(controller.indexPath, 'utf8'))
+    index.documents[0].relativePath = second.document.relativePath
+    writeFileSync(controller.indexPath, JSON.stringify(index))
+    await expect(controller.mutate({ action: 'delete', id: first.document.id, fileRevision: first.document.fileRevision! }, controller.revision())).rejects.toThrow(/managed path/i)
+    expect(controller.get(second.document.id).content).toBe('Second body.')
+    expect(controller.snapshot().total).toBe(2)
+  })
+
+  it('rejects a damaged index when both file fields point at another document', async () => {
+    const { controller } = deleteFixture()
+    const first = await controller.mutate({ action: 'create', title: 'First', content: 'First body.' })
+    const second = await controller.mutate({ action: 'create', title: 'Second', content: 'Protected body.' })
+    const index = JSON.parse(readFileSync(controller.indexPath, 'utf8'))
+    index.documents[0].filename = second.document.filename
+    index.documents[0].relativePath = second.document.relativePath
+    writeFileSync(controller.indexPath, JSON.stringify(index))
+    await expect(controller.mutate({ action: 'delete', id: first.document.id, fileRevision: first.document.fileRevision! }, controller.revision())).rejects.toThrow(/managed path/i)
+    expect(controller.get(second.document.id).content).toBe('Protected body.')
+    expect(existsSync(join(controller.storageRoot, first.document.relativePath))).toBe(true)
+  })
+
+  it('preserves edits made directly to the managed file after confirmation', async () => {
+    const { controller } = deleteFixture()
+    const saved = await controller.mutate({ action: 'create', title: 'Direct edit', content: 'Reviewed content.' })
+    const path = join(controller.storageRoot, saved.document.relativePath)
+    writeFileSync(path, 'An external correction after confirmation.')
+    await expect(controller.mutate({ action: 'delete', id: saved.document.id, fileRevision: saved.document.fileRevision! }, saved.snapshot.revision)).rejects.toBeInstanceOf(DocumentConflictError)
+    expect(readFileSync(path, 'utf8')).toBe('An external correction after confirmation.')
+    expect(controller.snapshot().total).toBe(1)
+  })
+
+  it.skipIf(process.platform === 'win32')('rejects a managed file symlink without touching the target or metadata', async () => {
+    const { controller, workspace } = deleteFixture()
+    const saved = await controller.mutate({ action: 'create', title: 'Link', content: 'Managed.' })
+    const path = join(controller.storageRoot, saved.document.relativePath)
+    const original = join(workspace, 'original.md')
+    writeFileSync(original, 'External original.')
+    rmSync(path)
+    symlinkSync(original, path)
+    await expect(controller.mutate({ action: 'delete', id: saved.document.id, fileRevision: saved.document.fileRevision! }, saved.snapshot.revision)).rejects.toThrow(/regular managed file/i)
+    expect(readFileSync(original, 'utf8')).toBe('External original.')
+    expect(controller.snapshot().total).toBe(1)
+  })
+})
+
+describe('Documents deletion authority', () => {
+  async function setup() {
+    const f = deleteFixture()
+    const runner = new MemoryCompositionRunner()
+    releases.push(() => runner.dispose())
+    await runner.mount(strategy, { instanceId: 'strategy' })
+    await runner.mount(plugin, { instanceId: 'documents', config: { dataDir: f.controller.storageRoot } })
+    const base = { sourceInstanceKey: 'source:documents', scope: { storage: 'custom' as const, workspaceId: f.workspace } }
+    const added = await f.controller.mutate({ action: 'create', title: 'Selected draft', content: 'Only this copy.' })
+    return { ...f, runner, base, added }
+  }
+
+  it('requires confirmed management and a fresh revision; does not invoke an archive workflow', async () => {
+    const f = await setup()
+    const request = { ...f.base, mode: 'mutate' as const, operation: 'delete', input: { id: f.added.document.id, fileRevision: f.added.document.fileRevision! }, expectedRevision: f.added.snapshot.revision }
+    await expect(f.runner.executeManagement({ ...request, confirmed: false })).rejects.toThrow(/confirm/i)
+    expect(f.controller.get(f.added.document.id).content).toBe('Only this copy.')
+    const deleted = await f.runner.executeManagement({ ...request, confirmed: true })
+    expect(deleted.value).toMatchObject({ action: 'deleted', snapshot: { total: 0, archivedCount: 0 } })
+  })
+
+  it('allows a confirmed Agent delete only for documents in its pinned ReadGrant', async () => {
+    const f = await setup()
+    const turn = await f.runner.beginTurn({ scope: f.base.scope })
+    const manage = turn.view.actionOffers.find(offer => offer.sourceActionId === 'manage')!
+    await expect(turn.executeAction(manage.id, { action: 'delete', id: f.added.document.id, fileRevision: f.added.document.fileRevision! }, () => true)).rejects.toThrow(/confirm/i)
+    const outside = await f.controller.mutate({ action: 'create', title: 'Not in View', content: 'Must survive.' })
+    await expect(turn.executeAction(manage.id, { action: 'delete', id: outside.document.id, fileRevision: outside.document.fileRevision!, confirmed: true, expectedRevision: outside.snapshot.revision }, () => true)).rejects.toThrow(/ReadGrant/)
+    await expect(turn.executeAction(manage.id, { action: 'delete', id: f.added.document.id, fileRevision: f.added.document.fileRevision!, confirmed: true, expectedRevision: f.added.snapshot.revision }, () => true)).rejects.toMatchObject({ code: 'revision-conflict' })
+    await expect(turn.executeAction(manage.id, { action: 'delete', id: f.added.document.id, fileRevision: f.added.document.fileRevision!, confirmed: true, expectedRevision: outside.snapshot.revision }, () => true)).resolves.toMatchObject({ completion: 'committed', details: { action: 'deleted' } })
+    expect(f.controller.get(outside.document.id).content).toBe('Must survive.')
+    turn.release()
+  })
+
+  it('exposes the post-search index revision so an Agent can confirm deleting a pinned archive', async () => {
+    const f = await setup()
+    await f.controller.archive(f.added.document.id, 1, { summary: 'Local archive.', memoryBodyIds: ['existing-reference'] })
+    const turn = await f.runner.beginTurn({ scope: f.base.scope })
+    const result = await turn.executeRoute(turn.view.routes[0]!.id, { query: 'Only this copy', includeArchived: true })
+    const revision = (result.metadata as { indexRevision: string }).indexRevision
+    expect(revision).toBe(f.controller.revision())
+    const manage = turn.view.actionOffers.find(offer => offer.sourceActionId === 'manage')!
+    await expect(turn.executeAction(manage.id, { action: 'delete', id: f.added.document.id, fileRevision: (result.items[0]!.provenance as { fileRevision: string }).fileRevision, confirmed: true, expectedRevision: revision! }, () => true))
+      .resolves.toMatchObject({ completion: 'committed', details: { action: 'deleted', document: { memoryBodyIds: ['existing-reference'] }, snapshot: { total: 0 } } })
+    turn.release()
   })
 })

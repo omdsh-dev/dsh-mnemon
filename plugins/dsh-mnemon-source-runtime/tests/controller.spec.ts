@@ -2,7 +2,23 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RUNTIME_ENTRY_DELIMITER } from '../src/contracts.ts'
+import { runtimeSourceConfig } from '../src/config.ts'
+import {
+  RUNTIME_ARCHIVE_DIRECTORY,
+  RUNTIME_DIRECTORY,
+  RUNTIME_ENTRY_DELIMITER,
+  RUNTIME_ENTRY_MAX_BYTES,
+  RUNTIME_LOCK_FILE,
+  RUNTIME_MEMORIES_FILE,
+  RUNTIME_MEMORY_LIMIT_MAX_BYTES,
+  RUNTIME_MEMORY_LIMITS,
+  RUNTIME_PROJECTION_FILES,
+  runtimeBytes,
+  runtimeProjection,
+  summarizeRuntimeMemories,
+  type RuntimeMemoryEntry,
+  type RuntimeMemoryTarget,
+} from '../src/contracts.ts'
 import {
   RuntimeMemoryCapacityError,
   RuntimeMemoryController,
@@ -11,6 +27,8 @@ import {
 const directories: string[] = []
 
 afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true })
 })
 
@@ -940,5 +958,166 @@ describe('explicit Runtime pins', () => {
     const plan = await controller.planMaintenance(request)
     await expect(controller.compactAndMutate(plan.revision, request, plan.entries, 5, { archive: 'local' })).rejects.toThrow('Pinned runtime entries')
     expect(controller.snapshot().entries.map(entry => entry.content)).toEqual(['Never silently drop me.'])
+  })
+})
+
+describe('compaction algorithm equivalence', () => {
+  const timestamp = '2026-10-02T00:00:00.000Z'
+  function compactionFixture(entries: RuntimeMemoryEntry[], target: RuntimeMemoryTarget = 'memory') {
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-compaction-algorithm-'))
+    directories.push(directory)
+    const controller = new RuntimeMemoryController({ effectiveDataDir: () => directory }, () => new Date('2026-10-03T00:00:00.000Z'), { memory: 1_048_576, user: 1_048_576 })
+    writeFileSync(controller.sourcePath, JSON.stringify({ version: 1, entries: [...entries, { content: 'remove sentinel', target, importance: 'normal', created_at: timestamp, updated_at: timestamp }] }))
+    return controller
+  }
+  function entry(content: string, i: number, target: RuntimeMemoryTarget = 'memory'): RuntimeMemoryEntry {
+    return { content, target, importance: (['low', 'critical', 'normal'] as const)[i % 3]!, created_at: timestamp, updated_at: timestamp, ...(target === 'memory' ? { branches: ['main'] } : {}) }
+  }
+
+  it.each(['memory', 'user'] as const)('preserves greedy packing, UTF-8 limits, metadata and order for %s', async target => {
+    const entries = Array.from({ length: 40 }, (_, i) => entry(`${i}:${['a', '中文', '𠀀', '\ud800'][i % 4]!.repeat(i % 7 + 1)}`, i, target))
+    const priority = { critical: 0, normal: 1, low: 2 }
+    for (const budget of [0, 1, 4, 10, 23, 60, 137, 512, 5000]) {
+      // Frozen full-rescan reference: preserves the original priority/packing contract.
+      const selected = new Set<RuntimeMemoryEntry>()
+      const packed: RuntimeMemoryEntry[] = []
+      for (const candidate of [...entries].sort((a, b) => priority[a.importance] - priority[b.importance])) {
+        if (Buffer.byteLength([...packed, candidate].map(e => e.content).join(RUNTIME_ENTRY_DELIMITER)) > budget) continue
+        packed.push(candidate)
+        selected.add(candidate)
+      }
+      const controller = compactionFixture(entries, target)
+      await controller.compactAndMutate(controller.snapshot().revision, { action: 'remove', target, oldText: 'remove sentinel' }, entries.map(({ content, importance }) => ({ content, importance })), budget)
+      const expected = entries.filter(e => selected.has(e))
+      expect(controller.snapshot().entries).toEqual(expected)
+      const content = expected.map(e => e.content).join(RUNTIME_ENTRY_DELIMITER)
+      // Disk encoding replaces an unpaired surrogate, as before.
+      expect(readFileSync(target === 'memory' ? controller.memoryPath : controller.userPath, 'utf8')).toBe(Buffer.from(content === '' ? '' : `${content}\n`).toString())
+    }
+  })
+
+  it('inherits the first identical committed entry when legacy duplicates have different branches', async () => {
+    const first = entry('same original content', 1)
+    const controller = compactionFixture([first, { ...first, branches: ['feature'], created_at: '2026-10-01T00:00:00.000Z' }])
+    await controller.compactAndMutate(controller.snapshot().revision, { action: 'remove', target: 'memory', oldText: 'remove sentinel' }, [{ content: first.content, importance: first.importance }])
+    expect(controller.snapshot().entries).toEqual([first])
+  })
+
+  it.each([1, 10, 100])('counts UTF-8 characters only linearly at N=%i', async n => {
+    const entries = Array.from({ length: n }, (_, i) => entry(`Synthetic 中文 content ${i}`, i))
+    const controller = compactionFixture(entries)
+    const revision = controller.snapshot().revision
+    const byteLength = Buffer.byteLength
+    let characters = 0
+    const counter = vi.spyOn(Buffer, 'byteLength').mockImplementation((value, encoding) => {
+      if (typeof value === 'string') characters += value.length
+      return byteLength(value, encoding)
+    })
+    await controller.compactAndMutate(revision, { action: 'remove', target: 'memory', oldText: 'remove sentinel' }, entries)
+    counter.mockRestore()
+    expect(controller.snapshot().entries).toEqual(entries)
+    expect(characters).toBeLessThan(12 * entries.map(e => e.content).join(RUNTIME_ENTRY_DELIMITER).length + 100)
+  })
+})
+
+describe('Runtime storage contracts', () => {
+  function contractsFixture(): { root: string; controller: RuntimeMemoryController } {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-mnemon-runtime-contracts-'))
+    directories.push(root)
+    return { root, controller: new RuntimeMemoryController({ effectiveDataDir: () => root }, () => new Date('2026-10-17T08:00:00.000Z')) }
+  }
+
+  function stored(root: string): RuntimeMemoryEntry[] {
+    return (JSON.parse(readFileSync(join(root, RUNTIME_DIRECTORY, RUNTIME_MEMORIES_FILE), 'utf8')) as { entries: RuntimeMemoryEntry[] }).entries
+  }
+
+  it('name the files the controller reads, writes and locks', () => {
+    const { root, controller } = contractsFixture()
+    const directory = join(root, RUNTIME_DIRECTORY)
+    expect(controller.directory).toBe(directory)
+    expect(controller.sourcePath).toBe(join(directory, RUNTIME_MEMORIES_FILE))
+    expect(controller.userPath).toBe(join(directory, RUNTIME_PROJECTION_FILES.user))
+    expect(controller.memoryPath).toBe(join(directory, RUNTIME_PROJECTION_FILES.memory))
+    expect(controller.lockPath).toBe(join(directory, RUNTIME_LOCK_FILE))
+    expect(controller.archivePath).toBe(join(directory, RUNTIME_ARCHIVE_DIRECTORY, 'MEMORY.md'))
+    // The names a Mnemon Pack has always carried them under.
+    expect([RUNTIME_DIRECTORY, RUNTIME_MEMORIES_FILE, RUNTIME_PROJECTION_FILES.user, RUNTIME_PROJECTION_FILES.memory, RUNTIME_LOCK_FILE])
+      .toEqual(['runtime', 'memories.json', 'USER.md', 'MEMORY.md', '.memories.lock'])
+  })
+
+  it('project each target byte for byte as the controller writes it, and count the bytes it reports', async () => {
+    const { root, controller } = contractsFixture()
+    for (const [target, content] of [
+      ['user', 'Prefers concise answers'], ['memory', '项目使用 pnpm workspace'], ['memory', 'A rare character \u{20BB7} takes four bytes'],
+      ['user', 'Écrit en français'], ['memory', 'The gateway retries twice'],
+    ] as const) await controller.mutate({ action: 'add', target, content })
+    const entries = stored(root)
+    const snapshot = controller.snapshot()
+    for (const target of ['user', 'memory'] as const) {
+      const file = readFileSync(join(root, RUNTIME_DIRECTORY, RUNTIME_PROJECTION_FILES[target]))
+      expect(Buffer.from(runtimeProjection(entries, target), 'utf8').equals(file)).toBe(true)
+      expect(runtimeBytes(entries, target)).toBe(snapshot.targets[target].used)
+      expect(runtimeBytes(entries, target)).toBe(file.length - 1)
+    }
+    expect(runtimeProjection(entries, 'memory').split(RUNTIME_ENTRY_DELIMITER)).toHaveLength(3)
+  })
+
+  it('project an empty target as an empty file and count it as zero bytes', async () => {
+    const { root, controller } = contractsFixture()
+    await controller.mutate({ action: 'add', target: 'memory', content: 'Only working memory' })
+    expect(readFileSync(join(root, RUNTIME_DIRECTORY, RUNTIME_PROJECTION_FILES.user), 'utf8')).toBe('')
+    expect(runtimeProjection(stored(root), 'user')).toBe('')
+    expect(runtimeBytes(stored(root), 'user')).toBe(0)
+    expect(runtimeBytes([], 'memory')).toBe(0)
+  })
+
+  it('count UTF-8 bytes as Node does, unpaired surrogates included, without Node', () => {
+    const contents = ['plain', 'é', '中文', '\u{20BB7}', '\uD800', 'x\uDC00y', '\uDC00\uD800', '߿ࠀ\uFFFD', '']
+    const expected = contents.map(content => Buffer.byteLength(content, 'utf8'))
+    // The browser has no Buffer: the count must not need it.
+    vi.stubGlobal('Buffer', undefined)
+    expect(contents.map(content => runtimeBytes([{ target: 'memory', content }], 'memory'))).toEqual(expected)
+    vi.unstubAllGlobals()
+    const joined = [{ target: 'memory', content: 'a\uD800' }, { target: 'user', content: 'skipped' }, { target: 'memory', content: '\u{20BB7}' }] as const
+    expect(runtimeBytes(joined, 'memory')).toBe(Buffer.byteLength(`a\uD800${RUNTIME_ENTRY_DELIMITER}\u{20BB7}`, 'utf8'))
+  })
+
+  it('keep the entry size limit the controller enforces', async () => {
+    const { controller } = contractsFixture()
+    await expect(controller.mutate({ action: 'add', target: 'memory', content: 'x'.repeat(RUNTIME_ENTRY_MAX_BYTES) })).resolves.toMatchObject({ success: true })
+    await expect(controller.mutate({ action: 'add', target: 'memory', content: 'y'.repeat(RUNTIME_ENTRY_MAX_BYTES + 1) })).rejects.toThrow(`max ${RUNTIME_ENTRY_MAX_BYTES}`)
+  })
+
+  it('state the limits the configuration and the controller apply', () => {
+    // The Starter's settings default and bound both files with these.
+    expect(RUNTIME_MEMORY_LIMITS).toEqual({ memory: 10 * 1024, user: 4 * 1024 })
+    expect(RUNTIME_MEMORY_LIMIT_MAX_BYTES).toBe(1024 * 1024)
+    const { root, controller } = contractsFixture()
+    expect(controller.limits).toEqual(RUNTIME_MEMORY_LIMITS)
+    expect(runtimeSourceConfig({ dataDir: root }, 'contracts')).toMatchObject({ memoryLimitBytes: RUNTIME_MEMORY_LIMITS.memory, userLimitBytes: RUNTIME_MEMORY_LIMITS.user })
+    for (const key of ['memoryLimitBytes', 'userLimitBytes'] as const) {
+      expect(runtimeSourceConfig({ dataDir: root, [key]: RUNTIME_MEMORY_LIMIT_MAX_BYTES }, 'contracts')[key]).toBe(RUNTIME_MEMORY_LIMIT_MAX_BYTES)
+      expect(() => runtimeSourceConfig({ dataDir: root, [key]: RUNTIME_MEMORY_LIMIT_MAX_BYTES + 1 }, 'contracts')).toThrow()
+    }
+    for (const target of ['memory', 'user'] as const) {
+      const storage = { effectiveDataDir: () => root }
+      expect(new RuntimeMemoryController(storage, undefined, { ...RUNTIME_MEMORY_LIMITS, [target]: RUNTIME_MEMORY_LIMIT_MAX_BYTES }).limits[target]).toBe(RUNTIME_MEMORY_LIMIT_MAX_BYTES)
+      expect(() => new RuntimeMemoryController(storage, undefined, { ...RUNTIME_MEMORY_LIMITS, [target]: RUNTIME_MEMORY_LIMIT_MAX_BYTES + 1 }))
+        .toThrow(`runtime ${target} memory limit must be an integer within 1..${RUNTIME_MEMORY_LIMIT_MAX_BYTES} bytes`)
+    }
+  })
+
+  it('summarize a stored file for an inventory without judging its entries, and never throw', async () => {
+    const { root, controller } = contractsFixture()
+    await controller.mutate({ action: 'add', target: 'user', content: 'One profile fact' })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'One working fact' })
+    expect(summarizeRuntimeMemories(JSON.parse(readFileSync(join(root, RUNTIME_DIRECTORY, RUNTIME_MEMORIES_FILE), 'utf8')))).toEqual({ valid: true, entries: 2, user: 1, memory: 1 })
+    // An entry that is an object counts whatever its target; anything else is skipped.
+    expect(summarizeRuntimeMemories({ version: 9, entries: [{ target: 'user' }, { target: 'other' }, null, 'text', [], { target: 'memory' }] }))
+      .toEqual({ valid: true, entries: 3, user: 1, memory: 1 })
+    expect(summarizeRuntimeMemories({ entries: [] })).toEqual({ valid: true, entries: 0, user: 0, memory: 0 })
+    for (const value of [null, [], 'memories', { entries: {} }, { version: 1 }]) {
+      expect(summarizeRuntimeMemories(value)).toEqual({ valid: false, entries: 0, user: 0, memory: 0 })
+    }
   })
 })

@@ -1,16 +1,21 @@
 // @vitest-environment jsdom
+import { Context } from '@deepseek-ai/cordis'
+import { SlotCore } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createContext, useContext, type ReactNode } from 'react'
-import { act, fireEvent, render, waitFor, within } from '@testing-library/react'
+import { createContext, createElement, useContext, useSyncExternalStore, type ComponentType, type ReactElement, type ReactNode } from 'react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+
+const workbenchMock = vi.hoisted(() => ({ mode: 'canonical' as 'canonical' | 'native' }))
 
 vi.mock('../src/client/MnemonWorkbench.tsx', () => ({
-  MnemonWorkbench: ({ sessionId, workspaceId, workspaceSelection, t, locale, onClose, surface, active, renderSlot }: {
+  MnemonWorkbench: ({ sessionId, workspaceId, workspaceSelection, t, locale, onClose, surface, active, titleBar, renderSlot }: {
     sessionId?: string
     workspaceId?: string
     t?: (key: string) => string
     locale?: 'zh' | 'en'
     surface?: 'sidebar' | 'builtin'
     active?: boolean
+    titleBar?: boolean
     onClose?: () => void
     renderSlot?: (name: string, props: unknown, options: unknown) => ReactNode
     workspaceSelection?: {
@@ -20,16 +25,22 @@ vi.mock('../src/client/MnemonWorkbench.tsx', () => ({
       onSelect(id: string): void
       onAlign(): void
     }
-  }) => <div data-testid="mnemon-canonical-content" data-active={active} data-session-id={sessionId} data-workspace-id={workspaceId} data-effective-workspace-id={workspaceSelection?.effectiveWorkspaceId} data-locale={locale} data-surface={surface} data-has-workspace-picker={workspaceSelection !== undefined} data-has-back-action={onClose !== undefined} data-has-source-renderer={renderSlot !== undefined}>
-    <h1>{t?.('tab.label')}</h1>
-    <span>{sessionId ?? 'no-session'}</span>
-    <select aria-label="workspace-test-selector" value={workspaceSelection?.selectedWorkspaceId ?? ''} onChange={event => workspaceSelection?.onSelect(event.target.value)}>
-      {workspaceSelection?.options.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.title}</option>)}
-    </select>
-    <button type="button" onClick={workspaceSelection?.onAlign}>align-test-workspace</button>
-    <button type="button" aria-label={t?.('header.backToConversation')} onClick={onClose}>back-test-conversation</button>
-    {renderSlot?.('mnemon.source.page', {}, {})}
-  </div>,
+  }) => workbenchMock.mode === 'native'
+    ? <div data-testid="native-memory" data-active={active} data-title-bar={titleBar}>
+        <input aria-label="Retained editor" defaultValue="draft" />
+        <button onClick={onClose}>Return to conversation</button>
+        {renderSlot?.('mnemon.source.page', {}, {})}
+      </div>
+    : <div data-testid="mnemon-canonical-content" data-active={active} data-session-id={sessionId} data-workspace-id={workspaceId} data-effective-workspace-id={workspaceSelection?.effectiveWorkspaceId} data-locale={locale} data-surface={surface} data-has-workspace-picker={workspaceSelection !== undefined} data-has-back-action={onClose !== undefined} data-has-source-renderer={renderSlot !== undefined}>
+        <h1>{t?.('tab.label')}</h1>
+        <span>{sessionId ?? 'no-session'}</span>
+        <select aria-label="workspace-test-selector" value={workspaceSelection?.selectedWorkspaceId ?? ''} onChange={event => workspaceSelection?.onSelect(event.target.value)}>
+          {workspaceSelection?.options.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.title}</option>)}
+        </select>
+        <button type="button" onClick={workspaceSelection?.onAlign}>align-test-workspace</button>
+        <button type="button" aria-label={t?.('header.backToConversation')} onClick={onClose}>back-test-conversation</button>
+        {renderSlot?.('mnemon.source.page', {}, {})}
+      </div>,
 }))
 
 import {
@@ -37,7 +48,9 @@ import {
   MnemonSidebarWorkspaceHost,
   MnemonBuiltinWorkspaceHost,
 } from '../src/client/workspace-mount.tsx'
-import { mountMnemonSidebarNavigation } from '../src/client/native-sidebar.tsx'
+import { MNEMON_BETTER_SIDEBAR_TAB_ID, mountBetterSidebarTab } from '../src/client/better-sidebar.tsx'
+import { inject } from '../src/client/index.ts'
+import { MNEMON_MAIN_PANEL_ID, mountMnemonSidebarNavigation } from '../src/client/native-sidebar.tsx'
 import { MnemonNativeSidebarSeat } from '../src/client/native-sidebar-seat.ts'
 import type { MnemonTranslate } from '../src/client/locales.ts'
 
@@ -155,7 +168,10 @@ function SlotOwnerProbe(): JSX.Element {
 }
 
 describe('Mnemon canonical workspace launcher', () => {
-  beforeEach(() => { renderShell() })
+  beforeEach(() => {
+    workbenchMock.mode = 'canonical'
+    renderShell()
+  })
   afterEach(() => {
     currentDispose?.()
     currentDispose = undefined
@@ -550,5 +566,331 @@ describe('Mnemon canonical workspace launcher', () => {
     snapshot = { active, locales: [] as const, revision: 1 }
     for (const listener of listeners) listener()
     await waitFor(() => expect(document.querySelector('[data-dsh-mnemon-entry]')?.textContent).toBe('Memory System'))
+  })
+})
+
+describe('Better Sidebar integration', () => {
+  interface Descriptor {
+    id: string
+    title: string | (() => string)
+    order?: number
+    single?: boolean
+    icon?: ReactNode | ((size: number) => ReactNode)
+    component: (props: { scope: { sessionId: string; cwd?: string }; visible: boolean }) => ReactNode
+  }
+
+  function service() {
+    const dispose = vi.fn()
+    const registerTab = vi.fn((_descriptor: Descriptor) => dispose)
+    return { registerTab, dispose }
+  }
+
+  function betterContext() {
+    let currentService: ReturnType<typeof service> | undefined
+    let serviceListener: ((name: string) => void) | undefined
+    const unsubscribe = vi.fn()
+    const localeSnapshot = { active: 'zh' as const, locales: [] as const, revision: 0 }
+    const sessionSnapshot = { current: 'session-current', byId: { 'session-current': { cwd: '/workspace/current' } } }
+    const workspaceSnapshot = { items: [
+      { workspaceId: 'workspace-current', title: 'Current', path: '/workspace/current' },
+      { workspaceId: 'workspace-target', title: 'Target', path: 'C:\\workspace\\target' },
+    ] }
+    const value = {
+      connection: { rpc: { call: vi.fn() } },
+      get: vi.fn((name: string) => name === 'betterSidebar' ? currentService : undefined),
+      on: vi.fn((_name: string, listener: (name: string) => void) => {
+        serviceListener = listener
+        return unsubscribe
+      }),
+      locale: { getSnapshot: () => localeSnapshot, subscribe: () => () => {} },
+      sessions: { list: { getSnapshot: () => sessionSnapshot, subscribe: () => () => {} } },
+      workspaces: { list: { getSnapshot: () => workspaceSnapshot, subscribe: () => () => {} } },
+    }
+    return {
+      value,
+      setService(next: ReturnType<typeof service> | undefined) {
+        currentService = next
+        serviceListener?.('betterSidebar')
+      },
+      notifyOtherService() { serviceListener?.('unrelated') },
+      unsubscribe,
+    }
+  }
+
+  afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+  })
+
+  it('registers across either activation order and follows service replacement lifetime', () => {
+    const ctx = betterContext()
+    const first = service()
+    const second = service()
+    const dispose = mountBetterSidebarTab(ctx.value as never, key => key === 'tab.label' ? '记忆系统' : key, new MnemonBetterSidebarSeat())
+
+    expect(first.registerTab).not.toHaveBeenCalled()
+    ctx.setService(first)
+    expect(first.registerTab).toHaveBeenCalledTimes(1)
+    ctx.notifyOtherService()
+    expect(first.registerTab).toHaveBeenCalledTimes(1)
+
+    const descriptor = first.registerTab.mock.calls[0]![0]
+    expect(descriptor).toMatchObject({ id: MNEMON_BETTER_SIDEBAR_TAB_ID, order: 55, single: true })
+    expect(typeof descriptor.title === 'function' ? descriptor.title() : descriptor.title).toBe('记忆系统')
+    expect(descriptor.icon).toBeTypeOf('function')
+
+    ctx.setService(second)
+    expect(first.dispose).toHaveBeenCalledTimes(1)
+    expect(second.registerTab).toHaveBeenCalledTimes(1)
+    ctx.setService(undefined)
+    expect(second.dispose).toHaveBeenCalledTimes(1)
+
+    dispose()
+    expect(ctx.unsubscribe).toHaveBeenCalledTimes(1)
+    expect(second.dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('publishes only the tab DOM seat, scope, and visibility to the DSH renderer', async () => {
+    const ctx = betterContext()
+    const sidebar = service()
+    const seat = new MnemonBetterSidebarSeat()
+    ctx.setService(sidebar)
+    const dispose = mountBetterSidebarTab(ctx.value as never, key => String(key), seat)
+    const descriptor = sidebar.registerTab.mock.calls[0]![0]
+    const view = render(descriptor.component({
+      scope: { sessionId: 'session-target', cwd: 'C:\\workspace\\target\\' },
+      visible: true,
+    }) as ReactElement)
+
+    await waitFor(() => expect(seat.getSnapshot()?.scope).toEqual({ sessionId: 'session-target', cwd: 'C:\\workspace\\target\\' }))
+    expect(seat.getSnapshot()?.visible).toBe(true)
+    expect(seat.getSnapshot()?.target).toBe(view.container.querySelector('[data-dsh-mnemon-better-sidebar-seat]'))
+    expect(view.container.querySelector('[data-testid="mnemon-better-sidebar-view"]')).toBeNull()
+
+    view.rerender(descriptor.component({ scope: { sessionId: 'session-target', cwd: 'C:\\workspace\\target\\' }, visible: false }) as ReactElement)
+    await waitFor(() => expect(seat.getSnapshot()?.visible).toBe(false))
+    view.unmount()
+    expect(seat.getSnapshot()).toBeUndefined()
+    dispose()
+  })
+})
+
+describe('native Sidebar panel integration', () => {
+  const releases: Array<() => void> = []
+  beforeEach(() => { workbenchMock.mode = 'native' })
+  afterEach(() => {
+    act(() => { for (const release of releases.splice(0).reverse()) release() })
+    cleanup()
+    document.body.replaceChildren()
+    for (const name of ['mnemon', 'ssh', 'taskboard']) document.documentElement.removeAttribute(`data-dsh-${name}-active`)
+  })
+
+  const sourceOwner = createContext('missing-owner')
+  function SourceProbe() { return <span>{useContext(sourceOwner)}</span> }
+
+  function nativeFixture(initiallyDeclared = true) {
+    const core = new SlotCore()
+    const controller = new MnemonWorkspaceController()
+    const seat = new MnemonNativeSidebarSeat()
+    let activePanel: string | null = null
+    let label = 'Memory System'
+    const panelListeners = new Set<() => void>()
+    const subscribePanel = (listener: () => void) => { panelListeners.add(listener); return () => panelListeners.delete(listener) }
+    const getPanel = () => activePanel
+    const selectPanel = vi.fn((id: string | null) => {
+      if (id !== null && !core.entriesOfSlot('main').some(entry => entry.options.key === id)) throw new Error('Unknown main panel')
+      activePanel = id
+      for (const listener of panelListeners) listener()
+    })
+    const layout = { selectPanel }
+    const register = core.register.bind(core)
+    const declare = () => register({ name: 'root', children: {
+      main: { kind: 'keyed', scope: 'root' },
+      'sidebar.panellist': { kind: 'list', scope: 'root' },
+    } } as never, (() => null) as never)
+    let stopOwner = initiallyDeclared ? declare() : undefined
+    const ctx = {
+      layout,
+      slots: {
+        register,
+        inject: (name: string, factory: () => () => void) => {
+          let stop: (() => void) | undefined
+          const sync = () => {
+            if (core.specDynamic(name) !== undefined) stop ??= factory()
+            else { const previous = stop; stop = undefined; previous?.() }
+          }
+          const unsubscribe = core.subscribeDeclaration(name, sync)
+          try { sync() } catch (error) { unsubscribe(); throw error }
+          return () => { unsubscribe(); stop?.() }
+        },
+      },
+      locale: { subscribe: () => () => {} },
+    }
+    const mount = () => mountMnemonSidebarNavigation(ctx as never, () => label, controller, seat)
+    const navigation = mount()
+    releases.push(() => { navigation.dispose(); stopOwner?.() })
+
+    function NativeFrame({ collapsed = false }: { collapsed?: boolean }) {
+      useSyncExternalStore(listener => core.subscribe('sidebar.panellist', listener), () => core.getVersion('sidebar.panellist'))
+      useSyncExternalStore(listener => core.subscribe('main', listener), () => core.getVersion('main'))
+      const selected = useSyncExternalStore(subscribePanel, getPanel)
+      const main = core.entriesOfSlot('main').find(entry => entry.options.key === selected)
+      return <>
+        <nav aria-label="Native panels">
+          <button onClick={() => selectPanel(null)}>New Session</button>
+          {core.entriesOfSlot('sidebar.panellist').map(entry => {
+            const title = typeof entry.options.label === 'function' ? entry.options.label() : entry.options.label
+            const Icon = entry.component as ComponentType<{ size: number; active: boolean }>
+            return <button key={entry.options.id} aria-label={title as string} aria-current={selected === entry.options.id ? 'page' : undefined} onClick={() => selectPanel(entry.options.id!)}>
+              <Icon size={collapsed ? 18 : 16} active={selected === entry.options.id} />
+              {!collapsed && <span>{title as string}</span>}
+            </button>
+          })}
+        </nav>
+        <main data-testid="native-main">
+          {main === undefined ? <p>Conversation</p> : createElement(main.component as ComponentType, { key: selected, ...main.inject?.() })}
+        </main>
+      </>
+    }
+    const locale = { active: 'en', locales: [], revision: 0 }
+    const sessions = { byId: {} }
+    const workspaces = { items: [] }
+    const current = { key: undefined, hooks: {}, keyedHooks: {}, props: {} }
+    function Host() {
+      return <sourceOwner.Provider value="shell-source-owner"><MnemonSidebarWorkspaceHost
+        controller={controller} nativeSidebarSeat={seat} navigation={navigation}
+        connection={{} as never} settingsScope={{} as never}
+        sessions={{ list: { getSnapshot: () => sessions, subscribe: () => () => {} } } as never}
+        workspaces={{ list: { getSnapshot: () => workspaces, subscribe: () => () => {} } } as never}
+        currentSession={{ getSnapshot: () => current, subscribe: () => () => {} }}
+        localeRuntime={{ getSnapshot: () => locale, subscribe: () => () => {} } as never}
+        sourcePageDirectory={{ getSnapshot: () => [], subscribe: () => () => {} }}
+        renderSlot={() => <SourceProbe />} t={() => label}
+      /></sourceOwner.Provider>
+    }
+    const registerPeer = (id = 'plugins') => {
+      const stopMain = register({ name: 'main', key: id }, () => <p>{id} panel</p>)
+      const stopIcon = register({ name: 'sidebar.panellist', id, label: id, order: 0 }, () => <svg />)
+      return () => { stopIcon(); stopMain() }
+    }
+    return {
+      core, ctx, controller, seat, navigation, mount, selectPanel, getPanel, NativeFrame, Host, registerPeer,
+      rename: (value: string) => { label = value },
+      declare: () => { stopOwner = declare() },
+      removeOwner: () => { stopOwner?.(); stopOwner = undefined },
+    }
+  }
+
+  it('authorizes native layout access through the real Cordis Client inject contract', async () => {
+    const f = nativeFixture()
+    f.navigation.dispose()
+    const root = new Context()
+    let navigation: ReturnType<typeof mountMnemonSidebarNavigation> | undefined
+    const failures: unknown[] = []
+    for (const name of inject) root.provide(name, {})
+    root.set('slots', f.ctx.slots)
+    root.set('locale', f.ctx.locale)
+    if (inject.includes('layout')) root.set('layout', f.ctx.layout)
+    else root.provide('layout', f.ctx.layout)
+    try {
+      await root.plugin({ inject, apply(ctx: Context) {
+        try { navigation = mountMnemonSidebarNavigation(ctx as never, () => 'Memory System', f.controller, f.seat) }
+        catch (error) { failures.push(error) }
+      } })
+      expect(failures).toEqual([])
+      expect(f.core.entriesOfSlot('sidebar.panellist')).toHaveLength(1)
+      expect(navigation).toBeDefined()
+      act(() => navigation!.open())
+      expect(f.selectPanel).toHaveBeenCalledWith(MNEMON_MAIN_PANEL_ID)
+    } finally {
+      navigation?.dispose()
+      await root.fiber.dispose()
+    }
+  })
+
+  it('adds a native panel beside Plugins, follows native icon sizes and locale labels, and retains Source ownership and editor state', () => {
+    const f = nativeFixture()
+    releases.push(f.registerPeer())
+    const view = render(<><f.NativeFrame /><f.Host /></>)
+    const entry = screen.getByRole('button', { name: 'Memory System' })
+    expect(document.querySelector('[data-dsh-mnemon-entry]')).toBeNull()
+    expect(entry.querySelector('svg')?.getAttribute('width')).toBe('16')
+    expect(entry.querySelector('svg')?.getAttribute('height')).toBe('16')
+    expect(f.core.entriesOfSlot('main').map(item => item.options.key)).toEqual([MNEMON_MAIN_PANEL_ID, 'plugins'])
+    fireEvent.click(entry)
+    const content = screen.getByTestId('native-memory')
+    expect(entry.getAttribute('aria-current')).toBe('page')
+    const band = document.querySelector('[data-dsh-mnemon-main-seat] > [data-window-drag]')
+    expect(band?.getAttribute('aria-hidden')).toBe('true')
+    expect(content.getAttribute('data-title-bar')).toBe('true')
+    expect(within(screen.getByTestId('native-main')).getByText('shell-source-owner')).not.toBeNull()
+    fireEvent.change(screen.getByLabelText('Retained editor'), { target: { value: 'unsaved draft' } })
+    fireEvent.click(screen.getByRole('button', { name: 'plugins' }))
+    expect(screen.queryByTestId('native-memory')).toBeNull()
+    expect(screen.getByText('plugins panel')).not.toBeNull()
+    expect(entry.hasAttribute('aria-current')).toBe(false)
+    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(false)
+    fireEvent.click(entry)
+    expect(screen.getByTestId('native-memory')).toBe(content)
+    expect((screen.getByLabelText('Retained editor') as HTMLInputElement).value).toBe('unsaved draft')
+    fireEvent.click(entry)
+    expect(screen.getByTestId('native-memory')).toBe(content)
+    f.rename('记忆系统')
+    view.rerender(<><f.NativeFrame collapsed /><f.Host /></>)
+    const collapsedEntry = screen.getByRole('button', { name: '记忆系统' })
+    expect(collapsedEntry.textContent).toBe('')
+    expect(collapsedEntry.querySelector('svg')?.getAttribute('width')).toBe('18')
+    expect(collapsedEntry.getAttribute('aria-current')).toBe('page')
+  })
+
+  it.each(['Return to conversation', 'New Session', 'Escape'])('returns native selection and the current main panel to Conversation with %s', action => {
+    const f = nativeFixture()
+    render(<><f.NativeFrame /><f.Host /></>)
+    act(() => f.navigation.open())
+    expect(screen.getByTestId('native-memory')).not.toBeNull()
+    if (action === 'Escape') fireEvent.keyDown(window, { key: 'Escape' })
+    else fireEvent.click(screen.getByRole('button', { name: action }))
+    expect(f.getPanel()).toBeNull()
+    expect(screen.queryByTestId('native-memory')).toBeNull()
+    expect(screen.getByText('Conversation')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Memory System' }).hasAttribute('aria-current')).toBe(false)
+  })
+
+  it('coordinates legacy peers and reasserts native navigation before their DOM announcement is observed', () => {
+    const f = nativeFixture()
+    render(<><f.NativeFrame /><f.Host /></>)
+    const entry = screen.getByRole('button', { name: 'Memory System' })
+    fireEvent.click(entry)
+    act(() => document.dispatchEvent(new CustomEvent('dsh-panel-activate', { detail: 'taskboard' })))
+    expect(f.getPanel()).toBeNull()
+    fireEvent.click(entry)
+    document.documentElement.removeAttribute('data-dsh-mnemon-active')
+    document.documentElement.setAttribute('data-dsh-ssh-active', '')
+    fireEvent.click(entry)
+    expect(f.getPanel()).toBe(MNEMON_MAIN_PANEL_ID)
+    expect(document.documentElement.hasAttribute('data-dsh-ssh-active')).toBe(false)
+    expect(screen.getByTestId('native-memory')).not.toBeNull()
+  })
+
+  it('replaces only its fallback when native seats arrive, and restores it when a replacement layout removes them', () => {
+    document.body.innerHTML = '<aside data-pane="sidebar"><div><button class="newSession">New</button></div></aside>'
+    const f = nativeFixture(false)
+    expect(document.querySelectorAll('[data-dsh-mnemon-entry]')).toHaveLength(1)
+    act(() => f.declare())
+    expect(document.querySelector('[data-dsh-mnemon-entry]')).toBeNull()
+    expect(f.core.entriesOfSlot('sidebar.panellist')).toHaveLength(1)
+    act(() => f.removeOwner())
+    expect(document.querySelectorAll('[data-dsh-mnemon-entry]')).toHaveLength(1)
+    f.navigation.dispose()
+    expect(document.querySelector('[data-dsh-mnemon-entry]')).toBeNull()
+  })
+
+  it('rejects an occupied native panel id without replacing the peer or leaking a launcher', () => {
+    const f = nativeFixture()
+    const peers = f.core.entriesOfSlot('main')
+    expect(() => f.mount()).toThrow()
+    expect(f.core.entriesOfSlot('main')).toEqual(peers)
+    expect(f.core.entriesOfSlot('sidebar.panellist')).toHaveLength(1)
+    expect(document.querySelector('[data-dsh-mnemon-entry]')).toBeNull()
   })
 })

@@ -1,4 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { performance } from 'node:perf_hooks'
+import { Context } from '@deepseek-ai/cordis'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   COMPOSABLE_MEMORY_API_VERSION,
   type ComposableMemoryView,
@@ -9,12 +11,24 @@ import {
   type MemoryViewRequest,
 } from "../src/core/contracts/index.ts"
 import type { InstalledMemorySource, InstalledMemoryStrategy, MemoryContributionSnapshot } from '../src/core/contributions.ts'
+import { canonicalMemoryJson, jsonClone } from '../src/core/definitions.ts'
 import {
   MemoryCompositionGeneration,
   MemoryCompositionRunner,
+  MemoryGenerationHost,
   defineMemorySource,
   defineMemoryStrategy,
 } from "../src/core/index.ts"
+import * as core from '../src/core/plugin.ts'
+import { MemoryRuntime } from '../src/core/runtime.ts'
+import { installMemory } from '../src/sdk/index.ts'
+import { MemoryCompositionRunner as TestingMemoryCompositionRunner } from 'dsh-mnemon/testing'
+import type { DocumentMutationResult } from 'dsh-mnemon-source-documents/contracts'
+import type { RuntimeMemorySnapshot } from 'dsh-mnemon-source-runtime/contracts'
+import * as capture from 'dsh-mnemon-strategy-auto-capture'
+import * as light from 'dsh-mnemon-strategy-light-context'
+import * as scoped from 'dsh-mnemon-strategy-scoped'
+import { compositionFixture } from './fixtures/composition.ts'
 
 const REQUEST: MemoryViewRequest = {
   scope: { storage: 'workspace', workspaceId: '/workspace' },
@@ -577,4 +591,517 @@ describe('Composable View Memory compiler', () => {
     await expect(generation.executeRoute(view, view.routes[0]!.id, cyclic)).rejects.toThrow()
     await generation.dispose()
   })
+})
+
+describe('Source-neutral Core entry', () => {
+  it('mounts on plain Cordis without a DSH default service or built-in contribution', async () => {
+    const ctx = new Context()
+    const fiber = ctx.plugin(core)
+    await fiber.await()
+    const service = ctx.mnemonMemory
+    expect(core.inject).toEqual([])
+    expect(Object.keys(core).sort()).toEqual(['apply', 'inject', 'name', 'provide'])
+    expect(Object.keys(service)).toEqual(['installContributions'])
+    expect(Object.isFrozen(service)).toBe(true)
+    await fiber.dispose()
+    expect(() => service.installContributions({}, { instanceId: 'closed' })).toThrow('disposed')
+    expect(ctx.get('mnemonMemory', false)).toBeUndefined()
+  })
+
+  it('supports third-party Source/Strategy turns without the default bundle and owns shutdown', async () => {
+    const runner = new TestingMemoryCompositionRunner()
+    const disposed = vi.fn()
+    const source = defineMemorySource({
+      manifest: {
+        apiVersion: COMPOSABLE_MEMORY_API_VERSION, kind: 'source', typeId: 'external-notes',
+        packageName: 'dsh-mnemon-external-notes', role: 'notes', capabilities: ['project'], consistency: 'exact-snapshot',
+      },
+      create: context => ({
+        facts: () => ({
+          sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: 'external-notes', role: 'notes',
+          availability: 'ready', revision: 'r1', capabilities: ['project'], routeIds: [], actionIds: [],
+        }),
+        project: request => ({ fragments: [{
+          id: 'note', sourceInstanceKey: context.sourceInstanceKey, mode: request.mode,
+          text: 'Only external notes', revision: 'r1',
+        }] }),
+        dispose: disposed,
+      }),
+    })
+    const strategy = defineMemoryStrategy({
+      manifest: {
+        apiVersion: COMPOSABLE_MEMORY_API_VERSION, kind: 'strategy', typeId: 'notes-view', packageName: 'dsh-mnemon-external-notes-view',
+        deterministic: true, supportedSourceRoles: ['notes'], maxSources: 1, maxRoutes: 1, maxActions: 1,
+      },
+      compose: (_request, facts) => ({ strategyTypeId: 'notes-view', explanation: 'Only selected notes', sources: facts.map(fact => ({
+        sourceInstanceKey: fact.sourceInstanceKey, projection: { mode: 'eager', maxCharacters: 1_000 }, routes: [], actions: [],
+      })) }),
+    })
+    try {
+      await runner.mount({ inject: ['mnemonMemory'], apply(child: Context) {
+        installMemory(child, { sources: [source] })
+      } }, { instanceId: 'notes' })
+      await runner.mount({ inject: ['mnemonMemory'], apply(child: Context) {
+        installMemory(child, { strategies: [strategy] })
+      } }, { instanceId: 'view' })
+      const turn = await runner.beginTurn()
+      try { expect(turn.view.projection.map(fragment => fragment.text)).toEqual(['Only external notes']) }
+      finally { turn.release() }
+    } finally { await runner.dispose() }
+    expect(disposed).toHaveBeenCalledOnce()
+  })
+})
+
+describe('Core JSON boundary validation without serialization', () => {
+  it('retains frozen detached values, shared references, sparse arrays and negative zero', () => {
+    const shared = { values: ['Unicode 中文 \u{1F600}', -0, null, true] }
+    const sparse = new Array(3) as string[]
+    sparse[1] = 'middle'
+    const value = { shared, same: shared, sparse, nullPrototype: Object.assign(Object.create(null) as { note: string }, { note: 'kept' }) }
+    const cloned = jsonClone(value, 'boundary')
+    expect(cloned).toEqual(value)
+    expect(cloned).not.toBe(value)
+    expect(cloned.shared).not.toBe(shared)
+    expect(cloned.same).toBe(cloned.shared)
+    expect(Object.is(cloned.shared.values[1], -0)).toBe(true)
+    expect(Object.hasOwn(cloned.sparse, 0)).toBe(false)
+    expect(Object.hasOwn(cloned.sparse, 1)).toBe(true)
+    expect(Object.isFrozen(cloned)).toBe(true)
+    expect(Object.isFrozen(cloned.shared.values)).toBe(true)
+    expect(Object.isFrozen(cloned.nullPrototype)).toBe(true)
+    shared.values[0] = 'caller changed'
+    expect(cloned.shared.values[0]).toBe('Unicode 中文 \u{1F600}')
+  })
+
+  it.each([
+    undefined, () => undefined, Symbol('unsupported'), 1n, NaN, Infinity, -Infinity,
+    new Date(), new Map(), new Set(), new Uint8Array([1]), Object.create({ inherited: true }) as unknown,
+  ])('preserves canonical rejection for unsupported value %#', value => {
+    for (const input of [value, { nested: value }, [value]]) {
+      let expected: string | undefined
+      try { canonicalMemoryJson(input, 'boundary') } catch (error) { expected = (error as Error).message }
+      expect(expected).toBeDefined()
+      expect(() => jsonClone(input, 'boundary')).toThrow(expected!)
+    }
+  })
+
+  it('enforces the same depth and ancestor-cycle checks without rejecting shared subtrees', () => {
+    let depth48: unknown = null
+    for (let index = 0; index < 48; index++) depth48 = { nested: depth48 }
+    expect(() => jsonClone(depth48, 'boundary')).not.toThrow()
+    expect(() => jsonClone({ nested: depth48 }, 'boundary')).toThrow('boundary is nested too deeply')
+    const cycle: { next?: unknown } = {}
+    cycle.next = { back: cycle }
+    expect(() => jsonClone(cycle, 'boundary')).toThrow('boundary contains a cycle')
+    const shared = { value: 'allowed' }
+    expect(jsonClone({ first: shared, second: shared }, 'boundary')).toEqual({ first: shared, second: shared })
+  })
+
+  it.each(['forEach', 'map'])('never allows a caller-owned %s override to bypass element checks', method => {
+    for (const value of [NaN, new Date(0), () => undefined, undefined]) {
+      const input = [value]
+      Object.defineProperty(input, method, { value() {} })
+      expect(() => jsonClone(input, 'boundary')).toThrow(/non-finite|non-JSON/u)
+    }
+    const cycle: unknown[] = []
+    cycle.push(cycle)
+    Object.defineProperty(cycle, method, { value() {} })
+    expect(() => jsonClone(cycle, 'boundary')).toThrow('boundary contains a cycle')
+
+    const valid = new Array(3) as string[]
+    valid[1] = 'middle'
+    Object.defineProperty(valid, method, { value: null })
+    const result = jsonClone(valid, 'boundary')
+    expect(result[1]).toBe('middle')
+    expect(Object.hasOwn(result, 0)).toBe(false)
+    expect(Object.hasOwn(result, method)).toBe(false)
+    expect(Object.isFrozen(result)).toBe(true)
+  })
+
+  it('preserves canonical object visitation order when nested accessors affect later values', () => {
+    const input = () => {
+      const victim = { value: 0 }
+      const trigger = {}
+      Object.defineProperty(trigger, 'touch', { enumerable: true, get() { victim.value = NaN; return true } })
+      return { z: victim, a: trigger }
+    }
+    expect(() => canonicalMemoryJson(input(), 'boundary')).toThrow('boundary contains a non-finite number')
+    expect(() => jsonClone(input(), 'boundary')).toThrow('boundary contains a non-finite number')
+  })
+
+  it('does not stringify management payloads while canonical digests keep their exact representation', () => {
+    const value = { z: [3, { z: 'last', a: 'first' }], a: 'start' }
+    const stringify = vi.spyOn(JSON, 'stringify')
+    try {
+      expect(jsonClone(value, 'boundary')).toEqual(value)
+      expect(stringify).not.toHaveBeenCalled()
+      expect(canonicalMemoryJson(value)).toBe('{"a":"start","z":[3,{"a":"first","z":"last"}]}')
+      expect(stringify).toHaveBeenCalled()
+    } finally { stringify.mockRestore() }
+  })
+})
+
+describe('Memory generation lifecycle', () => {
+  function source(instance: string, dispose: () => void = () => {}, fail = false): InstalledMemorySource {
+    const definition = defineMemorySource({
+      manifest: {
+        apiVersion: COMPOSABLE_MEMORY_API_VERSION,
+        kind: 'source',
+        typeId: instance,
+        packageName: `dsh-mnemon-source-${instance}`,
+        role: 'fixture',
+        capabilities: ['project'],
+        consistency: 'exact-snapshot',
+      },
+      create: context => {
+        if (fail) throw new Error(`factory failed: ${context.sourceInstanceKey}`)
+        return {
+          facts: () => ({ sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: instance, role: 'fixture', availability: 'ready' as const, revision: 'r1', capabilities: ['project' as const], routeIds: [], actionIds: [] }),
+          project: () => ({ fragments: [] }),
+          dispose,
+        }
+      },
+    })
+    return {
+      kind: 'source',
+      instanceKey: `source:${instance}`,
+      provenance: { packageName: definition.manifest.packageName, entryId: instance },
+      definition,
+    }
+  }
+
+  function strategy(instance = 'default'): InstalledMemoryStrategy {
+    const definition = defineMemoryStrategy({
+      manifest: {
+        apiVersion: COMPOSABLE_MEMORY_API_VERSION,
+        kind: 'strategy',
+        typeId: instance,
+        packageName: `dsh-mnemon-strategy-${instance}`,
+        deterministic: true,
+        supportedSourceRoles: ['fixture'],
+        maxSources: 10,
+        maxRoutes: 10,
+        maxActions: 10,
+      },
+      compose: () => ({ strategyTypeId: instance, sources: [], explanation: 'Fixture.' }),
+    })
+    return {
+      kind: 'strategy',
+      instanceKey: `strategy:${instance}`,
+      provenance: { packageName: definition.manifest.packageName, entryId: instance },
+      definition,
+    }
+  }
+
+  function snapshot(revision: number, sources: InstalledMemorySource[], strategies: InstalledMemoryStrategy[] = [strategy()]): MemoryContributionSnapshot {
+    return { revision, sources, strategies }
+  }
+
+  it('reports cleanup failures even after a Host attachment has detached', async () => {
+    const runtime = new MemoryRuntime()
+    runtime.installContributions({ sources: [source('failure', () => { throw new Error('provider close failed') })], strategies: [strategy()] })
+    const attachment = runtime.attachGeneration()
+    await expect(attachment.dispose()).rejects.toThrow('disposal failed')
+    await expect(runtime.dispose()).rejects.toThrow('Memory Runtime cleanup failed')
+  })
+
+  it('publishes a complete candidate and drains the previous generation after its lease', async () => {
+    const firstDisposed = vi.fn()
+    const secondDisposed = vi.fn()
+    const host = new MemoryGenerationHost()
+    expect(host.reconcile(snapshot(1, [{ ...source('stable', firstDisposed), effectiveDigest: 'v1' }])).state).toBe('ready')
+    const lease = host.acquire()
+    const firstId = lease.id
+
+    expect(host.reconcile(snapshot(2, [{ ...source('stable', secondDisposed), effectiveDigest: 'v2' }])).state).toBe('ready')
+    expect(host.inspect()).toMatchObject({
+      servingGenerationId: expect.not.stringMatching(firstId),
+      drainingGenerationIds: [firstId],
+    })
+    expect(firstDisposed).not.toHaveBeenCalled()
+    lease.release()
+    await Promise.resolve()
+    expect(firstDisposed).toHaveBeenCalledOnce()
+    expect(host.inspect().drainingGenerationIds).toEqual([])
+    await host.dispose()
+    expect(secondDisposed).toHaveBeenCalledOnce()
+  })
+
+  it('preserves Serving when an additive candidate fails', async () => {
+    const disposed = vi.fn()
+    const host = new MemoryGenerationHost()
+    host.reconcile(snapshot(1, [source('stable', disposed)]))
+    const stable = host.current()
+    const report = host.reconcile(snapshot(2, [source('stable'), source('broken', undefined, true)]))
+    expect(report).toMatchObject({ state: 'rejected', diagnostics: [{ message: expect.stringContaining('factory failed') }] })
+    expect(host.current()).toBe(stable)
+    const lease = host.acquire()
+    expect(lease.id).toBe(stable?.id)
+    lease.release()
+    await host.dispose()
+  })
+
+  it('fails closed for new turns after an explicitly required contribution is removed', async () => {
+    const disposed = vi.fn()
+    const host = new MemoryGenerationHost()
+    host.reconcile(snapshot(1, [source('required', disposed)]))
+    const lease = host.acquire()
+
+    expect(host.reconcile(snapshot(2, [], [strategy()])).state).toBe('incomplete')
+    expect(() => host.acquire()).toThrow('No Memory Source')
+    expect(lease.generation.id).toBe(lease.id)
+    expect(disposed).not.toHaveBeenCalled()
+    lease.release()
+    await Promise.resolve()
+    expect(disposed).toHaveBeenCalledOnce()
+    await host.dispose()
+  })
+
+  it('publishes a valid replacement when one of several optional Sources is removed', async () => {
+    const firstDisposed = vi.fn()
+    const secondDisposed = vi.fn()
+    const host = new MemoryGenerationHost()
+    expect(host.reconcile(snapshot(1, [source('first', firstDisposed), source('second', secondDisposed)])).state).toBe('ready')
+    const previous = host.current()!.id
+    expect(host.reconcile(snapshot(2, [source('first')])).state).toBe('ready')
+    expect(host.current()?.id).not.toBe(previous)
+    expect(host.inspect().servingGenerationId).toBe(host.current()?.id)
+    await Promise.resolve()
+    expect(firstDisposed).toHaveBeenCalledOnce()
+    expect(secondDisposed).toHaveBeenCalledOnce()
+    await host.dispose()
+  })
+
+  it('does not publish an incomplete initial assembly or infer a Strategy by priority', () => {
+    const host = new MemoryGenerationHost()
+    expect(host.reconcile(snapshot(1, [], [])).state).toBe('incomplete')
+    expect(() => host.acquire()).toThrow('no Serving')
+    expect(host.reconcile(snapshot(2, [source('one')], [strategy('one'), strategy('two')]))).toMatchObject({
+      state: 'rejected',
+      diagnostics: [{ message: expect.stringContaining('exactly one') }],
+    })
+  })
+
+  it('waits for in-flight leases on shutdown and refuses new acquisitions immediately', async () => {
+    const disposed = vi.fn()
+    const host = new MemoryGenerationHost()
+    host.reconcile(snapshot(1, [source('one', disposed)]))
+    const lease = host.acquire()
+    const shutdown = host.dispose()
+    expect(() => host.acquire()).toThrow('disposed')
+    expect(disposed).not.toHaveBeenCalled()
+    lease.release()
+    await shutdown
+    expect(disposed).toHaveBeenCalledOnce()
+  })
+
+  it('makes lease release idempotent', async () => {
+    const disposed = vi.fn()
+    const host = new MemoryGenerationHost()
+    host.reconcile(snapshot(1, [source('one', disposed)]))
+    const lease = host.acquire()
+    host.reconcile(snapshot(2, [source('two')]))
+    lease.release()
+    lease.release()
+    await Promise.resolve()
+    expect(disposed).toHaveBeenCalledOnce()
+    await host.dispose()
+  })
+})
+
+describe('Composable Memory root-turn boundary', () => {
+  const fixtures: Awaited<ReturnType<typeof compositionFixture>>[] = []
+  async function fixture() { const value = await compositionFixture(); fixtures.push(value); return value }
+  afterEach(async () => { for (const value of fixtures.splice(0)) await value.dispose() })
+
+  it('retains dispatch authority until the last delegation and child turn release it', async () => {
+    const { workspace, releases, graph } = await fixture()
+    const scope = { storage: 'custom' as const, workspaceId: workspace, agentId: 'parent' }
+    const parent = await graph.composableTurns.beginTurn('parent:1', scope)
+    const first = graph.composableTurns.retainView(parent.view.id)
+    const second = graph.composableTurns.retainView(parent.view.id)
+    graph.composableTurns.endTurn(parent.turnId)
+    await Promise.all(releases.map(release => release()))
+    expect(graph.memoryComposition.inspect().drainingGenerationIds).toContain(parent.view.runtimeGeneration)
+    first()
+    first()
+    expect(() => graph.composableTurns.pinTurn('child:1', { ...scope, workspaceId: '/other' }, parent.view.id)).toThrow('storage scope')
+    const child = graph.composableTurns.pinTurn('child:1', { ...scope, agentId: 'child' }, parent.view.id)
+    second()
+    expect(child.view).toBe(parent.view)
+    expect(graph.composableTurns.memoryWake(child.view.id).viewId).toBe(parent.view.id)
+    expect(graph.memoryComposition.generation(parent.view.runtimeGeneration)).toBeDefined()
+    graph.composableTurns.endTurn(child.turnId)
+    expect(graph.composableTurns.get(parent.view.id)).toBeUndefined()
+    expect(graph.memoryComposition.generation(parent.view.runtimeGeneration)).toBeUndefined()
+  })
+
+  it('assigns independent Route budgets to child executions sharing a dispatch View', async () => {
+    const { workspace, graph } = await fixture()
+    const scope = { storage: 'custom' as const, workspaceId: workspace, agentId: 'parent' }
+    const parent = await graph.composableTurns.beginTurn('parent:1', scope)
+    const child = graph.composableTurns.pinTurn('child:1', { ...scope, agentId: 'child' }, parent.view.id)
+    const route = parent.view.routes.find(candidate => candidate.sourceRouteId === 'search')!
+    await graph.composableTurns.executeRoute(parent.turnId, route.id, { query: 'bounded' })
+    await expect(graph.composableTurns.executeRoute(parent.turnId, route.id, { query: 'bounded' })).resolves.toMatchObject({ output: { notRun: true } })
+    const read = await graph.composableTurns.executeRoute(child.turnId, route.id, { query: 'bounded' })
+    expect(read).toMatchObject({ viewId: parent.view.id })
+    expect(read.output).not.toHaveProperty('notRun')
+    graph.composableTurns.endTurn(child.turnId)
+    const next = graph.composableTurns.pinTurn('child:1', { ...scope, agentId: 'child' }, parent.view.id)
+    expect(next).not.toBe(child)
+    await expect(graph.composableTurns.executeRoute(next.turnId, route.id, { query: 'bounded' })).resolves.toMatchObject({ viewId: parent.view.id })
+  })
+
+  it('joins concurrent beginnings, rejects scope reuse, and releases a cancelled composition', async () => {
+    const { workspace, graph } = await fixture()
+    const generation = graph.memoryComposition.current()!
+    const original = generation.compose.bind(generation)
+    const gate = Promise.withResolvers<void>()
+    const compose = vi.spyOn(generation, 'compose').mockImplementation(async request => { await gate.promise; return original(request) })
+    const scope = { storage: 'custom' as const, workspaceId: workspace, agentId: 'root' }
+    const first = graph.composableTurns.beginTurn('root:join', scope)
+    const second = graph.composableTurns.beginTurn('root:join', scope)
+    await expect(graph.composableTurns.beginTurn('root:join', { ...scope, agentId: 'other' })).rejects.toThrow('another scope')
+    gate.resolve()
+    expect(await first).toBe(await second)
+    expect(compose).toHaveBeenCalledOnce()
+    graph.composableTurns.endTurn('root:join')
+    const cancelled = graph.composableTurns.beginTurn('root:cancel', scope)
+    graph.composableTurns.endTurn('root:cancel')
+    await expect(cancelled).rejects.toThrow('ended during composition')
+    expect(graph.composableTurns.activeTurn('root')).toBeUndefined()
+  })
+
+  it('does not publish a View after disposal while composition is pending', async () => {
+    const { graph } = await fixture()
+    const pending = graph.composableTurns.beginTurn('root:closing', { storage: 'custom', agentId: 'root' })
+    graph.composableTurns.dispose()
+    await expect(pending).rejects.toThrow('ended during composition')
+    expect(graph.composableTurns.activeTurn('root')).toBeUndefined()
+  })
+
+  it('keeps in-flight Route I/O leased after its parent turn closes', async () => {
+    const { graph } = await fixture()
+    const turn = await graph.composableTurns.beginTurn('root:operation', { storage: 'custom', agentId: 'root' })
+    const generation = graph.memoryComposition.current()!
+    const route = turn.view.routes[0]!
+    const gate = Promise.withResolvers<void>()
+    vi.spyOn(generation, 'executeRoute').mockImplementation(async () => { await gate.promise; return {
+      id: 'evidence:test', viewId: turn.view.id, routeId: route.id, sourceInstanceKey: route.sourceInstanceKey,
+      observedAt: 'now', items: [], truncated: false,
+    } })
+    const call = graph.composableTurns.executeRoute(turn.turnId, route.id, {})
+    graph.composableTurns.endTurn(turn.turnId)
+    let closed = false
+    const close = graph.memoryComposition.dispose().then(() => { closed = true })
+    await Promise.resolve()
+    expect(closed).toBe(false)
+    gate.resolve()
+    await call
+    await close
+    expect(closed).toBe(true)
+  })
+
+  it('pins one View and renders its projection plus callable Route ids into the LLM Wake', async () => {
+    const { workspace, graph } = await fixture()
+    await graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: 'Turn-pinned composable context.' })
+    await graph.source('documents').mutate<DocumentMutationResult>('mutate', { action: 'create', title: 'Turn route', content: 'turn-route-token' })
+    const turn = await graph.composableTurns!.beginTurn('agent-1:1', {
+      storage: 'custom', workspaceId: workspace, sessionId: 'agent-1', agentId: 'agent-1',
+    })
+    const wake = graph.composableTurns!.memoryWake(turn.view.id)
+
+    expect(wake.text).toContain('Turn-pinned composable context.')
+    expect(wake.text).toContain('source:mnemon-source-documents/search')
+    expect(wake.text).toContain('"inputSchema"')
+    expect(wake.text).toContain('"required":["query"]')
+    expect(wake.sections.map(section => section.layerId)).toEqual(['runtime', 'documents', 'memory-spaces'])
+    expect(graph.composableTurns!.activeTurn('agent-1')).toBe(turn)
+
+    graph.composableTurns!.endTurn(turn.turnId)
+    graph.dispose()
+  })
+
+  it('executes Routes and reauthorized Actions against the exact leased generation', async () => {
+    const { workspace, graph } = await fixture()
+    const document = await graph.source('documents').mutate<DocumentMutationResult>('mutate', { action: 'create', title: 'Evidence', content: 'leased-route-token' })
+    const turn = await graph.composableTurns!.beginTurn('agent-1:1', {
+      storage: 'custom', workspaceId: workspace, sessionId: 'agent-1', agentId: 'agent-1',
+    })
+    const route = turn.view.routes.find(candidate => candidate.sourceRouteId === 'search')!
+    const evidence = await graph.composableTurns!.executeRoute(turn.turnId, route.id, { query: 'leased-route-token' })
+    expect(evidence.items.map(item => item.id)).toEqual([document.document.id])
+
+    const offer = turn.view.actionOffers.find(candidate => candidate.sourceActionId === 'mutate')!
+    await expect(graph.composableTurns!.executeAction(turn.turnId, offer.id, {
+      action: 'add', target: 'memory', content: 'denied',
+    }, () => false)).rejects.toThrow('not currently authorized')
+    const receipt = await graph.composableTurns!.executeAction(turn.turnId, offer.id, {
+      action: 'add', target: 'memory', content: 'authorized composable write',
+    }, () => true)
+    expect(receipt).toMatchObject({ viewId: turn.view.id, offerId: offer.id, status: 'succeeded' })
+    expect((await graph.source('runtime').read<RuntimeMemorySnapshot>('snapshot')).entries.some(entry => entry.content === 'authorized composable write')).toBe(true)
+
+    graph.composableTurns!.endTurn(turn.turnId)
+    graph.dispose()
+  })
+
+  it('keeps a leased turn usable while explicit plugin removal fails closed for new turns', async () => {
+    const { workspace, releases, graph } = await fixture()
+    const turn = await graph.composableTurns!.beginTurn('agent-1:1', {
+      storage: 'custom', workspaceId: workspace, sessionId: 'agent-1', agentId: 'agent-1',
+    })
+    await Promise.all(releases.map(release => release()))
+    await expect(graph.composableTurns!.beginTurn('agent-2:1', {
+      storage: 'custom', workspaceId: workspace, sessionId: 'agent-2', agentId: 'agent-2',
+    })).rejects.toThrow('No Memory Source')
+    expect(graph.composableTurns!.memoryWake(turn.view.id).viewId).toBe(turn.view.id)
+
+    graph.composableTurns!.endTurn(turn.turnId)
+    graph.dispose()
+  })
+})
+
+describe('Composable View performance fences', () => {
+  const fixtures: Awaited<ReturnType<typeof compositionFixture>>[] = []
+  async function fixture() { const value = await compositionFixture(); fixtures.push(value); return value }
+  afterEach(async () => { for (const value of fixtures.splice(0)) await value.dispose() })
+
+  it.each(['default', 'additive'])('composes repeated three-Source Views within a bounded local control-plane budget (%s)', async mode => {
+    const f = await fixture()
+    const { workspace, graph } = f
+    if (mode === 'additive') {
+      await f.mount(scoped, { instanceId: 'scoped' })
+      await f.mount(light, { instanceId: 'light' })
+      await f.mount(capture, { instanceId: 'capture' })
+    }
+    await graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: 'Performance fixture.' })
+    await graph.source('documents').mutate<DocumentMutationResult>('mutate', { action: 'create', title: 'Performance', content: 'Bounded fixture.' })
+    const generation = graph.memoryComposition!.current()!
+    const request = {
+      scope: { storage: 'custom' as const, workspaceId: workspace, sessionId: 'performance' },
+      scenario: 'performance.fixture',
+      budget: {
+        maxProjectionCharacters: 65_536,
+        maxRoutes: 16,
+        maxActions: 16,
+        maxEvidenceResults: 16,
+        maxEvidenceCharacters: 16_384,
+      },
+    }
+
+    const warm = await generation.compose(request)
+    expect(warm.strategyExtensions?.length ?? 0).toBe(mode === 'additive' ? 3 : 0)
+    const startedWall = performance.now()
+    const startedCpu = process.cpuUsage()
+    for (let index = 0; index < 100; index += 1) await generation.compose(request)
+    const elapsedWall = performance.now() - startedWall
+    const elapsedCpu = process.cpuUsage(startedCpu)
+    const cpuMilliseconds = (elapsedCpu.user + elapsedCpu.system) / 1_000
+
+    expect(cpuMilliseconds).toBeLessThan(2_000)
+    expect(elapsedWall).toBeLessThan(15_000)
+    graph.dispose()
+  }, 30_000)
 })
