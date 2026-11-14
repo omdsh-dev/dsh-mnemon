@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { mkdirSync } from 'node:fs'
+import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as scoped from 'dsh-mnemon-strategy-scoped'
 import * as lightContext from 'dsh-mnemon-strategy-light-context'
@@ -53,10 +54,55 @@ async function fixture(taskRunner?: RuntimeMaintenanceTaskRunner, config: Config
     workspaceId: 'workspace', sourceInstanceKey, operation: 'mutate', input, confirmed: true,
     expectedRevision: await f.live.snapshot().memoryComposition.current()!.managementRevision(sourceInstanceKey, { storage: f.config.storageScope, workspaceId: f.workspace }),
   })
-  return { ...f, fixtureRoot: f.root, coordinator, start, write, root, child, begin, execute, management }
+  return { ...f, fixtureRoot: f.root, coordinator, lifecycle, start, write, root, child, begin, execute, management }
 }
 
 describe('default Runtime capacity workflow across Host entry points', () => {
+  it.each(['named', 'generic', 'fallback', 'management'].flatMap(entry => ['serialized', 'json-error', 'foreign-realm'].map(shape => ({ entry, shape }))))('maintains capacity across a $shape Source failure through $entry (#641)', async ({ entry, shape }) => {
+    const f = await fixture()
+    const generation = f.live.snapshot().memoryComposition.current()!
+    const serializeFailure = async <T,>(operation: Promise<T>): Promise<T> => {
+      try { return await operation }
+      catch (error) {
+        if (!(error instanceof Error)) throw error
+        if (shape === 'json-error') throw JSON.parse(JSON.stringify(error))
+        const fields = { ...error, name: error.name, message: error.message }
+        throw shape === 'serialized' ? Object.freeze(fields) : runInNewContext('Object.assign(new Error(fields.message), fields)', { fields })
+      }
+    }
+    const action = generation.executeAction.bind(generation)
+    const manage = generation.executeManagement.bind(generation)
+    vi.spyOn(generation, 'executeAction').mockImplementation((...args) => serializeFailure(action(...args)))
+    vi.spyOn(generation, 'executeManagement').mockImplementation((...args) => serializeFailure(manage(...args)))
+    const turn = entry === 'fallback' ? undefined : await f.begin()
+    const input = { action: 'add' as const, target: 'memory' as const, content: pending }
+    if (entry === 'named') await expect(f.execute('mnemon_runtime_memory', input)).resolves.toMatchObject({ added: pending })
+    else if (entry === 'generic') {
+      const offer = turn!.view.actionOffers.find(value => value.sourceInstanceKey === runtimeKey && value.sourceActionId === 'mutate')!
+      await expect(f.execute('mnemon_view_action', { offerId: offer.id, input })).resolves.toMatchObject({ completion: 'committed' })
+    } else if (entry === 'fallback') {
+      await expect(f.coordinator.runtime(f.root, input, new AbortController().signal)).resolves.toMatchObject({ added: pending })
+    } else await expect(f.write('source-management-mutate', await f.management())).resolves.toMatchObject({ ok: true })
+    expect((await f.graph.source('runtime').read<RuntimeMemorySnapshot>('snapshot')).entries.map(value => value.content)).toEqual([pending])
+    expect(await f.graph.source('memory-spaces').read('search', { query: 'Saved durable fact' }))
+      .toMatchObject({ results: [expect.objectContaining({ content: saved })] })
+    expect(f.start).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { label: 'serialized message', error: { message: 'Archive destination is unavailable; retry after reconnecting.', privateTranscript: 'PRIVATE-SYNTHETIC-CONTENT' }, message: 'Archive destination is unavailable; retry after reconnecting.' },
+    { label: 'opaque Error', error: new Error('[object Object]'), message: 'Operation failed without a readable error message.' },
+    { label: 'unknown object', error: { privateTranscript: 'PRIVATE-SYNTHETIC-CONTENT' }, message: 'Operation failed without a readable error message.' },
+  ])('returns a readable $label to the save UI without dumping other fields (#641)', async ({ error, message }) => {
+    const f = await fixture()
+    const request = await f.management()
+    vi.spyOn(f.lifecycle, 'manageSource').mockRejectedValueOnce(error)
+    const result = await f.write('source-management-mutate', request)
+    expect(result).toMatchObject({ ok: false, error: { message } })
+    expect(JSON.stringify(result)).not.toContain('PRIVATE-SYNTHETIC-CONTENT')
+    expect((await f.graph.source('runtime').read<RuntimeMemorySnapshot>('snapshot')).entries.map(value => value.content)).toEqual([saved])
+  })
+
   it.each(['named', 'generic', 'fallback'].flatMap(entry => [false, true].map(overflow => ({ entry, overflow }))))('preserves importance for $entry writes, overflow=$overflow (#469)', async ({ entry, overflow }) => {
     const f = await fixture()
     const runtime = f.graph.source('runtime')
@@ -387,7 +433,9 @@ describe('default Runtime capacity workflow across Host entry points', () => {
       if (request.mode === 'mutate' && request.operation === 'remember-many') throw new Error('Provider unavailable')
       return manage(request)
     })
-    expect(await f.write('source-management-mutate', await f.management())).toMatchObject({ ok: false, error: { message: 'Provider unavailable' } })
+    expect(await f.write('source-management-mutate', await f.management())).toMatchObject({ ok: false, error: {
+      message: expect.stringMatching(/Would exceed memory runtime memory capacity:.*limit 512.*Automatic capacity maintenance failed: Provider unavailable/u),
+    } })
     expect((await f.graph.source('runtime').read<RuntimeMemorySnapshot>('snapshot')).entries.map(entry => entry.content)).toEqual([saved])
   })
 

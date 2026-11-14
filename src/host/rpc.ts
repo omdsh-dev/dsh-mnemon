@@ -6,6 +6,7 @@ import type { MnemonGitHubAuth } from './github-auth.ts'
 import { assertParticipation } from './access.ts'
 import { WORKSPACE_MEMORY_EXCLUDED } from './workspace-exclusion.ts'
 import { sourceFailure } from './source-session.ts'
+import { errorMessage } from './error-message.ts'
 import { mainStrategyTypeId } from './main-strategy.ts'
 import { strategyDrives } from './strategy-workflows.ts'
 import { isVersionComponentId, VersionUpdateManager } from './version-updates.ts'
@@ -93,7 +94,7 @@ function failure(error: unknown): RpcResult<unknown> {
   // A named failure, such as a sync remote that refused the credentials, carries its
   // reason so the page can state it in its own language; the message stays as written.
   const reason = error instanceof Error ? (error as { reason?: unknown }).reason : undefined
-  return { ok: false, error: { code: 'internal', message: error instanceof Error ? error.message : String(error), details: typeof reason === 'string' ? { reason } : {} } }
+  return { ok: false, error: { code: 'internal', message: errorMessage(error), details: typeof reason === 'string' ? { reason } : {} } }
 }
 function badRequest(message: string): RpcResult<unknown> {
   return { ok: false, error: { code: 'bad-request', message, details: { issues: [] } } }

@@ -10,6 +10,7 @@ import { RUNTIME_ENTRY_DELIMITER, type RuntimeMemoryCompactedEntry, type Runtime
 import type { Insight, MemorySpaceCatalog, MemorySpaceWriteScopeRequest } from 'dsh-mnemon-source-memory-spaces/contracts'
 import { mutationResultCommitted } from './receipts.ts'
 import { sourceFailure, type SourceSession } from './source-session.ts'
+import { errorMessage } from './error-message.ts'
 import { allowsParticipation } from './access.ts'
 import type { CoordinatedRuntimeMemoryResult, SubagentCounters } from './protocol.ts'
 import type { ComposableMemoryView, MemoryMigrationLineage, MemoryOperationScope } from '../core/contracts/index.ts'
@@ -165,15 +166,56 @@ async function archiveRuntimeLocally(counters: SubagentCounters, context: Runtim
 }
 
 export async function runtimeLocked(counters: SubagentCounters, context: RuntimeWriteContext, request: RuntimeMemoryMutation, signal: AbortSignal): Promise<CoordinatedRuntimeMemoryResult> {
-  signal.throwIfAborted()
-  context.assertWritable?.()
-  const runtimeMemory = context.runtime
+  let capacity: unknown
+  const routingDiagnostics: string[] = []
   try {
-    return await context.commit()
+    signal.throwIfAborted()
+    context.assertWritable?.()
+    try {
+      return await context.commit()
+    } catch (error) {
+      if (!sourceFailure(error, 'runtime-capacity') || !context.maintain) throw error
+      capacity = error
+    }
+    return await maintainRuntime(counters, context, request, signal, routingDiagnostics)
   } catch (error) {
-    if (!sourceFailure(error, 'runtime-capacity') || !context.maintain) throw error
+    const failure = runtimeError(error, signal)
+    if (capacity === undefined || signal.aborted) throw failure
+    // A routing fallback can succeed before the actual archive fails. Preserve
+    // both facts, without claiming a failed or uncertain write was committed.
+    const routing = routingDiagnostics.length === 0 ? '' : ` First routing diagnostics: ${routingDiagnostics.join(' ')}`
+    const message = `${runtimeError(capacity, signal).message} Automatic capacity maintenance failed: ${failure.message}${routing}`
+    const reported = failure instanceof AggregateError ? new AggregateError(failure.errors, message, { cause: failure }) : new Error(message, { cause: failure })
+    for (const key of ['code', 'reason'] as const) {
+      const value = (failure as Error & { code?: unknown; reason?: unknown })[key]
+      if (typeof value === 'string') Object.assign(reported, { [key]: value })
+    }
+    throw reported
   }
+}
 
+function runtimeError(error: unknown, signal: AbortSignal): Error {
+  const cancelled = signal.aborted && error === signal.reason
+  const value = optionalObject(error)
+  let fallback = cancelled ? 'Runtime memory operation cancelled.' : undefined
+  if (!cancelled && sourceFailure(error, 'runtime-capacity')) {
+    // JSON serialization drops Error.message but retains the Source's numeric
+    // capacity fields. Do not dump arbitrary objects to reconstruct the message.
+    fallback = [value?.used, value?.projected, value?.limit].every(field => Number.isSafeInteger(field) && Number(field) >= 0)
+      ? `Runtime memory capacity exceeded: ${value!.projected} bytes (current ${value!.used}, limit ${value!.limit}). Archive and compact runtime memory before retrying.`
+      : 'Runtime memory capacity exceeded. Archive and compact runtime memory before retrying.'
+  }
+  const message = errorMessage(error, fallback)
+  if (error instanceof Error && error.message === message) return error
+  const result = new Error(message, { cause: error })
+  if (typeof value?.code === 'string') Object.assign(result, { code: value.code })
+  if (typeof value?.name === 'string') result.name = value.name
+  if (cancelled) result.name = 'AbortError'
+  return result
+}
+
+async function maintainRuntime(counters: SubagentCounters, context: RuntimeWriteContext, request: RuntimeMemoryMutation, signal: AbortSignal, routingDiagnostics: string[]): Promise<CoordinatedRuntimeMemoryResult> {
+  const runtimeMemory = context.runtime
   const plan = await runtimeMemory.read<RuntimeMemoryMaintenancePlan>('maintenance-plan', { ...request, ...(context.preserveImportance ? { preserveImportance: true } : {}) }, signal)
   if (context.expectedRevision !== undefined && context.expectedRevision !== plan.revision) throw new Error('Runtime source revision conflict before capacity maintenance')
   if (!plan.requiresMaintenance) return context.commit()
@@ -299,7 +341,9 @@ ${chunk.context}
         // validation. Publish either the complete proposal or the whole chunk's
         // deterministic fallback; never retain a partially validated route.
         for (const index of chunk.indexes) routed.set(index, fallbackBody.id)
-        summaries.push(`batch ${chunkIndex + 1} routed to ${fallbackBody.id} deterministically (routing failed: ${safeFailureDetail(error instanceof Error ? error.message : String(error))})`)
+        const diagnostic = `batch ${chunkIndex + 1} routed to ${fallbackBody.id} deterministically (routing failed: ${safeFailureDetail(errorMessage(error))})`
+        summaries.push(diagnostic)
+        if (routingDiagnostics.length < 3) routingDiagnostics.push(diagnostic)
       }
     }
     summary = summaries.join(' ')

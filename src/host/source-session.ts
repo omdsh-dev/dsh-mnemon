@@ -129,6 +129,7 @@ function json(input: unknown): MemoryJsonValue {
 }
 
 /** Error codes are part of the Source protocol; its private Error classes are not. */
-export function sourceFailure<T extends { code: string }>(value: unknown, code: T['code']): value is Error & T {
-  return value instanceof Error && 'code' in value && value.code === code
+export function sourceFailure<T extends { code: string }>(value: unknown, code: T['code']): value is T {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    && 'code' in value && value.code === code
 }

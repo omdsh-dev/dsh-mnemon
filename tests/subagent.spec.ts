@@ -2407,6 +2407,74 @@ describe('Mnemon memory subagent coordinator', () => {
     expect(f.spaces.rememberMany).not.toHaveBeenCalled()
   })
 
+  it('reports an actual archive failure and the earlier missing-result fallback together (#641)', async () => {
+    const f = runtimeArchiveFixture()
+    addSecondWritableBody(f.spaces)
+    f.host.start.mockResolvedValueOnce({ id: 'router-without-result', result: Promise.resolve({ output: [], stopReason: 'completed', structured: undefined }), dispose: vi.fn(async () => {}) })
+    vi.mocked(f.spaces.rememberMany).mockRejectedValueOnce({ message: 'Archive backend is busy; retry later.', code: 'busy', privateTranscript: 'PRIVATE-SYNTHETIC-CONTENT' })
+    const error = await f.archive().then(() => undefined, error => error as Error)
+    expect(error).toBeInstanceOf(Error)
+    expect(error?.message).toContain('Runtime capacity exceeded')
+    expect(error?.message).toContain('Archive backend is busy; retry later.')
+    expect(error?.message).toContain('memory subagent completed without recording its result')
+    expect(error?.message).not.toMatch(/\[object Object\]|PRIVATE-SYNTHETIC-CONTENT/u)
+    expect(f.runtime.compactAndMutate).not.toHaveBeenCalled()
+    expect(f.spaces.forget).not.toHaveBeenCalled()
+  })
+
+  it('keeps missing routing results recoverable and visible in a successful receipt (#641)', async () => {
+    const f = runtimeArchiveFixture()
+    addSecondWritableBody(f.spaces)
+    f.host.start.mockResolvedValueOnce({ id: 'router-without-result', result: Promise.resolve({ output: [], stopReason: 'completed', structured: undefined }), dispose: vi.fn(async () => {}) })
+    await expect(f.archive()).resolves.toMatchObject({ success: true, maintenance: {
+      memoryBodyIds: ['project'], summary: expect.stringContaining('routing failed: memory subagent completed without recording its result'),
+    } })
+    expect(vi.mocked(f.spaces.rememberMany).mock.calls.flatMap(([requests]) => requests.map(value => value.content))).toEqual(f.plan.entries.map(value => value.content))
+    expect(f.runtime.compactAndMutate).toHaveBeenCalledOnce()
+  })
+
+  it('normalizes a structured refusal without attempting capacity maintenance (#641)', async () => {
+    const f = runtimeArchiveFixture()
+    vi.mocked(f.runtime.mutate).mockRejectedValueOnce({ code: 'read-only', message: 'Memory is read-only.' })
+    const error = await f.archive().then(() => undefined, error => error as Error)
+    expect(error).toBeInstanceOf(Error)
+    expect(error?.message).toBe('Memory is read-only.')
+    expect(f.runtime.planMaintenance).not.toHaveBeenCalled()
+    expect(f.spaces.rememberMany).not.toHaveBeenCalled()
+  })
+
+  it('reconstructs capacity context when JSON serialization removes Error.message (#641)', async () => {
+    const f = runtimeArchiveFixture()
+    vi.mocked(f.runtime.mutate).mockRejectedValueOnce(JSON.parse(JSON.stringify(capacityError('memory', f.plan.used, f.plan.projected, f.plan.limit))))
+    vi.mocked(f.spaces.rememberMany).mockRejectedValueOnce({ message: 'Archive is unavailable.' })
+    await expect(f.archive()).rejects.toThrow(`Runtime memory capacity exceeded: ${f.plan.projected} bytes (current ${f.plan.used}, limit ${f.plan.limit})`)
+    expect(f.runtime.planMaintenance).toHaveBeenCalled()
+    expect(f.runtime.compactAndMutate).not.toHaveBeenCalled()
+  })
+
+  it('preserves structured cancellation without writing or dumping the reason object (#641)', async () => {
+    const f = runtimeArchiveFixture()
+    const abort = new AbortController()
+    abort.abort({ message: 'User cancelled capacity maintenance.', privateContext: 'PRIVATE-SYNTHETIC-CONTENT' })
+    const error = await f.archive(abort.signal).then(() => undefined, error => error as Error)
+    expect(error).toBeInstanceOf(Error)
+    expect(error).toMatchObject({ name: 'AbortError', message: 'User cancelled capacity maintenance.' })
+    expect(f.runtime.mutate).not.toHaveBeenCalled()
+    expect(f.spaces.rememberMany).not.toHaveBeenCalled()
+  })
+
+  it('redacts structured routing diagnostics when a later archive write fails (#641)', async () => {
+    const f = runtimeArchiveFixture()
+    addSecondWritableBody(f.spaces)
+    f.host.start.mockRejectedValueOnce({ message: 'Router rejected sk-synthetic-secret-12345', transcript: 'PRIVATE-SYNTHETIC-CONTENT' })
+    vi.mocked(f.spaces.rememberMany).mockRejectedValueOnce(new Error('Archive unavailable'))
+    const error = await f.archive().then(() => undefined, error => error as Error)
+    expect(error?.message).toContain('Archive unavailable')
+    expect(error?.message).toContain('Router rejected [redacted]')
+    expect(error?.message).not.toMatch(/sk-synthetic|PRIVATE-SYNTHETIC-CONTENT|\[object Object\]/u)
+    expect(f.runtime.compactAndMutate).not.toHaveBeenCalled()
+  })
+
   it('rechecks the fallback destination when an invalid routing response follows deactivation', async () => {
     const f = runtimeArchiveFixture()
     addSecondWritableBody(f.spaces)
