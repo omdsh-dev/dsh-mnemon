@@ -1,33 +1,36 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { AgentMemoryTurn } from '../src/host/agent-memory-turn.ts'
-import type { HostAgent } from '../src/host/dsh.ts'
+import type { HostAgent, HostContextShape } from '../src/host/dsh.ts'
+import { MemoryPluginManagement } from '../src/host/plugin-management.ts'
 import { createViewHandler } from '../src/host/view-rpc.ts'
 import { createRuntimeGraph, LiveMnemonRuntime } from '../src/host/runtime.ts'
 import type { MemoryViewConfigurationRequest, MemoryViewPreferences } from '../src/host/view-protocol.ts'
-import { viewManagementFixture } from './fixtures/view-management.ts'
+import { viewManagementFixture, type ViewManagementFixtureOptions } from './fixtures/view-management.ts'
 import type { RuntimeMemorySnapshot } from 'dsh-mnemon-source-runtime/contracts'
 import type { Context } from '@deepseek-ai/cordis'
 import { COMPOSABLE_MEMORY_API_VERSION } from 'dsh-mnemon/contracts'
 import { defineMemoryStrategy, defineMemoryStrategyConfiguration, installMemory } from 'dsh-mnemon/extension-sdk'
 import { sessionLog } from './fixtures/session-log.ts'
 
-const fixtures: Awaited<ReturnType<typeof viewManagementFixture>>[] = []
-afterEach(async () => { for (const value of fixtures.splice(0)) await value.dispose() })
-async function fixture(saved?: MemoryViewPreferences, anchor?: string, stored?: Record<string, object>) {
-  const value = await viewManagementFixture(saved, anchor, stored)
-  fixtures.push(value)
-  return value
-}
-const runtimeKey = 'source:mnemon-source-runtime'
-const documentsKey = 'source:mnemon-source-documents'
-const spacesKey = 'source:mnemon-source-memory-spaces'
-async function request(f: Awaited<ReturnType<typeof fixture>>, entries: MemoryViewConfigurationRequest['entries'] = {}): Promise<MemoryViewConfigurationRequest> {
-  return { expectedRevision: (await f.management.catalog()).revision, strategyTypeId: 'default-three-tier', entries }
-}
-const scope = (f: Awaited<ReturnType<typeof fixture>>) => ({ storage: 'custom' as const, workspaceId: f.workspace, sessionId: 'root', agentId: 'root' })
+type Fixture = Awaited<ReturnType<typeof viewManagementFixture>>
 
 describe('View configuration with the real pinned DSH Cordis Loader', () => {
+  const fixtures: Fixture[] = []
+  afterEach(async () => { for (const value of fixtures.splice(0)) await value.dispose() })
+  async function fixture(saved?: MemoryViewPreferences, anchor?: string, stored?: Record<string, object>) {
+    const value = await viewManagementFixture(saved, anchor, stored)
+    fixtures.push(value)
+    return value
+  }
+  const runtimeKey = 'source:mnemon-source-runtime'
+  const documentsKey = 'source:mnemon-source-documents'
+  const spacesKey = 'source:mnemon-source-memory-spaces'
+  async function request(f: Fixture, entries: MemoryViewConfigurationRequest['entries'] = {}): Promise<MemoryViewConfigurationRequest> {
+    return { expectedRevision: (await f.management.catalog()).revision, strategyTypeId: 'default-three-tier', entries }
+  }
+  const scope = (f: Fixture) => ({ storage: 'custom' as const, workspaceId: f.workspace, sessionId: 'root', agentId: 'root' })
+
   it('discovers disabled entries through public descriptors without activating or persisting them', async () => {
     const f = await fixture()
     const before = f.engine.contributionSnapshot().revision
@@ -385,5 +388,291 @@ describe('View configuration with the real pinned DSH Cordis Loader', () => {
     const response = await handler('dashboard', { sessionId: 'root', workspaceId: 'workspace' })
     expect(response).toMatchObject({ ok: true, value: { current: { id: current.id, turn: 7 }, activity } })
     expect(current).not.toHaveProperty('activity')
+  })
+})
+
+describe('View overlays across full profile reconciliation', () => {
+  const fixtures: Fixture[] = []
+  afterEach(async () => { for (const value of fixtures.splice(0)) await value.dispose() })
+
+  async function fixture() {
+    const f = await viewManagementFixture()
+    fixtures.push(f)
+    const mutate = vi.mocked(f.settings.mutate).getMockImplementation()!
+    // Match the public ConfigEditor contract: reconcile the complete profile
+    // before validation and again after persisting a settings edit.
+    vi.mocked(f.settings.mutate).mockImplementation(async (...args) => {
+      await f.reconcileProfile()
+      await mutate(...args)
+      await f.reconcileProfile()
+    })
+    return f
+  }
+
+  const scope = (f: Fixture) => ({ storage: 'custom' as const, workspaceId: f.workspace, sessionId: 'root', agentId: 'root' })
+  async function apply(f: Fixture, entries: MemoryViewConfigurationRequest['entries']) {
+    return f.management.apply(f.config, scope(f), {
+      expectedRevision: (await f.management.catalog()).revision,
+      strategyTypeId: 'default-three-tier', entries,
+    })
+  }
+
+  it('keeps the same profile namespace for the public ctx and legacy context Loader anchors', async () => {
+    const f = await fixture()
+    const baseUrl = 'file:///isolated/profiles/web/cordis.yml'
+    const namespace = (anchor: object) => new MemoryPluginManagement({
+      settings: f.settings,
+      get: () => ({ entries: () => f.loader.entries(), ...anchor }),
+    } as unknown as HostContextShape, f.engine, f.settings).settingsNamespace
+    const expected = namespace({ config: { baseUrl } })
+    expect(expected).toMatch(/^mnemon-view-[a-f0-9]{16}$/u)
+    expect(namespace({ ctx: { baseUrl } })).toBe(expected)
+    expect(namespace({ context: { baseUrl } })).toBe(expected)
+    expect(namespace({ ctx: { baseUrl }, context: { baseUrl: 'file:///different/' } })).toBe(expected)
+    expect(namespace({ config: { baseUrl }, ctx: { baseUrl: 'file:///different/' } })).toBe(expected)
+  })
+
+  it('keeps an enabled-by-profile extension disabled and preserves untouched saved choices after a save', async () => {
+    const f = await fixture()
+    f.profileEntries.find(entry => entry.id === 'light')!.disabled = false
+    await f.reconcileProfile()
+    await apply(f, {
+      capture: { enabled: true, config: { instruction: 'Keep approved preferences.' } },
+    })
+    await apply(f, { light: { enabled: false, config: { maxProjectionCharacters: 700 } } })
+
+    const catalog = await f.management.catalog()
+    expect(catalog.entries.find(entry => entry.entryId === 'light')).toMatchObject({ enabled: false, active: false, config: { maxProjectionCharacters: 700 } })
+    expect(catalog.entries.find(entry => entry.entryId === 'capture')).toMatchObject({ enabled: true, active: true, config: { instruction: 'Keep approved preferences.' } })
+    expect(f.settingsDocuments.get(f.management.settingsNamespace)!.value).toMatchObject({ entries: {
+      light: { enabled: false, config: { maxProjectionCharacters: 700 } },
+      capture: { enabled: true, config: { instruction: 'Keep approved preferences.' } },
+    } })
+    const turn = await f.graph.composableTurns.beginTurn('after-profile-save', scope(f))
+    expect(turn.view.strategyExtensions?.map(value => value.typeId)).toEqual(['auto-capture'])
+    f.graph.composableTurns.endTurn(turn.turnId)
+    expect(f.treeWrite).not.toHaveBeenCalled()
+  })
+
+  it.each(['mnemon', 'another-plugin'])('restores saved choices before a catalog reads a %s settings write', async namespace => {
+    const f = await fixture()
+    await apply(f, { light: { enabled: true, config: { maxProjectionCharacters: 900 } } })
+    if (namespace !== 'mnemon') f.settings.register(namespace, {}, { base: { enabled: true }, applies: 'live' })
+    const revision = f.settingsDocuments.get(namespace)!.revision
+    await f.settings.mutate(namespace, [{ op: 'set', path: ['enabled'], value: false }], revision)
+
+    // No polling or timer wait: the response itself fences the pending restore.
+    const catalog = await f.management.catalog()
+    expect(catalog.entries.find(entry => entry.entryId === 'light')).toMatchObject({ enabled: true, active: true, config: { maxProjectionCharacters: 900 } })
+    expect(catalog.diagnostics).toEqual([])
+    expect(f.settings.mutate).toHaveBeenCalledTimes(2)
+    const preview = await f.management.preview(f.config, scope(f), { expectedRevision: catalog.revision, strategyTypeId: 'default-three-tier', entries: {} })
+    expect(preview.extensions.map(value => value.typeId)).toEqual(['light-context'])
+  })
+
+  it('waits for the real Loader activation while a catalog restores a reloaded profile', async () => {
+    const f = await fixture()
+    await apply(f, { light: { enabled: true, config: {} } })
+    const entry = f.loader.resolve('light')
+    const update = entry.update.bind(entry)
+    let began!: () => void
+    const restoring = new Promise<void>(resolve => { began = resolve })
+    let release!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    vi.spyOn(entry, 'update').mockImplementation(async options => {
+      if (options.disabled === false) { began(); await gate }
+      await update(options)
+    })
+    await f.reconcileProfile()
+    let returned = false
+    const catalog = f.management.catalog().then(value => { returned = true; return value })
+    try {
+      await restoring
+      expect(returned).toBe(false)
+    } finally { release() }
+    expect((await catalog).entries.find(value => value.entryId === 'light')).toMatchObject({ enabled: true, active: true })
+  })
+
+  it('retains a second profile reload arriving during an in-flight restore', async () => {
+    const f = await fixture()
+    await apply(f, { light: { enabled: true, config: {} } })
+    await f.reconcileProfile()
+    const entry = f.loader.resolve('light')
+    const update = entry.update.bind(entry)
+    vi.spyOn(entry, 'update').mockImplementationOnce(async options => {
+      await update(options)
+      await f.reconcileProfile()
+    })
+    const catalog = await f.management.catalog()
+    expect(catalog.entries.find(value => value.entryId === 'light')).toMatchObject({ enabled: true, active: true })
+    expect(catalog.diagnostics).toEqual([])
+  })
+
+  it('retries catalog discovery when a reload arrives during an asynchronous module import', async () => {
+    const f = await fixture()
+    await apply(f, { light: { enabled: true, config: {} } })
+    const original = vi.mocked(f.loader.import).getMockImplementation()!
+    let began!: () => void
+    const importing = new Promise<void>(resolve => { began = resolve })
+    let release!: () => void
+    const gate = new Promise<void>(resolve => { release = resolve })
+    vi.mocked(f.loader.import).mockImplementationOnce(async name => {
+      began()
+      await gate
+      return original(name)
+    })
+    const catalog = f.management.catalog()
+    try {
+      await importing
+      await f.reconcileProfile()
+    } finally { release() }
+    expect((await catalog).entries.find(value => value.entryId === 'light')).toMatchObject({ enabled: true, active: true })
+  })
+
+  it('compensates durable settings before restoring the live graph if the post-save replay fails', async () => {
+    const f = await fixture()
+    const entry = f.loader.resolve('light')
+    const update = entry.update.bind(entry)
+    let enables = 0
+    vi.spyOn(entry, 'update').mockImplementation(async options => {
+      if (options.disabled === false && ++enables === 2) throw new Error('Post-save activation failed')
+      await update(options)
+    })
+
+    await expect(apply(f, { light: { enabled: true, config: {} } })).rejects.toThrow('Post-save activation failed')
+    expect(f.settings.mutate).toHaveBeenCalledTimes(2)
+    expect(f.settingsDocuments.get(f.management.settingsNamespace)!.value).toEqual({ entries: {} })
+    expect(entry.disabled).toBe(true)
+    expect(f.engine.contributionSnapshot().strategyExtensions ?? []).toEqual([])
+    const turn = await f.graph.composableTurns.beginTurn('after-compensation', scope(f))
+    expect(turn.view.strategyExtensions ?? []).toEqual([])
+    f.graph.composableTurns.endTurn(turn.turnId)
+    expect((await f.management.catalog()).diagnostics).toEqual([])
+  })
+
+  it('reports an incomplete rollback when the compensating settings write fails', async () => {
+    const f = await fixture()
+    const entry = f.loader.resolve('light')
+    const update = entry.update.bind(entry)
+    const mutate = vi.mocked(f.settings.mutate).getMockImplementation()!
+    let writes = 0
+    vi.mocked(f.settings.mutate).mockImplementation(async (...args) => {
+      if (++writes === 2) throw new Error('Compensation disk failure')
+      await mutate(...args)
+    })
+    let enables = 0
+    vi.spyOn(entry, 'update').mockImplementation(async options => {
+      if (options.disabled === false && ++enables === 2) throw new Error('Post-save activation failed')
+      await update(options)
+    })
+
+    const error = await apply(f, { light: { enabled: true, config: {} } }).catch(error => error as AggregateError)
+    expect(error).toBeInstanceOf(AggregateError)
+    expect((error as AggregateError).errors.map(value => value.message)).toEqual(['Post-save activation failed', 'Compensation disk failure'])
+    expect((await f.management.catalog()).diagnostics.join(' ')).toContain('rollback was incomplete')
+    expect(entry.disabled).toBe(true)
+    expect(f.settingsDocuments.get(f.management.settingsNamespace)!.value).toMatchObject({ entries: { light: { enabled: true } } })
+    expect(f.settings.mutate).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not compensate over a newer saved choice after a replay failure', async () => {
+    const f = await fixture()
+    const entry = f.loader.resolve('light')
+    const update = entry.update.bind(entry)
+    const newer = { strategyTypeId: 'default-three-tier', entries: { light: { enabled: true, config: { maxProjectionCharacters: 900 } } } }
+    let enables = 0
+    vi.spyOn(entry, 'update').mockImplementation(async options => {
+      if (options.disabled === false && ++enables === 2) {
+        const document = f.settingsDocuments.get(f.management.settingsNamespace)!
+        document.value = newer
+        document.revision += 1
+        throw new Error('Post-save activation failed')
+      }
+      await update(options)
+    })
+
+    const error = await apply(f, { light: { enabled: true, config: {} } }).catch(error => error as AggregateError)
+    expect(error).toBeInstanceOf(AggregateError)
+    expect((error as AggregateError).errors[1].message).toContain('settings changed before rollback')
+    expect(f.settingsDocuments.get(f.management.settingsNamespace)!.value).toEqual(newer)
+    expect(f.settings.mutate).toHaveBeenCalledOnce()
+    expect(entry.disabled).toBe(true)
+  })
+})
+
+describe('memory plugin enablement owned by the DSH profile patch', () => {
+  const fixtures: Fixture[] = []
+  afterEach(async () => { for (const value of fixtures.splice(0)) await value.dispose() })
+
+  async function fixture(saved?: MemoryViewPreferences, options: ViewManagementFixtureOptions = {}) {
+    const value = await viewManagementFixture(saved, undefined, {}, { pluginManager: true, ...options })
+    fixtures.push(value)
+    return value
+  }
+  const scope = (f: Fixture) => ({ storage: 'custom' as const, workspaceId: f.workspace, sessionId: 'root', agentId: 'root' })
+  async function apply(f: Fixture, entries: MemoryViewConfigurationRequest['entries'], strategyTypeId = 'default-three-tier') {
+    await f.management.apply(f.config, scope(f), { expectedRevision: (await f.management.catalog()).revision, strategyTypeId, entries })
+  }
+  const saved = (f: Fixture) => f.settingsDocuments.get(f.management.settingsNamespace)!.value as MemoryViewPreferences
+  const entry = async (f: Fixture, entryId: string) => (await f.management.catalog()).entries.find(value => value.entryId === entryId)!
+
+  it('writes enablement through the DSH plugin manager and saves only configuration', async () => {
+    const f = await fixture()
+    await apply(f, { capture: { enabled: true, config: { instruction: 'Keep approved preferences.' } } })
+    expect(f.pluginManager.setPluginEnabled).toHaveBeenCalledExactlyOnceWith('capture', true)
+    expect(f.profileEntries.find(row => row.id === 'capture')).toMatchObject({ disabled: false })
+    expect(saved(f).entries).toEqual({ capture: { config: { instruction: 'Keep approved preferences.' } } })
+    expect(await entry(f, 'capture')).toMatchObject({ enabled: true, active: true, config: { instruction: 'Keep approved preferences.' } })
+    expect(f.treeWrite).not.toHaveBeenCalled()
+  })
+
+  it('keeps a DSH Plugins page toggle instead of restoring an older choice', async () => {
+    const f = await fixture()
+    await apply(f, { light: { enabled: true, config: { maxProjectionCharacters: 700 } } })
+    // The Plugins page switch writes the same profile row and reconciles.
+    await f.pluginManager.setPluginEnabled('light', false)
+    expect(await entry(f, 'light')).toMatchObject({ enabled: false, active: false, config: { maxProjectionCharacters: 700 } })
+    await f.reconcileProfile()
+    expect(await entry(f, 'light')).toMatchObject({ enabled: false, active: false })
+    await f.pluginManager.setPluginEnabled('light', true)
+    // Saved configuration still applies once the row runs again.
+    expect(await entry(f, 'light')).toMatchObject({ enabled: true, active: true, config: { maxProjectionCharacters: 700 } })
+  })
+
+  it('moves previously saved enablement into the profile patch once', async () => {
+    const f = await fixture({ strategyTypeId: 'default-three-tier', entries: {
+      light: { enabled: true, config: { maxProjectionCharacters: 900 } },
+      scoped: { enabled: false, config: {} },
+    } })
+    await f.management.catalog()
+    expect(f.pluginManager.setPluginEnabled.mock.calls).toEqual([['light', true], ['scoped', false]])
+    expect(saved(f)).toEqual({ strategyTypeId: 'default-three-tier', entries: { light: { config: { maxProjectionCharacters: 900 } }, scoped: { config: {} } } })
+    expect(await entry(f, 'light')).toMatchObject({ enabled: true, active: true, config: { maxProjectionCharacters: 900 } })
+    await f.reconcileProfile()
+    await f.management.catalog()
+    expect(f.pluginManager.setPluginEnabled).toHaveBeenCalledTimes(2)
+  })
+
+  it('switches between mutually exclusive main Strategies in one transaction', async () => {
+    const f = await fixture(undefined, { generalStrategy: true })
+    await apply(f, {
+      general: { enabled: true, config: {} },
+      'mnemon-strategy-default-three-tier': { enabled: false, config: {} },
+    }, 'general')
+    // The new main Strategy starts before the previous one stops.
+    expect(f.pluginManager.setPluginEnabled.mock.calls).toEqual([['general', true], ['mnemon-strategy-default-three-tier', false]])
+    expect(saved(f).strategyTypeId).toBe('general')
+    const turn = await f.graph.composableTurns.beginTurn('after-switch', scope(f))
+    expect(turn.view.strategyTypeId).toBe('general')
+    f.graph.composableTurns.endTurn(turn.turnId)
+  })
+
+  it('rolls enablement back when the saved View no longer composes', async () => {
+    const f = await fixture(undefined, { generalStrategy: true })
+    // Selecting a Strategy whose Entry stays off must not leave half-applied rows.
+    await expect(apply(f, { capture: { enabled: true, config: {} } }, 'general')).rejects.toThrow('selected memory Strategy type is unavailable: general')
+    expect(f.pluginManager.setPluginEnabled).not.toHaveBeenCalled()
+    expect(await entry(f, 'capture')).toMatchObject({ enabled: false, active: false })
+    expect(saved(f).entries).toEqual({})
   })
 })

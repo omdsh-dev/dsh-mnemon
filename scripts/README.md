@@ -59,7 +59,7 @@ Under `fixtures/`. Each scripted model answers for one `serve-e2e.mjs` option an
 | `delegated-completion.mjs` | The scripted models: reads the completion instructions a delegated child receives |
 | `model-request-log.mjs` | `--log-model-requests`: the model, sender, tool count and reasoning settings that each `Fixture model request:` line adds |
 | `openviking-protocol.mjs` | Run with `node` for `--openviking-write`: a deterministic OpenViking protocol server, not a live backend; `MNEMON_OPENVIKING_FIXTURE_PORT` (default 19335) |
-| `openviking-user-key.mjs` | `tests/openviking-user-host.spec.mjs`: the user-key protocol of issue #271 |
+| `openviking-user-key.mjs` | `tests/openviking-host.spec.mjs`: the user-key protocol of issue #271 |
 | `electron-dsh-host.cjs` | `--electron`: runs the DSH CLI in an Electron main process |
 | `electron-desktop-window.mjs`, `electron-desktop-preload.cjs` | Opens a running WebUI the way DSH Desktop does, at `dsh-app://app/`, for desktop-only checks such as #310; `DSH_HOST_URL`, `DSH_TRANSPORT`, `DSH_OFFSCREEN`, `DSH_LANG`, `--remote-debugging-port` |
 | `packed-web-fixture.mjs` | Published DSH and packed plugins with disposable state, shared by `serve-runtime-metadata.mjs`, `serve-skin-hook.mjs` and `serve-sidebar-bundle-reproduction.mjs`; `--profile`, `--artifacts`, `--state`, `--port`; `MNEMON_CLI_PATH` |

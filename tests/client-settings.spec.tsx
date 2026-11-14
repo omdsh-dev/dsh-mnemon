@@ -3,6 +3,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { publicEmbeddingSettings } from '../src/host/embedding-settings.ts'
 import { MnemonSettingsCard } from '../src/client/MnemonSettingsCard.tsx'
+import { MnemonSaveAction } from '../src/client/MnemonSaveAction.tsx'
+import { MnemonStorageSection, type MnemonStorageSectionProps } from '../src/client/MnemonStorageSection.tsx'
+import { MnemonWorkbench } from '../src/client/MnemonWorkbench.tsx'
+import { directoryPicker } from '../src/client/picker.ts'
 import { MnemonChangeSignal } from '../src/client/change-signal.ts'
 import { MnemonComponentListSeat } from '../src/client/component-list-seat.ts'
 import { MemorySpacesSettings } from 'dsh-mnemon-source-memory-spaces/client'
@@ -11,9 +15,9 @@ import { MEMORY_SPACES_PACKAGE, RUNTIME_PACKAGE, RuntimeSettings, THREE_TIER_PAC
 import { translateEn, translateZh, type MnemonTranslate } from '../src/client/locales.ts'
 import type { ClientConnectionHandle, ClientSettingsScope } from "../src/host/dsh.ts"
 import type { Config } from "../src/host/config.ts"
-import type { MemoryCompositionStatus, MemoryPluginEntryView, MemoryViewConfigurationRequest, MemoryViewDashboard } from "../src/host/protocol.ts"
+import type { ClientSettingsSnapshot, MemoryCompositionStatus, MemoryPluginEntryView, MemoryViewConfigurationRequest, MemoryViewDashboard } from "../src/host/protocol.ts"
 import { TEST_PROVIDERS as MEMORY_PROVIDER_CATALOG } from './fixtures/providers.ts'
-import { liveSettingsScope, settingsScope } from './helpers/settings-scope.ts'
+import { liveSettingsScope, readySnapshot, settingsScope } from './helpers/settings-scope.ts'
 
 afterEach(cleanup)
 
@@ -91,8 +95,7 @@ function chooseIn(id: string, option: string): void {
 
 describe('MnemonSettingsCard', () => {
   it.each([false, true])('submits the OpenViking user-key scope to its owning instance and reports rejection=%s', async rejected => {
-    const snapshot = { status: 'ready' as const, value: {}, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const }
-    const scope = settingsScope(snapshot)
+    const scope = settingsScope<Config>(readySnapshot({}))
     const descriptor = MEMORY_PROVIDER_CATALOG.find(candidate => candidate.id === 'openviking')!
     const providers = ['work-cloud', 'personal-cloud'].map(id => ({ ...descriptor, id, typeId: 'openviking', label: id }))
     const call = vi.fn(async (channel: string, endpoint: string, payload: unknown) => {
@@ -127,7 +130,7 @@ describe('MnemonSettingsCard', () => {
 
   it('applies review choices at once and waits for Apply on the typed limits', async () => {
     const mutate = vi.fn(async () => {})
-    const scope = liveSettingsScope<Config>({ status: 'ready' as const, value: {}, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const }, mutate)
+    const scope = liveSettingsScope<Config>(readySnapshot({}), mutate)
     render(threeTier(scope))
     // A choice applies when made, writing the idle review with only what changed.
     choose('Agent Teams 兼容模式', '受限任务 Agent 审查')
@@ -152,7 +155,7 @@ describe('MnemonSettingsCard', () => {
 
   it.each([false, true])('persists the review watermark choice only with a writable settings scope (read-only: %s)', async readOnly => {
     const mutate = vi.fn(async () => {})
-    const scope = liveSettingsScope<Config>({ status: 'ready', value: { idleReview: { maxPerSession: 3 } }, revision: 0, writable: !readOnly, mode: 'host' }, mutate)
+    const scope = liveSettingsScope<Config>(readySnapshot({ idleReview: { maxPerSession: 3 } }, { writable: !readOnly }), mutate)
     render(threeTier(scope, undefined, {}, translateEn))
     const choice = screen.getByRole('switch', { name: 'Keep review limits after reopening' })
     expect(checked(choice)).toBe(false)
@@ -168,7 +171,7 @@ describe('MnemonSettingsCard', () => {
 
   it('switches runtime memory writes for idle review at once (#319)', async () => {
     const mutate = vi.fn(async () => {})
-    const scope = liveSettingsScope<Config>({ status: 'ready' as const, value: {}, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const }, mutate)
+    const scope = liveSettingsScope<Config>(readySnapshot({}), mutate)
     render(threeTier(scope))
     const runtime = screen.getByRole('switch', { name: '写入运行时记忆' })
     expect(checked(runtime)).toBe(true)
@@ -182,8 +185,7 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('keeps Team review compatibility selection read-only without the Host settings grant', () => {
-    const snapshot = { status: 'ready' as const, value: { idleReview: { agentTeams: 'scoped' as const } }, revision: 0, writable: false, mode: 'host' as const }
-    const scope = settingsScope(snapshot)
+    const scope = settingsScope<Config>(readySnapshot({ idleReview: { agentTeams: 'scoped' } }, { writable: false }))
     render(threeTier(scope, undefined, { language: 'en' }, translateEn))
     const choice = selector('Agent Teams compatibility')
     expect(choice.textContent).toBe('Scoped task Agent review')
@@ -192,7 +194,7 @@ describe('MnemonSettingsCard', () => {
   })
   it('applies DSH management of the embedding at once, and the typed connection from its Apply', async () => {
     const mutate = vi.fn(async () => {})
-    const scope = liveSettingsScope<Config>({ status: 'ready' as const, value: { storageScope: 'global' as const }, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const }, mutate, value => publicEmbeddingSettings(value, value, true) as Config)
+    const scope = liveSettingsScope<Config>(readySnapshot({ storageScope: 'global' }), mutate, value => publicEmbeddingSettings(value, value, true) as Config)
 
     render(spaces(scope))
 
@@ -239,15 +241,10 @@ describe('MnemonSettingsCard', () => {
 
   it('turns DSH management off at once with the saved connection, dropping unapplied edits', async () => {
     const mutate = vi.fn(async () => {})
-    const snapshot = {
-      status: 'ready' as const,
-      value: {
-        storageScope: 'global' as const,
-        embedding: { enabled: true, endpoint: 'http://127.0.0.1:11434', model: 'qwen3-embedding:0.6b' },
-      },
-      base: {}, user: {}, revision: 1, writable: true, mode: 'host' as const,
-    }
-    const scope = liveSettingsScope<Config>(snapshot, mutate)
+    const scope = liveSettingsScope<Config>(readySnapshot({
+      storageScope: 'global',
+      embedding: { enabled: true, endpoint: 'http://127.0.0.1:11434', model: 'qwen3-embedding:0.6b' },
+    }, { revision: 1 }), mutate)
 
     render(spaces(scope))
     fireEvent.change(screen.getByRole('textbox', { name: '嵌入 Endpoint' }), { target: { value: 'ftp://invalid.example' } })
@@ -263,15 +260,10 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('tests the saved embedding runtime through Mnemon and reports connection plus coverage', async () => {
-    const snapshot = {
-      status: 'ready' as const,
-      value: {
-        storageScope: 'global' as const,
-        embedding: { enabled: true, endpoint: 'http://127.0.0.1:11434', model: 'qwen3-embedding:0.6b' },
-      },
-      base: {}, user: {}, revision: 1, writable: true, mode: 'host' as const,
-    }
-    const scope = settingsScope(snapshot)
+    const scope = settingsScope<Config>(readySnapshot({
+      storageScope: 'global',
+      embedding: { enabled: true, endpoint: 'http://127.0.0.1:11434', model: 'qwen3-embedding:0.6b' },
+    }, { revision: 1 }))
     const call = vi.fn(async (channel: string, endpoint: string) => {
       if (channel === '/dsh-mnemon-read' && endpoint === 'embedding-status') return {
         ok: true as const,
@@ -291,8 +283,7 @@ describe('MnemonSettingsCard', () => {
   })
 
   it.each([false, true])('never calls a missing model or an unchecked legacy CLI available (legacy=%s, #494)', async legacy => {
-    const scope = settingsScope({ status: 'ready' as const,
-      value: { storageScope: 'global' as const }, base: {}, user: {}, revision: 1, writable: true, mode: 'host' as const })
+    const scope = settingsScope<Config>(readySnapshot({ storageScope: 'global' }, { revision: 1 }))
     const message = 'Embedding model checks require Mnemon CLI 0.2.13 or newer. Update the configured CLI and test again.'
     const call = vi.fn(async (channel: string, endpoint: string) => {
       if (channel === '/dsh-mnemon-read' && endpoint === 'embedding-status') return legacy
@@ -312,12 +303,7 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('lists the vectors of each Mnemon Native space, so a full count for one never reads as all of them (#392)', async () => {
-    const snapshot = {
-      status: 'ready' as const,
-      value: { storageScope: 'global' as const },
-      base: {}, user: {}, revision: 1, writable: true, mode: 'host' as const,
-    }
-    const scope = settingsScope(snapshot)
+    const scope = settingsScope<Config>(readySnapshot({ storageScope: 'global' }, { revision: 1 }))
     const space = (memoryBodyId: string, name: string, totalInsights: number, embedded: number, coverage: string, active = true) => ({ memoryBodyId, name, active, totalInsights, embedded, coverage })
     let filled = false
     const fill = Promise.withResolvers<void>()
@@ -381,12 +367,7 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('says why a fill failed, and offers none while the embedding service is down (#392)', async () => {
-    const snapshot = {
-      status: 'ready' as const,
-      value: { storageScope: 'global' as const },
-      base: {}, user: {}, revision: 1, writable: true, mode: 'host' as const,
-    }
-    const scope = settingsScope(snapshot)
+    const scope = settingsScope<Config>(readySnapshot({ storageScope: 'global' }, { revision: 1 }))
     let available = true
     const call = vi.fn(async (channel: string, endpoint: string) => {
       if (channel === '/dsh-mnemon-read' && endpoint === 'embedding-status') return {
@@ -418,11 +399,7 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('says what a fill that stopped early did, and promises no fill a read-only Host cannot make (#392)', async () => {
-    const snapshot = (writeEnabled: boolean) => ({
-      status: 'ready' as const,
-      value: { storageScope: 'global' as const, writeEnabled },
-      base: {}, user: {}, revision: 1, writable: true, mode: 'host' as const,
-    })
+    const snapshot = (writeEnabled: boolean) => readySnapshot<Config>({ storageScope: 'global', writeEnabled }, { revision: 1 })
     const results = [
       // The service answers Mnemon's probe and returns no vector, as when its model is not pulled.
       { memoryBodyId: 'tools', filled: 0, remaining: 64, model: 'nomic-embed-text', stopped: 'refused' },
@@ -465,12 +442,7 @@ describe('MnemonSettingsCard', () => {
 
   it('renders one switch per live Catalog layer and persists only its enabled state', async () => {
     const mutate = vi.fn(async () => {})
-    const snapshot = {
-      status: 'ready' as const,
-      value: { storageScope: 'global' as const },
-      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
-    }
-    const scope = settingsScope(snapshot, mutate)
+    const scope = settingsScope<Config>(readySnapshot({ storageScope: 'global' }), mutate)
     const participation = { recall: 'automatic', write: 'automatic', projection: 'automatic', maintenance: 'automatic' } as const
     const descriptor: MemoryCompositionStatus = {
       serving: true,
@@ -512,7 +484,7 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('shows a layer whose component is off as off, and keeps the Providers on Memory Spaces\' page until it runs', async () => {
-    const scope = settingsScope({ status: 'ready' as const, value: { storageScope: 'global' as const }, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const })
+    const scope = settingsScope<Config>(readySnapshot({ storageScope: 'global' }))
     const participation = { recall: 'automatic', write: 'automatic', projection: 'automatic', maintenance: 'automatic' } as const
     const descriptor: MemoryCompositionStatus = {
       serving: true,
@@ -585,7 +557,7 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('marks 技能管理 experimental on its row and its page, and no other component', async () => {
-    const scope = settingsScope({ status: 'ready' as const, value: { storageScope: 'global' as const }, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const })
+    const scope = settingsScope<Config>(readySnapshot({ storageScope: 'global' }))
     const participation = { recall: 'automatic', write: 'automatic', projection: 'automatic', maintenance: 'automatic' } as const
     const descriptor: MemoryCompositionStatus = {
       serving: true,
@@ -623,12 +595,7 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('ignores a Provider catalog response from the previously selected workspace', async () => {
-    const snapshot = {
-      status: 'ready' as const,
-      value: { storageScope: 'workspace' as const },
-      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
-    }
-    const scope = settingsScope(snapshot)
+    const scope = settingsScope<Config>(readySnapshot({ storageScope: 'workspace' }))
     const provider = MEMORY_PROVIDER_CATALOG.find(candidate => candidate.id === 'openviking')!
     const catalog = (endpoint: string) => ({
       ok: true as const,
@@ -660,12 +627,7 @@ describe('MnemonSettingsCard', () => {
   }, 10_000)
 
   it('uses the Host settings grant instead of transport locality on a trusted remote connection', async () => {
-    const snapshot = {
-      status: 'ready' as const,
-      value: { storageScope: 'global' as const },
-      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
-    }
-    const scope = settingsScope(snapshot)
+    const scope = settingsScope<Config>(readySnapshot({ storageScope: 'global' }))
     const call = vi.fn(async (channel: string, remoteEndpoint: string, rawArgs: unknown) => {
       const endpoint = (rawArgs as { args: { endpoint: string } }).args.endpoint
       if (channel === '/api' && remoteEndpoint === 'dshMnemon/read' && endpoint === 'task-agent-models') return {
@@ -695,8 +657,7 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('shows an actionable error instead of a blank settings page when both scopes are unavailable', () => {
-    const snapshot = { status: 'unavailable' as const, writable: false, mode: 'host' as const }
-    const scope = settingsScope<Config>(snapshot)
+    const scope = settingsScope<Config>({ status: 'unavailable', writable: false, mode: 'host' })
 
     render(<MnemonSettingsCard scope={scope} />)
 
@@ -705,7 +666,7 @@ describe('MnemonSettingsCard', () => {
 
   it('follows global by default and applies a custom Provider and model at once', async () => {
     const mutate = vi.fn(async () => {})
-    const scope = liveSettingsScope<Config>({ status: 'ready' as const, value: { storageScope: 'global' as const }, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const }, mutate)
+    const scope = liveSettingsScope<Config>(readySnapshot({ storageScope: 'global' }), mutate)
     const call = vi.fn(async (channel: string, endpoint: string, _payload: unknown) => {
       if (channel === '/dsh-mnemon-read' && endpoint === 'task-agent-models') return {
         ok: true as const,
@@ -754,7 +715,7 @@ describe('MnemonSettingsCard', () => {
 
   it('follows the conversation the page was opened from only once that is chosen, and reads a choice stored elsewhere', async () => {
     const mutate = vi.fn(async () => {})
-    const scope = liveSettingsScope<Config>({ status: 'ready' as const, value: { storageScope: 'global' as const }, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const }, mutate)
+    const scope = liveSettingsScope<Config>(readySnapshot({ storageScope: 'global' }), mutate)
     const call = vi.fn(async (channel: string, endpoint: string, _payload: unknown) => {
       if (channel === '/dsh-mnemon-read' && endpoint === 'task-agent-models') return { ok: true as const, value: conversationDirectory }
       throw new Error(`unexpected ${channel} ${endpoint}`)
@@ -781,7 +742,7 @@ describe('MnemonSettingsCard', () => {
 
   it('keeps following the conversation when a custom model is given up before it was written', async () => {
     const mutate = vi.fn(async () => {})
-    const scope = liveSettingsScope<Config>({ status: 'ready' as const, value: { storageScope: 'global' as const, taskAgentModel: { mode: 'inherit', followConversation: true } }, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const }, mutate)
+    const scope = liveSettingsScope<Config>(readySnapshot({ storageScope: 'global', taskAgentModel: { mode: 'inherit', followConversation: true } }), mutate)
     // The whole directory never arrives, so choosing a custom model waits.
     const call = vi.fn(async (channel: string, endpoint: string, payload: unknown) => {
       if (channel === '/dsh-mnemon-read' && endpoint === 'task-agent-models') {
@@ -802,7 +763,7 @@ describe('MnemonSettingsCard', () => {
 
   it('reads the whole directory again for a custom route after a failed read', async () => {
     let full = 0
-    const scope = liveSettingsScope<Config>({ status: 'ready' as const, value: { storageScope: 'global' as const, taskAgentModel: { mode: 'fixed', provider: 'openai', model: 'gpt-5' } }, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const }, vi.fn(async () => {}))
+    const scope = liveSettingsScope<Config>(readySnapshot({ storageScope: 'global', taskAgentModel: { mode: 'fixed', provider: 'openai', model: 'gpt-5' } }), vi.fn(async () => {}))
     const call = vi.fn(async (channel: string, endpoint: string, payload: unknown) => {
       if (channel === '/dsh-mnemon-read' && endpoint === 'task-agent-models') {
         if ((payload as { includeCatalog: boolean }).includeCatalog && ++full === 1) return { ok: false as const, error: { code: 'unavailable', message: 'the model directory is down' } }
@@ -824,7 +785,7 @@ describe('MnemonSettingsCard', () => {
   it('states the route the Host takes without a DSH default, and the Host\'s route before the settings are read', async () => {
     const without = { ...conversationDirectory, defaultSelection: undefined, inherited: { provider: 'ai', model: 'starter', source: 'active-agent' as const }, effective: { provider: 'ai', model: 'starter', source: 'active-agent' as const } }
     const call = vi.fn(async (_channel: string, _endpoint: string, _payload: unknown) => ({ ok: true as const, value: without }))
-    const ready = liveSettingsScope<Config>({ status: 'ready' as const, value: { storageScope: 'global' as const }, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const }, vi.fn(async () => {}))
+    const ready = liveSettingsScope<Config>(readySnapshot({ storageScope: 'global' }), vi.fn(async () => {}))
     const { unmount } = render(threeTier(ready, { rpc: { call }, isLoopback: true } as ClientConnectionHandle))
     expect(await screen.findByText('ai / starter')).toBeTruthy()
     expect(screen.getByText('已打开的会话')).toBeTruthy()
@@ -832,7 +793,7 @@ describe('MnemonSettingsCard', () => {
 
     // Until the page has the settings, only the Host knows the stored choice.
     const stored = { ...conversationDirectory, effective: { provider: 'openai', model: 'gpt-5', source: 'fixed' as const } }
-    const loading = settingsScope<Config>({ status: 'loading' as const, writable: false, mode: 'host' as const } as never)
+    const loading = settingsScope<Config>({ status: 'loading', writable: false, mode: 'host' })
     render(threeTier(loading, { rpc: { call: vi.fn(async () => ({ ok: true as const, value: stored })) }, isLoopback: true } as ClientConnectionHandle))
     expect(await screen.findByText('openai / gpt-5')).toBeTruthy()
     expect(screen.getByText('自定义')).toBeTruthy()
@@ -840,7 +801,7 @@ describe('MnemonSettingsCard', () => {
 
   it('keeps rapid route-mode switches stable while model requests finish out of order', async () => {
     const mutate = vi.fn(async () => {})
-    const scope = liveSettingsScope<Config>({ status: 'ready' as const, value: { storageScope: 'global' as const }, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const }, mutate)
+    const scope = liveSettingsScope<Config>(readySnapshot({ storageScope: 'global' }), mutate)
     const catalog = {
       effective: { provider: 'deepseek', model: 'deepseek-chat', source: 'dsh-default' as const },
       defaultSelection: { provider: 'deepseek', model: 'deepseek-chat' },
@@ -881,16 +842,11 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('hydrates the full model catalog when a fixed route was already saved', async () => {
-    const snapshot = {
-      status: 'ready' as const,
-      value: {
-        storageScope: 'global' as const,
-        taskAgentModel: { mode: 'fixed' as const, provider: 'openai', model: 'gpt-5' },
-      },
-      base: {}, user: {}, revision: 1, writable: true, mode: 'host' as const,
-    }
-    const scope = settingsScope(snapshot)
-    const call = vi.fn(async (channel: string, endpoint: string, payload: unknown) => {
+    const scope = settingsScope<Config>(readySnapshot({
+      storageScope: 'global',
+      taskAgentModel: { mode: 'fixed', provider: 'openai', model: 'gpt-5' },
+    }, { revision: 1 }))
+    const call = vi.fn(async (channel: string, endpoint: string, _payload: unknown) => {
       if (channel === '/dsh-mnemon-read' && endpoint === 'task-agent-models') return {
         ok: true as const,
         value: {
@@ -917,12 +873,7 @@ describe('MnemonSettingsCard', () => {
 
   it.each([undefined, 'builtin', 'buildin', 'sidebar'] as const)('applies displayMode=%s at once, while storage waits for its Apply', async displayMode => {
     const mutate = vi.fn(async () => {})
-    const snapshot = {
-      status: 'ready' as const,
-      value: { storageScope: 'global' as const, ...(displayMode === undefined ? {} : { displayMode }) },
-      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
-    }
-    const scope = liveSettingsScope<Config>(snapshot, mutate)
+    const scope = liveSettingsScope<Config>(readySnapshot({ storageScope: 'global', ...(displayMode === undefined ? {} : { displayMode }) }), mutate)
 
     render(<MnemonSettingsCard scope={scope} />)
 
@@ -942,16 +893,8 @@ describe('MnemonSettingsCard', () => {
 
   it('applies a storage change from its own line and says it was saved', async () => {
     const mutate = vi.fn(async () => {})
-    const snapshot = {
-      status: 'ready' as const,
-      value: { timeoutMs: 10000, defaultRecallLimit: 10, routingGuidance: true, lifecycleEnabled: true, recallMode: 'guided' as const, writebackMode: 'guided' as const, tabEnabled: true, writeEnabled: true },
-      base: { timeoutMs: 10000, defaultRecallLimit: 10, routingGuidance: true, lifecycleEnabled: true, recallMode: 'guided' as const, writebackMode: 'guided' as const, tabEnabled: true, writeEnabled: true },
-      user: {},
-      revision: 0,
-      writable: true,
-      mode: 'host' as const,
-    }
-    const scope = settingsScope(snapshot, mutate)
+    const baseValue: Config = { timeoutMs: 10000, defaultRecallLimit: 10, routingGuidance: true, lifecycleEnabled: true, recallMode: 'guided', writebackMode: 'guided', tabEnabled: true, writeEnabled: true }
+    const scope = settingsScope<Config>(readySnapshot(baseValue, { base: baseValue }), mutate)
 
     render(<MnemonSettingsCard scope={scope} />)
     choose('存储范围', '工作区')
@@ -967,16 +910,7 @@ describe('MnemonSettingsCard', () => {
 
   it('keeps where USER.md lives on Runtime Memory\'s page, applied when chosen', async () => {
     const mutate = vi.fn(async () => {})
-    const snapshot = {
-      status: 'ready' as const,
-      value: { storageScope: 'workspace' as const, runtimeUserScope: 'storage' as const },
-      base: {},
-      user: {},
-      revision: 0,
-      writable: true,
-      mode: 'host' as const,
-    }
-    const scope = liveSettingsScope<Config>(snapshot, mutate)
+    const scope = liveSettingsScope<Config>(readySnapshot({ storageScope: 'workspace', runtimeUserScope: 'storage' }), mutate)
 
     render(<><MnemonSettingsCard scope={scope} />{runtime(scope)}</>)
 
@@ -991,7 +925,7 @@ describe('MnemonSettingsCard', () => {
   it('stages Runtime capacities, preserves maintenance settings and reads saved values after reopening', async () => {
     const saving = deferred<void>()
     const mutate = vi.fn(() => saving.promise)
-    const scope = liveSettingsScope<Config>({ status: 'ready', value: { runtimeMemory: { maintenanceMaxTokens: 32768 } }, base: {}, user: {}, revision: 0, writable: true, mode: 'host' }, mutate)
+    const scope = liveSettingsScope<Config>(readySnapshot({ runtimeMemory: { maintenanceMaxTokens: 32768 } }), mutate)
     const view = render(runtime(scope))
     const user = screen.getByRole('spinbutton', { name: '用户画像上限（字节）' }) as HTMLInputElement
     const memory = screen.getByRole('spinbutton', { name: '工作记忆上限（字节）' }) as HTMLInputElement
@@ -1017,7 +951,7 @@ describe('MnemonSettingsCard', () => {
 
   it('defaults Runtime inheritance off, saves it immediately and preserves staged capacities', async () => {
     const mutate = vi.fn(async () => {})
-    const scope = liveSettingsScope<Config>({ status: 'ready', value: { runtimeMemory: { maintenanceMaxTokens: 32768 } }, base: {}, user: {}, revision: 0, writable: true, mode: 'host' }, mutate)
+    const scope = liveSettingsScope<Config>(readySnapshot({ runtimeMemory: { maintenanceMaxTokens: 32768 } }), mutate)
     const view = render(runtime(scope))
     const inheritance = screen.getByRole('switch', { name: '子 Agent 自动继承 Runtime 记忆' })
     expect(checked(inheritance)).toBe(false)
@@ -1039,7 +973,7 @@ describe('MnemonSettingsCard', () => {
 
   it('restores the saved Runtime inheritance choice after a failed write', async () => {
     const mutate = vi.fn(async () => {}).mockRejectedValueOnce(new Error('Synthetic write rejection'))
-    const scope = liveSettingsScope<Config>({ status: 'ready', value: {}, base: {}, user: {}, revision: 0, writable: true, mode: 'host' }, mutate)
+    const scope = liveSettingsScope<Config>(readySnapshot({}), mutate)
     render(runtime(scope))
     const inheritance = screen.getByRole('switch', { name: '子 Agent 自动继承 Runtime 记忆' })
     fireEvent.click(inheritance)
@@ -1052,7 +986,7 @@ describe('MnemonSettingsCard', () => {
 
   it.each(['', '0', '-1', '1.5', '1048577'])('rejects the Runtime capacity %j without writing settings', value => {
     const mutate = vi.fn(async () => {})
-    const scope = settingsScope<Config>({ status: 'ready', value: {}, base: {}, user: {}, revision: 0, writable: true, mode: 'host' }, mutate)
+    const scope = settingsScope<Config>(readySnapshot({}), mutate)
     render(runtime(scope))
     const user = screen.getByRole('spinbutton', { name: '用户画像上限（字节）' })
     fireEvent.change(user, { target: { value } })
@@ -1065,7 +999,7 @@ describe('MnemonSettingsCard', () => {
 
   it.each(['1', '1048576'])('accepts the Runtime byte boundary %s and keeps the other limit inherited', async value => {
     const mutate = vi.fn(async () => {})
-    const scope = liveSettingsScope<Config>({ status: 'ready', value: {}, base: {}, user: {}, revision: 0, writable: true, mode: 'host' }, mutate)
+    const scope = liveSettingsScope<Config>(readySnapshot({}), mutate)
     render(runtime(scope))
     fireEvent.change(screen.getByRole('spinbutton', { name: '用户画像上限（字节）' }), { target: { value } })
     fireEvent.click(apply())
@@ -1074,7 +1008,7 @@ describe('MnemonSettingsCard', () => {
 
   it('keeps exact byte values and the draft when a Runtime capacity save is rejected, then allows retry', async () => {
     const mutate = vi.fn(async () => {}).mockRejectedValueOnce(new Error('Synthetic write rejection'))
-    const scope = liveSettingsScope<Config>({ status: 'ready', value: { runtimeMemory: { userLimitBytes: 4097, memoryLimitBytes: 10241, maintenanceMaxTokens: 16384 } }, base: {}, user: {}, revision: 0, writable: true, mode: 'host' }, mutate)
+    const scope = liveSettingsScope<Config>(readySnapshot({ runtimeMemory: { userLimitBytes: 4097, memoryLimitBytes: 10241, maintenanceMaxTokens: 16384 } }), mutate)
     render(runtime(scope))
     const user = screen.getByRole('spinbutton', { name: '用户画像上限（字节）' }) as HTMLInputElement
     expect(user.value).toBe('4097')
@@ -1093,7 +1027,7 @@ describe('MnemonSettingsCard', () => {
     { pageWritable: true, scopeWritable: false, status: 'ready' as const },
     { pageWritable: true, scopeWritable: true, status: 'loading' as const },
   ])('disables Runtime capacity edits when unavailable: %j', ({ pageWritable, scopeWritable, status }) => {
-    const scope = settingsScope<Config>({ status, value: {}, base: {}, user: {}, revision: 0, writable: scopeWritable, mode: 'host' })
+    const scope = settingsScope<Config>(readySnapshot({}, { status, writable: scopeWritable }))
     render(runtime(scope, { writable: pageWritable }))
     for (const input of screen.getAllByRole('spinbutton')) expect((input as HTMLInputElement).disabled).toBe(true)
     expect((screen.getByRole('switch', { name: '子 Agent 自动继承 Runtime 记忆' }) as HTMLButtonElement).disabled).toBe(true)
@@ -1101,16 +1035,7 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('uses the DSH-bound locale in the plugin configuration slot', () => {
-    const snapshot = {
-      status: 'ready' as const,
-      value: { storageScope: 'global' as const },
-      base: {},
-      user: {},
-      revision: 0,
-      writable: true,
-      mode: 'host' as const,
-    }
-    const scope = settingsScope(snapshot)
+    const scope = settingsScope<Config>(readySnapshot({ storageScope: 'global' }))
 
     render(<MnemonSettingsCard scope={scope} t={translateEn} />)
 
@@ -1121,7 +1046,7 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('explains the grouping row only while DSH lists it below the configuration', () => {
-    const scope = settingsScope({ status: 'ready' as const, value: {}, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const })
+    const scope = settingsScope<Config>(readySnapshot({}))
     const componentList = new MnemonComponentListSeat()
     const note = () => screen.queryByText(/dsh-mnemon\/bundle is the Starter's grouping entry/u)
     render(<MnemonSettingsCard scope={scope} t={translateEn} componentList={componentList} />)
@@ -1137,16 +1062,7 @@ describe('MnemonSettingsCard', () => {
 
   it('accepts and persists a manually entered custom directory', async () => {
     const mutate = vi.fn(async () => {})
-    const snapshot = {
-      status: 'ready' as const,
-      value: { storageScope: 'global' as const },
-      base: {},
-      user: {},
-      revision: 0,
-      writable: true,
-      mode: 'host' as const,
-    }
-    const scope = settingsScope(snapshot, mutate)
+    const scope = settingsScope<Config>(readySnapshot({ storageScope: 'global' }), mutate)
     const view = render(<MnemonSettingsCard scope={scope} />)
 
     // The default location has no field; choosing Custom opens one, ready to type in.
@@ -1169,28 +1085,15 @@ describe('MnemonSettingsCard', () => {
 
   it('migrates a legacy named Pack to the single selected directory', async () => {
     const mutate = vi.fn(async () => {})
-    const snapshot = {
-      status: 'ready' as const,
-      value: {
-        storageScope: 'custom' as const,
-        customPackId: 'project',
-        customPacks: [
-          { id: 'project', name: 'Project', dataDir: '/packs/project' },
-          { id: 'research', name: 'Research', dataDir: '/packs/research' },
-        ],
-      },
-      base: {},
-      user: {
-        storageScope: 'custom' as const,
-        customPackId: 'project',
-        customPacks: [
-          { id: 'project', name: 'Project', dataDir: '/packs/project' },
-          { id: 'research', name: 'Research', dataDir: '/packs/research' },
-        ],
-      },
-      revision: 0, writable: true, mode: 'host' as const,
+    const legacyPack: Config = {
+      storageScope: 'custom',
+      customPackId: 'project',
+      customPacks: [
+        { id: 'project', name: 'Project', dataDir: '/packs/project' },
+        { id: 'research', name: 'Research', dataDir: '/packs/research' },
+      ],
     }
-    const scope = settingsScope(snapshot, mutate)
+    const scope = settingsScope<Config>(readySnapshot(legacyPack, { user: legacyPack }), mutate)
 
     render(<MnemonSettingsCard scope={scope} />)
     const directory = screen.getByRole('textbox', { name: '数据目录' }) as HTMLInputElement
@@ -1207,17 +1110,8 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('returns to the default directory by choosing it, not by emptying the field', async () => {
-    const snapshot = {
-      status: 'ready' as const,
-      value: { storageScope: 'global' as const },
-      base: {},
-      user: {},
-      revision: 0,
-      writable: true,
-      mode: 'host' as const,
-    }
     const mutate = vi.fn(async () => {})
-    const scope = settingsScope({ ...snapshot, value: { storageScope: 'custom' as const, dataDir: '/data/mnemon' } }, mutate)
+    const scope = settingsScope<Config>(readySnapshot({ storageScope: 'custom', dataDir: '/data/mnemon' }), mutate)
 
     render(<MnemonSettingsCard scope={scope} />)
     const directory = screen.getByRole('textbox', { name: '数据目录' }) as HTMLInputElement
@@ -1240,12 +1134,7 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('accepts Windows drive and UNC paths in the browser form', () => {
-    const snapshot = {
-      status: 'ready' as const,
-      value: { storageScope: 'global' as const },
-      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
-    }
-    const scope = settingsScope(snapshot)
+    const scope = settingsScope<Config>(readySnapshot({ storageScope: 'global' }))
 
     render(<MnemonSettingsCard scope={scope} />)
     fireEvent.click(directoryChoice('自定义'))
@@ -1259,16 +1148,7 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('uses native disabled semantics for a read-only settings scope', () => {
-    const snapshot = {
-      status: 'ready' as const,
-      value: { storageScope: 'global' as const },
-      base: {},
-      user: {},
-      revision: 0,
-      writable: false,
-      mode: 'host' as const,
-    }
-    const scope = settingsScope(snapshot)
+    const scope = settingsScope<Config>(readySnapshot({ storageScope: 'global' }, { writable: false }))
 
     render(<><MnemonSettingsCard scope={scope} />{threeTier(scope)}</>)
 
@@ -1286,7 +1166,7 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('says a remote page needs the management grant instead of calling the deployment read-only', () => {
-    const snapshot = { status: 'ready' as const, value: { storageScope: 'global' as const }, base: {}, user: {}, revision: 0, writable: false, mode: 'host' as const }
+    const snapshot = readySnapshot<Config>({ storageScope: 'global' }, { writable: false })
     const call = vi.fn(async () => ({ ok: false as const, error: { code: 'unavailable', message: 'offline', details: { issues: [] } } }))
     vi.stubGlobal('location', { protocol: 'https:', hostname: 'memory.example' })
     try {
@@ -1299,12 +1179,7 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('does not present temporary defaults as read-only while settings load', () => {
-    const snapshot = {
-      status: 'loading' as const,
-      writable: false,
-      mode: 'host' as const,
-    }
-    const scope = settingsScope<Config>(snapshot)
+    const scope = settingsScope<Config>({ status: 'loading', writable: false, mode: 'host' })
 
     render(<MnemonSettingsCard scope={scope} />)
 
@@ -1313,34 +1188,19 @@ describe('MnemonSettingsCard', () => {
     expect(screen.queryByRole('button', { name: /^存储范围 / })).toBeNull()
   })
 
-  it('applies an interaction toggle at once through the mnemon-ui scope', async () => {
+  it('defaults the two interaction toggles checked and applies changes at once through the mnemon-ui scope', async () => {
     const interactionMutate = vi.fn(async () => {})
-    const coreSnapshot = {
-      status: 'ready' as const,
-      value: { storageScope: 'global' as const },
-      base: {},
-      user: {},
-      revision: 0,
-      writable: true,
-      mode: 'host' as const,
-    }
-    const scope = settingsScope(coreSnapshot)
-    const interactionSnapshot = {
-      status: 'ready' as const,
-      value: { turnBar: true, saveAction: true },
-      base: {},
-      user: {},
-      revision: 0,
-      writable: true,
-      mode: 'host' as const,
-    }
-    const interactionScope = liveSettingsScope(interactionSnapshot, interactionMutate)
+    const scope = settingsScope<Config>(readySnapshot({ storageScope: 'global' }))
+    const interactionScope = liveSettingsScope(readySnapshot({ turnBar: true, saveAction: true }), interactionMutate)
 
-    const view = render(<MnemonSettingsCard scope={scope} interactionScope={interactionScope} />)
+    const view = render(<MnemonSettingsCard scope={scope} />)
+    expect(view.queryByLabelText('记忆工具卡')).toBeNull()
+    expect(checked(view.getByRole('switch', { name: '回合记忆栏' }))).toBe(true)
+    expect(checked(view.getByRole('switch', { name: '存入记忆按钮' }))).toBe(true)
 
+    view.rerender(<MnemonSettingsCard scope={scope} interactionScope={interactionScope} />)
     const turnBar = view.getByRole('switch', { name: '回合记忆栏' })
     expect(checked(turnBar)).toBe(true)
-    expect(view.queryByLabelText('记忆工具卡')).toBeNull()
 
     fireEvent.click(turnBar)
     await waitFor(() => expect(interactionMutate).toHaveBeenCalledWith([
@@ -1351,8 +1211,8 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('shows the saved value again beside the reason when a toggle is refused', async () => {
-    const scope = settingsScope({ status: 'ready' as const, value: { storageScope: 'global' as const }, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const })
-    const interactionScope = liveSettingsScope({ status: 'ready' as const, value: { turnBar: true, saveAction: true }, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const },
+    const scope = settingsScope<Config>(readySnapshot({ storageScope: 'global' }))
+    const interactionScope = liveSettingsScope(readySnapshot({ turnBar: true, saveAction: true }),
       vi.fn(async () => { throw new Error('settings are locked') }))
 
     render(<MnemonSettingsCard scope={scope} interactionScope={interactionScope} />)
@@ -1361,32 +1221,8 @@ describe('MnemonSettingsCard', () => {
     expect(checked(screen.getByRole('switch', { name: '存入记忆按钮' }))).toBe(true)
   })
 
-  it('presents the two remaining interaction toggles checked by default', () => {
-    const snapshot = {
-      status: 'ready' as const,
-      value: { storageScope: 'global' as const },
-      base: {},
-      user: {},
-      revision: 0,
-      writable: true,
-      mode: 'host' as const,
-    }
-    const scope = settingsScope(snapshot)
-
-    const view = render(<MnemonSettingsCard scope={scope} />)
-
-    expect(view.queryByLabelText('记忆工具卡')).toBeNull()
-    expect(checked(view.getByRole('switch', { name: '回合记忆栏' }))).toBe(true)
-    expect(checked(view.getByRole('switch', { name: '存入记忆按钮' }))).toBe(true)
-  })
-
   it('does not invent Provider registrations while the Host catalog is loading', () => {
-    const snapshot = {
-      status: 'ready' as const,
-      value: { storageScope: 'workspace' as const },
-      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
-    }
-    const scope = settingsScope(snapshot)
+    const scope = settingsScope<Config>(readySnapshot({ storageScope: 'workspace' }))
     const providerSettings = new Promise<never>(() => {})
     const call = vi.fn((channel: string, endpoint: string) => {
       if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return providerSettings
@@ -1402,12 +1238,7 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('uses the native default/custom location pattern for a scope-aware local provider', async () => {
-    const snapshot = {
-      status: 'ready' as const,
-      value: { storageScope: 'global' as const },
-      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
-    }
-    const scope = settingsScope(snapshot)
+    const scope = settingsScope<Config>(readySnapshot({ storageScope: 'global' }))
     const provider = {
       id: 'holographic' as const,
       label: 'Holographic', kind: 'local' as const, origin: 'third-party' as const, summary: 'Local facts',
@@ -1462,12 +1293,7 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('renders and saves an unknown Provider instance entirely from its descriptor', async () => {
-    const snapshot = {
-      status: 'ready' as const,
-      value: { storageScope: 'global' as const },
-      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
-    }
-    const scope = settingsScope(snapshot)
+    const scope = settingsScope<Config>(readySnapshot({ storageScope: 'global' }))
     const provider = {
       id: 'work-account', typeId: 'vector-store', label: 'Vector Store', icon: { kind: 'glyph' as const, value: 'VS' },
       kind: 'remote' as const, origin: 'third-party' as const, workspaceBinding: 'provider-global' as const,
@@ -1513,12 +1339,7 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('edits a reusable provider service and reports its Memory Space synchronization', async () => {
-    const snapshot = {
-      status: 'ready' as const,
-      value: { storageScope: 'workspace' as const },
-      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
-    }
-    const scope = settingsScope(snapshot)
+    const scope = settingsScope<Config>(readySnapshot({ storageScope: 'workspace' }))
     const provider = {
       id: 'openviking' as const,
       label: 'OpenViking', kind: 'remote' as const, origin: 'third-party' as const, summary: 'Shared memory',
@@ -1582,12 +1403,7 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('keeps a new provider off until its required service configuration is saved', async () => {
-    const snapshot = {
-      status: 'ready' as const,
-      value: { storageScope: 'global' as const },
-      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
-    }
-    const scope = settingsScope(snapshot)
+    const scope = settingsScope<Config>(readySnapshot({ storageScope: 'global' }))
     const provider = {
       id: 'supermemory' as const,
       label: 'Supermemory', kind: 'remote' as const, origin: 'third-party' as const, summary: 'Semantic memory',
@@ -1659,12 +1475,7 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('previews and safely imports one complete directory ZIP', async () => {
-    const snapshot = {
-      status: 'ready' as const,
-      value: { storageScope: 'global' as const },
-      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
-    }
-    const scope = settingsScope(snapshot)
+    const scope = settingsScope<Config>(readySnapshot({ storageScope: 'global' }))
     const call = vi.fn(async (_channel: string, endpoint: string, payload: unknown) => {
       if (endpoint === 'target') return { ok: true as const, value: { root: '/active/.mnemon', scope: 'global' } }
       if (endpoint === 'inspect') return {
@@ -1718,7 +1529,7 @@ describe('MnemonSettingsCard', () => {
   })
 
   it('tells the memory views after an import that reports a failure, since it can have merged first', async () => {
-    const scope = settingsScope({ status: 'ready' as const, value: { storageScope: 'global' as const }, base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const })
+    const scope = settingsScope<Config>(readySnapshot({ storageScope: 'global' }))
     const call = vi.fn(async (_channel: string, endpoint: string) => {
       if (endpoint === 'target') return { ok: true as const, value: { root: '/active/.mnemon', scope: 'global' } }
       if (endpoint === 'inspect') return { ok: true as const, value: {
@@ -1743,9 +1554,8 @@ describe('MnemonSettingsCard', () => {
 
 describe('centralized workspace storage settings', () => {
   function settings(value: Config, writable = true) {
-    const snapshot = { status: 'ready' as const, value, base: {}, user: {}, revision: 0, writable, mode: 'host' as const }
     const mutate = vi.fn(async () => {})
-    return { scope: settingsScope(snapshot, mutate), mutate }
+    return { scope: settingsScope(readySnapshot(value, { writable }), mutate), mutate }
   }
   it('keeps workspace exclusion empty by default and saves only an explicit staged path list', async () => {
     const { scope, mutate } = settings({})
@@ -1834,5 +1644,185 @@ describe('centralized workspace storage settings', () => {
     fireEvent.click(directoryChoice('默认'))
     expect(screen.getByTitle('/home/me/.mnemon')).toBeTruthy()
     expect(screen.getByText('应用后读写新位置，已有数据不会迁移')).toBeTruthy()
+  })
+})
+
+describe('storage directory chooser', () => {
+  function chooserFixture(overrides: Partial<MnemonStorageSectionProps> = {}, clientPicker = true) {
+    const mutate = vi.fn(async () => {})
+    const value = { storageScope: 'custom' as const, dataDir: '/fixture/original' }
+    const scope = settingsScope(readySnapshot<Config>(value), mutate)
+    const picker = { available: () => true, pick: vi.fn(async (): Promise<string | null> => '/fixture/chosen') }
+    const props: MnemonStorageSectionProps = { scope, value, user: {}, disabled: false, dashboard: null,
+      target: { root: '/fixture/original', scope: 'custom', nativeDirectoryPicker: true }, ...(clientPicker ? { directoryPicker: picker } : {}),
+      language: 'en', t: translateEn, onOpen: vi.fn(), onSaved: vi.fn(), ...overrides }
+    const view = render(<MnemonStorageSection {...props} />)
+    return { ...view, props, picker, mutate, update: (next: Partial<MnemonStorageSectionProps>) => view.rerender(<MnemonStorageSection {...props} {...next} />) }
+  }
+
+  const field = () => screen.getByRole('textbox', { name: 'Data directory' }) as HTMLInputElement
+  const chooseDirectory = () => fireEvent.click(screen.getByRole('button', { name: 'Choose directory' }))
+  const applyDirectory = () => fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+  it.each(['custom', 'workspaces'] as const)('stages a selected path and preserves the %s scope on Apply', async storageScope => {
+    const f = chooserFixture({ value: { storageScope, dataDir: '/fixture/original' } })
+    chooseDirectory()
+    await waitFor(() => expect(field().value).toBe('/fixture/chosen'))
+    expect(f.mutate).not.toHaveBeenCalled()
+    expect(screen.getByText('Memory moves to the new location; existing data stays where it is')).toBeTruthy()
+    applyDirectory()
+    await waitFor(() => expect(f.mutate).toHaveBeenCalledWith([{ op: 'set', path: ['dataDir'], value: '/fixture/chosen' }]))
+    expect(f.props.onSaved).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the global default until Custom and Apply are both chosen', async () => {
+    const f = chooserFixture({ value: { storageScope: 'global' } })
+    expect(screen.queryByRole('button', { name: 'Choose directory' })).toBeNull()
+    fireEvent.click(screen.getByRole('radio', { name: 'Custom' }))
+    chooseDirectory()
+    await waitFor(() => expect(field().value).toBe('/fixture/chosen'))
+    expect(f.mutate).not.toHaveBeenCalled()
+    applyDirectory()
+    await waitFor(() => expect(f.mutate).toHaveBeenCalledWith([
+      { op: 'set', path: ['storageScope'], value: 'custom' },
+      { op: 'set', path: ['dataDir'], value: '/fixture/chosen' },
+    ]))
+  })
+
+  it('preserves a typed draft when the native chooser is cancelled', async () => {
+    const f = chooserFixture()
+    fireEvent.change(field(), { target: { value: '/fixture/typed' } })
+    f.picker.pick.mockResolvedValue(null)
+    chooseDirectory()
+    await waitFor(() => expect((screen.getByRole('button', { name: 'Choose directory' }) as HTMLButtonElement).disabled).toBe(false))
+    expect(field().value).toBe('/fixture/typed')
+    expect(f.mutate).not.toHaveBeenCalled()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('discards a picked path and keeps the existing configuration', async () => {
+    const f = chooserFixture()
+    chooseDirectory()
+    await waitFor(() => expect(field().value).toBe('/fixture/chosen'))
+    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }))
+    expect(field().value).toBe('/fixture/original')
+    expect(f.mutate).not.toHaveBeenCalled()
+  })
+
+  it('leaves manual entry usable after a chooser error', async () => {
+    const f = chooserFixture()
+    f.picker.pick.mockRejectedValue(new Error('Chooser denied'))
+    chooseDirectory()
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toBe('Could not open the directory chooser. Try again or enter a path.'))
+    expect(screen.queryByText('Chooser denied')).toBeNull()
+    fireEvent.change(field(), { target: { value: '/fixture/manual' } })
+    expect(screen.queryByRole('alert')).toBeNull()
+    applyDirectory()
+    await waitFor(() => expect(f.mutate).toHaveBeenCalledWith([{ op: 'set', path: ['dataDir'], value: '/fixture/manual' }]))
+  })
+
+  it('keeps the selected draft retryable when saving fails', async () => {
+    const f = chooserFixture()
+    f.mutate.mockRejectedValueOnce(new Error('Profile write failed'))
+    chooseDirectory()
+    await waitFor(() => expect(field().value).toBe('/fixture/chosen'))
+    applyDirectory()
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('Profile write failed'))
+    expect(f.props.onSaved).not.toHaveBeenCalled()
+    expect(f.props.value?.dataDir).toBe('/fixture/original')
+    expect(field().value).toBe('/fixture/chosen')
+    applyDirectory()
+    await waitFor(() => expect(f.props.onSaved).toHaveBeenCalledOnce())
+  })
+
+  it.each(['absent capability', 'browse capability', 'absent client', 'unavailable client'] as const)('keeps manual entry with %s', condition => {
+    const f = chooserFixture({
+      target: { root: '/fixture/original', scope: 'custom', ...(condition === 'absent capability' ? {} : { nativeDirectoryPicker: condition !== 'browse capability' }) },
+      ...(condition === 'unavailable client' ? { directoryPicker: { available: () => false, pick: vi.fn() } } : {}),
+    }, condition !== 'absent client')
+    expect(screen.queryByRole('button', { name: 'Choose directory' })).toBeNull()
+    expect(field().disabled).toBe(false)
+    expect(f.picker.pick).not.toHaveBeenCalled()
+  })
+
+  it('does not open a chooser in a read-only view or for a workspace-owned directory', () => {
+    const f = chooserFixture({ disabled: true })
+    chooseDirectory()
+    expect(f.picker.pick).not.toHaveBeenCalled()
+    f.update({ value: { storageScope: 'workspace' }, disabled: false })
+    expect(screen.queryByRole('button', { name: 'Choose directory' })).toBeNull()
+    expect(screen.queryByRole('textbox', { name: 'Data directory' })).toBeNull()
+  })
+
+  it.each(['edit', 'default', 'scope', 'workspace', 'permissions', 'saved value', 'unmount'] as const)('ignores a pending result after %s changes', async change => {
+    const f = chooserFixture()
+    let resolve!: (path: string) => void
+    f.picker.pick.mockImplementation(() => new Promise(next => { resolve = next }))
+    chooseDirectory()
+    chooseDirectory()
+    expect(f.picker.pick).toHaveBeenCalledOnce()
+    if (change === 'edit') fireEvent.change(field(), { target: { value: '/fixture/newer' } })
+    if (change === 'default') fireEvent.click(screen.getByRole('radio', { name: 'Default' }))
+    if (change === 'scope') {
+      fireEvent.click(document.querySelector<HTMLButtonElement>('[aria-labelledby^="mnemon-storage-scope-title "]')!)
+      fireEvent.click(screen.getAllByRole('menuitem').find(item => item.textContent?.startsWith('Workspace'))!)
+    }
+    if (change === 'workspace') f.update({ workspaceId: 'different-workspace' })
+    if (change === 'permissions') f.update({ disabled: true })
+    if (change === 'saved value') f.update({ value: { storageScope: 'custom', dataDir: '/fixture/elsewhere' } })
+    if (change === 'unmount') f.unmount()
+    await act(async () => { resolve('/fixture/stale') })
+    expect(screen.queryByDisplayValue('/fixture/stale')).toBeNull()
+    expect(f.mutate).not.toHaveBeenCalled()
+    if (change === 'edit') expect(field().value).toBe('/fixture/newer')
+  })
+})
+
+describe('optional DSH client picker', () => {
+  it('uses the public service and follows removal and replacement', async () => {
+    const first = { pickDirectory: vi.fn(async () => '/fixture/first') }
+    const get = vi.fn((): unknown => first)
+    const connection = { isLoopback: true }
+    const picker = directoryPicker({ get, connection } as never)
+    expect(picker.available()).toBe(true)
+    await expect(picker.pick()).resolves.toBe('/fixture/first')
+    expect(get).toHaveBeenCalledWith('uiWorkspace')
+    get.mockReturnValue(undefined)
+    expect(picker.available()).toBe(false)
+    await expect(picker.pick()).rejects.toThrow('unavailable')
+    get.mockReturnValue({ pickDirectory: async () => null })
+    expect(picker.available()).toBe(true)
+    await expect(picker.pick()).resolves.toBeNull()
+    connection.isLoopback = false
+    expect(picker.available()).toBe(false)
+    await expect(picker.pick()).rejects.toThrow('unavailable')
+    connection.isLoopback = true
+    get.mockImplementation(() => { throw new Error('service unloaded') })
+    expect(picker.available()).toBe(false)
+  })
+})
+
+describe('settings scope this-binding', () => {
+  class ThisBoundSettingsScope implements ClientSettingsScope<Config> {
+    private state: ClientSettingsSnapshot<Config> = { status: 'ready', value: {}, revision: 1, writable: true, mode: 'host' }
+    private listeners = new Set<() => void>()
+    getSnapshot(): ClientSettingsSnapshot<Config> { return this.state }
+    subscribe(listener: () => void): () => void {
+      this.listeners.add(listener)
+      return () => { this.listeners.delete(listener) }
+    }
+    async mutate(): Promise<void> {}
+  }
+
+  const rejectingConnection = { rpc: { call: vi.fn(() => Promise.reject(new Error('no host'))) } } as unknown as ClientConnectionHandle
+  const locale = { getSnapshot: () => 'en-US', subscribe: () => () => {} }
+
+  it('renders MnemonWorkbench with a this-bound settings scope (real Host shape)', () => {
+    expect(() => render(<MnemonWorkbench connection={rejectingConnection} settingsScope={new ThisBoundSettingsScope()} sessionId="session-1" />)).not.toThrow()
+  })
+
+  it('renders MnemonSaveAction with a this-bound settings scope (real Host shape)', () => {
+    render(<MnemonSaveAction messageId="message-1" connection={rejectingConnection} settingsScope={new ThisBoundSettingsScope()} localeRuntime={locale as never} t={key => key} />)
+    expect(screen.getByLabelText('saveAction.button')).toBeTruthy()
   })
 })

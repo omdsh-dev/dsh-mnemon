@@ -1,19 +1,33 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import { evaluatePluginCompatibility } from '@deepseek-ai/dsh-app-boot'
 import { HostConnectionService } from '@deepseek-ai/dsh-client-connection'
-import { tmpdir } from 'node:os'
-import { createHash } from 'node:crypto'
-import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ToolDefinition, HostAgent, HostSessionEvent } from "../src/host/dsh.ts"
-import { apply, inject } from '../src/index.ts'
+import type { MnemonMemoryService } from 'dsh-mnemon/extension-sdk'
+import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
+import native from 'dsh-mnemon-provider-mnemon-native'
+import * as documentsPlugin from 'dsh-mnemon-source-documents'
+import * as spacesPlugin from 'dsh-mnemon-source-memory-spaces'
+import * as runtimePlugin from 'dsh-mnemon-source-runtime'
+import * as autoCapture from 'dsh-mnemon-strategy-auto-capture'
+import * as strategyPlugin from 'dsh-mnemon-strategy-default-three-tier'
+import * as lightContext from 'dsh-mnemon-strategy-light-context'
+import * as scoped from 'dsh-mnemon-strategy-scoped'
+import { MemoryRuntime } from '../src/core/runtime.ts'
+import type { HostAgent, HostContextShape, HostSessionEvent, HostSettingsService, ToolDefinition } from "../src/host/dsh.ts"
+import { MemoryPluginInstallation } from '../src/host/plugin-installation.ts'
+import type { ProcessOptions } from '../src/host/process.ts'
+import { agentScope } from '../src/host/runtime.ts'
 import { MnemonSubagentCoordinator } from "../src/host/subagent.ts"
 import { registerTools } from "../src/host/tools.ts"
-import { MemoryRuntime } from '../src/core/runtime.ts'
-import type { MnemonMemoryService } from 'dsh-mnemon/extension-sdk'
+import { apply, inject } from '../src/index.ts'
 import { compositionFixture } from './fixtures/composition.ts'
-import { agentScope } from '../src/host/runtime.ts'
 import { sessionLog } from './fixtures/session-log.ts'
 
 const manifest = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as {
@@ -541,5 +555,292 @@ describe('dsh-mnemon plugin composition', () => {
     for (const cleanup of fixture.effectCleanups.splice(0).reverse()) await cleanup()
     expect(() => active!.host.acquire()).toThrow('disposed')
     expect(() => (fixture.ctx.get('mnemonMemory') as MnemonMemoryService).installContributions({}, { instanceId: 'closed' })).toThrow('disposed')
+  })
+})
+
+describe('explicit default Starter', () => {
+  const fixtures: Awaited<ReturnType<typeof compositionFixture>>[] = []
+  afterEach(async () => { for (const value of fixtures.splice(0)) await value.dispose() })
+
+  it('mounts real Cordis Entries, recomposes remaining Sources, and keeps old leases after unload', async () => {
+    const value = await compositionFixture()
+    fixtures.push(value)
+    const { extensions, graph, releases } = value
+    expect(extensions.contributionSnapshot()).toMatchObject({
+      revision: 4,
+      sources: [
+        { instanceKey: 'source:mnemon-source-runtime' },
+        { instanceKey: 'source:mnemon-source-documents' },
+        { instanceKey: 'source:mnemon-source-memory-spaces', effectiveDigest: expect.stringMatching(/^providers:/u) },
+      ],
+      strategies: [{ instanceKey: 'strategy:mnemon-strategy-default-three-tier' }],
+    })
+    const lease = graph.memoryComposition.acquire()
+    try {
+      await releases[0]!()
+      expect(graph.memoryComposition.inspect().evaluation).toMatchObject({
+        state: 'ready',
+        sourceInstanceKeys: ['source:mnemon-source-documents', 'source:mnemon-source-memory-spaces'],
+      })
+      expect(graph.memoryComposition.inspect().drainingGenerationIds).toContain(lease.id)
+    } finally { lease.release() }
+    expect(graph.memoryComposition.inspect().drainingGenerationIds).toEqual([])
+  })
+
+  it('keeps stable Starter Entries inside the legacy core lifecycle gate', () => {
+    expect([runtimePlugin.name, documentsPlugin.name, spacesPlugin.name, strategyPlugin.name]).toEqual([
+      'dsh-mnemon-source-runtime', 'dsh-mnemon-source-documents', 'dsh-mnemon-source-memory-spaces', 'dsh-mnemon-strategy-default-three-tier',
+    ])
+    const patch = readFileSync(new URL('../cordis.patch.yml', import.meta.url), 'utf8')
+    expect(patch).toMatch(/- insert:\n(?:    #.*\n)*    - id: mnemon-bundle\n      name: dsh-mnemon\/bundle\n      group: true\n      disabled: !!js/u)
+    expect(patch).not.toContain('mnemon-starter')
+    expect(patch).not.toContain('inject:')
+    expect(patch).toContain("[...loader.entries()].find(entry => entry.options.id === 'mnemon')")
+    expect(patch).toContain('entry.evaluate(entry.options.disabled.__jsExpr)')
+    expect(patch).toMatch(/        - id: mnemon\n          # Core\/Host/u)
+    for (const name of [runtimePlugin.name, documentsPlugin.name, spacesPlugin.name, strategyPlugin.name]) {
+      expect(patch).toMatch(new RegExp(`        - id: ${name.slice(4)}\\n          name: ${name}`, 'u'))
+    }
+    for (const name of [autoCapture.name, lightContext.name, scoped.name]) {
+      expect(patch).toMatch(new RegExp(`        - id: ${name.slice(4)}\\n          name: ${name}\\n          disabled: true`, 'u'))
+    }
+    expect(patch).not.toContain('dsh-mnemon/source-')
+    expect(patch).not.toContain('bundledContributions')
+  })
+
+  it('allows a Source to mount only its explicitly selected private children', async () => {
+    const runner = new MemoryCompositionRunner()
+    try {
+      const applyProvider = vi.fn(native.apply)
+      await runner.mount({ inject: ['mnemonMemory'], async apply(ctx: Context) {
+        const result = await spacesPlugin.installMemorySpaces(ctx, [{ instanceId: 'work-native', module: { ...native, apply: applyProvider }, config: undefined }])
+        expect(result).toBeUndefined()
+      } }, { instanceId: 'memory-spaces/custom:team' })
+      expect(applyProvider).toHaveBeenCalledOnce()
+      expect(runner.context.get('mnemonProvider', false)).toBeUndefined()
+      expect(runner.inspect().evaluation.sourceInstanceKeys).toEqual(['source:memory-spaces/custom:team'])
+      await expect(spacesPlugin.apply(new Context(), { providers: ['not-installed'] })).rejects.toThrow('DSH Loader')
+      await expect(runner.mount(spacesPlugin, { instanceId: 'duplicate', config: {
+        providers: ['dsh-mnemon-provider-mnemon-native', 'dsh-mnemon-provider-mnemon-native'],
+      } })).rejects.toThrow('duplicate Memory Space Provider child')
+    } finally { await runner.dispose() }
+  })
+})
+
+describe('dshmarket client-only shim Entries (#359)', () => {
+  const shimEntry = (name: string) => `include:dsh-market:mkt-client-${name}`
+  const cleanups: Array<() => Promise<void>> = []
+  afterEach(async () => { await Promise.all(cleanups.splice(0).map(cleanup => cleanup())) })
+
+  async function starterComposition() {
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-market-shim-'))
+    const runner = new MemoryCompositionRunner({
+      strategyTypeId: 'default-three-tier',
+      sourceConfiguration: source => source.manifest.typeId === 'runtime' || source.manifest.typeId === 'documents' ? { dataDir: directory } : {},
+    })
+    cleanups.push(async () => { await runner.dispose(); rmSync(directory, { recursive: true, force: true }) })
+    await runner.mount(strategyPlugin, { instanceId: 'include:mnemon-strategy-default-three-tier' })
+    await runner.mount(runtimePlugin, { instanceId: 'include:mnemon-source-runtime' })
+    await runner.mount(documentsPlugin, { instanceId: 'include:mnemon-source-documents' })
+    await runner.mount({ inject: ['mnemonMemory'], async apply(ctx: Context) {
+      await spacesPlugin.installMemorySpaces(ctx, [{ instanceId: native.id, module: native, config: undefined }])
+    } }, { instanceId: 'include:mnemon-source-memory-spaces' })
+    return runner
+  }
+
+  async function sourceKeys(runner: MemoryCompositionRunner) {
+    return (await runner.managementCatalog()).sources.map(source => source.sourceInstanceKey).sort()
+  }
+
+  it('adds no second Runtime Memory or Project Documents, so the layered View still composes', async () => {
+    const runner = await starterComposition()
+    const before = await sourceKeys(runner)
+    expect(before).toEqual(['source:include:mnemon-source-documents', 'source:include:mnemon-source-memory-spaces', 'source:include:mnemon-source-runtime'])
+    await runner.mount(runtimePlugin, { instanceId: shimEntry('dsh-mnemon-source-runtime') })
+    await runner.mount(documentsPlugin, { instanceId: shimEntry('dsh-mnemon-source-documents') })
+    const turn = await runner.beginTurn()
+    expect(turn.view.sourcePresentations?.length).toBeGreaterThan(0)
+    turn.release()
+    expect(await sourceKeys(runner)).toEqual(before)
+  })
+
+  it('mounts Memory Spaces there without its Providers and without an error', async () => {
+    const runner = await starterComposition()
+    const before = await sourceKeys(runner)
+    await runner.mount(spacesPlugin, { instanceId: shimEntry('dsh-mnemon-source-memory-spaces') })
+    expect(await sourceKeys(runner)).toEqual(before)
+  })
+
+  it('still composes a second configured instance under an ordinary Entry', async () => {
+    const runner = await starterComposition()
+    await runner.mount(runtimePlugin, { instanceId: 'runtime-work' })
+    await expect(runner.mount(spacesPlugin, { instanceId: 'spaces-work' })).rejects.toThrow('at least one explicit Provider child')
+    expect(await sourceKeys(runner)).toContain('source:runtime-work')
+  })
+})
+
+describe('DSH-native Memory plugin installation', () => {
+  const roots: string[] = []
+  afterEach(async () => { await Promise.all(roots.splice(0).map(path => rm(path, { recursive: true, force: true }))) })
+
+  async function profile() {
+    const root = await mkdtemp(join(tmpdir(), 'mnemon-plugin-install-'))
+    roots.push(root)
+    const directory = join(root, 'profiles', 'web')
+    await mkdir(directory, { recursive: true })
+    await writeFile(join(directory, 'cordis.yml'), '[]\n')
+    await writeFile(join(directory, 'package.json'), JSON.stringify({ name: 'dsh-profile-web', private: true, dependencies: {}, dsh: { profile: { bundles: [] } } }, null, 2))
+    const loader = { entries: () => [], config: { baseUrl: pathToFileURL(join(directory, 'cordis.yml')).href } }
+    const documents = new Map<string, { value: Record<string, unknown>; revision: number; validate?: (value: never) => void }>()
+    const listeners = new Map<string, Set<(...args: any[]) => void>>()
+    const emit = (name: string, ...args: any[]) => { for (const listener of listeners.get(name) ?? []) listener(...args) }
+    const settings: HostSettingsService = {
+      writable: true,
+      register: (namespace, _schema, options) => {
+        if (!documents.has(namespace)) documents.set(namespace, { value: structuredClone(options.base ?? {}) as Record<string, unknown>, revision: 0,
+          ...(options.validate === undefined ? {} : { validate: options.validate as (value: never) => void }) })
+        return { get: () => documents.get(namespace)!.value as never }
+      },
+      describe: () => [...documents].map(([ns, value]) => ({ ns, value: value.value, revision: value.revision, applies: 'live' as const })),
+      mutate: vi.fn(async (namespace, operations, expectedRevision) => {
+        const current = documents.get(namespace)!
+        if (expectedRevision !== undefined && expectedRevision !== current.revision) throw new Error('Settings changed concurrently')
+        const next = structuredClone(current.value)
+        for (const operation of operations) {
+          if (operation.op !== 'set' || operation.path.length !== 1) throw new Error('Unexpected settings mutation')
+          next[operation.path[0]!] = structuredClone(operation.value)
+        }
+        current.validate?.(next as never)
+        current.value = next
+        current.revision += 1
+        emit('settings/updated', namespace, next)
+      }),
+      onUpdated: listener => {
+        const entries = listeners.get('settings/updated') ?? new Set()
+        entries.add(listener)
+        listeners.set('settings/updated', entries)
+        return () => { entries.delete(listener) }
+      },
+    }
+    const ctx = {
+      settings,
+      get: (name: string) => name === 'loader' ? loader : undefined,
+      on: (name: string, listener: (...args: any[]) => void) => {
+        const entries = listeners.get(name) ?? new Set()
+        entries.add(listener)
+        listeners.set(name, entries)
+        return () => { entries.delete(listener) }
+      },
+    } as unknown as HostContextShape
+    return { root, directory, ctx, settings, documents, emit }
+  }
+
+  const registryManifest = (name = 'dsh-mnemon-strategy-focus') => ({
+    name, version: '0.5.0-beta.4', description: 'A bounded test Strategy.',
+    peerDependencies: { 'dsh-mnemon': '^0.5.0-beta.1' }, dsh: { bundle: { patch: './cordis.patch.yml' } },
+  })
+
+  it('reports the exact active Profile and keeps suggestions distinct from activation', async () => {
+    const f = await profile()
+    const manager = new MemoryPluginInstallation(f.ctx, { resolveDshCommand: () => ({ command: '/fake/dsh', prefix: [] }) })
+    expect(manager.environment()).toEqual({ supported: true, profileName: 'web', suggestions: [
+      'dsh-mnemon-strategy-scoped', 'dsh-mnemon-strategy-light-context', 'dsh-mnemon-strategy-auto-capture',
+    ] })
+  })
+
+  it('discovers a compatible Source or Strategy only from an exact package name', async () => {
+    const f = await profile()
+    const fetchPackage = vi.fn(async (name: string, _tag: string) => registryManifest(name))
+    const manager = new MemoryPluginInstallation(f.ctx, { currentVersion: '0.5.0-beta.1', fetchPackage,
+      resolveDshCommand: () => ({ command: '/fake/dsh', prefix: [] }) })
+    await expect(manager.inspect('dsh-mnemon-strategy-focus')).resolves.toEqual({
+      packageName: 'dsh-mnemon-strategy-focus', version: '0.5.0-beta.4', kind: 'strategy',
+      description: 'A bounded test Strategy.', mnemonPeerRange: '^0.5.0-beta.1', installed: false,
+    })
+    expect(fetchPackage).toHaveBeenCalledWith('dsh-mnemon-strategy-focus', 'beta')
+    await expect(manager.inspect('file:../plugin')).rejects.toThrow('exact dsh-mnemon')
+  })
+
+  it('rejects packages that cannot join the DSH bundle stack', async () => {
+    const f = await profile()
+    const manager = new MemoryPluginInstallation(f.ctx, { fetchPackage: async name => ({ ...registryManifest(name), dsh: undefined }),
+      resolveDshCommand: () => ({ command: '/fake/dsh', prefix: [] }) })
+    await expect(manager.inspect('dsh-mnemon-source-notes')).rejects.toThrow('bundle patch')
+  })
+
+  it('installs an inspected exact version through the current DSH Profile and verifies registration', async () => {
+    const f = await profile()
+    const processRunner = vi.fn(async (command: string, args: readonly string[], options: ProcessOptions) => {
+      const value = JSON.parse(await readFile(join(f.directory, 'package.json'), 'utf8')) as Record<string, any>
+      value.dependencies['dsh-mnemon-strategy-focus'] = '0.5.0-beta.4'
+      value.dsh.profile.bundles.push('dsh-mnemon-strategy-focus')
+      await writeFile(join(f.directory, 'package.json'), JSON.stringify(value, null, 2))
+      expect(command).toBe(process.execPath)
+      expect(args).toEqual(['/opt/dsh/lib/bin.js', 'plugin', '--profile', 'web', 'add', 'dsh-mnemon-strategy-focus@0.5.0-beta.4', '--save-exact'])
+      expect(options.env?.DSH_HOME).toBe(f.root)
+      return { stdout: '', stderr: '', exitCode: 0 }
+    })
+    const manager = new MemoryPluginInstallation(f.ctx, { currentVersion: '0.5.0-beta.1', fetchPackage: async name => registryManifest(name), processRunner,
+      resolveDshCommand: () => ({ command: process.execPath, prefix: ['/opt/dsh/lib/bin.js'] }) })
+    await expect(manager.install('dsh-mnemon-strategy-focus', '0.5.0-beta.4')).resolves.toEqual({
+      packageName: 'dsh-mnemon-strategy-focus', version: '0.5.0-beta.4', profileName: 'web', installed: true, restartRequired: true,
+    })
+    expect(processRunner).toHaveBeenCalledOnce()
+  })
+
+  it('requires a Loader-owned Profile and rechecks the inspected version', async () => {
+    const noLoader = { get: () => undefined } as unknown as HostContextShape
+    expect(new MemoryPluginInstallation(noLoader).environment()).toMatchObject({ supported: false, reason: 'loader-unavailable' })
+    const f = await profile()
+    const manager = new MemoryPluginInstallation(f.ctx, { fetchPackage: async name => registryManifest(name), resolveDshCommand: () => ({ command: '/fake/dsh', prefix: [] }) })
+    await expect(manager.install('dsh-mnemon-strategy-focus', '0.5.0-beta.3')).rejects.toThrow('version changed')
+  })
+})
+
+describe('profile generation imports against host-owned framework packages', () => {
+  const repoRoot = fileURLToPath(new URL('../', import.meta.url))
+  const repoManifest = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'))
+
+  function generation() {
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-generation-import-'))
+    const profile = join(directory, 'profiles/web')
+    const installed = join(directory, 'profiles/.generations/live/mnemon/node_modules')
+    const packageRoot = join(installed, 'dsh-mnemon')
+    mkdirSync(packageRoot, { recursive: true })
+    cpSync(join(repoRoot, 'lib'), join(packageRoot, 'lib'), { recursive: true })
+    writeFileSync(join(packageRoot, 'package.json'), JSON.stringify(repoManifest))
+
+    const dependencies = { ...repoManifest.dependencies, ...repoManifest.peerDependencies }
+    const hostModules = join(directory, 'profiles/node_modules')
+    for (const name of Object.keys(dependencies)) {
+      const target = join(name.startsWith('@deepseek-ai/') ? hostModules : installed, name)
+      mkdirSync(dirname(target), { recursive: true })
+      symlinkSync(join(repoRoot, 'node_modules', name), target, 'junction')
+    }
+    mkdirSync(join(profile, 'node_modules'), { recursive: true })
+    symlinkSync(packageRoot, join(profile, 'node_modules/dsh-mnemon'), 'junction')
+    return { directory, profile }
+  }
+
+  it('loads the complete built Starter with the host Cosmokit and live configuration', () => {
+    const fixture = generation()
+    try {
+      const entry = join(fixture.profile, 'check.mjs')
+      writeFileSync(entry, `
+        import assert from 'node:assert/strict'
+        import * as mnemon from 'dsh-mnemon'
+        const config = mnemon.Config({ displayMode: 'builtin', remoteAccess: 'read-only' })
+        assert.equal(typeof config.displayMode?.get, 'function')
+        assert.equal(config.displayMode.get(), 'builtin')
+        assert.equal(config.remoteAccess, 'read-only')
+        assert.equal(typeof mnemon.apply, 'function')
+        assert.equal(mnemon.name, 'dsh-mnemon')
+        console.log(JSON.stringify({ loaded: true }))
+      `)
+      const result = spawnSync(process.execPath, [entry], { encoding: 'utf8', timeout: 20_000 })
+      expect(result.error).toBeUndefined()
+      expect(result.status, result.stderr).toBe(0)
+      expect(JSON.parse(result.stdout)).toEqual({ loaded: true })
+    } finally { rmSync(fixture.directory, { recursive: true, force: true }) }
   })
 })

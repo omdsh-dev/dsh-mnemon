@@ -1,6 +1,10 @@
 import { vi } from 'vitest'
 import type { ClientSettingsScope, ClientSettingsSnapshot } from '../../src/host/protocol.ts'
 
+export function readySnapshot<T>(value: T, overrides: Partial<ClientSettingsSnapshot<T>> = {}): ClientSettingsSnapshot<T> {
+  return { status: 'ready', value, base: {} as T, user: {} as T, revision: 0, writable: true, mode: 'host', ...overrides }
+}
+
 /**
  * Settings scope fake over one published snapshot. Reads go through the
  * receiver like DSH's own scopes, so an unbound read fails the test; writes
@@ -26,6 +30,10 @@ export function liveSettingsScope<T extends object>(snapshot: ClientSettingsSnap
     snapshot: snapshot.value === undefined || readback === undefined ? snapshot : { ...snapshot, value: readback(snapshot.value) },
     getSnapshot() { return this.snapshot },
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener) } },
+    publish(next: ClientSettingsSnapshot<T>) {
+      scope.snapshot = next
+      for (const listener of [...listeners]) listener()
+    },
     async mutate(operations: Parameters<ClientSettingsScope<T>['mutate']>[0]) {
       await mutate(operations)
       const value = structuredClone(scope.snapshot.value ?? {}) as Record<string, unknown>
@@ -39,6 +47,6 @@ export function liveSettingsScope<T extends object>(snapshot: ClientSettingsSnap
       scope.snapshot = { ...scope.snapshot, value: readback === undefined ? value as T : readback(value as T), revision: (scope.snapshot.revision ?? 0) + 1 }
       for (const listener of listeners) listener()
     },
-  } satisfies ClientSettingsScope<T> & { snapshot: ClientSettingsSnapshot<T> }
+  } satisfies ClientSettingsScope<T> & { snapshot: ClientSettingsSnapshot<T>; publish: (next: ClientSettingsSnapshot<T>) => void }
   return scope
 }

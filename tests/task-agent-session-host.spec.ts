@@ -1,28 +1,35 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
-import AgentRegistry from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import LlmRuntime, { LlmAdapter, createUserMessage, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { LlmAdapter, createUserMessage, type ContentBlock, type GenerateOptions, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import SessionQueryEngine from '@deepseek-ai/dsh-session-query'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
+import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import { afterEach, expect, it, vi } from 'vitest'
-import type { ToolExecutionInput } from '@deepseek-ai/dsh-tools'
-import type { HostAgent, HostContextShape, HostSession } from '../src/host/dsh.ts'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { ToolExecutionInput, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
+import type { HostAgent, HostContextShape, HostSession, HostSubagentRun } from '../src/host/dsh.ts'
 import type { DocumentView } from 'dsh-mnemon-source-documents/contracts'
 import type { RuntimeMemorySnapshot } from 'dsh-mnemon-source-runtime/contracts'
-import type { Insight, PreparedMemoryPlacement } from 'dsh-mnemon-source-memory-spaces/contracts'
+import type { Insight, MemorySpaceCatalog, MemorySpaceView, PreparedMemoryPlacement } from 'dsh-mnemon-source-memory-spaces/contracts'
+import { startWithContinuationTurns } from '../src/host/continuation-turn.ts'
 import { MnemonLifecycle } from '../src/host/lifecycle.ts'
+import { startGuardedReview } from '../src/host/review-tools.ts'
 import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
 import { startSubagent } from '../src/host/subagent-start.ts'
 import { registerTools } from '../src/host/tools.ts'
 import { createPluginMessage } from '../src/host/plugin-message.ts'
-import { createRuntimeGraph } from '../src/host/runtime.ts'
+import { createRuntimeGraph, LiveMnemonRuntime } from '../src/host/runtime.ts'
 import { resolveConfig } from '../src/host/config.ts'
 import { compositionFixture } from './fixtures/composition.ts'
 import { JsonlSessionPersistence } from './helpers/dsh-plugins.ts'
 import { executeTool, loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
+import { memoryGraphFixture } from './helpers/memory-graph.ts'
 
 // The released Host hides detached task sessions (#435). Activation-owned master requires
 // ordinary task roots, discoverable through ACP. The WebUI hides non-current blank roots;
@@ -37,6 +44,7 @@ const sessionQuery = await import(requireDsh.resolve('@deepseek-ai/dsh-session-q
 // DSH's ACP agent plugin takes its message stream from `config.stream`, as its own tests give it one.
 const acp = await import(requireDsh.resolve('@deepseek-ai/dsh-acp')) as { inject: string[]; apply(ctx: Context, config: object): void }
 
+describe('task agent session host', () => {
 type Message = GenerateOptions['messages'][number]
 type Reply = string | { name: string; args: Record<string, unknown> }
 type Header = NonNullable<HostSession['header']> & { id: string }
@@ -735,3 +743,547 @@ it('first human steer receives fresh View guidance after an automatic first step
     expect(humanPrompt).toContain('This is a new user request in a completed Mnemon task conversation.')
   } finally { stop(); await task.dispose() }
 }, 30_000)
+})
+
+describe('agent ownership host', () => {
+  async function fixture(provider: 'spawn' | 'fork', hold: boolean | ((options: GenerateOptions) => boolean) = false, answer = false, providerName = provider as string) {
+    const directory = await mkdtemp(join(tmpdir(), 'mnemon-ownership-host-'))
+    const ctx = new Context()
+    const memory = memoryGraphFixture()
+    const runtime = new LiveMnemonRuntime(memory.graph, undefined, undefined, memory.extensions)
+    let modelCalls = 0, toolTurns = 0, allowedCalls = 0, outsideCalls = 0
+    class Model extends LlmAdapter {
+      override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+        modelCalls++
+        if (JSON.stringify(options.messages).includes('Perform a synthetic review.')) {
+          expect(JSON.stringify(options.messages.filter(message => message.role === 'system'))).toContain('Synthetic isolated reviewer.')
+        }
+        if (typeof hold === 'function' ? hold(options) : hold) await new Promise<void>((resolve, reject) => {
+          options.signal?.addEventListener('abort', () => reject(options.signal?.reason), { once: true })
+          if (options.signal?.aborted) reject(options.signal.reason)
+        })
+        const modelTurn = ++toolTurns
+        const name = answer ? 'mnemon_subagent_result' : modelTurn === 1 ? 'outside' : modelTurn === 2 ? 'allowed' : undefined
+        if (name !== undefined) {
+          const id = `ownership-${modelCalls}` as Extract<StreamChunk, { type: 'tool-call-delta' }>['id']
+          const requestId = JSON.stringify(options.messages.filter(message => message.role === 'system')).match(/requestId `([^`]+)`/u)?.[1]
+          const args = answer ? JSON.stringify({ requestId, result: { answer: 'Synthetic answer.', citations: [] } }) : '{}'
+          yield { type: 'block-start', index: 0, blockType: 'tool-call' }
+          yield { type: 'tool-call-delta', index: 0, id, name, argumentsDelta: args }
+          yield { type: 'block-end', index: 0, block: { type: 'tool-call', id, name, arguments: args } }
+          yield { type: 'finish', reason: { kind: 'tool-calls' } }
+        } else {
+          yield { type: 'block-start', index: 0, blockType: 'text' }
+          yield { type: 'text-delta', index: 0, text: 'Synthetic review complete.' }
+          yield { type: 'block-end', index: 0, block: { type: 'text', text: 'Synthetic review complete.' } }
+          yield { type: 'finish', reason: { kind: 'stop' } }
+        }
+      }
+    }
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(JsonlSessionPersistence, { root: directory, compression: 'none' })
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(SystemPrompt)
+    await loadTools(ctx)
+    await ctx.plugin(AgentRegistry)
+    await ctx.plugin(AgentLoop, { agents: [] })
+    await loadWorkingDirectory(ctx)
+    await ctx.plugin(SubagentRuntime)
+    const providerFiber = await ctx.plugin(await import(requireDsh.resolve(`@deepseek-ai/dsh-subagent-${provider}-in-process`)), { providerName })
+    ctx.llm.registerAdapter(['fixture'], new Model())
+    for (const name of ['allowed', 'outside']) ctx.tools.register({ name, description: name, parameters: { type: 'object', properties: {} }, output: { schema: { type: 'object' }, render: () => [{ type: 'text', text: 'ok' }] }, async execute() {
+      if (name === 'allowed') allowedCalls++; else outsideCalls++
+      return {}
+    } })
+    const host = ctx as unknown as HostContextShape
+    const parent = await ctx.agentLoop.create(SessionId('ownership-parent'), { provider: 'fixture', model: 'synthetic' }, { cwd: directory })
+    const coordinator = new MnemonSubagentCoordinator(host.subagents, runtime, host)
+    const lifecycle = new MnemonLifecycle(host, coordinator, memory.graph.config, runtime)
+    let stop: (() => void) | undefined
+    const children: HostAgent[] = []
+    ctx.on('agent/created', ({ agent }) => { if (agent.id !== parent.id) children.push(agent as unknown as HostAgent); return undefined })
+    const begin = () => { stop = lifecycle.start(); return stop }
+    const start = (signal = new AbortController().signal, creator = parent as unknown as HostAgent) => startGuardedReview(host, creator, ['allowed'], () => startWithContinuationTurns(host, creator, () => startSubagent(host.subagents, host.agents, provider, {
+      parent: creator, label: 'Synthetic ownership review', prompt: [{ type: 'text', text: 'Perform a synthetic review.' }], signal,
+      toolFilter: { allow: ['allowed'] }, persona: 'Synthetic isolated reviewer.',
+    }, host)))
+    return { ctx, host, parent, coordinator, lifecycle, runtime, memory, children, begin, start, providerFiber, counts: () => ({ modelCalls, allowedCalls, outsideCalls }), async close() {
+      stop?.(); coordinator.dispose(); runtime.dispose(); await ctx.fiber.dispose(); await rm(directory, { recursive: true, force: true })
+    } }
+  }
+
+  it.skipIf(typeof SubagentRuntime.prototype !== 'object' || !('resolveName' in SubagentRuntime.prototype))('keeps repeated memory workers recognizable and addressable after completion (#616)', async () => {
+    const f = await fixture('spawn', false, true)
+    try {
+      await f.ctx.plugin(sessionQuery.default)
+      const caller = f.parent as unknown as HostAgent
+      const signal = new AbortController().signal
+      const runs = await Promise.all([1, 2].map(() => f.coordinator.answer(caller, 'Synthetic question', [], signal)))
+      const service = f.ctx.subagents as unknown as {
+        listDescendants(id: string): Promise<Array<{ id: string; name: string }>>
+        resolveName(agent: unknown, name: string, signal: AbortSignal): Promise<string>
+      }
+      const catalog = await service.listDescendants(f.parent.id)
+      expect(catalog).toHaveLength(2)
+      expect(new Set(catalog.map(child => child.name)).size).toBe(2)
+      for (const child of catalog) {
+        expect(child.name).toMatch(/^mnemon-answer-[a-f0-9]{16}$/u)
+        expect(await service.resolveName(f.parent, child.name, signal)).toBe(child.id)
+        expect(runs.some(run => run.delegation.runId === child.id)).toBe(true)
+        expect(f.host.agents.get(child.id)).toBeUndefined()
+      }
+    } finally { await f.close() }
+  })
+
+  it.each(['spawn', 'fork'] as const)('adopts roots and runs an isolated guarded %s child using real Host ownership', async provider => {
+    const f = await fixture(provider)
+    try {
+      f.begin()
+      expect(f.lifecycle.snapshot().activeAgents).toBe(1)
+      const fresh = await f.ctx.agentLoop.create(SessionId('ownership-new-root'), { provider: 'fixture', model: 'synthetic' })
+      expect(f.lifecycle.snapshot().activeAgents).toBe(2)
+      const run = await f.start()
+      const result = await run.result
+      expect(result.stopReason).toBe('completed')
+      expect(f.counts()).toEqual({ modelCalls: 3, allowedCalls: 1, outsideCalls: 0 })
+      expect(f.lifecycle.snapshot().activeAgents).toBe(2)
+      await run.dispose()
+      expect(f.host.agents.get(run.id)).toBeUndefined()
+      expect(f.memory.views.activeTurn(run.id)).toBeUndefined()
+      await fresh.ctx.fiber.dispose()
+    } finally { await f.close() }
+  })
+
+  it('guards a real nested creator before work, while the production coordinator rejects its depth', async () => {
+    const f = await fixture('spawn', options => JSON.stringify(options.messages).includes('Hold the synthetic creator.'))
+    let creator: HostSubagentRun | undefined, nested: HostSubagentRun | undefined
+    try {
+      f.begin()
+      creator = await startSubagent(f.host.subagents, f.host.agents, 'spawn', {
+        parent: f.parent as unknown as HostAgent, label: 'Synthetic resident creator',
+        prompt: [{ type: 'text', text: 'Hold the synthetic creator.' }], signal: new AbortController().signal,
+      }, f.host)
+      await vi.waitFor(() => expect(f.counts().modelCalls).toBe(1))
+      const parent = f.host.agents.get(creator.id)!
+      const childCount = f.children.length
+      await expect(f.coordinator.answer(parent, 'Synthetic question', [], new AbortController().signal)).rejects.toThrow(/depth/iu)
+      expect(f.children).toHaveLength(childCount)
+      expect(f.counts().modelCalls).toBe(1)
+      nested = await f.start(new AbortController().signal, parent)
+      await nested.result
+      expect(f.counts()).toEqual({ modelCalls: 4, allowedCalls: 1, outsideCalls: 0 })
+      await nested.dispose()
+      expect(f.host.agents.get(nested.id)).toBeUndefined()
+    } finally { await nested?.dispose(); await creator?.dispose(); await f.close() }
+  })
+
+  it.each(['spawn', 'fork'] as const)('stops a running %s child on abort and releases its memory pin', async provider => {
+    const f = await fixture(provider, true)
+    const controller = new AbortController()
+    let run: HostSubagentRun | undefined
+    try {
+      f.begin()
+      run = await f.start(controller.signal)
+      await vi.waitFor(() => expect(f.counts().modelCalls).toBe(1))
+      expect(f.memory.views.activeTurn(run.id)).toBeDefined()
+      controller.abort(new Error('Synthetic cancellation'))
+      await run.result
+      await run.dispose()
+      expect(f.host.agents.get(run.id)).toBeUndefined()
+      expect(f.memory.views.activeTurn(run.id)).toBeUndefined()
+      expect(f.counts().allowedCalls).toBe(0)
+    } finally { await run?.dispose(); await f.close() }
+  })
+
+  it.each((['spawn', 'fork'] as const).flatMap(provider => (['guard', 'section'] as const).map(failure => ({ provider, failure }))))('admits no prompt or model call when $provider publication $failure fails', async ({ provider, failure }) => {
+    const f = await fixture(provider)
+    try {
+      f.begin()
+      if (failure === 'section') {
+        const original = SystemPrompt.prototype.section
+        vi.spyOn(SystemPrompt.prototype, 'section').mockImplementation(function (this: SystemPrompt, options) {
+          if (options.text === 'Synthetic isolated reviewer.') throw new Error('Synthetic publication failure')
+          return original.call(this, options)
+        })
+      } else {
+        vi.spyOn(Object.getPrototypeOf(f.ctx.tools) as typeof f.ctx.tools, 'guard').mockImplementation(() => { throw new Error('Synthetic publication failure') })
+      }
+      await expect(f.start()).rejects.toThrow('Synthetic publication failure')
+      expect(f.counts()).toEqual({ modelCalls: 0, allowedCalls: 0, outsideCalls: 0 })
+      expect(f.host.agents.list?.().filter(agent => agent.id !== f.parent.id)).toEqual([])
+      expect(f.children.every(child => f.host.agents.get(child.id) === undefined)).toBe(true)
+      for (const child of f.children) {
+        expect(child.session.snapshotEvents().some(event => event.type === 'user/message' || event.type === 'turn/start')).toBe(false)
+        expect(f.memory.views.activeTurn(child.id)).toBeUndefined()
+      }
+    } finally { vi.restoreAllMocks(); await f.close() }
+  })
+
+  it('selects the official spawn provider and records the coordinator result on the running Host', async () => {
+    const f = await fixture('spawn', false, true)
+    try {
+      f.begin()
+      const result = await f.coordinator.answer(f.parent as unknown as HostAgent, 'Synthetic question', [], new AbortController().signal)
+      expect(result).toMatchObject({ answer: 'Synthetic answer.', citations: [], delegation: { provider: 'spawn' } })
+      expect(f.counts().modelCalls).toBe(1)
+      expect(f.host.agents.get(result.delegation.runId)).toBeUndefined()
+    } finally { await f.close() }
+  })
+
+  it('discovers a preloaded custom provider after Mnemon recreation and configuration changes on the real Host', async () => {
+    const f = await fixture('spawn', false, true, 'preloaded-local')
+    let coordinator = f.coordinator
+    const ask = () => coordinator.answer(f.parent as unknown as HostAgent, 'Synthetic question', [], new AbortController().signal)
+    try {
+      f.begin()
+      await expect(ask()).resolves.toMatchObject({ answer: 'Synthetic answer.', delegation: { provider: 'preloaded-local' } })
+      coordinator.dispose()
+      coordinator = new MnemonSubagentCoordinator(f.host.subagents, f.runtime, f.host)
+      await expect(ask()).resolves.toMatchObject({ delegation: { provider: 'preloaded-local' } })
+      await f.providerFiber.update({ providerName: 'renamed-local' })
+      await f.providerFiber.await()
+      await expect(ask()).resolves.toMatchObject({ delegation: { provider: 'renamed-local' } })
+      await f.providerFiber.dispose()
+      await expect(ask()).rejects.toThrow('requires a non-inheriting DSH subagent provider')
+      expect(f.counts().modelCalls).toBe(3)
+    } finally { coordinator.dispose(); await f.close() }
+  })
+})
+
+describe('asynchronous Recall with the real DSH host', () => {
+  type Response = string | { name: string; args: Record<string, unknown> }
+  const cleanups: Array<() => Promise<void>> = []
+  afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup() })
+
+  class SessionReads extends SessionQueryEngine {
+    override async searchSessions(): Promise<never> { throw new Error('unexpected full-text session search') }
+    override async searchEvents(): Promise<never> { throw new Error('unexpected full-text event search') }
+  }
+
+  class AsyncAdapter extends LlmAdapter {
+    private calls = 0
+    constructor(private readonly respond: (options: GenerateOptions) => Response | Promise<Response>) { super() }
+    override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+      const response = await this.respond(options)
+      options.signal?.throwIfAborted()
+      const id = `test-call-${++this.calls}` as Extract<StreamChunk, { type: 'tool-call-delta' }>['id']
+      if (typeof response === 'string') {
+        yield { type: 'block-start', index: 0, blockType: 'text' }
+        yield { type: 'text-delta', index: 0, text: response }
+        yield { type: 'block-end', index: 0, block: { type: 'text', text: response } }
+      } else {
+        const args = JSON.stringify(response.args)
+        yield { type: 'block-start', index: 0, blockType: 'tool-call' }
+        yield { type: 'tool-call-delta', index: 0, id, name: response.name, argumentsDelta: args }
+        yield { type: 'block-end', index: 0, block: { type: 'tool-call', id, name: response.name, arguments: args } }
+      }
+      yield { type: 'usage', usage: { inputTokens: 10, outputTokens: 5 } }
+      yield { type: 'finish', reason: { kind: typeof response === 'string' ? 'stop' : 'tool-calls' } }
+    }
+  }
+
+  async function gate(promise: Promise<void>, signal?: AbortSignal): Promise<void> {
+    const aborted = Promise.withResolvers<void>()
+    const abort = () => aborted.reject(signal?.reason)
+    signal?.addEventListener('abort', abort, { once: true })
+    try {
+      signal?.throwIfAborted()
+      await Promise.race([promise, aborted.promise])
+    } finally {
+      signal?.removeEventListener('abort', abort)
+    }
+  }
+
+  interface CompatibleSubagentContinuation {
+    followup?(parent: Agent, childId: SessionId, content: ContentBlock[], options: { source: { kind: 'user' }; signal: AbortSignal }): Promise<unknown>
+    sendMessage?(sender: Agent, targetId: SessionId, content: ContentBlock[], options: { signal: AbortSignal }): Promise<unknown>
+  }
+
+  async function continueChild(runtime: SubagentRuntime, parent: Agent, childId: SessionId, content: ContentBlock[]): Promise<void> {
+    const compatible = runtime as unknown as CompatibleSubagentContinuation
+    const signal = new AbortController().signal
+    if (typeof compatible.sendMessage === 'function') { await compatible.sendMessage(parent, childId, content, { signal }); return }
+    if (typeof compatible.followup === 'function') { await compatible.followup(parent, childId, content, { source: { kind: 'user' }, signal }); return }
+    throw new TypeError('Unsupported DSH subagent continuation API')
+  }
+
+  async function harness(respond: (options: GenerateOptions) => Response | Promise<Response>) {
+    const root = await mkdtemp(join(tmpdir(), 'mnemon-async-host-'))
+    const ctx = new Context()
+    const memory = memoryGraphFixture()
+    const runtime = new LiveMnemonRuntime(memory.graph, undefined, undefined, memory.extensions)
+    let stop: (() => void) | undefined
+    cleanups.push(async () => {
+      try { await ctx.fiber.dispose() } finally {
+        stop?.()
+        runtime.dispose()
+        await rm(root, { recursive: true, force: true })
+      }
+    })
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
+    await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(SessionReads)
+    await ctx.plugin(SystemPrompt)
+    await loadTools(ctx)
+    await ctx.plugin(AgentRegistry)
+    await ctx.plugin(AgentLoop, { agents: [] })
+    await loadWorkingDirectory(ctx)
+    await ctx.plugin(SubagentRuntime)
+    await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
+    ctx.llm.registerAdapter(['mock'], new AsyncAdapter(respond))
+    const host = ctx as unknown as HostContextShape
+    const coordinator = new MnemonSubagentCoordinator(host.subagents, runtime)
+    const lifecycle = new MnemonLifecycle(host, coordinator, memory.graph.config, runtime)
+    registerTools(host, runtime, coordinator, memory.extensions)
+    stop = lifecycle.start()
+    const children: Agent[] = []
+    const recalls: ToolExecutionResult[] = []
+    ctx.on('agent/created', ({ agent }): undefined => { if (agent.session.header.origin === 'subagent') children.push(agent) })
+    ctx.on('tools/result', (execution, result) => { if (execution.name === 'mnemon_recall') recalls.push(result) })
+    ctx.tools.register({
+      name: 'test_start_child',
+      description: 'Start one asynchronous child.',
+      parameters: { type: 'object', properties: {} },
+      output: { schema: { type: 'object', additionalProperties: true }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
+      async execute(_args, execution) {
+        if (execution.agent === undefined) throw new Error('test tool requires an Agent')
+        const subagents = ctx.subagents as unknown as { rootOf?: unknown; startContinuable?: (spec: unknown) => Promise<unknown>; startActivation?: (spec: unknown) => Promise<{ childId: string; messageId?: string }> }
+        const spec = { provider: 'spawn', label: 'Recall task', request: { parent: execution.agent, prompt: [{ type: 'text', text: 'Recall release history.' }] }, signal: execution.signal }
+        if (typeof subagents.startContinuable === 'function') return subagents.startContinuable(spec)
+        const activation = await subagents.startActivation!(typeof subagents.rootOf === 'function'
+          ? { provider: spec.provider, label: spec.label, ...spec.request, signal: spec.signal, delivery: 'parent' }
+          : { ...spec, delivery: 'parent' })
+        return { childId: activation.childId, messageId: activation.messageId }
+      },
+    })
+    const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' }, { cwd: root })
+    const runParent = async () => {
+      parent.followup(createUserMessage({ content: [{ type: 'text', text: 'Continue.' }], source: { kind: 'user' } }))
+      await parent.whenIdle()
+    }
+    return { ...memory, ctx, runtime, lifecycle, parent, children, recalls, runParent }
+  }
+
+  it('keeps the dispatch authority after parent completion, a later turn and a runtime swap', async () => {
+    const release = Promise.withResolvers<void>()
+    let parentCalls = 0
+    let childCalls = 0
+    const value = await harness(async options => {
+      if (options.sessionId === 'parent') return parentCalls++ === 0 ? { name: 'test_start_child', args: {} } : 'Parent done.'
+      if (childCalls++ === 0) {
+        await gate(release.promise, options.signal)
+        return { name: 'mnemon_recall', args: { query: 'release history' } }
+      }
+      return 'Child done.'
+    })
+    await value.runParent()
+    expect(value.children).toHaveLength(1)
+    const child = value.children[0]!
+    await vi.waitFor(() => expect(childCalls).toBe(1), { timeout: 5_000 })
+    const dispatchView = value.views.activeTurn(child.id)!.view.id
+    expect(value.views.activeTurn(value.parent.id)).toBeUndefined()
+    const replacement = memoryGraphFixture(['replacement'])
+    value.runtime.swap(replacement.graph)
+    await value.runParent()
+    expect(value.runtime.forAgent(child as unknown as HostAgent)).toBe(value.graph)
+    expect(value.views.activeTurn(child.id)!.view.id).toBe(dispatchView)
+    expect(value.lifecycle.snapshot().activeAgents).toBe(1)
+    release.resolve()
+    await vi.waitFor(() => expect(value.ctx.agents.get(child.id)).toBeUndefined(), { timeout: 5_000 })
+    expect(value.recalls).toEqual([expect.objectContaining({ isError: false, value: expect.objectContaining({ results: [expect.objectContaining({ memoryBodyId: 'project' })] }) })])
+    expect(value.search).toHaveBeenCalledOnce()
+    expect(replacement.search).not.toHaveBeenCalled()
+    expect(value.views.activeTurn(child.id)).toBeUndefined()
+    expect(value.runtime.forAgent(child as unknown as HostAgent)).toBe(replacement.graph)
+  }, 15_000)
+
+  it('gives a cold-resumed child a new pin and retrieval budget instead of replaying its previous activation', async () => {
+    let parentCalls = 0
+    let childCalls = 0
+    const value = await harness(options => {
+      if (options.sessionId === 'parent') return parentCalls++ === 0 ? { name: 'test_start_child', args: {} } : 'Parent done.'
+      const step = childCalls++ % 4
+      return step === 3 ? 'Child done.' : { name: 'mnemon_recall', args: { query: step === 0 ? 'release history' : step === 1 ? 'release details' : 'one query too many' } }
+    })
+    await value.runParent()
+    expect(value.children).toHaveLength(1)
+    const child = value.children[0]!
+    await vi.waitFor(() => expect(value.ctx.agents.get(child.id)).toBeUndefined(), { timeout: 5_000 })
+    expect(value.search).toHaveBeenCalledTimes(2)
+    const replacement = memoryGraphFixture(['replacement'])
+    value.runtime.swap(replacement.graph)
+    await continueChild(value.ctx.subagents, value.parent, child.id, [{ type: 'text', text: 'Recall release history again.' }])
+    await vi.waitFor(() => expect(value.ctx.agents.get(child.id)).toBeUndefined(), { timeout: 5_000 })
+    expect(value.children).toHaveLength(2)
+    expect(value.children[1]!.id).toBe(child.id)
+    expect(value.children[1]).not.toBe(child)
+    expect(replacement.search).toHaveBeenCalledTimes(2)
+    expect(value.recalls).toHaveLength(6)
+    expect(value.recalls.every(result => !result.isError)).toBe(true)
+    expect(value.recalls[3]).toMatchObject({ value: { query: 'release history', results: [expect.objectContaining({ memoryBodyId: 'replacement' })] } })
+    expect(value.views.activeTurn(child.id)).toBeUndefined()
+    expect(replacement.views.activeTurn(child.id)).toBeUndefined()
+  }, 15_000)
+})
+
+describe('remember target host (#387)', () => {
+  type Message = GenerateOptions['messages'][number]
+  type Reply = string | { name: string; args: Record<string, unknown> }
+  const text = (message: Message) => message.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')
+
+  class RememberAdapter extends LlmAdapter {
+    private calls = 0
+    constructor(private readonly respond: (options: GenerateOptions) => Reply) { super() }
+    override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+      const reply = this.respond(options)
+      const id = `call-${++this.calls}` as Extract<StreamChunk, { type: 'tool-call-delta' }>['id']
+      if (typeof reply === 'string') {
+        yield { type: 'block-start', index: 0, blockType: 'text' }
+        yield { type: 'text-delta', index: 0, text: reply }
+        yield { type: 'block-end', index: 0, block: { type: 'text', text: reply } }
+      } else {
+        const args = JSON.stringify(reply.args)
+        yield { type: 'block-start', index: 0, blockType: 'tool-call' }
+        yield { type: 'tool-call-delta', index: 0, id, name: reply.name, argumentsDelta: args }
+        yield { type: 'block-end', index: 0, block: { type: 'tool-call', id, name: reply.name, arguments: args } }
+      }
+      yield { type: 'usage', usage: { inputTokens: 10, outputTokens: 5 } }
+      yield { type: 'finish', reason: { kind: typeof reply === 'string' ? 'stop' : 'tool-calls' } }
+    }
+  }
+
+  const disposers: Array<() => Promise<void>> = []
+  afterEach(async () => { for (const dispose of disposers.splice(0)) await dispose() })
+
+  async function host(attempts: () => string[], options: { query?: boolean } = {}) {
+    const f = await compositionFixture()
+    const project = await f.memorySpace()
+    const spaces = f.graph.source('memory-spaces')
+    const trials = await spaces.mutate<MemorySpaceView>('body-create', { name: 'Tool trial batch 3', description: 'Results of tool trial batch 3: what each tool did in the third test batch.', providerId: 'holographic', active: true })
+    await spaces.mutate('remember', { memoryBodyId: trials.id, content: 'Batch 3 opened with the search tool.', category: 'fact', source: 'external' })
+    await spaces.mutate('body-update', { memoryBodyId: trials.id, active: false })
+    const ctx = new Context()
+    const tried: string[] = []
+    const seen: string[] = []
+    const resumed: string[] = []
+    const adapter = new RememberAdapter(options => {
+      if (options.sessionId === 'parent') return 'Noted.'
+      const users = options.messages.filter(message => message.role === 'user').map(text)
+      const resume = users.findLastIndex(message => message.includes('RESUME:'))
+      if (resume >= 0) {
+        const after = options.messages.slice(options.messages.findLastIndex(message => message.role === 'user' && text(message).includes('RESUME:')) + 1)
+        const answered = after.filter(message => message.role === 'tool').map(text)
+        if (answered.length === 0) return { name: 'mnemon_remember', args: { content: 'Resumed: the index rebuild took four minutes.', memoryBodyId: trials.id } }
+        resumed.push(...answered)
+        return 'Done.'
+      }
+      const system = JSON.stringify(options.messages.filter(message => message.role === 'system'))
+      const terminal = system.match(/Completion protocol: call `([^`]+)`/u)?.[1]
+      const requestId = system.match(/requestId `([^`]+)`/u)?.[1]
+      if (terminal === undefined || requestId === undefined) throw new Error('writer completion capability is missing')
+      const results = options.messages.filter(message => message.role === 'tool').map(text)
+      seen.splice(0, seen.length, ...results)
+      const plan = attempts()
+      const step = results.length
+      if (step < plan.length) {
+        tried.push(plan[step]!)
+        return { name: 'mnemon_remember', args: { content: 'Tool trial batch 3: the search tool returned stale results until the index was rebuilt.', memoryBodyId: plan[step]! } }
+      }
+      return { name: terminal, args: { requestId, result: { summary: 'Saved the batch 3 finding.', action: 'stored', memoryBodyIds: [plan.at(-1)!] } } }
+    })
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(JsonlSessionPersistence, { root: join(f.root, 'sessions'), compression: 'none' })
+    await ctx.plugin(SessionProjectionRegistry)
+    if (options.query === true) await ctx.plugin(sessionQuery.default)
+    await ctx.plugin(SystemPrompt)
+    await loadTools(ctx)
+    await ctx.plugin(AgentRegistry)
+    await ctx.plugin(AgentLoop, { agents: [] })
+    await loadWorkingDirectory(ctx)
+    await ctx.plugin(SubagentRuntime)
+    await ctx.plugin(spawn, { providerName: 'spawn' })
+    ctx.llm.registerAdapter(['scripted'], adapter)
+    const dshHost = ctx as unknown as HostContextShape
+    const coordinator = new MnemonSubagentCoordinator(dshHost.subagents, f.live, dshHost)
+    const lifecycle = new MnemonLifecycle(dshHost, coordinator, f.config, f.live)
+    registerTools(dshHost, f.live, coordinator, f.extensions)
+    const stop = lifecycle.start()
+    disposers.push(async () => { stop(); await ctx.fiber.dispose(); await f.dispose() })
+    const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'scripted', model: 'fixture' }, { cwd: f.workspace })
+    parent.followup(createUserMessage({ content: [{ type: 'text', text: 'We just finished tool trial batch 3.' }], source: { kind: 'user' } }))
+    await parent.whenIdle()
+    const directory = async () => new Map((await spaces.read<MemorySpaceCatalog>('body-directory')).items.map(body => [body.id, body]))
+    const holds = async (id: string, words: string) => ((await spaces.read<{ results: Array<{ memoryBodyId?: string; content: string }> }>('search', { query: words, memoryBodyIds: [id] })).results)
+      .some(result => result.content.includes(words))
+    const refusals = () => seen.filter(result => /requested for Memory Space|is switched off/u.test(result))
+    const agents = (ctx as unknown as { agents: { get(id: string): { whenIdle(): Promise<void> } | undefined } }).agents
+    return { coordinator, dsh: dshHost, agents, parent: parent as unknown as HostAgent, project: project.id, trials: trials.id, tried, refusals, resumed, directory, holds }
+  }
+
+  it('writes where mnemon_remember named, though another space describes the memory better', async () => {
+    let plan: string[] = []
+    const h = await host(() => plan)
+    plan = [h.trials, h.project]
+    const result = await h.coordinator.remember(h.parent, { content: 'Tool trial batch 3: the search tool returned stale results until the index was rebuilt.', memoryBodyId: h.project }, new AbortController().signal)
+    expect(h.tried).toEqual([h.trials, h.project])
+    expect(h.refusals()).toEqual([expect.stringContaining(`requested for Memory Space ${JSON.stringify(h.project)}`)])
+    expect(result).toMatchObject({ delegated: true, memoryBodyIds: [h.project] })
+    expect(result).not.toHaveProperty('activatedMemoryBodyIds')
+    expect(await h.holds(h.project, 'stale results')).toBe(true)
+    const spaces = await h.directory()
+    expect(spaces.get(h.trials)?.active).toBe(false)
+  })
+
+  it('never switches on an inactive space the caller did not name', async () => {
+    let plan: string[] = []
+    const h = await host(() => plan)
+    plan = [h.trials, h.project]
+    const result = await h.coordinator.remember(h.parent, { content: 'Tool trial batch 3: the search tool returned stale results until the index was rebuilt.' }, new AbortController().signal)
+    expect(h.refusals()).toEqual([expect.stringContaining(`Memory Space ${JSON.stringify(h.trials)} is switched off`)])
+    expect(result).toMatchObject({ memoryBodyIds: [h.project] })
+    expect((await h.directory()).get(h.trials)?.active).toBe(false)
+  })
+
+  it('refuses a switched-off space a model named before any writer runs', async () => {
+    let plan: string[] = []
+    const h = await host(() => plan)
+    plan = [h.trials]
+    await expect(h.coordinator.remember(h.parent, { content: 'Tool trial batch 3: the search tool returned stale results until the index was rebuilt.', memoryBodyId: h.trials }, new AbortController().signal))
+      .rejects.toThrow(`Memory Space ${JSON.stringify(h.trials)} (Tool trial batch 3) is switched off, and a write would switch it back on.`)
+    expect(h.tried).toEqual([])
+    expect((await h.directory()).get(h.trials)?.active).toBe(false)
+  })
+
+  it('writes to a switched-off space the user picked, switches it on and says so', async () => {
+    let plan: string[] = []
+    const h = await host(() => plan)
+    plan = [h.trials]
+    const result = await h.coordinator.remember(h.parent, { content: 'Tool trial batch 3: the search tool returned stale results until the index was rebuilt.', memoryBodyId: h.trials }, new AbortController().signal, { activateTarget: true })
+    expect(h.refusals()).toEqual([])
+    expect(result).toMatchObject({ memoryBodyIds: [h.trials], activatedMemoryBodyIds: [h.trials] })
+    expect((await h.directory()).get(h.trials)?.active).toBe(true)
+  })
+
+  it('refuses memory tools to a writer that finished, when another Agent sends it a message', async () => {
+    let plan: string[] = []
+    const h = await host(() => plan, { query: true })
+    plan = [h.project]
+    const signal = new AbortController().signal
+    const result = await h.coordinator.remember(h.parent, { content: 'Tool trial batch 3: the search tool returned stale results until the index was rebuilt.', memoryBodyId: h.project }, signal)
+    expect(result.memoryBodyIds).toEqual([h.project])
+    const subagents = h.dsh.subagents as unknown as { sendMessage?(sender: HostAgent, target: string, content: unknown, options: { signal: AbortSignal }): Promise<unknown> }
+    let delivered = false
+    try {
+      await subagents.sendMessage?.(h.parent, result.runId, [{ type: 'text', text: 'RESUME: save the rebuild time too.' }], { signal })
+      delivered = subagents.sendMessage !== undefined
+    } catch { /* This DSH keeps a finished child finished. */ }
+    await h.agents.get(result.runId)?.whenIdle()
+    await new Promise(resolve => setTimeout(resolve, 200))
+    expect(h.resumed).toEqual(delivered ? [expect.stringContaining('This Mnemon task has finished')] : [])
+    expect((await h.directory()).get(h.trials)?.active).toBe(false)
+  })
+})
