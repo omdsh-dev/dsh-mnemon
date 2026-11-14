@@ -2,7 +2,8 @@ import { resolve } from 'node:path'
 import type { MemoryOperationScope } from '../core/contracts/index.ts'
 import { isMemoryCompositionUnavailable } from '../core/generation.ts'
 import type { ComposableMemoryTurn } from '../core/turns.ts'
-import type { HostAgent } from './dsh.ts'
+import type { HostAgent, HostSession } from './dsh.ts'
+import { findSessionEvent, sessionEvents, sessionLength } from './session-events.ts'
 import { agentScope, type MnemonAgentRuntimeSource, type MnemonRuntimeGraph } from './runtime.ts'
 import { inspectMemoryView, modelMemoryWake } from './view-presentation.ts'
 import type { MemoryViewInspection } from './view-protocol.ts'
@@ -21,35 +22,49 @@ export interface PinnedAgentMemoryTurn {
   release(): void
 }
 
+interface SessionPosition {
+  offset: number
+  lastSeq: number | undefined
+  turn: number | undefined
+  step: { turn: number; step: number } | undefined
+}
+const positions = new WeakMap<HostSession, SessionPosition>()
+
+/** Only lifecycle metadata survives a read; even a very long open turn is scanned once. */
+function sessionPosition(session: HostSession): SessionPosition {
+  const end = sessionLength(session)
+  let position = positions.get(session)
+  if (position === undefined || end < position.offset || (position.offset > 0 && session.eventAt(position.offset - 1)?.seq !== position.lastSeq)) {
+    const boundary = findSessionEvent(session, event => event.type === 'turn/start' || event.type === 'turn/end')
+    position = { offset: boundary?.seq ?? end, lastSeq: boundary === undefined && end > 0 ? session.eventAt(end - 1)?.seq : undefined, turn: undefined, step: undefined }
+    positions.set(session, position)
+  }
+  for (const event of sessionEvents(session, position.offset, end)) {
+    if (event.type === 'turn/start') {
+      position.turn = typeof event.data.turn === 'number' ? event.data.turn : undefined
+      position.step = undefined
+    } else if (event.type === 'turn/end' && event.data.turn === position.turn) {
+      position.turn = undefined; position.step = undefined
+    } else if (event.type === 'step/start' && position.turn !== undefined && event.data.turn === position.turn && typeof event.data.step === 'number') {
+      position.step = { turn: position.turn, step: event.data.step }
+    } else if (event.type === 'step/end' && position.step?.turn === event.data.turn && position.step?.step === event.data.step) {
+      position.step = undefined
+    }
+    position.offset++
+    position.lastSeq = event.seq
+  }
+  return position
+}
+
 /** The durable log, not a parent session id, identifies the executing turn. */
 export function openAgentTurn(agent: HostAgent): number | undefined {
-  let open: number | undefined
-  for (const event of agent.session.snapshotEvents()) {
-    const turn = typeof event.data.turn === 'number' ? event.data.turn : undefined
-    if (event.type === 'turn/start' && turn !== undefined) open = turn
-    else if (event.type === 'turn/end' && turn === open) open = undefined
-  }
-  return open
+  return sessionPosition(agent.session).turn
 }
 
 /** PTC dispatch records belong to a real open step, not just an open turn. */
 export function openAgentStep(agent: HostAgent): { turn: number; step: number } | undefined {
-  let turn: number | undefined
-  let open: { turn: number; step: number } | undefined
-  for (const event of agent.session.snapshotEvents()) {
-    if (event.type === 'turn/start') {
-      turn = typeof event.data.turn === 'number' ? event.data.turn : undefined
-      open = undefined
-    } else if (event.type === 'turn/end' && event.data.turn === turn) {
-      turn = undefined
-      open = undefined
-    } else if (event.type === 'step/start' && turn !== undefined && event.data.turn === turn && typeof event.data.step === 'number') {
-      open = { turn, step: event.data.step }
-    } else if (event.type === 'step/end' && open?.turn === event.data.turn && open?.step === event.data.step) {
-      open = undefined
-    }
-  }
-  return open
+  const step = sessionPosition(agent.session).step
+  return step === undefined ? undefined : { ...step }
 }
 
 /**

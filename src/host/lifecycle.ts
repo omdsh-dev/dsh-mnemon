@@ -1,3 +1,4 @@
+import { findSessionEvent, sessionEvents, sessionTurnEvents, SessionEventCursor } from './session-events.ts'
 import { randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
@@ -116,11 +117,20 @@ function eventTurn(event: HostSessionEvent): number | undefined {
   return typeof event.data.turn === 'number' ? event.data.turn : undefined
 }
 
-function memoryToolCalls(events: readonly HostSessionEvent[], turn?: number): number {
-  return events.filter(event => event.type === 'tool/call'
-    && (turn === undefined || eventTurn(event) === turn)
-    && typeof event.data.name === 'string'
-    && event.data.name.startsWith('mnemon_')).length
+/** Small log-derived counters, updated from appended pages instead of retaining events. */
+class LifecycleLogProjection {
+  private readonly cursor = new SessionEventCursor()
+  memoryToolCalls = 0
+  readonly assistantCharacters = new Map<number, number>()
+
+  read(session: HostAgent['session']): this {
+    this.cursor.consume(session, event => {
+      if (event.type === 'tool/call' && typeof event.data.name === 'string' && event.data.name.startsWith('mnemon_')) this.memoryToolCalls++
+      const turn = eventTurn(event)
+      if (turn !== undefined && event.type === 'assistant/message') this.assistantCharacters.set(turn, (this.assistantCharacters.get(turn) ?? 0) + assistantEventTextLength(event))
+    }, () => { this.memoryToolCalls = 0; this.assistantCharacters.clear() })
+    return this
+  }
 }
 
 const REVIEW_SUBSTANTIVE_USER_CHARACTERS = 320
@@ -161,16 +171,19 @@ function assistantEventTextLength(event: HostSessionEvent): number {
     .reduce((total, length) => total + length, 0)
 }
 
-function completedToolActivity(events: readonly HostSessionEvent[], turn: number): { count: number; names: Set<string> } {
-  const count = events.filter(event => event.type === 'tool/result' && eventTurn(event) === turn).length
-  const names = new Set(events
-    .filter(event => event.type === 'tool/call' && eventTurn(event) === turn && typeof event.data.name === 'string')
-    .map(event => String(event.data.name)))
+function completedToolActivity(events: Iterable<HostSessionEvent>, turn: number): { count: number; names: Set<string> } {
+  let count = 0
+  const names = new Set<string>()
+  for (const event of events) {
+    if (eventTurn(event) !== turn) continue
+    if (event.type === 'tool/result') count++
+    if (event.type === 'tool/call' && typeof event.data.name === 'string') names.add(event.data.name)
+  }
   return { count, names }
 }
 
 /** Join the text content of an `assistant/message` event whose message id matches. */
-function assistantMessageText(events: readonly HostSessionEvent[], messageId: string): AssistantMessageText | null {
+function assistantMessageText(events: Iterable<HostSessionEvent>, messageId: string): AssistantMessageText | null {
   for (const event of events) {
     if (event.type !== 'assistant/message') continue
     const message = event.data.message as { id?: unknown; content?: Array<{ type?: unknown; text?: unknown }> } | undefined
@@ -205,6 +218,7 @@ class MnemonAgentLifecycle {
   private readonly guidedTurns = new Set<number>()
   private pendingSnapshot: PendingMemorySnapshot | undefined
   private readonly memoryActivity = new TurnActivityProjection()
+  private readonly log = new LifecycleLogProjection()
   private readonly turnActivity = new Map<number, {
     messageIds: Set<string>
     userTextLength: number
@@ -276,7 +290,7 @@ class MnemonAgentLifecycle {
       this.pendingSnapshot = undefined
       // An earlier Session observer may unload us during step/start publication,
       // before our own observer runs. Finish only this already accepted plan.
-      const started = pending === undefined ? undefined : this.agent.session.snapshotEvents().findLast(event => event.type === 'step/start')
+      const started = pending === undefined ? undefined : findSessionEvent(this.agent.session, event => event.type === 'step/start')?.event
       if (pending !== undefined && started !== undefined && eventTurn(started) === pending.turn && started.data.step === pending.step) {
         this.queueSnapshotRetirement(pending)
       }
@@ -294,7 +308,7 @@ class MnemonAgentLifecycle {
       startSource: this.startSource,
       primePending: this.primePending,
       guidedTurns: this.guidedTurns.size,
-      memoryToolCalls: memoryToolCalls(this.agent.session.snapshotEvents()),
+      memoryToolCalls: this.log.read(this.agent.session).memoryToolCalls,
       idleReviewPending: this.idleReviewTimer !== undefined,
       reviewRunning: this.reviewRunning,
       reviewActivity: this.reviewActivity(),
@@ -325,12 +339,12 @@ class MnemonAgentLifecycle {
 
   /** Incremental snapshot of settled Mnemon activity in this durable log. */
   turnMemoryActivities(): TurnMemoryActivitySnapshot {
-    return this.memoryActivity.snapshot(this.agent.session.snapshotEvents())
+    return this.memoryActivity.snapshotSession(this.agent.session)
   }
 
   /** Plain text of one finalized assistant message, from this agent's session log. */
   assistantMessageText(messageId: string): AssistantMessageText | null {
-    return assistantMessageText(this.agent.session.snapshotEvents(), messageId)
+    return assistantMessageText(sessionEvents(this.agent.session), messageId)
   }
 
   memoryWake(): MemoryWake | undefined {
@@ -428,7 +442,7 @@ class MnemonAgentLifecycle {
     this.recordComposedTurn(payload.turn)
     if (payload.signal.aborted || !this.restoreWatermark() || !this.idleReviewAllowed()) return
     const activity = this.ensureTurnActivity(payload.turn)
-    const tools = completedToolActivity(this.agent.session.snapshotEvents(), payload.turn)
+    const tools = completedToolActivity(sessionTurnEvents(this.agent.session, payload.turn), payload.turn)
     activity.toolCallCount = tools.count
     activity.toolNames = tools.names
     if (!this.reviewActivity().eligible || !this.reviewAdmitted(payload.turn)) return
@@ -519,7 +533,7 @@ class MnemonAgentLifecycle {
         return
       }
       if (this.agent.status !== 'idle') return
-      const completed = this.agent.session.snapshotEvents().some(event => event.type === 'turn/end' && eventTurn(event) === turn)
+      const completed = findSessionEvent(this.agent.session, event => event.type === 'turn/end' && eventTurn(event) === turn) !== undefined
       if (!completed || !this.reviewActivity().eligible || !this.reviewAdmitted(turn)) return
       void this.runIdleReview()
     }, Math.min(2_147_483_647, Math.max(this.config.idleReviewMs, (this.lastReviewAttemptAt ?? -Infinity) + this.config.idleReview.minIntervalMs - Date.now())))
@@ -733,13 +747,8 @@ class MnemonAgentLifecycle {
       explicitCandidate ||= activity.explicitCandidate
       completedNonMemoryTool ||= activity.toolCallCount > 0 && [...activity.toolNames].some(name => !name.startsWith('mnemon_'))
     }
-    const assistantTextLength = this.agent.session.snapshotEvents()
-      .filter(event => {
-        const turn = eventTurn(event)
-        return turn !== undefined && turns.has(turn)
-      })
-      .map(assistantEventTextLength)
-      .reduce((total, length) => total + length, 0)
+    const characters = this.log.read(this.agent.session).assistantCharacters
+    const assistantTextLength = [...turns].reduce((total, turn) => total + (characters.get(turn) ?? 0), 0)
     return explicitCandidate
       || totalUserTextLength >= REVIEW_SUBSTANTIVE_USER_CHARACTERS
       || assistantTextLength >= REVIEW_SUBSTANTIVE_ASSISTANT_CHARACTERS
