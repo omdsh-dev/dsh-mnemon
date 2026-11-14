@@ -20,7 +20,8 @@ assert(Number.isInteger(port) && port >= 0 && port <= 65535, 'Invalid port')
 await mkdir(state, { recursive: true, mode: 0o700 })
 assert.equal((await readdir(state)).length, 0, 'Use an empty disposable state directory')
 const workspace = join(state, 'workspace'), dshHome = join(state, 'dsh-home'), isolatedHome = join(state, 'home')
-for (const directory of [workspace, dshHome, isolatedHome]) await mkdir(directory, { recursive: true })
+const documents = join(state, 'documents'), agentsHome = join(state, 'agents-home')
+for (const directory of [workspace, dshHome, isolatedHome, documents, agentsHome]) await mkdir(directory, { recursive: true })
 const save = (name, value) => writeFile(join(state, name), typeof value === 'string' ? value : JSON.stringify(value, null, 2) + '\n', { mode: 0o600 })
 const run = (command, args, env = process.env) => new Promise((done, fail) => {
   const child = spawn(command, args, { cwd: workspace, env, stdio: ['ignore', 'pipe', 'pipe'] })
@@ -73,6 +74,7 @@ registryUrl = `http://127.0.0.1:${registry.address().port}`
 const preload = join(state, 'registry-preload.mjs')
 await writeFile(preload, `const originalFetch = globalThis.fetch;\nconst names = new Set(${JSON.stringify([...packages.keys()])});\nglobalThis.fetch = (input, init) => {\n  const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);\n  if (url.hostname === 'registry.npmjs.org' && names.has(decodeURIComponent(url.pathname).split('/')[1])) {\n    const target = ${JSON.stringify(registryUrl)} + url.pathname + url.search;\n    input = input instanceof Request ? new Request(target, input) : target;\n  }\n  return originalFetch(input, init);\n};\n`)
 const env = { ...process.env, HOME: isolatedHome, DSH_HOME: dshHome, DSH_TELEMETRY_DISABLED: '1',
+  DSH_AGENTS_HOME: agentsHome,
   MNEMON_DATA_DIR: join(state, 'data'), npm_config_registry: registryUrl, NPM_CONFIG_REGISTRY: registryUrl,
   npm_config_store_dir: join(state, 'pnpm-store'), NODE_OPTIONS: `--import=${preload}`,
   PATH: `${dirname(process.execPath)}:${process.env.PATH ?? ''}` }
@@ -82,6 +84,11 @@ if (values.previous) {
   const initialEnv = { ...env, NODE_OPTIONS: '', npm_config_registry: 'https://registry.npmjs.org', NPM_CONFIG_REGISTRY: 'https://registry.npmjs.org' }
   await save('previous-install.log', await run(process.execPath, [dshBin, 'plugin', '--profile', 'web', 'add', values.previous, '--registry', 'https://registry.npmjs.org'], initialEnv))
 }
+// macOS resolves Documents independently of HOME; isolate the first-use workspace too.
+const profile = join(dshHome, 'profiles', 'web'), patch = join(profile, 'cordis.patch.yml')
+await mkdir(profile, { recursive: true })
+const existingPatch = await readFile(patch, 'utf8').catch(error => { if (error.code === 'ENOENT') return ''; throw error })
+await writeFile(patch, existingPatch.replace(/^\[\][ \t]*$/mu, '') + '\n- id: workspace-controller\n  config:\n    documentsDirectory: ' + JSON.stringify(documents) + '\n', { mode: 0o600 })
 await save('candidates.json', [...packages.values()].map(pkg => ({ name: pkg.manifest.name, version: pkg.manifest.version, filename: basename(pkg.path), sha256: pkg.sha256, integrity: pkg.integrity })))
 const info = { pid: process.pid, state, workspace, dshHome, registryUrl, port, restarts: 0 }
 let child, output = '', stopping = false, restarting = false

@@ -1,0 +1,160 @@
+{
+  "timestamp": "2026-11-14T17:30:00.192073+00:00",
+  "rootVersion": "0.5.45",
+  "versions": [
+    {
+      "name": "dsh-mnemon",
+      "expected": "0.5.45",
+      "actual": "0.5.45",
+      "match": true,
+      "source": "immutable npm version"
+    },
+    {
+      "name": "dsh-mnemon-provider-byterover",
+      "expected": "0.5.7",
+      "actual": "0.5.7",
+      "match": true,
+      "source": "immutable npm version"
+    },
+    {
+      "name": "dsh-mnemon-provider-hindsight",
+      "expected": "0.5.7",
+      "actual": "0.5.7",
+      "match": true,
+      "source": "immutable npm version"
+    },
+    {
+      "name": "dsh-mnemon-provider-holographic",
+      "expected": "0.5.7",
+      "actual": "0.5.7",
+      "match": true,
+      "source": "immutable npm version"
+    },
+    {
+      "name": "dsh-mnemon-provider-honcho",
+      "expected": "0.5.5",
+      "actual": "0.5.5",
+      "match": true,
+      "source": "immutable npm version"
+    },
+    {
+      "name": "dsh-mnemon-provider-mem0",
+      "expected": "0.5.5",
+      "actual": "0.5.5",
+      "match": true,
+      "source": "immutable npm version"
+    },
+    {
+      "name": "dsh-mnemon-provider-mnemon-native",
+      "expected": "0.5.11",
+      "actual": "0.5.11",
+      "match": true,
+      "source": "immutable npm version"
+    },
+    {
+      "name": "dsh-mnemon-provider-openviking",
+      "expected": "0.5.10",
+      "actual": "0.5.10",
+      "match": true,
+      "source": "immutable npm version"
+    },
+    {
+      "name": "dsh-mnemon-provider-retaindb",
+      "expected": "0.5.6",
+      "actual": "0.5.6",
+      "match": true,
+      "source": "immutable npm version"
+    },
+    {
+      "name": "dsh-mnemon-provider-supermemory",
+      "expected": "0.5.5",
+      "actual": "0.5.5",
+      "match": true,
+      "source": "immutable npm version"
+    },
+    {
+      "name": "dsh-mnemon-source-documents",
+      "expected": "0.6.0",
+      "actual": "0.6.0",
+      "match": true,
+      "source": "immutable npm version"
+    },
+    {
+      "name": "dsh-mnemon-source-memory-spaces",
+      "expected": "0.5.27",
+      "actual": "0.5.27",
+      "match": true,
+      "source": "immutable npm version"
+    },
+    {
+      "name": "dsh-mnemon-source-runtime",
+      "expected": "0.5.19",
+      "actual": "0.5.19",
+      "match": true,
+      "source": "immutable npm version"
+    },
+    {
+      "name": "dsh-mnemon-source-skills",
+      "expected": "0.5.12",
+      "actual": "0.5.12",
+      "match": true,
+      "source": "immutable npm version"
+    },
+    {
+      "name": "dsh-mnemon-strategy-auto-capture",
+      "expected": "0.5.5",
+      "actual": "0.5.5",
+      "match": true,
+      "source": "immutable npm version"
+    },
+    {
+      "name": "dsh-mnemon-strategy-default-three-tier",
+      "expected": "0.5.13",
+      "actual": "0.5.13",
+      "match": true,
+      "source": "immutable npm version"
+    },
+    {
+      "name": "dsh-mnemon-strategy-general",
+      "expected": "0.5.2",
+      "actual": "0.5.2",
+      "match": true,
+      "source": "immutable npm version"
+    },
+    {
+      "name": "dsh-mnemon-strategy-light-context",
+      "expected": "0.5.6",
+      "actual": "0.5.6",
+      "match": true,
+      "source": "immutable npm version"
+    },
+    {
+      "name": "dsh-mnemon-strategy-scoped",
+      "expected": "0.5.5",
+      "actual": "0.5.5",
+      "match": true,
+      "source": "immutable npm version"
+    }
+  ],
+  "pinnedPackageCount": 19,
+  "versionMismatches": 0,
+  "candidatePackages": [],
+  "candidateFileCount": 0,
+  "contentMismatches": 0,
+  "executableBitMismatches": 0,
+  "fileSetMismatches": 0,
+  "hashes": {
+    "memories.json": {
+      "sha256": "fe5d97709cb3d40dc14450412de9906eac5776a9675d04e1fa71f7298bb27b94",
+      "bytes": 578
+    },
+    "MEMORY.md": {
+      "sha256": "07c9f29183ef2eb957e046028b26c602caf706baebb206bbaa0c3f4f9b069ca7",
+      "bytes": 77
+    },
+    "USER.md": {
+      "sha256": "ae28b3df84d60efe09c7cccd03cfa4a2f73f9cad7913e706c75c927094ae97ba",
+      "bytes": 75
+    }
+  }
+}
