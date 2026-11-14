@@ -59,7 +59,7 @@ function fixture(options: Config = {}): Fixture {
     sync: { status: vi.fn(), configure: vi.fn(), push: vi.fn(), preview: vi.fn(), pull: vi.fn() },
     reviews: ledger,
   }
-  const route = { graph, selectedWorkspace: { id: 'workspace', title: 'Fixture', path: '/fixture/workspace' }, selectedRoot: root, effectiveRoot: root, aligned: true, liveSession: true }
+  const route = { graph, participation: { excluded: false }, selectedWorkspace: { id: 'workspace', title: 'Fixture', path: '/fixture/workspace' }, selectedRoot: root, effectiveRoot: root, aligned: true, liveSession: true }
   const runtime = { config: graph.config, route: vi.fn(() => route), reviews: ledger } as unknown as LiveMnemonRuntime
   return { runtime, graph, ledger, root, runtimeSource, documentsSource }
 }

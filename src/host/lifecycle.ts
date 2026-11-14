@@ -23,6 +23,8 @@ import { applyMemoryViewGuidance } from './guidance.ts'
 import { modelMemoryWake } from './view-presentation.ts'
 import { strategyDrives, viewStrategy } from './strategy-workflows.ts'
 import { mainStrategyTypeId } from './main-strategy.ts'
+import { MEMORY_TOOLS } from './protocol.ts'
+import { WORKSPACE_MEMORY_EXCLUDED } from './workspace-exclusion.ts'
 import { AgentMemoryTurn, openAgentTurn, type DelegatedMemoryView } from './agent-memory-turn.ts'
 import type { AssistantMessageText, LifecycleAgentSnapshot, LifecycleCounters, LifecyclePhase, LifecycleSnapshot, ReviewActivityScore, SkillActivitySnapshot, SupervisedWritebackResult, TaskAgentModelCatalog } from "./protocol.ts"
 import type { PreparedMemoryPlacement } from 'dsh-mnemon-source-memory-spaces/contracts'
@@ -35,7 +37,7 @@ import type { SkillEvolution } from './skill-evolution.ts'
 import { IdleReviewWatermarkStore } from './idle-review-watermark.ts'
 import { activationOwned, contextIsActive, isInactiveContextError, isCreatingChild, isRootAgent, isTaskRecord, rootAgents, titleTask } from './agent-compat.ts'
 
-type AgentRuntimeSource = Pick<MnemonAgentRuntimeSource, 'config' | 'forAgent' | 'executions' | 'onChanged'>
+type AgentRuntimeSource = Pick<MnemonAgentRuntimeSource, 'config' | 'forAgent' | 'executions' | 'onChanged' | 'memoryParticipation'>
 
 interface HostDefaultModelService {
   currentSelection(): { provider: string; model: string; reasoningEffort?: string }
@@ -376,7 +378,7 @@ class MnemonAgentLifecycle {
       this.config.lifecycleEnabled ? this.memoryWake()?.text : undefined,
       this.config.lifecycleEnabled ? memorySnapshotState(this.memoryTurn?.current?.context.view) : undefined)
     this.pendingSnapshot = { turn: payload.turn, step: payload.step, signal: payload.signal, update }
-    if (!this.config.lifecycleEnabled) return decision
+    if (!this.config.lifecycleEnabled || this.memoryTurn?.excluded) return decision
     if (this.config.writeEnabled && this.config.writebackMode === 'guided') {
       this.recordTurnMessages(payload.turn, decision.messages)
     }
@@ -527,6 +529,7 @@ class MnemonAgentLifecycle {
 
   /** Resolve only the graph actually serving this parent, never a selected View or startup cwd. */
   private restoreWatermark(): boolean {
+    if (this.memoryTurn?.excluded) { this.watermarkEnabled = false; return false }
     if (!this.config.idleReview.persistWatermark) { this.watermarkEnabled = false; return true }
     try {
       const directory = this.runtimeDirectory?.()
@@ -554,6 +557,7 @@ class MnemonAgentLifecycle {
   }
 
   configurationChanged(): void {
+    if (this.memoryTurn?.excluded) { this.cancelIdleReview(true); this.memoryTurn.end() }
     const policy = this.reviewPolicy()
     if (policy !== this.observedReviewPolicy) {
       this.cancelIdleReview(true)
@@ -607,7 +611,7 @@ class MnemonAgentLifecycle {
 
   private idleReviewAllowed(reserved = false): boolean {
     return !this.disposed && contextIsActive(this.agent.ctx) && (!this.config.idleReview.persistWatermark || this.watermarkError === undefined)
-      && this.config.lifecycleEnabled && this.config.writeEnabled && this.config.writebackMode === 'guided'
+      && !this.memoryTurn?.excluded && this.config.lifecycleEnabled && this.config.writeEnabled && this.config.writebackMode === 'guided'
       && this.config.idleReview.enabled && (reserved || this.idleReviewAttempts < this.config.idleReview.maxPerSession)
       && idleReviewBlockReason(this.agent, this.config.idleReview.agentTeams) === undefined
       && this.strategyDrivesIdleReview()
@@ -809,6 +813,7 @@ export class MnemonLifecycle {
   private readonly owners = new Map<HostAgent, { lifecycle: MnemonAgentLifecycle; dispose: () => unknown }>()
   private readonly children = new Map<HostAgent, () => unknown>()
   private readonly memoryTurns = new Map<HostAgent, AgentMemoryTurn>()
+  private readonly workspacePolicies = new Map<HostAgent, { update(): void; dispose(): unknown }>()
   private readonly counters: LifecycleCounters = { primes: 0, recallCues: 0, writebackCues: 0, supervisedRequests: 0, failures: 0 }
   /** Creation ids reserved before DSH publishes clean task-root Agents. */
   private readonly taskAgentIds = new Set<string>()
@@ -866,15 +871,19 @@ export class MnemonLifecycle {
   start(): () => void {
     // DSH creates a new Agent for startup, resume, clear and compaction alike.
     const stopChanged = this.runtimeSource?.onChanged?.(() => {
+      for (const policy of this.workspacePolicies.values()) policy.update()
+      for (const memory of this.memoryTurns.values()) if (memory.excluded) memory.end()
       for (const { lifecycle } of this.owners.values()) lifecycle.configurationChanged()
     })
-    const stopCreated = this.ctx.on('agent/created', (({ agent, source }: SessionStartPayload) => { this.install(agent, source) }) as never)
+    const stopCreated = this.ctx.on('agent/created', (({ agent, source }: SessionStartPayload) => { this.install(agent, source) }) as never, { prepend: true })
+    for (const agent of this.ctx.agents.list?.() ?? []) if (contextIsActive(agent.ctx)) this.watchWorkspacePolicy(agent)
     for (const agent of rootAgents(this.ctx.agents, this.ctx.subagents)) this.install(agent, 'adopted')
     return () => {
       stopChanged?.()
       stopCreated()
       for (const dispose of [...this.children.values()].reverse()) dispose()
       for (const owner of [...this.owners.values()].reverse()) owner.dispose()
+      for (const policy of [...this.workspacePolicies.values()].reverse()) policy.dispose()
       this.children.clear()
       this.owners.clear()
       this.memoryTurns.clear()
@@ -1390,6 +1399,7 @@ export class MnemonLifecycle {
 
   private install(agent: HostAgent, source: LifecycleAgentSnapshot['startSource']): void {
     if (!contextIsActive(agent.ctx)) return
+    this.watchWorkspacePolicy(agent)
     if (this.taskAgentIds.has(agent.id) || this.owners.has(agent) || this.children.has(agent)) return
     if ((isTaskRecord(agent.id) || this.coordinator.isFinishedTask(agent.id, agent)) && !isCreatingChild(this.ctx.agents, agent)) {
       // Only fresh user turns can continue a completed task; never register its
@@ -1403,13 +1413,21 @@ export class MnemonLifecycle {
     }
     if (!isRootAgent(this.ctx.agents, this.ctx.subagents, agent)) return
     const memoryTurn = this.runtimeSource === undefined ? undefined : new AgentMemoryTurn(agent, this.runtimeSource)
-    const lifecycle = new MnemonAgentLifecycle(agent, this.coordinator, this.config, this.counters, source, memoryTurn, () => this.runtimeSource?.forAgent(agent).directory)
+    const lifecycle = new MnemonAgentLifecycle(agent, this.coordinator, this.config, this.counters, source, memoryTurn,
+      () => memoryTurn?.excluded ? undefined : this.runtimeSource?.forAgent(agent).directory)
     let dispose: () => unknown
     dispose = agent.ctx.effect(() => {
       const stop = lifecycle.start()
-      const stopSkills = this.skillEvolution?.watch(agent)
+      let stopSkills: (() => void) | undefined
+      const updateSkills = () => {
+        if (memoryTurn?.excluded) { stopSkills?.(); stopSkills = undefined }
+        else stopSkills ??= this.skillEvolution?.watch(agent)
+      }
+      updateSkills()
+      const stopSkillsPolicy = this.runtimeSource?.onChanged?.(updateSkills)
       return () => {
         try {
+          stopSkillsPolicy?.()
           stopSkills?.()
           stop()
         } finally {
@@ -1423,6 +1441,32 @@ export class MnemonLifecycle {
     if (memoryTurn !== undefined) this.memoryTurns.set(agent, memoryTurn)
   }
 
+  /** Hide inherited memory tools and also deny scoped/new tools through the live guard. */
+  private watchWorkspacePolicy(agent: HostAgent): void {
+    if (this.workspacePolicies.has(agent) || this.runtimeSource?.memoryParticipation === undefined) return
+    let update!: () => void
+    const dispose = agent.ctx.effect(() => {
+      let stopRestriction: (() => unknown) | undefined
+      const excluded = () => this.runtimeSource?.memoryParticipation?.(agent).excluded === true
+      const stopGuard = agent.ctx.tools?.guard?.(execution => execution.name?.startsWith('mnemon_')
+        && this.runtimeSource?.memoryParticipation?.(execution.agent ?? agent).excluded ? WORKSPACE_MEMORY_EXCLUDED : undefined)
+      update = () => {
+        if (excluded()) {
+          if (stopRestriction !== undefined) return
+          const stop = agent.ctx.tools?.restrict?.({ deny: [...Object.keys(MEMORY_TOOLS), 'mnemon_subagent_result'] })
+          if (typeof stop === 'function') stopRestriction = stop as () => unknown
+        } else { stopRestriction?.(); stopRestriction = undefined }
+      }
+      update()
+      return () => {
+        stopRestriction?.()
+        if (typeof stopGuard === 'function') stopGuard()
+        this.workspacePolicies.delete(agent)
+      }
+    }, 'dsh-mnemon.workspace-participation()')
+    this.workspacePolicies.set(agent, { update, dispose })
+  }
+
   /** Child memory ownership is independent of root-only reminders and idle review. */
   private installChild(agent: HostAgent): void {
     const runtime = this.runtimeSource
@@ -1432,10 +1476,11 @@ export class MnemonLifecycle {
     if (runtime === undefined || parent === undefined || parent === agent || !contextIsActive(agent.ctx) || !contextIsActive(parent.ctx)) return
     this.coordinator.inheritTaskContinuation(parent, agent)
     const parentMemory = this.memoryTurns.get(parent)
-    let delegation: DelegatedMemoryView
-    if (parentMemory !== undefined) {
+    let delegation: DelegatedMemoryView | undefined
+    const excluded = runtime.memoryParticipation?.(agent).excluded === true
+    if (!excluded && parentMemory !== undefined) {
       delegation = parentMemory.delegate()
-    } else {
+    } else if (!excluded) {
       const graph = runtime.forAgent(parent)
       const parentPin = graph.composableTurns.activeTurn(parent.id)
       delegation = {

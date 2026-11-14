@@ -392,13 +392,16 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const workspaceContext = status?.workspaceContext
   const storageMode = workspaceContext?.mode ?? status?.storage?.activeKind ?? configuredStorageScope(settingsSnapshot.value)
   const storageModeText = storageScopeLabel(t, storageMode)
-  const showWorkspacePicker = isWorkspaceStorageScope(storageMode) && workspaceSelection !== undefined && workspaceSelection.options.length > 0
+  const showWorkspacePicker = (isWorkspaceStorageScope(storageMode) || workspaceContext?.workspaces?.some(workspace => workspace.participation.excluded))
+    && workspaceSelection !== undefined && workspaceSelection.options.length > 0
   const workspaceDiverged = workspaceContext !== undefined && isWorkspaceStorageScope(workspaceContext.mode) && !workspaceContext.aligned
   const canAlignWorkspace = workspaceDiverged && workspaceSelection?.effectiveWorkspaceId !== undefined
   const workspaceDifference = workspaceContext === undefined
     ? ''
     : `${t('workspace.selectedRoot', { root: workspaceContext.selectedRoot })}; ${t('workspace.effectiveRoot', { root: workspaceContext.effectiveRoot })}`
-  const workspacePicker = showWorkspacePicker && <SelectField inline size="sm" className={appearanceClass(css.workspacePicker, sidebarCss.workspacePicker)} label={t('workspace.viewing')} ariaLabel={t('workspace.selectorAria')} value={workspaceSelection.selectedWorkspaceId ?? ''} options={workspaceSelection.options.map(workspace => ({ value: workspace.id, label: workspace.title }))} onChange={workspaceSelection.onSelect} />
+  const workspaceParticipation = workspaceContext?.participation
+  const excludedWorkspaceIds = new Set(workspaceContext?.workspaces?.filter(workspace => workspace.participation.excluded).map(workspace => workspace.id))
+  const workspacePicker = showWorkspacePicker && <SelectField inline size="sm" className={appearanceClass(css.workspacePicker, sidebarCss.workspacePicker)} label={t('workspace.viewing')} ariaLabel={t('workspace.selectorAria')} value={workspaceSelection.selectedWorkspaceId ?? ''} options={workspaceSelection.options.map(workspace => ({ value: workspace.id, label: excludedWorkspaceIds.has(workspace.id) ? `${workspace.title} · ${t('workspace.excluded')}` : workspace.title }))} onChange={workspaceSelection.onSelect} />
   const notice = compositionNotice(status?.memorySystem, t)
   const memoryOff = status?.memorySystem !== undefined && !status.memorySystem.serving
   const composingType = status?.memorySystem?.serving === true ? status.memorySystem.strategyTypeId : undefined
@@ -534,6 +537,9 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       </Callout>}</Reveal>
       <Reveal className={css.notice}>{status?.restartPending !== undefined && <RestartReminder pending={status.restartPending} />}</Reveal>
       {workspaceToast.element}
+      {workspaceParticipation?.excluded && <div className={css.alert} role="status"><strong>{t('workspace.excluded')}</strong><span>{t('workspace.excludedDetail')}</span></div>}
+      {(workspaceParticipation?.invalidEntries?.length ?? 0) > 0 && <div className={css.alert} role="status">{t('workspace.invalidExclusions', { count: workspaceParticipation!.invalidEntries!.length })}</div>}
+      {workspaceParticipation?.reason === 'workspace-unavailable' && <div className={css.alert} role="status">{t('workspace.unavailable')}</div>}
       <OrdinaryNotices remoteReadOnly={remoteReadOnly} reviewPaused={focused ? undefined : status?.lifecycle?.current?.idleReviewBlocked} />
       {!focused && <BackgroundWorkflowNotice workflows={status?.memorySystem?.workflows} />}
       {!focused && status?.lifecycle?.current?.idleReviewWatermark !== undefined && <div className={css.alert} role={status.lifecycle.current.idleReviewWatermark.state === 'error' ? 'alert' : 'status'}>

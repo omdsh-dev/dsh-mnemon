@@ -18,6 +18,7 @@ import type { ComposableMemoryTurn } from '../core/turns.ts'
 import { idleReviewBlockReason, reviewLayerPolicy, startGuardedChild, startGuardedReview, type ReviewToolHost } from './review-tools.ts'
 import { reviewCheckpoint } from './review-checkpoint.ts'
 import { startWithContinuationTurns } from './continuation-turn.ts'
+import { assertAgentMemoryIncluded } from './workspace-exclusion.ts'
 import { configuredProviderNames, contextIsActive, isInactiveContextError, isTaskRecord, type ProviderConfigurationHost } from './agent-compat.ts'
 import { childComposition, startSubagent, type SubagentStartAgents } from './subagent-start.ts'
 import type { IdleReviewFailure, MemoryToolName } from './protocol.ts'
@@ -964,6 +965,7 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
     skillMaxTokens?: number,
   ): Promise<{ provider: string; runId: string; result: HostSubagentResult; receipts: CapturedToolReceipt[]; writes: CapturedToolReceipt[] }> {
     if (this.disposed) throw new Error('dsh-mnemon subagent coordinator is disposed')
+    assertAgentMemoryIncluded(this.runtimeSource, parent)
     const provider = this.provider(preferredProvider, this.runtimeSource.forAgent(parent).config.subagentProviderNames)
     assertDshOutputSchema(outputSchema)
     if (this.resultRuntime === undefined) throw new Error('dsh-mnemon subagent result tool runtime is unavailable')

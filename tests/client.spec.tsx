@@ -1668,6 +1668,28 @@ describe('MnemonWorkbench', () => {
     expect(onAlign).toHaveBeenCalledTimes(1)
   })
 
+  it('marks exclusions even with shared global storage, preserves inspection, and explains disabled edits', async () => {
+    const base = createConnection({ runtimeCount: 1 })
+    const call = vi.fn(async (channel: string, endpoint: string, payload?: Record<string, unknown>) => {
+      const response = await base.call(channel, endpoint, payload)
+      if (!response.ok || endpoint !== 'status-summary') return response
+      return { ...response, value: { ...response.value as Record<string, unknown>, writeEnabled: false,
+        workspaceContext: { mode: 'global', aligned: true, selectedRoot: '/fixture/data', effectiveRoot: '/fixture/data',
+          participation: { excluded: true, invalidEntries: [1] }, workspaces: [{ id: 'workspace-1', participation: { excluded: true } }] },
+      } }
+    })
+    render(<MnemonWorkbench connection={{ rpc: { call }, isLoopback: true } as unknown as ClientConnectionHandle} settingsScope={settingsScope}
+      workspaceId="workspace-1" workspaceSelection={{ options: [{ id: 'workspace-1', title: 'Private project', path: '/fixture/private' }], selectedWorkspaceId: 'workspace-1', onSelect: vi.fn(), onAlign: vi.fn() }} />)
+    expect(await screen.findByText('已排除记忆', { exact: true })).toBeTruthy()
+    expect(screen.getByRole('button', { name: '选择要查看的记忆工作区 Private project · 已排除记忆' })).toBeTruthy()
+    expect(screen.getByText('已连接')).toBeTruthy()
+    expect(screen.getByText(/有 1 项排除路径无效或不可访问/u)).toBeTruthy()
+    await selectWorkspaceTab('运行时记忆')
+    expect(await screen.findByText('运行时条目 1')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '添加记忆' })).toBeNull()
+    expect(screen.queryByText(/仍会进入上下文/u)).toBeNull()
+  })
+
   it.each(['sidebar', 'builtin'] as const)('clears %s Source data and editors before the new scope finishes loading', async surface => {
     const { call } = createConnection({ runtimeCount: 3 })
     const delayedCall = vi.fn(async (channel: string, endpoint: string, payload?: Record<string, unknown>) => {

@@ -1747,6 +1747,24 @@ describe('centralized workspace storage settings', () => {
     const mutate = vi.fn(async () => {})
     return { scope: settingsScope(snapshot, mutate), mutate }
   }
+  it('keeps workspace exclusion empty by default and saves only an explicit staged path list', async () => {
+    const { scope, mutate } = settings({})
+    render(<MnemonSettingsCard scope={scope} />)
+    const input = screen.getByRole('textbox', { name: '排除记忆的工作区' }) as HTMLTextAreaElement
+    expect(input.value).toBe('')
+    expect(mutate).not.toHaveBeenCalled()
+    fireEvent.change(input, { target: { value: ' /work/private\n~/personal\n/work/private\n' } })
+    expect(mutate).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: '应用' }))
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['excludedWorkspaces'], value: ['/work/private', '~/personal'] }]))
+  })
+  it('lets users remove exclusions without modifying storage placement or other settings', async () => {
+    const { scope, mutate } = settings({ excludedWorkspaces: ['/work/private'], storageScope: 'workspaces' })
+    render(<MnemonSettingsCard scope={scope} t={translateEn} />)
+    fireEvent.change(screen.getByRole('textbox', { name: 'Workspaces excluded from memory' }), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['excludedWorkspaces'], value: [] }]))
+  })
   it('applies the scope and central root together from the storage section', async () => {
     const { scope, mutate } = settings({ storageScope: 'global' })
     render(<MnemonSettingsCard scope={scope} />)

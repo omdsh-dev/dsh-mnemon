@@ -111,6 +111,10 @@ export interface MnemonStorageSectionProps {
 export function MnemonStorageSection(props: MnemonStorageSectionProps): JSX.Element {
   const { t } = props
   const value = props.value ?? {}
+  const exclusion = useStaged({ paths: (value.excludedWorkspaces ?? []).join('\n') }, async draft => {
+    await props.scope.mutate([{ op: 'set', path: ['excludedWorkspaces'], value: [...new Set(draft.paths.split(/\r?\n/u).map(path => path.trim()).filter(Boolean))] }])
+    props.onSaved()
+  })
   const saved = storageDraft(value)
   const storage = useStaged(saved, async draft => {
     const operations: SettingsOperation[] = []
@@ -219,6 +223,12 @@ export function MnemonStorageSection(props: MnemonStorageSectionProps): JSX.Elem
         </GlobalLocationSetting>}
       <PanelActions dirty={storage.dirty} saving={storage.saving} invalid={problem} failed={storage.failed} applied={storage.applied} disabled={props.disabled || storageMissing(draft)}
         note={t('storage.moveNote')} t={t} onDiscard={storage.discard} onApply={() => { void storage.apply() }} />
+      <SettingRow title={t('workspace.excludeTitle')} hint={t('workspace.excludeHint')} htmlFor="mnemon-excluded-workspaces" stacked>
+        <textarea id="mnemon-excluded-workspaces" className={css.workspacePaths} rows={3} value={exclusion.draft.paths} disabled={props.disabled || exclusion.saving}
+          spellCheck={false} autoCapitalize="none" onChange={event => exclusion.edit({ paths: event.target.value })} />
+      </SettingRow>
+      <PanelActions dirty={exclusion.dirty} saving={exclusion.saving} invalid={null} failed={exclusion.failed} applied={exclusion.applied} disabled={props.disabled}
+        note={t('workspace.excludeNote')} t={t} onDiscard={exclusion.discard} onApply={() => { void exclusion.apply() }} />
       <MnemonPackSection {...(props.connection === undefined ? {} : { connection: props.connection })} {...(props.sessionId === undefined ? {} : { sessionId: props.sessionId })}
         {...(props.workspaceId === undefined ? {} : { workspaceId: props.workspaceId })} target={props.target}
         {...(props.onDataChanged === undefined ? {} : { onImported: props.onDataChanged })} t={t} />

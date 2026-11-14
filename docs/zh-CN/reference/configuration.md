@@ -19,7 +19,7 @@ Web profile 的 patch 通常是 `~/.dsh/profiles/web/cordis.patch.yml`。旧宿�
 | 界面位置 | 设置 | 保存为 |
 |---|---|---|
 | 记忆组合 | 主策略；每个记忆来源与增强各一个开关；各组件声明的选项 | `memoryView.strategyTypeId` 与 `memoryView.entries.<entry>.config`；组件的开关状态由 DSH 插件管理器写为对应 Entry 的 `disabled` 行 |
-| 存储 | 存储范围、数据目录、备份与迁移；Git 同步开关 | `storageScope`、`dataDir`、`syncEnabled` |
+| 存储 | 存储范围、数据目录、排除工作区、备份与迁移；Git 同步开关 | `storageScope`、`dataDir`、`excludedWorkspaces`、`syncEnabled` |
 | 界面 | 记忆系统入口、回合记忆栏、存入记忆按钮 | `displayMode`、`conversationInteraction.turnBar`、`conversationInteraction.saveAction` |
 | 运行时记忆页面 | 用户画像范围 | `runtimeUserScope` |
 | 记忆空间页面 | 记忆 Provider；Mnemon Native 嵌入（自动、Ollama 或 OpenAI 兼容） | `state/memory-providers.json` 中的 Provider 注册表；`embedding` |
@@ -36,6 +36,7 @@ OpenViking user key 没有 admin 权限时，可组合服务字段 `discoveryUse
 mnemon:
   storageScope: global # global | workspace | custom | workspaces
   runtimeUserScope: storage # storage | global
+  excludedWorkspaces: [] # 可选的已存在工作区绝对路径，支持 ~
   # dataDir: ~/mnemon-data       # custom 时必填
   # cliPath: /opt/homebrew/bin/mnemon
   # store: legacy-store          # 兼容发现提示，不是常规路由目标
@@ -95,6 +96,7 @@ mnemon:
 |---|---:|---|---|
 | `storageScope` | `global` | `global` / `workspace` / `custom` / `workspaces` | 统一控制 Runtime、Documents、Memory Spaces 和预留 state 根目录 |
 | `runtimeUserScope` | `storage` | `storage` / `global` | 让 USER.md 跟随当前存储根，或叠加全局 USER.md，同时保持项目 MEMORY.md 与其他层使用所选范围 |
+| `excludedWorkspaces` | `[]` | 已存在目录的绝对路径列表 | 让指定工作区及其子代理不参与记忆，不删除已有数据 |
 | `dataDir` | 未设置 | 绝对路径、`~` 或 `~/...` | `custom` 时必填；`workspaces` 时为可选集中根目录；旧配置只设置它时自动解析为 `custom` |
 | `cliPath` | 自动发现 | 可执行路径 | 显式指定 Mnemon CLI |
 | `store` | 未设置 | `[A-Za-z0-9][A-Za-z0-9_-]*` | 用于旧 Store 的兼容发现/首选提示；语义操作由 Memory Space 路由 |
@@ -235,6 +237,14 @@ Hindsight 的加权最终排名分和 OpenViking 的原始相似度使用 `provi
 DSH 负责浏览器认证或配对，以及 Host/Origin 校验。远程页面使用命名空间 API Gateway，本地回环客户端与 DSH 桌面版窗口（`dsh-app://app/`）使用各自的通道；只有 DSH 为页面声明了不持有 Host 的传输方式时，应用页面才按远程页面处理。Mnemon 网关映射单独执行 `remoteAccess`：`read-only` 允许普通读取、小范围激活和设置查看，但拒绝写入、ZIP 操作、View 变更与设置修改；没有 `trusted-host` 授权时，设置快照报告 `writable: false`。修改这项仅在启动时读取的策略后请重启 DSH。DSH `trustedHosts` 不能代替 HTTPS 或部署层访问控制。`writeEnabled=false` 是产品级只读模式，不能代替传输层认证。
 
 完整的代理、启动 token、可信 authority、重启与验证流程见[云端 WebUI](../guides/operations.md#cloud-hosted-webui)。
+
+### 按工作区排除记忆
+
+在 **存储 → 排除记忆的工作区** 中每行填写一个路径并应用。默认空列表不改变现有行为。路径支持 `~`，经真实路径规范化后精确匹配工作区目录（包括符号链接别名），不支持通配符或递归目录规则。工作区身份取自 DSH 会话头，与存储范围设置无关。子代理即使改变 cwd，也继承父会话的工作区决策；父 Agent 未加载时，可通过 DSH 的工作区与会话目录识别父会话所属工作区。
+
+被排除的会话不再获得新的记忆 View、提示词指导、召回提醒或记忆工具，也不参与自动整理、技能演化、容量维护和记忆写入。工作台标明“已排除记忆”，保留已有数据的查看，拒绝记忆写入与 Agent 辅助操作。配置仍可编辑，便于移除排除项。无效、不存在或不可访问的目录会被忽略，并在工作台提示；无法识别当前或父工作区时会给出诊断，不会静默停用无关会话。
+
+保存后对后续操作生效，不抹除已经进入会话的历史和已完成写入，也不回滚已经派发给 Provider 的操作。移除路径后，下一轮恢复记忆参与，无需迁移或删除数据。这是 Mnemon 的参与设置，不是文件系统或 Host 的安全沙箱。
 
 ## 存储范围
 
