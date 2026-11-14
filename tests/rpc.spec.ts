@@ -67,10 +67,11 @@ function protocolFixture(options: Config = {}) {
     },
   }
   const route = {
+    participation: { excluded: false },
     graph, selectedWorkspace: { id: 'workspace', title: 'Fixture', path: '/fixture/workspace' },
     selectedRoot: '/fixture/data', effectiveRoot: '/fixture/data', aligned: true, liveSession: true,
   }
-  const runtime = { config: graph.config, route: vi.fn(() => route) } as unknown as LiveMnemonRuntime
+  const runtime = { config: graph.config, route: vi.fn(() => route), workspaceParticipations: () => [] } as unknown as LiveMnemonRuntime
   return { runtime, graph, route, sources, generation, release }
 }
 

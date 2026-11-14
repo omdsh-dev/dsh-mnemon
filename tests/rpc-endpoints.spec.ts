@@ -80,9 +80,9 @@ function hostHandlers(): Map<string, HostRpcHandler> {
     packs: { target: () => ({}), exportPack: answer, inspectPack: () => ({}), importPack: answer },
     sync: { status: answer, configure: answer, push: answer, preview: answer, backups: answer, diff: answer, pull: answer },
   }
-  const route = { graph, selectedRoot: '/fixture/data', effectiveRoot: '/fixture/data', aligned: true, liveSession: false }
+  const route = { graph, participation: { excluded: false }, selectedRoot: '/fixture/data', effectiveRoot: '/fixture/data', aligned: true, liveSession: false }
   const runtime = {
-    config, route: () => route,
+    config, route: () => route, workspaceParticipations: () => [],
     sync: { github: () => ({ status: answer, start: answer, poll: answer, cancel: answer, signOut: answer, repositories: answer, create: answer }) },
     reviews: { view: () => ({}), addOpinion: () => ({}), decide: () => ({}), reopen: () => ({}), get: () => undefined },
   } as unknown as LiveMnemonRuntime

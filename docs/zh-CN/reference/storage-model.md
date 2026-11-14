@@ -31,6 +31,10 @@ recall active Memory Spaces
 follow an exact cold reference when full text is required
 ```
 
+## 工作区参与范围
+
+存储范围决定数据保存在哪里；[`excludedWorkspaces`](./configuration.md#按工作区排除记忆) 决定哪些工作区会话参与 Mnemon。排除列表默认为空，对所有存储范围生效，子代理即使改变 cwd 也继承父会话的决策。已有数据和会话历史保持完整。工作台标明排除状态并允许查看；移除排除项后恢复记忆参与。
+
 ## 跨 Agent 共享边界
 
 共享不意味着广播对话或文件。多个 Agent 都集成 Mnemon，且能够访问相同存储根与可识别的 Store 时，可以共享 Native 长期事实。三方 Provider 通过自己的 workspace、user、bank、project 或 container 范围共享；Runtime 与 Documents 不会自动进入其他 Agent 的上下文。

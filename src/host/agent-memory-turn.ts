@@ -71,7 +71,7 @@ export class AgentMemoryTurn {
 
   constructor(
     private readonly agent: HostAgent,
-    private readonly runtime: Pick<MnemonAgentRuntimeSource, 'config' | 'forAgent' | 'executions'>,
+    private readonly runtime: Pick<MnemonAgentRuntimeSource, 'config' | 'forAgent' | 'executions' | 'memoryParticipation'>,
     private readonly delegation?: DelegatedMemoryView,
     private readonly independent = false,
   ) {
@@ -117,7 +117,10 @@ export class AgentMemoryTurn {
     return { graph, scope: agentScope(this.agent, graph.config) }
   }
 
+  get excluded(): boolean { return this.runtime.memoryParticipation?.(this.agent).excluded === true }
+
   async begin(turn: number, signal?: AbortSignal): Promise<void> {
+    if (this.excluded) { this.end(); return }
     if (this.closed) throw new Error('memory Agent lifetime has ended')
     signal?.throwIfAborted()
     if (this.pinned?.turn === turn || this.unavailable?.turn === turn) return
@@ -128,6 +131,7 @@ export class AgentMemoryTurn {
     const abort = () => controller.abort(signal!.reason)
     signal?.addEventListener('abort', abort, { once: true })
     const result = this.pin(turn, generation, controller.signal).catch((error: unknown) => {
+      if (this.excluded) { this.clearInspection(); return }
       // Memory is optional for a conversation. With no composition serving,
       // the turn runs without a View: nothing revives a disabled policy, and
       // the turn itself does not fail. It stays that way until the turn ends.

@@ -74,7 +74,7 @@ export async function migrateLegacyDisplayMode(settings: HostSettingsService): P
 }
 
 const MUTABLE_FIELDS = [
-  'storageScope', 'runtimeUserScope', 'cliPath', 'dataDir', 'customPackId', 'customPacks', 'store', 'timeoutMs', 'defaultRecallLimit',
+  'storageScope', 'runtimeUserScope', 'excludedWorkspaces', 'cliPath', 'dataDir', 'customPackId', 'customPacks', 'store', 'timeoutMs', 'defaultRecallLimit',
   'runtimeMemory',
   'embedding',
   'recallQuality',

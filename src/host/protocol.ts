@@ -284,6 +284,7 @@ export interface Config {
   storageScope?: StorageScopeKind
   /** Whether USER.md follows the selected storage root or stays in the global root. */
   runtimeUserScope?: 'storage' | 'global'
+  excludedWorkspaces?: string[]
   cliPath?: string
   dataDir?: string
   customPackId?: string
@@ -369,6 +370,7 @@ export interface InteractionConfig {
 export interface ResolvedConfig {
   storageScope: StorageScopeKind
   runtimeUserScope: 'storage' | 'global'
+  excludedWorkspaces: string[]
   cliPath?: string
   dataDir?: string
   store?: string
@@ -687,6 +689,13 @@ export interface LifecycleCounters {
   failures: number
 }
 
+export interface WorkspaceMemoryParticipation {
+  excluded: boolean
+  reason?: 'workspace-unavailable'
+  /** Zero-based positions of ignored invalid/unavailable configuration entries. */
+  invalidEntries?: number[]
+}
+
 export interface LifecycleAgentSnapshot {
   sessionId: string
   status: 'idle' | 'running'
@@ -762,6 +771,8 @@ export interface StatusView {
   skills?: SkillsStatusSummary
   storage?: StorageScopeCatalog
   workspaceContext?: {
+    participation?: WorkspaceMemoryParticipation
+    workspaces?: Array<{ id: string; participation: WorkspaceMemoryParticipation }>
     mode: StorageScopeKind
     selectedRoot: string
     effectiveRoot: string
