@@ -1203,6 +1203,57 @@ describe('Mnemon DSH lifecycle integration', () => {
     } finally { value.stop() }
   })
 
+  it.each([false, true])('rechecks unavailable admission once in a later step (recovers=%s, issue 635)', async recovers => {
+    vi.useFakeTimers()
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
+    try {
+      await value.preStep([durableCandidate(300)], 1)
+      await value.turnStopping(1)
+      await value.preStep([durableCandidate(300)], 2)
+      const check = vi.mocked(value.coordinator.checkReviewAccess).mockReset().mockResolvedValue(false)
+      check.mockResolvedValueOnce(false).mockResolvedValueOnce(recovers)
+      const request = async (step: number) => value.agentListeners.get('agent/request')?.({ agent: value.agent, turn: 2, step, signal: new AbortController().signal }, async () => ({}))
+      await request(1)
+      await request(1) // A model transport retry is still the same step.
+      expect(check).toHaveBeenCalledTimes(1)
+      await request(2)
+      await request(3)
+      expect(check).toHaveBeenCalledTimes(2)
+      await value.turnStopping(2)
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(value.coordinator.review).toHaveBeenCalledTimes(recovers ? 1 : 0)
+      expect(value.lifecycle.snapshot('session-1').current?.idleReviewAttempts).toBe(recovers ? 1 : 0)
+    } finally { value.stop() }
+  })
+
+  it('preserves the watermark and quota when admission recovers after reopening (issue 635)', async () => {
+    vi.useFakeTimers()
+    const directory = mkdtempSync(join(directories, 'recovered-admission-'))
+    const config = resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark: true, minIntervalMs: 5_000, maxPerSession: 2 } })
+    const before = fixture(config, { directory })
+    for (const turn of [1, 2]) { await before.preStep([durableCandidate(300)], turn); await before.turnStopping(turn) }
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(before.lifecycle.snapshot('session-1').current?.idleReviewAttempts).toBe(1)
+    before.stop()
+    const resumed = fixture(config, { directory })
+    try {
+      expect(resumed.lifecycle.snapshot('session-1').current?.idleReviewWatermark?.restoredAttempts).toBe(1)
+      await resumed.preStep([durableCandidate(300)], 3); await resumed.turnStopping(3)
+      await resumed.preStep([durableCandidate(300)], 4)
+      vi.mocked(resumed.coordinator.checkReviewAccess).mockResolvedValueOnce(false).mockResolvedValueOnce(true)
+      const request = resumed.agentListeners.get('agent/request')!
+      for (const step of [1, 2]) await request({ agent: resumed.agent, turn: 4, step, signal: new AbortController().signal }, async () => ({}))
+      await resumed.turnStopping(4)
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(resumed.coordinator.review).toHaveBeenCalledOnce()
+      const watermark = join(directory, 'state', 'idle-review', createHash('sha256').update('session-1').digest('hex') + '.json')
+      expect(JSON.parse(readFileSync(watermark, 'utf8')).attempts).toBe(2)
+      for (const turn of [5, 6]) { await resumed.preStep([durableCandidate(300)], turn); await resumed.turnStopping(turn) }
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(resumed.coordinator.review).toHaveBeenCalledOnce()
+    } finally { resumed.stop() }
+  })
+
   it('waits for the review score threshold, then debounces a full-checkpoint review', async () => {
     vi.useFakeTimers()
     const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))

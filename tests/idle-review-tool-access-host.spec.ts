@@ -7,6 +7,7 @@ import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { expect, it, vi } from 'vitest'
 import type { HostAgent, HostContextShape } from '../src/host/dsh.ts'
 import { MnemonLifecycle } from '../src/host/lifecycle.ts'
@@ -14,7 +15,7 @@ import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
 import { registerTools } from '../src/host/tools.ts'
 import { compositionFixture } from './fixtures/composition.ts'
 import { JsonlSessionPersistence } from './helpers/dsh-plugins.ts'
-import { loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
+import { executeTool, loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
 
 const spawn = await import(requireDsh.resolve('@deepseek-ai/dsh-subagent-spawn-in-process'))
 const fork = await import(requireDsh.resolve('@deepseek-ai/dsh-subagent-fork-in-process'))
@@ -162,11 +163,50 @@ it('keeps a completed PTC conversation loadable after automatic review', async (
   } finally { await f.close() }
 }, 20_000)
 
+it.each([false, true])('recovers admission in a later real step without bypassing guards (PTC=%s, issue 635)', async codeMode => {
+  const f = await fixture('spawn', true, codeMode)
+  try {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    await f.turn()
+    const before = f.modelCalls.length
+    // Simulate a restored executor/preset becoming usable after its first request.
+    f.parent.ctx.tools.guard(exec => f.modelCalls.length === before && exec.name.startsWith('mnemon_') ? 'Synthetic temporarily unavailable admission.' : undefined)
+    await f.foreground()
+    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.waitFor(() => expect(f.coordinator.snapshot().reviews).toBe(1))
+    expect(f.lifecycle.snapshot('parent-denied').current).toMatchObject({ idleReviewAttempts: 1 })
+    await assertReloadable(f)
+  } finally { await f.close() }
+}, 20_000)
+
+it('reports bounded admission diagnostics through mnemon_status without private errors (issue 635)', async () => {
+  const f = await fixture()
+  try {
+    f.live.config.idleReview.enabled = false
+    const agent = f.parent as unknown as HostAgent
+    expect(f.coordinator.reviewAccessStatus(agent)).toEqual({ state: 'unchecked' })
+    await f.duringStep(async () => {
+      const stop = f.parent.ctx.on('tools/execute', async (exec, next) => {
+        if (exec.name === 'mnemon_subagent_result') throw new Error('SYNTHETIC_PRIVATE_ERROR_DO_NOT_RETURN')
+        return next()
+      })
+      expect(await f.coordinator.checkReviewAccess(agent, new AbortController().signal)).toBe(false)
+      stop()
+      const status = await executeTool(f.parent.ctx, { agent: f.parent, callId: ToolCallId('review-diagnostic'), name: 'mnemon_status', arguments: {}, signal: new AbortController().signal })
+      expect(status).toMatchObject({ isError: false, value: { idleReviewAccess: { state: 'unavailable', reason: 'execution-error', checkedAt: expect.any(String) } } })
+      expect(JSON.stringify(status)).not.toContain('SYNTHETIC_PRIVATE_ERROR')
+      expect(await f.coordinator.checkReviewAccess(agent, new AbortController().signal)).toBe(true)
+      expect(f.coordinator.reviewAccessStatus(agent)).toEqual({ state: 'available', checkedAt: expect.any(String) })
+    })
+  } finally { await f.close() }
+})
+
 it('never executes an admission probe outside a real open turn', async () => {
   const f = await fixture('spawn', false, true)
   try {
     const before = f.parent.session.snapshotEvents()
     expect(await f.coordinator.checkReviewAccess(f.parent as unknown as HostAgent, new AbortController().signal)).toBe(false)
+    expect(f.coordinator.reviewAccessStatus(f.parent as unknown as HostAgent)).toMatchObject({ state: 'unavailable', reason: 'no-open-step' })
     expect(f.parent.session.snapshotEvents()).toEqual(before)
     expect(f.modelCalls).toEqual([])
   } finally { await f.close() }
