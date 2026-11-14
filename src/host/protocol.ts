@@ -687,6 +687,13 @@ export interface LifecycleCounters {
   failures: number
 }
 
+/** Last automatic-review tool check for one live Agent, without raw errors or arguments. */
+export interface ReviewAccessStatus {
+  state: 'unchecked' | 'available' | 'unavailable'
+  reason?: 'disposed' | 'executor-unavailable' | 'check-in-flight' | 'no-open-step' | 'approval-required' | 'handler-not-reached' | 'result-rejected' | 'timeout' | 'execution-error' | 'cancelled'
+  checkedAt?: string
+}
+
 export interface LifecycleAgentSnapshot {
   sessionId: string
   status: 'idle' | 'running'
@@ -704,6 +711,7 @@ export interface LifecycleAgentSnapshot {
   lastReviewDocumentIds?: string[]
   idleReviewAttempts?: number
   idleReviewBlocked?: 'agent-team' | 'tool-access'
+  idleReviewAccess?: ReviewAccessStatus
   idleReviewWatermark?: { state: 'ready' | 'error'; restoredAttempts: number; maxPerSession: number; error?: string }
   nextReviewAt?: string
   lastReviewFailure?: IdleReviewFailure

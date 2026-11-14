@@ -217,7 +217,7 @@ class MnemonAgentLifecycle {
   private reviewController: AbortController | undefined
   private reviewRunning = false
   private reviewAccessBlocked = false
-  private reviewAdmission: { turn: number; policy: string | undefined; available: boolean } | undefined
+  private reviewAdmission: { turn: number; step: number; attempts: number; policy: string | undefined; available: boolean } | undefined
   private lastReviewAt: string | undefined
   private lastReviewAction: string | undefined
   private lastReviewScore: number | undefined
@@ -264,7 +264,7 @@ class MnemonAgentLifecycle {
       // context behind it, and `recordTurnMessages` sees the complete batch
       // rather than a partial one.
       this.agent.ctx.on('agent/pre-step', ((payload: PreStepPayload, next: () => Promise<HostPreStepDecision>) => this.preStep(payload, next)) as never, { prepend: true }),
-      this.agent.ctx.on('agent/request', (async (payload: TurnStoppingPayload, next: () => Promise<unknown>) => {
+      this.agent.ctx.on('agent/request', (async (payload: TurnStoppingPayload & { step: number }, next: () => Promise<unknown>) => {
         await this.prepareReviewAccess(payload)
         return next()
       }) as never, { prepend: true }),
@@ -297,6 +297,7 @@ class MnemonAgentLifecycle {
       memoryToolCalls: memoryToolCalls(this.agent.session.snapshotEvents()),
       idleReviewPending: this.idleReviewTimer !== undefined,
       reviewRunning: this.reviewRunning,
+      idleReviewAccess: this.coordinator.reviewAccessStatus?.(this.agent),
       reviewActivity: this.reviewActivity(),
       idleReviewAttempts: this.idleReviewAttempts,
       ...(this.config.idleReview.persistWatermark ? { idleReviewWatermark: {
@@ -438,13 +439,18 @@ class MnemonAgentLifecycle {
     if (admission?.turn === payload.turn && admission.policy === this.reviewPolicy() && admission.available) this.scheduleIdleReview(payload.turn)
   }
 
-  private async prepareReviewAccess(payload: TurnStoppingPayload): Promise<void> {
+  private async prepareReviewAccess(payload: TurnStoppingPayload & { step: number }): Promise<void> {
     this.recordComposedTurn(payload.turn)
     if (payload.signal.aborted || !this.restoreWatermark() || !this.idleReviewAllowed() || this.turnActivity.get(payload.turn)?.noMaintenance) return
     const policy = this.reviewPolicy()
-    // One bounded challenge per turn/policy; model retries and later steps
-    // reuse it. Every actual review tool still passes the Host's live guards.
-    if (this.reviewAdmission?.turn === payload.turn && this.reviewAdmission.policy === policy) return
+    // A transient failure on the first request must not poison the whole turn.
+    // Retry at most once, in a later real step (never on a transport retry or
+    // after step/end). Successful admission is reused only within this policy
+    // and turn; every actual review tool still passes the Host's live guards.
+    const previous = this.reviewAdmission?.turn === payload.turn && this.reviewAdmission.policy === policy ? this.reviewAdmission : undefined
+    if (previous !== undefined && (previous.available || previous.attempts >= 2 || payload.step <= previous.step)) return
+    const attempts = (previous?.attempts ?? 0) + 1
+    this.reviewAdmission = { turn: payload.turn, step: payload.step, attempts, policy, available: false }
     const controller = new AbortController()
     const signal = AbortSignal.any([payload.signal, controller.signal])
     const epoch = this.reviewEpoch
@@ -454,7 +460,7 @@ class MnemonAgentLifecycle {
       const available = await this.coordinator.checkReviewAccess(this.agent, signal)
       if (signal.aborted || epoch !== this.reviewEpoch || policy !== this.reviewPolicy() || !this.idleReviewAllowed()) return
       this.reviewAccessBlocked = !available
-      this.reviewAdmission = { turn: payload.turn, policy, available }
+      this.reviewAdmission = { turn: payload.turn, step: payload.step, attempts, policy, available }
     } catch (error) {
       if (!signal.aborted) this.fail(error)
     } finally {
