@@ -1,21 +1,15 @@
 import type { MemoryInstallContribution } from './service.ts'
-import type { MemoryJsonValue, MemoryPluginLocalizedText } from '../core/contracts/index.ts'
-import { canonicalMemoryJson, deepFreeze } from '../core/definitions.ts'
+import type {
+  MemoryJsonValue,
+  MemoryPluginLocalizedText,
+  MemoryStrategyConfigurationField,
+  MemoryStrategyConfigurationFieldOption,
+} from '../core/contracts/index.ts'
+import { canonicalMemoryJson, deepFreeze, isPlainObject } from '../core/definitions.ts'
 
 /** Human-facing metadata only. It is never added to a model View. */
 export type MemoryLocalizedText = MemoryPluginLocalizedText
-
-export interface MemoryStrategyConfigurationField {
-  key: string
-  label: MemoryLocalizedText
-  description?: MemoryLocalizedText
-  /** Numbers are finite integers; lists have at most 32 unique, nonempty strings. */
-  input: 'number' | 'text' | 'textarea' | 'string-list' | 'source-list'
-  defaultValue?: MemoryJsonValue
-  minimum?: number
-  maximum?: number
-  sourceRoles?: string[]
-}
+export type { MemoryStrategyConfigurationField, MemoryStrategyConfigurationFieldOption }
 
 /**
  * Optional module export named `memoryStrategyConfiguration`.
@@ -51,6 +45,11 @@ export function readMemoryStrategyConfiguration(value: MemoryStrategyConfigurati
       || !['number', 'text', 'textarea', 'string-list', 'source-list'].includes(field.input)
       || !text(field.label) || field.description !== undefined && !text(field.description)
       || [field.minimum, field.maximum].some(bound => bound !== undefined && (typeof bound !== 'number' || !Number.isFinite(bound)))
+      || field.options !== undefined && (!Array.isArray(field.options) || field.options.length === 0 || field.options.length > 32
+        || field.options.some((option: unknown) => {
+          const item = typeof option === 'object' && option !== null ? option as Record<string, unknown> : undefined
+          return item === undefined || typeof item.value !== 'string' || !item.value.trim() || item.value.length > 128 || !text(item.label)
+        }))
       || field.sourceRoles !== undefined && (!Array.isArray(field.sourceRoles) || field.sourceRoles.length > 32
         || field.sourceRoles.some((role: unknown) => typeof role !== 'string' || !role || role.length > 128)))
     || new Set(value.fields.map(field => field.key)).size !== value.fields.length
@@ -82,7 +81,7 @@ export function readMemoryStrategyConfiguration(value: MemoryStrategyConfigurati
 /** Validate and copy supplied values without applying defaults or executing code. */
 export function memoryStrategyConfigurationValues(definition: MemoryStrategyConfiguration, input: unknown): Record<string, MemoryJsonValue> {
   const value = input ?? {}
-  if (typeof value !== 'object' || Array.isArray(value)) throw new Error('Plugin configuration must be an object')
+  if (!isPlainObject(value)) throw new Error('Plugin configuration must be an object')
   const json = JSON.stringify(value)
   if (json.length > 64 * 1024) throw new Error('Plugin configuration exceeds 64 KiB')
   const config = JSON.parse(json) as Record<string, MemoryJsonValue>

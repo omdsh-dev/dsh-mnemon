@@ -12,7 +12,7 @@ import {
   writeFileSync,
   writeSync,
 } from 'node:fs'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { basename, join } from 'node:path'
 import {
   DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES,
@@ -35,12 +35,12 @@ import type {
   RuntimeMemoryUsage,
 } from './contracts.ts'
 import {
-  RUNTIME_MEMORY_VERSION, RUNTIME_ENTRY_DELIMITER, RUNTIME_MEMORY_LIMITS, RUNTIME_BRANCH_NAME_MAX, RUNTIME_BRANCH_NAME_PATTERN,
+  RUNTIME_MEMORY_VERSION, RUNTIME_ENTRY_DELIMITER, RUNTIME_MEMORY_LIMITS, RUNTIME_BRANCH_NAME_MAX, RUNTIME_BRANCHES_PER_ENTRY_MAX,
   RUNTIME_ARCHIVE_DIRECTORY, RUNTIME_DIRECTORY, RUNTIME_ENTRY_MAX_BYTES, RUNTIME_LOCK_FILE, RUNTIME_LOCK_STALE_MS, RUNTIME_MEMORIES_FILE, RUNTIME_PROJECTION_FILES,
-  parseRuntimeBranches, runtimeBytes, runtimeProjection, runtimePinnedProjection, assertRuntimePinnedBudget, RUNTIME_PINNED_PROJECTION_LIMIT, type RuntimeMemoryLimits,
+  isValidRuntimeBranchName, parseRuntimeBranches, runtimeBytes, runtimeProjection, runtimePinnedProjection, assertRuntimePinnedBudget, RUNTIME_PINNED_PROJECTION_LIMIT, type RuntimeMemoryLimits,
 } from './contracts.ts'
 
-export { RUNTIME_BRANCH_NAME_MAX }
+export { RUNTIME_BRANCH_NAME_MAX, RUNTIME_BRANCHES_PER_ENTRY_MAX }
 
 export interface RuntimeMemoryContextProjection {
   revision: string
@@ -113,8 +113,6 @@ function isImportance(value: unknown): value is RuntimeMemoryImportance {
   return value === 'critical' || value === 'normal' || value === 'low'
 }
 
-export const RUNTIME_BRANCHES_PER_ENTRY_MAX = 16
-
 /** Validate a model-supplied branch scope. Returns the normalized list; an empty list means "no scope". */
 export function normalizeRuntimeBranches(value: unknown, field = 'branches'): string[] {
   if (!Array.isArray(value)) throw new Error(`${field} must be an array of git branch names`)
@@ -123,13 +121,7 @@ export function normalizeRuntimeBranches(value: unknown, field = 'branches'): st
   for (const item of value) {
     if (typeof item !== 'string') throw new Error(`${field} must contain only git branch names`)
     const branch = item.trim()
-    if (branch === ''
-      || branch.length > RUNTIME_BRANCH_NAME_MAX
-      || !RUNTIME_BRANCH_NAME_PATTERN.test(branch)
-      || branch === '-'
-      || branch.startsWith('/') || branch.startsWith('-')
-      || branch.endsWith('/') || branch.endsWith('.')
-      || branch.includes('..') || branch.includes('//') || branch.includes('@{')) {
+    if (!isValidRuntimeBranchName(branch)) {
       throw new Error(`${field} must contain git branch names (letters, numbers, dot, underscore, slash, dash)`)
     }
     if (seen.has(branch)) throw new Error(`${field} must not repeat a branch name`)
@@ -519,15 +511,42 @@ ${memory || '(empty)'}
   }
 
   mutate(request: RuntimeMemoryMutation, options: { preserveImportance?: boolean } = {}): Promise<RuntimeMemoryMutationResult> {
-    if (request.target === 'user' && this.userController !== undefined) return this.userController.mutate(request, options)
-    const operation = this.queue.then(() => this.withLock(() => this.mutateLocked(request, options.preserveImportance)))
+    return this.mutateCommitted(request, options).then(committed => committed.result)
+  }
+
+  mutateCommitted(
+    request: RuntimeMemoryMutation,
+    options: { preserveImportance?: boolean } = {},
+  ): Promise<{ revision: string; result: RuntimeMemoryMutationResult }> {
+    if (request.target === 'user' && this.userController !== undefined) {
+      return this.userController.mutateInternal(request, options.preserveImportance).then(({ file: globalFile, result }) => ({
+        revision: this.combinedRevision(this.withLock(() => this.readSource()), globalFile),
+        result,
+      }))
+    }
+    return this.mutateInternal(request, options.preserveImportance).then(({ file, result }) => ({
+      revision: this.combinedRevision(file),
+      result,
+    }))
+  }
+
+  private mutateInternal(
+    request: RuntimeMemoryMutation,
+    preserveImportance = false,
+  ): Promise<{ file: RuntimeMemoryFile; result: RuntimeMemoryMutationResult }> {
+    const operation = this.queue.then(() => this.withLock(() => this.mutateLocked(request, preserveImportance)))
     this.queue = operation.catch(() => undefined)
     return operation
   }
 
   /** Human-management only. Automatic maintenance preserves this explicit state. */
   setPinned(target: RuntimeMemoryTarget, content: string, pinned: boolean): Promise<RuntimeMemorySnapshot> {
-    if (target === 'user' && this.userController !== undefined) return this.userController.setPinned(target, content, pinned).then(() => this.snapshot())
+    if (target === 'user' && this.userController !== undefined) {
+      return this.userController.setPinned(target, content, pinned).then(globalSnapshot => {
+        const local = this.withLock(() => this.readSource())
+        return this.snapshotUnlocked(this.combineFiles(local, { version: RUNTIME_MEMORY_VERSION, entries: globalSnapshot.entries }))
+      })
+    }
     const operation = this.queue.then(() => this.withLock(() => {
       const file = this.readSource()
       const matches = file.entries.filter(entry => entry.target === target && entry.content === content)
@@ -536,7 +555,7 @@ ${memory || '(empty)'}
       matches[0]!.updated_at = this.now().toISOString()
       if (pinned) assertRuntimePinnedBudget(file.entries)
       this.persist(file)
-      return this.snapshotUnlocked(file)
+      return this.snapshotUnlocked(this.userController === undefined ? file : this.combineFiles(file, this.userController.readSource()))
     }))
     this.queue = operation.catch(() => undefined)
     return operation
@@ -544,28 +563,53 @@ ${memory || '(empty)'}
 
   /** Resolve exactly which committed entries survive a blocked mutation and are safe to compact. */
   planMaintenance(request: RuntimeMemoryMutation, options: { preserveImportance?: boolean } = {}): Promise<RuntimeMemoryMaintenancePlan> {
-    if (request.target === 'user' && this.userController !== undefined) return this.userController.planMaintenance(request, options)
+    return this.planMaintenanceCommitted(request, options).then(planned => planned.plan)
+  }
+
+  planMaintenanceCommitted(
+    request: RuntimeMemoryMutation,
+    options: { preserveImportance?: boolean } = {},
+  ): Promise<{ revision: string; plan: RuntimeMemoryMaintenancePlan }> {
+    if (request.target === 'user' && this.userController !== undefined) {
+      return this.userController.planMaintenanceInternal(request, options.preserveImportance).then(({ file: globalFile, plan }) => ({
+        revision: this.combinedRevision(this.withLock(() => this.readSource()), globalFile),
+        plan,
+      }))
+    }
+    return this.planMaintenanceInternal(request, options.preserveImportance).then(({ file, plan }) => ({
+      revision: this.combinedRevision(file),
+      plan,
+    }))
+  }
+
+  private planMaintenanceInternal(
+    request: RuntimeMemoryMutation,
+    preserveImportance = false,
+  ): Promise<{ file: RuntimeMemoryFile; plan: RuntimeMemoryMaintenancePlan }> {
     const operation = this.queue.then(() => this.withLock(() => {
       const file = this.readSource()
-      const prepared = prepareMutation(file.entries, request, this.now().toISOString(), options.preserveImportance)
+      const prepared = prepareMutation(file.entries, request, this.now().toISOString(), preserveImportance)
       assertRuntimePinnedBudget(prepared.projectedEntries)
       const used = runtimeBytes(file.entries, request.target)
       const projected = runtimeBytes(prepared.projectedEntries, request.target)
       const limit = this.limits[request.target]
       return {
-        revision: revision(file),
-        action: request.action,
-        target: request.target,
-        entries: prepared.compactableEntries.map(entry => ({ ...entry })),
-        ...(prepared.pendingEntry === undefined ? {} : {
-          pending: { content: prepared.pendingEntry.content, importance: prepared.pendingEntry.importance, ...(prepared.pendingEntry.pinned === undefined ? {} : { pinned: prepared.pendingEntry.pinned }) },
-        }),
-        ...(prepared.excludedEntry === undefined ? {} : { excluded: { ...prepared.excludedEntry } }),
-        used,
-        projected,
-        limit,
-        requiresMaintenance: prepared.changed && projected > limit,
-        localArchive: true as const,
+        file,
+        plan: {
+          revision: revision(file),
+          action: request.action,
+          target: request.target,
+          entries: prepared.compactableEntries.map(entry => ({ ...entry })),
+          ...(prepared.pendingEntry === undefined ? {} : {
+            pending: { content: prepared.pendingEntry.content, importance: prepared.pendingEntry.importance, ...(prepared.pendingEntry.pinned === undefined ? {} : { pinned: prepared.pendingEntry.pinned }) },
+          }),
+          ...(prepared.excludedEntry === undefined ? {} : { excluded: { ...prepared.excludedEntry } }),
+          used,
+          projected,
+          limit,
+          requiresMaintenance: prepared.changed && projected > limit,
+          localArchive: true as const,
+        },
       }
     }))
     this.queue = operation.catch(() => undefined)
@@ -584,9 +628,37 @@ ${memory || '(empty)'}
     maxCompactedBytes?: number,
     options: { archive?: 'local'; preserveImportance?: boolean } = {},
   ): Promise<RuntimeMemoryMutationResult> {
+    return this.compactAndMutateCommitted(expectedRevision, request, compacted, maxCompactedBytes, options).then(committed => committed.result)
+  }
+
+  compactAndMutateCommitted(
+    expectedRevision: string,
+    request: RuntimeMemoryMutation,
+    compacted: RuntimeMemoryCompactedEntry[],
+    maxCompactedBytes?: number,
+    options: { archive?: 'local'; preserveImportance?: boolean } = {},
+  ): Promise<{ revision: string; result: RuntimeMemoryMutationResult }> {
     if (request.target === 'user' && this.userController !== undefined) {
-      return this.userController.compactAndMutate(expectedRevision, request, compacted, maxCompactedBytes, options)
+      return this.userController.compactAndMutateInternal(expectedRevision, request, compacted, maxCompactedBytes, options)
+        .then(({ file: globalFile, result }) => ({
+          revision: this.combinedRevision(this.withLock(() => this.readSource()), globalFile),
+          result,
+        }))
     }
+    return this.compactAndMutateInternal(expectedRevision, request, compacted, maxCompactedBytes, options)
+      .then(({ file, result }) => ({
+        revision: this.combinedRevision(file),
+        result,
+      }))
+  }
+
+  private compactAndMutateInternal(
+    expectedRevision: string,
+    request: RuntimeMemoryMutation,
+    compacted: RuntimeMemoryCompactedEntry[],
+    maxCompactedBytes?: number,
+    options: { archive?: 'local'; preserveImportance?: boolean } = {},
+  ): Promise<{ file: RuntimeMemoryFile; result: RuntimeMemoryMutationResult }> {
     const operation = this.queue.then(() => this.withLock(() => {
       const file = this.readSource()
       const beforeRevision = revision(file)
@@ -599,7 +671,10 @@ ${memory || '(empty)'}
         throw new Error('compaction byte budget is invalid')
       }
       if (!prepared.changed) {
-        return this.result(request.target, prepared.projectedEntries, prepared.fields)
+        return {
+          file,
+          result: this.result(request.target, prepared.projectedEntries, prepared.fields),
+        }
       }
       const replacements = compactionCandidates(compacted, prepared.compactableEntries, request.target, now)
       for (const pinned of prepared.compactableEntries.filter(entry => entry.pinned === true)) {
@@ -629,12 +704,31 @@ ${memory || '(empty)'}
       if (archived !== undefined && archived.length > 0) this.archiveLocally(archived, beforeRevision, now)
       this.persist(next)
       return {
-        ...this.result(request.target, entries, prepared.fields),
-        ...(archived === undefined ? {} : { archived: { entries: archived.length, path: this.archivePath } }),
+        file: next,
+        result: {
+          ...this.result(request.target, entries, prepared.fields),
+          ...(archived === undefined ? {} : { archived: { entries: archived.length, path: this.archivePath } }),
+        },
       }
     }))
     this.queue = operation.catch(() => undefined)
     return operation
+  }
+
+  private combineFiles(local: RuntimeMemoryFile, global: RuntimeMemoryFile): RuntimeMemoryFile {
+    return {
+      version: RUNTIME_MEMORY_VERSION,
+      entries: [
+        ...global.entries.filter(entry => entry.target === 'user'),
+        ...local.entries.filter(entry => entry.target === 'memory'),
+      ],
+    }
+  }
+
+  private combinedRevision(local: RuntimeMemoryFile, globalOverride?: RuntimeMemoryFile): string {
+    if (this.userController === undefined) return revision(local)
+    const global = globalOverride ?? this.userController.withLock(() => this.userController!.readSource())
+    return revision(this.combineFiles(local, global))
   }
 
   /** Append entries to the local archive: JSON Lines to restore from, and Markdown to read. */
@@ -663,16 +757,17 @@ ${memory || '(empty)'}
     })
   }
 
-  private mutateLocked(request: RuntimeMemoryMutation, preserveImportance = false): RuntimeMemoryMutationResult {
+  private mutateLocked(request: RuntimeMemoryMutation, preserveImportance = false): { file: RuntimeMemoryFile; result: RuntimeMemoryMutationResult } {
     const file = this.readSource()
     const prepared = prepareMutation(file.entries, request, this.now().toISOString(), preserveImportance)
     assertRuntimePinnedBudget(prepared.projectedEntries)
-    if (!prepared.changed) return this.result(request.target, prepared.projectedEntries, prepared.fields)
+    if (!prepared.changed) return { file, result: this.result(request.target, prepared.projectedEntries, prepared.fields) }
     const used = runtimeBytes(prepared.projectedEntries, request.target)
     const limit = this.limits[request.target]
     if (used > limit) throw new RuntimeMemoryCapacityError(request.target, runtimeBytes(file.entries, request.target), used, limit)
-    this.persist({ version: RUNTIME_MEMORY_VERSION, entries: prepared.projectedEntries })
-    return this.result(request.target, prepared.projectedEntries, prepared.fields)
+    const next: RuntimeMemoryFile = { version: RUNTIME_MEMORY_VERSION, entries: prepared.projectedEntries }
+    this.persist(next)
+    return { file: next, result: this.result(request.target, prepared.projectedEntries, prepared.fields) }
   }
 
   private result(
@@ -736,9 +831,9 @@ ${memory || '(empty)'}
 
   private persist(file: RuntimeMemoryFile): void {
     mkdirSync(this.directory, { recursive: true, mode: 0o700 })
-    const nonce = `${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}`
+    const nonce = `${process.pid}.${randomUUID()}`
     const writes: Array<[string, string]> = [
-      [this.localUserPath, runtimeProjection(file.entries, 'user')],
+      ...(this.userController === undefined ? [[this.localUserPath, runtimeProjection(file.entries, 'user')] as [string, string]] : []),
       [this.memoryPath, runtimeProjection(file.entries, 'memory')],
       [this.sourcePath, `${JSON.stringify(file, null, 2)}\n`],
     ]
@@ -753,7 +848,10 @@ ${memory || '(empty)'}
   }
 
   private repairProjections(file: RuntimeMemoryFile): void {
-    for (const [path, target] of [[this.localUserPath, 'user'], [this.memoryPath, 'memory']] as const) {
+    const targets: ReadonlyArray<readonly [string, RuntimeMemoryTarget]> = this.userController === undefined
+      ? [[this.localUserPath, 'user'], [this.memoryPath, 'memory']]
+      : [[this.memoryPath, 'memory']]
+    for (const [path, target] of targets) {
       const expected = runtimeProjection(file.entries, target)
       let current: string | undefined
       try {
@@ -762,7 +860,7 @@ ${memory || '(empty)'}
         current = undefined
       }
       if (current === expected) continue
-      const temporary = join(this.directory, `.${basename(path)}.${process.pid}.${Date.now()}.tmp`)
+      const temporary = join(this.directory, `.${basename(path)}.${process.pid}.${randomUUID()}.tmp`)
       try {
         writeFileSync(temporary, expected, { encoding: 'utf8', mode: 0o600 })
         renameSync(temporary, path)

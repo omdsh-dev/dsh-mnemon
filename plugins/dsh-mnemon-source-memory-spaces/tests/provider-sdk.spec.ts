@@ -405,3 +405,37 @@ describe('memory provider placement', () => {
     }
   })
 })
+
+describe('HttpMemoryProvider and bearerAuthHeader', () => {
+  it('normalizes bearer tokens without emitting empty headers or double prefixes', () => {
+    expect(sdk.bearerAuthHeader(undefined)).toBeUndefined()
+    expect(sdk.bearerAuthHeader('')).toBeUndefined()
+    expect(sdk.bearerAuthHeader('   ')).toBeUndefined()
+    expect(sdk.bearerAuthHeader('Bearer   ')).toBeUndefined()
+    expect(sdk.bearerAuthHeader('secret-token')).toBe('Bearer secret-token')
+    expect(sdk.bearerAuthHeader('  bearer secret-token  ')).toBe('Bearer secret-token')
+  })
+
+  it('attaches HTTP status codes to non-OK errors and respects per-request timeoutMs', async () => {
+    class ProbeHttpProvider extends sdk.HttpMemoryProvider {
+      readonly id = 'fixture'
+      async list() { return [] }
+      probe(connection: sdk.MemoryProviderConnection, path: string, options?: sdk.HttpRequestInit) {
+        return this.requestConnection(connection, path, options)
+      }
+    }
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ message: 'upstream HTTP 404 text inside 502' }), { status: 502 }))
+      .mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(init.signal?.reason ?? new Error('aborted')), { once: true })
+      }))
+    const { authority } = createMemorySpaceProviderFixture(descriptor, {}, { dataDir: '/unused' })
+    const provider = new ProbeHttpProvider(authority, { label: 'Probe', fetch: fetchMock, requestTimeoutMs: 10_000 })
+
+    await expect(provider.probe({ endpoint: 'https://probe.example' }, '/v1/items')).rejects.toMatchObject({
+      message: 'Probe HTTP 502: upstream HTTP 404 text inside 502',
+      status: 502,
+    })
+    await expect(provider.probe({ endpoint: 'https://probe.example' }, '/v1/slow', { timeoutMs: 25 })).rejects.toThrow('timed out after 25ms')
+  })
+})

@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
+import * as sdk from 'dsh-mnemon/extension-sdk'
 import { defineMemoryPlugin, defineMemoryViewExtension, installMemory, defineMemoryStrategyConfiguration, validateMemoryViewExtension } from 'dsh-mnemon/extension-sdk'
 
 export interface Config { sourceKeys?: string[]; actionIds?: string[]; instruction?: string }
@@ -25,7 +26,10 @@ export function createAutoCaptureExtension(config: Config = {}) {
 }
 
 export function apply(ctx: Context, config: Config = {}): void {
-  installMemory(ctx, { plugin: memoryPlugin, strategyExtensions: [createAutoCaptureExtension(config)] })
+  const options = typeof sdk.memoryConfigurationDigest === 'function'
+    ? { effectiveDigest: sdk.memoryConfigurationDigest(config) }
+    : undefined
+  installMemory(ctx, { plugin: memoryPlugin, strategyExtensions: [createAutoCaptureExtension(config)] }, options)
 }
 
 export const memoryStrategyConfiguration = defineMemoryStrategyConfiguration({

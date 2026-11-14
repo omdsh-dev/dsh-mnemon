@@ -60,5 +60,6 @@ export interface MemoryWake {
 }
 
 export * from './plugin.ts'
+export * from './strategy.ts'
 export * from './view.ts'
 export * from './task-agent-model.ts'

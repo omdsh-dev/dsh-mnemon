@@ -8,7 +8,7 @@ import { promisify } from 'node:util'
 import { describe, expect, it, vi } from 'vitest'
 import type { JsonValue, MemorySpaceNativeRunner } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import { createMemorySpaceProviderFixture, mountMemorySpaceProvider } from 'dsh-mnemon-source-memory-spaces/testing'
-import module, { definition, descriptor, MnemonNativeProvider } from '../src/index.ts'
+import module, { definition, descriptor, MnemonNativeProvider, parseMemoryGraph } from '../src/index.ts'
 import { STORE_DUMP_MAX_OUTPUT_BYTES } from '../src/driver.ts'
 
 describe('independent Native Provider', () => {
@@ -27,6 +27,7 @@ describe('independent Native Provider', () => {
   it('requires a command capability and creates its own adapter', () => {
     const { authority } = createMemorySpaceProviderFixture(descriptor, {}, { dataDir: '/unused' })
     expect(() => definition.create({ memoryBodies: authority, config: { timeoutMs: 100 }, providerInstanceId: 'native', manifest: definition.manifest })).toThrow('nativeRunner')
+    expect(() => parseMemoryGraph('<html />')).toThrow('unexpected HTML')
   })
 
   it('decodes both CLI response generations and keeps every command scoped', async () => {

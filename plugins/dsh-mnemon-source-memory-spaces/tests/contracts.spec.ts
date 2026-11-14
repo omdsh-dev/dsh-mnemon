@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveMemorySpacesConfig } from '../src/config.ts'
-import { MnemonNativeProvider, definition as nativeDefinition, descriptor as nativeDescriptor } from 'dsh-mnemon-provider-mnemon-native'
 import {
   isNativeProvider, MEMORY_PROVIDER_REGISTRY_FILE, MEMORY_SPACE_DATABASE_FILE, MEMORY_SPACE_DESCRIPTION_MAX_LENGTH, MEMORY_SPACE_ID_PATTERN,
   MEMORY_SPACE_NAME_MAX_LENGTH, MEMORY_SPACE_REGISTRY_FILE, MEMORY_SPACES_DIRECTORY, MNEMON_ACTIVE_STORE_FILE, NATIVE_PROVIDER_ID,
@@ -12,7 +11,7 @@ import {
 import { validateMemorySpaceId } from '../src/memory-spaces.ts'
 import type { ProcessRunner } from '../src/providers/process.ts'
 import { createRunner } from '../src/runner.ts'
-import { createRegistry, installedCliStub } from './providers.ts'
+import { TestNativeProvider as MnemonNativeProvider, createRegistry, installedCliStub, nativeDefinition, nativeDescriptor } from './providers.ts'
 
 const FAKE_CLI = installedCliStub()
 const directories: string[] = []

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { removeDisposableDirectory } from './disposable-directory.ts'
+import { writeAtomicJsonSync } from './fs-atomic.ts'
 import { join, relative, resolve, sep } from 'node:path'
 import { zipSync, unzipSync, type Unzipped } from 'fflate'
 import type { ResolvedConfig } from './config.ts'
@@ -760,26 +761,30 @@ export class MnemonGitSync {
   }
 
   async configure(patch: unknown): Promise<MnemonSyncConfigView> {
-    const previous = this.store.read()
     const fields = record(patch)
     // This machine's name belongs to its identity, not to the channel settings, so it is
-    // taken out of the patch and checked before anything is written.
+    // taken out of the patch and checked before anything is written or locked on disk.
     const { machineLabel: name, ...settings }: Record<string, unknown> = fields ?? {}
     const naming = fields !== undefined && 'machineLabel' in fields
     if (naming && name !== null && name !== '') machineLabel(name)
-    const next = this.store.patch(fields === undefined ? patch : settings)
-    // A saved token authenticates the host it was saved for. Moving the repository to
-    // another host forgets it unless a new token comes with the move, so a token never
-    // reaches a host it was not meant for.
-    if (next.token !== undefined && previous.repoUrl !== undefined && fields !== undefined && !('token' in fields)
-      && tokenHost(previous.repoUrl) !== tokenHost(next.repoUrl)) delete next.token
-    this.store.write(next)
-    if (naming) this.machine.rename(name)
-    // When memory last travelled is a fact about one repository, branch and directory; another
-    // one starts with none, as the documents there are no agreement with this machine (#385).
-    // What the documents last agreed on stays: it names its repository, branch and commit, so
-    // another repository never uses it, and reconnecting to this one picks it up again.
-    if (previous.repoUrl !== next.repoUrl || previous.branch !== next.branch || previous.subdir !== next.subdir) rmSync(this.lastRunPath(), { force: true })
+    this.store.patch(fields === undefined ? patch : settings)
+    const next = await this.lock(() => {
+      const previous = this.store.read()
+      const updated = this.store.patch(fields === undefined ? patch : settings)
+      // A saved token authenticates the host it was saved for. Moving the repository to
+      // another host forgets it unless a new token comes with the move, so a token never
+      // reaches a host it was not meant for.
+      if (updated.token !== undefined && previous.repoUrl !== undefined && fields !== undefined && !('token' in fields)
+        && tokenHost(previous.repoUrl) !== tokenHost(updated.repoUrl)) delete updated.token
+      this.store.write(updated)
+      if (naming) this.machine.rename(name)
+      // When memory last travelled is a fact about one repository, branch and directory; another
+      // one starts with none, as the documents there are no agreement with this machine (#385).
+      // What the documents last agreed on stays: it names its repository, branch and commit, so
+      // another repository never uses it, and reconnecting to this one picks it up again.
+      if (previous.repoUrl !== updated.repoUrl || previous.branch !== updated.branch || previous.subdir !== updated.subdir) rmSync(this.lastRunPath(), { force: true })
+      return updated
+    })
     return this.credentialView(next)
   }
 
@@ -790,10 +795,11 @@ export class MnemonGitSync {
    * and the merged result is what the new commit holds.
    */
   async push(input: { message?: unknown; signal?: AbortSignal } = {}): Promise<MnemonSyncPushResult> {
-    const settings = this.requireRepository()
+    this.requireRepository()
     await this.requireGit(input.signal)
     const message = commitMessage(input.message, this.now())
     return this.lock(async () => {
+      const settings = this.requireRepository()
       // Another machine can publish between this run's fetch and its push, and Git then
       // refuses the push. Folding the branch in again is exactly what the first attempt
       // did, so it is repeated once before the refusal is reported.
@@ -996,7 +1002,7 @@ export class MnemonGitSync {
     try {
       const ancestry = await this.git(['merge-base', '--is-ancestor', last.commit, tip], { cwd: this.store.mirror(), signal })
       if (ancestry.exitCode !== 0) return undefined
-      const index = await this.show(last.commit, settings.subdir + DOCUMENTS_INDEX_PATH, signal)
+      const index = await this.showUtf8(last.commit, settings.subdir + DOCUMENTS_INDEX_PATH, signal)
       return index === undefined ? undefined : documentVersions({ [DOCUMENTS_INDEX_PATH]: index })
     } catch (error) {
       // An old index that cannot be read is no agreement; the merge keeps copies, as without one.
@@ -1008,40 +1014,35 @@ export class MnemonGitSync {
   /** Remember what this machine and the branch at `commit` now agree on. Bookkeeping never fails the run it follows. */
   private agree(settings: MnemonSyncSettings & { repoUrl: string }, files: Record<string, Uint8Array>, commit: string): void {
     const path = this.basePath()
-    const temporary = path + '.' + String(process.pid) + '.tmp'
     try {
       const documents = documentVersions(files)
       if (documents === undefined || !AGREED_COMMIT.test(commit)) {
         rmSync(path, { force: true })
         return
       }
-      mkdirSync(join(path, '..'), { recursive: true, mode: 0o700 })
-      writeFileSync(temporary, JSON.stringify({ version: 1, scope: this.agreementScope(settings), commit, documents }, null, 2) + '\n', { mode: 0o600 })
-      renameSync(temporary, path)
+      writeAtomicJsonSync(path, { version: 1, scope: this.agreementScope(settings), commit, documents })
     } catch {
-      rmSync(temporary, { force: true })
+      // Bookkeeping never fails the sync run it follows.
     }
   }
 
   /** Remember one finished run. Bookkeeping never fails the run it describes. */
   private recordRun(run: Omit<MnemonSyncLastRun, 'at'>): void {
     const path = this.lastRunPath()
-    const temporary = path + '.' + String(process.pid) + '.tmp'
     try {
-      mkdirSync(join(path, '..'), { recursive: true, mode: 0o700 })
-      writeFileSync(temporary, JSON.stringify({ at: this.now().toISOString(), ...run }, null, 2) + '\n', { mode: 0o600 })
-      renameSync(temporary, path)
+      writeAtomicJsonSync(path, { at: this.now().toISOString(), ...run })
     } catch {
-      rmSync(temporary, { force: true })
+      // Bookkeeping never fails the sync run it describes.
     }
   }
 
   /** Read the remote payload and report what it would change, without importing anything. */
   async preview(signal?: AbortSignal): Promise<MnemonSyncPreview> {
-    const settings = this.requireRepository()
+    this.requireRepository()
     await this.requireGit(signal)
     const exported = await this.packs.exportPack('full')
     return this.lock(async () => {
+      const settings = this.requireRepository()
       const remote = await this.readRemote(settings, signal)
       if (remote === undefined) throw this.absentPayload(settings)
       const local = unpack(Buffer.from(exported.base64, 'base64'))
@@ -1071,10 +1072,11 @@ export class MnemonGitSync {
    * missing or unreadable is not a backup and is skipped rather than reported empty.
    */
   async backups(input: { limit?: number } = {}, signal?: AbortSignal): Promise<MnemonSyncBackupList> {
-    const settings = this.requireRepository()
+    this.requireRepository()
     await this.requireGit(signal)
     const limit = backupLimit(input.limit)
     return this.lock(async () => {
+      const settings = this.requireRepository()
       // A branch with no payload yet is an empty history, not a failure: the reader
       // is asking what exists, and nothing existing is a valid answer.
       const prepared = await this.ensureMirror(settings, signal)
@@ -1100,10 +1102,11 @@ export class MnemonGitSync {
    * machine has not applied.
    */
   async diff(signal?: AbortSignal): Promise<MnemonSyncDiff> {
-    const settings = this.requireRepository()
+    this.requireRepository()
     await this.requireGit(signal)
     const exported = await this.packs.exportPack('full')
     return this.lock(async () => {
+      const settings = this.requireRepository()
       const remote = await this.readRemote(settings, signal)
       if (remote === undefined) throw this.absentPayload(settings)
       const local = unpack(Buffer.from(exported.base64, 'base64'))
@@ -1172,7 +1175,7 @@ export class MnemonGitSync {
 
   /** Preview the remote payload, then merge it through the importer Import ZIP uses. */
   async pull(input: { mode?: MnemonPackImportMode; components?: MnemonPackComponent[]; revive?: boolean; signal?: AbortSignal } = {}): Promise<MnemonSyncPullResult> {
-    const settings = this.requireRepository()
+    this.requireRepository()
     await this.requireGit(input.signal)
     const mode = input.mode ?? 'merge'
     const options: { mode: MnemonPackImportMode; components?: MnemonPackComponent[]; revive?: boolean } = {
@@ -1182,6 +1185,7 @@ export class MnemonGitSync {
       ...(input.revive === true ? { revive: true } : {}),
     }
     return this.lock(async () => {
+      const settings = this.requireRepository()
       const remote = await this.readRemote(settings, input.signal)
       if (remote === undefined) throw this.absentPayload(settings)
       const base = input.components === undefined || input.components.includes('documents')
@@ -1313,11 +1317,15 @@ export class MnemonGitSync {
   }
 
   /**
-   * One file out of one commit, or nothing when that commit does not hold it.
+   * One UTF-8 text file out of one commit, or nothing when that commit does not hold it.
    * Reading through the object store is what keeps the work tree, the index, and
-   * `HEAD` untouched, so the next push still sees a clean tree.
+   * `HEAD` untouched, so the next push still sees a clean tree. Binary object paths
+   * are rejected because `ProcessRunner` decodes UTF-8 stdout.
    */
-  private async show(commit: string, path: string, signal?: AbortSignal): Promise<Uint8Array | undefined> {
+  private async showUtf8(commit: string, path: string, signal?: AbortSignal): Promise<Uint8Array | undefined> {
+    if (/\.(?:db|sqlite|sqlite3|zip|pack|gz)$/iu.test(path)) {
+      throw new Error('binary git object reads are unsupported through UTF-8 git show: ' + path)
+    }
     const result = await this.git(['show', commit + ':' + path], {
       cwd: this.store.mirror(), signal, maxOutputBytes: MAX_FILE_BYTES,
     })
@@ -1327,7 +1335,7 @@ export class MnemonGitSync {
 
   /** One commit as a backup, or nothing when it does not actually carry a readable manifest. */
   private async backup(row: CommitRow, subdir: string, signal?: AbortSignal): Promise<MnemonSyncBackup | undefined> {
-    const bytes = await this.show(row.commit, subdir + MANIFEST, signal)
+    const bytes = await this.showUtf8(row.commit, subdir + MANIFEST, signal)
     if (bytes === undefined) return undefined
     let manifest: MnemonPackManifest
     let machine: MnemonMachineIdentity | undefined
@@ -1582,10 +1590,10 @@ export class MnemonGitSync {
     return text.replaceAll(token, '***')
   }
 
-  private async lock<T>(operation: () => Promise<T>): Promise<T> {
+  private lock<T>(operation: () => T | Promise<T>): Promise<T> {
     mkdirSync(this.root, { recursive: true, mode: 0o700 })
     mkdirSync(this.store.directory(), { recursive: true, mode: 0o700 })
-    return withDirectoryLock(join(this.store.directory(), '.sync.lock'), async () => {
+    return withDirectoryLock(join(this.store.directory(), '.sync.lock'), () => {
       this.sweepCredentials()
       return operation()
     })
@@ -1759,43 +1767,71 @@ function abandoned(path: string, now: number): boolean {
   }
 }
 
-/**
- * A single-writer lock for one storage root's sync work; the pack locks cover the
- * shared data. The lock records its owner, so a Host that stopped mid-operation
- * does not leave every later sync refused until someone deletes the directory.
- */
-async function withDirectoryLock<T>(path: string, operation: () => Promise<T>): Promise<T> {
-  const deadline = Date.now() + LOCK_TIMEOUT_MS
-  let held = false
-  while (!held && Date.now() < deadline) {
-    try {
-      mkdirSync(path, { recursive: false, mode: 0o700 })
-      held = true
-    } catch {
-      if (abandoned(path, Date.now())) {
-        // Moving the lock aside is atomic, so of two waiters that found it abandoned only
-        // one takes it over; the other finds it gone, or taken again, and keeps waiting.
-        const aside = path + '.abandoned.' + String(process.pid) + '.' + String(Date.now())
-        try {
-          if (abandoned(path, Date.now())) renameSync(path, aside)
-        } catch {
-          continue
-        }
+function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {
+  return typeof value === 'object' && value !== null && typeof (value as PromiseLike<T>).then === 'function'
+}
+
+function tryAcquireDirectoryLock(path: string): boolean {
+  try {
+    mkdirSync(path, { recursive: false, mode: 0o700 })
+    return true
+  } catch {
+    if (abandoned(path, Date.now())) {
+      // Moving the lock aside is atomic, so of two waiters that found it abandoned only
+      // one takes it over; the other finds it gone, or taken again, and keeps waiting.
+      const aside = path + '.abandoned.' + String(process.pid) + '.' + String(Date.now())
+      try {
+        if (abandoned(path, Date.now())) renameSync(path, aside)
         rmSync(aside, { recursive: true, force: true })
-        continue
+        mkdirSync(path, { recursive: false, mode: 0o700 })
+        return true
+      } catch {
+        return false
       }
-      await new Promise<void>(resolveReady => setTimeout(resolveReady, 25))
     }
+    return false
   }
-  if (!held) throw new MnemonSyncError('busy', 'another Mnemon sync operation is still running')
+}
+
+function runHoldingDirectoryLock<T>(path: string, operation: () => T | Promise<T>): Promise<T> {
   try {
     writeFileSync(join(path, LOCK_OWNER), JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }) + '\n', { mode: 0o600 })
   } catch {
     // The lock still holds without its record; only its recovery falls back to the age.
   }
+  let outcome: T | Promise<T>
   try {
-    return await operation()
-  } finally {
+    outcome = operation()
+  } catch (error) {
     rmSync(path, { recursive: true, force: true })
+    return Promise.reject(error instanceof Error ? error : new Error(String(error)))
   }
+  if (!isPromiseLike(outcome)) {
+    rmSync(path, { recursive: true, force: true })
+    return Promise.resolve(outcome)
+  }
+  return Promise.resolve(outcome).finally(() => {
+    rmSync(path, { recursive: true, force: true })
+  })
+}
+
+/**
+ * A single-writer lock for one storage root's sync work; the pack locks cover the
+ * shared data. The lock records its owner, so a Host that stopped mid-operation
+ * does not leave every later sync refused until someone deletes the directory.
+ */
+function withDirectoryLock<T>(path: string, operation: () => T | Promise<T>): Promise<T> {
+  if (tryAcquireDirectoryLock(path)) {
+    return runHoldingDirectoryLock(path, operation)
+  }
+  return (async () => {
+    const deadline = Date.now() + LOCK_TIMEOUT_MS
+    let held = false
+    while (!held && Date.now() < deadline) {
+      await new Promise<void>(resolveReady => setTimeout(resolveReady, 25))
+      held = tryAcquireDirectoryLock(path)
+    }
+    if (!held) throw new MnemonSyncError('busy', 'another Mnemon sync operation is still running')
+    return runHoldingDirectoryLock(path, operation)
+  })()
 }

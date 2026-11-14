@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { findMnemonCommand, mnemonNpmLauncher, nodeLauncherEnvironment, resolveMnemonInvocation } from 'dsh-mnemon-source-memory-spaces/native-cli'
+import { expandUserPath } from './config/index.ts'
 import { runProcess, type ProcessOptions, type ProcessResult, type ProcessRunner } from './process.ts'
 import type { VersionComponentId, VersionComponentStatus, VersionInstallMode, VersionPackageId, VersionPackageStatus, VersionRestartStatus, VersionStatus, VersionUpdateOutcome, VersionUpdateResult } from "./protocol.ts"
 
@@ -214,8 +215,8 @@ function executable(path: string): boolean {
 
 /** Resolve one executable without invoking a shell. */
 export function resolveExecutable(command: string): string | undefined {
-  if (command.includes('/') || command.includes('\\')) {
-    const path = command.startsWith('~/') ? join(homedir(), command.slice(2)) : resolve(command)
+  if (command.includes('/') || command.includes('\\') || command === '~') {
+    const path = resolve(expandUserPath(command))
     return executable(path) ? path : undefined
   }
   const names = process.platform === 'win32' ? [`${command}.exe`, `${command}.cmd`, command] : [command]
@@ -296,8 +297,12 @@ async function fetchJson(url: string): Promise<unknown> {
   }
 }
 
-async function fetchNpmLatest(name: string, tag = 'latest'): Promise<string | undefined> {
-  const body = await fetchJson(`https://registry.npmjs.org/${encodeURIComponent(name)}/${encodeURIComponent(tag)}`)
+function npmRegistryBase(): string {
+  return (process.env.npm_config_registry ?? process.env.NPM_CONFIG_REGISTRY ?? 'https://registry.npmjs.org').replace(/\/+$/u, '')
+}
+
+export async function fetchNpmLatest(name: string, tag = 'latest'): Promise<string | undefined> {
+  const body = await fetchJson(`${npmRegistryBase()}/${encodeURIComponent(name)}/${encodeURIComponent(tag)}`)
   if (typeof body !== 'object' || body === null) return undefined
   const version = (body as Record<string, unknown>).version
   return typeof version === 'string' ? version : undefined
@@ -445,7 +450,7 @@ export class VersionUpdateManager {
     this.packageManifestPath = dependencies.packageManifestPath ?? PACKAGE_MANIFEST_PATH
     this.runningVersion = (dependencies.packageManifestPath === undefined ? LOADED_VERSION : undefined) ?? manifest(this.packageManifestPath)?.version ?? '0.0.0'
     this.dshMnemonVersion = this.runningVersion
-    this.dshHome = dependencies.dshHome ?? (process.env.DSH_HOME?.trim() || join(homedir(), '.dsh'))
+    this.dshHome = dependencies.dshHome ?? resolve(expandUserPath(process.env.DSH_HOME?.trim() || join(homedir(), '.dsh')))
     this.mnemonCliPath = dependencies.mnemonCliPath ?? (() => findMnemonCommand({}))
     this.processRunner = dependencies.processRunner ?? runProcess
     this.executable = dependencies.resolveExecutable ?? resolveExecutable

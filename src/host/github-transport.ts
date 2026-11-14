@@ -213,12 +213,46 @@ export function discoverGitHubProxy(options: {
 }
 
 /** Open one CONNECT tunnel through the proxy and finish its TLS handshake. */
-function connectThroughProxy(proxy: URL, host: string, port: number): Promise<TLSSocket> {
+function connectThroughProxy(
+  proxy: URL,
+  host: string,
+  port: number,
+  signal?: AbortSignal,
+  timeoutMs = MNEMON_GITHUB_TUNNEL_TIMEOUT_MS,
+): Promise<TLSSocket> {
   return new Promise<TLSSocket>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason instanceof Error ? signal.reason : new Error(String(signal.reason ?? 'aborted')))
+      return
+    }
     const authority = host + ':' + String(port)
     const authorization = proxy.username === ''
       ? {}
       : { 'proxy-authorization': 'Basic ' + Buffer.from(decodeURIComponent(proxy.username) + ':' + decodeURIComponent(proxy.password)).toString('base64') }
+    let rawSocket: Duplex | undefined
+    let tlsSocket: TLSSocket | undefined
+    let handshakeTimer: NodeJS.Timeout | undefined
+    let settled = false
+    const clearHandshake = (): void => {
+      if (handshakeTimer !== undefined) {
+        clearTimeout(handshakeTimer)
+        handshakeTimer = undefined
+      }
+    }
+    const fail = (error: unknown): void => {
+      if (settled) return
+      settled = true
+      clearHandshake()
+      signal?.removeEventListener('abort', onAbort)
+      tlsSocket?.destroy()
+      rawSocket?.destroy()
+      connect.destroy()
+      reject(error instanceof Error ? error : new Error(String(error)))
+    }
+    const onAbort = (): void => {
+      fail(signal?.reason instanceof Error ? signal.reason : new Error(String(signal?.reason ?? 'aborted')))
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
     const connect = httpRequest({
       host: proxy.hostname,
       port: proxy.port === '' ? 80 : Number(proxy.port),
@@ -226,29 +260,52 @@ function connectThroughProxy(proxy: URL, host: string, port: number): Promise<TL
       path: authority,
       headers: { host: authority, ...authorization },
       agent: false,
-      timeout: MNEMON_GITHUB_TUNNEL_TIMEOUT_MS,
+      timeout: timeoutMs,
     })
     connect.once('connect', (response, socket) => {
-      if (response.statusCode !== 200) {
+      rawSocket = socket
+      if (settled) {
         socket.destroy()
-        reject(new Error('the proxy refused the tunnel with HTTP ' + String(response.statusCode)))
+        return
+      }
+      if (response.statusCode !== 200) {
+        fail(new Error('the proxy refused the tunnel with HTTP ' + String(response.statusCode)))
         return
       }
       const secured = tlsConnect({ socket, servername: host })
-      secured.once('secureConnect', () => resolve(secured))
-      secured.once('error', reject)
+      tlsSocket = secured
+      handshakeTimer = setTimeout(() => {
+        fail(new Error('the TLS handshake through the proxy did not finish within ' + String(timeoutMs) + 'ms'))
+      }, timeoutMs)
+      handshakeTimer.unref?.()
+      secured.once('secureConnect', () => {
+        if (settled) {
+          secured.destroy()
+          socket.destroy()
+          return
+        }
+        settled = true
+        clearHandshake()
+        signal?.removeEventListener('abort', onAbort)
+        resolve(secured)
+      })
+      secured.once('error', fail)
     })
     connect.once('timeout', () => {
-      connect.destroy(new Error('the proxy did not answer within ' + String(MNEMON_GITHUB_TUNNEL_TIMEOUT_MS) + 'ms'))
+      fail(new Error('the proxy did not answer within ' + String(timeoutMs) + 'ms'))
     })
-    connect.once('error', reject)
+    connect.once('error', fail)
     connect.end()
   })
 }
 
 /** An agent whose every connection is a tunnel through one proxy. */
 class TunnelAgent extends Agent {
-  constructor(private readonly proxy: URL) {
+  constructor(
+    private readonly proxy: URL,
+    private readonly signal?: AbortSignal,
+    private readonly timeoutMs = MNEMON_GITHUB_TUNNEL_TIMEOUT_MS,
+  ) {
     super({ keepAlive: false })
   }
 
@@ -260,8 +317,16 @@ class TunnelAgent extends Agent {
       callback?.(new Error('the tunnel needs a destination host'), undefined as unknown as Duplex)
       return undefined
     }
-    connectThroughProxy(this.proxy, host, Number.isFinite(port) ? port : 443).then(
-      socket => { callback?.(null, socket) },
+    connectThroughProxy(this.proxy, host, Number.isFinite(port) ? port : 443, this.signal, this.timeoutMs).then(
+      socket => {
+        if (this.signal?.aborted) {
+          socket.destroy()
+          const reason = this.signal.reason
+          callback?.(reason instanceof Error ? reason : new Error(String(reason ?? 'aborted')), undefined as unknown as Duplex)
+          return
+        }
+        callback?.(null, socket)
+      },
       (error: unknown) => { callback?.(error instanceof Error ? error : new Error(String(error)), undefined as unknown as Duplex) },
     )
     return undefined
@@ -291,13 +356,18 @@ export function tunnelAnswer(status: number, type: string | undefined, text: str
 }
 
 /** The request one tunnel performs, as a `fetch`-shaped answer. */
-function tunnelRequest(agent: TunnelAgent, url: string, init: RequestInit): Promise<Response> {
+function tunnelRequest(target: URL, url: string, init: RequestInit, timeoutMs = MNEMON_GITHUB_TUNNEL_TIMEOUT_MS): Promise<Response> {
   return new Promise<Response>((resolve, reject) => {
+    const signal = init.signal ?? undefined
+    const agent = new TunnelAgent(target, signal, timeoutMs)
     const request = httpsRequest(url, {
       agent,
       method: init.method ?? 'GET',
       headers: headerRecord(init.headers),
-      ...(init.signal === undefined || init.signal === null ? {} : { signal: init.signal }),
+      ...(signal === undefined ? {} : { signal }),
+    })
+    request.on('socket', socket => {
+      if (request.destroyed || signal?.aborted) socket.destroy()
     })
     request.once('error', reject)
     request.once('response', response => {
@@ -315,15 +385,14 @@ function tunnelRequest(agent: TunnelAgent, url: string, init: RequestInit): Prom
 }
 
 /** A `fetch` that reaches every host through one proxy. */
-export function createTunnelFetch(proxy: MnemonGitHubProxy): MnemonGitHubFetch {
+export function createTunnelFetch(proxy: MnemonGitHubProxy, timeoutMs = MNEMON_GITHUB_TUNNEL_TIMEOUT_MS): MnemonGitHubFetch {
   let target: URL
   try {
     target = new URL(proxy.url)
   } catch {
     throw new Error('the proxy address could not be read: ' + proxy.url)
   }
-  const agent = new TunnelAgent(target)
-  return (async (input: RequestInfo | URL, init: RequestInit = {}) => tunnelRequest(agent, urlOf(input), init)) as MnemonGitHubFetch
+  return (async (input: RequestInfo | URL, init: RequestInit = {}) => tunnelRequest(target, urlOf(input), init, timeoutMs)) as MnemonGitHubFetch
 }
 
 /** One line naming what went wrong, with the reason undici hid in `cause`. */

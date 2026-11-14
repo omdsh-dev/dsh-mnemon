@@ -349,4 +349,85 @@ describe('market sources', () => {
     const failed = service(web({ 'https://skills.sh/api/search?q=pdf&limit=30': 429 }))
     expect(await failed.searchMarket(undefined, 'pdf')).toMatchObject({ items: [], error: 'skills.sh is busy; try again in a moment' })
   })
+
+  it('defaults GitHub catalog entries without ref to HEAD, allows up to 4 MiB skill documents, and aborts oversized streams early', async () => {
+    const calls: string[] = []
+    const largeDoc = SKILL('large-doc', 'x'.repeat(2_500_000))
+    const registryPath = join(root, 'custom-registry.json')
+    writeFileSync(registryPath, JSON.stringify({
+      version: 1,
+      id: 'custom',
+      name: 'Custom',
+      skills: [
+        { name: 'head-skill', description: 'Default branch HEAD.', source: { type: 'github', repo: 'acme/trunk-repo', path: 'skills/head-skill' } },
+        { name: 'large-doc', description: '3 MiB SKILL.md.', source: { type: 'url', url: 'https://example.test/large/SKILL.md' } },
+        { name: 'oversized-header', description: 'Too big Content-Length.', source: { type: 'url', url: 'https://example.test/huge/SKILL.md' } },
+        { name: 'oversized-stream', description: 'Too big stream.', source: { type: 'url', url: 'https://example.test/stream/SKILL.md' } },
+      ],
+    }))
+    let textCalled = false
+    let streamChunksRead = 0
+    const fetcher: Fetcher = async url => {
+      calls.push(url)
+      if (url === 'https://api.github.com/repos/acme/trunk-repo/git/trees/HEAD?recursive=1') {
+        return answer(200, JSON.stringify({ truncated: false, tree: [{ path: 'skills/head-skill/SKILL.md', type: 'blob', size: 64 }] }))
+      }
+      if (url === 'https://raw.githubusercontent.com/acme/trunk-repo/HEAD/skills/head-skill/SKILL.md') {
+        return answer(200, SKILL('head-skill'))
+      }
+      if (url === 'https://example.test/large/SKILL.md') {
+        return answer(200, largeDoc)
+      }
+      if (url === 'https://example.test/huge/SKILL.md') {
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: name => name.toLowerCase() === 'content-length' ? String(5 * 1024 * 1024) : null },
+          text: async () => { textCalled = true; return '' },
+          arrayBuffer: async () => { textCalled = true; return new ArrayBuffer(0) },
+        }
+      }
+      if (url === 'https://example.test/stream/SKILL.md') {
+        const chunk = new Uint8Array(1024 * 1024)
+        const body = new ReadableStream<Uint8Array>({
+          pull(controller) {
+            streamChunksRead += 1
+            if (streamChunksRead > 100) controller.close()
+            else controller.enqueue(chunk)
+          },
+        })
+        return {
+          ok: true,
+          status: 200,
+          body,
+          text: async () => '',
+          arrayBuffer: async () => new ArrayBuffer(0),
+        }
+      }
+      return answer(404)
+    }
+    const market = service(fetcher)
+    let rev = market.revision(undefined)
+    await market.addRegistry(registryPath)
+    expect(market.revision(undefined)).not.toBe(rev)
+    rev = market.revision(undefined)
+
+    const preview = await market.marketPreview('custom', 'head-skill')
+    expect(preview.content).toContain('name: head-skill')
+    await market.installMarket(undefined, { registryId: 'custom', name: 'head-skill' })
+    expect(calls.every(url => !url.includes('/main/'))).toBe(true)
+
+    const largePreview = await market.marketPreview('custom', 'large-doc')
+    expect(largePreview.content.length).toBe(largeDoc.length)
+
+    await expect(market.marketPreview('custom', 'oversized-header')).rejects.toThrow('larger than 4194304 bytes')
+    expect(textCalled).toBe(false)
+
+    await expect(market.marketPreview('custom', 'oversized-stream')).rejects.toThrow('larger than 4194304 bytes')
+    expect(streamChunksRead).toBeLessThanOrEqual(6)
+
+    rev = market.revision(undefined)
+    await market.toggleRegistry('custom', false)
+    expect(market.revision(undefined)).not.toBe(rev)
+  })
 })

@@ -35,6 +35,8 @@ const TREE_TTL_MS = 10 * 60 * 1000
 export interface FetchResponse {
   ok: boolean
   status: number
+  headers?: { get(name: string): string | null } | undefined
+  body?: ReadableStream<Uint8Array> | null | undefined
   text(): Promise<string>
   arrayBuffer(): Promise<ArrayBuffer>
 }
@@ -157,17 +159,60 @@ async function request(fetcher: Fetcher, url: string, signal?: AbortSignal, head
   }
 }
 
-async function fetchText(fetcher: Fetcher, url: string, signal?: AbortSignal, headers?: Record<string, string>): Promise<string> {
+function checkDeclaredLength(response: FetchResponse, url: string, limit: number): void {
+  const declared = response.headers?.get('content-length')?.trim()
+  if (declared !== undefined && /^\d+$/u.test(declared) && Number(declared) > limit) {
+    throw new Error(`${url} is larger than ${limit} bytes`)
+  }
+}
+
+async function readStreamBytes(body: ReadableStream<Uint8Array>, url: string, limit: number): Promise<Buffer> {
+  const reader = body.getReader()
+  const chunks: Uint8Array[] = []
+  let total = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (value === undefined || value.byteLength === 0) continue
+      total += value.byteLength
+      if (total > limit) {
+        await reader.cancel().catch(() => undefined)
+        throw new Error(`${url} is larger than ${limit} bytes`)
+      }
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+  return Buffer.concat(chunks, total)
+}
+
+async function fetchText(
+  fetcher: Fetcher,
+  url: string,
+  signal?: AbortSignal,
+  headers?: Record<string, string>,
+  limit = MAX_REGISTRY_BYTES,
+): Promise<string> {
   const response = await request(fetcher, url, signal, headers)
   if (!response.ok) throw new Error(`${url} answered HTTP ${response.status}`)
+  checkDeclaredLength(response, url, limit)
+  if (typeof response.body?.getReader === 'function') {
+    return (await readStreamBytes(response.body, url, limit)).toString('utf8')
+  }
   const text = await response.text()
-  if (Buffer.byteLength(text, 'utf8') > MAX_REGISTRY_BYTES) throw new Error(`${url} is larger than ${MAX_REGISTRY_BYTES} bytes`)
+  if (Buffer.byteLength(text, 'utf8') > limit) throw new Error(`${url} is larger than ${limit} bytes`)
   return text
 }
 
-async function fetchBytes(fetcher: Fetcher, url: string, limit: number, signal?: AbortSignal): Promise<Buffer> {
+async function fetchBytes(fetcher: Fetcher, url: string, limit: number, signal?: AbortSignal, label = url): Promise<Buffer> {
   const response = await request(fetcher, url, signal)
-  if (!response.ok) throw new Error(`${url} answered HTTP ${response.status}`)
+  if (!response.ok) throw new Error(`${label} answered HTTP ${response.status}`)
+  checkDeclaredLength(response, url, limit)
+  if (typeof response.body?.getReader === 'function') {
+    return readStreamBytes(response.body, url, limit)
+  }
   const data = Buffer.from(await response.arrayBuffer())
   if (data.byteLength > limit) throw new Error(`${url} is larger than ${limit} bytes`)
   return data
@@ -472,7 +517,7 @@ export async function listSkillFiles(entry: MarketEntry, registryLocation: strin
     case 'github': {
       const { repo, path } = entry.source
       const prefix = path === '' ? '' : path + '/'
-      return (await githubTree(fetcher, repo, entry.source.ref ?? 'main', path, signal)).map(file => ({ path: file.path.slice(prefix.length), bytes: file.size ?? 0 }))
+      return (await githubTree(fetcher, repo, entry.source.ref ?? 'HEAD', path, signal)).map(file => ({ path: file.path.slice(prefix.length), bytes: file.size ?? 0 }))
     }
   }
 }
@@ -480,15 +525,17 @@ export async function listSkillFiles(entry: MarketEntry, registryLocation: strin
 /** The SKILL.md of a market entry, for a preview before installing. */
 export async function fetchSkillDocument(entry: MarketEntry, registryLocation: string, fetcher: Fetcher, signal?: AbortSignal): Promise<string> {
   switch (entry.source.type) {
-    case 'url': return fetchText(fetcher, entry.source.url, signal)
+    case 'url': return fetchText(fetcher, entry.source.url, signal, undefined, MAX_FILE_BYTES)
     case 'path': {
       const root = localRoot(entry as MarketEntry & { source: { type: 'path' } }, registryLocation)
-      return readFileSync(statSync(root).isFile() ? root : join(root, 'SKILL.md'), 'utf8')
+      const file = statSync(root).isFile() ? root : join(root, 'SKILL.md')
+      if (statSync(file).size > MAX_FILE_BYTES) throw new Error(`${file} is larger than ${MAX_FILE_BYTES} bytes`)
+      return readFileSync(file, 'utf8')
     }
-    case 'files': return fetchText(fetcher, new URL('SKILL.md', entry.source.base).toString(), signal)
+    case 'files': return fetchText(fetcher, new URL('SKILL.md', entry.source.base).toString(), signal, undefined, MAX_FILE_BYTES)
     case 'artifact': return (await artifactFiles(entry as MarketEntry & { source: { type: 'artifact' } }, fetcher, signal)).find(file => file.path === 'SKILL.md')!.data.toString('utf8')
     case 'indexed': return unresolved()
-    case 'github': return fetchText(fetcher, rawUrl(entry.source.repo, entry.source.ref ?? 'main', entry.source.path === '' ? 'SKILL.md' : `${entry.source.path}/SKILL.md`), signal)
+    case 'github': return fetchText(fetcher, rawUrl(entry.source.repo, entry.source.ref ?? 'HEAD', entry.source.path === '' ? 'SKILL.md' : `${entry.source.path}/SKILL.md`), signal, undefined, MAX_FILE_BYTES)
   }
 }
 
@@ -514,10 +561,8 @@ export async function fetchSkillFiles(entry: MarketEntry, registryLocation: stri
     } else if (entry.source.type === 'files') {
       data = await fetchBytes(fetcher, new URL(path, entry.source.base).toString(), MAX_FILE_BYTES, signal)
     } else {
-      const { repo, ref = 'main' } = entry.source
-      const response = await request(fetcher, rawUrl(repo, ref, entry.source.path === '' ? path : `${entry.source.path}/${path}`), signal)
-      if (!response.ok) throw new Error(`${repo}/${path} answered HTTP ${response.status}`)
-      data = Buffer.from(await response.arrayBuffer())
+      const { repo, ref = 'HEAD' } = entry.source
+      data = await fetchBytes(fetcher, rawUrl(repo, ref, entry.source.path === '' ? path : `${entry.source.path}/${path}`), MAX_FILE_BYTES, signal, `${repo}/${path}`)
     }
     if (data.byteLength > MAX_FILE_BYTES) throw new Error(`${path} is larger than ${MAX_FILE_BYTES} bytes`)
     files.push({ path, data })

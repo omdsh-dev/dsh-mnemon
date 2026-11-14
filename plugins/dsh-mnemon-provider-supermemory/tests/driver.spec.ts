@@ -102,6 +102,29 @@ describe('standalone supermemory data plane', () => {
       'DELETE /v3/documents/doc-1',
     ])
   })
+
+  it('probes status via a single lightweight v4 list request, omits blank Authorization, and does not fallback on 5xx', async () => {
+    const requests: Array<{ path: string; init?: RequestInit }> = []
+    const fetchMock = vi.fn<typeof fetch>(async (url, init) => {
+      const path = new URL(String(url)).pathname
+      requests.push({ path: `${init?.method ?? 'GET'} ${path}`, ...(init === undefined ? {} : { init }) })
+      if (path === '/v4/memories/list') return response({ memoryEntries: [] })
+      if (path === '/v3/container-tags/list') return response({ containerTags: [] })
+      if (path === '/v4/memories' && init?.method === 'DELETE') return response({ message: 'upstream HTTP 404 detail' }, 500)
+      throw new Error(`unexpected ${init?.method ?? 'GET'} ${path}`)
+    })
+    const { registry, body } = await providerBody('supermemory', {
+      endpoint: 'https://api.supermemory.ai', apiKey: 'Bearer sm-secret', containerTag: 'alice', searchMode: 'hybrid',
+    })
+    const provider = new SupermemoryProvider(registry, { fetch: fetchMock })
+
+    await expect(provider.status(body)).resolves.toEqual({ healthy: true })
+    await expect(provider.forget(body, 'sm-1')).rejects.toThrow(/HTTP 500/u)
+    await expect(provider.discover({ endpoint: 'https://api.supermemory.ai', apiKey: '' })).resolves.toEqual([])
+    expect(requests.map(entry => entry.path)).toEqual(['POST /v4/memories/list', 'DELETE /v4/memories', 'GET /v3/container-tags/list'])
+    expect(new Headers(requests[0]?.init?.headers).get('Authorization')).toBe('Bearer sm-secret')
+    expect(new Headers(requests[2]?.init?.headers).get('Authorization')).toBeNull()
+  })
 })
 
 describe('independent supermemory Provider', () => {

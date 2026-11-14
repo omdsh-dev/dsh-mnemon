@@ -1,6 +1,12 @@
-import type { MemoryJsonValue, MemoryPluginLocalizedText, MemoryPluginRole, MemoryViewGuidance, MemoryViewSourcePresentation } from '../core/contracts/index.ts'
-import type { TurnMemoryActivity } from './protocol.ts'
-import type { MemoryStrategyConfigurationField } from '../sdk/strategy-configuration.ts'
+import type {
+  MemoryJsonValue,
+  MemoryPluginLocalizedText,
+  MemoryPluginRole,
+  MemoryStrategyConfigurationField,
+  MemoryViewGuidance,
+  MemoryViewSourcePresentation,
+} from '../core/contracts/index.ts'
+import type { TurnMemoryActivity } from './protocol/memory.ts'
 
 export const MNEMON_VIEW_CHANNEL = '/dsh-mnemon-view'
 export const MNEMON_VIEW_WRITE_CHANNEL = '/dsh-mnemon-view-settings'

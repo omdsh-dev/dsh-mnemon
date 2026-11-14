@@ -2,11 +2,83 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import type { Context } from '@deepseek-ai/cordis'
+import { ANY_MEMORY_SOURCE_ROLE, COMPOSABLE_MEMORY_API_VERSION } from 'dsh-mnemon/contracts'
+import { defineMemoryPlugin, defineMemoryStrategy, installMemory } from 'dsh-mnemon/extension-sdk'
 import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
 import * as plugin from '../src/index.ts'
 import { strategy } from './fixture.ts'
 
 describe('Skills Source', () => {
+  it('declares both generic source and procedural source capabilities so it composes alone with strategies requiring source', async () => {
+    expect(plugin.memoryPlugin.provides).toEqual([{ id: 'source' }, { id: 'source.procedural' }])
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-skills-standalone-'))
+    const runner = new MemoryCompositionRunner()
+    const requiresSourceStrategy = {
+      inject: ['mnemonMemory'],
+      apply(ctx: Context) {
+        installMemory(ctx, {
+          plugin: defineMemoryPlugin({
+            packageName: 'test-requires-source-strategy',
+            label: { en: 'Requires Source', 'zh-CN': '需要记忆源' },
+            description: { en: 'Requires Source.', 'zh-CN': '需要记忆源。' },
+            roles: ['strategy'],
+            provides: [{ id: 'strategy', exclusive: true }],
+            requires: ['source'],
+          }),
+          strategies: [defineMemoryStrategy({
+            manifest: {
+              apiVersion: COMPOSABLE_MEMORY_API_VERSION,
+              kind: 'strategy',
+              typeId: 'test-requires-source',
+              packageName: 'test-requires-source-strategy',
+              deterministic: true,
+              supportedSourceRoles: [ANY_MEMORY_SOURCE_ROLE],
+              maxSources: 4,
+              maxRoutes: 4,
+              maxActions: 4,
+            },
+            compose: (_request, sources) => ({
+              strategyTypeId: 'test-requires-source',
+              explanation: 'Standalone skills test.',
+              sources: sources.filter(source => source.availability !== 'unavailable').map(source => ({
+                sourceInstanceKey: source.sourceInstanceKey,
+                routeIds: source.routeIds,
+                actionIds: source.actionIds,
+              })),
+            }),
+          })],
+        })
+      },
+    }
+    try {
+      await runner.mount(requiresSourceStrategy, { instanceId: 'strategy' })
+      await runner.mount(plugin, { instanceId: 'skills', config: { dataDir: join(directory, 'data'), dshHome: join(directory, 'dsh'), agentsHome: join(directory, 'agents') } })
+      const client = await runner.managementClient('source:skills', { storage: 'global' })
+      await expect(client.read('overview', null)).resolves.toMatchObject({ value: { counts: { skills: 0 } } })
+    } finally {
+      await runner.dispose()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('recovers management when evals.json was transiently unreadable during startup recovery', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-skills-recovery-'))
+    const dataDir = join(directory, 'data')
+    mkdirSync(join(dataDir, 'skills'), { recursive: true })
+    writeFileSync(join(dataDir, 'skills', 'evals.json'), '{broken-at-boot')
+    const runner = new MemoryCompositionRunner()
+    try {
+      await runner.mount(strategy, { instanceId: 'strategy' })
+      await runner.mount(plugin, { instanceId: 'skills', config: { dataDir, dshHome: join(directory, 'dsh'), agentsHome: join(directory, 'agents') } })
+      rmSync(join(dataDir, 'skills', 'evals.json'), { force: true })
+      const client = await runner.managementClient('source:skills', { storage: 'global' })
+      await expect(client.read('runs', null)).resolves.toMatchObject({ value: [] })
+    } finally {
+      await runner.dispose()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
   it('resolves recorded origins only through confirmed management, without offering model grants', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'mnemon-skills-origin-'))
     const workspace = join(directory, 'workspace')

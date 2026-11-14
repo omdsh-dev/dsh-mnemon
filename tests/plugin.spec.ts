@@ -544,14 +544,11 @@ describe('dsh-mnemon plugin composition', () => {
     const fixture = context()
     const attach = vi.spyOn(MemoryRuntime.prototype, 'attachGeneration')
     apply(fixture.ctx as never, { cliPath: '/fake/mnemon', dataDir: dataDir() })
-    // Registration validates the initial candidate before the active graph starts.
-    expect(attach).toHaveBeenCalledTimes(2)
-    const [checked, active] = attach.mock.results.map(result => result.value as ReturnType<MemoryRuntime['attachGeneration']>)
-    expect(() => checked!.host.acquire()).toThrow('disposed')
+    // Registration validates via lightweight composition dry-run before the single active graph starts.
+    expect(attach).toHaveBeenCalledTimes(1)
+    const [active] = attach.mock.results.map(result => result.value as ReturnType<MemoryRuntime['attachGeneration']>)
     fixture.preflight({ cliPath: '/fake/mnemon', dataDir: dataDir() })
-    expect(attach).toHaveBeenCalledTimes(3)
-    const candidate = attach.mock.results[2]!.value as ReturnType<MemoryRuntime['attachGeneration']>
-    expect(() => candidate.host.acquire()).toThrow('disposed')
+    expect(attach).toHaveBeenCalledTimes(1)
     for (const cleanup of fixture.effectCleanups.splice(0).reverse()) await cleanup()
     expect(() => active!.host.acquire()).toThrow('disposed')
     expect(() => (fixture.ctx.get('mnemonMemory') as MnemonMemoryService).installContributions({}, { instanceId: 'closed' })).toThrow('disposed')

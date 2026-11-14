@@ -8,7 +8,7 @@ import { Config, InteractionConfig, resolveConfig } from '../src/host/config.ts'
 import type { HostContextShape, HostSettingsService } from '../src/host/dsh.ts'
 import { plainHostConfig } from '../src/host/live-config.ts'
 import { ProfileMnemonSettings } from '../src/host/settings-service.ts'
-import { legacyPreferences, legacySchema, preferences, schema as ViewSchema } from '../src/host/view-preferences.ts'
+import { preferences, schema as ViewSchema } from '../src/host/view-preferences.ts'
 
 const viewNamespace = 'mnemon-view-0123456789abcdef'
 const legacyNamespace = 'mnemon-plugins-0123456789abcdef'
@@ -124,7 +124,6 @@ function host(disk: Files) {
       settings.register('mnemon', Config, { applies: 'live', validate: resolveConfig })
       settings.register('mnemon-ui', InteractionConfig, { applies: 'live' })
       settings.register(viewNamespace, ViewSchema, { applies: 'live', validate: preferences })
-      settings.register(legacyNamespace, legacySchema, { applies: 'live', validate: legacyPreferences })
     } })
     return { ctx, fiber, entry, settings }
   }

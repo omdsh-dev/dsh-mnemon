@@ -14,7 +14,7 @@ export const memoryPlugin = defineMemoryPlugin({
     'zh-CN': '管理 DSH 技能，并让它们从对话中持续改进。',
   },
   roles: ['source'],
-  provides: [{ id: 'source.procedural' }],
+  provides: [{ id: 'source' }, { id: 'source.procedural' }],
 })
 
 export function apply(ctx: Context, config: Config = {}): void {

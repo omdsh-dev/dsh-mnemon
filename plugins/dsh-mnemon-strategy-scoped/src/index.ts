@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
+import * as sdk from 'dsh-mnemon/extension-sdk'
 import { defineMemoryPlugin, defineMemoryViewExtension, installMemory, defineMemoryStrategyConfiguration, validateMemoryViewExtension } from 'dsh-mnemon/extension-sdk'
 
 export interface Config { sourceKeys?: string[]; writableSourceKeys?: string[] }
@@ -13,6 +14,10 @@ export const memoryPlugin = defineMemoryPlugin({
   requires: ['strategy'],
 })
 const roles = ['working-context', 'narrative', 'durable-evidence']
+const roleRank = (role: string): number => {
+  const index = roles.indexOf(role)
+  return index === -1 ? roles.length : index
+}
 
 export function createScopedExtension(config: Config = {}) {
   const selection = config.sourceKeys === undefined ? undefined : validateMemoryViewExtension('selection', {
@@ -23,8 +28,8 @@ export function createScopedExtension(config: Config = {}) {
   }).writableSourceKeys
   return defineMemoryViewExtension({ typeId: 'scoped', packageName: name, slot: 'selection',
     contribute: (_request, sources) => selection ?? {
-      sourceKeys: sources.filter(source => roles.includes(source.role))
-        .sort((a, b) => roles.indexOf(a.role) - roles.indexOf(b.role) || a.sourceInstanceKey.localeCompare(b.sourceInstanceKey))
+      sourceKeys: [...sources]
+        .sort((a, b) => roleRank(a.role) - roleRank(b.role) || a.sourceInstanceKey.localeCompare(b.sourceInstanceKey))
         .map(source => source.sourceInstanceKey),
       ...(writable === undefined ? {} : { writableSourceKeys: writable }),
     },
@@ -32,7 +37,10 @@ export function createScopedExtension(config: Config = {}) {
 }
 
 export function apply(ctx: Context, config: Config = {}): void {
-  installMemory(ctx, { plugin: memoryPlugin, strategyExtensions: [createScopedExtension(config)] })
+  const options = typeof sdk.memoryConfigurationDigest === 'function'
+    ? { effectiveDigest: sdk.memoryConfigurationDigest(config) }
+    : undefined
+  installMemory(ctx, { plugin: memoryPlugin, strategyExtensions: [createScopedExtension(config)] }, options)
 }
 
 export const memoryStrategyConfiguration = defineMemoryStrategyConfiguration({

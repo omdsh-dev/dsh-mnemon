@@ -64,6 +64,18 @@ export function canonicalMemoryJson(value: unknown, label = 'memory value', ance
   }
 }
 
+/** Plain JSON-compatible object check rejecting arrays, null, and class instances (Date, Map, Set, RegExp). */
+export function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
+export function asPlainObject(value: unknown, label = 'value'): Record<string, unknown> {
+  if (!isPlainObject(value)) throw new Error(`${label} must be an object`)
+  return value
+}
+
 export function deepFreeze<T>(value: T): T {
   if (typeof value !== 'object' || value === null || Object.isFrozen(value)) return value
   for (const child of Object.values(value as Record<string, unknown>)) deepFreeze(child)

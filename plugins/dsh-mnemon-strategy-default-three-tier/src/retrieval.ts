@@ -168,7 +168,8 @@ class ThreeTierTurn implements MemoryStrategyTurn {
   private readonly state: TurnRetrievalState = { recallAttempts: [], evidenceDigests: new Set(), evidenceReferences: new Set() }
   constructor(private readonly view: ComposableMemoryView) {}
   async query(request: MemoryStrategyReadRequest, read: MemoryStrategyRead): Promise<MemoryEvidence> {
-    const grant = this.view.readGrants.find(grant => grant.id === request.route.readGrantId && grant.sourceInstanceKey === request.route.sourceInstanceKey)!
+    const grant = this.view.readGrants.find(grant => grant.id === request.route.readGrantId && grant.sourceInstanceKey === request.route.sourceInstanceKey)
+    if (grant === undefined) return read(request.input)
     const input = object(request.input, 'three-tier read')
     if (grant.schema === 'dsh-mnemon.documents/v1' && request.route.sourceRouteId === 'search') return this.documents(request, read)
     if (grant.schema !== 'dsh-mnemon.memory-spaces/v1' || !['recall', 'related', 'inspect'].includes(request.route.sourceRouteId)) return read(request.input)

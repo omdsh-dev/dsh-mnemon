@@ -118,6 +118,12 @@ export class MemoryContributionRegistry {
   }
 
   private notify(snapshot: MemoryContributionSnapshot): void {
-    for (const listener of [...this.listeners]) listener(snapshot)
+    for (const listener of [...this.listeners]) {
+      try {
+        listener(snapshot)
+      } catch {
+        // Isolate subscriber failures so remaining listeners still observe the snapshot.
+      }
+    }
   }
 }

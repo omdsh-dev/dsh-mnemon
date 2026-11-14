@@ -46,7 +46,14 @@ export class MemoryRuntime {
         this.batchSnapshot = undefined
         const pending = [...this.reconciliations]
         this.reconciliations.clear()
-        for (const [host, snapshot] of pending) host.reconcile(snapshot)
+        for (const [host, snapshot] of pending) {
+          if (host.isDisposed) continue
+          try {
+            host.reconcile(snapshot)
+          } catch (error) {
+            if (!host.isDisposed) throw error
+          }
+        }
         if (this.contributionsPending) {
           this.contributionsPending = false
           this.notifyCommitted()
@@ -88,7 +95,13 @@ export class MemoryRuntime {
     if (this.closed) return
     if (this.batchDepth) { this.contributionsPending = true; return }
     const snapshot = this.contributions.snapshot()
-    for (const listener of [...this.committedListeners]) listener(snapshot)
+    for (const listener of [...this.committedListeners]) {
+      try {
+        listener(snapshot)
+      } catch {
+        // Isolate subscriber failures so remaining listeners still observe the committed snapshot.
+      }
+    }
   }
 
   /** Attach one Host runtime graph to the current definition set. */
@@ -99,17 +112,22 @@ export class MemoryRuntime {
     // A workspace first opened during a settings transaction also starts from
     // the committed baseline, then joins the final reconciliation.
     if (this.batchSnapshot !== undefined) this.reconciliations.set(host, this.contributions.snapshot())
-    const unsubscribe = this.contributions.subscribe(snapshot => {
-      if (this.batchDepth) this.reconciliations.set(host, snapshot)
-      else host.reconcile(snapshot)
-    })
     let attached = true
+    let unsubscribe: () => void = () => {}
     const release = (): void => {
       if (!attached) return
       attached = false
       unsubscribe()
       this.reconciliations.delete(host)
     }
+    unsubscribe = this.contributions.subscribe(snapshot => {
+      if (host.isDisposed) {
+        release()
+        return
+      }
+      if (this.batchDepth) this.reconciliations.set(host, snapshot)
+      else host.reconcile(snapshot)
+    })
     let disposal: Promise<void> | undefined
     const attachment: MemoryGenerationAttachment = {
       host,

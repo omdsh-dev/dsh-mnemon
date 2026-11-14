@@ -1,5 +1,5 @@
 import { descriptor, provider, strategy } from './fixture.ts'
-import { providerEntries } from './providers.ts'
+import { providerEntries, TestHolographicProvider as HolographicProvider } from './providers.ts'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,7 +7,6 @@ import type { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 
 import { DEFAULT_MEMORY_VIEW_BUDGET, MemoryCompositionRunner } from 'dsh-mnemon/testing'
-import { HolographicProvider } from 'dsh-mnemon-provider-holographic'
 import * as spaces from '../src/index.ts'
 import { installMemorySpaces } from '../src/index.ts'
 import { MemorySpaceRegistry } from '../src/memory-spaces.ts'
@@ -398,6 +397,30 @@ describe('Memory Spaces metadata IO through public Cordis plugins', () => {
       turn.release()
     } finally {
       search.mockRestore()
+      await runner.dispose()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  })
+
+  it('validates remember-many request fields and enforces the 8192-character boundary cleanly', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-spaces-remember-many-'))
+    const scope = { storage: 'custom' as const }
+    const runner = new MemoryCompositionRunner()
+    try {
+      await runner.mount(strategy, { instanceId: 'strategy' })
+      await runner.mount({ inject: ['mnemonMemory'], async apply(ctx: Context) {
+        await installMemorySpaces(ctx, [{ instanceId: 'fixture', module: provider, config: undefined }], { config: { dataDir: directory } })
+      } }, { instanceId: 'spaces' })
+      const client = await runner.managementClient('source:spaces', scope)
+      await client.mutate('provider-service-update', { providerId: 'fixture', settings: {}, enabled: true }, { confirmed: true })
+      const body = ((await client.read('body-directory')).value as unknown as MemorySpaceCatalog).items[0]!
+      await expect(client.mutate('remember-many', { requests: [{ content: 42 as unknown as string, memoryBodyId: body.id }] }, { confirmed: true }))
+        .rejects.toThrow(/content/u)
+      await expect(client.mutate('remember-many', { requests: [{ content: 'x'.repeat(8193), memoryBodyId: body.id }] }, { confirmed: true }))
+        .rejects.toThrow('max 8192 characters')
+      await expect(client.mutate('remember', { content: 'x'.repeat(8193), memoryBodyId: body.id }, { confirmed: true }))
+        .rejects.toThrow('max 8192 characters')
+    } finally {
       await runner.dispose()
       rmSync(directory, { recursive: true, force: true })
     }

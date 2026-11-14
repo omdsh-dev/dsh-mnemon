@@ -1,4 +1,5 @@
 import { descriptor } from './descriptor.ts'
+import * as providerSdk from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import type { JsonValue } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import type { MemorySpaceAuthority } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import type { Insight, MemoryBody as MemorySpace, MemoryListRequest, RememberRequest, SearchRequest } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
@@ -31,7 +32,9 @@ function insight(value: unknown): Insight | undefined {
  * ambiguous, so retrying `remember`'s POST on it can store the memory twice.
  */
 function isEndpointMissing(error: unknown): boolean {
-  return error instanceof Error && /HTTP 404\b/u.test(error.message)
+  const status = typeof error === 'object' && error !== null ? (error as { status?: unknown }).status : undefined
+  if (typeof status === 'number') return status === 404
+  return error instanceof Error && /^[^:]+ HTTP 404\b/u.test(error.message)
 }
 
 export class RetainDbProvider extends HttpMemoryProvider implements MemoryProviderAdapter {
@@ -148,11 +151,18 @@ export class RetainDbProvider extends HttpMemoryProvider implements MemoryProvid
   }
 
   private headers(connection: Record<string, string | number | boolean>, path: string): HeadersInit {
-    const token = String(connection.apiKey ?? '').replace(/^Bearer\s+/iu, '')
+    const rawKey = String(connection.apiKey ?? '').trim()
+    const auth = typeof providerSdk.bearerAuthHeader === 'function'
+      ? providerSdk.bearerAuthHeader(rawKey)
+      : (() => {
+          const stripped = rawKey.replace(/^Bearer(?:\s+|$)/iu, '').trim()
+          return stripped === '' ? undefined : `Bearer ${stripped}`
+        })()
+    const token = auth?.slice('Bearer '.length)
     return {
-      Authorization: `Bearer ${token}`,
+      ...(auth === undefined ? {} : { Authorization: auth }),
       'x-sdk-runtime': 'dsh-mnemon',
-      ...(path.startsWith('/v1/memory') || path.startsWith('/v1/context') ? { 'X-API-Key': token } : {}),
+      ...(token !== undefined && (path.startsWith('/v1/memory') || path.startsWith('/v1/context')) ? { 'X-API-Key': token } : {}),
     }
   }
 }

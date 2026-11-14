@@ -13,7 +13,7 @@ import type {
 import { COMPOSABLE_MEMORY_API_VERSION } from 'dsh-mnemon/contracts'
 import { defineMemorySource, memoryInputInteger as integer, createMemoryMutationReceipt as receipt, memoryInputRecord as record, memoryInputStringArray as stringArray, memoryInputText as text, truncateMemoryText as truncate } from 'dsh-mnemon/extension-sdk'
 import { modelSpaceCatalog, modelStatus, modelJson } from './view-model.ts'
-import { MemorySpacesService, mutationResultCompletion } from './service.ts'
+import { MAX_REMEMBER_CONTENT_LENGTH, MemorySpacesService, mutationResultCompletion } from './service.ts'
 import { createRunner } from './runner.ts'
 import type { EmbeddingCredentialReader } from './embedding-credentials.ts'
 import { MemoryProviderCatalog } from './providers/catalog.ts'
@@ -41,6 +41,30 @@ const CATEGORY_SET = new Set<Category>(CATEGORIES)
 const SOURCE_SET = new Set<Source>(SOURCES)
 const INTENT_SET = new Set<Intent>(INTENTS)
 const EDGE_SET = new Set<EdgeType>(EDGE_TYPES)
+
+function parseRememberRequest(value: MemoryJsonValue): RememberRequest {
+  const input = record(value, 'remember request')
+  const content = text(input.content, 'content', MAX_REMEMBER_CONTENT_LENGTH)!
+  const category = text(input.category, 'category', 30, false)
+  if (category !== undefined && !CATEGORY_SET.has(category as Category)) throw new Error(`unsupported category: ${category}`)
+  if (input.importance !== undefined && (typeof input.importance !== 'number' || !Number.isFinite(input.importance))) {
+    throw new Error('importance must be a finite number')
+  }
+  const tags = stringArray(input.tags, 'tags', 100)
+  const entities = stringArray(input.entities, 'entities', 100)
+  const source = text(input.source, 'source', 30, false)
+  if (source !== undefined && !SOURCE_SET.has(source as Source)) throw new Error(`unsupported source: ${source}`)
+  const memoryBodyId = text(input.memoryBodyId, 'memoryBodyId', 300, false)
+  return {
+    content,
+    ...(category === undefined ? {} : { category: category as Category }),
+    ...(input.importance === undefined ? {} : { importance: input.importance }),
+    ...(tags === undefined ? {} : { tags }),
+    ...(entities === undefined ? {} : { entities }),
+    ...(source === undefined ? {} : { source: source as Source }),
+    ...(memoryBodyId === undefined ? {} : { memoryBodyId }),
+  }
+}
 
 function grantIds(grant: MemoryReadGrant): string[] {
   return stringArray(record(grant.value, 'Memory Spaces ReadGrant').memoryBodyIds, 'memoryBodyIds', 10_000) ?? []
@@ -247,15 +271,7 @@ async function manageMemorySpaces(service: MemorySpacesService, request: MemoryS
       )
       return managementResult(service, service.memorySpaces.providerServices().items.find(item => item.providerId === providerId)!)
     }
-    case 'remember': return managementResult(service, await service.remember({
-      content: text(input.content, 'content', 100_000)!,
-      ...(text(input.category, 'category', 30, false) === undefined ? {} : { category: text(input.category, 'category', 30, false)! as Category }),
-      ...(typeof input.importance !== 'number' ? {} : { importance: input.importance }),
-      ...(stringArray(input.tags, 'tags', 100) === undefined ? {} : { tags: stringArray(input.tags, 'tags', 100)! }),
-      ...(stringArray(input.entities, 'entities', 100) === undefined ? {} : { entities: stringArray(input.entities, 'entities', 100)! }),
-      ...(text(input.source, 'source', 30, false) === undefined ? {} : { source: text(input.source, 'source', 30, false)! as Source }),
-      ...(text(input.memoryBodyId, 'memoryBodyId', 300, false) === undefined ? {} : { memoryBodyId: text(input.memoryBodyId, 'memoryBodyId', 300, false)! }),
-    }, request.signal))
+    case 'remember': return managementResult(service, await service.remember(parseRememberRequest(request.input), request.signal))
     case 'link': return managementResult(service, await service.link(
       text(input.sourceId, 'sourceId', 2_000)!,
       text(input.targetId, 'targetId', 2_000)!,
@@ -281,7 +297,7 @@ async function manageMemorySpaces(service: MemorySpacesService, request: MemoryS
     }
     case 'remember-many': {
       if (!Array.isArray(input.requests) || input.requests.length > 1_000) throw new Error('remember-many requires at most 1000 requests')
-      return managementResult(service, await service.rememberMany(input.requests.map(value => record(value, 'remember request') as unknown as RememberRequest), request.signal))
+      return managementResult(service, await service.rememberMany(input.requests.map(parseRememberRequest), request.signal))
     }
     case 'body-create-for-persistence': {
       const selection = input.selection === undefined ? undefined : record(input.selection, 'placement selection')
@@ -647,16 +663,9 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
             bodyId = defaults[0]!
           }
           if (!writableBodies.includes(bodyId)) throw new Error('remember destination is outside this View scope')
-          const category = text(input.category, 'category', 30, false) as Category | undefined
-          const source = text(input.source, 'source', 30, false) as Source | undefined
-          if (category !== undefined && !CATEGORY_SET.has(category)) throw new Error(`unsupported category: ${category}`)
-          if (source !== undefined && !SOURCE_SET.has(source)) throw new Error(`unsupported source: ${source}`)
+          const parsed = parseRememberRequest(request.input)
           result = await service.remember({
-            content: text(input.content, 'content', 100_000)!,
-            ...(category === undefined ? {} : { category }), ...(source === undefined ? {} : { source }),
-            ...(typeof input.importance !== 'number' ? {} : { importance: input.importance }),
-            ...(input.tags === undefined ? {} : { tags: stringArray(input.tags, 'tags') ?? [] }),
-            ...(input.entities === undefined ? {} : { entities: stringArray(input.entities, 'entities') ?? [] }),
+            ...parsed,
             ...(bodyId === undefined ? {} : { memoryBodyId: bodyId }),
           }, request.signal) as MemoryJsonValue
         } else if (request.offer.sourceActionId === 'link') {

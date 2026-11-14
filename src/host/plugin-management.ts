@@ -31,8 +31,7 @@ import {
   type MemoryViewPreferences,
 } from './view-protocol.ts'
 import { inspectMemoryView } from './view-presentation.ts'
-import { schema, legacySchema, preferences, legacyPreferences, type LegacySourcePreferences } from './view-preferences.ts'
-import { withMainStrategy } from './main-strategy.ts'
+import { preferences, resolveLoaderAnchor, schema, withMainStrategy } from './config/index.ts'
 
 /** Deliberately excludes Loader.write(): generated or package YAML is never edited. */
 export interface MemoryPluginLoaderEntry {
@@ -156,7 +155,6 @@ function orderPlugins(values: MemoryPluginEntryView[]): MemoryPluginEntryView[] 
 export class MemoryPluginManagement {
   readonly settingsNamespace: string
   private readonly settings: HostSettingsScope<MemoryViewPreferences>
-  private readonly legacySettings: HostSettingsScope<LegacySourcePreferences>
   private queue: Promise<unknown> = Promise.resolve()
   private closed = false
   private timer: ReturnType<typeof setTimeout> | undefined
@@ -168,17 +166,11 @@ export class MemoryPluginManagement {
   private enablementMoveError: string | undefined
 
   constructor(private readonly ctx: HostContextShape, private readonly engine: MemoryRuntime, private readonly settingsService: HostSettingsService) {
-    const loader = this.loader()
-    const anchor = loader?.config?.baseUrl ?? loader?.ctx?.baseUrl ?? loader?.context?.baseUrl
+    const anchor = resolveLoaderAnchor(ctx)
     const suffix = anchor ? `-${hash(anchor).slice(0, 16)}` : ''
     this.settingsNamespace = `${MNEMON_VIEW_SETTINGS_NAMESPACE}${suffix}`
     this.settings = settingsService.register<MemoryViewPreferences>(this.settingsNamespace, schema, {
       base: { entries: {} }, applies: 'live', validate: value => { preferences(value) },
-    })
-    // Read the previously published Source overlay only as an input migration.
-    // New writes always use the unified mnemon-view document above.
-    this.legacySettings = settingsService.register<LegacySourcePreferences>(`mnemon-plugins${suffix}`, legacySchema, {
-      base: { sources: {} }, applies: 'live', validate: value => { legacyPreferences(value) },
     })
   }
 
@@ -193,7 +185,7 @@ export class MemoryPluginManagement {
       // Its public settled event can arrive while an overlay is being restored.
       this.ctx.on('app-boot/config-reload', () => this.scheduleRestore(true)),
       this.settingsService.onUpdated(namespace => {
-        if (namespace === this.settingsNamespace || namespace === `mnemon-plugins${this.settingsNamespace.slice(MNEMON_VIEW_SETTINGS_NAMESPACE.length)}`) schedule()
+        if (namespace === this.settingsNamespace) schedule()
       })]
     // Saved enablement moves into the profile patch once the plugin manager runs.
     this.ctx.inject(['pluginManager'], () => { schedule() })
@@ -202,7 +194,7 @@ export class MemoryPluginManagement {
   }
 
   private scheduleRestore(profileReload = false): void {
-    const hasSavedState = Object.keys(this.settings.get().entries ?? {}).length > 0 || Object.keys(this.legacySettings.get().sources ?? {}).length > 0
+    const hasSavedState = Object.keys(this.settings.get().entries ?? {}).length > 0
     if (this.closed || (!profileReload && this.changingEntries) || !hasSavedState) return
     this.restorePending = true
     if (this.changingEntries || this.timer) return
@@ -314,7 +306,7 @@ export class MemoryPluginManagement {
   }
 
   private revision(items: ManagedPlugin[]): string {
-    const namespaces = new Set(['mnemon', this.settingsNamespace, `mnemon-plugins${this.settingsNamespace.slice(MNEMON_VIEW_SETTINGS_NAMESPACE.length)}`])
+    const namespaces = new Set(['mnemon', this.settingsNamespace])
     return hash({
       settings: this.settingsService.describe({ redactSecrets: true }).filter(value => namespaces.has(value.ns)).map(value => [value.ns, value.revision]),
       contribution: this.engine.contributionSnapshot().revision,
@@ -514,20 +506,16 @@ export class MemoryPluginManagement {
   /** Move saved enablement into the profile patch once, keeping only configuration overlays. */
   private async moveEnablement(manager: HostPluginManager, items: ManagedPlugin[]): Promise<boolean> {
     const saved = this.settings.get().entries ?? {}
-    const legacy = this.legacySettings.get().sources ?? {}
     const moves = items.flatMap(item => {
-      const enabled = saved[item.entry.id] !== undefined ? saved[item.entry.id]!.enabled
-        : item.descriptor.roles.includes('source') ? legacy[item.entry.id]?.enabled : undefined
+      const enabled = saved[item.entry.id]?.enabled
       return enabled === undefined ? [] : [{ entryId: item.entry.id, enabled }]
     }).sort((left, right) => Number(right.enabled) - Number(left.enabled))
-    if (moves.length === 0 && Object.keys(legacy).length === 0) return false
+    if (moves.length === 0) return false
     // Write each saved choice explicitly: the live state may still be Mnemon's
     // earlier overlay rather than what the profile patch declares.
-    const legacyNamespace = `mnemon-plugins${this.settingsNamespace.slice(MNEMON_VIEW_SETTINGS_NAMESPACE.length)}`
-    const revisions = { view: this.settingsRevision(), legacy: this.settingsRevision(legacyNamespace) }
+    const viewRevision = this.settingsRevision()
     for (const move of moves) await this.setEnabled(manager, move.entryId, move.enabled)
-    await this.settingsService.mutate(this.settingsNamespace, [{ op: 'set', path: ['entries'], value: configurationOnly(saved) }], revisions.view)
-    if (Object.keys(legacy).length > 0) await this.settingsService.mutate(legacyNamespace, [{ op: 'set', path: ['sources'], value: {} }], revisions.legacy)
+    await this.settingsService.mutate(this.settingsNamespace, [{ op: 'set', path: ['entries'], value: configurationOnly(saved) }], viewRevision)
     return true
   }
 
@@ -544,14 +532,12 @@ export class MemoryPluginManagement {
     }
     const manager = this.enablementOwner()
     const saved = this.settings.get().entries ?? {}
-    const legacy = this.legacySettings.get().sources ?? {}
     const desired = Object.fromEntries(items.flatMap(item => {
       const unified = saved[item.entry.id]
+      if (unified === undefined) return []
       // With the plugin manager, the profile patch already decided enablement.
       const current = !item.entry.disabled
-      if (unified !== undefined) return [[item.entry.id, { enabled: manager === undefined ? unified.enabled ?? current : current, config: unified.config }]]
-      const oldSource = manager === undefined && item.descriptor.roles.includes('source') ? legacy[item.entry.id] : undefined
-      return oldSource === undefined ? [] : [[item.entry.id, { enabled: oldSource.enabled, config: item.value.config }]]
+      return [[item.entry.id, { enabled: manager === undefined ? unified.enabled ?? current : current, config: unified.config }]]
     }))
     const request: MemoryViewConfigurationRequest = {
       expectedRevision: this.revision(items),

@@ -1,18 +1,30 @@
 import { Context } from '@deepseek-ai/cordis'
-import { Config as PlainConfig, InteractionConfig, resolveConfig, resolveInteractionConfig, SkillsConfig, type Config as MnemonConfig } from './config.ts'
+import {
+  credentialPort,
+  DEFAULT_SKILLS_CONFIG,
+  InteractionConfig,
+  migrateLegacyDisplayMode,
+  PlainConfig,
+  ProfileMnemonSettings,
+  registerSettingsRpc,
+  resolveConfig,
+  resolveInteractionConfig,
+  SkillsConfig,
+  validateRuntimeComposition,
+} from './config/index.ts'
+import { LiveConfig, plainHostConfig, type LiveHostConfig } from './config/live.ts'
 import { MnemonAutoBackupScheduler } from './auto-backup.ts'
 import { registerCommands } from './commands.ts'
 import type { HostContextShape, HostCredentialsService, HostWorkspaceRegistry } from './dsh.ts'
-import { githubGrantFromRecord, MNEMON_SYNC_GITHUB_CREDENTIAL_KEY, MnemonGitHubAuth, type MnemonGitHubCredentialPort } from './github-auth.ts'
+import { MnemonGitHubAuth } from './github-auth.ts'
 import { registerGuidance } from './guidance.ts'
 import { createRuntimeGraph, LiveMnemonRuntime } from './runtime.ts'
 import { MnemonLifecycle, taskRoute } from './lifecycle.ts'
 import { SkillEvolution } from './skill-evolution.ts'
-import { DEFAULT_SKILLS_CONFIG, type ResolvedSkillsConfig } from './protocol.ts'
+import type { Config as MnemonConfig, ResolvedSkillsConfig } from './protocol.ts'
 import { skillsSourceFor } from './skill-source.ts'
 import { registerRpc } from './rpc.ts'
 import { hasNativeDirectoryPicker } from './directory-picker.ts'
-import { migrateLegacyDisplayMode, registerSettingsRpc } from './settings.ts'
 import { MnemonSubagentCoordinator } from './subagent.ts'
 import { registerTools } from './tools.ts'
 import { registerMnemonSubagentTokenUsageProjection } from './subagent-token-usage.ts'
@@ -21,14 +33,12 @@ import { MemoryPluginManagement } from './plugin-management.ts'
 import { registerViewRpc } from './view-rpc.ts'
 import { MemoryPluginInstallation } from './plugin-installation.ts'
 import { MnemonRemoteService } from './remote-rpc.ts'
-import { plainHostConfig, type LiveHostConfig } from './live-config.ts'
-import { ProfileMnemonSettings } from './settings-service.ts'
 import { dshPluginCommand, VersionUpdateManager, type DshBundleInstaller } from './version-updates.ts'
 
 export const name = 'dsh-mnemon'
 export const provide = ['mnemonMemory']
 export const inject = ['tools', 'settings', 'commands', 'agents', 'subagents']
-export { LiveConfig as Config } from './live-config.ts'
+export { LiveConfig as Config }
 export type { MnemonConfig }
 
 /** Resolve the optional Web workspace service at call time, not plugin-mount time. */
@@ -37,36 +47,6 @@ function optionalWorkspaceRegistry(ctx: HostContextShape): HostWorkspaceRegistry
   return {
     get: id => current()?.get(id),
     list: () => current()?.list() ?? [],
-  }
-}
-
-/**
- * The one credentials record this plugin keeps, as DSH's store addresses it:
- * `<scope>/<id>`. Presence of the record is the whole fact, and every write
- * goes through `modifyRecord` so a replacement happens under the store's lock.
- */
-function credentialPort(service: () => HostCredentialsService | undefined): MnemonGitHubCredentialPort {
-  return {
-    available: () => service() !== undefined,
-    describe: async () => {
-      const store = service()
-      if (store === undefined) return { configured: false, writable: false }
-      const info = await store.describeRecord(MNEMON_SYNC_GITHUB_CREDENTIAL_KEY)
-      return { configured: info.configured, writable: info.writable }
-    },
-    read: async () => githubGrantFromRecord(await service()?.readRecord(MNEMON_SYNC_GITHUB_CREDENTIAL_KEY)),
-    write: async grant => {
-      const store = service()
-      if (store === undefined) throw new Error('this DSH Host provides no credentials store, so GitHub sign-in is unavailable')
-      await store.modifyRecord(MNEMON_SYNC_GITHUB_CREDENTIAL_KEY, async () => ({ kind: 'grant', payload: grant }))
-    },
-    clear: async () => {
-      const store = service()
-      if (store === undefined) return
-      // An absent record is already the signed-out state; deleting one twice is not a failure.
-      if (await store.readRecord(MNEMON_SYNC_GITHUB_CREDENTIAL_KEY) === undefined) return
-      await store.deleteRecord(MNEMON_SYNC_GITHUB_CREDENTIAL_KEY)
-    },
   }
 }
 
@@ -90,41 +70,42 @@ export function apply(rawContext: unknown, rawConfig: MnemonConfig | LiveHostCon
   const extensions = provideMemoryRuntime(ctx)
   const memoryPlugins = new MemoryPluginManagement(ctx, extensions, hostSettings)
   const pluginInstallation = new MemoryPluginInstallation(ctx)
-  const effectiveConfig = (value: MnemonConfig) => memoryPlugins.resolveConfig(resolveConfig(value), value.memoryView ?? { entries: {} })
   // 技能管理's settings: read at every turn and review, so a change applies at once.
   const skillSettings = hostSettings.register<ResolvedSkillsConfig>('mnemon-skills', SkillsConfig, {
     base: { ...DEFAULT_SKILLS_CONFIG },
     applies: 'live',
   })
+  const effectiveConfig = (value: MnemonConfig) =>
+    memoryPlugins.resolveConfig(resolveConfig({ ...value, skills: value.skills ?? skillSettings.get() }), value.memoryView ?? { entries: {} })
   const settings = hostSettings.register<MnemonConfig>('mnemon', PlainConfig, {
     base: config,
     applies: 'live',
     // Profile writes commit asynchronously. Check that the candidate composes
     // now, then build from the committed live references on volatile-update.
-    validate: value => createRuntimeGraph(effectiveConfig(value), undefined, extensions, skillSettings.get().allowLinkedUpdates).dispose(),
+    validate: value => validateRuntimeComposition(effectiveConfig(value), extensions),
   })
-  const runtime = new LiveMnemonRuntime(createRuntimeGraph(effectiveConfig(settings.get()), undefined, extensions, skillSettings.get().allowLinkedUpdates), optionalWorkspaceRegistry(ctx), ctx.agents, extensions)
+  const runtime = new LiveMnemonRuntime(createRuntimeGraph(effectiveConfig(settings.get()), undefined, extensions), optionalWorkspaceRegistry(ctx), ctx.agents, extensions)
   runtime.useGitHubAuth(optionalGitHubAuth(ctx))
   // The automatic Git backup is one timer for the whole Host, not one per
-  // graph: a settings write builds and disposes a throwaway graph to validate
-  // itself, and a timer owned by a graph would be armed and dropped again on
-  // every keystroke in the settings form.
+  // graph: a settings write validates itself without building a graph, and a
+  // timer owned by a graph would be armed and dropped on every swap.
   const autoBackup = new MnemonAutoBackupScheduler(runtime)
   runtime.useAutoBackup(() => autoBackup.snapshot())
   const resolved = runtime.config
   ctx.effect(() => hostSettings.onUpdated((namespace, value) => {
     if (namespace === 'mnemon-skills') {
-      if (runtime.snapshot().allowLinkedSkillUpdates !== skillSettings.get().allowLinkedUpdates) {
-        runtime.swap(createRuntimeGraph(effectiveConfig(settings.get()), undefined, extensions, skillSettings.get().allowLinkedUpdates))
+      const nextSkills = skillSettings.get()
+      if (runtime.snapshot().allowLinkedSkillUpdates !== nextSkills.allowLinkedUpdates) {
+        runtime.swap(createRuntimeGraph(effectiveConfig({ ...settings.get(), skills: nextSkills }), undefined, extensions))
       }
       return
     }
     if (namespace === memoryPlugins.settingsNamespace) {
-      runtime.swap(createRuntimeGraph(effectiveConfig(settings.get()), undefined, extensions, skillSettings.get().allowLinkedUpdates))
+      runtime.swap(createRuntimeGraph(effectiveConfig(settings.get()), undefined, extensions))
       return
     }
     if (namespace !== 'mnemon') return
-    runtime.swap(createRuntimeGraph(effectiveConfig(value as MnemonConfig), undefined, extensions, skillSettings.get().allowLinkedUpdates))
+    runtime.swap(createRuntimeGraph(effectiveConfig(value as MnemonConfig), undefined, extensions))
   }), 'dsh-mnemon: live runtime settings')
   ctx.effect(() => memoryPlugins.start(), 'dsh-mnemon: plugin graph settings')
   hostSettings.register('mnemon-ui', InteractionConfig, {
@@ -142,8 +123,11 @@ export function apply(rawContext: unknown, rawConfig: MnemonConfig | LiveHostCon
     const unsubscribe = ctx.on('settings/document-updated', ((namespace: string) => {
       if (namespace === 'mnemon') migrate()
     }) as never)
+    const stopUpdated = hostSettings.onUpdated(namespace => {
+      if (namespace === 'mnemon') migrate()
+    })
     migrate()
-    return () => { disposed = true; unsubscribe() }
+    return () => { disposed = true; stopUpdated(); unsubscribe() }
   }, 'dsh-mnemon: canonical displayMode migration')
   ctx.effect(() => {
     let disposed = false
@@ -171,7 +155,7 @@ export function apply(rawContext: unknown, rawConfig: MnemonConfig | LiveHostCon
     source: agent => skillsSourceFor(runtime, agent),
     taskRoute: workspace => lifecycle.skillTaskRoute(workspace),
     runTask: (workspaceRoot, signal, operation, route) => lifecycle.runSkillTask(workspaceRoot, signal, operation, route),
-    skillTask: (parent, label, prompt, schema, persona, signal, _route, maxTokens) => coordinator.skillTask(parent, label, prompt, schema, persona, signal, taskRoute(parent), maxTokens),
+    skillTask: (parent, label, prompt, schema, persona, signal, route, maxTokens) => coordinator.skillTask(parent, label, prompt, schema, persona, signal, route ?? taskRoute(parent), maxTokens),
   })
   ctx.effect(() => hostSettings.onUpdated(() => skills.settingsChanged()), 'dsh-mnemon: automatic skill adoption settings')
   lifecycle.useSkillEvolution(skills)
@@ -185,7 +169,7 @@ export function apply(rawContext: unknown, rawConfig: MnemonConfig | LiveHostCon
     const stop = lifecycle.start()
     return async () => {
       stop()
-      skills.dispose()
+      await skills.dispose()
       await coordinator.dispose()
       runtime.dispose()
     }

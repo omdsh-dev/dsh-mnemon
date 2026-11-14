@@ -1,13 +1,12 @@
 import { isDefaultSourceInstance, isWorkspaceStorageScope, type MnemonSyncAutoBackup } from './protocol.ts'
 import { resolve } from 'node:path'
-import type { ResolvedConfig } from './config.ts'
 import type { HostAgent, HostAgentsService, HostWorkspace, HostWorkspaceRegistry } from './dsh.ts'
 import { MnemonPackManager } from './pack.ts'
 import { MnemonReviewLedger } from './review-ledger.ts'
 import { MnemonGitSync } from './git-sync.ts'
 import type { MnemonGitHubAuth } from './github-auth.ts'
 import { StorageScopeInspector } from './storage-scope.ts'
-import { createStorageRoot } from './storage-root.ts'
+import { createStorageRoot, mainStrategyTypeId, WorkspaceMemoryPolicy, type ResolvedConfig } from './config/index.ts'
 import { canonicalWorkspacePath } from '../sdk/workspace-storage.ts'
 import { SourceSession } from './source-session.ts'
 import { MemoryRuntime } from '../core/runtime.ts'
@@ -15,10 +14,8 @@ import type { MemoryGenerationHost } from '../core/generation.ts'
 import { ComposableMemoryTurnManager } from '../core/turns.ts'
 import { MEMORY_CAPABILITIES, type MemoryOperationScope } from '../core/contracts/index.ts'
 import { allowsParticipation } from './access.ts'
-import { mainStrategyTypeId } from './main-strategy.ts'
 import type { CompileMemoryGenerationOptions } from '../core/composition.ts'
 import { MemoryExecutions } from './memory-executions.ts'
-import { WorkspaceMemoryPolicy } from './workspace-exclusion.ts'
 import type { WorkspaceMemoryParticipation } from './protocol.ts'
 
 export interface MnemonRuntimeGraph {
@@ -54,7 +51,11 @@ export function agentScope(agent: HostAgent, config: ResolvedConfig): MemoryOper
 }
 
 /** Shared by production graphs and read-only View previews. */
-export function memoryGenerationOptions(config: ResolvedConfig, workspaceRoot: string | undefined, allowLinkedSkillUpdates = false): CompileMemoryGenerationOptions {
+export function memoryGenerationOptions(
+  config: ResolvedConfig,
+  workspaceRoot: string | undefined,
+  allowLinkedSkillUpdates = config.skills?.allowLinkedUpdates ?? false,
+): CompileMemoryGenerationOptions {
   const directory = createStorageRoot(config, workspaceRoot).effectiveDataDir()
   const userDirectory = config.runtimeUserScope === 'global' ? createStorageRoot({ storageScope: 'global' }).effectiveDataDir() : directory
   return {
@@ -83,7 +84,12 @@ export function memoryGenerationOptions(config: ResolvedConfig, workspaceRoot: s
 }
 
 /** One default-product scope over the single Composable Runtime. */
-export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot: string | undefined, extensions: MemoryRuntime, allowLinkedSkillUpdates = false): MnemonRuntimeGraph {
+export function createRuntimeGraph(
+  config: ResolvedConfig,
+  workspaceRoot: string | undefined,
+  extensions: MemoryRuntime,
+  allowLinkedSkillUpdates = config.skills?.allowLinkedUpdates ?? false,
+): MnemonRuntimeGraph {
   const root = createStorageRoot(config, workspaceRoot)
   const directory = root.effectiveDataDir()
   const attachment = extensions.attachGeneration(memoryGenerationOptions(config, workspaceRoot, allowLinkedSkillUpdates))
@@ -229,7 +235,10 @@ export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
     this.retireGraph(previous)
     for (const graph of this.workspaceGraphs.values()) this.retireGraph(graph)
     this.workspaceGraphs.clear()
-    for (const listener of this.changeListeners) listener()
+    for (const listener of [...this.changeListeners]) {
+      try { listener() }
+      catch (error) { console.warn('dsh-mnemon: runtime change listener failed', error) }
+    }
   }
 
   snapshot(): MnemonRuntimeGraph {

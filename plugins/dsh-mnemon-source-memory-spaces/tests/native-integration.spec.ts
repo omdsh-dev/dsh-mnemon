@@ -2,13 +2,15 @@ import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
+import type { Context } from '@deepseek-ai/cordis'
 import { MemoryCompositionRunner, type MemoryTestTurn } from 'dsh-mnemon/testing'
 import { resolveMemorySpacesConfig } from '../src/config.ts'
 import type { MemorySpaceView, Insight } from '../src/contracts.ts'
-import * as spaces from '../src/index.ts'
+import { installMemorySpaces } from '../src/index.ts'
 import { findMnemonCommand } from '../src/native-cli.ts'
 import { createRunner } from '../src/runner.ts'
 import { strategy } from './fixture.ts'
+import { nativeProviderModule } from './providers.ts'
 
 // Opt in with a verified release binary; never discover or mutate a personal root.
 const cliPath = process.env.MNEMON_NATIVE_TEST_CLI
@@ -19,10 +21,11 @@ describe.skipIf(!cliPath)('real Native Provider through Source composition', () 
     const turns: MemoryTestTurn[] = []
     try {
       await runner.mount(strategy, { instanceId: 'strategy' })
-      await runner.mount(spaces, { instanceId: 'native', config: {
-        dataDir: directory, cliPath, timeoutMs: 10_000,
-        providers: [{ use: 'dsh-mnemon-provider-mnemon-native', instanceId: 'mnemon-native' }],
-      } })
+      await runner.mount({ inject: ['mnemonMemory'], async apply(ctx: Context) {
+        await installMemorySpaces(ctx, [{ instanceId: 'mnemon-native', module: nativeProviderModule, config: undefined }], {
+          config: { dataDir: directory, ...(cliPath === undefined ? {} : { cliPath }), timeoutMs: 10_000 },
+        })
+      } }, { instanceId: 'native' })
       const management = await runner.managementClient('source:native')
       const created = await management.mutate('body-create', {
         name: 'Isolated native test', description: 'Synthetic plugin integration fixture.', providerId: 'mnemon-native', active: true,

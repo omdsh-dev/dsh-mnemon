@@ -6,7 +6,7 @@ import { Config, InteractionConfig, SkillsConfig } from '../src/host/config.ts'
 import type { HostContextShape, HostSettingsService } from '../src/host/dsh.ts'
 import { DEFAULT_SKILLS_CONFIG, type SettingsOperation } from '../src/host/protocol.ts'
 import { ProfileMnemonSettings } from '../src/host/settings-service.ts'
-import { legacySchema, schema as ViewSchema } from '../src/host/view-preferences.ts'
+import { schema as ViewSchema } from '../src/host/view-preferences.ts'
 
 type Descriptor = ReturnType<HostSettingsService['describe']>[number]
 type Entry = { id: string; options: { id: string; config: Record<string, unknown> } }
@@ -67,7 +67,6 @@ function registerNamespaces(target: Mounted): void {
   target.settings.register('mnemon', Config, { base: {}, applies: 'live' })
   target.settings.register('mnemon-ui', InteractionConfig, { base: { turnBar: true, saveAction: true }, applies: 'live' })
   target.settings.register(viewNamespace, ViewSchema, { base: { entries: {} }, applies: 'live' })
-  target.settings.register(legacyNamespace, legacySchema, { base: { sources: {} }, applies: 'live' })
 }
 
 describe('profile settings facade', () => {
@@ -233,14 +232,14 @@ describe('profile settings facade', () => {
     const described = target.settings.describe({ redactSecrets: true })
     expect(f.forms.describe).toHaveBeenCalledWith({ redactSecrets: true })
     expect(described.map(item => [item.ns, item.revision])).toEqual([
-      ['mnemon', 12], ['mnemon-ui', 12], [viewNamespace, 12], [legacyNamespace, 12],
+      ['mnemon', 12], ['mnemon-ui', 12], [viewNamespace, 12],
     ])
     expect(described.find(item => item.ns === 'mnemon-ui')).toEqual({
       ns: 'mnemon-ui', value: { turnBar: false, saveAction: true }, base: { turnBar: true, saveAction: true },
       user: { turnBar: false }, revision: 12, applies: 'live',
     })
     expect(described.find(item => item.ns === 'mnemon')?.value).toMatchObject({ displayMode: 'builtin' })
-    expect(described.find(item => item.ns === legacyNamespace)?.value).toEqual({})
+    expect(() => target.settings.register(legacyNamespace, ViewSchema, { base: {}, applies: 'live' })).toThrow('Unsupported')
   })
 
   it.each(['missing-form', 'missing-base'] as const)('does not reconstruct secrets in redacted %s fallback values', async missing => {

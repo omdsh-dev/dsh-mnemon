@@ -39,22 +39,19 @@ function validateFieldBounds(field: MemoryProviderConfigField, value: number): v
   if (field.max !== undefined && value > field.max) throw new Error(`${field.label} must be at most ${field.max}`)
 }
 
-function normalizeScopedProviderConnection(
-  providerId: MemoryProviderId,
-  scope: MemoryProviderConfigField['scope'],
+function normalizeConnectionFields(
+  label: string,
+  fields: readonly MemoryProviderConfigField[],
+  settingKind: string,
   input: MemoryProviderConnection | undefined,
-  previous: MemoryProviderConnection = {},
-  clearSecrets: readonly string[] = [],
-  catalog: readonly MemoryProviderDescriptor[] = [],
+  previous: MemoryProviderConnection,
+  clearSecrets: readonly string[],
 ): MemoryProviderConnection {
-  const descriptor = memoryProviderDescriptor(providerId, catalog)
-  if (isNativeProvider(descriptor)) return {}
-  const fields = descriptor.fields.filter(item => item.scope === scope)
   const allowed = new Set(fields.map(item => item.key))
-  for (const key of Object.keys(input ?? {})) if (!allowed.has(key)) throw new Error(`unsupported ${descriptor.label} ${scope} setting: ${key}`)
+  for (const key of Object.keys(input ?? {})) if (!allowed.has(key)) throw new Error(`unsupported ${label} ${settingKind}: ${key}`)
   for (const key of clearSecrets) {
     const configField = fields.find(item => item.key === key)
-    if (configField?.input !== 'secret') throw new Error(`cannot clear non-secret ${descriptor.label} ${scope} setting: ${key}`)
+    if (configField?.input !== 'secret') throw new Error(`cannot clear non-secret ${label} ${settingKind}: ${key}`)
   }
   const output: MemoryProviderConnection = {}
   for (const configField of fields) {
@@ -62,8 +59,7 @@ function normalizeScopedProviderConnection(
       output[configField.key] = ''
       continue
     }
-    const supplied = input?.[configField.key]
-    const value = supplied ?? previous[configField.key] ?? configField.defaultValue
+    const value = input?.[configField.key] ?? previous[configField.key] ?? configField.defaultValue
     if (configField.input === 'boolean') {
       if (value === undefined) continue
       if (typeof value === 'boolean') output[configField.key] = value
@@ -83,6 +79,32 @@ function normalizeScopedProviderConnection(
     if (normalized !== '' || configField.required || configField.input === 'secret') output[configField.key] = normalized
   }
   return output
+}
+
+function publicConnectionFields(
+  fields: readonly MemoryProviderConfigField[],
+  connection: MemoryProviderConnection,
+  filterKnownKeys: boolean,
+): { settings: MemoryProviderConnection; configuredSecrets: string[] } {
+  const keys = filterKnownKeys ? new Set(fields.map(item => item.key)) : undefined
+  const secrets = new Set(fields.filter(item => item.input === 'secret').map(item => item.key))
+  return {
+    settings: Object.fromEntries(Object.entries(connection).filter(([key]) => (keys === undefined || keys.has(key)) && !secrets.has(key))),
+    configuredSecrets: [...secrets].filter(key => String(connection[key] ?? '') !== ''),
+  }
+}
+
+function normalizeScopedProviderConnection(
+  providerId: MemoryProviderId,
+  scope: MemoryProviderConfigField['scope'],
+  input: MemoryProviderConnection | undefined,
+  previous: MemoryProviderConnection = {},
+  clearSecrets: readonly string[] = [],
+  catalog: readonly MemoryProviderDescriptor[] = [],
+): MemoryProviderConnection {
+  const descriptor = memoryProviderDescriptor(providerId, catalog)
+  if (isNativeProvider(descriptor)) return {}
+  return normalizeConnectionFields(descriptor.label, descriptor.fields.filter(item => item.scope === scope), `${scope} setting`, input, previous, clearSecrets)
 }
 
 export function providerServiceFields(providerId: MemoryProviderId, catalog: readonly MemoryProviderDescriptor[] = []): MemoryProviderConfigField[] {
@@ -121,41 +143,7 @@ export function normalizeProviderConnection(
 ): MemoryProviderConnection {
   const descriptor = memoryProviderDescriptor(providerId, catalog)
   if (isNativeProvider(descriptor)) return {}
-  const allowed = new Set(descriptor.fields.map(item => item.key))
-  for (const key of Object.keys(input ?? {})) if (!allowed.has(key)) throw new Error(`unsupported ${descriptor.label} setting: ${key}`)
-  for (const key of clearSecrets) {
-    const configField = descriptor.fields.find(item => item.key === key)
-    if (configField?.input !== 'secret') throw new Error(`cannot clear non-secret ${descriptor.label} setting: ${key}`)
-  }
-
-  const output: MemoryProviderConnection = {}
-  for (const configField of descriptor.fields) {
-    if (clearSecrets.includes(configField.key)) {
-      output[configField.key] = ''
-      continue
-    }
-    const supplied = input?.[configField.key]
-    const fallback = previous[configField.key] ?? configField.defaultValue
-    const value = supplied ?? fallback
-    if (configField.input === 'boolean') {
-      if (value === undefined) continue
-      if (typeof value === 'boolean') output[configField.key] = value
-      else if (value === 'true' || value === 'false') output[configField.key] = value === 'true'
-      else throw new Error(`${configField.label} must be true or false`)
-      continue
-    }
-    if (configField.input === 'number') {
-      if (value === undefined || value === '') continue
-      const parsed = typeof value === 'number' ? value : Number(value)
-      if (!Number.isFinite(parsed)) throw new Error(`${configField.label} must be a finite number`)
-      validateFieldBounds(configField, parsed)
-      output[configField.key] = parsed
-      continue
-    }
-    const normalized = normalizeString(value, configField)
-    if (normalized !== '' || configField.required || configField.input === 'secret') output[configField.key] = normalized
-  }
-  return output
+  return normalizeConnectionFields(descriptor.label, descriptor.fields, 'setting', input, previous, clearSecrets)
 }
 
 export function publicScopedProviderConnection(providerId: MemoryProviderId, scope: MemoryProviderConfigField['scope'], connection: MemoryProviderConnection, catalog: readonly MemoryProviderDescriptor[] = []): {
@@ -163,13 +151,7 @@ export function publicScopedProviderConnection(providerId: MemoryProviderId, sco
   configuredSecrets: string[]
 } {
   const descriptor = memoryProviderDescriptor(providerId, catalog)
-  const fields = descriptor.fields.filter(item => item.scope === scope)
-  const keys = new Set(fields.map(item => item.key))
-  const secrets = new Set(fields.filter(item => item.input === 'secret').map(item => item.key))
-  return {
-    settings: Object.fromEntries(Object.entries(connection).filter(([key]) => keys.has(key) && !secrets.has(key))),
-    configuredSecrets: [...secrets].filter(key => String(connection[key] ?? '') !== ''),
-  }
+  return publicConnectionFields(descriptor.fields.filter(item => item.scope === scope), connection, true)
 }
 
 export function publicProviderConnection(providerId: MemoryProviderId, connection: MemoryProviderConnection, catalog: readonly MemoryProviderDescriptor[] = []): {
@@ -177,11 +159,7 @@ export function publicProviderConnection(providerId: MemoryProviderId, connectio
   configuredSecrets: string[]
 } {
   const descriptor = memoryProviderDescriptor(providerId, catalog)
-  const secrets = new Set(descriptor.fields.filter(item => item.input === 'secret').map(item => item.key))
-  return {
-    settings: Object.fromEntries(Object.entries(connection).filter(([key]) => !secrets.has(key))),
-    configuredSecrets: [...secrets].filter(key => String(connection[key] ?? '') !== ''),
-  }
+  return publicConnectionFields(descriptor.fields, connection, false)
 }
 
 /** Immutable descriptor/config normalizer scoped to one Provider snapshot. */

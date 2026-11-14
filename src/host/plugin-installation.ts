@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, normalize, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { HostContextShape } from './dsh.ts'
+import { resolveProfileBaseDir } from './config/index.ts'
 import { runProcess, type ProcessRunner } from './process.ts'
 import type { MemoryPluginLoader } from './plugin-management.ts'
 import { parseSemver, resolveExecutable } from './version-updates.ts'
@@ -92,11 +93,8 @@ async function fetchPackage(packageName: string, tag: string): Promise<unknown> 
 }
 
 function profileFrom(ctx: HostContextShape): Profile | undefined {
-  const loader = ctx.get('loader') as Partial<MemoryPluginLoader> | undefined
-  const anchor = loader?.config?.baseUrl ?? loader?.context?.baseUrl
-  if (anchor === undefined) return undefined
-  let anchorPath: string
-  try { anchorPath = anchor.startsWith('file:') ? fileURLToPath(anchor) : resolve(anchor) } catch { return undefined }
+  const anchorPath = resolveProfileBaseDir(ctx)
+  if (anchorPath === undefined) return undefined
   const directory = manifest(join(anchorPath, 'package.json'))?.name?.startsWith('dsh-profile-') === true ? anchorPath : dirname(anchorPath)
   const value = manifest(join(directory, 'package.json'))
   if (!value?.name?.startsWith('dsh-profile-')) return undefined

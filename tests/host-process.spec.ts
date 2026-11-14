@@ -20,6 +20,39 @@ function subprocess() {
 describe('bounded subprocess UTF-8 output', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
+  it('escalates to SIGKILL after grace timeout when a real child process ignores SIGTERM', async () => {
+    const { spawn: realSpawn } = await vi.importActual<typeof import('node:child_process')>('node:child_process')
+    let spawned: ReturnType<typeof realSpawn> | undefined
+    vi.mocked(spawn).mockImplementationOnce(((command: string, args: readonly string[], options: object) => {
+      spawned = realSpawn(command, args as string[], options)
+      return spawned
+    }) as unknown as typeof spawn)
+
+    const script = 'process.on("SIGTERM", () => {}); process.stdout.write("ready\\n"); setInterval(() => {}, 1000)'
+    await expect(
+      runProcess(process.execPath, ['-e', script], { timeoutMs: 80, killGraceMs: 60, label: 'hung-child' }),
+    ).rejects.toThrow('hung-child did not respond within 80ms')
+
+    expect(spawned).toBeDefined()
+    const closed = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        spawned?.kill('SIGKILL')
+        reject(new Error('SIGTERM-ignoring child was not terminated by SIGKILL within grace window'))
+      }, 2_000)
+      if (spawned!.exitCode !== null || spawned!.signalCode !== null) {
+        clearTimeout(timer)
+        resolve({ code: spawned!.exitCode, signal: spawned!.signalCode })
+        return
+      }
+      spawned!.once('close', (code, signal) => {
+        clearTimeout(timer)
+        resolve({ code, signal })
+      })
+    })
+    expect(closed.signal).toBe('SIGKILL')
+    expect(() => process.kill(spawned!.pid!, 0)).toThrow()
+  })
+
   it('preserves interleaved stdout and stderr even when every multibyte character is split', async () => {
     const child = subprocess()
     const stdout = '{"content":"配置键为 backend.rule.4，验证端口为 12004。𠮷"}\n'

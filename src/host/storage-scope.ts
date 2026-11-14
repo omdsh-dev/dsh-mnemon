@@ -1,5 +1,4 @@
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { existsSync, lstatSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { DOCUMENTS_DIRECTORY, DOCUMENTS_INDEX_FILE, summarizeDocumentIndex } from 'dsh-mnemon-source-documents/contracts'
 import {
@@ -7,34 +6,29 @@ import {
   summarizeMemoryProviderRegistry, summarizeMemorySpaceRegistry,
 } from 'dsh-mnemon-source-memory-spaces/contracts'
 import { RUNTIME_DIRECTORY, RUNTIME_MEMORIES_FILE, RUNTIME_PROJECTION_FILES, summarizeRuntimeMemories } from 'dsh-mnemon-source-runtime/contracts'
-import type { ResolvedConfig } from './config.ts'
-import type { StorageRoot } from './storage-root.ts'
-import { createStorageRoot } from './storage-root.ts'
-import type { StorageAreaInventory, StorageAreaKind, StorageAreaStatus, StorageScopeCatalog, StorageScopeInventory, StorageScopeKind } from "./protocol.ts"
+import { createStorageRoot, expandUserPath, resolveGlobalDataDir, type ResolvedConfig, type StorageRoot } from './config/index.ts'
+import type { StorageAreaInventory, StorageAreaKind, StorageAreaStatus, StorageScopeCatalog, StorageScopeInventory, StorageScopeKind } from './protocol.ts'
 
-export type { StorageAreaInventory, StorageAreaKind, StorageAreaStatus, StorageScopeCatalog, StorageScopeInventory, StorageScopeKind } from "./protocol.ts"
-
-function expandHome(path: string): string {
-  if (path === '~') return homedir()
-  return path.startsWith('~/') ? join(homedir(), path.slice(2)) : path
-}
+export type { StorageAreaInventory, StorageAreaKind, StorageAreaStatus, StorageScopeCatalog, StorageScopeInventory, StorageScopeKind } from './protocol.ts'
 
 function canonical(path: string): string {
-  return resolve(expandHome(path))
+  return resolve(expandUserPath(path))
 }
 
 function globalRoot(): string {
-  const fromEnvironment = process.env.MNEMON_DATA_DIR?.trim()
-  return canonical(fromEnvironment === undefined || fromEnvironment === '' ? '~/.mnemon' : fromEnvironment)
+  return resolveGlobalDataDir()
 }
 
 function safeBytes(path: string): number {
-  if (!existsSync(path)) return 0
   try {
-    const stats = statSync(path)
+    const stats = lstatSync(path)
+    if (stats.isSymbolicLink()) return 0
     if (stats.isFile()) return stats.size
     if (!stats.isDirectory()) return 0
-    return readdirSync(path, { withFileTypes: true }).reduce((total, entry) => total + safeBytes(join(path, entry.name)), 0)
+    return readdirSync(path, { withFileTypes: true }).reduce(
+      (total, entry) => entry.isSymbolicLink() ? total : total + safeBytes(join(path, entry.name)),
+      0,
+    )
   } catch {
     return 0
   }
@@ -78,7 +72,7 @@ function memorySpacesArea(root: string): StorageAreaInventory {
     const registryPath = join(path, MEMORY_SPACE_REGISTRY_FILE)
     const registry = existsSync(registryPath) ? summarizeMemorySpaceRegistry(readJson(registryPath)) : undefined
     const registered = registry?.spaces ?? 0
-    const databaseCount = readdirSync(path, { withFileTypes: true }).filter(entry => entry.isDirectory() && existsSync(join(path, entry.name, MEMORY_SPACE_DATABASE_FILE))).length
+    const databaseCount = readdirSync(path, { withFileTypes: true }).filter(entry => !entry.isSymbolicLink() && entry.isDirectory() && existsSync(join(path, entry.name, MEMORY_SPACE_DATABASE_FILE))).length
     const invalidRegistry = registry !== undefined && !registry.valid
     return {
       kind: 'memory-bodies', path,
@@ -113,7 +107,10 @@ function stateArea(root: string): StorageAreaInventory {
   const path = join(root, 'state')
   if (!existsSync(path)) return missing('state', path)
   try {
-    const files = readdirSync(path, { withFileTypes: true }).filter(entry => entry.isFile())
+    const entries = readdirSync(path, { withFileTypes: true }).filter(entry => !entry.isSymbolicLink())
+    const files = entries.filter(entry => entry.isFile())
+    const directories = entries.filter(entry => entry.isDirectory())
+    const bytes = safeBytes(path)
     const providerRegistry = join(path, MEMORY_PROVIDER_REGISTRY_FILE)
     let providerConnections = 0
     let providerServices = 0
@@ -124,8 +121,9 @@ function stateArea(root: string): StorageAreaInventory {
         providerServices = registry.services
       } catch {}
     }
+    const occupied = files.length > 0 || directories.length > 0 || bytes > 0
     return {
-      kind: 'state', path, status: files.length === 0 ? 'empty' : 'ready', bytes: safeBytes(path), itemCount: files.length,
+      kind: 'state', path, status: occupied ? 'ready' : 'empty', bytes, itemCount: files.length > 0 ? files.length : directories.length,
       details: { reviewLedger: existsSync(join(path, 'review-ledger.json')), providerServices, providerConnections, files: files.length },
     }
   } catch (error) {

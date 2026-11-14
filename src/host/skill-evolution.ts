@@ -155,6 +155,7 @@ function newSkillRoot(settings: ResolvedSkillsConfig, source: SkillsSourcePort, 
 export class SkillEvolution {
   private readonly sessions = new Map<string, SessionState>()
   private readonly jobs = new Set<AbortController>()
+  private readonly activeJobs = new Set<Promise<unknown>>()
   private disposed = false
   private activeBacktests = 0
   private backtestJobs = 0
@@ -251,7 +252,7 @@ export class SkillEvolution {
       if (this.disposed || state.running !== undefined) return
       const current = this.host.settings()
       if (agent.status !== 'idle' || !current.evolution || (!current.allowCreate && !current.allowUpdate)) return
-      state.running = this.review(agent, state, 'automatic').then(() => undefined).finally(() => { delete state.running })
+      state.running = this.trackJob(this.review(agent, state, 'automatic').then(() => undefined)).finally(() => { delete state.running })
     }, Math.max(settings.idleSeconds * 1000, cooldown))
   }
 
@@ -280,7 +281,7 @@ export class SkillEvolution {
     }
     if (state.window.size === 0) throw new Error('this conversation has no finished turn to review yet')
     this.cancelTimer(agent.id)
-    const run = this.review(agent, state, 'manual')
+    const run = this.trackJob(this.review(agent, state, 'manual'))
     state.running = run.then(() => undefined).finally(() => { delete state.running })
     const result = await run
     if (result instanceof Error) throw result
@@ -392,6 +393,12 @@ export class SkillEvolution {
 
   // ---- page assistance -----------------------------------------------------
 
+  private trackJob<T>(promise: Promise<T>): Promise<T> {
+    this.activeJobs.add(promise)
+    void promise.finally(() => { this.activeJobs.delete(promise) })
+    return promise
+  }
+
   private background(name: string, work: (signal: AbortSignal) => Promise<void>, deadlineMs?: number): Promise<void> {
     const controller = new AbortController()
     this.jobs.add(controller)
@@ -399,10 +406,10 @@ export class SkillEvolution {
       controller.abort(new DraftDeadlineError(`${name} did not finish within ${Math.round(deadlineMs / 60_000)} minutes`))
     }, deadlineMs)
     timer?.unref?.()
-    const result = work(controller.signal).catch(error => this.warn(`${name} failed`, deadlineReason(controller.signal) ?? error)).finally(() => {
+    const result = this.trackJob(work(controller.signal).catch(error => this.warn(`${name} failed`, deadlineReason(controller.signal) ?? error)).finally(() => {
       if (timer !== undefined) clearTimeout(timer)
       this.jobs.delete(controller)
-    })
+    }))
     return result
   }
 
@@ -432,8 +439,15 @@ export class SkillEvolution {
         await abortable(signal, () => this.writeDraft(source, workspace, input, { pack, targetRoot, guidance, onRecorded: () => { recorded = true } }, signal))
       } catch (error) {
         if (!recorded && input.suggestionId !== undefined) {
-          const suggestions = await source.read<SkillSuggestion[]>('suggestions')
-          if (suggestions.find(item => item.id === input.suggestionId)?.status === 'drafting') {
+          let shouldReset = true
+          try {
+            const suggestions = await source.read<SkillSuggestion[]>('suggestions')
+            const current = suggestions.find(item => item.id === input.suggestionId)
+            shouldReset = current === undefined || current.status === 'drafting'
+          } catch {
+            shouldReset = true
+          }
+          if (shouldReset) {
             await source.mutate('suggestion-status', { id: input.suggestionId, status: 'pending', error: message(deadlineReason(signal) ?? error) }).catch(() => undefined)
           }
         }
@@ -711,12 +725,24 @@ export class SkillEvolution {
     return state === undefined ? undefined : { turns: state.window.size, score: state.window.score().score }
   }
 
-  dispose(): void {
+  dispose(): Promise<void> {
     this.automatic.dispose()
     this.disposed = true
     for (const state of this.sessions.values()) if (state.timer !== undefined) clearTimeout(state.timer)
     this.sessions.clear()
     for (const job of this.jobs) job.abort()
     this.jobs.clear()
+    const pending = [...this.activeJobs]
+    if (pending.length === 0) return Promise.resolve()
+    let timer: NodeJS.Timeout | undefined
+    return Promise.race([
+      Promise.allSettled(pending).then(() => undefined),
+      new Promise<void>(resolve => {
+        timer = setTimeout(resolve, 2_000)
+        timer.unref?.()
+      }),
+    ]).finally(() => {
+      if (timer !== undefined) clearTimeout(timer)
+    })
   }
 }
