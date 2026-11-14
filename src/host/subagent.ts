@@ -890,6 +890,10 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
     return this.reviewAdmission.check(parent, signal)
   }
 
+  reviewAccessStatus(parent: HostAgent) {
+    return this.reviewAdmission.status(parent)
+  }
+
   private availableTools(parent: HostAgent, tools: readonly string[]): string[] {
     const registry = parent.ctx?.tools
     return typeof registry?.get === 'function' ? tools.filter(name => registry.get!(name, parent) !== undefined) : [...tools]

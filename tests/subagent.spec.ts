@@ -3188,7 +3188,8 @@ describe('Mnemon root/child tool split', () => {
     root.session.header!.cwd = f.workspace
     await f.graph.composableTurns.beginTurn('root:health', agentScope(root, f.config), 'test')
     const registered: ToolDefinition[] = []
-    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool); return () => {} } } } as unknown as HostContextShape, f.live, {} as MnemonSubagentCoordinator, f.extensions)
+    const coordinator = { reviewAccessStatus: () => ({ state: 'unchecked' }) } as unknown as MnemonSubagentCoordinator
+    registerTools({ tools: { register: (tool: ToolDefinition) => { registered.push(tool); return () => {} } } } as unknown as HostContextShape, f.live, coordinator, f.extensions)
     const status = await registered.find(tool => tool.name === 'mnemon_status')!.execute({} as never, { agent: root, signal: new AbortController().signal })
     expect(status).toMatchObject({ memorySpaces: { active: 1 }, healthy: true })
     expect(JSON.stringify(status)).not.toMatch(/cliPath|dataDir|memoryBodyDirectory|dbPath|byCategory|topEntities|apiKey/)

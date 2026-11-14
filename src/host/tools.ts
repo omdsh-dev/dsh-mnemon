@@ -290,7 +290,8 @@ function registerMemorySpaceReadTools(ctx: HostContextShape, { sourceFor, requir
     async execute(_args: unknown, exec: ToolExecution) {
       requireSource(exec, 'memory-spaces', 'status')
       const evidence = await sourceFor(exec, 'memory-spaces').route('inspect', { section: 'health' }, exec.signal)
-      return evidence.output ?? evidence
+      const health = evidence.output ?? evidence
+      return { ...health as Record<string, unknown>, idleReviewAccess: coordinator.reviewAccessStatus(requireAgent(exec)) }
     },
     presentCall: () => ({ card: 'generic', title: 'Check Mnemon status', kind: 'other' }),
     presentResult: () => ({ card: 'generic', title: 'Mnemon status checked' }),
