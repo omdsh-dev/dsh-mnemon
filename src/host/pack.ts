@@ -405,20 +405,26 @@ function validatePackPayload(files: Record<string, Uint8Array>, components: Mnem
 }
 
 /** `staleMs` is the owner's rule for an abandoned lock: a Source's lock is taken over only when that Source would take it over. */
-async function acquireLock(path: string, staleMs: number): Promise<() => void> {
+function tryAcquireLockSync(path: string, staleMs: number): (() => void) | undefined {
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
-  const deadline = Date.now() + LOCK_TIMEOUT_MS
   let descriptor: number | undefined
-  while (descriptor === undefined) {
+  for (let attempt = 0; attempt < 2 && descriptor === undefined; attempt++) {
     try {
       descriptor = openSync(path, 'wx', 0o600)
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-      try { if (Date.now() - statSync(path).mtimeMs > staleMs) rmSync(path, { force: true }) } catch {}
-      if (Date.now() >= deadline) throw new Error(`timed out waiting for Pack component lock: ${path}`)
-      await delay(LOCK_RETRY_MS)
+      if (attempt === 0) {
+        try {
+          if (Date.now() - statSync(path).mtimeMs > staleMs) {
+            rmSync(path, { force: true })
+            continue
+          }
+        } catch {}
+      }
+      return undefined
     }
   }
+  if (descriptor === undefined) return undefined
   // The lock is the lock file's existence, not its descriptor. Windows refuses
   // to rename a directory that holds an open handle, and an import replaces the
   // runtime and documents directories that carry these very lock files.
@@ -443,14 +449,35 @@ function sourceLocks(root: string, components: readonly MnemonPackComponent[]): 
   return locks
 }
 
-async function withLocks<T>(root: string, components: MnemonPackComponent[], operation: () => T | Promise<T>): Promise<T> {
+/**
+ * Acquire the full lock set, run the synchronous critical section, and release all locks without
+ * yielding in between. Releasing partial locks before an async retry ensures synchronous Source
+ * controllers (`Atomics.wait`) on the same event loop never deadlock against a suspended Pack task.
+ */
+async function withLocks<T>(root: string, components: MnemonPackComponent[], operation: () => T): Promise<T> {
   const locks = [{ path: join(root, '.dsh-pack.lock'), staleMs: LOCK_STALE_MS }, ...sourceLocks(root, components)]
-  const releases: Array<() => void> = []
-  try {
-    for (const lock of locks) releases.push(await acquireLock(lock.path, lock.staleMs))
-    return await operation()
-  } finally {
+  const deadline = Date.now() + LOCK_TIMEOUT_MS
+  while (true) {
+    const releases: Array<() => void> = []
+    let contendedPath: string | undefined
+    for (const lock of locks) {
+      const release = tryAcquireLockSync(lock.path, lock.staleMs)
+      if (release === undefined) {
+        contendedPath = lock.path
+        break
+      }
+      releases.push(release)
+    }
+    if (contendedPath === undefined) {
+      try {
+        return operation()
+      } finally {
+        for (const release of releases.reverse()) release()
+      }
+    }
     for (const release of releases.reverse()) release()
+    if (Date.now() >= deadline) throw new Error(`timed out waiting for Pack component lock: ${contendedPath}`)
+    await delay(LOCK_RETRY_MS)
   }
 }
 
