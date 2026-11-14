@@ -6,7 +6,7 @@ import { activationOwned, isReservedChild, reservedChildId, withReservedChild, t
 export interface ReviewToolHost {
   agents?: { isOwnedBy?(id: string, parent: HostAgent): boolean; get?(id: string): HostAgent | undefined }
   subagents?: ActivationOwnership
-  on(name: string, listener: (...args: never[]) => unknown): unknown
+  on(name: string, listener: (...args: never[]) => unknown, options?: { prepend?: boolean }): unknown
 }
 
 // One store distinguishes nested starts as well as independent overlapping starts.
@@ -125,6 +125,8 @@ export async function startGuardedChild(
   let attachmentError: unknown
   let expectedChildId: string | undefined
   let run: HostSubagentRun | undefined
+  // DSH announces serially: a normal observer can bail before later listeners.
+  // Install this execution fence in the same early phase as child composition.
   const listener = host.on('agent/created', (({ agent }: { agent: HostAgent }) => {
     if (startingChild.getStore() !== pending) return
     if (reserved ? agent.id !== expectedChildId || !isReservedChild(agents, parent, agent) : !agents!.isOwnedBy!(agent.id, parent)) return
@@ -146,7 +148,7 @@ export async function startGuardedChild(
       // Synchronous publication failure lets the provider roll back the child.
       throw error
     }
-  }) as never)
+  }) as never, { prepend: true })
   if (typeof listener !== 'function') throw new Error(`Mnemon ${purpose} creation observer did not return a disposer`)
   let disposeObserver: (() => unknown) | undefined = listener as () => unknown
   const closeObserver = async () => {
