@@ -38,7 +38,7 @@ function DocumentMarkdown(props: { content: string }): JSX.Element {
 
 type DocumentListItem = DocumentRecord & { healthy?: boolean; excerpt: string }
 
-export function DocumentsPage(props: { client: DocumentsPageClient; revision: number; writeEnabled: boolean; sessionId?: string; canCreate?: boolean; documentId?: string; onMutate: () => void }): JSX.Element {
+export function DocumentsPage(props: { client: DocumentsPageClient; revision: number; writeEnabled: boolean; sessionId?: string; canCreate?: boolean; documentId?: string; onMutate?: () => void }): JSX.Element {
   const t = useT()
   const locale = useLocale()
   const documentCreateFormId = useId()
@@ -66,36 +66,127 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
   const [content, setContent] = useState('')
   const [sources, setSources] = useState('')
   const displayRequests = useRequestVersion()
+  const snapshotRef = useRef<DocumentSnapshot | null>(null)
+  snapshotRef.current = snapshot
+  const selectedRef = useRef<DocumentView | null>(null)
+  selectedRef.current = selected
+  const fetchedSignatureRef = useRef<string | null>(null)
+  const queryRef = useRef(query)
+  queryRef.current = query
+  const statusRef = useRef(status)
+  statusRef.current = status
 
-  const display = useCallback(async (nextQuery: string, nextStatus: 'active' | 'archived') => {
+  const adoptMutatedDocument = useCallback((candidate: unknown) => {
+    if (typeof candidate === 'object' && candidate !== null && 'content' in candidate && typeof (candidate as { content: unknown }).content === 'string') {
+      const view = candidate as DocumentView
+      selectedRef.current = view
+      if (view.fileRevision !== undefined || props.client.deleteDocument === undefined) {
+        fetchedSignatureRef.current = `${view.id}:${view.revision}:${view.contentHash}`
+      }
+      setSelected(view)
+    }
+  }, [props.client.deleteDocument])
+
+  const display = useCallback(async (
+    nextQuery: string,
+    nextStatus: 'active' | 'archived',
+    preferred?: { id: string; document?: unknown },
+  ) => {
     const request = displayRequests.begin()
     setLoading(true); setError(null); setVisibleLimit(pageSize)
     try {
-      // Searching updates access metadata. Read the index afterward so a
-      // subsequent confirmed deletion uses the displayed, current revision.
-      const searched = nextQuery.trim() === '' ? undefined : (await props.client.searchDocuments(nextQuery, nextStatus === 'archived')).results
-      const current = await props.client.documents()
-      const records = searched ?? current.documents
+      let current: DocumentSnapshot
+      let records: DocumentListItem[]
+      if (nextQuery.trim() === '') {
+        current = await props.client.documents()
+        records = current.documents
+      } else if (snapshotRef.current !== null) {
+        // Reuse the loaded index and merge searched record metadata/revision in place
+        // without issuing a sequential snapshot RPC waterfall.
+        const existing = snapshotRef.current
+        const searchResponse = await props.client.searchDocuments(nextQuery, nextStatus === 'archived')
+        const byId = new Map(searchResponse.results.map(item => [item.id, item]))
+        const mergedDocuments: DocumentSnapshot['documents'] = existing.documents.map(document => {
+          const hit = byId.get(document.id)
+          return hit === undefined ? document : { ...document, ...hit, healthy: document.healthy }
+        })
+        for (const item of searchResponse.results) {
+          if (!existing.documents.some(document => document.id === item.id)) {
+            mergedDocuments.push({ ...item, healthy: true })
+          }
+        }
+        current = {
+          ...existing,
+          ...(typeof searchResponse.revision === 'string' ? { revision: searchResponse.revision } : {}),
+          documents: mergedDocuments,
+        }
+        records = searchResponse.results
+      } else {
+        const [searchResponse, loadedSnapshot] = await Promise.all([
+          props.client.searchDocuments(nextQuery, nextStatus === 'archived'),
+          props.client.documents(),
+        ])
+        current = typeof searchResponse.revision === 'string'
+          ? { ...loadedSnapshot, revision: searchResponse.revision }
+          : loadedSnapshot
+        records = searchResponse.results
+      }
       const filtered = records.filter(record => record.status === nextStatus)
         .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
       if (!displayRequests.isCurrent(request)) return
+      snapshotRef.current = current
       setSnapshot(current)
       setItems(filtered)
-      setSelectedId(previous => previous !== null && filtered.some(record => record.id === previous) ? previous : filtered[0]?.id ?? null)
+      if (preferred?.document !== undefined && filtered.some(record => record.id === preferred.id)) {
+        adoptMutatedDocument(preferred.document)
+      }
+      setSelectedId(previous => {
+        const candidate = preferred?.id ?? previous
+        return candidate !== null && filtered.some(record => record.id === candidate) ? candidate : filtered[0]?.id ?? null
+      })
     } catch (reason) {
       if (!displayRequests.isCurrent(request)) return
+      snapshotRef.current = null
       setError(message(reason)); setSnapshot(null); setItems([]); setSelectedId(null)
     } finally {
       if (displayRequests.isCurrent(request)) setLoading(false)
     }
-  }, [displayRequests, pageSize, props.client])
+  }, [adoptMutatedDocument, displayRequests, pageSize, props.client])
 
-  useEffect(() => { void display(query, status) }, [display, props.revision, status])
+  useEffect(() => { void display(queryRef.current, statusRef.current) }, [display, props.revision])
   useEffect(() => {
-    setSelected(null)
-    if (selectedId === null || !snapshot?.documents.some(document => document.id === selectedId)) return
+    if (selectedId === null) {
+      setSelected(null)
+      return
+    }
+    if (snapshot === null) return
+    const record = snapshot.documents.find(document => document.id === selectedId)
+    if (record === undefined) {
+      setSelected(null)
+      return
+    }
+    const currentSelected = selectedRef.current
+    const recordSignature = `${record.id}:${record.revision}:${record.contentHash}`
+    if (
+      currentSelected !== null
+      && currentSelected.id === record.id
+      && (currentSelected.fileRevision !== undefined || fetchedSignatureRef.current === recordSignature)
+      && currentSelected.revision === record.revision
+      && currentSelected.contentHash === record.contentHash
+      && currentSelected.updatedAt === record.updatedAt
+      && currentSelected.status === record.status
+      && currentSelected.title === record.title
+      && currentSelected.description === record.description
+    ) {
+      return
+    }
     let active = true
-    void props.client.document(selectedId).then(value => { if (active) setSelected(value) }).catch(reason => { if (active) setError(message(reason)) })
+    void props.client.document(selectedId).then(value => {
+      if (!active) return
+      fetchedSignatureRef.current = `${value.id}:${value.revision}:${value.contentHash}`
+      selectedRef.current = value
+      setSelected(value)
+    }).catch(reason => { if (active) setError(message(reason)) })
     return () => { active = false }
   }, [props.client, selectedId, snapshot])
   useLayoutEffect(() => {
@@ -110,13 +201,20 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
   const resetComposer = () => { setTitle(''); setDescription(''); setContent(''); setSources(''); setComposing(false) }
   const startComposer = () => { setTitle(''); setDescription(''); setContent(''); setSources(''); setEditing(false); setComposing(true) }
   const sourcePaths = (value: string) => value.split(/\r?\n|,/gu).map(path => path.trim()).filter(Boolean)
+  const changeStatus = (nextStatus: 'active' | 'archived') => {
+    if (status === nextStatus) return
+    setStatus(nextStatus)
+    void display(query, nextStatus)
+  }
 
   const create = async (event: FormEvent) => {
     event.preventDefault(); setSaving(true); setError(null); setNotice(null)
     try {
       const result = await props.client.mutateDocument({ action: 'create', title, description, content, sourcePaths: sourcePaths(sources) })
       setNotice(result.maintenance === undefined ? t('documents.created') : t('documents.createdAfterArchive', { count: result.maintenance.archivedDocumentIds.length }))
-      setStatus('active'); setQuery(''); resetComposer(); props.onMutate(); await display('', 'active'); setSelectedId(result.document.id)
+      setStatus('active'); setQuery(''); resetComposer()
+      await display('', 'active', { id: result.document.id, document: result.document })
+      props.onMutate?.()
     } catch (reason) { setError(message(reason)) } finally { setSaving(false) }
   }
 
@@ -132,7 +230,9 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
     try {
       const result = await props.client.mutateDocument({ action: 'update', id: selected.id, title, description, content, sourcePaths: sourcePaths(sources) })
       setNotice(result.maintenance === undefined ? t('documents.updated') : t('documents.updatedAfterArchive', { count: result.maintenance.archivedDocumentIds.length }))
-      setEditing(false); props.onMutate(); await display(query, status); setSelectedId(result.document.id)
+      setEditing(false)
+      await display(query, status, { id: result.document.id, document: result.document })
+      props.onMutate?.()
     } catch (reason) { setError(message(reason)) } finally { setSaving(false) }
   }
 
@@ -144,7 +244,9 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
       // A local archive keeps the original without an index in any Memory Space.
       const spaces = result.maintenance?.memoryBodyIds ?? []
       setNotice(spaces.length === 0 ? t('documents.archivedLocally') : t('documents.archived', { spaces: spaces.join(', ') }))
-      setConfirmArchive(false); setStatus('archived'); setQuery(''); props.onMutate(); await display('', 'archived'); setSelectedId(result.document.id)
+      setConfirmArchive(false); setStatus('archived'); setQuery('')
+      await display('', 'archived', { id: result.document.id, document: result.document })
+      props.onMutate?.()
     } catch (reason) { setError(message(reason)) } finally { setSaving(false) }
   }
 
@@ -155,8 +257,8 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
       await props.client.deleteDocument(deleteTarget.document.id, deleteTarget.revision, deleteTarget.document.fileRevision)
       setDeleteTarget(null); setSelected(null); setSelectedId(null)
       setNotice(t('documents.deleted'))
-      props.onMutate()
       await display(query, status)
+      props.onMutate?.()
     } catch (reason) { setDeleteError(message(reason)) } finally { setSaving(false) }
   }
 
@@ -203,7 +305,7 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
 
       <section className={css.documentToolbar}>
         <form onSubmit={event => { event.preventDefault(); void display(query, status) }}><SearchField className={css.documentSearch} label={t('documents.searchAria')} value={query} onChange={event => setQuery(event.target.value)} placeholder={t('documents.searchPlaceholder')} /><button type="submit" className={css.secondaryButton}>{t('documents.search')}</button></form>
-        <div role="group" aria-label={t('documents.scope')}><button type="button" data-active={status === 'active' || undefined} onClick={() => setStatus('active')}>{t('documents.active')} <b>{activeCount}</b></button><button type="button" data-active={status === 'archived' || undefined} onClick={() => setStatus('archived')}>{t('documents.archivedCount')} <b>{archivedCount}</b></button></div>
+        <div role="group" aria-label={t('documents.scope')}><button type="button" data-active={status === 'active' || undefined} onClick={() => changeStatus('active')}>{t('documents.active')} <b>{activeCount}</b></button><button type="button" data-active={status === 'archived' || undefined} onClick={() => changeStatus('archived')}>{t('documents.archivedCount')} <b>{archivedCount}</b></button></div>
 
       </section>
 

@@ -26,6 +26,7 @@ import { descriptor as hindsight } from 'dsh-mnemon-provider-hindsight'
 import { descriptor as holographic } from 'dsh-mnemon-provider-holographic'
 import { descriptor as mem0 } from 'dsh-mnemon-provider-mem0'
 import { descriptor as openviking } from 'dsh-mnemon-provider-openviking'
+import spacesCopy from 'dsh-mnemon-source-memory-spaces/presentation/locales.json' with { type: 'json' }
 import { MemorySpacesSettings } from 'dsh-mnemon-source-memory-spaces/client'
 import { MnemonActionSeat } from '../src/client/action-seat.ts'
 import { createComponentHosts } from '../src/client/component-host.ts'
@@ -296,7 +297,13 @@ describe('component regions', () => {
 
 describe('reads the settings make across a configuration change', () => {
   const settle = async () => { for (let i = 0; i < 6; i += 1) await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)) }) }
-  const t = (key: string, params?: Record<string, unknown>) => translateEn(key as MnemonKey, params)
+  const t = (key: string, params?: Record<string, unknown>) => {
+    const pluginTemplate = (spacesCopy.en as Record<string, string>)[key]
+    if (pluginTemplate !== undefined) {
+      return params === undefined ? pluginTemplate : pluginTemplate.replace(/\{(\w+)\}/g, (match, name: string) => name in params ? String(params[name]) : match)
+    }
+    return translateEn(key as MnemonKey, params)
+  }
   const embedding = (endpoint: string) => ({ enabled: true, endpoint, model: 'nomic-embed-text', protocol: 'auto', apiKey: '' })
   const catalog = (provider: typeof mem0) => ({ providers: [provider], items: [{ providerId: provider.id, enabled: true, configured: true, settings: {}, configuredSecrets: [] }], generatedAt: 'now' })
 
@@ -590,8 +597,8 @@ describe('component fallback across Starter and Memory Spaces versions', () => {
       const region = () => <>{renderComponentRegion({ slots }, MNEMON_COMPONENT_SETTINGS_SLOT, MEMORY_SPACES_PACKAGE, props)}</>
       installShippedComponentSettings(ctx as never, { scope, t: translateEn })
       const view = render(region())
-      const card = () => within(view.container).queryByRole('group', { name: `OpenViking ${translateEn('config.providerServiceTitle' as MnemonKey)}` })
-      const native = () => within(view.container).queryByText(translateEn('config.nativeCliMissing' as MnemonKey))
+      const card = () => within(view.container).queryByRole('group', { name: `OpenViking ${(spacesCopy.en as Record<string, string>)['config.providerServiceTitle']}` })
+      const native = () => within(view.container).queryByText((spacesCopy.en as Record<string, string>)['config.nativeCliMissing']!)
       return { ctx, view, region, card, native, endpoints, release, replace: async () => {
         const client = await spacesClient(true)
         client.installMemorySpacesSettings(ctx as never)
@@ -609,7 +616,7 @@ describe('component fallback across Starter and Memory Spaces versions', () => {
       expect(settings.view.container.querySelector('section')).not.toBe(fallback)
       expect(settings.card()).not.toBeNull()
       expect(settings.native()).not.toBeNull()
-      expect(within(settings.view.container).queryByText(translateEn('config.loadingProviders' as MnemonKey))).toBeNull()
+      expect(within(settings.view.container).queryByText((spacesCopy.en as Record<string, string>)['config.loadingProviders']!)).toBeNull()
       await settle()
       expect(settings.card()).not.toBeNull()
       expect(settings.native()).not.toBeNull()

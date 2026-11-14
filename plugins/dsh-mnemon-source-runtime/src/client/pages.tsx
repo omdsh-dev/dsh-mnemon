@@ -10,7 +10,7 @@ function fold(text: string): string {
   return text.replace(/\s+/gu, ' ').trim()
 }
 
-export function RuntimePage(props: { client: RuntimePageClient; revision: number; writeEnabled: boolean; focusText?: string; onRevealElement?(element: HTMLElement): void; onMutate: () => void }): JSX.Element {
+export function RuntimePage(props: { client: RuntimePageClient; revision: number; writeEnabled: boolean; focusText?: string; onRevealElement?(element: HTMLElement): void; onMutate?: () => void }): JSX.Element {
   const t = useT()
   const locale = useLocale()
   const runtimeAddFormId = useId()
@@ -70,7 +70,7 @@ export function RuntimePage(props: { client: RuntimePageClient; revision: number
           ? t('runtime.result.localArchive', { target: t(`runtime.target.${request.target}` as MnemonKey), count: result.entryCount, archived: result.archived?.entries ?? 0 })
         : t('runtime.result.maintenance', { target: t(`runtime.target.${request.target}` as MnemonKey), count: result.entryCount, spaces: result.maintenance.memoryBodyIds.join(', ') || '—' }))
     await load()
-    props.onMutate()
+    props.onMutate?.()
   }
   const add = async (event: FormEvent) => {
     event.preventDefault()
@@ -108,9 +108,11 @@ export function RuntimePage(props: { client: RuntimePageClient; revision: number
     if (props.client.pinRuntimeMemory === undefined) return
     setSaving(true); setError(null); setNotice(null)
     try {
-      await props.client.pinRuntimeMemory({ target: entry.target, content: entry.content, pinned: entry.pinned !== true })
+      const next = await props.client.pinRuntimeMemory({ target: entry.target, content: entry.content, pinned: entry.pinned !== true })
+      if (next !== undefined && next !== null && Array.isArray(next.entries)) setSnapshot(next)
+      else await load()
       setNotice(t(entry.pinned === true ? 'runtime.unpinnedNotice' : 'runtime.pinnedNotice'))
-      await load(); props.onMutate()
+      props.onMutate?.()
     } catch (reason) { setError(message(reason)) } finally { setSaving(false) }
   }
   const runtimeEditActionClass = appearanceClass(css.ghostButton, appearanceClass(sidebarCss.itemActionButton, sidebarCss.itemEditAction))

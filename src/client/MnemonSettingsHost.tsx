@@ -31,13 +31,17 @@ interface MnemonSettingsHostProps extends Omit<MnemonSettingsCardProps, 'session
 export function MnemonSettingsHost({ view, currentSession, sessions, workspaces, localeRuntime, componentSettingsDirectory, componentHost, renderSlot, renderContributed, ...props }: MnemonSettingsHostProps): JSX.Element | null {
   const sessionId = useMnemonSessionId(currentSession)
   const subscribeSessions = useCallback((listener: () => void) => sessions.list.subscribe(listener), [sessions.list])
-  const getSessions = useCallback(() => sessions.list.getSnapshot(), [sessions.list])
+  const getSessionCwd = useCallback((): string | null => {
+    const byId = sessions.list.getSnapshot().byId as Record<string, { cwd?: string } | undefined>
+    if (sessionId === undefined || !Object.hasOwn(byId, sessionId)) return null
+    return byId[sessionId]?.cwd ?? null
+  }, [sessionId, sessions.list])
   const subscribeWorkspaces = useCallback((listener: () => void) => workspaces.list.subscribe(listener), [workspaces.list])
   const getWorkspaces = useCallback(() => workspaces.list.getSnapshot(), [workspaces.list])
   const subscribeLocale = useCallback((listener: () => void) => localeRuntime.subscribe(listener), [localeRuntime])
   const getLanguage = useCallback((): string => localeRuntime.getSnapshot().active, [localeRuntime])
   const language = useSyncExternalStore(subscribeLocale, getLanguage, getLanguage)
-  const catalog = useSyncExternalStore(subscribeSessions, getSessions, getSessions)
+  const cwd = useSyncExternalStore(subscribeSessions, getSessionCwd, getSessionCwd) ?? undefined
   const workspaceList = useSyncExternalStore(subscribeWorkspaces, getWorkspaces, getWorkspaces)
   const subscribeDirectory = useCallback((listener: () => void) => componentSettingsDirectory?.subscribe(listener) ?? (() => {}), [componentSettingsDirectory])
   const getDirectory = useCallback(() => componentSettingsDirectory?.getSnapshot(), [componentSettingsDirectory])
@@ -59,7 +63,6 @@ export function MnemonSettingsHost({ view, currentSession, sessions, workspaces,
     },
   }, [renderSlot, renderContributed, contributed, componentHost])
   if (view !== 'page') return null
-  const cwd = sessionId === undefined ? undefined : Object.entries(catalog.byId).find(([id]) => id === sessionId)?.[1]?.cwd
   const normalizePath = (value: string): string => value.replace(/[\\/]+$/u, '')
   const workspace = sessionId === undefined
     ? workspaceList.items[0]

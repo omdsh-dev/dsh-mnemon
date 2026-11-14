@@ -7,7 +7,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { loadMemoryClientArtifact, MemoryCompositionRunner } from 'dsh-mnemon/testing'
 import * as runtime from 'dsh-mnemon-source-runtime'
+import runtimeLocales from 'dsh-mnemon-source-runtime/presentation/locales.json' with { type: 'json' }
 import * as focus from '../lib/external-strategy.js'
+
+const runtimeEn = (key: keyof typeof runtimeLocales.en): string => runtimeLocales.en[key]
 
 const require = createRequire(import.meta.url)
 const dependencies = {
@@ -40,7 +43,7 @@ describe('compiled Source clients with compiled Core and no source aliases', () 
       await runner.mount(runtime, { instanceId: 'work', config: { dataDir: directory } })
       const management = await runner.managementClient('source:work')
       const view = render(<owned.RuntimeSourcePage sourceTypeId="runtime" sourceInstanceKey="source:work" sourceInstances={[]} locale="en" writable management={management} />)
-      expect(await screen.findByRole('heading', { name: core.translateEn('runtime.title') })).not.toBeNull()
+      expect(await screen.findByRole('heading', { name: runtimeEn('runtime.title') })).not.toBeNull()
       expect(view.container.querySelector('[class*="runtimeSummaryCard"]')).not.toBeNull()
       const style = document.querySelector('style[data-plugin-css="dsh-mnemon-source-runtime/presentation/page.module.css"]')
       expect(style?.textContent).toContain('runtimeSummaryCard')
@@ -80,10 +83,10 @@ describe('compiled Source clients with compiled Core and no source aliases', () 
       const base = { sourceTypeId: 'runtime', sourceInstances: [], locale: 'en', writable: true }
       const Page = runtimeClient.RuntimeSourcePage
       const view = render(<Page {...base} sourceInstanceKey="source:work" management={work} />)
-      fireEvent.click(await screen.findByRole('button', { name: core.translateEn('runtime.addButton') }))
-      const textarea = await screen.findByRole('textbox', { name: core.translateEn('runtime.content') })
+      fireEvent.click(await screen.findByRole('button', { name: runtimeEn('runtime.addButton') }))
+      const textarea = await screen.findByRole('textbox', { name: runtimeEn('runtime.content') })
       fireEvent.change(textarea, { target: { value: 'compiled UI sentinel' } })
-      fireEvent.click(screen.getByRole('button', { name: core.translateEn('runtime.addAction') }))
+      fireEvent.click(screen.getByRole('button', { name: runtimeEn('runtime.addAction') }))
       expect(await screen.findByText('compiled UI sentinel')).not.toBeNull()
       expect((await work.read('snapshot')).value).toMatchObject({ entries: [expect.objectContaining({ content: 'compiled UI sentinel' })] })
       view.rerender(<Page {...base} sourceInstanceKey="source:personal" management={personal} />)

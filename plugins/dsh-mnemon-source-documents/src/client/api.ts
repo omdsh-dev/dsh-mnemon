@@ -4,7 +4,7 @@ import type { DocumentMutation, DocumentMutationResult, DocumentSearchResult, Do
 export interface DocumentsPageClient {
   documents(): Promise<DocumentSnapshot>
   document(id: string): Promise<DocumentView>
-  searchDocuments(query: string, includeArchived?: boolean, limit?: number): Promise<DocumentSearchResult>
+  searchDocuments(query: string, includeArchived?: boolean, limit?: number): Promise<DocumentSearchResult & { revision?: string }>
   mutateDocument(request: DocumentMutation): Promise<DocumentMutationResult>
   archiveDocument(id: string): Promise<DocumentMutationResult>
   deleteDocument?(id: string, expectedRevision: string, fileRevision: string): Promise<DocumentMutationResult>

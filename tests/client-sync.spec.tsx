@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MnemonChangeSignal } from '../src/client/change-signal.ts'
 import { MnemonReviewSection } from '../src/client/MnemonReviewSection.tsx'
@@ -766,5 +766,55 @@ describe('Git sync view helpers', () => {
     expect(refused('https://github.com/o/r.git', 'none')).toBe('Needs credentials; sign in with GitHub or add an access token')
     expect(failureText(translateEn, 'remote-auth', 'Permission denied (publickey)', 'git@github.com:o/r.git', 'environment')).toBe('SSH authentication failed; check this computer\'s SSH key')
     expect(failureText(translateEn, 'remote-not-found', 'not found', 'https://github.com/o/r.git', 'token')).toBe('Repository not found; check the address, as a private repository needs a sign-in or a token')
+  })
+
+  it('polls syncStatus settle with exponential backoff (250ms -> 500ms -> 1000ms) instead of tight 250ms loops', async () => {
+    vi.useFakeTimers()
+    try {
+      let statusReads = 0
+      const call = vi.fn(async (_channel: string, endpoint: string) => {
+        if (endpoint === 'github-status') return { ok: true as const, value: { available: false, signedIn: false, writable: false } }
+        statusReads += 1
+        const ready = statusReads >= 4
+        return {
+          ok: true as const,
+          value: {
+            enabled: ready,
+            configured: false,
+            config: { enabled: ready, branch: 'mnemon-sync', subdir: 'mnemon/', hasToken: false, credentialSource: 'none' as const, authorName: 'sync', authorEmail: 'sync@localhost', autoBackupMinutes: 0 },
+            configPath: '/data/state/sync-git.json',
+            mirrorPath: '/data/state/sync/git',
+            machine: { id: 'm1', label: 'host', createdAt: '2026-08-01T00:00:00.000Z' },
+            machineLabel: { source: 'hostname' as const, hostname: 'host' },
+            git: { available: true, required: '2.20', version: '2.50.1' },
+            remote: { reachable: false, branchExists: false },
+          },
+        }
+      })
+      render(<MnemonSyncSection connection={{ rpc: { call }, isLoopback: true } as unknown as ClientConnectionHandle} enabled onEnabled={vi.fn()} disabled={false} t={translateEn} />)
+
+      await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+      expect(statusReads).toBe(1)
+
+      // 250ms first retry
+      await act(async () => { await vi.advanceTimersByTimeAsync(249) })
+      expect(statusReads).toBe(1)
+      await act(async () => { await vi.advanceTimersByTimeAsync(1) })
+      expect(statusReads).toBe(2)
+
+      // 500ms second retry (not 250ms)
+      await act(async () => { await vi.advanceTimersByTimeAsync(250) })
+      expect(statusReads).toBe(2)
+      await act(async () => { await vi.advanceTimersByTimeAsync(250) })
+      expect(statusReads).toBe(3)
+
+      // 1000ms third retry
+      await act(async () => { await vi.advanceTimersByTimeAsync(500) })
+      expect(statusReads).toBe(3)
+      await act(async () => { await vi.advanceTimersByTimeAsync(500) })
+      expect(statusReads).toBe(4)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

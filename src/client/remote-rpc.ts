@@ -53,6 +53,60 @@ function isLoopbackHostname(hostname: string): boolean {
     && parts.every(part => /^\d{1,3}$/.test(part) && Number(part) <= 255)
 }
 
+export interface RemoteAccessCapability {
+  readonly isOwner?: boolean | (() => boolean)
+  readonly owner?: boolean
+  readonly principal?: string
+  readonly state?: { readonly owner?: boolean; readonly snapshot?: { readonly kind?: string } }
+  getSnapshot?(): { isOwner?: boolean; owner?: boolean; principal?: string } | undefined
+  source?(kind: string, id: string, action: string): { allowed?: boolean; isOwner?: boolean; getSnapshot?(): boolean } | boolean | undefined
+}
+
+const connectionRemoteAccess = new WeakMap<ClientConnectionHandle, RemoteAccessCapability>()
+
+/** Bind DSH 0.2.1+ `ctx.remoteAccess` capability state to a connection handle for local vs remote routing. */
+export function bindConnectionRemoteAccess(
+  connection: ClientConnectionHandle,
+  capability: RemoteAccessCapability | undefined,
+): () => void {
+  if (capability === undefined) {
+    connectionRemoteAccess.delete(connection)
+    return () => {}
+  }
+  connectionRemoteAccess.set(connection, capability)
+  return () => {
+    if (connectionRemoteAccess.get(connection) === capability) {
+      connectionRemoteAccess.delete(connection)
+    }
+  }
+}
+
+function resolveRemoteOwnerState(capability: RemoteAccessCapability | undefined): boolean | undefined {
+  if (capability === undefined) return undefined
+  const directOwner = typeof capability.isOwner === 'function' ? capability.isOwner() : (capability.isOwner ?? capability.owner)
+  if (typeof directOwner === 'boolean') return directOwner
+  if (typeof capability.principal === 'string') return capability.principal === 'owner'
+  if (typeof capability.getSnapshot === 'function') {
+    const snapshot = capability.getSnapshot()
+    if (typeof snapshot?.isOwner === 'boolean') return snapshot.isOwner
+    if (typeof snapshot?.owner === 'boolean') return snapshot.owner
+    if (typeof snapshot?.principal === 'string') return snapshot.principal === 'owner'
+  }
+  const internalKind = capability.state?.snapshot?.kind
+  if (internalKind === 'owner') return true
+  if (internalKind === 'granted') return false
+  if (internalKind !== 'closed' && typeof capability.source === 'function') {
+    const probe = capability.source('\u0000global', '', '__dsh_owner_probe__')
+    if (typeof probe === 'boolean') return probe
+    if (probe !== null && typeof probe === 'object') {
+      if (typeof probe.getSnapshot === 'function') return Boolean(probe.getSnapshot())
+      if (typeof probe.isOwner === 'boolean') return probe.isOwner
+      if (typeof probe.allowed === 'boolean') return probe.allowed
+    }
+  }
+  return undefined
+}
+
 /**
  * A window the application serves itself, such as DSH Desktop's
  * `dsh-app://app/`, runs beside its Host rather than across a network.
@@ -63,12 +117,20 @@ function isApplicationPage(page: Location | undefined): boolean {
 }
 
 /**
- * A network page is remote when its hostname or the DSH Connection is not
- * loopback. An application page is local unless DSH declares a transport that
- * does not own the Host, which only a page connected to another machine does.
+ * Consult official DSH `0.2.1+` `remoteAccess` capability state when available,
+ * falling back to legacy application-page / loopback transport inspection on `0.2.0-rc.2`.
  */
 export function isRemoteConnection(connection: ClientConnectionHandle): boolean {
   const page = globalThis.location
+  const capability = connectionRemoteAccess.get(connection)
+    ?? (connection as { remoteAccess?: RemoteAccessCapability }).remoteAccess
+  const ownerState = resolveRemoteOwnerState(capability)
+  if (ownerState !== undefined) {
+    if (!ownerState) return true
+    if (isApplicationPage(page)) return false
+    const hostname = page?.hostname
+    return typeof hostname === 'string' && hostname !== '' && !isLoopbackHostname(hostname)
+  }
   if (isApplicationPage(page)) {
     const transport = (globalThis as { __DSH_TRANSPORT__?: { ownsHost?: unknown } }).__DSH_TRANSPORT__
     return transport !== undefined && transport !== null && transport.ownsHost !== true

@@ -58,7 +58,29 @@ interface TurnActivityCacheEntry {
   inFlight?: Promise<TurnMemoryActivitySnapshot>
 }
 
+const MAX_TURN_ACTIVITY_SESSIONS = 32
 const turnActivityCache = new WeakMap<ClientConnectionHandle, Map<string, TurnActivityCacheEntry>>()
+
+function touchTurnActivityEntry(
+  sessions: Map<string, TurnActivityCacheEntry>,
+  key: string,
+  entry: TurnActivityCacheEntry,
+): void {
+  sessions.delete(key)
+  sessions.set(key, entry)
+  if (sessions.size <= MAX_TURN_ACTIVITY_SESSIONS) return
+  for (const [candidateKey, candidate] of sessions) {
+    if (candidateKey !== key && candidate.inFlight === undefined) {
+      sessions.delete(candidateKey)
+      if (sessions.size <= MAX_TURN_ACTIVITY_SESSIONS) return
+    }
+  }
+  while (sessions.size > MAX_TURN_ACTIVITY_SESSIONS) {
+    const oldest = sessions.keys().next().value
+    if (oldest === undefined || oldest === key) break
+    sessions.delete(oldest)
+  }
+}
 
 async function loadTurnActivities(connection: ClientConnectionHandle, sessionId: string | undefined, requiredCursor: number): Promise<TurnMemoryActivitySnapshot> {
   let sessions = turnActivityCache.get(connection)
@@ -70,8 +92,8 @@ async function loadTurnActivities(connection: ClientConnectionHandle, sessionId:
   let entry = sessions.get(key)
   if (entry === undefined) {
     entry = { cursor: -1, activities: new Map() }
-    sessions.set(key, entry)
   }
+  touchTurnActivityEntry(sessions, key, entry)
   if (entry.cursor >= requiredCursor) return { cursor: entry.cursor, activities: [...entry.activities.values()] }
   if (entry.inFlight !== undefined) {
     const snapshot = await entry.inFlight

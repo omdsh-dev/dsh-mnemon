@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { publicEmbeddingSettings } from '../src/host/embedding-settings.ts'
 import { MnemonSettingsCard } from '../src/client/MnemonSettingsCard.tsx'
+import { base64FromBytes, bytesFromBase64 } from '../src/client/MnemonPackSection.tsx'
 import { MnemonSaveAction } from '../src/client/MnemonSaveAction.tsx'
 import { MnemonStorageSection, type MnemonStorageSectionProps } from '../src/client/MnemonStorageSection.tsx'
 import { MnemonWorkbench } from '../src/client/MnemonWorkbench.tsx'
@@ -1799,6 +1800,93 @@ describe('optional DSH client picker', () => {
     connection.isLoopback = true
     get.mockImplementation(() => { throw new Error('service unloaded') })
     expect(picker.available()).toBe(false)
+  })
+
+  it('delegates directly to DSH 0.2.1+ remote.directoryPicker and falls back cleanly to mnemon/picker RPC', async () => {
+    const pick = vi.fn(async () => ({ ok: true as const, value: '/fixture/remote-picked' }))
+    const mode = vi.fn(async () => ({ ok: true as const, value: 'native' as const }))
+    const list = vi.fn(async (path?: string) => ({
+      ok: true as const,
+      value: { path: path ?? '/fixture', entries: [{ name: 'sub', path: '/fixture/sub' }] },
+    }))
+    const createDirectory = vi.fn(async (parent: string, name: string) => ({
+      ok: true as const,
+      value: `${parent}/${name}`,
+    }))
+    const rpcCall = vi.fn(async (_channel: string, endpoint: string, payload: Record<string, unknown>) => {
+      if (endpoint === 'mode') return { ok: true as const, value: { mode: 'browse' } }
+      if (endpoint === 'pick') return { ok: true as const, value: { path: '/fixture/fallback-picked' } }
+      if (endpoint === 'list') return { ok: true as const, value: { path: String(payload.path ?? '/fallback'), entries: [] } }
+      if (endpoint === 'mkdir') return { ok: true as const, value: { path: `${payload.parentPath}/${payload.name}` } }
+      return { ok: false as const, error: { message: 'unexpected' } }
+    })
+
+    const nativePicker = directoryPicker({
+      get: () => undefined,
+      connection: { isLoopback: true, rpc: { call: rpcCall } } as never,
+      remote: { directoryPicker: { mode, pick, list, createDirectory } },
+    })
+    expect(nativePicker.available()).toBe(true)
+    await expect(nativePicker.mode!()).resolves.toBe('native')
+    await expect(nativePicker.pick()).resolves.toBe('/fixture/remote-picked')
+    await expect(nativePicker.list!('/fixture')).resolves.toEqual({
+      path: '/fixture',
+      entries: [{ name: 'sub', path: '/fixture/sub' }],
+    })
+    await expect(nativePicker.createDirectory!('/fixture', 'created')).resolves.toBe('/fixture/created')
+    expect(rpcCall).not.toHaveBeenCalled()
+
+    // Fallback when neither remote.directoryPicker nor uiWorkspace is present:
+    const fallbackPicker = directoryPicker({
+      get: () => undefined,
+      connection: { isLoopback: true, rpc: { call: rpcCall } } as never,
+    })
+    expect(fallbackPicker.available()).toBe(false)
+    await expect(fallbackPicker.mode!()).resolves.toBe('browse')
+    await expect(fallbackPicker.pick()).resolves.toBe('/fixture/fallback-picked')
+    await expect(fallbackPicker.list!('/fallback')).resolves.toEqual({ path: '/fallback', entries: [] })
+    await expect(fallbackPicker.createDirectory!('/fallback', 'dir')).resolves.toBe('/fallback/dir')
+    expect(rpcCall).toHaveBeenCalledTimes(4)
+  })
+})
+
+describe('chunked pack base64 and data-scoped settings invalidation', () => {
+  it('round-trips multi-chunk (>32 KB) binary archives through base64FromBytes and bytesFromBase64', () => {
+    const source = new Uint8Array(70_001)
+    for (let index = 0; index < source.byteLength; index += 1) {
+      source[index] = (index * 131 + 17) & 0xff
+    }
+    const encoded = base64FromBytes(source)
+    const decoded = new Uint8Array(bytesFromBase64(encoded))
+    expect(decoded.byteLength).toBe(source.byteLength)
+    expect(decoded).toEqual(source)
+    expect(bytesFromBase64('').byteLength).toBe(0)
+  })
+
+  it('does not re-fetch dashboard, memory-system, or pack target when UI-only settings change', async () => {
+    const scope = liveSettingsScope<Config>(readySnapshot({ displayMode: 'sidebar', storageScope: 'global' }))
+    const call = vi.fn(async (_channel: string, endpoint: string) => {
+      if (endpoint === 'dashboard') return { ok: true as const, value: { entries: [] } }
+      if (endpoint === 'memory-system') return { ok: true as const, value: { serving: true, state: 'ready', diagnostics: [], configuration: { layers: {} } } }
+      if (endpoint === 'target') return { ok: true as const, value: { root: '/fixture/.mnemon', scope: 'global' } }
+      if (endpoint === 'status') return { ok: true as const, value: { enabled: false, configured: false, config: {}, git: { available: true }, remote: { reachable: false, branchExists: false } } }
+      return { ok: true as const, value: { items: [] } }
+    })
+    render(<MnemonSettingsCard scope={scope} connection={{ rpc: { call }, isLoopback: true } as unknown as ClientConnectionHandle} />)
+    await waitFor(() => expect(call.mock.calls.some(([, endpoint]) => endpoint === 'target')).toBe(true))
+    const countDataCalls = () => call.mock.calls.filter(([, endpoint]) => endpoint === 'dashboard' || endpoint === 'memory-system' || endpoint === 'target').length
+    const baseline = countDataCalls()
+
+    await act(async () => {
+      await scope.mutate([{ op: 'set', path: ['displayMode'], value: 'builtin' }])
+    })
+    await act(async () => {})
+    expect(countDataCalls()).toBe(baseline)
+
+    await act(async () => {
+      await scope.mutate([{ op: 'set', path: ['storageScope'], value: 'custom' }, { op: 'set', path: ['dataDir'], value: '/fixture/custom' }])
+    })
+    await waitFor(() => expect(countDataCalls()).toBeGreaterThan(baseline))
   })
 })
 

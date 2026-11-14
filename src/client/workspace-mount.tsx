@@ -15,6 +15,7 @@ import { MnemonWorkspaceController } from './workspace-controller.ts'
 import { useMnemonSessionId, type MnemonSessionBinding } from './session-binding.ts'
 import css from './MnemonWorkspace.module.css'
 import { MemoryComposerToggle, type MemoryComposer } from './memory-composer.tsx'
+import { createRafCoalescer } from './shared/dom-seat.ts'
 
 const ACTIVE_ATTR = 'data-dsh-mnemon-active'
 const TASKBOARD_ACTIVE_ATTR = 'data-dsh-taskboard-active'
@@ -113,19 +114,24 @@ export function MnemonBuiltinWorkspaceHost(props: MnemonBuiltinWorkspaceHostProp
 export function MnemonWorkspaceHost(props: MnemonWorkspaceHostProps): JSX.Element {
   const subscribeLocale = useCallback((listener: () => void) => props.localeRuntime.subscribe(listener), [props.localeRuntime])
   const getLocale = useCallback(() => props.localeRuntime.getSnapshot(), [props.localeRuntime])
+  const mainSessionId = useMnemonSessionId(props.currentSession)
+  const sessionId = Object.hasOwn(props, 'sessionId') ? props.sessionId : mainSessionId
+  const explicitCwd = props.cwd
   const subscribeSessions = useCallback((listener: () => void) => props.sessions.list.subscribe(listener), [props.sessions.list])
-  const getSessions = useCallback(() => props.sessions.list.getSnapshot(), [props.sessions.list])
+  const getSessionCwd = useCallback((): string | null => {
+    const byId = props.sessions.list.getSnapshot().byId as Record<string, { cwd?: string } | undefined>
+    if (explicitCwd !== undefined) return explicitCwd
+    if (sessionId === undefined || !Object.hasOwn(byId, sessionId)) return null
+    return byId[sessionId]?.cwd ?? null
+  }, [explicitCwd, props.sessions.list, sessionId])
   const subscribeWorkspaces = useCallback((listener: () => void) => props.workspaces.list.subscribe(listener), [props.workspaces.list])
   const getWorkspaces = useCallback(() => props.workspaces.list.getSnapshot(), [props.workspaces.list])
   const locale = useSyncExternalStore(subscribeLocale, getLocale, getLocale)
-  const sessions = useSyncExternalStore(subscribeSessions, getSessions, getSessions)
+  const currentCwd = useSyncExternalStore(subscribeSessions, getSessionCwd, getSessionCwd) ?? undefined
   const workspaces = useSyncExternalStore(subscribeWorkspaces, getWorkspaces, getWorkspaces)
-  const mainSessionId = useMnemonSessionId(props.currentSession)
   const hidden = useHiddenSourceTypes(props.skillsPanel)
   const hiddenSourceTypes = props.focus === undefined ? hidden : undefined
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string>()
-  const sessionId = Object.hasOwn(props, 'sessionId') ? props.sessionId : mainSessionId
-  const currentCwd = props.cwd ?? (sessionId === undefined ? undefined : Object.entries(sessions.byId).find(([id]) => id === sessionId)?.[1]?.cwd)
   const effectiveWorkspace = currentCwd === undefined
     ? undefined
     : workspaces.items.find(workspace => normalizePath(workspace.path) === normalizePath(currentCwd))
@@ -187,7 +193,9 @@ export function MnemonSidebarWorkspaceHost(props: MnemonWorkspaceHostProps & { c
       const { left, top, width, height } = column.getBoundingClientRect()
       setBounds(previous => previous?.left === left && previous.top === top && previous.width === width && previous.height === height ? previous : { left, top, width, height })
     }
-    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(update)
+    const updateCoalescer = createRafCoalescer(update)
+    const scheduleUpdate = (): void => { updateCoalescer.schedule() }
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(scheduleUpdate)
     const detach = (): void => {
       if (column !== undefined) {
         observer?.unobserve(column)
@@ -208,14 +216,17 @@ export function MnemonSidebarWorkspaceHost(props: MnemonWorkspaceHostProps & { c
       }
       update()
     }
+    const connectCoalescer = createRafCoalescer(connect)
     connect()
-    const shell = new MutationObserver(connect)
+    const shell = new MutationObserver(() => { connectCoalescer.schedule() })
     shell.observe(document.body, { childList: true, subtree: true })
-    window.addEventListener('resize', update)
+    window.addEventListener('resize', scheduleUpdate)
     return () => {
+      connectCoalescer.cancel()
+      updateCoalescer.cancel()
       shell.disconnect()
       observer?.disconnect()
-      window.removeEventListener('resize', update)
+      window.removeEventListener('resize', scheduleUpdate)
       detach()
     }
   }, [state.open, props.controller, nativeSidebar?.available])

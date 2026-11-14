@@ -11,7 +11,8 @@ import { MemoryIcon } from './memory-icon.tsx'
 import css from './MnemonWorkspace.module.css'
 
 export const MNEMON_MAIN_PANEL_ID = 'mnemon' as MainPanelId
-const ICON_SELECTOR = '[data-dsh-plugin="dsh-mnemon"][data-dsh-part="sidebar-icon"]'
+
+type UsePanelInfoHook = <T>(selector: (info: { activePanelId: string | null }) => T) => T
 
 /** The native Sidebar owns the surrounding button, label, tooltip and state. */
 function MnemonSidebarIcon({ size }: Pick<PropsRuntime<'sidebar.panellist'>, 'size'>): JSX.Element {
@@ -19,19 +20,25 @@ function MnemonSidebarIcon({ size }: Pick<PropsRuntime<'sidebar.panellist'>, 'si
 }
 
 /** DSH selects this seat; the shell registration retains Source render authority. */
-function MnemonMainPanel({ seat, controller }: { seat: MnemonNativeSidebarSeat; controller: MnemonWorkspaceController }): JSX.Element {
+function MnemonMainPanel({ seat, controller, usePanelInfo }: { seat: MnemonNativeSidebarSeat; controller: MnemonWorkspaceController; usePanelInfo?: UsePanelInfoHook }): JSX.Element {
   const parent = useRef<HTMLDivElement>(null)
+  const panelActive = usePanelInfo === undefined ? true : usePanelInfo(info => info.activePanelId === MNEMON_MAIN_PANEL_ID)
   useLayoutEffect(() => {
-    if (parent.current === null) return
+    if (parent.current === null || !panelActive) return
     const detach = seat.attach(parent.current)
     controller.open()
     return () => { controller.close(); detach() }
-  }, [seat, controller])
+  }, [seat, controller, panelActive])
   // The top clearance this seat keeps is the window's title bar on DSH Desktop; marking it
   // lets the window move from there, as from DSH's own pages.
   return <div ref={parent} className={css.nativeWorkspace} data-dsh-mnemon-main-seat>
     <div className={css.windowDragBand} data-window-drag aria-hidden="true" />
   </div>
+}
+
+interface LayoutPanelInfo {
+  getSnapshot(): { activePanelId: MainPanelId | string | null }
+  subscribe(listener: () => void): () => void
 }
 
 /** Use the published panel contract, with a fallback for replacement layouts. */
@@ -42,6 +49,7 @@ export function mountMnemonSidebarNavigation(
   seat: MnemonNativeSidebarSeat,
 ): { open(): void; close(): void; dispose(): void } {
   let stopFallback: (() => void) | undefined
+  let stopFallbackPanels: (() => void) | undefined
   let disposed = false
   const navigation = {
     open(): void {
@@ -57,34 +65,42 @@ export function mountMnemonSidebarNavigation(
     if (disposed || seat.getSnapshot().available) {
       stopFallback?.()
       stopFallback = undefined
+      stopFallbackPanels?.()
+      stopFallbackPanels = undefined
     } else {
+      stopFallbackPanels ??= coordinateSidebarPanels(controller, navigation.close)
       stopFallback ??= mountMnemonSidebarEntry(controller, t, listener => ctx.locale.subscribe(listener))
     }
   }
-  const stopPanels = coordinateSidebarPanels(controller, navigation.close)
   let stopNative: (() => void) | undefined
-  // Legacy overlay peers can take over before their asynchronous DOM flag is
-  // observed. A repeated native navigation must still dismiss those overlays.
-  const reassert = (event: MouseEvent): void => {
-    if (!seat.getSnapshot().available || !(event.target instanceof Element)) return
-    const button = event.target.closest('button')
-    if (button?.querySelector(ICON_SELECTOR) != null) controller.open()
-  }
+  let stopPanelInfo: (() => void) | undefined
   const dispose = (): void => {
     if (disposed) return
     disposed = true
-    document.removeEventListener('click', reassert, true)
-    stopPanels()
+    stopPanelInfo?.()
+    stopPanelInfo = undefined
     stopNative?.()
     stopFallback?.()
+    stopFallbackPanels?.()
+    stopFallback = undefined
+    stopFallbackPanels = undefined
     controller.close()
   }
   try {
+    const panelInfo = (ctx.layout as { panelInfo?: LayoutPanelInfo } | undefined)?.panelInfo
+    if (panelInfo !== undefined && typeof panelInfo.subscribe === 'function' && typeof panelInfo.getSnapshot === 'function') {
+      stopPanelInfo = panelInfo.subscribe(() => {
+        if (!seat.getSnapshot().available) return
+        if (panelInfo.getSnapshot().activePanelId !== MNEMON_MAIN_PANEL_ID && controller.getSnapshot().open) {
+          controller.close()
+        }
+      })
+    }
     // Replacement shells may not declare the native panel seats; the fallback entry covers them.
     stopNative = ctx.slots.inject('main', () => ctx.slots.inject('sidebar.panellist', () => {
       const stopMain = ctx.slots.register({
         name: 'main', key: MNEMON_MAIN_PANEL_ID, inject: () => ({ seat, controller }),
-      }, MnemonMainPanel)
+      }, MnemonMainPanel as never)
       let stopIcon: (() => void) | undefined
       try {
         stopIcon = ctx.slots.register({
@@ -108,7 +124,6 @@ export function mountMnemonSidebarNavigation(
         reconcileFallback()
       }
     }))
-    document.addEventListener('click', reassert, true)
     reconcileFallback()
     return { ...navigation, dispose }
   } catch (error) {

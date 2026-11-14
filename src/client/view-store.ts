@@ -2,6 +2,7 @@ import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import type { MemoryPluginEntryView, MemoryPluginPreference, MemoryViewDashboard } from '../host/view-protocol.ts'
 import type { MnemonClient } from './api.ts'
 import { message } from './page-kit.tsx'
+import { ExternalStore } from './shared/store.ts'
 
 /** A change to the components or the main Strategy, with the states on either side. */
 export interface MnemonViewChange {
@@ -75,43 +76,34 @@ function moved(before: MemoryViewDashboard, after: MemoryViewDashboard): boolean
  * write. It records each change with the states on either side, so the page
  * can say what changed, undo its own writes and retry a refused one.
  */
-export class MnemonViewStore {
-  private state: MnemonViewState
-  private readonly listeners = new Set<() => void>()
+export class MnemonViewStore extends ExternalStore<MnemonViewState> {
   private ticket = 0
   private seq = 0
   private last: ViewRequest | undefined
   private own: { at: number; request: ViewRequest } | undefined
 
   constructor(private readonly client: MnemonClient | undefined) {
-    this.state = { status: client === undefined ? 'unavailable' : 'loading', dashboard: null, working: null, failure: null, change: null }
-  }
-
-  readonly getSnapshot = (): MnemonViewState => this.state
-
-  readonly subscribe = (listener: () => void): (() => void) => {
-    this.listeners.add(listener)
-    return () => { this.listeners.delete(listener) }
+    super({ status: client === undefined ? 'unavailable' : 'loading', dashboard: null, working: null, failure: null, change: null })
   }
 
   /** Re-read the dashboard, keeping the current one on screen until the answer arrives. */
   async load(): Promise<void> {
     // A write re-reads when it finishes, after every change it caused, such
     // as the plugin manager's own announcement of the switches it applied.
-    if (this.client === undefined || this.state.working !== null) return
+    if (this.client === undefined || this.snapshot.working !== null) return
     const ticket = ++this.ticket
-    const previous = this.state.status === 'ready' ? this.state.dashboard : null
-    if (this.state.status !== 'ready') this.publish({ ...this.state, status: 'loading' })
+    const previous = this.snapshot.status === 'ready' ? this.snapshot.dashboard : null
+    if (this.snapshot.status !== 'ready') this.setSnapshot({ ...this.snapshot, status: 'loading' })
     try {
       const dashboard = await this.client.viewDashboard()
       if (ticket !== this.ticket) return
       const external = previous !== null && moved(previous, dashboard) && !this.echoes(previous, dashboard)
-      this.publish({
-        ...this.state, status: 'ready', dashboard, failure: null,
-        change: external ? { seq: ++this.seq, origin: 'external', before: previous, after: dashboard } : this.state.change,
+      this.setSnapshot({
+        ...this.snapshot, status: 'ready', dashboard, failure: null,
+        change: external ? { seq: ++this.seq, origin: 'external', before: previous, after: dashboard } : this.snapshot.change,
       })
     } catch {
-      if (ticket === this.ticket) this.publish({ ...this.state, status: 'unavailable', dashboard: null })
+      if (ticket === this.ticket) this.setSnapshot({ ...this.snapshot, status: 'unavailable', dashboard: null })
     }
   }
 
@@ -123,8 +115,8 @@ export class MnemonViewStore {
    * @returns whether the Host accepted the write.
    */
   async apply(key: string, strategyTypeId: string | undefined, entries: Record<string, MemoryPluginPreference>, configured: readonly string[] = []): Promise<boolean> {
-    const previous = this.state.dashboard
-    if (this.client === undefined || previous === null || this.state.working !== null) return false
+    const previous = this.snapshot.dashboard
+    if (this.client === undefined || previous === null || this.snapshot.working !== null) return false
     const ticket = ++this.ticket
     const request: ViewRequest = { key, strategyTypeId, entries, configured }
     this.last = request
@@ -134,7 +126,7 @@ export class MnemonViewStore {
     const optimistic: MemoryViewDashboard = { ...previous, strategyTypeId: strategyTypeId ?? previous.strategyTypeId, entries: previous.entries.map(entry => entries[entry.entryId] === undefined
       ? entry
       : { ...entry, enabled: entries[entry.entryId]!.enabled, active: entries[entry.entryId]!.enabled, ...configured.includes(entry.entryId) ? { config: entries[entry.entryId]!.config } : {} }) }
-    this.publish({ ...this.state, working: { key, before: previous, after: optimistic }, failure: null, dashboard: optimistic })
+    this.setSnapshot({ ...this.snapshot, working: { key, before: previous, after: optimistic }, failure: null, dashboard: optimistic })
     let base = previous
     try {
       for (let attempt = 0; ; attempt += 1) {
@@ -154,16 +146,16 @@ export class MnemonViewStore {
       if (ticket !== this.ticket) return false
       // Show what the Host now holds; the refused write may have met a newer revision.
       const current = await this.client.viewDashboard().catch(() => previous)
-      if (ticket === this.ticket) this.publish({ ...this.state, dashboard: current, working: null, failure: { seq: ++this.seq, key, kind: 'apply' } })
+      if (ticket === this.ticket) this.setSnapshot({ ...this.snapshot, dashboard: current, working: null, failure: { seq: ++this.seq, key, kind: 'apply' } })
       return false
     }
     try {
       const next = await this.client.viewDashboard()
-      if (ticket === this.ticket) this.publish({ ...this.state, status: 'ready', dashboard: next, working: null, change: { seq: ++this.seq, origin: 'own', key, before: base, after: next } })
+      if (ticket === this.ticket) this.setSnapshot({ ...this.snapshot, status: 'ready', dashboard: next, working: null, change: { seq: ++this.seq, origin: 'own', key, before: base, after: next } })
     } catch {
       // The write committed. Keep its visible value and refuse another write
       // with a stale revision until the page reloads.
-      if (ticket === this.ticket) this.publish({ ...this.state, dashboard: this.state.dashboard === null ? null : { ...this.state.dashboard, writable: false }, working: null, failure: { seq: ++this.seq, key, kind: 'refresh' } })
+      if (ticket === this.ticket) this.setSnapshot({ ...this.snapshot, dashboard: this.snapshot.dashboard === null ? null : { ...this.snapshot.dashboard, writable: false }, working: null, failure: { seq: ++this.seq, key, kind: 'refresh' } })
     }
     return true
   }
@@ -202,11 +194,6 @@ export class MnemonViewStore {
     if (before.strategyTypeId !== after.strategyTypeId && after.strategyTypeId !== own.request.strategyTypeId) return false
     return switchedEntries(before, after).every(entry => own.request.entries[entry.entryId]?.enabled === entry.enabled)
       && reconfiguredEntries(before, after).every(entry => own.request.configured.includes(entry.entryId))
-  }
-
-  private publish(state: MnemonViewState): void {
-    this.state = state
-    for (const listener of [...this.listeners]) listener()
   }
 }
 

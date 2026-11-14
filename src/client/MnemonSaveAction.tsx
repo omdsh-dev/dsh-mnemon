@@ -166,21 +166,23 @@ function runtimePlaceNote(destination: SaveDestination, content: string, usage: 
   return { text: t(keep === 0 ? 'saveAction.place.fullAll' : 'saveAction.place.full', { target, used, limit, keep: humanBytes(keep) }), blocked: false }
 }
 
-/**
- * Save-to-memory action on finalized assistant messages. A task Agent decides
- * whether the (editable) reply is worth keeping and where it goes, or the user
- * names the place and the text goes there through that place's own write. The
- * dialog shows the same receipt as Save to memory on the Memory Spaces page.
- */
-export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sessionId, connection, settingsScope, localeRuntime, t }: MnemonSaveActionProps): JSX.Element {
-  const subscribeLocale = useCallback((listener: () => void) => localeRuntime.subscribe(listener), [localeRuntime])
-  const getLocale = useCallback(() => localeRuntime.getSnapshot(), [localeRuntime])
-  useSyncExternalStore(subscribeLocale, getLocale, getLocale)
-  const subscribeSettings = useCallback((listener: () => void) => settingsScope.subscribe(listener), [settingsScope])
+const EMPTY_DESTINATIONS: ReadonlyArray<FieldOption<SaveDestination>> = Object.freeze([])
+
+interface MnemonSaveDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  messageId: string
+  sessionId?: string
+  connection: ClientConnectionHandle
+  settingsScope: ClientSettingsScope<Config>
+  t: Translate
+}
+
+function MnemonSaveDialog({ open, onOpenChange, messageId, sessionId, connection, settingsScope, t }: MnemonSaveDialogProps): JSX.Element {
+  const subscribeSettings = useCallback((listener: () => void) => open ? settingsScope.subscribe(listener) : () => {}, [open, settingsScope])
   const getSettingsSnapshot = useCallback(() => settingsScope.getSnapshot(), [settingsScope])
   const settingsSnapshot = useSyncExternalStore(subscribeSettings, getSettingsSnapshot, getSettingsSnapshot)
   const managementWritable = settingsSnapshot.status === 'ready' && settingsSnapshot.writable
-  const [open, setOpen] = useState(false)
   const [writeEnabled, setWriteEnabled] = useState<boolean | undefined>(undefined)
   const [taskAgent, setTaskAgent] = useState<boolean | undefined>(undefined)
   const [status, setStatus] = useState<Partial<StatusView> | undefined>(undefined)
@@ -192,17 +194,23 @@ export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sess
   const [outcome, setOutcome] = useState<SaveOutcome | null>(null)
   const [usage, setUsage] = useState<RuntimeUsage | undefined>(undefined)
   const candidateId = useId()
-  const openRef = useRef(false)
+  const openRef = useRef(open)
+  const prevOpenRef = useRef(open)
   const requestVersionRef = useRef(0)
+  if (prevOpenRef.current !== open) {
+    prevOpenRef.current = open
+    requestVersionRef.current += 1
+  }
+  openRef.current = open
   // The text and place a running save writes, and a direct save's result the
   // dialog was closed for: neither is lost when the dialog closes and opens again.
   const inFlightRef = useRef<{ content: string; destination: SaveDestination } | undefined>(undefined)
   const unseenRef = useRef<SaveOutcome | undefined>(undefined)
 
-  const setPanelOpen = (next: boolean): void => {
+  const closePanel = (): void => {
     requestVersionRef.current += 1
-    openRef.current = next
-    setOpen(next)
+    openRef.current = false
+    onOpenChange(false)
   }
 
   useEffect(() => {
@@ -256,7 +264,7 @@ export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sess
   }, [open, connection, sessionId, messageId, managementWritable])
 
   const content = candidate?.trim() ?? ''
-  const options = saveDestinations(status, taskAgent, t)
+  const options = open ? saveDestinations(status, taskAgent, t) : EMPTY_DESTINATIONS
   const usable = options.filter(option => option.disabled !== true)
   // The user's choice, else the first place open: the task Agent while it can write, then working memory.
   const destination: SaveDestination = chosen ?? usable[0]?.value ?? 'agent'
@@ -275,7 +283,7 @@ export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sess
     return () => { alive = false }
   }, [open, runtimeTarget, usage, status, connection, sessionId])
   const agentOpen = options.some(option => option.value === 'agent' && option.disabled !== true)
-  const placeNote = runtimePlaceNote(destination, content, usage, taskAgent, agentOpen, t)
+  const placeNote = open ? runtimePlaceNote(destination, content, usage, taskAgent, agentOpen, t) : undefined
 
   // A result answers one text in one place: sending the same text there again
   // waits for an edit. A failure can be sent again as it is.
@@ -313,7 +321,7 @@ export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sess
 
   const viewMemory = (): void => {
     const runtime = outcome !== null && isRuntimePlace(outcome.destination)
-    setPanelOpen(false)
+    closePanel()
     // Runtime Memory opens on the entry it now holds, stored as one line.
     dispatchMnemonAnchor({ page: runtime ? 'runtime/entries' : 'memory-spaces/content',
       ...(runtime ? { seed: outcome.content.replace(/\s+/gu, ' ') } : {}),
@@ -322,6 +330,77 @@ export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sess
   const direct = writeEnabled === true && destination !== 'agent'
   const receiptSummary = outcome?.note === undefined ? outcome?.summary
     : t(outcome.note.key, { ...outcome.note.params, ...(outcome.note.place === undefined ? {} : { target: t(outcome.note.place) }) })
+
+  return (
+    <Modal
+      open={open}
+      onClose={closePanel}
+      title={t('saveAction.title')}
+      closeLabel={t('saveAction.close')}
+      description={t(direct ? 'saveAction.hintDirect' : 'saveAction.hint')}
+      className={css.modal as string}
+      contentClassName={css.modalContent as string}
+      footer={(
+        <>
+          <Button variant="outline" className={css.modalAction} disabled={submitting} onClick={closePanel}>
+            {outcome === null ? t('common.cancel') : t('saveAction.close')}
+          </Button>
+          <Button variant="primary" className={css.modalAction} disabled={!canSubmit} onClick={submit}>
+            {direct ? (submitting ? t('saveAction.saving') : t('saveAction.save')) : (submitting ? t('saveAction.submitting') : t('saveAction.submit'))}
+          </Button>
+        </>
+      )}
+    >
+      {writeEnabled === false && <div className={css.readOnly} role="status">{t('saveAction.readOnly')}</div>}
+      {candidate === undefined && !missing && <div className={css.status}>{t('saveAction.fetching')}</div>}
+      {missing && <div className={css.status} role="status">{t('saveAction.missing')}</div>}
+      {candidate !== undefined && (
+        <div className={css.candidate}>
+          <div className={css.candidateHeading}>
+            <label htmlFor={candidateId}>{t('saveAction.candidate')}</label>
+            {writeEnabled === true && !direct && taskAgent !== undefined && usable.length > 0 && <TaskAgentTag available={taskAgent && selected?.disabled !== true} t={t} />}
+          </div>
+          <textarea id={candidateId} rows={12} value={candidate} onChange={event => setCandidate(event.target.value)} autoFocus />
+          {truncated && <small className={css.truncated}>{t('saveAction.truncated', { limit: PREVIEW_LIMIT })}</small>}
+          {writeEnabled === true && (
+            <SelectField
+              className={css.destination}
+              label={t('saveAction.to')}
+              value={destination}
+              options={options}
+              disabled={submitting}
+              onChange={setChosen}
+            />
+          )}
+          {writeEnabled === true && placeNote !== undefined && <small className={css.placeNote} data-tone={placeNote.blocked ? 'blocked' : 'caution'}>{placeNote.text}</small>}
+          {writeEnabled === true && status !== undefined && usable.length === 0 && <small className={css.placeNote} data-tone="blocked">{t('saveAction.noPlace')}</small>}
+        </div>
+      )}
+      {outcome !== null && <WriteReceipt t={t} action={outcome.action} summary={receiptSummary} error={outcome.error} unembedded={outcome.unembedded} embeddingManaged={outcome.embeddingManaged} onView={viewMemory}
+        {...(isRuntimePlace(outcome.destination) ? { viewLabel: t('receipt.viewRuntime') } : {})} />}
+    </Modal>
+  )
+}
+
+/**
+ * Save-to-memory action on finalized assistant messages. Closed buttons render
+ * lightweight without subscribing to settingsScope or computing destinations
+ * until the user opens the dialog for a turn.
+ */
+export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sessionId, connection, settingsScope, localeRuntime, t }: MnemonSaveActionProps): JSX.Element {
+  const subscribeLocale = useCallback((listener: () => void) => localeRuntime.subscribe(listener), [localeRuntime])
+  const getLocale = useCallback(() => localeRuntime.getSnapshot(), [localeRuntime])
+  useSyncExternalStore(subscribeLocale, getLocale, getLocale)
+  const [open, setOpen] = useState(false)
+  const [dialogMounted, setDialogMounted] = useState(false)
+  const openRef = useRef(false)
+  openRef.current = open
+
+  const setPanelOpen = useCallback((next: boolean): void => {
+    openRef.current = next
+    if (next) setDialogMounted(true)
+    setOpen(next)
+  }, [])
 
   return (
     <div className={css.wrap}>
@@ -337,53 +416,17 @@ export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sess
           <span className={css.icon}><MemoryIcon size={16} /></span>
         </button>
       </Tooltip>
-      <Modal
-        open={open}
-        onClose={() => setPanelOpen(false)}
-        title={t('saveAction.title')}
-        closeLabel={t('saveAction.close')}
-        description={t(direct ? 'saveAction.hintDirect' : 'saveAction.hint')}
-        className={css.modal as string}
-        contentClassName={css.modalContent as string}
-        footer={(
-          <>
-            <Button variant="outline" className={css.modalAction} disabled={submitting} onClick={() => setPanelOpen(false)}>
-              {outcome === null ? t('common.cancel') : t('saveAction.close')}
-            </Button>
-            <Button variant="primary" className={css.modalAction} disabled={!canSubmit} onClick={submit}>
-              {direct ? (submitting ? t('saveAction.saving') : t('saveAction.save')) : (submitting ? t('saveAction.submitting') : t('saveAction.submit'))}
-            </Button>
-          </>
-        )}
-      >
-        {writeEnabled === false && <div className={css.readOnly} role="status">{t('saveAction.readOnly')}</div>}
-        {candidate === undefined && !missing && <div className={css.status}>{t('saveAction.fetching')}</div>}
-        {missing && <div className={css.status} role="status">{t('saveAction.missing')}</div>}
-        {candidate !== undefined && (
-          <div className={css.candidate}>
-            <div className={css.candidateHeading}>
-              <label htmlFor={candidateId}>{t('saveAction.candidate')}</label>
-              {writeEnabled === true && !direct && taskAgent !== undefined && usable.length > 0 && <TaskAgentTag available={taskAgent && selected?.disabled !== true} t={t} />}
-            </div>
-            <textarea id={candidateId} rows={12} value={candidate} onChange={event => setCandidate(event.target.value)} autoFocus />
-            {truncated && <small className={css.truncated}>{t('saveAction.truncated', { limit: PREVIEW_LIMIT })}</small>}
-            {writeEnabled === true && (
-              <SelectField
-                className={css.destination}
-                label={t('saveAction.to')}
-                value={destination}
-                options={options}
-                disabled={submitting}
-                onChange={setChosen}
-              />
-            )}
-            {writeEnabled === true && placeNote !== undefined && <small className={css.placeNote} data-tone={placeNote.blocked ? 'blocked' : 'caution'}>{placeNote.text}</small>}
-            {writeEnabled === true && status !== undefined && usable.length === 0 && <small className={css.placeNote} data-tone="blocked">{t('saveAction.noPlace')}</small>}
-          </div>
-        )}
-        {outcome !== null && <WriteReceipt t={t} action={outcome.action} summary={receiptSummary} error={outcome.error} unembedded={outcome.unembedded} embeddingManaged={outcome.embeddingManaged} onView={viewMemory}
-          {...(isRuntimePlace(outcome.destination) ? { viewLabel: t('receipt.viewRuntime') } : {})} />}
-      </Modal>
+      {dialogMounted && (
+        <MnemonSaveDialog
+          open={open}
+          onOpenChange={setPanelOpen}
+          messageId={messageId}
+          {...(sessionId === undefined ? {} : { sessionId })}
+          connection={connection}
+          settingsScope={settingsScope}
+          t={t}
+        />
+      )}
     </div>
   )
 })

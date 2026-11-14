@@ -2,6 +2,7 @@ import type { MnemonTranslate } from './locales.ts'
 import css from './MnemonWorkspace.module.css'
 import type { MnemonWorkspaceController } from './workspace-controller.ts'
 import { createMemoryIcon } from './memory-icon.tsx'
+import { createRafCoalescer } from './shared/dom-seat.ts'
 
 const FAMILY_SELECTOR = '[data-dsh-taskboard-entry], [data-dsh-ssh-entry], [data-dsh-mnemon-entry]'
 
@@ -62,6 +63,7 @@ export function mountMnemonSidebarEntry(
   const { entry, label } = createEntry(controller)
   let root: HTMLElement | undefined
   let placed = false
+  let waitingForRoot = false
 
   const syncLabel = (): void => {
     const text = t('tab.label')
@@ -70,36 +72,59 @@ export function mountMnemonSidebarEntry(
     if (label.textContent !== text) label.textContent = text
   }
 
-  const rootObserver = new MutationObserver(() => {
-    if (root === undefined || !root.isConnected) {
-      placed = false
-      tryPlace()
-      return
-    }
-    if (!root.contains(entry)) placed = placeEntry(root, entry)
+  const syncCoalescer = createRafCoalescer(() => { tryPlace() })
+
+  const waitObserver = new MutationObserver(() => { syncCoalescer.schedule() })
+  const detachmentObserver = new MutationObserver(() => {
+    if (root !== undefined && !root.isConnected) syncCoalescer.schedule()
   })
+  const rootObserver = new MutationObserver(() => {
+    if (root === undefined || !root.isConnected || !root.contains(entry)) syncCoalescer.schedule()
+  })
+
+  const armWaitObserver = (): void => {
+    if (waitingForRoot) return
+    waitingForRoot = true
+    waitObserver.observe(document.body, { childList: true, subtree: true })
+  }
+
+  const disarmWaitObserver = (): void => {
+    if (!waitingForRoot) return
+    waitingForRoot = false
+    waitObserver.disconnect()
+  }
+
+  const observeRootAncestors = (target: HTMLElement): void => {
+    detachmentObserver.disconnect()
+    let ancestor = target.parentElement
+    while (ancestor !== null) {
+      detachmentObserver.observe(ancestor, { childList: true })
+      ancestor = ancestor.parentElement
+    }
+  }
 
   const tryPlace = (): void => {
     syncLabel()
     if (root !== undefined && !root.isConnected) {
       rootObserver.disconnect()
+      detachmentObserver.disconnect()
       root = undefined
       placed = false
     }
-    if (placed && document.body.contains(entry)) return
-    if (placed) {
-      rootObserver.disconnect()
-      root = undefined
-      placed = false
+    if (placed && root !== undefined && root.contains(entry)) return
+    if (placed) placed = false
+    if (root === undefined) {
+      root = sidebarRoot()
+      if (root === undefined) {
+        armWaitObserver()
+        return
+      }
+      disarmWaitObserver()
+      rootObserver.observe(root, { childList: true, subtree: true })
+      observeRootAncestors(root)
     }
-    root ??= sidebarRoot()
-    if (root === undefined) return
     placed = placeEntry(root, entry)
-    if (placed) rootObserver.observe(root, { childList: true, subtree: true })
   }
-
-  const waitObserver = new MutationObserver(tryPlace)
-  waitObserver.observe(document.body, { childList: true, subtree: true })
 
   // Like DSH's own panel row, the open workspace is also the current page.
   const syncActive = (): void => {
@@ -114,8 +139,10 @@ export function mountMnemonSidebarEntry(
   const unsubscribe = controller.subscribe(syncActive)
   const unsubscribeLocale = subscribeLocale(syncLabel)
   const dispose = (): void => {
-    waitObserver.disconnect()
+    syncCoalescer.cancel()
+    disarmWaitObserver()
     rootObserver.disconnect()
+    detachmentObserver.disconnect()
     unsubscribe()
     unsubscribeLocale()
     entry.remove()

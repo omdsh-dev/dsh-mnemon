@@ -65,6 +65,7 @@ function RecordDetail(props: { context: SkillsPageContext; id: string; focus: nu
   const [names, setNames] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const configRevision = context.configRevision ?? 0
   useEffect(() => {
     let active = true
     void context.client.trajectory(props.id).then(value => {
@@ -72,9 +73,13 @@ function RecordDetail(props: { context: SkillsPageContext; id: string; focus: nu
       setTrajectory(value)
       setTarget(current => current !== '' ? current : value.stats.skills[0] ?? '')
     }).catch(context.fail)
-    void context.client.catalog().then(catalog => { if (active) setNames([...new Set(catalog.skills.map(skill => skill.name))]) }).catch(() => undefined)
     return () => { active = false }
   }, [context.client, props.id, context.revision])
+  useEffect(() => {
+    let active = true
+    void context.client.catalog().then(catalog => { if (active) setNames([...new Set(catalog.skills.map(skill => skill.name))]) }).catch(() => undefined)
+    return () => { active = false }
+  }, [context.client, configRevision])
   if (trajectory === null) return <Busy label={t('common.loading')} />
   const targets = [...new Set([...trajectory.stats.skills, ...names])]
   const skillName = target !== '' ? target : targets[0] ?? ''

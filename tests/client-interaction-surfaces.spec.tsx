@@ -11,6 +11,7 @@ import type { Config } from "../src/host/config.ts"
 import { apply } from '../src/client/index.ts'
 import { translateEn, translateZh } from '../src/client/locales.ts'
 import { MnemonSaveAction } from '../src/client/MnemonSaveAction.tsx'
+import { SkillTurnTail } from '../src/client/SkillTurnTail.tsx'
 import { MnemonTurnTail, memoryPageForTool, turnItems, turnTools } from '../src/client/MnemonTurnTail.tsx'
 import { consumeMnemonAnchor, dispatchMnemonAnchor, subscribeMnemonAnchor } from '../src/client/anchor.ts'
 import { WriteReceipt } from '../src/client/page-controls.tsx'
@@ -1185,5 +1186,94 @@ describe('the receipt of a memory saved without a vector', () => {
     expect(controlsCss).toMatch(/\.receipt > \.receiptNote \{[^}]*color: var\(--dsw-alias-label-tertiary\);/u)
     expect(controlsCss).toMatch(/\.receipt > \.receiptNote\[data-tone='caution'\] \{\s*color: var\(--dsw-alias-state-warn-label, var\(--dsw-alias-label-secondary\)\);\s*\}/u)
     expect(controlsCss.match(/--dsw-alias-state-warn-label/gu)).toHaveLength(1)
+  })
+})
+
+describe('O(N) turn scaling and bounded LRU caches', () => {
+  it('keeps closed MnemonSaveAction buttons unsubscribed from settingsScope until opened', async () => {
+    let subscribers = 0
+    const readySettingsSnapshot = { status: 'ready' as const, value: {}, writable: true, mode: 'host' as const }
+    const trackedSettings = {
+      getSnapshot: () => readySettingsSnapshot,
+      subscribe: (_listener: () => void) => {
+        subscribers += 1
+        return () => { subscribers -= 1 }
+      },
+      mutate: async () => {},
+    }
+    const call = vi.fn(async (_channel: string, endpoint: string) => {
+      if (endpoint === 'assistant-message') return { ok: true as const, value: { text: 'Saved note', truncated: false } }
+      return { ok: true as const, value: { writeEnabled: true, memoryBodies: [] } }
+    })
+    const connection = { rpc: { call }, isLoopback: true } as ClientConnectionHandle
+
+    render(<>
+      {Array.from({ length: 10 }, (_, index) => (
+        <MnemonSaveAction
+          key={index}
+          messageId={`msg-${index}`}
+          sessionId="session-scale"
+          connection={connection}
+          settingsScope={trackedSettings as never}
+          localeRuntime={localeRuntime}
+          t={translate}
+        />
+      ))}
+    </>)
+
+    expect(subscribers).toBe(0)
+    expect(call).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getAllByLabelText('saveAction.button')[0]!)
+    await waitFor(() => expect(subscribers).toBe(1))
+  })
+
+  it('caps SkillTurnTail session cache to 32 sessions with LRU eviction', async () => {
+    const call = vi.fn(async () => ({
+      ok: true as const,
+      value: { available: false, turns: [], reviews: [] },
+    }))
+    const connection = { rpc: { call }, isLoopback: true } as ClientConnectionHandle
+    const view = render(<div />)
+
+    for (let index = 0; index < 33; index += 1) {
+      view.rerender(
+        <SkillTurnTail
+          turn={{ turn: 1, status: 'closed' }}
+          seq={5}
+          sessionId={`skill-session-${index}`}
+          connection={connection}
+          localeRuntime={localeRuntime}
+          t={translate}
+        />,
+      )
+      await waitFor(() => expect(call).toHaveBeenCalledTimes(index + 1))
+    }
+
+    // Most recent session (32) stays cached; oldest session (0) was evicted after 32 entries.
+    view.rerender(
+      <SkillTurnTail
+        turn={{ turn: 1, status: 'closed' }}
+        seq={5}
+        sessionId="skill-session-32"
+        connection={connection}
+        localeRuntime={localeRuntime}
+        t={translate}
+      />,
+    )
+    await act(async () => {})
+    expect(call).toHaveBeenCalledTimes(33)
+
+    view.rerender(
+      <SkillTurnTail
+        turn={{ turn: 1, status: 'closed' }}
+        seq={5}
+        sessionId="skill-session-0"
+        connection={connection}
+        localeRuntime={localeRuntime}
+        t={translate}
+      />,
+    )
+    await waitFor(() => expect(call).toHaveBeenCalledTimes(34))
   })
 })

@@ -5,8 +5,13 @@ import type { MnemonSourceManagementClient } from './dsh-context.ts'
 import { message } from './page-kit.tsx'
 import type { MemorySourcePageEntry } from './source-pages.tsx'
 
+interface CoalescedReadEntry {
+  promise: Promise<MemorySourceManagementResult>
+  waiters: number
+}
+
 function bindSourceManagementClient(client: MnemonClient, instance: MemorySourceManagementInstance, taskClient: MnemonClient, assertCurrent: () => void, readEpoch: () => number, changed: () => void): MnemonSourceManagementClient {
-  const pending = new Map<string, Promise<MemorySourceManagementResult>>()
+  const pending = new Map<string, CoalescedReadEntry>()
   const independent = async (run: () => Promise<MemorySourceManagementResult>): Promise<MemorySourceManagementResult> => {
     assertCurrent()
     pending.clear()
@@ -34,15 +39,21 @@ function bindSourceManagementClient(client: MnemonClient, instance: MemorySource
       assertCurrent()
       if (options?.coalesce !== true) return independent(() => client.readSourceManagement(instance.sourceInstanceKey, operation, input))
       const key = JSON.stringify([readEpoch(), operation, input])
-      let request = pending.get(key)
-      if (request === undefined) {
-        request = client.readSourceManagement(instance.sourceInstanceKey, operation, input).finally(() => {
-          if (pending.get(key) === request) pending.delete(key)
-        })
-        pending.set(key, request)
+      let entry = pending.get(key)
+      if (entry === undefined) {
+        const created: CoalescedReadEntry = {
+          promise: client.readSourceManagement(instance.sourceInstanceKey, operation, input).finally(() => {
+            if (pending.get(key) === created) pending.delete(key)
+          }),
+          waiters: 0,
+        }
+        entry = created
+        pending.set(key, entry)
       }
-      // Do not retain completed data or share mutable response objects between pages.
-      return structuredClone(await request)
+      entry.waiters += 1
+      const result = await entry.promise
+      // Clone only when concurrent callers share one in-flight response object.
+      return entry.waiters > 1 ? structuredClone(result) : result
     },
     mutate: (operation, input, options) => write(() => client.mutateSourceManagement(
       instance.sourceInstanceKey,
@@ -62,8 +73,21 @@ function bindSourceManagementClient(client: MnemonClient, instance: MemorySource
  * The Source instances that run in one view context, read again whenever `revision` moves: a management client
  * bound to each, the registered pages whose Source runs, and the Source types the descriptor-driven management
  * page shows, those without a page of their own or with configuration fields.
+ *
+ * `scopeContextKey` omits `sessionId` so switching conversations within the same storage scope and workspace
+ * retains the catalog in place without unmounting active Source pages while `viewContextKey` still fences stale
+ * session-bound writes.
  */
-export function useSourceCatalog(client: MnemonClient, taskClient: MnemonClient, revision: number, viewContextKey: string, sourcePageEntries: readonly MemorySourcePageEntry[], active = true, onSourceChanged?: (sourceTypeId: string) => void): {
+export function useSourceCatalog(
+  client: MnemonClient,
+  taskClient: MnemonClient,
+  revision: number,
+  viewContextKey: string,
+  sourcePageEntries: readonly MemorySourcePageEntry[],
+  active = true,
+  onSourceChanged?: (sourceTypeId: string) => void,
+  scopeContextKey: string = viewContextKey,
+): {
   sourceCatalogState: { contextKey: string; value: MemorySourceManagementCatalog | null; error: string | null }
   sourceCatalog: MemorySourceManagementCatalog | null
   sourceInstances: MemorySourceManagementInstance[]
@@ -71,7 +95,7 @@ export function useSourceCatalog(client: MnemonClient, taskClient: MnemonClient,
   visibleSourcePages: MemorySourcePageEntry[]
   managedSourceTypes: [string, MemorySourceManagementInstance[]][]
 } {
-  const [sourceCatalogState, setSourceCatalogState] = useState<{ contextKey: string; value: MemorySourceManagementCatalog | null; error: string | null }>(() => ({ contextKey: viewContextKey, value: null, error: null }))
+  const [sourceCatalogState, setSourceCatalogState] = useState<{ contextKey: string; value: MemorySourceManagementCatalog | null; error: string | null }>(() => ({ contextKey: scopeContextKey, value: null, error: null }))
 
   const current = useRef<{ client: MnemonClient; viewContextKey: string; active: boolean; revision: number; epoch: number }>()
   const previousRead = current.current
@@ -84,14 +108,14 @@ export function useSourceCatalog(client: MnemonClient, taskClient: MnemonClient,
     if (!active) return
     let pending = true
     void client.sourceManagementCatalog().then(value => {
-      if (pending) setSourceCatalogState({ contextKey: viewContextKey, value, error: null })
+      if (pending) setSourceCatalogState({ contextKey: scopeContextKey, value, error: null })
     }).catch(reason => {
-      if (pending) setSourceCatalogState({ contextKey: viewContextKey, value: null, error: message(reason) })
+      if (pending) setSourceCatalogState({ contextKey: scopeContextKey, value: null, error: message(reason) })
     })
     return () => { pending = false }
-  }, [active, client, revision, viewContextKey])
+  }, [active, client, revision, scopeContextKey, viewContextKey])
 
-  const sourceCatalog = sourceCatalogState.contextKey === viewContextKey ? sourceCatalogState.value : null
+  const sourceCatalog = sourceCatalogState.contextKey === scopeContextKey ? sourceCatalogState.value : null
   const sourceInstances = sourceCatalog?.sources ?? []
   const bindings = useRef<{ client: MnemonClient; taskClient: MnemonClient; context: string; generation?: string; values: Map<string, { signature: string; management: MnemonSourceManagementClient }> }>()
   const sourceManagementClients = useMemo(() => {

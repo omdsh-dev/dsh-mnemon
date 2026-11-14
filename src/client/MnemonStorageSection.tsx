@@ -12,6 +12,7 @@ import { MnemonReviewSection } from './MnemonReviewSection.tsx'
 import { MnemonSyncSection } from './MnemonSyncSection.tsx'
 import { SelectRow, SettingRow } from './settings-controls.tsx'
 import { PanelActions, useLive, WriteFailure, useStaged } from './settings-panel.tsx'
+import type { MnemonClient } from './api.ts'
 import type { MnemonDirectoryPicker } from './picker.ts'
 
 type StorageChoice = 'global' | 'workspace' | 'workspaces'
@@ -86,6 +87,7 @@ export interface MnemonStorageSectionProps {
   dashboard: MemoryViewDashboard | null
   /** The directory memory reads and writes now. */
   target: PackTarget | null
+  client?: MnemonClient
   connection?: ClientConnectionHandle
   directoryPicker?: MnemonDirectoryPicker
   sessionId?: string
@@ -229,16 +231,16 @@ export function MnemonStorageSection(props: MnemonStorageSectionProps): JSX.Elem
       </SettingRow>
       <PanelActions dirty={exclusion.dirty} saving={exclusion.saving} invalid={null} failed={exclusion.failed} applied={exclusion.applied} disabled={props.disabled}
         note={t('workspace.excludeNote')} t={t} onDiscard={exclusion.discard} onApply={() => { void exclusion.apply() }} />
-      <MnemonPackSection {...(props.connection === undefined ? {} : { connection: props.connection })} {...(props.sessionId === undefined ? {} : { sessionId: props.sessionId })}
+      <MnemonPackSection {...(props.client === undefined ? {} : { client: props.client })} {...(props.connection === undefined ? {} : { connection: props.connection })} {...(props.sessionId === undefined ? {} : { sessionId: props.sessionId })}
         {...(props.workspaceId === undefined ? {} : { workspaceId: props.workspaceId })} target={props.target}
         {...(props.onDataChanged === undefined ? {} : { onImported: props.onDataChanged })} t={t} />
-      <MnemonSyncSection {...(props.connection === undefined ? {} : { connection: props.connection })} {...(props.sessionId === undefined ? {} : { sessionId: props.sessionId })}
+      <MnemonSyncSection {...(props.client === undefined ? {} : { client: props.client })} {...(props.connection === undefined ? {} : { connection: props.connection })} {...(props.sessionId === undefined ? {} : { sessionId: props.sessionId })}
         {...(props.workspaceId === undefined ? {} : { workspaceId: props.workspaceId })} disabled={props.disabled} enabled={sync.value} onEnabled={sync.set}
         {...(props.onDataChanged === undefined ? {} : { onMerged: props.onDataChanged })} t={t} />
       <WriteFailure error={sync.failed} t={t} />
       {/* The reconciliation is the other half of one channel: it reads the branch the
           switch above publishes to, so it only exists once that switch is on. */}
-      {sync.value && <MnemonReviewSection {...(props.connection === undefined ? {} : { connection: props.connection })} {...(props.sessionId === undefined ? {} : { sessionId: props.sessionId })}
+      {sync.value && <MnemonReviewSection {...(props.client === undefined ? {} : { client: props.client })} {...(props.connection === undefined ? {} : { connection: props.connection })} {...(props.sessionId === undefined ? {} : { sessionId: props.sessionId })}
         {...(props.workspaceId === undefined ? {} : { workspaceId: props.workspaceId })} disabled={props.disabled}
         {...(props.onDataChanged === undefined ? {} : { onApplied: props.onDataChanged })} t={t} />}
     </div>

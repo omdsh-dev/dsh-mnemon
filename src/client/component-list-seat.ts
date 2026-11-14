@@ -1,3 +1,5 @@
+import { HeldSeat } from './shared/dom-seat.ts'
+
 /** The id of the Starter's grouping row in its `cordis.patch.yml`. */
 export const STARTER_GROUP_ROW_ID = 'mnemon-bundle'
 
@@ -7,31 +9,9 @@ export const STARTER_GROUP_ROW_ID = 'mnemon-bundle'
  * 0.2.1 lists only the components. The page's head controls see the rows DSH
  * draws and report them here for the configuration above the list.
  */
-export class MnemonComponentListSeat {
-  private latest: { groupRow: boolean } | undefined
-  private readonly listeners = new Set<() => void>()
-
-  /** Undefined until a page reports, so nothing is said about a list not yet seen. */
-  readonly getSnapshot = (): boolean | undefined => this.latest?.groupRow
-
-  readonly subscribe = (listener: () => void): (() => void) => {
-    this.listeners.add(listener)
-    return () => { this.listeners.delete(listener) }
-  }
-
+export class MnemonComponentListSeat extends HeldSeat<boolean> {
   /** Report whether the open page lists the row until the returned disposer runs; a newer report replaces it. */
   report(groupRow: boolean): () => void {
-    const report = { groupRow }
-    this.latest = report
-    this.emit()
-    return () => {
-      if (this.latest !== report) return
-      this.latest = undefined
-      this.emit()
-    }
-  }
-
-  private emit(): void {
-    for (const listener of [...this.listeners]) listener()
+    return this.hold(groupRow)
   }
 }

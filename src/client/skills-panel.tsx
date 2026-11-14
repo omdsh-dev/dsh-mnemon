@@ -8,6 +8,7 @@ import type { MnemonActionSeat } from './action-seat.ts'
 import type { MnemonChangeSignal } from './change-signal.ts'
 import type { MnemonClientContext } from './dsh-context.ts'
 import type { MnemonTranslate } from './locales.ts'
+import { ExternalStore } from './shared/store.ts'
 import { MNEMON_SOURCE_PAGE_SLOT, type MemorySourcePageDirectory } from './source-pages.tsx'
 import { MnemonWorkspaceHost } from './workspace-mount.tsx'
 import css from './MnemonWorkspace.module.css'
@@ -26,21 +27,13 @@ export function isSkillsPage(page: string): boolean {
  * Whether 技能管理 has its own sidebar entry right now. The Memory System
  * leaves its page out while it does, and its links open the entry instead.
  */
-export class SkillsPanelSeat {
-  private available = false
-  private readonly listeners = new Set<() => void>()
-
-  readonly getSnapshot = (): boolean => this.available
-
-  readonly subscribe = (listener: () => void): (() => void) => {
-    this.listeners.add(listener)
-    return () => { this.listeners.delete(listener) }
+export class SkillsPanelSeat extends ExternalStore<boolean> {
+  constructor() {
+    super(false)
   }
 
   set(available: boolean): void {
-    if (this.available === available) return
-    this.available = available
-    for (const listener of [...this.listeners]) listener()
+    this.setSnapshot(available)
   }
 }
 
@@ -87,15 +80,18 @@ function SkillsSidebarIcon({ size }: Pick<PropsRuntime<'sidebar.panellist'>, 'si
   return <span data-dsh-plugin="dsh-mnemon" data-dsh-part="skills-sidebar-icon" style={{ display: 'inline-flex' }}><IconSkillOutlineRegular size={size} /></span>
 }
 
+type UsePanelInfoHook = <T>(selector: (info: { activePanelId: string | null }) => T) => T
+
 /** The panel: the Memory System workbench focused on 技能管理, its title the window's top edge. */
-function SkillsMainPanel(props: SkillsPanelServices & { render: SourcePageRenderer; navigation: { open(): void; close(): void } }): JSX.Element {
+function SkillsMainPanel(props: SkillsPanelServices & { render: SourcePageRenderer; navigation: { open(): void; close(): void }; usePanelInfo?: UsePanelInfoHook }): JSX.Element {
   const title = props.t('skills.label')
+  const active = props.usePanelInfo === undefined ? true : props.usePanelInfo(info => info.activePanelId === SKILLS_PANEL_ID)
   return <div className={css.nativeWorkspace} data-dsh-mnemon-main-seat>
     <div className={css.windowDragBand} data-window-drag aria-hidden="true" />
     <section className={css.nativeWorkspace} aria-label={title}>
       <MnemonWorkspaceHost connection={props.connection} settingsScope={props.settingsScope} skillsScope={props.skillsScope} sessions={props.sessions} workspaces={props.workspaces}
         currentSession={props.currentSession} localeRuntime={props.localeRuntime} sourcePageDirectory={props.sourcePageDirectory} configuration={props.configuration}
-        componentChanges={props.componentChanges} t={props.t} titleBar focus={{ sourceTypeId: SKILLS_SOURCE_TYPE, title }} renderSlot={props.render} navigation={props.navigation} />
+        componentChanges={props.componentChanges} t={props.t} active={active} titleBar focus={{ sourceTypeId: SKILLS_SOURCE_TYPE, title }} renderSlot={props.render} navigation={props.navigation} />
     </section>
   </div>
 }

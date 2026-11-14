@@ -267,10 +267,13 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const connectionContext = useRef({ connection, revision: 0 })
   if (connectionContext.current.connection !== connection) connectionContext.current = { connection, revision: connectionContext.current.revision + 1 }
   const clientContextKey = `${connectionContext.current.revision}\u0000${sessionId ?? ''}\u0000${workspaceId ?? ''}`
-  // Pages remount only when they would show other data: another storage scope
-  // or directory. Any other save re-reads in place and keeps page drafts.
+  // Pages remount only when they would show other data: another storage scope,
+  // directory, or workspace. Switching chat sessions within the same workspace
+  // or global/custom storage keeps active pages and drafts mounted in place.
   const storageContext = settingsSnapshot.revision === undefined ? 'loading'
     : JSON.stringify([settingsSnapshot.value?.storageScope ?? null, settingsSnapshot.value?.dataDir ?? null, settingsSnapshot.value?.runtimeUserScope ?? null])
+  const effectiveWorkspace = workspaceId ?? (surface === 'builtin' ? sessionId ?? '' : '')
+  const surfaceScopeKey = `${connectionContext.current.revision}\u0000${storageContext}\u0000${effectiveWorkspace}`
   const viewContextKey = `${clientContextKey}\u0000${storageContext}`
   const workspaceToast = useToast()
   const showWorkspaceToast = workspaceToast.show
@@ -290,12 +293,13 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
     canvas.scrollTop = Math.max(0, canvas.scrollTop + element.getBoundingClientRect().top - canvas.getBoundingClientRect().top - inset)
   }, [])
 
-  const { status, statusLoading, statusError, loadStatus } = useWorkspaceStatus(client, viewContextKey, active)
-  const [revision, setRevision] = useState(0)
+  const { status, statusLoading, statusError, loadStatus, ensureFullStatus } = useWorkspaceStatus(client, viewContextKey, active)
+  const [catalogRevision, setCatalogRevision] = useState(0)
+  const [dashboardRevision, setDashboardRevision] = useState(0)
   const sourceChanged = useCallback((sourceTypeId: string) => {
     if (sourceTypeId === 'skills') invalidateSkillActivity(connection)
   }, [connection])
-  const { sourceCatalogState, sourceCatalog, sourceInstances, sourceManagementClients, visibleSourcePages, managedSourceTypes: allManagedSourceTypes } = useSourceCatalog(client, taskClient, revision, viewContextKey, sourcePageEntries, active, sourceChanged)
+  const { sourceCatalogState, sourceCatalog, sourceInstances, sourceManagementClients, visibleSourcePages, managedSourceTypes: allManagedSourceTypes } = useSourceCatalog(client, taskClient, catalogRevision, viewContextKey, sourcePageEntries, active, sourceChanged, surfaceScopeKey)
   const managedSourceTypes = useMemo(() => allManagedSourceTypes.filter(([sourceTypeId]) => shows(sourceTypeId)), [allManagedSourceTypes, shows])
   const [selectedSourceInstances, setSelectedSourceInstances] = useState<Record<string, string>>({})
   // Configured layers whose Source is not running keep a diagnostic tab unless
@@ -309,13 +313,15 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   // The installed components name themselves: every name here comes from a
   // component's own declaration, the way the configuration shows it.
   const [dashboard, setDashboard] = useState<MemoryViewDashboard | null>(null)
+  const dashboardClientRef = useRef(client)
+  dashboardClientRef.current = client
   useEffect(() => {
     if (!active) return
     let current = true
     // Names are a courtesy: an unreadable dashboard leaves the pages' own labels.
-    client.viewDashboard().then(value => { if (current) setDashboard(Array.isArray(value?.entries) ? value : null) }, () => { if (current) setDashboard(null) })
+    dashboardClientRef.current.viewDashboard().then(value => { if (current) setDashboard(Array.isArray(value?.entries) ? value : null) }, () => { if (current) setDashboard(null) })
     return () => { current = false }
-  }, [active, client, revision, componentRevision])
+  }, [active, surfaceScopeKey, dashboardRevision, componentRevision])
   const sourceName = useCallback((sourceTypeId: string, fallback?: string): string => {
     const component = dashboard === null ? undefined : sourceOf(dashboard, sourceTypeId)
     return component === undefined ? fallback ?? sourceTypeId : componentCopy(component, locale).label
@@ -347,10 +353,16 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const home: Page = focusPage === undefined ? 'status' : `source:${focusPage.id}`
   const accepts = useCallback((target: string): boolean => target === 'status' ? focusType === undefined : shows(target.split('/')[0]!), [focusType, shows])
   const { page, navigationInput, openTab, sourceNavigationEntries } = useWorkspaceNavigation({
-    sessionId, viewContextKey, resetViewportScroll, sourceCatalog, sourcePageEntries, visibleSourcePages, managedSourceTypes, stoppedTypes, disabledTypes, dashboard, sourceName, showWorkspaceToast, accepts, home,
+    sessionId, viewContextKey: surfaceScopeKey, resetViewportScroll, sourceCatalog, sourcePageEntries, visibleSourcePages, managedSourceTypes, stoppedTypes, disabledTypes, dashboard, sourceName, showWorkspaceToast, accepts, home,
   })
+  const focused = focusType !== undefined
+  const wantsFullStatus = !focused && page === 'status'
+  const wantsFullStatusRef = useRef(wantsFullStatus)
+  wantsFullStatusRef.current = wantsFullStatus
+  const reloadStatus = useCallback(() => loadStatus(() => wantsFullStatusRef.current), [loadStatus])
   // Runs after the catalog and component-name reads, so the three requests keep their order.
-  useEffect(() => { if (active) void loadStatus() }, [active, loadStatus])
+  useEffect(() => { if (active) void reloadStatus() }, [active, reloadStatus])
+  useEffect(() => { if (active && wantsFullStatus) ensureFullStatus() }, [active, ensureFullStatus, wantsFullStatus])
 
   const currentView = useRef({ active, client, viewContextKey })
   currentView.current = { active, client, viewContextKey }
@@ -359,8 +371,10 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const isBoundView = useCallback(() => viewMounted.current && currentView.current.client === client && currentView.current.viewContextKey === viewContextKey, [client, viewContextKey])
   const isCurrentView = useCallback(() => currentView.current.active && isBoundView(), [isBoundView])
   const assertCurrentView = () => { if (!isBoundView()) throw new Error('Source page is unmounted or its view context changed') }
-  const mutate = useCallback(() => { if (!isCurrentView()) return; setRevision(value => value + 1); void loadStatus() }, [isCurrentView, loadStatus])
-  const refreshAll = mutate
+  // Local Source writes refresh lightweight status summary and catalog revisions without
+  // re-fetching static component names or forcing open Source pages to double-reload via refreshKey.
+  const mutate = useCallback(() => { if (!isCurrentView()) return; setCatalogRevision(value => value + 1); void reloadStatus() }, [isCurrentView, reloadStatus])
+  const refreshAll = useCallback(() => { if (!isCurrentView()) return; setCatalogRevision(value => value + 1); setDashboardRevision(value => value + 1); void reloadStatus() }, [isCurrentView, reloadStatus])
   // The header's refresh also asks the open Source page to reload its data.
   const [refreshKey, setRefreshKey] = useState(0)
   const refreshPage = useCallback(() => { setRefreshKey(value => value + 1); refreshAll() }, [refreshAll])
@@ -438,7 +452,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
     }
     const openSettings = openConfiguration === undefined ? undefined : () => { requestComponentPage(selected.packageName); openConfiguration() }
     const preferences = skillsPreferences ?? (!isDefaultSourceInstance(selected.sourceInstanceKey, 'memory-spaces') ? undefined : {
-      value: JSON.parse(JSON.stringify({ persistenceStrategy: { ...settingsSnapshot.value?.persistenceStrategy, providerConnections: {} } })) as JsonValue,
+      value: { persistenceStrategy: { ...settingsSnapshot.value?.persistenceStrategy, providerConnections: {} } } as unknown as JsonValue,
       writable: settingsSnapshot.writable,
       replace: async (value: JsonValue) => {
         assertCurrentView()
@@ -514,7 +528,6 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const openSettings = openConfiguration === undefined ? undefined
     : focusPackage === undefined ? (focusType === undefined ? openConfiguration : undefined)
       : () => { requestComponentPage(focusPackage); openConfiguration() }
-  const focused = focusType !== undefined
   return (
     <main ref={shellRef} className={appearanceClass(css.shell, sidebarCss.shell)} data-dsh-plugin="dsh-mnemon" data-dsh-part="mnemon-view" data-mnemon-surface={surface} data-mnemon-focus={focusType}>
       <header className={appearanceClass(css.masthead, sidebarCss.masthead)} data-window-drag={titleBar || undefined}>
@@ -529,7 +542,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
         </div>
         <div className={appearanceClass(css.headerActions, sidebarCss.headerActions)}>{headerActions}<div className={appearanceClass(css.statusCluster, sidebarCss.statusCluster)}>{!focused && <CompositionStatus tone={statusTone} label={connectionLabel} strategy={composingLabel} layers={headerLayers} onOpen={openConfiguration} />}<button type="button" className={css.iconButton} disabled={statusLoading} onClick={refreshPage} aria-label={t('common.refresh')} title={t('common.refresh')}><IconRefreshOutlineRegular size={16} /></button></div>{openSettings !== undefined && <button type="button" className={css.iconButton} onClick={openSettings} aria-label={t('header.configure')} title={t('header.configure')}><IconSettingsOutlineRegular size={16} /></button>}</div>
       </header>
-      {sourceCatalogState.contextKey === viewContextKey && sourceCatalogState.error !== null && <div className={css.alert} role="alert">{sourceCatalogState.error}</div>}
+      {sourceCatalogState.contextKey === surfaceScopeKey && sourceCatalogState.error !== null && <div className={css.alert} role="alert">{sourceCatalogState.error}</div>}
       {(statusError !== null || status?.healthy === false && notice === undefined) && <div className={css.alert} role="alert"><strong>{t('header.notReady')}</strong><span>{statusError ?? status?.error}</span></div>}
       <Reveal className={css.notice}>{!focused && statusError === null && notice !== undefined && <Callout tone={notice.tone === 'error' ? 'error' : 'warning'} title={notice.title}
         actions={openConfiguration === undefined ? undefined : <Button variant="outline" size="sm" onClick={openConfiguration}>{t('common.openConfiguration')}</Button>}>
@@ -562,11 +575,11 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       </div>}
       <div className={css.workspace}>
         {!focused && <WorkspaceNavigation page={page} onSelect={openTab} sourcePages={sourceNavigationEntries} disabledTypes={disabledTypes} memoryOff={memoryOff} />}
-        <section key={viewContextKey} className={appearanceClass(css.canvas, sidebarCss.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={(activeSourcePage?.navigation?.stickyHeader !== false) ? '' : undefined}>
+        <section key={surfaceScopeKey} className={appearanceClass(css.canvas, sidebarCss.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={(activeSourcePage?.navigation?.stickyHeader !== false) ? '' : undefined}>
           {page === 'status' && focus !== undefined && disabledTypes.has(focus.sourceTypeId) && <SourceDisabledPage title={focus.title} onOpenConfiguration={openConfiguration} />}
           {page === 'status' && !focused && <WorkbenchStatusContext.Provider value={status}>
             <StatusPage client={client} status={status} loading={statusLoading} writeEnabled={writeEnabled} attention={notice !== undefined}
-              components={componentCards} renderCard={renderCard} areaName={areaName} onRefresh={() => void loadStatus()} onOpenConfiguration={openConfiguration} />
+              components={componentCards} renderCard={renderCard} areaName={areaName} onRefresh={() => void loadStatus(true)} onOpenConfiguration={openConfiguration} />
           </WorkbenchStatusContext.Provider>}
           {activeManagedSourceInstance !== undefined && managedSourcePageContent}
           {activeSourcePage !== undefined && customSourcePage}

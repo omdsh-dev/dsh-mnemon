@@ -4,13 +4,19 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useRef, type ComponentType } from 'react'
 
+const renderCounts = vi.hoisted(() => ({ workspace: 0, settings: 0 }))
+
 vi.mock('../src/client/MnemonWorkbench.tsx', () => ({
-  MnemonWorkbench: ({ sessionId, workspaceSelection }: { sessionId?: string; workspaceSelection?: { effectiveWorkspaceId?: string } }) =>
-    <div data-testid="workspace" data-session={sessionId} data-effective-workspace={workspaceSelection?.effectiveWorkspaceId} />,
+  MnemonWorkbench: ({ sessionId, workspaceSelection }: { sessionId?: string; workspaceSelection?: { effectiveWorkspaceId?: string } }) => {
+    renderCounts.workspace += 1
+    return <div data-testid="workspace" data-session={sessionId} data-effective-workspace={workspaceSelection?.effectiveWorkspaceId} />
+  },
 }))
 vi.mock('../src/client/MnemonSettingsCard.tsx', () => ({
-  MnemonSettingsCard: ({ sessionId, workspaceId, workspaceLabel }: { sessionId?: string; workspaceId?: string; workspaceLabel?: string }) =>
-    <div data-testid="settings" data-session={sessionId} data-workspace={workspaceId} data-label={workspaceLabel} />,
+  MnemonSettingsCard: ({ sessionId, workspaceId, workspaceLabel }: { sessionId?: string; workspaceId?: string; workspaceLabel?: string }) => {
+    renderCounts.settings += 1
+    return <div data-testid="settings" data-session={sessionId} data-workspace={workspaceId} data-label={workspaceLabel} />
+  },
 }))
 vi.mock('../src/client/better-sidebar.tsx', () => ({ mountBetterSidebarTab: () => () => {} }))
 
@@ -283,10 +289,59 @@ describe('published UI session binding', () => {
     expect(ownClick).toHaveBeenCalledTimes(1)
     expect(consumeMnemonAnchor('session-a')).toMatchObject({ page: 'status' })
   })
+
+  it('activates Builtin conversation view directly via uiConversation without rAF DOM tab scraping', async () => {
+    const f = fixture()
+    const selectView = vi.fn()
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame')
+    const ctxWithConversation = {
+      ...f.ctx,
+      uiConversation: { views: { select: selectView } },
+      inject(deps: readonly string[], callback: (scoped: unknown) => void) {
+        if (deps.includes('uiConversation')) callback(ctxWithConversation)
+      },
+    }
+    apply(ctxWithConversation as never)
+    await act(async () => {})
+
+    rafSpy.mockClear()
+    dispatchMnemonAnchor({ page: 'status', sessionId: 'session-a' })
+    expect(selectView).toHaveBeenCalledWith('session-a', 'mnemon')
+    expect(rafSpy).not.toHaveBeenCalled()
+  })
+
+  it('does not re-render MnemonWorkspaceHost or MnemonSettingsHost when streaming session updates keep cwd unchanged', () => {
+    const f = fixture()
+    renderCounts.workspace = 0
+    renderCounts.settings = 0
+    render(<MnemonWorkspaceHost {...f.workspaceProps} />)
+    f.renderSettings()
+    const baselineWorkspace = renderCounts.workspace
+    const baselineSettings = renderCounts.settings
+
+    for (let tick = 1; tick <= 5; tick += 1) {
+      act(() => f.catalog.publish({
+        byId: {
+          'session-a': { cwd: '/tmp/workspace-a', title: `Streaming ${tick}`, updatedAt: tick, unread: tick % 2 === 0 } as { cwd?: string },
+          'session-b': { cwd: '/tmp/workspace-b', title: `Other ${tick}` } as { cwd?: string },
+        },
+        current: 'session-a',
+      }))
+    }
+    expect(renderCounts.workspace).toBe(baselineWorkspace)
+    expect(renderCounts.settings).toBe(baselineSettings)
+
+    act(() => f.catalog.publish({
+      byId: { 'session-a': { cwd: '/tmp/workspace-b' }, 'session-b': { cwd: '/tmp/workspace-b' } },
+      current: 'session-a',
+    }))
+    expect(renderCounts.workspace).toBeGreaterThan(baselineWorkspace)
+    expect(renderCounts.settings).toBeGreaterThan(baselineSettings)
+  })
 })
 
 describe('Memory view composer', () => {
-  const t: MnemonTranslate = key => en[key]
+  const t: MnemonTranslate = key => en[key] ?? key
   const releases: Array<() => void> = []
   afterEach(() => {
     for (const stop of releases.splice(0).reverse()) stop()

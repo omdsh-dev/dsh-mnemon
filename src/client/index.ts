@@ -46,6 +46,8 @@ import { mountSubagentTokenUsageOverride } from './subagent-token-usage.tsx'
 import { installMemoryComposer } from './memory-composer.tsx'
 import { isRecord } from './is-record.ts'
 import { retiredMemorySnapshot } from './retired-memory-snapshot.ts'
+import { bindConnectionRemoteAccess, type RemoteAccessCapability } from './remote-rpc.ts'
+import { HeldSeat } from './shared/dom-seat.ts'
 
 export * from './extension-sdk.ts'
 
@@ -114,9 +116,17 @@ function enabledOf(value: unknown, key: 'turnBar' | 'saveAction'): boolean {
  * see by itself: components switched through DSH's plugin manager, and memory
  * a sync, a merge, an import or an applied plan on the configuration page wrote.
  */
+/** Direct conversation-view activator registered when the host exposes programmatic view selection. */
+class MnemonConversationViewSeat extends HeldSeat<(sessionId: string) => boolean> {
+  provide(activate: (sessionId: string) => boolean): () => void {
+    return this.hold(activate)
+  }
+}
+
 interface MnemonSeats {
   configuration: MnemonActionSeat
   workspace: MnemonActionSeat
+  conversationView: MnemonConversationViewSeat
   components: MnemonChangeSignal
   componentList: MnemonComponentListSeat
   /** 技能管理's settings, and whether it has a sidebar entry of its own. */
@@ -255,40 +265,55 @@ function mountBuiltinMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
   }, MnemonBuiltinWorkspaceHost))
   const dispose = () => { disposeView(); composer.dispose() }
   if (typeof window === 'undefined' || typeof document === 'undefined') return dispose
-  const selectMemoryTab = (): boolean => {
+  const LEGACY_TAB_MAX_FRAMES = 4
+  const selectMemoryTabDom = (): 'activated' | 'ambiguous' | 'absent' => {
     const label = translate('tab.label').trim()
     const eligible = (candidate: HTMLElement): boolean => !candidate.hasAttribute('disabled')
       && candidate.getAttribute('aria-disabled') !== 'true' && candidate.closest('[hidden], [aria-hidden="true"]') === null
     const conversations = [...document.querySelectorAll<HTMLElement>('[data-slot="main.conversation"]')].filter(eligible)
-    if (conversations.length !== 1) return false
+    if (conversations.length > 1) return 'ambiguous'
+    if (conversations.length === 0) return 'absent'
     const tabs = [...conversations[0]!.querySelectorAll<HTMLElement>('[role="tab"]')]
       .filter(candidate => candidate.textContent?.trim() === label && eligible(candidate))
     // Split panes can expose identically labelled tabs without a public
     // session marker. Keep the anchor pending instead of choosing a pane.
-    if (tabs.length !== 1) return false
+    if (tabs.length > 1) return 'ambiguous'
+    if (tabs.length === 0) return 'absent'
     tabs[0]!.click()
-    return true
+    return 'activated'
+  }
+  const activateMemoryTab = (sessionId: string): 'activated' | 'ambiguous' | 'absent' => {
+    const direct = seats.conversationView.getSnapshot()
+    if (direct !== undefined && direct(sessionId)) return 'activated'
+    return selectMemoryTabDom()
   }
   const openView = (event: Event): void => {
     if (skillsApart(event, seats)) return
     const sessionId = (event as CustomEvent<MnemonAnchor>).detail?.sessionId
     const mainSessionId = ctx.uiSession.adapter.current.getSnapshot().key
     if (mainSessionId === undefined || (sessionId !== undefined && sessionId !== mainSessionId)) return
-    selectMemoryTab()
+    activateMemoryTab(mainSessionId)
   }
   window.addEventListener(MNEMON_ANCHOR_EVENT, openView)
-  // Another main panel, such as Plugins, first returns to the conversation,
-  // whose tabs render a frame or more later.
+  // Prefer direct conversation-view activation; keep a bounded 4-frame fallback
+  // only for legacy hosts whose conversation outlet commits after `selectPanel(null)`.
   let frame: number | undefined
   const openFromPanel = (): void => {
     ctx.layout.selectPanel(null)
+    if (frame !== undefined) {
+      cancelAnimationFrame(frame)
+      frame = undefined
+    }
+    const targetSessionId = ctx.uiSession.adapter.current.getSnapshot().key
+    if (targetSessionId !== undefined && activateMemoryTab(targetSessionId) !== 'absent') return
     let attempts = 0
     const attempt = (): void => {
       frame = undefined
-      if (selectMemoryTab() || (attempts += 1) >= 30) return
+      const currentSessionId = ctx.uiSession.adapter.current.getSnapshot().key
+      const status = currentSessionId === undefined ? selectMemoryTabDom() : activateMemoryTab(currentSessionId)
+      if (status !== 'absent' || (attempts += 1) >= LEGACY_TAB_MAX_FRAMES) return
       frame = requestAnimationFrame(attempt)
     }
-    if (frame !== undefined) cancelAnimationFrame(frame)
     frame = requestAnimationFrame(attempt)
   }
   // Builtin lives in a conversation's tabs, which exist once the current
@@ -322,15 +347,26 @@ export function apply(rawContext: unknown): void {
   const interactionSettings = new MnemonSettingsScope<InteractionConfig>(ctx.connection, MNEMON_UI_SETTINGS_NAMESPACE)
   const skillsSettings = new MnemonSettingsScope<SkillsConfig>(ctx.connection, MNEMON_SKILLS_SETTINGS_NAMESPACE)
   const seats: MnemonSeats = {
-    configuration: new MnemonActionSeat(), workspace: new MnemonActionSeat(), components: new MnemonChangeSignal(), componentList: new MnemonComponentListSeat(),
+    configuration: new MnemonActionSeat(), workspace: new MnemonActionSeat(), conversationView: new MnemonConversationViewSeat(), components: new MnemonChangeSignal(), componentList: new MnemonComponentListSeat(),
     skills: { scope: skillsSettings, panel: new SkillsPanelSeat() },
   }
   const namespace: MnemonNamespace = 'mnemon'
-  ctx.effect(() => ctx.locale.register(namespace, { zh, en }), 'dsh-mnemon: locale dictionaries')
+  ctx.effect(() => ctx.locale.register(namespace, { zh: zh as unknown as Record<MnemonKey, string>, en }), 'dsh-mnemon: locale dictionaries')
   const translate = ctx.locale.bind(namespace)
+  ctx.inject(['remoteAccess'], inner => {
+    inner.effect(() => bindConnectionRemoteAccess(ctx.connection, (inner as unknown as { remoteAccess?: RemoteAccessCapability }).remoteAccess), 'dsh-mnemon: remote access capability')
+  })
   // Optional on older Hosts; the registry owns cleanup and history rebuilds.
   ctx.inject(['uiConversation'], inner => {
     inner.uiConversation.events?.register(retiredMemorySnapshot)
+    const views = (inner.uiConversation as unknown as {
+      selectView?: (sessionId: string, viewId: string) => boolean | void
+      views?: { select?: (sessionId: string, viewId: string) => boolean | void; activate?: (sessionId: string, viewId: string) => boolean | void }
+    })
+    const selectFn = views.views?.select ?? views.views?.activate ?? views.selectView
+    if (typeof selectFn === 'function') {
+      inner.effect(() => seats.conversationView.provide((sessionId: string) => selectFn(sessionId, 'mnemon') !== false), 'dsh-mnemon: conversation view activation')
+    }
   })
   // The Plugins page provides its navigation while it lives; the memory
   // workspace links to its configuration only then.

@@ -5,8 +5,15 @@ import { join } from 'node:path'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
-import { MemorySourcePageFrame, translateEn as t } from 'dsh-mnemon/client'
+import { MemorySourcePageFrame, translateEn } from 'dsh-mnemon/client'
+import copy from '../presentation/locales.json' with { type: 'json' }
 import { strategy } from './fixture.ts'
+
+function t(key: string, params: Record<string, unknown> = {}): string {
+  const own = (copy.en as Record<string, string>)[key]
+  const text = own ?? translateEn(key as Parameters<typeof translateEn>[0], params)
+  return own === undefined ? text : text.replace(/\{(\w+)\}/g, (match, name: string) => name in params ? String(params[name]) : match)
+}
 
 // Load the installed Core's actual DSH browser artifact; no repository source alias.
 vi.mock('dsh-mnemon/client', async () => {
@@ -226,6 +233,62 @@ describe('independent Documents Source client', () => {
       view.rerender(page(1))
       expect(await screen.findByRole('heading', { name: t('documents.selectTitle') })).not.toBeNull()
       expect(screen.queryByRole('alert')).toBeNull()
+    } finally { cleanup(); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
+  })
+
+  it('eliminates mutation read storms, skips search snapshot waterfalls, and preserves reader content across refreshes', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-documents-perf-'))
+    const workspace = join(directory, 'workspace')
+    mkdirSync(workspace)
+    const runner = new MemoryCompositionRunner()
+    try {
+      await runner.mount(strategy, { instanceId: 'strategy' })
+      await runner.mount(plugin, { instanceId: 'notes', config: { dataDir: join(directory, 'data') } })
+      const management = await runner.managementClient('source:notes', { storage: 'custom', workspaceId: workspace })
+      const readSpy = vi.spyOn(management, 'read')
+
+      let refreshKey = 0
+      const baseProps = {
+        sourceTypeId: 'documents',
+        sourceInstanceKey: 'source:notes',
+        sourceInstances: [],
+        locale: 'en',
+        writable: true,
+        management,
+      }
+      let view!: ReturnType<typeof render>
+      const onRefresh = () => {
+        refreshKey += 1
+        view.rerender(<DocumentsSourcePage {...baseProps} refreshKey={refreshKey} onRefresh={onRefresh} />)
+      }
+      view = render(<DocumentsSourcePage {...baseProps} refreshKey={refreshKey} onRefresh={onRefresh} />)
+      await screen.findByRole('button', { name: t('documents.new') })
+      const countReads = (name: string) => readSpy.mock.calls.filter(([operation]) => operation === name).length
+      expect(countReads('snapshot')).toBe(1)
+
+      readSpy.mockClear()
+      fireEvent.click(screen.getByRole('button', { name: t('documents.new') }))
+      fireEvent.change(screen.getByLabelText(t('documents.name')), { target: { value: 'Fast document' } })
+      fireEvent.change(screen.getByLabelText(t('documents.markdown')), { target: { value: 'Initial body without extra reads' } })
+      fireEvent.click(screen.getByRole('button', { name: t('documents.create') }))
+      expect(await screen.findByRole('heading', { name: 'Fast document' })).not.toBeNull()
+      expect(countReads('snapshot')).toBe(1)
+      expect(countReads('document')).toBe(0)
+
+      // External refresh with unchanged document metadata keeps reader mounted and skips document(id) re-fetch.
+      readSpy.mockClear()
+      refreshKey += 1
+      view.rerender(<DocumentsSourcePage {...baseProps} refreshKey={refreshKey} onRefresh={onRefresh} />)
+      await waitFor(() => expect(countReads('snapshot')).toBe(1))
+      expect(screen.getByRole('heading', { name: 'Fast document' })).not.toBeNull()
+      expect(countReads('document')).toBe(0)
+
+      // Search when snapshot is already loaded does not trigger a sequential snapshot waterfall.
+      readSpy.mockClear()
+      fireEvent.change(screen.getByLabelText(t('documents.searchAria')), { target: { value: 'Initial body' } })
+      fireEvent.click(screen.getByRole('button', { name: t('documents.search') }))
+      await waitFor(() => expect(countReads('search')).toBe(1))
+      expect(countReads('snapshot')).toBe(0)
     } finally { cleanup(); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
   })
 })

@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { cleanup, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
-import { translateEn } from 'dsh-mnemon/client'
+import { MemorySourcePageFrame, translateEn } from 'dsh-mnemon/client'
 import copy from '../presentation/locales.json' with { type: 'json' }
 import { descriptor, provider, strategy } from './fixture.ts'
 
@@ -27,9 +27,16 @@ import type { EntityMemoriesView, EntityRelatedView, EntityView, Insight } from 
 import { installMemorySpaces } from '../src/index.ts'
 import { defineMemorySpaceProvider, MEMORY_SPACE_PROVIDER_API_VERSION, NORMALIZED_RELEVANCE_SCORE } from '../src/provider-sdk.ts'
 import { MemorySpacesSourcePage, installMemorySpacesUI, memorySpacesPageClient } from '../src/client.ts'
+import { MemoryGraph } from '../src/client/memory-graph.tsx'
+import { SyncFreshnessText } from '../src/client/overview-page.tsx'
+
+function t(key: string, params: Record<string, unknown> = {}): string {
+  const own = (copy.en as Record<string, string>)[key]
+  const text = own ?? translateEn(key as Parameters<typeof translateEn>[0], params)
+  return own === undefined ? text : text.replace(/\{(\w+)\}/g, (match, name: string) => name in params ? String(params[name]) : match)
+}
 
 describe('independent Memory Spaces Source client', () => {
-  const t = translateEn
   it('selects advertised assistance for placement and activation while tracking revisions', async () => {
     const read = vi.fn(async () => ({ revision: 'r2', value: {} }))
     const mutate = vi.fn(async () => ({ revision: 'r4', value: {} }))
@@ -540,5 +547,103 @@ describe('Entities page', { timeout: 30_000 }, () => {
     fireEvent.click(screen.getByRole('button', { name: t('entities.retry') }))
     expect(await screen.findByText('Recovered related memory')).not.toBeNull()
     expect(screen.getByText('Atlas memory 1')).not.toBeNull()
+  })
+})
+
+describe('OverviewPage & MemoryGraph performance guardrails', () => {
+  it('renders MemoryGraph on mount in a single frame without scheduling requestAnimationFrame clones', () => {
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame')
+    try {
+      const graph = {
+        generatedAt: '2026-10-20T00:00:00.000Z',
+        nodes: [
+          { id: 'space:work', kind: 'space' as const, category: 'space', content: 'Work', color: '#4f46e5' },
+          { id: 'entity:atlas', kind: 'entity' as const, category: 'entity', content: 'Atlas', color: '#0ea5e9' },
+          { id: 'mem-1', kind: 'memory' as const, category: 'architecture', content: 'Gateway fronts Atlas', color: '#10b981' },
+        ],
+        edges: [
+          { sourceId: 'space:work', targetId: 'entity:atlas', label: 'scope', color: '#708199', type: 'scope' as const },
+          { sourceId: 'entity:atlas', targetId: 'mem-1', label: 'entity', color: '#38bdf8', type: 'entity' as const },
+        ],
+      }
+      render(<MemorySourcePageFrame locale="en"><MemoryGraph graph={graph} onSelect={vi.fn()} /></MemorySourcePageFrame>)
+      expect(screen.getByText('Atlas')).not.toBeNull()
+      expect(rafSpy).not.toHaveBeenCalled()
+    } finally {
+      rafSpy.mockRestore()
+    }
+  })
+
+  it('isolates relative sync freshness ticks in SyncFreshnessText without re-rendering siblings', () => {
+    vi.useFakeTimers()
+    try {
+      const now = new Date('2026-10-20T12:00:00.000Z').getTime()
+      vi.setSystemTime(now)
+      let siblingRenders = 0
+      function Sibling(): null {
+        siblingRenders += 1
+        return null
+      }
+      const syncedAt = now - 4_000
+      const { container } = render(
+        <MemorySourcePageFrame locale="en">
+          <div><SyncFreshnessText lastFullSyncAt={syncedAt} /><Sibling /></div>
+        </MemorySourcePageFrame>,
+      )
+      expect(siblingRenders).toBe(1)
+      expect(container.textContent).toMatch(/just now/i)
+
+      vi.advanceTimersByTime(2_000)
+      expect(siblingRenders).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('suppresses parent refreshKey echoes when toggling Active on MemorySpacesSourcePage', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-spaces-echo-'))
+    const runner = new MemoryCompositionRunner()
+    try {
+      await runner.mount(strategy, { instanceId: 'strategy' })
+      await runner.mount({ inject: ['mnemonMemory'], async apply(ctx: Context) {
+        await installMemorySpaces(ctx, [{ instanceId: 'account', module: provider, config: undefined }], { config: { dataDir: directory } })
+      } }, { instanceId: 'spaces' })
+      const management = await runner.managementClient('source:spaces')
+      await management.mutate('provider-service-update', { providerId: 'account', settings: {}, enabled: true }, { confirmed: true })
+      await management.mutate('body-create', { name: 'Alpha', description: 'Primary space', providerId: 'account' }, { confirmed: true })
+      const readSpy = vi.spyOn(management, 'read')
+
+      let refreshKey = 0
+      const baseProps = {
+        page: 'spaces' as const,
+        sourceTypeId: 'memory-spaces',
+        sourceInstanceKey: 'source:spaces',
+        sourceInstances: [],
+        locale: 'en',
+        writable: true,
+        management,
+      }
+      let view!: ReturnType<typeof render>
+      const onRefresh = () => {
+        refreshKey += 1
+        view.rerender(<MemorySpacesSourcePage {...baseProps} refreshKey={refreshKey} onRefresh={onRefresh} />)
+      }
+      view = render(<MemorySpacesSourcePage {...baseProps} refreshKey={refreshKey} onRefresh={onRefresh} />)
+      const alphaCard = () => [...document.querySelectorAll('article')].find(article => article.querySelector('strong')?.textContent === 'Alpha')
+      await waitFor(() => expect(alphaCard()).toBeTruthy())
+      await waitFor(() => expect(within(alphaCard()!).getByRole('switch').getAttribute('aria-checked')).toBe('false'))
+
+      readSpy.mockClear()
+      fireEvent.click(within(alphaCard()!).getByRole('switch'))
+      await waitFor(() => expect(within(alphaCard()!).getByRole('switch').getAttribute('aria-checked')).toBe('true'))
+      const directoryReads = readSpy.mock.calls.filter(([operation]) => operation === 'body-directory').length
+      const statusReads = readSpy.mock.calls.filter(([operation]) => operation === 'status-summary').length
+      expect(directoryReads).toBe(1)
+      expect(statusReads).toBe(1)
+    } finally {
+      cleanup()
+      await runner.dispose()
+      rmSync(directory, { recursive: true, force: true })
+    }
   })
 })

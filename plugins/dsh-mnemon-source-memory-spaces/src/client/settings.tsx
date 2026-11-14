@@ -170,6 +170,30 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
   const [fill, setFill] = useState<EmbeddingFillState | undefined>(undefined)
   const statusRequest = useRef(0)
   const on = page.component.enabled
+  // As dsh-mnemon's isWorkspaceStorageScope, which lives in its Host protocol, outside its public client.
+  const activeScope = value?.storageScope === 'workspace' || value?.storageScope === 'workspaces' ? 'workspace' : 'global'
+  const workspaceIdentity = activeScope === 'workspace'
+    ? ((page.workspace as { id?: string; path?: string; label?: string } | undefined)?.id
+      ?? (page.workspace as { path?: string } | undefined)?.path
+      ?? page.workspace?.label
+      ?? '')
+    : ''
+  const embeddingSignature = JSON.stringify([
+    value?.embedding?.enabled ?? false,
+    value?.embedding?.endpoint ?? '',
+    value?.embedding?.model ?? '',
+    value?.embedding?.protocol ?? '',
+    value?.embedding?.apiKeyStorage ?? '',
+    value?.embedding?.apiKeyConfigured ?? false,
+    value?.embedding?.apiKeyEnv ?? '',
+  ])
+  const providerScopeKey = `${activeScope}:${workspaceIdentity}`
+  const lastProviderScopeKey = useRef(providerScopeKey)
+  const providerRefreshKeyRef = useRef(0)
+  if (lastProviderScopeKey.current !== providerScopeKey) {
+    lastProviderScopeKey.current = providerScopeKey
+    providerRefreshKeyRef.current += 1
+  }
 
   useEffect(() => {
     if (client === undefined || !on) { setNativeCliFound(undefined); retained.delete(RETAINED_CLI); return }
@@ -180,14 +204,14 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
       retained.set(RETAINED_CLI, { commandFound: summary.commandFound })
     }, () => { if (current) { setNativeCliFound(undefined); retained.delete(RETAINED_CLI) } })
     return () => { current = false }
-  }, [client, on, retained, snapshot.revision])
+  }, [activeScope, client, on, retained, workspaceIdentity])
   // A page opened again finds out anew, as it always has; only a mount that replaces this one starts from it.
   useEffect(() => () => { retained.delete(RETAINED_CLI) }, [retained])
   useEffect(() => {
     statusRequest.current += 1
     setStatus({ state: 'idle' })
     setFill(undefined)
-  }, [client, snapshot.revision])
+  }, [activeScope, client, embeddingSignature, on, workspaceIdentity])
 
   // Providers are read only while their Source runs; the page's switch turns it on.
   if (!on) return <p className={css.panelNote}>{t('spaces.offNote')}</p>
@@ -213,8 +237,6 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
       reason => { setFill({ ...target, state: 'failed', error: message(reason) }); test() },
     )
   }
-  // As dsh-mnemon's isWorkspaceStorageScope, which lives in its Host protocol, outside its public client.
-  const activeScope = value?.storageScope === 'workspace' || value?.storageScope === 'workspaces' ? 'workspace' : 'global'
   const readOnly = value?.writeEnabled === false
   const disabled = !page.writable || snapshot.status === 'loading' || !snapshot.writable
   const cliMissing = nativeCliFound === false
@@ -225,7 +247,7 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
       retained={retained}
       {...(activeScope !== 'workspace' || page.workspace?.label === undefined ? {} : { workspaceLabel: page.workspace.label })}
       activeScope={activeScope}
-      refreshKey={snapshot.revision ?? 0}
+      refreshKey={providerRefreshKeyRef.current}
       disabled={disabled || readOnly}
       scopeChanging={false}
       onChanged={host.changed}

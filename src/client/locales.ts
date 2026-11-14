@@ -1,17 +1,18 @@
-import runtimeCopy from 'dsh-mnemon-source-runtime/presentation/locales.json' with { type: 'json' }
-import documentsCopy from 'dsh-mnemon-source-documents/presentation/locales.json' with { type: 'json' }
-import spacesCopy from 'dsh-mnemon-source-memory-spaces/presentation/locales.json' with { type: 'json' }
-
 /** Mnemon workspace copy, synchronized with DSH's global locale service. */
 
 export const zh = {
-  ...runtimeCopy.zh, ...documentsCopy.zh, ...spacesCopy.zh,
   'composer.expand': '展开输入框',
   'composer.collapse': '收起输入框',
   'composer.collapsed': '输入框已收起',
   'tab.label': '记忆系统',
   'nav.aria': 'Mnemon 页面',
   'nav.status': '状态',
+  'nav.runtime': '运行时记忆',
+  'nav.runtimeDetail': 'USER / MEMORY',
+  'nav.documents': '项目档案',
+  'nav.documentsDetail': '索引与归档',
+  'nav.spaces': '记忆空间',
+  'nav.spacesDetail': '图谱与检索',
   'common.refresh': '刷新',
   'common.openConfiguration': '前往配置',
   'common.loading': '载入中…',
@@ -849,16 +850,23 @@ export const zh = {
   'skillTail.openSuggestions': '在技能管理中查看建议',
 } satisfies Record<string, string>
 
-export type MnemonKey = keyof typeof zh
+type CoreMnemonKey = keyof typeof zh
 
-export const en: Record<MnemonKey, string> = {
-  ...runtimeCopy.en, ...documentsCopy.en, ...spacesCopy.en,
+export type MnemonKey = CoreMnemonKey | (string & {})
+
+const coreEn = {
   'composer.expand': 'Show message input',
   'composer.collapse': 'Collapse message input',
   'composer.collapsed': 'Message input collapsed',
   'tab.label': 'Memory System',
   'nav.aria': 'Mnemon pages',
   'nav.status': 'Status',
+  'nav.runtime': 'Runtime Memory',
+  'nav.runtimeDetail': 'USER / MEMORY',
+  'nav.documents': 'Project Documents',
+  'nav.documentsDetail': 'Index & archive',
+  'nav.spaces': 'Memory Spaces',
+  'nav.spacesDetail': 'Graph & recall',
   'common.refresh': 'Refresh',
   'common.openConfiguration': 'Open configuration',
   'common.loading': 'Loading…',
@@ -1694,12 +1702,14 @@ export const en: Record<MnemonKey, string> = {
   'skillTail.failed': 'Review failed',
   'skillTail.openSkill': 'Open {name} in Skills',
   'skillTail.openSuggestions': 'Open the suggestions in Skills',
-}
+} satisfies Record<CoreMnemonKey, string>
+
+export const en: Record<MnemonKey, string> = coreEn as unknown as Record<MnemonKey, string>
 
 export type MnemonTranslate = (key: MnemonKey, params?: Record<string, unknown>) => string
 
-function interpolate(dictionary: Record<MnemonKey, string>, key: MnemonKey, params?: Record<string, unknown>): string {
-  const template = dictionary[key]
+function interpolate(dictionary: Record<string, string>, key: MnemonKey, params?: Record<string, unknown>): string {
+  const template = dictionary[key] ?? key
   if (params === undefined) return template
   return template.replace(/\{(\w+)\}/g, (match, name: string) => name in params ? String(params[name]) : match)
 }

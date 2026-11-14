@@ -25,30 +25,44 @@ function completedRunSummary(run: BacktestRun, t: SkillsTranslate): string {
  * button that backtests the current version, and the runs, newest first, each
  * opening to its per-case verdicts. A draft is backtested from its review.
  */
-export function SkillTests(props: { context: SkillsPageContext; skillName: string; runModel?: ModelRoute | null }): JSX.Element {
+export function SkillTests(props: {
+  context: SkillsPageContext
+  skillName: string
+  cases?: EvalCase[]
+  hasFile?: boolean
+  runModel?: ModelRoute | null
+}): JSX.Element {
   const t = useT()
   const { context, skillName } = props
   // The pick the page holds for this skill; a run asks the task Agent's own
   // route when it is null.
   const runModel = props.runModel ?? null
-  const [cases, setCases] = useState<EvalCase[] | null>(null)
-  const [runs, setRuns] = useState<BacktestRun[]>([])
-  const [hasFile, setHasFile] = useState(true)
+  const hasProvidedCases = props.cases !== undefined
+  const hasProvidedFile = props.hasFile !== undefined
+  const [fetchedCases, setFetchedCases] = useState<EvalCase[] | null>(null)
+  const [runs, setRuns] = useState<BacktestRun[] | null>(null)
+  const [fetchedHasFile, setFetchedHasFile] = useState(true)
   const [editing, setEditing] = useState<CaseDraft | null>(null)
   const [deleting, setDeleting] = useState<EvalCase | null>(null)
   const [openRun, setOpenRun] = useState<string | undefined>()
   const [busy, setBusy] = useState(false)
   useEffect(() => {
     let active = true
-    void Promise.all([context.client.cases(skillName), context.client.runs(skillName), context.client.evidencePack({ skill: skillName })]).then(([list, history, pack]) => {
+    void Promise.all([
+      hasProvidedCases ? Promise.resolve(null) : context.client.cases(skillName),
+      context.client.runs(skillName),
+      hasProvidedFile ? Promise.resolve(null) : context.client.evidencePack({ skill: skillName }),
+    ]).then(([list, history, pack]) => {
       if (!active) return
-      setCases(list)
+      if (list !== null) setFetchedCases(list)
       setRuns(history.filter(run => run.target.kind !== 'draft'))
-      setHasFile(pack.skill !== undefined)
+      if (pack !== null) setFetchedHasFile(pack.skill !== undefined)
     }).catch(context.fail)
     return () => { active = false }
-  }, [context.client, skillName, context.revision])
-  if (cases === null) return <Busy label={t('common.loading')} />
+  }, [context.client, skillName, context.revision, hasProvidedCases, hasProvidedFile])
+  const cases = props.cases ?? fetchedCases
+  const hasFile = props.hasFile ?? fetchedHasFile
+  if (cases === null || runs === null) return <Busy label={t('common.loading')} />
   const enabled = cases.filter(entry => entry.enabled)
   const running = runs.some(entry => entry.status === 'running')
   const run = async () => {

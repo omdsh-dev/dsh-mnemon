@@ -15,8 +15,17 @@ import { SettingRow } from './settings-controls.tsx'
 export type PackTarget = Omit<MnemonPackTarget, 'defaultRoot'> & { defaultRoot?: string }
 
 /** Where memory lives now, read again whenever `refreshKey` moves. */
-export function usePackTarget(connection: ClientConnectionHandle | undefined, sessionId: string | undefined, workspaceId: string | undefined, refreshKey: number): { target: PackTarget | null; failed: string | null } {
-  const client = useMemo(() => connection === undefined ? null : new MnemonClient(connection, sessionId, workspaceId), [connection, sessionId, workspaceId])
+export function usePackTarget(
+  connection: ClientConnectionHandle | undefined,
+  sessionId: string | undefined,
+  workspaceId: string | undefined,
+  refreshKey: number,
+  sharedClient?: MnemonClient,
+): { target: PackTarget | null; failed: string | null } {
+  const client = useMemo(
+    () => sharedClient ?? (connection === undefined ? null : new MnemonClient(connection, sessionId, workspaceId)),
+    [connection, sessionId, sharedClient, workspaceId],
+  )
   const [state, setState] = useState<{ target: PackTarget | null; failed: string | null }>({ target: null, failed: null })
   useEffect(() => {
     if (client === null) return
@@ -28,6 +37,7 @@ export function usePackTarget(connection: ClientConnectionHandle | undefined, se
 }
 
 interface MnemonPackSectionProps {
+  client?: MnemonClient
   connection?: ClientConnectionHandle
   sessionId?: string
   workspaceId?: string
@@ -44,28 +54,57 @@ interface PendingZip {
 }
 
 const ZIP_ACCEPT = '.zip,application/zip'
+/** 24 KiB (8192 * 3) aligns on 3-byte base64 blocks and stays well below Function.prototype.apply stack limits. */
+const BASE64_ENCODE_CHUNK_BYTES = 24_576
+/** 32 KiB (divisible by 4) decodes 24 KiB per chunk without allocating a full-archive binary string. */
+const BASE64_DECODE_CHUNK_CHARS = 32_768
 
-function fileBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onerror = () => reject(reader.error ?? new Error('Could not read ZIP file'))
-    reader.onload = () => {
-      const value = reader.result
-      if (typeof value !== 'string') return reject(new Error('Could not read ZIP file'))
-      const separator = value.indexOf(',')
-      if (separator < 0) return reject(new Error('ZIP file encoding is invalid'))
-      resolve(value.slice(separator + 1))
-    }
-    reader.readAsDataURL(file)
-  })
+export function base64FromBytes(bytes: Uint8Array): string {
+  if (bytes.byteLength === 0) return ''
+  const parts: string[] = []
+  for (let offset = 0; offset < bytes.byteLength; offset += BASE64_ENCODE_CHUNK_BYTES) {
+    const chunk = bytes.subarray(offset, Math.min(offset + BASE64_ENCODE_CHUNK_BYTES, bytes.byteLength))
+    parts.push(btoa(String.fromCharCode.apply(null, chunk as unknown as number[])))
+  }
+  return parts.join('')
 }
 
-function bytesFromBase64(base64: string): ArrayBuffer {
-  const binary = atob(base64)
-  const buffer = new ArrayBuffer(binary.length)
+export function bytesFromBase64(base64: string): ArrayBuffer {
+  const clean = base64.replace(/\s+/gu, '')
+  if (clean.length === 0) return new ArrayBuffer(0)
+  if (clean.length % 4 !== 0) throw new Error('Invalid base64 archive length')
+  const padding = clean.endsWith('==') ? 2 : clean.endsWith('=') ? 1 : 0
+  const totalBytes = (clean.length * 3) / 4 - padding
+  const buffer = new ArrayBuffer(totalBytes)
   const bytes = new Uint8Array(buffer)
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
+  let writeOffset = 0
+  for (let readOffset = 0; readOffset < clean.length; readOffset += BASE64_DECODE_CHUNK_CHARS) {
+    const slice = clean.slice(readOffset, Math.min(readOffset + BASE64_DECODE_CHUNK_CHARS, clean.length))
+    const decoded = atob(slice)
+    for (let index = 0; index < decoded.length; index += 1) {
+      bytes[writeOffset + index] = decoded.charCodeAt(index)
+    }
+    writeOffset += decoded.length
+  }
   return buffer
+}
+
+async function fileBase64(file: File): Promise<string> {
+  if (typeof FileReader === 'function') {
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onerror = () => reject(reader.error ?? new Error('Could not read ZIP file'))
+      reader.onload = () => {
+        const value = reader.result
+        if (typeof value !== 'string') return reject(new Error('Could not read ZIP file'))
+        const separator = value.indexOf(',')
+        if (separator < 0) return reject(new Error('ZIP file encoding is invalid'))
+        resolve(value.slice(separator + 1))
+      }
+      reader.readAsDataURL(file)
+    })
+  }
+  return base64FromBytes(new Uint8Array(await file.arrayBuffer()))
 }
 
 function download(result: MnemonPackExport): void {
@@ -78,8 +117,11 @@ function download(result: MnemonPackExport): void {
 }
 
 /** Backup and migration of the data directory as one ZIP; the directory itself shows beside the storage choice. */
-export function MnemonPackSection({ connection, sessionId, workspaceId, target, onImported, t }: MnemonPackSectionProps): JSX.Element {
-  const client = useMemo(() => connection === undefined ? null : new MnemonClient(connection, sessionId, workspaceId), [connection, sessionId, workspaceId])
+export function MnemonPackSection({ client: sharedClient, connection, sessionId, workspaceId, target, onImported, t }: MnemonPackSectionProps): JSX.Element {
+  const client = useMemo(
+    () => sharedClient ?? (connection === undefined ? null : new MnemonClient(connection, sessionId, workspaceId)),
+    [connection, sessionId, sharedClient, workspaceId],
+  )
   const input = useRef<HTMLInputElement | null>(null)
   const [pending, setPending] = useState<PendingZip | null>(null)
   const [busy, setBusy] = useState<'export' | 'inspect' | 'import' | null>(null)

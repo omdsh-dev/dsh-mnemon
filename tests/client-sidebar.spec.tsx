@@ -43,6 +43,9 @@ vi.mock('../src/client/MnemonWorkbench.tsx', () => ({
       </div>,
 }))
 
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   MnemonWorkspaceHost,
   MnemonSidebarWorkspaceHost,
@@ -856,20 +859,76 @@ describe('native Sidebar panel integration', () => {
     expect(screen.getByRole('button', { name: 'Memory System' }).hasAttribute('aria-current')).toBe(false)
   })
 
-  it('coordinates legacy peers and reasserts native navigation before their DOM announcement is observed', () => {
+  it('relies on native layout.selectPanel without legacy DOM click or attribute scraping while keeping 0.2.0-rc.2 fallback coordination', () => {
     const f = nativeFixture()
+    const sessionRow = document.createElement('button')
+    sessionRow.className = 'sessionRow'
+    document.body.append(sessionRow)
     render(<><f.NativeFrame /><f.Host /></>)
     const entry = screen.getByRole('button', { name: 'Memory System' })
     fireEvent.click(entry)
-    act(() => document.dispatchEvent(new CustomEvent('dsh-panel-activate', { detail: 'taskboard' })))
-    expect(f.getPanel()).toBeNull()
-    fireEvent.click(entry)
-    document.documentElement.removeAttribute('data-dsh-mnemon-active')
-    document.documentElement.setAttribute('data-dsh-ssh-active', '')
-    fireEvent.click(entry)
     expect(f.getPanel()).toBe(MNEMON_MAIN_PANEL_ID)
-    expect(document.documentElement.hasAttribute('data-dsh-ssh-active')).toBe(false)
+    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(false)
+    // Native 0.2.1+ ignores legacy DOM panel events, root attributes, and session-row capture clicks.
+    act(() => document.dispatchEvent(new CustomEvent('dsh-panel-activate', { detail: 'taskboard' })))
+    expect(f.getPanel()).toBe(MNEMON_MAIN_PANEL_ID)
+    document.documentElement.setAttribute('data-dsh-ssh-active', '')
+    fireEvent.click(sessionRow)
+    expect(f.getPanel()).toBe(MNEMON_MAIN_PANEL_ID)
+    expect(document.documentElement.hasAttribute('data-dsh-ssh-active')).toBe(true)
+    document.documentElement.removeAttribute('data-dsh-ssh-active')
     expect(screen.getByTestId('native-memory')).not.toBeNull()
+
+    // Removing native slots falls back to 0.2.0-rc.2 where coordinateSidebarPanels still runs.
+    document.body.innerHTML = '<aside data-pane="sidebar"><div><button class="newSession">New</button></div></aside>'
+    act(() => f.removeOwner())
+    const fallbackEntry = document.querySelector<HTMLButtonElement>('[data-dsh-mnemon-entry]')!
+    expect(fallbackEntry).not.toBeNull()
+    act(() => f.navigation.open())
+    expect(f.controller.getSnapshot().open).toBe(true)
+    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(true)
+    act(() => document.dispatchEvent(new CustomEvent('dsh-panel-activate', { detail: 'taskboard' })))
+    expect(f.controller.getSnapshot().open).toBe(false)
+    expect(document.documentElement.hasAttribute('data-dsh-mnemon-active')).toBe(false)
+  })
+
+  it('disconnects document.body waitObserver once placed so chat streaming mutations schedule zero syncs, re-arming only on root disconnect', async () => {
+    document.body.innerHTML = '<div data-dsh-frame><aside data-pane="sidebar"><div class="sidebarRoot"><div class="logoRow"><button class="newSession">New</button></div></div></aside><main data-pane="conversation"><div data-chat-stream></div></main></div>'
+    const controller = new MnemonWorkspaceController()
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame')
+    const disposeEntry = mountFallbackEntry(context(), (() => 'Memory System') as never, controller)
+    releases.push(disposeEntry)
+
+    expect(document.querySelector('[data-dsh-mnemon-entry]')).not.toBeNull()
+    rafSpy.mockClear()
+
+    const chatStream = document.querySelector('[data-chat-stream]')!
+    await act(async () => {
+      for (let index = 0; index < 10; index += 1) {
+        const token = document.createElement('span')
+        token.textContent = `token-${index}`
+        chatStream.append(token)
+      }
+    })
+    expect(rafSpy).not.toHaveBeenCalled()
+
+    // Disconnecting the sidebar root re-arms waitObserver so a remounted sidebar gets the entry back.
+    const aside = document.querySelector('aside[data-pane="sidebar"]')!
+    await act(async () => { aside.remove() })
+    await act(async () => {
+      const replacement = document.createElement('aside')
+      replacement.setAttribute('data-pane', 'sidebar')
+      replacement.innerHTML = '<div class="sidebarRoot"><div class="logoRow"><button class="newSession">New</button></div></div>'
+      document.querySelector('[data-dsh-frame]')!.prepend(replacement)
+    })
+    await waitFor(() => expect(document.querySelectorAll('[data-dsh-mnemon-entry]')).toHaveLength(1))
+  })
+
+  it('pads main-panel titleBar headers by --dsh-frame-leading-clearance for macOS traffic lights', () => {
+    const viewCss = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../src/client/MnemonView.module.css'), 'utf8')
+    expect(viewCss).toContain('.masthead[data-window-drag]')
+    expect(viewCss).toContain('calc(24px + var(--dsh-frame-leading-clearance, 0px))')
+    expect(viewCss).toContain('calc(16px + var(--dsh-frame-leading-clearance, 0px))')
   })
 
   it('replaces only its fallback when native seats arrive, and restores it when a replacement layout removes them', () => {
