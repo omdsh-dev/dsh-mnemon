@@ -420,6 +420,8 @@ mnemon:
 
 每个子 Agent 都通过固定注册的同一个 `mnemon_subagent_result` 工具交回结果，并带上为它签发的可撤销 `requestId`：子 Agent 返回 `{ requestId, result }`，Host 按该操作的 schema 校验 `result`，拒绝过期或其他子任务提交的结果。
 
+若模型适配器在工具执行前拒绝该结果工具的不完整 JSON 实参（`MALFORMED_RESPONSE`），同一子代理会获得一次纠正请求，仅重交括号完整的结果，不重复已完成的写入。正常结果不增加请求；其他工具或错误、第二次不合法的结果仍按原有方式失败。不静默补写 JSON，不放松 schema 或守卫，不重启整个任务。额外请求使用子代理已有模型与输出上限；不保证模型必然纠正成功，取消仍会终止任务。
+
 空闲审查默认使用不继承父上下文的 `spawn` Provider，并从父 Agent 当前公开 surface 构建有界检查点。仅收录完整可见文本消息与成功工具结果，不重建被省略或不可用的上下文。`idleReview.provider: fork` 保留完整父上下文审查，并要求 `inheritsParentContext=true`。fork 缺失或不兼容时，`idleReview.fallback` 在启动前选择 `spawn` 或 `skip`；已启动的运行绝不通过其他 Provider 重试。
 
 审查要求本地子 Agent 发布、`agents.isOwnedBy` 和 `agent.ctx.tools.guard`；guard 同样阻止无关的 own-scope 插件工具与 Code Mode 子调用。`maxContextChars` 限制 spawn 检查点；`maxTokens` 限制每次模型响应，不限制 fork 继承输入或多步运行的总用量。

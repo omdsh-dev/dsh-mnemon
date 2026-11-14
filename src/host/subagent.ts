@@ -1063,6 +1063,7 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
 
 Completion protocol: call \`${resultToolName}\` exactly once with requestId \`${requestId}\` and result matching this JSON schema:
 ${JSON.stringify(outputSchema)}
+The tool arguments must be a complete JSON object with both requestId and result. Close the result object AND the outer arguments object; a result ending in an array still needs the enclosing closing braces. If the adapter rejects invalid JSON before dispatch, correct only the result submission; do not repeat earlier writes or other completed work.
 This is the only completion channel for this run. Do not finish with a plain-text answer. The requestId expires when this run finishes or is cancelled.`
       const perOpMaxTokens = operation === 'migration' || operation === 'compaction' || operation === 'reconcile'
         ? this.runtimeMaintenanceMaxTokensResolver?.() ?? 8_192
