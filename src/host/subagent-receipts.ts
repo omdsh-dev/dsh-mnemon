@@ -3,6 +3,7 @@
  * it called, which can stand in for a result it did not record, and the bounded detail of a failure.
  */
 import type { HostSubagentResult, HostSubagentRun } from "./dsh.ts"
+import { reverseSessionEvents } from './session-events.ts'
 import { mutationResultCommitted } from './receipts.ts'
 import type { IdleReviewFailure, MemoryToolName } from './protocol.ts'
 import { WRITE_ACTIONS } from './subagent-prompts.ts'
@@ -76,9 +77,8 @@ export function subagentFailureDetail(run: HostSubagentRun, result: HostSubagent
     const diagnostic = safeFailureDetail(result.diagnostic)
     if (diagnostic !== '') return diagnostic
   }
-  const events = run.localAgent === undefined ? [] : run.localAgent.session.snapshotEvents()
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const event = events[index]
+  const events = run.localAgent === undefined ? [] : reverseSessionEvents(run.localAgent.session)
+  for (const { event } of events) {
     if (event?.type !== 'turn/end') continue
     const reason = event.data.reason
     if (typeof reason !== 'object' || reason === null || Array.isArray(reason)) continue

@@ -147,6 +147,8 @@ export interface HostSessionEvent {
 
 /** Minimum DSH Session surface: immutable header, range snapshots and indexed reads. */
 export interface HostSession {
+  /** Public DSH next sequence offset (log length). Optional for older adapters. */
+  readonly seq?: number
   inheritedEventCount?: number
   header?: { origin?: 'subagent'; parentSession?: string; delegationDepth?: number; cwd?: string; agentPreset?: string }
   snapshotEvents(fromSeq?: number, toSeqExclusive?: number): readonly HostSessionEvent[]

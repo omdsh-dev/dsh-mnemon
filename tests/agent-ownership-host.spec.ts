@@ -183,12 +183,14 @@ it.each((['spawn', 'fork'] as const).flatMap(provider => (['guard', 'section'] a
         if (options.text === 'Synthetic isolated reviewer.') throw new Error('Synthetic publication failure')
         return original.call(this, options)
       })
-    } else f.ctx.on('agent/created', ({ agent }) => {
-      vi.spyOn(agent.ctx.tools, 'guard').mockImplementation(() => { throw new Error('Synthetic publication failure') })
-      return undefined
-    }, { prepend: true })
+    } else {
+      // Inject at the public service method: Mnemon now installs its guard
+      // before ordinary creation observers, so patching it in one is too late.
+      vi.spyOn(Object.getPrototypeOf(f.ctx.tools) as typeof f.ctx.tools, 'guard').mockImplementation(() => { throw new Error('Synthetic publication failure') })
+    }
     await expect(f.start()).rejects.toThrow('Synthetic publication failure')
     expect(f.counts()).toEqual({ modelCalls: 0, allowedCalls: 0, outsideCalls: 0 })
+    expect(f.host.agents.list?.().filter(agent => agent.id !== f.parent.id)).toEqual([])
     expect(f.children.every(child => f.host.agents.get(child.id) === undefined)).toBe(true)
     for (const child of f.children) {
       expect(child.session.snapshotEvents().some(event => event.type === 'user/message' || event.type === 'turn/start')).toBe(false)

@@ -86,6 +86,26 @@ function page(navigationInput: { seed: string; nonce: number } = { seed: 'skill:
 }
 
 describe('Skills page', () => {
+  it.each([true, false])('keeps a selected directory folded across catalog refreshes (writable=%s, #627)', async writable => {
+    const props = { sourceTypeId: 'skills', sourceInstanceKey: 'source:skills', sourceInstances: [], locale: 'en', writable, management }
+    const location = { seed: 'skill:user-dsh:release-notes', nonce: 1 }
+    const view = render(<SkillsSourcePage {...props} navigationInput={location} refreshKey={0} />)
+    const group = await screen.findByRole('button', { name: new RegExp(t('root.user-dsh'), 'u') })
+    fireEvent.click(group)
+    expect(group.getAttribute('aria-expanded')).toBe('false')
+
+    writeFileSync(skillPath(), SKILL.replace('Write release notes from a changelog.', 'Updated catalog description.'))
+    view.rerender(<SkillsSourcePage {...props} navigationInput={location} refreshKey={1} />)
+    await screen.findByText('Updated catalog description.')
+    expect(group.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('switch', { name: t('skills.toggle', { name: 'release-notes' }) })).toBeNull()
+
+    // An explicit link still reveals the same selected skill after a user folds its group.
+    view.rerender(<SkillsSourcePage {...props} navigationInput={{ ...location, nonce: 2 }} refreshKey={1} />)
+    await waitFor(() => expect(group.getAttribute('aria-expanded')).toBe('true'))
+    expect(screen.getByRole('switch', { name: t('skills.toggle', { name: 'release-notes' }) })).not.toBeNull()
+  })
+
   it('folds source directories without hiding search results or a direct selection (#617)', async () => {
     page()
     const group = await screen.findByRole('button', { name: new RegExp(t('root.user-dsh'), 'u') })

@@ -7,6 +7,7 @@ import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { expect, it, vi } from 'vitest'
 import type { HostAgent, HostContextShape } from '../src/host/dsh.ts'
 import { MnemonLifecycle } from '../src/host/lifecycle.ts'
@@ -14,15 +15,16 @@ import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
 import { registerTools } from '../src/host/tools.ts'
 import { compositionFixture } from './fixtures/composition.ts'
 import { JsonlSessionPersistence } from './helpers/dsh-plugins.ts'
-import { loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
+import { executeTool, loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
 
 const spawn = await import(requireDsh.resolve('@deepseek-ai/dsh-subagent-spawn-in-process'))
 const fork = await import(requireDsh.resolve('@deepseek-ai/dsh-subagent-fork-in-process'))
 const sessionApi = await import(requireDsh.resolve('@deepseek-ai/dsh-session'))
 const format = await import(requireDsh.resolve('@deepseek-ai/dsh-session-format-v3-to-v4'))
 
-async function fixture(provider: 'spawn' | 'fork' = 'spawn', persistWatermark = false, codeMode = false, autoReview = false) {
+async function fixture(provider: 'spawn' | 'fork' = 'spawn', persistWatermark = false, codeMode = false, autoReview = false, publicationWrites = false) {
   const f = await compositionFixture({ idleReviewMs: 5_000, idleReview: { provider, persistWatermark, minIntervalMs: 5_000, maxPerSession: 2 } })
+  const body = publicationWrites ? await f.memorySpace() : undefined
   const ctx = new Context()
   const modelCalls: string[] = []
   const children: string[] = []
@@ -51,14 +53,20 @@ async function fixture(provider: 'spawn' | 'fork' = 'spawn', persistWatermark = 
         yield { type: 'finish', reason: { kind: 'tool-calls' } }
         return
       }
-      if (String(options.sessionId) !== 'parent-denied' && !options.messages.some(message => message.role === 'tool')) {
+      if (String(options.sessionId) !== 'parent-denied' && (publicationWrites || !options.messages.some(message => message.role === 'tool'))) {
         const system = JSON.stringify(options.messages.filter(message => message.role === 'system'))
         const requestId = system.match(/requestId `([^`]+)`/u)?.[1]
         const ptc = options.tools?.some(tool => tool.name === 'run_code') && !options.tools?.some(tool => tool.name === 'mnemon_subagent_result')
-        const name = ptc ? 'run_code' : 'mnemon_subagent_result'
-        const id = 'fixture-result' as Extract<StreamChunk, { type: 'tool-call-delta' }>['id']
-        const result = { requestId, result: { action: 'skipped', summary: 'Synthetic review completed.', memoryBodyIds: [], documentIds: [] } }
-        const args = JSON.stringify(ptc ? { code: `await tools.mnemon_subagent_result(${JSON.stringify(result)})`, description: 'Complete synthetic review' } : result)
+        const write = JSON.stringify(options.messages).includes('[dsh-mnemon:delegated write]')
+        const mutation = !publicationWrites || options.messages.some(message => message.role === 'tool') ? undefined : write
+          ? { name: 'mnemon_remember', input: { memoryBodyId: body!.id, content: 'Synthetic publication-safe memory.' } }
+          : { name: 'mnemon_runtime_memory', input: { action: 'add', target: 'memory', content: 'Synthetic publication-safe runtime.' } }
+        const tool = mutation?.name ?? 'mnemon_subagent_result'
+        const name = ptc ? 'run_code' : tool
+        const id = (publicationWrites ? `fixture-result-${modelCalls.length}` : 'fixture-result') as Extract<StreamChunk, { type: 'tool-call-delta' }>['id']
+        const result = { requestId, result: { action: !publicationWrites ? 'skipped' : write ? 'stored' : 'added', summary: 'Synthetic review completed.', memoryBodyIds: publicationWrites && write ? [body!.id] : [], documentIds: [] } }
+        const input = mutation?.input ?? result
+        const args = JSON.stringify(ptc ? { code: `await tools.${tool}(${JSON.stringify(input)})`, description: 'Complete synthetic review' } : input)
         yield { type: 'block-start', index: 0, blockType: 'tool-call' }
         yield { type: 'tool-call-delta', index: 0, id, name, argumentsDelta: args }
         yield { type: 'block-end', index: 0, block: { type: 'tool-call', id, name, arguments: args } }
@@ -101,6 +109,7 @@ async function fixture(provider: 'spawn' | 'fork' = 'spawn', persistWatermark = 
     await ctx.plugin(await import(requireDsh.resolve('@deepseek-ai/dsh-experimental-auto-review')))
   }
   ctx.on('agent/created', ({ agent }) => { if (String(agent.id) !== 'parent-denied') children.push(agent.id); return undefined })
+  if (publicationWrites) ctx.on('agent/created', (({ agent }: { agent: HostAgent }) => agent.session.header?.origin === 'subagent' ? 1 : undefined) as never)
   const host = ctx as unknown as HostContextShape
   const coordinator = new MnemonSubagentCoordinator(host.subagents, f.live, host)
   const stopTools = registerTools(host, f.live, coordinator, f.extensions)
@@ -116,7 +125,7 @@ async function fixture(provider: 'spawn' | 'fork' = 'spawn', persistWatermark = 
     const stop = parent.ctx.on('agent/request', async (_payload, next) => { await run(); return next() }, { prepend: true })
     try { await turn() } finally { stop() }
   }
-  return { ...f, ctx, coordinator, lifecycle, parent, turn, duringStep, modelCalls, children,
+  return { ...f, ctx, coordinator, lifecycle, parent, turn, duringStep, modelCalls, children, body,
     enableAuto: () => { preset = 'auto' },
     foreground: async () => { foregroundCall = true; await turn(); return foregroundExecutions },
     async close() {
@@ -147,6 +156,51 @@ async function assertReloadable(f: Awaited<ReturnType<typeof fixture>>) {
   } finally { await reader.fiber.dispose() }
 }
 
+// Cordis serial publication stops on a non-null/false/undefined return. A
+// plugin's accidental `return array.push(agent)` must not skip Mnemon's guard.
+it.each([
+  { purpose: 'review', provider: 'spawn', codeMode: false },
+  { purpose: 'review', provider: 'fork', codeMode: false },
+  { purpose: 'review', provider: 'spawn', codeMode: true },
+  { purpose: 'write', provider: 'spawn', codeMode: false },
+  { purpose: 'write', provider: 'spawn', codeMode: true },
+] as const)('installs $purpose setup before a bailing creation observer ($provider, PTC=$codeMode, issue 629)', async ({ purpose, provider, codeMode }) => {
+  const f = await fixture(provider, false, codeMode, false, true)
+  try {
+    f.live.config.idleReview.enabled = false
+    await f.turn()
+    f.live.config.idleReview.runtimeMemory = true
+    const agent = f.parent as unknown as HostAgent
+    const signal = new AbortController().signal
+    const result = purpose === 'review'
+      ? await f.coordinator.review(agent, signal)
+      : await f.coordinator.remember(agent, { content: 'Synthetic durable decision.' }, signal)
+    expect(result).toMatchObject({ delegated: true, action: purpose === 'write' ? 'stored' : 'added' })
+    if (purpose === 'review') expect(await f.graph.source('runtime').read('snapshot')).toMatchObject({ entries: [expect.objectContaining({ content: 'Synthetic publication-safe runtime.' })] })
+    else expect(await f.graph.source('memory-spaces').read('list', { memoryBodyIds: [f.body!.id] })).toMatchObject({ items: [expect.objectContaining({ content: 'Synthetic publication-safe memory.' })] })
+    expect(f.children).toHaveLength(1)
+    expect(f.modelCalls).toContain(f.children[0])
+    expect(f.ctx.agents.get(SessionId(f.children[0]!))).toBeUndefined()
+  } finally { await f.close() }
+}, 20_000)
+
+
+it('completes automatic idle review despite a bailing creation observer (issue 629)', async () => {
+  const f = await fixture('spawn', false, false, false, true)
+  try {
+    f.live.config.idleReview.runtimeMemory = true
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    await f.turn()
+    await f.turn()
+    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.waitFor(() => expect(f.coordinator.snapshot().reviews).toBe(1), { timeout: 10_000 })
+    expect(f.lifecycle.snapshot('parent-denied').current).toMatchObject({ reviewRunning: false, lastReviewAction: 'added' })
+    expect(await f.graph.source('runtime').read('snapshot')).toMatchObject({ entries: [expect.objectContaining({ content: 'Synthetic publication-safe runtime.' })] })
+    expect(f.children).toHaveLength(1)
+    await assertReloadable(f)
+  } finally { await f.close() }
+}, 20_000)
+
 it('keeps a completed PTC conversation loadable after automatic review', async () => {
   const f = await fixture('spawn', false, true)
   try {
@@ -162,11 +216,50 @@ it('keeps a completed PTC conversation loadable after automatic review', async (
   } finally { await f.close() }
 }, 20_000)
 
+it.each([false, true])('recovers admission in a later real step without bypassing guards (PTC=%s, issue 635)', async codeMode => {
+  const f = await fixture('spawn', true, codeMode)
+  try {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    await f.turn()
+    const before = f.modelCalls.length
+    // Simulate a restored executor/preset becoming usable after its first request.
+    f.parent.ctx.tools.guard(exec => f.modelCalls.length === before && exec.name.startsWith('mnemon_') ? 'Synthetic temporarily unavailable admission.' : undefined)
+    await f.foreground()
+    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.waitFor(() => expect(f.coordinator.snapshot().reviews).toBe(1))
+    expect(f.lifecycle.snapshot('parent-denied').current).toMatchObject({ idleReviewAttempts: 1 })
+    await assertReloadable(f)
+  } finally { await f.close() }
+}, 20_000)
+
+it('reports bounded admission diagnostics through mnemon_status without private errors (issue 635)', async () => {
+  const f = await fixture()
+  try {
+    f.live.config.idleReview.enabled = false
+    const agent = f.parent as unknown as HostAgent
+    expect(f.coordinator.reviewAccessStatus(agent)).toEqual({ state: 'unchecked' })
+    await f.duringStep(async () => {
+      const stop = f.parent.ctx.on('tools/execute', async (exec, next) => {
+        if (exec.name === 'mnemon_subagent_result') throw new Error('SYNTHETIC_PRIVATE_ERROR_DO_NOT_RETURN')
+        return next()
+      })
+      expect(await f.coordinator.checkReviewAccess(agent, new AbortController().signal)).toBe(false)
+      stop()
+      const status = await executeTool(f.parent.ctx, { agent: f.parent, callId: ToolCallId('review-diagnostic'), name: 'mnemon_status', arguments: {}, signal: new AbortController().signal })
+      expect(status).toMatchObject({ isError: false, value: { idleReviewAccess: { state: 'unavailable', reason: 'execution-error', checkedAt: expect.any(String) } } })
+      expect(JSON.stringify(status)).not.toContain('SYNTHETIC_PRIVATE_ERROR')
+      expect(await f.coordinator.checkReviewAccess(agent, new AbortController().signal)).toBe(true)
+      expect(f.coordinator.reviewAccessStatus(agent)).toEqual({ state: 'available', checkedAt: expect.any(String) })
+    })
+  } finally { await f.close() }
+})
+
 it('never executes an admission probe outside a real open turn', async () => {
   const f = await fixture('spawn', false, true)
   try {
     const before = f.parent.session.snapshotEvents()
     expect(await f.coordinator.checkReviewAccess(f.parent as unknown as HostAgent, new AbortController().signal)).toBe(false)
+    expect(f.coordinator.reviewAccessStatus(f.parent as unknown as HostAgent)).toMatchObject({ state: 'unavailable', reason: 'no-open-step' })
     expect(f.parent.session.snapshotEvents()).toEqual(before)
     expect(f.modelCalls).toEqual([])
   } finally { await f.close() }

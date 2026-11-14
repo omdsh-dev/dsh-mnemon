@@ -1,0 +1,18 @@
+{
+  "issue": 627,
+  "base": "1dec529da00a9527351efd329a4beac400cd399a",
+  "dsh": "0.2.2-rc.3",
+  "source": "locally built branch from main",
+  "data": "Synthetic disposable skills only",
+  "before": "Both writable and read-only catalog-refresh regression cases fail on main.",
+  "after": "55 Source Client tests passed; a collapsed directory remains folded after refresh while the selected skill stays readable.",
+  "checks": [
+    "Docs, root/plugin type checks and deterministic builds passed",
+    "All independent plugin test suites passed",
+    "Root regression rerun with two workers: 2739 passed, 9 conditional skips",
+    "Real Headless activation, settings recovery and Starter disable passed",
+    "Package entry and export validation passed"
+  ],
+  "initialVerification": "The unconstrained root run hit one existing 5-second hung-backtest deadline test timeout under load; the full root suite passed with --maxWorkers=2.",
+  "screenshot": "after-refresh.jpg"
+}

@@ -16,16 +16,17 @@ export function SkillsPage(props: { context: SkillsPageContext; location: Skills
   const [selected, setSelected] = useState<string | undefined>(location.skillKey)
   const [creating, setCreating] = useState(false)
   const [collapsed, setCollapsed] = useState<ReadonlySet<SkillRootKind>>(() => new Set())
+  const selectedRoot = catalog?.skills.find(skill => skill.key === selected)?.root
   // A direct link or a newly created skill must be visible in its source group.
+  // Catalog polling refreshes objects without changing the user's selection.
   useEffect(() => {
-    const root = catalog?.skills.find(skill => skill.key === selected)?.root
-    if (root !== undefined) setCollapsed(current => {
-      if (!current.has(root)) return current
+    if (selectedRoot !== undefined) setCollapsed(current => {
+      if (!current.has(selectedRoot)) return current
       const next = new Set(current)
-      next.delete(root)
+      next.delete(selectedRoot)
       return next
     })
-  }, [catalog, selected, location.nonce])
+  }, [selectedRoot, selected, location.nonce])
   useEffect(() => {
     let active = true
     void context.client.catalog().then(value => {

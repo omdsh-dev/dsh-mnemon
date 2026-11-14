@@ -8,11 +8,15 @@ export const CONTINUATION_TEXT = 'Continue from the tool results above.'
 
 /** How a server reports a chat template that found no user query (Ollama, vLLM and others). */
 const NO_USER_QUERY = /no user query found in messages/iu
+// DSH's pi-ai adapter rejects malformed tool JSON before dispatching any call
+// in that response. Only our completion channel gets this local retry.
+const MALFORMED_RESULT = /^Tool call "mnemon_subagent_result": /u
+export const RESULT_RETRY_TEXT = 'The model adapter rejected the mnemon_subagent_result arguments before executing the call. Submit only the result again, using the same requestId and the required result schema. Use complete valid JSON: close the result object and then the outer arguments object, including every final brace and bracket. Do not repeat completed writes or other work. Do not return a plain-text answer.'
 
 export interface ContinuationHost {
   agents?: { isOwnedBy?(id: string, parent: HostAgent): boolean; get?(id: string): HostAgent | undefined }
   subagents?: ActivationOwnership
-  on(name: string, listener: (...args: never[]) => unknown): unknown
+  on(name: string, listener: (...args: never[]) => unknown, options?: { prepend?: boolean }): unknown
 }
 
 interface PreStepPayload {
@@ -24,7 +28,7 @@ interface PreStepPayload {
 interface RequestErrorPayload {
   turn: number
   step: number
-  failure?: { message?: string }
+  failure?: { message?: string; code?: string }
   signal: AbortSignal
 }
 
@@ -52,13 +56,20 @@ function hasUserText(message: HostUserMessage): boolean {
 function continueAfterRefusal(agent: HostAgent): Array<() => unknown> {
   if (typeof agent.ctx?.on !== 'function' || !contextIsActive(agent.ctx)) return []
   let refused = false
+  let retriedResult = false
   const retried = new Set<string>()
   const turn = () => createPluginMessage(CONTINUATION_TEXT, 'instructions')
   return [
     agent.ctx.on('agent/request-error', (async (payload: RequestErrorPayload, next: () => Promise<unknown>) => {
       const step = `${payload.turn}:${payload.step}`
       const session = agent.session
-      if (payload.signal.aborted || payload.step < 2 || retried.has(step) || typeof session.append !== 'function'
+      if (payload.signal.aborted || typeof session.append !== 'function') return next()
+      if (!retriedResult && payload.failure?.code === 'MALFORMED_RESPONSE' && MALFORMED_RESULT.test(payload.failure.message ?? '')) {
+        retriedResult = true
+        session.append('user/message', createPluginMessage(RESULT_RETRY_TEXT, 'instructions'), { surfaceOp: 'append' })
+        return { kind: 'retry' }
+      }
+      if (payload.step < 2 || retried.has(step)
         || !NO_USER_QUERY.test(payload.failure?.message ?? '')) return next()
       retried.add(step)
       refused = true
@@ -89,13 +100,15 @@ export async function startWithContinuationTurns(host: ContinuationHost, parent:
   const pending = Symbol('Mnemon delegated start')
   const stops: Array<() => unknown> = []
   let expectedChildId: string | undefined
+  // Like persona/tool composition and the guard, recovery must exist before
+  // ordinary publication observers can short-circuit DSH's serial dispatch.
   const listener = host.on('agent/created', (({ agent }: { agent: HostAgent }) => {
     if (startingChild.getStore() !== pending) return
     if (!contextIsActive(parent.ctx) || !contextIsActive(agent.ctx)) return
     if (reserved && (agent.id !== expectedChildId || !isReservedChild(host.agents, parent, agent))) return
     if (typeof host.agents?.isOwnedBy === 'function' && !host.agents.isOwnedBy(agent.id, parent)) return
     for (const stop of continueAfterRefusal(agent)) if (typeof stop === 'function') stops.push(stop)
-  }) as never)
+  }) as never, { prepend: true })
   const release = async () => { for (const stop of stops.splice(0)) await stop() }
   let run: HostSubagentRun
   try {
