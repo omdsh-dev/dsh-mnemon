@@ -6,8 +6,9 @@ import { describe, expect, it } from 'vitest'
 /**
  * The supported hosts: DSH 0.2.0 from 0.2.0-rc.2 and 0.2.x from 0.2.1-rc.1, finals included.
  * 0.2.1-rc.5 is the development baseline; installed-host CI also checks the published 0.2.2 RC. Alpha versions are not support targets.
+ * Desktop-only previews are covered here when npm does not publish them for installed-host CI.
  */
-const SUPPORTED_DSH_RUNTIMES = ['0.2.0-rc.2', '0.2.0', '0.2.1-rc.1', '0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.5', '0.2.1', '0.2.2-rc.1', '0.2.2-rc.2', '0.2.2']
+const SUPPORTED_DSH_RUNTIMES = ['0.2.0-rc.2', '0.2.0', '0.2.1-rc.1', '0.2.1-rc.2', '0.2.1-rc.3', '0.2.1-rc.5', '0.2.1', '0.2.2-rc.1', '0.2.2-rc.2', '0.2.2-rc.3', '0.2.2']
 /** Hosts the Starter no longer supports: DSH 0.1.7, 0.2.0-rc.1, the 0.2.1 alphas and DSH 0.3. */
 const UNSUPPORTED_DSH_RUNTIMES = ['0.1.7-rc.2', '0.2.0-rc.1', '0.2.1-alpha.3', '0.2.1-alpha.5', '0.3.0-rc.1']
 
