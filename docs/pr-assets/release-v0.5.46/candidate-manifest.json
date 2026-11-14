@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 2,
+  "revision": "b523b603a4ee3756c23478d2629255ae8f7800d2",
+  "baseRevision": "1dec529da00a9527351efd329a4beac400cd399a",
+  "starter": {
+    "name": "dsh-mnemon",
+    "version": "0.5.46",
+    "distTag": "latest"
+  },
+  "composition": [
+    {
+      "name": "dsh-mnemon-provider-byterover",
+      "version": "0.5.7"
+    },
+    {
+      "name": "dsh-mnemon-provider-hindsight",
+      "version": "0.5.7"
+    },
+    {
+      "name": "dsh-mnemon-provider-holographic",
+      "version": "0.5.7"
+    },
+    {
+      "name": "dsh-mnemon-provider-honcho",
+      "version": "0.5.5"
+    },
+    {
+      "name": "dsh-mnemon-provider-mem0",
+      "version": "0.5.5"
+    },
+    {
+      "name": "dsh-mnemon-provider-mnemon-native",
+      "version": "0.5.11"
+    },
+    {
+      "name": "dsh-mnemon-provider-openviking",
+      "version": "0.5.10"
+    },
+    {
+      "name": "dsh-mnemon-provider-retaindb",
+      "version": "0.5.6"
+    },
+    {
+      "name": "dsh-mnemon-provider-supermemory",
+      "version": "0.5.5"
+    },
+    {
+      "name": "dsh-mnemon-source-documents",
+      "version": "0.6.0"
+    },
+    {
+      "name": "dsh-mnemon-source-memory-spaces",
+      "version": "0.5.28"
+    },
+    {
+      "name": "dsh-mnemon-source-runtime",
+      "version": "0.5.20"
+    },
+    {
+      "name": "dsh-mnemon-source-skills",
+      "version": "0.5.13"
+    },
+    {
+      "name": "dsh-mnemon-strategy-auto-capture",
+      "version": "0.5.5"
+    },
+    {
+      "name": "dsh-mnemon-strategy-default-three-tier",
+      "version": "0.5.13"
+    },
+    {
+      "name": "dsh-mnemon-strategy-general",
+      "version": "0.5.2"
+    },
+    {
+      "name": "dsh-mnemon-strategy-light-context",
+      "version": "0.5.6"
+    },
+    {
+      "name": "dsh-mnemon-strategy-scoped",
+      "version": "0.5.5"
+    },
+    {
+      "name": "dsh-mnemon",
+      "version": "0.5.46"
+    }
+  ],
+  "packages": [
+    {
+      "name": "dsh-mnemon-source-memory-spaces",
+      "version": "0.5.28",
+      "filename": "dsh-mnemon-source-memory-spaces-0.5.28.tgz",
+      "integrity": "sha512-eCyseTwf6EXJN/2amh53W1cLEwTOY9AfPQbHpwdZLz37bXMlsZHFmO5jmPmPC7vuaoU5JUFFbcVK5JsJ0V+dTw==",
+      "size": 201663
+    },
+    {
+      "name": "dsh-mnemon-source-runtime",
+      "version": "0.5.20",
+      "filename": "dsh-mnemon-source-runtime-0.5.20.tgz",
+      "integrity": "sha512-QvfP0lRkWBsM0ExWaMqlYIb9CGjzWTl518Rrqsp9rNL0iVLbpLQ1J7pHFdEiwg4TkHd5dtWtmeCG8md5egc70g==",
+      "size": 34510
+    },
+    {
+      "name": "dsh-mnemon-source-skills",
+      "version": "0.5.13",
+      "filename": "dsh-mnemon-source-skills-0.5.13.tgz",
+      "integrity": "sha512-92TszxLI0T9B7u+qWD0iccDSIcR2eyFhvl0sI7ZAkD+SxrEWqO5H/jjbx05blxuf3eulgI/+Meuw8PdgOulbpg==",
+      "size": 169143
+    },
+    {
+      "name": "dsh-mnemon",
+      "version": "0.5.46",
+      "filename": "dsh-mnemon-0.5.46.tgz",
+      "integrity": "sha512-IxFM9nTNyJSC7AX+fMf6jq5A0mcCehIkH/uhQDPBZquurbCnoLeOctm+HifKHDbRTXrGTS8ZyZJjvcbYS/mGgg==",
+      "size": 564675
+    }
+  ]
+}

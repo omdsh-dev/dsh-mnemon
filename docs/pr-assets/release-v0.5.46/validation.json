@@ -1,0 +1,278 @@
+{
+  "schemaVersion": 1,
+  "version": "0.5.46",
+  "previousVersion": "0.5.45",
+  "verifiedAt": "2026-11-14T17:44:49.860944+00:00",
+  "timezone": "Asia/Shanghai",
+  "platform": "darwin-arm64",
+  "node": "24.22.2",
+  "candidateRevision": "b523b603a4ee3756c23478d2629255ae8f7800d2",
+  "baseReleaseRevision": "1dec529da00a9527351efd329a4beac400cd399a",
+  "alignmentRevision": "242ddd0fe58334edc433250b95a4a2e072a5e6f3",
+  "byteIdenticalAfterMainAlignmentAndRebuild": true,
+  "releaseManifest": "candidate-manifest.json",
+  "candidateFiles": "candidate-files.json",
+  "verification": {
+    "root": {
+      "passed": 2801,
+      "skipped": 9
+    },
+    "workspacePlugins": {
+      "passed": 899,
+      "skipped": 4
+    },
+    "installedDshRc3": {
+      "passed": 2802,
+      "skipped": 8
+    },
+    "independentPluginRepositories": 18,
+    "packedArtifactsVerified": 19
+  },
+  "summary": {
+    "freshInstallations": 7,
+    "upgrades": 7,
+    "fullUpgradeRestarts": 7,
+    "finalPinnedVersionChecks": 266,
+    "finalCandidateFileChecks": 2366,
+    "finalCandidateExecutableModeChecks": 2366,
+    "retainedRuntimeHashes": 21,
+    "uiScreenshots": 49
+  },
+  "starterSize": {
+    "files": 71,
+    "packedBytes": 564675,
+    "unpackedBytes": 2361512,
+    "ceilingBytes": 3000000
+  },
+  "hosts": [
+    {
+      "dsh": "0.2.0-rc.2",
+      "cohort": "020",
+      "fresh": "passed",
+      "upgrade": "passed",
+      "fullRestart": "passed",
+      "memoryAndPinRetainedInUi": true,
+      "runtimeFileHashesRetained": true,
+      "records": [
+        "020-fresh-audit.json",
+        "020-upgrade-before.json",
+        "020-upgrade-after.json",
+        "020-upgrade-restarted.json"
+      ],
+      "screenshots": [
+        "020-fresh-add.jpg",
+        "020-fresh-status.jpg",
+        "020-upgrade-memory-before.jpg",
+        "020-upgrade-offered.jpg",
+        "020-upgrade-updated.jpg",
+        "020-upgrade-restarted.jpg",
+        "020-upgrade-retained.jpg"
+      ]
+    },
+    {
+      "dsh": "0.2.1-rc.2",
+      "cohort": "rc2",
+      "fresh": "passed",
+      "upgrade": "passed",
+      "fullRestart": "passed",
+      "memoryAndPinRetainedInUi": true,
+      "runtimeFileHashesRetained": true,
+      "records": [
+        "rc2-fresh-audit.json",
+        "rc2-upgrade-before.json",
+        "rc2-upgrade-after.json",
+        "rc2-upgrade-restarted.json"
+      ],
+      "screenshots": [
+        "rc2-fresh-add.jpg",
+        "rc2-fresh-status.jpg",
+        "rc2-upgrade-memory-before.jpg",
+        "rc2-upgrade-offered.jpg",
+        "rc2-upgrade-updated.jpg",
+        "rc2-upgrade-restarted.jpg",
+        "rc2-upgrade-retained.jpg"
+      ]
+    },
+    {
+      "dsh": "0.2.1-rc.3",
+      "cohort": "rc3",
+      "fresh": "passed",
+      "upgrade": "passed",
+      "fullRestart": "passed",
+      "memoryAndPinRetainedInUi": true,
+      "runtimeFileHashesRetained": true,
+      "records": [
+        "rc3-fresh-audit.json",
+        "rc3-upgrade-before.json",
+        "rc3-upgrade-after.json",
+        "rc3-upgrade-restarted.json"
+      ],
+      "screenshots": [
+        "rc3-fresh-add.jpg",
+        "rc3-fresh-status.jpg",
+        "rc3-upgrade-memory-before.jpg",
+        "rc3-upgrade-offered.jpg",
+        "rc3-upgrade-updated.jpg",
+        "rc3-upgrade-restarted.jpg",
+        "rc3-upgrade-retained.jpg"
+      ]
+    },
+    {
+      "dsh": "0.2.1-rc.5",
+      "cohort": "rc5",
+      "fresh": "passed",
+      "upgrade": "passed",
+      "fullRestart": "passed",
+      "memoryAndPinRetainedInUi": true,
+      "runtimeFileHashesRetained": true,
+      "records": [
+        "rc5-fresh-audit.json",
+        "rc5-upgrade-before.json",
+        "rc5-upgrade-after.json",
+        "rc5-upgrade-restarted.json"
+      ],
+      "screenshots": [
+        "rc5-fresh-add.jpg",
+        "rc5-fresh-status.jpg",
+        "rc5-upgrade-memory-before.jpg",
+        "rc5-upgrade-offered.jpg",
+        "rc5-upgrade-updated.jpg",
+        "rc5-upgrade-restarted.jpg",
+        "rc5-upgrade-retained.jpg"
+      ]
+    },
+    {
+      "dsh": "0.2.2-rc.1",
+      "cohort": "rc1",
+      "fresh": "passed",
+      "upgrade": "passed",
+      "fullRestart": "passed",
+      "memoryAndPinRetainedInUi": true,
+      "runtimeFileHashesRetained": true,
+      "records": [
+        "rc1-fresh-audit.json",
+        "rc1-upgrade-before.json",
+        "rc1-upgrade-after.json",
+        "rc1-upgrade-restarted.json"
+      ],
+      "screenshots": [
+        "rc1-fresh-add.jpg",
+        "rc1-fresh-status.jpg",
+        "rc1-upgrade-memory-before.jpg",
+        "rc1-upgrade-offered.jpg",
+        "rc1-upgrade-updated.jpg",
+        "rc1-upgrade-restarted.jpg",
+        "rc1-upgrade-retained.jpg"
+      ]
+    },
+    {
+      "dsh": "0.2.2-rc.2",
+      "cohort": "022rc2",
+      "fresh": "passed",
+      "upgrade": "passed",
+      "fullRestart": "passed",
+      "memoryAndPinRetainedInUi": true,
+      "runtimeFileHashesRetained": true,
+      "records": [
+        "022rc2-fresh-audit.json",
+        "022rc2-upgrade-before.json",
+        "022rc2-upgrade-after.json",
+        "022rc2-upgrade-restarted.json"
+      ],
+      "screenshots": [
+        "022rc2-fresh-add.jpg",
+        "022rc2-fresh-status.jpg",
+        "022rc2-upgrade-memory-before.jpg",
+        "022rc2-upgrade-offered.jpg",
+        "022rc2-upgrade-updated.jpg",
+        "022rc2-upgrade-restarted.jpg",
+        "022rc2-upgrade-retained.jpg"
+      ]
+    },
+    {
+      "dsh": "0.2.2-rc.3",
+      "cohort": "022rc3",
+      "fresh": "passed",
+      "upgrade": "passed",
+      "fullRestart": "passed",
+      "memoryAndPinRetainedInUi": true,
+      "runtimeFileHashesRetained": true,
+      "records": [
+        "022rc3-fresh-audit.json",
+        "022rc3-upgrade-before.json",
+        "022rc3-upgrade-after.json",
+        "022rc3-upgrade-restarted.json"
+      ],
+      "screenshots": [
+        "022rc3-fresh-add.jpg",
+        "022rc3-fresh-status.jpg",
+        "022rc3-upgrade-memory-before.jpg",
+        "022rc3-upgrade-offered.jpg",
+        "022rc3-upgrade-updated.jpg",
+        "022rc3-upgrade-restarted.jpg",
+        "022rc3-upgrade-retained.jpg"
+      ]
+    }
+  ],
+  "screenshotsSha256": {
+    "rc1-upgrade-memory-before.jpg": "57c279e41b679e0fa4dfc5f0fd35f8e0f07ac0b49520eb0a0d76d547ed5ff7a6",
+    "022rc2-upgrade-updated.jpg": "a1cf4044dcaef1fc3466c001239dabe0eaff3d5bf7f65edaba408f50fcdcf8ae",
+    "rc3-upgrade-restarted.jpg": "0f0b28059592607e5105e4a72a01fb1f878a78dbea2ce9944b966968b46e0383",
+    "rc3-upgrade-updated.jpg": "e48faff3f02b9437260de96d5f560ef9606868cc4c2da5b775e9d94ed2842220",
+    "022rc3-upgrade-updated.jpg": "dbb57db9d7c63b0bc6b2dbafa23f0867b5daf99788f1f2809ae7380878f735c0",
+    "020-upgrade-retained.jpg": "175ef48b30e8525babd7d40ed29bc84025842ddecc2e6e7b97f6c979bd2a254b",
+    "rc2-upgrade-updated.jpg": "6d02e3edc3b38818e204f3e39c48fc424d92026c7eff60b1bc76a7a96d9f58b6",
+    "022rc3-upgrade-restarted.jpg": "557eabccb9dc8045076c058a1c5e884e13626355d5a9f7f2faecd1c2ed48c9a8",
+    "rc3-upgrade-retained.jpg": "2c02954b872d723bca93d3eb3e8d682b34e7c0742868eb3144a0059d8f21fd65",
+    "rc1-upgrade-updated.jpg": "bba3ad567b34e9ec7a18d3f082d0c296ecd6113dd3af059f2243f4892ff33934",
+    "022rc3-upgrade-retained.jpg": "cebf63598c1a842b47a0c0c6be0e19165b9b3a60349bb043b4d92a8699b72e97",
+    "020-upgrade-updated.jpg": "2ddbd247a538e45f4e21f4c0fe137a271917e2526e085123b9abe7af88e67afb",
+    "rc5-upgrade-offered.jpg": "d9df45beec2cc5934124d390971e80512ab4f3e3ee1051a90a7703fae9063d6c",
+    "022rc2-upgrade-offered.jpg": "8a7518d5c825089beb97e4f5a852ada8d0e97e33d826688727733a15b06c673d",
+    "rc3-upgrade-offered.jpg": "42959885f133b05c64bbf23faeabdcdf373657ba9be31f20c8ab4d7947f6c107",
+    "rc3-fresh-status.jpg": "129c574c6100e6acaf54fbc2d76367f639a31b6205362ce0a92f30445ec2e65d",
+    "022rc3-upgrade-offered.jpg": "6320568f776e66e49281c7cc4d85de048d72faac3c91cc4ca2c33aeb12994e00",
+    "rc1-upgrade-restarted.jpg": "ac49dc07f7b836ac6cbca9d11d3a0cae88657bf2aed8530d07b8a72990612fa5",
+    "rc2-upgrade-offered.jpg": "4e5fe691f24a59e55d2c6560871e18c69dedea4b8190db69efd2376ef850fe6c",
+    "rc3-fresh-add.jpg": "8a80fd1443b16130eb76a6fc6714b0c7350b39f894b3f521a7a377cbe19c25f1",
+    "rc1-upgrade-offered.jpg": "9850f1a5ff4d2a3f79b701b1a811340fd5e88b5741420c016b70f3078fe6bea8",
+    "020-upgrade-offered.jpg": "6f59db7c5d45e0396933f039d4ec1d0c1c74dcc9b997f15cf292c9b36e9edbe3",
+    "022rc2-fresh-status.jpg": "4070348c88ff7dbf7330d5c05b4cabeb13c71b719146ec9a633fc5d6fb774980",
+    "rc5-upgrade-updated.jpg": "bdf461f888a0dee4b43b9add430007f2d44c07c34b1a29a842d9edded1f99a40",
+    "022rc2-fresh-add.jpg": "72ca517e32ac09384aa0a33b05b818bae447f88e30516fa18bd688a4072c0820",
+    "rc3-upgrade-memory-before.jpg": "2ad30ba069a3654c96ef3e6852fcdfcc4f4165cffa084d2aa2bdbff289510971",
+    "022rc2-upgrade-retained.jpg": "27ba97fb5d127e6595bdae63bc4849dfc3b28c57978c23639a1a188d39b9ae3a",
+    "rc2-upgrade-retained.jpg": "4e73efeed5289d0590057ffb809aa3ba9a7176b3a4f8b4c921302c1e0155bb66",
+    "020-fresh-add.jpg": "90765d2123c72c982f34e902eb48fd929bef1f4c9a054a5a925716f96737ffd3",
+    "rc2-fresh-status.jpg": "c8f85b006b5f106782967c66d72d601c1b2263a95582f8f63b31ea41297a197c",
+    "022rc3-fresh-status.jpg": "8a3f3f2094592c5bca1cb58f95ce7e8f8d9133bad9f55cd06489758d6b143316",
+    "022rc2-upgrade-memory-before.jpg": "432852418de902d1e778943c7efe984e33e87cdaa4e5c1ce71e82e9cbce239a9",
+    "rc5-upgrade-restarted.jpg": "329cec33784f3ebdad45a81d8cb548ce29093aee75a02a2635d3076ee750b010",
+    "rc5-upgrade-memory-before.jpg": "134a688746f9e3940a502525d40fc2d9c692b5768929383637df0b9fac472402",
+    "022rc3-upgrade-memory-before.jpg": "2dff766170a5e6580eeca6aa42962feef9a9b7293299ae6397670a037ccfcf18",
+    "rc5-fresh-status.jpg": "33698496370feee62472759e99d509bc4cc0c13b64be9a6d23e70c27e54d2d74",
+    "rc2-upgrade-restarted.jpg": "4aa4ff8b8750bd60deb5deaed814fd67aac9be6bc2ac230540d024bc223013ca",
+    "020-upgrade-restarted.jpg": "14d33a045488f5e5366c028d6cbef9b3c80343b582fe316f8ba9f46bf6d2fed0",
+    "022rc2-upgrade-restarted.jpg": "4e0fa4049c79c2c9b42ad3ba484bb46581cb7463fd1017a0df235c18417c1c15",
+    "022rc3-fresh-add.jpg": "97f5c0c0694695e3d12bb812608593cc01df232f034bc04596f43ed4ba293c5d",
+    "rc1-fresh-status.jpg": "d48f56895bc2b8dc41bec2bbf806d1725c6769d04ec1a7357a0c50f2eac92a01",
+    "rc2-upgrade-memory-before.jpg": "532fc901e3edd6276dde999173baa4c78e6f4b13d9081a3c79b0fd38f43f4743",
+    "rc1-upgrade-retained.jpg": "d289b045c6bf891e2221be0253f099304f21f5c0fdef90e615090e7f78076aa0",
+    "020-fresh-status.jpg": "f87246b0fbb5bb2c926fb1b38c68eef6fada11436f805ff85e2a169a1e4fbe2b",
+    "rc2-fresh-add.jpg": "37786732b98c3c33476cf010b26ea8d706a7333ecc8fc14dd31befbbd024f987",
+    "rc5-upgrade-retained.jpg": "44f6e29310dae225dd41fc989016926812bd8c64157b4dbe9721780dd995e76e",
+    "rc5-fresh-add.jpg": "313ad1e570422e4a3a87b378825576e9fb4ef846dab97517cbd98215bfa52c12",
+    "rc1-fresh-add.jpg": "49af80639b381af58fc89ea8c5b8d7d0d1baad1a2b8a721a37bed363401857dd",
+    "020-upgrade-memory-before.jpg": "09bb1ace97288fd077c03e47942c5fc2316616b01b18a6aafddf2d5db8ab6cb6"
+  },
+  "limitations": [
+    "Isolated Web profiles, not native Desktop OS integration or cloud-model quality.",
+    "No alpha or arbitrary master compatibility claim.",
+    "Loopback candidate metadata is aged for acceptance; real npm release-age policy is outside these UI checks."
+  ],
+  "fixtureNotes": [
+    "Documents and agents-home are isolated alongside HOME and Mnemon data.",
+    "Initial upgrade fixture setup failed on a commented empty YAML list; the harness was corrected and failed fixtures recreated before acceptance.",
+    "No paid API or personal Desktop data used."
+  ]
+}
