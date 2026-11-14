@@ -195,6 +195,7 @@ export const Config: z<Config> = z.object({
   // resolve to the custom scope instead of being silently reset to global.
   storageScope: z.union(['global', 'workspace', 'custom', 'workspaces'] as const),
   runtimeUserScope: z.union(['storage', 'global'] as const).default('storage'),
+  excludedWorkspaces: z.array(z.string()).default([]),
   cliPath: z.string(),
   dataDir: z.string(),
   customPackId: z.string(),
@@ -414,6 +415,7 @@ export function resolveConfig(config: Config = {}): ResolvedConfig {
   return {
     storageScope,
     runtimeUserScope,
+    excludedWorkspaces: [...new Set((config.excludedWorkspaces ?? []).map(path => path.trim()).filter(Boolean))],
     ...(cliPath === undefined ? {} : { cliPath }),
     ...(dataDir === undefined ? {} : { dataDir }),
     ...(store === undefined ? {} : { store }),

@@ -326,6 +326,7 @@ details[open] > summary .providerChevron { transform: rotate(180deg); }
 .editor { display: flex; min-width: 0; flex-direction: column; gap: 12px; border-radius: var(--dsw-radius-lg); padding: 14px 16px; background: var(--dsw-alias-bg-module-platform); }
 .providerServicePrompt,
 .editorNote { margin: 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
+.workspacePaths { width: 100%; min-width: 0; box-sizing: border-box; resize: vertical; padding: 8px 10px; border: 1px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-module-platform); line-height: 20px; }
 .editorHeading h3 { margin: 0; font-size: 14px; font-weight: 500; line-height: 22px; }
 .editorHeading p { margin: 2px 0 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
 .editor .toggleRow { padding: 10px 0; border-top: .5px solid var(--dsw-alias-border-l3); border-bottom: .5px solid var(--dsw-alias-border-l3); }

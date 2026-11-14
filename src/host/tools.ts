@@ -10,6 +10,7 @@ import { unofferedViewId } from './view-presentation.ts'
 import { agentScope, type MnemonAgentRuntimeSource, type MnemonRuntimeGraph } from './runtime.ts'
 import { isSubagent, MnemonSubagentCoordinator } from './subagent.ts'
 import { memoryReadPresentation, memoryWritePresentation, namedToolPresentation } from './activity-presentation.ts'
+import { assertAgentMemoryIncluded } from './workspace-exclusion.ts'
 
 const text = (value: unknown): Array<{ type: 'text'; text: string }> => [{
   type: 'text',
@@ -118,7 +119,11 @@ export function registerTools(ctx: HostContextShape, runtimeSource: MnemonAgentR
 
 /** What the handlers of every family share: the calling Agent's runtime graph and Sources, its checks, and a Source Action call. */
 function toolHelpers(runtimeSource: MnemonAgentRuntimeSource) {
-  const runtimeFor = (exec: ToolExecution): MnemonRuntimeGraph => runtimeSource.forAgent(requireAgent(exec))
+  const runtimeFor = (exec: ToolExecution): MnemonRuntimeGraph => {
+    const agent = requireAgent(exec)
+    assertAgentMemoryIncluded(runtimeSource, agent)
+    return runtimeSource.forAgent(agent)
+  }
   const sourceFor = (exec: ToolExecution, typeId: string) => {
     const graph = runtimeFor(exec)
     return graph.source(typeId, agentScope(requireAgent(exec), graph.config))

@@ -4,6 +4,7 @@ import type { MnemonLifecycle } from './lifecycle.ts'
 import type { LiveMnemonRuntime } from './runtime.ts'
 import type { MnemonGitHubAuth } from './github-auth.ts'
 import { assertParticipation } from './access.ts'
+import { WORKSPACE_MEMORY_EXCLUDED } from './workspace-exclusion.ts'
 import { sourceFailure } from './source-session.ts'
 import { mainStrategyTypeId } from './main-strategy.ts'
 import { strategyDrives } from './strategy-workflows.ts'
@@ -51,9 +52,11 @@ function scoped(runtime: LiveMnemonRuntime, payload: Record<string, unknown>, li
 }
 type ScopedRuntime = ReturnType<typeof scoped>
 function requireAligned(runtime: ScopedRuntime): void {
+  if (runtime.participation.excluded) throw new Error(WORKSPACE_MEMORY_EXCLUDED)
   if (!runtime.aligned) throw new Error('the selected memory workspace differs from the current session; align the workbench before running an Agent-backed operation')
 }
 function requireWritable(runtime: ScopedRuntime): void {
+  if (runtime.participation.excluded) throw new Error(WORKSPACE_MEMORY_EXCLUDED)
   if (!runtime.graph.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only (writeEnabled: false)')
 }
 function requireCapability(runtime: ScopedRuntime, typeId: string, capability: MemoryCapability): void {
@@ -369,6 +372,7 @@ export function createReadHandler(input: LiveMnemonRuntime, lifecycle?: MnemonLi
           }
           return success({
             ...status,
+            writeEnabled: !runtime.participation.excluded && status.writeEnabled === true,
             ...(versions === undefined ? {} : { dshMnemonVersion: versions.runningVersion }),
             ...(restartPending === undefined ? {} : { restartPending }),
             ...(lifecycle === undefined ? {} : { lifecycle: lifecycle.snapshot(runtime.scope.sessionId, isWorkspaceStorageScope(runtime.graph.config.storageScope) ? runtime.scope.workspaceId : undefined) }),
@@ -377,6 +381,8 @@ export function createReadHandler(input: LiveMnemonRuntime, lifecycle?: MnemonLi
             memorySystem: composition,
             storage: runtime.graph.storage.catalog(runtime.scope.workspaceId),
             workspaceContext: {
+              participation: runtime.participation,
+              workspaces: input.workspaceParticipations(),
               mode: runtime.graph.config.storageScope, selectedRoot: runtime.selectedRoot, effectiveRoot: runtime.effectiveRoot, aligned: runtime.aligned,
               ...(runtime.selectedWorkspace === undefined ? {} : { selectedWorkspace: runtime.selectedWorkspace }),
               ...(runtime.effectiveWorkspace === undefined ? {} : { effectiveWorkspace: runtime.effectiveWorkspace }),

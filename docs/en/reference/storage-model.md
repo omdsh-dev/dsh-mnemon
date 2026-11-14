@@ -31,6 +31,10 @@ recall active Memory Spaces
 follow an exact cold reference when full text is required
 ```
 
+## Workspace participation
+
+Storage scope chooses where data lives; [`excludedWorkspaces`](./configuration.md#excluding-a-workspace-from-memory) chooses which workspace conversations may use Mnemon. Exclusion defaults to an empty list, applies across all storage scopes, and includes child agents even when they use a different cwd. Existing data and conversation history remain intact. The workbench marks exclusions and permits inspection; removing an exclusion restores memory participation.
+
 ## Cross-agent sharing boundary
 
 Sharing does not broadcast conversations or files. Mnemon-enabled agents can share durable Native facts when each integrates Mnemon and can access the same storage root and recognized Stores. Third-party Providers share through their own workspace, user, bank, project or container scope. Runtime and Documents do not automatically enter other agents' context.

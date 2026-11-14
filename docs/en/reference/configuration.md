@@ -19,7 +19,7 @@ As DSH does for every plugin that carries its own configuration, the Web interfa
 | Where in the UI | Settings | Saved as |
 |---|---|---|
 | Memory composition | Main strategy; one switch per memory source and enhancement; each component's declared options | `memoryView.strategyTypeId` and `memoryView.entries.<entry>.config`; each component's on/off is its Entry's `disabled` row, written by DSH's plugin manager |
-| Storage | Storage scope, data directory, backup and migration; the Git sync switch | `storageScope`, `dataDir`, `syncEnabled` |
+| Storage | Storage scope, data directory, excluded workspaces, backup and migration; the Git sync switch | `storageScope`, `dataDir`, `excludedWorkspaces`, `syncEnabled` |
 | Interface | Memory System opens in, turn memory bar, save to memory | `displayMode`, `conversationInteraction.turnBar`, `conversationInteraction.saveAction` |
 | Runtime memory's page | User profile scope | `runtimeUserScope` |
 | Memory Spaces' page | Memory providers; Mnemon Native embedding (auto, Ollama or OpenAI-compatible) | The Provider registry in `state/memory-providers.json`; `embedding` |
@@ -36,6 +36,7 @@ OpenViking user keys without admin access can opt into one-owner discovery using
 mnemon:
   storageScope: global # global | workspace | custom | workspaces
   runtimeUserScope: storage # storage | global
+  excludedWorkspaces: [] # Optional existing absolute workspace paths; ~ is supported
   # dataDir: ~/mnemon-data       # required for custom
   # cliPath: /opt/homebrew/bin/mnemon
   # store: legacy-store          # compatibility discovery hint, not a regular routing target
@@ -95,6 +96,7 @@ mnemon:
 |---|---:|---|---|
 | `storageScope` | `global` | `global` / `workspace` / `custom` / `workspaces` | Controls the root for Runtime, Documents, Memory Spaces, and reserved state as one unit |
 | `runtimeUserScope` | `storage` | `storage` / `global` | Keeps USER.md in the selected storage root, or overlays the global USER.md while project MEMORY.md and the other layers stay selected-scope |
+| `excludedWorkspaces` | `[]` | List of existing absolute directory paths | Opts specific workspaces and their children out of memory without deleting data |
 | `dataDir` | unset | absolute path, `~`, or `~/...` | Required for `custom`; optional central root for `workspaces`; legacy configurations that set only this option automatically resolve to `custom` |
 | `cliPath` | auto-discovered | executable path | Explicitly selects the Mnemon CLI |
 | `store` | unset | `[A-Za-z0-9][A-Za-z0-9_-]*` | Compatibility discovery/preference hint for legacy Stores; semantic operations are routed through Memory Spaces |
@@ -235,6 +237,14 @@ These pure recall-quality policies belong to the Memory Spaces Source. Configura
 DSH owns browser authentication or pairing and Host/Origin validation. Remote pages use the namespaced API Gateway; local loopback clients and DSH desktop windows (`dsh-app://app/`) use their own channels, and an application page counts as remote only when DSH declares a transport for it that does not own the Host. Mnemon's Gateway projection separately enforces `remoteAccess`: `read-only` allows ordinary reads, narrow activation and settings inspection, but rejects writes, ZIP operations, View mutations and settings changes. Settings snapshots report `writable: false` without the `trusted-host` grant. Restart DSH after changing this startup-only policy. DSH `trustedHosts` does not replace HTTPS or deployment access controls. `writeEnabled=false` is a product-level read-only mode, not a substitute for transport authentication.
 
 For the complete proxy, launch-token, trusted-authority, restart and verification workflow, see [Cloud-hosted WebUI](../guides/operations.md#cloud-hosted-webui).
+
+### Excluding a workspace from memory
+
+In **Storage → Workspaces excluded from memory**, enter one path per line and apply. The default empty list changes nothing. Paths support `~`, are canonicalized through real paths (including symlink aliases), and match the workspace directory exactly; this is not a glob or a recursive directory rule. Session workspace identity comes from DSH's session header, independently of the selected storage scope. A child inherits its parent's workspace decision even if the child's cwd differs; an unloaded parent's workspace can be resolved from DSH's workspace/session catalog.
+
+An excluded conversation receives no new memory View, prompt guidance, recall cues, or memory tools. Its automatic review, skill evolution, capacity maintenance, and memory writes are disabled. The workbench marks the workspace as excluded, permits inspection of existing data, and refuses memory writes and Agent-backed assistance. Configuration remains editable so exclusion can be removed. Invalid, missing, or inaccessible directories are ignored and reported by the workbench; an unknown workspace or parent workspace is reported without silently disabling unrelated sessions.
+
+Saving applies to subsequent operations. Already delivered conversation history and completed writes are not erased, and an operation already dispatched to a Provider is not rolled back. Removing the path restores participation on the next turn; no migration or data deletion is involved. This is a Mnemon participation setting, not a filesystem or Host security sandbox.
 
 ## Storage Scopes
 

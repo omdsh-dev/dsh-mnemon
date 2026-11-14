@@ -2,6 +2,7 @@ import type { CommandDefinition, CommandInvocation, CommandResult, CommandServic
 import type { Insight, MemorySpacesStatus } from 'dsh-mnemon-source-memory-spaces/contracts'
 import { agentScope, type MnemonAgentRuntimeSource } from './runtime.ts'
 import { mutationResultCommitted } from './receipts.ts'
+import { assertAgentMemoryIncluded } from './workspace-exclusion.ts'
 import type { MnemonSubagentCoordinator } from './subagent.ts'
 
 /** What a memory saved without a vector means, in the words the WebUI receipts use (#388). */
@@ -39,6 +40,7 @@ function splitInput(rawInput: string): { verb: string; argument: string } {
 }
 
 async function execute(serviceOrSource: MnemonAgentRuntimeSource, coordinator: MnemonSubagentCoordinator, invocation: CommandInvocation): Promise<CommandResult> {
+  assertAgentMemoryIncluded(serviceOrSource, invocation.agent)
   const graph = serviceOrSource.forAgent(invocation.agent)
   const source = graph.source('memory-spaces', agentScope(invocation.agent, graph.config))
   const { verb, argument } = splitInput(invocation.rawInput)

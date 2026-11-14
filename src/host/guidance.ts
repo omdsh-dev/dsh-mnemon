@@ -1,6 +1,7 @@
-import type { HostContextShape } from './dsh.ts'
+import type { HostAgent, HostContextShape } from './dsh.ts'
 import type { ResolvedConfig } from './config.ts'
 import type { ComposableMemoryView } from '../core/contracts/index.ts'
+import type { MnemonAgentRuntimeSource } from './runtime.ts'
 
 export const GUIDANCE_SECTION_NAME = 'mnemon:routing'
 export const RUNTIME_MEMORY_CONTEXT_NAME = 'mnemon:runtime-memory'
@@ -24,13 +25,13 @@ export function applyMemoryViewGuidance<T extends { sections: Array<{ name: stri
 }
 
 /** Register once the prompt service is active; Cordis re-runs this if the service is replaced. */
-export function registerGuidance(ctx: HostContextShape, config?: Pick<ResolvedConfig, 'routingGuidance'>): void {
+export function registerGuidance(ctx: HostContextShape, config?: Pick<ResolvedConfig, 'routingGuidance'>, runtime?: Pick<MnemonAgentRuntimeSource, 'memoryParticipation'>): void {
   ctx.inject(['systemPrompt'], prompted => {
-    const prompt = prompted.get('systemPrompt') as { section(value: { name: string; order: number; text: () => string }): unknown }
+    const prompt = prompted.get('systemPrompt') as { section(value: { name: string; order: number; text: (context?: { agent?: HostAgent }) => string }): unknown }
     prompt.section({
       name: GUIDANCE_SECTION_NAME,
       order: 150,
-      text: () => config?.routingGuidance === false ? '' : ROUTING_GUIDANCE,
+      text: context => config?.routingGuidance === false || context?.agent !== undefined && runtime?.memoryParticipation?.(context.agent).excluded ? '' : ROUTING_GUIDANCE,
     })
   })
 }

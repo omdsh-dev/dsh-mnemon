@@ -18,11 +18,14 @@ import { allowsParticipation } from './access.ts'
 import { mainStrategyTypeId } from './main-strategy.ts'
 import type { CompileMemoryGenerationOptions } from '../core/composition.ts'
 import { MemoryExecutions } from './memory-executions.ts'
+import { WorkspaceMemoryPolicy } from './workspace-exclusion.ts'
+import type { WorkspaceMemoryParticipation } from './protocol.ts'
 
 export interface MnemonRuntimeGraph {
   readonly config: ResolvedConfig
   readonly allowLinkedSkillUpdates?: boolean
   readonly directory: string
+  readonly workspaceRoot?: string
   readonly storage: StorageScopeInspector
   readonly packs: MnemonPackManager
   readonly sync: MnemonGitSync
@@ -39,6 +42,7 @@ export interface MnemonAgentRuntimeSource {
   readonly config: ResolvedConfig
   readonly executions: MemoryExecutions
   forAgent(agent: HostAgent, options?: { independent?: boolean }): MnemonRuntimeGraph
+  memoryParticipation?(agent: HostAgent): WorkspaceMemoryParticipation
   bindAgentRuntime(agentId: string, graph: MnemonRuntimeGraph): () => void
   /** Synchronous notification after a committed live configuration swap. */
   onChanged?(listener: () => void): () => void
@@ -92,7 +96,7 @@ export function createRuntimeGraph(config: ResolvedConfig, workspaceRoot: string
   const packs = new MnemonPackManager(root, config, () => {}, () => new Date())
   let disposed = false
   return {
-    config, allowLinkedSkillUpdates, directory, storage: new StorageScopeInspector(root, config), packs, sync: new MnemonGitSync(root, config, packs),
+    config, allowLinkedSkillUpdates, directory, ...(workspaceRoot === undefined ? {} : { workspaceRoot }), storage: new StorageScopeInspector(root, config), packs, sync: new MnemonGitSync(root, config, packs),
     reviews: new MnemonReviewLedger(root),
     memoryComposition: attachment.host, composableTurns,
     source: (type, scope = { storage: config.storageScope, ...(workspaceRoot === undefined ? {} : { workspaceId: workspaceRoot }) }) => new SourceSession(attachment.host, composableTurns, type, scope),
@@ -160,6 +164,7 @@ export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
   private autoBackupView: (() => MnemonSyncAutoBackup | undefined) | undefined
   private closed = false
   private readonly changeListeners = new Set<() => void>()
+  private readonly workspacePolicy: WorkspaceMemoryPolicy
 
   readonly config: ResolvedConfig
   readonly storage: StorageScopeInspector
@@ -170,6 +175,7 @@ export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
   constructor(initial: MnemonRuntimeGraph, private readonly workspaceRegistry: HostWorkspaceRegistry | undefined, private readonly agents: Pick<HostAgentsService, 'get'> | undefined, private readonly extensions: MemoryRuntime) {
     this.current = initial
     this.config = liveProxy(() => this.current.config)
+    this.workspacePolicy = new WorkspaceMemoryPolicy(() => this.config.excludedWorkspaces, agents, workspaceRegistry)
     this.storage = liveProxy(() => this.current.storage)
     this.packs = liveProxy(() => this.current.packs)
     this.sync = liveProxy(() => this.current.sync)
@@ -264,6 +270,10 @@ export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
     for (const graph of graphs) graph.dispose()
   }
 
+  memoryParticipation(agent: HostAgent): WorkspaceMemoryParticipation { return this.workspacePolicy.forAgent(agent) }
+  workspaceParticipation(path?: string): WorkspaceMemoryParticipation { return this.workspacePolicy.forWorkspace(path) }
+  workspaceParticipations() { return (this.workspaceRegistry?.list() ?? []).map(workspace => ({ id: workspace.id, participation: this.workspaceParticipation(workspace.path) })) }
+
   /** Resolve the runtime that must serve one Agent execution. */
   forAgent(agent: HostAgent, options: { independent?: boolean } = {}): MnemonRuntimeGraph {
     this.assertOpen()
@@ -299,6 +309,7 @@ export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
     aligned: boolean
     /** The request names a session whose Agent is loaded, so work can run in that conversation. */
     liveSession: boolean
+    participation: WorkspaceMemoryParticipation
   } {
     this.assertOpen()
     const effectiveAgent = this.agent(request.sessionId)
@@ -325,6 +336,8 @@ export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
       effectiveRoot,
       aligned: selectedRoot === effectiveRoot,
       liveSession: effectiveAgent !== undefined,
+      participation: effectiveAgent !== undefined && selectedWorkspace?.path === effectiveWorkspace?.path
+        ? this.memoryParticipation(effectiveAgent) : this.workspaceParticipation(selectedWorkspace?.path),
     }
   }
 
@@ -350,6 +363,7 @@ export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
    * because its runtime was replaced is left to the runtime that replaced it.
    */
   private rediscoverProviders(graph: MnemonRuntimeGraph): void {
+    if (this.workspaceParticipation(graph.workspaceRoot).excluded) return
     if (!graph.config.writeEnabled || !allowsParticipation(graph.config, 'memory-spaces', 'maintain', 'automatic')) return
     const directory = resolve(graph.directory)
     const controller = new AbortController()

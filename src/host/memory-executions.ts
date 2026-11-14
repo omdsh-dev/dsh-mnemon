@@ -3,6 +3,7 @@ import type { ComposableMemoryTurn } from '../core/turns.ts'
 import type { DelegatedMemoryView } from './agent-memory-turn.ts'
 import type { HostAgent } from './dsh.ts'
 import { agentScope, type MnemonAgentRuntimeSource, type MnemonRuntimeGraph } from './runtime.ts'
+import { assertAgentMemoryIncluded } from './workspace-exclusion.ts'
 
 interface MemoryExecution {
   readonly graph: MnemonRuntimeGraph
@@ -26,7 +27,7 @@ export class MemoryExecutions {
   private readonly pending = new Set<ExecutionSlot>()
   private closed = false
 
-  constructor(private readonly runtime: Pick<MnemonAgentRuntimeSource, 'forAgent' | 'bindAgentRuntime'>) {}
+  constructor(private readonly runtime: Pick<MnemonAgentRuntimeSource, 'forAgent' | 'bindAgentRuntime' | 'memoryParticipation'>) {}
 
   async turn(agent: HostAgent, turn: number, signal: AbortSignal, delegation?: DelegatedMemoryView, independent = false): Promise<MemoryExecution> {
     signal.throwIfAborted()
@@ -45,6 +46,7 @@ export class MemoryExecutions {
   }
 
   async workflow(agent: HostAgent, operation: string, signal: AbortSignal): Promise<MemoryExecution & { signal: AbortSignal }> {
+    assertAgentMemoryIncluded(this.runtime, agent)
     this.assertOpen()
     signal.throwIfAborted()
     let slot = this.slots.get(agent.id)
@@ -92,6 +94,7 @@ export class MemoryExecutions {
   }
 
   private open(agent: HostAgent, kind: ExecutionSlot['kind'], turnId: string, purpose: string, delegation?: DelegatedMemoryView, independent = false): ExecutionSlot {
+    assertAgentMemoryIncluded(this.runtime, agent)
     this.assertOpen()
     const previous = this.slots.get(agent.id)
     const done = deferred<void>()
@@ -117,6 +120,7 @@ export class MemoryExecutions {
     this.pending.add(slot)
     void (async () => {
       await previous?.done
+      assertAgentMemoryIncluded(this.runtime, agent)
       slot.controller.signal.throwIfAborted()
       this.assertOpen()
       const graph = delegation?.graph ?? (independent ? this.runtime.forAgent(agent, { independent: true }) : this.runtime.forAgent(agent))

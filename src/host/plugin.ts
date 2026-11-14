@@ -195,7 +195,7 @@ export function apply(rawContext: unknown, rawConfig: MnemonConfig | LiveHostCon
     return registerTools(ctx, runtime, coordinator, extensions, loader?.await?.())
   }, 'dsh-mnemon: Source tool lifecycle')
   registerCommands(ctx.commands, runtime, coordinator)
-  registerGuidance(ctx, resolved)
+  registerGuidance(ctx, resolved, runtime)
   ctx.inject(['connection', 'webServer'], (webContext) => {
     // `inject` guarantees the service at runtime; retain the defensive guard
     // because HostContextShape also models profiles where it is absent.
