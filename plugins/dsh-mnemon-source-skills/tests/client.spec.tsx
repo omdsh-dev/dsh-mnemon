@@ -3,10 +3,12 @@ import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { URL as NodeURL } from 'node:url'
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
 import { strategy } from './fixture.ts'
+
+configure({ asyncUtilTimeout: 5000 })
 
 // Load the installed Core's actual DSH browser artifact; no repository source alias.
 vi.mock('dsh-mnemon/client', async () => {
@@ -27,6 +29,15 @@ import { css, translate } from '../src/client/presentation.ts'
 import { skillsPageClient } from '../src/client/api.ts'
 import { compareRuns } from '../src/client/evolution-page.tsx'
 import type { BacktestRun, CaseResult, EvalCase, ReviewRecordInput, SkillSummary, TrashEntry } from '../src/contracts.ts'
+
+globalThis.ResizeObserver ??= class {
+  constructor(private readonly callback: ResizeObserverCallback) {}
+  observe(target: Element): void {
+    this.callback([{ target, borderBoxSize: [{ inlineSize: 0, blockSize: 0 }] } as unknown as ResizeObserverEntry], this as unknown as ResizeObserver)
+  }
+  unobserve(): void {}
+  disconnect(): void {}
+} as unknown as typeof ResizeObserver
 
 const t = translate('en')
 /** An accessible name made of these parts in order, however its markup spaces them. */
@@ -1154,5 +1165,53 @@ describe('model pickers', () => {
     await screen.findByText('Group them by component from now on')
     const asideAfter = document.querySelector('aside')
     expect(asideAfter?.parentElement?.className).toBe(splitClassBefore)
+  })
+
+  it('never displays stale skill actions or overwrites another skill while switching skills with an in-flight detail read', async () => {
+    const projectFile = join(directory, 'workspace', '.dsh', 'skills', 'release-notes', 'SKILL.md')
+    const userFile = skillPath()
+    mkdirSync(join(directory, 'workspace', '.dsh', 'skills', 'release-notes'), { recursive: true })
+    writeFileSync(projectFile, '---\nname: release-notes\ndescription: Project release notes\n---\nProject-only body.\n')
+    writeFileSync(userFile, '---\nname: release-notes\ndescription: User release notes\n---\nUser-only body.\n')
+
+    let resolveUserSkill: (() => void) | undefined
+    const delayed = new Proxy(management, {
+      get: (target, prop, receiver) => {
+        if (prop !== 'read') return Reflect.get(target, prop, receiver)
+        return async (operation: string, input: unknown) => {
+          const key = (input as { key?: string } | null)?.key
+          if (operation === 'skill' && key === 'user-dsh:release-notes' && resolveUserSkill === undefined) {
+            await new Promise<void>(resolve => { resolveUserSkill = resolve })
+          }
+          return target.read(operation as never, input as never)
+        }
+      },
+    })
+
+    render(
+      <SkillsSourcePage
+        sourceTypeId="skills"
+        sourceInstanceKey="source:skills"
+        sourceInstances={[]}
+        locale="en"
+        writable
+        management={delayed}
+        navigationInput={{ seed: 'skill:project-dsh:release-notes', nonce: 1 }}
+      />,
+    )
+    await screen.findByText('Project-only body.')
+
+    const userRow = screen.getAllByRole('button', { name: /release-notes/u })
+      .find(button => button.textContent?.includes('User release notes'))
+    expect(userRow).toBeDefined()
+    fireEvent.click(userRow!)
+
+    // While user-dsh:release-notes is still loading, project-dsh:release-notes detail and Edit action must not remain interactive.
+    expect(screen.queryByText('Project-only body.')).toBeNull()
+    expect(screen.queryByRole('button', { name: t('common.edit') })).toBeNull()
+
+    resolveUserSkill?.()
+    await screen.findByText('User-only body.')
+    expect(readFileSync(userFile, 'utf8')).toContain('User-only body.')
   })
 })

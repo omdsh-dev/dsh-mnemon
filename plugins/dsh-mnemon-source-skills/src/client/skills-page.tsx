@@ -92,7 +92,7 @@ export function SkillsPage(props: { context: SkillsPageContext; location: Skills
           </>}>{t('skills.emptyBody')}</Empty>
         : current === undefined
           ? <Empty glyph="✦" title={t('skills.select')}>{t('skills.selectBody')}</Empty>
-          : <SkillDetail context={context} skillKey={current.key} stats={catalog.stats[current.name]} onDeleted={() => setSelected(undefined)} />}
+          : <SkillDetail key={current.key} context={context} skillKey={current.key} stats={catalog.stats[current.name]} onDeleted={() => setSelected(undefined)} />}
     </div>
     {creating && <CreateDialog context={context} roots={catalog.roots.map(root => root.kind)} onClose={() => setCreating(false)} onCreated={skill => { setCreating(false); setSelected(skill.key); context.refresh() }} />}
   </div>
@@ -148,8 +148,8 @@ function SkillRow(props: { context: SkillsPageContext; skill: SkillSummary; stat
 function SkillDetail(props: { context: SkillsPageContext; skillKey: string; stats: Stats; onDeleted: () => void }): JSX.Element {
   const t = useT()
   const { context, stats } = props
-  const [skill, setSkill] = useState<(SkillDocument & { versions: SkillVersion[] }) | null>(null)
-  const [editing, setEditing] = useState<string | null>(null)
+  const [loadedSkill, setLoadedSkill] = useState<(SkillDocument & { versions: SkillVersion[] }) | null>(null)
+  const [editing, setEditing] = useState<{ key: string; name: string; hash: string; original: string; text: string } | null>(null)
   const [improving, setImproving] = useState(false)
   const [busy, setBusy] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -163,10 +163,12 @@ function SkillDetail(props: { context: SkillsPageContext; skillKey: string; stat
   }, [props.skillKey])
   useEffect(() => {
     let active = true
-    void context.client.skill(props.skillKey).then(value => { if (active) setSkill(value) }).catch(context.fail)
+    void context.client.skill(props.skillKey).then(value => { if (active) setLoadedSkill(value) }).catch(context.fail)
     return () => { active = false }
   }, [context.client, props.skillKey, context.revision, reload])
+  const skill = loadedSkill?.key === props.skillKey ? loadedSkill : null
   if (skill === null) return <Busy label={t('common.loading')} />
+  const activeEditing = editing?.key === skill.key ? editing : null
   const write = async (operation: () => Promise<unknown>) => {
     setBusy(true)
     try { await operation(); setReload(value => value + 1); context.refresh() } catch (error) { context.fail(error) } finally { setBusy(false) }
@@ -187,7 +189,7 @@ function SkillDetail(props: { context: SkillsPageContext; skillKey: string; stat
       </div>
       <div className={css.skDetailActions}>
         {usable && <Button variant="outline" size="sm" onClick={() => context.useSkill(skill.name)}>{t('skills.use')}</Button>}
-        <Button variant="outline" size="sm" disabled={!context.writable || busy || skill.readOnly === true} onClick={() => setEditing(skill.content)}>{t('common.edit')}</Button>
+        <Button variant="outline" size="sm" disabled={!context.writable || busy || skill.readOnly === true} onClick={() => setEditing({ key: skill.key, name: skill.name, hash: skill.hash, original: skill.content, text: skill.content })}>{t('common.edit')}</Button>
         <MoreMenu label={t('common.more')} items={more} onSelect={id => id === 'improve' ? setImproving(true) : setDeleting(true)} />
       </div>
     </header>
@@ -221,11 +223,11 @@ function SkillDetail(props: { context: SkillsPageContext; skillKey: string; stat
         <div className={css.skResources}>{skill.resources!.map(file => <code key={file}><SkillPath path={file} /></code>)}</div>
       </Fold>}
     </div>
-    {editing !== null && <SidebarModal wide title={t('editor.title', { name: skill.name })} busy={busy} onClose={() => setEditing(null)} footer={<>
+    {activeEditing !== null && <SidebarModal wide title={t('editor.title', { name: activeEditing.name })} busy={busy} onClose={() => setEditing(null)} footer={<>
       <Button variant="ghost" onClick={() => setEditing(null)}>{t('common.cancel')}</Button>
-      <Button variant="primary" disabled={busy || editing === skill.content} onClick={() => void write(async () => { await context.client.saveSkill(skill.key, editing, skill.hash); setEditing(null) })}>{busy ? t('common.saving') : t('common.save')}</Button>
+      <Button variant="primary" disabled={busy || activeEditing.text === activeEditing.original} onClick={() => void write(async () => { await context.client.saveSkill(activeEditing.key, activeEditing.text, activeEditing.hash); setEditing(null) })}>{busy ? t('common.saving') : t('common.save')}</Button>
     </>}>
-      <textarea className={css.skEditor} spellCheck={false} value={editing} onChange={event => setEditing(event.target.value)} aria-label={t('diff.code')} />
+      <textarea className={css.skEditor} spellCheck={false} value={activeEditing.text} onChange={event => setEditing(current => current === null ? null : { ...current, text: event.target.value })} aria-label={t('diff.code')} />
     </SidebarModal>}
     {improving && <ImproveDialog context={context} name={skill.name} onClose={() => setImproving(false)} />}
     {comparing !== null && <SidebarModal wide title={t('versions.compareTitle', { time: stamp(comparing.version.createdAt) })} onClose={() => setComparing(null)}>
