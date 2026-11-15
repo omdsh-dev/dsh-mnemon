@@ -236,6 +236,42 @@ describe('registering its own settings', () => {
       vi.resetModules()
     }
   })
+
+  it('renders and saves Memory Spaces settings beside published dsh-mnemon 0.5.46 client exports without post-0.5.46 controls', async () => {
+    vi.doMock('dsh-mnemon/client', async () => ({
+      ...await artifact(),
+      AdvancedSection: undefined,
+      SelectRow: undefined,
+      SettingRow: undefined,
+      SettingSelect: undefined,
+    }))
+    vi.resetModules()
+    try {
+      const { MemorySpacesSettings: StandaloneSettings } = await import('../src/client/settings.tsx')
+      const read = async (operation: string) => operation === 'provider-services' ? { providers: [], items: [], generatedAt: 'now' } : { commandFound: true }
+      const { lent, set, changed } = host({ storageScope: 'global' }, { read })
+      const { container } = render(
+        <StandaloneSettings component={{ packageName: 'dsh-mnemon-source-memory-spaces', label: 'Memory Spaces', enabled: true }} writable language="en" host={lent} />,
+      )
+
+      const recallSection = container.querySelector('[data-settings-section="recall"]') as HTMLElement
+      expect(recallSection).not.toBeNull()
+      expect(recallSection.querySelectorAll('input, select, textarea, button:not([data-disclosure-open])')).toHaveLength(0)
+
+      fireEvent.click(within(recallSection).getByRole('button', { name: t('config.recallTitle') }))
+      fireEvent.change(within(recallSection).getByLabelText(t('config.defaultRecallLimit')), { target: { value: '18' } })
+      fireEvent.click(within(recallSection).getByRole('button', { name: new RegExp(`^${t('config.recallQualityPolicy')}`, 'u') }))
+      fireEvent.click(screen.getByRole('menuitem', { name: new RegExp(t('config.recallPolicy.exhaustive-v1').replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u') }))
+      fireEvent.click(within(recallSection).getByRole('button', { name: t('options.apply') }))
+
+      await waitFor(() => expect(set).toHaveBeenCalledWith('defaultRecallLimit', 18))
+      expect(set).toHaveBeenCalledWith('recallQuality', { policy: 'exhaustive-v1' })
+      expect(changed).toHaveBeenCalledOnce()
+    } finally {
+      vi.doMock('dsh-mnemon/client', artifact)
+      vi.resetModules()
+    }
+  })
 })
 
 
@@ -333,8 +369,10 @@ describe('Space policy, Recall & timeouts, and locale parity', { timeout: 20_000
     const recallSection = container.querySelector('[data-settings-section="recall"]') as HTMLElement | null
     expect(policySection).not.toBeNull()
     expect(policySection!.hasAttribute('data-open')).toBe(false)
+    expect(policySection!.querySelectorAll('input, select, textarea, button:not([data-disclosure-open])')).toHaveLength(0)
     expect(recallSection).not.toBeNull()
     expect(recallSection!.hasAttribute('data-open')).toBe(false)
+    expect(recallSection!.querySelectorAll('input, select, textarea, button:not([data-disclosure-open])')).toHaveLength(0)
 
     fireEvent.click(within(policySection!).getByRole('button', { name: new RegExp(t('config.policyTitle'), 'u') }))
     expect(policySection!.hasAttribute('data-open')).toBe(true)

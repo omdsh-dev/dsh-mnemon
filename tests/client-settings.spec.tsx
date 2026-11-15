@@ -140,8 +140,10 @@ describe('MnemonSettingsCard', () => {
     choose('Agent Teams 兼容模式', '受限任务 Agent 审查')
     await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['idleReview'], value: { agentTeams: 'scoped' } }]))
     expect(selector('Agent Teams 兼容模式').textContent).toBe('受限任务 Agent 审查')
-    // The limits are typed: Apply appears once one changes and refuses what the Host would.
+    // The limits are typed inside their collapsed disclosure: Apply appears once one changes and refuses what the Host would.
     expect(screen.queryByRole('button', { name: '应用' })).toBeNull()
+    expect(screen.queryByRole('spinbutton', { name: '最小审查间隔（秒）' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '审查参数' }))
     expect((screen.getByRole('spinbutton', { name: '最小审查间隔（秒）' }) as HTMLInputElement).value).toBe('300')
     fireEvent.change(screen.getByRole('spinbutton', { name: '每会话最多尝试次数' }), { target: { value: '-1' } })
     expect(screen.getByRole('alert').textContent).toBe('每会话最多尝试次数需在 0–200 之间')
@@ -2069,6 +2071,7 @@ describe('Phase 1 converged settings, deep-linking, and lent component host', ()
 
     const toggle = screen.getByRole('button', { name: translateEn('config.runtimeAdvanced') })
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByLabelText(translateEn('config.runtime.maintenanceMaxTokens'))).toBeNull()
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
     const tokensInput = screen.getByLabelText(translateEn('config.runtime.maintenanceMaxTokens')) as HTMLInputElement

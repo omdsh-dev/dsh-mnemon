@@ -1,9 +1,9 @@
 import { css as pageCss, languageChain, settingsTranslate, SourceTranslation, useT, type DshLocale } from './presentation.ts'
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type JSX, type ReactNode } from 'react'
-import { Button, IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type JSX, type ReactNode } from 'react'
+import { Button, IconChevronDownOutlineRegular, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
-  AdvancedSection, Callout, installMemoryComponentUI, MemorySourcePageFrame, memorySettingsStyles, message,
-  PanelActions, SelectField, SelectRow, SettingRow, ToggleRow, useLive, useStaged, WriteFailure,
+  Callout, installMemoryComponentUI, MemorySourcePageFrame, memorySettingsStyles, message,
+  PanelActions, SelectField, ToggleRow, useLive, useStaged, WriteFailure,
   type MemoryComponentHost, type MemoryComponentSettingsProps, type MemoryComponentUIContext,
 } from 'dsh-mnemon/client'
 import type { MemoryJsonValue } from 'dsh-mnemon/contracts'
@@ -241,9 +241,11 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
   const [status, setStatus] = useState<{ state: 'idle' | 'loading' | 'ready' | 'error'; value?: MnemonEmbeddingStatus; error?: string }>({ state: 'idle' })
   const [fill, setFill] = useState<EmbeddingFillState | undefined>(undefined)
   const [policyOpen, setPolicyOpen] = useState(() => page.section === 'policy')
+  const [recallOpen, setRecallOpen] = useState(() => page.section === 'recall')
   const statusRequest = useRef(0)
   useEffect(() => {
     if (page.section === 'policy') setPolicyOpen(true)
+    if (page.section === 'recall') setRecallOpen(true)
   }, [page.section])
   const on = page.component.enabled
   // As dsh-mnemon's isWorkspaceStorageScope, which lives in its Host protocol, outside its public client.
@@ -407,7 +409,9 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
     </section>
 
     <section className={`${css.panelSection} ${pageCss.settingsSection} ${pageCss.settingsPolicy}`} data-settings-section="policy" data-open={policyOpen ? '' : undefined} aria-labelledby="mnemon-spaces-policy">
-      <button type="button" className={pageCss.settingsPolicyToggle} aria-expanded={policyOpen} data-disclosure-open={policyOpen ? undefined : ''} onClick={() => setPolicyOpen(open => !open)}>
+      <button type="button" className={pageCss.settingsPolicyToggle} aria-expanded={policyOpen}
+        {...(policyOpen ? { 'aria-controls': 'mnemon-spaces-policy-body' } : {})}
+        data-disclosure-open={policyOpen ? undefined : ''} onClick={() => setPolicyOpen(open => !open)}>
         <span className={pageCss.settingsPolicyHeading}>
           <strong id="mnemon-spaces-policy">{t('config.policyTitle')}</strong>
           <small>{t('config.policyDescription')}</small>
@@ -417,7 +421,7 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
           <IconChevronDownOutlineRegular className={pageCss.smoothChevron} size={14} />
         </span>
       </button>
-      {policyOpen && <div className={`${pageCss.settingsPolicyBody} ${pageCss.inlineExpand}`}>
+      {policyOpen && <div id="mnemon-spaces-policy-body" className={`${pageCss.settingsPolicyBody} ${pageCss.inlineExpand}`}>
         <PlacementModeFieldset mode={effectivePolicyDraft.mode} radioGroupName="settings-persistence-mode" disabled={disabled || policyForm.saving} onChange={mode => policyForm.edit({ mode })} />
         <PlacementTargetControls draft={effectivePolicyDraft} providers={policyProviders} providerRadioGroupName="settings-strategy-provider" fieldLayout="settings" disabled={disabled || policyForm.saving} onChange={policyForm.edit} />
         <PanelActions dirty={policyForm.dirty} saving={policyForm.saving} invalid={placementPolicyProblem(effectivePolicyDraft, policyProviders, t)} failed={policyForm.failed} applied={policyForm.applied}
@@ -425,33 +429,92 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
       </div>}
     </section>
 
-    <AdvancedSection title={t('config.recallTitle')} section="recall" activeSection={page.section} className={`${pageCss.settingsSection} ${pageCss.settingsRecall}`}>
-      <p className={css.panelNote}>{t('config.recallDescription')}</p>
-      <div className={pageCss.settingsRows}>
-        <SettingRow htmlFor="mnemon-spaces-recall-limit" title={t('config.defaultRecallLimit')} hint={t('config.defaultRecallLimitHint')}>
-          <input id="mnemon-spaces-recall-limit" className={pageCss.settingsNumberInput} type="number" inputMode="numeric" min={1} max={50} step={1}
-            aria-label={t('config.defaultRecallLimit')} aria-invalid={!validRecallLimit(recallForm.draft.defaultRecallLimit)}
-            value={recallForm.draft.defaultRecallLimit} disabled={disabled || recallForm.saving}
-            onChange={event => recallForm.edit({ defaultRecallLimit: event.target.value })} />
-        </SettingRow>
-        <SelectRow id="mnemon-spaces-recall-policy" label={t('config.recallQualityPolicy')} value={recallForm.draft.policy} disabled={disabled || recallForm.saving}
-          options={RECALL_POLICY_IDS.map(id => ({
-            value: id,
-            label: t(`config.recallPolicy.${id}`),
-            detail: t(`config.recallPolicy.${id}.detail`),
-          }))}
-          onChange={policy => recallForm.edit({ policy })} />
-        <SettingRow htmlFor="mnemon-spaces-timeout-ms" title={t('config.timeoutMs')} hint={t('config.timeoutMsHint')}>
-          <input id="mnemon-spaces-timeout-ms" className={pageCss.settingsNumberInput} type="number" inputMode="numeric" min={100} max={120000} step={100}
-            aria-label={t('config.timeoutMs')} aria-invalid={!validTimeoutMs(recallForm.draft.timeoutMs)}
-            value={recallForm.draft.timeoutMs} disabled={disabled || recallForm.saving}
-            onChange={event => recallForm.edit({ timeoutMs: event.target.value })} />
-        </SettingRow>
-      </div>
-      <PanelActions dirty={recallForm.dirty} saving={recallForm.saving} invalid={recallProblem(recallForm.draft, t)} failed={recallForm.failed} applied={recallForm.applied}
-        disabled={disabled} t={t} onDiscard={recallForm.discard} onApply={() => { void recallForm.apply() }} />
-    </AdvancedSection>
+    <section className={`${css.panelSection} ${pageCss.settingsSection} ${pageCss.settingsRecall}`} data-settings-section="recall" data-open={recallOpen ? '' : undefined} aria-labelledby="mnemon-spaces-recall">
+      <button type="button" className={pageCss.settingsPolicyToggle} aria-expanded={recallOpen} aria-labelledby="mnemon-spaces-recall"
+        {...(recallOpen ? { 'aria-controls': 'mnemon-spaces-recall-body' } : {})}
+        data-disclosure-open={recallOpen ? undefined : ''} onClick={() => setRecallOpen(open => !open)}>
+        <span className={pageCss.settingsPolicyHeading}>
+          <strong id="mnemon-spaces-recall">{t('config.recallTitle')}</strong>
+          <small>{t('config.recallDescription')}</small>
+        </span>
+        <span className={pageCss.settingsPolicyMeta}>
+          <IconChevronDownOutlineRegular className={pageCss.smoothChevron} size={14} />
+        </span>
+      </button>
+      {recallOpen && <div id="mnemon-spaces-recall-body" className={`${pageCss.settingsPolicyBody} ${pageCss.inlineExpand}`}>
+        <div className={pageCss.settingsRows}>
+          <SpacesSettingRow htmlFor="mnemon-spaces-recall-limit" title={t('config.defaultRecallLimit')} hint={t('config.defaultRecallLimitHint')}>
+            <input id="mnemon-spaces-recall-limit" className={pageCss.settingsNumberInput} type="number" inputMode="numeric" min={1} max={50} step={1}
+              aria-label={t('config.defaultRecallLimit')} aria-invalid={!validRecallLimit(recallForm.draft.defaultRecallLimit)}
+              value={recallForm.draft.defaultRecallLimit} disabled={disabled || recallForm.saving}
+              onChange={event => recallForm.edit({ defaultRecallLimit: event.target.value })} />
+          </SpacesSettingRow>
+          <SpacesSelectRow id="mnemon-spaces-recall-policy" label={t('config.recallQualityPolicy')} value={recallForm.draft.policy} disabled={disabled || recallForm.saving}
+            options={RECALL_POLICY_IDS.map(id => ({
+              value: id,
+              label: t(`config.recallPolicy.${id}`),
+              detail: t(`config.recallPolicy.${id}.detail`),
+            }))}
+            onChange={policy => recallForm.edit({ policy })} />
+          <SpacesSettingRow htmlFor="mnemon-spaces-timeout-ms" title={t('config.timeoutMs')} hint={t('config.timeoutMsHint')}>
+            <input id="mnemon-spaces-timeout-ms" className={pageCss.settingsNumberInput} type="number" inputMode="numeric" min={100} max={120000} step={100}
+              aria-label={t('config.timeoutMs')} aria-invalid={!validTimeoutMs(recallForm.draft.timeoutMs)}
+              value={recallForm.draft.timeoutMs} disabled={disabled || recallForm.saving}
+              onChange={event => recallForm.edit({ timeoutMs: event.target.value })} />
+          </SpacesSettingRow>
+        </div>
+        <PanelActions dirty={recallForm.dirty} saving={recallForm.saving} invalid={recallProblem(recallForm.draft, t)} failed={recallForm.failed} applied={recallForm.applied}
+          disabled={disabled} t={t} onDiscard={recallForm.discard} onApply={() => { void recallForm.apply() }} />
+      </div>}
+    </section>
   </>
+}
+
+/**
+ * Self-contained preference row & selector so Memory Spaces settings never
+ * depend on post-0.5.46 `dsh-mnemon/client` exports when upgraded standalone.
+ */
+function SpacesSettingRow(props: { title: string; titleId?: string | undefined; hint?: ReactNode; htmlFor?: string | undefined; children?: ReactNode }): JSX.Element {
+  const title = props.htmlFor === undefined
+    ? <strong id={props.titleId}>{props.title}</strong>
+    : <label id={props.titleId} htmlFor={props.htmlFor}><strong>{props.title}</strong></label>
+  return <div className={pageCss.settingsRow}>
+    <div className={pageCss.settingsRowCopy}>{title}{props.hint !== undefined && props.hint !== '' && <small>{props.hint}</small>}</div>
+    {props.children !== undefined && <div className={pageCss.settingsRowControl}>{props.children}</div>}
+  </div>
+}
+
+function SpacesSelectRow<T extends string>(props: {
+  id: string
+  label: string
+  value: T
+  options: readonly { value: T; label: string; detail?: string | undefined }[]
+  disabled?: boolean | undefined
+  onChange: (value: T) => void
+}): JSX.Element {
+  const [open, setOpen] = useState(false)
+  const titleId = `${props.id}-title`
+  const valueId = useId()
+  const current = props.options.find(option => option.value === props.value)
+  return <SpacesSettingRow title={props.label} titleId={titleId} hint={current?.detail}>
+    <Menu
+      open={open}
+      onClose={() => setOpen(false)}
+      align="end"
+      portal
+      selectedId={props.value}
+      listClassName={pageCss.settingsSelectMenu}
+      items={props.options.map(option => ({
+        id: option.value,
+        label: option.detail === undefined ? option.label : <span className={pageCss.settingsSelectOption}><span>{option.label}</span><small>{option.detail}</small></span>,
+      }))}
+      onSelect={id => { setOpen(false); if (id !== props.value) props.onChange(id as T) }}
+      anchor={<button type="button" className={pageCss.settingsSelector} aria-haspopup="menu" aria-expanded={open} aria-labelledby={`${titleId} ${valueId}`} disabled={props.disabled === true} onClick={() => setOpen(value => !value)}>
+        <span id={valueId}>{current?.label ?? props.value}</span>
+        <IconChevronDownOutlineRegular size={12} />
+      </button>}
+    />
+  </SpacesSettingRow>
 }
 
 /** Mnemon Native, listed first among the Providers; its body holds the settings only Native reads. */

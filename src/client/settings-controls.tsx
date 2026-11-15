@@ -101,8 +101,9 @@ export function ToggleRow(props: { id: string; label: string; titleId?: string |
 
 /**
  * Smoothly animated collapsible disclosure for advanced or secondary settings.
- * Keeps children mounted inside a CSS grid row transition so staged inputs keep
- * their state and accessible labels while collapsed, and auto-expands on section deep-links.
+ * Unmounts its body while collapsed so hidden controls are never focusable or
+ * editable via keyboard navigation, while parent `useStaged` state preserves
+ * unsaved edits across collapse/expand and section deep-links auto-expand it.
  */
 export function AdvancedSection(props: {
   title: ReactNode
@@ -119,13 +120,14 @@ export function AdvancedSection(props: {
   }, [props.section, props.activeSection])
   return <div className={[css.advanced, props.className].filter(Boolean).join(' ')} data-open={open ? '' : undefined}
     {...(props.section === undefined ? {} : { 'data-settings-section': props.section })}>
-    <button type="button" className={css.advancedToggle} aria-expanded={open} aria-controls={bodyId}
+    <button type="button" className={css.advancedToggle} aria-expanded={open}
+      {...(open ? { 'aria-controls': bodyId } : {})}
       data-disclosure-open={open ? undefined : ''} onClick={() => setOpen(value => !value)}>
       <span>{props.title}</span>
       <IconChevronDownOutlineRegular size={12} />
     </button>
-    <div id={bodyId} className={css.advancedBody}>
+    {open && <div id={bodyId} className={css.advancedBody}>
       <div className={css.advancedContent}>{props.children}</div>
-    </div>
+    </div>}
   </div>
 }

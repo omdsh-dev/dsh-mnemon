@@ -52,7 +52,8 @@ describe('技能管理 settings under Plugins', () => {
   it('stages both draft budgets while evolution is off and rejects invalid values', async () => {
     const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: {}, revision: 1, writable: true, mode: 'host' })
     const view = render(<SkillsSettings scope={scope} page={page} t={t} />)
-    fireEvent.click(screen.getByText('Draft generation'))
+    expect(screen.queryByLabelText('Draft output token limit')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: t('skills.draftGeneration') }))
     const first = screen.getByLabelText('Draft output token limit')
     const retry = screen.getByLabelText('Retry output token limit')
     expect(first).toHaveProperty('value', '32768')
@@ -66,8 +67,37 @@ describe('技能管理 settings under Plugins', () => {
     await waitFor(() => expect(scope.getSnapshot().value).toMatchObject({ draftMaxTokens: 49152, draftRetryMaxTokens: 49152 }))
     view.unmount()
     render(<SkillsSettings scope={scope} page={page} t={t} />)
+    expect(screen.queryByLabelText('Draft output token limit')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: t('skills.draftGeneration') }))
     expect(screen.getByLabelText('Draft output token limit')).toHaveProperty('value', '49152')
     expect(screen.getByLabelText('Retry output token limit')).toHaveProperty('value', '49152')
+  })
+
+  it('unmounts collapsed Parameters and Draft generation inputs so hidden fields cannot be focused or edited, while preserving staged edits', () => {
+    const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: { evolution: true }, revision: 1, writable: true, mode: 'host' })
+    const { container } = render(<SkillsSettings scope={scope} page={page} t={t} />)
+
+    const parametersSection = container.querySelector('[data-settings-section="parameters"]') as HTMLElement
+    const draftSection = container.querySelector('[data-settings-section="draft"]') as HTMLElement
+    expect(parametersSection).not.toBeNull()
+    expect(draftSection).not.toBeNull()
+    expect(parametersSection.querySelectorAll('input, select, textarea, button:not([data-disclosure-open])')).toHaveLength(0)
+    expect(draftSection.querySelectorAll('input, select, textarea, button:not([data-disclosure-open])')).toHaveLength(0)
+
+    const draftToggle = screen.getByRole('button', { name: t('skills.draftGeneration') })
+    expect(draftToggle.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(draftToggle)
+    expect(draftToggle.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.change(screen.getByLabelText('Draft output token limit'), { target: { value: '40960' } })
+
+    fireEvent.click(draftToggle)
+    expect(draftToggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByLabelText('Draft output token limit')).toBeNull()
+    expect(draftSection.querySelectorAll('input, select, textarea, button:not([data-disclosure-open])')).toHaveLength(0)
+
+    fireEvent.click(draftToggle)
+    expect(screen.getByLabelText('Draft output token limit')).toHaveProperty('value', '40960')
+    expect(screen.getByRole('button', { name: t('options.apply') })).toHaveProperty('disabled', false)
   })
 
   it('stages the new-skill destination until Apply and restores it on Discard', async () => {
@@ -92,6 +122,8 @@ describe('技能管理 settings under Plugins', () => {
     const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: { evolution: true }, revision: 1, writable: blocked !== 'scope', mode: 'host' }, writes)
     render(<SkillsSettings scope={scope} page={{ ...page, writable: blocked !== 'page' }} t={t} />)
     expect(screen.getByRole('button', { name: `${t('skills.targetScope')} ${t('skills.targetScope.user')}` })).toHaveProperty('disabled', true)
+    expect(screen.queryByLabelText('Draft output token limit')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: t('skills.draftGeneration') }))
     expect(screen.getByLabelText('Draft output token limit')).toHaveProperty('disabled', true)
     expect(screen.getByLabelText('Retry output token limit')).toHaveProperty('disabled', true)
     expect(screen.getByRole('switch', { name: t('skills.allowLinkedUpdates') })).toHaveProperty('disabled', true)

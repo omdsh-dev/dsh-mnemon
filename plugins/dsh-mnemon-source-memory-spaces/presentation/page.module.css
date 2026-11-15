@@ -319,7 +319,8 @@ button.readSourceCard:hover { background: var(--mn-hover); }
   font-weight: 500;
   line-height: 17px;
 }
-.settingsPolicy[data-open] .settingsPolicyToggle .smoothChevron { transform: rotate(180deg); }
+.settingsPolicy[data-open] .settingsPolicyToggle .smoothChevron,
+.settingsRecall[data-open] .settingsPolicyToggle .smoothChevron { transform: rotate(180deg); }
 .settingsPolicy .placementPromptField { color: var(--dsw-alias-label-primary); font-size: 13px; line-height: 20px; }
 .settingsPolicy textarea {
   width: 100%;
@@ -342,6 +343,49 @@ button.readSourceCard:hover { background: var(--mn-hover); }
 .settingsPolicy textarea:disabled { opacity: .5; }
 .settingsRows { display: flex; min-width: 0; flex-direction: column; }
 .settingsRows > :last-child { border-bottom: 0; }
+.settingsRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 14px 0;
+  border-bottom: .5px solid var(--dsw-alias-border-l2);
+}
+.settingsRowCopy { display: flex; min-width: 0; flex: 1 1 auto; flex-direction: column; gap: 2px; }
+.settingsRowCopy strong,
+.settingsRowCopy label { color: var(--dsw-alias-label-primary); font-size: 14px; font-weight: 400; line-height: 22px; }
+.settingsRowCopy small { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
+.settingsRowControl { display: flex; min-width: 0; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 8px; }
+.settingsSelector {
+  appearance: none;
+  display: inline-flex;
+  max-width: 280px;
+  height: 36px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--dsw-radius-md, 8px);
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-module-platform);
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.settingsSelector > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.settingsSelector > svg { flex: none; color: var(--dsw-alias-label-tertiary); }
+.settingsSelector:hover:not(:disabled),
+.settingsSelector[aria-expanded='true'] { background: var(--dsw-alias-interactive-bg-hover); }
+.settingsSelector:active:not(:disabled) { background: var(--dsw-alias-interactive-bg-active); }
+.settingsSelector:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); }
+.settingsSelector:disabled { cursor: default; opacity: .4; }
+.settingsSelectMenu { min-width: 220px; }
+.settingsSelectOption { display: grid; min-width: 0; gap: 1px; white-space: normal; }
+.settingsSelectOption > small { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
 .settingsNumberInput {
   width: 112px;
   height: 34px;
