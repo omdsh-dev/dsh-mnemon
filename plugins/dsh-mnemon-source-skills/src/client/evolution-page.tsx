@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
-import { Button, DiffBlock, IconSparkleRegular, SegmentedControl, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, DiffBlock, IconSparkleRegular, SegmentedControl, Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { appearanceClass, SelectField } from 'dsh-mnemon/client'
 import type { AutoAdoptionEvent, BacktestRun, DraftView, ModelRoute, SkillDraft, SkillRootKind, SkillSuggestion, SuggestionStatus, SuggestionView, Trajectory } from '../contracts.ts'
 import { modelOptionPick, modelOptionValue, useModelChoice } from './model-choice.tsx'
@@ -157,7 +157,6 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
       {bar}
       {prominent.map(item => <ListItem key={item.id} item={item} selected={current?.id === item.id} onSelect={() => setSelected(item.id)} />)}
       {oneOff.length > 0 && <Fold key={selectedOneOff ? selected : 'one-off'} defaultOpen={selectedOneOff} title={t('triage.fold', { count: oneOff.length })}>
-        <p className={css.skMuted}>{t('triage.soft')}</p>
         {oneOff.map(item => <ListItem key={item.id} item={item} selected={current?.id === item.id} onSelect={() => setSelected(item.id)} />)}
       </Fold>}
     </aside>
@@ -279,8 +278,7 @@ function SuggestionDetail(props: { context: SkillsPageContext; id: string; model
       onClose={() => setDeleting(false)}
       onConfirm={() => void act(async () => { await context.client.deleteSuggestion(suggestion.id); setDeleting(false); context.notice(t('evolution.deleted')) })} />}
     {suggestion.triage !== undefined && <section aria-label={t('triage.title')}>
-      <p><strong>{t(`triage.${suggestion.triage.classification}`)}</strong> · {t('triage.facts', suggestion.triage as unknown as Record<string, unknown>)}</p>
-      <p className={css.skMuted}>{t('triage.rules')} {t('triage.soft')}</p>
+      <p><Tooltip label={t('triage.rules')}><span tabIndex={0}><Tag tone={suggestion.triage.classification === 'durable' ? 'info' : 'neutral'}>{t(`triage.${suggestion.triage.classification}`)}</Tag></span></Tooltip> · {t('triage.facts', suggestion.triage as unknown as Record<string, unknown>)}</p>
     </section>}
     {suggestion.rationale !== undefined && <Clamp text={suggestion.rationale} />}
     {view.skill?.readOnly && <p className={css.skWarn}>{t('skills.linkedReadOnly')}</p>}

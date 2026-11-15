@@ -44,13 +44,13 @@ Temporary progress, guesses and secrets are not written.
 Each finished reply has a brain-shaped **Save to memory** in its action strip, the same mark as the Memory System; the database icon beside it is DSH's usage, not memory. Selecting it reads that reply and opens a dialog:
 
 - The title is **Save to memory**, with one line on what happens to the text. **Task Agent ready** means the task Agent can take it.
-- **Candidate (editable)** starts with the whole reply; usually you keep only the sentence worth remembering. **Cancel** changes nothing.
+- **Content** starts with the whole reply; usually you keep only the sentence worth remembering. **Cancel** changes nothing.
 - **Save to** picks where it goes:
-  - **Let the Agent decide** is the default while a task Agent can write. **Send to task Agent** hands the text to an independent task Agent, which decides whether it is worth keeping, picks the right Memory Space, removes duplicates, distils and writes, outside the conversation.
+  - **Auto** is the default while a task Agent can write. **Save** hands the text to an independent task Agent, which decides whether it is worth keeping, picks the right Memory Space, removes duplicates, distils and writes, outside the conversation.
   - **Working memory (MEMORY.md)**, **User profile (USER.md)** or an active Memory Space by name: **Save** writes the text there at once, through the same write as that place's page; no task Agent decides where it goes. Working memory and the user profile keep it as one line. Before saving, the dialog says when the text is too long for one entry or for the file, and when the file is full: working memory then keeps part of its entries and moves the rest out, and a task Agent condenses the user profile, which needs one.
   - A place is listed while its layer is on, its component runs and its writes are not switched off.
   - Without a task Agent, or without a Memory Space Provider, the dialog starts on **Working memory** while it is listed. With no place open at all, it says so and sending stays closed.
-- A receipt follows: the outcome (**Saved**, **Updated**, **Submitted; the Provider confirms later**, **Skipped**, **Partly saved**, **Not finished** or **Failed**), a summary of where the text went, and a link to it: **View in Memory Spaces**, or Runtime Memory for working memory and the user profile. A memory saved without a vector gets a line saying so: semantic matching misses it until the vector is filled in from the Mnemon Native embedding settings on [Memory Spaces' page](#memory-spaces-page), and keyword search still finds it. While **Manage embedding settings in DSH** is off, as it is by default, the line is a plain note that no embedding service is available; while it is on, the line is a caution that the embedding service set up there did not produce a vector. **Cancel** becomes **Close**. Sending the same text to the same place again needs an edit, and with **Let the Agent decide** the task Agent takes the edited text as a new candidate; another place, or a send that failed, takes it as it is.
+- A receipt follows: the outcome (**Saved**, **Updated**, **Submitted; the Provider confirms later**, **Skipped**, **Partly saved**, **Not finished** or **Failed**), a summary of where the text went, and a link to it: **View in Memory Spaces**, or Runtime Memory for working memory and the user profile. A memory saved without a vector gets a line saying so: semantic matching misses it until the vector is filled in from the Mnemon Native embedding settings on [Memory Spaces' page](#memory-spaces-page), and keyword search still finds it. While **Manage embedding settings in DSH** is off, as it is by default, the line is a plain note that no embedding service is available; while it is on, the line is a caution that the embedding service set up there did not produce a vector. **Cancel** becomes **Close**. Sending the same text to the same place again needs an edit, and with **Auto** the task Agent takes the edited text as a new candidate; another place, or a send that failed, takes it as it is.
 
 | Edit the candidate | Choose where it goes | The task Agent's receipt |
 |---|---|---|
@@ -83,21 +83,21 @@ Leaving the panel or hiding its browser tab pauses automatic inspection and poll
 
 ![Status: the engine, one card per memory component, the running Provider and the storage areas](../../assets/webui-v0.5.32/en/memory-status.jpg)
 
-The top row has one card per component: the engine with its version, then each Source with what it holds. **Memory providers** lists only the running Providers with their spaces' connection state and sums up the rest in one line, *N more Providers are off*, with **Open configuration** beside it; the storage areas follow. Regions load independently; one failure never hides the rest.
+The top row has one card per component: the engine with its version, then each Source with what it holds. **Memory providers** lists only the running Providers with their spaces' connection state and sums up the rest in one line, *N more Providers are off*, with **Open settings** beside it; the storage areas follow. Regions load independently; one failure never hides the rest.
 
-A notice with **Open configuration** appears only when memory needs attention:
+A notice with **Open settings** appears only when memory needs attention:
 
 - **Memory not in use**: no main strategy runs, so conversations continue without memory.
 - **The selected main strategy is not running**: another strategy composes memory for now.
 - **The latest component change did not take effect**: the previous composition keeps serving.
 
-**Check versions** is read-only. It tells whether the Mnemon CLI is missing, current or out of date, with the npm command to copy, and lists each subpackage's installed, published and pinned version. When a newer dsh-mnemon exists, **Update** installs it through DSH's own plugin installer, in the desktop app too. Restart DSH after updating packages; until then, a notice above every page names the installed version. [Version checks and updates](./operations.md#version-checks-and-updates) explains each case.
+**Versions** is read-only. It tells whether the Mnemon CLI is missing, current or out of date, with the npm command to copy, and lists each subpackage's installed, published and pinned version. When a newer dsh-mnemon exists, **Update** installs it through DSH's own plugin installer, in the desktop app too. Restart DSH after updating packages; until then, a notice above every page names the installed version. [Version checks and updates](./operations.md#version-checks-and-updates) explains each case.
 
 ### Runtime memory
 
 Runtime memory is the compact context injected into every turn. **User profile** (`USER.md`) holds who you are, your preferences and collaboration rules. **Working memory** (`MEMORY.md`) holds project facts, environment, decisions and lessons. Each card shows its size against its limit. Opened from a turn, the entry that turn wrote carries a highlighted border; see [the correction above](#turn-memory-bar).
 
-- Entries are newest first, with filters for target and text. Editing an older entry keeps its place. **Add memory** opens the dialog for a new runtime entry.
+- Entries are newest first, with filters for target and text. Editing an older entry keeps its place. **New** opens the dialog for a new runtime entry.
 - Keep entries short, independent and repeatedly useful; temporary progress and raw logs do not belong here.
 - A working-memory entry can be limited to git branches. It is then injected only while the session's workspace is on one of them; the page and the files on disk are unaffected.
 - When working memory reaches its limit, the Host archives its entries into a memory space, keeps the most important ones that fit in about 70% of the limit, and adds the new one. With no memory space that can take them, for example without the Mnemon CLI or another Provider, the entries it does not keep move to the local archive `runtime/archived/MEMORY.md` in the data directory instead.
@@ -140,28 +140,28 @@ Idle review never edits existing documents. It searches first, skips what is cov
 
 ![The Memory Spaces overview: two active spaces and one inactive](../../assets/webui-v0.5.32/en/memory-spaces.jpg)
 
-A memory space is one named scope of long-term evidence on one Provider. **Overview** lists the spaces as cards; the switch on a card decides whether dsh-mnemon reads it, and the tag names its Provider, such as Mnemon Native. Clicking a card reconnects only that space. **Save to memory** and **Provider for new spaces** sit at the top right, with **Recall**, **Content** and **Entities** beside Overview.
+A memory space is one named scope of long-term evidence on one Provider. **Overview** lists the spaces as cards; the switch on a card decides whether dsh-mnemon reads it, and the tag names its Provider, such as Mnemon Native. Clicking a card reconnects only that space. **Save to memory** and **Space policy** sit at the top right, with **Recall**, **Content** and **Entities** beside Overview.
 
 ![The graph of the active spaces with the ClickHouse entity selected](../../assets/webui-v0.5.32/en/memory-graph.jpg)
 
-Below the cards, the graph merges what the active spaces can show: memories, entities, and the links between them. Select a space, entity or memory to see its context on the right, here the ClickHouse entity with **Recall around this**. Layout, dragging and reset only change the picture. The footer counts spaces, memories and entities, and how many elements are drawn.
+Below the cards, the graph merges what the active spaces can show: memories, entities, and the links between them. Select a space, entity or memory to see its context on the right, here the ClickHouse entity with **Recall**. Layout, dragging and reset only change the picture. The footer counts spaces, memories and entities, and how many elements are drawn.
 
 **Quiet display** in the graph toolbar is off by default. Turn it on for neutral colors, thin edges and no grid; labels appear on hover, keyboard focus or selection. Selecting a node keeps its neighbors clear and dims the rest without hiding them. Click the background or press Escape while a node is focused to clear the selection. The choice is saved only in the current browser and does not change memory, relationships or provider settings. Layout, dragging and the detail panel work as before.
 
 Each space declares what its Provider can really supply. Mnemon Native gives typed relationships; Hindsight and Holographic give their own graphs; Providers without edges contribute content only; query-only Providers such as ByteRover wait for a question. Nothing unsupported is invented.
 
-- **Create Memory Space** always lets you pick the Provider, with ready Providers first; turn more on from [Memory Spaces' page](#memory-spaces-page).
-- **Provider for new spaces** matters only when a task Agent creates a space. **Fixed Provider** always creates it on the Provider you choose; **Smart selection rules** let the Host enforce data and capability rules first, then the task Agent chooses among the eligible Providers. Existing spaces are still chosen by name and description.
-- **Tidy names and descriptions** samples each selected active space and gives it to an independent task Agent for a title and description. Each space runs on its own; a failure stays on its card.
+- **New** always lets you pick the Provider, with ready Providers first; turn more on from [Memory Spaces' page](#memory-spaces-page).
+- **Space policy** matters only when a task Agent creates a space. **Fixed Provider** always creates it on the Provider you choose; **Smart selection rules** let the Host enforce data and capability rules first, then the task Agent chooses among the eligible Providers. Existing spaces are still chosen by name and description.
+- **Tidy** samples each selected active space and gives it to an independent task Agent for a title and description. Each space runs on its own; a failure stays on its card.
 - **Rediscover** asks every enabled third-party Provider again for namespaces created on its side since its settings were saved. The Host also asks once, a little after it starts. A new space shows **New** and stays inactive until you switch it on. A line above the cards says what was found and which Provider could not finish, until you dismiss it; a page opened while the Host is asking shows it when the Host is done. A space you disconnected stays disconnected.
 
 #### Recall
 
-| Direct search | Ask Agent |
+| Search | Ask AI |
 |---|---|
 | ![Direct search across the active spaces, with scores and provenance](../../assets/webui-v0.5.32/en/memory-recall.jpg) | ![An Agent answer drawn from five memories, with its citations listed by content](../../assets/webui-v0.5.32/en/memory-agent.jpg) |
 
-**Direct search** returns raw evidence from every active space without an Agent, with each Provider's own score, space and category. **Ask Agent** runs the same search, then gives the evidence to a read-only task Agent for an answer. The answer speaks in terms of the evidence, and **Cites** below lists the memories it used by their content, never by id. Providers answer concurrently, so one failure never hides the others. **View related** and **Forget** appear only where the Provider supports them. Opening Recall with a query, from a turn's item, **Recall around this** or **View related**, runs it right away. Focused questions work better than bare keywords.
+**Search** returns raw evidence from every active space without an Agent, with each Provider's own score, space and category. **Ask AI** runs the same search, then gives the evidence to a read-only task Agent for an answer. The answer speaks in terms of the evidence, and **Cites** below lists the memories it used by their content, never by id. Providers answer concurrently, so one failure never hides the others. **Related** and **Forget** appear only where the Provider supports them. Opening Recall with a query, from a turn's item, **Recall** or **Related**, runs it right away. Focused questions work better than bare keywords.
 
 #### Content and Entities
 
@@ -169,13 +169,13 @@ Each space declares what its Provider can really supply. Mnemon Native gives typ
 |---|---|
 | ![Content: the memory just saved appears in the list](../../assets/webui-v0.5.32/en/memory-content.jpg) | ![Entities: ClickHouse selected, with the memories that mention it](../../assets/webui-v0.5.32/en/memory-entities.jpg) |
 
-**Content** lists memories where the Provider can enumerate them; query-only Providers show content once you enter a query. **Entities** uses only real entity indexes, currently Mnemon Native, Hindsight and Holographic. Each entity's count is the number of memories that carry it across the active spaces, and the list shows every entity. Selecting one lists exactly those memories, most important first, at once. Below them, **Find related memories** runs recall for the entity among memories that do not carry it. Recall takes longer, so it runs only when asked for: once opened, it stays open for the next entities until you hide it, for the rest of the browser session. When no memory carries a name you entered, related memories show by themselves.
+**Content** lists memories where the Provider can enumerate them; query-only Providers show content once you enter a query. **Entities** uses only real entity indexes, currently Mnemon Native, Hindsight and Holographic. Each entity's count is the number of memories that carry it across the active spaces, and the list shows every entity. Selecting one lists exactly those memories, most important first, at once. Below them, **Related memories** runs recall for the entity among memories that do not carry it. Recall takes longer, so it runs only when asked for: once opened, it stays open for the next entities until you hide it, for the rest of the browser session. When no memory carries a name you entered, related memories show by themselves.
 
 #### Save to memory
 
 ![Save to memory on the Memory Spaces page](../../assets/webui-v0.5.32/en/memory-remember.jpg)
 
-**Save to memory** here works like the conversation's dialog with **Let the Agent decide**: write the candidate, send it to the task Agent, and view the result under **Content** from the receipt. Open **Advanced options** only when a target, category or importance is genuinely required.
+**Save to memory** here works like the conversation's dialog with **Auto**: write the content, click **Save**, and view the result under **Content** from the receipt. Open **Advanced options** only when a target, category or importance is genuinely required.
 
 ### Skills
 
@@ -235,7 +235,7 @@ The gear on a row, the gear beside **Main strategy**, and a component's name any
 
 ![Memory Spaces' page with Mnemon Native and the third-party Providers](../../assets/webui-v0.5.32/en/plugin-spaces.jpg)
 
-- **Runtime memory's page**: **User profile scope** and **Capacity limits**. *Shared globally* combines a global `USER.md` with workspace or custom `MEMORY.md`, without moving either. Set each capacity in bytes and choose **Apply**, or **Discard changes** to restore the saved values. Lowering a limit does not delete existing entries; see [Runtime Memory budgets](../reference/configuration.md#runtime-memory-budgets).
+- **Runtime memory's page**: **User profile scope** and **Capacity limits**. *Shared globally* combines a global `USER.md` with workspace or custom `MEMORY.md`, without moving either. Set each capacity in bytes and choose **Apply**, or **Discard** to restore the saved values. Lowering a limit does not delete existing entries; see [Runtime Memory budgets](../reference/configuration.md#runtime-memory-budgets).
 - **Memory Spaces' page**: the **Memory providers**. Mnemon Native comes first and, expanded, holds only its embedding settings. Every third-party Provider has its own switch and is off by default; its endpoint, key and fields appear once it is on. The Global or Workspace tag shows its effective scope. OpenViking's **User key owner (skip admin)** field selects one user namespace for keys without admin access; see [its limits](./memory-providers.md#operational-boundaries).
 - **Skills' page**, tagged **Experimental**: **Self-evolution**, and while it is on, independent **Suggest new skills** and **Suggest skill improvements** switches, **Backtest drafts** and the folded **Review parameters**; **In the conversation** for the line under each turn; **Sidebar entry**. Switches apply at once, the parameters with **Apply**; see the [Skills guide](./skills.md#settings).
 - **Layered strategy's page**: **Background tasks**. **Task Agent model** chooses the model of the task Agents behind Save to memory, Ask Agent, Tidy names and descriptions, smart selection for new spaces and document archiving, never of the main conversation: **Follow global**, **Follow the conversation** or **Custom**. [Configuration](../reference/configuration.md#background-task-agent-model-route) explains each choice. **Idle review**, **Write runtime memory**, **Keep review limits after reopening** (off by default), its method and Agent Teams compatibility apply at once; **Review limits** apply with **Apply**. With **Write runtime memory** off, review only creates Documents. With persistent limits enabled, the workspace shows attempts for this parent session, restored usage and its next earliest review time. Persistence errors pause automatic review and show recovery guidance; regular conversation and manual actions remain available. Review runs only after turns the Layered strategy composed; see [configuration](../reference/configuration.md#provider-requirements).

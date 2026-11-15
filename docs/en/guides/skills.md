@@ -30,8 +30,8 @@ The list groups every `SKILL.md` DSH can load by where it lives, in DSH's order 
 
 - Each row has a **switch** that turns the skill on or off for both the model and the `/` menu, and **Use** (on hover) that returns to the conversation with `/name` in its input. A dot means an improvement waits for the skill DSH loads.
 - **New** writes a `SKILL.md` from a name and a description in the root you choose; the name must be lowercase letters, digits and single hyphens.
-- The detail shows the rendered `SKILL.md` with **Use**, **Edit** and a menu with **Draft an improvement** (a task Agent writes a draft, optionally from your note) and **Remove** (the folder moves to the **Trash** tab).
-- **Invocation** is one choice: **Auto and / command**, **/ command only**, **Auto-load only** or **Off**. It writes DSH's own `disable-model-invocation` and `user-invocable` keys.
+- The detail shows the rendered `SKILL.md` with **Use**, **Edit** and a menu with **Improve** (a task Agent writes a draft, optionally from your note) and **Remove** (the folder moves to the **Trash** tab).
+- **Invocation** is one choice: **Auto + /**, **/ only**, **Auto only** or **Off**. It writes DSH's own `disable-model-invocation` and `user-invocable` keys.
 - **Tests** is one line with the skill's case count and last score; it opens the skill under **Evals**. **Versions** and **Files** fold away: every change (creation, edit, invocation, install, an adopted improvement, a restore) leaves a version you can compare and restore.
 
 Every write is fenced by the file's hash, so a skill edited elsewhere in the meantime is not overwritten.
@@ -42,7 +42,7 @@ Every write is fenced by the file's hash, so a skill edited elsewhere in the mea
 
 When the name is already taken, choose another name, explicitly confirm replacement, or cancel. Replacement checks the current file hash and keeps the displaced skill in the Trash. Renaming updates the skill name while retaining the bundle's other files. The list and count refresh after each operation.
 
-**Delete for good** asks you to type the skill name. **Empty the Trash** has its own confirmation. Both permanently remove files; ordinary **Remove** keeps them recoverable.
+**Delete** asks you to type the skill name. **Empty** has its own confirmation. Both permanently remove files; ordinary **Remove** keeps them recoverable.
 
 ### Evolution
 
@@ -50,9 +50,9 @@ The page follows drafts and backtests while they run, refreshes the cards again 
 
 On wide screens, the Pending and Done lists scroll independently of the selected detail. Selecting another item opens its detail at the top while keeping your place in the list. Narrow screens keep the list above the detail.
 
-**Global model** chooses the model that writes and redrafts skills; **Selected model** overrides it for one suggestion. Clearing an override follows the global choice, and clearing both follows the task Agent. Automatic backtests started by draft generation use the draft's selected model. Choices survive a restart in `skills/preferences.json`; older versions ignore that optional file.
+**Global model** chooses the model that writes and redrafts skills; **Item model** overrides it for one suggestion. Clearing an override follows the global choice, and clearing both follows the task Agent. Automatic backtests started by draft generation use the draft's selected model. Choices survive a restart in `skills/preferences.json`; older versions ignore that optional file.
 
-**Pending** lists what waits for you: suggestions, and drafts written for a skill directly. **Done** keeps what was adopted, dismissed, expired or invalidated. **Evidence** lists the conversations reviews read. The sparkle button, **Review this conversation**, reviews the current conversation now instead of waiting for it to pause.
+**Pending** lists what waits for you: suggestions, and drafts written for a skill directly. **Done** keeps what was adopted, dismissed, expired or invalidated. **Evidence** lists the conversations reviews read. The sparkle button, **Review now**, reviews the current conversation now instead of waiting for it to pause.
 
 Deleting a suggestion removes its links from review records and evidence, while keeping the recorded conversation and test cases. Old records with deleted suggestion links are filtered automatically when read. If a suggestion is deleted while its page is open, the detail shows a deleted notice; other loading failures can be retried.
 
@@ -199,7 +199,7 @@ The [configuration reference](../reference/configuration.md#skills-settings) lis
 
 | What you see | What to do |
 |---|---|
-| **Evolution** stays empty | Check that **Self-evolution** and at least one suggestion type are on. A conversation needs a few turns of real work and a pause before its first review; use **Review this conversation** to review it now. |
+| **Evolution** stays empty | Check that **Self-evolution** and at least one suggestion type are on. A conversation needs a few turns of real work and a pause before its first review; use **Review now** to review it now. |
 | **Review failed** under a turn | The task Agent could not answer; the window is kept for the next try. After three failures, the conversation stops reviewing until DSH recreates its Agent. |
 | *GitHub declined to list …* | The hourly limit is spent. Try again later, or set `GITHUB_TOKEN`. A skills.sh preview still shows the skill from its text copy, and says so. |
 | *skills.sh is busy* or *can't search right now* | Search again in a moment; your other sources still work. The switch under **Sources** turns skills.sh off. |
@@ -211,4 +211,4 @@ The [configuration reference](../reference/configuration.md#skills-settings) lis
 
 Draft generation stops after 15 minutes; backtests after 45 minutes. At most two backtests run at once (each with at most two cases executing concurrently), with a bounded queue of at most 16 active or waiting runs. Waiting runs can also be cancelled and count toward the deadline. A hung task returns to a retryable state even if its model ignores cancellation. Cancel backtests on the draft card; cancellation keeps the draft, cases and partial results. Review the draft before manually adopting without a completed comparison.
 
-If the original skill changed or a creation now has a same-name target, the card explains the conflict and offers **Regenerate and backtest**. This reads the latest skill while preserving prior guidance. Editing an old draft does not bypass its file hash check. A file changed during generation is rejected before the old draft is replaced. Expired running records are persisted as interrupted at Source startup and by its minute reaper; late results cannot revive them.
+If the original skill changed or a creation now has a same-name target, the card explains the conflict and offers **Redraft & test**. This reads the latest skill while preserving prior guidance. Editing an old draft does not bypass its file hash check. A file changed during generation is rejected before the old draft is replaced. Expired running records are persisted as interrupted at Source startup and by its minute reaper; late results cannot revive them.

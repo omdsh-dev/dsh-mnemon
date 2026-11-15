@@ -173,7 +173,7 @@ function StorageDomains(props: {
     <section className={css.storageDomains} aria-label={t('status.storageDomains')}>
       <div className={css.statusSectionHeader}>
         <div><h3>{t('status.storageDomains')}</h3><p>{t('status.storageDomainsText')}</p></div>
-        <span className={css.phaseBadge}>{storageScopeLabel(t, props.selectedKind)}</span>
+        <span className={css.phaseBadge} title={t('status.storageFootnote')}>{storageScopeLabel(t, props.selectedKind)}</span>
       </div>
       {props.catalog === undefined ? <div className={css.storageUnavailable}>{t('status.storageWaiting')}</div> : props.selected?.root === undefined ? <div className={css.storageUnavailable}><strong>{storageScopeLabel(t, props.selectedKind)}</strong><p>{props.selectedKind === 'custom' ? t('status.storageCustomUnset') : t('status.storageWorkspaceUnavailable')}</p></div> : <>
         <div className={css.storageRoot}>
@@ -190,7 +190,6 @@ function StorageDomains(props: {
           </article>)}
         </div>
       </>}
-      {props.catalog !== undefined && <p className={css.storageFootnote}>{t('status.storageFootnote', { root: props.catalog.activeRoot })}</p>}
     </section>
   )
 }

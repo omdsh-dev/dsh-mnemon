@@ -473,7 +473,7 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
             <strong>{catalogUnavailable ? t('overview.directory.unsyncedBadge') : `${catalog?.activeCount ?? '—'} / ${catalog?.total ?? '—'} ${t('common.active')}`}</strong>
             {canRediscover && <button type="button" className={spaceEditActionClass} title={t('overview.rediscoverHint')} aria-busy={rediscoveryRunning || undefined} onClick={() => void rediscover()}>{rediscoveryRunning ? t('overview.rediscovering') : t('overview.rediscoverAction')}</button>}
             {props.writeEnabled && !catalogUnavailable && <button type="button" className={spaceEditActionClass} title={!props.agentAvailable ? t('overview.metadataUnavailable') : undefined} onClick={() => { setMetadataSelection([]); setMetadataTasks({}); setMetadataOpen(true); if (!props.agentAvailable) props.onAgentRefresh() }}>{t('overview.metadataAction')}</button>}
-            {props.writeEnabled && !catalogUnavailable && <button type="button" className={spaceEditActionClass} onClick={() => setCreatingSpaceOpen(true)}>{t('overview.createTitle')}</button>}
+            {props.writeEnabled && !catalogUnavailable && <button type="button" className={spaceEditActionClass} onClick={() => setCreatingSpaceOpen(true)}>{t('overview.newAction')}</button>}
           </div>
         </div>
         {/* Present before it has anything to say, so assistive technology announces what it says. */}

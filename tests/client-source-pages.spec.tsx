@@ -498,7 +498,7 @@ describe('Source Client presentation conformance', () => {
     expect((screen.getByLabelText(/^Token/u) as HTMLInputElement).value).toBe('')
 
     fireEvent.change(endpoint, { target: { value: 'https://new-health.example.test' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Save configuration' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(calls).toEqual(expect.arrayContaining([
       expect.objectContaining({
         endpoint: 'source-management-mutate',

@@ -104,7 +104,7 @@ describe('independent Memory Spaces Source client', () => {
       const management = await runner.managementClient('source:spaces')
       await management.mutate('provider-service-update', { providerId: 'account', settings: {}, enabled: true }, { confirmed: true })
       render(<MemorySpacesSourcePage page="spaces" sourceTypeId="memory-spaces" sourceInstanceKey="source:spaces" sourceInstances={[]} locale="en" writable management={management} />)
-      fireEvent.click(await screen.findByRole('button', { name: 'Create Memory Space' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'New' }))
       const dialog = screen.getByRole('dialog', { name: 'Create Memory Space' })
       await waitFor(() => expect((within(dialog).getByRole('radio', { name: /Fixture/u }) as HTMLInputElement).checked).toBe(true))
     } finally { cleanup(); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
@@ -160,24 +160,24 @@ describe('independent Memory Spaces Source client', () => {
     fireEvent.click(open)
     const note = () => screen.queryByText(t(key))
     const other = () => screen.queryByText(t(key === 'receipt.unembedded' ? 'receipt.unembeddedNoService' : 'receipt.unembedded'))
-    fireEvent.change(await screen.findByRole('textbox', { name: 'Candidate' }), { target: { value: 'Grafana on staging listens on port 3300.' } })
-    const send = await screen.findByRole('button', { name: 'Send to task Agent' }) as HTMLButtonElement
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Content' }), { target: { value: 'Grafana on staging listens on port 3300.' } })
+    const send = await screen.findByRole('button', { name: 'Save' }) as HTMLButtonElement
     await waitFor(() => expect(send.disabled).toBe(false))
     fireEvent.click(send)
     await screen.findByText('Saved to Project.')
     expect(note()?.getAttribute('data-tone')).toBe(tone)
     expect(other()).toBeNull()
     // With constraints, Mnemon Native's own receipt says embedded: false.
-    fireEvent.change(screen.getByRole('textbox', { name: 'Candidate' }), { target: { value: 'Prometheus on staging listens on port 9090.' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Send with constraints' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Content' }), { target: { value: 'Prometheus on staging listens on port 9090.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save with options' }))
     await waitFor(() => expect(mutate).toHaveBeenCalledWith('remember', expect.objectContaining({ content: 'Prometheus on staging listens on port 9090.', memoryBodyId: 'project' }), expect.anything()))
     await waitFor(() => expect(note()?.getAttribute('data-tone')).toBe(tone))
     expect(screen.queryByText('Saved to Project.')).toBeNull()
     expect(other()).toBeNull()
     // A memory saved with its vector says nothing about one.
     embedded = true
-    fireEvent.change(screen.getByRole('textbox', { name: 'Candidate' }), { target: { value: 'Loki on staging listens on port 3100.' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Send with constraints' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Content' }), { target: { value: 'Loki on staging listens on port 3100.' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save with options' }))
     await waitFor(() => expect(mutate).toHaveBeenCalledTimes(2))
     await screen.findByText(t('receipt.written'))
     expect(note()).toBeNull()
@@ -651,8 +651,8 @@ describe('OverviewPage & MemoryGraph performance guardrails', () => {
       expect(within(tablist).getAllByRole('tab').map(tab => tab.getAttribute('tabindex'))).toEqual(['-1', '-1', '0', '-1'])
 
       // Clearing the Content filter immediately triggers an unfiltered list reload.
-      await waitFor(() => expect(screen.getByPlaceholderText('Filter by content or exact ID…')).toBeTruthy())
-      const filterInput = screen.getByPlaceholderText('Filter by content or exact ID…')
+      await waitFor(() => expect(screen.getByPlaceholderText('Filter content or ID…')).toBeTruthy())
+      const filterInput = screen.getByPlaceholderText('Filter content or ID…')
       fireEvent.change(filterInput, { target: { value: 'missing-query' } })
       fireEvent.submit(filterInput.closest('form')!)
       await waitFor(() => expect(readSpy.mock.calls.some(([op, input]) => op === 'list' && (input as { query?: string })?.query === 'missing-query')).toBe(true))
