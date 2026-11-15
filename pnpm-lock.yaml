@@ -492,9 +492,6 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: ^3.18.4
         version: 3.18.5
-      markdown-to-jsx:
-        specifier: ^7.7.0
-        version: 7.7.17(react@18.3.1)
     devDependencies:
       '@deepseek-ai/dsh-client-store':
         specifier: 0.2.1-rc.5
@@ -846,9 +843,6 @@ importers:
       '@deepseek-ai/cordis':
         specifier: ^4.0.1
         version: 4.0.5(@deepseek-ai/cordis-plugin-include@1.0.10)(@deepseek-ai/cordis-plugin-loader@1.0.6)
-      markdown-to-jsx:
-        specifier: ^7.7.0
-        version: 7.7.17(react@18.3.1)
       yaml:
         specifier: ^2.9.0
         version: 2.9.0
@@ -5955,15 +5949,6 @@ packages:
 
   markdown-table@3.0.4:
     resolution: {integrity: sha512-wiYz4+JrLyb/DqW2hkFJxP7Vd7JuTDm77fvbM8VfEQdmSMqcImWeeRbHwZjBjIFki/VaMK2BhFi7oUUZeM5bqw==}
-
-  markdown-to-jsx@7.7.17:
-    resolution: {integrity: sha512-7mG/1feQ0TX5I7YyMZVDgCC/y2I3CiEhIRQIhyov9nGBP5eoVrOXXHuL5ZP8GRfxVZKRiXWJgwXkb9It+nQZfQ==}
-    engines: {node: '>= 10'}
-    peerDependencies:
-      react: '>= 0.14.0'
-    peerDependenciesMeta:
-      react:
-        optional: true
 
   marked-terminal@7.3.0:
     resolution: {integrity: sha512-t4rBvPsHc57uE/2nJOLmMbZCQ4tgAccAED3ngXQqW6g+TxA488JzJ+FK3lQkzBQOI1mRV/r/Kq+1ZlJ4D0owQw==}
@@ -12850,10 +12835,6 @@ snapshots:
       '@jridgewell/sourcemap-codec': 1.5.5
 
   markdown-table@3.0.4: {}
-
-  markdown-to-jsx@7.7.17(react@18.3.1):
-    optionalDependencies:
-      react: 18.3.1
 
   marked-terminal@7.3.0(marked@9.1.6):
     dependencies:

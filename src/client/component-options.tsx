@@ -1,5 +1,5 @@
 import { useId, useState, type JSX } from 'react'
-import { Checkbox } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Checkbox, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MemoryJsonValue } from '../core/contracts/index.ts'
 import type { MemoryPluginEntryView, MemoryViewDashboard } from '../host/view-protocol.ts'
 import { componentCopy } from './component-copy.ts'
@@ -84,6 +84,7 @@ export function ComponentOptions(props: ComponentOptionsProps): JSX.Element {
   const { entry, t } = props
   const id = useId()
   const [draft, setDraft] = useState(() => initial(entry))
+  const [confirmEmptySources, setConfirmEmptySources] = useState(false)
   const zh = props.language.toLowerCase().startsWith('zh')
   const text = (value: { en: string; 'zh-CN': string } | undefined): string => value === undefined ? '' : zh ? value['zh-CN'] : value.en
   const results = entry.fields.map(field => ({ field, result: parse(field, draft[field.key]!, t) }))
@@ -91,8 +92,14 @@ export function ComponentOptions(props: ComponentOptionsProps): JSX.Element {
   const config: Config = Object.fromEntries(results.flatMap(({ field, result }) => draft[field.key]!.own && 'value' in result ? [[field.key, result.value]] : []))
   // Any edit shows Apply, a refused value included, so the page can say what to fix.
   const edited = JSON.stringify(draft) !== JSON.stringify(initial(entry))
-  const edit = (field: Field, next: Partial<Staged>): void => setDraft(current => ({ ...current, [field.key]: { ...current[field.key]!, ...next, own: true } }))
-  const reset = (field: Field): void => setDraft(current => ({ ...current, [field.key]: staged(field, undefined, false) }))
+  const edit = (field: Field, next: Partial<Staged>): void => {
+    setConfirmEmptySources(false)
+    setDraft(current => ({ ...current, [field.key]: { ...current[field.key]!, ...next, own: true } }))
+  }
+  const reset = (field: Field): void => {
+    setConfirmEmptySources(false)
+    setDraft(current => ({ ...current, [field.key]: staged(field, undefined, false) }))
+  }
   const locked = props.disabled || props.pending
   // A Source is named by the component that registered it, as everywhere else.
   const sourceName = (sourceTypeId: string, fallback: string): string => {
@@ -127,11 +134,25 @@ export function ComponentOptions(props: ComponentOptionsProps): JSX.Element {
     })}
     {/* A refused save keeps the edits; the page's notice says why. */}
     <PanelActions dirty={edited} saving={props.pending} invalid={invalid ? t('options.fix') : null} failed={null} applied={false}
-      disabled={props.disabled} t={t} onDiscard={() => setDraft(initial(entry))} onApply={() => {
-        if (entry.typeId === 'scoped' && Array.isArray(config.sourceKeys) && config.sourceKeys.length === 0
-          && !window.confirm(t('options.emptySourcesConfirm'))) return
+      disabled={props.disabled} t={t} onDiscard={() => { setConfirmEmptySources(false); setDraft(initial(entry)) }} onApply={() => {
+        if (entry.typeId === 'scoped' && Array.isArray(config.sourceKeys) && config.sourceKeys.length === 0) {
+          setConfirmEmptySources(true)
+          return
+        }
         void props.onApply(config)
       }} />
+    <Modal
+      open={confirmEmptySources}
+      onClose={() => { if (!props.pending) setConfirmEmptySources(false) }}
+      title={t('options.emptySourcesTitle')}
+      closeLabel={t('common.close')}
+      footer={<>
+        <Button variant="outline" disabled={props.pending} onClick={() => setConfirmEmptySources(false)}>{t('common.cancel')}</Button>
+        <Button variant="primary" disabled={locked} onClick={() => { setConfirmEmptySources(false); void props.onApply(config) }}>{t('options.apply')}</Button>
+      </>}
+    >
+      <p className={`${css.surface} ${css.confirmCopy}`}>{t('options.emptySourcesConfirm')}</p>
+    </Modal>
   </div>
 }
 

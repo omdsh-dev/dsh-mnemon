@@ -12,7 +12,7 @@ export default defineConfig([
   entry: { client: 'src/client.ts' }, outDir: 'lib', format: 'cjs', platform: 'browser',
   target: 'es2022', dts: false, clean: false, fixedExtension: false,
   outExtensions: () => ({ js: '.js', dts: '.d.ts' }),
-  deps: { neverBundle: true, alwaysBundle: ['markdown-to-jsx'], onlyBundle: ['markdown-to-jsx'] },
+  deps: { neverBundle: true },
   define: { 'process.env.NODE_ENV': JSON.stringify('production') },
 
   plugins: [{

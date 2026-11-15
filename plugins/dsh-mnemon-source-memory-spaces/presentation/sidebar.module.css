@@ -55,6 +55,25 @@
   color: var(--dsw-alias-label-primary);
 }
 .shell .memoryWriteButton { flex: none; }
+.shell .modal {
+  display: flex;
+  max-height: min(82vh, 720px);
+  max-height: min(82dvh, 720px);
+  flex-direction: column;
+  overflow: hidden;
+}
+.shell .modal > [class*='modalBody'] {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.shell .modal > [class*='modalFooter'] {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  background: var(--dsw-alias-bg-layer-2, var(--mn-surface));
+}
 .shell .modal section[class*='supervisedComposer'] { overflow: visible; border: 0; }
 .shell .modal form[class*='supervisedForm'] { padding: 0; }
 .shell .modal [class*='supervisedHeading'] { margin-bottom: 12px; }
@@ -157,7 +176,7 @@
   white-space: nowrap;
 }
 .shell .bodyCardMeta [class*='bodyHealth'] { flex: 0 0 auto; }
-.shell .bodyCardHeader > [class*='bodySwitch'] { flex: 0 0 auto; }
+.shell .bodyCardHeader > [role='switch'] { flex: 0 0 auto; }
 .shell article[class*='bodyCard'] > p {
   display: -webkit-box;
   min-height: 40px;

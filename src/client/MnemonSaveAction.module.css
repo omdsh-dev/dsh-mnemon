@@ -34,12 +34,16 @@
   flex: none;
 }
 
-.modal {
+.modal.modal {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   width: min(640px, calc(100vw - max(12px, env(safe-area-inset-left, 0px)) - max(12px, env(safe-area-inset-right, 0px))));
   max-height: calc(100vh - 24px);
 }
 
-.modalContent {
+.modalContent.modalContent {
+  flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -93,15 +97,19 @@
   max-height: 50vh;
   border: .5px solid var(--dsw-alias-border-l4);
   border-radius: var(--dsw-radius-md);
-  padding: 10px 12px;
+  padding: 10px 12px 14px;
+  scroll-padding-bottom: 12px;
   resize: vertical;
   background: var(--dsw-alias-bg-layer-3);
   color: var(--dsw-alias-label-primary);
-  font: 14px/22px var(--dsw-font-family);
+  font-family: var(--dsw-font-family);
+  font-size: 14px;
+  line-height: 1.55;
 }
 .candidate textarea:focus-visible {
-  outline: none;
-  border-color: var(--dsw-alias-state-business-primary);
+  outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--mn-accent, var(--dsw-alias-state-business-primary)));
+  outline-offset: -1px;
+  border-color: var(--mn-accent, var(--dsw-alias-state-business-primary));
 }
 
 /* Where the candidate goes: the task Agent, or a place the user names. */
@@ -130,7 +138,7 @@
 }
 
 @media (max-width: 640px), (max-height: 560px) {
-  .modal {
+  .modal.modal {
     width: min(100%, calc(100vw - max(8px, env(safe-area-inset-left, 0px)) - max(8px, env(safe-area-inset-right, 0px))));
     max-height: calc(100vh - 16px);
   }
@@ -149,11 +157,11 @@
 }
 
 @supports (height: 100dvh) {
-  .modal {
+  .modal.modal {
     max-height: calc(100dvh - 24px);
   }
   @media (max-width: 640px), (max-height: 560px) {
-    .modal { max-height: calc(100dvh - 16px); }
+    .modal.modal { max-height: calc(100dvh - 16px); }
     .candidate textarea {
       min-height: clamp(140px, 32dvh, 220px);
       max-height: 42dvh;

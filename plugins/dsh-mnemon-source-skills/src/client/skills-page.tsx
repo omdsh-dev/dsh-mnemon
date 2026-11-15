@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState, type JSX } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { Button, DiffBlock, Switch, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SearchField, SelectField, SidebarModal } from 'dsh-mnemon/client'
 import { SKILL_ROOT_KINDS, type CatalogView, type SkillDocument, type SkillInvocation, type SkillRootKind, type SkillSummary, type SkillVersion } from '../contracts.ts'
 import { css, errorText, points, stamp, useT } from './presentation.ts'
-import { Busy, Confirm, diffLabels, Empty, Field, Fold, FoldLink, MoreMenu, SkillIcon, SkillMarkdown, useLink } from './shared.tsx'
+import { Busy, Confirm, diffLabels, Empty, Field, Fold, FoldLink, MoreMenu, SkillIcon, SkillMarkdown, SkillPath, useLink } from './shared.tsx'
 import type { SkillsLocation, SkillsPageContext } from './ui.tsx'
 
 type Stats = CatalogView['stats'][string] | undefined
@@ -48,9 +48,13 @@ export function SkillsPage(props: { context: SkillsPageContext; location: Skills
     const needle = query.trim().toLowerCase()
     return (catalog?.skills ?? []).filter(skill => needle === '' || skill.name.includes(needle) || skill.description.toLowerCase().includes(needle))
   }, [catalog, query])
+  const paneRef = useRef<HTMLDivElement | null>(null)
+  const current = catalog?.skills.find(skill => skill.key === selected)
+  useLayoutEffect(() => {
+    if (paneRef.current !== null) paneRef.current.scrollTop = 0
+  }, [current?.key])
   if (catalog === null) return <Busy label={t('common.loading')} />
   const groups = catalog.roots.map(root => ({ root, skills: visible.filter(skill => skill.root === root.kind) }))
-  const current = catalog.skills.find(skill => skill.key === selected)
   return <div className={`${css.skSplit} ${css.skSkillsSplit}`}>
     <aside className={css.skList}>
       <header className={css.skListBar}>
@@ -69,7 +73,7 @@ export function SkillsPage(props: { context: SkillsPageContext; location: Skills
               return next
             })}>
             <span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
-            <span>{t(`root.${group.root.kind}`)}<small>{group.root.path}</small></span>
+            <span>{t(`root.${group.root.kind}`)}<small><SkillPath path={group.root.path} /></small></span>
             <span>{group.skills.length}</span>
           </button></h5>
           {expanded && group.skills.map(skill => <SkillRow key={skill.key} context={context} skill={skill} stats={catalog.stats[skill.name]} selected={selected === skill.key} onSelect={() => setSelected(skill.key)} />)}
@@ -80,7 +84,7 @@ export function SkillsPage(props: { context: SkillsPageContext; location: Skills
         <ul>{catalog.problems.map(problem => <li key={problem.path}><code title={problem.path}>{problem.path.split(/[\\/]/u).slice(-2).join('/')}</code><span>{problem.reason}</span></li>)}</ul>
       </details>}
     </aside>
-    <div className={css.skPane} key={current?.key ?? 'empty'}>
+    <div ref={paneRef} className={css.skPane}>
       {catalog.skills.length === 0
         ? <Empty glyph="✦" title={t('skills.empty')} action={<>
             <Button variant="primary" size="sm" disabled={!context.writable} onClick={() => setCreating(true)}>{t('skills.new')}</Button>
@@ -144,19 +148,27 @@ function SkillRow(props: { context: SkillsPageContext; skill: SkillSummary; stat
 function SkillDetail(props: { context: SkillsPageContext; skillKey: string; stats: Stats; onDeleted: () => void }): JSX.Element {
   const t = useT()
   const { context, stats } = props
-  const [skill, setSkill] = useState<(SkillDocument & { versions: SkillVersion[] }) | null>(null)
-  const [editing, setEditing] = useState<string | null>(null)
+  const [loadedSkill, setLoadedSkill] = useState<(SkillDocument & { versions: SkillVersion[] }) | null>(null)
+  const [editing, setEditing] = useState<{ key: string; name: string; hash: string; original: string; text: string } | null>(null)
   const [improving, setImproving] = useState(false)
   const [busy, setBusy] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [comparing, setComparing] = useState<{ version: SkillVersion; content: string } | null>(null)
   const [reload, setReload] = useState(0)
   useEffect(() => {
+    setEditing(null)
+    setImproving(false)
+    setDeleting(false)
+    setComparing(null)
+  }, [props.skillKey])
+  useEffect(() => {
     let active = true
-    void context.client.skill(props.skillKey).then(value => { if (active) setSkill(value) }).catch(context.fail)
+    void context.client.skill(props.skillKey).then(value => { if (active) setLoadedSkill(value) }).catch(context.fail)
     return () => { active = false }
   }, [context.client, props.skillKey, context.revision, reload])
+  const skill = loadedSkill?.key === props.skillKey ? loadedSkill : null
   if (skill === null) return <Busy label={t('common.loading')} />
+  const activeEditing = editing?.key === skill.key ? editing : null
   const write = async (operation: () => Promise<unknown>) => {
     setBusy(true)
     try { await operation(); setReload(value => value + 1); context.refresh() } catch (error) { context.fail(error) } finally { setBusy(false) }
@@ -173,11 +185,11 @@ function SkillDetail(props: { context: SkillsPageContext; skillKey: string; stat
       <div>
         <h3>{skill.name}</h3>
         <p>{skill.description}</p>
-        <span className={css.skMeta}><span>{t(`root.${skill.root}`)}</span><code title={skill.path}>{skill.path}</code></span>
+        <span className={css.skMeta}><span>{t(`root.${skill.root}`)}</span><code title={skill.path}><SkillPath path={skill.path} /></code></span>
       </div>
       <div className={css.skDetailActions}>
         {usable && <Button variant="outline" size="sm" onClick={() => context.useSkill(skill.name)}>{t('skills.use')}</Button>}
-        <Button variant="outline" size="sm" disabled={!context.writable || busy || skill.readOnly === true} onClick={() => setEditing(skill.content)}>{t('common.edit')}</Button>
+        <Button variant="outline" size="sm" disabled={!context.writable || busy || skill.readOnly === true} onClick={() => setEditing({ key: skill.key, name: skill.name, hash: skill.hash, original: skill.content, text: skill.content })}>{t('common.edit')}</Button>
         <MoreMenu label={t('common.more')} items={more} onSelect={id => id === 'improve' ? setImproving(true) : setDeleting(true)} />
       </div>
     </header>
@@ -195,7 +207,7 @@ function SkillDetail(props: { context: SkillsPageContext; skillKey: string; stat
     <SkillMarkdown body={skill.body} />
     <div className={css.skFolds}>
       <FoldLink title={t('tests.title')} meta={testsMeta} onOpen={() => context.navigate({ tab: 'evals', skillName: skill.name })} />
-      <Fold title={t('versions.title')} meta={String(skill.versions.length)}>
+      <Fold key={`${skill.key}:versions`} title={t('versions.title')} meta={String(skill.versions.length)}>
         {skill.versions.length === 0 ? <p className={css.skMuted}>{t('versions.empty')}</p> : <ul className={css.skVersions}>{skill.versions.map(version => <li key={version.id}>
           <Tag tone={version.reason === 'evolution' ? 'success' : 'outline'}>{t(`versions.reason.${version.reason}`)}</Tag>
           <time title={version.createdAt}>{stamp(version.createdAt)}</time>
@@ -207,15 +219,15 @@ function SkillDetail(props: { context: SkillsPageContext; skillKey: string; stat
           </>}
         </li>)}</ul>}
       </Fold>
-      {(skill.resources?.length ?? 0) > 0 && <Fold title={t('skills.files')} meta={String(skill.resources!.length)}>
-        <div className={css.skResources}>{skill.resources!.map(file => <code key={file}>{file}</code>)}</div>
+      {(skill.resources?.length ?? 0) > 0 && <Fold key={`${skill.key}:files`} title={t('skills.files')} meta={String(skill.resources!.length)}>
+        <div className={css.skResources}>{skill.resources!.map(file => <code key={file}><SkillPath path={file} /></code>)}</div>
       </Fold>}
     </div>
-    {editing !== null && <SidebarModal wide title={t('editor.title', { name: skill.name })} busy={busy} onClose={() => setEditing(null)} footer={<>
+    {activeEditing !== null && <SidebarModal wide title={t('editor.title', { name: activeEditing.name })} busy={busy} onClose={() => setEditing(null)} footer={<>
       <Button variant="ghost" onClick={() => setEditing(null)}>{t('common.cancel')}</Button>
-      <Button variant="primary" disabled={busy || editing === skill.content} onClick={() => void write(async () => { await context.client.saveSkill(skill.key, editing, skill.hash); setEditing(null) })}>{busy ? t('common.saving') : t('common.save')}</Button>
+      <Button variant="primary" disabled={busy || activeEditing.text === activeEditing.original} onClick={() => void write(async () => { await context.client.saveSkill(activeEditing.key, activeEditing.text, activeEditing.hash); setEditing(null) })}>{busy ? t('common.saving') : t('common.save')}</Button>
     </>}>
-      <textarea className={css.skEditor} spellCheck={false} value={editing} onChange={event => setEditing(event.target.value)} aria-label="SKILL.md" />
+      <textarea className={css.skEditor} spellCheck={false} value={activeEditing.text} onChange={event => setEditing(current => current === null ? null : { ...current, text: event.target.value })} aria-label={t('diff.code')} />
     </SidebarModal>}
     {improving && <ImproveDialog context={context} name={skill.name} onClose={() => setImproving(false)} />}
     {comparing !== null && <SidebarModal wide title={t('versions.compareTitle', { time: stamp(comparing.version.createdAt) })} onClose={() => setComparing(null)}>

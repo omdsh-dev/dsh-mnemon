@@ -104,10 +104,6 @@
 .storageMode > strong { color: var(--mn-muted); font-weight: 500; }
 
 .statusCluster { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 6px; color: var(--mn-faint); font-size: 13px; line-height: 20px; white-space: nowrap; }
-/* StateDot: a 6px core, no halo. */
-.statusDot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: var(--mn-idle); }
-.online { background: var(--mn-success); }
-.offline { background: var(--mn-danger); }
 .checking { background: var(--mn-idle); }
 .iconButton { display: inline-flex; width: 28px; height: 28px; flex: 0 0 auto; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: var(--dsw-radius-sm); color: var(--mn-caption); background: transparent; cursor: pointer; }
 .iconButton:hover:not(:disabled) { color: var(--mn-muted); background: var(--mn-hover); }
@@ -182,6 +178,7 @@
 .canvas { min-width: 0; flex: 1; overflow: auto; overscroll-behavior-x: contain; overscroll-behavior-y: auto; scroll-behavior: auto; -webkit-overflow-scrolling: touch; background: var(--mn-surface); }
 .page { width: 100%; min-height: 100%; margin: 0 auto; padding: 20px 24px clamp(96px, 14vh, 150px); }
 .pageHeader { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px 24px; margin-bottom: 16px; }
+.pageHeader:has(+ [class*='subNav']) { margin-bottom: 8px; }
 .pageHeader > div:first-child { min-width: 0; }
 .pageHeader h2 { margin: 0; font-size: 16px; font-weight: 500; line-height: 24px; }
 .pageHeader p { max-width: 72ch; margin: 2px 0 0; color: var(--mn-muted); font-size: 13px; line-height: 20px; }
@@ -311,8 +308,8 @@
 .modalTheme.modalTheme.modalTheme { position: absolute; inset: 0; display: block; width: auto; height: auto; min-width: 0; min-height: 0; overflow: visible; color: var(--mn-text); background: transparent; pointer-events: none; }
 .modalBackdrop { position: fixed; z-index: 0; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; overscroll-behavior: contain; padding: max(24px, var(--dsh-frame-top-clearance, 24px)) 24px; background: var(--dsw-alias-bg-mask-1); backdrop-filter: var(--dsw-mask-blur); touch-action: none; pointer-events: auto; animation: mnemon-dialog-backdrop-enter 180ms ease-out both; }
 /* Match the host Modal's layer-2 fill; the canvas backs translucent skins.
-   The footer stays transparent so this surface is painted only once. */
-.modal { display: flex; box-sizing: border-box; width: min(640px, 100%); min-height: 0; max-height: 100%; flex-direction: column; overflow: hidden; border: 0; border-radius: var(--dsw-radius-panel); background: linear-gradient(var(--mn-layer-2), var(--mn-layer-2)), var(--mn-surface); box-shadow: var(--dsw-elevation-prominent); touch-action: auto; transform-origin: 50% 100%; backface-visibility: hidden; will-change: transform, opacity; animation: mnemon-dialog-enter 200ms cubic-bezier(.2, .75, .2, 1) both; }
+   The footer carries the same opaque backing so scrolled fields never bleed behind actions. */
+.modal { display: flex; box-sizing: border-box; width: min(640px, 100%); min-height: 0; max-height: min(860px, calc(100vh - 32px)); max-height: min(860px, calc(100dvh - 32px)); flex-direction: column; overflow: hidden; border: 0; border-radius: var(--dsw-radius-panel); background: linear-gradient(var(--mn-layer-2), var(--mn-layer-2)), var(--mn-surface); box-shadow: var(--dsw-elevation-prominent); touch-action: auto; transform-origin: 50% 100%; backface-visibility: hidden; will-change: transform, opacity; animation: mnemon-dialog-enter 200ms cubic-bezier(.2, .75, .2, 1) both; }
 .modalBackdrop[data-closing],
 .modal[data-closing] { pointer-events: none; }
 .modalDragHandle { display: none; }
@@ -322,8 +319,8 @@
 .modal > header h2 { margin: 0; font-size: 16px; font-weight: 500; line-height: 24px; }
 .modal > header p { max-width: 64ch; margin: 4px 0 0; overflow-wrap: anywhere; color: var(--mn-muted); font-size: 13px; line-height: 20px; }
 .modal > header .iconButton { flex: none; color: var(--mn-muted); }
-.modalBody { min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 8px 24px 20px; scrollbar-gutter: stable; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
-.modalFooter { display: flex; flex: none; align-items: center; justify-content: flex-end; gap: 12px; padding: 4px 24px 24px; background: transparent; }
+.modalBody { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 8px 24px 16px; scroll-padding-bottom: 16px; scrollbar-gutter: stable; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+.modalFooter { position: relative; z-index: 2; display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 12px; border-top: .5px solid var(--mn-line); padding: 12px 24px 18px; background: linear-gradient(var(--mn-layer-2), var(--mn-layer-2)), var(--mn-surface); }
 .modalFooter button { min-height: 36px; padding-inline: 14px; }
 .modalFooterMeta { margin-right: auto; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
 .modalFooterActions { display: flex; min-width: 0; align-items: center; justify-content: flex-end; gap: 8px; margin-left: auto; }
@@ -333,20 +330,18 @@
 @keyframes mnemon-metadata-sweep { to { transform: translateX(120%); } }
 @keyframes mnemon-metadata-refreshed { 0% { border-color: color-mix(in srgb, var(--mn-accent) 60%, var(--mn-card-line)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--mn-accent) 14%, transparent); } 100% { border-color: var(--mn-card-line); box-shadow: 0 0 0 0 transparent; } }
 
-/* Status overview: one settings-card surface split into four cells. */
-/* One card for the engine and one per Source component, however many are
-   installed: cards share each row, and the hairlines between them fall on
-   the first row and column outside the clip. */
-.healthStrip { position: relative; display: flex; flex-wrap: wrap; margin-bottom: 16px; overflow: hidden; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); }
+/* Status overview: one card for the engine and one per Source component in a
+   balanced responsive grid so wide desktop fits all cards evenly and narrower
+   widths wrap into uniform columns without orphan stretching. */
+.healthStrip { position: relative; display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 10px; margin-bottom: 16px; }
 .asyncStatusBlock { position: relative; min-width: 0; min-height: 36px; }
-.healthStrip article { display: flex; min-width: 0; min-height: 76px; box-sizing: border-box; flex: 1 1 150px; align-items: flex-start; gap: 10px; margin: -.5px 0 0 -.5px; padding: 14px 16px; border-top: .5px solid var(--mn-line); border-left: .5px solid var(--mn-line); }
-.healthStrip article > div { min-width: 0; }
+.healthStrip article { display: flex; min-width: 0; min-height: 76px; box-sizing: border-box; align-items: flex-start; gap: 10px; padding: 13px 14px; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); background: var(--mn-surface); }
+.healthStrip article > div { min-width: 0; flex: 1; }
 .healthStrip small { display: block; margin-bottom: 2px; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
-.healthStrip strong { display: block; overflow: hidden; font-size: 14px; font-weight: 500; line-height: 22px; text-overflow: ellipsis; white-space: nowrap; }
+.healthStrip strong { display: block; font-size: 13.5px; font-weight: 500; line-height: 20px; overflow-wrap: break-word; }
 .healthStrip p { margin: 2px 0 0; overflow: hidden; color: var(--mn-faint); font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
 .healthIndicator { width: 6px; height: 6px; flex: 0 0 auto; margin-top: 6px; border-radius: 50%; }
 .healthGood { background: var(--mn-success); }
-.healthBad { background: var(--mn-danger); }
 .healthMuted { background: var(--mn-idle); }
 /* Provider rows follow the DSH plugin list: 36px mark, 14px title, tertiary detail. */
 .providerHealth { margin-bottom: 16px; padding: 16px; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); }
@@ -368,11 +363,11 @@
 .providerHealthList article[data-status='idle'] .providerHealthSignal { background: var(--mn-idle); }
 .storageDomains { margin-bottom: 16px; padding: 16px; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); }
 .storageRoot { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 16px; margin-top: 12px; padding: 10px 12px; border-radius: var(--dsw-radius-md); background: var(--mn-block-fill); }
-.storageRoot > div:first-child { display: grid; min-width: 0; gap: 2px; }
-.storageRoot span, .storageRoot small { color: var(--mn-faint); font-size: 12px; line-height: 18px; }
+.storageRoot > div:first-child { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr); gap: 2px; color: var(--mn-muted); font-size: 12px; line-height: 18px; }
+.storageRoot > div:first-child > span:first-child, .storageRoot small { color: var(--mn-faint); font-size: 12px; line-height: 18px; }
 .storageRoot code { overflow: hidden; color: var(--mn-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .storageRoot > div:last-child { display: grid; flex: 0 0 auto; gap: 2px; justify-items: end; }
-.storageRoot strong { font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.storageRoot strong { font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--mn-text); }
 .storageAreaGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
 .storageAreaGrid article { display: flex; min-width: 0; min-height: 148px; box-sizing: border-box; flex-direction: column; padding: 12px 14px; border: .5px solid var(--mn-line); border-radius: var(--dsw-radius-md); }
 .storageAreaGrid article > header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -387,7 +382,7 @@
 .storageAreaMetric span { color: var(--mn-faint); font-size: 12px; }
 .storageAreaMetric code { margin-left: auto; color: var(--mn-faint); font-size: 11px; }
 .storageAreaGrid article > p { min-height: 36px; margin: 6px 0 8px; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
-.storagePath { display: block; overflow: hidden; margin-top: auto; padding-top: 8px; border-top: .5px solid var(--mn-line); color: var(--mn-faint); font-size: 11px; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.storagePath { display: flex; min-width: 0; overflow: hidden; margin-top: auto; padding-top: 8px; border-top: .5px solid var(--mn-line); color: var(--mn-faint); font-size: 11px; line-height: 16px; }
 .storageAreaGrid article > small { display: block; margin-top: 6px; color: var(--mn-danger); font-size: 12px; line-height: 18px; }
 .storageUnavailable { display: grid; min-height: 120px; place-content: center; gap: 4px; margin-top: 12px; border-radius: var(--dsw-radius-md); color: var(--mn-muted); background: var(--mn-block-fill); text-align: center; }
 .storageUnavailable strong { font-size: 13px; font-weight: 500; }
@@ -484,7 +479,7 @@
   .modal > header { gap: 12px; padding: 10px max(14px, env(safe-area-inset-right, 0px)) 12px max(14px, env(safe-area-inset-left, 0px)); }
   .modal > header p { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
   .modal > header .iconButton { width: 44px; height: 44px; margin: -4px -5px -4px 0; }
-  .modalBody { padding: 14px max(14px, env(safe-area-inset-right, 0px)) 18px max(14px, env(safe-area-inset-left, 0px)); scrollbar-gutter: auto; scroll-padding-bottom: 12px; }
+  .modalBody { padding: 14px max(14px, env(safe-area-inset-right, 0px)) 16px max(14px, env(safe-area-inset-left, 0px)); scrollbar-gutter: auto; scroll-padding-bottom: 16px; }
   .modalBody button { min-height: 44px; }
   .modalFooter { align-items: stretch; flex-direction: column; gap: 8px; padding: 10px max(14px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px)); }
   .modalFooterMeta { max-width: none; margin: 0; }
@@ -495,7 +490,7 @@
   .page { padding: 16px 16px calc(170px + env(safe-area-inset-bottom, 0px)); }
   .pageHeader { display: grid; gap: 10px; }
   .pageHeaderMeta { justify-content: flex-start; }
-  .healthStrip article { flex-basis: 100%; }
+  .healthStrip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .providerHealthMeta { align-items: flex-end; flex-direction: column; gap: 4px; }
   .storageRoot { align-items: flex-start; flex-direction: column; }
   .storageRoot > div:last-child { justify-items: start; }
@@ -503,12 +498,12 @@
 }
 
 @media (max-width: 520px) {
-  .workspacePicker select { width: min(150px, 39vw); }
   .nav { gap: 18px; scroll-snap-type: x proximity; }
   .nav button { scroll-snap-align: start; }
   .pageHeaderMeta { align-items: stretch; }
   .pageHeaderMeta > code { display: inline-flex; align-items: center; }
   .pageHeaderMeta > button { flex: 1; }
+  .healthStrip { grid-template-columns: minmax(0, 1fr); }
   .emptyState { min-height: 180px; padding: 24px 16px; }
   .formGrid { grid-template-columns: 1fr; }
 }
@@ -560,6 +555,14 @@
 .page[data-source-page] .page { width: 100%; min-height: 0; margin: 0; padding: 0; }
 
 /* Use the panel width: a narrow desktop sidebar needs the same chrome as a phone. */
+@container mnemon-workbench (max-width: 927px) {
+  .healthStrip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@container mnemon-workbench (max-width: 680px) {
+  .healthStrip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 @container mnemon-workbench (max-width: 520px) {
   .masthead { min-height: 0; flex-wrap: wrap; gap: 4px 8px; padding: 8px 16px 2px; }
   .masthead[data-window-drag] { padding-left: calc(16px + var(--dsh-frame-leading-clearance, 0px)); }
@@ -578,6 +581,7 @@
   .shell .masthead .workspaceMismatch > span { display: inline; }
   .alert, .notice { margin-inline: 16px; }
   .topNavigation { padding-inline: 16px; }
+  .healthStrip { grid-template-columns: minmax(0, 1fr); }
   .noticeToggle { display: flex; min-width: 0; min-height: 28px; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 16px 0; padding: 4px 12px; border: 0; border-radius: var(--dsw-radius-md); color: var(--dsw-alias-state-warn-label, var(--mn-text)); background: var(--dsw-alias-state-warn-tertiary, color-mix(in srgb, var(--mn-warn) 12%, transparent)); text-align: left; cursor: pointer; font-size: 12px; line-height: 18px; }
   .noticeToggle > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .noticeToggle > svg { flex: 0 0 auto; transform: rotate(-90deg); }

@@ -1,7 +1,7 @@
 import { css, sidebarCss, useT } from './presentation.ts'
 import type { JSX } from 'react'
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
-import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
+import { PathLabel, Switch, writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import { MEMORY_SPACE_DESCRIPTION_MAX_LENGTH, MEMORY_SPACE_NAME_MAX_LENGTH, NATIVE_PROVIDER_ID, type MemorySpaceCatalog, type MemorySpaceMetadataUpdate, type MemorySpaceRediscovery, type MemorySpaceView, type MemoryGraphNode, type MemoryGraphSnapshot, type MemoryProviderConnection, type MemoryProviderId } from '../contracts.ts'
 import type { MemorySpacesPageClient } from './api.ts'
 import { ProviderIcon } from './ProviderIcon.tsx'
@@ -9,6 +9,13 @@ import { providerSummary } from './provider-presentation.ts'
 import { appearanceClass, useLocale, humanBytes, message, PageHeader, SidebarModal, EmptyState } from 'dsh-mnemon/client'
 import { MemoryProviderBadge, ProviderMemoryFields, ReadSourcePanel, categoryLabel, mergeProviderDefaults, nativeSpaceProvider, providerDraftComplete, providerUnavailableKey, readyFirst, readyProviderId, type ProviderDrafts } from './widgets.tsx'
 import { MemoryGraph, enrichMultiSpaceGraph, graphKindLabel, graphNodeKey, graphNodeKind } from './memory-graph.tsx'
+
+const canRenderSwitch = typeof Switch === 'function' || (typeof Switch === 'object' && Switch !== null)
+const canRenderPathLabel = typeof PathLabel === 'function' || (typeof PathLabel === 'object' && PathLabel !== null)
+
+function isFilesystemLocation(value: string): boolean {
+  return (value.includes('/') || value.includes('\\')) && !/^[a-z][a-z0-9+.-]*:\/\//iu.test(value)
+}
 
 /** Full-text popup for a selected graph node whose inspector preview is clamped. */
 function ContentPreview(props: { node: MemoryGraphNode; kind: string; onClose: () => void }): JSX.Element {
@@ -441,7 +448,18 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
       {selectedProvider !== undefined && selectedProvider.origin !== 'native' && <ProviderMemoryFields provider={selectedProvider} connection={providerDrafts[selectedProvider.id] ?? {}} onChange={(key, value) => updateProviderDraft(selectedProvider.id, key, value)} />}
     </section>
   </form>
-  const spaceToggle = (body: MemorySpaceView) => <button type="button" className={css.bodySwitch} role="switch" aria-checked={body.active} aria-label={t('overview.toggleAria', { name: body.name })} disabled={!props.activationEnabled || changing === body.id || deletingSpace === body.id} onClick={() => void toggle(body)}><span className={css.bodySwitchTrack} aria-hidden="true"><i /></span><span>{changing === body.id ? t('overview.toggling') : body.active ? t('common.active') : t('common.inactive')}</span></button>
+  const spaceToggle = (body: MemorySpaceView) => {
+    const statusTitle = changing === body.id ? t('overview.toggling') : body.active ? t('common.active') : t('common.inactive')
+    const disabled = !props.activationEnabled || changing === body.id || deletingSpace === body.id
+    return canRenderSwitch
+      ? <Switch checked={body.active} label={t('overview.toggleAria', { name: body.name })} title={statusTitle} disabled={disabled} onChange={() => void toggle(body)} />
+      : <button type="button" role="switch" aria-checked={body.active} aria-label={t('overview.toggleAria', { name: body.name })} title={statusTitle} disabled={disabled} onClick={() => void toggle(body)}>{statusTitle}</button>
+  }
+  const renderLocation = (body: MemorySpaceView) => {
+    const location = body.provider.location
+    if (canRenderPathLabel && location !== '' && isFilesystemLocation(location)) return <PathLabel path={location} />
+    return location || body.provider.label
+  }
   const spaceEditActionClass = appearanceClass(css.ghostButton, appearanceClass(sidebarCss.itemActionButton, sidebarCss.itemEditAction))
   const spaceDeleteActionClass = appearanceClass(css.dangerButton, appearanceClass(sidebarCss.itemActionButton, sidebarCss.itemDangerAction))
   return (
@@ -478,7 +496,7 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
               if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return
               event.preventDefault(); void reconnect(body)
             }}>
-              {<><div className={sidebarCss.bodyCardHeader}><div className={sidebarCss.bodyCardIdentity}><span className={css.bodySignal} /><div><strong title={body.id}>{body.name}</strong><div className={sidebarCss.bodyCardMeta}><MemoryProviderBadge providerId={body.provider.id} label={body.provider.label} /><small className={css.bodyHealth}>{reconnectingSpace === body.id ? t('overview.reconnecting') : body.statusLoading ? t('overview.storageChecking') : body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small>{body.mnemonDefault && <small className={css.mnemonDefaultBadge}>{t('overview.mnemonDefault')}</small>}{newSpaceIds.has(body.id) && <small className={css.newSpaceBadge}>{t('overview.newSpace')}</small>}</div></div></div>{spaceToggle(body)}</div><p title={body.description || t('overview.noDescription')}>{body.description || t('overview.noDescription')}</p>{placementReceipt(body)}<footer className={sidebarCss.bodyCardFooter}><div className={sidebarCss.bodyCardStats}>{!nativeSpaceProvider(body.provider) ? <><span className={css.bodyFooterBlock} title={t(body.provider.kind === 'remote' ? 'overview.providerRemote' : 'overview.providerLocal')}>{t(body.provider.kind === 'remote' ? 'overview.providerRemote' : 'overview.providerLocal')}</span><span className={`${css.bodyFooterBlock} ${css.bodyFooterGrow}`} title={body.provider.location || body.provider.label}>{body.provider.location || body.provider.label}</span></> : <><span className={css.bodyFooterBlock} title={t('common.memories', { count: body.stats?.totalInsights ?? 0 })}>{t('common.memories', { count: body.stats?.totalInsights ?? 0 })}</span><span className={css.bodyFooterBlock} title={t('common.edges', { count: body.stats?.edgeCount ?? 0 })}>{t('common.edges', { count: body.stats?.edgeCount ?? 0 })}</span><span className={css.bodyFooterBlock} title={humanBytes(body.stats?.dbSizeBytes ?? 0)}>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></>}</div><div className={css.bodyCardActions}><button type="button" className={spaceEditActionClass} aria-label={t('overview.editSpaceAria', { name: body.name })} disabled={!props.writeEnabled || deletingSpace === body.id} onClick={() => beginEdit(body)}>{t('overview.editSpace')}</button><button type="button" className={spaceDeleteActionClass} aria-label={t(!nativeSpaceProvider(body.provider) ? 'overview.disconnectSpaceAria' : 'overview.deleteSpaceAria', { name: body.name })} title={canDeleteSpace(body) ? undefined : t('overview.lastStoreDeleteHint')} disabled={!props.writeEnabled || deletingSpace === body.id || !canDeleteSpace(body)} onClick={() => setConfirmingDeleteSpace(body.id)}>{!nativeSpaceProvider(body.provider) ? t('overview.disconnectSpace') : t('overview.deleteSpace')}</button></div></footer></>}
+              {<><div className={sidebarCss.bodyCardHeader}><div className={sidebarCss.bodyCardIdentity}><span className={css.bodySignal} /><div><strong title={body.id}>{body.name}</strong><div className={sidebarCss.bodyCardMeta}><MemoryProviderBadge providerId={body.provider.id} label={body.provider.label} /><small className={css.bodyHealth}>{reconnectingSpace === body.id ? t('overview.reconnecting') : body.statusLoading ? t('overview.storageChecking') : body.healthy ? t('overview.storageHealthy') : t('overview.storageUnhealthy')}</small>{body.mnemonDefault && <small className={css.mnemonDefaultBadge}>{t('overview.mnemonDefault')}</small>}{newSpaceIds.has(body.id) && <small className={css.newSpaceBadge}>{t('overview.newSpace')}</small>}</div></div></div>{spaceToggle(body)}</div><p title={body.description || t('overview.noDescription')}>{body.description || t('overview.noDescription')}</p>{placementReceipt(body)}<footer className={sidebarCss.bodyCardFooter}><div className={sidebarCss.bodyCardStats}>{!nativeSpaceProvider(body.provider) ? <><span className={css.bodyFooterBlock} title={t(body.provider.kind === 'remote' ? 'overview.providerRemote' : 'overview.providerLocal')}>{t(body.provider.kind === 'remote' ? 'overview.providerRemote' : 'overview.providerLocal')}</span><span className={`${css.bodyFooterBlock} ${css.bodyFooterGrow}`} title={body.provider.location || body.provider.label}>{renderLocation(body)}</span></> : <><span className={css.bodyFooterBlock} title={t('common.memories', { count: body.stats?.totalInsights ?? 0 })}>{t('common.memories', { count: body.stats?.totalInsights ?? 0 })}</span><span className={css.bodyFooterBlock} title={t('common.edges', { count: body.stats?.edgeCount ?? 0 })}>{t('common.edges', { count: body.stats?.edgeCount ?? 0 })}</span><span className={css.bodyFooterBlock} title={humanBytes(body.stats?.dbSizeBytes ?? 0)}>{humanBytes(body.stats?.dbSizeBytes ?? 0)}</span></>}</div><div className={css.bodyCardActions}><button type="button" className={spaceEditActionClass} aria-label={t('overview.editSpaceAria', { name: body.name })} disabled={!props.writeEnabled || deletingSpace === body.id} onClick={() => beginEdit(body)}>{t('overview.editSpace')}</button><button type="button" className={spaceDeleteActionClass} aria-label={t(!nativeSpaceProvider(body.provider) ? 'overview.disconnectSpaceAria' : 'overview.deleteSpaceAria', { name: body.name })} title={canDeleteSpace(body) ? undefined : t('overview.lastStoreDeleteHint')} disabled={!props.writeEnabled || deletingSpace === body.id || !canDeleteSpace(body)} onClick={() => setConfirmingDeleteSpace(body.id)}>{!nativeSpaceProvider(body.provider) ? t('overview.disconnectSpace') : t('overview.deleteSpace')}</button></div></footer></>}
             </article>
           ))}
           {catalog?.total === 0 && <div className={css.bodyDirectoryEmpty}><span>◇</span><div><strong>{catalogUnavailable ? t('overview.unsyncedTitle') : t('overview.emptyTitle')}</strong><p>{catalogUnavailable ? t('overview.unsyncedShort') : t('overview.emptyShort')}</p></div></div>}

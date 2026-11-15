@@ -1,12 +1,18 @@
-import { useEffect, useId, useRef, useState, type JSX, type ReactNode } from 'react'
-import Markdown from 'markdown-to-jsx'
+import { useEffect, useId, useMemo, useRef, useState, type JSX, type ReactNode } from 'react'
 import {
-  Button, Checkbox, IconChevronDownOutlineRegular, IconEllipsisOutlineRegular, Menu, StateDot, Tag, TextShimmer,
-  type StateDotState, type TagTone,
+  Button, Checkbox, IconChevronDownOutlineRegular, IconEllipsisOutlineRegular, MarkdownText, Menu, PathLabel, StateDot, Tag, TextShimmer,
+  type MarkdownLabels, type StateDotState, type TagTone,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import { EmptyState, Reveal, SidebarModal } from 'dsh-mnemon/client'
+import { EmptyState, Reveal, SidebarModal, useLocale } from 'dsh-mnemon/client'
 import type { EvolutionSignal, RunStatus, SuggestionStatus, TrajectoryAnnotation, TrajectoryStep } from '../contracts.ts'
 import { css, useT, type SkillsKey, type SkillsTranslate } from './presentation.ts'
+
+const canRenderMarkdown = typeof MarkdownText === 'function' || (typeof MarkdownText === 'object' && MarkdownText !== null)
+const canRenderPathLabel = typeof PathLabel === 'function' || (typeof PathLabel === 'object' && PathLabel !== null)
+
+export function SkillPath(props: { path: string }): JSX.Element {
+  return canRenderPathLabel ? <PathLabel path={props.path} /> : <>{props.path}</>
+}
 
 const SIGNAL_TONE: Record<EvolutionSignal, TagTone> = {
   correction: 'warning', directive: 'info', 'tool-failure': 'danger', 'approach-change': 'warning',
@@ -65,10 +71,10 @@ export function Empty(props: { glyph: string; title: string; children: string; a
 
 export function Confirm(props: { title: string; body: string; confirmLabel: string; busy?: boolean; danger?: boolean; onConfirm: () => void; onClose: () => void }): JSX.Element {
   const t = useT()
-  return <SidebarModal title={props.title} description={props.body} {...(props.busy === undefined ? {} : { busy: props.busy })} onClose={props.onClose} footer={<>
+  return <SidebarModal title={props.title} {...(props.busy === undefined ? {} : { busy: props.busy })} onClose={props.onClose} footer={<>
     <Button variant="ghost" onClick={props.onClose}>{t('common.cancel')}</Button>
     <Button variant="primary" className={props.danger === true ? css.skDangerButton : undefined} disabled={props.busy === true} onClick={props.onConfirm}>{props.confirmLabel}</Button>
-  </>}><span /></SidebarModal>
+  </>}><p className={css.skProse}>{props.body}</p></SidebarModal>
 }
 
 /**
@@ -143,7 +149,7 @@ export interface MoreItem {
 export function MoreMenu(props: { label: string; items: readonly MoreItem[]; disabled?: boolean; onSelect: (id: string) => void }): JSX.Element | null {
   const [open, setOpen] = useState(false)
   if (props.items.length === 0) return null
-  return <Menu open={open} onClose={() => setOpen(false)} align="end" portal
+  return <Menu open={open} autoFocus onClose={() => setOpen(false)} align="end" portal
     items={props.items.map(item => ({ id: item.id, label: item.label, ...(item.danger === true ? { danger: true } : {}), ...(item.disabled === true ? { disabled: true } : {}) }))}
     onSelect={id => { setOpen(false); props.onSelect(id) }}
     anchor={<button type="button" className={css.skIconButton} aria-label={props.label} title={props.label} aria-haspopup="menu" aria-expanded={open} disabled={props.disabled} onClick={() => setOpen(value => !value)}>
@@ -220,7 +226,15 @@ export function diffLabels(t: SkillsTranslate) {
 
 /** The SKILL.md body as Markdown, without its frontmatter. */
 export function SkillMarkdown(props: { body: string }): JSX.Element {
-  return <div className={css.skDoc}><Markdown options={{ disableParsingRawHTML: true, forceBlock: true }}>{props.body}</Markdown></div>
+  const locale = useLocale()
+  const labels = useMemo<MarkdownLabels>(() => {
+    const zh = locale.startsWith('zh')
+    return {
+      code: { copyLabel: zh ? '复制' : 'Copy', copiedLabel: zh ? '已复制' : 'Copied' },
+      footnotes: zh ? '脚注' : 'Footnotes',
+    }
+  }, [locale])
+  return <div className={css.skDoc}>{canRenderMarkdown ? <MarkdownText text={props.body} labels={labels} /> : props.body}</div>
 }
 
 const CATEGORY_GLYPH: Record<string, string> = {

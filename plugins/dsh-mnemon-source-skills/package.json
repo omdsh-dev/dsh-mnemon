@@ -48,7 +48,6 @@
     "verify": "pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {
-    "markdown-to-jsx": "^7.7.0",
     "yaml": "^2.9.0"
   },
   "peerDependencies": {

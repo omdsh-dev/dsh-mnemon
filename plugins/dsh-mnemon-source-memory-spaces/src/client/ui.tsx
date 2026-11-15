@@ -1,5 +1,5 @@
 import { css, sidebarCss, useT } from './presentation.ts'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import type { MemoryJsonValue } from 'dsh-mnemon/contracts'
 import * as mnemonClient from 'dsh-mnemon/client'
 import {
@@ -142,11 +142,26 @@ function MemorySpacesSourceView(props: MemorySourcePageProps & { page: Page }): 
   const forget = async (insight: Insight) => { await client.forget(insight.id, insight.memoryBodyId); refresh() }
   const bodies = status?.memoryBodies ?? []
   const preferences = props.preferences
+  const onTabKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const currentIndex = TABS.findIndex(tab => tab.id === page)
+    if (currentIndex < 0) return
+    let nextIndex = -1
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % TABS.length
+    else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + TABS.length) % TABS.length
+    else if (event.key === 'Home') nextIndex = 0
+    else if (event.key === 'End') nextIndex = TABS.length - 1
+    else return
+    event.preventDefault()
+    const nextTab = TABS[nextIndex]!
+    setPage(nextTab.id)
+    const buttons = event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+    buttons[nextIndex]?.focus()
+  }
   return <>
     {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
     {<section className={sidebarCss.memoryWorkspace} ref={headerRef}>
       <PageHeader title={t('nav.spaces')} description={t('overview.description')} {...(writable ? {} : { meta: activationEnabled ? t('common.activationOnly') : t('common.readOnly') })} action={<div className={css.memoryHeaderActions}><button type="button" className={appearanceClass(css.primaryButton, sidebarCss.memoryWriteButton)} disabled={!writable} onClick={() => remember()}>{t('nav.rememberAction')}</button>{preferences !== undefined && <button type="button" className={css.secondaryButton} onClick={() => setStrategyOpen(true)}>{t('strategy.action')}</button>}</div>} />
-      <div className={sidebarCss.memoryNavigation}><div className={sidebarCss.memoryTabs} role="tablist" aria-label={t('nav.memory.aria')}>{TABS.map(tab => <button key={tab.id} type="button" role="tab" aria-selected={page === tab.id} data-active={page === tab.id ? '' : undefined} onClick={() => setPage(tab.id)}>{t(tab.key)}</button>)}</div></div>
+      <div className={sidebarCss.memoryNavigation}><div className={sidebarCss.memoryTabs} role="tablist" aria-label={t('nav.memory.aria')} onKeyDown={onTabKeyDown}>{TABS.map(tab => <button key={tab.id} type="button" role="tab" tabIndex={page === tab.id ? 0 : -1} aria-selected={page === tab.id} data-active={page === tab.id ? '' : undefined} onClick={() => setPage(tab.id)}>{t(tab.key)}</button>)}</div></div>
     </section>}
     {page === 'spaces' && <OverviewPage active={props.active ?? true} client={client} metadataClient={client} revision={revision} reloadKey={reloads} activationEnabled={activationEnabled} writeEnabled={writable} agentAvailable={agentAvailable} fallbackBodies={bodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={status?.memoryBodies !== undefined} onMutate={refresh} onAgentRefresh={refresh} onBodyReconnect={handleBodyReconnect} onBodyMetadata={handleBodyMetadata} onExplore={explore} />}
     {page === 'explore' && <ExplorePage client={client} agentClient={client} agentAvailable={client.canAssist('agent-search')} status={status} seed={seed} writeEnabled={writable} onForget={forget} onRevealElement={revealElement} />}

@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { Button, DiffBlock, IconSparkleRegular, SegmentedControl, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { appearanceClass, SelectField } from 'dsh-mnemon/client'
 import type { AutoAdoptionEvent, BacktestRun, DraftView, ModelRoute, SkillDraft, SkillRootKind, SkillSuggestion, SuggestionStatus, SuggestionView, Trajectory } from '../contracts.ts'
 import { modelOptionPick, modelOptionValue, useModelChoice } from './model-choice.tsx'
 import { css, points, relative, stamp, useT } from './presentation.ts'
-import { ActionTag, Busy, Clamp, Confirm, diffLabels, Empty, Fold, MoreList, MoreMenu, SkillMarkdown, StatusTag, StepTimeline, useLink } from './shared.tsx'
+import { ActionTag, Busy, Clamp, Confirm, diffLabels, Empty, Fold, MoreList, MoreMenu, SkillMarkdown, SkillPath, StatusTag, StepTimeline, useLink } from './shared.tsx'
 import { EvidenceView } from './evidence-page.tsx'
 import { RunDetail } from './skill-tests.tsx'
 import type { EvolutionFilter, SkillsLocation, SkillsPageContext } from './ui.tsx'
@@ -94,13 +94,17 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
       ...(suggestions ?? []).filter(entry => statuses.includes(entry.status)).map(suggestion => ({ kind: 'suggestion' as const, id: suggestion.id, suggestion })),
     ]
   }, [filter, suggestions, drafts])
-  if (suggestions === null) return <Busy label={t('common.loading')} />
-  const pendingCount = suggestions.filter(entry => PENDING.includes(entry.status)).length + drafts.length
+  const paneRef = useRef<HTMLDivElement | null>(null)
   const oneOff = filter === 'pending' ? items.filter(item => item.kind === 'suggestion' && item.suggestion.status === 'pending' && item.suggestion.triage?.classification === 'one-off') : []
   const folded = new Set(oneOff.map(item => item.id))
   const prominent = items.filter(item => !folded.has(item.id)).sort((a, b) =>
     Number(b.kind === 'suggestion' && b.suggestion.triage?.classification === 'durable') - Number(a.kind === 'suggestion' && a.suggestion.triage?.classification === 'durable'))
   const current = items.find(item => item.id === selected) ?? prominent[0]
+  useLayoutEffect(() => {
+    if (paneRef.current !== null) paneRef.current.scrollTop = 0
+  }, [current?.id, filter])
+  if (suggestions === null) return <Busy label={t('common.loading')} />
+  const pendingCount = suggestions.filter(entry => PENDING.includes(entry.status)).length + drafts.length
   const selectedOneOff = selected !== undefined && folded.has(selected)
   const canReview = context.sessionId !== undefined && context.client.canAssist('skill-review-now')
   const reviewNow = async () => {
@@ -143,16 +147,12 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
       context.refresh()
     } catch (error) { context.fail(error) }
   }
-  // The same two pickers on both pages: the global pick, and this card's own.
-  const modelBar = <div className={css.skListBar} style={{ borderBottom: 'none', padding: '0 0 10px' }}>
-    <div className={css.skSplit} style={{ minHeight: 0, alignItems: 'center', width: '100%' }}>
-      <SelectField<string> label={t('evolution.model')} triggerDetail inline size="sm" value={modelOptionValue(choice.preferences.model)} disabled={!context.writable || choice.models === null} onChange={saveDraftModel} options={choice.options} />
-      <SelectField<string> label={t('evolution.modelCard')} triggerDetail inline size="sm" value={modelOptionValue(currentOverride)} disabled={!context.writable || !canOverride || choice.models === null} onChange={saveSuggestionModel} options={choice.cardOptions} />
-    </div>
+  // Keep model pickers inside the detail pane so the left inbox header never shifts across Pending | Done | Evidence.
+  const modelBar = <div className={css.skPaneBar}>
+    <SelectField<string> label={t('evolution.model')} triggerDetail inline size="sm" value={modelOptionValue(choice.preferences.model)} disabled={!context.writable || choice.models === null} onChange={saveDraftModel} options={choice.options} />
+    <SelectField<string> label={t('evolution.modelCard')} triggerDetail inline size="sm" value={modelOptionValue(currentOverride)} disabled={!context.writable || !canOverride || choice.models === null} onChange={saveSuggestionModel} options={choice.cardOptions} />
   </div>
-  return <>
-    {modelBar}
-    <div className={appearanceClass(css.skSplit, css.skEvolutionSplit)}>
+  return <div className={appearanceClass(css.skSplit, css.skEvolutionSplit)}>
     <aside className={css.skList}>
       {bar}
       {prominent.map(item => <ListItem key={item.id} item={item} selected={current?.id === item.id} onSelect={() => setSelected(item.id)} />)}
@@ -161,7 +161,8 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
         {oneOff.map(item => <ListItem key={item.id} item={item} selected={current?.id === item.id} onSelect={() => setSelected(item.id)} />)}
       </Fold>}
     </aside>
-    <div key={current?.id ?? filter} className={css.skPane}>
+    <div ref={paneRef} className={css.skPane}>
+      {modelBar}
       {current === undefined
         ? filter === 'pending' && evolutionOff
           ? <Empty glyph="✧" title={t('evolution.off')} action={<>
@@ -183,8 +184,7 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
                 onClose={() => setDeleting(undefined)} onConfirm={() => void removeItem(current)} />}
             </article>}
     </div>
-    </div>
-  </>
+  </div>
 }
 
 function ListItem(props: { item: Item; selected: boolean; onSelect: () => void }): JSX.Element {
@@ -213,18 +213,22 @@ function SuggestionDetail(props: { context: SkillsPageContext; id: string; model
   // The pick the page holds for this card, as `provider`/`model` for the Host;
   // none at all asks it to use the task Agent's own route.
   const route = props.model === null || props.model === undefined ? {} : { provider: props.model.provider, model: props.model.model }
-  const [view, setView] = useState<SuggestionView | null>(null)
+  const [loadedView, setLoadedView] = useState<SuggestionView | null>(null)
   const [loadError, setLoadError] = useState<'missing' | 'failed' | null>(null)
   const [reload, setReload] = useState(0)
   const [trajectories, setTrajectories] = useState<Map<string, Trajectory | null>>(new Map())
   const [busy, setBusy] = useState(false)
   const [deleting, setDeleting] = useState(false)
   useEffect(() => {
+    setDeleting(false)
+    setTrajectories(new Map())
+  }, [props.id])
+  useEffect(() => {
     let active = true
     setLoadError(null)
     void context.client.suggestion(props.id).then(async value => {
       if (!active) return
-      setView(value)
+      setLoadedView(value)
       const uniqueIds = [...new Set(value.suggestion.evidence.slice(-4).map(reference => reference.trajectoryId))]
       const entries = await Promise.all(uniqueIds.map(async trajectoryId => [
         trajectoryId,
@@ -233,7 +237,7 @@ function SuggestionDetail(props: { context: SkillsPageContext; id: string; model
       if (active) setTrajectories(new Map(entries))
     }).catch(error => {
       if (!active) return
-      setView(null)
+      setLoadedView(null)
       if ((error instanceof Error ? error.message : String(error)) === 'suggestion not found: ' + props.id) setLoadError('missing')
       else { setLoadError('failed'); context.fail(error) }
     })
@@ -241,6 +245,7 @@ function SuggestionDetail(props: { context: SkillsPageContext; id: string; model
   }, [context.client, props.id, context.revision, reload])
   if (loadError !== null) return <Empty glyph="?" title={t(loadError === 'missing' ? 'evolution.missing' : 'evolution.loadFailed')}
     action={<Button variant="ghost" onClick={() => setReload(value => value + 1)}>{t('common.retry')}</Button>}>{t(loadError === 'missing' ? 'evolution.missingBody' : 'evolution.loadFailedBody')}</Empty>
+  const view = loadedView !== null && loadedView.suggestion.id === props.id ? loadedView : null
   if (view === null) return <Busy label={t('common.loading')} />
   const { suggestion } = view
   const canDraft = context.client.canAssist('skill-draft') && !(suggestion.action === 'update' && view.skill === undefined)
@@ -284,14 +289,14 @@ function SuggestionDetail(props: { context: SkillsPageContext; id: string; model
     {suggestion.autoAdoption !== undefined && suggestion.autoAdoption.length > 0 && <AutoAdoptionHistory events={suggestion.autoAdoption} />}
     {suggestion.status === 'drafting' && <Busy label={t('evolution.drafting')} />}
     {suggestion.lastError !== undefined && suggestion.status === 'pending' && <p className={css.inlineError}>{t('evolution.draftFailed', { error: suggestion.lastError })}</p>}
-    {suggestion.status === 'review' && suggestion.draftId !== undefined && <DraftReview context={context} draftId={suggestion.draftId} model={props.model ?? null} readDraft={props.readDraft} />}
+    {suggestion.status === 'review' && suggestion.draftId !== undefined && <DraftReview key={suggestion.draftId} context={context} draftId={suggestion.draftId} model={props.model ?? null} readDraft={props.readDraft} />}
     {suggestion.status === 'adopted' && view.skill !== undefined && <p className={css.skSuccess}>{t('evolution.adopted')} {view.skillInCatalog !== false && <button type="button" className={css.skLink} onClick={() => context.navigate({ tab: 'skills', skillKey: view.skill!.key })}>{t('evolution.openSkill')} ›</button>}</p>}
     <div className={css.skFolds}>
-      {view.skill !== undefined && <Fold title={t('evolution.currentSkill')} meta={t(`root.${view.skill.root}`)}>
-        <p className={css.skMuted}>{view.skill.path}</p>
+      {view.skill !== undefined && <Fold key={`${suggestion.id}:skill`} title={t('evolution.currentSkill')} meta={t(`root.${view.skill.root}`)}>
+        <p className={css.skMuted}><SkillPath path={view.skill.path} /></p>
         <SkillMarkdown body={view.skill.body} />
       </Fold>}
-      <Fold title={t('evolution.evidence')} meta={t('evolution.evidenceMeta', { conversations: references.length, steps: cited })}>
+      <Fold key={`${suggestion.id}:evidence`} title={t('evolution.evidence')} meta={t('evolution.evidenceMeta', { conversations: references.length, steps: cited })}>
         {references.map((reference, index) => {
           const trajectory = trajectories.get(reference.trajectoryId)
           if (trajectory === undefined) return <Busy key={index} label={t('common.loading')} />
@@ -339,7 +344,7 @@ function DraftReview(props: { context: SkillsPageContext; draftId: string; model
   // A redraft continues what the user picked for drafts; a pick of none follows
   // the task Agent, as every run did before the pickers existed.
   const route = props.model === null || props.model === undefined ? {} : { provider: props.model.provider, model: props.model.model }
-  const [view, setView] = useState<DraftView | null>(null)
+  const [loadedView, setLoadedView] = useState<DraftView | null>(null)
   const [cases, setCases] = useState<number | undefined>(undefined)
   const [editing, setEditing] = useState<string | null>(null)
   const [redrafting, setRedrafting] = useState<string | null>(null)
@@ -350,11 +355,19 @@ function DraftReview(props: { context: SkillsPageContext; draftId: string; model
   const [confirmAdopt, setConfirmAdopt] = useState(false)
   const configRevision = context.configRevision ?? 0
   const loadDraft = props.readDraft ?? context.client.draft
+  const view = loadedView !== null && loadedView.draft.id === props.draftId ? loadedView : null
+  useEffect(() => {
+    setEditing(null)
+    setRedrafting(null)
+    setDetails(false)
+    setConfirmAdopt(false)
+    setCases(undefined)
+  }, [props.draftId])
   useEffect(() => {
     let active = true
     void loadDraft(props.draftId).then(value => {
       if (!active) return
-      setView(value)
+      setLoadedView(value)
       if (value.draft.targetRoot !== undefined) setRoot(value.draft.targetRoot)
       void context.client.cases(value.draft.skillName).then(list => { if (active) setCases(list.filter(entry => entry.enabled).length) }).catch(() => undefined)
     }).catch(context.fail)
@@ -456,7 +469,7 @@ function DraftReview(props: { context: SkillsPageContext; draftId: string; model
     {editing === null
       ? <DiffBlock maxLines={40} labels={diffLabels(t)} diffs={[{ path: `${draft.skillName}/SKILL.md`, oldText: view.base?.content ?? null, newText: draft.content }]} />
       : <div className={css.skComposer}>
-          <textarea className={css.skEditor} spellCheck={false} value={editing} onChange={event => setEditing(event.target.value)} aria-label="SKILL.md" />
+          <textarea className={css.skEditor} spellCheck={false} value={editing} onChange={event => setEditing(event.target.value)} aria-label={t('diff.code')} />
           <footer>
             <Button variant="ghost" size="sm" onClick={() => setEditing(null)}>{t('common.cancel')}</Button>
             <Button variant="primary" size="sm" disabled={busy || editing === draft.content} onClick={() => void act(() => context.client.updateDraft(draft.id, editing), () => setEditing(null))}>{t('common.save')}</Button>

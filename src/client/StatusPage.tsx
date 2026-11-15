@@ -5,7 +5,7 @@ import { VersionDialog } from './VersionDialog.tsx'
 import { clearStarterUpdate, pendingStarterUpdate } from './starter-update.ts'
 import type { MnemonKey, MnemonTranslate } from './locales.ts'
 import { NATIVE_PROVIDER_ID, ProviderIcon } from './memory-spaces-client.ts'
-import { Button } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, PathLabel } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './MnemonView.module.css'
 import { useT, humanBytes, PageHeader } from './page-kit.tsx'
 
@@ -177,7 +177,7 @@ function StorageDomains(props: {
       </div>
       {props.catalog === undefined ? <div className={css.storageUnavailable}>{t('status.storageWaiting')}</div> : props.selected?.root === undefined ? <div className={css.storageUnavailable}><strong>{storageScopeLabel(t, props.selectedKind)}</strong><p>{props.selectedKind === 'custom' ? t('status.storageCustomUnset') : t('status.storageWorkspaceUnavailable')}</p></div> : <>
         <div className={css.storageRoot}>
-          <div><span>{storageScopeLabel(t, props.selectedKind)} · {t('status.storageActiveRoot')}</span><code>{props.selected.root}</code></div>
+          <div><span>{storageScopeLabel(t, props.selectedKind)} · {t('status.storageActiveRoot')}</span><PathLabel path={props.selected.root} /></div>
           <div><strong>{humanBytes(props.selected.totalBytes)}</strong><small>{props.selected.available ? t('status.storageAvailable') : t('status.storageNotCreated')}</small></div>
         </div>
         <div className={css.storageAreaGrid}>
@@ -185,7 +185,7 @@ function StorageDomains(props: {
             <header><div><span /> <strong>{props.areaName(area.kind)}</strong></div><em>{areaStatus(area.status)}</em></header>
             <div className={css.storageAreaMetric}><strong>{area.itemCount}</strong><span>{t('status.storageItems')}</span><code>{humanBytes(area.bytes)}</code></div>
             <p>{storageAreaDetails(t, area)}</p>
-            <code className={css.storagePath}>{area.path}</code>
+            <span className={css.storagePath}><PathLabel path={area.path} /></span>
             {area.issue !== undefined && <small>{area.issue}</small>}
           </article>)}
         </div>

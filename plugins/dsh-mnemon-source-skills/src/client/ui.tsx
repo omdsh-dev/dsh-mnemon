@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { installMemorySourceUI, MemorySourcePageFrame, PageHeader, Reveal, type MemorySourcePageProps } from 'dsh-mnemon/client'
 import type { SkillsOverview } from '../contracts.ts'
 import { skillsPageClient, type SkillsPageClient } from './api.ts'
@@ -186,9 +186,23 @@ function SkillsView(props: MemorySourcePageProps & { management: NonNullable<Mem
   }
   const waiting = overview === null ? 0 : overview.counts.pending + overview.counts.drafts
   const trashed = overview === null ? 0 : overview.counts.trash
+  const onTabKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    const currentIndex = TABS.indexOf(location.tab)
+    if (currentIndex < 0) return
+    let nextIndex: number | undefined
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % TABS.length
+    else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + TABS.length) % TABS.length
+    else if (event.key === 'Home') nextIndex = 0
+    else if (event.key === 'End') nextIndex = TABS.length - 1
+    if (nextIndex === undefined) return
+    event.preventDefault()
+    setLocation({ tab: TABS[nextIndex]! })
+    const buttons = event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+    buttons[nextIndex]?.focus()
+  }
   const tabs = <div className={sidebarCss.memoryNavigation}>
-    <div className={sidebarCss.memoryTabs} role="tablist" aria-label={t('tabs.aria')}>
-      {TABS.map(tab => <button key={tab} type="button" role="tab" aria-selected={location.tab === tab} data-active={location.tab === tab ? '' : undefined} onClick={() => setLocation({ tab })}>
+    <div className={sidebarCss.memoryTabs} role="tablist" aria-label={t('tabs.aria')} onKeyDown={onTabKeyDown}>
+      {TABS.map(tab => <button key={tab} type="button" role="tab" tabIndex={location.tab === tab ? 0 : -1} aria-selected={location.tab === tab} data-active={location.tab === tab ? '' : undefined} onClick={() => setLocation({ tab })}>
         {t(`tab.${tab}`)}{tab === 'evolution' && waiting > 0 && <b className={css.skTabBadge} aria-label={t('tabs.waiting', { count: waiting })}>{waiting}</b>}
         {tab === 'trash' && trashed > 0 && <b className={css.skTabBadge} aria-label={t('tabs.trash', { count: trashed })}>{trashed}</b>}
       </button>)}

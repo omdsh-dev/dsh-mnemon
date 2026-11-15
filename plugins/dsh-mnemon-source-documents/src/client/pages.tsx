@@ -1,37 +1,31 @@
 import { css, sidebarCss, useT } from './presentation.ts'
 import type { JSX } from 'react'
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
-import Markdown from 'markdown-to-jsx'
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { MarkdownText, PathLabel, type MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import { type DocumentRecord, type DocumentSnapshot, type DocumentView } from '../contracts.ts'
 import type { DocumentsPageClient } from './api.ts'
 import { useRequestVersion, appearanceClass, useLocale, humanBytes, message, PageHeader, ProgressiveFooter, SidebarModal, EmptyState, SearchField } from 'dsh-mnemon/client'
 
-const SAFE_LINK_PATTERN = /^(?:https?:|mailto:|#|\/)/iu
+const canRenderMarkdown = typeof MarkdownText === 'function' || (typeof MarkdownText === 'object' && MarkdownText !== null)
+const canRenderPathLabel = typeof PathLabel === 'function' || (typeof PathLabel === 'object' && PathLabel !== null)
 
-function safeLink(href: string | null | undefined): string | undefined {
-  if (href == null) return undefined
-  const value = href.trim()
-  return SAFE_LINK_PATTERN.test(value) ? value : undefined
+function PathText(props: { path: string }): JSX.Element {
+  return canRenderPathLabel ? <PathLabel path={props.path} /> : <>{props.path}</>
 }
 
-/** Render managed Markdown without raw HTML and with a deliberately small link surface. */
+/** Render managed Markdown through the official DSH Markdown pipeline without raw HTML or unsafe links. */
 function DocumentMarkdown(props: { content: string }): JSX.Element {
+  const locale = useLocale()
+  const labels = useMemo<MarkdownLabels>(() => {
+    const zh = locale.startsWith('zh')
+    return {
+      code: { copyLabel: zh ? '复制' : 'Copy', copiedLabel: zh ? '已复制' : 'Copied' },
+      footnotes: zh ? '脚注' : 'Footnotes',
+    }
+  }, [locale])
   return (
     <div className={css.markdownBody}>
-      <Markdown options={{
-        disableParsingRawHTML: true,
-        forceBlock: true,
-        overrides: {
-          a: {
-            component: ({ href, children, ...rest }: { href?: string; children?: JSX.Element | string }) => {
-              const target = safeLink(href)
-              return target === undefined
-                ? <span>{children}</span>
-                : <a {...rest} href={target} target={target.startsWith('http') ? '_blank' : undefined} rel={target.startsWith('http') ? 'noreferrer noopener' : undefined}>{children}</a>
-            },
-          },
-        },
-      }}>{props.content}</Markdown>
+      {canRenderMarkdown ? <MarkdownText text={props.content} labels={labels} /> : props.content}
     </div>
   )
 }
@@ -78,6 +72,7 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
   queryRef.current = query
   const statusRef = useRef(status)
   statusRef.current = status
+  const activeSearchRef = useRef(false)
 
   const adoptMutatedDocument = useCallback((candidate: unknown) => {
     if (typeof candidate === 'object' && candidate !== null && 'content' in candidate && typeof (candidate as { content: unknown }).content === 'string') {
@@ -97,6 +92,7 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
     reloadIndex = false,
   ) => {
     const request = displayRequests.begin()
+    activeSearchRef.current = nextQuery.trim() !== ''
     setLoading(true); setError(null); setVisibleLimit(pageSize)
     try {
       let current: DocumentSnapshot
@@ -311,7 +307,14 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
       </section>
 
       <section className={css.documentToolbar}>
-        <form onSubmit={event => { event.preventDefault(); void display(query, status) }}><SearchField className={css.documentSearch} label={t('documents.searchAria')} value={query} onChange={event => setQuery(event.target.value)} placeholder={t('documents.searchPlaceholder')} /><button type="submit" className={css.secondaryButton}>{t('documents.search')}</button></form>
+        <form onSubmit={event => { event.preventDefault(); void display(query, status) }}><SearchField className={css.documentSearch} label={t('documents.searchAria')} value={query} onChange={event => {
+          const next = event.target.value
+          const hadQuery = query.trim() !== ''
+          setQuery(next)
+          if (hadQuery && next === '' && activeSearchRef.current) {
+            void display('', status)
+          }
+        }} placeholder={t('documents.searchPlaceholder')} /><button type="submit" className={css.secondaryButton}>{t('documents.search')}</button></form>
         <div role="group" aria-label={t('documents.scope')}><button type="button" data-active={status === 'active' || undefined} onClick={() => changeStatus('active')}>{t('documents.active')} <b>{activeCount}</b></button><button type="button" data-active={status === 'archived' || undefined} onClick={() => changeStatus('archived')}>{t('documents.archivedCount')} <b>{archivedCount}</b></button></div>
 
       </section>
@@ -330,8 +333,8 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
         <section ref={readerRef} className={css.documentReader} aria-label={t('documents.reader')} data-scroll-region={''}>
           {selected === null ? <EmptyState glyph="▤" title={t('documents.selectTitle')}>{t('documents.selectText')}</EmptyState> : (<article className={css.documentDetail}>
             <header><div><span>{selected.status === 'active' ? t('documents.active') : t('documents.coldArchive')}</span><h3>{selected.title}</h3><p>{selected.description || t('documents.noDescription')}</p></div><div className={css.documentActions}>{props.writeEnabled && selected.status === 'active' && <button type="button" className={documentEditActionClass} onClick={beginEdit}>{t('documents.edit')}</button>}{props.writeEnabled && props.client.deleteDocument !== undefined && snapshot !== null && <button type="button" className={documentArchiveActionClass} disabled={!selectedIsCurrent} onClick={() => { setDeleteError(null); setDeleteTarget({ document: selected, revision: snapshot.revision }) }}>{t('documents.delete')}</button>}</div></header>
-            <dl><div><dt>{t('documents.path')}</dt><dd><code>{selected.relativePath}</code></dd></div><div><dt>{t('documents.revision')}</dt><dd>{selected.revision}</dd></div><div><dt>{t('documents.hash')}</dt><dd><code>{selected.contentHash.slice(0, 16)}</code></dd></div><div><dt>{t('documents.size')}</dt><dd>{humanBytes(selected.sizeBytes)}</dd></div></dl>
-            {selected.sourcePaths.length > 0 && <div className={css.documentSources}><span>{t('documents.sources')}</span>{selected.sourcePaths.map(path => <code key={path}>{path}</code>)}</div>}
+            <dl><div><dt>{t('documents.path')}</dt><dd><code><PathText path={selected.relativePath} /></code></dd></div><div><dt>{t('documents.revision')}</dt><dd>{selected.revision}</dd></div><div><dt>{t('documents.hash')}</dt><dd><code>{selected.contentHash.slice(0, 16)}</code></dd></div><div><dt>{t('documents.size')}</dt><dd>{humanBytes(selected.sizeBytes)}</dd></div></dl>
+            {selected.sourcePaths.length > 0 && <div className={css.documentSources}><span>{t('documents.sources')}</span>{selected.sourcePaths.map(path => <code key={path}><PathText path={path} /></code>)}</div>}
             {selected.status === 'archived' && <div className={css.documentArchiveReceipt}><strong>{t(selected.memoryBodyIds.length === 0 ? 'documents.archiveNote' : 'documents.archiveReceipt')}</strong><p>{selected.archiveSummary}</p><div>{selected.memoryBodyIds.map(id => <code key={id}>{id}</code>)}</div></div>}
             <DocumentMarkdown content={selected.content} />
             {props.writeEnabled && selected.status === 'active' && <footer className={css.documentDanger}>{<><div><strong>{t('documents.archiveTitle')}</strong><p>{t('documents.archiveDescription')}</p></div><button type="button" className={documentArchiveActionClass} onClick={() => setConfirmArchive(true)}>{t('documents.archive')}</button></>}</footer>}

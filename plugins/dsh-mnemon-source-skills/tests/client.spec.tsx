@@ -3,10 +3,12 @@ import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, symlinkSync, 
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { URL as NodeURL } from 'node:url'
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, configure, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
 import { strategy } from './fixture.ts'
+
+configure({ asyncUtilTimeout: 5000 })
 
 // Load the installed Core's actual DSH browser artifact; no repository source alias.
 vi.mock('dsh-mnemon/client', async () => {
@@ -27,6 +29,15 @@ import { css, translate } from '../src/client/presentation.ts'
 import { skillsPageClient } from '../src/client/api.ts'
 import { compareRuns } from '../src/client/evolution-page.tsx'
 import type { BacktestRun, CaseResult, EvalCase, ReviewRecordInput, SkillSummary, TrashEntry } from '../src/contracts.ts'
+
+globalThis.ResizeObserver ??= class {
+  constructor(private readonly callback: ResizeObserverCallback) {}
+  observe(target: Element): void {
+    this.callback([{ target, borderBoxSize: [{ inlineSize: 0, blockSize: 0 }] } as unknown as ResizeObserverEntry], this as unknown as ResizeObserver)
+  }
+  unobserve(): void {}
+  disconnect(): void {}
+} as unknown as typeof ResizeObserver
 
 const t = translate('en')
 /** An accessible name made of these parts in order, however its markup spaces them. */
@@ -1137,5 +1148,261 @@ describe('model pickers', () => {
     reject = false
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     await screen.findByRole('heading', { name: 'release-notes' })
+  })
+
+  it('supports roving tabindex keyboard navigation on the Skills tablist and keeps Evolution split shell stable across filters', async () => {
+    await mutate('review-record', review())
+    render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable management={management} />)
+    const [tablist] = await screen.findAllByRole('tablist')
+    fireEvent.keyDown(tablist!, { key: 'Home' })
+    expect(within(tablist!).getAllByRole('tab').map(tab => tab.getAttribute('tabindex'))).toEqual(['0', '-1', '-1', '-1', '-1'])
+    fireEvent.keyDown(tablist!, { key: 'ArrowRight' })
+    expect(within(tablist!).getAllByRole('tab').map(tab => tab.getAttribute('tabindex'))).toEqual(['-1', '0', '-1', '-1', '-1'])
+    await waitFor(() => expect(document.querySelector('aside')).not.toBeNull())
+    const asideBefore = document.querySelector('aside')
+    const splitClassBefore = asideBefore!.parentElement?.className
+    fireEvent.click(await screen.findByRole('tab', { name: t('evolution.evidence') }))
+    await screen.findByText('Group them by component from now on')
+    const asideAfter = document.querySelector('aside')
+    expect(asideAfter?.parentElement?.className).toBe(splitClassBefore)
+  })
+
+  it('never displays stale skill actions or overwrites another skill while switching skills with an in-flight detail read', async () => {
+    const projectFile = join(directory, 'workspace', '.dsh', 'skills', 'release-notes', 'SKILL.md')
+    const userFile = skillPath()
+    mkdirSync(join(directory, 'workspace', '.dsh', 'skills', 'release-notes'), { recursive: true })
+    writeFileSync(projectFile, '---\nname: release-notes\ndescription: Project release notes\n---\nProject-only body.\n')
+    writeFileSync(userFile, '---\nname: release-notes\ndescription: User release notes\n---\nUser-only body.\n')
+
+    let resolveUserSkill: (() => void) | undefined
+    const delayed = new Proxy(management, {
+      get: (target, prop, receiver) => {
+        if (prop !== 'read') return Reflect.get(target, prop, receiver)
+        return async (operation: string, input: unknown) => {
+          const key = (input as { key?: string } | null)?.key
+          if (operation === 'skill' && key === 'user-dsh:release-notes' && resolveUserSkill === undefined) {
+            await new Promise<void>(resolve => { resolveUserSkill = resolve })
+          }
+          return target.read(operation as never, input as never)
+        }
+      },
+    })
+
+    render(
+      <SkillsSourcePage
+        sourceTypeId="skills"
+        sourceInstanceKey="source:skills"
+        sourceInstances={[]}
+        locale="en"
+        writable
+        management={delayed}
+        navigationInput={{ seed: 'skill:project-dsh:release-notes', nonce: 1 }}
+      />,
+    )
+    await screen.findByText('Project-only body.')
+
+    const userRow = screen.getAllByRole('button', { name: /release-notes/u })
+      .find(button => button.textContent?.includes('User release notes'))
+    expect(userRow).toBeDefined()
+    fireEvent.click(userRow!)
+
+    // While user-dsh:release-notes is still loading, project-dsh:release-notes detail and Edit action must not remain interactive.
+    expect(screen.queryByText('Project-only body.')).toBeNull()
+    expect(screen.queryByRole('button', { name: t('common.edit') })).toBeNull()
+
+    resolveUserSkill?.()
+    await screen.findByText('User-only body.')
+    expect(readFileSync(userFile, 'utf8')).toContain('User-only body.')
+  })
+
+  it('does not adopt the previous draft while a newly selected suggestion or standalone draft is loading', async () => {
+    const alphaFile = join(directory, 'dsh', 'skills', 'review-alpha', 'SKILL.md')
+    const betaFile = join(directory, 'dsh', 'skills', 'review-beta', 'SKILL.md')
+    mkdirSync(join(directory, 'dsh', 'skills', 'review-alpha'), { recursive: true })
+    mkdirSync(join(directory, 'dsh', 'skills', 'review-beta'), { recursive: true })
+    const originalAlpha = '---\nname: review-alpha\ndescription: Review fixture.\n---\n\nOriginal review-alpha\n'
+    const originalBeta = '---\nname: review-beta\ndescription: Review fixture.\n---\n\nOriginal review-beta\n'
+    const changedAlpha = '---\nname: review-alpha\ndescription: Review fixture.\n---\n\nChanged ALPHA\n'
+    const changedBeta = '---\nname: review-beta\ndescription: Review fixture.\n---\n\nChanged BETA\n'
+    writeFileSync(alphaFile, originalAlpha)
+    writeFileSync(betaFile, originalBeta)
+
+    const baseReview = review()
+    await mutate('review-record', {
+      ...baseReview,
+      suggestions: [
+        { skillName: 'review-alpha', action: 'update', summary: 'Refine alpha', rationale: 'Alpha note.', confidence: 0.85, signals: ['correction'], steps: [3, 4] },
+        { skillName: 'review-beta', action: 'update', summary: 'Refine beta', rationale: 'Beta note.', confidence: 0.84, signals: ['correction'], steps: [3, 4] },
+      ],
+      cases: [],
+    })
+    const suggestions = (await management.read('suggestions', null)).value as Array<{ id: string; skillName: string }>
+    const alphaSuggestion = suggestions.find(item => item.skillName === 'review-alpha')!
+    const betaSuggestion = suggestions.find(item => item.skillName === 'review-beta')!
+    const alphaDraft = await mutate('draft-record', {
+      suggestionId: alphaSuggestion.id,
+      skillName: 'review-alpha',
+      content: changedAlpha,
+      notes: 'Alpha draft.',
+      changes: [],
+      guidance: [],
+    }) as { id: string }
+    const betaDraft = await mutate('draft-record', {
+      suggestionId: betaSuggestion.id,
+      skillName: 'review-beta',
+      content: changedBeta,
+      notes: 'Beta draft.',
+      changes: [],
+      guidance: [],
+    }) as { id: string }
+
+    let resolveBetaDraft: (() => void) | undefined
+    const mutations: Array<{ op: string; input: unknown }> = []
+    const delayed = new Proxy(management, {
+      get: (target, prop, receiver) => {
+        if (prop === 'read') {
+          return async (operation: string, input: unknown) => {
+            const id = (input as { id?: string } | null)?.id
+            if (operation === 'draft' && id === betaDraft.id && resolveBetaDraft === undefined) {
+              await new Promise<void>(resolve => { resolveBetaDraft = resolve })
+            }
+            return target.read(operation as never, input as never)
+          }
+        }
+        if (prop === 'mutate') {
+          return async (operation: string, input: unknown, options: unknown) => {
+            mutations.push({ op: operation, input })
+            return target.mutate(operation as never, input as never, options as never)
+          }
+        }
+        return Reflect.get(target, prop, receiver)
+      },
+    })
+
+    render(
+      <SkillsSourcePage
+        sourceTypeId="skills"
+        sourceInstanceKey="source:skills"
+        sourceInstances={[]}
+        locale="en"
+        writable
+        management={delayed}
+        navigationInput={{ seed: `suggestion:${alphaSuggestion.id}`, nonce: 1 }}
+      />,
+    )
+    await screen.findByRole('heading', { name: 'review-alpha' })
+    expect(await screen.findByRole('button', { name: t('draft.adopt') })).not.toBeNull()
+
+    const betaItem = screen.getAllByRole('button', { name: /review-beta/u })[0]!
+    fireEvent.click(betaItem)
+    await screen.findByRole('heading', { name: 'review-beta' })
+
+    // While betaDraft is still loading, alphaDraft's Adopt button must NOT remain mounted or clickable.
+    expect(screen.queryByRole('button', { name: t('draft.adopt') })).toBeNull()
+    expect(readFileSync(alphaFile, 'utf8')).toBe(originalAlpha)
+
+    resolveBetaDraft?.()
+    const adoptBeta = await screen.findByRole('button', { name: t('draft.adopt') })
+    fireEvent.click(adoptBeta)
+
+    await waitFor(() => expect(readFileSync(betaFile, 'utf8')).toBe(changedBeta))
+    expect(readFileSync(alphaFile, 'utf8')).toBe(originalAlpha)
+    expect(mutations.filter(entry => entry.op === 'draft-adopt')).toEqual([
+      { op: 'draft-adopt', input: { id: betaDraft.id } },
+    ])
+  })
+
+  it('does not adopt the previous standalone draft while a newly selected standalone draft is loading', async () => {
+    const mutations: Array<{ op: string; input: unknown }> = []
+    const standaloneAlphaFile = join(directory, 'dsh', 'skills', 'standalone-alpha', 'SKILL.md')
+    const standaloneBetaFile = join(directory, 'dsh', 'skills', 'standalone-beta', 'SKILL.md')
+    mkdirSync(join(directory, 'dsh', 'skills', 'standalone-alpha'), { recursive: true })
+    mkdirSync(join(directory, 'dsh', 'skills', 'standalone-beta'), { recursive: true })
+    const originalStandaloneAlpha = '---\nname: standalone-alpha\ndescription: Standalone fixture.\n---\n\nOriginal standalone-alpha\n'
+    const originalStandaloneBeta = '---\nname: standalone-beta\ndescription: Standalone fixture.\n---\n\nOriginal standalone-beta\n'
+    const changedStandaloneAlpha = '---\nname: standalone-alpha\ndescription: Standalone fixture.\n---\n\nChanged STANDALONE ALPHA\n'
+    const changedStandaloneBeta = '---\nname: standalone-beta\ndescription: Standalone fixture.\n---\n\nChanged STANDALONE BETA\n'
+    writeFileSync(standaloneAlphaFile, originalStandaloneAlpha)
+    writeFileSync(standaloneBetaFile, originalStandaloneBeta)
+    const standaloneAlpha = await mutate('draft-record', {
+      skillName: 'standalone-alpha',
+      content: changedStandaloneAlpha,
+      notes: 'Standalone alpha draft.',
+      changes: [],
+      guidance: [],
+    }) as { id: string }
+    const standaloneBeta = await mutate('draft-record', {
+      skillName: 'standalone-beta',
+      content: changedStandaloneBeta,
+      notes: 'Standalone beta draft.',
+      changes: [],
+      guidance: [],
+    }) as { id: string }
+
+    let delayBetaDraft = false
+    let resolveStandaloneBeta: (() => void) | undefined
+    const delayedStandalone = new Proxy(management, {
+      get: (target, prop, receiver) => {
+        if (prop === 'read') {
+          return async (operation: string, input: unknown) => {
+            const id = (input as { id?: string } | null)?.id
+            if (delayBetaDraft && operation === 'draft' && id === standaloneBeta.id && resolveStandaloneBeta === undefined) {
+              await new Promise<void>(resolve => { resolveStandaloneBeta = resolve })
+            }
+            return target.read(operation as never, input as never)
+          }
+        }
+        if (prop === 'mutate') {
+          return async (operation: string, input: unknown, options: unknown) => {
+            mutations.push({ op: operation, input })
+            return target.mutate(operation as never, input as never, options as never)
+          }
+        }
+        return Reflect.get(target, prop, receiver)
+      },
+    })
+
+    const view = render(
+      <SkillsSourcePage
+        sourceTypeId="skills"
+        sourceInstanceKey="source:skills"
+        sourceInstances={[]}
+        locale="en"
+        writable
+        management={delayedStandalone}
+        navigationInput={{ seed: `draft:${standaloneAlpha.id}`, nonce: 1 }}
+        refreshKey={0}
+      />,
+    )
+    await screen.findByRole('heading', { name: 'standalone-alpha' })
+    expect(await screen.findByRole('button', { name: t('draft.adopt') })).not.toBeNull()
+
+    const standaloneBetaRow = screen.getAllByRole('button', { name: /standalone-beta/u })[0]!
+    // Bump refreshKey to clear the draft promise cache while delaying standaloneBeta's detail read,
+    // and switch to standalone-beta synchronously: standaloneAlpha's Adopt button must unmount immediately.
+    delayBetaDraft = true
+    view.rerender(
+      <SkillsSourcePage
+        sourceTypeId="skills"
+        sourceInstanceKey="source:skills"
+        sourceInstances={[]}
+        locale="en"
+        writable
+        management={delayedStandalone}
+        navigationInput={{ seed: `draft:${standaloneAlpha.id}`, nonce: 1 }}
+        refreshKey={1}
+      />,
+    )
+    fireEvent.click(standaloneBetaRow)
+    expect(screen.getByRole('heading', { name: 'standalone-beta' })).not.toBeNull()
+    expect(screen.queryByRole('button', { name: t('draft.adopt') })).toBeNull()
+
+    resolveStandaloneBeta?.()
+    fireEvent.click(await screen.findByRole('button', { name: t('draft.adopt') }))
+    await waitFor(() => expect(readFileSync(standaloneBetaFile, 'utf8')).toBe(changedStandaloneBeta))
+    expect(readFileSync(standaloneAlphaFile, 'utf8')).toBe(originalStandaloneAlpha)
+    expect(mutations.filter(entry => entry.op === 'draft-adopt')).toEqual([
+      { op: 'draft-adopt', input: { id: standaloneBeta.id } },
+    ])
   })
 })

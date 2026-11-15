@@ -1,7 +1,7 @@
 import { useMemoryComposerInset } from './memory-composer.tsx'
 import { isWorkspaceStorageScope } from '../host/protocol.ts'
 import { isDefaultSourceInstance } from '../host/protocol.ts'
-import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react'
 import { IconChevronLeftOutline14, IconRefreshOutlineRegular, IconSettingsOutlineRegular } from './ui-icons.ts'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 
@@ -184,20 +184,53 @@ function SourceStoppedPage(props: { title: string; memoryOff: boolean; onOpenCon
 
 function WorkspaceNavigation(props: { page: Page; onSelect(page: Page): void; sourcePages: readonly SourceNavigationEntry[]; disabledTypes: ReadonlySet<string>; memoryOff: boolean }): JSX.Element {
   const t = useT()
-  const entries: readonly SourceNavigationEntry[] = [
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
+  const allEntries: readonly SourceNavigationEntry[] = [
     { id: 'status', page: 'status', label: t('nav.status'), detail: '', group: 'system', glyph: '⌘', primary: true },
     ...props.sourcePages,
   ]
+  const entries = allEntries.filter(entry => entry.primary)
   const selectedType = sourcePageEntryId(props.page)?.split('/')[0]
-  const button = (item: SourceNavigationEntry) => {
-    const active = props.page === item.page || selectedType !== undefined && selectedType === item.sourceTypeId
+  const isActive = (item: SourceNavigationEntry): boolean =>
+    props.page === item.page || selectedType !== undefined && selectedType === item.sourceTypeId
+  const activeIndex = entries.findIndex(isActive)
+  const tabStopIndex = activeIndex >= 0 ? activeIndex : 0
+
+  const onTabKeyDown = (index: number, event: KeyboardEvent<HTMLButtonElement>): void => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return
+    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft' && event.key !== 'Home' && event.key !== 'End') return
+    const enabledIndices = entries.map((_, i) => i).filter(i => {
+      const el = tabRefs.current[i]
+      return el === null || el === undefined || (!el.disabled && el.getAttribute('aria-disabled') !== 'true')
+    })
+    if (enabledIndices.length === 0) return
+    let targetIndex: number
+    if (event.key === 'Home') {
+      targetIndex = enabledIndices[0]!
+    } else if (event.key === 'End') {
+      targetIndex = enabledIndices[enabledIndices.length - 1]!
+    } else {
+      const pos = enabledIndices.indexOf(index)
+      const delta = event.key === 'ArrowRight' ? 1 : -1
+      targetIndex = pos >= 0
+        ? enabledIndices[(pos + delta + enabledIndices.length) % enabledIndices.length]!
+        : enabledIndices[delta > 0 ? 0 : enabledIndices.length - 1]!
+    }
+    event.preventDefault()
+    tabRefs.current[targetIndex]?.focus()
+    const target = entries[targetIndex]
+    if (target !== undefined) props.onSelect(target.page)
+  }
+
+  const button = (item: SourceNavigationEntry, index: number) => {
+    const active = isActive(item)
     const disabled = item.sourceTypeId !== undefined && props.disabledTypes.has(item.sourceTypeId)
     // A switched-off layer says so first; a stopped Source matters only while the layer is on.
     const badge = disabled ? t('layers.disabledBadge') : item.stopped === true ? t(props.memoryOff ? 'layers.memoryOffBadge' : 'layers.stoppedBadge') : undefined
-    return <button key={item.id} type="button" role="tab" aria-selected={active} data-active={active ? '' : undefined} aria-label={badge === undefined ? undefined : item.label + ' · ' + badge} data-layer-disabled={badge === undefined ? undefined : ''} onClick={() => props.onSelect(item.page)}><span>{item.label}</span>{badge !== undefined && <em className={css.layerDisabledBadge}>{badge}</em>}</button>
+    return <button key={item.id} ref={el => { tabRefs.current[index] = el }} type="button" role="tab" tabIndex={index === tabStopIndex ? 0 : -1} aria-selected={active} data-active={active ? '' : undefined} aria-label={badge === undefined ? undefined : item.label + ' · ' + badge} data-layer-disabled={badge === undefined ? undefined : ''} onKeyDown={event => onTabKeyDown(index, event)} onClick={() => props.onSelect(item.page)}><span>{item.label}</span>{badge !== undefined && <em className={css.layerDisabledBadge}>{badge}</em>}</button>
   }
   return <div className={appearanceClass(css.topNavigation, sidebarCss.topNavigation)}>
-    <div className={appearanceClass(css.nav, sidebarCss.nav)} role="tablist" aria-label={t('nav.aria')}>{entries.filter(entry => entry.primary).map(button)}</div>
+    <div className={appearanceClass(css.nav, sidebarCss.nav)} role="tablist" aria-label={t('nav.aria')}>{entries.map(button)}</div>
   </div>
 }
 

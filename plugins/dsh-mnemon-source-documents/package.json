@@ -47,8 +47,7 @@
     "verify": "pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {
-    "@deepseek-ai/schemastery": "^3.18.4",
-    "markdown-to-jsx": "^7.7.0"
+    "@deepseek-ai/schemastery": "^3.18.4"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",

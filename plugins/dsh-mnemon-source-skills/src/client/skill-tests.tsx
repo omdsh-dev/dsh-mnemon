@@ -1,4 +1,4 @@
-import { useEffect, useState, type JSX } from 'react'
+import { useEffect, useRef, useState, type JSX } from 'react'
 import { Button, Checkbox, Switch, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SidebarModal } from 'dsh-mnemon/client'
 import type { BacktestRun, EvalCase, ModelRoute } from '../contracts.ts'
@@ -41,6 +41,7 @@ export function SkillTests(props: {
   const hasProvidedFile = props.hasFile !== undefined
   const [fetchedCases, setFetchedCases] = useState<EvalCase[] | null>(null)
   const [runs, setRuns] = useState<BacktestRun[] | null>(null)
+  const [loadedSkill, setLoadedSkill] = useState<string | null>(null)
   const [fetchedHasFile, setFetchedHasFile] = useState(true)
   const [editing, setEditing] = useState<CaseDraft | null>(null)
   const [deleting, setDeleting] = useState<EvalCase | null>(null)
@@ -57,12 +58,13 @@ export function SkillTests(props: {
       if (list !== null) setFetchedCases(list)
       setRuns(history.filter(run => run.target.kind !== 'draft'))
       if (pack !== null) setFetchedHasFile(pack.skill !== undefined)
+      setLoadedSkill(skillName)
     }).catch(context.fail)
     return () => { active = false }
   }, [context.client, skillName, context.revision, hasProvidedCases, hasProvidedFile])
   const cases = props.cases ?? fetchedCases
   const hasFile = props.hasFile ?? fetchedHasFile
-  if (cases === null || runs === null) return <Busy label={t('common.loading')} />
+  if (cases === null || runs === null || loadedSkill !== skillName) return <Busy label={t('common.loading')} />
   const enabled = cases.filter(entry => entry.enabled)
   const running = runs.some(entry => entry.status === 'running')
   const run = async () => {
@@ -140,13 +142,22 @@ export function RunDetail(props: { run: BacktestRun }): JSX.Element {
   </div>
 }
 
+interface CheckRow {
+  rowId: number
+  id?: string
+  text: string
+  must: boolean
+}
+
 function CaseEditor(props: { initial: CaseDraft; busy: boolean; onClose: () => void; onSave: (input: CaseDraft) => void }): JSX.Element {
   const t = useT()
+  const nextRowIdRef = useRef(props.initial.checks.length)
   const [value, setValue] = useState<CaseDraft>(props.initial)
+  const [checkRows, setCheckRows] = useState<CheckRow[]>(() => props.initial.checks.map((check, index) => ({ ...check, rowId: index })))
   const [error, setError] = useState<string | null>(null)
-  const checks = value.checks.filter(check => check.text.trim() !== '')
+  const checks = checkRows.filter(check => check.text.trim() !== '').map(({ rowId: _rowId, ...check }) => check)
   const valid = value.title.trim() !== '' && value.prompt.trim() !== '' && checks.length > 0
-  const setCheck = (index: number, patch: Partial<CaseDraft['checks'][number]>) => setValue(current => ({ ...current, checks: current.checks.map((check, position) => position === index ? { ...check, ...patch } : check) }))
+  const setCheck = (rowId: number, patch: Partial<CaseDraft['checks'][number]>) => setCheckRows(current => current.map(check => check.rowId === rowId ? { ...check, ...patch } : check))
   return <SidebarModal wide title={props.initial.id === undefined ? t('tests.newTitle') : t('tests.editTitle')} busy={props.busy} onClose={props.onClose} footer={<>
     {error !== null && <span className={css.skFormError}>{error}</span>}
     <Button variant="ghost" onClick={props.onClose}>{t('common.cancel')}</Button>
@@ -162,12 +173,12 @@ function CaseEditor(props: { initial: CaseDraft; busy: boolean; onClose: () => v
       </div>
       <fieldset className={css.skChecks}>
         <legend>{t('tests.checksLabel')}</legend>
-        {value.checks.map((check, index) => <div key={index}>
-          <Checkbox className={css.skMust} checked={check.must} label={t('tests.must')} onChange={must => setCheck(index, { must })} />
-          <input value={check.text} placeholder={t('tests.checkPlaceholder')} onChange={event => setCheck(index, { text: event.target.value })} />
-          <button type="button" className={css.skDismiss} aria-label={t('common.delete')} onClick={() => setValue(current => ({ ...current, checks: current.checks.filter((_, position) => position !== index) }))}>×</button>
+        {checkRows.map(check => <div key={check.rowId}>
+          <Checkbox className={css.skMust} checked={check.must} label={t('tests.must')} onChange={must => setCheck(check.rowId, { must })} />
+          <input value={check.text} placeholder={t('tests.checkPlaceholder')} onChange={event => setCheck(check.rowId, { text: event.target.value })} />
+          <button type="button" className={css.skDismiss} aria-label={t('common.delete')} onClick={() => setCheckRows(current => current.filter(row => row.rowId !== check.rowId))}>×</button>
         </div>)}
-        {value.checks.length < 8 && <Button variant="ghost" size="sm" onClick={() => setValue(current => ({ ...current, checks: [...current.checks, { text: '', must: false }] }))}>{t('tests.addCheck')}</Button>}
+        {checkRows.length < 8 && <Button variant="ghost" size="sm" onClick={() => { const rowId = nextRowIdRef.current++; setCheckRows(current => [...current, { rowId, text: '', must: false }]) }}>{t('tests.addCheck')}</Button>}
       </fieldset>
     </div>
   </SidebarModal>

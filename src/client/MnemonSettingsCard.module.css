@@ -50,7 +50,7 @@
   display: flex;
   position: relative;
   min-width: 0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px 16px;
@@ -61,7 +61,7 @@
 .rows > .packRow:last-child > .settingRow { border-bottom: 0; }
 .rows > .packRow:last-child { padding-bottom: 0; }
 .settingRow[data-stacked] { flex-direction: column; align-items: stretch; }
-.settingCopy { display: flex; min-width: min(240px, 100%); flex: 1 1 0; flex-direction: column; gap: 2px; }
+.settingCopy { display: flex; min-width: 0; flex: 1 1 auto; flex-direction: column; gap: 2px; }
 .settingCopy strong,
 .settingCopy label { color: var(--dsw-alias-label-primary); font-size: 14px; font-weight: 400; line-height: 22px; }
 .settingCopy small { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
@@ -106,10 +106,10 @@
 .boardSearch { display: flex; min-width: 0; align-items: center; gap: 8px; margin: 12px 0 0; border: .5px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-md); padding: 0 10px; color: var(--dsw-alias-label-tertiary); background: var(--dsw-alias-bg-base); }
 .boardSearch input { min-width: 0; height: 32px; flex: 1; border: 0; outline: none; color: var(--dsw-alias-label-primary); background: transparent; font: inherit; font-size: 13px; }
 /* A component's page: what it is, how it relates to the others, its options.
-   The card grows to fit a component's own settings and scrolls inside the
-   Modal's padding box, as DSH asks of its consumers. */
-.detailsDialog { width: min(560px, 100%); max-height: 100%; }
-.detailsScroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+   The dialog stays bounded within the viewport while its body scrolls cleanly. */
+.detailsDialog.detailsDialog { display: flex; width: min(560px, 100%); max-height: min(760px, calc(100vh - 48px)); max-height: min(760px, calc(100dvh - 48px)); flex-direction: column; overflow: hidden; }
+.detailsDialog > :not(.detailsScroll) { flex-shrink: 0; }
+.detailsScroll.detailsScroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 16px; scroll-padding-bottom: 16px; }
 .detailsBody { display: flex; min-width: 0; flex-direction: column; gap: 16px; }
 .detailsHead { display: flex; min-width: 0; flex-direction: column; gap: 6px; }
 .detailsHeadLine { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
@@ -147,7 +147,7 @@
 .rows > .panelNote { padding: 8px 0; }
 .panelError { margin: 0; font-size: 12px; line-height: 18px; }
 .boardRow { display: flex; min-width: 0; flex-direction: column; padding: 14px 0; border-bottom: .5px solid var(--dsw-alias-border-l2); }
-.boardRowLine { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.boardRowLine { display: flex; min-width: 0; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
 .boardGroup > .boardRow:last-child,
 .boardOthersList > .boardRow:last-child { border-bottom: 0; padding-bottom: 4px; }
 .boardMain { padding-top: 12px; }
@@ -176,13 +176,16 @@
 .optionHint[data-error] { color: var(--dsw-alias-state-error-primary); }
 .optionChoices { display: flex; min-width: 0; flex-wrap: wrap; gap: 6px 16px; }
 .optionEmpty { margin: 0; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
-/* The row's state then its control, kept together when the row wraps. */
-.boardControl { display: flex; min-width: 0; flex: 0 1 auto; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px 12px; margin-left: auto; }
+.confirmCopy { margin: 0; color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; }
+/* The row's state then its control, kept together on desktop and stacked only when narrow. */
+.boardControl { display: flex; min-width: 0; flex: 0 0 auto; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 6px 12px; margin-left: auto; }
 .boardState { display: inline-flex; min-width: 0; align-items: center; gap: 6px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; white-space: nowrap; }
 .boardState[data-tone='warning'],
 .boardState[data-tone='error'] { color: var(--dsw-alias-label-secondary); }
 .boardValue { color: var(--dsw-alias-label-secondary); font-size: 13px; line-height: 20px; }
 @container (max-width: 420px) {
+  .boardMain .boardRowLine { flex-wrap: wrap; }
+  .boardControl { flex-wrap: wrap; }
   .boardMain .boardControl { width: 100%; justify-content: stretch; }
   .boardMain .boardControl > :last-child { flex: 1; }
 }
@@ -617,6 +620,8 @@ details[open] > summary .providerChevron { transform: rotate(180deg); }
 
 @media (max-width: 620px) {
   .page { gap: 28px; }
+  .settingRow:has(.rowActions),
+  .settingRow:has(.inlineChoices) { flex-wrap: wrap; }
   .rowActions { width: 100%; }
   .rowActions button { flex: 1; }
   .importBar { grid-template-columns: minmax(0, 1fr) auto; }
