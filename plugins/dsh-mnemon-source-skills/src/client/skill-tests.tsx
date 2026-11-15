@@ -41,6 +41,7 @@ export function SkillTests(props: {
   const hasProvidedFile = props.hasFile !== undefined
   const [fetchedCases, setFetchedCases] = useState<EvalCase[] | null>(null)
   const [runs, setRuns] = useState<BacktestRun[] | null>(null)
+  const [loadedSkill, setLoadedSkill] = useState<string | null>(null)
   const [fetchedHasFile, setFetchedHasFile] = useState(true)
   const [editing, setEditing] = useState<CaseDraft | null>(null)
   const [deleting, setDeleting] = useState<EvalCase | null>(null)
@@ -57,12 +58,13 @@ export function SkillTests(props: {
       if (list !== null) setFetchedCases(list)
       setRuns(history.filter(run => run.target.kind !== 'draft'))
       if (pack !== null) setFetchedHasFile(pack.skill !== undefined)
+      setLoadedSkill(skillName)
     }).catch(context.fail)
     return () => { active = false }
   }, [context.client, skillName, context.revision, hasProvidedCases, hasProvidedFile])
   const cases = props.cases ?? fetchedCases
   const hasFile = props.hasFile ?? fetchedHasFile
-  if (cases === null || runs === null) return <Busy label={t('common.loading')} />
+  if (cases === null || runs === null || loadedSkill !== skillName) return <Busy label={t('common.loading')} />
   const enabled = cases.filter(entry => entry.enabled)
   const running = runs.some(entry => entry.status === 'running')
   const run = async () => {

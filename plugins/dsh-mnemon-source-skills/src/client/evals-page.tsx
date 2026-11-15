@@ -114,7 +114,7 @@ export function EvalsPage(props: { context: SkillsPageContext; location: SkillsL
     </aside>
     <div ref={paneRef} className={css.skPane}>
       {modelBar}
-      <article className={css.skDetail}>
+      <article key={current.name} className={css.skDetail}>
         <header className={css.skDetailHead}>
           <div>
             <h3>{current.exists ? <button type="button" className={css.skTitleLink} onClick={() => context.navigate({ tab: 'skills', skillName: current.name })}>{current.name}</button> : current.name}</h3>

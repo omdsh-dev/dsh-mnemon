@@ -1214,4 +1214,195 @@ describe('model pickers', () => {
     await screen.findByText('User-only body.')
     expect(readFileSync(userFile, 'utf8')).toContain('User-only body.')
   })
+
+  it('does not adopt the previous draft while a newly selected suggestion or standalone draft is loading', async () => {
+    const alphaFile = join(directory, 'dsh', 'skills', 'review-alpha', 'SKILL.md')
+    const betaFile = join(directory, 'dsh', 'skills', 'review-beta', 'SKILL.md')
+    mkdirSync(join(directory, 'dsh', 'skills', 'review-alpha'), { recursive: true })
+    mkdirSync(join(directory, 'dsh', 'skills', 'review-beta'), { recursive: true })
+    const originalAlpha = '---\nname: review-alpha\ndescription: Review fixture.\n---\n\nOriginal review-alpha\n'
+    const originalBeta = '---\nname: review-beta\ndescription: Review fixture.\n---\n\nOriginal review-beta\n'
+    const changedAlpha = '---\nname: review-alpha\ndescription: Review fixture.\n---\n\nChanged ALPHA\n'
+    const changedBeta = '---\nname: review-beta\ndescription: Review fixture.\n---\n\nChanged BETA\n'
+    writeFileSync(alphaFile, originalAlpha)
+    writeFileSync(betaFile, originalBeta)
+
+    const baseReview = review()
+    await mutate('review-record', {
+      ...baseReview,
+      suggestions: [
+        { skillName: 'review-alpha', action: 'update', summary: 'Refine alpha', rationale: 'Alpha note.', confidence: 0.85, signals: ['correction'], steps: [3, 4] },
+        { skillName: 'review-beta', action: 'update', summary: 'Refine beta', rationale: 'Beta note.', confidence: 0.84, signals: ['correction'], steps: [3, 4] },
+      ],
+      cases: [],
+    })
+    const suggestions = (await management.read('suggestions', null)).value as Array<{ id: string; skillName: string }>
+    const alphaSuggestion = suggestions.find(item => item.skillName === 'review-alpha')!
+    const betaSuggestion = suggestions.find(item => item.skillName === 'review-beta')!
+    const alphaDraft = await mutate('draft-record', {
+      suggestionId: alphaSuggestion.id,
+      skillName: 'review-alpha',
+      content: changedAlpha,
+      notes: 'Alpha draft.',
+      changes: [],
+      guidance: [],
+    }) as { id: string }
+    const betaDraft = await mutate('draft-record', {
+      suggestionId: betaSuggestion.id,
+      skillName: 'review-beta',
+      content: changedBeta,
+      notes: 'Beta draft.',
+      changes: [],
+      guidance: [],
+    }) as { id: string }
+
+    let resolveBetaDraft: (() => void) | undefined
+    const mutations: Array<{ op: string; input: unknown }> = []
+    const delayed = new Proxy(management, {
+      get: (target, prop, receiver) => {
+        if (prop === 'read') {
+          return async (operation: string, input: unknown) => {
+            const id = (input as { id?: string } | null)?.id
+            if (operation === 'draft' && id === betaDraft.id && resolveBetaDraft === undefined) {
+              await new Promise<void>(resolve => { resolveBetaDraft = resolve })
+            }
+            return target.read(operation as never, input as never)
+          }
+        }
+        if (prop === 'mutate') {
+          return async (operation: string, input: unknown, options: unknown) => {
+            mutations.push({ op: operation, input })
+            return target.mutate(operation as never, input as never, options as never)
+          }
+        }
+        return Reflect.get(target, prop, receiver)
+      },
+    })
+
+    render(
+      <SkillsSourcePage
+        sourceTypeId="skills"
+        sourceInstanceKey="source:skills"
+        sourceInstances={[]}
+        locale="en"
+        writable
+        management={delayed}
+        navigationInput={{ seed: `suggestion:${alphaSuggestion.id}`, nonce: 1 }}
+      />,
+    )
+    await screen.findByRole('heading', { name: 'review-alpha' })
+    expect(await screen.findByRole('button', { name: t('draft.adopt') })).not.toBeNull()
+
+    const betaItem = screen.getAllByRole('button', { name: /review-beta/u })[0]!
+    fireEvent.click(betaItem)
+    await screen.findByRole('heading', { name: 'review-beta' })
+
+    // While betaDraft is still loading, alphaDraft's Adopt button must NOT remain mounted or clickable.
+    expect(screen.queryByRole('button', { name: t('draft.adopt') })).toBeNull()
+    expect(readFileSync(alphaFile, 'utf8')).toBe(originalAlpha)
+
+    resolveBetaDraft?.()
+    const adoptBeta = await screen.findByRole('button', { name: t('draft.adopt') })
+    fireEvent.click(adoptBeta)
+
+    await waitFor(() => expect(readFileSync(betaFile, 'utf8')).toBe(changedBeta))
+    expect(readFileSync(alphaFile, 'utf8')).toBe(originalAlpha)
+    expect(mutations.filter(entry => entry.op === 'draft-adopt')).toEqual([
+      { op: 'draft-adopt', input: { id: betaDraft.id } },
+    ])
+  })
+
+  it('does not adopt the previous standalone draft while a newly selected standalone draft is loading', async () => {
+    const mutations: Array<{ op: string; input: unknown }> = []
+    const standaloneAlphaFile = join(directory, 'dsh', 'skills', 'standalone-alpha', 'SKILL.md')
+    const standaloneBetaFile = join(directory, 'dsh', 'skills', 'standalone-beta', 'SKILL.md')
+    mkdirSync(join(directory, 'dsh', 'skills', 'standalone-alpha'), { recursive: true })
+    mkdirSync(join(directory, 'dsh', 'skills', 'standalone-beta'), { recursive: true })
+    const originalStandaloneAlpha = '---\nname: standalone-alpha\ndescription: Standalone fixture.\n---\n\nOriginal standalone-alpha\n'
+    const originalStandaloneBeta = '---\nname: standalone-beta\ndescription: Standalone fixture.\n---\n\nOriginal standalone-beta\n'
+    const changedStandaloneAlpha = '---\nname: standalone-alpha\ndescription: Standalone fixture.\n---\n\nChanged STANDALONE ALPHA\n'
+    const changedStandaloneBeta = '---\nname: standalone-beta\ndescription: Standalone fixture.\n---\n\nChanged STANDALONE BETA\n'
+    writeFileSync(standaloneAlphaFile, originalStandaloneAlpha)
+    writeFileSync(standaloneBetaFile, originalStandaloneBeta)
+    const standaloneAlpha = await mutate('draft-record', {
+      skillName: 'standalone-alpha',
+      content: changedStandaloneAlpha,
+      notes: 'Standalone alpha draft.',
+      changes: [],
+      guidance: [],
+    }) as { id: string }
+    const standaloneBeta = await mutate('draft-record', {
+      skillName: 'standalone-beta',
+      content: changedStandaloneBeta,
+      notes: 'Standalone beta draft.',
+      changes: [],
+      guidance: [],
+    }) as { id: string }
+
+    let delayBetaDraft = false
+    let resolveStandaloneBeta: (() => void) | undefined
+    const delayedStandalone = new Proxy(management, {
+      get: (target, prop, receiver) => {
+        if (prop === 'read') {
+          return async (operation: string, input: unknown) => {
+            const id = (input as { id?: string } | null)?.id
+            if (delayBetaDraft && operation === 'draft' && id === standaloneBeta.id && resolveStandaloneBeta === undefined) {
+              await new Promise<void>(resolve => { resolveStandaloneBeta = resolve })
+            }
+            return target.read(operation as never, input as never)
+          }
+        }
+        if (prop === 'mutate') {
+          return async (operation: string, input: unknown, options: unknown) => {
+            mutations.push({ op: operation, input })
+            return target.mutate(operation as never, input as never, options as never)
+          }
+        }
+        return Reflect.get(target, prop, receiver)
+      },
+    })
+
+    const view = render(
+      <SkillsSourcePage
+        sourceTypeId="skills"
+        sourceInstanceKey="source:skills"
+        sourceInstances={[]}
+        locale="en"
+        writable
+        management={delayedStandalone}
+        navigationInput={{ seed: `draft:${standaloneAlpha.id}`, nonce: 1 }}
+        refreshKey={0}
+      />,
+    )
+    await screen.findByRole('heading', { name: 'standalone-alpha' })
+    expect(await screen.findByRole('button', { name: t('draft.adopt') })).not.toBeNull()
+
+    const standaloneBetaRow = screen.getAllByRole('button', { name: /standalone-beta/u })[0]!
+    // Bump refreshKey to clear the draft promise cache while delaying standaloneBeta's detail read,
+    // and switch to standalone-beta synchronously: standaloneAlpha's Adopt button must unmount immediately.
+    delayBetaDraft = true
+    view.rerender(
+      <SkillsSourcePage
+        sourceTypeId="skills"
+        sourceInstanceKey="source:skills"
+        sourceInstances={[]}
+        locale="en"
+        writable
+        management={delayedStandalone}
+        navigationInput={{ seed: `draft:${standaloneAlpha.id}`, nonce: 1 }}
+        refreshKey={1}
+      />,
+    )
+    fireEvent.click(standaloneBetaRow)
+    expect(screen.getByRole('heading', { name: 'standalone-beta' })).not.toBeNull()
+    expect(screen.queryByRole('button', { name: t('draft.adopt') })).toBeNull()
+
+    resolveStandaloneBeta?.()
+    fireEvent.click(await screen.findByRole('button', { name: t('draft.adopt') }))
+    await waitFor(() => expect(readFileSync(standaloneBetaFile, 'utf8')).toBe(changedStandaloneBeta))
+    expect(readFileSync(standaloneAlphaFile, 'utf8')).toBe(originalStandaloneAlpha)
+    expect(mutations.filter(entry => entry.op === 'draft-adopt')).toEqual([
+      { op: 'draft-adopt', input: { id: standaloneBeta.id } },
+    ])
+  })
 })

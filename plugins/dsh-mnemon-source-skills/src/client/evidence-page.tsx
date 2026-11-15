@@ -53,7 +53,7 @@ export function EvidenceView(props: { context: SkillsPageContext; location: Skil
         ? <Busy label={t('common.loading')} />
         : current === undefined
           ? <Empty glyph="✧" title={t('evolution.empty.evidence')}>{t('evolution.emptyBody.evidence')}</Empty>
-          : <RecordDetail context={context} id={current.id} focus={current.id === location.trajectoryId ? location.steps : undefined} onDeleted={() => setSelected(undefined)} />}
+          : <RecordDetail key={current.id} context={context} id={current.id} focus={current.id === location.trajectoryId ? location.steps : undefined} onDeleted={() => setSelected(undefined)} />}
     </div>
   </div>
 }
@@ -65,7 +65,7 @@ export function EvidenceView(props: { context: SkillsPageContext; location: Skil
 function RecordDetail(props: { context: SkillsPageContext; id: string; focus: number[] | undefined; onDeleted: () => void }): JSX.Element {
   const t = useT()
   const { context } = props
-  const [trajectory, setTrajectory] = useState<Trajectory | null>(null)
+  const [loadedTrajectory, setLoadedTrajectory] = useState<Trajectory | null>(null)
   // A link's steps are highlighted, not chosen: making cases from them is the reader's call.
   const [chosen, setChosen] = useState<Set<number>>(() => new Set())
   const [target, setTarget] = useState('')
@@ -82,7 +82,7 @@ function RecordDetail(props: { context: SkillsPageContext; id: string; focus: nu
     let active = true
     void context.client.trajectory(props.id).then(value => {
       if (!active) return
-      setTrajectory(value)
+      setLoadedTrajectory(value)
       setTarget(current => current !== '' ? current : value.stats.skills[0] ?? '')
     }).catch(context.fail)
     return () => { active = false }
@@ -92,6 +92,7 @@ function RecordDetail(props: { context: SkillsPageContext; id: string; focus: nu
     void context.client.catalog().then(catalog => { if (active) setNames([...new Set(catalog.skills.map(skill => skill.name))]) }).catch(() => undefined)
     return () => { active = false }
   }, [context.client, configRevision])
+  const trajectory = loadedTrajectory !== null && loadedTrajectory.id === props.id ? loadedTrajectory : null
   if (trajectory === null) return <Busy label={t('common.loading')} />
   const targets = [...new Set([...trajectory.stats.skills, ...names])]
   const skillName = target !== '' ? target : targets[0] ?? ''
