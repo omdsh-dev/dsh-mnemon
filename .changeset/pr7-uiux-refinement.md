@@ -7,3 +7,5 @@
 ---
 
 Refine UI/UX alignment, typography tokens, smooth transitions, and user-logical settings ordering across Mnemon settings and Source views.
+
+Keep Runtime scope filters equally sized and fully readable in narrow layouts, with an aligned selection indicator and a wrapping search toolbar.

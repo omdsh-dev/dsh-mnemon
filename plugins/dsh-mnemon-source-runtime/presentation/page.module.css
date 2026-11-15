@@ -15,16 +15,18 @@
 .runtimeSummaryGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
 .runtimeSummaryCard { min-width: 0; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); }
 .runtimeBrowser { overflow: hidden; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); }
-.runtimeBrowserToolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-bottom: .5px solid var(--mn-line); }
+.runtimeBrowserToolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-bottom: .5px solid var(--mn-line); }
 /* Scope filter, matching DSH SegmentedControl sliding indicator mechanics. */
 .runtimeScopeFilter {
   --dsh-segment-count: 3;
   --dsh-segment-index: 0;
   position: relative;
   display: inline-grid;
+  max-width: 100%;
   grid-auto-flow: column;
-  grid-auto-columns: 1fr;
-  align-items: center;
+  /* Keep the indicator and buttons equally wide even when labels need to wrap. */
+  grid-auto-columns: minmax(0, 1fr);
+  align-items: stretch;
   gap: 2px;
   padding: 4px;
   border-radius: var(--dsw-radius-md);
@@ -48,7 +50,8 @@
   position: relative;
   z-index: 1;
   display: inline-flex;
-  height: 28px;
+  min-width: 0;
+  min-height: 28px;
   align-items: center;
   justify-content: center;
   border: 0;
@@ -59,14 +62,15 @@
   font-size: 13px;
   font-weight: 500;
   line-height: 20px;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
   cursor: pointer;
   transition: color 120ms ease;
 }
 .runtimeScopeFilter button:hover,
 .runtimeScopeFilter button[data-active] { color: var(--mn-text); }
 .runtimeScopeFilter button:focus-visible { outline: var(--dsw-focus-ring-width, 2px) solid var(--mn-focus); outline-offset: -2px; }
-.runtimeScopeFilter b { margin-left: 6px; color: var(--mn-faint); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.runtimeScopeFilter b { flex-shrink: 0; margin-left: 6px; color: var(--mn-faint); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .runtimeFilterQuery { width: min(320px, 42%); min-width: 210px; }
 .runtimeUnifiedList { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 12px; }
 .runtimeEntryBadges { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -119,6 +123,7 @@
 .runtimeComposerActions button { width: 100%; }
   .runtimeBrowserToolbar { align-items: stretch; flex-direction: column; }
   .runtimeScopeFilter { width: 100%; }
+  .runtimeScopeFilter button { padding-inline: 6px; }
   .runtimeFilterQuery { width: 100%; min-width: 0; }
 }
 
