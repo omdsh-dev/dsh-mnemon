@@ -6,18 +6,63 @@
 .documentCapacity > div { height: 4px; margin: 8px 0 6px; overflow: hidden; border-radius: 999px; background: var(--mn-fill); }
 .documentCapacity > div i { display: block; height: 100%; border-radius: inherit; background: var(--dsw-alias-brand-primary); transition: width .3s ease; }
 
-.documentToolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 8px; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); }
+.documentToolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 10px 12px; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); }
 .documentToolbar form { display: flex; min-width: 260px; flex: 1; align-items: center; gap: 8px; }
 .documentSearch { flex: 1; }
 .documentEditor input,
 .documentEditor textarea { width: 100%; border: .5px solid var(--mn-field-line); border-radius: var(--dsw-radius-md); outline: 0; padding: 6px 10px; color: var(--mn-text); background: var(--mn-input); font-size: 13px; line-height: 20px; }
 .documentEditor input:focus,
 .documentEditor textarea:focus { border-color: var(--mn-accent); }
-/* Filter, as the DSH SegmentedControl. */
-.documentToolbar > div { display: flex; align-items: center; gap: 2px; padding: 3px; border-radius: var(--dsw-radius-md); background: var(--mn-hover); }
-.documentToolbar > div button { min-height: 28px; border: 0; border-radius: var(--dsw-radius-sm); padding: 0 12px; color: var(--mn-muted); background: transparent; font-size: 13px; font-weight: 500; line-height: 20px; cursor: pointer; }
-.documentToolbar > div button:hover { color: var(--mn-text); }
-.documentToolbar > div button[data-active] { color: var(--mn-text); background: var(--mn-layer-1); box-shadow: var(--dsw-elevation-soft); }
+/* Filter, matching DSH SegmentedControl sliding indicator mechanics. */
+.documentToolbar > div {
+  --dsh-segment-count: 2;
+  --dsh-segment-index: 0;
+  position: relative;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--mn-hover);
+}
+.documentToolbar > div::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: calc((100% - 8px - 2px * (var(--dsh-segment-count) - 1)) / var(--dsh-segment-count));
+  height: calc(100% - 8px);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--mn-layer-1);
+  box-shadow: var(--dsw-elevation-soft);
+  transform: translateX(calc(var(--dsh-segment-index) * (100% + 2px)));
+  transition: transform 160ms cubic-bezier(.22, 1, .36, 1);
+  pointer-events: none;
+}
+.documentToolbar > div button {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  padding: 0 12px;
+  color: var(--mn-muted);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+.documentToolbar > div button:hover,
+.documentToolbar > div button[data-active] { color: var(--mn-text); }
+.documentToolbar > div button:focus-visible { outline: var(--dsw-focus-ring-width, 2px) solid var(--mn-focus); outline-offset: -2px; }
 .documentToolbar > div b { margin-left: 6px; color: var(--mn-faint); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
 
 .documentWorkspace { display: grid; min-height: 590px; grid-template-columns: minmax(250px, 310px) minmax(0, 1fr); gap: 12px; }
@@ -25,7 +70,7 @@
 .documentReader { min-width: 0; overflow: hidden; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); }
 .documentList { align-self: stretch; }
 .documentList > header { display: flex; min-height: 44px; align-items: center; justify-content: space-between; padding: 0 14px; border-bottom: .5px solid var(--mn-line); color: var(--mn-faint); font-size: 12px; line-height: 18px; }
-.documentList > header code { color: var(--mn-muted); }
+.documentList > header code { color: var(--mn-muted); font-variant-numeric: tabular-nums; }
 .documentList > button { --mn-provider-color: var(--mn-faint); display: block; width: calc(100% - 12px); margin: 6px 6px 0; border: 0; border-radius: var(--dsw-radius-md); padding: 10px 12px; color: var(--mn-text); background: transparent; text-align: left; cursor: pointer; transition: background-color .15s; }
 .documentList > button:hover { background: var(--mn-hover); }
 .documentList > button[data-selected] { background: var(--mn-fill); }
@@ -33,7 +78,7 @@
 .documentList > button strong { overflow: hidden; font-size: 13px; font-weight: 500; line-height: 20px; text-overflow: ellipsis; white-space: nowrap; }
 .documentList > button time { flex: 0 0 auto; color: var(--mn-faint); font-size: 11px; font-variant-numeric: tabular-nums; }
 .documentList > button p { display: -webkit-box; margin: 4px 0 6px; overflow: hidden; color: var(--mn-faint); font-size: 12px; line-height: 18px; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.documentList > button footer { display: flex; align-items: center; gap: 8px; color: var(--mn-faint); font-size: 11px; line-height: 16px; }
+.documentList > button footer { display: flex; align-items: center; gap: 8px; color: var(--mn-faint); font-size: 11px; line-height: 16px; font-variant-numeric: tabular-nums; }
 .documentList > button footer code { margin-left: auto; }
 .documentList > button footer em { color: var(--mn-danger); font-style: normal; }
 .documentListEmpty { display: grid; min-height: 230px; place-items: center; align-content: center; gap: 4px; padding: 24px; color: var(--mn-muted); text-align: center; }
@@ -53,7 +98,7 @@
 .documentDetail > dl > div { min-width: 0; padding: 8px 10px; }
 .documentDetail > dl > div + div { border-left: .5px solid var(--mn-line); }
 .documentDetail dt { margin-bottom: 2px; color: var(--mn-faint); font-size: 11px; line-height: 16px; }
-.documentDetail dd { margin: 0; overflow: hidden; font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
+.documentDetail dd { margin: 0; overflow: hidden; font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .documentSources { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0; }
 .documentSources > span { margin-right: 4px; color: var(--mn-faint); font-size: 12px; }
 .documentSources code,
@@ -166,4 +211,11 @@
   .documentDetail > dl > div:nth-child(even) { border-left: 0; }
   .documentDetail > dl > div + div { border-top: .5px solid var(--mn-line); }
   .markdownBody { padding: 16px; font-size: 13px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .documentCapacity > div i,
+  .documentToolbar > div::before,
+  .documentToolbar > div button,
+  .documentList > button { transition: none; }
 }

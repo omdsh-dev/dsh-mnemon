@@ -1,4 +1,4 @@
-import { type ComponentProps, type JSX } from 'react'
+import { useId, type ComponentProps, type JSX } from 'react'
 import { RUNTIME_MEMORY_LIMIT_MAX_BYTES, RUNTIME_MEMORY_LIMITS } from 'dsh-mnemon-source-runtime/contracts'
 import {
   DEFAULT_IDLE_REVIEW,
@@ -17,7 +17,7 @@ import type { MnemonTranslate } from './locales.ts'
 import { MemorySpacesSettings } from './memory-spaces-client.ts'
 import css from './MnemonSettingsCard.module.css'
 import type { MnemonDirectoryPicker } from './picker.ts'
-import { AdvancedSection, SelectRow, ToggleRow } from './settings-controls.tsx'
+import { AdvancedSection, SelectRow, SettingRow, ToggleRow } from './settings-controls.tsx'
 import { PanelActions, useLive, useScope, useStaged, WriteFailure } from './settings-panel.tsx'
 import { SKILLS_PACKAGE, SkillsSettings } from './skills-settings.tsx'
 import { TaskAgentModelRows, useTaskAgentModel } from './task-agent-model.tsx'
@@ -92,6 +92,7 @@ function documentsLimitValue(text: string): number | undefined {
 /** Runtime Memory's scope applies immediately; its byte limits and maintenance token ceiling wait for Apply. */
 export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryComponentSettingsProps }): JSX.Element {
   const { scope, page, t } = props
+  const baseId = useId()
   const snapshot = useScope(scope)
   const saved: 'storage' | 'global' = snapshot.value?.runtimeUserScope === 'global' ? 'global' : 'storage'
   const profile = useLive(saved, async value => { await scope.mutate([{ op: 'set', path: ['runtimeUserScope'], value }]) })
@@ -119,7 +120,7 @@ export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryC
   })
   const invalid = RUNTIME_LIMITS.find(key => runtimeLimitValue(limits.draft[key]) === undefined)
   const invalidMaintenance = runtimeMaintenanceTokens(maintenance.draft.maintenanceMaxTokens) === undefined
-  return <><section className={css.panelSection} data-settings-section="user-scope" aria-label={t('config.runtimeUserScopeTitle')}>
+  return <><section className={css.preferenceSection} data-settings-section="user-scope" aria-label={t('config.runtimeUserScopeTitle')}>
     <div className={css.rows}>
       <SelectRow id="mnemon-runtime-user-scope" label={t('config.runtimeUserScopeTitle')} value={profile.value} disabled={disabled} onChange={profile.set} options={[
         { value: 'storage', label: t('config.runtimeUserScopeStorage'), detail: t('config.runtimeUserScopeStorageHint') },
@@ -128,7 +129,7 @@ export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryC
     </div>
     <WriteFailure error={profile.failed} t={t} />
   </section>
-  <section className={css.panelSection} data-settings-section="inheritance" aria-label={t('config.runtimeInheritance')}>
+  <section className={css.preferenceSection} data-settings-section="inheritance" aria-label={t('config.runtimeInheritance')}>
     <div className={css.rows}>
       <ToggleRow id="mnemon-runtime-inherit-subagents" label={t('config.runtimeInheritance')}
         hint={t('config.runtimeInheritanceHint')} checked={inheritance.value} disabled={disabled} onChange={inheritance.set} />
@@ -140,27 +141,26 @@ export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryC
       <h3 id="mnemon-runtime-limits">{t('config.runtimeLimitsTitle')}</h3>
       <p id="mnemon-runtime-limits-hint">{t('config.runtimeLimitsHint', { user: RUNTIME_MEMORY_LIMITS.user / 1024, memory: RUNTIME_MEMORY_LIMITS.memory / 1024 })}</p>
     </div>
-    <div className={css.fieldGrid}>
-      {RUNTIME_LIMITS.map(key => <label key={key}>{t(`config.runtime.${key}`)}
-        <input type="number" min="1" max={RUNTIME_MEMORY_LIMIT_MAX_BYTES} step="1" inputMode="numeric"
+    <div className={css.rows}>
+      {RUNTIME_LIMITS.map(key => <SettingRow key={key} htmlFor={`${baseId}-${key}`} title={t(`config.runtime.${key}`)}>
+        <input id={`${baseId}-${key}`} className={css.numberInput} type="number" min="1" max={RUNTIME_MEMORY_LIMIT_MAX_BYTES} step="1" inputMode="numeric"
           value={limits.draft[key]} disabled={disabled || limits.saving} aria-describedby="mnemon-runtime-limits-hint"
           aria-invalid={runtimeLimitValue(limits.draft[key]) === undefined}
           onChange={event => limits.edit({ [key]: event.target.value })} />
-      </label>)}
+      </SettingRow>)}
     </div>
     <PanelActions dirty={limits.dirty} saving={limits.saving} applied={limits.applied} failed={limits.failed} disabled={disabled} t={t}
       note={t('config.runtimeLimitsApply')}
       invalid={invalid === undefined ? null : t('config.runtimeLimitInvalid', { field: t(`config.runtime.${invalid}`), max: RUNTIME_MEMORY_LIMIT_MAX_BYTES })}
       onDiscard={limits.discard} onApply={() => { void limits.apply() }} />
-    <AdvancedSection title={t('config.runtimeAdvanced')} section="maintenance" activeSection={page.section}>
-      <p className={css.panelNote}>{t('config.runtimeMaintenanceHint', { defaultTokens: DEFAULT_RUNTIME_MAINTENANCE_MAX_TOKENS })}</p>
-      <div className={css.fieldGrid}>
-        <label>{t('config.runtime.maintenanceMaxTokens')}
-          <input type="number" min={RUNTIME_MAINTENANCE_MIN_TOKENS} max={RUNTIME_MAINTENANCE_MAX_TOKENS} step="1" inputMode="numeric"
+    <AdvancedSection title={t('config.runtimeAdvanced')} hint={t('config.runtimeMaintenanceHint', { defaultTokens: DEFAULT_RUNTIME_MAINTENANCE_MAX_TOKENS })} section="maintenance" activeSection={page.section}>
+      <div className={css.rows}>
+        <SettingRow htmlFor={`${baseId}-maintenance`} title={t('config.runtime.maintenanceMaxTokens')}>
+          <input id={`${baseId}-maintenance`} className={css.numberInput} type="number" min={RUNTIME_MAINTENANCE_MIN_TOKENS} max={RUNTIME_MAINTENANCE_MAX_TOKENS} step="1" inputMode="numeric"
             value={maintenance.draft.maintenanceMaxTokens} disabled={disabled || maintenance.saving}
             aria-invalid={invalidMaintenance}
             onChange={event => maintenance.edit({ maintenanceMaxTokens: event.target.value })} />
-        </label>
+        </SettingRow>
       </div>
       <PanelActions dirty={maintenance.dirty} saving={maintenance.saving} applied={maintenance.applied} failed={maintenance.failed} disabled={disabled} t={t}
         invalid={invalidMaintenance ? t('config.runtimeMaintenanceInvalid', {
@@ -178,6 +178,7 @@ export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryC
 /** Project Documents' active capacity limit, staged with Apply. */
 export function DocumentsSettings(props: ShippedSettingsServices & { page: MemoryComponentSettingsProps }): JSX.Element {
   const { scope, page, t } = props
+  const baseId = useId()
   const snapshot = useScope(scope)
   const disabled = !page.writable || snapshot.status === 'loading' || !snapshot.writable
   const configured = snapshot.value?.documents
@@ -197,13 +198,13 @@ export function DocumentsSettings(props: ShippedSettingsServices & { page: Memor
         maxMiB: DOCUMENTS_MAX_LIMIT_BYTES / (1024 * 1024),
       })}</p>
     </div>
-    <div className={css.fieldGrid}>
-      <label>{t('config.documents.limitBytes')}
-        <input type="number" min="1" max={DOCUMENTS_MAX_LIMIT_BYTES} step="1" inputMode="numeric"
+    <div className={css.rows}>
+      <SettingRow htmlFor={`${baseId}-limit`} title={t('config.documents.limitBytes')}>
+        <input id={`${baseId}-limit`} className={css.numberInput} type="number" min="1" max={DOCUMENTS_MAX_LIMIT_BYTES} step="1" inputMode="numeric"
           value={capacity.draft.limitBytes} disabled={disabled || capacity.saving} aria-describedby="mnemon-documents-limits-hint"
           aria-invalid={invalid}
           onChange={event => capacity.edit({ limitBytes: event.target.value })} />
-      </label>
+      </SettingRow>
     </div>
     <PanelActions dirty={capacity.dirty} saving={capacity.saving} applied={capacity.applied} failed={capacity.failed} disabled={disabled} t={t}
       note={t('config.documentsLimitsApply')}

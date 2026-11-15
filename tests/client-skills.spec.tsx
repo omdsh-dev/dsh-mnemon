@@ -447,6 +447,88 @@ describe('技能管理 settings under Plugins', () => {
       expectedRevision: 'rev-live-1',
     })))
   })
+
+  it('orders SkillsSettings in user-logical workflow sequence and preserves disclosure accessible names with badges', async () => {
+    const scope = liveSettingsScope<SkillsConfig>({
+      status: 'ready',
+      value: { evolution: true },
+      revision: 1,
+      writable: true,
+      mode: 'host',
+    })
+    const liveKey = 'include:dsh-mnemon-source-skills'
+    const call = vi.fn(async (channel: string, endpoint: string, payload: Record<string, unknown>) => {
+      if (channel === '/dsh-mnemon-read' && endpoint === 'task-agent-models') {
+        return {
+          ok: true as const,
+          value: {
+            effective: { provider: 'deepseek', model: 'deepseek-chat', source: 'dsh-default' as const },
+            groups: [{ id: 'deepseek', name: 'DeepSeek', models: [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }] }],
+            failures: [],
+          },
+        }
+      }
+      if (channel === '/dsh-mnemon-read' && endpoint === 'source-management-catalog') {
+        return {
+          ok: true as const,
+          value: {
+            sources: [{
+              sourceInstanceKey: liveKey,
+              sourceTypeId: 'skills',
+              title: 'Skills',
+              revision: 'rev-1',
+              availability: 'ready',
+              readOperations: ['draft-preferences', 'market'],
+              mutateOperations: [],
+            }],
+          },
+        }
+      }
+      if (channel === '/dsh-mnemon-read' && endpoint === 'source-management-read') {
+        if (payload.operation === 'draft-preferences') {
+          return { ok: true as const, value: { revision: 'rev-1', value: { draftModel: null, runModel: null } } }
+        }
+        if (payload.operation === 'market') {
+          return {
+            ok: true as const,
+            value: {
+              revision: 'rev-1',
+              value: {
+                registries: [
+                  { id: 'builtin-official', label: 'Official Skills', url: 'https://skills.sh', builtin: true, enabled: true, skillCount: 12 },
+                  { id: 'team-repo', label: 'Team Skills', url: 'https://example.com/team', builtin: false, enabled: false, skillCount: 4 },
+                ],
+              },
+            },
+          }
+        }
+      }
+      return { ok: false as const, error: { message: `unexpected ${channel}/${endpoint}` } }
+    })
+    const conn = { rpc: { call }, isLoopback: true } as unknown as ClientConnectionHandle
+
+    const { container } = render(<SkillsSettings scope={scope} page={page} connection={conn} t={t} />)
+
+    const marketToggle = await screen.findByRole('button', { name: t('skills.market') })
+    expect(marketToggle.textContent).toContain('1/2')
+
+    const orderedNodes: Element[] = [
+      screen.getByRole('switch', { name: t('skills.hints') }),
+      screen.getByRole('switch', { name: t('skills.sidebar') }),
+      screen.getByRole('button', { name: `${t('skills.targetScope')} ${t('skills.targetScope.user')}` }),
+      screen.getByRole('switch', { name: t('skills.allowLinkedUpdates') }),
+      screen.getByRole('switch', { name: t('skills.evolution') }),
+      screen.getByRole('switch', { name: t('skills.allowCreate') }),
+    ]
+    for (const section of ['models', 'draft', 'market', 'directories']) {
+      const node = container.querySelector(`[data-settings-section="${section}"]`)
+      expect(node, `expected [data-settings-section="${section}"]`).not.toBeNull()
+      orderedNodes.push(node!)
+    }
+    for (let index = 0; index < orderedNodes.length - 1; index += 1) {
+      expect(orderedNodes[index]!.compareDocumentPosition(orderedNodes[index + 1]!) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+    }
+  })
 })
 
 describe('the skills line under a turn', () => {

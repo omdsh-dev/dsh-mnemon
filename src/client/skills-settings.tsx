@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type JSX } from 'react'
 import { Button, Switch, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   DEFAULT_SKILLS_CONFIG,
@@ -20,7 +20,7 @@ import type { MnemonTranslate } from './locales.ts'
 import css from './MnemonSettingsCard.module.css'
 import { message } from './page-kit.tsx'
 import type { MnemonDirectoryPicker } from './picker.ts'
-import { AdvancedSection, SelectRow, ToggleRow, type SettingOption } from './settings-controls.tsx'
+import { AdvancedSection, SelectRow, SettingRow, ToggleRow, type SettingOption } from './settings-controls.tsx'
 import { PanelActions, useLive, useScope, useStaged, WriteFailure } from './settings-panel.tsx'
 
 /** The package 技能管理 ships as; its page under Plugins carries these settings. */
@@ -284,6 +284,7 @@ export function SkillsSettings(props: {
   t: MnemonTranslate
 }): JSX.Element {
   const { scope, page, connection, directoryPicker, t } = props
+  const baseId = useId()
   const snapshot = useScope(scope)
   const saved = resolvedSkills(snapshot.value)
   const write = (key: keyof ResolvedSkillsConfig) => async (value: boolean): Promise<void> => { await scope.mutate([set(key, value)]) }
@@ -481,6 +482,49 @@ export function SkillsSettings(props: {
 
   return <section className={css.panelSection} aria-label={t('skills.label')}>
     <div className={css.rows}>
+      <ToggleRow id="mnemon-skills-hints" label={t('skills.hints')} hint={t('skills.hintsHint')} checked={hints.value} disabled={disabled} onChange={hints.set} />
+      <ToggleRow id="mnemon-skills-sidebar" label={t('skills.sidebar')} hint={t('skills.sidebarHint')} checked={sidebar.value} disabled={disabled} onChange={sidebar.set} />
+      <SelectRow id="mnemon-skills-target" label={t('skills.targetScope')} hint={t('skills.targetScopeHint')} value={destination.draft.targetScope}
+        options={(['user', 'project', 'storage'] as const).map(value => ({ value, label: t(`skills.targetScope.${value}`) }))}
+        disabled={disabled || destination.saving} onChange={targetScope => destination.edit({ targetScope })} />
+      <PanelActions dirty={destination.dirty} saving={destination.saving} applied={destination.applied} failed={destination.failed} disabled={disabled} invalid={null} t={t}
+        onDiscard={destination.discard} onApply={() => { void destination.apply() }} />
+      <ToggleRow id="mnemon-skills-linked-updates" label={t('skills.allowLinkedUpdates')} hint={t('skills.allowLinkedUpdatesHint')} checked={linkedUpdates.value} disabled={disabled} onChange={linkedUpdates.set} />
+
+      <ToggleRow id="mnemon-skills-evolution" label={t('skills.evolution')} hint={t('skills.evolutionHint')} checked={evolution.value} disabled={disabled} onChange={evolution.set} />
+      {evolution.value && <div className={css.evolutionGroup}>
+        <ToggleRow id="mnemon-skills-create" label={t('skills.allowCreate')} hint={t('skills.allowCreateHint')} checked={allowCreate.value} disabled={disabled} onChange={allowCreate.set} />
+        <ToggleRow id="mnemon-skills-update" label={t('skills.allowUpdate')} hint={t('skills.allowUpdateHint')} checked={allowUpdate.value} disabled={disabled} onChange={allowUpdate.set} />
+        <ToggleRow id="mnemon-skills-backtest" label={t('skills.autoBacktest')} hint={t('skills.autoBacktestHint')} checked={autoBacktest.value} disabled={disabled} onChange={autoBacktest.set} />
+        <ToggleRow id="mnemon-skills-auto-adopt" label={t('skills.autoAdopt')} hint={t('skills.autoAdoptHint')} checked={autoAdopt.value} disabled={disabled || !autoBacktest.value} onChange={autoAdopt.set} />
+        <SettingRow htmlFor={`${baseId}-adopt-limit`} title={t('skills.autoAdoptDailyLimit')} hint={t('skills.autoBudgetHint')}>
+          <input id={`${baseId}-adopt-limit`} className={css.numberInput} type="number" min={0} max={100} step={1} inputMode="numeric"
+            value={adoptionBudget.draft.limit} disabled={disabled || adoptionBudget.saving}
+            aria-invalid={parameterValue({ min: 0, max: 100, integer: true }, adoptionBudget.draft.limit) === undefined}
+            onChange={event => adoptionBudget.edit({ limit: event.target.value })} />
+        </SettingRow>
+        <SettingRow htmlFor={`${baseId}-adopt-tz`} title={t('skills.autoAdoptTimeZone')}>
+          <input id={`${baseId}-adopt-tz`} className={css.compactTextInput} type="text" value={adoptionBudget.draft.timeZone}
+            placeholder="local / Asia/Shanghai" disabled={disabled || adoptionBudget.saving}
+            aria-invalid={!validSkillsTimeZone(adoptionBudget.draft.timeZone.trim())}
+            onChange={event => adoptionBudget.edit({ timeZone: event.target.value })} />
+        </SettingRow>
+        <PanelActions dirty={adoptionBudget.dirty} saving={adoptionBudget.saving} applied={adoptionBudget.applied} failed={adoptionBudget.failed} disabled={disabled} t={t}
+          invalid={invalidAdoption ? t('skills.autoBudgetInvalid') : null} onDiscard={adoptionBudget.discard} onApply={() => { void adoptionBudget.apply() }} />
+        <AdvancedSection title={t('skills.parameters')} section="parameters" activeSection={page.section}>
+          <div className={css.fieldGrid}>
+            {PARAMETERS.map(field => <label key={field.key}>{t(`skills.${field.key}`)}
+              <input type="number" step={field.integer ? 1 : 0.05} inputMode={field.integer ? 'numeric' : 'decimal'} value={parameters.draft[field.key]} disabled={disabled}
+                aria-invalid={parameterValue(field, parameters.draft[field.key]) === undefined}
+                onChange={event => parameters.edit({ [field.key]: event.target.value })} />
+            </label>)}
+          </div>
+          <PanelActions dirty={parameters.dirty} saving={parameters.saving} applied={parameters.applied} failed={parameters.failed} disabled={disabled} t={t}
+            invalid={invalid === undefined ? null : t('skills.invalid', { field: t(`skills.${invalid.key}`), min: invalid.min, max: invalid.max })}
+            onDiscard={parameters.discard} onApply={() => { void parameters.apply() }} />
+        </AdvancedSection>
+      </div>}
+
       {modelsState.ready && <div className={css.skillsSubgroup} data-settings-section="models">
         <div className={css.panelHeading}>
           <h3>{t('skills.models')}</h3>
@@ -495,79 +539,23 @@ export function SkillsSettings(props: {
         <WriteFailure error={modelsState.error} t={t} />
       </div>}
 
-      <div className={css.skillsSubgroup} data-settings-section="directories">
-        <div className={css.panelHeading}>
-          <h3>{t('skills.directories')}</h3>
-          <p>{t('skills.directoriesHint')}</p>
-        </div>
-        <div className={`${css.fieldGrid} ${css.directoryFields}`}>
-          {DIRECTORY_FIELDS.map(({ key, placeholder }) => <label key={key}>{t(`skills.${key}`)}
-            {canPickDirectory ? <span className={css.directoryPickerRow}>
-              <input className={css.directoryInput} type="text" value={directories.draft[key]} placeholder={placeholder}
-                disabled={disabled || directories.saving} autoComplete="off" spellCheck={false} autoCapitalize="none" autoCorrect="off"
-                onChange={event => directories.edit({ [key]: event.target.value })} />
-              <Button variant="outline" size="sm" disabled={disabled || directories.saving || pickingKey !== null}
-                aria-busy={pickingKey === key || undefined} aria-label={`${t('storage.chooseDirectory')} · ${t(`skills.${key}`)}`}
-                onClick={() => { void pickDirectory(key) }}>{t('storage.chooseDirectory')}</Button>
-            </span> : <input className={css.directoryInput} type="text" value={directories.draft[key]} placeholder={placeholder}
-              disabled={disabled || directories.saving} autoComplete="off" spellCheck={false} autoCapitalize="none" autoCorrect="off"
-              onChange={event => directories.edit({ [key]: event.target.value })} />}
-          </label>)}
-        </div>
-        {pickerFailed && <p className={css.panelError} role="alert">{t('storage.pickFailed')}</p>}
-        <PanelActions dirty={directories.dirty} saving={directories.saving} applied={directories.applied} failed={directories.failed}
-          disabled={disabled} invalid={null} t={t} onDiscard={directories.discard} onApply={() => { void directories.apply() }} />
-      </div>
-
-      <ToggleRow id="mnemon-skills-evolution" label={t('skills.evolution')} hint={t('skills.evolutionHint')} checked={evolution.value} disabled={disabled} onChange={evolution.set} />
-      {evolution.value && <ToggleRow id="mnemon-skills-create" label={t('skills.allowCreate')} hint={t('skills.allowCreateHint')} checked={allowCreate.value} disabled={disabled} onChange={allowCreate.set} />}
-      {evolution.value && <ToggleRow id="mnemon-skills-update" label={t('skills.allowUpdate')} hint={t('skills.allowUpdateHint')} checked={allowUpdate.value} disabled={disabled} onChange={allowUpdate.set} />}
-      <SelectRow id="mnemon-skills-target" label={t('skills.targetScope')} hint={t('skills.targetScopeHint')} value={destination.draft.targetScope}
-        options={(['user', 'project', 'storage'] as const).map(value => ({ value, label: t(`skills.targetScope.${value}`) }))}
-        disabled={disabled || destination.saving} onChange={targetScope => destination.edit({ targetScope })} />
-      <PanelActions dirty={destination.dirty} saving={destination.saving} applied={destination.applied} failed={destination.failed} disabled={disabled} invalid={null} t={t}
-        onDiscard={destination.discard} onApply={() => { void destination.apply() }} />
-      <ToggleRow id="mnemon-skills-linked-updates" label={t('skills.allowLinkedUpdates')} hint={t('skills.allowLinkedUpdatesHint')} checked={linkedUpdates.value} disabled={disabled} onChange={linkedUpdates.set} />
-      <AdvancedSection title={t('skills.draftGeneration')} section="draft" activeSection={page.section}>
-        <p className={css.panelNote}>{t('skills.draftBudgetHint')}</p>
-        <div className={css.fieldGrid}>
-          {DRAFT_PARAMETERS.map(field => <label key={field.key}>{t(`skills.${field.key}`)}
-            <input type="number" step={1} min={field.min} max={field.max} inputMode="numeric" value={draftBudgets.draft[field.key]} disabled={disabled || draftBudgets.saving}
+      <AdvancedSection title={t('skills.draftGeneration')} hint={t('skills.draftBudgetHint')} section="draft" activeSection={page.section}>
+        <div className={css.rows}>
+          {DRAFT_PARAMETERS.map(field => <SettingRow key={field.key} htmlFor={`${baseId}-${field.key}`} title={t(`skills.${field.key}`)}>
+            <input id={`${baseId}-${field.key}`} className={css.numberInput} type="number" step={1} min={field.min} max={field.max} inputMode="numeric"
+              value={draftBudgets.draft[field.key]} disabled={disabled || draftBudgets.saving}
               aria-invalid={parameterValue(field, draftBudgets.draft[field.key]) === undefined}
               onChange={event => draftBudgets.edit({ [field.key]: event.target.value })} />
-          </label>)}
+          </SettingRow>)}
         </div>
         <PanelActions dirty={draftBudgets.dirty} saving={draftBudgets.saving} applied={draftBudgets.applied} failed={draftBudgets.failed} disabled={disabled} t={t}
           invalid={invalidDraft === undefined ? null : t('skills.invalid', { field: t(`skills.${invalidDraft.key}`), min: invalidDraft.min, max: invalidDraft.max })}
           onDiscard={draftBudgets.discard} onApply={() => { void draftBudgets.apply() }} />
       </AdvancedSection>
-      {evolution.value && <ToggleRow id="mnemon-skills-backtest" label={t('skills.autoBacktest')} hint={t('skills.autoBacktestHint')} checked={autoBacktest.value} disabled={disabled} onChange={autoBacktest.set} />}
-      {evolution.value && <ToggleRow id="mnemon-skills-auto-adopt" label={t('skills.autoAdopt')} hint={t('skills.autoAdoptHint')} checked={autoAdopt.value} disabled={disabled || !autoBacktest.value} onChange={autoAdopt.set} />}
-      {evolution.value && <div>
-        <p className={css.panelNote}>{t('skills.autoBudgetHint')}</p>
-        <div className={css.fieldGrid}>
-          <label>{t('skills.autoAdoptDailyLimit')}<input type="number" min={0} max={100} step={1} value={adoptionBudget.draft.limit} disabled={disabled || adoptionBudget.saving}
-            onChange={event => adoptionBudget.edit({ limit: event.target.value })} /></label>
-          <label>{t('skills.autoAdoptTimeZone')}<input type="text" value={adoptionBudget.draft.timeZone} placeholder="local / Asia/Shanghai" disabled={disabled || adoptionBudget.saving}
-            onChange={event => adoptionBudget.edit({ timeZone: event.target.value })} /></label>
-        </div>
-        <PanelActions dirty={adoptionBudget.dirty} saving={adoptionBudget.saving} applied={adoptionBudget.applied} failed={adoptionBudget.failed} disabled={disabled} t={t}
-          invalid={invalidAdoption ? t('skills.autoBudgetInvalid') : null} onDiscard={adoptionBudget.discard} onApply={() => { void adoptionBudget.apply() }} />
-      </div>}
-      {evolution.value && <AdvancedSection title={t('skills.parameters')} section="parameters" activeSection={page.section}>
-        <div className={css.fieldGrid}>
-          {PARAMETERS.map(field => <label key={field.key}>{t(`skills.${field.key}`)}
-            <input type="number" step={field.integer ? 1 : 0.05} inputMode={field.integer ? 'numeric' : 'decimal'} value={parameters.draft[field.key]} disabled={disabled}
-              aria-invalid={parameterValue(field, parameters.draft[field.key]) === undefined}
-              onChange={event => parameters.edit({ [field.key]: event.target.value })} />
-          </label>)}
-        </div>
-        <PanelActions dirty={parameters.dirty} saving={parameters.saving} applied={parameters.applied} failed={parameters.failed} disabled={disabled} t={t}
-          invalid={invalid === undefined ? null : t('skills.invalid', { field: t(`skills.${invalid.key}`), min: invalid.min, max: invalid.max })}
-          onDiscard={parameters.discard} onApply={() => { void parameters.apply() }} />
-      </AdvancedSection>}
 
-      {marketState.ready && <AdvancedSection title={t('skills.market')} section="market" activeSection={page.section}>
+      {marketState.ready && <AdvancedSection title={t('skills.market')}
+        badge={`${marketState.registries.filter(registry => registry.enabled).length}/${marketState.registries.length}`}
+        section="market" activeSection={page.section}>
         <div className={css.marketHeader}>
           <p className={css.panelNote}>{t('skills.marketHint')}</p>
           <ActionButton label={t('skills.marketRefresh')} pendingLabel={t('skills.marketRefreshing')}
@@ -617,8 +605,29 @@ export function SkillsSettings(props: {
         <WriteFailure error={marketState.error} t={t} />
       </AdvancedSection>}
 
-      <ToggleRow id="mnemon-skills-hints" label={t('skills.hints')} hint={t('skills.hintsHint')} checked={hints.value} disabled={disabled} onChange={hints.set} />
-      <ToggleRow id="mnemon-skills-sidebar" label={t('skills.sidebar')} hint={t('skills.sidebarHint')} checked={sidebar.value} disabled={disabled} onChange={sidebar.set} />
+      <div className={css.skillsSubgroup} data-settings-section="directories">
+        <div className={css.panelHeading}>
+          <h3>{t('skills.directories')}</h3>
+          <p>{t('skills.directoriesHint')}</p>
+        </div>
+        <div className={`${css.fieldGrid} ${css.directoryFields}`}>
+          {DIRECTORY_FIELDS.map(({ key, placeholder }) => <label key={key}>{t(`skills.${key}`)}
+            {canPickDirectory ? <span className={css.directoryPickerRow}>
+              <input className={css.directoryInput} type="text" value={directories.draft[key]} placeholder={placeholder}
+                disabled={disabled || directories.saving} autoComplete="off" spellCheck={false} autoCapitalize="none" autoCorrect="off"
+                onChange={event => directories.edit({ [key]: event.target.value })} />
+              <Button variant="outline" size="sm" disabled={disabled || directories.saving || pickingKey !== null}
+                aria-busy={pickingKey === key || undefined} aria-label={`${t('storage.chooseDirectory')} · ${t(`skills.${key}`)}`}
+                onClick={() => { void pickDirectory(key) }}>{t('storage.chooseDirectory')}</Button>
+            </span> : <input className={css.directoryInput} type="text" value={directories.draft[key]} placeholder={placeholder}
+              disabled={disabled || directories.saving} autoComplete="off" spellCheck={false} autoCapitalize="none" autoCorrect="off"
+              onChange={event => directories.edit({ [key]: event.target.value })} />}
+          </label>)}
+        </div>
+        {pickerFailed && <p className={css.panelError} role="alert">{t('storage.pickFailed')}</p>}
+        <PanelActions dirty={directories.dirty} saving={directories.saving} applied={directories.applied} failed={directories.failed}
+          disabled={disabled} invalid={null} t={t} onDiscard={directories.discard} onApply={() => { void directories.apply() }} />
+      </div>
     </div>
     <WriteFailure error={evolution.failed ?? allowCreate.failed ?? allowUpdate.failed ?? linkedUpdates.failed ?? autoBacktest.failed ?? autoAdopt.failed ?? hints.failed ?? sidebar.failed} t={t} />
   </section>

@@ -226,7 +226,7 @@ export function MnemonStorageSection(props: MnemonStorageSectionProps): JSX.Elem
       <PanelActions dirty={storage.dirty} saving={storage.saving} invalid={problem} failed={storage.failed} applied={storage.applied} disabled={props.disabled || storageMissing(draft)}
         note={t('storage.moveNote')} t={t} onDiscard={storage.discard} onApply={() => { void storage.apply() }} />
       <SettingRow title={t('workspace.excludeTitle')} hint={t('workspace.excludeHint')} htmlFor="mnemon-excluded-workspaces" stacked>
-        <textarea id="mnemon-excluded-workspaces" className={css.workspacePaths} rows={3} value={exclusion.draft.paths} disabled={props.disabled || exclusion.saving}
+        <textarea id="mnemon-excluded-workspaces" className={css.workspacePaths} rows={2} value={exclusion.draft.paths} disabled={props.disabled || exclusion.saving}
           spellCheck={false} autoCapitalize="none" onChange={event => exclusion.edit({ paths: event.target.value })} />
       </SettingRow>
       <PanelActions dirty={exclusion.dirty} saving={exclusion.saving} invalid={null} failed={exclusion.failed} applied={exclusion.applied} disabled={props.disabled}
