@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -275,20 +275,25 @@ describe('independent Documents Source client', () => {
       expect(countReads('snapshot')).toBe(1)
       expect(countReads('document')).toBe(0)
 
-      // External refresh with unchanged document metadata keeps reader mounted and skips document(id) re-fetch.
+      // Explicit refresh reloads the selected document from disk even when index.json metadata is unchanged.
+      const snapshot = (await management.read('snapshot')).value as unknown as plugin.DocumentSnapshot
+      const markdownPath = join(directory, 'data', snapshot.documents[0]!.relativePath)
+      writeFileSync(markdownPath, '# External file edit\n\nEdited directly on disk.\n', 'utf8')
       readSpy.mockClear()
       refreshKey += 1
       view.rerender(<DocumentsSourcePage {...baseProps} refreshKey={refreshKey} onRefresh={onRefresh} />)
-      await waitFor(() => expect(countReads('snapshot')).toBe(1))
       expect(screen.getByRole('heading', { name: 'Fast document' })).not.toBeNull()
-      expect(countReads('document')).toBe(0)
+      expect(await screen.findByText('Edited directly on disk.')).not.toBeNull()
+      expect(countReads('snapshot')).toBe(1)
+      expect(countReads('document')).toBe(1)
 
-      // Search when snapshot is already loaded does not trigger a sequential snapshot waterfall.
+      // Search when snapshot is already loaded does not trigger a sequential snapshot waterfall or redundant document read.
       readSpy.mockClear()
-      fireEvent.change(screen.getByLabelText(t('documents.searchAria')), { target: { value: 'Initial body' } })
+      fireEvent.change(screen.getByLabelText(t('documents.searchAria')), { target: { value: 'Edited directly' } })
       fireEvent.click(screen.getByRole('button', { name: t('documents.search') }))
       await waitFor(() => expect(countReads('search')).toBe(1))
       expect(countReads('snapshot')).toBe(0)
+      expect(countReads('document')).toBe(0)
     } finally { cleanup(); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
   })
 })

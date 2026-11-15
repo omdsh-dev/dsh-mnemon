@@ -803,43 +803,87 @@ describe('Skills page', () => {
     releaseStrict()
     const injectSpy = vi.fn()
     const selectPanel = vi.fn()
-    const selectSession = vi.fn()
+    const openSession = vi.fn()
+    const startSession = vi.fn()
     const setDraft = vi.fn()
     const focus = vi.fn()
-    const requestDraftInitialization = vi.fn()
-    const scopeToken = { session: 'session-2' }
+    const scope2 = { kind: 'agent-ctx', sessionId: 'session-2' }
+    const binding2 = { sessionId: 'session-2', ctx: scope2 }
+    const scopeUnmounted = { kind: 'agent-ctx', sessionId: 'session-unmounted' }
+    const bindingUnmounted = { sessionId: 'session-unmounted', ctx: scopeUnmounted }
+    const retainedBindings = new Map<string, { sessionId: string; ctx: unknown }>([
+      ['session-1', { sessionId: 'session-1', ctx: { kind: 'agent-ctx', sessionId: 'session-1' } }],
+    ])
+    openSession.mockImplementation((target: string) => {
+      if (target === 'session-2') retainedBindings.set('session-2', binding2)
+      if (target === 'session-unmounted') retainedBindings.set('session-unmounted', bindingUnmounted)
+    })
+    const requestDraftInitialization = vi.fn((binding: { sessionId: string; ctx: unknown }, options: { prompt?: string; whenDraftExists?: string }) => {
+      if (retainedBindings.get(binding.sessionId) !== binding) {
+        throw new Error('conversation.input.requestDraftInitialization requires a retained Session binding')
+      }
+      expect(options).toEqual({ prompt: '/release-notes ', whenDraftExists: 'replace' })
+      return 'applied' as const
+    })
 
     const releaseModern = installSkillUseBridge({
       slots: { inject: injectSpy, register: vi.fn() },
       layout: { selectPanel },
+      uiWorkspace: { openSession, startSession },
       sessions: {
-        selectedSessionId: { getSnapshot: () => 'session-1' },
-        selectSession,
-        sessionScope: (id: string) => id === 'session-2' ? scopeToken : { session: id },
+        list: {
+          getSnapshot: () => ({
+            ids: ['session-1', 'session-2'],
+            byId: {
+              'session-1': { id: 'session-1', retainedBy: { mainView: 1 } },
+              'session-2': { id: 'session-2', retainedBy: {} },
+            },
+          }),
+        },
+        scope: (id: string) => retainedBindings.get(id)?.ctx,
+        binding: (id: string) => retainedBindings.get(id),
       },
       conversation: {
         input: {
-          for: scope => scope === scopeToken
-            ? { getSnapshot: () => ({ draft: 'summarize the diff' }), setDraft, focus }
-            : undefined,
+          for: actx => {
+            const matched = [...retainedBindings.values()].find(candidate => candidate.ctx === actx)
+            if (matched === undefined) throw new Error('conversation.input.for requires a retained Session scope')
+            if (matched.sessionId === 'session-unmounted') return undefined
+            return {
+              state: { getSnapshot: () => ({ draft: 'Review probe: keep this unsent draft.' }) },
+              setDraft,
+              focus,
+            }
+          },
           requestDraftInitialization,
         },
       },
     })
 
     expect(injectSpy).not.toHaveBeenCalled()
-    expect(requestSkillUse('release-notes', 'session-2')).toBe(true)
+    // Omitted sessionId resolves the mainView-retained session ('session-1') and preserves its unsent draft.
+    expect(requestSkillUse('release-notes')).toBe(true)
+    expect(openSession).not.toHaveBeenCalled()
+    expect(setDraft).toHaveBeenCalledWith('/release-notes Review probe: keep this unsent draft.')
     expect(selectPanel).toHaveBeenCalledWith(null)
-    expect(selectSession).toHaveBeenCalledWith('session-2')
-    expect(setDraft).toHaveBeenCalledWith('/release-notes summarize the diff')
+    expect(focus).toHaveBeenCalledTimes(1)
+
+    // Explicit target session switches via uiWorkspace.openSession and updates its retained SessionInput.
+    setDraft.mockClear()
+    selectPanel.mockClear()
+    focus.mockClear()
+    expect(requestSkillUse('release-notes', 'session-2')).toBe(true)
+    expect(openSession).toHaveBeenCalledWith('session-2')
+    expect(selectPanel).toHaveBeenCalledWith(null)
+    expect(setDraft).toHaveBeenCalledWith('/release-notes Review probe: keep this unsent draft.')
     expect(focus).toHaveBeenCalledOnce()
     expect(requestDraftInitialization).not.toHaveBeenCalled()
 
-    // Unmounted composer falls back to requestDraftInitialization on DSH 0.2.1+.
+    // Fallback to requestDraftInitialization passes the retained SessionBinding and DraftInitializationOptions.
     expect(requestSkillUse('release-notes', 'session-unmounted')).toBe(true)
     expect(requestDraftInitialization).toHaveBeenCalledWith(
-      { session: 'session-unmounted' },
-      { draft: '/release-notes ', cursor: '/release-notes '.length, mode: 'replace' },
+      bindingUnmounted,
+      { prompt: '/release-notes ', whenDraftExists: 'replace' },
     )
     releaseModern()
 

@@ -3,9 +3,10 @@ import { useEffect, useRef } from 'react'
 /**
  * "Use" puts `/name ` into the conversation's input, where DSH's own gesture
  * loads the skill when the message is sent. On DSH 0.2.1+, this uses the
- * official `ctx.conversation.input` controller directly without mounting a slot
- * component or firing DOM events; on DSH 0.2.0-rc.2 (where `ctx.conversation`
- * is absent), it falls back to the gated composer-row event bridge.
+ * official `ctx.conversation.input` and `ctx.sessions` contracts directly
+ * without mounting a slot component or firing DOM events; on DSH 0.2.0-rc.2
+ * (where `ctx.conversation` is absent), it falls back to the gated composer-row
+ * event bridge.
  */
 export const SKILL_USE_EVENT = 'dsh-mnemon:skill-use'
 
@@ -15,48 +16,95 @@ interface SkillUseDetail {
   handled: boolean
 }
 
+export interface SessionInputState {
+  readonly draft: string
+}
+
 export interface SessionInputController {
-  getSnapshot?: () => { draft?: string } | undefined
-  setDraft(draft: string): void
+  readonly state: {
+    getSnapshot(): SessionInputState
+  }
+  setDraft(text: string): void
   focus?: () => void
 }
 
+export interface DraftInitializationOptions {
+  readonly prompt?: string
+  readonly clearPreviousDraft?: boolean
+  readonly whenDraftExists?: 'replace' | 'append' | 'keep'
+}
+
+export type DraftInitializationResult = 'applied' | 'preserved' | 'blocked'
+
+export interface RetainedSessionBinding {
+  readonly sessionId: string
+  readonly ctx: unknown
+}
+
 export interface SessionInputResolver {
-  for?: (scope: unknown) => SessionInputController | undefined
+  for?: (actx: unknown) => SessionInputController | undefined
   requestDraftInitialization?: (
-    binding: unknown,
-    init: { draft: string; cursor?: number; mode?: 'if-empty' | 'replace' },
-  ) => void
+    binding: RetainedSessionBinding,
+    options: DraftInitializationOptions,
+  ) => DraftInitializationResult
+}
+
+export interface SessionSummaryRow {
+  readonly id: string
+  readonly retainedBy?: Readonly<Partial<Record<string, number>>>
 }
 
 export interface SessionsRuntime {
-  selectedSessionId?:
-    | string
-    | null
-    | {
-        get?: () => string | null | undefined
-        getSnapshot?: () => string | null | undefined
-        value?: string | null | undefined
-      }
-  selectSession?: (sessionId: string | null) => void
-  sessionScope?: ((sessionId: string) => unknown) | ReadonlyMap<string, unknown> | Record<string, unknown>
-  getSessionScope?: (sessionId: string) => unknown
+  readonly list?: {
+    getSnapshot(): {
+      readonly ids?: readonly string[]
+      readonly byId: Readonly<Record<string, SessionSummaryRow | undefined>>
+    }
+  }
+  scope?: (sessionId: string) => unknown
+  binding?: (sessionId: string) => RetainedSessionBinding | undefined
+  retainInfo?: (sessionId: string) => {
+    getSnapshot(): {
+      readonly retainedBy: Readonly<Partial<Record<string, number>>>
+    }
+  }
+}
+
+export interface UiSessionRuntime {
+  readonly adapter?: {
+    readonly current?: {
+      getSnapshot(): { readonly key?: string | undefined }
+    }
+  }
+}
+
+export interface UiWorkspaceRuntime {
+  openSession?: (target: string) => void
+  startSession?: (workspaceId?: string, options?: DraftInitializationOptions) => void
 }
 
 export interface SkillUseRuntimeContext {
   slots: unknown
   conversation?: { input?: SessionInputResolver | undefined } | undefined
   sessions?: SessionsRuntime | undefined
+  uiSession?: UiSessionRuntime | undefined
+  uiWorkspace?: UiWorkspaceRuntime | undefined
   layout?: { selectPanel?: (panelId: string | null) => void } | undefined
 }
 
 type DirectSkillUseHandler = (name: string, sessionId?: string) => boolean
 
 let directHandler: DirectSkillUseHandler | undefined
+let directModeActive = false
 
 /** A request no composer has taken yet (0.2.0-rc.2 fallback): the next composer of its session to mount takes it. */
 let pending: { detail: SkillUseDetail; at: number } | undefined
 const PENDING_MS = 10_000
+
+/** Whether DSH 0.2.1+ direct `ctx.conversation.input` mode is currently active (rather than the deferred 0.2.0-rc.2 bridge). */
+export function isDirectSkillUseActive(): boolean {
+  return directModeActive
+}
 
 /**
  * Ask the open composer to take `/name`. On DSH 0.2.1+ this writes directly
@@ -123,52 +171,7 @@ interface SlotRegistry {
 
 export const SKILL_USE_SLOT = 'conversation.input.left'
 
-function readSelectedSessionId(sessions: SessionsRuntime | undefined): string | undefined {
-  const selected = sessions?.selectedSessionId
-  if (typeof selected === 'string') return selected === '' ? undefined : selected
-  if (typeof selected === 'object' && selected !== null) {
-    const value = selected.getSnapshot?.() ?? selected.get?.() ?? selected.value
-    return typeof value === 'string' && value !== '' ? value : undefined
-  }
-  return undefined
-}
-
-function resolveSessionScope(sessions: SessionsRuntime | undefined, sessionId: string | undefined): unknown {
-  if (sessions === undefined || sessionId === undefined) return undefined
-  const scopeSource = sessions.sessionScope
-  if (typeof scopeSource === 'function') return scopeSource.call(sessions, sessionId)
-  if (scopeSource instanceof Map) return scopeSource.get(sessionId)
-  if (typeof scopeSource === 'object' && scopeSource !== null) return (scopeSource as Record<string, unknown>)[sessionId]
-  if (typeof sessions.getSessionScope === 'function') return sessions.getSessionScope(sessionId)
-  return undefined
-}
-
-function resolveController(
-  input: SessionInputResolver,
-  sessions: SessionsRuntime | undefined,
-  scope: unknown,
-  fallbackTarget: unknown,
-): SessionInputController | undefined {
-  if (typeof input.for !== 'function') return undefined
-  if (scope !== undefined) {
-    try {
-      const controller = input.for(scope)
-      if (controller !== undefined) return controller
-    } catch {
-      // Fall through to draft initialization if the scope is not ready yet.
-    }
-  }
-  if (sessions === undefined && fallbackTarget !== undefined && fallbackTarget !== scope) {
-    try {
-      return input.for(fallbackTarget)
-    } catch {
-      return undefined
-    }
-  }
-  return undefined
-}
-
-function readOptionalService<K extends 'conversation' | 'sessions' | 'layout'>(
+function readOptionalService<K extends 'conversation' | 'sessions' | 'uiSession' | 'uiWorkspace' | 'layout'>(
   ctx: SkillUseRuntimeContext,
   key: K,
 ): SkillUseRuntimeContext[K] {
@@ -189,29 +192,80 @@ function readOptionalService<K extends 'conversation' | 'sessions' | 'layout'>(
   }
 }
 
+function readMainSessionId(ctx: SkillUseRuntimeContext, sessions: SessionsRuntime | undefined): string | undefined {
+  const currentKey = readOptionalService(ctx, 'uiSession')?.adapter?.current?.getSnapshot?.()?.key
+  if (typeof currentKey === 'string' && currentKey !== '') return currentKey
+  const byId = sessions?.list?.getSnapshot?.()?.byId
+  if (byId !== undefined) {
+    for (const candidate of Object.values(byId)) {
+      if (candidate !== undefined && (candidate.retainedBy?.mainView ?? 0) > 0 && candidate.id !== '') {
+        return candidate.id
+      }
+    }
+  }
+  return undefined
+}
+
 function applyDirectSkillUse(ctx: SkillUseRuntimeContext, input: SessionInputResolver, name: string, sessionId?: string): boolean {
   const layout = readOptionalService(ctx, 'layout')
   const sessions = readOptionalService(ctx, 'sessions')
-  try { layout?.selectPanel?.(null) } catch { /* Conversation panel may already be active or unmanaged. */ }
-  const selectedId = readSelectedSessionId(sessions)
-  const targetSessionId = sessionId ?? selectedId
-  if (sessionId !== undefined && sessionId !== selectedId) {
-    try { sessions?.selectSession?.(sessionId) } catch { /* Ignore if session switching is unsupported. */ }
+  const uiWorkspace = readOptionalService(ctx, 'uiWorkspace')
+  const mainSessionId = readMainSessionId(ctx, sessions)
+  const requestedSessionId = typeof sessionId === 'string' && sessionId !== '' ? sessionId : undefined
+  const targetSessionId = requestedSessionId ?? mainSessionId
+
+  if (targetSessionId === undefined) {
+    if (typeof uiWorkspace?.startSession === 'function') {
+      try {
+        uiWorkspace.startSession(undefined, { prompt: draftWithSkill('', name), whenDraftExists: 'replace' })
+        return true
+      } catch {
+        return false
+      }
+    }
+    return false
   }
-  const sessionScope = resolveSessionScope(sessions, targetSessionId)
-  const controller = resolveController(input, sessions, sessionScope, targetSessionId ?? ctx)
-  if (controller !== undefined) {
-    const nextDraft = draftWithSkill(controller.getSnapshot?.()?.draft ?? '', name)
-    controller.setDraft(nextDraft)
-    controller.focus?.()
-    return true
+
+  let binding = sessions?.binding?.(targetSessionId)
+  if ((requestedSessionId !== undefined && requestedSessionId !== mainSessionId) || binding === undefined) {
+    try {
+      uiWorkspace?.openSession?.(targetSessionId)
+      binding = sessions?.binding?.(targetSessionId)
+    } catch {
+      // Fall through and inspect whatever retained scope/binding is available.
+    }
   }
-  const binding = sessionScope ?? targetSessionId
+
+  const actx = sessions?.scope?.(targetSessionId) ?? binding?.ctx
+  if (actx !== undefined && typeof input.for === 'function') {
+    try {
+      const controller = input.for(actx)
+      if (controller !== undefined) {
+        const currentDraft = controller.state.getSnapshot().draft
+        controller.setDraft(draftWithSkill(currentDraft, name))
+        try { layout?.selectPanel?.(null) } catch { /* Conversation panel may already be active or unmanaged. */ }
+        controller.focus?.()
+        return true
+      }
+    } catch {
+      // Fall through to requestDraftInitialization when a retained binding exists.
+    }
+  }
+
   if (binding !== undefined && typeof input.requestDraftInitialization === 'function') {
-    const nextDraft = draftWithSkill('', name)
-    input.requestDraftInitialization(binding, { draft: nextDraft, cursor: nextDraft.length, mode: 'replace' })
-    return true
+    try {
+      const result = input.requestDraftInitialization(binding, {
+        prompt: draftWithSkill('', name),
+        whenDraftExists: 'replace',
+      })
+      if (result === 'blocked') return false
+      try { layout?.selectPanel?.(null) } catch { /* Conversation panel may already be active or unmanaged. */ }
+      return true
+    } catch {
+      return false
+    }
   }
+
   return false
 }
 
@@ -223,6 +277,7 @@ export function installSkillUseBridge(ctx: SkillUseRuntimeContext): () => void {
   const tryDirect = (name: string, sessionId?: string): boolean | undefined => {
     const input = readOptionalService(ctx, 'conversation')?.input
     if (input === undefined) return undefined
+    directModeActive = true
     return applyDirectSkillUse(ctx, input, name, sessionId)
   }
   const initialInput = readOptionalService(ctx, 'conversation')?.input
@@ -232,20 +287,26 @@ export function installSkillUseBridge(ctx: SkillUseRuntimeContext): () => void {
       return applyDirectSkillUse(ctx, currentInput, name, sessionId)
     }
     directHandler = handler
+    directModeActive = true
     pending = undefined
     return () => {
-      if (directHandler === handler) directHandler = undefined
+      if (directHandler === handler) {
+        directHandler = undefined
+        directModeActive = false
+      }
     }
   }
   const handler: DirectSkillUseHandler = (name, sessionId) => {
     const result = tryDirect(name, sessionId)
     if (result !== undefined) return result
+    directModeActive = false
     const detail: SkillUseDetail = { name, ...(sessionId === undefined ? {} : { sessionId }), handled: false }
     window.dispatchEvent(new CustomEvent(SKILL_USE_EVENT, { detail }))
     pending = detail.handled ? undefined : { detail, at: Date.now() }
     return detail.handled
   }
   directHandler = handler
+  directModeActive = false
   const slots = ctx.slots as SlotRegistry
   let disposeSlot: (() => void) | undefined
   try {
@@ -257,7 +318,10 @@ export function installSkillUseBridge(ctx: SkillUseRuntimeContext): () => void {
     disposeSlot = undefined
   }
   return () => {
-    if (directHandler === handler) directHandler = undefined
+    if (directHandler === handler) {
+      directHandler = undefined
+      directModeActive = false
+    }
     disposeSlot?.()
   }
 }

@@ -46,6 +46,7 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
   const pageSize = 8
   const readerRef = useRef<HTMLElement | null>(null)
   const [snapshot, setSnapshot] = useState<DocumentSnapshot | null>(null)
+  const [loadedRevision, setLoadedRevision] = useState(props.revision)
   const [items, setItems] = useState<DocumentListItem[]>([])
   const [visibleLimit, setVisibleLimit] = useState(pageSize)
   const [selectedId, setSelectedId] = useState<string | null>(props.documentId ?? null)
@@ -70,6 +71,8 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
   snapshotRef.current = snapshot
   const selectedRef = useRef<DocumentView | null>(null)
   selectedRef.current = selected
+  const revisionRef = useRef(props.revision)
+  revisionRef.current = props.revision
   const fetchedSignatureRef = useRef<string | null>(null)
   const queryRef = useRef(query)
   queryRef.current = query
@@ -81,7 +84,7 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
       const view = candidate as DocumentView
       selectedRef.current = view
       if (view.fileRevision !== undefined || props.client.deleteDocument === undefined) {
-        fetchedSignatureRef.current = `${view.id}:${view.revision}:${view.contentHash}`
+        fetchedSignatureRef.current = `${revisionRef.current}:${view.id}:${view.revision}:${view.contentHash}`
       }
       setSelected(view)
     }
@@ -91,6 +94,7 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
     nextQuery: string,
     nextStatus: 'active' | 'archived',
     preferred?: { id: string; document?: unknown },
+    reloadIndex = false,
   ) => {
     const request = displayRequests.begin()
     setLoading(true); setError(null); setVisibleLimit(pageSize)
@@ -100,7 +104,7 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
       if (nextQuery.trim() === '') {
         current = await props.client.documents()
         records = current.documents
-      } else if (snapshotRef.current !== null) {
+      } else if (snapshotRef.current !== null && !reloadIndex) {
         // Reuse the loaded index and merge searched record metadata/revision in place
         // without issuing a sequential snapshot RPC waterfall.
         const existing = snapshotRef.current
@@ -134,8 +138,10 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
       const filtered = records.filter(record => record.status === nextStatus)
         .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
       if (!displayRequests.isCurrent(request)) return
+      const refreshStamp = revisionRef.current
       snapshotRef.current = current
       setSnapshot(current)
+      setLoadedRevision(refreshStamp)
       setItems(filtered)
       if (preferred?.document !== undefined && filtered.some(record => record.id === preferred.id)) {
         adoptMutatedDocument(preferred.document)
@@ -153,7 +159,7 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
     }
   }, [adoptMutatedDocument, displayRequests, pageSize, props.client])
 
-  useEffect(() => { void display(queryRef.current, statusRef.current) }, [display, props.revision])
+  useEffect(() => { void display(queryRef.current, statusRef.current, undefined, true) }, [display, props.revision])
   useEffect(() => {
     if (selectedId === null) {
       setSelected(null)
@@ -166,11 +172,11 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
       return
     }
     const currentSelected = selectedRef.current
-    const recordSignature = `${record.id}:${record.revision}:${record.contentHash}`
+    const recordSignature = `${loadedRevision}:${record.id}:${record.revision}:${record.contentHash}`
     if (
       currentSelected !== null
       && currentSelected.id === record.id
-      && (currentSelected.fileRevision !== undefined || fetchedSignatureRef.current === recordSignature)
+      && fetchedSignatureRef.current === recordSignature
       && currentSelected.revision === record.revision
       && currentSelected.contentHash === record.contentHash
       && currentSelected.updatedAt === record.updatedAt
@@ -181,14 +187,15 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
       return
     }
     let active = true
+    const requestRevision = loadedRevision
     void props.client.document(selectedId).then(value => {
       if (!active) return
-      fetchedSignatureRef.current = `${value.id}:${value.revision}:${value.contentHash}`
+      fetchedSignatureRef.current = `${requestRevision}:${value.id}:${value.revision}:${value.contentHash}`
       selectedRef.current = value
       setSelected(value)
     }).catch(reason => { if (active) setError(message(reason)) })
     return () => { active = false }
-  }, [props.client, selectedId, snapshot])
+  }, [loadedRevision, props.client, selectedId, snapshot])
   useLayoutEffect(() => {
     if (readerRef.current !== null) readerRef.current.scrollTop = 0
   }, [selectedId])

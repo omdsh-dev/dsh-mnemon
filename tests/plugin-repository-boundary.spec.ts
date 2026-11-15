@@ -107,7 +107,9 @@ describe('standalone plugin repository boundary', () => {
           violations.push(`${relative(root, file)} crosses its public contract: ${specifier}`)
         }
       }
-      if (file.includes(`${sep}src${sep}`) && /\.(?:binding|mnemonMemorySpace)\b/u.test(readFileSync(file, 'utf8'))) {
+      const isClientSource = file.includes(`${sep}src${sep}client${sep}`) || file.endsWith(`${sep}src${sep}client.ts`)
+      const forbiddenHostBinding = isClientSource ? /\.mnemonMemorySpace\b/u : /\.(?:binding|mnemonMemorySpace)\b/u
+      if (file.includes(`${sep}src${sep}`) && forbiddenHostBinding.test(readFileSync(file, 'utf8'))) {
         violations.push(`${relative(root, file)} reaches into a Host business binding`)
       }
     }

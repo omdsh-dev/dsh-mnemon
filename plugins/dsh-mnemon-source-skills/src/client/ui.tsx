@@ -8,7 +8,7 @@ import { MarketPage } from './market-page.tsx'
 import { css, errorText, sidebarCss, translate, useT } from './presentation.ts'
 import { SkillsPage } from './skills-page.tsx'
 import { TrashPage } from './trash-page.tsx'
-import { installSkillUseBridge, requestSkillUse, type SkillUseRuntimeContext } from './use-skill.tsx'
+import { installSkillUseBridge, isDirectSkillUseActive, requestSkillUse, type SkillUseRuntimeContext } from './use-skill.tsx'
 
 export type SkillsTab = 'skills' | 'evolution' | 'evals' | 'market' | 'trash'
 /** What 进化 lists: suggestions still waiting, those handled, or the conversations reviews read. */
@@ -176,7 +176,7 @@ function SkillsView(props: MemorySourcePageProps & { management: NonNullable<Mem
     fail: reason => { setError(errorText(reason)); setNotice(null) },
     useSkill: name => {
       const taken = requestSkillUse(name, props.sessionId)
-      if (props.onReturnToConversation !== undefined) props.onReturnToConversation()
+      if (props.onReturnToConversation !== undefined && (taken || !isDirectSkillUseActive())) props.onReturnToConversation()
       else if (taken) { setNotice(t('skills.used', { name })); setError(null) }
       else { setError(t('skills.noConversation')); setNotice(null) }
     },
