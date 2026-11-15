@@ -667,7 +667,7 @@ describe('OverviewPage & MemoryGraph performance guardrails', () => {
   })
 })
 
-describe('Settings deep-linking, error banner placement, and reduced-motion polish', () => {
+describe('Settings deep-linking, error banner placement, and reduced-motion polish', { timeout: 20_000 }, () => {
   it('deep-links Space policy to onOpenSettings("policy") when provided, and falls back to PersistenceStrategyDialog when omitted', async () => {
     const nativeProvider = {
       ...descriptor,

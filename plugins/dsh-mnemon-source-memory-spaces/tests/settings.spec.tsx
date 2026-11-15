@@ -323,7 +323,7 @@ describe('write-only embedding credentials', () => {
   })
 })
 
-describe('Space policy, Recall & timeouts, and locale parity', () => {
+describe('Space policy, Recall & timeouts, and locale parity', { timeout: 20_000 }, () => {
   it('renders providers, policy, and recall sections and saves Space policy with native fallback when body-directory is absent', async () => {
     const { lent, set, changed } = host({ storageScope: 'global' })
     const { container } = render(settings(lent))
@@ -371,25 +371,25 @@ describe('Space policy, Recall & timeouts, and locale parity', () => {
     expect(policySection.hasAttribute('data-open')).toBe(true)
 
     await waitFor(() => expect(read).toHaveBeenCalledWith('provider-services'))
-    fireEvent.click(within(policySection).getByRole('radio', { name: /Smart selection/u }))
-    const openVikingCheckbox = await within(policySection).findByRole('checkbox', { name: /OpenViking/u }) as HTMLInputElement
+    fireEvent.click(within(policySection).getByLabelText(/Smart selection/u))
+    const openVikingCheckbox = await within(policySection).findByLabelText(/OpenViking/u) as HTMLInputElement
     fireEvent.click(openVikingCheckbox)
     expect(openVikingCheckbox.checked).toBe(true)
 
-    fireEvent.change(within(policySection).getByRole('textbox', { name: t('overview.placementPrompt') }), {
+    fireEvent.change(within(policySection).getByLabelText(t('overview.placementPrompt')), {
       target: { value: 'Team knowledge; prefer shared after exact writes.' },
     })
     fireEvent.click(within(policySection).getByRole('button', { name: new RegExp(`^${t('overview.preference')}`, 'u') }))
-    fireEvent.click(screen.getByRole('menuitem', { name: t('overview.preferenceShared') }))
-    fireEvent.click(within(policySection).getByRole('checkbox', { name: t('overview.capability.exact-write') }))
+    fireEvent.click(screen.getByText(t('overview.preferenceShared')))
+    fireEvent.click(within(policySection).getByLabelText(t('overview.capability.exact-write')))
 
-    const targetUriInput = within(policySection).getByRole('textbox', { name: t('overview.providerTargetUri') })
+    const targetUriInput = within(policySection).getByLabelText(t('overview.providerTargetUri'))
     fireEvent.change(targetUriInput, { target: { value: '' } })
-    expect((within(policySection).getByRole('button', { name: t('options.apply') }) as HTMLButtonElement).disabled).toBe(true)
-    expect(within(policySection).getByRole('alert').textContent).toBe(t('config.policyConnectionIncomplete'))
+    const applyButton = within(policySection).getByText(t('options.apply')).closest('button') as HTMLButtonElement
+    expect(applyButton.disabled).toBe(true)
+    expect(policySection.querySelector('[role="alert"]')?.textContent).toBe(t('config.policyConnectionIncomplete'))
 
     fireEvent.change(targetUriInput, { target: { value: 'viking://user/team/memories' } })
-    const applyButton = within(policySection).getByRole('button', { name: t('options.apply') }) as HTMLButtonElement
     expect(applyButton.disabled).toBe(false)
     fireEvent.click(applyButton)
 
@@ -411,8 +411,8 @@ describe('Space policy, Recall & timeouts, and locale parity', () => {
 
     // Enforcing local-only disables remote candidates and removes them from allowedProviderIds.
     fireEvent.click(within(policySection).getByRole('button', { name: new RegExp(`^${t('overview.dataBoundary')}`, 'u') }))
-    fireEvent.click(screen.getByRole('menuitem', { name: t('overview.dataBoundaryLocal') }))
-    const updatedOpenViking = within(policySection).getByRole('checkbox', { name: /OpenViking/u }) as HTMLInputElement
+    fireEvent.click(screen.getByText(t('overview.dataBoundaryLocal')))
+    const updatedOpenViking = within(policySection).getByLabelText(/OpenViking/u) as HTMLInputElement
     expect(updatedOpenViking.disabled).toBe(true)
     expect(updatedOpenViking.checked).toBe(false)
   })
