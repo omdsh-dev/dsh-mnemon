@@ -124,6 +124,8 @@ DSH 自己的插件列表从包内的 `locale/en.json` 与 `locale/zh.json`（`m
 
 #### 组件自己的设置与状态卡片
 
+Source 页面的通用 `onOpenSettings` 回调不代表主包支持某个具体设置区。可独立升级的 Source 在迁移控件前，应检测 `dsh-mnemon/client` 是否导出可选的 `supportsMemoryComponentSettingsSection(packageName, section)`。主包声明支持记忆空间的 `policy`/`recall`（含所需配置读写权限）以及技能管理的 `models`/`market`。导出不存在或返回 `false` 时，保留原有 Source 控件，不展示旧主包无法读取或保存的配置字段。
+
 声明的选项不够用时，组件可以在 `./client` 入口把自己的设置加入它的组件页，记忆空间就是这样带来它的 Provider 与嵌入。其他随附组件的设置仍由 dsh-mnemon 通过同一区域绘制：运行时记忆的用户画像范围、分层策略的后台任务。Source 还可以提供它运行时在记忆系统“状态”页卡片上显示的内容。
 
 ```tsx

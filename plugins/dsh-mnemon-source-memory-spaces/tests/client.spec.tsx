@@ -9,16 +9,21 @@ import { MemorySourcePageFrame, translateEn } from 'dsh-mnemon/client'
 import copy from '../presentation/locales.json' with { type: 'json' }
 import { descriptor, provider, strategy } from './fixture.ts'
 
+const { settingsSupport } = vi.hoisted(() => ({ settingsSupport: vi.fn(() => false) }))
+afterEach(() => settingsSupport.mockReturnValue(false))
+
 // Load the installed Core's actual DSH browser artifact; no repository source alias.
 vi.mock('dsh-mnemon/client', async () => {
   const { createRequire } = await import('node:module')
   const { loadMemoryClientArtifact } = await import('dsh-mnemon/testing')
-  return loadMemoryClientArtifact(createRequire(import.meta.url).resolve('dsh-mnemon/client'), {
+  const client = loadMemoryClientArtifact<Record<string, unknown>>(createRequire(import.meta.url).resolve('dsh-mnemon/client'), {
     react: await vi.importActual('react'),
     'react/jsx-runtime': await vi.importActual('react/jsx-runtime'),
     'react-dom': await vi.importActual('react-dom'),
     '@deepseek-ai/dsh-client-ui-primitives': await vi.importActual('@deepseek-ai/dsh-client-ui-primitives'),
   })
+  // Only the new-host cases advertise migrated sections; all other exports stay published.
+  return { ...client, supportsMemoryComponentSettingsSection: settingsSupport }
 })
 afterEach(cleanup)
 
@@ -668,7 +673,8 @@ describe('OverviewPage & MemoryGraph performance guardrails', () => {
 })
 
 describe('Settings deep-linking, error banner placement, and reduced-motion polish', { timeout: 20_000 }, () => {
-  it('deep-links Space policy to onOpenSettings("policy") when provided, and falls back to PersistenceStrategyDialog when omitted', async () => {
+  it.each([true, false])('keeps Space policy editable with a generic callback (migrated section supported=%s)', async supported => {
+    settingsSupport.mockReturnValue(supported)
     const nativeProvider = {
       ...descriptor,
       id: 'mnemon-native',
@@ -707,23 +713,27 @@ describe('Settings deep-linking, error banner placement, and reduced-motion poli
     )
 
     fireEvent.click(await screen.findByRole('button', { name: t('strategy.action') }))
-    expect(onOpenSettings).toHaveBeenCalledWith('policy')
-    expect(screen.queryByRole('dialog', { name: t('strategy.title') })).toBeNull()
+    if (supported) {
+      expect(onOpenSettings).toHaveBeenCalledWith('policy')
+      expect(screen.queryByRole('dialog', { name: t('strategy.title') })).toBeNull()
 
-    view.rerender(
-      <MemorySpacesSourcePage
-        page="spaces"
-        sourceTypeId="memory-spaces"
-        sourceInstanceKey="source:policy-fallback"
-        sourceInstances={[]}
-        locale="en"
-        writable
-        preferences={{ value: {}, writable: true, replace }}
-        management={{ ...management, sourceInstanceKey: 'source:policy-fallback' }}
-      />,
-    )
+      view.rerender(
+        <MemorySpacesSourcePage
+          page="spaces"
+          sourceTypeId="memory-spaces"
+          sourceInstanceKey="source:policy-fallback"
+          sourceInstances={[]}
+          locale="en"
+          writable
+          preferences={{ value: {}, writable: true, replace }}
+          management={{ ...management, sourceInstanceKey: 'source:policy-fallback' }}
+        />,
+      )
 
-    fireEvent.click(await screen.findByRole('button', { name: t('strategy.action') }))
+      fireEvent.click(await screen.findByRole('button', { name: t('strategy.action') }))
+    } else {
+      expect(onOpenSettings).not.toHaveBeenCalled()
+    }
     const dialog = await screen.findByRole('dialog', { name: t('strategy.title') })
     await waitFor(() => expect(within(dialog).getByRole('radio', { name: /Smart selection/u })).toBeTruthy())
     fireEvent.click(within(dialog).getByRole('radio', { name: /Smart selection/u }))

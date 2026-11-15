@@ -10,6 +10,13 @@ export type SourceKey = keyof typeof labels.zh
 export const css: Readonly<Record<string, string>> = { ...memoryPageStyles, ...page }
 export const sidebarCss: Readonly<Record<string, string>> = { ...memorySidebarStyles, ...sidebar }
 
+/** Older Core versions open the component page without lending policy/recall settings. */
+export function supportsSettingsSection(section: 'policy' | 'recall'): boolean {
+  if (!('supportsMemoryComponentSettingsSection' in mnemonClient)) return false
+  const supports = (mnemonClient as { supportsMemoryComponentSettingsSection?: (packageName: string, section: string) => boolean }).supportsMemoryComponentSettingsSection
+  return typeof supports === 'function' && supports('dsh-mnemon-source-memory-spaces', section)
+}
+
 /**
  * Reveal wrapper that falls back to a plain wrapper beside older dsh-mnemon
  * releases (such as 0.5.31) whose client entry predates `Reveal`.

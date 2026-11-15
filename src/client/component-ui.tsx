@@ -19,6 +19,21 @@ export const MNEMON_COMPONENT_SETTINGS_SLOT = 'mnemon.component.settings' as con
  * export neither and draw those settings at the default priority.
  */
 export const MNEMON_COMPONENT_FALLBACK_PRIORITY = 100
+
+const COMPONENT_SETTINGS_SECTIONS: Readonly<Record<string, readonly string[]>> = {
+  'dsh-mnemon-source-memory-spaces': ['policy', 'recall'],
+  'dsh-mnemon-source-skills': ['models', 'market'],
+}
+
+/**
+ * Sections this Core supplies, including the configuration access they need.
+ * A generic open-settings callback alone does not promise these sections. Source
+ * clients must keep their own controls when this export is absent or returns false.
+ */
+export function supportsMemoryComponentSettingsSection(packageName: string, section: string): boolean {
+  return Object.hasOwn(COMPONENT_SETTINGS_SECTIONS, packageName) && COMPONENT_SETTINGS_SECTIONS[packageName]!.includes(section)
+}
+
 /**
  * What a component's card on the Memory System's Status page says while it
  * runs, keyed by the component's package name. A card that is not running

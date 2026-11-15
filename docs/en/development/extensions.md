@@ -124,6 +124,8 @@ DSH's own plugin list names a package from its `locale/en.json` and `locale/zh.j
 
 #### A component's own settings and Status card
 
+The generic Source-page `onOpenSettings` callback does not guarantee any particular settings section. For independently upgraded Sources, feature-detect the optional `supportsMemoryComponentSettingsSection(packageName, section)` export from `dsh-mnemon/client` before moving a control there. Core advertises Memory Spaces `policy`/`recall` (including the configuration access they require) and Skills `models`/`market`. If the export is absent or returns `false`, keep the existing Source controls; do not expose fields that the older Core cannot read or write.
+
 When declared options are not enough, a component adds its own settings to its page from its `./client` entry, the way Memory Spaces brings its Providers and embedding. dsh-mnemon draws the other shipped components' settings through the same region: Runtime Memory's user profile scope and the Layered strategy's background tasks. A Source can also say what its card on the Memory System's Status page shows while it runs.
 
 ```tsx

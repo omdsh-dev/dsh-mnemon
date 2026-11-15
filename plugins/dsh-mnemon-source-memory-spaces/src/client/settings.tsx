@@ -1,4 +1,4 @@
-import { css as pageCss, languageChain, settingsTranslate, SourceTranslation, useT, type DshLocale } from './presentation.ts'
+import { css as pageCss, languageChain, settingsTranslate, SourceTranslation, supportsSettingsSection, useT, type DshLocale } from './presentation.ts'
 import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type JSX, type ReactNode } from 'react'
 import { Button, IconChevronDownOutlineRegular, Menu } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
@@ -408,7 +408,7 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
       />
     </section>
 
-    <section className={`${css.panelSection} ${pageCss.settingsSection} ${pageCss.settingsPolicy}`} data-settings-section="policy" data-open={policyOpen ? '' : undefined} aria-labelledby="mnemon-spaces-policy">
+    {supportsSettingsSection('policy') && <section className={`${css.panelSection} ${pageCss.settingsSection} ${pageCss.settingsPolicy}`} data-settings-section="policy" data-open={policyOpen ? '' : undefined} aria-labelledby="mnemon-spaces-policy">
       <button type="button" className={pageCss.settingsPolicyToggle} aria-expanded={policyOpen}
         {...(policyOpen ? { 'aria-controls': 'mnemon-spaces-policy-body' } : {})}
         data-disclosure-open={policyOpen ? undefined : ''} onClick={() => setPolicyOpen(open => !open)}>
@@ -427,9 +427,9 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
         <PanelActions dirty={policyForm.dirty} saving={policyForm.saving} invalid={placementPolicyProblem(effectivePolicyDraft, policyProviders, t)} failed={policyForm.failed} applied={policyForm.applied}
           disabled={disabled} t={t} onDiscard={policyForm.discard} onApply={() => { void policyForm.apply() }} />
       </div>}
-    </section>
+    </section>}
 
-    <section className={`${css.panelSection} ${pageCss.settingsSection} ${pageCss.settingsRecall}`} data-settings-section="recall" data-open={recallOpen ? '' : undefined} aria-labelledby="mnemon-spaces-recall">
+    {supportsSettingsSection('recall') && <section className={`${css.panelSection} ${pageCss.settingsSection} ${pageCss.settingsRecall}`} data-settings-section="recall" data-open={recallOpen ? '' : undefined} aria-labelledby="mnemon-spaces-recall">
       <button type="button" className={pageCss.settingsPolicyToggle} aria-expanded={recallOpen} aria-labelledby="mnemon-spaces-recall"
         {...(recallOpen ? { 'aria-controls': 'mnemon-spaces-recall-body' } : {})}
         data-disclosure-open={recallOpen ? undefined : ''} onClick={() => setRecallOpen(open => !open)}>
@@ -466,7 +466,7 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
         <PanelActions dirty={recallForm.dirty} saving={recallForm.saving} invalid={recallProblem(recallForm.draft, t)} failed={recallForm.failed} applied={recallForm.applied}
           disabled={disabled} t={t} onDiscard={recallForm.discard} onApply={() => { void recallForm.apply() }} />
       </div>}
-    </section>
+    </section>}
   </>
 }
 

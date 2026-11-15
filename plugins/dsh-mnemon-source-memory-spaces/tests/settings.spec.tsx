@@ -16,7 +16,8 @@ const { artifact } = vi.hoisted(() => ({ artifact: async () => {
     '@deepseek-ai/dsh-client-ui-primitives': await vi.importActual('@deepseek-ai/dsh-client-ui-primitives'),
   })
 } }))
-vi.mock('dsh-mnemon/client', artifact)
+// New surfaces explicitly opt into the capability; legacy cases below omit it.
+vi.mock('dsh-mnemon/client', async () => ({ ...await artifact(), supportsMemoryComponentSettingsSection: () => true }))
 afterEach(cleanup)
 
 import { MemorySourcePageFrame, translateEn as coreEn, translateZh as coreZh } from 'dsh-mnemon/client'
@@ -237,36 +238,39 @@ describe('registering its own settings', () => {
     }
   })
 
-  it('renders and saves Memory Spaces settings beside published dsh-mnemon 0.5.46 client exports without post-0.5.46 controls', async () => {
+  it('keeps embedding usable and hides unlent policy/recall settings when Core lacks migrated sections', async () => {
     vi.doMock('dsh-mnemon/client', async () => ({
       ...await artifact(),
       AdvancedSection: undefined,
       SelectRow: undefined,
       SettingRow: undefined,
       SettingSelect: undefined,
+      supportsMemoryComponentSettingsSection: undefined,
     }))
     vi.resetModules()
     try {
       const { MemorySpacesSettings: StandaloneSettings } = await import('../src/client/settings.tsx')
       const read = async (operation: string) => operation === 'provider-services' ? { providers: [], items: [], generatedAt: 'now' } : { commandFound: true }
-      const { lent, set, changed } = host({ storageScope: 'global' }, { read })
+      const { lent, set } = host({ storageScope: 'global', embedding: { enabled: true, endpoint: 'https://embedding.example.test/v1', model: 'original', protocol: 'openai' } }, { read })
       const { container } = render(
         <StandaloneSettings component={{ packageName: 'dsh-mnemon-source-memory-spaces', label: 'Memory Spaces', enabled: true }} writable language="en" host={lent} />,
       )
 
-      const recallSection = container.querySelector('[data-settings-section="recall"]') as HTMLElement
-      expect(recallSection).not.toBeNull()
-      expect(recallSection.querySelectorAll('input, select, textarea, button:not([data-disclosure-open])')).toHaveLength(0)
-
-      fireEvent.click(within(recallSection).getByRole('button', { name: t('config.recallTitle') }))
-      fireEvent.change(within(recallSection).getByLabelText(t('config.defaultRecallLimit')), { target: { value: '18' } })
-      fireEvent.click(within(recallSection).getByRole('button', { name: new RegExp(`^${t('config.recallQualityPolicy')}`, 'u') }))
-      fireEvent.click(screen.getByRole('menuitem', { name: new RegExp(t('config.recallPolicy.exhaustive-v1').replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u') }))
-      fireEvent.click(within(recallSection).getByRole('button', { name: t('options.apply') }))
-
-      await waitFor(() => expect(set).toHaveBeenCalledWith('defaultRecallLimit', 18))
-      expect(set).toHaveBeenCalledWith('recallQuality', { policy: 'exhaustive-v1' })
-      expect(changed).toHaveBeenCalledOnce()
+      expect(container.querySelector('[data-settings-section="policy"]')).toBeNull()
+      expect(container.querySelector('[data-settings-section="recall"]')).toBeNull()
+      expect(container.querySelector('[data-settings-section="providers"]')).not.toBeNull()
+      // The old host lends only embedding for writes, not the newly migrated fields.
+      const save = set.getMockImplementation()!
+      set.mockImplementation(async (key, value) => {
+        if (key !== 'embedding') throw new Error(`Core does not lend ${key}`)
+        await save(key, value)
+      })
+      fireEvent.change(screen.getByLabelText(t('config.embeddingEndpoint')), { target: { value: 'https://embedding.example.test/v1' } })
+      fireEvent.change(screen.getByLabelText(t('config.embeddingModel')), { target: { value: 'fixture' } })
+      fireEvent.click(screen.getByRole('button', { name: t('options.apply') }))
+      await waitFor(() => expect(set).toHaveBeenCalledWith('embedding', expect.objectContaining({ model: 'fixture' })))
+      expect(set).toHaveBeenCalledOnce()
+      expect(lent.configuration.getSnapshot().value).toMatchObject({ storageScope: 'global', embedding: { model: 'fixture' } })
     } finally {
       vi.doMock('dsh-mnemon/client', artifact)
       vi.resetModules()

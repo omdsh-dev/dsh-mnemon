@@ -3,7 +3,7 @@ import { IconSettingsOutlineRegular, Tag } from '@deepseek-ai/dsh-client-ui-prim
 import { SearchField, SelectField } from 'dsh-mnemon/client'
 import type { CatalogView, EvalCase } from '../contracts.ts'
 import { modelOptionPick, modelOptionValue, useModelChoice } from './model-choice.tsx'
-import { css, points, relative, useT } from './presentation.ts'
+import { css, points, relative, supportsSettingsSection, useT } from './presentation.ts'
 import { Busy, Empty, SkillIcon } from './shared.tsx'
 import { SkillTests } from './skill-tests.tsx'
 import type { SkillsLocation, SkillsPageContext } from './ui.tsx'
@@ -86,9 +86,11 @@ export function EvalsPage(props: { context: SkillsPageContext; location: SkillsL
   const runOverride = Object.hasOwn(choice.preferences.skillRunModels, current.name) ? choice.preferences.skillRunModels[current.name]! : null
   const effectiveRunModel = runOverride ?? choice.preferences.runModel ?? null
   const saveSkillRun = (value: string) => choice.saveSkillRunModel(current.name, modelOptionPick(value))
+  const modelSettingsAvailable = context.openSettings !== undefined && supportsSettingsSection('models')
   const modelBar = <div className={css.skPaneBar}>
+    {!modelSettingsAvailable && <SelectField<string> label={t('tests.model')} triggerDetail inline size="sm" value={modelOptionValue(choice.preferences.runModel)} disabled={!context.writable || choice.models === null} onChange={value => choice.saveRunModel(modelOptionPick(value))} options={choice.options} />}
     <SelectField<string> label={t('tests.modelCard')} triggerDetail inline size="sm" value={modelOptionValue(runOverride)} disabled={!context.writable || choice.models === null} onChange={saveSkillRun} options={choice.cardOptions} />
-    {context.openSettings !== undefined && <button type="button" className={css.skIconButton} onClick={() => context.openSettings!('models')} aria-label={t('common.settings')} title={t('common.settings')}><IconSettingsOutlineRegular size={15} /></button>}
+    {modelSettingsAvailable && <button type="button" className={css.skIconButton} onClick={() => context.openSettings!('models')} aria-label={t('common.settings')} title={t('common.settings')}><IconSettingsOutlineRegular size={15} /></button>}
   </div>
   return <div className={`${css.skSplit} ${css.skSkillsSplit}`}>
     <aside className={css.skList}>

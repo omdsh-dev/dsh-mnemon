@@ -3,7 +3,7 @@ import { Button, DiffBlock, IconSettingsOutlineRegular, IconSparkleRegular, Segm
 import { appearanceClass, SelectField } from 'dsh-mnemon/client'
 import type { AutoAdoptionEvent, BacktestRun, DraftView, ModelRoute, SkillDraft, SkillRootKind, SkillSuggestion, SuggestionStatus, SuggestionView, Trajectory } from '../contracts.ts'
 import { modelOptionPick, modelOptionValue, useModelChoice } from './model-choice.tsx'
-import { css, points, relative, stamp, useT } from './presentation.ts'
+import { css, points, relative, stamp, supportsSettingsSection, useT } from './presentation.ts'
 import { ActionTag, Busy, Clamp, Confirm, diffLabels, Empty, Fold, MoreList, MoreMenu, SkillMarkdown, SkillPath, StatusTag, StepTimeline, useLink } from './shared.tsx'
 import { EvidenceView } from './evidence-page.tsx'
 import { RunDetail } from './skill-tests.tsx'
@@ -147,10 +147,12 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
     } catch (error) { context.fail(error) }
   }
   const showOffEmpty = current === undefined && filter === 'pending' && evolutionOff
+  const modelSettingsAvailable = context.openSettings !== undefined && supportsSettingsSection('models')
   // Keep model picker inside the detail pane so the left inbox header never shifts across Pending | Done | Evidence.
   const modelBar = <div className={css.skPaneBar}>
+    {!modelSettingsAvailable && <SelectField<string> label={t('evolution.model')} triggerDetail inline size="sm" value={modelOptionValue(choice.preferences.model)} disabled={!context.writable || choice.models === null} onChange={value => choice.saveDraftModel(modelOptionPick(value))} options={choice.options} />}
     <SelectField<string> label={t('evolution.modelCard')} triggerDetail inline size="sm" value={modelOptionValue(currentOverride)} disabled={!context.writable || !canOverride || choice.models === null} onChange={saveSuggestionModel} options={choice.cardOptions} />
-    {context.openSettings !== undefined && !showOffEmpty && <button type="button" className={css.skIconButton} onClick={() => context.openSettings!('models')} aria-label={t('common.settings')} title={t('common.settings')}><IconSettingsOutlineRegular size={15} /></button>}
+    {modelSettingsAvailable && !showOffEmpty && <button type="button" className={css.skIconButton} onClick={() => context.openSettings!('models')} aria-label={t('common.settings')} title={t('common.settings')}><IconSettingsOutlineRegular size={15} /></button>}
   </div>
   return <div className={appearanceClass(css.skSplit, css.skEvolutionSplit)}>
     <aside className={css.skList}>

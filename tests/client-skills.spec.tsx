@@ -6,6 +6,7 @@ import type { SkillActivitySnapshot, SkillsConfig } from '../src/host/protocol.t
 import { subscribeMnemonAnchor } from '../src/client/anchor.ts'
 import { translateEn as t } from '../src/client/locales.ts'
 import { SKILLS_PAGE, SkillTurnTail, invalidateSkillActivity } from '../src/client/SkillTurnTail.tsx'
+import { supportsMemoryComponentSettingsSection } from '../src/client/extension-sdk.ts'
 import { SKILLS_PACKAGE, SkillsSettings } from '../src/client/skills-settings.tsx'
 import { MnemonChangeSignal } from '../src/client/change-signal.ts'
 import { liveSettingsScope } from './helpers/settings-scope.ts'
@@ -188,6 +189,7 @@ describe('技能管理 settings under Plugins', () => {
   })
 
   it('converges Default Models onto live draft-preference mutations and hides the section when Skills RPC is offline', async () => {
+    expect(supportsMemoryComponentSettingsSection(SKILLS_PACKAGE, 'models')).toBe(true)
     const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: {}, revision: 1, writable: true, mode: 'host' })
     let preferences = {
       draftModel: null as { provider: string; model: string } | null,
@@ -295,6 +297,7 @@ describe('技能管理 settings under Plugins', () => {
   })
 
   it('manages Market Sources registries via Skills source-management RPC', async () => {
+    expect(supportsMemoryComponentSettingsSection(SKILLS_PACKAGE, 'market')).toBe(true)
     const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: {}, revision: 1, writable: true, mode: 'host' })
     let registries = [
       { id: 'builtin-official', label: 'Official Skills', url: 'https://skills.sh', builtin: true, enabled: true, skillCount: 24 },

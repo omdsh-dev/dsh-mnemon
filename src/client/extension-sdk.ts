@@ -11,7 +11,7 @@ export type { MnemonSourceManagementClient, MemorySourcePageInstance } from './s
 // client answers it; the pages read it and nothing else here drives it.
 export type { TaskAgentModelCatalog, TaskAgentModelCatalogGroup, TaskAgentModelCatalogModel } from 'dsh-mnemon/contracts'
 export {
-  installMemoryComponentUI, MNEMON_COMPONENT_FALLBACK_PRIORITY, MNEMON_COMPONENT_SETTINGS_SLOT, MNEMON_COMPONENT_STATUS_SLOT,
+  installMemoryComponentUI, supportsMemoryComponentSettingsSection, MNEMON_COMPONENT_FALLBACK_PRIORITY, MNEMON_COMPONENT_SETTINGS_SLOT, MNEMON_COMPONENT_STATUS_SLOT,
   type MemoryComponentConfigurationSnapshot, type MemoryComponentHost,
   type MemoryComponentSettingsComponent, type MemoryComponentSettingsProps, type MemoryComponentStatusComponent, type MemoryComponentStatusProps,
   type MemoryComponentUIContext, type MemoryComponentUIContribution,

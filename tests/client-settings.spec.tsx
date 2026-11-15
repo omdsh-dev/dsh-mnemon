@@ -12,6 +12,7 @@ import { directoryPicker } from '../src/client/picker.ts'
 import { MnemonChangeSignal } from '../src/client/change-signal.ts'
 import { MnemonComponentListSeat } from '../src/client/component-list-seat.ts'
 import { MemorySpacesSettings } from 'dsh-mnemon-source-memory-spaces/client'
+import { supportsMemoryComponentSettingsSection } from '../src/client/extension-sdk.ts'
 import { createComponentHosts, type ComponentHosts } from '../src/client/component-host.ts'
 import { requestComponentPage, takeComponentPage, takeComponentPageRequest } from '../src/client/component-page-request.ts'
 import { DOCUMENTS_PACKAGE, DocumentsSettings, MEMORY_SPACES_PACKAGE, RUNTIME_PACKAGE, RuntimeSettings, THREE_TIER_PACKAGE, ThreeTierSettings } from '../src/client/component-settings.tsx'
@@ -2102,6 +2103,11 @@ describe('Phase 1 converged settings, deep-linking, and lent component host', ()
   })
 
   it('lends persistenceStrategy, recall limits, timeoutMs, and provider-services to Memory Spaces while rejecting unlent fields', async () => {
+    expect(supportsMemoryComponentSettingsSection(MEMORY_SPACES_PACKAGE, 'policy')).toBe(true)
+    expect(supportsMemoryComponentSettingsSection(MEMORY_SPACES_PACKAGE, 'recall')).toBe(true)
+    expect(supportsMemoryComponentSettingsSection(MEMORY_SPACES_PACKAGE, 'unknown')).toBe(false)
+    expect(supportsMemoryComponentSettingsSection('unknown', 'policy')).toBe(false)
+    expect(supportsMemoryComponentSettingsSection('constructor', 'policy')).toBe(false)
     const writes = vi.fn(async () => {})
     const scope = liveSettingsScope<Config>(readySnapshot({
       persistenceStrategy: { mode: 'automatic', providerId: 'mnemon-native', prompt: 'Keep team notes', rules: { allowedProviderIds: [], dataBoundary: 'local-only', requiredCapabilities: [], preference: 'balanced' }, providerConnections: { openviking: { targetUri: 'viking://team' } } },

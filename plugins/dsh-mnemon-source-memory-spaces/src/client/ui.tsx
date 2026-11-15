@@ -1,4 +1,4 @@
-import { css, SafeReveal, sidebarCss, useT } from './presentation.ts'
+import { css, SafeReveal, sidebarCss, supportsSettingsSection, useT } from './presentation.ts'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import * as mnemonClient from 'dsh-mnemon/client'
 import {
@@ -129,9 +129,10 @@ function MemorySpacesSourceView(props: MemorySourcePageProps & { page: Page }): 
   const forget = async (insight: Insight) => { await client.forget(insight.id, insight.memoryBodyId); refresh() }
   const bodies = status?.memoryBodies ?? []
   const preferences = props.preferences
-  const showStrategyAction = props.onOpenSettings !== undefined || preferences !== undefined
+  const policySettingsAvailable = props.onOpenSettings !== undefined && supportsSettingsSection('policy')
+  const showStrategyAction = policySettingsAvailable || preferences !== undefined
   const openStrategy = () => {
-    if (props.onOpenSettings !== undefined) props.onOpenSettings('policy')
+    if (policySettingsAvailable) props.onOpenSettings!('policy')
     else setStrategyOpen(true)
   }
   const onTabKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
