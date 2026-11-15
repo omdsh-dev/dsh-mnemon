@@ -294,6 +294,17 @@ describe('independent Documents Source client', () => {
       await waitFor(() => expect(countReads('search')).toBe(1))
       expect(countReads('snapshot')).toBe(0)
       expect(countReads('document')).toBe(0)
+
+      readSpy.mockClear()
+      fireEvent.change(screen.getByLabelText(t('documents.searchAria')), { target: { value: 'unmatched-search-term' } })
+      fireEvent.click(screen.getByRole('button', { name: t('documents.search') }))
+      await waitFor(() => expect(countReads('search')).toBe(1))
+      expect(countReads('snapshot')).toBe(0)
+      await waitFor(() => expect(screen.queryByRole('button', { name: /Fast document/u })).toBeNull())
+
+      // Clearing SearchField immediately exits search mode and restores the snapshot list.
+      fireEvent.change(screen.getByLabelText(t('documents.searchAria')), { target: { value: '' } })
+      expect(await screen.findByRole('button', { name: /Fast document/u })).not.toBeNull()
     } finally { cleanup(); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
   })
 })

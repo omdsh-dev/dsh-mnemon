@@ -1138,4 +1138,21 @@ describe('model pickers', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     await screen.findByRole('heading', { name: 'release-notes' })
   })
+
+  it('supports roving tabindex keyboard navigation on the Skills tablist and keeps Evolution split shell stable across filters', async () => {
+    await mutate('review-record', review())
+    render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable management={management} />)
+    const [tablist] = await screen.findAllByRole('tablist')
+    fireEvent.keyDown(tablist!, { key: 'Home' })
+    expect(within(tablist!).getAllByRole('tab').map(tab => tab.getAttribute('tabindex'))).toEqual(['0', '-1', '-1', '-1', '-1'])
+    fireEvent.keyDown(tablist!, { key: 'ArrowRight' })
+    expect(within(tablist!).getAllByRole('tab').map(tab => tab.getAttribute('tabindex'))).toEqual(['-1', '0', '-1', '-1', '-1'])
+    await waitFor(() => expect(document.querySelector('aside')).not.toBeNull())
+    const asideBefore = document.querySelector('aside')
+    const splitClassBefore = asideBefore!.parentElement?.className
+    fireEvent.click(await screen.findByRole('tab', { name: t('evolution.evidence') }))
+    await screen.findByText('Group them by component from now on')
+    const asideAfter = document.querySelector('aside')
+    expect(asideAfter?.parentElement?.className).toBe(splitClassBefore)
+  })
 })

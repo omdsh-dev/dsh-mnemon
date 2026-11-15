@@ -1,4 +1,24 @@
+.shell .modal {
+  display: flex;
+  flex-direction: column;
+  max-height: min(86vh, 760px);
+  max-height: min(86dvh, 760px);
+  overflow: hidden;
+}
+.shell .modal > [class*='modalBody'] {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.shell .modal > [class*='modalFooter'] {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  background: var(--dsw-alias-bg-layer-2, var(--mn-surface));
+}
 .shell .modal form[class*='documentEditor'] {
+  flex-shrink: 0;
   margin: 0;
   padding: 0;
   border: 0;

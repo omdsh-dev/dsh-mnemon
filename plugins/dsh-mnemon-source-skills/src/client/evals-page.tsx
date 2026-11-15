@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type JSX } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SearchField, SelectField } from 'dsh-mnemon/client'
 import type { CatalogView, EvalCase, ModelRoute } from '../contracts.ts'
@@ -66,15 +66,20 @@ export function EvalsPage(props: { context: SkillsPageContext; location: SkillsL
       }
     }).sort((a, b) => Number(b.exists) - Number(a.exists) || a.name.localeCompare(b.name))
   }, [catalog, cases])
-  if (catalog === null) return <Busy label={t('common.loading')} />
-  if (rows.length === 0) return <Empty glyph="✓" title={t('evals.empty')}>{t('evals.emptyBody')}</Empty>
+  const paneRef = useRef<HTMLDivElement | null>(null)
   const needle = query.trim().toLowerCase()
   const visible = rows.filter(row => needle === '' || row.name.includes(needle))
   const groups = [
     { key: 'tested', title: t('evals.tested'), rows: visible.filter(row => row.cases > 0) },
     { key: 'untested', title: t('evals.untested'), rows: visible.filter(row => row.cases === 0) },
   ].filter(group => group.rows.length > 0)
-  const current = rows.find(row => row.name === selected) ?? groups[0]?.rows[0] ?? rows[0]!
+  const activeRow = rows.find(row => row.name === selected) ?? groups[0]?.rows[0] ?? rows[0]
+  useLayoutEffect(() => {
+    if (paneRef.current !== null) paneRef.current.scrollTop = 0
+  }, [activeRow?.name])
+  if (catalog === null) return <Busy label={t('common.loading')} />
+  if (rows.length === 0) return <Empty glyph="✓" title={t('evals.empty')}>{t('evals.emptyBody')}</Empty>
+  const current = activeRow!
   const currentCases = cases.filter(entry => entry.skillName === current.name)
   // The pick for this skill, else the global one: a backtest runs on the first
   // that is set, and on the task Agent's own route when neither is.
@@ -82,15 +87,11 @@ export function EvalsPage(props: { context: SkillsPageContext; location: SkillsL
   const effectiveRunModel = runOverride ?? choice.preferences.runModel ?? null
   const saveRun = (value: string) => choice.saveRunModel(modelOptionPick(value))
   const saveSkillRun = (value: string) => choice.saveSkillRunModel(current.name, modelOptionPick(value))
-  const modelBar = <div className={css.skListBar} style={{ borderBottom: 'none', padding: '0 0 10px' }}>
-    <div className={css.skSplit} style={{ minHeight: 0, alignItems: 'center', width: '100%' }}>
-      <SelectField<string> label={t('tests.model')} triggerDetail inline size="sm" value={modelOptionValue(choice.preferences.runModel)} disabled={!context.writable || choice.models === null} onChange={saveRun} options={choice.options} />
-      <SelectField<string> label={t('tests.modelCard')} triggerDetail inline size="sm" value={modelOptionValue(runOverride)} disabled={!context.writable || choice.models === null} onChange={saveSkillRun} options={choice.cardOptions} />
-    </div>
+  const modelBar = <div className={css.skPaneBar}>
+    <SelectField<string> label={t('tests.model')} triggerDetail inline size="sm" value={modelOptionValue(choice.preferences.runModel)} disabled={!context.writable || choice.models === null} onChange={saveRun} options={choice.options} />
+    <SelectField<string> label={t('tests.modelCard')} triggerDetail inline size="sm" value={modelOptionValue(runOverride)} disabled={!context.writable || choice.models === null} onChange={saveSkillRun} options={choice.cardOptions} />
   </div>
-  return <>
-    {modelBar}
-    <div className={css.skSplit}>
+  return <div className={`${css.skSplit} ${css.skSkillsSplit}`}>
     <aside className={css.skList}>
       <header className={css.skListBar}>
         <SearchField label={t('skills.search')} placeholder={t('skills.search')} value={query} onChange={event => setQuery(event.target.value)} />
@@ -111,8 +112,9 @@ export function EvalsPage(props: { context: SkillsPageContext; location: SkillsL
         </div>)}
       </section>)}
     </aside>
-    <div className={css.skPane}>
-      <article key={current.name} className={css.skDetail}>
+    <div ref={paneRef} className={css.skPane}>
+      {modelBar}
+      <article className={css.skDetail}>
         <header className={css.skDetailHead}>
           <div>
             <h3>{current.exists ? <button type="button" className={css.skTitleLink} onClick={() => context.navigate({ tab: 'skills', skillName: current.name })}>{current.name}</button> : current.name}</h3>
@@ -122,6 +124,5 @@ export function EvalsPage(props: { context: SkillsPageContext; location: SkillsL
         <SkillTests context={context} skillName={current.name} cases={currentCases} hasFile={current.exists} runModel={effectiveRunModel} />
       </article>
     </div>
-    </div>
-  </>
+  </div>
 }

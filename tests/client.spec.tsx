@@ -839,9 +839,10 @@ describe('MnemonWorkbench', () => {
     expect(within(providerStatus).queryByText('Mem0')).toBeNull()
     expect(within(providerStatus).getByText(/另有 \d+ 个 Provider 未启用/)).toBeTruthy()
     expect(screen.getByRole('heading', { name: '存储域' })).toBeTruthy()
-    expect(within(screen.getByRole('region', { name: '存储域' })).getAllByRole('article')).toHaveLength(3)
+    const storageDomains = screen.getByRole('region', { name: '存储域' })
+    expect(within(storageDomains).getAllByRole('article')).toHaveLength(3)
     expect(screen.queryByText('后台状态')).toBeNull()
-    expect(screen.getByText('/tmp/mnemon')).toBeTruthy()
+    expect(within(storageDomains).getByText((_, element) => element?.textContent === '/tmp/mnemon' && Array.from(element.children).every(child => child.textContent !== '/tmp/mnemon'))).toBeTruthy()
   }, 10_000)
 
   it('keeps a Native Provider failure out of the dsh-mnemon engine summary', async () => {

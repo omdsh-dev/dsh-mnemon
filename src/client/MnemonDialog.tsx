@@ -20,6 +20,28 @@ const REDUCED_MOTION_MEDIA = '(prefers-reduced-motion: reduce)'
 const CLOSE_DURATION_MS = 240
 const SNAP_DURATION_MS = 280
 
+let activeBodyLocks = 0
+let savedBodyOverflow = ''
+
+function lockBodyScroll(): () => void {
+  if (typeof document === 'undefined') return () => {}
+  if (activeBodyLocks === 0) {
+    savedBodyOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+  }
+  activeBodyLocks += 1
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    activeBodyLocks = Math.max(0, activeBodyLocks - 1)
+    if (activeBodyLocks === 0 && typeof document !== 'undefined') {
+      document.body.style.overflow = savedBodyOverflow
+      savedBodyOverflow = ''
+    }
+  }
+}
+
 interface DragSession {
   pointerId: number
   captureTarget: HTMLDivElement
@@ -104,6 +126,7 @@ export function MnemonDialog(props: MnemonDialogProps): JSX.Element | null {
   const closeButtonRef = useRef<HTMLButtonElement | null>(null)
   const returnFocusRef = useRef<HTMLElement | null>(null)
   const dragRef = useRef<DragSession | null>(null)
+  const detachDragListenersRef = useRef<(() => void) | null>(null)
   const snapGenerationRef = useRef(0)
   const closingRef = useRef(false)
   const mountedRef = useRef(true)
@@ -111,6 +134,11 @@ export function MnemonDialog(props: MnemonDialogProps): JSX.Element | null {
   const onCloseRef = useRef(props.onClose)
   busyRef.current = props.busy === true
   onCloseRef.current = props.onClose
+
+  const detachDragListeners = useCallback((): void => {
+    detachDragListenersRef.current?.()
+    detachDragListenersRef.current = null
+  }, [])
 
   const focusPreferredControl = useCallback(() => {
     const control = dialogRef.current?.querySelector<HTMLElement>('[data-autofocus]:not(:disabled)')
@@ -124,6 +152,12 @@ export function MnemonDialog(props: MnemonDialogProps): JSX.Element | null {
 
   const requestClose = useCallback(() => {
     if (busyRef.current || closingRef.current) return
+    detachDragListeners()
+    if (dragRef.current !== null) {
+      releaseDragCapture(dragRef.current)
+      dragRef.current = null
+      if (dialogRef.current !== null) delete dialogRef.current.dataset.dragging
+    }
     const dialog = dialogRef.current
     const backdrop = backdropRef.current
     if (dialog === null || backdrop === null || matches(REDUCED_MOTION_MEDIA) || typeof dialog.animate !== 'function' || typeof backdrop.animate !== 'function') {
@@ -152,12 +186,19 @@ export function MnemonDialog(props: MnemonDialogProps): JSX.Element | null {
         ], { duration: CLOSE_DURATION_MS, easing, fill: 'forwards' })
     const backdropAnimation = backdrop.animate([{ opacity: fromBackdropOpacity }, { opacity: 0 }], { duration: CLOSE_DURATION_MS, easing: 'ease-out', fill: 'forwards' })
     void waitForAnimations([dialogAnimation, backdropAnimation], CLOSE_DURATION_MS).then(finishClose)
-  }, [finishClose])
+  }, [detachDragListeners, finishClose])
 
   const resetDrag = useCallback(() => {
+    detachDragListeners()
     const dialog = dialogRef.current
     const backdrop = backdropRef.current
-    if (dialog === null || backdrop === null) return
+    if (dialog === null || backdrop === null) {
+      if (dragRef.current !== null) {
+        releaseDragCapture(dragRef.current)
+        dragRef.current = null
+      }
+      return
+    }
     const drag = dragRef.current
     const offset = drag?.offset ?? 0
     const snapGeneration = ++snapGenerationRef.current
@@ -184,36 +225,7 @@ export function MnemonDialog(props: MnemonDialogProps): JSX.Element | null {
       dialogAnimation.cancel()
       backdropAnimation.cancel()
     })
-  }, [])
-
-  const beginDrag = (event: ReactPointerEvent<HTMLDivElement>): void => {
-    if (busyRef.current || closingRef.current || !event.isPrimary || !matches(SHEET_MEDIA)) return
-    if (event.pointerType === 'mouse' && event.button !== 0) return
-    const dialog = dialogRef.current
-    if (dialog === null) return
-    snapGenerationRef.current += 1
-    const initialOffset = currentTranslateY(dialog)
-    const backdrop = backdropRef.current
-    const initialBackdropOpacity = backdrop === null ? '' : window.getComputedStyle(backdrop).opacity
-    cancelAnimations(dialog)
-    cancelAnimations(backdrop)
-    const time = event.timeStamp
-    dragRef.current = {
-      pointerId: event.pointerId,
-      captureTarget: event.currentTarget,
-      startY: event.clientY,
-      initialOffset,
-      lastY: event.clientY,
-      lastTime: time,
-      velocity: 0,
-      offset: initialOffset,
-      height: Math.max(dialog.getBoundingClientRect().height, 1),
-    }
-    dialog.dataset.dragging = 'true'
-    dialog.style.setProperty('--mn-modal-drag-y', `${initialOffset}px`)
-    if (backdrop !== null) backdrop.style.opacity = initialBackdropOpacity
-    try { event.currentTarget.setPointerCapture?.(event.pointerId) } catch { /* Global pointer listeners keep the gesture alive. */ }
-  }
+  }, [detachDragListeners])
 
   const moveDrag = useCallback((event: PointerEvent): void => {
     const drag = dragRef.current
@@ -239,6 +251,7 @@ export function MnemonDialog(props: MnemonDialogProps): JSX.Element | null {
     const threshold = Math.min(Math.max(drag.height * .22, 96), 180)
     const shouldClose = drag.offset >= threshold || (drag.offset >= 28 && drag.velocity >= .55)
     if (shouldClose) {
+      detachDragListeners()
       dragRef.current = null
       releaseDragCapture(drag)
       if (dialogRef.current !== null) delete dialogRef.current.dataset.dragging
@@ -246,11 +259,55 @@ export function MnemonDialog(props: MnemonDialogProps): JSX.Element | null {
     } else {
       resetDrag()
     }
-  }, [requestClose, resetDrag])
+  }, [detachDragListeners, requestClose, resetDrag])
 
   const cancelDrag = useCallback((event: PointerEvent): void => {
     if (dragRef.current?.pointerId === event.pointerId) resetDrag()
   }, [resetDrag])
+
+  const beginDrag = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    if (busyRef.current || closingRef.current || !event.isPrimary || !matches(SHEET_MEDIA)) return
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    const dialog = dialogRef.current
+    if (dialog === null) return
+    detachDragListeners()
+    snapGenerationRef.current += 1
+    const initialOffset = currentTranslateY(dialog)
+    const backdrop = backdropRef.current
+    const initialBackdropOpacity = backdrop === null ? '' : window.getComputedStyle(backdrop).opacity
+    cancelAnimations(dialog)
+    cancelAnimations(backdrop)
+    const time = event.timeStamp
+    dragRef.current = {
+      pointerId: event.pointerId,
+      captureTarget: event.currentTarget,
+      startY: event.clientY,
+      initialOffset,
+      lastY: event.clientY,
+      lastTime: time,
+      velocity: 0,
+      offset: initialOffset,
+      height: Math.max(dialog.getBoundingClientRect().height, 1),
+    }
+    dialog.dataset.dragging = 'true'
+    dialog.style.setProperty('--mn-modal-drag-y', `${initialOffset}px`)
+    if (backdrop !== null) backdrop.style.opacity = initialBackdropOpacity
+    const cancelOnBlur = (): void => { if (dragRef.current !== null) resetDrag() }
+    const cancelWhenHidden = (): void => { if (document.visibilityState === 'hidden') cancelOnBlur() }
+    window.addEventListener('pointermove', moveDrag, { passive: false })
+    window.addEventListener('pointerup', endDrag)
+    window.addEventListener('pointercancel', cancelDrag)
+    window.addEventListener('blur', cancelOnBlur)
+    document.addEventListener('visibilitychange', cancelWhenHidden)
+    detachDragListenersRef.current = () => {
+      window.removeEventListener('pointermove', moveDrag)
+      window.removeEventListener('pointerup', endDrag)
+      window.removeEventListener('pointercancel', cancelDrag)
+      window.removeEventListener('blur', cancelOnBlur)
+      document.removeEventListener('visibilitychange', cancelWhenHidden)
+    }
+    try { event.currentTarget.setPointerCapture?.(event.pointerId) } catch { /* Global pointer listeners keep the gesture alive. */ }
+  }
 
   useLayoutEffect(() => {
     returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -270,13 +327,17 @@ export function MnemonDialog(props: MnemonDialogProps): JSX.Element | null {
 
   useEffect(() => {
     mountedRef.current = true
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    const unlockBodyScroll = lockBodyScroll()
     return () => {
       mountedRef.current = false
-      document.body.style.overflow = previousOverflow
+      detachDragListeners()
+      if (dragRef.current !== null) {
+        releaseDragCapture(dragRef.current)
+        dragRef.current = null
+      }
+      unlockBodyScroll()
     }
-  }, [])
+  }, [detachDragListeners])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -308,23 +369,6 @@ export function MnemonDialog(props: MnemonDialogProps): JSX.Element | null {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [requestClose])
-
-  useEffect(() => {
-    const cancelOnBlur = (): void => { if (dragRef.current !== null) resetDrag() }
-    const cancelWhenHidden = (): void => { if (document.visibilityState === 'hidden') cancelOnBlur() }
-    window.addEventListener('pointermove', moveDrag, { passive: false })
-    window.addEventListener('pointerup', endDrag)
-    window.addEventListener('pointercancel', cancelDrag)
-    window.addEventListener('blur', cancelOnBlur)
-    document.addEventListener('visibilitychange', cancelWhenHidden)
-    return () => {
-      window.removeEventListener('pointermove', moveDrag)
-      window.removeEventListener('pointerup', endDrag)
-      window.removeEventListener('pointercancel', cancelDrag)
-      window.removeEventListener('blur', cancelOnBlur)
-      document.removeEventListener('visibilitychange', cancelWhenHidden)
-    }
-  }, [cancelDrag, endDrag, moveDrag, resetDrag])
 
   const interceptCloseControl = (event: ReactMouseEvent<HTMLElement>): void => {
     const target = event.target instanceof Element ? event.target.closest<HTMLElement>('[data-dialog-close]') : null

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type JSX, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX, type ReactNode } from 'react'
 import { Button, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
-import { SelectField } from 'dsh-mnemon/client'
+import { appearanceClass, SelectField } from 'dsh-mnemon/client'
 import type { Trajectory, TrajectorySummary } from '../contracts.ts'
 import { css, relative, stamp, useT } from './presentation.ts'
 import { Busy, Clamp, Confirm, Empty, MoreMenu, SignalTag, StepTimeline } from './shared.tsx'
@@ -19,6 +19,7 @@ export function EvidenceView(props: { context: SkillsPageContext; location: Skil
   // A link may narrow the view to one skill; one to a record shows it among all.
   const [skill, setSkill] = useState(location.filter === 'evidence' && location.trajectoryId === undefined ? location.skillName ?? '' : '')
   const [selected, setSelected] = useState<string | undefined>(location.trajectoryId)
+  const paneRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => { if (location.trajectoryId !== undefined) setSelected(location.trajectoryId) }, [location.trajectoryId, location.nonce])
   useEffect(() => {
     let active = true
@@ -26,27 +27,33 @@ export function EvidenceView(props: { context: SkillsPageContext; location: Skil
     return () => { active = false }
   }, [context.client, context.revision])
   const skills = useMemo(() => [...new Set((records ?? []).flatMap(record => record.stats.skills))].sort(), [records])
-  if (records === null) return <Busy label={t('common.loading')} />
-  const shown = records.filter(record => skill === '' || record.stats.skills.includes(skill))
-    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || Date.parse(b.createdAt) - Date.parse(a.createdAt))
+  const shown = useMemo(() => (records ?? []).filter(record => skill === '' || record.stats.skills.includes(skill))
+    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || Date.parse(b.createdAt) - Date.parse(a.createdAt)), [records, skill])
   const current = shown.find(record => record.id === selected) ?? shown[0]
-  return <div className={css.skSplit}>
+  useLayoutEffect(() => {
+    if (paneRef.current !== null) paneRef.current.scrollTop = 0
+  }, [current?.id])
+  return <div className={appearanceClass(css.skSplit, css.skEvolutionSplit)}>
     <aside className={css.skList}>
       {props.bar}
-      {(skills.length > 1 || skill !== '') && <div className={css.skListFilter}>
-        <SelectField size="sm" hideLabel label={t('evidence.skill')} value={skill} onChange={value => { setSkill(value); setSelected(undefined) }}
-          options={[{ value: '', label: t('evidence.allSkills') }, ...skills.map(name => ({ value: name, label: name }))]} />
-      </div>}
-      {shown.map(record => <button key={record.id} type="button" className={css.skListItem} data-selected={current?.id === record.id ? '' : undefined} onClick={() => setSelected(record.id)}>
-        <div><strong>{record.sessionTitle ?? record.sessionId.slice(0, 8)}</strong>{record.pinned && <Tag tone="neutral">{t('records.pinned')}</Tag>}</div>
-        <p>{t('records.stats', { turns: record.stats.turns, tools: record.stats.toolCalls })}{record.stats.skills.length > 0 ? ` · ${record.stats.skills.join(', ')}` : ''}</p>
-        <footer><time>{relative(t, record.createdAt)}</time>{record.suggestionIds.length > 0 && <span>{t('records.suggested', { count: record.suggestionIds.length })}</span>}</footer>
-      </button>)}
+      {records === null ? <div className={css.skListNote}><Busy label={t('common.loading')} /></div> : <>
+        {(skills.length > 1 || skill !== '') && <div className={css.skListFilter}>
+          <SelectField size="sm" hideLabel label={t('evidence.skill')} value={skill} onChange={value => { setSkill(value); setSelected(undefined) }}
+            options={[{ value: '', label: t('evidence.allSkills') }, ...skills.map(name => ({ value: name, label: name }))]} />
+        </div>}
+        {shown.map(record => <button key={record.id} type="button" className={css.skListItem} data-selected={current?.id === record.id ? '' : undefined} onClick={() => setSelected(record.id)}>
+          <div><strong>{record.sessionTitle ?? record.sessionId.slice(0, 8)}</strong>{record.pinned && <Tag tone="neutral">{t('records.pinned')}</Tag>}</div>
+          <p>{t('records.stats', { turns: record.stats.turns, tools: record.stats.toolCalls })}{record.stats.skills.length > 0 ? ` · ${record.stats.skills.join(', ')}` : ''}</p>
+          <footer><time>{relative(t, record.createdAt)}</time>{record.suggestionIds.length > 0 && <span>{t('records.suggested', { count: record.suggestionIds.length })}</span>}</footer>
+        </button>)}
+      </>}
     </aside>
-    <div className={css.skPane}>
-      {current === undefined
-        ? <Empty glyph="✧" title={t('evolution.empty.evidence')}>{t('evolution.emptyBody.evidence')}</Empty>
-        : <RecordDetail key={current.id} context={context} id={current.id} focus={current.id === location.trajectoryId ? location.steps : undefined} onDeleted={() => setSelected(undefined)} />}
+    <div ref={paneRef} className={css.skPane}>
+      {records === null
+        ? <Busy label={t('common.loading')} />
+        : current === undefined
+          ? <Empty glyph="✧" title={t('evolution.empty.evidence')}>{t('evolution.emptyBody.evidence')}</Empty>
+          : <RecordDetail context={context} id={current.id} focus={current.id === location.trajectoryId ? location.steps : undefined} onDeleted={() => setSelected(undefined)} />}
     </div>
   </div>
 }
@@ -66,6 +73,11 @@ function RecordDetail(props: { context: SkillsPageContext; id: string; focus: nu
   const [busy, setBusy] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const configRevision = context.configRevision ?? 0
+  useEffect(() => {
+    setChosen(new Set())
+    setTarget('')
+    setDeleting(false)
+  }, [props.id])
   useEffect(() => {
     let active = true
     void context.client.trajectory(props.id).then(value => {

@@ -288,4 +288,49 @@ describe('MnemonDialog', () => {
 
     menu.remove()
   })
+
+  it('attaches window pointer drag listeners lazily only during an active mobile sheet drag', () => {
+    setMedia({ mobile: true, reduced: true })
+    const addSpy = vi.spyOn(window, 'addEventListener')
+    const removeSpy = vi.spyOn(window, 'removeEventListener')
+    const pointerTypes = new Set(['pointermove', 'pointerup', 'pointercancel'])
+
+    const { unmount } = renderDialog()
+    expect(addSpy.mock.calls.filter(([type]) => pointerTypes.has(type))).toHaveLength(0)
+
+    const dialog = screen.getByRole('dialog', { name: '测试弹窗' })
+    const handle = dialog.querySelector('[data-dialog-drag-handle]')
+    if (handle === null) throw new Error('drag handle missing')
+
+    pointer(handle, 'pointerdown', 100)
+    expect(addSpy.mock.calls.filter(([type]) => pointerTypes.has(type)).map(([type]) => type)).toEqual(['pointermove', 'pointerup', 'pointercancel'])
+
+    pointer(handle, 'pointerup', 105)
+    expect(removeSpy.mock.calls.filter(([type]) => pointerTypes.has(type)).map(([type]) => type)).toEqual(['pointermove', 'pointerup', 'pointercancel'])
+
+    unmount()
+  })
+
+  it('reference-counts document.body scroll lock across nested dialogs', () => {
+    document.body.style.overflow = 'clip'
+    const outer = render(
+      <MnemonDialog title="外层弹窗" closeLabel="关闭外层" onClose={vi.fn()}>
+        <p>外层内容</p>
+      </MnemonDialog>,
+    )
+    expect(document.body.style.overflow).toBe('hidden')
+
+    const inner = render(
+      <MnemonDialog title="内层确认" closeLabel="关闭内层" onClose={vi.fn()}>
+        <p>内层内容</p>
+      </MnemonDialog>,
+    )
+    expect(document.body.style.overflow).toBe('hidden')
+
+    inner.unmount()
+    expect(document.body.style.overflow).toBe('hidden')
+
+    outer.unmount()
+    expect(document.body.style.overflow).toBe('clip')
+  })
 })

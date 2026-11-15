@@ -9,9 +9,17 @@ const GRAPH_WIDTH = 930
 
 const GRAPH_HEIGHT = 520
 
-const GRAPH_MARGIN_X = 58
+const GRAPH_MARGIN_LEFT = 62
 
-const GRAPH_MARGIN_Y = 58
+const GRAPH_MARGIN_RIGHT = 104
+
+const GRAPH_MARGIN_TOP = 72
+
+const GRAPH_MARGIN_BOTTOM = 54
+
+const GRAPH_TOOLBAR_SAFE_X = 300
+
+const GRAPH_TOOLBAR_SAFE_Y = 104
 
 const CATEGORY_ORDER = ['space', 'entity', 'preference', 'decision', 'fact', 'insight', 'context', 'general']
 
@@ -130,25 +138,29 @@ function activeCategoryAnchors(grouped: Map<string, MemoryGraphNode[]>): Map<str
     const rightIndex = CATEGORY_ORDER.indexOf(right)
     return (leftIndex < 0 ? CATEGORY_ORDER.length : leftIndex) - (rightIndex < 0 ? CATEGORY_ORDER.length : rightIndex)
   })
+  const centerX = (GRAPH_MARGIN_LEFT + GRAPH_WIDTH - GRAPH_MARGIN_RIGHT) / 2
+  const centerY = (GRAPH_TOOLBAR_SAFE_Y + GRAPH_HEIGHT - GRAPH_MARGIN_BOTTOM) / 2
   const anchors = new Map<string, GraphPosition>()
   if (categories.length === 1) {
-    anchors.set(categories[0]!, { x: GRAPH_WIDTH / 2, y: GRAPH_HEIGHT / 2 })
+    anchors.set(categories[0]!, clampGraphPosition({ x: centerX, y: centerY }))
     return anchors
   }
   categories.forEach((category, index) => {
     const angle = -Math.PI / 2 + (index / categories.length) * Math.PI * 2
-    anchors.set(category, {
-      x: GRAPH_WIDTH / 2 + Math.cos(angle) * Math.min(250, 115 + categories.length * 23),
-      y: GRAPH_HEIGHT / 2 + Math.sin(angle) * Math.min(165, 78 + categories.length * 15),
-    })
+    anchors.set(category, clampGraphPosition({
+      x: centerX + Math.cos(angle) * Math.min(235, 108 + categories.length * 21),
+      y: centerY + Math.sin(angle) * Math.min(144, 68 + categories.length * 13),
+    }))
   })
   return anchors
 }
 
 function clampGraphPosition(position: GraphPosition): GraphPosition {
+  const x = Math.min(GRAPH_WIDTH - GRAPH_MARGIN_RIGHT, Math.max(GRAPH_MARGIN_LEFT, position.x))
+  const minY = x > GRAPH_TOOLBAR_SAFE_X ? GRAPH_TOOLBAR_SAFE_Y : GRAPH_MARGIN_TOP
   return {
-    x: Math.min(GRAPH_WIDTH - GRAPH_MARGIN_X, Math.max(GRAPH_MARGIN_X, position.x)),
-    y: Math.min(GRAPH_HEIGHT - GRAPH_MARGIN_Y, Math.max(GRAPH_MARGIN_Y, position.y)),
+    x,
+    y: Math.min(GRAPH_HEIGHT - GRAPH_MARGIN_BOTTOM, Math.max(minY, position.y)),
   }
 }
 
@@ -236,17 +248,17 @@ function uniformGraphPositions(nodes: MemoryGraphNode[]): GraphPositions {
   })
   const columns = Math.max(1, Math.ceil(Math.sqrt(ordered.length * 1.65)))
   const rows = Math.max(1, Math.ceil(ordered.length / columns))
-  const cellWidth = (GRAPH_WIDTH - GRAPH_MARGIN_X * 2) / columns
-  const cellHeight = (GRAPH_HEIGHT - GRAPH_MARGIN_Y * 2) / rows
+  const cellWidth = (GRAPH_WIDTH - GRAPH_MARGIN_LEFT - GRAPH_MARGIN_RIGHT) / columns
+  const cellHeight = (GRAPH_HEIGHT - GRAPH_TOOLBAR_SAFE_Y - GRAPH_MARGIN_BOTTOM) / rows
   ordered.forEach((node, index) => {
     const row = Math.floor(index / columns)
     const column = index % columns
     const rowLength = Math.min(columns, ordered.length - row * columns)
     const rowOffset = (columns - rowLength) * cellWidth / 2
-    positions.set(graphNodeKey(node), {
-      x: GRAPH_MARGIN_X + rowOffset + cellWidth * (column + .5),
-      y: GRAPH_MARGIN_Y + cellHeight * (row + .5),
-    })
+    positions.set(graphNodeKey(node), clampGraphPosition({
+      x: GRAPH_MARGIN_LEFT + rowOffset + cellWidth * (column + .5),
+      y: GRAPH_TOOLBAR_SAFE_Y + cellHeight * (row + .5),
+    }))
   })
   return positions
 }

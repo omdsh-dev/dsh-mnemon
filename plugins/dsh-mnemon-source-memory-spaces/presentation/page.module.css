@@ -41,7 +41,7 @@ button.readSourceCard:hover { background: var(--mn-hover); }
 .readSourceMeta { display: flex; min-width: 0; align-items: center; gap: 6px; }
 .readSourceMeta > small { overflow: hidden; color: var(--mn-faint); font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
 .readSourceState { justify-items: end; text-align: right; }
-.readSourceState em { width: fit-content; padding: 1px 8px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; font-style: normal; font-weight: 500; line-height: 17px; white-space: nowrap; }
+.readSourceState em { width: fit-content; flex-shrink: 0; padding: 1px 8px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; font-style: normal; font-weight: 500; line-height: 17px; white-space: nowrap; }
 .readSourceCard[data-status="unsupported"] .readSourceState em { border: .5px solid var(--mn-field-line); color: var(--mn-faint); background: transparent; }
 .readSourceState small { color: var(--mn-faint); font-size: 11px; line-height: 14px; white-space: nowrap; }
 
@@ -71,8 +71,8 @@ button.readSourceCard:hover { background: var(--mn-hover); }
 .bodyHealth { color: var(--mn-success); font-size: 12px; line-height: 18px; }
 .bodyCard:not([data-healthy]) .bodyHealth { color: var(--mn-danger); }
 .bodyCard[data-status-loading] .bodyHealth { color: var(--mn-faint); }
-.mnemonDefaultBadge { width: fit-content; padding: 1px 8px; border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 10%, transparent); font-size: 11px; font-weight: 500; line-height: 17px; white-space: nowrap; }
-.newSpaceBadge { width: fit-content; padding: 1px 8px; border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 10%, transparent); font-size: 11px; font-weight: 500; line-height: 17px; white-space: nowrap; }
+.mnemonDefaultBadge { width: fit-content; flex-shrink: 0; padding: 1px 8px; border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 10%, transparent); font-size: 11px; font-weight: 500; line-height: 17px; white-space: nowrap; }
+.newSpaceBadge { width: fit-content; flex-shrink: 0; padding: 1px 8px; border-radius: 999px; color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 10%, transparent); font-size: 11px; font-weight: 500; line-height: 17px; white-space: nowrap; }
 /* What asking the Providers again found: one row, as a write receipt reads. */
 .rediscoveryNotice { display: flex; min-width: 0; align-items: flex-start; gap: 8px 12px; margin: 0 0 12px; padding: 10px 12px; border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-module-platform); }
 .rediscoveryNotice > div { display: grid; flex: 1 1 auto; min-width: 0; gap: 2px; }
@@ -133,17 +133,9 @@ button.readSourceCard:hover { background: var(--mn-hover); }
 .bodyCard[data-provider="supermemory"],
 .metadataList > label[data-provider="supermemory"],
 .graphNode[data-provider="supermemory"] { --mn-provider-color: #df4d72; }
-/* DSH Switch: 36 by 20 track, brand fill when on. */
-.bodySwitch { display: flex; min-height: 28px; align-items: center; gap: 8px; border: 0; padding: 0; color: var(--mn-faint); background: transparent; font-size: 12px; line-height: 18px; cursor: pointer; }
-.bodySwitchTrack { position: relative; width: 36px; height: 20px; flex: 0 0 auto; box-sizing: border-box; padding: 2px; border-radius: 999px; background: var(--mn-line-strong); transition: background-color 120ms ease; }
-.bodySwitchTrack i { display: block; width: 16px; height: 16px; border-radius: 50%; background: var(--dsw-alias-label-primary-foreground); transition: transform 120ms ease; }
-.bodySwitch:hover { color: var(--mn-muted); }
-.bodySwitch[aria-checked="true"] { color: var(--mn-muted); }
-.bodySwitch[aria-checked="true"] .bodySwitchTrack { background: var(--dsw-alias-brand-primary); }
-.bodySwitch[aria-checked="true"] .bodySwitchTrack i { transform: translateX(16px); }
 .bodyCardActions { display: flex; align-items: center; gap: 8px; }
-.bodyCreateForm { gap: 16px; padding-top: 0; }
-.createSection { display: grid; gap: 12px; padding: 14px 16px; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); }
+.bodyCreateForm { display: flex; min-width: 0; flex-shrink: 0; flex-direction: column; gap: 16px; padding-top: 0; padding-bottom: 4px; }
+.createSection { display: grid; min-width: 0; flex-shrink: 0; gap: 12px; padding: 14px 16px; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); }
 .createSectionHeading { display: flex; align-items: flex-start; gap: 10px; }
 .createSectionHeading > span { display: grid; min-width: 22px; height: 22px; flex: 0 0 auto; place-items: center; padding: 0 6px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; font-weight: 500; line-height: 1; }
 .createSectionHeading > div { display: grid; min-width: 0; gap: 2px; }
@@ -152,7 +144,7 @@ button.readSourceCard:hover { background: var(--mn-hover); }
 .createIdentityGrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: stretch; }
 .createIdentityGrid > label { align-content: start; }
 .createIdentityGrid textarea { min-height: 72px; }
-.strategyForm { gap: 16px; padding-top: 0; }
+.strategyForm { display: flex; min-width: 0; flex-shrink: 0; flex-direction: column; gap: 16px; padding-top: 0; padding-bottom: 4px; }
 .strategyLoading { position: relative; display: flex; min-height: 88px; align-items: center; justify-content: center; border-radius: var(--dsw-radius-md); color: var(--mn-faint); background: var(--mn-fill); font-size: 12px; }
 .strategyLoading .sectionSpinner { top: 10px; right: 10px; }
 /* Choice tiles, as the DSH appearance choice: hairline, filled when selected. */
@@ -167,7 +159,7 @@ button.readSourceCard:hover { background: var(--mn-hover); }
 .placementMode strong { color: var(--mn-text); font-size: 13px; font-weight: 500; line-height: 20px; }
 .placementMode strong em { margin-left: 6px; padding: 1px 8px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; font-style: normal; font-weight: 500; line-height: 17px; }
 .placementMode small { color: var(--mn-faint); font-size: 12px; line-height: 18px; }
-.placementPolicy { display: grid; gap: 10px; margin: 0; padding: 12px 14px; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-md); }
+.placementPolicy { display: grid; min-width: 0; flex-shrink: 0; gap: 10px; margin: 0; padding: 12px 14px; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-md); }
 .placementPolicyHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .placementPolicyHeading > div { display: grid; gap: 2px; }
 .placementPolicyHeading strong { font-size: 13px; font-weight: 500; line-height: 20px; }
@@ -229,7 +221,7 @@ button.readSourceCard:hover { background: var(--mn-hover); }
 .providerChoice label:has(input:focus-visible),
 .capabilityRules label:has(input:focus-visible),
 .placementCandidates label:has(input:focus-visible) { outline: var(--dsw-focus-ring-width, 2px) solid var(--mn-focus); outline-offset: 1px; }
-.providerFields { display: grid; gap: 10px; padding: 12px 14px; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-md); }
+.providerFields { display: grid; min-width: 0; flex-shrink: 0; gap: 10px; padding: 12px 14px; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-md); }
 .providerFieldHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .providerFieldIdentity { display: flex; min-width: 0; align-items: center; gap: 10px; }
 .providerFieldIdentity > div { display: grid; min-width: 0; gap: 2px; }
@@ -332,7 +324,7 @@ button.readSourceCard:hover { background: var(--mn-hover); }
 .inspectorHeading button { display: grid; width: 28px; height: 28px; place-items: center; border: 0; border-radius: var(--dsw-radius-sm); color: var(--mn-muted); background: transparent; cursor: pointer; }
 .inspectorHeading button:hover { background: var(--mn-hover); }
 .inspectorChips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 20px; }
-.categoryChip { display: inline-flex; padding: 1px 8px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; font-weight: 500; line-height: 17px; }
+.categoryChip { display: inline-flex; flex-shrink: 0; padding: 1px 8px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; font-weight: 500; line-height: 17px; white-space: nowrap; }
 .inspectorTitleRow { display: flex; min-width: 0; align-items: flex-start; gap: 8px; margin: 12px 0 20px; }
 .inspectorTitle { display: -webkit-box; min-width: 0; flex: 1; margin: 0; overflow: hidden; font-size: 14px; font-weight: 400; line-height: 22px; overflow-wrap: anywhere; white-space: pre-wrap; -webkit-box-orient: vertical; -webkit-line-clamp: 6; }
 .inspectorEye { display: grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border: .5px solid var(--mn-line-strong); border-radius: var(--dsw-radius-sm); color: var(--mn-muted); background: transparent; cursor: pointer; transition: color .15s, background-color .15s; }
@@ -375,12 +367,12 @@ button.readSourceCard:hover { background: var(--mn-hover); }
 .badges,
 .tags,
 .entities { display: flex; flex-wrap: wrap; gap: 6px; }
-.badge { padding: 1px 8px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; font-weight: 500; line-height: 17px; }
+.badge { flex-shrink: 0; padding: 1px 8px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; font-weight: 500; line-height: 17px; white-space: nowrap; }
 .id { color: var(--mn-faint); font-size: 11px; }
 .content { margin: 10px 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 22px; }
 .tags { color: var(--mn-accent); font-size: 12px; line-height: 18px; }
 .entities { margin-top: 8px; }
-.entities span { padding: 1px 8px; border: .5px solid var(--mn-field-line); border-radius: 999px; color: var(--mn-faint); font-size: 11px; font-weight: 500; line-height: 17px; }
+.entities span { flex-shrink: 0; padding: 1px 8px; border: .5px solid var(--mn-field-line); border-radius: 999px; color: var(--mn-faint); font-size: 11px; font-weight: 500; line-height: 17px; white-space: nowrap; }
 .cardActions { display: flex; min-height: 32px; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 10px; border-top: .5px solid var(--mn-line); padding-top: 8px; }
 
 .entityLayout { display: grid; grid-template-columns: 264px minmax(0, 1fr); gap: 16px; align-items: start; }
@@ -395,7 +387,7 @@ button.readSourceCard:hover { background: var(--mn-hover); }
 .entityList button[aria-pressed="true"] { color: var(--mn-text); background: var(--mn-hover); }
 .entityList button[aria-pressed="true"] { background: var(--mn-fill); }
 .entityList button > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.entityList strong { flex: none; color: var(--mn-faint); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.entityList strong { flex: 0 0 auto; color: var(--mn-faint); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .entityResults > .emptyState { min-height: 360px; }
 .entitySection { min-width: 0; }
 .entitySection + .entitySection { margin-top: 24px; }
@@ -448,7 +440,6 @@ button.readSourceCard:hover { background: var(--mn-hover); }
 .memoryList { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: start; }
 .memoryList .insightCard { height: 100%; margin: 0; }
 .modalFooterNote { max-width: 54ch; margin: 0 auto 0 0; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
-.modalInlineStatus { margin: 12px 0 0; color: var(--mn-muted); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
 .metadataDialog { display: grid; gap: 12px; }
 .metadataToolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
 .metadataToolbar > span { display: flex; min-width: 0; align-items: center; gap: 8px; }

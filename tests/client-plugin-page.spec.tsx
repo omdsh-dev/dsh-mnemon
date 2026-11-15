@@ -391,13 +391,22 @@ describe('scoped component options', () => {
 
   it('does not write a cancelled empty selection, but preserves an explicitly confirmed one', () => {
     const { boxes, onApply } = fixture()
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const confirm = vi.spyOn(window, 'confirm')
     boxes.filter(box => (box as HTMLInputElement).checked).forEach(box => fireEvent.click(box))
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
-    expect(confirm).toHaveBeenCalledOnce()
+    expect(confirm).not.toHaveBeenCalled()
+    const dialog = screen.getByRole('dialog', { name: 'No memory sources selected' })
+    expect(within(dialog).getByText(/No memory sources are selected/u)).toBeTruthy()
     expect(onApply).not.toHaveBeenCalled()
-    confirm.mockReturnValue(true)
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog', { name: 'No memory sources selected' })).toBeNull()
+    expect(onApply).not.toHaveBeenCalled()
+
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    const reopened = screen.getByRole('dialog', { name: 'No memory sources selected' })
+    fireEvent.click(within(reopened).getByRole('button', { name: 'Apply' }))
+    expect(screen.queryByRole('dialog', { name: 'No memory sources selected' })).toBeNull()
     expect(onApply).toHaveBeenCalledWith({ sourceKeys: [] })
   })
 

@@ -55,7 +55,7 @@
 .documentSources { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0; }
 .documentSources > span { margin-right: 4px; color: var(--mn-faint); font-size: 12px; }
 .documentSources code,
-.documentArchiveReceipt code { padding: 1px 8px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; line-height: 17px; }
+.documentArchiveReceipt code { display: inline-flex; max-width: 100%; align-items: center; padding: 1px 8px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; line-height: 17px; }
 .markdownBody { min-height: 310px; margin: 16px 0 0; overflow-wrap: anywhere; padding: clamp(16px, 2.5vw, 28px); border: .5px solid var(--mn-line); border-radius: var(--dsw-radius-md); color: var(--mn-text); font-size: 14px; line-height: 1.75; }
 .markdownBody > :first-child { margin-top: 0; }
 .markdownBody > :last-child { margin-bottom: 0; }

@@ -17,9 +17,10 @@ export function ListPage(props: { client: MemorySpacesPageClient; revision: numb
   const [visibleLimit, setVisibleLimit] = useState(pageSize)
   const [selectedBodyId, setSelectedBodyId] = useState<string | undefined>()
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (overrideQuery?: string) => {
+    const effectiveQuery = overrideQuery ?? query
     setLoading(true); setError(null)
-    try { setView(await props.client.list({ ...(query.trim() === '' ? {} : { query }), ...(category === '' ? {} : { category }), limit: 1000 })) } catch (reason) { setError(message(reason)) } finally { setLoading(false) }
+    try { setView(await props.client.list({ ...(effectiveQuery.trim() === '' ? {} : { query: effectiveQuery }), ...(category === '' ? {} : { category }), limit: 1000 })) } catch (reason) { setError(message(reason)) } finally { setLoading(false) }
   }, [category, props.client, query])
   useEffect(() => { setVisibleLimit(pageSize); void load() }, [pageSize, props.revision])
   const submit = (event: FormEvent) => { event.preventDefault(); setVisibleLimit(pageSize); void load() }
@@ -33,7 +34,15 @@ export function ListPage(props: { client: MemorySpacesPageClient; revision: numb
   return (
     <div className={css.page}>
       <PageHeader title={t('content.title')} description={t('content.description')} meta={t('content.count', { count: view === null ? '—' : selectedBodyId === undefined ? view.total : filteredItems.length })} />
-      <form className={css.listToolbar} onSubmit={submit}><SearchField label={t('content.filterAria')} value={query} onChange={event => setQuery(event.target.value)} placeholder={t('content.filterPlaceholder')} /><SelectField hideLabel label={t('content.categoryAria')} value={category} options={[{ value: '' as Category | '', label: t('common.allCategories') }, ...CATEGORIES.map(value => ({ value, label: categoryLabel(t, value) }))]} onChange={setCategory} /><button type="submit" className={css.secondaryButton} disabled={loading}>{loading ? t('common.loading') : t('content.apply')}</button></form>
+      <form className={css.listToolbar} onSubmit={submit}><SearchField label={t('content.filterAria')} value={query} onChange={event => {
+        const next = event.target.value
+        const hadQuery = query !== ''
+        setQuery(next)
+        if (hadQuery && next === '') {
+          setVisibleLimit(pageSize)
+          void load('')
+        }
+      }} placeholder={t('content.filterPlaceholder')} /><SelectField hideLabel label={t('content.categoryAria')} value={category} options={[{ value: '' as Category | '', label: t('common.allCategories') }, ...CATEGORIES.map(value => ({ value, label: categoryLabel(t, value) }))]} onChange={setCategory} /><button type="submit" className={css.secondaryButton} disabled={loading}>{loading ? t('common.loading') : t('content.apply')}</button></form>
       <div className={css.listNotice}>{t('content.notice')}</div>
       <ReadSourcePanel title={t('content.sourcesTitle')} sources={sources} selectedBodyId={selectedBodyId} onSelect={selectBody} />
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}

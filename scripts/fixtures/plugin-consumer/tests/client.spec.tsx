@@ -20,7 +20,7 @@ const dependencies = {
   '@deepseek-ai/dsh-client-ui-primitives': await vi.importActual('@deepseek-ai/dsh-client-ui-primitives'),
 }
 const core = loadMemoryClientArtifact<typeof import('dsh-mnemon/client')>(require.resolve('dsh-mnemon/client'), dependencies)
-const sourceDependencies = { ...dependencies, 'dsh-mnemon/client': core, 'markdown-to-jsx': require('markdown-to-jsx') }
+const sourceDependencies = { ...dependencies, 'dsh-mnemon/client': core }
 const runtimeClient = loadMemoryClientArtifact<typeof import('dsh-mnemon-source-runtime/client')>(require.resolve('dsh-mnemon-source-runtime/client'), sourceDependencies)
 const documentsClient = loadMemoryClientArtifact<typeof import('dsh-mnemon-source-documents/client')>(require.resolve('dsh-mnemon-source-documents/client'), sourceDependencies)
 const spacesClient = loadMemoryClientArtifact<typeof import('dsh-mnemon-source-memory-spaces/client')>(require.resolve('dsh-mnemon-source-memory-spaces/client'), sourceDependencies)

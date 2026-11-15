@@ -28,8 +28,10 @@
 }
 
 .shell .modalBackdrop { z-index: 1300; }
+.shell .modal { display: flex; max-height: min(860px, calc(100vh - 32px)); max-height: min(860px, calc(100dvh - 32px)); flex-direction: column; overflow: hidden; }
 .shell .modal.modalWide { width: min(760px, 100%); }
-.shell .modal > [class*='modalBody'] { min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+.shell .modal > [class*='modalBody'] { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 16px; scroll-padding-bottom: 16px; scrollbar-gutter: stable; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+.shell .modal > [class*='modalFooter'] { position: relative; z-index: 2; flex: 0 0 auto; border-top: .5px solid var(--mn-line); padding: 12px 24px 18px; background: linear-gradient(var(--mn-layer-2), var(--mn-layer-2)), var(--mn-surface); }
 
 .shell .canvas { background: var(--mn-surface); }
 .shell button,
@@ -40,6 +42,7 @@
 .shell textarea { line-height: 20px; }
 
 .shell .pageHeader { margin-bottom: 16px; }
+.shell .pageHeader:has(+ [class*='subNav']) { margin-bottom: 8px; }
 .shell .canvas[data-lock-page-header] [class*='pageHeader'] {
   position: sticky;
   z-index: 12;
@@ -48,6 +51,10 @@
   padding: 20px 24px 12px;
   border-bottom: .5px solid var(--dsw-alias-border-l2);
   background: var(--mn-surface);
+}
+.shell .canvas[data-lock-page-header] [class*='pageHeader']:has(+ [class*='subNav']) {
+  margin-bottom: 6px;
+  padding-bottom: 10px;
 }
 /* The substring match above also reaches the header's own meta column. */
 .shell .canvas[data-lock-page-header] [class*='pageHeader'] [class*='pageHeaderMeta'] { position: static; margin: 0; padding: 0; border: 0; background: none; }
@@ -78,9 +85,10 @@
 
 @media (max-width: 760px) {
   .shell .headerActions { max-width: none; }
-  .shell .statusCluster > span:not([class*='statusDot']) { display: inline; }
+  .shell .statusCluster > span { display: inline; }
   .shell .workspacePicker > [data-part='label'], .shell .workspaceMismatch > span { display: none; }
   .shell .canvas[data-lock-page-header] [class*='pageHeader'] { margin: -16px -16px 16px; padding: 16px 16px 12px; }
+  .shell .canvas[data-lock-page-header] [class*='pageHeader']:has(+ [class*='subNav']) { margin-bottom: 6px; padding-bottom: 10px; }
   .shell .modalBackdrop { align-items: flex-end; padding: max(10px, env(safe-area-inset-top, 0px)) 0 0; }
   .shell .modal, .shell .modal.modalWide { width: 100vw; max-height: calc(100vh - max(10px, env(safe-area-inset-top, 0px))); border-radius: var(--dsw-radius-xl) var(--dsw-radius-xl) 0 0; }
   .shell .modal > header { gap: 12px; padding: 10px max(14px, env(safe-area-inset-right, 0px)) 12px max(14px, env(safe-area-inset-left, 0px)); }

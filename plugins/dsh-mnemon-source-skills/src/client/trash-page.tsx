@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
-import { Button, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Checkbox, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SelectField, SidebarModal } from 'dsh-mnemon/client'
 import type { SkillRootKind, TrashEntry, TrashRestoreInput, TrashRestorePreview } from '../contracts.ts'
 import { css, errorText, stamp, useT } from './presentation.ts'
-import { Busy, Confirm, Empty, Field, SkillIcon } from './shared.tsx'
+import { Busy, Confirm, Empty, Field, SkillIcon, SkillPath } from './shared.tsx'
 import type { SkillsLocation, SkillsPageContext } from './ui.tsx'
 
 /** A size the eye can compare: bytes under a kilobyte, else whole KiB or MiB. */
@@ -65,7 +65,7 @@ export function TrashPage(props: { context: SkillsPageContext; location: SkillsL
         <span className={css.skRowText}>
           <strong>{entry.name}</strong>
           <small>{t('trash.meta', { time: stamp(entry.trashedAt), size: size(entry.bytes) })}</small>
-          {entry.originalPath !== undefined && <small title={entry.originalPath}><code>{entry.originalPath}</code></small>}
+          {entry.originalPath !== undefined && <small title={entry.originalPath}><code><SkillPath path={entry.originalPath} /></code></small>}
           <span className={css.skTrashTags}>
             {entry.root !== undefined && <Tag tone="quiet">{t(`root.${entry.root}`)}</Tag>}
             <Tag tone="quiet">{t(entry.kind === 'file' ? 'trash.file' : 'trash.bundle')}</Tag>
@@ -187,9 +187,9 @@ function RestoreDialog(props: { context: SkillsPageContext; entry: TrashEntry; i
         ...roots.map(kind => ({ value: kind, label: t(`root.${kind}`) })),
       ]} />
       <Field label={t('create.name')} hint={t('create.nameHint')}>{control => <input {...control} value={name} disabled={busy} onChange={event => setName(event.target.value.trim().toLowerCase())} />}</Field>
-      {preview?.path !== undefined && <code style={previewing ? { opacity: 0.6 } : undefined}>{preview.path}</code>}
+      {preview?.path !== undefined && <code style={previewing ? { opacity: 0.6 } : undefined}><SkillPath path={preview.path} /></code>}
       {preview === null && previewing && <span className={css.skMuted} role="status">{t('common.loading')}</span>}
-      {preview?.conflict !== undefined && <label><input type="checkbox" checked={replace} disabled={busy || previewing} onChange={event => setReplace(event.target.checked)} /> {t('trash.replace')}</label>}
+      {preview?.conflict !== undefined && <Checkbox checked={replace} disabled={busy || previewing} label={t('trash.replace')} onChange={setReplace} />}
       {error !== null && <p role="alert" className={css.skFormError}>{error}</p>}
     </div>
   </SidebarModal>

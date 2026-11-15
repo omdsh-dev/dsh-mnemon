@@ -84,14 +84,22 @@ export function SelectField<T extends string>(props: {
         aria-labelledby={`${props.ariaLabel === undefined ? labelId : nameId} ${valueId}`}
         disabled={props.disabled === true}
         onClick={event => {
+          if (open) {
+            setOpen(false)
+            return
+          }
           // 4px for the menu's gap and 12px for the portal's viewport margin.
           const rect = event.currentTarget.getBoundingClientRect()
           const below = Math.floor(window.innerHeight - rect.bottom - 4 - 12)
           const above = Math.floor(rect.top - 4 - 12)
           const flip = below < 220 && above > below
-          document.documentElement.style.setProperty('--dsh-select-menu-max', `${Math.max(160, flip ? above : below)}px`)
+          const nextValue = `${Math.max(160, flip ? above : below)}px`
+          const root = document.documentElement
+          if (root.style.getPropertyValue('--dsh-select-menu-max').trim() !== nextValue) {
+            root.style.setProperty('--dsh-select-menu-max', nextValue)
+          }
           setSide(flip ? 'top' : 'bottom')
-          setOpen(value => !value)
+          setOpen(true)
         }}
       >
         {detail

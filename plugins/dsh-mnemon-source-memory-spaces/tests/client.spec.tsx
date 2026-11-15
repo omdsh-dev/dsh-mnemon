@@ -640,6 +640,25 @@ describe('OverviewPage & MemoryGraph performance guardrails', () => {
       const statusReads = readSpy.mock.calls.filter(([operation]) => operation === 'status-summary').length
       expect(directoryReads).toBe(1)
       expect(statusReads).toBe(1)
+
+      // Sub-navigation tablist supports WAI-ARIA roving tabindex and keyboard navigation.
+      const tablist = screen.getByRole('tablist')
+      const tabs = within(tablist).getAllByRole('tab')
+      expect(tabs.map(tab => tab.getAttribute('tabindex'))).toEqual(['0', '-1', '-1', '-1'])
+      fireEvent.keyDown(tablist, { key: 'End' })
+      expect(within(tablist).getAllByRole('tab').map(tab => tab.getAttribute('tabindex'))).toEqual(['-1', '-1', '-1', '0'])
+      fireEvent.keyDown(tablist, { key: 'ArrowLeft' })
+      expect(within(tablist).getAllByRole('tab').map(tab => tab.getAttribute('tabindex'))).toEqual(['-1', '-1', '0', '-1'])
+
+      // Clearing the Content filter immediately triggers an unfiltered list reload.
+      await waitFor(() => expect(screen.getByPlaceholderText('Filter by content or exact ID…')).toBeTruthy())
+      const filterInput = screen.getByPlaceholderText('Filter by content or exact ID…')
+      fireEvent.change(filterInput, { target: { value: 'missing-query' } })
+      fireEvent.submit(filterInput.closest('form')!)
+      await waitFor(() => expect(readSpy.mock.calls.some(([op, input]) => op === 'list' && (input as { query?: string })?.query === 'missing-query')).toBe(true))
+      readSpy.mockClear()
+      fireEvent.change(filterInput, { target: { value: '' } })
+      await waitFor(() => expect(readSpy.mock.calls.some(([op, input]) => op === 'list' && (input as { query?: string })?.query === undefined)).toBe(true))
     } finally {
       cleanup()
       await runner.dispose()

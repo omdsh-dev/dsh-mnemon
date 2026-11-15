@@ -9,6 +9,7 @@ import type { MnemonSourcePageOwnerProps } from "../src/client/dsh-context.ts"
 import { MnemonWorkbench } from '../src/client/MnemonWorkbench.tsx'
 import { MNEMON_COMPONENT_STATUS_SLOT } from '../src/client/component-ui.tsx'
 import { translateEn } from '../src/client/locales.ts'
+import { SelectField } from '../src/client/page-controls.tsx'
 import { PageHeader } from '../src/client/page-kit.tsx'
 import { dispatchMnemonAnchor } from '../src/client/anchor.ts'
 import {
@@ -508,5 +509,71 @@ describe('Source Client presentation conformance', () => {
         }),
       }),
     ])))
+  })
+
+  it('supports roving tabIndex and ArrowLeft/ArrowRight/Home/End keyboard navigation in WorkspaceNavigation', async () => {
+    const pages = [
+      { id: 'runtime/entries', sourceTypeId: 'runtime', pageId: 'entries', label: 'Runtime memory', order: 1 },
+      { id: 'documents/library', sourceTypeId: 'documents', pageId: 'library', label: 'Documents', order: 2 },
+    ]
+    const sources = [
+      { sourceInstanceKey: 'source:runtime', sourceTypeId: 'runtime', packageName: 'dsh-mnemon-source-runtime', role: 'working-context', availability: 'ready', revision: 'r1', capabilities: ['read'], management: { label: 'Runtime memory' } },
+      { sourceInstanceKey: 'source:documents', sourceTypeId: 'documents', packageName: 'dsh-mnemon-source-documents', role: 'narrative', availability: 'ready', revision: 'r1', capabilities: ['read'], management: { label: 'Documents' } },
+    ]
+    const connection = { rpc: { call: vi.fn(async (_channel: string, endpoint: string) => ({ ok: true, value: endpoint === 'source-management-catalog' ? { generationId: 'g1', sources } : status })) }, isLoopback: true }
+    const renderSlot = ((_name: string, _owner: MnemonSourcePageOwnerProps, options: { only?: string }) => <div>Page: {options.only}</div>) as never
+
+    render(<MnemonWorkbench connection={connection as never} settingsScope={settings} t={translateEn} locale="en"
+      sourcePageDirectory={{ getSnapshot: () => pages, subscribe: () => () => {} }} renderSlot={renderSlot} />)
+
+    const statusTab = await screen.findByRole('tab', { name: 'Status' })
+    const runtimeTab = await screen.findByRole('tab', { name: 'Runtime memory' })
+    const documentsTab = await screen.findByRole('tab', { name: 'Documents' })
+
+    expect(statusTab.tabIndex).toBe(0)
+    expect(runtimeTab.tabIndex).toBe(-1)
+    expect(documentsTab.tabIndex).toBe(-1)
+
+    statusTab.focus()
+    fireEvent.keyDown(statusTab, { key: 'ArrowRight' })
+    expect(document.activeElement).toBe(runtimeTab)
+    expect(runtimeTab.getAttribute('aria-selected')).toBe('true')
+    expect(runtimeTab.tabIndex).toBe(0)
+    expect(statusTab.tabIndex).toBe(-1)
+
+    fireEvent.keyDown(runtimeTab, { key: 'End' })
+    expect(document.activeElement).toBe(documentsTab)
+    expect(documentsTab.getAttribute('aria-selected')).toBe('true')
+
+    fireEvent.keyDown(documentsTab, { key: 'ArrowRight' })
+    expect(document.activeElement).toBe(statusTab)
+    expect(statusTab.getAttribute('aria-selected')).toBe('true')
+
+    fireEvent.keyDown(statusTab, { key: 'ArrowLeft' })
+    expect(document.activeElement).toBe(documentsTab)
+    expect(documentsTab.getAttribute('aria-selected')).toBe('true')
+
+    fireEvent.keyDown(documentsTab, { key: 'Home' })
+    expect(document.activeElement).toBe(statusTab)
+    expect(statusTab.getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('skips redundant root style writes in SelectField when --dsh-select-menu-max is unchanged', () => {
+    document.documentElement.style.removeProperty('--dsh-select-menu-max')
+    const setPropertySpy = vi.spyOn(document.documentElement.style, 'setProperty')
+    render(<SelectField label="Scope" value="global" options={[{ value: 'global', label: 'Global' }, { value: 'workspace', label: 'Workspace' }]} onChange={vi.fn()} />)
+
+    const trigger = screen.getByRole('button', { name: /Scope/u })
+    // Open menu: writes --dsh-select-menu-max once.
+    fireEvent.click(trigger)
+    expect(setPropertySpy.mock.calls.filter(([prop]) => prop === '--dsh-select-menu-max')).toHaveLength(1)
+
+    // Close menu via trigger: does not rewrite --dsh-select-menu-max.
+    fireEvent.click(trigger)
+    expect(setPropertySpy.mock.calls.filter(([prop]) => prop === '--dsh-select-menu-max')).toHaveLength(1)
+
+    // Reopen menu at the same geometry: skips redundant setProperty call.
+    fireEvent.click(trigger)
+    expect(setPropertySpy.mock.calls.filter(([prop]) => prop === '--dsh-select-menu-max')).toHaveLength(1)
   })
 })

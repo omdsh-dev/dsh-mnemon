@@ -189,7 +189,9 @@
 .skEvolutionSplit > .skPane { min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; }
 .skSkillsSplit > .skList > *,
 .skEvolutionSplit > .skList > * { flex-shrink: 0; }
-.skSkillsSplit > .skList { height: 100%; box-sizing: border-box; }
+.skSkillsSplit > .skList,
+.skEvolutionSplit > .skList { height: 100%; box-sizing: border-box; }
+.skPaneBar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: .5px solid var(--mn-line); }
 
 .skListBar { display: flex; align-items: center; gap: 8px; padding: 10px; border-bottom: .5px solid var(--mn-line); }
 .skListBar > :first-child { min-width: 0; flex: 1; }
@@ -295,7 +297,7 @@
 /* Where it lives, when, how sure: small, separated by dots. */
 .skMeta { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 0 6px; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
 .skMeta > * + *::before { content: '·'; margin-right: 6px; color: var(--mn-line-strong, var(--mn-faint)); }
-.skMeta code { min-width: 0; max-width: 100%; overflow: hidden; font: 11px/18px var(--mn-code); text-overflow: ellipsis; white-space: nowrap; }
+.skMeta code { display: inline-flex; align-items: center; min-width: 0; max-width: 100%; overflow: hidden; font: 11px/18px var(--mn-code); text-overflow: ellipsis; white-space: nowrap; }
 .skInvocation { display: flex; align-items: center; gap: 8px; }
 .skWhen { margin: 0; color: var(--mn-muted); font-size: 12px; line-height: 18px; }
 
@@ -372,7 +374,7 @@
 .skTrashTags { display: flex; flex-wrap: wrap; gap: 6px; }
 .skTrashList li > .skTrashActions { display: flex; flex: 0 0 auto; margin-left: auto; gap: 6px; }
 .skResources { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.skResources code { padding: 1px 8px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font: 11px/17px var(--mn-code); }
+.skResources code { display: inline-flex; align-items: center; max-width: 100%; padding: 1px 8px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font: 11px/17px var(--mn-code); }
 
 .skEditor { width: 100%; min-height: 420px; resize: vertical; border: .5px solid var(--mn-field-line); border-radius: var(--dsw-radius-md); outline: 0; padding: 10px 12px; color: var(--mn-text); background: var(--mn-input); font: 12px/1.6 var(--mn-code); tab-size: 2; transition: border-color 120ms ease; }
 .skEditor:focus { border-color: var(--mn-accent); }
@@ -586,12 +588,13 @@
 
 /* ---- narrow widths -------------------------------------------------------- */
 
-@media (max-width: 860px) {
+@media (max-width: 760px) {
   .skSplit { grid-template-columns: minmax(0, 1fr); }
   .skList { max-height: 360px; overflow-y: auto; }
   .skSkillsSplit,
   .skEvolutionSplit { height: auto; }
-  .skSkillsSplit > .skList { height: auto; }
+  .skSkillsSplit > .skList,
+  .skEvolutionSplit > .skList { height: auto; }
   .skSkillsSplit > .skPane,
   .skEvolutionSplit > .skPane { overflow: visible; overscroll-behavior-y: auto; }
 }
