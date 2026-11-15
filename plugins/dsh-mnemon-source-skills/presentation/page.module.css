@@ -37,6 +37,8 @@
 .skMuted { margin: 0; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
 .skProse { margin: 0; color: var(--mn-muted); font-size: 13px; line-height: 21px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .skBusy { display: inline-flex; align-items: center; gap: 8px; padding: 6px 0; color: var(--mn-muted); font-size: 12px; line-height: 18px; }
+.skPage > .skBusy,
+.skPane > .skBusy { display: flex; min-height: 360px; align-items: center; justify-content: center; }
 
 .skLink {
   border: 0;
@@ -93,7 +95,8 @@
 .skSuccess { margin: 0; padding: 8px 12px; border-radius: var(--dsw-radius-md); color: var(--mn-text); font-size: 12px; line-height: 18px; }
 .skWarn { background: color-mix(in srgb, var(--mn-warn) 11%, transparent); }
 .skSuccess { background: color-mix(in srgb, var(--mn-success) 9%, transparent); }
-.skDangerButton { background: var(--mn-danger) !important; }
+.skDangerButton { border-color: transparent !important; color: var(--dsw-static-neutral-00, #ffffff) !important; background: var(--mn-danger) !important; }
+.skDangerButton:hover:not(:disabled) { background: color-mix(in srgb, var(--mn-danger) 88%, #000) !important; }
 
 /* A long paragraph shows its first lines; the rest opens in place. */
 .skClamp { display: grid; justify-items: start; gap: 2px; }
@@ -132,8 +135,9 @@
   margin-left: 6px;
   padding: 0 5px;
   border-radius: 999px;
-  color: var(--dsw-alias-label-inverse, #fff);
-  background: var(--mn-accent);
+  corner-shape: round;
+  color: var(--dsw-static-neutral-00, #ffffff);
+  background: var(--dsw-alias-brand-primary, var(--mn-accent));
   font-size: 11px;
   font-weight: 500;
   line-height: 16px;
@@ -182,7 +186,7 @@
 
 /* Keep each list beside its detail while browsing long skills or suggestions. */
 .skSkillsSplit,
-.skEvolutionSplit { height: max(320px, calc(100dvh - 320px)); min-height: 0; }
+.skEvolutionSplit { height: clamp(420px, calc(100dvh - var(--dsh-frame-top-clearance, 0px) - 248px), 780px); min-height: 0; }
 .skSkillsSplit > .skList,
 .skSkillsSplit > .skPane,
 .skEvolutionSplit > .skList,
@@ -192,17 +196,25 @@
 .skSkillsSplit > .skList,
 .skEvolutionSplit > .skList { height: 100%; box-sizing: border-box; }
 .skPaneBar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: .5px solid var(--mn-line); }
+.skPaneBar > .skIconButton { margin-left: auto; }
 
 .skListBar { display: flex; align-items: center; gap: 8px; padding: 10px; border-bottom: .5px solid var(--mn-line); }
 .skListBar > :first-child { min-width: 0; flex: 1; }
 .skListNote { margin: 0; padding: 18px 16px; color: var(--mn-faint); font-size: 12px; line-height: 18px; text-align: center; }
 /* A second, quieter control under the bar: narrowing the list. */
 .skListFilter { padding: 8px 10px 2px; }
-.skListGroup h5 { margin: 14px 16px 4px; overflow: hidden; color: var(--mn-faint); font-size: 11px; font-weight: 500; letter-spacing: .02em; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
-.skGroupToggle { display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 0; border: 0; color: inherit; background: transparent; text-align: start; font: inherit; cursor: pointer; }
-.skGroupToggle > :nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.skGroupToggle small { display: block; overflow: hidden; text-overflow: ellipsis; font-size: 10px; font-weight: 400; }
-.skGroupToggle:focus-visible { outline: 2px solid var(--mn-accent); outline-offset: -2px; }
+.skListGroup h5 { margin: 10px 6px 2px; overflow: visible; color: var(--mn-faint); font-size: 11px; font-weight: 500; letter-spacing: .02em; line-height: 16px; }
+.skGroupHeading { padding: 4px 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skGroupToggle { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; padding: 5px 10px; border: 0; border-radius: var(--dsw-radius-sm, 6px); color: inherit; background: transparent; text-align: start; font: inherit; cursor: pointer; transition: color 120ms ease, background-color 120ms ease; }
+.skGroupToggle:hover:not(:disabled) { color: var(--mn-muted); background: var(--mn-hover); }
+.skGroupToggle:disabled { cursor: default; }
+.skGroupChevron { flex: none; color: var(--mn-faint); transition: transform 160ms cubic-bezier(.2, 0, 0, 1), color 120ms ease; }
+.skGroupToggle[aria-expanded='false'] .skGroupChevron { transform: rotate(-90deg); }
+.skGroupToggle:hover:not(:disabled) .skGroupChevron { color: var(--mn-text); }
+.skGroupLabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skGroupLabel small { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; font-weight: 400; }
+.skGroupCount { flex: none; min-width: 18px; padding: 0 5px; border-radius: 999px; corner-shape: round; color: var(--mn-muted); background: var(--mn-fill); font-size: 10px; font-weight: 500; line-height: 16px; text-align: center; font-variant-numeric: tabular-nums; }
+.skGroupToggle:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--dsw-focus-ring-color, var(--mn-accent)); }
 
 /* An inbox row: what it is, one or two lines on it, and when. */
 .skListItem {
@@ -265,11 +277,11 @@
 .skRowText strong > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .skRowText small { overflow: hidden; color: var(--mn-faint); font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
 /* A last backtest score, the colour of how it went. */
-.skScore { flex: none; min-width: 24px; color: var(--mn-muted); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; line-height: 20px; text-align: right; animation: sk-pop 260ms cubic-bezier(.2, 0, 0, 1); }
+.skScore { flex: none; min-width: 24px; border-radius: 999px; corner-shape: round; color: var(--mn-muted); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; line-height: 20px; text-align: right; animation: sk-pop 260ms cubic-bezier(.2, 0, 0, 1); }
 .skScore[data-tone='good'] { color: var(--mn-success); }
 .skScore[data-tone='bad'] { color: var(--mn-danger); }
 /* Something waits for this skill. */
-.skDot { width: 6px; height: 6px; flex: none; border-radius: 999px; background: var(--mn-accent); animation: sk-pop 260ms cubic-bezier(.2, 0, 0, 1); }
+.skDot { width: 6px; height: 6px; flex: none; border-radius: 999px; corner-shape: round; background: var(--mn-accent); animation: sk-pop 260ms cubic-bezier(.2, 0, 0, 1); }
 .skRowActions { display: flex; flex: none; align-items: center; gap: 8px; }
 .skUse { opacity: 0; transform: translateX(4px); pointer-events: none; transition: opacity 140ms ease, transform 180ms cubic-bezier(.2, 0, 0, 1); }
 .skRow:hover .skUse,
@@ -368,6 +380,7 @@
 .skVersions li:hover { background: var(--mn-hover); }
 .skVersions time { color: var(--mn-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .skVersions li > span { flex: 1; }
+.skTrash { width: 100%; max-width: 960px; margin-inline: auto; }
 .skTrashList li { flex-wrap: wrap; padding-block: 10px; }
 .skTrashList li > span { flex: 0 0 auto; }
 .skTrashList li > .skRowText { flex: 1 1 220px; }
@@ -588,6 +601,21 @@
 
 /* ---- narrow widths -------------------------------------------------------- */
 
+@container mnemon-workbench (max-width: 880px) {
+  .skSplit { grid-template-columns: minmax(236px, 280px) minmax(0, 1fr); }
+}
+
+@container mnemon-workbench (max-width: 640px) {
+  .skSplit { grid-template-columns: minmax(0, 1fr); }
+  .skList { max-height: 360px; overflow-y: auto; }
+  .skSkillsSplit,
+  .skEvolutionSplit { height: auto; }
+  .skSkillsSplit > .skList,
+  .skEvolutionSplit > .skList { height: auto; }
+  .skSkillsSplit > .skPane,
+  .skEvolutionSplit > .skPane { overflow: visible; overscroll-behavior-y: auto; }
+}
+
 @media (max-width: 760px) {
   .skSplit { grid-template-columns: minmax(0, 1fr); }
   .skList { max-height: 360px; overflow-y: auto; }
@@ -599,13 +627,20 @@
   .skEvolutionSplit > .skPane { overflow: visible; overscroll-behavior-y: auto; }
 }
 
+@container mnemon-workbench (max-width: 560px) {
+  .skDetailHead { flex-direction: column; }
+  .skDetailActions { justify-content: flex-start; }
+}
+
 @media (max-width: 560px) {
   .skDetailHead { flex-direction: column; }
   .skDetailActions { justify-content: flex-start; }
 }
 
+.skGroupBody { display: grid; grid-template-columns: minmax(0, 1fr); animation: skAppear 160ms var(--dsw-ease-out, cubic-bezier(.2, 0, 0, 1)); }
+
 @media (prefers-reduced-motion: reduce) {
-  .skPage, .skDetail, .skEmpty, .skTable, .skComposer, .skRunDetail, .skMarketCard, .skMarketSection, .skMarketAdd, .skAudit, .skSourceList > li, .skTabBadge, .skDot, .skScore { animation: none; }
-  .skUse, .skFold > header > button > svg, .skFold[data-link] > header > button > b, .skCallout > b, .skMarketCard { transition: none; }
+  .skPage, .skDetail, .skEmpty, .skTable, .skComposer, .skRunDetail, .skMarketCard, .skMarketSection, .skMarketAdd, .skAudit, .skSourceList > li, .skTabBadge, .skDot, .skScore, .skGroupBody { animation: none; }
+  .skUse, .skGroupChevron, .skGroupToggle, .skFold > header > button > svg, .skFold[data-link] > header > button > b, .skCallout > b, .skMarketCard, .skLink, .skDismiss, .skIconButton, .skListItem, .skRow, .skRowText, .skIcon { transition: none; }
   .skIconButton[data-busy] > svg, .skIconButton[data-pulse] > svg { animation: none; }
 }

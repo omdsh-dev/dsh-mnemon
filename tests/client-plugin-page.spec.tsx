@@ -281,7 +281,7 @@ describe('component regions', () => {
     const { context, registered, declare } = slots()
     declare()
     const dispose = installShippedComponentSettings(context, { scope: settingsScope<Config>({ status: 'ready', value: {}, writable: true, mode: 'host' }), t: translateZh })
-    expect(registered.map(entry => entry.options.key)).toEqual([RUNTIME_PACKAGE, MEMORY_SPACES_PACKAGE, THREE_TIER_PACKAGE])
+    expect(registered.map(entry => entry.options.key)).toEqual([RUNTIME_PACKAGE, DOCUMENTS_PACKAGE, MEMORY_SPACES_PACKAGE, THREE_TIER_PACKAGE])
     dispose()
     expect(registered).toEqual([])
     const withSkills = installShippedComponentSettings(context, {
@@ -542,7 +542,7 @@ describe('component fallback across Starter and Memory Spaces versions', () => {
       expect(spaces()[0]!.options.priority).toBe(MNEMON_COMPONENT_FALLBACK_PRIORITY)
       rendered(slots)
       expect(screen.getAllByRole('heading', { name: '记忆 Provider' })).toHaveLength(1)
-      expect(screen.getByText('Mnemon Native')).toBeTruthy()
+      expect(within(screen.getByRole('region', { name: '记忆 Provider' })).getByText('Mnemon Native')).toBeTruthy()
     })
 
     it('dsh-mnemon 0.5.31 and new Memory Spaces: Memory Spaces registers nothing, so the old built-in shows alone', async () => {

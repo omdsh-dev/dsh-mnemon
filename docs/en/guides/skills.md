@@ -8,7 +8,7 @@
 |---|---|---|
 | [The Skills page](#the-skills-page) | Manage skills, handle what self-evolution suggests, test skills, install more | **Memory System → Skills**, or its own sidebar entry |
 | [In a conversation](#in-a-conversation) | See which skills a turn used and what its review suggested | The **Turn skills** line under a finished turn |
-| [Settings](#settings) | Turn self-evolution, its parameters, the conversation line and the sidebar entry on or off | **Plugins → dsh-mnemon → Skills**, or the gear on the Skills page |
+| [Settings](#settings) | Configure self-evolution, its parameters, default models, skill directories, market sources, the conversation line and the sidebar entry | **Plugins → dsh-mnemon → Skills**, or the gear on the Skills page |
 
 A skill is a folder with a `SKILL.md`, in the [Agent Skills](https://agentskills.io/specification) format DSH reads. The page never calls a model itself, and skills reach the model only through DSH's own `skill` tool: Skills never adds anything to a turn's memory View.
 
@@ -50,7 +50,7 @@ The page follows drafts and backtests while they run, refreshes the cards again 
 
 On wide screens, the Pending and Done lists scroll independently of the selected detail. Selecting another item opens its detail at the top while keeping your place in the list. Narrow screens keep the list above the detail.
 
-**Global model** chooses the model that writes and redrafts skills; **Item model** overrides it for one suggestion. Clearing an override follows the global choice, and clearing both follows the task Agent. Automatic backtests started by draft generation use the draft's selected model. Choices survive a restart in `skills/preferences.json`; older versions ignore that optional file.
+The global draft model is configured under **Default models** in [Skills settings](#settings); **Item model** at the top of the detail overrides it for one suggestion (`Follow default` shows the active default model, and the gear beside it opens Default models in Settings). Clearing an override follows the global default, and leaving both unset follows the task Agent. Automatic backtests started by draft generation use the draft's selected model. Choices survive a restart in `skills/preferences.json`; older versions ignore that optional file.
 
 **Pending** lists what waits for you: suggestions, and drafts written for a skill directly. **Done** keeps what was adopted, dismissed, expired or invalidated. **Evidence** lists the conversations reviews read. The sparkle button, **Review now**, reviews the current conversation now instead of waiting for it to pause.
 
@@ -96,7 +96,7 @@ Reusable suggestions appear first. Pending one-off candidates are folded with an
 
 Every skill's tests in one place. The list shows the skills with cases first, each with its last score against the version DSH loads, then the skills without cases, then the skills a suggestion proposes that do not exist yet (**Not created**), which link to their suggestion.
 
-Evals has its own **Global model** and a **Selected model** override per skill. Manual backtests, including a draft's comparison with its baseline, use the skill override, then the Evals global choice, then the task Agent. The executor and judge use the same selected model.
+The global backtest model is configured under **Default models** in [Skills settings](#settings), and **Item model** at the top of the detail saves a per-skill override (with a gear shortcut to Default models). Manual backtests, including a draft's comparison with its baseline, use the skill override, then the global backtest default, then the task Agent. The executor and judge use the same selected model.
 
 - **Add case** takes a title, the task as the user would say it, optional context, and checks, each **Must** or **Should**. Cases also come from reviews and from evidence. Each case has a switch, and opens to its checks and the conversation it came from.
 - **Backtest** runs the enabled cases against the current version, or without the skill when it does not exist yet. The history keeps the newest runs, each opening to its per-case verdicts, the steps the run took and its answer.
@@ -122,7 +122,7 @@ The market reads skills from **sources**, each one way skills are already publis
 | **Catalog** | A JSON file in the market's own format, by URL or path: a team's curated list, with categories and both languages |
 
 - **Search** filters your sources and, below them, shows what skills.sh found, each with its repository and install count.
-- **Sources** lists the sources, each with its kind, skill count and freshness or its error, a switch, and **Refresh** or **Remove** in its menu. **Add a source** takes `owner/repo`, a github.com or skills.sh link, a site's address, or a JSON file's URL or path, and says what it read before anything is fetched. Pasting the same into the search box offers to add it in one click.
+- **Sources** opens the **Market sources** section in Skills settings (or the Sources dialog when mounted standalone), listing each source with its kind, skill count and status or error, a switch, **Refresh**, **Remove**, and **Add a source** for `owner/repo`, a github.com or skills.sh link, a site's address, or a JSON file's URL or path. Pasting any of those into the Market search box also offers to add it in one click.
 - **Preview** shows the `SKILL.md`, its files, license and source, and for a skill skills.sh reviewed, the **Security review** of each reviewer (pass, warning or fail, worst first).
 - **Install** writes the skill to the root you choose. Files come from the skill's own repository or site, complete, bounded in size and number, with every path kept inside the skill folder; a site's artifact must match its published SHA-256 digest. The install is recorded, so the market can offer an update, and it says when a local edit would be replaced.
 
@@ -174,6 +174,9 @@ Skills has its own page under **Plugins → dsh-mnemon**, like every component, 
 | **Backtest drafts** | On | Compare each new draft with the current version on its test cases |
 | **Automatically adopt new suggestions** | Off | Draft and adopt only new idle-review suggestions with complete non-regressing backtests; up to two rewrites |
 | **Draft generation** | 32,768 / 65,536 tokens | First attempt / one larger retry after truncation; saved with **Apply** and available with self-evolution off |
+| **Default models** | Follow task Agent | Global default models for draft generation and backtesting; apply at once |
+| **Skill directories** | `~/.dsh` / `~/.agents` | Custom user-level DSH and `.agents` home roots, with directory chooser support; saved with **Apply** |
+| **Market sources** | Built-in Featured + skills.sh | Enable, refresh, remove or add skill market registries in one place |
 | **Review parameters** | — | The thresholds above, folded, applied together with **Apply** |
 | **In the conversation** | On | Show the **Turn skills** line under each turn |
 | **Sidebar entry** | Off | Show Skills as its own sidebar entry instead of in the Memory System |

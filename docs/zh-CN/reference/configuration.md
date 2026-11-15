@@ -19,12 +19,14 @@ Web profile 的 patch 通常是 `~/.dsh/profiles/web/cordis.patch.yml`。旧宿�
 | 界面位置 | 设置 | 保存为 |
 |---|---|---|
 | 记忆组合 | 主策略；每个记忆来源与增强各一个开关；各组件声明的选项 | `memoryView.strategyTypeId` 与 `memoryView.entries.<entry>.config`；组件的开关状态由 DSH 插件管理器写为对应 Entry 的 `disabled` 行 |
+| 任务 Agent | 任务 Agent 模型 | `taskAgentModel` |
 | 存储 | 存储范围、数据目录、排除工作区、备份与迁移；Git 同步开关 | `storageScope`、`dataDir`、`excludedWorkspaces`、`syncEnabled` |
 | 界面 | 记忆系统入口、回合记忆栏、存入记忆按钮 | `displayMode`、`conversationInteraction.turnBar`、`conversationInteraction.saveAction` |
-| 运行时记忆页面 | 用户画像范围 | `runtimeUserScope` |
-| 记忆空间页面 | 记忆 Provider；Mnemon Native 嵌入（自动、Ollama 或 OpenAI 兼容） | `state/memory-providers.json` 中的 Provider 注册表；`embedding` |
-| 分层策略页面 | 任务 Agent 模型；空闲审查 | `taskAgentModel`；`idleReview` |
-| 技能管理页面 | 自进化、草案自动回测、复盘参数、对话提示、侧边栏入口 | `skills`；见[技能管理设置](#技能管理设置) |
+| 运行时记忆页面 | 用户画像范围；容量上限与维护预算 | `runtimeUserScope`、`runtimeMemory` |
+| 项目档案页面 | 活跃档案容量上限 | `documents.limitBytes` |
+| 记忆空间页面 | 记忆 Provider、Mnemon Native 嵌入、空间策略与检索/超时参数 | `state/memory-providers.json` 中的 Provider 注册表；`embedding`、`persistenceStrategy`、`defaultRecallLimit`、`recallQuality`、`timeoutMs` |
+| 分层策略页面 | 任务 Agent 模型同步视图；空闲审查 | `taskAgentModel`；`idleReview` |
+| 技能管理页面 | 自进化、默认模型、技能目录、市场来源、复盘参数、对话提示、侧边栏入口 | `skills` 与 `skills/preferences.json`；见[技能管理设置](#技能管理设置) |
 
 开关与选择器立即生效；存储目录、嵌入连接、审查参数与组件选项等需要输入的值要点击**应用**。Provider 可复用的服务字段（服务地址、凭据、可执行文件）保存在 Provider 注册表中，而不是 Mnemon 的 YAML；启用或保存 Provider 时，会把它已有的命名空间发现到**记忆空间 → 概览**，关闭时只移除这些本地映射。其他高级项需要直接修改 YAML。
 
@@ -104,7 +106,8 @@ mnemon:
 | `defaultRecallLimit` | `10` | 1–50 | 服务和 UI 默认召回条数；不同入口可能再收紧 |
 | `runtimeMemory.memoryLimitBytes` | `10240` | 1–1048576 字节 | 完整 `MEMORY.md` 投影的 UTF-8 字节上限 |
 | `runtimeMemory.userLimitBytes` | `4096` | 1–1048576 字节 | 完整 `USER.md` 投影的 UTF-8 字节上限 |
-| `runtimeMemory.maintenanceMaxTokens` | `8192` | 1–1000000 tokens | Runtime 迁移与压缩 worker 的完成 token 预算；不改变项目档案归档与元信息维护预算 |
+| `runtimeMemory.maintenanceMaxTokens` | `8192` | 128–131072 tokens | Runtime 迁移与压缩 worker 的完成 token 预算；不改变项目档案归档与元信息维护预算 |
+| `documents.limitBytes` | `10485760` | 1–104857600 字节 | 项目档案活跃副本的总 UTF-8 字节上限（默认 10 MiB） |
 | `embedding` | `{ enabled: false, endpoint: http://localhost:11434, model: nomic-embed-text, apiKey: '', protocol: auto }` | enabled + HTTP(S) endpoint + model + 可选 apiKey + protocol（auto/ollama/openai） | 开启后，Host 为每个 Mnemon CLI 子进程注入保存的 endpoint、模型、API Key 与协议覆盖；endpoint 以 `/v1` 结尾时 Mnemon 自动使用 OpenAI 兼容协议并以 Bearer 头携带 apiKey，`protocol: openai` 可对非 `/v1` 端点显式指定；关闭后不干预既有 Host 环境和 Mnemon 默认值 |
 | `memoryTopology.layers.<id>.enabled` | 三个默认层为 `true` | boolean | 旧版记忆层标记。记忆组合中 Source 的开关会打开或关闭它的 DSH Entry，并同时恢复这个标记；读不到组件时才使用它。关闭 Source 不会删除或迁移数据 |
 | `memoryTopology.layers.<id>.participation` | 每层各自的默认值 | `recall`、`write`、`projection`、`maintenance` 分别取 `off` / `manual` / `automatic` | 分层策略下每一层如何参与各类工作 |
@@ -401,6 +404,8 @@ DSH 的实时模型目录会报告各模型的输入模态，选择器为支持�
 | `skills.expiryDays` | `7` | 1–90 天 | **建议有效期**：未处理的建议超过这个时间即过期 |
 | `skills.maxPendingPerSession` | `5` | 1–20 | **单个对话待处理上限**：超出后，这段对话里置信度最低的待处理建议过期 |
 | `skills.casesPerRun` | `8` | 1–20 | **每次回测用例数**：一次自动回测最多运行的用例数 |
+| `skills.dshHome` | 未设置（`~/.dsh`） | 目录路径 | **DSH 主目录**：覆盖用户级 DSH 技能根目录（`<dshHome>/skills`）；留空恢复默认 |
+| `skills.agentsHome` | 未设置（`~/.agents`） | 目录路径 | **Agents 主目录**：覆盖用户级共享 `.agents` 根目录（`<agentsHome>/skills`）；留空恢复默认 |
 
 关闭自进化时也可以配置**草案生成**。两项预算分别明确限制每次尝试，避免隐性翻倍用户设置的上限。每份草案最多尝试两次，与原有的文件校验失败修正共用一次重试机会。只有 `max-tokens` 才可使用较大的预算；取消和其他模型错误不重试。截断结果在解析和保存前丢弃，重试使用新的任务与子代理。成功草案仍通过原有 schema、内容校验和采纳校验；默认仍须用户手动采纳，生成草案本身不会改动已安装技能。复盘、用例生成、执行和评分仍使用原有预算。
 

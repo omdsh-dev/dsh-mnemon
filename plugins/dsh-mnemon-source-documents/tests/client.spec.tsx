@@ -307,4 +307,52 @@ describe('independent Documents Source client', () => {
       expect(await screen.findByRole('button', { name: /Fast document/u })).not.toBeNull()
     } finally { cleanup(); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
   })
+
+  it('renders a calm loading state without flashing EmptyState or exposing stale edit actions while switching documents', async () => {
+    const records: Array<DocumentView & { healthy: boolean; excerpt: string }> = [
+      {
+        id: 'doc-a', title: 'Document Alpha', description: 'First document', content: 'Alpha body text', healthy: true, excerpt: '',
+        filename: 'alpha.md', relativePath: 'documents/alpha.md', sourcePaths: [], sessionIds: [], memoryBodyIds: [],
+        status: 'active', revision: 1, contentHash: 'hash-alpha', fileRevision: 'rev-alpha', sizeBytes: 100,
+        createdAt: '2026-08-10T08:00:00.000Z', updatedAt: '2026-09-01T08:00:00.000Z', lastAccessedAt: '2026-09-01T08:00:00.000Z',
+      },
+      {
+        id: 'doc-b', title: 'Document Beta', description: 'Second document', content: 'Beta body text', healthy: true, excerpt: '',
+        filename: 'beta.md', relativePath: 'documents/beta.md', sourcePaths: [], sessionIds: [], memoryBodyIds: [],
+        status: 'active', revision: 1, contentHash: 'hash-beta', fileRevision: 'rev-beta', sizeBytes: 120,
+        createdAt: '2026-08-05T08:00:00.000Z', updatedAt: '2026-09-01T08:00:00.000Z', lastAccessedAt: '2026-09-01T08:00:00.000Z',
+      },
+    ]
+    const snapshot: DocumentSnapshot = {
+      documents: records, workspaceRoot: '/workspace', directory: '/documents', indexPath: '/documents/index.json',
+      generatedAt: '2026-09-01T08:00:00Z', revision: 'fixture', limitBytes: 10000, activeBytes: 220, activeCount: 2, archivedCount: 0, total: 2,
+    }
+    let releaseBeta!: (view: DocumentView) => void
+    const client: DocumentsPageClient = {
+      documents: async () => snapshot,
+      document: id => id === 'doc-b'
+        ? new Promise<DocumentView>(resolve => { releaseBeta = resolve })
+        : Promise.resolve(records[0]!),
+      searchDocuments: vi.fn(),
+      mutateDocument: vi.fn(),
+      archiveDocument: vi.fn(),
+      deleteDocument: vi.fn(),
+    }
+    render(<MemorySourcePageFrame locale="en"><DocumentsPage client={client} revision={0} writeEnabled onMutate={() => {}} /></MemorySourcePageFrame>)
+    const reader = await screen.findByLabelText(t('documents.reader'))
+    expect(await within(reader).findByRole('heading', { name: 'Document Alpha' })).not.toBeNull()
+    expect(within(reader).getByText('Alpha body text')).not.toBeNull()
+
+    fireEvent.click(within(screen.getByLabelText(t('documents.list'))).getByRole('button', { name: /Document Beta/u }))
+    // While Document Beta is in flight, neither EmptyState ("Select a document") nor stale Document Alpha actions appear.
+    expect(within(reader).queryByRole('heading', { name: t('documents.selectTitle') })).toBeNull()
+    expect(within(reader).queryByText('Alpha body text')).toBeNull()
+    expect(within(reader).queryByRole('button', { name: t('documents.edit') })).toBeNull()
+    expect(within(reader).getByRole('status', { name: t('common.loading') })).not.toBeNull()
+
+    releaseBeta(records[1]!)
+    expect(await within(reader).findByRole('heading', { name: 'Document Beta' })).not.toBeNull()
+    expect(within(reader).getByText('Beta body text')).not.toBeNull()
+    expect(within(reader).queryByRole('status', { name: t('common.loading') })).toBeNull()
+  })
 })

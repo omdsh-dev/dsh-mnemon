@@ -1,6 +1,7 @@
-import { css, useT } from './presentation.ts'
+import { css, SafeReveal, useT } from './presentation.ts'
 import type { JSX } from 'react'
 import { useEffect, useId, useState, type FormEvent } from 'react'
+import { IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { CATEGORIES, type Category, type MemorySpaceView } from '../contracts.ts'
 import type { MemorySpacesPageClient } from './api.ts'
 import { message, SidebarModal, EmptyState, SelectField, TaskAgentTag, WriteReceipt } from 'dsh-mnemon/client'
@@ -58,15 +59,15 @@ export function RememberPage(props: { client: MemorySpacesPageClient; agentAvail
       <div className={css.candidateHeading}><label htmlFor={candidateId}>{t('remember.candidate')}</label><TaskAgentTag available={props.agentAvailable} /></div>
       <textarea id={candidateId} value={content} onChange={event => setContent(event.target.value)} maxLength={8000} rows={8} placeholder={t('remember.placeholder')} />
       {!props.agentAvailable && <p className={css.sessionHint}>{t('remember.taskAgentHint')}</p>}
-      {outcome !== null && <WriteReceipt action={outcome.action} summary={outcome.summary} error={outcome.error} unembedded={outcome.unembedded} embeddingManaged={outcome.embeddingManaged} onView={props.onView} />}
+      <SafeReveal>{outcome !== null ? <WriteReceipt action={outcome.action} summary={outcome.summary} error={outcome.error} unembedded={outcome.unembedded} embeddingManaged={outcome.embeddingManaged} onView={props.onView} /> : null}</SafeReveal>
     </form>
     <details className={css.advancedWrite}>
-      <summary><span><strong>{t('remember.advanced')}</strong><small>{t('remember.advancedHint')}</small></span><span>{t('remember.expand')}</span></summary>
+      <summary><span><strong>{t('remember.advanced')}</strong><small>{t('remember.advancedHint')}</small></span><span className={css.advancedWriteIndicator}><span className={css.advancedWriteToggleText}>{t('remember.expand')}</span><IconChevronDownOutlineRegular className={css.advancedWriteChevron} size={14} /></span></summary>
       <form className={css.manualForm} onSubmit={event => void manualSave(event)}>
         <div className={css.formGrid}>
           <div className={css.fieldWide}>
             <SelectField label={t('remember.target')} value={memoryBodyId} options={props.memoryBodies.map(body => ({ value: body.id, label: `${body.name} · ${body.provider.label}${body.active ? ` · ${t('common.active')}` : ''}` }))} onChange={setMemoryBodyId} />
-            {selectedMemoryBody?.provider.capabilities.writeMode === 'async-extracting' && <small className={css.providerWriteHint}>{t('remember.asyncProviderHint')}</small>}
+            <SafeReveal>{selectedMemoryBody?.provider.capabilities.writeMode === 'async-extracting' ? <small className={css.providerWriteHint}>{t('remember.asyncProviderHint')}</small> : null}</SafeReveal>
           </div>
           <SelectField label={t('common.category')} value={category} options={CATEGORIES.map(value => ({ value, label: categoryLabel(t, value) }))} onChange={setCategory} />
           <SelectField label={t('common.importanceLabel')} value={String(importance)} options={[1, 2, 3, 4, 5].map(value => ({ value: String(value), label: `${value} / 5` }))} onChange={value => setImportance(Number(value))} />

@@ -21,6 +21,7 @@
   font: inherit;
   font-size: 12px;
   line-height: 18px;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 .bar:hover {
   background: var(--dsw-alias-interactive-bg-hover);
@@ -91,6 +92,7 @@
   gap: 3px;
   border: none;
   border-radius: 999px;
+  corner-shape: round;
   padding: 1px 8px;
   cursor: pointer;
   background: var(--dsw-alias-bg-module-platform);
@@ -100,6 +102,7 @@
   font-weight: 500;
   line-height: 17px;
   white-space: nowrap;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 
 .toolCount {
@@ -140,6 +143,7 @@
   font-size: 12px;
   line-height: 19px;
   text-align: left;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 .item:hover {
   background: var(--dsw-alias-interactive-bg-hover);
@@ -185,5 +189,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .chevron { transition: none; }
+  .bar, .chevron, .toolChip, .item { transition: none; }
 }

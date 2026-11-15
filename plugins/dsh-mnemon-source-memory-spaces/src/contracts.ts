@@ -16,6 +16,10 @@ export type MemoryProviderId = string
  */
 export const NATIVE_PROVIDER_ID = 'mnemon-native'
 
+export const DEFAULT_TIMEOUT_MS = 10_000
+export const DEFAULT_RECALL_LIMIT = 10
+export const DEFAULT_RECALL_QUALITY_POLICY = 'strict-v1'
+
 /** Whether a Provider is Mnemon Native: by its implementation type, else by its id. */
 export function isNativeProvider(provider: { readonly id: MemoryProviderId; readonly typeId?: string | undefined }): boolean {
   return (provider.typeId ?? provider.id) === NATIVE_PROVIDER_ID
@@ -836,6 +840,8 @@ export type UpdateMemoryBodyRequest = UpdateMemorySpaceRequest
 export type MemoryBody = MemorySpace
 /** @deprecated Use MemorySpaceCatalog. The wire shape is unchanged. */
 export type MemoryBodyCatalog = MemorySpaceCatalog
+/** Alias for the `body-directory` operation payload returned to settings and Source clients. */
+export type MemoryBodyDirectory = MemorySpaceCatalog
 /** @deprecated Use MemorySpaceMetadataMaintenanceResult. The wire shape is unchanged. */
 export type MemoryBodyMetadataMaintenanceResult = MemorySpaceMetadataMaintenanceResult
 /** @deprecated Use MemorySpaceMetadataSample. The wire shape is unchanged. */

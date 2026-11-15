@@ -16,7 +16,8 @@ const { artifact } = vi.hoisted(() => ({ artifact: async () => {
     '@deepseek-ai/dsh-client-ui-primitives': await vi.importActual('@deepseek-ai/dsh-client-ui-primitives'),
   })
 } }))
-vi.mock('dsh-mnemon/client', artifact)
+// New surfaces explicitly opt into the capability; legacy cases below omit it.
+vi.mock('dsh-mnemon/client', async () => ({ ...await artifact(), supportsMemoryComponentSettingsSection: () => true }))
 afterEach(cleanup)
 
 import { MemorySourcePageFrame, translateEn as coreEn, translateZh as coreZh } from 'dsh-mnemon/client'
@@ -60,7 +61,7 @@ function host(value: Record<string, unknown>, operations: Partial<Record<'read' 
   }
   return { lent, set, changed }
 }
-const settings = (lent: MemoryComponentHost, enabled = true) => <MemorySpacesSettings component={{ packageName: 'dsh-mnemon-source-memory-spaces', label: 'Memory Spaces', enabled }} writable language="en" host={lent} />
+const settings = (lent: MemoryComponentHost, enabled = true, section?: string) => <MemorySpacesSettings component={{ packageName: 'dsh-mnemon-source-memory-spaces', label: 'Memory Spaces', enabled }} writable language="en" host={lent} {...(section === undefined ? {} : { section })} />
 
 describe('one Provider field, drawn as each place draws it', () => {
   it('shows a saved credential on the configuration page as a mask that what is typed replaces', () => {
@@ -236,6 +237,45 @@ describe('registering its own settings', () => {
       vi.resetModules()
     }
   })
+
+  it('keeps embedding usable and hides unlent policy/recall settings when Core lacks migrated sections', async () => {
+    vi.doMock('dsh-mnemon/client', async () => ({
+      ...await artifact(),
+      AdvancedSection: undefined,
+      SelectRow: undefined,
+      SettingRow: undefined,
+      SettingSelect: undefined,
+      supportsMemoryComponentSettingsSection: undefined,
+    }))
+    vi.resetModules()
+    try {
+      const { MemorySpacesSettings: StandaloneSettings } = await import('../src/client/settings.tsx')
+      const read = async (operation: string) => operation === 'provider-services' ? { providers: [], items: [], generatedAt: 'now' } : { commandFound: true }
+      const { lent, set } = host({ storageScope: 'global', embedding: { enabled: true, endpoint: 'https://embedding.example.test/v1', model: 'original', protocol: 'openai' } }, { read })
+      const { container } = render(
+        <StandaloneSettings component={{ packageName: 'dsh-mnemon-source-memory-spaces', label: 'Memory Spaces', enabled: true }} writable language="en" host={lent} />,
+      )
+
+      expect(container.querySelector('[data-settings-section="policy"]')).toBeNull()
+      expect(container.querySelector('[data-settings-section="recall"]')).toBeNull()
+      expect(container.querySelector('[data-settings-section="providers"]')).not.toBeNull()
+      // The old host lends only embedding for writes, not the newly migrated fields.
+      const save = set.getMockImplementation()!
+      set.mockImplementation(async (key, value) => {
+        if (key !== 'embedding') throw new Error(`Core does not lend ${key}`)
+        await save(key, value)
+      })
+      fireEvent.change(screen.getByLabelText(t('config.embeddingEndpoint')), { target: { value: 'https://embedding.example.test/v1' } })
+      fireEvent.change(screen.getByLabelText(t('config.embeddingModel')), { target: { value: 'fixture' } })
+      fireEvent.click(screen.getByRole('button', { name: t('options.apply') }))
+      await waitFor(() => expect(set).toHaveBeenCalledWith('embedding', expect.objectContaining({ model: 'fixture' })))
+      expect(set).toHaveBeenCalledOnce()
+      expect(lent.configuration.getSnapshot().value).toMatchObject({ storageScope: 'global', embedding: { model: 'fixture' } })
+    } finally {
+      vi.doMock('dsh-mnemon/client', artifact)
+      vi.resetModules()
+    }
+  })
 })
 
 
@@ -320,5 +360,164 @@ describe('write-only embedding credentials', () => {
     expect(read).not.toHaveBeenCalledWith('status-summary')
     expect(read).not.toHaveBeenCalledWith('provider-services')
     expect(screen.queryByText(t('config.embeddingNotTested'))).toBeNull()
+  })
+})
+
+describe('Space policy, Recall & timeouts, and locale parity', { timeout: 20_000 }, () => {
+  it('renders providers, policy, and recall sections and saves Space policy with native fallback when body-directory is absent', async () => {
+    const { lent, set, changed } = host({ storageScope: 'global' })
+    const { container } = render(settings(lent))
+
+    expect(container.querySelector('[data-settings-section="providers"]')).not.toBeNull()
+    const policySection = container.querySelector('[data-settings-section="policy"]') as HTMLElement | null
+    const recallSection = container.querySelector('[data-settings-section="recall"]') as HTMLElement | null
+    expect(policySection).not.toBeNull()
+    expect(policySection!.hasAttribute('data-open')).toBe(false)
+    expect(policySection!.querySelectorAll('input, select, textarea, button:not([data-disclosure-open])')).toHaveLength(0)
+    expect(recallSection).not.toBeNull()
+    expect(recallSection!.hasAttribute('data-open')).toBe(false)
+    expect(recallSection!.querySelectorAll('input, select, textarea, button:not([data-disclosure-open])')).toHaveLength(0)
+
+    fireEvent.click(within(policySection!).getByRole('button', { name: new RegExp(t('config.policyTitle'), 'u') }))
+    expect(policySection!.hasAttribute('data-open')).toBe(true)
+    fireEvent.click(within(policySection!).getByRole('radio', { name: /Smart selection/u }))
+    fireEvent.change(within(policySection!).getByRole('textbox', { name: t('overview.placementPrompt') }), {
+      target: { value: 'Prefer local relational memory.' },
+    })
+    fireEvent.click(within(policySection!).getByRole('button', { name: t('options.apply') }))
+
+    await waitFor(() => expect(set).toHaveBeenCalledWith('persistenceStrategy', {
+      mode: 'automatic',
+      providerId: 'mnemon-native',
+      prompt: 'Prefer local relational memory.',
+      rules: {
+        allowedProviderIds: ['mnemon-native'],
+        dataBoundary: 'allow-remote',
+        requiredCapabilities: [],
+        preference: 'balanced',
+      },
+      providerConnections: {},
+    }))
+    expect(changed).toHaveBeenCalledOnce()
+  })
+
+  it('loads provider-services descriptors into Space policy, validates required memory fields and local-only boundaries, and saves persistenceStrategy', async () => {
+    const read = vi.fn(async (operation: string) => {
+      if (operation === 'provider-services') return { providers: [openviking], items: [{ providerId: 'openviking', enabled: true, configured: true, settings: { endpoint: 'http://127.0.0.1:1933' }, configuredSecrets: [] }], generatedAt: 'now' }
+      if (operation === 'status-summary') return { commandFound: true }
+      throw new Error(`unexpected read ${operation}`)
+    })
+    const { lent, set, changed } = host({ storageScope: 'global' }, { read })
+    const { container } = render(settings(lent, true, 'policy'))
+    const policySection = container.querySelector('[data-settings-section="policy"]') as HTMLElement
+    expect(policySection.hasAttribute('data-open')).toBe(true)
+
+    await waitFor(() => expect(read).toHaveBeenCalledWith('provider-services'))
+    fireEvent.click(within(policySection).getByLabelText(/Smart selection/u))
+    const openVikingCheckbox = await within(policySection).findByLabelText(/OpenViking/u) as HTMLInputElement
+    fireEvent.click(openVikingCheckbox)
+    expect(openVikingCheckbox.checked).toBe(true)
+
+    fireEvent.change(within(policySection).getByLabelText(t('overview.placementPrompt')), {
+      target: { value: 'Team knowledge; prefer shared after exact writes.' },
+    })
+    fireEvent.click(within(policySection).getByRole('button', { name: new RegExp(`^${t('overview.preference')}`, 'u') }))
+    fireEvent.click(screen.getByText(t('overview.preferenceShared')))
+    fireEvent.click(within(policySection).getByLabelText(t('overview.capability.exact-write')))
+
+    const targetUriInput = within(policySection).getByLabelText(t('overview.providerTargetUri'))
+    fireEvent.change(targetUriInput, { target: { value: '' } })
+    const applyButton = within(policySection).getByText(t('options.apply')).closest('button') as HTMLButtonElement
+    expect(applyButton.disabled).toBe(true)
+    expect(policySection.querySelector('[role="alert"]')?.textContent).toBe(t('config.policyConnectionIncomplete'))
+
+    fireEvent.change(targetUriInput, { target: { value: 'viking://user/team/memories' } })
+    expect(applyButton.disabled).toBe(false)
+    fireEvent.click(applyButton)
+
+    await waitFor(() => expect(set).toHaveBeenCalledWith('persistenceStrategy', {
+      mode: 'automatic',
+      providerId: 'mnemon-native',
+      prompt: 'Team knowledge; prefer shared after exact writes.',
+      rules: {
+        allowedProviderIds: ['mnemon-native', 'openviking'],
+        dataBoundary: 'allow-remote',
+        requiredCapabilities: ['exact-write'],
+        preference: 'shared-first',
+      },
+      providerConnections: {
+        openviking: expect.objectContaining({ targetUri: 'viking://user/team/memories' }),
+      },
+    }))
+    expect(changed).toHaveBeenCalledOnce()
+
+    // Enforcing local-only disables remote candidates and removes them from allowedProviderIds.
+    fireEvent.click(within(policySection).getByRole('button', { name: new RegExp(`^${t('overview.dataBoundary')}`, 'u') }))
+    fireEvent.click(screen.getByText(t('overview.dataBoundaryLocal')))
+    const updatedOpenViking = within(policySection).getByLabelText(/OpenViking/u) as HTMLInputElement
+    expect(updatedOpenViking.disabled).toBe(true)
+    expect(updatedOpenViking.checked).toBe(false)
+  })
+
+  it('auto-expands Recall & timeouts on section="recall", validates bounds, and preserves numeric recallQuality fields', async () => {
+    const read = async (operation: string) => {
+      if (operation === 'provider-services') return { providers: [], items: [], generatedAt: 'now' }
+      if (operation === 'status-summary') return { commandFound: true }
+      throw new Error(`unexpected read ${operation}`)
+    }
+    const { lent, set, changed } = host({
+      storageScope: 'global',
+      recallQuality: { policy: 'strict-v1', minFinalScore: 0.42, fallbackTopK: 3 },
+    }, { read })
+    const { container } = render(settings(lent, true, 'recall'))
+    const recallSection = container.querySelector('[data-settings-section="recall"]') as HTMLElement
+    expect(recallSection.hasAttribute('data-open')).toBe(true)
+    expect(within(recallSection).getByRole('button', { name: t('config.recallTitle') }).getAttribute('aria-expanded')).toBe('true')
+
+    const limitInput = within(recallSection).getByLabelText(t('config.defaultRecallLimit')) as HTMLInputElement
+    const timeoutInput = within(recallSection).getByLabelText(t('config.timeoutMs')) as HTMLInputElement
+    expect(limitInput.value).toBe('10')
+    expect(timeoutInput.value).toBe('10000')
+
+    fireEvent.change(limitInput, { target: { value: '0' } })
+    expect((within(recallSection).getByRole('button', { name: t('options.apply') }) as HTMLButtonElement).disabled).toBe(true)
+    expect(within(recallSection).getByRole('alert').textContent).toBe(t('config.defaultRecallLimitInvalid'))
+    fireEvent.change(limitInput, { target: { value: '51' } })
+    expect((within(recallSection).getByRole('button', { name: t('options.apply') }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.change(limitInput, { target: { value: '24' } })
+
+    fireEvent.change(timeoutInput, { target: { value: '99' } })
+    expect((within(recallSection).getByRole('button', { name: t('options.apply') }) as HTMLButtonElement).disabled).toBe(true)
+    expect(within(recallSection).getByRole('alert').textContent).toBe(t('config.timeoutMsInvalid'))
+    fireEvent.change(timeoutInput, { target: { value: '25000' } })
+
+    fireEvent.click(within(recallSection).getByRole('button', { name: new RegExp(`^${t('config.recallQualityPolicy')}`, 'u') }))
+    fireEvent.click(screen.getByRole('menuitem', { name: new RegExp(t('config.recallPolicy.balanced-v1').replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u') }))
+
+    const applyButton = within(recallSection).getByRole('button', { name: t('options.apply') }) as HTMLButtonElement
+    expect(applyButton.disabled).toBe(false)
+    fireEvent.click(applyButton)
+
+    await waitFor(() => expect(set).toHaveBeenCalledWith('defaultRecallLimit', 24))
+    expect(set).toHaveBeenCalledWith('recallQuality', { policy: 'balanced-v1', minFinalScore: 0.42, fallbackTopK: 3 })
+    expect(set).toHaveBeenCalledWith('timeoutMs', 25000)
+    expect(changed).toHaveBeenCalledOnce()
+  })
+
+  it('maintains 100% key parity and zero emoji characters across en and zh locales', () => {
+    const enKeys = Object.keys(copy.en).sort()
+    const zhKeys = Object.keys(copy.zh).sort()
+    expect(enKeys).toEqual(zhKeys)
+    const emojiPattern = /\p{Extended_Pictographic}/u
+    for (const [key, value] of Object.entries(copy.en)) {
+      expect(typeof value, `en.${key}`).toBe('string')
+      expect(value.length, `en.${key}`).toBeGreaterThan(0)
+      expect(emojiPattern.test(value), `emoji in en.${key}`).toBe(false)
+    }
+    for (const [key, value] of Object.entries(copy.zh)) {
+      expect(typeof value, `zh.${key}`).toBe('string')
+      expect(value.length, `zh.${key}`).toBeGreaterThan(0)
+      expect(emojiPattern.test(value), `emoji in zh.${key}`).toBe(false)
+    }
   })
 })

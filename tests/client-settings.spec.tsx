@@ -7,12 +7,16 @@ import { base64FromBytes, bytesFromBase64 } from '../src/client/MnemonPackSectio
 import { MnemonSaveAction } from '../src/client/MnemonSaveAction.tsx'
 import { MnemonStorageSection, type MnemonStorageSectionProps } from '../src/client/MnemonStorageSection.tsx'
 import { MnemonWorkbench } from '../src/client/MnemonWorkbench.tsx'
+import { MnemonActionSeat } from '../src/client/action-seat.ts'
 import { directoryPicker } from '../src/client/picker.ts'
 import { MnemonChangeSignal } from '../src/client/change-signal.ts'
 import { MnemonComponentListSeat } from '../src/client/component-list-seat.ts'
 import { MemorySpacesSettings } from 'dsh-mnemon-source-memory-spaces/client'
+import { supportsMemoryComponentSettingsSection } from '../src/client/extension-sdk.ts'
 import { createComponentHosts, type ComponentHosts } from '../src/client/component-host.ts'
-import { MEMORY_SPACES_PACKAGE, RUNTIME_PACKAGE, RuntimeSettings, THREE_TIER_PACKAGE, ThreeTierSettings } from '../src/client/component-settings.tsx'
+import { requestComponentPage, takeComponentPage, takeComponentPageRequest } from '../src/client/component-page-request.ts'
+import { DOCUMENTS_PACKAGE, DocumentsSettings, MEMORY_SPACES_PACKAGE, RUNTIME_PACKAGE, RuntimeSettings, THREE_TIER_PACKAGE, ThreeTierSettings } from '../src/client/component-settings.tsx'
+import { MNEMON_SOURCE_PAGE_SLOT, type MemorySourcePageProps } from '../src/client/source-pages.tsx'
 import { translateEn, translateZh, type MnemonTranslate } from '../src/client/locales.ts'
 import type { ClientConnectionHandle, ClientSettingsScope } from "../src/host/dsh.ts"
 import type { Config } from "../src/host/config.ts"
@@ -137,8 +141,10 @@ describe('MnemonSettingsCard', () => {
     choose('Agent Teams 兼容模式', '受限任务 Agent 审查')
     await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['idleReview'], value: { agentTeams: 'scoped' } }]))
     expect(selector('Agent Teams 兼容模式').textContent).toBe('受限任务 Agent 审查')
-    // The limits are typed: Apply appears once one changes and refuses what the Host would.
+    // The limits are typed inside their collapsed disclosure: Apply appears once one changes and refuses what the Host would.
     expect(screen.queryByRole('button', { name: '应用' })).toBeNull()
+    expect(screen.queryByRole('spinbutton', { name: '最小审查间隔（秒）' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '审查参数' }))
     expect((screen.getByRole('spinbutton', { name: '最小审查间隔（秒）' }) as HTMLInputElement).value).toBe('300')
     fireEvent.change(screen.getByRole('spinbutton', { name: '每会话最多尝试次数' }), { target: { value: '-1' } })
     expect(screen.getByRole('alert').textContent).toBe('每会话最多尝试次数需在 0–200 之间')
@@ -651,7 +657,9 @@ describe('MnemonSettingsCard', () => {
       args: { endpoint: 'task-agent-models', payload: { includeCatalog: false } },
     }))
     expect(selector('存储范围').disabled).toBe(false)
-    expect(selector('任务 Agent 模型').disabled).toBe(false)
+    const taskAgentSelectors = screen.getAllByRole('button', { name: /^任务 Agent 模型 /u }) as HTMLButtonElement[]
+    expect(taskAgentSelectors).toHaveLength(2)
+    for (const item of taskAgentSelectors) expect(item.disabled).toBe(false)
     expect(screen.queryByText('当前部署的插件设置为只读。')).toBeNull()
     await waitFor(() => expect(call.mock.calls.some(([, remoteEndpoint, args]) => remoteEndpoint === 'dshMnemon/read' && (args as { args: { endpoint: string } }).args.endpoint === 'provider-services')).toBe(true))
     expect(call.mock.calls.some(([, remoteEndpoint, args]) => remoteEndpoint === 'dshMnemon/pack' && (args as { args: { endpoint: string } }).args.endpoint === 'target')).toBe(true)
@@ -1912,5 +1920,318 @@ describe('settings scope this-binding', () => {
   it('renders MnemonSaveAction with a this-bound settings scope (real Host shape)', () => {
     render(<MnemonSaveAction messageId="message-1" connection={rejectingConnection} settingsScope={new ThisBoundSettingsScope()} localeRuntime={locale as never} t={key => key} />)
     expect(screen.getByLabelText('saveAction.button')).toBeTruthy()
+  })
+})
+
+describe('Phase 1 converged settings, deep-linking, and lent component host', () => {
+  it('promotes global taskAgentModel to a top-level MnemonSettingsCard section between CompositionBoard and Storage', async () => {
+    const mutate = vi.fn(async () => {})
+    const scope = liveSettingsScope<Config>(readySnapshot({ storageScope: 'global' }), mutate)
+    const call = vi.fn(async (channel: string, endpoint: string) => {
+      if (channel === '/dsh-mnemon-read' && endpoint === 'task-agent-models') {
+        return { ok: true as const, value: conversationDirectory }
+      }
+      if (channel === '/dsh-mnemon-read' && endpoint === 'memory-system') {
+        return { ok: true as const, value: { serving: true, evaluation: { state: 'ready', contributionRevision: 1, sourceInstanceKeys: [], diagnostics: [] }, sources: [], configuration: { id: 'default-three-tier', strategyId: 'default-three-tier', layers: {} } } }
+      }
+      if (channel === '/dsh-mnemon-view' && endpoint === 'dashboard') {
+        return { ok: true as const, value: { revision: 'v1', writable: true, strategyTypeId: 'default-three-tier', currentUnavailable: 'no-session', sources: [], diagnostics: [], pluginInstallation: { supported: false, reason: 'loader-unavailable', suggestions: [] }, entries: [] } }
+      }
+      if (channel === '/dsh-mnemon-pack' && endpoint === 'target') {
+        return { ok: true as const, value: { root: '/fixture/.mnemon', scope: 'global' } }
+      }
+      return { ok: true as const, value: { enabled: false, configured: false, config: {}, git: { available: true }, remote: { reachable: false, branchExists: false } } }
+    })
+    render(<MnemonSettingsCard scope={scope} connection={{ rpc: { call }, isLoopback: true } as unknown as ClientConnectionHandle} t={translateEn} />)
+
+    const taskAgentSection = document.querySelector('section[data-settings-section="task-agent"]') as HTMLElement
+    expect(taskAgentSection).not.toBeNull()
+    const storageSection = document.getElementById('mnemon-storage-heading')!.closest('section')!
+    expect(taskAgentSection.compareDocumentPosition(storageSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    choose('Task Agent model', 'Custom', taskAgentSection)
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([
+      { op: 'set', path: ['taskAgentModel'], value: { mode: 'fixed', provider: 'deepseek', model: 'deepseek-chat' } },
+    ]))
+  })
+
+  it('deep-links into a component settings section, auto-expands its disclosure, and scrolls it into view', async () => {
+    requestComponentPage('pkg-a', 'sec-1')
+    expect(takeComponentPageRequest()).toEqual({ packageName: 'pkg-a', section: 'sec-1' })
+    expect(takeComponentPageRequest()).toBeUndefined()
+    requestComponentPage('pkg-b')
+    expect(takeComponentPage()).toBe('pkg-b')
+
+    const scope = liveSettingsScope<Config>(readySnapshot({ storageScope: 'global' }))
+    const scrollIntoView = vi.fn()
+    const originalScrollIntoView = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = scrollIntoView
+    try {
+      const participation = { recall: 'automatic', write: 'automatic', projection: 'automatic', maintenance: 'automatic' } as const
+      const dashboard: MemoryViewDashboard = {
+        revision: 'view-1', writable: true, strategyTypeId: 'default-three-tier', currentUnavailable: 'no-session', sources: [], diagnostics: [],
+        pluginInstallation: { supported: false, reason: 'loader-unavailable', suggestions: [] },
+        entries: [
+          {
+            entryId: 'mnemon-strategy-default-three-tier', packageName: THREE_TIER_PACKAGE, roles: ['strategy'], typeId: 'default-three-tier',
+            label: { en: 'Three-tier Memory', 'zh-CN': '分层记忆' }, description: { en: '', 'zh-CN': '' },
+            fields: [], provides: [], requires: [], requiredBy: [], enabled: true, active: true, writable: true, config: {},
+          },
+          {
+            entryId: 'mnemon-source-runtime', packageName: RUNTIME_PACKAGE, roles: ['source'], typeId: 'runtime',
+            label: { en: 'Runtime Memory', 'zh-CN': '运行时记忆' }, description: { en: '', 'zh-CN': '' },
+            fields: [], provides: [], requires: [], requiredBy: [], enabled: true, active: true, writable: true, config: {},
+          },
+        ],
+      }
+      const call = vi.fn(async (channel: string, endpoint: string) => {
+        if (channel === '/dsh-mnemon-read' && endpoint === 'memory-system') {
+          return { ok: true as const, value: { serving: true, evaluation: { state: 'ready', contributionRevision: 1, sourceInstanceKeys: [], diagnostics: [] }, sources: [], configuration: { id: 'default-three-tier', strategyId: 'default-three-tier', layers: { runtime: { enabled: true, participation, adapterIds: [] } } } } }
+        }
+        if (channel === '/dsh-mnemon-view' && endpoint === 'dashboard') return { ok: true as const, value: dashboard }
+        if (channel === '/dsh-mnemon-read' && endpoint === 'task-agent-models') return { ok: true as const, value: { groups: [], failures: [] } }
+        if (channel === '/dsh-mnemon-pack' && endpoint === 'target') return { ok: true as const, value: { root: '/root/.mnemon', scope: 'global' as const } }
+        return { ok: true as const, value: { enabled: false, configured: false, config: {}, git: { available: true }, remote: { reachable: false, branchExists: false } } }
+      })
+      requestComponentPage(RUNTIME_PACKAGE, 'maintenance')
+      render(<MnemonSettingsCard
+        scope={scope}
+        connection={{ rpc: { call }, isLoopback: true } as unknown as ClientConnectionHandle}
+        language="en"
+        t={translateEn}
+        componentSettings={{
+          has: pkg => pkg === RUNTIME_PACKAGE,
+          render: (entry, current) => <RuntimeSettings
+            scope={scope}
+            t={translateEn}
+            page={{ component: { packageName: entry.packageName, label: current.label, enabled: current.enabled }, writable: current.writable, language: current.language, ...(current.section === undefined ? {} : { section: current.section }) }}
+          />,
+        }}
+      />)
+
+      const dialog = await screen.findByRole('dialog', { name: 'Runtime Memory' })
+      const toggle = within(dialog).getByRole('button', { name: translateEn('config.runtimeAdvanced') })
+      expect(toggle.getAttribute('aria-expanded')).toBe('true')
+      const maintenanceInput = await within(dialog).findByLabelText(translateEn('config.runtime.maintenanceMaxTokens')) as HTMLInputElement
+      expect(maintenanceInput.value).toBe('8192')
+      await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' }))
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView
+    }
+  })
+
+  it('stages DocumentsSettings limitBytes, validates bounds, and re-reads data views when documents config changes', async () => {
+    const writes = vi.fn(async () => {})
+    const scope = liveSettingsScope<Config>(readySnapshot({}), writes)
+    render(<DocumentsSettings scope={scope} page={page(DOCUMENTS_PACKAGE, { language: 'en' })} t={translateEn} />)
+
+    const limitInput = screen.getByLabelText(translateEn('config.documents.limitBytes')) as HTMLInputElement
+    expect(limitInput.value).toBe('10485760')
+    expect(screen.queryByRole('button', { name: 'Apply' })).toBeNull()
+
+    fireEvent.change(limitInput, { target: { value: '0' } })
+    expect(screen.getByRole('button', { name: 'Apply' })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('alert').textContent).toBe(translateEn('config.documentsLimitInvalid', {
+      field: translateEn('config.documents.limitBytes'),
+      max: 104_857_600,
+    }))
+
+    fireEvent.change(limitInput, { target: { value: '20971520' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+    expect(limitInput.value).toBe('10485760')
+
+    fireEvent.change(limitInput, { target: { value: '20971520' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    await waitFor(() => expect(writes).toHaveBeenCalledWith([
+      { op: 'set', path: ['documents'], value: { limitBytes: 20_971_520 } },
+    ]))
+
+    cleanup()
+    const call = vi.fn(async (_channel: string, endpoint: string) => {
+      if (endpoint === 'dashboard') return { ok: true as const, value: { entries: [] } }
+      if (endpoint === 'memory-system') return { ok: true as const, value: { serving: true, state: 'ready', diagnostics: [], configuration: { layers: {} } } }
+      if (endpoint === 'target') return { ok: true as const, value: { root: '/fixture/.mnemon', scope: 'global' } }
+      return { ok: true as const, value: { items: [], groups: [], failures: [] } }
+    })
+    render(<MnemonSettingsCard scope={scope} connection={{ rpc: { call }, isLoopback: true } as unknown as ClientConnectionHandle} />)
+    await waitFor(() => expect(call.mock.calls.some(([, endpoint]) => endpoint === 'target')).toBe(true))
+    const countTargetCalls = () => call.mock.calls.filter(([, endpoint]) => endpoint === 'target').length
+    const baseline = countTargetCalls()
+    await act(async () => {
+      await scope.mutate([{ op: 'set', path: ['documents'], value: { limitBytes: 31_457_280 } }])
+    })
+    await waitFor(() => expect(countTargetCalls()).toBeGreaterThan(baseline))
+  })
+
+  it('exposes RuntimeSettings maintenanceMaxTokens inside a smooth disclosure while preserving existing runtimeMemory fields', async () => {
+    const writes = vi.fn(async () => {})
+    const scope = liveSettingsScope<Config>(readySnapshot({
+      runtimeMemory: { inheritToSubagents: true, userLimitBytes: 12_000, memoryLimitBytes: 24_000 },
+    }), writes)
+    render(runtime(scope, { language: 'en' }, translateEn))
+
+    const toggle = screen.getByRole('button', { name: translateEn('config.runtimeAdvanced') })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByLabelText(translateEn('config.runtime.maintenanceMaxTokens'))).toBeNull()
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    const tokensInput = screen.getByLabelText(translateEn('config.runtime.maintenanceMaxTokens')) as HTMLInputElement
+    expect(tokensInput.value).toBe('8192')
+
+    fireEvent.change(tokensInput, { target: { value: '64' } })
+    expect(screen.getByRole('button', { name: 'Apply' })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('alert').textContent).toBe(translateEn('config.runtimeMaintenanceInvalid', {
+      field: translateEn('config.runtime.maintenanceMaxTokens'),
+      min: 128,
+      max: 131_072,
+    }))
+
+    fireEvent.change(tokensInput, { target: { value: '16384' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
+    await waitFor(() => expect(writes).toHaveBeenCalledWith([
+      {
+        op: 'set',
+        path: ['runtimeMemory'],
+        value: {
+          inheritToSubagents: true,
+          userLimitBytes: 12_000,
+          memoryLimitBytes: 24_000,
+          maintenanceMaxTokens: 16_384,
+        },
+      },
+    ]))
+  })
+
+  it('lends persistenceStrategy, recall limits, timeoutMs, and provider-services to Memory Spaces while rejecting unlent fields', async () => {
+    expect(supportsMemoryComponentSettingsSection(MEMORY_SPACES_PACKAGE, 'policy')).toBe(true)
+    expect(supportsMemoryComponentSettingsSection(MEMORY_SPACES_PACKAGE, 'recall')).toBe(true)
+    expect(supportsMemoryComponentSettingsSection(MEMORY_SPACES_PACKAGE, 'unknown')).toBe(false)
+    expect(supportsMemoryComponentSettingsSection('unknown', 'policy')).toBe(false)
+    expect(supportsMemoryComponentSettingsSection('constructor', 'policy')).toBe(false)
+    const writes = vi.fn(async () => {})
+    const scope = liveSettingsScope<Config>(readySnapshot({
+      persistenceStrategy: { mode: 'automatic', providerId: 'mnemon-native', prompt: 'Keep team notes', rules: { allowedProviderIds: [], dataBoundary: 'local-only', requiredCapabilities: [], preference: 'balanced' }, providerConnections: { openviking: { targetUri: 'viking://team' } } },
+      defaultRecallLimit: 12,
+      recallQuality: { lowScoreThreshold: 0.35, highScoreThreshold: 0.75 },
+      timeoutMs: 15_000,
+      storageScope: 'global',
+      writeEnabled: true,
+      idleReviewMs: 60_000,
+    }), writes)
+    const call = vi.fn(async (channel: string, endpoint: string) => {
+      if (channel === '/dsh-mnemon-read' && endpoint === 'provider-services') return { ok: true as const, value: { providers: [], items: [], generatedAt: 'now' } }
+      return { ok: false as const, error: { message: 'unexpected' } }
+    })
+    const hosts = createComponentHosts({ scope, connection: { rpc: { call }, isLoopback: true } as unknown as ClientConnectionHandle })
+    const lentHost = hosts(MEMORY_SPACES_PACKAGE, 'session-a', 'workspace-a')!
+
+    expect(lentHost.configuration.getSnapshot().value).toEqual({
+      persistenceStrategy: expect.objectContaining({ mode: 'automatic', providerConnections: { openviking: { targetUri: 'viking://team' } } }),
+      defaultRecallLimit: 12,
+      recallQuality: { lowScoreThreshold: 0.35, highScoreThreshold: 0.75 },
+      timeoutMs: 15_000,
+      storageScope: 'global',
+      writeEnabled: true,
+    })
+
+    await lentHost.configuration.set('defaultRecallLimit', 20)
+    await lentHost.configuration.set('recallQuality', { lowScoreThreshold: 0.4, highScoreThreshold: 0.8 })
+    await lentHost.configuration.set('timeoutMs', 25_000)
+    expect(writes).toHaveBeenNthCalledWith(1, [{ op: 'set', path: ['defaultRecallLimit'], value: 20 }])
+    expect(writes).toHaveBeenNthCalledWith(2, [{ op: 'set', path: ['recallQuality'], value: { lowScoreThreshold: 0.4, highScoreThreshold: 0.8 } }])
+    expect(writes).toHaveBeenNthCalledWith(3, [{ op: 'set', path: ['timeoutMs'], value: 25_000 }])
+
+    await expect(lentHost.configuration.set('storageScope', 'workspace')).rejects.toThrow(/does not lend/u)
+    await expect(lentHost.operations!.read('provider-services')).resolves.toEqual({ providers: [], items: [], generatedAt: 'now' })
+    expect(call).toHaveBeenCalledWith('/dsh-mnemon-read', 'provider-services', { sessionId: 'session-a', workspaceId: 'workspace-a' })
+    await expect(lentHost.operations!.read('body-directory')).rejects.toThrow(/does not serve/u)
+    await expect(lentHost.operations!.read('memory-system')).rejects.toThrow(/does not serve/u)
+  })
+
+  it('preserves providerConnections in MnemonWorkbench Source preferences and threads section to onOpenSettings', async () => {
+    const mutate = vi.fn(async () => {})
+    const scope = liveSettingsScope<Config>(readySnapshot({
+      persistenceStrategy: {
+        mode: 'automatic',
+        providerId: 'mnemon-native',
+        prompt: 'Route durable facts',
+        rules: {
+          allowedProviderIds: ['mnemon-native'],
+          dataBoundary: 'local-only',
+          requiredCapabilities: [],
+          preference: 'balanced',
+        },
+        providerConnections: { openviking: { targetUri: 'viking://resources/shared' } },
+      },
+    }), mutate)
+    const openConfiguration = vi.fn()
+    const configurationSeat = new MnemonActionSeat()
+    configurationSeat.provide(openConfiguration)
+    let capturedProps: MemorySourcePageProps | undefined
+    const catalog = {
+      generationId: 'g1',
+      sources: [{
+        sourceInstanceKey: 'source:mnemon-source-memory-spaces',
+        sourceTypeId: 'memory-spaces',
+        role: 'durable-evidence' as const,
+        assistance: ['activation'] as const,
+        packageName: MEMORY_SPACES_PACKAGE,
+        availability: 'ready' as const,
+        revision: 'r1',
+        capabilities: ['read', 'write'] as const,
+        management: { label: 'Memory Spaces', description: '' },
+      }],
+    }
+    const entries = [{
+      id: 'memory-spaces/spaces',
+      sourceTypeId: 'memory-spaces',
+      pageId: 'spaces',
+      label: 'Memory Spaces',
+      order: 0,
+    }] as const
+    const call = vi.fn(async (_channel: string, endpoint: string) => {
+      if (endpoint === 'source-management-catalog') return { ok: true as const, value: catalog }
+      if (endpoint === 'memory-system') return { ok: true as const, value: { serving: true, evaluation: { state: 'ready', contributionRevision: 1, sourceInstanceKeys: ['source:mnemon-source-memory-spaces'], diagnostics: [] }, sources: [], configuration: { id: 'default-three-tier', strategyId: 'default-three-tier', layers: { 'memory-spaces': { enabled: true, participation: { recall: 'automatic', write: 'automatic', projection: 'automatic', maintenance: 'automatic' }, adapterIds: [] } } } } }
+      return { ok: true as const, value: { healthy: true, writeEnabled: true, memoryBodies: [], providerServices: [], stats: { totalInsights: 0, deletedInsights: 0, edgeCount: 0, oplogCount: 0, dbSizeBytes: 0, byCategory: {}, topEntities: [] } } }
+    })
+
+    takeComponentPageRequest()
+    render(<MnemonWorkbench
+      connection={{ rpc: { call }, isLoopback: true } as unknown as ClientConnectionHandle}
+      settingsScope={scope}
+      configuration={configurationSeat}
+      sourcePageDirectory={{ getSnapshot: () => entries, subscribe: () => () => {} }}
+      renderSlot={((_slot: string, props: MemorySourcePageProps) => {
+        capturedProps = props
+        return <div data-testid="captured-source-page">captured</div>
+      }) as never}
+      t={translateEn}
+    />)
+
+    fireEvent.click(await screen.findByRole('tab', { name: 'Memory Spaces' }))
+    await screen.findByTestId('captured-source-page')
+    const prefValue = capturedProps?.preferences?.value as { persistenceStrategy?: Record<string, unknown> } | undefined
+    expect(prefValue?.persistenceStrategy?.providerConnections).toEqual({
+      openviking: { targetUri: 'viking://resources/shared' },
+    })
+
+    await capturedProps!.preferences!.replace({
+      persistenceStrategy: {
+        ...(prefValue?.persistenceStrategy ?? {}),
+        prompt: 'Updated prompt',
+      },
+    } as never)
+    expect(mutate).toHaveBeenCalledWith([{
+      op: 'set',
+      path: ['persistenceStrategy'],
+      value: expect.objectContaining({
+        prompt: 'Updated prompt',
+        providerConnections: { openviking: { targetUri: 'viking://resources/shared' } },
+      }),
+    }])
+
+    capturedProps!.onOpenSettings!('policy')
+    expect(openConfiguration).toHaveBeenCalledOnce()
+    expect(takeComponentPageRequest()).toEqual({ packageName: MEMORY_SPACES_PACKAGE, section: 'policy' })
   })
 })

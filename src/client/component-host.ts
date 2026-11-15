@@ -21,11 +21,11 @@ interface Lent {
 }
 
 const LENT: Readonly<Record<string, Lent>> = {
-  // Memory Spaces' Providers and the embedding runtime only Mnemon Native reads. Where memory
-  // is stored scopes a Provider, and a read-only Mnemon takes no fill.
+  // Memory Spaces' Providers, Space policy, recall parameters and the embedding runtime only Mnemon
+  // Native reads. Where memory is stored scopes a Provider, and a read-only Mnemon takes no fill.
   'dsh-mnemon-source-memory-spaces': {
-    reads: ['embedding', 'storageScope', 'writeEnabled'],
-    owns: ['embedding'],
+    reads: ['embedding', 'persistenceStrategy', 'defaultRecallLimit', 'recallQuality', 'timeoutMs', 'storageScope', 'writeEnabled'],
+    owns: ['embedding', 'persistenceStrategy', 'defaultRecallLimit', 'recallQuality', 'timeoutMs'],
     read: ['status-summary', 'embedding-status', 'provider-services'],
     write: ['embedding-fill', 'provider-service-update'],
     // An embedding test checks the connection as it is now, so it always asks the Host.

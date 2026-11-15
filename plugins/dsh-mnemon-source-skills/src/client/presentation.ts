@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import * as mnemonClient from 'dsh-mnemon/client'
 import { memoryPageStyles, memorySidebarStyles, useLocale } from 'dsh-mnemon/client'
 import copy from '../../presentation/locales.json' with { type: 'json' }
 import page from '../../presentation/page.module.css'
@@ -8,6 +9,13 @@ export type SkillsTranslate = (key: SkillsKey, params?: Record<string, unknown>)
 
 export const css: Readonly<Record<string, string>> = { ...memoryPageStyles, ...page }
 export const sidebarCss: Readonly<Record<string, string>> = memorySidebarStyles
+
+/** Older Core versions have generic settings navigation but no model or market section. */
+export function supportsSettingsSection(section: 'models' | 'market'): boolean {
+  if (!('supportsMemoryComponentSettingsSection' in mnemonClient)) return false
+  const supports = (mnemonClient as { supportsMemoryComponentSettingsSection?: (packageName: string, section: string) => boolean }).supportsMemoryComponentSettingsSection
+  return typeof supports === 'function' && supports('dsh-mnemon-source-skills', section)
+}
 
 export function translate(locale: string): SkillsTranslate {
   const dictionary: Record<string, string> = locale.startsWith('en') ? copy.en : copy.zh

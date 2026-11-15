@@ -42,6 +42,8 @@
 
 .documentReader { padding: clamp(16px, 2vw, 24px); }
 .documentReader > .emptyState { height: 100%; border: 0; background: transparent; }
+.documentReader > .loading { display: flex; height: 100%; min-height: 240px; align-items: center; justify-content: center; gap: 8px; }
+.documentReader > .loading [class*='sectionSpinner'] { position: static; }
 .documentDetail > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: .5px solid var(--mn-line); }
 .documentDetail > header span { color: var(--mn-faint); font-size: 12px; line-height: 18px; }
 .documentDetail > header h3 { margin: 2px 0; font-size: 16px; font-weight: 500; line-height: 24px; }
@@ -107,6 +109,28 @@
 .documentEditorMeta { display: grid; grid-template-columns: .8fr 1.2fr; gap: 12px; }
 .documentEditorMeta label { margin: 0; }
 .documentEditor footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+@container mnemon-workbench (max-width: 880px) {
+  .documentWorkspace { grid-template-columns: minmax(220px, 270px) minmax(0, 1fr); }
+  .documentDetail > dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .documentDetail > dl > div + div { border-left: 0; }
+  .documentDetail > dl > div:nth-child(even) { border-left: .5px solid var(--mn-line); }
+  .documentDetail > dl > div:nth-child(n + 3) { border-top: .5px solid var(--mn-line); }
+}
+
+@container mnemon-workbench (max-width: 640px) {
+  .documentSummary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .documentCapacity { grid-column: 1 / -1; }
+  .documentToolbar { align-items: stretch; flex-direction: column; }
+  .documentToolbar form { min-width: 0; }
+  .documentToolbar > div,
+  .documentToolbar > button { width: 100%; }
+  .documentToolbar > div button { flex: 1; }
+  .documentWorkspace { min-height: 0; grid-template-columns: 1fr; }
+  .documentList { max-height: 330px; overflow: auto; -webkit-overflow-scrolling: touch; }
+  .documentReader { min-height: 430px; }
+  .documentEditorMeta { grid-template-columns: 1fr; }
+}
 
 @media (max-width: 1000px) {
   .documentWorkspace { grid-template-columns: minmax(220px, 270px) minmax(0, 1fr); }

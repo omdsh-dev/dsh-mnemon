@@ -1,8 +1,10 @@
 import { type ComponentProps, type JSX } from 'react'
-import { IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import { RUNTIME_MEMORY_LIMIT_MAX_BYTES, RUNTIME_MEMORY_LIMITS } from 'dsh-mnemon-source-runtime/contracts'
 import {
   DEFAULT_IDLE_REVIEW,
+  DEFAULT_RUNTIME_MAINTENANCE_MAX_TOKENS,
+  DOCUMENTS_DEFAULT_LIMIT_BYTES,
+  DOCUMENTS_MAX_LIMIT_BYTES,
   type ClientConnectionHandle,
   type ClientSettingsScope,
   type Config,
@@ -14,13 +16,15 @@ import { installMemoryComponentFallbackUI, installMemoryComponentUI, type Memory
 import type { MnemonTranslate } from './locales.ts'
 import { MemorySpacesSettings } from './memory-spaces-client.ts'
 import css from './MnemonSettingsCard.module.css'
-import { SelectRow, ToggleRow } from './settings-controls.tsx'
+import type { MnemonDirectoryPicker } from './picker.ts'
+import { AdvancedSection, SelectRow, ToggleRow } from './settings-controls.tsx'
 import { PanelActions, useLive, useScope, useStaged, WriteFailure } from './settings-panel.tsx'
 import { SKILLS_PACKAGE, SkillsSettings } from './skills-settings.tsx'
 import { TaskAgentModelRows, useTaskAgentModel } from './task-agent-model.tsx'
 
 /** The packages whose own settings dsh-mnemon supplies, through the same region an installed component uses. */
 export const RUNTIME_PACKAGE = 'dsh-mnemon-source-runtime'
+export const DOCUMENTS_PACKAGE = 'dsh-mnemon-source-documents'
 export const MEMORY_SPACES_PACKAGE = 'dsh-mnemon-source-memory-spaces'
 export const THREE_TIER_PACKAGE = 'dsh-mnemon-strategy-default-three-tier'
 
@@ -30,13 +34,15 @@ export interface ShippedSettingsServices {
   /** 技能管理's own group of settings. */
   skillsScope?: ClientSettingsScope<SkillsConfig>
   connection?: ClientConnectionHandle
+  directoryPicker?: MnemonDirectoryPicker
   t: MnemonTranslate
 }
 
 /**
  * Register the settings dsh-mnemon keeps for its shipped components, the way
  * an installed component registers its own: Runtime Memory carries where its
- * user profile lives and its capacities, the Layered strategy the background tasks it drives.
+ * user profile lives and its capacities, Project Documents its active capacity,
+ * and the Layered strategy the background tasks it drives.
  * Memory Spaces brings its Providers and embedding itself. Its settings show
  * here, as a fallback, whenever its own client registers none: while it is
  * off, while its client loads, if that client fails, and beside a Memory
@@ -46,9 +52,13 @@ export function installShippedComponentSettings(ctx: MemoryComponentUIContext & 
   const { locale } = ctx
   const disposers = [
     installMemoryComponentUI(ctx, { packageName: RUNTIME_PACKAGE, settings: page => <RuntimeSettings {...services} page={page} /> }),
+    installMemoryComponentUI(ctx, { packageName: DOCUMENTS_PACKAGE, settings: page => <DocumentsSettings {...services} page={page} /> }),
     installMemoryComponentFallbackUI(ctx, { packageName: MEMORY_SPACES_PACKAGE, settings: page => <MemorySpacesSettings {...page} {...(locale === undefined ? {} : { locale })} /> }),
     installMemoryComponentUI(ctx, { packageName: THREE_TIER_PACKAGE, settings: page => <ThreeTierSettings {...services} page={page} /> }),
-    ...(services.skillsScope === undefined ? [] : [installMemoryComponentUI(ctx, { packageName: SKILLS_PACKAGE, settings: page => <SkillsSettings scope={services.skillsScope!} page={page} t={services.t} /> })]),
+    ...(services.skillsScope === undefined ? [] : [installMemoryComponentUI(ctx, {
+      packageName: SKILLS_PACKAGE,
+      settings: page => <SkillsSettings scope={services.skillsScope!} page={page} connection={services.connection} directoryPicker={services.directoryPicker} t={services.t} />,
+    })]),
   ]
   return () => { for (const dispose of disposers.reverse()) dispose() }
 }
@@ -64,7 +74,22 @@ function runtimeLimitValue(text: string): number | undefined {
   return Number.isInteger(value) && value >= 1 && value <= RUNTIME_MEMORY_LIMIT_MAX_BYTES ? value : undefined
 }
 
-/** Runtime Memory's scope applies immediately; its byte limits wait for Apply. */
+const RUNTIME_MAINTENANCE_MIN_TOKENS = 128
+const RUNTIME_MAINTENANCE_MAX_TOKENS = 131_072
+
+function runtimeMaintenanceTokens(text: string): number | undefined {
+  if (text.trim() === '') return undefined
+  const value = Number(text)
+  return Number.isInteger(value) && value >= RUNTIME_MAINTENANCE_MIN_TOKENS && value <= RUNTIME_MAINTENANCE_MAX_TOKENS ? value : undefined
+}
+
+function documentsLimitValue(text: string): number | undefined {
+  if (text.trim() === '') return undefined
+  const value = Number(text)
+  return Number.isInteger(value) && value >= 1 && value <= DOCUMENTS_MAX_LIMIT_BYTES ? value : undefined
+}
+
+/** Runtime Memory's scope applies immediately; its byte limits and maintenance token ceiling wait for Apply. */
 export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryComponentSettingsProps }): JSX.Element {
   const { scope, page, t } = props
   const snapshot = useScope(scope)
@@ -85,8 +110,16 @@ export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryC
       ...configured, ...Object.fromEntries(changed.map(key => [key, runtimeLimitValue(draft[key])!])),
     } }])
   })
+  const savedMaintenance = String(configured?.maintenanceMaxTokens ?? DEFAULT_RUNTIME_MAINTENANCE_MAX_TOKENS)
+  const maintenance = useStaged({ maintenanceMaxTokens: savedMaintenance }, async draft => {
+    const next = runtimeMaintenanceTokens(draft.maintenanceMaxTokens)
+    if (next !== undefined && next !== runtimeMaintenanceTokens(savedMaintenance)) {
+      await scope.mutate([{ op: 'set', path: ['runtimeMemory'], value: { ...configured, maintenanceMaxTokens: next } }])
+    }
+  })
   const invalid = RUNTIME_LIMITS.find(key => runtimeLimitValue(limits.draft[key]) === undefined)
-  return <><section className={css.panelSection} aria-label={t('config.runtimeUserScopeTitle')}>
+  const invalidMaintenance = runtimeMaintenanceTokens(maintenance.draft.maintenanceMaxTokens) === undefined
+  return <><section className={css.panelSection} data-settings-section="user-scope" aria-label={t('config.runtimeUserScopeTitle')}>
     <div className={css.rows}>
       <SelectRow id="mnemon-runtime-user-scope" label={t('config.runtimeUserScopeTitle')} value={profile.value} disabled={disabled} onChange={profile.set} options={[
         { value: 'storage', label: t('config.runtimeUserScopeStorage'), detail: t('config.runtimeUserScopeStorageHint') },
@@ -95,14 +128,14 @@ export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryC
     </div>
     <WriteFailure error={profile.failed} t={t} />
   </section>
-  <section className={css.panelSection} aria-label={t('config.runtimeInheritance')}>
+  <section className={css.panelSection} data-settings-section="inheritance" aria-label={t('config.runtimeInheritance')}>
     <div className={css.rows}>
       <ToggleRow id="mnemon-runtime-inherit-subagents" label={t('config.runtimeInheritance')}
         hint={t('config.runtimeInheritanceHint')} checked={inheritance.value} disabled={disabled} onChange={inheritance.set} />
     </div>
     <WriteFailure error={inheritance.failed} t={t} />
   </section>
-  <section className={css.panelSection} aria-labelledby="mnemon-runtime-limits">
+  <section className={css.panelSection} data-settings-section="limits" aria-labelledby="mnemon-runtime-limits">
     <div className={css.panelHeading}>
       <h3 id="mnemon-runtime-limits">{t('config.runtimeLimitsTitle')}</h3>
       <p id="mnemon-runtime-limits-hint">{t('config.runtimeLimitsHint', { user: RUNTIME_MEMORY_LIMITS.user / 1024, memory: RUNTIME_MEMORY_LIMITS.memory / 1024 })}</p>
@@ -119,7 +152,64 @@ export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryC
       note={t('config.runtimeLimitsApply')}
       invalid={invalid === undefined ? null : t('config.runtimeLimitInvalid', { field: t(`config.runtime.${invalid}`), max: RUNTIME_MEMORY_LIMIT_MAX_BYTES })}
       onDiscard={limits.discard} onApply={() => { void limits.apply() }} />
+    <AdvancedSection title={t('config.runtimeAdvanced')} section="maintenance" activeSection={page.section}>
+      <p className={css.panelNote}>{t('config.runtimeMaintenanceHint', { defaultTokens: DEFAULT_RUNTIME_MAINTENANCE_MAX_TOKENS })}</p>
+      <div className={css.fieldGrid}>
+        <label>{t('config.runtime.maintenanceMaxTokens')}
+          <input type="number" min={RUNTIME_MAINTENANCE_MIN_TOKENS} max={RUNTIME_MAINTENANCE_MAX_TOKENS} step="1" inputMode="numeric"
+            value={maintenance.draft.maintenanceMaxTokens} disabled={disabled || maintenance.saving}
+            aria-invalid={invalidMaintenance}
+            onChange={event => maintenance.edit({ maintenanceMaxTokens: event.target.value })} />
+        </label>
+      </div>
+      <PanelActions dirty={maintenance.dirty} saving={maintenance.saving} applied={maintenance.applied} failed={maintenance.failed} disabled={disabled} t={t}
+        invalid={invalidMaintenance ? t('config.runtimeMaintenanceInvalid', {
+          field: t('config.runtime.maintenanceMaxTokens'),
+          min: RUNTIME_MAINTENANCE_MIN_TOKENS,
+          max: RUNTIME_MAINTENANCE_MAX_TOKENS,
+        }) : null}
+        onDiscard={maintenance.discard} onApply={() => { void maintenance.apply() }} />
+    </AdvancedSection>
   </section></>
+}
+
+// ---- Project Documents: active document byte capacity ----
+
+/** Project Documents' active capacity limit, staged with Apply. */
+export function DocumentsSettings(props: ShippedSettingsServices & { page: MemoryComponentSettingsProps }): JSX.Element {
+  const { scope, page, t } = props
+  const snapshot = useScope(scope)
+  const disabled = !page.writable || snapshot.status === 'loading' || !snapshot.writable
+  const configured = snapshot.value?.documents
+  const savedLimit = String(configured?.limitBytes ?? DOCUMENTS_DEFAULT_LIMIT_BYTES)
+  const capacity = useStaged({ limitBytes: savedLimit }, async draft => {
+    const next = documentsLimitValue(draft.limitBytes)
+    if (next !== undefined && next !== documentsLimitValue(savedLimit)) {
+      await scope.mutate([{ op: 'set', path: ['documents'], value: { ...configured, limitBytes: next } }])
+    }
+  })
+  const invalid = documentsLimitValue(capacity.draft.limitBytes) === undefined
+  return <section className={css.panelSection} data-settings-section="capacity" aria-labelledby="mnemon-documents-limits">
+    <div className={css.panelHeading}>
+      <h3 id="mnemon-documents-limits">{t('config.documentsLimitsTitle')}</h3>
+      <p id="mnemon-documents-limits-hint">{t('config.documentsLimitsHint', {
+        defaultMiB: DOCUMENTS_DEFAULT_LIMIT_BYTES / (1024 * 1024),
+        maxMiB: DOCUMENTS_MAX_LIMIT_BYTES / (1024 * 1024),
+      })}</p>
+    </div>
+    <div className={css.fieldGrid}>
+      <label>{t('config.documents.limitBytes')}
+        <input type="number" min="1" max={DOCUMENTS_MAX_LIMIT_BYTES} step="1" inputMode="numeric"
+          value={capacity.draft.limitBytes} disabled={disabled || capacity.saving} aria-describedby="mnemon-documents-limits-hint"
+          aria-invalid={invalid}
+          onChange={event => capacity.edit({ limitBytes: event.target.value })} />
+      </label>
+    </div>
+    <PanelActions dirty={capacity.dirty} saving={capacity.saving} applied={capacity.applied} failed={capacity.failed} disabled={disabled} t={t}
+      note={t('config.documentsLimitsApply')}
+      invalid={invalid ? t('config.documentsLimitInvalid', { field: t('config.documents.limitBytes'), max: DOCUMENTS_MAX_LIMIT_BYTES }) : null}
+      onDiscard={capacity.discard} onApply={() => { void capacity.apply() }} />
+  </section>
 }
 
 // ---- Layered strategy: the background tasks it drives ----
@@ -195,7 +285,7 @@ export function ThreeTierSettings(props: ShippedSettingsServices & { page: Memor
       <TaskAgentModelRows mode={taskAgent.choosing ? 'fixed' : taskAgent.route.mode} route={taskAgent.route} settled={taskAgent.settled} choosing={taskAgent.choosing}
         catalog={taskAgent.catalog.value} state={taskAgent.catalog.state} error={taskAgent.catalog.error} retry={taskAgent.retry}
         disabled={disabled} onMode={taskAgent.setMode} onRoute={taskAgent.setRoute} t={t} />
-      <IdleReviewRows choice={choice.value} limits={limits} disabled={disabled} onChoice={next => choice.set({ ...choice.value, ...next })} t={t} />
+      <IdleReviewRows choice={choice.value} limits={limits} disabled={disabled} activeSection={page.section} onChoice={next => choice.set({ ...choice.value, ...next })} t={t} />
     </div>
     <WriteFailure error={taskAgent.failed ?? choice.failed} t={t} />
   </section>
@@ -205,6 +295,7 @@ function IdleReviewRows(props: {
   choice: ReviewChoice
   limits: ReturnType<typeof useStaged<Record<keyof ReviewLimits, string>>>
   disabled: boolean
+  activeSection?: string | undefined
   onChoice: (next: Partial<ReviewChoice>) => void
   t: MnemonTranslate
 }): JSX.Element {
@@ -228,8 +319,7 @@ function IdleReviewRows(props: {
         { value: 'pause', label: t('config.reviewTeamPause'), detail: t('config.reviewTeamPauseHint') },
         { value: 'scoped', label: t('config.reviewTeamScoped'), detail: t('config.reviewTeamScopedHint') },
       ]} />
-      <details className={css.advanced}>
-        <summary>{t('config.reviewLimits')}<IconChevronDownOutlineRegular size={12} /></summary>
+      <AdvancedSection title={t('config.reviewLimits')} section="review-limits" activeSection={props.activeSection}>
         <div className={css.fieldGrid}>
           {LIMITS.map(limit => <label key={limit.key}>{t(`config.review.${limit.key}`)}
             <input type="number" step="1" inputMode="numeric" value={limits.draft[limit.key]} disabled={props.disabled}
@@ -240,7 +330,7 @@ function IdleReviewRows(props: {
         <PanelActions dirty={limits.dirty} saving={limits.saving} applied={limits.applied} failed={limits.failed} disabled={props.disabled} t={t}
           invalid={invalid === undefined ? null : t('config.reviewLimitInvalid', { field: t(`config.review.${invalid.key}`), min: invalid.min / invalid.scale, max: invalid.max / invalid.scale })}
           onDiscard={limits.discard} onApply={() => { void limits.apply() }} />
-      </details>
+      </AdvancedSection>
     </>}
   </>
 }

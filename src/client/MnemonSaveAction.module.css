@@ -13,14 +13,19 @@
   justify-content: center;
   border: none;
   border-radius: 28px;
+  corner-shape: round;
   padding: 6px;
   cursor: pointer;
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
+  transition: background-color 120ms ease, color 120ms ease;
 }
 .button:hover, .button[aria-expanded="true"] {
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-secondary);
+}
+.button:active {
+  background: var(--dsw-alias-interactive-bg-active);
 }
 .button:focus-visible {
   outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
@@ -55,6 +60,10 @@
 }
 
 .status {
+  display: flex;
+  min-height: 296px;
+  align-items: center;
+  justify-content: center;
   margin: 0;
   color: var(--dsw-alias-label-tertiary);
   font-size: 13px;
@@ -167,4 +176,8 @@
       max-height: 42dvh;
     }
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button { transition: none; }
 }

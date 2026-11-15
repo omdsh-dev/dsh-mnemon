@@ -1,4 +1,4 @@
-import type { JSX, ReactNode } from 'react'
+import { useEffect, useRef, type JSX, type ReactNode } from 'react'
 import { Button, IconChevronLeftOutlineRegular, Modal, StateDot, Tag, TextShimmer, type StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MemoryJsonValue } from '../core/contracts/index.ts'
 import type { MemoryPluginEntryView, MemoryViewDashboard } from '../host/view-protocol.ts'
@@ -31,6 +31,8 @@ export interface ComponentDetailsProps {
   t: MnemonTranslate
   /** The settings the component contributed, rendered after what its declarations give. */
   settings?: ReactNode | undefined
+  /** Optional target section inside the component's settings when deep-linked. */
+  section?: string | undefined
   /** The page this one was opened from, to go back to. */
   back?: { name: string; go: () => void } | undefined
   /** The page's container already heads it with the component's name, package and description, as DSH's row page does. */
@@ -59,6 +61,39 @@ export function ComponentDetails(props: ComponentDetailsProps): JSX.Element {
  */
 export function ComponentPage(props: Omit<ComponentDetailsProps, 'onClose'>): JSX.Element {
   const { entry, dashboard, name, t } = props
+  const bodyRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const target = props.section?.trim()
+    const body = bodyRef.current
+    if (target === undefined || target === '' || body === null) return
+    const escapeAttr = typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(target) : target.replace(/["\\]/gu, '\\$&')
+    const reveal = (): boolean => {
+      const element = body.querySelector<HTMLElement>(`[data-settings-section="${escapeAttr}"]`)
+      if (element === null) return false
+      let current: HTMLElement | null = element
+      while (current !== null && current !== body) {
+        if (current instanceof HTMLDetailsElement && !current.open) current.open = true
+        if (current.hasAttribute('data-disclosure-open')) {
+          current.click()
+        } else {
+          const trigger = [...current.children].find((child): child is HTMLElement => child instanceof HTMLElement && child.hasAttribute('data-disclosure-open'))
+          trigger?.click()
+        }
+        current = current.parentElement
+      }
+      element.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+      return true
+    }
+    if (reveal()) return
+    // A section loaded asynchronously (for example default models or market sources)
+    // may mount right after the initial dialog render; observe briefly until it appears.
+    if (typeof MutationObserver === 'undefined') return
+    const observer = new MutationObserver(() => {
+      if (reveal()) observer.disconnect()
+    })
+    observer.observe(body, { childList: true, subtree: true })
+    return () => observer.disconnect()
+  }, [props.section, entry.entryId])
   const relations = relationsOf(dashboard, entry)
   const names = (entries: readonly MemoryPluginEntryView[]): string => nameList(entries.map(name), t)
   // What the switch would move beyond the component itself.
@@ -76,7 +111,7 @@ export function ComponentPage(props: Omit<ComponentDetailsProps, 'onClose'>): JS
     <StateDot state={on ? 'done' : 'idle'} /><span>{name(other)}</span>
   </button>
 
-  return <div className={`${css.surface} ${css.detailsBody}`}>
+  return <div ref={bodyRef} className={`${css.surface} ${css.detailsBody}`}>
     {props.back !== undefined && <button type="button" className={css.detailsBack} onClick={props.back.go}>
       <IconChevronLeftOutlineRegular size={12} aria-hidden="true" />{t('details.back', { component: props.back.name })}
     </button>}

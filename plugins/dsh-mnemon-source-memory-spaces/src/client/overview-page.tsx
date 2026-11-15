@@ -77,7 +77,7 @@ function OverviewSyncHeader(props: {
   )
 }
 
-export function OverviewPage(props: { client: MemorySpacesPageClient; active?: boolean; metadataClient: MemorySpacesPageClient; revision: number; reloadKey?: number; activationEnabled: boolean; writeEnabled: boolean; agentAvailable: boolean; fallbackBodies: MemorySpaceView[]; fallbackDirectory: string | undefined; catalogKnown: boolean; onMutate: () => void; onAgentRefresh: () => void; onBodyReconnect: (body: MemorySpaceView) => void; onBodyMetadata: (updates: readonly MemorySpaceMetadataUpdate[]) => void; onExplore: (query: string) => void }): JSX.Element {
+export function OverviewPage(props: { client: MemorySpacesPageClient; active?: boolean; metadataClient: MemorySpacesPageClient; revision: number; reloadKey?: number; activationEnabled: boolean; writeEnabled: boolean; agentAvailable: boolean; fallbackBodies: MemorySpaceView[]; fallbackDirectory: string | undefined; catalogKnown: boolean; onMutate: () => void; onAgentRefresh: () => void; onBodyReconnect: (body: MemorySpaceView) => void; onBodyMetadata: (updates: readonly MemorySpaceMetadataUpdate[]) => void; onExplore: (query: string) => void; onOpenSettings?: ((section?: string) => void) | undefined }): JSX.Element {
   const t = useT()
   const locale = useLocale()
   const spaceCreateFormId = useId()
@@ -444,7 +444,10 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
           <i className={css.choiceControl} data-kind="radio" aria-hidden="true" />
         </label>
       })}</fieldset>
-      {providers.some(provider => provider.serviceConfigured === false) && <small className={css.providerEnableHint}>{t('overview.providerEnableHint')}</small>}
+      {providers.some(provider => provider.serviceConfigured === false) && <div className={css.providerEnableRow}>
+        <small className={css.providerEnableHint}>{t('overview.providerEnableHint')}</small>
+        {props.onOpenSettings !== undefined && <button type="button" className={css.providerEnableLink} onClick={() => { setCreatingSpaceOpen(false); props.onOpenSettings?.('providers') }}>{t('overview.openProvidersSettings')}</button>}
+      </div>}
       {selectedProvider !== undefined && selectedProvider.origin !== 'native' && <ProviderMemoryFields provider={selectedProvider} connection={providerDrafts[selectedProvider.id] ?? {}} onChange={(key, value) => updateProviderDraft(selectedProvider.id, key, value)} />}
     </section>
   </form>

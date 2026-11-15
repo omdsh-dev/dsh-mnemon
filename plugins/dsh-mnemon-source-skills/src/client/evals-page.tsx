@@ -1,9 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
-import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconSettingsOutlineRegular, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SearchField, SelectField } from 'dsh-mnemon/client'
-import type { CatalogView, EvalCase, ModelRoute } from '../contracts.ts'
+import type { CatalogView, EvalCase } from '../contracts.ts'
 import { modelOptionPick, modelOptionValue, useModelChoice } from './model-choice.tsx'
-import { css, points, relative, useT } from './presentation.ts'
+import { css, points, relative, supportsSettingsSection, useT } from './presentation.ts'
 import { Busy, Empty, SkillIcon } from './shared.tsx'
 import { SkillTests } from './skill-tests.tsx'
 import type { SkillsLocation, SkillsPageContext } from './ui.tsx'
@@ -85,11 +85,12 @@ export function EvalsPage(props: { context: SkillsPageContext; location: SkillsL
   // that is set, and on the task Agent's own route when neither is.
   const runOverride = Object.hasOwn(choice.preferences.skillRunModels, current.name) ? choice.preferences.skillRunModels[current.name]! : null
   const effectiveRunModel = runOverride ?? choice.preferences.runModel ?? null
-  const saveRun = (value: string) => choice.saveRunModel(modelOptionPick(value))
   const saveSkillRun = (value: string) => choice.saveSkillRunModel(current.name, modelOptionPick(value))
+  const modelSettingsAvailable = context.openSettings !== undefined && supportsSettingsSection('models')
   const modelBar = <div className={css.skPaneBar}>
-    <SelectField<string> label={t('tests.model')} triggerDetail inline size="sm" value={modelOptionValue(choice.preferences.runModel)} disabled={!context.writable || choice.models === null} onChange={saveRun} options={choice.options} />
+    {!modelSettingsAvailable && <SelectField<string> label={t('tests.model')} triggerDetail inline size="sm" value={modelOptionValue(choice.preferences.runModel)} disabled={!context.writable || choice.models === null} onChange={value => choice.saveRunModel(modelOptionPick(value))} options={choice.options} />}
     <SelectField<string> label={t('tests.modelCard')} triggerDetail inline size="sm" value={modelOptionValue(runOverride)} disabled={!context.writable || choice.models === null} onChange={saveSkillRun} options={choice.cardOptions} />
+    {modelSettingsAvailable && <button type="button" className={css.skIconButton} onClick={() => context.openSettings!('models')} aria-label={t('common.settings')} title={t('common.settings')}><IconSettingsOutlineRegular size={15} /></button>}
   </div>
   return <div className={`${css.skSplit} ${css.skSkillsSplit}`}>
     <aside className={css.skList}>
@@ -98,7 +99,7 @@ export function EvalsPage(props: { context: SkillsPageContext; location: SkillsL
       </header>
       {visible.length === 0 && <p className={css.skListNote}>{t('skills.noMatch')}</p>}
       {groups.map(group => <section key={group.key} className={css.skListGroup}>
-        <h5>{group.title}</h5>
+        <h5 className={css.skGroupHeading}>{group.title}</h5>
         {group.rows.map(row => <div key={row.name} className={css.skRow} data-selected={row.name === current.name ? '' : undefined}>
           <button type="button" className={css.skRowMain} onClick={() => setSelected(row.name)}>
             <SkillIcon name={row.name} />

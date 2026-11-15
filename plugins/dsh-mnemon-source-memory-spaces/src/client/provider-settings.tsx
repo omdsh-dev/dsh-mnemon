@@ -1,7 +1,7 @@
-import { useT, type SourceKey } from './presentation.ts'
+import { css as pageCss, SafeReveal, useT, type SourceKey } from './presentation.ts'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type JSX, type ReactNode } from 'react'
 import { Button, IconChevronDownOutlineRegular, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
-import { GlobalLocationSetting, memorySettingsStyles, message, Reveal, useRequestVersion } from 'dsh-mnemon/client'
+import { GlobalLocationSetting, memorySettingsStyles, message, useRequestVersion } from 'dsh-mnemon/client'
 // Each function reads memorySettingsStyles where it draws, never at load: dsh-mnemon 0.5.31 lacks it and never draws
 // these settings, and this bundle's pages must still load beside it.
 import type { MemoryProviderConfigField, MemoryProviderConnection, MemoryProviderDescriptor, MemoryProviderServiceCatalog, MemoryProviderServiceView } from '../contracts.ts'
@@ -30,6 +30,8 @@ interface ProviderSettingsSectionProps {
   notice?: ReactNode
   /** A Provider was saved or switched, so pages that list Providers re-read them. */
   onChanged?: () => void
+  /** Latest Provider catalog as loaded or mutated, so sibling policy controls reuse it without a second RPC. */
+  onCatalog?: (catalog: MemoryProviderServiceCatalog) => void
 }
 
 interface ServiceDraft {
@@ -271,7 +273,7 @@ function ProviderPanel(props: {
     <div className={css.providerRowHeader}>
       <button type="button" className={css.providerDisclosure} aria-expanded={expanded} disabled={!enabled || controlDisabled} onClick={toggleExpanded}>
         <span className={css.providerIdentity}><ProviderIcon providerId={props.provider.id} icon={props.provider.icon} className={css.providerMark} /><span><strong>{props.provider.label}</strong><small>{providerSummary(t, props.provider)}</small></span></span>
-        {enabled && <IconChevronDownOutlineRegular className={css.providerChevron} size={14} />}
+        {enabled && <IconChevronDownOutlineRegular className={`${css.providerChevron} ${pageCss.smoothChevron}`} size={14} />}
       </button>
       <div className={css.providerEnableControl}>
         <span className={css.providerScopeTag} data-scope={providerScope}>{t(`config.${providerScope}`)}</span>
@@ -279,8 +281,8 @@ function ProviderPanel(props: {
         <Switch className={css.providerToggle} checked={enabled} label={t('config.providerToggleAria', { provider: props.provider.label })} disabled={controlDisabled} onChange={next => void toggle(next)} />
       </div>
     </div>
-    {failed !== null && <p className={css.providerToggleError} role="alert">{t('config.providerToggleFailed', { error: failed })}</p>}
-    {enabled && expanded && <div className={css.providerInlineBody}><ProviderServiceForm provider={props.provider} service={props.service} activeScope={props.activeScope} disabled={controlDisabled} onSave={props.onSave} /></div>}
+    <SafeReveal>{failed !== null ? <p className={css.providerToggleError} role="alert">{t('config.providerToggleFailed', { error: failed })}</p> : null}</SafeReveal>
+    {enabled && expanded && <div className={`${css.providerInlineBody} ${pageCss.inlineExpand}`}><ProviderServiceForm provider={props.provider} service={props.service} activeScope={props.activeScope} disabled={controlDisabled} onSave={props.onSave} /></div>}
   </div>
 }
 
@@ -288,7 +290,7 @@ function ProviderPanel(props: {
 export function ProviderSettingsSection(props: ProviderSettingsSectionProps): JSX.Element {
   const t = useT()
   const css = memorySettingsStyles
-  const { client, retained } = props
+  const { client, retained, onCatalog } = props
   const initialCatalog = client === undefined ? undefined : retainedCatalog(retained)
   const [catalog, setCatalog] = useState<MemoryProviderServiceCatalog>(() => initialCatalog ?? EMPTY_PROVIDER_CATALOG)
   const [loading, setLoading] = useState(client !== undefined && initialCatalog === undefined)
@@ -305,13 +307,14 @@ export function ProviderSettingsSection(props: ProviderSettingsSectionProps): JS
       if (!loadRequests.isCurrent(request)) return
       retained.set(RETAINED_PROVIDERS, next)
       setCatalog(next)
+      onCatalog?.(next)
     } catch (reason) {
       if (!loadRequests.isCurrent(request)) return
       setFailed(message(reason))
     } finally {
       if (!quiet && loadRequests.isCurrent(request)) setLoading(false)
     }
-  }, [client, loadRequests, retained])
+  }, [client, loadRequests, onCatalog, retained])
 
   const blocked = props.blocked !== undefined
   const pending = props.pending === true
@@ -324,9 +327,10 @@ export function ProviderSettingsSection(props: ProviderSettingsSectionProps): JS
     }
     const cached = client === undefined ? undefined : retainedCatalog(retained)
     setCatalog(cached ?? EMPTY_PROVIDER_CATALOG)
+    if (cached !== undefined) onCatalog?.(cached)
     setLoading(client !== undefined && cached === undefined)
     void load(cached !== undefined)
-  }, [blocked, client, load, loadRequests, pending, props.refreshKey, retained])
+  }, [blocked, client, load, loadRequests, onCatalog, pending, props.refreshKey, retained])
 
   const acceptService = useCallback((service: MemoryProviderServiceView): void => {
     setCatalog(current => {
@@ -335,9 +339,10 @@ export function ProviderSettingsSection(props: ProviderSettingsSectionProps): JS
         : [...current.items, service]
       const next = { ...current, items, generatedAt: new Date().toISOString() }
       if (client !== undefined) retained.set(RETAINED_PROVIDERS, next)
+      onCatalog?.(next)
       return next
     })
-  }, [client, retained])
+  }, [client, onCatalog, retained])
 
   const save = async (provider: MemoryProviderDescriptor, draft: ServiceDraft): Promise<void> => {
     if (client === undefined) throw new Error(t('config.providerUnavailable'))
@@ -356,9 +361,9 @@ export function ProviderSettingsSection(props: ProviderSettingsSectionProps): JS
 
   const disabled = props.disabled || props.scopeChanging || client === undefined || loading || catalog.generatedAt === ''
   // Explanations slide in and out, so the list does not jump when a dependency changes.
-  if (blocked) return <><Reveal>{props.blocked}</Reveal><div className={css.providerList}>{props.leading}</div></>
+  if (blocked) return <><SafeReveal>{props.blocked}</SafeReveal><div className={css.providerList}>{props.leading}</div></>
   return <>
-    <Reveal>{props.notice ?? null}</Reveal>
+    <SafeReveal>{props.notice ?? null}</SafeReveal>
     {props.scopeChanging && <p className={css.scopeChanging} role="status">{t('config.saveScopeBeforeProviders')}</p>}
     {props.workspaceLabel !== undefined && <p className={css.providerTarget}>{t('config.providerTargetWorkspace', { workspace: props.workspaceLabel })}</p>}
     {loading && <span className={css.visuallyHidden} role="status">{t('config.loadingProviders')}</span>}

@@ -7,7 +7,7 @@ import { SearchField, SelectField, SidebarModal, useLocale } from 'dsh-mnemon/cl
 import { SKILL_ROOT_KINDS, type LocalizedText, type MarketAudit, type MarketItem, type MarketPreview, type MarketRegistry, type MarketSearchResult, type MarketView, type SkillRootKind } from '../contracts.ts'
 import { splitFrontmatter } from '../fence.ts'
 import { detectSource, type DetectedSource } from '../source-kind.ts'
-import { compactCount, css, errorText, relative, useT, type SkillsTranslate } from './presentation.ts'
+import { compactCount, css, errorText, relative, supportsSettingsSection, useT, type SkillsTranslate } from './presentation.ts'
 import { Busy, Clamp, Empty, MoreMenu, SkillIcon, SkillMarkdown } from './shared.tsx'
 import type { SkillsLocation, SkillsPageContext } from './ui.tsx'
 
@@ -126,7 +126,7 @@ export function MarketPage(props: { context: SkillsPageContext; location: Skills
     <header className={css.skMarketBar}>
       <SearchField label={t('market.search')} placeholder={t('market.searchPlaceholder')} value={query} onChange={event => setQuery(event.target.value)} />
       {view.categories.length > 0 && <SelectField size="sm" hideLabel label={t('market.category')} value={category} onChange={setCategory} options={[{ value: '', label: t('market.allCategories') }, ...view.categories.map(entry => ({ value: entry.id, label: text(entry.label, language) }))]} />}
-      <Button variant="ghost" size="sm" onClick={() => setSourcesOpen(true)}>{t('market.sources', { count: view.registries.filter(registry => registry.enabled).length })}</Button>
+      <Button variant="ghost" size="sm" onClick={() => { if (context.openSettings !== undefined && supportsSettingsSection('market')) context.openSettings('market'); else setSourcesOpen(true) }}>{t('market.sources', { count: view.registries.filter(registry => registry.enabled).length })}</Button>
       <button type="button" className={css.skIconButton} disabled={refreshing || !context.writable} data-busy={refreshing ? '' : undefined} onClick={() => void refresh()} aria-label={t('market.refresh')} title={t('market.refresh')}><IconRefreshOutlineRegular size={16} /></button>
     </header>
     {detected !== undefined && <div className={css.skMarketAdd}>

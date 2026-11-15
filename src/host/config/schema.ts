@@ -4,6 +4,7 @@ import type { MemoryJsonValue } from '../../core/contracts/index.ts'
 import { isPlainObject } from '../../core/json.ts'
 import type {
   Config as SharedConfig,
+  DocumentsConfig,
   InteractionConfig as SharedInteractionConfig,
   MemoryPersistenceStrategy,
   MemoryProviderConnection,
@@ -34,12 +35,15 @@ import {
   DEFAULT_RUNTIME_USER_LIMIT_BYTES,
   DEFAULT_SKILLS_CONFIG,
   DEFAULT_TIMEOUT_MS,
+  DOCUMENTS_DEFAULT_LIMIT_BYTES,
+  DOCUMENTS_MAX_LIMIT_BYTES,
   IDLE_REVIEW_BOUNDS,
   MAX_IDLE_REVIEW_MS,
   MAX_RECALL_LIMIT,
   MAX_RUNTIME_MAINTENANCE_MAX_TOKENS,
   MAX_RUNTIME_MEMORY_LIMIT_BYTES,
   MAX_TIMEOUT_MS,
+  MIN_DOCUMENTS_LIMIT_BYTES,
   MIN_IDLE_REVIEW_MS,
   MIN_RECALL_LIMIT,
   MIN_RUNTIME_MAINTENANCE_MAX_TOKENS,
@@ -141,6 +145,14 @@ export const SkillsConfig: z<Partial<ResolvedSkillsConfig>, ResolvedSkillsConfig
   expiryDays: z.number().step(1).min(SKILLS_BOUNDS.expiryDays.min).max(SKILLS_BOUNDS.expiryDays.max).default(DEFAULT_SKILLS_CONFIG.expiryDays),
   maxPendingPerSession: z.number().step(1).min(SKILLS_BOUNDS.maxPendingPerSession.min).max(SKILLS_BOUNDS.maxPendingPerSession.max).default(DEFAULT_SKILLS_CONFIG.maxPendingPerSession),
   casesPerRun: z.number().step(1).min(SKILLS_BOUNDS.casesPerRun.min).max(SKILLS_BOUNDS.casesPerRun.max).default(DEFAULT_SKILLS_CONFIG.casesPerRun),
+  dshHome: z.transform(z.string(), value => {
+    const trimmed = value.trim()
+    return trimmed === '' ? undefined : trimmed
+  }),
+  agentsHome: z.transform(z.string(), value => {
+    const trimmed = value.trim()
+    return trimmed === '' ? undefined : trimmed
+  }),
 }) as unknown as z<Partial<ResolvedSkillsConfig>, ResolvedSkillsConfig>
 
 const MemoryProviderConnectionSchema: z<MemoryProviderConnection> = z.dict(z.union([z.string(), z.number(), z.boolean()]))
@@ -182,6 +194,10 @@ const RecallQualitySchema: z<RecallQualityConfig> = z.object({
   maxMediumResults: z.number().step(1).min(RECALL_QUALITY_BOUNDS.maxResults.min).max(RECALL_QUALITY_BOUNDS.maxResults.max).default(DEFAULT_RECALL_MAX_MEDIUM_RESULTS),
   maxRankedResults: z.number().step(1).min(RECALL_QUALITY_BOUNDS.maxResults.min).max(RECALL_QUALITY_BOUNDS.maxResults.max).default(DEFAULT_RECALL_MAX_RANKED_RESULTS),
   maxUnknownResults: z.number().step(1).min(RECALL_QUALITY_BOUNDS.maxResults.min).max(RECALL_QUALITY_BOUNDS.maxResults.max).default(DEFAULT_RECALL_MAX_UNKNOWN_RESULTS),
+})
+
+export const DocumentsSchema: z<DocumentsConfig> = z.object({
+  limitBytes: z.number().step(1).min(MIN_DOCUMENTS_LIMIT_BYTES).max(DOCUMENTS_MAX_LIMIT_BYTES).default(DOCUMENTS_DEFAULT_LIMIT_BYTES),
 })
 
 export const RuntimeMemorySchema: z<RuntimeMemoryConfig> = z.object({
@@ -244,6 +260,9 @@ export const Config: z<SharedConfig> = z.object({
   // so that stored values validate as they did.
   timeoutMs: z.number().step(1).min(MIN_TIMEOUT_MS).max(MAX_TIMEOUT_MS).default(DEFAULT_TIMEOUT_MS),
   defaultRecallLimit: z.number().step(1).min(MIN_RECALL_LIMIT).max(MAX_RECALL_LIMIT).default(DEFAULT_RECALL_LIMIT),
+  documents: DocumentsSchema.default({
+    limitBytes: DOCUMENTS_DEFAULT_LIMIT_BYTES,
+  }),
   runtimeMemory: RuntimeMemorySchema.default({
     inheritToSubagents: false,
     memoryLimitBytes: DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES,

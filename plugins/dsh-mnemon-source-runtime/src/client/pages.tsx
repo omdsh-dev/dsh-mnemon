@@ -3,7 +3,7 @@ import type { JSX } from 'react'
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { type RuntimeMemoryEntry, type RuntimeMemoryImportance, type RuntimeMemorySnapshot, type RuntimeMemoryTarget } from '../contracts.ts'
 import type { RuntimePageClient } from './api.ts'
-import { type MnemonKey, appearanceClass, useLocale, humanBytes, message, parseBranchesInput, PageHeader, ProgressiveFooter, SidebarModal, SearchField, SelectField } from 'dsh-mnemon/client'
+import { type MnemonKey, appearanceClass, useLocale, humanBytes, message, parseBranchesInput, PageHeader, ProgressiveFooter, Reveal, SidebarModal, SearchField, SelectField } from 'dsh-mnemon/client'
 
 /** Whitespace folded, as a conversation turn quotes an entry it wrote. */
 function fold(text: string): string {
@@ -125,9 +125,13 @@ export function RuntimePage(props: { client: RuntimePageClient; revision: number
       <div className={css.runtimeEntryMeta}>{showTarget ? <div className={css.runtimeEntryBadges}><span className={css.runtimeEntryTarget}>{entry.target === 'user' ? 'USER.md' : 'MEMORY.md'}</span><span>{t(`runtime.importance.${entry.importance}` as MnemonKey)}</span>{entry.pinned === true && <span className={css.runtimeEntryBranch}>{t('runtime.pinned')}</span>}{entry.branches !== undefined && entry.branches.length > 0 && <span className={css.runtimeEntryBranch} title={t('runtime.branchBadge')}>{entry.branches.join(', ')}</span>}</div> : <><span>{t(`runtime.importance.${entry.importance}` as MnemonKey)}</span>{entry.pinned === true && <span className={css.runtimeEntryBranch}>{t('runtime.pinned')}</span>}{entry.branches !== undefined && entry.branches.length > 0 && <span className={css.runtimeEntryBranch} title={t('runtime.branchBadge')}>{entry.branches.join(', ')}</span>}</>}<time dateTime={entry.created_at}>{new Date(entry.created_at).toLocaleString(locale)}</time></div>
       {<p>{entry.content}</p>}
 
-      <footer>
-        {(props.writeEnabled ? <>{props.client.pinRuntimeMemory !== undefined && <button type="button" className={runtimeEditActionClass} disabled={saving} aria-pressed={entry.pinned === true} onClick={() => void togglePin(entry)}>{t(entry.pinned === true ? 'runtime.unpin' : 'runtime.pin')}</button>}<button type="button" className={runtimeEditActionClass} disabled={saving && isRemoving} onClick={() => beginEdit(entry)}>{t('runtime.editAction')}</button><button type="button" className={runtimeRemoveActionClass} disabled={saving && isRemoving} onClick={() => { setRemoving(key); setEditing(null) }}>{t('runtime.removeAction')}</button></> : null)}
-      </footer>
+      {props.writeEnabled && (
+        <footer>
+          {props.client.pinRuntimeMemory !== undefined && <button type="button" className={runtimeEditActionClass} disabled={saving} aria-pressed={entry.pinned === true} onClick={() => void togglePin(entry)}>{t(entry.pinned === true ? 'runtime.unpin' : 'runtime.pin')}</button>}
+          <button type="button" className={runtimeEditActionClass} disabled={saving && isRemoving} onClick={() => beginEdit(entry)}>{t('runtime.editAction')}</button>
+          <button type="button" className={runtimeRemoveActionClass} disabled={saving && isRemoving} onClick={() => { setRemoving(key); setEditing(null) }}>{t('runtime.removeAction')}</button>
+        </footer>
+      )}
     </article>
   }
 
@@ -163,8 +167,8 @@ export function RuntimePage(props: { client: RuntimePageClient; revision: number
   return (
     <div className={css.page}>
       <PageHeader title={t('runtime.title')} description={t('runtime.description')} meta={snapshot === null ? t('common.loading') : t('runtime.total', { count: snapshot.entries.length })} {...(props.writeEnabled ? { action: <button type="button" className={css.primaryButton} onClick={() => setAdding(true)}>{t('runtime.addButton')}</button> } : {})} />
-      {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
-      {notice !== null && <div className={css.runtimeNotice} role="status">{notice}</div>}
+      <Reveal>{error === null ? null : <div className={css.inlineError} role="alert">{error}</div>}</Reveal>
+      <Reveal>{notice === null ? null : <div className={css.runtimeNotice} role="status">{notice}</div>}</Reveal>
 
       {!props.writeEnabled && <div className={css.runtimeReadOnly}>{t('runtime.readOnly')}</div>}
       {<>

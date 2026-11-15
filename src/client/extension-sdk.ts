@@ -11,13 +11,13 @@ export type { MnemonSourceManagementClient, MemorySourcePageInstance } from './s
 // client answers it; the pages read it and nothing else here drives it.
 export type { TaskAgentModelCatalog, TaskAgentModelCatalogGroup, TaskAgentModelCatalogModel } from 'dsh-mnemon/contracts'
 export {
-  installMemoryComponentUI, MNEMON_COMPONENT_FALLBACK_PRIORITY, MNEMON_COMPONENT_SETTINGS_SLOT, MNEMON_COMPONENT_STATUS_SLOT,
+  installMemoryComponentUI, supportsMemoryComponentSettingsSection, MNEMON_COMPONENT_FALLBACK_PRIORITY, MNEMON_COMPONENT_SETTINGS_SLOT, MNEMON_COMPONENT_STATUS_SLOT,
   type MemoryComponentConfigurationSnapshot, type MemoryComponentHost,
   type MemoryComponentSettingsComponent, type MemoryComponentSettingsProps, type MemoryComponentStatusComponent, type MemoryComponentStatusProps,
   type MemoryComponentUIContext, type MemoryComponentUIContribution,
 } from './component-ui.tsx'
 // What Memory Spaces' own settings are drawn with, the controls and styles dsh-mnemon drew them with.
-export { memorySettingsStyles, ToggleRow } from './settings-controls.tsx'
+export { AdvancedSection, memorySettingsStyles, SelectRow, SettingRow, SettingSelect, ToggleRow, type SettingOption } from './settings-controls.tsx'
 export { PanelActions, useLive, useStaged, WriteFailure } from './settings-panel.tsx'
 export { Callout, Reveal } from './feedback.tsx'
 export { GlobalLocationSetting } from './GlobalLocationSetting.tsx'

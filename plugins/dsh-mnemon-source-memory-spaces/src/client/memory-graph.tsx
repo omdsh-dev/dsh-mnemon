@@ -363,7 +363,8 @@ export const MemoryGraph = memo(function MemoryGraph(props: MemoryGraphProps): J
   const animateTo = useCallback((target: GraphPositions, mode: Exclude<GraphLayoutMode, 'custom'>) => {
     cancelAnimation()
     setLayoutMode(mode)
-    if (positionsMatch(positionsRef.current, target) || typeof window.requestAnimationFrame !== 'function') {
+    const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true
+    if (prefersReducedMotion || positionsMatch(positionsRef.current, target) || typeof window.requestAnimationFrame !== 'function') {
       if (positionsRef.current !== target) commitPositions(target)
       return
     }

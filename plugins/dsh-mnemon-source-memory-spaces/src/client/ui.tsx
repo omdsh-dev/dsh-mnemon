@@ -1,6 +1,5 @@
-import { css, sidebarCss, useT } from './presentation.ts'
+import { css, SafeReveal, sidebarCss, supportsSettingsSection, useT } from './presentation.ts'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
-import type { MemoryJsonValue } from 'dsh-mnemon/contracts'
 import * as mnemonClient from 'dsh-mnemon/client'
 import {
   createMemorySourcePageClient, installMemorySourceUI, MemorySourcePageFrame, translateEn, message, PageHeader,
@@ -9,20 +8,8 @@ import {
 import type { Insight, MemorySpaceMetadataUpdate, MemorySpacesStatus, MemorySpaceView } from '../contracts.ts'
 import { OverviewPage, ExplorePage, EntitiesPage, RememberPage, ListPage, PersistenceStrategyDialog, type MemoryPlacementPageConfig } from './pages.tsx'
 import type { MemorySpacesPageClient } from './api.ts'
+import { cleanJson } from './placement-policy.tsx'
 import { installMemorySpacesSettings, yieldsComponentSettings } from './settings.tsx'
-
-function cleanJson(value: unknown): MemoryJsonValue {
-  if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value
-  if (Array.isArray(value)) return value.map(item => item === undefined ? null : cleanJson(item))
-  if (typeof value === 'object' && value !== null) {
-    const out: Record<string, MemoryJsonValue> = {}
-    for (const [key, entry] of Object.entries(value)) {
-      if (entry !== undefined) out[key] = cleanJson(entry)
-    }
-    return out
-  }
-  return null
-}
 
 /** The adapter never gets a transport or chooses another Source instance. */
 export function memorySpacesPageClient(management: MnemonSourceManagementClient): MemorySpacesPageClient & { status(): Promise<MemorySpacesStatus>; canAssist(operation: string): boolean } {
@@ -142,6 +129,12 @@ function MemorySpacesSourceView(props: MemorySourcePageProps & { page: Page }): 
   const forget = async (insight: Insight) => { await client.forget(insight.id, insight.memoryBodyId); refresh() }
   const bodies = status?.memoryBodies ?? []
   const preferences = props.preferences
+  const policySettingsAvailable = props.onOpenSettings !== undefined && supportsSettingsSection('policy')
+  const showStrategyAction = policySettingsAvailable || preferences !== undefined
+  const openStrategy = () => {
+    if (policySettingsAvailable) props.onOpenSettings!('policy')
+    else setStrategyOpen(true)
+  }
   const onTabKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     const currentIndex = TABS.findIndex(tab => tab.id === page)
     if (currentIndex < 0) return
@@ -158,12 +151,12 @@ function MemorySpacesSourceView(props: MemorySourcePageProps & { page: Page }): 
     buttons[nextIndex]?.focus()
   }
   return <>
-    {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
-    {<section className={sidebarCss.memoryWorkspace} ref={headerRef}>
-      <PageHeader title={t('nav.spaces')} description={t('overview.description')} {...(writable ? {} : { meta: activationEnabled ? t('common.activationOnly') : t('common.readOnly') })} action={<div className={css.memoryHeaderActions}><button type="button" className={appearanceClass(css.primaryButton, sidebarCss.memoryWriteButton)} disabled={!writable} onClick={() => remember()}>{t('nav.rememberAction')}</button>{preferences !== undefined && <button type="button" className={css.secondaryButton} onClick={() => setStrategyOpen(true)}>{t('strategy.action')}</button>}</div>} />
+    <section className={sidebarCss.memoryWorkspace} ref={headerRef}>
+      <PageHeader title={t('nav.spaces')} description={t('overview.description')} {...(writable ? {} : { meta: activationEnabled ? t('common.activationOnly') : t('common.readOnly') })} action={<div className={css.memoryHeaderActions}><button type="button" className={appearanceClass(css.primaryButton, sidebarCss.memoryWriteButton)} disabled={!writable} onClick={() => remember()}>{t('nav.rememberAction')}</button>{showStrategyAction && <button type="button" className={css.secondaryButton} onClick={openStrategy}>{t('strategy.action')}</button>}</div>} />
       <div className={sidebarCss.memoryNavigation}><div className={sidebarCss.memoryTabs} role="tablist" aria-label={t('nav.memory.aria')} onKeyDown={onTabKeyDown}>{TABS.map(tab => <button key={tab.id} type="button" role="tab" tabIndex={page === tab.id ? 0 : -1} aria-selected={page === tab.id} data-active={page === tab.id ? '' : undefined} onClick={() => setPage(tab.id)}>{t(tab.key)}</button>)}</div></div>
-    </section>}
-    {page === 'spaces' && <OverviewPage active={props.active ?? true} client={client} metadataClient={client} revision={revision} reloadKey={reloads} activationEnabled={activationEnabled} writeEnabled={writable} agentAvailable={agentAvailable} fallbackBodies={bodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={status?.memoryBodies !== undefined} onMutate={refresh} onAgentRefresh={refresh} onBodyReconnect={handleBodyReconnect} onBodyMetadata={handleBodyMetadata} onExplore={explore} />}
+    </section>
+    <SafeReveal className={css.workspaceErrorReveal}>{error !== null && <div className={css.inlineError} role="alert">{error}</div>}</SafeReveal>
+    {page === 'spaces' && <OverviewPage active={props.active ?? true} client={client} metadataClient={client} revision={revision} reloadKey={reloads} activationEnabled={activationEnabled} writeEnabled={writable} agentAvailable={agentAvailable} fallbackBodies={bodies} fallbackDirectory={status?.memoryBodyDirectory} catalogKnown={status?.memoryBodies !== undefined} onMutate={refresh} onAgentRefresh={refresh} onBodyReconnect={handleBodyReconnect} onBodyMetadata={handleBodyMetadata} onExplore={explore} {...(props.onOpenSettings === undefined ? {} : { onOpenSettings: props.onOpenSettings })} />}
     {page === 'explore' && <ExplorePage client={client} agentClient={client} agentAvailable={client.canAssist('agent-search')} status={status} seed={seed} writeEnabled={writable} onForget={forget} onRevealElement={revealElement} />}
     {page === 'entities' && <EntitiesPage client={client} revision={revision} writeEnabled={writable} onForget={forget} onExplore={explore} />}
     {page === 'content' && <ListPage client={client} revision={revision} writeEnabled={writable} onForget={forget} onClone={insight => remember(insight.content)} onExplore={explore} />}

@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { Checkbox } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { JsonValue, MemorySourceManagementInstance } from '../host/protocol.ts'
 import type { MnemonKey } from './locales.ts'
 import { MNEMON_SOURCE_CONFIGURATION_MUTATE, MNEMON_SOURCE_CONFIGURATION_READ } from './source-pages.tsx'
@@ -101,12 +102,16 @@ export function SourceManagementPage(props: {
       <div className={css.formGrid}>{fields.map(field => {
         const value = draft[field.key]
         const update = (next: JsonValue): void => setDraft(current => ({ ...current, [field.key]: next }))
+        if (field.input === 'boolean') {
+          return <div key={field.key} className={css.providerFieldControl}>
+            <Checkbox checked={value === true} label={field.label} onChange={next => update(next)} />
+            {field.description !== undefined && <small>{field.description}</small>}
+          </div>
+        }
         return <label key={field.key}>{field.label}
-          {field.input === 'boolean'
-            ? <input type="checkbox" checked={value === true} onChange={event => update(event.target.checked)} />
-            : field.input === 'select'
-              ? <SelectField hideLabel label={field.label} value={typeof value === 'string' ? value : ''} options={[{ value: '', label: '—' }, ...(field.options ?? []).map(option => ({ value: option.value, label: option.label }))]} onChange={update} />
-              : <input type={field.input === 'secret' ? 'password' : field.input === 'number' ? 'number' : field.input === 'url' ? 'url' : 'text'} value={typeof value === 'string' || typeof value === 'number' ? value : ''} required={field.required && field.input !== 'secret'} autoComplete={field.input === 'secret' ? 'new-password' : undefined} placeholder={field.input === 'secret' ? t('sourcePage.secretPlaceholder') : undefined} onChange={event => update(event.target.value)} />}
+          {field.input === 'select'
+            ? <SelectField hideLabel label={field.label} value={typeof value === 'string' ? value : ''} options={[{ value: '', label: '—' }, ...(field.options ?? []).map(option => ({ value: option.value, label: option.label }))]} onChange={update} />
+            : <input type={field.input === 'secret' ? 'password' : field.input === 'number' ? 'number' : field.input === 'url' ? 'url' : 'text'} value={typeof value === 'string' || typeof value === 'number' ? value : ''} required={field.required && field.input !== 'secret'} autoComplete={field.input === 'secret' ? 'new-password' : undefined} placeholder={field.input === 'secret' ? t('sourcePage.secretPlaceholder') : undefined} onChange={event => update(event.target.value)} />}
           {field.description !== undefined && <small>{field.description}</small>}
         </label>
       })}</div>

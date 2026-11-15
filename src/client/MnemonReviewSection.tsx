@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type JSX } from 'react'
-import { Button, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, Checkbox, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { type ClientConnectionHandle, type MnemonReconcileOperation, type MnemonReviewEntry, type MnemonReviewLedgerView, type MnemonReviewStatus } from '../host/protocol.ts'
 import { MnemonClient } from './api.ts'
+import { Reveal } from './feedback.tsx'
 import type { MnemonTranslate } from './locales.ts'
 import { MnemonDialog } from './MnemonDialog.tsx'
 import css from './MnemonSettingsCard.module.css'
@@ -219,7 +220,7 @@ export function MnemonReviewSection(props: MnemonReviewSectionProps): JSX.Elemen
       {(entry.appliedOperations ?? []).length > 0 && <small>{t('review.appliedCount', { count: (entry.appliedOperations ?? []).length, total: entry.operations.length })}</small>}
       {entry.failure !== undefined && <p className={css.error} role="alert">{t('review.applyFailed', { error: entry.failure })}</p>}
       {entry.status === 'rejected' && <small>{t('review.rejectedHint')}</small>}
-      {open && <>
+      <Reveal>{open && <div className={css.reviewDetails}>
         <p>{entry.summary}</p>
         {entry.status === 'accepted' && <div className={css.reviewSelection}>
           <small>{t('review.selectHint')}</small>
@@ -237,11 +238,13 @@ export function MnemonReviewSection(props: MnemonReviewSectionProps): JSX.Elemen
             {(entry.appliedOperations ?? []).includes(index)
               ? <span>{operationText(t, operation)}</span>
               : entry.status === 'accepted'
-                ? <label>
-                    <input type="checkbox" checked={selection.includes(index)} disabled={busy !== null}
-                      onChange={() => { toggle(entry, index) }} />
-                    <span>{operationText(t, operation)}</span>
-                  </label>
+                ? <Checkbox
+                    className={css.reviewOperationCheckbox}
+                    checked={selection.includes(index)}
+                    disabled={busy !== null}
+                    label={operationText(t, operation)}
+                    onChange={() => { toggle(entry, index) }}
+                  />
                 : <span>{operationText(t, operation)}</span>}
             <small>{operation.reason}</small>
           </li>)}
@@ -261,7 +264,7 @@ export function MnemonReviewSection(props: MnemonReviewSectionProps): JSX.Elemen
           <Button variant="outline" size="sm" disabled={busy !== null || opinion.trim() === ''}
             onClick={() => { leaveOpinion(entry.id) }}>{t('review.opinionSend')}</Button>
         </div>
-      </>}
+      </div>}</Reveal>
     </div>
   }
 
@@ -283,9 +286,9 @@ export function MnemonReviewSection(props: MnemonReviewSectionProps): JSX.Elemen
     <div className={css.syncState} aria-live="polite">
       <span>{pending === 0 ? t('review.empty') : t('review.pending', { count: pending })}</span>
     </div>
-    {complaint !== null && <p className={css.error} role="alert">{complaint}</p>}
-    {failed !== null && <p className={css.error} role="alert">{t('review.failed', { error: failed })}</p>}
-    {notice !== null && <p className={css.syncSuccess} role="status">{notice}</p>}
+    <Reveal>{complaint !== null && <p className={css.error} role="alert">{complaint}</p>}</Reveal>
+    <Reveal>{failed !== null && <p className={css.error} role="alert">{t('review.failed', { error: failed })}</p>}</Reveal>
+    <Reveal>{notice !== null && <p className={css.syncSuccess} role="status">{notice}</p>}</Reveal>
     {history.length > 0 && <div className={css.rowActions}>
       <Button variant="ghost" size="sm" onClick={() => { setHistoryOpen(true) }}>
         {t('review.history', { count: history.length })}</Button>

@@ -61,7 +61,7 @@ export interface MemorySourcePageProps {
    * Open this Source component's own settings, on its page under Plugins.
    * Present while that page offers navigation.
    */
-  onOpenSettings?(): void
+  onOpenSettings?: (section?: string) => void
   /**
    * The page is the whole view, as in a sidebar entry of its own: the view's
    * header already carries its title.

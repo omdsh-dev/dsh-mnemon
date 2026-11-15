@@ -6,6 +6,11 @@
   background: transparent;
 }
 .shell .modal form[class*='runtimeComposer'] > [class*='runtimeComposerHeading'] { display: none; }
+.shell [class*='runtimeComposerBranch'] input {
+  box-sizing: border-box;
+  min-height: 36px;
+  height: 36px;
+}
 
 /* Runtime metadata reads as DSH Tags; the target is the one informational tone. */
 .shell [class*='runtimeEntryBadges'] > span {

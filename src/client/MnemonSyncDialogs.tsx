@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type JSX } from 'react'
 import { Button, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MnemonPackComponent, MnemonPackComponentSummary, MnemonSyncBackupList, MnemonSyncCredentialSource, MnemonSyncDiff, MnemonSyncPreview } from '../host/protocol.ts'
 import type { MnemonClient } from './api.ts'
+import { Reveal } from './feedback.tsx'
 import type { MnemonTranslate } from './locales.ts'
 import { MnemonDialog } from './MnemonDialog.tsx'
 import css from './MnemonSettingsCard.module.css'
@@ -234,12 +235,12 @@ export function SyncCompareDialog({ client, repoUrl, credential, writable, t, on
               {showConflicts ? t('review.collapse') : t('config.syncCompareShowConflicts')}</Button>
             <Button variant="ghost" size="sm" onClick={goToReview}>{t('config.syncCompareGoReview')}</Button>
           </div>
-          {showConflicts && <ul className={css.syncConflictList}>
+          <Reveal>{showConflicts && <ul className={css.syncConflictList}>
             {conflicts.slice(0, SHOWN_CONFLICTS).map(conflict => <li key={conflict.target + '\u0000' + conflict.local.content} className={css.syncConflict}>
               <span><small>{t('config.syncDiffHere')}</small>{clip(conflict.local.content, 240)}</span>
               <span><small>{t('config.syncDiffThere')}</small>{clip(conflict.remote.content, 240)}</span>
             </li>)}
-          </ul>}
+          </ul>}</Reveal>
         </div>}
         {heldBack > 0 && <div className={css.syncCompareNote}>
           <p className={css.syncDialogNote}>{t('config.syncCompareHeldBack', { count: heldBack })}</p>

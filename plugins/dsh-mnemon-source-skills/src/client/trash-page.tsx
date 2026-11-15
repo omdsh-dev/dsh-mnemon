@@ -48,7 +48,7 @@ export function TrashPage(props: { context: SkillsPageContext; location: SkillsL
       else await run(() => context.client.restoreTrash({ id: entry.id }), () => context.notice(t('trash.restored', { name: entry.name })))
     } catch { setRestoring({ entry, preview: null }) } finally { setBusy(false) }
   }
-  return <article className={css.skDetail}>
+  return <article className={`${css.skDetail} ${css.skTrash}`}>
     <header className={css.skDetailHead}>
       <div>
         <h3>{t('trash.title')}</h3>

@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ClientConnectionHandle } from '../src/host/dsh.ts'
 import type { SkillActivitySnapshot, SkillsConfig } from '../src/host/protocol.ts'
 import { subscribeMnemonAnchor } from '../src/client/anchor.ts'
 import { translateEn as t } from '../src/client/locales.ts'
 import { SKILLS_PAGE, SkillTurnTail, invalidateSkillActivity } from '../src/client/SkillTurnTail.tsx'
+import { supportsMemoryComponentSettingsSection } from '../src/client/extension-sdk.ts'
 import { SKILLS_PACKAGE, SkillsSettings } from '../src/client/skills-settings.tsx'
 import { MnemonChangeSignal } from '../src/client/change-signal.ts'
 import { liveSettingsScope } from './helpers/settings-scope.ts'
@@ -52,7 +53,8 @@ describe('技能管理 settings under Plugins', () => {
   it('stages both draft budgets while evolution is off and rejects invalid values', async () => {
     const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: {}, revision: 1, writable: true, mode: 'host' })
     const view = render(<SkillsSettings scope={scope} page={page} t={t} />)
-    fireEvent.click(screen.getByText('Draft generation'))
+    expect(screen.queryByLabelText('Draft output token limit')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: t('skills.draftGeneration') }))
     const first = screen.getByLabelText('Draft output token limit')
     const retry = screen.getByLabelText('Retry output token limit')
     expect(first).toHaveProperty('value', '32768')
@@ -66,8 +68,37 @@ describe('技能管理 settings under Plugins', () => {
     await waitFor(() => expect(scope.getSnapshot().value).toMatchObject({ draftMaxTokens: 49152, draftRetryMaxTokens: 49152 }))
     view.unmount()
     render(<SkillsSettings scope={scope} page={page} t={t} />)
+    expect(screen.queryByLabelText('Draft output token limit')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: t('skills.draftGeneration') }))
     expect(screen.getByLabelText('Draft output token limit')).toHaveProperty('value', '49152')
     expect(screen.getByLabelText('Retry output token limit')).toHaveProperty('value', '49152')
+  })
+
+  it('unmounts collapsed Parameters and Draft generation inputs so hidden fields cannot be focused or edited, while preserving staged edits', () => {
+    const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: { evolution: true }, revision: 1, writable: true, mode: 'host' })
+    const { container } = render(<SkillsSettings scope={scope} page={page} t={t} />)
+
+    const parametersSection = container.querySelector('[data-settings-section="parameters"]') as HTMLElement
+    const draftSection = container.querySelector('[data-settings-section="draft"]') as HTMLElement
+    expect(parametersSection).not.toBeNull()
+    expect(draftSection).not.toBeNull()
+    expect(parametersSection.querySelectorAll('input, select, textarea, button:not([data-disclosure-open])')).toHaveLength(0)
+    expect(draftSection.querySelectorAll('input, select, textarea, button:not([data-disclosure-open])')).toHaveLength(0)
+
+    const draftToggle = screen.getByRole('button', { name: t('skills.draftGeneration') })
+    expect(draftToggle.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(draftToggle)
+    expect(draftToggle.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.change(screen.getByLabelText('Draft output token limit'), { target: { value: '40960' } })
+
+    fireEvent.click(draftToggle)
+    expect(draftToggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByLabelText('Draft output token limit')).toBeNull()
+    expect(draftSection.querySelectorAll('input, select, textarea, button:not([data-disclosure-open])')).toHaveLength(0)
+
+    fireEvent.click(draftToggle)
+    expect(screen.getByLabelText('Draft output token limit')).toHaveProperty('value', '40960')
+    expect(screen.getByRole('button', { name: t('options.apply') })).toHaveProperty('disabled', false)
   })
 
   it('stages the new-skill destination until Apply and restores it on Discard', async () => {
@@ -92,6 +123,8 @@ describe('技能管理 settings under Plugins', () => {
     const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: { evolution: true }, revision: 1, writable: blocked !== 'scope', mode: 'host' }, writes)
     render(<SkillsSettings scope={scope} page={{ ...page, writable: blocked !== 'page' }} t={t} />)
     expect(screen.getByRole('button', { name: `${t('skills.targetScope')} ${t('skills.targetScope.user')}` })).toHaveProperty('disabled', true)
+    expect(screen.queryByLabelText('Draft output token limit')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: t('skills.draftGeneration') }))
     expect(screen.getByLabelText('Draft output token limit')).toHaveProperty('disabled', true)
     expect(screen.getByLabelText('Retry output token limit')).toHaveProperty('disabled', true)
     expect(screen.getByRole('switch', { name: t('skills.allowLinkedUpdates') })).toHaveProperty('disabled', true)
@@ -153,6 +186,266 @@ describe('技能管理 settings under Plugins', () => {
       { op: 'set', path: ['idleSeconds'], value: 45 },
       { op: 'set', path: ['minConfidence'], value: 0.7 },
     ]))
+  })
+
+  it('converges Default Models onto live draft-preference mutations and hides the section when Skills RPC is offline', async () => {
+    expect(supportsMemoryComponentSettingsSection(SKILLS_PACKAGE, 'models')).toBe(true)
+    const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: {}, revision: 1, writable: true, mode: 'host' })
+    let preferences = {
+      draftModel: null as { provider: string; model: string } | null,
+      runModel: { provider: 'deepseek', model: 'deepseek-chat' } as { provider: string; model: string } | null,
+    }
+    const call = vi.fn(async (channel: string, endpoint: string, payload: Record<string, unknown>) => {
+      if (channel === '/dsh-mnemon-read' && endpoint === 'task-agent-models') {
+        return {
+          ok: true as const,
+          value: {
+            effective: { provider: 'deepseek', model: 'deepseek-chat', source: 'dsh-default' as const },
+            groups: [
+              { id: 'deepseek', name: 'DeepSeek', models: [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }] },
+              { id: 'openai', name: 'OpenAI', models: [{ id: 'gpt-5', name: 'GPT-5' }] },
+            ],
+            failures: [],
+          },
+        }
+      }
+      if (channel === '/dsh-mnemon-read' && endpoint === 'source-management-read') {
+        if (payload.operation === 'draft-preferences') return { ok: true as const, value: { revision: 'r1', value: preferences } }
+        return { ok: false as const, error: { message: 'unsupported' } }
+      }
+      if (channel === '/dsh-mnemon-write' && endpoint === 'source-management-mutate') {
+        expect(payload.sourceInstanceKey).toBe('skills/default')
+        expect(payload.operation).toBe('draft-preference')
+        const input = payload.input as { slot: 'draft' | 'run'; model: { provider: string; model: string } | null }
+        preferences = {
+          ...preferences,
+          ...(input.slot === 'draft' ? { draftModel: input.model } : { runModel: input.model }),
+        }
+        return { ok: true as const, value: { revision: 'r2', value: preferences } }
+      }
+      return { ok: false as const, error: { message: `unexpected ${channel}/${endpoint}` } }
+    })
+    const conn = { rpc: { call }, isLoopback: true } as unknown as ClientConnectionHandle
+    const view = render(<SkillsSettings scope={scope} page={{ ...page, sessionId: 'session-1', workspace: { id: 'ws-1' } }} connection={conn} t={t} />)
+
+    const draftTrigger = await screen.findByRole('button', { name: new RegExp(`^${t('skills.draftModel')} `, 'u') })
+    expect(draftTrigger.closest('[data-settings-section="models"]')).not.toBeNull()
+    expect(draftTrigger.textContent).toContain(t('skills.modelAuto'))
+
+    fireEvent.click(draftTrigger)
+    fireEvent.click(screen.getByRole('menuitem', { name: /GPT-5/u }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'source-management-mutate', expect.objectContaining({
+      sourceInstanceKey: 'skills/default',
+      operation: 'draft-preference',
+      input: { slot: 'draft', model: { provider: 'openai', model: 'gpt-5' } },
+      sessionId: 'session-1',
+      workspaceId: 'ws-1',
+    })))
+
+    const runTrigger = screen.getByRole('button', { name: new RegExp(`^${t('skills.runModel')} `, 'u') })
+    fireEvent.click(runTrigger)
+    fireEvent.click(screen.getByRole('menuitem', { name: new RegExp(`^${t('skills.modelAuto').replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}`, 'u') }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'source-management-mutate', expect.objectContaining({
+      operation: 'draft-preference',
+      input: { slot: 'run', model: null },
+    })))
+    view.unmount()
+
+    const offline = {
+      rpc: { call: vi.fn(async () => ({ ok: false as const, error: { message: 'source offline' } })) },
+      isLoopback: true,
+    } as unknown as ClientConnectionHandle
+    render(<SkillsSettings scope={scope} page={page} connection={offline} t={t} />)
+    await act(async () => {})
+    expect(document.querySelector('[data-settings-section="models"]')).toBeNull()
+  })
+
+  it('stages Skill Directories with directoryPicker browse support and unsets cleared overrides', async () => {
+    const writes = vi.fn(async () => {})
+    const scope = liveSettingsScope<SkillsConfig>({
+      status: 'ready',
+      value: { dshHome: '/initial/.dsh' },
+      revision: 1,
+      writable: true,
+      mode: 'host',
+    }, writes)
+    const picker = {
+      available: () => true,
+      pick: vi.fn(async () => '/picked/.agents'),
+    }
+
+    render(<SkillsSettings scope={scope} page={page} directoryPicker={picker} t={t} />)
+    const dshInput = screen.getByLabelText(t('skills.dshHome')) as HTMLInputElement
+    const agentsInput = screen.getByLabelText(t('skills.agentsHome')) as HTMLInputElement
+    expect(dshInput.closest('[data-settings-section="directories"]')).not.toBeNull()
+    expect(dshInput.value).toBe('/initial/.dsh')
+    expect(agentsInput.value).toBe('')
+
+    const browseButtons = within(dshInput.closest('[data-settings-section="directories"]') as HTMLElement)
+      .getAllByRole('button', { name: new RegExp(`^${t('storage.chooseDirectory')}`, 'u') })
+    expect(browseButtons).toHaveLength(2)
+    fireEvent.click(browseButtons[1]!)
+    await waitFor(() => expect(agentsInput.value).toBe('/picked/.agents'))
+    expect(writes).not.toHaveBeenCalled()
+
+    fireEvent.change(dshInput, { target: { value: '   ' } })
+    fireEvent.click(within(dshInput.closest('[data-settings-section="directories"]') as HTMLElement).getByRole('button', { name: t('options.apply') }))
+    await waitFor(() => expect(writes).toHaveBeenCalledWith([
+      { op: 'unset', path: ['dshHome'] },
+      { op: 'set', path: ['agentsHome'], value: '/picked/.agents' },
+    ]))
+  })
+
+  it('manages Market Sources registries via Skills source-management RPC', async () => {
+    expect(supportsMemoryComponentSettingsSection(SKILLS_PACKAGE, 'market')).toBe(true)
+    const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: {}, revision: 1, writable: true, mode: 'host' })
+    let registries = [
+      { id: 'builtin-official', label: 'Official Skills', url: 'https://skills.sh', builtin: true, enabled: true, skillCount: 24 },
+      { id: 'team-repo', label: 'Team Skills', url: 'https://github.com/acme/skills', builtin: false, enabled: true, skillCount: 5 },
+    ]
+    const call = vi.fn(async (channel: string, endpoint: string, payload: Record<string, unknown>) => {
+      if (channel === '/dsh-mnemon-read' && endpoint === 'source-management-read' && payload.operation === 'market') {
+        return { ok: true as const, value: { revision: 'r1', value: { registries } } }
+      }
+      if (channel === '/dsh-mnemon-write' && endpoint === 'source-management-mutate') {
+        const input = payload.input as Record<string, unknown>
+        if (payload.operation === 'registry-toggle') {
+          registries = registries.map(item => item.id === input.id ? { ...item, enabled: Boolean(input.enabled) } : item)
+        } else if (payload.operation === 'registry-remove') {
+          registries = registries.filter(item => item.id !== input.id)
+        } else if (payload.operation === 'registry-add') {
+          const loc = String(input.location ?? input.url ?? '')
+          registries = [...registries, { id: 'added-repo', label: loc, url: loc, builtin: false, enabled: true, skillCount: 2 }]
+        }
+        return { ok: true as const, value: { revision: 'r2', value: { registries } } }
+      }
+      return { ok: false as const, error: { message: 'unsupported' } }
+    })
+    const conn = { rpc: { call }, isLoopback: true } as unknown as ClientConnectionHandle
+
+    render(<SkillsSettings scope={scope} page={page} connection={conn} t={t} />)
+    const marketToggle = await screen.findByRole('button', { name: t('skills.market') })
+    expect(marketToggle.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(marketToggle)
+    expect(marketToggle.getAttribute('aria-expanded')).toBe('true')
+    const marketSection = document.querySelector('[data-settings-section="market"]') as HTMLElement
+    expect(marketSection).not.toBeNull()
+    expect(within(marketSection).getByText('Official Skills')).not.toBeNull()
+
+    // Builtin registry has no remove button; custom registry has one.
+    const removePattern = new RegExp(`^${t('skills.marketRemove')}`, 'u')
+    expect(within(marketSection).getAllByRole('button', { name: removePattern })).toHaveLength(1)
+
+    fireEvent.click(within(marketSection).getByRole('switch', { name: 'Official Skills' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'source-management-mutate', expect.objectContaining({
+      operation: 'registry-toggle',
+      input: { id: 'builtin-official', enabled: false },
+    })))
+
+    fireEvent.click(within(marketSection).getByRole('button', { name: t('skills.marketRefresh') }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'source-management-mutate', expect.objectContaining({
+      operation: 'market-refresh',
+      input: {},
+    })))
+
+    const urlInput = within(marketSection).getByLabelText(t('skills.marketAddPlaceholder'))
+    fireEvent.change(urlInput, { target: { value: 'https://github.com/acme/extra-skills' } })
+    fireEvent.click(within(marketSection).getByRole('button', { name: t('skills.marketAdd') }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'source-management-mutate', expect.objectContaining({
+      operation: 'registry-add',
+      input: { location: 'https://github.com/acme/extra-skills' },
+    })))
+    expect(await within(marketSection).findAllByText('https://github.com/acme/extra-skills')).not.toHaveLength(0)
+
+    const removeButtons = within(marketSection).getAllByRole('button', { name: removePattern })
+    fireEvent.click(removeButtons[0]!)
+    await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'source-management-mutate', expect.objectContaining({
+      operation: 'registry-remove',
+      input: { id: 'team-repo' },
+    })))
+    expect(within(marketSection).queryByText('Team Skills')).toBeNull()
+  })
+
+  it('resolves the live Skills Source instance from source-management-catalog before reading or mutating', async () => {
+    const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: {}, revision: 1, writable: true, mode: 'host' })
+    const liveKey = 'include:dsh-mnemon-source-skills'
+    let catalogCalls = 0
+    const call = vi.fn(async (channel: string, endpoint: string, payload: Record<string, unknown>) => {
+      if (channel === '/dsh-mnemon-read' && endpoint === 'task-agent-models') {
+        return {
+          ok: true as const,
+          value: {
+            effective: { provider: 'deepseek', model: 'deepseek-chat', source: 'dsh-default' as const },
+            groups: [{ id: 'deepseek', name: 'DeepSeek', models: [{ id: 'deepseek-chat', name: 'DeepSeek Chat' }] }],
+            failures: [],
+          },
+        }
+      }
+      if (channel === '/dsh-mnemon-read' && endpoint === 'source-management-catalog') {
+        catalogCalls += 1
+        return {
+          ok: true as const,
+          value: {
+            sources: [{
+              sourceInstanceKey: liveKey,
+              sourceTypeId: 'skills',
+              title: 'Skills',
+              revision: 'rev-live-1',
+              availability: 'ready',
+              readOperations: ['draft-preferences', 'market'],
+              mutateOperations: ['draft-preference', 'market-refresh'],
+            }],
+          },
+        }
+      }
+      if (channel === '/dsh-mnemon-read' && endpoint === 'source-management-read') {
+        if (payload.sourceInstanceKey !== liveKey) {
+          return { ok: false as const, error: { message: `Unknown Source instance: ${String(payload.sourceInstanceKey)}` } }
+        }
+        if (payload.operation === 'draft-preferences') {
+          return { ok: true as const, value: { revision: 'rev-live-1', value: { draftModel: null, runModel: null } } }
+        }
+        if (payload.operation === 'market') {
+          return {
+            ok: true as const,
+            value: {
+              revision: 'rev-live-1',
+              value: { registries: [{ id: 'builtin-official', label: 'Official Skills', url: 'https://skills.sh', builtin: true, enabled: true, skillCount: 12 }] },
+            },
+          }
+        }
+      }
+      if (channel === '/dsh-mnemon-write' && endpoint === 'source-management-mutate') {
+        expect(payload.sourceInstanceKey).toBe(liveKey)
+        expect(payload.expectedRevision).toBe('rev-live-1')
+        return {
+          ok: true as const,
+          value: {
+            revision: 'rev-live-2',
+            value: { registries: [{ id: 'builtin-official', label: 'Official Skills', url: 'https://skills.sh', builtin: true, enabled: true, skillCount: 12 }] },
+          },
+        }
+      }
+      return { ok: false as const, error: { message: `unexpected ${channel}/${endpoint}` } }
+    })
+    const conn = { rpc: { call }, isLoopback: true } as unknown as ClientConnectionHandle
+
+    render(<SkillsSettings scope={scope} page={{ ...page, section: 'market' }} connection={conn} t={t} />)
+
+    expect(await screen.findByRole('button', { name: new RegExp(`^${t('skills.draftModel')} `, 'u') })).not.toBeNull()
+    const marketToggle = await screen.findByRole('button', { name: t('skills.market') })
+    expect(marketToggle.getAttribute('aria-expanded')).toBe('true')
+    expect(catalogCalls).toBe(1)
+
+    const marketSection = document.querySelector('[data-settings-section="market"]') as HTMLElement
+    expect(within(marketSection).getByText('Official Skills')).not.toBeNull()
+
+    fireEvent.click(within(marketSection).getByRole('button', { name: t('skills.marketRefresh') }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'source-management-mutate', expect.objectContaining({
+      sourceInstanceKey: liveKey,
+      operation: 'market-refresh',
+      expectedRevision: 'rev-live-1',
+    })))
   })
 })
 

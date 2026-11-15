@@ -10,16 +10,21 @@ import { strategy } from './fixture.ts'
 
 configure({ asyncUtilTimeout: 5000 })
 
+const { settingsSupport } = vi.hoisted(() => ({ settingsSupport: vi.fn(() => false) }))
+beforeEach(() => settingsSupport.mockReturnValue(false))
+
 // Load the installed Core's actual DSH browser artifact; no repository source alias.
 vi.mock('dsh-mnemon/client', async () => {
   const { createRequire } = await import('node:module')
   const { loadMemoryClientArtifact } = await import('dsh-mnemon/testing')
-  return loadMemoryClientArtifact(createRequire(import.meta.url).resolve('dsh-mnemon/client'), {
+  const client = loadMemoryClientArtifact<Record<string, unknown>>(createRequire(import.meta.url).resolve('dsh-mnemon/client'), {
     react: await vi.importActual('react'),
     'react/jsx-runtime': await vi.importActual('react/jsx-runtime'),
     'react-dom': await vi.importActual('react-dom'),
     '@deepseek-ai/dsh-client-ui-primitives': await vi.importActual('@deepseek-ai/dsh-client-ui-primitives'),
   })
+  // Explicit new-host capability fixture; a generic callback on an old host stays false.
+  return { ...client, supportsMemoryComponentSettingsSection: settingsSupport }
 })
 
 import * as plugin from '../src/index.ts'
@@ -391,6 +396,7 @@ describe('Skills page', () => {
     await waitFor(() => expect(replace).toHaveBeenCalledWith({ evolution: true }))
     fireEvent.click(screen.getByRole('button', { name: t('common.settings') }))
     expect(onOpenSettings).toHaveBeenCalledTimes(1)
+    expect(onOpenSettings).toHaveBeenCalledWith()
     // The page itself carries no settings of its own.
     expect(screen.queryByRole('switch', { name: /evolution/iu })).toBeNull()
   })
@@ -667,7 +673,7 @@ describe('Skills page', () => {
     expect(draftWithSkill('  ', 'pdf')).toBe('/pdf ')
   })
 
-  it('installs a skill from a catalog added by path, without the network', async () => {
+  it('keeps the source dialog and catalog installation usable when old Core only offers generic settings navigation', async () => {
     const team = join(directory, 'team')
     mkdirSync(join(team, 'weekly-report'), { recursive: true })
     writeFileSync(join(team, 'weekly-report', 'SKILL.md'), '---\nname: weekly-report\ndescription: Write the weekly report.\n---\n\n# Weekly report\n\n1. Collect merged PRs\n')
@@ -675,11 +681,13 @@ describe('Skills page', () => {
       { name: 'weekly-report', title: { en: 'Weekly report' }, description: { en: 'Writes the weekly report from merged work.' }, category: 'docs-writing', author: 'Team', source: { type: 'path', path: 'weekly-report' } },
     ] }))
     await mutate('registry-toggle', { id: 'official', enabled: false })
-    page()
+    const onOpenSettings = vi.fn()
+    render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable management={management} onOpenSettings={onOpenSettings} />)
     fireEvent.click(await screen.findByRole('tab', { name: t('tab.market') }))
     // skills.sh stays on; the official catalog was switched off.
     fireEvent.click(await screen.findByRole('button', { name: t('market.sources', { count: 1 }) }))
     const sources = await screen.findByRole('dialog')
+    expect(onOpenSettings).not.toHaveBeenCalled()
     fireEvent.change(within(sources).getByLabelText(t('sources.addTitle')), { target: { value: join(team, 'registry.json') } })
     expect(within(sources).getByText(`${t('sources.detected.catalog')} · registry.json`)).not.toBeNull()
     fireEvent.click(within(sources).getByRole('button', { name: t('sources.add') }))
@@ -996,7 +1004,7 @@ describe('model pickers', () => {
     })
   }
 
-  /** The two pickers of a page, by the labels the toolbar shows. */
+  /** The contextual per-item model picker, by the label the toolbar shows. */
   const picker = (label: string) => screen.getByRole('button', { name: named(label) }) as HTMLButtonElement
 
   it.each(['skill', 'global', 'default'] as const)('uses the %s backtest model for both sides of a draft comparison', async selection => {
@@ -1025,6 +1033,7 @@ describe('model pickers', () => {
   })
 
   it.each(['suggestion', 'global', 'default'] as const)('uses the %s model when redrafting a suggestion', async selection => {
+    settingsSupport.mockReturnValue(true)
     await mutate('review-record', review())
     const [suggestion] = (await management.read('suggestions', null)).value as Array<{ id: string }>
     const global = { provider: 'buddy', model: 'deepseek-v4.1-flash' }
@@ -1034,11 +1043,19 @@ describe('model pickers', () => {
     const draft = await mutate('draft-record', { suggestionId: suggestion!.id, skillName: 'release-notes', content: SKILL, notes: 'Draft to revise', changes: [], guidance: [] }) as { id: string }
     const execute = vi.fn(async () => ({ ...await management.read('revision', null), value: { started: true } }))
     const assisted = Object.assign(withModels(management), { assistance: { operations: ['skill-draft'], execute } })
-    render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable management={assisted} navigationInput={{ seed: `suggestion:${suggestion!.id}`, nonce: 1 }} />)
+    render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable onOpenSettings={() => {}} management={assisted} navigationInput={{ seed: `suggestion:${suggestion!.id}`, nonce: 1 }} />)
     await screen.findByText('Draft to revise')
-    await waitFor(() => expect(picker(t('evolution.model')).disabled).toBe(false))
+    expect(screen.queryByRole('button', { name: named(t('evolution.model')) })).toBeNull()
+    await waitFor(() => expect(picker(t('evolution.modelCard')).disabled).toBe(false))
     if (selection === 'suggestion') await waitFor(() => expect(picker(t('evolution.modelCard')).textContent).toContain('DeepSeek-V4.1-Flash-1017'))
-    if (selection === 'global') await waitFor(() => expect(picker(t('evolution.model')).textContent).toContain('DeepSeek-V4.1-Flash'))
+    if (selection === 'global') {
+      await waitFor(() => expect(picker(t('evolution.modelCard')).textContent).toContain(t('evolution.modelAuto')))
+      await waitFor(() => expect(picker(t('evolution.modelCard')).textContent).toContain('DeepSeek-V4.1-Flash'))
+    }
+    if (selection === 'default') {
+      await waitFor(() => expect(picker(t('evolution.modelCard')).textContent).toContain(t('evolution.modelAuto')))
+      await waitFor(() => expect(picker(t('evolution.modelCard')).textContent).toContain('deepseek-v4.1-flash'))
+    }
     fireEvent.click(screen.getByRole('button', { name: t('common.more') }))
     fireEvent.click(await screen.findByRole('menuitem', { name: t('draft.redraft') }))
     fireEvent.change(screen.getByRole('textbox', { name: t('draft.redraftNote') }), { target: { value: 'Keep the component headings' } })
@@ -1049,53 +1066,133 @@ describe('model pickers', () => {
     }, expect.objectContaining({ confirmed: true })))
   })
 
-  it('offers the global pick and this card\'s own on 进化, and stores each', async () => {
+  it.each(['legacy-core', 'no-navigation', 'read-only'] as const)('preserves global and per-item model controls with %s', async mode => {
+    settingsSupport.mockReturnValue(mode === 'no-navigation')
     await mutate('review-record', review())
     const [suggestion] = (await management.read('suggestions', null)).value as Array<{ id: string }>
-    render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable management={withModels(management)} navigationInput={{ seed: `suggestion:${suggestion!.id}`, nonce: 1 }} />)
-    // The card picker follows the Agent until this card is given a model of its own.
-    await waitFor(() => expect(picker(t('evolution.modelCard')).textContent).toContain(t('evolution.modelAuto')))
-    // The global picker names the model the task Agent runs once the directory arrives.
-    await waitFor(() => expect(picker(t('evolution.model')).textContent).toContain('deepseek-v4.1-flash'))
-    expect(picker(t('evolution.model')).disabled).toBe(false)
-    // A card's own pick writes only that card's entry.
-    fireEvent.click(picker(t('evolution.modelCard')))
-    fireEvent.click(await screen.findByRole('menuitem', { name: named('DeepSeek-V4.1-Flash-1017', 'TRAE (字节)') }))
-    await waitFor(async () => expect((await management.read('draft-preferences', null)).value).toMatchObject({ suggestionModels: { [suggestion!.id]: { provider: 'trae', model: 'deepseek-v4.1-flash-1017' } } }))
-    // The global pick writes the global entry and leaves the card's alone.
-    fireEvent.click(picker(t('evolution.model')))
-    fireEvent.click(await screen.findByRole('menuitem', { name: named('DeepSeek-V4.1-Flash', 'CodeBuddy (腾讯)') }))
-    await waitFor(async () => expect((await management.read('draft-preferences', null)).value).toMatchObject({ model: { provider: 'buddy', model: 'deepseek-v4.1-flash' }, suggestionModels: { [suggestion!.id]: { provider: 'trae', model: 'deepseek-v4.1-flash-1017' } } }))
+    const global = { provider: 'buddy', model: 'deepseek-v4.1-flash' }
+    const override = { provider: 'trae', model: 'deepseek-v4.1-flash-1017' }
+    await mutate('draft-preference', { model: global })
+    await mutate('draft-preference', { slot: 'run', model: global })
+    await mutate('draft-preference', { suggestionId: suggestion!.id, model: override })
+    await mutate('draft-preference', { skillName: 'release-notes', slot: 'run', model: override })
+    const onOpenSettings = vi.fn()
+    const props = { sourceTypeId: 'skills', sourceInstanceKey: 'source:skills', sourceInstances: [], locale: 'en', writable: mode !== 'read-only', management: withModels(management), ...(mode === 'no-navigation' ? {} : { onOpenSettings }) }
+    const view = render(<SkillsSourcePage {...props} navigationInput={{ seed: `suggestion:${suggestion!.id}`, nonce: 1 }} />)
+    for (const [index, label] of [t('evolution.model'), t('tests.model')].entries()) {
+      if (index === 1) view.rerender(<SkillsSourcePage {...props} navigationInput={{ seed: 'evals:release-notes', nonce: 2 }} />)
+      await waitFor(() => expect(picker(label).textContent).toContain('DeepSeek-V4.1-Flash'))
+      expect(picker(label).disabled).toBe(mode === 'read-only')
+      expect(screen.queryByRole('button', { name: t('common.settings') })).toBeNull()
+      if (mode !== 'read-only') {
+        fireEvent.click(picker(label))
+        fireEvent.click(await screen.findByRole('menuitem', { name: named('DeepSeek-V4.1-Flash-1017', 'TRAE (字节)') }))
+        await waitFor(async () => expect((await management.read('draft-preferences', null)).value).toMatchObject({ [index === 0 ? 'model' : 'runModel']: override }))
+      }
+    }
+    expect(onOpenSettings).not.toHaveBeenCalled()
+    expect((await management.read('draft-preferences', null)).value).toMatchObject({
+      model: mode === 'read-only' ? global : override,
+      runModel: mode === 'read-only' ? global : override,
+      suggestionModels: { [suggestion!.id]: override },
+      skillRunModels: { 'release-notes': override },
+    })
   })
 
-  it('writes the pickers before the directory arrives, showing follow-default and staying disabled', async () => {
+  it('offers only the contextual item picker on 进化, shows the active global default in Follow default, and stores per-suggestion overrides', async () => {
+    settingsSupport.mockReturnValue(true)
+    await mutate('review-record', review())
+    const [suggestion] = (await management.read('suggestions', null)).value as Array<{ id: string }>
+    await mutate('draft-preference', { model: { provider: 'buddy', model: 'deepseek-v4.1-flash' } })
+    render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable onOpenSettings={() => {}} management={withModels(management)} navigationInput={{ seed: `suggestion:${suggestion!.id}`, nonce: 1 }} />)
+    await waitFor(() => expect(picker(t('evolution.modelCard')).disabled).toBe(false))
+    expect(screen.queryByRole('button', { name: named(t('evolution.model')) })).toBeNull()
+    // Follow-default reflects the configured global draft model until overridden for this card.
+    await waitFor(() => expect(picker(t('evolution.modelCard')).textContent).toContain(t('evolution.modelAuto')))
+    await waitFor(() => expect(picker(t('evolution.modelCard')).textContent).toContain('DeepSeek-V4.1-Flash'))
+    // A card's own pick writes only that card's entry while preserving the global default.
+    fireEvent.click(picker(t('evolution.modelCard')))
+    fireEvent.click(await screen.findByRole('menuitem', { name: named('DeepSeek-V4.1-Flash-1017', 'TRAE (字节)') }))
+    await waitFor(async () => expect((await management.read('draft-preferences', null)).value).toMatchObject({
+      model: { provider: 'buddy', model: 'deepseek-v4.1-flash' },
+      suggestionModels: { [suggestion!.id]: { provider: 'trae', model: 'deepseek-v4.1-flash-1017' } },
+    }))
+  })
+
+  it('renders the item picker before the directory arrives, showing follow-default and staying disabled until ready', async () => {
+    settingsSupport.mockReturnValue(true)
+    await mutate('review-record', review())
+    const [suggestion] = (await management.read('suggestions', null)).value as Array<{ id: string }>
     const pending: { release: (value: never) => void } = { release: () => {} }
     const slow = Object.assign(Object.create(Object.getPrototypeOf(management) as object), management, {
       models: () => new Promise<never>(resolve => { pending.release = resolve as (value: never) => void }),
     }) as typeof management
-    render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable management={slow} navigationInput={{ seed: 'evolution:pending', nonce: 1 }} />)
-    // The toolbar is there while the directory is still in flight, and says follow-default.
-    await waitFor(() => expect(picker(t('evolution.model')).textContent).toContain(t('evolution.modelAuto')))
-    expect(picker(t('evolution.model')).disabled).toBe(true)
+    render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable onOpenSettings={() => {}} management={slow} navigationInput={{ seed: `suggestion:${suggestion!.id}`, nonce: 1 }} />)
+    // The toolbar holds its place while the directory is in flight, showing Follow default + hint.
+    await waitFor(() => expect(picker(t('evolution.modelCard')).textContent).toContain(t('evolution.modelAuto')))
+    expect(screen.queryByRole('button', { name: named(t('evolution.model')) })).toBeNull()
+    expect(picker(t('evolution.modelCard')).textContent).toContain(t('evolution.modelAutoHint'))
     expect(picker(t('evolution.modelCard')).disabled).toBe(true)
     pending.release({ effective: { provider: 'buddy', model: 'deepseek-v4.1-flash' }, groups: [], failures: [] } as never)
-    // Once the directory answers, the picker opens and names the model the Agent runs.
-    await waitFor(() => expect(picker(t('evolution.model')).disabled).toBe(false))
-    expect(picker(t('evolution.model')).textContent).toContain('deepseek-v4.1-flash')
+    // Once the directory answers, the item picker enables and shows the Agent's active model in Follow default.
+    await waitFor(() => expect(picker(t('evolution.modelCard')).disabled).toBe(false))
+    expect(picker(t('evolution.modelCard')).textContent).toContain('deepseek-v4.1-flash')
   })
 
-  it('picks the model a backtest runs on, globally and for one skill, on 评测', async () => {
+  it('uses the global runModel or per-skill override on 评测 without rendering a duplicate global picker', async () => {
+    settingsSupport.mockReturnValue(true)
     await mutate('review-record', review())
-    render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable management={withModels(management)} navigationInput={{ seed: 'evals:release-notes', nonce: 1 }} />)
-    // The global picker names the Agent's own model; the per-skill one follows it until set.
-    await waitFor(() => expect(picker(t('tests.model')).textContent).toContain('deepseek-v4.1-flash'))
-    expect(picker(t('tests.modelCard')).textContent).toContain(t('tests.modelAuto'))
-    fireEvent.click(picker(t('tests.model')))
-    fireEvent.click(await screen.findByRole('menuitem', { name: named('DeepSeek-V4.1-Flash', 'CodeBuddy (腾讯)') }))
-    await waitFor(async () => expect((await management.read('draft-preferences', null)).value).toMatchObject({ runModel: { provider: 'buddy', model: 'deepseek-v4.1-flash' } }))
+    const global = { provider: 'buddy', model: 'deepseek-v4.1-flash' }
+    const override = { provider: 'trae', model: 'deepseek-v4.1-flash-1017' }
+    await mutate('draft-preference', { slot: 'run', model: global })
+    const execute = vi.fn(async () => ({ ...await management.read('revision', null), value: { runId: 'run-1' } }))
+    const assisted = Object.assign(withModels(management), { assistance: { operations: ['skill-backtest'], execute } })
+    render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable onOpenSettings={() => {}} management={assisted} navigationInput={{ seed: 'evals:release-notes', nonce: 1 }} />)
+    await waitFor(() => expect(picker(t('tests.modelCard')).disabled).toBe(false))
+    expect(screen.queryByRole('button', { name: named(t('tests.model')) })).toBeNull()
+    await waitFor(() => expect(picker(t('tests.modelCard')).textContent).toContain(t('tests.modelAuto')))
+    await waitFor(() => expect(picker(t('tests.modelCard')).textContent).toContain('DeepSeek-V4.1-Flash'))
+
+    fireEvent.click(await screen.findByRole('button', { name: t('tests.run') }))
+    await waitFor(() => expect(execute).toHaveBeenCalledWith('skill-backtest', {
+      skillName: 'release-notes', target: { kind: 'current' }, ...global,
+    }, expect.objectContaining({ confirmed: true })))
+
+    execute.mockClear()
     fireEvent.click(picker(t('tests.modelCard')))
     fireEvent.click(await screen.findByRole('menuitem', { name: named('DeepSeek-V4.1-Flash-1017', 'TRAE (字节)') }))
-    await waitFor(async () => expect((await management.read('draft-preferences', null)).value).toMatchObject({ skillRunModels: { 'release-notes': { provider: 'trae', model: 'deepseek-v4.1-flash-1017' } } }))
+    await waitFor(async () => expect((await management.read('draft-preferences', null)).value).toMatchObject({
+      runModel: global,
+      skillRunModels: { 'release-notes': override },
+    }))
+    fireEvent.click(screen.getByRole('button', { name: t('tests.run') }))
+    await waitFor(() => expect(execute).toHaveBeenCalledWith('skill-backtest', {
+      skillName: 'release-notes', target: { kind: 'current' }, ...override,
+    }, expect.objectContaining({ confirmed: true })))
+  })
+
+  it('deep-links model settings from 进化 and 评测 and market source settings from 市场 when onOpenSettings is provided', async () => {
+    settingsSupport.mockReturnValue(true)
+    await mutate('review-record', review())
+    const [suggestion] = (await management.read('suggestions', null)).value as Array<{ id: string }>
+    const onOpenSettings = vi.fn()
+    render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable management={withModels(management)} onOpenSettings={onOpenSettings} navigationInput={{ seed: `suggestion:${suggestion!.id}`, nonce: 1 }} />)
+    await screen.findByRole('heading', { name: 'release-notes' })
+    fireEvent.click(screen.getByRole('button', { name: t('common.settings') }))
+    expect(onOpenSettings).toHaveBeenCalledTimes(1)
+    expect(onOpenSettings).toHaveBeenLastCalledWith('models')
+
+    fireEvent.click(screen.getByRole('tab', { name: /^Evals/u }))
+    await screen.findByRole('button', { name: named(t('tests.modelCard')) })
+    fireEvent.click(screen.getByRole('button', { name: t('common.settings') }))
+    expect(onOpenSettings).toHaveBeenCalledTimes(2)
+    expect(onOpenSettings).toHaveBeenLastCalledWith('models')
+
+    fireEvent.click(screen.getByRole('tab', { name: t('tab.market') }))
+    fireEvent.click(await screen.findByRole('button', { name: /^Sources ·/u }))
+    expect(onOpenSettings).toHaveBeenCalledTimes(3)
+    expect(onOpenSettings).toHaveBeenLastCalledWith('market')
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('deletes a suggestion from its card, and a draft from its own, after a confirmation', async () => {

@@ -55,14 +55,18 @@ export function ProviderMemoryFields(props: {
   body?: MemorySpaceView
   clearSecrets?: string[]
   onClearSecretsChange?: (keys: string[]) => void
+  layout?: 'settings' | 'dialog'
+  disabled?: boolean
 }): JSX.Element {
   const t = useT()
+  const layout = props.layout ?? 'dialog'
   return <div className={css.providerFields} data-provider={props.provider.id}>
     <div className={css.providerFieldHeading}><div className={css.providerFieldIdentity}><ProviderIcon providerId={props.provider.id} icon={props.provider.icon} className={css.providerFieldIcon} /><div><strong>{props.provider.label}</strong><small>{providerSummary(t, props.provider)}</small></div></div><span>{props.provider.kind === 'local' ? t('overview.providerKindLocal') : t('overview.providerKindRemote')} · {t(`overview.workspaceBinding.${props.provider.workspaceBinding}`)}</span></div>
     <div className={css.providerAdvancedGrid}>{memoryProviderFields(props.provider).map(field => {
       const saved = props.body?.provider.configuredSecrets.includes(field.key) === true
       const clearSecrets = props.clearSecrets ?? []
-      return <ProviderField key={field.key} field={field} value={props.connection[field.key]} layout="dialog" saved={saved} clearing={clearSecrets.includes(field.key)}
+      return <ProviderField key={field.key} field={field} value={props.connection[field.key]} layout={layout} saved={saved} clearing={clearSecrets.includes(field.key)}
+        {...(props.disabled === undefined ? {} : { disabled: props.disabled })}
         onChange={value => props.onChange(field.key, value)}
         {...(props.body === undefined || props.onClearSecretsChange === undefined ? {} : {
           onClearChange: (clearing: boolean) => props.onClearSecretsChange!(clearing ? [...new Set([...clearSecrets, field.key])] : clearSecrets.filter(key => key !== field.key)),
