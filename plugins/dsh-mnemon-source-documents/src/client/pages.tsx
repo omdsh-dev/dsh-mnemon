@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import { MarkdownText, PathLabel, type MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import { type DocumentRecord, type DocumentSnapshot, type DocumentView } from '../contracts.ts'
 import type { DocumentsPageClient } from './api.ts'
-import { useRequestVersion, appearanceClass, useLocale, humanBytes, message, PageHeader, ProgressiveFooter, SidebarModal, EmptyState, SearchField } from 'dsh-mnemon/client'
+import { useRequestVersion, appearanceClass, useLocale, humanBytes, message, PageHeader, ProgressiveFooter, Reveal, SectionSpinner, SidebarModal, EmptyState, SearchField } from 'dsh-mnemon/client'
 
 const canRenderMarkdown = typeof MarkdownText === 'function' || (typeof MarkdownText === 'object' && MarkdownText !== null)
 const canRenderPathLabel = typeof PathLabel === 'function' || (typeof PathLabel === 'object' && PathLabel !== null)
@@ -45,6 +45,7 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
   const [visibleLimit, setVisibleLimit] = useState(pageSize)
   const [selectedId, setSelectedId] = useState<string | null>(props.documentId ?? null)
   const [selected, setSelected] = useState<DocumentView | null>(null)
+  const [failedSelectedId, setFailedSelectedId] = useState<string | null>(null)
   const [status, setStatus] = useState<'active' | 'archived'>('active')
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
@@ -184,12 +185,17 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
     }
     let active = true
     const requestRevision = loadedRevision
+    setFailedSelectedId(null)
     void props.client.document(selectedId).then(value => {
       if (!active) return
       fetchedSignatureRef.current = `${requestRevision}:${value.id}:${value.revision}:${value.contentHash}`
       selectedRef.current = value
       setSelected(value)
-    }).catch(reason => { if (active) setError(message(reason)) })
+    }).catch(reason => {
+      if (!active) return
+      setFailedSelectedId(selectedId)
+      setError(message(reason))
+    })
     return () => { active = false }
   }, [loadedRevision, props.client, selectedId, snapshot])
   useLayoutEffect(() => {
@@ -221,17 +227,20 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
     } catch (reason) { setError(message(reason)) } finally { setSaving(false) }
   }
 
+  const activeSelected = selected !== null && selected.id === selectedId ? selected : null
+  const loadingSelected = selectedId !== null && failedSelectedId !== selectedId && (selected === null || selected.id !== selectedId) && items.some(item => item.id === selectedId)
+
   const beginEdit = () => {
-    if (selected === null) return
-    setTitle(selected.title); setDescription(selected.description); setContent(selected.content); setSources(selected.sourcePaths.join('\n')); setEditing(true); setComposing(false); setConfirmArchive(false)
+    if (activeSelected === null) return
+    setTitle(activeSelected.title); setDescription(activeSelected.description); setContent(activeSelected.content); setSources(activeSelected.sourcePaths.join('\n')); setEditing(true); setComposing(false); setConfirmArchive(false)
   }
 
   const update = async (event: FormEvent) => {
     event.preventDefault()
-    if (selected === null) return
+    if (activeSelected === null) return
     setSaving(true); setError(null); setNotice(null)
     try {
-      const result = await props.client.mutateDocument({ action: 'update', id: selected.id, title, description, content, sourcePaths: sourcePaths(sources) })
+      const result = await props.client.mutateDocument({ action: 'update', id: activeSelected.id, title, description, content, sourcePaths: sourcePaths(sources) })
       setNotice(result.maintenance === undefined ? t('documents.updated') : t('documents.updatedAfterArchive', { count: result.maintenance.archivedDocumentIds.length }))
       setEditing(false)
       await display(query, status, { id: result.document.id, document: result.document })
@@ -240,10 +249,10 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
   }
 
   const archive = async () => {
-    if (selected === null) return
+    if (activeSelected === null) return
     setSaving(true); setError(null); setNotice(null)
     try {
-      const result = await props.client.archiveDocument(selected.id)
+      const result = await props.client.archiveDocument(activeSelected.id)
       // A local archive keeps the original without an index in any Memory Space.
       const spaces = result.maintenance?.memoryBodyIds ?? []
       setNotice(spaces.length === 0 ? t('documents.archivedLocally') : t('documents.archived', { spaces: spaces.join(', ') }))
@@ -268,17 +277,17 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
   const usage = snapshot === null ? 0 : Math.min(100, snapshot.activeBytes / snapshot.limitBytes * 100)
   const activeCount = snapshot?.activeCount ?? 0
   const archivedCount = snapshot?.archivedCount ?? 0
-  const selectedRecord = snapshot?.documents.find(document => document.id === selected?.id)
-  const selectedIsCurrent = selected?.fileRevision !== undefined && selectedRecord?.revision === selected.revision
-    && selectedRecord.contentHash === selected.contentHash && selectedRecord.status === selected.status
+  const selectedRecord = snapshot?.documents.find(document => document.id === activeSelected?.id)
+  const selectedIsCurrent = activeSelected?.fileRevision !== undefined && selectedRecord?.revision === activeSelected.revision
+    && selectedRecord.contentHash === activeSelected.contentHash && selectedRecord.status === activeSelected.status
   const composer = <form id={documentCreateFormId} className={css.documentEditor} onSubmit={event => void create(event)}>
     <header><div><h3>{t('documents.newTitle')}</h3><p>{t('documents.editorHint')}</p></div><span>{t('documents.managedCopy')}</span></header>
     <div className={css.documentEditorMeta}><label>{t('documents.name')}<input value={title} onChange={event => setTitle(event.target.value)} required /></label><label>{t('documents.routing')}<input value={description} onChange={event => setDescription(event.target.value)} /></label></div>
     <label>{t('documents.sources')}<input value={sources} onChange={event => setSources(event.target.value)} placeholder={t('documents.sourcesPlaceholder')} /></label>
     <label>{t('documents.markdown')}<textarea value={content} onChange={event => setContent(event.target.value)} rows={10} required /></label>
   </form>
-  const editComposer = selected === null ? null : <form id={documentEditFormId} className={css.documentEditor} onSubmit={event => void update(event)}>
-    <header><div><h3>{t('documents.editTitle')}</h3><p>{t('documents.editorHint')}</p></div><code>{selected.id}</code></header>
+  const editComposer = activeSelected === null ? null : <form id={documentEditFormId} className={css.documentEditor} onSubmit={event => void update(event)}>
+    <header><div><h3>{t('documents.editTitle')}</h3><p>{t('documents.editorHint')}</p></div><code>{activeSelected.id}</code></header>
     <div className={css.documentEditorMeta}><label>{t('documents.name')}<input value={title} onChange={event => setTitle(event.target.value)} required /></label><label>{t('documents.routing')}<input value={description} onChange={event => setDescription(event.target.value)} /></label></div>
     <label>{t('documents.sources')}<input value={sources} onChange={event => setSources(event.target.value)} /></label><label>{t('documents.markdown')}<textarea value={content} onChange={event => setContent(event.target.value)} rows={18} required /></label>
   </form>
@@ -288,6 +297,7 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
   const selectDocument = (documentId: string) => {
     if (selectedId === documentId) return
     setSelected(null)
+    setFailedSelectedId(null)
     setSelectedId(documentId)
     setEditing(false)
     setConfirmArchive(false)
@@ -297,8 +307,8 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
   return (
     <div className={css.page}>
       <PageHeader title={t('documents.title')} description={t('documents.description')} meta={snapshot === null ? t('common.loading') : t('documents.capacity', { used: humanBytes(snapshot.activeBytes), limit: humanBytes(snapshot.limitBytes) })} {...(props.writeEnabled && (props.canCreate ?? props.sessionId !== undefined) ? { action: <button type="button" className={css.primaryButton} onClick={startComposer}>{t('documents.new')}</button> } : {})} />
-      {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
-      {notice !== null && <div className={css.runtimeNotice} role="status">{notice}</div>}
+      <Reveal>{error === null ? null : <div className={css.inlineError} role="alert">{error}</div>}</Reveal>
+      <Reveal>{notice === null ? null : <div className={css.runtimeNotice} role="status">{notice}</div>}</Reveal>
 
       <section className={css.documentSummary} aria-label={t('documents.summary')}>
         <article><span>{t('documents.active')}</span><strong>{activeCount}</strong><small>{t('documents.activeHint')}</small></article>
@@ -331,19 +341,23 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
         </aside>
 
         <section ref={readerRef} className={css.documentReader} aria-label={t('documents.reader')} data-scroll-region={''}>
-          {selected === null ? <EmptyState glyph="▤" title={t('documents.selectTitle')}>{t('documents.selectText')}</EmptyState> : (<article className={css.documentDetail}>
-            <header><div><span>{selected.status === 'active' ? t('documents.active') : t('documents.coldArchive')}</span><h3>{selected.title}</h3><p>{selected.description || t('documents.noDescription')}</p></div><div className={css.documentActions}>{props.writeEnabled && selected.status === 'active' && <button type="button" className={documentEditActionClass} onClick={beginEdit}>{t('documents.edit')}</button>}{props.writeEnabled && props.client.deleteDocument !== undefined && snapshot !== null && <button type="button" className={documentArchiveActionClass} disabled={!selectedIsCurrent} onClick={() => { setDeleteError(null); setDeleteTarget({ document: selected, revision: snapshot.revision }) }}>{t('documents.delete')}</button>}</div></header>
-            <dl><div><dt>{t('documents.path')}</dt><dd><code><PathText path={selected.relativePath} /></code></dd></div><div><dt>{t('documents.revision')}</dt><dd>{selected.revision}</dd></div><div><dt>{t('documents.hash')}</dt><dd><code>{selected.contentHash.slice(0, 16)}</code></dd></div><div><dt>{t('documents.size')}</dt><dd>{humanBytes(selected.sizeBytes)}</dd></div></dl>
-            {selected.sourcePaths.length > 0 && <div className={css.documentSources}><span>{t('documents.sources')}</span>{selected.sourcePaths.map(path => <code key={path}><PathText path={path} /></code>)}</div>}
-            {selected.status === 'archived' && <div className={css.documentArchiveReceipt}><strong>{t(selected.memoryBodyIds.length === 0 ? 'documents.archiveNote' : 'documents.archiveReceipt')}</strong><p>{selected.archiveSummary}</p><div>{selected.memoryBodyIds.map(id => <code key={id}>{id}</code>)}</div></div>}
-            <DocumentMarkdown content={selected.content} />
-            {props.writeEnabled && selected.status === 'active' && <footer className={css.documentDanger}>{<><div><strong>{t('documents.archiveTitle')}</strong><p>{t('documents.archiveDescription')}</p></div><button type="button" className={documentArchiveActionClass} onClick={() => setConfirmArchive(true)}>{t('documents.archive')}</button></>}</footer>}
-          </article>)}
+          {activeSelected !== null ? (<article className={css.documentDetail}>
+            <header><div><span>{activeSelected.status === 'active' ? t('documents.active') : t('documents.coldArchive')}</span><h3>{activeSelected.title}</h3><p>{activeSelected.description || t('documents.noDescription')}</p></div><div className={css.documentActions}>{props.writeEnabled && activeSelected.status === 'active' && <button type="button" className={documentEditActionClass} onClick={beginEdit}>{t('documents.edit')}</button>}{props.writeEnabled && props.client.deleteDocument !== undefined && snapshot !== null && <button type="button" className={documentArchiveActionClass} disabled={!selectedIsCurrent} onClick={() => { setDeleteError(null); setDeleteTarget({ document: activeSelected, revision: snapshot.revision }) }}>{t('documents.delete')}</button>}</div></header>
+            <dl><div><dt>{t('documents.path')}</dt><dd><code><PathText path={activeSelected.relativePath} /></code></dd></div><div><dt>{t('documents.revision')}</dt><dd>{activeSelected.revision}</dd></div><div><dt>{t('documents.hash')}</dt><dd><code>{activeSelected.contentHash.slice(0, 16)}</code></dd></div><div><dt>{t('documents.size')}</dt><dd>{humanBytes(activeSelected.sizeBytes)}</dd></div></dl>
+            {activeSelected.sourcePaths.length > 0 && <div className={css.documentSources}><span>{t('documents.sources')}</span>{activeSelected.sourcePaths.map(path => <code key={path}><PathText path={path} /></code>)}</div>}
+            {activeSelected.status === 'archived' && <div className={css.documentArchiveReceipt}><strong>{t(activeSelected.memoryBodyIds.length === 0 ? 'documents.archiveNote' : 'documents.archiveReceipt')}</strong><p>{activeSelected.archiveSummary}</p><div>{activeSelected.memoryBodyIds.map(id => <code key={id}>{id}</code>)}</div></div>}
+            <DocumentMarkdown content={activeSelected.content} />
+            {props.writeEnabled && activeSelected.status === 'active' && <footer className={css.documentDanger}>{<><div><strong>{t('documents.archiveTitle')}</strong><p>{t('documents.archiveDescription')}</p></div><button type="button" className={documentArchiveActionClass} onClick={() => setConfirmArchive(true)}>{t('documents.archive')}</button></>}</footer>}
+          </article>) : loadingSelected || (loading && items.length === 0) ? (
+            <div className={css.loading}><SectionSpinner label={t('common.loading')} /><span>{t('common.loading')}</span></div>
+          ) : (
+            <EmptyState glyph="▤" title={t('documents.selectTitle')}>{t('documents.selectText')}</EmptyState>
+          )}
         </section>
       </div>
       {composing && <SidebarModal title={t('documents.newTitle')} description={t('documents.editorHint')} busy={saving} onClose={resetComposer} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close className={css.secondaryButton} disabled={saving} onClick={resetComposer}>{t('common.cancel')}</button><button type="submit" form={documentCreateFormId} className={css.primaryButton} disabled={saving || title.trim() === '' || content.trim() === ''}>{saving ? t('documents.saving') : t('documents.create')}</button></div>}>{composer}</SidebarModal>}
-      {editing && selected !== null && <SidebarModal title={t('documents.editTitle')} description={selected.title} busy={saving} onClose={() => setEditing(false)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close className={css.secondaryButton} disabled={saving} onClick={() => setEditing(false)}>{t('common.cancel')}</button><button type="submit" form={documentEditFormId} className={css.primaryButton} disabled={saving}>{saving ? t('documents.saving') : t('documents.save')}</button></div>}>{editComposer}</SidebarModal>}
-      {confirmArchive && selected !== null && <SidebarModal title={t('documents.archiveConfirm')} description={selected.title} busy={saving} onClose={() => setConfirmArchive(false)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close data-autofocus className={css.secondaryButton} disabled={saving} onClick={() => setConfirmArchive(false)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void archive()}>{saving ? t('documents.archiving') : t('documents.archiveNow')}</button></div>}><div className={css.bodyDeleteConfirm}><p>{t('documents.archiveDescription')}</p><div className={css.bodyDeleteSummary}><strong>{selected.title}</strong><span>{selected.relativePath} · {humanBytes(selected.sizeBytes)}</span></div></div></SidebarModal>}
+      {editing && activeSelected !== null && <SidebarModal title={t('documents.editTitle')} description={activeSelected.title} busy={saving} onClose={() => setEditing(false)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close className={css.secondaryButton} disabled={saving} onClick={() => setEditing(false)}>{t('common.cancel')}</button><button type="submit" form={documentEditFormId} className={css.primaryButton} disabled={saving}>{saving ? t('documents.saving') : t('documents.save')}</button></div>}>{editComposer}</SidebarModal>}
+      {confirmArchive && activeSelected !== null && <SidebarModal title={t('documents.archiveConfirm')} description={activeSelected.title} busy={saving} onClose={() => setConfirmArchive(false)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close data-autofocus className={css.secondaryButton} disabled={saving} onClick={() => setConfirmArchive(false)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void archive()}>{saving ? t('documents.archiving') : t('documents.archiveNow')}</button></div>}><div className={css.bodyDeleteConfirm}><p>{t('documents.archiveDescription')}</p><div className={css.bodyDeleteSummary}><strong>{activeSelected.title}</strong><span>{activeSelected.relativePath} · {humanBytes(activeSelected.sizeBytes)}</span></div></div></SidebarModal>}
       {deleteTarget !== null && props.writeEnabled && <SidebarModal title={t('documents.deleteConfirm')} description={deleteTarget.document.title} busy={saving} onClose={() => setDeleteTarget(null)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close data-autofocus className={css.secondaryButton} disabled={saving} onClick={() => setDeleteTarget(null)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void remove()}>{saving ? t('documents.deleting') : t('documents.deleteNow')}</button></div>}><div className={css.bodyDeleteConfirm}>{deleteError !== null && <div className={css.inlineError} role="alert">{deleteError}</div>}<p>{t('documents.deleteDescription')}</p><div className={css.bodyDeleteSummary}><strong>{deleteTarget.document.title}</strong><span>{deleteTarget.document.relativePath} · {humanBytes(deleteTarget.document.sizeBytes)}</span></div></div></SidebarModal>}
     </div>
   )

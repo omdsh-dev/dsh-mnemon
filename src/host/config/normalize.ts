@@ -5,6 +5,7 @@ import { normalizeDisplayMode } from '../display-mode.ts'
 import type {
   Config as SharedConfig,
   CustomPackConfig as SharedCustomPackConfig,
+  DocumentsConfig,
   InteractionConfig as SharedInteractionConfig,
   MemoryTopologyConfig,
   ResolvedConfig as SharedResolvedConfig,
@@ -23,11 +24,14 @@ import {
   DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES,
   DEFAULT_RUNTIME_USER_LIMIT_BYTES,
   DEFAULT_TIMEOUT_MS,
+  DOCUMENTS_DEFAULT_LIMIT_BYTES,
+  DOCUMENTS_MAX_LIMIT_BYTES,
   MAX_IDLE_REVIEW_MS,
   MAX_RECALL_LIMIT,
   MAX_RUNTIME_MAINTENANCE_MAX_TOKENS,
   MAX_RUNTIME_MEMORY_LIMIT_BYTES,
   MAX_TIMEOUT_MS,
+  MIN_DOCUMENTS_LIMIT_BYTES,
   MIN_IDLE_REVIEW_MS,
   MIN_RECALL_LIMIT,
   MIN_RUNTIME_MAINTENANCE_MAX_TOKENS,
@@ -52,7 +56,10 @@ export function mainStrategyTypeId(config: Pick<SharedResolvedConfig, 'memoryTop
 }
 
 export function resolveSkillsConfig(config: Partial<ResolvedSkillsConfig> | undefined = {}): ResolvedSkillsConfig {
-  return SkillsConfig(config ?? {})
+  const resolved = SkillsConfig(config ?? {})
+  if (resolved.dshHome === undefined) delete resolved.dshHome
+  if (resolved.agentsHome === undefined) delete resolved.agentsHome
+  return resolved
 }
 
 export function resolveInteractionConfig(config: SharedInteractionConfig = {}): SharedResolvedInteractionConfig {
@@ -129,6 +136,12 @@ function resolveTaskAgentModel(value: TaskAgentModelConfig | undefined): Resolve
   if (provider === undefined || model === undefined) throw new Error('dsh-mnemon: a fixed task Agent model requires both provider and model')
   if (provider.length > 200 || model.length > 300) throw new Error('dsh-mnemon: task Agent provider or model id is too long')
   return { mode, provider, model }
+}
+
+function resolveDocuments(value: DocumentsConfig | undefined): SharedResolvedConfig['documents'] {
+  return {
+    limitBytes: boundedInteger(value?.limitBytes, DOCUMENTS_DEFAULT_LIMIT_BYTES, MIN_DOCUMENTS_LIMIT_BYTES, DOCUMENTS_MAX_LIMIT_BYTES, 'Documents limit', ' bytes'),
+  }
 }
 
 function resolveRuntimeMemory(value: RuntimeMemoryConfig | undefined): SharedResolvedConfig['runtimeMemory'] {
@@ -211,6 +224,7 @@ export function resolveConfig(config: SharedConfig = {}): SharedResolvedConfig {
     ...(store === undefined ? {} : { store }),
     timeoutMs: boundedInteger(config.timeoutMs, DEFAULT_TIMEOUT_MS, MIN_TIMEOUT_MS, MAX_TIMEOUT_MS, 'timeoutMs'),
     defaultRecallLimit: boundedInteger(config.defaultRecallLimit, DEFAULT_RECALL_LIMIT, MIN_RECALL_LIMIT, MAX_RECALL_LIMIT, 'defaultRecallLimit'),
+    documents: resolveDocuments(config.documents),
     runtimeMemory: resolveRuntimeMemory(config.runtimeMemory),
     embedding: resolveEmbedding(config.embedding),
     memoryTopology: resolveMemoryTopology(config.memoryTopology),

@@ -57,6 +57,7 @@ export function MnemonSettingsHost({ view, currentSession, sessions, workspaces,
         writable: page.writable, language: page.language,
         ...(page.sessionId === undefined ? {} : { sessionId: page.sessionId }),
         ...(page.workspace === undefined ? {} : { workspace: page.workspace }),
+        ...(page.section === undefined ? {} : { section: page.section }),
         ...(host === undefined ? {} : { host }),
       }
       return renderSlot !== undefined ? renderSlot(MNEMON_COMPONENT_SETTINGS_SLOT, owner, { entryKey: entry.packageName, fallback: null }) : renderContributed!(entry.packageName, owner)

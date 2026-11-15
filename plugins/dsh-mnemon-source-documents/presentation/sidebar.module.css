@@ -28,8 +28,8 @@
 .shell .modal form[class*='documentEditor'] > header { display: none; }
 
 .shell [class*='documentWorkspace'] {
-  height: clamp(520px, calc(100dvh - 220px), 760px);
-  min-height: 520px;
+  height: clamp(420px, calc(100dvh - var(--dsh-frame-top-clearance, 0px) - 344px), 720px);
+  min-height: 420px;
   align-items: stretch;
 }
 .shell [class*='documentList'],
@@ -38,6 +38,12 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+}
+
+@container mnemon-workbench (max-width: 640px) {
+  .shell [class*='documentWorkspace'] { height: auto; min-height: 0; }
+  .shell [class*='documentList'] { overflow-y: auto; scrollbar-gutter: auto; }
+  .shell [class*='documentReader'] { overflow: visible; scrollbar-gutter: auto; }
 }
 
 @media (max-width: 760px) {

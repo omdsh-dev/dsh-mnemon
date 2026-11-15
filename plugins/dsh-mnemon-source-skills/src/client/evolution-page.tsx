@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
-import { Button, DiffBlock, IconSparkleRegular, SegmentedControl, Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, DiffBlock, IconSettingsOutlineRegular, IconSparkleRegular, SegmentedControl, Tag, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import { appearanceClass, SelectField } from 'dsh-mnemon/client'
 import type { AutoAdoptionEvent, BacktestRun, DraftView, ModelRoute, SkillDraft, SkillRootKind, SkillSuggestion, SuggestionStatus, SuggestionView, Trajectory } from '../contracts.ts'
 import { modelOptionPick, modelOptionValue, useModelChoice } from './model-choice.tsx'
@@ -135,7 +135,6 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
   const canOverride = currentId !== undefined && current?.kind === 'suggestion' && PENDING.includes(current.suggestion.status)
   const currentOverride = currentId === undefined ? null : Object.hasOwn(choice.preferences.suggestionModels, currentId) ? choice.preferences.suggestionModels[currentId]! : null
   const currentModel = currentOverride ?? choice.preferences.model ?? null
-  const saveDraftModel = (value: string) => choice.saveDraftModel(modelOptionPick(value))
   const saveSuggestionModel = (value: string) => { if (canOverride && currentId !== undefined) choice.saveSuggestionModel(currentId, modelOptionPick(value)) }
   const removeItem = async (item: Item) => {
     try {
@@ -147,10 +146,11 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
       context.refresh()
     } catch (error) { context.fail(error) }
   }
-  // Keep model pickers inside the detail pane so the left inbox header never shifts across Pending | Done | Evidence.
+  const showOffEmpty = current === undefined && filter === 'pending' && evolutionOff
+  // Keep model picker inside the detail pane so the left inbox header never shifts across Pending | Done | Evidence.
   const modelBar = <div className={css.skPaneBar}>
-    <SelectField<string> label={t('evolution.model')} triggerDetail inline size="sm" value={modelOptionValue(choice.preferences.model)} disabled={!context.writable || choice.models === null} onChange={saveDraftModel} options={choice.options} />
     <SelectField<string> label={t('evolution.modelCard')} triggerDetail inline size="sm" value={modelOptionValue(currentOverride)} disabled={!context.writable || !canOverride || choice.models === null} onChange={saveSuggestionModel} options={choice.cardOptions} />
+    {context.openSettings !== undefined && !showOffEmpty && <button type="button" className={css.skIconButton} onClick={() => context.openSettings!('models')} aria-label={t('common.settings')} title={t('common.settings')}><IconSettingsOutlineRegular size={15} /></button>}
   </div>
   return <div className={appearanceClass(css.skSplit, css.skEvolutionSplit)}>
     <aside className={css.skList}>
@@ -163,10 +163,10 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
     <div ref={paneRef} className={css.skPane}>
       {modelBar}
       {current === undefined
-        ? filter === 'pending' && evolutionOff
+        ? showOffEmpty
           ? <Empty glyph="✧" title={t('evolution.off')} action={<>
               {context.evolution?.enable !== undefined && <Button variant="primary" size="sm" disabled={!context.writable} onClick={() => void context.evolution!.enable!().then(context.refresh, context.fail)}>{t('evolution.turnOn')}</Button>}
-              {context.openSettings !== undefined && <Button variant="outline" size="sm" onClick={context.openSettings}>{t('common.settings')}</Button>}
+              {context.openSettings !== undefined && <Button variant="outline" size="sm" onClick={() => context.openSettings?.()}>{t('common.settings')}</Button>}
             </>}>{t('evolution.offBody')}</Empty>
           : <Empty glyph="✧" title={t(oneOff.length > 0 ? 'triage.choose' : `evolution.empty.${filter}`)}>{t(oneOff.length > 0 ? 'triage.soft' : `evolution.emptyBody.${filter}`)}</Empty>
         : current.kind === 'suggestion'

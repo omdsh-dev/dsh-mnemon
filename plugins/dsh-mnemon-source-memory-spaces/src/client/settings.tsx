@@ -1,15 +1,28 @@
-import { languageChain, settingsTranslate, SourceTranslation, useT, type DshLocale } from './presentation.ts'
+import { css as pageCss, languageChain, settingsTranslate, SourceTranslation, useT, type DshLocale } from './presentation.ts'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type JSX, type ReactNode } from 'react'
 import { Button, IconChevronDownOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
-  Callout, installMemoryComponentUI, MemorySourcePageFrame, memorySettingsStyles, message, PanelActions, SelectField, ToggleRow, useLive, useStaged, WriteFailure,
+  AdvancedSection, Callout, installMemoryComponentUI, MemorySourcePageFrame, memorySettingsStyles, message,
+  PanelActions, SelectField, SelectRow, SettingRow, ToggleRow, useLive, useStaged, WriteFailure,
   type MemoryComponentHost, type MemoryComponentSettingsProps, type MemoryComponentUIContext,
 } from 'dsh-mnemon/client'
 import type { MemoryJsonValue } from 'dsh-mnemon/contracts'
-import { EMBEDDING_ENVIRONMENT_NAME, DEFAULT_EMBEDDING_ENDPOINT, DEFAULT_EMBEDDING_MODEL, DEFAULT_EMBEDDING_PROTOCOL, MNEMON_EMBEDDING_PROTOCOLS, NATIVE_PROVIDER_ID, type MnemonEmbeddingSettingsView, type MnemonEmbeddingFill, type MnemonEmbeddingSpaceStatus, type MnemonEmbeddingStatus } from '../contracts.ts'
+import {
+  DEFAULT_EMBEDDING_ENDPOINT, DEFAULT_EMBEDDING_MODEL, DEFAULT_EMBEDDING_PROTOCOL,
+  DEFAULT_RECALL_LIMIT, DEFAULT_RECALL_QUALITY_POLICY, DEFAULT_TIMEOUT_MS,
+  EMBEDDING_ENVIRONMENT_NAME, MNEMON_EMBEDDING_PROTOCOLS, NATIVE_PROVIDER_ID,
+  type MemoryPersistenceStrategy, type MemoryProviderDescriptor, type MemoryProviderServiceCatalog,
+  type MnemonEmbeddingFill, type MnemonEmbeddingSettingsView, type MnemonEmbeddingSpaceStatus,
+  type MnemonEmbeddingStatus, type RecallQualityConfig,
+} from '../contracts.ts'
+import {
+  PlacementModeFieldset, PlacementTargetControls, cleanJson, createPlacementPolicyDraft,
+  nativeFallbackProvider, placementPolicyProblem, serializePlacementPolicy, type PlacementPolicyDraft,
+} from './placement-policy.tsx'
 import { ProviderIcon } from './ProviderIcon.tsx'
 import { ProviderSettingsSection } from './provider-settings.tsx'
 import { memorySpacesSettingsClient } from './settings-client.ts'
+import { mergeProviderDefaults } from './widgets.tsx'
 
 /** The package these settings belong to, as Memory Spaces' plugin declaration names it. */
 const PACKAGE_NAME = 'dsh-mnemon-source-memory-spaces'
@@ -31,9 +44,26 @@ export function installMemorySpacesSettings(ctx: MemoryComponentUIContext & { lo
   return installMemoryComponentUI(ctx, { packageName: PACKAGE_NAME, settings: props => <MemorySpacesSettings {...props} {...(locale === undefined ? {} : { locale })} /> })
 }
 
+const RECALL_POLICY_IDS = ['strict-v1', 'balanced-v1', 'exhaustive-v1'] as const
+type RecallPolicyId = typeof RECALL_POLICY_IDS[number]
+
+function isRecallPolicyId(value: string | undefined): value is RecallPolicyId {
+  return value !== undefined && (RECALL_POLICY_IDS as readonly string[]).includes(value)
+}
+
 /** The configuration keys these settings read, as dsh-mnemon lends them. */
 interface SpacesConfiguration {
   embedding?: MnemonEmbeddingSettingsView
+  persistenceStrategy?: MemoryPersistenceStrategy
+  defaultRecallLimit?: number
+  recallQuality?: RecallQualityConfig & {
+    policy?: RecallPolicyId | string
+    minFinalScore?: number
+    relativeBestRatio?: number
+    fallbackTopK?: number
+    minAnchorLexicalScore?: number
+  }
+  timeoutMs?: number
   storageScope?: string
   writeEnabled?: boolean
 }
@@ -48,6 +78,12 @@ interface EmbeddingDraft {
   protocol: string
 }
 
+interface RecallDraft {
+  defaultRecallLimit: string
+  policy: RecallPolicyId
+  timeoutMs: string
+}
+
 function embeddingDraft(value: SpacesConfiguration | undefined): EmbeddingDraft {
   const embedding = value?.embedding
   return {
@@ -58,6 +94,31 @@ function embeddingDraft(value: SpacesConfiguration | undefined): EmbeddingDraft 
     clearApiKey: false,
     protocol: embedding?.protocol ?? DEFAULT_EMBEDDING_PROTOCOL,
   }
+}
+
+function recallDraft(value: SpacesConfiguration | undefined): RecallDraft {
+  return {
+    defaultRecallLimit: String(value?.defaultRecallLimit ?? DEFAULT_RECALL_LIMIT),
+    policy: isRecallPolicyId(value?.recallQuality?.policy) ? value.recallQuality.policy : DEFAULT_RECALL_QUALITY_POLICY,
+    timeoutMs: String(value?.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+  }
+}
+
+function parseStrictInteger(raw: string): number | undefined {
+  const trimmed = raw.trim()
+  if (!/^\d+$/u.test(trimmed)) return undefined
+  const parsed = Number(trimmed)
+  return Number.isSafeInteger(parsed) ? parsed : undefined
+}
+
+function validRecallLimit(raw: string): boolean {
+  const parsed = parseStrictInteger(raw)
+  return parsed !== undefined && parsed >= 1 && parsed <= 50
+}
+
+function validTimeoutMs(raw: string): boolean {
+  const parsed = parseStrictInteger(raw)
+  return parsed !== undefined && parsed >= 100 && parsed <= 120_000
 }
 
 function validEmbeddingEndpoint(value: string): boolean {
@@ -97,9 +158,15 @@ function embeddingProblem(draft: EmbeddingDraft, t: Translate): string | null {
   return null
 }
 
+function recallProblem(draft: RecallDraft, t: Translate): string | null {
+  if (!validRecallLimit(draft.defaultRecallLimit)) return t('config.defaultRecallLimitInvalid')
+  if (!validTimeoutMs(draft.timeoutMs)) return t('config.timeoutMsInvalid')
+  return null
+}
+
 /** The stored value: a switched-off override keeps only the fields that are valid. */
 function embeddingValue(enabled: boolean, draft: EmbeddingDraft, secure: boolean, legacyKey = ''): MemoryJsonValue {
-  const auth = secure ? { apiKey: draft.apiKey.trim(), apiKeyEnv: draft.apiKeyEnv.trim(), ...(draft.clearApiKey ? { clearApiKey: true } : {}) } : { apiKey: legacyKey };
+  const auth = secure ? { apiKey: draft.apiKey.trim(), apiKeyEnv: draft.apiKeyEnv.trim(), ...(draft.clearApiKey ? { clearApiKey: true } : {}) } : { apiKey: legacyKey }
   const endpoint = draft.endpoint.trim().replace(/\/+$/u, '')
   if (enabled) return { enabled: true, endpoint, model: draft.model.trim(), protocol: draft.protocol, ...auth }
   return {
@@ -113,9 +180,10 @@ function embeddingValue(enabled: boolean, draft: EmbeddingDraft, secure: boolean
 
 /**
  * Memory Spaces' own settings: the Providers that store its spaces, Mnemon
- * Native first with the embedding runtime only Native reads. They need what
- * dsh-mnemon lends them; without it they show nothing. With DSH's language
- * service they translate as dsh-mnemon drew them, through its language chain.
+ * Native first with the embedding runtime only Native reads, default Space
+ * placement policy, and recall/timeout parameters. They need what dsh-mnemon
+ * lends them; without it they show nothing. With DSH's language service they
+ * translate as dsh-mnemon drew them, through its language chain.
  */
 export function MemorySpacesSettings(props: MemoryComponentSettingsProps & { locale?: DshLocale | undefined }): ReactNode {
   if (props.host === undefined) return null
@@ -142,6 +210,7 @@ function SettingsTranslation(props: { locale: DshLocale | undefined; language: s
 // Whether the Host found the Mnemon CLI, in the host's retained store under a name every Memory Spaces version
 // reads alike. It is kept only while a mount lasts, for the mount that replaces it.
 const RETAINED_CLI = 'status-summary'
+const RETAINED_PROVIDERS = 'provider-services'
 
 function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; host: MemoryComponentHost }): JSX.Element {
   const t = useT()
@@ -166,9 +235,16 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
     form.edit({ apiKey: '', clearApiKey: false })
   })
   const [nativeCliFound, setNativeCliFound] = useState<boolean | undefined>(() => (retained.get(RETAINED_CLI) as { commandFound?: boolean } | undefined)?.commandFound)
+  const [providerCatalog, setProviderCatalog] = useState<MemoryProviderServiceCatalog | undefined>(() =>
+    client === undefined ? undefined : retained.get(RETAINED_PROVIDERS) as MemoryProviderServiceCatalog | undefined,
+  )
   const [status, setStatus] = useState<{ state: 'idle' | 'loading' | 'ready' | 'error'; value?: MnemonEmbeddingStatus; error?: string }>({ state: 'idle' })
   const [fill, setFill] = useState<EmbeddingFillState | undefined>(undefined)
+  const [policyOpen, setPolicyOpen] = useState(() => page.section === 'policy')
   const statusRequest = useRef(0)
+  useEffect(() => {
+    if (page.section === 'policy') setPolicyOpen(true)
+  }, [page.section])
   const on = page.component.enabled
   // As dsh-mnemon's isWorkspaceStorageScope, which lives in its Host protocol, outside its public client.
   const activeScope = value?.storageScope === 'workspace' || value?.storageScope === 'workspaces' ? 'workspace' : 'global'
@@ -195,8 +271,61 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
     providerRefreshKeyRef.current += 1
   }
 
+  const fallbackProvider = useMemo(() => nativeFallbackProvider(t, nativeCliFound !== false), [nativeCliFound, t])
+  const policyProviders = useMemo<MemoryProviderDescriptor[]>(() => {
+    if (providerCatalog === undefined || providerCatalog.providers.length === 0) return [fallbackProvider]
+    const serviceById = new Map(providerCatalog.items.map(item => [item.providerId, item]))
+    return [
+      fallbackProvider,
+      ...providerCatalog.providers
+        .filter(provider => provider.id !== NATIVE_PROVIDER_ID)
+        .map(provider => {
+          const item = serviceById.get(provider.id)
+          return { ...provider, serviceConfigured: item !== undefined && item.enabled && item.configured }
+        }),
+    ]
+  }, [fallbackProvider, providerCatalog])
+  const policySaved = useMemo(
+    () => createPlacementPolicyDraft(value?.persistenceStrategy, policyProviders),
+    [policyProviders, value?.persistenceStrategy],
+  )
+  const policyForm = useStaged(policySaved, async draft => {
+    const merged: PlacementPolicyDraft = {
+      ...draft,
+      providerConnections: mergeProviderDefaults(policyProviders, draft.providerConnections),
+    }
+    await configuration.set('persistenceStrategy', cleanJson(serializePlacementPolicy(merged, policyProviders)))
+    host.changed()
+  })
+  const effectivePolicyDraft = useMemo<PlacementPolicyDraft>(() => ({
+    ...policyForm.draft,
+    providerConnections: mergeProviderDefaults(policyProviders, policyForm.draft.providerConnections),
+  }), [policyForm.draft, policyProviders])
+
+  const recallSaved = useMemo(() => recallDraft(value), [value?.defaultRecallLimit, value?.recallQuality?.policy, value?.timeoutMs])
+  const recallForm = useStaged(recallSaved, async draft => {
+    const nextLimit = parseStrictInteger(draft.defaultRecallLimit) ?? DEFAULT_RECALL_LIMIT
+    const nextTimeout = parseStrictInteger(draft.timeoutMs) ?? DEFAULT_TIMEOUT_MS
+    let wrote = false
+    if (nextLimit !== (value?.defaultRecallLimit ?? DEFAULT_RECALL_LIMIT)) {
+      await configuration.set('defaultRecallLimit', nextLimit)
+      wrote = true
+    }
+    const savedPolicy = isRecallPolicyId(value?.recallQuality?.policy) ? value.recallQuality.policy : DEFAULT_RECALL_QUALITY_POLICY
+    if (draft.policy !== savedPolicy) {
+      await configuration.set('recallQuality', cleanJson({ ...(value?.recallQuality ?? {}), policy: draft.policy }))
+      wrote = true
+    }
+    if (nextTimeout !== (value?.timeoutMs ?? DEFAULT_TIMEOUT_MS)) {
+      await configuration.set('timeoutMs', nextTimeout)
+      wrote = true
+    }
+    recallForm.edit({ defaultRecallLimit: String(nextLimit), timeoutMs: String(nextTimeout) })
+    if (wrote) host.changed()
+  })
+
   useEffect(() => {
-    if (client === undefined || !on) { setNativeCliFound(undefined); retained.delete(RETAINED_CLI); return }
+    if (client === undefined || !on) { setNativeCliFound(undefined); setProviderCatalog(undefined); retained.delete(RETAINED_CLI); return }
     let current = true
     void client.statusSummary().then(summary => {
       if (!current) return
@@ -205,8 +334,12 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
     }, () => { if (current) { setNativeCliFound(undefined); retained.delete(RETAINED_CLI) } })
     return () => { current = false }
   }, [activeScope, client, on, retained, workspaceIdentity])
+
   // A page opened again finds out anew, as it always has; only a mount that replaces this one starts from it.
-  useEffect(() => () => { retained.delete(RETAINED_CLI) }, [retained])
+  useEffect(() => () => {
+    retained.delete(RETAINED_CLI)
+  }, [retained])
+
   useEffect(() => {
     statusRequest.current += 1
     setStatus({ state: 'idle' })
@@ -240,32 +373,85 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
   const readOnly = value?.writeEnabled === false
   const disabled = !page.writable || snapshot.status === 'loading' || !snapshot.writable
   const cliMissing = nativeCliFound === false
-  return <section className={css.panelSection} aria-labelledby="mnemon-spaces-providers">
-    <div className={css.panelHeading}><h3 id="mnemon-spaces-providers">{t('config.providersTitle')}</h3><p>{t('config.providersDescription')}</p></div>
-    <ProviderSettingsSection
-      client={client}
-      retained={retained}
-      {...(activeScope !== 'workspace' || page.workspace?.label === undefined ? {} : { workspaceLabel: page.workspace.label })}
-      activeScope={activeScope}
-      refreshKey={providerRefreshKeyRef.current}
-      disabled={disabled || readOnly}
-      scopeChanging={false}
-      onChanged={host.changed}
-      {...(readOnly ? { notice: <Callout tone="warning" className={css.groupCallout} title={t('config.providersReadOnlyTitle')}>{t('config.providersReadOnlyDetail')}</Callout> } : {})}
-      leading={<NativeProviderCard activeScope={activeScope} cliMissing={cliMissing} t={t}>
-        <EmbeddingEditor secure={secure} credentialSaved={value?.embedding?.apiKeyStorage === 'credentials'} managed={managed.value} draft={form.draft} disabled={disabled} connectionAvailable={client !== undefined} cliMissing={cliMissing} changing={form.dirty}
-          status={status} t={t} onEdit={form.edit} onTest={() => { setFill(undefined); test() }}
-          canFill={!disabled && !readOnly} fill={fill} onFill={fillSpace}
-          onManaged={on => { if (!on) form.discard(); managed.set(on) }}
-          actions={<>
-            <WriteFailure error={managed.failed} t={t} />
-            {legacy && !form.dirty && <Button variant="outline" size="sm" disabled={disabled || form.saving} onClick={() => { void form.apply() }}>{t('config.embeddingMigrateKey')}</Button>}
-            <PanelActions dirty={form.dirty} saving={form.saving} invalid={embeddingProblem(form.draft, t)} failed={form.failed} applied={form.applied}
-              disabled={disabled} t={t} onDiscard={form.discard} onApply={() => { void form.apply() }} />
-          </>} />
-      </NativeProviderCard>}
-    />
-  </section>
+  const handleProviderChanged = (): void => {
+    host.changed()
+  }
+
+  return <>
+    <section className={css.panelSection} data-settings-section="providers" aria-labelledby="mnemon-spaces-providers">
+      <div className={css.panelHeading}><h3 id="mnemon-spaces-providers">{t('config.providersTitle')}</h3><p>{t('config.providersDescription')}</p></div>
+      <ProviderSettingsSection
+        client={client}
+        retained={retained}
+        {...(activeScope !== 'workspace' || page.workspace?.label === undefined ? {} : { workspaceLabel: page.workspace.label })}
+        activeScope={activeScope}
+        refreshKey={providerRefreshKeyRef.current}
+        disabled={disabled || readOnly}
+        scopeChanging={false}
+        onChanged={handleProviderChanged}
+        onCatalog={setProviderCatalog}
+        {...(readOnly ? { notice: <Callout tone="warning" className={css.groupCallout} title={t('config.providersReadOnlyTitle')}>{t('config.providersReadOnlyDetail')}</Callout> } : {})}
+        leading={<NativeProviderCard activeScope={activeScope} cliMissing={cliMissing} t={t}>
+          <EmbeddingEditor secure={secure} credentialSaved={value?.embedding?.apiKeyStorage === 'credentials'} managed={managed.value} draft={form.draft} disabled={disabled} connectionAvailable={client !== undefined} cliMissing={cliMissing} changing={form.dirty}
+            status={status} t={t} onEdit={form.edit} onTest={() => { setFill(undefined); test() }}
+            canFill={!disabled && !readOnly} fill={fill} onFill={fillSpace}
+            onManaged={on => { if (!on) form.discard(); managed.set(on) }}
+            actions={<>
+              <WriteFailure error={managed.failed} t={t} />
+              {legacy && !form.dirty && <Button variant="outline" size="sm" disabled={disabled || form.saving} onClick={() => { void form.apply() }}>{t('config.embeddingMigrateKey')}</Button>}
+              <PanelActions dirty={form.dirty} saving={form.saving} invalid={embeddingProblem(form.draft, t)} failed={form.failed} applied={form.applied}
+                disabled={disabled} t={t} onDiscard={form.discard} onApply={() => { void form.apply() }} />
+            </>} />
+        </NativeProviderCard>}
+      />
+    </section>
+
+    <section className={`${css.panelSection} ${pageCss.settingsSection} ${pageCss.settingsPolicy}`} data-settings-section="policy" data-open={policyOpen ? '' : undefined} aria-labelledby="mnemon-spaces-policy">
+      <button type="button" className={pageCss.settingsPolicyToggle} aria-expanded={policyOpen} data-disclosure-open={policyOpen ? undefined : ''} onClick={() => setPolicyOpen(open => !open)}>
+        <span className={pageCss.settingsPolicyHeading}>
+          <strong id="mnemon-spaces-policy">{t('config.policyTitle')}</strong>
+          <small>{t('config.policyDescription')}</small>
+        </span>
+        <span className={pageCss.settingsPolicyMeta}>
+          <span className={pageCss.settingsPolicyBadge}>{t(effectivePolicyDraft.mode === 'automatic' ? 'overview.placementAutomatic' : 'overview.placementManual')}</span>
+          <IconChevronDownOutlineRegular className={pageCss.smoothChevron} size={14} />
+        </span>
+      </button>
+      {policyOpen && <div className={`${pageCss.settingsPolicyBody} ${pageCss.inlineExpand}`}>
+        <PlacementModeFieldset mode={effectivePolicyDraft.mode} radioGroupName="settings-persistence-mode" disabled={disabled || policyForm.saving} onChange={mode => policyForm.edit({ mode })} />
+        <PlacementTargetControls draft={effectivePolicyDraft} providers={policyProviders} providerRadioGroupName="settings-strategy-provider" fieldLayout="settings" disabled={disabled || policyForm.saving} onChange={policyForm.edit} />
+        <PanelActions dirty={policyForm.dirty} saving={policyForm.saving} invalid={placementPolicyProblem(effectivePolicyDraft, policyProviders, t)} failed={policyForm.failed} applied={policyForm.applied}
+          disabled={disabled} t={t} onDiscard={policyForm.discard} onApply={() => { void policyForm.apply() }} />
+      </div>}
+    </section>
+
+    <AdvancedSection title={t('config.recallTitle')} section="recall" activeSection={page.section} className={`${pageCss.settingsSection} ${pageCss.settingsRecall}`}>
+      <p className={css.panelNote}>{t('config.recallDescription')}</p>
+      <div className={pageCss.settingsRows}>
+        <SettingRow htmlFor="mnemon-spaces-recall-limit" title={t('config.defaultRecallLimit')} hint={t('config.defaultRecallLimitHint')}>
+          <input id="mnemon-spaces-recall-limit" className={pageCss.settingsNumberInput} type="number" inputMode="numeric" min={1} max={50} step={1}
+            aria-label={t('config.defaultRecallLimit')} aria-invalid={!validRecallLimit(recallForm.draft.defaultRecallLimit)}
+            value={recallForm.draft.defaultRecallLimit} disabled={disabled || recallForm.saving}
+            onChange={event => recallForm.edit({ defaultRecallLimit: event.target.value })} />
+        </SettingRow>
+        <SelectRow id="mnemon-spaces-recall-policy" label={t('config.recallQualityPolicy')} value={recallForm.draft.policy} disabled={disabled || recallForm.saving}
+          options={RECALL_POLICY_IDS.map(id => ({
+            value: id,
+            label: t(`config.recallPolicy.${id}`),
+            detail: t(`config.recallPolicy.${id}.detail`),
+          }))}
+          onChange={policy => recallForm.edit({ policy })} />
+        <SettingRow htmlFor="mnemon-spaces-timeout-ms" title={t('config.timeoutMs')} hint={t('config.timeoutMsHint')}>
+          <input id="mnemon-spaces-timeout-ms" className={pageCss.settingsNumberInput} type="number" inputMode="numeric" min={100} max={120000} step={100}
+            aria-label={t('config.timeoutMs')} aria-invalid={!validTimeoutMs(recallForm.draft.timeoutMs)}
+            value={recallForm.draft.timeoutMs} disabled={disabled || recallForm.saving}
+            onChange={event => recallForm.edit({ timeoutMs: event.target.value })} />
+        </SettingRow>
+      </div>
+      <PanelActions dirty={recallForm.dirty} saving={recallForm.saving} invalid={recallProblem(recallForm.draft, t)} failed={recallForm.failed} applied={recallForm.applied}
+        disabled={disabled} t={t} onDiscard={recallForm.discard} onApply={() => { void recallForm.apply() }} />
+    </AdvancedSection>
+  </>
 }
 
 /** Mnemon Native, listed first among the Providers; its body holds the settings only Native reads. */
@@ -277,7 +463,7 @@ function NativeProviderCard(props: { activeScope: 'global' | 'workspace'; cliMis
       <span className={css.providerEnableControl}>
         <span className={css.providerScopeTag} data-scope={props.activeScope}>{props.t(`config.${props.activeScope}`)}</span>
         <span className={css.providerState} data-enabled={props.cliMissing ? undefined : ''}>{props.t(props.cliMissing ? 'config.nativeCliMissing' : 'config.officialNative')}</span>
-        <IconChevronDownOutlineRegular className={css.providerChevron} size={14} />
+        <IconChevronDownOutlineRegular className={`${css.providerChevron} ${pageCss.smoothChevron}`} size={14} />
       </span>
     </summary>
     <div className={css.providerInlineBody}>{props.children}</div>
@@ -335,7 +521,7 @@ function EmbeddingEditor(props: {
     </div>
     <ToggleRow id="mnemon-embedding-managed" label={t('config.embeddingManaged')} hint={t('config.embeddingManagedHint')} checked={props.managed} disabled={props.disabled}
       onChange={props.onManaged} />
-    {props.managed && <>
+    {props.managed && <div className={`${pageCss.embeddingManagedBody} ${pageCss.inlineExpand}`}>
       <div className={css.fieldGrid}>
         {text('endpoint', 'url', t('config.embeddingEndpoint'), validEmbeddingEndpoint(draft.endpoint), DEFAULT_EMBEDDING_ENDPOINT)}
         {text('model', 'text', t('config.embeddingModel'), validEmbeddingModel(draft.model), DEFAULT_EMBEDDING_MODEL)}
@@ -352,7 +538,7 @@ function EmbeddingEditor(props: {
         <label className={css.providerBoolean}><input type="checkbox" checked={draft.clearApiKey} disabled={props.disabled} onChange={event => props.onEdit({ clearApiKey: event.target.checked, apiKey: '', apiKeyEnv: '' })} /><span>{t('config.embeddingClearKey')}</span></label>
       </> : <p className={css.editorNote}>{t('config.embeddingUpgradeHost')}</p>}
       <p className={css.editorNote}>{t('config.embeddingSecurity')}</p>
-    </>}
+    </div>}
     {props.actions}
     <div className={css.embeddingTest} aria-live="polite">
       <span className={status.state === 'error' ? css.error : undefined} role={status.state === 'error' ? 'alert' : undefined}>{feedback}</span>

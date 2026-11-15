@@ -195,6 +195,7 @@ function EffectiveRoute(props: { route: TaskAgentRoute; settled?: boolean | unde
  * read that fails keeps the reason on the page and offers to read again.
  */
 export function TaskAgentModelRows(props: {
+  idPrefix?: string | undefined
   mode: TaskAgentRoute['mode']
   route: TaskAgentRoute
   /** The page has read the stored settings; until then the route stated is the Host's. */
@@ -232,20 +233,21 @@ export function TaskAgentModelRows(props: {
     ...(route.model !== '' && group?.models.some(model => model.id === route.model) !== true ? [{ value: route.model, label: route.model }] : []),
     ...(group?.models ?? []).map(model => ({ value: model.id, label: model.name, ...(model.inputModalities?.includes('image') === true ? { detail: t('config.taskAgentImageInput') } : {}) })),
   ]
+  const prefix = props.idPrefix ?? 'mnemon-task-agent'
   const chooseProvider = (provider: string): void => {
     const model = groups.find(candidate => candidate.id === provider)?.models[0]?.id
     if (model !== undefined) props.onRoute({ provider, model })
   }
   return <>
-    <SelectRow id="mnemon-task-agent" label={t('config.taskAgentTitle')} value={props.mode} disabled={props.disabled} onChange={props.onMode}
+    <SelectRow id={prefix} label={t('config.taskAgentTitle')} value={props.mode} disabled={props.disabled} onChange={props.onMode}
       options={[
         { value: 'inherit', label: t('config.taskAgentInherit'), detail: t('config.taskAgentInheritHint') },
         { value: 'conversation', label: t('config.taskAgentConversation'), detail: t('config.taskAgentConversationHint') },
         { value: 'fixed', label: t('config.taskAgentFixed'), detail: t('config.taskAgentFixedHint'), ...(props.state === 'unavailable' ? { disabled: true } : {}) },
       ]} />
     {fixed && <>
-      <SelectRow id="mnemon-task-agent-provider" label={t('config.taskAgentProvider')} value={route.provider} disabled={props.disabled || props.state !== 'ready'} options={providers} onChange={chooseProvider} />
-      <SelectRow id="mnemon-task-agent-model" label={t('config.taskAgentModel')} value={route.model} disabled={props.disabled || props.state !== 'ready' || group === undefined} options={models}
+      <SelectRow id={`${prefix}-provider`} label={t('config.taskAgentProvider')} value={route.provider} disabled={props.disabled || props.state !== 'ready'} options={providers} onChange={chooseProvider} />
+      <SelectRow id={`${prefix}-model`} label={t('config.taskAgentModel')} value={route.model} disabled={props.disabled || props.state !== 'ready' || group === undefined} options={models}
         onChange={model => props.onRoute({ provider: route.provider, model })} />
     </>}
     <div className={css.rowDetail}>

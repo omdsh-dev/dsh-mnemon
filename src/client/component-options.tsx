@@ -143,6 +143,7 @@ export function ComponentOptions(props: ComponentOptionsProps): JSX.Element {
       }} />
     <Modal
       open={confirmEmptySources}
+      {...(css.confirmDialog === undefined ? {} : { className: css.confirmDialog })}
       onClose={() => { if (!props.pending) setConfirmEmptySources(false) }}
       title={t('options.emptySourcesTitle')}
       closeLabel={t('common.close')}

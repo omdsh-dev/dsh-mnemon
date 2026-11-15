@@ -9,6 +9,7 @@ import {
   type MnemonSyncStatus,
 } from '../host/protocol.ts'
 import type { MnemonClient } from './api.ts'
+import { Reveal } from './feedback.tsx'
 import type { MnemonTranslate } from './locales.ts'
 import { message } from './page-kit.tsx'
 import css from './MnemonSettingsCard.module.css'
@@ -91,7 +92,7 @@ export function AdvancedSettings({ client, status, disabled, t, onSaved }: { cli
       <small>{[savedLabel, config.branch, config.subdir, savedMode === 'default' ? t('config.syncAuthorDefault') : savedMode === 'machine' ? t('config.syncAuthorMachine') : config.authorName || config.authorEmail || t('config.syncAuthorCustom')].filter(part => part !== '').join(' · ')}</small>
       <IconChevronDownOutlineRegular className={css.providerChevron} size={14} />
     </button>
-    {open && <div className={css.editor}>
+    <Reveal>{open && <div className={css.editor}>
       {status.machine !== undefined && <div className={css.syncChoice}>
         <span className={css.syncFieldLabel} id={nameRadio + '-label'}>{t('config.syncMachineName')}</span>
         <div className={css.inlineChoices} role="radiogroup" aria-labelledby={nameRadio + '-label'}>
@@ -155,6 +156,6 @@ export function AdvancedSettings({ client, status, disabled, t, onSaved }: { cli
           <Button variant="primary" size="sm" disabled={disabled || !ready || busy} onClick={() => void save()}>{busy ? t('config.syncSaving') : t('config.syncSave')}</Button>
         </div>
       </div>
-    </div>}
+    </div>}</Reveal>
   </div>
 }

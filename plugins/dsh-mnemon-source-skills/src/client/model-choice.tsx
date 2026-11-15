@@ -42,9 +42,24 @@ export function modelOptionsFrom(models: TaskAgentModelCatalog | null, t: Skills
   return options
 }
 
-/** The same list for one card: follow-default, then the directory without its own default entry. */
-export function modelCardOptionsFrom(modelOptions: readonly FieldOption<string>[], t: SkillsTranslate, autoKey: 'tests.modelAuto' | 'evolution.modelAuto'): FieldOption<string>[] {
-  return [{ value: 'auto', label: t(autoKey) }, ...modelOptions.slice(1)]
+/** The same list for one card: follow-default (showing the active default route), then the directory without its own default entry. */
+export function modelCardOptionsFrom(
+  modelOptions: readonly FieldOption<string>[],
+  t: SkillsTranslate,
+  autoKey: 'tests.modelAuto' | 'evolution.modelAuto',
+  defaultModel?: ModelRoute | null,
+): FieldOption<string>[] {
+  const autoLabel = t(autoKey)
+  let detail: string
+  if (defaultModel !== null && defaultModel !== undefined) {
+    const target = `${defaultModel.provider}|${defaultModel.model}`
+    detail = modelOptions.slice(1).find(option => option.value === target)?.label ?? defaultModel.model
+  } else if (modelOptions[0] !== undefined && modelOptions[0].label !== autoLabel) {
+    detail = modelOptions[0].label
+  } else {
+    detail = t('evolution.modelAutoHint')
+  }
+  return [{ value: 'auto', label: autoLabel, detail }, ...modelOptions.slice(1)]
 }
 
 const NO_PREFERENCES: DraftPreferencesView = { suggestionModels: {}, skillRunModels: {} }
@@ -95,8 +110,9 @@ export function useModelChoice(context: SkillsPageContext, autoKey: 'tests.model
       void context.client.draftPreferences().then(setPreferences).catch(() => undefined)
     })
   }, [context])
+  const defaultModel = autoKey === 'tests.modelAuto' ? preferences.runModel : preferences.model
   const options = useMemo(() => modelOptionsFrom(models, t, autoKey), [models, t, autoKey])
-  const cardOptions = useMemo(() => modelCardOptionsFrom(options, t, autoKey), [options, t, autoKey])
+  const cardOptions = useMemo(() => modelCardOptionsFrom(options, t, autoKey, defaultModel), [options, t, autoKey, defaultModel])
   return {
     models,
     preferences,

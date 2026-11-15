@@ -45,6 +45,8 @@ export interface MemoryComponentSettingsProps {
   /** The conversation and workspace the page was opened for, when there is one. */
   sessionId?: string
   workspace?: { id: string; label?: string }
+  /** Optional target section inside the component's settings when deep-linked. */
+  section?: string | undefined
   /**
    * What the page lends the settings registered under the key of a shipped
    * component whose settings dsh-mnemon used to draw (today Memory Spaces):

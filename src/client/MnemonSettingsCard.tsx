@@ -11,11 +11,12 @@ import type { MemoryPluginEntryView } from '../host/view-protocol.ts'
 import { MnemonClient } from './api.ts'
 import { isRemoteConnection } from './remote-rpc.ts'
 import { CompositionBoard, usePageTrail, type ComponentSettingsRenderer, type LayerSettings } from './CompositionBoard.tsx'
-import { subscribeComponentPage, takeComponentPage } from './component-page-request.ts'
+import { subscribeComponentPage, takeComponentPageRequest } from './component-page-request.ts'
 import { componentCopy } from './component-copy.ts'
 import { useViewFeedback } from './view-feedback.tsx'
 import { SelectRow, ToggleRow } from './settings-controls.tsx'
 import { useLive, useScope, WriteFailure } from './settings-panel.tsx'
+import { TaskAgentModelRows, useTaskAgentModel } from './task-agent-model.tsx'
 import { useViewStore } from './view-store.ts'
 import css from './MnemonSettingsCard.module.css'
 import { isRecord } from './is-record.ts'
@@ -31,7 +32,7 @@ export interface ComponentSettingsSource {
   /** Whether a component registered settings, by package name. */
   has(packageName: string): boolean
   /** Render them for one component's page. */
-  render(entry: MemoryPluginEntryView, page: { enabled: boolean; label: string; writable: boolean; language: string; sessionId?: string; workspace?: { id: string; label?: string } }): ReactNode
+  render(entry: MemoryPluginEntryView, page: { enabled: boolean; label: string; writable: boolean; language: string; sessionId?: string; workspace?: { id: string; label?: string }; section?: string }): ReactNode
 }
 
 export interface MnemonSettingsCardProps {
@@ -85,6 +86,7 @@ function dataRelevantConfigKey(status: 'loading' | 'ready' | 'unavailable', valu
     record?.excludedWorkspaces ?? null,
     record?.memoryTopology ?? null,
     record?.memoryView ?? null,
+    record?.documents ?? null,
   ])
 }
 
@@ -115,9 +117,9 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   useEffect(() => {
     if (entries === undefined || component !== undefined) return
     const take = (): void => {
-      const requested = takeComponentPage()
-      const entry = requested === undefined ? undefined : entries.find(candidate => candidate.packageName === requested)
-      if (entry !== undefined) openPage(entry.entryId, 'configuration')
+      const requested = takeComponentPageRequest()
+      const entry = requested === undefined ? undefined : entries.find(candidate => candidate.packageName === requested.packageName)
+      if (entry !== undefined) openPage(entry.entryId, 'configuration', requested?.section)
     }
     take()
     return subscribeComponentPage(take)
@@ -168,14 +170,16 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   const display = useLive(normalizeDisplayMode(coreSnapshot.value?.displayMode), async value => { await scope.mutate([{ op: 'set', path: ['displayMode'], value }]) })
   const turnBar = useLive(interactionSnapshot.value?.turnBar !== false, async value => { await interactionScope.mutate([{ op: 'set', path: ['turnBar'], value }]) })
   const saveAction = useLive(interactionSnapshot.value?.saveAction !== false, async value => { await interactionScope.mutate([{ op: 'set', path: ['saveAction'], value }]) })
+  const taskAgent = useTaskAgentModel({ scope, connection, sessionId, workspaceId })
 
   // The page's composition opens each component's page; what the component contributed renders there.
   const settingsRenderer = useMemo<ComponentSettingsRenderer | undefined>(() => componentSettings === undefined ? undefined : {
     has: packageName => componentSettings.has(packageName),
-    render: (entry, writableNow) => componentSettings.render(entry, {
+    render: (entry, writableNow, section) => componentSettings.render(entry, {
       enabled: entry.enabled, label: componentCopy(entry, language).label, writable: writableNow, language,
       ...(sessionId === undefined ? {} : { sessionId }),
       ...(workspaceId === undefined ? {} : { workspace: { id: workspaceId, ...(workspaceLabel === undefined ? {} : { label: workspaceLabel }) } }),
+      ...(section === undefined ? {} : { section }),
     }),
   }, [componentSettings, language, sessionId, workspaceId, workspaceLabel])
 
@@ -205,6 +209,20 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
         {!writable && <p className={css.readOnlyNotice}>{readOnlyNotice}</p>}
         <CompositionBoard view={view} system={memorySystem} systemPending={memorySystemState === 'loading'} layers={layerSettings} readOnly={!coreSnapshot.writable} language={language} t={t}
           pages={pages} {...(settingsRenderer === undefined ? {} : { componentSettings: settingsRenderer })} />
+
+        <section className={css.section} data-settings-section="task-agent" aria-labelledby="mnemon-task-agent-heading">
+          <div className={css.sectionHeading}>
+            <h2 id="mnemon-task-agent-heading">{t('config.taskAgentSectionTitle')}</h2>
+            <p>{t('config.taskAgentSectionDescription')}</p>
+            {taskAgent.catalog.state === 'loading' && <span className={css.miniSpinner} aria-hidden="true" />}
+          </div>
+          <div className={css.rows}>
+            <TaskAgentModelRows idPrefix="mnemon-card-task-agent" mode={taskAgent.choosing ? 'fixed' : taskAgent.route.mode} route={taskAgent.route}
+              settled={taskAgent.settled} choosing={taskAgent.choosing} catalog={taskAgent.catalog.value} state={taskAgent.catalog.state}
+              error={taskAgent.catalog.error} retry={taskAgent.retry} disabled={coreDisabled} onMode={taskAgent.setMode} onRoute={taskAgent.setRoute} t={t} />
+          </div>
+          <WriteFailure error={taskAgent.failed} t={t} />
+        </section>
 
         <MnemonStorageSection scope={scope} value={coreSnapshot.value} user={coreUser} disabled={coreDisabled} dashboard={view.state.dashboard} target={target}
           {...(sharedClient === undefined ? {} : { client: sharedClient })}

@@ -55,6 +55,7 @@ describe('independent Runtime Source client', () => {
     const contents = () => Array.from(listElement.querySelectorAll('article > p'), item => item.textContent)
     await waitFor(() => expect(contents()).toEqual([12, 11, 10, 9, 8, 7, 6, 5, 4, 3].map(day => `Entry ${day}`)))
     expect(list.queryByText(t('runtime.editAction'))).toBeNull()
+    expect(listElement.querySelectorAll('article footer')).toHaveLength(0)
     fireEvent.click(list.getByText(t('common.showMore', { count: 2 })))
     expect(contents().slice(-2)).toEqual(['Entry 2 edited', 'Entry 1'])
     expect(Array.from(listElement.querySelectorAll('article time')).at(-2)?.getAttribute('datetime')).toBe('2026-08-02T08:00:00.000Z')
@@ -64,6 +65,7 @@ describe('independent Runtime Source client', () => {
     expect(contents()).toEqual(['Entry 12', 'Entry 10'])
     view.rerender(page(true))
     expect(list.getAllByText(t('runtime.editAction'))).toHaveLength(2)
+    expect(listElement.querySelectorAll('article footer')).toHaveLength(2)
     expect(client.mutateRuntimeMemory).not.toHaveBeenCalled()
   })
 

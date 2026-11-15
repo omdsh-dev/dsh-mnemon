@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useState, useSyncExternalStore, type JSX,
 import { memoryTool, type ClientConnectionHandle, type MemoryActivityItem, type TurnMemoryActivity } from "../host/protocol.ts"
 import { MnemonClient } from './api.ts'
 import { dispatchMnemonAnchor, type MnemonAnchorPage } from './anchor.ts'
+import { Reveal } from './feedback.tsx'
 import type { MnemonKey } from './locales.ts'
 import type { MnemonClientContext } from './dsh-context.ts'
 import css from './MnemonTurnTail.module.css'
@@ -126,7 +127,7 @@ export const MnemonTurnTail = memo(function MnemonTurnTail({ turn, seq, sessionI
         </span>
         <IconChevronDownOutlineRegular size={12} className={`${css.chevron} ${open ? css.chevronOpen : ''}`} />
       </button>
-      {open && (
+      <Reveal>{open && (
         <ul className={css.details} aria-label={t('turnTail.toolList')}>
           {turnTools(activity.names).map(({ name, count }) => {
             const key = memoryTool(name)?.label
@@ -159,7 +160,7 @@ export const MnemonTurnTail = memo(function MnemonTurnTail({ turn, seq, sessionI
             )
           })}
         </ul>
-      )}
+      )}</Reveal>
     </div>
   )
 })

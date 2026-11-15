@@ -6,6 +6,7 @@ import type { Config } from "../src/host/config.ts"
 import type { VersionRestartStatus } from '../src/host/protocol.ts'
 import { ComposedMnemonWorkbench as MnemonWorkbench } from './fixtures/client.tsx'
 import { MnemonActionSeat } from '../src/client/action-seat.ts'
+import { takeComponentPageRequest } from '../src/client/component-page-request.ts'
 import { MnemonChangeSignal } from '../src/client/change-signal.ts'
 import { clearStarterUpdate, pendingStarterUpdate, recordStarterUpdate } from '../src/client/starter-update.ts'
 import { translateZh, translateEn, zh } from '../src/client/locales.ts'
@@ -1582,6 +1583,22 @@ describe('MnemonWorkbench', () => {
     expect((within(localDialog).getByRole('checkbox', { name: /Mem0/ }) as HTMLInputElement).disabled).toBe(true)
     expect((within(localDialog).getByRole('checkbox', { name: /Holographic/ }) as HTMLInputElement).disabled).toBe(false)
     expect((within(localDialog).getByRole('checkbox', { name: /ByteRover/ }) as HTMLInputElement).disabled).toBe(false)
+  })
+
+  it('deep-links Space policy from Memory Spaces into component settings when configuration navigation is available', async () => {
+    const { connection } = createConnection({ withInactiveBody: true })
+    const configuration = new MnemonActionSeat()
+    const openConfiguration = vi.fn()
+    configuration.provide(openConfiguration)
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" configuration={configuration} />)
+
+    fireEvent.click(await screen.findByRole('tab', { name: '记忆空间' }))
+    await waitFor(() => expect(screen.getByRole('region', { name: '记忆空间目录' })).toBeTruthy())
+    fireEvent.click(await screen.findByRole('button', { name: '空间策略' }))
+
+    expect(openConfiguration).toHaveBeenCalledTimes(1)
+    expect(takeComponentPageRequest()).toEqual({ packageName: 'dsh-mnemon-source-memory-spaces', section: 'policy' })
+    expect(screen.queryByRole('dialog', { name: '空间策略' })).toBeNull()
   })
 
   it('shows the persisted provider decision on the Memory Space card', async () => {

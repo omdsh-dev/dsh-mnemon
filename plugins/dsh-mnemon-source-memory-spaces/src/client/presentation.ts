@@ -1,4 +1,5 @@
-import { createContext, useContext, useMemo } from 'react'
+import { createContext, createElement, useContext, useMemo, type JSX, type ReactNode } from 'react'
+import * as mnemonClient from 'dsh-mnemon/client'
 import { memoryPageStyles, memorySidebarStyles, useT as useSharedT, useLocale, type MnemonKey } from 'dsh-mnemon/client'
 import type labels from 'dsh-mnemon-source-memory-spaces/presentation/locales.json'
 import copy from '../../presentation/locales.json' with { type: 'json' }
@@ -8,6 +9,17 @@ import sidebar from '../../presentation/sidebar.module.css'
 export type SourceKey = keyof typeof labels.zh
 export const css: Readonly<Record<string, string>> = { ...memoryPageStyles, ...page }
 export const sidebarCss: Readonly<Record<string, string>> = { ...memorySidebarStyles, ...sidebar }
+
+/**
+ * Reveal wrapper that falls back to a plain wrapper beside older dsh-mnemon
+ * releases (such as 0.5.31) whose client entry predates `Reveal`.
+ */
+export function SafeReveal(props: { children: ReactNode; className?: string | undefined }): JSX.Element | null {
+  const Impl = (mnemonClient as { Reveal?: (p: { children: ReactNode; className?: string | undefined }) => JSX.Element | null }).Reveal
+  if (Impl !== undefined) return createElement(Impl, props)
+  if (props.children === null || props.children === undefined || props.children === false) return null
+  return props.className === undefined ? createElement('div', null, props.children) : createElement('div', { className: props.className }, props.children)
+}
 
 type Translate = (key: SourceKey | MnemonKey, params?: Record<string, unknown>) => string
 

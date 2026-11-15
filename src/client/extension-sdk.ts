@@ -17,7 +17,7 @@ export {
   type MemoryComponentUIContext, type MemoryComponentUIContribution,
 } from './component-ui.tsx'
 // What Memory Spaces' own settings are drawn with, the controls and styles dsh-mnemon drew them with.
-export { memorySettingsStyles, ToggleRow } from './settings-controls.tsx'
+export { AdvancedSection, memorySettingsStyles, SelectRow, SettingRow, SettingSelect, ToggleRow, type SettingOption } from './settings-controls.tsx'
 export { PanelActions, useLive, useStaged, WriteFailure } from './settings-panel.tsx'
 export { Callout, Reveal } from './feedback.tsx'
 export { GlobalLocationSetting } from './GlobalLocationSetting.tsx'

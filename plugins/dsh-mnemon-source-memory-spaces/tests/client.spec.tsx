@@ -666,3 +666,168 @@ describe('OverviewPage & MemoryGraph performance guardrails', () => {
     }
   })
 })
+
+describe('Settings deep-linking, error banner placement, and reduced-motion polish', () => {
+  it('deep-links Space policy to onOpenSettings("policy") when provided, and falls back to PersistenceStrategyDialog when omitted', async () => {
+    const nativeProvider = {
+      ...descriptor,
+      id: 'mnemon-native',
+      label: 'Mnemon Native',
+      origin: 'native' as const,
+      kind: 'local' as const,
+      serviceConfigured: true,
+    }
+    const catalog = { items: [], providers: [nativeProvider], total: 0, activeCount: 0, directory: '/data', generatedAt: 'now' }
+    const read = vi.fn(async (operation: string) => ({
+      revision: 'r1',
+      value: (operation === 'status-summary'
+        ? { writeEnabled: true, memoryBodies: [], defaultRecallLimit: 10 }
+        : operation === 'body-directory' || operation === 'bodies'
+          ? catalog
+          : operation === 'graph'
+            ? { nodes: [], edges: [], generatedAt: 'now' }
+            : []) as never,
+    }))
+    const onOpenSettings = vi.fn()
+    const replace = vi.fn(async () => {})
+    const management = { sourceInstanceKey: 'source:policy-link', revision: 'r1', read, mutate: vi.fn() }
+
+    const view = render(
+      <MemorySpacesSourcePage
+        page="spaces"
+        sourceTypeId="memory-spaces"
+        sourceInstanceKey="source:policy-link"
+        sourceInstances={[]}
+        locale="en"
+        writable
+        onOpenSettings={onOpenSettings}
+        preferences={{ value: {}, writable: true, replace }}
+        management={management}
+      />,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: t('strategy.action') }))
+    expect(onOpenSettings).toHaveBeenCalledWith('policy')
+    expect(screen.queryByRole('dialog', { name: t('strategy.title') })).toBeNull()
+
+    view.rerender(
+      <MemorySpacesSourcePage
+        page="spaces"
+        sourceTypeId="memory-spaces"
+        sourceInstanceKey="source:policy-fallback"
+        sourceInstances={[]}
+        locale="en"
+        writable
+        preferences={{ value: {}, writable: true, replace }}
+        management={{ ...management, sourceInstanceKey: 'source:policy-fallback' }}
+      />,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: t('strategy.action') }))
+    const dialog = await screen.findByRole('dialog', { name: t('strategy.title') })
+    await waitFor(() => expect(within(dialog).getByRole('radio', { name: /Smart selection/u })).toBeTruthy())
+    fireEvent.click(within(dialog).getByRole('radio', { name: /Smart selection/u }))
+    fireEvent.click(within(dialog).getByRole('button', { name: t('strategy.save') }))
+
+    await waitFor(() => expect(replace).toHaveBeenCalledWith({
+      persistenceStrategy: expect.objectContaining({ mode: 'automatic', providerId: 'mnemon-native' }),
+    }))
+  })
+
+  it('deep-links unconfigured Providers from Create Memory Space dialog to onOpenSettings("providers")', async () => {
+    const providers = [
+      { ...descriptor, id: 'mnemon-native', label: 'Mnemon Native', origin: 'native' as const, kind: 'local' as const, serviceConfigured: true },
+      { ...descriptor, id: 'openviking', label: 'OpenViking', origin: 'third-party' as const, kind: 'remote' as const, serviceConfigured: false },
+    ]
+    const catalog = { items: [], providers, total: 0, activeCount: 0, directory: '/data', generatedAt: 'now' }
+    const read = vi.fn(async (operation: string) => ({
+      revision: 'r1',
+      value: (operation === 'status-summary'
+        ? { writeEnabled: true, memoryBodies: [], defaultRecallLimit: 10 }
+        : operation === 'body-directory' || operation === 'bodies'
+          ? catalog
+          : operation === 'graph'
+            ? { nodes: [], edges: [], generatedAt: 'now' }
+            : []) as never,
+    }))
+    const onOpenSettings = vi.fn()
+    render(
+      <MemorySpacesSourcePage
+        page="spaces"
+        sourceTypeId="memory-spaces"
+        sourceInstanceKey="source:create-link"
+        sourceInstances={[]}
+        locale="en"
+        writable
+        onOpenSettings={onOpenSettings}
+        management={{ sourceInstanceKey: 'source:create-link', revision: 'r1', read, mutate: vi.fn() }}
+      />,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: t('overview.newAction') }))
+    const dialog = await screen.findByRole('dialog', { name: t('overview.createTitle') })
+    expect(within(dialog).getByText(t('overview.providerEnableHint'))).toBeTruthy()
+    const openProviders = within(dialog).getByRole('button', { name: t('overview.openProvidersSettings') })
+    fireEvent.click(openProviders)
+
+    expect(onOpenSettings).toHaveBeenCalledWith('providers')
+    expect(screen.queryByRole('dialog', { name: t('overview.createTitle') })).toBeNull()
+  })
+
+  it('renders top-level workspace error alerts below the sticky memoryWorkspace header', async () => {
+    const read = vi.fn(async (operation: string) => {
+      if (operation === 'status-summary') throw new Error('workspace offline')
+      return { revision: 'r1', value: [] }
+    })
+    render(
+      <MemorySpacesSourcePage
+        page="explore"
+        sourceTypeId="memory-spaces"
+        sourceInstanceKey="source:error-order"
+        sourceInstances={[]}
+        locale="en"
+        management={{ sourceInstanceKey: 'source:error-order', revision: 'r1', read, mutate: vi.fn() }}
+      />,
+    )
+
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('workspace offline')
+    const workspaceSection = screen.getByRole('tablist', { name: t('nav.memory.aria') }).closest('section')!
+    expect((workspaceSection.compareDocumentPosition(alert) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0).toBe(true)
+  })
+
+  it('skips requestAnimationFrame camera tweening in MemoryGraph when prefers-reduced-motion: reduce is active', () => {
+    const originalMatchMedia = window.matchMedia
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame')
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === '(prefers-reduced-motion: reduce)',
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }))
+    try {
+      const graph = {
+        generatedAt: '2026-10-20T00:00:00.000Z',
+        nodes: [
+          { id: 'space:work', kind: 'space' as const, category: 'space', content: 'Work', color: '#4f46e5' },
+          { id: 'entity:atlas', kind: 'entity' as const, category: 'entity', content: 'Atlas', color: '#0ea5e9' },
+        ],
+        edges: [
+          { sourceId: 'space:work', targetId: 'entity:atlas', label: 'scope', color: '#708199', type: 'scope' as const },
+        ],
+      }
+      render(<MemorySourcePageFrame locale="en"><MemoryGraph graph={graph} onSelect={vi.fn()} /></MemorySourcePageFrame>)
+      rafSpy.mockClear()
+      fireEvent.click(screen.getByRole('button', { name: t('graph.uniformAction') }))
+      expect(screen.getByRole('img').getAttribute('data-layout')).toBe('uniform')
+      expect(rafSpy).not.toHaveBeenCalled()
+    } finally {
+      rafSpy.mockRestore()
+      window.matchMedia = originalMatchMedia
+    }
+  })
+})

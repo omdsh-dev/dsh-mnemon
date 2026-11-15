@@ -19,12 +19,14 @@ As DSH does for every plugin that carries its own configuration, the Web interfa
 | Where in the UI | Settings | Saved as |
 |---|---|---|
 | Memory composition | Main strategy; one switch per memory source and enhancement; each component's declared options | `memoryView.strategyTypeId` and `memoryView.entries.<entry>.config`; each component's on/off is its Entry's `disabled` row, written by DSH's plugin manager |
+| Task Agent | Task Agent model | `taskAgentModel` |
 | Storage | Storage scope, data directory, excluded workspaces, backup and migration; the Git sync switch | `storageScope`, `dataDir`, `excludedWorkspaces`, `syncEnabled` |
 | Interface | Memory System opens in, turn memory bar, save to memory | `displayMode`, `conversationInteraction.turnBar`, `conversationInteraction.saveAction` |
-| Runtime memory's page | User profile scope | `runtimeUserScope` |
-| Memory Spaces' page | Memory providers; Mnemon Native embedding (auto, Ollama or OpenAI-compatible) | The Provider registry in `state/memory-providers.json`; `embedding` |
-| Layered strategy's page | Task Agent model; idle review | `taskAgentModel`; `idleReview` |
-| Skills' page | Self-evolution, backtest drafts, review parameters, the conversation line, the sidebar entry | `skills`; see [Skills settings](#skills-settings) |
+| Runtime memory's page | User profile scope; capacity limits and maintenance budget | `runtimeUserScope`, `runtimeMemory` |
+| Project Documents' page | Active capacity limit | `documents.limitBytes` |
+| Memory Spaces' page | Memory providers, Mnemon Native embedding, Space policy, and recall/timeout parameters | The Provider registry in `state/memory-providers.json`; `embedding`, `persistenceStrategy`, `defaultRecallLimit`, `recallQuality`, `timeoutMs` |
+| Layered strategy's page | Synchronized Task Agent model view; idle review | `taskAgentModel`; `idleReview` |
+| Skills' page | Self-evolution, default models, skill directories, market sources, review parameters, the conversation line, the sidebar entry | `skills` and `skills/preferences.json`; see [Skills settings](#skills-settings) |
 
 Switches and selectors apply at once; typed values such as the storage directory, the embedding connection, review limits and component options wait for **Apply**. A Provider's reusable service fields (endpoints, credentials, executables) live in the Provider registry, not in Mnemon's YAML; enabling or saving a Provider discovers its namespaces into **Memory Spaces → Overview**, and turning it off removes only those local mappings. Other advanced settings are edited in YAML.
 
@@ -104,7 +106,8 @@ mnemon:
 | `defaultRecallLimit` | `10` | 1–50 | Default recall count for the service and UI; individual entry points may impose a lower limit |
 | `runtimeMemory.memoryLimitBytes` | `10240` | 1–1048576 bytes | UTF-8 byte limit for the complete `MEMORY.md` projection |
 | `runtimeMemory.userLimitBytes` | `4096` | 1–1048576 bytes | UTF-8 byte limit for the complete `USER.md` projection |
-| `runtimeMemory.maintenanceMaxTokens` | `8192` | 1–1000000 tokens | Completion-token budget for Runtime migration and compaction workers; does not change Document archive or metadata-maintenance budgets |
+| `runtimeMemory.maintenanceMaxTokens` | `8192` | 128–131072 tokens | Completion-token budget for Runtime migration and compaction workers; does not change Document archive or metadata-maintenance budgets |
+| `documents.limitBytes` | `10485760` | 1–104857600 bytes | Total UTF-8 byte limit for active Project Documents copies (default 10 MiB) |
 | `embedding` | `{ enabled: false, endpoint: http://localhost:11434, model: nomic-embed-text, apiKey: '', protocol: auto }` | enabled + HTTP(S) endpoint + model + optional apiKey + protocol (auto/ollama/openai) | When enabled, the Host injects the saved endpoint, model, API key, and protocol override into every Mnemon CLI child process; an endpoint ending in `/v1` makes Mnemon use the OpenAI-compatible protocol with the API key as a Bearer token, and `protocol: openai` forces it for non-`/v1` endpoints; when disabled, existing Host environment and Mnemon defaults remain untouched |
 | `memoryTopology.layers.<id>.enabled` | `true` for the three defaults | boolean | Legacy layer flag. A Source's switch on the board turns its DSH Entry on or off and turns this flag back on with it; the flag is used when the components cannot be read. Turning a Source off never deletes or migrates data |
 | `memoryTopology.layers.<id>.participation` | per layer | `off` / `manual` / `automatic` for `recall`, `write`, `projection`, `maintenance` | How a layer takes part in each kind of work under the Layered strategy |
@@ -401,6 +404,8 @@ Skills keeps its settings under `skills` in the `mnemon` entry, edited on its ow
 | `skills.expiryDays` | `7` | 1–90 days | **Suggestion expiry**: an untouched suggestion expires after this long |
 | `skills.maxPendingPerSession` | `5` | 1–20 | **Pending per conversation**: past this, the least confident pending suggestions of a conversation expire |
 | `skills.casesPerRun` | `8` | 1–20 | **Cases per backtest**: the most cases one automatic backtest runs |
+| `skills.dshHome` | unset (`~/.dsh`) | directory path | **DSH home**: overrides the user-level DSH skills home (`<dshHome>/skills`); leave blank for default |
+| `skills.agentsHome` | unset (`~/.agents`) | directory path | **Agents home**: overrides the user-level shared `.agents` home (`<agentsHome>/skills`); leave blank for default |
 
 **Draft generation** is available even with self-evolution off. The two budgets explicitly bound each attempt instead of silently doubling a user's limit. A draft gets at most two attempts total, shared with the existing retry for a rejected skill file. Only a `max-tokens` stop can use the larger budget; cancellation and other model failures do not retry. A truncated result is discarded before parsing or saving, and a retry starts a fresh task and child. Successful drafts still require the existing schema and content checks and explicit adoption; generating a draft does not change the installed skill. Reviews, case generation, executors and judges retain their existing budgets.
 

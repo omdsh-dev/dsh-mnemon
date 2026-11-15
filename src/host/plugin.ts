@@ -95,7 +95,12 @@ export function apply(rawContext: unknown, rawConfig: MnemonConfig | LiveHostCon
   ctx.effect(() => hostSettings.onUpdated((namespace, value) => {
     if (namespace === 'mnemon-skills') {
       const nextSkills = skillSettings.get()
-      if (runtime.snapshot().allowLinkedSkillUpdates !== nextSkills.allowLinkedUpdates) {
+      const currentSkills = runtime.snapshot().config.skills
+      if (
+        runtime.snapshot().allowLinkedSkillUpdates !== nextSkills.allowLinkedUpdates
+        || currentSkills?.dshHome !== nextSkills.dshHome
+        || currentSkills?.agentsHome !== nextSkills.agentsHome
+      ) {
         runtime.swap(createRuntimeGraph(effectiveConfig({ ...settings.get(), skills: nextSkills }), undefined, extensions))
       }
       return

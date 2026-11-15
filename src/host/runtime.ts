@@ -71,8 +71,17 @@ export function memoryGenerationOptions(
       const type = installed.definition.manifest.typeId
       if (!isDefaultSourceInstance(installed.instanceKey, type)) return {}
       if (type === 'runtime') return { dataDir: directory, userDataDir: userDirectory, memoryLimitBytes: config.runtimeMemory.memoryLimitBytes, userLimitBytes: config.runtimeMemory.userLimitBytes }
-      if (type === 'documents') return { dataDir: directory }
-      if (type === 'skills') return { dataDir: directory, allowLinkedUpdates: allowLinkedSkillUpdates }
+      if (type === 'documents') return {
+        dataDir: directory,
+        ...(config.documents?.limitBytes === undefined ? {} : { limitBytes: config.documents.limitBytes }),
+        ...(config.documents === undefined ? {} : { documents: config.documents }),
+      }
+      if (type === 'skills') return {
+        dataDir: directory,
+        allowLinkedUpdates: allowLinkedSkillUpdates,
+        ...(config.skills?.dshHome === undefined ? {} : { dshHome: config.skills.dshHome }),
+        ...(config.skills?.agentsHome === undefined ? {} : { agentsHome: config.skills.agentsHome }),
+      }
       if (type === 'memory-spaces') return JSON.parse(JSON.stringify({
         dataDir: directory, cliPath: config.cliPath, store: config.store, timeoutMs: config.timeoutMs,
         defaultRecallLimit: config.defaultRecallLimit, writeEnabled: config.writeEnabled,

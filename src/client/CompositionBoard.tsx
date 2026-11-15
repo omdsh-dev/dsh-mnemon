@@ -1,4 +1,4 @@
-import { useId, useMemo, useState, type JSX, type ReactNode } from 'react'
+import { useCallback, useId, useMemo, useState, type JSX, type ReactNode } from 'react'
 import { IconChevronDownOutlineRegular, IconLinkOutlineRegular, IconSearchOutlineRegular, IconSettingsOutlineRegular, StateDot, Switch, Tag, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MemoryCompositionStatus } from '../host/protocol.ts'
 import type { MemoryPluginEntryView, MemoryPluginPreference, MemoryViewDashboard } from '../host/view-protocol.ts'
@@ -29,7 +29,7 @@ type Name = (entry: MemoryPluginEntryView) => string
 /** The settings components contribute to their own pages. */
 export interface ComponentSettingsRenderer {
   has(packageName: string): boolean
-  render(entry: MemoryPluginEntryView, writable: boolean): ReactNode
+  render(entry: MemoryPluginEntryView, writable: boolean, section?: string): ReactNode
 }
 
 /**
@@ -38,19 +38,30 @@ export interface ComponentSettingsRenderer {
  */
 export interface PageTrail {
   trail: readonly string[]
-  open(entryId: string, from: 'configuration' | 'page'): void
+  section?: string | undefined
+  open(entryId: string, from: 'configuration' | 'page', section?: string): void
   back(): void
   close(): void
 }
 
 export function usePageTrail(): PageTrail {
-  const [trail, setTrail] = useState<readonly string[]>([])
+  const [state, setState] = useState<{ trail: readonly string[]; section?: string | undefined }>({ trail: [] })
+  const open = useCallback((entryId: string, from: 'configuration' | 'page', section?: string) => {
+    const normalized = section?.trim() ? section.trim() : undefined
+    setState(current => ({
+      trail: from === 'page' ? current.trail.at(-1) === entryId ? current.trail : [...current.trail, entryId] : [entryId],
+      ...(normalized === undefined ? {} : { section: normalized }),
+    }))
+  }, [])
+  const back = useCallback(() => setState(current => ({ trail: current.trail.slice(0, -1) })), [])
+  const close = useCallback(() => setState({ trail: [] }), [])
   return useMemo(() => ({
-    trail,
-    open: (entryId, from) => setTrail(current => from === 'page' ? current.at(-1) === entryId ? current : [...current, entryId] : [entryId]),
-    back: () => setTrail(current => current.slice(0, -1)),
-    close: () => setTrail([]),
-  }), [trail])
+    trail: state.trail,
+    ...(state.section === undefined ? {} : { section: state.section }),
+    open,
+    back,
+    close,
+  }), [state.trail, state.section, open, back, close])
 }
 
 /** A component's name, which opens its page; underlined on hover. */
@@ -376,7 +387,7 @@ export function CompositionBoard(props: CompositionBoardProps): JSX.Element | nu
     return entry.enabled ? { tone: 'warning', text: t('board.notRunning') } : { tone: 'idle', text: t('board.off') }
   }
   /** A component's page: its state and control, as its row has them, and what it declares and contributed. */
-  const pageOf = (entry: MemoryPluginEntryView, board: MemoryViewDashboard): Omit<ComponentDetailsProps, 'onClose' | 'onOpen' | 'back'> => {
+  const pageOf = (entry: MemoryPluginEntryView, board: MemoryViewDashboard, section?: string): Omit<ComponentDetailsProps, 'onClose' | 'onOpen' | 'back'> => {
     const isMain = entry.roles.includes('strategy')
     const item = isMain ? undefined : [...sourceItems, ...otherItems].find(candidate => candidate.entry === entry)
     const control = isMain
@@ -385,14 +396,15 @@ export function CompositionBoard(props: CompositionBoardProps): JSX.Element | nu
     return {
       entry, dashboard: board, name, hint: componentCopy(entry, language).hint,
       state: isMain ? mainState(entry) : item?.state, control, writable: !locked, applying: working?.key === 'options:' + entry.entryId, language, t,
-      settings: props.componentSettings?.has(entry.packageName) === true ? props.componentSettings.render(entry, !props.readOnly) : undefined,
+      ...(section === undefined ? {} : { section }),
+      settings: props.componentSettings?.has(entry.packageName) === true ? props.componentSettings.render(entry, !props.readOnly, section) : undefined,
       onApply: config => view.store.configure('options:' + entry.entryId, entry, config),
     }
   }
   const openedId = pages.trail.at(-1)
   const open = openedId === undefined || dashboard === null ? undefined : dashboard.entries.find(entry => entry.entryId === openedId)
   const previous = pages.trail.length < 2 || dashboard === null ? undefined : dashboard.entries.find(entry => entry.entryId === pages.trail.at(-2))
-  const details: ReactNode = open === undefined || dashboard === null ? null : <ComponentDetails {...pageOf(open, dashboard)}
+  const details: ReactNode = open === undefined || dashboard === null ? null : <ComponentDetails {...pageOf(open, dashboard, pages.section)}
     {...(previous === undefined ? {} : { back: { name: name(previous), go: pages.back } })}
     onOpen={other => pages.open(other.entryId, 'page')}
     onClose={pages.close} />

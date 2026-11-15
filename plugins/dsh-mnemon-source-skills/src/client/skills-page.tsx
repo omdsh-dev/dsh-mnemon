@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
-import { Button, DiffBlock, Switch, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, DiffBlock, IconChevronDownOutlineRegular, Switch, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SearchField, SelectField, SidebarModal } from 'dsh-mnemon/client'
 import { SKILL_ROOT_KINDS, type CatalogView, type SkillDocument, type SkillInvocation, type SkillRootKind, type SkillSummary, type SkillVersion } from '../contracts.ts'
 import { css, errorText, points, stamp, useT } from './presentation.ts'
@@ -72,11 +72,11 @@ export function SkillsPage(props: { context: SkillsPageContext; location: Skills
               else next.add(group.root.kind)
               return next
             })}>
-            <span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
-            <span>{t(`root.${group.root.kind}`)}<small><SkillPath path={group.root.path} /></small></span>
-            <span>{group.skills.length}</span>
+            <IconChevronDownOutlineRegular size={12} className={css.skGroupChevron} aria-hidden="true" />
+            <span className={css.skGroupLabel}>{t(`root.${group.root.kind}`)}<small><SkillPath path={group.root.path} /></small></span>
+            <span className={css.skGroupCount}>{group.skills.length}</span>
           </button></h5>
-          {expanded && group.skills.map(skill => <SkillRow key={skill.key} context={context} skill={skill} stats={catalog.stats[skill.name]} selected={selected === skill.key} onSelect={() => setSelected(skill.key)} />)}
+          {expanded && <div className={css.skGroupBody}>{group.skills.map(skill => <SkillRow key={skill.key} context={context} skill={skill} stats={catalog.stats[skill.name]} selected={selected === skill.key} onSelect={() => setSelected(skill.key)} />)}</div>}
         </section>
       })}
       {catalog.problems.length > 0 && <details className={css.skProblems}>

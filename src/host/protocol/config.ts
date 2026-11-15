@@ -48,6 +48,19 @@ export interface CustomPackConfig {
   dataDir: string
 }
 
+export const DEFAULT_RUNTIME_MAINTENANCE_MAX_TOKENS = 8_192
+export const DOCUMENTS_DEFAULT_LIMIT_BYTES = 10 * 1024 * 1024
+export const DOCUMENTS_MAX_LIMIT_BYTES = 100 * 1024 * 1024
+
+export interface DocumentsConfig {
+  /** Maximum total UTF-8 bytes of active Project Documents. */
+  limitBytes?: number
+}
+
+export interface ResolvedDocumentsConfig {
+  limitBytes: number
+}
+
 export interface RuntimeMemoryConfig {
   /** Automatically project Runtime memory into newly created child Agents; off by default. */
   inheritToSubagents?: boolean
@@ -112,6 +125,7 @@ export interface Config {
   store?: string
   timeoutMs?: number
   defaultRecallLimit?: number
+  documents?: DocumentsConfig
   runtimeMemory?: RuntimeMemoryConfig
   /** Optional DSH-owned overrides injected into every Mnemon CLI process. */
   embedding?: MnemonEmbeddingConfig
@@ -196,6 +210,7 @@ export interface ResolvedConfig {
   store?: string
   timeoutMs: number
   defaultRecallLimit: number
+  documents: ResolvedDocumentsConfig
   runtimeMemory: ResolvedRuntimeMemoryConfig
   embedding: ResolvedMnemonEmbeddingConfig
   memoryTopology: ResolvedMemoryTopologyConfig
@@ -270,6 +285,10 @@ export interface ResolvedSkillsConfig {
   /** At most this many pending suggestions from one conversation. */
   maxPendingPerSession: number
   casesPerRun: number
+  /** Custom DSH home directory used to discover user skills; defaults to ~/.dsh. */
+  dshHome?: string
+  /** Custom shared Agents home directory used to discover user skills; defaults to ~/.agents. */
+  agentsHome?: string
 }
 
 export const DEFAULT_SKILLS_CONFIG: Readonly<ResolvedSkillsConfig> = Object.freeze({

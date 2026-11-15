@@ -27,7 +27,7 @@
   border-bottom-color: var(--dsw-alias-state-business-primary);
 }
 
-.shell .modalBackdrop { z-index: 1300; }
+.shell .modalBackdrop { z-index: 1000; }
 .shell .modal { display: flex; max-height: min(860px, calc(100vh - 32px)); max-height: min(860px, calc(100dvh - 32px)); flex-direction: column; overflow: hidden; }
 .shell .modal.modalWide { width: min(760px, 100%); }
 .shell .modal > [class*='modalBody'] { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 16px; scroll-padding-bottom: 16px; scrollbar-gutter: stable; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
@@ -40,6 +40,65 @@
 .shell textarea { font-family: var(--dsw-font-family); font-size: 13px; font-weight: 400; }
 .shell select { cursor: pointer; font-weight: 400; }
 .shell textarea { line-height: 20px; }
+
+.shell .memoryWorkspace {
+  position: sticky;
+  z-index: 12;
+  top: 0;
+  flex: 0 0 auto;
+  margin: -20px -24px 16px;
+  padding: 20px 24px 0;
+  border-bottom: .5px solid var(--dsw-alias-border-l2);
+  background: var(--mn-surface);
+}
+.shell .memoryWorkspace > [class*='pageHeader'] { margin-bottom: 12px; }
+/* A page under Source sub-tabs titles its section rather than the page: the DSH group heading scale. */
+.shell .memoryWorkspace ~ [class*='page'] > [class*='pageHeader'] { margin-bottom: 12px; }
+.shell .memoryWorkspace ~ [class*='page'] > [class*='pageHeader'] h2 { font-size: 14px; line-height: 22px; }
+.shell .memoryWorkspace ~ [class*='page'] > [class*='pageHeader'] p { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
+/* Keep secondary controls in flow beneath the one pinned Source header. */
+.shell [class*='relatedPane'], .shell [class*='entityRail'] { position: static; }
+
+/* Secondary tabs, as the DSH settings tabs: monochrome underline. */
+.shell .memoryNavigation {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 0;
+}
+
+.shell .memoryTabs {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  gap: 22px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.shell .memoryTabs::-webkit-scrollbar { display: none; }
+.shell .memoryTabs button {
+  position: relative;
+  min-width: max-content;
+  min-height: 0;
+  margin-bottom: -.5px;
+  padding: 6px 1px 9px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--dsw-alias-label-tertiary);
+  background: transparent;
+  font-size: 13px;
+  line-height: 20px;
+  cursor: pointer;
+  transition: color 150ms var(--ds-ease-in-out, cubic-bezier(.4, 0, .2, 1)), border-bottom-color 150ms var(--ds-ease-in-out, cubic-bezier(.4, 0, .2, 1));
+}
+.shell .memoryTabs button:hover { color: var(--dsw-alias-label-primary); }
+.shell .memoryTabs button[data-active] {
+  border-bottom-color: var(--dsw-alias-label-primary);
+  color: var(--dsw-alias-label-primary);
+}
+.shell .memoryWriteButton { flex: none; }
 
 .shell .pageHeader { margin-bottom: 16px; }
 .shell .pageHeader:has(+ [class*='subNav']) { margin-bottom: 8px; }
@@ -66,6 +125,7 @@
   border-radius: var(--dsw-radius-sm);
   font-size: 12px;
   line-height: 18px;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
 }
 .shell .itemEditAction {
   border: .5px solid var(--dsw-alias-border-l3);
@@ -73,6 +133,7 @@
   background: transparent;
 }
 .shell .itemEditAction:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+.shell .itemEditAction:active:not(:disabled) { background: var(--dsw-alias-interactive-bg-active); }
 .shell .itemDangerAction {
   border: 0;
   color: var(--dsw-alias-state-error-primary);
@@ -87,6 +148,7 @@
   .shell .headerActions { max-width: none; }
   .shell .statusCluster > span { display: inline; }
   .shell .workspacePicker > [data-part='label'], .shell .workspaceMismatch > span { display: none; }
+  .shell .memoryWorkspace { margin: -16px -16px 16px; padding: 16px 16px 0; }
   .shell .canvas[data-lock-page-header] [class*='pageHeader'] { margin: -16px -16px 16px; padding: 16px 16px 12px; }
   .shell .canvas[data-lock-page-header] [class*='pageHeader']:has(+ [class*='subNav']) { margin-bottom: 6px; padding-bottom: 10px; }
   .shell .modalBackdrop { align-items: flex-end; padding: max(10px, env(safe-area-inset-top, 0px)) 0 0; }
@@ -112,6 +174,7 @@
 
 @media (max-width: 520px) {
   .shell .headerActions { max-width: none; flex: 0 0 auto; }
+  .shell .memoryTabs { gap: 18px; }
   .shell [class*='backButton'] > span { display: none; }
   .shell .workspacePicker button { width: min(118px, 30vw); }
   .shell .statusCluster [class*='iconButton'] { display: none; }
@@ -125,4 +188,9 @@
 @media (pointer: coarse) {
   .shell .modal > header [class*='iconButton'] { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
   .shell .modal > [class*='modalBody'] button, .shell .modal > [class*='modalFooter'] button { min-height: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell .memoryTabs button,
+  .shell .itemActionButton { transition: none; }
 }

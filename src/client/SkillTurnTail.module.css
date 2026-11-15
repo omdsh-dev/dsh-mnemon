@@ -48,6 +48,7 @@
   line-height: 20px;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 .item:hover {
   background: var(--dsw-alias-interactive-bg-hover);
@@ -68,4 +69,8 @@
 }
 .state[data-tone='error'] {
   color: var(--dsw-alias-label-tertiary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item { transition: none; }
 }

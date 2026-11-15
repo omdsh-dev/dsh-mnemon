@@ -48,6 +48,7 @@
   font-size: 13px;
   line-height: 20px;
   cursor: pointer;
+  transition: color 140ms ease, border-bottom-color 140ms ease;
 }
 .shell .memoryTabs button:hover { color: var(--dsw-alias-label-primary); }
 .shell .memoryTabs button[data-active] {
@@ -235,8 +236,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .shell .memoryTabs button,
   .shell [class*='inspectorEye'],
-.shell [class*='inspectorHeading'] button {
+  .shell [class*='inspectorHeading'] button {
     transition: none;
   }
 }

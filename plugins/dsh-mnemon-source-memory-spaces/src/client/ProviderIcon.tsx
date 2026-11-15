@@ -10,9 +10,9 @@ export interface ProviderIconProps {
 
 function GenericProviderMark(): JSX.Element {
   return <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect width="36" height="36" rx="9" fill="#F1F3F7" />
-    <ellipse cx="18" cy="11" rx="8" ry="3.5" fill="#68738A" />
-    <path d="M10 11v7c0 1.93 3.58 3.5 8 3.5s8-1.57 8-3.5v-7M10 18v7c0 1.93 3.58 3.5 8 3.5s8-1.57 8-3.5v-7" stroke="#68738A" strokeWidth="1.6" />
+    <rect width="36" height="36" rx="9" fill="var(--dsw-alias-bg-module-platform, var(--mn-fill, #f1f3f7))" />
+    <ellipse cx="18" cy="11" rx="8" ry="3.5" fill="var(--dsw-alias-label-secondary, var(--mn-muted, #68738a))" />
+    <path d="M10 11v7c0 1.93 3.58 3.5 8 3.5s8-1.57 8-3.5v-7M10 18v7c0 1.93 3.58 3.5 8 3.5s8-1.57 8-3.5v-7" stroke="var(--dsw-alias-label-secondary, var(--mn-muted, #68738a))" strokeWidth="1.6" />
   </svg>
 }
 

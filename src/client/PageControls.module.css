@@ -46,11 +46,13 @@
   line-height: 22px;
   white-space: nowrap;
   cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 .selector > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .selector > svg { flex: none; color: var(--dsw-alias-label-tertiary); }
 .selector:hover:not(:disabled),
 .selector[aria-expanded='true'] { background: var(--dsw-alias-interactive-bg-hover); }
+.selector:active:not(:disabled) { background: var(--dsw-alias-interactive-bg-active); }
 .selector:focus-visible {
   outline: var(--dsw-focus-ring-width, 2px) solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
   outline-offset: 2px;
@@ -108,4 +110,8 @@
 }
 .receipt > .receiptNote[data-tone='caution'] {
   color: var(--dsw-alias-state-warn-label, var(--dsw-alias-label-secondary));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .selector { transition: none; }
 }

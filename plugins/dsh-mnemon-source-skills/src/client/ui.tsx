@@ -52,7 +52,7 @@ export interface SkillsPageContext {
   /** Unknown where the page has no settings to read. */
   evolution: EvolutionState | undefined
   /** Open 技能管理's settings under Plugins. */
-  openSettings?: () => void
+  openSettings?: (section?: string) => void
   sessionId?: string
 }
 

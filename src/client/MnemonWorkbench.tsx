@@ -34,7 +34,7 @@ import { Callout, Reveal, useToast } from './feedback.tsx'
 import feedbackCss from './MnemonFeedback.module.css'
 import { Button, StateDot, type StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SelectField } from './page-controls.tsx'
-import { jsonRecord } from './is-record.ts'
+import { isRecord, jsonRecord } from './is-record.ts'
 import sidebarCss from './MnemonSidebarView.module.css'
 import css from "./MnemonView.module.css"
 import { I18nContext, LocaleContext, useT, useLocale, PageHeader, EmptyState } from "./page-kit.tsx"
@@ -483,9 +483,15 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
         await skillsScope.mutate([{ op: 'set', path: ['evolution'], value: evolution }])
       },
     }
-    const openSettings = openConfiguration === undefined ? undefined : () => { requestComponentPage(selected.packageName); openConfiguration() }
+    const openSettings = openConfiguration === undefined ? undefined : (section?: string) => { requestComponentPage(selected.packageName, section); openConfiguration() }
+    const rawStrategy = settingsSnapshot.value?.persistenceStrategy
     const preferences = skillsPreferences ?? (!isDefaultSourceInstance(selected.sourceInstanceKey, 'memory-spaces') ? undefined : {
-      value: { persistenceStrategy: { ...settingsSnapshot.value?.persistenceStrategy, providerConnections: {} } } as unknown as JsonValue,
+      value: {
+        persistenceStrategy: {
+          ...rawStrategy,
+          providerConnections: isRecord(rawStrategy?.providerConnections) ? rawStrategy.providerConnections : {},
+        },
+      } as unknown as JsonValue,
       writable: settingsSnapshot.writable,
       replace: async (value: JsonValue) => {
         assertCurrentView()
@@ -575,27 +581,27 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
         </div>
         <div className={appearanceClass(css.headerActions, sidebarCss.headerActions)}>{headerActions}<div className={appearanceClass(css.statusCluster, sidebarCss.statusCluster)}>{!focused && <CompositionStatus tone={statusTone} label={connectionLabel} strategy={composingLabel} layers={headerLayers} onOpen={openConfiguration} />}<button type="button" className={css.iconButton} disabled={statusLoading} onClick={refreshPage} aria-label={t('common.refresh')} title={t('common.refresh')}><IconRefreshOutlineRegular size={16} /></button></div>{openSettings !== undefined && <button type="button" className={css.iconButton} onClick={openSettings} aria-label={t('header.configure')} title={t('header.configure')}><IconSettingsOutlineRegular size={16} /></button>}</div>
       </header>
-      {sourceCatalogState.contextKey === surfaceScopeKey && sourceCatalogState.error !== null && <div className={css.alert} role="alert">{sourceCatalogState.error}</div>}
-      {(statusError !== null || status?.healthy === false && notice === undefined) && <div className={css.alert} role="alert"><strong>{t('header.notReady')}</strong><span>{statusError ?? status?.error}</span></div>}
+      <Reveal>{sourceCatalogState.contextKey === surfaceScopeKey && sourceCatalogState.error !== null && <div className={css.alert} role="alert">{sourceCatalogState.error}</div>}</Reveal>
+      <Reveal>{(statusError !== null || status?.healthy === false && notice === undefined) && <div className={css.alert} role="alert"><strong>{t('header.notReady')}</strong><span>{statusError ?? status?.error}</span></div>}</Reveal>
       <Reveal className={css.notice}>{!focused && statusError === null && notice !== undefined && <Callout tone={notice.tone === 'error' ? 'error' : 'warning'} title={notice.title}
         actions={openConfiguration === undefined ? undefined : <Button variant="outline" size="sm" onClick={openConfiguration}>{t('common.openConfiguration')}</Button>}>
         {notice.detail}
       </Callout>}</Reveal>
       <Reveal className={css.notice}>{status?.restartPending !== undefined && <RestartReminder pending={status.restartPending} />}</Reveal>
       {workspaceToast.element}
-      {workspaceParticipation?.excluded && <div className={css.alert} role="status"><strong>{t('workspace.excluded')}</strong><span>{t('workspace.excludedDetail')}</span></div>}
-      {(workspaceParticipation?.invalidEntries?.length ?? 0) > 0 && <div className={css.alert} role="status">{t('workspace.invalidExclusions', { count: workspaceParticipation!.invalidEntries!.length })}</div>}
-      {workspaceParticipation?.reason === 'workspace-unavailable' && <div className={css.alert} role="status">{t('workspace.unavailable')}</div>}
-      <OrdinaryNotices remoteReadOnly={remoteReadOnly} reviewPaused={focused ? undefined : status?.lifecycle?.current?.idleReviewBlocked} />
-      {!focused && <BackgroundWorkflowNotice workflows={status?.memorySystem?.workflows} />}
-      {!focused && status?.lifecycle?.current?.idleReviewWatermark !== undefined && <div className={css.alert} role={status.lifecycle.current.idleReviewWatermark.state === 'error' ? 'alert' : 'status'}>
+      <Reveal>{Boolean(workspaceParticipation?.excluded) && <div className={css.alert} role="status"><strong>{t('workspace.excluded')}</strong><span>{t('workspace.excludedDetail')}</span></div>}</Reveal>
+      <Reveal>{(workspaceParticipation?.invalidEntries?.length ?? 0) > 0 && <div className={css.alert} role="status">{t('workspace.invalidExclusions', { count: workspaceParticipation!.invalidEntries!.length })}</div>}</Reveal>
+      <Reveal>{workspaceParticipation?.reason === 'workspace-unavailable' && <div className={css.alert} role="status">{t('workspace.unavailable')}</div>}</Reveal>
+      <Reveal>{(remoteReadOnly || (!focused && Boolean(status?.lifecycle?.current?.idleReviewBlocked))) && <OrdinaryNotices remoteReadOnly={remoteReadOnly} reviewPaused={focused ? undefined : status?.lifecycle?.current?.idleReviewBlocked} />}</Reveal>
+      <Reveal>{!focused && status?.memorySystem?.workflows !== undefined && (!status.memorySystem.workflows.idleReview || !status.memorySystem.workflows.runtimeCapacity) && <BackgroundWorkflowNotice workflows={status.memorySystem.workflows} />}</Reveal>
+      <Reveal>{!focused && status?.lifecycle?.current?.idleReviewWatermark !== undefined && <div className={css.alert} role={status.lifecycle.current.idleReviewWatermark.state === 'error' ? 'alert' : 'status'}>
         <span>{t('status.reviewWatermarkUsage', { attempts: status.lifecycle.current.idleReviewAttempts ?? 0, max: status.lifecycle.current.idleReviewWatermark.maxPerSession, restored: status.lifecycle.current.idleReviewWatermark.restoredAttempts })}</span>
         {status.lifecycle.current.idleReviewWatermark.state === 'error' ? <>
           <strong>{t('status.reviewWatermarkPaused')}</strong>
           <span>{t('status.reviewWatermarkRecovery')}</span>
         </> : status.lifecycle.current.nextReviewAt !== undefined && <span>{t('status.reviewWatermarkNext', { time: new Date(status.lifecycle.current.nextReviewAt).toLocaleString(locale) })}</span>}
-      </div>}
-      {!focused && status?.lifecycle?.current?.lastError !== undefined && <div className={css.alert} role="alert" aria-label={t('status.reviewFailed')}>
+      </div>}</Reveal>
+      <Reveal>{!focused && status?.lifecycle?.current?.lastError !== undefined && <div className={css.alert} role="alert" aria-label={t('status.reviewFailed')}>
         <strong>{t('status.reviewFailed')}</strong>
         <span>{status.lifecycle.current.lastError}</span>
         <span>{t('status.reviewFailedDetail')}</span>
@@ -605,7 +611,7 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
           <ul>{status.lifecycle.current.lastReviewFailure.receipts.map((receipt, index) => <li key={index}>{[receipt.tool, receipt.action, receipt.documentId, receipt.target, receipt.revision].filter(Boolean).join(' · ')}</li>)}</ul>
         </>}
         {/CONTEXT_WINDOW_EXCEEDED|exceed(?:s|ed)? (?:the )?(?:available )?context (?:size|window)/iu.test(status.lifecycle.current.lastError) && <span>{t('status.reviewContextWindow')}</span>}
-      </div>}
+      </div>}</Reveal>
       <div className={css.workspace}>
         {!focused && <WorkspaceNavigation page={page} onSelect={openTab} sourcePages={sourceNavigationEntries} disabledTypes={disabledTypes} memoryOff={memoryOff} />}
         <section key={surfaceScopeKey} className={appearanceClass(css.canvas, sidebarCss.canvas)} ref={canvasRef} data-testid="mnemon-canvas" data-lock-page-header={(activeSourcePage?.navigation?.stickyHeader !== false) ? '' : undefined}>

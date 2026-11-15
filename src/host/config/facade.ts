@@ -20,6 +20,7 @@ import { plainHostConfig } from './live.ts'
 import { migrateLegacyDisplayMode, planLegacySettingsImport } from './migrations.ts'
 import { normalizeDisplayMode } from './normalize.ts'
 import { createStorageRoot, resolveGlobalDataDir } from './paths.ts'
+import { DocumentsSchema, RuntimeMemorySchema } from './schema.ts'
 import { prepareEmbeddingSettings, publicEmbeddingSettings, type EmbeddingCredentialStore } from './secrets.ts'
 
 export {
@@ -406,7 +407,7 @@ function descriptor(settings: HostSettingsService, namespace: string) {
 
 const MUTABLE_FIELDS = [
   'storageScope', 'runtimeUserScope', 'excludedWorkspaces', 'cliPath', 'dataDir', 'customPackId', 'customPacks', 'store', 'timeoutMs', 'defaultRecallLimit',
-  'runtimeMemory',
+  'documents', 'runtimeMemory',
   'embedding',
   'recallQuality',
   'routingGuidance', 'lifecycleEnabled', 'recallMode', 'writebackMode', 'idleReviewMs', 'idleReview',
@@ -425,7 +426,7 @@ const INTERACTION_PATHS: string[][] = [
 ]
 
 const UI_FIELDS = ['turnBar', 'saveAction']
-const SKILLS_FIELDS = Object.keys(DEFAULT_SKILLS_CONFIG)
+const SKILLS_FIELDS = [...Object.keys(DEFAULT_SKILLS_CONFIG), 'dshHome', 'agentsHome']
 const MEMORY_LAYER_ID = /^[a-z][a-z0-9-]{0,127}$/u
 
 function namespaceOf(payload: Record<string, unknown>): string {
@@ -471,6 +472,20 @@ export function createSettingsHandler(settings: HostSettingsService, credentials
         if (op.op === 'unset') return { op: 'unset' as const, path }
         if (op.op !== 'set') throw new Error(`unsupported settings operation: ${String(op.op)}`)
         if (path[0] === 'memoryTopology' && typeof op.value !== 'boolean') throw new Error('memory layer enabled must be boolean')
+        if (namespace === MNEMON_SETTINGS_NAMESPACE && path[0] === 'documents') {
+          requirePayloadObject(op.value)
+          DocumentsSchema(op.value as never)
+        }
+        if (namespace === MNEMON_SETTINGS_NAMESPACE && path[0] === 'runtimeMemory') {
+          requirePayloadObject(op.value)
+          RuntimeMemorySchema(op.value as never)
+        }
+        if (namespace === MNEMON_SKILLS_SETTINGS_NAMESPACE && (path[0] === 'dshHome' || path[0] === 'agentsHome')) {
+          if (typeof op.value !== 'string') throw new Error(`skills.${path[0]} must be a string`)
+          const trimmed = op.value.trim()
+          if (trimmed === '') return { op: 'unset' as const, path }
+          return { op: 'set' as const, path, value: trimmed }
+        }
         return { op: 'set' as const, path, value: namespace === MNEMON_SETTINGS_NAMESPACE && path[0] === 'displayMode' ? normalizeDisplayMode(op.value) : op.value }
       })
       const revision = payload.expectedRevision

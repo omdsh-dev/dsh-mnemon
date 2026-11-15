@@ -522,4 +522,64 @@ describe('embedding credentials through the settings bridge', () => {
     expect(resolveConfig(config).embedding.apiKeyEnv).toBe('FIXTURE_EMBED_KEY')
     expect(() => resolveConfig({ embedding: { apiKeyEnv: 'BAD NAME' } })).toThrow('apiKeyEnv')
   })
+
+  it('normalizes documents.limitBytes and skills directory overrides across schema, resolver, and settings facade', async () => {
+    const defaults = resolveConfig({})
+    expect(defaults.documents).toEqual({ limitBytes: 10_485_760 })
+    expect(defaults.skills.dshHome).toBeUndefined()
+    expect(defaults.skills.agentsHome).toBeUndefined()
+
+    const configured = Config({
+      documents: { limitBytes: 25_165_824 },
+      skills: { dshHome: '  /custom/dsh  ', agentsHome: '   ' },
+    })
+    expect(configured.documents?.limitBytes).toBe(25_165_824)
+    expect(configured.skills?.dshHome).toBe('/custom/dsh')
+    expect(configured.skills?.agentsHome).toBeUndefined()
+    const resolved = resolveConfig(configured)
+    expect(resolved.documents).toEqual({ limitBytes: 25_165_824 })
+    expect(resolved.skills.dshHome).toBe('/custom/dsh')
+    expect(resolved.skills.agentsHome).toBeUndefined()
+
+    expect(() => Config({ documents: { limitBytes: 0 } })).toThrow()
+    expect(() => Config({ documents: { limitBytes: 104_857_601 } })).toThrow()
+
+    const mutate = vi.fn(async () => {})
+    const settings = {
+      writable: true,
+      register: vi.fn(),
+      mutate,
+      describe: () => [
+        { ns: 'mnemon', value: {}, revision: 1, applies: 'live' as const },
+        { ns: 'mnemon-skills', value: {}, revision: 1, applies: 'live' as const },
+      ],
+    } as unknown as HostSettingsService
+    const handler = createSettingsHandler(settings)
+
+    await expect(handler('mutate', {
+      expectedRevision: 1,
+      ops: [{ op: 'set', path: ['documents'], value: { limitBytes: 20_971_520 } }],
+    })).resolves.toMatchObject({ ok: true })
+    expect(mutate).toHaveBeenCalledWith('mnemon', [{ op: 'set', path: ['documents'], value: { limitBytes: 20_971_520 } }], 1)
+
+    await expect(handler('mutate', {
+      ops: [{ op: 'set', path: ['documents'], value: { limitBytes: 0 } }],
+    })).resolves.toMatchObject({ ok: false, error: { code: 'settings-rejected' } })
+
+    const skillDirOps = [
+      { op: 'set', path: ['dshHome'], value: '/custom/dsh' },
+      { op: 'set', path: ['agentsHome'], value: '/custom/agents' },
+    ]
+    await expect(handler('mutate', {
+      namespace: 'mnemon-skills',
+      expectedRevision: 1,
+      ops: skillDirOps,
+    })).resolves.toMatchObject({ ok: true })
+    expect(mutate).toHaveBeenCalledWith('mnemon-skills', skillDirOps, 1)
+
+    await expect(handler('mutate', {
+      namespace: 'mnemon-skills',
+      ops: [{ op: 'unset', path: ['dshHome'] }, { op: 'unset', path: ['agentsHome'] }],
+    })).resolves.toMatchObject({ ok: true })
+  })
 })

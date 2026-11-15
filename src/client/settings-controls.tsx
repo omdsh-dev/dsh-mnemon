@@ -1,4 +1,4 @@
-import { useId, useState, type JSX, type ReactNode } from 'react'
+import { useEffect, useId, useState, type JSX, type ReactNode } from 'react'
 import { IconChevronDownOutlineRegular, Menu, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './MnemonSettingsCard.module.css'
 import { Reveal, TARGET } from './feedback.tsx'
@@ -96,5 +96,36 @@ export function ToggleRow(props: { id: string; label: string; titleId?: string |
       <Reveal>{props.note === undefined ? null : <div className={css.rowNote}>{props.note}</div>}</Reveal>
     </div>
     <Switch className={css.switch} checked={props.checked} label={props.ariaLabel ?? props.label} disabled={props.disabled} onChange={props.onChange} />
+  </div>
+}
+
+/**
+ * Smoothly animated collapsible disclosure for advanced or secondary settings.
+ * Keeps children mounted inside a CSS grid row transition so staged inputs keep
+ * their state and accessible labels while collapsed, and auto-expands on section deep-links.
+ */
+export function AdvancedSection(props: {
+  title: ReactNode
+  defaultOpen?: boolean | undefined
+  section?: string | undefined
+  activeSection?: string | undefined
+  className?: string | undefined
+  children: ReactNode
+}): JSX.Element {
+  const [open, setOpen] = useState(() => props.defaultOpen === true || (props.section !== undefined && props.activeSection === props.section))
+  const bodyId = useId()
+  useEffect(() => {
+    if (props.section !== undefined && props.activeSection === props.section) setOpen(true)
+  }, [props.section, props.activeSection])
+  return <div className={[css.advanced, props.className].filter(Boolean).join(' ')} data-open={open ? '' : undefined}
+    {...(props.section === undefined ? {} : { 'data-settings-section': props.section })}>
+    <button type="button" className={css.advancedToggle} aria-expanded={open} aria-controls={bodyId}
+      data-disclosure-open={open ? undefined : ''} onClick={() => setOpen(value => !value)}>
+      <span>{props.title}</span>
+      <IconChevronDownOutlineRegular size={12} />
+    </button>
+    <div id={bodyId} className={css.advancedBody}>
+      <div className={css.advancedContent}>{props.children}</div>
+    </div>
   </div>
 }

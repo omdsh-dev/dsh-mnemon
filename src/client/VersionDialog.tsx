@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { writeClipboard } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { VersionComponentStatus, VersionInstallMode, VersionPackageStatus, VersionStatus, VersionUpdateResult } from '../host/protocol.ts'
 import { MnemonClient } from './api.ts'
+import { Reveal } from './feedback.tsx'
 import type { MnemonTranslate } from './locales.ts'
 import { message, SidebarModal, useT } from './page-kit.tsx'
 import { clearStarterUpdate, recordStarterUpdate, type StarterUpdateRecord } from './starter-update.ts'
@@ -200,13 +201,13 @@ export function VersionDialog(props: {
             <button type="button" className={css.versionPackagesToggle} aria-expanded={packagesOpen} aria-controls="mnemon-version-packages" onClick={() => setPackagesOpen(open => !open)}>
               <span aria-hidden="true">{packagesOpen ? '▾' : '▸'}</span><strong>{t('versions.packages', { count: packages.length })}</strong><small>{outdated > 0 ? t('versions.packagesOutdated', { count: outdated }) : t(packagesOpen ? 'versions.packagesHide' : 'versions.packagesDetail')}</small>
             </button>
-            {packagesOpen && <div id="mnemon-version-packages">
+            <Reveal>{packagesOpen && <div id="mnemon-version-packages">
               <p className={css.versionNotice}>{t('versions.packagesHint')}</p>
               {(['source', 'strategy', 'provider'] as const).map(kind => {
                 const members = packages.filter(item => item.kind === kind)
                 return members.length === 0 ? null : <section key={kind} aria-label={t(`versions.kind.${kind}`)}><h4>{t(`versions.kind.${kind}`)}</h4><ul>{members.map(renderPackage)}</ul></section>
               })}
-            </div>}
+            </div>}</Reveal>
           </div>}
         </article>
       })}</div>}
