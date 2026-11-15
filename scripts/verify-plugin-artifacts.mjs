@@ -66,7 +66,7 @@ function inside(directory, path) {
   return child !== '..' && !child.startsWith(`..${sep}`) && !isAbsolute(child)
 }
 
-async function run(command, arguments_, cwd, label) {
+async function run(command, arguments_, cwd, label, timeoutMs = 180_000) {
   const started = performance.now()
   const output = await new Promise((fulfill, reject) => {
     const child = spawn(command, arguments_, {
@@ -76,7 +76,7 @@ async function run(command, arguments_, cwd, label) {
     })
     let stdout = ''
     let stderr = ''
-    const deadline = setTimeout(() => child.kill('SIGTERM'), 180_000)
+    const deadline = setTimeout(() => child.kill('SIGTERM'), timeoutMs)
     child.stdout.on('data', chunk => { stdout += chunk })
     child.stderr.on('data', chunk => { stderr += chunk })
     child.on('error', error => { clearTimeout(deadline); reject(error) })
@@ -154,7 +154,9 @@ async function verifyIndependent(name) {
     // The outer pool already runs several packages together. Give each Vitest
     // process one worker so it cannot multiply that pool by the CPU count.
     const commandArgs = command === 'test' ? ['--', '--maxWorkers=1'] : []
-    await run('npm', ['run', command, ...commandArgs], directory, `${name}: standalone ${command}`)
+    // The full UI suite exceeds three minutes on CI even when every case passes.
+    // Keep per-case Vitest limits intact and bound the complete test command to five minutes.
+    await run('npm', ['run', command, ...commandArgs], directory, `${name}: standalone ${command}`, command === 'test' ? 300_000 : 180_000)
   }
   const installed = await realpath(directory)
   assert(!inside(root, installed))
