@@ -107,6 +107,8 @@ export function ToggleRow(props: { id: string; label: string; titleId?: string |
  */
 export function AdvancedSection(props: {
   title: ReactNode
+  hint?: ReactNode
+  badge?: ReactNode
   defaultOpen?: boolean | undefined
   section?: string | undefined
   activeSection?: string | undefined
@@ -114,17 +116,24 @@ export function AdvancedSection(props: {
   children: ReactNode
 }): JSX.Element {
   const [open, setOpen] = useState(() => props.defaultOpen === true || (props.section !== undefined && props.activeSection === props.section))
+  const titleId = useId()
   const bodyId = useId()
   useEffect(() => {
     if (props.section !== undefined && props.activeSection === props.section) setOpen(true)
   }, [props.section, props.activeSection])
   return <div className={[css.advanced, props.className].filter(Boolean).join(' ')} data-open={open ? '' : undefined}
     {...(props.section === undefined ? {} : { 'data-settings-section': props.section })}>
-    <button type="button" className={css.advancedToggle} aria-expanded={open}
+    <button type="button" className={css.advancedToggle} aria-expanded={open} aria-labelledby={titleId}
       {...(open ? { 'aria-controls': bodyId } : {})}
       data-disclosure-open={open ? undefined : ''} onClick={() => setOpen(value => !value)}>
-      <span>{props.title}</span>
-      <IconChevronDownOutlineRegular size={12} />
+      <span className={css.advancedHeading}>
+        <span id={titleId} className={css.advancedTitle}>{props.title}</span>
+        {props.hint !== undefined && props.hint !== '' && <small className={css.advancedHint}>{props.hint}</small>}
+      </span>
+      <span className={css.advancedMeta}>
+        {props.badge !== undefined && <span className={css.advancedBadge}>{props.badge}</span>}
+        <IconChevronDownOutlineRegular size={14} aria-hidden="true" />
+      </span>
     </button>
     {open && <div id={bodyId} className={css.advancedBody}>
       <div className={css.advancedContent}>{props.children}</div>

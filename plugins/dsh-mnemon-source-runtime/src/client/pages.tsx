@@ -1,6 +1,6 @@
 import { css, sidebarCss, useT } from './presentation.ts'
 import type { JSX } from 'react'
-import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { type RuntimeMemoryEntry, type RuntimeMemoryImportance, type RuntimeMemorySnapshot, type RuntimeMemoryTarget } from '../contracts.ts'
 import type { RuntimePageClient } from './api.ts'
 import { type MnemonKey, appearanceClass, useLocale, humanBytes, message, parseBranchesInput, PageHeader, ProgressiveFooter, Reveal, SidebarModal, SearchField, SelectField } from 'dsh-mnemon/client'
@@ -175,7 +175,12 @@ export function RuntimePage(props: { client: RuntimePageClient; revision: number
         <div className={css.runtimeSummaryGrid}>{targetSummary('user')}{targetSummary('memory')}</div>
         <section className={css.runtimeBrowser} aria-label={t('runtime.entriesAria')}>
           <div className={css.runtimeBrowserToolbar}>
-            <div className={css.runtimeScopeFilter} role="group" aria-label={t('runtime.scopeAria')}><button type="button" data-active={filterTarget === 'all' || undefined} onClick={() => setFilterTarget('all')}>{t('runtime.scopeAll')} <b>{snapshot?.entries.length ?? 0}</b></button><button type="button" data-active={filterTarget === 'user' || undefined} onClick={() => setFilterTarget('user')}>{t('runtime.target.user')} <b>{snapshot?.targets.user.entryCount ?? 0}</b></button><button type="button" data-active={filterTarget === 'memory' || undefined} onClick={() => setFilterTarget('memory')}>{t('runtime.target.memory')} <b>{snapshot?.targets.memory.entryCount ?? 0}</b></button></div>
+            <div className={css.runtimeScopeFilter} role="group" aria-label={t('runtime.scopeAria')}
+              style={{ '--dsh-segment-count': 3, '--dsh-segment-index': filterTarget === 'all' ? 0 : filterTarget === 'user' ? 1 : 2 } as CSSProperties}>
+              <button type="button" data-active={filterTarget === 'all' || undefined} onClick={() => setFilterTarget('all')}>{t('runtime.scopeAll')} <b>{snapshot?.entries.length ?? 0}</b></button>
+              <button type="button" data-active={filterTarget === 'user' || undefined} onClick={() => setFilterTarget('user')}>{t('runtime.target.user')} <b>{snapshot?.targets.user.entryCount ?? 0}</b></button>
+              <button type="button" data-active={filterTarget === 'memory' || undefined} onClick={() => setFilterTarget('memory')}>{t('runtime.target.memory')} <b>{snapshot?.targets.memory.entryCount ?? 0}</b></button>
+            </div>
             <SearchField className={css.runtimeFilterQuery} label={t('runtime.filterAria')} value={filterQuery} onChange={event => setFilterQuery(event.target.value)} placeholder={t('runtime.filterPlaceholder')} />
           </div>
           <div ref={listRef} className={css.runtimeUnifiedList}>{visibleEntries.map(entry => runtimeEntry(entry, true))}{!loading && filteredEntries.length === 0 && <div className={css.runtimeEmpty}><span>○</span><p>{t('runtime.noMatch')}</p></div>}</div>

@@ -1,6 +1,6 @@
 import { css, sidebarCss, useT } from './presentation.ts'
 import type { JSX } from 'react'
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { MarkdownText, PathLabel, type MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import { type DocumentRecord, type DocumentSnapshot, type DocumentView } from '../contracts.ts'
 import type { DocumentsPageClient } from './api.ts'
@@ -325,7 +325,11 @@ export function DocumentsPage(props: { client: DocumentsPageClient; revision: nu
             void display('', status)
           }
         }} placeholder={t('documents.searchPlaceholder')} /><button type="submit" className={css.secondaryButton}>{t('documents.search')}</button></form>
-        <div role="group" aria-label={t('documents.scope')}><button type="button" data-active={status === 'active' || undefined} onClick={() => changeStatus('active')}>{t('documents.active')} <b>{activeCount}</b></button><button type="button" data-active={status === 'archived' || undefined} onClick={() => changeStatus('archived')}>{t('documents.archivedCount')} <b>{archivedCount}</b></button></div>
+        <div role="group" aria-label={t('documents.scope')}
+          style={{ '--dsh-segment-count': 2, '--dsh-segment-index': status === 'active' ? 0 : 1 } as CSSProperties}>
+          <button type="button" data-active={status === 'active' || undefined} onClick={() => changeStatus('active')}>{t('documents.active')} <b>{activeCount}</b></button>
+          <button type="button" data-active={status === 'archived' || undefined} onClick={() => changeStatus('archived')}>{t('documents.archivedCount')} <b>{archivedCount}</b></button>
+        </div>
 
       </section>
 

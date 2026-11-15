@@ -287,13 +287,13 @@ button.readSourceCard:hover { background: var(--mn-hover); }
 .settingsPolicyBody { display: flex; min-width: 0; flex-direction: column; gap: 12px; margin-top: 8px; }
 .settingsPolicyToggle {
   display: flex;
-  width: 100%;
+  width: calc(100% + 16px);
   min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin: 0;
-  padding: 6px 8px;
+  margin: 0 -8px;
+  padding: 9px 8px;
   border: 0;
   border-radius: var(--dsw-radius-md, 8px);
   color: var(--dsw-alias-label-primary);
@@ -306,11 +306,11 @@ button.readSourceCard:hover { background: var(--mn-hover); }
 .settingsPolicyToggle:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .settingsPolicyToggle:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); }
 .settingsPolicyHeading { display: grid; min-width: 0; gap: 2px; }
-.settingsPolicyHeading strong { font-size: 13px; font-weight: 500; line-height: 20px; }
+.settingsPolicyHeading strong { font-size: 14px; font-weight: 400; line-height: 22px; }
 .settingsPolicyHeading small { color: var(--dsw-alias-label-tertiary); font-size: 12px; font-weight: 400; line-height: 18px; }
 .settingsPolicyMeta { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 8px; color: var(--dsw-alias-label-tertiary); }
 .settingsPolicyBadge {
-  padding: 2px 8px;
+  padding: 1px 8px;
   border-radius: 999px;
   corner-shape: round;
   color: var(--dsw-alias-label-secondary);
@@ -318,6 +318,7 @@ button.readSourceCard:hover { background: var(--mn-hover); }
   font-size: 11px;
   font-weight: 500;
   line-height: 17px;
+  font-variant-numeric: tabular-nums;
 }
 .settingsPolicy[data-open] .settingsPolicyToggle .smoothChevron,
 .settingsRecall[data-open] .settingsPolicyToggle .smoothChevron { transform: rotate(180deg); }
@@ -387,7 +388,7 @@ button.readSourceCard:hover { background: var(--mn-hover); }
 .settingsSelectOption { display: grid; min-width: 0; gap: 1px; white-space: normal; }
 .settingsSelectOption > small { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
 .settingsNumberInput {
-  width: 112px;
+  width: 128px;
   height: 34px;
   box-sizing: border-box;
   border: .5px solid var(--dsw-alias-border-l4);
@@ -401,6 +402,7 @@ button.readSourceCard:hover { background: var(--mn-hover); }
   line-height: 20px;
   text-align: right;
   font-variant-numeric: tabular-nums;
+  transition: border-color 120ms ease;
 }
 .settingsNumberInput:focus-visible { border-color: var(--dsw-alias-state-business-primary); }
 .settingsNumberInput[aria-invalid='true'] { border-color: var(--dsw-alias-state-error-primary); }
@@ -542,7 +544,7 @@ button.readSourceCard:hover { background: var(--mn-hover); }
 .entitySearch input { min-width: 0; }
 .entitySearch > button { min-height: 34px; border-radius: var(--dsw-radius-md, 8px); }
 .entityHeading { display: flex; align-items: center; justify-content: space-between; margin: 16px 4px 6px; }
-.entityHeading small { color: var(--mn-faint); font-size: 12px; }
+.entityHeading small { color: var(--mn-faint); font-size: 12px; font-variant-numeric: tabular-nums; }
 .entityList { display: grid; gap: 2px; }
 .entityList button { display: flex; min-height: 32px; align-items: center; justify-content: space-between; gap: 10px; border: 0; border-radius: var(--dsw-radius-sm); padding: 0 10px; color: var(--mn-muted); background: transparent; cursor: pointer; text-align: left; }
 .entityList button:hover,
@@ -606,7 +608,7 @@ button.readSourceCard:hover { background: var(--mn-hover); }
 .metadataDialog { display: grid; gap: 12px; }
 .metadataToolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
 .metadataToolbar > span { display: flex; min-width: 0; align-items: center; gap: 8px; }
-.metadataToolbar em { padding: 1px 8px; border-radius: 999px; corner-shape: round; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; font-style: normal; font-weight: 500; line-height: 17px; }
+.metadataToolbar em { padding: 1px 8px; border-radius: 999px; corner-shape: round; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; font-style: normal; font-weight: 500; line-height: 17px; font-variant-numeric: tabular-nums; }
 .metadataList { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .metadataEmpty { grid-column: 1 / -1; padding: 20px; border-radius: var(--dsw-radius-md); color: var(--mn-faint); background: var(--mn-fill); font-size: 12px; text-align: center; }
 .metadataList > label { position: relative; display: grid; min-width: 0; min-height: 76px; grid-template-columns: 16px minmax(0, 1fr); align-items: start; gap: 10px; padding: 12px; cursor: pointer; }
@@ -732,6 +734,8 @@ button.readSourceCard:hover { background: var(--mn-hover); }
   .capabilityRules label,
   .placementCandidates > label,
   .smoothChevron,
+  .settingsPolicyToggle,
+  .settingsNumberInput,
   .advancedWriteChevron {
     transition: none;
   }

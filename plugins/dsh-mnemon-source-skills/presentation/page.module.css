@@ -182,7 +182,7 @@
 .skList,
 .skPane { min-width: 0; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); }
 .skList { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 6px; }
-.skPane { padding: clamp(16px, 2vw, 24px); overflow: hidden; }
+.skPane { --sk-pane-pad: clamp(16px, 2vw, 24px); padding: var(--sk-pane-pad); overflow: hidden; }
 
 /* Keep each list beside its detail while browsing long skills or suggestions. */
 .skSkillsSplit,
@@ -195,10 +195,10 @@
 .skEvolutionSplit > .skList > * { flex-shrink: 0; }
 .skSkillsSplit > .skList,
 .skEvolutionSplit > .skList { height: 100%; box-sizing: border-box; }
-.skPaneBar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: .5px solid var(--mn-line); }
+.skPaneBar { display: flex; min-height: 56px; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: calc(-1 * var(--sk-pane-pad)) calc(-1 * var(--sk-pane-pad)) 16px; padding: 10px var(--sk-pane-pad); border-bottom: .5px solid var(--mn-line); }
 .skPaneBar > .skIconButton { margin-left: auto; }
 
-.skListBar { display: flex; align-items: center; gap: 8px; padding: 10px; border-bottom: .5px solid var(--mn-line); }
+.skListBar { display: flex; min-height: 56px; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: .5px solid var(--mn-line); }
 .skListBar > :first-child { min-width: 0; flex: 1; }
 .skListNote { margin: 0; padding: 18px 16px; color: var(--mn-faint); font-size: 12px; line-height: 18px; text-align: center; }
 /* A second, quieter control under the bar: narrowing the list. */
@@ -251,7 +251,7 @@
   color: var(--mn-muted);
   background: var(--mn-fill);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1;
   transition: color 140ms ease, background-color 140ms ease;
 }
@@ -300,7 +300,7 @@
 .skDetail { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr); gap: 14px; animation: sk-arrive 200ms cubic-bezier(.2, 0, 0, 1); }
 .skDetailHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .skDetailHead > div:first-child { display: grid; min-width: 0; gap: 4px; }
-.skDetailHead h3 { margin: 0; overflow-wrap: anywhere; font-size: 17px; font-weight: 600; line-height: 26px; }
+.skDetailHead h3 { margin: 0; overflow-wrap: anywhere; font-size: 16px; font-weight: 500; line-height: 24px; }
 .skDetailHead p { margin: 0; color: var(--mn-muted); font-size: 13px; line-height: 20px; }
 .skDetailActions { display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }
 .skKicker { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
@@ -318,7 +318,7 @@
 .skDoc { min-width: 0; overflow-wrap: anywhere; color: var(--mn-text); font-size: 13px; line-height: 1.75; }
 .skDoc > :first-child { margin-top: 0; }
 .skDoc > :last-child { margin-bottom: 0; }
-.skDoc h1, .skDoc h2, .skDoc h3, .skDoc h4 { margin: 1.4em 0 .5em; color: var(--mn-text); font-weight: 600; line-height: 1.4; }
+.skDoc h1, .skDoc h2, .skDoc h3, .skDoc h4 { margin: 1.4em 0 .5em; color: var(--mn-text); font-weight: 500; line-height: 1.4; }
 .skDoc h1 { font-size: 1.25em; }
 .skDoc h2 { font-size: 1.1em; }
 .skDoc h3, .skDoc h4 { font-size: 1em; }
@@ -425,7 +425,7 @@
 
 .skDraft { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr); gap: 12px; padding-top: 14px; border-top: .5px solid var(--mn-line); }
 .skSectionHead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
-.skSectionHead h4 { display: flex; align-items: baseline; gap: 8px; margin: 0; font-size: 14px; font-weight: 600; line-height: 22px; }
+.skSectionHead h4 { display: flex; align-items: baseline; gap: 8px; margin: 0; font-size: 14px; font-weight: 500; line-height: 22px; }
 .skSectionHead h4 small { color: var(--mn-faint); font-size: 12px; font-weight: 400; }
 .skSectionHead > div { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .skChanges { display: grid; gap: 3px; margin: 0; padding-left: 18px; color: var(--mn-muted); font-size: 12px; line-height: 18px; }
@@ -437,7 +437,7 @@
 .skBacktestLine { display: flex; min-width: 0; flex: 1; align-items: center; gap: 10px; border: 0; padding: 4px 0; color: var(--mn-text); background: transparent; font: inherit; font-size: 12px; line-height: 18px; text-align: left; cursor: pointer; }
 .skBacktestLine > span { flex: none; color: var(--mn-faint); }
 .skBacktestLine > strong { min-width: 0; overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.skBacktestLine > em { flex: none; padding: 0 7px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-hover); font-style: normal; font-weight: 600; font-variant-numeric: tabular-nums; }
+.skBacktestLine > em { flex: none; padding: 0 7px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-hover); font-style: normal; font-weight: 500; font-variant-numeric: tabular-nums; }
 .skBacktest[data-tone='good'] .skBacktestLine > em { color: var(--mn-success); background: color-mix(in srgb, var(--mn-success) 12%, transparent); }
 .skBacktest[data-tone='bad'] .skBacktestLine > em { color: var(--mn-danger); background: color-mix(in srgb, var(--mn-danger) 12%, transparent); }
 .skBacktestLine:hover > strong { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--mn-line-strong, var(--mn-faint)); }

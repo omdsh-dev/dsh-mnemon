@@ -2102,6 +2102,26 @@ describe('Phase 1 converged settings, deep-linking, and lent component host', ()
     ]))
   })
 
+  it('aligns RuntimeSettings and DocumentsSettings numeric inputs as compact horizontal SettingRows', () => {
+    const scope = liveSettingsScope<Config>(readySnapshot({
+      runtimeMemory: { inheritToSubagents: true, userLimitBytes: 12_000, memoryLimitBytes: 24_000 },
+      documents: { limitBytes: 10_485_760 },
+    }))
+    const { container } = render(<>
+      {runtime(scope, { language: 'en' }, translateEn)}
+      <DocumentsSettings scope={scope} page={page(DOCUMENTS_PACKAGE, { language: 'en' })} t={translateEn} />
+    </>)
+
+    const userLimit = screen.getByLabelText(translateEn('config.runtime.userLimitBytes')) as HTMLInputElement
+    const memoryLimit = screen.getByLabelText(translateEn('config.runtime.memoryLimitBytes')) as HTMLInputElement
+    const docsLimit = screen.getByLabelText(translateEn('config.documents.limitBytes')) as HTMLInputElement
+    for (const input of [userLimit, memoryLimit, docsLimit]) {
+      expect(input.type).toBe('number')
+      expect(input.closest('label')).toBeNull()
+      expect(container.querySelector(`label[for="${input.id}"]`)).not.toBeNull()
+    }
+  })
+
   it('lends persistenceStrategy, recall limits, timeoutMs, and provider-services to Memory Spaces while rejecting unlent fields', async () => {
     expect(supportsMemoryComponentSettingsSection(MEMORY_SPACES_PACKAGE, 'policy')).toBe(true)
     expect(supportsMemoryComponentSettingsSection(MEMORY_SPACES_PACKAGE, 'recall')).toBe(true)

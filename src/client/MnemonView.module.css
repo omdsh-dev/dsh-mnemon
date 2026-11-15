@@ -31,7 +31,7 @@
   --mn-idle: var(--dsw-alias-state-idle-primary);
   --mn-priority: var(--dsw-alias-state-warn-primary);
   --mn-focus: var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary));
-  --mn-code: var(--ds-font-family-code, "SFMono-Regular", Consolas, monospace);
+  --mn-code: var(--dsw-font-mono, var(--ds-font-family-code, ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace));
   --mn-sans: var(--dsw-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
   container: mnemon-workbench / inline-size;
   box-sizing: border-box;
@@ -306,8 +306,8 @@
 .runtimeNotice { margin-bottom: 12px; padding: 8px 12px; border-radius: var(--dsw-radius-md); color: var(--mn-success); background: color-mix(in srgb, var(--mn-success) 8%, transparent); font-size: 12px; line-height: 18px; }
 .runtimeFootnote { margin: 12px 2px 0; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
 .formGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
-.listProgress { display: flex; min-height: 56px; align-items: center; justify-content: center; gap: 12px; margin-top: 12px; padding: 10px; border-top: .5px solid var(--mn-line); color: var(--mn-faint); font-size: 12px; line-height: 18px; }
-.compactListProgress { display: grid; justify-items: stretch; gap: 8px; margin-top: 8px; padding: 10px 2px 2px; border-top: .5px solid var(--mn-line); color: var(--mn-faint); font-size: 12px; line-height: 18px; text-align: center; }
+.listProgress { display: flex; min-height: 56px; align-items: center; justify-content: center; gap: 12px; margin-top: 12px; padding: 10px; border-top: .5px solid var(--mn-line); color: var(--mn-faint); font-size: 12px; line-height: 18px; font-variant-numeric: tabular-nums; }
+.compactListProgress { display: grid; justify-items: stretch; gap: 8px; margin-top: 8px; padding: 10px 2px 2px; border-top: .5px solid var(--mn-line); color: var(--mn-faint); font-size: 12px; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums; }
 .compactListProgress button { width: 100%; }
 
 /* Dialogs follow the DSH Modal: panel radius, layer-2 fill, prominent elevation.
@@ -347,8 +347,8 @@
 .healthStrip article:hover { border-color: var(--mn-line-strong); }
 .healthStrip article > div { min-width: 0; flex: 1; }
 .healthStrip small { display: block; margin-bottom: 2px; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
-.healthStrip strong { display: block; font-size: 13.5px; font-weight: 500; line-height: 20px; overflow-wrap: break-word; }
-.healthStrip p { margin: 2px 0 0; overflow: hidden; color: var(--mn-faint); font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
+.healthStrip strong { display: block; font-size: 14px; font-weight: 500; line-height: 20px; overflow-wrap: break-word; font-variant-numeric: tabular-nums; }
+.healthStrip p { margin: 2px 0 0; overflow: hidden; color: var(--mn-faint); font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .healthIndicator { width: 6px; height: 6px; flex: 0 0 auto; margin-top: 6px; border-radius: 50%; corner-shape: round; }
 .healthGood { background: var(--mn-success); }
 .healthMuted { background: var(--mn-idle); }
@@ -392,7 +392,7 @@
 .storageAreaMetric { display: flex; align-items: baseline; gap: 6px; margin-top: 12px; }
 .storageAreaMetric strong { font-size: 20px; font-weight: 500; line-height: 28px; font-variant-numeric: tabular-nums; }
 .storageAreaMetric span { color: var(--mn-faint); font-size: 12px; }
-.storageAreaMetric code { margin-left: auto; color: var(--mn-faint); font-size: 11px; }
+.storageAreaMetric code { margin-left: auto; color: var(--mn-faint); font-size: 11px; font-variant-numeric: tabular-nums; }
 .storageAreaGrid article > p { min-height: 36px; margin: 6px 0 8px; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
 .storagePath { display: flex; min-width: 0; overflow: hidden; margin-top: auto; padding-top: 8px; border-top: .5px solid var(--mn-line); color: var(--mn-faint); font-size: 11px; line-height: 16px; }
 .storageAreaGrid article > small { display: block; margin-top: 6px; color: var(--mn-danger); font-size: 12px; line-height: 18px; }
@@ -425,7 +425,7 @@
 .versionNumbers { display: grid; grid-template-columns: 1fr auto 1fr; align-items: end; gap: 10px; margin-top: 10px; }
 .versionNumbers > div { display: grid; gap: 2px; }
 .versionNumbers small { color: var(--mn-faint); font-size: 12px; line-height: 18px; }
-.versionNumbers code { font-size: 13px; }
+.versionNumbers code { font-size: 13px; font-variant-numeric: tabular-nums; }
 .versionNumbers > span { padding-bottom: 1px; color: var(--mn-faint); }
 .versionLocation { display: flex; min-width: 0; gap: 6px; margin-top: 8px; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
 .versionLocation > span { flex: none; }

@@ -16,11 +16,56 @@
 .runtimeSummaryCard { min-width: 0; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); }
 .runtimeBrowser { overflow: hidden; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); }
 .runtimeBrowserToolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-bottom: .5px solid var(--mn-line); }
-/* Scope filter, as the DSH SegmentedControl. */
-.runtimeScopeFilter { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 2px; padding: 3px; border-radius: var(--dsw-radius-md); background: var(--mn-hover); }
-.runtimeScopeFilter button { min-height: 28px; border: 0; border-radius: var(--dsw-radius-sm); padding: 0 12px; color: var(--mn-muted); background: transparent; font-size: 13px; font-weight: 500; line-height: 20px; cursor: pointer; }
-.runtimeScopeFilter button:hover { color: var(--mn-text); }
-.runtimeScopeFilter button[data-active] { color: var(--mn-text); background: var(--mn-layer-1); box-shadow: var(--dsw-elevation-soft); }
+/* Scope filter, matching DSH SegmentedControl sliding indicator mechanics. */
+.runtimeScopeFilter {
+  --dsh-segment-count: 3;
+  --dsh-segment-index: 0;
+  position: relative;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: var(--dsw-radius-md);
+  background: var(--mn-hover);
+}
+.runtimeScopeFilter::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: calc((100% - 8px - 2px * (var(--dsh-segment-count) - 1)) / var(--dsh-segment-count));
+  height: calc(100% - 8px);
+  border-radius: var(--dsw-radius-sm);
+  background: var(--mn-layer-1);
+  box-shadow: var(--dsw-elevation-soft);
+  transform: translateX(calc(var(--dsh-segment-index) * (100% + 2px)));
+  transition: transform 160ms cubic-bezier(.22, 1, .36, 1);
+  pointer-events: none;
+}
+.runtimeScopeFilter button {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  padding: 0 12px;
+  color: var(--mn-muted);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+.runtimeScopeFilter button:hover,
+.runtimeScopeFilter button[data-active] { color: var(--mn-text); }
+.runtimeScopeFilter button:focus-visible { outline: var(--dsw-focus-ring-width, 2px) solid var(--mn-focus); outline-offset: -2px; }
 .runtimeScopeFilter b { margin-left: 6px; color: var(--mn-faint); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
 .runtimeFilterQuery { width: min(320px, 42%); min-width: 210px; }
 .runtimeUnifiedList { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 12px; }
@@ -73,5 +118,12 @@
   .runtimeComposerActions > *,
 .runtimeComposerActions button { width: 100%; }
   .runtimeBrowserToolbar { align-items: stretch; flex-direction: column; }
+  .runtimeScopeFilter { width: 100%; }
   .runtimeFilterQuery { width: 100%; min-width: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .runtimeScopeFilter::before,
+  .runtimeScopeFilter button,
+  .capacityLine i { transition: none; }
 }
