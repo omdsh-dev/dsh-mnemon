@@ -155,6 +155,7 @@ function newSkillRoot(settings: ResolvedSkillsConfig, source: SkillsSourcePort, 
 export class SkillEvolution {
   private readonly sessions = new Map<string, SessionState>()
   private readonly jobs = new Set<AbortController>()
+  private readonly activeJobs = new Set<Promise<unknown>>()
   private disposed = false
   private activeBacktests = 0
   private backtestJobs = 0
@@ -251,7 +252,7 @@ export class SkillEvolution {
       if (this.disposed || state.running !== undefined) return
       const current = this.host.settings()
       if (agent.status !== 'idle' || !current.evolution || (!current.allowCreate && !current.allowUpdate)) return
-      state.running = this.review(agent, state, 'automatic').then(() => undefined).finally(() => { delete state.running })
+      state.running = this.trackJob(this.review(agent, state, 'automatic').then(() => undefined)).finally(() => { delete state.running })
     }, Math.max(settings.idleSeconds * 1000, cooldown))
   }
 
@@ -280,7 +281,7 @@ export class SkillEvolution {
     }
     if (state.window.size === 0) throw new Error('this conversation has no finished turn to review yet')
     this.cancelTimer(agent.id)
-    const run = this.review(agent, state, 'manual')
+    const run = this.trackJob(this.review(agent, state, 'manual'))
     state.running = run.then(() => undefined).finally(() => { delete state.running })
     const result = await run
     if (result instanceof Error) throw result
@@ -392,6 +393,12 @@ export class SkillEvolution {
 
   // ---- page assistance -----------------------------------------------------
 
+  private trackJob<T>(promise: Promise<T>): Promise<T> {
+    this.activeJobs.add(promise)
+    void promise.finally(() => { this.activeJobs.delete(promise) })
+    return promise
+  }
+
   private background(name: string, work: (signal: AbortSignal) => Promise<void>, deadlineMs?: number): Promise<void> {
     const controller = new AbortController()
     this.jobs.add(controller)
@@ -399,10 +406,10 @@ export class SkillEvolution {
       controller.abort(new DraftDeadlineError(`${name} did not finish within ${Math.round(deadlineMs / 60_000)} minutes`))
     }, deadlineMs)
     timer?.unref?.()
-    const result = work(controller.signal).catch(error => this.warn(`${name} failed`, deadlineReason(controller.signal) ?? error)).finally(() => {
+    const result = this.trackJob(work(controller.signal).catch(error => this.warn(`${name} failed`, deadlineReason(controller.signal) ?? error)).finally(() => {
       if (timer !== undefined) clearTimeout(timer)
       this.jobs.delete(controller)
-    })
+    }))
     return result
   }
 
@@ -432,8 +439,15 @@ export class SkillEvolution {
         await abortable(signal, () => this.writeDraft(source, workspace, input, { pack, targetRoot, guidance, onRecorded: () => { recorded = true } }, signal))
       } catch (error) {
         if (!recorded && input.suggestionId !== undefined) {
-          const suggestions = await source.read<SkillSuggestion[]>('suggestions')
-          if (suggestions.find(item => item.id === input.suggestionId)?.status === 'drafting') {
+          let shouldReset = true
+          try {
+            const suggestions = await source.read<SkillSuggestion[]>('suggestions')
+            const current = suggestions.find(item => item.id === input.suggestionId)
+            shouldReset = current === undefined || current.status === 'drafting'
+          } catch {
+            shouldReset = true
+          }
+          if (shouldReset) {
             await source.mutate('suggestion-status', { id: input.suggestionId, status: 'pending', error: message(deadlineReason(signal) ?? error) }).catch(() => undefined)
           }
         }
@@ -570,21 +584,38 @@ export class SkillEvolution {
       const run = await source.mutate<BacktestRun>('run-start', { skillName: input.skillName, target: resolved.target, caseIds: cases.map(entry => entry.id), ...(input.expectedCasesHash === undefined ? {} : { expectedCasesHash: input.expectedCasesHash }), ...(input.route === undefined ? {} : { model: input.route }) }, input.signal)
       void this.background('skill backtest', async deadline => {
         const controller = new AbortController()
-        const abort = () => controller.abort(deadline.aborted ? deadline.reason : input.signal?.reason)
+        let watcher: NodeJS.Timeout | undefined
+        const stopWatcher = () => {
+          if (watcher !== undefined) {
+            clearTimeout(watcher)
+            watcher = undefined
+          }
+        }
+        const abort = () => {
+          stopWatcher()
+          controller.abort(deadline.aborted ? deadline.reason : input.signal?.reason)
+        }
         deadline.addEventListener('abort', abort, { once: true })
         input.signal?.addEventListener('abort', abort, { once: true })
         if (deadline.aborted || input.signal?.aborted) abort()
         const signal = controller.signal
         // Cancellation is a Source-owned mutation and works even after a restart.
-        let checking = false
-        const watcher = setInterval(() => {
-          if (checking || signal.aborted) return
-          checking = true
-          void source.read<BacktestRun>('run', { id: run.id }).then(current => {
-            if (current.status !== 'running') controller.abort(new Error(current.error ?? 'Backtest interrupted'))
-          }).catch(error => controller.abort(error)).finally(() => { checking = false })
-        }, 1_000)
-        watcher.unref?.()
+        let pollDelayMs = 1_000
+        const scheduleWatch = () => {
+          if (signal.aborted) return
+          watcher = setTimeout(() => {
+            watcher = undefined
+            if (signal.aborted) return
+            void source.read<BacktestRun>('run', { id: run.id }).then(current => {
+              if (current.status !== 'running') controller.abort(new Error(current.error ?? 'Backtest interrupted'))
+            }).catch(error => controller.abort(error)).finally(() => {
+              pollDelayMs = Math.min(5_000, Math.round(pollDelayMs * 1.5))
+              scheduleWatch()
+            })
+          }, pollDelayMs)
+          watcher.unref?.()
+        }
+        scheduleWatch()
         try {
           await abortable(signal, async () => {
             const release = await this.backtestSlot(signal)
@@ -617,7 +648,7 @@ export class SkillEvolution {
           await source.mutate('run-finish', { id: run.id, status: signal.aborted ? 'interrupted' : 'failed', error: message(signal.aborted ? signal.reason : error) }).catch(() => undefined)
           throw error
         } finally {
-          clearInterval(watcher)
+          stopWatcher()
           deadline.removeEventListener('abort', abort)
           input.signal?.removeEventListener('abort', abort)
         }
@@ -711,12 +742,24 @@ export class SkillEvolution {
     return state === undefined ? undefined : { turns: state.window.size, score: state.window.score().score }
   }
 
-  dispose(): void {
+  dispose(): Promise<void> {
     this.automatic.dispose()
     this.disposed = true
     for (const state of this.sessions.values()) if (state.timer !== undefined) clearTimeout(state.timer)
     this.sessions.clear()
     for (const job of this.jobs) job.abort()
     this.jobs.clear()
+    const pending = [...this.activeJobs]
+    if (pending.length === 0) return Promise.resolve()
+    let timer: NodeJS.Timeout | undefined
+    return Promise.race([
+      Promise.allSettled(pending).then(() => undefined),
+      new Promise<void>(resolve => {
+        timer = setTimeout(resolve, 2_000)
+        timer.unref?.()
+      }),
+    ]).finally(() => {
+      if (timer !== undefined) clearTimeout(timer)
+    })
   }
 }

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
+import { withMemoryStorageLock } from 'dsh-mnemon/extension-sdk'
 import type { MnemonRunner, MnemonTextCommand } from './runner.ts'
 import {
   EMPTY_MEMORY_PROVIDER_CATALOG,
@@ -24,7 +25,7 @@ import type {
 import type { ProviderMemorySpace } from './providers/adapter.ts'
 import {
   isNativeProvider, MEMORY_PROVIDER_REGISTRY_FILE, MEMORY_SPACE_DATABASE_FILE, MEMORY_SPACE_DESCRIPTION_MAX_LENGTH, MEMORY_SPACE_ID_PATTERN, MEMORY_SPACE_NAME_MAX_LENGTH,
-  MEMORY_SPACE_REGISTRY_FILE, MEMORY_SPACES_DIRECTORY, NATIVE_PROVIDER_ID,
+  MEMORY_SPACE_REGISTRY_FILE, MEMORY_SPACES_DIRECTORY, MNEMON_ACTIVE_STORE_FILE, NATIVE_PROVIDER_ID,
 } from './contracts.ts'
 
 const NATIVE_REGISTRY_VERSION = 1
@@ -256,6 +257,17 @@ export function validateMemorySpaceId(value: string): string {
   return normalized
 }
 
+interface RegistryFileState {
+  spaces: StoredMemorySpace[]
+  services: Partial<Record<MemoryProviderId, MemoryProviderConnection>>
+  serviceEnabled: Partial<Record<MemoryProviderId, boolean>>
+  disconnected: Partial<Record<MemoryProviderId, DisconnectedNamespace[]>>
+  diskRevision?: string | undefined
+  directoryMtimeMs?: number | undefined
+  activeFileMtimeMs?: number | undefined
+  pendingStoreDirs?: string[] | undefined
+}
+
 /**
  * Persistent metadata layered over Mnemon's native named stores.
  *
@@ -269,14 +281,9 @@ export class MemorySpaceRegistry {
   readonly providerRegistryPath: string
   /** The namespaces a person disconnected, which asking a Provider again leaves out (#373). */
   readonly disconnectsPath: string
+  private readonly activeStorePath: string
   private refreshing = false
-  private readonly state: {
-    spaces: StoredMemorySpace[]
-    services: Partial<Record<MemoryProviderId, MemoryProviderConnection>>
-    serviceEnabled: Partial<Record<MemoryProviderId, boolean>>
-    disconnected: Partial<Record<MemoryProviderId, DisconnectedNamespace[]>>
-    diskRevision?: string
-  }
+  private readonly state: RegistryFileState
 
   constructor(
     readonly runner: MnemonRunner,
@@ -286,10 +293,11 @@ export class MemorySpaceRegistry {
     private readonly persistent = true,
     private readonly now: () => Date = () => new Date(),
     private readonly providerCatalog: MemoryProviderCatalog = EMPTY_MEMORY_PROVIDER_CATALOG,
-    sharedState?: MemorySpaceRegistry['state'],
+    sharedState?: RegistryFileState,
   ) {
     this.state = sharedState ?? { spaces: [], services: {}, serviceEnabled: {}, disconnected: {} }
     this.directory = join(runner.effectiveDataDir(), MEMORY_SPACES_DIRECTORY)
+    this.activeStorePath = join(runner.effectiveDataDir(), MNEMON_ACTIVE_STORE_FILE)
     // Keep the published v1 filename and serialized bodies key for existing stores and Packs.
     this.registryPath = join(this.directory, MEMORY_SPACE_REGISTRY_FILE)
     this.providerRegistryPath = join(runner.effectiveDataDir(), 'state', MEMORY_PROVIDER_REGISTRY_FILE)
@@ -322,7 +330,6 @@ export class MemorySpaceRegistry {
 
   list(): MemorySpace[] {
     this.refreshIfChanged()
-    this.reconcileDiscoveredStores()
     return this.spaces.filter(body => this.providerCatalog.has(body.providerId)).map(body => this.view(body))
   }
 
@@ -710,9 +717,17 @@ export class MemorySpaceRegistry {
       createdAt: timestamp,
       updatedAt: timestamp,
     }
-    this.spaces.push(body)
-    this.save()
-    return this.view(body)
+    const commit = () => {
+      if (nativeProvider) this.refreshIfChanged()
+      const existing = this.spaces.findIndex(entry => entry.id === id)
+      if (existing >= 0) this.spaces[existing] = body
+      else this.spaces.push(body)
+      this.save()
+      return this.view(body)
+    }
+    return nativeProvider && this.persistent
+      ? await withMemoryStorageLock(this.runner.effectiveDataDir(), async () => commit())
+      : commit()
   }
 
   update(id: string, request: UpdateMemorySpaceRequest): MemorySpace {
@@ -823,13 +838,48 @@ export class MemorySpaceRegistry {
       options: { ...(signal === undefined ? {} : { signal }), store: commandStore },
     })
     await this.runner.runTextBatch(commands)
-    this.spaces = this.spaces.filter(entry => entry.id !== body.id)
-    this.save()
+    const commit = () => {
+      this.refreshIfChanged()
+      this.spaces = this.spaces.filter(entry => entry.id !== body.id)
+      this.save()
+    }
+    if (this.persistent) await withMemoryStorageLock(this.runner.effectiveDataDir(), async () => commit())
+    else commit()
     return body
   }
 
   setActive(id: string, active: boolean): MemorySpace {
     return this.update(id, { active })
+  }
+
+  setActiveMany(ids: readonly string[], active: boolean): MemorySpace[] {
+    this.refreshIfChanged()
+    const normalizedIds = [...new Set(ids.map(validateMemorySpaceId))]
+    if (normalizedIds.length === 0) return []
+    const indices = normalizedIds.map(id => {
+      const index = this.spaces.findIndex(body => body.id === id)
+      if (index < 0) throw new Error(`unknown memory space: ${id}`)
+      return index
+    })
+    let changed = false
+    const updated: StoredMemorySpace[] = []
+    for (const index of indices) {
+      const current = this.spaces[index]!
+      if (current.active === active) {
+        updated.push(current)
+        continue
+      }
+      const next: StoredMemorySpace = {
+        ...current,
+        active,
+        updatedAt: this.nextTimestamp(current.updatedAt),
+      }
+      this.spaces[index] = next
+      updated.push(next)
+      changed = true
+    }
+    if (changed) this.save()
+    return updated.map(body => this.view(body))
   }
 
   /** Advance the safe catalog checkpoint after provider-backed content changes. */
@@ -858,15 +908,25 @@ export class MemorySpaceRegistry {
 
   private diskRevision(): string {
     if (!this.persistent) return 'ephemeral'
-    return [this.registryPath, this.providerRegistryPath, this.disconnectsPath].map(path => {
+    const paths = [
+      this.registryPath,
+      this.providerRegistryPath,
+      this.disconnectsPath,
+      this.directory,
+      this.activeStorePath,
+      ...(this.state.pendingStoreDirs ?? []),
+    ]
+    const stamps = paths.map(path => {
       try {
         const stat = statSync(path, { bigint: true })
-        return `${stat.ino}:${stat.mtimeNs}:${stat.size}`
+        return `${stat.ino}:${stat.mtimeNs}:${stat.ctimeNs}:${stat.size}:${stat.nlink}`
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 'missing'
         throw error
       }
-    }).join('/')
+    })
+    stamps.push(process.env.MNEMON_STORE?.trim() ?? '')
+    return stamps.join('/')
   }
 
   /** Separate generations and legacy facades observe the same durable authority. */
@@ -1030,13 +1090,34 @@ export class MemorySpaceRegistry {
   }
 
   private reconcileDiscoveredStores(): void {
-    if (!this.persistent || !existsSync(this.directory)) return
+    if (!this.persistent) return
+    try {
+      this.state.activeFileMtimeMs = statSync(this.activeStorePath).mtimeMs
+    } catch {
+      this.state.activeFileMtimeMs = undefined
+    }
+    if (!existsSync(this.directory)) {
+      this.state.directoryMtimeMs = undefined
+      this.state.pendingStoreDirs = undefined
+      return
+    }
+    try {
+      this.state.directoryMtimeMs = statSync(this.directory).mtimeMs
+    } catch {
+      this.state.directoryMtimeMs = undefined
+    }
     const timestamp = this.now().toISOString()
     const legacyActive = this.runner.effectiveStore()
     let changed = false
     const knownIds = new Set(this.spaces.map(body => body.id))
+    const pendingStoreDirs: string[] = []
     for (const entry of readdirSync(this.directory, { withFileTypes: true })) {
-      if (!entry.isDirectory() || !MEMORY_SPACE_ID_PATTERN.test(entry.name) || !existsSync(join(this.directory, entry.name, MEMORY_SPACE_DATABASE_FILE))) continue
+      if (!entry.isDirectory() || !MEMORY_SPACE_ID_PATTERN.test(entry.name)) continue
+      const storeDir = join(this.directory, entry.name)
+      if (!existsSync(join(storeDir, MEMORY_SPACE_DATABASE_FILE))) {
+        pendingStoreDirs.push(storeDir)
+        continue
+      }
       if (knownIds.has(entry.name)) continue
       this.spaces.push({
         id: entry.name,
@@ -1050,6 +1131,7 @@ export class MemorySpaceRegistry {
       knownIds.add(entry.name)
       changed = true
     }
+    this.state.pendingStoreDirs = pendingStoreDirs.length === 0 ? undefined : pendingStoreDirs
     if (changed) this.save()
   }
 
@@ -1131,8 +1213,12 @@ export class MemorySpaceRegistry {
   }
 
   private writeRegistry(path: string, file: NativeRegistryFile | ProviderRegistryFile | DisconnectsFile): void {
-    const temporary = join(dirname(path), `.${basename(path)}.${process.pid}.tmp`)
-    writeFileSync(temporary, `${JSON.stringify(file, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
-    renameSync(temporary, path)
+    const temporary = join(dirname(path), `.${basename(path)}.${process.pid}.${randomUUID()}.tmp`)
+    try {
+      writeFileSync(temporary, `${JSON.stringify(file, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
+      renameSync(temporary, path)
+    } finally {
+      rmSync(temporary, { force: true })
+    }
   }
 }

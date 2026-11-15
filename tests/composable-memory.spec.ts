@@ -14,10 +14,10 @@ import type { InstalledMemorySource, InstalledMemoryStrategy, MemoryContribution
 import { canonicalMemoryJson, jsonClone } from '../src/core/definitions.ts'
 import {
   MemoryCompositionGeneration,
-  MemoryCompositionRunner,
   MemoryGenerationHost,
   defineMemorySource,
   defineMemoryStrategy,
+  evaluateMemoryComposition,
 } from "../src/core/index.ts"
 import * as core from '../src/core/plugin.ts'
 import { MemoryRuntime } from '../src/core/runtime.ts'
@@ -526,8 +526,7 @@ describe('Composable View Memory compiler', () => {
       explanation: 'Invalid route escalation.',
       sources: [{ sourceInstanceKey: facts[0]!.sourceInstanceKey, routeIds: ['admin'] }],
     })))
-    const runner = new MemoryCompositionRunner()
-    const result = await runner.run({ contributions: contributions(installedSource(sourceDefinition({ dispose })), bad), request: REQUEST })
+    const result = await evaluateMemoryComposition({ contributions: contributions(installedSource(sourceDefinition({ dispose })), bad), request: REQUEST })
 
     expect(result.report).toMatchObject({ state: 'rejected', diagnostics: [{ code: 'composition-rejected', message: expect.stringContaining('unavailable route') }] })
     expect(dispose).toHaveBeenCalledOnce()
@@ -540,13 +539,12 @@ describe('Composable View Memory compiler', () => {
       explanation: `pass-${++pass}`,
       sources: [{ sourceInstanceKey: facts[0]!.sourceInstanceKey }],
     })))
-    const result = await new MemoryCompositionRunner().run({ contributions: contributions(installedSource(), unstable), request: REQUEST })
+    const result = await evaluateMemoryComposition({ contributions: contributions(installedSource(), unstable), request: REQUEST })
     expect(result.report).toMatchObject({ state: 'rejected', diagnostics: [{ message: expect.stringContaining('not deterministic') }] })
   })
 
   it('reports incomplete assemblies without inventing hidden defaults', async () => {
-    const runner = new MemoryCompositionRunner()
-    await expect(runner.run({ contributions: { revision: 1, sources: [], strategies: [] } })).resolves.toMatchObject({
+    await expect(evaluateMemoryComposition({ contributions: { revision: 1, sources: [], strategies: [] } })).resolves.toMatchObject({
       report: {
         state: 'incomplete',
         diagnostics: [
@@ -561,7 +559,7 @@ describe('Composable View Memory compiler', () => {
     const create = vi.fn(sourceDefinition().create)
     const definition = { ...sourceDefinition(), create }
     const duplicate = installedSource(definition, 'duplicate')
-    const result = await new MemoryCompositionRunner().run({
+    const result = await evaluateMemoryComposition({
       contributions: { revision: 2, sources: [duplicate, duplicate], strategies: [installedStrategy()] },
     })
     expect(result.report).toMatchObject({ state: 'rejected', diagnostics: [{ message: expect.stringContaining('duplicated') }] })

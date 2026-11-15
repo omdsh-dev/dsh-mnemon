@@ -9,7 +9,7 @@ import {
   type MemoryViewContribution,
 } from "../src/core/contracts/index.ts"
 import type { InstalledMemoryPlugin, InstalledMemorySource, InstalledMemoryStrategy, MemoryContributionSnapshot } from '../src/core/contributions.ts'
-import { MemoryCompositionRunner as CoreMemoryCompositionRunner, defineMemoryPlugin } from '../src/core/index.ts'
+import { defineMemoryPlugin, evaluateMemoryComposition } from '../src/core/index.ts'
 import {
   defineMemorySource,
   defineMemoryStrategy,
@@ -787,7 +787,7 @@ describe('memory plugin graph contract', () => {
 
   it('rejects a missing hard dependency before creating a generation', async () => {
     const work = graphSource('work', 'working-context')
-    const result = await new CoreMemoryCompositionRunner().run({ contributions: snapshot([work], [
+    const result = await evaluateMemoryComposition({ contributions: snapshot([work], [
       plugin('work', { packageName: work.provenance.packageName, label: { en: 'Work', 'zh-CN': '工作' }, description: { en: 'Work.', 'zh-CN': '工作。' }, roles: ['source'], provides: [{ id: 'source.working-context' }] }),
       plugin('base', { packageName: 'dsh-mnemon-strategy-base', label: { en: 'Base', 'zh-CN': '基础' }, description: { en: 'Base.', 'zh-CN': '基础。' }, roles: ['strategy'], provides: [{ id: 'strategy.base' }], requires: ['source.durable-evidence'] }),
     ]) })
@@ -796,7 +796,7 @@ describe('memory plugin graph contract', () => {
 
   it('rejects two active providers of one exclusive capability', async () => {
     const left = graphSource('left', 'working-context'), right = graphSource('right', 'working-context')
-    const result = await new CoreMemoryCompositionRunner().run({ contributions: snapshot([left, right], [
+    const result = await evaluateMemoryComposition({ contributions: snapshot([left, right], [
       plugin('left', { packageName: left.provenance.packageName, label: { en: 'Left', 'zh-CN': '左' }, description: { en: 'Left.', 'zh-CN': '左。' }, roles: ['source'], provides: [{ id: 'source.primary', exclusive: true }] }),
       plugin('right', { packageName: right.provenance.packageName, label: { en: 'Right', 'zh-CN': '右' }, description: { en: 'Right.', 'zh-CN': '右。' }, roles: ['source'], provides: [{ id: 'source.primary', exclusive: true }] }),
     ]) })
@@ -805,7 +805,7 @@ describe('memory plugin graph contract', () => {
 
   it('lets a legacy Source satisfy a semantic dependency from its runtime role', async () => {
     const durable = graphSource('legacy', 'durable-evidence')
-    const result = await new CoreMemoryCompositionRunner().run({ contributions: snapshot([durable], [
+    const result = await evaluateMemoryComposition({ contributions: snapshot([durable], [
       plugin('base', { packageName: 'dsh-mnemon-strategy-base', label: { en: 'Base', 'zh-CN': '基础' }, description: { en: 'Base.', 'zh-CN': '基础。' }, roles: ['strategy'], provides: [{ id: 'strategy.base' }], requires: ['source.durable-evidence'] }),
     ]) })
     expect(result.report.state).toBe('ready')

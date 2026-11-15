@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
+import * as sdk from 'dsh-mnemon/extension-sdk'
 import { defineMemoryPlugin, defineMemoryStrategyConfiguration, installMemory } from 'dsh-mnemon/extension-sdk'
 import { createGeneralStrategy, GENERAL_STRATEGY_TYPE_ID, GENERAL_VIEW_STRATEGY, type GeneralStrategyConfig } from './strategy.ts'
 
@@ -34,7 +35,10 @@ export const memoryStrategyConfiguration = defineMemoryStrategyConfiguration({
 })
 
 export function apply(ctx: Context, config: Config = {}): void {
-  installMemory(ctx, memoryStrategyConfiguration.create(config as never))
+  const options = typeof sdk.memoryConfigurationDigest === 'function'
+    ? { effectiveDigest: sdk.memoryConfigurationDigest(config) }
+    : undefined
+  installMemory(ctx, memoryStrategyConfiguration.create(config as never), options)
 }
 
 export { createGeneralStrategy, GENERAL_STRATEGY_TYPE_ID, GENERAL_VIEW_STRATEGY }

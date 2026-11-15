@@ -46,10 +46,11 @@ describe('standalone OpenViking data plane', () => {
     })
     const { provider } = await bodyAndRegistry(fetchMock)
 
-    await expect(provider.discover({ endpoint: 'https://memory.example.com', apiKey: 'private-key', account: 'acme' })).resolves.toEqual([
+    await expect(provider.discover({ endpoint: 'https://memory.example.com', apiKey: 'Bearer private-key', account: 'acme' })).resolves.toEqual([
       { externalId: 'acme:alice', name: 'Alice', description: 'Product lead memory.', connection: { targetUri: 'viking://user/alice/memories', user: 'alice', actorPeerId: 'dsh' } },
       { externalId: 'acme:bob', name: 'Bob', description: 'Engineer', connection: { targetUri: 'viking://user/bob/memories', user: 'bob', actorPeerId: 'dsh' } },
     ])
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get('Authorization')).toBe('Bearer private-key')
   })
 
   it('scopes semantic retrieval to the configured memory URI and keeps credentials in host headers', async () => {

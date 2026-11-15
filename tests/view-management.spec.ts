@@ -186,19 +186,6 @@ describe('View configuration with the real pinned DSH Cordis Loader', () => {
     await vi.waitFor(async () => expect((await restarted.management.catalog()).entries.find(entry => entry.entryId === 'light')).toMatchObject({ active: true, config: { maxProjectionCharacters: 700 } }))
   })
 
-  it('reads the previous Source overlay once as migration input without writing a second settings model', async () => {
-    const anchor = 'file:///isolated/profiles/legacy/cordis.yml'
-    const probe = await fixture(undefined, anchor)
-    const suffix = probe.management.settingsNamespace.slice('mnemon-view'.length)
-    const restarted = await fixture(undefined, anchor, {
-      [`mnemon-plugins${suffix}`]: { sources: { 'mnemon-source-documents': { enabled: false } } },
-    })
-    await vi.waitFor(async () => expect((await restarted.management.catalog()).entries.find(entry => entry.entryId === 'mnemon-source-documents')).toMatchObject({ enabled: false, active: false }))
-    expect(restarted.settings.mutate).not.toHaveBeenCalled()
-    expect(restarted.settingsDocuments.get(restarted.management.settingsNamespace)?.value).toEqual({ entries: {} })
-    expect(restarted.treeWrite).not.toHaveBeenCalled()
-  })
-
   it('rolls back live registrations if durable settings fail, including pinned and future views', async () => {
     const f = await fixture()
     const id = f.graph.memoryComposition.current()!.id

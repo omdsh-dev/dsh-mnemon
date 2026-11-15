@@ -119,6 +119,8 @@ function eventTurn(event: HostSessionEvent): number | undefined {
   return typeof event.data.turn === 'number' ? event.data.turn : undefined
 }
 
+const MAX_TRACKED_TURN_ENTRIES = 128
+
 /** Small log-derived counters, updated from appended pages instead of retaining events. */
 class LifecycleLogProjection {
   private readonly cursor = new SessionEventCursor()
@@ -129,7 +131,12 @@ class LifecycleLogProjection {
     this.cursor.consume(session, event => {
       if (event.type === 'tool/call' && typeof event.data.name === 'string' && event.data.name.startsWith('mnemon_')) this.memoryToolCalls++
       const turn = eventTurn(event)
-      if (turn !== undefined && event.type === 'assistant/message') this.assistantCharacters.set(turn, (this.assistantCharacters.get(turn) ?? 0) + assistantEventTextLength(event))
+      if (turn !== undefined && event.type === 'assistant/message') {
+        this.assistantCharacters.set(turn, (this.assistantCharacters.get(turn) ?? 0) + assistantEventTextLength(event))
+        while (this.assistantCharacters.size > MAX_TRACKED_TURN_ENTRIES) {
+          this.assistantCharacters.delete(this.assistantCharacters.keys().next().value!)
+        }
+      }
     }, () => { this.memoryToolCalls = 0; this.assistantCharacters.clear() })
     return this
   }
@@ -726,6 +733,9 @@ class MnemonAgentLifecycle {
         noMaintenance: false,
       }
       this.turnActivity.set(turn, activity)
+      while (this.turnActivity.size > MAX_TRACKED_TURN_ENTRIES) {
+        this.turnActivity.delete(this.turnActivity.keys().next().value!)
+      }
     }
     return activity
   }
@@ -768,15 +778,18 @@ class MnemonAgentLifecycle {
   private reviewActivity(): ReviewActivityScore {
     const toolNames = new Set<string>()
     let totalUserTextLength = 0
+    let turnCount = 0
     let toolCallCount = 0
     for (const activity of this.turnActivity.values()) {
+      if (activity.noMaintenance) continue
+      turnCount += 1
       totalUserTextLength += activity.userTextLength
       toolCallCount += activity.toolCallCount
       for (const name of activity.toolNames) toolNames.add(name)
     }
     return scoreReviewActivity({
       totalUserTextLength,
-      turnCount: this.turnActivity.size,
+      turnCount,
       toolCallCount,
       uniqueToolCount: toolNames.size,
     })

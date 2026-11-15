@@ -1,9 +1,16 @@
 import { descriptor } from './descriptor.ts'
+import * as providerSdk from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import type { JsonValue } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import type { MemorySpaceAuthority } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import type { Insight, MemoryBody as MemorySpace, MemoryListRequest, RememberRequest, SearchRequest } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import { HttpMemoryProvider, firstArray, jsonNumber, jsonObject, jsonString, type HttpProviderOptions } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import { NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter, type ProviderBodyStatus as ProviderSpaceStatus, type ProviderMemorySpace, type ProviderSearchResult } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
+
+function isHttpNotFound(error: unknown): boolean {
+  const status = typeof error === 'object' && error !== null ? (error as { status?: unknown }).status : undefined
+  if (typeof status === 'number') return status === 404
+  return error instanceof Error && /^[^:]+ HTTP 404\b/u.test(error.message)
+}
 
 function insight(value: unknown): Insight | undefined {
   const item = jsonObject(value)
@@ -48,7 +55,18 @@ export class SupermemoryProvider extends HttpMemoryProvider implements MemoryPro
 
   async status(body: MemorySpace, signal?: AbortSignal): Promise<ProviderSpaceStatus> {
     try {
-      await this.list(body, { limit: 1 }, signal)
+      const connection = this.connection(body)
+      await this.request(body, '/v4/memories/list', {
+        headers: this.headers(connection),
+        json: {
+          containerTags: [String(connection.containerTag)],
+          limit: 1,
+          page: 1,
+          sort: 'createdAt',
+          order: 'desc',
+        },
+        signal,
+      })
       return { healthy: true }
     } catch (error) {
       return { healthy: false, error: error instanceof Error ? error.message : String(error) }
@@ -148,7 +166,7 @@ export class SupermemoryProvider extends HttpMemoryProvider implements MemoryPro
         ...(jsonObject(payload)?.forgotten === undefined ? {} : { forgotten: jsonObject(payload)!.forgotten as JsonValue }),
       }
     } catch (error) {
-      if (!(error instanceof Error) || !/HTTP 404\b/u.test(error.message)) throw error
+      if (!isHttpNotFound(error)) throw error
       await this.request(body, `/v3/documents/${encodeURIComponent(id)}`, {
         method: 'DELETE',
         headers: this.headers(connection),
@@ -159,7 +177,16 @@ export class SupermemoryProvider extends HttpMemoryProvider implements MemoryPro
   }
 
   private headers(connection: Record<string, string | number | boolean>): HeadersInit {
-    const token = String(connection.apiKey ?? '').replace(/^Bearer\s+/iu, '')
-    return { Authorization: `Bearer ${token}`, 'x-sm-source': 'dsh-mnemon' }
+    const rawKey = String(connection.apiKey ?? '').trim()
+    const auth = typeof providerSdk.bearerAuthHeader === 'function'
+      ? providerSdk.bearerAuthHeader(rawKey)
+      : (() => {
+          const stripped = rawKey.replace(/^Bearer(?:\s+|$)/iu, '').trim()
+          return stripped === '' ? undefined : `Bearer ${stripped}`
+        })()
+    return {
+      ...(auth === undefined ? {} : { Authorization: auth }),
+      'x-sm-source': 'dsh-mnemon',
+    }
   }
 }

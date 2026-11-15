@@ -55,7 +55,7 @@ async function fixture(label: string, seed: number, bodyId = 'project') {
     bodies: [{ id: bodyId, name: `Space ${seed}`, description: `Seed ${seed}`, active: true, createdAt: now().toISOString(), updatedAt: now().toISOString() }],
   }, null, 2)}\n`)
   writeFileSync(join(root, 'active'), `${bodyId}\n`)
-  return { root, workspace, ...created, manager: new MnemonPackManager(created.runner, created.config, undefined, now) }
+  return { root, workspace, sources, ...created, manager: new MnemonPackManager(created.runner, created.config, undefined, now) }
 }
 
 /** Replace a fixture's Memory Spaces with real databases, as Mnemon writes them. */
@@ -809,6 +809,76 @@ describe('Mnemon Pack', () => {
       expect(finished, scope).toBeGreaterThanOrEqual(released[0]!)
       expect(existsSync(lock)).toBe(false)
     }
+  })
+
+  it('releases partial Source locks before retrying on contention and never yields while holding a Source lock', async () => {
+    const source = await fixture('pack-lock-contention', 15)
+    const documentsLock = join(source.root, DOCUMENTS_DIRECTORY, DOCUMENTS_LOCK_FILE)
+
+    // Reproduction 1: Documents lock is held for 200ms while full Pack export retries;
+    // a concurrent synchronous Runtime write must succeed immediately instead of timing out on Runtime lock.
+    writeFileSync(documentsLock, 'held\n')
+    const writer = new Worker(`
+      const { workerData } = require('node:worker_threads')
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 200)
+      require('node:fs').rmSync(workerData.lock, { force: true })
+    `, { eval: true, workerData: { lock: documentsLock } })
+    const exited = new Promise(resolve => writer.once('exit', resolve))
+    const exporting = source.manager.exportPack('full')
+    await new Promise(resolve => setTimeout(resolve, 35))
+    const writeStart = performance.now()
+    await source.sources.runtime.mutate('mutate', {
+      action: 'add',
+      target: 'memory',
+      content: 'Concurrent runtime write during documents lock contention',
+      importance: 'normal',
+    }, { confirmed: true })
+    const writeElapsed = performance.now() - writeStart
+    expect(writeElapsed).toBeLessThan(150)
+    const exported = await exporting
+    await exited
+    expect(exported.manifest.components).toContain('runtime')
+    expect(exported.manifest.components).toContain('documents')
+
+    // Reproduction 2: Queued Runtime writes racing Pack lock acquisition/execution on the same event loop
+    // must never observe a Source lock held across an async yield.
+    for (let round = 0; round < 5; round++) {
+      const packPromise = source.manager.exportPack('full')
+      const queuedWrite = new Promise<number>((resolve, reject) => {
+        setImmediate(() => {
+          const started = performance.now()
+          source.sources.runtime.mutate('mutate', {
+            action: 'add',
+            target: 'memory',
+            content: `Queued runtime write round ${round}`,
+            importance: 'normal',
+          }, { confirmed: true }).then(() => resolve(performance.now() - started), reject)
+        })
+      })
+      const [, queuedElapsed] = await Promise.all([packPromise, queuedWrite])
+      expect(queuedElapsed).toBeLessThan(500)
+    }
+  })
+
+  it('releases already acquired locks if a later lock acquisition throws', async () => {
+    const source = await fixture('pack-lock-acquire-throw', 16)
+    const documentsDir = join(source.root, DOCUMENTS_DIRECTORY)
+    rmSync(documentsDir, { recursive: true, force: true })
+    writeFileSync(documentsDir, 'occupying documents path with a regular file\n')
+
+    await expect(source.manager.exportPack('full')).rejects.toThrow()
+
+    expect(existsSync(join(source.root, '.dsh-pack.lock'))).toBe(false)
+    expect(existsSync(join(source.root, RUNTIME_DIRECTORY, RUNTIME_LOCK_FILE))).toBe(false)
+
+    const writeStart = performance.now()
+    await source.sources.runtime.mutate('mutate', {
+      action: 'add',
+      target: 'memory',
+      content: 'Runtime write immediately after failed full Pack lock acquisition',
+      importance: 'normal',
+    }, { confirmed: true })
+    expect(performance.now() - writeStart).toBeLessThan(200)
   })
 })
 

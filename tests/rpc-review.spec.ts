@@ -91,12 +91,20 @@ describe('Mnemon review endpoints', () => {
     operations: [{ kind: 'runtime-remove' as const, target: 'user' as const, oldText: 'Prefer short answers', reason: 'Superseded by the concise preference.' }],
   }
 
-  it('reads and records review activity without a writable or scoped Host', async () => {
-    const f = fixture({ writeEnabled: false })
+  it('allows view on a read-only Host while gating review mutations behind writeEnabled', async () => {
+    const readonly = fixture({ writeEnabled: false })
+    const readonlyHandler = createReviewHandler(readonly.runtime)
+    const readonlyCreated = readonly.ledger.create(proposal)
+
+    expect(await readonlyHandler('view', {})).toMatchObject({ ok: true, value: { pending: 1, entries: [{ id: readonlyCreated.id, status: 'pending', title: 'Merge duplicate answers' }] } })
+    expect(await readonlyHandler('opinion', { id: readonlyCreated.id, text: 'Blocked on read-only Host.' })).toMatchObject({ ok: false, error: { message: expect.stringContaining('read-only') } })
+    expect(await readonlyHandler('decide', { id: readonlyCreated.id, status: 'rejected' })).toMatchObject({ ok: false, error: { message: expect.stringContaining('read-only') } })
+    expect(await readonlyHandler('reopen', { id: readonlyCreated.id })).toMatchObject({ ok: false, error: { message: expect.stringContaining('read-only') } })
+    expect(await readonlyHandler('apply', { id: readonlyCreated.id })).toMatchObject({ ok: false, error: { message: expect.stringContaining('read-only') } })
+
+    const f = fixture()
     const handler = createReviewHandler(f.runtime)
     const created = f.ledger.create(proposal)
-
-    expect(await handler('view', {})).toMatchObject({ ok: true, value: { pending: 1, entries: [{ id: created.id, status: 'pending', title: 'Merge duplicate answers' }] } })
     expect(await handler('opinion', { id: created.id, text: 'Keep the wording from the desktop.', author: 'user' })).toMatchObject({ ok: true })
     // Only the Host decides what an Agent is: an unrecognised author is recorded as the user.
     expect(await handler('opinion', { id: created.id, text: 'Also update the changelog.', author: 'robot' })).toMatchObject({ ok: true })
@@ -109,8 +117,112 @@ describe('Mnemon review endpoints', () => {
     expect(await handler('decide', { id: created.id, status: 'accepted' })).toMatchObject({ ok: false, error: { message: `this review was already decided: ${created.id}` } })
     expect(await handler('reopen', { id: created.id })).toMatchObject({ ok: true, value: { status: 'pending' } })
     expect(await handler('reopen', { id: 'missing' })).toMatchObject({ ok: false, error: { message: 'unknown review entry: missing' } })
-    // Only a writable Host reaches endpoint dispatch at all.
-    expect(await createReviewHandler(fixture().runtime)('nope', {})).toMatchObject({ ok: false, error: { code: 'bad-request', message: 'unknown review endpoint: nope' } })
+    expect(await handler('nope', {})).toMatchObject({ ok: false, error: { code: 'bad-request', message: 'unknown review endpoint: nope' } })
+  })
+
+  it('scopes view, opinion, decide, reopen, and apply to the requested workspace review ledger', async () => {
+    const wsA = fixture()
+    const wsB = fixture()
+    const entryA = wsA.ledger.create({ ...proposal, title: 'Workspace A proposal' })
+    const entryB = wsB.ledger.create({ ...proposal, title: 'Workspace B proposal' })
+
+    const multiRuntime = {
+      config: wsA.runtime.config,
+      reviews: wsA.ledger,
+      route: vi.fn((requested?: { workspaceId?: string }) => {
+        const target = requested?.workspaceId === 'ws-b' ? wsB : wsA
+        return {
+          graph: target.graph,
+          participation: { excluded: false },
+          selectedWorkspace: { id: requested?.workspaceId ?? 'ws-a', title: 'Scoped', path: target.root },
+          selectedRoot: target.root,
+          effectiveRoot: target.root,
+          aligned: true,
+          liveSession: true,
+        }
+      }),
+    } as unknown as LiveMnemonRuntime
+
+    const handler = createReviewHandler(multiRuntime, lifecycle())
+    expect(await handler('view', { workspaceId: 'ws-b' })).toMatchObject({
+      ok: true,
+      value: { entries: [{ id: entryB.id, title: 'Workspace B proposal' }] },
+    })
+    expect(await handler('opinion', { workspaceId: 'ws-b', id: entryB.id, text: 'Scoped to B' })).toMatchObject({ ok: true })
+    expect(wsA.ledger.get(entryA.id)?.opinions).toEqual([])
+    expect(wsB.ledger.get(entryB.id)?.opinions).toMatchObject([{ text: 'Scoped to B' }])
+
+    expect(await handler('decide', { workspaceId: 'ws-b', id: entryB.id, status: 'accepted' })).toMatchObject({ ok: true })
+    expect(wsA.ledger.get(entryA.id)?.status).toBe('pending')
+    expect(wsB.ledger.get(entryB.id)?.status).toBe('accepted')
+
+    expect(await handler('apply', { workspaceId: 'ws-b', id: entryB.id })).toMatchObject({ ok: true, value: { applied: 1 } })
+    expect(wsB.runtimeSource.mutate).toHaveBeenCalledTimes(1)
+    expect(wsA.runtimeSource.mutate).not.toHaveBeenCalled()
+
+    expect(await handler('reopen', { workspaceId: 'ws-b', id: entryB.id })).toMatchObject({ ok: true, value: { status: 'pending' } })
+    expect(wsB.ledger.get(entryB.id)?.status).toBe('pending')
+  })
+
+  it('requires documents:archive rather than runtime:write when applying document-archive-only proposals', async () => {
+    const f = fixture({
+      memoryTopology: {
+        layers: {
+          runtime: { enabled: false },
+          documents: { enabled: true },
+        },
+      },
+    })
+    f.documentsSource.read.mockResolvedValue({
+      documents: [{ id: 'obsolete-guide', revision: 3, status: 'active' }],
+      activeCount: 1,
+    })
+    const entry = f.ledger.create({
+      ...proposal,
+      operations: [{ kind: 'document-archive', documentId: 'obsolete-guide', reason: 'Outdated.' }],
+    })
+    f.ledger.decide(entry.id, 'accepted')
+    const handler = createReviewHandler(f.runtime, lifecycle())
+
+    expect(await handler('apply', { id: entry.id })).toMatchObject({ ok: true, value: { applied: 1, failures: [] } })
+    expect(f.documentsSource.mutate).toHaveBeenCalledWith(
+      'archive',
+      { id: 'obsolete-guide', documentRevision: 3, summary: 'Outdated.' },
+      expect.any(AbortSignal),
+    )
+    expect(f.runtimeSource.mutate).not.toHaveBeenCalled()
+
+    const docsDisabled = fixture({
+      memoryTopology: {
+        layers: {
+          runtime: { enabled: true },
+          documents: { enabled: false },
+        },
+      },
+    })
+    const blocked = docsDisabled.ledger.create({
+      ...proposal,
+      operations: [{ kind: 'document-archive', documentId: 'obsolete-guide', reason: 'Outdated.' }],
+    })
+    docsDisabled.ledger.decide(blocked.id, 'accepted')
+    expect(await createReviewHandler(docsDisabled.runtime, lifecycle())('apply', { id: blocked.id })).toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining('documents') },
+    })
+  })
+
+  it('serializes concurrent opinion mutations without losing updates', async () => {
+    const f = fixture()
+    const entry = f.ledger.create(proposal)
+    const handler = createReviewHandler(f.runtime, lifecycle())
+
+    const results = await Promise.all(
+      Array.from({ length: 8 }, (_, index) => handler('opinion', { id: entry.id, text: `Opinion ${index}` })),
+    )
+    expect(results.every(result => result.ok)).toBe(true)
+    expect(f.ledger.get(entry.id)?.opinions.map(item => item.text).sort()).toEqual(
+      Array.from({ length: 8 }, (_, index) => `Opinion ${index}`).sort(),
+    )
   })
 
   it('runs a reconciliation only through a writable Host that owns the work', async () => {

@@ -10,6 +10,7 @@ export interface ProcessResult {
 export interface ProcessOptions {
   signal?: AbortSignal | undefined
   timeoutMs: number
+  killGraceMs?: number | undefined
   maxOutputBytes?: number
   cwd?: string | undefined
   env?: NodeJS.ProcessEnv | undefined
@@ -23,6 +24,7 @@ export type ProcessRunner = (
 ) => Promise<ProcessResult>
 
 const DEFAULT_MAX_OUTPUT_BYTES = 2 * 1024 * 1024
+const DEFAULT_KILL_GRACE_MS = 1_500
 
 /** Spawn without a shell, with bounded output and cooperative cancellation. */
 export const runProcess: ProcessRunner = (command, args, options) => new Promise((resolve, reject) => {
@@ -35,6 +37,7 @@ export const runProcess: ProcessRunner = (command, args, options) => new Promise
     ...(options.env === undefined ? {} : { env: options.env }),
   })
   const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
+  const killGraceMs = options.killGraceMs ?? DEFAULT_KILL_GRACE_MS
   let stdout = ''
   let stderr = ''
   const stdoutDecoder = new StringDecoder('utf8')
@@ -43,18 +46,27 @@ export const runProcess: ProcessRunner = (command, args, options) => new Promise
   let settled = false
   let killTimer: NodeJS.Timeout | undefined
 
+  const clearKillTimer = (): void => {
+    if (killTimer !== undefined) {
+      clearTimeout(killTimer)
+      killTimer = undefined
+    }
+  }
+
   const stop = (): void => {
     if (child.exitCode !== null || child.signalCode !== null) return
+    if (killTimer !== undefined) return
     child.kill('SIGTERM')
     killTimer = setTimeout(() => {
+      killTimer = undefined
       if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
-    }, 1500)
+    }, killGraceMs)
+    killTimer.unref?.()
   }
   const finish = (error: Error | null, result?: ProcessResult): void => {
     if (settled) return
     settled = true
     clearTimeout(timeout)
-    if (killTimer !== undefined) clearTimeout(killTimer)
     options.signal?.removeEventListener('abort', abort)
     if (error === null) resolve(result!)
     else reject(error)
@@ -77,9 +89,11 @@ export const runProcess: ProcessRunner = (command, args, options) => new Promise
   child.stdout.on('data', (chunk: Buffer) => { append('stdout', chunk) })
   child.stderr.on('data', (chunk: Buffer) => { append('stderr', chunk) })
   child.on('error', (error) => {
+    clearKillTimer()
     finish(new Error(`failed to launch ${label} (${JSON.stringify(command)}): ${error.message}`))
   })
   child.on('close', (exitCode) => {
+    clearKillTimer()
     stdout += stdoutDecoder.end()
     stderr += stderrDecoder.end()
     finish(null, { stdout, stderr, exitCode })

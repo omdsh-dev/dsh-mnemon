@@ -116,12 +116,14 @@ const ENTITY_INDEX_UNCHECKED_REUSE_MS = 10_000
 
 /** How long one Provider may take to list its namespaces when they are asked for again. */
 export const MEMORY_SPACES_REDISCOVERY_PROVIDER_TIMEOUT_MS = 30_000
+export const MAX_REMEMBER_CONTENT_LENGTH = 8 * 1024
 
 /**
  * Rediscovery per data directory, shared by every generation in this process: the pass now
  * running, which a second request joins, and the last one, which the Memory Spaces page shows.
  */
 const rediscoveries = new Map<string, { running?: Promise<MemorySpaceRediscovery>; last?: MemorySpaceRediscovery }>()
+const activeServiceCounts = new Map<string, number>()
 
 /** Settle with `work`, or reject once `signal` aborts, whichever comes first. */
 function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
@@ -463,12 +465,23 @@ export class MemorySpacesService {
       : providerCatalog === EMPTY_MEMORY_PROVIDER_CATALOG ? memorySpaces : memorySpaces.withProviderCatalog(providerCatalog)
     this.recallQualityPolicy = recallQualityPolicyRegistry.resolve(config.recallQuality.policy)
     this.providers = providerAdapterRegistry.create({ memorySpaces: this.memorySpaces, memoryBodies: this.memorySpaces, config: this.config, nativeRunner: this.runner })
+    const registryKey = this.memorySpaces.providerRegistryPath
+    activeServiceCounts.set(registryKey, (activeServiceCounts.get(registryKey) ?? 0) + 1)
   }
 
   /** Release clients owned by one composable Memory Spaces generation. */
   async dispose(): Promise<void> {
     if (this.providersDisposed) return
     this.providersDisposed = true
+    const registryKey = this.memorySpaces.providerRegistryPath
+    const remaining = (activeServiceCounts.get(registryKey) ?? 1) - 1
+    if (remaining <= 0) {
+      activeServiceCounts.delete(registryKey)
+      const entry = rediscoveries.get(registryKey)
+      if (entry?.running === undefined) rediscoveries.delete(registryKey)
+    } else {
+      activeServiceCounts.set(registryKey, remaining)
+    }
     const failures: unknown[] = []
     for (const provider of [...this.providers.values()].reverse()) {
       try {
@@ -514,25 +527,35 @@ export class MemorySpacesService {
     }
   }
 
-  /** Return the control-plane directory without waiting for provider I/O. */
-  spaceDirectory(): MemorySpaceCatalog {
+  private metadataSnapshot() {
+    const spaces = this.memorySpaces.list()
+    const providerServices = this.memorySpaces.providerServices().items
+    const commandFound = this.runner.commandFound
     const mnemonDefaultStore = this.runner.persistedStore()
-    const all = this.memorySpaces.list()
-    const enabled = new Set(this.memorySpaces.providerServices().items.filter(service => service.enabled).map(service => service.providerId))
-    const items: MemorySpaceView[] = all.map(body => {
+    return { spaces, providerServices, commandFound, mnemonDefaultStore }
+  }
+
+  private buildSpaceDirectory(snapshot: ReturnType<MemorySpacesService['metadataSnapshot']>): MemorySpaceCatalog {
+    const { spaces, providerServices, commandFound, mnemonDefaultStore } = snapshot
+    const enabled = new Set(providerServices.filter(service => service.enabled).map(service => service.providerId))
+    const items: MemorySpaceView[] = spaces.map(body => {
       const nativeProvider = this.isNativeSpace(body)
       const providerEnabled = nativeProvider || enabled.has(body.provider.id)
       return { ...body, providerEnabled, mnemonDefault: nativeProvider && body.id === mnemonDefaultStore, healthy: false, statusLoading: true }
     })
+    const defaultProviderId = this.config.persistenceStrategy.providerDefaulted === true
+      ? (this.providerCatalog.providers.find(provider => isNativeProvider(provider) && commandFound)
+        ?? this.providerCatalog.providers.find(provider => !isNativeProvider(provider) && enabled.has(provider.id)))?.id
+      : this.config.persistenceStrategy.providerId
     return {
       items,
       providers: this.providerCatalog.providers.map(provider => ({
         ...provider,
-        serviceConfigured: isNativeProvider(provider) ? this.runner.commandFound : enabled.has(provider.id),
+        serviceConfigured: isNativeProvider(provider) ? commandFound : enabled.has(provider.id),
       })),
       persistenceStrategy: {
         mode: this.config.persistenceStrategy.mode,
-        providerId: this.persistenceProviderId() ?? this.config.persistenceStrategy.providerId,
+        providerId: defaultProviderId ?? this.config.persistenceStrategy.providerId,
         prompt: this.config.persistenceStrategy.prompt,
         rules: { ...this.config.persistenceStrategy.rules },
       },
@@ -542,6 +565,11 @@ export class MemorySpacesService {
       generatedAt: new Date().toISOString(),
       rediscovery: this.rediscoveryState(),
     }
+  }
+
+  /** Return the control-plane directory without waiting for provider I/O. */
+  spaceDirectory(): MemorySpaceCatalog {
+    return this.buildSpaceDirectory(this.metadataSnapshot())
   }
 
   private rediscoveryState(): NonNullable<MemorySpaceCatalog['rediscovery']> {
@@ -578,19 +606,21 @@ export class MemorySpacesService {
     const services = serviceItems
       .map(service => ({ providerId: service.providerId, enabled: service.enabled, configured: service.configured }))
       .sort((left, right) => left.providerId.localeCompare(right.providerId))
+    const providerReady = this.providerCatalog.providers.some(provider => isNativeProvider(provider) ? commandFound : enabled.has(provider.id))
     // The revision stays as it was while the CLI is found, so a working setup sees no change.
     const revision = createHash('sha256').update(JSON.stringify({ bodies: spaces, services, ...(commandFound ? {} : { nativeUnavailable: true }) })).digest('hex')
-    return { all, active, providerReady: this.memorySpaces.defaultProviderId() !== undefined, revision }
+    return { all, active, providerReady, revision }
   }
 
   /** Return a usable system snapshot without waiting for any Provider I/O. */
   statusSummary(): StatusView {
-    const catalog = this.spaceDirectory()
+    const snapshot = this.metadataSnapshot()
+    const catalog = this.buildSpaceDirectory(snapshot)
     // Reuse the version a full status read while the same binary is installed.
     const version = this.cliVersion !== undefined && this.cliBinary() === this.cliVersion.binary ? this.cliVersion.version : undefined
     const active = catalog.items.filter(body => body.active && body.providerEnabled !== false)
     const dshActiveStores = active.map(body => body.id)
-    const providerServices = this.memorySpaces.providerServices().items.map(service => {
+    const providerServices = snapshot.providerServices.map(service => {
       const descriptor = this.providerCatalog.descriptor(service.providerId)
       const spaces = catalog.items.filter(body => body.provider.id === service.providerId)
       const activeSpaces = spaces.filter(body => body.active && body.providerEnabled !== false)
@@ -610,10 +640,10 @@ export class MemorySpacesService {
       // dsh-mnemon engine itself appear disconnected.
       healthy: true,
       cliPath: this.runner.command,
-      commandFound: this.runner.commandFound,
+      commandFound: snapshot.commandFound,
       dataDir: this.runner.effectiveDataDir(),
       store: dshActiveStores.join(', ') || 'none',
-      mnemonDefaultStore: this.runner.persistedStore(),
+      mnemonDefaultStore: snapshot.mnemonDefaultStore,
       dshActiveStores,
       writeEnabled: this.config.writeEnabled,
       timeoutMs: this.config.timeoutMs,
@@ -727,7 +757,8 @@ export class MemorySpacesService {
 
   async status(signal?: AbortSignal): Promise<StatusView> {
     // Mnemon Native reports a version once its CLI is installed or one of its spaces exists.
-    const nativeInUse = this.runner.commandFound || this.memorySpaces.list().some(body => this.isNativeSpace(body))
+    const initialCommandFound = this.runner.commandFound
+    const nativeInUse = initialCommandFound || this.memorySpaces.list().some(body => this.isNativeSpace(body))
     let versionError: unknown
     const [catalog, rawVersion] = await Promise.all([
       this.spaces(signal),
@@ -738,9 +769,10 @@ export class MemorySpacesService {
           })
         : Promise.resolve(undefined),
     ])
+    const snapshot = this.metadataSnapshot()
     const active = catalog.items.filter(body => body.active && body.providerEnabled !== false)
     const dshActiveStores = active.map(body => body.id)
-    const providerServices = this.memorySpaces.providerServices().items.map(service => {
+    const providerServices = snapshot.providerServices.map(service => {
       const descriptor = this.providerCatalog.descriptor(service.providerId)
       const spaces = catalog.items.filter(body => body.provider.id === service.providerId)
       const activeSpaces = spaces.filter(body => body.active && body.providerEnabled !== false)
@@ -766,10 +798,10 @@ export class MemorySpacesService {
     })
     const base = {
       cliPath: this.runner.command,
-      commandFound: this.runner.commandFound,
+      commandFound: snapshot.commandFound,
       dataDir: this.runner.effectiveDataDir(),
       store: dshActiveStores.join(', ') || 'none',
-      mnemonDefaultStore: this.runner.persistedStore(),
+      mnemonDefaultStore: snapshot.mnemonDefaultStore,
       dshActiveStores,
       writeEnabled: this.config.writeEnabled,
       timeoutMs: this.config.timeoutMs,
@@ -1371,16 +1403,17 @@ export class MemorySpacesService {
     const readable = new Map(this.memorySpaces.active()
       .filter(body => this.isNativeSpace(body) || this.memorySpaces.providerServiceEnabled(body.provider.id))
       .map(body => [body.id, body]))
-    const found: Insight[] = []
-    for (const memoryBodyId of new Set(memoryBodyIds)) {
+    const targets = [...new Set(memoryBodyIds)].flatMap(memoryBodyId => {
       const body = readable.get(memoryBodyId)
-      if (body === undefined) continue
+      if (body === undefined) return []
       const provider = this.providerFor(body)
-      if (provider.get === undefined) continue
-      const insight = await provider.get(body, exact, signal)
-      if (insight !== undefined && insight.id === exact) found.push(this.annotate(insight, body))
-    }
-    return found
+      return provider.get === undefined ? [] : [{ body, get: provider.get.bind(provider) }]
+    })
+    const results = await Promise.all(targets.map(async ({ body, get }) => {
+      const insight = await get(body, exact, signal)
+      return insight !== undefined && insight.id === exact ? this.annotate(insight, body) : undefined
+    }))
+    return results.filter((insight): insight is Insight => insight !== undefined)
   }
 
   async related(id: string, depth = 2, edge?: EdgeType, signal?: AbortSignal, memoryBodyId?: string): Promise<Insight[]> {
@@ -1500,25 +1533,35 @@ export class MemorySpacesService {
     const key = this.memorySpaces.providerRegistryPath
     const entry = rediscoveries.get(key) ?? {}
     rediscoveries.set(key, entry)
-    const joined = entry.running
-    if (joined !== undefined) {
+    while (entry.running !== undefined) {
+      const joined = entry.running
       try {
         return await (signal === undefined ? joined : untilAborted(joined, signal))
       } catch {
         signal?.throwIfAborted()
-        const next = entry.running
-        if (next !== undefined && next !== joined) return await (signal === undefined ? next : untilAborted(next, signal))
+      }
+    }
+    const cleanupIfIdle = () => {
+      if ((activeServiceCounts.get(key) ?? 0) === 0 && entry.running === undefined) {
+        rediscoveries.delete(key)
       }
     }
     const running = this.runRediscovery(trigger, signal, providerTimeoutMs)
-    entry.running = running
-    try {
-      const outcome = await running
-      entry.last = outcome
-      return outcome
-    } finally {
-      if (entry.running === running) delete entry.running
-    }
+    const tracked = running.then(
+      outcome => {
+        entry.last = outcome
+        if (entry.running === tracked) delete entry.running
+        cleanupIfIdle()
+        return outcome
+      },
+      error => {
+        if (entry.running === tracked) delete entry.running
+        cleanupIfIdle()
+        throw error
+      },
+    )
+    entry.running = tracked
+    return await tracked
   }
 
   private async runRediscovery(trigger: MemorySpaceRediscovery['trigger'], signal: AbortSignal | undefined, providerTimeoutMs: number): Promise<MemorySpaceRediscovery> {
@@ -1600,10 +1643,7 @@ export class MemorySpacesService {
     }
     if (insights.length === 0) {
       if (deactivateSources) {
-        for (const source of sources) {
-          if (!source.active) continue
-          this.memorySpaces.setActive(source.id, false)
-        }
+        this.memorySpaces.setActiveMany(sources.filter(source => source.active).map(source => source.id), false)
       }
 
       return { action: 'merged', imported: 0, updated: 0, skipped: 0, edges_inserted: 0, targetMemoryBodyId: target.id }
@@ -1620,10 +1660,7 @@ export class MemorySpacesService {
         && counts.reduce<number>((sum, value) => sum + Number(value), 0) === insights.length
       this.activateAfterWrite(target, complete)
       if (deactivateSources && complete) {
-        for (const source of sources) {
-          if (!source.active) continue
-          this.memorySpaces.setActive(source.id, false)
-        }
+        this.memorySpaces.setActiveMany(sources.filter(source => source.active).map(source => source.id), false)
       }
 
       const completion = mutationResultCompletion(result)
@@ -1685,7 +1722,7 @@ export class MemorySpacesService {
     // Runtime entries are capped at 8 KiB. Keep the service boundary large
     // enough for the Host to archive any valid hot-memory entry byte-for-byte;
     // the UI remains at its existing 8,000-character limit.
-    const content = required(request.content, 'content', 8 * 1024)
+    const content = required(request.content, 'content', MAX_REMEMBER_CONTENT_LENGTH)
     // Keep omission distinct from an explicit level so Provider defaults apply.
     const importance = request.importance === undefined ? undefined : integer(request.importance, 3, 1, 5)
     const category = allowed(request.category, CATEGORIES, 'category') ?? 'general'

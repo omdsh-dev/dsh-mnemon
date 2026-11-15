@@ -4,6 +4,7 @@ import { defineMemorySource, installMemory, truncateMemoryText, type MemorySourc
 import { COMPOSABLE_MEMORY_API_VERSION, type MemoryJsonValue } from 'dsh-mnemon/contracts'
 import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
 import * as plugin from '../src/index.ts'
+import { DEFAULT_THREE_TIER_VIEW_STRATEGY } from '../src/index.ts'
 import { defineThreeTierExtension } from '../src/extension-sdk.ts'
 
 /** An external Source repository can implement this protocol without a sibling import. */
@@ -281,6 +282,28 @@ describe('independent three-tier execution policy', () => {
       expect(result.sourceInstanceKey).toBe(related[1]!.sourceInstanceKey)
       expect(result.routeId).toBe(related[1]!.id)
       expect(output(result).results).toEqual([])
+    } finally { await runner.dispose() }
+  })
+
+  it('delegates directly to the Source when an offered Route carries no matching ReadGrant', async () => {
+    const { runner } = await fixture('documents')
+    try {
+      const mounted = await runner.beginTurn()
+      const route = { ...mounted.view.routes[0]!, readGrantId: 'missing-grant' }
+      const turn = DEFAULT_THREE_TIER_VIEW_STRATEGY.createTurn!({ ...mounted.view, readGrants: [], routes: [route] })
+      const expected = {
+        id: 'evidence:grantless',
+        viewId: mounted.view.id,
+        routeId: route.id,
+        sourceInstanceKey: route.sourceInstanceKey,
+        observedAt: '2026-08-31T00:00:00.000Z',
+        items: [{ id: 'item-1', text: 'Direct Source read without ReadGrant.', provenance: {} }],
+        truncated: false,
+      }
+      const read = vi.fn(async () => expected)
+      await expect(turn.query!({ route, input: { query: 'direct' } }, read)).resolves.toEqual(expected)
+      expect(read).toHaveBeenCalledWith({ query: 'direct' })
+      mounted.release()
     } finally { await runner.dispose() }
   })
 })

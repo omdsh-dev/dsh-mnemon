@@ -433,8 +433,13 @@ function assertInputSchema(schemaValue: MemoryJsonValue, value: MemoryJsonValue,
     throw new Error(`${label} must be ${expected}`)
   } else if (expected === 'boolean' && typeof value !== 'boolean') {
     throw new Error(`${label} must be a boolean`)
-  } else if (expected === 'array' && !Array.isArray(value)) {
-    throw new Error(`${label} must be an array`)
+  } else if (expected === 'array') {
+    if (!Array.isArray(value)) throw new Error(`${label} must be an array`)
+    if (schema.items !== undefined) {
+      for (let index = 0; index < value.length; index++) {
+        assertInputSchema(schema.items, value[index]!, `${label}[${index}]`)
+      }
+    }
   }
   if (Array.isArray(schema.enum) && !schema.enum.some(candidate => canonicalMemoryJson(candidate) === canonicalMemoryJson(value))) {
     throw new Error(`${label} is not an allowed value`)
@@ -716,9 +721,13 @@ export class MemoryCompositionGeneration {
   }
 
   private strategyContributions(request: MemoryViewRequest, sources: readonly MemoryAvailableSource[]): readonly MemoryStrategyContribution[] {
+    const supportedRoles = this.strategy.definition.manifest.supportedSourceRoles
+    const eligible = supportedRoles.includes(ANY_MEMORY_SOURCE_ROLE)
+      ? sources
+      : deepFreeze(sources.filter(source => supportedRoles.includes(source.role)))
     return deepFreeze(this.extensions.map(extension => {
       const label = `memory Strategy extension ${extension.instanceKey}`
-      const value = jsonClone(extension.definition.contribute(request, sources), label)
+      const value = jsonClone(extension.definition.contribute(request, eligible), label)
       if (canonicalMemoryJson(value, label).length > 64_000) throw new Error(`${label} exceeds 64000 characters`)
       return { instanceKey: extension.instanceKey, typeId: extension.definition.manifest.typeId, slot: extension.definition.manifest.slot, value }
     }))
@@ -938,58 +947,89 @@ export class MemoryCompositionGeneration {
   }
 }
 
-export interface MemoryCompositionRunnerInput {
+export interface MemoryCompositionEvaluationInput {
   contributions: MemoryContributionSnapshot
   request?: MemoryViewRequest
   strategyInstanceKey?: string
   strategyTypeId?: string
 }
 
-export interface MemoryCompositionRunnerResult {
+export interface MemoryCompositionEvaluationResult {
   report: MemoryCompositionEvaluationReport
   generation?: MemoryCompositionGeneration
   view?: ComposableMemoryView
 }
 
 /**
- * Test/dev runner analogous to Spring's context runner. It is deliberately not
- * a production Service: plugins, CI, registry checks, and RSI candidates all
- * pass through the same compiler without gaining a bypass.
+ * Pure topology/manifest dry-run validator for configuration preflight.
+ * Validates contribution uniqueness, plugin dependency edges, selected Strategy
+ * resolution, extension slots, timeout bounds, and Source configuration cloning
+ * without instantiating any Source runtime or touching disk.
  */
-export class MemoryCompositionRunner {
-  async run(input: MemoryCompositionRunnerInput): Promise<MemoryCompositionRunnerResult> {
-    let snapshot: MemoryContributionSnapshot
-    try {
-      snapshot = captureMemoryContributionSnapshot(input.contributions)
-    } catch (error) {
-      return { report: rejectedReport(input.contributions.revision, error) }
+export function validateMemoryGraphComposition(
+  snapshotValue: MemoryContributionSnapshot,
+  options: CompileMemoryGenerationOptions = {},
+): void {
+  const snapshot = captureMemoryContributionSnapshot(snapshotValue)
+  positiveInteger(options.sourceTimeoutMs ?? 10_000, 'memory Source timeoutMs', 300_000)
+  for (const installed of snapshot.sources) {
+    jsonClone(options.sourceConfiguration?.(installed) ?? {}, 'Source configuration')
+    options.sourceCapabilities?.(installed)
+  }
+  if (snapshot.sources.length === 0 || snapshot.strategies.length === 0) return
+  validateMemoryPluginGraph(snapshot.plugins ?? [], [
+    'source',
+    ...snapshot.sources.map(source => `source.${source.definition.manifest.role}`),
+    'strategy',
+  ])
+  const strategy = selectStrategy(snapshot.strategies, options)
+  const strategyManifest = strategy.definition.manifest
+  const extensions = (snapshot.strategyExtensions ?? []).filter(extension => extension.definition.manifest.strategyTypeId === strategyManifest.typeId
+    || extension.definition.manifest.strategyTypeId === ANY_MEMORY_STRATEGY && strategyManifest.extensionSlots?.includes(extension.definition.manifest.slot) === true)
+  for (const extension of extensions) {
+    const slot = extension.definition.manifest.slot
+    if (!strategyManifest.extensionSlots?.includes(slot)) {
+      throw new Error(`memory Strategy does not support extension slot: ${slot} (${extension.instanceKey})`)
     }
-    if (snapshot.sources.length === 0 || snapshot.strategies.length === 0) {
-      const diagnostics: MemoryCompositionDiagnostic[] = []
-      if (snapshot.sources.length === 0) diagnostics.push({ code: 'missing-source', message: 'No Memory Source contribution is installed.' })
-      if (snapshot.strategies.length === 0) diagnostics.push({ code: 'missing-strategy', message: 'No Memory Strategy contribution is installed.' })
-      return {
-        report: deepFreeze({
-          state: 'incomplete',
-          contributionRevision: snapshot.revision,
-          sourceInstanceKeys: snapshot.sources.map(source => source.instanceKey),
-          diagnostics,
-        }),
-      }
+  }
+}
+
+/**
+ * Stateless composition evaluator: plugins, CI, registry checks, and RSI
+ * candidates pass through the same compiler without gaining a bypass.
+ */
+export async function evaluateMemoryComposition(input: MemoryCompositionEvaluationInput): Promise<MemoryCompositionEvaluationResult> {
+  let snapshot: MemoryContributionSnapshot
+  try {
+    snapshot = captureMemoryContributionSnapshot(input.contributions)
+  } catch (error) {
+    return { report: rejectedReport(input.contributions.revision, error) }
+  }
+  if (snapshot.sources.length === 0 || snapshot.strategies.length === 0) {
+    const diagnostics: MemoryCompositionDiagnostic[] = []
+    if (snapshot.sources.length === 0) diagnostics.push({ code: 'missing-source', message: 'No Memory Source contribution is installed.' })
+    if (snapshot.strategies.length === 0) diagnostics.push({ code: 'missing-strategy', message: 'No Memory Strategy contribution is installed.' })
+    return {
+      report: deepFreeze({
+        state: 'incomplete',
+        contributionRevision: snapshot.revision,
+        sourceInstanceKeys: snapshot.sources.map(source => source.instanceKey),
+        diagnostics,
+      }),
     }
-    let generation: MemoryCompositionGeneration | undefined
-    try {
-      generation = new MemoryCompositionGeneration(snapshot, {
-        ...(input.strategyInstanceKey === undefined ? {} : { strategyInstanceKey: input.strategyInstanceKey }),
-        ...(input.strategyTypeId === undefined ? {} : { strategyTypeId: input.strategyTypeId }),
-      })
-      if (input.request === undefined) return { report: generation.report, generation }
-      const view = await generation.compose(input.request)
-      return { report: generation.report, generation, view }
-    } catch (error) {
-      await generation?.dispose().catch(() => {})
-      return { report: rejectedReport(snapshot.revision, error, snapshot.sources.map(source => source.instanceKey)) }
-    }
+  }
+  let generation: MemoryCompositionGeneration | undefined
+  try {
+    generation = new MemoryCompositionGeneration(snapshot, {
+      ...(input.strategyInstanceKey === undefined ? {} : { strategyInstanceKey: input.strategyInstanceKey }),
+      ...(input.strategyTypeId === undefined ? {} : { strategyTypeId: input.strategyTypeId }),
+    })
+    if (input.request === undefined) return { report: generation.report, generation }
+    const view = await generation.compose(input.request)
+    return { report: generation.report, generation, view }
+  } catch (error) {
+    await generation?.dispose().catch(() => {})
+    return { report: rejectedReport(snapshot.revision, error, snapshot.sources.map(source => source.instanceKey)) }
   }
 }
 

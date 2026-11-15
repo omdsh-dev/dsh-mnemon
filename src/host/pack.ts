@@ -16,9 +16,10 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { basename, dirname, join, resolve, sep } from 'node:path'
-import { homedir } from 'node:os'
+import { setTimeout as delay } from 'node:timers/promises'
 import { strFromU8, strToU8, unzipSync, zipSync, type Unzipped, type Zippable } from 'fflate'
-import type { ResolvedConfig } from './config.ts'
+import { createStorageRoot, type ResolvedConfig, type StorageRoot } from './config/index.ts'
+import { writeAtomicFileSync } from './fs-atomic.ts'
 import {
   DOCUMENTS_ACTIVE_LIMIT_BYTES, DOCUMENTS_DIRECTORY, DOCUMENTS_INDEX_FILE, DOCUMENTS_LOCK_FILE, DOCUMENTS_LOCK_STALE_MS, DOCUMENT_FILENAME_PATTERN,
   parseDocumentIndex, type DocumentIndex, type DocumentRecord,
@@ -33,7 +34,6 @@ import {
   RUNTIME_MEMORY_LIMITS, RUNTIME_MEMORY_VERSION, RUNTIME_PROJECTION_FILES,
   parseRuntimeBranches, runtimeBytes, runtimeProjection, assertRuntimePinnedBudget, type RuntimeMemoryEntry, type RuntimeMemoryLimits, type RuntimeMemoryTarget,
 } from 'dsh-mnemon-source-runtime/contracts'
-import { createStorageRoot, type StorageRoot } from './storage-root.ts'
 import { MNEMON_PACK_COMPONENTS, type MnemonEntryOrigin, type MnemonMachineIdentity, type MnemonPackComponent, type MnemonPackComponentSummary, type MnemonPackExport, type MnemonPackImportMode, type MnemonPackImportResult, type MnemonPackManifest, type MnemonPackPreview, type MnemonPackScope, type MnemonPackTarget, type MnemonRuntimeMergeReport, type MnemonTombstone, type MnemonTombstoneFile } from "./protocol.ts"
 import { MnemonMachineStore } from './machine-identity.ts'
 import { pluginPackageVersion } from './version-updates.ts'
@@ -404,25 +404,27 @@ function validatePackPayload(files: Record<string, Uint8Array>, components: Mnem
   }
 }
 
-function sleepSync(milliseconds: number): void {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds)
-}
-
 /** `staleMs` is the owner's rule for an abandoned lock: a Source's lock is taken over only when that Source would take it over. */
-function acquireLock(path: string, staleMs: number): () => void {
+function tryAcquireLockSync(path: string, staleMs: number): (() => void) | undefined {
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
-  const deadline = Date.now() + LOCK_TIMEOUT_MS
   let descriptor: number | undefined
-  while (descriptor === undefined) {
+  for (let attempt = 0; attempt < 2 && descriptor === undefined; attempt++) {
     try {
       descriptor = openSync(path, 'wx', 0o600)
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-      try { if (Date.now() - statSync(path).mtimeMs > staleMs) rmSync(path, { force: true }) } catch {}
-      if (Date.now() >= deadline) throw new Error(`timed out waiting for Pack component lock: ${path}`)
-      sleepSync(LOCK_RETRY_MS)
+      if (attempt === 0) {
+        try {
+          if (Date.now() - statSync(path).mtimeMs > staleMs) {
+            rmSync(path, { force: true })
+            continue
+          }
+        } catch {}
+      }
+      return undefined
     }
   }
+  if (descriptor === undefined) return undefined
   // The lock is the lock file's existence, not its descriptor. Windows refuses
   // to rename a directory that holds an open handle, and an import replaces the
   // runtime and documents directories that carry these very lock files.
@@ -447,14 +449,32 @@ function sourceLocks(root: string, components: readonly MnemonPackComponent[]): 
   return locks
 }
 
-function withLocks<T>(root: string, components: MnemonPackComponent[], operation: () => T): T {
+/**
+ * Acquire the full lock set, run the synchronous critical section, and release all locks without
+ * yielding in between. Releasing partial locks before an async retry ensures synchronous Source
+ * controllers (`Atomics.wait`) on the same event loop never deadlock against a suspended Pack task.
+ */
+async function withLocks<T>(root: string, components: MnemonPackComponent[], operation: () => T): Promise<T> {
   const locks = [{ path: join(root, '.dsh-pack.lock'), staleMs: LOCK_STALE_MS }, ...sourceLocks(root, components)]
-  const releases: Array<() => void> = []
-  try {
-    for (const lock of locks) releases.push(acquireLock(lock.path, lock.staleMs))
-    return operation()
-  } finally {
-    for (const release of releases.reverse()) release()
+  const deadline = Date.now() + LOCK_TIMEOUT_MS
+  while (true) {
+    const releases: Array<() => void> = []
+    let contendedPath: string | undefined
+    try {
+      for (const lock of locks) {
+        const release = tryAcquireLockSync(lock.path, lock.staleMs)
+        if (release === undefined) {
+          contendedPath = lock.path
+          break
+        }
+        releases.push(release)
+      }
+      if (contendedPath === undefined) return operation()
+    } finally {
+      for (const release of releases.reverse()) release()
+    }
+    if (Date.now() >= deadline) throw new Error(`timed out waiting for Pack component lock: ${contendedPath}`)
+    await delay(LOCK_RETRY_MS)
   }
 }
 
@@ -1025,13 +1045,7 @@ function reconcilePersistedStore(root: string): void {
   const replacement = ids.has('default')
     ? 'default'
     : current.filter(body => body.active).map(body => body.id).sort()[0] ?? [...ids].sort()[0] ?? 'default'
-  const temporary = join(root, `.active-${process.pid}-${randomUUID()}.tmp`)
-  try {
-    writeFileSync(temporary, `${replacement}\n`, { mode: 0o600 })
-    renameSync(temporary, join(root, MNEMON_ACTIVE_STORE_FILE))
-  } finally {
-    rmSync(temporary, { force: true })
-  }
+  writeAtomicFileSync(join(root, MNEMON_ACTIVE_STORE_FILE), `${replacement}\n`)
 }
 
 function stageImport(root: string, pack: ParsedPack, components: MnemonPackComponent[], mode: MnemonPackImportMode, runtimeLimits: RuntimeMemoryLimits, options: { revive?: boolean; tombstones?: MnemonTombstoneFile; documentsBase?: Readonly<Record<string, string>> } = {}): { staging: string; report: RuntimeMergeReport | undefined; revived: MnemonTombstone[] } {
@@ -1212,7 +1226,7 @@ export class MnemonPackManager {
   async recordDeletions(): Promise<void> {
     return this.runner.withExclusive(async () => {
       await new Promise<void>(resolveReady => setImmediate(resolveReady))
-      withLocks(this.root, ['runtime'], () => {
+      await withLocks(this.root, ['runtime'], () => {
         const runtime = readCurrentRuntime(this.root, this.runtimeLimits)
         advanceTombstones(this.root, runtime.entries, this.identity(), this.now().toISOString())
       })

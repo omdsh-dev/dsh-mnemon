@@ -20,6 +20,129 @@ function subprocess() {
 describe('bounded subprocess UTF-8 output', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
+  it.skipIf(process.platform === 'win32')('escalates to SIGKILL after grace timeout when a real POSIX child process ignores SIGTERM', async () => {
+    const { spawn: realSpawn } = await vi.importActual<typeof import('node:child_process')>('node:child_process')
+    let spawned: ReturnType<typeof realSpawn> | undefined
+    let markReady = (): void => {}
+    const ready = new Promise<void>(resolve => { markReady = resolve })
+    vi.mocked(spawn).mockImplementationOnce(((command: string, args: readonly string[], options: object) => {
+      spawned = realSpawn(command, args as string[], options)
+      let buffered = ''
+      spawned.stdout?.on('data', (chunk: Buffer) => {
+        buffered += chunk.toString('utf8')
+        if (buffered.includes('ready')) markReady()
+      })
+      return spawned
+    }) as unknown as typeof spawn)
+
+    const controller = new AbortController()
+    const script = 'process.on("SIGTERM", () => {}); process.stdout.write("ready\\n"); setInterval(() => {}, 1000)'
+    const running = runProcess(process.execPath, ['-e', script], {
+      timeoutMs: 5_000,
+      killGraceMs: 60,
+      signal: controller.signal,
+      label: 'hung-child',
+    })
+    await ready
+    controller.abort('probe')
+    await expect(running).rejects.toThrow('hung-child command aborted: probe')
+
+    expect(spawned).toBeDefined()
+    const closed = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        spawned?.kill('SIGKILL')
+        reject(new Error('SIGTERM-ignoring child was not terminated by SIGKILL within grace window'))
+      }, 2_000)
+      if (spawned!.exitCode !== null || spawned!.signalCode !== null) {
+        clearTimeout(timer)
+        resolve({ code: spawned!.exitCode, signal: spawned!.signalCode })
+        return
+      }
+      spawned!.once('close', (code, signal) => {
+        clearTimeout(timer)
+        resolve({ code, signal })
+      })
+    })
+    expect(closed.signal).toBe('SIGKILL')
+    expect(() => process.kill(spawned!.pid!, 0)).toThrow()
+  })
+
+  it.runIf(process.platform === 'win32')('terminates a real hung child process on Windows after ready marker', async () => {
+    const { spawn: realSpawn } = await vi.importActual<typeof import('node:child_process')>('node:child_process')
+    let spawned: ReturnType<typeof realSpawn> | undefined
+    let markReady = (): void => {}
+    const ready = new Promise<void>(resolve => { markReady = resolve })
+    vi.mocked(spawn).mockImplementationOnce(((command: string, args: readonly string[], options: object) => {
+      spawned = realSpawn(command, args as string[], options)
+      let buffered = ''
+      spawned.stdout?.on('data', (chunk: Buffer) => {
+        buffered += chunk.toString('utf8')
+        if (buffered.includes('ready')) markReady()
+      })
+      return spawned
+    }) as unknown as typeof spawn)
+
+    const controller = new AbortController()
+    const script = 'process.stdout.write("ready\\n"); setInterval(() => {}, 1000)'
+    const running = runProcess(process.execPath, ['-e', script], {
+      timeoutMs: 5_000,
+      killGraceMs: 60,
+      signal: controller.signal,
+      label: 'hung-child',
+    })
+    await ready
+    controller.abort('probe')
+    await expect(running).rejects.toThrow('hung-child command aborted: probe')
+
+    expect(spawned).toBeDefined()
+    const closed = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        spawned?.kill('SIGKILL')
+        reject(new Error('hung child was not terminated on Windows within grace window'))
+      }, 2_000)
+      if (spawned!.exitCode !== null || spawned!.signalCode !== null) {
+        clearTimeout(timer)
+        resolve({ code: spawned!.exitCode, signal: spawned!.signalCode })
+        return
+      }
+      spawned!.once('close', (code, signal) => {
+        clearTimeout(timer)
+        resolve({ code, signal })
+      })
+    })
+    expect(closed.signal).toBe('SIGTERM')
+    expect(() => process.kill(spawned!.pid!, 0)).toThrow()
+  })
+
+  it('escalates from SIGTERM to SIGKILL after killGraceMs when the subprocess stays open', async () => {
+    vi.useFakeTimers()
+    try {
+      const child = subprocess()
+      child.kill.mockImplementation((signal: string) => {
+        if (signal === 'SIGKILL') child.signalCode = 'SIGKILL'
+        return true
+      })
+      const rejected = expect(
+        runProcess('test-cli', [], { timeoutMs: 80, killGraceMs: 60, label: 'hung-child' }),
+      ).rejects.toThrow('hung-child did not respond within 80ms')
+
+      await vi.advanceTimersByTimeAsync(80)
+      await rejected
+      expect(child.kill).toHaveBeenCalledTimes(1)
+      expect(child.kill).toHaveBeenLastCalledWith('SIGTERM')
+
+      await vi.advanceTimersByTimeAsync(59)
+      expect(child.kill).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(1)
+      expect(child.kill).toHaveBeenCalledTimes(2)
+      expect(child.kill).toHaveBeenLastCalledWith('SIGKILL')
+      child.emit('close', null)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('preserves interleaved stdout and stderr even when every multibyte character is split', async () => {
     const child = subprocess()
     const stdout = '{"content":"配置键为 backend.rule.4，验证端口为 12004。𠮷"}\n'

@@ -1,7 +1,7 @@
 import { lstatSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { withMemoryStorageLock } from 'dsh-mnemon/extension-sdk'
 import { sha256 } from '../src/catalog.ts'
 import { skillCaseSignature, type RunTarget, type ReviewRecordInput, type SkillSuggestion, type TrajectorySummary } from '../src/contracts.ts'
@@ -82,6 +82,9 @@ describe('skill catalog', () => {
     expect(catalog.skills.find(entry => entry.key === 'user-dsh:flat-skill')?.layout).toBe('flat')
     expect(catalog.problems.map(problem => problem.reason)).toEqual(['missing YAML frontmatter', 'invalid skill name "Bad_Name"'])
     expect(service().catalogView(undefined).roots.map(entry => entry.kind)).toEqual(['user-dsh', 'user-agents'])
+    const tooLong = 'a'.repeat(65)
+    write(join(agents, 'skills', 'too-long', 'SKILL.md'), skill(tooLong))
+    expect(service().catalogView(workspace).problems.map(problem => problem.reason)).toContain(`invalid skill name "${tooLong}"`)
   })
 
   it('switches a skill with DSH frontmatter keys and keeps every other byte', () => {
@@ -691,6 +694,36 @@ describe('draft and backtest recovery', () => {
     expect((await store.finishRun({ id: old.id, status: 'completed' })).status).toBe('interrupted')
     await expect(store.progressRun({ id: old.id, result: { caseId: entry.id, title: 'Case', verdict: 'pass', score: 1, checks: [], steps: [], answer: '' } })).rejects.toThrow('not running')
     expect(await store.reclaimStaleRuns()).toEqual({ reclaimed: 0 })
+  })
+
+  it('updates revision on eval mutations without rewriting ledger.json and reads ledger once in trajectories()', async () => {
+    write(join(home, 'skills', 'release-notes', 'SKILL.md'), skill('release-notes'))
+    const store = service()
+    await store.recordReview(workspace, review())
+    await store.recordReview(workspace, review({ trajectory: { ...review().trajectory, sessionId: 'session-2', stats: { ...review().trajectory.stats, skills: [] } } }))
+    const ledgerGenerationBefore = store.store.ledger().generation
+    let rev = store.revision(workspace)
+
+    const saved = await store.saveCase({ skillName: 'release-notes', title: 'Fast check', prompt: 'Run check', checks: [{ text: 'Checks', must: true }] })
+    expect(store.revision(workspace)).not.toBe(rev)
+    rev = store.revision(workspace)
+
+    const run = await store.startRun({ skillName: 'release-notes', target: { kind: 'none' }, caseIds: [saved.id] })
+    expect(store.revision(workspace)).not.toBe(rev)
+    rev = store.revision(workspace)
+
+    await store.progressRun({ id: run.id, result: { caseId: saved.id, title: saved.title, verdict: 'pass', score: 1, checks: [], steps: [], answer: 'ok' } })
+    expect(store.revision(workspace)).not.toBe(rev)
+    rev = store.revision(workspace)
+
+    await store.finishRun({ id: run.id, status: 'completed' })
+    expect(store.revision(workspace)).not.toBe(rev)
+    expect(store.store.ledger().generation).toBe(ledgerGenerationBefore)
+
+    const spy = vi.spyOn(store.store, 'ledger')
+    expect(store.trajectories({ skill: 'release-notes' })).toHaveLength(2)
+    expect(spy).toHaveBeenCalledTimes(1)
+    spy.mockRestore()
   })
 })
 

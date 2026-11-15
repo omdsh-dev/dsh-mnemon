@@ -1,6 +1,7 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import { join, resolve } from 'node:path'
+import { writeAtomicJsonSync } from './fs-atomic.ts'
 
 export interface IdleReviewWatermark {
   readonly version: 1
@@ -96,11 +97,7 @@ export class IdleReviewWatermarkStore {
   }
 
   private write(state: IdleReviewWatermark): void {
-    const temporary = this.path + '.' + randomUUID() + '.tmp'
-    try {
-      fs.writeFileSync(temporary, JSON.stringify(state) + '\n', { mode: 0o600, flag: 'wx' })
-      fs.renameSync(temporary, this.path)
-    } finally { fs.rmSync(temporary, { force: true }) }
+    writeAtomicJsonSync(this.path, state, { fs, indent: 0, flag: 'wx' })
   }
 
   /**

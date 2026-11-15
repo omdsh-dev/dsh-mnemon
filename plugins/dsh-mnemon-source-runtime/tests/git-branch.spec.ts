@@ -67,6 +67,14 @@ describe('resolveGitBranch', () => {
       mkdirSync(nested, { recursive: true })
       expect(resolveGitBranch(nested)).toBe('nested-branch')
     })
+
+    it('falls back to git when .git is a worktree file', () => {
+      const repository = gitRepository()
+      const worktree = join(mkdtempSync(join(tmpdir(), 'dsh-mnemon-worktree-')), 'wt')
+      directories.push(join(worktree, '..'))
+      execFileSync('git', ['-C', repository, 'worktree', 'add', '-q', '-b', 'worktree-branch', worktree], { stdio: 'ignore', env: gitEnvironment() })
+      expect(resolveGitBranch(worktree)).toBe('worktree-branch')
+    })
   } else {
     it('skips git-backed assertions when git is unavailable', () => {
       expect(true).toBe(true)

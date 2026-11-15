@@ -275,8 +275,17 @@ export class DocumentController {
       const ranked = index.documents
         .filter(record => allowedIds === undefined || allowedIds.has(record.id))
         .filter(record => includeArchived || record.status === 'active')
-        .map(record => {
-          const view = this.view(record)
+        .flatMap(record => {
+          let view: DocumentView
+          try {
+            view = this.view(record)
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+              this.excerpts.delete(this.pathFor(record))
+              return []
+            }
+            throw error
+          }
           const title = view.title.normalize('NFKC').toLocaleLowerCase()
           const description = view.description.normalize('NFKC').toLocaleLowerCase()
           const content = view.content.normalize('NFKC').toLocaleLowerCase()
@@ -289,7 +298,7 @@ export class DocumentController {
             if (titleMatch || descriptionMatch || contentMatch) tokenMatches += 1
             score += titleMatch ? 4 : descriptionMatch ? 2 : contentMatch ? 1 : 0
           }
-          return { result: { ...view, score }, tokenMatches }
+          return [{ result: { ...view, score }, tokenMatches }]
         })
         .filter(candidate => normalized === '' || (candidate.result.score > 0 && candidate.tokenMatches >= requiredTokenMatches))
         .sort((left, right) => right.result.score - left.result.score || Date.parse(right.result.updatedAt) - Date.parse(left.result.updatedAt))
@@ -341,15 +350,16 @@ export class DocumentController {
       const rendered = renderDocument(updated, content)
       updated.sizeBytes = Buffer.byteLength(rendered, 'utf8')
       const destination = this.pathFor(updated)
-      renameSync(source, destination)
+      this.atomicWrite(destination, rendered)
       try {
-        writeFileSync(destination, rendered, 'utf8')
         index.documents = index.documents.map(record => record.id === id ? updated : record)
         this.persistIndex(index)
       } catch (error) {
-        if (existsSync(destination)) renameSync(destination, source)
+        rmSync(destination, { force: true })
         throw error
       }
+      rmSync(source, { force: true })
+      this.excerpts.delete(source)
       return { success: true, action: 'archived', document: { ...updated, content, fileRevision: hash(rendered) }, snapshot: this.snapshotUnlocked(index) }
     }))
     this.queue = operation.catch(() => undefined)
@@ -588,8 +598,13 @@ export class DocumentController {
 
   private atomicWrite(path: string, content: string | Uint8Array): void {
     const temporary = `${path}.${process.pid}.${crypto.randomUUID()}.tmp`
-    writeFileSync(temporary, content, { encoding: 'utf8', mode: 0o600 })
-    renameSync(temporary, path)
+    try {
+      if (typeof content === 'string') writeFileSync(temporary, content, { encoding: 'utf8', mode: 0o600 })
+      else writeFileSync(temporary, content, { mode: 0o600 })
+      renameSync(temporary, path)
+    } finally {
+      rmSync(temporary, { force: true })
+    }
   }
 
   private withLock<T>(callback: () => T): T {

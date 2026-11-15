@@ -280,7 +280,7 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
       // A Host that went away mid-write left its suggestion stuck in `drafting`
       // and refuses both a retry and a delete; put those back before anything reads.
       void service.reclaimOrphanDrafts().catch(() => void 0)
-      const recovery = service.reclaimStaleRuns()
+      const recovery = service.reclaimStaleRuns().catch(() => undefined)
       const reaper = setInterval(() => { void service.reclaimStaleRuns().catch(() => void 0) }, 60_000)
       reaper.unref?.()
       const facts = (scope: { workspaceId?: string }, management: boolean): MemorySourceFacts => management ? {

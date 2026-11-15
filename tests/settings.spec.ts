@@ -369,7 +369,14 @@ describe('embedding credentials through the settings bridge', () => {
       describe: () => [{ ns: 'mnemon', value, base: value, user: value, revision, applies: 'live' }],
       mutate: vi.fn(async (_namespace: string, operations: ProtocolSettingsOperation[], expected?: number) => {
         if (expected !== revision) throw new Error('settings conflict')
-        for (const operation of operations) if (operation.op === 'set') value = { ...value, [operation.path[0]!]: operation.value }
+        for (const operation of operations) {
+          if (operation.op === 'set') value = { ...value, [operation.path[0]!]: operation.value }
+          else {
+            const next = { ...value } as Record<string, unknown>
+            delete next[operation.path[0]!]
+            value = next as typeof value
+          }
+        }
         revision++
       }),
     } as unknown as HostSettingsService
@@ -438,15 +445,67 @@ describe('embedding credentials through the settings bridge', () => {
     expect(f.records.has((f.value().embedding as Record<string, unknown>).apiKeyRef as string)).toBe(true)
   })
 
-  it('does not implicitly forward an existing credential to a changed endpoint; explicit removal preserves rollback records', async () => {
+  it('does not implicitly forward an existing credential to a changed endpoint, preserves rollback records on failed commits, and cleans up superseded records on commit', async () => {
     const f = fixture()
     await f.save({ apiKey: key })
+    const initialRef = (f.value().embedding as Record<string, unknown>).apiKeyRef as string
+    expect(f.records.has(initialRef)).toBe(true)
+
     expect(await f.save({ endpoint: 'https://another.example.test/v1' })).toMatchObject({ ok: false })
     expect(f.value().embedding.endpoint).toBe(endpoint)
+    expect(f.records.has(initialRef)).toBe(true)
+
+    // Failed profile commit retains the previous credential record for rollback safety.
+    vi.mocked(f.settings.mutate).mockRejectedValueOnce(new Error('disk error'))
+    expect(await f.save({ endpoint: 'http://localhost:11434', clearApiKey: true })).toMatchObject({ ok: false })
+    expect(f.records.has(initialRef)).toBe(true)
+
+    // Committed clearApiKey deletes the superseded credential record.
     expect(await f.save({ endpoint: 'http://localhost:11434', clearApiKey: true })).toMatchObject({ ok: true })
     expect(f.value().embedding).toMatchObject({ endpoint: 'http://localhost:11434', apiKey: '', apiKeyRef: '', apiKeyEnv: '' })
-    expect(f.records.size).toBe(1)
+    expect(f.records.size).toBe(0)
     expect(JSON.stringify(f.value())).not.toContain('clearApiKey')
+  })
+
+  it('deletes superseded credential records when rotating keys, switching to apiKeyEnv, or unsetting embedding', async () => {
+    const f = fixture()
+    await f.save({ apiKey: 'first-secret-key' })
+    const firstRef = (f.value().embedding as Record<string, unknown>).apiKeyRef as string
+    expect(f.records.size).toBe(1)
+
+    // Key rotation deletes firstRef and keeps only secondRef.
+    expect(await f.save({ apiKey: 'second-secret-key' })).toMatchObject({ ok: true })
+    const secondRef = (f.value().embedding as Record<string, unknown>).apiKeyRef as string
+    expect(secondRef).not.toBe(firstRef)
+    expect(f.records.has(firstRef)).toBe(false)
+    expect(f.records.has(secondRef)).toBe(true)
+    expect(f.records.size).toBe(1)
+
+    // Switching to apiKeyEnv deletes secondRef.
+    expect(await f.save({ apiKeyEnv: 'ROTATED_EMBED_KEY' })).toMatchObject({ ok: true })
+    expect(f.records.size).toBe(0)
+
+    // Saving a key and unsetting ['embedding'] deletes the stored credential record.
+    expect(await f.save({ apiKey: 'third-secret-key', apiKeyEnv: '' })).toMatchObject({ ok: true })
+    expect(f.records.size).toBe(1)
+    expect(await f.handler('mutate', {
+      expectedRevision: 5,
+      ops: [{ op: 'unset', path: ['embedding'] }],
+    })).toMatchObject({ ok: true })
+    expect(f.records.size).toBe(0)
+  })
+
+  it.each([null, '', false, -1, 1.5, Number.NaN])('rejects malformed expectedRevision (%j) instead of coercing it', async invalidRevision => {
+    const f = fixture()
+    const response = await f.handler('mutate', {
+      expectedRevision: invalidRevision,
+      ops: [{ op: 'unset', path: ['displayMode'] }],
+    })
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'settings-rejected', message: 'expectedRevision must be a non-negative integer' },
+    })
+    expect(f.settings.mutate).not.toHaveBeenCalled()
   })
 
   it('rejects arbitrary credential references and invalid settings before writing a record', async () => {

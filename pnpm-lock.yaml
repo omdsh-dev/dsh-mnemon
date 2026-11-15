@@ -653,33 +653,6 @@ importers:
       dsh-mnemon:
         specifier: ^0.5.46
         version: link:../..
-      dsh-mnemon-provider-byterover:
-        specifier: ^0.5.7
-        version: link:../dsh-mnemon-provider-byterover
-      dsh-mnemon-provider-hindsight:
-        specifier: ^0.5.7
-        version: link:../dsh-mnemon-provider-hindsight
-      dsh-mnemon-provider-holographic:
-        specifier: ^0.5.7
-        version: link:../dsh-mnemon-provider-holographic
-      dsh-mnemon-provider-honcho:
-        specifier: ^0.5.5
-        version: link:../dsh-mnemon-provider-honcho
-      dsh-mnemon-provider-mem0:
-        specifier: ^0.5.5
-        version: link:../dsh-mnemon-provider-mem0
-      dsh-mnemon-provider-mnemon-native:
-        specifier: ^0.5.11
-        version: link:../dsh-mnemon-provider-mnemon-native
-      dsh-mnemon-provider-openviking:
-        specifier: ^0.5.9
-        version: link:../dsh-mnemon-provider-openviking
-      dsh-mnemon-provider-retaindb:
-        specifier: ^0.5.5
-        version: link:../dsh-mnemon-provider-retaindb
-      dsh-mnemon-provider-supermemory:
-        specifier: ^0.5.5
-        version: link:../dsh-mnemon-provider-supermemory
       immer:
         specifier: ^10.1.1
         version: 10.2.0

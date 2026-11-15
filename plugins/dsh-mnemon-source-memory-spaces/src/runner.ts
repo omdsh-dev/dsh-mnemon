@@ -5,7 +5,7 @@ import type { ResolvedMemorySpacesConfig as ResolvedConfig } from './config.ts'
 import { ProcessError, runProcess, type ProcessFailureReason, type ProcessOptions, type ProcessRunner } from './providers/process.ts'
 import { withMemoryStorageLock } from 'dsh-mnemon/extension-sdk'
 import { embeddingApiKey, type EmbeddingCredentialReader } from './embedding-credentials.ts'
-import { findMnemonCommand, isMnemonExecutable, resolveMnemonInvocation } from './native-cli.ts'
+import { findMnemonCommand, invalidateMnemonCommandCache, isMnemonExecutable, resolveMnemonInvocation } from './native-cli.ts'
 
 /** Why a CLI call failed where callers act on the cause; a call that ran and exited non-zero carries none. */
 export type MnemonCliFailure = ProcessFailureReason | 'no-database'
@@ -134,7 +134,9 @@ export function createRunner(config: ResolvedConfig, processRunner: ProcessRunne
       result = await processRunner(invocation.command, invocation.args,
         { ...processOptions, ...(invocation.env === undefined ? {} : { env: invocation.env }) })
     } catch (error) {
-      throw new MnemonCliError(safeError(processFailureMessage(error, args)), error instanceof ProcessError ? error.reason : 'launch')
+      const reason = error instanceof ProcessError ? error.reason : 'launch'
+      if (reason === 'launch') invalidateMnemonCommandCache()
+      throw new MnemonCliError(safeError(processFailureMessage(error, args)), reason)
     }
     if (result.exitCode !== 0) {
       const detail = safeError(result.stderr.trim() || result.stdout.trim() || 'no output')
@@ -154,7 +156,10 @@ export function createRunner(config: ResolvedConfig, processRunner: ProcessRunne
     get command() { return currentCommand() },
     get commandFound() {
       const found = findMnemonCommand(config)
-      return found !== undefined && isMnemonExecutable(found)
+      if (found === undefined) return false
+      return config.cliPath !== undefined && (config.cliPath.includes('/') || config.cliPath.includes('\\'))
+        ? isMnemonExecutable(found)
+        : true
     },
     async runJson(args, options) {
       const stdout = await execute(args, options)

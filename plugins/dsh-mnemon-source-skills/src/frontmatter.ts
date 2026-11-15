@@ -56,7 +56,7 @@ export function parseSkill(raw: string): { skill: ParsedSkill } | { problem: str
   const name = typeof fields.name === 'string' && fields.name.length > 0 ? fields.name : undefined
   const description = typeof fields.description === 'string' && fields.description.length > 0 ? fields.description : undefined
   if (name === undefined || description === undefined) return { problem: 'frontmatter requires name and description' }
-  if (!SKILL_NAME.test(name)) return { problem: `invalid skill name "${name}"` }
+  if (!isSkillName(name)) return { problem: `invalid skill name "${name}"` }
   for (const [legacy, canonical] of [['disableModelInvocation', 'disable-model-invocation'], ['modelInvocable', 'disable-model-invocation'], ['userInvocable', 'user-invocable']] as const) {
     if (Object.hasOwn(fields, legacy)) return { problem: `frontmatter field "${legacy}" is unsupported; use "${canonical}"` }
   }

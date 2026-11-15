@@ -20,11 +20,13 @@ function runtimeMutation(value: MemoryJsonValue): RuntimeMemoryMutation {
   if (!TARGETS.has(target)) throw new Error(`unsupported Runtime Memory target: ${target}`)
   const importance = text(input.importance, 'importance', 20, false) as RuntimeMemoryImportance | undefined
   if (importance !== undefined && !IMPORTANCE.has(importance)) throw new Error(`unsupported Runtime Memory importance: ${importance}`)
+  const content = text(input.content, 'content', 100_000, false)
+  const oldText = text(input.oldText ?? input.old_text, 'oldText', 100_000, false)
   return {
     action,
     target,
-    ...(text(input.content, 'content', 100_000, false) === undefined ? {} : { content: text(input.content, 'content', 100_000, false)! }),
-    ...(text(input.oldText ?? input.old_text, 'oldText', 100_000, false) === undefined ? {} : { oldText: text(input.oldText ?? input.old_text, 'oldText', 100_000, false)! }),
+    ...(content === undefined ? {} : { content }),
+    ...(oldText === undefined ? {} : { oldText }),
     ...(importance === undefined ? {} : { importance }),
     ...(input.branches === undefined ? {} : { branches: stringArray(input.branches, 'branches', 100) ?? [] }),
   }
@@ -134,24 +136,32 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
       async manage(request) {
         const input = request.input === null ? {} : record(request.input, 'Runtime Memory management')
         if (request.mode === 'read') {
-          let value: unknown
-          if (request.operation === 'snapshot') value = controller.snapshot()
-          else if (request.operation === 'maintenance-plan') {
-            if (typeof projectionSDK.reserveMemoryProjection !== 'function' && controller.snapshot().entries.some(entry => entry.pinned === true)) throw new Error('Pinned Runtime maintenance requires a newer dsh-mnemon Host; update the Host before retrying.')
-            value = await controller.planMaintenance(runtimeMutation(request.input), { preserveImportance: input.preserveImportance === true })
+          if (request.operation === 'snapshot') {
+            const snapshot = controller.snapshot()
+            return { revision: snapshot.revision, value: snapshot as unknown as MemoryJsonValue }
           }
-          else throw new Error('unsupported Runtime management read operation: ' + request.operation)
-          return { revision: controller.snapshot().revision, value: value as MemoryJsonValue }
+          if (request.operation === 'maintenance-plan') {
+            if (typeof projectionSDK.reserveMemoryProjection !== 'function' && controller.snapshot().entries.some(entry => entry.pinned === true)) {
+              throw new Error('Pinned Runtime maintenance requires a newer dsh-mnemon Host; update the Host before retrying.')
+            }
+            const planned = await controller.planMaintenanceCommitted(runtimeMutation(request.input), { preserveImportance: input.preserveImportance === true })
+            return { revision: planned.revision, value: planned.plan as unknown as MemoryJsonValue }
+          }
+          throw new Error('unsupported Runtime management read operation: ' + request.operation)
         }
         if (!request.confirmed) throw new Error('Runtime management mutation requires explicit confirmation')
-        let result: unknown
-        if (request.operation === 'mutate') result = await controller.mutate(runtimeMutation(request.input), { preserveImportance: input.preserveImportance === true })
-        else if (request.operation === 'pin') {
+        if (request.operation === 'mutate') {
+          const committed = await controller.mutateCommitted(runtimeMutation(request.input), { preserveImportance: input.preserveImportance === true })
+          return { revision: committed.revision, value: committed.result as unknown as MemoryJsonValue }
+        }
+        if (request.operation === 'pin') {
           if (input.pinned === true && typeof projectionSDK.reserveMemoryProjection !== 'function') throw new Error('Pinned Runtime requires a newer dsh-mnemon Host; update the Host and official Strategies together.')
           const target = text(input.target, 'target', 20)! as RuntimeMemoryTarget
           if (!TARGETS.has(target) || typeof input.pinned !== 'boolean') throw new Error('Pin requires a valid target and boolean pinned state')
-          result = await controller.setPinned(target, text(input.content, 'content', 100_000)!, input.pinned)
-        } else if (request.operation === 'compact-and-mutate') {
+          const snapshot = await controller.setPinned(target, text(input.content, 'content', 100_000)!, input.pinned)
+          return { revision: snapshot.revision, value: snapshot as unknown as MemoryJsonValue }
+        }
+        if (request.operation === 'compact-and-mutate') {
           if (!Array.isArray(input.compacted)) throw new Error('compacted must be an array')
           const compacted = input.compacted.map(value => {
             const entry = record(value, 'compacted entry')
@@ -165,18 +175,18 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
             } satisfies RuntimeMemoryCompactedEntry
           })
           if (input.archive !== undefined && input.archive !== 'local') throw new Error('archive must be "local" when given')
-          result = await controller.compactAndMutate(
+          const committed = await controller.compactAndMutateCommitted(
             text(input.revision, 'revision', 300)!, runtimeMutation(input.mutation!), compacted,
             typeof input.maxBytes === 'number' ? input.maxBytes : undefined,
             { ...(input.archive === 'local' ? { archive: 'local' as const } : {}), preserveImportance: input.preserveImportance === true },
           )
-        } else throw new Error('unsupported Runtime management mutation operation: ' + request.operation)
-        return { revision: controller.snapshot().revision, value: result as unknown as MemoryJsonValue }
+          return { revision: committed.revision, value: committed.result as unknown as MemoryJsonValue }
+        }
+        throw new Error('unsupported Runtime management mutation operation: ' + request.operation)
       },
       async mutate(request) {
-        const result = await controller.mutate(runtimeMutation(request.input), { preserveImportance: true })
-        const revision = controller.snapshot().revision
-        return receipt(request.view.id, request.offer.id, context.sourceInstanceKey, revision, result as unknown as MemoryJsonValue, 'committed')
+        const committed = await controller.mutateCommitted(runtimeMutation(request.input), { preserveImportance: true })
+        return receipt(request.view.id, request.offer.id, context.sourceInstanceKey, committed.revision, committed.result as unknown as MemoryJsonValue, 'committed')
       },
     }
   },

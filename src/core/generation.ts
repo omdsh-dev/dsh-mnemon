@@ -142,6 +142,10 @@ export class MemoryGenerationHost {
     return this.serving?.state === 'serving' ? this.serving.generation : undefined
   }
 
+  get isDisposed(): boolean {
+    return this.closed
+  }
+
   generation(id: string): MemoryCompositionGeneration | undefined {
     return this.records.get(id)?.generation
   }

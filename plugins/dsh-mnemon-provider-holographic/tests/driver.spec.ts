@@ -54,10 +54,23 @@ describe('standalone holographic data plane', () => {
       nodes: expect.arrayContaining([expect.objectContaining({ id: 'entity:SQLite', kind: 'entity' })]),
       edges: expect.arrayContaining([expect.objectContaining({ sourceId: first.id, targetId: 'entity:SQLite', type: 'entity' })]),
     })
-    await expect(provider.status(body)).resolves.toMatchObject({ healthy: true, stats: { totalInsights: 2, edgeCount: 3 } })
+    await expect(provider.status(body)).resolves.toMatchObject({ healthy: true, stats: { totalInsights: 2, edgeCount: 3, dbSizeBytes: statSync(dataPath).size } })
     expect(statSync(dataPath).mode & 0o777).toBe(0o600)
     await expect(provider.forget(body, first.id)).resolves.toMatchObject({ action: 'deleted' })
     await expect(provider.list(body, {})).resolves.toHaveLength(1)
+  })
+
+  it('matches short entities on whole-token boundaries without substring false positives', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'dsh-mnemon-holographic-entities-'))
+    temporaryDirectories.push(dataDir)
+    const { authority, body } = createMemorySpaceProviderFixture(descriptor, { defaultTrust: 1, minTrust: 0 }, { dataDir })
+    const provider = new HolographicProvider(authority)
+    await provider.remember(body, { content: 'Go service powers the UI and AI workflow.', entities: ['Go', 'UI', 'AI'] })
+
+    expect((await provider.search(body, { query: 'going to build an idea' })).results).toEqual([])
+    const matched = await provider.search(body, { query: 'deploy Go with UI and AI' })
+    expect(matched.results).toHaveLength(1)
+    expect(matched.results[0]?.score).toBe(0.8)
   })
 })
 

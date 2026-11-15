@@ -130,6 +130,18 @@ export const RUNTIME_MEMORY_LIMIT_MAX_BYTES = MAX_RUNTIME_MEMORY_LIMIT_BYTES
 export const RUNTIME_BRANCH_NAME_MAX = 128
 /** The characters a git branch name in a scope may use. */
 export const RUNTIME_BRANCH_NAME_PATTERN = /^[A-Za-z0-9._/-]+$/u
+/** Maximum number of git branch names a single Runtime Memory entry may scope to. */
+export const RUNTIME_BRANCHES_PER_ENTRY_MAX = 16
+
+export function isValidRuntimeBranchName(branch: string): boolean {
+  return branch !== ''
+    && branch.length <= RUNTIME_BRANCH_NAME_MAX
+    && RUNTIME_BRANCH_NAME_PATTERN.test(branch)
+    && branch !== '-'
+    && !branch.startsWith('/') && !branch.startsWith('-')
+    && !branch.endsWith('/') && !branch.endsWith('.')
+    && !branch.includes('..') && !branch.includes('//') && !branch.includes('@{')
+}
 
 /**
  * Read a stored branch scope. Absent or malformed data reads as no scope, so an entry that
@@ -137,10 +149,12 @@ export const RUNTIME_BRANCH_NAME_PATTERN = /^[A-Za-z0-9._/-]+$/u
  * of breaking the projection that reads it.
  */
 export function parseRuntimeBranches(value: unknown): string[] | undefined {
-  if (!Array.isArray(value)) return undefined
+  if (!Array.isArray(value) || value.length > RUNTIME_BRANCHES_PER_ENTRY_MAX) return undefined
   const branches: string[] = []
+  const seen = new Set<string>()
   for (const item of value) {
-    if (typeof item !== 'string' || item === '' || item.length > RUNTIME_BRANCH_NAME_MAX || !RUNTIME_BRANCH_NAME_PATTERN.test(item)) return undefined
+    if (typeof item !== 'string' || !isValidRuntimeBranchName(item) || seen.has(item)) return undefined
+    seen.add(item)
     branches.push(item)
   }
   return branches

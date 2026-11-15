@@ -23,6 +23,14 @@ export interface JsonRequestOptions {
   timeoutMs?: number
 }
 
+export type HttpRequestInit = JsonRequestOptions
+
+export function bearerAuthHeader(apiKey: unknown): string | undefined {
+  if (typeof apiKey !== 'string') return undefined
+  const token = apiKey.trim().replace(/^Bearer(?:\s+|$)/iu, '').trim()
+  return token === '' ? undefined : `Bearer ${token}`
+}
+
 export function jsonObject(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -124,7 +132,7 @@ export abstract class HttpMemoryProvider {
       }
       if (!response.ok) {
         const detail = errorDetail(payload)
-        throw new Error(`${label} HTTP ${response.status}${detail === undefined ? '' : `: ${detail}`}`)
+        throw Object.assign(new Error(`${label} HTTP ${response.status}${detail === undefined ? '' : `: ${detail}`}`), { status: response.status })
       }
       return payload
     } catch (error) {

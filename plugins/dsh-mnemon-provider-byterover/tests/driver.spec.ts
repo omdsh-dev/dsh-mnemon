@@ -25,13 +25,20 @@ describe('standalone byterover data plane', () => {
     const { authority: registry, body } = createMemorySpaceProviderFixture(descriptor, { cliPath: '/opt/byterover/bin/brv', workingDirectory: 'brv-space', apiKey: 'brv-secret' }, { dataDir, instanceId: 'work-account' })
     const provider = new ByteRoverProvider(registry, { process, queryTimeoutMs: 1_000, curateTimeoutMs: 2_000 })
 
+    expect(definition.manifest.scoreSemantics).toBe('provider-native')
+    expect(provider.scoreSemantics).toEqual({ kind: 'provider-native' })
+
     await expect(provider.status(body)).resolves.toEqual({ healthy: true })
     await expect(provider.status(body)).resolves.toEqual({ healthy: true })
     expect(calls.filter(call => call.args[0] === 'status')).toHaveLength(1)
     const recalled = await provider.search(body, { query: 'How should we deploy?' })
-    expect(recalled.results).toEqual([expect.objectContaining({ id: expect.stringMatching(/^byterover:/), category: 'context', score: 1 })])
+    expect(recalled.results).toEqual([expect.objectContaining({ id: expect.stringMatching(/^byterover:/), category: 'context' })])
+    expect(recalled.results[0]?.score).toBeUndefined()
     expect(JSON.stringify(recalled)).not.toContain('brv-secret')
     await expect(provider.remember(body, { content: 'Always use staged rollout.' })).resolves.toMatchObject({ action: 'stored' })
+    // `remember` invalidates the cached status automatically so subsequent health probes reflect writes.
+    await expect(provider.status(body)).resolves.toEqual({ healthy: true })
+    expect(calls.filter(call => call.args[0] === 'status')).toHaveLength(2)
     await expect(provider.graph(body)).resolves.toMatchObject({ nodes: [], edges: [] })
 
     expect(calls[1]).toMatchObject({ command: '/opt/byterover/bin/brv', args: ['query', '--', 'How should we deploy?'] })
@@ -40,7 +47,22 @@ describe('standalone byterover data plane', () => {
     expect(calls[1]?.options.label).toBe('ByteRover')
     provider.invalidateStatus(body.id)
     await expect(provider.status(body)).resolves.toEqual({ healthy: true })
-    expect(calls.filter(call => call.args[0] === 'status')).toHaveLength(2)
+    expect(calls.filter(call => call.args[0] === 'status')).toHaveLength(3)
+  })
+
+  it('treats ByteRover no-relevant-context CLI messages as empty recall instead of a high-confidence hit', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'dsh-mnemon-byterover-empty-'))
+    temporaryDirectories.push(dataDir)
+    const process = vi.fn<ProcessRunner>(async (_command, args) => {
+      if (args[0] === 'query') return { stdout: 'No relevant context found in the knowledge tree.', stderr: '', exitCode: 0 }
+      return { stdout: '', stderr: 'unknown', exitCode: 1 }
+    })
+    const { authority: registry, body } = createMemorySpaceProviderFixture(descriptor, { cliPath: '/opt/byterover/bin/brv' }, { dataDir })
+    const provider = new ByteRoverProvider(registry, { process })
+    await expect(provider.search(body, { query: 'missing topic' })).resolves.toEqual({
+      results: [],
+      hint: 'ByteRover found no relevant memories.',
+    })
   })
 })
 

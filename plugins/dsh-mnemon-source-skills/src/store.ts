@@ -123,11 +123,34 @@ function pruneSuggestionLinks(ledger: LedgerFile): LedgerFile {
   return ledger
 }
 
+/** Replace a file atomically via a unique sibling temp file, cleaning up on failure. */
+export function writeFileAtomic(path: string, content: string, options?: { dirMode?: number; fileMode?: number }): void {
+  mkdirSync(dirname(path), options?.dirMode === undefined ? { recursive: true } : { recursive: true, mode: options.dirMode })
+  const temporary = `${path}.${process.pid}-${randomUUID()}.tmp`
+  try {
+    writeFileSync(temporary, content, options?.fileMode === undefined ? undefined : { mode: options.fileMode })
+    renameSync(temporary, path)
+  } finally {
+    rmSync(temporary, { force: true })
+  }
+}
+
+function fileStamp(path: string): string {
+  try {
+    const info = statSync(path, { bigint: true })
+    return `${info.size}:${info.mtimeNs}:${info.ctimeNs}:${info.ino}`
+  } catch {
+    return '-'
+  }
+}
+
 /**
  * The Skills Source's own files under `<dataDir>/skills`. Every file is
  * replaced atomically; callers serialize writes with the storage lock.
  */
 export class SkillsStore {
+  private readonly jsonCache = new Map<string, { stamp: string; value: unknown }>()
+
   constructor(readonly directory: string) {}
 
   private path(name: string): string {
@@ -141,35 +164,55 @@ export class SkillsStore {
 
   private readJson(name: string): unknown {
     const path = this.path(name)
-    if (!existsSync(path)) return undefined
-    try { return JSON.parse(readFileSync(path, 'utf8')) as unknown } catch (error) {
+    const stamp = fileStamp(path)
+    if (stamp === '-') {
+      this.jsonCache.delete(name)
+      return undefined
+    }
+    const cached = this.jsonCache.get(name)
+    if (cached !== undefined && cached.stamp === stamp) return structuredClone(cached.value)
+    let parsed: unknown
+    try { parsed = JSON.parse(readFileSync(path, 'utf8')) as unknown } catch (error) {
       throw new Error(`Skills Source file is unreadable: ${path}: ${error instanceof Error ? error.message : String(error)}`)
     }
+    if (this.jsonCache.size >= 32 && !this.jsonCache.has(name)) {
+      const oldest = this.jsonCache.keys().next().value
+      if (oldest !== undefined) this.jsonCache.delete(oldest)
+    }
+    this.jsonCache.set(name, { stamp, value: parsed })
+    return structuredClone(parsed)
   }
 
   private writeAtomic(path: string, content: string): void {
-    mkdirSync(join(path, '..'), { recursive: true, mode: 0o700 })
-    const temporary = `${path}.${process.pid}-${randomUUID()}.tmp`
-    try {
-      writeFileSync(temporary, content, { mode: 0o600 })
-      renameSync(temporary, path)
-    } finally {
-      rmSync(temporary, { force: true })
-    }
+    writeFileAtomic(path, content, { dirMode: 0o700, fileMode: 0o600 })
   }
 
   private writeJson(name: string, value: unknown): void {
+    this.jsonCache.delete(name)
     this.writeAtomic(this.path(name), `${JSON.stringify(value, null, 2)}\n`)
   }
 
   /** Name, size and time of each file the revision depends on. */
   fingerprint(): string {
-    return ['ledger.json', 'evals.json', 'auto-adoption-budget.json'].map(name => {
-      try {
-        const info = statSync(this.path(name))
-        return `${name}:${info.size}:${info.mtimeMs}`
-      } catch { return `${name}:-` }
-    }).join('|')
+    const tracked = [
+      'ledger.json',
+      'evals.json',
+      'auto-adoption-budget.json',
+      join('market', 'registries.json'),
+      join('market', 'installs.json'),
+    ].map(name => `${name}:${fileStamp(this.path(name))}`)
+    const cacheDir = this.path(join('market', 'cache'))
+    let cacheEntries: string[]
+    try {
+      cacheEntries = readdirSync(cacheDir)
+        .filter(name => name.endsWith('.json'))
+        .sort()
+        .map(name => `${name}:${fileStamp(join(cacheDir, name))}`)
+    } catch {
+      cacheEntries = ['-']
+    }
+    tracked.push(`market/cache:${cacheEntries.join(',')}`)
+    return tracked.join('|')
   }
 
   autoAdoptionBudget(): BudgetEntry[] | undefined {
@@ -261,12 +304,12 @@ export class SkillsStore {
     this.writeJson('evals.json', evals)
   }
 
-  trajectory(id: string): Trajectory {
+  trajectory(id: string, ledger?: LedgerFile): Trajectory {
     if (!/^[a-z0-9-]{1,80}$/u.test(id)) throw new Error('invalid trajectory id')
     const value = object(this.readJson(join('trajectories', `${id}.json`)))
     if (value === undefined) throw new Error('trajectory not found: ' + id)
     const trajectory = value as unknown as Trajectory
-    const ids = new Set(this.ledger().suggestions.map(suggestion => suggestion.id))
+    const ids = new Set((ledger ?? this.ledger()).suggestions.map(suggestion => suggestion.id))
     trajectory.suggestionIds = trajectory.suggestionIds.filter(id => ids.has(id))
     for (const annotation of trajectory.annotations) {
       if (annotation.suggestionIds === undefined) continue

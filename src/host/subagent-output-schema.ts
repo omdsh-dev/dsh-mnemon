@@ -1,7 +1,7 @@
 /** The JSON Schema subset DSH structured-output tools compile, and the check of a captured result against a schema in it. */
 
 const DSH_OUTPUT_SCHEMA_KEYS = new Set([
-  'type', 'oneOf', 'properties', 'required', 'additionalProperties', 'items', 'enum', 'const',
+  'type', 'oneOf', 'properties', 'required', 'additionalProperties', 'items', 'enum', 'const', 'minLength',
   'title', 'description', 'default', 'examples', 'deprecated', 'readOnly', 'writeOnly', '$comment',
 ])
 
@@ -11,6 +11,9 @@ export function assertDshOutputSchema(schema: unknown, path = 'schema'): void {
   const value = schema as Record<string, unknown>
   for (const key of Object.keys(value)) {
     if (!DSH_OUTPUT_SCHEMA_KEYS.has(key)) throw new Error(`unsupported DSH output schema keyword: ${path}.${key}`)
+  }
+  if (value.minLength !== undefined && (typeof value.minLength !== 'number' || !Number.isInteger(value.minLength) || value.minLength < 0)) {
+    throw new Error(`${path}.minLength must be a non-negative integer`)
   }
   if (typeof value.properties === 'object' && value.properties !== null && !Array.isArray(value.properties)) {
     for (const [name, child] of Object.entries(value.properties)) assertDshOutputSchema(child, `${path}.properties.${name}`)
@@ -66,6 +69,9 @@ export function assertDshOutputValue(schema: unknown, candidate: unknown, path =
       return
     case 'string':
       if (typeof candidate !== 'string') throw new Error(`${path} must be a string`)
+      if (typeof value.minLength === 'number' && candidate.length < value.minLength) {
+        throw new Error(`${path} must contain at least ${value.minLength} characters`)
+      }
       return
     case 'number':
       if (typeof candidate !== 'number' || !Number.isFinite(candidate)) throw new Error(`${path} must be a finite number`)

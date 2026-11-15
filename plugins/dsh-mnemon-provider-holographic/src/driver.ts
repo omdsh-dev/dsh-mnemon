@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { topScored } from './top-scored.ts'
 import type { JsonValue } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
@@ -35,11 +35,23 @@ interface HolographicStore {
 
 const WORD = /[\p{L}\p{N}_-]+/gu
 const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]+/gu
+const HAS_CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u
 const QUOTED = /["“”'‘’]([^"“”'‘’]{2,100})["“”'‘’]/gu
 const CAPITALIZED = /\b([A-Z][\p{L}\p{N}_-]+(?:\s+[A-Z][\p{L}\p{N}_-]+)*)\b/gu
 
 function clampTrust(value: number): number {
   return Math.min(1, Math.max(0, value))
+}
+
+function matchesEntity(queryLower: string, queryWords: ReadonlySet<string>, rawEntity: string): boolean {
+  const entity = rawEntity.trim().toLocaleLowerCase()
+  if (entity === '') return false
+  if (HAS_CJK.test(entity)) return queryLower.includes(entity)
+  const entityWords = entity.match(WORD) ?? []
+  if (entityWords.length === 0) return queryLower.includes(entity)
+  if (entityWords.length === 1 && entityWords[0] === entity) return queryWords.has(entity)
+  const escaped = entity.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+  return new RegExp(`(?<![\\p{L}\\p{N}_-])${escaped}(?![\\p{L}\\p{N}_-])`, 'u').test(queryLower)
 }
 
 function terms(value: string): Set<string> {
@@ -105,8 +117,9 @@ export class HolographicProvider implements MemoryProviderAdapter {
 
   async status(body: MemorySpace): Promise<ProviderSpaceStatus> {
     try {
-      const store = this.load(body)
-      return { healthy: true, stats: this.stats(store) }
+      const path = this.path(body)
+      const store = this.loadFromPath(path)
+      return { healthy: true, stats: this.stats(store, path) }
     } catch (error) {
       return { healthy: false, error: error instanceof Error ? error.message : String(error) }
     }
@@ -118,12 +131,13 @@ export class HolographicProvider implements MemoryProviderAdapter {
     const minTrust = clampTrust(Number(connection.minTrust ?? 0.3))
     const queryTerms = terms(request.query)
     const query = request.query.toLocaleLowerCase()
+    const queryWords = new Set(query.match(WORD) ?? [])
     const limit = Math.min(Math.max(request.limit ?? 10, 1), 50)
     const results = topScored(store.facts.flatMap(fact => {
       if (fact.trustScore < minTrust || (request.category !== undefined && fact.category !== request.category)) return []
       const lexical = overlap(queryTerms, terms(`${fact.content} ${fact.tags.join(' ')} ${fact.entities.join(' ')}`))
       const phrase = fact.content.toLocaleLowerCase().includes(query) ? 1 : 0
-      const entity = fact.entities.some(value => query.includes(value.toLocaleLowerCase())) ? 1 : 0
+      const entity = fact.entities.some(value => matchesEntity(query, queryWords, value)) ? 1 : 0
       const relevance = Math.max(lexical, phrase * 0.9, entity * 0.8)
       return relevance <= 0 ? [] : [{ fact, score: relevance * fact.trustScore }]
     }), limit)
@@ -227,7 +241,10 @@ export class HolographicProvider implements MemoryProviderAdapter {
   }
 
   private load(body: MemorySpace): HolographicStore {
-    const path = this.path(body)
+    return this.loadFromPath(this.path(body))
+  }
+
+  private loadFromPath(path: string): HolographicStore {
     if (!existsSync(path)) return { version: 1, facts: [] }
     const value = JSON.parse(readFileSync(path, 'utf8')) as Partial<HolographicStore>
     if (value.version !== 1 || !Array.isArray(value.facts)) throw new Error(`invalid Holographic fact store: ${path}`)
@@ -238,12 +255,16 @@ export class HolographicProvider implements MemoryProviderAdapter {
     const path = this.path(body)
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
     const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`
-    writeFileSync(temporary, `${JSON.stringify(store, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
-    renameSync(temporary, path)
-    chmodSync(path, 0o600)
+    try {
+      writeFileSync(temporary, `${JSON.stringify(store, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 })
+      renameSync(temporary, path)
+      chmodSync(path, 0o600)
+    } finally {
+      rmSync(temporary, { force: true })
+    }
   }
 
-  private stats(store: HolographicStore): MemorySpaceStats {
+  private stats(store: HolographicStore, path: string): MemorySpaceStats {
     const byCategory: Record<string, number> = {}
     const entityCounts = new Map<string, number>()
     for (const fact of store.facts) {
@@ -255,7 +276,7 @@ export class HolographicProvider implements MemoryProviderAdapter {
       deletedInsights: 0,
       edgeCount: store.facts.reduce((total, fact) => total + fact.entities.length, 0),
       oplogCount: 0,
-      dbSizeBytes: Buffer.byteLength(JSON.stringify(store)),
+      dbSizeBytes: existsSync(path) ? statSync(path).size : 0,
       byCategory,
       topEntities: [...entityCounts].map(([entity, count]) => ({ entity, count })).sort((left, right) => right.count - left.count).slice(0, 20),
     }

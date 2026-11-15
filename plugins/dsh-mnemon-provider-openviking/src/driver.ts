@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import * as providerSdk from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import type { JsonValue } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import type { MemorySpaceAuthority } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import type {
@@ -11,7 +12,7 @@ import type {
   RememberRequest,
   SearchRequest,
 } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
-import { CATEGORIES, type MemoryProviderAdapter, type ProviderBodyStatus as ProviderSpaceStatus, type ProviderMemorySpace, type ProviderSearchResult } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
+import { CATEGORIES, jsonNumber as number, jsonObject as object, jsonString as string, type MemoryProviderAdapter, type ProviderBodyStatus as ProviderSpaceStatus, type ProviderMemorySpace, type ProviderSearchResult } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 
 interface OpenVikingEnvelope {
   status?: string
@@ -32,16 +33,11 @@ interface OpenVikingProviderOptions {
 
 type OpenVikingConnection = OpenVikingSpaceConnection & { discoveryUser?: string }
 
-function object(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : undefined
-}
-
-function string(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined
-}
-
-function number(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+function normalizeBearerHeader(apiKey: unknown): string | undefined {
+  if (typeof providerSdk.bearerAuthHeader === 'function') return providerSdk.bearerAuthHeader(apiKey)
+  if (typeof apiKey !== 'string') return undefined
+  const stripped = apiKey.trim().replace(/^Bearer(?:\s+|$)/iu, '').trim()
+  return stripped === '' ? undefined : `Bearer ${stripped}`
 }
 
 /** The categories Mnemon writes; anything else is stored, and read back, as general. */
@@ -91,7 +87,7 @@ function discoveryUser(connection: MemoryProviderConnection | OpenVikingConnecti
   if (!safeUser(user) || !safeUser(String(connection.account ?? '').trim())) {
     throw new Error('OpenViking user-key discovery requires an explicit account and a safe discovery user')
   }
-  if (String(connection.apiKey ?? '').trim() === '') throw new Error('OpenViking user-key discovery requires a user API key')
+  if (normalizeBearerHeader(connection.apiKey) === undefined) throw new Error('OpenViking user-key discovery requires a user API key')
   return user
 }
 
@@ -440,11 +436,12 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
     options.signal?.addEventListener('abort', relay, { once: true })
     const timer = setTimeout(() => controller.abort(new Error('OpenViking request timed out')), options.timeoutMs ?? this.requestTimeoutMs)
     try {
+      const auth = normalizeBearerHeader(connection.apiKey)
       const response = await this.requestFetch(`${connection.endpoint}${path}`, {
         ...init,
         headers: {
           'Content-Type': 'application/json',
-          ...(connection.apiKey === undefined || connection.apiKey === '' ? {} : { Authorization: `Bearer ${connection.apiKey}` }),
+          ...(auth === undefined ? {} : { Authorization: auth }),
           ...(keyBound || connection.account === undefined || connection.account === '' ? {} : { 'X-OpenViking-Account': String(connection.account) }),
           ...(keyBound || connection.user === undefined || connection.user === '' ? {} : { 'X-OpenViking-User': String(connection.user) }),
           ...(connection.actorPeerId === undefined || connection.actorPeerId === '' ? {} : { 'X-OpenViking-Actor-Peer': String(connection.actorPeerId) }),

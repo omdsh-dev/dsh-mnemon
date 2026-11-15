@@ -251,6 +251,31 @@ describe('Asking every enabled Provider again (#373)', () => {
     expect(service.spaceDirectory().rediscovery).toMatchObject({ running: false, last: { trigger: 'manual' } })
   })
 
+  it('coalesces multiple joiners onto one replacement pass when the starter aborts', async () => {
+    const { service } = setup()
+    const hindsight = upstream('hindsight', [bank('bank-a')])
+    install(service, hindsight)
+    await service.updateProviderService('hindsight', SETTINGS)
+    hindsight.discover.mockClear()
+    let finishFirst!: (value: Array<ReturnType<typeof bank>>) => void
+    hindsight.discover
+      .mockImplementationOnce(() => new Promise(resolve => { finishFirst = resolve }))
+      .mockImplementationOnce(async () => [bank('bank-a'), bank('bank-b')])
+    const starter = new AbortController()
+    const first = service.rediscoverProviders('startup', starter.signal)
+    const second = service.rediscoverProviders('manual')
+    const third = service.rediscoverProviders('manual')
+    await vi.waitFor(() => expect(hindsight.discover).toHaveBeenCalledTimes(1))
+
+    starter.abort(new Error('starter cancelled'))
+    await expect(first).rejects.toThrow('starter cancelled')
+    const [secondOutcome, thirdOutcome] = await Promise.all([second, third])
+    expect(hindsight.discover).toHaveBeenCalledTimes(2)
+    expect(secondOutcome).toEqual(thirdOutcome)
+    finishFirst([bank('bank-a')])
+    await service.dispose()
+  })
+
   it('lets a request that joined a pass stop waiting for it, and leaves the pass running', async () => {
     const { service } = setup()
     const hindsight = upstream('hindsight', [bank('bank-a')])

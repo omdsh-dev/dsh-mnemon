@@ -53,8 +53,28 @@ describe('browser bundle platform boundary', () => {
       }
     }
     expect([...visited].map(file => file.slice(root.length).split(sep).join('/')).sort()).toEqual([
-      'src/host/display-mode.ts', 'src/host/memory-tools.ts', 'src/host/protocol.ts', 'src/host/starter-components.ts', 'src/host/sync-rules.ts', 'src/host/view-protocol.ts',
+      'src/host/display-mode.ts',
+      'src/host/memory-tools.ts',
+      'src/host/protocol.ts',
+      'src/host/protocol/channels.ts',
+      'src/host/protocol/config.ts',
+      'src/host/protocol/memory.ts',
+      'src/host/protocol/pack-sync-review.ts',
+      'src/host/starter-components.ts',
+      'src/host/sync-rules.ts',
+      'src/host/view-protocol.ts',
     ])
+
+    const protocolFiles = [
+      join(root, 'src/host/protocol.ts'),
+      join(root, 'src/host/view-protocol.ts'),
+      ...readdirSync(join(root, 'src/host/protocol'))
+        .filter(name => name.endsWith('.ts'))
+        .map(name => join(root, 'src/host/protocol', name)),
+    ]
+    for (const file of protocolFiles) {
+      expect(readFileSync(file, 'utf8'), file).not.toMatch(/(?:from|import)\s*['"]node:/u)
+    }
   })
 
   it('delegates deployment URLs and transport to the host connection', () => {

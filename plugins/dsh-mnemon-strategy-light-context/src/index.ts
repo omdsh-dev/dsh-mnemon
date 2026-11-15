@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
+import * as sdk from 'dsh-mnemon/extension-sdk'
 import { defineMemoryPlugin, defineMemoryViewExtension, installMemory, defineMemoryStrategyConfiguration, validateMemoryViewExtension } from 'dsh-mnemon/extension-sdk'
 
 export interface Config { maxProjectionCharacters?: number }
@@ -19,7 +20,10 @@ export function createLightContextExtension(config: Config = {}) {
 }
 
 export function apply(ctx: Context, config: Config = {}): void {
-  installMemory(ctx, { plugin: memoryPlugin, strategyExtensions: [createLightContextExtension(config)] })
+  const options = typeof sdk.memoryConfigurationDigest === 'function'
+    ? { effectiveDigest: sdk.memoryConfigurationDigest(config) }
+    : undefined
+  installMemory(ctx, { plugin: memoryPlugin, strategyExtensions: [createLightContextExtension(config)] }, options)
 }
 
 export const memoryStrategyConfiguration = defineMemoryStrategyConfiguration({

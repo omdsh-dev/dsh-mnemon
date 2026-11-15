@@ -1318,7 +1318,7 @@ describe('Mnemon DSH lifecycle integration', () => {
 
     expect(value.lifecycle.snapshot('session-1').current).toMatchObject({
       idleReviewPending: false,
-      reviewActivity: { score: 5, eligible: true },
+      reviewActivity: { score: 0, eligible: false, turnCount: 0 },
     })
     await vi.advanceTimersByTimeAsync(5_000)
     expect(value.coordinator.review).not.toHaveBeenCalled()

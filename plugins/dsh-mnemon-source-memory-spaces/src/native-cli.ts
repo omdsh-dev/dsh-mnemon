@@ -173,6 +173,34 @@ function commonCliPaths(platform: NodeJS.Platform, env: NodeJS.ProcessEnv, home:
   return UNIX_COMMON_CLI_PATHS.map(candidate => expandHome(candidate, home, platform))
 }
 
+const MNEMON_COMMAND_CACHE_TTL_MS = 5_000
+const WINDOWS_CACHE_ENV_KEYS = ['GOBIN', 'GOPATH', 'LOCALAPPDATA', 'ProgramFiles', 'PNPM_HOME', 'APPDATA', 'NVM_SYMLINK'] as const
+
+interface CachedMnemonCommand {
+  found: string | undefined
+  expiresAt: number
+}
+
+const mnemonCommandCache = new Map<string, CachedMnemonCommand>()
+
+export function invalidateMnemonCommandCache(): void {
+  mnemonCommandCache.clear()
+}
+
+function commandCacheKey(
+  cliPath: string | undefined,
+  platform: NodeJS.Platform,
+  env: NodeJS.ProcessEnv,
+  home: string,
+): string {
+  const pathValue = envValue(env, 'PATH', platform) ?? ''
+  const envCliPath = envValue(env, 'MNEMON_CLI_PATH', platform)?.trim() ?? ''
+  const winExtras = platform === 'win32'
+    ? WINDOWS_CACHE_ENV_KEYS.map(name => envValue(env, name, 'win32') ?? '').join('\u0000')
+    : ''
+  return `${platform}\u0000${home}\u0000${cliPath ?? ''}\u0000${envCliPath}\u0000${pathValue}\u0000${winExtras}`
+}
+
 /** Locate the local Mnemon binary without invoking a shell. */
 export function findMnemonCommand(
   config: { cliPath?: string | undefined },
@@ -181,16 +209,33 @@ export function findMnemonCommand(
   const platform = options.platform ?? process.platform
   const env = options.env ?? process.env
   const home = options.home ?? homedir()
+  const customCheck = options.isExecutable !== undefined
   const isExecutable = options.isExecutable ?? (path => isMnemonExecutable(path, platform))
   const paths = pathApi(platform)
+  const pathEntries = (envValue(env, 'PATH', platform) ?? '').split(paths.delimiter).filter(directory => directory !== '')
+  const envPath = envValue(env, 'MNEMON_CLI_PATH', platform)?.trim()
+  const cacheKey = customCheck ? undefined : commandCacheKey(config.cliPath, platform, env, home)
+  const now = Date.now()
+  if (cacheKey !== undefined) {
+    const cached = mnemonCommandCache.get(cacheKey)
+    if (cached !== undefined && now < cached.expiresAt) {
+      if (cached.found !== undefined) {
+        const directExplicit = config.cliPath !== undefined && (config.cliPath.includes('/') || config.cliPath.includes('\\'))
+        if (directExplicit || isMnemonExecutable(cached.found, platform)) return cached.found
+        mnemonCommandCache.delete(cacheKey)
+      } else if ((envPath === undefined || envPath === '') && pathEntries.length > 2) {
+        return undefined
+      }
+    }
+  }
+
   const resolveCommand = (command: string): string | undefined => {
     const expanded = expandHome(command, home, platform)
     // Explicit paths remain authoritative even when missing, so execution
     // reports the configured path instead of silently choosing another CLI.
     if (expanded.includes('/') || expanded.includes('\\')) return expanded
     const names = platform === 'win32' && paths.extname(expanded) === '' ? [`${expanded}.exe`, `${expanded}.cmd`] : [expanded]
-    for (const directory of (envValue(env, 'PATH', platform) ?? '').split(paths.delimiter)) {
-      if (directory === '') continue
+    for (const directory of pathEntries) {
       for (const name of names) {
         const path = paths.join(platform === 'win32' ? directory.replace(/^"(.*)"$/, '$1') : directory, name)
         if (/\.cmd$/i.test(name) && mnemonNpmLauncher(path) === undefined) continue
@@ -199,17 +244,25 @@ export function findMnemonCommand(
     }
     return undefined
   }
-  if (config.cliPath !== undefined) return resolveCommand(config.cliPath)
-  const envPath = envValue(env, 'MNEMON_CLI_PATH', platform)?.trim()
+
+  const remember = (found: string | undefined): string | undefined => {
+    if (cacheKey !== undefined) {
+      if (mnemonCommandCache.size >= 64) mnemonCommandCache.clear()
+      mnemonCommandCache.set(cacheKey, { found, expiresAt: now + MNEMON_COMMAND_CACHE_TTL_MS })
+    }
+    return found
+  }
+
+  if (config.cliPath !== undefined) return remember(resolveCommand(config.cliPath))
   if (envPath !== undefined && envPath !== '') {
     const path = resolveCommand(envPath)
-    if (path !== undefined && isExecutable(path)) return path
+    if (path !== undefined && isExecutable(path)) return remember(path)
   }
   const fromPath = resolveCommand('mnemon')
-  if (fromPath !== undefined) return fromPath
+  if (fromPath !== undefined) return remember(fromPath)
   for (const path of commonCliPaths(platform, env, home)) {
     if (/\.cmd$/i.test(path) && mnemonNpmLauncher(path) === undefined) continue
-    if (isExecutable(path)) return path
+    if (isExecutable(path)) return remember(path)
   }
-  return undefined
+  return remember(undefined)
 }

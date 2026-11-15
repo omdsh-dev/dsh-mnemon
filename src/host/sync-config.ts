@@ -1,12 +1,13 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { isAbsolute, join, resolve } from 'node:path'
+import type { StorageRoot } from './config/index.ts'
 import { removeDisposableDirectory } from './disposable-directory.ts'
+import { writeAtomicJsonSync } from './fs-atomic.ts'
 import {
   MNEMON_SYNC_DEFAULT_AUTHOR_EMAIL, MNEMON_SYNC_DEFAULT_AUTHOR_NAME,
   MNEMON_SYNC_DEFAULT_BRANCH, MNEMON_SYNC_DEFAULT_SUBDIR,
   MNEMON_SYNC_TOKEN_ENV, syncBranchValid, syncDirectoryParts, syncEmailValid, syncRepositoryProblem, type MnemonSyncConfigView,
 } from './protocol.ts'
-import type { StorageRoot } from './storage-root.ts'
 
 // The environment variable that overrides the stored token for one operation
 // and the defaults the settings form shows are declared with the other wire
@@ -171,9 +172,6 @@ export class MnemonSyncSettingsStore {
   }
 
   write(settings: MnemonSyncSettings): void {
-    const directory = this.directory()
-    mkdirSync(directory, { recursive: true, mode: 0o700 })
-    const temporary = join(directory, '.' + MNEMON_SYNC_CONFIG_FILE + '.' + String(process.pid) + '.tmp')
     const file: Record<string, string | number> = {
       branch: settings.branch,
       subdir: settings.subdir,
@@ -183,12 +181,7 @@ export class MnemonSyncSettingsStore {
     }
     if (settings.repoUrl !== undefined) file.repoUrl = settings.repoUrl
     if (settings.token !== undefined) file.token = settings.token
-    try {
-      writeFileSync(temporary, JSON.stringify(file, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 })
-      renameSync(temporary, this.path())
-    } finally {
-      rmSync(temporary, { force: true })
-    }
+    writeAtomicJsonSync(this.path(), file)
   }
 
   /**

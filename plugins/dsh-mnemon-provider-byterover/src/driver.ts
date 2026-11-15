@@ -5,7 +5,7 @@ import type { JsonValue } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import type { MemorySpaceAuthority } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import { runProcess, type ProcessRunner } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import type { Insight, MemoryBody as MemorySpace, MemoryGraphSnapshot, MemoryListRequest, MemoryProviderConnection, RememberRequest, SearchRequest } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
-import { NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter, type ProviderBodyStatus as ProviderSpaceStatus, type ProviderMemorySpace, type ProviderSearchResult } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
+import type { MemoryProviderAdapter, ProviderBodyStatus as ProviderSpaceStatus, ProviderMemorySpace, ProviderSearchResult } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import { resolveByteRoverInvocation } from './cli.ts'
 
 interface ByteRoverProviderOptions {
@@ -16,7 +16,7 @@ interface ByteRoverProviderOptions {
 
 export class ByteRoverProvider implements MemoryProviderAdapter {
   readonly id = 'byterover' as const
-  readonly scoreSemantics = NORMALIZED_RELEVANCE_SCORE
+  readonly scoreSemantics = Object.freeze({ kind: 'provider-native' as const })
   private readonly process: ProcessRunner
   private readonly queryTimeoutMs: number
   private readonly curateTimeoutMs: number
@@ -79,7 +79,9 @@ export class ByteRoverProvider implements MemoryProviderAdapter {
 
   async search(body: MemorySpace, request: SearchRequest, signal?: AbortSignal): Promise<ProviderSearchResult> {
     const output = await this.run(body, ['query', '--', request.query.slice(0, 5_000)], this.queryTimeoutMs, signal)
-    if (output.length < 20) return { results: [], hint: 'ByteRover found no relevant memories.' }
+    if (output.length < 20 || /^no relevant (?:context|memories)\b/iu.test(output)) {
+      return { results: [], hint: 'ByteRover found no relevant memories.' }
+    }
     const content = output.length > 8_000 ? `${output.slice(0, 8_000)}\n\n[... truncated]` : output
     return {
       results: [{
@@ -87,7 +89,6 @@ export class ByteRoverProvider implements MemoryProviderAdapter {
         content,
         category: 'context',
         source: 'external',
-        score: 1,
       }],
     }
   }
@@ -110,6 +111,7 @@ export class ByteRoverProvider implements MemoryProviderAdapter {
 
   async remember(body: MemorySpace, request: RememberRequest, signal?: AbortSignal): Promise<JsonValue> {
     await this.run(body, ['curate', '--', request.content], this.curateTimeoutMs, signal)
+    this.invalidateStatus(body.id)
     return { action: 'stored', provider: this.id, summary: 'ByteRover curated the memory into its knowledge tree.' }
   }
 

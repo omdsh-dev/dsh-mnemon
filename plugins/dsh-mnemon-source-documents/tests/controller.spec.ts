@@ -42,7 +42,10 @@ describe('Mnemon Documents control plane', () => {
     expect((await controller.search('live-sentinel', { allowedIds: [last.id] })).results[0]?.content).toBe('External changed content live-sentinel')
     expect((await controller.search('storage schema', { allowedIds: [] })).results).toEqual([])
     rmSync(join(controller.workspaceRoot, last.relativePath))
-    // A broken eligible file must still fail even if it would rank below the limit.
+    // Missing files (ENOENT) skip cleanly so one disappeared active file does not break search.
+    expect((await controller.search('storage schema', { limit: 1 })).results[0]?.id).toBe(original[0]!.id)
+    // Non-ENOENT broken eligible files still fail even if they would rank below the limit.
+    mkdirSync(join(controller.workspaceRoot, last.relativePath))
     await expect(controller.search('storage schema', { limit: 1 })).rejects.toThrow()
     expect((await controller.search('storage schema', { allowedIds: [original[0]!.id] })).results[0]?.id).toBe(original[0]!.id)
   })
@@ -190,12 +193,26 @@ describe('Mnemon Documents control plane', () => {
     await expect(controller.search('Old', { includeArchived: true })).resolves.toMatchObject({ total: 1 })
   })
 
-  it('preserves the active copy when an archive races a document revision', async () => {
+  it('preserves the active copy when an archive races a document revision or index persistence fails', async () => {
     const controller = new DocumentController(workspace())
     const created = await controller.mutate({ action: 'create', title: 'Concurrency', content: 'Revision one.' })
     await controller.mutate({ action: 'update', id: created.document.id, content: 'Revision two.' })
     await expect(controller.archive(created.document.id, created.document.revision, { summary: 'stale', memoryBodyIds: [] })).rejects.toBeInstanceOf(DocumentConflictError)
     expect(controller.get(created.document.id)).toMatchObject({ status: 'active', content: 'Revision two.' })
+
+    const activePath = join(controller.workspaceRoot, created.document.relativePath)
+    const activeBytesBefore = readFileSync(activePath)
+    const internal = controller as unknown as { atomicWrite(path: string, content: string): void }
+    const atomicWrite = internal.atomicWrite.bind(controller)
+    const failure = vi.spyOn(internal, 'atomicWrite').mockImplementation((path, content) => {
+      if (path === controller.indexPath) throw new Error('injected archive index failure')
+      atomicWrite(path, content)
+    })
+    await expect(controller.archive(created.document.id, 2, { summary: 'Attempted archive', memoryBodyIds: [] })).rejects.toThrow('injected archive index failure')
+    failure.mockRestore()
+    expect(readFileSync(activePath)).toEqual(activeBytesBefore)
+    expect(existsSync(join(controller.archivedDirectory, created.document.filename))).toBe(false)
+    expect(controller.get(created.document.id)).toMatchObject({ status: 'active', revision: 2, content: 'Revision two.' })
   })
 
   it('rejects source traversal and resolves one controller per workspace', async () => {

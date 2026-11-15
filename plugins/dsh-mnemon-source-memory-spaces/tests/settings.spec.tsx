@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { MemoryComponentConfigurationSnapshot, MemoryComponentHost } from 'dsh-mnemon/client'
 import type { MemoryProviderConfigField, MemoryProviderDescriptor } from '../src/contracts.ts'
-import { descriptor as openviking } from 'dsh-mnemon-provider-openviking'
+import { openvikingDescriptor as openviking } from './providers.ts'
 
 // Load the installed Core's actual DSH browser artifact; no repository source alias.
 const { artifact } = vi.hoisted(() => ({ artifact: async () => {

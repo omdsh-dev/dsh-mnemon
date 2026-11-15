@@ -13,6 +13,7 @@ import {
   RUNTIME_MEMORY_LIMIT_MAX_BYTES,
   RUNTIME_MEMORY_LIMITS,
   RUNTIME_PROJECTION_FILES,
+  parseRuntimeBranches,
   runtimeBytes,
   runtimeProjection,
   summarizeRuntimeMemories,
@@ -44,8 +45,13 @@ function fixture(now = new Date('2026-08-13T08:00:00.000Z')): { directory: strin
 describe('RuntimeMemoryController', () => {
   it('preserves importance through a separate USER.md store, plans and compaction (#469)', async () => {
     const { directory } = fixture()
-    const controller = new RuntimeMemoryController({ effectiveDataDir: () => directory }, undefined, undefined,
+    const workspaceDir = join(directory, 'workspace')
+    const controller = new RuntimeMemoryController({ effectiveDataDir: () => workspaceDir }, undefined, undefined,
       { effectiveDataDir: () => join(directory, 'profile') })
+    expect(existsSync(join(workspaceDir, 'runtime', 'USER.md'))).toBe(false)
+    expect(existsSync(join(directory, 'profile', 'runtime', 'USER.md'))).toBe(true)
+    controller.contextProjection()
+    expect(existsSync(join(workspaceDir, 'runtime', 'USER.md'))).toBe(false)
     await controller.mutate({ action: 'add', target: 'user', content: 'Keep the original rule', importance: 'critical' })
     const request = { action: 'replace' as const, target: 'user' as const, oldText: 'Keep the original rule', content: 'Correct the rule', importance: 'normal' as const }
     const plan = await controller.planMaintenance(request, { preserveImportance: true })
@@ -837,6 +843,10 @@ describe('RuntimeMemoryController branch scoping', () => {
       content: 'too many branches',
       branches: Array.from({ length: 17 }, (_, index) => `b${index}`),
     })).rejects.toThrow(/at most/)
+    expect(parseRuntimeBranches(['main', 'feature/deep'])).toEqual(['main', 'feature/deep'])
+    for (const bad of [...invalid.map(name => [name]), ['-'], ['-flag'], ['a//b'], ['a', 'a'], Array.from({ length: 17 }, (_, index) => `b${index}`)]) {
+      expect(parseRuntimeBranches(bad)).toBeUndefined()
+    }
     expect(readFileSync(controller.sourcePath, 'utf8')).toBe(before)
   })
 

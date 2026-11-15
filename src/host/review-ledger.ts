@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import type { StorageRoot } from './storage-root.ts'
+import type { StorageRoot } from './config/index.ts'
+import { writeAtomicJsonSync } from './fs-atomic.ts'
 import type { MnemonReviewEntry, MnemonReviewLedgerView, MnemonReviewOpinion, MnemonReviewStatus } from './protocol.ts'
 
 export const MNEMON_REVIEW_DIRECTORY = 'state'
@@ -9,6 +10,7 @@ export const MNEMON_REVIEW_FILE = 'review-ledger.json'
 /** The ledger is a worklist, not an archive: the oldest decided proposals fall off first. */
 const MAX_REVIEW_ENTRIES = 200
 const MAX_REVIEW_TEXT = 4_000
+const LOCK_STALE_MS = 30_000
 const STATUSES: readonly MnemonReviewStatus[] = ['pending', 'accepted', 'rejected']
 
 interface LedgerFile {
@@ -76,8 +78,11 @@ function parseEntry(value: unknown): MnemonReviewEntry | undefined {
  */
 export class MnemonReviewLedger {
   private readonly root: string
+  private readonly runner: Pick<StorageRoot, 'effectiveDataDir'> & Partial<Pick<StorageRoot, 'withExclusive'>>
+  private queue: Promise<unknown> = Promise.resolve()
 
-  constructor(runner: Pick<StorageRoot, 'effectiveDataDir'>) {
+  constructor(runner: Pick<StorageRoot, 'effectiveDataDir'> & Partial<Pick<StorageRoot, 'withExclusive'>>) {
+    this.runner = runner
     this.root = resolve(runner.effectiveDataDir())
   }
 
@@ -87,6 +92,14 @@ export class MnemonReviewLedger {
 
   path(): string {
     return join(this.directory(), MNEMON_REVIEW_FILE)
+  }
+
+  /** Serialize async review mutations across concurrent RPC callers and storage locks. */
+  withExclusive<T>(operation: () => T | Promise<T>): Promise<T> {
+    const run = () => (this.runner.withExclusive !== undefined ? this.runner.withExclusive(operation) : Promise.resolve().then(operation))
+    const next = this.queue.then(run)
+    this.queue = next.then(() => {}, () => {})
+    return next
   }
 
   list(): MnemonReviewEntry[] {
@@ -110,21 +123,23 @@ export class MnemonReviewLedger {
 
   /** One proposal from one reconciliation run. Every run is kept, even when it finds nothing. */
   create(input: { title: string; summary: string; machine: { id: string; label: string }; foreignMachines: string[]; operations: MnemonReviewEntry['operations'] }): MnemonReviewEntry {
-    const at = new Date().toISOString()
-    const entry: MnemonReviewEntry = {
-      id: randomUUID(),
-      createdAt: at,
-      updatedAt: at,
-      status: 'pending',
-      title: text(input.title, 200),
-      summary: text(input.summary),
-      machine: { id: text(input.machine.id, 120), label: text(input.machine.label, 200) },
-      foreignMachines: strings(input.foreignMachines, 32),
-      operations: input.operations,
-      opinions: [],
-    }
-    this.save([entry, ...this.list()])
-    return entry
+    return this.withFileLock(() => {
+      const at = new Date().toISOString()
+      const entry: MnemonReviewEntry = {
+        id: randomUUID(),
+        createdAt: at,
+        updatedAt: at,
+        status: 'pending',
+        title: text(input.title, 200),
+        summary: text(input.summary),
+        machine: { id: text(input.machine.id, 120), label: text(input.machine.label, 200) },
+        foreignMachines: strings(input.foreignMachines, 32),
+        operations: input.operations,
+        opinions: [],
+      }
+      this.save([entry, ...this.list()])
+      return entry
+    })
   }
 
   /** An opinion never decides anything by itself; it is what a reviewer thinks. */
@@ -173,13 +188,39 @@ export class MnemonReviewLedger {
   }
 
   private update(id: string, change: (entry: MnemonReviewEntry) => MnemonReviewEntry): MnemonReviewEntry {
-    const entries = this.list()
-    const index = entries.findIndex(entry => entry.id === id)
-    if (index < 0) throw new Error('unknown review entry: ' + id)
-    const next = { ...change(entries[index]!), updatedAt: new Date().toISOString() }
-    entries[index] = next
-    this.save(entries)
-    return next
+    return this.withFileLock(() => {
+      const entries = this.list()
+      const index = entries.findIndex(entry => entry.id === id)
+      if (index < 0) throw new Error('unknown review entry: ' + id)
+      const next = { ...change(entries[index]!), updatedAt: new Date().toISOString() }
+      entries[index] = next
+      this.save(entries)
+      return next
+    })
+  }
+
+  private withFileLock<T>(operation: () => T): T {
+    mkdirSync(this.directory(), { recursive: true, mode: 0o700 })
+    const lock = `${this.path()}.lock`
+    let acquired = false
+    for (let attempt = 0; attempt < 64; attempt += 1) {
+      try {
+        mkdirSync(lock, { mode: 0o700 })
+        acquired = true
+        break
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+        try {
+          if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) rmdirSync(lock)
+        } catch {}
+      }
+    }
+    if (!acquired) throw new Error('review ledger is busy: ' + this.path())
+    try {
+      return operation()
+    } finally {
+      try { rmdirSync(lock) } catch {}
+    }
   }
 
   private read(): LedgerFile {
@@ -195,13 +236,6 @@ export class MnemonReviewLedger {
       ...entries.filter(entry => entry.status === 'pending'),
       ...entries.filter(entry => entry.status !== 'pending'),
     ].slice(0, MAX_REVIEW_ENTRIES)
-    mkdirSync(this.directory(), { recursive: true, mode: 0o700 })
-    const temporary = `${this.path()}.${process.pid}-${randomUUID()}.tmp`
-    try {
-      writeFileSync(temporary, `${JSON.stringify({ version: 1, entries: kept }, null, 2)}\n`, { mode: 0o600 })
-      renameSync(temporary, this.path())
-    } finally {
-      rmSync(temporary, { force: true })
-    }
+    writeAtomicJsonSync(this.path(), { version: 1, entries: kept })
   }
 }

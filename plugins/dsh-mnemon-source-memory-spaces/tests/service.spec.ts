@@ -12,7 +12,6 @@ import { createRunner } from '../src/runner.ts'
 import { mutationResultCompletion, mutationResultCommitted, type MemorySpacesService } from '../src/service.ts'
 import type { RecallQualityConfig } from '../src/contracts.ts'
 import type { MnemonRunner } from '../src/runner.ts'
-import { parseMemoryGraph } from 'dsh-mnemon-provider-mnemon-native'
 import { createService } from './providers.ts'
 import { RecallQualityPolicyRegistry, STRICT_RECALL_QUALITY_POLICY, type RecallQualityPolicy } from '../src/recall-quality/index.ts'
 
@@ -1088,8 +1087,14 @@ describe('MemorySpacesService', () => {
     expect(process).toHaveBeenCalledWith(FAKE_CLI, expect.arrayContaining(['--intent', 'ENTITY', '--limit', '50', '--verbose']), expect.anything())
   })
 
-  it('rejects malformed visualization output', () => {
-    expect(() => parseMemoryGraph('<html />')).toThrow('unexpected HTML')
+  it('rejects malformed visualization output', async () => {
+    const { service, process } = fixture()
+    process.mockImplementationOnce(async (_command, args) => args.includes('viz')
+      ? { stdout: '<html />', stderr: '', exitCode: 0 }
+      : { stdout: '[]', stderr: '', exitCode: 0 })
+    await expect(service.graph(undefined, ['work'])).resolves.toMatchObject({
+      sources: [{ memoryBodyId: 'work', status: 'unavailable', hint: expect.stringContaining('unexpected HTML') }],
+    })
   })
 
   it('normalizes the nested recall rows returned by Mnemon 0.1.2', async () => {

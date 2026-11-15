@@ -630,19 +630,24 @@ export function createReviewHandler(input: LiveMnemonRuntime, lifecycle?: Mnemon
   return async (endpoint, rawPayload, signal) => {
     try {
       const payload = object(rawPayload)
-      const ledger = input.reviews
+      const runtime = scoped(input, payload, lifecycle)
+      const ledger = runtime.graph.reviews
       if (endpoint === 'view') return success(ledger.view())
+      if (endpoint !== 'opinion' && endpoint !== 'decide' && endpoint !== 'reopen' && endpoint !== 'reconcile' && endpoint !== 'apply') {
+        return badRequest('unknown review endpoint: ' + endpoint)
+      }
+      requireWritable(runtime)
       if (endpoint === 'opinion') {
         const author = payload.author === 'agent' ? 'agent' : 'user'
-        return success(ledger.addOpinion(String(payload.id ?? ''), author, String(payload.text ?? '')))
+        return success(await ledger.withExclusive(() => ledger.addOpinion(String(payload.id ?? ''), author, String(payload.text ?? ''))))
       }
       if (endpoint === 'decide') {
         const status = payload.status === 'rejected' ? 'rejected' : 'accepted'
-        return success(ledger.decide(String(payload.id ?? ''), status))
+        return success(await ledger.withExclusive(() => ledger.decide(String(payload.id ?? ''), status)))
       }
-      if (endpoint === 'reopen') return success(ledger.reopen(String(payload.id ?? '')))
-      const runtime = scoped(input, payload, lifecycle)
-      requireWritable(runtime)
+      if (endpoint === 'reopen') {
+        return success(await ledger.withExclusive(() => ledger.reopen(String(payload.id ?? ''))))
+      }
       if (endpoint === 'reconcile') {
         if (lifecycle === undefined) throw new Error('Mnemon memory reconciliation is unavailable')
         // The reviewer's words shape the plan and never widen it: what an operation may
@@ -651,16 +656,11 @@ export function createReviewHandler(input: LiveMnemonRuntime, lifecycle?: Mnemon
         if (guidance !== undefined && typeof guidance !== 'string') throw new Error('the reconciliation guidance must be a string')
         return success(await lifecycle.reconcile(runtime.graph, runtime.scope, signal ?? new AbortController().signal, guidance === undefined ? {} : { guidance }))
       }
-      if (endpoint === 'apply') {
-        if (lifecycle === undefined) throw new Error('Mnemon memory reconciliation is unavailable')
+      if (lifecycle === undefined) throw new Error('Mnemon memory reconciliation is unavailable')
+      const appliedResult = await ledger.withExclusive(async () => {
         const entry = ledger.get(String(payload.id ?? ''))
         if (entry === undefined) throw new Error('unknown review entry: ' + String(payload.id ?? ''))
         if (entry.status !== 'accepted') throw new Error('accept the review before applying it: ' + entry.id)
-        requireCapability(runtime, 'runtime', 'write')
-        const sessions: MnemonReconcileSessions = {
-          runtime: runtime.source('runtime'),
-          documents: runtime.source('documents'),
-        }
         // Omitted means every operation, which is what a caller that predates partial
         // application sends. An index the plan does not hold is refused rather than
         // dropped, because a caller that believes it applied the whole review must not
@@ -677,14 +677,25 @@ export function createReviewHandler(input: LiveMnemonRuntime, lifecycle?: Mnemon
         if (pending.length === 0) {
           throw new Error('every operation in this review has already run: ' + entry.id)
         }
+        const selectedOps = pending.map(index => entry.operations[index]!)
+        if (selectedOps.some(operation => operation.kind !== 'document-archive')) {
+          requireCapability(runtime, 'runtime', 'write')
+        }
+        if (selectedOps.some(operation => operation.kind === 'document-archive')) {
+          requireCapability(runtime, 'documents', 'archive')
+        }
+        const sessions: MnemonReconcileSessions = {
+          runtime: runtime.source('runtime'),
+          documents: runtime.source('documents'),
+        }
         const outcome = await applyReconcileOperations(entry.operations, sourceApplier(sessions), signal ?? new AbortController().signal, pending)
         const failure = outcome.failures.length === 0 ? undefined : outcome.failures.join('; ')
         const applied = ledger.applied(entry.id, failure, pending.slice(0, outcome.applied))
         if (failure !== undefined) throw new Error(failure)
-        if ((await catalog(runtime)).sources.some(source => source.sourceTypeId === 'memory-spaces')) await runtime.source('memory-spaces').mutate('reload', {})
-        return success({ entry: applied, applied: outcome.applied, failures: outcome.failures })
-      }
-      return badRequest('unknown review endpoint: ' + endpoint)
+        return { entry: applied, applied: outcome.applied, failures: outcome.failures }
+      })
+      if ((await catalog(runtime)).sources.some(source => source.sourceTypeId === 'memory-spaces')) await runtime.source('memory-spaces').mutate('reload', {})
+      return success(appliedResult)
     } catch (error) { return failure(error) }
   }
 }
