@@ -9,6 +9,7 @@ import { message } from './page-kit.tsx'
 import { SettingRow } from './settings-controls.tsx'
 
 export interface MnemonReviewSectionProps {
+  client?: MnemonClient
   connection?: ClientConnectionHandle
   sessionId?: string
   workspaceId?: string
@@ -66,8 +67,8 @@ function stamp(value: string): string {
 export function MnemonReviewSection(props: MnemonReviewSectionProps): JSX.Element {
   const { t } = props
   const client = useMemo(
-    () => props.connection === undefined ? null : new MnemonClient(props.connection, props.sessionId, props.workspaceId),
-    [props.connection, props.sessionId, props.workspaceId],
+    () => props.client ?? (props.connection === undefined ? null : new MnemonClient(props.connection, props.sessionId, props.workspaceId)),
+    [props.client, props.connection, props.sessionId, props.workspaceId],
   )
   const [ledger, setLedger] = useState<MnemonReviewLedgerView | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)

@@ -84,6 +84,10 @@
   padding: 10px 24px 4px;
   background: var(--mn-surface);
 }
+/* Collapsed macOS sidebar leaves traffic-light controls over the main column's leading edge. */
+.masthead[data-window-drag] {
+  padding-left: calc(24px + var(--dsh-frame-leading-clearance, 0px));
+}
 
 .backButton {
   display: inline-flex;
@@ -466,6 +470,7 @@
   .sourceManagementSummary { grid-template-columns: 1fr; }
   .sourceManagementSummary dl, .sourceManagementCapabilities { grid-column: auto; }
   .masthead { padding: 8px 16px 2px; }
+  .masthead[data-window-drag] { padding-left: calc(16px + var(--dsh-frame-leading-clearance, 0px)); }
   .alert, .notice { margin-inline: 16px; }
   .topNavigation { padding: 0 16px; }
   .workspacePicker > [data-part='label'] { display: none; }
@@ -557,6 +562,7 @@
 /* Use the panel width: a narrow desktop sidebar needs the same chrome as a phone. */
 @container mnemon-workbench (max-width: 520px) {
   .masthead { min-height: 0; flex-wrap: wrap; gap: 4px 8px; padding: 8px 16px 2px; }
+  .masthead[data-window-drag] { padding-left: calc(16px + var(--dsh-frame-leading-clearance, 0px)); }
   .shell .brand { display: contents; }
   .brand h1 { min-width: 0; flex: 1 1 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .backButton > span, .storageMode { display: none; }

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { MnemonClient } from '../src/client/api.ts'
+import { bindConnectionRemoteAccess } from '../src/client/remote-rpc.ts'
 import { MnemonSettingsScope } from '../src/client/settings.ts'
 import type { InteractionConfig } from '../src/host/config.ts'
 import { hasNativeDirectoryPicker } from '../src/host/directory-picker.ts'
@@ -275,6 +276,47 @@ describe('MnemonClient product transport', () => {
 
     await expect(client.taskAgentModels(false)).resolves.toEqual(catalog)
     expect(call).toHaveBeenCalledWith(expect.any(String), 'task-agent-models', { includeCatalog: false, sessionId: 'session-9', workspaceId: 'workspace-2' })
+  })
+
+  it('consults DSH 0.2.1+ ctx.remoteAccess capability state before legacy transport inspection', async () => {
+    const call = vi.fn(async (_channel: string, _endpoint: string) => ({
+      ok: true as const,
+      value: { ok: true as const, value: { healthy: true }, healthy: true },
+    }))
+    const connection = { isLoopback: false, rpc: { call } } as ClientConnectionHandle
+    const unbindOwner = bindConnectionRemoteAccess(connection, { state: { snapshot: { kind: 'owner' } } })
+    const client = new MnemonClient(connection)
+
+    await client.statusSummary()
+    expect(call).toHaveBeenLastCalledWith(MNEMON_READ_CHANNEL, 'status-summary', {})
+    unbindOwner()
+
+    const unbindGranted = bindConnectionRemoteAccess(connection, { state: { snapshot: { kind: 'granted' } } })
+    await client.statusSummary()
+    expect(call).toHaveBeenLastCalledWith('/api', 'dshMnemon/read', { args: { endpoint: 'status-summary', payload: {} } })
+    unbindGranted()
+  })
+
+  it('caps turnActivityCache to 32 sessions with LRU eviction', async () => {
+    const call = vi.fn(async () => ({
+      ok: true as const,
+      value: {
+        cursor: 5,
+        activities: [{ turn: 1, count: 1, names: ['mnemon_recall'], recalls: 1, writes: 0, documentSearches: 0, inspections: 0, failures: 0 }],
+      },
+    }))
+    const connection = { rpc: { call }, isLoopback: true } as ClientConnectionHandle
+    for (let index = 0; index < 33; index += 1) {
+      await new MnemonClient(connection, `session-${index}`).turnActivity(1, 5)
+    }
+    expect(call).toHaveBeenCalledTimes(33)
+
+    // session-32 (most recent) is still cached; session-0 (oldest beyond 32) was evicted.
+    await new MnemonClient(connection, 'session-32').turnActivity(1, 5)
+    expect(call).toHaveBeenCalledTimes(33)
+
+    await new MnemonClient(connection, 'session-0').turnActivity(1, 5)
+    expect(call).toHaveBeenCalledTimes(34)
   })
 })
 

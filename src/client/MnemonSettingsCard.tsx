@@ -73,6 +73,21 @@ const NO_COMPONENT_LIST: Pick<MnemonComponentListSeat, 'subscribe' | 'getSnapsho
  * Typed values wait for their group's Apply; the storage location waits too,
  * because it moves where every component reads and writes.
  */
+function dataRelevantConfigKey(status: 'loading' | 'ready' | 'unavailable', value: Config | undefined): string {
+  if (status === 'loading') return 'loading'
+  if (status === 'unavailable') return 'unavailable'
+  const record = value as (Config & { memoryView?: unknown }) | undefined
+  return JSON.stringify([
+    record?.storageScope ?? null,
+    record?.dataDir ?? null,
+    record?.customPackId ?? null,
+    record?.customPacks ?? null,
+    record?.excludedWorkspaces ?? null,
+    record?.memoryTopology ?? null,
+    record?.memoryView ?? null,
+  ])
+}
+
 export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractionScope, connection, directoryPicker, sessionId, workspaceId, workspaceLabel, t = translateZh, language = 'zh', componentChanges = NO_CHANGE_SIGNAL, componentSettings, component, componentList = NO_COMPONENT_LIST }: MnemonSettingsCardProps): JSX.Element | null {
   const interactionScope = suppliedInteractionScope ?? scope as unknown as ClientSettingsScope<InteractionConfig>
   const coreSnapshot = useScope(scope)
@@ -82,12 +97,17 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   const componentRevision = useSyncExternalStore(componentChanges.subscribe, componentChanges.getSnapshot, componentChanges.getSnapshot)
   // DSH 0.2.0 and earlier list the Starter's grouping row below, always off; DSH 0.2.1 lists only the components.
   const groupRowListed = useSyncExternalStore(componentList.subscribe, componentList.getSnapshot, componentList.getSnapshot) === true
-  // Every term only grows, so the sum changes whenever any one does. The
-  // settings revision covers saves to the same Host entry from another page
-  // or window, which the View revision includes.
-  const dataRevision = targetRevision + componentRevision + (coreSnapshot.revision ?? 0)
-  const viewClient = useMemo(() => connection === undefined ? undefined : new MnemonClient(connection, sessionId, workspaceId), [connection, sessionId, workspaceId])
-  const view = useViewStore(viewClient, dataRevision)
+  // Key data-layer RPC refreshes only on storage and topology fields so UI-only
+  // toggles (displayMode, syncEnabled, conversation interaction) do not trigger
+  // redundant dashboard, memory-system, and pack-target round-trips.
+  const dataConfigKey = dataRelevantConfigKey(coreSnapshot.status, coreSnapshot.value)
+  const seenDataConfig = useRef({ key: dataConfigKey, revision: 0 })
+  if (seenDataConfig.current.key !== dataConfigKey) {
+    seenDataConfig.current = { key: dataConfigKey, revision: seenDataConfig.current.revision + 1 }
+  }
+  const dataRevision = targetRevision + componentRevision + seenDataConfig.current.revision
+  const sharedClient = useMemo(() => connection === undefined ? undefined : new MnemonClient(connection, sessionId, workspaceId), [connection, sessionId, workspaceId])
+  const view = useViewStore(sharedClient, dataRevision)
   const pages = usePageTrail()
   // A page elsewhere asked for one component's settings, such as 技能管理's gear: open its page here.
   const entries = view.state.dashboard?.entries
@@ -113,12 +133,12 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   const root = useRef<HTMLElement | null>(null)
   const feedbackToast = useViewFeedback(view, root, t, language)
   const [memorySystem, setMemorySystem] = useState<MemoryCompositionStatus | null>(null)
-  const [memorySystemState, setMemorySystemState] = useState<'unavailable' | 'loading' | 'ready' | 'error'>(connection === undefined ? 'unavailable' : 'loading')
+  const [memorySystemState, setMemorySystemState] = useState<'unavailable' | 'loading' | 'ready' | 'error'>(sharedClient === undefined ? 'unavailable' : 'loading')
   const topologyRequest = useRef(0)
-  const { target } = usePackTarget(connection, sessionId, workspaceId, dataRevision)
+  const { target } = usePackTarget(connection, sessionId, workspaceId, dataRevision, sharedClient)
 
   useEffect(() => {
-    if (connection === undefined) {
+    if (sharedClient === undefined) {
       topologyRequest.current += 1
       setMemorySystem(null)
       setMemorySystemState('unavailable')
@@ -127,7 +147,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
     const request = topologyRequest.current + 1
     topologyRequest.current = request
     setMemorySystemState('loading')
-    void new MnemonClient(connection, sessionId, workspaceId).memorySystem().then(descriptor => {
+    void sharedClient.memorySystem().then(descriptor => {
       if (topologyRequest.current !== request) return
       setMemorySystem(descriptor)
       setMemorySystemState('ready')
@@ -137,7 +157,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
       setMemorySystemState('error')
     })
     return () => { topologyRequest.current += 1 }
-  }, [connection, sessionId, workspaceId, dataRevision])
+  }, [sharedClient, dataRevision])
 
   const coreUser = useMemo(() => isRecord(coreSnapshot.user) ? coreSnapshot.user : {}, [coreSnapshot.user])
   const loading = coreSnapshot.status === 'loading' || interactionSnapshot.status === 'loading'
@@ -187,6 +207,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
           pages={pages} {...(settingsRenderer === undefined ? {} : { componentSettings: settingsRenderer })} />
 
         <MnemonStorageSection scope={scope} value={coreSnapshot.value} user={coreUser} disabled={coreDisabled} dashboard={view.state.dashboard} target={target}
+          {...(sharedClient === undefined ? {} : { client: sharedClient })}
           {...(directoryPicker === undefined ? {} : { directoryPicker })}
           {...(connection === undefined ? {} : { connection })} {...(sessionId === undefined ? {} : { sessionId })} {...(workspaceId === undefined ? {} : { workspaceId })}
           language={language} t={t} onOpen={entry => pages.open(entry.entryId, 'configuration')} onSaved={() => setTargetRevision(revision => revision + 1)}

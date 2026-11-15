@@ -1,6 +1,6 @@
 import { css, useT } from './presentation.ts'
 import type { JSX } from 'react'
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { normalizeEntityKey, type MemorySpaceView, type MemoryGraphNode, type MemoryGraphSnapshot } from '../contracts.ts'
 import { type MnemonTranslate, short } from 'dsh-mnemon/client'
 import { categoryLabel } from './widgets.tsx'
@@ -264,7 +264,27 @@ function graphPoint(svg: SVGSVGElement, clientX: number, clientY: number): Graph
   return clampGraphPosition({ x: (clientX - bounds.left) * GRAPH_WIDTH / width, y: (clientY - bounds.top) * GRAPH_HEIGHT / height })
 }
 
-export function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: string | undefined; onSelect: (node: MemoryGraphNode) => void; onClearSelection?: () => void; quiet?: boolean; onQuietChange?: (quiet: boolean) => void }): JSX.Element {
+function positionsMatch(current: GraphPositions, target: GraphPositions): boolean {
+  if (current === target) return true
+  if (current.size !== target.size) return false
+  for (const [id, destination] of target) {
+    const origin = current.get(id)
+    if (origin === undefined) return false
+    if (Math.abs(origin.x - destination.x) > 0.01 || Math.abs(origin.y - destination.y) > 0.01) return false
+  }
+  return true
+}
+
+export interface MemoryGraphProps {
+  graph: MemoryGraphSnapshot
+  selectedId?: string | undefined
+  onSelect: (node: MemoryGraphNode) => void
+  onClearSelection?: () => void
+  quiet?: boolean
+  onQuietChange?: (quiet: boolean) => void
+}
+
+export const MemoryGraph = memo(function MemoryGraph(props: MemoryGraphProps): JSX.Element {
   const t = useT()
   const visibleNodes = useMemo(() => {
     const spaces = props.graph.nodes.filter(node => graphNodeKind(node) === 'space')
@@ -305,11 +325,16 @@ export function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: st
       return { edge, offset: (groupIndex - (group.length - 1) / 2) * 12 }
     })
   }, [edges])
-  const layoutKey = `${visibleNodes.map(node => `${graphNodeKey(node)}:${graphNodeKind(node)}:${node.category ?? 'general'}`).join('|')}::${edges.map(edge => `${edge.sourceId}>${edge.targetId}:${edge.type ?? 'temporal'}`).join('|')}`
+  const layoutKey = useMemo(
+    () => `${visibleNodes.map(node => `${graphNodeKey(node)}:${graphNodeKind(node)}:${node.category ?? 'general'}`).join('|')}::${edges.map(edge => `${edge.sourceId}>${edge.targetId}:${edge.type ?? 'temporal'}`).join('|')}`,
+    [visibleNodes, edges],
+  )
   const naturalLayout = useMemo(() => naturalGraphPositions(visibleNodes, edges), [layoutKey])
+  const uniformLayout = useMemo(() => uniformGraphPositions(visibleNodes), [visibleNodes])
   const [positions, setPositions] = useState<GraphPositions>(() => naturalLayout)
   const [layoutMode, setLayoutMode] = useState<GraphLayoutMode>('natural')
   const positionsRef = useRef(positions)
+  const appliedLayoutKeyRef = useRef(layoutKey)
   const animationRef = useRef<number | null>(null)
   const dragRef = useRef<{ nodeId: string; pointerId: number; startX: number; startY: number; moved: boolean } | null>(null)
 
@@ -326,7 +351,10 @@ export function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: st
   const animateTo = useCallback((target: GraphPositions, mode: Exclude<GraphLayoutMode, 'custom'>) => {
     cancelAnimation()
     setLayoutMode(mode)
-    if (typeof window.requestAnimationFrame !== 'function') { commitPositions(target); return }
+    if (positionsMatch(positionsRef.current, target) || typeof window.requestAnimationFrame !== 'function') {
+      if (positionsRef.current !== target) commitPositions(target)
+      return
+    }
     const start = new Map(positionsRef.current)
     const startedAt = performance.now()
     const tick = (time: number) => {
@@ -344,7 +372,11 @@ export function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: st
     animationRef.current = window.requestAnimationFrame(tick)
   }, [cancelAnimation, commitPositions])
 
-  useEffect(() => { animateTo(naturalLayout, 'natural') }, [layoutKey])
+  useEffect(() => {
+    if (appliedLayoutKeyRef.current === layoutKey && positionsMatch(positionsRef.current, naturalLayout)) return
+    appliedLayoutKeyRef.current = layoutKey
+    animateTo(naturalLayout, 'natural')
+  }, [animateTo, layoutKey, naturalLayout])
   useEffect(() => () => cancelAnimation(), [cancelAnimation])
 
   const beginDrag = (event: ReactPointerEvent<SVGGElement>, nodeId: string) => {
@@ -398,8 +430,8 @@ export function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: st
       <div className={css.graphCanvasControls} role="toolbar" aria-label={t('graph.layoutAria')}>
         <span role="status" aria-label={t('graph.layoutStatus', { layout: layoutLabel })}><i />{t('graph.draggable', { layout: layoutLabel })}</span>
         {props.onQuietChange !== undefined && <button type="button" aria-pressed={props.quiet === true} data-active={props.quiet || undefined} title={t('graph.quietHint')} onClick={() => props.onQuietChange?.(!props.quiet)}>{t('graph.quietAction')}</button>}
-        <button type="button" data-active={layoutMode === 'natural' || undefined} onClick={() => animateTo(naturalGraphPositions(visibleNodes, edges), 'natural')}>{t('graph.naturalAction')}</button>
-        <button type="button" data-active={layoutMode === 'uniform' || undefined} onClick={() => animateTo(uniformGraphPositions(visibleNodes), 'uniform')}>{t('graph.uniformAction')}</button>
+        <button type="button" data-active={layoutMode === 'natural' || undefined} onClick={() => animateTo(naturalLayout, 'natural')}>{t('graph.naturalAction')}</button>
+        <button type="button" data-active={layoutMode === 'uniform' || undefined} onClick={() => animateTo(uniformLayout, 'uniform')}>{t('graph.uniformAction')}</button>
       </div>
       <svg className={css.graphSvg} viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`} role="img" data-quiet={props.quiet || undefined} data-layout={layoutMode} data-density={visibleNodes.length <= 12 ? 'sparse' : 'dense'} aria-label={t('graph.aria', { nodes: props.graph.nodes.length, edges: props.graph.edges.length })}
         onClick={() => { if (props.quiet) props.onClearSelection?.() }}
@@ -458,4 +490,4 @@ export function MemoryGraph(props: { graph: MemoryGraphSnapshot; selectedId?: st
       </svg>
     </>
   )
-}
+})

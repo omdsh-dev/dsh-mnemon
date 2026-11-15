@@ -1,4 +1,4 @@
-import { useEffect, useState, type JSX } from 'react'
+import { useEffect, useRef, useState, type JSX } from 'react'
 import { Button, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SelectField, SidebarModal } from 'dsh-mnemon/client'
 import type { SkillRootKind, TrashEntry, TrashRestoreInput, TrashRestorePreview } from '../contracts.ts'
@@ -87,33 +87,82 @@ export function TrashPage(props: { context: SkillsPageContext; location: SkillsL
   </article>
 }
 
+const RESTORE_PREVIEW_DEBOUNCE_MS = 200
+
 function RestoreDialog(props: { context: SkillsPageContext; entry: TrashEntry; initial: TrashRestorePreview | null; onClose: () => void; onRestored: () => void }): JSX.Element {
   const t = useT()
   const [name, setName] = useState(props.entry.name)
   const [root, setRoot] = useState(props.initial?.needsRoot === true ? '' : 'original')
   const [preview, setPreview] = useState<TrashRestorePreview | null>(props.initial)
+  const [previewing, setPreviewing] = useState(false)
   const [roots, setRoots] = useState<SkillRootKind[]>(props.initial?.roots ?? [])
   const [replace, setReplace] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const mountedRef = useRef(false)
+  const lastRootRef = useRef(root)
+  const hasInitialRoots = (props.initial?.roots.length ?? 0) > 0
+  const initialMatchedKey = props.initial !== null && !props.initial.needsRoot
+    ? `${props.entry.id}|original|${props.entry.name}`
+    : null
   const validName = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(name) && name.length <= 64
   useEffect(() => {
+    if (hasInitialRoots) return
     let active = true
     void props.context.client.catalog().then(catalog => { if (active) setRoots(catalog.roots.map(item => item.kind)) }).catch(props.context.fail)
     return () => { active = false }
-  }, [props.context.client])
+  }, [props.context.client, hasInitialRoots])
   useEffect(() => {
     let active = true
-    setPreview(null)
-    setReplace(false)
-    setError(null)
-    if (!validName || root === '') return () => { active = false }
+    const initialMount = !mountedRef.current
+    const rootChanged = lastRootRef.current !== root
+    mountedRef.current = true
+    lastRootRef.current = root
+    if (!initialMount) {
+      setReplace(false)
+      setError(null)
+    }
+    if (root === '') {
+      setPreview(initialMount ? props.initial : null)
+      setPreviewing(false)
+      return () => { active = false }
+    }
+    if (!validName) {
+      setPreviewing(false)
+      return () => { active = false }
+    }
+    const requestKey = `${props.entry.id}|${root}|${name}`
+    if (initialMount && initialMatchedKey === requestKey) {
+      setPreviewing(false)
+      return () => { active = false }
+    }
     const input = { id: props.entry.id, name, ...(root === 'original' ? {} : { root: root as SkillRootKind }) }
-    void props.context.client.previewTrashRestore(input).then(value => { if (active) setPreview(value) }).catch(reason => { if (active) setError(errorText(reason)) })
-    return () => { active = false }
-  }, [props.context.client, props.entry.id, root, name, validName])
+    const runPreview = () => {
+      void props.context.client.previewTrashRestore(input)
+        .then(value => {
+          if (!active) return
+          setPreview(value)
+          setPreviewing(false)
+        })
+        .catch(reason => {
+          if (!active) return
+          setError(errorText(reason))
+          setPreviewing(false)
+        })
+    }
+    setPreviewing(true)
+    if (initialMount || rootChanged) {
+      runPreview()
+      return () => { active = false }
+    }
+    const timer = window.setTimeout(runPreview, RESTORE_PREVIEW_DEBOUNCE_MS)
+    return () => {
+      active = false
+      window.clearTimeout(timer)
+    }
+  }, [props.context.client, props.entry.id, props.initial, initialMatchedKey, root, name, validName])
   const submit = async () => {
-    if (preview === null || preview.needsRoot || !props.context.writable) return
+    if (preview === null || previewing || preview.needsRoot || !props.context.writable) return
     setBusy(true)
     setError(null)
     const input: TrashRestoreInput = {
@@ -128,9 +177,9 @@ function RestoreDialog(props: { context: SkillsPageContext; entry: TrashEntry; i
   }
   return <SidebarModal title={t('trash.restoreTitle', { name: props.entry.name })} busy={busy} onClose={props.onClose} footer={<>
     <Button variant="ghost" disabled={busy} onClick={props.onClose}>{t('common.cancel')}</Button>
-    <Button variant="primary" disabled={busy || !props.context.writable || !validName || preview === null || preview.needsRoot || (preview.conflict !== undefined && !replace)} onClick={() => void submit()}>{t('trash.restore')}</Button>
+    <Button variant="primary" disabled={busy || previewing || !props.context.writable || !validName || preview === null || preview.needsRoot || (preview.conflict !== undefined && !replace)} onClick={() => void submit()}>{t('trash.restore')}</Button>
   </>}>
-    <div className={css.skForm}>
+    <div className={css.skForm} aria-busy={previewing || undefined}>
       <p>{t('trash.chooseHint')}</p>
       <SelectField label={t('create.root')} value={root} onChange={setRoot} options={[
         { value: '', label: t('trash.chooseRoot') },
@@ -138,8 +187,9 @@ function RestoreDialog(props: { context: SkillsPageContext; entry: TrashEntry; i
         ...roots.map(kind => ({ value: kind, label: t(`root.${kind}`) })),
       ]} />
       <Field label={t('create.name')} hint={t('create.nameHint')}>{control => <input {...control} value={name} disabled={busy} onChange={event => setName(event.target.value.trim().toLowerCase())} />}</Field>
-      {preview?.path !== undefined && <code>{preview.path}</code>}
-      {preview?.conflict !== undefined && <label><input type="checkbox" checked={replace} disabled={busy} onChange={event => setReplace(event.target.checked)} /> {t('trash.replace')}</label>}
+      {preview?.path !== undefined && <code style={previewing ? { opacity: 0.6 } : undefined}>{preview.path}</code>}
+      {preview === null && previewing && <span className={css.skMuted} role="status">{t('common.loading')}</span>}
+      {preview?.conflict !== undefined && <label><input type="checkbox" checked={replace} disabled={busy || previewing} onChange={event => setReplace(event.target.checked)} /> {t('trash.replace')}</label>}
       {error !== null && <p role="alert" className={css.skFormError}>{error}</p>}
     </div>
   </SidebarModal>

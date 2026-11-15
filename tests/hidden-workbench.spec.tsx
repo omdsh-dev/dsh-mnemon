@@ -458,4 +458,52 @@ describe('retained hidden workbench', () => {
     await act(async () => {})
     expect(call).not.toHaveBeenCalled()
   })
+
+  it('preserves mounted Source canvas and drafts across same-workspace session switches while updating sessionId prop', async () => {
+    const { connection } = transport()
+    const props = { connection, settingsScope: scope, sourcePageDirectory: directory, renderSlot: sourceSlot, focus, workspaceId: 'one' }
+    const view = render(<MnemonWorkbench {...props} sessionId="A" />)
+    await screen.findByText('A/one')
+    const initialCanvas = screen.getByTestId('mnemon-canvas')
+    initialCanvas.scrollTop = 180
+    fireEvent.change(screen.getByRole('textbox', { name: 'Draft' }), { target: { value: 'preserved draft' } })
+
+    view.rerender(<MnemonWorkbench {...props} sessionId="B" />)
+    await screen.findByText('B/one')
+    expect(screen.getByTestId('mnemon-canvas')).toBe(initialCanvas)
+    expect(initialCanvas.scrollTop).toBe(180)
+    expect((screen.getByRole('textbox', { name: 'Draft' }) as HTMLTextAreaElement).value).toBe('preserved draft')
+  })
+
+  it('defers full status() until the Status page is active and avoids refreshKey echo on local Source onRefresh', async () => {
+    const { connection, call } = transport()
+    const original = call.getMockImplementation()!
+    call.mockImplementation(async (channel, endpoint, input) => {
+      if (endpoint === 'status-summary') return { ok: true, value: { healthy: true, writeEnabled: true, commandFound: true, memoryBodies: [] } } as never
+      if (endpoint === 'status') return { ok: true, value: { healthy: true, writeEnabled: true, commandFound: true, version: '0.2.0', memoryBodies: [] } } as never
+      return original(channel, endpoint, input)
+    })
+    let latestProps: MemorySourcePageProps | undefined
+    const trackingSlot: typeof renderSlot = (_name, props) => {
+      latestProps = props as unknown as MemorySourcePageProps
+      return <SourcePage {...latestProps} />
+    }
+
+    // Focused Source view (`page === 'source:skills/test'`) defers full `status` RPC:
+    const focused = render(<MnemonWorkbench connection={connection} settingsScope={scope} sourcePageDirectory={directory} renderSlot={trackingSlot} focus={focus} sessionId="A" workspaceId="one" />)
+    await screen.findByText('A/one')
+    expect(call.mock.calls.some(([, endpoint]) => endpoint === 'status')).toBe(false)
+
+    const initialRefreshKey = latestProps!.refreshKey
+    const dashboardReads = call.mock.calls.filter(([, endpoint]) => endpoint === 'dashboard').length
+    act(() => { latestProps!.onRefresh?.() })
+    await act(async () => {})
+    expect(latestProps!.refreshKey).toBe(initialRefreshKey)
+    expect(call.mock.calls.filter(([, endpoint]) => endpoint === 'dashboard')).toHaveLength(dashboardReads)
+    focused.unmount()
+
+    // Unfocused Workbench starts on `'status'`, so full `status` runs when summary needs CLI version:
+    render(<MnemonWorkbench connection={connection} settingsScope={scope} sourcePageDirectory={directory} renderSlot={trackingSlot} sessionId="A" workspaceId="one" />)
+    await waitFor(() => expect(call.mock.calls.some(([, endpoint]) => endpoint === 'status')).toBe(true))
+  })
 })

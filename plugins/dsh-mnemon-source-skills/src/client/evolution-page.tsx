@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type JSX } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { Button, DiffBlock, IconSparkleRegular, SegmentedControl, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { appearanceClass, SelectField } from 'dsh-mnemon/client'
 import type { AutoAdoptionEvent, BacktestRun, DraftView, ModelRoute, SkillDraft, SkillRootKind, SkillSuggestion, SuggestionStatus, SuggestionView, Trajectory } from '../contracts.ts'
@@ -27,17 +27,56 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
   const [reviewing, setReviewing] = useState(false)
   const [deleting, setDeleting] = useState<string | undefined>(undefined)
   const choice = useModelChoice(context, 'evolution.modelAuto')
+  const draftCacheRef = useRef<{ revision: number; client: SkillsPageContext['client']; entries: Map<string, Promise<DraftView>> }>({
+    revision: -1,
+    client: context.client,
+    entries: new Map(),
+  })
+  if (draftCacheRef.current.revision !== context.revision || draftCacheRef.current.client !== context.client) {
+    draftCacheRef.current = { revision: context.revision, client: context.client, entries: new Map() }
+  }
+  const readDraft = useCallback((draftId: string): Promise<DraftView> => {
+    let bucket = draftCacheRef.current
+    if (bucket.revision !== context.revision || bucket.client !== context.client) {
+      bucket = { revision: context.revision, client: context.client, entries: new Map() }
+      draftCacheRef.current = bucket
+    }
+    const existing = bucket.entries.get(draftId)
+    if (existing !== undefined) return existing
+    const request = context.client.draft(draftId).catch(error => {
+      bucket.entries.delete(draftId)
+      throw error
+    })
+    bucket.entries.set(draftId, request)
+    return request
+  }, [context.client, context.revision])
+  const hasSharedOverview = 'overview' in context
   useEffect(() => {
     let active = true
     void context.client.suggestions().then(list => { if (active) setSuggestions(list) }).catch(context.fail)
-    // Drafts written for a skill directly have no suggestion; the ready ones wait beside the suggestions.
-    void context.client.overview().then(async overview => {
-      const ids = overview.attention.filter(item => item.kind === 'draft').map(item => item.id)
-      const views = await Promise.all(ids.map(id => context.client.draft(id).then(view => view.draft).catch(() => undefined)))
-      if (active) setDrafts(views.filter((draft): draft is SkillDraft => draft !== undefined && draft.suggestionId === undefined))
-    }).catch(() => undefined)
     return () => { active = false }
-  }, [context.client, context.revision])
+  }, [context.client, context.fail, context.revision])
+  useEffect(() => {
+    if (suggestions === null) return
+    if (hasSharedOverview && context.overview === null) return
+    let active = true
+    // Drafts written for a skill directly have no suggestion; skip drafts already linked to a suggestion.
+    const linkedDraftIds = new Set(suggestions.flatMap(entry => entry.draftId === undefined ? [] : [entry.draftId]))
+    const loadStandaloneDrafts = async () => {
+      const overview = hasSharedOverview ? context.overview! : await context.client.overview()
+      const ids = overview.attention
+        .filter(item => item.kind === 'draft' && !linkedDraftIds.has(item.id))
+        .map(item => item.id)
+      if (ids.length === 0) {
+        if (active) setDrafts([])
+        return
+      }
+      const views = await Promise.all(ids.map(id => readDraft(id).then(view => view.draft).catch(() => undefined)))
+      if (active) setDrafts(views.filter((draft): draft is SkillDraft => draft !== undefined && draft.suggestionId === undefined))
+    }
+    void loadStandaloneDrafts().catch(() => undefined)
+    return () => { active = false }
+  }, [context.client, context.overview, context.revision, hasSharedOverview, readDraft, suggestions])
   // A link opens a suggestion, a draft, the first suggestion waiting for a skill, or the evidence.
   useLink(location.nonce, location.filter === 'evidence' || suggestions !== null, () => {
     if (location.filter === 'evidence' || suggestions === null) { setFilter('evidence'); return }
@@ -131,7 +170,7 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
             </>}>{t('evolution.offBody')}</Empty>
           : <Empty glyph="✧" title={t(oneOff.length > 0 ? 'triage.choose' : `evolution.empty.${filter}`)}>{t(oneOff.length > 0 ? 'triage.soft' : `evolution.emptyBody.${filter}`)}</Empty>
         : current.kind === 'suggestion'
-          ? <SuggestionDetail key={current.id} context={context} id={current.id} model={currentModel} />
+          ? <SuggestionDetail key={current.id} context={context} id={current.id} model={currentModel} readDraft={readDraft} />
           : <article className={css.skDetail}>
               <header className={css.skDetailHead}>
                 <div><span className={css.skKicker}><ActionTag action="update" /></span><h3>{current.draft.skillName}</h3></div>
@@ -139,7 +178,7 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
                   <Button variant="ghost" size="sm" disabled={!context.writable} onClick={() => setDeleting(current.id)}>{t('common.delete')}</Button>
                 </div>
               </header>
-              <DraftReview key={current.id} context={context} draftId={current.id} model={currentModel} />
+              <DraftReview key={current.id} context={context} draftId={current.id} model={currentModel} readDraft={readDraft} />
               {deleting === current.id && <Confirm danger title={t('evolution.deleteTitle')} body={t('evolution.deleteBody')} confirmLabel={t('common.delete')}
                 onClose={() => setDeleting(undefined)} onConfirm={() => void removeItem(current)} />}
             </article>}
@@ -168,7 +207,7 @@ function ListItem(props: { item: Item; selected: boolean; onSelect: () => void }
   </button>
 }
 
-function SuggestionDetail(props: { context: SkillsPageContext; id: string; model?: ModelRoute | null }): JSX.Element {
+function SuggestionDetail(props: { context: SkillsPageContext; id: string; model?: ModelRoute | null; readDraft: (draftId: string) => Promise<DraftView> }): JSX.Element {
   const t = useT()
   const { context } = props
   // The pick the page holds for this card, as `provider`/`model` for the Host;
@@ -186,12 +225,12 @@ function SuggestionDetail(props: { context: SkillsPageContext; id: string; model
     void context.client.suggestion(props.id).then(async value => {
       if (!active) return
       setView(value)
-      const loaded = new Map<string, Trajectory | null>()
-      for (const reference of value.suggestion.evidence.slice(-4)) {
-        if (loaded.has(reference.trajectoryId)) continue
-        loaded.set(reference.trajectoryId, await context.client.trajectory(reference.trajectoryId).catch(() => null))
-      }
-      if (active) setTrajectories(loaded)
+      const uniqueIds = [...new Set(value.suggestion.evidence.slice(-4).map(reference => reference.trajectoryId))]
+      const entries = await Promise.all(uniqueIds.map(async trajectoryId => [
+        trajectoryId,
+        await context.client.trajectory(trajectoryId).catch(() => null),
+      ] as const))
+      if (active) setTrajectories(new Map(entries))
     }).catch(error => {
       if (!active) return
       setView(null)
@@ -245,7 +284,7 @@ function SuggestionDetail(props: { context: SkillsPageContext; id: string; model
     {suggestion.autoAdoption !== undefined && suggestion.autoAdoption.length > 0 && <AutoAdoptionHistory events={suggestion.autoAdoption} />}
     {suggestion.status === 'drafting' && <Busy label={t('evolution.drafting')} />}
     {suggestion.lastError !== undefined && suggestion.status === 'pending' && <p className={css.inlineError}>{t('evolution.draftFailed', { error: suggestion.lastError })}</p>}
-    {suggestion.status === 'review' && suggestion.draftId !== undefined && <DraftReview context={context} draftId={suggestion.draftId} model={props.model ?? null} />}
+    {suggestion.status === 'review' && suggestion.draftId !== undefined && <DraftReview context={context} draftId={suggestion.draftId} model={props.model ?? null} readDraft={props.readDraft} />}
     {suggestion.status === 'adopted' && view.skill !== undefined && <p className={css.skSuccess}>{t('evolution.adopted')} {view.skillInCatalog !== false && <button type="button" className={css.skLink} onClick={() => context.navigate({ tab: 'skills', skillKey: view.skill!.key })}>{t('evolution.openSkill')} ›</button>}</p>}
     <div className={css.skFolds}>
       {view.skill !== undefined && <Fold title={t('evolution.currentSkill')} meta={t(`root.${view.skill.root}`)}>
@@ -294,7 +333,7 @@ const NEW_SKILL_ROOTS: readonly SkillRootKind[] = ['user-dsh', 'project-dsh']
  * opens to its cases, and the diff. Adopt and discard sit with its title;
  * editing and redrafting with a note wait behind its menu.
  */
-function DraftReview(props: { context: SkillsPageContext; draftId: string; model?: ModelRoute | null }): JSX.Element {
+function DraftReview(props: { context: SkillsPageContext; draftId: string; model?: ModelRoute | null; readDraft?: (draftId: string) => Promise<DraftView> }): JSX.Element {
   const t = useT()
   const { context } = props
   // A redraft continues what the user picked for drafts; a pick of none follows
@@ -309,18 +348,27 @@ function DraftReview(props: { context: SkillsPageContext; draftId: string; model
   const [details, setDetails] = useState(false)
   const [busy, setBusy] = useState(false)
   const [confirmAdopt, setConfirmAdopt] = useState(false)
+  const configRevision = context.configRevision ?? 0
+  const loadDraft = props.readDraft ?? context.client.draft
   useEffect(() => {
     let active = true
-    void context.client.draft(props.draftId).then(value => {
+    void loadDraft(props.draftId).then(value => {
       if (!active) return
       setView(value)
       if (value.draft.targetRoot !== undefined) setRoot(value.draft.targetRoot)
-      // A project root exists only for a conversation in a project.
-      if (value.draft.action === 'create') void context.client.catalog().then(catalog => { if (active) setRoots(NEW_SKILL_ROOTS.filter(kind => catalog.roots.some(entry => entry.kind === kind))) }).catch(() => undefined)
       void context.client.cases(value.draft.skillName).then(list => { if (active) setCases(list.filter(entry => entry.enabled).length) }).catch(() => undefined)
     }).catch(context.fail)
     return () => { active = false }
-  }, [context.client, props.draftId, context.revision])
+  }, [context.client, context.fail, context.revision, loadDraft, props.draftId])
+  useEffect(() => {
+    if (view?.draft.action !== 'create') return
+    let active = true
+    // A project root exists only for a conversation in a project.
+    void context.client.catalog().then(catalog => {
+      if (active) setRoots(NEW_SKILL_ROOTS.filter(kind => catalog.roots.some(entry => entry.kind === kind)))
+    }).catch(() => undefined)
+    return () => { active = false }
+  }, [configRevision, context.client, view?.draft.action])
   if (view === null) return <Busy label={t('common.loading')} />
   const { draft } = view
   // Runs are linked oldest first; the comparison is always the latest pair.

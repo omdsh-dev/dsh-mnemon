@@ -438,13 +438,13 @@ describe('Source Client presentation conformance', () => {
     const connection = { rpc: { call: vi.fn(async (_channel: string, endpoint: string) => ({
       ok: true, value: endpoint === 'source-management-catalog' ? { generationId: 'g1', sources } : status,
     })) }, isLoopback: true }
-    const runtimePages = [{ id: 'runtime/entries', sourceTypeId: 'runtime', pageId: 'entries', label: translateEn('nav.runtime'), order: 100 }]
+    const runtimePages = [{ id: 'runtime/entries', sourceTypeId: 'runtime', pageId: 'entries', label: 'Runtime memory', order: 100 }]
     const renderSlot = ((_name: string, owner: MnemonSourcePageOwnerProps, options: { only?: string }) => options.only !== 'runtime/entries' ? null : <div>
       <span data-testid="runtime-selected-instance">{owner.management?.sourceInstanceKey}</span>
       <span data-testid="runtime-hidden-child">{!('children' in owner) ? 'no' : 'yes'}</span>
     </div>) as never
     render(<MnemonWorkbench connection={connection as never} settingsScope={settings} sessionId="s1" t={translateEn} locale="en" sourcePageDirectory={{ getSnapshot: () => runtimePages, subscribe: () => () => {} }} renderSlot={renderSlot} />)
-    fireEvent.click(await screen.findByRole('tab', { name: translateEn('nav.runtime') }))
+    fireEvent.click(await screen.findByRole('tab', { name: 'Runtime memory' }))
     await waitFor(() => expect(screen.getByTestId('runtime-selected-instance').textContent).toBe('source:mnemon-source-runtime'))
     expect(screen.getByTestId('runtime-hidden-child').textContent).toBe('no')
     fireEvent.click(screen.getByRole('button', { name: /^Select Source instance/ }))

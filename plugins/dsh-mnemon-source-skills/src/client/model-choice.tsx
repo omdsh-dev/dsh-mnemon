@@ -78,16 +78,23 @@ export function useModelChoice(context: SkillsPageContext, autoKey: 'tests.model
     void context.client.models().then(value => { if (active) setModels(value) }).catch(() => undefined)
     return () => { active = false }
   }, [context.client])
+  const configRevision = context.configRevision ?? 0
   useEffect(() => {
     let active = true
     void context.client.draftPreferences().then(value => { if (active) setPreferences(value) }).catch(() => undefined)
     return () => { active = false }
-  }, [context.client, context.revision])
+  }, [context.client, configRevision])
   /** Show the pick now, then let the Host's answer replace it; a failure shows through and reverts. */
   const write = useCallback((apply: (current: DraftPreferencesView) => DraftPreferencesView, operation: () => Promise<DraftPreferencesView>) => {
     setPreferences(current => apply(current))
-    void operation().then(next => { setPreferences(next); context.refresh() }).catch((error: unknown) => { context.fail(error); context.refresh() })
-  }, [context, context.client])
+    void operation().then(next => {
+      setPreferences(next)
+    }).catch((error: unknown) => {
+      context.fail(error)
+      context.client.invalidatePreferences?.()
+      void context.client.draftPreferences().then(setPreferences).catch(() => undefined)
+    })
+  }, [context])
   const options = useMemo(() => modelOptionsFrom(models, t, autoKey), [models, t, autoKey])
   const cardOptions = useMemo(() => modelCardOptionsFrom(options, t, autoKey), [options, t, autoKey])
   return {

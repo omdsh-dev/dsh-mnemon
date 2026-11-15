@@ -8,7 +8,7 @@ import { MarketPage } from './market-page.tsx'
 import { css, errorText, sidebarCss, translate, useT } from './presentation.ts'
 import { SkillsPage } from './skills-page.tsx'
 import { TrashPage } from './trash-page.tsx'
-import { installSkillUseBridge, requestSkillUse } from './use-skill.tsx'
+import { installSkillUseBridge, isDirectSkillUseActive, requestSkillUse, type SkillUseRuntimeContext } from './use-skill.tsx'
 
 export type SkillsTab = 'skills' | 'evolution' | 'evals' | 'market' | 'trash'
 /** What 进化 lists: suggestions still waiting, those handled, or the conversations reviews read. */
@@ -37,8 +37,12 @@ export interface EvolutionState {
 export interface SkillsPageContext {
   client: SkillsPageClient
   writable: boolean
-  /** Reload this page's data; every tab watches it. */
+  /** Reload active tab/poll data; every tab watches it. */
   revision: number
+  /** Static configuration revision; unaffected by 3s busy polling. */
+  configRevision?: number
+  /** Shared overview already loaded by SkillsView for the current revision. */
+  overview?: SkillsOverview | null
   refresh(): void
   navigate(location: SkillsLocation): void
   notice(text: string): void
@@ -54,6 +58,7 @@ export interface SkillsPageContext {
 
 const TABS: readonly SkillsTab[] = ['skills', 'evolution', 'evals', 'market', 'trash']
 const POLL_MS = 3_000
+const FOCUS_COOLDOWN_MS = 500
 const NOTICE_MS = 5_000
 const FILTERS: readonly EvolutionFilter[] = ['pending', 'done', 'evidence']
 
@@ -86,16 +91,26 @@ function SkillsView(props: MemorySourcePageProps & { management: NonNullable<Mem
   const client = useMemo(() => skillsPageClient(props.management), [props.management])
   const [location, setLocation] = useState<SkillsLocation>(() => seedLocation(props.navigationInput) ?? { tab: rememberedTab })
   const [revision, setRevision] = useState(0)
+  const [configRevision, setConfigRevision] = useState(0)
   const [overview, setOverview] = useState<SkillsOverview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const refresh = useCallback(() => setRevision(value => value + 1), [])
+  const pollRefresh = useCallback(() => {
+    client.beginReadWave?.(() => setRevision(value => value + 1))
+    setRevision(value => value + 1)
+  }, [client])
+  const refresh = useCallback(() => {
+    client.beginReadWave?.(() => setRevision(value => value + 1))
+    setRevision(value => value + 1)
+    setConfigRevision(value => value + 1)
+  }, [client])
   const refreshKey = useRef(props.refreshKey)
   useEffect(() => {
     if (refreshKey.current === props.refreshKey) return
     refreshKey.current = props.refreshKey
+    client.invalidatePreferences?.()
     refresh()
-  }, [props.refreshKey, refresh])
+  }, [client, props.refreshKey, refresh])
   useEffect(() => {
     const seeded = seedLocation(props.navigationInput)
     if (seeded !== undefined) setLocation(seeded)
@@ -112,24 +127,31 @@ function SkillsView(props: MemorySourcePageProps & { management: NonNullable<Mem
   const wasBusy = useRef(false)
   useEffect(() => {
     if (props.active === false) return
-    // The overview and each tab read separately. Once completion stops polling,
-    // fetch the cards again so a pre-completion response cannot remain on screen.
-    if (wasBusy.current && !busy) refresh()
+    // Reconcile once more only if an independent tab read observed an older ledger than overview (#448).
+    if (wasBusy.current && !busy && client.markWaveIdleAndCheckStale?.() === true) pollRefresh()
     wasBusy.current = busy
     if (!busy) return
-    const timer = setInterval(refresh, POLL_MS)
+    const timer = setInterval(pollRefresh, POLL_MS)
     return () => clearInterval(timer)
-  }, [busy, refresh, props.active])
+  }, [busy, client, pollRefresh, props.active])
+  const lastFocusRefreshAt = useRef(0)
   useEffect(() => {
     if (props.active === false) return
-    const resume = (): void => { if (document.visibilityState !== 'hidden') refresh() }
+    const resume = (): void => {
+      if (document.visibilityState === 'hidden') return
+      const now = Date.now()
+      if (now - lastFocusRefreshAt.current < FOCUS_COOLDOWN_MS) return
+      lastFocusRefreshAt.current = now
+      client.invalidatePreferences?.()
+      refresh()
+    }
     window.addEventListener('focus', resume)
     document.addEventListener('visibilitychange', resume)
     return () => {
       window.removeEventListener('focus', resume)
       document.removeEventListener('visibilitychange', resume)
     }
-  }, [refresh, props.active])
+  }, [client, refresh, props.active])
   useEffect(() => {
     if (notice === null) return
     const timer = setTimeout(() => setNotice(null), NOTICE_MS)
@@ -146,13 +168,15 @@ function SkillsView(props: MemorySourcePageProps & { management: NonNullable<Mem
     client,
     writable: props.writable !== false,
     revision,
+    configRevision,
+    overview,
     refresh,
     navigate: next => setLocation({ ...next, nonce: Date.now() }),
     notice: text => { setNotice(text); setError(null) },
     fail: reason => { setError(errorText(reason)); setNotice(null) },
     useSkill: name => {
       const taken = requestSkillUse(name, props.sessionId)
-      if (props.onReturnToConversation !== undefined) props.onReturnToConversation()
+      if (props.onReturnToConversation !== undefined && (taken || !isDirectSkillUseActive())) props.onReturnToConversation()
       else if (taken) { setNotice(t('skills.used', { name })); setError(null) }
       else { setError(t('skills.noConversation')); setNotice(null) }
     },
@@ -202,9 +226,26 @@ export function installSkillsMemoryUI(ctx: Parameters<typeof installMemorySource
   }] })
 }
 
+type SkillsCordisClientContext = Parameters<typeof installMemorySourceUI>[0] & SkillUseRuntimeContext & {
+  effect?: (fn: () => () => void) => void
+  inject?: (deps: readonly string[], callback: (inner: SkillsCordisClientContext) => void) => void
+}
+
 export const inject = ['slots']
 /** The tab is named by the component's declaration; the page label is only a fallback. */
-export function apply(ctx: Parameters<typeof installMemorySourceUI>[0]): void {
-  installSkillsMemoryUI(ctx)
-  installSkillUseBridge(ctx)
+export function apply(ctx: SkillsCordisClientContext): void {
+  const disposePage = installSkillsMemoryUI(ctx)
+  let disposeBridge = installSkillUseBridge(ctx)
+  ctx.inject?.(['conversation', 'sessions', 'layout'], inner => {
+    disposeBridge()
+    const disposeDirect = installSkillUseBridge(inner)
+    inner.effect?.(() => () => {
+      disposeDirect()
+      disposeBridge = installSkillUseBridge(ctx)
+    })
+  })
+  ctx.effect?.(() => () => {
+    disposeBridge()
+    disposePage()
+  })
 }

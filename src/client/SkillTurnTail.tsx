@@ -32,7 +32,9 @@ interface Entry {
   listeners: Set<() => void>
 }
 
-/** One snapshot per conversation, shared by every bar under its turns. */
+const MAX_SKILL_ACTIVITY_SESSIONS = 32
+
+/** One snapshot per conversation, shared by every bar under its turns, bounded by 32-session LRU. */
 const entries = new WeakMap<ClientConnectionHandle, Map<string, Entry>>()
 
 function entryOf(connection: ClientConnectionHandle, sessionId: string): Entry {
@@ -42,9 +44,28 @@ function entryOf(connection: ClientConnectionHandle, sessionId: string): Entry {
     entries.set(connection, sessions)
   }
   let entry = sessions.get(sessionId)
-  if (entry === undefined) {
-    entry = { settle: 0, checkedCursor: -1, requestedCursor: -1, revision: 0, componentRevision: 0, listeners: new Set() }
+  if (entry !== undefined) {
+    sessions.delete(sessionId)
     sessions.set(sessionId, entry)
+    return entry
+  }
+  entry = { settle: 0, checkedCursor: -1, requestedCursor: -1, revision: 0, componentRevision: 0, listeners: new Set() }
+  sessions.set(sessionId, entry)
+  if (sessions.size > MAX_SKILL_ACTIVITY_SESSIONS) {
+    for (const [candidateId, candidate] of sessions) {
+      if (candidateId !== sessionId && candidate.listeners.size === 0 && candidate.loading === undefined) {
+        cancelScheduled(candidate)
+        sessions.delete(candidateId)
+        if (sessions.size <= MAX_SKILL_ACTIVITY_SESSIONS) break
+      }
+    }
+    while (sessions.size > MAX_SKILL_ACTIVITY_SESSIONS) {
+      const oldest = sessions.keys().next().value
+      if (oldest === undefined || oldest === sessionId) break
+      const victim = sessions.get(oldest)
+      if (victim !== undefined) cancelScheduled(victim)
+      sessions.delete(oldest)
+    }
   }
   return entry
 }

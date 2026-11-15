@@ -5,8 +5,15 @@ import { join } from 'node:path'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
-import { MemorySourcePageFrame, translateEn as t } from 'dsh-mnemon/client'
+import { MemorySourcePageFrame, translateEn } from 'dsh-mnemon/client'
+import copy from '../presentation/locales.json' with { type: 'json' }
 import { strategy } from './fixture.ts'
+
+function t(key: string, params: Record<string, unknown> = {}): string {
+  const own = (copy.en as Record<string, string>)[key]
+  const text = own ?? translateEn(key as Parameters<typeof translateEn>[0], params)
+  return own === undefined ? text : text.replace(/\{(\w+)\}/g, (match, name: string) => name in params ? String(params[name]) : match)
+}
 
 // Load the installed Core's actual DSH browser artifact; no repository source alias.
 vi.mock('dsh-mnemon/client', async () => {
@@ -188,5 +195,49 @@ describe('independent Runtime Source client', () => {
     expect(entries.get('runtime/entries')).toEqual(expect.any(Function))
     release()
     expect(entries.size).toBe(0)
+  })
+
+  it('adopts pin snapshots without redundant reads, suppresses refreshKey echoes, and refreshes on sessionId changes', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-runtime-perf-'))
+    const runner = new MemoryCompositionRunner()
+    try {
+      await runner.mount(strategy, { instanceId: 'strategy' })
+      await runner.mount(plugin, { instanceId: 'work', config: { dataDir: directory } })
+      const management = await runner.managementClient('source:work')
+      const readSpy = vi.spyOn(management, 'read')
+
+      let refreshKey = 0
+      const baseProps = {
+        sourceTypeId: 'runtime',
+        sourceInstanceKey: 'source:work',
+        sourceInstances: [],
+        locale: 'en',
+        writable: true,
+        management,
+      }
+      let view!: ReturnType<typeof render>
+      const onRefresh = () => {
+        refreshKey += 1
+        view.rerender(<RuntimeSourcePage {...baseProps} refreshKey={refreshKey} sessionId="session-a" onRefresh={onRefresh} />)
+      }
+      view = render(<RuntimeSourcePage {...baseProps} refreshKey={refreshKey} sessionId="session-a" onRefresh={onRefresh} />)
+      await screen.findByRole('button', { name: t('runtime.addButton') })
+      const snapshotReads = () => readSpy.mock.calls.filter(([operation]) => operation === 'snapshot').length
+      expect(snapshotReads()).toBe(1)
+
+      fireEvent.click(screen.getByRole('button', { name: t('runtime.addButton') }))
+      fireEvent.change(await screen.findByRole('textbox', { name: t('runtime.content') }), { target: { value: 'Single reload entry' } })
+      fireEvent.click(screen.getByRole('button', { name: t('runtime.addAction') }))
+      await screen.findByText('Single reload entry')
+      expect(snapshotReads()).toBe(2)
+
+      readSpy.mockClear()
+      fireEvent.click(screen.getByRole('button', { name: 'Pin' }))
+      await screen.findByRole('button', { name: 'Unpin' })
+      expect(snapshotReads()).toBe(0)
+
+      view.rerender(<RuntimeSourcePage {...baseProps} refreshKey={refreshKey} sessionId="session-b" onRefresh={onRefresh} />)
+      await waitFor(() => expect(snapshotReads()).toBe(1))
+    } finally { cleanup(); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
   })
 })

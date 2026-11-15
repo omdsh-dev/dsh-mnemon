@@ -21,8 +21,8 @@ vi.mock('dsh-mnemon/client', async () => {
 })
 
 import * as plugin from '../src/index.ts'
-import { installSkillsMemoryUI, SkillsSourcePage } from '../src/client.ts'
-import { draftWithSkill, installSkillUseBridge, SKILL_USE_SLOT, SkillUseBridge } from '../src/client/use-skill.tsx'
+import { inject as clientInject, installSkillsMemoryUI, SkillsSourcePage } from '../src/client.ts'
+import { draftWithSkill, installSkillUseBridge, requestSkillUse, SKILL_USE_SLOT, SkillUseBridge } from '../src/client/use-skill.tsx'
 import { css, translate } from '../src/client/presentation.ts'
 import { skillsPageClient } from '../src/client/api.ts'
 import { compareRuns } from '../src/client/evolution-page.tsx'
@@ -90,6 +90,7 @@ describe('Skills page', () => {
     const props = { sourceTypeId: 'skills', sourceInstanceKey: 'source:skills', sourceInstances: [], locale: 'en', writable, management }
     const location = { seed: 'skill:user-dsh:release-notes', nonce: 1 }
     const view = render(<SkillsSourcePage {...props} navigationInput={location} refreshKey={0} />)
+    await screen.findByRole('heading', { name: 'release-notes' })
     const group = await screen.findByRole('button', { name: new RegExp(t('root.user-dsh'), 'u') })
     fireEvent.click(group)
     expect(group.getAttribute('aria-expanded')).toBe('false')
@@ -785,6 +786,187 @@ describe('Skills page', () => {
     release()
     expect(entries).toEqual([])
     expect(waiting.size).toBe(0)
+  })
+
+  it('uses ctx.conversation.input directly on DSH 0.2.1+ without registering conversation.input.left, and preserves the 0.2.0-rc.2 fallback', () => {
+    expect(clientInject).toEqual(['slots'])
+    const strictCordisProxy = new Proxy(
+      { slots: { inject: vi.fn(() => () => undefined), register: vi.fn(() => () => undefined) } },
+      {
+        get(target, prop, receiver) {
+          if (prop === 'slots' || prop === 'get') return Reflect.get(target, prop, receiver)
+          throw new Error(`cannot get property "${String(prop)}" without inject`)
+        },
+      },
+    )
+    const releaseStrict = installSkillUseBridge(strictCordisProxy as never)
+    releaseStrict()
+    const injectSpy = vi.fn()
+    const selectPanel = vi.fn()
+    const openSession = vi.fn()
+    const startSession = vi.fn()
+    const setDraft = vi.fn()
+    const focus = vi.fn()
+    const scope2 = { kind: 'agent-ctx', sessionId: 'session-2' }
+    const binding2 = { sessionId: 'session-2', ctx: scope2 }
+    const scopeUnmounted = { kind: 'agent-ctx', sessionId: 'session-unmounted' }
+    const bindingUnmounted = { sessionId: 'session-unmounted', ctx: scopeUnmounted }
+    const retainedBindings = new Map<string, { sessionId: string; ctx: unknown }>([
+      ['session-1', { sessionId: 'session-1', ctx: { kind: 'agent-ctx', sessionId: 'session-1' } }],
+    ])
+    openSession.mockImplementation((target: string) => {
+      if (target === 'session-2') retainedBindings.set('session-2', binding2)
+      if (target === 'session-unmounted') retainedBindings.set('session-unmounted', bindingUnmounted)
+    })
+    const requestDraftInitialization = vi.fn((binding: { sessionId: string; ctx: unknown }, options: { prompt?: string; whenDraftExists?: string }) => {
+      if (retainedBindings.get(binding.sessionId) !== binding) {
+        throw new Error('conversation.input.requestDraftInitialization requires a retained Session binding')
+      }
+      expect(options).toEqual({ prompt: '/release-notes ', whenDraftExists: 'replace' })
+      return 'applied' as const
+    })
+
+    const releaseModern = installSkillUseBridge({
+      slots: { inject: injectSpy, register: vi.fn() },
+      layout: { selectPanel },
+      uiWorkspace: { openSession, startSession },
+      sessions: {
+        list: {
+          getSnapshot: () => ({
+            ids: ['session-1', 'session-2'],
+            byId: {
+              'session-1': { id: 'session-1', retainedBy: { mainView: 1 } },
+              'session-2': { id: 'session-2', retainedBy: {} },
+            },
+          }),
+        },
+        scope: (id: string) => retainedBindings.get(id)?.ctx,
+        binding: (id: string) => retainedBindings.get(id),
+      },
+      conversation: {
+        input: {
+          for: actx => {
+            const matched = [...retainedBindings.values()].find(candidate => candidate.ctx === actx)
+            if (matched === undefined) throw new Error('conversation.input.for requires a retained Session scope')
+            if (matched.sessionId === 'session-unmounted') return undefined
+            return {
+              state: { getSnapshot: () => ({ draft: 'Review probe: keep this unsent draft.' }) },
+              setDraft,
+              focus,
+            }
+          },
+          requestDraftInitialization,
+        },
+      },
+    })
+
+    expect(injectSpy).not.toHaveBeenCalled()
+    // Omitted sessionId resolves the mainView-retained session ('session-1') and preserves its unsent draft.
+    expect(requestSkillUse('release-notes')).toBe(true)
+    expect(openSession).not.toHaveBeenCalled()
+    expect(setDraft).toHaveBeenCalledWith('/release-notes Review probe: keep this unsent draft.')
+    expect(selectPanel).toHaveBeenCalledWith(null)
+    expect(focus).toHaveBeenCalledTimes(1)
+
+    // Explicit target session switches via uiWorkspace.openSession and updates its retained SessionInput.
+    setDraft.mockClear()
+    selectPanel.mockClear()
+    focus.mockClear()
+    expect(requestSkillUse('release-notes', 'session-2')).toBe(true)
+    expect(openSession).toHaveBeenCalledWith('session-2')
+    expect(selectPanel).toHaveBeenCalledWith(null)
+    expect(setDraft).toHaveBeenCalledWith('/release-notes Review probe: keep this unsent draft.')
+    expect(focus).toHaveBeenCalledOnce()
+    expect(requestDraftInitialization).not.toHaveBeenCalled()
+
+    // Fallback to requestDraftInitialization passes the retained SessionBinding and DraftInitializationOptions.
+    expect(requestSkillUse('release-notes', 'session-unmounted')).toBe(true)
+    expect(requestDraftInitialization).toHaveBeenCalledWith(
+      bindingUnmounted,
+      { prompt: '/release-notes ', whenDraftExists: 'replace' },
+    )
+    releaseModern()
+
+    // Once released (or on DSH 0.2.0-rc.2 without ctx.conversation), SkillUseBridge handles it cleanly.
+    const fallbackDraft = vi.fn()
+    render(<SkillUseBridge sessionId="legacy-session" inputActions={{ setDraft: fallbackDraft }} useInput={selector => selector({ draft: 'draft body' })} />)
+    expect(requestSkillUse('release-notes', 'legacy-session')).toBe(true)
+    expect(fallbackDraft).toHaveBeenCalledWith('/release-notes draft body')
+  })
+
+  it('caches revision, draft-preferences, and immutable trajectories in skillsPageClient', async () => {
+    await mutate('review-record', review())
+    const [trajectorySummary] = (await management.read('trajectories', null)).value as Array<{ id: string }>
+    const readSpy = vi.spyOn(management, 'read')
+    const execute = vi.fn(async () => ({ ...await management.read('revision', null), value: { runId: 'run-1' } }))
+    const assisted = Object.assign(Object.create(Object.getPrototypeOf(management) as object) as typeof management, management, {
+      assistance: { operations: ['skill-backtest'], execute },
+    })
+    const client = skillsPageClient(assisted)
+    await client.overview()
+    readSpy.mockClear()
+
+    // Writes use the cached revision without a pre-write 'revision' RPC.
+    await client.createSkill({ name: 'fast-skill', description: 'Created without pre-write revision read.' })
+    expect(readSpy.mock.calls.filter(([op]) => op === 'revision')).toHaveLength(0)
+
+    // Backtest reads draft-preferences once and caches it across repeated invocations.
+    execute.mockImplementation(async () => ({ revision: assisted.revision, value: { runId: 'run-1' } }))
+    readSpy.mockClear()
+    await client.backtest({ skillName: 'release-notes', target: { kind: 'current' } })
+    await client.backtest({ skillName: 'release-notes', target: { kind: 'current' } })
+    expect(readSpy.mock.calls.filter(([op]) => op === 'draft-preferences')).toHaveLength(1)
+
+    // Immutable trajectory reads hit the in-memory LRU cache on repeat reads.
+    readSpy.mockClear()
+    const first = await client.trajectory(trajectorySummary!.id)
+    const second = await client.trajectory(trajectorySummary!.id)
+    expect(second).toEqual(first)
+    expect(readSpy.mock.calls.filter(([op]) => op === 'trajectory')).toHaveLength(1)
+  })
+
+  it('eliminates duplicate overview and cases reads, deduplicates focus+visibilitychange, and debounces RestoreDialog previews', async () => {
+    await mutate('review-record', review())
+    const readSpy = vi.spyOn(management, 'read')
+    render(<SkillsSourcePage sourceTypeId="skills" sourceInstanceKey="source:skills" sourceInstances={[]} locale="en" writable management={management} navigationInput={{ seed: 'evolution:pending', nonce: 1 }} />)
+    await screen.findByRole('button', { name: /One-off candidates/u })
+    expect(readSpy.mock.calls.filter(([op]) => op === 'overview')).toHaveLength(1)
+
+    // Window focus + visibilitychange within 500ms fires only 1 refresh wave instead of 2.
+    readSpy.mockClear()
+    act(() => {
+      window.dispatchEvent(new Event('focus'))
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+    await waitFor(() => expect(readSpy.mock.calls.filter(([op]) => op === 'overview')).toHaveLength(1))
+
+    // EvalsPage shares loaded cases and skill existence with SkillTests (0 skill-specific cases or evidence-pack reads).
+    readSpy.mockClear()
+    fireEvent.click(screen.getByRole('tab', { name: /^Evals/u }))
+    await screen.findByRole('button', { name: t('tests.run') })
+    expect(readSpy.mock.calls.filter(([op]) => op === 'cases')).toHaveLength(1)
+    expect(readSpy.mock.calls.filter(([op]) => op === 'evidence-pack')).toHaveLength(0)
+
+    // RestoreDialog keeps previous preview path mounted while debouncing keystrokes by 200ms.
+    const skill = (await management.read('skill', { key: 'user-dsh:release-notes' })).value as unknown as SkillSummary
+    await mutate('skill-delete', { key: skill.key, expectedHash: skill.hash })
+    await mutate('skill-create', { name: 'release-notes', description: 'Conflicting skill.' })
+    fireEvent.click(screen.getByRole('tab', { name: /^Trash/u }))
+    readSpy.mockClear()
+    fireEvent.click(await screen.findByRole('button', { name: 'Restore' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Restore release-notes' })
+    expect(readSpy.mock.calls.filter(([op]) => op === 'trash-restore-preview')).toHaveLength(1)
+
+    readSpy.mockClear()
+    const nameInput = within(dialog).getByLabelText(new RegExp(`^${t('create.name')}`, 'u'))
+    fireEvent.change(nameInput, { target: { value: 'release-notes-' } })
+    fireEvent.change(nameInput, { target: { value: 'release-notes-a' } })
+    fireEvent.change(nameInput, { target: { value: 'release-notes-ab' } })
+    // Previous path remains visible without flickering null, and no preview RPC fires before the 200ms debounce window.
+    expect(dialog.querySelector('code')).not.toBeNull()
+    expect(readSpy.mock.calls.filter(([op]) => op === 'trash-restore-preview')).toHaveLength(0)
+    await waitFor(() => expect(readSpy.mock.calls.filter(([op]) => op === 'trash-restore-preview')).toHaveLength(1))
+    expect(dialog.querySelector('code')?.textContent).toContain('release-notes-ab')
   })
 })
 

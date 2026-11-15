@@ -75,6 +75,7 @@ export function EvalsPage(props: { context: SkillsPageContext; location: SkillsL
     { key: 'untested', title: t('evals.untested'), rows: visible.filter(row => row.cases === 0) },
   ].filter(group => group.rows.length > 0)
   const current = rows.find(row => row.name === selected) ?? groups[0]?.rows[0] ?? rows[0]!
+  const currentCases = cases.filter(entry => entry.skillName === current.name)
   // The pick for this skill, else the global one: a backtest runs on the first
   // that is set, and on the task Agent's own route when neither is.
   const runOverride = Object.hasOwn(choice.preferences.skillRunModels, current.name) ? choice.preferences.skillRunModels[current.name]! : null
@@ -118,7 +119,7 @@ export function EvalsPage(props: { context: SkillsPageContext; location: SkillsL
             {!current.exists && <p>{t('evals.notCreatedBody')}{proposed.has(current.name) && <> <button type="button" className={css.skLink} onClick={() => context.navigate({ tab: 'evolution', skillName: current.name })}>{t('evals.openSuggestion')} ›</button></>}</p>}
           </div>
         </header>
-        <SkillTests context={context} skillName={current.name} runModel={effectiveRunModel} />
+        <SkillTests context={context} skillName={current.name} cases={currentCases} hasFile={current.exists} runModel={effectiveRunModel} />
       </article>
     </div>
     </div>

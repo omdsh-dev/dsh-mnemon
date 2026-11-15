@@ -22,11 +22,13 @@ import type { RepositoryEditorProps } from './sync-repository-editor.ts'
 import { GitHubConnect } from './MnemonSyncGitHubConnect.tsx'
 import { AdvancedSettings } from './MnemonSyncAdvancedSettings.tsx'
 
-/** How long the row waits for the Host to report the switch it just saved. */
-const STATUS_SETTLE_MS = 250
-const STATUS_SETTLE_ATTEMPTS = 20
+/** Exponential backoff while waiting for the Host to observe the newly saved sync switch. */
+const STATUS_SETTLE_INITIAL_MS = 250
+const STATUS_SETTLE_MAX_MS = 1_000
+const STATUS_SETTLE_ATTEMPTS = 8
 
 interface MnemonSyncSectionProps {
+  client?: MnemonClient
   connection?: ClientConnectionHandle
   sessionId?: string
   workspaceId?: string
@@ -56,8 +58,11 @@ interface MnemonSyncSectionProps {
  * the result, so it is the one primary action. "Check remote" reads what a sync
  * would change and writes nothing until a button in it is pressed.
  */
-export function MnemonSyncSection({ connection, sessionId, workspaceId, disabled, enabled, onEnabled, onMerged, t }: MnemonSyncSectionProps): JSX.Element {
-  const client = useMemo(() => connection === undefined ? null : new MnemonClient(connection, sessionId, workspaceId), [connection, sessionId, workspaceId])
+export function MnemonSyncSection({ client: sharedClient, connection, sessionId, workspaceId, disabled, enabled, onEnabled, onMerged, t }: MnemonSyncSectionProps): JSX.Element {
+  const client = useMemo(
+    () => sharedClient ?? (connection === undefined ? null : new MnemonClient(connection, sessionId, workspaceId)),
+    [connection, sessionId, sharedClient, workspaceId],
+  )
   const [status, setStatus] = useState<MnemonSyncStatus | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [loadFailed, setLoadFailed] = useState<string | null>(null)
@@ -109,8 +114,10 @@ export function MnemonSyncSection({ connection, sessionId, workspaceId, disabled
     setLoaded(false)
     void (async () => {
       let next = await client.syncStatus()
+      let delayMs = STATUS_SETTLE_INITIAL_MS
       for (let attempt = 0; active && next.enabled === false && attempt < STATUS_SETTLE_ATTEMPTS; attempt += 1) {
-        await new Promise(settle => setTimeout(settle, STATUS_SETTLE_MS))
+        await new Promise(settle => setTimeout(settle, delayMs))
+        delayMs = Math.min(delayMs * 2, STATUS_SETTLE_MAX_MS)
         next = await client.syncStatus()
       }
       return next

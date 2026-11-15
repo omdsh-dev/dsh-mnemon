@@ -21,6 +21,55 @@ function ContentPreview(props: { node: MemoryGraphNode; kind: string; onClose: (
   )
 }
 
+function useSyncFreshnessText(lastFullSyncAt: number | null, active: boolean): string {
+  const t = useT()
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (lastFullSyncAt !== null) setNow(Date.now())
+  }, [lastFullSyncAt])
+  useEffect(() => {
+    if (!active || lastFullSyncAt === null) return
+    const ageMs = Math.max(0, now - lastFullSyncAt)
+    const intervalMs = ageMs < 60_000 ? 1_000 : 60_000
+    const timer = window.setTimeout(() => setNow(Date.now()), intervalMs)
+    return () => window.clearTimeout(timer)
+  }, [active, lastFullSyncAt, now])
+  if (lastFullSyncAt === null) return t('overview.fullSyncPending')
+  const seconds = Math.max(0, Math.floor((now - lastFullSyncAt) / 1_000))
+  if (seconds < 5) return t('overview.fullSyncJustNow')
+  if (seconds < 60) return t('overview.fullSyncSeconds', { count: seconds })
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return t('overview.fullSyncMinutes', { count: minutes })
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return t('overview.fullSyncHours', { count: hours })
+  return t('overview.fullSyncDays', { count: Math.floor(hours / 24) })
+}
+
+/** Leaf freshness clock: ticks every 1s while < 60s old, then every 60s, without re-rendering OverviewPage or MemoryGraph. */
+export function SyncFreshnessText(props: { lastFullSyncAt: number | null; active?: boolean }): JSX.Element {
+  const text = useSyncFreshnessText(props.lastFullSyncAt, props.active !== false)
+  return <>{text}</>
+}
+
+function OverviewSyncHeader(props: {
+  lastFullSyncAt: number | null
+  active: boolean
+  loading: boolean
+  catalogLoading: boolean
+  graphLoading: boolean
+}): JSX.Element {
+  const t = useT()
+  const fullSyncAge = useSyncFreshnessText(props.lastFullSyncAt, props.active)
+  return (
+    <PageHeader
+      title={t('nav.overview')}
+      description={t('overview.pageDescription')}
+      meta={fullSyncAge}
+      {...(props.loading ? { loadingLabel: props.catalogLoading ? t('overview.directoryLoading') : props.graphLoading ? t('overview.snapshotLoading') : t('overview.healthLoading') } : {})}
+    />
+  )
+}
+
 export function OverviewPage(props: { client: MemorySpacesPageClient; active?: boolean; metadataClient: MemorySpacesPageClient; revision: number; reloadKey?: number; activationEnabled: boolean; writeEnabled: boolean; agentAvailable: boolean; fallbackBodies: MemorySpaceView[]; fallbackDirectory: string | undefined; catalogKnown: boolean; onMutate: () => void; onAgentRefresh: () => void; onBodyReconnect: (body: MemorySpaceView) => void; onBodyMetadata: (updates: readonly MemorySpaceMetadataUpdate[]) => void; onExplore: (query: string) => void }): JSX.Element {
   const t = useT()
   const locale = useLocale()
@@ -32,10 +81,11 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
   const [quietGraph, setQuietGraph] = useState(() => {
     try { return localStorage.getItem('dsh-mnemon:graph-appearance') === 'quiet' } catch { return false }
   })
-  const changeGraphAppearance = (quiet: boolean): void => {
+  const changeGraphAppearance = useCallback((quiet: boolean): void => {
     setQuietGraph(quiet)
     try { localStorage.setItem('dsh-mnemon:graph-appearance', quiet ? 'quiet' : 'standard') } catch { /* Keep the choice for this view when browser storage is unavailable. */ }
-  }
+  }, [])
+  const clearGraphSelection = useCallback(() => setSelected(null), [])
   const [catalogLoading, setCatalogLoading] = useState(true)
   const [healthLoading, setHealthLoading] = useState(true)
   const [graphLoading, setGraphLoading] = useState(true)
@@ -65,13 +115,17 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
   const [rediscovering, setRediscovering] = useState(false)
   const [pageRediscovery, setPageRediscovery] = useState<MemorySpaceRediscovery | null>(null)
   const [seenRediscovery, setSeenRediscovery] = useState<string | null>(readSeenRediscovery)
-  const [syncClock, setSyncClock] = useState(() => Date.now())
   const loadRequest = useRef(0)
+  const catalogRef = useRef<MemorySpaceCatalog | null>(null)
+  catalogRef.current = catalog
+  const healthLoadingRef = useRef(healthLoading)
+  healthLoadingRef.current = healthLoading
   const initialSyncStarted = useRef(false)
   const directoryRetryStarted = useRef(false)
   const fullSyncObserved = useRef(true)
-  const load = useCallback(async (quiet = false) => {
+  const load = useCallback(async (quiet = false, preserveHealth = false) => {
     const request = ++loadRequest.current
+    const previousCatalog = preserveHealth && !healthLoadingRef.current ? catalogRef.current : null
     setCatalogLoading(true)
     setHealthLoading(true)
     setGraphLoading(true)
@@ -93,18 +147,38 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
         }
       })
       if (request !== loadRequest.current) return
-      setProviderDrafts(current => mergeProviderDefaults(nextCatalog.providers, current))
-      setCatalog(nextCatalog)
+      const previousById = previousCatalog === null ? null : new Map(previousCatalog.items.map(item => [item.id, item]))
+      const mergedItems = previousById === null
+        ? nextCatalog.items
+        : nextCatalog.items.map(item => {
+            const existing = previousById.get(item.id)
+            if (existing === undefined || existing.statusLoading === true) return item
+            return {
+              ...item,
+              healthy: existing.healthy,
+              statusLoading: false,
+              ...(existing.error === undefined ? {} : { error: existing.error }),
+              ...(existing.stats === undefined ? {} : { stats: existing.stats }),
+            }
+          })
+      const hydratedCatalog: MemorySpaceCatalog = previousById === null ? nextCatalog : { ...nextCatalog, items: mergedItems }
+      const needsHealthProbe = directoryUnavailable || previousById === null || hydratedCatalog.items.some(item => item.statusLoading === true)
+      setProviderDrafts(current => mergeProviderDefaults(hydratedCatalog.providers, current))
+      setCatalog(hydratedCatalog)
       setCatalogLoading(false)
-      void props.client.bodies().then(next => {
-        if (request !== loadRequest.current) return
-        setCatalog(next)
-      }).catch(reason => {
-        if (request === loadRequest.current && !quiet && !directoryUnavailable) setError(message(reason))
-      }).finally(() => { if (request === loadRequest.current) setHealthLoading(false) })
+      if (!needsHealthProbe) {
+        setHealthLoading(false)
+      } else {
+        void props.client.bodies().then(next => {
+          if (request !== loadRequest.current) return
+          setCatalog(next)
+        }).catch(reason => {
+          if (request === loadRequest.current && !quiet && !directoryUnavailable) setError(message(reason))
+        }).finally(() => { if (request === loadRequest.current) setHealthLoading(false) })
+      }
       void props.client.graph().then(next => {
         if (request !== loadRequest.current) return
-        const enriched = enrichMultiSpaceGraph(next, nextCatalog.items)
+        const enriched = enrichMultiSpaceGraph(next, hydratedCatalog.items)
         setGraph(enriched)
         setSelected(current => current === null ? null : enriched.nodes.find(node => graphNodeKey(node) === graphNodeKey(current)) ?? null)
       }).catch(reason => {
@@ -137,11 +211,6 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
     directoryRetryStarted.current = true
     void load(true)
   }, [catalogUnavailable, load, props.catalogKnown])
-  useEffect(() => {
-    if (props.active === false) return
-    const timer = window.setInterval(() => setSyncClock(Date.now()), 1_000)
-    return () => window.clearInterval(timer)
-  }, [props.active])
   // A new space starts with a provider that can take it now.
   useEffect(() => { setSpaceProviderId(current => readyProviderId(catalog?.providers ?? [], current) ?? current) }, [catalog])
   // A pass the Host started while this page is open: read the directory again until it ends, then
@@ -166,7 +235,7 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
     setChanging(body.id); setError(null)
     try {
       await props.client.updateBody(body.id, { active: !body.active })
-      await load(true)
+      await load(true, true)
       props.onMutate()
     } catch (reason) { setError(message(reason)) } finally { setChanging(null) }
   }
@@ -324,22 +393,8 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
     if (!fullSyncObserved.current) return
     fullSyncObserved.current = false
     if (error !== null) return
-    const completedAt = Date.now()
-    setLastFullSyncAt(completedAt)
-    setSyncClock(completedAt)
+    setLastFullSyncAt(Date.now())
   }, [error, loading])
-  const fullSyncAge = lastFullSyncAt === null
-    ? t('overview.fullSyncPending')
-    : (() => {
-        const seconds = Math.max(0, Math.floor((syncClock - lastFullSyncAt) / 1_000))
-        if (seconds < 5) return t('overview.fullSyncJustNow')
-        if (seconds < 60) return t('overview.fullSyncSeconds', { count: seconds })
-        const minutes = Math.floor(seconds / 60)
-        if (minutes < 60) return t('overview.fullSyncMinutes', { count: minutes })
-        const hours = Math.floor(minutes / 60)
-        if (hours < 24) return t('overview.fullSyncHours', { count: hours })
-        return t('overview.fullSyncDays', { count: Math.floor(hours / 24) })
-      })()
   const selectedProvider = providers.find(provider => provider.id === spaceProviderId)
   // The latest pass: one started here answers even when it found nothing; one from start-up
   // speaks only when it has news.
@@ -391,8 +446,7 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
   const spaceDeleteActionClass = appearanceClass(css.dangerButton, appearanceClass(sidebarCss.itemActionButton, sidebarCss.itemDangerAction))
   return (
     <div className={css.page}>
-      <PageHeader title={t('nav.overview')} description={t(('overview.pageDescription'))} meta={fullSyncAge} {...(loading ? { loadingLabel: catalogLoading ? t('overview.directoryLoading') : graphLoading ? t('overview.snapshotLoading') : t('overview.healthLoading') } : {})}
- />
+      <OverviewSyncHeader lastFullSyncAt={lastFullSyncAt} active={props.active !== false} loading={loading} catalogLoading={catalogLoading} graphLoading={graphLoading} />
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
       <section className={css.bodyDirectory} aria-label={t('overview.directory')}>
         <div className={css.bodyDirectoryHeader}>
@@ -451,7 +505,7 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
               <div><span className={css.liveDot} />{t('overview.snapshot')} <small>{generated}</small></div>
               <div className={css.graphLegend}><span data-edge="scope">{t('overview.edgeScope')}</span><span data-edge="temporal">{t('overview.edgeTemporal')}</span><span data-edge="semantic">{t('overview.edgeSemantic')}</span><span data-edge="causal">{t('overview.edgeCausal')}</span><span data-edge="entity">{t('overview.edgeEntity')}</span></div>
             </div>
-            <div className={css.graphViewport}><MemoryGraph graph={graph} selectedId={selected === null ? undefined : graphNodeKey(selected)} onSelect={setSelected} onClearSelection={() => setSelected(null)} quiet={quietGraph} onQuietChange={changeGraphAppearance} /></div>
+            <div className={css.graphViewport}><MemoryGraph graph={graph} selectedId={selected === null ? undefined : graphNodeKey(selected)} onSelect={setSelected} onClearSelection={clearGraphSelection} quiet={quietGraph} onQuietChange={changeGraphAppearance} /></div>
             <div className={css.graphFooter}><span>{t('overview.graphComposition', { spaces: graphSpaces, memories: graphMemories, entities: graphEntities })}</span><span>{t('overview.graphCount', { visible: Math.min(graph.nodes.length, 60), total: graph.nodes.length })} · {t('overview.graphEdges', { count: graph.edges.length })}</span></div>
           </section>
           <aside className={css.graphInspector} data-empty={selected === null || undefined}>

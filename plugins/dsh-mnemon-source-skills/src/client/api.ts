@@ -93,44 +93,160 @@ export interface SkillsPageClient {
   backtest(input: { skillName: string; target: RunTarget; caseIds?: string[]; provider?: string; model?: string }): Promise<{ runId: string }>
   deriveCases(input: { trajectoryId: string; skillName: string; steps?: number[] }): Promise<{ added: EvalCase[]; skipped: number }>
   reviewNow(): Promise<ReviewRecordResult>
+
+  /** Clear cached static preferences when resuming from another window or manual refresh. */
+  invalidatePreferences?(): void
+  /** Track read revisions across a poll wave so completion reconciles only when a card saw an older ledger (#448). */
+  beginReadWave?(onLateStaleRead?: () => void): void
+  markWaveIdleAndCheckStale?(): boolean
 }
 
 function json(value: unknown): MemoryJsonValue {
-  return JSON.parse(JSON.stringify(value ?? null)) as MemoryJsonValue
+  if (value === undefined || value === null) return null
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value
+  if (Array.isArray(value)) return value.map(item => item === undefined ? null : json(item))
+  if (typeof value === 'object') {
+    const out: Record<string, MemoryJsonValue> = {}
+    for (const [key, entry] of Object.entries(value)) {
+      if (entry !== undefined) out[key] = json(entry)
+    }
+    return out
+  }
+  return null
 }
 
 const CONFLICT = /revision conflict|Skills Source changed since it was read; reload/u
+const MAX_TRAJECTORY_CACHE = 64
 
 /**
- * The Source's revision moves with every background review and run, so each
- * write fetches it first and tries once more if a background write slipped in
- * between. A conflict is refused before anything runs, and every write here
- * carries its own precondition, so retrying never applies one twice.
+ * The Source's revision is tracked from every read and mutation response so
+ * writes use the cached revision immediately, fetching `'revision'` only when
+ * uninitialized or retrying once on a concurrent background conflict.
  */
 export function skillsPageClient(management: MnemonSourceManagementClient): SkillsPageClient {
-  const read = async <T,>(operation: string, input: unknown = null, coalesce = false): Promise<T> => (await management.read(operation, json(input), { coalesce })).value as T
-  const fresh = async () => (await management.read('revision', null)).revision
-  const retry = async <T,>(attempt: (revision: string) => Promise<{ value: MemoryJsonValue }>): Promise<T> => {
+  let cachedRevision: string | undefined = typeof management.revision === 'string' && management.revision !== ''
+    ? management.revision
+    : undefined
+  let preferencesPromise: Promise<DraftPreferencesView> | undefined
+  const trajectoryCache = new Map<string, Trajectory>()
+  const trajectoryInFlight = new Map<string, Promise<Trajectory>>()
+
+  let waveOverviewRevision: string | undefined
+  let waveOtherRevisions = new Set<string>()
+  let waveIdleObserved = false
+  let waveLateStaleCallback: (() => void) | undefined
+
+  const recordRevision = (revision: unknown): void => {
+    if (typeof revision === 'string' && revision !== '') cachedRevision = revision
+  }
+
+  const read = async <T,>(operation: string, input: unknown = null, coalesce = false): Promise<T> => {
+    const response = await management.read(operation, json(input), { coalesce })
+    recordRevision(response.revision)
+    if (typeof response.revision === 'string' && response.revision !== '') {
+      if (operation === 'overview') {
+        waveOverviewRevision = response.revision
+      } else {
+        waveOtherRevisions.add(response.revision)
+        if (waveIdleObserved && waveOverviewRevision !== undefined && response.revision !== waveOverviewRevision) {
+          waveIdleObserved = false
+          const notify = waveLateStaleCallback
+          waveLateStaleCallback = undefined
+          notify?.()
+        }
+      }
+    }
+    return response.value as T
+  }
+
+  const fresh = async (): Promise<string> => {
+    const response = await management.read('revision', null)
+    recordRevision(response.revision)
+    return response.revision
+  }
+
+  const retry = async <T,>(attempt: (revision: string) => Promise<{ revision?: string; value: MemoryJsonValue }>): Promise<T> => {
     for (let count = 1; ; count++) {
-      try { return (await attempt(await fresh())).value as T } catch (error) {
+      const revision = cachedRevision ?? await fresh()
+      try {
+        const response = await attempt(revision)
+        recordRevision(response.revision)
+        return response.value as T
+      } catch (error) {
         if (count >= 3 || !CONFLICT.test(error instanceof Error ? error.message : String(error))) throw error
+        cachedRevision = undefined
       }
     }
   }
+
   const mutate = <T,>(operation: string, input: unknown) => retry<T>(revision => management.mutate(operation, json(input), { confirmed: true, expectedRevision: revision }))
   const assist = <T,>(operation: string, input: unknown) => {
     if (management.assistance?.operations.includes(operation) !== true) return Promise.reject<T>(new Error('a task Agent is not available for this action'))
     return retry<T>(revision => management.assistance!.execute(operation, json(input), { expectedRevision: revision, confirmed: true }))
   }
+
+  const readDraftPreferences = (): Promise<DraftPreferencesView> => {
+    preferencesPromise ??= read<DraftPreferencesView>('draft-preferences').catch(error => {
+      preferencesPromise = undefined
+      throw error
+    })
+    return preferencesPromise
+  }
+
+  const writeDraftPreferences = (payload: Record<string, unknown>): Promise<DraftPreferencesView> =>
+    mutate<DraftPreferencesView>('draft-preference', payload).then(
+      next => {
+        preferencesPromise = Promise.resolve(next)
+        return next
+      },
+      error => {
+        preferencesPromise = undefined
+        throw error
+      },
+    )
+
+  const readTrajectory = (id: string): Promise<Trajectory> => {
+    const cached = trajectoryCache.get(id)
+    if (cached !== undefined) {
+      trajectoryCache.delete(id)
+      trajectoryCache.set(id, cached)
+      return Promise.resolve(cached)
+    }
+    const existing = trajectoryInFlight.get(id)
+    if (existing !== undefined) return existing
+    const request = read<Trajectory>('trajectory', { id }).then(value => {
+      trajectoryInFlight.delete(id)
+      trajectoryCache.delete(id)
+      trajectoryCache.set(id, value)
+      while (trajectoryCache.size > MAX_TRAJECTORY_CACHE) {
+        const oldest = trajectoryCache.keys().next().value
+        if (oldest === undefined) break
+        trajectoryCache.delete(oldest)
+      }
+      return value
+    }, error => {
+      trajectoryInFlight.delete(id)
+      throw error
+    })
+    trajectoryInFlight.set(id, request)
+    return request
+  }
+
+  const evictTrajectory = (id: string): void => {
+    trajectoryCache.delete(id)
+    trajectoryInFlight.delete(id)
+  }
+
   // Detail cards have no pickers of their own. Resolve their saved choice here
   // too, while leaving explicit (including invalid partial) routes to the Host.
   const savedModel = async (slot: 'draft' | 'run', input: { provider?: string; model?: string; suggestionId?: string; skillName?: string }): Promise<ModelRoute | undefined> => {
     if (input.provider !== undefined || input.model !== undefined) return undefined
-    const preferences = await read<DraftPreferencesView>('draft-preferences')
+    const preferences = await readDraftPreferences()
     const overrides = slot === 'draft' ? preferences.suggestionModels : preferences.skillRunModels
     const key = slot === 'draft' ? input.suggestionId : input.skillName
     return key !== undefined && Object.hasOwn(overrides, key) ? overrides[key] : slot === 'draft' ? preferences.model : preferences.runModel
   }
+
   return {
     overview: () => read('overview', null, true),
     catalog: () => read('catalog', null, true),
@@ -138,8 +254,23 @@ export function skillsPageClient(management: MnemonSourceManagementClient): Skil
     version: (key, id) => read('version', { key, id }),
     suggestions: status => read('suggestions', status === undefined ? {} : { status }, true),
     suggestion: id => read('suggestion', { id }),
-    trajectories: filter => read('trajectories', filter ?? {}, true),
-    trajectory: id => read('trajectory', { id }),
+    trajectories: filter => read<TrajectorySummary[]>('trajectories', filter ?? {}, true).then(list => {
+      for (const summary of list) {
+        const cached = trajectoryCache.get(summary.id)
+        if (
+          cached !== undefined
+          && (
+            cached.pinned !== summary.pinned
+            || cached.suggestionIds.length !== summary.suggestionIds.length
+            || cached.suggestionIds.some((id, index) => id !== summary.suggestionIds[index])
+          )
+        ) {
+          trajectoryCache.delete(summary.id)
+        }
+      }
+      return list
+    }),
+    trajectory: readTrajectory,
     cases: skill => read('cases', skill === undefined ? {} : { skill }, true),
     runs: skill => read('runs', skill === undefined ? {} : { skill }, true),
     run: id => read('run', { id }),
@@ -158,10 +289,22 @@ export function skillsPageClient(management: MnemonSourceManagementClient): Skil
     emptyTrash: () => mutate('trash-empty', {}),
     restoreVersion: (key, versionId, expectedHash) => mutate('version-restore', { key, versionId, expectedHash }),
     dismissSuggestion: id => mutate('suggestion-dismiss', { id }),
-    deleteSuggestion: id => mutate('suggestion-delete', { id }),
+    deleteSuggestion: id => {
+      for (const [trajectoryId, cached] of trajectoryCache.entries()) {
+        if (cached.suggestionIds.includes(id)) trajectoryCache.delete(trajectoryId)
+      }
+      trajectoryInFlight.clear()
+      return mutate('suggestion-delete', { id })
+    },
     deleteDraft: id => mutate('draft-delete', { id }),
-    pinTrajectory: (id, pinned) => mutate('trajectory-pin', { id, pinned }),
-    deleteTrajectory: id => mutate('trajectory-delete', { id }),
+    pinTrajectory: (id, pinned) => {
+      evictTrajectory(id)
+      return mutate('trajectory-pin', { id, pinned })
+    },
+    deleteTrajectory: id => {
+      evictTrajectory(id)
+      return mutate('trajectory-delete', { id })
+    },
     saveCase: input => mutate('case-save', { case: input }),
     deleteCase: id => mutate('case-delete', { id }),
     updateDraft: (id, content) => mutate('draft-update', { id, content }),
@@ -170,11 +313,11 @@ export function skillsPageClient(management: MnemonSourceManagementClient): Skil
     discardDraft: id => mutate('draft-discard', { id }),
     linkRun: (draftId, runId) => mutate('run-link', { draftId, runId }),
 
-    draftPreferences: () => read('draft-preferences'),
-    saveDraftModel: model => mutate('draft-preference', { model }),
-    saveSuggestionModel: (id, model) => mutate('draft-preference', { suggestionId: id, model }),
-    saveRunModel: model => mutate('draft-preference', { slot: 'run', model }),
-    saveSkillRunModel: (skillName, model) => mutate('draft-preference', { slot: 'run', skillName, model }),
+    draftPreferences: readDraftPreferences,
+    saveDraftModel: model => writeDraftPreferences({ model }),
+    saveSuggestionModel: (id, model) => writeDraftPreferences({ suggestionId: id, model }),
+    saveRunModel: model => writeDraftPreferences({ slot: 'run', model }),
+    saveSkillRunModel: (skillName, model) => writeDraftPreferences({ slot: 'run', skillName, model }),
     models: () => management.models === undefined ? Promise.reject<TaskAgentModelCatalog>(new Error('model catalog is unavailable')) : management.models(),
 
     market: () => read('market'),
@@ -190,6 +333,24 @@ export function skillsPageClient(management: MnemonSourceManagementClient): Skil
     generateDraft: async input => assist('skill-draft', { ...await savedModel('draft', input), ...input }),
     backtest: async input => assist('skill-backtest', { ...await savedModel('run', input), ...input }),
     deriveCases: input => assist('skill-derive-cases', input),
-    reviewNow: () => assist('skill-review-now', {}),
+    reviewNow: () => {
+      trajectoryCache.clear()
+      trajectoryInFlight.clear()
+      return assist('skill-review-now', {})
+    },
+
+    invalidatePreferences: () => { preferencesPromise = undefined },
+    beginReadWave: onLateStaleRead => {
+      waveOverviewRevision = undefined
+      waveOtherRevisions = new Set()
+      waveIdleObserved = false
+      waveLateStaleCallback = onLateStaleRead
+    },
+    markWaveIdleAndCheckStale: () => {
+      const stale = waveOverviewRevision !== undefined && [...waveOtherRevisions].some(rev => rev !== waveOverviewRevision)
+      waveIdleObserved = !stale
+      if (stale) waveLateStaleCallback = undefined
+      return stale
+    },
   }
 }

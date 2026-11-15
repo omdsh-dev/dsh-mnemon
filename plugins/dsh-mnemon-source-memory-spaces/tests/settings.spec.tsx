@@ -19,8 +19,21 @@ const { artifact } = vi.hoisted(() => ({ artifact: async () => {
 vi.mock('dsh-mnemon/client', artifact)
 afterEach(cleanup)
 
-import { MemorySourcePageFrame, translateEn as t, translateZh } from 'dsh-mnemon/client'
+import { MemorySourcePageFrame, translateEn as coreEn, translateZh as coreZh } from 'dsh-mnemon/client'
+import copy from '../presentation/locales.json' with { type: 'json' }
 import type { DshLocale } from '../src/client/presentation.ts'
+
+function t(key: string, params: Record<string, unknown> = {}): string {
+  const own = (copy.en as Record<string, string>)[key]
+  const text = own ?? coreEn(key as Parameters<typeof coreEn>[0], params)
+  return own === undefined ? text : text.replace(/\{(\w+)\}/g, (match, name: string) => name in params ? String(params[name]) : match)
+}
+
+function translateZh(key: string, params: Record<string, unknown> = {}): string {
+  const own = (copy.zh as Record<string, string>)[key]
+  const text = own ?? coreZh(key as Parameters<typeof coreZh>[0], params)
+  return own === undefined ? text : text.replace(/\{(\w+)\}/g, (match, name: string) => name in params ? String(params[name]) : match)
+}
 import { ProviderField } from '../src/client/provider-field.tsx'
 import { MemorySpacesSettings } from '../src/client/settings.tsx'
 
@@ -272,5 +285,40 @@ describe('write-only embedding credentials', () => {
     expect(password.disabled).toBe(true)
     fireEvent.click(screen.getByRole('switch', { name: t('config.embeddingManaged') }))
     await waitFor(() => expect(set).toHaveBeenCalledWith('embedding', expect.objectContaining({ enabled: false, apiKey: 'legacy-fixture' })))
+  })
+
+  it('preserves embedding test status and avoids re-reading statusSummary or providerServices on unrelated revision bumps', async () => {
+    const read = vi.fn(async (operation: string) => {
+      if (operation === 'provider-services') return { providers: [], items: [], generatedAt: 'now' }
+      if (operation === 'status-summary') return { commandFound: true }
+      if (operation === 'embedding-status') {
+        return {
+          available: true,
+          configured: true,
+          endpoint: saved.endpoint,
+          model: saved.model,
+          embeddedCount: 12,
+          totalCount: 12,
+          spaces: [],
+        }
+      }
+      throw new Error(`unexpected read ${operation}`)
+    })
+    const { lent, set } = host({ storageScope: 'global', embedding: saved }, { read })
+    render(settings(lent))
+    await waitFor(() => expect(read).toHaveBeenCalledWith('status-summary'))
+    await waitFor(() => expect(read).toHaveBeenCalledWith('provider-services'))
+    const testButton = await screen.findByRole('button', { name: t('config.embeddingTest') })
+    await waitFor(() => expect((testButton as HTMLButtonElement).disabled).toBe(false))
+
+    fireEvent.click(testButton)
+    await waitFor(() => expect(read).toHaveBeenCalledWith('embedding-status'))
+    expect(screen.queryByText(t('config.embeddingNotTested'))).toBeNull()
+
+    read.mockClear()
+    await set('unrelatedSetting', 'updated-value')
+    expect(read).not.toHaveBeenCalledWith('status-summary')
+    expect(read).not.toHaveBeenCalledWith('provider-services')
+    expect(screen.queryByText(t('config.embeddingNotTested'))).toBeNull()
   })
 })
