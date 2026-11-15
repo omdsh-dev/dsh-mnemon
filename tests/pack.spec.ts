@@ -859,6 +859,27 @@ describe('Mnemon Pack', () => {
       expect(queuedElapsed).toBeLessThan(500)
     }
   })
+
+  it('releases already acquired locks if a later lock acquisition throws', async () => {
+    const source = await fixture('pack-lock-acquire-throw', 16)
+    const documentsDir = join(source.root, DOCUMENTS_DIRECTORY)
+    rmSync(documentsDir, { recursive: true, force: true })
+    writeFileSync(documentsDir, 'occupying documents path with a regular file\n')
+
+    await expect(source.manager.exportPack('full')).rejects.toThrow()
+
+    expect(existsSync(join(source.root, '.dsh-pack.lock'))).toBe(false)
+    expect(existsSync(join(source.root, RUNTIME_DIRECTORY, RUNTIME_LOCK_FILE))).toBe(false)
+
+    const writeStart = performance.now()
+    await source.sources.runtime.mutate('mutate', {
+      action: 'add',
+      target: 'memory',
+      content: 'Runtime write immediately after failed full Pack lock acquisition',
+      importance: 'normal',
+    }, { confirmed: true })
+    expect(performance.now() - writeStart).toBeLessThan(200)
+  })
 })
 
 it('roundtrips pins and preserves them ahead of unpinned critical entries in a merge overflow', async () => {

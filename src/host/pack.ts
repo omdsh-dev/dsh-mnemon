@@ -460,22 +460,19 @@ async function withLocks<T>(root: string, components: MnemonPackComponent[], ope
   while (true) {
     const releases: Array<() => void> = []
     let contendedPath: string | undefined
-    for (const lock of locks) {
-      const release = tryAcquireLockSync(lock.path, lock.staleMs)
-      if (release === undefined) {
-        contendedPath = lock.path
-        break
+    try {
+      for (const lock of locks) {
+        const release = tryAcquireLockSync(lock.path, lock.staleMs)
+        if (release === undefined) {
+          contendedPath = lock.path
+          break
+        }
+        releases.push(release)
       }
-      releases.push(release)
+      if (contendedPath === undefined) return operation()
+    } finally {
+      for (const release of releases.reverse()) release()
     }
-    if (contendedPath === undefined) {
-      try {
-        return operation()
-      } finally {
-        for (const release of releases.reverse()) release()
-      }
-    }
-    for (const release of releases.reverse()) release()
     if (Date.now() >= deadline) throw new Error(`timed out waiting for Pack component lock: ${contendedPath}`)
     await delay(LOCK_RETRY_MS)
   }
