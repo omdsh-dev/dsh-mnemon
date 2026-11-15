@@ -116,7 +116,7 @@ describe('dsh-mnemon page under DSH Plugins', () => {
     const open = vi.fn()
     let withdraw = (): void => {}
     act(() => { withdraw = workspace.provide(open) })
-    fireEvent.click(screen.getByRole('button', { name: 'Open Memory System' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }))
     expect(open).toHaveBeenCalledOnce()
 
     for (const subject of [
@@ -686,7 +686,7 @@ describe('component fallback across Starter and Memory Spaces versions', () => {
         : [] }))
       const Page = spaces.MemorySpacesSourcePage as ComponentType<Record<string, unknown>>
       render(<Page page="spaces" sourceTypeId="memory-spaces" sourceInstanceKey="source:spaces" sourceInstances={[]} locale="en" writable management={{ sourceInstanceKey: 'source:spaces', revision: 'r1', read, mutate: vi.fn() }} />)
-      fireEvent.click(await screen.findByRole('button', { name: 'Create Memory Space' }))
+      fireEvent.click(await screen.findByRole('button', { name: 'New' }))
       const dialog = screen.getByRole('dialog', { name: 'Create Memory Space' })
       for (const [descriptor, control] of [[mem0, 'input[type="checkbox"]'], [hindsight, 'button'], [holographic, 'input[type="number"]']] as const) {
         fireEvent.click(within(dialog).getByRole('radio', { name: new RegExp(descriptor.label, 'u') }))

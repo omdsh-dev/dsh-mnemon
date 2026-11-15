@@ -29,19 +29,19 @@ Project Documents needs a DSH workspace even with global storage. Select a works
 
 ## 2. Store your first memories
 
-**Runtime memory.** Open **Runtime memory**, choose **Add memory** and save a preference in the user profile or a project fact in working memory. It is injected into every later turn.
+**Runtime memory.** Open **Runtime memory**, choose **New** and save a preference in the user profile or a project fact in working memory. It is injected into every later turn.
 
-**A document.** Open **Project Documents**, choose **New document** and save a short design note or checklist. The Agent searches documents when a question needs them.
+**A document.** Open **Project Documents**, choose **New** and save a short design note or checklist. The Agent searches documents when a question needs them.
 
-**A memory space.** Open **Memory Spaces → Overview** and choose **Create Memory Space**:
+**A memory space.** Open **Memory Spaces → Overview** and choose **New**:
 
 1. Pick a Provider. Mnemon Native, the local default, is offered once its CLI is installed; enable third-party Providers on [Memory Spaces' page](./ui-guide.md#on-the-plugins-page) first.
 2. Give it a narrow name, such as *Project decisions*, and describe what belongs there.
 3. Keep it active so conversations can read it.
 
-In an empty storage root, the first Mnemon Native space uses Mnemon's `default` store id while keeping your name and description; spaces on other Providers get their own ids. Then choose **Save to memory**, enter something stable and secret-free, and choose **Send to task Agent**. An independent task Agent picks the space, removes duplicates and writes, and its receipt says where it went.
+In an empty storage root, the first Mnemon Native space uses Mnemon's `default` store id while keeping your name and description; spaces on other Providers get their own ids. Then choose **Save to memory**, enter something stable and secret-free, and choose **Save**. An independent task Agent picks the space, removes duplicates and writes, and its receipt says where it went.
 
-**Check it.** Open **Memory Spaces → Recall**, ask a concrete question and choose **Direct search**. Each result keeps its memory space, category, importance and score; copy its id when you need it.
+**Check it.** Open **Memory Spaces → Recall**, ask a concrete question and choose **Search**. Each result keeps its memory space, category, importance and score; copy its id when you need it.
 
 ![Direct search across the active memory spaces](../../assets/webui-v0.5.32/en/memory-recall.jpg)
 

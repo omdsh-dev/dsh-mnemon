@@ -12,12 +12,12 @@ The short rule: **keep every-turn context in runtime memory, complete narratives
 |---|---|---|---|
 | Keep preferences, conventions and environment facts in every turn | **Runtime memory** | The Host maintains `USER.md` and `MEMORY.md` projections | Yes, after you confirm |
 | Keep complete designs, investigations, procedures and handoffs | **Project Documents** | The Host manages Markdown, search, capacity and revisions | Creating and editing do; reading and searching do not |
-| Create a durable space on one of nine backends | **Memory Spaces → Overview → Create Memory Space** | You choose an enabled Provider | Yes |
-| Decide the Provider for spaces a task Agent creates | **Memory Spaces → Provider for new spaces** | One fixed Provider, or Host rules first and then the task Agent among the eligible ones | Saving the setting does |
-| Find raw durable evidence | **Memory Spaces → Recall → Direct search** | Active spaces answer concurrently with their native recall | No |
-| Turn evidence into an answer | **Memory Spaces → Recall → Ask Agent** | A clean task Agent receives only the bounded evidence | No |
+| Create a durable space on one of nine backends | **Memory Spaces → Overview → New** | You choose an enabled Provider | Yes |
+| Decide the Provider for spaces a task Agent creates | **Memory Spaces → Space policy** | One fixed Provider, or Host rules first and then the task Agent among the eligible ones | Saving the setting does |
+| Find raw durable evidence | **Memory Spaces → Recall → Search** | Active spaces answer concurrently with their native recall | No |
+| Turn evidence into an answer | **Memory Spaces → Recall → Ask AI** | A clean task Agent receives only the bounded evidence | No |
 | Qualify, deduplicate, distil and write a candidate | **Save to memory** under a reply or on Memory Spaces | A clean task Agent behind Host-enforced tools, paths, locks and receipts, with a receipt for you | Only if the Agent decides to write |
-| Title and describe several spaces | **Memory Spaces → Overview → Tidy names and descriptions** | One isolated task per space | Local catalog metadata only |
+| Title and describe several spaces | **Memory Spaces → Overview → Tidy** | One isolated task per space | Local catalog metadata only |
 | Move a document out of hot capacity | **Project Documents → Archive** | A task Agent indexes a cold reference before the Host moves the original; without a Memory Space, the Host archives it locally without one | Yes |
 | See what memory a turn used | **Turn memory** under the reply | The documents and memories each tool read or wrote, each opening where it lives | No |
 | Change how memory is composed | **Plugins → dsh-mnemon → Memory composition** | Switches apply to future turns | Configuration only |

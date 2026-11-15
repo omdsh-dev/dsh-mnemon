@@ -119,7 +119,7 @@ describe('MnemonSettingsCard', () => {
     fireEvent.click(within(card).getByRole('button'))
     const user = within(card).getByRole('textbox', { name: 'User Key 所属用户（跳过 Admin）' })
     fireEvent.change(user, { target: { value: rejected ? 'bob' : 'alice' } })
-    fireEvent.click(within(card).getByRole('button', { name: '保存服务配置' }))
+    fireEvent.click(within(card).getByRole('button', { name: '保存' }))
     await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'provider-service-update', {
       providerId: 'work-cloud', enabled: true, settings: { endpoint: 'https://memory.example/openviking', account: 'work', discoveryUser: rejected ? 'bob' : 'alice' },
     }))
@@ -934,7 +934,7 @@ describe('MnemonSettingsCard', () => {
     expect(memory.value).toBe('10240')
     fireEvent.change(user, { target: { value: '8192' } })
     expect(mutate).not.toHaveBeenCalled()
-    fireEvent.click(screen.getByRole('button', { name: '放弃修改' }))
+    fireEvent.click(screen.getByRole('button', { name: '放弃' }))
     expect(user.value).toBe('4096')
     fireEvent.change(user, { target: { value: '8192' } })
     fireEvent.change(memory, { target: { value: '20480' } })
@@ -1283,7 +1283,7 @@ describe('MnemonSettingsCard', () => {
       expect((within(card).getByRole('textbox', { name: '事实存储路径' }) as HTMLInputElement).value).toBe('/srv/dsh/holographic.json')
     }
     const path = within(card).getByRole('textbox', { name: '事实存储路径' })
-    const save = within(card).getByRole('button', { name: '保存服务配置' }) as HTMLButtonElement
+    const save = within(card).getByRole('button', { name: '保存' }) as HTMLButtonElement
     fireEvent.change(path, { target: { value: '/srv/dsh/holographic-v2.json' } })
     expect(save.disabled).toBe(false)
     fireEvent.click(save)
@@ -1332,7 +1332,7 @@ describe('MnemonSettingsCard', () => {
     const endpoint = within(card).getByRole('textbox', { name: 'Vector endpoint' })
     expect((within(card).getByLabelText('Vector API token') as HTMLInputElement).type).toBe('password')
     fireEvent.change(endpoint, { target: { value: 'https://vectors-v2.example' } })
-    fireEvent.click(within(card).getByRole('button', { name: '保存服务配置' }))
+    fireEvent.click(within(card).getByRole('button', { name: '保存' }))
 
     await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'provider-service-update', expect.objectContaining({
       providerId: 'work-account', enabled: true, settings: { serverUrl: 'https://vectors-v2.example' },
@@ -1388,7 +1388,7 @@ describe('MnemonSettingsCard', () => {
     expect(apiKey.value).toBe('replacement-secret')
     fireEvent.click(screen.getByRole('button', { name: '隐藏凭证' }))
     expect(apiKey.type).toBe('password')
-    fireEvent.click(screen.getByRole('button', { name: '保存服务配置' }))
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
 
     await waitFor(() => expect(call).toHaveBeenCalledWith('/dsh-mnemon-write', 'provider-service-update', {
       providerId: 'openviking',
@@ -1705,7 +1705,7 @@ describe('storage directory chooser', () => {
     const f = chooserFixture()
     chooseDirectory()
     await waitFor(() => expect(field().value).toBe('/fixture/chosen'))
-    fireEvent.click(screen.getByRole('button', { name: 'Discard changes' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
     expect(field().value).toBe('/fixture/original')
     expect(f.mutate).not.toHaveBeenCalled()
   })
