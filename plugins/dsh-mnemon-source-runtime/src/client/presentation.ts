@@ -13,7 +13,13 @@ export function useT(): (key: SourceKey | MnemonKey, params?: Record<string, unk
   const fallback = useSharedT()
   const locale = useLocale()
   return useMemo(() => (key: SourceKey | MnemonKey, params?: Record<string, unknown>) => {
-    const dictionary = locale.startsWith('en') ? copy.en : copy.zh
+    const dictionary = locale.toLowerCase().startsWith('zh') ? copy.zh : copy.en
+    // Preserve Source-owned zh/en copy while allowing other language packs
+    // through the enclosing Host translator before the English fallback.
+    if (!/^(en|zh)(-|$)/i.test(locale)) {
+      const translated = fallback(key as MnemonKey, params)
+      if (translated !== key) return translated
+    }
     if (!Object.hasOwn(dictionary, key)) return fallback(key as MnemonKey, params)
     const text = dictionary[key as SourceKey]
     return params === undefined ? text : text.replace(/\{(\w+)\}/g, (match, name: string) => name in params ? String(params[name]) : match)

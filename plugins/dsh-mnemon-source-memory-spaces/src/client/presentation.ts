@@ -56,7 +56,13 @@ export function useT(): Translate {
   const fallback = useSharedT()
   const locale = useLocale()
   return useMemo(() => override ?? ((key: SourceKey | MnemonKey, params?: Record<string, unknown>) => {
-    const dictionary = locale.startsWith('en') ? copy.en : copy.zh
+    const dictionary = locale.toLowerCase().startsWith('zh') ? copy.zh : copy.en
+    // Preserve Source-owned zh/en copy while allowing other language packs
+    // through the enclosing Host translator before the English fallback.
+    if (!/^(en|zh)(-|$)/i.test(locale)) {
+      const translated = fallback(key as MnemonKey, params)
+      if (translated !== key) return translated
+    }
     if (!Object.hasOwn(dictionary, key)) return fallback(key as MnemonKey, params)
     return interpolate(dictionary[key as SourceKey], params)
   }), [override, locale, fallback])
@@ -80,7 +86,7 @@ export function languageChain(snapshot: DshLocaleSnapshot): string[] {
  */
 export function settingsTranslate(locale: DshLocale, chain: readonly string[] | undefined, language: string): Translate {
   const bound = locale.bind('mnemon')
-  const head = chain === undefined ? language.startsWith('en') ? 'en' : 'zh' : chain.find(id => id === 'zh' || id === 'en') ?? 'en'
+  const head = chain === undefined ? language.toLowerCase().startsWith('zh') ? 'zh' : 'en' : chain.find(id => id === 'zh' || id === 'en') ?? 'en'
   const own: Readonly<Record<string, string>> = head === 'en' ? copy.en : copy.zh
   const packFirst = chain !== undefined && chain.length > 0 && chain[0] !== head
   return (key, params) => {

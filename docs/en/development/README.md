@@ -136,6 +136,8 @@ The fixture prints a temporary workspace and loopback URL. It isolates `DSH_HOME
 
 Check Sidebar without a session, all primary/secondary tabs, Runtime add/edit/remove and branch clear, Documents create/search/read, Provider settings/discovery, activation, error states, dialog cancellation, Save-to-memory, layout switching, locale and restoration of chat interaction. On the `dsh-mnemon` page under Plugins, also check the main strategy selector, each component's switch and page, DSH's component rows and the pages they open, the Default/Custom storage location, and a backup import preview. Use a disposable real Provider or controlled fixture for write/read/forget; never test against personal memory.
 
+Source pages preserve Chinese and English copy. Other locales use the Host-bound `mnemon` language pack when it answers a key, then fall back to English for missing translations. Test partial packs and locale switches across Runtime, Documents, Memory Spaces and Skills; translation must not change read/write authority.
+
 Also switch `displayMode` live: the Sidebar and the conversation tab (`builtin`) must never mount together. Both use the same Source pages; the conversation tab follows its owning session for global/workspace/workspaces/custom reads, writes and tasks, hides scope controls, and clears stale data and editors when the session changes. Check legacy `buildin` normalization and the collapsed icon under the native Sidebar skin as well as supported layout plugins.
 
 Separate upstream profile/transport warnings from Mnemon failures rather than hiding the console.
