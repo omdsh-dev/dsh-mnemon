@@ -97,6 +97,7 @@ OpenViking 适配器目前通过 `RememberRequest.content` 接收文本，并保
 - WebUI 不直接调用远程服务或本地 CLI；Provider I/O 都留在 Host，统一具备取消、超时、进程输出上限和 shell-disabled 参数执行。
 - “断开”三方记忆空间只删除本地目录登记，不删除底层数据。单条记忆的“遗忘”是另一项按能力开放的操作。
 - Holographic 是对本地结构化事实语义的 TypeScript 适配，使用原子 JSON 存储，并保持独立的数据格式与生命周期实现。
+- Holographic 遇到原文完全一致的重复写入时，会返回已有事实 ID 和已存原文，不重写该事实。即使它未进入检索排名靠前的结果，Runtime 容量归档仍能直接验证该持久副本。检索排序、可信度筛选和原文必须完全一致的要求保持不变。
 - Holographic 将显式写入重要度视为 1 到 5 的整数，并以 `importance / 5` 保存可信度；省略重要度时使用 `defaultTrust`。搜索、浏览和关联读取均排除低于 `minTrust` 的事实，隐藏的事实仍然保留。已有事实的可信度保持原值：旧值 1 无法还原原始重要度，因此不会自动重写。新事实单独保留显式重要度，旧版本读取器会忽略该可选字段。其他 Provider 也会收到未被补齐的重要度并使用各自默认值（Mnemon Native 仍为 3）。
 - Hindsight 使用轻量存活检查，并从 Provider 的 bank stats、实体目录与图谱响应读取真实统计、实体和关系；旧版缺少统计接口时仍可使用召回与图谱表面。
 - 在 Windows 上，ByteRover 从 `PATH` 或显式 `cliPath` 解析 npm 全局或本地安装的 `brv.cmd`，再通过 Node 运行经验证的 `byterover-cli/bin/run.js` 入口。相对 `PATH` 条目与显式相对 `cliPath` 均以知识库工作目录为基准解析，JavaScript 入口在启动前转换为绝对路径。查询与 curate 内容保持为字面参数，不经过 shell。请先用 `npm install -g byterover-cli` 单独安装 CLI；自定义可执行文件继续直接运行。无法识别的 `.cmd` 包装会被拒绝，并显示配置指引。

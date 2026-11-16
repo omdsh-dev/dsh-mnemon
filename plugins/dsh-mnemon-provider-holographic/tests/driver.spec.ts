@@ -11,6 +11,28 @@ const temporaryDirectories: string[] = []
 afterEach(() => { for (const directory of temporaryDirectories.splice(0)) rmSync(directory, { recursive: true, force: true }) })
 
 describe('standalone holographic data plane', () => {
+  it('returns exact stored evidence for a duplicate outside the top search results (#657)', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'dsh-mnemon-holographic-archive-'))
+    temporaryDirectories.push(dataDir)
+    const dataPath = join(dataDir, 'facts.json')
+    const { authority, body } = createMemorySpaceProviderFixture(descriptor, { dataPath, minTrust: 0 }, { dataDir })
+    const provider = new HolographicProvider(authority)
+    const content = 'Release records preserve the verified deployment decision.'
+    const existing = await provider.remember(body, { content, importance: 3 }) as { id: string }
+    for (let index = 0; index < 25; index += 1) {
+      await provider.remember(body, { content: `${content} Related record ${index}.`, importance: 5 })
+    }
+    const ranked = await provider.search(body, { query: content, limit: 20 })
+    expect(ranked.results).toHaveLength(20)
+    expect(ranked.results.some(row => row.id === existing.id)).toBe(false)
+    const before = readFileSync(dataPath, 'utf8')
+    await expect(provider.remember(body, { content: `  ${content}\n`, importance: 5 })).resolves.toMatchObject({
+      action: 'skipped', id: existing.id, content,
+    })
+    expect(readFileSync(dataPath, 'utf8')).toBe(before)
+    await expect(provider.remember(body, { content: content.toLowerCase() })).resolves.toMatchObject({ action: 'stored' })
+  })
+
   it('preserves exact Jaccard scores for unequal token sets and Unicode', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'dsh-mnemon-holographic-score-'))
     temporaryDirectories.push(dataDir)
