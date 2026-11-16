@@ -19,7 +19,7 @@ import { idleReviewBlockReason, reviewLayerPolicy, startGuardedChild, startGuard
 import { reviewCheckpoint } from './review-checkpoint.ts'
 import { startWithContinuationTurns } from './continuation-turn.ts'
 import { assertAgentMemoryIncluded } from './workspace-exclusion.ts'
-import { configuredProviderNames, contextIsActive, isInactiveContextError, isTaskRecord, type ProviderConfigurationHost } from './agent-compat.ts'
+import { activationOwned, configuredProviderNames, contextIsActive, isInactiveContextError, isTaskRecord, type ProviderConfigurationHost } from './agent-compat.ts'
 import { childComposition, startSubagent, type SubagentStartAgents } from './subagent-start.ts'
 import type { IdleReviewFailure, MemoryToolName } from './protocol.ts'
 import { assertDshOutputSchema, assertDshOutputValue } from './subagent-output-schema.ts'
@@ -122,6 +122,27 @@ interface HostResultToolRuntime extends ReviewToolHost, ProviderConfigurationHos
   tools: HostToolRegistry
   agents?: SubagentStartAgents
   on(name: string, listener: (...args: never[]) => unknown, options?: { prepend?: boolean }): unknown
+}
+
+export interface IsolatedReviewRequest {
+  parent: HostAgent
+  sessionId: string
+  prompt: string
+  persona: string
+  allowedTools: string[]
+  maxTokens: number
+  route?: ModelRoute
+  signal: AbortSignal
+  guardTools: (execution: ToolExecution) => string | undefined
+}
+
+export type IsolatedReviewRunner = (request: IsolatedReviewRequest) => Promise<{ stopReason: string; detail?: string }>
+
+const automaticReviewSignals = new WeakSet<AbortSignal>()
+
+/** Mark one automatic idle-review signal so spawn mode avoids writing `subagent/catalog` onto the conversation (#651). */
+export function markAutomaticReviewSignal(signal: AbortSignal): void {
+  automaticReviewSignals.add(signal)
 }
 
 export class IdleReviewError extends Error {
@@ -247,6 +268,8 @@ export class MnemonSubagentCoordinator {
   private disposeTaskNotices: (() => unknown) | undefined
   /** Delegated children whose run has ended, newest last, at most FINISHED_CHILDREN. */
   private readonly finishedChildren = new Set<string>()
+  private readonly standaloneReviewIds = new Set<string>()
+  private isolatedReviewRunner: IsolatedReviewRunner | undefined
   private readonly continuations = new Map<HostAgent, () => unknown>()
   private readonly continuationOwners = new WeakMap<HostAgent, TaskContinuation>()
   private readonly providerNames = new Set(['spawn', 'fork'])
@@ -273,7 +296,7 @@ export class MnemonSubagentCoordinator {
       },
       execute: async (args: never, execution: ToolExecution) => {
         if (this.reviewAdmission.acknowledge(args, execution)) return { recorded: true }
-        if (!isSubagent(execution.agent)) throw new Error('Mnemon subagent result tools are restricted to delegated children')
+        if (!isSubagent(execution.agent) && !this.standaloneReviewIds.has(execution.agent?.id ?? '')) throw new Error('Mnemon subagent result tools are restricted to delegated children')
         execution.signal.throwIfAborted()
         assertDshOutputValue(RESULT_TOOL_INPUT_SCHEMA, args)
         const request = object(args)
@@ -307,6 +330,10 @@ export class MnemonSubagentCoordinator {
         resultRuntime.on('subagent/provider-removed', ((name: string) => { this.providerNames.delete(name) }) as never),
       ]) if (typeof stop === 'function') this.providerObservers.push(stop as () => unknown)
     }
+  }
+
+  setIsolatedReviewRunner(runner: IsolatedReviewRunner | undefined): void {
+    this.isolatedReviewRunner = runner
   }
 
   dispose(): unknown {
@@ -938,7 +965,10 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
       const prompt = preferred === 'fork' ? 'Review the inherited completed checkpoint now.' : reviewCheckpoint(parent.session, config.maxContextChars)
       const base = reviewPersona(tools.includes('mnemon_runtime_memory'))
       const persona = preferred === 'fork' ? base : base.replaceAll('inherited', 'supplied bounded')
-      const { provider, runId, result } = await this.delegate(parent, 'review', 'Mnemon idle checkpoint review', prompt, tools, WRITE_SCHEMA, execution.signal, preferred, persona, { terminalTools: writers }, undefined, undefined, admission)
+      const standalone = preferred === 'spawn' && automaticReviewSignals.has(signal) && this.isolatedReviewRunner !== undefined
+      const { provider, runId, result } = standalone
+        ? await this.runStandaloneReview(parent, prompt, tools, WRITE_SCHEMA, execution.signal, persona, { terminalTools: writers }, admission)
+        : await this.delegate(parent, 'review', 'Mnemon idle checkpoint review', prompt, tools, WRITE_SCHEMA, execution.signal, preferred, persona, { terminalTools: writers }, undefined, undefined, admission)
       const value = object(result.structured)
       return {
         delegated: true,
@@ -950,6 +980,211 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
         documentIds: strings(value.documentIds),
       }
     } finally { execution.release() }
+  }
+
+  private openResultCapture(
+    operation: DelegatedOperation,
+    outputSchema: Record<string, unknown>,
+    signal: AbortSignal,
+    recovery: ToolReceiptRecovery | undefined,
+    persona: string,
+  ) {
+    const resultToolName = RESULT_TOOL_NAME
+    const requestId = randomUUID()
+    let captured: CapturedSubagentResult | undefined
+    let pending: (CapturedSubagentResult & { parent: symbol }) | undefined
+    let activeResultExecution: object | undefined
+    const staged = new WeakMap<object, CapturedSubagentResult>()
+    const recoverableTools = new Set(recovery?.terminalTools ?? [])
+    const committedReceipts: CapturedToolReceipt[] = []
+    const reviewReceipts: CapturedToolReceipt[] = []
+    const writeReceipts: CapturedToolReceipt[] = []
+    const stagedReceipts = new Map<symbol, CapturedToolReceipt[]>()
+    let expectedChildId: string | undefined
+    const canSubmit = (agent: HostAgent | undefined) => isSubagent(agent) || (agent !== undefined && this.standaloneReviewIds.has(agent.id))
+    const observer = this.resultRuntime!.on('tools/result', ((execution: ToolExecution, result: HostToolResultObservation) => {
+      if (!this.resultRequests.has(requestId)) return
+      if (operation === 'review' && execution.agent !== undefined && execution.agent.id === expectedChildId && execution.name !== undefined
+        && recoverableTools.has(execution.name) && result.isError !== true && Object.hasOwn(result, 'value')) {
+        reviewReceipts.push({ agentId: execution.agent.id, name: execution.name, arguments: execution.arguments, value: result.value })
+      }
+      if (operation === 'write' && execution.name !== undefined && SPACE_WRITE_TOOLS.has(execution.name) && execution.agent !== undefined
+        && isSubagent(execution.agent) && result.isError !== true && Object.hasOwn(result, 'value')) {
+        writeReceipts.push({ agentId: execution.agent.id, name: execution.name, arguments: execution.arguments, value: result.value })
+      }
+      if (signal.aborted) return
+      if (execution.token !== undefined) {
+        const entries = stagedReceipts.get(execution.token)
+        if (entries !== undefined) {
+          stagedReceipts.delete(execution.token)
+          if (result.isError !== true) committedReceipts.push(...entries)
+        }
+      }
+      if (execution.name === resultToolName) {
+        const entry = staged.get(execution)
+        if (entry === undefined) return
+        staged.delete(execution)
+        if (activeResultExecution === execution) activeResultExecution = undefined
+        if (result.isError === true) return
+        if (execution.parent === undefined) {
+          if (captured === undefined) captured = entry
+        } else if (captured === undefined && pending === undefined) {
+          pending = { ...entry, parent: execution.parent }
+        }
+        return
+      }
+      if (pending !== undefined && pending.parent === execution.token) {
+        const entry = pending
+        pending = undefined
+        if (result.isError !== true && captured === undefined) captured = { agentId: entry.agentId, value: entry.value }
+      }
+      if (execution.name === undefined || !recoverableTools.has(execution.name) || result.isError === true || !Object.hasOwn(result, 'value')) return
+      const agent = execution.agent
+      if (agent === undefined || !canSubmit(agent)) return
+      const receipt: CapturedToolReceipt = { agentId: agent.id, name: execution.name, arguments: execution.arguments, value: result.value }
+      if (execution.parent === undefined) committedReceipts.push(receipt)
+      else stagedReceipts.set(execution.parent, [...(stagedReceipts.get(execution.parent) ?? []), receipt])
+    }) as never)
+    if (typeof observer !== 'function') throw new Error('dsh-mnemon subagent result observer registration did not return a disposer')
+    const disposeResultObserver = observer as () => unknown
+    this.resultRequests.set(requestId, async (value, execution) => {
+      signal.throwIfAborted()
+      const agent = execution.agent
+      if (agent === undefined || !canSubmit(agent)) throw new Error('Mnemon subagent result tools are restricted to delegated children')
+      if (expectedChildId !== undefined && agent.id !== expectedChildId) throw new Error('Mnemon subagent result belongs to a different child')
+      if (activeResultExecution !== undefined || pending !== undefined || captured !== undefined) throw new Error('Mnemon subagent result was already recorded')
+      if (execution.concludeTurn === undefined) throw new Error('Mnemon subagent result tool requires terminal tool-call support')
+      assertDshOutputValue(outputSchema, value)
+      activeResultExecution = execution
+      staged.set(execution, { agentId: agent.id, value })
+      execution.concludeTurn()
+      return { recorded: true }
+    })
+    const completionPersona = `${persona}
+
+Completion protocol: call \`${resultToolName}\` exactly once with requestId \`${requestId}\` and result matching this JSON schema:
+${JSON.stringify(outputSchema)}
+The tool arguments must be a complete JSON object with both requestId and result. Close the result object AND the outer arguments object; a result ending in an array still needs the enclosing closing braces. If the adapter rejects invalid JSON before dispatch, correct only the result submission; do not repeat earlier writes or other completed work.
+This is the only completion channel for this run. Do not finish with a plain-text answer. The requestId expires when this run finishes or is cancelled.`
+    return {
+      requestId,
+      completionPersona,
+      setRunId: (id: string) => { expectedChildId = id },
+      getRunId: () => expectedChildId,
+      finish: (runId: string, activeRun: HostSubagentRun | undefined, result: HostSubagentResult, perOpMaxTokens: number | undefined, provider: string) => {
+        if (captured !== undefined && captured.agentId !== runId) throw new Error('Mnemon subagent result was recorded by a different child')
+        let structured = captured?.value ?? result.structured
+        if (structured === undefined && result.stopReason === 'completed') {
+          structured = recoverStructuredResult(recovery, committedReceipts.filter(receipt => receipt.agentId === runId))
+        }
+        if (result.stopReason !== 'completed') {
+          const detail = activeRun === undefined ? result.diagnostic : subagentFailureDetail(activeRun, result)
+          throw new SubagentStoppedError(result.stopReason, perOpMaxTokens, detail)
+        }
+        if (structured !== undefined) assertDshOutputValue(outputSchema, structured)
+        if (structured === undefined) throw new Error('memory subagent completed without recording its result')
+        if (operation === 'review' && ['failed', 'partial', 'unknown'].includes(String(object(structured).action))) throw new Error(`memory review reported ${object(structured).action}`)
+        return {
+          provider,
+          runId,
+          result: { ...result, structured },
+          receipts: committedReceipts.filter(receipt => receipt.agentId === runId),
+          writes: writeReceipts.filter(receipt => receipt.agentId === runId),
+        }
+      },
+      toReviewError: (provider: string, error: unknown, runId: string | undefined) => {
+        const receipts = reviewReceipts.map(reviewReceipt).filter((receipt): receipt is NonNullable<typeof receipt> => receipt !== undefined)
+        if (receipts.length > 0 || !isInactiveContextError(error)) this.counters.failures += 1
+        return new IdleReviewError(error instanceof Error ? error.message : String(error), {
+          status: receipts.length > 0 ? 'partial' : 'failed', provider,
+          ...(runId === undefined ? {} : { runId }), receipts,
+        }, { cause: error })
+      },
+      revoke: () => {
+        this.resultRequests.delete(requestId)
+      },
+      disposeObserver: async () => {
+        await disposeResultObserver()
+      },
+    }
+  }
+
+  private recordOperationCompletion(operation: DelegatedOperation, completed: { runId: string }): void {
+    if (operation === 'skill') this.counters.skills = (this.counters.skills ?? 0) + 1
+    else this.counters[operation === 'write' ? 'writes' : operation === 'review' ? 'reviews' : operation === 'placement' ? 'placements' : operation === 'migration' ? 'migrations' : operation === 'compaction' ? 'compactions' : operation === 'document-archive' ? 'documentArchives' : operation === 'metadata-maintenance' ? 'metadataMaintenances' : operation === 'reconcile' ? 'reconciliations' : 'answers'] += 1
+    this.counters.lastRunId = completed.runId
+    if (operation !== 'answer') this.counters.lastOperation = operation
+    this.counters.lastAt = new Date().toISOString()
+  }
+
+  private async runStandaloneReview(
+    parent: HostAgent,
+    prompt: string,
+    tools: string[],
+    outputSchema: Record<string, unknown>,
+    signal: AbortSignal,
+    persona: string,
+    recovery: ToolReceiptRecovery | undefined,
+    admission: (() => void) | undefined,
+  ): Promise<{ provider: string; runId: string; result: HostSubagentResult }> {
+    if (this.disposed) throw new Error('dsh-mnemon subagent coordinator is disposed')
+    assertAgentMemoryIncluded(this.runtimeSource, parent)
+    const provider = this.provider('spawn', this.runtimeSource.forAgent(parent).config.subagentProviderNames)
+    assertDshOutputSchema(outputSchema)
+    if (this.resultRuntime === undefined) throw new Error('dsh-mnemon subagent result tool runtime is unavailable')
+    const runner = this.isolatedReviewRunner
+    if (runner === undefined) throw new Error('dsh-mnemon isolated review runner is unavailable')
+    const sessionId = `mnemon-review-v1-${randomUUID()}`
+    const maxTokens = this.runtimeSource.config.idleReview.maxTokens
+    const allowedTools = [...this.availableTools(parent, tools), RESULT_TOOL_NAME]
+    const allowedWithPtc = new Set([...allowedTools, 'run_code'])
+    const layerPolicy = reviewLayerPolicy()
+    const capture = this.openResultCapture('review', outputSchema, signal, recovery, persona)
+    capture.setRunId(sessionId)
+    this.standaloneReviewIds.add(sessionId)
+    let completed: { provider: string; runId: string; result: HostSubagentResult } | undefined
+    let failure: unknown
+    try {
+      signal.throwIfAborted()
+      admission?.()
+      const outcome = await runner({
+        parent,
+        sessionId,
+        prompt,
+        persona: capture.completionPersona,
+        allowedTools,
+        maxTokens,
+        signal,
+        guardTools: execution => {
+          const name = execution.name
+          if (name !== undefined && !allowedWithPtc.has(name)) {
+            return `Mnemon review cannot execute ${JSON.stringify(name)}.`
+          }
+          return layerPolicy(execution)
+        },
+      })
+      completed = capture.finish(sessionId, undefined, {
+        output: [],
+        stopReason: outcome.stopReason,
+        ...(outcome.detail === undefined ? {} : { diagnostic: outcome.detail }),
+      }, maxTokens, provider)
+      this.recordOperationCompletion('review', completed)
+      return completed
+    } catch (error) {
+      failure = capture.toReviewError(provider, error, sessionId)
+      throw failure
+    } finally {
+      capture.revoke()
+      this.standaloneReviewIds.delete(sessionId)
+      this.finished(sessionId)
+      let cleanupFailure: unknown
+      try {
+        await capture.disposeObserver()
+      } catch (error) {
+        if (failure === undefined) cleanupFailure = error
+      }
+      if (cleanupFailure !== undefined) throw capture.toReviewError(provider, cleanupFailure, sessionId)
+    }
   }
 
   private async delegate(
@@ -973,104 +1208,20 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
     const provider = this.provider(preferredProvider, this.runtimeSource.forAgent(parent).config.subagentProviderNames)
     assertDshOutputSchema(outputSchema)
     if (this.resultRuntime === undefined) throw new Error('dsh-mnemon subagent result tool runtime is unavailable')
-    // Keep the inherited tool inventory byte-stable. Only the child prompt
-    // and arguments carry the revocable capability for this delegated run.
     const resultToolName = RESULT_TOOL_NAME
-    const requestId = randomUUID()
-    let captured: CapturedSubagentResult | undefined
-    let pending: (CapturedSubagentResult & { parent: symbol }) | undefined
-    let activeResultExecution: object | undefined
-    const staged = new WeakMap<object, CapturedSubagentResult>()
-    const recoverableTools = new Set(recovery?.terminalTools ?? [])
-    const committedReceipts: CapturedToolReceipt[] = []
-    const reviewReceipts: CapturedToolReceipt[] = []
-    const writeReceipts: CapturedToolReceipt[] = []
-    let reviewChildId: string | undefined
-    // Code Mode sub-dispatches are provisional until their enclosing run_code
-    // execution publishes a successful authoritative result.
-    const stagedReceipts = new Map<symbol, CapturedToolReceipt[]>()
+    let capture: ReturnType<MnemonSubagentCoordinator['openResultCapture']> | undefined
     let run: HostSubagentRun | undefined
     let completed: { provider: string; runId: string; result: HostSubagentResult; receipts: CapturedToolReceipt[]; writes: CapturedToolReceipt[] } | undefined
     let failure: unknown
-    let disposeResultObserver: (() => unknown) | undefined
     let releaseWorkflow: (() => void) | undefined
     try {
-      // A maintenance/task run has its own bounded View only when no parent
-      // turn is open. Ordinary children reuse the parent's immutable View.
       if (tools.length > 0) {
         const execution = await this.runtimeSource.executions.workflow(parent, operation, signal)
         releaseWorkflow = execution.release
         signal = execution.signal
       }
       if (this.disposed) throw new Error('dsh-mnemon subagent coordinator is disposed')
-      const observer = this.resultRuntime.on('tools/result', ((execution: ToolExecution, result: HostToolResultObservation) => {
-        if (!this.resultRequests.has(requestId)) return
-        // A committed Source result remains useful reconciliation evidence even
-        // if its outer Code Mode execution or the reviewer later fails/aborts.
-        if (operation === 'review' && execution.agent?.id === reviewChildId && execution.name !== undefined
-          && recoverableTools.has(execution.name) && result.isError !== true && Object.hasOwn(result, 'value')) {
-          reviewReceipts.push({ agentId: execution.agent!.id, name: execution.name, arguments: execution.arguments, value: result.value })
-        }
-        // A Memory Space write holds once its Source answers, whatever the Code Mode program
-        // around it does next: where a write went is read from these (#387).
-        if (operation === 'write' && execution.name !== undefined && SPACE_WRITE_TOOLS.has(execution.name) && execution.agent !== undefined
-          && isSubagent(execution.agent) && result.isError !== true && Object.hasOwn(result, 'value')) {
-          writeReceipts.push({ agentId: execution.agent.id, name: execution.name, arguments: execution.arguments, value: result.value })
-        }
-        if (signal.aborted) return
-        if (execution.token !== undefined) {
-          const entries = stagedReceipts.get(execution.token)
-          if (entries !== undefined) {
-            stagedReceipts.delete(execution.token)
-            if (result.isError !== true) committedReceipts.push(...entries)
-          }
-        }
-        if (execution.name === resultToolName) {
-          const entry = staged.get(execution)
-          if (entry === undefined) return
-          staged.delete(execution)
-          if (activeResultExecution === execution) activeResultExecution = undefined
-          if (result.isError === true) return
-          if (execution.parent === undefined) {
-            if (captured === undefined) captured = entry
-          } else if (captured === undefined && pending === undefined) {
-            pending = { ...entry, parent: execution.parent }
-          }
-          return
-        }
-        if (pending !== undefined && pending.parent === execution.token) {
-          const entry = pending
-          pending = undefined
-          if (result.isError !== true && captured === undefined) captured = { agentId: entry.agentId, value: entry.value }
-        }
-        if (execution.name === undefined || !recoverableTools.has(execution.name) || result.isError === true || !Object.hasOwn(result, 'value')) return
-        const agent = execution.agent
-        if (agent === undefined || !isSubagent(agent)) return
-        const receipt: CapturedToolReceipt = { agentId: agent.id, name: execution.name, arguments: execution.arguments, value: result.value }
-        if (execution.parent === undefined) committedReceipts.push(receipt)
-        else stagedReceipts.set(execution.parent, [...(stagedReceipts.get(execution.parent) ?? []), receipt])
-      }) as never)
-      if (typeof observer !== 'function') throw new Error('dsh-mnemon subagent result observer registration did not return a disposer')
-      disposeResultObserver = observer as () => unknown
-      this.resultRequests.set(requestId, async (value, execution) => {
-        signal.throwIfAborted()
-        const agent = execution.agent
-        if (agent === undefined || !isSubagent(agent)) throw new Error('Mnemon subagent result tools are restricted to delegated children')
-        if (run !== undefined && agent.id !== run.id) throw new Error('Mnemon subagent result belongs to a different child')
-        if (activeResultExecution !== undefined || pending !== undefined || captured !== undefined) throw new Error('Mnemon subagent result was already recorded')
-        if (execution.concludeTurn === undefined) throw new Error('Mnemon subagent result tool requires terminal tool-call support')
-        assertDshOutputValue(outputSchema, value)
-        activeResultExecution = execution
-        staged.set(execution, { agentId: agent.id, value })
-        execution.concludeTurn()
-        return { recorded: true }
-      })
-      const completionPersona = `${persona}
-
-Completion protocol: call \`${resultToolName}\` exactly once with requestId \`${requestId}\` and result matching this JSON schema:
-${JSON.stringify(outputSchema)}
-The tool arguments must be a complete JSON object with both requestId and result. Close the result object AND the outer arguments object; a result ending in an array still needs the enclosing closing braces. If the adapter rejects invalid JSON before dispatch, correct only the result submission; do not repeat earlier writes or other completed work.
-This is the only completion channel for this run. Do not finish with a plain-text answer. The requestId expires when this run finishes or is cancelled.`
+      capture = this.openResultCapture(operation, outputSchema, signal, recovery, persona)
       const perOpMaxTokens = operation === 'migration' || operation === 'compaction' || operation === 'reconcile'
         ? this.runtimeMaintenanceMaxTokensResolver?.() ?? 8_192
         : operation === 'document-archive' ? 8_192
@@ -1100,48 +1251,30 @@ This is the only completion channel for this run. Do not finish with a plain-tex
           ...(resolvedAgentOptions === undefined ? {} : { agentOptions: resolvedAgentOptions }),
           maxDepth: this.delegationLimit(parent),
           toolFilter: { allow: [...this.availableTools(parent, tools), resultToolName] },
-          persona: completionPersona,
+          persona: capture!.completionPersona,
         }, host)
       })
       run = operation === 'review'
-        ? await startGuardedReview(this.resultRuntime, parent, [...tools, resultToolName], start, child => { reviewChildId = child.id }, reviewLayerPolicy())
+        ? await startGuardedReview(this.resultRuntime, parent, [...tools, resultToolName], start, child => { capture!.setRunId(child.id) }, reviewLayerPolicy())
         // A DSH without Agent ownership or scoped tool guards runs the child as before.
         : guard !== undefined ? await startGuardedChild(this.resultRuntime, parent, start, guard, { purpose: operation, optional: true })
         : await start()
       const activeRun = run
+      capture.setRunId(activeRun.id)
       const result = await activeRun.result
-      if (captured !== undefined && captured.agentId !== activeRun.id) throw new Error('Mnemon subagent result was recorded by a different child')
-      let structured = captured?.value ?? result.structured
-      if (structured === undefined && result.stopReason === 'completed') {
-        // Do not rerun a mutation after a missed handoff. A matching successful
-        // tool receipt is already the host's authoritative commit evidence.
-        structured = recoverStructuredResult(recovery, committedReceipts.filter(receipt => receipt.agentId === activeRun.id))
-      }
-      if (result.stopReason !== 'completed') {
-        const detail = subagentFailureDetail(activeRun, result)
-        throw new SubagentStoppedError(result.stopReason, perOpMaxTokens, detail)
-      }
-      if (structured !== undefined) assertDshOutputValue(outputSchema, structured)
-      if (structured === undefined) throw new Error('memory subagent completed without recording its result')
-      if (operation === 'review' && ['failed', 'partial', 'unknown'].includes(String(object(structured).action))) throw new Error(`memory review reported ${object(structured).action}`)
-      completed = {
-        provider,
-        runId: activeRun.id,
-        result: { ...result, structured },
-        receipts: committedReceipts.filter(receipt => receipt.agentId === activeRun.id),
-        writes: writeReceipts.filter(receipt => receipt.agentId === activeRun.id),
-      }
+      completed = capture.finish(activeRun.id, activeRun, result, perOpMaxTokens, provider)
     } catch (error) {
-      const receipts = reviewReceipts.map(reviewReceipt).filter((receipt): receipt is NonNullable<typeof receipt> => receipt !== undefined)
-      if (operation !== 'review' || receipts.length > 0 || !isInactiveContextError(error)) this.counters.failures += 1
-      failure = operation === 'review' ? new IdleReviewError(error instanceof Error ? error.message : String(error), {
-        status: receipts.length > 0 ? 'partial' : 'failed', provider,
-        ...(reviewChildId === undefined ? {} : { runId: reviewChildId }), receipts,
-      }, { cause: error }) : error
+      if (operation === 'review') {
+        failure = capture?.toReviewError(provider, error, capture.getRunId())
+          ?? (() => { this.counters.failures += 1; return new IdleReviewError(error instanceof Error ? error.message : String(error), { status: 'failed', provider, receipts: [] }, { cause: error }) })()
+      } else {
+        this.counters.failures += 1
+        failure = error
+      }
       throw failure
     } finally {
       // Revoke before asynchronous child disposal, including rejected startup.
-      this.resultRequests.delete(requestId)
+      capture?.revoke()
       let cleanupFailure: unknown
       if (run !== undefined) {
         this.finished(run.id)
@@ -1151,30 +1284,25 @@ This is the only completion channel for this run. Do not finish with a plain-tex
           if (failure === undefined) cleanupFailure = error
         }
       }
-      if (disposeResultObserver !== undefined) {
+      if (capture !== undefined) {
         try {
-          await disposeResultObserver()
+          await capture.disposeObserver()
         } catch (error) {
           if (failure === undefined && cleanupFailure === undefined) cleanupFailure = error
         }
       }
       releaseWorkflow?.()
       if (cleanupFailure !== undefined) {
-        const receipts = reviewReceipts.map(reviewReceipt).filter((receipt): receipt is NonNullable<typeof receipt> => receipt !== undefined)
-        if (operation !== 'review' || receipts.length > 0 || !isInactiveContextError(cleanupFailure)) this.counters.failures += 1
-        if (operation !== 'review') throw cleanupFailure
-        throw new IdleReviewError(cleanupFailure instanceof Error ? cleanupFailure.message : String(cleanupFailure), {
-          status: receipts.length > 0 ? 'partial' : 'failed', provider,
-          ...(reviewChildId === undefined ? {} : { runId: reviewChildId }), receipts,
-        }, { cause: cleanupFailure })
+        if (operation === 'review') {
+          throw capture?.toReviewError(provider, cleanupFailure, capture.getRunId())
+            ?? (() => { this.counters.failures += 1; return new IdleReviewError(cleanupFailure instanceof Error ? cleanupFailure.message : String(cleanupFailure), { status: 'failed', provider, receipts: [] }, { cause: cleanupFailure }) })()
+        }
+        this.counters.failures += 1
+        throw cleanupFailure
       }
     }
     if (completed === undefined) throw new Error('memory subagent did not complete')
-    if (operation === 'skill') this.counters.skills = (this.counters.skills ?? 0) + 1
-    else this.counters[operation === 'write' ? 'writes' : operation === 'review' ? 'reviews' : operation === 'placement' ? 'placements' : operation === 'migration' ? 'migrations' : operation === 'compaction' ? 'compactions' : operation === 'document-archive' ? 'documentArchives' : operation === 'metadata-maintenance' ? 'metadataMaintenances' : operation === 'reconcile' ? 'reconciliations' : 'answers'] += 1
-    this.counters.lastRunId = completed.runId
-    if (operation !== 'answer') this.counters.lastOperation = operation
-    this.counters.lastAt = new Date().toISOString()
+    this.recordOperationCompletion(operation, completed)
     return completed
   }
 

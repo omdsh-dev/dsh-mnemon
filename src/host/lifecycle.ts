@@ -16,7 +16,9 @@ import type {
 import type { Insight, RememberRequest, SearchRequest } from 'dsh-mnemon-source-memory-spaces/contracts'
 import type { RuntimeMemoryMutation } from 'dsh-mnemon-source-runtime/contracts'
 import type { DocumentMutation } from 'dsh-mnemon-source-documents/contracts'
-import { IdleReviewError, MnemonSubagentCoordinator } from './subagent.ts'
+import { delegatedTaskLine, IdleReviewError, markAutomaticReviewSignal, MnemonSubagentCoordinator, type IsolatedReviewRequest } from './subagent.ts'
+import { attachContinuationTurns } from './continuation-turn.ts'
+import { archiveTaskSession, sweepUnarchivedTaskSessions } from './task-session-cleanup.ts'
 import { scoreReviewActivity } from './review-activity.ts'
 import { idleReviewBlockReason } from './review-tools.ts'
 import { TurnActivityProjection, type TurnMemoryActivity, type TurnMemoryActivitySnapshot } from './activity.ts'
@@ -681,6 +683,7 @@ class MnemonAgentLifecycle {
         }
       }
       this.mark('review')
+      markAutomaticReviewSignal(controller.signal)
       const result = await this.coordinator.review(this.agent, controller.signal, () => {
         if (epoch !== this.reviewEpoch || policy !== this.reviewPolicy() || !this.idleReviewAllowed(true)) {
           controller.abort(new Error('Automatic idle review admission changed'))
@@ -848,6 +851,7 @@ export class MnemonLifecycle {
   /** Bounded process-local replay fence for finalized-message write actions: the latest text per message. */
   private readonly supervisedWritebacks = new Map<string, { content: string; result: Promise<SupervisedWritebackResult> }>()
   private skillEvolution: SkillEvolution | undefined
+  private readonly isolatedReviewMemoryDisposers = new Map<HostAgent, () => unknown>()
 
   constructor(
     private readonly ctx: HostContextShape,
@@ -897,6 +901,9 @@ export class MnemonLifecycle {
   }
 
   start(): () => void {
+    this.coordinator.setIsolatedReviewRunner?.(request => this.runIsolatedReview(request))
+    const sweepController = new AbortController()
+    void sweepUnarchivedTaskSessions(this.ctx, this.taskAgentIds, sweepController.signal).catch(() => {})
     // DSH creates a new Agent for startup, resume, clear and compaction alike.
     const stopChanged = this.runtimeSource?.onChanged?.(() => {
       for (const policy of this.workspacePolicies.values()) policy.update()
@@ -909,12 +916,16 @@ export class MnemonLifecycle {
     for (const agent of this.ctx.agents.list?.() ?? []) if (contextIsActive(agent.ctx)) this.watchWorkspacePolicy(agent)
     for (const agent of rootAgents(this.ctx.agents, this.ctx.subagents)) this.install(agent, 'adopted')
     return () => {
+      sweepController.abort()
+      this.coordinator.setIsolatedReviewRunner?.(undefined)
       stopChanged?.()
       stopCreated()
       for (const dispose of [...this.children.values()].reverse()) dispose()
+      for (const dispose of [...this.isolatedReviewMemoryDisposers.values()].reverse()) dispose()
       for (const owner of [...this.owners.values()].reverse()) owner.dispose()
       for (const policy of [...this.workspacePolicies.values()].reverse()) policy.dispose()
       this.children.clear()
+      this.isolatedReviewMemoryDisposers.clear()
       this.owners.clear()
       this.memoryTurns.clear()
     }
@@ -1265,6 +1276,7 @@ export class MnemonLifecycle {
       if (handle !== undefined) {
         try { await handle.dispose() } catch (error) { if (failure === undefined) throw error }
       }
+      await archiveTaskSession(this.ctx, sessionId)
       this.taskAgentIds.delete(sessionId)
     }
   }
@@ -1505,21 +1517,26 @@ export class MnemonLifecycle {
     // A lineage string alone is not authority. Orphans get no model Recall pin.
     if (runtime === undefined || parent === undefined || parent === agent || !contextIsActive(agent.ctx) || !contextIsActive(parent.ctx)) return
     this.coordinator.inheritTaskContinuation(parent, agent)
+    const delegation = this.delegatedMemoryFor(agent, parent, runtime)
+    this.attachChildMemoryTurn(agent, runtime, delegation, true)
+  }
+
+  private delegatedMemoryFor(agent: HostAgent, parent: HostAgent, runtime: AgentRuntimeSource): DelegatedMemoryView | undefined {
+    if (runtime.memoryParticipation?.(agent).excluded === true) return undefined
     const parentMemory = this.memoryTurns.get(parent)
-    let delegation: DelegatedMemoryView | undefined
-    const excluded = runtime.memoryParticipation?.(agent).excluded === true
-    if (!excluded && parentMemory !== undefined) {
-      delegation = parentMemory.delegate()
-    } else if (!excluded) {
-      const graph = runtime.forAgent(parent)
-      const parentPin = graph.composableTurns.activeTurn(parent.id)
-      delegation = {
-        graph,
-        scope: parentPin?.scope ?? agentScope(parent, graph.config),
-        ...(parentPin === undefined ? {} : { viewId: parentPin.view.id }),
-      }
+    if (parentMemory !== undefined) return parentMemory.delegate()
+    const graph = runtime.forAgent(parent)
+    const parentPin = graph.composableTurns.activeTurn(parent.id)
+    return {
+      graph,
+      scope: parentPin?.scope ?? agentScope(parent, graph.config),
+      ...(parentPin === undefined ? {} : { viewId: parentPin.view.id }),
     }
-    let dispose: () => unknown
+  }
+
+  private attachChildMemoryTurn(agent: HostAgent, runtime: AgentRuntimeSource, delegation: DelegatedMemoryView | undefined, trackChild: boolean): () => unknown {
+    const targetMap = trackChild ? this.children : this.isolatedReviewMemoryDisposers
+    let dispose: (() => unknown) | undefined
     dispose = agent.ctx.effect(() => {
       const memory = new AgentMemoryTurn(agent, runtime, delegation)
       this.memoryTurns.set(agent, memory)
@@ -1530,7 +1547,7 @@ export class MnemonLifecycle {
         } finally {
           try { memory.dispose() } finally {
             if (this.memoryTurns.get(agent) === memory) this.memoryTurns.delete(agent)
-            if (this.children.get(agent) === dispose) this.children.delete(agent)
+            if (targetMap.get(agent) === dispose) targetMap.delete(agent)
           }
         }
       }
@@ -1567,6 +1584,156 @@ export class MnemonLifecycle {
       }
       return cleanup
     }, 'dsh-mnemon.child-memory()')
-    this.children.set(agent, dispose)
+    targetMap.set(agent, dispose)
+    return dispose
+  }
+
+  /**
+   * Run automatic `spawn` idle review in one standalone archived session so it
+   * never appends `subagent/catalog` rows to the conversation's Subagent list (#651)
+   * and never leaves unarchived shells in the workspace registry (#472).
+   */
+  private async runIsolatedReview(request: IsolatedReviewRequest): Promise<{ stopReason: string; detail?: string }> {
+    const runtime = this.runtimeSource
+    if (runtime === undefined) throw new Error('dsh-mnemon runtime source is unavailable')
+    const parent = request.parent
+    const permissionPresets = parent.ctx?.get?.('permissionPresets') as { current?(session: unknown): unknown } | undefined
+    const sandboxPolicy = parent.ctx?.get?.('sandboxPolicy') as { overrideOf?(session: unknown): unknown } | undefined
+    const approval = parent.ctx?.get?.('approval')
+    const presetValue = permissionPresets?.current?.(parent.session)
+    const delegatedPolicies = {
+      permissionPreset: presetValue === 'auto' || presetValue === 'danger-full-access' ? presetValue : undefined,
+      sandboxMode: sandboxPolicy?.overrideOf?.(parent.session),
+      approvalPolicy: approval === undefined ? undefined : 'never',
+    }
+    const fixed = this.config.taskAgentModel.mode === 'fixed'
+      ? this.taskAgentModelOptions(parent.id, parent.session.header?.cwd)
+      : undefined
+    const fallbackRoute = (() => {
+      const provider = parent.options?.provider?.trim()
+      const model = parent.options?.model?.trim()
+      const effort = parent.options?.reasoningEffort?.trim()
+      if (!provider || !model) return this.taskAgentModelOptions(parent.id, parent.session.header?.cwd)
+      return { provider, model, ...(effort ? { reasoningEffort: effort } : {}) }
+    })()
+    const baseRoute = fixed ?? this.conversationRoute(parent.id) ?? fallbackRoute
+    if (baseRoute === undefined) throw new Error('no default provider/model is available for an isolated idle review Agent')
+    const agentOptions = { ...baseRoute, maxTokens: request.maxTokens }
+    const requestedDir = parent.session.header?.cwd?.trim()
+    const dir = await this.taskAgentDirectories(requestedDir === '' ? undefined : requestedDir)
+    const presetsRaw = this.ctx.get('agentPresets') as (HostAgentPresetService & { composeFrom?(childCtx: unknown, parentCtx: unknown): void }) | undefined
+    const presets = presetService(presetsRaw)
+    const parentPreset = parent.session.header?.agentPreset
+    const presetId = parentPreset !== undefined && parentPreset.trim() !== ''
+      ? parentPreset
+      : presets === undefined ? undefined : (await presets.resolve()).id
+    const modern = activationOwned(this.ctx.subagents)
+    const meta = {
+      cwd: dir.cwd,
+      ...(modern ? {} : { origin: 'subagent' as const }),
+      ...(presetId === undefined ? {} : { agentPreset: presetId }),
+    }
+    const delegation = this.delegatedMemoryFor(parent, parent, runtime)
+    if (delegation === undefined) throw new Error('Memory view delegation is unavailable for isolated idle review')
+
+    this.taskAgentIds.add(request.sessionId)
+    let handle: HostAgentHandle | undefined
+    let stopContinuation: (() => void) | undefined
+    let disposeMemoryTurn: (() => unknown) | undefined
+    let stopPersona: (() => unknown) | undefined
+    const removeAbortListener = (() => {
+      let listener: (() => void) | undefined
+      return {
+        attach(child: HostAgent) {
+          listener = () => { try { child.cancel({ kind: 'hook', reason: 'Idle review cancelled' }) } catch {} }
+          request.signal.addEventListener('abort', listener, { once: true })
+          if (request.signal.aborted) listener()
+        },
+        detach() {
+          if (listener !== undefined) request.signal.removeEventListener('abort', listener)
+          listener = undefined
+        },
+      }
+    })()
+    try {
+      handle = await this.ctx.agents.create({
+        sessionId: request.sessionId,
+        meta,
+        agentOptions,
+        signal: request.signal,
+        setup: async (agentCtx, child) => {
+          if (child === undefined) throw new Error('DSH omitted the created Agent during isolated idle review setup')
+          if (presets !== undefined && presetId !== undefined) await presets.mount(agentCtx, presetId)
+          else presetsRaw?.composeFrom?.(agentCtx, parent.ctx)
+          if (typeof child.session.append === 'function') {
+            if (delegatedPolicies.sandboxMode !== undefined) child.session.append('sandbox/mode', { mode: delegatedPolicies.sandboxMode, source: 'delegation' })
+            if (delegatedPolicies.approvalPolicy !== undefined) child.session.append('approval/policy', { policy: delegatedPolicies.approvalPolicy, source: 'delegation' })
+            if (delegatedPolicies.permissionPreset !== undefined) child.session.append('permission/preset', { preset: delegatedPolicies.permissionPreset })
+          }
+          const workingDirectory = (agentCtx.get?.('workingDirectory') ?? this.ctx.get('workingDirectory')) as WorkingDirectoryService | undefined
+          if (typeof workingDirectory?.set === 'function') await workingDirectory.set(child, dir.workFrom ?? dir.cwd, request.signal)
+          if (typeof agentCtx.systemPrompt?.section === 'function') {
+            agentCtx.systemPrompt.section({
+              name: 'deployment:persona-prefix',
+              order: agentCtx.systemPrompt.getSectionOrder?.('DEPLOYMENT_PERSONA_PREFIX') ?? 10,
+              text: request.persona,
+            })
+          } else if (typeof agentCtx.on === 'function') {
+            const stop = agentCtx.on('system-prompt/assemble', (async (assembly: PromptAssembly, _ctx: PromptAssemblyContext, next: () => Promise<PromptAssembly>) => {
+              const assembled = await next()
+              return { ...assembled, sections: [{ name: 'deployment:persona-prefix', text: request.persona }, ...assembled.sections] }
+            }) as never)
+            if (typeof stop === 'function') stopPersona = stop as () => unknown
+          }
+          agentCtx.tools?.restrict?.({ allow: request.allowedTools })
+          agentCtx.tools?.guard?.(request.guardTools)
+          stopContinuation = attachContinuationTurns(child)
+          disposeMemoryTurn = this.attachChildMemoryTurn(child, runtime, delegation, false)
+        },
+      })
+      const child = handle.agent
+      if (modern) titleTask(child, 'Mnemon · Idle review')
+      removeAbortListener.attach(child)
+      const startSeq = child.session.seq ?? child.session.snapshotEvents().length
+      child.followup({
+        id: `mnemon-review-${randomUUID()}`,
+        role: 'user',
+        source: { kind: 'user' },
+        content: [{ type: 'text', text: `${delegatedTaskLine('review')}\n${request.prompt}` }],
+      })
+      let idleError: unknown
+      try {
+        await (child as HostAgent & { whenIdle(): Promise<void> }).whenIdle()
+      } catch (error) {
+        idleError = error
+      }
+      const events = child.session.snapshotEvents(startSeq)
+      const turnEnd = [...events].reverse().find(event => event.type === 'turn/end')
+      const reason = turnEnd?.data?.reason as { kind?: unknown; error?: { message?: unknown } } | undefined
+      if (reason?.kind === 'error' || (idleError !== undefined && !request.signal.aborted && reason?.kind !== 'aborted')) {
+        const detail = typeof reason?.error?.message === 'string'
+          ? reason.error.message
+          : idleError instanceof Error ? idleError.message : idleError === undefined ? undefined : String(idleError)
+        return { stopReason: 'error', ...(detail === undefined ? {} : { detail }) }
+      }
+      if (request.signal.aborted || reason?.kind === 'aborted') return { stopReason: 'aborted' }
+      if (reason?.kind === 'max-tokens') return { stopReason: 'max-tokens' }
+      if (reason?.kind === 'refusal') return { stopReason: 'refusal' }
+      return { stopReason: 'completed' }
+    } finally {
+      removeAbortListener.detach()
+      stopPersona?.()
+      stopContinuation?.()
+      if (handle !== undefined) {
+        try { await handle.dispose() } finally {
+          disposeMemoryTurn?.()
+          await archiveTaskSession(this.ctx, request.sessionId)
+          this.taskAgentIds.delete(request.sessionId)
+        }
+      } else {
+        disposeMemoryTurn?.()
+        this.taskAgentIds.delete(request.sessionId)
+      }
+    }
   }
 }

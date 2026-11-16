@@ -254,6 +254,10 @@ export interface HostWorkspace {
 export interface HostWorkspaceRegistry {
   get(id: string): HostWorkspace | undefined
   list(): HostWorkspace[]
+  /** Persisted archived session ids in the workspace registry, when exposed by DSH. */
+  readonly archivedSessionIds?: readonly string[]
+  /** Mark a finished session archived so DSH excludes it from sidebars and blank-session reuse. */
+  archiveSession?(sessionId: string, options?: { stopActivity?: boolean }): Promise<void>
 }
 
 export interface HostSubagentResult {

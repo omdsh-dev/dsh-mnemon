@@ -375,7 +375,7 @@ Memory Space 目录建立后，长期语义操作使用明确的记忆空间 ID�
 
 ## 后台任务 Agent 的模型路由
 
-整理名称与说明、Agent 查询、记忆系统与对话中的存入记忆和档案归档会创建一个不继承主对话历史的独立顶层任务 Agent。它使用当前查看工作区作为 cwd；即使没有选中主 Agent session，也能落到左上角选定工作区。任务完成后释放的是 Agent 实例，DSH 已保存的本地会话记录会保留；Mnemon 不自动删除这些记录。官方 DSH 0.2.2-rc.1 及更早的受支持 Host 保留子代理来源标记，侧栏和 ACP 对话列表不会显示这些记录（[#435](https://github.com/omdsh-dev/dsh-mnemon/issues/435)）。DSH 0.2.2-rc.2 与已检查的 master 快照移除了这一公开创建路径，因此 ACP 可列出带 `Mnemon · …` 标题的任务根；标准 WebUI 当前仍隐藏未开始对话轮次且不是当前打开项的根会话。其他客户端或列表元数据缺失时仍可能显示。仅重新打开已完成记录不会恢复 Mnemon 工具权限，重启后同样如此；用户主动发送的新轮次遵循当前权限。详见[Host 兼容说明](./compatibility.md#已发布的-dsh-022-rc1-与-issue-554)。
+整理名称与说明、Agent 查询、记忆系统与对话中的存入记忆和档案归档会创建一个不继承主对话历史的独立顶层任务 Agent。它使用当前查看工作区作为 cwd；即使没有选中主 Agent session，也能落到左上角选定工作区。任务完成后会释放 Agent 实例，并在宿主暴露 `workspaceRegistry.archiveSession` 时自动把已完成的 `mnemon-task-v1-*` 记录标记为已归档，启动时也会补全此前遗留任务空壳的归档状态（[#472](https://github.com/omdsh-dev/dsh-mnemon/issues/472)）；DSH 已保存的本地会话文件仍会保留在磁盘上且可恢复，但不再进入 Web 新会话空白复用候选池与侧栏列表。默认的 `spawn` 模式自动空闲审查也会在独立的已归档 `mnemon-review-v1-*` 会话中执行，避免向主对话的子 Agent 列表持续写入条目（[#651](https://github.com/omdsh-dev/dsh-mnemon/issues/651)）。官方 DSH 0.2.2-rc.1 及更早的受支持 Host 保留子代理来源标记，侧栏和 ACP 对话列表不会显示这些记录（[#435](https://github.com/omdsh-dev/dsh-mnemon/issues/435)）。DSH 0.2.2-rc.2 与已检查的 master 快照移除了这一公开创建路径，因此 ACP 可列出带 `Mnemon · …` 标题的任务根；标准 WebUI 当前仍隐藏未开始对话轮次且不是当前打开项的根会话。其他客户端或列表元数据缺失时仍可能显示。仅重新打开已完成记录不会恢复 Mnemon 工具权限，重启后同样如此；用户主动发送的新轮次遵循当前权限。详见[Host 兼容说明](./compatibility.md#已发布的-dsh-022-rc1-与-issue-554)。
 
 “分层策略”页面的“后台任务 → 任务 Agent 模型”为这些任务 Agent 与空闲审查 worker 提供三个选项：
 
@@ -403,7 +403,7 @@ DSH 的实时模型目录会报告各模型的输入模态，选择器为支持�
 
 | 键 | 默认值 | 范围 | 含义 |
 |---|---:|---|---|
-| `skills.evolution` | `false` | boolean | **自进化**：后台复盘并建议改进技能；会创建落盘的任务及子代理会话，Mnemon 不自动删除这些记录 |
+| `skills.evolution` | `false` | boolean | **自进化**：后台复盘并建议改进技能；会创建落盘的任务及子代理会话，已完成的 `mnemon-task-v1-*` 任务空壳会在宿主支持时自动归档（不删除磁盘文件） |
 | `skills.allowCreate` | `true` | boolean | **新建技能建议**：允许复盘提出尚不存在的新技能 |
 | `skills.allowUpdate` | `true` | boolean | **改进已有技能**：允许复盘提出已有技能的改进 |
 | `skills.allowLinkedUpdates` | `false` | boolean | **允许更新链接技能**：更新已有符号链接或 junction 背后的原始文件，所有共享 Agent 都会受影响。创建、安装、移除规则不变，仅对可信目标开启。 |

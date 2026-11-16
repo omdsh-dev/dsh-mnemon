@@ -447,6 +447,35 @@ it('revokes a cancelled or timed-out challenge even when middleware ignores canc
     })
   } finally { await f.close() }
 })
+
+it('runs automatic spawn idle review in isolated archived sessions without polluting the conversation subagent list (issues 651, 472)', async () => {
+  const f = await fixture('spawn')
+  try {
+    const archived: string[] = []
+    f.ctx.provide('workspaceRegistry', {
+      get: (id: string) => id === 'ws-1' ? { id: 'ws-1', path: f.workspace, title: 'Workspace' } : undefined,
+      list: () => [{ id: 'ws-1', path: f.workspace, title: 'Workspace', sessionIds: ['parent-denied'] }],
+      get archivedSessionIds() { return archived },
+      archiveSession: vi.fn(async (sessionId: string) => { if (!archived.includes(sessionId)) archived.push(sessionId) }),
+    })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    await f.turn()
+    await f.turn()
+    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.waitFor(() => expect(f.lifecycle.snapshot('parent-denied').current).toMatchObject({ reviewRunning: false, idleReviewAttempts: 1 }), { timeout: 10_000 })
+    expect(f.coordinator.snapshot().reviews).toBe(1)
+    await f.turn()
+    await f.turn()
+    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.waitFor(() => expect(f.lifecycle.snapshot('parent-denied').current).toMatchObject({ reviewRunning: false, idleReviewAttempts: 2 }), { timeout: 10_000 })
+    expect(f.coordinator.snapshot().reviews).toBe(2)
+    expect(f.children).toHaveLength(2)
+    expect(f.children.every(id => id.startsWith('mnemon-review-v1-'))).toBe(true)
+    expect(archived).toEqual(expect.arrayContaining(f.children))
+    expect(f.parent.session.snapshotEvents().some(event => event.type === 'subagent/catalog')).toBe(false)
+    await assertReloadable(f)
+  } finally { await f.close() }
+}, 20_000)
 })
 
 describe('review evidence host', () => {

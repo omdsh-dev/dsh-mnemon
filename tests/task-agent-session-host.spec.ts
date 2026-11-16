@@ -743,6 +743,41 @@ it('first human steer receives fresh View guidance after an automatic first step
     expect(humanPrompt).toContain('This is a new user request in a completed Mnemon task conversation.')
   } finally { stop(); await task.dispose() }
 }, 30_000)
+
+it('archives finished task shells on completion and archives legacy shells on startup sweep without blocking resume (issue 472)', async () => {
+  const h = await host()
+  const archived: string[] = []
+  const sessionIds = ['plain', 'mnemon-task-v1-stale-shell']
+  const stale = await (h.ctx as unknown as {
+    agents: { create(options: object): Promise<{ agent: { id: string }; dispose(): Promise<void> }> }
+  }).agents.create({
+    sessionId: SessionId('mnemon-task-v1-stale-shell'),
+    meta: { cwd: h.f.workspace, origin: 'subagent' },
+    agentOptions: { provider: 'scripted', model: 'fixture' },
+  })
+  await stale.dispose()
+  h.ctx.provide('workspaceRegistry', {
+    get: (id: string) => id === 'ws-1' ? { id: 'ws-1', path: h.f.workspace, title: 'Workspace', sessionIds } : undefined,
+    list: () => [{ id: 'ws-1', path: h.f.workspace, title: 'Workspace', sessionIds }],
+    get archivedSessionIds() { return archived },
+    archiveSession: async (sessionId: string) => {
+      if (!sessionIds.includes(sessionId) && sessionId !== stale.agent.id && !sessionId.startsWith('mnemon-task-v1-')) {
+        throw new Error(`unknown session: ${sessionId}`)
+      }
+      if (!archived.includes(sessionId)) archived.push(sessionId)
+    },
+  })
+  h.restartMnemon()
+  await vi.waitFor(() => expect(archived).toContain('mnemon-task-v1-stale-shell'))
+  expect(archived).not.toContain('plain')
+
+  const saved = await h.lifecycle.superviseTask('', CANDIDATE, undefined, h.f.workspace)
+  expect(saved.sessionId).toMatch(/^mnemon-task-v1-/)
+  expect(archived).toContain(saved.sessionId)
+  expect(sessionIds.concat(saved.sessionId).filter(id => id !== 'plain' && !archived.includes(id))).toEqual([])
+  const resumed = await h.ctx.agents.resume({ resumeSessionId: SessionId(saved.sessionId), agentOptions: { provider: 'scripted', model: 'fixture' } })
+  await resumed.dispose()
+}, 30_000)
 })
 
 describe('agent ownership host', () => {
