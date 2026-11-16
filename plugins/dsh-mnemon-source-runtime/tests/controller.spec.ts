@@ -43,6 +43,33 @@ function fixture(now = new Date('2026-08-13T08:00:00.000Z')): { directory: strin
 }
 
 describe('RuntimeMemoryController', () => {
+  it('defers only unpinned low-priority entries in the current branch without changing storage (#364)', async () => {
+    const { directory, controller } = fixture()
+    await controller.mutate({ action: 'add', target: 'user', content: 'Optional personal background', importance: 'low' })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'Optional project detail', importance: 'low', branches: ['main'] })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'Other branch detail', importance: 'low', branches: ['other'] })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'Always ask before publishing', importance: 'normal' })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'Pinned optional detail', importance: 'low' })
+    await controller.setPinned('memory', 'Pinned optional detail', true)
+    const before = readFileSync(join(directory, 'runtime', 'memories.json'), 'utf8')
+    const full = controller.contextProjection('main')
+    const deferred = controller.contextProjection('main', true)
+    expect(deferred.text).not.toContain('Optional personal background')
+    expect(deferred.text).not.toContain('Optional project detail')
+    expect(deferred.text).not.toContain('Other branch detail')
+    expect(deferred.text).toContain('Always ask before publishing')
+    expect(deferred.text).toContain('Pinned optional detail')
+    expect(deferred.deferredEntries.map(entry => entry.content)).toEqual(['Optional personal background', 'Optional project detail'])
+    expect(deferred.entries).toHaveLength(2)
+    expect(deferred.totalEntries).toBe(5)
+    expect(deferred.minimumCharacters).toBe(full.minimumCharacters)
+    expect(deferred.revision).toBe(full.revision)
+    expect(full.text).toContain('Optional project detail')
+    expect(controller.contextProjection('main')).toEqual(full)
+    expect(readFileSync(join(directory, 'runtime', 'memories.json'), 'utf8')).toBe(before)
+    expect(readFileSync(join(directory, 'runtime', 'MEMORY.md'), 'utf8')).toContain('Optional project detail')
+  })
+
   it('preserves importance through a separate USER.md store, plans and compaction (#469)', async () => {
     const { directory } = fixture()
     const workspaceDir = join(directory, 'workspace')

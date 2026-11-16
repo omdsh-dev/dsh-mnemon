@@ -10,6 +10,13 @@ import { mainStrategyTypeId, withMainStrategy } from '../src/host/main-strategy.
 afterEach(() => vi.unstubAllEnvs())
 
 describe('Mnemon config and resolution', () => {
+  it('keeps low-priority Runtime projection deferral opt-in and validates it (#364)', () => {
+    expect(resolveConfig({}).runtimeMemory.deferLowPriority).toBe(false)
+    expect(resolveConfig({ runtimeMemory: { deferLowPriority: true } }).runtimeMemory.deferLowPriority).toBe(true)
+    expect(Config({ runtimeMemory: { deferLowPriority: true } }).runtimeMemory?.deferLowPriority).toBe(true)
+    expect(() => resolveConfig({ runtimeMemory: { deferLowPriority: 'yes' } } as never)).toThrow('deferLowPriority')
+  })
+
   it('keeps creation roots opt-in and validates the whole preference atomically (#658)', () => {
     expect(resolveSkillsConfig().skillRoots).toBeUndefined()
     const skillRoots = { create: ['project-agents', 'user-agents'], default: 'project-agents' } as const
@@ -179,6 +186,7 @@ describe('Mnemon config and resolution', () => {
         maintenanceMaxTokens: 32_768,
       },
     }).runtimeMemory).toEqual({
+      deferLowPriority: false,
       inheritToSubagents: false,
       memoryLimitBytes: 20_480,
       userLimitBytes: 10_240,

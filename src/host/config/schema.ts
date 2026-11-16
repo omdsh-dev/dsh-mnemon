@@ -209,6 +209,7 @@ export const DocumentsSchema: z<DocumentsConfig> = z.object({
 })
 
 export const RuntimeMemorySchema: z<RuntimeMemoryConfig> = z.object({
+  deferLowPriority: z.boolean().default(false),
   inheritToSubagents: z.boolean().default(false),
   memoryLimitBytes: z.number().step(1).min(MIN_RUNTIME_MEMORY_LIMIT_BYTES).max(MAX_RUNTIME_MEMORY_LIMIT_BYTES).default(DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES),
   userLimitBytes: z.number().step(1).min(MIN_RUNTIME_MEMORY_LIMIT_BYTES).max(MAX_RUNTIME_MEMORY_LIMIT_BYTES).default(DEFAULT_RUNTIME_USER_LIMIT_BYTES),
@@ -272,6 +273,7 @@ export const Config: z<SharedConfig> = z.object({
     limitBytes: DOCUMENTS_DEFAULT_LIMIT_BYTES,
   }),
   runtimeMemory: RuntimeMemorySchema.default({
+    deferLowPriority: false,
     inheritToSubagents: false,
     memoryLimitBytes: DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES,
     userLimitBytes: DEFAULT_RUNTIME_USER_LIMIT_BYTES,

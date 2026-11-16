@@ -9,10 +9,12 @@ export interface Config {
   userDataDir?: string
   memoryLimitBytes?: number
   userLimitBytes?: number
+  deferLowPriority?: boolean
 }
 
 export const Config: z<Config> = z.object({
   dataDir: z.string(), userDataDir: z.string(),
+  deferLowPriority: z.boolean(),
   memoryLimitBytes: z.number().step(1).min(1).max(MAX_RUNTIME_MEMORY_LIMIT_BYTES),
   userLimitBytes: z.number().step(1).min(1).max(MAX_RUNTIME_MEMORY_LIMIT_BYTES),
 })
@@ -27,6 +29,7 @@ export function runtimeSourceConfig(value: Config, instanceKey: string): Require
   if (!isAbsolute(dataDir) || !isAbsolute(userDataDir)) throw new Error('Runtime Source dataDir and userDataDir must be absolute')
   return {
     dataDir, userDataDir,
+    deferLowPriority: config.deferLowPriority ?? false,
     memoryLimitBytes: config.memoryLimitBytes ?? DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES,
     userLimitBytes: config.userLimitBytes ?? DEFAULT_RUNTIME_USER_LIMIT_BYTES,
   }

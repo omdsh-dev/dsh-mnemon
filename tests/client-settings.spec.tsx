@@ -958,6 +958,28 @@ describe('MnemonSettingsCard', () => {
     expect((screen.getByRole('spinbutton', { name: 'Working memory limit (bytes)' }) as HTMLInputElement).value).toBe('20480')
   })
 
+  it.each([false, true])('saves or rejects Runtime deferral without losing staged capacities (reject=%s, #364)', async rejected => {
+    const mutate = rejected ? vi.fn(async () => { throw new Error('Synthetic rejection') }) : vi.fn(async () => {})
+    const scope = liveSettingsScope<Config>(readySnapshot({ runtimeMemory: { maintenanceMaxTokens: 32768 } }), mutate)
+    const view = render(runtime(scope))
+    const toggle = screen.getByRole('switch', { name: '低优先级记忆按需读取' })
+    expect(checked(toggle)).toBe(false)
+    fireEvent.change(screen.getByRole('spinbutton', { name: '用户画像上限（字节）' }), { target: { value: '8192' } })
+    fireEvent.click(toggle)
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['runtimeMemory'], value: { maintenanceMaxTokens: 32768, deferLowPriority: true } }]))
+    if (rejected) {
+      expect((await screen.findByRole('alert')).textContent).toContain('Synthetic rejection')
+      expect(checked(toggle)).toBe(false)
+      expect(scope.snapshot.value?.runtimeMemory?.deferLowPriority).toBeUndefined()
+    } else {
+      await waitFor(() => expect(scope.snapshot.value?.runtimeMemory?.deferLowPriority).toBe(true))
+    }
+    expect((screen.getByRole('spinbutton', { name: '用户画像上限（字节）' }) as HTMLInputElement).value).toBe('8192')
+    view.unmount()
+    render(runtime(scope, { writable: false }, translateEn))
+    expect((screen.getByRole('switch', { name: 'Read low-priority memory on demand' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it('defaults Runtime inheritance off, saves it immediately and preserves staged capacities', async () => {
     const mutate = vi.fn(async () => {})
     const scope = liveSettingsScope<Config>(readySnapshot({ runtimeMemory: { maintenanceMaxTokens: 32768 } }), mutate)

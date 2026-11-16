@@ -12,6 +12,38 @@ import * as plugin from '../src/index.ts'
 import { RuntimeMemoryController } from '../src/controller.ts'
 
 describe('standalone runtime Source', () => {
+  it('offers deferred entries through a bounded snapshot-pinned Route without crossing branches or instances (#364)', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-runtime-deferred-'))
+    const workspace = join(directory, 'workspace')
+    mkdirSync(workspace)
+    execFileSync('git', ['init', '--quiet', '-b', 'main', workspace])
+    const controller = new RuntimeMemoryController({ effectiveDataDir: () => directory })
+    const runner = new MemoryCompositionRunner()
+    try {
+      for (const [content, branches] of [['Exact detail 17.2', ['main']], ['Other branch secret', ['other']]] as const) {
+        await controller.mutate({ action: 'add', target: 'memory', content, importance: 'low', branches: [...branches] })
+      }
+      await runner.mount(strategy, { instanceId: 'strategy' })
+      await runner.mount(plugin, { instanceId: 'work', config: { dataDir: directory, deferLowPriority: true } })
+      await runner.mount(plugin, { instanceId: 'unfiltered', config: { dataDir: join(directory, 'other') } })
+      const turn = await runner.beginTurn({ scope: { storage: 'custom', workspaceId: workspace } })
+      const projection = turn.view.projection.find(fragment => fragment.sourceInstanceKey === 'source:work')!
+      expect(projection.text).not.toContain('Exact detail')
+      expect(projection.text).toContain('1 low-priority')
+      expect(turn.view.sourcePresentations?.find(item => item.sourceInstanceKey === 'source:work')).toMatchObject({ visibleItems: 0, totalItems: 2 })
+      expect(turn.view.routes).toHaveLength(1)
+      const route = turn.view.routes[0]!
+      expect(route.sourceInstanceKey).toBe('source:work')
+      await controller.mutate({ action: 'replace', target: 'memory', oldText: 'Exact detail 17.2', content: 'Changed after composition' })
+      const evidence = await turn.executeRoute(route.id, { query: '17.2', limit: 1 })
+      expect(evidence.items).toMatchObject([{ text: 'Exact detail 17.2', provenance: { target: 'memory', importance: 'low', branches: ['main'] } }])
+      expect(JSON.stringify(evidence)).not.toContain('Other branch')
+      expect(JSON.stringify(evidence)).not.toContain('Changed after composition')
+      expect((await turn.executeRoute(route.id, { query: 'Other branch' })).items).toEqual([])
+      turn.release()
+    } finally { await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
+  })
+
   it('owns stable scope and visible-entry digests, separating additions and ages from retractions', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'mnemon-runtime-snapshot-scope-'))
     const workspace = join(directory, 'workspace')

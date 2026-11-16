@@ -14,6 +14,8 @@ The recordings and screenshots come from the [v0.5.32 gallery](../../assets/webu
 
 Two rules hold everywhere. **Switches and selectors apply as soon as you change them**; if a write fails, the control shows the saved value again next to the reason. **Typed values wait for their group's Apply**, which appears once something changed, together with a note on what applying will do.
 
+Runtime settings also offer **Read low-priority memory on demand** (off by default). It keeps unpinned low-priority entries in storage and the management list, while the model reads them through scoped search instead of receiving them in every prompt. Pinned entries remain projected.
+
 ## In a conversation
 
 ![Ask a question, expand the turn memory bar, and open the document it read in Project Documents](../../assets/webui-v0.5.32/en/recall.gif)
