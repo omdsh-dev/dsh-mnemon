@@ -157,6 +157,12 @@ In **Plugins → dsh-mnemon → Runtime memory**, **Automatically share Runtime 
 
 The setting applies to newly created subagents. Each child captures the current choice at dispatch and keeps it across live settings changes, alongside its delegated memory View. When enabled, the captured Runtime projection is appended once per accepted turn, including native and PTC tool modes; later tool steps do not append another copy or rewrite the request prefix. The setting filters Runtime projections from all Runtime Source instances only. Parent task context, explicit memory-tool access, other Source projections and required background maintenance inputs retain their existing behavior. It does not remove content already included in a task or its conversation history.
 
+### Deferred low-priority Runtime entries
+
+The **Read low-priority memory on demand** switch on Runtime memory's settings page sets `runtimeMemory.deferLowPriority`. It is off by default. When enabled, unpinned entries explicitly marked `low` stay out of the eager prompt; normal, critical and pinned entries retain their usual projection. A short count points the model to a bounded Runtime search Route, which can read the full entry and metadata from that turn's snapshot. Literal query, target, limit and offset support precise retrieval and browsing. Search respects the same Source, workspace, shared USER scope and Git branch as the projection.
+
+This changes prompt delivery only: files, capacity accounting, management lists, writes and backups stay complete. No text classifier changes importance or deletes entries. Disable the switch to restore full projection on subsequent turns. Explicitly recalled content follows ordinary conversation-history retention. Standalone Runtime Sources use `deferLowPriority: true` in their own configuration; custom Strategies must retain the offered `search` Route to make deferred details accessible.
+
 ### Runtime Memory budgets
 
 In **Plugins → dsh-mnemon → Runtime memory → Capacity limits**, set the user-profile and working-memory limits in bytes, then choose **Apply**. Each accepts an integer from 1 to 1048576; **Discard changes** restores the saved values. The defaults remain 4096 bytes (4 KiB) and 10240 bytes (10 KiB). This form preserves the separate maintenance-token budget.

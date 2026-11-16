@@ -47,6 +47,8 @@ export interface RuntimeMemoryContextProjection {
   text: string
   /** Exact entries represented by this branch-aware prompt projection. */
   entries: RuntimeMemoryEntry[]
+  /** Branch-visible low-priority entries omitted only from the eager prompt. */
+  deferredEntries: RuntimeMemoryEntry[]
   /** Complete stored entry count before branch filtering. */
   totalEntries: number
   minimumCharacters: number
@@ -426,13 +428,11 @@ export class RuntimeMemoryController {
    * branches are hidden from the projection; the on-disk Markdown files and
    * the source JSON always remain complete.
    */
-  contextProjection(branch?: string): RuntimeMemoryContextProjection {
+  contextProjection(branch?: string, deferLowPriority = false): RuntimeMemoryContextProjection {
     const branchScope = scopeBranch(branch)
     const projectedAt = this.now().getTime()
     const local = this.localContextProjection(projectedAt, branchScope)
     const global = this.userController?.localContextProjection(projectedAt)
-    const user = global?.user ?? local.user
-    const memory = local.memory
     const entries = global === undefined
       ? local.snapshot.entries
       : [
@@ -454,9 +454,15 @@ export class RuntimeMemoryController {
             user: { ...visibleUser, markdownPath: this.userPath },
           },
         } satisfies RuntimeMemorySnapshot
-    const visibleEntries = branchScope === undefined
+    const branchEntries = branchScope === undefined
       ? entries
       : entries.filter(entry => entry.target === 'user' || entryMatchesBranch(entry, branchScope))
+    const deferred = (entry: RuntimeMemoryEntry) => deferLowPriority && entry.importance === 'low' && entry.pinned !== true
+    const deferredEntries = branchEntries.filter(deferred)
+    const visibleEntries = branchEntries.filter(entry => !deferred(entry))
+    const user = contextMarkdown(visibleEntries.filter(entry => entry.pinned !== true), 'user', projectedAt)
+    const memory = contextMarkdown(visibleEntries.filter(entry => entry.pinned !== true), 'memory', projectedAt)
+    const deferredLine = deferredEntries.length === 0 ? '' : `\n${deferredEntries.length} low-priority entries are available on demand through this Runtime Source's search Route; search before assuming a missing fact is unknown.`
     const branchLine = branchScope === undefined
       ? ''
       : `\nGit branch: ${branchScope}${local.hidden > 0 ? ` (${local.hidden} branch-scoped entr${local.hidden === 1 ? 'y' : 'ies'} hidden)` : ''}`
@@ -466,9 +472,10 @@ export class RuntimeMemoryController {
       minimumCharacters: prefix.length,
       revision: snapshot.revision,
       entries: visibleEntries.map(entry => ({ ...entry, ...(entry.branches === undefined ? {} : { branches: [...entry.branches] }) })),
+      deferredEntries: deferredEntries.map(entry => ({ ...entry, ...(entry.branches === undefined ? {} : { branches: [...entry.branches] }) })),
       totalEntries: entries.length,
       text: `${prefix}MNEMON RUNTIME MEMORY SNAPSHOT
-Entry annotations default to importance=normal and ages=0d (whole days at projection; future/unknown for future/invalid timestamps). Current instructions win. For old_text/oldText, use entry content only.${branchLine}
+Entry annotations default to importance=normal and ages=0d (whole days at projection; future/unknown for future/invalid timestamps). Current instructions win. For old_text/oldText, use entry content only.${branchLine}${deferredLine}
 
 USER.md (user profile)
 <runtime-memory-file name="USER.md">

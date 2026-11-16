@@ -1,11 +1,11 @@
 import * as projectionSDK from 'dsh-mnemon/extension-sdk'
-import type { MemoryJsonValue, MemorySourceDefinition } from 'dsh-mnemon/contracts'
-import { createHash } from 'node:crypto'
+import type { MemoryEvidenceItem, MemoryJsonValue, MemorySourceDefinition } from 'dsh-mnemon/contracts'
+import { createHash, randomUUID } from 'node:crypto'
 import { COMPOSABLE_MEMORY_API_VERSION } from 'dsh-mnemon/contracts'
 import { defineMemorySource, createMemoryMutationReceipt as receipt, memoryInputRecord as record, memoryInputStringArray as stringArray, memoryInputText as text, truncateMemoryText as truncate } from 'dsh-mnemon/extension-sdk'
 import { resolveGitBranch } from './git-branch.ts'
 import { RuntimeMemoryController } from './controller.ts'
-import type { RuntimeMemoryAction, RuntimeMemoryCompactedEntry, RuntimeMemoryImportance, RuntimeMemoryMutation, RuntimeMemoryTarget } from './contracts.ts'
+import type { RuntimeMemoryAction, RuntimeMemoryCompactedEntry, RuntimeMemoryEntry, RuntimeMemoryImportance, RuntimeMemoryMutation, RuntimeMemoryTarget } from './contracts.ts'
 import { runtimeSourceConfig, type Config } from './config.ts'
 
 const ACTIONS = new Set<RuntimeMemoryAction>(['add', 'replace', 'remove'])
@@ -41,8 +41,21 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
     typeId: 'runtime',
     packageName: 'dsh-mnemon-source-runtime',
     role: 'working-context',
-    capabilities: ['status', 'project', 'write'],
+    capabilities: ['status', 'project', 'search', 'write'],
     consistency: 'exact-snapshot',
+    routes: [{
+      id: 'search',
+      description: 'Read Runtime entries from this View, including deferred low-priority details and their metadata. Match literal query text, optionally filter target; use an empty query and offset to browse. Other branches and Sources are excluded.',
+      capability: 'search',
+      inputSchema: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          query: { type: 'string' }, target: { type: 'string', enum: ['user', 'memory'] },
+          limit: { type: 'integer', minimum: 1, maximum: 50 }, offset: { type: 'integer', minimum: 0 },
+        },
+      },
+      maxCalls: 4, maxResults: 50, maxCharacters: 16_000,
+    }],
     actions: [{
       id: 'mutate',
       description: 'Add, replace, or remove an entry in Runtime Memory.',
@@ -76,10 +89,10 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
     const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
     const projection = (workspaceId?: string) => {
       const branch = resolveGitBranch(workspaceId)
-      const current = controller.contextProjection(branch)
+      const current = controller.contextProjection(branch, effective.deferLowPriority)
       return { ...current, snapshot: {
         version: 1,
-        scope: digest([effective.dataDir, effective.userDataDir, branch ?? null]),
+        scope: digest([effective.dataDir, effective.userDataDir, branch ?? null, ...(effective.deferLowPriority ? [true] : [])]),
         // Ages are projection annotations. Content, importance and branch scope
         // identify a fact; losing any old occurrence requires a checkpoint.
         entries: current.entries.map(entry => digest([entry.target, entry.content, entry.importance, entry.branches ?? [], ...(entry.pinned === true ? [true] : [])])).sort(),
@@ -101,19 +114,27 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
           availability: 'ready',
           revision: current.revision,
           ...(current.minimumCharacters === 0 ? {} : { hints: { minimumProjectionCharacters: current.minimumCharacters } }),
-          capabilities: ['status', 'project', 'write'],
-          routeIds: [],
+          capabilities: effective.deferLowPriority ? ['status', 'project', 'search', 'write'] : ['status', 'project', 'write'],
+          routeIds: effective.deferLowPriority ? ['search'] : [],
           actionIds: ['mutate'],
         }
       },
       project(request) {
-        if (!request.includeProjection) return { fragments: [] }
+        if (!request.includeProjection && !effective.deferLowPriority) return { fragments: [] }
         const current = prepared.get(request.scope) ?? projection(request.scope.workspaceId)
         prepared.delete(request.scope)
         if (current.revision !== request.expectedRevision) throw new Error('Runtime projection revision changed during composition')
-        if (current.minimumCharacters > request.maxCharacters) throw new Error(`Pinned Runtime entries need ${current.minimumCharacters} projection characters, but the View grants ${request.maxCharacters}. Unpin entries or increase the View budget; pinned entries were not truncated.`)
+        if (request.includeProjection && current.minimumCharacters > request.maxCharacters) throw new Error(`Pinned Runtime entries need ${current.minimumCharacters} projection characters, but the View grants ${request.maxCharacters}. Unpin entries or increase the View budget; pinned entries were not truncated.`)
         return {
-          fragments: [{
+          ...(effective.deferLowPriority ? { readGrant: {
+            id: `${context.sourceInstanceKey}/grant/${current.revision}`,
+            sourceInstanceKey: context.sourceInstanceKey, schema: 'dsh-mnemon.runtime/v1',
+            revision: current.revision, consistency: 'exact-snapshot' as const,
+            // Host-only turn data. Search never widens the branch scope or reads
+            // a later revision from disk after this View has been composed.
+            value: { entries: [...current.entries, ...current.deferredEntries] } as unknown as MemoryJsonValue,
+          } } : {}),
+          fragments: request.includeProjection ? [{
             id: `${context.sourceInstanceKey}/projection`,
             sourceInstanceKey: context.sourceInstanceKey,
             mode: request.mode,
@@ -122,7 +143,7 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
             // A truncated projection cannot certify that all old facts remain
             // visible. Hosts then conservatively compare the entire fragment.
             provenance: { sourceTypeId: 'runtime', ...(current.text.length <= request.maxCharacters ? { snapshot: current.snapshot } : {}) },
-          }],
+          }] : [],
           presentation: {
             visibleItems: current.entries.length,
             totalItems: current.totalEntries,
@@ -131,6 +152,38 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
               title: truncate(entry.content, 160),
             })),
           },
+        }
+      },
+      query(request) {
+        if (!effective.deferLowPriority || request.grant.schema !== 'dsh-mnemon.runtime/v1') throw new Error('Runtime search requires a deferred-projection ReadGrant')
+        request.signal?.throwIfAborted()
+        const input = record(request.input, 'Runtime search')
+        const query = (text(input.query, 'query', 2_000, false) ?? '').trim().toLowerCase()
+        const target = text(input.target, 'target', 20, false)
+        const grant = record(request.grant.value, 'Runtime ReadGrant')
+        // This exact-snapshot grant was materialized above, then validated and
+        // cloned by Core. It contains no paths and is never model-provided input.
+        const entries = grant.entries as unknown as RuntimeMemoryEntry[]
+        const matches = entries.filter(entry => (target === undefined || entry.target === target) && entry.content.toLowerCase().includes(query))
+        const offset = typeof input.offset === 'number' ? Math.max(0, Math.floor(input.offset)) : 0
+        const limit = Math.min(request.route.maxResults ?? 50, typeof input.limit === 'number' ? Math.max(1, Math.min(50, Math.floor(input.limit))) : 10)
+        let remaining = request.route.maxCharacters ?? 16_000
+        let shortened = false
+        const items: MemoryEvidenceItem[] = []
+        for (const entry of matches.slice(offset, offset + limit)) {
+          if (remaining <= 0) break
+          const content = truncate(entry.content, remaining)
+          remaining -= content.length
+          shortened ||= content !== entry.content
+          const { content: _content, ...metadata } = entry
+          items.push({ id: digest([entry.target, entry.content, entry.branches ?? []]), text: content,
+            revision: request.grant.revision, provenance: metadata as unknown as MemoryJsonValue })
+        }
+        const nextOffset = offset + items.length
+        return {
+          id: `evidence:${randomUUID()}`, viewId: request.view.id, routeId: request.route.id, sourceInstanceKey: context.sourceInstanceKey,
+          observedAt: new Date().toISOString(), items, truncated: shortened || nextOffset < matches.length,
+          metadata: { total: matches.length, offset, ...(nextOffset < matches.length ? { nextOffset } : {}) },
         }
       },
       async manage(request) {

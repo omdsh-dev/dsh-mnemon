@@ -63,6 +63,8 @@ export interface ResolvedDocumentsConfig {
 }
 
 export interface RuntimeMemoryConfig {
+  /** Omit unpinned low-priority entries from eager prompts; offer scoped search instead. */
+  deferLowPriority?: boolean
   /** Automatically project Runtime memory into newly created child Agents; off by default. */
   inheritToSubagents?: boolean
   /** Maximum UTF-8 bytes projected into MEMORY.md. */
@@ -74,6 +76,7 @@ export interface RuntimeMemoryConfig {
 }
 
 export interface ResolvedRuntimeMemoryConfig {
+  deferLowPriority: boolean
   inheritToSubagents: boolean
   memoryLimitBytes: number
   userLimitBytes: number

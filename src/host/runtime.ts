@@ -70,7 +70,7 @@ export function memoryGenerationOptions(
     sourceConfiguration: installed => {
       const type = installed.definition.manifest.typeId
       if (!isDefaultSourceInstance(installed.instanceKey, type)) return {}
-      if (type === 'runtime') return { dataDir: directory, userDataDir: userDirectory, memoryLimitBytes: config.runtimeMemory.memoryLimitBytes, userLimitBytes: config.runtimeMemory.userLimitBytes }
+      if (type === 'runtime') return { dataDir: directory, userDataDir: userDirectory, memoryLimitBytes: config.runtimeMemory.memoryLimitBytes, userLimitBytes: config.runtimeMemory.userLimitBytes, deferLowPriority: config.runtimeMemory.deferLowPriority }
       if (type === 'documents') return {
         dataDir: directory,
         ...(config.documents?.limitBytes === undefined ? {} : { limitBytes: config.documents.limitBytes }),

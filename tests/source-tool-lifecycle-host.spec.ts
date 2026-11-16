@@ -14,6 +14,7 @@ import * as scoped from 'dsh-mnemon-strategy-scoped'
 import * as general from 'dsh-mnemon-strategy-general'
 import type { DocumentSnapshot } from 'dsh-mnemon-source-documents/contracts'
 import type { HostAgent, HostContextShape } from '../src/host/dsh.ts'
+import type { Config } from '../src/host/protocol.ts'
 import { MnemonLifecycle } from '../src/host/lifecycle.ts'
 import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
 import { registerTools } from '../src/host/tools.ts'
@@ -46,8 +47,8 @@ class ScriptedAdapter extends LlmAdapter {
   }
 }
 
-async function harness(respond: Respond, configure?: (f: Awaited<ReturnType<typeof compositionFixture>>) => Promise<void>, codeMode = false) {
-  const f = await compositionFixture()
+async function harness(respond: Respond, configure?: (f: Awaited<ReturnType<typeof compositionFixture>>) => Promise<void>, codeMode = false, config: Config = {}) {
+  const f = await compositionFixture(config)
   const ctx = new Context()
   let stop: (() => void) | undefined
   let stopTools: (() => void) | undefined
@@ -104,6 +105,8 @@ it('creates and immediately updates a Document through real Host tools in one Ge
     f.config.memoryTopology.strategyId = 'general'
     await f.mount(general, { instanceId: 'general' })
   })
+
+
   try {
     await f.turn('Create the synthetic draft, then correct it immediately.')
     expect(calls).toBe(3)
@@ -114,6 +117,30 @@ it('creates and immediately updates a Document through real Host tools in one Ge
   } finally { await f.dispose() }
 }, 20_000)
 
+it('keeps optional Runtime details out of the prompt and recalls them through a real Host Route (#364)', async () => {
+  let calls = 0
+  const f = await harness(options => {
+    const messages = JSON.stringify(options.messages)
+    if (calls++ === 0) {
+      expect(messages).not.toContain('Synthetic optional port 8123')
+      const view = f.live.forAgent(f.parent).composableTurns.activeTurn(f.parent.id)!.view
+      const route = view.routes.find(route => route.sourceInstanceKey === 'source:mnemon-source-runtime')!
+      expect(route).toBeDefined()
+      return { name: 'mnemon_view_route', args: { routeId: route.id, input: { query: '8123' } } }
+    }
+    expect(messages).toContain('Synthetic optional port 8123')
+    return 'The optional detail was retrieved.'
+  }, async f => {
+    await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: 'Synthetic optional port 8123', importance: 'low' })
+  }, false, { runtimeMemory: { deferLowPriority: true }, idleReview: { enabled: false } })
+  try {
+    await f.turn('Find the optional port detail.')
+    expect(calls).toBe(2)
+    const receipts = f.session.snapshotEvents().filter(event => event.type === 'tool/result')
+    expect(receipts).toHaveLength(1)
+    expect(JSON.stringify(receipts)).not.toContain('"isError":true')
+  } finally { await f.dispose() }
+})
 it('updates an already loaded Agent schema and keeps Documents/Runtime usable with Memory Spaces absent', async () => {
   const requests: string[][] = []
   let calls = 0

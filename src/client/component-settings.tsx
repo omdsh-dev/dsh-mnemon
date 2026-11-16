@@ -98,6 +98,9 @@ export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryC
   const profile = useLive(saved, async value => { await scope.mutate([{ op: 'set', path: ['runtimeUserScope'], value }]) })
   const disabled = !page.writable || snapshot.status === 'loading' || !snapshot.writable
   const configured = snapshot.value?.runtimeMemory
+  const deferred = useLive(configured?.deferLowPriority === true, async value => {
+    await scope.mutate([{ op: 'set', path: ['runtimeMemory'], value: { ...configured, deferLowPriority: value } }])
+  })
   const inheritance = useLive(configured?.inheritToSubagents === true, async value => {
     await scope.mutate([{ op: 'set', path: ['runtimeMemory'], value: { ...configured, inheritToSubagents: value } }])
   })
@@ -135,6 +138,13 @@ export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryC
         hint={t('config.runtimeInheritanceHint')} checked={inheritance.value} disabled={disabled} onChange={inheritance.set} />
     </div>
     <WriteFailure error={inheritance.failed} t={t} />
+  </section>
+  <section className={css.preferenceSection} data-settings-section="deferred-runtime" aria-label={t('config.runtimeDeferred')}>
+    <div className={css.rows}>
+      <ToggleRow id="mnemon-runtime-defer-low" label={t('config.runtimeDeferred')}
+        hint={t('config.runtimeDeferredHint')} checked={deferred.value} disabled={disabled} onChange={deferred.set} />
+    </div>
+    <WriteFailure error={deferred.failed} t={t} />
   </section>
   <section className={css.panelSection} data-settings-section="limits" aria-labelledby="mnemon-runtime-limits">
     <div className={css.panelHeading}>
