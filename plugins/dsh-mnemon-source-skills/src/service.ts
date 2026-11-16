@@ -1,3 +1,5 @@
+import { creationChoices, validateCreationConfig } from './creation-roots.ts'
+import type { SkillCreationConfig } from './contracts.ts'
 import { inQuotaDay, quota, retainedBudget, type BudgetEntry } from './auto-adoption-budget.ts'
 import { triageSuggestion } from './triage.ts'
 import type { AutoAdoptionReservation } from './contracts.ts'
@@ -43,9 +45,6 @@ function clip(value: string, maximum: number): string {
   return text.length <= maximum ? text : text.slice(0, maximum - 1) + '…'
 }
 
-/** Where a new skill goes when nothing says otherwise: the user's own DSH skills. */
-const DEFAULT_ROOT: SkillRootKind = 'user-dsh'
-
 function staleRun(run: BacktestRun, now: number): BacktestRun {
   return run.status === 'running' && now - Date.parse(run.startedAt) > RUN_STALE_MS ? { ...run, status: 'interrupted' } : run
 }
@@ -70,9 +69,15 @@ function runScore(results: readonly CaseResult[]): { passRate?: number; score?: 
 export class SkillsService {
   readonly store: SkillsStore
   private scopedCatalogCache: Map<string, SkillCatalog> | undefined
+  private readonly creation: SkillCreationConfig | undefined
 
-  constructor(private readonly dataDir: string, private readonly roots: Omit<SkillRootOptions, 'workspace'> = {}, private readonly clock: () => Date = () => new Date(), private readonly fetcher: Fetcher = defaultFetcher) {
+  constructor(private readonly dataDir: string, private readonly roots: Omit<SkillRootOptions, 'workspace'> & { skillRoots?: SkillCreationConfig } = {}, private readonly clock: () => Date = () => new Date(), private readonly fetcher: Fetcher = defaultFetcher) {
+    this.creation = validateCreationConfig(roots.skillRoots)
     this.store = new SkillsStore(join(dataDir, 'skills'))
+  }
+
+  private defaultRoot(workspace: string | undefined): SkillRootKind {
+    return this.creation === undefined ? 'user-dsh' : creationChoices(this.creation, this.catalog(workspace)).default
   }
 
   private options(workspace: string | undefined): SkillRootOptions {
@@ -163,7 +168,7 @@ export class SkillsService {
         ...(last?.finishedAt === undefined ? {} : { lastRunAt: last.finishedAt }),
       }
     }
-    return { ...catalog, stats }
+    return { ...catalog, stats, ...(this.creation === undefined ? {} : { creation: creationChoices(this.creation, catalog) }) }
   }
 
   overview(workspace: string | undefined): SkillsOverview {
@@ -402,7 +407,7 @@ export class SkillsService {
     return this.write(() => {
       if (!isSkillName(input.name)) throw new Error('a skill name uses lowercase letters, digits and single hyphens (max 64)')
       const catalog = this.catalog(workspace)
-      const root = input.root ?? DEFAULT_ROOT
+      const root = input.root ?? this.defaultRoot(workspace)
       if (!SKILL_ROOT_KINDS.includes(root)) throw new Error('unknown skill root: ' + root)
       requireWritableRoot(rootPath(catalog, root))
       const directory = join(rootPath(catalog, root), input.name)
@@ -699,7 +704,7 @@ export class SkillsService {
   private automaticIdentity(workspace: string | undefined, suggestion: SkillSuggestion): string {
     const target = suggestion.action === 'update'
       ? this.requireOriginal(this.suggestionOriginal(this.store.ledger(), suggestion)).path
-      : join(rootPath(this.catalog(workspace), suggestion.targetRoot ?? DEFAULT_ROOT), suggestion.skillName, 'SKILL.md')
+      : join(rootPath(this.catalog(workspace), suggestion.targetRoot ?? this.defaultRoot(workspace)), suggestion.skillName, 'SKILL.md')
     return sha256(resolve(target))
   }
 
@@ -874,7 +879,7 @@ export class SkillsService {
         ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }),
         skillName: input.skillName,
         action: loaded === undefined ? 'create' : 'update',
-        ...(loaded === undefined ? { targetRoot: input.targetRoot ?? suggestion?.targetRoot ?? DEFAULT_ROOT } : { baseKey: loaded.key, baseHash: loaded.hash, origin: origin! }),
+        ...(loaded === undefined ? { targetRoot: input.targetRoot ?? prior?.targetRoot ?? suggestion?.targetRoot ?? this.defaultRoot(workspace) } : { baseKey: loaded.key, baseHash: loaded.hash, origin: origin! }),
         content: input.content,
         notes: clip(input.notes, 2_000),
         changes: input.changes.map(change => clip(change, 300)).filter(Boolean).slice(0, 12),
@@ -932,7 +937,7 @@ export class SkillsService {
       }
       if (input.automatic !== undefined) {
         const suggestion = ledger.suggestions.find(entry => entry.id === draft.suggestionId)!
-        const identity = this.automaticIdentity(workspace, { ...suggestion, targetRoot: input.root ?? draft.targetRoot ?? DEFAULT_ROOT })
+        const identity = this.automaticIdentity(workspace, { ...suggestion, targetRoot: input.root ?? draft.targetRoot ?? this.defaultRoot(workspace) })
         if (input.automatic.reservationId !== undefined) {
           const entry = this.budgetEntries(ledger).find(candidate => candidate.id === input.automatic!.reservationId)
           if (entry?.suggestionId !== suggestion.id || entry.identity !== identity) throw new Error('Automatic adoption reservation changed; manual review required')
@@ -965,7 +970,7 @@ export class SkillsService {
         key = base.key
         updated = findSkill(this.catalog(original.origin?.workspace), key)
       } else {
-        const root = input.root ?? draft.targetRoot ?? DEFAULT_ROOT
+        const root = input.root ?? draft.targetRoot ?? this.defaultRoot(workspace)
         if (activeSkill(catalog, draft.skillName) !== undefined) throw new Error(`${draft.skillName} exists now; draft it again as an update`)
         const target = rootPath(catalog, root)
         requireWritableRoot(target)
@@ -1441,7 +1446,7 @@ export class SkillsService {
       if (existing !== undefined && existing.hash !== install!.hash && input.overwrite !== true) {
         throw new Error(`${name} was edited after it was installed; confirm to replace your changes`)
       }
-      const root = existing?.root ?? input.root ?? DEFAULT_ROOT
+      const root = existing?.root ?? input.root ?? this.defaultRoot(workspace)
       const target = existing === undefined ? join(rootPath(catalog, root), name) : existing.layout === 'bundle' ? dirname(existing.path) : existing.path
       if (existing === undefined && (existsSync(target) || existsSync(target + '.md'))) throw new Error(`${name} already exists in this root`)
       const staged = stageFiles(this.store.stagingDirectory(), files)

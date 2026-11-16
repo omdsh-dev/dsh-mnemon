@@ -179,6 +179,37 @@ describe('skill evolution in the Host', () => {
     }
   }
 
+  it.each([true, false])('uses Source creation preferences for evolution with workspace=%s (#658)', async inWorkspace => {
+    config = { ...config, targetScope: 'user', autoBacktest: false }
+    await runner.mount(skillsPlugin, { instanceId: 'configured', config: {
+      dataDir: join(directory, 'data'), dshHome: join(directory, 'dsh'), agentsHome: join(directory, 'agents'),
+      skillRoots: { create: ['project-agents', 'user-agents'], default: 'project-agents' },
+    } })
+    const scope = { storage: 'custom' as const, ...(inWorkspace ? { workspaceId: join(directory, 'workspace') } : {}) }
+    const client = await runner.managementClient('source:configured', scope)
+    const configuredSource: SkillsSourcePort = {
+      scope,
+      read: async (operation, input = null) => (await client.read(operation, input as never)).value as never,
+      mutate: async (operation, input) => {
+        const { revision } = await client.read('revision', null)
+        return (await client.mutate(operation, input as never, { confirmed: true, expectedRevision: revision })).value as never
+      },
+    }
+    const expectedRoot = inWorkspace ? 'project-agents' : 'user-agents'
+    const content = '---\nname: incident-triage\ndescription: Capture incident logs.\n---\n\n1. Read the logs.\n'
+    const { skills } = evolution([(_label, prompt) => {
+      expect(prompt).toContain(`It will be written to ${expectedRoot}.`)
+      return { content, notes: '', changes: [] }
+    }])
+    await skills.draft(configuredSource, join(directory, 'unrelated-task-cwd'), { skill: 'incident-triage' })
+    await vi.waitFor(async () => expect(await configuredSource.read<SkillDraft[]>('drafts')).toHaveLength(1))
+    const [draft] = await configuredSource.read<SkillDraft[]>('drafts')
+    expect(draft?.targetRoot).toBe(expectedRoot)
+    await configuredSource.mutate('draft-adopt', { id: draft!.id })
+    const path = inWorkspace ? join(directory, 'workspace', '.agents', 'skills') : join(directory, 'agents', 'skills')
+    expect(readFileSync(join(path, 'incident-triage', 'SKILL.md'), 'utf8')).toBe(content)
+  })
+
   it.each([
     [undefined, 'workspaces', 'user-dsh'],
     ['user', 'workspaces', 'user-dsh'], ['project', 'global', 'project-dsh'],

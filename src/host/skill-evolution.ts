@@ -113,7 +113,7 @@ function abortable<T>(signal: AbortSignal, work: () => Promise<T>): Promise<T> {
 
 /** Resolve only roots supplied by this Source's scoped catalog, never the task's cwd. */
 function newSkillRoot(settings: ResolvedSkillsConfig, source: SkillsSourcePort, catalog: SkillCatalog, explicit?: SkillRootKind): SkillRootKind {
-  let root = explicit
+  let root = explicit ?? catalog.creation?.default
   if (root === undefined) {
     if (settings.targetScope === 'storage' && source.scope === undefined) throw new Error('The skill destination needs a known storage scope; select User or Project in Skills settings.')
     const project = settings.targetScope === 'project' || (settings.targetScope === 'storage' && (source.scope?.storage === 'workspace' || source.scope?.storage === 'workspaces'))

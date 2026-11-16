@@ -391,6 +391,7 @@ DSH 的实时模型目录会报告各模型的输入模态，选择器为支持�
 | `skills.allowUpdate` | `true` | boolean | **改进已有技能**：允许复盘提出已有技能的改进 |
 | `skills.allowLinkedUpdates` | `false` | boolean | **允许更新链接技能**：更新已有符号链接或 junction 背后的原始文件，所有共享 Agent 都会受影响。创建、安装、移除规则不变，仅对可信目标开启。 |
 | `skills.targetScope` | `user` | `storage` / `user` / `project` | **新技能写入位置**：`user` → `user-dsh`；`project` → `project-dsh`；`storage` 跟随 `storageScope`（`global` / `custom` → 用户，`workspace` / `workspaces` → 项目）。设置页面支持应用或放弃 |
+| `skills.skillRoots` | 未设置 | `{ create: SkillRootKind[], default: SkillRootKind }` | 可选的**新技能目录**：统一手动新建、新进化草案和市场安装的可选目录与默认值，整体应用或放弃。 |
 | `skills.autoBacktest` | `true` | boolean | **草案自动回测**：草案写好后用测试用例与当前版本对比 |
 | `skills.autoAdopt` | `false` | boolean | 自动起草并采纳新的空闲审查建议；要求自进化与自动回测开启、完整文本回测不退步，最多重写两次。 |
 | `skills.draftMaxTokens` | `32768` | 整数，128–131072 | **草案输出 token 上限**：首次生成完整草案的预算，包含推理 token |
@@ -411,7 +412,18 @@ DSH 的实时模型目录会报告各模型的输入模态，选择器为支持�
 
 两项均应符合所选提供方/模型的输出上限。若仍被截断，错误会列出实际尝试的预算、原 `SKILL.md` 的 UTF-8 字节数（新技能为零）以及设置位置。只在模型支持的范围内提高预算；提供方拒绝请求预算时应调低。如果完整文件无法容纳于该上限，需要缩短技能或选择输出上限更高的模型。
 
-`skills.targetScope` 默认保留 `user`，兼容现有安装：升级或修改存储范围不会把新技能写到另一个根目录。需要跟随存储范围时显式选择 `storage`。新建议记录解析后的目标；草案及重新起草保留该目标，采纳沿用草案的目标，除非用户手动选择其他位置。旧版本中没有目标字段的建议在起草时使用当前设置；已有草案保留记录的目标。改进已有技能始终写回 `baseKey` 与记录来源共同确定的原文件（包括所属项目），不受设置、所选存储范围或目标覆盖影响。
+未设置 `skills.skillRoots` 时，`skills.targetScope` 默认保留 `user`，兼容现有安装：升级或修改存储范围不会把新技能写到另一个根目录。需要跟随存储范围时显式选择 `storage`。新建议记录解析后的目标；草案及重新起草保留该目标，采纳沿用草案的目标，除非用户手动选择其他位置。旧版本中没有目标字段的建议在起草时使用当前设置；已有草案保留记录的目标。改进已有技能始终写回 `baseKey` 与记录来源共同确定的原文件（包括所属项目），不受设置、所选存储范围或目标覆盖影响。
+
+可在技能设置页用 `skills.skillRoots` 从 `project-dsh`、`project-agents`、`user-dsh`、`user-agents` 中选择创建目录。`create` 必须包含 1–4 个不重复的目录，`default` 必须在列表内。例如：
+
+```yaml
+skills:
+  skillRoots:
+    create: [project-agents, user-agents]
+    default: project-agents
+```
+
+启用后，新进化建议优先使用这组配置，同时作用于手动新建和市场首次安装。无工作区时，项目默认目录回退到对应用户目录（`project-agents` → `user-agents`，`project-dsh` → `user-dsh`），即使只配置了项目目录，也会显示该回退选项。显式指定的目标、已有草案和已安装技能保留原位置，并继续遵循现有路径、归属与哈希检查；这些偏好不是权限边界。技能扫描仍按原优先级读取全部四类目录。关闭后恢复旧行为，不移动任何文件。独立 Skills Source 的配置也接受同样的 `skillRoots` 对象。
 
 项目根来自所选工作区的 Skills Source 目录，遵循 DSH 的发现规则（最近的 `.git` 祖先目录，否则为工作区本身），不使用模型任务的工作目录。缺少工作区/项目或目标不可写时，复盘/起草会显示明确错误，不静默降级到用户技能。采纳时重新检查最终选择的项目：不会重建起草后被删除的项目，用户可以明确改选用户根目录；后续文件系统错误也会显示。不会迁移技能或改变发现优先顺序，默认仍由用户手动采纳；可选的自动采纳也遵守这些 Source 校验。
 

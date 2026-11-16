@@ -349,7 +349,7 @@ function DraftReview(props: { context: SkillsPageContext; draftId: string; model
   const [editing, setEditing] = useState<string | null>(null)
   const [redrafting, setRedrafting] = useState<string | null>(null)
   const [root, setRoot] = useState<SkillRootKind>('user-dsh')
-  const [roots, setRoots] = useState<readonly SkillRootKind[]>(['user-dsh'])
+  const [roots, setRoots] = useState<readonly SkillRootKind[]>([])
   const [details, setDetails] = useState(false)
   const [busy, setBusy] = useState(false)
   const [confirmAdopt, setConfirmAdopt] = useState(false)
@@ -376,12 +376,17 @@ function DraftReview(props: { context: SkillsPageContext; draftId: string; model
   useEffect(() => {
     if (view?.draft.action !== 'create') return
     let active = true
-    // A project root exists only for a conversation in a project.
+    setRoots([])
     void context.client.catalog().then(catalog => {
-      if (active) setRoots(NEW_SKILL_ROOTS.filter(kind => catalog.roots.some(entry => entry.kind === kind)))
-    }).catch(() => undefined)
+      if (!active) return
+      const selected = view.draft.targetRoot ?? catalog.creation?.default ?? 'user-dsh'
+      const choices = catalog.creation?.roots ?? NEW_SKILL_ROOTS.filter(kind => catalog.roots.some(entry => entry.kind === kind))
+      // Existing drafts retain their recorded destination, even after preferences change.
+      setRoots(choices.includes(selected) ? choices : [...choices, selected])
+      setRoot(selected)
+    }).catch(context.fail)
     return () => { active = false }
-  }, [configRevision, context.client, view?.draft.action])
+  }, [configRevision, context.client, context.fail, view?.draft.id, view?.draft.action, view?.draft.targetRoot])
   if (view === null) return <Busy label={t('common.loading')} />
   const { draft } = view
   // Runs are linked oldest first; the comparison is always the latest pair.
@@ -416,9 +421,9 @@ function DraftReview(props: { context: SkillsPageContext; draftId: string; model
     <header className={css.skSectionHead}>
       <h4>{t('draft.title')}<small>{stamp(draft.updatedAt)}</small></h4>
       {ready && <div>
-        {draft.action === 'create' && roots.length > 1 && <SelectField inline size="sm" label={t('draft.writeTo')} value={root} disabled={busy} onChange={setRoot}
+        {draft.action === 'create' && roots.length > 0 && <SelectField inline size="sm" label={t('draft.writeTo')} value={root} disabled={busy} onChange={setRoot}
           options={roots.map(kind => ({ value: kind, label: t(`root.${kind}`) }))} />}
-        <Button variant="primary" size="sm" disabled={!context.writable || busy || editing !== null || running || view.conflict !== undefined || !originalAvailable || view.base?.readOnly === true} onClick={() => regressed ? setConfirmAdopt(true) : void adopt()}>{t('draft.adopt')}</Button>
+        <Button variant="primary" size="sm" disabled={!context.writable || busy || (draft.action === 'create' && roots.length === 0) || editing !== null || running || view.conflict !== undefined || !originalAvailable || view.base?.readOnly === true} onClick={() => regressed ? setConfirmAdopt(true) : void adopt()}>{t('draft.adopt')}</Button>
         <Button variant="ghost" size="sm" disabled={!context.writable || busy} onClick={() => void act(() => context.client.discardDraft(draft.id))}>{t('draft.discard')}</Button>
         <MoreMenu label={t('common.more')} disabled={!context.writable || busy} onSelect={id => id === 'edit' ? setEditing(draft.content) : setRedrafting('')}
           items={[{ id: 'edit', label: t('draft.edit') }, ...(originalAvailable && !view.base?.readOnly && context.client.canAssist('skill-draft') ? [{ id: 'redraft', label: t('draft.redraft') }] : [])]} />

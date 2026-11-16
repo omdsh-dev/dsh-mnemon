@@ -391,6 +391,7 @@ Skills keeps its settings under `skills` in the `mnemon` entry, edited on its ow
 | `skills.allowUpdate` | `true` | boolean | **Suggest skill improvements**: allow reviews to improve existing skills |
 | `skills.allowLinkedUpdates` | `false` | boolean | **Allow linked skill updates**: update original files behind existing symlinks/junctions; all sharing Agents see changes. Creation/install/removal rules stay unchanged. Enable only for trusted targets. |
 | `skills.targetScope` | `user` | `storage` / `user` / `project` | **New skill destination**: `user` → `user-dsh`; `project` → `project-dsh`; `storage` follows `storageScope` (`global` / `custom` → user, `workspace` / `workspaces` → project). Apply or Discard on the settings page |
+| `skills.skillRoots` | unset | `{ create: SkillRootKind[], default: SkillRootKind }` | Optional **New skill directories**: creation choices and default for manual create, new evolution drafts and market installs; Apply or Discard together. |
 | `skills.autoBacktest` | `true` | boolean | **Backtest drafts**: compare each new draft with the current version on its test cases |
 | `skills.autoAdopt` | `false` | boolean | Automatically draft and adopt new idle-review suggestions only after complete, non-regressing text backtests; at most two rewrites. Requires evolution and automatic backtests. |
 | `skills.draftMaxTokens` | `32768` | integer, 128–131072 | **Draft output token limit**: budget for the first complete draft, including reasoning |
@@ -411,7 +412,18 @@ Skills keeps its settings under `skills` in the `mnemon` entry, edited on its ow
 
 Keep both values within the selected provider/model's output limit. If generation still truncates, the error reports the attempted budgets and source `SKILL.md` size in UTF-8 bytes (zero for a new skill), and points to these settings. Raise the budgets only within the model's supported limit; if the provider rejects a requested budget, lower it. If the complete file cannot fit that limit, shorten the skill or select a model with a larger output limit.
 
-`skills.targetScope` defaults to `user` to preserve existing installations: upgrading or changing storage scope does not move new skill writes to another root. Choose `storage` explicitly to follow storage scope. New suggestions record their resolved destination; drafts and redrafts keep that destination, and adoption uses the draft unless you explicitly choose another root. Suggestions from older versions without a destination use the current setting when drafted; existing drafts retain their recorded root. Improvements always write back to the original file identified by `baseKey` and its recorded origin, including the owning project, regardless of this setting, the selected storage scope or a destination override.
+When `skills.skillRoots` is unset, `skills.targetScope` defaults to `user` to preserve existing installations: upgrading or changing storage scope does not move new skill writes to another root. Choose `storage` explicitly to follow storage scope. New suggestions record their resolved destination; drafts and redrafts keep that destination, and adoption uses the draft unless you explicitly choose another root. Suggestions from older versions without a destination use the current setting when drafted; existing drafts retain their recorded root. Improvements always write back to the original file identified by `baseKey` and its recorded origin, including the owning project, regardless of this setting, the selected storage scope or a destination override.
+
+Configure `skills.skillRoots` in the Skills settings page to offer any of `project-dsh`, `project-agents`, `user-dsh`, `user-agents`. `create` must contain 1–4 unique roots and `default` must be included. For example:
+
+```yaml
+skills:
+  skillRoots:
+    create: [project-agents, user-agents]
+    default: project-agents
+```
+
+This opt-in overrides `targetScope` for new evolution suggestions, and also applies to manual creation and new market installs. Without a workspace, a project default falls back to the matching user root (`project-agents` → `user-agents`, `project-dsh` → `user-dsh`), which is offered even if only project roots were configured. Explicit destinations, existing drafts and installed skills retain their targets and existing path, ownership and hash checks; these preferences are not an authorization boundary. Discovery still scans all four roots in the same precedence order. Disabling the option restores legacy behavior without moving files. A standalone Skills Source accepts the same `skillRoots` object in its configuration.
 
 Project roots come from the Skills Source catalog for the selected workspace, following DSH discovery (nearest `.git` ancestor, or the workspace itself); the model task's working directory is not used. A missing workspace/project or an unwritable destination produces a visible review/draft error. Mnemon does not silently fall back to user skills. Adoption checks the final selected project again: a project removed after drafting is not recreated, and you can explicitly select a user root instead. Later filesystem failures are also reported. No skills are migrated, discovery precedence is unchanged, and adoption is manual by default; the opt-in automatic-adoption flow uses the same Source checks.
 

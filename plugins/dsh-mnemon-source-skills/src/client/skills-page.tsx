@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { Button, DiffBlock, IconChevronDownOutlineRegular, Switch, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SearchField, SelectField, SidebarModal } from 'dsh-mnemon/client'
-import { SKILL_ROOT_KINDS, type CatalogView, type SkillDocument, type SkillInvocation, type SkillRootKind, type SkillSummary, type SkillVersion } from '../contracts.ts'
+import { type CatalogView, type SkillDocument, type SkillInvocation, type SkillRootKind, type SkillSummary, type SkillVersion } from '../contracts.ts'
 import { css, errorText, points, stamp, useT } from './presentation.ts'
 import { Busy, Confirm, diffLabels, Empty, Field, Fold, FoldLink, MoreMenu, SkillIcon, SkillMarkdown, SkillPath, useLink } from './shared.tsx'
 import type { SkillsLocation, SkillsPageContext } from './ui.tsx'
@@ -94,7 +94,7 @@ export function SkillsPage(props: { context: SkillsPageContext; location: Skills
           ? <Empty glyph="✦" title={t('skills.select')}>{t('skills.selectBody')}</Empty>
           : <SkillDetail key={current.key} context={context} skillKey={current.key} stats={catalog.stats[current.name]} onDeleted={() => setSelected(undefined)} />}
     </div>
-    {creating && <CreateDialog context={context} roots={catalog.roots.map(root => root.kind)} onClose={() => setCreating(false)} onCreated={skill => { setCreating(false); setSelected(skill.key); context.refresh() }} />}
+    {creating && <CreateDialog context={context} roots={catalog.creation?.roots ?? catalog.roots.map(root => root.kind)} defaultRoot={catalog.creation?.default} onClose={() => setCreating(false)} onCreated={skill => { setCreating(false); setSelected(skill.key); context.refresh() }} />}
   </div>
 }
 
@@ -273,11 +273,11 @@ function ImproveDialog(props: { context: SkillsPageContext; name: string; onClos
   </SidebarModal>
 }
 
-function CreateDialog(props: { context: SkillsPageContext; roots: readonly SkillRootKind[]; onClose: () => void; onCreated: (skill: SkillSummary) => void }): JSX.Element {
+function CreateDialog(props: { context: SkillsPageContext; roots: readonly SkillRootKind[]; defaultRoot?: SkillRootKind | undefined; onClose: () => void; onCreated: (skill: SkillSummary) => void }): JSX.Element {
   const t = useT()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [root, setRoot] = useState<SkillRootKind>(props.roots.includes('user-dsh') ? 'user-dsh' : props.roots[0] ?? 'user-dsh')
+  const [root, setRoot] = useState<SkillRootKind>(props.defaultRoot ?? (props.roots.includes('user-dsh') ? 'user-dsh' : props.roots[0] ?? 'user-dsh'))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const valid = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(name) && name.length <= 64 && description.trim() !== ''
@@ -294,7 +294,7 @@ function CreateDialog(props: { context: SkillsPageContext; roots: readonly Skill
     <div className={css.skForm}>
       <Field label={t('create.name')} hint={t('create.nameHint')}>{control => <input {...control} value={name} placeholder="release-notes" onChange={event => setName(event.target.value.trim().toLowerCase())} />}</Field>
       <Field label={t('create.description')} hint={t('create.descriptionHint')}>{control => <textarea {...control} rows={3} value={description} onChange={event => setDescription(event.target.value)} />}</Field>
-      <div className={css.skFormRow}><SelectField label={t('create.root')} value={root} options={SKILL_ROOT_KINDS.filter(kind => props.roots.includes(kind)).map(kind => ({ value: kind, label: t(`root.${kind}`) }))} onChange={setRoot} /></div>
+      <div className={css.skFormRow}><SelectField label={t('create.root')} value={root} options={props.roots.map(kind => ({ value: kind, label: t(`root.${kind}`) }))} onChange={setRoot} /></div>
     </div>
   </SidebarModal>
 }

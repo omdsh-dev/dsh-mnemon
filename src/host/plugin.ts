@@ -100,6 +100,7 @@ export function apply(rawContext: unknown, rawConfig: MnemonConfig | LiveHostCon
         runtime.snapshot().allowLinkedSkillUpdates !== nextSkills.allowLinkedUpdates
         || currentSkills?.dshHome !== nextSkills.dshHome
         || currentSkills?.agentsHome !== nextSkills.agentsHome
+        || JSON.stringify(currentSkills?.skillRoots) !== JSON.stringify(nextSkills.skillRoots)
       ) {
         runtime.swap(createRuntimeGraph(effectiveConfig({ ...settings.get(), skills: nextSkills }), undefined, extensions))
       }

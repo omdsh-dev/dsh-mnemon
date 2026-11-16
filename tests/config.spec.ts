@@ -10,6 +10,14 @@ import { mainStrategyTypeId, withMainStrategy } from '../src/host/main-strategy.
 afterEach(() => vi.unstubAllEnvs())
 
 describe('Mnemon config and resolution', () => {
+  it('keeps creation roots opt-in and validates the whole preference atomically (#658)', () => {
+    expect(resolveSkillsConfig().skillRoots).toBeUndefined()
+    const skillRoots = { create: ['project-agents', 'user-agents'], default: 'project-agents' } as const
+    expect(resolveSkillsConfig({ skillRoots: { ...skillRoots, create: [...skillRoots.create] } }).skillRoots).toEqual(skillRoots)
+    for (const value of [{}, { create: [] }, { create: ['user-agents'], default: 'project-agents' }, { create: ['user-dsh', 'user-dsh'], default: 'user-dsh' }, { create: ['unknown'], default: 'unknown' }]) {
+      expect(() => resolveSkillsConfig({ skillRoots: value } as never)).toThrow()
+    }
+  })
   it('defaults automatic adoption off and validates its persistent daily budget settings', () => {
     expect(resolveSkillsConfig()).toMatchObject({ autoAdopt: false, autoAdoptDailyLimit: 2, autoAdoptTimeZone: 'local' })
     expect(resolveSkillsConfig({ autoAdoptDailyLimit: 0, autoAdoptTimeZone: 'Asia/Shanghai' })).toMatchObject({ autoAdoptDailyLimit: 0, autoAdoptTimeZone: 'Asia/Shanghai' })

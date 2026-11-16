@@ -1,3 +1,4 @@
+import type { SkillRootKind } from 'dsh-mnemon-source-skills/contracts'
 import { useEffect, useId, useMemo, useRef, useState, type JSX } from 'react'
 import { Button, Switch, Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
@@ -27,6 +28,8 @@ import { PanelActions, useLive, useScope, useStaged, WriteFailure } from './sett
 export const SKILLS_PACKAGE = 'dsh-mnemon-source-skills'
 const SKILLS_MANAGEMENT_INSTANCE = 'skills/default'
 const AUTO_MODEL = 'auto'
+// UI choices stay local: the Core browser artifact must load without a Skills Node entry.
+const CREATION_ROOTS: readonly SkillRootKind[] = ['project-dsh', 'project-agents', 'user-dsh', 'user-agents']
 
 type SkillsModelSelection = {
   provider: string
@@ -299,6 +302,17 @@ export function SkillsSettings(props: {
   const destination = useStaged({ targetScope: saved.targetScope }, async draft => {
     await scope.mutate([set('targetScope', draft.targetScope)])
   })
+  const creation = useStaged({
+    enabled: saved.skillRoots !== undefined,
+    create: saved.skillRoots?.create ?? ['user-dsh', 'project-dsh'] as SkillRootKind[],
+    default: saved.skillRoots?.default ?? 'user-dsh' as SkillRootKind,
+  }, async draft => {
+    await scope.mutate([draft.enabled
+      ? { op: 'set', path: ['skillRoots'], value: { create: draft.create, default: draft.default } }
+      : { op: 'unset', path: ['skillRoots'] }])
+  })
+  const creationInvalid = creation.draft.enabled && (creation.draft.create.length === 0 || !creation.draft.create.includes(creation.draft.default))
+    ? t('skills.roots.invalid') : null
   const savedDirectories = { dshHome: saved.dshHome ?? '', agentsHome: saved.agentsHome ?? '' }
   const directories = useStaged(savedDirectories, async draft => {
     const operations: SettingsOperation[] = []
@@ -486,9 +500,22 @@ export function SkillsSettings(props: {
       <ToggleRow id="mnemon-skills-sidebar" label={t('skills.sidebar')} hint={t('skills.sidebarHint')} checked={sidebar.value} disabled={disabled} onChange={sidebar.set} />
       <SelectRow id="mnemon-skills-target" label={t('skills.targetScope')} hint={t('skills.targetScopeHint')} value={destination.draft.targetScope}
         options={(['user', 'project', 'storage'] as const).map(value => ({ value, label: t(`skills.targetScope.${value}`) }))}
-        disabled={disabled || destination.saving} onChange={targetScope => destination.edit({ targetScope })} />
+        disabled={disabled || destination.saving || saved.skillRoots !== undefined} onChange={targetScope => destination.edit({ targetScope })} />
       <PanelActions dirty={destination.dirty} saving={destination.saving} applied={destination.applied} failed={destination.failed} disabled={disabled} invalid={null} t={t}
         onDiscard={destination.discard} onApply={() => { void destination.apply() }} />
+      <AdvancedSection title={t('skills.roots.title')} hint={t('skills.roots.hint')} section="roots" activeSection={page.section}>
+        <ToggleRow id="mnemon-skills-roots" label={t('skills.roots.enabled')} hint="" checked={creation.draft.enabled} disabled={disabled || creation.saving} onChange={enabled => creation.edit({ enabled })} />
+        {creation.draft.enabled && <>
+          {CREATION_ROOTS.map(kind => <ToggleRow key={kind} id={`mnemon-skills-root-${kind}`} label={t(`skills.root.${kind}`)} hint=""
+            checked={creation.draft.create.includes(kind)} disabled={disabled || creation.saving}
+            onChange={enabled => creation.edit({ create: enabled ? [...creation.draft.create, kind] : creation.draft.create.filter(root => root !== kind) })} />)}
+          <SelectRow id="mnemon-skills-root-default" label={t('skills.roots.default')} value={creation.draft.default}
+            options={CREATION_ROOTS.map(value => ({ value, label: t(`skills.root.${value}`) }))}
+            disabled={disabled || creation.saving} onChange={value => creation.edit({ default: value })} />
+        </>}
+        <PanelActions dirty={creation.dirty} saving={creation.saving} applied={creation.applied} failed={creation.failed} disabled={disabled} invalid={creationInvalid} t={t}
+          onDiscard={creation.discard} onApply={() => { void creation.apply() }} />
+      </AdvancedSection>
       <ToggleRow id="mnemon-skills-linked-updates" label={t('skills.allowLinkedUpdates')} hint={t('skills.allowLinkedUpdatesHint')} checked={linkedUpdates.value} disabled={disabled} onChange={linkedUpdates.set} />
 
       <ToggleRow id="mnemon-skills-evolution" label={t('skills.evolution')} hint={t('skills.evolutionHint')} checked={evolution.value} disabled={disabled} onChange={evolution.set} />
