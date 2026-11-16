@@ -19,6 +19,7 @@ Web profile 的 patch 通常是 `~/.dsh/profiles/web/cordis.patch.yml`。旧宿�
 | 界面位置 | 设置 | 保存为 |
 |---|---|---|
 | 记忆组合 | 主策略；每个记忆来源与增强各一个开关；各组件声明的选项 | `memoryView.strategyTypeId` 与 `memoryView.entries.<entry>.config`；组件的开关状态由 DSH 插件管理器写为对应 Entry 的 `disabled` 行 |
+| 记忆写入 | 记忆工具写入前确认 | `confirmWrites` |
 | 任务 Agent | 任务 Agent 模型 | `taskAgentModel` |
 | 存储 | 存储范围、数据目录、排除工作区、备份与迁移；Git 同步开关 | `storageScope`、`dataDir`、`excludedWorkspaces`、`syncEnabled` |
 | 界面 | 记忆系统入口、回合记忆栏、存入记忆按钮 | `displayMode`、`conversationInteraction.turnBar`、`conversationInteraction.saveAction` |
@@ -84,6 +85,7 @@ mnemon:
     maxTokens: 16384
   tabEnabled: true
   writeEnabled: true
+  confirmWrites: false
   taskAgentModel:
     mode: inherit # inherit | fixed
     # followConversation: true # 与 inherit 一起使用：跟随会话
@@ -139,6 +141,7 @@ mnemon:
 | `displayMode` | `sidebar` | `sidebar` / `builtin`；兼容旧值 `buildin` | 记忆系统入口：独立 Sidebar 或会话内标签页，共用同一工作台；旧拼写自动迁移为 `builtin` |
 | `tabEnabled` | `true` | boolean | 是否挂载所选入口和工作台；关闭后 Host RPC、命令和 Agent 工具保持注册 |
 | `writeEnabled` | `true` | boolean | 是否暴露语义写工具、写 RPC 和写命令 |
+| `confirmWrites` | `false` | boolean | 每次模型调用 Mnemon 写入工具前请求 DSH 审批；开启时暂停闲时记忆整理 |
 | `syncEnabled` | `false` | boolean | 本机是否同步到 Git 仓库。默认关闭，关闭时保持沉默：存储页那一行只有标题与开关，不读取状态，也不执行 Git 命令。仓库、分支、目录、提交身份、令牌与自动同步间隔（`autoBackupMinutes`）保存在 `state/sync-git.json`，不在这里 |
 | `taskAgentModel` | `{ mode: inherit }` | `inherit` / `fixed`；`followConversation`：boolean | 独立任务 Agent 与空闲审查 worker 的模型路由：`inherit`（**跟随全局**）、`inherit` 加 `followConversation: true`（**跟随会话**），或必须同时保存 `provider` 与 `model` 的 `fixed`（**自定义**）。见[后台任务 Agent 的模型路由](#后台任务-agent-的模型路由) |
 | `subagentProviderNames` | `[]` | 最多 32 个非空名称，每个最多 128 字符 | Host 不再支持枚举且自定义插件把名称隐藏在代码中时，提供额外子 Agent Provider 候选。在 Mnemon 插件配置中填写，隔离检查仍然有效；标准 `providerName` 配置会自动发现。 |
@@ -150,6 +153,14 @@ mnemon:
 所有值都保存在 `mnemon` 条目下并实时生效：界面的 `mnemon-ui` 设置范围保存为 `conversationInteraction`，`mnemon-view` 设置范围保存为 `memoryView`，`mnemon-skills` 设置范围保存为 `skills`。存储根只会在新运行图初始化成功后原子切换。
 
 Git 同步的默认提交者跟随 Host 在 `state/sync/git` 中解析的 Git 身份；`state/sync-git.json` 中的自定义身份优先。旧的占位姓名/邮箱组合也跟随 Git，只有未配置的字段才使用占位值。优先级与作者被拒绝后的恢复步骤见 [Git 仓库同步](../guides/operations.md#git-仓库同步)。
+
+### 模型记忆写入前确认
+
+开启**插件 → 可组合记忆 → 记忆写入 → 记忆工具写入前确认**，或设置 `mnemon.confirmWrites: true`。默认关闭。模型调用 Mnemon 写入工具（包括 `mnemon_view_action` 和 PTC 内嵌调用）时，必须先通过 DSH 审批，工具处理函数才会运行。每次确认只授权该次工具操作，其中仍包含原有的容量维护流程。已有权限拒绝和只读限制继续生效；拒绝、取消、没有审批通道，或 DSH 审批策略为 `never` 时不写入，也不会自动重试。
+
+开关在调用派发时读取，对已有 View 和子 Agent 同样生效；不会撤销已经批准或正在执行的写入。开启时暂停闲时记忆整理，记忆系统会显示原因；关闭后，后续符合条件的回合可以重新调度整理。读取工具和用户明确发起的管理操作保持原行为。此设置约束 Mnemon 记忆工具，不是 Shell/文件系统写入、手动编辑、Git 同步或独立技能自动化的总权限开关，这些操作仍沿用各自的权限与确认机制。
+
+不会迁移或删除记忆数据。关闭开关或删除该配置字段即可恢复原流程。
 
 ### 子 Agent 的 Runtime 记忆继承
 

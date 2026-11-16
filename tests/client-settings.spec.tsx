@@ -191,6 +191,27 @@ describe('MnemonSettingsCard', () => {
     await waitFor(() => expect(screen.queryByRole('switch', { name: '写入运行时记忆' })).toBeNull())
   })
 
+  it.each([false, true])('saves or rejects memory write confirmation without changing other settings (reject=%s, #140)', async rejected => {
+    const mutate = rejected ? vi.fn(async () => { throw new Error('Synthetic rejection') }) : vi.fn(async () => {})
+    const scope = liveSettingsScope<Config>(readySnapshot({ storageScope: 'workspace' }), mutate)
+    const view = render(<MnemonSettingsCard scope={scope} />)
+    const toggle = screen.getByRole('switch', { name: '记忆工具写入前确认' })
+    expect(checked(toggle)).toBe(false)
+    fireEvent.click(toggle)
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['confirmWrites'], value: true }]))
+    if (rejected) {
+      expect((await screen.findByRole('alert')).textContent).toContain('Synthetic rejection')
+      expect(checked(toggle)).toBe(false)
+    } else {
+      await waitFor(() => expect(scope.snapshot.value?.confirmWrites).toBe(true))
+    }
+    expect(scope.snapshot.value?.storageScope).toBe('workspace')
+    view.unmount()
+    const readOnly = settingsScope<Config>(readySnapshot({ confirmWrites: true }, { writable: false }), vi.fn())
+    render(<MnemonSettingsCard scope={readOnly} t={translateEn} />)
+    expect((screen.getByRole('switch', { name: 'Confirm memory tool writes' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it('keeps Team review compatibility selection read-only without the Host settings grant', () => {
     const scope = settingsScope<Config>(readySnapshot({ idleReview: { agentTeams: 'scoped' } }, { writable: false }))
     render(threeTier(scope, undefined, { language: 'en' }, translateEn))

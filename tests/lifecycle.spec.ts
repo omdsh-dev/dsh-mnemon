@@ -32,6 +32,23 @@ afterAll(cleanupLifecycleDirectories)
 afterEach(() => vi.useRealTimers())
 
 describe('Mnemon DSH lifecycle integration', () => {
+  it('pauses idle review while confirmation is required and resumes after disabling it (#140)', async () => {
+    vi.useFakeTimers()
+    const config = resolveConfig({ confirmWrites: true, idleReviewMs: 5_000 })
+    const value = fixture(config)
+    try {
+      await completeDurableTurns(value)
+      await vi.advanceTimersByTimeAsync(600_000)
+      expect(value.coordinator.checkReviewAccess).not.toHaveBeenCalled()
+      expect(value.coordinator.review).not.toHaveBeenCalled()
+      expect(value.lifecycle.snapshot('session-1').current).toMatchObject({ idleReviewBlocked: 'write-confirmation', idleReviewAttempts: 0, idleReviewPending: false })
+      config.confirmWrites = false
+      await completeDurableTurns(value, 3, 4)
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(value.coordinator.review).toHaveBeenCalledTimes(1)
+      expect(value.lifecycle.snapshot('session-1').current?.idleReviewBlocked).toBeUndefined()
+    } finally { value.stop() }
+  })
 
   it('emits producer-owned guided context accepted by the published legacy Session migration', async () => {
     const value = fixture(resolveConfig({ recallMode: 'guided', writebackMode: 'guided' }))

@@ -19,6 +19,7 @@ import { MnemonLifecycle } from '../src/host/lifecycle.ts'
 import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
 import { registerTools } from '../src/host/tools.ts'
 import { compositionFixture } from './fixtures/composition.ts'
+import { registerMemoryWriteApproval } from '../src/host/write-approval.ts'
 import { JsonlSessionPersistence } from './helpers/dsh-plugins.ts'
 import { loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
 
@@ -52,8 +53,9 @@ async function harness(respond: Respond, configure?: (f: Awaited<ReturnType<type
   const ctx = new Context()
   let stop: (() => void) | undefined
   let stopTools: (() => void) | undefined
+  let stopApproval: (() => void) | undefined
   let coordinator: MnemonSubagentCoordinator | undefined
-  const dispose = async () => { stop?.(); stopTools?.(); coordinator?.dispose(); await ctx.fiber.dispose(); await f.dispose() }
+  const dispose = async () => { stop?.(); stopApproval?.(); stopTools?.(); coordinator?.dispose(); await ctx.fiber.dispose(); await f.dispose() }
   try {
     await configure?.(f)
     await ctx.plugin(LlmRuntime)
@@ -78,6 +80,7 @@ async function harness(respond: Respond, configure?: (f: Awaited<ReturnType<type
     const host = ctx as unknown as HostContextShape
     coordinator = new MnemonSubagentCoordinator(host.subagents, f.live, host)
     stopTools = registerTools(host, f.live, coordinator, f.extensions)
+    stopApproval = registerMemoryWriteApproval(host, f.live)
     stop = new MnemonLifecycle(host, coordinator, f.config, f.live).start()
     const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' }, { cwd: f.workspace })
     if (codeMode) await selectPtc(parent.ctx)
@@ -353,3 +356,96 @@ it('delivers the conservative Layered protocol and still honors an explicit Runt
     expect(JSON.stringify(receipts)).not.toContain('"isError":true')
   } finally { await f.dispose() }
 }, 20_000)
+
+it.each([
+  { mode: 'native', outcome: 'allowed-once' },
+  { mode: 'native', outcome: 'rejected' },
+  { mode: 'native', outcome: 'unavailable' },
+  { mode: 'native', outcome: 'cancelled' },
+  { mode: 'native', outcome: 'deny-rule' },
+  { mode: 'native', outcome: 'never' },
+  { mode: 'native', outcome: 'missing-service' },
+  { mode: 'ptc', outcome: 'allowed-once' },
+  { mode: 'ptc', outcome: 'rejected' },
+  { mode: 'native', outcome: 'off' },
+])('confirms Document replacement before writing on the real Host ($mode / $outcome, #140)', async ({ mode, outcome }) => {
+  let calls = 0
+  let asks = 0
+  let id = ''
+  const f = await harness(() => {
+    if (calls++ !== 0) return 'Finished the requested operation.'
+    const args = { action: 'update', id, content: 'Synthetic approved replacement.' }
+    return mode === 'native' ? { name: 'mnemon_document_manage', args }
+      : { name: 'run_code', args: { description: 'Update the synthetic document', code: `await tools.mnemon_document_manage(${JSON.stringify(args)})` } }
+  }, async fixture => {
+    await fixture.graph.source('documents').mutate('mutate', { action: 'create', title: 'Approval fixture', content: 'Synthetic original content.' })
+    id = (await fixture.graph.source('documents').read<DocumentSnapshot>('snapshot')).documents[0]!.id
+  }, mode === 'ptc', { confirmWrites: outcome !== 'off', idleReview: { enabled: false } })
+  try {
+    if (outcome !== 'missing-service') {
+      const Approval = await import(requireDsh.resolve('@deepseek-ai/dsh-user-approval'))
+      await f.ctx.plugin(Approval.default, { policy: outcome === 'never' ? 'never' : 'ask' })
+      f.ctx.on('approval/request' as never, (async (request: { displayReason?: Record<string, string> }) => {
+        asks++
+        expect(request.displayReason?.zh).toContain('请确认本次记忆修改')
+        expect(request.displayReason?.en).toContain('Review this memory change')
+        expect((await f.graph.source('documents').read('document', { id }) as { content: string }).content).toBe('Synthetic original content.')
+        return outcome
+      }) as never)
+    }
+    if (outcome === 'deny-rule') f.parent.ctx.on('tools/pre-execute', (async () => ({ kind: 'deny', reason: 'Synthetic pre-existing denial' })) as never)
+    await f.turn('Replace the synthetic document.')
+    expect(calls).toBe(2)
+    const allowed = outcome === 'allowed-once' || outcome === 'off'
+    expect(await f.graph.source('documents').read('document', { id })).toMatchObject({ content: allowed ? 'Synthetic approved replacement.' : 'Synthetic original content.' })
+    expect(asks).toBe(['never', 'missing-service', 'off', 'deny-rule'].includes(outcome) ? 0 : 1)
+    const decided = f.session.snapshotEvents().filter(event => event.type === 'approval/decided')
+    expect(decided).toHaveLength(['missing-service', 'off', 'deny-rule'].includes(outcome) ? 0 : 1)
+  } finally { await f.dispose() }
+}, 20_000)
+
+it.each([false, true])('requires separate approval for named and generic memory writes in one turn (PTC=%s, #140)', async codeMode => {
+  let calls = 0
+  const asked: string[] = []
+  const f = await harness(() => {
+    const step = calls++
+    if (step > (codeMode ? 0 : 1)) return 'Finished the synthetic write requests.'
+    const offer = f.live.forAgent(f.parent).composableTurns.activeTurn(f.parent.id)!.view.actionOffers.find(offer => offer.sourceInstanceKey === 'source:mnemon-source-runtime')!
+    const first = { action: 'add', target: 'memory', content: 'Approved synthetic fact.' }
+    const second = { offerId: offer.id, input: { action: 'add', target: 'memory', content: 'Rejected synthetic fact.' } }
+    if (codeMode) return { name: 'run_code', args: { description: 'Two synthetic memory writes', code: `await tools.mnemon_runtime_memory(${JSON.stringify(first)}); await tools.mnemon_view_action(${JSON.stringify(second)})` } }
+    return step === 0 ? { name: 'mnemon_runtime_memory', args: first } : { name: 'mnemon_view_action', args: second }
+  }, undefined, codeMode, { confirmWrites: true, idleReview: { enabled: false } })
+  try {
+    const Approval = await import(requireDsh.resolve('@deepseek-ai/dsh-user-approval'))
+    await f.ctx.plugin(Approval.default, { policy: 'ask' })
+    f.ctx.on('approval/request' as never, (async (request: { toolName: string }) => {
+      asked.push(request.toolName)
+      return asked.length === 1 ? 'allowed-once' : 'rejected'
+    }) as never)
+    await f.turn('Perform the two synthetic memory writes.')
+    expect(asked).toEqual(['mnemon_runtime_memory', 'mnemon_view_action'])
+    expect(await f.graph.source('runtime').read('snapshot')).toMatchObject({ entries: [{ content: 'Approved synthetic fact.' }] })
+    const events = f.session.snapshotEvents().filter(event => event.type === 'approval/decided')
+    expect(events).toHaveLength(2)
+  } finally { await f.dispose() }
+}, 20_000)
+
+it('applies live write confirmation to an already-pinned View (#140)', async () => {
+  let calls = 0
+  let asks = 0
+  const f = await harness(() => {
+    if (calls++ !== 0) return 'Kept the original data.'
+    // Composition has already pinned this turn while the preference was off.
+    f.config.confirmWrites = true
+    return { name: 'mnemon_runtime_memory', args: { action: 'add', target: 'memory', content: 'Must not be silently written.' } }
+  }, undefined, false, { confirmWrites: false, idleReview: { enabled: false } })
+  try {
+    const Approval = await import(requireDsh.resolve('@deepseek-ai/dsh-user-approval'))
+    await f.ctx.plugin(Approval.default, { policy: 'ask' })
+    f.ctx.on('approval/request' as never, (async () => { asks++; return 'rejected' }) as never)
+    await f.turn('Try the synthetic memory write.')
+    expect(asks).toBe(1)
+    expect(await f.graph.source('runtime').read('snapshot')).toMatchObject({ entries: [] })
+  } finally { await f.dispose() }
+})

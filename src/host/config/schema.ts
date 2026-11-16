@@ -303,6 +303,7 @@ export const Config: z<SharedConfig> = z.object({
   displayMode: z.union(['sidebar', 'builtin', 'buildin'] as const).default('sidebar'),
   tabEnabled: z.boolean().default(true),
   writeEnabled: z.boolean().default(true),
+  confirmWrites: z.boolean().default(false),
   remoteAccess: z.union(['read-only', 'trusted-host'] as const).default('read-only'),
   lifecycleEnabled: z.boolean().default(true),
   recallMode: z.union(['guided', 'off'] as const).default('guided'),

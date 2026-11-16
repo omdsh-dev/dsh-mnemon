@@ -146,7 +146,7 @@ function OrdinaryNotices(props: { remoteReadOnly: boolean; reviewPaused: Lifecyc
     </button>
     <div id={contentsId} className={css.noticeContents}>
       {props.remoteReadOnly && <div className={css.alert} role="status">{t('workspace.remoteReadOnly')}</div>}
-      {props.reviewPaused && <div className={css.alert} role="status">{t(props.reviewPaused === 'tool-access' ? 'status.reviewToolAccessPaused' : 'status.reviewTeamPaused')}</div>}
+      {props.reviewPaused && <div className={css.alert} role="status">{t(props.reviewPaused === 'write-confirmation' ? 'status.reviewConfirmationPaused' : props.reviewPaused === 'tool-access' ? 'status.reviewToolAccessPaused' : 'status.reviewTeamPaused')}</div>}
     </div>
   </div>
 }

@@ -27,6 +27,7 @@ import { registerRpc } from './rpc.ts'
 import { hasNativeDirectoryPicker } from './directory-picker.ts'
 import { MnemonSubagentCoordinator } from './subagent.ts'
 import { registerTools } from './tools.ts'
+import { registerMemoryWriteApproval } from './write-approval.ts'
 import { registerMnemonSubagentTokenUsageProjection } from './subagent-token-usage.ts'
 import { provideMemoryRuntime } from '../core/runtime.ts'
 import { MemoryPluginManagement } from './plugin-management.ts'
@@ -185,6 +186,7 @@ export function apply(rawContext: unknown, rawConfig: MnemonConfig | LiveHostCon
     return registerTools(ctx, runtime, coordinator, extensions, loader?.await?.())
   }, 'dsh-mnemon: Source tool lifecycle')
   registerCommands(ctx.commands, runtime, coordinator)
+  ctx.effect(() => registerMemoryWriteApproval(ctx, runtime), 'dsh-mnemon: memory write approval')
   registerGuidance(ctx, resolved, runtime)
   ctx.inject(['connection', 'webServer'], (webContext) => {
     // `inject` guarantees the service at runtime; retain the defensive guard

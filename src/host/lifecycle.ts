@@ -328,7 +328,7 @@ class MnemonAgentLifecycle {
         restoredAttempts: this.restoredAttempts, maxPerSession: this.config.idleReview.maxPerSession,
         ...(this.watermarkError === undefined ? {} : { error: this.watermarkError }),
       } } : {}),
-      ...(idleReviewBlockReason(this.agent, this.config.idleReview.agentTeams) !== undefined
+      ...(this.config.confirmWrites ? { idleReviewBlocked: 'write-confirmation' as const } : idleReviewBlockReason(this.agent, this.config.idleReview.agentTeams) !== undefined
         ? { idleReviewBlocked: 'agent-team' as const } : this.reviewAccessBlocked ? { idleReviewBlocked: 'tool-access' as const } : {}),
       ...(this.lastReviewAttemptAt === undefined ? {} : { nextReviewAt: new Date(Math.min(8_640_000_000_000_000, this.lastReviewAttemptAt + this.config.idleReview.minIntervalMs)).toISOString() }),
       ...(this.lastReviewFailure === undefined ? {} : { lastReviewFailure: this.lastReviewFailure }),
@@ -605,7 +605,7 @@ class MnemonAgentLifecycle {
 
   /** Policy/root changes invalidate an already queued checkpoint instead of catching up. */
   private reviewPolicy(): string | undefined {
-    try { return JSON.stringify([this.config.idleReview.persistWatermark ? this.runtimeDirectory?.() : undefined, this.config.lifecycleEnabled, this.config.writeEnabled,
+    try { return JSON.stringify([this.config.idleReview.persistWatermark ? this.runtimeDirectory?.() : undefined, this.config.lifecycleEnabled, this.config.writeEnabled, this.config.confirmWrites,
       this.config.storageScope, this.config.dataDir, this.config.writebackMode, this.config.idleReviewMs, this.config.idleReview, this.config.taskAgentModel, mainStrategyTypeId(this.config)]) } catch (error) {
       if (this.config.idleReview.persistWatermark) this.pauseWatermark(error)
       return undefined
@@ -638,7 +638,7 @@ class MnemonAgentLifecycle {
 
   private idleReviewAllowed(reserved = false): boolean {
     return !this.disposed && contextIsActive(this.agent.ctx) && (!this.config.idleReview.persistWatermark || this.watermarkError === undefined)
-      && !this.memoryTurn?.excluded && this.config.lifecycleEnabled && this.config.writeEnabled && this.config.writebackMode === 'guided'
+      && !this.memoryTurn?.excluded && this.config.lifecycleEnabled && this.config.writeEnabled && !this.config.confirmWrites && this.config.writebackMode === 'guided'
       && this.config.idleReview.enabled && (reserved || this.idleReviewAttempts < this.config.idleReview.maxPerSession)
       && idleReviewBlockReason(this.agent, this.config.idleReview.agentTeams) === undefined
       && this.strategyDrivesIdleReview()

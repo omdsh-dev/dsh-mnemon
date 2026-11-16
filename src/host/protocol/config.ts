@@ -144,6 +144,8 @@ export interface Config {
   displayMode?: MnemonDisplayMode | 'buildin'
   tabEnabled?: boolean
   writeEnabled?: boolean
+  /** Require DSH approval before model-facing memory tools mutate data. */
+  confirmWrites?: boolean
   /** Remote management grant for paired pages; loopback pages keep full access. */
   remoteAccess?: 'read-only' | 'trusted-host'
   lifecycleEnabled?: boolean
@@ -223,6 +225,7 @@ export interface ResolvedConfig {
   displayMode: MnemonDisplayMode
   tabEnabled: boolean
   writeEnabled: boolean
+  confirmWrites: boolean
   /** Remote management grant for paired pages; loopback pages keep full access. */
   remoteAccess: 'read-only' | 'trusted-host'
   lifecycleEnabled: boolean

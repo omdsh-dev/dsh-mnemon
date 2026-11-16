@@ -254,6 +254,10 @@ Expand the Mnemon Native card. **Manage embedding settings in DSH** makes the sa
 
 </details>
 
+### Memory writes
+
+**Memory writes → Confirm memory tool writes** is off by default. When enabled, model memory writes use DSH approval and idle memory review pauses. A rejected or unavailable approval leaves memory unchanged; direct management edits retain their existing confirmation.
+
 ### Storage
 
 ![Storage: the scope, the default data directory, backup, and the Interface settings](../../assets/webui-v0.5.32/en/plugin-storage.jpg)
