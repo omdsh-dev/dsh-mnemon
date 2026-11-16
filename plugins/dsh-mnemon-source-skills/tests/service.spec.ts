@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { withMemoryStorageLock } from 'dsh-mnemon/extension-sdk'
 import { sha256 } from '../src/catalog.ts'
-import { skillCaseSignature, type RunTarget, type ReviewRecordInput, type SkillSuggestion, type TrajectorySummary } from '../src/contracts.ts'
+import { skillCaseSignature, skillDraftSignature, type RunTarget, type ReviewRecordInput, type SkillSuggestion, type TrajectorySummary } from '../src/contracts.ts'
 import { setFrontmatterKey, withInvocation } from '../src/frontmatter.ts'
 import { SkillsService } from '../src/service.ts'
 import type { LedgerFile } from '../src/store.ts'
@@ -1254,5 +1254,117 @@ describe('configured creation roots (#658)', () => {
     { create: ['user-agents'], default: 'project-agents' }, { create: ['user-dsh', 'user-dsh'], default: 'user-dsh' },
   ])('rejects invalid configuration before any file write: %j', skillRoots => {
     expect(() => new SkillsService(data, { skillRoots } as never)).toThrow(/skillRoots/)
+  })
+})
+
+describe('bundle supporting files (#654)', () => {
+  it('inspects, drafts, tests, adopts, and rolls back supporting files alongside SKILL.md', async () => {
+    const skills = service()
+    write(join(home, 'skills', 'release-notes', 'SKILL.md'), `${skill('release-notes')}\nVerbose table.\nSee [guide](references/guide.md).\n`)
+    write(join(home, 'skills', 'release-notes', 'references', 'guide.md'), '# Guide\n\nOld rule.\n')
+    write(join(home, 'skills', 'release-notes', 'references', 'obsolete.md'), 'Remove me.\n')
+
+    const key = 'user-dsh:release-notes'
+    const doc = skills.skill(workspace, key)
+    expect(doc.resourceFiles?.map(f => f.path)).toEqual(['references/guide.md', 'references/obsolete.md'])
+    const beforeRev = skills.revision(workspace)
+    write(join(home, 'skills', 'release-notes', 'references', 'guide.md'), '# Guide\n\nOld rule updated on disk.\n')
+    expect(skills.revision(workspace)).not.toBe(beforeRev)
+    write(join(home, 'skills', 'release-notes', 'references', 'guide.md'), '# Guide\n\nOld rule.\n')
+
+    const draft = await skills.recordDraft(workspace, {
+      skillName: 'release-notes',
+      content: `${skill('release-notes')}\nFollow [guide](references/guide.md) and [checklist](references/checklist.md).\n`,
+      notes: 'Extracted checklist and updated guide.',
+      changes: ['Shrank SKILL.md', 'Added references/checklist.md', 'Deleted obsolete.md'],
+      guidance: [],
+      files: [
+        { path: 'references/guide.md', action: 'upsert', content: '# Guide\n\nUpdated rule.\n' },
+        { path: 'references/checklist.md', action: 'upsert', content: '# Checklist\n\n- Check CHANGELOG.\n' },
+        { path: 'references/obsolete.md', action: 'delete' },
+      ],
+    })
+    expect(draft.files).toHaveLength(3)
+    const view = skills.draft(workspace, draft.id)
+    expect(view.conflict).toBeUndefined()
+    expect(view.baseFileContents?.['references/guide.md']).toBe('# Guide\n\nOld rule.\n')
+    expect(view.baseFileContents?.['references/obsolete.md']).toBe('Remove me.\n')
+
+    const resolved = skills.targetContent(workspace, 'release-notes', { kind: 'draft', draftId: draft.id })
+    expect(resolved.resources).toEqual([
+      { path: 'references/checklist.md', content: '# Checklist\n\n- Check CHANGELOG.\n' },
+      { path: 'references/guide.md', content: '# Guide\n\nUpdated rule.\n' },
+    ])
+    expect(resolved.target).toMatchObject({ kind: 'draft', hash: sha256(skillDraftSignature(draft)) })
+
+    const adopted = await skills.adoptDraft(workspace, draft.id)
+    expect(adopted.skill.hash).toBe(sha256(draft.content))
+    expect(readFileSync(join(home, 'skills', 'release-notes', 'references', 'guide.md'), 'utf8')).toBe('# Guide\n\nUpdated rule.\n')
+    expect(readFileSync(join(home, 'skills', 'release-notes', 'references', 'checklist.md'), 'utf8')).toContain('CHANGELOG')
+    expect(existsSync(join(home, 'skills', 'release-notes', 'references', 'obsolete.md'))).toBe(false)
+
+    const original = skills.versions(key).find(version => version.reason === 'original')!
+    const restored = await skills.restoreVersion(workspace, { key, versionId: original.id, expectedHash: adopted.skill.hash })
+    expect(restored.hash).toBe(sha256(`${skill('release-notes')}\nVerbose table.\nSee [guide](references/guide.md).\n`))
+    expect(readFileSync(join(home, 'skills', 'release-notes', 'references', 'guide.md'), 'utf8')).toBe('# Guide\n\nOld rule.\n')
+    expect(readFileSync(join(home, 'skills', 'release-notes', 'references', 'obsolete.md'), 'utf8')).toBe('Remove me.\n')
+    expect(existsSync(join(home, 'skills', 'release-notes', 'references', 'checklist.md'))).toBe(false)
+  })
+
+  it('guards flat skills, broken references, traversal paths, and concurrent base-file edits', async () => {
+    const skills = service()
+    write(join(home, 'skills', 'flat-skill.md'), `${skill('flat-skill')}\nLegacy [missing](references/preexisting.md).\n`)
+    write(join(home, 'skills', 'bundle-skill', 'SKILL.md'), skill('bundle-skill'))
+    write(join(home, 'skills', 'bundle-skill', 'references', 'spec.md'), '# Spec v1\n')
+
+    // Pre-existing broken reference on untouched line remains tolerated; adding files to flat skill is rejected.
+    const flatOk = await skills.recordDraft(workspace, {
+      skillName: 'flat-skill',
+      content: `${skill('flat-skill', 'Updated')}\nLegacy [missing](references/preexisting.md).\n`,
+      notes: '', changes: [], guidance: [],
+    })
+    expect(flatOk.action).toBe('update')
+    await expect(skills.recordDraft(workspace, {
+      skillName: 'flat-skill',
+      content: skill('flat-skill'), notes: '', changes: [], guidance: [],
+      files: [{ path: 'references/new.md', action: 'upsert', content: 'hi' }],
+    })).rejects.toThrow('single .md file')
+
+    await expect(skills.recordDraft(workspace, {
+      skillName: 'bundle-skill',
+      content: `${skill('bundle-skill')}\nRead [missing](references/missing.md).\n`,
+      notes: '', changes: [], guidance: [],
+    })).rejects.toThrow('references/missing.md')
+    await expect(skills.recordDraft(workspace, {
+      skillName: 'bundle-skill',
+      content: skill('bundle-skill'), notes: '', changes: [], guidance: [],
+      files: [{ path: '../escape.md', action: 'upsert', content: 'nope' }],
+    })).rejects.toThrow('invalid segment')
+
+    const conflictDraft = await skills.recordDraft(workspace, {
+      skillName: 'bundle-skill',
+      content: skill('bundle-skill', 'With ref'),
+      notes: '', changes: [], guidance: [],
+      files: [{ path: 'references/spec.md', action: 'upsert', content: '# Spec v2\n' }],
+    })
+    write(join(home, 'skills', 'bundle-skill', 'references', 'spec.md'), '# Spec edited externally\n')
+    expect(skills.draft(workspace, conflictDraft.id).conflict).toBe('base-changed')
+    await expect(skills.adoptDraft(workspace, conflictDraft.id)).rejects.toThrow('changed since it was read')
+  })
+
+  it('includes drafted supporting files in automatic adoption draftHash verification and supports create bundles', async () => {
+    const skills = service()
+    const entry = await skills.saveCase({ skillName: 'deploy-flow', title: 'Deploy', prompt: 'Deploy safely', checks: [{ text: 'Reads checklist', must: true }] })
+    const createdDraft = await skills.recordDraft(workspace, {
+      skillName: 'deploy-flow',
+      content: `${skill('deploy-flow')}\nSee [checklist](references/checklist.md).\n`,
+      notes: 'New bundle skill.', changes: ['Created SKILL.md and references/checklist.md'], guidance: [],
+      files: [{ path: 'references/checklist.md', action: 'upsert', content: '# Deploy Checklist\n' }],
+    })
+    const adopted = await skills.adoptDraft(workspace, createdDraft.id)
+    expect(adopted.skill.layout).toBe('bundle')
+    expect(readFileSync(join(home, 'skills', 'deploy-flow', 'references', 'checklist.md'), 'utf8')).toBe('# Deploy Checklist\n')
+    expect(skillDraftSignature({ content: 'a' })).toBe('a')
+    expect(entry.skillName).toBe('deploy-flow')
   })
 })

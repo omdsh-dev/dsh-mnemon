@@ -5,12 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
 import * as skillsPlugin from 'dsh-mnemon-source-skills'
 import * as generalStrategy from 'dsh-mnemon-strategy-general'
-import type { BacktestRun, EvalCase, EvidencePack, SkillCatalog, SkillDraft, SkillSuggestion, Trajectory } from 'dsh-mnemon-source-skills/contracts'
+import type { BacktestRun, DraftView, EvalCase, EvidencePack, SkillCatalog, SkillDraft, SkillSuggestion, Trajectory } from 'dsh-mnemon-source-skills/contracts'
 import type { HostAgent, HostAgentContext, HostSessionEvent } from '../src/host/dsh.ts'
 import { DEFAULT_SKILLS_CONFIG, type ResolvedSkillsConfig } from '../src/host/protocol.ts'
 import { SkillEvolution, type SkillEvolutionHost, type SkillsSourcePort } from '../src/host/skill-evolution.ts'
 import { SubagentStoppedError } from '../src/host/subagent-errors.ts'
-import { gradeCase, parseSkillDraft, parseSkillReview, renderSteps, skillDraftPrompt, skillReviewPrompt, SKILL_REVIEW_PERSONA } from '../src/host/skill-review.ts'
+import { gradeCase, parseSkillDraft, parseSkillReview, renderSteps, skillDraftPrompt, skillExecutorPrompt, skillReviewPrompt, SKILL_REVIEW_PERSONA } from '../src/host/skill-review.ts'
 import { captureTurn, redact, sessionTitle, TrajectoryWindow, turnSkillUses } from '../src/host/skill-trajectory.ts'
 import { sessionLog } from './fixtures/session-log.ts'
 
@@ -1164,6 +1164,79 @@ describe('skill evolution in the Host', () => {
       expect(after.lastError).toBe('skill draft did not finish within 15 minutes')
     })
     stop()
+  })
+
+  it('drafts supporting reference files and passes them through backtesting (#654)', async () => {
+    expect(parseSkillDraft({
+      content: '---\nname: a\ndescription: A.\n---\nBody\n', notes: 'n', changes: ['c'], files: [],
+    })).toEqual({ content: '---\nname: a\ndescription: A.\n---\nBody\n', notes: 'n', changes: ['c'] })
+    expect(parseSkillDraft({
+      content: '---\nname: a\ndescription: A.\n---\nSee [ref](references/guide.md).\n', notes: 'n', changes: ['c'],
+      files: [{ path: 'references/guide.md', action: 'upsert', content: '# Guide\n' }],
+    }).files).toEqual([{ path: 'references/guide.md', action: 'upsert', content: '# Guide\n' }])
+
+    const refsDir = join(directory, 'dsh', 'skills', 'release-notes', 'references')
+    mkdirSync(refsDir, { recursive: true })
+    writeFileSync(join(refsDir, 'format.md'), '# Legacy format\n')
+    writeFileSync(join(refsDir, 'old.md'), 'Obsolete template\n')
+
+    const evalCase = await source.mutate<EvalCase>('case-save', {
+      skillName: 'release-notes', title: 'Checklist flow', prompt: 'Prepare release notes',
+      checks: [{ text: 'Uses checklist reference', must: true }], enabled: true,
+    })
+
+    const prompts: Array<{ label: string; prompt: string }> = []
+    config = { ...config, autoBacktest: true }
+    const { skills, host } = evolution([])
+    host.skillTask.mockImplementation(async (_parent: HostAgent, label: string, prompt: string) => {
+      prompts.push({ label, prompt })
+      if (label === 'Mnemon skill draft') {
+        return { structured: {
+          content: '---\nname: release-notes\ndescription: Write release notes cleanly.\n---\n\n# release-notes\n\n1. Follow [checklist](references/checklist.md) and [format](references/format.md).\n',
+          notes: 'Moved checklist out of SKILL.md and dropped obsolete file.',
+          changes: ['Trimmed SKILL.md', 'Added references/checklist.md', 'Removed references/old.md'],
+          files: [
+            { path: 'references/checklist.md', action: 'upsert', content: '# Checklist\n\n1. Verify tags.\n' },
+            { path: 'references/format.md', action: 'upsert', content: '# New format\n' },
+            { path: 'references/old.md', action: 'delete' },
+          ],
+        } }
+      }
+      if (label.startsWith('Mnemon skill eval:')) {
+        return { structured: { steps: ['Read references/checklist.md'], answer: prompt.includes('## references/checklist.md') ? 'Draft notes' : 'Baseline notes' } }
+      }
+      return { structured: { checks: [{ index: 1, pass: true, note: 'Checked' }], summary: 'Pass' } }
+    })
+
+    await skills.draft(source, join(directory, 'workspace'), { skill: 'release-notes' })
+    await vi.advanceTimersByTimeAsync(0)
+    await vi.waitFor(async () => {
+      const [draft] = await source.read<SkillDraft[]>('drafts', { skill: 'release-notes' })
+      expect(draft).toBeDefined()
+      const view = await source.read<DraftView>('draft', { id: draft!.id })
+      expect(view.runs).toHaveLength(2)
+      expect(view.runs.every(run => run.status === 'completed')).toBe(true)
+    })
+    const [draft] = await source.read<SkillDraft[]>('drafts', { skill: 'release-notes' })
+    expect(draft!.files).toHaveLength(3)
+
+    const draftPrompt = prompts.find(entry => entry.label.includes('draft'))!.prompt
+    expect(draftPrompt).toContain('<supporting_file path="references/format.md"')
+    expect(draftPrompt).toContain('# Legacy format')
+    const draftEvalPrompt = prompts.find(entry => entry.label.includes('eval') && entry.prompt.includes('<skill_resources') && entry.prompt.includes('## references/checklist.md'))!.prompt
+    expect(draftEvalPrompt).toContain('1. Verify tags.')
+    expect(draftEvalPrompt).not.toContain('Obsolete template')
+
+    const baseEvalPrompt = prompts.find(entry => entry.label.includes('eval') && entry.prompt.includes('Obsolete template'))!.prompt
+    expect(baseEvalPrompt).toContain('# Legacy format')
+    expect(skillExecutorPrompt(evalCase, { name: 'release-notes', content: 'Body only' })).not.toContain('<skill_resources')
+
+    const adopted = await source.mutate<{ skill: { layout: string }; version: { id: string } }>('draft-adopt', { id: draft!.id })
+    expect(adopted.skill.layout).toBe('bundle')
+    expect(readFileSync(join(refsDir, 'checklist.md'), 'utf8')).toContain('Verify tags')
+    expect(readFileSync(join(refsDir, 'format.md'), 'utf8')).toBe('# New format\n')
+    expect(() => readFileSync(join(refsDir, 'old.md'), 'utf8')).toThrow()
+    skills.dispose()
   })
 })
 

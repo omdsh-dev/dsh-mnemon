@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
 import { SKILL_ROOT_KINDS, SKILL_ROOT_RANK, type SkillCatalog, type SkillDocument, type SkillProblem, type SkillRoot, type SkillRootKind, type SkillSummary } from './contracts.ts'
 import { parseSkill, splitFrontmatter } from './frontmatter.ts'
+import { readSkillResourceFiles } from './bundle-files.ts'
 
 export interface SkillRootOptions {
   /** DSH's home; `$DSH_HOME`, then `~/.dsh`. */
@@ -194,6 +195,15 @@ export function catalogFingerprint(options: SkillRootOptions): string {
       try {
         const info = statSync(candidate)
         hash.update(`${entry.name}\0${info.size}\0${info.mtimeMs}\0${linkedSkill(root.path, candidate)}\0`)
+        if (!entry.name.endsWith('.md')) {
+          const bundleDir = join(root.path, entry.name)
+          for (const rel of resources(bundleDir)) {
+            try {
+              const resInfo = statSync(join(bundleDir, rel))
+              hash.update(`res:${rel}\0${resInfo.size}\0${resInfo.mtimeMs}\0`)
+            } catch { hash.update(`res:${rel}\0-\0`) }
+          }
+        }
       } catch { hash.update(`${entry.name}\0-\0`) }
     }
   }
@@ -214,7 +224,16 @@ export function activeSkill(catalog: SkillCatalog, name: string): SkillSummary |
 export function readSkillDocument(summary: SkillSummary): SkillDocument {
   const content = readFileSync(summary.path, 'utf8')
   const split = splitFrontmatter(content)
-  return { ...summary, hash: sha256(content), bytes: Buffer.byteLength(content, 'utf8'), content, frontmatter: split?.frontmatter ?? '', body: split?.body ?? content }
+  const resourceFiles = summary.layout === 'bundle' ? readSkillResourceFiles(summary) : []
+  return {
+    ...summary,
+    hash: sha256(content),
+    bytes: Buffer.byteLength(content, 'utf8'),
+    content,
+    frontmatter: split?.frontmatter ?? '',
+    body: split?.body ?? content,
+    ...(resourceFiles.length === 0 ? {} : { resourceFiles }),
+  }
 }
 
 export function rootPath(catalog: SkillCatalog, kind: SkillRootKind): string {

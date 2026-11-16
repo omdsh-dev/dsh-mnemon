@@ -124,7 +124,7 @@ function pruneSuggestionLinks(ledger: LedgerFile): LedgerFile {
 }
 
 /** Replace a file atomically via a unique sibling temp file, cleaning up on failure. */
-export function writeFileAtomic(path: string, content: string, options?: { dirMode?: number; fileMode?: number }): void {
+export function writeFileAtomic(path: string, content: string | Buffer, options?: { dirMode?: number; fileMode?: number }): void {
   mkdirSync(dirname(path), options?.dirMode === undefined ? { recursive: true } : { recursive: true, mode: options.dirMode })
   const temporary = `${path}.${process.pid}-${randomUUID()}.tmp`
   try {
@@ -337,8 +337,21 @@ export class SkillsStore {
     this.writeAtomic(this.path(join('versions', keyDirectory(version.skillKey), `${version.id}.md`)), content)
   }
 
+  versionResources(version: SkillVersion): Record<string, string> | undefined {
+    const raw = object(this.readJson(join('versions', keyDirectory(version.skillKey), `${version.id}.files.json`)))
+    if (raw === undefined) return undefined
+    const out: Record<string, string> = {}
+    for (const [key, value] of Object.entries(raw)) if (typeof value === 'string') out[key] = value
+    return out
+  }
+
+  saveVersionResources(version: SkillVersion, files: Record<string, string>): void {
+    this.writeJson(join('versions', keyDirectory(version.skillKey), `${version.id}.files.json`), files)
+  }
+
   deleteVersionContent(version: SkillVersion): void {
     rmSync(this.path(join('versions', keyDirectory(version.skillKey), `${version.id}.md`)), { force: true })
+    rmSync(this.path(join('versions', keyDirectory(version.skillKey), `${version.id}.files.json`)), { force: true })
   }
 
   registries(): RegistryRecord[] {

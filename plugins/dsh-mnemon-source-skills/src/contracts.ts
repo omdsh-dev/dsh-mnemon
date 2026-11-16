@@ -77,11 +77,31 @@ export interface SkillCatalog {
   problems: SkillProblem[]
 }
 
+export interface SkillResourceFile {
+  path: string
+  hash: string
+  bytes: number
+  /** UTF-8 text when readable within prompt/preview bounds; omitted for binary or oversized files. */
+  content?: string
+  binary?: boolean
+}
+
+export interface SkillDraftFileChange {
+  path: string
+  action: 'upsert' | 'delete'
+  /** UTF-8 content when action is `upsert`. */
+  content?: string
+  /** Optional expected hash of the existing file (or null when creating a new file). */
+  baseHash?: string | null
+}
+
 export interface SkillDocument extends SkillSummary {
   content: string
   /** Frontmatter text between the fences, verbatim. */
   frontmatter: string
   body: string
+  /** Supporting files beside SKILL.md inside a bundle directory, when present. */
+  resourceFiles?: SkillResourceFile[]
 }
 
 export type SkillVersionReason = 'original' | 'edit' | 'evolution' | 'restore' | 'invocation' | 'create' | 'install'
@@ -238,6 +258,10 @@ export interface SkillDraft {
   /** For `create`, where adopting writes the new bundle. */
   targetRoot?: SkillRootKind
   content: string
+  /** Optional supporting-file updates or deletions inside the skill bundle. */
+  files?: SkillDraftFileChange[]
+  /** Expected hashes of touched supporting files when the draft was created (null = did not exist). */
+  baseFileHashes?: Record<string, string | null>
   notes: string
   changes: string[]
   guidance: string[]
@@ -514,6 +538,8 @@ export interface DraftView {
   conflict?: 'base-changed' | 'target-exists'
   /** The file the draft replaces, as it is now. */
   base?: SkillDocument
+  /** Current text of supporting files touched by `draft.files`, keyed by relative path. */
+  baseFileContents?: Record<string, string>
   resolution?: SkillResolution
   runs: BacktestRun[]
 }
@@ -670,6 +696,15 @@ export interface AutomaticAdoption {
   casesHash: string
 }
 export { skillCaseSignature, compareAutomaticSkillRuns } from './auto-adoption.ts'
+
+/** Canonical draft payload used to hash single-file and multi-file drafts without breaking legacy drafts. */
+export function skillDraftSignature(draft: Pick<SkillDraft, 'content' | 'files'>): string {
+  if (draft.files === undefined || draft.files.length === 0) return draft.content
+  const ordered = [...draft.files]
+    .sort((left, right) => left.path.localeCompare(right.path))
+    .map(file => [file.path, file.action, file.action === 'delete' ? null : (file.content ?? '')])
+  return JSON.stringify([draft.content, ordered])
+}
 
 export interface SuggestionTriage {
   version: 1

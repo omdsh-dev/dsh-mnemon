@@ -21,7 +21,7 @@ export class AutomaticSkillStop extends Error {
 export function hashSkillCases(cases: readonly EvalCase[]): string {
   return createHash('sha256').update(SkillsContracts.skillCaseSignature(cases)).digest('hex')
 }
-export function hashSkillDraft(draft: SkillDraft): string { return createHash('sha256').update(draft.content).digest('hex') }
+export function hashSkillDraft(draft: SkillDraft): string { return createHash('sha256').update(SkillsContracts.skillDraftSignature(draft)).digest('hex') }
 
 /** Only fresh idle-review suggestions enter this bounded, in-process queue. */
 export class SkillAutoAdoption {
