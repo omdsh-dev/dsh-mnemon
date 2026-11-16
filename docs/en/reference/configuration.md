@@ -19,6 +19,7 @@ As DSH does for every plugin that carries its own configuration, the Web interfa
 | Where in the UI | Settings | Saved as |
 |---|---|---|
 | Memory composition | Main strategy; one switch per memory source and enhancement; each component's declared options | `memoryView.strategyTypeId` and `memoryView.entries.<entry>.config`; each component's on/off is its Entry's `disabled` row, written by DSH's plugin manager |
+| Memory writes | Confirm memory tool writes | `confirmWrites` |
 | Task Agent | Task Agent model | `taskAgentModel` |
 | Storage | Storage scope, data directory, excluded workspaces, backup and migration; the Git sync switch | `storageScope`, `dataDir`, `excludedWorkspaces`, `syncEnabled` |
 | Interface | Memory System opens in, turn memory bar, save to memory | `displayMode`, `conversationInteraction.turnBar`, `conversationInteraction.saveAction` |
@@ -84,6 +85,7 @@ mnemon:
     maxTokens: 16384
   tabEnabled: true
   writeEnabled: true
+  confirmWrites: false
   taskAgentModel:
     mode: inherit # inherit | fixed
     # followConversation: true # with inherit: Follow the conversation
@@ -139,6 +141,7 @@ mnemon:
 | `displayMode` | `sidebar` | `sidebar` / `builtin`; legacy `buildin` accepted | Where the Memory System opens: standalone Sidebar or a conversation tab using the same workspace UI; legacy spelling is migrated to `builtin` |
 | `tabEnabled` | `true` | boolean | Whether to mount the selected entry and workbench; Host RPC, commands, and Agent tools remain registered when off |
 | `writeEnabled` | `true` | boolean | Whether to expose semantic write tools, write RPC, and write commands |
+| `confirmWrites` | `false` | boolean | Requests DSH approval for each model-facing Mnemon write tool and pauses idle memory review while enabled |
 | `syncEnabled` | `false` | boolean | Whether this installation syncs to a Git repository at all. Off by default, and off is silent: the Storage row is a title and a switch, no status is read and no Git command runs. Repository, branch, directory, commit identity, token and automatic sync interval (`autoBackupMinutes`) stay in `state/sync-git.json`, never here |
 | `taskAgentModel` | `{ mode: inherit }` | `inherit` / `fixed`; `followConversation`: boolean | Model route for independent task Agents and the idle review worker: `inherit` (**Follow global**), `inherit` with `followConversation: true` (**Follow the conversation**), or `fixed` (**Custom**) with both `provider` and `model`. See [Background Task Agent Model Route](#background-task-agent-model-route) |
 | `subagentProviderNames` | `[]` | Up to 32 nonempty names, 128 characters each | Extra subagent-provider candidates when the Host has no enumeration and a custom plugin hides its name in code. Set in the Mnemon plugin configuration; all isolation checks still apply. Standard `providerName` configurations are discovered automatically. |
@@ -150,6 +153,14 @@ mnemon:
 Every value is saved under the `mnemon` entry and applies live. The UI's `mnemon-ui` settings scope is stored as `conversationInteraction`, its `mnemon-view` scope as `memoryView`, and its `mnemon-skills` scope as `skills`. The storage root switches atomically only after the new runtime graph initializes successfully.
 
 Git sync's default author follows the Host's Git identity as resolved in `state/sync/git`; a custom author in `state/sync-git.json` overrides it. The legacy placeholder pair also follows Git, with the placeholder used only for unconfigured fields. See [Git repository sync](../guides/operations.md#git-repository-sync) for precedence and recovery after an author rejection.
+
+### Confirm model memory writes
+
+Enable **Plugins → dsh-mnemon → Memory writes → Confirm memory tool writes**, or set `mnemon.confirmWrites: true`. It is off by default. Every model-facing Mnemon write tool, including `mnemon_view_action` and calls nested inside PTC, requests DSH approval before its handler runs. Approval applies to that single tool operation; its normal capacity-maintenance workflow remains part of the operation. Existing permission denials and read-only restrictions still apply. Rejection, cancellation, a missing approval channel or DSH's `never` approval policy prevents the write without an automatic retry.
+
+The preference is read at dispatch, including for existing Views and children. It does not revoke a write already approved or running. Idle memory review pauses while confirmation is required, with the reason shown in the Memory System; turning the setting off permits later eligible turns to schedule review again. Read tools and explicitly initiated management operations keep their existing behavior. This setting covers Mnemon memory tools, not Shell/filesystem writes, manual edits, Git synchronization or separately configured skill automation; those keep their own permissions and confirmations.
+
+No memory data is migrated or deleted. Disable the switch or remove the field to restore the existing workflow.
 
 ### Subagent Runtime inheritance
 

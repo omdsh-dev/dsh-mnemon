@@ -297,7 +297,7 @@ export interface LifecycleAgentSnapshot {
   lastReviewScore?: number
   lastReviewDocumentIds?: string[]
   idleReviewAttempts?: number
-  idleReviewBlocked?: 'agent-team' | 'tool-access'
+  idleReviewBlocked?: 'agent-team' | 'tool-access' | 'write-confirmation'
   idleReviewAccess?: ReviewAccessStatus
   idleReviewWatermark?: { state: 'ready' | 'error'; restoredAttempts: number; maxPerSession: number; error?: string }
   nextReviewAt?: string

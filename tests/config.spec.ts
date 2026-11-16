@@ -10,6 +10,13 @@ import { mainStrategyTypeId, withMainStrategy } from '../src/host/main-strategy.
 afterEach(() => vi.unstubAllEnvs())
 
 describe('Mnemon config and resolution', () => {
+  it('keeps memory write confirmation opt-in and validates its value (#140)', () => {
+    expect(resolveConfig({}).confirmWrites).toBe(false)
+    expect(resolveConfig({ confirmWrites: true }).confirmWrites).toBe(true)
+    expect(Config({ confirmWrites: true }).confirmWrites).toBe(true)
+    expect(() => resolveConfig({ confirmWrites: 'true' } as never)).toThrow('confirmWrites must be a boolean')
+  })
+
   it('keeps creation roots opt-in and validates the whole preference atomically (#658)', () => {
     expect(resolveSkillsConfig().skillRoots).toBeUndefined()
     const skillRoots = { create: ['project-agents', 'user-agents'], default: 'project-agents' } as const

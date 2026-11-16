@@ -171,6 +171,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
   const turnBar = useLive(interactionSnapshot.value?.turnBar !== false, async value => { await interactionScope.mutate([{ op: 'set', path: ['turnBar'], value }]) })
   const saveAction = useLive(interactionSnapshot.value?.saveAction !== false, async value => { await interactionScope.mutate([{ op: 'set', path: ['saveAction'], value }]) })
   const taskAgent = useTaskAgentModel({ scope, connection, sessionId, workspaceId })
+  const confirmWrites = useLive(coreSnapshot.value?.confirmWrites === true, async value => { await scope.mutate([{ op: 'set', path: ['confirmWrites'], value }]) })
 
   // The page's composition opens each component's page; what the component contributed renders there.
   const settingsRenderer = useMemo<ComponentSettingsRenderer | undefined>(() => componentSettings === undefined ? undefined : {
@@ -209,6 +210,15 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
         {!writable && <p className={css.readOnlyNotice}>{readOnlyNotice}</p>}
         <CompositionBoard view={view} system={memorySystem} systemPending={memorySystemState === 'loading'} layers={layerSettings} readOnly={!coreSnapshot.writable} language={language} t={t}
           pages={pages} {...(settingsRenderer === undefined ? {} : { componentSettings: settingsRenderer })} />
+
+        <section className={css.section} data-settings-section="write-confirmation" aria-labelledby="mnemon-write-confirmation-heading">
+          <div className={css.sectionHeading}><h2 id="mnemon-write-confirmation-heading">{t('config.memoryWriting')}</h2></div>
+          <div className={css.rows}>
+            <ToggleRow id="mnemon-confirm-writes" label={t('config.confirmWrites')} hint={t('config.confirmWritesHint')}
+              checked={confirmWrites.value} disabled={coreDisabled} onChange={confirmWrites.set} />
+          </div>
+          <WriteFailure error={confirmWrites.failed} t={t} />
+        </section>
 
         <section className={css.section} data-settings-section="task-agent" aria-labelledby="mnemon-task-agent-heading">
           <div className={css.sectionHeading}>

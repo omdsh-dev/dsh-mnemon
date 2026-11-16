@@ -207,6 +207,8 @@ export function resolveConfig(config: SharedConfig = {}): SharedResolvedConfig {
   if (!['global', 'workspace', 'custom', 'workspaces'].includes(storageScope)) throw new Error('dsh-mnemon: unsupported storageScope')
   const runtimeUserScope = config.runtimeUserScope ?? 'storage'
   if (runtimeUserScope !== 'storage' && runtimeUserScope !== 'global') throw new Error(`dsh-mnemon: unsupported Runtime USER.md scope: ${String(runtimeUserScope)}`)
+  const confirmWrites = config.confirmWrites ?? false
+  if (typeof confirmWrites !== 'boolean') throw new Error('dsh-mnemon: confirmWrites must be a boolean')
   const selectedPack = requestedPackId === undefined
     ? legacyPacks.find(pack => pack.dataDir === legacyDataDir) ?? (legacyPacks.length === 1 ? legacyPacks[0] : undefined)
     : legacyPacks.find(pack => pack.id === requestedPackId)
@@ -234,6 +236,7 @@ export function resolveConfig(config: SharedConfig = {}): SharedResolvedConfig {
     displayMode: normalizeDisplayMode(config.displayMode),
     tabEnabled: config.tabEnabled ?? true,
     writeEnabled: config.writeEnabled ?? true,
+    confirmWrites,
     remoteAccess: config.remoteAccess ?? 'read-only',
     lifecycleEnabled: config.lifecycleEnabled ?? true,
     recallMode: config.recallMode ?? 'guided',
