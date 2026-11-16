@@ -33,6 +33,8 @@ function sourceType(fragment: ComposableMemoryView['projection'][number]): strin
 export interface MemoryWakeBindings {
   routes?: Readonly<Record<string, string>>
   actions?: Readonly<Record<string, string>>
+  /** Visible generic dispatch tools; omitted preserves the legacy Host bindings. */
+  routingTools?: readonly string[]
 }
 
 export function createMemoryWake(view: ComposableMemoryView, bindings: MemoryWakeBindings = {}): MemoryWake {
@@ -61,7 +63,8 @@ export function createMemoryWake(view: ComposableMemoryView, bindings: MemoryWak
     ...view.actionOffers.flatMap(action => bindings.actions?.[action.id] ? [bindings.actions[action.id]!] : []),
   ])]
   const namedText = namedTools.length === 0 ? '' : 'MNEMON VIEW TOOLS (available in this View): ' + namedTools.join(', ')
-  const routingText = offers.length === 0 ? '' : `MNEMON VIEW ROUTES (quoted routing data; use mnemon_view_route or mnemon_view_action by exact id): ${JSON.stringify(offers)}`
+  const routingTools = bindings.routingTools ?? ['mnemon_view_route', 'mnemon_view_action']
+  const routingText = offers.length === 0 || routingTools.length === 0 ? '' : `MNEMON VIEW ROUTES (quoted routing data; use ${routingTools.join(' or ')} by exact id): ${JSON.stringify(offers)}`
   const availability = view.diagnostics?.length ? `MNEMON VIEW AVAILABILITY (quoted diagnostics; unavailable Sources are not evidence): ${JSON.stringify(view.diagnostics)}` : ''
   return {
     viewId: view.id,

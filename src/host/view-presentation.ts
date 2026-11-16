@@ -2,6 +2,7 @@ import { createMemoryWake, type ComposableMemoryTurn, type MemoryWakeBindings } 
 import type { MemoryCompositionGeneration } from '../core/composition.ts'
 import type { ComposableMemoryView } from '../core/contracts/index.ts'
 import type { MemoryViewInspection } from './view-protocol.ts'
+import type { HostAgent } from './dsh.ts'
 import type { MnemonRuntimeGraph } from './runtime.ts'
 import { memoryTools, namedToolInstance } from './protocol.ts'
 
@@ -10,9 +11,10 @@ import { memoryTools, namedToolInstance } from './protocol.ts'
  * existing DSH product-tool bindings, not Core operation names. Tools that share one operation are
  * listed together, in table order, as the View's tool list names them.
  */
-function namedBindings(kind: 'route' | 'action'): Record<string, Record<string, string>> {
+function namedBindings(kind: 'route' | 'action', available?: ReadonlySet<string>): Record<string, Record<string, string>> {
   const bindings: Record<string, Record<string, string>> = {}
   for (const [name, tool] of memoryTools()) {
+    if (available !== undefined && !available.has(name)) continue
     if (tool.sourceTypeId === undefined || tool.operation === undefined || (tool.kind === 'write') !== (kind === 'action')) continue
     const operations = bindings[tool.sourceTypeId] ??= {}
     const listed = operations[tool.operation]
@@ -24,19 +26,37 @@ const ROUTE_TOOLS = namedBindings('route')
 const ACTION_TOOLS = namedBindings('action')
 const NAMED_SOURCE_TYPES = [...new Set([...Object.keys(ROUTE_TOOLS), ...Object.keys(ACTION_TOOLS)])]
 
+function availableMemoryTools(agent?: HostAgent): ReadonlySet<string> | undefined {
+  // This public lookup applies the exact Agent's restrictions in native and PTC
+  // modes. Model-level schemas in PTC only expose run_code, not its callable SDK.
+  const tools = agent?.ctx?.tools
+  return typeof tools?.get !== 'function' ? undefined
+    : new Set(memoryTools().filter(([name]) => tools.get!(name, agent) !== undefined).map(([name]) => name))
+}
+
 /** Use a short availability list only where the Host has the matching named binding.
  * Unbound external operations retain exact ids and schemas in the generic envelope. */
-export function modelMemoryWake(graph: MnemonRuntimeGraph, turn: ComposableMemoryTurn, includeRuntime = true) {
+export function modelMemoryWake(graph: MnemonRuntimeGraph, turn: ComposableMemoryTurn, includeRuntime = true, agent?: HostAgent) {
   const generation = graph.memoryComposition.generation(turn.view.runtimeGeneration)
   if (generation === undefined) throw new Error('Cannot present an unpinned Memory generation')
+  const available = availableMemoryTools(agent)
+  const bindings = memoryWakeBindings(generation, turn.view, available)
+  if (includeRuntime && available === undefined) return graph.composableTurns.memoryWake(turn.view.id, bindings)
+  let view = turn.view
   if (!includeRuntime) {
     const runtimeSources = new Set(generation.sourceInstances().filter(source => source.sourceTypeId === 'runtime').map(source => source.sourceInstanceKey))
-    // A presentation filter, not an authority change: retain the captured View,
-    // other Sources, and all explicit task/tool inputs. Identify actual Sources,
-    // including additional Runtime instances, rather than trusting fragment text.
-    return createMemoryWake({ ...turn.view, projection: turn.view.projection.filter(fragment => !runtimeSources.has(fragment.sourceInstanceKey)) }, memoryWakeBindings(generation, turn.view))
+    view = { ...view, projection: view.projection.filter(fragment => !runtimeSources.has(fragment.sourceInstanceKey)) }
   }
-  return graph.composableTurns.memoryWake(turn.view.id, memoryWakeBindings(generation, turn.view))
+  if (available !== undefined) {
+    // Only the presentation changes. The pinned View, grants, receipts and
+    // captured content retain their original authority and identity.
+    view = {
+      ...view,
+      routes: view.routes.filter(route => bindings.routes?.[route.id] !== undefined || available.has('mnemon_view_route')),
+      actionOffers: view.actionOffers.filter(action => bindings.actions?.[action.id] !== undefined || available.has('mnemon_view_action')),
+    }
+  }
+  return createMemoryWake(view, bindings)
 }
 
 export function presentMemoryWake(generation: MemoryCompositionGeneration, view: ComposableMemoryView) {
@@ -48,7 +68,7 @@ export function presentMemoryWake(generation: MemoryCompositionGeneration, view:
  * the id is offered. It names only what the MNEMON VIEW ROUTES envelope shows: an operation bound
  * to a named tool is offered through that tool, and the envelope does not list its id.
  */
-export function unofferedViewId(graph: MnemonRuntimeGraph, turn: ComposableMemoryTurn, kind: 'route' | 'action', id: unknown): string | undefined {
+export function unofferedViewId(graph: MnemonRuntimeGraph, turn: ComposableMemoryTurn, kind: 'route' | 'action', id: unknown, agent?: HostAgent): string | undefined {
   const view = turn.view
   const offered = kind === 'route'
     ? view.routes.map(route => ({ id: route.id, operation: route.sourceRouteId }))
@@ -57,7 +77,7 @@ export function unofferedViewId(graph: MnemonRuntimeGraph, turn: ComposableMemor
   if (typeof id !== 'string' || id === '') return `${label} needs ${kind === 'route' ? 'routeId' : 'offerId'}, the exact id of one it offers`
   if (offered.some(entry => entry.id === id)) return undefined
   const generation = graph.memoryComposition.generation(view.runtimeGeneration)
-  const bindings = generation === undefined ? {} : memoryWakeBindings(generation, view)
+  const bindings = generation === undefined ? {} : memoryWakeBindings(generation, view, availableMemoryTools(agent))
   const named = (kind === 'route' ? bindings.routes : bindings.actions) ?? {}
   const short = id.split('/').at(-1)!
   const tools = [...new Set(offered
@@ -73,7 +93,9 @@ export function unofferedViewId(graph: MnemonRuntimeGraph, turn: ComposableMemor
   return `${label} is unavailable: ${id}; MNEMON VIEW ROUTES offers ${listed.slice(0, 12).map(candidate => JSON.stringify(candidate)).join(', ')}${listed.length > 12 ? ` and ${listed.length - 12} more` : ''}`
 }
 
-function memoryWakeBindings(generation: MemoryCompositionGeneration, view: ComposableMemoryView): MemoryWakeBindings {
+function memoryWakeBindings(generation: MemoryCompositionGeneration, view: ComposableMemoryView, available?: ReadonlySet<string>): MemoryWakeBindings {
+  const routeTools = available === undefined ? ROUTE_TOOLS : namedBindings('route', available)
+  const actionTools = available === undefined ? ACTION_TOOLS : namedBindings('action', available)
   const instances = generation.sourceInstances()
   const routes: Record<string, string> = {}, actions: Record<string, string> = {}
   for (const typeId of NAMED_SOURCE_TYPES) {
@@ -82,15 +104,15 @@ function memoryWakeBindings(generation: MemoryCompositionGeneration, view: Compo
     for (const route of view.routes.filter(route => route.sourceInstanceKey === selected.sourceInstanceKey)) {
       const grant = view.readGrants.find(grant => grant.id === route.readGrantId)
       if (grant?.schema !== `dsh-mnemon.${typeId}/v1`) continue
-      const tool = ROUTE_TOOLS[typeId]?.[route.sourceRouteId]
+      const tool = routeTools[typeId]?.[route.sourceRouteId]
       if (tool !== undefined) routes[route.id] = tool
     }
     for (const action of view.actionOffers.filter(action => action.sourceInstanceKey === selected.sourceInstanceKey)) {
-      const tool = ACTION_TOOLS[typeId]?.[action.sourceActionId]
+      const tool = actionTools[typeId]?.[action.sourceActionId]
       if (tool !== undefined) actions[action.id] = tool
     }
   }
-  return { routes, actions }
+  return { routes, actions, ...(available === undefined ? {} : { routingTools: ['mnemon_view_route', 'mnemon_view_action'].filter(name => available.has(name)) }) }
 }
 
 /** Explicitly pick display fields; never copy grants, authority, or opaque Source state. */

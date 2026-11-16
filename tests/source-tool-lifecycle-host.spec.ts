@@ -46,7 +46,7 @@ class ScriptedAdapter extends LlmAdapter {
   }
 }
 
-async function harness(respond: Respond, configure?: (f: Awaited<ReturnType<typeof compositionFixture>>) => Promise<void>) {
+async function harness(respond: Respond, configure?: (f: Awaited<ReturnType<typeof compositionFixture>>) => Promise<void>, codeMode = false) {
   const f = await compositionFixture()
   const ctx = new Context()
   let stop: (() => void) | undefined
@@ -60,7 +60,13 @@ async function harness(respond: Respond, configure?: (f: Awaited<ReturnType<type
     await ctx.plugin(JsonlSessionPersistence, { root: join(f.root, 'sessions'), compression: 'none' })
     await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SystemPrompt)
-    await loadTools(ctx)
+    if (codeMode) {
+      for (const [name, config] of [
+        ['dsh-fs-local', { cwd: f.workspace }], ['dsh-subprocess-local', {}], ['dsh-sandbox-local', {}],
+        ['dsh-sandbox-policy', { mode: 'read-only', workspaceRoot: f.workspace }], ['dsh-ptc-runtime-node', {}],
+      ] as const) await ctx.plugin((await import(requireDsh.resolve(`@deepseek-ai/${name}`))).default, config)
+    }
+    const selectPtc = await loadTools(ctx)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(AgentLoop, { agents: [] })
     await loadWorkingDirectory(ctx)
@@ -73,6 +79,7 @@ async function harness(respond: Respond, configure?: (f: Awaited<ReturnType<type
     stopTools = registerTools(host, f.live, coordinator, f.extensions)
     stop = new MnemonLifecycle(host, coordinator, f.config, f.live).start()
     const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' }, { cwd: f.workspace })
+    if (codeMode) await selectPtc(parent.ctx)
     const turn = async (text: string) => {
       parent.followup(createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } }))
       await parent.whenIdle()
@@ -262,3 +269,39 @@ it('keeps global tool families while a workspace View selects only Runtime', asy
     f.graph.composableTurns.endTurn(turn.turnId)
   } finally { await f.dispose() }
 }, 20_000)
+
+
+it.each([false, true])('keeps the View tool list consistent with scoped visibility (PTC=%s, #656)', async codeMode => {
+  const requests: GenerateOptions[] = []
+  let restricted = true
+  let calls = 0
+  const content = 'Synthetic write through the allowed Runtime tool.'
+  const f = await harness(options => {
+    requests.push(options)
+    if (calls++ % 2 === 1) return 'Synthetic tool check complete.'
+    if (codeMode) return { name: 'run_code', args: {
+      description: 'Check SDK visibility and write allowed synthetic Runtime context.',
+      code: `await tools.mnemon_runtime_memory({action:'add',target:'memory',content:${JSON.stringify(content)}}); return 'sdk:' + typeof tools.mnemon_remember + '|' + typeof tools.mnemon_runtime_memory;`,
+    } }
+    return { name: 'mnemon_runtime_memory', args: { action: 'add', target: 'memory', content } }
+  }, async f => { await f.memorySpace() }, codeMode)
+  const allow = ['mnemon_runtime_memory', 'mnemon_recall', 'mnemon_status', 'mnemon_memory_bodies', 'mnemon_document_search', 'mnemon_document_create']
+  const release = f.parent.ctx.tools!.restrict!({ allow }) as () => void
+  const toolLine = (request: GenerateOptions) => request.messages.flatMap(message => message.content.flatMap(block => block.type === 'text' ? block.text.split('\n') : [])).filter(line => line.startsWith('MNEMON VIEW TOOLS')).at(-1)
+  try {
+    await f.turn('Use the allowed Runtime tool and inspect current memory tool availability.')
+    expect(requests).toHaveLength(2)
+    const limited = toolLine(requests[0]!)!
+    for (const name of allow) expect(limited).toContain(name)
+    for (const name of ['mnemon_remember', 'mnemon_forget', 'mnemon_related', 'mnemon_document_manage', 'mnemon_memory_body_create']) expect(limited).not.toContain(name)
+    expect(await f.graph.source('runtime').read('snapshot')).toMatchObject({ entries: [expect.objectContaining({ content })] })
+    if (codeMode) {
+      expect(requests[0]!.tools?.map(tool => tool.name)).toEqual(['run_code'])
+      expect(JSON.stringify(f.session.snapshotEvents().filter(event => event.type === 'tool/result'))).toContain('sdk:undefined|function')
+    }
+    release(); restricted = false
+    await f.turn('The restriction is lifted; inspect availability again.')
+    expect(toolLine(requests[2]!)).toContain('mnemon_remember')
+    if (codeMode) expect(JSON.stringify(f.session.snapshotEvents().filter(event => event.type === 'tool/result'))).toContain('sdk:function|function')
+  } finally { if (restricted) release(); await f.dispose() }
+}, 30_000)

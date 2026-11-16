@@ -41,6 +41,8 @@ Model tools, lifecycle hooks, and system scheduling use an `automatic` trigger. 
 
 ## Model tools
 
+The availability list in each model-facing memory View follows DSH's tool visibility for that Agent. In PTC mode it checks the callable SDK scope, rather than treating the single `run_code` model schema as the whole tool set. Hidden named tools are not advertised; generic Route/Action IDs are offered only when their dispatch tool is visible. This does not change the pinned View, permissions or stored context, and execution-time guards still apply. Hosts without scoped lookup retain the previous presentation.
+
 ### Read-only tools
 
 | Tool | Purpose | Root Agent path |

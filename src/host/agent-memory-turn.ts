@@ -103,7 +103,7 @@ export class AgentMemoryTurn {
 
   modelWake() {
     const pinned = this.pinned
-    return pinned === undefined ? undefined : modelMemoryWake(pinned.graph, pinned.context, this.includeRuntime)
+    return pinned === undefined ? undefined : modelMemoryWake(pinned.graph, pinned.context, this.includeRuntime, this.agent)
   }
 
   /** Why the current turn has no View, when memory could not be composed for it. */
@@ -189,7 +189,7 @@ export class AgentMemoryTurn {
     try {
       if (this.closed || this.generation !== generation) throw new Error('memory turn ended during View preparation')
       signal?.throwIfAborted()
-      const inspection = inspectMemoryView(graph.memoryComposition.generation(context.view.runtimeGeneration)!, context.view, 'active', turn, modelMemoryWake(graph, context, this.includeRuntime).text)
+      const inspection = inspectMemoryView(graph.memoryComposition.generation(context.view.runtimeGeneration)!, context.view, 'active', turn, modelMemoryWake(graph, context, this.includeRuntime, this.agent).text)
       this.pinned = { turn, graph, context, release: execution.release }
       this.warned = undefined
       this.lastInspection = inspection

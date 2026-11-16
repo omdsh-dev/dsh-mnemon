@@ -120,7 +120,7 @@ export class TaskContinuation {
     for (const [id, graph] of this.views) if (graph.composableTurns.get(id) === undefined) this.views.delete(id)
     if (pin !== undefined) this.views.set(pin.context.view.id, pin.graph)
     if (!starting && step.step !== 1) return decision
-    const wake = pin === undefined ? '' : modelMemoryWake(pin.graph, pin.context).text
+    const wake = pin === undefined ? '' : modelMemoryWake(pin.graph, pin.context, true, this.agent).text
     return { ...decision, messages: [...decision.messages, createPluginMessage(`${CONTINUATION_GUIDANCE}\n\n${wake}`, 'instructions')] }
   }
 
