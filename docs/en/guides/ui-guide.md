@@ -14,8 +14,6 @@ The recordings and screenshots come from the [v0.5.32 gallery](../../assets/webu
 
 Two rules hold everywhere. **Switches and selectors apply as soon as you change them**; if a write fails, the control shows the saved value again next to the reason. **Typed values wait for their group's Apply**, which appears once something changed, together with a note on what applying will do.
 
-**Memory writes → Confirm memory tool writes** is off by default. When enabled, model memory writes use DSH approval and idle memory review pauses. A rejected or unavailable approval leaves memory unchanged; direct management edits retain their existing confirmation.
-
 ## In a conversation
 
 ![Ask a question, expand the turn memory bar, and open the document it read in Project Documents](../../assets/webui-v0.5.32/en/recall.gif)
@@ -253,6 +251,10 @@ The gear on a row, the gear beside **Main strategy**, and a component's name any
 Expand the Mnemon Native card. **Manage embedding settings in DSH** makes the saved endpoint, model, protocol and optional key authoritative for Mnemon child processes, including Desktop launches that do not read shell startup files. While it is on, those fields apply together with their **Apply**. Automatic protocol selection treats an endpoint ending in `/v1` as OpenAI-compatible; other endpoints need an explicit protocol. The URL rejects embedded credentials, queries and fragments. Memory and query text are sent to the configured service. **Test status** checks saved values, not an unsaved draft. It requires Mnemon CLI 0.2.13 or newer; older or unrecognized binaries show an upgrade instruction. The status reports model usability, so a reachable service with a missing model reads **Embedding model unavailable**, even when existing vectors have 100% coverage. It counts the vectors of every Mnemon Native space and lists each one under the total, an inactive space included; a space that cannot be read shows the reason and stays out of the total. A space that lacks vectors is marked, since memories without a vector are left out of semantic matching. While the selected embedding model is available, its **Fill in** creates them through the Host, with the storage root and embedding settings DSH uses, which a terminal `mnemon embed --all` may not share. A fill runs for at most a minute, in steps no longer than one Mnemon call (`timeoutMs`, at most ten seconds), so other memory work goes on between them, and Mnemon keeps every vector it wrote. The line under the list then says how many it filled in, how many are still missing, in which case **Fill in** goes on, or that the service returned none, as when it does not serve the model. See [embedding configuration](../reference/configuration.md) before turning it on.
 
 </details>
+
+### Memory writes
+
+**Memory writes → Confirm memory tool writes** is off by default. When enabled, model memory writes use DSH approval and idle memory review pauses. A rejected or unavailable approval leaves memory unchanged; direct management edits retain their existing confirmation.
 
 ### Storage
 
