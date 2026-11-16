@@ -175,7 +175,7 @@ function registerViewTools(ctx: HostContextShape, { runtimeFor, config, composab
     execute: async (args: { routeId: string; input: MemoryJsonValue }, exec: ToolExecution) => {
       const { manager, turn } = composableTurn(exec)
       // An id the View does not offer names only what the envelope shows (#390).
-      const refusal = unofferedViewId(runtimeFor(exec), turn, 'route', args.routeId)
+      const refusal = unofferedViewId(runtimeFor(exec), turn, 'route', args.routeId, exec.agent)
       if (refusal !== undefined) throw new Error(refusal)
       const evidence = await manager.executeRoute(turn.turnId, args.routeId, args.input, exec.signal)
       return evidence.output ?? evidence
@@ -203,7 +203,7 @@ function registerViewTools(ctx: HostContextShape, { runtimeFor, config, composab
       const graph = runtimeFor(exec)
       // The turn the coordinator acts in; an id it does not offer names only what the envelope shows (#390).
       const turn = graph.composableTurns.activeTurn(agent.id)
-      const refusal = turn === undefined ? undefined : unofferedViewId(graph, turn, 'action', args.offerId)
+      const refusal = turn === undefined ? undefined : unofferedViewId(graph, turn, 'action', args.offerId, exec.agent)
       if (refusal !== undefined) throw new Error(refusal)
       const offer = turn?.view.actionOffers.find(candidate => candidate.id === args.offerId)
       const source = offer === undefined ? undefined : graph.memoryComposition.generation(turn!.view.runtimeGeneration)?.sourceInstances()

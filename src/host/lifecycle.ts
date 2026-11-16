@@ -360,7 +360,7 @@ class MnemonAgentLifecycle {
   memoryWake(): MemoryWake | undefined {
     const pinned = this.memoryTurn?.current
     if (pinned === undefined) return undefined
-    return modelMemoryWake(pinned.graph, pinned.context)
+    return modelMemoryWake(pinned.graph, pinned.context, true, this.agent)
   }
 
   /**

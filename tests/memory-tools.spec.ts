@@ -13,7 +13,7 @@ import { agentScope, type MnemonAgentRuntimeSource, type MnemonRuntimeGraph } fr
 import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
 import { executeHostTool, usesToolBatchExecution } from '../src/host/tool-execution.ts'
 import { registerTools } from '../src/host/tools.ts'
-import { modelMemoryWake, presentMemoryWake } from '../src/host/view-presentation.ts'
+import { modelMemoryWake, presentMemoryWake, unofferedViewId } from '../src/host/view-presentation.ts'
 import { compositionFixture } from './fixtures/composition.ts'
 import { toolContributions } from './fixtures/tool-contributions.ts'
 import { cleanupSubagentFixtures, parent, releases } from './fixtures/subagent-coordinator.ts'
@@ -157,6 +157,49 @@ describe('memory tool table', () => {
     expect(named).toEqual(['MNEMON VIEW TOOLS (available in this View): mnemon_document_search, mnemon_memory_bodies / mnemon_status, mnemon_recall, mnemon_related, '
       + 'mnemon_runtime_memory, mnemon_document_manage, mnemon_document_create, mnemon_memory_body_create / mnemon_memory_body_update / mnemon_memory_body_merge, '
       + 'mnemon_remember, mnemon_forget'])
+  })
+
+  it('lists only scoped tools and leaves pinned authority and Runtime content intact (#656)', async () => {
+    const f = await compositionFixture()
+    fixtures.push(f)
+    await f.memorySpace()
+    await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: 'Synthetic retained context.' })
+    const turn = await f.graph.composableTurns.beginTurn('root:restricted', { storage: 'custom', workspaceId: f.workspace, agentId: 'root' })
+    const before = structuredClone(turn.view)
+    const allowed = new Set(['mnemon_recall', 'mnemon_status', 'mnemon_runtime_memory', 'mnemon_document_search', 'mnemon_document_create'])
+    const agent = { ctx: { tools: { get(name: string, scope: HostAgent) { expect(this).toBe(agent.ctx.tools); expect(scope).toBe(agent); return allowed.has(name) ? {} : undefined } } } } as HostAgent
+    const wake = modelMemoryWake(f.graph, turn, true, agent)
+    expect(wake.text).toContain('Synthetic retained context.')
+    expect(wake.text.split('\n').find(line => line.startsWith('MNEMON VIEW TOOLS'))).toBe('MNEMON VIEW TOOLS (available in this View): mnemon_document_search, mnemon_status, mnemon_recall, mnemon_runtime_memory, mnemon_document_create')
+    expect(wake.text).not.toContain('MNEMON VIEW ROUTES')
+    expect(turn.view).toEqual(before)
+    expect(wake.viewDigest).toBe(turn.view.digest)
+    expect(modelMemoryWake(f.graph, turn).text).toContain('mnemon_remember')
+    expect(modelMemoryWake(f.graph, turn, true, { ctx: { tools: { get: () => ({}) } } } as unknown as HostAgent)).toEqual(modelMemoryWake(f.graph, turn))
+    expect(modelMemoryWake(f.graph, turn, true, { ctx: {} } as HostAgent)).toEqual(modelMemoryWake(f.graph, turn))
+    allowed.clear()
+    const blocked = modelMemoryWake(f.graph, turn, true, agent)
+    expect(blocked.text).not.toContain('MNEMON VIEW TOOLS')
+    expect(blocked.text).not.toContain('MNEMON VIEW ROUTES')
+    expect(blocked.text).toContain('Synthetic retained context.')
+    expect(turn.view).toEqual(before)
+  })
+
+  it.each(['mnemon_view_route', 'mnemon_view_action'])('offers exact generic ids only through visible %s (#656)', async name => {
+    const f = await compositionFixture()
+    fixtures.push(f)
+    await f.memorySpace()
+    const turn = await f.graph.composableTurns.beginTurn('root:generic', { storage: 'custom', workspaceId: f.workspace, agentId: 'root' })
+    const agent = { ctx: { tools: { get: (tool: string) => tool === name ? {} : undefined } } } as unknown as HostAgent
+    const wake = modelMemoryWake(f.graph, turn, true, agent)
+    expect(wake.text).not.toContain('MNEMON VIEW TOOLS')
+    const line = wake.text.split('\n').find(text => text.startsWith('MNEMON VIEW ROUTES'))!
+    expect(line).toContain(`use ${name} by exact id`)
+    if (name === 'mnemon_view_route') expect(unofferedViewId(f.graph, turn, 'route', 'recall', agent)).not.toContain('call that tool')
+    else expect(unofferedViewId(f.graph, turn, 'action', 'remember', agent)).not.toContain('call that tool')
+    const offers = JSON.parse(line.slice(line.indexOf(': ') + 2)) as Array<{ routes: unknown[]; actions: unknown[] }>
+    expect(offers.flatMap(offer => name === 'mnemon_view_route' ? offer.routes : offer.actions).length).toBeGreaterThan(0)
+    expect(offers.flatMap(offer => name === 'mnemon_view_route' ? offer.actions : offer.routes)).toEqual([])
   })
 })
 
