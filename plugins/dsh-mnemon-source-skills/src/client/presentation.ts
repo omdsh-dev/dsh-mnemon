@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import * as mnemonClient from 'dsh-mnemon/client'
-import { memoryPageStyles, memorySidebarStyles, useLocale } from 'dsh-mnemon/client'
+import { memoryPageStyles, memorySidebarStyles, useLocale, useT as useSharedT, type MnemonKey } from 'dsh-mnemon/client'
 import copy from '../../presentation/locales.json' with { type: 'json' }
 import page from '../../presentation/page.module.css'
 
@@ -18,9 +18,9 @@ export function supportsSettingsSection(section: 'models' | 'market'): boolean {
 }
 
 export function translate(locale: string): SkillsTranslate {
-  const dictionary: Record<string, string> = locale.startsWith('en') ? copy.en : copy.zh
+  const dictionary: Record<string, string> = locale.toLowerCase().startsWith('zh') ? copy.zh : copy.en
   return (key, params) => {
-    const text = dictionary[key] ?? copy.zh[key] ?? key
+    const text = dictionary[key] ?? copy.en[key] ?? key
     if (params === undefined) return text
     // English words after a count: {count:case|cases} follows the parameter it names.
     return text
@@ -31,7 +31,15 @@ export function translate(locale: string): SkillsTranslate {
 
 export function useT(): SkillsTranslate {
   const locale = useLocale()
-  return useMemo(() => translate(locale), [locale])
+  const shared = useSharedT()
+  return useMemo(() => {
+    const fallback = translate(locale)
+    if (/^(en|zh)(-|$)/i.test(locale)) return fallback
+    return (key: SkillsKey, params?: Record<string, unknown>) => {
+      const text = shared(key as MnemonKey, params)
+      return text === key ? fallback(key, params) : text
+    }
+  }, [locale, shared])
 }
 
 export function percent(value: number | undefined): string {

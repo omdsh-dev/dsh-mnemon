@@ -1,12 +1,19 @@
-import type { JSX, ReactNode } from 'react'
+import { useContext, useMemo, type JSX, type ReactNode } from 'react'
 import type { MemoryJsonValue } from 'dsh-mnemon/contracts'
 import type { MnemonSourceManagementClient } from './source-contracts.ts'
 import { I18nContext, LocaleContext } from './page-kit.tsx'
-import { translateEn, translateZh } from './locales.ts'
+import { translateEn, translateZh, type MnemonTranslate } from './locales.ts'
 
 /** Optional default presentation kit; custom pages may use their own UI. */
 export function MemorySourcePageFrame(props: { locale: string; children: ReactNode }): JSX.Element {
-  const translate = props.locale.startsWith('en') ? translateEn : translateZh
+  const enclosing = useContext(I18nContext)
+  const dictionary = props.locale.toLowerCase().startsWith('zh') ? translateZh : translateEn
+  // Built-in context defaults must not mask the page's locale. A Host-bound
+  // translator may supply a language pack before our local fallback.
+  const translate = useMemo<MnemonTranslate>(() => enclosing === translateZh || enclosing === translateEn ? dictionary : (key, params) => {
+    const text = enclosing(key, params)
+    return text === key ? dictionary(key, params) : text
+  }, [enclosing, dictionary])
   return <I18nContext.Provider value={translate}><LocaleContext.Provider value={props.locale}>{props.children}</LocaleContext.Provider></I18nContext.Provider>
 }
 
