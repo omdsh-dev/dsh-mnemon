@@ -1,3 +1,4 @@
+import type { SkillCreationConfig } from 'dsh-mnemon-source-skills/contracts'
 import type {
   MemoryPersistenceStrategy,
   MnemonEmbeddingConfig,
@@ -246,6 +247,8 @@ export interface ResolvedInteractionConfig {
 export type SkillsConfig = Partial<ResolvedSkillsConfig>
 
 export interface ResolvedSkillsConfig {
+  /** Optional creation preferences; unset preserves legacy targetScope behavior. */
+  skillRoots?: SkillCreationConfig
   /** Review finished conversations in the background and suggest new or better skills. */
   evolution: boolean
   /** Allow reviews to suggest new skills. Existing suggestions remain actionable. */

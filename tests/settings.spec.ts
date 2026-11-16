@@ -566,6 +566,11 @@ describe('embedding credentials through the settings bridge', () => {
       ops: [{ op: 'set', path: ['documents'], value: { limitBytes: 0 } }],
     })).resolves.toMatchObject({ ok: false, error: { code: 'settings-rejected' } })
 
+    const rootsOps = [{ op: 'set', path: ['skillRoots'], value: { create: ['project-agents', 'user-agents'], default: 'project-agents' } }]
+    await expect(handler('mutate', { namespace: 'mnemon-skills', expectedRevision: 1, ops: rootsOps })).resolves.toMatchObject({ ok: true })
+    expect(mutate).toHaveBeenCalledWith('mnemon-skills', rootsOps, 1)
+    await expect(handler('mutate', { namespace: 'mnemon-skills', ops: [{ op: 'unset', path: ['skillRoots'] }] })).resolves.toMatchObject({ ok: true })
+
     const skillDirOps = [
       { op: 'set', path: ['dshHome'], value: '/custom/dsh' },
       { op: 'set', path: ['agentsHome'], value: '/custom/agents' },

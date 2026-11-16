@@ -426,7 +426,7 @@ const INTERACTION_PATHS: string[][] = [
 ]
 
 const UI_FIELDS = ['turnBar', 'saveAction']
-const SKILLS_FIELDS = [...Object.keys(DEFAULT_SKILLS_CONFIG), 'dshHome', 'agentsHome']
+const SKILLS_FIELDS = [...Object.keys(DEFAULT_SKILLS_CONFIG), 'dshHome', 'agentsHome', 'skillRoots']
 const MEMORY_LAYER_ID = /^[a-z][a-z0-9-]{0,127}$/u
 
 function namespaceOf(payload: Record<string, unknown>): string {

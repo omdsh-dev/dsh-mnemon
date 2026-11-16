@@ -124,6 +124,14 @@ export const SkillsConfig: z<Partial<ResolvedSkillsConfig>, ResolvedSkillsConfig
   allowUpdate: z.boolean().default(DEFAULT_SKILLS_CONFIG.allowUpdate),
   targetScope: z.union(['storage', 'user', 'project'] as const).default(DEFAULT_SKILLS_CONFIG.targetScope),
   allowLinkedUpdates: z.boolean().default(DEFAULT_SKILLS_CONFIG.allowLinkedUpdates),
+  skillRoots: z.transform(z.object({
+    create: z.array(z.union(['project-dsh', 'project-agents', 'user-dsh', 'user-agents'] as const)).min(1).max(4),
+    default: z.union(['project-dsh', 'project-agents', 'user-dsh', 'user-agents'] as const),
+  }), value => {
+    // Cordis serializes transforms; keep validation self-contained.
+    if (!value.create || !value.default || new Set(value.create).size !== value.create.length || !value.create.includes(value.default)) throw new Error('skills.skillRoots requires unique create roots including default')
+    return { create: value.create, default: value.default }
+  }),
   autoBacktest: z.boolean().default(DEFAULT_SKILLS_CONFIG.autoBacktest),
   autoAdopt: z.boolean().default(DEFAULT_SKILLS_CONFIG.autoAdopt),
   autoAdoptDailyLimit: z.number().step(1).min(SKILLS_BOUNDS.autoAdoptDailyLimit.min).max(SKILLS_BOUNDS.autoAdoptDailyLimit.max).default(DEFAULT_SKILLS_CONFIG.autoAdoptDailyLimit),

@@ -23,6 +23,28 @@ const locale = { active: 'en' as const, locales: [], revision: 0 }
 const localeRuntime = { getSnapshot: () => locale, subscribe: () => () => {} }
 
 describe('技能管理 settings under Plugins', () => {
+  it('stages creation choices and default together and restores legacy behavior when disabled (#658)', async () => {
+    const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: {}, revision: 1, writable: true, mode: 'host' })
+    render(<SkillsSettings scope={scope} page={page} t={t} />)
+    fireEvent.click(screen.getByRole('button', { name: t('skills.roots.title') }))
+    fireEvent.click(screen.getByRole('switch', { name: t('skills.roots.enabled') }))
+    fireEvent.click(screen.getByRole('switch', { name: t('skills.root.user-dsh') }))
+    fireEvent.click(screen.getByRole('switch', { name: t('skills.root.project-dsh') }))
+    expect(screen.getByRole('button', { name: t('options.apply') })).toHaveProperty('disabled', true)
+    fireEvent.click(screen.getByRole('switch', { name: t('skills.root.project-agents') }))
+    fireEvent.click(screen.getByRole('switch', { name: t('skills.root.user-agents') }))
+    fireEvent.click(screen.getByRole('button', { name: `${t('skills.roots.default')} ${t('skills.root.user-dsh')}` }))
+    fireEvent.click(screen.getByRole('menuitem', { name: t('skills.root.project-agents') }))
+    expect(scope.getSnapshot().value?.skillRoots).toBeUndefined()
+    fireEvent.click(screen.getByRole('button', { name: t('options.apply') }))
+    await waitFor(() => expect(scope.getSnapshot().value?.skillRoots).toEqual({ create: ['project-agents', 'user-agents'], default: 'project-agents' }))
+    expect(screen.getByRole('button', { name: `${t('skills.targetScope')} ${t('skills.targetScope.user')}` })).toHaveProperty('disabled', true)
+    fireEvent.click(screen.getByRole('switch', { name: t('skills.roots.enabled') }))
+    fireEvent.click(screen.getByRole('button', { name: t('options.apply') }))
+    await waitFor(() => expect(scope.getSnapshot().value?.skillRoots).toBeUndefined())
+    expect(screen.getByRole('button', { name: `${t('skills.targetScope')} ${t('skills.targetScope.user')}` })).toHaveProperty('disabled', false)
+  })
+
   it('keeps linked updates off by default and saves an explicit opt-in while evolution is off', async () => {
     const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: {}, revision: 1, writable: true, mode: 'host' })
     render(<SkillsSettings scope={scope} page={page} t={t} />)

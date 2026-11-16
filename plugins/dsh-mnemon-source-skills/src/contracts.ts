@@ -10,6 +10,17 @@ export type SkillRootKind = 'project-dsh' | 'project-agents' | 'user-dsh' | 'use
 export const SKILL_ROOT_KINDS: readonly SkillRootKind[] = ['project-dsh', 'project-agents', 'user-dsh', 'user-agents']
 export const SKILL_ROOT_RANK: Readonly<Record<SkillRootKind, number>> = { 'project-dsh': 100, 'project-agents': 200, 'user-dsh': 400, 'user-agents': 500 }
 
+/** Creation preferences, not an authorization boundary for explicit writes or existing skills. */
+export interface SkillCreationConfig {
+  create: SkillRootKind[]
+  default: SkillRootKind
+}
+
+export interface SkillCreationChoices {
+  roots: SkillRootKind[]
+  default: SkillRootKind
+}
+
 export interface SkillRoot {
   kind: SkillRootKind
   path: string
@@ -58,6 +69,8 @@ export interface SkillProblem {
 }
 
 export interface SkillCatalog {
+  /** Present only when creation preferences are configured; resolved for this workspace. */
+  creation?: SkillCreationChoices
   projectRoot?: string
   roots: SkillRoot[]
   skills: SkillSummary[]

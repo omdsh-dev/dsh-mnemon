@@ -140,6 +140,17 @@ describe('skill registries', () => {
 })
 
 describe('market install', () => {
+  it('uses the configured Agents default for installs and retains the installed root on update (#658)', async () => {
+    const files = { 'skills/frontend-design/SKILL.md': SKILL('frontend-design') }
+    const market = new SkillsService(join(root, 'data'), { dshHome: join(root, 'dsh'), agentsHome: join(root, 'agents'), skillRoots: { create: ['project-agents', 'user-agents'], default: 'project-agents' } }, () => now, github(files))
+    const installed = await market.installMarket(undefined, { registryId: 'official', name: 'frontend-design' })
+    expect(installed.skill.root).toBe('user-agents')
+    files['skills/frontend-design/SKILL.md'] = SKILL('frontend-design', 'Upstream changed')
+    const updated = await service(github(files)).installMarket(undefined, { registryId: 'official', name: 'frontend-design', root: 'user-dsh' })
+    expect(updated.skill.root).toBe('user-agents')
+    expect(updated.updated).toBe(true)
+  })
+
   it('previews, installs, detects edits and updates a GitHub skill from the official registry', async () => {
     const calls: string[] = []
     const files: Record<string, string> = { 'skills/frontend-design/SKILL.md': SKILL('frontend-design'), 'skills/frontend-design/LICENSE.txt': 'Apache License', 'other/SKILL.md': SKILL('other') }

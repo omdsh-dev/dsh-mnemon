@@ -79,6 +79,7 @@ export function memoryGenerationOptions(
       if (type === 'skills') return {
         dataDir: directory,
         allowLinkedUpdates: allowLinkedSkillUpdates,
+        ...(config.skills?.skillRoots === undefined ? {} : { skillRoots: config.skills.skillRoots }),
         ...(config.skills?.dshHome === undefined ? {} : { dshHome: config.skills.dshHome }),
         ...(config.skills?.agentsHome === undefined ? {} : { agentsHome: config.skills.agentsHome }),
       }

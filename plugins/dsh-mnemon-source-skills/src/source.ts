@@ -1,3 +1,4 @@
+import type { SkillCreationConfig } from './contracts.ts'
 import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { COMPOSABLE_MEMORY_API_VERSION, type MemoryJsonValue, type MemorySourceDefinition, type MemorySourceFacts } from 'dsh-mnemon/contracts'
@@ -18,6 +19,8 @@ export interface Config {
   agentsHome?: string
   /** Opt in to updating original files of existing symlink/junction skills. */
   allowLinkedUpdates?: boolean
+  /** Default and offered destinations for newly created skills. */
+  skillRoots?: SkillCreationConfig
 }
 
 function workspace(scope: { workspaceId?: string }): string | undefined {
@@ -276,6 +279,7 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
         ...(effective.dshHome === undefined ? {} : { dshHome: effective.dshHome }),
         ...(effective.agentsHome === undefined ? {} : { agentsHome: effective.agentsHome }),
         allowLinkedUpdates: effective.allowLinkedUpdates === true,
+        ...(effective.skillRoots === undefined ? {} : { skillRoots: effective.skillRoots }),
       })
       // A Host that went away mid-write left its suggestion stuck in `drafting`
       // and refuses both a retry and a delete; put those back before anything reads.

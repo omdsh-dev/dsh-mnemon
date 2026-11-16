@@ -57,6 +57,7 @@ export function mainStrategyTypeId(config: Pick<SharedResolvedConfig, 'memoryTop
 
 export function resolveSkillsConfig(config: Partial<ResolvedSkillsConfig> | undefined = {}): ResolvedSkillsConfig {
   const resolved = SkillsConfig(config ?? {})
+  if (resolved.skillRoots === undefined) delete resolved.skillRoots
   if (resolved.dshHome === undefined) delete resolved.dshHome
   if (resolved.agentsHome === undefined) delete resolved.agentsHome
   return resolved

@@ -102,6 +102,39 @@ function page(navigationInput: { seed: string; nonce: number } = { seed: 'skill:
 }
 
 describe('Skills page', () => {
+  it('offers configured creation roots and writes a new skill into the selected Agents directory (#658)', async () => {
+    await runner.dispose()
+    runner = new MemoryCompositionRunner()
+    await runner.mount(strategy, { instanceId: 'strategy' })
+    await runner.mount(plugin, { instanceId: 'skills', config: { dataDir: join(directory, 'data'), dshHome: join(directory, 'dsh'), agentsHome: join(directory, 'agents'), skillRoots: { create: ['project-agents', 'user-agents'], default: 'project-agents' } } })
+    management = await runner.managementClient('source:skills', { storage: 'custom', workspaceId: join(directory, 'workspace') })
+    page()
+    fireEvent.click(await screen.findByRole('button', { name: t('skills.new') }))
+    const dialog = await screen.findByRole('dialog', { name: t('create.title') })
+    const picker = within(dialog).getByRole('button', { name: new RegExp(t('root.project-agents'), 'u') })
+    fireEvent.click(picker)
+    expect(screen.queryByRole('menuitem', { name: t('root.user-dsh') })).toBeNull()
+    expect(screen.getByRole('menuitem', { name: t('root.user-agents') })).not.toBeNull()
+    fireEvent.click(screen.getByRole('menuitem', { name: t('root.project-agents') }))
+    fireEvent.change(within(dialog).getByLabelText(new RegExp(`^${t('create.name')}`, 'u')), { target: { value: 'agents-created' } })
+    fireEvent.change(within(dialog).getByLabelText(new RegExp(`^${t('create.description')}`, 'u')), { target: { value: 'Synthetic Agents workflow.' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: t('create.submit') }))
+    await screen.findByRole('heading', { name: 'agents-created', level: 3 })
+    expect(readFileSync(join(directory, 'workspace', '.agents', 'skills', 'agents-created', 'SKILL.md'), 'utf8')).toContain('Synthetic Agents workflow.')
+  })
+
+  it('keeps a draft Agents destination visible and usable with legacy creation choices (#658)', async () => {
+    const content = SKILL.replaceAll('release-notes', 'agents-draft')
+    const draft = await mutate('draft-record', { skillName: 'agents-draft', content, notes: '', changes: [], guidance: [], targetRoot: 'project-agents' }) as { id: string }
+    page({ seed: `draft:${draft.id}`, nonce: 1 })
+    const adopt = await screen.findByRole('button', { name: t('draft.adopt') })
+    await waitFor(() => expect(adopt).toHaveProperty('disabled', false))
+    expect(screen.getByRole('button', { name: new RegExp(t('root.project-agents'), 'u') })).not.toBeNull()
+    fireEvent.click(adopt)
+    await screen.findByText(t('draft.adopted', { name: 'agents-draft' }))
+    expect(readFileSync(join(directory, 'workspace', '.agents', 'skills', 'agents-draft', 'SKILL.md'), 'utf8')).toBe(content)
+  })
+
   it.each([true, false])('keeps a selected directory folded across catalog refreshes (writable=%s, #627)', async writable => {
     const props = { sourceTypeId: 'skills', sourceInstanceKey: 'source:skills', sourceInstances: [], locale: 'en', writable, management }
     const location = { seed: 'skill:user-dsh:release-notes', nonce: 1 }
@@ -673,7 +706,14 @@ describe('Skills page', () => {
     expect(draftWithSkill('  ', 'pdf')).toBe('/pdf ')
   })
 
-  it('keeps the source dialog and catalog installation usable when old Core only offers generic settings navigation', async () => {
+  it.each([false, true])('keeps catalog installation usable with configured roots=%s and legacy settings navigation (#658)', async configured => {
+    if (configured) {
+      await runner.dispose()
+      runner = new MemoryCompositionRunner()
+      await runner.mount(strategy, { instanceId: 'strategy' })
+      await runner.mount(plugin, { instanceId: 'skills', config: { dataDir: join(directory, 'data'), dshHome: join(directory, 'dsh'), agentsHome: join(directory, 'agents'), skillRoots: { create: ['project-agents', 'user-agents'], default: 'project-agents' } } })
+      management = await runner.managementClient('source:skills', { storage: 'custom' })
+    }
     const team = join(directory, 'team')
     mkdirSync(join(team, 'weekly-report'), { recursive: true })
     writeFileSync(join(team, 'weekly-report', 'SKILL.md'), '---\nname: weekly-report\ndescription: Write the weekly report.\n---\n\n# Weekly report\n\n1. Collect merged PRs\n')
@@ -698,8 +738,9 @@ describe('Skills page', () => {
     const detail = await screen.findByRole('dialog')
     expect(await within(detail).findByText('Collect merged PRs')).not.toBeNull()
     expect(within(detail).getByText(t('market.trust'))).not.toBeNull()
+    if (configured) await within(detail).findByRole('button', { name: new RegExp(t('root.user-agents'), 'u') })
     fireEvent.click(within(detail).getByRole('button', { name: t('market.install') }))
-    await waitFor(() => expect(readFileSync(join(directory, 'dsh', 'skills', 'weekly-report', 'SKILL.md'), 'utf8')).toContain('Collect merged PRs'))
+    await waitFor(() => expect(readFileSync(join(directory, configured ? 'agents' : 'dsh', 'skills', 'weekly-report', 'SKILL.md'), 'utf8')).toContain('Collect merged PRs'))
     expect(await screen.findByText(t('market.installed', { name: 'weekly-report' }))).not.toBeNull()
     expect(await screen.findByText(t('market.state.installed'))).not.toBeNull()
   })

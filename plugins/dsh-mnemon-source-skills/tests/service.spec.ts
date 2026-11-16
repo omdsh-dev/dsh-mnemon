@@ -1213,3 +1213,46 @@ describe('the Trash', () => {
     expect(skills.trashItems()).toEqual([])
   })
 })
+
+
+describe('configured creation roots (#658)', () => {
+  const configured = () => new SkillsService(data, { dshHome: home, agentsHome: agents, skillRoots: { create: ['project-agents', 'user-agents'], default: 'project-agents' } } as never, () => now)
+
+  it('applies the configured default without narrowing discovery or explicit destinations', async () => {
+    const skills = configured()
+    expect(skills.catalogView(workspace)).toMatchObject({ creation: { roots: ['project-agents', 'user-agents'], default: 'project-agents' } })
+    expect(skills.catalogView(workspace).roots).toHaveLength(4)
+    const created = await skills.createSkill(workspace, { name: 'agents-default', description: 'Synthetic workflow' })
+    expect(created.root).toBe('project-agents')
+    expect(created.path).toBe(join(root, 'project', '.agents', 'skills', 'agents-default', 'SKILL.md'))
+    expect((await skills.createSkill(workspace, { name: 'explicit-root', description: 'Synthetic', root: 'user-dsh' })).root).toBe('user-dsh')
+    expect((await service().createSkill(workspace, { name: 'legacy-default', description: 'Synthetic' })).root).toBe('user-dsh')
+  })
+
+  it('falls back to the corresponding user root without a workspace, including project-only choices', async () => {
+    for (const create of [['project-agents', 'user-agents'], ['project-agents']]) {
+      const skills = new SkillsService(data, { dshHome: home, agentsHome: agents, skillRoots: { create, default: 'project-agents' } } as never)
+      expect(skills.catalogView(undefined)).toMatchObject({ creation: { roots: ['user-agents'], default: 'user-agents' } })
+    }
+    expect((await configured().createSkill(undefined, { name: 'global-fallback', description: 'Synthetic' })).root).toBe('user-agents')
+    await expect(configured().createSkill(undefined, { name: 'explicit-missing', description: 'Synthetic', root: 'project-agents' })).rejects.toThrow()
+  })
+
+  it('pins the selected draft destination across configuration changes and preserves update origins', async () => {
+    const skills = configured()
+    const draft = await skills.recordDraft(workspace, { skillName: 'agents-draft', content: skill('agents-draft'), notes: '', changes: [], guidance: [] })
+    expect(draft.targetRoot).toBe('project-agents')
+    const adopted = await service().adoptDraft(workspace, draft.id)
+    expect(adopted.skill.root).toBe('project-agents')
+    const update = await service().recordDraft(workspace, { skillName: 'agents-draft', content: skill('agents-draft', 'Changed'), notes: '', changes: [], guidance: [] })
+    const updated = await configured().adoptDraft(workspace, update.id, { root: 'user-dsh' })
+    expect(updated.skill.root).toBe('project-agents')
+  })
+
+  it.each([
+    { create: [], default: 'user-dsh' }, { create: ['unknown'], default: 'unknown' },
+    { create: ['user-agents'], default: 'project-agents' }, { create: ['user-dsh', 'user-dsh'], default: 'user-dsh' },
+  ])('rejects invalid configuration before any file write: %j', skillRoots => {
+    expect(() => new SkillsService(data, { skillRoots } as never)).toThrow(/skillRoots/)
+  })
+})

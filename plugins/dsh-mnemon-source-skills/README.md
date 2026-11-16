@@ -18,6 +18,7 @@ The Source never calls a model and never joins a model View; skills reach the mo
 | `dshHome` | `$DSH_HOME`, then `~/.dsh` | DSH's home; its `skills` folder is read |
 | `agentsHome` | `$DSH_AGENTS_HOME`, then `~/.agents` | The shared agents home; its `skills` folder is read |
 
+| `skillRoots` | unset | Optional `{ create: [project-agents, user-agents], default: project-agents }` for new skills, drafts and market installs. A project default falls back to its matching user root without a workspace. Existing targets and scanning are unchanged. |
 | `allowLinkedUpdates` | `false` | Update existing linked skill targets without replacing their links; shared Agents see the changes. The default instance follows the Host Skills setting. |
 
 Self-evolution, its review parameters, the line under each turn and the sidebar entry are dsh-mnemon settings, under `skills` in its configuration, edited on this component's page under **Plugins → dsh-mnemon**; see [Skills settings](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/reference/configuration.md#skills-settings). The Host passes the admission rules with each review, so this Source keeps no settings of its own.

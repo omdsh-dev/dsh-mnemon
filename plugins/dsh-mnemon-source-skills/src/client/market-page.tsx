@@ -4,7 +4,7 @@ import {
   IconRefreshOutlineRegular, IconSearchOutlineRegular, Input, Switch, Tag,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { SearchField, SelectField, SidebarModal, useLocale } from 'dsh-mnemon/client'
-import { SKILL_ROOT_KINDS, type LocalizedText, type MarketAudit, type MarketItem, type MarketPreview, type MarketRegistry, type MarketSearchResult, type MarketView, type SkillRootKind } from '../contracts.ts'
+import { type LocalizedText, type MarketAudit, type MarketItem, type MarketPreview, type MarketRegistry, type MarketSearchResult, type MarketView, type SkillRootKind } from '../contracts.ts'
 import { splitFrontmatter } from '../fence.ts'
 import { detectSource, type DetectedSource } from '../source-kind.ts'
 import { compactCount, css, errorText, relative, supportsSettingsSection, useT, type SkillsTranslate } from './presentation.ts'
@@ -208,13 +208,20 @@ function MarketDetail(props: { context: SkillsPageContext; item: MarketItem; reg
   const [preview, setPreview] = useState<MarketPreview | null>(null)
   const [previewError, setPreviewError] = useState<string | null>(null)
   const [root, setRoot] = useState<SkillRootKind>('user-dsh')
+  const [roots, setRoots] = useState<readonly SkillRootKind[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
     let active = true
+    setRoots([])
+    void context.client.catalog().then(catalog => {
+      if (!active) return
+      setRoots(catalog.creation?.roots ?? catalog.roots.map(entry => entry.kind))
+      setRoot(catalog.creation?.default ?? 'user-dsh')
+    }).catch(reason => { if (active) setError(errorText(reason)) })
     void context.client.marketPreview(item.registryId, itemKey(item)).then(value => { if (active) setPreview(value) }).catch(reason => { if (active) setPreviewError(errorText(reason)) })
     return () => { active = false }
-  }, [context.client, item.registryId, item.name])
+  }, [context.client, context.configRevision, item.registryId, item.name])
   const install = async () => {
     setBusy(true)
     setError(null)
@@ -239,10 +246,10 @@ function MarketDetail(props: { context: SkillsPageContext; item: MarketItem; reg
   const homepage = preview?.homepage ?? item.homepage
   return <SidebarModal wide title={text(item.title, language) || item.name} description={description} busy={busy} onClose={props.onClose} footer={<>
     {error !== null && <span className={css.skFormError}>{error}</span>}
-    {item.state === 'available' && <SelectField size="sm" inline label={t('market.installTo')} value={root} onChange={setRoot} options={SKILL_ROOT_KINDS.map(kind => ({ value: kind, label: t(`root.${kind}`) }))} />}
+    {item.state === 'available' && <SelectField size="sm" inline label={t('market.installTo')} value={root} onChange={setRoot} disabled={busy || roots.length === 0} options={roots.map(kind => ({ value: kind, label: t(`root.${kind}`) }))} />}
     {item.skillKey !== undefined && <Button variant="ghost" onClick={() => { props.onClose(); context.navigate({ tab: 'skills', skillKey: item.skillKey! }) }}>{t('market.open')}</Button>}
     <Button variant="ghost" onClick={props.onClose}>{t('common.close')}</Button>
-    {canInstall && <Button variant="primary" disabled={busy || !context.writable || (preview === null && previewError === null)} onClick={() => void install()}>
+    {canInstall && <Button variant="primary" disabled={busy || !context.writable || (item.state === 'available' && roots.length === 0) || (preview === null && previewError === null)} onClick={() => void install()}>
       {busy ? t('market.installing') : t(item.state === 'modified' ? 'market.overwrite' : item.state === 'update' ? 'market.update' : 'market.install')}
     </Button>}
   </>}>
