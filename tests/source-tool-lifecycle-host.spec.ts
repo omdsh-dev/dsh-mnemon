@@ -305,3 +305,24 @@ it.each([false, true])('keeps the View tool list consistent with scoped visibili
     if (codeMode) expect(JSON.stringify(f.session.snapshotEvents().filter(event => event.type === 'tool/result'))).toContain('sdk:function|function')
   } finally { if (restricted) release(); await f.dispose() }
 }, 30_000)
+
+
+it('delivers the conservative Layered protocol and still honors an explicit Runtime destination (#655)', async () => {
+  let calls = 0
+  const f = await harness(options => {
+    const visible = JSON.stringify(options)
+    expect(visible).toContain('durable user-authored')
+    expect(visible).toContain('Project records')
+    expect(visible).toContain('explicitly chooses Runtime')
+    if (calls++ === 0) return { name: 'mnemon_runtime_memory', args: { action: 'add', target: 'memory', content: 'Synthetic project decision explicitly pinned by the user.', importance: 'low', branches: ['demo'] } }
+    return 'Saved to Runtime as requested.'
+  })
+  try {
+    await f.turn('Explicitly save this synthetic project decision to Runtime MEMORY.md, scoped to demo, with low importance.')
+    expect(calls).toBe(2)
+    expect(await f.graph.source('runtime').read('snapshot')).toMatchObject({ entries: [expect.objectContaining({ content: 'Synthetic project decision explicitly pinned by the user.', importance: 'low', branches: ['demo'] })] })
+    const receipts = f.parent.session.snapshotEvents().filter(event => event.type === 'tool/result')
+    expect(receipts).toHaveLength(1)
+    expect(JSON.stringify(receipts)).not.toContain('"isError":true')
+  } finally { await f.dispose() }
+}, 20_000)

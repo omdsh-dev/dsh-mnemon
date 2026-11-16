@@ -38,6 +38,12 @@ Source snapshotting does not run semantic recall. Prime only initializes routing
 
 A child captures and retains its live parent's pinned View and runtime at `agent/created`, before its driver starts. Its own turns pin that retained View, even after the parent finishes or moves to a newer generation. The delegation is released when the child activation is disposed. A cold resume receives a new delegation; an explicitly Host-created background child with no parent model turn snapshots a fresh scoped View. Children have their own turn authority without root-only cues or idle review. See [the authority lifecycle](../development/architecture.md#lifecycle-and-failures).
 
+### Attended hot-memory capture
+
+The main conversation uses the same conservative admission boundary as idle review: capture explicit, durable user-authored identity/preferences and compact rules needed for future work. Project designs, one-off decisions, configuration/account snapshots, investigations and progress belong in Documents when substantial and writable; otherwise skip them. A generic “remember this” request does not promote a project record into every-turn context. An explicit choice of Runtime, USER.md or MEMORY.md still works through the existing write tools and permissions. Lower importance and branch scope do not make transient records eligible.
+
+These are model-facing routing instructions, not a content classifier or a storage rejection rule. Existing entries, manual edits, correction/removal, branch scoping and capacity handling are unchanged. The model still decides whether a candidate qualifies; the tool description, Layered protocol and short reminders now agree.
+
 ### Delegated child sessions
 
 Every task dsh-mnemon delegates to a child Agent starts with one line of its own, `[dsh-mnemon:delegated <operation>]`, and the task follows on the next line: `review` for idle review, `write` for writes and Save to memory, `skill` for skill reviews, drafts, backtests and eval cases, and `answer`, `placement`, `migration`, `compaction`, `document-archive`, `metadata-maintenance` and `reconcile` for the others. Later releases may add operations, so match the pattern rather than this list. DSH records the task as a user message (`source.kind: "user"`) in the child's session, whose header carries `origin: "subagent"` and `parentSession`.
