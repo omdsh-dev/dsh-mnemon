@@ -40,6 +40,16 @@ describe('memory tool table', () => {
     return { name: tool.name, description: tool.description, parameters: tool.parameters, ...(deferred ? { deferLoading: true } : {}), output: tool.output.schema }
   }
 
+  it('describes hot-memory eligibility without treating transient facts as low priority (#655)', () => {
+    const tool = registered().find(tool => tool.name === 'mnemon_runtime_memory')!
+    expect(tool.description).toContain('durable user-authored')
+    expect(tool.description).toContain('Project records')
+    expect(tool.description).toContain('otherwise skip')
+    expect(tool.description).toContain('explicitly chooses Runtime')
+    expect(JSON.stringify(tool.parameters)).not.toContain('low for transient facts')
+    expect(JSON.stringify(tool.parameters)).not.toContain('project, environment, decisions, and lessons')
+  })
+
   it('has a row for every memory tool the Host registers, in registration order, and for nothing else', () => {
     const names = registered().map(tool => tool.name)
     // The result tool delegated children finish with runs no Source operation, so it has no row.

@@ -301,7 +301,7 @@
   },
   {
     "name": "mnemon_runtime_memory",
-    "description": "Maintain compact hot memory injected into future turns. Write only new reusable facts supplied or corrected by the user, or information the user explicitly asks to save. Never copy, promote, or summarize evidence returned by Documents, Recall, or Related unless the user explicitly asks to save that exact evidence; answering a read question must stay read-only. add creates one independent fact; replace corrects or consolidates one uniquely matched entry; remove is only for an explicitly withdrawn, obsolete, or wrong entry. target=user is only for who the user is; target=memory is for project/environment/decisions/lessons. Skip questions, guesses, assistant-authored claims, temporary progress, completed-work logs, raw dumps, secrets, rediscoverable facts, and skill-covered guidance. This tool exclusively writes runtime MEMORY.md and USER.md; capacity archival and compaction are automatic. Optional branches (git branch names, target=memory only) project an entry only in sessions on those branches: use them for branch-specific decisions and experiments, tag new branch-scoped entries with the git branch reported in the snapshot header, omit for cross-branch facts; on replace an empty list clears the scope, and an omitted list keeps the current scope.",
+    "description": "Maintain compact hot memory injected into future turns. Capture only new, explicit, durable user-authored identity/preferences or compact rules needed for future work. Project records, one-off decisions, configuration/account snapshots, investigations and progress belong in Documents when substantial and writable; otherwise skip. A general request to remember does not change that destination; honor a user who explicitly chooses Runtime, USER.md or MEMORY.md, subject to existing permissions. Never copy, promote, or summarize evidence returned by Documents, Recall, or Related unless the user explicitly asks to save that exact evidence; answering a read question must stay read-only. add creates one independent fact; replace corrects or consolidates one uniquely matched entry; remove is only for an explicitly withdrawn, obsolete, or wrong entry. target=user is only for who the user is; target=memory is for compact user-stated rules needed for future work. Skip questions, guesses, assistant-authored claims, temporary progress, completed-work logs, raw dumps, secrets, rediscoverable facts, and skill-covered guidance. This tool exclusively writes runtime MEMORY.md and USER.md; capacity archival and compaction are automatic. Optional branches (git branch names, target=memory only) project an entry only in sessions on those branches: scope does not change capture eligibility; tag new branch-scoped entries with the git branch reported in the snapshot header, omit for cross-branch facts; on replace an empty list clears the scope, and an omitted list keeps the current scope.",
     "parameters": {
       "type": "object",
       "properties": {
@@ -320,7 +320,7 @@
             "memory",
             "user"
           ],
-          "description": "user for user identity/preferences; memory for project, environment, decisions, and lessons."
+          "description": "user for user identity/preferences; memory for compact user-stated rules needed for future work, or an explicitly requested Runtime destination."
         },
         "content": {
           "type": "string",
@@ -337,7 +337,7 @@
             "normal",
             "low"
           ],
-          "description": "critical for explicit must/always/never rules; low for transient facts; normal by default."
+          "description": "critical for explicit must/always/never rules; low for lower-priority eligible durable entries; normal by default. Importance does not make transient facts eligible."
         },
         "branches": {
           "type": "array",
