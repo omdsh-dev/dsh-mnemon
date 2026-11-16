@@ -70,6 +70,26 @@ async function fixture(taskRunner?: RuntimeMaintenanceTaskRunner, config: Config
 }
 
 describe('default Runtime capacity workflow across Host entry points', () => {
+  it('archives an existing Holographic fact outside the top 20 and completes the pending write (#657)', async () => {
+    const f = await fixture()
+    const body = await f.memorySpace()
+    const spaces = f.graph.source('memory-spaces')
+    const existing = await spaces.mutate<{ id: string }>('remember', { memoryBodyId: body.id, content: saved, importance: 3 })
+    for (let index = 0; index < 25; index += 1) {
+      await spaces.mutate('remember', { memoryBodyId: body.id, content: `${saved} Related record ${index}.`, importance: 5 })
+    }
+    const before = await spaces.read<{ results: Insight[] }>('search', { query: saved, limit: 20, memoryBodyIds: [body.id] })
+    expect(before.results).toHaveLength(20)
+    expect(before.results.some(row => row.content === saved)).toBe(false)
+    await f.begin()
+    await expect(f.execute('mnemon_runtime_memory', { action: 'add', target: 'memory', content: pending }))
+      .resolves.toMatchObject({ added: pending, maintenance: { kind: 'mnemon-archive', memoryBodyIds: [body.id] } })
+    expect((await f.graph.source('runtime').read<RuntimeMemorySnapshot>('snapshot')).entries.map(entry => entry.content)).toEqual([pending])
+    const stored = await spaces.read<{ items: Insight[] }>('list', { memoryBodyIds: [body.id], limit: 100 })
+    expect(stored.items.filter(row => row.content === saved)).toEqual([expect.objectContaining({ id: existing.id, content: saved })])
+    expect(f.start).not.toHaveBeenCalled()
+  })
+
   it.each(['named', 'generic', 'fallback', 'management'].flatMap(entry => ['serialized', 'json-error', 'foreign-realm'].map(shape => ({ entry, shape }))))('maintains capacity across a $shape Source failure through $entry (#641)', async ({ entry, shape }) => {
     const f = await fixture()
     const generation = f.live.snapshot().memoryComposition.current()!

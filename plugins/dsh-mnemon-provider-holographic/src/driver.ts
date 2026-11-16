@@ -201,7 +201,8 @@ export class HolographicProvider implements MemoryProviderAdapter {
     }
     const store = this.load(body)
     const existing = store.facts.find(fact => fact.content === request.content.trim())
-    if (existing !== undefined) return { action: 'skipped', provider: this.id, id: existing.id, summary: 'Holographic already contains this fact.' }
+    // Exact stored content lets archival verify a duplicate without ranked search.
+    if (existing !== undefined) return { action: 'skipped', provider: this.id, id: existing.id, content: existing.content, summary: 'Holographic already contains this fact.' }
     const now = new Date().toISOString()
     const connection = this.connection(body)
     const fact: HolographicFact = {
