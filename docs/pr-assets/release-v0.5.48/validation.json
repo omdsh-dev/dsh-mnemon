@@ -1,0 +1,78 @@
+{
+  "date": "2026-11-18",
+  "baseRelease": "0.5.47",
+  "candidateRevision": "d298d2eedbd3227148ae74bfa9056408aa9d8e05",
+  "release": "0.5.48",
+  "environment": {
+    "os": "macOS arm64",
+    "node": "24.22.2",
+    "pnpm": "10.13.1",
+    "host": "isolated Web profiles"
+  },
+  "hosts": [
+    "0.2.0-rc.2",
+    "0.2.1-rc.2",
+    "0.2.1-rc.3",
+    "0.2.1-rc.5",
+    "0.2.2-rc.1",
+    "0.2.2-rc.2",
+    "0.2.2-rc.3",
+    "0.2.2-rc.4"
+  ],
+  "results": {
+    "freshInstalls": 8,
+    "updatesViaVersionDialog": 8,
+    "upgradesWithRetainedRuntimeDataAfterFullRestart": 8,
+    "pinnedVersionsPerProfile": 19,
+    "candidateFilesPerProfile": 154,
+    "finalVersionFileSetContentOrModeMismatches": 0,
+    "runtimeFilesCheckedPerUpgrade": [
+      "memories.json",
+      "MEMORY.md",
+      "USER.md"
+    ]
+  },
+  "rc4InstalledHostSuite": {
+    "passed": 2858,
+    "skipped": 9,
+    "failed": 0
+  },
+  "starter": {
+    "fileCount": 74,
+    "packedBytes": 611030,
+    "unpackedBytes": 2572554,
+    "unpackedLimit": 3000000
+  },
+  "artifacts": [
+    {
+      "name": "dsh-mnemon-source-memory-spaces",
+      "version": "0.5.30",
+      "filename": "dsh-mnemon-source-memory-spaces-0.5.30.tgz",
+      "integrity": "sha512-Kx28A0rmO52s933hURJAFtS9OaluLEm1oSe6IEDaU4R+fty1gbgUHxslJA52hYN4/aDmq8RBHw3g7Rociew2fg==",
+      "size": 222376,
+      "sha256": "23817bd16b2ff0b1032a01b533888fb0771e20e6ebdfc3fccd298e5fe4101703"
+    },
+    {
+      "name": "dsh-mnemon-source-skills",
+      "version": "0.5.15",
+      "filename": "dsh-mnemon-source-skills-0.5.15.tgz",
+      "integrity": "sha512-3bppoKb3PFFP36d9jhSof/dCJZmTzmowSPh+P0k9Nb9UOnsYE2J0apzqF9bHcacda8vLgWw6sX6jJ5EN8hTKsQ==",
+      "size": 177498,
+      "sha256": "45f24dbf8a89963d436614c3ad3b113591c3bb5803a31525257023c265f20632"
+    },
+    {
+      "name": "dsh-mnemon",
+      "version": "0.5.48",
+      "filename": "dsh-mnemon-0.5.48.tgz",
+      "integrity": "sha512-o9AfnP58MNBgOE2q4qyN34lpd7yN2amrjP1D3fmDvSsaGg2flgDz+CWuxSVzBxrAyNq0pS3JOm9FXOQctnSTiA==",
+      "size": 611030,
+      "sha256": "70416d64c154b05f872157d3b0bd9d2e95fb90ce731bfc46b97337decd1e9117"
+    }
+  ],
+  "auditArchive": {
+    "name": "v0.5.48-acceptance.tar.gz",
+    "sha256": "68d3fe71b0d010f253db2a5101c08b1f23943b1b9f59877216e8db67162934a0",
+    "members": 34,
+    "url": "https://github.com/omdsh-dev/dsh-mnemon/releases/download/v0.5.48/v0.5.48-acceptance.tar.gz"
+  }
+}
