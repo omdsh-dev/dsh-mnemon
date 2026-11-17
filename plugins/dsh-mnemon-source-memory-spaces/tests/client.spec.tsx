@@ -870,7 +870,7 @@ describe('Settings deep-linking, error banner placement, and reduced-motion poli
     const stroke = vi.fn()
     const fakeCtx = {
       setTransform: vi.fn(), clearRect: vi.fn(), fillRect: vi.fn(), save: vi.fn(), restore: vi.fn(),
-      beginPath: vi.fn(), ellipse: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(), arc: vi.fn(),
+      beginPath: vi.fn(), roundRect: vi.fn(), closePath: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(), arc: vi.fn(),
       fill: vi.fn(), stroke, setLineDash: vi.fn(), fillText,
       strokeStyle: '', fillStyle: '', lineWidth: 1, globalAlpha: 1, font: '', textAlign: 'center', textBaseline: 'top',
     } as unknown as CanvasRenderingContext2D
@@ -884,6 +884,8 @@ describe('Settings deep-linking, error banner placement, and reduced-motion poli
       expect(rafSpy).not.toHaveBeenCalled()
       expect(fillText).toHaveBeenCalled()
       expect(stroke).toHaveBeenCalled()
+      expect(fakeCtx.roundRect).toHaveBeenCalled()
+      expect(fakeCtx.closePath).toHaveBeenCalled()
 
       const canvas = screen.getByRole('img', { name: t('graph.aria3d', { nodes: 3, edges: 2 }) }) as HTMLCanvasElement
       expect(canvas.dataset.view).toBe('3d')
@@ -902,11 +904,29 @@ describe('Settings deep-linking, error banner placement, and reduced-motion poli
       // Clicking the center-anchored single space selects it cleanly; Escape clears selection.
       fireEvent.click(canvas, { clientX: 465, clientY: 260 })
       expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'space:work' }))
+      onSelect.mockClear()
+      // An orbit drag must not also open an inspector on its trailing click.
+      for (const [type, clientX] of [['pointerdown', 440], ['pointermove', 465], ['pointerup', 465]] as const) {
+        fireEvent(canvas, new MouseEvent(type, { bubbles: true, button: 0, clientX, clientY: 260 }))
+      }
+      fireEvent.click(canvas, { clientX: 465, clientY: 260 })
+      expect(onSelect).not.toHaveBeenCalled()
+      fireEvent.click(canvas, { clientX: 465, clientY: 260 })
+      expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'space:work' }))
 
       fireEvent.keyDown(canvas, { key: 'ArrowRight' })
       fireEvent.keyDown(canvas, { key: '+' })
       fireEvent.keyDown(canvas, { key: 'Escape' })
       expect(onClearSelection).toHaveBeenCalledOnce()
+
+      fireEvent.click(screen.getByRole('button', { name: t('graph.zoomInAction') }))
+      fireEvent.click(screen.getByRole('button', { name: t('graph.resetViewAction') }))
+      expect(rafSpy).not.toHaveBeenCalled()
+      // An idle graph redraws immediately when the Host changes its theme.
+      const draws = vi.mocked(fakeCtx.clearRect).mock.calls.length
+      document.body.toggleAttribute('data-ds-dark-theme', true)
+      await waitFor(() => expect(vi.mocked(fakeCtx.clearRect).mock.calls.length).toBeGreaterThan(draws))
+      document.body.removeAttribute('data-ds-dark-theme')
 
       cleanup()
       localStorage.removeItem('dsh-mnemon:graph-view')
@@ -949,6 +969,7 @@ describe('Settings deep-linking, error banner placement, and reduced-motion poli
       await waitFor(() => expect(document.querySelector('svg[role="img"]')).not.toBeNull())
     } finally {
       localStorage.removeItem('dsh-mnemon:graph-view')
+      document.body.removeAttribute('data-ds-dark-theme')
       getContextSpy.mockRestore()
       rafSpy.mockRestore()
     }

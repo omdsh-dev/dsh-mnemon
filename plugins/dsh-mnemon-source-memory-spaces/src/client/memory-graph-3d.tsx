@@ -286,7 +286,6 @@ function readThemePalette(canvas: HTMLCanvasElement) {
   }
   return {
     bg: pick(['--dsw-alias-bg-layer-1', '--mn-layer-1'], '#ffffff'),
-    line: pick(['--dsw-alias-border-l2', '--mn-line'], '#e5e7eb'),
     text: pick(['--dsw-alias-label-primary', '--mn-text'], '#111827'),
     muted: pick(['--dsw-alias-label-secondary', '--mn-muted'], '#4b5563'),
     faint: pick(['--dsw-alias-label-tertiary', '--mn-faint'], '#9ca3af'),
@@ -294,17 +293,14 @@ function readThemePalette(canvas: HTMLCanvasElement) {
   }
 }
 
-export interface MemoryGraph3DProps extends MemoryGraphProps {}
-
 /** Zero-dependency interactive HTML5 2D-canvas 3D perspective renderer for multi-space memory graphs. */
-export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraph3DProps): JSX.Element {
+export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraphProps): JSX.Element {
   const t = useT()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const cameraRef = useRef<Camera3D>({ ...DEFAULT_CAMERA })
   const projectedRef = useRef<ProjectedNode[]>([])
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; lastX: number; lastY: number; moved: boolean } | null>(null)
   const skipNextClickRef = useRef(false)
-  const animRef = useRef<number | null>(null)
   const drawRef = useRef<() => void>(() => undefined)
   const [hoveredId, setHoveredId] = useState<string | undefined>(undefined)
   const [dragging, setDragging] = useState(false)
@@ -314,14 +310,6 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraph3DPro
     [props.graph, props.selectedId],
   )
   const layout = useMemo(() => compute3DLayout(visibleNodes, visibleEdges), [visibleNodes, visibleEdges])
-  const nodeById = useMemo(() => new Map(visibleNodes.map(node => [graphNodeKey(node), node])), [visibleNodes])
-
-  const cancelAnimation = useCallback(() => {
-    if (animRef.current !== null && typeof window.cancelAnimationFrame === 'function') {
-      window.cancelAnimationFrame(animRef.current)
-    }
-    animRef.current = null
-  }, [])
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current
@@ -347,24 +335,6 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraph3DPro
     ctx.clearRect(0, 0, width, height)
     ctx.fillStyle = palette.bg
     ctx.fillRect(0, 0, width, height)
-
-    if (!quiet) {
-      ctx.save()
-      ctx.strokeStyle = palette.line
-      ctx.lineWidth = 0.75
-      ctx.globalAlpha = 0.45
-      for (const radiusFactor of [0.45, 0.85]) {
-        const center = project3DPoint({ x: 0, y: 0, z: 0 }, cam, width, height)
-        if (center !== undefined) {
-          const rx = SPHERE_RADIUS * radiusFactor * center.scale
-          const ry = Math.max(12, rx * Math.abs(Math.sin(cam.pitch)) * 0.72 + 12)
-          ctx.beginPath()
-          ctx.ellipse(center.sx, center.sy, rx, ry, 0, 0, Math.PI * 2)
-          ctx.stroke()
-        }
-      }
-      ctx.restore()
-    }
 
     const projectedById = new Map<string, ProjectedNode>()
     const projectedList: ProjectedNode[] = []
@@ -420,9 +390,15 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraph3DPro
       ctx.save()
       ctx.globalAlpha = dimmed ? 0.32 : depthAlpha
 
-      if (isSelected || isHovered || graphNodeKind(node) === 'space') {
+      if (isSelected || isHovered || graphNodeKind(node) !== 'memory') {
         ctx.beginPath()
-        ctx.arc(sx, sy, radius + (isSelected ? 5 : 3.5), 0, Math.PI * 2)
+        const halo = radius + (isSelected ? 5 : 3.5)
+        const kind = graphNodeKind(node)
+        if (kind === 'space') ctx.roundRect(sx - halo, sy - halo * 0.8, halo * 2, halo * 1.6, 5)
+        else if (kind === 'entity') {
+          ctx.moveTo(sx, sy - halo); ctx.lineTo(sx + halo, sy)
+          ctx.lineTo(sx, sy + halo); ctx.lineTo(sx - halo, sy); ctx.closePath()
+        } else ctx.arc(sx, sy, halo, 0, Math.PI * 2)
         ctx.strokeStyle = color
         ctx.lineWidth = isSelected ? 2 : 1.25
         ctx.globalAlpha = dimmed ? 0.25 : (isSelected ? 0.95 : 0.52)
@@ -431,11 +407,11 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraph3DPro
 
       ctx.globalAlpha = dimmed ? 0.35 : depthAlpha
       ctx.beginPath()
-      ctx.arc(sx, sy, radius, 0, Math.PI * 2)
+      ctx.arc(sx, sy, graphNodeKind(node) === 'memory' ? radius : radius * 0.5, 0, Math.PI * 2)
       ctx.fillStyle = color
       ctx.fill()
 
-      const showLabel = isSelected || isHovered || (!quiet && (sparse || graphNodeKind(node) === 'space' || (focusId !== undefined && isNeighbor)))
+      const showLabel = isSelected || isHovered || (!quiet && (sparse || graphNodeKind(node) === 'space'))
       if (showLabel) {
         const label = short(node.content, graphNodeKind(node) === 'space' ? 24 : 20)
         ctx.font = `${isSelected || graphNodeKind(node) === 'space' ? 500 : 400} 11px system-ui, -apple-system, sans-serif`
@@ -464,11 +440,17 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraph3DPro
   }, [])
 
   useEffect(() => {
+    const observer = new MutationObserver(() => drawRef.current())
+    // DSH's ThemePresenter publishes its palette and token overrides on body.
+    observer.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme', 'style'] })
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
     const canvas = canvasRef.current
     if (canvas === null) return
     const onWheel = (event: WheelEvent) => {
       event.preventDefault()
-      cancelAnimation()
       cameraRef.current = {
         ...cameraRef.current,
         distance: clamp(cameraRef.current.distance + event.deltaY * 0.75, 340, 1650),
@@ -477,33 +459,13 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraph3DPro
     }
     canvas.addEventListener('wheel', onWheel, { passive: false })
     return () => canvas.removeEventListener('wheel', onWheel)
-  }, [cancelAnimation])
+  }, [])
 
-  useEffect(() => () => cancelAnimation(), [cancelAnimation])
-
-  const animateCameraTo = useCallback((target: Camera3D) => {
-    cancelAnimation()
-    const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true
-    if (prefersReducedMotion || typeof window.requestAnimationFrame !== 'function') {
-      cameraRef.current = { ...target }
-      drawRef.current()
-      return
-    }
-    const start = { ...cameraRef.current }
-    const startedAt = performance.now()
-    const tick = (time: number) => {
-      const progress = Math.min(1, (time - startedAt) / 480)
-      const eased = 1 - Math.pow(1 - progress, 3)
-      cameraRef.current = {
-        yaw: start.yaw + (target.yaw - start.yaw) * eased,
-        pitch: start.pitch + (target.pitch - start.pitch) * eased,
-        distance: start.distance + (target.distance - start.distance) * eased,
-      }
-      drawRef.current()
-      animRef.current = progress < 1 ? window.requestAnimationFrame(tick) : null
-    }
-    animRef.current = window.requestAnimationFrame(tick)
-  }, [cancelAnimation])
+  // Camera controls update once per interaction, without an animation loop.
+  const setCamera = (camera: Camera3D) => {
+    cameraRef.current = camera
+    drawRef.current()
+  }
 
   const canvasCoordinates = (clientX: number, clientY: number, element: HTMLCanvasElement) => {
     const rect = element.getBoundingClientRect()
@@ -519,8 +481,8 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraph3DPro
   }
 
   const onPointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
-    if (!Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return
-    cancelAnimation()
+    if (event.button !== 0 || !Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return
+    skipNextClickRef.current = false
     dragRef.current = { pointerId: event.pointerId ?? 0, startX: event.clientX, startY: event.clientY, lastX: event.clientX, lastY: event.clientY, moved: false }
     event.currentTarget.setPointerCapture?.(event.pointerId)
     setDragging(true)
@@ -555,8 +517,7 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraph3DPro
     dragRef.current = null
     setDragging(false)
     event.currentTarget.releasePointerCapture?.(event.pointerId)
-    skipNextClickRef.current = true
-    if (!drag.moved) pickAt(event.clientX, event.clientY, event.currentTarget)
+    skipNextClickRef.current = drag.moved
   }
 
   const onClick = (event: ReactMouseEvent<HTMLCanvasElement>) => {
@@ -565,14 +526,13 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraph3DPro
   }
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLCanvasElement>) => {
-    if (event.key === 'Escape') { props.onClearSelection?.(); return }
-    if (event.key === '0' || event.key === 'r' || event.key === 'R') { event.preventDefault(); animateCameraTo(DEFAULT_CAMERA); return }
+    if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); props.onClearSelection?.(); return }
+    if (event.key === '0' || event.key === 'r' || event.key === 'R') { event.preventDefault(); setCamera(DEFAULT_CAMERA); return }
     const yawStep = event.key === 'ArrowLeft' ? -0.18 : event.key === 'ArrowRight' ? 0.18 : 0
     const pitchStep = event.key === 'ArrowUp' ? -0.14 : event.key === 'ArrowDown' ? 0.14 : 0
     const zoomStep = event.key === '+' || event.key === '=' ? -120 : event.key === '-' || event.key === '_' ? 120 : 0
     if (yawStep === 0 && pitchStep === 0 && zoomStep === 0) return
     event.preventDefault()
-    cancelAnimation()
     cameraRef.current = {
       yaw: cameraRef.current.yaw + yawStep,
       pitch: clamp(cameraRef.current.pitch + pitchStep, -1.35, 1.35),
@@ -582,19 +542,17 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraph3DPro
   }
 
   const adjustZoom = (delta: number) => {
-    animateCameraTo({ ...cameraRef.current, distance: clamp(cameraRef.current.distance + delta, 340, 1650) })
+    setCamera({ ...cameraRef.current, distance: clamp(cameraRef.current.distance + delta, 340, 1650) })
   }
-
-  const hoveredNode = hoveredId === undefined ? undefined : nodeById.get(hoveredId)
 
   return (
     <>
       <div className={css.graphCanvasControls} role="toolbar" aria-label={t('graph.orbitAria')}>
-        <span role="status"><i />{hoveredNode !== undefined ? short(hoveredNode.content, 24) : t('graph.orbitHint')}</span>
+        <span>{t('graph.orbitHint')}</span>
         {props.onQuietChange !== undefined && <button type="button" aria-pressed={props.quiet === true} data-active={props.quiet || undefined} title={t('graph.quietHint')} onClick={() => props.onQuietChange?.(!props.quiet)}>{t('graph.quietAction')}</button>}
         <button type="button" aria-label={t('graph.zoomInAction')} onClick={() => adjustZoom(-160)}>+</button>
         <button type="button" aria-label={t('graph.zoomOutAction')} onClick={() => adjustZoom(160)}>−</button>
-        <button type="button" onClick={() => animateCameraTo(DEFAULT_CAMERA)}>{t('graph.resetViewAction')}</button>
+        <button type="button" onClick={() => setCamera(DEFAULT_CAMERA)}>{t('graph.resetViewAction')}</button>
       </div>
       <canvas
         ref={canvasRef}
