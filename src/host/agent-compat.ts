@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomUUID } from 'node:crypto'
-import type { HostAgent, HostAgentContext, HostAgentsService } from './dsh.ts'
+import type { HostAgent, HostAgentContext, HostAgentsService, HostSessionEvent } from './dsh.ts'
+import { sessionEvents } from './session-events.ts'
 
 /** Cordis errors may be wrapped by the review coordinator. */
 export function isInactiveContextError(error: unknown): boolean {
@@ -68,6 +69,39 @@ export function isTaskRecord(id: string): boolean {
 export function titleTask(agent: HostAgent, title: string): void {
   const service = agent.ctx.get?.('sessionTitle') as { rename?(session: HostAgent['session'], title: string): unknown } | undefined
   service?.rename?.(agent.session, title)
+}
+
+/** Only our initial task label may be unpinned; a later user rename always wins. */
+export function watchTaskTitle(agent: HostAgent): () => unknown {
+  if (!/^mnemon-task-v1-[0-9a-f-]{36}$/.test(agent.id) || agent.session.header?.origin === 'subagent') return () => undefined
+  const service = agent.ctx.get?.('sessionTitle') as {
+    get?(session: HostAgent['session']): { eventSeq: number; title: string; source: { kind: string }; messageSeqs: readonly number[] } | undefined
+    refresh?(session: HostAgent['session']): Promise<unknown>
+  } | undefined
+  if (typeof service?.get !== 'function' || typeof service.refresh !== 'function') return () => undefined
+  let requested = false
+  return agent.ctx.on('session/event', ((session: HostAgent['session'], event: HostSessionEvent) => {
+    if (requested || session !== agent.session || event.type !== 'user/message') return
+    const source = event.data.source as { kind?: string } | undefined
+    const content = event.data.content as Array<{ type?: string; text?: string }> | undefined
+    if (source?.kind !== 'user' || !content?.some(block => block.type === 'text' && block.text?.trim())) return
+    requested = true
+    const current = service.get!(session)
+    if (current?.source.kind !== 'user' || current.messageSeqs.length !== 0 || !current.title.startsWith('Mnemon · ')) return
+    // Older versions called rename() too. Their first title is repairable without
+    // a migration, but only while no human input or subsequent title precedes it.
+    for (const recorded of sessionEvents(session, 0, current.eventSeq + 1)) {
+      if (recorded.type === 'user/message' && (recorded.data.source as { kind?: string } | undefined)?.kind === 'user') return
+      if (recorded.type !== 'session/title') continue
+      if (recorded.seq !== current.eventSeq) return
+      // The Host owns generation, fallback and cancellation on a concurrent manual
+      // rename. Title provider failure must not interrupt the conversation itself.
+      void Promise.resolve().then(() => {
+        if (contextIsActive(agent.ctx) && service.get!(session)?.eventSeq === current.eventSeq) return service.refresh!(session)
+      }).catch(() => undefined)
+      return
+    }
+  }) as never)
 }
 
 interface ReservedChild {

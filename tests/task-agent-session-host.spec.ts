@@ -524,6 +524,62 @@ it.skipIf(!activationTrees)('keeps a titled completed task outside conversation 
   await expectTaskVisibility(h, 1)
 })
 
+it.skipIf(!activationTrees).each([undefined, 'My shopping plan', 'Mnemon · Skills'])('uses a human topic after a skill task unless explicitly renamed (%s, issue 670)', async manualTitle => {
+  let target = ''
+  const h = await host(undefined, options => options.sessionId === target ? 'Noted.' : undefined)
+  target = await h.lifecycle.runSkillTask(h.f.workspace, new AbortController().signal, async agent => agent.id)
+  h.restartMnemon()
+  const task = await h.ctx.agents.resume({ resumeSessionId: SessionId(target), agentOptions: { provider: 'scripted', model: 'fixture' } })
+  const titles = h.ctx.get('sessionTitle') as {
+    get(session: unknown): { title: string; source: { kind: string } }
+    rename(session: unknown, title: string): void
+  }
+  try {
+    expect(titles.get(task.agent.session).title).toBe('Mnemon · Skills')
+    if (manualTitle !== undefined) titles.rename(task.agent.session, manualTitle)
+    // Automatic plugin messages do not take ownership of the task title.
+    task.agent.followup(createPluginMessage('Automatic maintenance reminder.', 'instructions') as never)
+    await task.agent.whenIdle()
+    expect(titles.get(task.agent.session).title).toBe(manualTitle ?? 'Mnemon · Skills')
+    task.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Help me choose a laptop for travel' }], source: { kind: 'user' } }))
+    await task.agent.whenIdle()
+    await vi.waitFor(() => expect(titles.get(task.agent.session)).toMatchObject({
+      title: manualTitle ?? 'Help me choose a laptop for travel',
+      source: { kind: manualTitle === undefined ? 'fallback' : 'user' },
+    }))
+    // No additional title generation or old task revival on a second user turn.
+    task.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Battery life matters most.' }], source: { kind: 'user' } }))
+    await task.agent.whenIdle()
+    expect(titles.get(task.agent.session).title).toBe(manualTitle ?? 'Help me choose a laptop for travel')
+    expect(h.lifecycle.snapshot()).toMatchObject({ activeAgents: 0 })
+  } finally { await task.dispose() }
+})
+
+it.skipIf(!activationTrees).each([false, true])('uses the Host title provider and preserves concurrent manual renames (%s, issue 670)', async renameDuringGeneration => {
+  let target = ''
+  const h = await host(undefined, options => options.sessionId === target ? 'Noted.' : undefined)
+  target = await h.lifecycle.runSkillTask(h.f.workspace, new AbortController().signal, async agent => agent.id)
+  const task = await h.ctx.agents.resume({ resumeSessionId: SessionId(target), agentOptions: { provider: 'scripted', model: 'fixture' } })
+  const titles = h.ctx.get('sessionTitle') as {
+    get(session: unknown): { title: string; source: { kind: string } }
+    rename(session: unknown, title: string): void
+    register(provider: object): () => void
+  }
+  const generate = vi.fn(async ({ messages, route }: { messages: Array<{ seq: number; text: string }>; route?: { provider: string; model: string } }) => {
+    expect(route).toEqual({ provider: 'scripted', model: 'fixture' })
+    expect(messages.map(message => message.text)).toEqual(['Help me choose a laptop for travel'])
+    if (renameDuringGeneration) titles.rename(task.agent.session, 'My chosen title')
+    return { title: 'Travel laptop comparison', messageSeqs: messages.map(message => message.seq) }
+  })
+  const stop = titles.register({ id: 'fixture-title', automatic: 'first-prompt', generate })
+  try {
+    task.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Help me choose a laptop for travel' }], source: { kind: 'user' } }))
+    await task.agent.whenIdle()
+    await vi.waitFor(() => expect(titles.get(task.agent.session).title).toBe(renameDuringGeneration ? 'My chosen title' : 'Travel laptop comparison'))
+    expect(generate).toHaveBeenCalledTimes(1)
+  } finally { stop(); await task.dispose() }
+})
+
 it.each(['root', 'child'] as const)('continues a completed %s task on a new user turn after Mnemon recreation', async kind => {
   const results: string[] = []
   let target = ''

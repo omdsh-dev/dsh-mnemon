@@ -1,4 +1,5 @@
 import { AgentMemoryTurn, openAgentTurn } from './agent-memory-turn.ts'
+import { watchTaskTitle } from './agent-compat.ts'
 import { findSessionEvent, sessionEvents } from './session-events.ts'
 import type { HostAgent, HostPreStepDecision, HostSession, HostSessionEvent, HostUserMessage, ToolExecution } from './dsh.ts'
 import { applyMemoryViewGuidance } from './guidance.ts'
@@ -60,6 +61,7 @@ export class TaskContinuation {
 
   start(): () => void {
     try {
+      this.stops.push(watchTaskTitle(this.agent))
       const guard = this.agent.ctx.tools?.guard?.(execution => this.guard(execution))
       if (typeof guard !== 'function') throw new Error('Task continuation requires a scoped memory tool guard')
       this.stops.push(guard as () => unknown)
