@@ -889,6 +889,16 @@ describe('Settings deep-linking, error banner placement, and reduced-motion poli
       expect(canvas.dataset.view).toBe('3d')
       vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 930, height: 520, right: 930, bottom: 520, x: 0, y: 0, toJSON: () => ({}) })
 
+      // The native selector exposes every visible node without pointer coordinates.
+      const picker = screen.getByRole('combobox', { name: t('graph.selectNodeAction') })
+      picker.focus()
+      expect(document.activeElement).toBe(picker)
+      fireEvent.change(picker, { target: { value: 'mem-1' } })
+      expect(onSelect).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'mem-1' }))
+      fireEvent.change(picker, { target: { value: '' } })
+      expect(onClearSelection).toHaveBeenCalledOnce()
+      onClearSelection.mockClear()
+
       // Clicking the center-anchored single space selects it cleanly; Escape clears selection.
       fireEvent.click(canvas, { clientX: 465, clientY: 260 })
       expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'space:work' }))
@@ -926,6 +936,8 @@ describe('Settings deep-linking, error banner placement, and reduced-motion poli
       expect(localStorage.getItem('dsh-mnemon:graph-view')).toBe('3d')
       await waitFor(() => expect(document.querySelector('canvas[data-view="3d"]')).not.toBeNull())
       expect(document.querySelector('svg[role="img"]')).toBeNull()
+      fireEvent.change(screen.getByRole('combobox', { name: t('graph.selectNodeAction') }), { target: { value: 'mem-1' } })
+      await waitFor(() => expect(within(screen.getByRole('complementary')).getByText('Use sqlite WAL mode')).toBeTruthy())
 
       cleanup()
       render(<MemorySpacesSourcePage page="spaces" sourceTypeId="memory-spaces" sourceInstanceKey="source:g3d" sourceInstances={[]} locale="en" management={{ sourceInstanceKey: 'source:g3d', revision: 'r1', read, mutate: vi.fn() }} />)

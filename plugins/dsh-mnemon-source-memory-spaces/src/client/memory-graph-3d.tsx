@@ -614,6 +614,24 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraph3DPro
         onPointerLeave={() => { if (dragRef.current === null) setHoveredId(undefined) }}
         onKeyDown={onKeyDown}
       />
+      <label className={css.graphNodePicker}>
+        {t('graph.selectNodeAction')}
+        <select
+          aria-label={t('graph.selectNodeAction')}
+          value={props.selectedId ?? ''}
+          disabled={visibleNodes.length === 0}
+          onChange={event => {
+            if (event.target.value === '') { props.onClearSelection?.(); return }
+            const selected = visibleNodes.find(node => graphNodeKey(node) === event.target.value)
+            if (selected !== undefined) props.onSelect(selected)
+          }}
+        >
+          <option value="">{t('graph.noNodeSelected')}</option>
+          {[...visibleNodes].sort((a, b) => graphNodeKey(a).localeCompare(graphNodeKey(b))).map(node => (
+            <option key={graphNodeKey(node)} value={graphNodeKey(node)}>{short(node.content, 80)}</option>
+          ))}
+        </select>
+      </label>
     </>
   )
 })
