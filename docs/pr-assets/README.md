@@ -12,6 +12,7 @@ For new evaluations, commit the reusable harness and workload generator to [`scr
 
 | Record / 记录 | Scope / 范围 |
 |---|---|
+| [v0.5.48 release acceptance](./release-v0.5.48/README.md) / [中文](./release-v0.5.48/README.zh-CN.md) | Web installation, upgrade from 0.5.47 and Runtime data retention through restart / 网页新装、从 0.5.47 升级与重启后的运行时记忆保留 |
 | [v0.5.47 release acceptance](./release-v0.5.47/README.md) / [中文](./release-v0.5.47/README.zh-CN.md) | Seven published Hosts: fresh install, retained-data upgrade and restart / 七个已发布宿主的新装、保留数据升级与重启 |
 | [v0.5.46 release acceptance](./release-v0.5.46/README.md) / [中文](./release-v0.5.46/README.zh-CN.md) | Seven published Hosts: fresh install, upgrade and retained data / 七个已发布 Host 的新装、升级与数据保留 |
 | [Runtime capacity failures](./issue-641-runtime-capacity-errors/README.md) / [中文](./issue-641-runtime-capacity-errors/README.zh-CN.md) | Serialized Source errors, bounded routing diagnostics and real save recovery / 序列化 Source 错误、有界路由诊断与真实保存恢复 |

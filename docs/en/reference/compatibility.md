@@ -6,7 +6,8 @@ The Starter pins a tested combination of official plugins. The table records ver
 
 | Component | Baseline | What is verified |
 |---|---|---|
-| DSH current RC | `0.2.2-rc.2` | Published npm `next` on 2026-11-11; RC1 remains a CI target. Full installed-Host tests and packed Starter installation/upgrade checks run on Node 24.22.2; the Host requires Node >=24.9.0. |
+| DSH 0.2.2 CI hosts | `0.2.2-rc.1`, `0.2.2-rc.2` | Installed-Host suites run on Node 24.22.2. DSH 0.2.2 requires Node >=24.9.0. |
+| DSH 0.2.2 release checks | `0.2.2-rc.3`, `0.2.2-rc.4` | v0.5.48 verified Web installation, upgrade and data retention on both versions and ran the installed-Host suite on rc.4. [Release acceptance](../../pr-assets/release-v0.5.48/README.md) |
 | Inspected DSH source snapshot | `fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159` | Separate Node 24 verification against the unmodified source build, including live-model WebUI tasks. This identifies one master commit, not every source build or alpha. See [activation-owned Host evidence](../../pr-assets/dsh-master-agents/README.md). |
 | DSH development baseline | `0.2.1-rc.5` | Pinned development dependencies and an installed-Host CI target on Node 22.19. |
 | DSH earlier supported hosts | `0.2.0-rc.2`, `0.2.1-rc.3` | CI runs every root test against these installed packages. See [DSH 0.2.0 and 0.2.1](#dsh-020-and-021) for version differences; the supported range still admits 0.2.1-rc.1 and rc.2. |
@@ -15,7 +16,7 @@ The Starter pins a tested combination of official plugins. The table records ver
 | Mnemon Native CLI | `0.2.9`; embedding model checks require `0.2.13+` | Opt-in tests against a real CLI and disposable data; install the CLI separately. Older versions retain their other commands, but Test status asks for an upgrade because their availability fields only establish provider reachability |
 | Third-party Providers | Adapter contracts and fixtures | Does not establish live cloud-account conformance or upstream availability |
 
-DSH 0.2.2 support targets the official published **0.2.2-rc.1 and 0.2.2-rc.2**. Alpha builds are no longer compatibility or CI targets; users on alpha should upgrade to the published RC. The broad manifest range is an installation gate, not a promise of alpha support. [Earlier isolated alpha Host evidence](../../pr-assets/issue-554-alpha-host/README.md) is retained as a historical record only.
+For the 0.2.2 line, use an officially published release candidate listed above. Alpha builds are no longer compatibility or CI targets; users on alpha should upgrade to the published RC. The broad manifest range is an installation gate, not a promise of alpha support. [Earlier isolated alpha Host evidence](../../pr-assets/issue-554-alpha-host/README.md) is retained as a historical record only.
 
 DSH 0.2.1-rc.3 and the current RC target fetch the official API-key model directory over the network. The task Agent model selector allows that Provider up to six seconds, covering DSH's default five-second request budget; other Providers retain their three-second bound. This changes directory loading only, not model selection, inference timeouts or saved configuration.
 
