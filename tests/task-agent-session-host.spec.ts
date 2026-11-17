@@ -744,7 +744,28 @@ it('first human steer receives fresh View guidance after an automatic first step
   } finally { stop(); await task.dispose() }
 }, 30_000)
 
-it('archives finished task shells on completion and archives legacy shells on startup sweep without blocking resume (issue 472)', async () => {
+it('retains a task conversation after the user continues it and keeps it unarchived', async () => {
+  let target = ''
+  const h = await host(undefined, options => options.sessionId === target ? 'Shopping advice.' : undefined)
+  const saved = await h.lifecycle.superviseTask('', CANDIDATE, undefined, h.f.workspace)
+  target = saved.sessionId
+  const resumed = await h.ctx.agents.resume({ resumeSessionId: SessionId(target), agentOptions: { provider: 'scripted', model: 'fixture' } })
+  resumed.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Help me choose a new laptop.' }], source: { kind: 'user' } }))
+  await resumed.agent.whenIdle()
+  await resumed.dispose()
+  const archived: string[] = []
+  h.ctx.provide('workspaceRegistry', {
+    list: () => [{ sessionIds: [target] }],
+    get archivedSessionIds() { return archived },
+    archiveSession: async (id: string) => { archived.push(id) },
+  })
+  h.restartMnemon()
+  await new Promise(resolve => setTimeout(resolve, 20))
+  expect(archived).not.toContain(target)
+}, 30_000)
+
+
+it('archives newly finished task shells, preserving historical and explicitly restored sessions (issue 472)', async () => {
   const h = await host()
   const archived: string[] = []
   const sessionIds = ['plain', 'mnemon-task-v1-stale-shell']
@@ -768,13 +789,18 @@ it('archives finished task shells on completion and archives legacy shells on st
     },
   })
   h.restartMnemon()
-  await vi.waitFor(() => expect(archived).toContain('mnemon-task-v1-stale-shell'))
+  await new Promise(resolve => setTimeout(resolve, 20))
+  expect(archived).not.toContain('mnemon-task-v1-stale-shell')
   expect(archived).not.toContain('plain')
 
   const saved = await h.lifecycle.superviseTask('', CANDIDATE, undefined, h.f.workspace)
   expect(saved.sessionId).toMatch(/^mnemon-task-v1-/)
   expect(archived).toContain(saved.sessionId)
-  expect(sessionIds.concat(saved.sessionId).filter(id => id !== 'plain' && !archived.includes(id))).toEqual([])
+  // Restoring an archived task is a user choice; restarting must not undo it.
+  archived.splice(archived.indexOf(saved.sessionId), 1)
+  h.restartMnemon()
+  await new Promise(resolve => setTimeout(resolve, 20))
+  expect(archived).not.toContain(saved.sessionId)
   const resumed = await h.ctx.agents.resume({ resumeSessionId: SessionId(saved.sessionId), agentOptions: { provider: 'scripted', model: 'fixture' } })
   await resumed.dispose()
 }, 30_000)

@@ -18,7 +18,7 @@ import type { RuntimeMemoryMutation } from 'dsh-mnemon-source-runtime/contracts'
 import type { DocumentMutation } from 'dsh-mnemon-source-documents/contracts'
 import { delegatedTaskLine, IdleReviewError, markAutomaticReviewSignal, MnemonSubagentCoordinator, type IsolatedReviewRequest } from './subagent.ts'
 import { attachContinuationTurns } from './continuation-turn.ts'
-import { archiveTaskSession, sweepUnarchivedTaskSessions } from './task-session-cleanup.ts'
+import { archiveTaskSession } from './task-session-cleanup.ts'
 import { scoreReviewActivity } from './review-activity.ts'
 import { idleReviewBlockReason } from './review-tools.ts'
 import { TurnActivityProjection, type TurnMemoryActivity, type TurnMemoryActivitySnapshot } from './activity.ts'
@@ -902,8 +902,6 @@ export class MnemonLifecycle {
 
   start(): () => void {
     this.coordinator.setIsolatedReviewRunner?.(request => this.runIsolatedReview(request))
-    const sweepController = new AbortController()
-    void sweepUnarchivedTaskSessions(this.ctx, this.taskAgentIds, sweepController.signal).catch(() => {})
     // DSH creates a new Agent for startup, resume, clear and compaction alike.
     const stopChanged = this.runtimeSource?.onChanged?.(() => {
       for (const policy of this.workspacePolicies.values()) policy.update()
@@ -916,7 +914,6 @@ export class MnemonLifecycle {
     for (const agent of this.ctx.agents.list?.() ?? []) if (contextIsActive(agent.ctx)) this.watchWorkspacePolicy(agent)
     for (const agent of rootAgents(this.ctx.agents, this.ctx.subagents)) this.install(agent, 'adopted')
     return () => {
-      sweepController.abort()
       this.coordinator.setIsolatedReviewRunner?.(undefined)
       stopChanged?.()
       stopCreated()
@@ -1276,7 +1273,7 @@ export class MnemonLifecycle {
       if (handle !== undefined) {
         try { await handle.dispose() } catch (error) { if (failure === undefined) throw error }
       }
-      await archiveTaskSession(this.ctx, sessionId)
+      await archiveTaskSession(this.ctx, sessionId, handle?.agent.session)
       this.taskAgentIds.delete(sessionId)
     }
   }
@@ -1639,6 +1636,7 @@ export class MnemonLifecycle {
     this.taskAgentIds.add(request.sessionId)
     let handle: HostAgentHandle | undefined
     let stopContinuation: (() => void) | undefined
+    const taskMessageId = `mnemon-review-${randomUUID()}`
     let disposeMemoryTurn: (() => unknown) | undefined
     let stopPersona: (() => unknown) | undefined
     const removeAbortListener = (() => {
@@ -1696,7 +1694,7 @@ export class MnemonLifecycle {
       removeAbortListener.attach(child)
       const startSeq = child.session.seq ?? child.session.snapshotEvents().length
       child.followup({
-        id: `mnemon-review-${randomUUID()}`,
+        id: taskMessageId,
         role: 'user',
         source: { kind: 'user' },
         content: [{ type: 'text', text: `${delegatedTaskLine('review')}\n${request.prompt}` }],
@@ -1727,7 +1725,7 @@ export class MnemonLifecycle {
       if (handle !== undefined) {
         try { await handle.dispose() } finally {
           disposeMemoryTurn?.()
-          await archiveTaskSession(this.ctx, request.sessionId)
+          await archiveTaskSession(this.ctx, request.sessionId, handle.agent.session, taskMessageId)
           this.taskAgentIds.delete(request.sessionId)
         }
       } else {
