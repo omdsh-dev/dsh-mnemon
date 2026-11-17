@@ -1,4 +1,4 @@
-import { findSessionEvent, sessionEvents, sessionTurnEvents, SessionEventCursor } from './session-events.ts'
+import { findSessionEvent, sessionEvents, sessionLength, sessionTurnEvents, SessionEventCursor } from './session-events.ts'
 import { randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
@@ -16,7 +16,9 @@ import type {
 import type { Insight, RememberRequest, SearchRequest } from 'dsh-mnemon-source-memory-spaces/contracts'
 import type { RuntimeMemoryMutation } from 'dsh-mnemon-source-runtime/contracts'
 import type { DocumentMutation } from 'dsh-mnemon-source-documents/contracts'
-import { IdleReviewError, MnemonSubagentCoordinator } from './subagent.ts'
+import { delegatedTaskLine, IdleReviewError, MnemonSubagentCoordinator, type IsolatedReviewRequest } from './subagent.ts'
+import { attachContinuationTurns } from './continuation-turn.ts'
+import { archiveTaskSession } from './task-session-cleanup.ts'
 import { scoreReviewActivity } from './review-activity.ts'
 import { idleReviewBlockReason } from './review-tools.ts'
 import { TurnActivityProjection, type TurnMemoryActivity, type TurnMemoryActivitySnapshot } from './activity.ts'
@@ -897,6 +899,7 @@ export class MnemonLifecycle {
   }
 
   start(): () => void {
+    this.coordinator.setIsolatedReviewRunner?.(request => this.runIsolatedReview(request))
     // DSH creates a new Agent for startup, resume, clear and compaction alike.
     const stopChanged = this.runtimeSource?.onChanged?.(() => {
       for (const policy of this.workspacePolicies.values()) policy.update()
@@ -909,6 +912,7 @@ export class MnemonLifecycle {
     for (const agent of this.ctx.agents.list?.() ?? []) if (contextIsActive(agent.ctx)) this.watchWorkspacePolicy(agent)
     for (const agent of rootAgents(this.ctx.agents, this.ctx.subagents)) this.install(agent, 'adopted')
     return () => {
+      this.coordinator.setIsolatedReviewRunner?.(undefined)
       stopChanged?.()
       stopCreated()
       for (const dispose of [...this.children.values()].reverse()) dispose()
@@ -1265,6 +1269,7 @@ export class MnemonLifecycle {
       if (handle !== undefined) {
         try { await handle.dispose() } catch (error) { if (failure === undefined) throw error }
       }
+      await archiveTaskSession(this.ctx, sessionId, handle?.agent.session)
       this.taskAgentIds.delete(sessionId)
     }
   }
@@ -1505,21 +1510,25 @@ export class MnemonLifecycle {
     // A lineage string alone is not authority. Orphans get no model Recall pin.
     if (runtime === undefined || parent === undefined || parent === agent || !contextIsActive(agent.ctx) || !contextIsActive(parent.ctx)) return
     this.coordinator.inheritTaskContinuation(parent, agent)
+    const delegation = this.delegatedMemoryFor(agent, parent, runtime)
+    this.attachChildMemoryTurn(agent, runtime, delegation)
+  }
+
+  private delegatedMemoryFor(agent: HostAgent, parent: HostAgent, runtime: AgentRuntimeSource): DelegatedMemoryView | undefined {
+    if (runtime.memoryParticipation?.(agent).excluded === true) return undefined
     const parentMemory = this.memoryTurns.get(parent)
-    let delegation: DelegatedMemoryView | undefined
-    const excluded = runtime.memoryParticipation?.(agent).excluded === true
-    if (!excluded && parentMemory !== undefined) {
-      delegation = parentMemory.delegate()
-    } else if (!excluded) {
-      const graph = runtime.forAgent(parent)
-      const parentPin = graph.composableTurns.activeTurn(parent.id)
-      delegation = {
-        graph,
-        scope: parentPin?.scope ?? agentScope(parent, graph.config),
-        ...(parentPin === undefined ? {} : { viewId: parentPin.view.id }),
-      }
+    if (parentMemory !== undefined) return parentMemory.delegate()
+    const graph = runtime.forAgent(parent)
+    const parentPin = graph.composableTurns.activeTurn(parent.id)
+    return {
+      graph,
+      scope: parentPin?.scope ?? agentScope(parent, graph.config),
+      ...(parentPin === undefined ? {} : { viewId: parentPin.view.id }),
     }
-    let dispose: () => unknown
+  }
+
+  private attachChildMemoryTurn(agent: HostAgent, runtime: AgentRuntimeSource, delegation: DelegatedMemoryView | undefined): () => unknown {
+    let dispose: (() => unknown) | undefined
     dispose = agent.ctx.effect(() => {
       const memory = new AgentMemoryTurn(agent, runtime, delegation)
       this.memoryTurns.set(agent, memory)
@@ -1568,5 +1577,141 @@ export class MnemonLifecycle {
       return cleanup
     }, 'dsh-mnemon.child-memory()')
     this.children.set(agent, dispose)
+    return dispose
+  }
+
+  /**
+   * Run automatic `spawn` idle review in one standalone archived session so it
+   * never appends `subagent/catalog` rows to the conversation's Subagent list (#651)
+   * and never leaves unarchived shells in the workspace registry (#472).
+   */
+  private async runIsolatedReview(request: IsolatedReviewRequest): Promise<{ stopReason: string; detail?: string }> {
+    const runtime = this.runtimeSource
+    if (runtime === undefined) throw new Error('dsh-mnemon runtime source is unavailable')
+    const parent = request.parent
+    const permissionPresets = parent.ctx?.get?.('permissionPresets') as { current?(session: unknown): unknown } | undefined
+    const sandboxPolicy = parent.ctx?.get?.('sandboxPolicy') as { overrideOf?(session: unknown): unknown } | undefined
+    const approval = parent.ctx?.get?.('approval')
+    const presetValue = permissionPresets?.current?.(parent.session)
+    const delegatedPolicies = {
+      permissionPreset: presetValue === 'auto' || presetValue === 'danger-full-access' ? presetValue : undefined,
+      sandboxMode: sandboxPolicy?.overrideOf?.(parent.session),
+      approvalPolicy: approval === undefined ? undefined : 'never',
+    }
+    const fixed = this.config.taskAgentModel.mode === 'fixed'
+      ? this.taskAgentModelOptions(parent.id, parent.session.header?.cwd)
+      : undefined
+    const fallbackRoute = (() => {
+      const provider = parent.options?.provider?.trim()
+      const model = parent.options?.model?.trim()
+      const effort = parent.options?.reasoningEffort?.trim()
+      if (!provider || !model) return this.taskAgentModelOptions(parent.id, parent.session.header?.cwd)
+      return { provider, model, ...(effort ? { reasoningEffort: effort } : {}) }
+    })()
+    const baseRoute = fixed ?? this.conversationRoute(parent.id) ?? fallbackRoute
+    if (baseRoute === undefined) throw new Error('no default provider/model is available for an isolated idle review Agent')
+    const agentOptions = { ...baseRoute, maxTokens: request.maxTokens }
+    const requestedDir = parent.session.header?.cwd?.trim()
+    const dir = await this.taskAgentDirectories(requestedDir === '' ? undefined : requestedDir)
+    const presetsRaw = this.ctx.get('agentPresets') as (HostAgentPresetService & { composeFrom?(childCtx: unknown, parentCtx: unknown): void }) | undefined
+    const presets = presetService(presetsRaw)
+    const parentPreset = parent.session.header?.agentPreset
+    const presetId = parentPreset !== undefined && parentPreset.trim() !== ''
+      ? parentPreset
+      : presets === undefined ? undefined : (await presets.resolve()).id
+    const modern = activationOwned(this.ctx.subagents)
+    const meta = {
+      cwd: dir.cwd,
+      ...(modern ? {} : { origin: 'subagent' as const }),
+      ...(presetId === undefined ? {} : { agentPreset: presetId }),
+    }
+    const delegation = this.delegatedMemoryFor(parent, parent, runtime)
+    if (delegation === undefined) throw new Error('Memory view delegation is unavailable for isolated idle review')
+
+    this.taskAgentIds.add(request.sessionId)
+    let handle: HostAgentHandle | undefined
+    let stopContinuation: (() => void) | undefined
+    const taskMessageId = `mnemon-review-${randomUUID()}`
+    let disposeMemoryTurn: (() => unknown) | undefined
+    let stopPersona: (() => unknown) | undefined
+    const cancel = () => { try { handle?.agent.cancel({ kind: 'hook', reason: 'Idle review cancelled' }) } catch {} }
+    try {
+      handle = await this.ctx.agents.create({
+        sessionId: request.sessionId,
+        meta,
+        agentOptions,
+        signal: request.signal,
+        setup: async (agentCtx, child) => {
+          if (child === undefined) throw new Error('DSH omitted the created Agent during isolated idle review setup')
+          if (presets !== undefined && presetId !== undefined) await presets.mount(agentCtx, presetId)
+          else presetsRaw?.composeFrom?.(agentCtx, parent.ctx)
+          if (typeof child.session.append === 'function') {
+            if (delegatedPolicies.sandboxMode !== undefined) child.session.append('sandbox/mode', { mode: delegatedPolicies.sandboxMode, source: 'delegation' })
+            if (delegatedPolicies.approvalPolicy !== undefined) child.session.append('approval/policy', { policy: delegatedPolicies.approvalPolicy, source: 'delegation' })
+            if (delegatedPolicies.permissionPreset !== undefined) child.session.append('permission/preset', { preset: delegatedPolicies.permissionPreset })
+          }
+          const workingDirectory = (agentCtx.get?.('workingDirectory') ?? this.ctx.get('workingDirectory')) as WorkingDirectoryService | undefined
+          if (typeof workingDirectory?.set === 'function') await workingDirectory.set(child, dir.workFrom ?? dir.cwd, request.signal)
+          if (typeof agentCtx.systemPrompt?.section === 'function') {
+            agentCtx.systemPrompt.section({
+              name: 'deployment:persona-prefix',
+              order: agentCtx.systemPrompt.getSectionOrder?.('DEPLOYMENT_PERSONA_PREFIX') ?? 10,
+              text: request.persona,
+            })
+          } else if (typeof agentCtx.on === 'function') {
+            const stop = agentCtx.on('system-prompt/assemble', (async (assembly: PromptAssembly, _ctx: PromptAssemblyContext, next: () => Promise<PromptAssembly>) => {
+              const assembled = await next()
+              return { ...assembled, sections: [{ name: 'deployment:persona-prefix', text: request.persona }, ...assembled.sections] }
+            }) as never)
+            if (typeof stop === 'function') stopPersona = stop as () => unknown
+          }
+          agentCtx.tools?.restrict?.({ allow: request.allowedTools })
+          agentCtx.tools?.guard?.(request.guardTools)
+          stopContinuation = attachContinuationTurns(child)
+          disposeMemoryTurn = this.attachChildMemoryTurn(child, runtime, delegation)
+        },
+      })
+      const child = handle.agent
+      if (modern) titleTask(child, 'Mnemon · Idle review')
+      request.signal.addEventListener('abort', cancel, { once: true })
+      request.signal.throwIfAborted()
+      const startSeq = sessionLength(child.session)
+      child.followup({
+        id: taskMessageId,
+        role: 'user',
+        source: { kind: 'user' },
+        content: [{ type: 'text', text: `${delegatedTaskLine('review')}\n${request.prompt}` }],
+      })
+      let idleError: unknown
+      try {
+        await (child as HostAgent & { whenIdle(): Promise<void> }).whenIdle()
+      } catch (error) {
+        idleError = error
+      }
+      const turnEnd = findSessionEvent(child.session, event => event.type === 'turn/end', startSeq)?.event
+      const reason = turnEnd?.data?.reason as { kind?: unknown; error?: { message?: unknown } } | undefined
+      if (reason?.kind === 'error' || (idleError !== undefined && !request.signal.aborted && reason?.kind !== 'aborted')) {
+        const detail = typeof reason?.error?.message === 'string'
+          ? reason.error.message
+          : idleError instanceof Error ? idleError.message : idleError === undefined ? undefined : String(idleError)
+        return { stopReason: 'error', ...(detail === undefined ? {} : { detail }) }
+      }
+      if (request.signal.aborted || reason?.kind === 'aborted') return { stopReason: 'aborted' }
+      if (reason?.kind === 'max-tokens') return { stopReason: 'max-tokens' }
+      if (reason?.kind === 'refusal') return { stopReason: 'refusal' }
+      return { stopReason: 'completed' }
+    } finally {
+      request.signal.removeEventListener('abort', cancel)
+      stopPersona?.()
+      stopContinuation?.()
+      try {
+        try { await handle?.dispose() } finally {
+          disposeMemoryTurn?.()
+          if (handle !== undefined) await archiveTaskSession(this.ctx, request.sessionId, handle.agent.session, taskMessageId)
+        }
+      } finally {
+        this.taskAgentIds.delete(request.sessionId)
+      }
+    }
   }
 }

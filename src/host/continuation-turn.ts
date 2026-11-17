@@ -88,6 +88,11 @@ function continueAfterRefusal(agent: HostAgent): Array<() => unknown> {
   ]
 }
 
+export function attachContinuationTurns(agent: HostAgent): () => void {
+  const stops = continueAfterRefusal(agent)
+  return () => { for (const stop of stops.splice(0)) stop() }
+}
+
 /**
  * Start one delegated child and attach the refusal recovery while DSH
  * publishes it, before its first step. Async context attributes concurrent
