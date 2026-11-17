@@ -1,10 +1,11 @@
 import { parse } from 'yaml'
-import type { SkillInvocation } from './contracts.ts'
+import { MAX_SKILL_BYTES, type SkillInvocation } from './contracts.ts'
+
+export { MAX_SKILL_BYTES } from './contracts.ts'
 
 /** DSH's skill name rule, shared by the registry and the filesystem provider. */
 export const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u
 export const MAX_SKILL_NAME = 64
-export const MAX_SKILL_BYTES = 64 * 1024
 
 export function isSkillName(value: string): boolean {
   return value.length <= MAX_SKILL_NAME && SKILL_NAME.test(value)
@@ -111,7 +112,8 @@ export function withInvocation(raw: string, invocation: SkillInvocation): string
 
 /** Validate content about to be written as one skill named `name`. */
 export function validateSkillContent(content: string, name: string): ParsedSkill {
-  if (Buffer.byteLength(content, 'utf8') > MAX_SKILL_BYTES) throw new Error(`SKILL.md is too large (max ${MAX_SKILL_BYTES} bytes)`)
+  const bytes = Buffer.byteLength(content, 'utf8')
+  if (bytes > MAX_SKILL_BYTES) throw new Error(`SKILL.md is too large (max ${MAX_SKILL_BYTES} bytes); got ${bytes} UTF-8 bytes. For a bundle, move detailed examples/tables into references/ and link them from SKILL.md. For a single .md skill, shorten it in place without adding supporting files. Preserve required steps and information.`)
   const parsed = parseSkill(content)
   if ('problem' in parsed) throw new Error('SKILL.md would not load in DSH: ' + parsed.problem)
   if (parsed.skill.name !== name) throw new Error(`SKILL.md names "${parsed.skill.name}", not "${name}"`)
