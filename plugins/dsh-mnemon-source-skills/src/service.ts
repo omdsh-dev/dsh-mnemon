@@ -15,11 +15,11 @@ import {
   type SkillDraft, type SkillDraftFileChange, type SkillOrigin, type SkillResolution, type SkillResourceFile, type SkillRootKind, type SkillSuggestion, type SkillSummary, type SkillVersion, type SkillVersionReason, type SkillsOverview, type Trajectory, type TrajectorySummary, type TrashEntry, type TrashRestoreInput, type TrashRestorePreview,
 } from './contracts.ts'
 import { activeSkill, catalogFingerprint, findSkill, readCatalog, readSkillDocument, requireWritableRoot, requireWritableSkill, rootPath, sha256, type SkillRootOptions } from './catalog.ts'
-import { applyBundleFileChanges, extractConcreteBundleReferences, prepareDraftFileChanges, readBundleResourceState, readSkillResourceFiles } from './bundle-files.ts'
+import { snapshotResourcePreview, snapshotBundleFiles, changedBundleSnapshot, restoreBundleFiles, applyBundleFileChanges, extractConcreteBundleReferences, prepareDraftFileChanges, readBundleResourceState, readSkillResourceFiles } from './bundle-files.ts'
 import { legacySuggestionWorkspace, skillOrigin, validOrigin } from './identity.ts'
 import { isSkillName, setFrontmatterKey, skillTemplate, validateSkillContent, withInvocation } from './frontmatter.ts'
 import { admitReview, expireSuggestions, OPEN_STATUSES, policyFrom, similarCase, trajectorySummary } from './policy.ts'
-import { entryExists, MAX_CASES_PER_SKILL, MAX_VERSIONS_PER_SKILL, SkillsStore, writeFileAtomic, type EvalsFile, type LedgerFile, type RegistryRecord } from './store.ts'
+import { entryExists, MAX_CASES_PER_SKILL, MAX_VERSIONS_PER_SKILL, SkillsStore, writeFileAtomic, type SkillBundleSnapshot, type EvalsFile, type LedgerFile, type RegistryRecord } from './store.ts'
 import {
   bundledOfficialRegistry, defaultFetcher, fetchSkillDocument, fetchSkillFiles, indexedParts, isDiscoveryIndex, isPluginMarketplace, listSkillFiles, loadDiscovery,
   loadJson, loadRegistry, loadRepository, marketplaceRepository, OFFICIAL_REGISTRY_ID, OFFICIAL_REGISTRY_URL, parseDiscovery, parseRegistry, REGISTRY_REFRESH_MS,
@@ -418,11 +418,11 @@ export class SkillsService {
     reason: SkillVersionReason,
     previous: string | undefined,
     links: { suggestionId?: string; draftId?: string; note?: string } = {},
-    bundles?: { previous?: Record<string, string>; current?: Record<string, string> },
+    bundles?: { previous?: SkillBundleSnapshot; current?: SkillBundleSnapshot },
   ): SkillVersion {
     const now = this.clock()
     const existing = ledger.versions.filter(version => version.skillKey === skillKey)
-    const make = (body: string, why: SkillVersionReason, extra: typeof links, offset: number, bundleFiles?: Record<string, string>): SkillVersion => {
+    const make = (body: string, why: SkillVersionReason, extra: typeof links, offset: number, bundleFiles?: SkillBundleSnapshot): SkillVersion => {
       const hash = sha256(body)
       const version: SkillVersion = {
         id: `${(now.getTime() + offset).toString(36)}-${hash.slice(0, 8)}`, skillKey, hash, bytes: Buffer.byteLength(body, 'utf8'), reason: why,
@@ -434,8 +434,8 @@ export class SkillsService {
       return version
     }
     // The content as it was before the first write this Source made, so it can come back.
-    if (existing.length === 0 && previous !== undefined && (sha256(previous) !== sha256(content) || bundles?.previous !== undefined)) {
-      make(previous, 'original', {}, 0, bundles?.previous)
+    if (previous !== undefined && (bundles?.previous !== undefined || (existing.length === 0 && sha256(previous) !== sha256(content)))) {
+      make(previous, existing.length === 0 ? 'original' : 'edit', {}, 0, bundles?.previous)
     }
     const version = make(content, reason, links, 1, bundles?.current)
     const forSkill = ledger.versions.filter(candidate => candidate.skillKey === skillKey)
@@ -666,15 +666,11 @@ export class SkillsService {
       validateSkillContent(content, skill.name)
       const targetResources = skill.layout === 'bundle' ? this.store.versionResources(version) : undefined
       const previousResources = skill.layout === 'bundle' && targetResources !== undefined
-        ? bundleTextMap(readSkillResourceFiles({ path, layout: 'bundle' }))
+        ? snapshotBundleFiles(dirname(path))
         : undefined
-      let bundleApplied: { rollback(): void } | undefined
+      let bundleApplied: ReturnType<typeof restoreBundleFiles> | undefined
       if (targetResources !== undefined && skill.layout === 'bundle') {
-        const changes: SkillDraftFileChange[] = [
-          ...Object.entries(targetResources).map(([relPath, body]) => ({ path: relPath, action: 'upsert' as const, content: body })),
-          ...Object.keys(previousResources ?? {}).filter(relPath => !Object.hasOwn(targetResources, relPath)).map(relPath => ({ path: relPath, action: 'delete' as const })),
-        ]
-        bundleApplied = changes.length === 0 ? undefined : applyBundleFileChanges(dirname(path), changes)
+        bundleApplied = restoreBundleFiles(dirname(path), targetResources, previousResources!)
       }
       try {
         this.writeSkillFile(path, content)
@@ -684,7 +680,7 @@ export class SkillsService {
         throw error
       }
       this.recordVersion(ledger, skill.key, content, 'restore', previous, { note: version.id },
-        targetResources === undefined ? undefined : { ...(previousResources === undefined ? {} : { previous: previousResources }), current: targetResources })
+        targetResources === undefined ? undefined : { ...(previousResources === undefined ? {} : { previous: previousResources }), current: bundleApplied!.snapshot })
       this.store.saveLedger(ledger)
       return findSkill(this.catalog(workspace), skill.key)
     })
@@ -1053,7 +1049,7 @@ export class SkillsService {
       let key: string
       let previous: string | undefined
       let updated: SkillSummary | undefined
-      let versionBundles: { previous?: Record<string, string>; current?: Record<string, string> } | undefined
+      let versionBundles: { previous?: SkillBundleSnapshot; current?: SkillBundleSnapshot } | undefined
       const hasFileChanges = (draft.files?.length ?? 0) > 0
       if (draft.action === 'update') {
         const original = this.draftOriginal(ledger, draft)
@@ -1070,7 +1066,8 @@ export class SkillsService {
         if (hasFileChanges && base.layout !== 'bundle') {
           throw new Error(`${base.name} is a single .md file and cannot adopt supporting files`)
         }
-        const previousResources = hasFileChanges ? bundleTextMap(readSkillResourceFiles({ path, layout: 'bundle' })) : undefined
+        const previousResources = hasFileChanges ? snapshotBundleFiles(dirname(path)) : undefined
+        const currentResources = previousResources === undefined ? undefined : changedBundleSnapshot(previousResources, draft.files!)
         let bundleApplied: { rollback(): void } | undefined
         if (hasFileChanges) bundleApplied = applyBundleFileChanges(dirname(path), draft.files!)
         try {
@@ -1084,7 +1081,7 @@ export class SkillsService {
           this.invalidateCatalog()
           versionBundles = {
             ...(previousResources === undefined ? {} : { previous: previousResources }),
-            current: bundleTextMap(readSkillResourceFiles({ path, layout: 'bundle' })),
+            current: currentResources!,
           }
         }
         key = base.key
@@ -1114,7 +1111,7 @@ export class SkillsService {
             throw error
           }
           this.invalidateCatalog()
-          versionBundles = { current: bundleTextMap(readSkillResourceFiles({ path: skillPath, layout: 'bundle' })) }
+          versionBundles = { current: changedBundleSnapshot({ version: 1, complete: true, files: {} }, draft.files!) }
         }
         key = `${root}:${draft.skillName}`
       }
@@ -1237,7 +1234,7 @@ export class SkillsService {
         const version = this.store.ledger().versions.find(candidate => candidate.id === target.versionId)
         if (version === undefined) throw new Error('version not found: ' + target.versionId)
         const versionResources = this.store.versionResources(version)
-        const resources = versionResources === undefined ? [] : toResourceList(versionResources)
+        const resources = versionResources === undefined ? [] : snapshotResourcePreview(versionResources)
         return {
           content: this.store.versionContent(version),
           ...(resources.length === 0 ? {} : { resources }),

@@ -1,10 +1,13 @@
 import { readBudget, type BudgetEntry } from './auto-adoption-budget.ts'
 import { createHash, randomUUID } from 'node:crypto'
-import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import type {
   BacktestRun, DraftPreferences, EvalCase, MarketInstall, MarketRegistryFile, MarketSourceKind, ModelRoute, ReviewLogEntry, SkillDraft, SkillRootKind, SkillSuggestion, SkillVersion, Trajectory, TrajectorySummary, TrashEntry,
 } from './contracts.ts'
+
+export const MAX_BUNDLE_SNAPSHOT_BYTES = 16 * 1024 * 1024
+export const MAX_BUNDLE_SNAPSHOT_FILES = 1024
 
 export const MAX_TRAJECTORIES = 100
 export const MAX_REVIEWS = 200
@@ -129,6 +132,7 @@ export function writeFileAtomic(path: string, content: string | Buffer, options?
   const temporary = `${path}.${process.pid}-${randomUUID()}.tmp`
   try {
     writeFileSync(temporary, content, options?.fileMode === undefined ? undefined : { mode: options.fileMode })
+    if (options?.fileMode !== undefined) chmodSync(temporary, options.fileMode)
     renameSync(temporary, path)
   } finally {
     rmSync(temporary, { force: true })
@@ -337,19 +341,42 @@ export class SkillsStore {
     this.writeAtomic(this.path(join('versions', keyDirectory(version.skillKey), `${version.id}.md`)), content)
   }
 
-  versionResources(version: SkillVersion): Record<string, string> | undefined {
-    const raw = object(this.readJson(join('versions', keyDirectory(version.skillKey), `${version.id}.files.json`)))
-    if (raw === undefined) return undefined
-    const out: Record<string, string> = {}
-    for (const [key, value] of Object.entries(raw)) if (typeof value === 'string') out[key] = value
-    return out
+  versionResources(version: SkillVersion): SkillBundleSnapshot | undefined {
+    const name = join('versions', keyDirectory(version.skillKey), `${version.id}.bundle.json`)
+    const raw = this.readJson(name)
+    if (raw !== undefined) {
+      const value = object(raw)
+      const files = object(value?.files)
+      if (value?.version !== 1 || value.complete !== true || files === undefined) throw new Error('Invalid supporting-file version snapshot')
+      if (Object.keys(files).length > MAX_BUNDLE_SNAPSHOT_FILES) throw new Error('Supporting-file snapshot is too large')
+      let bytes = 0
+      for (const entry of Object.values(files)) {
+        const file = object(entry)
+        if (typeof file?.base64 !== 'string' || Buffer.from(file.base64, 'base64').toString('base64') !== file.base64
+          || typeof file.mode !== 'number' || !Number.isInteger(file.mode) || file.mode < 0 || file.mode > 0o777) throw new Error('Invalid supporting-file version entry')
+        bytes += Buffer.from(file.base64, 'base64').length
+        if (bytes > MAX_BUNDLE_SNAPSHOT_BYTES) throw new Error('Supporting-file snapshot is too large')
+      }
+      return value as unknown as SkillBundleSnapshot
+    }
+    if (version.bundleSnapshot === true) throw new Error('Supporting-file version snapshot is missing; no files were restored')
+    const legacy = object(this.readJson(join('versions', keyDirectory(version.skillKey), `${version.id}.files.json`)))
+    if (legacy === undefined) return undefined
+    const files: SkillBundleSnapshot['files'] = Object.create(null)
+    for (const [path, content] of Object.entries(legacy)) {
+      if (typeof content !== 'string') throw new Error('Invalid legacy supporting-file version')
+      files[path] = { base64: Buffer.from(content, 'utf8').toString('base64') }
+    }
+    return { version: 1, complete: false, files }
   }
 
-  saveVersionResources(version: SkillVersion, files: Record<string, string>): void {
-    this.writeJson(join('versions', keyDirectory(version.skillKey), `${version.id}.files.json`), files)
+  saveVersionResources(version: SkillVersion, files: SkillBundleSnapshot): void {
+    this.writeJson(join('versions', keyDirectory(version.skillKey), `${version.id}.bundle.json`), files)
+    version.bundleSnapshot = true
   }
 
   deleteVersionContent(version: SkillVersion): void {
+    rmSync(this.path(join('versions', keyDirectory(version.skillKey), `${version.id}.bundle.json`)), { force: true })
     rmSync(this.path(join('versions', keyDirectory(version.skillKey), `${version.id}.md`)), { force: true })
     rmSync(this.path(join('versions', keyDirectory(version.skillKey), `${version.id}.files.json`)), { force: true })
   }
@@ -472,4 +499,11 @@ export class SkillsStore {
     rmSync(this.path(join('trash', entry.id)), { recursive: true, force: true })
     rmSync(this.path(join('trash', `${entry.id}.json`)), { force: true })
   }
+}
+
+/** Version-only byte snapshots; never sent as model evidence. */
+export interface SkillBundleSnapshot {
+  version: 1
+  complete: boolean
+  files: Record<string, { base64: string; mode?: number }>
 }

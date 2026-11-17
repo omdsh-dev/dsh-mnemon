@@ -107,6 +107,8 @@ export interface SkillDocument extends SkillSummary {
 export type SkillVersionReason = 'original' | 'edit' | 'evolution' | 'restore' | 'invocation' | 'create' | 'install'
 
 export interface SkillVersion {
+  /** A complete byte snapshot must exist when restoring supporting files. */
+  bundleSnapshot?: boolean
   id: string
   skillKey: string
   hash: string

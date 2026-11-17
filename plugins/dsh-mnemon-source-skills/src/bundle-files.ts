@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto'
 import { lstatSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
+import type { SkillBundleSnapshot } from './store.ts'
 import type { SkillDraftFileChange, SkillResourceFile, SkillSummary } from './contracts.ts'
-import { writeFileAtomic } from './store.ts'
+import { MAX_BUNDLE_SNAPSHOT_BYTES, MAX_BUNDLE_SNAPSHOT_FILES, writeFileAtomic } from './store.ts'
+export { MAX_BUNDLE_SNAPSHOT_BYTES } from './store.ts'
 
 export const MAX_DRAFT_FILE_OPS = 20
 export const MAX_RESOURCE_TEXT_BYTES = 32 * 1024
@@ -129,6 +131,76 @@ export function readBundleResourceState(bundleDir: string, relPath: string): { e
   return { exists: true, hash, ...(buf.includes(0) || buf.byteLength > MAX_DRAFT_RESOURCE_FILE_BYTES ? {} : { content: buf.toString('utf8') }) }
 }
 
+/** Complete recoverable bytes for editable paths, independent of model preview limits. */
+
+export function snapshotBundleFiles(bundleDir: string): SkillBundleSnapshot {
+  const root = realpathSync(bundleDir)
+  const files: SkillBundleSnapshot['files'] = Object.create(null)
+  let bytes = 0
+  const visit = (directory: string, depth: number) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (entry.name.startsWith('.') || entry.isSymbolicLink()) continue
+      const full = join(directory, entry.name)
+      if (entry.isDirectory()) { if (depth < 3) visit(full, depth + 1); continue }
+      if (!entry.isFile()) continue
+      const path = relative(root, full).replaceAll('\\', '/')
+      if (path.toLowerCase() === 'skill.md') continue
+      // Names the editing API cannot accept remain outside its restore scope.
+      try { if (normalizeBundleRelativePath(path) !== path) continue } catch { continue }
+      const info = lstatSync(full)
+      if (!info.isFile() || info.isSymbolicLink() || !insideDirectory(root, realpathSync(full))) throw new Error('supporting file changed during backup: ' + path)
+      bytes += info.size
+      if (bytes > MAX_BUNDLE_SNAPSHOT_BYTES || Object.keys(files).length >= MAX_BUNDLE_SNAPSHOT_FILES) throw new Error('Skill supporting-file backup exceeds 16 MiB or 1024 files; no files were changed')
+      const data = readFileSync(full)
+      if (data.length !== info.size) throw new Error('supporting file changed during backup: ' + path)
+      files[path] = { base64: data.toString('base64'), mode: info.mode & 0o777 }
+    }
+  }
+  visit(root, 0)
+  return { version: 1, complete: true, files }
+}
+
+export function changedBundleSnapshot(before: SkillBundleSnapshot, changes: readonly SkillDraftFileChange[]): SkillBundleSnapshot {
+  const files: SkillBundleSnapshot['files'] = Object.assign(Object.create(null), before.files)
+  for (const change of changes) {
+    const path = normalizeBundleRelativePath(change.path)
+    if (change.action === 'delete') delete files[path]
+    else files[path] = { base64: Buffer.from(change.content ?? '', 'utf8').toString('base64'), mode: files[path]?.mode ?? 0o600 }
+  }
+  return boundedSnapshot(files)
+}
+
+function boundedSnapshot(files: SkillBundleSnapshot['files']): SkillBundleSnapshot {
+  const bytes = Object.values(files).reduce((total, file) => total + Buffer.from(file.base64, 'base64').length, 0)
+  if (bytes > MAX_BUNDLE_SNAPSHOT_BYTES || Object.keys(files).length > MAX_BUNDLE_SNAPSHOT_FILES) throw new Error('Skill supporting-file backup exceeds 16 MiB or 1024 files; no files were changed')
+  return { version: 1, complete: true, files }
+}
+
+export function restoreBundleFiles(bundleDir: string, target: SkillBundleSnapshot, current: SkillBundleSnapshot): { rollback(): void; snapshot: SkillBundleSnapshot } {
+  const files: SkillBundleSnapshot['files'] = Object.assign(Object.create(null), target.complete ? {} : current.files)
+  for (const [path, file] of Object.entries(target.files)) files[path] = { ...file, mode: file.mode ?? current.files[path]?.mode ?? 0o600 }
+  const snapshot = boundedSnapshot(files)
+  const changes: BundleFileMutation[] = Object.entries(target.files).map(([path, file]) => ({
+    path, action: 'upsert', content: Buffer.from(file.base64, 'base64'), ...(file.mode === undefined ? {} : { mode: file.mode }),
+  }))
+  // Legacy text previews never described a complete bundle: absence is not a deletion.
+  if (target.complete) for (const path of Object.keys(current.files)) {
+    if (!Object.hasOwn(target.files, path)) changes.push({ path, action: 'delete' })
+  }
+  return { ...applyBundleFileChanges(bundleDir, changes), snapshot }
+}
+
+/** Backtests get the same bounded text preview, never persisted binary/base64 data. */
+export function snapshotResourcePreview(snapshot: SkillBundleSnapshot): Array<{ path: string; content: string }> {
+  let bytes = 0
+  return Object.keys(snapshot.files).sort((a, b) => a.localeCompare(b)).slice(0, MAX_READ_RESOURCES).flatMap(path => {
+    const data = Buffer.from(snapshot.files[path]!.base64, 'base64')
+    if (data.includes(0) || data.length > MAX_RESOURCE_TEXT_BYTES || bytes + data.length > MAX_TOTAL_RESOURCE_TEXT_BYTES) return []
+    bytes += data.length
+    return [{ path, content: data.toString('utf8') }]
+  })
+}
+
 const REFERENCE_LINK = /\[[^\]]*\]\(([^)\s]+)\)/gu
 const REFERENCE_CODE = /`((?:\.\/)?(?:references|scripts|assets)\/[^`\s]+)`/gu
 const TEMPLATE_HINT = /[*<>{}$[\]]|\.\.\./u
@@ -225,32 +297,36 @@ export function prepareDraftFileChanges(input: {
 }
 
 /** Apply supporting-file upserts/deletes inside `bundleDir` and return a rollback handle. */
-export function applyBundleFileChanges(bundleDir: string, changes: readonly SkillDraftFileChange[]): { rollback: () => void } {
+type BundleFileMutation = Omit<SkillDraftFileChange, 'content'> & { content?: string | Buffer; mode?: number }
+
+export function applyBundleFileChanges(bundleDir: string, changes: readonly BundleFileMutation[]): { rollback: () => void } {
   const bundleReal = realpathSync(resolve(bundleDir))
   const targets = changes.map(change => {
     const path = normalizeBundleRelativePath(change.path)
     const full = ensureContainedParents(bundleReal, path)
     let previous: Buffer | null = null
+    let mode = 0o600
     try {
       const info = lstatSync(full)
       if (info.isSymbolicLink() || !info.isFile()) throw new Error(`refusing non-regular supporting file: ${path}`)
       const fileReal = realpathSync(full)
       if (!insideDirectory(bundleReal, fileReal)) throw new Error(`supporting path escapes skill directory: ${path}`)
       previous = readFileSync(fileReal)
+      mode = info.mode & 0o777
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
-    return { change, full, previous }
+    return { change, full, previous, mode }
   })
 
-  const applied: Array<{ full: string; previous: Buffer | null }> = []
+  const applied: Array<{ full: string; previous: Buffer | null; mode: number }> = []
   const rollback = () => {
     for (const entry of applied.reverse()) {
       try {
         if (entry.previous === null) rmSync(entry.full, { force: true })
         else {
           mkdirSync(dirname(entry.full), { recursive: true, mode: 0o700 })
-          writeFileAtomic(entry.full, entry.previous, { dirMode: 0o700, fileMode: 0o600 })
+          writeFileAtomic(entry.full, entry.previous, { dirMode: 0o700, fileMode: entry.mode })
         }
       } catch {
         // Best-effort rollback of prior files in reverse order.
@@ -259,11 +335,11 @@ export function applyBundleFileChanges(bundleDir: string, changes: readonly Skil
   }
 
   try {
-    for (const { change, full, previous } of targets) {
+    for (const { change, full, previous, mode } of targets) {
       if (change.action === 'delete') {
         if (previous !== null) {
           rmSync(full, { force: true })
-          applied.push({ full, previous })
+          applied.push({ full, previous, mode })
           let parent = dirname(full)
           while (parent !== bundleReal && insideDirectory(bundleReal, parent)) {
             if (readdirSync(parent).length > 0) break
@@ -273,8 +349,8 @@ export function applyBundleFileChanges(bundleDir: string, changes: readonly Skil
         }
       } else {
         mkdirSync(dirname(full), { recursive: true, mode: 0o700 })
-        writeFileAtomic(full, change.content ?? '', { dirMode: 0o700, fileMode: 0o600 })
-        applied.push({ full, previous })
+        writeFileAtomic(full, change.content ?? '', { dirMode: 0o700, fileMode: change.mode ?? mode })
+        applied.push({ full, previous, mode })
       }
     }
   } catch (error) {
