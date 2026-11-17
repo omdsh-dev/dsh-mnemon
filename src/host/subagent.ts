@@ -131,19 +131,11 @@ export interface IsolatedReviewRequest {
   persona: string
   allowedTools: string[]
   maxTokens: number
-  route?: ModelRoute
   signal: AbortSignal
   guardTools: (execution: ToolExecution) => string | undefined
 }
 
 export type IsolatedReviewRunner = (request: IsolatedReviewRequest) => Promise<{ stopReason: string; detail?: string }>
-
-const automaticReviewSignals = new WeakSet<AbortSignal>()
-
-/** Mark one automatic idle-review signal so spawn mode avoids writing `subagent/catalog` onto the conversation (#651). */
-export function markAutomaticReviewSignal(signal: AbortSignal): void {
-  automaticReviewSignals.add(signal)
-}
 
 export class IdleReviewError extends Error {
   constructor(message: string, readonly review: IdleReviewFailure, options?: ErrorOptions) {
@@ -965,7 +957,8 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
       const prompt = preferred === 'fork' ? 'Review the inherited completed checkpoint now.' : reviewCheckpoint(parent.session, config.maxContextChars)
       const base = reviewPersona(tools.includes('mnemon_runtime_memory'))
       const persona = preferred === 'fork' ? base : base.replaceAll('inherited', 'supplied bounded')
-      const standalone = preferred === 'spawn' && automaticReviewSignals.has(signal) && this.isolatedReviewRunner !== undefined
+      // Only the automatic lifecycle supplies admission; manual reviews retain DSH's normal delegation.
+      const standalone = preferred === 'spawn' && admission !== undefined && this.isolatedReviewRunner !== undefined
       const { provider, runId, result } = standalone
         ? await this.runStandaloneReview(parent, prompt, tools, WRITE_SCHEMA, execution.signal, persona, { terminalTools: writers }, admission)
         : await this.delegate(parent, 'review', 'Mnemon idle checkpoint review', prompt, tools, WRITE_SCHEMA, execution.signal, preferred, persona, { terminalTools: writers }, undefined, undefined, admission)

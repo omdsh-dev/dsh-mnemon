@@ -1,4 +1,4 @@
-import { findSessionEvent, sessionEvents, sessionTurnEvents, SessionEventCursor } from './session-events.ts'
+import { findSessionEvent, sessionEvents, sessionLength, sessionTurnEvents, SessionEventCursor } from './session-events.ts'
 import { randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import { resolve } from 'node:path'
@@ -16,7 +16,7 @@ import type {
 import type { Insight, RememberRequest, SearchRequest } from 'dsh-mnemon-source-memory-spaces/contracts'
 import type { RuntimeMemoryMutation } from 'dsh-mnemon-source-runtime/contracts'
 import type { DocumentMutation } from 'dsh-mnemon-source-documents/contracts'
-import { delegatedTaskLine, IdleReviewError, markAutomaticReviewSignal, MnemonSubagentCoordinator, type IsolatedReviewRequest } from './subagent.ts'
+import { delegatedTaskLine, IdleReviewError, MnemonSubagentCoordinator, type IsolatedReviewRequest } from './subagent.ts'
 import { attachContinuationTurns } from './continuation-turn.ts'
 import { archiveTaskSession } from './task-session-cleanup.ts'
 import { scoreReviewActivity } from './review-activity.ts'
@@ -683,7 +683,6 @@ class MnemonAgentLifecycle {
         }
       }
       this.mark('review')
-      markAutomaticReviewSignal(controller.signal)
       const result = await this.coordinator.review(this.agent, controller.signal, () => {
         if (epoch !== this.reviewEpoch || policy !== this.reviewPolicy() || !this.idleReviewAllowed(true)) {
           controller.abort(new Error('Automatic idle review admission changed'))
@@ -851,7 +850,6 @@ export class MnemonLifecycle {
   /** Bounded process-local replay fence for finalized-message write actions: the latest text per message. */
   private readonly supervisedWritebacks = new Map<string, { content: string; result: Promise<SupervisedWritebackResult> }>()
   private skillEvolution: SkillEvolution | undefined
-  private readonly isolatedReviewMemoryDisposers = new Map<HostAgent, () => unknown>()
 
   constructor(
     private readonly ctx: HostContextShape,
@@ -918,11 +916,9 @@ export class MnemonLifecycle {
       stopChanged?.()
       stopCreated()
       for (const dispose of [...this.children.values()].reverse()) dispose()
-      for (const dispose of [...this.isolatedReviewMemoryDisposers.values()].reverse()) dispose()
       for (const owner of [...this.owners.values()].reverse()) owner.dispose()
       for (const policy of [...this.workspacePolicies.values()].reverse()) policy.dispose()
       this.children.clear()
-      this.isolatedReviewMemoryDisposers.clear()
       this.owners.clear()
       this.memoryTurns.clear()
     }
@@ -1515,7 +1511,7 @@ export class MnemonLifecycle {
     if (runtime === undefined || parent === undefined || parent === agent || !contextIsActive(agent.ctx) || !contextIsActive(parent.ctx)) return
     this.coordinator.inheritTaskContinuation(parent, agent)
     const delegation = this.delegatedMemoryFor(agent, parent, runtime)
-    this.attachChildMemoryTurn(agent, runtime, delegation, true)
+    this.attachChildMemoryTurn(agent, runtime, delegation)
   }
 
   private delegatedMemoryFor(agent: HostAgent, parent: HostAgent, runtime: AgentRuntimeSource): DelegatedMemoryView | undefined {
@@ -1531,8 +1527,7 @@ export class MnemonLifecycle {
     }
   }
 
-  private attachChildMemoryTurn(agent: HostAgent, runtime: AgentRuntimeSource, delegation: DelegatedMemoryView | undefined, trackChild: boolean): () => unknown {
-    const targetMap = trackChild ? this.children : this.isolatedReviewMemoryDisposers
+  private attachChildMemoryTurn(agent: HostAgent, runtime: AgentRuntimeSource, delegation: DelegatedMemoryView | undefined): () => unknown {
     let dispose: (() => unknown) | undefined
     dispose = agent.ctx.effect(() => {
       const memory = new AgentMemoryTurn(agent, runtime, delegation)
@@ -1544,7 +1539,7 @@ export class MnemonLifecycle {
         } finally {
           try { memory.dispose() } finally {
             if (this.memoryTurns.get(agent) === memory) this.memoryTurns.delete(agent)
-            if (targetMap.get(agent) === dispose) targetMap.delete(agent)
+            if (this.children.get(agent) === dispose) this.children.delete(agent)
           }
         }
       }
@@ -1581,7 +1576,7 @@ export class MnemonLifecycle {
       }
       return cleanup
     }, 'dsh-mnemon.child-memory()')
-    targetMap.set(agent, dispose)
+    this.children.set(agent, dispose)
     return dispose
   }
 
@@ -1639,20 +1634,7 @@ export class MnemonLifecycle {
     const taskMessageId = `mnemon-review-${randomUUID()}`
     let disposeMemoryTurn: (() => unknown) | undefined
     let stopPersona: (() => unknown) | undefined
-    const removeAbortListener = (() => {
-      let listener: (() => void) | undefined
-      return {
-        attach(child: HostAgent) {
-          listener = () => { try { child.cancel({ kind: 'hook', reason: 'Idle review cancelled' }) } catch {} }
-          request.signal.addEventListener('abort', listener, { once: true })
-          if (request.signal.aborted) listener()
-        },
-        detach() {
-          if (listener !== undefined) request.signal.removeEventListener('abort', listener)
-          listener = undefined
-        },
-      }
-    })()
+    const cancel = () => { try { handle?.agent.cancel({ kind: 'hook', reason: 'Idle review cancelled' }) } catch {} }
     try {
       handle = await this.ctx.agents.create({
         sessionId: request.sessionId,
@@ -1686,13 +1668,14 @@ export class MnemonLifecycle {
           agentCtx.tools?.restrict?.({ allow: request.allowedTools })
           agentCtx.tools?.guard?.(request.guardTools)
           stopContinuation = attachContinuationTurns(child)
-          disposeMemoryTurn = this.attachChildMemoryTurn(child, runtime, delegation, false)
+          disposeMemoryTurn = this.attachChildMemoryTurn(child, runtime, delegation)
         },
       })
       const child = handle.agent
       if (modern) titleTask(child, 'Mnemon · Idle review')
-      removeAbortListener.attach(child)
-      const startSeq = child.session.seq ?? child.session.snapshotEvents().length
+      request.signal.addEventListener('abort', cancel, { once: true })
+      request.signal.throwIfAborted()
+      const startSeq = sessionLength(child.session)
       child.followup({
         id: taskMessageId,
         role: 'user',
@@ -1705,8 +1688,7 @@ export class MnemonLifecycle {
       } catch (error) {
         idleError = error
       }
-      const events = child.session.snapshotEvents(startSeq)
-      const turnEnd = [...events].reverse().find(event => event.type === 'turn/end')
+      const turnEnd = findSessionEvent(child.session, event => event.type === 'turn/end', startSeq)?.event
       const reason = turnEnd?.data?.reason as { kind?: unknown; error?: { message?: unknown } } | undefined
       if (reason?.kind === 'error' || (idleError !== undefined && !request.signal.aborted && reason?.kind !== 'aborted')) {
         const detail = typeof reason?.error?.message === 'string'
@@ -1719,17 +1701,15 @@ export class MnemonLifecycle {
       if (reason?.kind === 'refusal') return { stopReason: 'refusal' }
       return { stopReason: 'completed' }
     } finally {
-      removeAbortListener.detach()
+      request.signal.removeEventListener('abort', cancel)
       stopPersona?.()
       stopContinuation?.()
-      if (handle !== undefined) {
-        try { await handle.dispose() } finally {
+      try {
+        try { await handle?.dispose() } finally {
           disposeMemoryTurn?.()
-          await archiveTaskSession(this.ctx, request.sessionId, handle.agent.session, taskMessageId)
-          this.taskAgentIds.delete(request.sessionId)
+          if (handle !== undefined) await archiveTaskSession(this.ctx, request.sessionId, handle.agent.session, taskMessageId)
         }
-      } else {
-        disposeMemoryTurn?.()
+      } finally {
         this.taskAgentIds.delete(request.sessionId)
       }
     }
