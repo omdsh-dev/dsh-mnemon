@@ -312,6 +312,14 @@ mnemon-bundle (cordis:group): pending (waiting for service: mnemonStarterReady)
 - 桌面版会把它当作启动失败，显示插件恢复页。点击**卸载此插件并继续检测**（记忆数据保留），应用启动后按[第 3 步](#3-安装并启用-dsh-mnemon)重新添加 dsh-mnemon。重新安装 0.5.18 或 0.5.19 时，这个开关仍是关闭的（它保存在 profile 中），因此接着按上一条打开它。
 - 0.5.20 起没有单独的开关：组件组自己准备依赖解析，残留的设置会被忽略。提示中的名称是 `dsh-mnemon/bundle` 时，说明刚更新到 0.5.20 而没有重启，DSH 仍在运行旧的组件组，完全退出 DSH 再重新打开即可。
 
+### 轻量上下文启用后立即关闭，或设置无法应用
+
+Starter 已包含轻量上下文、范围限制、自动记录和通用策略。再单独安装这些策略包，可能让同一个组件被两个 bundle 重复插入，出现加载后立即 `disposed` 或开关无法保存。启动时，Mnemon 会合并这种未修改的默认策略 bundle：只保留 Starter 的组件入口，保留安装包、用户 patch、启用状态和配置，不修改记忆数据。自定义过的策略 bundle 不会自动移除；只读 profile 会记录恢复提示。
+
+若使用旧版插件或自定义 bundle，请在 DSH 插件页保留 `dsh-mnemon` bundle，关闭重复选择的独立策略 bundle（例如 `dsh-mnemon-strategy-light-context`），然后重启，通过 Mnemon 的组件开关启用轻量上下文。不要卸载策略包或删除记忆目录。
+
+轻量上下文是投影增强，`memoryView.strategyTypeId` 应选择实际的主策略，例如 `general` 或 `default-three-tier`。如果手动配置成了 `light-context`，请在“主策略”中选回要使用的主策略，再开启轻量上下文；保留原有 `entries` 和 `maxProjectionCharacters` 配置。启用增强不需要关闭主策略。
+
 ### 升级 DSH
 
 先在现有的 DSH 中更新 dsh-mnemon，再升级 DSH，然后再更新一次 dsh-mnemon。否则 DSH 0.2 启动时会停用 0.5.19 之前的版本，记忆数据不受影响，更新插件后即可恢复；在 DSH 0.2.1 上，0.5.30 及更早的版本仍会运行，但记忆子 Agent 与**检查版本 → 更新**都会失败。每个较早的 DSH 应保留哪个版本，见[更早的 DSH](../reference/compatibility.md#更早的-dsh)；具体步骤，包括**检查版本 → 更新**停在 `already-installed` 时如何更新一次，见[升级顺序](../reference/compatibility.md#升级顺序)。

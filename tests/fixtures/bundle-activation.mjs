@@ -27,13 +27,19 @@ const configPath = join(profileDir, 'cordis.yml')
 const settings = process.argv[3] === 'settings'
 const isolated = process.argv.includes('--isolated')
 const otherBundle = process.argv.includes('--other-bundle')
-const selected = isolated ? (otherBundle ? ['fixture-other'] : []) : ['dsh-mnemon']
+const standaloneLight = process.argv.includes('--standalone-light')
+const customLight = process.argv.includes('--custom-light')
+// An installation-owned real package wins bundle resolution on the pinned dev
+// Host. Use a fixture bundle alias; its component keeps the official id/module.
+const lightBundle = 'dsh-mnemon-strategy-fixture-light'
+const selected = isolated ? (otherBundle ? ['fixture-other'] : []) : ['dsh-mnemon', ...(standaloneLight ? [lightBundle] : [])]
+if (process.argv.includes('--light-first')) selected.reverse()
 const modules = isolated ? join(temporary, 'profiles/.generations/starter/node_modules') : join(profileDir, 'node_modules')
 const profile = { name: 'fixture', dir: profileDir, patchPath, installAnchor, cwd: temporary, home: temporary,
   startedBundles: selected, overlays: [], telemetryDisabledEnv: '1' }
 const state = { active: new Map(), configs: new Map() }
 let ctx
-try {
+async function verify() {
   await mkdir(profileDir, { recursive: true })
   const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
   const names = ['dsh-mnemon', ...Object.keys(manifest.dependencies).filter(name => name.startsWith('dsh-mnemon-'))]
@@ -81,10 +87,19 @@ export async function apply(ctx, config) {
   }
   if (otherBundle) await symlink(join(modules, 'fixture-other'), join(profileDir, 'node_modules/fixture-other'), process.platform === 'win32' ? 'junction' : 'dir')
   await writeFile(join(profileDir, 'node_modules/dsh-mnemon/cordis.patch.yml'), await readFile(join(root, 'cordis.patch.yml')))
-  await writeFile(join(profileDir, 'package.json'), JSON.stringify({ private: true, dependencies: { 'dsh-mnemon': '0.0.0', ...(otherBundle ? { 'fixture-other': '1.0.0' } : {}) }, dsh: { profile: { bundles: selected } } }))
+  if (standaloneLight) {
+    await mkdir(join(modules, lightBundle))
+    await writeFile(join(modules, lightBundle, 'package.json'), JSON.stringify({ name: lightBundle, version: '0.0.0', dsh: { bundle: { patch: './cordis.patch.yml' } } }))
+    await writeFile(join(modules, lightBundle, 'cordis.patch.yml'),
+      await readFile(join(root, 'plugins/dsh-mnemon-strategy-light-context/cordis.patch.yml'), 'utf8') + (customLight ? '      config:\n        maxProjectionCharacters: 1700\n' : ''))
+  }
+  const profileManifest = { private: true, description: 'Keep unrelated metadata', dependencies: { 'dsh-mnemon': '0.0.0', ...(otherBundle ? { 'fixture-other': '1.0.0' } : {}),
+    ...(standaloneLight ? { [lightBundle]: '0.0.0' } : {}) }, dsh: { profile: { bundles: selected } } }
+  await writeFile(join(profileDir, 'package.json'), JSON.stringify(profileManifest))
   // Keep the profile's Connection container independent from the Starter.
   await writeFile(configPath, '- id: connection\n  name: cordis:group\n  group: true\n  config: []\n')
   const retained = '# Operator comment\n- id: mnemon\n  config:\n    timeoutMs: 4321\n- id: mnemon-strategy-auto-capture\n  disabled: false\n- id: mnemon-source-documents\n  disabled: true\n'
+    + (standaloneLight ? '- id: mnemon-strategy-light-context\n  disabled: false\n  config:\n    maxProjectionCharacters: 700\n' : '')
   await writeFile(patchPath, retained)
   const patches = () => app.readProfilePatches('dsh', profile)
   const flatten = rows => rows.flatMap(row => [row, ...(row.group && Array.isArray(row.config) ? flatten(row.config) : [])])
@@ -128,7 +143,7 @@ export async function apply(ctx, config) {
   }
   const stop = async () => { await ctx?.fiber.dispose(); ctx = undefined; assert.equal(state.active.size, 0) }
   // The general main Strategy ships off until it is selected.
-  const enabledNames = names.filter(name => !['dsh-mnemon-source-documents', 'dsh-mnemon-strategy-general', 'dsh-mnemon-strategy-light-context', 'dsh-mnemon-strategy-scoped'].includes(name))
+  const enabledNames = names.filter(name => !['dsh-mnemon-source-documents', 'dsh-mnemon-strategy-general', ...(!standaloneLight || customLight ? ['dsh-mnemon-strategy-light-context'] : []), 'dsh-mnemon-strategy-scoped'].includes(name))
   const assertActive = expected => {
     assert.deepEqual([...state.active].sort(), expected.map(name => [name, 1]).sort())
     assert.equal([...ctx.loader.entries()].filter(entry => entry.options.id === 'mnemon-bundle').length, 1)
@@ -136,6 +151,7 @@ export async function apply(ctx, config) {
   const assertEnabled = () => {
     assertActive(enabledNames)
     assert.equal(state.configs.get('dsh-mnemon').timeoutMs, 4321)
+    if (standaloneLight && !customLight) assert.equal(state.configs.get('dsh-mnemon-strategy-light-context').maxProjectionCharacters, 700)
   }
   const assertRetained = async () => {
     const saved = await readFile(patchPath, 'utf8')
@@ -144,6 +160,16 @@ export async function apply(ctx, config) {
   }
   const reload = () => app.reconcileProfilePatches(ctx, patches(), 'dsh')
   await start()
+  if (standaloneLight) {
+    const persisted = JSON.parse(await readFile(join(profileDir, 'package.json'), 'utf8'))
+    assert.deepEqual(persisted, { ...profileManifest, dsh: { profile: { bundles: customLight ? selected : ['dsh-mnemon'] } } })
+    assert.equal(await readFile(patchPath, 'utf8'), retained, 'Normalization must preserve every user patch byte')
+    if (customLight) {
+      await stop()
+      console.log('Custom strategy bundle and user profile preserved.')
+      return
+    }
+  }
   if (isolated) {
     assert.equal(state.active.size, 0)
     let previousPackage
@@ -198,12 +224,14 @@ export async function apply(ctx, config) {
     }
     const core = plugins.find(entry => entry.moduleName === 'dsh-mnemon')
     assert.equal(core.patchId, 'mnemon')
-    for (const name of ['dsh-mnemon-source-runtime', 'dsh-mnemon-source-memory-spaces', 'dsh-mnemon-strategy-auto-capture']) {
+    for (const name of ['dsh-mnemon-source-runtime', 'dsh-mnemon-source-memory-spaces', 'dsh-mnemon-strategy-auto-capture', ...(standaloneLight && !customLight ? ['dsh-mnemon-strategy-light-context'] : [])]) {
       const component = plugins.find(entry => entry.moduleName === name)
       const children = name === 'dsh-mnemon-source-memory-spaces' ? names.filter(item => item.startsWith('dsh-mnemon-provider-')) : []
-      assert.equal((await manager.setPluginEnabled(component.entryId, false)).application, 'applied')
+      const disabled = await manager.setPluginEnabled(component.entryId, false)
+      assert.equal(disabled.application, 'applied', JSON.stringify({ name, disabled }))
       assertActive(enabledNames.filter(item => item !== name && !children.includes(item)))
-      assert.equal((await manager.setPluginEnabled(component.entryId, true)).application, 'applied')
+      const enabled = await manager.setPluginEnabled(component.entryId, true)
+      assert.equal(enabled.application, 'applied', JSON.stringify({ name, enabled }))
       assertEnabled()
     }
     for (const enabled of [false, true, false]) {
@@ -253,6 +281,9 @@ export async function apply(ctx, config) {
     message: 'unrecognized Loader tree carrier; use cordis:group or cordis:include for native child collection' }])
   console.log(JSON.stringify({ dsh, packages: names.length,
     components: 9, manager: Boolean(Manager), result: 'passed' }))
+}
+try {
+  await verify()
 } finally {
   await ctx?.fiber.dispose()
   await rm(temporary, { recursive: true, force: true })

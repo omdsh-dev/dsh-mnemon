@@ -50,6 +50,9 @@ jobs:
           plugins/dsh-mnemon-source-memory-spaces/tests/runner.spec.ts
           plugins/dsh-mnemon-source-memory-spaces/tests/process.spec.ts
 
+      - name: Test duplicate optional strategy bundles
+        run: pnpm exec vitest run tests/bundle-activation.spec.mjs -t "standalone bundle|custom configuration"
+
       - name: Verify real pnpm global shims outside the Desktop PATH
         run: pnpm run verify:windows-pnpm
 

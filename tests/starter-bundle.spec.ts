@@ -25,7 +25,7 @@ describe('the Starter component group', () => {
   })
 
   it('makes the dependency closure visible before the native group mounts its children', async () => {
-    const ctx = { loader: { builtins: { group: NativeGroup } } }
+    const ctx = { fiber: {}, loader: { builtins: { group: NativeGroup } } }
     const lifecycle = (new MnemonBundle(ctx as never, children) as unknown as Bundle)[init]()
     const disposer = lifecycle.next()
     await new Promise(resolve => setTimeout(resolve, 0))
