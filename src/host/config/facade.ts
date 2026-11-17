@@ -141,7 +141,10 @@ export class ProfileMnemonSettings implements HostSettingsService {
     this.owner = (ctx as unknown as { fiber?: ProfileFiber }).fiber
     this.editor = ctx.get('configEditor') as ProfileEditor | undefined
     const profile = ctx.get('profileContext') as { home?: string } | undefined
-    const root = (ctx as unknown as { root?: object }).root ?? ctx
+    // New Cordis stores root metadata under a global symbol; reading `.root`
+    // there is treated as an undeclared service. Older hosts still use `.root`.
+    const metadata = ctx as unknown as { [key: symbol]: object | undefined; root?: object }
+    const root = metadata[Symbol.for('cordis.root')] ?? metadata.root ?? ctx
     if (profile?.home !== undefined && existsSync(join(profile.home, 'settings.yaml'))) pendingNativeImports.add(root)
     this.nativeImportPending = pendingNativeImports.has(root)
     const owner = this.owner

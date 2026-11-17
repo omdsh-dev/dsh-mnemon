@@ -61,7 +61,7 @@ function writeOverride(disk: Files, config: Record<string, unknown>): void {
 }
 
 /** Real facade and files; only the published ConfigEditor/Forms boundary is mocked. */
-function host(disk: Files) {
+function host(disk: Files, symbolRoot = false) {
   const root = new Context()
   roots.push(root)
   const inherited = { timeoutMs: 10000, defaultRecallLimit: 10 }
@@ -120,7 +120,16 @@ function host(disk: Files) {
       Object.assign(child.fiber, { entry })
       child.fiber.config = Config(raw)
       entry.fiber = child.fiber
-      settings = new ProfileMnemonSettings(child as unknown as HostContextShape, child.fiber.config)
+      // New Cordis keeps root metadata under a symbol and rejects service-style
+      // reads of `root`. Retain the real Cordis lifecycle on both contracts.
+      const facadeContext = symbolRoot ? new Proxy(child, {
+        get(target, key) {
+          if (key === Symbol.for('cordis.root')) return root
+          if (key === 'root') throw new Error('cannot get property "root" without inject')
+          return Reflect.get(target, key)
+        },
+      }) : child
+      settings = new ProfileMnemonSettings(facadeContext as unknown as HostContextShape, child.fiber.config)
       settings.register('mnemon', Config, { applies: 'live', validate: resolveConfig })
       settings.register('mnemon-ui', InteractionConfig, { applies: 'live' })
       settings.register(viewNamespace, ViewSchema, { applies: 'live', validate: preferences })
@@ -432,7 +441,7 @@ describe('profile settings recovery from retained legacy YAML', () => {
     expect(readFileSync(disk.backup)).toEqual(originalBackup)
   })
 
-  it('keeps the native-import gate across remounts and recovers only in a new root', async () => {
+  it.each([false, true])('keeps the native-import gate across remounts and recovers only in a new root (symbol root: %s)', async symbolRoot => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const source = '# Original source, renamed only by the simulated native importer\n' + stringify({
       mnemon: { timeoutMs: 25000 }, 'mnemon-ui': { turnBar: false, saveAction: false },
@@ -440,7 +449,7 @@ describe('profile settings recovery from retained legacy YAML', () => {
     })
     const disk = files({ source })
     const originalPatch = readFileSync(disk.patch)
-    const f = host(disk)
+    const f = host(disk, symbolRoot)
     const first = await f.mount()
     await first.settings.importLegacy([documents])
     expect(f.editor.edit).not.toHaveBeenCalled()
@@ -460,7 +469,7 @@ describe('profile settings recovery from retained legacy YAML', () => {
     // Finish the native root-section import, then simulate a cold Host start.
     writeOverride(disk, { timeoutMs: 25000 })
     await f.unmount(remounted)
-    const restarted = host(disk)
+    const restarted = host(disk, symbolRoot)
     const recovered = await restarted.mount()
     await recovered.settings.importLegacy([documents])
     expect(restarted.editor.edit).toHaveBeenCalledTimes(1)
