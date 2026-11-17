@@ -2,6 +2,7 @@ import { findSessionEvent, reverseSessionEvents, sessionTurnEvents } from './ses
 import { SkillAutoAdoption, AutomaticSkillStop, hashSkillCases, hashSkillDraft } from './skill-auto-adoption.ts'
 import { accessSync, constants, statSync } from 'node:fs'
 import { dirname } from 'node:path'
+import { MAX_SKILL_BYTES } from 'dsh-mnemon-source-skills/contracts'
 import type {
   BacktestRun, DraftView, EvalCase, EvidencePack, ReviewLogEntry, ReviewRecordInput, ReviewRecordResult, RunTarget, SkillCatalog, SkillDocument, SkillDraft, SkillRootKind, SkillSuggestion, Trajectory,
   ModelRoute, DraftExpectation,
@@ -11,7 +12,7 @@ import type { ResolvedSkillsConfig, SkillActivitySnapshot, StorageScopeKind, Tur
 import {
   gradeCase, parseCases, parseExecution, parseSkillDraft, parseSkillReview, SKILL_CASES_PERSONA, SKILL_CASES_SCHEMA, SKILL_DRAFT_PERSONA, SKILL_DRAFT_SCHEMA,
   SKILL_EXECUTOR_PERSONA, SKILL_EXECUTOR_SCHEMA, SKILL_JUDGE_PERSONA, SKILL_JUDGE_SCHEMA, SKILL_REVIEW_PERSONA, SKILL_REVIEW_SCHEMA,
-  skillCasesPrompt, skillDraftPrompt, skillExecutorPrompt, skillJudgePrompt, skillReviewPrompt,
+  skillCasesPrompt, skillDraftPrompt, skillDraftSizeGuidance, skillExecutorPrompt, skillJudgePrompt, skillReviewPrompt,
 } from './skill-review.ts'
 import { captureTurn, redact, TrajectoryWindow, turnSkillUses, TurnSkillUseProjection } from './skill-trajectory.ts'
 import { SubagentStoppedError } from './subagent-errors.ts'
@@ -341,7 +342,7 @@ export class SkillEvolution {
         ...allowedTypes(),
         ...(title === undefined ? {} : { sessionTitle: title }), ...(workspace === undefined ? {} : { workspace }),
         steps, stats, score: score.score, threshold: score.threshold,
-        loaded, catalog: active.map(skill => ({ name: skill.name, description: skill.description })), caseTitles, openSuggestions,
+        loaded, catalog: active, caseTitles, openSuggestions,
       })
       const paused = { structured: { outcome: 'nothing', summary: 'Skill review was paused by the current settings.', suggestions: [] } }
       const types = allowedTypes()
@@ -529,7 +530,8 @@ export class SkillEvolution {
         signal.throwIfAborted()
         // One retry, told exactly why DSH would refuse the file.
         if (attempt > 0 || /changed while this draft/.test(message(error))) throw error
-        prompt += `\n\nYour previous SKILL.md was rejected: ${message(error)}. Return a corrected complete file and any supporting files.`
+        prompt += `\n\nYour previous SKILL.md was rejected: ${message(error)}. Return a corrected complete result.`
+        if (Buffer.byteLength(parsed.content, 'utf8') > MAX_SKILL_BYTES) prompt += `\n${skillDraftSizeGuidance(pack)}`
       }
     }
     signal.throwIfAborted()

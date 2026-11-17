@@ -97,6 +97,27 @@ describe('skill catalog', () => {
 })
 
 describe('skill writes', () => {
+  it.each(['bundle', 'flat'] as const)('rejects oversized %s edits with recovery guidance and preserves the UTF-8 byte boundary', async layout => {
+    const path = join(home, 'skills', ...(layout === 'bundle' ? ['pdf', 'SKILL.md'] : ['pdf.md']))
+    const prefix = skill('pdf')
+    const room = 65_536 - Buffer.byteLength(prefix)
+    const content = prefix + '字'.repeat(Math.floor(room / 3)) + 'x'.repeat(room % 3)
+    write(path, prefix)
+    const store = service()
+    const before = store.skill(workspace, 'user-dsh:pdf')
+    const saved = await store.saveSkill(workspace, { key: before.key, expectedHash: before.hash, content })
+    expect(saved.bytes).toBe(65_536)
+    expect(content.length).toBeLessThan(65_536)
+    const versions = store.versions(before.key)
+    await expect(store.saveSkill(workspace, { key: before.key, expectedHash: saved.hash, content: content + 'x' }))
+      .rejects.toThrow(/65537.*UTF-8.*references\/.*single.*\.md/s)
+    expect(readFileSync(path, 'utf8')).toBe(content)
+    expect(store.versions(before.key)).toEqual(versions)
+    expect(store.drafts()).toEqual([])
+    expect(existsSync(join(home, 'skills', 'pdf', 'references'))).toBe(false)
+    expect(store.skill(workspace, before.key).layout).toBe(layout)
+  })
+
   it('fences on the file hash and keeps the original and each edit as versions', async () => {
     const path = join(home, 'skills', 'pdf', 'SKILL.md')
     write(path, skill('pdf'))

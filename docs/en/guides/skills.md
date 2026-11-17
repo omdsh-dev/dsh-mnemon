@@ -36,6 +36,8 @@ The list groups every `SKILL.md` DSH can load by where it lives, in DSH's order 
 
 Every write is fenced by the file's hash, so a skill edited elsewhere in the meantime is not overwritten.
 
+`SKILL.md` writes must fit within 64 KiB (65,536 UTF-8 bytes, including frontmatter). An oversized manual save reports the actual size and leaves the existing file unchanged; it does not call a model or split files automatically. For a bundle, move detailed material into `references/` and keep links in `SKILL.md`. For a flat single `.md` skill, shorten redundant wording in place while preserving required steps and information.
+
 ### Trash
 
 **Trash** lists removed skills with their name, removal time, original location, bundle or single-file layout, and size. **Restore** returns a known entry to its recorded path, including its original project even when another workspace is selected. Older entries without a known location ask you to choose a root.
@@ -45,6 +47,8 @@ When the name is already taken, choose another name, explicitly confirm replacem
 **Delete** asks you to type the skill name. **Empty** has its own confirmation. Both permanently remove files; ordinary **Remove** keeps them recoverable.
 
 ### Evolution
+
+Reviews see full-file byte sizes and bundle/flat layout alongside the skill catalog, including when a content preview is truncated. Size alone does not bypass the conversation-evidence requirements. Draft generation states the same write limit from the start; an oversized result uses the existing single repair retry to request a shorter `SKILL.md` plus referenced detail files for bundles, or an in-place edit for flat skills. Draft review, backtesting and adoption rules remain unchanged. A model can still fail to produce a valid draft; no oversized file is written.
 
 The page follows drafts and backtests while they run, refreshes the cards again when they finish, and reloads when you return to the window or tab.
 

@@ -5,6 +5,9 @@
 
 import type { MarketSourceKind } from './source-kind.ts'
 
+/** UTF-8 byte ceiling for writing SKILL.md, including frontmatter. Discovery may read larger existing files. */
+export const MAX_SKILL_BYTES = 64 * 1024
+
 /** The DSH skill roots this Source reads and writes, in DSH's precedence order. */
 export type SkillRootKind = 'project-dsh' | 'project-agents' | 'user-dsh' | 'user-agents'
 export const SKILL_ROOT_KINDS: readonly SkillRootKind[] = ['project-dsh', 'project-agents', 'user-dsh', 'user-agents']

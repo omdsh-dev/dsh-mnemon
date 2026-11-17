@@ -450,6 +450,8 @@ describe('skill evolution in the Host', () => {
     expect(skillTask).toHaveBeenCalledTimes(1)
     expect(prompt).toContain('[2] turn 1 · skill loaded: release-notes (by the model)')
     expect(prompt).toContain('=== release-notes (user-dsh:')
+    const bytes = Buffer.byteLength(readFileSync(join(directory, 'dsh', 'skills', 'release-notes', 'SKILL.md'), 'utf8'))
+    expect(prompt).toContain(`- release-notes: Write release notes from a changelog. (SKILL.md=${bytes} UTF-8 bytes; layout=bundle)`)
     const [suggestion] = await source.read<SkillSuggestion[]>('suggestions')
     expect(suggestion).toMatchObject({ skillName: 'release-notes', action: 'update', status: 'pending', sourceSessionId: 'session-1', signals: ['correction'] })
     const trajectory = await source.read<Trajectory>('trajectory', { id: suggestion!.evidence[0]!.trajectoryId })
@@ -782,6 +784,91 @@ describe('skill evolution in the Host', () => {
     await global.mutate('draft-adopt', { id: next!.id })
     expect(readFileSync(path, 'utf8')).toContain('Include the release date')
     expect(readFileSync(join(directory, 'dsh', 'skills', 'release-notes', 'SKILL.md'), 'utf8')).not.toContain('Include the release date')
+  })
+
+  it('repairs an oversized bundle draft through references without writing until adoption', async () => {
+    config = { ...config, autoBacktest: false }
+    const file = join(directory, 'dsh', 'skills', 'release-notes', 'SKILL.md')
+    const header = readFileSync(file, 'utf8')
+    const details = '保留所有参数与异常处理示例。\n'.repeat(2_000)
+    const original = header + details
+    writeFileSync(file, original)
+    expect(Buffer.byteLength(original)).toBeGreaterThan(65_536)
+    expect(original.length).toBeLessThan(65_536)
+    const next = header + '2. Follow references/details.md for parameters and error handling.\n'
+    const { skills, skillTask, host } = evolution([
+      (_label, prompt) => {
+        expect(prompt).toContain(`${Buffer.byteLength(original)} UTF-8 bytes`)
+        expect(prompt).toContain('65536')
+        return { content: original, notes: '', changes: [] }
+      },
+      (_label, prompt) => {
+        const repair = prompt.split('Your previous SKILL.md was rejected:')[1]!
+        expect(repair).toContain('references/')
+        expect(repair).toContain('files')
+        expect(repair).toContain('Preserve')
+        return { content: next, notes: 'Move details into a reference.', changes: ['Extract details'], files: [{ path: 'references/details.md', action: 'upsert', content: details }] }
+      },
+    ])
+    await skills.draft(source, undefined, { skill: 'release-notes' })
+    await vi.waitFor(async () => expect(await source.read('drafts', { skill: 'release-notes' })).toHaveLength(1))
+    expect(skillTask).toHaveBeenCalledTimes(2)
+    expect(host.warn).not.toHaveBeenCalled()
+    expect(readFileSync(file, 'utf8')).toBe(original)
+    const reference = join(directory, 'dsh', 'skills', 'release-notes', 'references', 'details.md')
+    expect(existsSync(reference)).toBe(false)
+    const [draft] = await source.read<SkillDraft[]>('drafts', { skill: 'release-notes' })
+    await source.mutate('draft-adopt', { id: draft!.id })
+    expect(readFileSync(file, 'utf8')).toBe(next)
+    expect(readFileSync(reference, 'utf8')).toBe(details)
+    skills.dispose()
+  })
+
+  it('repairs an oversized flat draft in place without creating a bundle', async () => {
+    config = { ...config, autoBacktest: false }
+    const bundle = join(directory, 'dsh', 'skills', 'release-notes')
+    const file = bundle + '.md'
+    renameSync(join(bundle, 'SKILL.md'), file)
+    rmSync(bundle, { recursive: true })
+    const original = readFileSync(file, 'utf8')
+    const next = original + '2. Group by component.\n'
+    const { skills, skillTask, host } = evolution([
+      () => ({ content: original + '字'.repeat(22_000), notes: '', changes: [] }),
+      (_label, prompt) => {
+        const repair = prompt.split('Your previous SKILL.md was rejected:')[1]!
+        expect(repair).toContain('omit files')
+        expect(repair).toContain('Do not convert')
+        return { content: next, notes: '', changes: ['Group by component'] }
+      },
+    ])
+    await skills.draft(source, undefined, { skill: 'release-notes' })
+    await vi.waitFor(async () => expect(await source.read('drafts', { skill: 'release-notes' })).toHaveLength(1))
+    const [draft] = await source.read<SkillDraft[]>('drafts', { skill: 'release-notes' })
+    expect(draft!.files ?? []).toEqual([])
+    expect(skillTask).toHaveBeenCalledTimes(2)
+    expect(host.warn).not.toHaveBeenCalled()
+    await source.mutate('draft-adopt', { id: draft!.id })
+    expect(readFileSync(file, 'utf8')).toBe(next)
+    expect(existsSync(bundle)).toBe(false)
+    skills.dispose()
+  })
+
+  it('stops after one oversized retry without replacing a saved draft or writing references', async () => {
+    config = { ...config, autoBacktest: false }
+    const file = join(directory, 'dsh', 'skills', 'release-notes', 'SKILL.md')
+    const original = readFileSync(file, 'utf8')
+    await source.mutate('draft-record', { skillName: 'release-notes', content: original, notes: 'Saved draft', changes: [], guidance: [] })
+    const ledgerPath = join(directory, 'data', 'skills', 'ledger.json')
+    const ledger = readFileSync(ledgerPath, 'utf8')
+    const oversized = () => ({ content: original + '字'.repeat(22_000), notes: '', changes: [], files: [{ path: 'references/details.md', action: 'upsert', content: 'Never written.' }] })
+    const { skills, skillTask, host } = evolution([oversized, oversized])
+    await skills.draft(source, undefined, { skill: 'release-notes' })
+    await vi.waitFor(() => expect(host.warn).toHaveBeenCalledOnce())
+    expect(skillTask).toHaveBeenCalledTimes(2)
+    expect(readFileSync(file, 'utf8')).toBe(original)
+    expect(readFileSync(ledgerPath, 'utf8')).toBe(ledger)
+    expect(existsSync(join(directory, 'dsh', 'skills', 'release-notes', 'references'))).toBe(false)
+    skills.dispose()
   })
 
   it('regenerates a truncated draft under a fresh task with the configured larger budget', async () => {
@@ -1245,6 +1332,28 @@ describe('skill evolution in the Host', () => {
 })
 
 describe('bounded skill review context', () => {
+  it('shows full UTF-8 sizes and layouts even when loaded content is truncated or metadata is absent', () => {
+    const content = '字'.repeat(23_000)
+    const prompt = skillReviewPrompt({
+      steps: [], stats: { turns: 1, toolCalls: 0, toolFailures: 0, skills: ['large'] }, score: 1, threshold: 1,
+      loaded: [{ name: 'large', root: 'user-dsh', path: '/skills/large/SKILL.md', content, layout: 'bundle' }],
+      catalog: [
+        { name: 'large', description: 'Large workflow.', layout: 'bundle', bytes: 69_000 },
+        { name: 'near', description: 'Single file.', layout: 'flat', bytes: 64_000 },
+        { name: 'legacy', description: 'No optional metadata.' },
+      ], caseTitles: {}, openSuggestions: [],
+    })
+    expect(prompt).toContain('69000 UTF-8 bytes')
+    expect(prompt).toContain('64000 UTF-8 bytes')
+    expect(prompt).toContain('layout=bundle')
+    expect(prompt).toContain('layout=flat')
+    expect(prompt).toContain('65536')
+    expect(prompt).toContain('- legacy: No optional metadata.')
+    expect(prompt).not.toContain('undefined')
+    expect(prompt).toContain('[truncated]')
+    expect(prompt).not.toContain(content)
+  })
+
   it('limits open suggestions and their wording without exposing evidence or draft payloads', () => {
     const prompt = skillReviewPrompt({
       steps: [], stats: { turns: 0, toolCalls: 0, toolFailures: 0, skills: [] }, score: 0, threshold: 1,
