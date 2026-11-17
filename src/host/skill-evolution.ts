@@ -519,6 +519,7 @@ export class SkillEvolution {
           ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }),
           ...(input.draftId === undefined ? {} : { draftId: input.draftId }),
           skillName: pack.skillName, content: parsed.content, notes: parsed.notes, changes: parsed.changes, guidance,
+          ...(parsed.files === undefined ? {} : { files: parsed.files }),
           expectedBaseHash: pack.skill?.hash ?? null,
           ...(prepared.expectedDraft === undefined ? {} : { expectedDraft: prepared.expectedDraft }),
           ...(pack.action === 'create' ? { targetRoot } : {}),
@@ -528,7 +529,7 @@ export class SkillEvolution {
         signal.throwIfAborted()
         // One retry, told exactly why DSH would refuse the file.
         if (attempt > 0 || /changed while this draft/.test(message(error))) throw error
-        prompt += `\n\nYour previous SKILL.md was rejected: ${message(error)}. Return a corrected complete file.`
+        prompt += `\n\nYour previous SKILL.md was rejected: ${message(error)}. Return a corrected complete file and any supporting files.`
       }
     }
     signal.throwIfAborted()
@@ -580,7 +581,7 @@ export class SkillEvolution {
       if (cases.length === 0) throw new Error(`${input.skillName} has no enabled eval case to run`)
       if (input.expectedCasesHash !== undefined && hashSkillCases(cases) !== input.expectedCasesHash) throw new Error('Eval cases changed before this backtest started')
       if (cases.some(entry => entry.requiresVision !== undefined && typeof entry.requiresVision !== 'boolean')) throw new Error('requiresVision must be a boolean')
-      const resolved = await source.read<{ content?: string; target: RunTarget }>('target-content', { skillName: input.skillName, target: input.target }, input.signal)
+      const resolved = await source.read<{ content?: string; resources?: Array<{ path: string; content: string }>; target: RunTarget }>('target-content', { skillName: input.skillName, target: input.target }, input.signal)
       const run = await source.mutate<BacktestRun>('run-start', { skillName: input.skillName, target: resolved.target, caseIds: cases.map(entry => entry.id), ...(input.expectedCasesHash === undefined ? {} : { expectedCasesHash: input.expectedCasesHash }), ...(input.route === undefined ? {} : { model: input.route }) }, input.signal)
       void this.background('skill backtest', async deadline => {
         const controller = new AbortController()
@@ -633,7 +634,7 @@ export class SkillEvolution {
                 const worker = async () => {
                   for (let entry = queue.shift(); entry !== undefined; entry = queue.shift()) {
                     signal.throwIfAborted()
-                    const result = await this.runCase(task, entry, input.skillName, resolved.content, signal)
+                    const result = await this.runCase(task, entry, input.skillName, resolved.content, resolved.resources, signal)
                     signal.throwIfAborted()
                     await source.mutate('run-progress', { id: run.id, result }, signal)
                   }
@@ -665,11 +666,11 @@ export class SkillEvolution {
    * result) gets one more try; a case that still cannot run is recorded as
    * an error, which the run's score leaves out.
    */
-  private async runCase(task: HostAgent, entry: EvalCase, skillName: string, content: string | undefined, signal: AbortSignal) {
+  private async runCase(task: HostAgent, entry: EvalCase, skillName: string, content: string | undefined, resources: ReadonlyArray<{ path: string; content: string }> | undefined, signal: AbortSignal) {
     let failure: unknown
     for (let attempt = 0; attempt < CASE_ATTEMPTS; attempt++) {
       try {
-        const executed = parseExecution((await this.host.skillTask(task, `Mnemon skill eval: ${entry.title}`.slice(0, 120), skillExecutorPrompt(entry, { name: skillName, ...(content === undefined ? {} : { content }) }), SKILL_EXECUTOR_SCHEMA as unknown as Record<string, unknown>, SKILL_EXECUTOR_PERSONA, signal)).structured)
+        const executed = parseExecution((await this.host.skillTask(task, `Mnemon skill eval: ${entry.title}`.slice(0, 120), skillExecutorPrompt(entry, { name: skillName, ...(content === undefined ? {} : { content }), ...(resources === undefined || resources.length === 0 ? {} : { resources }) }), SKILL_EXECUTOR_SCHEMA as unknown as Record<string, unknown>, SKILL_EXECUTOR_PERSONA, signal)).structured)
         signal.throwIfAborted()
         const judged = await this.host.skillTask(task, `Mnemon skill judge: ${entry.title}`.slice(0, 120), skillJudgePrompt(entry, executed.steps, executed.answer), SKILL_JUDGE_SCHEMA as unknown as Record<string, unknown>, SKILL_JUDGE_PERSONA, signal)
         const grade = gradeCase(entry, judged.structured)

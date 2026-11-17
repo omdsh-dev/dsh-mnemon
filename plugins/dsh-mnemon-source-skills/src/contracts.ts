@@ -77,16 +77,56 @@ export interface SkillCatalog {
   problems: SkillProblem[]
 }
 
+export interface SkillResourceFile {
+  path: string
+  hash: string
+  bytes: number
+  /** UTF-8 text when readable within prompt/preview bounds; omitted for binary or oversized files. */
+  content?: string
+  binary?: boolean
+}
+
+export interface SkillDraftFileChange {
+  path: string
+  action: 'upsert' | 'delete'
+  /** UTF-8 content when action is `upsert`. */
+  content?: string
+  /** Optional expected hash of the existing file (or null when creating a new file). */
+  baseHash?: string | null
+}
+
+/** Shared wire validation for model drafts and Source management requests. */
+export function parseSkillDraftFiles(value: unknown): SkillDraftFileChange[] | undefined {
+  if (value === undefined || value === null) return undefined
+  if (!Array.isArray(value) || value.length > 20) throw new Error('files must be an array of at most 20 items')
+  if (value.length === 0) return undefined
+  return value.map((item: unknown) => {
+    if (item === null || typeof item !== 'object') throw new Error('each supporting file needs a path and action')
+    const { path, action, content, baseHash } = item as Record<string, unknown>
+    if (typeof path !== 'string' || path.trim() === '' || path.length > 200 || (action !== 'upsert' && action !== 'delete')) {
+      throw new Error('each supporting file needs a relative path and action (upsert or delete)')
+    }
+    if (action === 'upsert' && (typeof content !== 'string' || content.trim() === '')) throw new Error(`supporting file "${path}" requires non-empty content`)
+    if (baseHash !== undefined && baseHash !== null && (typeof baseHash !== 'string' || baseHash.trim() === '' || baseHash.length > 100)) throw new Error('invalid supporting file baseHash')
+    return { path: path.trim(), action, ...(action === 'upsert' ? { content: content as string } : {}),
+      ...(baseHash === undefined ? {} : { baseHash: baseHash === null ? null : (baseHash as string).trim() }) }
+  })
+}
+
 export interface SkillDocument extends SkillSummary {
   content: string
   /** Frontmatter text between the fences, verbatim. */
   frontmatter: string
   body: string
+  /** Supporting files beside SKILL.md inside a bundle directory, when present. */
+  resourceFiles?: SkillResourceFile[]
 }
 
 export type SkillVersionReason = 'original' | 'edit' | 'evolution' | 'restore' | 'invocation' | 'create' | 'install'
 
 export interface SkillVersion {
+  /** A complete byte snapshot must exist when restoring supporting files. */
+  bundleSnapshot?: boolean
   id: string
   skillKey: string
   hash: string
@@ -238,6 +278,10 @@ export interface SkillDraft {
   /** For `create`, where adopting writes the new bundle. */
   targetRoot?: SkillRootKind
   content: string
+  /** Optional supporting-file updates or deletions inside the skill bundle. */
+  files?: SkillDraftFileChange[]
+  /** Expected hashes of touched supporting files when the draft was created (null = did not exist). */
+  baseFileHashes?: Record<string, string | null>
   notes: string
   changes: string[]
   guidance: string[]
@@ -514,6 +558,8 @@ export interface DraftView {
   conflict?: 'base-changed' | 'target-exists'
   /** The file the draft replaces, as it is now. */
   base?: SkillDocument
+  /** Current text of supporting files touched by `draft.files`, keyed by relative path. */
+  baseFileContents?: Record<string, string>
   resolution?: SkillResolution
   runs: BacktestRun[]
 }
@@ -670,6 +716,15 @@ export interface AutomaticAdoption {
   casesHash: string
 }
 export { skillCaseSignature, compareAutomaticSkillRuns } from './auto-adoption.ts'
+
+/** Canonical draft payload used to hash single-file and multi-file drafts without breaking legacy drafts. */
+export function skillDraftSignature(draft: Pick<SkillDraft, 'content' | 'files'>): string {
+  if (draft.files === undefined || draft.files.length === 0) return draft.content
+  const ordered = [...draft.files]
+    .sort((left, right) => left.path.localeCompare(right.path))
+    .map(file => [file.path, file.action, file.action === 'delete' ? null : (file.content ?? '')])
+  return JSON.stringify([draft.content, ordered])
+}
 
 export interface SuggestionTriage {
   version: 1

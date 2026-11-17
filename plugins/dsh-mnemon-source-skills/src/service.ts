@@ -8,17 +8,18 @@ import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSy
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { withMemoryStorageLock } from 'dsh-mnemon/extension-sdk'
 import {
-  SKILL_ROOT_KINDS, skillCaseSignature, compareAutomaticSkillRuns, type AutoAdoptionEvent, type AutomaticAdoption, type DraftExpectation,
+  SKILL_ROOT_KINDS, skillCaseSignature, skillDraftSignature, compareAutomaticSkillRuns, type AutoAdoptionEvent, type AutomaticAdoption, type DraftExpectation,
   type BacktestRun, type CaseResult, type CatalogView, type DraftPreferencesView, type DraftView, type EvalCase, type EvidencePack, type ModelRoute, type SuggestionView,
   type MarketEntry, type MarketInstall, type MarketInstallState, type MarketItem, type MarketPreview, type MarketRegistry, type MarketRegistryFile, type MarketSearchResult,
   type MarketSourceKind, type MarketView, type ReviewRecordInput, type ReviewRecordResult, type RunTarget, type SkillCatalog, type SkillDocument,
-  type SkillDraft, type SkillOrigin, type SkillResolution, type SkillRootKind, type SkillSuggestion, type SkillSummary, type SkillVersion, type SkillVersionReason, type SkillsOverview, type Trajectory, type TrajectorySummary, type TrashEntry, type TrashRestoreInput, type TrashRestorePreview,
+  type SkillDraft, type SkillDraftFileChange, type SkillOrigin, type SkillResolution, type SkillResourceFile, type SkillRootKind, type SkillSuggestion, type SkillSummary, type SkillVersion, type SkillVersionReason, type SkillsOverview, type Trajectory, type TrajectorySummary, type TrashEntry, type TrashRestoreInput, type TrashRestorePreview,
 } from './contracts.ts'
 import { activeSkill, catalogFingerprint, findSkill, readCatalog, readSkillDocument, requireWritableRoot, requireWritableSkill, rootPath, sha256, type SkillRootOptions } from './catalog.ts'
+import { snapshotResourcePreview, snapshotBundleFiles, changedBundleSnapshot, restoreBundleFiles, applyBundleFileChanges, extractConcreteBundleReferences, prepareDraftFileChanges, readBundleResourceState, readSkillResourceFiles } from './bundle-files.ts'
 import { legacySuggestionWorkspace, skillOrigin, validOrigin } from './identity.ts'
 import { isSkillName, setFrontmatterKey, skillTemplate, validateSkillContent, withInvocation } from './frontmatter.ts'
 import { admitReview, expireSuggestions, OPEN_STATUSES, policyFrom, similarCase, trajectorySummary } from './policy.ts'
-import { entryExists, MAX_CASES_PER_SKILL, MAX_VERSIONS_PER_SKILL, SkillsStore, writeFileAtomic, type EvalsFile, type LedgerFile, type RegistryRecord } from './store.ts'
+import { entryExists, MAX_CASES_PER_SKILL, MAX_VERSIONS_PER_SKILL, SkillsStore, writeFileAtomic, type SkillBundleSnapshot, type EvalsFile, type LedgerFile, type RegistryRecord } from './store.ts'
 import {
   bundledOfficialRegistry, defaultFetcher, fetchSkillDocument, fetchSkillFiles, indexedParts, isDiscoveryIndex, isPluginMarketplace, listSkillFiles, loadDiscovery,
   loadJson, loadRegistry, loadRepository, marketplaceRepository, OFFICIAL_REGISTRY_ID, OFFICIAL_REGISTRY_URL, parseDiscovery, parseRegistry, REGISTRY_REFRESH_MS,
@@ -43,6 +44,16 @@ export interface CaseInput {
 function clip(value: string, maximum: number): string {
   const text = value.trim()
   return text.length <= maximum ? text : text.slice(0, maximum - 1) + '…'
+}
+
+function bundleTextMap(files: readonly SkillResourceFile[]): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const file of files) if (file.content !== undefined) out[file.path] = file.content
+  return out
+}
+
+function toResourceList(map: Record<string, string>): Array<{ path: string; content: string }> {
+  return Object.keys(map).sort((a, b) => a.localeCompare(b)).map(path => ({ path, content: map[path]! }))
 }
 
 function staleRun(run: BacktestRun, now: number): BacktestRun {
@@ -297,8 +308,29 @@ export class SkillsService {
       if (draft === undefined) throw new Error('draft not found: ' + id)
       const original = draft.action === 'update' ? this.draftOriginal(ledger, draft) : undefined
       const base = original?.skill
+      const baseDoc = base === undefined ? undefined : readSkillDocument(base)
+      let fileConflict = false
+      const baseFileContents: Record<string, string> = {}
+      if (draft.action === 'update' && base !== undefined) {
+        for (const [relPath, expectedHash] of Object.entries(draft.baseFileHashes ?? {})) {
+          if (base.layout !== 'bundle') { fileConflict = true; break }
+          try {
+            const state = readBundleResourceState(dirname(base.path), relPath)
+            if (state.hash !== expectedHash) { fileConflict = true }
+            if (state.content !== undefined) baseFileContents[relPath] = state.content
+          } catch { fileConflict = true }
+        }
+        for (const file of draft.files ?? []) {
+          if (base.layout === 'bundle' && baseFileContents[file.path] === undefined) {
+            try {
+              const state = readBundleResourceState(dirname(base.path), file.path)
+              if (state.content !== undefined) baseFileContents[file.path] = state.content
+            } catch { /* unreadable file stays omitted from preview */ }
+          }
+        }
+      }
       const conflict = draft.action === 'update'
-        ? base !== undefined && base.hash !== draft.baseHash ? 'base-changed' as const : undefined
+        ? base !== undefined && (base.hash !== draft.baseHash || fileConflict) ? 'base-changed' as const : undefined
         : activeSkill(this.catalog(workspace), draft.skillName) !== undefined ? 'target-exists' as const : undefined
       const now = this.clock().getTime()
       const evals = draft.runIds.length === 0 ? undefined : this.store.evals()
@@ -306,7 +338,14 @@ export class SkillsService {
         const run = evals.runs.find(candidate => candidate.id === runId)
         return run === undefined ? [] : [staleRun(run, now)]
       })
-      return { draft, ...(conflict === undefined ? {} : { conflict }), ...(original === undefined ? {} : { resolution: original.resolution }), ...(base === undefined ? {} : { base: readSkillDocument(base) }), runs }
+      return {
+        draft,
+        ...(conflict === undefined ? {} : { conflict }),
+        ...(original === undefined ? {} : { resolution: original.resolution }),
+        ...(baseDoc === undefined ? {} : { base: baseDoc }),
+        ...(Object.keys(baseFileContents).length === 0 ? {} : { baseFileContents }),
+        runs,
+      }
     })
   }
 
@@ -372,22 +411,33 @@ export class SkillsService {
 
   // ---- writes --------------------------------------------------------------
 
-  private recordVersion(ledger: LedgerFile, skillKey: string, content: string, reason: SkillVersionReason, previous: string | undefined, links: { suggestionId?: string; draftId?: string; note?: string } = {}): SkillVersion {
+  private recordVersion(
+    ledger: LedgerFile,
+    skillKey: string,
+    content: string,
+    reason: SkillVersionReason,
+    previous: string | undefined,
+    links: { suggestionId?: string; draftId?: string; note?: string } = {},
+    bundles?: { previous?: SkillBundleSnapshot; current?: SkillBundleSnapshot },
+  ): SkillVersion {
     const now = this.clock()
     const existing = ledger.versions.filter(version => version.skillKey === skillKey)
-    const make = (body: string, why: SkillVersionReason, extra: typeof links, offset: number): SkillVersion => {
+    const make = (body: string, why: SkillVersionReason, extra: typeof links, offset: number, bundleFiles?: SkillBundleSnapshot): SkillVersion => {
       const hash = sha256(body)
       const version: SkillVersion = {
         id: `${(now.getTime() + offset).toString(36)}-${hash.slice(0, 8)}`, skillKey, hash, bytes: Buffer.byteLength(body, 'utf8'), reason: why,
         createdAt: new Date(now.getTime() + offset).toISOString(), ...extra,
       }
       this.store.saveVersionContent(version, body)
+      if (bundleFiles !== undefined) this.store.saveVersionResources(version, bundleFiles)
       ledger.versions.unshift(version)
       return version
     }
     // The content as it was before the first write this Source made, so it can come back.
-    if (existing.length === 0 && previous !== undefined && sha256(previous) !== sha256(content)) make(previous, 'original', {}, 0)
-    const version = make(content, reason, links, 1)
+    if (previous !== undefined && (bundles?.previous !== undefined || (existing.length === 0 && sha256(previous) !== sha256(content)))) {
+      make(previous, existing.length === 0 ? 'original' : 'edit', {}, 0, bundles?.previous)
+    }
+    const version = make(content, reason, links, 1, bundles?.current)
     const forSkill = ledger.versions.filter(candidate => candidate.skillKey === skillKey)
     if (forSkill.length > MAX_VERSIONS_PER_SKILL) {
       const removable = forSkill.filter(candidate => candidate.reason !== 'original').slice(MAX_VERSIONS_PER_SKILL - 1)
@@ -614,8 +664,23 @@ export class SkillsService {
       if (version === undefined) throw new Error('version not found: ' + input.versionId)
       const content = this.store.versionContent(version)
       validateSkillContent(content, skill.name)
-      this.writeSkillFile(path, content)
-      this.recordVersion(ledger, skill.key, content, 'restore', previous, { note: version.id })
+      const targetResources = skill.layout === 'bundle' ? this.store.versionResources(version) : undefined
+      const previousResources = skill.layout === 'bundle' && targetResources !== undefined
+        ? snapshotBundleFiles(dirname(path))
+        : undefined
+      let bundleApplied: ReturnType<typeof restoreBundleFiles> | undefined
+      if (targetResources !== undefined && skill.layout === 'bundle') {
+        bundleApplied = restoreBundleFiles(dirname(path), targetResources, previousResources!)
+      }
+      try {
+        this.writeSkillFile(path, content)
+      } catch (error) {
+        bundleApplied?.rollback()
+        this.invalidateCatalog()
+        throw error
+      }
+      this.recordVersion(ledger, skill.key, content, 'restore', previous, { note: version.id },
+        targetResources === undefined ? undefined : { ...(previousResources === undefined ? {} : { previous: previousResources }), current: bundleApplied!.snapshot })
       this.store.saveLedger(ledger)
       return findSkill(this.catalog(workspace), skill.key)
     })
@@ -687,7 +752,7 @@ export class SkillsService {
     if (expected === undefined) return
     const current = ledger.drafts.find(draft => draft.id === suggestion?.draftId)
     const matches = expected === null ? suggestion !== undefined && suggestion.draftId === undefined
-      : current?.id === expected.id && current.status === 'ready' && sha256(current.content) === expected.hash
+      : current?.id === expected.id && current.status === 'ready' && sha256(skillDraftSignature(current)) === expected.hash
     if (!matches) throw new Error('The suggestion or draft changed while this draft was being generated; leave it for manual review')
   }
 
@@ -851,7 +916,7 @@ export class SkillsService {
     })
   }
 
-  recordDraft(workspace: string | undefined, input: { suggestionId?: string; draftId?: string; skillName: string; content: string; notes: string; changes: string[]; guidance: string[]; targetRoot?: SkillRootKind; expectedBaseHash?: string | null; expectedDraft?: DraftExpectation; signal?: AbortSignal }): Promise<SkillDraft> {
+  recordDraft(workspace: string | undefined, input: { suggestionId?: string; draftId?: string; skillName: string; content: string; notes: string; changes: string[]; guidance: string[]; files?: SkillDraftFileChange[]; targetRoot?: SkillRootKind; expectedBaseHash?: string | null; expectedDraft?: DraftExpectation; signal?: AbortSignal }): Promise<SkillDraft> {
     return this.write(() => {
       input.signal?.throwIfAborted()
       validateSkillContent(input.content, input.skillName)
@@ -870,6 +935,15 @@ export class SkillsService {
       if (loaded !== undefined) requireWritableSkill(loaded, this.roots.allowLinkedUpdates)
       if (input.expectedBaseHash !== undefined && (loaded?.hash ?? null) !== input.expectedBaseHash) throw new Error('The skill changed while this draft was being generated; regenerate it from the current file')
       const origin = loaded === undefined ? undefined : original?.origin ?? skillOrigin(catalog, loaded)
+      const baseDoc = loaded === undefined ? undefined : readSkillDocument(loaded)
+      const preparedFiles = prepareDraftFileChanges({
+        action: loaded === undefined ? 'create' : 'update',
+        isFlatSkill: loaded?.layout === 'flat',
+        skillContent: input.content,
+        ...(baseDoc === undefined ? {} : { baseContent: baseDoc.content }),
+        existingResources: baseDoc?.resourceFiles ?? [],
+        ...(input.files === undefined ? {} : { files: input.files }),
+      })
       for (const draft of ledger.drafts) {
         if (draft.status === 'ready' && draft.skillName === input.skillName && draft.suggestionId === input.suggestionId
           && (loaded === undefined ? draft.action === 'create' : this.draftOriginal(ledger, draft).skill?.path === loaded.path)) { draft.status = 'discarded'; draft.updatedAt = now }
@@ -881,6 +955,8 @@ export class SkillsService {
         action: loaded === undefined ? 'create' : 'update',
         ...(loaded === undefined ? { targetRoot: input.targetRoot ?? prior?.targetRoot ?? suggestion?.targetRoot ?? this.defaultRoot(workspace) } : { baseKey: loaded.key, baseHash: loaded.hash, origin: origin! }),
         content: input.content,
+        ...(preparedFiles.files === undefined ? {} : { files: preparedFiles.files }),
+        ...(preparedFiles.baseFileHashes === undefined ? {} : { baseFileHashes: preparedFiles.baseFileHashes }),
         notes: clip(input.notes, 2_000),
         changes: input.changes.map(change => clip(change, 300)).filter(Boolean).slice(0, 12),
         guidance: input.guidance.map(text => clip(text, 2_000)).filter(Boolean).slice(-8),
@@ -902,6 +978,18 @@ export class SkillsService {
       const draft = ledger.drafts.find(candidate => candidate.id === input.id)
       if (draft === undefined || draft.status !== 'ready') throw new Error('only a draft waiting for review can be edited')
       validateSkillContent(input.content, draft.skillName)
+      if (draft.files !== undefined || extractConcreteBundleReferences(input.content).length > 0) {
+        const original = draft.action === 'update' ? this.draftOriginal(ledger, draft).skill : undefined
+        const baseDoc = original === undefined ? undefined : readSkillDocument(original)
+        prepareDraftFileChanges({
+          action: draft.action,
+          isFlatSkill: original?.layout === 'flat',
+          skillContent: input.content,
+          ...(baseDoc === undefined ? {} : { baseContent: baseDoc.content }),
+          existingResources: baseDoc?.resourceFiles ?? [],
+          ...(draft.files === undefined ? {} : { files: draft.files }),
+        })
+      }
       draft.content = input.content
       draft.updatedAt = this.clock().toISOString()
       this.store.saveLedger(ledger)
@@ -926,7 +1014,7 @@ export class SkillsService {
         const after = evals.runs.find(run => run.id === proof.draftRunId)
         automaticResult = compareAutomaticSkillRuns(cases, before, after, casesHash)
         if (suggestion?.status !== 'review' || suggestion.draftId !== draft.id || Date.parse(suggestion.expiresAt) <= this.clock().getTime()
-          || proof.draftHash !== sha256(draft.content) || casesHash !== proof.casesHash
+          || proof.draftHash !== sha256(skillDraftSignature(draft)) || casesHash !== proof.casesHash
           || before?.skillName !== draft.skillName || after?.skillName !== draft.skillName
           || !(Date.parse(before.startedAt) >= Date.parse(draft.createdAt)) || !(Date.parse(after.startedAt) >= Date.parse(draft.createdAt))
           || after.target.kind !== 'draft' || after.target.draftId !== draft.id || after.target.hash !== proof.draftHash
@@ -961,12 +1049,41 @@ export class SkillsService {
       let key: string
       let previous: string | undefined
       let updated: SkillSummary | undefined
+      let versionBundles: { previous?: SkillBundleSnapshot; current?: SkillBundleSnapshot } | undefined
+      const hasFileChanges = (draft.files?.length ?? 0) > 0
       if (draft.action === 'update') {
         const original = this.draftOriginal(ledger, draft)
         const base = this.requireOriginal(original)
         const path = requireWritableSkill(base, this.roots.allowLinkedUpdates)
         previous = this.requireHash({ ...base, path }, draft.baseHash)
-        this.writeSkillFile(path, draft.content)
+        if (draft.baseFileHashes !== undefined) {
+          if (base.layout !== 'bundle') throw new Error(`${base.name} supporting files changed since this draft was created; generate a new draft`)
+          for (const [relPath, expectedHash] of Object.entries(draft.baseFileHashes)) {
+            const state = readBundleResourceState(dirname(path), relPath)
+            if (state.hash !== expectedHash) throw new Error(`${base.name} (${relPath}) changed since it was read; generate a new draft`)
+          }
+        }
+        if (hasFileChanges && base.layout !== 'bundle') {
+          throw new Error(`${base.name} is a single .md file and cannot adopt supporting files`)
+        }
+        const previousResources = hasFileChanges ? snapshotBundleFiles(dirname(path)) : undefined
+        const currentResources = previousResources === undefined ? undefined : changedBundleSnapshot(previousResources, draft.files!)
+        let bundleApplied: { rollback(): void } | undefined
+        if (hasFileChanges) bundleApplied = applyBundleFileChanges(dirname(path), draft.files!)
+        try {
+          this.writeSkillFile(path, draft.content)
+        } catch (error) {
+          bundleApplied?.rollback()
+          this.invalidateCatalog()
+          throw error
+        }
+        if (hasFileChanges) {
+          this.invalidateCatalog()
+          versionBundles = {
+            ...(previousResources === undefined ? {} : { previous: previousResources }),
+            current: currentResources!,
+          }
+        }
         key = base.key
         updated = findSkill(this.catalog(original.origin?.workspace), key)
       } else {
@@ -983,11 +1100,23 @@ export class SkillsService {
         }
         const directory = join(target, draft.skillName)
         if (existsSync(directory) || existsSync(directory + '.md')) throw new Error(`${draft.skillName} already exists in this root`)
-        this.writeSkillFile(join(directory, 'SKILL.md'), draft.content)
+        const skillPath = join(directory, 'SKILL.md')
+        this.writeSkillFile(skillPath, draft.content)
+        if (hasFileChanges) {
+          try {
+            applyBundleFileChanges(directory, draft.files!)
+          } catch (error) {
+            rmSync(directory, { recursive: true, force: true })
+            this.invalidateCatalog()
+            throw error
+          }
+          this.invalidateCatalog()
+          versionBundles = { current: changedBundleSnapshot({ version: 1, complete: true, files: {} }, draft.files!) }
+        }
         key = `${root}:${draft.skillName}`
       }
       const now = this.clock().toISOString()
-      const version = this.recordVersion(ledger, key, draft.content, 'evolution', previous, { draftId: draft.id, ...(draft.suggestionId === undefined ? {} : { suggestionId: draft.suggestionId }) })
+      const version = this.recordVersion(ledger, key, draft.content, 'evolution', previous, { draftId: draft.id, ...(draft.suggestionId === undefined ? {} : { suggestionId: draft.suggestionId }) }, versionBundles)
       draft.status = 'adopted'
       draft.updatedAt = now
       const suggestion = draft.suggestionId === undefined ? undefined : ledger.suggestions.find(candidate => candidate.id === draft.suggestionId)
@@ -1077,19 +1206,40 @@ export class SkillsService {
     })
   }
 
-  /** The content a run tests, resolved from its target. */
-  targetContent(workspace: string | undefined, skillName: string, target: RunTarget): { content?: string; target: RunTarget } {
+  /** The content and supporting text files a run tests, resolved from its target. */
+  targetContent(workspace: string | undefined, skillName: string, target: RunTarget): { content?: string; resources?: Array<{ path: string; content: string }>; target: RunTarget } {
     return this.withCatalog(() => {
       if (target.kind === 'none') return { target: { kind: 'none' } }
       if (target.kind === 'draft') {
-        const draft = this.store.ledger().drafts.find(candidate => candidate.id === target.draftId)
+        const ledger = this.store.ledger()
+        const draft = ledger.drafts.find(candidate => candidate.id === target.draftId)
         if (draft === undefined || draft.skillName !== skillName) throw new Error('draft not found for this skill')
-        return { content: draft.content, target: { kind: 'draft', draftId: draft.id, hash: sha256(draft.content) } }
+        const resourcesMap: Record<string, string> = {}
+        if (draft.action === 'update') {
+          const base = this.draftOriginal(ledger, draft).skill
+          if (base !== undefined) Object.assign(resourcesMap, bundleTextMap(readSkillDocument(base).resourceFiles ?? []))
+        }
+        for (const change of draft.files ?? []) {
+          if (change.action === 'delete') delete resourcesMap[change.path]
+          else if (change.content !== undefined) resourcesMap[change.path] = change.content
+        }
+        const resources = toResourceList(resourcesMap)
+        return {
+          content: draft.content,
+          ...(resources.length === 0 ? {} : { resources }),
+          target: { kind: 'draft', draftId: draft.id, hash: sha256(skillDraftSignature(draft)) },
+        }
       }
       if (target.kind === 'version') {
         const version = this.store.ledger().versions.find(candidate => candidate.id === target.versionId)
         if (version === undefined) throw new Error('version not found: ' + target.versionId)
-        return { content: this.store.versionContent(version), target: { kind: 'version', versionId: version.id, skillKey: version.skillKey, hash: version.hash } }
+        const versionResources = this.store.versionResources(version)
+        const resources = versionResources === undefined ? [] : snapshotResourcePreview(versionResources)
+        return {
+          content: this.store.versionContent(version),
+          ...(resources.length === 0 ? {} : { resources }),
+          target: { kind: 'version', versionId: version.id, skillKey: version.skillKey, hash: version.hash },
+        }
       }
       const ledger = target.draftId === undefined ? undefined : this.store.ledger()
       const draft = target.draftId === undefined ? undefined : ledger!.drafts.find(candidate => candidate.id === target.draftId && candidate.skillName === skillName)
@@ -1097,7 +1247,12 @@ export class SkillsService {
       const loaded = draft === undefined ? activeSkill(this.catalog(workspace), skillName) : this.requireOriginal(this.draftOriginal(ledger!, draft))
       if (loaded === undefined) throw new Error(`${skillName} has no file to test; test a draft or no skill`)
       const document = readSkillDocument(loaded)
-      return { content: document.content, target: { kind: 'current', skillKey: loaded.key, hash: document.hash, ...(draft === undefined ? {} : { draftId: draft.id }) } }
+      const resources = toResourceList(bundleTextMap(document.resourceFiles ?? []))
+      return {
+        content: document.content,
+        ...(resources.length === 0 ? {} : { resources }),
+        target: { kind: 'current', skillKey: loaded.key, hash: document.hash, ...(draft === undefined ? {} : { draftId: draft.id }) },
+      }
     })
   }
 

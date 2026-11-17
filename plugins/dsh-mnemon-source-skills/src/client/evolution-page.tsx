@@ -472,7 +472,14 @@ function DraftReview(props: { context: SkillsPageContext; draftId: string; model
       </footer>
     </div>}
     {editing === null
-      ? <DiffBlock maxLines={40} labels={diffLabels(t)} diffs={[{ path: `${draft.skillName}/SKILL.md`, oldText: view.base?.content ?? null, newText: draft.content }]} />
+      ? <DiffBlock maxLines={40} labels={diffLabels(t)} diffs={[
+          { path: `${draft.skillName}/SKILL.md`, oldText: view.base?.content ?? null, newText: draft.content },
+          ...(draft.files ?? []).map(file => ({
+            path: `${draft.skillName}/${file.path}`,
+            oldText: view.baseFileContents?.[file.path] ?? null,
+            newText: file.action === 'delete' ? '' : (file.content ?? ''),
+          })),
+        ]} />
       : <div className={css.skComposer}>
           <textarea className={css.skEditor} spellCheck={false} value={editing} onChange={event => setEditing(event.target.value)} aria-label={t('diff.code')} />
           <footer>

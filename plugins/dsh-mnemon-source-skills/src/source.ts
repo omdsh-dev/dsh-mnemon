@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { COMPOSABLE_MEMORY_API_VERSION, type MemoryJsonValue, type MemorySourceDefinition, type MemorySourceFacts } from 'dsh-mnemon/contracts'
 import { defineMemorySource, memoryInputRecord as record, memoryInputStringArray as stringArray, memoryInputText as text } from 'dsh-mnemon/extension-sdk'
-import { AUTO_ADOPTION_STAGES, AUTO_ADOPTION_REASONS, type AutoAdoptionEvent, type DraftExpectation, type AutomaticAdoption, EVOLUTION_SIGNALS, SKILL_ROOT_KINDS, type CaseResult, type EvolutionSignal, type ModelRoute, type ReviewRecordInput, type RunTarget, type SkillRootKind, type SkillsPolicy, type TrajectoryStep } from './contracts.ts'
+import { AUTO_ADOPTION_STAGES, AUTO_ADOPTION_REASONS, type AutoAdoptionEvent, type DraftExpectation, type AutomaticAdoption, EVOLUTION_SIGNALS, SKILL_ROOT_KINDS, type CaseResult, type EvolutionSignal, type ModelRoute, type ReviewRecordInput, type RunTarget, parseSkillDraftFiles, type SkillRootKind, type SkillsPolicy, type TrajectoryStep } from './contracts.ts'
 import { SkillsService, type CaseInput } from './service.ts'
 
 export const SKILLS_SOURCE_TYPE_ID = 'skills'
@@ -410,16 +410,21 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
               })
               break
             }
-            case 'draft-record': value = await service.recordDraft(root, {
-              ...(request.signal === undefined ? {} : { signal: request.signal }),
-              ...draftExpectation(fields.expectedDraft),
-              ...(fields.expectedBaseHash === undefined ? {} : { expectedBaseHash: fields.expectedBaseHash === null ? null : text(fields.expectedBaseHash, 'expectedBaseHash', 100)! }),
-              ...(optionalText(fields.suggestionId, 'suggestionId', 100) === undefined ? {} : { suggestionId: optionalText(fields.suggestionId, 'suggestionId', 100)! }),
-              ...(optionalText(fields.draftId, 'draftId', 100) === undefined ? {} : { draftId: optionalText(fields.draftId, 'draftId', 100)! }),
-              skillName: text(fields.skillName, 'skillName', 64)!, content: typeof fields.content === 'string' ? fields.content : '',
-              notes: typeof fields.notes === 'string' ? fields.notes : '', changes: stringArray(fields.changes, 'changes', 20) ?? [], guidance: stringArray(fields.guidance, 'guidance', 20) ?? [],
-              ...(rootKind(fields.targetRoot) === undefined ? {} : { targetRoot: rootKind(fields.targetRoot)! }),
-            }); break
+            case 'draft-record': {
+              const files = parseSkillDraftFiles(fields.files)
+              value = await service.recordDraft(root, {
+                ...(request.signal === undefined ? {} : { signal: request.signal }),
+                ...draftExpectation(fields.expectedDraft),
+                ...(fields.expectedBaseHash === undefined ? {} : { expectedBaseHash: fields.expectedBaseHash === null ? null : text(fields.expectedBaseHash, 'expectedBaseHash', 100)! }),
+                ...(optionalText(fields.suggestionId, 'suggestionId', 100) === undefined ? {} : { suggestionId: optionalText(fields.suggestionId, 'suggestionId', 100)! }),
+                ...(optionalText(fields.draftId, 'draftId', 100) === undefined ? {} : { draftId: optionalText(fields.draftId, 'draftId', 100)! }),
+                skillName: text(fields.skillName, 'skillName', 64)!, content: typeof fields.content === 'string' ? fields.content : '',
+                notes: typeof fields.notes === 'string' ? fields.notes : '', changes: stringArray(fields.changes, 'changes', 20) ?? [], guidance: stringArray(fields.guidance, 'guidance', 20) ?? [],
+                ...(files === undefined ? {} : { files }),
+                ...(rootKind(fields.targetRoot) === undefined ? {} : { targetRoot: rootKind(fields.targetRoot)! }),
+              })
+              break
+            }
             case 'draft-update': value = await service.updateDraft({ id: text(fields.id, 'id', 100)!, content: typeof fields.content === 'string' ? fields.content : '' }); break
             case 'draft-adopt': value = await service.adoptDraft(root, text(fields.id, 'id', 100)!, { ...(request.signal === undefined ? {} : { signal: request.signal }), ...automaticAdoption(fields.automatic), ...(rootKind(fields.root) === undefined ? {} : { root: rootKind(fields.root)! }) }); break
             case 'draft-discard': value = await service.discardDraft(text(fields.id, 'id', 100)!); break
