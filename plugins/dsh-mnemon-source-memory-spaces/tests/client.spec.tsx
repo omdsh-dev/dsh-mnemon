@@ -33,6 +33,7 @@ import { installMemorySpaces } from '../src/index.ts'
 import { defineMemorySpaceProvider, MEMORY_SPACE_PROVIDER_API_VERSION, NORMALIZED_RELEVANCE_SCORE } from '../src/provider-sdk.ts'
 import { MemorySpacesSourcePage, installMemorySpacesUI, memorySpacesPageClient } from '../src/client.ts'
 import { MemoryGraph } from '../src/client/memory-graph.tsx'
+import { MemoryGraph3D, compute3DLayout, pickProjectedNode, project3DPoint } from '../src/client/memory-graph-3d.tsx'
 import { SyncFreshnessText } from '../src/client/overview-page.tsx'
 
 function t(key: string, params: Record<string, unknown> = {}): string {
@@ -838,6 +839,139 @@ describe('Settings deep-linking, error banner placement, and reduced-motion poli
     } finally {
       rafSpy.mockRestore()
       window.matchMedia = originalMatchMedia
+    }
+  })
+
+  it('supports opt-in 3D canvas projection, picking, camera orbit/zoom, and 2D/3D persistence (#506)', async () => {
+    const graph = {
+      generatedAt: '2026-10-20T00:00:00.000Z',
+      nodes: [
+        { id: 'space:work', kind: 'space' as const, category: 'space', memoryProviderId: 'mnemon-native', content: 'Work', color: '#4f46e5' },
+        { id: 'entity:atlas', kind: 'entity' as const, category: 'entity', content: 'Atlas', color: '#0ea5e9' },
+        { id: 'mem-1', kind: 'memory' as const, category: 'decision', content: 'Use sqlite WAL mode', importance: 4, color: '#ef8354' },
+      ],
+      edges: [
+        { sourceId: 'space:work', targetId: 'entity:atlas', label: 'scope', color: '#708199', type: 'scope' as const },
+        { sourceId: 'entity:atlas', targetId: 'mem-1', label: 'entity', color: '#25b383', type: 'entity' as const },
+      ],
+    }
+
+    const layout = compute3DLayout(graph.nodes, graph.edges)
+    expect(layout.get('space:work')).toEqual({ x: 0, y: 0, z: 0 })
+    const memPoint = layout.get('mem-1')!
+    expect(Number.isFinite(memPoint.x) && Number.isFinite(memPoint.y) && Number.isFinite(memPoint.z)).toBe(true)
+    const camA = project3DPoint({ x: 120, y: 40, z: -60 }, { yaw: 0.2, pitch: 0.1, distance: 960 }, 930, 520)!
+    const camB = project3DPoint({ x: 120, y: 40, z: -60 }, { yaw: 1.0, pitch: 0.1, distance: 960 }, 930, 520)!
+    expect(camA.sx).not.toBeCloseTo(camB.sx, 2)
+    expect(pickProjectedNode([{ id: 'mem-1', node: graph.nodes[2]!, sx: camA.sx, sy: camA.sy, rz: camA.rz, scale: camA.scale, radius: 8 }], camA.sx + 2, camA.sy - 2)?.id).toBe('mem-1')
+    expect(pickProjectedNode([{ id: 'mem-1', node: graph.nodes[2]!, sx: camA.sx, sy: camA.sy, rz: camA.rz, scale: camA.scale, radius: 8 }], camA.sx + 100, camA.sy)).toBeUndefined()
+
+    const fillText = vi.fn()
+    const stroke = vi.fn()
+    const fakeCtx = {
+      setTransform: vi.fn(), clearRect: vi.fn(), fillRect: vi.fn(), save: vi.fn(), restore: vi.fn(),
+      beginPath: vi.fn(), roundRect: vi.fn(), closePath: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(), arc: vi.fn(),
+      fill: vi.fn(), stroke, setLineDash: vi.fn(), fillText,
+      strokeStyle: '', fillStyle: '', lineWidth: 1, globalAlpha: 1, font: '', textAlign: 'center', textBaseline: 'top',
+    } as unknown as CanvasRenderingContext2D
+    const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(fakeCtx)
+    const rafSpy = vi.spyOn(window, 'requestAnimationFrame')
+
+    try {
+      const onSelect = vi.fn()
+      const onClearSelection = vi.fn()
+      render(<MemorySourcePageFrame locale="en"><MemoryGraph3D graph={graph} onSelect={onSelect} onClearSelection={onClearSelection} /></MemorySourcePageFrame>)
+      expect(rafSpy).not.toHaveBeenCalled()
+      expect(fillText).toHaveBeenCalled()
+      expect(stroke).toHaveBeenCalled()
+      expect(fakeCtx.roundRect).toHaveBeenCalled()
+      expect(fakeCtx.closePath).toHaveBeenCalled()
+
+      const canvas = screen.getByRole('img', { name: t('graph.aria3d', { nodes: 3, edges: 2 }) }) as HTMLCanvasElement
+      expect(canvas.dataset.view).toBe('3d')
+      vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 930, height: 520, right: 930, bottom: 520, x: 0, y: 0, toJSON: () => ({}) })
+
+      // The native selector exposes every visible node without pointer coordinates.
+      const picker = screen.getByRole('combobox', { name: t('graph.selectNodeAction') })
+      picker.focus()
+      expect(document.activeElement).toBe(picker)
+      fireEvent.change(picker, { target: { value: 'mem-1' } })
+      expect(onSelect).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'mem-1' }))
+      fireEvent.change(picker, { target: { value: '' } })
+      expect(onClearSelection).toHaveBeenCalledOnce()
+      onClearSelection.mockClear()
+
+      // Clicking the center-anchored single space selects it cleanly; Escape clears selection.
+      fireEvent.click(canvas, { clientX: 465, clientY: 260 })
+      expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'space:work' }))
+      onSelect.mockClear()
+      // An orbit drag must not also open an inspector on its trailing click.
+      for (const [type, clientX] of [['pointerdown', 440], ['pointermove', 465], ['pointerup', 465]] as const) {
+        fireEvent(canvas, new MouseEvent(type, { bubbles: true, button: 0, clientX, clientY: 260 }))
+      }
+      fireEvent.click(canvas, { clientX: 465, clientY: 260 })
+      expect(onSelect).not.toHaveBeenCalled()
+      fireEvent.click(canvas, { clientX: 465, clientY: 260 })
+      expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'space:work' }))
+
+      fireEvent.keyDown(canvas, { key: 'ArrowRight' })
+      fireEvent.keyDown(canvas, { key: '+' })
+      fireEvent.keyDown(canvas, { key: 'Escape' })
+      expect(onClearSelection).toHaveBeenCalledOnce()
+
+      fireEvent.click(screen.getByRole('button', { name: t('graph.zoomInAction') }))
+      fireEvent.click(screen.getByRole('button', { name: t('graph.resetViewAction') }))
+      expect(rafSpy).not.toHaveBeenCalled()
+      // An idle graph redraws immediately when the Host changes its theme.
+      const draws = vi.mocked(fakeCtx.clearRect).mock.calls.length
+      document.body.toggleAttribute('data-ds-dark-theme', true)
+      await waitFor(() => expect(vi.mocked(fakeCtx.clearRect).mock.calls.length).toBeGreaterThan(draws))
+      document.body.removeAttribute('data-ds-dark-theme')
+
+      cleanup()
+      localStorage.removeItem('dsh-mnemon:graph-view')
+      const graphCapabilities = { ...descriptor.capabilities, graph: true }
+      const catalog = {
+        items: [{
+          id: 'work', name: 'Work', kind: 'project', active: true, writable: true, healthy: true, mnemonDefault: true, status: 'ready', count: 1,
+          capabilities: graphCapabilities,
+          provider: { id: 'mnemon-native', label: 'Mnemon Native', origin: 'native' as const, kind: 'local' as const },
+        }],
+        providers: [{ ...descriptor, capabilities: graphCapabilities, id: 'mnemon-native', label: 'Mnemon Native', origin: 'native' as const, kind: 'local' as const, serviceConfigured: true }],
+        total: 1, activeCount: 1, directory: '/data', generatedAt: 'now',
+      }
+      const read = vi.fn(async (operation: string) => ({
+        revision: 'r1',
+        value: (operation === 'graph' ? graph
+          : operation === 'body-directory' || operation === 'bodies' ? catalog
+          : operation === 'status-summary' ? { writeEnabled: true, memoryBodies: [], defaultRecallLimit: 12 }
+          : []) as never,
+      }))
+      render(<MemorySpacesSourcePage page="spaces" sourceTypeId="memory-spaces" sourceInstanceKey="source:g3d" sourceInstances={[]} locale="en" management={{ sourceInstanceKey: 'source:g3d', revision: 'r1', read, mutate: vi.fn() }} />)
+      await screen.findByRole('button', { name: t('graph.view3d') })
+      expect(document.querySelector('svg[role="img"]')).not.toBeNull()
+      expect(document.querySelector('canvas[data-view="3d"]')).toBeNull()
+
+      fireEvent.click(screen.getByRole('button', { name: t('graph.view3d') }))
+      expect(localStorage.getItem('dsh-mnemon:graph-view')).toBe('3d')
+      await waitFor(() => expect(document.querySelector('canvas[data-view="3d"]')).not.toBeNull())
+      expect(document.querySelector('svg[role="img"]')).toBeNull()
+      fireEvent.change(screen.getByRole('combobox', { name: t('graph.selectNodeAction') }), { target: { value: 'mem-1' } })
+      await waitFor(() => expect(within(screen.getByRole('complementary')).getByText('Use sqlite WAL mode')).toBeTruthy())
+
+      cleanup()
+      render(<MemorySpacesSourcePage page="spaces" sourceTypeId="memory-spaces" sourceInstanceKey="source:g3d" sourceInstances={[]} locale="en" management={{ sourceInstanceKey: 'source:g3d', revision: 'r1', read, mutate: vi.fn() }} />)
+      await screen.findByRole('button', { name: t('graph.view2d') })
+      await waitFor(() => expect(document.querySelector('canvas[data-view="3d"]')).not.toBeNull())
+
+      fireEvent.click(screen.getByRole('button', { name: t('graph.view2d') }))
+      expect(localStorage.getItem('dsh-mnemon:graph-view')).toBe('2d')
+      await waitFor(() => expect(document.querySelector('svg[role="img"]')).not.toBeNull())
+    } finally {
+      localStorage.removeItem('dsh-mnemon:graph-view')
+      document.body.removeAttribute('data-ds-dark-theme')
+      getContextSpy.mockRestore()
+      rafSpy.mockRestore()
     }
   })
 })

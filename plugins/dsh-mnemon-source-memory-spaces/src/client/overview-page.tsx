@@ -9,6 +9,7 @@ import { providerSummary } from './provider-presentation.ts'
 import { appearanceClass, useLocale, humanBytes, message, PageHeader, SidebarModal, EmptyState } from 'dsh-mnemon/client'
 import { MemoryProviderBadge, ProviderMemoryFields, ReadSourcePanel, categoryLabel, mergeProviderDefaults, nativeSpaceProvider, providerDraftComplete, providerUnavailableKey, readyFirst, readyProviderId, type ProviderDrafts } from './widgets.tsx'
 import { MemoryGraph, enrichMultiSpaceGraph, graphKindLabel, graphNodeKey, graphNodeKind } from './memory-graph.tsx'
+import { MemoryGraph3D } from './memory-graph-3d.tsx'
 
 const canRenderSwitch = typeof Switch === 'function' || (typeof Switch === 'object' && Switch !== null)
 const canRenderPathLabel = typeof PathLabel === 'function' || (typeof PathLabel === 'object' && PathLabel !== null)
@@ -91,6 +92,13 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
   const changeGraphAppearance = useCallback((quiet: boolean): void => {
     setQuietGraph(quiet)
     try { localStorage.setItem('dsh-mnemon:graph-appearance', quiet ? 'quiet' : 'standard') } catch { /* Keep the choice for this view when browser storage is unavailable. */ }
+  }, [])
+  const [graphView, setGraphView] = useState<'2d' | '3d'>(() => {
+    try { return localStorage.getItem('dsh-mnemon:graph-view') === '3d' ? '3d' : '2d' } catch { return '2d' }
+  })
+  const changeGraphView = useCallback((view: '2d' | '3d'): void => {
+    setGraphView(view)
+    try { localStorage.setItem('dsh-mnemon:graph-view', view) } catch { /* Keep the choice for this view when browser storage is unavailable. */ }
   }, [])
   const clearGraphSelection = useCallback(() => setSelected(null), [])
   const [catalogLoading, setCatalogLoading] = useState(true)
@@ -524,9 +532,19 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
           <section className={css.graphPanel} data-quiet={quietGraph || undefined}>
             <div className={css.graphToolbar}>
               <div><span className={css.liveDot} />{t('overview.snapshot')} <small>{generated}</small></div>
-              <div className={css.graphLegend}><span data-edge="scope">{t('overview.edgeScope')}</span><span data-edge="temporal">{t('overview.edgeTemporal')}</span><span data-edge="semantic">{t('overview.edgeSemantic')}</span><span data-edge="causal">{t('overview.edgeCausal')}</span><span data-edge="entity">{t('overview.edgeEntity')}</span></div>
+              <div className={css.graphToolbarRight}>
+                <div className={css.graphLegend}><span data-edge="scope">{t('overview.edgeScope')}</span><span data-edge="temporal">{t('overview.edgeTemporal')}</span><span data-edge="semantic">{t('overview.edgeSemantic')}</span><span data-edge="causal">{t('overview.edgeCausal')}</span><span data-edge="entity">{t('overview.edgeEntity')}</span></div>
+                <div className={css.graphModeToggle} role="group" aria-label={t('graph.viewModeAria')}>
+                  <button type="button" aria-pressed={graphView === '2d'} data-active={graphView === '2d' || undefined} onClick={() => changeGraphView('2d')}>{t('graph.view2d')}</button>
+                  <button type="button" aria-pressed={graphView === '3d'} data-active={graphView === '3d' || undefined} onClick={() => changeGraphView('3d')}>{t('graph.view3d')}</button>
+                </div>
+              </div>
             </div>
-            <div className={css.graphViewport}><MemoryGraph graph={graph} selectedId={selected === null ? undefined : graphNodeKey(selected)} onSelect={setSelected} onClearSelection={clearGraphSelection} quiet={quietGraph} onQuietChange={changeGraphAppearance} /></div>
+            <div className={css.graphViewport}>
+              {graphView === '3d'
+                ? <MemoryGraph3D graph={graph} selectedId={selected === null ? undefined : graphNodeKey(selected)} onSelect={setSelected} onClearSelection={clearGraphSelection} quiet={quietGraph} onQuietChange={changeGraphAppearance} />
+                : <MemoryGraph graph={graph} selectedId={selected === null ? undefined : graphNodeKey(selected)} onSelect={setSelected} onClearSelection={clearGraphSelection} quiet={quietGraph} onQuietChange={changeGraphAppearance} />}
+            </div>
             <div className={css.graphFooter}><span>{t('overview.graphComposition', { spaces: graphSpaces, memories: graphMemories, entities: graphEntities })}</span><span>{t('overview.graphCount', { visible: Math.min(graph.nodes.length, 60), total: graph.nodes.length })} · {t('overview.graphEdges', { count: graph.edges.length })}</span></div>
           </section>
           <aside className={css.graphInspector} data-empty={selected === null || undefined}>
