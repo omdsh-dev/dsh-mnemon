@@ -654,6 +654,28 @@ describe('memory plugin enablement owned by the DSH profile patch', () => {
     f.graph.composableTurns.endTurn(turn.turnId)
   })
 
+  it('recovers an extension incorrectly selected as the main Strategy without changing stored memory (#673)', async () => {
+    const f = await fixture({ strategyTypeId: 'light-context', entries: { light: { config: { maxProjectionCharacters: 4096 } } } }, { generalStrategy: true })
+    await f.pluginManager.setPluginEnabled('general', true)
+    await f.pluginManager.setPluginEnabled('mnemon-strategy-default-three-tier', false)
+    await f.pluginManager.setPluginEnabled('scoped', true)
+    await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: 'Keep this existing memory. '.repeat(250) })
+    const before = await f.graph.source('runtime').read<RuntimeMemorySnapshot>('snapshot')
+
+    await expect(apply(f, { light: { enabled: true, config: { maxProjectionCharacters: 4096 } } }, 'light-context'))
+      .rejects.toThrow('selected memory Strategy type is unavailable: light-context')
+    expect(await entry(f, 'light')).toMatchObject({ enabled: false, active: false })
+    // Select the actual main Strategy; Light context contributes projection only.
+    await apply(f, { light: { enabled: true, config: { maxProjectionCharacters: 4096 } } }, 'general')
+    const preview = await f.management.preview(f.config, scope(f), { expectedRevision: (await f.management.catalog()).revision, strategyTypeId: 'general', entries: {} })
+    expect(preview.strategyTypeId).toBe('general')
+    expect(preview.extensions.map(value => value.typeId).sort()).toEqual(['light-context', 'scoped'])
+    expect(preview.projection.reduce((sum, fragment) => sum + fragment.text.length, 0)).toBeLessThanOrEqual(4096)
+    expect(await f.graph.source('runtime').read('snapshot')).toMatchObject({ revision: before.revision, entries: before.entries, targets: before.targets })
+    await f.reconcileProfile()
+    expect(await entry(f, 'light')).toMatchObject({ enabled: true, active: true, config: { maxProjectionCharacters: 4096 } })
+  })
+
   it('rolls enablement back when the saved View no longer composes', async () => {
     const f = await fixture(undefined, { generalStrategy: true })
     // Selecting a Strategy whose Entry stays off must not leave half-applied rows.

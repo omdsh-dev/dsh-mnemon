@@ -312,6 +312,14 @@ The sidebar has no **Memory System**, and every dsh-mnemon component on the Plug
 - The desktop app treats this as a failed start and shows its plugin recovery page. Click **Remove this plugin and continue** (your memory data stays), and once the app is up, add dsh-mnemon again as in [step 3](#3-install-and-enable-dsh-mnemon). Reinstalling 0.5.18 or 0.5.19 keeps the switch off, because the profile saves it, so then turn it on as above.
 - From 0.5.20 there is no separate switch: the group prepares dependency resolution itself, and a leftover setting for it is ignored. If the message names `dsh-mnemon/bundle`, DSH was updated to 0.5.20 without a restart and still runs the old group; quit DSH completely and start it again.
 
+### Light context stops immediately or its settings cannot be applied
+
+The Starter already includes light context, scoped selection, auto capture and the general strategy. Installing these strategy packages separately can insert the same component through two bundles, causing immediate disposal or refused switches. At startup, Mnemon consolidates these unmodified default strategy bundles into the Starter entry, preserving installed packages, user patches, enablement and configuration. Memory data is unchanged. Customized strategy bundles are not removed automatically; read-only profiles receive a recovery warning.
+
+On an older plugin version or with a customized bundle, keep the `dsh-mnemon` bundle selected in DSH's Plugins page and deselect the duplicate standalone strategy bundle, such as `dsh-mnemon-strategy-light-context`. Restart, then enable light context with Mnemon's component switch. Keep the strategy package installed and retain memory directories.
+
+Light context is a projection enhancement. `memoryView.strategyTypeId` must name a main strategy such as `general` or `default-three-tier`. If a manual configuration set it to `light-context`, choose the intended main strategy in the main-strategy selector before enabling the enhancement. Retain the existing `entries` and `maxProjectionCharacters` settings. Enabling an enhancement does not require disabling the main strategy.
+
 ### Upgrading DSH
 
 Update dsh-mnemon on your current DSH first, then upgrade DSH, and update dsh-mnemon again. Otherwise DSH 0.2 turns a release before 0.5.19 off when it starts, with your memory untouched until the plugin is updated, and on DSH 0.2.1 releases up to 0.5.30 keep running while their memory subagents and **Check versions → Update** fail. [Older DSH releases](../reference/compatibility.md#older-dsh-releases) lists the release each older DSH keeps, and the [upgrade order](../reference/compatibility.md#upgrade-order) gives the steps, including how to update once where **Check versions → Update** stops with `already-installed`.

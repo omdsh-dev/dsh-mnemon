@@ -13,6 +13,16 @@ const profile = process.env.MNEMON_BUNDLE_TEST_PROFILE ?? fileURLToPath(new URL(
 const env = { ...process.env, NODE_PATH: undefined }
 
 describe('published Starter activation contracts', () => {
+  it.each([false, true])('preserves light-context activation and configuration when its standalone bundle is also selected (#673, first: %s)', async first => {
+    const { stdout } = await run(process.execPath, ['--expose-internals', fixture, profile, 'manager', '--standalone-light', ...(first ? ['--light-first'] : [])], { env, timeout: 30_000 })
+    expect(stdout).toContain('"manager":true,"result":"passed"')
+  }, 30_000)
+
+  it('does not remove a separately selected strategy bundle with custom configuration', async () => {
+    const { stdout } = await run(process.execPath, ['--expose-internals', fixture, profile, 'manager', '--standalone-light', '--custom-light'], { env, timeout: 30_000 })
+    expect(stdout).toContain('Custom strategy bundle and user profile preserved.')
+  }, 30_000)
+
   it('saves settings after removing a duplicate manual bundle insertion (#470)', async () => {
     const { stdout } = await run(process.execPath, ['--expose-internals', fixture, profile, 'settings'], { env, timeout: 30_000 })
     expect(stdout).toContain('Config editor saved and reloaded Skills evolution with unique bundle/core IDs (#470).')
