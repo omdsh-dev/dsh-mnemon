@@ -56,59 +56,46 @@ function ensureContainedParents(bundleReal: string, relPath: string): string {
   return join(bundleReal, ...segments)
 }
 
-/** Inspect non-symlink supporting files inside a bundle directory without failing on unreadable entries. */
+/** Both model previews and backups traverse the same editable, contained files. */
+function* bundleFiles(root: string, strict: boolean, directory = root, depth = 0): Generator<{ path: string; full: string; bytes: number; mode: number }> {
+  let entries
+  try { entries = readdirSync(directory, { withFileTypes: true }) } catch (error) { if (strict) throw error; return }
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (entry.name.startsWith('.') || entry.isSymbolicLink()) continue
+    const full = join(directory, entry.name)
+    if (entry.isDirectory()) { if (depth < 3) yield* bundleFiles(root, strict, full, depth + 1); continue }
+    if (!entry.isFile()) continue
+    const path = relative(root, full).replaceAll('\\', '/')
+    // Hidden, linked and otherwise uneditable paths remain outside restore scope.
+    try { if (normalizeBundleRelativePath(path) !== path) continue } catch { continue }
+    try {
+      const info = lstatSync(full)
+      if (!info.isFile() || info.isSymbolicLink() || !insideDirectory(root, realpathSync(full))) throw new Error('supporting file changed during read: ' + path)
+      yield { path, full, bytes: info.size, mode: info.mode & 0o777 }
+    } catch (error) { if (strict) throw error }
+  }
+}
+
+/** Best-effort, bounded model preview; backups below never use these limits. */
 export function readSkillResourceFiles(summary: Pick<SkillSummary, 'path' | 'layout'>): SkillResourceFile[] {
   if (summary.layout !== 'bundle') return []
-  const directory = dirname(summary.path)
-  let rootReal: string
-  try {
-    rootReal = realpathSync(directory)
-  } catch {
-    return []
-  }
-  const collected: Array<{ rel: string; full: string; bytes: number }> = []
-  const visit = (dir: string, depth: number) => {
-    let entries
-    try { entries = readdirSync(dir, { withFileTypes: true }) } catch { return }
-    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
-      if (collected.length >= MAX_READ_RESOURCES || entry.name.startsWith('.')) continue
-      if (entry.isSymbolicLink()) continue
-      const full = join(dir, entry.name)
-      const rel = relative(directory, full).replaceAll('\\', '/')
-      if (rel === '' || rel === 'SKILL.md') continue
-      if (entry.isDirectory()) {
-        if (depth < 3) visit(full, depth + 1)
-        continue
-      }
-      if (!entry.isFile()) continue
-      try {
-        const info = lstatSync(full)
-        if (!info.isFile() || info.isSymbolicLink()) continue
-        const fileReal = realpathSync(full)
-        if (!insideDirectory(rootReal, fileReal)) continue
-        collected.push({ rel, full: fileReal, bytes: info.size })
-      } catch {
-        // Ignore transient or unreadable files during catalog inspection.
-      }
-    }
-  }
-  visit(directory, 0)
-  let totalTextBytes = 0
-  return collected.flatMap(({ rel, full, bytes }): SkillResourceFile[] => {
+  let root: string
+  try { root = realpathSync(dirname(summary.path)) } catch { return [] }
+  const resources: SkillResourceFile[] = []
+  let count = 0, textBytes = 0
+  for (const { path, full, bytes } of bundleFiles(root, false)) {
+    if (count++ >= MAX_READ_RESOURCES) break
+    if (bytes > 1024 * 1024) continue
     try {
-      if (bytes > 1024 * 1024) return []
-      const buf = readFileSync(full)
-      const hash = sha256Hex(buf)
-      const binary = buf.includes(0)
-      if (!binary && buf.byteLength <= MAX_RESOURCE_TEXT_BYTES && totalTextBytes + buf.byteLength <= MAX_TOTAL_RESOURCE_TEXT_BYTES) {
-        totalTextBytes += buf.byteLength
-        return [{ path: rel, hash, bytes: buf.byteLength, content: buf.toString('utf8') }]
-      }
-      return [{ path: rel, hash, bytes: buf.byteLength, ...(binary ? { binary: true } : {}) }]
-    } catch {
-      return []
-    }
-  })
+      const data = readFileSync(full)
+      const binary = data.includes(0)
+      const text = !binary && data.length <= MAX_RESOURCE_TEXT_BYTES && textBytes + data.length <= MAX_TOTAL_RESOURCE_TEXT_BYTES
+      if (text) textBytes += data.length
+      resources.push({ path, hash: sha256Hex(data), bytes: data.length,
+        ...(binary ? { binary: true } : {}), ...(text ? { content: data.toString('utf8') } : {}) })
+    } catch { /* Transient or unreadable files are omitted only from model previews. */ }
+  }
+  return resources
 }
 
 /** Read one exact supporting file inside a bundle directory, rejecting symlinks and traversal. */
@@ -132,31 +119,16 @@ export function readBundleResourceState(bundleDir: string, relPath: string): { e
 }
 
 /** Complete recoverable bytes for editable paths, independent of model preview limits. */
-
 export function snapshotBundleFiles(bundleDir: string): SkillBundleSnapshot {
-  const root = realpathSync(bundleDir)
   const files: SkillBundleSnapshot['files'] = Object.create(null)
-  let bytes = 0
-  const visit = (directory: string, depth: number) => {
-    for (const entry of readdirSync(directory, { withFileTypes: true })) {
-      if (entry.name.startsWith('.') || entry.isSymbolicLink()) continue
-      const full = join(directory, entry.name)
-      if (entry.isDirectory()) { if (depth < 3) visit(full, depth + 1); continue }
-      if (!entry.isFile()) continue
-      const path = relative(root, full).replaceAll('\\', '/')
-      if (path.toLowerCase() === 'skill.md') continue
-      // Names the editing API cannot accept remain outside its restore scope.
-      try { if (normalizeBundleRelativePath(path) !== path) continue } catch { continue }
-      const info = lstatSync(full)
-      if (!info.isFile() || info.isSymbolicLink() || !insideDirectory(root, realpathSync(full))) throw new Error('supporting file changed during backup: ' + path)
-      bytes += info.size
-      if (bytes > MAX_BUNDLE_SNAPSHOT_BYTES || Object.keys(files).length >= MAX_BUNDLE_SNAPSHOT_FILES) throw new Error('Skill supporting-file backup exceeds 16 MiB or 1024 files; no files were changed')
-      const data = readFileSync(full)
-      if (data.length !== info.size) throw new Error('supporting file changed during backup: ' + path)
-      files[path] = { base64: data.toString('base64'), mode: info.mode & 0o777 }
-    }
+  let bytes = 0, count = 0
+  for (const file of bundleFiles(realpathSync(bundleDir), true)) {
+    bytes += file.bytes
+    if (bytes > MAX_BUNDLE_SNAPSHOT_BYTES || ++count > MAX_BUNDLE_SNAPSHOT_FILES) throw new Error('Skill supporting-file backup exceeds 16 MiB or 1024 files; no files were changed')
+    const data = readFileSync(file.full)
+    if (data.length !== file.bytes) throw new Error('supporting file changed during backup: ' + file.path)
+    files[file.path] = { base64: data.toString('base64'), mode: file.mode }
   }
-  visit(root, 0)
   return { version: 1, complete: true, files }
 }
 
@@ -245,7 +217,7 @@ export function prepareDraftFileChanges(input: {
   const existingByPath = new Map(input.existingResources.map(file => [file.path, file]))
   const seen = new Set<string>()
   const normalized: SkillDraftFileChange[] = []
-  const baseFileHashes: Record<string, string | null> = {}
+  const baseFileHashes: Record<string, string | null> = Object.create(null)
 
   for (const entry of rawFiles) {
     const path = normalizeBundleRelativePath(entry.path)

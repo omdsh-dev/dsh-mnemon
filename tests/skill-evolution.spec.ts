@@ -1167,6 +1167,10 @@ describe('skill evolution in the Host', () => {
   })
 
   it('drafts supporting reference files and passes them through backtesting (#654)', async () => {
+    // An oversized model response must not silently drop file changes.
+    expect(() => parseSkillDraft({ content: 'Skill', files: Array.from({ length: 21 }, (_, i) => ({
+      path: `references/${i}.md`, action: 'upsert', content: 'Reference',
+    })) })).toThrow('at most 20')
     expect(parseSkillDraft({
       content: '---\nname: a\ndescription: A.\n---\nBody\n', notes: 'n', changes: ['c'], files: [],
     })).toEqual({ content: '---\nname: a\ndescription: A.\n---\nBody\n', notes: 'n', changes: ['c'] })

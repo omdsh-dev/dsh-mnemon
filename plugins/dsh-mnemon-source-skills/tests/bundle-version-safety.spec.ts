@@ -23,6 +23,17 @@ beforeEach(() => {
 })
 afterEach(() => rmSync(root, { recursive: true, force: true }))
 
+it('keeps the conflict fence for a literal __proto__ supporting file after reopening', async () => {
+  const path = join(bundle, '__proto__')
+  writeFileSync(path, 'original')
+  const draft = await skills.recordDraft(undefined, { skillName: 'review-case', content, notes: '', changes: [], guidance: [],
+    files: [{ path: '__proto__', action: 'upsert', content: 'draft' }] })
+  writeFileSync(path, 'external edit')
+  skills = new SkillsService(join(root, 'data'), { dshHome: home, agentsHome: join(root, 'agents') })
+  await expect(skills.adoptDraft(undefined, draft.id)).rejects.toThrow('changed since it was read')
+  expect(readFileSync(path, 'utf8')).toBe('external edit')
+})
+
 it.skipIf(process.platform === 'win32')('preserves the executable mode of an updated supporting script', () => {
   const path = join(bundle, 'scripts', 'run.sh')
   mkdirSync(dirname(path), { recursive: true })

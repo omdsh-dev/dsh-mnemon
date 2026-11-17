@@ -95,6 +95,24 @@ export interface SkillDraftFileChange {
   baseHash?: string | null
 }
 
+/** Shared wire validation for model drafts and Source management requests. */
+export function parseSkillDraftFiles(value: unknown): SkillDraftFileChange[] | undefined {
+  if (value === undefined || value === null) return undefined
+  if (!Array.isArray(value) || value.length > 20) throw new Error('files must be an array of at most 20 items')
+  if (value.length === 0) return undefined
+  return value.map((item: unknown) => {
+    if (item === null || typeof item !== 'object') throw new Error('each supporting file needs a path and action')
+    const { path, action, content, baseHash } = item as Record<string, unknown>
+    if (typeof path !== 'string' || path.trim() === '' || path.length > 200 || (action !== 'upsert' && action !== 'delete')) {
+      throw new Error('each supporting file needs a relative path and action (upsert or delete)')
+    }
+    if (action === 'upsert' && (typeof content !== 'string' || content.trim() === '')) throw new Error(`supporting file "${path}" requires non-empty content`)
+    if (baseHash !== undefined && baseHash !== null && (typeof baseHash !== 'string' || baseHash.trim() === '' || baseHash.length > 100)) throw new Error('invalid supporting file baseHash')
+    return { path: path.trim(), action, ...(action === 'upsert' ? { content: content as string } : {}),
+      ...(baseHash === undefined ? {} : { baseHash: baseHash === null ? null : (baseHash as string).trim() }) }
+  })
+}
+
 export interface SkillDocument extends SkillSummary {
   content: string
   /** Frontmatter text between the fences, verbatim. */

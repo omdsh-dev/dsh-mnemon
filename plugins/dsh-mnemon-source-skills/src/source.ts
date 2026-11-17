@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { COMPOSABLE_MEMORY_API_VERSION, type MemoryJsonValue, type MemorySourceDefinition, type MemorySourceFacts } from 'dsh-mnemon/contracts'
 import { defineMemorySource, memoryInputRecord as record, memoryInputStringArray as stringArray, memoryInputText as text } from 'dsh-mnemon/extension-sdk'
-import { AUTO_ADOPTION_STAGES, AUTO_ADOPTION_REASONS, type AutoAdoptionEvent, type DraftExpectation, type AutomaticAdoption, EVOLUTION_SIGNALS, SKILL_ROOT_KINDS, type CaseResult, type EvolutionSignal, type ModelRoute, type ReviewRecordInput, type RunTarget, type SkillDraftFileChange, type SkillRootKind, type SkillsPolicy, type TrajectoryStep } from './contracts.ts'
+import { AUTO_ADOPTION_STAGES, AUTO_ADOPTION_REASONS, type AutoAdoptionEvent, type DraftExpectation, type AutomaticAdoption, EVOLUTION_SIGNALS, SKILL_ROOT_KINDS, type CaseResult, type EvolutionSignal, type ModelRoute, type ReviewRecordInput, type RunTarget, parseSkillDraftFiles, type SkillRootKind, type SkillsPolicy, type TrajectoryStep } from './contracts.ts'
 import { SkillsService, type CaseInput } from './service.ts'
 
 export const SKILLS_SOURCE_TYPE_ID = 'skills'
@@ -70,25 +70,6 @@ function draftExpectation(value: MemoryJsonValue | undefined): { expectedDraft?:
   if (value === null) return { expectedDraft: null }
   const expected = record(value, 'expectedDraft')
   return { expectedDraft: { id: text(expected.id, 'expectedDraft.id', 100)!, hash: text(expected.hash, 'expectedDraft.hash', 100)! } }
-}
-
-function draftFiles(value: MemoryJsonValue | undefined): SkillDraftFileChange[] | undefined {
-  if (value === undefined) return undefined
-  if (!Array.isArray(value) || value.length > 20) throw new Error('files must be an array of at most 20 items')
-  return value.map((entry, index) => {
-    const item = record(entry, `files[${index}]`)
-    const path = text(item.path, `files[${index}].path`, 200)!
-    const action = item.action
-    if (action !== 'upsert' && action !== 'delete') throw new Error(`files[${index}].action must be upsert or delete`)
-    if (action === 'upsert' && typeof item.content !== 'string') throw new Error(`files[${index}].content must be a string`)
-    const baseHash = item.baseHash === undefined ? undefined : item.baseHash === null ? null : text(item.baseHash, `files[${index}].baseHash`, 100)!
-    return {
-      path,
-      action,
-      ...(typeof item.content === 'string' ? { content: item.content } : {}),
-      ...(baseHash !== undefined ? { baseHash } : {}),
-    }
-  })
 }
 
 function automaticAdoption(value: MemoryJsonValue | undefined): { automatic?: AutomaticAdoption } {
@@ -430,7 +411,7 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
               break
             }
             case 'draft-record': {
-              const files = draftFiles(fields.files)
+              const files = parseSkillDraftFiles(fields.files)
               value = await service.recordDraft(root, {
                 ...(request.signal === undefined ? {} : { signal: request.signal }),
                 ...draftExpectation(fields.expectedDraft),

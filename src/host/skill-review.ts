@@ -1,4 +1,4 @@
-import type { EvalCase, EvidencePack, EvolutionSignal, SkillDocument, SkillDraftFileChange, SkillSuggestion, TrajectoryStep } from 'dsh-mnemon-source-skills/contracts'
+import { parseSkillDraftFiles, type EvalCase, type EvidencePack, type EvolutionSignal, type SkillDocument, type SkillDraftFileChange, type SkillSuggestion, type TrajectoryStep } from 'dsh-mnemon-source-skills/contracts'
 
 const SIGNALS: readonly EvolutionSignal[] = ['correction', 'directive', 'tool-failure', 'approach-change', 'procedure', 'skill-gap', 'skill-misleading', 'success']
 
@@ -328,24 +328,7 @@ export function parseSkillDraft(value: unknown): { content: string; notes: strin
   const input = record(value)
   const content = typeof input.content === 'string' ? input.content.replace(/^\s*```(?:markdown|md)?\n([\s\S]*?)\n```\s*$/u, '$1') : ''
   if (content.trim() === '') throw new Error('the skill author returned no SKILL.md')
-  let files: SkillDraftFileChange[] | undefined
-  if (input.files !== undefined && input.files !== null) {
-    if (!Array.isArray(input.files)) throw new Error('the skill author returned invalid files')
-    const parsed: SkillDraftFileChange[] = []
-    for (const raw of input.files.slice(0, 20)) {
-      const entry = record(raw)
-      const path = string(entry.path).trim()
-      const action = entry.action === 'delete' ? 'delete' : entry.action === 'upsert' ? 'upsert' : undefined
-      if (path === '' || action === undefined) throw new Error('each supporting file needs a path and action (upsert or delete)')
-      if (action === 'upsert') {
-        if (typeof entry.content !== 'string' || entry.content.trim() === '') throw new Error(`supporting file "${path}" requires non-empty content`)
-        parsed.push({ path, action, content: entry.content })
-      } else {
-        parsed.push({ path, action })
-      }
-    }
-    if (parsed.length > 0) files = parsed
-  }
+  const files = parseSkillDraftFiles(input.files)
   return {
     content: content.endsWith('\n') ? content : content + '\n',
     notes: string(input.notes).slice(0, 2_000),
