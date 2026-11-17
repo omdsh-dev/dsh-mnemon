@@ -15,13 +15,13 @@ importers:
         specifier: ^3.18.4
         version: 3.18.5
       dsh-mnemon-provider-byterover:
-        specifier: 0.5.7
+        specifier: 0.5.8
         version: link:plugins/dsh-mnemon-provider-byterover
       dsh-mnemon-provider-hindsight:
         specifier: 0.5.7
         version: link:plugins/dsh-mnemon-provider-hindsight
       dsh-mnemon-provider-holographic:
-        specifier: 0.5.7
+        specifier: 0.5.8
         version: link:plugins/dsh-mnemon-provider-holographic
       dsh-mnemon-provider-honcho:
         specifier: 0.5.5
@@ -33,40 +33,40 @@ importers:
         specifier: 0.5.11
         version: link:plugins/dsh-mnemon-provider-mnemon-native
       dsh-mnemon-provider-openviking:
-        specifier: 0.5.10
+        specifier: 0.5.11
         version: link:plugins/dsh-mnemon-provider-openviking
       dsh-mnemon-provider-retaindb:
-        specifier: 0.5.6
+        specifier: 0.5.7
         version: link:plugins/dsh-mnemon-provider-retaindb
       dsh-mnemon-provider-supermemory:
-        specifier: 0.5.5
+        specifier: 0.5.6
         version: link:plugins/dsh-mnemon-provider-supermemory
       dsh-mnemon-source-documents:
-        specifier: 0.6.0
+        specifier: 0.6.1
         version: link:plugins/dsh-mnemon-source-documents
       dsh-mnemon-source-memory-spaces:
-        specifier: 0.5.28
+        specifier: 0.5.29
         version: link:plugins/dsh-mnemon-source-memory-spaces
       dsh-mnemon-source-runtime:
-        specifier: 0.5.20
+        specifier: 0.5.21
         version: link:plugins/dsh-mnemon-source-runtime
       dsh-mnemon-source-skills:
-        specifier: 0.5.13
+        specifier: 0.5.14
         version: link:plugins/dsh-mnemon-source-skills
       dsh-mnemon-strategy-auto-capture:
-        specifier: 0.5.5
+        specifier: 0.5.6
         version: link:plugins/dsh-mnemon-strategy-auto-capture
       dsh-mnemon-strategy-default-three-tier:
-        specifier: 0.5.13
+        specifier: 0.5.14
         version: link:plugins/dsh-mnemon-strategy-default-three-tier
       dsh-mnemon-strategy-general:
-        specifier: 0.5.2
+        specifier: 0.5.3
         version: link:plugins/dsh-mnemon-strategy-general
       dsh-mnemon-strategy-light-context:
-        specifier: 0.5.6
+        specifier: 0.5.7
         version: link:plugins/dsh-mnemon-strategy-light-context
       dsh-mnemon-strategy-scoped:
-        specifier: 0.5.5
+        specifier: 0.5.6
         version: link:plugins/dsh-mnemon-strategy-scoped
       fflate:
         specifier: ^0.8.3
@@ -296,7 +296,7 @@ importers:
         specifier: ^22.0.0
         version: 22.20.1
       dsh-mnemon-source-memory-spaces:
-        specifier: ^0.5.26
+        specifier: ^0.5.29
         version: link:../dsh-mnemon-source-memory-spaces
       tsdown:
         specifier: ^0.22.0
@@ -340,7 +340,7 @@ importers:
         specifier: ^22.0.0
         version: 22.20.1
       dsh-mnemon-source-memory-spaces:
-        specifier: ^0.5.23
+        specifier: ^0.5.29
         version: link:../dsh-mnemon-source-memory-spaces
       tsdown:
         specifier: ^0.22.0
@@ -428,7 +428,7 @@ importers:
         specifier: ^22.0.0
         version: 22.20.1
       dsh-mnemon-source-memory-spaces:
-        specifier: ^0.5.23
+        specifier: ^0.5.29
         version: link:../dsh-mnemon-source-memory-spaces
       tsdown:
         specifier: ^0.22.0
@@ -450,7 +450,7 @@ importers:
         specifier: ^22.0.0
         version: 22.20.1
       dsh-mnemon-source-memory-spaces:
-        specifier: ^0.5.11
+        specifier: ^0.5.29
         version: link:../dsh-mnemon-source-memory-spaces
       tsdown:
         specifier: ^0.22.0
@@ -472,7 +472,7 @@ importers:
         specifier: ^22.0.0
         version: 22.20.1
       dsh-mnemon-source-memory-spaces:
-        specifier: ^0.5.11
+        specifier: ^0.5.29
         version: link:../dsh-mnemon-source-memory-spaces
       tsdown:
         specifier: ^0.22.0
@@ -530,7 +530,7 @@ importers:
         specifier: ^9.0.0
         version: 9.0.0
       dsh-mnemon:
-        specifier: ^0.5.42
+        specifier: ^0.5.47
         version: link:../..
       immer:
         specifier: ^10.1.1
@@ -648,7 +648,7 @@ importers:
         specifier: ^9.0.0
         version: 9.0.0
       dsh-mnemon:
-        specifier: ^0.5.46
+        specifier: ^0.5.47
         version: link:../..
       immer:
         specifier: ^10.1.1
@@ -766,7 +766,7 @@ importers:
         specifier: ^9.0.0
         version: 9.0.0
       dsh-mnemon:
-        specifier: ^0.5.46
+        specifier: ^0.5.47
         version: link:../..
       immer:
         specifier: ^10.1.1
@@ -884,7 +884,7 @@ importers:
         specifier: ^9.0.0
         version: 9.0.0
       dsh-mnemon:
-        specifier: ^0.5.46
+        specifier: ^0.5.47
         version: link:../..
       immer:
         specifier: ^10.1.1
@@ -966,10 +966,10 @@ importers:
         specifier: ^22.0.0
         version: 22.20.1
       dsh-mnemon:
-        specifier: ^0.5.17
+        specifier: ^0.5.47
         version: link:../..
       dsh-mnemon-strategy-default-three-tier:
-        specifier: ^0.5.7
+        specifier: ^0.5.14
         version: link:../dsh-mnemon-strategy-default-three-tier
       tsdown:
         specifier: ^0.22.0
@@ -991,7 +991,7 @@ importers:
         specifier: ^22.0.0
         version: 22.20.1
       dsh-mnemon:
-        specifier: ^0.5.43
+        specifier: ^0.5.47
         version: link:../..
       tsdown:
         specifier: ^0.22.0
@@ -1013,7 +1013,7 @@ importers:
         specifier: ^22.0.0
         version: 22.20.1
       dsh-mnemon:
-        specifier: ^0.5.43
+        specifier: ^0.5.47
         version: link:../..
       tsdown:
         specifier: ^0.22.0
@@ -1035,10 +1035,10 @@ importers:
         specifier: ^22.0.0
         version: 22.20.1
       dsh-mnemon:
-        specifier: ^0.5.32
+        specifier: ^0.5.47
         version: link:../..
       dsh-mnemon-strategy-default-three-tier:
-        specifier: ^0.5.10
+        specifier: ^0.5.14
         version: link:../dsh-mnemon-strategy-default-three-tier
       tsdown:
         specifier: ^0.22.0
@@ -1060,10 +1060,10 @@ importers:
         specifier: ^22.0.0
         version: 22.20.1
       dsh-mnemon:
-        specifier: ^0.5.17
+        specifier: ^0.5.47
         version: link:../..
       dsh-mnemon-strategy-default-three-tier:
-        specifier: ^0.5.7
+        specifier: ^0.5.14
         version: link:../dsh-mnemon-strategy-default-three-tier
       tsdown:
         specifier: ^0.22.0
