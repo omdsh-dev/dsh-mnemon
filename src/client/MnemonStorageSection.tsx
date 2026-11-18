@@ -3,7 +3,8 @@ import { Button, PathLabel } from '@deepseek-ai/dsh-client-ui-primitives'
 import { MNEMON_PACK_COMPONENTS, type ClientConnectionHandle, type ClientSettingsScope, type Config, type SettingsOperation } from '../host/protocol.ts'
 import type { MemoryPluginEntryView, MemoryViewDashboard } from '../host/view-protocol.ts'
 import { componentCopy } from './component-copy.ts'
-import { ComponentChips } from './CompositionBoard.tsx'
+import { ComponentChips, PageLink } from './CompositionBoard.tsx'
+import { RUNTIME_PACKAGE } from './component-settings.tsx'
 import { GlobalLocationSetting } from './GlobalLocationSetting.tsx'
 import type { MnemonTranslate } from './locales.ts'
 import css from './MnemonSettingsCard.module.css'
@@ -94,7 +95,7 @@ export interface MnemonStorageSectionProps {
   workspaceId?: string
   language: string
   t: MnemonTranslate
-  onOpen: (entry: MemoryPluginEntryView) => void
+  onOpen: (entry: MemoryPluginEntryView, section?: string) => void
   onSaved: () => void
   /** A sync, a merge, an import or an applied plan may have changed memory, which views elsewhere show. */
   onDataChanged?: () => void
@@ -182,6 +183,7 @@ export function MnemonStorageSection(props: MnemonStorageSectionProps): JSX.Elem
   // The Sources that keep their data here, in the order a backup lists them.
   const order = (entry: MemoryPluginEntryView): number => (MNEMON_PACK_COMPONENTS as readonly string[]).indexOf(entry.typeId ?? '')
   const users = (props.dashboard?.entries ?? []).filter(entry => entry.roles.includes('source') && order(entry) >= 0).sort((left, right) => order(left) - order(right))
+  const runtime = users.find(entry => entry.packageName === RUNTIME_PACKAGE && entry.enabled)
   // Where memory lives now; while a change waits, the Apply line says what it does instead.
   const current = storage.dirty ? undefined : props.target?.root
   const defaultRoot = props.target?.defaultRoot ?? (saved.scope === 'global' && saved.location === 'default' ? current : undefined)
@@ -225,6 +227,12 @@ export function MnemonStorageSection(props: MnemonStorageSectionProps): JSX.Elem
         </GlobalLocationSetting>}
       <PanelActions dirty={storage.dirty} saving={storage.saving} invalid={problem} failed={storage.failed} applied={storage.applied} disabled={props.disabled || storageMissing(draft)}
         note={t('storage.moveNote')} t={t} onDiscard={storage.discard} onApply={() => { void storage.apply() }} />
+      {saved.scope !== 'global' && runtime !== undefined && (
+        <SettingRow title={t('config.runtimeUserScopeTitle')}
+          hint={t(value.runtimeUserScope === 'global' ? 'storage.userProfileShared' : 'storage.userProfileByWorkspace')}>
+          <PageLink label={t('storage.runtimeSettings')} onOpen={() => props.onOpen(runtime, 'user-scope')} />
+        </SettingRow>
+      )}
       <SettingRow title={t('workspace.excludeTitle')} hint={t('workspace.excludeHint')} htmlFor="mnemon-excluded-workspaces" stacked>
         <textarea id="mnemon-excluded-workspaces" className={css.workspacePaths} rows={2} value={exclusion.draft.paths} disabled={props.disabled || exclusion.saving}
           spellCheck={false} autoCapitalize="none" onChange={event => exclusion.edit({ paths: event.target.value })} />

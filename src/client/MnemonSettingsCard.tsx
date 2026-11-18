@@ -238,7 +238,7 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
           {...(sharedClient === undefined ? {} : { client: sharedClient })}
           {...(directoryPicker === undefined ? {} : { directoryPicker })}
           {...(connection === undefined ? {} : { connection })} {...(sessionId === undefined ? {} : { sessionId })} {...(workspaceId === undefined ? {} : { workspaceId })}
-          language={language} t={t} onOpen={entry => pages.open(entry.entryId, 'configuration')} onSaved={() => setTargetRevision(revision => revision + 1)}
+          language={language} t={t} onOpen={(entry, section) => pages.open(entry.entryId, 'configuration', section)} onSaved={() => setTargetRevision(revision => revision + 1)}
           onDataChanged={componentChanges.bump} />
 
         <section className={css.section} aria-labelledby="mnemon-interface-heading">
