@@ -159,7 +159,8 @@ Packs, sync merge, overflow packing and metadata-based restore preserve the opti
 - `add` writes an independent new fact; exactly identical content is not added twice.
 - `replace` and `remove` first match the normalized full content of `old_text` within the requested `target`, then replace or remove that entire item. One exact match takes precedence even when other items contain the same text.
 - When no full-content match exists, a unique substring still locates the item.
-- Zero matches, duplicate exact matches, and ambiguous substring matches are rejected without changing the store; no fuzzy mutation is performed. Branch tags control projection and are not mutation selectors.
+- Runtime collapses legacy duplicates with the same normalized content, target and branch scope. It keeps the newest copy and the latest explicit pin decision. A replacement that would recreate a same-scope duplicate is rejected with instructions to consolidate the entries.
+- Zero matches or ambiguous matches are rejected. Equal text in different branch scopes stays distinct. Branch tags control projection and do not select a mutation target.
 
 ### Capacity
 

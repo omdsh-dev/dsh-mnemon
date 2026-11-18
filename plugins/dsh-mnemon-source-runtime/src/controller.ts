@@ -183,6 +183,32 @@ function parseEntry(value: unknown): RuntimeMemoryEntry | undefined {
   }
 }
 
+function duplicateEntryKey(entry: RuntimeMemoryEntry): string {
+  return JSON.stringify([entry.target, entry.content, [...(entry.branches ?? [])].sort()])
+}
+
+function isNewerEntry(entry: RuntimeMemoryEntry, previous: RuntimeMemoryEntry): boolean {
+  const updated = Date.parse(entry.updated_at)
+  const previousUpdated = Date.parse(previous.updated_at)
+  return Number.isFinite(updated) && (!Number.isFinite(previousUpdated) || updated > previousUpdated)
+}
+
+function collapseDuplicateEntries(entries: readonly RuntimeMemoryEntry[]): RuntimeMemoryEntry[] {
+  const groups = new Map<string, { latest: RuntimeMemoryEntry; pin?: RuntimeMemoryEntry }>()
+  for (const entry of entries) {
+    const key = duplicateEntryKey(entry)
+    const group = groups.get(key)
+    if (group === undefined) {
+      groups.set(key, { latest: entry, ...(entry.pinned === undefined ? {} : { pin: entry }) })
+      continue
+    }
+    if (isNewerEntry(entry, group.latest)) group.latest = entry
+    // A copy without a pin field cannot undo an explicit decision.
+    if (entry.pinned !== undefined && (group.pin === undefined || isNewerEntry(entry, group.pin))) group.pin = entry
+  }
+  return [...groups.values()].map(({ latest, pin }) => pin?.pinned === undefined ? latest : { ...latest, pinned: pin.pinned })
+}
+
 function age(timestamp: string, projectedAt: number): string {
   const time = Date.parse(timestamp)
   if (!Number.isFinite(time)) return 'unknown'
@@ -253,7 +279,7 @@ function prepareMutation(
     .map((entry, index) => entry.target === request.target && entry.content.includes(oldText) ? index : -1)
     .filter(index => index >= 0)
   const exactMatches = substringMatches.filter(index => entries[index]!.content === oldText)
-  // Full entry content takes precedence, but duplicate exact entries remain ambiguous.
+  // Full content takes precedence. The same content in different branch scopes is ambiguous.
   const matches = exactMatches.length > 0 ? exactMatches : substringMatches
   if (matches.length === 0) throw new Error(`No ${request.target} entry contains ${JSON.stringify(oldText)}.`)
   if (matches.length > 1) throw new Error(`Multiple ${request.target} entries contain ${JSON.stringify(oldText)}; use a unique substring.`)
@@ -275,6 +301,11 @@ function prepareMutation(
     if (branchScope !== undefined) {
       if (branchScope.length === 0) delete pendingEntry.branches
       else pendingEntry.branches = branchScope
+    }
+    const key = duplicateEntryKey(pendingEntry)
+    if (entries.some((entry, entryIndex) => entryIndex !== index && entry.target === request.target
+      && entry.content === content && duplicateEntryKey(entry) === key)) {
+      throw new Error(`An identical ${request.target} entry already exists in this scope. Remove the old entry to consolidate them.`)
     }
     entries[index] = pendingEntry
     return {
@@ -833,7 +864,7 @@ ${memory || '(empty)'}
     }
     const entries = parsed.entries.map(parseEntry)
     if (entries.some(entry => entry === undefined)) throw new Error('runtime memories.json contains an invalid entry')
-    return { version: RUNTIME_MEMORY_VERSION, entries: entries as RuntimeMemoryEntry[] }
+    return { version: RUNTIME_MEMORY_VERSION, entries: collapseDuplicateEntries(entries as RuntimeMemoryEntry[]) }
   }
 
   private persist(file: RuntimeMemoryFile): void {
