@@ -1662,6 +1662,41 @@ describe('centralized workspace storage settings', () => {
     expect(mutate).not.toHaveBeenCalled()
   })
 
+  it.each(['workspace', 'workspaces'] as const)('opens the existing user profile selector from %s storage (#625)', async storageScope => {
+    const mutate = vi.fn(async () => {})
+    const scope = liveSettingsScope<Config>(readySnapshot({ storageScope }), mutate)
+    const runtimeEntry: MemoryPluginEntryView = {
+      entryId: 'mnemon-source-runtime', packageName: RUNTIME_PACKAGE, roles: ['source'], typeId: 'runtime',
+      label: { en: 'Runtime Memory', 'zh-CN': '运行时记忆' }, description: { en: '', 'zh-CN': '' },
+      fields: [], provides: [], requires: [], requiredBy: [], enabled: true, active: true, writable: true, config: {},
+    }
+    const dashboard: MemoryViewDashboard = {
+      revision: 'view-1', writable: true, strategyTypeId: 'default-three-tier', sources: [], diagnostics: [],
+      entries: [runtimeEntry], pluginInstallation: { supported: false, suggestions: [] },
+    }
+    const call = vi.fn(async (channel: string, endpoint: string) => {
+      if (channel === '/dsh-mnemon-view' && endpoint === 'dashboard') return { ok: true, value: dashboard }
+      return { ok: false, message: 'Unused endpoint' }
+    })
+    render(<MnemonSettingsCard scope={scope} connection={{ rpc: { call }, isLoopback: true } as unknown as ClientConnectionHandle}
+      componentSettings={{
+        has: pkg => pkg === RUNTIME_PACKAGE,
+        render: (_entry, current) => runtime(scope, current),
+      }} />)
+
+    const storage = screen.getByRole('region', { name: '存储' })
+    const shortcut = await within(storage).findByRole('button', { name: '运行时记忆设置' })
+    expect(within(storage).getByText('每个工作区都有独立的用户画像。')).toBeTruthy()
+    fireEvent.click(shortcut)
+    expect(mutate).not.toHaveBeenCalled()
+
+    const dialog = await screen.findByRole('dialog', { name: '运行时记忆' })
+    choose('用户画像范围', '全局共享', dialog)
+
+    await waitFor(() => expect(mutate).toHaveBeenCalledExactlyOnceWith([{ op: 'set', path: ['runtimeUserScope'], value: 'global' }]))
+    expect(within(storage).getByText('所有工作区共用一个用户画像，工作记忆仍按工作区隔离。')).toBeTruthy()
+  })
+
   it('shows the one directory memory uses: the default under its title, a typed one in its field', async () => {
     const connection = (root: string, scope: string) => {
       const call = vi.fn(async (channel: string, endpoint: string) => {
