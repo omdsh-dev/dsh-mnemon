@@ -58,6 +58,8 @@ export interface RuntimeMemoryMutation {
   content?: string
   oldText?: string
   importance?: RuntimeMemoryImportance
+  /** Management-only exact scope selector for replace/remove. An empty list selects an unscoped working-memory entry. */
+  matchBranches?: string[]
   /** Git branch names limiting where a target=memory entry is projected. Absent keeps the current scope on replace; an empty list clears it. */
   branches?: string[]
 }

@@ -10,6 +10,10 @@ function fold(text: string): string {
   return text.replace(/\s+/gu, ' ').trim()
 }
 
+function entrySelector(entry: RuntimeMemoryEntry) {
+  return entry.target === 'memory' ? { matchBranches: entry.branches ?? [] } : {}
+}
+
 export function RuntimePage(props: { client: RuntimePageClient; revision: number; writeEnabled: boolean; focusText?: string; onRevealElement?(element: HTMLElement): void; onMutate?: () => void }): JSX.Element {
   const t = useT()
   const locale = useLocale()
@@ -58,7 +62,7 @@ export function RuntimePage(props: { client: RuntimePageClient; revision: number
     else element.scrollIntoView?.({ block: 'nearest' })
   }, [snapshot, visibleLimit])
 
-  const entryKey = (entry: RuntimeMemoryEntry) => `${entry.target}:${entry.created_at}:${entry.content}`
+  const entryKey = (entry: RuntimeMemoryEntry) => JSON.stringify([entry.target, entry.created_at, entry.content, [...(entry.branches ?? [])].sort()])
   const mutate = async (request: Parameters<RuntimePageClient['mutateRuntimeMemory']>[0]) => {
     setNotice(null); setError(null)
     const result = await props.client.mutateRuntimeMemory(request)
@@ -93,14 +97,14 @@ export function RuntimePage(props: { client: RuntimePageClient; revision: number
     try {
       const rawBranches = editBranches.trim()
       const branchDelta = entry.target !== 'memory' || rawBranches === editBranchesOriginal.trim() ? undefined : rawBranches === '' ? [] : parseBranchesInput(editBranches)
-      await mutate({ action: 'replace', target: entry.target, old_text: entry.content, content: editContent, importance: editImportance, ...(branchDelta === undefined ? {} : { branches: branchDelta }) })
+      await mutate({ action: 'replace', target: entry.target, old_text: entry.content, content: editContent, importance: editImportance, ...entrySelector(entry), ...(branchDelta === undefined ? {} : { branches: branchDelta }) })
       setEditing(null)
     } catch (reason) { setError(message(reason)) } finally { setSaving(false) }
   }
   const remove = async (entry: RuntimeMemoryEntry) => {
     setSaving(true)
     try {
-      await mutate({ action: 'remove', target: entry.target, old_text: entry.content })
+      await mutate({ action: 'remove', target: entry.target, old_text: entry.content, ...entrySelector(entry) })
       setRemoving(null)
     } catch (reason) { setError(message(reason)) } finally { setSaving(false) }
   }
@@ -108,7 +112,7 @@ export function RuntimePage(props: { client: RuntimePageClient; revision: number
     if (props.client.pinRuntimeMemory === undefined) return
     setSaving(true); setError(null); setNotice(null)
     try {
-      const next = await props.client.pinRuntimeMemory({ target: entry.target, content: entry.content, pinned: entry.pinned !== true })
+      const next = await props.client.pinRuntimeMemory({ target: entry.target, content: entry.content, pinned: entry.pinned !== true, ...entrySelector(entry) })
       if (next !== undefined && next !== null && Array.isArray(next.entries)) setSnapshot(next)
       else await load()
       setNotice(t(entry.pinned === true ? 'runtime.unpinnedNotice' : 'runtime.pinnedNotice'))
@@ -189,7 +193,16 @@ export function RuntimePage(props: { client: RuntimePageClient; revision: number
       </>}
       {adding && <SidebarModal title={t('runtime.addTitle')} description={t('runtime.addDescription')} busy={saving} onClose={closeComposer} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close className={css.secondaryButton} disabled={saving} onClick={closeComposer}>{t('common.cancel')}</button><button type="submit" form={runtimeAddFormId} className={css.primaryButton} disabled={saving || content.trim() === ''}>{saving ? t('runtime.saving') : t('runtime.addAction')}</button></div>}>{composer}</SidebarModal>}
       {editingEntry !== undefined && <SidebarModal title={t('runtime.editContent')} description={t(`runtime.target.${editingEntry.target}` as MnemonKey)} busy={saving} onClose={() => setEditing(null)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close className={css.secondaryButton} disabled={saving} onClick={() => setEditing(null)}>{t('common.cancel')}</button><button type="submit" form={runtimeEditFormId} className={css.primaryButton} disabled={saving || editContent.trim() === ''}>{t('runtime.saveEdit')}</button></div>}>{editForm}</SidebarModal>}
-      {removingEntry !== undefined && <SidebarModal title={t('runtime.removeTitle')} description={t(`runtime.target.${removingEntry.target}` as MnemonKey)} busy={saving} onClose={() => setRemoving(null)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close data-autofocus className={css.secondaryButton} disabled={saving} onClick={() => setRemoving(null)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void remove(removingEntry)}>{t('runtime.removeAction')}</button></div>}><div className={css.bodyDeleteConfirm}><p>{t('runtime.removeWarning')}</p><div className={css.bodyDeleteSummary}><p className={css.bodyDeleteContent}>{removingEntry.content}</p><span>{t(`runtime.importance.${removingEntry.importance}` as MnemonKey)}</span></div></div></SidebarModal>}
+      {removingEntry !== undefined && <SidebarModal title={t('runtime.removeTitle')} description={t(`runtime.target.${removingEntry.target}` as MnemonKey)} busy={saving} onClose={() => setRemoving(null)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close data-autofocus className={css.secondaryButton} disabled={saving} onClick={() => setRemoving(null)}>{t('common.cancel')}</button><button type="button" className={css.dangerSolidButton} disabled={saving} onClick={() => void remove(removingEntry)}>{t('runtime.removeAction')}</button></div>}>
+        <div className={css.bodyDeleteConfirm}>
+          <p>{t('runtime.removeWarning')}</p>
+          <div className={css.bodyDeleteSummary}>
+            <p className={css.bodyDeleteContent}>{removingEntry.content}</p>
+            <span>{t(`runtime.importance.${removingEntry.importance}` as MnemonKey)}</span>
+            {removingEntry.branches !== undefined && removingEntry.branches.length > 0 && <span className={css.runtimeEntryBranch} title={t('runtime.branchBadge')}>{removingEntry.branches.join(', ')}</span>}
+          </div>
+        </div>
+      </SidebarModal>}
     </div>
   )
 }

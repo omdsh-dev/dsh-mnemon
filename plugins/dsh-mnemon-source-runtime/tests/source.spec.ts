@@ -171,6 +171,27 @@ describe('standalone runtime Source', () => {
     } finally { await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
   })
 
+  it('rejects a stale branch selection even if another scope still has the same text', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-runtime-stale-scope-'))
+    const runner = new MemoryCompositionRunner()
+    try {
+      await runner.mount(strategy, { instanceId: 'strategy' })
+      await runner.mount(plugin, { instanceId: 'work', config: { dataDir: directory } })
+      const management = await runner.managementClient('source:work')
+      const entry = { target: 'memory', content: 'Check the prerequisites.' }
+      await management.mutate('mutate', { ...entry, action: 'add', branches: ['stable'] }, { confirmed: true })
+      const before = await management.read('snapshot')
+      await expect(management.mutate('pin', { ...entry, pinned: true, matchBranches: [] }, { confirmed: true })).rejects.toThrow(/exact current entry/i)
+      await expect(management.mutate('mutate', {
+        action: 'remove', target: 'memory', old_text: entry.content, matchBranches: ['old-branch'],
+      }, { confirmed: true })).rejects.toThrow(/exact.*branch scope/i)
+      await expect(management.mutate('mutate', {
+        action: 'remove', target: 'memory', old_text: 'prerequisites', matchBranches: ['stable'],
+      }, { confirmed: true })).rejects.toThrow(/exact.*branch scope/i)
+      expect((await management.read('snapshot')).revision).toBe(before.revision)
+    } finally { await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
+  })
+
   it('owns storage and composes two independent configured instances with no private Host binding', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'mnemon-runtime-plugin-'))
     const workspace = join(directory, 'workspace')

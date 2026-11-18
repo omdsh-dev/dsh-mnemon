@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -184,6 +184,46 @@ describe('independent Runtime Source client', () => {
       expect(otherAfter.value).toMatchObject({ entries: [
         { content: 'EGO_LINUX_CHROME' }, { content: 'X', branches: ['main'] },
       ] })
+    } finally { cleanup(); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
+  })
+
+  it('pins, edits and removes the selected scope when text and creation time match', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'mnemon-runtime-scoped-client-'))
+    const runner = new MemoryCompositionRunner()
+    try {
+      const runtime = join(directory, 'runtime')
+      mkdirSync(runtime)
+      const time = '2026-11-01T00:00:00.000Z'
+      const entry = { content: 'Review the release notes.', target: 'memory', importance: 'normal', created_at: time, updated_at: time }
+      writeFileSync(join(runtime, 'memories.json'), JSON.stringify({ version: 1, entries: [entry, { ...entry, branches: ['feature/docs'] }, { ...entry, branches: ['release'] }] }))
+      await runner.mount(strategy, { instanceId: 'strategy' })
+      await runner.mount(plugin, { instanceId: 'work', config: { dataDir: directory } })
+      const management = await runner.managementClient('source:work')
+      const readEntries = async () => ((await management.read('snapshot')).value as unknown as RuntimeMemorySnapshot).entries
+      render(<RuntimeSourcePage sourceTypeId="runtime" sourceInstanceKey="source:work" sourceInstances={[]} locale="en" writable management={management} />)
+
+      const docsRow = within((await screen.findByText('feature/docs')).closest('article')!)
+      fireEvent.click(docsRow.getByRole('button', { name: t('runtime.pin') }))
+      await docsRow.findByRole('button', { name: t('runtime.unpin') })
+      expect((await readEntries()).filter(item => item.pinned).map(item => item.branches)).toEqual([['feature/docs']])
+
+      const releaseRow = within(screen.getByText('release').closest('article')!)
+      fireEvent.click(releaseRow.getByRole('button', { name: t('runtime.editAction') }))
+      expect(screen.getByRole('textbox', { name: t('runtime.branches') })).toHaveProperty('value', 'release')
+      fireEvent.change(screen.getByRole('textbox', { name: t('runtime.editContent') }), { target: { value: 'Publish the release notes.' } })
+      fireEvent.click(screen.getByRole('button', { name: t('runtime.saveEdit') }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      expect((await readEntries()).find(item => item.branches?.includes('release'))?.content).toBe('Publish the release notes.')
+
+      fireEvent.click(within(screen.getByText('feature/docs').closest('article')!).getByRole('button', { name: t('runtime.removeAction') }))
+      const confirmation = within(screen.getByRole('dialog'))
+      expect(confirmation.getByText('feature/docs')).toBeDefined()
+      fireEvent.click(confirmation.getByRole('button', { name: t('runtime.removeAction') }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      expect(await readEntries()).toEqual([
+        entry,
+        expect.objectContaining({ content: 'Publish the release notes.', branches: ['release'] }),
+      ])
     } finally { cleanup(); await runner.dispose(); rmSync(directory, { recursive: true, force: true }) }
   })
 
