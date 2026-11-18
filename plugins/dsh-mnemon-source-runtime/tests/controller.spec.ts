@@ -190,6 +190,70 @@ describe('RuntimeMemoryController', () => {
     expect(controller.snapshot().entries[1]).toEqual(other)
   })
 
+  it.each(['memory', 'user'] as const)('restores %s edits when legacy data contains duplicate entries (#679)', async target => {
+    const { directory, controller } = fixture()
+    const content = 'Keep a single copy of this rule.'
+    const scope = target === 'memory' ? { branches: ['dev', 'main'] } : {}
+    const old: RuntimeMemoryEntry = {
+      target, content, importance: 'critical', pinned: true, ...scope,
+      created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-10-02T00:00:00.000Z',
+    }
+    const { pinned: _pin, ...metadata } = old
+    const newer: RuntimeMemoryEntry = {
+      ...metadata, content: '  Keep a single copy  of this rule. ', importance: 'normal',
+      ...(target === 'user' ? { pinned: false } : {}),
+      updated_at: '2026-10-03T00:00:00.000Z',
+      origin: { machine: 'fixture', label: 'Fixture machine', at: '2026-10-03T00:00:00.000Z' },
+      ...(target === 'memory' ? { branches: ['main', 'dev'] } : {}),
+    }
+    const other = {
+      ...old, content: 'Other entry.',
+      ...(target === 'memory' ? { branches: ['release'] } : {}),
+    }
+    writeFileSync(controller.sourcePath, JSON.stringify({ version: 1, entries: [old, other, newer] }))
+
+    const reopened = new RuntimeMemoryController({ effectiveDataDir: () => directory })
+    const recovered = { ...newer, content, pinned: target === 'memory' }
+    expect(reopened.snapshot().entries).toEqual([recovered, other])
+    expect(JSON.parse(readFileSync(reopened.sourcePath, 'utf8'))).toEqual({ version: 1, entries: [recovered, other] })
+    await expect(reopened.mutate({ action: 'replace', target, oldText: content, content: 'Corrected rule.' }))
+      .resolves.toMatchObject({ replaced: { from: content, to: 'Corrected rule.' } })
+    await expect(reopened.mutate({ action: 'remove', target, oldText: 'Corrected rule.' }))
+      .resolves.toMatchObject({ removed: 'Corrected rule.', entryCount: 1 })
+    expect(reopened.snapshot().entries).toEqual([other])
+  })
+
+  it('compacts a live store with duplicate entries and applies the pending add (#679)', async () => {
+    const { directory } = fixture()
+    const controller = new RuntimeMemoryController({ effectiveDataDir: () => directory }, undefined, { memory: 64, user: 64 })
+    const original = 'Use one stable path for the test fixture.'
+    const entry: RuntimeMemoryEntry = {
+      target: 'memory', content: original, importance: 'normal',
+      created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-10-01T00:00:00.000Z',
+    }
+    writeFileSync(controller.sourcePath, JSON.stringify({ version: 1, entries: [entry, entry] }))
+    const request = { action: 'add', target: 'memory', content: 'The fixture is reset after each run.' } as const
+
+    await expect(controller.mutate(request)).rejects.toBeInstanceOf(RuntimeMemoryCapacityError)
+    const plan = await controller.planMaintenance(request)
+    expect(plan.requiresMaintenance).toBe(true)
+    await expect(controller.compactAndMutate(plan.revision, request, plan.entries, 16, { archive: 'local' }))
+      .resolves.toMatchObject({ added: request.content, entryCount: 1, archived: { entries: 1 } })
+    expect(readFileSync(controller.archiveSourcePath, 'utf8').trim().split('\n').map(line => JSON.parse(line).content)).toEqual([original])
+    expect(readFileSync(controller.memoryPath, 'utf8')).toBe(request.content + '\n')
+  })
+
+  it('prevents a replacement from recreating a same-scope duplicate (#679)', async () => {
+    const { controller } = fixture()
+    await controller.mutate({ action: 'add', target: 'memory', content: 'First', branches: ['dev', 'main'] })
+    await controller.mutate({ action: 'add', target: 'memory', content: 'Second', branches: ['main', 'dev'] })
+    const before = readFileSync(controller.sourcePath, 'utf8')
+
+    await expect(controller.mutate({ action: 'replace', target: 'memory', oldText: 'First', content: 'Second' }))
+      .rejects.toThrow('An identical memory entry already exists in this scope')
+    expect(readFileSync(controller.sourcePath, 'utf8')).toBe(before)
+  })
+
   it.each(['remove', 'replace'] as const)('rejects %s of duplicate exact entries without choosing a branch or changing files', async action => {
     const { controller } = fixture()
     await controller.mutate({ action: 'add', target: 'memory', content: 'X', branches: ['main'] })
