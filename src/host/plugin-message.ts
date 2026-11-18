@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { MessageSourceMap } from '@deepseek-ai/dsh-llm'
 import type { HostUserMessage } from './dsh.ts'
-import type { MemorySnapshotState } from './memory-snapshot-state.ts'
+import type { MemorySnapshotState, RuntimeSnapshotRange } from './memory-snapshot-state.ts'
 
 declare module '@deepseek-ai/dsh-llm' {
   interface MessageSourceMap {
@@ -9,6 +9,7 @@ declare module '@deepseek-ai/dsh-llm' {
       kind: 'dsh-mnemon'
       form: 'recall' | 'instructions' | 'memory-snapshot' | 'memory-snapshot-retired'
       snapshot?: MemorySnapshotState
+      runtimeRanges?: RuntimeSnapshotRange[]
     }
   }
 }
@@ -24,7 +25,7 @@ export function isMnemonMessageSource(source: unknown): boolean {
 }
 
 /** A user-role message this plugin adds to a step, marked with its own source. */
-export function createPluginMessage(text: string, form: 'recall' | 'instructions' | 'memory-snapshot', snapshot?: MemorySnapshotState): HostUserMessage {
+export function createPluginMessage(text: string, form: 'recall' | 'instructions' | 'memory-snapshot', snapshot?: MemorySnapshotState, runtimeRanges?: RuntimeSnapshotRange[]): HostUserMessage {
   return structuredClone({
     id: randomUUID(),
     role: 'user' as const,
@@ -33,6 +34,7 @@ export function createPluginMessage(text: string, form: 'recall' | 'instructions
       kind: MNEMON_PLUGIN_SOURCE,
       form,
       ...(snapshot === undefined ? {} : { snapshot }),
+      ...(runtimeRanges === undefined ? {} : { runtimeRanges }),
     } satisfies MessageSourceMap['dsh-mnemon'],
   })
 }

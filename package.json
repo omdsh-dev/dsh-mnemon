@@ -98,6 +98,10 @@
     "./bundle": {
       "types": "./lib/types/src/bundle.d.ts",
       "default": "./lib/bundle.js"
+    },
+    "./compaction": {
+      "types": "./lib/types/src/compaction.d.ts",
+      "default": "./lib/compaction.js"
     }
   },
   "files": [
@@ -181,6 +185,7 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.4",
     "@deepseek-ai/dsh-app-boot": ">=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-compaction-basic": ">=0.2.1-rc.5 <0.2.2-0 || >=0.2.2-rc.2 <0.2.3-0",
     "@deepseek-ai/dsh-typert-protocol": ">=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.1 <0.3.0-0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
@@ -208,6 +213,7 @@
     "@deepseek-ai/dsh-client-ui-sidebar": "0.2.1-rc.5",
     "@deepseek-ai/dsh-client-ui-slots": "0.2.1-rc.5",
     "@deepseek-ai/dsh-client-ui-tool": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-compaction-basic": "0.2.1-rc.5",
     "@deepseek-ai/dsh-llm": "0.2.1-rc.5",
     "@deepseek-ai/dsh-session": "0.2.1-rc.5",
     "@deepseek-ai/dsh-session-format-v0-to-v1": "0.2.1-rc.5",
@@ -260,6 +266,9 @@
     "dsh-mnemon-repair-session": "bin/repair-legacy-session.mjs"
   },
   "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-compaction-basic": {
+      "optional": true
+    },
     "@deepseek-ai/dsh-app-boot": {
       "optional": true
     }

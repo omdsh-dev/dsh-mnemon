@@ -174,6 +174,23 @@ The **Read low-priority memory on demand** switch on Runtime memory's settings p
 
 This changes prompt delivery only: files, capacity accounting, management lists, writes and backups stay complete. No text classifier changes importance or deletes entries. Disable the switch to restore full projection on subsequent turns. Explicitly recalled content follows ordinary conversation-history retention. Standalone Runtime Sources use `deferLowPriority: true` in their own configuration; custom Strategies must retain the offered `search` Route to make deferred details accessible.
 
+<a id="snapshot-compaction"></a>
+
+### Opt-in snapshot compaction
+
+The optional `dsh-mnemon/compaction` backend is off by default. To enable it for one Agent preset, edit the existing `compaction-basic` entry within that preset's compaction group and set its `name` to `dsh-mnemon/compaction`. Keep the entry ID and any existing `config` fields. The group uses one backend for both automatic compaction and `/compact`.
+
+For example, `dsh --profile web --dump-config` shows the effective Web presets. When configuring a built-in preset through a profile patch, copy that preset's full `config` and keep the other plugins in its list.
+
+```yaml
+- id: compaction-basic
+  name: dsh-mnemon/compaction
+```
+
+Use the updated Starter and Runtime Source together. The backend uses the installed DSH Basic compaction package as an optional peer. The opt-in path is verified on DSH 0.2.2-rc.2 and 0.2.2-rc.4. Restore `name: '@deepseek-ai/dsh-compaction-basic'` in that preset to return to the standard behavior.
+
+Ordinary Runtime corrections and removals append an authoritative snapshot for the next turn, including an empty projection after the last entry is removed. Within the existing snapshot budget, earlier requests keep their prefix. This deliberately leaves old text in ordinary requests until history is compacted or the snapshot limit forces a checkpoint. Authority or visibility changes still retire affected snapshots before the next applicable request.
+
 ### Runtime Memory budgets
 
 In **Plugins → dsh-mnemon → Runtime memory → Capacity limits**, set the user-profile and working-memory limits in bytes, then choose **Apply**. Each accepts an integer from 1 to 1048576; **Discard changes** restores the saved values. The defaults remain 4096 bytes (4 KiB) and 10240 bytes (10 KiB). This form preserves the separate maintenance-token budget.

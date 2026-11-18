@@ -93,8 +93,9 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
       return { ...current, snapshot: {
         version: 1,
         scope: digest([effective.dataDir, effective.userDataDir, branch ?? null, ...(effective.deferLowPriority ? [true] : [])]),
-        // Ages are projection annotations. Content, importance and branch scope
-        // identify a fact; losing any old occurrence requires a checkpoint.
+        branchVisibility: current.branchVisibility,
+        // Ages are projection annotations. Keep each visible fact identifiable,
+        // including changes to its importance, scope and pin.
         entries: current.entries.map(entry => digest([entry.target, entry.content, entry.importance, entry.branches ?? [], ...(entry.pinned === true ? [true] : [])])).sort(),
       } }
     }
