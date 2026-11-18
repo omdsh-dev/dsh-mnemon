@@ -656,7 +656,7 @@ describe('MnemonWorkbench', () => {
     expect(await screen.findByText('Session review attempts: 3 / 4 (2 restored).')).toBeTruthy()
     if (state === 'error') {
       expect(await screen.findByText('Automatic review paused: persistent limits are unavailable.')).toBeTruthy()
-      expect(screen.getByText(/Stop Hosts using this storage root/)).toBeTruthy()
+      expect(screen.getByText(/Continue the conversation to retry/)).toBeTruthy()
     } else {
       expect(await screen.findByText(/Next review no earlier than/)).toBeTruthy()
     }
