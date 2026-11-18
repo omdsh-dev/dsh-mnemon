@@ -187,7 +187,7 @@ For example, `dsh --profile web --dump-config` shows the effective Web presets. 
   name: dsh-mnemon/compaction
 ```
 
-Use the updated Starter and Runtime Source together. The backend uses the installed DSH Basic compaction package as an optional peer. The opt-in path is verified on DSH 0.2.2-rc.2 and 0.2.2-rc.4. Restore `name: '@deepseek-ai/dsh-compaction-basic'` in that preset to return to the standard behavior.
+Use the updated Starter and Runtime Source together. DSH loads the Basic compaction package from its own installation when the backend is selected. The opt-in path is verified on DSH 0.2.2-rc.2 and 0.2.2-rc.4. Restore `name: '@deepseek-ai/dsh-compaction-basic'` in that preset to return to the standard behavior.
 
 Ordinary Runtime corrections and removals append an authoritative snapshot for the next turn, including an empty projection after the last entry is removed. Within the existing snapshot budget, earlier requests keep their prefix. This deliberately leaves old text in ordinary requests until history is compacted or the snapshot limit forces a checkpoint. Authority or visibility changes still retire affected snapshots before the next applicable request.
 

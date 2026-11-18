@@ -1,3 +1,5 @@
+// DSH resolves its own compactor when this entry is selected. A Starter peer
+// would make the installer resolve and validate it even for unselected presets.
 import { BasicCompactionEngine } from '@deepseek-ai/dsh-compaction-basic'
 import type { HostSession } from './host/dsh.ts'
 import { summaryWithoutRuntimeSnapshots } from './host/memory-snapshot.ts'
