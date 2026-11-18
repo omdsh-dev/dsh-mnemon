@@ -153,15 +153,16 @@ export function prepareMemorySnapshot(session: HostSession, text: string | undef
     }]
   })
   const latest = snapshots.at(-1)
+  const appendOnly = options.deferRetirement === true && state?.branchVisibility !== undefined
+    && (options.runtimeRanges?.length ?? 0) > 0 && snapshots.every(snapshot =>
+      snapshot.state?.branchVisibility === state.branchVisibility && (snapshot.runtimeRanges?.length ?? 0) > 0)
   const compatible = state !== undefined && snapshots.every(snapshot => snapshot.state?.boundary === state.boundary
-    && (retainsSnapshotEntries(snapshot.state.entries, state.entries) || (options.deferRetirement === true
-      && state.branchVisibility !== undefined && state.branchVisibility === snapshot.state.branchVisibility
-      && (options.runtimeRanges?.length ?? 0) > 0 && (snapshot.runtimeRanges?.length ?? 0) > 0)))
+    && (appendOnly || retainsSnapshotEntries(snapshot.state.entries, state.entries)))
   const unchanged = current !== undefined && latest?.text === current
   const count = snapshots.length + (unchanged ? 0 : 1)
-  const bytes = snapshots.reduce((total, snapshot) => total + Buffer.byteLength(snapshot.text, 'utf8'), 0)
-    + (unchanged || current === undefined ? 0 : Buffer.byteLength(current, 'utf8'))
-  const withinBudget = count <= MAX_SNAPSHOTS && (count <= 1 || bytes <= MAX_SNAPSHOT_BYTES)
+  const withinBudget = appendOnly || (count <= MAX_SNAPSHOTS && (count <= 1
+    || snapshots.reduce((total, snapshot) => total + Buffer.byteLength(snapshot.text, 'utf8'), 0)
+      + (unchanged || current === undefined ? 0 : Buffer.byteLength(current, 'utf8')) <= MAX_SNAPSHOT_BYTES))
   const retained = current === undefined ? []
     : options.checkpoint === true ? unchanged && state !== undefined && latest?.state?.boundary === state.boundary
       && retainsSnapshotEntries(latest.state.entries, state.entries) ? [latest] : []

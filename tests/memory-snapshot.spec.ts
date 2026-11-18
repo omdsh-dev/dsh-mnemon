@@ -130,6 +130,24 @@ describe('memory snapshot surface updates', () => {
     expect(f.session.snapshotEvents()).toEqual(before)
   })
 
+  it('keeps authorized opt-in snapshots beyond 64 KiB until compaction', () => {
+    const f = fixture()
+    const plan = (text: string, hash: string, checkpoint = false) => prepareMemorySnapshot(f.session as unknown as HostSession, text,
+      { ...state([hash.repeat(64)]), branchVisibility: 'd'.repeat(64) }, { deferRetirement: true, checkpoint, runtimeRanges: [[0, text.length]] })
+    const first = '旧'.repeat(14_000)
+    const second = '新'.repeat(14_000)
+    f.commit(plan(first, 'a'))
+    const before = f.session.deriveMessages()
+    f.commit(plan(second, 'c'))
+    const messages = f.session.deriveMessages()
+    expect(messages.slice(0, 1)).toEqual(before)
+    expect(messages).toHaveLength(2)
+    expect(f.session.surface.contentGeneration).toBe(0)
+
+    f.commit(plan(second, 'c', true))
+    expect(f.session.deriveMessages()).toEqual(messages.slice(1))
+  })
+
   it('checkpoints changed authority even with identical text, and retires removed or corrected facts', () => {
     const f = fixture()
     f.commit(f.plan('identical text', state()))

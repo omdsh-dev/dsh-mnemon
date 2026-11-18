@@ -473,23 +473,29 @@ it.runIf(supportsSnapshotCompaction)('appends corrections and deletion to an emp
   try {
     await f.turn(handle.agent)
     const generation = handle.agent.session.surface.contentGeneration
-    const before = f.requests.at(-1)!
-    await memory.mutate('mutate', { action: 'replace', target: 'memory', oldText: 'Synthetic turn-view retained fact.', content: 'Synthetic corrected fact.' })
-    await f.turn(handle.agent)
-    const corrected = f.requests[3]!
-    expect(corrected.messages.slice(0, before.messages.length)).toEqual(before.messages)
-    expect(corrected.tools).toEqual(before.tools)
-    expect(snapshots(corrected.messages)).toHaveLength(2)
-    expect(JSON.stringify(snapshots(corrected.messages).at(-1)?.content)).toContain('Synthetic corrected fact.')
-    expect(corrected.messages.find(message => message.role === 'system')?.content).toEqual(before.messages.find(message => message.role === 'system')?.content)
+    let fact = 'Synthetic turn-view retained fact.'
+    for (let revision = 1; revision <= 5; revision++) {
+      const before = f.requests.at(-1)!
+      const nextRequest = f.requests.length
+      const correction = `Synthetic corrected fact ${revision}.`
+      await memory.mutate('mutate', { action: 'replace', target: 'memory', oldText: fact, content: correction })
+      fact = correction
+      await f.turn(handle.agent)
+      const corrected = f.requests[nextRequest]!
+      expect(corrected.messages.slice(0, before.messages.length)).toEqual(before.messages)
+      expect(corrected.tools).toEqual(before.tools)
+      expect(snapshots(corrected.messages)).toHaveLength(revision + 1)
+      expect(JSON.stringify(snapshots(corrected.messages).at(-1)?.content)).toContain(correction)
+    }
 
     const beforeDelete = f.requests.at(-1)!
-    await memory.mutate('mutate', { action: 'remove', target: 'memory', oldText: 'Synthetic corrected fact.' })
+    const nextRequest = f.requests.length
+    await memory.mutate('mutate', { action: 'remove', target: 'memory', oldText: fact })
     await f.turn(handle.agent)
-    const deleted = f.requests[6]!
+    const deleted = f.requests[nextRequest]!
     expect(deleted.messages.slice(0, beforeDelete.messages.length)).toEqual(beforeDelete.messages)
     expect(deleted.tools).toEqual(beforeDelete.tools)
-    expect(snapshots(deleted.messages)).toHaveLength(3)
+    expect(snapshots(deleted.messages)).toHaveLength(7)
     expect(JSON.stringify(snapshots(deleted.messages).at(-1)?.content)).toContain('<runtime-memory-file name=\\"MEMORY.md\\">\\n(empty)')
     expect(handle.agent.session.surface.contentGeneration).toBe(generation)
     expect(handle.agent.session.snapshotEvents().filter(event => event.type === 'developer/message' && event.data.message.source.kind === 'dsh-mnemon')).toHaveLength(0)
