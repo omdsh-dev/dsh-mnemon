@@ -1104,6 +1104,67 @@ describe('compaction algorithm equivalence', () => {
     expect(controller.snapshot().entries).toEqual([first])
   })
 
+  it('keeps both branch and unscoped copies of a fact when capacity fits (#679)', async () => {
+    const scoped = { ...entry('Shared text', 1), branches: ['release', 'main'], pinned: true }
+    const { branches: _branches, ...metadata } = scoped
+    const unscoped: RuntimeMemoryEntry = { ...metadata, importance: 'low', pinned: false, updated_at: '2026-10-01T00:00:00.000Z' }
+    const controller = compactionFixture([scoped, unscoped])
+    const request = { action: 'remove', target: 'memory', oldText: 'remove sentinel' } as const
+    const plan = await controller.planMaintenance(request)
+    const [scopedCandidate, unscopedCandidate] = plan.entries
+    await expect(controller.compactAndMutate(plan.revision, request, [
+      { ...scopedCandidate!, branches: ['main', 'release'] },
+      unscopedCandidate!,
+    ])).resolves.toMatchObject({ entryCount: 2 })
+    expect(controller.snapshot().entries).toEqual([scoped, unscoped])
+    expect(controller.contextProjection('unrelated').entries).toEqual([unscoped])
+  })
+
+  it('archives the omitted branch copy even when another branch keeps the same text (#679)', async () => {
+    const main = { ...entry('Same release note', 1), branches: ['main'] }
+    const dev = { ...entry('Same release note', 0), branches: ['dev'] }
+    const controller = compactionFixture([main, dev])
+    const request = { action: 'remove', target: 'memory', oldText: 'remove sentinel' } as const
+    const plan = await controller.planMaintenance(request)
+    await expect(controller.compactAndMutate(plan.revision, request, plan.entries, runtimeBytes([main], 'memory'), { archive: 'local' }))
+      .resolves.toMatchObject({ entryCount: 1, archived: { entries: 1 } })
+    expect(controller.snapshot().entries).toEqual([main])
+    expect(JSON.parse(readFileSync(controller.archiveSourcePath, 'utf8'))).toMatchObject(dev)
+    expect(controller.contextProjection('dev').entries).toEqual([])
+  })
+
+  it('keeps a different branch’s copy when compacting a pending replacement (#679)', async () => {
+    const before = { ...entry('Old release note', 1), branches: ['main'] }
+    const other = { ...entry('Corrected release note', 1), branches: ['dev'] }
+    const controller = compactionFixture([before, other])
+    const request = { action: 'replace', target: 'memory', oldText: before.content, content: other.content } as const
+    const plan = await controller.planMaintenance(request)
+    await expect(controller.compactAndMutate(plan.revision, request, plan.entries))
+      .resolves.toMatchObject({ entryCount: 3, replaced: { from: before.content, to: other.content } })
+    const copies = controller.snapshot().entries.filter(e => e.content === other.content)
+    expect(copies.map(e => e.branches)).toEqual([['dev'], ['main']])
+  })
+
+  it('refuses to compact away a pinned copy in a separate branch (#679)', async () => {
+    const main = { ...entry('Pinned fact', 1), pinned: true, branches: ['main'] }
+    const dev = { ...main, branches: ['dev'] }
+    const controller = compactionFixture([main, dev])
+    const request = { action: 'remove', target: 'memory', oldText: 'remove sentinel' } as const
+    const plan = await controller.planMaintenance(request)
+    await expect(controller.compactAndMutate(plan.revision, request, [main])).rejects.toThrow('Compaction omitted a pinned entry')
+    expect(controller.snapshot().entries).toEqual(expect.arrayContaining([main, dev]))
+  })
+
+  it('rejects compaction that reintroduces a removed fact under another branch (#679)', async () => {
+    const fact = { ...entry('Remove this scoped fact', 1), branches: ['main'] }
+    const controller = compactionFixture([fact])
+    const request = { action: 'remove', target: 'memory', oldText: fact.content } as const
+    const plan = await controller.planMaintenance(request)
+    await expect(controller.compactAndMutate(plan.revision, request, [...plan.entries, { ...fact, branches: ['dev'] }]))
+      .rejects.toThrow('compacted runtime memory reintroduces the replaced or removed entry')
+    expect(controller.snapshot().entries[0]).toEqual(fact)
+  })
+
   it.each([1, 10, 100])('counts UTF-8 characters only linearly at N=%i', async n => {
     const entries = Array.from({ length: n }, (_, i) => entry(`Synthetic 中文 content ${i}`, i))
     const controller = compactionFixture(entries)
