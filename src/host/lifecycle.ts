@@ -576,8 +576,9 @@ class MnemonAgentLifecycle {
   }
 
   private planSnapshot(options: MemorySnapshotOptions): ReturnType<typeof prepareMemorySnapshot> {
-    const view = options.recall?.view.view ?? this.memoryTurn?.current?.context.view
-    const wake = this.config.lifecycleEnabled && !this.memoryTurn?.excluded ? this.memoryWake(view) : undefined
+    const presentation = options.recall?.view.view
+    const view = presentation ?? this.memoryTurn?.current?.context.view
+    const wake = this.config.lifecycleEnabled && !this.memoryTurn?.excluded ? this.memoryWake(presentation) : undefined
     const ranges = wake === undefined ? undefined : runtimeSnapshotRanges(wake)
     return prepareMemorySnapshot(this.agent.session, wake?.text, wake === undefined ? undefined : memorySnapshotState(view),
       { ...options, ...(ranges === undefined ? {} : { runtimeRanges: ranges }) })
