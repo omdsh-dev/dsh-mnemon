@@ -552,7 +552,7 @@ export function SkillsSettings(props: {
         <ToggleRow id="mnemon-skills-auto-adopt" label={t('skills.autoAdopt')} hint={t('skills.autoAdoptHint')} checked={autoAdopt.value} disabled={disabled || !autoBacktest.value} onChange={autoAdopt.set} />
         <div className={css.nestedBudgetGroup} data-dimmed={!autoAdopt.value ? '' : undefined}>
           <SettingRow htmlFor={`${baseId}-adopt-limit`} title={t('skills.autoAdoptDailyLimit')} hint={t('skills.autoBudgetHint')}>
-            <input id={`${baseId}-adopt-limit`} className={css.numberInput} type="number" min={0} max={100} step={1} inputMode="numeric"
+            <input id={`${baseId}-adopt-limit`} className={`${css.numberInput} ${css.alignedNumberInput}`} type="number" min={0} max={100} step={1} inputMode="numeric"
               value={adoptionBudget.draft.limit} disabled={disabled || adoptionBudget.saving}
               aria-invalid={parameterValue({ min: 0, max: 100, integer: true }, adoptionBudget.draft.limit) === undefined}
               onChange={event => adoptionBudget.edit({ limit: event.target.value })} />

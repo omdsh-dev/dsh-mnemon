@@ -333,11 +333,24 @@
   line-height: 20px;
   transition: border-color 120ms ease;
 }
-.numberInput { width: 128px; text-align: right; font-variant-numeric: tabular-nums; }
+.numberInput {
+  width: 128px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+}
+.numberInput::-webkit-inner-spin-button,
+.numberInput::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .compactTextInput {
-  width: 196px;
+  width: 168px;
+  padding: 0 12px;
   font-family: var(--dsw-font-mono, var(--ds-font-family-code, ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace));
   font-size: 12px;
+  text-align: left;
+}
+.alignedNumberInput {
+  width: 168px;
+  padding: 0 12px;
   text-align: left;
 }
 .compactTextInput::placeholder { color: var(--dsw-alias-label-dimmed); font-family: var(--dsw-font-family); font-size: 12px; }
@@ -393,7 +406,10 @@
   line-height: 20px;
   text-align: right;
   font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
 }
+.unitInput > input::-webkit-inner-spin-button,
+.unitInput > input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 .unitSuffix {
   flex: none;
   color: var(--dsw-alias-label-tertiary);
@@ -406,19 +422,17 @@
 
 /* Crisp subsection kicker inside component settings dialogs. */
 .settingsSubheading {
-  margin: 14px 0 2px;
+  margin: 6px 0 2px;
+  padding-top: 16px;
+  border-top: .5px solid var(--dsw-alias-border-l2);
   color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
   font-weight: 500;
   line-height: 16px;
   letter-spacing: .02em;
 }
-.rows > .settingsSubheading:first-child { margin-top: 0; }
-.rows > .settingRow:has(+ .settingsSubheading),
-.rows > .toggleRow:has(+ .settingsSubheading),
-.rows > .advanced:has(+ .settingsSubheading),
-.rows > .evolutionGroup:has(+ .settingsSubheading),
-.rows > .skillsSubgroup:has(+ .settingsSubheading) { border-bottom-color: var(--dsw-alias-border-l2); }
+.rows > .settingsSubheading:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.rows > :has(+ .settingsSubheading) { border-bottom: 0; }
 
 /* A follow-up under the row above it, such as a chosen task model route. */
 .rowDetail { display: flex; min-width: 0; flex-direction: column; gap: 10px; padding: 0 0 14px; border-bottom: .5px solid var(--dsw-alias-border-l2); }
@@ -482,33 +496,27 @@
   display: flex;
   min-width: 0;
   flex-direction: column;
-  margin: 0 0 4px;
-  padding-left: 14px;
-  border-left: 1.5px solid var(--dsw-alias-border-l3);
-  border-bottom: .5px solid var(--dsw-alias-border-l2);
+  margin: 2px 0 4px;
+  padding-left: 12px;
+  border-left: 1px solid var(--dsw-alias-border-l2);
   animation: advanced-expand 180ms cubic-bezier(.22, 1, .36, 1) both;
 }
 .toggleRow:has(+ .evolutionGroup) { border-bottom: 0; padding-bottom: 8px; }
-.evolutionGroup > :first-child { padding-top: 10px; }
+.evolutionGroup > :first-child { padding-top: 8px; }
 .evolutionGroup > :last-child { border-bottom: 0; }
 
-/* Secondary sub-controls visually tied to a preceding toggle (e.g. daily auto-adopt quota). */
+/* Flush dependent controls under a toggle (e.g. daily auto-adopt quota) — no second nested rail. */
 .nestedBudgetGroup {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  margin: 0 0 4px;
-  padding-left: 12px;
-  border-left: 1.5px solid var(--dsw-alias-border-l2);
-  border-bottom: .5px solid var(--dsw-alias-border-l2);
   transition: opacity 160ms ease;
 }
-.toggleRow:has(+ .nestedBudgetGroup) { border-bottom: 0; padding-bottom: 8px; }
-.nestedBudgetGroup[data-dimmed] { opacity: .66; }
+.nestedBudgetGroup[data-dimmed] { opacity: .62; }
 .nestedBudgetGroup[data-dimmed]:hover,
 .nestedBudgetGroup[data-dimmed]:focus-within { opacity: 1; }
-.nestedBudgetGroup > :first-child { padding-top: 8px; }
-.nestedBudgetGroup > :last-child { border-bottom: 0; }
+.nestedBudgetGroup > .settingRow:has(+ .panelActions) { border-bottom: 0; padding-bottom: 4px; }
+.nestedBudgetGroup > .panelActions { padding: 8px 0 12px; border-bottom: .5px solid var(--dsw-alias-border-l2); }
 
 .skillsSubgroup { display: flex; min-width: 0; flex-direction: column; gap: 0; padding: 0; border-bottom: .5px solid var(--dsw-alias-border-l2); }
 .rows > .skillsSubgroup:last-child { border-bottom: 0; padding-bottom: 4px; }
@@ -943,7 +951,8 @@ details[open] > summary .providerChevron { transform: rotate(180deg); }
   .providerState { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
   .numberInput,
   .unitInput { width: 104px; }
-  .compactTextInput { width: 156px; }
+  .compactTextInput,
+  .alignedNumberInput { width: 144px; }
   .memoryConfigFooter { align-items: stretch; flex-direction: column; }
   .memoryConfigFooter > div:last-child { width: 100%; }
   .memoryConfigFooter button { flex: 1; }
