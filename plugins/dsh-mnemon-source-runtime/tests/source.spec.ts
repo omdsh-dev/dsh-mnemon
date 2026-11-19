@@ -63,9 +63,10 @@ describe('standalone runtime Source', () => {
         return source.project({ scope, sourceInstanceKey, expectedRevision: facts.revision, includeProjection: true, mode: 'eager', maxCharacters })
       }
       const metadata = (value: Awaited<ReturnType<typeof project>>) =>
-        (value.fragments[0]!.provenance as { snapshot: { version: number; scope: string; entries: string[] } }).snapshot
+        (value.fragments[0]!.provenance as { snapshot: { version: number; scope: string; branchVisibility: string; entries: string[] } }).snapshot
       const first = await project()
-      expect(metadata(first)).toEqual({ version: 1, scope: expect.stringMatching(/^[a-f0-9]{64}$/u), entries: [expect.stringMatching(/^[a-f0-9]{64}$/u)] })
+      const digest = expect.stringMatching(/^[a-f0-9]{64}$/u)
+      expect(metadata(first)).toEqual({ version: 1, scope: digest, branchVisibility: digest, entries: [digest] })
       vi.setSystemTime(new Date('2026-08-13T08:00:00.000Z'))
       const aged = await project()
       expect(aged.fragments[0]!.text).not.toBe(first.fragments[0]!.text)
@@ -78,10 +79,16 @@ describe('standalone runtime Source', () => {
       await controller.mutate({ action: 'replace', target: 'memory', oldText: 'Original fact.', content: 'Corrected fact.' })
       const corrected = metadata(await project())
       expect(corrected.entries).not.toContain(metadata(first).entries[0])
+      expect(corrected.branchVisibility).toBe(metadata(first).branchVisibility)
       execFileSync('git', ['symbolic-ref', 'HEAD', 'refs/heads/other'], { cwd: workspace })
       const other = metadata(await project())
       expect(other.entries).toEqual(corrected.entries)
       expect(other.scope).not.toBe(corrected.scope)
+      await controller.mutate({ action: 'replace', target: 'memory', oldText: 'Corrected fact.', content: 'Corrected fact.', branches: ['main'] })
+      const restricted = metadata(await project())
+      expect(restricted.scope).toBe(other.scope)
+      expect(restricted.branchVisibility).not.toBe(other.branchVisibility)
+      expect(restricted.entries).toHaveLength(1)
       expect((await project(20)).fragments[0]!.provenance).not.toHaveProperty('snapshot')
     } finally {
       vi.useRealTimers()

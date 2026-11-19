@@ -1,8 +1,9 @@
 import { resolve } from 'node:path'
-import type { MemoryOperationScope } from '../core/contracts/index.ts'
+import { DEFAULT_MEMORY_VIEW_BUDGET, type MemoryOperationScope } from '../core/contracts/index.ts'
 import { isMemoryCompositionUnavailable } from '../core/generation.ts'
 import type { ComposableMemoryTurn } from '../core/turns.ts'
 import type { HostAgent, HostSession } from './dsh.ts'
+import { memorySnapshotState, type MemorySnapshotState } from './memory-snapshot-state.ts'
 import { findSessionEvent, sessionEvents, sessionLength } from './session-events.ts'
 import { agentScope, type MnemonAgentRuntimeSource, type MnemonRuntimeGraph } from './runtime.ts'
 import { inspectMemoryView, modelMemoryWake } from './view-presentation.ts'
@@ -133,6 +134,28 @@ export class AgentMemoryTurn {
   }
 
   get excluded(): boolean { return this.runtime.memoryParticipation?.(this.agent).excluded === true }
+
+  /** Compaction may start before a turn has appended its newest snapshot. */
+  async snapshotAuthority(signal?: AbortSignal): Promise<MemorySnapshotState | undefined> {
+    if (this.closed || this.excluded || !this.runtime.config.lifecycleEnabled) return undefined
+    try {
+      const graph = this.runtime.forAgent(this.agent, { independent: true })
+      const lease = graph.memoryComposition.acquire()
+      try {
+        const view = await lease.generation.compose({
+          scope: agentScope(this.agent, graph.config), scenario: 'agent.root-turn', budget: { ...DEFAULT_MEMORY_VIEW_BUDGET },
+        }, signal)
+        if (this.closed || this.excluded || !this.runtime.config.lifecycleEnabled
+          || this.runtime.forAgent(this.agent, { independent: true }) !== graph
+          || graph.memoryComposition.current() !== lease.generation) return undefined
+        return memorySnapshotState(view)
+      } finally { lease.release() }
+    } catch {
+      signal?.throwIfAborted()
+      // Ordinary conversation can still be summarized when a View is unavailable.
+      return undefined
+    }
+  }
 
   async begin(turn: number, signal?: AbortSignal): Promise<void> {
     if (this.excluded) { this.end(); return }

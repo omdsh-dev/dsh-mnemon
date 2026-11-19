@@ -98,6 +98,10 @@
     "./bundle": {
       "types": "./lib/types/src/bundle.d.ts",
       "default": "./lib/bundle.js"
+    },
+    "./compaction": {
+      "types": "./lib/types/src/compaction.d.ts",
+      "default": "./lib/compaction.js"
     }
   },
   "files": [
@@ -208,6 +212,7 @@
     "@deepseek-ai/dsh-client-ui-sidebar": "0.2.1-rc.5",
     "@deepseek-ai/dsh-client-ui-slots": "0.2.1-rc.5",
     "@deepseek-ai/dsh-client-ui-tool": "0.2.1-rc.5",
+    "@deepseek-ai/dsh-compaction-basic": "0.2.1-rc.5",
     "@deepseek-ai/dsh-llm": "0.2.1-rc.5",
     "@deepseek-ai/dsh-session": "0.2.1-rc.5",
     "@deepseek-ai/dsh-session-format-v0-to-v1": "0.2.1-rc.5",

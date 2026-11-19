@@ -7,7 +7,11 @@ export interface MemorySnapshotState {
   version: 1
   boundary: string
   entries: string[]
+  /** Complete Runtime projections can distinguish content changes from newly hidden facts. */
+  branchVisibility?: string
 }
+
+export type RuntimeSnapshotRange = [start: number, end: number]
 
 const digest = (value: unknown): string => createHash('sha256').update(canonicalMemoryJson(value)).digest('hex')
 const hash = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/u.test(value)
@@ -16,7 +20,10 @@ const record = (value: unknown): value is Record<string, unknown> => typeof valu
 export function readMemorySnapshotState(value: unknown): MemorySnapshotState | undefined {
   if (!record(value) || value.version !== 1 || !hash(value.boundary)
     || !Array.isArray(value.entries) || !value.entries.every(hash)) return undefined
-  return { version: 1, boundary: value.boundary, entries: [...value.entries] }
+  return {
+    version: 1, boundary: value.boundary, entries: [...value.entries],
+    ...(hash(value.branchVisibility) ? { branchVisibility: value.branchVisibility } : {}),
+  }
 }
 
 /**
@@ -27,11 +34,18 @@ export function readMemorySnapshotState(value: unknown): MemorySnapshotState | u
 export function memorySnapshotState(view: ComposableMemoryView | undefined): MemorySnapshotState | undefined {
   if (view === undefined) return undefined
   const entries: string[] = []
+  const branchVisibility: string[] = []
+  let completeRuntime = true
   const projection = view.projection.map(fragment => {
     const provenance = fragment.provenance
     const snapshot = record(provenance) ? provenance.snapshot : undefined
-    if (!record(provenance) || provenance.sourceTypeId !== 'runtime' || !record(snapshot)
-      || snapshot.version !== 1 || !hash(snapshot.scope) || !Array.isArray(snapshot.entries) || !snapshot.entries.every(hash)) return fragment
+    if (!record(provenance) || provenance.sourceTypeId !== 'runtime') return fragment
+    if (!record(snapshot) || snapshot.version !== 1 || !hash(snapshot.scope) || !Array.isArray(snapshot.entries) || !snapshot.entries.every(hash)) {
+      completeRuntime = false
+      return fragment
+    }
+    if (hash(snapshot.branchVisibility)) branchVisibility.push(digest([fragment.sourceInstanceKey, fragment.id, snapshot.branchVisibility]))
+    else completeRuntime = false
     entries.push(...snapshot.entries.map(entry => digest([fragment.sourceInstanceKey, fragment.id, entry])))
     const { text: _text, revision: _revision, ...identity } = fragment
     return { ...identity, provenance: { ...provenance, snapshot: { version: 1, scope: snapshot.scope } } }
@@ -45,6 +59,7 @@ export function memorySnapshotState(view: ComposableMemoryView | undefined): Mem
       guidance: view.guidance ?? null, diagnostics: view.diagnostics ?? [],
     }),
     entries: entries.sort(),
+    ...(completeRuntime && branchVisibility.length > 0 ? { branchVisibility: digest(branchVisibility.sort()) } : {}),
   }
 }
 

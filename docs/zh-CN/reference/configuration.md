@@ -174,6 +174,23 @@ Git 同步的默认提交者跟随 Host 在 `state/sync/git` 中解析的 Git �
 
 此选项只改变提示词投递方式：文件、容量计算、管理列表、写入和备份仍保持完整，不会根据文本猜测重要度或删除条目。关闭后，后续回合恢复完整投影。已主动召回的内容仍遵循普通对话历史的保留规则。独立 Runtime Source 在自己的配置中使用 `deferLowPriority: true`；自定义 Strategy 需保留 Source 提供的 `search` Route，才能按需读取这些内容。
 
+<a id="snapshot-compaction"></a>
+
+### 可选快照压缩后端
+
+`dsh-mnemon/compaction` 默认关闭。要为某个 Agent preset 启用，在该 preset 的压缩组中编辑现有 `compaction-basic` 条目，将 `name` 改为 `dsh-mnemon/compaction`。保留条目 ID 和原有的 `config` 字段。自动压缩和 `/compact` 共用组内的这一个后端。
+
+例如，可以用 `dsh --profile web --dump-config` 查看 Web 实际使用的 presets。通过 profile patch 修改内置 preset 时，复制该 preset 完整的 `config`，并保留列表中的其他插件。
+
+```yaml
+- id: compaction-basic
+  name: dsh-mnemon/compaction
+```
+
+请一并更新 Starter 和 Runtime Source。选用此后端时，DSH 会从自己的安装目录加载 Basic 压缩包。该可选路径已在 DSH 0.2.2-rc.2 和 0.2.2-rc.4 验证。在该 preset 中恢复 `name: '@deepseek-ai/dsh-compaction-basic'` 即可恢复标准行为。
+
+普通运行时记忆更正和移除会在末尾追加下一轮采用的完整快照。移除最后一条时也会追加空投影。此前的请求前缀保持一致，旧文会保留到 DSH 压缩会话。权限或可见范围变化仍会在下一次适用的请求前清理相关快照。四份快照和 64 KiB 的限制适用于默认策略。
+
 ### Runtime Memory 容量与维护预算
 
 在**插件 → 可组合记忆 → 运行时记忆 → 容量上限**中，以字节填写用户画像和工作记忆的上限，再点击**应用**。两项均接受 1–1048576 之间的整数；**放弃修改**恢复已保存的值。默认仍为 4096 字节（4 KiB）和 10240 字节（10 KiB）。此表单保留单独配置的维护 token 预算。

@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import type { HostSession, HostSessionEvent, HostUserMessage } from './dsh.ts'
-import { createPluginMessage, isMnemonMessageSource, MNEMON_PLUGIN_SOURCE } from './plugin-message.ts'
-import { readMemorySnapshotState, retainsSnapshotEntries, type MemorySnapshotState } from './memory-snapshot-state.ts'
+import type { Message } from '@deepseek-ai/dsh-llm'
+import type { MemoryWake } from '../core/contracts/index.ts'
+import type { HostSession, HostUserMessage } from './dsh.ts'
+import { createPluginMessage, isBm25RecallSource, isMnemonMessageSource, MNEMON_PLUGIN_SOURCE } from './plugin-message.ts'
+import { readMemorySnapshotState, retainsSnapshotEntries, type MemorySnapshotState, type RuntimeSnapshotRange } from './memory-snapshot-state.ts'
 
 // Initial engineering defaults, not measured provider cache optima. The current
 // snapshot is always complete, even when it alone exceeds the history budget.
@@ -54,11 +56,11 @@ function isTruncatedRuntimeSnapshot(text: string): boolean {
 }
 
 /** Read only this producer's snapshot formats; ordinary recalls retain history. */
-function snapshotText(event: HostSessionEvent | undefined): string | undefined {
-  if (event?.type !== 'user/message' || event.data.role !== 'user') return undefined
-  const source = event.data.source as { kind?: unknown; form?: unknown } | undefined
+function snapshotText(message: { role?: unknown; source?: unknown; content?: unknown }): string | undefined {
+  if (message.role !== 'user') return undefined
+  const source = message.source as { kind?: unknown; form?: unknown } | undefined
   if (!isMnemonMessageSource(source)) return undefined
-  const content = event.data.content
+  const content = message.content
   if (!Array.isArray(content) || content.length !== 1) return undefined
   const block = content[0] as { type?: unknown; text?: unknown } | undefined
   if (block?.type !== 'text' || typeof block.text !== 'string') return undefined
@@ -70,6 +72,61 @@ function snapshotText(event: HostSessionEvent | undefined): string | undefined {
   return block.text
 }
 
+/** Ranges follow the Wake's original section order and leave the wire text intact. */
+export function runtimeSnapshotRanges(wake: MemoryWake): RuntimeSnapshotRange[] | undefined {
+  const ranges: RuntimeSnapshotRange[] = []
+  let offset = 0
+  for (const section of wake.sections) {
+    if (section.mode !== 'eager' || section.text === '') continue
+    if (!wake.text.startsWith(section.text, offset)) return undefined
+    const end = offset + section.text.length
+    if (section.layerId === 'runtime') ranges.push([offset, end])
+    offset = end + 2
+  }
+  return ranges
+}
+
+function readRuntimeRanges(value: unknown, text: string): RuntimeSnapshotRange[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  let next = 0
+  const ranges: RuntimeSnapshotRange[] = []
+  for (const range of value) {
+    if (!Array.isArray(range) || range.length !== 2) return undefined
+    const [start, end] = range as [number, number]
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < next || end <= start || end > text.length
+      || (start !== 0 && text.slice(start - 2, start) !== '\n\n')
+      || (end !== text.length && !text.startsWith('\n\n', end))) return undefined
+    ranges.push([start, end])
+    next = end + 2
+  }
+  return ranges
+}
+
+/** Runtime and on-demand hits come from their Sources after a checkpoint. */
+export function summaryWithoutTransientMemory(messages: readonly Message[], authority: MemorySnapshotState | undefined): readonly Message[] {
+  const filtered = messages.flatMap((message): Message[] => {
+    // A summary cannot revoke a recalled reference or re-check its ReadGrant.
+    if (message.role === 'user' && isBm25RecallSource(message.source)) return []
+    const text = snapshotText(message)
+    if (text === undefined) return [message]
+    const source = message.source as { snapshot?: unknown; runtimeRanges?: unknown } | undefined
+    if (authority === undefined || readMemorySnapshotState(source?.snapshot)?.boundary !== authority.boundary) return []
+    const ranges = readRuntimeRanges(source?.runtimeRanges, text)
+    if (ranges === undefined) return [] // An old snapshot cannot be split by provenance.
+    if (ranges.length === 0) return [message]
+    let kept = ''
+    let offset = 0
+    for (const [start, end] of ranges) {
+      kept += text.slice(offset, start)
+      offset = end === text.length ? end : end + 2
+    }
+    kept += text.slice(offset)
+    if (ranges.at(-1)![1] === text.length && kept.endsWith('\n\n')) kept = kept.slice(0, -2)
+    return kept === '' ? [] : [{ ...message, content: [{ type: 'text', text: kept }] } as Message]
+  })
+  return filtered.length === messages.length && filtered.every((message, index) => message === messages[index]) ? messages : filtered
+}
+
 /**
  * Prepare a snapshot and its retirements without writing before step/start.
  * Commit after step/start publication, before the Host builds its request.
@@ -78,30 +135,45 @@ function snapshotText(event: HostSessionEvent | undefined): string | undefined {
  * replacement shadows one owned node and cites it; the append-only audit keeps
  * the original full message, without touching interleaved conversation.
  */
-export function prepareMemorySnapshot(session: HostSession, text: string | undefined, state?: MemorySnapshotState): {
+export function prepareMemorySnapshot(session: HostSession, text: string | undefined, state?: MemorySnapshotState, options: {
+  deferRetirement?: boolean
+  checkpoint?: boolean
+  runtimeRanges?: RuntimeSnapshotRange[]
+} = {}): {
   message: HostUserMessage | undefined
   retire(turn: number, step: number): void
 } {
   const current = text?.trim() === '' ? undefined : text
   const snapshots = session.surface.nodes.flatMap(seq => {
     const event = session.eventAt(seq)
-    const text = snapshotText(event)
-    const source = event?.data.source as { form?: unknown; snapshot?: unknown } | undefined
-    return text === undefined ? [] : [{ seq, text, state: source?.form === 'memory-snapshot' ? readMemorySnapshotState(source.snapshot) : undefined }]
+    if (event?.type !== 'user/message') return []
+    const text = snapshotText(event.data)
+    const source = event.data.source as { form?: unknown; snapshot?: unknown; runtimeRanges?: unknown } | undefined
+    return text === undefined ? [] : [{
+      seq, text, state: source?.form === 'memory-snapshot' ? readMemorySnapshotState(source.snapshot) : undefined,
+      runtimeRanges: readRuntimeRanges(source?.runtimeRanges, text),
+    }]
   })
   const latest = snapshots.at(-1)
+  const appendOnly = options.deferRetirement === true && state?.branchVisibility !== undefined
+    && (options.runtimeRanges?.length ?? 0) > 0 && snapshots.every(snapshot =>
+      snapshot.state?.branchVisibility === state.branchVisibility && (snapshot.runtimeRanges?.length ?? 0) > 0)
   const compatible = state !== undefined && snapshots.every(snapshot => snapshot.state?.boundary === state.boundary
-    && retainsSnapshotEntries(snapshot.state.entries, state.entries))
+    && (appendOnly || retainsSnapshotEntries(snapshot.state.entries, state.entries)))
   const unchanged = current !== undefined && latest?.text === current
   const count = snapshots.length + (unchanged ? 0 : 1)
-  const bytes = snapshots.reduce((total, snapshot) => total + Buffer.byteLength(snapshot.text, 'utf8'), 0)
-    + (unchanged || current === undefined ? 0 : Buffer.byteLength(current, 'utf8'))
-  const withinBudget = count <= MAX_SNAPSHOTS && (count <= 1 || bytes <= MAX_SNAPSHOT_BYTES)
-  const retained = current === undefined ? [] : compatible && withinBudget ? snapshots
+  const withinBudget = appendOnly || (count <= MAX_SNAPSHOTS && (count <= 1
+    || snapshots.reduce((total, snapshot) => total + Buffer.byteLength(snapshot.text, 'utf8'), 0)
+      + (unchanged || current === undefined ? 0 : Buffer.byteLength(current, 'utf8')) <= MAX_SNAPSHOT_BYTES))
+  const retained = current === undefined ? []
+    : options.checkpoint === true ? unchanged && state !== undefined && latest?.state?.boundary === state.boundary
+      && retainsSnapshotEntries(latest.state.entries, state.entries) ? [latest] : []
+    : compatible && withinBudget ? snapshots
     // Callers without a View keep the conservative single-snapshot behavior.
     : state === undefined && unchanged ? [latest!] : []
   const stale = snapshots.filter(snapshot => !retained.includes(snapshot))
-  const message = current === undefined || (unchanged && retained.includes(latest!)) ? undefined : createPluginMessage(current, 'memory-snapshot', state)
+  const message = current === undefined || (unchanged && retained.includes(latest!))
+    ? undefined : createPluginMessage(current, 'memory-snapshot', state, options.runtimeRanges)
   return {
     message,
     retire(turn, step) {
