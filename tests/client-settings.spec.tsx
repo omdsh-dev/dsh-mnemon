@@ -971,7 +971,11 @@ describe('MnemonSettingsCard', () => {
     expect(user.disabled).toBe(true)
     expect(memory.disabled).toBe(true)
     await act(async () => saving.resolve())
-    expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['runtimeMemory'], value: { maintenanceMaxTokens: 32768, userLimitBytes: 8192, memoryLimitBytes: 20480 } }])
+    expect(mutate).toHaveBeenCalledWith([
+      { op: 'set', path: ['runtimeMemory', 'userLimitBytes'], value: 8192 },
+      { op: 'set', path: ['runtimeMemory', 'memoryLimitBytes'], value: 20480 },
+    ])
+    expect(scope.snapshot.value?.runtimeMemory?.maintenanceMaxTokens).toBe(32768)
     expect(screen.getByRole('status').textContent).toBe('已保存并实时生效')
     view.unmount()
     render(runtime(scope, {}, translateEn))
@@ -987,7 +991,7 @@ describe('MnemonSettingsCard', () => {
     expect(checked(toggle)).toBe(false)
     fireEvent.change(screen.getByRole('spinbutton', { name: '用户画像上限（字节）' }), { target: { value: '8192' } })
     fireEvent.click(toggle)
-    await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['runtimeMemory'], value: { maintenanceMaxTokens: 32768, deferLowPriority: true } }]))
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['runtimeMemory', 'deferLowPriority'], value: true }]))
     if (rejected) {
       expect((await screen.findByRole('alert')).textContent).toContain('Synthetic rejection')
       expect(checked(toggle)).toBe(false)
@@ -1001,6 +1005,30 @@ describe('MnemonSettingsCard', () => {
     expect((screen.getByRole('switch', { name: 'Read low-priority memory on demand' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
+  it('defaults experimental BM25 recall off and saves only its setting', async () => {
+    const mutate = vi.fn(async () => {})
+    const scope = liveSettingsScope<Config>(readySnapshot({ runtimeMemory: { deferLowPriority: true } }), mutate)
+    render(runtime(scope))
+    const toggle = screen.getByRole('switch', { name: '工作记忆按需检索（实验）' })
+    expect(checked(toggle)).toBe(false)
+    fireEvent.click(toggle)
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['runtimeMemory', 'bm25Recall'], value: true }]))
+    expect(checked(toggle)).toBe(true)
+  })
+
+  it('keeps both Runtime recall preferences when their saves overlap', async () => {
+    const recallSave = deferred<void>()
+    const deferredSave = deferred<void>()
+    const mutate = vi.fn().mockReturnValueOnce(recallSave.promise).mockReturnValueOnce(deferredSave.promise)
+    const scope = liveSettingsScope<Config>(readySnapshot({ runtimeMemory: { maintenanceMaxTokens: 32768 } }), mutate)
+    render(runtime(scope))
+    fireEvent.click(screen.getByRole('switch', { name: '工作记忆按需检索（实验）' }))
+    fireEvent.click(screen.getByRole('switch', { name: '低优先级记忆按需读取' }))
+    await act(async () => recallSave.resolve())
+    await act(async () => deferredSave.resolve())
+    expect(scope.snapshot.value?.runtimeMemory).toEqual({ bm25Recall: true, deferLowPriority: true, maintenanceMaxTokens: 32768 })
+  })
+
   it('defaults Runtime inheritance off, saves it immediately and preserves staged capacities', async () => {
     const mutate = vi.fn(async () => {})
     const scope = liveSettingsScope<Config>(readySnapshot({ runtimeMemory: { maintenanceMaxTokens: 32768 } }), mutate)
@@ -1010,7 +1038,7 @@ describe('MnemonSettingsCard', () => {
     fireEvent.change(screen.getByRole('spinbutton', { name: '用户画像上限（字节）' }), { target: { value: '8192' } })
     fireEvent.click(inheritance)
     await waitFor(() => expect(scope.snapshot.value?.runtimeMemory?.inheritToSubagents).toBe(true))
-    expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['runtimeMemory'], value: { maintenanceMaxTokens: 32768, inheritToSubagents: true } }])
+    expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['runtimeMemory', 'inheritToSubagents'], value: true }])
     expect((screen.getByRole('spinbutton', { name: '用户画像上限（字节）' }) as HTMLInputElement).value).toBe('8192')
     fireEvent.click(apply())
     await waitFor(() => expect(scope.snapshot.value?.runtimeMemory).toEqual({ inheritToSubagents: true, userLimitBytes: 8192, maintenanceMaxTokens: 32768 }))
@@ -1055,7 +1083,7 @@ describe('MnemonSettingsCard', () => {
     render(runtime(scope))
     fireEvent.change(screen.getByRole('spinbutton', { name: '用户画像上限（字节）' }), { target: { value } })
     fireEvent.click(apply())
-    await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['runtimeMemory'], value: { userLimitBytes: Number(value) } }]))
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['runtimeMemory', 'userLimitBytes'], value: Number(value) }]))
   })
 
   it('keeps exact byte values and the draft when a Runtime capacity save is rejected, then allows retry', async () => {
@@ -2169,13 +2197,8 @@ describe('Phase 1 converged settings, deep-linking, and lent component host', ()
     await waitFor(() => expect(writes).toHaveBeenCalledWith([
       {
         op: 'set',
-        path: ['runtimeMemory'],
-        value: {
-          inheritToSubagents: true,
-          userLimitBytes: 12_000,
-          memoryLimitBytes: 24_000,
-          maintenanceMaxTokens: 16_384,
-        },
+        path: ['runtimeMemory', 'maintenanceMaxTokens'],
+        value: 16_384,
       },
     ]))
   })

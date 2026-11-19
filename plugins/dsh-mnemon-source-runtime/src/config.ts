@@ -10,11 +10,12 @@ export interface Config {
   memoryLimitBytes?: number
   userLimitBytes?: number
   deferLowPriority?: boolean
+  bm25Recall?: boolean
 }
 
 export const Config: z<Config> = z.object({
   dataDir: z.string(), userDataDir: z.string(),
-  deferLowPriority: z.boolean(),
+  deferLowPriority: z.boolean(), bm25Recall: z.boolean(),
   memoryLimitBytes: z.number().step(1).min(1).max(MAX_RUNTIME_MEMORY_LIMIT_BYTES),
   userLimitBytes: z.number().step(1).min(1).max(MAX_RUNTIME_MEMORY_LIMIT_BYTES),
 })
@@ -30,6 +31,7 @@ export function runtimeSourceConfig(value: Config, instanceKey: string): Require
   return {
     dataDir, userDataDir,
     deferLowPriority: config.deferLowPriority ?? false,
+    bm25Recall: config.bm25Recall ?? false,
     memoryLimitBytes: config.memoryLimitBytes ?? DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES,
     userLimitBytes: config.userLimitBytes ?? DEFAULT_RUNTIME_USER_LIMIT_BYTES,
   }

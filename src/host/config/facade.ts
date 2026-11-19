@@ -430,6 +430,7 @@ const INTERACTION_PATHS: string[][] = [
 
 const UI_FIELDS = ['turnBar', 'saveAction']
 const SKILLS_FIELDS = [...Object.keys(DEFAULT_SKILLS_CONFIG), 'dshHome', 'agentsHome', 'skillRoots']
+const RUNTIME_MEMORY_FIELDS = ['bm25Recall', 'deferLowPriority', 'inheritToSubagents', 'memoryLimitBytes', 'userLimitBytes', 'maintenanceMaxTokens']
 const MEMORY_LAYER_ID = /^[a-z][a-z0-9-]{0,127}$/u
 
 function namespaceOf(payload: Record<string, unknown>): string {
@@ -445,6 +446,7 @@ function mutablePath(namespace: string, path: string[]): boolean {
   if (namespace === MNEMON_UI_SETTINGS_NAMESPACE) return path.length === 1 && UI_FIELDS.includes(path[0]!)
   if (namespace === MNEMON_SKILLS_SETTINGS_NAMESPACE) return path.length === 1 && SKILLS_FIELDS.includes(path[0]!)
   if (path.length === 1) return MUTABLE_FIELDS.includes(path[0]!)
+  if (path.length === 2 && path[0] === 'runtimeMemory') return RUNTIME_MEMORY_FIELDS.includes(path[1]!)
   if (path.length === 4 && path[0] === 'memoryTopology' && path[1] === 'layers' && path[3] === 'enabled') {
     return MEMORY_LAYER_ID.test(path[2]!)
   }
@@ -480,8 +482,9 @@ export function createSettingsHandler(settings: HostSettingsService, credentials
           DocumentsSchema(op.value as never)
         }
         if (namespace === MNEMON_SETTINGS_NAMESPACE && path[0] === 'runtimeMemory') {
-          requirePayloadObject(op.value)
-          RuntimeMemorySchema(op.value as never)
+          if (path.length === 2 && (op.value === undefined || op.value === null)) throw new Error(`runtimeMemory.${path[1]} requires a value`)
+          const update = path.length === 1 ? requirePayloadObject(op.value) : { [path[1]!]: op.value }
+          RuntimeMemorySchema(update as never)
         }
         if (namespace === MNEMON_SKILLS_SETTINGS_NAMESPACE && (path[0] === 'dshHome' || path[0] === 'agentsHome')) {
           if (typeof op.value !== 'string') throw new Error(`skills.${path[0]} must be a string`)

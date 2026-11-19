@@ -20,7 +20,7 @@ export default class MnemonCompactionEngine extends BasicCompactionEngine {
     const authority = await readSnapshotAuthority(session, signal)
     signal?.throwIfAborted()
     markSummaryAuthority(session, authority)
-    const messages = summaryWithoutTransientMemory(input.messages, authority)
+    const messages = summaryWithoutTransientMemory(input.messages, authority?.state)
     if (messages === input.messages) return super.summarize(input, agent, signal)
     // DSH's default replay would reconstruct the unfiltered range. The
     // custom-summarizer result still records output, route and usage.

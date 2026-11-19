@@ -20,6 +20,7 @@ import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
 import { registerTools } from '../src/host/tools.ts'
 import { createRuntimeGraph } from '../src/host/runtime.ts'
 import { resolveConfig } from '../src/host/config.ts'
+import type { RuntimeMemoryConfig } from '../src/host/protocol.ts'
 import { compositionFixture } from './fixtures/composition.ts'
 import { JsonlSessionPersistence } from './helpers/dsh-plugins.ts'
 import { dsh021, dshVersion, executeTool, loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
@@ -48,8 +49,8 @@ class ScriptedAdapter extends LlmAdapter {
   }
 }
 
-async function fixture(mode: Mode, start = true, inheritToSubagents?: boolean, snapshotCompaction = false) {
-  const f = await compositionFixture({ idleReview: { enabled: false }, ...(inheritToSubagents === undefined ? {} : { runtimeMemory: { inheritToSubagents } }) })
+async function fixture(mode: Mode, start = true, runtimeMemory?: RuntimeMemoryConfig, snapshotCompaction = false) {
+  const f = await compositionFixture({ idleReview: { enabled: false }, ...(runtimeMemory === undefined ? {} : { runtimeMemory }) })
   // Both named tools and unbound, exact Route/Action ids must reach the model.
   await f.mount(documents, { instanceId: 'extra-documents', config: { dataDir: join(f.root, 'extra-documents') } })
   await f.mount(runtime, { instanceId: 'extra-runtime', config: { dataDir: join(f.root, 'extra-runtime') } })
@@ -93,7 +94,7 @@ async function fixture(mode: Mode, start = true, inheritToSubagents?: boolean, s
     const stopLifecycle = () => { stop?.(); stop = undefined }
     const startLifecycle = () => { stopLifecycle(); stop = lifecycle.start() }
     if (start) startLifecycle()
-    const requests: Array<{ sessionId: string; turn: number | undefined; viewId: string | undefined; strategyType: string | undefined; grantSources: string[]; text: string; messages: GenerateOptions['messages']; tools: GenerateOptions['tools']; purpose: GenerateOptions['purpose'] }> = []
+    const requests: Array<{ sessionId: string; turn: number | undefined; viewId: string | undefined; strategyType: string | undefined; grantSources: string[]; text: string; messages: GenerateOptions['messages']; tools: GenerateOptions['tools']; system: GenerateOptions['system']; purpose: GenerateOptions['purpose'] }> = []
     const receipts: Array<{ sessionId: string; name: string; isError: boolean; text: string }> = []
     const errors: unknown[] = []
     ctx.on('agent/error', ({ error }) => { errors.push(error); return undefined })
@@ -102,7 +103,7 @@ async function fixture(mode: Mode, start = true, inheritToSubagents?: boolean, s
       const pin = f.graph.composableTurns.activeTurn(String(options.sessionId))
       requests.push({ sessionId: String(options.sessionId), turn: pin === undefined ? undefined : Number(pin.turnId.split(':').at(-1)), viewId: pin?.view.id,
         strategyType: pin?.view.strategyTypeId, grantSources: pin?.view.readGrants.map(grant => grant.sourceInstanceKey) ?? [],
-        text: JSON.stringify(options.messages.filter(message => message.role === 'user')), messages: options.messages, tools: options.tools, purpose: options.purpose })
+        text: JSON.stringify(options.messages.filter(message => message.role === 'user')), messages: options.messages, tools: options.tools, system: options.system, purpose: options.purpose })
       if (options.purpose === 'compaction') return 'Synthetic checkpoint of the ordinary conversation.'
       const count = calls.get(String(options.sessionId)) ?? 0
       calls.set(String(options.sessionId), count + 1)
@@ -119,8 +120,8 @@ async function fixture(mode: Mode, start = true, inheritToSubagents?: boolean, s
     })
     ctx.on('agent/created', async ({ agent }) => { if (mode === 'ptc') await selectPtc(agent.ctx); return undefined })
     const create = () => ctx.agents.create({ sessionId: SessionId('turn-view-parent'), meta: { cwd: f.workspace }, agentOptions: { provider: 'fixture', model: 'fixture' } })
-    const turn = async (agent: Agent, ownRequest = false) => {
-      agent.followup(createUserMessage({ source: ownRequest ? { kind: 'dsh-mnemon', form: 'instructions' } : { kind: 'user' }, content: [{ type: 'text', text: 'Read synthetic memory status and documents.' }] }))
+    const turn = async (agent: Agent, ownRequest = false, text = 'Read synthetic memory status and documents.') => {
+      agent.followup(createUserMessage({ source: ownRequest ? { kind: 'dsh-mnemon', form: 'instructions' } : { kind: 'user' }, content: [{ type: 'text', text }] }))
       await agent.whenIdle()
       if (errors.length > 0) throw errors.shift()
     }
@@ -196,7 +197,7 @@ it('adopts an Agent when lifecycle registration arrives during its first prompt 
 }, 20_000)
 
 it.each((['native', 'ptc'] as const).flatMap(mode => [false, true].flatMap(bypassAssembly => [undefined, false, true].map(inheritToSubagents => ({ mode, bypassAssembly, inheritToSubagents })))))('presents a child View once per turn: %j', async ({ mode, bypassAssembly, inheritToSubagents }) => {
-  const f = await fixture(mode, true, inheritToSubagents)
+  const f = await fixture(mode, true, inheritToSubagents === undefined ? undefined : { inheritToSubagents })
   if (bypassAssembly) f.ctx.on('system-prompt/assemble', async assembly => assembly, { prepend: true })
   const parent = await f.create()
   const child = await f.ctx.agents.create({ sessionId: SessionId('turn-view-child'), parentAgent: parent.agent,
@@ -263,7 +264,7 @@ it('captures the current inheritance choice for new children across live setting
 }, 20_000)
 
 it('injects the captured parent View after the parent finishes and newer memory is stored', async () => {
-  const f = await fixture('native', true, true)
+  const f = await fixture('native', true, { inheritToSubagents: true })
   await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'user', content: 'Synthetic delegated user preference.' })
   const parent = await f.create()
   let child: Awaited<ReturnType<typeof f.ctx.agents.create>> | undefined
@@ -349,6 +350,110 @@ it('retains execution policy when a View is prepared by the accepted step', asyn
     expectWake(f.requests[0]!.text)
   } finally { await handle.dispose(); await f.close() }
 })
+
+function bm25Messages(messages: GenerateOptions['messages']) {
+  return messages.filter(message => message.role === 'user' && message.source?.kind === 'dsh-mnemon'
+    && (message.source.form === 'bm25-recall' || message.source.form === 'bm25-invalidation'))
+}
+
+it('retains eager Runtime and the original tool surface with BM25 omitted or off', async () => {
+  const projected = []
+  for (const config of [undefined, { bm25Recall: false }]) {
+    const f = await fixture('native', true, config)
+    const handle = await f.create()
+    try {
+      await f.turn(handle.agent, false, 'Borealis')
+      const request = f.requests[0]!
+      expectWake(request.text)
+      expect(request.text).not.toContain('source:mnemon-source-runtime/search')
+      expect(bm25Messages(request.messages)).toEqual([])
+      projected.push({ context: snapshots(request.messages).map(message => message.content), tools: request.tools })
+    } finally { await handle.dispose(); await f.close() }
+  }
+  expect(projected[0]).toEqual(projected[1])
+})
+
+const supportsSnapshotCompaction = dshVersion === '0.2.1-rc.5' || /^0\.2\.2(?:-rc\.(?:[2-9]|[1-9]\d+))?$/u.test(dshVersion)
+
+it.each([
+  ['native', false], ['ptc', false],
+  ...(supportsSnapshotCompaction ? [['native', true], ['ptc', true]] as const : []),
+] as const)('appends only BM25 hits and keeps %s request prefixes on resume (Mnemon compaction %s)', async (mode, snapshotCompaction) => {
+  const f = await fixture(mode, true, { bm25Recall: true }, snapshotCompaction)
+  execFileSync('git', ['init', '--quiet', '-b', 'main', f.workspace])
+  let handle = await f.create()
+  try {
+    const runtime = f.graph.source('runtime')
+    const documents = f.graph.source('documents')
+    const original = 'Glacier deployment uses an amber queue.'
+    const corrected = 'Glacier deployment uses a violet queue.'
+    const pinned = 'Ship only through the signed pipeline.'
+    await runtime.mutate('mutate', { action: 'add', target: 'memory', content: original, branches: ['main'] })
+    await runtime.mutate('mutate', { action: 'add', target: 'memory', content: pinned })
+    await runtime.mutate('pin', { target: 'memory', content: pinned, pinned: true })
+    await runtime.mutate('mutate', { action: 'add', target: 'user', content: 'Use short explanations.' })
+    const { document } = await documents.mutate<{ document: { id: string } }>('mutate', {
+      action: 'create', title: 'Glacier 部署手册', content: 'BODY_CANARY_ONLY',
+    })
+    await documents.mutate('mutate', { action: 'create', title: '任务中断后继续执行', content: 'OTHER_BODY_CANARY_ONLY' })
+
+    for (const query of ['继续', 'Glacier 部署', 'Glacier 部署']) await f.turn(handle.agent, false, query)
+    expect(bm25Messages(f.requests[0]!.messages)).toHaveLength(0)
+    expect(f.requests[0]!.text).toContain(pinned)
+    expect(f.requests[0]!.text).toContain('Use short explanations.')
+    expect(f.requests[0]!.text).toContain('source:mnemon-source-runtime/search')
+    expect(f.requests[0]!.text).not.toContain('Synthetic turn-view retained fact.')
+    expect(f.requests[0]!.text).not.toContain(original)
+    const delivered = bm25Messages(f.requests[3]!.messages)
+    expect(delivered).toHaveLength(1)
+    const initial = JSON.stringify(delivered[0]!.content)
+    expect(initial).toContain(original)
+    expect(initial).toContain('Glacier 部署手册')
+    expect(initial).toContain(document.id)
+    expect(initial).not.toContain('BODY_CANARY_ONLY')
+    expect(bm25Messages(f.requests[6]!.messages)).toEqual(delivered)
+    const surface = handle.agent.session.surface.contentGeneration
+
+    await runtime.mutate('mutate', { action: 'replace', target: 'memory', oldText: original, content: corrected })
+    await documents.mutate('mutate', { action: 'update', id: document.id, title: 'Glacier 生产部署' })
+    await f.turn(handle.agent, false, 'Glacier 部署')
+    const updated = bm25Messages(f.requests[9]!.messages)
+    expect(updated).toHaveLength(2)
+    const latest = JSON.stringify(updated[1]!.content)
+    expect(latest).toContain('Disregard superseded or removed references')
+    expect(latest).toContain(corrected)
+    expect(latest).toContain('Glacier 生产部署')
+
+    await runtime.mutate('mutate', { action: 'remove', target: 'memory', oldText: corrected })
+    await f.turn(handle.agent, false, '火星气压')
+    const expired = bm25Messages(f.requests[12]!.messages)
+    expect(expired).toHaveLength(3)
+    expect(expired[2]?.source).toMatchObject({ form: 'bm25-invalidation' })
+    expect(JSON.stringify(expired[2]!.content)).toContain('Disregard superseded or removed references')
+    expect(JSON.stringify(expired[2]!.content)).not.toContain(corrected)
+
+    await handle.dispose()
+    handle = await f.ctx.agents.resume({ resumeSessionId: SessionId('turn-view-parent'), agentOptions: { provider: 'fixture', model: 'fixture' } })
+    await f.turn(handle.agent, false, 'Glacier 部署')
+    expect(bm25Messages(f.requests[15]!.messages)).toEqual(expired)
+    // Compare the actual adapter input, including the system envelope and tools.
+    for (const index of [3, 6, 9, 12, 15]) {
+      const before = f.requests[index - 1]!
+      const after = f.requests[index]!
+      expect(JSON.stringify(after.messages.slice(0, before.messages.length))).toBe(JSON.stringify(before.messages))
+      expect(after.system).toBe(before.system)
+      expect(after.tools).toEqual(before.tools)
+    }
+    expect(handle.agent.session.surface.contentGeneration).toBe(surface)
+    expect(handle.agent.session.snapshotEvents().filter(event => event.type === 'user/message'
+      && event.data.source.kind === 'dsh-mnemon' && event.data.source.form === 'bm25-recall')).toHaveLength(2)
+
+    execFileSync('git', ['symbolic-ref', 'HEAD', 'refs/heads/other'], { cwd: f.workspace })
+    await f.turn(handle.agent, false, '火星气压')
+    expect(bm25Messages(f.requests[18]!.messages)).toHaveLength(0)
+    expect(f.requests[18]!.text).toContain(pinned)
+  } finally { await handle.dispose(); await f.close() }
+}, 20_000)
 
 it.each(['native', 'ptc'] as const)('preserves the full request prefix until the snapshot budget checkpoints, including %s resume', async mode => {
   const f = await fixture(mode)
@@ -464,8 +569,6 @@ function snapshots(messages: GenerateOptions['messages']) {
   return messages.filter(message => message.role === 'user' && message.source?.kind === 'dsh-mnemon' && message.source.form === 'memory-snapshot')
 }
 
-const supportsSnapshotCompaction = dshVersion === '0.2.1-rc.5' || /^0\.2\.2(?:-rc\.(?:[2-9]|[1-9]\d+))?$/u.test(dshVersion)
-
 it.runIf(supportsSnapshotCompaction)('appends corrections and deletion to an empty snapshot without changing the full request prefix', async () => {
   const f = await fixture('native', true, undefined, true)
   const handle = await f.create()
@@ -578,6 +681,100 @@ it.runIf(supportsSnapshotCompaction)('restores the current Runtime snapshot when
     expect(session.surface.nodes).not.toContain(snapshotSeq)
   } finally { await handle.dispose(); await f.close() }
 })
+
+it.runIf(supportsSnapshotCompaction)('filters eager and BM25 memory together before a manual checkpoint', async () => {
+  const f = await fixture('native', true, { bm25Recall: true }, true)
+  const handle = await f.create()
+  try {
+    const runtime = f.graph.source('runtime')
+    const old = 'Comet runs on the amber queue.'
+    const removed = 'Comet uses the secret cobalt queue.'
+    const corrected = 'Comet runs on the violet queue.'
+    const profile = 'Prefer the synthetic profile setting.'
+    await runtime.mutate('mutate', { action: 'add', target: 'user', content: profile })
+    await runtime.mutate('mutate', { action: 'add', target: 'memory', content: old })
+    await runtime.mutate('mutate', { action: 'add', target: 'memory', content: removed })
+    await f.turn(handle.agent, false, 'Comet')
+    await f.turn(handle.agent, false, 'Read synthetic memory status and documents.')
+    expect(f.requests[0]!.text).toContain(old)
+    expect(f.requests[0]!.text).toContain(removed)
+    expect(f.requests[0]!.text).toContain(profile)
+    await runtime.mutate('mutate', { action: 'replace', target: 'memory', oldText: old, content: corrected })
+    await runtime.mutate('mutate', { action: 'remove', target: 'memory', oldText: removed })
+
+    expect(await f.compactionContext.compaction.compactNow(handle.agent, new AbortController().signal)).not.toBeNull()
+    const summary = f.requests.find(request => request.purpose === 'compaction')!
+    const summaryInput = JSON.stringify(summary.messages)
+    for (const fact of [old, removed, corrected, profile]) expect(summaryInput).not.toContain(fact)
+    expect(bm25Messages(summary.messages)).toHaveLength(0)
+    expect(summary.text).toContain('Read synthetic memory status and documents.')
+    expect(summary.text).toContain('MNEMON VIEW TOOLS')
+
+    await f.turn(handle.agent, false, 'Comet')
+    const after = f.requests.at(-1)!
+    expect(after.text).toContain(corrected)
+    expect(after.text).toContain(profile)
+    expect(after.text).not.toContain(old)
+    expect(after.text).not.toContain(removed)
+    expect(snapshots(after.messages)).toHaveLength(1)
+  } finally { await handle.dispose(); await f.close() }
+})
+
+for (const revoke of [false, true]) {
+  it.runIf(supportsSnapshotCompaction)(`revalidates both memory projections during request compaction (revoke: ${revoke})`, async () => {
+    const f = await fixture('native', true, { bm25Recall: true }, true)
+    const handle = await f.create()
+    try {
+      const runtime = f.graph.source('runtime')
+      const hit = 'Kepler uses the synthetic quartz queue.'
+      const profile = 'Use the synthetic Kepler profile.'
+      await runtime.mutate('mutate', { action: 'add', target: 'user', content: profile })
+      await runtime.mutate('mutate', { action: 'add', target: 'memory', content: hit })
+      await f.turn(handle.agent, false, 'Kepler')
+      expect(f.requests[0]!.text).toContain(hit)
+      expect(f.requests[0]!.text).toContain(profile)
+      const session = handle.agent.session
+      const start = session.surface.nodes.find(seq => {
+        const event = session.eventAt(seq)
+        return event?.type === 'user/message' && event.data.source.kind === 'dsh-mnemon'
+          && event.data.source.form === 'memory-snapshot'
+      })!
+      const end = session.surface.nodes.findLast(seq => session.eventAt(seq)?.type === 'assistant/message')!
+
+      let compacted = false
+      const stop = f.ctx.on('agent/request', async (request, next) => {
+        const route = await next()
+        if (!compacted && request.agent === handle.agent) {
+          compacted = true
+          if (revoke) {
+            const topology = f.config.memoryTopology
+            const layer = topology.layers.runtime!
+            const config = resolveConfig({ ...f.config, memoryTopology: { ...topology, layers: { ...topology.layers,
+              runtime: { ...layer, participation: { ...layer.participation, projection: 'off', recall: 'off' } } } } })
+            f.live.swap(createRuntimeGraph(config, f.workspace, f.extensions))
+          }
+          expect(await f.compactionContext.compaction.compactRegion(start, end, handle.agent, request.signal)).not.toBeNull()
+        }
+        return route
+      })
+      try { await f.turn(handle.agent, false, 'Kepler') } finally { stop() }
+      const summary = f.requests.find(request => request.purpose === 'compaction')!
+      expect(JSON.stringify(summary.messages)).not.toContain(hit)
+      expect(JSON.stringify(summary.messages)).not.toContain(profile)
+      const after = f.requests.slice(3).filter(request => request.purpose !== 'compaction')
+      expect(after.length).toBeGreaterThan(0)
+      for (const request of after) {
+        expect(request.text.includes(hit)).toBe(!revoke)
+        expect(request.text.includes(profile)).toBe(!revoke)
+      }
+      if (revoke) {
+        await f.turn(handle.agent, false, 'Kepler')
+        expect(f.requests.at(-1)!.text).not.toContain(hit)
+        expect(f.requests.at(-1)!.text).not.toContain(profile)
+      }
+    } finally { await handle.dispose(); await f.close() }
+  })
+}
 
 it.runIf(supportsSnapshotCompaction)('excludes a revoked View from compaction before another turn begins', async () => {
   const f = await fixture('native', true, undefined, true)

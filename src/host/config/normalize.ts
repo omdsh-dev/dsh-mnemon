@@ -146,11 +146,14 @@ function resolveDocuments(value: DocumentsConfig | undefined): SharedResolvedCon
 }
 
 function resolveRuntimeMemory(value: RuntimeMemoryConfig | undefined): SharedResolvedConfig['runtimeMemory'] {
+  const bm25Recall = value?.bm25Recall ?? false
+  if (typeof bm25Recall !== 'boolean') throw new Error('dsh-mnemon: Runtime bm25Recall must be a boolean')
   const deferLowPriority = value?.deferLowPriority ?? false
   if (typeof deferLowPriority !== 'boolean') throw new Error('dsh-mnemon: Runtime deferLowPriority must be a boolean')
   const inheritToSubagents = value?.inheritToSubagents ?? false
   if (typeof inheritToSubagents !== 'boolean') throw new Error('dsh-mnemon: Runtime inheritToSubagents must be a boolean')
   return {
+    bm25Recall,
     deferLowPriority,
     inheritToSubagents,
     memoryLimitBytes: boundedInteger(value?.memoryLimitBytes, DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES, MIN_RUNTIME_MEMORY_LIMIT_BYTES, MAX_RUNTIME_MEMORY_LIMIT_BYTES, 'Runtime MEMORY.md limit', ' bytes'),

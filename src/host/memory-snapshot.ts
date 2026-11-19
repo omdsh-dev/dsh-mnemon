@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { Message } from '@deepseek-ai/dsh-llm'
 import type { MemoryWake } from '../core/contracts/index.ts'
 import type { HostSession, HostUserMessage } from './dsh.ts'
+import { prepareBm25Recall, readBm25RecallState, type Bm25RecallState, type Bm25View } from './bm25-recall.ts'
 import { createPluginMessage, isBm25RecallSource, isMnemonMessageSource, MNEMON_PLUGIN_SOURCE } from './plugin-message.ts'
 import { readMemorySnapshotState, retainsSnapshotEntries, type MemorySnapshotState, type RuntimeSnapshotRange } from './memory-snapshot-state.ts'
 
@@ -127,6 +128,13 @@ export function summaryWithoutTransientMemory(messages: readonly Message[], auth
   return filtered.length === messages.length && filtered.every((message, index) => message === messages[index]) ? messages : filtered
 }
 
+export interface MemorySnapshotOptions {
+  deferRetirement?: boolean
+  checkpoint?: boolean
+  runtimeRanges?: RuntimeSnapshotRange[]
+  recall?: { view: Bm25View; query: string | undefined; checkpoint: boolean }
+}
+
 /**
  * Prepare a snapshot and its retirements without writing before step/start.
  * Commit after step/start publication, before the Host builds its request.
@@ -135,18 +143,23 @@ export function summaryWithoutTransientMemory(messages: readonly Message[], auth
  * replacement shadows one owned node and cites it; the append-only audit keeps
  * the original full message, without touching interleaved conversation.
  */
-export function prepareMemorySnapshot(session: HostSession, text: string | undefined, state?: MemorySnapshotState, options: {
-  deferRetirement?: boolean
-  checkpoint?: boolean
-  runtimeRanges?: RuntimeSnapshotRange[]
-} = {}): {
+export function prepareMemorySnapshot(session: HostSession, text: string | undefined, state?: MemorySnapshotState, options: MemorySnapshotOptions = {}): {
   message: HostUserMessage | undefined
+  recall: HostUserMessage | undefined
   retire(turn: number, step: number): void
 } {
   const current = text?.trim() === '' ? undefined : text
+  const recalls: { seq: number; state: Bm25RecallState }[] = []
+  const unreadableRecalls: number[] = []
   const snapshots = session.surface.nodes.flatMap(seq => {
     const event = session.eventAt(seq)
     if (event?.type !== 'user/message') return []
+    if (isBm25RecallSource(event.data.source)) {
+      const state = readBm25RecallState(event.data.source)
+      if (state === undefined) unreadableRecalls.push(seq)
+      else recalls.push({ seq, state })
+      return []
+    }
     const text = snapshotText(event.data)
     const source = event.data.source as { form?: unknown; snapshot?: unknown; runtimeRanges?: unknown } | undefined
     return text === undefined ? [] : [{
@@ -171,14 +184,19 @@ export function prepareMemorySnapshot(session: HostSession, text: string | undef
     : compatible && withinBudget ? snapshots
     // Callers without a View keep the conservative single-snapshot behavior.
     : state === undefined && unchanged ? [latest!] : []
-  const stale = snapshots.filter(snapshot => !retained.includes(snapshot))
+  const recall = prepareBm25Recall(recalls, options.recall?.view, options.recall?.query, options.recall?.checkpoint === true)
+  const stale = [...snapshots.filter(snapshot => !retained.includes(snapshot)).map(snapshot => snapshot.seq), ...unreadableRecalls, ...recall.retire]
   const message = current === undefined || (unchanged && retained.includes(latest!))
-    ? undefined : createPluginMessage(current, 'memory-snapshot', state, options.runtimeRanges)
+    ? undefined : createPluginMessage(current, 'memory-snapshot', {
+        ...(state === undefined ? {} : { snapshot: state }),
+        ...(options.runtimeRanges === undefined ? {} : { runtimeRanges: options.runtimeRanges }),
+      })
   return {
     message,
+    recall: recall.message,
     retire(turn, step) {
       const visible = new Set(session.surface.nodes)
-      for (const { seq } of stale) {
+      for (const seq of stale) {
         if (!visible.has(seq)) continue
         if (session.append === undefined) throw new Error('DSH Session append is required to retire superseded memory snapshots')
         session.append('developer/message', {

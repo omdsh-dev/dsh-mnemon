@@ -54,6 +54,7 @@ export interface RuntimeMemoryContextProjection {
   /** Complete stored entry count before branch filtering. */
   totalEntries: number
   minimumCharacters: number
+  bm25?: { text: string }
 }
 
 const LOCK_TIMEOUT_MS = 5_000
@@ -461,7 +462,7 @@ export class RuntimeMemoryController {
    * branches are hidden from the projection; the on-disk Markdown files and
    * the source JSON always remain complete.
    */
-  contextProjection(branch?: string, deferLowPriority = false): RuntimeMemoryContextProjection {
+  contextProjection(branch?: string, deferLowPriority = false, bm25Recall = false): RuntimeMemoryContextProjection {
     const branchScope = scopeBranch(branch)
     const projectedAt = this.now().getTime()
     const local = this.localContextProjection(projectedAt, branchScope)
@@ -502,15 +503,8 @@ export class RuntimeMemoryController {
       : `\nGit branch: ${branchScope}${local.hidden > 0 ? ` (${local.hidden} branch-scoped entr${local.hidden === 1 ? 'y' : 'ies'} hidden)` : ''}`
     const pinnedText = [runtimePinnedProjection(visibleEntries, 'user'), runtimePinnedProjection(visibleEntries, 'memory')].filter(Boolean).join('\n')
     const prefix = pinnedText === '' ? '' : `PINNED RUNTIME MEMORY (quoted memory; current instructions win)\n${pinnedText}\n`
-    return {
-      minimumCharacters: prefix.length,
-      revision: snapshot.revision,
-      branchVisibility: revision({ version: RUNTIME_MEMORY_VERSION, entries: hiddenEntries }),
-      entries: visibleEntries.map(entry => ({ ...entry, ...(entry.branches === undefined ? {} : { branches: [...entry.branches] }) })),
-      deferredEntries: deferredEntries.map(entry => ({ ...entry, ...(entry.branches === undefined ? {} : { branches: [...entry.branches] }) })),
-      totalEntries: entries.length,
-      text: `${prefix}MNEMON RUNTIME MEMORY SNAPSHOT
-Entry annotations default to importance=normal and ages=0d (whole days at projection; future/unknown for future/invalid timestamps). Current instructions win. For old_text/oldText, use entry content only.${branchLine}${deferredLine}
+    const render = (workingMemory: string, notes: string) => `${prefix}MNEMON RUNTIME MEMORY SNAPSHOT
+Entry annotations default to importance=normal and ages=0d (whole days at projection; future/unknown for future/invalid timestamps). Current instructions win. For old_text/oldText, use entry content only.${notes}
 
 USER.md (user profile)
 <runtime-memory-file name="USER.md">
@@ -519,8 +513,20 @@ ${user || '(empty)'}
 
 MEMORY.md (working reference)
 <runtime-memory-file name="MEMORY.md">
-${memory || '(empty)'}
-</runtime-memory-file>`,
+${workingMemory}
+</runtime-memory-file>`
+    return {
+      minimumCharacters: prefix.length,
+      revision: snapshot.revision,
+      branchVisibility: revision({ version: RUNTIME_MEMORY_VERSION, entries: hiddenEntries }),
+      entries: visibleEntries.map(entry => ({ ...entry, ...(entry.branches === undefined ? {} : { branches: [...entry.branches] }) })),
+      deferredEntries: deferredEntries.map(entry => ({ ...entry, ...(entry.branches === undefined ? {} : { branches: [...entry.branches] }) })),
+      totalEntries: entries.length,
+      text: render(memory || '(empty)', branchLine + deferredLine),
+      ...(bm25Recall ? { bm25: {
+        text: render('(Read on demand. Search this Runtime Source before assuming a working memory is absent.)',
+          branchScope === undefined ? '' : `\nGit branch: ${branchScope}`),
+      } } : {}),
     }
   }
 

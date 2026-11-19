@@ -34,9 +34,10 @@ import type { PreparedMemoryPlacement } from 'dsh-mnemon-source-memory-spaces/co
 import type { MemoryWake } from "../core/contracts/index.ts"
 import { agentScope, type MnemonAgentRuntimeSource } from './runtime.ts'
 import { createPluginMessage, isMnemonMessageSource, MNEMON_PLUGIN_SOURCE } from './plugin-message.ts'
-import { prepareMemorySnapshot, runtimeSnapshotRanges } from './memory-snapshot.ts'
-import { memorySnapshotState, retainsSnapshotEntries, type MemorySnapshotState } from './memory-snapshot-state.ts'
-import { bindSnapshotAuthority, takeSnapshotCompactionStep, takeSummaryAuthority } from './snapshot-compaction.ts'
+import { bm25View, readBm25RecallState } from './bm25-recall.ts'
+import { prepareMemorySnapshot, runtimeSnapshotRanges, type MemorySnapshotOptions } from './memory-snapshot.ts'
+import { memorySnapshotState, retainsSnapshotEntries } from './memory-snapshot-state.ts'
+import { bindSnapshotAuthority, takeSnapshotCompactionStep, takeSummaryAuthority, type SnapshotAuthority } from './snapshot-compaction.ts'
 import type { SkillEvolution } from './skill-evolution.ts'
 import { IdleReviewWatermarkStore } from './idle-review-watermark.ts'
 import { activationOwned, contextIsActive, isInactiveContextError, isCreatingChild, isRootAgent, isTaskRecord, rootAgents, titleTask } from './agent-compat.ts'
@@ -93,8 +94,10 @@ interface PendingMemorySnapshot {
   signal: AbortSignal
   update: ReturnType<typeof prepareMemorySnapshot>
   checkpoint: boolean
+  recallCheckpoint: boolean
+  recallQuery: string | undefined
   deferRetirement: boolean
-  injecting: string | undefined
+  injecting: Set<string>
 }
 
 interface TurnStoppingPayload extends AgentEventPayload {
@@ -232,6 +235,7 @@ class MnemonAgentLifecycle {
   private startSource: LifecycleAgentSnapshot['startSource']
   private readonly guidedTurns = new Set<number>()
   private pendingSnapshot: PendingMemorySnapshot | undefined
+  private recallCheckpoint: boolean | undefined
   private readonly memoryActivity = new TurnActivityProjection()
   private readonly log = new LifecycleLogProjection()
   private readonly turnActivity = new Map<number, {
@@ -367,10 +371,10 @@ class MnemonAgentLifecycle {
     return assistantMessageText(sessionEvents(this.agent.session), messageId)
   }
 
-  memoryWake(): MemoryWake | undefined {
+  memoryWake(presentation?: import('../core/contracts/index.ts').ComposableMemoryView): MemoryWake | undefined {
     const pinned = this.memoryTurn?.current
     if (pinned === undefined) return undefined
-    return modelMemoryWake(pinned.graph, pinned.context, true, this.agent)
+    return modelMemoryWake(pinned.graph, pinned.context, true, this.agent, presentation)
   }
 
   /**
@@ -405,6 +409,20 @@ class MnemonAgentLifecycle {
     // or Mnemon can load while that waterfall is already running. The accepted
     // Agent step still needs its own durable turn's View before tools or Wake.
     if (!this.disposed && openAgentTurn(this.agent) === payload.turn) await this.memoryTurn?.begin(payload.turn, payload.signal)
+    const view = this.memoryTurn?.current?.context.view
+    const experiment = this.config.lifecycleEnabled && this.config.runtimeMemory.bm25Recall && !this.memoryTurn?.excluded
+      ? bm25View(view) : undefined
+    if (experiment !== undefined && this.recallCheckpoint === undefined) {
+      const latest = findSessionEvent(this.agent.session, event => event.type === 'step/start'
+        || event.type === 'compaction/end' && event.data.error === undefined)
+      this.recallCheckpoint = latest?.event.type === 'compaction/end'
+    }
+    const recallCheckpoint = this.recallCheckpoint === true
+    const ownRequest = payload.step === 1 && decision.messages.some(message => isMnemonMessageSource(message.source))
+    const query = experiment !== undefined && payload.step === 1 && !ownRequest
+      ? decision.messages.filter(message => message.source.kind === 'user')
+        .flatMap(message => message.content.flatMap(block => block.type === 'text' ? [block.text] : [])).join('\n')
+      : undefined
     // Retirement is independent of injection gates: a disabled/absent View or
     // changed authority must not leave old snapshots in an accepted request.
     if (deferRetirement && this.snapshotCheckpoint === undefined) {
@@ -417,8 +435,13 @@ class MnemonAgentLifecycle {
       this.snapshotCheckpoint = latest?.type === 'compaction/end'
     }
     const checkpoint = deferRetirement && this.snapshotCheckpoint === true
-    const update = this.planSnapshot(deferRetirement, checkpoint)
-    const pending: PendingMemorySnapshot = { turn: payload.turn, step: payload.step, signal: payload.signal, update, checkpoint, deferRetirement: false, injecting: undefined }
+    const update = this.planSnapshot({ deferRetirement, checkpoint,
+      ...(experiment === undefined ? {} : { recall: { view: experiment, query, checkpoint: recallCheckpoint } }),
+    })
+    const pending: PendingMemorySnapshot = {
+      turn: payload.turn, step: payload.step, signal: payload.signal, update, checkpoint, recallCheckpoint,
+      recallQuery: undefined, deferRetirement: false, injecting: new Set(),
+    }
     this.pendingSnapshot = pending
     if (!this.config.lifecycleEnabled || this.memoryTurn?.excluded) return decision
     if (this.config.writeEnabled && this.config.writebackMode === 'guided') {
@@ -427,21 +450,21 @@ class MnemonAgentLifecycle {
     if (payload.step !== 1) {
       pending.deferRetirement = deferRetirement
       if (!checkpoint || update.message === undefined) return decision
-      pending.injecting = update.message.id
+      pending.injecting.add(update.message.id)
       return { kind: 'enter', messages: [...decision.messages, update.message] }
     }
 
-    const ownRequest = decision.messages.some(message => isMnemonMessageSource(message.source))
     if (ownRequest) {
       return decision
     }
     if (decision.messages.length === 0) return decision
     // Appended last; normal additions preserve the preceding request prefix.
-    const snapshot = update.message
+    const additions = [update.message, update.recall].filter(message => message !== undefined)
     pending.deferRetirement = deferRetirement
-    pending.injecting = snapshot?.id
+    pending.recallQuery = query
+    for (const addition of additions) pending.injecting.add(addition.id)
     const withSnapshot = (messages: HostUserMessage[]): HostUserMessage[] =>
-      snapshot === undefined ? messages : [...messages, snapshot]
+      additions.length === 0 ? messages : [...messages, ...additions]
 
     if (this.primePending) {
       this.primePending = false
@@ -526,21 +549,19 @@ class MnemonAgentLifecycle {
     if (event.type === 'compaction/end') {
       const authority = takeSummaryAuthority(session)
       if (event.data.error === undefined) {
-        this.snapshotCheckpoint = true
-        if (this.activeSnapshot !== undefined && authority !== undefined) this.restoreSnapshotAfterCompaction(this.activeSnapshot, authority.state)
+        this.snapshotCheckpoint = this.recallCheckpoint = true
+        if (this.activeSnapshot !== undefined && authority !== undefined) this.restoreSnapshotAfterCompaction(this.activeSnapshot, authority.value)
       }
       return
     }
-    if (event.type === 'user/message' && this.activeSnapshot?.injecting !== undefined && this.activeSnapshot.injecting === event.data.id) {
-      this.activeSnapshot.injecting = undefined
-      return
-    }
+    if (event.type === 'user/message' && typeof event.data.id === 'string') this.activeSnapshot?.injecting.delete(event.data.id)
     const turn = eventTurn(event)
     if (event.type === 'step/start') {
       const pending = this.pendingSnapshot
       if (pending === undefined || pending.turn !== turn || pending.step !== event.data.step) return
       this.pendingSnapshot = undefined
       if (pending.checkpoint) this.snapshotCheckpoint = false
+      if (pending.recallCheckpoint) this.recallCheckpoint = false
       this.activeSnapshot = pending.deferRetirement ? pending : undefined
       this.queueSnapshotRetirement(pending)
       return
@@ -554,32 +575,62 @@ class MnemonAgentLifecycle {
     this.releaseView(turn)
   }
 
-  private planSnapshot(deferRetirement: boolean, checkpoint: boolean): ReturnType<typeof prepareMemorySnapshot> {
-    const wake = this.config.lifecycleEnabled && !this.memoryTurn?.excluded ? this.memoryWake() : undefined
+  private planSnapshot(options: MemorySnapshotOptions): ReturnType<typeof prepareMemorySnapshot> {
+    const presentation = options.recall?.view.view
+    const view = presentation ?? this.memoryTurn?.current?.context.view
+    const wake = this.config.lifecycleEnabled && !this.memoryTurn?.excluded ? this.memoryWake(presentation) : undefined
     const ranges = wake === undefined ? undefined : runtimeSnapshotRanges(wake)
-    const state = wake === undefined ? undefined : memorySnapshotState(this.memoryTurn?.current?.context.view)
-    return prepareMemorySnapshot(this.agent.session, wake?.text, state,
-      { deferRetirement, checkpoint, ...(ranges === undefined ? {} : { runtimeRanges: ranges }) })
+    return prepareMemorySnapshot(this.agent.session, wake?.text, wake === undefined ? undefined : memorySnapshotState(view),
+      { ...options, ...(ranges === undefined ? {} : { runtimeRanges: ranges }) })
   }
 
-  private restoreSnapshotAfterCompaction(active: PendingMemorySnapshot, authority: MemorySnapshotState | undefined): void {
+  private restoreSnapshotAfterCompaction(active: PendingMemorySnapshot, authority: SnapshotAuthority | undefined): void {
     // Model-switch and overflow compaction can land after step/start. Restore
     // the pinned View before DSH builds that request or its retry.
     queueMicrotask(() => {
       const step = openAgentStep(this.agent)
       if (this.activeSnapshot !== active || active.signal.aborted || step?.turn !== active.turn || step.step !== active.step) return
       try {
-        const pinned = memorySnapshotState(this.memoryTurn?.current?.context.view)
-        const authorized = pinned !== undefined && authority?.boundary === pinned.boundary
-          && retainsSnapshotEntries(pinned.entries, authority.entries)
-        const update = authorized ? this.planSnapshot(true, true) : prepareMemorySnapshot(this.agent.session, undefined)
+        const pinnedView = this.memoryTurn?.current?.context.view
+        const pinnedRecall = this.config.runtimeMemory.bm25Recall ? bm25View(pinnedView) : undefined
+        const pinned = memorySnapshotState(pinnedRecall?.view ?? pinnedView)
+        const currentState = authority?.state
+        const authorized = pinned !== undefined && currentState?.boundary === pinned.boundary
+          && currentState.branchVisibility === pinned.branchVisibility
+          && retainsSnapshotEntries(pinned.entries, currentState.entries)
+
+        // Revalidate the pinned catalog against a fresh View. A compaction made
+        // during a step cannot introduce hits from outside that step's pin.
+        const currentRecall = authority?.recall
+        const allowed = new Set(currentRecall === undefined ? [] : [...currentRecall.memory, ...currentRecall.documents].map(item => item.key))
+        const recall = pinnedRecall !== undefined && currentRecall?.scope === pinnedRecall.scope ? {
+          view: {
+            ...pinnedRecall,
+            memory: pinnedRecall.memory.filter(item => allowed.has(item.key)),
+            documents: pinnedRecall.documents.filter(item => allowed.has(item.key)),
+          },
+          query: active.recallQuery,
+          checkpoint: true,
+        } : undefined
+        const options = recall === undefined ? {} : { recall }
+        const update = authorized ? this.planSnapshot({ ...options, deferRetirement: true, checkpoint: true })
+          : prepareMemorySnapshot(this.agent.session, undefined, undefined, options)
         update.retire(active.turn, active.step)
-        if (!authorized && active.injecting !== undefined) { this.cancelSnapshotRequest(); return }
-        if (update.message !== undefined && active.injecting === undefined) {
-          if (this.agent.session.append === undefined) throw new Error('DSH Session append is required after compaction')
-          this.agent.session.append('user/message', update.message, { surfaceOp: 'append' })
+        const snapshotPending = active.update.message !== undefined && active.injecting.has(active.update.message.id)
+        const recallPending = active.update.recall !== undefined && active.injecting.has(active.update.recall.id)
+        const plannedRecall = readBm25RecallState(active.update.recall?.source)
+        if ((!authorized && snapshotPending) || (recallPending
+          && (recall === undefined || plannedRecall?.scope !== recall.view.scope || plannedRecall.added.some(key => !allowed.has(key))))) {
+          this.cancelSnapshotRequest()
+          return
         }
-        this.snapshotCheckpoint = false
+        const replacements = [snapshotPending ? undefined : update.message, recallPending ? undefined : update.recall]
+        for (const message of replacements) {
+          if (message === undefined) continue
+          if (this.agent.session.append === undefined) throw new Error('DSH Session append is required after compaction')
+          this.agent.session.append('user/message', message, { surfaceOp: 'append' })
+        }
+        this.snapshotCheckpoint = this.recallCheckpoint = false
       } catch { this.cancelSnapshotRequest() }
     })
   }

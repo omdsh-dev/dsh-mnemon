@@ -92,6 +92,26 @@ describe('Mnemon settings bridge', () => {
     await expect(handler('mutate', { ops: [{ op: 'set', path: ['memoryTopology', 'layers', 'documents', 'participation'], value: {} }] })).resolves.toMatchObject({ ok: false })
   })
 
+  it('validates individual Runtime fields without replacing sibling settings', async () => {
+    const mutate = vi.fn(async () => {})
+    const settings = {
+      writable: true,
+      mutate,
+      describe: () => [{ ns: 'mnemon', value: { runtimeMemory: { deferLowPriority: true } }, revision: 3, applies: 'live' as const }],
+    } as unknown as HostSettingsService
+    const handler = createSettingsHandler(settings)
+    const recall = { op: 'set', path: ['runtimeMemory', 'bm25Recall'], value: true }
+    const capacity = { op: 'set', path: ['runtimeMemory', 'userLimitBytes'], value: 8192 }
+    const ops = [recall, capacity]
+
+    await expect(handler('mutate', { ops, expectedRevision: 3 })).resolves.toMatchObject({ ok: true })
+    expect(mutate).toHaveBeenCalledWith('mnemon', ops, 3)
+    for (const op of [{ ...recall, value: 'false' }, { ...recall, value: null }, { ...capacity, value: 0 }]) {
+      await expect(handler('mutate', { ops: [op] })).resolves.toMatchObject({ ok: false })
+    }
+    expect(mutate).toHaveBeenCalledTimes(1)
+  })
+
   it('accepts the whole persistence strategy through the Mnemon namespace', async () => {
     const persistenceStrategy = {
       mode: 'automatic',

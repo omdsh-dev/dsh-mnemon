@@ -108,6 +108,7 @@ mnemon:
 | `defaultRecallLimit` | `10` | 1–50 | Default recall count for the service and UI; individual entry points may impose a lower limit |
 | `runtimeMemory.memoryLimitBytes` | `10240` | 1–1048576 bytes | UTF-8 byte limit for the complete `MEMORY.md` projection |
 | `runtimeMemory.userLimitBytes` | `4096` | 1–1048576 bytes | UTF-8 byte limit for the complete `USER.md` projection |
+| `runtimeMemory.bm25Recall` | `false` | boolean | Experimental automatic matching of working memories and project Document titles in Layered conversations |
 | `runtimeMemory.maintenanceMaxTokens` | `8192` | 128–131072 tokens | Completion-token budget for Runtime migration and compaction workers; does not change Document archive or metadata-maintenance budgets |
 | `documents.limitBytes` | `10485760` | 1–104857600 bytes | Total UTF-8 byte limit for active Project Documents copies (default 10 MiB) |
 | `embedding` | `{ enabled: false, endpoint: http://localhost:11434, model: nomic-embed-text, apiKey: '', protocol: auto }` | enabled + HTTP(S) endpoint + model + optional apiKey + protocol (auto/ollama/openai) | When enabled, the Host injects the saved endpoint, model, API key, and protocol override into every Mnemon CLI child process; an endpoint ending in `/v1` makes Mnemon use the OpenAI-compatible protocol with the API key as a Bearer token, and `protocol: openai` forces it for non-`/v1` endpoints; when disabled, existing Host environment and Mnemon defaults remain untouched |
@@ -174,6 +175,12 @@ The **Read low-priority memory on demand** switch on Runtime memory's settings p
 
 This changes prompt delivery only: files, capacity accounting, management lists, writes and backups stay complete. No text classifier changes importance or deletes entries. Disable the switch to restore full projection on subsequent turns. Explicitly recalled content follows ordinary conversation-history retention. Standalone Runtime Sources use `deferLowPriority: true` in their own configuration; custom Strategies must retain the offered `search` Route to make deferred details accessible.
 
+### Experimental working-memory search
+
+**Search working memory on demand (experimental)** in the Runtime Memory settings controls `runtimeMemory.bm25Recall`. At the first step of a Layered conversation turn, a local BM25 search uses the new user text and the current View's authorized Sources. It ranks individual `MEMORY.md` entries and active Project Document titles separately. Up to three entries and two titles share a 1,600-character result budget. Titles link to Document IDs for follow-up search. A turn without a usable match adds no search result. The user profile and pinned entries supply the fixed Runtime context, and the scoped Runtime search Route lets the model look up missing entries before editing memory.
+
+An already delivered item is kept in the conversation without adding another copy. A correction or deletion marks an earlier reference as expired. After a successful DSH compaction, the next accepted step retires remaining raw blocks that contain obsolete matches. Scope or participation changes retire earlier results before the next model request. Disabling the option returns to eager Runtime projection. This setting affects model delivery in the main conversation. Files and explicit Source tools retain their normal formats and authority.
+
 <a id="snapshot-compaction"></a>
 
 ### Opt-in snapshot compaction
@@ -190,6 +197,8 @@ For example, `dsh --profile web --dump-config` shows the effective Web presets. 
 Use the updated Starter and Runtime Source together. DSH loads the Basic compaction package from its own installation when the backend is selected. The opt-in path is verified on DSH 0.2.2-rc.2 and 0.2.2-rc.4. Restore `name: '@deepseek-ai/dsh-compaction-basic'` in that preset to return to the standard behavior.
 
 Ordinary Runtime corrections and removals append an authoritative snapshot for the next turn, including an empty projection after the last entry is removed. Earlier requests keep their prefix. The history retains the old text until DSH compacts the session. Authority or visibility changes still retire affected snapshots before the next applicable request. The four-snapshot and 64 KiB limits apply to the default policy.
+
+When both this backend and experimental BM25 search are enabled, compaction excludes Runtime snapshot text and BM25 quotations from its summary input. The next request revalidates any retained references against the current View and can recall current hits. Ordinary corrections and deletions still append at the end of the request; loss of read authority retires the affected blocks before the request is sent.
 
 ### Runtime Memory budgets
 

@@ -3,7 +3,9 @@ import { DEFAULT_MEMORY_VIEW_BUDGET, type MemoryOperationScope } from '../core/c
 import { isMemoryCompositionUnavailable } from '../core/generation.ts'
 import type { ComposableMemoryTurn } from '../core/turns.ts'
 import type { HostAgent, HostSession } from './dsh.ts'
-import { memorySnapshotState, type MemorySnapshotState } from './memory-snapshot-state.ts'
+import { bm25View } from './bm25-recall.ts'
+import { memorySnapshotState } from './memory-snapshot-state.ts'
+import type { SnapshotAuthority } from './snapshot-compaction.ts'
 import { findSessionEvent, sessionEvents, sessionLength } from './session-events.ts'
 import { agentScope, type MnemonAgentRuntimeSource, type MnemonRuntimeGraph } from './runtime.ts'
 import { inspectMemoryView, modelMemoryWake } from './view-presentation.ts'
@@ -136,7 +138,7 @@ export class AgentMemoryTurn {
   get excluded(): boolean { return this.runtime.memoryParticipation?.(this.agent).excluded === true }
 
   /** Compaction may start before a turn has appended its newest snapshot. */
-  async snapshotAuthority(signal?: AbortSignal): Promise<MemorySnapshotState | undefined> {
+  async snapshotAuthority(signal?: AbortSignal): Promise<SnapshotAuthority | undefined> {
     if (this.closed || this.excluded || !this.runtime.config.lifecycleEnabled) return undefined
     try {
       const graph = this.runtime.forAgent(this.agent, { independent: true })
@@ -148,7 +150,8 @@ export class AgentMemoryTurn {
         if (this.closed || this.excluded || !this.runtime.config.lifecycleEnabled
           || this.runtime.forAgent(this.agent, { independent: true }) !== graph
           || graph.memoryComposition.current() !== lease.generation) return undefined
-        return memorySnapshotState(view)
+        const recall = this.runtime.config.runtimeMemory.bm25Recall ? bm25View(view) : undefined
+        return { state: memorySnapshotState(recall?.view ?? view), recall }
       } finally { lease.release() }
     } catch {
       signal?.throwIfAborted()

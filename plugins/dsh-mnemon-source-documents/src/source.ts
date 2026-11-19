@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import type { MemoryEvidenceItem, MemoryJsonValue, MemoryReadGrant, MemorySourceDefinition } from 'dsh-mnemon/contracts'
 import { COMPOSABLE_MEMORY_API_VERSION } from 'dsh-mnemon/contracts'
 import { defineMemorySource, createMemoryMutationReceipt as receipt, memoryInputRecord as record, memoryInputStringArray as stringArray, memoryInputText as text, truncateMemoryText as truncate } from 'dsh-mnemon/extension-sdk'
@@ -160,7 +160,13 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
           sourceInstanceKey: context.sourceInstanceKey,
           schema: 'dsh-mnemon.documents/v1',
           value: { workspaceRoot: root, documentIds: active.map(document => document.id),
-            archivedDocumentIds: current.documents.filter(document => document.status === 'archived' && document.healthy).map(document => document.id).sort() },
+            archivedDocumentIds: current.documents.filter(document => document.status === 'archived' && document.healthy).map(document => document.id).sort(),
+            ...(request.includeProjection && effective.bm25Recall ? { bm25: {
+              scope: createHash('sha256').update(JSON.stringify([effective.dataDir, root])).digest('hex'),
+              text: truncate('Project Documents can be searched by title or topic.', request.maxCharacters),
+              titles: active.map(document => ({ id: document.id, title: document.title })),
+            } } : {}),
+          },
           revision: current.revision,
           consistency: 'namespace-pinned-live-read',
         }
