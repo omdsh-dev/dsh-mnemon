@@ -231,7 +231,7 @@ export function DocumentsSettings(props: ShippedSettingsServices & { page: Memor
 
 // ---- Layered strategy: the background tasks it drives ----
 
-type ReviewChoice = Pick<ResolvedIdleReviewConfig, 'enabled' | 'runtimeMemory' | 'persistWatermark' | 'provider' | 'fallback' | 'agentTeams'>
+type ReviewChoice = Pick<ResolvedIdleReviewConfig, 'enabled' | 'silent' | 'runtimeMemory' | 'persistWatermark' | 'provider' | 'fallback' | 'agentTeams'>
 type ReviewLimits = Pick<ResolvedIdleReviewConfig, 'minIntervalMs' | 'maxPerSession' | 'maxContextChars' | 'maxTokens'>
 
 /** Each limit as the page shows it: the interval in seconds, the others as stored. */
@@ -246,7 +246,7 @@ function reviewOf(value: Config | undefined): ResolvedIdleReviewConfig {
   return { ...DEFAULT_IDLE_REVIEW, ...value?.idleReview }
 }
 
-const choiceOf = (review: ResolvedIdleReviewConfig): ReviewChoice => ({ enabled: review.enabled, runtimeMemory: review.runtimeMemory, persistWatermark: review.persistWatermark, provider: review.provider, fallback: review.fallback, agentTeams: review.agentTeams })
+const choiceOf = (review: ResolvedIdleReviewConfig): ReviewChoice => ({ enabled: review.enabled, silent: review.silent, runtimeMemory: review.runtimeMemory, persistWatermark: review.persistWatermark, provider: review.provider, fallback: review.fallback, agentTeams: review.agentTeams })
 const limitsOf = (review: ResolvedIdleReviewConfig): Record<keyof ReviewLimits, string> =>
   Object.fromEntries(LIMITS.map(limit => [limit.key, String(review[limit.key] / limit.scale)])) as Record<keyof ReviewLimits, string>
 
@@ -321,6 +321,7 @@ function IdleReviewRows(props: {
   return <>
     <ToggleRow id="mnemon-idle-review" label={t('config.reviewTitle')} ariaLabel={t('config.reviewEnabled')} hint={t('config.reviewDescription')} checked={choice.enabled} disabled={props.disabled} onChange={enabled => props.onChoice({ enabled })} />
     {choice.enabled && <>
+      <ToggleRow id="mnemon-review-silent" label={t('config.reviewSilent')} hint={t('config.reviewSilentHint')} checked={choice.silent} disabled={props.disabled} onChange={silent => props.onChoice({ silent })} />
       <ToggleRow id="mnemon-review-persist-watermark" label={t('config.reviewPersistWatermark')} hint={t('config.reviewPersistWatermarkHint')} checked={choice.persistWatermark} disabled={props.disabled} onChange={persistWatermark => props.onChoice({ persistWatermark })} />
       <ToggleRow id="mnemon-review-runtime-memory" label={t('config.reviewRuntimeMemory')} hint={t('config.reviewRuntimeMemoryHint')} checked={choice.runtimeMemory} disabled={props.disabled} onChange={runtimeMemory => props.onChoice({ runtimeMemory })} />
       <SelectRow id="mnemon-review-provider" label={t('config.reviewProvider')} value={choice.provider} disabled={props.disabled} onChange={provider => props.onChoice({ provider })} options={[

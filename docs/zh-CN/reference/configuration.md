@@ -131,6 +131,7 @@ mnemon:
 | `idleReviewMs` | `30000` | 5000–600000 ms | 达标后需要连续空闲的时间 |
 | `idleReview.enabled` | `true` | boolean | 自动审查独立开关 |
 | `idleReview.runtimeMemory` | `true` | boolean | 允许审查修改运行时记忆（USER.md 与 MEMORY.md）；`false` 时只创建项目档案 |
+| `idleReview.silent` | `true` | boolean | 隐藏当前对话的自动 Spawn 审查会话 |
 | `idleReview.persistWatermark` | `false` | boolean | 在实际运行时存储根目录中，为同一持久父会话保留尝试限额和冷却时间 |
 | `idleReview.provider` | `spawn` | `spawn` / `fork` | 有界检查点或继承父上下文 |
 | `idleReview.fallback` | `spawn` | `spawn` / `skip` | 仅启动前处理 fork 缺失/不兼容 |
@@ -501,6 +502,8 @@ mnemon:
 **审查写入什么。**每条知识只进一层。项目记录（设计、实现细节、路径、端口、范围约定、交接说明等）最多写成一份项目档案。工作记忆（MEMORY.md）只收用户明确说过的简短规则，例如约定、纠正、环境事实或工具特性，且项目档案和已有条目都未涵盖；USER.md 收身份与偏好。guard 让每轮审查只写一层：建了项目档案后，修改工作记忆会被拒绝；修改工作记忆后，新建项目档案会被拒绝；USER.md 的修改不受影响。`idleReview.runtimeMemory: false` 会从审查中收回 `mnemon_runtime_memory`，审查只创建项目档案。审查从不写入记忆空间：工作记忆在容量整理时归档进去，项目档案在冷归档时建立索引；**存入记忆**与 `mnemon_remember` 则直接写入。
 
 `idleReviewMs` 仍是连续空闲防抖时间。`minIntervalMs` 限制尝试间隔，失败与取消也计入；`maxPerSession` 限制尝试次数，零表示暂停。默认情况下，新的父 Agent（包括重启 Host 或重新打开会话）获得新的内存内预算。
+
+开启**静默运行空闲审查**后，自动 Spawn 审查会话会隐藏。关闭后，新审查仍会执行，会话会显示在当前对话的子 Agent 列表中。启动时清理未分组的旧审查记录也遵循此设置。
 
 在分层策略的空闲审查设置中启用**重新打开会话后保留审查限额**，或设置 `idleReview.persistWatermark: true`，即可恢复同一持久父会话的尝试次数和剩余冷却时间。身份由实际运行时存储根目录与父会话 ID 共同决定；新会话或其他根目录使用独立预算，选择 Source/View 或使用全局 USER.md 不改变身份。重建 Agent 或回退 surface 不重置已保留的额度；若 DSH 在清空/压缩时分配新会话 ID，则按新会话处理。在运行中的 Agent 打开此开关后，会立即合并该根目录已用的次数和上次尝试时间作为持久基线，不额外计次或启动工作。关闭后新增内存内尝试、再重新启用时会再次合并，不携带其他根目录的用量。每次尝试在启动子代理前先写入磁盘，失败和取消也计次；预约后崩溃可能消耗一次额度而未启动子代理。重启不重放工作、不补跑审查，仍需新的合格检查点。系统时钟回拨导致的未来时间仍保留冷却约束，并以有界定时器等待。
 

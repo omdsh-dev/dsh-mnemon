@@ -219,6 +219,7 @@ export const RuntimeMemorySchema: z<RuntimeMemoryConfig> = z.object({
 
 export const IdleReviewSchema = z.object({
   enabled: z.boolean().default(DEFAULT_IDLE_REVIEW.enabled),
+  silent: z.boolean().default(DEFAULT_IDLE_REVIEW.silent),
   runtimeMemory: z.boolean().default(DEFAULT_IDLE_REVIEW.runtimeMemory),
   persistWatermark: z.boolean().default(DEFAULT_IDLE_REVIEW.persistWatermark),
   provider: z.union(['spawn', 'fork'] as const).default(DEFAULT_IDLE_REVIEW.provider),

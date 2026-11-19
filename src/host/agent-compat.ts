@@ -114,10 +114,10 @@ interface ReservedChild {
 const creatingChild = new AsyncLocalStorage<ReservedChild>()
 
 /** Share one reservation across guard, continuation and composition wrappers, never across nested runs. */
-export function withReservedChild<T>(parent: HostAgent, operation: () => Promise<T>, fresh = false): Promise<T> {
+export function withReservedChild<T>(parent: HostAgent, operation: () => Promise<T>, fresh = false, id?: string): Promise<T> {
   const current = creatingChild.getStore()
   if (!fresh && current?.parent === parent && !current.claimed) return operation()
-  return creatingChild.run({ parent, id: `mnemon-run-v1-${randomUUID()}` }, operation)
+  return creatingChild.run({ parent, id: id ?? `mnemon-run-v1-${randomUUID()}` }, operation)
 }
 
 export function reservedChildId(parent: HostAgent): string | undefined {

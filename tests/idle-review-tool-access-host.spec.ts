@@ -25,6 +25,7 @@ import { retiredMemorySnapshot } from '../src/client/retired-memory-snapshot.ts'
 import type { HostAgent, HostContextShape } from '../src/host/dsh.ts'
 import { MnemonLifecycle } from '../src/host/lifecycle.ts'
 import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
+import { isIdleReviewOwner } from '../src/host/task-session-cleanup.ts'
 import { registerTools } from '../src/host/tools.ts'
 import { compositionFixture } from './fixtures/composition.ts'
 import { JsonlSessionPersistence } from './helpers/dsh-plugins.ts'
@@ -39,18 +40,27 @@ const ptcServices = await Promise.all(['dsh-fs-local', 'dsh-subprocess-local', '
   .map(name => import(requireDsh.resolve(`@deepseek-ai/${name}`))))
 
 describe('idle review tool access host', () => {
-async function fixture(provider: 'spawn' | 'fork' = 'spawn', persistWatermark = false, codeMode = false, autoReview = false, publicationWrites = false) {
-  const f = await compositionFixture({ idleReviewMs: 5_000, idleReview: { provider, persistWatermark, minIntervalMs: 5_000, maxPerSession: 2 } })
+async function fixture(provider: 'spawn' | 'fork' = 'spawn', persistWatermark = false, codeMode = false, autoReview = false, publicationWrites = false,
+  visibility?: { silent: boolean }) {
+  const f = await compositionFixture({ idleReviewMs: 5_000, idleReview: { provider, persistWatermark, minIntervalMs: 5_000, maxPerSession: 2, ...visibility } })
   const body = publicationWrites ? await f.memorySpace() : undefined
   const ctx = new Context()
   const modelCalls: string[] = []
   const children: string[] = []
+  const reviewOwners: Agent[] = []
+  const reviews: Array<{ id: string; origin: string | undefined; owner: string | undefined }> = []
   let foregroundCall = false
   let foregroundExecutions = 0
   let preset = 'danger-full-access'
   class Model extends LlmAdapter {
     override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
       modelCalls.push(String(options.sessionId))
+      const id = String(options.sessionId)
+      if (id.startsWith('mnemon-review-v1-') && !reviews.some(review => review.id === id)) {
+        const agent = ctx.agents.get(SessionId(id))!
+        const subagents = ctx.subagents as unknown as { rootOf?(agent: Agent): Agent }
+        reviews.push({ id, origin: agent.session.header.origin, owner: subagents.rootOf?.(agent).id })
+      }
       if (autoReview && options.messages.some(message => message.role === 'user' && message.content.some(block => block.type === 'text' && block.text.startsWith('ENVIRONMENT\n')))) {
         const text = '{"risk":"low","decision":"allow"}'
         yield { type: 'block-start', index: 0, blockType: 'text' }
@@ -125,7 +135,11 @@ async function fixture(provider: 'spawn' | 'fork' = 'spawn', persistWatermark = 
     ctx.provide('approval', { overrideOf: () => 'never' })
     await ctx.plugin(await import(requireDsh.resolve('@deepseek-ai/dsh-experimental-auto-review')))
   }
-  ctx.on('agent/created', ({ agent }) => { if (String(agent.id) !== 'parent-denied') children.push(agent.id); return undefined })
+  ctx.on('agent/created', ({ agent }) => {
+    if (isIdleReviewOwner(agent.id)) reviewOwners.push(agent)
+    else if (String(agent.id) !== 'parent-denied') children.push(agent.id)
+    return undefined
+  })
   if (publicationWrites) ctx.on('agent/created', (({ agent }: { agent: HostAgent }) => agent.session.header?.origin === 'subagent' ? 1 : undefined) as never)
   const host = ctx as unknown as HostContextShape
   const coordinator = new MnemonSubagentCoordinator(host.subagents, f.live, host)
@@ -142,7 +156,7 @@ async function fixture(provider: 'spawn' | 'fork' = 'spawn', persistWatermark = 
     const stop = parent.ctx.on('agent/request', async (_payload, next) => { await run(); return next() }, { prepend: true })
     try { await turn() } finally { stop() }
   }
-  return { ...f, ctx, coordinator, lifecycle, parent, turn, duringStep, modelCalls, children, body,
+  return { ...f, ctx, coordinator, lifecycle, parent, turn, duringStep, modelCalls, children, reviewOwners, reviews, body,
     enableAuto: () => { preset = 'auto' },
     foreground: async () => { foregroundCall = true; await turn(); return foregroundExecutions },
     async close() {
@@ -448,7 +462,7 @@ it('revokes a cancelled or timed-out challenge even when middleware ignores canc
   } finally { await f.close() }
 })
 
-it('runs automatic spawn idle review in isolated archived sessions without polluting the conversation subagent list (issues 651, 472)', async () => {
+it('hides automatic spawn idle review during execution and keeps it out of the conversation subagent list (issues 687, 651, 472)', async () => {
   const f = await fixture('spawn')
   try {
     const archived: string[] = []
@@ -471,8 +485,48 @@ it('runs automatic spawn idle review in isolated archived sessions without pollu
     expect(f.coordinator.snapshot().reviews).toBe(2)
     expect(f.children).toHaveLength(2)
     expect(f.children.every(id => id.startsWith('mnemon-review-v1-'))).toBe(true)
+    expect(f.reviews.map(review => review.id)).toEqual(f.children)
+    expect(f.reviews.map(review => review.origin)).toEqual(['subagent', 'subagent'])
     expect(archived).toEqual(expect.arrayContaining(f.children))
+    const modern = typeof (f.ctx.subagents as { rootOf?: unknown }).rootOf === 'function'
+    if (modern) {
+      expect(f.reviews.map(review => review.owner)).toEqual(f.reviewOwners.map(owner => owner.id))
+      for (const owner of f.reviewOwners) {
+        expect(owner.session.snapshotEvents().some(event => event.type === 'turn/start')).toBe(false)
+        expect(f.modelCalls).not.toContain(owner.id)
+        expect(archived).toContain(owner.id)
+      }
+    }
     expect(f.parent.session.snapshotEvents().some(event => event.type === 'subagent/catalog')).toBe(false)
+    await assertReloadable(f)
+  } finally { await f.close() }
+}, 20_000)
+
+it('runs visible spawn idle reviews and skips orphan archival when silent mode is off', async () => {
+  const f = await fixture('spawn', false, false, false, true, { silent: false })
+  try {
+    const archiveSession = vi.fn(async () => {})
+    const listSessions = vi.fn(async () => [])
+    f.ctx.provide('workspaceRegistry', {
+      get: (id: string) => id === 'ws-1' ? { id: 'ws-1', path: f.workspace, title: 'Workspace' } : undefined,
+      list: () => [{ id: 'ws-1', path: f.workspace, title: 'Workspace', sessionIds: ['parent-denied'] }],
+      archiveSession,
+    })
+    f.ctx.provide('sessionQuery', { listSessions, readSession: vi.fn() })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    await f.turn()
+    await f.turn()
+    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.waitFor(() => expect(f.lifecycle.snapshot('parent-denied').current).toMatchObject({ reviewRunning: false, lastReviewAction: 'added' }), { timeout: 10_000 })
+    expect(f.coordinator.snapshot().reviews).toBe(1)
+    expect(await f.graph.source('runtime').read('snapshot')).toMatchObject({ entries: [expect.objectContaining({ content: 'Synthetic publication-safe runtime.' })] })
+    expect(f.children).toHaveLength(1)
+    expect(f.reviewOwners).toHaveLength(0)
+    expect(f.parent.session.snapshotEvents()).toContainEqual(expect.objectContaining({
+      type: 'subagent/catalog', data: expect.objectContaining({ childId: f.children[0] }),
+    }))
+    expect(listSessions).not.toHaveBeenCalled()
+    expect(archiveSession).not.toHaveBeenCalled()
     await assertReloadable(f)
   } finally { await f.close() }
 }, 20_000)

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { HostSession, HostSessionEvent } from '../src/host/dsh.ts'
-import { archiveTaskSession } from '../src/host/task-session-cleanup.ts'
+import { archiveOrphanedIdleReviews, archiveTaskSession } from '../src/host/task-session-cleanup.ts'
 
 function fixture(messages: Array<{ id: string; source: { kind: string } }> = []) {
   const events: HostSessionEvent[] = messages.map((message, seq) => ({ type: 'user/message', seq, data: { message } }))
@@ -45,4 +45,28 @@ describe('archival of an owned completed task', () => {
     await expect(archiveTaskSession(f.host, 'task', f.session)).resolves.toBe(false)
     await expect(archiveTaskSession(f.host, 'task', undefined)).resolves.toBe(false)
   })
+})
+
+it('repairs only proven leftover idle-review records and their blank owners', async () => {
+  const ids = Array.from({ length: 9 }, (_, index) => `mnemon-review-v1-01234567-89ab-4abc-8123-${String(index).padStart(12, '0')}`)
+  const ownerId = 'mnemon-review-owner-v1-01234567-89ab-4abc-8123-000000000000'
+  const prompt = { type: 'user/message', data: { id: 'mnemon-review-01234567-89ab-4abc-8123-000000000000', source: { kind: 'user' },
+    content: [{ type: 'text', text: '[dsh-mnemon:delegated review]\nSynthetic task.' }] } }
+  const readSession = vi.fn(async (id: string) => ({ session: { id }, inheritedEventCount: 0, events: id === ownerId
+    ? [{ type: 'subagent/catalog', data: { childId: ids[0] } }]
+    : id === ids[1] ? [prompt, { type: 'user/message', data: { source: { kind: 'user' } } }]
+    : id === ids[2] ? [{ ...prompt, data: { ...prompt.data, id: 'text-but-no-ownership' } }]
+    : id === ids[3] ? [prompt, { type: 'session/title', data: { source: { kind: 'user' }, title: 'My notes' } }]
+    : [prompt] }))
+  const { registry, archiveSession } = fixture()
+  registry.archivedSessionIds.push(ids[4]!)
+  registry.pinnedSessionIds.push(ids[5]!)
+  const query = {
+    listSessions: async () => [...ids, ownerId].map(id => ({ header: { id, ...(id === ids[8] ? { origin: 'subagent' } : {}) }, persisted: true, live: id === ids[6] })),
+    readSession,
+  }
+  const host = { get: (name: string) => name === 'sessionQuery' ? query : { ...registry, list: () => [{ sessionIds: [ids[7]] }] } }
+  await archiveOrphanedIdleReviews(host, new AbortController().signal)
+  expect(archiveSession.mock.calls).toEqual([[ids[0]], [ownerId]])
+  expect(readSession.mock.calls.flat()).toEqual([...ids.slice(0, 4), ownerId])
 })

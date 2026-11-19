@@ -270,6 +270,7 @@ export interface HostSubagentResult {
 
 export interface HostSubagentRun {
   id: string
+  messageId?: string
   localAgent?: HostAgent
   result: Promise<HostSubagentResult>
   dispose(): Promise<void>
@@ -285,12 +286,13 @@ export interface HostSubagentProvider {
 
 export interface HostSubagentStartRequest {
   label?: string
+  cwd?: string
   /** Optional catalog name, forwarded only to Hosts with named-child support. */
   name?: string
   prompt: Array<{ type: 'text'; text: string }>
   parent: HostAgent
   signal: AbortSignal
-  agentOptions?: { provider?: string; model?: string; maxTokens?: number }
+  agentOptions?: { provider?: string; model?: string; maxTokens?: number; reasoningEffort?: string }
   outputSchema?: Record<string, unknown>
   maxDepth?: number
   /** The child's tools and its persona, which DSH 0.2.0 takes in the request (see subagent-start.ts). */

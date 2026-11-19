@@ -6,7 +6,7 @@ The Starter pins a tested combination of official plugins. The table records ver
 
 | Component | Baseline | What is verified |
 |---|---|---|
-| DSH 0.2.2 CI hosts | `0.2.2-rc.1`, `0.2.2-rc.2` | Installed-Host suites run on Node 24.22.2. DSH 0.2.2 requires Node >=24.9.0. |
+| DSH 0.2.2 CI hosts | `0.2.2-rc.1`, `0.2.2-rc.2`, `0.2.2-rc.5` | Installed-Host suites run on Node 24.22.2. DSH 0.2.2 requires Node >=24.9.0. |
 | DSH 0.2.2 release checks | `0.2.2-rc.3`, `0.2.2-rc.4` | v0.5.48 verified Web installation, upgrade and data retention on both versions and ran the installed-Host suite on rc.4. [Release acceptance](../../pr-assets/release-v0.5.48/README.md) |
 | Inspected DSH source snapshot | `fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159` | Separate Node 24 verification against the unmodified source build, including live-model WebUI tasks. This identifies one master commit, not every source build or alpha. See [activation-owned Host evidence](../../pr-assets/dsh-master-agents/README.md). |
 | DSH development baseline | `0.2.1-rc.5` | Pinned development dependencies and an installed-Host CI target on Node 22.19. |
@@ -43,6 +43,10 @@ Installing for the first time? How DSH chooses the registry, and why its result 
 | `0.1.5-rc.1` to `0.1.7-alpha.1` | `0.5.16` |
 
 What those hosts needed is kept under [Older DSH hosts](#older-dsh-hosts). How each release was verified, and the earlier Headless and WebUI records that remain historical evidence, are under [Verification and evidence](#verification-and-evidence).
+
+### Published DSH 0.2.2 RC5
+
+Automatic `spawn` idle review uses a DSH-managed child under a blank task owner when the Host manages subagent ownership. The reviewer stays out of the main sidebar and the reviewed conversation's Subagent list while it runs. The task owner makes no model requests. After completion, DSH's archive retains the task history. On startup, Mnemon also archives leftover ungrouped review records after verifying their original task prompt. Pinned, grouped, active or user-continued sessions are preserved. [Issue #687](https://github.com/omdsh-dev/dsh-mnemon/issues/687)
 
 ### Published DSH 0.2.2 RC2
 
