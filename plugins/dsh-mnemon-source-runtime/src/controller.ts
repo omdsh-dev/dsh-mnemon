@@ -186,7 +186,7 @@ function parseEntry(value: unknown): RuntimeMemoryEntry | undefined {
   }
 }
 
-function duplicateEntryKey(entry: RuntimeMemoryEntry): string {
+function runtimeEntryKey(entry: { target: RuntimeMemoryTarget; content: string; branches?: readonly string[] | undefined }): string {
   return JSON.stringify([entry.target, entry.content, [...(entry.branches ?? [])].sort()])
 }
 
@@ -199,7 +199,7 @@ function isNewerEntry(entry: RuntimeMemoryEntry, previous: RuntimeMemoryEntry): 
 function collapseDuplicateEntries(entries: readonly RuntimeMemoryEntry[]): RuntimeMemoryEntry[] {
   const groups = new Map<string, { latest: RuntimeMemoryEntry; pin?: RuntimeMemoryEntry }>()
   for (const entry of entries) {
-    const key = duplicateEntryKey(entry)
+    const key = runtimeEntryKey(entry)
     const group = groups.get(key)
     if (group === undefined) {
       groups.set(key, { latest: entry, ...(entry.pinned === undefined ? {} : { pin: entry }) })
@@ -305,9 +305,9 @@ function prepareMutation(
       if (branchScope.length === 0) delete pendingEntry.branches
       else pendingEntry.branches = branchScope
     }
-    const key = duplicateEntryKey(pendingEntry)
+    const key = runtimeEntryKey(pendingEntry)
     if (entries.some((entry, entryIndex) => entryIndex !== index && entry.target === request.target
-      && entry.content === content && duplicateEntryKey(entry) === key)) {
+      && entry.content === content && runtimeEntryKey(entry) === key)) {
       throw new Error(`An identical ${request.target} entry already exists in this scope. Remove the old entry to consolidate them.`)
     }
     entries[index] = pendingEntry
@@ -337,21 +337,23 @@ function compactionCandidates(
   now: string,
 ): RuntimeMemoryEntry[] {
   const seen = new Set<string>()
-  const existingByContent = new Map<string, RuntimeMemoryEntry>()
-  // Preserve find()'s first match, including legacy duplicates with different scopes.
-  for (const entry of existing) if (!existingByContent.has(entry.content)) existingByContent.set(entry.content, entry)
+  const existingByKey = new Map(existing.map(entry => [runtimeEntryKey(entry), entry]))
+  const firstByContent = new Map<string, RuntimeMemoryEntry>()
+  for (const entry of existing) if (!firstByContent.has(entry.content)) firstByContent.set(entry.content, entry)
   return compacted.map((entry): RuntimeMemoryEntry => {
     const content = normalizeContent(entry.content, 'compacted content')
     if (!isImportance(entry.importance)) throw new Error('compacted importance must be critical, normal, or low')
-    if (seen.has(content)) throw new Error('compacted runtime memory contains duplicate entries')
-    seen.add(content)
-    const unchanged = existingByContent.get(content)
-    // A compactor that drops the scope inherits it from the identical committed entry, so branch
-    // visibility can never be silently widened by maintenance.
-    const inheritedBranches = entry.branches ?? unchanged?.branches
+    const branches = entry.branches === undefined ? undefined : normalizeRuntimeBranches(entry.branches, 'compacted branches')
+    if (target === 'user' && branches?.length) throw new Error('compacted branches apply to target=memory only')
+    // A missing scope matches an unscoped original first. Older callers that
+    // omit the scope for an existing scoped fact still inherit its scope.
+    const unchanged = existingByKey.get(runtimeEntryKey({ target, content, branches }))
+      ?? (branches === undefined ? firstByContent.get(content) : undefined)
+    const scope = unchanged?.branches ?? branches
+    if (unchanged === undefined && firstByContent.has(content)) throw new Error('Compaction cannot change the branch scope of an existing entry')
     if (entry.pinned !== undefined && entry.pinned !== unchanged?.pinned) throw new Error('Compaction cannot change pin state')
-    if (unchanged?.pinned === true && (entry.importance !== unchanged.importance || JSON.stringify(inheritedBranches) !== JSON.stringify(unchanged.branches))) throw new Error('Compaction cannot change a pinned entry')
-    return {
+    if (unchanged?.pinned === true && entry.importance !== unchanged.importance) throw new Error('Compaction cannot change a pinned entry')
+    const candidate: RuntimeMemoryEntry = {
       content,
       created_at: unchanged?.created_at ?? now,
       updated_at: unchanged?.updated_at ?? now,
@@ -359,8 +361,12 @@ function compactionCandidates(
       importance: entry.importance,
       ...(unchanged?.pinned === undefined ? {} : { pinned: unchanged.pinned }),
       ...(unchanged?.origin === undefined ? {} : { origin: unchanged.origin }),
-      ...(inheritedBranches === undefined ? {} : { branches: inheritedBranches }),
+      ...(scope !== undefined && scope.length > 0 ? { branches: scope } : {}),
     }
+    const key = runtimeEntryKey(candidate)
+    if (seen.has(key)) throw new Error('compacted runtime memory contains duplicate entries')
+    seen.add(key)
+    return candidate
   })
 }
 
@@ -725,13 +731,25 @@ ${workingMemory}
         }
       }
       const replacements = compactionCandidates(compacted, prepared.compactableEntries, request.target, now)
+      const byKey = new Map(replacements.map(entry => [runtimeEntryKey(entry), entry]))
       for (const pinned of prepared.compactableEntries.filter(entry => entry.pinned === true)) {
-        if (!replacements.some(entry => entry.content === pinned.content && entry.pinned === true)) throw new Error('Compaction omitted a pinned entry; no data was changed')
+        if (byKey.get(runtimeEntryKey(pinned))?.pinned !== true) throw new Error('Compaction omitted a pinned entry; no data was changed')
       }
-      if (prepared.pendingEntry !== undefined && replacements.some(entry => entry.content === prepared.pendingEntry!.content)) {
+      // Same-text variants may survive only if they really were in the plan.
+      // A candidate must not recreate excluded text in an invented scope.
+      const survivingKeys = new Set(prepared.compactableEntries.map(runtimeEntryKey))
+      const conflicts = (entry: RuntimeMemoryEntry): boolean => {
+        const key = runtimeEntryKey(entry)
+        return replacements.some(candidate => {
+          if (candidate.content !== entry.content) return false
+          const candidateKey = runtimeEntryKey(candidate)
+          return candidateKey === key || !survivingKeys.has(candidateKey)
+        })
+      }
+      if (prepared.pendingEntry !== undefined && conflicts(prepared.pendingEntry)) {
         throw new Error('compacted runtime memory duplicates the pending mutation')
       }
-      if (prepared.excludedEntry !== undefined && replacements.some(entry => entry.content === prepared.excludedEntry!.content)) {
+      if (prepared.excludedEntry !== undefined && conflicts(prepared.excludedEntry)) {
         throw new Error('compacted runtime memory reintroduces the replaced or removed entry')
       }
       // The worker supplies semantic candidates; deterministic packing owns exact
@@ -743,9 +761,9 @@ ${workingMemory}
       const limit = this.limits[request.target]
       if (used > limit) throw new RuntimeMemoryCapacityError(request.target, runtimeBytes(file.entries, request.target), used, limit)
       const next: RuntimeMemoryFile = { version: RUNTIME_MEMORY_VERSION, entries }
-      const kept = new Set(fitted.map(entry => entry.content))
+      const kept = new Set(fitted.map(runtimeEntryKey))
       const archived = options.archive === 'local' && request.target === 'memory'
-        ? prepared.compactableEntries.filter(entry => !kept.has(entry.content))
+        ? prepared.compactableEntries.filter(entry => !kept.has(runtimeEntryKey(entry)))
         : undefined
       // The archive is appended before the compacted store commits: a failure in
       // between leaves an entry in both places, never in neither.

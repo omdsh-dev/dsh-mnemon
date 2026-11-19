@@ -166,6 +166,8 @@ Packs, sync merge, overflow packing and metadata-based restore preserve the opti
 
 ### Capacity
 
+Capacity maintenance distinguishes entries with the same text by their branch scope. Each scoped pin must be retained, and the local archive keeps the scope of each entry it moves out of Runtime.
+
 | Target | Default limit | Maintenance method |
 |---|---:|---|
 | `USER.md` | 4 KiB | A local no-tool worker merges conservatively; content never enters a Memory Space |
