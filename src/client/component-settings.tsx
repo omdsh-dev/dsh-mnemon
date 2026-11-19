@@ -99,13 +99,13 @@ export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryC
   const disabled = !page.writable || snapshot.status === 'loading' || !snapshot.writable
   const configured = snapshot.value?.runtimeMemory
   const deferred = useLive(configured?.deferLowPriority === true, async value => {
-    await scope.mutate([{ op: 'set', path: ['runtimeMemory'], value: { ...configured, deferLowPriority: value } }])
+    await scope.mutate([{ op: 'set', path: ['runtimeMemory', 'deferLowPriority'], value }])
   })
   const bm25 = useLive(configured?.bm25Recall === true, async value => {
     await scope.mutate([{ op: 'set', path: ['runtimeMemory', 'bm25Recall'], value }])
   })
   const inheritance = useLive(configured?.inheritToSubagents === true, async value => {
-    await scope.mutate([{ op: 'set', path: ['runtimeMemory'], value: { ...configured, inheritToSubagents: value } }])
+    await scope.mutate([{ op: 'set', path: ['runtimeMemory', 'inheritToSubagents'], value }])
   })
   const savedLimits: RuntimeLimits = {
     userLimitBytes: String(configured?.userLimitBytes ?? RUNTIME_MEMORY_LIMITS.user),
@@ -113,15 +113,15 @@ export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryC
   }
   const limits = useStaged(savedLimits, async draft => {
     const changed = RUNTIME_LIMITS.filter(key => runtimeLimitValue(draft[key]) !== runtimeLimitValue(savedLimits[key]))
-    if (changed.length > 0) await scope.mutate([{ op: 'set', path: ['runtimeMemory'], value: {
-      ...configured, ...Object.fromEntries(changed.map(key => [key, runtimeLimitValue(draft[key])!])),
-    } }])
+    if (changed.length > 0) await scope.mutate(changed.map(key => ({
+      op: 'set', path: ['runtimeMemory', key], value: runtimeLimitValue(draft[key])!,
+    })))
   })
   const savedMaintenance = String(configured?.maintenanceMaxTokens ?? DEFAULT_RUNTIME_MAINTENANCE_MAX_TOKENS)
   const maintenance = useStaged({ maintenanceMaxTokens: savedMaintenance }, async draft => {
     const next = runtimeMaintenanceTokens(draft.maintenanceMaxTokens)
     if (next !== undefined && next !== runtimeMaintenanceTokens(savedMaintenance)) {
-      await scope.mutate([{ op: 'set', path: ['runtimeMemory'], value: { ...configured, maintenanceMaxTokens: next } }])
+      await scope.mutate([{ op: 'set', path: ['runtimeMemory', 'maintenanceMaxTokens'], value: next }])
     }
   })
   const invalid = RUNTIME_LIMITS.find(key => runtimeLimitValue(limits.draft[key]) === undefined)
