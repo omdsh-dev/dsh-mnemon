@@ -14,7 +14,7 @@ export interface SubagentPublications {
 }
 
 /** A delegated child's own tools and persona. */
-type ChildComposition = Pick<HostSubagentStartRequest, 'toolFilter' | 'persona'>
+type ChildComposition = Pick<HostSubagentStartRequest, 'toolFilter' | 'persona'> & { setup?: (agent: HostAgent) => void }
 
 /** DSH's deployment persona, which a child's own section of the same name replaces for that child. */
 const PERSONA_SECTION = 'deployment:persona-prefix'
@@ -62,16 +62,21 @@ export async function startSubagent(
   provider: string,
   request: HostSubagentStartRequest & { label: string },
   publications?: SubagentPublications,
+  setup?: (agent: HostAgent) => void,
 ): Promise<HostSubagentRun> {
   if (typeof subagents.startActivation === 'function' && reservedChildId(request.parent) === undefined) {
-    return withReservedChild(request.parent, () => startSubagent(subagents, agents, provider, request, publications))
+    return withReservedChild(request.parent, () => startSubagent(subagents, agents, provider, request, publications, setup))
   }
   const { toolFilter, persona, ...task } = request
-  if ((toolFilter === undefined && persona === undefined) || childComposition(subagents, subagents.getProvider(provider)) !== 'publication') {
+  if (setup === undefined && toolFilter === undefined && persona === undefined) {
+    return startOnHost(subagents, agents, provider, request)
+  }
+  if (childComposition(subagents, subagents.getProvider(provider)) !== 'publication') {
+    if (setup !== undefined) throw new Error('DSH cannot compose this local subagent before its first step')
     return startOnHost(subagents, agents, provider, request)
   }
   if (publications === undefined) throw new Error('This DSH takes no subagent persona or tool filter at start, and dsh-mnemon cannot observe the child it publishes')
-  const composition: ChildComposition = { ...(toolFilter === undefined ? {} : { toolFilter }), ...(persona === undefined ? {} : { persona }) }
+  const composition: ChildComposition = { ...(toolFilter === undefined ? {} : { toolFilter }), ...(persona === undefined ? {} : { persona }), ...(setup === undefined ? {} : { setup }) }
   return startComposed(publications, agents, request.parent, composition, () => startOnHost(subagents, agents, provider, task), activationOwned(subagents))
 }
 
@@ -112,6 +117,7 @@ async function startOnHost(
       const localAgent = child !== undefined && (modern || typeof agents?.isOwnedBy !== 'function' || agents.isOwnedBy(child.id, request.parent)) ? child : undefined
       return {
         id: activation.childId,
+        ...(activation.messageId === undefined ? {} : { messageId: activation.messageId }),
         ...(localAgent === undefined ? {} : { localAgent }),
         result: activation.result,
         dispose: () => activation.dispose(),
@@ -136,7 +142,7 @@ async function startOnHost(
  * the child shares with its parent, for that child alone. Its scope releases
  * both with it.
  */
-function compose(agent: HostAgent, { toolFilter, persona }: ChildComposition): void {
+function compose(agent: HostAgent, { toolFilter, persona, setup }: ChildComposition): void {
   const prompt = agent.ctx.systemPrompt
   const tools = agent.ctx.tools
   if (persona !== undefined && (typeof prompt?.section !== 'function' || typeof prompt.getSectionOrder !== 'function')) {
@@ -147,6 +153,7 @@ function compose(agent: HostAgent, { toolFilter, persona }: ChildComposition): v
   }
   if (persona !== undefined) prompt!.section!({ name: PERSONA_SECTION, order: prompt!.getSectionOrder!('DEPLOYMENT_PERSONA_PREFIX'), text: persona })
   if (toolFilter !== undefined) tools!.restrict!(toolFilter)
+  setup?.(agent)
 }
 
 /**

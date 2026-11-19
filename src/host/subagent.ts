@@ -126,6 +126,7 @@ interface HostResultToolRuntime extends ReviewToolHost, ProviderConfigurationHos
 
 export interface IsolatedReviewRequest {
   parent: HostAgent
+  provider: string
   sessionId: string
   prompt: string
   persona: string
@@ -1142,6 +1143,7 @@ This is the only completion channel for this run. Do not finish with a plain-tex
       admission?.()
       const outcome = await runner({
         parent,
+        provider,
         sessionId,
         prompt,
         persona: capture.completionPersona,

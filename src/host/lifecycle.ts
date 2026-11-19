@@ -6,11 +6,13 @@ import type { ResolvedConfig } from './config.ts'
 import type {
   CreateHostAgentOptions,
   HostAgent,
+  HostAgentContext,
   HostAgentHandle,
   HostContextShape,
   HostLlmService,
   HostPreStepDecision,
   HostSessionEvent,
+  HostSubagentRun,
   HostUserMessage,
 } from "./dsh.ts"
 import type { Insight, RememberRequest, SearchRequest } from 'dsh-mnemon-source-memory-spaces/contracts'
@@ -18,7 +20,7 @@ import type { RuntimeMemoryMutation } from 'dsh-mnemon-source-runtime/contracts'
 import type { DocumentMutation } from 'dsh-mnemon-source-documents/contracts'
 import { delegatedTaskLine, IdleReviewError, MnemonSubagentCoordinator, type IsolatedReviewRequest } from './subagent.ts'
 import { attachContinuationTurns } from './continuation-turn.ts'
-import { archiveTaskSession } from './task-session-cleanup.ts'
+import { archiveOrphanedIdleReviews, archiveTaskSession, isIdleReviewOwner } from './task-session-cleanup.ts'
 import { scoreReviewActivity } from './review-activity.ts'
 import { idleReviewBlockReason } from './review-tools.ts'
 import { TurnActivityProjection, type TurnMemoryActivity, type TurnMemoryActivitySnapshot } from './activity.ts'
@@ -38,7 +40,8 @@ import { prepareMemorySnapshot } from './memory-snapshot.ts'
 import { memorySnapshotState } from './memory-snapshot-state.ts'
 import type { SkillEvolution } from './skill-evolution.ts'
 import { IdleReviewWatermarkStore } from './idle-review-watermark.ts'
-import { activationOwned, contextIsActive, isInactiveContextError, isCreatingChild, isRootAgent, isTaskRecord, rootAgents, titleTask } from './agent-compat.ts'
+import { activationOwned, contextIsActive, isInactiveContextError, isCreatingChild, isRootAgent, isTaskRecord, rootAgents, titleTask, withReservedChild } from './agent-compat.ts'
+import { childComposition, startSubagent } from './subagent-start.ts'
 
 type AgentRuntimeSource = Pick<MnemonAgentRuntimeSource, 'config' | 'forAgent' | 'executions' | 'onChanged' | 'memoryParticipation'>
 
@@ -900,6 +903,12 @@ export class MnemonLifecycle {
 
   start(): () => void {
     this.coordinator.setIsolatedReviewRunner?.(request => this.runIsolatedReview(request))
+    const repair = new AbortController()
+    const repairScope = activationOwned(this.ctx.subagents) && typeof this.ctx.inject === 'function'
+      ? this.ctx.inject(['workspaceRegistry', 'sessionQuery'], ctx => {
+        if (!repair.signal.aborted) void archiveOrphanedIdleReviews(ctx, repair.signal).catch(() => undefined)
+      }) as { dispose?(): unknown } | undefined
+      : undefined
     // DSH creates a new Agent for startup, resume, clear and compaction alike.
     const stopChanged = this.runtimeSource?.onChanged?.(() => {
       for (const policy of this.workspacePolicies.values()) policy.update()
@@ -912,6 +921,8 @@ export class MnemonLifecycle {
     for (const agent of this.ctx.agents.list?.() ?? []) if (contextIsActive(agent.ctx)) this.watchWorkspacePolicy(agent)
     for (const agent of rootAgents(this.ctx.agents, this.ctx.subagents)) this.install(agent, 'adopted')
     return () => {
+      repair.abort()
+      repairScope?.dispose?.()
       this.coordinator.setIsolatedReviewRunner?.(undefined)
       stopChanged?.()
       stopCreated()
@@ -1435,7 +1446,7 @@ export class MnemonLifecycle {
   private install(agent: HostAgent, source: LifecycleAgentSnapshot['startSource']): void {
     if (!contextIsActive(agent.ctx)) return
     this.watchWorkspacePolicy(agent)
-    if (this.taskAgentIds.has(agent.id) || this.owners.has(agent) || this.children.has(agent)) return
+    if (this.taskAgentIds.has(agent.id) || isIdleReviewOwner(agent.id) || this.owners.has(agent) || this.children.has(agent)) return
     if ((isTaskRecord(agent.id) || this.coordinator.isFinishedTask(agent.id, agent)) && !isCreatingChild(this.ctx.agents, agent)) {
       // Only fresh user turns can continue a completed task; never register its
       // history with conversation automation or revive the old result callback.
@@ -1636,6 +1647,44 @@ export class MnemonLifecycle {
     let stopPersona: (() => unknown) | undefined
     const cancel = () => { try { handle?.agent.cancel({ kind: 'hook', reason: 'Idle review cancelled' }) } catch {} }
     try {
+      const mountPreset = async (agentCtx: HostAgentContext) => {
+        if (presets !== undefined && presetId !== undefined) await presets.mount(agentCtx, presetId)
+        else presetsRaw?.composeFrom?.(agentCtx, parent.ctx)
+      }
+      const applyPolicies = (child: HostAgent) => {
+        if (typeof child.session.append === 'function') {
+          if (delegatedPolicies.sandboxMode !== undefined) child.session.append('sandbox/mode', { mode: delegatedPolicies.sandboxMode, source: 'delegation' })
+          if (delegatedPolicies.approvalPolicy !== undefined) child.session.append('approval/policy', { policy: delegatedPolicies.approvalPolicy, source: 'delegation' })
+          if (delegatedPolicies.permissionPreset !== undefined) child.session.append('permission/preset', { preset: delegatedPolicies.permissionPreset })
+        }
+      }
+      const installReview = (agentCtx: HostAgentContext, child: HostAgent) => {
+        if (typeof agentCtx.systemPrompt?.section === 'function') {
+          agentCtx.systemPrompt.section({
+            name: 'deployment:persona-prefix',
+            order: agentCtx.systemPrompt.getSectionOrder?.('DEPLOYMENT_PERSONA_PREFIX') ?? 10,
+            text: request.persona,
+          })
+        } else if (typeof agentCtx.on === 'function') {
+          const stop = agentCtx.on('system-prompt/assemble', (async (assembly: PromptAssembly, _ctx: PromptAssemblyContext, next: () => Promise<PromptAssembly>) => {
+            const assembled = await next()
+            return { ...assembled, sections: [{ name: 'deployment:persona-prefix', text: request.persona }, ...assembled.sections] }
+          }) as never)
+          if (typeof stop === 'function') stopPersona = stop
+        }
+        agentCtx.tools?.restrict?.({ allow: request.allowedTools })
+        agentCtx.tools?.guard?.(request.guardTools)
+        stopContinuation = attachContinuationTurns(child)
+        disposeMemoryTurn = this.attachChildMemoryTurn(child, runtime, delegation)
+      }
+      const prompt = [{ type: 'text' as const, text: `${delegatedTaskLine('review')}\n${request.prompt}` }]
+      const subagents = this.ctx.subagents
+      if (modern && childComposition(subagents, subagents.getProvider(request.provider)) === 'publication') {
+        return await this.runManagedReview(request, meta, agentOptions, dir.workFrom ?? dir.cwd, prompt, mountPreset, child => {
+          applyPolicies(child)
+          installReview(child.ctx, child)
+        })
+      }
       handle = await this.ctx.agents.create({
         sessionId: request.sessionId,
         meta,
@@ -1643,32 +1692,11 @@ export class MnemonLifecycle {
         signal: request.signal,
         setup: async (agentCtx, child) => {
           if (child === undefined) throw new Error('DSH omitted the created Agent during isolated idle review setup')
-          if (presets !== undefined && presetId !== undefined) await presets.mount(agentCtx, presetId)
-          else presetsRaw?.composeFrom?.(agentCtx, parent.ctx)
-          if (typeof child.session.append === 'function') {
-            if (delegatedPolicies.sandboxMode !== undefined) child.session.append('sandbox/mode', { mode: delegatedPolicies.sandboxMode, source: 'delegation' })
-            if (delegatedPolicies.approvalPolicy !== undefined) child.session.append('approval/policy', { policy: delegatedPolicies.approvalPolicy, source: 'delegation' })
-            if (delegatedPolicies.permissionPreset !== undefined) child.session.append('permission/preset', { preset: delegatedPolicies.permissionPreset })
-          }
+          await mountPreset(agentCtx)
+          applyPolicies(child)
           const workingDirectory = (agentCtx.get?.('workingDirectory') ?? this.ctx.get('workingDirectory')) as WorkingDirectoryService | undefined
           if (typeof workingDirectory?.set === 'function') await workingDirectory.set(child, dir.workFrom ?? dir.cwd, request.signal)
-          if (typeof agentCtx.systemPrompt?.section === 'function') {
-            agentCtx.systemPrompt.section({
-              name: 'deployment:persona-prefix',
-              order: agentCtx.systemPrompt.getSectionOrder?.('DEPLOYMENT_PERSONA_PREFIX') ?? 10,
-              text: request.persona,
-            })
-          } else if (typeof agentCtx.on === 'function') {
-            const stop = agentCtx.on('system-prompt/assemble', (async (assembly: PromptAssembly, _ctx: PromptAssemblyContext, next: () => Promise<PromptAssembly>) => {
-              const assembled = await next()
-              return { ...assembled, sections: [{ name: 'deployment:persona-prefix', text: request.persona }, ...assembled.sections] }
-            }) as never)
-            if (typeof stop === 'function') stopPersona = stop as () => unknown
-          }
-          agentCtx.tools?.restrict?.({ allow: request.allowedTools })
-          agentCtx.tools?.guard?.(request.guardTools)
-          stopContinuation = attachContinuationTurns(child)
-          disposeMemoryTurn = this.attachChildMemoryTurn(child, runtime, delegation)
+          installReview(agentCtx, child)
         },
       })
       const child = handle.agent
@@ -1680,7 +1708,7 @@ export class MnemonLifecycle {
         id: taskMessageId,
         role: 'user',
         source: { kind: 'user' },
-        content: [{ type: 'text', text: `${delegatedTaskLine('review')}\n${request.prompt}` }],
+        content: prompt,
       })
       let idleError: unknown
       try {
@@ -1711,6 +1739,30 @@ export class MnemonLifecycle {
         }
       } finally {
         this.taskAgentIds.delete(request.sessionId)
+      }
+    }
+  }
+
+  /** Give DSH a real owner without adding children to the reviewed conversation. */
+  private async runManagedReview(request: IsolatedReviewRequest, meta: NonNullable<CreateHostAgentOptions['meta']>,
+    agentOptions: NonNullable<CreateHostAgentOptions['agentOptions']>, cwd: string, prompt: Array<{ type: 'text'; text: string }>,
+    mountPreset: (ctx: HostAgentContext) => Promise<void>, setup: (child: HostAgent) => void,
+  ): Promise<{ stopReason: string; detail?: string }> {
+    const ownerId = `mnemon-review-owner-v1-${randomUUID()}`
+    const owner = await this.ctx.agents.create({ sessionId: ownerId, meta, agentOptions, signal: request.signal, setup: mountPreset })
+    let run: HostSubagentRun | undefined
+    try {
+      run = await withReservedChild(owner.agent, () => startSubagent(this.ctx.subagents, this.ctx.agents, request.provider, {
+        parent: owner.agent, label: 'Idle review', cwd, prompt, agentOptions, maxDepth: 1, signal: request.signal,
+      }, this.ctx, setup), true, request.sessionId)
+      const result = await run.result
+      return { stopReason: result.stopReason, ...(result.diagnostic === undefined ? {} : { detail: result.diagnostic }) }
+    } finally {
+      try {
+        await run?.dispose()
+        await archiveTaskSession(this.ctx, request.sessionId, run?.localAgent?.session, run?.messageId)
+      } finally {
+        try { await owner.dispose() } finally { await archiveTaskSession(this.ctx, ownerId, owner.agent.session) }
       }
     }
   }
