@@ -4,7 +4,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { COMPOSABLE_MEMORY_API_VERSION } from 'dsh-mnemon/contracts'
 import { defineMemorySource, createMemoryMutationReceipt as receipt, memoryInputRecord as record, memoryInputStringArray as stringArray, memoryInputText as text, truncateMemoryText as truncate } from 'dsh-mnemon/extension-sdk'
 import { resolveGitBranch } from './git-branch.ts'
-import { RuntimeMemoryController } from './controller.ts'
+import { normalizeRuntimeBranches, RuntimeMemoryController } from './controller.ts'
 import type { RuntimeMemoryAction, RuntimeMemoryCompactedEntry, RuntimeMemoryEntry, RuntimeMemoryImportance, RuntimeMemoryMutation, RuntimeMemoryTarget } from './contracts.ts'
 import { runtimeSourceConfig, type Config } from './config.ts'
 
@@ -12,7 +12,7 @@ const ACTIONS = new Set<RuntimeMemoryAction>(['add', 'replace', 'remove'])
 const TARGETS = new Set<RuntimeMemoryTarget>(['memory', 'user'])
 const IMPORTANCE = new Set<RuntimeMemoryImportance>(['critical', 'normal', 'low'])
 
-function runtimeMutation(value: MemoryJsonValue): RuntimeMemoryMutation {
+function runtimeMutation(value: MemoryJsonValue, management = false): RuntimeMemoryMutation {
   const input = record(value, 'Runtime Memory mutation')
   const action = text(input.action, 'action', 20) as RuntimeMemoryAction
   const target = text(input.target, 'target', 20) as RuntimeMemoryTarget
@@ -28,6 +28,7 @@ function runtimeMutation(value: MemoryJsonValue): RuntimeMemoryMutation {
     ...(content === undefined ? {} : { content }),
     ...(oldText === undefined ? {} : { oldText }),
     ...(importance === undefined ? {} : { importance }),
+    ...(management && input.matchBranches !== undefined ? { matchBranches: normalizeRuntimeBranches(input.matchBranches, 'matchBranches') } : {}),
     ...(input.branches === undefined ? {} : { branches: stringArray(input.branches, 'branches', 100) ?? [] }),
   }
 }
@@ -208,21 +209,22 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
             if (typeof projectionSDK.reserveMemoryProjection !== 'function' && controller.snapshot().entries.some(entry => entry.pinned === true)) {
               throw new Error('Pinned Runtime maintenance requires a newer dsh-mnemon Host; update the Host before retrying.')
             }
-            const planned = await controller.planMaintenanceCommitted(runtimeMutation(request.input), { preserveImportance: input.preserveImportance === true })
+            const planned = await controller.planMaintenanceCommitted(runtimeMutation(request.input, true), { preserveImportance: input.preserveImportance === true })
             return { revision: planned.revision, value: planned.plan as unknown as MemoryJsonValue }
           }
           throw new Error('unsupported Runtime management read operation: ' + request.operation)
         }
         if (!request.confirmed) throw new Error('Runtime management mutation requires explicit confirmation')
         if (request.operation === 'mutate') {
-          const committed = await controller.mutateCommitted(runtimeMutation(request.input), { preserveImportance: input.preserveImportance === true })
+          const committed = await controller.mutateCommitted(runtimeMutation(request.input, true), { preserveImportance: input.preserveImportance === true })
           return { revision: committed.revision, value: committed.result as unknown as MemoryJsonValue }
         }
         if (request.operation === 'pin') {
           if (input.pinned === true && typeof projectionSDK.reserveMemoryProjection !== 'function') throw new Error('Pinned Runtime requires a newer dsh-mnemon Host; update the Host and official Strategies together.')
           const target = text(input.target, 'target', 20)! as RuntimeMemoryTarget
           if (!TARGETS.has(target) || typeof input.pinned !== 'boolean') throw new Error('Pin requires a valid target and boolean pinned state')
-          const snapshot = await controller.setPinned(target, text(input.content, 'content', 100_000)!, input.pinned)
+          const matchBranches = input.matchBranches === undefined ? undefined : normalizeRuntimeBranches(input.matchBranches, 'matchBranches')
+          const snapshot = await controller.setPinned(target, text(input.content, 'content', 100_000)!, input.pinned, matchBranches)
           return { revision: snapshot.revision, value: snapshot as unknown as MemoryJsonValue }
         }
         if (request.operation === 'compact-and-mutate') {
@@ -240,7 +242,7 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
           })
           if (input.archive !== undefined && input.archive !== 'local') throw new Error('archive must be "local" when given')
           const committed = await controller.compactAndMutateCommitted(
-            text(input.revision, 'revision', 300)!, runtimeMutation(input.mutation!), compacted,
+            text(input.revision, 'revision', 300)!, runtimeMutation(input.mutation!, true), compacted,
             typeof input.maxBytes === 'number' ? input.maxBytes : undefined,
             { ...(input.archive === 'local' ? { archive: 'local' as const } : {}), preserveImportance: input.preserveImportance === true },
           )
