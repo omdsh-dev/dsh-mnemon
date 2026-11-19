@@ -25,7 +25,7 @@ function validTimestamp(value: unknown): value is number {
 function failure(error: unknown): Error {
   const code = (error as NodeJS.ErrnoException | undefined)?.code
   const detail = code === 'EBUSY' ? ' (busy)' : typeof code === 'string' && /^[A-Z_]+$/u.test(code) ? ` (${code})` : ''
-  return new Error(`Idle review watermark unavailable${detail}. Automatic review is paused. Stop Hosts using this storage root, repair this session's state or lock under state/idle-review, then reopen the session.`, { cause: error })
+  return new Error(`Idle review watermark unavailable${detail}. Automatic review is paused. Continue the conversation to recheck. If the error persists, stop Hosts using this storage root before inspecting this session's state or lock under state/idle-review.`, { cause: error })
 }
 
 /** Host-local admission state, deliberately outside Packs and Git sync. */

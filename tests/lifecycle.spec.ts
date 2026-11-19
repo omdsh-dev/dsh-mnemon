@@ -809,6 +809,66 @@ describe('Mnemon DSH lifecycle integration', () => {
     }
   })
 
+  it('recovers a persisted review budget on a later turn after lock contention (#635)', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000_000)
+    const directory = mkdtempSync(join(directories, 'busy-watermark-'))
+    const saved = { version: 1, sessionId: 'session-1', attempts: 1, lastReviewAttemptAt: Date.now() - 60_000 }
+    const filename = writeWatermark(directory, saved)
+    const config = resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark: true, minIntervalMs: 5_000, maxPerSession: 2 } })
+    const value = fixture(config, { directory })
+    const lock = filename + '.lock'
+    try {
+      fs.mkdirSync(lock)
+      await completeDurableTurns(value)
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(value.coordinator.review).not.toHaveBeenCalled()
+      expect(JSON.parse(readFileSync(filename, 'utf8'))).toEqual(saved)
+      expect(fs.existsSync(lock)).toBe(true)
+      expect(value.lifecycle.snapshot('session-1').current?.idleReviewWatermark).toMatchObject({
+        state: 'error', error: expect.stringContaining('(busy)'),
+      })
+
+      fs.rmdirSync(lock)
+      await vi.advanceTimersByTimeAsync(600_000)
+      expect(value.coordinator.review).not.toHaveBeenCalled()
+      await completeDurableTurns(value, 3, 4)
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(value.coordinator.review).toHaveBeenCalledOnce()
+      expect(JSON.parse(readFileSync(filename, 'utf8')).attempts).toBe(2)
+      expect(value.lifecycle.snapshot('session-1').current?.idleReviewWatermark).toMatchObject({
+        state: 'ready', restoredAttempts: 1, maxPerSession: 2,
+      })
+
+      await completeDurableTurns(value, 5, 6)
+      await vi.advanceTimersByTimeAsync(600_000)
+      expect(value.coordinator.review).toHaveBeenCalledOnce()
+    } finally { value.stop() }
+  })
+
+  it('loads repaired state on the next turn without discarding its quota (#635)', async () => {
+    vi.useFakeTimers()
+    const directory = mkdtempSync(join(directories, 'repaired-watermark-'))
+    const filename = writeWatermark(directory, 'invalid state')
+    const config = resolveConfig({ idleReviewMs: 5_000, idleReview: { persistWatermark: true, maxPerSession: 1 } })
+    const value = fixture(config, { directory })
+    try {
+      await completeDurableTurns(value)
+      await vi.advanceTimersByTimeAsync(600_000)
+      expect(value.coordinator.checkReviewAccess).not.toHaveBeenCalled()
+      expect(readFileSync(filename, 'utf8')).toBe('invalid state')
+      const repaired = { version: 1, sessionId: 'session-1', attempts: 1, lastReviewAttemptAt: Date.now() - 60_000 }
+      writeWatermark(directory, repaired)
+      await completeDurableTurns(value, 3, 4)
+      await vi.advanceTimersByTimeAsync(600_000)
+      expect(value.lifecycle.snapshot('session-1').current).toMatchObject({
+        idleReviewAttempts: 1, idleReviewPending: false, idleReviewWatermark: { state: 'ready', restoredAttempts: 1 },
+      })
+      expect(value.coordinator.review).not.toHaveBeenCalled()
+      expect(JSON.parse(readFileSync(filename, 'utf8'))).toEqual(repaired)
+    } finally { value.stop() }
+  })
+
   it('starts no child when atomic persistence fails and leaves the old budget intact', async () => {
     vi.useFakeTimers()
     const directory = mkdtempSync(join(directories, 'write-failure-'))

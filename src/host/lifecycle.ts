@@ -264,6 +264,7 @@ class MnemonAgentLifecycle {
   private watermarkKey: string | undefined
   private watermarkStore: IdleReviewWatermarkStore | undefined
   private watermarkError: string | undefined
+  private watermarkRetryTurn: number | undefined
   private restoredAttempts = 0
   private idleReviewAttempts = 0
   private lastReviewAttemptAt: number | undefined
@@ -514,7 +515,7 @@ class MnemonAgentLifecycle {
 
   private async prepareReviewAccess(payload: TurnStoppingPayload & { step: number }): Promise<void> {
     this.recordComposedTurn(payload.turn)
-    if (payload.signal.aborted || !this.restoreWatermark() || !this.idleReviewAllowed() || this.turnActivity.get(payload.turn)?.noMaintenance) return
+    if (payload.signal.aborted || !this.restoreWatermark(payload.turn) || !this.idleReviewAllowed() || this.turnActivity.get(payload.turn)?.noMaintenance) return
     const policy = this.reviewPolicy()
     // A transient failure on the first request must not poison the whole turn.
     // Retry at most once, in a later real step (never on a transport retry or
@@ -679,15 +680,21 @@ class MnemonAgentLifecycle {
   }
 
   /** Resolve only the graph actually serving this parent, never a selected View or startup cwd. */
-  private restoreWatermark(): boolean {
+  private restoreWatermark(retryTurn?: number): boolean {
     if (this.memoryTurn?.excluded) { this.watermarkEnabled = false; return false }
     if (!this.config.idleReview.persistWatermark) { this.watermarkEnabled = false; return true }
     try {
       const directory = this.runtimeDirectory?.()
       if (directory === undefined || directory.trim() === '') throw new Error('runtime storage unavailable')
       const key = JSON.stringify([resolve(directory), this.agent.id])
-      if (this.watermarkKey === key && this.watermarkEnabled) return this.watermarkError === undefined
       const sameRoot = this.watermarkKey === key
+      if (sameRoot && this.watermarkEnabled) {
+        if (this.watermarkError === undefined) return true
+        // Recheck on a real later request. Status reads and idle timers must
+        // not turn a failed load or reservation into automatic catch-up work.
+        if (retryTurn === undefined || this.watermarkRetryTurn === retryTurn) return false
+      }
+      this.watermarkRetryTurn = retryTurn
       this.watermarkEnabled = true
       this.watermarkKey = key
       this.watermarkStore = new IdleReviewWatermarkStore(directory, this.agent.id)
@@ -723,7 +730,7 @@ class MnemonAgentLifecycle {
     // Never display a raw filesystem error: it can contain a private root/id.
     const message = error instanceof Error && error.message.startsWith('Idle review watermark unavailable')
       ? error.message
-      : "Idle review watermark unavailable. Automatic review is paused. Stop Hosts using this storage root, repair this session's state or lock under state/idle-review, then reopen the session."
+      : "Idle review watermark unavailable. Automatic review is paused. Continue the conversation to recheck. If the error persists, stop Hosts using this storage root before inspecting this session's state or lock under state/idle-review."
     this.watermarkError = message
   }
 
