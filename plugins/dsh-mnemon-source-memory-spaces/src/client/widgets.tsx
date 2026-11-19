@@ -98,12 +98,33 @@ export function MemoryProviderBadge(props: { providerId: MemoryProviderId; label
 export function ReadSourcePanel(props: {
   title: string
   hint?: string
+  compact?: boolean | undefined
   sources: readonly MemoryReadSource[]
   selectedBodyId?: string | undefined
   onSelect?: (memoryBodyId: string | undefined) => void
 }): JSX.Element | null {
   const t = useT()
   if (props.sources.length === 0) return null
+  if (props.compact === true && props.onSelect === undefined) {
+    return <section className={css.readSourcesCompact} aria-label={props.title} title={props.hint}>
+      <span className={css.readSourcesCompactTitle}>{props.title}</span>
+      <div className={css.readSourcesCompactList}>
+        {props.sources.map(source => {
+          const modeLabel = t(`readSources.mode.${source.mode}` as MnemonKey)
+          const statusLabel = t(`readSources.status.${source.status}` as MnemonKey, { count: source.itemCount })
+          const edgeSuffix = source.edgeCount === undefined || source.edgeCount === 0 ? '' : ` · ${t('readSources.edges', { count: source.edgeCount })}`
+          const tooltip = [source.providerLabel, modeLabel, `${statusLabel}${edgeSuffix}`, source.hint].filter(Boolean).join(' · ')
+          return <article key={source.memoryBodyId} className={css.readSourcePill} data-provider={source.providerId} data-mode={source.mode} data-status={source.status} title={tooltip}>
+            <span className={css.readSourceSignal} aria-hidden="true" />
+            <strong>{source.memoryBodyName}</strong>
+            <MemoryProviderBadge providerId={source.providerId} label={source.providerLabel} />
+            <small>{modeLabel}</small>
+            <em>{statusLabel}{edgeSuffix}</em>
+          </article>
+        })}
+      </div>
+    </section>
+  }
   const content = (source: MemoryReadSource) => <>
     <span className={css.readSourceSignal} aria-hidden="true" />
     <span className={css.readSourceIdentity}><strong>{source.memoryBodyName}</strong><span className={css.readSourceMeta}><MemoryProviderBadge providerId={source.providerId} label={source.providerLabel} /><small>{t(`readSources.model.${source.providerId}` as MnemonKey)}</small></span></span>

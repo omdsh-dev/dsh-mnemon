@@ -375,13 +375,23 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
   const readOnly = value?.writeEnabled === false
   const disabled = !page.writable || snapshot.status === 'loading' || !snapshot.writable
   const cliMissing = nativeCliFound === false
+  const totalProviders = policyProviders.length
+  const enabledProviders = (cliMissing ? 0 : 1) + (providerCatalog?.items.filter(item => item.providerId !== NATIVE_PROVIDER_ID && item.enabled).length ?? 0)
+  const recallBadge = t('config.recallBadge', {
+    limit: recallForm.draft.defaultRecallLimit,
+    policy: t(`config.recallPolicyShort.${recallForm.draft.policy}`),
+  })
   const handleProviderChanged = (): void => {
     host.changed()
   }
 
   return <>
     <section className={css.panelSection} data-settings-section="providers" aria-labelledby="mnemon-spaces-providers">
-      <div className={css.panelHeading}><h3 id="mnemon-spaces-providers">{t('config.providersTitle')}</h3><p>{t('config.providersDescription')}</p></div>
+      <div className={css.panelHeading}>
+        <h3 id="mnemon-spaces-providers">{t('config.providersTitle')}</h3>
+        {totalProviders > 0 && <span className={pageCss.settingsProvidersBadge}>{t('config.providersBadge', { enabled: enabledProviders, total: totalProviders })}</span>}
+        <p>{t('config.providersDescription')}</p>
+      </div>
       <ProviderSettingsSection
         client={client}
         retained={retained}
@@ -438,6 +448,7 @@ function SpacesSettings({ page, host }: { page: MemoryComponentSettingsProps; ho
           <small>{t('config.recallDescription')}</small>
         </span>
         <span className={pageCss.settingsPolicyMeta}>
+          <span className={pageCss.settingsPolicyBadge}>{recallBadge}</span>
           <IconChevronDownOutlineRegular className={pageCss.smoothChevron} size={14} />
         </span>
       </button>

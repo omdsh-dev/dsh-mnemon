@@ -43,6 +43,7 @@ export function memorySpacesPageClient(management: MnemonSourceManagementClient)
 }
 
 const rememberedPages = new WeakMap<MnemonSourceManagementClient, Page>()
+const EMPTY_BODIES: MemorySpaceView[] = []
 
 type Page = 'spaces' | 'explore' | 'entities' | 'remember' | 'content'
 const TABS = [{ id: 'spaces', key: 'nav.overview' }, { id: 'explore', key: 'nav.search' }, { id: 'content', key: 'nav.content' }, { id: 'entities', key: 'nav.entities' }] as const
@@ -120,14 +121,14 @@ function MemorySpacesSourceView(props: MemorySourcePageProps & { page: Page }): 
     void client?.status().then(value => { if (active) setStatus(value) }).catch(reason => { if (active) setError(message(reason)) })
     return () => { active = false }
   }, [client, revision])
+  const explore = useCallback((query: string) => { setSeed(query); setPage('explore') }, [])
+  const remember = useCallback((content = '') => { setSeed(content); setRememberOpen(true) }, [])
   if (client === undefined) return null
   const writable = props.writable === true && status?.writeEnabled === true
   const activationEnabled = status?.writeEnabled === true && (writable || client.canAssist('activation'))
   const agentAvailable = client.canAssist('supervise')
-  const explore = (query: string) => { setSeed(query); setPage('explore') }
-  const remember = (content = '') => { setSeed(content); setRememberOpen(true) }
   const forget = async (insight: Insight) => { await client.forget(insight.id, insight.memoryBodyId); refresh() }
-  const bodies = status?.memoryBodies ?? []
+  const bodies = status?.memoryBodies ?? EMPTY_BODIES
   const preferences = props.preferences
   const policySettingsAvailable = props.onOpenSettings !== undefined && supportsSettingsSection('policy')
   const showStrategyAction = policySettingsAvailable || preferences !== undefined

@@ -974,4 +974,45 @@ describe('Settings deep-linking, error banner placement, and reduced-motion poli
       rafSpy.mockRestore()
     }
   })
+
+  it('caches the 3D theme palette across orbit drags and wheel zooms until theme attributes change', async () => {
+    const graph = {
+      generatedAt: '2026-10-20T00:00:00.000Z',
+      nodes: [
+        { id: 'space:work', kind: 'space' as const, category: 'space', memoryProviderId: 'mnemon-native', content: 'Work', color: '#4f46e5' },
+        { id: 'mem-1', kind: 'memory' as const, category: 'fact', content: 'Cached palette renders smoothly', importance: 4, color: '#4d7cfe' },
+      ],
+      edges: [
+        { sourceId: 'space:work', targetId: 'mem-1', label: 'scope', color: '#708199', type: 'scope' as const },
+      ],
+    }
+    const fakeCtx = {
+      setTransform: vi.fn(), clearRect: vi.fn(), fillRect: vi.fn(), save: vi.fn(), restore: vi.fn(),
+      beginPath: vi.fn(), roundRect: vi.fn(), closePath: vi.fn(), moveTo: vi.fn(), lineTo: vi.fn(), arc: vi.fn(),
+      fill: vi.fn(), stroke: vi.fn(), setLineDash: vi.fn(), fillText: vi.fn(),
+      strokeStyle: '', fillStyle: '', lineWidth: 1, globalAlpha: 1, font: '', textAlign: 'center', textBaseline: 'top',
+    } as unknown as CanvasRenderingContext2D
+    const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(fakeCtx)
+    const computedSpy = vi.spyOn(window, 'getComputedStyle')
+    try {
+      render(<MemorySourcePageFrame locale="en"><MemoryGraph3D graph={graph} onSelect={vi.fn()} /></MemorySourcePageFrame>)
+      const canvas = screen.getByRole('img', { name: t('graph.aria3d', { nodes: 2, edges: 1 }) }) as HTMLCanvasElement
+      computedSpy.mockClear()
+
+      fireEvent(canvas, new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 400, clientY: 260 }))
+      for (let step = 1; step <= 8; step++) {
+        fireEvent(canvas, new MouseEvent('pointermove', { bubbles: true, button: 0, clientX: 400 + step * 10, clientY: 260 + step * 5 }))
+      }
+      fireEvent(canvas, new MouseEvent('pointerup', { bubbles: true, button: 0, clientX: 480, clientY: 300 }))
+      fireEvent(canvas, new WheelEvent('wheel', { bubbles: true, deltaY: -120 }))
+      expect(computedSpy.mock.calls.filter(([el]) => el === canvas)).toHaveLength(0)
+
+      document.body.toggleAttribute('data-ds-dark-theme', true)
+      await waitFor(() => expect(computedSpy.mock.calls.filter(([el]) => el === canvas)).toHaveLength(1))
+    } finally {
+      document.body.removeAttribute('data-ds-dark-theme')
+      computedSpy.mockRestore()
+      getContextSpy.mockRestore()
+    }
+  })
 })

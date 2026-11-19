@@ -315,6 +315,19 @@ export const MemoryGraph = memo(function MemoryGraph(props: MemoryGraphProps): J
     return result
   }, [props.quiet, props.selectedId, props.graph.edges, visibleIds])
   const visibleKinds = useMemo(() => new Map(visibleNodes.map(node => [graphNodeKey(node), graphNodeKind(node)])), [visibleNodes])
+  const nodeDisplay = useMemo(() => {
+    const sparse = visibleNodes.length <= 12
+    const map = new Map<string, { label: string; selectedLabel: string; bodyLabel?: string }>()
+    for (const node of visibleNodes) {
+      const normalized = node.content.replace(/\s+/gu, ' ')
+      map.set(graphNodeKey(node), {
+        label: short(normalized, sparse ? 26 : 19),
+        selectedLabel: short(normalized, 34),
+        ...(node.memoryBodyName === undefined ? {} : { bodyLabel: short(node.memoryBodyName, 12) }),
+      })
+    }
+    return map
+  }, [visibleNodes])
   const edges = useMemo(() => {
     const priority = new Map<string, number>([['entity', 0], ['scope', 1], ['causal', 2], ['semantic', 3], ['temporal', 4]])
     return props.graph.edges
@@ -345,6 +358,8 @@ export const MemoryGraph = memo(function MemoryGraph(props: MemoryGraphProps): J
   const uniformLayout = useMemo(() => uniformGraphPositions(visibleNodes), [visibleNodes])
   const [positions, setPositions] = useState<GraphPositions>(() => naturalLayout)
   const [layoutMode, setLayoutMode] = useState<GraphLayoutMode>('natural')
+  const layoutModeRef = useRef<GraphLayoutMode>('natural')
+  layoutModeRef.current = layoutMode
   const positionsRef = useRef(positions)
   const appliedLayoutKeyRef = useRef(layoutKey)
   const animationRef = useRef<number | null>(null)
@@ -407,7 +422,7 @@ export const MemoryGraph = memo(function MemoryGraph(props: MemoryGraphProps): J
     const next = new Map(positionsRef.current)
     next.set(drag.nodeId, point)
     commitPositions(next)
-    setLayoutMode('custom')
+    if (layoutModeRef.current !== 'custom') setLayoutMode('custom')
   }
   const endDrag = (event: ReactPointerEvent<SVGGElement>) => {
     const drag = dragRef.current
@@ -441,7 +456,7 @@ export const MemoryGraph = memo(function MemoryGraph(props: MemoryGraphProps): J
   return (
     <>
       <div className={css.graphCanvasControls} role="toolbar" aria-label={t('graph.layoutAria')}>
-        <span role="status" aria-label={t('graph.layoutStatus', { layout: layoutLabel })}><i />{t('graph.draggable', { layout: layoutLabel })}</span>
+        <span role="status" aria-label={t('graph.layoutStatus', { layout: layoutLabel })} title={t('graph.draggable', { layout: layoutLabel })}><i />{layoutLabel}</span>
         {props.onQuietChange !== undefined && <button type="button" aria-pressed={props.quiet === true} data-active={props.quiet || undefined} title={t('graph.quietHint')} onClick={() => props.onQuietChange?.(!props.quiet)}>{t('graph.quietAction')}</button>}
         <button type="button" data-active={layoutMode === 'natural' || undefined} onClick={() => animateTo(naturalLayout, 'natural')}>{t('graph.naturalAction')}</button>
         <button type="button" data-active={layoutMode === 'uniform' || undefined} onClick={() => animateTo(uniformLayout, 'uniform')}>{t('graph.uniformAction')}</button>
@@ -495,8 +510,8 @@ export const MemoryGraph = memo(function MemoryGraph(props: MemoryGraphProps): J
               : graphNodeKind(node) === 'entity'
                 ? <><path d={selected ? 'M 0 -18 L 18 0 L 0 18 L -18 0 Z' : 'M 0 -14 L 14 0 L 0 14 L -14 0 Z'} className={css.nodeHalo} filter={selected ? 'url(#mnemon-glow)' : undefined} /><circle r={selected ? 5 : 4} className={css.nodeCore} /></>
                 : <><circle r={selected ? 17 : visibleNodes.length <= 12 ? 14 : 11} className={css.nodeHalo} filter={selected ? 'url(#mnemon-glow)' : undefined} /><circle r={selected ? 7 : visibleNodes.length <= 12 ? 6 : 4.5} className={css.nodeCore} /></>}
-            {(props.quiet || selected || visibleNodes.length <= 12) && graphNodeKind(node) === 'memory' && node.memoryBodyName !== undefined && <text x="0" y="-18" textAnchor="middle" className={css.nodeBodyLabel}>{short(node.memoryBodyName, 12)}</text>}
-            {(props.quiet || showLabel) && <text x={visibleNodes.length <= 12 ? 19 : 15} y="4" className={css.nodeLabel}>{short(node.content.replace(/\s+/gu, ' '), selected ? 34 : visibleNodes.length <= 12 ? 26 : 19)}</text>}
+            {(props.quiet || selected || visibleNodes.length <= 12) && graphNodeKind(node) === 'memory' && nodeDisplay.get(nodeKey)?.bodyLabel !== undefined && <text x="0" y="-18" textAnchor="middle" className={css.nodeBodyLabel}>{nodeDisplay.get(nodeKey)!.bodyLabel}</text>}
+            {(props.quiet || showLabel) && <text x={visibleNodes.length <= 12 ? 19 : 15} y="4" className={css.nodeLabel}>{selected ? nodeDisplay.get(nodeKey)!.selectedLabel : nodeDisplay.get(nodeKey)!.label}</text>}
           </g>
         )
       })}

@@ -6,7 +6,7 @@ import { MEMORY_SPACE_DESCRIPTION_MAX_LENGTH, MEMORY_SPACE_NAME_MAX_LENGTH, NATI
 import type { MemorySpacesPageClient } from './api.ts'
 import { ProviderIcon } from './ProviderIcon.tsx'
 import { providerSummary } from './provider-presentation.ts'
-import { appearanceClass, useLocale, humanBytes, message, PageHeader, SidebarModal, EmptyState } from 'dsh-mnemon/client'
+import { appearanceClass, useLocale, humanBytes, message, SidebarModal, EmptyState } from 'dsh-mnemon/client'
 import { MemoryProviderBadge, ProviderMemoryFields, ReadSourcePanel, categoryLabel, mergeProviderDefaults, nativeSpaceProvider, providerDraftComplete, providerUnavailableKey, readyFirst, readyProviderId, type ProviderDrafts } from './widgets.tsx'
 import { MemoryGraph, enrichMultiSpaceGraph, graphKindLabel, graphNodeKey, graphNodeKind } from './memory-graph.tsx'
 import { MemoryGraph3D } from './memory-graph-3d.tsx'
@@ -59,7 +59,7 @@ export function SyncFreshnessText(props: { lastFullSyncAt: number | null; active
   return <>{text}</>
 }
 
-function OverviewSyncHeader(props: {
+function OverviewSyncPill(props: {
   lastFullSyncAt: number | null
   active: boolean
   loading: boolean
@@ -68,13 +68,14 @@ function OverviewSyncHeader(props: {
 }): JSX.Element {
   const t = useT()
   const fullSyncAge = useSyncFreshnessText(props.lastFullSyncAt, props.active)
+  const label = props.loading
+    ? (props.catalogLoading ? t('overview.directoryLoading') : props.graphLoading ? t('overview.snapshotLoading') : t('overview.healthLoading'))
+    : fullSyncAge
   return (
-    <PageHeader
-      title={t('nav.overview')}
-      description={t('overview.pageDescription')}
-      meta={fullSyncAge}
-      {...(props.loading ? { loadingLabel: props.catalogLoading ? t('overview.directoryLoading') : props.graphLoading ? t('overview.snapshotLoading') : t('overview.healthLoading') } : {})}
-    />
+    <span className={css.syncFreshnessPill} role={props.loading ? 'status' : undefined} aria-label={props.loading ? label : undefined} data-loading={props.loading || undefined} title={label}>
+      {props.loading && <span className={css.syncFreshnessSpinner} aria-hidden="true" />}
+      <span>{label}</span>
+    </span>
   )
 }
 
@@ -475,12 +476,13 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
   const spaceDeleteActionClass = appearanceClass(css.dangerButton, appearanceClass(sidebarCss.itemActionButton, sidebarCss.itemDangerAction))
   return (
     <div className={css.page}>
-      <OverviewSyncHeader lastFullSyncAt={lastFullSyncAt} active={props.active !== false} loading={loading} catalogLoading={catalogLoading} graphLoading={graphLoading} />
+      <h2 className={css.srOnlyHeading}>{t('nav.overview')}</h2>
       {error !== null && <div className={css.inlineError} role="alert">{error}</div>}
       <section className={css.bodyDirectory} aria-label={t('overview.directory')}>
         <div className={css.bodyDirectoryHeader}>
           <div><h3>{t('overview.directory')}</h3><p>{t('overview.directory.description')}</p>{catalogUnavailable && <code className={css.bodyDirectoryPath}>{t('overview.directory.unsynced')}</code>}</div>
           <div className={appearanceClass(css.bodyDirectoryControls, sidebarCss.bodyDirectoryActions)}>
+            <OverviewSyncPill lastFullSyncAt={lastFullSyncAt} active={props.active !== false} loading={loading} catalogLoading={catalogLoading} graphLoading={graphLoading} />
             <strong>{catalogUnavailable ? t('overview.directory.unsyncedBadge') : `${catalog?.activeCount ?? '—'} / ${catalog?.total ?? '—'} ${t('common.active')}`}</strong>
             {canRediscover && <button type="button" className={spaceEditActionClass} title={t('overview.rediscoverHint')} aria-busy={rediscoveryRunning || undefined} onClick={() => void rediscover()}>{rediscoveryRunning ? t('overview.rediscovering') : t('overview.rediscoverAction')}</button>}
             {props.writeEnabled && !catalogUnavailable && <button type="button" className={spaceEditActionClass} title={!props.agentAvailable ? t('overview.metadataUnavailable') : undefined} onClick={() => { setMetadataSelection([]); setMetadataTasks({}); setMetadataOpen(true); if (!props.agentAvailable) props.onAgentRefresh() }}>{t('overview.metadataAction')}</button>}
@@ -514,7 +516,7 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
         </div>
 
       </section>
-      <div className={css.asyncRegion}><ReadSourcePanel title={t('overview.snapshotSources')} hint={t('overview.snapshotSourcesHint')} sources={graphSources} /></div>
+      <div className={css.asyncRegion}><ReadSourcePanel compact title={t('overview.snapshotSources')} hint={t('overview.snapshotSourcesHint')} sources={graphSources} /></div>
       {creatingSpaceOpen && <SidebarModal title={t('overview.createTitle')} description={t('overview.createDialogHint')} busy={creating} wide onClose={() => setCreatingSpaceOpen(false)} footer={<div className={css.modalFooterActions}><button type="button" data-dialog-close className={css.secondaryButton} disabled={creating} onClick={() => setCreatingSpaceOpen(false)}>{t('common.cancel')}</button><button type="submit" form={spaceCreateFormId} className={css.primaryButton} disabled={creating || spaceName.trim() === '' || spaceDescription.trim() === '' || !providerDraftComplete(selectedProvider, providerDrafts[spaceProviderId])}>{creating ? t('overview.creating') : t('overview.createAction')}</button></div>}>{spaceCreateForm}</SidebarModal>}
       {metadataOpen && <SidebarModal title={t('overview.metadataTitle')} description={t('overview.metadataDescription')} busy={metadataBusy} wide onClose={() => setMetadataOpen(false)} footer={<><p className={css.modalFooterNote}>{t('overview.metadataSafety')}</p><div className={css.modalFooterActions}><button type="button" data-dialog-close className={css.secondaryButton} disabled={metadataBusy} onClick={() => setMetadataOpen(false)}>{t('common.cancel')}</button><button type="button" className={css.primaryButton} disabled={!props.agentAvailable || metadataSelection.length === 0} title={!props.agentAvailable ? t('overview.metadataUnavailable') : undefined} onClick={maintainMetadata}>{t('overview.metadataGenerate', { count: metadataSelection.length })}</button></div></>}><div className={css.metadataDialog}>
         {!props.agentAvailable && <div className={css.inlineError} role="status">{t('overview.metadataUnavailable')}</div>}
@@ -534,7 +536,7 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
               <div><span className={css.liveDot} />{t('overview.snapshot')} <small>{generated}</small></div>
               <div className={css.graphToolbarRight}>
                 <div className={css.graphLegend}><span data-edge="scope">{t('overview.edgeScope')}</span><span data-edge="temporal">{t('overview.edgeTemporal')}</span><span data-edge="semantic">{t('overview.edgeSemantic')}</span><span data-edge="causal">{t('overview.edgeCausal')}</span><span data-edge="entity">{t('overview.edgeEntity')}</span></div>
-                <div className={css.graphModeToggle} role="group" aria-label={t('graph.viewModeAria')}>
+                <div className={css.graphModeToggle} data-view={graphView} role="group" aria-label={t('graph.viewModeAria')}>
                   <button type="button" aria-pressed={graphView === '2d'} data-active={graphView === '2d' || undefined} onClick={() => changeGraphView('2d')}>{t('graph.view2d')}</button>
                   <button type="button" aria-pressed={graphView === '3d'} data-active={graphView === '3d' || undefined} onClick={() => changeGraphView('3d')}>{t('graph.view3d')}</button>
                 </div>
