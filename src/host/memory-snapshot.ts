@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { Message } from '@deepseek-ai/dsh-llm'
 import type { MemoryWake } from '../core/contracts/index.ts'
 import type { HostSession, HostUserMessage } from './dsh.ts'
-import { createPluginMessage, isMnemonMessageSource, MNEMON_PLUGIN_SOURCE } from './plugin-message.ts'
+import { createPluginMessage, isBm25RecallSource, isMnemonMessageSource, MNEMON_PLUGIN_SOURCE } from './plugin-message.ts'
 import { readMemorySnapshotState, retainsSnapshotEntries, type MemorySnapshotState, type RuntimeSnapshotRange } from './memory-snapshot-state.ts'
 
 // Initial engineering defaults, not measured provider cache optima. The current
@@ -102,9 +102,11 @@ function readRuntimeRanges(value: unknown, text: string): RuntimeSnapshotRange[]
   return ranges
 }
 
-/** Runtime comes from the Source on each turn, including after a checkpoint. */
-export function summaryWithoutRuntimeSnapshots(messages: readonly Message[], authority: MemorySnapshotState | undefined): readonly Message[] {
+/** Runtime and on-demand hits come from their Sources after a checkpoint. */
+export function summaryWithoutTransientMemory(messages: readonly Message[], authority: MemorySnapshotState | undefined): readonly Message[] {
   const filtered = messages.flatMap((message): Message[] => {
+    // A summary cannot revoke a recalled reference or re-check its ReadGrant.
+    if (message.role === 'user' && isBm25RecallSource(message.source)) return []
     const text = snapshotText(message)
     if (text === undefined) return [message]
     const source = message.source as { snapshot?: unknown; runtimeRanges?: unknown } | undefined

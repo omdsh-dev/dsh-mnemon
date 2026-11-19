@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ComposableMemoryView } from '../src/core/contracts/index.ts'
 import type { HostContextShape, HostMessageSource, HostSession } from '../src/host/dsh.ts'
 import { applyMemoryViewGuidance, registerGuidance, RUNTIME_MEMORY_CONTEXT_NAME, SNAPSHOT_GUIDANCE, withoutMemoryViewContext } from '../src/host/guidance.ts'
-import { prepareMemorySnapshot, runtimeSnapshotRanges, summaryWithoutRuntimeSnapshots } from '../src/host/memory-snapshot.ts'
+import { prepareMemorySnapshot, runtimeSnapshotRanges, summaryWithoutTransientMemory } from '../src/host/memory-snapshot.ts'
 import { memorySnapshotState, type MemorySnapshotState } from '../src/host/memory-snapshot-state.ts'
 import { modelMemoryWake } from '../src/host/view-presentation.ts'
 import { truncateMemoryText } from '../src/sdk/index.ts'
@@ -54,12 +54,27 @@ describe('memory snapshot surface updates', () => {
     const malformed = attributed([[-1, 5]])
     const user = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text }] })
     const input = [snapshot, malformed, user]
-    expect(summaryWithoutRuntimeSnapshots(input, state())).toEqual([
+    expect(summaryWithoutTransientMemory(input, state())).toEqual([
       { ...snapshot, content: [{ type: 'text', text: sections[1].text }] },
       user,
     ])
-    expect(summaryWithoutRuntimeSnapshots(input, state([], 'c'.repeat(64)))).toEqual([user])
+    expect(summaryWithoutTransientMemory(input, state([], 'c'.repeat(64)))).toEqual([user])
     expect(snapshot.content).toEqual([{ type: 'text', text }])
+  })
+
+  it('excludes only Mnemon BM25 hits and invalidations from the summary', () => {
+    const message = (source: HostMessageSource, text: string) => createUserMessage({
+      source: source as never, content: [{ type: 'text', text }],
+    })
+    const hit = message({ kind: 'dsh-mnemon', form: 'bm25-recall' }, 'Synthetic stale hit')
+    const invalidation = message({ kind: 'plugin', plugin: 'dsh-mnemon', form: 'bm25-invalidation' }, 'Synthetic invalidation')
+    const ordinary = message({ kind: 'user' }, 'Synthetic conversation')
+    const foreign = message({ kind: 'plugin', plugin: 'another-plugin', form: 'bm25-recall' }, 'Synthetic unrelated data')
+    const input = [ordinary, hit, foreign, invalidation]
+    for (const authority of [state(), undefined]) {
+      expect(summaryWithoutTransientMemory(input, authority)).toEqual([ordinary, foreign])
+    }
+    expect(input).toEqual([ordinary, hit, foreign, invalidation])
   })
 
   it.each([

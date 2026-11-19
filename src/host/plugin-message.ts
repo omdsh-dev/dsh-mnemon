@@ -24,6 +24,12 @@ export function isMnemonMessageSource(source: unknown): boolean {
     || (kind === 'plugin' && plugin === MNEMON_PLUGIN_SOURCE)
 }
 
+export function isBm25RecallSource(source: unknown): boolean {
+  if (!isMnemonMessageSource(source)) return false
+  const { form } = source as { form?: unknown }
+  return form === 'bm25-recall' || form === 'bm25-invalidation'
+}
+
 /** A user-role message this plugin adds to a step, marked with its own source. */
 export function createPluginMessage(text: string, form: 'recall' | 'instructions' | 'memory-snapshot', snapshot?: MemorySnapshotState, runtimeRanges?: RuntimeSnapshotRange[]): HostUserMessage {
   return structuredClone({
