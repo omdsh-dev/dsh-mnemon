@@ -40,8 +40,9 @@ const ptcServices = await Promise.all(['dsh-fs-local', 'dsh-subprocess-local', '
   .map(name => import(requireDsh.resolve(`@deepseek-ai/${name}`))))
 
 describe('idle review tool access host', () => {
-async function fixture(provider: 'spawn' | 'fork' = 'spawn', persistWatermark = false, codeMode = false, autoReview = false, publicationWrites = false) {
-  const f = await compositionFixture({ idleReviewMs: 5_000, idleReview: { provider, persistWatermark, minIntervalMs: 5_000, maxPerSession: 2 } })
+async function fixture(provider: 'spawn' | 'fork' = 'spawn', persistWatermark = false, codeMode = false, autoReview = false, publicationWrites = false,
+  visibility?: { silent: boolean }) {
+  const f = await compositionFixture({ idleReviewMs: 5_000, idleReview: { provider, persistWatermark, minIntervalMs: 5_000, maxPerSession: 2, ...visibility } })
   const body = publicationWrites ? await f.memorySpace() : undefined
   const ctx = new Context()
   const modelCalls: string[] = []
@@ -497,6 +498,35 @@ it('hides automatic spawn idle review during execution and keeps it out of the c
       }
     }
     expect(f.parent.session.snapshotEvents().some(event => event.type === 'subagent/catalog')).toBe(false)
+    await assertReloadable(f)
+  } finally { await f.close() }
+}, 20_000)
+
+it('runs visible spawn idle reviews and skips orphan archival when silent mode is off', async () => {
+  const f = await fixture('spawn', false, false, false, true, { silent: false })
+  try {
+    const archiveSession = vi.fn(async () => {})
+    const listSessions = vi.fn(async () => [])
+    f.ctx.provide('workspaceRegistry', {
+      get: (id: string) => id === 'ws-1' ? { id: 'ws-1', path: f.workspace, title: 'Workspace' } : undefined,
+      list: () => [{ id: 'ws-1', path: f.workspace, title: 'Workspace', sessionIds: ['parent-denied'] }],
+      archiveSession,
+    })
+    f.ctx.provide('sessionQuery', { listSessions, readSession: vi.fn() })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
+    await f.turn()
+    await f.turn()
+    await vi.advanceTimersByTimeAsync(5_000)
+    await vi.waitFor(() => expect(f.lifecycle.snapshot('parent-denied').current).toMatchObject({ reviewRunning: false, lastReviewAction: 'added' }), { timeout: 10_000 })
+    expect(f.coordinator.snapshot().reviews).toBe(1)
+    expect(await f.graph.source('runtime').read('snapshot')).toMatchObject({ entries: [expect.objectContaining({ content: 'Synthetic publication-safe runtime.' })] })
+    expect(f.children).toHaveLength(1)
+    expect(f.reviewOwners).toHaveLength(0)
+    expect(f.parent.session.snapshotEvents()).toContainEqual(expect.objectContaining({
+      type: 'subagent/catalog', data: expect.objectContaining({ childId: f.children[0] }),
+    }))
+    expect(listSessions).not.toHaveBeenCalled()
+    expect(archiveSession).not.toHaveBeenCalled()
     await assertReloadable(f)
   } finally { await f.close() }
 }, 20_000)

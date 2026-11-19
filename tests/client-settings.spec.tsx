@@ -176,6 +176,21 @@ describe('MnemonSettingsCard', () => {
     }
   })
 
+  it('disables silent reviews independently of the enabled setting and reloads the saved value', async () => {
+    const mutate = vi.fn(async () => {})
+    const scope = liveSettingsScope<Config>(readySnapshot({ idleReview: { maxPerSession: 3 } }), mutate)
+    const name = 'Run idle reviews silently'
+    const view = render(threeTier(scope, undefined, {}, translateEn))
+    expect(checked(screen.getByRole('switch', { name }))).toBe(true)
+    fireEvent.click(screen.getByRole('switch', { name }))
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['idleReview'], value: { maxPerSession: 3, silent: false } }]))
+    view.unmount()
+    const reopened = liveSettingsScope<Config>(readySnapshot({ idleReview: { maxPerSession: 3, silent: false } }), mutate)
+    render(threeTier(reopened, undefined, {}, translateEn))
+    expect(checked(screen.getByRole('switch', { name }))).toBe(false)
+    expect(checked(screen.getByRole('switch', { name: 'Enable idle review' }))).toBe(true)
+  })
+
   it('switches runtime memory writes for idle review at once (#319)', async () => {
     const mutate = vi.fn(async () => {})
     const scope = liveSettingsScope<Config>(readySnapshot({}), mutate)

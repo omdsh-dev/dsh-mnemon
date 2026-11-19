@@ -89,6 +89,7 @@ export type MnemonDisplayMode = 'sidebar' | 'builtin'
 
 export const DEFAULT_IDLE_REVIEW = {
   enabled: true,
+  silent: true,
   runtimeMemory: true,
   persistWatermark: false,
   provider: 'spawn',
@@ -102,6 +103,8 @@ export const DEFAULT_IDLE_REVIEW = {
 
 export interface ResolvedIdleReviewConfig {
   enabled: boolean
+  /** Hide automatic spawn reviews from the reviewed conversation. */
+  silent: boolean
   /** Whether review may change USER.md and MEMORY.md; it can create Documents either way. */
   runtimeMemory: boolean
   /** Preserve attempt quota and cooling time for the same persisted parent session. */

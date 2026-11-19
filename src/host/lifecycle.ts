@@ -904,13 +904,16 @@ export class MnemonLifecycle {
   start(): () => void {
     this.coordinator.setIsolatedReviewRunner?.(request => this.runIsolatedReview(request))
     const repair = new AbortController()
-    const repairScope = activationOwned(this.ctx.subagents) && typeof this.ctx.inject === 'function'
+    const repairScope = this.config.idleReview.silent && activationOwned(this.ctx.subagents) && typeof this.ctx.inject === 'function'
       ? this.ctx.inject(['workspaceRegistry', 'sessionQuery'], ctx => {
-        if (!repair.signal.aborted) void archiveOrphanedIdleReviews(ctx, repair.signal).catch(() => undefined)
+        if (this.config.idleReview.silent && !repair.signal.aborted) {
+          void archiveOrphanedIdleReviews(ctx, repair.signal).catch(() => undefined)
+        }
       }) as { dispose?(): unknown } | undefined
       : undefined
     // DSH creates a new Agent for startup, resume, clear and compaction alike.
     const stopChanged = this.runtimeSource?.onChanged?.(() => {
+      if (!this.config.idleReview.silent) repair.abort()
       for (const policy of this.workspacePolicies.values()) policy.update()
       for (const memory of this.memoryTurns.values()) if (memory.excluded) memory.end()
       for (const { lifecycle } of this.owners.values()) lifecycle.configurationChanged()

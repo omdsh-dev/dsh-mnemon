@@ -958,8 +958,8 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
       const prompt = preferred === 'fork' ? 'Review the inherited completed checkpoint now.' : reviewCheckpoint(parent.session, config.maxContextChars)
       const base = reviewPersona(tools.includes('mnemon_runtime_memory'))
       const persona = preferred === 'fork' ? base : base.replaceAll('inherited', 'supplied bounded')
-      // Only the automatic lifecycle supplies admission; manual reviews retain DSH's normal delegation.
-      const standalone = preferred === 'spawn' && admission !== undefined && this.isolatedReviewRunner !== undefined
+      // With silent mode off, automatic reviews use the same visible delegation as manual reviews.
+      const standalone = config.silent && preferred === 'spawn' && admission !== undefined && this.isolatedReviewRunner !== undefined
       const { provider, runId, result } = standalone
         ? await this.runStandaloneReview(parent, prompt, tools, WRITE_SCHEMA, execution.signal, persona, { terminalTools: writers }, admission)
         : await this.delegate(parent, 'review', 'Mnemon idle checkpoint review', prompt, tools, WRITE_SCHEMA, execution.signal, preferred, persona, { terminalTools: writers }, undefined, undefined, admission)
