@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type JSX, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type JSX, type ReactNode } from 'react'
 import { IconChevronDownOutlineRegular, Menu, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './MnemonSettingsCard.module.css'
 import { Reveal, TARGET } from './feedback.tsx'
@@ -40,12 +40,17 @@ export interface SettingOption<T extends string> {
  * A DSH preference row: title and hint on the left, one control on the right.
  * Shared by Mnemon Settings and the Plugins page composition.
  */
-export function SettingRow(props: { title: string; titleId?: string | undefined; hint?: ReactNode; htmlFor?: string | undefined; children?: ReactNode; stacked?: boolean | undefined; target?: string | undefined }): JSX.Element {
+export function SettingRow(props: { title: string; titleId?: string | undefined; badge?: ReactNode; hint?: ReactNode; htmlFor?: string | undefined; children?: ReactNode; stacked?: boolean | undefined; target?: string | undefined }): JSX.Element {
   const title = props.htmlFor === undefined
     ? <strong id={props.titleId}>{props.title}</strong>
     : <label id={props.titleId} htmlFor={props.htmlFor}><strong>{props.title}</strong></label>
   return <div className={css.settingRow} data-stacked={props.stacked === true ? '' : undefined} {...targetOf(props.target)}>
-    <div className={css.settingCopy}>{title}{props.hint !== undefined && props.hint !== '' && <small>{props.hint}</small>}</div>
+    <div className={css.settingCopy}>
+      {props.badge !== undefined && props.badge !== null && props.badge !== false
+        ? <div className={css.rowTitleLine}>{title}{props.badge}</div>
+        : title}
+      {props.hint !== undefined && props.hint !== '' && <small>{props.hint}</small>}
+    </div>
     {props.children !== undefined && <div className={css.settingControl}>{props.children}</div>}
   </div>
 }
@@ -88,10 +93,13 @@ export function SelectRow<T extends string>(props: { id: string; label: string; 
  * A row whose control is the DSH Switch. A note under the hint states what the
  * switch depends on and offers what resolves it; it slides in and out.
  */
-export function ToggleRow(props: { id: string; label: string; titleId?: string | undefined; hint: string; checked: boolean; disabled: boolean; ariaLabel?: string | undefined; note?: ReactNode; target?: string | undefined; onChange: (value: boolean) => void }): JSX.Element {
+export function ToggleRow(props: { id: string; label: string; titleId?: string | undefined; badge?: ReactNode; hint: string; checked: boolean; disabled: boolean; ariaLabel?: string | undefined; note?: ReactNode; target?: string | undefined; onChange: (value: boolean) => void }): JSX.Element {
+  const title = <strong id={props.titleId}>{props.label}</strong>
   return <div className={css.toggleRow} id={props.id} {...targetOf(props.target)}>
     <div className={css.settingCopy}>
-      <strong id={props.titleId}>{props.label}</strong>
+      {props.badge !== undefined && props.badge !== null && props.badge !== false
+        ? <div className={css.rowTitleLine}>{title}{props.badge}</div>
+        : title}
       {props.hint !== '' && <small>{props.hint}</small>}
       <Reveal>{props.note === undefined ? null : <div className={css.rowNote}>{props.note}</div>}</Reveal>
     </div>
@@ -116,16 +124,20 @@ export function AdvancedSection(props: {
   children: ReactNode
 }): JSX.Element {
   const [open, setOpen] = useState(() => props.defaultOpen === true || (props.section !== undefined && props.activeSection === props.section))
+  const userToggled = useRef(false)
   const titleId = useId()
   const bodyId = useId()
   useEffect(() => {
     if (props.section !== undefined && props.activeSection === props.section) setOpen(true)
   }, [props.section, props.activeSection])
+  useEffect(() => {
+    if (props.defaultOpen === true && !userToggled.current) setOpen(true)
+  }, [props.defaultOpen])
   return <div className={[css.advanced, props.className].filter(Boolean).join(' ')} data-open={open ? '' : undefined}
     {...(props.section === undefined ? {} : { 'data-settings-section': props.section })}>
     <button type="button" className={css.advancedToggle} aria-expanded={open} aria-labelledby={titleId}
       {...(open ? { 'aria-controls': bodyId } : {})}
-      data-disclosure-open={open ? undefined : ''} onClick={() => setOpen(value => !value)}>
+      data-disclosure-open={open ? undefined : ''} onClick={() => { userToggled.current = true; setOpen(value => !value) }}>
       <span className={css.advancedHeading}>
         <span id={titleId} className={css.advancedTitle}>{props.title}</span>
         {props.hint !== undefined && props.hint !== '' && <small className={css.advancedHint}>{props.hint}</small>}

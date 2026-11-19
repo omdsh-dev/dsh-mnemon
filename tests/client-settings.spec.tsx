@@ -212,19 +212,23 @@ describe('MnemonSettingsCard', () => {
     const view = render(<MnemonSettingsCard scope={scope} />)
     const toggle = screen.getByRole('switch', { name: '记忆工具写入前确认' })
     expect(checked(toggle)).toBe(false)
+    expect(screen.queryByText('暂停闲时整理')).toBeNull()
     fireEvent.click(toggle)
     await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['confirmWrites'], value: true }]))
     if (rejected) {
       expect((await screen.findByRole('alert')).textContent).toContain('Synthetic rejection')
       expect(checked(toggle)).toBe(false)
+      expect(screen.queryByText('暂停闲时整理')).toBeNull()
     } else {
       await waitFor(() => expect(scope.snapshot.value?.confirmWrites).toBe(true))
+      expect(screen.getByText('暂停闲时整理')).toBeTruthy()
     }
     expect(scope.snapshot.value?.storageScope).toBe('workspace')
     view.unmount()
     const readOnly = settingsScope<Config>(readySnapshot({ confirmWrites: true }, { writable: false }), vi.fn())
     render(<MnemonSettingsCard scope={readOnly} t={translateEn} />)
     expect((screen.getByRole('switch', { name: 'Confirm memory tool writes' }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText('Pauses idle review')).toBeTruthy()
   })
 
   it('keeps Team review compatibility selection read-only without the Host settings grant', () => {
@@ -976,7 +980,10 @@ describe('MnemonSettingsCard', () => {
     const memory = screen.getByRole('spinbutton', { name: '工作记忆上限（字节）' }) as HTMLInputElement
     expect(user.value).toBe('4096')
     expect(memory.value).toBe('10240')
+    expect(screen.getByText('4 KiB')).toBeTruthy()
+    expect(screen.getByText('10 KiB')).toBeTruthy()
     fireEvent.change(user, { target: { value: '8192' } })
+    expect(screen.getByText('8 KiB')).toBeTruthy()
     expect(mutate).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: '放弃' }))
     expect(user.value).toBe('4096')
@@ -1652,13 +1659,23 @@ describe('centralized workspace storage settings', () => {
     const mutate = vi.fn(async () => {})
     return { scope: settingsScope(readySnapshot(value, { writable }), mutate), mutate }
   }
-  it('keeps workspace exclusion empty by default and saves only an explicit staged path list', async () => {
+  it('keeps workspace exclusion collapsed while empty, preserves staged paths across toggle, and auto-expands when configured', async () => {
     const { scope, mutate } = settings({})
     render(<MnemonSettingsCard scope={scope} />)
+    expect(screen.queryByRole('textbox', { name: '排除记忆的工作区' })).toBeNull()
+    const toggle = screen.getByRole('button', { name: '排除记忆的工作区' })
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(toggle.textContent).toContain('未设置')
+    fireEvent.click(toggle)
     const input = screen.getByRole('textbox', { name: '排除记忆的工作区' }) as HTMLTextAreaElement
     expect(input.value).toBe('')
     expect(mutate).not.toHaveBeenCalled()
     fireEvent.change(input, { target: { value: ' /work/private\n~/personal\n/work/private\n' } })
+    // Collapse and re-expand preserves the unsaved draft without writing.
+    fireEvent.click(toggle)
+    expect(screen.queryByRole('textbox', { name: '排除记忆的工作区' })).toBeNull()
+    fireEvent.click(toggle)
+    expect((screen.getByRole('textbox', { name: '排除记忆的工作区' }) as HTMLTextAreaElement).value).toBe(' /work/private\n~/personal\n/work/private\n')
     expect(mutate).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: '应用' }))
     await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['excludedWorkspaces'], value: ['/work/private', '~/personal'] }]))
@@ -1666,9 +1683,18 @@ describe('centralized workspace storage settings', () => {
   it('lets users remove exclusions without modifying storage placement or other settings', async () => {
     const { scope, mutate } = settings({ excludedWorkspaces: ['/work/private'], storageScope: 'workspaces' })
     render(<MnemonSettingsCard scope={scope} t={translateEn} />)
+    expect(screen.getByRole('button', { name: 'Workspaces excluded from memory' }).textContent).toContain('1 excluded')
     fireEvent.change(screen.getByRole('textbox', { name: 'Workspaces excluded from memory' }), { target: { value: '' } })
     fireEvent.click(screen.getByRole('button', { name: 'Apply' }))
     await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['excludedWorkspaces'], value: [] }]))
+  })
+  it('keeps expanded exclusions read-only when settings are not writable', () => {
+    const { scope, mutate } = settings({ excludedWorkspaces: ['/work/private'] }, false)
+    render(<MnemonSettingsCard scope={scope} t={translateEn} />)
+    const input = screen.getByRole('textbox', { name: 'Workspaces excluded from memory' }) as HTMLTextAreaElement
+    expect(input.disabled).toBe(true)
+    expect(input.value).toBe('/work/private')
+    expect(mutate).not.toHaveBeenCalled()
   })
   it('applies the scope and central root together from the storage section', async () => {
     const { scope, mutate } = settings({ storageScope: 'global' })
