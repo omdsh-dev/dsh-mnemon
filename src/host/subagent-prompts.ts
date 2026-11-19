@@ -13,10 +13,10 @@ export const WRITE_SCHEMA = {
   properties: {
     summary: { type: 'string' },
     action: { type: 'string', enum: [...WRITE_ACTIONS] },
-    memoryBodyIds: { type: 'array', items: { type: 'string' } },
+    memoryBodyIds: { type: 'array', items: { type: 'string' }, description: 'IDs of affected Memory Spaces, if any.' },
     documentIds: { type: 'array', items: { type: 'string' } },
   },
-  required: ['summary', 'action', 'memoryBodyIds'],
+  required: ['summary', 'action'],
 } as const
 
 export const DOCUMENT_ARCHIVE_SCHEMA = {
