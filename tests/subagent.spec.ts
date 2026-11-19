@@ -17,6 +17,8 @@ import { sourceFixture } from './fixtures/sources.ts'
 import { compositionFixture } from './fixtures/composition.ts'
 import { assertDshOutputSchema, DELEGATED_OPERATIONS, DELEGATED_TASK_LINE, delegatedTaskLine, MnemonSubagentCoordinator, spaceWriteGuard, type RuntimeMaintenanceTaskRunner } from '../src/host/subagent.ts'
 import { CONTINUATION_TEXT } from '../src/host/continuation-turn.ts'
+import { assertDshOutputValue } from '../src/host/subagent-output-schema.ts'
+import { WRITE_SCHEMA } from '../src/host/subagent-prompts.ts'
 import { resolveConfig } from '../src/host/config.ts'
 import { sessionLog } from './fixtures/session-log.ts'
 import {
@@ -28,6 +30,15 @@ import {
 } from './fixtures/subagent-coordinator.ts'
 
 afterEach(cleanupSubagentFixtures)
+
+it('accepts a write result with omitted IDs and validates IDs when supplied', () => {
+  const skipped = { summary: 'Nothing to keep.', action: 'skipped' }
+  expect(() => assertDshOutputValue(WRITE_SCHEMA, skipped)).not.toThrow()
+  expect(() => assertDshOutputValue(WRITE_SCHEMA, { ...skipped, memoryBodyIds: [] })).not.toThrow()
+  expect(() => assertDshOutputValue(WRITE_SCHEMA, { ...skipped, memoryBodyIds: 'space' })).toThrow('result.memoryBodyIds must be an array')
+  expect(() => assertDshOutputValue(WRITE_SCHEMA, { ...skipped, memoryBodyIds: [1] })).toThrow('result.memoryBodyIds[0] must be a string')
+  expect(() => assertDshOutputValue(WRITE_SCHEMA, { ...skipped, documentIds: null })).toThrow('result.documentIds must be an array')
+})
 it('discovers effective provider configuration without enumeration and rechecks live registration', async () => {
   const names = ['preloaded-local']
   const host = subagents({ answer: 'Found.', citations: [] }, 'completed', names)
@@ -1968,35 +1979,35 @@ describe('What delegated children read', () => {
     expect(read).toEqual({
       remember: [
         { label: 'Mnemon remember', persona: 'c2ef08b302b643b680f1e7d7e953981027d0e780d15ec931282a20fc4e20eeb6',
-          completion: '0f114375d13f5c83bd7f5982103b05c96e0d0e1e86ab9a7e71c95c9e15538569', task: '1751ae61c39e985c6bd27da78fae45834a688eb7c33325675c7d92417ed341a4' },
+          completion: '77d0f9550f7a6ccb779a362469428b58156317a5ee55c9afe6f79e502789a641', task: '1751ae61c39e985c6bd27da78fae45834a688eb7c33325675c7d92417ed341a4' },
       ],
       'remember in a named space': [
         { label: 'Mnemon remember', persona: 'c2ef08b302b643b680f1e7d7e953981027d0e780d15ec931282a20fc4e20eeb6',
-          completion: '0f114375d13f5c83bd7f5982103b05c96e0d0e1e86ab9a7e71c95c9e15538569', task: 'fbe048318b4e53edd70fc79bd7a5ebc2c63e8f74d70bef18d9e731bcaec64076' },
+          completion: '77d0f9550f7a6ccb779a362469428b58156317a5ee55c9afe6f79e502789a641', task: 'fbe048318b4e53edd70fc79bd7a5ebc2c63e8f74d70bef18d9e731bcaec64076' },
       ],
       'supervised writeback': [
         { label: 'Mnemon supervised-writeback', persona: '052eed66fc4e7743491fdba64bf4e2ed894bf9d3265070769cb8c3e1d44f2ebf',
-          completion: '0f114375d13f5c83bd7f5982103b05c96e0d0e1e86ab9a7e71c95c9e15538569', task: '973f143b101ae2ad3926f6a808be6419020fed3644c5cb7e60dc681ca02fdae3' },
+          completion: '77d0f9550f7a6ccb779a362469428b58156317a5ee55c9afe6f79e502789a641', task: '973f143b101ae2ad3926f6a808be6419020fed3644c5cb7e60dc681ca02fdae3' },
       ],
       link: [
         { label: 'Mnemon link', persona: '382f5a3272f33fc0a8d9899160f7c329d92f98b9132b5cc7ff66deb4e8761dbc',
-          completion: '0f114375d13f5c83bd7f5982103b05c96e0d0e1e86ab9a7e71c95c9e15538569', task: 'd5938f682627e3d836a12325e815b17cfe7d3343e782bb490c188fa88b518e9f' },
+          completion: '77d0f9550f7a6ccb779a362469428b58156317a5ee55c9afe6f79e502789a641', task: 'd5938f682627e3d836a12325e815b17cfe7d3343e782bb490c188fa88b518e9f' },
       ],
       forget: [
         { label: 'Mnemon forget', persona: '382f5a3272f33fc0a8d9899160f7c329d92f98b9132b5cc7ff66deb4e8761dbc',
-          completion: '0f114375d13f5c83bd7f5982103b05c96e0d0e1e86ab9a7e71c95c9e15538569', task: '3274d890fed46556e1f6fcdc0eeba4d1b29b0e71a65113e3ee57ec8fd1ae0b57' },
+          completion: '77d0f9550f7a6ccb779a362469428b58156317a5ee55c9afe6f79e502789a641', task: '3274d890fed46556e1f6fcdc0eeba4d1b29b0e71a65113e3ee57ec8fd1ae0b57' },
       ],
       'create a space': [
         { label: 'Mnemon create-memory-body', persona: '382f5a3272f33fc0a8d9899160f7c329d92f98b9132b5cc7ff66deb4e8761dbc',
-          completion: '0f114375d13f5c83bd7f5982103b05c96e0d0e1e86ab9a7e71c95c9e15538569', task: '96a0f34ffb8273c8fceb1c1109db7650db0fe4d217895a2929eeec599e753e8f' },
+          completion: '77d0f9550f7a6ccb779a362469428b58156317a5ee55c9afe6f79e502789a641', task: '96a0f34ffb8273c8fceb1c1109db7650db0fe4d217895a2929eeec599e753e8f' },
       ],
       'update a space': [
         { label: 'Mnemon update-memory-body', persona: '382f5a3272f33fc0a8d9899160f7c329d92f98b9132b5cc7ff66deb4e8761dbc',
-          completion: '0f114375d13f5c83bd7f5982103b05c96e0d0e1e86ab9a7e71c95c9e15538569', task: 'e076721d8b7495ae45dcb1887c804e8b9326cc94470bf4d452dce0ee7b882ee0' },
+          completion: '77d0f9550f7a6ccb779a362469428b58156317a5ee55c9afe6f79e502789a641', task: 'e076721d8b7495ae45dcb1887c804e8b9326cc94470bf4d452dce0ee7b882ee0' },
       ],
       'merge spaces': [
         { label: 'Mnemon merge-memory-bodies', persona: '382f5a3272f33fc0a8d9899160f7c329d92f98b9132b5cc7ff66deb4e8761dbc',
-          completion: '0f114375d13f5c83bd7f5982103b05c96e0d0e1e86ab9a7e71c95c9e15538569', task: '87044cdaa67c1cdda9bd633b5781f8e4eccdd5d933b7f3f2a371e331713fab54' },
+          completion: '77d0f9550f7a6ccb779a362469428b58156317a5ee55c9afe6f79e502789a641', task: '87044cdaa67c1cdda9bd633b5781f8e4eccdd5d933b7f3f2a371e331713fab54' },
       ],
       answer: [
         { label: 'Memory evidence answer', persona: 'd0cfab8b646850fac2d9dc5d5ce1ca9ecd789b8d43654743910f7cbb715be475',
@@ -2012,19 +2023,19 @@ describe('What delegated children read', () => {
       ],
       'review through spawn': [
         { label: 'Mnemon idle checkpoint review', persona: '0557258a9e2fe882869bcdc5165c0bdade2020d811a292f8940e9703202c2fcd',
-          completion: '0f114375d13f5c83bd7f5982103b05c96e0d0e1e86ab9a7e71c95c9e15538569', task: '970af4c615d54aecdb62770ba4e1548982ff945e8c44d1a3eee301e848c99715' },
+          completion: '77d0f9550f7a6ccb779a362469428b58156317a5ee55c9afe6f79e502789a641', task: '970af4c615d54aecdb62770ba4e1548982ff945e8c44d1a3eee301e848c99715' },
       ],
       'review through spawn without runtime memory': [
         { label: 'Mnemon idle checkpoint review', persona: '39ed4aaacc757ba9650c9fed5344ddc7ddebcfc40748be75cef2e2f048d8b744',
-          completion: '0f114375d13f5c83bd7f5982103b05c96e0d0e1e86ab9a7e71c95c9e15538569', task: '970af4c615d54aecdb62770ba4e1548982ff945e8c44d1a3eee301e848c99715' },
+          completion: '77d0f9550f7a6ccb779a362469428b58156317a5ee55c9afe6f79e502789a641', task: '970af4c615d54aecdb62770ba4e1548982ff945e8c44d1a3eee301e848c99715' },
       ],
       'review through fork': [
         { label: 'Mnemon idle checkpoint review', persona: 'b5b2550f1c6a2930288dbd0d495daf54ea8dfb8e433b05b1c59fb198015a4ec7',
-          completion: '0f114375d13f5c83bd7f5982103b05c96e0d0e1e86ab9a7e71c95c9e15538569', task: 'd9ea7e7313d5f106117fa055829b396755f497c0b2636f48eb3008eb0b0178f9' },
+          completion: '77d0f9550f7a6ccb779a362469428b58156317a5ee55c9afe6f79e502789a641', task: 'd9ea7e7313d5f106117fa055829b396755f497c0b2636f48eb3008eb0b0178f9' },
       ],
       'review through fork without runtime memory': [
         { label: 'Mnemon idle checkpoint review', persona: '88b3f6472f3effce4156cbd94bd50aa38e1d031303eed3624689f5484998f1f2',
-          completion: '0f114375d13f5c83bd7f5982103b05c96e0d0e1e86ab9a7e71c95c9e15538569', task: 'd9ea7e7313d5f106117fa055829b396755f497c0b2636f48eb3008eb0b0178f9' },
+          completion: '77d0f9550f7a6ccb779a362469428b58156317a5ee55c9afe6f79e502789a641', task: 'd9ea7e7313d5f106117fa055829b396755f497c0b2636f48eb3008eb0b0178f9' },
       ],
       'MEMORY.md archive routing': [
         { label: 'Route runtime memory archive batch 1/2', persona: '4d53843ba45153bce9650aa3b15569e55b0d07f822b171c1a122c365be9f65ed',

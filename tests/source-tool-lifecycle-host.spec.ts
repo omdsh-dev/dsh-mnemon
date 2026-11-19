@@ -217,20 +217,23 @@ it.each(['add', 'replace'] as const)('persists well-formed Runtime %s metadata a
   } finally { await reader.fiber.dispose(); await f.dispose() }
 }, 20_000)
 
-it.each(['spawn', 'fork'] as const)('starts a %s review with only registered optional tools', async provider => {
+it.each(['spawn', 'fork'] as const)('completes a %s review without result IDs and with only registered optional tools', async provider => {
   for (const absent of ['documents', 'runtime'] as const) {
     const childRequests: string[][] = []
     const f = await harness(options => {
       if (options.sessionId === 'parent') return 'A completed synthetic checkpoint.'
       childRequests.push((options.tools ?? []).map(tool => tool.name))
+      if (childRequests.length > 1) return 'The synthetic completion was rejected.'
       const system = options.system ?? JSON.stringify(options.messages.filter(message => message.role === 'system'))
       const requestId = system.match(/requestId `([^`]+)`/u)?.[1]
       if (!requestId) throw new Error('Missing completion capability')
-      return { name: 'mnemon_subagent_result', args: { requestId, result: { summary: 'Checkpoint reviewed.', action: 'skipped', memoryBodyIds: [], documentIds: [] } } }
+      return { name: 'mnemon_subagent_result', args: { requestId, result: { summary: 'Checkpoint reviewed.', action: 'skipped' } } }
     }, async f => { f.config.idleReview.provider = provider; await f.releases[absent === 'documents' ? 1 : 0]!() })
     try {
       await f.turn('Review this synthetic checkpoint.')
-      await expect(f.coordinator.review(f.parent, new AbortController().signal)).resolves.toMatchObject({ delegated: true, action: 'skipped' })
+      await expect(f.coordinator.review(f.parent, new AbortController().signal)).resolves.toMatchObject({
+        delegated: true, action: 'skipped', summary: 'Checkpoint reviewed.', memoryBodyIds: [], documentIds: [],
+      })
       expect(childRequests).toHaveLength(1)
       expect(childRequests[0]?.toSorted()).toEqual(absent === 'documents' ? ['mnemon_runtime_memory', 'mnemon_subagent_result']
         : ['mnemon_document_create', 'mnemon_document_search', 'mnemon_subagent_result'])
