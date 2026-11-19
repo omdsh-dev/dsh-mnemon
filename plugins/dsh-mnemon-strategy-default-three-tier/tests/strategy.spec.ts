@@ -38,7 +38,7 @@ describe('standalone default three-tier Strategy', () => {
     const layer = (role: string, sourceTypeId: string, routeIds: string[] = [], actionIds: string[] = [], activeCount?: number) => ({
       ...fact(role, sourceTypeId), routeIds, actionIds, ...(activeCount === undefined ? {} : { hints: { activeCount } }),
     })
-    const runtime = layer('working-context', 'runtime')
+    const runtime = layer('working-context', 'runtime', [], ['mutate'])
     const documents = layer('narrative', 'documents', ['search'])
     const spaces = (routeIds: string[], actionIds: string[], activeCount?: number) => layer('durable-evidence', 'memory-spaces', routeIds, actionIds, activeCount)
     const compose = (...facts: MemoryAvailableSource[]) => plugin.DEFAULT_THREE_TIER_VIEW_STRATEGY.compose(request, facts).guidance
@@ -73,6 +73,22 @@ describe('standalone default three-tier Strategy', () => {
     const asyncOnly = compose(runtime, documents, { ...spaces(['inspect', 'recall'], ['remember'], 2), hints: { activeCount: 2, archivableCount: 0 } })
     expect(asyncOnly?.system).toContain('call mnemon_recall instead of inferring')
     expect(asyncOnly?.system).toContain('to a local archive file')
+  })
+
+  it.each([false, true])('omits unavailable Runtime write guidance while preserving reads (Recall %s)', recall => {
+    const request = { scope: { storage: 'custom' as const }, scenario: 'test', budget: { ...DEFAULT_MEMORY_VIEW_BUDGET } }
+    const runtime = fact('working-context', 'runtime')
+    const documents = { ...fact('narrative', 'documents'), routeIds: ['search'], actionIds: ['create'] }
+    const spaces = { ...fact('durable-evidence', 'memory-spaces'), routeIds: recall ? ['recall'] : [] }
+
+    const view = plugin.DEFAULT_THREE_TIER_VIEW_STRATEGY.compose(request, [runtime, documents, spaces])
+    expect(view.sources[0]).toMatchObject({ sourceInstanceKey: 'source:runtime', projection: { mode: 'eager' }, actionIds: [] })
+    expect(view.sources[1]).toMatchObject({ routeIds: ['search'], actionIds: ['create'] })
+    expect(view.guidance?.system).toContain('Runtime Memory is read-only in this View.')
+    expect(view.guidance?.system).toContain('budget-limited projection')
+    expect(view.guidance?.system).not.toContain('WRITE PROTOCOL')
+    expect(JSON.stringify(view.guidance)).not.toContain('mnemon_runtime_memory')
+    expect(JSON.stringify(view.guidance).includes('mnemon_recall')).toBe(recall)
   })
 
   it('rejects ambiguous roles instead of selecting by mount order', () => {
@@ -183,6 +199,7 @@ describe('three-tier owned extension contracts', () => {
 
   it('keeps runtime semantics without claiming default, narrowed or multi-Source projections are the entire store', () => {
     const facts = sources().map((source, index) => ({ ...source, sourceTypeId: ['runtime', 'documents', 'memory-spaces'][index]! }))
+    facts[0]!.actionIds = ['mutate']
     const original = strategy.compose(request, facts)
     expect(original.guidance?.system).toContain('budget-limited projection')
     expect(original.guidance?.system).not.toContain('complete projection')
@@ -192,6 +209,11 @@ describe('three-tier owned extension contracts', () => {
     const scoped = strategy.compose(request, facts, [contribution('selection', { sourceKeys: facts.map(source => source.sourceInstanceKey) })])
     expect(scoped.guidance?.system).toContain('only that Source')
     expect(scoped.guidance?.system).toContain('Read-only Sources stay read-only')
+    const scopedReadOnly = strategy.compose(request, facts, [
+      contribution('selection', { sourceKeys: facts.map(source => source.sourceInstanceKey), writableSourceKeys: ['source:1'] }),
+    ])
+    expect(scopedReadOnly.guidance?.system).toContain('Runtime Memory is read-only in this View.')
+    expect(scopedReadOnly.guidance?.system).not.toContain('offered mutate Action')
   })
 
   it('keeps all allocation sums finite and bounded, including tiny budgets and 32 Sources', () => {
