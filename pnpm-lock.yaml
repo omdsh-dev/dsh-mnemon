@@ -144,6 +144,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-tool':
         specifier: 0.2.1-rc.5
         version: 0.2.1-rc.5(@deepseek-ai/cordis@4.0.5)
+      '@deepseek-ai/dsh-compaction-basic':
+        specifier: 0.2.1-rc.5
+        version: 0.2.1-rc.5(6ed73168f5d07846fb6545a9b126a755)
       '@deepseek-ai/dsh-llm':
         specifier: 0.2.1-rc.5
         version: 0.2.1-rc.5(@deepseek-ai/cordis@4.0.5)

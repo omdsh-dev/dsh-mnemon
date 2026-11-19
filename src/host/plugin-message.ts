@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { MessageSourceMap } from '@deepseek-ai/dsh-llm'
 import type { HostUserMessage } from './dsh.ts'
-import type { MemorySnapshotState } from './memory-snapshot-state.ts'
+import type { MemorySnapshotState, RuntimeSnapshotRange } from './memory-snapshot-state.ts'
 import type { Bm25RecallState } from './bm25-recall.ts'
 
 type MnemonUserMessageForm = 'recall' | 'instructions' | 'memory-snapshot' | 'bm25-recall' | 'bm25-invalidation'
@@ -13,6 +13,7 @@ declare module '@deepseek-ai/dsh-llm' {
       form: MnemonUserMessageForm | 'memory-snapshot-retired'
       snapshot?: MemorySnapshotState
       bm25?: Bm25RecallState
+      runtimeRanges?: RuntimeSnapshotRange[]
     }
   }
 }
@@ -27,8 +28,14 @@ export function isMnemonMessageSource(source: unknown): boolean {
     || (kind === 'plugin' && plugin === MNEMON_PLUGIN_SOURCE)
 }
 
+export function isBm25RecallSource(source: unknown): boolean {
+  if (!isMnemonMessageSource(source)) return false
+  const { form } = source as { form?: unknown }
+  return form === 'bm25-recall' || form === 'bm25-invalidation'
+}
+
 /** A user-role message this plugin adds to a step, marked with its own source. */
-export function createPluginMessage(text: string, form: MnemonUserMessageForm, metadata?: { snapshot?: MemorySnapshotState; bm25?: Bm25RecallState }): HostUserMessage {
+export function createPluginMessage(text: string, form: MnemonUserMessageForm, metadata?: { snapshot?: MemorySnapshotState; bm25?: Bm25RecallState; runtimeRanges?: RuntimeSnapshotRange[] }): HostUserMessage {
   return structuredClone({
     id: randomUUID(),
     role: 'user' as const,

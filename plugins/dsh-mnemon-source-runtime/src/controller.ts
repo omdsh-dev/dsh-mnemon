@@ -44,6 +44,8 @@ export { RUNTIME_BRANCH_NAME_MAX, RUNTIME_BRANCHES_PER_ENTRY_MAX }
 
 export interface RuntimeMemoryContextProjection {
   revision: string
+  /** Opaque digest of entries excluded by the active Git branch. */
+  branchVisibility: string
   text: string
   /** Exact entries represented by this branch-aware prompt projection. */
   entries: RuntimeMemoryEntry[]
@@ -52,7 +54,7 @@ export interface RuntimeMemoryContextProjection {
   /** Complete stored entry count before branch filtering. */
   totalEntries: number
   minimumCharacters: number
-  bm25?: { text: string; hiddenRevision: string }
+  bm25?: { text: string }
 }
 
 const LOCK_TIMEOUT_MS = 5_000
@@ -489,6 +491,7 @@ export class RuntimeMemoryController {
     const branchEntries = branchScope === undefined
       ? entries
       : entries.filter(entry => entry.target === 'user' || entryMatchesBranch(entry, branchScope))
+    const hiddenEntries = branchScope === undefined ? [] : entries.filter(entry => entry.target === 'memory' && !entryMatchesBranch(entry, branchScope))
     const deferred = (entry: RuntimeMemoryEntry) => deferLowPriority && entry.importance === 'low' && entry.pinned !== true
     const deferredEntries = branchEntries.filter(deferred)
     const visibleEntries = branchEntries.filter(entry => !deferred(entry))
@@ -515,6 +518,7 @@ ${workingMemory}
     return {
       minimumCharacters: prefix.length,
       revision: snapshot.revision,
+      branchVisibility: revision({ version: RUNTIME_MEMORY_VERSION, entries: hiddenEntries }),
       entries: visibleEntries.map(entry => ({ ...entry, ...(entry.branches === undefined ? {} : { branches: [...entry.branches] }) })),
       deferredEntries: deferredEntries.map(entry => ({ ...entry, ...(entry.branches === undefined ? {} : { branches: [...entry.branches] }) })),
       totalEntries: entries.length,
@@ -522,8 +526,6 @@ ${workingMemory}
       ...(bm25Recall ? { bm25: {
         text: render('(Read on demand. Search this Runtime Source before assuming a working memory is absent.)',
           branchScope === undefined ? '' : `\nGit branch: ${branchScope}`),
-        hiddenRevision: revision({ version: RUNTIME_MEMORY_VERSION, entries: branchScope === undefined
-          ? [] : entries.filter(entry => entry.target === 'memory' && !entryMatchesBranch(entry, branchScope)) }),
       } } : {}),
     }
   }

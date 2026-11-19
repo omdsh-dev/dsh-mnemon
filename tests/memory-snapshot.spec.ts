@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ComposableMemoryView } from '../src/core/contracts/index.ts'
 import type { HostContextShape, HostMessageSource, HostSession } from '../src/host/dsh.ts'
 import { applyMemoryViewGuidance, registerGuidance, RUNTIME_MEMORY_CONTEXT_NAME, SNAPSHOT_GUIDANCE, withoutMemoryViewContext } from '../src/host/guidance.ts'
-import { prepareMemorySnapshot } from '../src/host/memory-snapshot.ts'
+import { prepareMemorySnapshot, runtimeSnapshotRanges, summaryWithoutTransientMemory } from '../src/host/memory-snapshot.ts'
 import type { Bm25View } from '../src/host/bm25-recall.ts'
 import { memorySnapshotState, type MemorySnapshotState } from '../src/host/memory-snapshot-state.ts'
 import { modelMemoryWake } from '../src/host/view-presentation.ts'
@@ -49,7 +49,7 @@ describe('memory snapshot surface updates', () => {
     }
     const update = (catalog: Bm25View | undefined, query?: string, checkpoint = false) => {
       const plan = prepareMemorySnapshot(f.session as unknown as HostSession, undefined, undefined,
-        catalog === undefined ? undefined : { view: catalog, query, checkpoint })
+        catalog === undefined ? undefined : { recall: { view: catalog, query, checkpoint } })
       plan.retire(1, 1)
       if (plan.recall !== undefined) f.session.append('user/message', plan.recall as never, { surfaceOp: 'append' })
     }
@@ -64,6 +64,45 @@ describe('memory snapshot surface updates', () => {
     expect(JSON.stringify(f.session.deriveMessages())).toContain('Glacier deployment')
     update(undefined)
     expect(f.session.deriveMessages()).toEqual([keep.data])
+  })
+
+  it('filters attributed Runtime spans, preserving mixed Source text and ordinary messages', () => {
+    const sections = [
+      { mode: 'eager', layerId: 'runtime', text: 'Synthetic private-old profile.' },
+      { mode: 'eager', layerId: 'documents', text: 'Synthetic Project record.\nPreserve spacing.' },
+      { mode: 'eager', layerId: 'runtime', text: 'Synthetic obsolete branches.' },
+    ] as const
+    const text = sections.map(section => section.text).join('\n\n')
+    const ranges = runtimeSnapshotRanges({ viewId: 'test', viewDigest: 'test', text, sections: [...sections] })
+    const attributed = (runtimeRanges: Array<[number, number]>) => createUserMessage({
+      source: { kind: 'dsh-mnemon', form: 'memory-snapshot', snapshot: state(), runtimeRanges },
+      content: [{ type: 'text', text }],
+    })
+    const snapshot = attributed(ranges!)
+    const malformed = attributed([[-1, 5]])
+    const user = createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text }] })
+    const input = [snapshot, malformed, user]
+    expect(summaryWithoutTransientMemory(input, state())).toEqual([
+      { ...snapshot, content: [{ type: 'text', text: sections[1].text }] },
+      user,
+    ])
+    expect(summaryWithoutTransientMemory(input, state([], 'c'.repeat(64)))).toEqual([user])
+    expect(snapshot.content).toEqual([{ type: 'text', text }])
+  })
+
+  it('excludes only Mnemon BM25 hits and invalidations from the summary', () => {
+    const message = (source: HostMessageSource, text: string) => createUserMessage({
+      source: source as never, content: [{ type: 'text', text }],
+    })
+    const hit = message({ kind: 'dsh-mnemon', form: 'bm25-recall' }, 'Synthetic stale hit')
+    const invalidation = message({ kind: 'plugin', plugin: 'dsh-mnemon', form: 'bm25-invalidation' }, 'Synthetic invalidation')
+    const ordinary = message({ kind: 'user' }, 'Synthetic conversation')
+    const foreign = message({ kind: 'plugin', plugin: 'another-plugin', form: 'bm25-recall' }, 'Synthetic unrelated data')
+    const input = [ordinary, hit, foreign, invalidation]
+    for (const authority of [state(), undefined]) {
+      expect(summaryWithoutTransientMemory(input, authority)).toEqual([ordinary, foreign])
+    }
+    expect(input).toEqual([ordinary, hit, foreign, invalidation])
   })
 
   it.each([
@@ -132,6 +171,24 @@ describe('memory snapshot surface updates', () => {
     const before = f.session.snapshotEvents()
     f.commit(f.plan(huge, state()))
     expect(f.session.snapshotEvents()).toEqual(before)
+  })
+
+  it('keeps authorized opt-in snapshots beyond 64 KiB until compaction', () => {
+    const f = fixture()
+    const plan = (text: string, hash: string, checkpoint = false) => prepareMemorySnapshot(f.session as unknown as HostSession, text,
+      { ...state([hash.repeat(64)]), branchVisibility: 'd'.repeat(64) }, { deferRetirement: true, checkpoint, runtimeRanges: [[0, text.length]] })
+    const first = '旧'.repeat(14_000)
+    const second = '新'.repeat(14_000)
+    f.commit(plan(first, 'a'))
+    const before = f.session.deriveMessages()
+    f.commit(plan(second, 'c'))
+    const messages = f.session.deriveMessages()
+    expect(messages.slice(0, 1)).toEqual(before)
+    expect(messages).toHaveLength(2)
+    expect(f.session.surface.contentGeneration).toBe(0)
+
+    f.commit(plan(second, 'c', true))
+    expect(f.session.deriveMessages()).toEqual(messages.slice(1))
   })
 
   it('checkpoints changed authority even with identical text, and retires removed or corrected facts', () => {

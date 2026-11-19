@@ -20,6 +20,7 @@ const host: UserConfig = {
   entry: {
     index: 'src/index.ts', starter: 'src/starter.ts', bundle: 'src/bundle.ts', core: 'src/core/plugin.ts', contracts: 'src/core/contracts/index.ts',
     'extension-sdk': 'src/sdk/index.ts', testing: 'src/sdk/testing.ts',
+    compaction: 'src/compaction.ts',
   },
   outDir: 'lib',
   format: ['esm'],

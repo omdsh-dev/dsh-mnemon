@@ -181,6 +181,25 @@ This changes prompt delivery only: files, capacity accounting, management lists,
 
 An already delivered item is kept in the conversation without adding another copy. A correction or deletion marks an earlier reference as expired. After a successful DSH compaction, the next accepted step retires remaining raw blocks that contain obsolete matches. Scope or participation changes retire earlier results before the next model request. Disabling the option returns to eager Runtime projection. This setting affects model delivery in the main conversation. Files and explicit Source tools retain their normal formats and authority.
 
+<a id="snapshot-compaction"></a>
+
+### Opt-in snapshot compaction
+
+The optional `dsh-mnemon/compaction` backend is off by default. To enable it for one Agent preset, edit the existing `compaction-basic` entry within that preset's compaction group and set its `name` to `dsh-mnemon/compaction`. Keep the entry ID and any existing `config` fields. The group uses one backend for both automatic compaction and `/compact`.
+
+For example, `dsh --profile web --dump-config` shows the effective Web presets. When configuring a built-in preset through a profile patch, copy that preset's full `config` and keep the other plugins in its list.
+
+```yaml
+- id: compaction-basic
+  name: dsh-mnemon/compaction
+```
+
+Use the updated Starter and Runtime Source together. DSH loads the Basic compaction package from its own installation when the backend is selected. The opt-in path is verified on DSH 0.2.2-rc.2 and 0.2.2-rc.4. Restore `name: '@deepseek-ai/dsh-compaction-basic'` in that preset to return to the standard behavior.
+
+Ordinary Runtime corrections and removals append an authoritative snapshot for the next turn, including an empty projection after the last entry is removed. Earlier requests keep their prefix. The history retains the old text until DSH compacts the session. Authority or visibility changes still retire affected snapshots before the next applicable request. The four-snapshot and 64 KiB limits apply to the default policy.
+
+When both this backend and experimental BM25 search are enabled, compaction excludes Runtime snapshot text and BM25 quotations from its summary input. The next request revalidates any retained references against the current View and can recall current hits. Ordinary corrections and deletions still append at the end of the request; loss of read authority retires the affected blocks before the request is sent.
+
 ### Runtime Memory budgets
 
 In **Plugins → dsh-mnemon → Runtime memory → Capacity limits**, set the user-profile and working-memory limits in bytes, then choose **Apply**. Each accepts an integer from 1 to 1048576; **Discard changes** restores the saved values. The defaults remain 4096 bytes (4 KiB) and 10240 bytes (10 KiB). This form preserves the separate maintenance-token budget.

@@ -95,6 +95,7 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
       return { ...current, snapshot: {
         version: 1,
         scope: digest([effective.dataDir, effective.userDataDir, branch ?? null, ...(effective.deferLowPriority ? [true] : [])]),
+        branchVisibility: current.branchVisibility,
         // Ages are projection annotations. Content, importance and branch scope
         // identify a fact; losing any old occurrence requires a checkpoint.
         entries: current.entries.map(entryDigest).sort(),
@@ -137,7 +138,7 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
             value: {
               entries: [...current.entries, ...current.deferredEntries],
               ...(request.includeProjection && current.bm25 !== undefined ? { bm25: {
-                scope: digest([current.snapshot.scope, current.bm25.hiddenRevision, 'bm25']),
+                scope: digest([current.snapshot.scope, current.branchVisibility, 'bm25']),
                 text: truncate(current.bm25.text, request.maxCharacters),
                 entries: current.entries.filter(entry => entry.target === 'user' || entry.pinned === true).map(entryDigest).sort(),
                 complete: current.bm25.text.length <= request.maxCharacters,

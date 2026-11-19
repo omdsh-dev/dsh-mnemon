@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { ComposableMemoryView, MemoryReadGrant } from '../core/contracts/index.ts'
-import type { HostSessionEvent, HostUserMessage } from './dsh.ts'
-import { createPluginMessage, isMnemonMessageSource } from './plugin-message.ts'
+import type { HostUserMessage } from './dsh.ts'
+import { createPluginMessage, isBm25RecallSource } from './plugin-message.ts'
 import { isDefaultSourceInstance } from './protocol.ts'
 
 const MAX_RECALL_CHARACTERS = 1_600
@@ -85,7 +85,7 @@ export function bm25View(view: ComposableMemoryView | undefined): Bm25View | und
         ? { ...fragment, text, revision: scope }
         : {
             ...fragment, text, revision: scope,
-            provenance: { sourceTypeId: 'runtime', ...(fixed.complete ? { snapshot: { version: 1, scope, entries: fixed.entries } } : {}) },
+            provenance: { sourceTypeId: 'runtime', ...(fixed.complete ? { snapshot: { version: 1, scope, entries: fixed.entries, branchVisibility: scope } } : {}) },
           }
     }),
     // This is a presentation-only copy. Workspace authorities remain in the
@@ -153,11 +153,9 @@ export interface Bm25RecallState {
   expired: string[]
 }
 
-export function bm25RecallState(event: HostSessionEvent | undefined): Bm25RecallState | undefined {
-  if (event?.type !== 'user/message') return undefined
-  const source = object(event.data.source)
-  if ((source?.form !== 'bm25-recall' && source?.form !== 'bm25-invalidation') || !isMnemonMessageSource(source)) return undefined
-  const state = object(source.bm25)
+export function readBm25RecallState(source: unknown): Bm25RecallState | undefined {
+  if (!isBm25RecallSource(source)) return undefined
+  const state = object(object(source)?.bm25)
   if (state === undefined || !hash(state.scope) || !hashes(state.added) || !hashes(state.expired)) return undefined
   return { scope: state.scope, added: state.added, expired: state.expired }
 }

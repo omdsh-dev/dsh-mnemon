@@ -163,7 +163,7 @@ export interface HostSession {
   /** Model-visible event sequences, in order; rewinds and compaction replace them. */
   surface: { readonly nodes: readonly number[] }
   /** Public Session append; replacements preserve the original events for audit. */
-  append?(type: string, data: unknown, options?: { surfaceOp?: HostSessionEvent['surfaceOp']; sourceEventSeqs?: readonly number[] }): unknown
+  append?(type: string, data: unknown, options?: { surfaceOp?: 'append' | HostSessionEvent['surfaceOp']; sourceEventSeqs?: readonly number[] }): unknown
 }
 
 export type HostPreStepDecision = { kind: 'reject' } | { kind: 'enter'; messages: HostUserMessage[] }

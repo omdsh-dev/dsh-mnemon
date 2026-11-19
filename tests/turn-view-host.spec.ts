@@ -23,7 +23,7 @@ import { resolveConfig } from '../src/host/config.ts'
 import type { RuntimeMemoryConfig } from '../src/host/protocol.ts'
 import { compositionFixture } from './fixtures/composition.ts'
 import { JsonlSessionPersistence } from './helpers/dsh-plugins.ts'
-import { dsh021, executeTool, loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
+import { dsh021, dshVersion, executeTool, loadTools, loadWorkingDirectory, requireDsh } from './helpers/installed-dsh.ts'
 
 type Mode = 'native' | 'ptc'
 type Reply = string | { name: string; args: Record<string, unknown> }
@@ -49,7 +49,7 @@ class ScriptedAdapter extends LlmAdapter {
   }
 }
 
-async function fixture(mode: Mode, start = true, runtimeMemory?: RuntimeMemoryConfig) {
+async function fixture(mode: Mode, start = true, runtimeMemory?: RuntimeMemoryConfig, snapshotCompaction = false) {
   const f = await compositionFixture({ idleReview: { enabled: false }, ...(runtimeMemory === undefined ? {} : { runtimeMemory }) })
   // Both named tools and unbound, exact Route/Action ids must reach the model.
   await f.mount(documents, { instanceId: 'extra-documents', config: { dataDir: join(f.root, 'extra-documents') } })
@@ -60,6 +60,7 @@ async function fixture(mode: Mode, start = true, runtimeMemory?: RuntimeMemoryCo
   ] } })
   await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: 'Synthetic turn-view retained fact.' })
   const ctx = new Context()
+  const compactionContext = ctx.isolate('compaction')
   let stop: (() => void) | undefined
   let stopTools: (() => void) | undefined
   let coordinator: MnemonSubagentCoordinator | undefined
@@ -69,6 +70,10 @@ async function fixture(mode: Mode, start = true, runtimeMemory?: RuntimeMemoryCo
     await ctx.plugin(SessionStore)
     await ctx.plugin(JsonlSessionPersistence, { root: join(f.root, 'sessions'), compression: 'none' })
     await ctx.plugin(SessionProjectionRegistry)
+    if (snapshotCompaction) {
+      await ctx.plugin((await import(requireDsh.resolve('@deepseek-ai/dsh-token-meter'))).default)
+      await compactionContext.plugin((await import('../src/compaction.ts')).default, { auto: false, retainTokens: 50 })
+    }
     await ctx.plugin((await import(requireDsh.resolve('@deepseek-ai/dsh-session-query'))).default)
     await ctx.plugin(SystemPrompt)
     if (mode === 'ptc') {
@@ -89,7 +94,7 @@ async function fixture(mode: Mode, start = true, runtimeMemory?: RuntimeMemoryCo
     const stopLifecycle = () => { stop?.(); stop = undefined }
     const startLifecycle = () => { stopLifecycle(); stop = lifecycle.start() }
     if (start) startLifecycle()
-    const requests: Array<{ sessionId: string; turn: number | undefined; viewId: string | undefined; strategyType: string | undefined; grantSources: string[]; text: string; messages: GenerateOptions['messages']; tools: GenerateOptions['tools']; system: GenerateOptions['system'] }> = []
+    const requests: Array<{ sessionId: string; turn: number | undefined; viewId: string | undefined; strategyType: string | undefined; grantSources: string[]; text: string; messages: GenerateOptions['messages']; tools: GenerateOptions['tools']; system: GenerateOptions['system']; purpose: GenerateOptions['purpose'] }> = []
     const receipts: Array<{ sessionId: string; name: string; isError: boolean; text: string }> = []
     const errors: unknown[] = []
     ctx.on('agent/error', ({ error }) => { errors.push(error); return undefined })
@@ -98,7 +103,8 @@ async function fixture(mode: Mode, start = true, runtimeMemory?: RuntimeMemoryCo
       const pin = f.graph.composableTurns.activeTurn(String(options.sessionId))
       requests.push({ sessionId: String(options.sessionId), turn: pin === undefined ? undefined : Number(pin.turnId.split(':').at(-1)), viewId: pin?.view.id,
         strategyType: pin?.view.strategyTypeId, grantSources: pin?.view.readGrants.map(grant => grant.sourceInstanceKey) ?? [],
-        text: JSON.stringify(options.messages.filter(message => message.role === 'user')), messages: options.messages, tools: options.tools, system: options.system })
+        text: JSON.stringify(options.messages.filter(message => message.role === 'user')), messages: options.messages, tools: options.tools, system: options.system, purpose: options.purpose })
+      if (options.purpose === 'compaction') return 'Synthetic checkpoint of the ordinary conversation.'
       const count = calls.get(String(options.sessionId)) ?? 0
       calls.set(String(options.sessionId), count + 1)
       const step = count % 3
@@ -119,7 +125,7 @@ async function fixture(mode: Mode, start = true, runtimeMemory?: RuntimeMemoryCo
       await agent.whenIdle()
       if (errors.length > 0) throw errors.shift()
     }
-    return { ...f, ctx, lifecycle, requests, receipts, startLifecycle, stopLifecycle, create, turn, close, unmountScoped }
+    return { ...f, ctx, compactionContext, lifecycle, requests, receipts, startLifecycle, stopLifecycle, create, turn, close, unmountScoped }
   } catch (error) { await close(); throw error }
 }
 
@@ -367,8 +373,13 @@ it('retains eager Runtime and the original tool surface with BM25 omitted or off
   expect(projected[0]).toEqual(projected[1])
 })
 
-it.each(['native', 'ptc'] as const)('appends only BM25 hits and keeps model request prefixes in %s turns and resume', async mode => {
-  const f = await fixture(mode, true, { bm25Recall: true })
+const supportsSnapshotCompaction = dshVersion === '0.2.1-rc.5' || /^0\.2\.2(?:-rc\.(?:[2-9]|[1-9]\d+))?$/u.test(dshVersion)
+
+it.each([
+  ['native', false], ['ptc', false],
+  ...(supportsSnapshotCompaction ? [['native', true], ['ptc', true]] as const : []),
+] as const)('appends only BM25 hits and keeps %s request prefixes on resume (Mnemon compaction %s)', async (mode, snapshotCompaction) => {
+  const f = await fixture(mode, true, { bm25Recall: true }, snapshotCompaction)
   execFileSync('git', ['init', '--quiet', '-b', 'main', f.workspace])
   let handle = await f.create()
   try {
@@ -557,6 +568,232 @@ it('retires a resumed legacy snapshot backlog without changing other producer me
 function snapshots(messages: GenerateOptions['messages']) {
   return messages.filter(message => message.role === 'user' && message.source?.kind === 'dsh-mnemon' && message.source.form === 'memory-snapshot')
 }
+
+it.runIf(supportsSnapshotCompaction)('appends corrections and deletion to an empty snapshot without changing the full request prefix', async () => {
+  const f = await fixture('native', true, undefined, true)
+  const handle = await f.create()
+  const memory = f.graph.source('runtime')
+  try {
+    await f.turn(handle.agent)
+    const generation = handle.agent.session.surface.contentGeneration
+    let fact = 'Synthetic turn-view retained fact.'
+    for (let revision = 1; revision <= 5; revision++) {
+      const before = f.requests.at(-1)!
+      const nextRequest = f.requests.length
+      const correction = `Synthetic corrected fact ${revision}.`
+      await memory.mutate('mutate', { action: 'replace', target: 'memory', oldText: fact, content: correction })
+      fact = correction
+      await f.turn(handle.agent)
+      const corrected = f.requests[nextRequest]!
+      expect(corrected.messages.slice(0, before.messages.length)).toEqual(before.messages)
+      expect(corrected.tools).toEqual(before.tools)
+      expect(snapshots(corrected.messages)).toHaveLength(revision + 1)
+      expect(JSON.stringify(snapshots(corrected.messages).at(-1)?.content)).toContain(correction)
+    }
+
+    const beforeDelete = f.requests.at(-1)!
+    const nextRequest = f.requests.length
+    await memory.mutate('mutate', { action: 'remove', target: 'memory', oldText: fact })
+    await f.turn(handle.agent)
+    const deleted = f.requests[nextRequest]!
+    expect(deleted.messages.slice(0, beforeDelete.messages.length)).toEqual(beforeDelete.messages)
+    expect(deleted.tools).toEqual(beforeDelete.tools)
+    expect(snapshots(deleted.messages)).toHaveLength(7)
+    expect(JSON.stringify(snapshots(deleted.messages).at(-1)?.content)).toContain('<runtime-memory-file name=\\"MEMORY.md\\">\\n(empty)')
+    expect(handle.agent.session.surface.contentGeneration).toBe(generation)
+    expect(handle.agent.session.snapshotEvents().filter(event => event.type === 'developer/message' && event.data.message.source.kind === 'dsh-mnemon')).toHaveLength(0)
+  } finally { await handle.dispose(); await f.close() }
+})
+
+it.runIf(supportsSnapshotCompaction)('filters Runtime before a manual checkpoint even before the correction was appended', async () => {
+  const f = await fixture('native', true, undefined, true)
+  const handle = await f.create()
+  try {
+    await f.turn(handle.agent)
+    await f.turn(handle.agent)
+    await f.graph.source('runtime').mutate('mutate', {
+      action: 'replace', target: 'memory', oldText: 'Synthetic turn-view retained fact.', content: 'Synthetic corrected before compaction.',
+    })
+    const result = await f.compactionContext.compaction.compactNow(handle.agent, new AbortController().signal)
+    expect(result).not.toBeNull()
+    const summaryRequests = f.requests.filter(request => request.purpose === 'compaction')
+    expect(summaryRequests).toHaveLength(1)
+    expect(summaryRequests[0]!.text).not.toContain('Synthetic turn-view retained fact.')
+    expect(summaryRequests[0]!.text).not.toContain('Synthetic corrected before compaction.')
+    expect(summaryRequests[0]!.text).toContain('Read synthetic memory status and documents.')
+    expect(summaryRequests[0]!.text).toContain('MNEMON VIEW TOOLS')
+    await f.turn(handle.agent)
+    const after = f.requests.at(-1)!
+    expect(snapshots(after.messages)).toHaveLength(1)
+    expect(after.text).toContain('Synthetic corrected before compaction.')
+    expect(after.text).not.toContain('Synthetic turn-view retained fact.')
+    expect(handle.agent.session.snapshotEvents().some(event =>
+      event.type === 'user/message' && JSON.stringify(event.data.content).includes('Synthetic turn-view retained fact.'))).toBe(true)
+  } finally { await handle.dispose(); await f.close() }
+})
+
+it.runIf(supportsSnapshotCompaction)('retires an entry whose scope changes even on the same Git branch', async () => {
+  const f = await fixture('native', true, undefined, true)
+  execFileSync('git', ['init', '--quiet', '-b', 'main', f.workspace])
+  const handle = await f.create()
+  try {
+    await f.turn(handle.agent)
+    await f.graph.source('runtime').mutate('mutate', {
+      action: 'replace', target: 'memory', oldText: 'Synthetic turn-view retained fact.',
+      content: 'Synthetic turn-view retained fact.', branches: ['restricted'],
+    })
+    await f.turn(handle.agent)
+    for (const request of f.requests.slice(3)) {
+      expect(request.text).not.toContain('Synthetic turn-view retained fact.')
+      expect(snapshots(request.messages)).toHaveLength(1)
+    }
+  } finally { await handle.dispose(); await f.close() }
+})
+
+it.runIf(supportsSnapshotCompaction)('restores the current Runtime snapshot when compaction lands during request routing', async () => {
+  const f = await fixture('native', true, undefined, true)
+  const handle = await f.create()
+  try {
+    await f.turn(handle.agent)
+    const session = handle.agent.session
+    const snapshotSeq = session.surface.nodes.find(seq => {
+      const event = session.eventAt(seq)
+      return event?.type === 'user/message' && event.data.source.kind === 'dsh-mnemon' && event.data.source.form === 'memory-snapshot'
+    })!
+    const lastReply = session.surface.nodes.findLast(seq => session.eventAt(seq)?.type === 'assistant/message')!
+    let compacted = false
+    f.ctx.on('agent/request', async (request, next) => {
+      const route = await next()
+      if (!compacted && request.agent === handle.agent) {
+        compacted = true
+        await f.compactionContext.compaction.compactRegion(snapshotSeq, lastReply, handle.agent, request.signal)
+      }
+      return route
+    })
+    await f.turn(handle.agent)
+    const summary = f.requests.find(request => request.purpose === 'compaction')!
+    expect(summary.text).not.toContain('Synthetic turn-view retained fact.')
+    const after = f.requests.filter(request => request.purpose !== 'compaction').slice(3)
+    for (const request of after) {
+      expect(snapshots(request.messages)).toHaveLength(1)
+      expect(request.text).toContain('Synthetic turn-view retained fact.')
+    }
+    expect(session.surface.nodes).not.toContain(snapshotSeq)
+  } finally { await handle.dispose(); await f.close() }
+})
+
+it.runIf(supportsSnapshotCompaction)('filters eager and BM25 memory together before a manual checkpoint', async () => {
+  const f = await fixture('native', true, { bm25Recall: true }, true)
+  const handle = await f.create()
+  try {
+    const runtime = f.graph.source('runtime')
+    const old = 'Comet runs on the amber queue.'
+    const removed = 'Comet uses the secret cobalt queue.'
+    const corrected = 'Comet runs on the violet queue.'
+    const profile = 'Prefer the synthetic profile setting.'
+    await runtime.mutate('mutate', { action: 'add', target: 'user', content: profile })
+    await runtime.mutate('mutate', { action: 'add', target: 'memory', content: old })
+    await runtime.mutate('mutate', { action: 'add', target: 'memory', content: removed })
+    await f.turn(handle.agent, false, 'Comet')
+    await f.turn(handle.agent, false, 'Read synthetic memory status and documents.')
+    expect(f.requests[0]!.text).toContain(old)
+    expect(f.requests[0]!.text).toContain(removed)
+    expect(f.requests[0]!.text).toContain(profile)
+    await runtime.mutate('mutate', { action: 'replace', target: 'memory', oldText: old, content: corrected })
+    await runtime.mutate('mutate', { action: 'remove', target: 'memory', oldText: removed })
+
+    expect(await f.compactionContext.compaction.compactNow(handle.agent, new AbortController().signal)).not.toBeNull()
+    const summary = f.requests.find(request => request.purpose === 'compaction')!
+    const summaryInput = JSON.stringify(summary.messages)
+    for (const fact of [old, removed, corrected, profile]) expect(summaryInput).not.toContain(fact)
+    expect(bm25Messages(summary.messages)).toHaveLength(0)
+    expect(summary.text).toContain('Read synthetic memory status and documents.')
+    expect(summary.text).toContain('MNEMON VIEW TOOLS')
+
+    await f.turn(handle.agent, false, 'Comet')
+    const after = f.requests.at(-1)!
+    expect(after.text).toContain(corrected)
+    expect(after.text).toContain(profile)
+    expect(after.text).not.toContain(old)
+    expect(after.text).not.toContain(removed)
+    expect(snapshots(after.messages)).toHaveLength(1)
+  } finally { await handle.dispose(); await f.close() }
+})
+
+for (const revoke of [false, true]) {
+  it.runIf(supportsSnapshotCompaction)(`revalidates both memory projections during request compaction (revoke: ${revoke})`, async () => {
+    const f = await fixture('native', true, { bm25Recall: true }, true)
+    const handle = await f.create()
+    try {
+      const runtime = f.graph.source('runtime')
+      const hit = 'Kepler uses the synthetic quartz queue.'
+      const profile = 'Use the synthetic Kepler profile.'
+      await runtime.mutate('mutate', { action: 'add', target: 'user', content: profile })
+      await runtime.mutate('mutate', { action: 'add', target: 'memory', content: hit })
+      await f.turn(handle.agent, false, 'Kepler')
+      expect(f.requests[0]!.text).toContain(hit)
+      expect(f.requests[0]!.text).toContain(profile)
+      const session = handle.agent.session
+      const start = session.surface.nodes.find(seq => {
+        const event = session.eventAt(seq)
+        return event?.type === 'user/message' && event.data.source.kind === 'dsh-mnemon'
+          && event.data.source.form === 'memory-snapshot'
+      })!
+      const end = session.surface.nodes.findLast(seq => session.eventAt(seq)?.type === 'assistant/message')!
+
+      let compacted = false
+      const stop = f.ctx.on('agent/request', async (request, next) => {
+        const route = await next()
+        if (!compacted && request.agent === handle.agent) {
+          compacted = true
+          if (revoke) {
+            const topology = f.config.memoryTopology
+            const layer = topology.layers.runtime!
+            const config = resolveConfig({ ...f.config, memoryTopology: { ...topology, layers: { ...topology.layers,
+              runtime: { ...layer, participation: { ...layer.participation, projection: 'off', recall: 'off' } } } } })
+            f.live.swap(createRuntimeGraph(config, f.workspace, f.extensions))
+          }
+          expect(await f.compactionContext.compaction.compactRegion(start, end, handle.agent, request.signal)).not.toBeNull()
+        }
+        return route
+      })
+      try { await f.turn(handle.agent, false, 'Kepler') } finally { stop() }
+      const summary = f.requests.find(request => request.purpose === 'compaction')!
+      expect(JSON.stringify(summary.messages)).not.toContain(hit)
+      expect(JSON.stringify(summary.messages)).not.toContain(profile)
+      const after = f.requests.slice(3).filter(request => request.purpose !== 'compaction')
+      expect(after.length).toBeGreaterThan(0)
+      for (const request of after) {
+        expect(request.text.includes(hit)).toBe(!revoke)
+        expect(request.text.includes(profile)).toBe(!revoke)
+      }
+      if (revoke) {
+        await f.turn(handle.agent, false, 'Kepler')
+        expect(f.requests.at(-1)!.text).not.toContain(hit)
+        expect(f.requests.at(-1)!.text).not.toContain(profile)
+      }
+    } finally { await handle.dispose(); await f.close() }
+  })
+}
+
+it.runIf(supportsSnapshotCompaction)('excludes a revoked View from compaction before another turn begins', async () => {
+  const f = await fixture('native', true, undefined, true)
+  const handle = await f.create()
+  try {
+    await f.turn(handle.agent)
+    await f.turn(handle.agent)
+    const next = resolveConfig({ ...f.config, memoryTopology: { ...f.config.memoryTopology,
+      layers: { ...f.config.memoryTopology.layers, runtime: { ...f.config.memoryTopology.layers.runtime,
+        participation: { ...f.config.memoryTopology.layers.runtime!.participation, projection: 'off' } } } } })
+    f.live.swap(createRuntimeGraph(next, f.workspace, f.extensions))
+    expect(await f.compactionContext.compaction.compactNow(handle.agent, new AbortController().signal)).not.toBeNull()
+    const summary = f.requests.find(request => request.purpose === 'compaction')!
+    expect(summary.text).not.toContain('Synthetic turn-view retained fact.')
+    expect(summary.text).toContain('Read synthetic memory status and documents.')
+    await f.turn(handle.agent)
+    expect(f.requests.at(-1)!.text).not.toContain('Synthetic turn-view retained fact.')
+  } finally { await handle.dispose(); await f.close() }
+})
 
 it('immediately checkpoints corrected and deleted facts while preserving their audit', async () => {
   const f = await fixture('native')
