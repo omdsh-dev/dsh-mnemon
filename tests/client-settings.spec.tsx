@@ -1001,6 +1001,17 @@ describe('MnemonSettingsCard', () => {
     expect((screen.getByRole('switch', { name: 'Read low-priority memory on demand' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
+  it('defaults experimental BM25 recall off and saves only its setting', async () => {
+    const mutate = vi.fn(async () => {})
+    const scope = liveSettingsScope<Config>(readySnapshot({ runtimeMemory: { deferLowPriority: true } }), mutate)
+    render(runtime(scope))
+    const toggle = screen.getByRole('switch', { name: '工作记忆按需检索（实验）' })
+    expect(checked(toggle)).toBe(false)
+    fireEvent.click(toggle)
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['runtimeMemory', 'bm25Recall'], value: true }]))
+    expect(checked(toggle)).toBe(true)
+  })
+
   it('defaults Runtime inheritance off, saves it immediately and preserves staged capacities', async () => {
     const mutate = vi.fn(async () => {})
     const scope = liveSettingsScope<Config>(readySnapshot({ runtimeMemory: { maintenanceMaxTokens: 32768 } }), mutate)

@@ -445,6 +445,7 @@ function mutablePath(namespace: string, path: string[]): boolean {
   if (namespace === MNEMON_UI_SETTINGS_NAMESPACE) return path.length === 1 && UI_FIELDS.includes(path[0]!)
   if (namespace === MNEMON_SKILLS_SETTINGS_NAMESPACE) return path.length === 1 && SKILLS_FIELDS.includes(path[0]!)
   if (path.length === 1) return MUTABLE_FIELDS.includes(path[0]!)
+  if (path.length === 2 && path[0] === 'runtimeMemory' && path[1] === 'bm25Recall') return true
   if (path.length === 4 && path[0] === 'memoryTopology' && path[1] === 'layers' && path[3] === 'enabled') {
     return MEMORY_LAYER_ID.test(path[2]!)
   }

@@ -67,12 +67,17 @@ export function memoryGenerationOptions(
     sourceCapabilities: installed => MEMORY_CAPABILITIES.filter(capability =>
       (config.writeEnabled || !['write', 'archive', 'link', 'forget', 'maintain', 'import'].includes(capability))
       && allowsParticipation(config, installed.definition.manifest.typeId, capability, 'automatic')),
-    sourceConfiguration: installed => {
+    sourceConfiguration: (installed, strategyTypeId) => {
       const type = installed.definition.manifest.typeId
       if (!isDefaultSourceInstance(installed.instanceKey, type)) return {}
-      if (type === 'runtime') return { dataDir: directory, userDataDir: userDirectory, memoryLimitBytes: config.runtimeMemory.memoryLimitBytes, userLimitBytes: config.runtimeMemory.userLimitBytes, deferLowPriority: config.runtimeMemory.deferLowPriority }
+      const bm25 = strategyTypeId === 'default-three-tier' && config.lifecycleEnabled && config.runtimeMemory.bm25Recall
+        && (type === 'runtime' || type === 'documents')
+        && allowsParticipation(config, type, 'project', 'automatic') && allowsParticipation(config, type, 'search', 'automatic')
+        ? { bm25Recall: true } : {}
+      if (type === 'runtime') return { dataDir: directory, userDataDir: userDirectory, memoryLimitBytes: config.runtimeMemory.memoryLimitBytes, userLimitBytes: config.runtimeMemory.userLimitBytes, deferLowPriority: config.runtimeMemory.deferLowPriority, ...bm25 }
       if (type === 'documents') return {
         dataDir: directory,
+        ...bm25,
         ...(config.documents?.limitBytes === undefined ? {} : { limitBytes: config.documents.limitBytes }),
         ...(config.documents === undefined ? {} : { documents: config.documents }),
       }

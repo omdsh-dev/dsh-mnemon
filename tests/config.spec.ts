@@ -193,6 +193,7 @@ describe('Mnemon config and resolution', () => {
         maintenanceMaxTokens: 32_768,
       },
     }).runtimeMemory).toEqual({
+      bm25Recall: false,
       deferLowPriority: false,
       inheritToSubagents: false,
       memoryLimitBytes: 20_480,
@@ -202,6 +203,14 @@ describe('Mnemon config and resolution', () => {
     expect(() => resolveConfig({ runtimeMemory: { memoryLimitBytes: 0 } })).toThrow('MEMORY.md limit')
     expect(() => resolveConfig({ runtimeMemory: { userLimitBytes: 1.5 } })).toThrow('USER.md limit')
     expect(() => resolveConfig({ runtimeMemory: { maintenanceMaxTokens: 1_000_001 } })).toThrow('maintenance maxTokens')
+  })
+
+  it('requires an explicit boolean to enable experimental BM25 recall', () => {
+    expect(resolveConfig({}).runtimeMemory.bm25Recall).toBe(false)
+    expect(resolveConfig({ runtimeMemory: { bm25Recall: false } }).runtimeMemory.bm25Recall).toBe(false)
+    expect(Config({ runtimeMemory: { bm25Recall: true } }).runtimeMemory?.bm25Recall).toBe(true)
+    expect(resolveConfig({ runtimeMemory: { bm25Recall: true } }).runtimeMemory.bm25Recall).toBe(true)
+    expect(() => resolveConfig({ runtimeMemory: { bm25Recall: 'on' } } as never)).toThrow('bm25Recall')
   })
 
   it('defaults child Runtime inheritance off and accepts only explicit booleans', () => {

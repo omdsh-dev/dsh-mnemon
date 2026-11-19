@@ -108,6 +108,7 @@ mnemon:
 | `defaultRecallLimit` | `10` | 1–50 | 服务和 UI 默认召回条数；不同入口可能再收紧 |
 | `runtimeMemory.memoryLimitBytes` | `10240` | 1–1048576 字节 | 完整 `MEMORY.md` 投影的 UTF-8 字节上限 |
 | `runtimeMemory.userLimitBytes` | `4096` | 1–1048576 字节 | 完整 `USER.md` 投影的 UTF-8 字节上限 |
+| `runtimeMemory.bm25Recall` | `false` | 布尔 | 在 Layered 主对话实验性地匹配工作记忆和项目文档标题 |
 | `runtimeMemory.maintenanceMaxTokens` | `8192` | 128–131072 tokens | Runtime 迁移与压缩 worker 的完成 token 预算；不改变项目档案归档与元信息维护预算 |
 | `documents.limitBytes` | `10485760` | 1–104857600 字节 | 项目档案活跃副本的总 UTF-8 字节上限（默认 10 MiB） |
 | `embedding` | `{ enabled: false, endpoint: http://localhost:11434, model: nomic-embed-text, apiKey: '', protocol: auto }` | enabled + HTTP(S) endpoint + model + 可选 apiKey + protocol（auto/ollama/openai） | 开启后，Host 为每个 Mnemon CLI 子进程注入保存的 endpoint、模型、API Key 与协议覆盖；endpoint 以 `/v1` 结尾时 Mnemon 自动使用 OpenAI 兼容协议并以 Bearer 头携带 apiKey，`protocol: openai` 可对非 `/v1` 端点显式指定；关闭后不干预既有 Host 环境和 Mnemon 默认值 |
@@ -173,6 +174,12 @@ Git 同步的默认提交者跟随 Host 在 `state/sync/git` 中解析的 Git �
 运行时记忆设置页的**低优先级记忆按需读取**开关对应 `runtimeMemory.deferLowPriority`，默认关闭。开启后，明确标记为 `low` 且未置顶的条目不再直接注入；普通、关键和置顶条目仍按原规则投影。简短的数量提示引导模型通过有界的 Runtime 检索 Route 读取本回合快照中的完整条目及元数据，支持字面查询、目标、数量和偏移量。检索遵守与投影一致的 Source、工作区、共享 USER 范围及 Git 分支限制。
 
 此选项只改变提示词投递方式：文件、容量计算、管理列表、写入和备份仍保持完整，不会根据文本猜测重要度或删除条目。关闭后，后续回合恢复完整投影。已主动召回的内容仍遵循普通对话历史的保留规则。独立 Runtime Source 在自己的配置中使用 `deferLowPriority: true`；自定义 Strategy 需保留 Source 提供的 `search` Route，才能按需读取这些内容。
+
+### 工作记忆按需检索实验
+
+运行时记忆设置页的**工作记忆按需检索（实验）**开关对应 `runtimeMemory.bm25Recall`，默认关闭。开启后，Layered 主对话在每轮首步使用新增的用户文本和当前 View 授权的来源运行本地 BM25。逐条排序 `MEMORY.md` 记忆和有效项目文档标题，最多追加三条记忆、两个标题，共用 1,600 字符的结果预算。文档标题带 ID，供后续查阅。没有有效命中的回合不追加检索结果。用户画像和置顶条目提供固定上下文，模型可通过 Runtime 检索 Route 查找遗漏条目后再编辑记忆。
+
+当前会话中已交付的条目会去重。更正或删除时标记旧引用失效。DSH 成功压缩后，下一次被接受的模型步骤会清理仍保留且含过期命中的原始检索块。作用域和参与权限变化时，在下次模型请求前清理旧结果。关闭该选项后恢复直接 Runtime 投影。选项作用于主对话的上下文投递，文件及显式工具沿用现有格式和权限。
 
 ### Runtime Memory 容量与维护预算
 

@@ -13,6 +13,7 @@ import type { ComposableMemoryView } from '../src/core/contracts/index.ts'
 import type { HostContextShape, HostMessageSource, HostSession } from '../src/host/dsh.ts'
 import { applyMemoryViewGuidance, registerGuidance, RUNTIME_MEMORY_CONTEXT_NAME, SNAPSHOT_GUIDANCE, withoutMemoryViewContext } from '../src/host/guidance.ts'
 import { prepareMemorySnapshot } from '../src/host/memory-snapshot.ts'
+import type { Bm25View } from '../src/host/bm25-recall.ts'
 import { memorySnapshotState, type MemorySnapshotState } from '../src/host/memory-snapshot-state.ts'
 import { modelMemoryWake } from '../src/host/view-presentation.ts'
 import { truncateMemoryText } from '../src/sdk/index.ts'
@@ -37,6 +38,33 @@ describe('memory snapshot surface updates', () => {
   }
 
   const state = (entries = ['a'.repeat(64)], boundary = 'b'.repeat(64)): MemorySnapshotState => ({ version: 1, boundary, entries })
+
+  it('retires expired BM25 quotations at compaction and clears them on opt-out', () => {
+    const f = fixture()
+    const keep = f.append('Conversation-owned text.', { kind: 'user' })
+    const activeDocument = { key: 'd'.repeat(64), text: 'Glacier deployment', documentId: 'doc-glacier' }
+    const view: Bm25View = {
+      view: {} as ComposableMemoryView, scope: 'f'.repeat(64),
+      memory: [{ key: 'a'.repeat(64), text: 'Glacier amber queue.' }], documents: [],
+    }
+    const update = (catalog: Bm25View | undefined, query?: string, checkpoint = false) => {
+      const plan = prepareMemorySnapshot(f.session as unknown as HostSession, undefined, undefined,
+        catalog === undefined ? undefined : { view: catalog, query, checkpoint })
+      plan.retire(1, 1)
+      if (plan.recall !== undefined) f.session.append('user/message', plan.recall as never, { surfaceOp: 'append' })
+    }
+    update(view, 'Glacier')
+    const delivered = f.session.deriveMessages()
+    const afterDelete = { ...view, memory: [], documents: [activeDocument] }
+    update(afterDelete)
+    expect(f.session.deriveMessages().slice(0, delivered.length)).toEqual(delivered)
+    expect(f.session.surface.contentGeneration).toBe(0)
+    update(afterDelete, 'Glacier', true)
+    expect(JSON.stringify(f.session.deriveMessages())).not.toContain('Glacier amber queue.')
+    expect(JSON.stringify(f.session.deriveMessages())).toContain('Glacier deployment')
+    update(undefined)
+    expect(f.session.deriveMessages()).toEqual([keep.data])
+  })
 
   it.each([
     { kind: 'plugin', plugin: 'dsh-mnemon', form: 'recall' },

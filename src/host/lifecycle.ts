@@ -35,6 +35,7 @@ import type { MemoryWake } from "../core/contracts/index.ts"
 import { agentScope, type MnemonAgentRuntimeSource } from './runtime.ts'
 import { createPluginMessage, isMnemonMessageSource, MNEMON_PLUGIN_SOURCE } from './plugin-message.ts'
 import { prepareMemorySnapshot } from './memory-snapshot.ts'
+import { bm25View } from './bm25-recall.ts'
 import { memorySnapshotState } from './memory-snapshot-state.ts'
 import type { SkillEvolution } from './skill-evolution.ts'
 import { IdleReviewWatermarkStore } from './idle-review-watermark.ts'
@@ -91,6 +92,7 @@ interface PendingMemorySnapshot {
   step: number
   signal: AbortSignal
   update: ReturnType<typeof prepareMemorySnapshot>
+  recallCheckpoint: boolean
 }
 
 interface TurnStoppingPayload extends AgentEventPayload {
@@ -228,6 +230,7 @@ class MnemonAgentLifecycle {
   private startSource: LifecycleAgentSnapshot['startSource']
   private readonly guidedTurns = new Set<number>()
   private pendingSnapshot: PendingMemorySnapshot | undefined
+  private recallCheckpoint: boolean | undefined
   private readonly memoryActivity = new TurnActivityProjection()
   private readonly log = new LifecycleLogProjection()
   private readonly turnActivity = new Map<number, {
@@ -359,10 +362,10 @@ class MnemonAgentLifecycle {
     return assistantMessageText(sessionEvents(this.agent.session), messageId)
   }
 
-  memoryWake(): MemoryWake | undefined {
+  memoryWake(presentation?: import('../core/contracts/index.ts').ComposableMemoryView): MemoryWake | undefined {
     const pinned = this.memoryTurn?.current
     if (pinned === undefined) return undefined
-    return modelMemoryWake(pinned.graph, pinned.context, true, this.agent)
+    return modelMemoryWake(pinned.graph, pinned.context, true, this.agent, presentation)
   }
 
   /**
@@ -396,27 +399,41 @@ class MnemonAgentLifecycle {
     // or Mnemon can load while that waterfall is already running. The accepted
     // Agent step still needs its own durable turn's View before tools or Wake.
     if (!this.disposed && openAgentTurn(this.agent) === payload.turn) await this.memoryTurn?.begin(payload.turn, payload.signal)
+    const view = this.memoryTurn?.current?.context.view
+    const experiment = this.config.lifecycleEnabled && this.config.runtimeMemory.bm25Recall && !this.memoryTurn?.excluded
+      ? bm25View(view) : undefined
+    if (experiment !== undefined && this.recallCheckpoint === undefined) {
+      const latest = findSessionEvent(this.agent.session, event => event.type === 'step/start'
+        || event.type === 'compaction/end' && event.data.error === undefined)
+      this.recallCheckpoint = latest?.event.type === 'compaction/end'
+    }
+    const recallCheckpoint = this.recallCheckpoint === true
+    const ownRequest = payload.step === 1 && decision.messages.some(message => isMnemonMessageSource(message.source))
+    const query = experiment !== undefined && payload.step === 1 && !ownRequest
+      ? decision.messages.filter(message => message.source.kind === 'user')
+        .flatMap(message => message.content.flatMap(block => block.type === 'text' ? [block.text] : [])).join('\n')
+      : undefined
     // Retirement is independent of injection gates: a disabled/absent View or
     // changed authority must not leave old snapshots in an accepted request.
     const update = prepareMemorySnapshot(this.agent.session,
-      this.config.lifecycleEnabled ? this.memoryWake()?.text : undefined,
-      this.config.lifecycleEnabled ? memorySnapshotState(this.memoryTurn?.current?.context.view) : undefined)
-    this.pendingSnapshot = { turn: payload.turn, step: payload.step, signal: payload.signal, update }
+      this.config.lifecycleEnabled ? this.memoryWake(experiment?.view)?.text : undefined,
+      this.config.lifecycleEnabled ? memorySnapshotState(experiment?.view ?? view) : undefined,
+      experiment === undefined ? undefined : { view: experiment, query, checkpoint: recallCheckpoint })
+    this.pendingSnapshot = { turn: payload.turn, step: payload.step, signal: payload.signal, update, recallCheckpoint }
     if (!this.config.lifecycleEnabled || this.memoryTurn?.excluded) return decision
     if (this.config.writeEnabled && this.config.writebackMode === 'guided') {
       this.recordTurnMessages(payload.turn, decision.messages)
     }
     if (payload.step !== 1) return decision
 
-    const ownRequest = decision.messages.some(message => isMnemonMessageSource(message.source))
     if (ownRequest) {
       return decision
     }
     if (decision.messages.length === 0) return decision
     // Appended last; normal additions preserve the preceding request prefix.
-    const snapshot = update.message
+    const additions = [update.message, update.recall].filter(message => message !== undefined)
     const withSnapshot = (messages: HostUserMessage[]): HostUserMessage[] =>
-      snapshot === undefined ? messages : [...messages, snapshot]
+      additions.length === 0 ? messages : [...messages, ...additions]
 
     if (this.primePending) {
       this.primePending = false
@@ -498,11 +515,13 @@ class MnemonAgentLifecycle {
 
   private sessionEvent(session: HostAgent['session'], event: HostSessionEvent): void {
     if (session !== this.agent.session) return
+    if (event.type === 'compaction/end' && event.data.error === undefined) this.recallCheckpoint = true
     const turn = eventTurn(event)
     if (event.type === 'step/start') {
       const pending = this.pendingSnapshot
       if (pending === undefined || pending.turn !== turn || pending.step !== event.data.step) return
       this.pendingSnapshot = undefined
+      if (pending.recallCheckpoint) this.recallCheckpoint = false
       this.queueSnapshotRetirement(pending)
       return
     }

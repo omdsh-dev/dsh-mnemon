@@ -36,13 +36,13 @@ function availableMemoryTools(agent?: HostAgent): ReadonlySet<string> | undefine
 
 /** Use a short availability list only where the Host has the matching named binding.
  * Unbound external operations retain exact ids and schemas in the generic envelope. */
-export function modelMemoryWake(graph: MnemonRuntimeGraph, turn: ComposableMemoryTurn, includeRuntime = true, agent?: HostAgent) {
+export function modelMemoryWake(graph: MnemonRuntimeGraph, turn: ComposableMemoryTurn, includeRuntime = true, agent?: HostAgent, presentation?: ComposableMemoryView) {
   const generation = graph.memoryComposition.generation(turn.view.runtimeGeneration)
   if (generation === undefined) throw new Error('Cannot present an unpinned Memory generation')
   const available = availableMemoryTools(agent)
-  const bindings = memoryWakeBindings(generation, turn.view, available)
-  if (includeRuntime && available === undefined) return graph.composableTurns.memoryWake(turn.view.id, bindings)
-  let view = turn.view
+  let view = presentation ?? turn.view
+  const bindings = memoryWakeBindings(generation, view, available)
+  if (presentation === undefined && includeRuntime && available === undefined) return graph.composableTurns.memoryWake(turn.view.id, bindings)
   if (!includeRuntime) {
     const runtimeSources = new Set(generation.sourceInstances().filter(source => source.sourceTypeId === 'runtime').map(source => source.sourceInstanceKey))
     view = { ...view, projection: view.projection.filter(fragment => !runtimeSources.has(fragment.sourceInstanceKey)) }

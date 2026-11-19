@@ -101,6 +101,9 @@ export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryC
   const deferred = useLive(configured?.deferLowPriority === true, async value => {
     await scope.mutate([{ op: 'set', path: ['runtimeMemory'], value: { ...configured, deferLowPriority: value } }])
   })
+  const bm25 = useLive(configured?.bm25Recall === true, async value => {
+    await scope.mutate([{ op: 'set', path: ['runtimeMemory', 'bm25Recall'], value }])
+  })
   const inheritance = useLive(configured?.inheritToSubagents === true, async value => {
     await scope.mutate([{ op: 'set', path: ['runtimeMemory'], value: { ...configured, inheritToSubagents: value } }])
   })
@@ -143,8 +146,11 @@ export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryC
     <div className={css.rows}>
       <ToggleRow id="mnemon-runtime-defer-low" label={t('config.runtimeDeferred')}
         hint={t('config.runtimeDeferredHint')} checked={deferred.value} disabled={disabled} onChange={deferred.set} />
+      <ToggleRow id="mnemon-runtime-bm25" label={t('config.runtimeBm25Recall')}
+        hint={t('config.runtimeBm25RecallHint')} checked={bm25.value} disabled={disabled} onChange={bm25.set} />
     </div>
     <WriteFailure error={deferred.failed} t={t} />
+    <WriteFailure error={bm25.failed} t={t} />
   </section>
   <section className={css.panelSection} data-settings-section="limits" aria-labelledby="mnemon-runtime-limits">
     <div className={css.panelHeading}>

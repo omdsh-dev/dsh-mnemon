@@ -87,15 +87,17 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
       { effectiveDataDir: () => effective.userDataDir },
     )
     const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
+    const searchable = effective.deferLowPriority || effective.bm25Recall
+    const entryDigest = (entry: RuntimeMemoryEntry) => digest([entry.target, entry.content, entry.importance, entry.branches ?? [], ...(entry.pinned === true ? [true] : [])])
     const projection = (workspaceId?: string) => {
       const branch = resolveGitBranch(workspaceId)
-      const current = controller.contextProjection(branch, effective.deferLowPriority)
+      const current = controller.contextProjection(branch, effective.deferLowPriority, effective.bm25Recall)
       return { ...current, snapshot: {
         version: 1,
         scope: digest([effective.dataDir, effective.userDataDir, branch ?? null, ...(effective.deferLowPriority ? [true] : [])]),
         // Ages are projection annotations. Content, importance and branch scope
         // identify a fact; losing any old occurrence requires a checkpoint.
-        entries: current.entries.map(entry => digest([entry.target, entry.content, entry.importance, entry.branches ?? [], ...(entry.pinned === true ? [true] : [])])).sort(),
+        entries: current.entries.map(entryDigest).sort(),
       } }
     }
     const prepared = new WeakMap<object, ReturnType<typeof projection>>()
@@ -114,25 +116,33 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
           availability: 'ready',
           revision: current.revision,
           ...(current.minimumCharacters === 0 ? {} : { hints: { minimumProjectionCharacters: current.minimumCharacters } }),
-          capabilities: effective.deferLowPriority ? ['status', 'project', 'search', 'write'] : ['status', 'project', 'write'],
-          routeIds: effective.deferLowPriority ? ['search'] : [],
+          capabilities: searchable ? ['status', 'project', 'search', 'write'] : ['status', 'project', 'write'],
+          routeIds: searchable ? ['search'] : [],
           actionIds: ['mutate'],
         }
       },
       project(request) {
-        if (!request.includeProjection && !effective.deferLowPriority) return { fragments: [] }
+        if (!request.includeProjection && !searchable) return { fragments: [] }
         const current = prepared.get(request.scope) ?? projection(request.scope.workspaceId)
         prepared.delete(request.scope)
         if (current.revision !== request.expectedRevision) throw new Error('Runtime projection revision changed during composition')
         if (request.includeProjection && current.minimumCharacters > request.maxCharacters) throw new Error(`Pinned Runtime entries need ${current.minimumCharacters} projection characters, but the View grants ${request.maxCharacters}. Unpin entries or increase the View budget; pinned entries were not truncated.`)
         return {
-          ...(effective.deferLowPriority ? { readGrant: {
+          ...(searchable ? { readGrant: {
             id: `${context.sourceInstanceKey}/grant/${current.revision}`,
             sourceInstanceKey: context.sourceInstanceKey, schema: 'dsh-mnemon.runtime/v1',
             revision: current.revision, consistency: 'exact-snapshot' as const,
             // Host-only turn data. Search never widens the branch scope or reads
             // a later revision from disk after this View has been composed.
-            value: { entries: [...current.entries, ...current.deferredEntries] } as unknown as MemoryJsonValue,
+            value: {
+              entries: [...current.entries, ...current.deferredEntries],
+              ...(request.includeProjection && current.bm25 !== undefined ? { bm25: {
+                scope: digest([current.snapshot.scope, current.bm25.hiddenRevision, 'bm25']),
+                text: truncate(current.bm25.text, request.maxCharacters),
+                entries: current.entries.filter(entry => entry.target === 'user' || entry.pinned === true).map(entryDigest).sort(),
+                complete: current.bm25.text.length <= request.maxCharacters,
+              } } : {}),
+            } as unknown as MemoryJsonValue,
           } } : {}),
           fragments: request.includeProjection ? [{
             id: `${context.sourceInstanceKey}/projection`,
@@ -155,7 +165,7 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
         }
       },
       query(request) {
-        if (!effective.deferLowPriority || request.grant.schema !== 'dsh-mnemon.runtime/v1') throw new Error('Runtime search requires a deferred-projection ReadGrant')
+        if (!searchable || request.grant.schema !== 'dsh-mnemon.runtime/v1') throw new Error('Runtime search requires a scoped ReadGrant')
         request.signal?.throwIfAborted()
         const input = record(request.input, 'Runtime search')
         const query = (text(input.query, 'query', 2_000, false) ?? '').trim().toLowerCase()

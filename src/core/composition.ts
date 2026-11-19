@@ -168,7 +168,7 @@ export interface CompileMemoryGenerationOptions {
   /** Compose with the only installed Strategy when the selected type is unavailable, and report it. */
   strategyFallback?: 'sole-strategy'
   /** Host adapter supplies scope defaults; each result is captured and digested. */
-  sourceConfiguration?: (source: InstalledMemorySource) => Readonly<Record<string, MemoryJsonValue>>
+  sourceConfiguration?: (source: InstalledMemorySource, strategyTypeId?: string) => Readonly<Record<string, MemoryJsonValue>>
   /** Per-Source facts/project deadline. Does not turn timed-out writes into failed receipts. */
   sourceTimeoutMs?: number
   now?: () => Date
@@ -519,7 +519,7 @@ export class MemoryCompositionGeneration {
     const created = new Map<string, RuntimeSource>()
     try {
       for (const installed of snapshot.sources) {
-        const configuration = jsonClone(options.sourceConfiguration?.(installed) ?? {}, 'Source configuration')
+        const configuration = jsonClone(options.sourceConfiguration?.(installed, strategyManifest.typeId) ?? {}, 'Source configuration')
         configurations.set(installed.instanceKey, configuration)
         const capabilities = options.sourceCapabilities?.(installed)
         if (capabilities !== undefined) this.permissions.set(installed.instanceKey, Object.freeze([...capabilities]))
@@ -972,17 +972,18 @@ export function validateMemoryGraphComposition(
 ): void {
   const snapshot = captureMemoryContributionSnapshot(snapshotValue)
   positiveInteger(options.sourceTimeoutMs ?? 10_000, 'memory Source timeoutMs', 300_000)
+  const strategy = snapshot.sources.length === 0 || snapshot.strategies.length === 0
+    ? undefined : selectStrategy(snapshot.strategies, options)
   for (const installed of snapshot.sources) {
-    jsonClone(options.sourceConfiguration?.(installed) ?? {}, 'Source configuration')
+    jsonClone(options.sourceConfiguration?.(installed, strategy?.definition.manifest.typeId) ?? {}, 'Source configuration')
     options.sourceCapabilities?.(installed)
   }
-  if (snapshot.sources.length === 0 || snapshot.strategies.length === 0) return
+  if (strategy === undefined) return
   validateMemoryPluginGraph(snapshot.plugins ?? [], [
     'source',
     ...snapshot.sources.map(source => `source.${source.definition.manifest.role}`),
     'strategy',
   ])
-  const strategy = selectStrategy(snapshot.strategies, options)
   const strategyManifest = strategy.definition.manifest
   const extensions = (snapshot.strategyExtensions ?? []).filter(extension => extension.definition.manifest.strategyTypeId === strategyManifest.typeId
     || extension.definition.manifest.strategyTypeId === ANY_MEMORY_STRATEGY && strategyManifest.extensionSlots?.includes(extension.definition.manifest.slot) === true)

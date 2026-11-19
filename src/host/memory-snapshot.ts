@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { HostSession, HostSessionEvent, HostUserMessage } from './dsh.ts'
 import { createPluginMessage, isMnemonMessageSource, MNEMON_PLUGIN_SOURCE } from './plugin-message.ts'
 import { readMemorySnapshotState, retainsSnapshotEntries, type MemorySnapshotState } from './memory-snapshot-state.ts'
+import { bm25RecallState, prepareBm25Recall, type Bm25RecallState, type Bm25View } from './bm25-recall.ts'
 
 // Initial engineering defaults, not measured provider cache optima. The current
 // snapshot is always complete, even when it alone exceeds the history budget.
@@ -78,15 +79,23 @@ function snapshotText(event: HostSessionEvent | undefined): string | undefined {
  * replacement shadows one owned node and cites it; the append-only audit keeps
  * the original full message, without touching interleaved conversation.
  */
-export function prepareMemorySnapshot(session: HostSession, text: string | undefined, state?: MemorySnapshotState): {
+export function prepareMemorySnapshot(session: HostSession, text: string | undefined, state?: MemorySnapshotState,
+  recall?: { view: Bm25View; query: string | undefined; checkpoint: boolean },
+): {
   message: HostUserMessage | undefined
+  recall: HostUserMessage | undefined
   retire(turn: number, step: number): void
 } {
   const current = text?.trim() === '' ? undefined : text
+  const recalls: { seq: number; state: Bm25RecallState }[] = []
   const snapshots = session.surface.nodes.flatMap(seq => {
     const event = session.eventAt(seq)
     const text = snapshotText(event)
     const source = event?.data.source as { form?: unknown; snapshot?: unknown } | undefined
+    if (source?.form === 'bm25-recall' || source?.form === 'bm25-invalidation') {
+      const state = bm25RecallState(event)
+      if (state !== undefined) recalls.push({ seq, state })
+    }
     return text === undefined ? [] : [{ seq, text, state: source?.form === 'memory-snapshot' ? readMemorySnapshotState(source.snapshot) : undefined }]
   })
   const latest = snapshots.at(-1)
@@ -101,12 +110,15 @@ export function prepareMemorySnapshot(session: HostSession, text: string | undef
     // Callers without a View keep the conservative single-snapshot behavior.
     : state === undefined && unchanged ? [latest!] : []
   const stale = snapshots.filter(snapshot => !retained.includes(snapshot))
-  const message = current === undefined || (unchanged && retained.includes(latest!)) ? undefined : createPluginMessage(current, 'memory-snapshot', state)
+  const extra = prepareBm25Recall(recalls, recall?.view, recall?.query, recall?.checkpoint === true)
+  const message = current === undefined || (unchanged && retained.includes(latest!)) ? undefined
+    : createPluginMessage(current, 'memory-snapshot', state === undefined ? undefined : { snapshot: state })
   return {
     message,
+    recall: extra.message,
     retire(turn, step) {
       const visible = new Set(session.surface.nodes)
-      for (const { seq } of stale) {
+      for (const seq of [...stale.map(snapshot => snapshot.seq), ...extra.retire]) {
         if (!visible.has(seq)) continue
         if (session.append === undefined) throw new Error('DSH Session append is required to retire superseded memory snapshots')
         session.append('developer/message', {
