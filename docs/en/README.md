@@ -41,6 +41,8 @@ dsh-mnemon gives DeepSeek Harness three kinds of memory: **runtime memory** in e
 
 ## What is new
 
+[v0.5.49](./releases/v0.5.49.md) adds opt-in BM25 recall and snapshot compaction, improves branch-scoped Runtime editing, and gives automatic idle review an independent visibility switch.
+
 [v0.5.48](./releases/v0.5.48.md) fixes optional strategy activation and Cordis root compatibility, reduces background task clutter, adds size guidance to skill bundle evolution, and adds an optional 3D memory overview.
 
 [v0.5.47](./releases/v0.5.47.md) consolidates settings, improves UI performance, fixes archive and tool hints, and adds optional skill directories, deferred Runtime details and memory-write approval.
