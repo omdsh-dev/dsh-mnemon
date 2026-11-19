@@ -19,7 +19,7 @@ import * as runtimePlugin from 'dsh-mnemon-source-runtime'
 import { DEFAULT_THREE_TIER_VIEW_STRATEGY } from 'dsh-mnemon-strategy-default-three-tier'
 import * as general from 'dsh-mnemon-strategy-general'
 import type { MemoryRuntime } from '../src/core/runtime.ts'
-import { resolveConfig, type ResolvedConfig } from '../src/host/config.ts'
+import { resolveConfig, type Config, type ResolvedConfig } from '../src/host/config.ts'
 import type { HostAgent, HostContextShape, ToolDefinition } from '../src/host/dsh.ts'
 import { LiveMnemonRuntime, PROVIDER_REDISCOVERY_TIMING, agentScope, type MnemonRuntimeGraph } from '../src/host/runtime.ts'
 import { MnemonSubagentCoordinator } from '../src/host/subagent.ts'
@@ -30,7 +30,7 @@ import { sessionLog } from './fixtures/session-log.ts'
 
 const fixtures: Awaited<ReturnType<typeof compositionFixture>>[] = []
 afterEach(async () => { for (const f of fixtures.splice(0)) await f.dispose() })
-async function fixture() { const f = await compositionFixture(); fixtures.push(f); return f }
+async function fixture(config?: Config) { const f = await compositionFixture(config); fixtures.push(f); return f }
 
 describe('default three-tier Host presentation and shared execution', () => {
   it('keeps instructions separate and advertises named bindings without duplicating their schemas', async () => {
@@ -51,6 +51,18 @@ describe('default three-tier Host presentation and shared execution', () => {
     const before = wake.text
     await f.graph.source('runtime').mutate('mutate', { action: 'add', target: 'memory', content: 'Later fact' })
     expect(modelMemoryWake(f.graph, turn).text).toBe(before)
+  })
+
+  it('keeps Runtime projection and other write offers when automatic Runtime writes are off', async () => {
+    const f = await fixture({ memoryTopology: { layers: { runtime: { participation: { write: 'manual' } } } } })
+    const turn = await f.graph.composableTurns.beginTurn('read-only:1', { storage: 'custom', workspaceId: f.workspace, agentId: 'root' })
+    const wake = modelMemoryWake(f.graph, turn)
+
+    expect(wake.text).toContain('MNEMON RUNTIME MEMORY SNAPSHOT')
+    expect(wake.text).toContain('mnemon_document_create')
+    expect(wake.text).not.toContain('mnemon_runtime_memory')
+    expect(wake.guidance?.system).toContain('Runtime Memory is read-only in this View.')
+    expect(JSON.stringify(wake.guidance)).not.toContain('mnemon_runtime_memory')
   })
 
   it('keeps external Source ids and schemas visible without exposing its private grant', async () => {
