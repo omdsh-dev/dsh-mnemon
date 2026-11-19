@@ -6,6 +6,7 @@ For an existing installation, start with [Compatibility and upgrades](../referen
 
 ## v0.5
 
+- [v0.5.49 · On-demand Memory and Reliable Idle Review](./v0.5.49.md)
 - [v0.5.48: Reliable Activation and Quieter Memory Tasks](./v0.5.48.md)
 - [v0.5.47: Clearer Settings and Optional Memory Controls](./v0.5.47.md)
 - [v0.5.46: Reliable Memory Tasks and Workspace Controls](./v0.5.46.md)
