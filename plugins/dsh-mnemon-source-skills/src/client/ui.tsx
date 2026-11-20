@@ -164,26 +164,38 @@ function SkillsView(props: MemorySourcePageProps & { management: NonNullable<Mem
     return { on: value.evolution, ...(preferences!.writable ? { enable: () => preferences!.replace({ evolution: true }) } : {}) }
   }, [preferences])
 
-  const context: SkillsPageContext = {
+  const tRef = useRef(t)
+  tRef.current = t
+  const returnToConversationRef = useRef(props.onReturnToConversation)
+  returnToConversationRef.current = props.onReturnToConversation
+  const sessionIdRef = useRef(props.sessionId)
+  sessionIdRef.current = props.sessionId
+  const navigate = useCallback((next: SkillsLocation) => setLocation({ ...next, nonce: Date.now() }), [])
+  const showNotice = useCallback((text: string) => { setNotice(text); setError(null) }, [])
+  const fail = useCallback((reason: unknown) => { setError(errorText(reason)); setNotice(null) }, [])
+  const useSkill = useCallback((name: string) => {
+    const taken = requestSkillUse(name, sessionIdRef.current)
+    const returnToConversation = returnToConversationRef.current
+    if (returnToConversation !== undefined && (taken || !isDirectSkillUseActive())) returnToConversation()
+    else if (taken) { setNotice(tRef.current('skills.used', { name })); setError(null) }
+    else { setError(tRef.current('skills.noConversation')); setNotice(null) }
+  }, [])
+
+  const context = useMemo<SkillsPageContext>(() => ({
     client,
     writable: props.writable !== false,
     revision,
     configRevision,
     overview,
     refresh,
-    navigate: next => setLocation({ ...next, nonce: Date.now() }),
-    notice: text => { setNotice(text); setError(null) },
-    fail: reason => { setError(errorText(reason)); setNotice(null) },
-    useSkill: name => {
-      const taken = requestSkillUse(name, props.sessionId)
-      if (props.onReturnToConversation !== undefined && (taken || !isDirectSkillUseActive())) props.onReturnToConversation()
-      else if (taken) { setNotice(t('skills.used', { name })); setError(null) }
-      else { setError(t('skills.noConversation')); setNotice(null) }
-    },
+    navigate,
+    notice: showNotice,
+    fail,
+    useSkill,
     evolution,
     ...(props.onOpenSettings === undefined ? {} : { openSettings: props.onOpenSettings }),
     ...(props.sessionId === undefined ? {} : { sessionId: props.sessionId }),
-  }
+  }), [client, configRevision, evolution, fail, navigate, overview, props.onOpenSettings, props.sessionId, props.writable, refresh, revision, showNotice, useSkill])
   const waiting = overview === null ? 0 : overview.counts.pending + overview.counts.drafts
   const trashed = overview === null ? 0 : overview.counts.trash
   const onTabKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {

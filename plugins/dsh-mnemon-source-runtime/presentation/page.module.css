@@ -12,10 +12,10 @@
 .runtimeComposerActions label { display: grid; gap: 6px; color: var(--mn-muted); font-size: 12px; font-weight: 500; line-height: 18px; }
 .runtimeChoice button { min-width: 136px; }
 .runtimeReadOnly { margin-bottom: 12px; padding: 8px 12px; border-radius: var(--dsw-radius-md); color: var(--mn-muted); background: var(--mn-block-fill, var(--mn-fill)); font-size: 12px; line-height: 18px; }
-.runtimeSummaryGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
-.runtimeSummaryCard { min-width: 0; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); }
-.runtimeBrowser { overflow: hidden; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); }
-.runtimeBrowserToolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-bottom: .5px solid var(--mn-line); }
+.runtimeSummaryGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 14px; }
+.runtimeSummaryCard { display: flex; min-width: 0; flex-direction: column; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); }
+.runtimeBrowser { min-width: 0; }
+.runtimeBrowserToolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 12px; padding: 2px 0 12px; }
 /* Scope filter, matching DSH SegmentedControl sliding indicator mechanics. */
 .runtimeScopeFilter {
   --dsh-segment-count: 3;
@@ -61,7 +61,7 @@
   background: transparent;
   font-size: 13px;
   font-weight: 500;
-  line-height: 20px;
+  line-height: 1;
   white-space: normal;
   overflow-wrap: anywhere;
   cursor: pointer;
@@ -70,9 +70,9 @@
 .runtimeScopeFilter button:hover,
 .runtimeScopeFilter button[data-active] { color: var(--mn-text); }
 .runtimeScopeFilter button:focus-visible { outline: var(--dsw-focus-ring-width, 2px) solid var(--mn-focus); outline-offset: -2px; }
-.runtimeScopeFilter b { flex-shrink: 0; margin-left: 6px; color: var(--mn-faint); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.runtimeScopeFilter b { flex-shrink: 0; margin-left: 6px; color: var(--mn-faint); font-size: 12px; font-weight: 400; line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .runtimeFilterQuery { width: min(320px, 42%); min-width: 210px; }
-.runtimeUnifiedList { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 12px; }
+.runtimeUnifiedList { display: grid; grid-template-columns: 1fr; gap: 10px; padding: 0; }
 .runtimeEntryBadges { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .runtimeEntryMeta .runtimeEntryTarget { color: var(--mn-accent); background: color-mix(in srgb, var(--mn-accent) 10%, transparent); }
 .runtimeEntryMeta .runtimeEntryBranch { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--mn-muted); background: var(--mn-fill); font-family: var(--mn-code); }
@@ -87,23 +87,25 @@
 .runtimeTargetHeader > div { display: grid; gap: 0; }
 .runtimeTargetHeader span { color: var(--mn-faint); font-family: var(--mn-code); font-size: 11px; line-height: 16px; }
 .runtimeTargetHeader h3 { margin: 0; font-size: 14px; font-weight: 500; line-height: 22px; }
-.runtimeTargetHeader > strong { padding: 1px 8px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; font-weight: 500; line-height: 17px; font-variant-numeric: tabular-nums; }
+.runtimeTargetHeader > strong { display: inline-flex; min-width: 24px; height: 20px; align-items: center; justify-content: center; padding: 0 7px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; font-weight: 500; line-height: 1; font-variant-numeric: tabular-nums; }
 .capacityLine { display: flex; align-items: center; gap: 10px; padding: 0 16px; }
 .capacityLine > div { height: 4px; flex: 1; overflow: hidden; border-radius: 999px; background: var(--mn-fill); }
 .capacityLine i { display: block; height: 100%; border-radius: inherit; background: var(--dsw-alias-brand-primary); transition: width .25s ease; }
 .capacityLine > span { min-width: 88px; color: var(--mn-faint); font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; }
-.runtimeTargetDescription { min-height: 36px; margin: 8px 16px 14px; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
-.runtimeEntry { --mn-provider-color: var(--mn-accent); position: relative; padding: 12px 14px 10px; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-md); }
+.runtimeTargetDescription { margin: 8px 16px 12px; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
+.runtimePinMeta { margin: auto 16px 0; padding: 9px 0 12px; border-top: .5px solid var(--mn-line); color: var(--mn-faint); font-size: 12px; line-height: 18px; font-variant-numeric: tabular-nums; }
+.runtimeEntry { --mn-provider-color: var(--mn-accent); position: relative; padding: 12px 14px 10px; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); transition: border-color 120ms ease; }
+.runtimeEntry:hover { border-color: var(--mn-line-strong); }
 .runtimeEntry[data-importance="critical"] { --mn-provider-color: var(--mn-priority); }
 .runtimeEntry[data-importance="low"] { --mn-provider-color: var(--mn-faint); }
 /* The entry a conversation turn wrote, when the turn opened this page. */
 .runtimeEntry[data-focused] { border-color: color-mix(in srgb, var(--mn-accent) 60%, var(--mn-card-line)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--mn-accent) 14%, transparent); }
-.runtimeEntryMeta { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.runtimeEntryMeta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; }
 .runtimeEntryMeta > span,
-.runtimeEntryBadges > span { padding: 1px 8px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; font-weight: 500; line-height: 17px; }
+.runtimeEntryBadges > span { display: inline-flex; height: 20px; align-items: center; padding: 0 8px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; font-weight: 500; line-height: 1; }
 .runtimeEntry[data-importance="critical"] .runtimeEntryMeta > span,
 .runtimeEntry[data-importance="critical"] .runtimeEntryBadges > span:not(.runtimeEntryTarget) { color: var(--mn-warn); background: color-mix(in srgb, var(--mn-warn) 12%, transparent); }
-.runtimeEntryMeta time { overflow: hidden; color: var(--mn-faint); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.runtimeEntryMeta time { flex: 0 0 auto; color: var(--mn-faint); font-size: 11px; line-height: 1; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .runtimeEntry > p { margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 22px; }
 .runtimeEntry > select { margin-top: 8px; }
 .runtimeEntry footer { display: flex; min-height: 32px; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: .5px solid var(--mn-line); }
@@ -130,5 +132,6 @@
 @media (prefers-reduced-motion: reduce) {
   .runtimeScopeFilter::before,
   .runtimeScopeFilter button,
+  .runtimeEntry,
   .capacityLine i { transition: none; }
 }

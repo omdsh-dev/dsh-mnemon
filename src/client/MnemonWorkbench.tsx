@@ -184,6 +184,7 @@ function SourceStoppedPage(props: { title: string; memoryOff: boolean; onOpenCon
 
 function WorkspaceNavigation(props: { page: Page; onSelect(page: Page): void; sourcePages: readonly SourceNavigationEntry[]; disabledTypes: ReadonlySet<string>; memoryOff: boolean }): JSX.Element {
   const t = useT()
+  const navRef = useRef<HTMLDivElement | null>(null)
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
   const allEntries: readonly SourceNavigationEntry[] = [
     { id: 'status', page: 'status', label: t('nav.status'), detail: '', group: 'system', glyph: '⌘', primary: true },
@@ -195,6 +196,28 @@ function WorkspaceNavigation(props: { page: Page; onSelect(page: Page): void; so
     props.page === item.page || selectedType !== undefined && selectedType === item.sourceTypeId
   const activeIndex = entries.findIndex(isActive)
   const tabStopIndex = activeIndex >= 0 ? activeIndex : 0
+
+  useEffect(() => {
+    const el = navRef.current
+    if (el === null) return
+    const syncFade = () => {
+      const overflow = el.scrollWidth - el.clientWidth
+      el.toggleAttribute('data-fade-left', overflow > 2 && el.scrollLeft > 2)
+      el.toggleAttribute('data-fade-right', overflow > 2 && el.scrollLeft < overflow - 2)
+    }
+    syncFade()
+    el.addEventListener('scroll', syncFade, { passive: true })
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(syncFade)
+    observer?.observe(el)
+    return () => {
+      el.removeEventListener('scroll', syncFade)
+      observer?.disconnect()
+    }
+  }, [entries.length])
+
+  useEffect(() => {
+    if (activeIndex >= 0) tabRefs.current[activeIndex]?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' })
+  }, [activeIndex])
 
   const onTabKeyDown = (index: number, event: KeyboardEvent<HTMLButtonElement>): void => {
     if (event.altKey || event.ctrlKey || event.metaKey) return
@@ -230,7 +253,7 @@ function WorkspaceNavigation(props: { page: Page; onSelect(page: Page): void; so
     return <button key={item.id} ref={el => { tabRefs.current[index] = el }} type="button" role="tab" tabIndex={index === tabStopIndex ? 0 : -1} aria-selected={active} data-active={active ? '' : undefined} aria-label={badge === undefined ? undefined : item.label + ' · ' + badge} data-layer-disabled={badge === undefined ? undefined : ''} onKeyDown={event => onTabKeyDown(index, event)} onClick={() => props.onSelect(item.page)}><span>{item.label}</span>{badge !== undefined && <em className={css.layerDisabledBadge}>{badge}</em>}</button>
   }
   return <div className={appearanceClass(css.topNavigation, sidebarCss.topNavigation)}>
-    <div className={appearanceClass(css.nav, sidebarCss.nav)} role="tablist" aria-label={t('nav.aria')}>{entries.map(button)}</div>
+    <div ref={navRef} className={appearanceClass(css.nav, sidebarCss.nav)} role="tablist" aria-label={t('nav.aria')}>{entries.map(button)}</div>
   </div>
 }
 
@@ -403,7 +426,42 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   useEffect(() => { viewMounted.current = true; return () => { viewMounted.current = false } }, [])
   const isBoundView = useCallback(() => viewMounted.current && currentView.current.client === client && currentView.current.viewContextKey === viewContextKey, [client, viewContextKey])
   const isCurrentView = useCallback(() => currentView.current.active && isBoundView(), [isBoundView])
-  const assertCurrentView = () => { if (!isBoundView()) throw new Error('Source page is unmounted or its view context changed') }
+  const assertCurrentView = useCallback(() => { if (!isBoundView()) throw new Error('Source page is unmounted or its view context changed') }, [isBoundView])
+  const latestProviderConnectionsRef = useRef(settingsSnapshot.value?.persistenceStrategy?.providerConnections)
+  latestProviderConnectionsRef.current = settingsSnapshot.value?.persistenceStrategy?.providerConnections
+  const skillsEvolutionSetting = skillsSnapshot.value?.evolution ?? DEFAULT_SKILLS_CONFIG.evolution
+  const memoSkillsPreferences = useMemo(() => (
+    skillsScope === undefined || skillsSnapshot.status !== 'ready' ? undefined : {
+      value: { evolution: skillsEvolutionSetting } as JsonValue,
+      writable: skillsSnapshot.writable,
+      replace: async (value: JsonValue) => {
+        assertCurrentView()
+        const evolution = jsonRecord(value)?.evolution
+        if (typeof evolution !== 'boolean') throw new Error('Skills preferences take evolution as a boolean')
+        await skillsScope.mutate([{ op: 'set', path: ['evolution'], value: evolution }])
+      },
+    }
+  ), [assertCurrentView, skillsEvolutionSetting, skillsScope, skillsSnapshot.status, skillsSnapshot.writable])
+  const rawPersistenceStrategy = settingsSnapshot.value?.persistenceStrategy
+  const memoMemorySpacesPreferences = useMemo(() => ({
+    value: {
+      persistenceStrategy: {
+        ...rawPersistenceStrategy,
+        providerConnections: isRecord(rawPersistenceStrategy?.providerConnections) ? rawPersistenceStrategy.providerConnections : {},
+      },
+    } as unknown as JsonValue,
+    writable: settingsSnapshot.writable,
+    replace: async (value: JsonValue) => {
+      assertCurrentView()
+      const requested = jsonRecord(value)?.persistenceStrategy
+      const strategy = requested === undefined ? undefined : jsonRecord(requested)
+      if (strategy === undefined) throw new Error('Persistence strategy preferences must be an object')
+      const connections = jsonRecord(strategy.providerConnections ?? {}) ?? {}
+      const merged = { ...latestProviderConnectionsRef.current }
+      for (const [id, fields] of Object.entries(connections)) merged[id] = { ...merged[id], ...jsonRecord(fields) } as NonNullable<typeof merged[string]>
+      await settingsScope.mutate([{ op: 'set', path: ['persistenceStrategy'], value: { ...strategy, providerConnections: merged } }])
+    },
+  }), [assertCurrentView, rawPersistenceStrategy, settingsScope, settingsSnapshot.writable])
   // Local Source writes refresh lightweight status summary and catalog revisions without
   // re-fetching static component names or forcing open Source pages to double-reload via refreshKey.
   const mutate = useCallback(() => { if (!isCurrentView()) return; setCatalogRevision(value => value + 1); void reloadStatus() }, [isCurrentView, reloadStatus])
@@ -473,37 +531,9 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
     if (selected === undefined || renderSlot === undefined) return null
     if (disabledTypes.has(sourceTypeId)) return <SourceDisabledPage title={sourceName(sourceTypeId, selected.management.label)} onOpenConfiguration={openConfiguration} />
     const management = sourceManagementClients.get(selected.sourceInstanceKey)
-    const skillsPreferences = sourceTypeId !== SKILLS_SOURCE_TYPE || skillsScope === undefined || skillsSnapshot.status !== 'ready' ? undefined : {
-      value: { evolution: skillsSnapshot.value?.evolution ?? DEFAULT_SKILLS_CONFIG.evolution } as JsonValue,
-      writable: skillsSnapshot.writable,
-      replace: async (value: JsonValue) => {
-        assertCurrentView()
-        const evolution = jsonRecord(value)?.evolution
-        if (typeof evolution !== 'boolean') throw new Error('Skills preferences take evolution as a boolean')
-        await skillsScope.mutate([{ op: 'set', path: ['evolution'], value: evolution }])
-      },
-    }
+    const skillsPreferences = sourceTypeId !== SKILLS_SOURCE_TYPE ? undefined : memoSkillsPreferences
     const openSettings = openConfiguration === undefined ? undefined : (section?: string) => { requestComponentPage(selected.packageName, section); openConfiguration() }
-    const rawStrategy = settingsSnapshot.value?.persistenceStrategy
-    const preferences = skillsPreferences ?? (!isDefaultSourceInstance(selected.sourceInstanceKey, 'memory-spaces') ? undefined : {
-      value: {
-        persistenceStrategy: {
-          ...rawStrategy,
-          providerConnections: isRecord(rawStrategy?.providerConnections) ? rawStrategy.providerConnections : {},
-        },
-      } as unknown as JsonValue,
-      writable: settingsSnapshot.writable,
-      replace: async (value: JsonValue) => {
-        assertCurrentView()
-        const requested = jsonRecord(value)?.persistenceStrategy
-        const strategy = requested === undefined ? undefined : jsonRecord(requested)
-        if (strategy === undefined) throw new Error('Persistence strategy preferences must be an object')
-        const connections = jsonRecord(strategy.providerConnections ?? {}) ?? {}
-        const merged = { ...settingsSnapshot.value?.persistenceStrategy?.providerConnections }
-        for (const [id, fields] of Object.entries(connections)) merged[id] = { ...merged[id], ...jsonRecord(fields) } as NonNullable<typeof merged[string]>
-        await settingsScope.mutate([{ op: 'set', path: ['persistenceStrategy'], value: { ...strategy, providerConnections: merged } }])
-      },
-    })
+    const preferences = skillsPreferences ?? (!isDefaultSourceInstance(selected.sourceInstanceKey, 'memory-spaces') ? undefined : memoMemorySpacesPreferences)
     return renderSlot(MNEMON_SOURCE_PAGE_SLOT, {
       sourceTypeId, sourceInstanceKey: selected.sourceInstanceKey, sourceInstances: instances, writable: writeEnabled, locale, active,
       ...(management === undefined ? {} : { management }),
@@ -524,14 +554,30 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   // Every Source component has a card, in the order the configuration lists its layer; a
   // component that is off and registered nothing still has one. Without the components,
   // the configured layers stand in.
+  const navPageBySourceType = new Map<string, Page>()
+  for (const entry of sourceNavigationEntries) {
+    if (entry.primary && entry.sourceTypeId !== undefined && !navPageBySourceType.has(entry.sourceTypeId)) {
+      navPageBySourceType.set(entry.sourceTypeId, entry.page)
+    }
+  }
   const sourceComponents = (dashboard?.entries ?? []).filter(entry => entry.roles.includes('source'))
   const rank = (entry: MemoryPluginEntryView): number => { const index = layerIds.indexOf(layerOf(entry) ?? ''); return index < 0 ? layerIds.length : index }
   const componentCards: ComponentCard[] = dashboard === null
-    ? layerIds.map(id => ({ key: id, packageName: 'dsh-mnemon-source-' + id, label: sourceName(id), enabled: layerState(id) !== 'off', state: layerState(id) }))
+    ? layerIds.map(id => {
+      const targetPage = navPageBySourceType.get(id)
+      return {
+        key: id, packageName: 'dsh-mnemon-source-' + id, label: sourceName(id), enabled: layerState(id) !== 'off', state: layerState(id),
+        ...(targetPage === undefined ? {} : { onSelect: () => openTab(targetPage) }),
+      }
+    })
     : [...sourceComponents].sort((left, right) => rank(left) - rank(right)).map(entry => {
       const layerId = layerOf(entry)
-      return { key: entry.entryId, packageName: entry.packageName, label: componentCopy(entry, locale).label, enabled: entry.enabled,
-        state: !entry.enabled ? 'off' : layerId === undefined ? (memoryOff ? 'memory-off' : 'stopped') : layerState(layerId) }
+      const targetPage = layerId === undefined ? undefined : navPageBySourceType.get(layerId)
+      return {
+        key: entry.entryId, packageName: entry.packageName, label: componentCopy(entry, locale).label, enabled: entry.enabled,
+        state: !entry.enabled ? 'off' : layerId === undefined ? (memoryOff ? 'memory-off' : 'stopped') : layerState(layerId),
+        ...(targetPage === undefined ? {} : { onSelect: () => openTab(targetPage) }),
+      }
     })
   const renderCard = (card: ComponentCard): ReactNode => renderSlot === undefined ? <strong>{t('board.running')}</strong> : renderSlot(MNEMON_COMPONENT_STATUS_SLOT, {
     component: { packageName: card.packageName, label: card.label, enabled: card.enabled }, language: locale,

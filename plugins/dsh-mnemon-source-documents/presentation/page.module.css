@@ -1,13 +1,14 @@
-.documentSummary { display: grid; grid-template-columns: .7fr .7fr 1.6fr; gap: 12px; margin-bottom: 12px; }
-.documentSummary article { min-width: 0; min-height: 92px; padding: 14px 16px; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); }
+.documentSummary { display: grid; grid-template-columns: .7fr .7fr 1.6fr; gap: 12px; margin-bottom: 14px; }
+.documentSummary article { display: flex; min-width: 0; min-height: 88px; flex-direction: column; padding: 14px 16px; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); }
 .documentSummary article > span { display: block; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
 .documentSummary article > strong { display: block; margin: 4px 0 2px; font-size: 20px; font-weight: 500; line-height: 28px; font-variant-numeric: tabular-nums; }
-.documentSummary article > small { color: var(--mn-faint); font-size: 12px; line-height: 18px; }
+.documentSummary article > small { margin-top: auto; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
 .documentCapacity > div { height: 4px; margin: 8px 0 6px; overflow: hidden; border-radius: 999px; background: var(--mn-fill); }
 .documentCapacity > div i { display: block; height: 100%; border-radius: inherit; background: var(--dsw-alias-brand-primary); transition: width .3s ease; }
 
-.documentToolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 10px 12px; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); }
+.documentToolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .documentToolbar form { display: flex; min-width: 260px; flex: 1; align-items: center; gap: 8px; }
+.documentToolbar form > button { min-height: 36px; }
 .documentSearch { flex: 1; }
 .documentEditor input,
 .documentEditor textarea { width: 100%; border: .5px solid var(--mn-field-line); border-radius: var(--dsw-radius-md); outline: 0; padding: 6px 10px; color: var(--mn-text); background: var(--mn-input); font-size: 13px; line-height: 20px; }
@@ -55,7 +56,7 @@
   background: transparent;
   font-size: 13px;
   font-weight: 500;
-  line-height: 20px;
+  line-height: 1;
   white-space: nowrap;
   cursor: pointer;
   transition: color 120ms ease;
@@ -63,18 +64,18 @@
 .documentToolbar > div button:hover,
 .documentToolbar > div button[data-active] { color: var(--mn-text); }
 .documentToolbar > div button:focus-visible { outline: var(--dsw-focus-ring-width, 2px) solid var(--mn-focus); outline-offset: -2px; }
-.documentToolbar > div b { margin-left: 6px; color: var(--mn-faint); font-size: 12px; font-weight: 400; font-variant-numeric: tabular-nums; }
+.documentToolbar > div b { margin-left: 6px; color: var(--mn-faint); font-size: 12px; font-weight: 400; line-height: 1; font-variant-numeric: tabular-nums; }
 
 .documentWorkspace { display: grid; min-height: 590px; grid-template-columns: minmax(250px, 310px) minmax(0, 1fr); gap: 12px; }
 .documentList,
 .documentReader { min-width: 0; overflow: hidden; border: .5px solid var(--mn-card-line); border-radius: var(--dsw-radius-lg); }
-.documentList { align-self: stretch; }
+.documentList { align-self: stretch; padding-bottom: 8px; }
 .documentList > header { display: flex; min-height: 44px; align-items: center; justify-content: space-between; padding: 0 14px; border-bottom: .5px solid var(--mn-line); color: var(--mn-faint); font-size: 12px; line-height: 18px; }
 .documentList > header code { color: var(--mn-muted); font-variant-numeric: tabular-nums; }
 .documentList > button { --mn-provider-color: var(--mn-faint); display: block; width: calc(100% - 12px); margin: 6px 6px 0; border: 0; border-radius: var(--dsw-radius-md); padding: 10px 12px; color: var(--mn-text); background: transparent; text-align: left; cursor: pointer; transition: background-color .15s; }
 .documentList > button:hover { background: var(--mn-hover); }
 .documentList > button[data-selected] { background: var(--mn-fill); }
-.documentList > button > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.documentList > button > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .documentList > button strong { overflow: hidden; font-size: 13px; font-weight: 500; line-height: 20px; text-overflow: ellipsis; white-space: nowrap; }
 .documentList > button time { flex: 0 0 auto; color: var(--mn-faint); font-size: 11px; font-variant-numeric: tabular-nums; }
 .documentList > button p { display: -webkit-box; margin: 4px 0 6px; overflow: hidden; color: var(--mn-faint); font-size: 12px; line-height: 18px; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
@@ -90,20 +91,22 @@
 .documentReader > .loading { display: flex; height: 100%; min-height: 240px; align-items: center; justify-content: center; gap: 8px; }
 .documentReader > .loading [class*='sectionSpinner'] { position: static; }
 .documentDetail > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding-bottom: 14px; border-bottom: .5px solid var(--mn-line); }
-.documentDetail > header span { color: var(--mn-faint); font-size: 12px; line-height: 18px; }
+.documentDetail > header > div:first-child > span { display: inline-flex; height: 20px; align-items: center; margin-bottom: 4px; padding: 0 8px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; font-weight: 500; line-height: 1; }
 .documentDetail > header h3 { margin: 2px 0; font-size: 16px; font-weight: 500; line-height: 24px; }
 .documentDetail > header p { margin: 0; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
 .documentActions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.documentDetail > dl { display: grid; grid-template-columns: 2fr .45fr .8fr .55fr; margin: 12px 0; border: .5px solid var(--mn-line); border-radius: var(--dsw-radius-md); overflow: hidden; }
-.documentDetail > dl > div { min-width: 0; padding: 8px 10px; }
+.documentDetail > dl { display: grid; grid-template-columns: 2fr .45fr .8fr .55fr; margin: 12px 0 4px; border: 0; border-radius: var(--dsw-radius-md); background: var(--mn-block-fill); overflow: hidden; }
+.documentDetail > dl > div { min-width: 0; padding: 8px 12px; }
 .documentDetail > dl > div + div { border-left: .5px solid var(--mn-line); }
 .documentDetail dt { margin-bottom: 2px; color: var(--mn-faint); font-size: 11px; line-height: 16px; }
-.documentDetail dd { margin: 0; overflow: hidden; font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.documentDetail dd { margin: 0; overflow: hidden; font-family: var(--mn-code); font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.documentDetail dd code { font-size: inherit; }
+.documentDetail dd [data-path-label] { font-size: inherit; line-height: inherit; }
 .documentSources { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0; }
 .documentSources > span { margin-right: 4px; color: var(--mn-faint); font-size: 12px; }
 .documentSources code,
-.documentArchiveReceipt code { display: inline-flex; max-width: 100%; align-items: center; padding: 1px 8px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; line-height: 17px; }
-.markdownBody { min-height: 310px; margin: 16px 0 0; overflow-wrap: anywhere; padding: clamp(16px, 2.5vw, 28px); border: .5px solid var(--mn-line); border-radius: var(--dsw-radius-md); color: var(--mn-text); font-size: 14px; line-height: 1.75; }
+.documentArchiveReceipt code { display: inline-flex; height: 20px; max-width: 100%; align-items: center; padding: 0 8px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; line-height: 1; }
+.markdownBody { min-height: 280px; margin: 14px 0 0; overflow-wrap: anywhere; padding: 4px 0 0; border: 0; border-radius: 0; color: var(--mn-text); font-size: 14px; line-height: 1.75; }
 .markdownBody > :first-child { margin-top: 0; }
 .markdownBody > :last-child { margin-bottom: 0; }
 .markdownBody h1,
@@ -210,7 +213,7 @@
   .documentDetail > dl { grid-template-columns: 1fr; }
   .documentDetail > dl > div:nth-child(even) { border-left: 0; }
   .documentDetail > dl > div + div { border-top: .5px solid var(--mn-line); }
-  .markdownBody { padding: 16px; font-size: 13px; }
+  .markdownBody { padding: 4px 0 0; font-size: 13px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

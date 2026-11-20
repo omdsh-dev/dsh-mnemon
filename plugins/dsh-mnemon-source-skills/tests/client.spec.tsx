@@ -1543,4 +1543,51 @@ describe('model pickers', () => {
       { op: 'draft-adopt', input: { id: standaloneBeta.id } },
     ])
   })
+
+  it('keeps Evolution context callbacks stable so notice and error banners do not re-fetch suggestions', async () => {
+    await mutate('review-record', review())
+    const reads: string[] = []
+    const counted = new Proxy(management, {
+      get: (target, prop, receiver) => {
+        if (prop === 'read') {
+          return async (operation: string, input: unknown) => {
+            reads.push(operation)
+            return target.read(operation as never, input as never)
+          }
+        }
+        return Reflect.get(target, prop, receiver)
+      },
+    })
+    const view = render(
+      <SkillsSourcePage
+        sourceTypeId="skills"
+        sourceInstanceKey="source:skills"
+        sourceInstances={[]}
+        locale="en"
+        writable
+        management={counted}
+        navigationInput={{ seed: 'evolution:pending', nonce: 1 }}
+      />,
+    )
+    await screen.findByRole('button', { name: t('triage.fold', { count: 1 }) })
+    const initialSuggestionsReads = reads.filter(op => op === 'suggestions').length
+    expect(initialSuggestionsReads).toBe(1)
+
+    // Triggering a parent re-render with updated props must not recreate context.fail
+    // or re-trigger EvolutionPage's suggestions() effect.
+    view.rerender(
+      <SkillsSourcePage
+        sourceTypeId="skills"
+        sourceInstanceKey="source:skills"
+        sourceInstances={[]}
+        locale="en"
+        writable
+        management={counted}
+        navigationInput={{ seed: 'evolution:pending', nonce: 1 }}
+        sessionId="session-rerender"
+      />,
+    )
+    await waitFor(() => expect(screen.getByRole('button', { name: t('triage.fold', { count: 1 }) })).not.toBeNull())
+    expect(reads.filter(op => op === 'suggestions')).toHaveLength(initialSuggestionsReads)
+  })
 })

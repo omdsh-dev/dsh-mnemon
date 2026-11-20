@@ -80,8 +80,10 @@
 .shell .memoryTabs::-webkit-scrollbar { display: none; }
 .shell .memoryTabs button {
   position: relative;
+  display: inline-flex;
   min-width: max-content;
   min-height: 0;
+  align-items: center;
   margin-bottom: -.5px;
   padding: 6px 1px 9px;
   border: 0;
