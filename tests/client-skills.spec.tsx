@@ -318,6 +318,20 @@ describe('技能管理 settings under Plugins', () => {
     ]))
   })
 
+  it('folds Skill Directories when unconfigured and shows status badges across folded disclosures', () => {
+    const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: { evolution: true }, revision: 1, writable: true, mode: 'host' })
+    render(<SkillsSettings scope={scope} page={page} t={t} />)
+    const dirToggle = screen.getByRole('button', { name: t('skills.directories') })
+    expect(dirToggle.getAttribute('aria-expanded')).toBe('false')
+    expect(dirToggle.textContent).toContain(t('skills.badgeDefault'))
+    expect(screen.queryByLabelText(t('skills.dshHome'))).toBeNull()
+    expect(screen.getByRole('button', { name: t('skills.roots.title') }).textContent).toContain(t('skills.badgeDefault'))
+    expect(screen.getByRole('button', { name: t('skills.draftGeneration') }).textContent).toContain('32K / 64K')
+    fireEvent.click(dirToggle)
+    expect(dirToggle.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByLabelText(t('skills.dshHome'))).toBeTruthy()
+  })
+
   it('manages Market Sources registries via Skills source-management RPC', async () => {
     expect(supportsMemoryComponentSettingsSection(SKILLS_PACKAGE, 'market')).toBe(true)
     const scope = liveSettingsScope<SkillsConfig>({ status: 'ready', value: {}, revision: 1, writable: true, mode: 'host' })

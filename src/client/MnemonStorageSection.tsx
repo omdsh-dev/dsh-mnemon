@@ -11,7 +11,7 @@ import css from './MnemonSettingsCard.module.css'
 import { MnemonPackSection, type PackTarget } from './MnemonPackSection.tsx'
 import { MnemonReviewSection } from './MnemonReviewSection.tsx'
 import { MnemonSyncSection } from './MnemonSyncSection.tsx'
-import { SelectRow, SettingRow } from './settings-controls.tsx'
+import { AdvancedSection, SelectRow, SettingRow } from './settings-controls.tsx'
 import { PanelActions, useLive, WriteFailure, useStaged } from './settings-panel.tsx'
 import type { MnemonClient } from './api.ts'
 import type { MnemonDirectoryPicker } from './picker.ts'
@@ -114,6 +114,7 @@ export interface MnemonStorageSectionProps {
 export function MnemonStorageSection(props: MnemonStorageSectionProps): JSX.Element {
   const { t } = props
   const value = props.value ?? {}
+  const excludedCount = (value.excludedWorkspaces ?? []).length
   const exclusion = useStaged({ paths: (value.excludedWorkspaces ?? []).join('\n') }, async draft => {
     await props.scope.mutate([{ op: 'set', path: ['excludedWorkspaces'], value: [...new Set(draft.paths.split(/\r?\n/u).map(path => path.trim()).filter(Boolean))] }])
     props.onSaved()
@@ -233,12 +234,16 @@ export function MnemonStorageSection(props: MnemonStorageSectionProps): JSX.Elem
           <PageLink label={t('storage.runtimeSettings')} onOpen={() => props.onOpen(runtime, 'user-scope')} />
         </SettingRow>
       )}
-      <SettingRow title={t('workspace.excludeTitle')} hint={t('workspace.excludeHint')} htmlFor="mnemon-excluded-workspaces" stacked>
-        <textarea id="mnemon-excluded-workspaces" className={css.workspacePaths} rows={2} value={exclusion.draft.paths} disabled={props.disabled || exclusion.saving}
+      <AdvancedSection title={t('workspace.excludeTitle')} hint={t('workspace.excludeHint')}
+        badge={excludedCount > 0 ? t('workspace.excludeCount', { count: excludedCount }) : t('workspace.excludeNone')}
+        defaultOpen={excludedCount > 0} section="exclusions">
+        <textarea id="mnemon-excluded-workspaces" className={css.workspacePaths} rows={3}
+          aria-label={t('workspace.excludeTitle')} placeholder={t('workspace.excludePlaceholder')}
+          value={exclusion.draft.paths} disabled={props.disabled || exclusion.saving}
           spellCheck={false} autoCapitalize="none" onChange={event => exclusion.edit({ paths: event.target.value })} />
-      </SettingRow>
-      <PanelActions dirty={exclusion.dirty} saving={exclusion.saving} invalid={null} failed={exclusion.failed} applied={exclusion.applied} disabled={props.disabled}
-        note={t('workspace.excludeNote')} t={t} onDiscard={exclusion.discard} onApply={() => { void exclusion.apply() }} />
+        <PanelActions dirty={exclusion.dirty} saving={exclusion.saving} invalid={null} failed={exclusion.failed} applied={exclusion.applied} disabled={props.disabled}
+          note={t('workspace.excludeNote')} t={t} onDiscard={exclusion.discard} onApply={() => { void exclusion.apply() }} />
+      </AdvancedSection>
       <MnemonPackSection {...(props.client === undefined ? {} : { client: props.client })} {...(props.connection === undefined ? {} : { connection: props.connection })} {...(props.sessionId === undefined ? {} : { sessionId: props.sessionId })}
         {...(props.workspaceId === undefined ? {} : { workspaceId: props.workspaceId })} target={props.target}
         {...(props.onDataChanged === undefined ? {} : { onImported: props.onDataChanged })} t={t} />

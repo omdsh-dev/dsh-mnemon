@@ -81,7 +81,8 @@ export function ComponentPage(props: Omit<ComponentDetailsProps, 'onClose'>): JS
         }
         current = current.parentElement
       }
-      element.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+      const reducedMotion = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
+      element.scrollIntoView?.({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' })
       return true
     }
     if (reveal()) return
@@ -89,10 +90,17 @@ export function ComponentPage(props: Omit<ComponentDetailsProps, 'onClose'>): JS
     // may mount right after the initial dialog render; observe briefly until it appears.
     if (typeof MutationObserver === 'undefined') return
     const observer = new MutationObserver(() => {
-      if (reveal()) observer.disconnect()
+      if (reveal()) {
+        clearTimeout(timeout)
+        observer.disconnect()
+      }
     })
+    const timeout = setTimeout(() => observer.disconnect(), 4000)
     observer.observe(body, { childList: true, subtree: true })
-    return () => observer.disconnect()
+    return () => {
+      clearTimeout(timeout)
+      observer.disconnect()
+    }
   }, [props.section, entry.entryId])
   const relations = relationsOf(dashboard, entry)
   const names = (entries: readonly MemoryPluginEntryView[]): string => nameList(entries.map(name), t)
@@ -124,9 +132,9 @@ export function ComponentPage(props: Omit<ComponentDetailsProps, 'onClose'>): JS
         </span>}
         <Tag tone={isShipped(entry) ? 'neutral' : 'info'}>{t(isShipped(entry) ? 'details.shipped' : 'details.installed')}</Tag>
         {isExperimental(entry) && <Tag tone="info">{t('board.experimental')}</Tag>}
+        {props.headed !== true && <code className={css.detailsPackage}>{entry.packageName}</code>}
         <span className={css.detailsControl}>{props.control}</span>
       </div>
-      {props.headed !== true && <code className={css.detailsPackage}>{entry.packageName}</code>}
     </div>
     {hasRelations && <section className={css.detailsSection} aria-label={t('details.relations')}>
       <h3>{t('details.relations')}</h3>

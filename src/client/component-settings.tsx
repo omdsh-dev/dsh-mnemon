@@ -1,4 +1,5 @@
 import { useId, type ComponentProps, type JSX } from 'react'
+import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import { RUNTIME_MEMORY_LIMIT_MAX_BYTES, RUNTIME_MEMORY_LIMITS } from 'dsh-mnemon-source-runtime/contracts'
 import {
   DEFAULT_IDLE_REVIEW,
@@ -13,6 +14,7 @@ import {
   type SkillsConfig,
 } from '../host/protocol.ts'
 import { installMemoryComponentFallbackUI, installMemoryComponentUI, type MemoryComponentSettingsProps, type MemoryComponentUIContext } from './component-ui.tsx'
+import { Callout } from './feedback.tsx'
 import type { MnemonTranslate } from './locales.ts'
 import { MemorySpacesSettings } from './memory-spaces-client.ts'
 import css from './MnemonSettingsCard.module.css'
@@ -89,6 +91,23 @@ function documentsLimitValue(text: string): number | undefined {
   return Number.isInteger(value) && value >= 1 && value <= DOCUMENTS_MAX_LIMIT_BYTES ? value : undefined
 }
 
+function formatByteEquivalent(bytes: number | undefined): string | null {
+  if (bytes === undefined || !Number.isFinite(bytes) || bytes <= 0) return null
+  const formatUnit = (value: number, unit: string): string => {
+    const rounded = Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/u, '')
+    return `${rounded} ${unit}`
+  }
+  if (bytes >= 1024 * 1024) return formatUnit(bytes / (1024 * 1024), 'MiB')
+  if (bytes >= 1024) return formatUnit(bytes / 1024, 'KiB')
+  return `${bytes} B`
+}
+
+function formatTokenBadge(tokens: number | undefined): string | undefined {
+  if (tokens === undefined || !Number.isFinite(tokens) || tokens <= 0) return undefined
+  if (tokens >= 1024 && tokens % 1024 === 0) return `${tokens / 1024}K tok`
+  return `${tokens} tok`
+}
+
 /** Runtime Memory's scope applies immediately; its byte limits and maintenance token ceiling wait for Apply. */
 export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryComponentSettingsProps }): JSX.Element {
   const { scope, page, t } = props
@@ -125,68 +144,79 @@ export function RuntimeSettings(props: ShippedSettingsServices & { page: MemoryC
     }
   })
   const invalid = RUNTIME_LIMITS.find(key => runtimeLimitValue(limits.draft[key]) === undefined)
-  const invalidMaintenance = runtimeMaintenanceTokens(maintenance.draft.maintenanceMaxTokens) === undefined
-  return <><section className={css.preferenceSection} data-settings-section="user-scope" aria-label={t('config.runtimeUserScopeTitle')}>
-    <div className={css.rows}>
-      <SelectRow id="mnemon-runtime-user-scope" label={t('config.runtimeUserScopeTitle')} value={profile.value} disabled={disabled} onChange={profile.set} options={[
-        { value: 'storage', label: t('config.runtimeUserScopeStorage'), detail: t('config.runtimeUserScopeStorageHint') },
-        { value: 'global', label: t('config.runtimeUserScopeGlobal'), detail: t('config.runtimeUserScopeGlobalHint') },
-      ]} />
-    </div>
-    <WriteFailure error={profile.failed} t={t} />
-  </section>
-  <section className={css.preferenceSection} data-settings-section="inheritance" aria-label={t('config.runtimeInheritance')}>
-    <div className={css.rows}>
-      <ToggleRow id="mnemon-runtime-inherit-subagents" label={t('config.runtimeInheritance')}
-        hint={t('config.runtimeInheritanceHint')} checked={inheritance.value} disabled={disabled} onChange={inheritance.set} />
-    </div>
-    <WriteFailure error={inheritance.failed} t={t} />
-  </section>
-  <section className={css.preferenceSection} data-settings-section="deferred-runtime" aria-label={t('config.runtimeDeferred')}>
-    <div className={css.rows}>
-      <ToggleRow id="mnemon-runtime-defer-low" label={t('config.runtimeDeferred')}
-        hint={t('config.runtimeDeferredHint')} checked={deferred.value} disabled={disabled} onChange={deferred.set} />
-      <ToggleRow id="mnemon-runtime-bm25" label={t('config.runtimeBm25Recall')}
-        hint={t('config.runtimeBm25RecallHint')} checked={bm25.value} disabled={disabled} onChange={bm25.set} />
-    </div>
-    <WriteFailure error={deferred.failed} t={t} />
-    <WriteFailure error={bm25.failed} t={t} />
-  </section>
-  <section className={css.panelSection} data-settings-section="limits" aria-labelledby="mnemon-runtime-limits">
-    <div className={css.panelHeading}>
-      <h3 id="mnemon-runtime-limits">{t('config.runtimeLimitsTitle')}</h3>
-      <p id="mnemon-runtime-limits-hint">{t('config.runtimeLimitsHint', { user: RUNTIME_MEMORY_LIMITS.user / 1024, memory: RUNTIME_MEMORY_LIMITS.memory / 1024 })}</p>
-    </div>
-    <div className={css.rows}>
-      {RUNTIME_LIMITS.map(key => <SettingRow key={key} htmlFor={`${baseId}-${key}`} title={t(`config.runtime.${key}`)}>
-        <input id={`${baseId}-${key}`} className={css.numberInput} type="number" min="1" max={RUNTIME_MEMORY_LIMIT_MAX_BYTES} step="1" inputMode="numeric"
-          value={limits.draft[key]} disabled={disabled || limits.saving} aria-describedby="mnemon-runtime-limits-hint"
-          aria-invalid={runtimeLimitValue(limits.draft[key]) === undefined}
-          onChange={event => limits.edit({ [key]: event.target.value })} />
-      </SettingRow>)}
-    </div>
-    <PanelActions dirty={limits.dirty} saving={limits.saving} applied={limits.applied} failed={limits.failed} disabled={disabled} t={t}
-      note={t('config.runtimeLimitsApply')}
-      invalid={invalid === undefined ? null : t('config.runtimeLimitInvalid', { field: t(`config.runtime.${invalid}`), max: RUNTIME_MEMORY_LIMIT_MAX_BYTES })}
-      onDiscard={limits.discard} onApply={() => { void limits.apply() }} />
-    <AdvancedSection title={t('config.runtimeAdvanced')} hint={t('config.runtimeMaintenanceHint', { defaultTokens: DEFAULT_RUNTIME_MAINTENANCE_MAX_TOKENS })} section="maintenance" activeSection={page.section}>
-      <div className={css.rows}>
-        <SettingRow htmlFor={`${baseId}-maintenance`} title={t('config.runtime.maintenanceMaxTokens')}>
-          <input id={`${baseId}-maintenance`} className={css.numberInput} type="number" min={RUNTIME_MAINTENANCE_MIN_TOKENS} max={RUNTIME_MAINTENANCE_MAX_TOKENS} step="1" inputMode="numeric"
-            value={maintenance.draft.maintenanceMaxTokens} disabled={disabled || maintenance.saving}
-            aria-invalid={invalidMaintenance}
-            onChange={event => maintenance.edit({ maintenanceMaxTokens: event.target.value })} />
-        </SettingRow>
+  const maintenanceValue = runtimeMaintenanceTokens(maintenance.draft.maintenanceMaxTokens)
+  const invalidMaintenance = maintenanceValue === undefined
+  return <>
+    <section className={css.panelSection} aria-labelledby={`${baseId}-scope-heading`}>
+      <div className={css.panelHeading}>
+        <h3 id={`${baseId}-scope-heading`}>{t('config.runtimeSectionScope')}</h3>
       </div>
-      <PanelActions dirty={maintenance.dirty} saving={maintenance.saving} applied={maintenance.applied} failed={maintenance.failed} disabled={disabled} t={t}
-        invalid={invalidMaintenance ? t('config.runtimeMaintenanceInvalid', {
-          field: t('config.runtime.maintenanceMaxTokens'),
-          min: RUNTIME_MAINTENANCE_MIN_TOKENS,
-          max: RUNTIME_MAINTENANCE_MAX_TOKENS,
-        }) : null}
-        onDiscard={maintenance.discard} onApply={() => { void maintenance.apply() }} />
-    </AdvancedSection>
-  </section></>
+      <div className={css.rows}>
+        <div data-settings-section="user-scope">
+          <SelectRow id="mnemon-runtime-user-scope" label={t('config.runtimeUserScopeTitle')} value={profile.value} disabled={disabled} onChange={profile.set} options={[
+            { value: 'storage', label: t('config.runtimeUserScopeStorage'), detail: t('config.runtimeUserScopeStorageHint') },
+            { value: 'global', label: t('config.runtimeUserScopeGlobal'), detail: t('config.runtimeUserScopeGlobalHint') },
+          ]} />
+        </div>
+        <div data-settings-section="inheritance">
+          <ToggleRow id="mnemon-runtime-inherit-subagents" label={t('config.runtimeInheritance')}
+            hint={t('config.runtimeInheritanceHint')} checked={inheritance.value} disabled={disabled} onChange={inheritance.set} />
+        </div>
+        <div data-settings-section="deferred-runtime">
+          <ToggleRow id="mnemon-runtime-defer-low" label={t('config.runtimeDeferred')}
+            hint={t('config.runtimeDeferredHint')} checked={deferred.value} disabled={disabled} onChange={deferred.set} />
+          <ToggleRow id="mnemon-runtime-bm25" label={t('config.runtimeBm25RecallLabel')} ariaLabel={t('config.runtimeBm25Recall')}
+            badge={<Tag tone="info">{t('board.experimental')}</Tag>}
+            hint={t('config.runtimeBm25RecallHint')} checked={bm25.value} disabled={disabled} onChange={bm25.set} />
+        </div>
+      </div>
+      <WriteFailure error={profile.failed ?? inheritance.failed ?? deferred.failed ?? bm25.failed} t={t} />
+    </section>
+    <section className={css.panelSection} data-settings-section="limits" aria-labelledby="mnemon-runtime-limits">
+      <div className={css.panelHeading}>
+        <h3 id="mnemon-runtime-limits">{t('config.runtimeLimitsTitle')}</h3>
+        <p id="mnemon-runtime-limits-hint">{t('config.runtimeLimitsHint', { user: RUNTIME_MEMORY_LIMITS.user / 1024, memory: RUNTIME_MEMORY_LIMITS.memory / 1024 })}</p>
+      </div>
+      <div className={css.rows}>
+        {RUNTIME_LIMITS.map(key => {
+          const parsed = runtimeLimitValue(limits.draft[key])
+          const equiv = formatByteEquivalent(parsed)
+          return <SettingRow key={key} htmlFor={`${baseId}-${key}`} title={t(`config.runtime.${key}`)}>
+            {equiv !== null && <span className={css.inputEquiv} aria-hidden="true">{equiv}</span>}
+            <input id={`${baseId}-${key}`} className={css.numberInput} type="number" min="1" max={RUNTIME_MEMORY_LIMIT_MAX_BYTES} step="1" inputMode="numeric"
+              value={limits.draft[key]} disabled={disabled || limits.saving} aria-describedby="mnemon-runtime-limits-hint"
+              aria-invalid={parsed === undefined}
+              onChange={event => limits.edit({ [key]: event.target.value })} />
+          </SettingRow>
+        })}
+      </div>
+      <PanelActions dirty={limits.dirty} saving={limits.saving} applied={limits.applied} failed={limits.failed} disabled={disabled} t={t}
+        note={t('config.runtimeLimitsApply')}
+        invalid={invalid === undefined ? null : t('config.runtimeLimitInvalid', { field: t(`config.runtime.${invalid}`), max: RUNTIME_MEMORY_LIMIT_MAX_BYTES })}
+        onDiscard={limits.discard} onApply={() => { void limits.apply() }} />
+      <AdvancedSection title={t('config.runtimeAdvanced')} hint={t('config.runtimeMaintenanceHint', { defaultTokens: DEFAULT_RUNTIME_MAINTENANCE_MAX_TOKENS })}
+        badge={formatTokenBadge(maintenanceValue)} section="maintenance" activeSection={page.section}>
+        <div className={css.rows}>
+          <SettingRow htmlFor={`${baseId}-maintenance`} title={t('config.runtime.maintenanceMaxTokens')}>
+            <span className={css.unitInput}>
+              <input id={`${baseId}-maintenance`} type="number" min={RUNTIME_MAINTENANCE_MIN_TOKENS} max={RUNTIME_MAINTENANCE_MAX_TOKENS} step="1" inputMode="numeric"
+                value={maintenance.draft.maintenanceMaxTokens} disabled={disabled || maintenance.saving}
+                aria-invalid={invalidMaintenance}
+                onChange={event => maintenance.edit({ maintenanceMaxTokens: event.target.value })} />
+              <span className={css.unitSuffix} aria-hidden="true">tok</span>
+            </span>
+          </SettingRow>
+        </div>
+        <PanelActions dirty={maintenance.dirty} saving={maintenance.saving} applied={maintenance.applied} failed={maintenance.failed} disabled={disabled} t={t}
+          invalid={invalidMaintenance ? t('config.runtimeMaintenanceInvalid', {
+            field: t('config.runtime.maintenanceMaxTokens'),
+            min: RUNTIME_MAINTENANCE_MIN_TOKENS,
+            max: RUNTIME_MAINTENANCE_MAX_TOKENS,
+          }) : null}
+          onDiscard={maintenance.discard} onApply={() => { void maintenance.apply() }} />
+      </AdvancedSection>
+    </section>
+  </>
 }
 
 // ---- Project Documents: active document byte capacity ----
@@ -205,7 +235,9 @@ export function DocumentsSettings(props: ShippedSettingsServices & { page: Memor
       await scope.mutate([{ op: 'set', path: ['documents'], value: { ...configured, limitBytes: next } }])
     }
   })
-  const invalid = documentsLimitValue(capacity.draft.limitBytes) === undefined
+  const parsedLimit = documentsLimitValue(capacity.draft.limitBytes)
+  const invalid = parsedLimit === undefined
+  const equiv = formatByteEquivalent(parsedLimit)
   return <section className={css.panelSection} data-settings-section="capacity" aria-labelledby="mnemon-documents-limits">
     <div className={css.panelHeading}>
       <h3 id="mnemon-documents-limits">{t('config.documentsLimitsTitle')}</h3>
@@ -216,6 +248,7 @@ export function DocumentsSettings(props: ShippedSettingsServices & { page: Memor
     </div>
     <div className={css.rows}>
       <SettingRow htmlFor={`${baseId}-limit`} title={t('config.documents.limitBytes')}>
+        {equiv !== null && <span className={css.inputEquiv} aria-hidden="true">{equiv}</span>}
         <input id={`${baseId}-limit`} className={css.numberInput} type="number" min="1" max={DOCUMENTS_MAX_LIMIT_BYTES} step="1" inputMode="numeric"
           value={capacity.draft.limitBytes} disabled={disabled || capacity.saving} aria-describedby="mnemon-documents-limits-hint"
           aria-invalid={invalid}
@@ -235,11 +268,11 @@ type ReviewChoice = Pick<ResolvedIdleReviewConfig, 'enabled' | 'silent' | 'runti
 type ReviewLimits = Pick<ResolvedIdleReviewConfig, 'minIntervalMs' | 'maxPerSession' | 'maxContextChars' | 'maxTokens'>
 
 /** Each limit as the page shows it: the interval in seconds, the others as stored. */
-const LIMITS: ReadonlyArray<{ key: keyof ReviewLimits; min: number; max: number; scale: number }> = [
-  { key: 'minIntervalMs', min: 5_000, max: 86_400_000, scale: 1_000 },
-  { key: 'maxPerSession', min: 0, max: 200, scale: 1 },
-  { key: 'maxContextChars', min: 1_000, max: 1_000_000, scale: 1 },
-  { key: 'maxTokens', min: 128, max: 131_072, scale: 1 },
+const LIMITS: ReadonlyArray<{ key: keyof ReviewLimits; min: number; max: number; scale: number; unit: string }> = [
+  { key: 'minIntervalMs', min: 5_000, max: 86_400_000, scale: 1_000, unit: 's' },
+  { key: 'maxPerSession', min: 0, max: 200, scale: 1, unit: 'x' },
+  { key: 'maxContextChars', min: 1_000, max: 1_000_000, scale: 1, unit: 'ch' },
+  { key: 'maxTokens', min: 128, max: 131_072, scale: 1, unit: 'tok' },
 ]
 
 function reviewOf(value: Config | undefined): ResolvedIdleReviewConfig {
@@ -296,8 +329,7 @@ export function ThreeTierSettings(props: ShippedSettingsServices & { page: Memor
       <p>{t('config.backgroundDescription')}</p>
       {taskAgent.catalog.state === 'loading' && <span className={css.miniSpinner} aria-hidden="true" />}
     </div>
-    <p className={css.panelNote}>{t('config.strategyWorkflowNote')}</p>
-    {!page.component.enabled && <p className={css.panelNote}>{t('threeTier.offNote')}</p>}
+    {!page.component.enabled && <Callout tone="idle" title={t('threeTier.offNote')} />}
     <div className={css.rows}>
       <TaskAgentModelRows mode={taskAgent.choosing ? 'fixed' : taskAgent.route.mode} route={taskAgent.route} settled={taskAgent.settled} choosing={taskAgent.choosing}
         catalog={taskAgent.catalog.value} state={taskAgent.catalog.state} error={taskAgent.catalog.error} retry={taskAgent.retry}
@@ -317,10 +349,12 @@ function IdleReviewRows(props: {
   t: MnemonTranslate
 }): JSX.Element {
   const { choice, limits, t } = props
+  const baseId = useId()
   const invalid = LIMITS.find(limit => limitValue(limit, limits.draft[limit.key]) === undefined)
+  const limitsBadge = `${limits.draft.minIntervalMs}s · ${limits.draft.maxPerSession}x`
   return <>
     <ToggleRow id="mnemon-idle-review" label={t('config.reviewTitle')} ariaLabel={t('config.reviewEnabled')} hint={t('config.reviewDescription')} checked={choice.enabled} disabled={props.disabled} onChange={enabled => props.onChoice({ enabled })} />
-    {choice.enabled && <>
+    {choice.enabled && <div className={css.evolutionGroup}>
       <ToggleRow id="mnemon-review-silent" label={t('config.reviewSilent')} hint={t('config.reviewSilentHint')} checked={choice.silent} disabled={props.disabled} onChange={silent => props.onChoice({ silent })} />
       <ToggleRow id="mnemon-review-persist-watermark" label={t('config.reviewPersistWatermark')} hint={t('config.reviewPersistWatermarkHint')} checked={choice.persistWatermark} disabled={props.disabled} onChange={persistWatermark => props.onChoice({ persistWatermark })} />
       <ToggleRow id="mnemon-review-runtime-memory" label={t('config.reviewRuntimeMemory')} hint={t('config.reviewRuntimeMemoryHint')} checked={choice.runtimeMemory} disabled={props.disabled} onChange={runtimeMemory => props.onChoice({ runtimeMemory })} />
@@ -337,18 +371,21 @@ function IdleReviewRows(props: {
         { value: 'pause', label: t('config.reviewTeamPause'), detail: t('config.reviewTeamPauseHint') },
         { value: 'scoped', label: t('config.reviewTeamScoped'), detail: t('config.reviewTeamScopedHint') },
       ]} />
-      <AdvancedSection title={t('config.reviewLimits')} section="review-limits" activeSection={props.activeSection}>
-        <div className={css.fieldGrid}>
-          {LIMITS.map(limit => <label key={limit.key}>{t(`config.review.${limit.key}`)}
-            <input type="number" step="1" inputMode="numeric" value={limits.draft[limit.key]} disabled={props.disabled}
-              aria-invalid={limitValue(limit, limits.draft[limit.key]) === undefined}
-              onChange={event => limits.edit({ [limit.key]: event.target.value })} />
-          </label>)}
+      <AdvancedSection title={t('config.reviewLimits')} badge={limitsBadge} section="review-limits" activeSection={props.activeSection}>
+        <div className={css.rows}>
+          {LIMITS.map(limit => <SettingRow key={limit.key} htmlFor={`${baseId}-${limit.key}`} title={t(`config.review.${limit.key}`)}>
+            <span className={css.unitInput}>
+              <input id={`${baseId}-${limit.key}`} type="number" step="1" inputMode="numeric" value={limits.draft[limit.key]} disabled={props.disabled}
+                aria-invalid={limitValue(limit, limits.draft[limit.key]) === undefined}
+                onChange={event => limits.edit({ [limit.key]: event.target.value })} />
+              <span className={css.unitSuffix} aria-hidden="true">{limit.unit}</span>
+            </span>
+          </SettingRow>)}
         </div>
         <PanelActions dirty={limits.dirty} saving={limits.saving} applied={limits.applied} failed={limits.failed} disabled={props.disabled} t={t}
           invalid={invalid === undefined ? null : t('config.reviewLimitInvalid', { field: t(`config.review.${invalid.key}`), min: invalid.min / invalid.scale, max: invalid.max / invalid.scale })}
           onDiscard={limits.discard} onApply={() => { void limits.apply() }} />
       </AdvancedSection>
-    </>}
+    </div>}
   </>
 }

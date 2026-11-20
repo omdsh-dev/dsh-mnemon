@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type JSX, type ReactNode } from 'react'
+import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   normalizeDisplayMode,
   type ClientConnectionHandle,
@@ -214,7 +215,9 @@ export function MnemonSettingsCard({ scope, interactionScope: suppliedInteractio
         <section className={css.section} data-settings-section="write-confirmation" aria-labelledby="mnemon-write-confirmation-heading">
           <div className={css.sectionHeading}><h2 id="mnemon-write-confirmation-heading">{t('config.memoryWriting')}</h2></div>
           <div className={css.rows}>
-            <ToggleRow id="mnemon-confirm-writes" label={t('config.confirmWrites')} hint={t('config.confirmWritesHint')}
+            <ToggleRow id="mnemon-confirm-writes" label={t('config.confirmWrites')}
+              badge={confirmWrites.value ? <Tag tone="warning">{t('config.confirmWritesBadge')}</Tag> : undefined}
+              hint={t('config.confirmWritesHint')}
               checked={confirmWrites.value} disabled={coreDisabled} onChange={confirmWrites.set} />
           </div>
           <WriteFailure error={confirmWrites.failed} t={t} />
