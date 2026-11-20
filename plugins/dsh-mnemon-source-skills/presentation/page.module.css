@@ -130,17 +130,20 @@
 /* ---- the tab row ---------------------------------------------------------- */
 
 .skTabBadge {
-  display: inline-block;
+  display: inline-flex;
   min-width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
   margin-left: 6px;
   padding: 0 5px;
   border-radius: 999px;
   corner-shape: round;
-  color: var(--dsw-static-neutral-00, #ffffff);
-  background: var(--dsw-alias-brand-primary, var(--mn-accent));
+  color: var(--dsw-alias-label-primary-foreground, #ffffff);
+  background: var(--dsw-alias-button-primary-fill, var(--dsw-alias-brand-primary, var(--mn-accent)));
   font-size: 11px;
   font-weight: 500;
-  line-height: 16px;
+  line-height: 1;
   text-align: center;
   font-variant-numeric: tabular-nums;
   animation: sk-pop 260ms cubic-bezier(.2, 0, 0, 1);
@@ -200,6 +203,7 @@
 
 .skListBar { display: flex; min-height: 56px; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: .5px solid var(--mn-line); }
 .skListBar > :first-child { min-width: 0; flex: 1; }
+.skListBar > button:not(.skIconButton) { min-height: 36px; }
 .skListNote { margin: 0; padding: 18px 16px; color: var(--mn-faint); font-size: 12px; line-height: 18px; text-align: center; }
 /* A second, quieter control under the bar: narrowing the list. */
 .skListFilter { padding: 8px 10px 2px; }
@@ -211,9 +215,10 @@
 .skGroupChevron { flex: none; color: var(--mn-faint); transition: transform 160ms cubic-bezier(.2, 0, 0, 1), color 120ms ease; }
 .skGroupToggle[aria-expanded='false'] .skGroupChevron { transform: rotate(-90deg); }
 .skGroupToggle:hover:not(:disabled) .skGroupChevron { color: var(--mn-text); }
-.skGroupLabel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.skGroupLabel small { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; font-weight: 400; }
-.skGroupCount { flex: none; min-width: 18px; padding: 0 5px; border-radius: 999px; corner-shape: round; color: var(--mn-muted); background: var(--mn-fill); font-size: 10px; font-weight: 500; line-height: 16px; text-align: center; font-variant-numeric: tabular-nums; }
+.skGroupLabel { display: grid; flex: 1; min-width: 0; gap: 1px; color: var(--mn-muted); font-size: 12px; font-weight: 500; line-height: 16px; }
+.skGroupLabel small { display: block; min-width: 0; overflow: hidden; color: var(--mn-faint); font-size: 11px; font-weight: 400; line-height: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.skGroupLabel [data-path-label] { font-size: 11px; line-height: 15px; }
+.skGroupCount { display: inline-flex; flex: none; min-width: 20px; height: 18px; align-items: center; justify-content: center; padding: 0 6px; border-radius: 999px; corner-shape: round; color: var(--mn-muted); background: var(--mn-fill); font-size: 11px; font-weight: 500; line-height: 1; text-align: center; font-variant-numeric: tabular-nums; }
 .skGroupToggle:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--dsw-focus-ring-color, var(--mn-accent)); }
 
 /* An inbox row: what it is, one or two lines on it, and when. */
@@ -307,9 +312,12 @@
 .skTitleLink { border: 0; padding: 0; color: inherit; background: transparent; font: inherit; text-align: left; cursor: pointer; }
 .skTitleLink:hover { color: var(--dsw-alias-link, var(--mn-accent)); }
 /* Where it lives, when, how sure: small, separated by dots. */
-.skMeta { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 0 6px; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
+.skMeta { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 2px 6px; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
+.skMeta > * { min-width: 0; }
+.skMeta > span { flex: none; }
 .skMeta > * + *::before { content: '·'; margin-right: 6px; color: var(--mn-line-strong, var(--mn-faint)); }
-.skMeta code { display: inline-flex; align-items: center; min-width: 0; max-width: 100%; overflow: hidden; font: 11px/18px var(--mn-code); text-overflow: ellipsis; white-space: nowrap; }
+.skMeta code { display: inline-flex; flex: 1 1 200px; align-items: center; min-width: 0; max-width: 100%; overflow: hidden; font: 11px/18px var(--mn-code); text-overflow: ellipsis; white-space: nowrap; }
+.skMeta [data-path-label] { font-size: inherit; line-height: inherit; }
 .skInvocation { display: flex; align-items: center; gap: 8px; }
 .skWhen { margin: 0; color: var(--mn-muted); font-size: 12px; line-height: 18px; }
 
@@ -361,17 +369,21 @@
   text-align: left;
   cursor: pointer;
 }
-.skFold > header > button > svg { flex: none; color: var(--mn-faint); transform: rotate(-90deg); transition: transform 180ms cubic-bezier(.2, 0, 0, 1), color 120ms ease; }
+.skFold > header > button > svg { order: 2; flex: none; margin-left: auto; color: var(--mn-faint); transform: rotate(-90deg); transition: transform 180ms cubic-bezier(.2, 0, 0, 1), color 120ms ease; }
 .skFold[data-open] > header > button > svg { transform: none; }
 .skFold > header > button:hover > svg { color: var(--mn-text); }
 .skFold > header > button > small { min-width: 0; overflow: hidden; color: var(--mn-faint); font-size: 12px; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
 .skFold > header > button:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--dsw-focus-ring-color, var(--mn-accent)); }
 .skFold > header > div { display: flex; align-items: center; gap: 6px; }
 .skFoldBody { display: grid; min-width: 0; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 2px 0 14px; }
-/* A row that leads to another tab: its title lines up with the folds', an arrow in place of the chevron. */
-.skFold[data-link] > header > button { padding-left: 24px; }
-.skFold[data-link] > header > button > b { margin-left: auto; color: var(--mn-faint); font-weight: 400; transition: transform 160ms cubic-bezier(.2, 0, 0, 1), color 120ms ease; }
+/* A row that leads to another tab: flush left with sibling folds, arrow aligned with fold chevrons. */
+.skFold[data-link] > header > button { padding-left: 4px; }
+.skFold[data-link] > header > button > b { margin-left: auto; color: var(--mn-faint); font-weight: 400; line-height: 1; transition: transform 160ms cubic-bezier(.2, 0, 0, 1), color 120ms ease; }
 .skFold[data-link] > header > button:hover > b { color: var(--dsw-alias-link, var(--mn-accent)); transform: translateX(2px); }
+/* Fold sitting directly inside the inbox rail (e.g. one-off suggestions). */
+.skList > .skFold { padding: 0 12px; }
+.skList > .skFold > header > button { margin-left: 0; padding: 8px 0; }
+.skList > .skFold .skFoldBody { gap: 0; margin: 0 -12px; padding: 0 0 6px; }
 
 /* ---- versions and files --------------------------------------------------- */
 
@@ -387,7 +399,7 @@
 .skTrashTags { display: flex; flex-wrap: wrap; gap: 6px; }
 .skTrashList li > .skTrashActions { display: flex; flex: 0 0 auto; margin-left: auto; gap: 6px; }
 .skResources { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.skResources code { display: inline-flex; align-items: center; max-width: 100%; padding: 1px 8px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font: 11px/17px var(--mn-code); }
+.skResources code { display: inline-flex; height: 20px; align-items: center; max-width: 100%; padding: 0 8px; border-radius: 999px; color: var(--mn-muted); background: var(--mn-fill); font: 11px/1 var(--mn-code); }
 
 .skEditor { width: 100%; min-height: 420px; resize: vertical; border: .5px solid var(--mn-field-line); border-radius: var(--dsw-radius-md); outline: 0; padding: 10px 12px; color: var(--mn-text); background: var(--mn-input); font: 12px/1.6 var(--mn-code); tab-size: 2; transition: border-color 120ms ease; }
 .skEditor:focus { border-color: var(--mn-accent); }
@@ -520,6 +532,7 @@
 .skMarket { display: grid; gap: 14px; }
 .skMarketBar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .skMarketBar > :first-child { min-width: 220px; flex: 1; }
+.skMarketBar > button:not(.skIconButton) { min-height: 34px; }
 .skMarketGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
 .skMarketCard {
   display: flex;
@@ -562,7 +575,7 @@
 .skAudits { display: grid; gap: 6px; }
 .skAudits > div { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .skAuditsLabel { margin-right: 2px; color: var(--mn-faint); font-size: 12px; line-height: 18px; }
-.skAudit { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px 2px 8px; border-radius: 999px; color: var(--mn-text); background: var(--mn-fill); font-size: 12px; line-height: 18px; animation: sk-pop 260ms cubic-bezier(.2, 0, 0, 1); }
+.skAudit { display: inline-flex; height: 22px; align-items: center; gap: 6px; padding: 0 9px 0 8px; border-radius: 999px; color: var(--mn-text); background: var(--mn-fill); font-size: 12px; line-height: 1; animation: sk-pop 260ms cubic-bezier(.2, 0, 0, 1); }
 .skAudit::before { content: ''; width: 6px; height: 6px; flex: none; border-radius: 999px; background: var(--mn-success); }
 .skAudit[data-status='warn']::before { background: var(--mn-warn); }
 .skAudit[data-status='fail']::before { background: var(--mn-danger); }
@@ -637,7 +650,7 @@
   .skDetailActions { justify-content: flex-start; }
 }
 
-.skGroupBody { display: grid; grid-template-columns: minmax(0, 1fr); animation: skAppear 160ms var(--dsw-ease-out, cubic-bezier(.2, 0, 0, 1)); }
+.skGroupBody { display: grid; grid-template-columns: minmax(0, 1fr); animation: sk-arrive 160ms var(--dsw-ease-out, cubic-bezier(.2, 0, 0, 1)); }
 
 @media (prefers-reduced-motion: reduce) {
   .skPage, .skDetail, .skEmpty, .skTable, .skComposer, .skRunDetail, .skMarketCard, .skMarketSection, .skMarketAdd, .skAudit, .skSourceList > li, .skTabBadge, .skDot, .skScore, .skGroupBody { animation: none; }

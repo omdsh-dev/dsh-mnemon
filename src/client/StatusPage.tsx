@@ -19,6 +19,8 @@ export interface ComponentCard {
   label: string
   enabled: boolean
   state: LayerState
+  /** Opens this Source's workspace tab when clicked. */
+  onSelect?: (() => void) | undefined
 }
 
 export function StatusPage(props: {
@@ -70,9 +72,14 @@ export function StatusPage(props: {
         <article><span className={`${css.healthIndicator} ${status === null ? css.healthMuted : css.healthGood}`} /><div><small>{t('status.engine')}</small><strong>{status?.dshMnemonVersion === undefined ? 'dsh-mnemon' : `dsh-mnemon ${status.dshMnemonVersion}`}</strong><p>{status === null ? t('status.pluginChecking') : t('status.pluginReady')}</p></div></article>
         {props.components.map(card => {
           const note = idle(card.state)
-          return <article key={card.key} data-component={card.packageName}>
+          return <article key={card.key} data-component={card.packageName} data-interactive={card.onSelect !== undefined ? '' : undefined}>
             <span className={`${css.healthIndicator} ${note === undefined && status !== null ? css.healthGood : css.healthMuted}`} />
-            <div><small>{card.label}</small>{note === undefined ? props.renderCard(card) : <><strong>{note.title}</strong><p>{note.detail}</p></>}</div>
+            <div>
+              {card.onSelect !== undefined
+                ? <button type="button" className={css.healthCardAction} onClick={card.onSelect}><small>{card.label}</small><span className={css.healthCardChevron} aria-hidden="true">›</span></button>
+                : <small>{card.label}</small>}
+              {note === undefined ? props.renderCard(card) : <><strong>{note.title}</strong><p>{note.detail}</p></>}
+            </div>
           </article>
         })}
       </section>

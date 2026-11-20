@@ -2220,4 +2220,17 @@ describe('MnemonWorkbench', () => {
     expect(screen.queryByRole('heading', { name: 'Memory System Flow' })).toBeNull()
     expect(screen.getAllByText('Memory Spaces').length).toBeGreaterThan(0)
   })
+
+  it('navigates to the matching Source tab when clicking a StatusPage health card', async () => {
+    const { connection } = createConnection()
+    render(<MnemonWorkbench connection={connection} settingsScope={settingsScope} sessionId="session-1" />)
+
+    await waitFor(() => expect(screen.getByText('已连接')).toBeTruthy())
+    const statusRegion = await screen.findByRole('region', { name: 'Mnemon 运行状态' })
+    const runtimeCardButton = within(statusRegion).getByRole('button', { name: '运行时记忆' })
+    fireEvent.click(runtimeCardButton)
+
+    const navigation = screen.getByRole('tablist', { name: 'Mnemon 页面' })
+    await waitFor(() => expect(within(navigation).getByRole('tab', { name: '运行时记忆' }).getAttribute('aria-selected')).toBe('true'))
+  })
 })
