@@ -12,6 +12,7 @@ For new evaluations, commit the reusable harness and workload generator to [`scr
 
 | Record / 记录 | Scope / 范围 |
 |---|---|
+| [v0.5.50 release acceptance](./release-v0.5.50/README.md) / [中文](./release-v0.5.50/README.zh-CN.md) | Web installation, upgrade from 0.5.49 and Runtime data retention / 网页新装、从 0.5.49 升级与运行时数据保留 |
 | [v0.5.49 release acceptance](./release-v0.5.49/README.md) / [中文](./release-v0.5.49/README.zh-CN.md) | Web installation, upgrade from 0.5.48 and Runtime data retention / 网页新装、从 0.5.48 升级与运行时数据保留 |
 | [v0.5.48 release acceptance](./release-v0.5.48/README.md) / [中文](./release-v0.5.48/README.zh-CN.md) | Web installation, upgrade from 0.5.47 and Runtime data retention through restart / 网页新装、从 0.5.47 升级与重启后的运行时记忆保留 |
 | [v0.5.47 release acceptance](./release-v0.5.47/README.md) / [中文](./release-v0.5.47/README.zh-CN.md) | Seven published Hosts: fresh install, retained-data upgrade and restart / 七个已发布宿主的新装、保留数据升级与重启 |
