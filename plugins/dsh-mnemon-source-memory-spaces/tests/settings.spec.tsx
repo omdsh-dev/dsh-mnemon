@@ -472,7 +472,10 @@ describe('Space policy, Recall & timeouts, and locale parity', { timeout: 20_000
     const { container } = render(settings(lent, true, 'recall'))
     const recallSection = container.querySelector('[data-settings-section="recall"]') as HTMLElement
     expect(recallSection.hasAttribute('data-open')).toBe(true)
-    expect(within(recallSection).getByRole('button', { name: t('config.recallTitle') }).getAttribute('aria-expanded')).toBe('true')
+    const recallButton = within(recallSection).getByRole('button', { name: t('config.recallTitle') })
+    expect(recallButton.getAttribute('aria-expanded')).toBe('true')
+    expect(recallButton.textContent).toContain(t('config.recallBadge', { limit: '10', policy: t('config.recallPolicyShort.strict-v1') }))
+    expect(container.querySelector('[data-settings-section="providers"]')?.textContent).toContain(t('config.providersBadge', { enabled: 1, total: 1 }))
 
     const limitInput = within(recallSection).getByLabelText(t('config.defaultRecallLimit')) as HTMLInputElement
     const timeoutInput = within(recallSection).getByLabelText(t('config.timeoutMs')) as HTMLInputElement

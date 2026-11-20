@@ -286,6 +286,7 @@ function readThemePalette(canvas: HTMLCanvasElement) {
   }
   return {
     bg: pick(['--dsw-alias-bg-layer-1', '--mn-layer-1'], '#ffffff'),
+    surface: pick(['--dsw-alias-bg-module-platform', '--mn-fill'], 'rgba(128,128,128,0.12)'),
     text: pick(['--dsw-alias-label-primary', '--mn-text'], '#111827'),
     muted: pick(['--dsw-alias-label-secondary', '--mn-muted'], '#4b5563'),
     faint: pick(['--dsw-alias-label-tertiary', '--mn-faint'], '#9ca3af'),
@@ -293,16 +294,21 @@ function readThemePalette(canvas: HTMLCanvasElement) {
   }
 }
 
+type ThemePalette = ReturnType<typeof readThemePalette>
+
 /** Zero-dependency interactive HTML5 2D-canvas 3D perspective renderer for multi-space memory graphs. */
 export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraphProps): JSX.Element {
   const t = useT()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
+  const paletteRef = useRef<ThemePalette | null>(null)
   const cameraRef = useRef<Camera3D>({ ...DEFAULT_CAMERA })
   const projectedRef = useRef<ProjectedNode[]>([])
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; lastX: number; lastY: number; moved: boolean } | null>(null)
   const skipNextClickRef = useRef(false)
   const drawRef = useRef<() => void>(() => undefined)
+  const hoveredIdRef = useRef<string | undefined>(undefined)
   const [hoveredId, setHoveredId] = useState<string | undefined>(undefined)
+  hoveredIdRef.current = hoveredId
   const [dragging, setDragging] = useState(false)
 
   const { nodes: visibleNodes, edges: visibleEdges, neighborIds } = useMemo(
@@ -310,6 +316,27 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraphProps
     [props.graph, props.selectedId],
   )
   const layout = useMemo(() => compute3DLayout(visibleNodes, visibleEdges), [visibleNodes, visibleEdges])
+  const nodeVisuals = useMemo(() => {
+    const map = new Map<string, { kind: ReturnType<typeof graphNodeKind>; color: string; baseRadius: number; label: string }>()
+    for (const node of visibleNodes) {
+      const id = graphNodeKey(node)
+      const kind = graphNodeKind(node)
+      const baseRadius = kind === 'space' ? 11.5 : kind === 'entity' ? 8.2 : 5.2 + Math.min(3.5, (node.importance ?? 3) * 0.65)
+      map.set(id, {
+        kind,
+        color: resolveColor(node),
+        baseRadius,
+        label: short(node.content.replace(/\s+/gu, ' '), kind === 'space' ? 24 : 20),
+      })
+    }
+    return map
+  }, [visibleNodes])
+  const pickerNodes = useMemo(
+    () => [...visibleNodes]
+      .sort((a, b) => graphNodeKey(a).localeCompare(graphNodeKey(b)))
+      .map(node => ({ key: graphNodeKey(node), label: short(node.content, 80) })),
+    [visibleNodes],
+  )
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current
@@ -327,7 +354,7 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraphProps
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
-    const palette = readThemePalette(canvas)
+    const palette = paletteRef.current ?? (paletteRef.current = readThemePalette(canvas))
     const cam = cameraRef.current
     const quiet = props.quiet === true
     const focusId = props.selectedId ?? hoveredId
@@ -341,12 +368,11 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraphProps
     for (const node of visibleNodes) {
       const id = graphNodeKey(node)
       const pt = layout.get(id)
-      if (pt === undefined) continue
+      const visual = nodeVisuals.get(id)
+      if (pt === undefined || visual === undefined) continue
       const p = project3DPoint(pt, cam, width, height)
       if (p === undefined) continue
-      const kind = graphNodeKind(node)
-      const baseRadius = kind === 'space' ? 11.5 : kind === 'entity' ? 8.2 : 5.2 + Math.min(3.5, (node.importance ?? 3) * 0.65)
-      const item: ProjectedNode = { id, node, sx: p.sx, sy: p.sy, rz: p.rz, scale: p.scale, radius: clamp(baseRadius * p.scale, 3.5, 22) }
+      const item: ProjectedNode = { id, node, sx: p.sx, sy: p.sy, rz: p.rz, scale: p.scale, radius: clamp(visual.baseRadius * p.scale, 3.5, 22) }
       projectedById.set(id, item)
       projectedList.push(item)
     }
@@ -359,46 +385,58 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraphProps
       })
       .sort((a, b) => b.depth - a.depth)
 
+    // Single save/restore around the edge pass avoids 240+ context stack pushes per drag frame.
+    ctx.save()
+    let dashed = false
     for (const { edge, s, tgt, depth } of drawableEdges) {
       const connected = focusId !== undefined && (edge.sourceId === focusId || edge.targetId === focusId)
       const depthAlpha = clamp(0.75 - depth / 1100, 0.25, 0.95)
-      ctx.save()
+      const wantDashed = !quiet && edge.type === 'scope'
+      if (wantDashed !== dashed) {
+        ctx.setLineDash(wantDashed ? [4, 5] : [])
+        dashed = wantDashed
+      }
       ctx.beginPath()
       ctx.strokeStyle = quiet ? (connected ? palette.accent : palette.faint) : (EDGE_COLORS[edge.type ?? ''] ?? palette.faint)
       ctx.lineWidth = (edge.type === 'entity' ? 1.4 : 1) * (connected ? 1.45 : 1)
       ctx.globalAlpha = quiet ? (connected ? 0.85 : focusId !== undefined ? 0.16 : 0.36) : (connected ? 0.9 : 0.48 * depthAlpha)
-      if (!quiet && edge.type === 'scope') ctx.setLineDash([4, 5])
       ctx.moveTo(s.sx, s.sy)
       ctx.lineTo(tgt.sx, tgt.sy)
       ctx.stroke()
-      ctx.restore()
     }
+    ctx.restore()
 
     projectedList.sort((a, b) => b.rz - a.rz)
     projectedRef.current = projectedList
 
     const sparse = visibleNodes.length <= 16
+    const canMeasure = typeof ctx.measureText === 'function'
     for (const item of projectedList) {
-      const { id, node, sx, sy, rz, radius } = item
+      const { id, sx, sy, rz, radius } = item
+      const visual = nodeVisuals.get(id)
+      if (visual === undefined) continue
+      const { kind, label } = visual
       const isSelected = props.selectedId === id
       const isHovered = hoveredId === id
       const isNeighbor = neighborIds.has(id)
       const dimmed = quiet && focusId !== undefined && !isSelected && !isHovered && !isNeighbor
       const depthAlpha = clamp(0.85 - rz / 950, 0.38, 1)
-      const color = quiet ? (isSelected || isHovered ? palette.accent : palette.muted) : resolveColor(node)
+      const color = quiet ? (isSelected || isHovered ? palette.accent : palette.muted) : visual.color
 
       ctx.save()
       ctx.globalAlpha = dimmed ? 0.32 : depthAlpha
 
-      if (isSelected || isHovered || graphNodeKind(node) !== 'memory') {
+      if (isSelected || isHovered || kind !== 'memory') {
         ctx.beginPath()
         const halo = radius + (isSelected ? 5 : 3.5)
-        const kind = graphNodeKind(node)
         if (kind === 'space') ctx.roundRect(sx - halo, sy - halo * 0.8, halo * 2, halo * 1.6, 5)
         else if (kind === 'entity') {
           ctx.moveTo(sx, sy - halo); ctx.lineTo(sx + halo, sy)
           ctx.lineTo(sx, sy + halo); ctx.lineTo(sx - halo, sy); ctx.closePath()
         } else ctx.arc(sx, sy, halo, 0, Math.PI * 2)
+        ctx.fillStyle = color
+        ctx.globalAlpha = dimmed ? 0.06 : (isSelected ? 0.16 : 0.1)
+        ctx.fill()
         ctx.strokeStyle = color
         ctx.lineWidth = isSelected ? 2 : 1.25
         ctx.globalAlpha = dimmed ? 0.25 : (isSelected ? 0.95 : 0.52)
@@ -407,23 +445,31 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraphProps
 
       ctx.globalAlpha = dimmed ? 0.35 : depthAlpha
       ctx.beginPath()
-      ctx.arc(sx, sy, graphNodeKind(node) === 'memory' ? radius : radius * 0.5, 0, Math.PI * 2)
+      ctx.arc(sx, sy, kind === 'memory' ? radius : radius * 0.5, 0, Math.PI * 2)
       ctx.fillStyle = color
       ctx.fill()
 
-      const showLabel = isSelected || isHovered || (!quiet && (sparse || graphNodeKind(node) === 'space'))
+      const showLabel = isSelected || isHovered || (!quiet && (sparse || kind === 'space'))
       if (showLabel) {
-        const label = short(node.content, graphNodeKind(node) === 'space' ? 24 : 20)
-        ctx.font = `${isSelected || graphNodeKind(node) === 'space' ? 500 : 400} 11px system-ui, -apple-system, sans-serif`
+        ctx.font = `${isSelected || kind === 'space' ? 500 : 400} 11px system-ui, -apple-system, sans-serif`
         ctx.textAlign = 'center'
         ctx.textBaseline = 'top'
-        ctx.fillStyle = isSelected ? palette.text : palette.muted
+        const labelY = sy + radius + 5
+        if ((isSelected || isHovered) && canMeasure) {
+          const textWidth = ctx.measureText(label).width
+          ctx.fillStyle = palette.bg
+          ctx.globalAlpha = 0.88
+          ctx.beginPath()
+          ctx.roundRect(sx - textWidth / 2 - 5, labelY - 2, textWidth + 10, 16, 4)
+          ctx.fill()
+        }
+        ctx.fillStyle = isSelected || isHovered ? palette.text : palette.muted
         ctx.globalAlpha = dimmed ? 0.4 : 0.95
-        ctx.fillText(label, sx, sy + radius + 5)
+        ctx.fillText(label, sx, labelY)
       }
       ctx.restore()
     }
-  }, [hoveredId, layout, neighborIds, props.quiet, props.selectedId, visibleEdges, visibleNodes])
+  }, [hoveredId, layout, neighborIds, nodeVisuals, props.quiet, props.selectedId, visibleEdges, visibleNodes])
 
   drawRef.current = draw
 
@@ -440,7 +486,10 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraphProps
   }, [])
 
   useEffect(() => {
-    const observer = new MutationObserver(() => drawRef.current())
+    const observer = new MutationObserver(() => {
+      paletteRef.current = null
+      drawRef.current()
+    })
     // DSH's ThemePresenter publishes its palette and token overrides on body.
     observer.observe(document.body, { attributes: true, attributeFilter: ['data-ds-dark-theme', 'style'] })
     return () => observer.disconnect()
@@ -508,7 +557,8 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraphProps
     if (!Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) return
     const point = canvasCoordinates(event.clientX, event.clientY, event.currentTarget)
     const hit = pickProjectedNode(projectedRef.current, point.x, point.y)
-    setHoveredId(hit === undefined ? undefined : graphNodeKey(hit))
+    const nextHovered = hit === undefined ? undefined : graphNodeKey(hit)
+    if (hoveredIdRef.current !== nextHovered) setHoveredId(nextHovered)
   }
 
   const onPointerUp = (event: ReactPointerEvent<HTMLCanvasElement>) => {
@@ -548,10 +598,10 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraphProps
   return (
     <>
       <div className={css.graphCanvasControls} role="toolbar" aria-label={t('graph.orbitAria')}>
-        <span>{t('graph.orbitHint')}</span>
+        <span title={t('graph.orbitHint')}><i />{t('graph.orbitShort')}</span>
         {props.onQuietChange !== undefined && <button type="button" aria-pressed={props.quiet === true} data-active={props.quiet || undefined} title={t('graph.quietHint')} onClick={() => props.onQuietChange?.(!props.quiet)}>{t('graph.quietAction')}</button>}
-        <button type="button" aria-label={t('graph.zoomInAction')} onClick={() => adjustZoom(-160)}>+</button>
-        <button type="button" aria-label={t('graph.zoomOutAction')} onClick={() => adjustZoom(160)}>−</button>
+        <button type="button" aria-label={t('graph.zoomInAction')} title={t('graph.zoomInAction')} onClick={() => adjustZoom(-160)}>+</button>
+        <button type="button" aria-label={t('graph.zoomOutAction')} title={t('graph.zoomOutAction')} onClick={() => adjustZoom(160)}>−</button>
         <button type="button" onClick={() => setCamera(DEFAULT_CAMERA)}>{t('graph.resetViewAction')}</button>
       </div>
       <canvas
@@ -569,11 +619,11 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraphProps
         onPointerUp={onPointerUp}
         onClick={onClick}
         onPointerCancel={event => { if (dragRef.current?.pointerId === event.pointerId) { dragRef.current = null; setDragging(false) } }}
-        onPointerLeave={() => { if (dragRef.current === null) setHoveredId(undefined) }}
+        onPointerLeave={() => { if (dragRef.current === null && hoveredIdRef.current !== undefined) setHoveredId(undefined) }}
         onKeyDown={onKeyDown}
       />
       <label className={css.graphNodePicker}>
-        {t('graph.selectNodeAction')}
+        <span>{t('graph.selectNodeAction')}</span>
         <select
           aria-label={t('graph.selectNodeAction')}
           value={props.selectedId ?? ''}
@@ -585,8 +635,8 @@ export const MemoryGraph3D = memo(function MemoryGraph3D(props: MemoryGraphProps
           }}
         >
           <option value="">{t('graph.noNodeSelected')}</option>
-          {[...visibleNodes].sort((a, b) => graphNodeKey(a).localeCompare(graphNodeKey(b))).map(node => (
-            <option key={graphNodeKey(node)} value={graphNodeKey(node)}>{short(node.content, 80)}</option>
+          {pickerNodes.map(item => (
+            <option key={item.key} value={item.key}>{item.label}</option>
           ))}
         </select>
       </label>

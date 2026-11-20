@@ -231,8 +231,41 @@
   .shell .memoryWorkspace { margin: -16px -16px 16px; padding: 16px 16px 0; }
 }
 
+@container mnemon-workbench (max-width: 560px) {
+  .shell .bodyCardFooter {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    white-space: normal;
+  }
+  .shell .bodyCardStats {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    overflow: visible;
+  }
+  .shell .bodyCardFooter [class*='bodyCardActions'] {
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 560px) {
+  .shell .bodyCardFooter {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    white-space: normal;
+  }
+  .shell .bodyCardStats {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    overflow: visible;
+  }
+  .shell .bodyCardFooter [class*='bodyCardActions'] {
+    justify-content: flex-end;
+  }
+}
+
 @media (max-width: 520px) {
   .shell .memoryTabs { gap: 18px; }
+  .shell .memoryWriteButton { flex: 1 1 0; justify-content: center; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -106,8 +106,10 @@ export function ExplorePage(props: { client: MemorySpacesPageClient; agentClient
       <form className={css.searchBar} onSubmit={event => void search(event)}>
         <SearchField className={css.queryField} label={t('search.queryAria')} value={query} onChange={event => setQuery(event.target.value)} placeholder={t('search.placeholder')} />
         <div className={css.searchControls}>
-          <SelectField className={css.searchChoice} label={t('common.category')} ariaLabel={t('search.categoryAria')} value={category} options={[{ value: '' as Category | '', label: t('common.allCategories') }, ...CATEGORIES.map(value => ({ value, label: categoryLabel(t, value) }))]} onChange={setCategory} />
-          <SelectField className={css.searchChoice} label={t('search.strategy')} ariaLabel={t('search.modeAria')} value={mode} options={[{ value: 'smart', label: t('search.modeSmart') }, { value: 'keyword', label: t('search.modeKeyword') }, { value: 'basic', label: t('search.modeBasic') }]} onChange={setMode} />
+          <div className={css.searchFilters}>
+            <SelectField inline className={css.searchChoice} label={t('common.category')} ariaLabel={t('search.categoryAria')} value={category} options={[{ value: '' as Category | '', label: t('common.allCategories') }, ...CATEGORIES.map(value => ({ value, label: categoryLabel(t, value) }))]} onChange={setCategory} />
+            <SelectField inline className={css.searchChoice} label={t('search.strategy')} ariaLabel={t('search.modeAria')} value={mode} options={[{ value: 'smart', label: t('search.modeSmart') }, { value: 'keyword', label: t('search.modeKeyword') }, { value: 'basic', label: t('search.modeBasic') }]} onChange={setMode} />
+          </div>
           <div className={css.searchActions}><button type="submit" className={css.secondaryButton} disabled={searching || query.trim() === ''}>{searchKind === 'direct' ? t('search.searching') : t('search.action')}</button><button type="button" className={css.primaryButton} disabled={searching || query.trim() === '' || !props.agentAvailable} onClick={() => void runSearch(true)}>{searchKind === 'agent' ? t('search.agentSearching') : t('search.agentAction')}</button></div>
         </div>
       </form>
