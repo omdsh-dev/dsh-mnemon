@@ -5,7 +5,6 @@ import { type RuntimeMemoryEntry, type RuntimeMemoryImportance, type RuntimeMemo
 import type { RuntimePageClient } from './api.ts'
 import { type MnemonKey, appearanceClass, useLocale, humanBytes, message, parseBranchesInput, PageHeader, ProgressiveFooter, Reveal, SidebarModal, SearchField, SelectField } from 'dsh-mnemon/client'
 
-/** Whitespace folded, as a conversation turn quotes an entry it wrote. */
 function fold(text: string): string {
   return text.replace(/\s+/gu, ' ').trim()
 }
@@ -41,7 +40,6 @@ export function RuntimePage(props: { client: RuntimePageClient; revision: number
   const [visibleLimit, setVisibleLimit] = useState(pageSize)
   const listRef = useRef<HTMLDivElement | null>(null)
   const revealed = useRef(false)
-  // A turn quotes what it wrote, cut short with an ellipsis when long.
   const focus = props.focusText === undefined ? '' : fold(props.focusText).replace(/…$/u, '')
   const focused = (entry: RuntimeMemoryEntry) => focus !== '' && fold(entry.content).startsWith(focus)
 

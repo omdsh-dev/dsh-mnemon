@@ -10,14 +10,10 @@ import { githubUrl, parseGithub } from './source-kind.ts'
 import official from '../market/official.json' with { type: 'json' }
 
 export const OFFICIAL_REGISTRY_ID = 'official'
-/** The official registry's newest copy; the package carries a snapshot for offline use. */
 export const OFFICIAL_REGISTRY_URL = 'https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/plugins/dsh-mnemon-source-skills/market/official.json'
-/** The open skills index searched as the user types. */
 export const SKILLS_SH_ID = 'skills-sh'
 export const SKILLS_SH_URL = 'https://skills.sh'
-/** A registry copy older than this is refreshed when the page opens. */
 export const REGISTRY_REFRESH_MS = 6 * 60 * 60 * 1000
-/** The schema of the Agent Skills discovery index this market reads. */
 export const DISCOVERY_SCHEMA = 'https://schemas.agentskills.io/discovery/0.2.0/schema.json'
 
 const MAX_REGISTRY_BYTES = 2 * 1024 * 1024
@@ -25,11 +21,9 @@ const MAX_ENTRIES = 1_000
 const MAX_FILES = 300
 const MAX_FILE_BYTES = 4 * 1024 * 1024
 const MAX_SKILL_BYTES_TOTAL = 12 * 1024 * 1024
-/** A repository lists at most this many skills, each read once for its name and description. */
 const MAX_REPOSITORY_SKILLS = 300
 const SEARCH_LIMIT = 30
 const TIMEOUT_MS = 20_000
-/** A repository's file tree is reused this long, between a preview and its install. */
 const TREE_TTL_MS = 10 * 60 * 1000
 
 export interface FetchResponse {
@@ -63,7 +57,6 @@ function localizedText(value: unknown, maximum: number): LocalizedText | undefin
   return { ...(en ? { en } : {}), ...(zh ? { 'zh-CN': zh } : {}) }
 }
 
-/** The text for a language, falling back to the other one. */
 export function localized(value: LocalizedText | undefined, language: string): string {
   if (value === undefined) return ''
   if (typeof value === 'string') return value
@@ -92,7 +85,6 @@ function source(value: unknown): MarketSource | undefined {
   return undefined
 }
 
-/** Validate a registry file; entries that cannot be installed are left out, not fatal. */
 export function parseRegistry(value: unknown): { registry: MarketRegistryFile; skipped: number } {
   const fields = object(value)
   if (fields === undefined || fields.version !== 1 || !Array.isArray(fields.skills)) throw new Error('a skill registry is a JSON object with "version": 1 and a "skills" array')
@@ -135,7 +127,6 @@ export function parseRegistry(value: unknown): { registry: MarketRegistryFile; s
   }
 }
 
-/** The registry the package ships, so the market works offline and before any refresh. */
 export function bundledOfficialRegistry(): MarketRegistryFile {
   return parseRegistry(official).registry
 }
@@ -222,7 +213,6 @@ function parseJson(text: string, what: string): unknown {
   try { return JSON.parse(text) } catch (error) { throw new Error(`${what} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`) }
 }
 
-/** Read a JSON file from an http(s) URL or an absolute file path. */
 export async function loadJson(location: string, fetcher: Fetcher, signal?: AbortSignal): Promise<unknown> {
   let text: string
   if (/^https?:\/\//u.test(location)) text = await fetchText(fetcher, location, signal)
@@ -235,12 +225,10 @@ export async function loadJson(location: string, fetcher: Fetcher, signal?: Abor
   return parseJson(text, 'the registry')
 }
 
-/** Read a registry from an http(s) URL or an absolute file path. */
 export async function loadRegistry(location: string, fetcher: Fetcher, signal?: AbortSignal): Promise<MarketRegistryFile> {
   return parseRegistry(await loadJson(location, fetcher, signal)).registry
 }
 
-/** A stable id for a registry the user adds: its own id when it declares one, else a digest of where it lives. */
 export function registryId(location: string, declared: string | undefined, taken: ReadonlySet<string>): string {
   if (declared !== undefined && declared !== OFFICIAL_REGISTRY_ID && declared !== SKILLS_SH_ID && !taken.has(declared)) return declared
   return 'registry-' + createHash('sha256').update(location).digest('hex').slice(0, 10)
@@ -253,10 +241,8 @@ function rawUrl(repo: string, ref: string, path: string): string {
 interface GithubTreeEntry { path: string; type: string; size?: number }
 interface GithubTree { tree: GithubTreeEntry[]; truncated: boolean; at: number }
 
-/** Trees per fetcher, so a preview and the install after it list a repository once. */
 const trees = new WeakMap<Fetcher, Map<string, GithubTree>>()
 
-/** A repository's whole file tree at a ref, from one GitHub API call. */
 async function repositoryTree(fetcher: Fetcher, repo: string, ref: string, signal?: AbortSignal): Promise<GithubTree> {
   let cache = trees.get(fetcher)
   if (cache === undefined) trees.set(fetcher, cache = new Map())
@@ -287,10 +273,8 @@ async function githubTree(fetcher: Fetcher, repo: string, ref: string, prefix: s
   return files
 }
 
-/** Folders whose `SKILL.md` files are not skills to offer: dependencies, build output, test fixtures. */
 const SKIPPED_FOLDERS = new Set(['node_modules', '.git', 'dist', 'build', 'fixtures', '__fixtures__', 'test', 'tests', '__tests__', 'vendor'])
 
-/** The `SKILL.md` files of a tree under a folder, nearest first. */
 function skillDocuments(tree: readonly GithubTreeEntry[], prefix: string): string[] {
   const base = prefix === '' ? '' : prefix + '/'
   return tree
@@ -304,7 +288,6 @@ function folderOf(path: string): string {
   return path === 'SKILL.md' ? '' : path.slice(0, -'/SKILL.md'.length)
 }
 
-/** The fields of a `SKILL.md` a market shows, or undefined when DSH could not load it under its name. */
 export function skillMeta(raw: string): { name: string; description: string; license?: string } | undefined {
   try {
     const split = splitFrontmatter(raw)
@@ -325,11 +308,6 @@ async function mapLimit<T, R>(items: readonly T[], limit: number, run: (item: T)
   return results
 }
 
-/**
- * Every skill a GitHub repository (or one folder of it) holds: one API call
- * for its tree, then each `SKILL.md` read raw for its name and description.
- * A repository that is a plugin marketplace lends its name to the list.
- */
 export async function loadRepository(location: string, fetcher: Fetcher, signal?: AbortSignal): Promise<MarketRegistryFile> {
   const github = parseGithub(location)
   if (github === undefined) throw new Error('not a GitHub repository: ' + location)
@@ -362,16 +340,11 @@ export async function loadRepository(location: string, fetcher: Fetcher, signal?
       const marketplace = object(parseJson(await fetchText(fetcher, rawUrl(github.repo, ref, '.claude-plugin/marketplace.json'), signal), 'the marketplace'))
       if (typeof marketplace?.name === 'string' && marketplace.name.trim() !== '') name = `${marketplace.name.trim().slice(0, 80)} · ${github.repo}`
       description = localizedText(marketplace?.description ?? object(marketplace?.metadata)?.description, 600)
-    } catch { /* The skills are listed either way. */ }
+    } catch { }
   }
   return { version: 1, name, skills, homepage: githubUrl(github), ...(description === undefined ? {} : { description }) }
 }
 
-/**
- * Where a site's Agent Skills index may live, nearest first: under the
- * path given, then at the site's root, the current well-known name before
- * the one it replaced. A URL that names an index is read as it is.
- */
 export function discoveryCandidates(location: string): string[] {
   const url = new URL(location)
   if (url.pathname.endsWith('/index.json')) return [url.toString()]
@@ -384,11 +357,6 @@ export function discoveryCandidates(location: string): string[] {
   return [...new Set(found)]
 }
 
-/**
- * An Agent Skills discovery index: schema 0.2.0 (one artifact per skill,
- * a `SKILL.md` or an archive, with its SHA-256 digest), or the earlier form
- * that lists each skill's files. Entries that break the rules are dropped.
- */
 export function parseDiscovery(value: unknown, indexUrl: string): MarketRegistryFile {
   const fields = object(value)
   if (fields === undefined || !Array.isArray(fields.skills)) throw new Error('an Agent Skills index is a JSON object with a "skills" array')
@@ -422,7 +390,6 @@ export function parseDiscovery(value: unknown, indexUrl: string): MarketRegistry
   return { version: 1, name: index.host + site, homepage: index.origin + (site === '' ? '/' : site), skills }
 }
 
-/** A site's Agent Skills index, from the first place it is published. */
 export async function loadDiscovery(location: string, fetcher: Fetcher, signal?: AbortSignal): Promise<MarketRegistryFile> {
   let found: { index: string; value: unknown } | undefined
   let reached = false
@@ -440,7 +407,6 @@ export async function loadDiscovery(location: string, fetcher: Fetcher, signal?:
   return parseDiscovery(found.value, found.index)
 }
 
-/** Whether a JSON file is a discovery index rather than a catalog, read by its shape. */
 export function isDiscoveryIndex(value: unknown): boolean {
   const fields = object(value)
   if (fields === undefined || !Array.isArray(fields.skills)) return false
@@ -449,13 +415,11 @@ export function isDiscoveryIndex(value: unknown): boolean {
   return fields.version === undefined && first !== undefined && Array.isArray(first.files)
 }
 
-/** Whether a JSON file is a Claude Code plugin marketplace. */
 export function isPluginMarketplace(value: unknown): boolean {
   const fields = object(value)
   return fields !== undefined && Array.isArray(fields.plugins) && typeof fields.name === 'string'
 }
 
-/** The GitHub repository a raw or blob URL of a marketplace file lives in. */
 export function marketplaceRepository(url: string): string | undefined {
   const parsed = new URL(url)
   const parts = parsed.pathname.split('/').filter(Boolean)
@@ -494,7 +458,6 @@ function listLocal(root: string): Array<{ path: string; bytes: number }> {
   return found
 }
 
-/** A discovery artifact's files, after its bytes match the digest its index published. */
 async function artifactFiles(entry: MarketEntry & { source: { type: 'artifact' } }, fetcher: Fetcher, signal?: AbortSignal): Promise<SkillFile[]> {
   const data = await fetchBytes(fetcher, entry.source.url, MAX_SKILL_BYTES_TOTAL, signal)
   if ('sha256:' + createHash('sha256').update(data).digest('hex') !== entry.source.digest) throw new Error(`${entry.source.url} does not match the digest its index published`)
@@ -506,7 +469,6 @@ function unresolved(): never {
   throw new Error('an indexed skill is resolved to its repository or site before it is read')
 }
 
-/** The file list of a market entry, without downloading it when its source can say. */
 export async function listSkillFiles(entry: MarketEntry, registryLocation: string, fetcher: Fetcher, signal?: AbortSignal): Promise<Array<{ path: string; bytes: number }>> {
   switch (entry.source.type) {
     case 'url': return [{ path: 'SKILL.md', bytes: 0 }]
@@ -522,7 +484,6 @@ export async function listSkillFiles(entry: MarketEntry, registryLocation: strin
   }
 }
 
-/** The SKILL.md of a market entry, for a preview before installing. */
 export async function fetchSkillDocument(entry: MarketEntry, registryLocation: string, fetcher: Fetcher, signal?: AbortSignal): Promise<string> {
   switch (entry.source.type) {
     case 'url': return fetchText(fetcher, entry.source.url, signal, undefined, MAX_FILE_BYTES)
@@ -539,7 +500,6 @@ export async function fetchSkillDocument(entry: MarketEntry, registryLocation: s
   }
 }
 
-/** Download every file of a market entry, bounded, with paths kept inside the skill folder. */
 export async function fetchSkillFiles(entry: MarketEntry, registryLocation: string, fetcher: Fetcher, signal?: AbortSignal): Promise<SkillFile[]> {
   if (entry.source.type === 'url') return [{ path: 'SKILL.md', data: Buffer.from(await fetchSkillDocument(entry, registryLocation, fetcher, signal), 'utf8') }]
   if (entry.source.type === 'indexed') return unresolved()
@@ -572,9 +532,6 @@ export async function fetchSkillFiles(entry: MarketEntry, registryLocation: stri
   return files
 }
 
-// ---- skills.sh -------------------------------------------------------------------
-
-/** A skill the open index found: its id, the repository or site it lives in, and how often it is installed. */
 export interface IndexedSkill {
   id: string
   origin: string
@@ -585,14 +542,12 @@ export interface IndexedSkill {
 
 const INDEX_ID = /^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)?\/[A-Za-z0-9_.-]+$/u
 
-/** The parts of an index id: `owner/repo/skill`, or `site/skill` for a site's own index. */
 export function indexedParts(id: string): { origin: string; skill: string } | undefined {
   if (!INDEX_ID.test(id)) return undefined
   const at = id.lastIndexOf('/')
   return { origin: id.slice(0, at), skill: id.slice(at + 1) }
 }
 
-/** Search skills.sh, the index the open `skills` CLI searches, newest installs first. */
 export async function searchSkillsSh(query: string, fetcher: Fetcher, signal?: AbortSignal): Promise<IndexedSkill[]> {
   const response = await request(fetcher, `${SKILLS_SH_URL}/api/search?${new URLSearchParams({ q: query, limit: String(SEARCH_LIMIT) }).toString()}`, signal)
   if (response.status === 429) throw new Error('skills.sh is busy; try again in a moment')
@@ -612,7 +567,6 @@ export async function searchSkillsSh(query: string, fetcher: Fetcher, signal?: A
   return found.sort((a, b) => b.installs - a.installs)
 }
 
-/** What security reviewers said about a skill on skills.sh; none when it was not reviewed yet. */
 export async function skillsShAudits(id: string, fetcher: Fetcher, signal?: AbortSignal): Promise<MarketAudit[]> {
   try {
     const response = await request(fetcher, `${SKILLS_SH_URL}/api/v1/skills/audit/${id.split('/').map(encodeURIComponent).join('/')}`, signal)
@@ -632,7 +586,6 @@ export async function skillsShAudits(id: string, fetcher: Fetcher, signal?: Abor
   } catch { return [] }
 }
 
-/** The text files skills.sh keeps of a skill: enough to read it, not always every file to install. */
 export async function skillsShSnapshot(id: string, fetcher: Fetcher, signal?: AbortSignal): Promise<SkillFile[]> {
   const parts = indexedParts(id)
   if (parts === undefined) throw new Error('not a skills.sh id: ' + id)
@@ -649,11 +602,6 @@ export async function skillsShSnapshot(id: string, fetcher: Fetcher, signal?: Ab
   return files
 }
 
-/**
- * Where an indexed skill's files live: the folder of its `SKILL.md` in its
- * GitHub repository, found in the repository's tree by folder name and then
- * by the name in its frontmatter; or its entry in its site's own index.
- */
 export async function resolveIndexed(skill: Pick<IndexedSkill, 'origin' | 'skill' | 'name'>, fetcher: Fetcher, signal?: AbortSignal): Promise<MarketEntry> {
   const github = parseGithub(skill.origin)
   if (github === undefined) {

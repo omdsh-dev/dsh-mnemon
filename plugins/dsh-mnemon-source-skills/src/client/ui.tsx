@@ -11,14 +11,11 @@ import { TrashPage } from './trash-page.tsx'
 import { installSkillUseBridge, isDirectSkillUseActive, requestSkillUse, type SkillUseRuntimeContext } from './use-skill.tsx'
 
 export type SkillsTab = 'skills' | 'evolution' | 'evals' | 'market' | 'trash'
-/** What 进化 lists: suggestions still waiting, those handled, or the conversations reviews read. */
 export type EvolutionFilter = 'pending' | 'done' | 'evidence'
 
-/** Where a link inside the page points: a tab, and what to select there. */
 export interface SkillsLocation {
   tab: SkillsTab
   skillKey?: string
-  /** A skill by name: the one DSH loads, its first waiting suggestion, or its tests. */
   skillName?: string
   suggestionId?: string
   draftId?: string
@@ -28,7 +25,6 @@ export interface SkillsLocation {
   nonce?: number
 }
 
-/** Self-evolution as the page knows it from its settings: on or off, and turning it on from here. */
 export interface EvolutionState {
   on: boolean
   enable?: () => Promise<void>
@@ -37,21 +33,15 @@ export interface EvolutionState {
 export interface SkillsPageContext {
   client: SkillsPageClient
   writable: boolean
-  /** Reload active tab/poll data; every tab watches it. */
   revision: number
-  /** Static configuration revision; unaffected by 3s busy polling. */
   configRevision?: number
-  /** Shared overview already loaded by SkillsView for the current revision. */
   overview?: SkillsOverview | null
   refresh(): void
   navigate(location: SkillsLocation): void
   notice(text: string): void
   fail(error: unknown): void
-  /** Put `/name` into the conversation's input and go back to it. */
   useSkill(name: string): void
-  /** Unknown where the page has no settings to read. */
   evolution: EvolutionState | undefined
-  /** Open 技能管理's settings under Plugins. */
   openSettings?: (section?: string) => void
   sessionId?: string
 }
@@ -62,11 +52,6 @@ const FOCUS_COOLDOWN_MS = 500
 const NOTICE_MS = 5_000
 const FILTERS: readonly EvolutionFilter[] = ['pending', 'done', 'evidence']
 
-/**
- * `skill:<key>`, `name:<skill>`, `suggestion:<id>`, `draft:<id>`,
- * `trajectory:<id>`, `evals:<skill>` or `evolution:<filter>` from a link
- * elsewhere, such as the skills line under a turn.
- */
 function seedLocation(input: MemorySourcePageProps['navigationInput']): SkillsLocation | undefined {
   if (typeof input !== 'object' || input === null || Array.isArray(input) || typeof input.seed !== 'string') return undefined
   const nonce = typeof input.nonce === 'number' ? input.nonce : Date.now()
@@ -83,7 +68,6 @@ function seedLocation(input: MemorySourcePageProps['navigationInput']): SkillsLo
   return undefined
 }
 
-/** The tab the page showed last, while the client runs: reopening the page lands there again. */
 let rememberedTab: SkillsTab = 'skills'
 
 function SkillsView(props: MemorySourcePageProps & { management: NonNullable<MemorySourcePageProps['management']> }): JSX.Element {
@@ -122,12 +106,10 @@ function SkillsView(props: MemorySourcePageProps & { management: NonNullable<Mem
     void client.overview().then(value => { if (active) setOverview(value) }).catch(reason => { if (active) setError(errorText(reason)) })
     return () => { active = false }
   }, [client, revision])
-  // Drafts and backtests finish in the background; follow them while one is under way.
   const busy = overview !== null && (overview.counts.runsRunning > 0 || overview.counts.drafting > 0)
   const wasBusy = useRef(false)
   useEffect(() => {
     if (props.active === false) return
-    // Reconcile once more only if an independent tab read observed an older ledger than overview (#448).
     if (wasBusy.current && !busy && client.markWaveIdleAndCheckStale?.() === true) pollRefresh()
     wasBusy.current = busy
     if (!busy) return
@@ -246,7 +228,6 @@ export function installSkillsMemoryUI(ctx: Parameters<typeof installMemorySource
   const t = translate(locale)
   return installMemorySourceUI(ctx, { sourceTypeId: 'skills', pages: [{
     id: 'library', order: 800, label: () => t('page.title'),
-    // This page pins its own title and tabs, as Memory Spaces does.
     navigation: { stickyHeader: false, group: 'tools', glyph: '✦' },
     component: SkillsSourcePage,
   }] })
@@ -258,7 +239,6 @@ type SkillsCordisClientContext = Parameters<typeof installMemorySourceUI>[0] & S
 }
 
 export const inject = ['slots']
-/** The tab is named by the component's declaration; the page label is only a fallback. */
 export function apply(ctx: SkillsCordisClientContext): void {
   const disposePage = installSkillsMemoryUI(ctx)
   let disposeBridge = installSkillUseBridge(ctx)

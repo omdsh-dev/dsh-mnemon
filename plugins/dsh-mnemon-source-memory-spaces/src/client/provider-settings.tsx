@@ -2,8 +2,6 @@ import { css as pageCss, SafeReveal, useT, type SourceKey } from './presentation
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type JSX, type ReactNode } from 'react'
 import { Button, IconChevronDownOutlineRegular, Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import { GlobalLocationSetting, memorySettingsStyles, message, useRequestVersion } from 'dsh-mnemon/client'
-// Each function reads memorySettingsStyles where it draws, never at load: dsh-mnemon 0.5.31 lacks it and never draws
-// these settings, and this bundle's pages must still load beside it.
 import type { MemoryProviderConfigField, MemoryProviderConnection, MemoryProviderDescriptor, MemoryProviderServiceCatalog, MemoryProviderServiceView } from '../contracts.ts'
 import { ProviderField } from './provider-field.tsx'
 import { ProviderIcon } from './ProviderIcon.tsx'
@@ -11,26 +9,18 @@ import { providerSummary } from './provider-presentation.ts'
 import type { MemorySpacesSettingsClient } from './settings-client.ts'
 
 interface ProviderSettingsSectionProps {
-  /** Absent while the page has no Host connection: nothing is read or written then. */
   client?: MemorySpacesSettingsClient | undefined
-  /** Where the list keeps the Providers it last read or saved: the host's store, which outlives a mount. */
   retained: Map<string, unknown>
   workspaceLabel?: string
   activeScope: 'global' | 'workspace'
   refreshKey: number
   disabled: boolean
   scopeChanging: boolean
-  /** Rendered first in the list; Settings puts Mnemon Native here as a peer of the others. */
   leading?: ReactNode
-  /** Why the other Providers cannot be listed now; they are not read while it is set. */
   blocked?: ReactNode
-  /** Whether it is not yet known if the Providers can be listed; they are read once it is. */
   pending?: boolean
-  /** Why the listed Providers cannot be switched; rendered above them. */
   notice?: ReactNode
-  /** A Provider was saved or switched, so pages that list Providers re-read them. */
   onChanged?: () => void
-  /** Latest Provider catalog as loaded or mutated, so sibling policy controls reuse it without a second RPC. */
   onCatalog?: (catalog: MemoryProviderServiceCatalog) => void
 }
 
@@ -44,8 +34,6 @@ const EMPTY_PROVIDER_CATALOG: MemoryProviderServiceCatalog = {
   generatedAt: '',
 }
 
-// The last catalog read or saved, under a name every Memory Spaces version reads alike: a list mounted again,
-// on a page opened again or in the settings that replace dsh-mnemon's, shows it while it is read anew.
 const RETAINED_PROVIDERS = 'provider-services'
 const retainedCatalog = (retained: Map<string, unknown>): MemoryProviderServiceCatalog | undefined => retained.get(RETAINED_PROVIDERS) as MemoryProviderServiceCatalog | undefined
 
@@ -286,7 +274,6 @@ function ProviderPanel(props: {
   </div>
 }
 
-/** The Providers that store Memory Spaces, one card each, with what their services need. */
 export function ProviderSettingsSection(props: ProviderSettingsSectionProps): JSX.Element {
   const t = useT()
   const css = memorySettingsStyles
@@ -360,7 +347,6 @@ export function ProviderSettingsSection(props: ProviderSettingsSectionProps): JS
   }
 
   const disabled = props.disabled || props.scopeChanging || client === undefined || loading || catalog.generatedAt === ''
-  // Explanations slide in and out, so the list does not jump when a dependency changes.
   if (blocked) return <><SafeReveal>{props.blocked}</SafeReveal><div className={css.providerList}>{props.leading}</div></>
   return <>
     <SafeReveal>{props.notice ?? null}</SafeReveal>

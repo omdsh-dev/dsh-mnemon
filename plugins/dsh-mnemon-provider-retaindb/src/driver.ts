@@ -23,14 +23,6 @@ function insight(value: unknown): Insight | undefined {
   }
 }
 
-/**
- * Whether a request failed because this deployment does not serve the endpoint.
- *
- * RetainDB exposes a current and a legacy surface, and only a missing endpoint
- * may fall through to the legacy one. Everything else - a 5xx, a timeout, or a
- * caller abort - must reach the caller untouched: the timeout in particular is
- * ambiguous, so retrying `remember`'s POST on it can store the memory twice.
- */
 function isEndpointMissing(error: unknown): boolean {
   const status = typeof error === 'object' && error !== null ? (error as { status?: unknown }).status : undefined
   if (typeof status === 'number') return status === 404

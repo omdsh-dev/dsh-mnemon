@@ -18,8 +18,6 @@ export function runtimePageClient(management: MnemonSourceManagementClient): Run
 function RuntimeSourceView(props: MemorySourcePageProps): JSX.Element | null {
   const client = useMemo(() => props.management === undefined ? undefined : runtimePageClient(props.management), [props.management])
   const [revision, setRevision] = useState(0)
-  // The workspace's refresh reloads this page as well, while local mutations
-  // update or reload once without echoing through the parent's refreshKey.
   const lastRefreshKey = useRef(props.refreshKey)
   const suppressRefreshEcho = useRef(false)
   useEffect(() => {
@@ -31,7 +29,6 @@ function RuntimeSourceView(props: MemorySourcePageProps): JSX.Element | null {
     }
     setRevision(value => value + 1)
   }, [props.refreshKey])
-  // Switching sessions refreshes session-scoped entries without unmounting the view.
   const lastSessionId = useRef(props.sessionId)
   const lastManagement = useRef(props.management)
   useEffect(() => {
@@ -48,7 +45,6 @@ function RuntimeSourceView(props: MemorySourcePageProps): JSX.Element | null {
     setTimeout(() => { suppressRefreshEcho.current = false }, 0)
   }, [props.onRefresh])
   if (client === undefined) return null
-  // A conversation turn opens the entry it wrote; each visit starts from that entry.
   const navigation = props.navigationInput
   const focus = typeof navigation === 'object' && navigation !== null && !Array.isArray(navigation) && typeof navigation.seed === 'string' && navigation.seed !== '' ? navigation : undefined
   return <RuntimePage key={typeof focus?.nonce === 'number' ? focus.nonce : 0} {...(focus === undefined ? {} : { focusText: focus.seed as string })} {...(props.onRevealElement === undefined ? {} : { onRevealElement: props.onRevealElement })} client={client} revision={revision} writeEnabled={props.writable === true} onMutate={handleMutate} />

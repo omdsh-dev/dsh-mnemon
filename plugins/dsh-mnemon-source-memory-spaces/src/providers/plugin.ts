@@ -1,11 +1,6 @@
 import type { Context, Plugin } from '@deepseek-ai/cordis'
 import type { PrivateMemorySpaceProviderHost } from './host.ts'
 import type { MemorySpaceProviderEntry } from './definitions.ts'
-/**
- * Build an ordinary child plugin whose only capability is a closure-held
- * registration into its Memory Spaces parent. No ctx.mnemonProvider service
- * exists, and core cannot resolve this host.
- */
 export function createMemorySpaceProviderPlugin<Config>(
   entry: MemorySpaceProviderEntry<Config>,
   host: PrivateMemorySpaceProviderHost,

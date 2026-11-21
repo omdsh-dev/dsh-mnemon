@@ -34,8 +34,6 @@ export interface ResolvedMemorySpacesConfig {
 
 export const MemorySpacesConfig = z.object({
   dataDir: z.string(), cliPath: z.string(), store: z.string(),
-  // The Starter's settings take 100–120,000 ms for the same value. One range for both is on the
-  // roadmap; until then each keeps its own, so that stored values validate as they did.
   timeoutMs: z.number().step(1).min(1).max(600_000),
   defaultRecallLimit: z.number().step(1).min(1).max(50),
   writeEnabled: z.boolean(), bm25IndexPush: z.boolean(), embedding: z.any(), recallQuality: z.any(), persistenceStrategy: z.any(),
@@ -129,8 +127,6 @@ export function resolveRecallQuality(value: RecallQualityConfig | undefined): Re
   return { policy, lowScoreThreshold, highScoreThreshold, candidateMultiplier, maxMediumResults, maxRankedResults, maxUnknownResults }
 }
 
-
-/** Capture only this Source's settings, with an instance-local default authority. */
 export function resolveMemorySpacesConfig(value: MemorySpacesConfig = {}, sourceInstanceKey = 'standalone'): ResolvedMemorySpacesConfig {
   const config = MemorySpacesConfig(value)
   const requested = optionalText(config.dataDir)

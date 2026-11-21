@@ -7,13 +7,9 @@ import { parseSkill, splitFrontmatter } from './frontmatter.ts'
 import { readSkillResourceFiles } from './bundle-files.ts'
 
 export interface SkillRootOptions {
-  /** DSH's home; `$DSH_HOME`, then `~/.dsh`. */
   dshHome?: string
-  /** The shared agents home; `$DSH_AGENTS_HOME`, then `~/.agents`. */
   agentsHome?: string
-  /** The workspace whose project roots are read; none means user roots only. */
   workspace?: string
-  /** Explicit permission to update existing linked skill documents. Defaults off. */
   allowLinkedUpdates?: boolean
 }
 
@@ -29,7 +25,6 @@ function configuredHome(explicit: string | undefined, variable: string, fallback
   return resolve(expandHome(value))
 }
 
-/** The nearest ancestor holding `.git`, as DSH finds a project; the workspace itself otherwise. */
 export function projectRoot(workspace: string): string {
   let current = resolve(workspace)
   while (true) {
@@ -60,8 +55,6 @@ export function sha256(content: string | Buffer): string {
   return createHash('sha256').update(content).digest('hex')
 }
 
-/** Detect links at the skill root, bundle directory or document.
- * Do not resolve OS aliases (for example macOS /tmp) or compare path casing. */
 export function linkedSkill(rootPath: string, path: string): boolean {
   return [rootPath, dirname(path), path].some(candidate => lstatSync(candidate).isSymbolicLink())
 }
@@ -77,8 +70,6 @@ export function requireWritableRoot(path: string): void {
 export function requireWritableSkill(skill: Pick<SkillSummary, 'rootPath' | 'path'>, allowLinkedUpdates = false): string {
   if (!linkedSkill(skill.rootPath, skill.path)) return skill.path
   if (!allowLinkedUpdates) throw new Error('Linked skills are read-only; edit the original skill in its source repository or use a local copy.')
-  // Resolve before checking the hash and atomically replacing the document.
-  // Renaming onto the logical SKILL.md path would destroy a file symlink.
   return realpathSync(skill.path)
 }
 
@@ -107,7 +98,6 @@ function resources(directory: string): string[] {
   return found
 }
 
-/** Discover every skill in the four roots with `dsh-skill-filesystem`'s rules. */
 export function readCatalog(options: SkillRootOptions): SkillCatalog {
   const { projectRoot: project, roots } = skillRoots(options)
   const listedRoots: SkillRoot[] = []
@@ -179,7 +169,6 @@ export function readCatalog(options: SkillRootOptions): SkillCatalog {
   return { ...(project === undefined ? {} : { projectRoot: project }), roots: listedRoots, skills, problems }
 }
 
-/** A cheap fingerprint of the roots: names, sizes and times, no content. */
 export function catalogFingerprint(options: SkillRootOptions): string {
   const hash = createHash('sha256')
   hash.update(`linked-updates:${options.allowLinkedUpdates === true}\0`)
@@ -216,7 +205,6 @@ export function findSkill(catalog: SkillCatalog, key: string): SkillSummary {
   return skill
 }
 
-/** The skill DSH loads for a name, if any root holds one. */
 export function activeSkill(catalog: SkillCatalog, name: string): SkillSummary | undefined {
   return catalog.skills.find(skill => skill.name === name && skill.shadowedBy === undefined)
 }

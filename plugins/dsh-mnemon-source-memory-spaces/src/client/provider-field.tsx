@@ -9,21 +9,11 @@ const SAVED_SECRET_MASK = '••••••••••••'
 export interface ProviderFieldProps {
   field: MemoryProviderConfigField
   value: string | number | boolean | undefined
-  /** The Provider keeps a saved credential for this field; it never comes back to the page. */
   saved: boolean
-  /** In a dialog, the saved credential is being cleared, so a required field needs a value again. */
   clearing?: boolean
   disabled?: boolean
-  /**
-   * `settings`, a service field on the configuration page; `dialog`, a space's
-   * field in this Source's dialogs. Each draws a field and shows a saved
-   * credential as it always has: the configuration page fills the field with a
-   * mask that a typed value replaces, and can show what is typed; a dialog
-   * leaves the field empty with a note and can clear the credential.
-   */
   layout: 'settings' | 'dialog'
   onChange: (value: string | number | boolean) => void
-  /** Offers clearing the saved credential, in a dialog that edits a space. */
   onClearChange?: (clearing: boolean) => void
 }
 
@@ -39,14 +29,12 @@ function SecretVisibilityIcon({ visible }: { visible: boolean }): JSX.Element {
   </svg>
 }
 
-/** One field of a Provider descriptor, wherever it is edited. */
 export function ProviderField(props: ProviderFieldProps): JSX.Element {
   return props.layout === 'settings' ? <SettingsField {...props} /> : <DialogField {...props} />
 }
 
 function SettingsField(props: ProviderFieldProps): JSX.Element {
   const t = useT()
-  // Read here, not at load: dsh-mnemon 0.5.31 lacks it, and the dialogs that share this module must load beside it.
   const settings = memorySettingsStyles
   const [secretVisible, setSecretVisible] = useState(false)
   const { field } = props

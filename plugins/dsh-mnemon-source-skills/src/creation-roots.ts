@@ -11,7 +11,6 @@ export function validateCreationConfig(value: SkillCreationConfig | undefined): 
   return { create: [...value.create], default: value.default }
 }
 
-/** A project default falls back to its corresponding user root outside a workspace. */
 export function creationChoices(config: SkillCreationConfig, catalog: SkillCatalog): SkillCreationChoices {
   const available = (root: SkillRootKind) => catalog.roots.some(entry => entry.kind === root)
   const roots = config.create.filter(available)

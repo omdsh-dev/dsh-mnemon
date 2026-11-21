@@ -18,7 +18,6 @@ function isFilesystemLocation(value: string): boolean {
   return (value.includes('/') || value.includes('\\')) && !/^[a-z][a-z0-9+.-]*:\/\//iu.test(value)
 }
 
-/** Full-text popup for a selected graph node whose inspector preview is clamped. */
 function ContentPreview(props: { node: MemoryGraphNode; kind: string; onClose: () => void }): JSX.Element {
   const t = useT()
   const meta = [props.kind, props.node.id, props.node.memoryBodyName].filter((entry): entry is string => entry !== undefined).join(' · ')
@@ -53,7 +52,6 @@ function useSyncFreshnessText(lastFullSyncAt: number | null, active: boolean): s
   return t('overview.fullSyncDays', { count: Math.floor(hours / 24) })
 }
 
-/** Leaf freshness clock: ticks every 1s while < 60s old, then every 60s, without re-rendering OverviewPage or MemoryGraph. */
 export function SyncFreshnessText(props: { lastFullSyncAt: number | null; active?: boolean }): JSX.Element {
   const text = useSyncFreshnessText(props.lastFullSyncAt, props.active !== false)
   return <>{text}</>
@@ -92,14 +90,14 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
   })
   const changeGraphAppearance = useCallback((quiet: boolean): void => {
     setQuietGraph(quiet)
-    try { localStorage.setItem('dsh-mnemon:graph-appearance', quiet ? 'quiet' : 'standard') } catch { /* Keep the choice for this view when browser storage is unavailable. */ }
+    try { localStorage.setItem('dsh-mnemon:graph-appearance', quiet ? 'quiet' : 'standard') } catch { }
   }, [])
   const [graphView, setGraphView] = useState<'2d' | '3d'>(() => {
     try { return localStorage.getItem('dsh-mnemon:graph-view') === '3d' ? '3d' : '2d' } catch { return '2d' }
   })
   const changeGraphView = useCallback((view: '2d' | '3d'): void => {
     setGraphView(view)
-    try { localStorage.setItem('dsh-mnemon:graph-view', view) } catch { /* Keep the choice for this view when browser storage is unavailable. */ }
+    try { localStorage.setItem('dsh-mnemon:graph-view', view) } catch { }
   }, [])
   const clearGraphSelection = useCallback(() => setSelected(null), [])
   const [catalogLoading, setCatalogLoading] = useState(true)
@@ -148,8 +146,6 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
     setError(null)
     let directoryUnavailable = false
     try {
-      // Render the control-plane directory first. Health and graph I/O then
-      // resolve independently without holding the cards or each other back.
       const nextCatalog = await props.client.bodyDirectory().then(next => { setCatalogUnavailable(false); return next }).catch(() => {
         directoryUnavailable = true
         setCatalogUnavailable(!props.catalogKnown)
@@ -215,7 +211,6 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
     initialSyncStarted.current = true
     void load()
   }, [load])
-  // The workspace's refresh reloads the whole directory quietly.
   const seenReload = useRef(props.reloadKey)
   useEffect(() => {
     if (seenReload.current === props.reloadKey) return
@@ -227,10 +222,7 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
     directoryRetryStarted.current = true
     void load(true)
   }, [catalogUnavailable, load, props.catalogKnown])
-  // A new space starts with a provider that can take it now.
   useEffect(() => { setSpaceProviderId(current => readyProviderId(catalog?.providers ?? [], current) ?? current) }, [catalog])
-  // A pass the Host started while this page is open: read the directory again until it ends, then
-  // show what it found. The read also brings the Source's new revision, so the switches keep working.
   const hostRediscovering = catalog?.rediscovery?.running === true && !rediscovering
   useEffect(() => {
     if (!hostRediscovering || props.active === false) return
@@ -330,7 +322,6 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
     } catch (reason) { setError(message(reason)) } finally { setCreating(false) }
   }
 
-  // Providers are asked again for namespaces they gained; the new spaces start inactive (#373).
   const rediscover = async () => {
     if (props.client.rediscoverBodies === undefined || rediscovering) return
     setRediscovering(true); setError(null)
@@ -392,9 +383,6 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
   const editingSpaceView = editingSpace === null ? undefined : catalog?.items.find(body => body.id === editingSpace)
   const deletingSpaceView = confirmingDeleteSpace === null ? undefined : catalog?.items.find(body => body.id === confirmingDeleteSpace)
   const providers = catalog?.providers ?? []
-  // The status summary already carries the non-blocking control-plane
-  // directory. Keep metadata maintenance usable while the richer Memory page
-  // health/graph requests are still resolving.
   const metadataCandidates = (catalog?.items ?? props.fallbackBodies).filter(body => body.active && body.providerEnabled !== false)
   const metadataRunningCount = Object.values(metadataTasks).filter(task => task.status === 'running').length
   const metadataBusy = metadataRunningCount > 0
@@ -412,8 +400,6 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
     setLastFullSyncAt(Date.now())
   }, [error, loading])
   const selectedProvider = providers.find(provider => provider.id === spaceProviderId)
-  // The latest pass: one started here answers even when it found nothing; one from start-up
-  // speaks only when it has news.
   const directoryRediscovery = catalog?.rediscovery?.last ?? null
   const rediscovery = pageRediscovery !== null && (directoryRediscovery === null || pageRediscovery.at >= directoryRediscovery.at) ? pageRediscovery : directoryRediscovery
   const rediscoveryAdded = rediscovery?.results.flatMap(result => result.added) ?? []
@@ -489,7 +475,6 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
             {props.writeEnabled && !catalogUnavailable && <button type="button" className={spaceEditActionClass} onClick={() => setCreatingSpaceOpen(true)}>{t('overview.newAction')}</button>}
           </div>
         </div>
-        {/* Present before it has anything to say, so assistive technology announces what it says. */}
         <div role="status">{rediscoveryShown && <div className={css.rediscoveryNotice}>
           <div>
             <p>{rediscoveryAdded.length > 0 ? t('overview.rediscoveryAdded', { count: rediscoveryAdded.length }) : t('overview.rediscoveryNone')}</p>
@@ -583,9 +568,7 @@ export function OverviewPage(props: { client: MemorySpacesPageClient; active?: b
   )
 }
 
-/** The rediscovery a person last dismissed on this browser, so the same news is not shown twice. */
 const REDISCOVERY_SEEN_KEY = 'dsh-mnemon.memory-spaces.rediscovery-seen'
-/** How often an open page looks again while the Host asks the Providers. */
 const REDISCOVERY_POLL_MS = 2_000
 
 function readSeenRediscovery(): string | null {
@@ -594,6 +577,5 @@ function readSeenRediscovery(): string | null {
 
 function writeSeenRediscovery(at: string): void {
   try { globalThis.localStorage?.setItem(REDISCOVERY_SEEN_KEY, at) } catch {
-    // A browser that keeps nothing shows the news again next time.
   }
 }

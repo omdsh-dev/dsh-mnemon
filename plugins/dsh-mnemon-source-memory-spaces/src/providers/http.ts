@@ -67,14 +67,12 @@ function errorDetail(payload: unknown): string | undefined {
   return jsonString(error?.message) ?? jsonString(error?.detail)
 }
 
-/** Shared timeout, cancellation, error, and projection behavior for HTTP providers. */
 export abstract class HttpMemoryProvider {
   abstract readonly id: MemoryProviderId
   protected readonly label: string | undefined
   protected readonly requestFetch: typeof fetch
   protected readonly requestTimeoutMs: number
 
-  /** @deprecated Use memorySpaces. */
   protected readonly memoryBodies: MemorySpaceAuthority
 
   constructor(protected readonly memorySpaces: MemorySpaceAuthority, options: HttpProviderOptions = {}) {

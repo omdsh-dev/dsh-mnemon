@@ -1,11 +1,9 @@
 import type { BacktestRun, CaseResult, EvalCase } from './contracts.ts'
 
-/** Stable evaluation inputs, excluding presentation timestamps and provenance. Hash at the server boundary. */
 export function skillCaseSignature(cases: readonly EvalCase[]): string {
   return JSON.stringify([...cases].sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0).map(entry => [entry.id, entry.skillName, entry.title, entry.prompt, entry.context ?? '', entry.enabled, entry.requiresVision === true, entry.checks.map(check => [check.id, check.text, check.must])]))
 }
 
-/** Automatic decisions require full matching coverage, not the UI's scored intersection. */
 export function compareAutomaticSkillRuns(cases: readonly EvalCase[], baseline: BacktestRun | undefined, draft: BacktestRun | undefined, casesHash: string): { outcome: 'unmeasured' | 'regressed' | 'not-worse'; baselineScore?: number; draftScore?: number } {
   const unmeasured = { outcome: 'unmeasured' as const }
   if (cases.length === 0 || cases.some(entry => !entry.enabled || entry.requiresVision === true || entry.checks.length === 0)) return unmeasured

@@ -25,7 +25,6 @@ export function quota(entries: readonly BudgetEntry[], now: Date, limit: number,
 export function inQuotaDay(entry: BudgetEntry, value: AutoAdoptionQuota): boolean {
   return dateIn(entry.at, value.timeZone) === value.date
 }
-/** Three days cover a calendar day even after changing between extreme IANA offsets. */
 export function retainedBudget(entries: readonly BudgetEntry[], now: Date): BudgetEntry[] {
   return entries.filter(entry => Date.parse(entry.at) >= now.getTime() - 72 * 60 * 60 * 1_000)
 }

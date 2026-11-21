@@ -7,7 +7,6 @@ import type { MemorySpacesPageClient } from './api.ts'
 import { message, SidebarModal, EmptyState, SelectField, TaskAgentTag, WriteReceipt } from 'dsh-mnemon/client'
 import { categoryLabel } from './widgets.tsx'
 
-/** `embeddingManaged`, from this Source's status, words a memory saved without a vector; left out, the receipt keeps the caution. */
 export function RememberPage(props: { client: MemorySpacesPageClient; agentAvailable: boolean; memoryBodies: MemorySpaceView[]; writeEnabled: boolean; seed: string; embeddingManaged?: boolean | undefined; onMutate: () => void; onClose: () => void; onView?: () => void }): JSX.Element {
   const t = useT()
   const rememberFormId = useId()
@@ -27,7 +26,6 @@ export function RememberPage(props: { client: MemorySpacesPageClient; agentAvail
   }, [memoryBodyId, props.memoryBodies])
   const selectedMemoryBody = props.memoryBodies.find(body => body.id === memoryBodyId)
   const candidate = content.trim()
-  // A receipt answers one text: sending the same text again waits for an edit.
   const answered = outcome !== null && outcome.content === candidate
   const busy = supervising || saving
 
@@ -48,7 +46,6 @@ export function RememberPage(props: { client: MemorySpacesPageClient; agentAvail
     setSaving(true); setOutcome(null)
     try {
       const response = await props.client.remember({ content: candidate, category, importance, tags: tags.split(',').map(value => value.trim()).filter(Boolean), entities: entities.split(',').map(value => value.trim()).filter(Boolean), source: 'user', ...(memoryBodyId === '' ? {} : { memoryBodyId }) })
-      // Mnemon Native says embedded: false for a memory it saved without a vector (#388).
       setOutcome({ content: candidate, action: typeof response.action === 'string' ? response.action : 'stored', summary: typeof response.summary === 'string' ? response.summary : '', unembedded: response.embedded === false, embeddingManaged: props.embeddingManaged })
       props.onMutate()
     } catch (reason) { setOutcome({ content: candidate, error: message(reason) }) } finally { setSaving(false) }

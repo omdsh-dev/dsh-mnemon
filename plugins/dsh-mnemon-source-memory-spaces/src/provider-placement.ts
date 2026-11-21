@@ -5,7 +5,6 @@ import type {
   MemoryPlacementCapability,
   MemoryPlacementDecision,
   MemoryPlacementPreference,
-  MemoryProviderCapabilities,
   MemoryProviderId,
   PreparedMemoryPlacement,
 } from './contracts.ts'
@@ -81,7 +80,7 @@ export function prepareMemoryPlacement(
     ...eligible.map(candidate => {
       const capabilities = [
         ...Object.entries(candidate.capabilities)
-          .filter(([key, value]) => typeof value === 'boolean' && value)
+          .filter(([, value]) => typeof value === 'boolean' && value)
           .map(([key]) => key),
         `writeMode=${candidate.capabilities.writeMode}`,
         `deletionMode=${candidate.capabilities.deletionMode}`,

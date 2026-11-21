@@ -15,13 +15,10 @@ import {
 import { createHash, randomUUID } from 'node:crypto'
 import { basename, join } from 'node:path'
 import {
-  DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES,
-  DEFAULT_RUNTIME_USER_LIMIT_BYTES,
   MAX_RUNTIME_MEMORY_LIMIT_BYTES,
 } from './defaults.ts'
 import type { RuntimeMemoryStorage } from './config.ts'
 import type {
-  RuntimeMemoryAction,
   RuntimeMemoryCompactedEntry,
   RuntimeMemoryEntry,
   RuntimeMemoryEntryOrigin,
@@ -32,7 +29,6 @@ import type {
   RuntimeMemorySnapshot,
   RuntimeMemoryTarget,
   RuntimeMemoryTargetView,
-  RuntimeMemoryUsage,
 } from './contracts.ts'
 import {
   RUNTIME_MEMORY_VERSION, RUNTIME_ENTRY_DELIMITER, RUNTIME_MEMORY_LIMITS, RUNTIME_BRANCH_NAME_MAX, RUNTIME_BRANCHES_PER_ENTRY_MAX,
@@ -44,14 +40,10 @@ export { RUNTIME_BRANCH_NAME_MAX, RUNTIME_BRANCHES_PER_ENTRY_MAX }
 
 export interface RuntimeMemoryContextProjection {
   revision: string
-  /** Opaque digest of entries excluded by the active Git branch. */
   branchVisibility: string
   text: string
-  /** Exact entries represented by this branch-aware prompt projection. */
   entries: RuntimeMemoryEntry[]
-  /** Branch-visible low-priority entries omitted only from the eager prompt. */
   deferredEntries: RuntimeMemoryEntry[]
-  /** Complete stored entry count before branch filtering. */
   totalEntries: number
   minimumCharacters: number
   bm25?: { text: string }
@@ -76,7 +68,6 @@ interface PreparedRuntimeMemoryMutation {
   fields: RuntimeMemoryResultFields
 }
 
-/** Append to a file that is not a symbolic link; the open fails on one. */
 function appendWithoutLinks(path: string, text: string): void {
   const descriptor = openSync(path, constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | (constants.O_NOFOLLOW ?? 0), 0o600)
   try {
@@ -118,7 +109,6 @@ function isImportance(value: unknown): value is RuntimeMemoryImportance {
   return value === 'critical' || value === 'normal' || value === 'low'
 }
 
-/** Validate a model-supplied branch scope. Returns the normalized list; an empty list means "no scope". */
 export function normalizeRuntimeBranches(value: unknown, field = 'branches'): string[] {
   if (!Array.isArray(value)) throw new Error(`${field} must be an array of git branch names`)
   const branches: string[] = []
@@ -183,8 +173,6 @@ function parseEntry(value: unknown): RuntimeMemoryEntry | undefined {
   if (value.target === 'user' && value.branches !== undefined) return undefined
   if (value.pinned !== undefined && typeof value.pinned !== 'boolean') return undefined
   const branches = parseRuntimeBranches(value.branches)
-  // The provenance a Host stamps is kept, read through its own rule like the branch
-  // scope; nothing else from the stored object passes through unchecked.
   const origin = parseOrigin(value.origin)
   return {
     content,
@@ -218,7 +206,6 @@ function collapseDuplicateEntries(entries: readonly RuntimeMemoryEntry[]): Runti
       continue
     }
     if (isNewerEntry(entry, group.latest)) group.latest = entry
-    // A copy without a pin field cannot undo an explicit decision.
     if (entry.pinned !== undefined && (group.pin === undefined || isNewerEntry(entry, group.pin))) group.pin = entry
   }
   return [...groups.values()].map(({ latest, pin }) => pin?.pinned === undefined ? latest : { ...latest, pinned: pin.pinned })
@@ -231,7 +218,6 @@ function age(timestamp: string, projectedAt: number): string {
   return `${Math.floor((projectedAt - time) / 86_400_000)}d`
 }
 
-/** Prompt-only annotations; stored content, matching and capacity stay unchanged. */
 function contextMarkdown(entries: readonly RuntimeMemoryEntry[], target: RuntimeMemoryTarget, projectedAt: number): string {
   return entries.filter(entry => entry.target === target).map(entry => {
     const annotations: string[] = []
@@ -296,7 +282,6 @@ function prepareMutation(
     .map((entry, index) => entry.target === request.target && entry.content.includes(oldText) && matchesSelectedBranches(entry, selection) ? index : -1)
     .filter(index => index >= 0)
   const exactMatches = substringMatches.filter(index => entries[index]!.content === oldText)
-  // The selected row must still exist exactly. Legacy callers can use a unique substring.
   const matches = exactMatches.length > 0 || selection !== undefined ? exactMatches : substringMatches
   if (matches.length === 0 && selection !== undefined) throw new Error('No exact working-memory entry matches this branch scope. Reload and retry.')
   if (matches.length === 0) throw new Error(`No ${request.target} entry contains ${JSON.stringify(oldText)}.`)
@@ -360,8 +345,6 @@ function compactionCandidates(
     if (!isImportance(entry.importance)) throw new Error('compacted importance must be critical, normal, or low')
     const branches = entry.branches === undefined ? undefined : normalizeRuntimeBranches(entry.branches, 'compacted branches')
     if (target === 'user' && branches?.length) throw new Error('compacted branches apply to target=memory only')
-    // A missing scope matches an unscoped original first. Older callers that
-    // omit the scope for an existing scoped fact still inherit its scope.
     const unchanged = existingByKey.get(runtimeEntryKey({ target, content, branches }))
       ?? (branches === undefined ? firstByContent.get(content) : undefined)
     const scope = unchanged?.branches ?? branches
@@ -397,7 +380,6 @@ function packCompactionCandidates(
   const delimiterBytes = Buffer.byteLength(RUNTIME_ENTRY_DELIMITER, 'utf8')
   let used = 0
   let count = 0
-  // Stable buckets retain pins first, then preserve importance and original order.
   for (const importance of ['pinned', 'critical', 'normal', 'low'] as const) for (const index of ranked[importance]) {
     const entry = replacements[index]!
     const matchesTarget = entry.target === target
@@ -415,10 +397,6 @@ function sleepSync(milliseconds: number): void {
   Atomics.wait(buffer, 0, 0, milliseconds)
 }
 
-/**
- * Single authority for hot memory. JSON is the durable source of truth;
- * Markdown files retain plain content; prompt projections add recorded metadata.
- */
 export class RuntimeMemoryController {
   readonly directory: string
   readonly sourcePath: string
@@ -426,7 +404,6 @@ export class RuntimeMemoryController {
   readonly memoryPath: string
   readonly userPath: string
   readonly lockPath: string
-  /** Where MEMORY.md entries go when compaction leaves them out and no Memory Space can take them. */
   readonly archivePath: string
   readonly archiveSourcePath: string
   readonly limits: RuntimeMemoryLimits
@@ -476,13 +453,6 @@ export class RuntimeMemoryController {
     })
   }
 
-  /**
-   * Read the exact Runtime revision and its prompt projection from each
-   * configured authority root.
-   * When a git branch is supplied, target=memory entries scoped to other
-   * branches are hidden from the projection; the on-disk Markdown files and
-   * the source JSON always remain complete.
-   */
   contextProjection(branch?: string, deferLowPriority = false, bm25Recall = false): RuntimeMemoryContextProjection {
     const branchScope = scopeBranch(branch)
     const projectedAt = this.now().getTime()
@@ -608,7 +578,6 @@ ${workingMemory}
     return operation
   }
 
-  /** Human-management only. Automatic maintenance preserves this explicit state. */
   setPinned(target: RuntimeMemoryTarget, content: string, pinned: boolean, matchBranches?: string[]): Promise<RuntimeMemorySnapshot> {
     if (target === 'user' && this.userController !== undefined) {
       return this.userController.setPinned(target, content, pinned, matchBranches).then(globalSnapshot => {
@@ -622,7 +591,6 @@ ${workingMemory}
       const matches = file.entries.filter(entry => entry.target === target && entry.content === content && matchesSelectedBranches(entry, selection))
       if (matches.length !== 1) throw new Error('Pin requires one exact current entry; reload and retry')
       const entry = matches[0]!
-      // Use the read order for optional fields so pin returns the persisted revision.
       file.entries[file.entries.indexOf(entry)] = parseEntry({ ...entry, pinned, updated_at: this.now().toISOString() })!
       if (pinned) assertRuntimePinnedBudget(file.entries)
       this.persist(file)
@@ -632,7 +600,6 @@ ${workingMemory}
     return operation
   }
 
-  /** Resolve exactly which committed entries survive a blocked mutation and are safe to compact. */
   planMaintenance(request: RuntimeMemoryMutation, options: { preserveImportance?: boolean } = {}): Promise<RuntimeMemoryMaintenancePlan> {
     return this.planMaintenanceCommitted(request, options).then(planned => planned.plan)
   }
@@ -687,11 +654,6 @@ ${workingMemory}
     return operation
   }
 
-  /**
-   * Commit semantic compaction and the original mutation together, or leave every local file unchanged.
-   * With `archive: 'local'`, committed MEMORY.md entries that compaction leaves out are appended to the
-   * local archive first, so a limit with no Memory Space to archive into never loses memory.
-   */
   compactAndMutate(
     expectedRevision: string,
     request: RuntimeMemoryMutation,
@@ -752,8 +714,6 @@ ${workingMemory}
       for (const pinned of prepared.compactableEntries.filter(entry => entry.pinned === true)) {
         if (byKey.get(runtimeEntryKey(pinned))?.pinned !== true) throw new Error('Compaction omitted a pinned entry; no data was changed')
       }
-      // Same-text variants may survive only if they really were in the plan.
-      // A candidate must not recreate excluded text in an invented scope.
       const survivingKeys = new Set(prepared.compactableEntries.map(runtimeEntryKey))
       const conflicts = (entry: RuntimeMemoryEntry): boolean => {
         const key = runtimeEntryKey(entry)
@@ -769,8 +729,6 @@ ${workingMemory}
       if (prepared.excludedEntry !== undefined && conflicts(prepared.excludedEntry)) {
         throw new Error('compacted runtime memory reintroduces the replaced or removed entry')
       }
-      // The worker supplies semantic candidates; deterministic packing owns exact
-      // UTF-8 accounting so the LLM never has to count bytes or delimiters.
       const fitted = packCompactionCandidates(replacements, request.target, compactedByteBudget)
       const targetEntries = [...fitted, ...(prepared.pendingEntry === undefined ? [] : [prepared.pendingEntry])]
       const entries = [...file.entries.filter(entry => entry.target !== request.target), ...targetEntries]
@@ -782,8 +740,6 @@ ${workingMemory}
       const archived = options.archive === 'local' && request.target === 'memory'
         ? prepared.compactableEntries.filter(entry => !kept.has(runtimeEntryKey(entry)))
         : undefined
-      // The archive is appended before the compacted store commits: a failure in
-      // between leaves an entry in both places, never in neither.
       if (archived !== undefined && archived.length > 0) this.archiveLocally(archived, beforeRevision, now)
       this.persist(next)
       return {
@@ -814,14 +770,11 @@ ${workingMemory}
     return revision(this.combineFiles(local, global))
   }
 
-  /** Append entries to the local archive: JSON Lines to restore from, and Markdown to read. */
   private archiveLocally(entries: readonly RuntimeMemoryEntry[], fromRevision: string, archivedAt: string): void {
     const directory = join(this.directory, RUNTIME_ARCHIVE_DIRECTORY)
     mkdirSync(directory, { recursive: true, mode: 0o700 })
-    // The data directory can sit in a workspace: an archive never follows a link out of it.
     const stat = lstatSync(directory)
     if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error(`Runtime Memory archive is not a directory: ${directory}`)
-    // Refuse a link or a directory at either file before writing to the other.
     for (const path of [this.archiveSourcePath, this.archivePath]) {
       let file
       try { file = lstatSync(path) } catch { continue }
@@ -923,7 +876,6 @@ ${workingMemory}
     const temporaries = writes.map(([path]) => join(this.directory, `.${basename(path)}.${nonce}.tmp`))
     try {
       writes.forEach(([, content], index) => writeFileSync(temporaries[index]!, content, { encoding: 'utf8', mode: 0o600 }))
-      // Projections move first; memories.json is the final commit marker and source of truth.
       writes.forEach(([path], index) => renameSync(temporaries[index]!, path))
     } finally {
       for (const temporary of temporaries) rmSync(temporary, { force: true })

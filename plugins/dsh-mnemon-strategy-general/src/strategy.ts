@@ -8,16 +8,13 @@ import {
 export const GENERAL_STRATEGY_TYPE_ID = 'general'
 
 export interface GeneralStrategyConfig {
-  /** Sources projected into every turn; unset keeps working-context Sources resident. */
   residentSourceKeys?: string[]
-  /** Operator guidance appended to the memory protocol. */
   instruction?: string
 }
 
 const MAX_SOURCES = 32
 const MAX_ROUTES = 64
 const MAX_ACTIONS = 64
-// A resident Source is read every turn, so it receives most of the shared projection budget.
 const RESIDENT_WEIGHT = 9
 const SOURCE_KEY = /^source:[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,292}$/u
 
@@ -36,7 +33,6 @@ function residentKeys(value: unknown): string[] | undefined {
   return [...value] as string[]
 }
 
-/** Deal ids one per Source per round, so every admitted Source is reachable before any gets a second. */
 function roundRobin(sources: readonly MemoryAvailableSource[], ids: (source: MemoryAvailableSource) => readonly string[], budget: number): Map<string, string[]> {
   const dealt = new Map(sources.map(source => [source.sourceInstanceKey, [] as string[]]))
   let remaining = budget
@@ -65,7 +61,6 @@ function captureGuidance(capture: MemoryViewExtensionValues['capture'], spec: Me
     + '\nUse only an Action offered for one eligible Source, with its exact schema and Host authorization. Do not duplicate a fact across Sources. Do not overwrite or delete existing memory as part of automatic capture. A suggestion is not a committed write; report the actual receipt. No background task is started by this policy.'
 }
 
-/** Role-agnostic composition: every available Source, one shared budget, and the model decides. */
 export function createGeneralStrategy(config: GeneralStrategyConfig = {}): MemoryStrategyDefinition {
   const configuredResident = residentKeys(config.residentSourceKeys)
   const instruction = memoryInputText(config.instruction as MemoryJsonValue | undefined, 'general Strategy instruction', 4_000, false)
@@ -98,7 +93,6 @@ export function createGeneralStrategy(config: GeneralStrategyConfig = {}): Memor
       const totalWeight = projected.reduce((sum, source) => sum + weight(source), 0)
       const allocation = new Map(projected.map(source => [source.sourceInstanceKey, Math.floor(characters * weight(source) / totalWeight)]))
       let remainder = characters - [...allocation.values()].reduce((sum, value) => sum + value, 0)
-      // The rounding remainder belongs to the earlier, preferred Sources.
       for (const source of projected) {
         if (remainder <= 0) break
         allocation.set(source.sourceInstanceKey, allocation.get(source.sourceInstanceKey)! + 1)

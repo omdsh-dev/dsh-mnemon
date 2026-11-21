@@ -18,7 +18,6 @@ export function ExplorePage(props: { client: MemorySpacesPageClient; agentClient
   const [sources, setSources] = useState<MemoryReadSource[]>([])
   const [searchKind, setSearchKind] = useState<'direct' | 'agent' | null>(null)
   const [agentAnswer, setAgentAnswer] = useState<{ answer: string; citations: string[]; runId: string } | null>(null)
-  /** A citation names the recalled memory it points at, not its identifiers. */
   const citationLabel = (citation: string): string => {
     const cited = results.find(result => `${result.memoryBodyId}/${result.id}` === citation || result.id === citation)
     return cited === undefined ? short(citation.split('/').at(-1) ?? citation, 12) : short(cited.content, 40)
@@ -34,8 +33,6 @@ export function ExplorePage(props: { client: MemorySpacesPageClient; agentClient
   const relatedRequests = useRequestVersion()
 
   useEffect(() => { if (props.seed !== '') setQuery(props.seed) }, [props.seed])
-  // Opening Recall with a query runs it once, with the configured recall limit,
-  // whether a conversation turn or another page sent it.
   const ranSeed = useRef('')
   useEffect(() => {
     if (props.seed === '' || props.status === null || ranSeed.current === props.seed) return

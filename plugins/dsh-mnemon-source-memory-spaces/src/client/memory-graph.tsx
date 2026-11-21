@@ -51,10 +51,8 @@ function entityGraphId(entity: string): string {
   return `entity:${encodeURIComponent(normalizeEntity(entity))}`
 }
 
-/** The graph and the Entities page count an entity by the same key. */
 const normalizeEntity = normalizeEntityKey
 
-/** Add routing scopes and entity indexes without issuing another recall. */
 export function enrichMultiSpaceGraph(graph: MemoryGraphSnapshot, bodies: MemorySpaceView[]): MemoryGraphSnapshot {
   if (graph.nodes.length === 0) return graph
   const memories = graph.nodes.map(node => ({ ...node, kind: 'memory' as const }))
@@ -78,9 +76,6 @@ export function enrichMultiSpaceGraph(graph: MemoryGraphSnapshot, bodies: Memory
     occurrenceCount: body.stats?.totalInsights ?? memoriesBySpace.get(body.id)?.length ?? 0,
   }))
 
-  // Native Mnemon entity edges connect two memories. This overview renders
-  // entities as first-class nodes, so retaining those edges would falsely make
-  // a memory-to-memory edge look like an entity-to-memory association.
   const edges: MemoryGraphSnapshot['edges'] = graph.edges.filter(edge => edge.type !== 'entity')
   for (const body of activeSpaces) {
     for (const memory of memoriesBySpace.get(body.id) ?? []) {

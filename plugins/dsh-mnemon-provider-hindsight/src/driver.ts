@@ -16,16 +16,10 @@ import type {
 import { HttpMemoryProvider, firstArray, jsonArray, jsonNumber, jsonObject, jsonString, type HttpProviderOptions } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import { type MemoryProviderAdapter, type ProviderBodyStatus as ProviderSpaceStatus, type ProviderMemorySpace, type ProviderSearchResult } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 
-/**
- * An entity name without the note Hindsight may append in parentheses, `Alice (person)`. The same
- * result as removing /\s*\([^)]*\)\s*$/u, in one pass: that pattern took quadratic time on a
- * name of many "(" without a ")", and the name comes from the server.
- */
 function withoutTrailingNote(entry: string): string {
   const trimmed = entry.trimEnd()
   if (!trimmed.endsWith(')')) return entry.trim()
   const close = trimmed.length - 1
-  // The leftmost "(" after the last ")" before the closing one: a note holds no ")" of its own.
   const open = trimmed.indexOf('(', trimmed.lastIndexOf(')', close - 1) + 1)
   return open < 0 || open >= close ? entry.trim() : trimmed.slice(0, open).trim()
 }
@@ -122,8 +116,6 @@ export class HindsightProvider extends HttpMemoryProvider implements MemoryProvi
           },
         }
       } catch {
-        // Older Hindsight deployments may expose recall and graph APIs without
-        // the newer statistics surfaces. Liveness remains sufficient there.
         return { healthy: true }
       }
     } catch (error) {

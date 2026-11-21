@@ -4,34 +4,17 @@ import type { DraftPreferencesView, ModelRoute } from '../contracts.ts'
 import { useT, type SkillsTranslate } from './presentation.ts'
 import type { SkillsPageContext } from './ui.tsx'
 
-/**
- * The model pickers the Evolution and Evaluation pages share: which model
- * drafts and backtests run on, globally and per item, offered from the same
- * directory the task Agent resolves its own route against.
- *
- * A pick is stored as `provider|model`, so one menu value names one route, and
- * an absent pick is `auto`: the page follows the task Agent, as it did before
- * the user picked anything.
- */
-
-/** The menu value of a pick; `auto` asks for no pick at all. */
 export function modelOptionValue(model: ModelRoute | null | undefined): string {
   if (model === null || model === undefined) return 'auto'
   return `${model.provider}|${model.model}`
 }
 
-/** The pick a menu value names; `auto` and a malformed value both pick nothing. */
 export function modelOptionPick(value: string): ModelRoute | null {
   const at = value.indexOf('|')
   if (at <= 0) return null
   return { provider: value.slice(0, at), model: value.slice(at + 1) }
 }
 
-/**
- * Follow-default first, then every Provider's models. The first entry exists
- * before the directory arrives, so the toolbar holds its place instead of
- * appearing a round trip later than the rest of the page.
- */
 export function modelOptionsFrom(models: TaskAgentModelCatalog | null, t: SkillsTranslate, autoKey: 'tests.modelAuto' | 'evolution.modelAuto'): FieldOption<string>[] {
   const label = models?.effective?.model ?? models?.inherited?.model ?? models?.defaultSelection?.model
   const options: FieldOption<string>[] = [{ value: 'auto', label: label ?? t(autoKey), detail: t('evolution.modelAutoHint') }]
@@ -42,7 +25,6 @@ export function modelOptionsFrom(models: TaskAgentModelCatalog | null, t: Skills
   return options
 }
 
-/** The same list for one card: follow-default (showing the active default route), then the directory without its own default entry. */
 export function modelCardOptionsFrom(
   modelOptions: readonly FieldOption<string>[],
   t: SkillsTranslate,
@@ -64,14 +46,10 @@ export function modelCardOptionsFrom(
 
 const NO_PREFERENCES: DraftPreferencesView = { suggestionModels: {}, skillRunModels: {} }
 
-/** What the pickers read and write, and the directory behind them. */
 export interface ModelChoice {
-  /** `null` until the directory arrives; the pickers are disabled meanwhile. */
   models: TaskAgentModelCatalog | null
   preferences: DraftPreferencesView
-  /** Every routable model, follow-default first. */
   options: FieldOption<string>[]
-  /** The same for one card's own pick. */
   cardOptions: FieldOption<string>[]
   saveDraftModel(model: ModelRoute | null): void
   saveSuggestionModel(id: string, model: ModelRoute | null): void
@@ -79,11 +57,6 @@ export interface ModelChoice {
   saveSkillRunModel(skillName: string, model: ModelRoute | null): void
 }
 
-/**
- * Read the directory and the stored picks alongside the page's own data, and
- * write one pick at a time. A write shows locally first so the menu answers at
- * once, then takes the Host's answer, which is also what a second window sees.
- */
 export function useModelChoice(context: SkillsPageContext, autoKey: 'tests.modelAuto' | 'evolution.modelAuto'): ModelChoice {
   const t = useT()
   const [models, setModels] = useState<TaskAgentModelCatalog | null>(null)
@@ -99,7 +72,6 @@ export function useModelChoice(context: SkillsPageContext, autoKey: 'tests.model
     void context.client.draftPreferences().then(value => { if (active) setPreferences(value) }).catch(() => undefined)
     return () => { active = false }
   }, [context.client, configRevision])
-  /** Show the pick now, then let the Host's answer replace it; a failure shows through and reverts. */
   const write = useCallback((apply: (current: DraftPreferencesView) => DraftPreferencesView, operation: () => Promise<DraftPreferencesView>) => {
     setPreferences(current => apply(current))
     void operation().then(next => {
@@ -147,7 +119,6 @@ export function useModelChoice(context: SkillsPageContext, autoKey: 'tests.model
   }
 }
 
-/** The preferences without one optional pick, for the case a pick was cleared. */
 function omit(preferences: DraftPreferencesView, key: 'model' | 'runModel'): DraftPreferencesView {
   if (preferences[key] === undefined) return preferences
   const next = { ...preferences }

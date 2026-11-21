@@ -1,6 +1,5 @@
 import { truncateMemoryText } from 'dsh-mnemon/extension-sdk'
 
-/** Preserve query-local evidence under the Source's per-document budget. */
 export function documentEvidence(content: string, query: string, maximum: number): string {
   if (maximum <= 0) return ''
   if (content.length <= maximum) return content

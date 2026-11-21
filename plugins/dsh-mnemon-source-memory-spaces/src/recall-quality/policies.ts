@@ -1,4 +1,3 @@
-/** Memory Spaces-owned recall quality policy. */
 import type {
   EvaluatedRecallQualityCandidate,
   RecallQualityCandidate,
@@ -27,7 +26,6 @@ function scoreDecision(
     return { action: 'keep', tier: 'unknown', reason: 'unscaled-score' }
   }
   if (score <= 0) return { action: nonPositiveAction, tier: 'low', reason: 'non-positive-score', normalizedScore: 0 }
-  // A violated range supplies ordering evidence, not calibrated confidence.
   if (score > 1) return { action: 'keep', tier: 'ranked', reason: 'out-of-range-score' }
   if (score < context.config.lowScoreThreshold) return { action: lowScoreAction, tier: 'low', reason: 'low-score', normalizedScore: score }
   if (score < context.config.highScoreThreshold) return { action: 'keep', tier: 'medium', reason: 'medium-score', normalizedScore: score }
@@ -46,8 +44,6 @@ export const STRICT_RECALL_QUALITY_POLICY: RecallQualityPolicy = {
     const kept = candidates.filter(candidate => candidate.decision.action === 'keep')
     let medium = 0
     let ranked = 0
-    // Preserve the fused order of these bounded lanes; raw score scales do not
-    // justify placing every medium result ahead of every native ranked result.
     const scored = kept.filter(({ decision }) =>
       decision.tier === 'medium' ? medium++ < context.config.maxMediumResults
         : decision.tier === 'ranked' && ranked++ < context.config.maxRankedResults)

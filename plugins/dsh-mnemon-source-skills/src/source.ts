@@ -11,15 +11,10 @@ export const SKILLS_SOURCE_ROLE = 'procedural'
 const CAPABILITIES = ['status', 'read', 'write'] as const
 
 export interface Config {
-  /** Absolute directory holding `skills/`; the Host supplies its storage root. */
   dataDir?: string
-  /** DSH's home; defaults to `$DSH_HOME`, then `~/.dsh`. */
   dshHome?: string
-  /** The shared agents home; defaults to `$DSH_AGENTS_HOME`, then `~/.agents`. */
   agentsHome?: string
-  /** Opt in to updating original files of existing symlink/junction skills. */
   allowLinkedUpdates?: boolean
-  /** Default and offered destinations for newly created skills. */
   skillRoots?: SkillCreationConfig
 }
 
@@ -49,7 +44,6 @@ function rootKind(value: MemoryJsonValue | undefined): SkillRootKind | undefined
   return value as SkillRootKind
 }
 
-/** A picked model, or null to clear the pick and follow the task Agent again. */
 function draftModelInput(value: MemoryJsonValue | undefined): ModelRoute | null {
   if (value === undefined || value === null) return null
   if (typeof value !== 'object' || Array.isArray(value)) throw new Error('model must be an object or null')
@@ -168,7 +162,6 @@ function step(value: MemoryJsonValue): TrajectoryStep {
   }
 }
 
-/** The admission rules the Host sends; each is checked again by the policy. */
 function policyInput(value: MemoryJsonValue): Partial<SkillsPolicy> {
   const input = record(value, 'policy')
   const number = (key: keyof SkillsPolicy) => typeof input[key] === 'number' && Number.isFinite(input[key]) ? { [key]: input[key] as number } : {}
@@ -180,7 +173,6 @@ function policyInput(value: MemoryJsonValue): Partial<SkillsPolicy> {
   return { ...allowed('allowCreate'), ...allowed('allowUpdate'), ...number('minConfidence'), ...number('expiryDays'), ...number('maxPendingPerSession') }
 }
 
-/** The Host's record of one review; bounded here as well as there. */
 function reviewRecord(value: MemoryJsonValue): ReviewRecordInput {
   const input = record(value, 'review record')
   const review = record(input.review ?? null, 'review')
@@ -281,8 +273,6 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
         allowLinkedUpdates: effective.allowLinkedUpdates === true,
         ...(effective.skillRoots === undefined ? {} : { skillRoots: effective.skillRoots }),
       })
-      // A Host that went away mid-write left its suggestion stuck in `drafting`
-      // and refuses both a retry and a delete; put those back before anything reads.
       void service.reclaimOrphanDrafts().catch(() => void 0)
       const recovery = service.reclaimStaleRuns().catch(() => undefined)
       const reaper = setInterval(() => { void service.reclaimStaleRuns().catch(() => void 0) }, 60_000)
@@ -291,7 +281,6 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
         sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: SKILLS_SOURCE_TYPE_ID, role: SKILLS_SOURCE_ROLE, availability: 'ready',
         revision: service.revision(workspace(scope)), capabilities: [...CAPABILITIES], routeIds: [], actionIds: [],
       } : {
-        // Skills reach the model through DSH's own skill tool and catalog; a View has nothing to add.
         sourceInstanceKey: context.sourceInstanceKey, sourceTypeId: SKILLS_SOURCE_TYPE_ID, role: SKILLS_SOURCE_ROLE, availability: 'unavailable',
         revision: 'management-only', capabilities: ['status'], routeIds: [], actionIds: [], hints: { reason: 'management-only' },
       }
@@ -344,7 +333,6 @@ export function createSkillsMemorySource(config: Config = {}): MemorySourceDefin
                 })
                 case 'target-content': return service.targetContent(root, text(fields.skillName, 'skillName', 64)!, runTarget(fields.target!))
                 case 'market': return service.marketView(root)
-                // A skill the search index found is named by its index id, `owner/repo/skill`.
                 case 'market-preview': return service.marketPreview(text(fields.registryId, 'registryId', 80)!, text(fields.name, 'name', 300)!, request.signal)
                 case 'market-search': return service.searchMarket(root, text(fields.query, 'query', 200)!, request.signal)
                 case 'installs': return service.installs()

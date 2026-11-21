@@ -1,4 +1,3 @@
-/** Memory Spaces-owned recall quality policy. */
 import type {
   EvaluatedRecallQualityCandidate,
   RecallQualityCandidate,

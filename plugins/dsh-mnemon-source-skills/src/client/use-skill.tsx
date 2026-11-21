@@ -1,13 +1,5 @@
 import { useEffect, useRef } from 'react'
 
-/**
- * "Use" puts `/name ` into the conversation's input, where DSH's own gesture
- * loads the skill when the message is sent. On DSH 0.2.1+, this uses the
- * official `ctx.conversation.input` and `ctx.sessions` contracts directly
- * without mounting a slot component or firing DOM events; on DSH 0.2.0-rc.2
- * (where `ctx.conversation` is absent), it falls back to the gated composer-row
- * event bridge.
- */
 export const SKILL_USE_EVENT = 'dsh-mnemon:skill-use'
 
 interface SkillUseDetail {
@@ -97,21 +89,13 @@ type DirectSkillUseHandler = (name: string, sessionId?: string) => boolean
 let directHandler: DirectSkillUseHandler | undefined
 let directModeActive = false
 
-/** A request no composer has taken yet (0.2.0-rc.2 fallback): the next composer of its session to mount takes it. */
 let pending: { detail: SkillUseDetail; at: number } | undefined
 const PENDING_MS = 10_000
 
-/** Whether DSH 0.2.1+ direct `ctx.conversation.input` mode is currently active (rather than the deferred 0.2.0-rc.2 bridge). */
 export function isDirectSkillUseActive(): boolean {
   return directModeActive
 }
 
-/**
- * Ask the open composer to take `/name`. On DSH 0.2.1+ this writes directly
- * through `ctx.conversation.input`; on 0.2.0-rc.2 it dispatches to the gated
- * composer bridge.
- * @returns whether a composer or draft initializer accepted `/name`.
- */
 export function requestSkillUse(name: string, sessionId?: string): boolean {
   if (directHandler !== undefined) return directHandler(name, sessionId)
   const detail: SkillUseDetail = { name, ...(sessionId === undefined ? {} : { sessionId }), handled: false }
@@ -120,7 +104,6 @@ export function requestSkillUse(name: string, sessionId?: string): boolean {
   return detail.handled
 }
 
-/** Where `/name` goes in a draft: first, once, ahead of what is already typed. */
 export function draftWithSkill(draft: string, name: string): string {
   const token = `/${name}`
   if (new RegExp(`(^|\\s)${token.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}(\\s|$)`, 'u').test(draft)) return draft
@@ -132,7 +115,6 @@ interface ComposerInputActions {
   setDraft(text: string): void
 }
 
-/** DSH 0.2.0-rc.2 session-scoped composer props: the input selector and its stable actions. */
 export interface SkillUseBridgeProps {
   sessionId?: string
   inputActions?: ComposerInputActions
@@ -141,7 +123,6 @@ export interface SkillUseBridgeProps {
 
 const noDraft = <T,>(selector: (state: { draft: string }) => T): T => selector({ draft: '' })
 
-/** Legacy 0.2.0-rc.2 fallback mounted in the composer row when `ctx.conversation.input` is absent. */
 export function SkillUseBridge(props: SkillUseBridgeProps): null {
   const useInput = props.useInput ?? noDraft
   const draft = useInput(state => state.draft)
@@ -155,7 +136,6 @@ export function SkillUseBridge(props: SkillUseBridgeProps): null {
       detail.handled = true
       if (pending?.detail === detail) pending = undefined
     }
-    // The page asked before this composer was on screen.
     if (pending !== undefined && Date.now() - pending.at < PENDING_MS) take(pending.detail)
     const listener = (event: Event) => take((event as CustomEvent<SkillUseDetail>).detail)
     window.addEventListener(SKILL_USE_EVENT, listener)
@@ -181,13 +161,11 @@ function readOptionalService<K extends 'conversation' | 'sessions' | 'uiSession'
       const resolved = getter.call(ctx, key) as SkillUseRuntimeContext[K]
       if (resolved !== undefined) return resolved
     } catch {
-      // Fall through to guarded property lookup.
     }
   }
   try {
     return ctx[key]
   } catch {
-    // Cordis 4 context proxies throw when reading un-injected service properties.
     return undefined
   }
 }
@@ -232,7 +210,6 @@ function applyDirectSkillUse(ctx: SkillUseRuntimeContext, input: SessionInputRes
       uiWorkspace?.openSession?.(targetSessionId)
       binding = sessions?.binding?.(targetSessionId)
     } catch {
-      // Fall through and inspect whatever retained scope/binding is available.
     }
   }
 
@@ -243,12 +220,11 @@ function applyDirectSkillUse(ctx: SkillUseRuntimeContext, input: SessionInputRes
       if (controller !== undefined) {
         const currentDraft = controller.state.getSnapshot().draft
         controller.setDraft(draftWithSkill(currentDraft, name))
-        try { layout?.selectPanel?.(null) } catch { /* Conversation panel may already be active or unmanaged. */ }
+        try { layout?.selectPanel?.(null) } catch { }
         controller.focus?.()
         return true
       }
     } catch {
-      // Fall through to requestDraftInitialization when a retained binding exists.
     }
   }
 
@@ -259,7 +235,7 @@ function applyDirectSkillUse(ctx: SkillUseRuntimeContext, input: SessionInputRes
         whenDraftExists: 'replace',
       })
       if (result === 'blocked') return false
-      try { layout?.selectPanel?.(null) } catch { /* Conversation panel may already be active or unmanaged. */ }
+      try { layout?.selectPanel?.(null) } catch { }
       return true
     } catch {
       return false
@@ -269,10 +245,6 @@ function applyDirectSkillUse(ctx: SkillUseRuntimeContext, input: SessionInputRes
   return false
 }
 
-/**
- * Connect "Use" to DSH's official `ctx.conversation.input` controller on 0.2.1+,
- * or register the gated composer-row fallback on DSH 0.2.0-rc.2.
- */
 export function installSkillUseBridge(ctx: SkillUseRuntimeContext): () => void {
   const tryDirect = (name: string, sessionId?: string): boolean | undefined => {
     const input = readOptionalService(ctx, 'conversation')?.input

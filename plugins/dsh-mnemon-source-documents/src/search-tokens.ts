@@ -1,4 +1,3 @@
-/** Small deterministic tokenizer shared by local Document and Native recovery. */
 export function lexicalSearchTokens(value: string, maximum = 64): string[] {
   const normalized = value.normalize('NFKC').toLocaleLowerCase()
   const tokens: string[] = []
@@ -14,7 +13,6 @@ export function lexicalSearchTokens(value: string, maximum = 64): string[] {
   return [...new Set(tokens)].slice(0, maximum)
 }
 
-/** Require broader coverage only after a query is focused enough to support it. */
 export function lexicalRequiredMatchCount(tokens: readonly string[]): number {
   if (tokens.length === 0) return 0
   if (tokens.length < 4) return 1

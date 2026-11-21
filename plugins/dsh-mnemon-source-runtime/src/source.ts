@@ -97,8 +97,6 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
         version: 1,
         scope: digest([effective.dataDir, effective.userDataDir, branch ?? null, ...(effective.deferLowPriority ? [true] : [])]),
         branchVisibility: current.branchVisibility,
-        // Ages are projection annotations. Content, importance and branch scope
-        // identify a fact; losing any old occurrence requires a checkpoint.
         entries: current.entries.map(entryDigest).sort(),
       } }
     }
@@ -134,8 +132,6 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
             id: `${context.sourceInstanceKey}/grant/${current.revision}`,
             sourceInstanceKey: context.sourceInstanceKey, schema: 'dsh-mnemon.runtime/v1',
             revision: current.revision, consistency: 'exact-snapshot' as const,
-            // Host-only turn data. Search never widens the branch scope or reads
-            // a later revision from disk after this View has been composed.
             value: {
               entries: [...current.entries, ...current.deferredEntries],
               ...(request.includeProjection && current.bm25 !== undefined ? { bm25: {
@@ -152,8 +148,6 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
             mode: request.mode,
             text: truncate(current.text, request.maxCharacters),
             revision: current.revision,
-            // A truncated projection cannot certify that all old facts remain
-            // visible. Hosts then conservatively compare the entire fragment.
             provenance: { sourceTypeId: 'runtime', ...(current.text.length <= request.maxCharacters ? { snapshot: current.snapshot } : {}) },
           }] : [],
           presentation: {
@@ -173,8 +167,6 @@ export function createRuntimeMemorySource(config: Config = {}): MemorySourceDefi
         const query = (text(input.query, 'query', 2_000, false) ?? '').trim().toLowerCase()
         const target = text(input.target, 'target', 20, false)
         const grant = record(request.grant.value, 'Runtime ReadGrant')
-        // This exact-snapshot grant was materialized above, then validated and
-        // cloned by Core. It contains no paths and is never model-provided input.
         const entries = grant.entries as unknown as RuntimeMemoryEntry[]
         const matches = entries.filter(entry => (target === undefined || entry.target === target) && entry.content.toLowerCase().includes(query))
         const offset = typeof input.offset === 'number' ? Math.max(0, Math.floor(input.offset)) : 0

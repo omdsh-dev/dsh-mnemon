@@ -2,7 +2,6 @@ import { EMBEDDING_CREDENTIAL_REFERENCE, type MnemonEmbeddingCredential, type Re
 
 export type EmbeddingCredentialReader = (reference: string) => Promise<unknown>
 
-/** The Host never exports this value to the browser or serializes it into configuration. */
 export async function embeddingApiKey(config: ResolvedMnemonEmbeddingConfig, read?: EmbeddingCredentialReader, environment: NodeJS.ProcessEnv = process.env): Promise<string> {
   if (config.apiKeyEnv) {
     const key = environment[config.apiKeyEnv]?.trim()

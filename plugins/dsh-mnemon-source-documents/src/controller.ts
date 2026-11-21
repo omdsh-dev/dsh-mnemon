@@ -76,7 +76,6 @@ function hash(value: string | Uint8Array): string {
 }
 
 function indexRevision(index: DocumentIndex): string {
-  // Archive adds optional fields; hash the same field order a disk read uses.
   return hash(JSON.stringify({ version: index.version, documents: index.documents.map(parseRecord) }))
 }
 
@@ -132,7 +131,6 @@ function excerpt(content: string, maximum = 220): string {
   return normalized.length <= maximum ? normalized : `${normalized.slice(0, maximum - 1)}…`
 }
 
-/** Include ctime and identity so restored mtimes and atomic replacements miss. */
 function diskIdentity(stat: BigIntStats): string {
   return `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}:${stat.mode}`
 }
@@ -148,7 +146,6 @@ function readIndexExcerpt(path: string, identity: string): string {
     const buffer = Buffer.allocUnsafe(INDEX_EXCERPT_READ_BYTES)
     const bytes = readSync(descriptor, buffer, 0, buffer.length, 0)
     const prefix = new TextDecoder().decode(buffer.subarray(0, bytes), { stream: bytes === buffer.length }).replace(/\r\n/gu, '\n')
-    // Require complete front matter before sampling the body.
     if (prefix.startsWith('---\n') && !prefix.includes('\n---\n', 4)) return ''
     return excerpt(documentBody(prefix))
   } finally {
@@ -187,7 +184,6 @@ function parseRecord(value: unknown): DocumentRecord | undefined {
   }
 }
 
-/** Project-scoped control plane for managed active and cold document copies. */
 export class DocumentController {
   readonly workspaceRoot: string
   readonly storageRoot: string
@@ -226,7 +222,6 @@ export class DocumentController {
     return this.withLock(() => this.snapshotUnlocked(this.readIndex()))
   }
 
-  /** Index push can sample short excerpts for active documents without descriptions. */
   catalog(includeIndexExcerpts = false): DocumentSnapshot {
     return this.withLock(() => this.snapshotUnlocked(this.readIndex(), includeIndexExcerpts ? 'index' : false))
   }
@@ -262,7 +257,6 @@ export class DocumentController {
         projected = used + Buffer.byteLength(renderDocument(record, content), 'utf8')
       } else if (request.action === 'delete') {
         const current = this.requireDocument(index, request.id)
-        // Deletion never needs archival, including when a lowered limit is exceeded.
         return { projected: used - (current.status === 'active' ? current.sizeBytes : 0), limit: this.limitBytes, fits: true, candidates: [] }
       } else {
         const current = this.requireDocument(index, request.id)
@@ -397,8 +391,6 @@ export class DocumentController {
       const current = this.requireDocument(index, request.id)
       const path = this.pathFor(current)
       const root = realpathSync(this.storageRoot)
-      // A damaged index must not redirect a destructive operation to another
-      // managed file, a project original, or a symlink outside the store.
       if (!DOCUMENT_FILENAME_PATTERN.test(current.filename)
         || path !== join(this.directory, current.status, current.filename)
         || index.documents.some(record => record !== current && this.pathFor(record) === path)
@@ -492,10 +484,9 @@ export class DocumentController {
     this.indexRevisions.set(index, revision)
     try {
       if (diskIdentity(statSync(this.indexPath, { bigint: true })) === identity) {
-        // Never expose cached mutable records/arrays through controller results.
         this.indexCache = { identity, index: copyIndex(index), revision }
       }
-    } catch { /* Do not cache an index concurrently removed by an external writer. */ }
+    } catch { }
     return index
   }
 
@@ -504,8 +495,6 @@ export class DocumentController {
   }
 
   private snapshotUnlocked(index: DocumentIndex, includeExcerpts: boolean | 'index' = true): DocumentSnapshot {
-    // Fix admission before scanning: FIFO insertion on every overflow miss
-    // would evict the next body and make every subsequent full scan miss.
     const cache = includeExcerpts === 'index' ? this.indexExcerpts : this.excerpts
     const excerptRecords = includeExcerpts === 'index' ? index.documents.filter(needsIndexExcerpt) : index.documents
     const cachedPaths = includeExcerpts === false ? undefined
@@ -542,7 +531,6 @@ export class DocumentController {
     }
   }
 
-  /** Cache only presentation excerpts; reads/search and each health check stay live. */
   private bodyExcerpt(record: DocumentRecord, path: string, stat: BigIntStats, cacheable: boolean, indexExcerpt: boolean): string {
     const identity = diskIdentity(stat)
     const cache = indexExcerpt ? this.indexExcerpts : this.excerpts
@@ -556,13 +544,11 @@ export class DocumentController {
       throw error
     }
     if (!cacheable) return value
-    // An out-of-band writer may replace the body between stat and read. Return
-    // the observed body, but never stamp it with an unrelated file's identity.
     try {
       if (diskIdentity(statSync(path, { bigint: true })) === identity) {
         cache.set(path, { identity, value })
       }
-    } catch { /* The next snapshot will observe a removed/inaccessible body. */ }
+    } catch { }
     return value
   }
 
@@ -623,8 +609,6 @@ export class DocumentController {
   }
 
   private persistIndex(index: DocumentIndex): void {
-    // This working copy has changed. A failed write must not publish its data
-    // or revision through the cache; successful writes are observed from disk.
     this.indexCache = undefined
     this.indexRevisions.delete(index)
     this.atomicWrite(this.indexPath, `${JSON.stringify(index, null, 2)}\n`)
@@ -666,7 +650,6 @@ export class DocumentController {
   }
 }
 
-/** Resolves one cached controller per canonical DSH workspace. */
 export class DocumentManager {
   private readonly controllers = new Map<string, DocumentController>()
 

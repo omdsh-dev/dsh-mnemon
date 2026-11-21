@@ -1,6 +1,5 @@
 import { gunzipSync, inflateRawSync } from 'node:zlib'
 
-/** A file read out of a skill archive, its path relative to the skill folder. */
 export interface ArchiveFile {
   path: string
   data: Buffer
@@ -11,7 +10,6 @@ export interface ArchiveLimits {
   bytes: number
 }
 
-/** A path inside the skill folder, or undefined when it would leave it. */
 function insidePath(raw: string): string | undefined {
   const path = raw.replace(/\\/gu, '/').replace(/^(?:\.\/)+/u, '')
   if (path === '' || path.startsWith('/') || /^[A-Za-z]:/u.test(path)) return undefined
@@ -20,7 +18,6 @@ function insidePath(raw: string): string | undefined {
   return path
 }
 
-/** Files an archiver adds that are not part of a skill. */
 function isJunk(path: string): boolean {
   return path.startsWith('__MACOSX/') || path.split('/').at(-1) === '.DS_Store'
 }
@@ -55,7 +52,6 @@ function octal(buffer: Buffer, start: number, length: number): number {
   return Number.parseInt(value, 8)
 }
 
-/** The `path` of a PAX extended header, which overrides the next entry's name. */
 function paxPath(body: Buffer): string | undefined {
   let offset = 0
   while (offset < body.length) {
@@ -71,7 +67,6 @@ function paxPath(body: Buffer): string | undefined {
   return undefined
 }
 
-/** A POSIX tar stream (ustar, PAX or GNU long names) of regular files and folders. */
 function readTar(buffer: Buffer, limits: ArchiveLimits): ArchiveFile[] {
   const collector = new Collector(limits)
   let offset = 0
@@ -104,7 +99,6 @@ const ZIP_LOCAL = 0x04034b50
 const ZIP_CENTRAL = 0x02014b50
 const ZIP_END = 0x06054b50
 
-/** A zip archive of stored or deflated files; encrypted, zip64 and linked entries are refused. */
 function readZip(buffer: Buffer, limits: ArchiveLimits): ArchiveFile[] {
   let end = -1
   for (let index = buffer.length - 22; index >= Math.max(0, buffer.length - 22 - 0xffff); index--) {
@@ -145,12 +139,6 @@ function readZip(buffer: Buffer, limits: ArchiveLimits): ArchiveFile[] {
   return collector.files
 }
 
-/**
- * The files of a skill archive, a `.tar.gz` or a `.zip` told apart by their
- * first bytes. Paths stay inside the skill folder; links, special files and
- * oversized content are refused. A single folder wrapping a skill whose
- * `SKILL.md` is not at the top is unwrapped.
- */
 export function readArchive(data: Buffer, limits: ArchiveLimits): ArchiveFile[] {
   let files: ArchiveFile[]
   if (data.length >= 2 && data[0] === 0x1f && data[1] === 0x8b) {

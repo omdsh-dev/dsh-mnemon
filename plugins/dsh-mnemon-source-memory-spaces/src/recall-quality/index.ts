@@ -1,4 +1,3 @@
-/** Memory Spaces-owned recall quality policy. */
 export type {
   EvaluatedRecallQualityCandidate,
   RecallQualityCandidate,

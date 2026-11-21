@@ -25,7 +25,6 @@ const CREATE_PROPERTIES = {
 
 function documentCreation(value: MemoryJsonValue): DocumentMutation {
   const input = record(value, 'Documents create')
-  // Enforce the narrower capability at the Source boundary as well as in its schema.
   for (const key of Object.keys(input)) {
     if (!Object.hasOwn(CREATE_PROPERTIES, key)) throw new Error('unsupported Documents create field: ' + key)
   }
@@ -125,8 +124,6 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
     const documents = new DocumentManager(effective.limitBytes, undefined, () => effective.dataDir)
     const snapshot = (workspaceId: string, indexExcerpts = false) => documents.forWorkspace(workspaceId).catalog(indexExcerpts)
     const prepared = new WeakMap<object, ReturnType<typeof snapshot>>()
-    // Source- and execution-local successful writes, not a broader read grant.
-    // Weak keys avoid retaining completed turns; View ids and grant ids can repeat.
     const created = new WeakMap<object, Set<string>>()
     return {
       facts(request) {

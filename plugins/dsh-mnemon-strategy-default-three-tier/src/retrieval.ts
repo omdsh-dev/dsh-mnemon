@@ -2,7 +2,6 @@ import { createHash, randomUUID } from 'node:crypto'
 import { memoryInputRecord as object, truncateMemoryText as clip, type ComposableMemoryView, type MemoryEvidence, type MemoryStrategyRead, type MemoryStrategyReadRequest, type MemoryStrategyTurn } from 'dsh-mnemon/extension-sdk'
 import type { MemoryJsonValue } from 'dsh-mnemon/contracts'
 
-/** The three-tier public read shape. Other strategies are free to use other Source protocols. */
 interface RecallInsight {
   id: string; content: string; score?: number; revision?: string
   category?: string; importance?: number; tags?: string[]; entities?: string[]; source?: string; createdAt?: string
@@ -14,9 +13,7 @@ type Insight = RecallInsight
 interface SearchRequest { query: string; mode?: string; limit?: number; memoryBodyIds?: string[] }
 interface RecallResult {
   query: string; mode: string; results: RecallInsight[]; hint?: string
-  /** This call ran no query and returns no evidence of its own. */
   notRun?: true
-  /** The turn's budget for this read was already spent; the reason it did not run. */
   budgetExhausted?: true
   memoryEvidence?: Omit<MemoryEvidence, 'items'>
 }
@@ -54,7 +51,6 @@ function evidenceInsights(evidence: MemoryEvidence): RecallInsight[] {
   })
 }
 
-/** Preserve the original read identity and truncation when the Strategy admits or replays evidence. */
 function recallEvidence(evidence: MemoryEvidence, results: readonly RecallInsight[]): NonNullable<RecallResult['memoryEvidence']> {
   const { items, ...metadata } = evidence
   return {
@@ -98,7 +94,6 @@ function recallQueryDigest(request: SearchRequest, sourceInstanceKey: string): s
   return sha256(JSON.stringify({ sourceInstanceKey, query: lexical, memoryBodyIds: [...request.memoryBodyIds ?? []].sort() }))
 }
 
-/** A replay must still respect the current call's selected Source subset. */
 function replayEvidence(previous: RecallResult | undefined, memoryBodyIds: readonly string[] | undefined, sourceInstanceKey: string): Pick<RecallResult, 'results' | 'memoryEvidence'> {
   if (previous?.memoryEvidence?.sourceInstanceKey !== sourceInstanceKey) return { results: [] }
   const original = previous?.results ?? []
@@ -111,7 +106,6 @@ function replayEvidence(previous: RecallResult | undefined, memoryBodyIds: reado
   } }) }
 }
 
-/** Admit a small, deduplicated evidence envelope after Provider quality policy. */
 function boundedModelInsights(results: readonly RecallInsight[], admission: ModelInsightAdmission = {}): ModelInsightEnvelope {
   const resultLimit = admission.resultLimit ?? MODEL_RECALL_RESULT_LIMIT
   const contentLimit = admission.contentLimit ?? MODEL_RECALL_CONTENT_LIMIT
@@ -163,7 +157,6 @@ function boundedModelInsights(results: readonly RecallInsight[], admission: Mode
   return { results: admitted }
 }
 
-
 class ThreeTierTurn implements MemoryStrategyTurn {
   private readonly state: TurnRetrievalState = { recallAttempts: [], evidenceDigests: new Set(), evidenceReferences: new Set() }
   constructor(private readonly view: ComposableMemoryView) {}
@@ -175,7 +168,6 @@ class ThreeTierTurn implements MemoryStrategyTurn {
     if (grant.schema !== 'dsh-mnemon.memory-spaces/v1' || !['recall', 'related', 'inspect'].includes(request.route.sourceRouteId)) return read(request.input)
     if (request.route.sourceRouteId === 'inspect') {
       const evidence = await read(request.input)
-      // Catalog is already bounded and sanitized by its Source. Never split JSON.
       return evidence.items.length === 1 ? { ...evidence, output: JSON.parse(evidence.items[0]!.text) as MemoryJsonValue } : evidence
     }
     const value = object(grant.value, 'Memory Spaces grant')
@@ -201,7 +193,6 @@ class ThreeTierTurn implements MemoryStrategyTurn {
     const input = object(request.input, 'Documents search')
     const query = String(input.query).trim()
     const includeArchived = input.includeArchived === true
-    // A search in flight can still fail and give the slot back, so a parallel one waits for it.
     if (this.state.documentSearchPending !== undefined) {
       await Promise.allSettled([this.state.documentSearchPending])
       return this.documents(request, read)
@@ -218,7 +209,6 @@ class ThreeTierTurn implements MemoryStrategyTurn {
     try {
       evidence = await pending
     } catch (error) {
-      // A failed search spent nothing: the next one in this turn may run.
       this.state.documentSearchClaimed = false
       throw error
     } finally {
@@ -244,9 +234,6 @@ class ThreeTierTurn implements MemoryStrategyTurn {
   }
   async recall(request: SearchRequest, read: MemoryStrategyRead, signal: AbortSignal, authority: RecallAuthority): Promise<RecallResult> {
     signal.throwIfAborted()
-    // Model-selected semantic filters are too brittle to be authoritative:
-    // one wrong category can hide the exact evidence. The query and pinned
-    // Source remain the complete model-facing routing contract.
     const limited: SearchRequest = {
       query: request.query,
       ...(request.mode === undefined ? {} : { mode: request.mode }),
@@ -269,16 +256,12 @@ class ThreeTierTurn implements MemoryStrategyTurn {
       }
     }
     if (retrieval.recallAttempts.length >= MODEL_RECALL_ATTEMPT_LIMIT) {
-      // A query holding the budget can still fail and give its slot back, so a parallel call
-      // waits for the queries in flight and asks again before it says the budget is spent.
       const inflight = retrieval.recallAttempts.flatMap(entry => entry.pending === undefined ? [] : [entry.pending])
       if (inflight.length > 0) {
         await Promise.allSettled(inflight)
         signal.throwIfAborted()
         return this.recall(request, read, signal, authority)
       }
-      // Another query's evidence must never read as this one's answer (#389): a new
-      // query past the budget runs nothing and returns nothing, and says so.
       return {
         query: scoped.query,
         mode: scoped.mode ?? 'smart',
@@ -293,8 +276,6 @@ class ThreeTierTurn implements MemoryStrategyTurn {
     const attempt: RecallAttempt = { queryDigest: digest }
     retrieval.recallAttempts.push(attempt)
     const operation = (async (): Promise<RecallResult> => {
-      // Distinct concurrent tool calls are serialized so the refinement can
-      // exclude evidence admitted by the initial query and share one envelope.
       if (predecessor !== undefined) await predecessor
       signal.throwIfAborted()
       const evidence = await read(json(scoped))
@@ -310,10 +291,6 @@ class ThreeTierTurn implements MemoryStrategyTurn {
         totalContentLimit: attemptIndex === 0
           ? MODEL_RECALL_INITIAL_TOTAL_CONTENT_LIMIT
           : Math.max(0, MODEL_RECALL_TOTAL_CONTENT_LIMIT - priorContentCharacters),
-        // A materially different query must be able to contribute one
-        // bounded medium/unknown clue even when the first attempt used
-        // its own slot. The shared result and character limits still cap
-        // the complete turn envelope.
         mediumLimit: MODEL_RECALL_MEDIUM_LIMIT_PER_ATTEMPT,
         unknownLimit: MODEL_RECALL_UNKNOWN_LIMIT_PER_ATTEMPT,
         excludeDigests: retrieval.evidenceDigests,
@@ -375,10 +352,7 @@ class ThreeTierTurn implements MemoryStrategyTurn {
       edge: options.edge ?? '',
     }))
     if (retrieval.relatedDigest !== undefined) {
-      // Only the same traversal gets its evidence again; another one's neighbours never
-      // read as this insight's (#389).
       if (retrieval.relatedDigest !== digest) {
-        // The traversal holding the slot can still fail and give it back.
         if (retrieval.relatedPending !== undefined) {
           await Promise.allSettled([retrieval.relatedPending])
           signal.throwIfAborted()
@@ -443,7 +417,6 @@ class ThreeTierTurn implements MemoryStrategyTurn {
       if (retrieval.relatedPending === operation) delete retrieval.relatedPending
     }
   }
-
 
 }
 

@@ -12,7 +12,6 @@ import type { EvolutionFilter, SkillsLocation, SkillsPageContext } from './ui.ts
 const PENDING: readonly SuggestionStatus[] = ['pending', 'drafting', 'review']
 const DONE: readonly SuggestionStatus[] = ['adopted', 'dismissed', 'expired', 'invalidated']
 
-/** One row of the inbox: a suggestion, or a draft written for a skill directly. */
 type Item =
   | { kind: 'suggestion'; id: string; suggestion: SkillSuggestion }
   | { kind: 'draft'; id: string; draft: SkillDraft }
@@ -60,7 +59,6 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
     if (suggestions === null) return
     if (hasSharedOverview && context.overview === null) return
     let active = true
-    // Drafts written for a skill directly have no suggestion; skip drafts already linked to a suggestion.
     const linkedDraftIds = new Set(suggestions.flatMap(entry => entry.draftId === undefined ? [] : [entry.draftId]))
     const loadStandaloneDrafts = async () => {
       const overview = hasSharedOverview ? context.overview! : await context.client.overview()
@@ -77,7 +75,6 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
     void loadStandaloneDrafts().catch(() => undefined)
     return () => { active = false }
   }, [context.client, context.overview, context.revision, hasSharedOverview, readDraft, suggestions])
-  // A link opens a suggestion, a draft, the first suggestion waiting for a skill, or the evidence.
   useLink(location.nonce, location.filter === 'evidence' || suggestions !== null, () => {
     if (location.filter === 'evidence' || suggestions === null) { setFilter('evidence'); return }
     const target = location.suggestionId !== undefined ? suggestions.find(entry => entry.id === location.suggestionId)
@@ -118,7 +115,7 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
     } catch (error) { context.fail(error) } finally { setReviewing(false) }
   }
   const evolutionOff = context.evolution !== undefined && !context.evolution.on
-  const bar = <header className={css.skListBar}>
+  const listHeader = <header className={css.skListBar}>
     <SegmentedControl id="skill-evolution-filter" label={t('tab.evolution')} value={filter} onChange={value => { setFilter(value); setSelected(undefined) }}
       options={[
         { value: 'pending', label: pendingCount > 0 ? t('evolution.pendingCount', { count: pendingCount }) : t('evolution.pending') },
@@ -128,9 +125,7 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
     {canReview && <button type="button" className={css.skIconButton} disabled={reviewing || !context.writable} onClick={() => void reviewNow()}
       aria-label={t('evolution.reviewNow')} title={t('evolution.reviewNow')} data-pulse={reviewing ? '' : undefined}><IconSparkleRegular size={16} /></button>}
   </header>
-  if (filter === 'evidence') return <EvidenceView context={context} location={location} bar={bar} />
-  // The picks that apply right now: this card's own, else the global one. A
-  // draft row has no suggestion, so only the global pick governs it.
+  if (filter === 'evidence') return <EvidenceView context={context} location={location} listHeader={listHeader} />
   const currentId = current?.kind === 'suggestion' ? current.id : undefined
   const canOverride = currentId !== undefined && current?.kind === 'suggestion' && PENDING.includes(current.suggestion.status)
   const currentOverride = currentId === undefined ? null : Object.hasOwn(choice.preferences.suggestionModels, currentId) ? choice.preferences.suggestionModels[currentId]! : null
@@ -148,7 +143,6 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
   }
   const showOffEmpty = current === undefined && filter === 'pending' && evolutionOff
   const modelSettingsAvailable = context.openSettings !== undefined && supportsSettingsSection('models')
-  // Keep model picker inside the detail pane so the left inbox header never shifts across Pending | Done | Evidence.
   const modelBar = <div className={css.skPaneBar}>
     {!modelSettingsAvailable && <SelectField<string> label={t('evolution.model')} triggerDetail inline size="sm" value={modelOptionValue(choice.preferences.model)} disabled={!context.writable || choice.models === null} onChange={value => choice.saveDraftModel(modelOptionPick(value))} options={choice.options} />}
     <SelectField<string> label={t('evolution.modelCard')} triggerDetail inline size="sm" value={modelOptionValue(currentOverride)} disabled={!context.writable || !canOverride || choice.models === null} onChange={saveSuggestionModel} options={choice.cardOptions} />
@@ -156,7 +150,7 @@ export function EvolutionPage(props: { context: SkillsPageContext; location: Ski
   </div>
   return <div className={appearanceClass(css.skSplit, css.skEvolutionSplit)}>
     <aside className={css.skList}>
-      {bar}
+      {listHeader}
       {prominent.map(item => <ListItem key={item.id} item={item} selected={current?.id === item.id} onSelect={() => setSelected(item.id)} />)}
       {oneOff.length > 0 && <Fold key={selectedOneOff ? selected : 'one-off'} defaultOpen={selectedOneOff} title={t('triage.fold', { count: oneOff.length })}>
         {oneOff.map(item => <ListItem key={item.id} item={item} selected={current?.id === item.id} onSelect={() => setSelected(item.id)} />)}
@@ -211,8 +205,6 @@ function ListItem(props: { item: Item; selected: boolean; onSelect: () => void }
 function SuggestionDetail(props: { context: SkillsPageContext; id: string; model?: ModelRoute | null; readDraft: (draftId: string) => Promise<DraftView> }): JSX.Element {
   const t = useT()
   const { context } = props
-  // The pick the page holds for this card, as `provider`/`model` for the Host;
-  // none at all asks it to use the task Agent's own route.
   const route = props.model === null || props.model === undefined ? {} : { provider: props.model.provider, model: props.model.model }
   const [loadedView, setLoadedView] = useState<SuggestionView | null>(null)
   const [loadError, setLoadError] = useState<'missing' | 'failed' | null>(null)
@@ -314,10 +306,6 @@ function SuggestionDetail(props: { context: SkillsPageContext; id: string; model
   </article>
 }
 
-/**
- * Average scores of a draft and its baseline over the cases both graded: a
- * case that could not run on either side says nothing about the change.
- */
 export function compareRuns(baseline: BacktestRun | undefined, candidate: BacktestRun | undefined): { baseline?: number; candidate?: number; excluded: number } {
   if (baseline?.status !== 'completed' || candidate?.status !== 'completed') return { excluded: 0 }
   const graded = (run: BacktestRun) => new Map(run.results.filter(result => result.verdict !== 'error').map(result => [result.caseId, result.score]))
@@ -330,19 +318,11 @@ export function compareRuns(baseline: BacktestRun | undefined, candidate: Backte
   return { baseline: mean(base), candidate: mean(next), excluded }
 }
 
-/** Where adopting may write a new skill: the user's own DSH skills, or the project's. */
 const NEW_SKILL_ROOTS: readonly SkillRootKind[] = ['user-dsh', 'project-dsh']
 
-/**
- * A draft under review: what changed and why, the backtest as one line that
- * opens to its cases, and the diff. Adopt and discard sit with its title;
- * editing and redrafting with a note wait behind its menu.
- */
 function DraftReview(props: { context: SkillsPageContext; draftId: string; model?: ModelRoute | null; readDraft?: (draftId: string) => Promise<DraftView> }): JSX.Element {
   const t = useT()
   const { context } = props
-  // A redraft continues what the user picked for drafts; a pick of none follows
-  // the task Agent, as every run did before the pickers existed.
   const route = props.model === null || props.model === undefined ? {} : { provider: props.model.provider, model: props.model.model }
   const [loadedView, setLoadedView] = useState<DraftView | null>(null)
   const [cases, setCases] = useState<number | undefined>(undefined)
@@ -381,7 +361,6 @@ function DraftReview(props: { context: SkillsPageContext; draftId: string; model
       if (!active) return
       const selected = view.draft.targetRoot ?? catalog.creation?.default ?? 'user-dsh'
       const choices = catalog.creation?.roots ?? NEW_SKILL_ROOTS.filter(kind => catalog.roots.some(entry => entry.kind === kind))
-      // Existing drafts retain their recorded destination, even after preferences change.
       setRoots(choices.includes(selected) ? choices : [...choices, selected])
       setRoot(selected)
     }).catch(context.fail)
@@ -389,7 +368,6 @@ function DraftReview(props: { context: SkillsPageContext; draftId: string; model
   }, [configRevision, context.client, context.fail, view?.draft.id, view?.draft.action, view?.draft.targetRoot])
   if (view === null) return <Busy label={t('common.loading')} />
   const { draft } = view
-  // Runs are linked oldest first; the comparison is always the latest pair.
   const latest = [...view.runs].reverse()
   const candidate = latest.find(run => run.target.kind === 'draft' && run.target.draftId === draft.id)
   const baseline = latest.find(run => run.target.kind !== 'draft')
@@ -490,7 +468,6 @@ function DraftReview(props: { context: SkillsPageContext; draftId: string; model
     {confirmAdopt && <Confirm title={t('draft.adoptAnyway')} body={t('draft.regressed')} confirmLabel={t('draft.adopt')} busy={busy} onClose={() => setConfirmAdopt(false)} onConfirm={() => void adopt()} />}
   </section>
 }
-
 
 function AutoAdoptionHistory(props: { events: AutoAdoptionEvent[] }): JSX.Element {
   const t = useT()

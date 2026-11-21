@@ -162,7 +162,6 @@ export function publicProviderConnection(providerId: MemoryProviderId, connectio
   return publicConnectionFields(descriptor.fields, connection, false)
 }
 
-/** Immutable descriptor/config normalizer scoped to one Provider snapshot. */
 export class MemoryProviderCatalog {
   readonly providers: readonly MemoryProviderDescriptor[]
 

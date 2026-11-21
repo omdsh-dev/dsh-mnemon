@@ -6,17 +6,11 @@ import { css, errorText, stamp, useT } from './presentation.ts'
 import { Busy, Confirm, Empty, Field, SkillIcon, SkillPath } from './shared.tsx'
 import type { SkillsLocation, SkillsPageContext } from './ui.tsx'
 
-/** A size the eye can compare: bytes under a kilobyte, else whole KiB or MiB. */
 function size(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   return bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KiB` : `${(bytes / (1024 * 1024)).toFixed(1)} MiB`
 }
 
-/**
- * Skills taken out of DSH's reach: every removal still sits on disk under the
- * Source's `trash` directory, so it can be put back, and only here can it be
- * deleted for good.
- */
 export function TrashPage(props: { context: SkillsPageContext; location: SkillsLocation }): JSX.Element {
   const t = useT()
   const { context } = props

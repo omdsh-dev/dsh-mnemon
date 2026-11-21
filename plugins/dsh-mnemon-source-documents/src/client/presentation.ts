@@ -14,8 +14,6 @@ export function useT(): (key: SourceKey | MnemonKey, params?: Record<string, unk
   const locale = useLocale()
   return useMemo(() => (key: SourceKey | MnemonKey, params?: Record<string, unknown>) => {
     const dictionary = locale.toLowerCase().startsWith('zh') ? copy.zh : copy.en
-    // Preserve Source-owned zh/en copy while allowing other language packs
-    // through the enclosing Host translator before the English fallback.
     if (!/^(en|zh)(-|$)/i.test(locale)) {
       const translated = fallback(key as MnemonKey, params)
       if (translated !== key) return translated

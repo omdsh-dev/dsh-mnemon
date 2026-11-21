@@ -6,10 +6,8 @@ import { isSkillName } from './frontmatter.ts'
 import { MAX_CASES_PER_SKILL, MAX_TRAJECTORIES, type EvalsFile, type LedgerFile } from './store.ts'
 
 const DISMISSED_COOLDOWN_MS = 24 * 60 * 60 * 1000
-/** Statuses in which a suggestion still holds its skill+action. */
 export const OPEN_STATUSES = new Set<SkillSuggestion['status']>(['pending', 'drafting', 'review'])
 
-/** Character bigrams, so similarity works for Chinese as well as English. */
 function bigrams(value: string): Map<string, number> {
   const text = value.toLowerCase().replace(/\s+/gu, ' ').trim()
   const grams = new Map<string, number>()
@@ -21,7 +19,6 @@ function bigrams(value: string): Map<string, number> {
   return grams
 }
 
-/** Dice coefficient over character bigrams. */
 export function similarity(left: string, right: string): number {
   const a = bigrams(left)
   const b = bigrams(right)
@@ -34,7 +31,6 @@ export function similarity(left: string, right: string): number {
   return 2 * shared / total
 }
 
-/** A reviewer's free-form name, made into DSH's kebab-case when it can be. */
 export function normalizeSkillName(value: string): string | undefined {
   const name = value.trim().toLowerCase().replace(/[\s_]+/gu, '-').replace(/[^a-z0-9-]/gu, '').replace(/-+/gu, '-').replace(/^-|-$/gu, '')
   return isSkillName(name) ? name : undefined
@@ -49,12 +45,6 @@ function clip(value: string, maximum: number): string {
   return text.length <= maximum ? text : text.slice(0, maximum - 1) + '…'
 }
 
-/**
- * `drafting` was set before this process started, so no live writer owns it any
- * more. A draft write is cancelled only by the Host going away, and the catch
- * that would put the suggestion back never runs then, so the row would sit in
- * "drafting" forever and refuse both a retry and a delete.
- */
 const PROCESS_STARTED_AT = Date.now() - Math.round(process.uptime() * 1_000)
 export const ORPHAN_DRAFT_ERROR = 'the host restarted while this draft was being written'
 
@@ -63,10 +53,6 @@ function orphanedDraft(suggestion: SkillSuggestion): boolean {
   return !Number.isFinite(at) || at < PROCESS_STARTED_AT
 }
 
-/**
- * Move pending suggestions past their expiry to `expired`, and suggestions whose
- * draft was abandoned by a dead process back to `pending`; true when anything changed.
- */
 export function expireSuggestions(ledger: LedgerFile, now: Date): boolean {
   let changed = false
   for (const suggestion of ledger.suggestions) {
@@ -98,7 +84,6 @@ function summaryOf(trajectory: Trajectory): TrajectorySummary {
   return summary
 }
 
-/** Keep the newest trajectories; pinned ones and those a suggestion or case cites stay longest. */
 export function boundedTrajectories(ledger: LedgerFile, evals: EvalsFile): string[] {
   if (ledger.trajectories.length <= MAX_TRAJECTORIES) return []
   const cited = new Set<string>([
@@ -115,13 +100,11 @@ export function boundedTrajectories(ledger: LedgerFile, evals: EvalsFile): strin
   return removed
 }
 
-/** Similar cases already in a skill's set, by title and prompt. */
 export function similarCase(cases: readonly EvalCase[], skillName: string, title: string, prompt: string): EvalCase | undefined {
   const candidate = `${title}\n${prompt}`
   return cases.find(entry => entry.skillName === skillName && similarity(`${entry.title}\n${entry.prompt}`, candidate) >= 0.8)
 }
 
-/** The admission rules a review asked for, each kept within its range or left at its default. */
 export function policyFrom(value: Partial<SkillsPolicy> | undefined): SkillsPolicy {
   const pick = (key: 'minConfidence' | 'expiryDays' | 'maxPendingPerSession', minimum: number, maximum: number): number => {
     const candidate = value?.[key]
@@ -150,11 +133,6 @@ export interface AdmissionContext {
   id: () => string
 }
 
-/**
- * Record one review: the trajectory it read, the log entry, and whatever of
- * its suggestions and cases pass the admission rules. Mutates the files in
- * the context; returns the trajectory to persist and what happened.
- */
 export function admitReview(context: AdmissionContext, input: ReviewRecordInput): { result: ReviewRecordResult; trajectory: Trajectory; removedTrajectories: string[] } {
   const { ledger, evals, policy, catalog, now } = context
   const at = now.toISOString()
@@ -170,7 +148,6 @@ export function admitReview(context: AdmissionContext, input: ReviewRecordInput)
   let casesAdded = 0
   expireSuggestions(ledger, now)
 
-  // One proposal per skill and action in a batch: the most confident wins.
   const batch = new Map<string, ReviewRecordInput['suggestions'][number] & { skillName: string }>()
   for (const raw of input.suggestions) {
     const name = normalizeSkillName(raw.skillName)
@@ -178,7 +155,6 @@ export function admitReview(context: AdmissionContext, input: ReviewRecordInput)
     if (raw.action !== 'create' && raw.action !== 'update') { skipped.push({ skillName: name, action: String(raw.action), reason: 'invalid_action' }); continue }
     if (raw.summary.trim() === '' || !Number.isFinite(raw.confidence)) { skipped.push({ skillName: name, action: raw.action, reason: 'missing_or_invalid_fields' }); continue }
     if (steps(raw.steps).length === 0) { skipped.push({ skillName: name, action: raw.action, reason: 'no_evidence' }); continue }
-    // A proposal follows the file DSH actually loads: creating a skill that exists is an update.
     const existing = activeSkill(catalog, name)
     const action = existing !== undefined ? 'update' : 'create'
     if (existing?.readOnly) { skipped.push({ skillName: name, action, reason: 'linked_skill' }); continue }
@@ -203,7 +179,6 @@ export function admitReview(context: AdmissionContext, input: ReviewRecordInput)
     if (dismissed !== undefined) { skipped.push({ skillName: proposal.skillName, action: proposal.action, reason: 'recently_dismissed' }); continue }
     const open = ledger.suggestions.find(suggestion => sameSkill(suggestion) && OPEN_STATUSES.has(suggestion.status))
     if (open !== undefined) {
-      // More evidence for an open suggestion is never lost, even when its wording stays.
       open.evidence = [...open.evidence, evidence].slice(-12)
       open.signals = signals([...open.signals, ...proposal.signals])
       if (open.status === 'pending' && confidence >= open.confidence) {
@@ -245,7 +220,6 @@ export function admitReview(context: AdmissionContext, input: ReviewRecordInput)
     inserted++
   }
 
-  // At most N pending per session: the least confident, then the oldest, expire first.
   const pending = ledger.suggestions.filter(suggestion => suggestion.status === 'pending' && suggestion.sourceSessionId === input.review.sessionId)
   if (pending.length > policy.maxPendingPerSession) {
     const excess = [...pending].sort((a, b) => a.confidence - b.confidence || Date.parse(a.createdAt) - Date.parse(b.createdAt)).slice(0, pending.length - policy.maxPendingPerSession)

@@ -40,7 +40,6 @@ function normalizeBearerHeader(apiKey: unknown): string | undefined {
   return stripped === '' ? undefined : `Bearer ${stripped}`
 }
 
-/** The categories Mnemon writes; anything else is stored, and read back, as general. */
 const CATEGORY_NAMES = new Set<string>(CATEGORIES)
 
 function categoryOf(value: unknown): string {
@@ -48,8 +47,6 @@ function categoryOf(value: unknown): string {
   return category !== undefined && CATEGORY_NAMES.has(category) ? category : 'general'
 }
 
-// Agent-authored memories use the content API; extraction counters cannot
-// prove that a one-turn session stored the caller's text.
 const MEMORY_FOLDERS: Record<string, string> = {
   preference: 'preferences',
   insight: 'experiences',
@@ -59,10 +56,6 @@ const MEMORY_FOLDERS: Record<string, string> = {
   general: 'entities',
 }
 
-/**
- * The slug's share of a file name, which Linux caps at 255 bytes: the stamp, the longest
- * category, the UUID and the separators take 66, so 48 characters of four bytes would not fit.
- */
 const SLUG_BYTES = 180
 
 function memoryUri(root: string, category: string, content: string): string {
@@ -72,8 +65,6 @@ function memoryUri(root: string, category: string, content: string): string {
   while (Buffer.byteLength(characters.join('').toLowerCase()) > SLUG_BYTES) characters.pop()
   const slug = characters.join('').toLowerCase() || 'memory'
   const stamp = new Date().toISOString().replace(/[-:T]/gu, '').slice(0, 14)
-  // Folders hold two categories each, so the category travels in the file name too. The slug
-  // never contains '_' and a UUID never does, so `_<category>-<uuid>.md` reads back exactly.
   return `${root}/${folder}/${stamp}-${slug}_${category}-${randomUUID()}.md`
 }
 
@@ -103,10 +94,8 @@ function queueFailed(value: unknown): boolean {
   })
 }
 
-/** What a folder holds, for files written before the category was in the name or by OpenViking itself. */
 const FOLDER_CATEGORIES: Record<string, string> = { preferences: 'preference', experiences: 'insight', events: 'context', entities: 'fact' }
 
-/** The category in the file name Mnemon wrote, else one the server reports, else the folder's. */
 function categoryFromUri(uri: string, reported?: unknown): string {
   const named = /_([a-z]+)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.md$/u.exec(uri)?.[1]
   if (named !== undefined && CATEGORY_NAMES.has(named)) return named
@@ -117,7 +106,6 @@ function categoryFromUri(uri: string, reported?: unknown): string {
   return Object.hasOwn(FOLDER_CATEGORIES, folder) ? FOLDER_CATEGORIES[folder]! : 'general'
 }
 
-/** Whether the server turned the request down as sent, so it wrote nothing: not a timeout or a server fault. */
 function refused(error: unknown): boolean {
   const status = (error as { status?: unknown } | undefined)?.status
   return typeof status === 'number' && status >= 400 && status < 500 && status !== 408 && status !== 409
@@ -191,7 +179,6 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
     const keyword = request.mode === 'keyword'
     signal?.throwIfAborted()
     if (keyword && request.query.trim() === '') return { results: [] }
-    // Match the Source's 1..50 search budget, including for direct adapter callers.
     const limit = keyword
       ? Math.min(50, Math.max(1, Math.floor(number(request.limit) ?? 10)))
       : request.limit
@@ -200,7 +187,6 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
       method: 'POST',
       body: JSON.stringify(keyword ? {
         uri: memoryRoot,
-        // The public keyword mode accepts literal text, not caller-supplied regex.
         pattern: request.query.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'),
         case_insensitive: true,
         node_limit: limit,
@@ -240,8 +226,6 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
   }
 
   async graph(body: MemorySpace, signal?: AbortSignal): Promise<MemoryGraphSnapshot> {
-    // Remote providers are projected as a bounded, disconnected browse view;
-    // they do not pretend to expose Mnemon's typed graph relationships.
     const items = await this.list(body, { limit: 200 }, signal)
     return {
       nodes: items.map(item => ({ ...item, color: '#5568d9' })),
@@ -275,12 +259,6 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
     })
   }
 
-  /**
-   * Each listed memory with its full content, leaving out one the server cannot read: its index
-   * can still list a file it no longer holds. When none can be read, the first failure is the
-   * answer, so a server that cannot be reached is never shown as an empty space, and a cancelled
-   * turn stops at once.
-   */
   private async readAll<T extends { id: string }>(body: MemorySpace, items: readonly T[], signal?: AbortSignal): Promise<{ read: Array<T & { content: string }>; skipped: number }> {
     const settled = await Promise.allSettled(items.map(async item => ({ ...item, content: await this.readContent(body, item.id, signal) })))
     signal?.throwIfAborted()
@@ -302,8 +280,6 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
     try {
       written = object(await this.request(body, '/api/v1/content/write', {
         method: 'POST',
-        // OpenViking 0.5.1 removed the server-side timeout field. Keep the common
-        // 0.4/0.5 request shape and bound the request with our HTTP deadline.
         body: JSON.stringify({ uri, content: request.content, mode: 'create', wait: true }),
       }, { signal }))
     } catch (error) {
@@ -311,21 +287,15 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
       throw new Error(`OpenViking write was not verified at ${uri}; remote content may remain. Inspect this URI before retrying. ${error instanceof Error ? error.message : String(error)}`, { cause: error })
     }
     try {
-      // Newer servers count their reserved metadata trailer too. Reject short
-      // writes here; the public readback below must still match the exact text.
       if (written?.uri !== uri || written.content_updated !== true || (number(written.written_bytes) ?? -1) < writtenBytes
         || written.mode !== 'create' || written.context_type !== 'memory'
         || written.vector_status !== 'complete' || !['complete', 'skipped'].includes(String(written.semantic_status))
         || queueFailed(written.queue_status)) {
         throw new Error('content API did not confirm this exact memory and completed indexing')
       }
-      // The public read projection removes OpenViking's reserved metadata.
-      // Reject normalization or a stale read rather than promising exactness.
       if (await this.readContent(body, uri, signal) !== request.content) throw new Error('stored content does not match the requested text')
       signal?.throwIfAborted()
     } catch (error) {
-      // A server timeout can happen after the file was written. Do not retry,
-      // fall back to extraction, or delete a target whose creation is uncertain.
       throw new Error(`OpenViking write was not verified at ${uri}; remote content may remain. Inspect this URI before retrying. ${error instanceof Error ? error.message : String(error)}`, { cause: error })
     }
     return {
@@ -341,12 +311,6 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
     }
   }
 
-  /**
-   * Label a verified memory. Tags only describe it - its category is in the URI too - so a server
-   * without the endpoint, one that refuses or does not confirm the call, or one that is slow to
-   * answer leaves an exact memory that is just untagged. The wait is short, as for `/health`:
-   * the receipt is already true.
-   */
   private async tag(body: MemorySpace, uri: string, tags: string[], signal?: AbortSignal): Promise<boolean> {
     try {
       const result = object(await this.request(body, '/api/v1/content/set_tags', { method: 'POST', body: JSON.stringify({ uri, tags, mode: 'replace' }) }, {
@@ -384,8 +348,6 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
 
   private async validateUserNamespace(connection: MemoryProviderConnection | OpenVikingConnection, user: string, signal?: AbortSignal): Promise<string> {
     const root = `viking://user/${user}/memories`
-    // Health is unauthenticated on some deployments. A read-only, scoped data
-    // request must succeed before the Host persists or replaces projections.
     const query = new URLSearchParams({ uri: root, recursive: 'false', output: 'original' })
     const result = await this.requestConnection(connection, `/api/v1/fs/ls?${query}`, {}, { signal })
     if (!Array.isArray(result) || result.some(item => !string(object(item)?.uri)?.startsWith(`${root}/`))) {
@@ -408,8 +370,6 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
       return `viking://user/${selectedUser}/memories`
     }
     if (match[1] !== undefined) return root
-    // Retain old persisted shorthand without sending the ambiguous URI to
-    // newer servers. With no configured user, ask the authenticated backend.
     const user = connection.user?.trim() || string(object(await this.request(body, '/api/v1/system/status', {}, { signal }))?.user) || ''
     if (!safeUser(user)) throw new Error('OpenViking could not resolve the memory owner; configure an explicit user memory URI')
     return `viking://user/${user}/memories`
@@ -428,8 +388,6 @@ export class OpenVikingProvider implements MemoryProviderAdapter {
 
   private async requestConnection(connection: MemoryProviderConnection | OpenVikingConnection, path: string, init: RequestInit = {}, options: OpenVikingRequestOptions = {}): Promise<unknown> {
     options.signal?.throwIfAborted()
-    // In api_key mode the backend binds the account/user to the key and
-    // rejects trusted identity overrides. Preserve old discovery by default.
     const keyBound = discoveryUser(connection) !== undefined
     const controller = new AbortController()
     const relay = () => controller.abort(options.signal?.reason)

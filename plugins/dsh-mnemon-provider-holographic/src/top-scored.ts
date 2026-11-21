@@ -1,11 +1,9 @@
-/** Stable descending score selection. Keep sort semantics for non-finite legacy scores. */
 export function topScored<T extends { score: number }>(values: T[], limit: number): T[] {
   const count = Math.min(values.length, Math.max(0, Math.trunc(limit) || 0))
   if (count === 0) return []
   if (values.length <= Math.max(64, count * 2) || values.some(value => !Number.isFinite(value.score))) {
     return values.sort((left, right) => right.score - left.score).slice(0, count)
   }
-  // The input position breaks ties exactly as stable Array.sort does.
   const compare = (left: number, right: number) => values[right]!.score - values[left]!.score || left - right
   const heap: number[] = []
   for (let index = 0; index < values.length; index++) {
@@ -20,7 +18,6 @@ export function topScored<T extends { score: number }>(values: T[], limit: numbe
       }
       heap[child] = index
     } else if (compare(index, heap[0]!) < 0) {
-      // The root is the worst retained row; restore that invariant after replacing it.
       let parent = 0
       while (parent * 2 + 1 < count) {
         let child = parent * 2 + 1

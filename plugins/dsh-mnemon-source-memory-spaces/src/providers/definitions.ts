@@ -16,10 +16,6 @@ const FIELD_KEY = /^[a-z][a-zA-Z0-9_-]{0,127}$/u
 
 export type MemorySpaceProviderScoreSemantics = 'normalized-relevance' | 'provider-native' | 'none'
 
-/**
- * Complete, JSON-safe definition metadata owned by the Memory Spaces Source.
- * It is deliberately not a Mnemon-wide contribution manifest.
- */
 export interface MemorySpaceProviderManifest {
   apiVersion: typeof MEMORY_SPACE_PROVIDER_API_VERSION
   kind: 'provider'
@@ -40,7 +36,6 @@ export interface MemorySpaceProviderManifest {
 }
 
 export interface MemorySpaceProviderRuntimeContext extends MemoryProviderAdapterFactoryContext {
-  /** Stable identity of this child mount inside one Memory Spaces Source. */
   providerInstanceId: string
   manifest: MemorySpaceProviderManifest
 }
@@ -52,15 +47,12 @@ export interface MemorySpaceProviderDefinition {
 
 export type MemorySpaceProviderDisposer = () => void | Promise<void>
 
-/** Capability handed directly to one child Fiber through a lexical closure. */
 export interface MemorySpaceProviderHost {
   install(owner: Context, definition: MemorySpaceProviderDefinition): MemorySpaceProviderDisposer
 }
 
-/** Typed child module mounted only by a Memory Spaces parent Fiber. */
 export interface MemorySpaceProviderModule<Config = undefined> {
   readonly id: string
-  /** Optional Cordis-compatible Standard Schema used for this child config. */
   readonly Config?: Plugin.Base<Config>['Config']
   apply(ctx: Context, host: MemorySpaceProviderHost, config: Config): void | Promise<void>
 }

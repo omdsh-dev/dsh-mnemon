@@ -5,7 +5,6 @@ export interface MemoryAdapterFactory<Id extends string, Context, Adapter extend
   create(context: Context): Adapter
 }
 
-/** Lifecycle-owned factory directory used by Provider plugins and the Host. */
 export class MemoryAdapterFactoryRegistry<Id extends string, Context, Adapter extends { readonly id: Id }> {
   private readonly factories = new Map<Id, MemoryAdapterFactory<Id, Context, Adapter>>()
 
@@ -39,6 +38,5 @@ export class MemoryAdapterFactoryRegistry<Id extends string, Context, Adapter ex
     return [...this.factories.keys()]
   }
 }
-
 
 export class MemoryProviderAdapterRegistry extends MemoryAdapterFactoryRegistry<string, MemoryProviderAdapterFactoryContext, MemoryProviderAdapter> {}

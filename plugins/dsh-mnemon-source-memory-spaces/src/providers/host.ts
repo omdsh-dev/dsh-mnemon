@@ -21,7 +21,6 @@ function requiredSourceInstanceId(value: string): string {
   return normalized
 }
 
-/** Presentation labels/icons do not change the semantic Generation digest. */
 function semanticManifest(manifest: MemorySpaceProviderManifest): unknown {
   return {
     apiVersion: manifest.apiVersion,
@@ -69,7 +68,6 @@ function assertRuntime(definition: MemorySpaceProviderDefinition, adapter: Memor
   }
 }
 
-/** Expose the configured child identity while preserving the driver methods. */
 function instanceAdapter(adapter: MemoryProviderAdapter, instanceId: string): MemoryProviderAdapter {
   return new Proxy(adapter, {
     get(target, property) {
@@ -135,10 +133,6 @@ interface ProviderRegistration {
   definition: MemorySpaceProviderDefinition
 }
 
-/**
- * Source-private definition host. It is a plain closure-owned object, never a
- * Cordis Context service and never a Mnemon contribution registry.
- */
 export class PrivateMemorySpaceProviderHost {
   private readonly registrations = new Map<string, ProviderRegistration>()
 

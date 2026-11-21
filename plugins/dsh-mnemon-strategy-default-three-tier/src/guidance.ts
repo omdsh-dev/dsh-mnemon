@@ -35,11 +35,6 @@ function replaced(text: string, from: string, to: string): string {
   return text.replace(from, to)
 }
 
-/**
- * The bounded protocol for what the View offers (#336): without Memory Spaces to
- * recall from, nothing points the model at mnemon_recall; without one to write to,
- * a full MEMORY.md archives locally. With both, it is the bounded protocol itself.
- */
 export function boundedRuntimeMemoryProtocol(offers: { recall: boolean; archive: boolean; runtimeWrite?: boolean }): string {
   let protocol = offers.runtimeWrite === false
     ? `${BOUNDED_RUNTIME_READ_PROTOCOL}\n\n${READ_ONLY_RUNTIME_NOTICE}`
@@ -53,7 +48,6 @@ export function boundedRuntimeMemoryProtocol(offers: { recall: boolean; archive:
   return protocol
 }
 
-/** The bounded protocol for a View with no Memory Spaces to recall from or write to (#336). */
 export const LOCAL_ARCHIVE_RUNTIME_MEMORY_PROTOCOL = boundedRuntimeMemoryProtocol({ recall: false, archive: false })
 
 const SCOPED_RUNTIME_READ_PROTOCOL = `MNEMON SCOPED RUNTIME MEMORY PROTOCOL
@@ -72,7 +66,6 @@ export const THREE_TIER_REMINDERS = {
   write: `[MNEMON] For mnemon_runtime_memory: ${RUNTIME_CAPTURE_GUIDANCE} Otherwise continue without writing memory.`,
 }
 
-/** Routing while Memory Spaces offer no recall: Documents and the write rules stay, mnemon_recall goes (#336). */
 export const ROUTING_GUIDANCE_WITHOUT_RECALL = `Use memory only when needed. Search Mnemon Documents for substantial project records; never infer a missing historical rule. For mnemon_runtime_memory: ${RUNTIME_CAPTURE_GUIDANCE} A write exists only after its receipt.`
 
 export const THREE_TIER_REMINDERS_WITHOUT_RECALL = {

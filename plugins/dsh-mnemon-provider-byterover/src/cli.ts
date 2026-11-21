@@ -20,12 +20,10 @@ function globalBins(env: NodeJS.ProcessEnv): string[] {
     join(local, 'pnpm'), join(local, 'pnpm', 'bin'), join(roaming, 'npm')].filter((value): value is string => value !== undefined)
 }
 
-/** npm/pnpm batch shims cannot run with shell:false; execute their verified JS entry. */
 export function resolveByteRoverInvocation(command: string, args: readonly string[], env: NodeJS.ProcessEnv, cwd = process.cwd()): {
   command: string; args: string[]; env: NodeJS.ProcessEnv
 } {
   if (process.platform !== 'win32') return { command, args: [...args], env }
-  // Leave explicit executable names/paths on the existing process route.
   if (/^brv(?:\.cmd)?$/i.test(command)) {
     const path = Object.entries(env).find(([key]) => key.toUpperCase() === 'PATH')?.[1] ?? ''
     let found: string | undefined
@@ -33,7 +31,6 @@ export function resolveByteRoverInvocation(command: string, args: readonly strin
       if (directory === '') continue
       const root = directory.replace(/^"(.*)"$/, '$1')
       for (const name of /\.cmd$/i.test(command) ? ['brv.cmd'] : ['brv.exe', 'brv.cmd']) {
-        // Windows resolves relative PATH entries from the child's cwd.
         const candidate = resolve(cwd, root, name)
         if (isFile(candidate)) { found = candidate; break }
       }
@@ -43,8 +40,6 @@ export function resolveByteRoverInvocation(command: string, args: readonly strin
     command = found
   }
   if (!/\.cmd$/i.test(command)) return { command, args: [...args], env }
-  // Validate the same explicit path that the subprocess would see, then keep
-  // its JS entry absolute when Node starts in the knowledge directory.
   command = resolve(cwd, command)
   try {
     const shim = readFileSync(command, 'utf8').replaceAll('\\', '/')
@@ -61,8 +56,6 @@ export function resolveByteRoverInvocation(command: string, args: readonly strin
       if (pkg.name === 'byterover-cli' && typeof bin === 'string' && bin.replace(/^\.\//, '') === 'bin/run.js' && isFile(launcher)) launchers.add(realpathSync(launcher))
     }
     if (launchers.size === 1) {
-      // process.execPath may be the Desktop Host's Electron executable. Windows
-      // environment names are case-insensitive, so emit only one spelling.
       const inherited = Object.fromEntries(Object.entries(env).filter(([key]) => key.toUpperCase() !== 'ELECTRON_RUN_AS_NODE'))
       return { command: process.execPath, args: [[...launchers][0]!, ...args], env: { ...inherited, ELECTRON_RUN_AS_NODE: '1' } }
     }

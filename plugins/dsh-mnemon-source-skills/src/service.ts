@@ -15,7 +15,7 @@ import {
   type SkillDraft, type SkillDraftFileChange, type SkillOrigin, type SkillResolution, type SkillResourceFile, type SkillRootKind, type SkillSuggestion, type SkillSummary, type SkillVersion, type SkillVersionReason, type SkillsOverview, type Trajectory, type TrajectorySummary, type TrashEntry, type TrashRestoreInput, type TrashRestorePreview,
 } from './contracts.ts'
 import { activeSkill, catalogFingerprint, findSkill, readCatalog, readSkillDocument, requireWritableRoot, requireWritableSkill, rootPath, sha256, type SkillRootOptions } from './catalog.ts'
-import { snapshotResourcePreview, snapshotBundleFiles, changedBundleSnapshot, restoreBundleFiles, applyBundleFileChanges, extractConcreteBundleReferences, prepareDraftFileChanges, readBundleResourceState, readSkillResourceFiles } from './bundle-files.ts'
+import { snapshotResourcePreview, snapshotBundleFiles, changedBundleSnapshot, restoreBundleFiles, applyBundleFileChanges, extractConcreteBundleReferences, prepareDraftFileChanges, readBundleResourceState } from './bundle-files.ts'
 import { legacySuggestionWorkspace, skillOrigin, validOrigin } from './identity.ts'
 import { isSkillName, setFrontmatterKey, skillTemplate, validateSkillContent, withInvocation } from './frontmatter.ts'
 import { admitReview, expireSuggestions, OPEN_STATUSES, policyFrom, similarCase, trajectorySummary } from './policy.ts'
@@ -27,7 +27,6 @@ import {
 } from './market.ts'
 import { detectSource, parseGithub } from './source-kind.ts'
 
-/** A run still `running` after this long outlived the Host that started it. */
 const RUN_STALE_MS = 45 * 60 * 1000
 
 export interface CaseInput {
@@ -60,7 +59,6 @@ function staleRun(run: BacktestRun, now: number): BacktestRun {
   return run.status === 'running' && now - Date.parse(run.startedAt) > RUN_STALE_MS ? { ...run, status: 'interrupted' } : run
 }
 
-/** A case that could not run says nothing about the skill, so only graded cases count. */
 function runScore(results: readonly CaseResult[]): { passRate?: number; score?: number; errors: number } {
   const graded = results.filter(result => result.verdict !== 'error')
   const errors = results.length - graded.length
@@ -72,17 +70,12 @@ function runScore(results: readonly CaseResult[]): { passRate?: number; score?: 
   }
 }
 
-/**
- * Everything the Skills Source does, over its store and the DSH skill roots.
- * Reads take no lock; every write runs under the storage lock and leaves the
- * files consistent if it fails half way.
- */
 export class SkillsService {
   readonly store: SkillsStore
   private scopedCatalogCache: Map<string, SkillCatalog> | undefined
   private readonly creation: SkillCreationConfig | undefined
 
-  constructor(private readonly dataDir: string, private readonly roots: Omit<SkillRootOptions, 'workspace'> & { skillRoots?: SkillCreationConfig } = {}, private readonly clock: () => Date = () => new Date(), private readonly fetcher: Fetcher = defaultFetcher) {
+  constructor(dataDir: string, private readonly roots: Omit<SkillRootOptions, 'workspace'> & { skillRoots?: SkillCreationConfig } = {}, private readonly clock: () => Date = () => new Date(), private readonly fetcher: Fetcher = defaultFetcher) {
     this.creation = validateCreationConfig(roots.skillRoots)
     this.store = new SkillsStore(join(dataDir, 'skills'))
   }
@@ -159,8 +152,6 @@ export class SkillsService {
       : 'The original skill file was deleted, moved, or cannot be read. Restore it or open the skill at its new location and generate a new draft.')
   }
 
-  // ---- reads ---------------------------------------------------------------
-
   catalogView(workspace: string | undefined): CatalogView {
     const catalog = this.catalog(workspace)
     const ledger = this.store.ledger()
@@ -192,7 +183,6 @@ export class SkillsService {
       ...ledger.suggestions.filter(suggestion => suggestion.status === 'pending').map(suggestion => ({ kind: 'suggestion' as const, id: suggestion.id, skillName: suggestion.skillName, title: suggestion.summary, at: suggestion.updatedAt })),
       ...ledger.drafts.filter(draft => draft.status === 'ready').map(draft => ({ kind: 'draft' as const, id: draft.id, skillName: draft.skillName, title: draft.notes || draft.skillName, at: draft.updatedAt })),
     ]
-    // The live version scoring below its own previous backtest is a regression to look at; draft runs are compared on their own page.
     const finished = evals.runs.filter(run => run.status === 'completed' && run.target.kind === 'current' && run.score !== undefined)
     for (const name of new Set(finished.map(run => run.skillName))) {
       const [latest, previous] = finished.filter(run => run.skillName === name)
@@ -325,7 +315,7 @@ export class SkillsService {
             try {
               const state = readBundleResourceState(dirname(base.path), file.path)
               if (state.content !== undefined) baseFileContents[file.path] = state.content
-            } catch { /* unreadable file stays omitted from preview */ }
+            } catch { }
           }
         }
       }
@@ -354,7 +344,6 @@ export class SkillsService {
     return (filter.sessionId === undefined ? reviews : reviews.filter(review => review.sessionId === filter.sessionId)).slice(0, Math.max(1, Math.min(200, filter.limit ?? 50)))
   }
 
-  /** What a draft or a case derivation needs, gathered once. */
   evidencePack(workspace: string | undefined, input: { suggestionId?: string; draftId?: string; skill?: string; action?: 'create' | 'update' }): EvidencePack {
     return this.withCatalog(() => {
       const ledger = this.store.ledger()
@@ -383,7 +372,6 @@ export class SkillsService {
         let trajectory: Trajectory
         try { trajectory = this.store.trajectory(reference.trajectoryId, ledger) } catch { continue }
         const wanted = new Set(reference.steps)
-        // The cited steps with one step of context on either side; the whole window when nothing is cited.
         const keep = wanted.size === 0 ? trajectory.steps : trajectory.steps.filter(step => [...wanted].some(index => Math.abs(index - step.index) <= 1))
         excerpts.push({
           trajectoryId: trajectory.id,
@@ -409,8 +397,6 @@ export class SkillsService {
     })
   }
 
-  // ---- writes --------------------------------------------------------------
-
   private recordVersion(
     ledger: LedgerFile,
     skillKey: string,
@@ -433,7 +419,6 @@ export class SkillsService {
       ledger.versions.unshift(version)
       return version
     }
-    // The content as it was before the first write this Source made, so it can come back.
     if (previous !== undefined && (bundles?.previous !== undefined || (existing.length === 0 && sha256(previous) !== sha256(content)))) {
       make(previous, existing.length === 0 ? 'original' : 'edit', {}, 0, bundles?.previous)
     }
@@ -520,7 +505,6 @@ export class SkillsService {
     })
   }
 
-  /** Skills removed and waiting in the Trash, newest first. */
   trashItems(): TrashEntry[] {
     return this.store.trashEntries()
   }
@@ -567,7 +551,6 @@ export class SkillsService {
     })
   }
 
-  /** Restore to the recorded origin, or an explicitly selected root; replacement preserves its predecessor. */
   restoreTrash(workspace: string | undefined, input: TrashRestoreInput): Promise<{ key: string; path: string }> {
     return this.write(() => {
       const { entry, name, destination } = this.trashTarget(workspace, input)
@@ -584,22 +567,20 @@ export class SkillsService {
         if (conflict !== undefined) displaced = this.store.trash(conflictPath!, conflict.name, this.trashOrigin(conflict, catalog))
         this.store.restoreTrash(entry, path, content)
       } catch (error) {
-        if (displaced !== undefined && !existsSync(conflictPath!)) try { renameSync(displaced, conflictPath!) } catch { /* The predecessor stays recoverable in the Trash. */ }
+        if (displaced !== undefined && !existsSync(conflictPath!)) try { renameSync(displaced, conflictPath!) } catch { }
         this.invalidateCatalog()
         throw error
       }
       this.invalidateCatalog()
       const key = `${root}:${name}`
       const ledger = this.store.ledger()
-      // Relative links become readable again only after returning to their original location.
-      try { content ??= readFileSync(entry.kind === 'file' ? path : join(path, 'SKILL.md'), 'utf8') } catch { /* Restoring the files must also work when a linked target is unavailable. */ }
+      try { content ??= readFileSync(entry.kind === 'file' ? path : join(path, 'SKILL.md'), 'utf8') } catch { }
       if (content !== undefined) this.recordVersion(ledger, key, content, 'restore', undefined)
       this.store.saveLedger(ledger)
       return { key, path }
     })
   }
 
-  /** Delete a Trash entry for good. */
   purgeTrash(input: { id: string }): Promise<{ purged: string }> {
     return this.write(() => {
       const entry = this.store.trashEntry(input.id)
@@ -609,7 +590,6 @@ export class SkillsService {
     })
   }
 
-  /** Delete everything waiting in the Trash for good, and say how much went. */
   emptyTrash(): Promise<{ purged: number }> {
     return this.write(() => {
       const entries = this.store.trashEntries()
@@ -619,7 +599,6 @@ export class SkillsService {
     })
   }
 
-  /** The model the user picked for drafts and backtests, if any. */
   draftPreferences(): DraftPreferencesView {
     const stored = this.store.preferences()
     return {
@@ -630,11 +609,6 @@ export class SkillsService {
     }
   }
 
-  /**
-   * Record one picker change. `suggestionId` targets a single suggestion,
-   * `skillName` with `slot: 'run'` a single skill, and a null model clears the
-   * entry so the page falls back to following the task Agent again.
-   */
   setDraftPreference(input: { slot?: string; suggestionId?: string; skillName?: string; model: ModelRoute | null }): Promise<DraftPreferencesView> {
     return this.write(() => {
       const preferences = this.store.preferences()
@@ -709,7 +683,6 @@ export class SkillsService {
     })
   }
 
-  /** Remove a suggestion for good, together with any draft it produced and its model pick. */
   deleteSuggestion(id: string): Promise<{ deleted: string }> {
     return this.write(() => {
       const ledger = this.store.ledger()
@@ -730,7 +703,6 @@ export class SkillsService {
     })
   }
 
-  /** The Host marks a suggestion `drafting` before a task Agent writes, and back to `pending` if it fails. */
   suggestionStatus(input: { id: string; status: 'drafting' | 'pending'; error?: string; expectedDraft?: DraftExpectation; signal?: AbortSignal }): Promise<SkillSuggestion> {
     return this.withSuggestion(input.id, (suggestion, ledger) => {
       input.signal?.throwIfAborted()
@@ -776,13 +748,12 @@ export class SkillsService {
   private budgetEntries(ledger: LedgerFile): BudgetEntry[] {
     const stored = this.store.autoAdoptionBudget()
     if (stored !== undefined) return retainedBudget(stored, this.clock())
-    // Preserve recorded work on upgrade, including suggestions since deleted.
     const entries = new Map<string, BudgetEntry>()
     for (const suggestion of ledger.suggestions) {
       const at = suggestion.autoAdoption?.find(event => event.stage === 'queued' || event.stage === 'drafting' || event.stage === 'adopted')?.at
       if (at !== undefined) {
         let identity = 'legacy:' + sha256(suggestion.skillName)
-        try { identity = this.automaticIdentity(legacySuggestionWorkspace(ledger, suggestion), suggestion) } catch { /* Missing legacy targets still consume the quota. */ }
+        try { identity = this.automaticIdentity(legacySuggestionWorkspace(ledger, suggestion), suggestion) } catch { }
         entries.set(suggestion.id, { id: randomUUID(), suggestionId: suggestion.id, identity, at })
       }
     }
@@ -885,7 +856,6 @@ export class SkillsService {
     })
   }
 
-  /** Cases a task Agent derived from a trajectory; similar ones are skipped, not duplicated. */
   addCases(input: { skillName: string; trajectoryId?: string; steps?: number[]; cases: CaseInput[] }): Promise<{ added: EvalCase[]; skipped: number }> {
     return this.write(() => {
       const evals = this.store.evals()
@@ -908,7 +878,7 @@ export class SkillsService {
           try {
             const trajectory = this.store.trajectory(input.trajectoryId, ledger)
             this.store.saveTrajectory({ ...trajectory, caseIds: summary.caseIds })
-          } catch { /* The summary alone still links the cases. */ }
+          } catch { }
         }
         this.store.saveLedger(ledger)
       }
@@ -997,7 +967,6 @@ export class SkillsService {
     })
   }
 
-  /** Adopt a draft; a new skill goes to `root` when given, else where the draft was meant to go. */
   adoptDraft(workspace: string | undefined, id: string, input: { root?: SkillRootKind; automatic?: AutomaticAdoption; signal?: AbortSignal } = {}): Promise<{ skill: SkillSummary; version: SkillVersion }> {
     return this.write(() => {
       const ledger = this.store.ledger()
@@ -1030,8 +999,6 @@ export class SkillsService {
           const entry = this.budgetEntries(ledger).find(candidate => candidate.id === input.automatic!.reservationId)
           if (entry?.suggestionId !== suggestion.id || entry.identity !== identity) throw new Error('Automatic adoption reservation changed; manual review required')
         } else {
-          // Older Hosts did not reserve before drafting; keep their flow working
-          // while applying the new default limit before any skill is written.
           const entries = this.budgetEntries(ledger)
           const value = quota(entries, this.clock(), 2, 'local')
           const migrated = entries.find(entry => entry.suggestionId === suggestion.id && inQuotaDay(entry, value))
@@ -1042,7 +1009,6 @@ export class SkillsService {
           if (!reserved.allowed) throw new Error('Automatic adoption daily budget requires manual review')
         }
       }
-      // Settings can be disabled while this operation waits for the Source lock.
       input.signal?.throwIfAborted()
       validateSkillContent(draft.content, draft.skillName)
       const catalog = this.catalog(workspace)
@@ -1091,8 +1057,6 @@ export class SkillsService {
         if (activeSkill(catalog, draft.skillName) !== undefined) throw new Error(`${draft.skillName} exists now; draft it again as an update`)
         const target = rootPath(catalog, root)
         requireWritableRoot(target)
-        // The project may have disappeared since drafting. Validate the final
-        // adoption choice before recursive mkdir can recreate that project.
         if (root.startsWith('project-')) {
           try {
             if (catalog.projectRoot === undefined || !statSync(catalog.projectRoot).isDirectory()) throw new Error('not a directory')
@@ -1152,7 +1116,6 @@ export class SkillsService {
     })
   }
 
-  /** Remove a draft for good; its suggestion goes back to `pending` so it can be drafted again. */
   deleteDraft(id: string): Promise<{ deleted: string }> {
     return this.write(() => {
       const ledger = this.store.ledger()
@@ -1173,10 +1136,6 @@ export class SkillsService {
     })
   }
 
-  /**
-   * Put suggestions whose draft write died with the previous Host back to
-   * `pending`, so the page stops showing them as "drafting" forever.
-   */
   reclaimOrphanDrafts(): Promise<{ reclaimed: number }> {
     return this.write(() => {
       const ledger = this.store.ledger()
@@ -1188,7 +1147,6 @@ export class SkillsService {
     })
   }
 
-  /** Persist terminal state so expired tasks cannot later revive themselves. */
   reclaimStaleRuns(): Promise<{ reclaimed: number }> {
     return this.write(() => {
       const evals = this.store.evals()
@@ -1206,7 +1164,6 @@ export class SkillsService {
     })
   }
 
-  /** The content and supporting text files a run tests, resolved from its target. */
   targetContent(workspace: string | undefined, skillName: string, target: RunTarget): { content?: string; resources?: Array<{ path: string; content: string }>; target: RunTarget } {
     return this.withCatalog(() => {
       if (target.kind === 'none') return { target: { kind: 'none' } }
@@ -1280,7 +1237,6 @@ export class SkillsService {
     })
   }
 
-  /** Attach a baseline run to the draft it is compared with. */
   linkRun(draftId: string, runId: string): Promise<void> {
     return this.write(() => {
       const ledger = this.store.ledger()
@@ -1352,9 +1308,6 @@ export class SkillsService {
     return trajectorySummary(trajectory)
   }
 
-  // ---- market --------------------------------------------------------------
-
-  /** The sources this Source knows: the built-in catalog and search index first, then the ones added. */
   private registryRecords(): Array<RegistryRecord & { kind: MarketSourceKind }> {
     const stored = this.store.registries()
     const enabled = (id: string) => stored.find(record => record.id === id)?.enabled ?? true
@@ -1365,7 +1318,6 @@ export class SkillsService {
     ]
   }
 
-  /** The newest copy of a registry: its cache, or the packaged snapshot for the official one. */
   private registryFile(record: RegistryRecord): { registry?: MarketRegistryFile; fetchedAt?: string; error?: string } {
     const cache = this.store.registryCache(record.id)
     if (cache?.registry !== undefined) return cache
@@ -1373,7 +1325,6 @@ export class SkillsService {
     return cache ?? {}
   }
 
-  /** A listed source's skills as it publishes them now. */
   private loadSource(kind: MarketSourceKind, location: string, signal?: AbortSignal): Promise<MarketRegistryFile> {
     switch (kind) {
       case 'catalog': return loadRegistry(location, this.fetcher, signal)
@@ -1383,7 +1334,6 @@ export class SkillsService {
     }
   }
 
-  /** The state of a market skill against what is loaded now and where it was installed from. */
   private installState(catalog: SkillCatalog, installs: readonly MarketInstall[], registry: string, name: string, version: string | undefined, sameOrigin?: (install: MarketInstall) => boolean): { state: MarketInstallState; skillKey?: string; installedVersion?: string } {
     const skill = activeSkill(catalog, name)
     if (skill === undefined) return { state: 'available' }
@@ -1422,10 +1372,6 @@ export class SkillsService {
     return { registries, categories: [...categories.values()], items, stale }
   }
 
-  /**
-   * Search the search sources. Each result says whether it is installed; one
-   * installed from a catalog out of the same repository counts as installed.
-   */
   async searchMarket(workspace: string | undefined, query: string, signal?: AbortSignal): Promise<MarketSearchResult> {
     const text = query.trim().slice(0, 200)
     const index = this.registryRecords().find(record => record.id === SKILLS_SH_ID)!
@@ -1455,7 +1401,6 @@ export class SkillsService {
     return { record, entry }
   }
 
-  /** Where a skill the search index found lives: its repository folder, or its site's index entry. */
   private indexedEntry(id: string, signal?: AbortSignal): Promise<MarketEntry> {
     const parts = indexedParts(id)
     if (parts === undefined) throw new Error('not a skill id of skills.sh: ' + id)
@@ -1470,7 +1415,6 @@ export class SkillsService {
         const [content, files] = await Promise.all([fetchSkillDocument(entry, '', this.fetcher, signal), listSkillFiles(entry, '', this.fetcher, signal)])
         return { registryId: registry, name, content, files: files.slice(0, 200), totalBytes: files.reduce((sum, file) => sum + file.bytes, 0), audits: await audits, ...(entry.homepage === undefined ? {} : { homepage: entry.homepage }) }
       } catch (error) {
-        // GitHub may decline to list a repository for a while; the index's own copy still shows the skill.
         if (signal?.aborted === true) throw error
         const snapshot = await skillsShSnapshot(name, this.fetcher, signal).catch(() => { throw error })
         return {
@@ -1485,7 +1429,6 @@ export class SkillsService {
     return { registryId: registry, name, content, files: files.slice(0, 200), totalBytes: files.reduce((sum, file) => sum + file.bytes, 0), ...(entry.homepage === undefined ? {} : { homepage: entry.homepage }) }
   }
 
-  /** Fetch the named sources (all enabled ones by default) and keep what each answered. */
   async refreshMarket(ids?: readonly string[], signal?: AbortSignal): Promise<MarketView['registries']> {
     const records = this.registryRecords().filter(record => record.enabled && record.kind !== 'search' && (ids === undefined || ids.includes(record.id)))
     const results = await Promise.all(records.map(async record => {
@@ -1497,18 +1440,12 @@ export class SkillsService {
         const previous = this.store.registryCache(result.record.id)
         this.store.saveRegistryCache(result.record.id, result.registry !== undefined
           ? { fetchedAt: at, registry: result.registry }
-          // A failed refresh keeps the copy it had, and says why it is not newer.
           : { ...(previous?.registry === undefined ? {} : { registry: previous.registry }), ...(previous?.fetchedAt === undefined ? {} : { fetchedAt: previous.fetchedAt }), error: result.error! })
       }
     })
     return this.marketView(undefined).registries
   }
 
-  /**
-   * Add a source from what the user pasted: a GitHub repository, a site
-   * publishing an Agent Skills index, or a JSON file by URL or path — a
-   * catalog, a discovery index, or a plugin marketplace on GitHub.
-   */
   async addRegistry(input: string, signal?: AbortSignal): Promise<MarketRegistry> {
     const detected = detectSource(input)
     if (detected === undefined) throw new Error('add a GitHub repository (owner/repo), a website, or a JSON file by URL or absolute path')
@@ -1574,13 +1511,6 @@ export class SkillsService {
     })
   }
 
-  /**
-   * Install a market skill, or update one installed from the same entry. The
-   * files are fetched before the lock, staged, checked against DSH's rules,
-   * then moved into place; a replaced folder goes to the trash first. A
-   * skill the search index found installs from its repository or site, under
-   * the name its own `SKILL.md` gives.
-   */
   async installMarket(workspace: string | undefined, input: { registryId: string; name: string; root?: SkillRootKind; overwrite?: boolean }, signal?: AbortSignal): Promise<{ skill: SkillSummary; updated: boolean }> {
     const indexed = input.registryId === SKILLS_SH_ID
     const { record, entry } = indexed
@@ -1613,7 +1543,7 @@ export class SkillsService {
         moveInto(staged, finalTarget)
       } catch (error) {
         rmSync(staged, { recursive: true, force: true })
-        if (trashed !== undefined && !existsSync(target)) try { renameSync(trashed, target) } catch { /* The trash keeps it. */ }
+        if (trashed !== undefined && !existsSync(target)) try { renameSync(trashed, target) } catch { }
         this.invalidateCatalog()
         throw error
       }
@@ -1636,7 +1566,6 @@ export class SkillsService {
   }
 }
 
-/** Write downloaded files into a fresh staging folder, never outside it. */
 function stageFiles(stagingRoot: string, files: readonly SkillFile[]): string {
   const directory = join(stagingRoot, randomUUID())
   for (const file of files) {
@@ -1648,7 +1577,6 @@ function stageFiles(stagingRoot: string, files: readonly SkillFile[]): string {
   return directory
 }
 
-/** Move a staged folder into place, copying when it lives on another volume. */
 function moveInto(staged: string, target: string): void {
   mkdirSync(dirname(target), { recursive: true })
   try {
