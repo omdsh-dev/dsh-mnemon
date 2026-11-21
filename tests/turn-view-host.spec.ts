@@ -488,6 +488,11 @@ it('pushes bounded Memory Space and Document summary indexes on step 1 without b
       description: 'Quartz cluster verification steps before promotion.',
       content: 'FULL_BODY_MARKER_MUST_NOT_BE_PUSHED '.repeat(30),
     })
+    const { document: withoutDescription } = await documents.mutate<{ document: { id: string } }>('mutate', {
+      action: 'create',
+      title: 'Escrow Checklist',
+      content: 'Quartz requires checking the escrow checkpoint. ' + 'Follow the written runbook. '.repeat(12) + 'PRIVATE_BODY_TAIL',
+    })
 
     // Unrelated query adds no recall message while preserving full eager Runtime memory.
     await f.turn(handle.agent, false, '继续')
@@ -505,6 +510,9 @@ it('pushes bounded Memory Space and Document summary indexes on step 1 without b
     expect(initial).toContain(document.id)
     expect(initial).toContain('Deployment Checklist')
     expect(initial).toContain('Quartz cluster verification steps')
+    expect(initial).toContain(withoutDescription.id)
+    expect(initial).toContain('Quartz requires checking the escrow checkpoint.')
+    expect(initial).not.toContain('PRIVATE_BODY_TAIL')
     expect(initial).not.toContain(inactiveSpace.id)
     expect(initial).not.toContain('Hidden Archive')
     expect(initial).not.toContain('FULL_BODY_MARKER_MUST_NOT_BE_PUSHED')

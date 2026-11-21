@@ -32,6 +32,7 @@ interface RecallSource {
   scope: string
   candidates: Candidate[]
   text: string
+  indexPush?: boolean
   fixed?: { entries: string[]; complete: boolean }
 }
 
@@ -41,6 +42,7 @@ export interface Bm25View {
   memory: Candidate[]
   documents: Candidate[]
   spaces?: Candidate[]
+  indexPush?: boolean
 }
 
 const presentations = new WeakMap<ComposableMemoryView, Bm25View>()
@@ -86,7 +88,7 @@ export function bm25View(view: ComposableMemoryView | undefined): Bm25View | und
           documentId: entry.id,
         }]
       })
-      sources.push({ kind: 'documents', grant, scope, candidates, text: catalog.text })
+      sources.push({ kind: 'documents', grant, scope, candidates, text: catalog.text, indexPush: catalog.indexPush === true })
     }
     if (hasRecall && grant.schema === 'dsh-mnemon.memory-spaces/v1' && isDefaultSourceInstance(grant.sourceInstanceKey, 'memory-spaces')
       && typeof catalog.text === 'string' && Array.isArray(catalog.spaces) && Array.isArray(value?.memoryBodyIds)) {
@@ -139,6 +141,7 @@ export function bm25View(view: ComposableMemoryView | undefined): Bm25View | und
     memory: sources.filter(source => source.kind === 'memory').flatMap(source => source.candidates),
     documents: sources.filter(source => source.kind === 'documents').flatMap(source => source.candidates),
     spaces: sources.filter(source => source.kind === 'spaces').flatMap(source => source.candidates),
+    indexPush: sources.some(source => source.kind === 'spaces' || source.indexPush === true),
   }
   presentations.set(view, result)
   return result
@@ -229,9 +232,10 @@ export function prepareBm25Recall(
   const expired = [...delivered].filter(key => !active.has(key)).sort()
   const terms = query === undefined ? [] : [...new Set(tokens(query.slice(0, MAX_QUERY_CHARACTERS)))]
     .filter(word => !FILLER.has(word)).slice(0, MAX_QUERY_TERMS)
+  const indexLimit = current.indexPush === true && current.memory.length === 0 ? 3 : 2
   const memoryHits = rank(current.memory, terms, 3).filter(item => !delivered.has(item.key))
-  const documentHits = rank(current.documents, terms, current.memory.length === 0 ? 3 : 2).filter(item => !delivered.has(item.key))
-  const spaceHits = rank(spaces, terms, current.memory.length === 0 ? 3 : 2).filter(item => !delivered.has(item.key))
+  const documentHits = rank(current.documents, terms, indexLimit).filter(item => !delivered.has(item.key))
+  const spaceHits = rank(spaces, terms, indexLimit).filter(item => !delivered.has(item.key))
   const hits = spaces.length === 0
     ? [...memoryHits, ...documentHits]
     : current.memory.length === 0

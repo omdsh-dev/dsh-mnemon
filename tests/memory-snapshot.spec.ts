@@ -13,7 +13,7 @@ import type { ComposableMemoryView } from '../src/core/contracts/index.ts'
 import type { HostContextShape, HostMessageSource, HostSession } from '../src/host/dsh.ts'
 import { applyMemoryViewGuidance, registerGuidance, RUNTIME_MEMORY_CONTEXT_NAME, SNAPSHOT_GUIDANCE, withoutMemoryViewContext } from '../src/host/guidance.ts'
 import { prepareMemorySnapshot, runtimeSnapshotRanges, summaryWithoutTransientMemory } from '../src/host/memory-snapshot.ts'
-import type { Bm25View } from '../src/host/bm25-recall.ts'
+import { prepareBm25Recall, readBm25RecallState, type Bm25View } from '../src/host/bm25-recall.ts'
 import { memorySnapshotState, type MemorySnapshotState } from '../src/host/memory-snapshot-state.ts'
 import { modelMemoryWake } from '../src/host/view-presentation.ts'
 import { truncateMemoryText } from '../src/sdk/index.ts'
@@ -66,6 +66,16 @@ describe('memory snapshot surface updates', () => {
     expect(f.session.deriveMessages()).toEqual([keep.data])
   })
 
+  it('keeps the existing two-title BM25 limit when index push is off', () => {
+    const catalog: Bm25View = {
+      view: {} as ComposableMemoryView, scope: 'e'.repeat(64), memory: [],
+      documents: [1, 2, 3].map(index => ({ key: String(index).repeat(64), text: `Quartz guide ${index}`, documentId: `doc-${index}` })),
+    }
+    const delivered = (view: Bm25View) => readBm25RecallState(prepareBm25Recall([], view, 'Quartz', false).message?.source)?.added
+    expect(delivered(catalog)).toHaveLength(2)
+    expect(delivered({ ...catalog, indexPush: true })).toHaveLength(3)
+  })
+
   it('bounds and invalidates Memory Space and Document summary index pushes (issue 701)', () => {
     const f = fixture()
     const space = {
@@ -79,7 +89,7 @@ describe('memory snapshot surface updates', () => {
       documentId: `doc-${index + 1}`,
       summary: `Aurora deployment guide ${index + 1}`,
     }))
-    const view: Bm25View = { view: {} as ComposableMemoryView, scope: 'e'.repeat(64), memory: [], documents: docs, spaces: [space] }
+    const view: Bm25View = { view: {} as ComposableMemoryView, scope: 'e'.repeat(64), memory: [], documents: docs, spaces: [space], indexPush: true }
     const update = (catalog: Bm25View | undefined, query?: string, checkpoint = false) => {
       const plan = prepareMemorySnapshot(f.session as unknown as HostSession, undefined, undefined,
         catalog === undefined ? undefined : { recall: { view: catalog, query, checkpoint } })
