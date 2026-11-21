@@ -213,6 +213,10 @@ export function resolveConfig(config: SharedConfig = {}): SharedResolvedConfig {
   if (!['global', 'workspace', 'custom', 'workspaces'].includes(storageScope)) throw new Error('dsh-mnemon: unsupported storageScope')
   const runtimeUserScope = config.runtimeUserScope ?? 'storage'
   if (runtimeUserScope !== 'storage' && runtimeUserScope !== 'global') throw new Error(`dsh-mnemon: unsupported Runtime USER.md scope: ${String(runtimeUserScope)}`)
+  const documentsScope = config.documentsScope ?? 'storage'
+  if (documentsScope !== 'storage' && documentsScope !== 'global') throw new Error(`dsh-mnemon: unsupported Documents scope: ${String(documentsScope)}`)
+  const memorySpacesScope = config.memorySpacesScope ?? 'storage'
+  if (memorySpacesScope !== 'storage' && memorySpacesScope !== 'global') throw new Error(`dsh-mnemon: unsupported Memory Spaces scope: ${String(memorySpacesScope)}`)
   const confirmWrites = config.confirmWrites ?? false
   if (typeof confirmWrites !== 'boolean') throw new Error('dsh-mnemon: confirmWrites must be a boolean')
   const selectedPack = requestedPackId === undefined
@@ -227,6 +231,8 @@ export function resolveConfig(config: SharedConfig = {}): SharedResolvedConfig {
   return {
     storageScope,
     runtimeUserScope,
+    documentsScope,
+    memorySpacesScope,
     excludedWorkspaces: [...new Set((config.excludedWorkspaces ?? []).map(path => path.trim()).filter(Boolean))],
     ...(cliPath === undefined ? {} : { cliPath }),
     ...(dataDir === undefined ? {} : { dataDir }),

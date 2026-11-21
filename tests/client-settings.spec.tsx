@@ -1766,6 +1766,22 @@ describe('centralized workspace storage settings', () => {
     expect(within(storage).getByText('所有工作区共用一个用户画像，工作记忆仍按工作区隔离。')).toBeTruthy()
   })
 
+  it('lets workspace-scoped installations share Documents and Memory Spaces globally from Storage settings (issue 374)', async () => {
+    const mutate = vi.fn(async () => {})
+    const scope = liveSettingsScope<Config>(readySnapshot({
+      storageScope: 'workspaces',
+      documentsScope: 'storage',
+      memorySpacesScope: 'storage',
+    }), mutate)
+    render(<MnemonSettingsCard scope={scope} />)
+
+    const storage = screen.getByRole('region', { name: '存储' })
+    choose('项目档案范围', '全局共享', storage)
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['documentsScope'], value: 'global' }]))
+    choose('记忆空间范围', '全局共享', storage)
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['memorySpacesScope'], value: 'global' }]))
+  })
+
   it('shows the one directory memory uses: the default under its title, a typed one in its field', async () => {
     const connection = (root: string, scope: string) => {
       const call = vi.fn(async (channel: string, endpoint: string) => {

@@ -100,6 +100,8 @@ mnemon:
 |---|---:|---|---|
 | `storageScope` | `global` | `global` / `workspace` / `custom` / `workspaces` | Controls the root for Runtime, Documents, Memory Spaces, and reserved state as one unit |
 | `runtimeUserScope` | `storage` | `storage` / `global` | Keeps USER.md in the selected storage root, or overlays the global USER.md while project MEMORY.md and the other layers stay selected-scope |
+| `documentsScope` | `storage` | `storage` / `global` | Keeps Project Documents in the selected storage root, or shares the global Project Documents library across workspaces |
+| `memorySpacesScope` | `storage` | `storage` / `global` | Keeps Memory Spaces and Provider connections in the selected storage root, or shares the global Memory Spaces store across workspaces |
 | `excludedWorkspaces` | `[]` | List of existing absolute directory paths | Opts specific workspaces and their children out of memory without deleting data |
 | `dataDir` | unset | absolute path, `~`, or `~/...` | Required for `custom`; optional central root for `workspaces`; legacy configurations that set only this option automatically resolve to `custom` |
 | `cliPath` | auto-discovered | executable path | Explicitly selects the Mnemon CLI |
@@ -337,10 +339,12 @@ This built-in mode is available with the Starter; no additional plugin is requir
 mnemon:
   storageScope: workspaces
   dataDir: ~/central-memory # optional; otherwise MNEMON_DATA_DIR or ~/.mnemon
-  runtimeUserScope: global # optional; share only USER.md
+  runtimeUserScope: global # optional; share USER.md globally
+  documentsScope: global # optional; share Project Documents globally
+  memorySpacesScope: global # optional; share Memory Spaces and Provider connections globally
 ```
 
-All four areas (`runtime`, `data`, `documents`, `state`) live under `<central-root>/workspaces/<sha256(canonical-workspace-path)>/`. Existing symlink aliases resolve to the same ID; different workspace paths remain isolated. A move or rename selects a new ID, with no automatic migration. Sidebar inspection follows the selected registered workspace; the conversation tab and Headless follow the owning session cwd. Global USER.md still uses `MNEMON_DATA_DIR` or `~/.mnemon`, even when the central root is customized.
+All four areas (`runtime`, `data`, `documents`, `state`) live under `<central-root>/workspaces/<sha256(canonical-workspace-path)>/` unless individually shared through `runtimeUserScope: global`, `documentsScope: global`, or `memorySpacesScope: global`. Existing symlink aliases resolve to the same ID; different workspace paths remain isolated. A move or rename selects a new ID, with no automatic migration. Sidebar inspection follows the selected registered workspace; the conversation tab and Headless follow the owning session cwd. Any component set to `global` uses `MNEMON_DATA_DIR` or `~/.mnemon`, even when the central root is customized.
 
 Workspace identity resolution allows not-yet-created directory descendants, including Unicode names and descendants below a symlink alias. A path below an existing file is rejected with `ENOTDIR` on every platform, including Windows, before a storage ID is computed. This does not change valid IDs or move, rewrite or remove existing storage.
 

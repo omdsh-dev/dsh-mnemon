@@ -57,7 +57,10 @@ export function memoryGenerationOptions(
   allowLinkedSkillUpdates = config.skills?.allowLinkedUpdates ?? false,
 ): CompileMemoryGenerationOptions {
   const directory = createStorageRoot(config, workspaceRoot).effectiveDataDir()
-  const userDirectory = config.runtimeUserScope === 'global' ? createStorageRoot({ storageScope: 'global' }).effectiveDataDir() : directory
+  const globalDirectory = createStorageRoot({ storageScope: 'global' }).effectiveDataDir()
+  const userDirectory = config.runtimeUserScope === 'global' ? globalDirectory : directory
+  const documentsDirectory = config.documentsScope === 'global' ? globalDirectory : directory
+  const memorySpacesDirectory = config.memorySpacesScope === 'global' ? globalDirectory : directory
   return {
     strategyTypeId: mainStrategyTypeId(config),
     // A main Strategy switched off in the DSH Plugins page must not leave the
@@ -76,7 +79,7 @@ export function memoryGenerationOptions(
         ? { bm25Recall: true } : {}
       if (type === 'runtime') return { dataDir: directory, userDataDir: userDirectory, memoryLimitBytes: config.runtimeMemory.memoryLimitBytes, userLimitBytes: config.runtimeMemory.userLimitBytes, deferLowPriority: config.runtimeMemory.deferLowPriority, ...bm25 }
       if (type === 'documents') return {
-        dataDir: directory,
+        dataDir: documentsDirectory,
         ...bm25,
         ...(config.documents?.limitBytes === undefined ? {} : { limitBytes: config.documents.limitBytes }),
         ...(config.documents === undefined ? {} : { documents: config.documents }),
@@ -89,7 +92,7 @@ export function memoryGenerationOptions(
         ...(config.skills?.agentsHome === undefined ? {} : { agentsHome: config.skills.agentsHome }),
       }
       if (type === 'memory-spaces') return JSON.parse(JSON.stringify({
-        dataDir: directory, cliPath: config.cliPath, store: config.store, timeoutMs: config.timeoutMs,
+        dataDir: memorySpacesDirectory, cliPath: config.cliPath, store: config.store, timeoutMs: config.timeoutMs,
         defaultRecallLimit: config.defaultRecallLimit, writeEnabled: config.writeEnabled,
         embedding: config.embedding, recallQuality: config.recallQuality, persistenceStrategy: config.persistenceStrategy,
       }))
@@ -389,7 +392,9 @@ export class LiveMnemonRuntime implements MnemonAgentRuntimeSource {
   private rediscoverProviders(graph: MnemonRuntimeGraph): void {
     if (this.workspaceParticipation(graph.workspaceRoot).excluded) return
     if (!graph.config.writeEnabled || !allowsParticipation(graph.config, 'memory-spaces', 'maintain', 'automatic')) return
-    const directory = resolve(graph.directory)
+    const directory = resolve(graph.config.memorySpacesScope === 'global'
+      ? createStorageRoot({ storageScope: 'global' }).effectiveDataDir()
+      : graph.directory)
     const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout> | undefined
     let running = false

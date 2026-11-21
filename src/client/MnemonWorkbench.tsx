@@ -327,7 +327,13 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   // directory, or workspace. Switching chat sessions within the same workspace
   // or global/custom storage keeps active pages and drafts mounted in place.
   const storageContext = settingsSnapshot.revision === undefined ? 'loading'
-    : JSON.stringify([settingsSnapshot.value?.storageScope ?? null, settingsSnapshot.value?.dataDir ?? null, settingsSnapshot.value?.runtimeUserScope ?? null])
+    : JSON.stringify([
+      settingsSnapshot.value?.storageScope ?? null,
+      settingsSnapshot.value?.dataDir ?? null,
+      settingsSnapshot.value?.runtimeUserScope ?? null,
+      settingsSnapshot.value?.documentsScope ?? null,
+      settingsSnapshot.value?.memorySpacesScope ?? null,
+    ])
   const effectiveWorkspace = workspaceId ?? (surface === 'builtin' ? sessionId ?? '' : '')
   const surfaceScopeKey = `${connectionContext.current.revision}\u0000${storageContext}\u0000${effectiveWorkspace}`
   const viewContextKey = `${clientContextKey}\u0000${storageContext}`

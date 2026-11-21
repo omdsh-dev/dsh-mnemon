@@ -79,7 +79,7 @@ Sharing does not broadcast conversations or files. Mnemon-enabled agents can sha
         +-- git/                  # disposable Git mirror of the sync branch; never a Pack component
 ```
 
-`storageScope` selects this whole root, not just the Mnemon databases; [Storage scopes](./configuration.md#storage-scopes) gives the root each scope resolves to. The opt-in `runtimeUserScope=global` is the sole split-root exception: Runtime reads USER.md from the global root while MEMORY.md and every other component remain under the selected root. Workbench tasks use the inspected workspace; conversation tools and lifecycle hooks use their owning session's cwd and pinned View. Host path resolution never creates files or changes old roots.
+`storageScope` selects this whole root, not just the Mnemon databases; [Storage scopes](./configuration.md#storage-scopes) gives the root each scope resolves to. Opt-in split-root overrides allow individual components to share the global root while keeping `MEMORY.md` isolated per workspace: `runtimeUserScope=global` reads `USER.md` from the global root, `documentsScope=global` shares the global Project Documents library, and `memorySpacesScope=global` shares the global Memory Spaces databases and Provider registry. A Mnemon Pack or Git sync still operates on one selected root without silently mixing separate global roots. Workbench tasks use the inspected workspace; conversation tools and lifecycle hooks use their owning session's cwd and pinned View. Host path resolution never creates files or changes old roots.
 
 The files under `state/`:
 

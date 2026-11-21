@@ -227,6 +227,10 @@ export function DocumentsSettings(props: ShippedSettingsServices & { page: Memor
   const baseId = useId()
   const snapshot = useScope(scope)
   const disabled = !page.writable || snapshot.status === 'loading' || !snapshot.writable
+  const savedScope: 'storage' | 'global' = snapshot.value?.documentsScope === 'global' ? 'global' : 'storage'
+  const documentsScope = useLive(savedScope, async value => {
+    await scope.mutate([{ op: 'set', path: ['documentsScope'], value }])
+  })
   const configured = snapshot.value?.documents
   const savedLimit = String(configured?.limitBytes ?? DOCUMENTS_DEFAULT_LIMIT_BYTES)
   const capacity = useStaged({ limitBytes: savedLimit }, async draft => {
@@ -238,28 +242,42 @@ export function DocumentsSettings(props: ShippedSettingsServices & { page: Memor
   const parsedLimit = documentsLimitValue(capacity.draft.limitBytes)
   const invalid = parsedLimit === undefined
   const equiv = formatByteEquivalent(parsedLimit)
-  return <section className={css.panelSection} data-settings-section="capacity" aria-labelledby="mnemon-documents-limits">
-    <div className={css.panelHeading}>
-      <h3 id="mnemon-documents-limits">{t('config.documentsLimitsTitle')}</h3>
-      <p id="mnemon-documents-limits-hint">{t('config.documentsLimitsHint', {
-        defaultMiB: DOCUMENTS_DEFAULT_LIMIT_BYTES / (1024 * 1024),
-        maxMiB: DOCUMENTS_MAX_LIMIT_BYTES / (1024 * 1024),
-      })}</p>
-    </div>
-    <div className={css.rows}>
-      <SettingRow htmlFor={`${baseId}-limit`} title={t('config.documents.limitBytes')}>
-        {equiv !== null && <span className={css.inputEquiv} aria-hidden="true">{equiv}</span>}
-        <input id={`${baseId}-limit`} className={css.numberInput} type="number" min="1" max={DOCUMENTS_MAX_LIMIT_BYTES} step="1" inputMode="numeric"
-          value={capacity.draft.limitBytes} disabled={disabled || capacity.saving} aria-describedby="mnemon-documents-limits-hint"
-          aria-invalid={invalid}
-          onChange={event => capacity.edit({ limitBytes: event.target.value })} />
-      </SettingRow>
-    </div>
-    <PanelActions dirty={capacity.dirty} saving={capacity.saving} applied={capacity.applied} failed={capacity.failed} disabled={disabled} t={t}
-      note={t('config.documentsLimitsApply')}
-      invalid={invalid ? t('config.documentsLimitInvalid', { field: t('config.documents.limitBytes'), max: DOCUMENTS_MAX_LIMIT_BYTES }) : null}
-      onDiscard={capacity.discard} onApply={() => { void capacity.apply() }} />
-  </section>
+  return <>
+    <section className={css.panelSection} data-settings-section="documents-scope" aria-labelledby={`${baseId}-scope-heading`}>
+      <div className={css.panelHeading}>
+        <h3 id={`${baseId}-scope-heading`}>{t('config.documentsScopeSection')}</h3>
+      </div>
+      <div className={css.rows}>
+        <SelectRow id="mnemon-documents-modal-scope" label={t('config.documentsScopeTitle')} value={documentsScope.value} disabled={disabled} onChange={documentsScope.set} options={[
+          { value: 'storage', label: t('config.componentScopeStorage'), detail: t('config.documentsScopeStorageHint') },
+          { value: 'global', label: t('config.componentScopeGlobal'), detail: t('config.documentsScopeGlobalHint') },
+        ]} />
+      </div>
+      <WriteFailure error={documentsScope.failed} t={t} />
+    </section>
+    <section className={css.panelSection} data-settings-section="capacity" aria-labelledby="mnemon-documents-limits">
+      <div className={css.panelHeading}>
+        <h3 id="mnemon-documents-limits">{t('config.documentsLimitsTitle')}</h3>
+        <p id="mnemon-documents-limits-hint">{t('config.documentsLimitsHint', {
+          defaultMiB: DOCUMENTS_DEFAULT_LIMIT_BYTES / (1024 * 1024),
+          maxMiB: DOCUMENTS_MAX_LIMIT_BYTES / (1024 * 1024),
+        })}</p>
+      </div>
+      <div className={css.rows}>
+        <SettingRow htmlFor={`${baseId}-limit`} title={t('config.documents.limitBytes')}>
+          {equiv !== null && <span className={css.inputEquiv} aria-hidden="true">{equiv}</span>}
+          <input id={`${baseId}-limit`} className={css.numberInput} type="number" min="1" max={DOCUMENTS_MAX_LIMIT_BYTES} step="1" inputMode="numeric"
+            value={capacity.draft.limitBytes} disabled={disabled || capacity.saving} aria-describedby="mnemon-documents-limits-hint"
+            aria-invalid={invalid}
+            onChange={event => capacity.edit({ limitBytes: event.target.value })} />
+        </SettingRow>
+      </div>
+      <PanelActions dirty={capacity.dirty} saving={capacity.saving} applied={capacity.applied} failed={capacity.failed} disabled={disabled} t={t}
+        note={t('config.documentsLimitsApply')}
+        invalid={invalid ? t('config.documentsLimitInvalid', { field: t('config.documents.limitBytes'), max: DOCUMENTS_MAX_LIMIT_BYTES }) : null}
+        onDiscard={capacity.discard} onApply={() => { void capacity.apply() }} />
+    </section>
+  </>
 }
 
 // ---- Layered strategy: the background tasks it drives ----
