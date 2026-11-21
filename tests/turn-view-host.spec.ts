@@ -455,6 +455,94 @@ it.each([
   } finally { await handle.dispose(); await f.close() }
 }, 20_000)
 
+it('pushes bounded Memory Space and Document summary indexes on step 1 without breaking prompt cache (issue 701)', async () => {
+  const f = await fixture('native', true, { indexPush: true }, supportsSnapshotCompaction)
+  const handle = await f.create()
+  try {
+    const documents = f.graph.source('documents')
+    const spaces = f.graph.source('memory-spaces')
+    const activeSpace = await f.memorySpace()
+    await spaces.mutate('body-update', {
+      memoryBodyId: activeSpace.id,
+      name: 'Release Architecture',
+      description: 'Quartz failover topology and canary rollback thresholds.',
+      active: true,
+    })
+    await spaces.mutate('body-create', {
+      name: 'Team Runbooks',
+      description: 'General onboarding notes unrelated to failover.',
+      active: true,
+      providerId: 'holographic',
+      connection: { dataPath: join(f.root, 'team-facts.json') },
+    })
+    const inactiveSpace = await spaces.mutate<{ id: string }>('body-create', {
+      name: 'Hidden Archive',
+      description: 'Quartz secret inactive space that must never be pushed.',
+      active: false,
+      providerId: 'holographic',
+      connection: { dataPath: join(f.root, 'inactive-facts.json') },
+    })
+    const { document } = await documents.mutate<{ document: { id: string } }>('mutate', {
+      action: 'create',
+      title: 'Deployment Checklist',
+      description: 'Quartz cluster verification steps before promotion.',
+      content: 'FULL_BODY_MARKER_MUST_NOT_BE_PUSHED '.repeat(30),
+    })
+
+    // Unrelated query adds no recall message while preserving full eager Runtime memory.
+    await f.turn(handle.agent, false, '继续')
+    expect(bm25Messages(f.requests[0]!.messages)).toHaveLength(0)
+    expect(f.requests[0]!.text).toContain('Synthetic turn-view retained fact.')
+
+    // Matching query pushes Space name/description and Document title/description without full body or inactive spaces.
+    await f.turn(handle.agent, false, 'Quartz failover verification')
+    const delivered = bm25Messages(f.requests[3]!.messages)
+    expect(delivered).toHaveLength(1)
+    const initial = JSON.stringify(delivered[0]!.content)
+    expect(initial).toContain(activeSpace.id)
+    expect(initial).toContain('Release Architecture')
+    expect(initial).toContain('Quartz failover topology')
+    expect(initial).toContain(document.id)
+    expect(initial).toContain('Deployment Checklist')
+    expect(initial).toContain('Quartz cluster verification steps')
+    expect(initial).not.toContain(inactiveSpace.id)
+    expect(initial).not.toContain('Hidden Archive')
+    expect(initial).not.toContain('FULL_BODY_MARKER_MUST_NOT_BE_PUSHED')
+    const surfaceGeneration = handle.agent.session.surface.contentGeneration
+
+    // Repeated query deduplicates without adding another block or busting the prefix.
+    await f.turn(handle.agent, false, 'Quartz failover verification')
+    expect(bm25Messages(f.requests[6]!.messages)).toEqual(delivered)
+
+    // Deactivating the Space and updating the Document description invalidates old refs and pushes the updated summary.
+    await spaces.mutate('body-update', { memoryBodyId: activeSpace.id, active: false })
+    await documents.mutate('mutate', { action: 'update', id: document.id, description: 'Quartz revised promotion runbook.' })
+    await f.turn(handle.agent, false, 'Quartz revised promotion')
+    const updated = bm25Messages(f.requests[9]!.messages)
+    expect(updated).toHaveLength(2)
+    const latest = JSON.stringify(updated[1]!.content)
+    expect(latest).toContain('Disregard superseded or removed references')
+    expect(latest).toContain('Quartz revised promotion runbook.')
+    expect(latest).not.toContain(activeSpace.id)
+
+    for (const index of [3, 6, 9]) {
+      const before = f.requests[index - 1]!
+      const after = f.requests[index]!
+      expect(JSON.stringify(after.messages.slice(0, before.messages.length))).toBe(JSON.stringify(before.messages))
+      expect(after.system).toBe(before.system)
+      expect(after.tools).toEqual(before.tools)
+    }
+    expect(handle.agent.session.surface.contentGeneration).toBe(surfaceGeneration)
+
+    if (supportsSnapshotCompaction) {
+      expect(await f.compactionContext.compaction.compactNow(handle.agent, new AbortController().signal)).not.toBeNull()
+      const summary = f.requests.find(request => request.purpose === 'compaction')!
+      expect(bm25Messages(summary.messages)).toHaveLength(0)
+      expect(JSON.stringify(summary.messages)).not.toContain('Quartz failover topology')
+    }
+  } finally { await handle.dispose(); await f.close() }
+}, 20_000)
+
 it.each(['native', 'ptc'] as const)('preserves the full request prefix until the snapshot budget checkpoints, including %s resume', async mode => {
   const f = await fixture(mode)
   let handle = await f.create()

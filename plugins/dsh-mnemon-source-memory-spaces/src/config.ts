@@ -12,6 +12,7 @@ export interface MemorySpacesConfig {
   timeoutMs?: number
   defaultRecallLimit?: number
   writeEnabled?: boolean
+  bm25IndexPush?: boolean
   embedding?: MnemonEmbeddingConfig
   recallQuality?: RecallQualityConfig
   persistenceStrategy?: MemoryPersistenceStrategy
@@ -25,6 +26,7 @@ export interface ResolvedMemorySpacesConfig {
   timeoutMs: number
   defaultRecallLimit: number
   writeEnabled: boolean
+  bm25IndexPush: boolean
   embedding: ResolvedMnemonEmbeddingConfig
   recallQuality: ResolvedRecallQualityConfig
   persistenceStrategy: ResolvedMemoryPersistenceStrategy
@@ -36,7 +38,7 @@ export const MemorySpacesConfig = z.object({
   // roadmap; until then each keeps its own, so that stored values validate as they did.
   timeoutMs: z.number().step(1).min(1).max(600_000),
   defaultRecallLimit: z.number().step(1).min(1).max(50),
-  writeEnabled: z.boolean(), embedding: z.any(), recallQuality: z.any(), persistenceStrategy: z.any(),
+  writeEnabled: z.boolean(), bm25IndexPush: z.boolean(), embedding: z.any(), recallQuality: z.any(), persistenceStrategy: z.any(),
 }) as unknown as z<MemorySpacesConfig>
 
 function optionalText(value: string | undefined): string | undefined { return value?.trim() || undefined }
@@ -143,6 +145,7 @@ export function resolveMemorySpacesConfig(value: MemorySpacesConfig = {}, source
     ...(cliPath === undefined ? {} : { cliPath }), ...(store === undefined ? {} : { store }),
     timeoutMs: config.timeoutMs ?? DEFAULT_TIMEOUT_MS, defaultRecallLimit: config.defaultRecallLimit ?? DEFAULT_RECALL_LIMIT,
     writeEnabled: config.writeEnabled ?? true,
+    bm25IndexPush: config.bm25IndexPush ?? false,
     embedding: resolveEmbedding(config.embedding), recallQuality: resolveRecallQuality(config.recallQuality),
     persistenceStrategy: resolvePersistenceStrategy(config.persistenceStrategy),
   }
