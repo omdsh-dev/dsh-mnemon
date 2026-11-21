@@ -177,6 +177,104 @@ describe('Mnemon storage-domain inventory and centralized roots', () => {
       expect(catalog.scopes.filter(scope => scope.active)).toEqual([expect.objectContaining({ kind: 'custom', root })])
       expect(catalog.scopes.find(scope => scope.kind === 'workspace')?.root).toBe(join(workspace, '.mnemon'))
     })
+
+    it('reports runtime ready when runtimeUserScope is global and USER.md lives only in the global root (issue 703)', () => {
+      const globalRoot = temporaryDirectory()
+      const workspace = temporaryDirectory()
+      try {
+        vi.stubEnv('MNEMON_DATA_DIR', globalRoot)
+        const config = { storageScope: 'workspaces' as const, runtimeUserScope: 'global' as const }
+        const storage = createStorageRoot(config, workspace)
+        const activeRoot = storage.effectiveDataDir()
+        mkdirSync(join(globalRoot, 'runtime'), { recursive: true })
+        writeFileSync(join(globalRoot, 'runtime', 'memories.json'), JSON.stringify({ version: 1, entries: [{ target: 'user' }, { target: 'user' }, { target: 'memory' }] }))
+        writeFileSync(join(globalRoot, 'runtime', 'USER.md'), 'shared profile\n')
+        writeFileSync(join(globalRoot, 'runtime', 'MEMORY.md'), 'global note\n')
+        mkdirSync(join(activeRoot, 'runtime'), { recursive: true })
+        writeFileSync(join(activeRoot, 'runtime', 'memories.json'), JSON.stringify({ version: 1, entries: [{ target: 'memory' }] }))
+        writeFileSync(join(activeRoot, 'runtime', 'MEMORY.md'), 'workspace note\n')
+
+        const catalog = new StorageScopeInspector(storage, config).catalog(workspace)
+        const activeRuntime = catalog.scopes.find(scope => scope.active)!.areas.find(area => area.kind === 'runtime')!
+        expect(activeRuntime).toMatchObject({
+          kind: 'runtime',
+          status: 'ready',
+          itemCount: 3,
+          details: { userEntries: 2, memoryEntries: 1, projectionsHealthy: true, sharedUserProfile: true, source: 'memories.json' },
+        })
+        expect(activeRuntime.issue).toBeUndefined()
+
+        // Removing the shared global USER.md projection still reports an accurate repair issue.
+        rmSync(join(globalRoot, 'runtime', 'USER.md'))
+        const missingUser = new StorageScopeInspector(storage, config).catalog(workspace).scopes.find(scope => scope.active)!.areas.find(area => area.kind === 'runtime')!
+        expect(missingUser).toMatchObject({
+          status: 'invalid',
+          details: { userEntries: 2, memoryEntries: 1, projectionsHealthy: false, sharedUserProfile: true },
+          issue: 'shared USER.md projection is missing',
+        })
+
+        // Restoring USER.md and removing the active workspace MEMORY.md reports missing MEMORY.md.
+        writeFileSync(join(globalRoot, 'runtime', 'USER.md'), 'shared profile\n')
+        rmSync(join(activeRoot, 'runtime', 'MEMORY.md'))
+        const missingMemory = new StorageScopeInspector(storage, config).catalog(workspace).scopes.find(scope => scope.active)!.areas.find(area => area.kind === 'runtime')!
+        expect(missingMemory).toMatchObject({
+          status: 'invalid',
+          details: { userEntries: 2, memoryEntries: 1, projectionsHealthy: false, sharedUserProfile: true },
+          issue: 'MEMORY.md projection is missing',
+        })
+
+        // Switching back to storage-local user scope flags the workspace root without USER.md as invalid.
+        writeFileSync(join(activeRoot, 'runtime', 'MEMORY.md'), 'workspace note\n')
+        const localOnly = new StorageScopeInspector(storage, { storageScope: 'workspaces', runtimeUserScope: 'storage' }).catalog(workspace).scopes.find(scope => scope.active)!.areas.find(area => area.kind === 'runtime')!
+        expect(localOnly).toMatchObject({
+          status: 'invalid',
+          itemCount: 1,
+          details: { userEntries: 0, memoryEntries: 1, projectionsHealthy: false },
+          issue: 'USER.md or MEMORY.md projection is missing',
+        })
+      } finally {
+        vi.unstubAllEnvs()
+      }
+    })
+
+    it('handles uninitialized global or local runtime stores cleanly when runtimeUserScope is global (issue 703)', () => {
+      const globalRoot = temporaryDirectory()
+      const workspace = temporaryDirectory()
+      try {
+        vi.stubEnv('MNEMON_DATA_DIR', globalRoot)
+        const config = { storageScope: 'workspace' as const, runtimeUserScope: 'global' as const }
+        const storage = createStorageRoot(config, workspace)
+        const activeRoot = storage.effectiveDataDir()
+        // Only local workspace memory exists before global store initializes.
+        mkdirSync(join(activeRoot, 'runtime'), { recursive: true })
+        writeFileSync(join(activeRoot, 'runtime', 'memories.json'), JSON.stringify({ version: 1, entries: [{ target: 'memory' }] }))
+        writeFileSync(join(activeRoot, 'runtime', 'MEMORY.md'), 'workspace note\n')
+
+        const localOnlyReady = new StorageScopeInspector(storage, config).catalog(workspace).scopes.find(scope => scope.active)!.areas.find(area => area.kind === 'runtime')!
+        expect(localOnlyReady).toMatchObject({
+          status: 'ready',
+          itemCount: 1,
+          details: { userEntries: 0, memoryEntries: 1, projectionsHealthy: true, sharedUserProfile: true },
+        })
+        expect(localOnlyReady.issue).toBeUndefined()
+
+        // A brand-new workspace inherits healthy shared user profile entries from the global root.
+        rmSync(join(activeRoot, 'runtime'), { recursive: true, force: true })
+        mkdirSync(join(globalRoot, 'runtime'), { recursive: true })
+        writeFileSync(join(globalRoot, 'runtime', 'memories.json'), JSON.stringify({ version: 1, entries: [{ target: 'user' }] }))
+        writeFileSync(join(globalRoot, 'runtime', 'USER.md'), 'shared profile\n')
+
+        const globalOnlyReady = new StorageScopeInspector(storage, config).catalog(workspace).scopes.find(scope => scope.active)!.areas.find(area => area.kind === 'runtime')!
+        expect(globalOnlyReady).toMatchObject({
+          status: 'ready',
+          itemCount: 1,
+          details: { userEntries: 1, memoryEntries: 0, projectionsHealthy: true, sharedUserProfile: true },
+        })
+        expect(globalOnlyReady.issue).toBeUndefined()
+      } finally {
+        vi.unstubAllEnvs()
+      }
+    })
   })
 
   describe('centralized storage roots', () => {
