@@ -15,9 +15,9 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs'
-import { basename, dirname, join, resolve, sep } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
-import { strFromU8, strToU8, unzipSync, zipSync, type Unzipped, type Zippable } from 'fflate'
+import { strToU8, unzipSync, zipSync, type Unzipped, type Zippable } from 'fflate'
 import { createStorageRoot, type ResolvedConfig, type StorageRoot } from './config/index.ts'
 import { writeAtomicFileSync } from './fs-atomic.ts'
 import {
@@ -40,12 +40,6 @@ import { pluginPackageVersion } from './version-updates.ts'
 
 export type { MnemonPackComponent, MnemonPackComponentSummary, MnemonPackExport, MnemonPackImportMode, MnemonPackImportResult, MnemonPackManifest, MnemonPackPreview, MnemonPackScope } from "./protocol.ts"
 
-// The sync channel reads the same payload files out of a Git commit that an
-// import would read out of an archive, so it validates them with the exact
-// parsers an import uses instead of a second, drifting copy. The entry key is
-// exported for the same reason: two sides agree on an entry's identity only
-// while one definition decides it. A removal is judged by the same rule here
-// and there, so what a tombstone covers is exported too.
 export type { StoredRuntimeEntry, RuntimeFile, DocumentIndex }
 export { entryKey, tombstoneCovers, tombstoneKey }
 
@@ -60,13 +54,6 @@ const MAX_FILES = 4096
 const LOCK_TIMEOUT_MS = 5_000
 const LOCK_STALE_MS = 30_000
 const LOCK_RETRY_MS = 20
-/**
- * Each component's directory under the data directory, as its Source names it. A Pack carries a
- * component's data files (memories and projections, the index and documents, the registry and
- * stores, never a lock, the local archive or a write-ahead log) under `payload/` at the paths they
- * have there, so these names and the Sources' file names spell the Pack's entries too;
- * tests/pack-compat-0.5.24.spec.ts pins them to the entries 0.5.24 accepts.
- */
 const COMPONENT_DIRECTORIES = { runtime: RUNTIME_DIRECTORY, documents: DOCUMENTS_DIRECTORY, 'memory-spaces': MEMORY_SPACES_DIRECTORY } as const
 export const RUNTIME_MEMORIES_PATH = `payload/${RUNTIME_DIRECTORY}/${RUNTIME_MEMORIES_FILE}`
 const RUNTIME_PROJECTION_PATHS = {
@@ -78,11 +65,6 @@ const MEMORY_SPACE_REGISTRY_PATH = `payload/${MEMORY_SPACES_DIRECTORY}/${MEMORY_
 const STATE_TOMBSTONE_FILE = 'tombstones.json'
 const STATE_RUNTIME_INDEX_FILE = 'runtime-index.json'
 const COMPONENT_ORDER = MNEMON_PACK_COMPONENTS
-/**
- * Every content hash this format writes is `sha256(...)` in hex, so one rule decides the shape.
- * The digest of a Runtime entry's text and the digest of a Document's body are the same kind of
- * value, and a second, drifting copy of the rule is how one of them ends up unchecked.
- */
 const CONTENT_HASH = /^[a-f0-9]{64}$/u
 const SQLITE_HEADER = Buffer.from('SQLite format 3\0', 'binary')
 
@@ -98,10 +80,6 @@ interface ParsedPack {
   manifest: MnemonPackManifest
 }
 
-/**
- * A stored entry may carry fields this Host does not own: the machine that wrote it,
- * and whatever a newer version adds. They round-trip through the Pack untouched.
- */
 type StoredRuntimeEntry = RuntimeMemoryEntry & { origin?: MnemonEntryOrigin }
 
 interface RuntimeFile {
@@ -142,12 +120,10 @@ function safeArchivePath(path: string): void {
   if (parts.some(part => part === '' || part === '.' || part === '..')) throw new Error(`unsafe Pack entry path: ${JSON.stringify(path)}`)
 }
 
-/** Where one component's files sit in a Pack; the sync channel compares a component's files by it. */
 export function payloadPrefix(component: MnemonPackComponent): string {
   return `payload/${COMPONENT_DIRECTORIES[component]}/`
 }
 
-/** The path segments below a component's payload directory, or nothing for a path outside it. */
 function payloadSegments(path: string, component: MnemonPackComponent): string[] | undefined {
   const prefix = payloadPrefix(component)
   return path.startsWith(prefix) ? path.slice(prefix.length).split('/') : undefined
@@ -161,13 +137,6 @@ function payloadComponent(path: string): MnemonPackComponent | undefined {
   return COMPONENT_ORDER.find(component => path.startsWith(payloadPrefix(component)))
 }
 
-/**
- * The exact entry list a Pack may hold, kept deliberately identical to the list
- * version 0.5.24 accepts: a backup written here opens there, and one written
- * there opens here. A file this list does not name is not "extra data", it is a
- * Pack the other side refuses outright, so machine-local state (deletions, the
- * machine identity) travels over the sync channel instead of inside an archive.
- */
 function allowedPayloadPath(path: string): boolean {
   if (path === RUNTIME_MEMORIES_PATH || path === RUNTIME_PROJECTION_PATHS.user || path === RUNTIME_PROJECTION_PATHS.memory) return true
   if (path === DOCUMENTS_INDEX_PATH) return true
@@ -184,7 +153,6 @@ function componentsForScope(scope: MnemonPackScope): MnemonPackComponent[] {
   return [scope]
 }
 
-/** Exported so the sync channel can read the manifest a commit holds without unpacking the archive. */
 export function parseManifest(value: unknown): MnemonPackManifest {
   const manifest = record(value)
   if (manifest?.format !== MNEMON_PACK_FORMAT || manifest.version !== MNEMON_PACK_VERSION) throw new Error('unsupported Mnemon Pack format or version')
@@ -209,9 +177,6 @@ export function parseManifest(value: unknown): MnemonPackManifest {
     }
     return { component, files: Number(item!.files), bytes: Number(item!.bytes), items: Number(item!.items) }
   })
-  // Anything else the writer put in the manifest (a newer field, a sync channel's
-  // own extension) is ignored rather than rejected: a reader has to open a Pack
-  // written by a version it has never seen.
   return {
     format: MNEMON_PACK_FORMAT,
     version: MNEMON_PACK_VERSION,
@@ -223,7 +188,6 @@ export function parseManifest(value: unknown): MnemonPackManifest {
   }
 }
 
-/** The sync channel reads its machine identity with this parser; no Pack carries one. */
 export function parseMachineIdentity(value: unknown): MnemonMachineIdentity | undefined {
   if (value === undefined || value === null) return undefined
   const machine = record(value)
@@ -240,15 +204,10 @@ function parseEntryOrigin(value: unknown): MnemonEntryOrigin | undefined {
   return { machine: origin.machine, label: origin.label, at: origin.at }
 }
 
-/**
- * Whole groups of four from the base64 alphabet, padded with at most two `=` at the end. The
- * length check and one character class keep this a flat loop at any size. A pattern that repeats
- * a four-character group keeps a backtracking entry per group, and V8 threw "Maximum call stack
- * size exceeded" once a payload passed about 4.5 MB (#368). The `u` flag stays off: under it,
- * V8 13 (Node 24) does the same for a class over a string holding a character above U+00FF.
- */
+const BASE64_LINEAR_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
+
 function isBase64(value: string): boolean {
-  return value.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(value)
+  return value.length % 4 === 0 && BASE64_LINEAR_PATTERN.test(value)
 }
 
 function decodeArchive(base64: string): Buffer {
@@ -309,10 +268,6 @@ export function parseRuntime(value: unknown, limits: RuntimeMemoryLimits = RUNTI
     if (entry.pinned !== undefined && typeof entry.pinned !== 'boolean') throw new Error('runtime memories.json contains invalid pin state')
     const content = entry.content.trim().replace(/\s+/gu, ' ')
     if (content === '' || content.includes('§') || Buffer.byteLength(content, 'utf8') > RUNTIME_ENTRY_MAX_BYTES) throw new Error('runtime memories.json contains invalid content')
-    // A Pack carries provenance, not only text: the branch scope of a working-memory entry
-    // and the machine that wrote it travel along. Each is read through its own rule, so a
-    // malformed value from a damaged archive or another installation is dropped here instead
-    // of reaching the runtime projection.
     const branches = entry.target === 'memory' ? parseRuntimeBranches(entry.branches) : undefined
     const origin = parseEntryOrigin(entry.origin)
     return {
@@ -358,16 +313,6 @@ function validDatabase(bytes: Uint8Array, path: string): void {
   if (bytes.length < 100 || !Buffer.from(bytes.subarray(0, SQLITE_HEADER.length)).equals(SQLITE_HEADER)) throw new Error(`${path} is not a SQLite ${MEMORY_SPACE_DATABASE_FILE}`)
 }
 
-/**
- * One document's payload entry, judged against the index that describes it.
- *
- * A document's body lives in its own file while its digest lives in `index.json`, so the two can
- * disagree while neither looks malformed: an index a person edited, a write that stopped halfway,
- * or a store an older version repaired by hand. The import path and the publish path judge that
- * pair by this one rule, so a payload this machine would refuse from another machine is never one
- * this machine produces. Reading the index does not judge the digest's shape: a ZIP backup reads
- * the same index, and a store that needs repair still has to download as one.
- */
 function assertDocumentPayload(document: DocumentRecord, bytes: Uint8Array): void {
   if (!CONTENT_HASH.test(document.contentHash)) throw new Error(`Documents index records a content hash that is not a sha256 digest for ${document.relativePath}`)
   if (bytes.length !== document.sizeBytes) throw new Error(`Documents payload size does not match ${document.relativePath}`)
@@ -404,7 +349,6 @@ function validatePackPayload(files: Record<string, Uint8Array>, components: Mnem
   }
 }
 
-/** `staleMs` is the owner's rule for an abandoned lock: a Source's lock is taken over only when that Source would take it over. */
 function tryAcquireLockSync(path: string, staleMs: number): (() => void) | undefined {
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
   let descriptor: number | undefined
@@ -425,9 +369,6 @@ function tryAcquireLockSync(path: string, staleMs: number): (() => void) | undef
     }
   }
   if (descriptor === undefined) return undefined
-  // The lock is the lock file's existence, not its descriptor. Windows refuses
-  // to rename a directory that holds an open handle, and an import replaces the
-  // runtime and documents directories that carry these very lock files.
   const identity = fstatSync(descriptor)
   closeSync(descriptor)
   return () => {
@@ -438,10 +379,6 @@ function tryAcquireLockSync(path: string, staleMs: number): (() => void) | undef
   }
 }
 
-/**
- * The lock each Source's controller holds while it writes, so a copy never sees a component half
- * written, always in this order whatever order the components are listed in.
- */
 function sourceLocks(root: string, components: readonly MnemonPackComponent[]): Array<{ path: string; staleMs: number }> {
   const locks: Array<{ path: string; staleMs: number }> = []
   if (components.includes('runtime')) locks.push({ path: join(root, RUNTIME_DIRECTORY, RUNTIME_LOCK_FILE), staleMs: RUNTIME_LOCK_STALE_MS })
@@ -449,11 +386,6 @@ function sourceLocks(root: string, components: readonly MnemonPackComponent[]): 
   return locks
 }
 
-/**
- * Acquire the full lock set, run the synchronous critical section, and release all locks without
- * yielding in between. Releasing partial locks before an async retry ensures synchronous Source
- * controllers (`Atomics.wait`) on the same event loop never deadlock against a suspended Pack task.
- */
 async function withLocks<T>(root: string, components: MnemonPackComponent[], operation: () => T): Promise<T> {
   const locks = [{ path: join(root, '.dsh-pack.lock'), staleMs: LOCK_STALE_MS }, ...sourceLocks(root, components)]
   const deadline = Date.now() + LOCK_TIMEOUT_MS
@@ -498,11 +430,6 @@ function readCurrentRuntime(root: string, limits: RuntimeMemoryLimits = RUNTIME_
   return existsSync(path) ? parseRuntime(JSON.parse(readFileSync(path, 'utf8')) as unknown, limits) : emptyRuntime()
 }
 
-/**
- * A Pack carries no local archive: the one MEMORY.md wrote while no Memory Space
- * could take its entries holds their only copy, so an import keeps it (#336).
- * Its files and folders are carried; a link is neither carried nor followed.
- */
 function keepRuntimeArchive(root: string, stagedRuntime: string): void {
   const copy = (from: string, to: string): void => {
     let stat
@@ -519,7 +446,6 @@ function keepRuntimeArchive(root: string, stagedRuntime: string): void {
   copy(join(root, RUNTIME_DIRECTORY, RUNTIME_ARCHIVE_DIRECTORY), join(stagedRuntime, RUNTIME_ARCHIVE_DIRECTORY))
 }
 
-/** Keep exact overflow records locally; a stable filename makes retried merges idempotent. */
 function archiveRuntimeOverflow(stagedRuntime: string, entries: RuntimeMemoryEntry[]): number {
   if (entries.length === 0) return 0
   const directory = join(stagedRuntime, RUNTIME_ARCHIVE_DIRECTORY, 'import-overflow')
@@ -538,7 +464,6 @@ function archiveRuntimeOverflow(stagedRuntime: string, entries: RuntimeMemoryEnt
   return added
 }
 
-/** Retain the same hot set on both machines, without asking a model to rewrite evidence. */
 function fitMergedRuntime(entries: RuntimeMemoryEntry[], limits: RuntimeMemoryLimits): { entries: RuntimeMemoryEntry[]; archived: RuntimeMemoryEntry[] } {
   if (runtimeBytes(entries.filter(entry => entry.pinned === true), 'memory') > limits.memory) throw new Error('Pinned runtime entries exceed the merge capacity. Unpin entries or increase the capacity; no data was changed.')
   if (runtimeBytes(entries, 'memory') <= limits.memory) return { entries, archived: [] }
@@ -654,18 +579,6 @@ function summaryFor(components: MnemonPackComponent[], files: Record<string, Uin
   })
 }
 
-/**
- * The payload of one Pack, and nothing else.
- *
- * A removal record and the identity that signs one are machine-local state: they
- * describe how two installations reconcile, not what a memory is, so they travel
- * over the sync channel and never appear here. An archive that carried them would
- * also stop opening in a version that does not know them.
- *
- * `stamp` is passed by the sync channel alone: signing entries with the writing
- * machine is what lets a later merge attribute an entry, and it advances the local
- * deletion ledger because publishing is what makes a removal visible.
- */
 function collectExport(root: string, components: MnemonPackComponent[], runtimeLimits: RuntimeMemoryLimits = RUNTIME_MEMORY_LIMITS, stamp?: { machine: MnemonMachineIdentity; at: string }): Record<string, Uint8Array> {
   const files: Record<string, Uint8Array> = {}
   if (components.includes('runtime')) {
@@ -699,10 +612,6 @@ function writeTombstones(directory: string, file: MnemonTombstoneFile): void {
   writeFileSync(join(directory, STATE_TOMBSTONE_FILE), `${JSON.stringify(file, null, 2)}\n`, { mode: 0o600 })
 }
 
-/**
- * The entries the last export carried. A removal leaves no trace in the data itself,
- * so this index is what lets a later export notice one and publish it as a tombstone.
- */
 interface RuntimeIndexFile {
   version: 1
   entries: Array<{ target: RuntimeMemoryTarget; contentHash: string }>
@@ -712,7 +621,6 @@ function emptyRuntimeIndex(): RuntimeIndexFile {
   return { version: 1, entries: [] }
 }
 
-/** A damaged index only costs forgotten deletions, so it degrades instead of failing an export. */
 function parseRuntimeIndex(value: unknown): RuntimeIndexFile {
   const source = record(value)
   if (source?.version !== 1 || !Array.isArray(source.entries)) return emptyRuntimeIndex()
@@ -741,11 +649,6 @@ function writeRuntimeIndex(directory: string, file: RuntimeIndexFile): void {
   writeFileSync(join(directory, STATE_RUNTIME_INDEX_FILE), `${JSON.stringify(file, null, 2)}\n`, { mode: 0o600 })
 }
 
-/**
- * Every entry the last export carried that the data directory no longer holds was deleted
- * here. Publishing that deletion as a tombstone is what stops another machine from writing
- * the entry back during the next merge.
- */
 function deletedSince(root: string, entries: StoredRuntimeEntry[], machine: MnemonMachineIdentity, at: string): MnemonTombstone[] {
   const present = new Set(entries.map(entry => `${entry.target}\0${tombstoneHash(entry)}`))
   return readRuntimeIndex(root).entries
@@ -753,7 +656,6 @@ function deletedSince(root: string, entries: StoredRuntimeEntry[], machine: Mnem
     .map(entry => ({ target: entry.target, contentHash: entry.contentHash, deletedAt: at, machine: machine.id }))
 }
 
-/** Record this export's entries and fold the deletions it revealed into the local tombstones. */
 function advanceTombstones(root: string, entries: StoredRuntimeEntry[], machine: MnemonMachineIdentity, at: string): MnemonTombstoneFile {
   const file = mergeTombstoneFiles(readCurrentTombstones(root), { version: 1, tombstones: deletedSince(root, entries, machine, at) })
   writeTombstones(join(root, 'state'), file)
@@ -761,22 +663,18 @@ function advanceTombstones(root: string, entries: StoredRuntimeEntry[], machine:
   return file
 }
 
-/** One entry's identity across machines: its target plus its exact text. */
 function entryKey(entry: { target: RuntimeMemoryTarget; content: string }): string {
   return `${entry.target}\0${entry.content}`
 }
 
-/** A deletion is a tombstone over that same identity, so it travels as data instead of as a diff. */
 function tombstoneHash(entry: { target: RuntimeMemoryTarget; content: string }): string {
   return sha256(`${entry.target}\0${entry.content}`)
 }
 
-/** One removal's identity: the same identity an entry key states, hashed. */
 function tombstoneKey(tombstone: MnemonTombstone): string {
   return `${tombstone.target}\0${tombstone.contentHash}`
 }
 
-/** A tombstone hides an entry until that entry is written again later than the deletion. */
 function tombstoneCovers(tombstone: MnemonTombstone, entry: StoredRuntimeEntry): boolean {
   if (tombstone.target !== entry.target || tombstone.contentHash !== tombstoneHash(entry)) return false
   const deletedAt = Date.parse(tombstone.deletedAt)
@@ -785,12 +683,6 @@ function tombstoneCovers(tombstone: MnemonTombstone, entry: StoredRuntimeEntry):
   return deletedAt >= updatedAt
 }
 
-/**
- * Entries this machine writes carry no origin until they leave it; an export stamps them.
- * The stamp is the entry's own write time, never the moment of the export: a stamp taken from
- * the clock would rewrite the payload on every run, and a repeated push would then publish a
- * commit that carries nothing new.
- */
 function stampedEntries(entries: StoredRuntimeEntry[], machine: MnemonMachineIdentity | undefined): StoredRuntimeEntry[] {
   if (machine === undefined) return entries
   return entries.map(entry => parseEntryOrigin(entry.origin) === undefined
@@ -798,34 +690,13 @@ function stampedEntries(entries: StoredRuntimeEntry[], machine: MnemonMachineIde
     : entry)
 }
 
-/**
- * What one merge did to the runtime entries, stated as counts rather than as a file:
- * a page that reports "added" without this number is guessing, and a merge that drops
- * an entry because a tombstone hides it has to be able to say how many it dropped.
- */
 type RuntimeMergeReport = MnemonRuntimeMergeReport
 
-/**
- * Fold one Pack's runtime entries into this data directory.
- *
- * `tombstones` is the removal ledger of the other side, and only the sync channel has one:
- * a ZIP carries none, and a merge without a ledger adds what is missing and removes nothing.
- * That is the safe-import rule — an archive a person opens by hand must never delete a memory.
- *
- * With a ledger, a tombstone is this machine's own record that it deleted an entry, and it
- * normally wins over the branch: without that rule a deleted memory would come back on every
- * merge. `revive` is the one case where the reader says the deletion was wrong: the branch's
- * copy is written again, and the tombstone is dropped so the next merge keeps agreeing with
- * the branch instead of hiding the entry a second time.
- */
 function mergeRuntime(root: string, pack: ParsedPack, runtimeLimits: RuntimeMemoryLimits, options: { revive?: boolean; tombstones?: MnemonTombstoneFile } = {}): { runtime: RuntimeFile; report: RuntimeMergeReport; revived: MnemonTombstone[]; archived: RuntimeMemoryEntry[] } {
   const current = readCurrentRuntime(root, runtimeLimits)
   const incoming = parseRuntime(json(pack.files[RUNTIME_MEMORIES_PATH]!, RUNTIME_MEMORIES_PATH), runtimeLimits)
   const tombstones = options.tombstones === undefined ? undefined : mergeTombstoneFiles(readCurrentTombstones(root), options.tombstones).tombstones
   const entries = tombstones === undefined ? [...current.entries] : current.entries.filter(entry => !tombstones.some(tombstone => tombstoneCovers(tombstone, entry)))
-  // What is present is what survives this machine's own deletions. Keying the merge off the
-  // stored file instead would count a deleted entry as already here, so reviving it would
-  // report nothing added while the tombstone kept it hidden — an add that adds nothing.
   const keys = new Set(entries.map(entryKey))
   const report: RuntimeMergeReport = { added: 0, held: 0 }
   const incomingKeys = new Set<string>()
@@ -835,8 +706,6 @@ function mergeRuntime(root: string, pack: ParsedPack, runtimeLimits: RuntimeMemo
     const hidden = tombstones === undefined ? [] : tombstones.filter(tombstone => tombstoneCovers(tombstone, entry))
     if (hidden.length > 0) {
       if (options.revive !== true) { report.held += 1; continue }
-      // The reader overrules their own deletion: the entry comes back and the
-      // tombstones that hid it go, or the next merge would hide it again.
       for (const tombstone of hidden) if (!revived.includes(tombstone)) revived.push(tombstone)
     }
     if (keys.has(key)) {
@@ -861,7 +730,6 @@ function mergeRuntime(root: string, pack: ParsedPack, runtimeLimits: RuntimeMemo
   }
 }
 
-/** Tombstones only ever grow: the newest deletion of one entry wins, and neither side forgets one. */
 function mergeTombstoneFiles(current: MnemonTombstoneFile, incoming: MnemonTombstoneFile): MnemonTombstoneFile {
   const byKey = new Map<string, MnemonTombstone>()
   for (const tombstone of [...current.tombstones, ...incoming.tombstones]) {
@@ -872,17 +740,11 @@ function mergeTombstoneFiles(current: MnemonTombstoneFile, incoming: MnemonTombs
   return { version: 1, tombstones: [...byKey.values()].sort((left, right) => left.deletedAt < right.deletedAt ? -1 : left.deletedAt > right.deletedAt ? 1 : 0) }
 }
 
-/**
- * One document's version as a sync agrees on it: every field but the time it was last read,
- * which a read moves without changing the document. A title, an archive or a link is as much
- * a part of it as the text.
- */
 export function documentVersion(document: DocumentRecord): string {
   const { lastAccessedAt: _read, ...fields } = document
   return sha256(canonicalJson(fields))
 }
 
-/** JSON with every object's keys in order and unset ones left out, so the same record always hashes the same. */
 function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
   if (value !== null && typeof value === 'object') {
@@ -892,13 +754,11 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(value) ?? 'null'
 }
 
-/** Whether two records say the same thing to a reader: the text, the title, the description and the archive. */
 function sameDocument(left: DocumentRecord, right: DocumentRecord): boolean {
   return left.contentHash === right.contentHash && left.title === right.title && left.description === right.description
     && left.status === right.status && (left.archiveSummary ?? '') === (right.archiveSummary ?? '')
 }
 
-/** Each document's version in one payload, by id, or nothing when the payload holds no valid Documents index. */
 export function documentVersions(files: Readonly<Record<string, Uint8Array>>): Record<string, string> | undefined {
   const bytes = files[DOCUMENTS_INDEX_PATH]
   if (bytes === undefined) return undefined
@@ -909,14 +769,6 @@ export function documentVersions(files: Readonly<Record<string, Uint8Array>>): R
   }
 }
 
-/**
- * `base` is each document's version as this machine and the branch last agreed on it, which
- * only a sync channel knows, and it decides only for a document both hold. One the branch did
- * not change since then keeps this machine's version, edited or not. One only the branch
- * changed is the newer version of the same document and replaces the one here, unless its
- * revision is lower than this machine's, as an older dsh-mnemon can publish; that one is kept
- * beside it, as a merge without `base` keeps every document whose text differs.
- */
 function mergeDocuments(root: string, pack: ParsedPack, base?: Readonly<Record<string, string>>): { index: DocumentIndex; files: Map<string, Uint8Array> } {
   const current = readCurrentDocuments(root)
   const incoming = archiveDocuments(pack)
@@ -926,7 +778,6 @@ function mergeDocuments(root: string, pack: ParsedPack, base?: Readonly<Record<s
     current.files.set(document.id, bytes)
     ids.set(document.id, document)
   }
-  // A divergent document is kept beside the local one under a new id.
   const copy = (source: DocumentRecord): void => {
     const remapped = remapDocument(source, incoming.files.get(source.id)!, randomUUID())
     add(remapped.document, remapped.bytes)
@@ -934,16 +785,11 @@ function mergeDocuments(root: string, pack: ParsedPack, base?: Readonly<Record<s
   for (const source of incoming.index.documents) {
     const existing = ids.get(source.id)
     const recorded = existing !== undefined && base !== undefined && Object.hasOwn(base, source.id) ? base[source.id] : undefined
-    // A version this machine agreed on is one it held, so it is never above this machine's own
-    // revision: one that is was never held here, and the merge goes on as without an agreement.
     const agreed = recorded !== undefined && documentVersion(source) === recorded && source.revision > existing!.revision ? undefined : recorded
     if (existing !== undefined && agreed !== undefined) {
       if (documentVersion(source) === agreed) continue
       const at = current.index.documents.indexOf(existing)
       if (documentVersion(existing) !== agreed) {
-        // Both sides changed it. This machine's version keeps the id, at a revision above both, so
-        // the other machine takes it as the newer one; the branch's version is kept beside it once,
-        // even when only its title, description or archive differs.
         const kept = { ...existing, revision: Math.max(existing.revision, source.revision) + 1 }
         current.index.documents[at] = kept
         ids.set(source.id, kept)
@@ -958,7 +804,6 @@ function mergeDocuments(root: string, pack: ParsedPack, base?: Readonly<Record<s
       }
     }
     if (existing !== undefined && existing.contentHash === source.contentHash) continue
-    // Merging the same pack again, as a retried sync does, finds that copy and does not make a second one.
     if (existing !== undefined && current.index.documents.some(document => document.contentHash === source.contentHash)) continue
     if (existing !== undefined) copy(source)
     else add(source, incoming.files.get(source.id)!)
@@ -968,7 +813,6 @@ function mergeDocuments(root: string, pack: ParsedPack, base?: Readonly<Record<s
   return current
 }
 
-/** Stable across repeated imports, bounded by the registry contract, and distinguishable in the UI. */
 function conflictSpaceName(source: MemorySpaceRegistryEntry): string {
   const suffix = ` (import conflict ${createHash('sha256').update(source.id).digest('hex').slice(0, 8)})`
   return source.name.slice(0, MEMORY_SPACE_NAME_MAX_LENGTH - suffix.length) + suffix
@@ -978,12 +822,9 @@ function mergeRegistry(root: string, pack: ParsedPack): { registry: MemorySpaceR
   const current = readCurrentRegistry(root)
   const incoming = archiveRegistry(pack)
   const ids = new Set(current.registry.bodies.map(body => body.id))
-  // Spaces are compared by what they hold, not by their bytes: reading a space rewrites
-  // its read counters, so the same space never has the same bytes on two machines (#370).
   const identity = new MemorySpaceIdentity(root)
   try {
     const covers = (outer: Uint8Array, inner: Uint8Array): boolean => identity.of(outer) === identity.of(inner) || identity.contains(outer, inner)
-    // Whether a space held here that `accept` admits already holds every memory of `database`.
     const held = (database: Uint8Array, accept: (body: MemorySpaceRegistryEntry) => boolean): boolean =>
       current.registry.bodies.some(body => accept(body) && covers(current.databases.get(body.id)!, database))
     const add = (body: MemorySpaceRegistryEntry, database: Uint8Array): void => {
@@ -995,19 +836,12 @@ function mergeRegistry(root: string, pack: ParsedPack): { registry: MemorySpaceR
       const sourceDb = incoming.databases.get(source.id)!
       if (ids.has(source.id)) {
         const localDb = current.databases.get(source.id)!
-        // Read on both machines, or an older version of this machine's: nothing new arrives,
-        // and this machine's copy stays, read counts included.
         if (covers(localDb, sourceDb)) continue
-        // The memories only the other machine holds join this machine's, which keeps its own rows,
-        // read counts and log: one space holding both, whichever side gained them.
         const merged = identity.merge(localDb, sourceDb)
         if (merged !== undefined) {
           current.databases.set(source.id, merged)
           continue
         }
-        // A memory edited or forgotten on one side: the other version stays beside this one as a
-        // copy, once. A space here already holding it, whatever its name, takes its place, and a
-        // conflict copy it only added to moves on with it. Also recognize older same-name copies.
         if (held(sourceDb, body => body.id !== source.id)) continue
         const copy = current.registry.bodies.find(body => body.id !== source.id && (body.name === conflictSpaceName(source) || body.name === source.name)
           && identity.contains(sourceDb, current.databases.get(body.id)!))
@@ -1018,8 +852,6 @@ function mergeRegistry(root: string, pack: ParsedPack): { registry: MemorySpaceR
         }
         add({ ...source, id: randomUUID(), name: conflictSpaceName(source), active: false, updatedAt: new Date().toISOString() }, sourceDb)
       } else if (!held(sourceDb, body => body.name === source.name)) {
-        // A space new here, unless one of the same name already holds every memory in it:
-        // a copy an older version made, or the other machine's copy of a divergent space.
         add(source, sourceDb)
       }
     }
@@ -1058,8 +890,6 @@ function stageImport(root: string, pack: ParsedPack, components: MnemonPackCompo
       const merged = mode === 'merge' ? mergeRuntime(root, pack, runtimeLimits, options) : undefined
       const runtime = merged === undefined ? parseRuntime(json(pack.files[RUNTIME_MEMORIES_PATH]!, RUNTIME_MEMORIES_PATH), runtimeLimits) : merged.runtime
       writeRuntime(join(staging, RUNTIME_DIRECTORY), runtime)
-      // A ZIP carries no removal ledger, and a safe import must not touch the one this
-      // machine keeps: without a ledger there is nothing to write and nothing to swap.
       if (options.tombstones !== undefined) {
         const tombstones = mergeTombstoneFiles(readCurrentTombstones(root), options.tombstones)
         if (merged === undefined) {
@@ -1067,9 +897,6 @@ function stageImport(root: string, pack: ParsedPack, components: MnemonPackCompo
         } else {
           report = merged.report
           revived = merged.revived
-          // A revived entry stays revived only if the tombstones that hid it are gone
-          // from the state this import commits, so they are dropped here rather than
-          // after the commit has already put them back.
           const dropped = new Set(revived.map(tombstoneKey))
           writeTombstones(join(staging, 'state'), dropped.size === 0 ? tombstones : { version: 1, tombstones: tombstones.tombstones.filter(tombstone => !dropped.has(tombstoneKey(tombstone))) })
         }
@@ -1081,8 +908,6 @@ function stageImport(root: string, pack: ParsedPack, components: MnemonPackCompo
       if (merged !== undefined && merged.archived.length > 0) {
         const archived = archiveRuntimeOverflow(join(staging, RUNTIME_DIRECTORY), merged.archived)
         if (archived > 0) merged.report.archived = archived
-        // Archival is not a user deletion. Remove only these keys from the previous
-        // export index in the same transaction, preserving any real pending deletions.
         const archivedKeys = new Set(merged.archived.map(entry => `${entry.target}\0${tombstoneHash(entry)}`))
         writeRuntimeIndex(join(staging, 'state'), { version: 1, entries: readRuntimeIndex(root).entries.filter(entry => !archivedKeys.has(`${entry.target}\0${entry.contentHash}`)) })
       }
@@ -1109,8 +934,6 @@ function commitStaging(root: string, staging: string, components: MnemonPackComp
   const backup = join(root, `.dsh-pack-backup-${randomUUID()}`)
   mkdirSync(backup, { recursive: true, mode: 0o700 })
   const committed: Array<{ directory: string; hadPrevious: boolean }> = []
-  // The Sources' locks are written into the staged directories, so the directories that replace
-  // the current ones arrive already locked and no Source writes between the swap and the release.
   const replacementLocks = sourceLocks(staging, components).map(lock => lock.path)
   const activePath = join(root, MNEMON_ACTIVE_STORE_FILE)
   const previousActive = existsSync(activePath) ? readFileSync(activePath) : undefined
@@ -1131,7 +954,6 @@ function commitStaging(root: string, staging: string, components: MnemonPackComp
       }
       committed.push({ directory, hadPrevious })
     }
-    // Only staged machine-local records participate; unrelated state is preserved.
     for (const file of [STATE_TOMBSTONE_FILE, STATE_RUNTIME_INDEX_FILE]) {
       if (!components.includes('runtime') || !existsSync(join(staging, 'state', file))) continue
       const directory = join(root, 'state')
@@ -1140,7 +962,6 @@ function commitStaging(root: string, staging: string, components: MnemonPackComp
       const previous = join(backup, file)
       const hadPrevious = existsSync(target)
       if (hadPrevious) renameSync(target, previous)
-      // Record the move before installing the replacement, so even that rename can roll back.
       stateSwaps.push({ file, hadPrevious })
       renameSync(join(staging, 'state', file), target)
     }
@@ -1180,7 +1001,6 @@ function safeName(value: string | undefined): string | undefined {
   return name === '' ? undefined : name.slice(0, 160)
 }
 
-/** Native, checksummed import/export for the one currently effective Mnemon root. */
 export class MnemonPackManager {
   private readonly root: string
   private readonly runtimeLimits: RuntimeMemoryLimits
@@ -1200,29 +1020,14 @@ export class MnemonPackManager {
     }
   }
 
-  /** The identity this machine stamps onto what it publishes to a sync branch. */
   identity(): MnemonMachineIdentity {
     return this.machine.read()
   }
 
-  /**
-   * What this data directory deleted, as of its last export.
-   *
-   * The ZIP path never reads this: a removal record describes how two installations
-   * reconcile, so it travels over the sync channel and stays out of the archive.
-   */
   tombstones(): MnemonTombstoneFile {
     return readCurrentTombstones(this.root)
   }
 
-  /**
-   * Record the entries this data directory held at its last export and no longer holds.
-   *
-   * An export does this on its way out, which is too late for a channel that merges the
-   * branch before it exports: the merge would write back the entry this machine just
-   * deleted, and the export that follows would see it present and record no removal at
-   * all. Recording the deletions first is what makes the merge honour them.
-   */
   async recordDeletions(): Promise<void> {
     return this.runner.withExclusive(async () => {
       await new Promise<void>(resolveReady => setImmediate(resolveReady))
@@ -1237,13 +1042,6 @@ export class MnemonPackManager {
     return { root: this.root, scope: this.config.storageScope, defaultRoot: resolve(createStorageRoot({ storageScope: 'global' }).effectiveDataDir()) }
   }
 
-  /**
-   * `stamp` is what the sync channel asks for and the ZIP path never does: signing entries
-   * with the writing machine is what lets a later merge attribute one, and it advances the
-   * local deletion ledger because publishing is what makes a removal visible. A backup a
-   * person downloads carries neither, so it stays readable by any version that knows the
-   * format.
-   */
   async exportPack(scope: MnemonPackScope, options: { stamp?: boolean } = {}): Promise<MnemonPackExport> {
     const components = componentsForScope(scope)
     return this.runner.withExclusive(async () => {
@@ -1251,10 +1049,6 @@ export class MnemonPackManager {
       return withLocks(this.root, components, () => {
         const exportedAt = this.now().toISOString()
         const payload = collectExport(this.root, components, this.runtimeLimits, options.stamp === true ? { machine: this.identity(), at: exportedAt } : undefined)
-        // Publishing is what makes a payload the branch's truth: `pushOnce` imports the branch's
-        // own payload before it can publish anything else, so an archive another machine would
-        // refuse must never leave this one. The ZIP path stays exempt on purpose: a person backing
-        // up a store that needs repair still has to be able to download one.
         if (options.stamp === true) validatePackPayload(payload, components, this.runtimeLimits)
         const summary = summaryFor(components, payload, this.runtimeLimits)
         const manifest: MnemonPackManifest = {
@@ -1267,8 +1061,6 @@ export class MnemonPackManager {
           'checksums.json': strToU8(`${JSON.stringify(checksums, null, 2)}\n`),
           ...payload,
         }
-        // fflate writes ZIP timestamps using local date fields. Pin those fields
-        // to keep the archive in range and byte-identical across timezones.
         const archive = zipSync(entries, { level: 6, mtime: new Date(1980, 0, 1) })
         if (archive.length > MNEMON_PACK_MAX_ARCHIVE_BYTES) throw new Error('exported Mnemon Pack exceeds the transport safety limit')
         const stamp = exportedAt.replace(/[:.]/gu, '-').replace('T', '_').replace('Z', '')
@@ -1291,15 +1083,9 @@ export class MnemonPackManager {
     }
   }
 
-  /**
-   * `documentsBase` is each document's version, by id, as a sync channel last agreed on it with
-   * the branch; a merge uses it to tell an older version from a divergent one. A ZIP import has none.
-   */
   async importPack(base64: string, options: { mode: MnemonPackImportMode; components?: MnemonPackComponent[]; revive?: boolean; tombstones?: MnemonTombstoneFile; documentsBase?: Readonly<Record<string, string>> }): Promise<MnemonPackImportResult> {
     const pack = parseArchive(base64, this.runtimeLimits)
     if (options.mode !== 'merge' && options.mode !== 'replace') throw new Error('Pack import mode must be merge or replace')
-    // The ledger arrives over the sync channel, so it is checked the same way a Pack is: a
-    // malformed removal record would otherwise merge silently and hide nothing.
     const tombstones = options.tombstones === undefined ? undefined : parseTombstones(options.tombstones)
     if (options.components !== undefined && (new Set(options.components).size !== options.components.length || options.components.some(component => !COMPONENT_ORDER.includes(component)))) {
       throw new Error('requested import components are invalid')

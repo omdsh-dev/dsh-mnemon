@@ -64,13 +64,11 @@ interface ProfileForms {
   mutate(namespace: string, operations: SettingsOperation[], expectedRevision?: number): Promise<void>
 }
 
-// A native import can remount this plugin; only a new host may clear the gate.
 const pendingNativeImports = new WeakSet<object>()
 const clone = <T>(value: T): T => structuredClone(value)
 const objectRecord = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
 
-// Preserve DSH expressions as data; never evaluate or flatten them into strings.
 function profileYaml(source: string): unknown {
   const document = parseDocument(source, {
     customTags: [{
@@ -108,11 +106,6 @@ function assertInitializableDirectory(directory: string): void {
   }
 }
 
-/**
- * Lightweight composition/topology dry-run validator for `internal/config` preflight.
- * Evaluates plugin contributions, source configurations, and storage root validity
- * without creating directories or instantiating Git sync, review ledgers, or inspectors.
- */
 export function validateRuntimeComposition(config: ResolvedConfig, extensions: RuntimeCompositionSource): void {
   assertInitializableDirectory(createStorageRoot(config, undefined).effectiveDataDir())
   if (config.runtimeUserScope === 'global' || config.documentsScope === 'global' || config.memorySpacesScope === 'global') {
@@ -124,7 +117,6 @@ export function validateRuntimeComposition(config: ResolvedConfig, extensions: R
   )
 }
 
-/** A local facade preserves Mnemon's wire namespaces; DSH owns all persistence. */
 export class ProfileMnemonSettings implements HostSettingsService {
   private readonly registrations = new Map<string, Registration>()
   private readonly listeners = new Set<SettingsListener>()
@@ -141,8 +133,6 @@ export class ProfileMnemonSettings implements HostSettingsService {
     this.owner = (ctx as unknown as { fiber?: ProfileFiber }).fiber
     this.editor = ctx.get('configEditor') as ProfileEditor | undefined
     const profile = ctx.get('profileContext') as { home?: string } | undefined
-    // New Cordis stores root metadata under a global symbol; reading `.root`
-    // there is treated as an undeclared service. Older hosts still use `.root`.
     const metadata = ctx as unknown as { [key: symbol]: object | undefined; root?: object }
     const root = metadata[Symbol.for('cordis.root')] ?? metadata.root ?? ctx
     if (profile?.home !== undefined && existsSync(join(profile.home, 'settings.yaml'))) pendingNativeImports.add(root)
@@ -155,8 +145,6 @@ export class ProfileMnemonSettings implements HostSettingsService {
         registration.validate?.(value as never)
       }
     }
-    // The public Cordis waterfall is also run by ConfigEditor before it writes.
-    // Scope by fiber: another plugin's config must never initialize our graph.
     ctx.on('internal/config', function (this: ProfileFiber, _raw: unknown, next: () => unknown) {
       const candidate = next()
       if (this === owner) validate(candidate)
@@ -165,8 +153,6 @@ export class ProfileMnemonSettings implements HostSettingsService {
     ctx.on('loader/volatile-update', ((paths: readonly (readonly string[])[]) => {
       if (this.closed) return
       for (const registration of this.registrations.values()) {
-        // A change to a field another namespace owns is that namespace's alone: 技能管理's settings
-        // never rebuild the memory runtime.
         const changed = paths.some(path => registration.field === undefined
           ? path.length === 0 || !['memoryView', 'legacySettingsImported', 'skills'].includes(path[0]!)
           : path.length === 0 || path[0] === registration.field)
@@ -285,9 +271,6 @@ export class ProfileMnemonSettings implements HostSettingsService {
         await this.forms.mutate(this.owner!.entry!.options.id, translated, revision)
         return
       } catch (error) {
-        // The virtual namespaces were independent on older DSH. The new host
-        // gives them one entry revision: rebase only when this namespace's
-        // values and overrides still match the snapshot the caller observed.
         if (attempt >= 2 || previous === undefined || typeof error !== 'object' || error === null
           || !('code' in error) || error.code !== 'SETTINGS_CONFLICT') throw error
         if (!this.writable) throw new Error('DSH settings are read-only')
@@ -298,7 +281,6 @@ export class ProfileMnemonSettings implements HostSettingsService {
     }
   }
 
-  /** Read only the retained backup; ConfigEditor preserves all other patch rows. */
   async importLegacy(sourceEntryIds: readonly string[]): Promise<void> {
     if (this.importing !== undefined) return this.importing
     this.importing = this.performImport(sourceEntryIds).finally(() => { this.importing = undefined })
@@ -309,8 +291,6 @@ export class ProfileMnemonSettings implements HostSettingsService {
     const profile = this.ctx.get('profileContext') as { home?: string } | undefined
     const entry = this.owner?.entry
     if (!this.writable || profile?.home === undefined || entry === undefined) return
-    // DSH exposes no completion event for its asynchronous import of the removed settings.yaml.
-    // Never race that writer: recover its retained backup on the next startup.
     if (this.nativeImportPending) {
       console.warn('dsh-mnemon: DSH is importing settings.yaml; restart once to recover retained Mnemon UI and plugin preferences')
       return
@@ -338,8 +318,6 @@ export class ProfileMnemonSettings implements HostSettingsService {
         if (typeof row.id !== 'string') return []
         const entries = this.editor!.entries().filter(candidate => candidate.options.id === row.id)
         if (entries.length > 1) throw new Error('Legacy settings import requires unambiguous profile Entry ids')
-        // Profile patches address local ids, whereas saved Views address the
-        // complete Loader id (for example include:mnemon-strategy-scoped).
         return [{ id: entries[0]?.id ?? row.id, ...('disabled' in row ? { disabled: row.disabled } : {}), ...('config' in row ? { config: row.config } : {}) }]
       }) : []
       return planLegacySettingsImport({ entryId: entry.options.id, viewNamespace, legacyNamespace, sections, currentOverride: configuration.override, entryOverrides, sourceEntryIds })
@@ -352,7 +330,6 @@ export class ProfileMnemonSettings implements HostSettingsService {
     if (this.closed) return
     await this.editor!.edit(entry, current => {
       if (this.closed) throw new Error('Mnemon settings are disposed')
-      // Re-read the explicit overlay inside DSH's revision/file lock.
       const next = plan()
       return { ...current, ...next.patch }
     })
@@ -415,14 +392,9 @@ const MUTABLE_FIELDS = [
   'recallQuality',
   'routingGuidance', 'lifecycleEnabled', 'recallMode', 'writebackMode', 'idleReviewMs', 'idleReview',
   'displayMode', 'tabEnabled', 'writeEnabled', 'confirmWrites', 'persistenceStrategy', 'taskAgentModel',
-  // Git sync is a profile choice the settings page makes, so its switch has to be
-  // writable here; everything about a repository stays in the sync state file.
   'syncEnabled',
 ]
-// remoteAccess is intentionally absent: changing the remote management grant
-// requires a local configuration edit and a Host restart.
 
-/** Nested paths of the live in-conversation interaction toggles. */
 const INTERACTION_PATHS: string[][] = [
   ['conversationInteraction', 'turnBar'],
   ['conversationInteraction', 'saveAction'],
@@ -441,7 +413,6 @@ function namespaceOf(payload: Record<string, unknown>): string {
   return namespace
 }
 
-/** Whether one mutation path targets a supported Mnemon settings field. */
 function mutablePath(namespace: string, path: string[]): boolean {
   if (namespace === MNEMON_UI_SETTINGS_NAMESPACE) return path.length === 1 && UI_FIELDS.includes(path[0]!)
   if (namespace === MNEMON_SKILLS_SETTINGS_NAMESPACE) return path.length === 1 && SKILLS_FIELDS.includes(path[0]!)
@@ -450,7 +421,6 @@ function mutablePath(namespace: string, path: string[]): boolean {
   if (path.length === 4 && path[0] === 'memoryTopology' && path[1] === 'layers' && path[3] === 'enabled') {
     return MEMORY_LAYER_ID.test(path[2]!)
   }
-  // Accepted only for legacy clients; the current UI writes `mnemon-ui`.
   return INTERACTION_PATHS.some(allowed => allowed.length === path.length && allowed.every((segment, index) => segment === path[index]))
 }
 

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { findMnemonCommand, mnemonNpmLauncher, nodeLauncherEnvironment, resolveMnemonInvocation } from 'dsh-mnemon-source-memory-spaces/native-cli'
 import { expandUserPath } from './config/index.ts'
 import { runProcess, type ProcessOptions, type ProcessResult, type ProcessRunner } from './process.ts'
-import type { VersionComponentId, VersionComponentStatus, VersionInstallMode, VersionPackageId, VersionPackageStatus, VersionRestartStatus, VersionStatus, VersionUpdateOutcome, VersionUpdateResult } from "./protocol.ts"
+import type { VersionComponentId, VersionInstallMode, VersionPackageId, VersionPackageStatus, VersionRestartStatus, VersionStatus, VersionUpdateOutcome, VersionUpdateResult } from "./protocol.ts"
 
 export type { VersionComponentId, VersionComponentStatus, VersionInstallMode, VersionStatus, VersionUpdateResult } from "./protocol.ts"
 
@@ -42,25 +42,16 @@ export interface VersionUpdateDependencies {
   resolveExecutable?: (command: string) => string | undefined
   fetchNpmLatest?: (name: string, tag?: string) => Promise<string | undefined>
   fetchMnemonLatest?: () => Promise<string | undefined>
-  /** DSH's plugin manager (`ctx.pluginManager`), which Web and Desktop profiles provide. */
   bundleInstaller?: () => DshBundleInstaller | undefined
-  /** The profile this Host runs in (`ctx.profileContext`). */
   runningProfile?: () => DshRunningProfile | undefined
-  /** DSH's own `dsh plugin` command for that profile; see {@link dshPluginCommand}. */
   pluginCommand?: () => Promise<DshPluginCommand | undefined>
 }
 
 export interface DshRunningProfile {
   dir: string
-  /** The launcher supplies the package manager, as a packaged app supplies its bundled pnpm; otherwise DSH runs pnpm from PATH. */
   packageManager: boolean
 }
 
-/**
- * DSH's `dsh plugin` command, bound to the profile this Host runs in: pnpm under the profile's write
- * lock, with the launcher's package manager, and DSH's compatibility check before and after the install,
- * which restores the profile manifest and lockfile when it refuses.
- */
 export type DshPluginCommand = (args: readonly string[]) => Promise<DshPluginCommandResult>
 
 export interface DshPluginCommandResult {
@@ -69,11 +60,9 @@ export interface DshPluginCommandResult {
   logPath?: string
   kind?: string
   timedOut?: boolean
-  /** The packages the running DSH refused, with the DSH they need. */
   incompatible?: ReadonlyArray<DshIncompatibility>
 }
 
-/** What a DSH launcher records about the profile it runs (`ctx.profileContext`). */
 interface DshProfileContext {
   name: string
   dir: string
@@ -89,15 +78,9 @@ function profileContextOf(value: unknown): DshProfileContext | undefined {
   return ['name', 'dir', 'installAnchor', 'cwd', 'home'].every(key => typeof profile[key as keyof DshProfileContext] === 'string') ? profile as DshProfileContext : undefined
 }
 
-/**
- * The `dsh plugin` command of the DSH this Host runs in, from `@deepseek-ai/dsh-plugin-manager/operations`,
- * which DSH's runtime resolution supplies to every profile. Undefined where the launcher records no
- * profile or the installation does not export the command.
- */
 export async function dshPluginCommand(profileContext: unknown): Promise<DshPluginCommand | undefined> {
   const profile = profileContextOf(profileContext)
   if (profile === undefined) return undefined
-  // A variable specifier keeps the bundler from resolving the module at build time.
   const specifier = '@deepseek-ai/dsh-plugin-manager/operations'
   let operations: { runPluginCommand?: (context: object, args: readonly string[], options: object) => Promise<DshPluginCommandResult> }
   try {
@@ -110,32 +93,15 @@ export async function dshPluginCommand(profileContext: unknown): Promise<DshPlug
   return args => run(
     { profile: profile.name, dir: profile.dir, installAnchor: profile.installAnchor, cwd: profile.cwd, home: profile.home },
     args,
-    // As DSH's plugin manager runs it: no secrets in the environment, bounded output, the bundle selection left alone.
     { execution: 'service', ...(profile.packageManager ?? {}), outputBytes: MAX_UPDATE_OUTPUT_BYTES, activateNewBundles: false, idleTimeoutMs: UPDATE_TIMEOUT_MS, signal: AbortSignal.timeout(UPDATE_TIMEOUT_MS) },
   )
 }
 
-/**
- * The part of DSH's plugin manager that updates the Starter. `installBundle` runs
- * `pnpm add <spec>` as `dsh plugin` does, with the profile's own package manager
- * (a packaged app's bundled pnpm), registry fallbacks and lock. It checks the new
- * version's DSH peers and restores the profile files when it fails. Upgrading an
- * installed bundle reports `restart-required` without reloading it, and
- * `enabled: false` leaves the profile's bundle selection alone. On DSH 0.2.1 a
- * profile with hot reload refuses to install over a package it has
- * (`already-installed`): there another version
- * replaces it only after it is removed, which would stop this plugin mid-update,
- * so the update runs DSH's own `dsh plugin add` instead.
- */
 export interface DshBundleInstaller {
   installBundle(spec: string, options?: { enabled?: boolean }): Promise<DshBundleChange>
   listBundles(): Promise<ReadonlyArray<{ name: string; version?: string }>>
 }
 
-/**
- * A package the running DSH refused. DSH 0.2.1 names what it needs `requirements`,
- * keyed `engines.dsh` or by DSH peer package; DSH 0.2.0 names the peers alone `peers`.
- */
 export interface DshIncompatibility {
   runtimeVersion?: string
   requirements?: Readonly<Record<string, string>>
@@ -162,24 +128,12 @@ export function isVersionComponentId(value: unknown): value is VersionComponentI
 const MNEMON_MODULE = 'github.com/mnemon-dev/mnemon'
 const PACKAGE_MANIFEST_PATH = [new URL('../package.json', import.meta.url), new URL('../../package.json', import.meta.url)]
   .map(url => fileURLToPath(url)).find(path => manifest(path)?.name === DSH_MNEMON_PACKAGE) ?? fileURLToPath(new URL('../package.json', import.meta.url))
-/**
- * The version this process loaded. Profiles install with a hoisted layout, so an update rewrites
- * these same files while the loaded modules stay in memory until DSH restarts.
- */
 const LOADED_VERSION = manifest(PACKAGE_MANIFEST_PATH)?.version
-/**
- * The version of the package this process loaded, for anything that has to name the build it came
- * from — a Pack manifest, a backup a person keeps. Resolving `package.json` relative to this
- * module is what makes it work from `src/` under a test runner and from `lib/` once built: the
- * candidate list steps up to the root that holds the manifest either way. A harness that imports
- * these sources without a package root reads none, so `0.0.0` stands in rather than failing.
- */
 export function pluginPackageVersion(): string {
   return LOADED_VERSION ?? '0.0.0'
 }
 const CHECK_TIMEOUT_MS = 10_000
 const UPDATE_TIMEOUT_MS = 10 * 60_000
-/** A check waits this long for an update that is finishing, within the browser's 15 s check deadline. */
 const IN_FLIGHT_WAIT_MS = 3_000
 const MAX_UPDATE_OUTPUT_BYTES = 16 * 1024
 
@@ -213,7 +167,6 @@ function executable(path: string): boolean {
   }
 }
 
-/** Resolve one executable without invoking a shell. */
 export function resolveExecutable(command: string): string | undefined {
   if (command.includes('/') || command.includes('\\') || command === '~') {
     const path = resolve(expandUserPath(command))
@@ -312,7 +265,6 @@ function dependencySpec(profile: PackageManifest | undefined, name = DSH_MNEMON_
   return profile?.dependencies?.[name] ?? profile?.devDependencies?.[name]
 }
 
-/** A dependency the Profile records at one exact version, as DSH's installer writes it. */
 function exactVersion(spec: string | undefined): string | undefined {
   return spec !== undefined && /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(spec) ? spec : undefined
 }
@@ -364,7 +316,6 @@ function linkedProfile(packageManifestPath: string, dshHome: string): DshInstall
     try {
       if (realpathSync(target) === packageRoot) matches.push({ name: entry.name, dir: profileDir, locationDir: target })
     } catch {
-      // A stale link belongs to neither the running package nor an update target.
     }
   }
   const match = matches[0]
@@ -384,7 +335,6 @@ async function resultOrThrow(runner: ProcessRunner, command: string, args: reado
   return result
 }
 
-/** DSH's failure code with the DSH a release needs, or with the first line of its diagnostic. */
 function dshFailure(change: DshBundleChange): string {
   const reason = change.error?.code ?? change.application
   const incompatible = change.error?.incompatible ?? []
@@ -394,7 +344,6 @@ function dshFailure(change: DshBundleChange): string {
     const runtime = incompatible.find(plugin => plugin.runtimeVersion !== undefined)?.runtimeVersion
     return `${reason} (requires ${peers.join(', ')}${runtime === undefined ? '' : `; this DSH is ${runtime}`})`
   }
-  // pnpm prints warnings and retries before its error: name the error line, the kind DSH read off it, and the full log.
   const lines = (change.error?.diagnostic ?? change.packageResult?.output ?? '').split('\n').map(line => line.trim()).filter(line => line !== '')
   const line = lines.findLast(line => /ERR_PNPM_[A-Z_]+/.test(line))
     ?? lines.findLast(line => /^(?:\[?error\]?\b|ERROR\b)|\brejected\b/i.test(line))
@@ -410,7 +359,6 @@ function updateOutput(result: ProcessResult): string | undefined {
   return output === '' ? undefined : output.slice(-4_000)
 }
 
-/** Follow public package links afresh after an update, without Node's resolution cache. */
 function packageAt(directory: string, name: string): string | undefined {
   for (let depth = 0; depth < 16; depth++) {
     const path = join(directory, 'node_modules', name, 'package.json')
@@ -427,9 +375,7 @@ function samePath(left: string, right: string): boolean {
 }
 
 export class VersionUpdateManager {
-  /** The version this Host runs; an update changes what is installed, not what is loaded. */
   readonly runningVersion: string
-  /** The Starter the last update installed, read only while the files on disk cannot be. */
   private dshMnemonVersion: string
   private readonly packageManifestPath: string
   private readonly dshHome: string
@@ -441,7 +387,6 @@ export class VersionUpdateManager {
   private readonly bundleInstallerOf: () => DshBundleInstaller | undefined
   private readonly runningProfile: () => DshRunningProfile | undefined
   private readonly pluginCommand: () => Promise<DshPluginCommand | undefined>
-  /** What Check versions updated while this Host runs, each with the version it replaced. */
   private readonly pendingRestart = new Map<VersionComponentId, string | undefined>()
   private inFlight: Promise<VersionUpdateResult> | undefined
   private lastUpdate: VersionUpdateOutcome | undefined
@@ -461,10 +406,6 @@ export class VersionUpdateManager {
     this.pluginCommand = dependencies.pluginCommand ?? (async () => undefined)
   }
 
-  /**
-   * DSH's own installer, only for the profile this Host runs in, so it never writes another
-   * profile, and only while DSH has a package manager to run.
-   */
   private bundleInstaller(install: DshInstall): DshBundleInstaller | undefined {
     if (install.mode !== 'npm' || install.profileDir === undefined) return undefined
     const installer = this.bundleInstallerOf()
@@ -478,14 +419,11 @@ export class VersionUpdateManager {
     }
   }
 
-  /** The Starter installed now, which DSH loads at its next start, however it was installed. */
   get currentDshMnemonVersion(): string {
     return this.installedVersion(inspectDshInstall(this.packageManifestPath, this.dshHome))
   }
 
   private installedVersion(install: DshInstall): string {
-    // The Profile records the exact Starter it installed, and DSH restores that record when an
-    // install fails, even when files it downloaded stay behind in node_modules.
     const recorded = install.mode === 'npm' && install.profileDir !== undefined
       ? exactVersion(dependencySpec(manifest(join(install.profileDir, 'package.json')))) : undefined
     if (recorded !== undefined) return recorded
@@ -494,25 +432,18 @@ export class VersionUpdateManager {
     return manifest(path)?.version ?? this.dshMnemonVersion
   }
 
-  /** A package Check versions updated, and still not the version it replaced. */
   private replaced(id: VersionComponentId, current: string | undefined): boolean {
     return this.pendingRestart.has(id) && current !== this.pendingRestart.get(id)
   }
 
   private remember(id: VersionComponentId, previousVersion: string | undefined): void {
-    // The first version replaced since this Host started is the one it loaded.
     if (!this.pendingRestart.has(id)) this.pendingRestart.set(id, previousVersion)
   }
 
-  /**
-   * What waits for a DSH restart: a Starter on disk other than the one this Host runs, however it
-   * was installed, and the packages Check versions updated on their own.
-   */
   restartStatus(): VersionRestartStatus | undefined {
     const install = inspectDshInstall(this.packageManifestPath, this.dshHome)
     const installed = this.installedVersion(install)
     const pending = [...this.pendingRestart.keys()].filter((id): id is VersionPackageId => id !== DSH_MNEMON_PACKAGE)
-    // A package put back to the version it replaced, by `dsh plugin` for example, waits for nothing.
     const rows = pending.length === 0 ? [] : this.subpackages(install).map(row => row.status)
     const packages = pending.filter(id => this.replaced(id, rows.find(row => row.id === id)?.current)).sort()
     if (installed === this.runningVersion && packages.length === 0) return undefined
@@ -526,7 +457,6 @@ export class VersionUpdateManager {
       const version = await settledWithin(this.fetchNpmLatest(name, tag), undefined)
       const parsed = version === undefined ? undefined : parseSemver(version)
       if (parsed === undefined) return undefined
-      // Stable users never opt in implicitly, even if a registry tag is wrong.
       if (parsed.prerelease.length > 0 && (tag === 'latest' || parsed.prerelease[0] !== tag)) return undefined
       return version
     }))
@@ -577,7 +507,7 @@ export class VersionUpdateManager {
             install.updateArgs = [launcher, 'update']
             install.updateEnv = nodeLauncherEnvironment()
           }
-        } catch { /* Keep npm provenance, but do not offer an unverified update target. */ }
+        } catch { }
       }
       return { install, ...(current === undefined ? {} : { current }) }
     }
@@ -595,8 +525,6 @@ export class VersionUpdateManager {
     const go = this.executable('go')
     if (go !== undefined) {
       try {
-        // Release archives also contain Go build metadata. Only offer go install
-        // when its actual output would replace the executable we are using.
         const environment = JSON.parse((await resultOrThrow(this.processRunner, go, ['env', '-json', 'GOBIN', 'GOPATH', 'GOOS', 'GOARCH', 'GOHOSTOS', 'GOHOSTARCH'], CHECK_TIMEOUT_MS)).stdout) as Record<string, unknown>
         const goPath = typeof environment.GOPATH === 'string' ? environment.GOPATH.split(delimiter)[0] : undefined
         const bin = typeof environment.GOBIN === 'string' && environment.GOBIN !== '' ? environment.GOBIN : goPath === undefined || goPath === '' ? undefined : join(goPath, 'bin')
@@ -612,7 +540,6 @@ export class VersionUpdateManager {
           return { ...(current === undefined ? {} : { current }), install: { mode: 'go', command, updateCommand: go, updateArgs: ['install', `${MNEMON_MODULE}@latest`] } }
         }
       } catch {
-        // Unknown output locations and non-Go binaries remain manual installs.
       }
     }
     return { ...(current === undefined ? {} : { current }), install: { mode: 'manual', command } }
@@ -632,12 +559,10 @@ export class VersionUpdateManager {
       const base = directSpec === undefined ? dirname(starterPath) : install.profileDir!
       const path = packageAt(base, name)
       const value = path === undefined ? undefined : manifest(path)
-      // A package the Profile added keeps the version its record names, as the Starter does.
       const current = (managedBy === 'profile' ? exactVersion(directSpec) : undefined) ?? value?.version
       const linked = isLinkSpec(directSpec ?? starter?.dependencies?.[name]) || install.mode === 'link'
         || (path !== undefined && !realpathSync(dirname(path)).replaceAll('\\', '/').includes('/node_modules/'))
       const mode: VersionInstallMode = linked ? 'link' : path === undefined ? 'missing' : install.mode === 'npm' ? 'npm' : 'manual'
-      // An optional Strategy added on its own is a DSH bundle, which DSH's installer replaces like the Starter.
       const throughDsh = managedBy === 'profile' && mode === 'npm' && installer !== undefined && value?.dsh?.bundle !== undefined
       const supported = managedBy === 'profile' && mode === 'npm' && (throughDsh || this.executable('pnpm') !== undefined)
       return {
@@ -657,8 +582,6 @@ export class VersionUpdateManager {
   }
 
   async check(): Promise<VersionStatus> {
-    // DSH swaps in the new browser client as soon as an update replaces the Starter's files, and
-    // that client checks again while the update may still be finishing: answer with its outcome.
     if (this.inFlight !== undefined) await settledWithin<VersionUpdateResult | undefined>(this.inFlight, undefined, IN_FLIGHT_WAIT_MS)
     const dshInstall = inspectDshInstall(this.packageManifestPath, this.dshHome)
     const [mnemonLocal, mnemonLatest, dshLatest, packages] = await Promise.all([
@@ -673,7 +596,6 @@ export class VersionUpdateManager {
     const pnpm = this.executable('pnpm')
     const installer = this.bundleInstaller(dshInstall)
     const mnemonOutdated = mnemonLocal.current !== undefined && mnemonLatest !== undefined && compareVersions(mnemonLocal.current, mnemonLatest) < 0
-    // `dsh plugin` may have installed another Starter while this Host runs.
     const installed = this.installedVersion(dshInstall)
     const dshOutdated = dshLatest !== undefined && compareVersions(installed, dshLatest) < 0
     const mnemonSupported = mnemonLocal.install.updateCommand !== undefined
@@ -768,19 +690,15 @@ export class VersionUpdateManager {
       const restartRequired = component === DSH_MNEMON_PACKAGE ? previousVersion !== this.runningVersion : this.replaced(component, previousVersion)
       return { component, previousVersion, currentVersion: previousVersion, updated: false, restartRequired }
     }
-    // DSH's own installer replaces a DSH bundle: the Starter, or a Strategy the profile added on its own.
     const installer = child === undefined || child.updateHint === 'dsh' ? this.bundleInstaller(install) : undefined
     if (installer !== undefined) {
       const result = await this.updateThroughDsh(installer, component, previousVersion, latest)
       if (result !== undefined) return result
-      // Where DSH refuses to install over the package, its own `dsh plugin add` replaces it.
       if (install.mode === 'npm' && install.profileDir !== undefined) return this.updateThroughPluginCommand(install.profileDir, install.profileName, component, previousVersion, latest)
     }
     const pnpm = this.executable('pnpm')
     if (install.mode !== 'npm' || install.profileDir === undefined || pnpm === undefined) throw new Error('This dsh-mnemon installation cannot be updated automatically')
     const output = await resultOrThrow(this.processRunner, pnpm, ['add', `${component}@${latest}`, '--save-exact'], UPDATE_TIMEOUT_MS, { cwd: install.profileDir })
-    // The running module may still reside in pnpm's old versioned directory.
-    // Read the profile's current public link, not that stale package path.
     const installedVersion = manifest(join(install.profileDir, 'node_modules', component, 'package.json'))?.version
     if (installedVersion !== latest) throw new Error(`${component} update did not install the requested version ${latest}; found ${installedVersion ?? 'no package'}`)
     const outputText = updateOutput(output)
@@ -796,12 +714,6 @@ export class VersionUpdateManager {
     }
   }
 
-  /**
-   * DSH 0.2.1 with hot reload replaces an installed package only after removing it, which would
-   * stop this plugin mid-update. `dsh plugin add` replaces it in place under the profile's lock, after
-   * DSH's compatibility check; the new version loads at the next restart, or at DSH's next profile
-   * recomposition, which replaces plugins whose files changed.
-   */
   private async updateThroughPluginCommand(profileDir: string, profileName: string | undefined, component: VersionComponentId, previousVersion: string, latest: string): Promise<VersionUpdateResult> {
     const spec = `${component}@${latest}`
     const command = await this.pluginCommand().catch(() => undefined)
@@ -822,7 +734,6 @@ export class VersionUpdateManager {
         packageResult: { output: result.output, ...(result.logPath === undefined ? {} : { logPath: result.logPath }), ...(result.kind === undefined ? {} : { kind: result.kind }) },
       })}`)
     }
-    // The running module may still reside in pnpm's old versioned directory; read the profile's public link.
     const installedVersion = manifest(join(profileDir, 'node_modules', component, 'package.json'))?.version
     if (installedVersion !== latest) throw new Error(`${component} update did not install the requested version ${latest}; found ${installedVersion ?? 'no package'}`)
     if (component === DSH_MNEMON_PACKAGE) this.dshMnemonVersion = installedVersion
@@ -838,11 +749,6 @@ export class VersionUpdateManager {
     }
   }
 
-  /**
-   * An exact version installs at once, outside pnpm's release-age window, and for the Starter pins
-   * its tested components. The update replaces the package only; which bundles run stays as it was.
-   * Undefined when DSH refuses to install over the installed package, before it runs pnpm.
-   */
   private async updateThroughDsh(installer: DshBundleInstaller, component: VersionComponentId, previousVersion: string, latest: string): Promise<VersionUpdateResult | undefined> {
     const spec = `${component}@${latest}`
     let change: DshBundleChange

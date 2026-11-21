@@ -17,14 +17,12 @@ export function isUserHomePath(value: string): boolean {
   return value === '~' || /^~[/\\]/u.test(value)
 }
 
-/** Expand `~`, `~/...`, and Windows `~\...` against the current user home directory. */
 export function expandUserPath(value: string, home = homedir()): string {
   if (value === '~') return home
   if (/^~[/\\]/u.test(value)) return join(home, value.slice(2))
   return value
 }
 
-/** Resolve the global Mnemon data directory (`MNEMON_DATA_DIR` override or `~/.mnemon`). */
 export function resolveGlobalDataDir(env: NodeJS.ProcessEnv = process.env, home = homedir()): string {
   const configured = env.MNEMON_DATA_DIR?.trim()
   return resolve(expandUserPath(configured || '~/.mnemon', home))
@@ -34,7 +32,6 @@ function expandDirectory(value: string): string {
   return resolve(expandUserPath(value))
 }
 
-/** Host owns every built-in layout; Sources own the data within the chosen root. */
 function storageDirectory(config: Pick<ResolvedConfig, 'storageScope' | 'dataDir'>, workspaceRoot?: string): string {
   const globalRoot = resolveGlobalDataDir()
   switch (config.storageScope) {
@@ -64,10 +61,7 @@ function existingWorkspace(path: string | undefined): string | undefined {
   } catch { return undefined }
 }
 
-/** Local opt-out, independent of data placement; never modifies a store. */
 export class WorkspaceMemoryPolicy {
-  // Remember only the parent workspace after unload, not its Agent/history.
-  // A different child cwd cannot shed inherited opt-out.
   private readonly parentWorkspaces = new WeakMap<HostAgent, string>()
   constructor(
     private readonly entries: () => readonly string[],
@@ -102,8 +96,6 @@ export class WorkspaceMemoryPolicy {
       if (!id) { workspace = owner.session.header?.cwd; break }
       const parent = this.agents?.get(id)
       if (parent === undefined) {
-        // A resumed child may outlive its parent's loaded Agent. The public
-        // workspace catalog still identifies the parent's persisted session.
         workspace = this.parentWorkspaces.get(owner) ?? this.workspaces?.list().find(item => item.sessionIds?.includes(id))?.path
         break
       }
@@ -124,18 +116,12 @@ interface LoaderLike {
   context?: { baseUrl?: string }
 }
 
-/** Resolve the Loader anchor URL/path used for profile-scoped namespaces and resolution. */
 export function resolveLoaderAnchor(ctx: Pick<HostContextShape, 'get'>): string | undefined {
   const loader = ctx.get('loader') as LoaderLike | undefined
   const anchor = loader?.config?.baseUrl ?? loader?.ctx?.baseUrl ?? loader?.context?.baseUrl
   return typeof anchor === 'string' && anchor.trim() !== '' ? anchor : undefined
 }
 
-/**
- * Unified DSH profile base directory lookup across `configEditor.documentPath`,
- * `profileContext.dir`, `loader.{config,ctx,context}.baseUrl`, `ctx.baseDir`,
- * and an optional `process.cwd()` fallback.
- */
 export function resolveProfileBaseDir(ctx: HostContextShape, options: { fallbackToCwd?: boolean } = {}): string | undefined {
   const editor = ctx.get('configEditor') as { documentPath?: unknown } | undefined
   if (typeof editor?.documentPath === 'string' && editor.documentPath.trim() !== '') {
@@ -155,7 +141,6 @@ export function resolveProfileBaseDir(ctx: HostContextShape, options: { fallback
         return /\.[a-z0-9]+$/iu.test(anchorPath) ? dirname(anchorPath) : anchorPath
       }
     } catch {
-      // Fall through to remaining host hints.
     }
   }
   const baseDir = (ctx as unknown as { baseDir?: unknown }).baseDir

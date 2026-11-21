@@ -26,7 +26,6 @@ export type ProcessRunner = (
 const DEFAULT_MAX_OUTPUT_BYTES = 2 * 1024 * 1024
 const DEFAULT_KILL_GRACE_MS = 1_500
 
-/** Spawn without a shell, with bounded output and cooperative cancellation. */
 export const runProcess: ProcessRunner = (command, args, options) => new Promise((resolve, reject) => {
   const label = options.label ?? 'mnemon'
   const child = spawn(command, [...args], {

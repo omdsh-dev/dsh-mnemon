@@ -1,9 +1,7 @@
-/** The optional public DSH directory-picker service, narrowed to capability discovery. */
 interface DirectoryPickerService {
   capability?(): { kind?: unknown; pick?: unknown }
 }
 
-/** Older hosts and browse-only compositions keep the existing manual path field. */
 export function hasNativeDirectoryPicker(ctx: { get(name: string): unknown }): boolean {
   try {
     const service = ctx.get('directoryPicker') as DirectoryPickerService | undefined

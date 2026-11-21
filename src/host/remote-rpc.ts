@@ -27,10 +27,6 @@ function denied(): RpcResult<unknown> {
   }
 }
 
-/**
- * What a remote page needs to reach each settings endpoint. An endpoint added to the settings
- * channel does not compile here until it is given one, so none becomes remote without a decision.
- */
 const REMOTE_SETTINGS: Readonly<Record<MnemonRpcEndpoint<typeof MNEMON_SETTINGS_CHANNEL>, 'read' | 'management'>> = { get: 'read', mutate: 'management' }
 
 function unknownSettingsEndpoint(endpoint: string): RpcResult<unknown> {
@@ -44,11 +40,6 @@ function unknownSettingsEndpoint(endpoint: string): RpcResult<unknown> {
   }
 }
 
-/**
- * Project Mnemon's existing handlers through DSH API Gateway. The Gateway owns
- * `/api`, Host/Origin validation, browser pairing, and response envelopes;
- * this Service retains Mnemon's narrower management grant.
- */
 export class MnemonRemoteService extends TypertRemoteService {
   constructor(ctx: Context, private readonly handlers: MnemonRemoteHandlers) {
     super(ctx, 'mnemonRemote', { namespace: MNEMON_REMOTE_NAMESPACE })
@@ -90,7 +81,6 @@ export class MnemonRemoteService extends TypertRemoteService {
 
   @Remote('settings')
   async settings(endpoint: string, payload: unknown, signal: AbortSignal): Promise<RpcResult<unknown>> {
-    // Object.hasOwn would read a non-string name, such as ["get"], as its text.
     const access = typeof endpoint === 'string' && Object.hasOwn(REMOTE_SETTINGS, endpoint) ? REMOTE_SETTINGS[endpoint as keyof typeof REMOTE_SETTINGS] : undefined
     if (access === 'management' && !this.handlers.management) return denied()
     if (access === undefined) return unknownSettingsEndpoint(endpoint)

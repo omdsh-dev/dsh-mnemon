@@ -21,14 +21,12 @@ function validTimestamp(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= MAX_TIMESTAMP
 }
 
-/** Messages deliberately omit filesystem paths, session ids and raw input. */
 function failure(error: unknown): Error {
   const code = (error as NodeJS.ErrnoException | undefined)?.code
   const detail = code === 'EBUSY' ? ' (busy)' : typeof code === 'string' && /^[A-Z_]+$/u.test(code) ? ` (${code})` : ''
   return new Error(`Idle review watermark unavailable${detail}. Automatic review is paused. Continue the conversation to recheck. If the error persists, stop Hosts using this storage root before inspecting this session's state or lock under state/idle-review.`, { cause: error })
 }
 
-/** Host-local admission state, deliberately outside Packs and Git sync. */
 export class IdleReviewWatermarkStore {
   private readonly directory: string
   private readonly path: string
@@ -67,7 +65,6 @@ export class IdleReviewWatermarkStore {
     }
   }
 
-  /** Preserve already-used in-process quota on opt-in without admitting work. */
   restore(floor?: Pick<IdleReviewWatermark, 'attempts' | 'lastReviewAttemptAt'>): IdleReviewWatermark {
     if (floor === undefined || floor.attempts === 0 && floor.lastReviewAttemptAt === null) return this.load()
     return this.withLock(() => {
@@ -100,11 +97,6 @@ export class IdleReviewWatermarkStore {
     writeAtomicJsonSync(this.path, state, { fs, indent: 0, flag: 'wx' })
   }
 
-  /**
-   * One bounded synchronous read/check/write critical section. Exclusive mkdir
-   * protects independent Hosts too; contention fails closed without stale-lock
-   * takeover. Never hold this lock while starting or awaiting model work.
-   */
   private withLock<T>(operation: () => T): T {
     const lock = this.path + '.lock'
     let held = false

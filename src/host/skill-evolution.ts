@@ -17,20 +17,15 @@ import {
 import { captureTurn, redact, TrajectoryWindow, turnSkillUses, TurnSkillUseProjection } from './skill-trajectory.ts'
 import { SubagentStoppedError } from './subagent-errors.ts'
 
-/** The Skills Source's management protocol, as the Host calls it. */
 export interface SkillsSourcePort {
-  /** The Source session's effective storage scope, including pinned workspace graphs. */
   readonly scope?: { readonly storage: StorageScopeKind }
   read<T>(operation: string, input?: unknown, signal?: AbortSignal): Promise<T>
   mutate<T>(operation: string, input: unknown, signal?: AbortSignal): Promise<T>
 }
 
 export interface SkillEvolutionHost {
-  /** 技能管理's settings as they are now; read at every turn and review. */
   settings(): ResolvedSkillsConfig
-  /** The Skills Source for a conversation's workspace; undefined when it is not installed or its layer is off. */
   source(agent: HostAgent): SkillsSourcePort | undefined
-  /** Run model work under a fresh task Agent in a workspace, outside any conversation. */
   runTask<T>(workspaceRoot: string | undefined, signal: AbortSignal, operation: (agent: HostAgent) => Promise<T>, route?: ModelRoute): Promise<T>
   skillTask(parent: HostAgent, label: string, prompt: string, schema: Record<string, unknown>, persona: string, signal: AbortSignal, route?: ModelRoute, maxTokens?: number): Promise<{ structured: unknown }>
   taskRoute?(workspaceRoot: string | undefined): (ModelRoute & { reasoningEffort?: string }) | undefined
@@ -41,34 +36,22 @@ export interface SkillEvolutionHost {
 interface SessionState {
   window: TrajectoryWindow
   timer?: ReturnType<typeof setTimeout>
-  /** The turn a review waiting for the conversation to sit idle will be placed under. */
   scheduled?: number
   running?: Promise<void>
-  /** The turn the review under way is placed under. */
   reviewing?: number
   lastReviewAt?: number
   failures: number
 }
 
-/** A conversation's turn bars read at most this many of its reviews. */
 const ACTIVITY_REVIEWS = 50
 const WAITING_STATUSES: ReadonlySet<string> = new Set(['pending', 'drafting', 'review'])
 
-/** A session stops reviewing after this many failures in a row, until DSH recreates its Agent. */
 const MAX_CONSECUTIVE_FAILURES = 3
-/** Backtest children run this many cases at once. */
-/** One retry for a case whose run failed rather than scored. */
 const CASE_ATTEMPTS = 2
 const BACKTEST_CONCURRENCY = 2
 
 interface PreStepPayload { step: number; signal: AbortSignal }
 
-/**
- * The Source's revision moves with every write, and background reviews and
- * runs write concurrently. A conflict is refused before the Source runs, and
- * every write carries its own precondition (a file hash, a status), so trying
- * again on the fresh revision is safe.
- */
 export function retryingSource(source: SkillsSourcePort, attempts = 4): SkillsSourcePort {
   return {
     ...(source.scope === undefined ? {} : { scope: source.scope }),
@@ -87,22 +70,14 @@ function message(error: unknown): string {
   return redact(error instanceof Error ? error.message : String(error))
 }
 
-/**
- * A draft task that stops reporting is abandoned here. The subagent behind it
- * can die without settling, and the suggestion would otherwise stay `drafting`
- * - blocking dismiss, delete and a retry - until the Host restarts.
- */
 const DRAFT_DEADLINE_MS = 15 * 60 * 1000
 
-/** Distinguishes a deadline abort from the plain abort a Host shutdown sends. */
 class DraftDeadlineError extends Error {}
 
-/** The deadline error a task ran into, so the Source records why the draft ended. */
 function deadlineReason(signal: AbortSignal): DraftDeadlineError | undefined {
   return signal.reason instanceof DraftDeadlineError ? signal.reason : undefined
 }
 
-/** Cancellation settles the owner even when an underlying task ignores its signal. */
 function abortable<T>(signal: AbortSignal, work: () => Promise<T>): Promise<T> {
   signal.throwIfAborted()
   return new Promise<T>((resolve, reject) => {
@@ -112,7 +87,6 @@ function abortable<T>(signal: AbortSignal, work: () => Promise<T>): Promise<T> {
   })
 }
 
-/** Resolve only roots supplied by this Source's scoped catalog, never the task's cwd. */
 function newSkillRoot(settings: ResolvedSkillsConfig, source: SkillsSourcePort, catalog: SkillCatalog, explicit?: SkillRootKind): SkillRootKind {
   let root = explicit ?? catalog.creation?.default
   if (root === undefined) {
@@ -129,8 +103,6 @@ function newSkillRoot(settings: ResolvedSkillsConfig, source: SkillsSourcePort, 
       if (!statSync(catalog.projectRoot!).isDirectory()) throw new Error('not a directory')
     } catch { throw new Error('The selected workspace project is unavailable; select an existing workspace or choose User in Skills settings.') }
   }
-  // The root may not exist until adoption. Check its nearest existing parent
-  // without creating directories; adoption still reports any later I/O failure.
   let parent = directory
   try {
     for (;;) {
@@ -147,12 +119,6 @@ function newSkillRoot(settings: ResolvedSkillsConfig, source: SkillsSourcePort, 
   return root
 }
 
-/**
- * The Host half of skill evolution: it captures each conversation's
- * trajectory as turns end, decides when a window has earned a review, runs
- * every model step under a task Agent, and records the results through the
- * Skills Source's own protocol. It never writes a skill file itself.
- */
 export class SkillEvolution {
   private readonly sessions = new Map<string, SessionState>()
   private readonly jobs = new Set<AbortController>()
@@ -195,7 +161,6 @@ export class SkillEvolution {
     return state
   }
 
-  /** Observe one root conversation Agent; the returned function stops observing it. */
   watch(agent: HostAgent): () => void {
     const stops = [
       agent.ctx.on('session/event', ((session: HostAgent['session'], event: HostSessionEvent) => {
@@ -203,7 +168,6 @@ export class SkillEvolution {
         void this.turnEnded(agent, event.data.turn).catch(error => this.warn('skill evolution could not read a finished turn', error))
       }) as never),
       agent.ctx.on('agent/pre-step', (async (payload: PreStepPayload, next: () => Promise<HostPreStepDecision>) => {
-        // A new turn means the conversation is not idle; the review waits for the next pause.
         if (payload.step === 1) this.cancelTimer(agent.id)
         return next()
       }) as never),
@@ -221,12 +185,10 @@ export class SkillEvolution {
     if (state !== undefined) delete state.scheduled
   }
 
-  /** 技能管理's settings as they are now. */
   config(): ResolvedSkillsConfig {
     return this.host.settings()
   }
 
-  /** Capture the finished turn and, when the window has earned it, schedule a review for the next pause. */
   async turnEnded(agent: HostAgent, turn: number): Promise<void> {
     if (this.disposed) return
     const settings = this.host.settings()
@@ -257,10 +219,6 @@ export class SkillEvolution {
     }, Math.max(settings.idleSeconds * 1000, cooldown))
   }
 
-  /**
-   * Review one session now, whatever its score: the window collected so far,
-   * or the session's recent turns when nothing is collected yet.
-   */
   async reviewNow(agent: HostAgent): Promise<ReviewRecordResult> {
     const settings = this.host.settings()
     if (!settings.allowCreate && !settings.allowUpdate) throw new Error('Enable new-skill or skill-improvement suggestions before reviewing')
@@ -289,7 +247,6 @@ export class SkillEvolution {
     return result
   }
 
-  /** Run one review; a failure is logged and returned, never thrown. */
   private async review(agent: HostAgent, state: SessionState, trigger: 'automatic' | 'manual'): Promise<ReviewRecordResult | Error> {
     const source = this.source(agent)
     if (source === undefined) return new Error('the Skills Source is not running for this conversation')
@@ -304,7 +261,6 @@ export class SkillEvolution {
       }
     }
     const started = this.now()
-    // The window moves out now; turns that end during the review start the next one.
     const window = state.window
     state.window = new TrajectoryWindow()
     const turn = window.lastTurn
@@ -327,7 +283,6 @@ export class SkillEvolution {
     try {
       const catalog = await source.read<SkillCatalog>('catalog', null, controller.signal)
       const active = catalog.skills.filter(skill => skill.shadowedBy === undefined)
-      // Management reads are deeply frozen, so order a copy instead of the result.
       const openSuggestions = [...await source.read<SkillSuggestion[]>('suggestions', { status: ['pending', 'drafting', 'review'] }, controller.signal)]
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       const loaded: SkillDocument[] = []
@@ -352,8 +307,6 @@ export class SkillEvolution {
           : this.host.skillTask(task, 'Mnemon skill review', prompt, SKILL_REVIEW_SCHEMA as unknown as Record<string, unknown>, SKILL_REVIEW_PERSONA, controller.signal)
       })
       const parsed = parseSkillReview(answer.structured)
-      // A switch changed while the model ran also applies to this result. The
-      // Source checks the final action against its current skill catalog.
       const current = this.host.settings()
       const policy = {
         ...allowedTypes(),
@@ -374,7 +327,6 @@ export class SkillEvolution {
     } catch (error) {
       state.failures += 1
       state.lastReviewAt = this.now().getTime()
-      // Keep the evidence for the next attempt, ahead of anything that arrived since.
       const pending = state.window
       state.window = window
       for (const turn of pending.captured()) state.window.add(turn, this.now())
@@ -391,8 +343,6 @@ export class SkillEvolution {
       delete state.reviewing
     }
   }
-
-  // ---- page assistance -----------------------------------------------------
 
   private trackJob<T>(promise: Promise<T>): Promise<T> {
     this.activeJobs.add(promise)
@@ -414,22 +364,14 @@ export class SkillEvolution {
     return result
   }
 
-  /**
-   * Write a draft for a suggestion (or for a skill directly) in the
-   * background; the suggestion shows `drafting` until it is recorded.
-   */
   async draft(port: SkillsSourcePort, workspace: string | undefined, input: { suggestionId?: string; draftId?: string; skill?: string; guidance?: string; targetRoot?: SkillRootKind; backtest?: boolean; route?: ModelRoute }): Promise<{ started: true; suggestionId?: string }> {
     const source = retryingSource(port)
     const pack = await source.read<EvidencePack>('evidence-pack', { ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }), ...(input.draftId === undefined ? {} : { draftId: input.draftId }), ...(input.skill === undefined ? {} : { skill: input.skill }) })
     if (pack.skill?.readOnly) throw new Error('Linked skills are read-only; use a local copy before generating an improvement draft.')
-    // The evidence window contains only three recent drafts across this skill.
-    // Resolve this flow's own prior draft independently of that bounded context.
     const previousId = input.draftId ?? pack.suggestion?.draftId
     const previous = previousId === undefined
       ? (await source.read<SkillDraft[]>('drafts', { skill: pack.skillName, ...(pack.skill === undefined ? {} : { path: pack.skill.path }), ...(input.suggestionId === undefined ? {} : { suggestionId: input.suggestionId }) })).find(draft => draft.suggestionId === input.suggestionId)
       : (await source.read<DraftView>('draft', { id: previousId })).draft
-    // An improvement always keeps the file the Source loaded. For a creation,
-    // freeze one choice before model work and use it for both prompt and record.
     const targetRoot = pack.action === 'update' ? pack.skill!.root
       : newSkillRoot(this.host.settings(), source, await source.read<SkillCatalog>('catalog'), input.targetRoot ?? previous?.targetRoot ?? pack.suggestion?.targetRoot)
     const guidance = [...(previous?.guidance ?? []), ...(input.guidance?.trim() ? [input.guidance.trim()] : [])].slice(-8)
@@ -501,16 +443,12 @@ export class SkillEvolution {
       } catch (error) {
         signal.throwIfAborted()
         if (error instanceof SubagentStoppedError && error.maxTokens !== undefined) attemptedBudgets[attemptedBudgets.length - 1] = error.maxTokens
-        // Share the existing one-retry limit with file-validation repair. A
-        // fresh task discards truncated JSON and gets a new result capability.
         if (error instanceof SubagentStoppedError && error.stopReason === 'max-tokens' && attempt === 0 && settings.draftRetryMaxTokens > maxTokens) {
           maxTokens = settings.draftRetryMaxTokens
           prompt += '\n\nThe previous attempt exhausted its output budget and was discarded. Return a complete SKILL.md from the beginning; keep notes and changes concise.'
           continue
         }
         const bytes = Buffer.byteLength(pack.skill?.content ?? '', 'utf8')
-        // The Source retains 500 error characters. Put actionable context first
-        // and bound provider detail so the page keeps the complete guidance.
         throw new Error(`Skill draft failed. Attempted budgets: ${attemptedBudgets.join(', ')} tokens; source SKILL.md: ${bytes} bytes (UTF-8). Adjust skills.draftMaxTokens / skills.draftRetryMaxTokens in Plugins → dsh-mnemon → Skills → Draft generation. Stay within provider/model caps: lower rejected budgets, shorten the skill or use a model with a higher output cap. Reason: ${message(error).slice(0, 100)}`, { cause: error })
       }
       const parsed = parseSkillDraft(answer.structured)
@@ -528,7 +466,6 @@ export class SkillEvolution {
         prepared.onRecorded?.()
       } catch (error) {
         signal.throwIfAborted()
-        // One retry, told exactly why DSH would refuse the file.
         if (attempt > 0 || /changed while this draft/.test(message(error))) throw error
         prompt += `\n\nYour previous SKILL.md was rejected: ${message(error)}. Return a corrected complete result.`
         if (Buffer.byteLength(parsed.content, 'utf8') > MAX_SKILL_BYTES) prompt += `\n${skillDraftSizeGuidance(pack)}`
@@ -537,8 +474,6 @@ export class SkillEvolution {
     signal.throwIfAborted()
     if (!prepared.deferBacktests && (settings.autoBacktest || input.backtest) && pack.cases.length > 0) {
       await this.backtest(source, workspace, { skillName: pack.skillName, target: { kind: 'draft', draftId: draft.id }, ...(input.route === undefined ? {} : { route: input.route }) })
-      // Older runs do not record their model, so they cannot be a baseline for
-      // an explicitly selected route even when the skill content is unchanged.
       const baselineKnown = input.route === undefined && pack.action === 'update' && pack.lastRun !== undefined && pack.lastRun.target.hash === pack.skill?.hash
       if (baselineKnown) await source.mutate('run-link', { draftId: draft.id, runId: pack.lastRun!.id })
       else {
@@ -549,7 +484,6 @@ export class SkillEvolution {
     return draft
   }
 
-  /** Start a backtest of one version of a skill against its enabled cases; it runs in the background. */
   private backtestSlot(signal: AbortSignal): Promise<() => void> {
     signal.throwIfAborted()
     return new Promise((resolve, reject) => {
@@ -602,7 +536,6 @@ export class SkillEvolution {
         input.signal?.addEventListener('abort', abort, { once: true })
         if (deadline.aborted || input.signal?.aborted) abort()
         const signal = controller.signal
-        // Cancellation is a Source-owned mutation and works even after a restart.
         let pollDelayMs = 1_000
         const scheduleWatch = () => {
           if (signal.aborted) return
@@ -663,11 +596,6 @@ export class SkillEvolution {
     }
   }
 
-  /**
-   * Execute and grade one case. A run that fails (an output limit, a missing
-   * result) gets one more try; a case that still cannot run is recorded as
-   * an error, which the run's score leaves out.
-   */
   private async runCase(task: HostAgent, entry: EvalCase, skillName: string, content: string | undefined, resources: ReadonlyArray<{ path: string; content: string }> | undefined, signal: AbortSignal) {
     let failure: unknown
     for (let attempt = 0; attempt < CASE_ATTEMPTS; attempt++) {
@@ -688,7 +616,6 @@ export class SkillEvolution {
     return { caseId: entry.id, title: entry.title, verdict: 'error' as const, score: 0, checks: [], steps: [], answer: '', error: message(failure) }
   }
 
-  /** Turn a recorded trajectory into eval cases for one skill. */
   async deriveCases(port: SkillsSourcePort, workspace: string | undefined, input: { trajectoryId: string; skillName: string; steps?: number[] }, signal: AbortSignal): Promise<{ added: EvalCase[]; skipped: number }> {
     const source = retryingSource(port)
     const trajectory = await source.read<Trajectory>('trajectory', { id: input.trajectoryId }, signal)
@@ -704,13 +631,6 @@ export class SkillEvolution {
     return source.mutate('cases-add', { skillName: input.skillName, trajectoryId: input.trajectoryId, ...(input.steps === undefined ? {} : { steps: input.steps }), cases }, signal)
   }
 
-  /**
-   * What one conversation did with skills, for the bars under its turns: the
-   * skills each turn used, read from its own log, and each review placed under
-   * the turn its window ended with — the one waiting or under way first, then
-   * the recorded ones with the suggestions they left that still wait. A
-   * conversation that is not live passes its stored log.
-   */
   private readonly skillUses = new WeakMap<HostAgent['session'], TurnSkillUseProjection>()
 
   async activity(agent: HostAgent, events?: readonly HostSessionEvent[]): Promise<SkillActivitySnapshot> {
@@ -739,7 +659,6 @@ export class SkillEvolution {
     return { available: true, turns, reviews }
   }
 
-  /** The window each live session has collected, for the page. */
   pending(sessionId: string): { turns: number; score: number } | undefined {
     const state = this.sessions.get(sessionId)
     return state === undefined ? undefined : { turns: state.window.size, score: state.window.score().score }

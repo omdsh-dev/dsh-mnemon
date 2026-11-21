@@ -1,14 +1,9 @@
-/**
- * Reading back what a delegated child returned: its structured result, the receipts of the memory tools
- * it called, which can stand in for a result it did not record, and the bounded detail of a failure.
- */
 import type { HostSubagentResult, HostSubagentRun } from "./dsh.ts"
 import { reverseSessionEvents } from './session-events.ts'
 import { mutationResultCommitted } from './receipts.ts'
 import type { IdleReviewFailure, MemoryToolName } from './protocol.ts'
 import { WRITE_ACTIONS } from './subagent-prompts.ts'
 
-/** Whether a call or a receipt names one of these memory tools, each a row of the tool table. */
 export function isTool(name: string | undefined, ...tools: readonly MemoryToolName[]): boolean {
   return tools.some(tool => tool === name)
 }
@@ -69,10 +64,7 @@ export function safeFailureDetail(value: string): string {
     .slice(0, 500)
 }
 
-/** Recover the contained DSH model/transport error without exposing the child transcript. */
 export function subagentFailureDetail(run: HostSubagentRun, result: HostSubagentResult): string | undefined {
-  // Prefer a provider's bounded diagnostic. In-process children publish none,
-  // so fall back to the local Agent's last turn error.
   if (typeof result.diagnostic === 'string') {
     const diagnostic = safeFailureDetail(result.diagnostic)
     if (diagnostic !== '') return diagnostic
@@ -145,7 +137,6 @@ function recoverWriteResult(receipts: readonly CapturedToolReceipt[]): Record<st
   }
 }
 
-/** Recover a terminal tool's observed result without promoting handler success to durable completion. */
 export function recoverStructuredResult(recovery: ToolReceiptRecovery | undefined, receipts: readonly CapturedToolReceipt[]): Record<string, unknown> | undefined {
   if (recovery === undefined) return undefined
   const terminalTools = new Set(recovery.terminalTools)

@@ -13,7 +13,6 @@ export const MNEMON_VIEW_WRITE_CHANNEL = '/dsh-mnemon-view-settings'
 export const MNEMON_VIEW_SETTINGS_NAMESPACE = 'mnemon-view'
 
 export interface MemoryPluginPreference { enabled: boolean; config: Record<string, MemoryJsonValue> }
-/** Saved form: enablement lives in the DSH profile patch once the plugin manager can write it. */
 export interface MemoryPluginSavedPreference { enabled?: boolean; config: Record<string, MemoryJsonValue> }
 export interface MemoryViewPreferences {
   strategyTypeId?: string
@@ -40,7 +39,6 @@ export interface MemoryPluginEntryView {
   diagnostic?: string
 }
 
-/** Browser read model, not a serialized authority envelope. No readGrants. */
 export interface MemoryViewInspection {
   id: string
   digest: string
@@ -66,7 +64,6 @@ export interface MemoryViewDashboard {
   strategyTypeId: string
   entries: MemoryPluginEntryView[]
   current?: MemoryViewInspection
-  /** Durable activity observed after the frozen current View was compiled. */
   activity?: TurnMemoryActivity
   currentUnavailable?: 'no-session' | 'unaligned' | 'not-generated'
   sources: Array<{ sourceInstanceKey: string; sourceTypeId: string; packageName: string; role: string; label: string }>

@@ -28,7 +28,7 @@ import { hasNativeDirectoryPicker } from './directory-picker.ts'
 import { MnemonSubagentCoordinator } from './subagent.ts'
 import { registerTools } from './tools.ts'
 import { registerMemoryWriteApproval } from './write-approval.ts'
-import { registerMnemonSubagentTokenUsageProjection } from './subagent-token-usage.ts'
+import { registerSubagentTokenUsage } from './subagent-token-usage.ts'
 import { provideMemoryRuntime } from '../core/runtime.ts'
 import { MemoryPluginManagement } from './plugin-management.ts'
 import { registerViewRpc } from './view-rpc.ts'
@@ -42,7 +42,6 @@ export const inject = ['tools', 'settings', 'commands', 'agents', 'subagents']
 export { LiveConfig as Config }
 export type { MnemonConfig }
 
-/** Resolve the optional Web workspace service at call time, not plugin-mount time. */
 function optionalWorkspaceRegistry(ctx: HostContextShape): HostWorkspaceRegistry {
   const current = (): HostWorkspaceRegistry | undefined => ctx.get('workspaceRegistry') as HostWorkspaceRegistry | undefined
   return {
@@ -51,27 +50,19 @@ function optionalWorkspaceRegistry(ctx: HostContextShape): HostWorkspaceRegistry
   }
 }
 
-/**
- * GitHub sign-in lives beside the sync channel, not inside it: one instance
- * spans every runtime generation, so a grant stored from the settings page is
- * the same one an Agent's workspace graph resolves. The credentials service is
- * read at call time, because a Headless profile may mount none at all.
- */
 function optionalGitHubAuth(ctx: HostContextShape): MnemonGitHubAuth {
   const current = (): HostCredentialsService | undefined => (ctx.get('credentials') ?? ctx.credentials) as HostCredentialsService | undefined
   return new MnemonGitHubAuth(credentialPort(current))
 }
 
-/** DSH owns assembly; this Host only wires scope, phases and user preferences. */
 export function apply(rawContext: unknown, rawConfig: MnemonConfig | LiveHostConfig = {}): void {
   const ctx = rawContext as unknown as HostContextShape
   const config = plainHostConfig(rawConfig)
   const hostSettings = new ProfileMnemonSettings(ctx, rawConfig)
-  registerMnemonSubagentTokenUsageProjection(ctx)
+  registerSubagentTokenUsage(ctx)
   const extensions = provideMemoryRuntime(ctx)
   const memoryPlugins = new MemoryPluginManagement(ctx, extensions, hostSettings)
   const pluginInstallation = new MemoryPluginInstallation(ctx)
-  // 技能管理's settings: read at every turn and review, so a change applies at once.
   const skillSettings = hostSettings.register<ResolvedSkillsConfig>('mnemon-skills', SkillsConfig, {
     base: { ...DEFAULT_SKILLS_CONFIG },
     applies: 'live',
@@ -81,15 +72,10 @@ export function apply(rawContext: unknown, rawConfig: MnemonConfig | LiveHostCon
   const settings = hostSettings.register<MnemonConfig>('mnemon', PlainConfig, {
     base: config,
     applies: 'live',
-    // Profile writes commit asynchronously. Check that the candidate composes
-    // now, then build from the committed live references on volatile-update.
     validate: value => validateRuntimeComposition(effectiveConfig(value), extensions),
   })
   const runtime = new LiveMnemonRuntime(createRuntimeGraph(effectiveConfig(settings.get()), undefined, extensions), optionalWorkspaceRegistry(ctx), ctx.agents, extensions)
   runtime.useGitHubAuth(optionalGitHubAuth(ctx))
-  // The automatic Git backup is one timer for the whole Host, not one per
-  // graph: a settings write validates itself without building a graph, and a
-  // timer owned by a graph would be armed and dropped on every swap.
   const autoBackup = new MnemonAutoBackupScheduler(runtime)
   runtime.useAutoBackup(() => autoBackup.snapshot())
   const resolved = runtime.config
@@ -166,8 +152,6 @@ export function apply(rawContext: unknown, rawConfig: MnemonConfig | LiveHostCon
   })
   ctx.effect(() => hostSettings.onUpdated(() => skills.settingsChanged()), 'dsh-mnemon: automatic skill adoption settings')
   lifecycle.useSkillEvolution(skills)
-  // Registered before the lifecycle root so teardown runs the other way round:
-  // the timer stops first, and only then does the runtime it reads go away.
   ctx.effect(() => {
     const stop = autoBackup.start()
     return () => { stop() }
@@ -189,17 +173,10 @@ export function apply(rawContext: unknown, rawConfig: MnemonConfig | LiveHostCon
   ctx.effect(() => registerMemoryWriteApproval(ctx, runtime), 'dsh-mnemon: memory write approval')
   registerGuidance(ctx, resolved, runtime)
   ctx.inject(['connection', 'webServer'], (webContext) => {
-    // `inject` guarantees the service at runtime; retain the defensive guard
-    // because HostContextShape also models profiles where it is absent.
-    // Connection's RPC getter keeps its provider's injection scope. Carry
-    // the explicitly injected server on our own Context so late registration
-    // works without changing or restarting the shared Connection plugin.
     const connection = Context.is(webContext)
       ? webContext.extend({ webServer: webContext.get('webServer') }).connection
       : webContext.connection
     if (connection === undefined) return
-    // The Starter updates through DSH's own plugin manager and profile, so a packaged
-    // app's bundled pnpm serves it where no pnpm is on PATH.
     const versions = new VersionUpdateManager({
       mnemonCliPath: () => runtime.config.cliPath,
       bundleInstaller: () => ctx.get('pluginManager') as DshBundleInstaller | undefined,

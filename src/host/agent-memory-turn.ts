@@ -11,7 +11,6 @@ import { agentScope, type MnemonAgentRuntimeSource, type MnemonRuntimeGraph } fr
 import { inspectMemoryView, modelMemoryWake } from './view-presentation.ts'
 import type { MemoryViewInspection } from './view-protocol.ts'
 
-/** Host-owned authority captured before a child activation starts executing. */
 export interface DelegatedMemoryView {
   readonly graph: MnemonRuntimeGraph
   readonly scope: MemoryOperationScope
@@ -33,7 +32,6 @@ interface SessionPosition {
 }
 const positions = new WeakMap<HostSession, SessionPosition>()
 
-/** Only lifecycle metadata survives a read; even a very long open turn is scanned once. */
 function sessionPosition(session: HostSession): SessionPosition {
   const end = sessionLength(session)
   let position = positions.get(session)
@@ -59,24 +57,17 @@ function sessionPosition(session: HostSession): SessionPosition {
   return position
 }
 
-/** The durable log, not a parent session id, identifies the executing turn. */
 export function openAgentTurn(agent: HostAgent): number | undefined {
   return sessionPosition(agent.session).turn
 }
 
-/** PTC dispatch records belong to a real open step, not just an open turn. */
 export function openAgentStep(agent: HostAgent): { turn: number; step: number } | undefined {
   const step = sessionPosition(agent.session).step
   return step === undefined ? undefined : { ...step }
 }
 
-/**
- * One Agent owns each turn pin. A child additionally retains its delegation
- * across parent completion, collection, and runtime swaps until it is disposed.
- */
 export class AgentMemoryTurn {
   private pinned: PinnedAgentMemoryTurn | undefined
-  /** A turn that runs without memory because no composition was serving when it began. */
   private unavailable: { turn: number; reason: string } | undefined
   private warned: string | undefined
   private pending: { turn: number; generation: number; controller: AbortController; result: Promise<void> } | undefined
@@ -93,8 +84,6 @@ export class AgentMemoryTurn {
     private readonly delegation?: DelegatedMemoryView,
     private readonly independent = false,
   ) {
-    // Capture the current preference at dispatch. An existing child retains its
-    // presentation across live config swaps, just as it retains its memory View.
     this.includeRuntime = delegation === undefined || runtime.config.runtimeMemory.inheritToSubagents
     if (delegation === undefined) return
     this.releaseDelegation = runtime.executions.retain(agent, delegation)
@@ -109,7 +98,6 @@ export class AgentMemoryTurn {
     return pinned === undefined ? undefined : modelMemoryWake(pinned.graph, pinned.context, this.includeRuntime, this.agent)
   }
 
-  /** Why the current turn has no View, when memory could not be composed for it. */
   get unavailableReason(): string | undefined {
     return this.unavailable?.reason
   }
@@ -122,7 +110,6 @@ export class AgentMemoryTurn {
 
   clearInspection(): void { this.lastInspection = undefined; this.lastWorkspace = undefined }
 
-  /** Capture now; descendants must not resolve a later parent turn on demand. */
   delegate(): DelegatedMemoryView {
     if (this.closed) throw new Error('memory Agent lifetime has ended')
     if (this.pinned !== undefined) {
@@ -130,14 +117,11 @@ export class AgentMemoryTurn {
     }
     if (this.delegation !== undefined) return this.delegation
     const graph = this.runtime.forAgent(this.agent)
-    // Explicit Host background operations have no model turn to inherit. Their
-    // child creates a fresh scoped View, never a historical owner-latest View.
     return { graph, scope: agentScope(this.agent, graph.config) }
   }
 
   get excluded(): boolean { return this.runtime.memoryParticipation?.(this.agent).excluded === true }
 
-  /** Compaction may start before a turn has appended its newest snapshot. */
   async snapshotAuthority(signal?: AbortSignal): Promise<SnapshotAuthority | undefined> {
     if (this.closed || this.excluded || !this.runtime.config.lifecycleEnabled) return undefined
     try {
@@ -155,7 +139,6 @@ export class AgentMemoryTurn {
       } finally { lease.release() }
     } catch {
       signal?.throwIfAborted()
-      // Ordinary conversation can still be summarized when a View is unavailable.
       return undefined
     }
   }
@@ -173,9 +156,6 @@ export class AgentMemoryTurn {
     signal?.addEventListener('abort', abort, { once: true })
     const result = this.pin(turn, generation, controller.signal).catch((error: unknown) => {
       if (this.excluded) { this.clearInspection(); return }
-      // Memory is optional for a conversation. With no composition serving,
-      // the turn runs without a View: nothing revives a disabled policy, and
-      // the turn itself does not fail. It stays that way until the turn ends.
       if (!isMemoryCompositionUnavailable(error) || this.closed || this.generation !== generation) throw error
       this.unavailable = { turn, reason: error.message }
       this.clearInspection()

@@ -21,7 +21,6 @@ interface ExecutionSlot {
   close(): void
 }
 
-/** One Host owner pairs each Core turn with its runtime binding. */
 export class MemoryExecutions {
   private readonly slots = new Map<string, ExecutionSlot>()
   private readonly pending = new Set<ExecutionSlot>()
@@ -54,7 +53,6 @@ export class MemoryExecutions {
     if (slot === undefined) {
       const graph = this.runtime.forAgent(agent)
       const context = graph.composableTurns.activeTurn(agent.id)
-      // A directly pinned/delegated turn remains owned by its caller.
       if (!this.slots.has(agent.id) && context !== undefined) return { graph, context, signal, release() {} }
       slot = this.open(agent, 'workflow', 'workflow:' + randomUUID(), 'agent.' + operation)
     }
@@ -113,7 +111,6 @@ export class MemoryExecutions {
         slot.closing = true
         slot.controller.abort(new Error('memory execution ended'))
         if (execution !== undefined) { try { execution.release() } finally { finish() } }
-        // Preparation owns cleanup until it actually settles, even after abort.
       },
     }
     this.slots.set(agent.id, slot)
@@ -142,7 +139,6 @@ export class MemoryExecutions {
         return execution
       } catch (error) { release(); throw error }
     })().then(ready.resolve, error => { finish(); ready.reject(error) })
-    // A queued slot can outlive a canceled caller while its predecessor drains.
     void slot.ready.catch(() => {})
     return slot
   }

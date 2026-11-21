@@ -2,7 +2,6 @@ import type { MemoryCompositionDiagnostic } from './contracts/index.ts'
 
 type SourceReadPhase = 'facts' | 'project'
 
-/** Sanitized public failure: never forward remote errors, paths or credentials. */
 export class SourceReadFailure extends Error {
   readonly diagnostic: MemoryCompositionDiagnostic
 
@@ -16,11 +15,6 @@ export class SourceReadFailure extends Error {
   }
 }
 
-/**
- * Bounds read-only composition work. Signals stay outside the JSON Strategy
- * input. This is cooperative cancellation, not a sandbox; writes must not be
- * raced against a timeout and then falsely reported as uncommitted.
- */
 export async function readSource<T>(
   sourceInstanceKey: string,
   phase: SourceReadPhase,
@@ -45,7 +39,6 @@ export async function readSource<T>(
       return execute(controller.signal)
     }).catch(() => {
       if (controller.signal.aborted) throw controller.signal.reason
-      // Raw provider errors may contain secrets. Only the owning plugin may log them.
       throw new SourceReadFailure(sourceInstanceKey, phase, false)
     })
     return await Promise.race([operation, interrupted])

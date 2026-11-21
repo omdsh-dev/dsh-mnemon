@@ -10,7 +10,6 @@ import type {
   MemoryEvidence,
   MemoryEvidenceItem,
   MemoryJsonValue,
-  MemoryPluginDescriptor,
   MemoryMutationReceipt,
   MemoryReadGrant,
   MemorySourceFacts,
@@ -97,7 +96,6 @@ function capturePlugin(plugin: InstalledMemoryPlugin): InstalledMemoryPlugin {
   })
 }
 
-/** Validate active dependency and exclusivity edges before any Source factory runs. */
 export function validateMemoryPluginGraph(
   plugins: readonly Pick<InstalledMemoryPlugin, 'instanceKey' | 'descriptor'>[],
   implicitCapabilities: readonly string[] = [],
@@ -130,8 +128,6 @@ export function captureMemoryContributionSnapshot(snapshot: MemoryContributionSn
   const owners: { strategyTypeId: string; slot: string; instanceKey: string }[] = []
   for (const extension of extensions) {
     const { strategyTypeId, slot } = extension.definition.manifest
-    // An any-Strategy extension meets every Strategy's extensions for its slot, so
-    // one owner per slot holds for whichever main Strategy is selected later.
     const owner = owners.find(item => item.slot === slot
       && (item.strategyTypeId === strategyTypeId || item.strategyTypeId === ANY_MEMORY_STRATEGY || strategyTypeId === ANY_MEMORY_STRATEGY))
     if (owner !== undefined) throw new Error(`memory Strategy extension slot conflict: ${strategyTypeId}/${slot} (${owner.instanceKey}, ${extension.instanceKey})`)
@@ -161,15 +157,11 @@ export function captureMemoryContributionSnapshot(snapshot: MemoryContributionSn
 }
 
 export interface CompileMemoryGenerationOptions {
-  /** Host authorization ceiling; Strategies can only narrow it. Management remains separately authorized. */
   sourceCapabilities?: (source: InstalledMemorySource) => readonly MemoryCapability[]
   strategyInstanceKey?: string
   strategyTypeId?: string
-  /** Compose with the only installed Strategy when the selected type is unavailable, and report it. */
   strategyFallback?: 'sole-strategy'
-  /** Host adapter supplies scope defaults; each result is captured and digested. */
   sourceConfiguration?: (source: InstalledMemorySource, strategyTypeId?: string) => Readonly<Record<string, MemoryJsonValue>>
-  /** Per-Source facts/project deadline. Does not turn timed-out writes into failed receipts. */
   sourceTimeoutMs?: number
   now?: () => Date
 }
@@ -292,8 +284,6 @@ function normalizeViewSpec(value: MemoryViewSpec, strategy: InstalledMemoryStrat
       }
     }
   }
-  // A Strategy may explain an absence (#504). Diagnostics carry no authority, so
-  // they are bounded and sanitized like the Host's own, and never reject a View.
   const diagnostics = value.diagnostics === undefined ? undefined : normalizeSpecDiagnostics(value.diagnostics)
   return deepFreeze({ strategyTypeId: value.strategyTypeId, sources: normalizedSources, explanation: requiredText(value.explanation, 'memory ViewSpec explanation', 4_000),
     ...(guidance === undefined ? {} : { guidance }),
@@ -461,8 +451,6 @@ function normalizeEvidence(value: MemoryEvidence, view: ComposableMemoryView, ro
     if (item.score !== undefined && !Number.isFinite(item.score)) throw new Error('memory Evidence score must be finite')
     const text = item.text
     if (characters + text.length > characterLimit) {
-      // Sources receive the effective ceiling and own excerpts/JSON formatting.
-      // Core drops an oversized item intact; it never turns structured data into broken text.
       truncated = true
       continue
     }
@@ -504,7 +492,6 @@ export class MemoryCompositionGeneration {
     ])
     this.strategy = selectStrategy(snapshot.strategies, options)
     const strategyManifest = this.strategy.definition.manifest
-    // Standard-slot extensions follow whichever selected Strategy declares their slot.
     this.extensions = (snapshot.strategyExtensions ?? []).filter(extension => extension.definition.manifest.strategyTypeId === strategyManifest.typeId
       || extension.definition.manifest.strategyTypeId === ANY_MEMORY_STRATEGY && strategyManifest.extensionSlots?.includes(extension.definition.manifest.slot) === true)
     for (const extension of this.extensions) {
@@ -581,7 +568,6 @@ export class MemoryCompositionGeneration {
   async compose(requestValue: MemoryViewRequest, signal?: AbortSignal): Promise<ComposableMemoryView> {
     signal?.throwIfAborted()
     const controller = new AbortController()
-    // One owned cancellation signal may serve more than ten independent Sources.
     setMaxListeners(0, controller.signal)
     const abort = () => controller.abort(signal!.reason)
     signal?.addEventListener('abort', abort, { once: true })
@@ -607,7 +593,6 @@ export class MemoryCompositionGeneration {
         availability: 'unavailable', revision: 'unavailable', capabilities: [], routeIds: [], actionIds: [],
       }
     }
-    // Invalid protocol/authority claims remain fatal, not ordinary remote outages.
     return normalizeFacts(source.installed, value)
   }
 
@@ -733,17 +718,11 @@ export class MemoryCompositionGeneration {
     }))
   }
 
-  /**
-   * Project the current scope's visible Source instances for the human
-   * management plane. The returned catalog contains only JSON-safe manifest
-   * metadata and SourceFacts; runtime objects and grants remain Host-only.
-   */
   sourceInstances(): ReadonlyArray<{ sourceInstanceKey: string; sourceTypeId: string }> {
     this.assertOpen()
     return [...this.sources.values()].map(source => ({ sourceInstanceKey: source.installed.instanceKey, sourceTypeId: source.installed.definition.manifest.typeId }))
   }
 
-  /** A caller without a cached human revision may fence just its selected Source. */
   async managementRevision(sourceInstanceKey: string, scope: MemoryViewRequest['scope'], signal?: AbortSignal): Promise<string> {
     this.assertOpen()
     const source = this.sources.get(instanceKey(sourceInstanceKey, 'source'))
@@ -783,7 +762,6 @@ export class MemoryCompositionGeneration {
     }, 'memory Source management catalog')
   }
 
-  /** Execute one short-lived, explicitly scoped management operation. */
   async executeManagement(requestValue: MemorySourceManagementRequest): Promise<MemorySourceManagementResult> {
     this.assertOpen()
     const sourceInstanceKey = instanceKey(requestValue.sourceInstanceKey, 'source')
@@ -849,14 +827,12 @@ export class MemoryCompositionGeneration {
         maxResults: Math.min(maxResults, limits.maxResults === undefined ? maxResults : positiveInteger(limits.maxResults, 'Strategy maxResults', 10_000)),
         maxCharacters: Math.min(maxCharacters, limits.maxCharacters === undefined ? maxCharacters : positiveInteger(limits.maxCharacters, 'Strategy maxCharacters', 10_000_000)),
       })
-      // Equal View digests do not make independent turns share execution state.
       let ledger = this.routeCalls.get(execution)
       if (ledger === undefined) { ledger = new Map(); this.routeCalls.set(execution, ledger) }
       const counter = `${view.id}\u0000${route.id}`
       const calls = ledger.get(counter) ?? 0
       if (calls >= route.maxCalls) throw new Error(`memory View Route call budget is exhausted: ${route.id}`)
       ledger.set(counter, calls + 1)
-      // A dispatched failure consumed a call; Core never guesses safe retry.
       const value = await source.runtime.query!({
         view: this.sourceView(view, route.sourceInstanceKey, execution), route: selectedRoute, grant,
         input: jsonClone(selectedInput, 'memory Route input'), ...(signal === undefined ? {} : { signal }),
@@ -960,12 +936,6 @@ export interface MemoryCompositionEvaluationResult {
   view?: ComposableMemoryView
 }
 
-/**
- * Pure topology/manifest dry-run validator for configuration preflight.
- * Validates contribution uniqueness, plugin dependency edges, selected Strategy
- * resolution, extension slots, timeout bounds, and Source configuration cloning
- * without instantiating any Source runtime or touching disk.
- */
 export function validateMemoryGraphComposition(
   snapshotValue: MemoryContributionSnapshot,
   options: CompileMemoryGenerationOptions = {},
@@ -995,10 +965,6 @@ export function validateMemoryGraphComposition(
   }
 }
 
-/**
- * Stateless composition evaluator: plugins, CI, registry checks, and RSI
- * candidates pass through the same compiler without gaining a bypass.
- */
 export async function evaluateMemoryComposition(input: MemoryCompositionEvaluationInput): Promise<MemoryCompositionEvaluationResult> {
   let snapshot: MemoryContributionSnapshot
   try {

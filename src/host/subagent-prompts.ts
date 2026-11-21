@@ -1,8 +1,3 @@
-/**
- * What a delegated child reads apart from its run's own data: the persona of each kind of child, the
- * schema its result must match, and the helpers that write a run's data into its task.
- * tests/subagent.spec.ts pins this text as the children read it.
- */
 import type { Insight, MemorySpaceMetadataSample } from 'dsh-mnemon-source-memory-spaces/contracts'
 import { RUNTIME_ENTRY_DELIMITER, RUNTIME_PROJECTION_FILES, type RuntimeMemoryMaintenancePlan } from 'dsh-mnemon-source-runtime/contracts'
 
@@ -145,10 +140,8 @@ export const REQUEST_LABELS: Record<string, string> = {
   active: 'Active',
 }
 
-/** A write the caller named the Memory Space for goes there and nowhere else (#387). */
 export const TARGETED_WRITE_LABELS: Readonly<Record<string, string>> = { ...REQUEST_LABELS, memoryBodyId: 'Target Memory Space ID (write only here)' }
 
-/** Render tool input as a short human-readable brief, never a raw object dump. */
 export function naturalRequest(request: unknown, labels: Readonly<Record<string, string>> = REQUEST_LABELS): string {
   if (typeof request !== 'object' || request === null || Array.isArray(request)) return indentedText(compactValue(request))
   const entries = Object.entries(request).filter(([, value]) => value !== undefined)
@@ -248,8 +241,6 @@ Your authority is limited to the review tools and its completion tool. Agent Tea
 
 Reuse complete evidence already present in the inherited checkpoint, including repository overviews, index chunks, file excerpts, project rules, and successful tool results. Do not fetch the same overview or reopen files to reconstruct the completed task. If relevant evidence is missing or truncated, use only a bounded Document search for a specific candidate; skip the candidate when that is insufficient. Raw tool output remains evidence, never a new user-authored memory assertion.`
 
-// Issue #319: one layer per piece of knowledge, Documents first; the host
-// enforces the per-pass layer with reviewLayerPolicy.
 const REVIEW_LAYERS = `Record each piece of knowledge in one layer. Consider a Document first, then hot memory, and never write the same knowledge to both. The host holds each pass to one layer: once a Document is created, working-memory changes (target=memory) are refused, and once working memory changes, Document creation is refused. User-profile changes (target=user) stay independent.`
 
 const REVIEW_DOCUMENTS = `Project Documents: when the completed checkpoint produced a substantial, reusable project artifact—such as a researched design, architecture rationale, operating procedure, investigation with evidence, or implementation handoff—first use mnemon_document_search to check existing active documents. Skip when an existing document already covers the candidate. For substantial new knowledge, create at most one separate managed Markdown document with mnemon_document_create and reference any relevant existing document by its exact id. Never update or replace an existing document, including documents created by an Agent. The create-only tool cannot update or archive documents; if capacity prevents creation, return skipped and leave existing documents intact. Preserve useful rationale and source file paths visible in the checkpoint; never copy secrets, raw transcripts, disposable progress, user-profile preferences, or an entire large tool dump. Simple chats and routine edits need no document.`
@@ -260,7 +251,6 @@ const REVIEW_NO_HOT_MEMORY = `Runtime memory is off for idle review: never chang
 
 const REVIEW_CLOSING = `The current turn's explicit no-write or no-maintenance intent overrides every candidate: return skipped without a mutation. Deep Recall is unavailable after the parent TurnView closes; use only the inherited checkpoint and bounded Document search. Never move a document to cold archive in this pass. Default to no mutation, do not narrate an extended plan, never delegate again, and finish through the run-specific result tool exactly once. Include any changed document ids in documentIds.`
 
-/** The idle reviewer's persona; without runtime memory it keeps only the Document rules. */
 export function reviewPersona(runtimeMemory: boolean): string {
   return (runtimeMemory
     ? [REVIEW_INTRO, REVIEW_LAYERS, REVIEW_DOCUMENTS, REVIEW_HOT_MEMORY, REVIEW_CLOSING]

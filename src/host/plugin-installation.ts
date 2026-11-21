@@ -30,7 +30,7 @@ interface Profile {
 }
 
 interface DshCommand { command: string; prefix: string[] }
-export interface MemoryPluginInstallationDependencies {
+export interface PluginInstallDeps {
   processRunner?: ProcessRunner
   fetchPackage?: (packageName: string, tag: string) => Promise<unknown>
   resolveDshCommand?: () => DshCommand | undefined
@@ -117,7 +117,7 @@ export class MemoryPluginInstallation {
   private readonly currentVersion: string
   private queue: Promise<unknown> = Promise.resolve()
 
-  constructor(private readonly ctx: HostContextShape, dependencies: MemoryPluginInstallationDependencies = {}) {
+  constructor(private readonly ctx: HostContextShape, dependencies: PluginInstallDeps = {}) {
     this.runner = dependencies.processRunner ?? runProcess
     this.fetcher = dependencies.fetchPackage ?? fetchPackage
     this.command = dependencies.resolveDshCommand ?? dshCommand

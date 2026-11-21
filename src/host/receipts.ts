@@ -1,5 +1,3 @@
-/** Validate external mutation receipts before retiring or compacting local data. */
-
 const COMMITTED_MUTATION_STATES = new Set([
   'added',
   'committed',
@@ -34,11 +32,9 @@ const UNCOMMITTED_MUTATION_STATES = new Set([
 ])
 const COMMITTED_MUTATION_COUNTS = ['created', 'deleted', 'edges_inserted', 'imported', 'removed', 'stored', 'updated'] as const
 
-/** A provider mutation is authoritative only after it reports an explicit durable terminal state. */
 export function mutationResultCommitted(result: unknown): boolean {
   if (typeof result !== 'object' || result === null || Array.isArray(result)) return false
   const value = result as Record<string, unknown>
-  // A Core receipt wins over Provider-shaped details or a successful tool transport.
   if ('memoryReceipt' in value || 'completion' in value) {
     const receipt = 'memoryReceipt' in value ? value.memoryReceipt : value
     if (typeof receipt !== 'object' || receipt === null || Array.isArray(receipt)) return false
@@ -46,7 +42,6 @@ export function mutationResultCommitted(result: unknown): boolean {
     return declared.completion === 'committed' && declared.status === 'succeeded'
       && typeof declared.committedAt === 'string' && Number.isFinite(Date.parse(declared.committedAt))
   }
-  // Host-owned management workflows also consume existing Source product results.
   const states = [value.action, value.status, value.state]
     .filter((entry): entry is string => typeof entry === 'string')
     .map(entry => entry.trim().toLocaleLowerCase())

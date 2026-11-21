@@ -3,13 +3,9 @@ import type { HostAgent, HostPreStepDecision, HostSubagentRun, HostUserMessage }
 import { createPluginMessage } from './plugin-message.ts'
 import { activationOwned, contextIsActive, isReservedChild, reservedChildId, withReservedChild, type ActivationOwnership } from './agent-compat.ts'
 
-/** The user turn that ends a refused delegated child's tool continuations. */
 export const CONTINUATION_TEXT = 'Continue from the tool results above.'
 
-/** How a server reports a chat template that found no user query (Ollama, vLLM and others). */
 const NO_USER_QUERY = /no user query found in messages/iu
-// DSH's pi-ai adapter rejects malformed tool JSON before dispatching any call
-// in that response. Only our completion channel gets this local retry.
 const MALFORMED_RESULT = /^Tool call "mnemon_subagent_result": /u
 export const RESULT_RETRY_TEXT = 'The model adapter rejected the mnemon_subagent_result arguments before executing the call. Submit only the result again, using the same requestId and the required result schema. Use complete valid JSON: close the result object and then the outer arguments object, including every final brace and bracket. Do not repeat completed writes or other work. Do not return a plain-text answer.'
 
@@ -32,27 +28,12 @@ interface RequestErrorPayload {
   signal: AbortSignal
 }
 
-// Distinguishes overlapping starts, as review-tools.ts does for its guard.
 const startingChild = new AsyncLocalStorage<symbol>()
 
 function hasUserText(message: HostUserMessage): boolean {
   return message.role === 'user' && message.content.some(block => block.type === 'text' && typeof block.text === 'string' && block.text.trim() !== '')
 }
 
-/**
- * Some chat templates refuse a request without a user query: Ollama 0.33
- * serving Qwen3.x answers 500 "no user query found in messages" (#327). A
- * delegated child's only user turn is its prompt. Once tool results fill the
- * model's context window, Ollama truncates from the front and drops that
- * prompt while keeping the tool messages after it.
- *
- * Nothing changes until a server refuses a request that way. The refused step
- * then ends with a short user turn and runs again at once (the server ran no
- * inference), and each later tool continuation of the same child ends the
- * same way, since the server always keeps the last message. A route that never
- * refuses keeps its requests as they are, so a template that shows reasoning
- * only after the last user query keeps the earlier steps' reasoning.
- */
 function continueAfterRefusal(agent: HostAgent): Array<() => unknown> {
   if (typeof agent.ctx?.on !== 'function' || !contextIsActive(agent.ctx)) return []
   let refused = false
@@ -73,14 +54,12 @@ function continueAfterRefusal(agent: HostAgent): Array<() => unknown> {
         || !NO_USER_QUERY.test(payload.failure?.message ?? '')) return next()
       retried.add(step)
       refused = true
-      // DSH's own context-overflow recovery also changes the session here, then retries the step.
       session.append('user/message', turn(), { surfaceOp: 'append' })
       return { kind: 'retry' }
     }) as never, { prepend: true }),
     agent.ctx.on('agent/pre-step', (async (payload: PreStepPayload, next: () => Promise<HostPreStepDecision>) => {
       const decision = await next()
       if (!refused || payload.step === 1 || payload.signal.aborted || decision.kind !== 'enter') return decision
-      // A handler that emptied the messages this step claimed ends the turn; keep that.
       if (payload.messages.length > 0 && decision.messages.length === 0) return decision
       if (decision.messages.some(hasUserText)) return decision
       return { ...decision, messages: [...decision.messages, turn()] }
@@ -93,20 +72,12 @@ export function attachContinuationTurns(agent: HostAgent): () => void {
   return () => { for (const stop of stops.splice(0)) stop() }
 }
 
-/**
- * Start one delegated child and attach the refusal recovery while DSH
- * publishes it, before its first step. Async context attributes concurrent
- * starts, and DSH's ownership check confirms the parent where it exists. A host
- * that does not report creation leaves the child as it was.
- */
 export async function startWithContinuationTurns(host: ContinuationHost, parent: HostAgent, start: () => Promise<HostSubagentRun>): Promise<HostSubagentRun> {
   parent.ctx?.fiber?.assertActive()
   const reserved = activationOwned(host.subagents)
   const pending = Symbol('Mnemon delegated start')
   const stops: Array<() => unknown> = []
   let expectedChildId: string | undefined
-  // Like persona/tool composition and the guard, recovery must exist before
-  // ordinary publication observers can short-circuit DSH's serial dispatch.
   const listener = host.on('agent/created', (({ agent }: { agent: HostAgent }) => {
     if (startingChild.getStore() !== pending) return
     if (!contextIsActive(parent.ctx) || !contextIsActive(agent.ctx)) return

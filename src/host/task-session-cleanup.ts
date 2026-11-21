@@ -27,7 +27,6 @@ function userMessage(event: HostSessionEvent): { id?: string; content?: Array<{ 
   return message.source?.kind === 'user' ? message : undefined
 }
 
-/** Archive only the task instance we just finished; historical IDs do not prove ownership. */
 export async function archiveTaskSession(
   host: TaskSessionArchiveHost | undefined,
   sessionId: string,
@@ -39,8 +38,6 @@ export async function archiveTaskSession(
   const registry = host?.get?.('workspaceRegistry') as WorkspaceRegistryArchiveHost | undefined
   if (typeof registry?.archiveSession !== 'function') return false
   if (registry.archivedSessionIds?.includes(id) || registry.pinnedSessionIds?.includes(id)) return false
-  // A human can take over a visible root while its background operation is finishing.
-  // Only the exact prompt submitted by this review invocation is exempt.
   for (const event of sessionEvents(session)) {
     const message = userMessage(event)
     if (message !== undefined && (taskMessageId === undefined || message.id !== taskMessageId)) return false
@@ -61,7 +58,6 @@ function isReviewRoot(header: ReviewHeader): boolean {
     && (reviewSession.test(header.id) || isIdleReviewOwner(header.id))
 }
 
-/** Repair old ungrouped reviews using the session log, never the ID or title alone. */
 export async function archiveOrphanedIdleReviews(host: TaskSessionArchiveHost, signal: AbortSignal): Promise<void> {
   const registry = host.get?.('workspaceRegistry') as WorkspaceRegistryArchiveHost | undefined
   const query = host.get?.('sessionQuery') as {
@@ -87,6 +83,6 @@ export async function archiveOrphanedIdleReviews(host: TaskSessionArchiveHost, s
         : messages.length === 1 && reviewPrompt.test(messages[0]?.id ?? '')
           && messages[0]?.content?.[0]?.type === 'text' && messages[0].content[0].text?.startsWith(delegatedTaskLine('review') + '\n')
       if (owned) await registry.archiveSession(header.id)
-    } catch { /* A busy, unreadable or missing session can be retried after reload. */ }
+    } catch { }
   }
 }

@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto'
 import type { HostAgent, HostAgentContext, HostAgentsService, HostSessionEvent } from './dsh.ts'
 import { sessionEvents } from './session-events.ts'
 
-/** Cordis errors may be wrapped by the review coordinator. */
 export function isInactiveContextError(error: unknown): boolean {
   const seen = new Set<unknown>()
   while (error !== null && typeof error === 'object' && !seen.has(error)) {
@@ -26,7 +25,6 @@ export interface ActivationOwnership {
   rootOf?(agent: HostAgent): HostAgent
 }
 
-/** Cordis exposes resolved plugin configuration even when Subagent has no list(). */
 export interface ProviderConfigurationHost {
   registry?: { values(): Iterable<{ fibers: Iterable<{ readonly effectiveConfig?: unknown }> }> }
 }
@@ -44,12 +42,10 @@ export function configuredProviderNames(host: ProviderConfigurationHost | undefi
   return [...names]
 }
 
-/** Official 0.2.2-rc.1 has registry ownership; master fcc0ad4 moved it into Subagent. */
 export function activationOwned(subagents: ActivationOwnership | undefined): boolean {
   return typeof subagents?.rootOf === 'function'
 }
 
-/** Only live registry instances can be adopted; persisted lineage is not authority. */
 export function isRootAgent(agents: HostAgentsService, subagents: ActivationOwnership, agent: HostAgent): boolean {
   if (agents.get(agent.id) !== agent) return false
   if (typeof agents.roots === 'function') return agents.roots().includes(agent)
@@ -61,7 +57,6 @@ export function rootAgents(agents: HostAgentsService, subagents: ActivationOwner
   return (agents.list?.() ?? []).filter(agent => isRootAgent(agents, subagents, agent))
 }
 
-/** Persisted IDs keep completed internal sessions out of conversation automation after restart. */
 export function isTaskRecord(id: string): boolean {
   return /^mnemon-(?:task|run)-v1-[0-9a-f-]{36}$/.test(id)
 }
@@ -71,7 +66,6 @@ export function titleTask(agent: HostAgent, title: string): void {
   service?.rename?.(agent.session, title)
 }
 
-/** Only our initial task label may be unpinned; a later user rename always wins. */
 export function watchTaskTitle(agent: HostAgent): () => unknown {
   if (!/^mnemon-task-v1-[0-9a-f-]{36}$/.test(agent.id) || agent.session.header?.origin === 'subagent') return () => undefined
   const service = agent.ctx.get?.('sessionTitle') as {
@@ -88,14 +82,10 @@ export function watchTaskTitle(agent: HostAgent): () => unknown {
     requested = true
     const current = service.get!(session)
     if (current?.source.kind !== 'user' || current.messageSeqs.length !== 0 || !current.title.startsWith('Mnemon · ')) return
-    // Older versions called rename() too. Their first title is repairable without
-    // a migration, but only while no human input or subsequent title precedes it.
     for (const recorded of sessionEvents(session, 0, current.eventSeq + 1)) {
       if (recorded.type === 'user/message' && (recorded.data.source as { kind?: string } | undefined)?.kind === 'user') return
       if (recorded.type !== 'session/title') continue
       if (recorded.seq !== current.eventSeq) return
-      // The Host owns generation, fallback and cancellation on a concurrent manual
-      // rename. Title provider failure must not interrupt the conversation itself.
       void Promise.resolve().then(() => {
         if (contextIsActive(agent.ctx) && service.get!(session)?.eventSeq === current.eventSeq) return service.refresh!(session)
       }).catch(() => undefined)
@@ -113,7 +103,6 @@ interface ReservedChild {
 
 const creatingChild = new AsyncLocalStorage<ReservedChild>()
 
-/** Share one reservation across guard, continuation and composition wrappers, never across nested runs. */
 export function withReservedChild<T>(parent: HostAgent, operation: () => Promise<T>, fresh = false, id?: string): Promise<T> {
   const current = creatingChild.getStore()
   if (!fresh && current?.parent === parent && !current.claimed) return operation()
@@ -137,7 +126,6 @@ export function isCreatingChild(agents: HostAgentsService, child: HostAgent): bo
   return current !== undefined && isReservedChild(agents, current.parent, child)
 }
 
-/** A lineage string or same-tree relationship is not a creation capability. */
 export function isReservedChild(
   agents: { get?(id: string): HostAgent | undefined } | undefined,
   parent: HostAgent,

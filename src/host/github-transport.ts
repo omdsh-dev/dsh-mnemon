@@ -1,68 +1,36 @@
-/**
- * How GitHub sign-in reaches GitHub.
- *
- * The plugin asks for the ambient `fetch`: that is the seam a launcher installs
- * a proxy policy on, so an explicit dispatcher here would override a policy
- * rather than honour it. On a network where GitHub is reachable only through a
- * proxy the launcher never heard about — one set in Windows' own settings, for
- * instance — the ambient request cannot connect at all and the page could only
- * report `fetch failed`.
- *
- * This module keeps the ambient request as the first choice and, only after it
- * fails to connect, retries the same request once through a proxy discovered
- * from the environment or, on Windows, from the system proxy settings, over a
- * CONNECT tunnel built from Node's own `http`, `tls` and `https` modules. No
- * dependency is added, no global dispatcher is replaced, and a launcher policy
- * that did install one keeps working untouched.
- */
 import { execFileSync } from 'node:child_process'
 import { request as httpRequest } from 'node:http'
 import { Agent, request as httpsRequest } from 'node:https'
 import type { Duplex } from 'node:stream'
 import { connect as tlsConnect, type TLSSocket } from 'node:tls'
 
-/** A proxy to reach, and where the plugin learned about it. */
 export interface MnemonGitHubProxy {
-  /** The proxy URL, such as `http://127.0.0.1:7890`. */
   url: string
-  /** The settings that named it, so a failure can name them back. */
   source: 'environment' | 'system'
 }
 
-/** A proxy plus the hosts that must not use it. */
 export interface MnemonGitHubProxyRoute {
   proxy: MnemonGitHubProxy
-  /** The bypass list that came with the proxy, when it carried one. */
   bypass?: string
 }
 
-/** The request shape both the ambient `fetch` and the tunnel satisfy. */
 export type MnemonGitHubFetch = typeof fetch
 
 export const MNEMON_GITHUB_TUNNEL_TIMEOUT_MS = 15_000
 export const MNEMON_GITHUB_REGISTRY_TIMEOUT_MS = 5_000
 
-/**
- * The environment names a proxy may hide in, in the order undici reads them:
- * lowercase wins over uppercase, and `all_proxy` is the last resort.
- */
 const PROXY_ENV_NAMES = [['https_proxy', 'HTTPS_PROXY'], ['http_proxy', 'HTTP_PROXY'], ['all_proxy', 'ALL_PROXY']] as const
 const BYPASS_ENV_NAMES = ['no_proxy', 'NO_PROXY'] as const
 
 const WINDOWS_INTERNET_SETTINGS = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings'
 const WINDOWS_PROXY_ENTRY = /^\s+(ProxyEnable|ProxyServer|ProxyOverride)\s+REG_(?:DWORD|SZ|EXPAND_SZ)\s+(\S.*)$/u
 
-/**
- * The ways a request dies before it is an answer. undici wraps the real reason
- * in `cause`, so a message and every cause below it are inspected.
- */
 const TRANSPORT_MARKERS = [
   'fetch failed', 'ECONNRESET', 'ECONNREFUSED', 'ECONNABORTED', 'ETIMEDOUT',
   'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH', 'EPIPE',
   'UND_ERR_', 'socket hang up', 'other side closed', 'network socket disconnected',
 ] as const
 
-/** Whether an error means the request never reached a server. */
 export function isTransportFailure(error: unknown): boolean {
   for (let current: unknown = error, depth = 0; current !== undefined && current !== null && depth < 5; depth += 1) {
     if (current instanceof Error) {
@@ -78,18 +46,15 @@ export function isTransportFailure(error: unknown): boolean {
   return false
 }
 
-/** Whether the caller itself stopped the request, which is never retried. */
 export function isAbortError(error: unknown): boolean {
   return error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')
 }
 
-/** Whether a host is this machine, which no proxy is ever asked about. */
 export function isLoopbackHost(host: string): boolean {
   const name = host.trim().toLowerCase().replace(/^\[|\]$/gu, '')
   return name === 'localhost' || name === '::1' || name.startsWith('127.')
 }
 
-/** Read one proxy setting, accepting both spellings and refusing blanks. */
 function proxyUrl(raw: string): string | undefined {
   const value = raw.trim()
   if (value === '') return undefined
@@ -110,7 +75,6 @@ function firstSetting(environment: NodeJS.ProcessEnv, names: readonly string[]):
   return undefined
 }
 
-/** The proxy this process was launched with, if any. */
 export function proxyFromEnvironment(environment: NodeJS.ProcessEnv = process.env): MnemonGitHubProxyRoute | undefined {
   for (const names of PROXY_ENV_NAMES) {
     const raw = firstSetting(environment, names)
@@ -123,10 +87,6 @@ export function proxyFromEnvironment(environment: NodeJS.ProcessEnv = process.en
   return undefined
 }
 
-/**
- * Read the shape Windows writes: one `host:port` for every protocol, or one
- * entry per protocol as `http=host:port;https=host:port`.
- */
 export function parseWindowsProxy(enable: string | undefined, server: string | undefined): MnemonGitHubProxy | undefined {
   if (server === undefined || server.trim() === '') return undefined
   const enabled = enable === undefined || /^(?:0x)?0*1$/iu.test(enable.trim())
@@ -146,7 +106,6 @@ export function parseWindowsProxy(enable: string | undefined, server: string | u
   return url === undefined ? undefined : { url, source: 'system' }
 }
 
-/** Whether a bypass list (`NO_PROXY` or `ProxyOverride`) covers a host. */
 export function proxyBypassesHost(bypass: string | undefined, host: string): boolean {
   if (bypass === undefined) return false
   const name = host.trim().toLowerCase().replace(/^\[|\]$/gu, '')
@@ -162,7 +121,6 @@ export function proxyBypassesHost(bypass: string | undefined, host: string): boo
   return false
 }
 
-/** Run `reg.exe` once; any failure means "this machine says nothing". */
 function readRegistry(command: string, args: string[]): string {
   return execFileSync(command, args, {
     encoding: 'utf8',
@@ -172,7 +130,6 @@ function readRegistry(command: string, args: string[]): string {
   })
 }
 
-/** The proxy Windows itself would use, read from the current user's settings. */
 export function readWindowsProxySettings(
   run: (command: string, args: string[]) => string = readRegistry,
 ): MnemonGitHubProxyRoute | undefined {
@@ -193,10 +150,6 @@ export function readWindowsProxySettings(
   return { proxy, ...(override === undefined || override === '' ? {} : { bypass: override }) }
 }
 
-/**
- * The proxy to fall back to: the environment first, because a launcher that
- * exported one meant it, then this machine's own system settings.
- */
 export function discoverGitHubProxy(options: {
   environment?: NodeJS.ProcessEnv
   platform?: NodeJS.Platform
@@ -212,7 +165,6 @@ export function discoverGitHubProxy(options: {
   }
 }
 
-/** Open one CONNECT tunnel through the proxy and finish its TLS handshake. */
 function connectThroughProxy(
   proxy: URL,
   host: string,
@@ -299,7 +251,6 @@ function connectThroughProxy(
   })
 }
 
-/** An agent whose every connection is a tunnel through one proxy. */
 class TunnelAgent extends Agent {
   constructor(
     private readonly proxy: URL,
@@ -345,17 +296,11 @@ function headerRecord(headers: HeadersInit | undefined): Record<string, string> 
   return { ...(headers as Record<string, string>) }
 }
 
-/**
- * What a tunnelled request read back, as a `fetch` answer: the status, the text and its
- * content type, which is all this channel uses. The type says how to read a body that
- * is not JSON, such as the form GitHub's sign-in answers with when no JSON was asked for.
- */
 export function tunnelAnswer(status: number, type: string | undefined, text: string): Response {
   const body = status === 204 || status === 205 || status === 304 ? null : text
   return new Response(body, { status, ...(type === undefined ? {} : { headers: { 'content-type': type } }) })
 }
 
-/** The request one tunnel performs, as a `fetch`-shaped answer. */
 function tunnelRequest(target: URL, url: string, init: RequestInit, timeoutMs = MNEMON_GITHUB_TUNNEL_TIMEOUT_MS): Promise<Response> {
   return new Promise<Response>((resolve, reject) => {
     const signal = init.signal ?? undefined
@@ -384,7 +329,6 @@ function tunnelRequest(target: URL, url: string, init: RequestInit, timeoutMs = 
   })
 }
 
-/** A `fetch` that reaches every host through one proxy. */
 export function createTunnelFetch(proxy: MnemonGitHubProxy, timeoutMs = MNEMON_GITHUB_TUNNEL_TIMEOUT_MS): MnemonGitHubFetch {
   let target: URL
   try {
@@ -395,7 +339,6 @@ export function createTunnelFetch(proxy: MnemonGitHubProxy, timeoutMs = MNEMON_G
   return (async (input: RequestInfo | URL, init: RequestInit = {}) => tunnelRequest(target, urlOf(input), init, timeoutMs)) as MnemonGitHubFetch
 }
 
-/** One line naming what went wrong, with the reason undici hid in `cause`. */
 export function describeTransportError(error: unknown): string {
   if (!(error instanceof Error)) return String(error)
   const parts = [error.message]
@@ -412,20 +355,11 @@ function unreachable(host: string, error: unknown, detail: string): Error {
 }
 
 export interface MnemonGitHubTransportOptions {
-  /** The request that goes first; the ambient `fetch` by default. */
   ambient?: MnemonGitHubFetch
-  /** Where a proxy is discovered from; the environment and Windows by default. */
   discover?: () => MnemonGitHubProxyRoute | undefined
-  /** How one proxy is reached; a CONNECT tunnel by default. */
   tunnel?: (proxy: MnemonGitHubProxy) => MnemonGitHubFetch
 }
 
-/**
- * The request this channel sends: the ambient `fetch` first, and one retry
- * through a discovered proxy when that cannot connect. A proxy that worked is
- * remembered, and a proxy that stops working is forgotten, so a machine that
- * moves between networks keeps reaching GitHub without a restart.
- */
 export function createGitHubTransport(options: MnemonGitHubTransportOptions = {}): MnemonGitHubFetch {
   const ambient = options.ambient ?? fetch
   const discover = options.discover ?? ((): MnemonGitHubProxyRoute | undefined => discoverGitHubProxy())
@@ -466,8 +400,6 @@ export function createGitHubTransport(options: MnemonGitHubTransportOptions = {}
         proxied = attempt
         return response
       } catch (tunnelError) {
-        // A caller that aborted still gets its abort; anything else is the
-        // fallback failing, which is worth naming together with the proxy.
         if (isAbortError(tunnelError)) throw tunnelError
         throw unreachable(host, error, '; the ' + route.proxy.source + ' proxy ' + route.proxy.url + ' could not reach it either: ' + describeTransportError(tunnelError))
       }

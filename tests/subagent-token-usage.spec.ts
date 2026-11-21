@@ -19,8 +19,8 @@ import {
 import type { HostSessionEvent } from "../src/host/dsh.ts"
 import {
   MNEMON_SUBAGENT_TOKEN_USAGE_KEY as key,
-  mnemonSubagentTokenUsageProjectionDefinition as projection,
-  registerMnemonSubagentTokenUsageProjection,
+  subagentTokenUsageProjection as projection,
+  registerSubagentTokenUsage,
   type MnemonSubagentTokenUsageState,
   type MnemonTokenUsageProjection,
 } from "../src/host/subagent-token-usage.ts"
@@ -92,7 +92,7 @@ describe('Mnemon subagent token-usage projection', () => {
     const inject = vi.fn((_services: string[], callback: (ctx: unknown) => void) => {
       callback({ sessionProjections: { register } })
     })
-    registerMnemonSubagentTokenUsageProjection({ inject } as never)
+    registerSubagentTokenUsage({ inject } as never)
 
     expect(inject).toHaveBeenCalledWith(['sessionProjections'], expect.any(Function))
     expect(register).toHaveBeenCalledWith(projection)

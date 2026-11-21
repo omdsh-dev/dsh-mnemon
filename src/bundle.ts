@@ -1,9 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { prepareStarterResolution } from './starter-resolution.ts'
 
-// Public Cordis keys: `cordis.group` marks a Loader tree carrier whose config is
-// a child entry list (the Loader leaves its expressions to the children), and
-// `cordis.init` is Service.init.
 const groupKey = Symbol.for('cordis.group')
 const init = Symbol.for('cordis.init')
 
@@ -14,7 +11,6 @@ interface NativeGroup {
 type NativeGroupClass = new (ctx: Context, config: unknown) => NativeGroup
 type EntryOptions = { id?: string; name?: string }
 
-/** Remove only redundant stock, disabled-by-default strategy bundle layers. */
 async function starterEntries(ctx: Context, config: unknown): Promise<unknown> {
   if (!Array.isArray(config)) return config
   const owner = ctx.fiber as unknown as { entry?: { options: EntryOptions; parent: { data: EntryOptions[]; unlink(options: EntryOptions): void } } }
@@ -35,8 +31,6 @@ async function starterEntries(ctx: Context, config: unknown): Promise<unknown> {
   if (duplicates.length === 0) return config
   const redundant = duplicates.map(layer => layer.packageName)
   const duplicateIds = new Set(duplicates.map(layer => layer.patches[0]!.insert![0]!.id))
-  // Recompose before writing: profile/home/CLI overrides still decide switches
-  // and options. Custom component bundles and the installed packages stay intact.
   const layers = loaded.layers.filter(layer => !redundant.includes(layer.packageName))
   const rows = app.composeEntries([app.readProfilePatches('dsh-mnemon', profile, { ...loaded, layers })])
   const owners = rows.filter(row => row.id === 'mnemon-bundle' && row.name === 'dsh-mnemon/bundle')
@@ -44,7 +38,6 @@ async function starterEntries(ctx: Context, config: unknown): Promise<unknown> {
   if (owners.length !== 1 || !Array.isArray(bundle?.config)) return config
   const flatten = (values: typeof rows): typeof rows => values.flatMap(row => [row, ...(row.group && Array.isArray(row.config) ? flatten(row.config) : [])])
   const canonical = flatten(rows)
-  // An extra manual insertion needs explicit repair, not a partial migration.
   if ([...duplicateIds].some(id => canonical.filter(row => row.id === id).length !== 1)) return config
   const manifest = app.readProfileManifest('dsh-mnemon', profile.dir)
   const bundles = manifest.dsh?.profile?.bundles
@@ -57,9 +50,6 @@ async function starterEntries(ctx: Context, config: unknown): Promise<unknown> {
     ctx.logger.warn('Cannot remove redundant Mnemon strategy bundle selections; keep the Starter bundle and deselect %s: %s', redundant.join(', '), String(error))
     return config
   }
-  // Retire the duplicate sibling from its old native group's update list.
-  // Older Loaders otherwise delete the shared Entry on the next reconciliation,
-  // even after this Starter has taken ownership. unlink() does not dispose it.
   for (const sibling of [...owner.entry.parent.data]) {
     if (sibling.id !== undefined && duplicateIds.has(sibling.id)
       && config.some(child => child.id === sibling.id && child.name === sibling.name)) {
@@ -69,12 +59,6 @@ async function starterEntries(ctx: Context, config: unknown): Promise<unknown> {
   return bundle.config
 }
 
-/**
- * The Starter's component group (`mnemon-bundle`). It makes the Starter's
- * dependency closure visible, then mounts the children with the Loader's own
- * `cordis:group`, so a component enabled without a restart resolves and no
- * separate readiness Entry can be turned off while the group waits for it.
- */
 export default class MnemonBundle {
   static inject = ['loader']
   static [groupKey] = true
@@ -83,12 +67,8 @@ export default class MnemonBundle {
 
   async *[init](): AsyncGenerator<() => void, void, unknown> {
     await prepareStarterResolution(this.ctx)
-    // DSH registers the native group for `cordis:group` rows before it mounts a profile.
     const Group = (this.ctx as unknown as { loader?: { builtins?: { group?: NativeGroupClass } } }).loader?.builtins?.group
     if (typeof Group !== 'function') throw new Error('dsh-mnemon/bundle needs the Loader\'s cordis:group builtin')
-    // Constructed in this fiber, the native group owns this Entry's children and config updates.
-    // A separately selected stock strategy bundle otherwise races this group
-    // for the same Loader id and makes the Host manager mark it unaddressable.
     const entries = await starterEntries(this.ctx, this.config)
     const group = new Group(this.ctx, entries)
     yield () => group.stop()

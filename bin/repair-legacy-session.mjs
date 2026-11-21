@@ -20,10 +20,6 @@ const count = value => integer(value) && value >= 0
 const exactKeys = (value, required, optional = []) => record(value) && required.every(key => Object.hasOwn(value, key)) &&
   Object.keys(value).every(key => required.includes(key) || optional.includes(key))
 
-// Official dsh-subagent 0.1.1-rc.2 v2 -> 0.1.2-alpha.2 v3 adds only the
-// optional agentReasoningEffort composition input. With that field absent,
-// these exact old records reconstruct the same declared child options. Apply
-// the stricter frozen-v3 constraints too; accepting v2 alone is insufficient.
 function supportedDescriptorV2(value) {
   if (!record(value) || value.version !== 2 || !nonempty(value.provider)) return false
   const base = ['version', 'mode', 'provider', 'label']
@@ -71,8 +67,6 @@ function supportedNullToolDelta(row) {
     chunk.name === null && count(chunk.index) && typeof chunk.id === 'string' && typeof chunk.argumentsDelta === 'string'
 }
 
-// This is a proof for the published DeepSeek empty-continuation-ID bug, not a
-// nearest-call heuristic. Everything is planned before any output is published.
 function recoverRecordedToolIdentities(entries) {
   const rawPatches = new Map()
   const packedIds = new Map()
@@ -95,7 +89,7 @@ function recoverRecordedToolIdentities(entries) {
   try {
     for (const entry of entries.slice(1)) {
       const row = entry.row
-      objectMembers(entry.line, 0) // Sequence identity cannot come from duplicate envelope keys.
+      objectMembers(entry.line, 0)
       if (row.type === 'turn/start') turn = row.data?.turn
       if (row.type === 'step/start') { turn = row.data?.turn; step = row.data?.step }
       entry.scope = { turn: row.data?.turn ?? turn, step: row.data?.step ?? step }
@@ -143,8 +137,6 @@ function recoverRecordedToolIdentities(entries) {
       previous = end
     }
     require(!nonempty || selected.size > 0, 'A completed tool stream needs nonempty chunk provenance.')
-    // v0 accepts unordered flat sets, but the active v1 -> v2 stage requires an
-    // ordered complete attempt. Do not silently rewrite that provenance here.
     return [...selected].sort((left, right) => left - right)
   }
   const sameStep = (left, right) => left?.turn === right?.turn && left?.step === right?.step
@@ -300,8 +292,6 @@ function recoverRecordedToolIdentities(entries) {
           if (!owned.has(entry)) owned.set(entry, new Set())
           owned.get(entry).add(JSON.stringify(path))
         }
-        // Only the exact slots of proven advertisement/call/result chains are
-        // owned; another core-looking call is not automatically trustworthy.
         for (const slots of provenChains) for (const [value, path] of slots) allow(value.entry, path)
         const linkedSeqs = new Set([...sources, row.seq, proposal.call.row.seq, proposal.toolResult.row.seq])
         const linkedMessages = new Set([data.message.id, proposal.toolResult.row.data.message.id])
@@ -368,9 +358,6 @@ function recoverRecordedToolIdentities(entries) {
   return result()
 }
 
-// Diagnose the other concrete legacy shapes reported in #251 without inventing
-// descriptor authority or tool associations. This is not a Session validator:
-// the owning DSH installation still validates the complete repaired artifact.
 function legacyBlockers() {
   const issues = new Map()
   const add = (code, message, row, line, path) => {
@@ -408,14 +395,13 @@ function legacyBlockers() {
       }
       if (row?.type === 'assistant/message') {
         message(data?.message, row, line, 'data.message')
-        // Frozen v0 also normalizes the older unwrapped assistant shape.
         if (record(data) && !Object.hasOwn(data, 'message') && Object.hasOwn(data, 'content') && Object.hasOwn(data, 'provenance')) {
           message(data, row, line, 'data')
         }
       }
       if (row?.type === 'tool/call') identifier(data?.callId, row, line, 'data.callId')
       if (row?.type === 'tool/result') {
-        identifier(data?.callId, row, line, 'data.callId') // Historical unwrapped result.
+        identifier(data?.callId, row, line, 'data.callId')
         message(data?.message, row, line, 'data.message')
       }
     },
@@ -423,8 +409,6 @@ function legacyBlockers() {
   }
 }
 
-// Locate JSON object members without reserializing message content or numbers.
-// JSON.parse validates each complete row before this scanner is used.
 function objectMembers(text, start, array = false) {
   let cursor = start
   const space = () => { while (/\s/.test(text[cursor] ?? '') && cursor < text.length) cursor++ }
@@ -466,7 +450,7 @@ function objectMembers(text, start, array = false) {
       if (names.has(name)) throw new Error('Duplicate JSON property in the legacy message path; refusing ambiguous repair.')
       names.add(name)
       space()
-      cursor++ // colon, already validated by JSON.parse
+      cursor++
       space()
     }
     const valueStart = cursor
@@ -474,7 +458,7 @@ function objectMembers(text, start, array = false) {
     members.push({ name, start, end: cursor, valueStart })
     space()
     if (text[cursor] === close) break
-    cursor++ // comma
+    cursor++
     space()
   }
   return members
@@ -514,7 +498,7 @@ function promoteDescriptor(line) {
   const data = objectMembers(line, 0).find(member => member.name === 'data')
   const members = objectMembers(line, data.valueStart)
   const filter = members.find(member => member.name === 'toolFilter')
-  if (filter) objectMembers(line, filter.valueStart) // Reject ambiguous nested fields as well.
+  if (filter) objectMembers(line, filter.valueStart)
   const version = members.find(member => member.name === 'version')
   return line.slice(0, version.valueStart) + '3' + line.slice(version.end)
 }
@@ -523,23 +507,16 @@ function normalizeNullToolName(line) {
   const data = objectMembers(line, 0).find(member => member.name === 'data')
   const chunk = objectMembers(line, data.valueStart).find(member => member.name === 'chunk')
   const name = objectMembers(line, chunk.valueStart).find(member => member.name === 'name')
-  // Old/current assemblers only assign truthy names; token timing instead uses
-  // name !== undefined. Keep this property: deleting it would change TTFT for
-  // an empty argument fragment. Every other raw byte remains unchanged.
   return line.slice(0, name.valueStart) + '""' + line.slice(name.end)
 }
 
 function expandPackedToolRun(line, row, retain, recoveredIds) {
   const data = objectMembers(line, 0).find(member => member.name === 'data')
-  objectMembers(line, data.valueStart) // Reject duplicate fields before reserializing this row.
+  objectMembers(line, data.valueStart)
   let time = row.time0
   const expanded = []
   for (let index = 0; index < row.data.args.length; index++) {
     if (index > 0) time += row.data.dt[index - 1]
-    // Historical packed-row expansion after preserving null-name presence as
-    // an empty string. No ID/name inference and
-    // no dropped chunks: the active v1 -> v2 migration retains these as raw
-    // stream records when their IDs or names are empty strings.
     expanded.push(retain(JSON.stringify({
       type: 'assistant/chunk', seq: row.seq0 + index, time,
       data: { turn: row.data.turn, step: row.data.step, chunk: {
@@ -562,8 +539,6 @@ async function readBounded(path) {
   return Buffer.concat(chunks)
 }
 
-// RFC 8878 framing: reject torn headers, blocks and checksums before Node's
-// decoder (which can otherwise accept an unfinished frame) sees the bytes.
 function frameLength(input, start) {
   const requireBytes = end => { if (end > input.length) throw new Error('Truncated Zstandard frame; no output written.') }
   requireBytes(start + 5)
@@ -608,7 +583,6 @@ function decodeFrames(input) {
 }
 
 function encodeFrames(text) {
-  // DSH requires the first frame to contain exactly its header line.
   const end = text.indexOf('\n') + 1
   const options = { params: { [zlib.constants.ZSTD_c_checksumFlag]: 1 } }
   return Buffer.concat([text.slice(0, end), text.slice(end)].filter(Boolean).map(part => zlib.zstdCompressSync(part, options)))
@@ -621,12 +595,10 @@ async function writeRepairCopy(input, output, result) {
     const path = join(temporary, 'session')
     const file = await open(path, 'wx', 0o600)
     try { await file.writeFile(result); await file.sync() } finally { await file.close() }
-    // Publish exclusively, including when output is a symlink or hard link.
     await link(path, output)
   } finally { await rm(temporary, { recursive: true, force: true }) }
 }
 
-/** Preserve the complete audit payload and all offsets; never truncate history. */
 async function repairIdleProbeSession(entries, original, compressed, input, output) {
   const header = entries[0].row
   assertUniqueJson(entries[0].line, header)
@@ -776,7 +748,6 @@ export async function repairLegacySession(input, output) {
     return retain(removeSummary(line))
   }).join('')
   const plain = Buffer.from(repaired)
-  // A clean artifact stays byte-identical, including its existing frame layout.
   const result = changes + descriptors + expandedRows + normalizedNames + recovery.fields === 0 ? original : compressed ? encodeFrames(repaired) : plain
   if (result.length > maximumBytes) throw new Error('Repaired Session exceeds the 128 MiB repair limit; no output written.')
   const blockers = diagnostics.report()
@@ -822,8 +793,6 @@ async function main(args) {
   }
 }
 
-// npm global installs expose this executable through a symlink. Resolve both
-// sides while keeping imports from stdin or another entry point side-effect free.
 function isEntrypoint() {
   try { return process.argv[1] !== undefined && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url)) }
   catch { return false }

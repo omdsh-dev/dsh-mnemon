@@ -1,9 +1,3 @@
-/**
- * The deterministic post-turn review gate.
- *
- * It scores user text length rather than provider token usage, which keeps
- * the gate stable when an adapter omits usage data.
- */
 export const POST_TURN_REVIEW_POLICY = Object.freeze({
   reviewThreshold: 5,
   textLengthScoreUnit: 50,

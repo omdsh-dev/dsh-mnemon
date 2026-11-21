@@ -19,7 +19,7 @@ import { idleReviewBlockReason, reviewLayerPolicy, startGuardedChild, startGuard
 import { reviewCheckpoint } from './review-checkpoint.ts'
 import { startWithContinuationTurns } from './continuation-turn.ts'
 import { assertAgentMemoryIncluded } from './workspace-exclusion.ts'
-import { activationOwned, configuredProviderNames, contextIsActive, isInactiveContextError, isTaskRecord, type ProviderConfigurationHost } from './agent-compat.ts'
+import { configuredProviderNames, contextIsActive, isInactiveContextError, isTaskRecord, type ProviderConfigurationHost } from './agent-compat.ts'
 import { childComposition, startSubagent, type SubagentStartAgents } from './subagent-start.ts'
 import type { IdleReviewFailure, MemoryToolName } from './protocol.ts'
 import { assertDshOutputSchema, assertDshOutputValue } from './subagent-output-schema.ts'
@@ -51,23 +51,14 @@ function evidenceInsights(evidence: MemoryEvidence): RecallInsight[] {
   })
 }
 
-/**
- * Every task dsh-mnemon delegates to a child Agent starts with one line of its own, such as
- * `[dsh-mnemon:delegated review]` (#393). DSH records the task as the child's prompt from a
- * person, so a plugin that reads sessions, such as one that collects a workspace's work, can
- * rely on this line, documented as stable, to leave Mnemon's own children out.
- */
 export const DELEGATED_TASK_PREFIX = '[dsh-mnemon:delegated '
-/** Every kind of task dsh-mnemon delegates, as its line names it. */
 export const DELEGATED_OPERATIONS = ['write', 'answer', 'review', 'placement', 'migration', 'compaction', 'document-archive', 'metadata-maintenance', 'reconcile', 'skill'] as const
 export type DelegatedOperation = typeof DELEGATED_OPERATIONS[number]
-/** The line as the reference documents it for readers of DSH sessions. */
 export const DELEGATED_TASK_LINE = /^\[dsh-mnemon:delegated [a-z-]+\]$/u
 export function delegatedTaskLine(operation: DelegatedOperation): string {
   return `${DELEGATED_TASK_PREFIX}${operation}]`
 }
 
-// Which memory tools each delegated child may call; every name is a row of the tool table.
 const READ_TOOLS: MemoryToolName[] = ['mnemon_memory_bodies', 'mnemon_recall', 'mnemon_related']
 const WRITE_TOOLS: MemoryToolName[] = [
   ...READ_TOOLS,
@@ -78,16 +69,11 @@ const WRITE_TOOLS: MemoryToolName[] = [
   'mnemon_memory_body_update',
   'mnemon_memory_body_merge',
 ]
-// Distillation is an autonomous run: the model decides what to keep, so it
-// must never be able to delete existing entries (issue #148). Explicit user
-// instructions such as /mnemon forget keep a dedicated worker that still owns
-// the forget tool.
 const AUTONOMOUS_WRITE_TOOLS = WRITE_TOOLS.filter(tool => tool !== 'mnemon_forget')
 const EXPLICIT_WRITE_TOOLS = WRITE_TOOLS
 const DOCUMENT_READ_TOOLS: MemoryToolName[] = ['mnemon_document_search']
 const REVIEW_TOOLS: MemoryToolName[] = [...DOCUMENT_READ_TOOLS, 'mnemon_runtime_memory', 'mnemon_document_create']
 const RESULT_TOOL_NAME = 'mnemon_subagent_result'
-/** How many finished delegated children stay refused memory tools if DSH resumes one. */
 const FINISHED_CHILDREN = 1_000
 const RESULT_TOOL_INPUT_SCHEMA = {
   type: 'object',
@@ -161,19 +147,14 @@ export interface RecallResult {
   query: string
   mode: string
   results: RecallInsight[]
-  /** The Strategy ran no query for this call, so `results` holds nothing of its own. */
   notRun?: true
-  /** It did not run because the turn's budget for this read was spent. */
   budgetExhausted?: true
-  /** Core read identity/usage; truncated also includes the Host's final admission limits. */
   memoryEvidence?: Omit<MemoryEvidence, 'items'>
   hint?: string
 }
 
-/** What a memory saved without a vector means for recall, and how its vector comes. */
 const UNEMBEDDED_HINT = 'Saved without a vector, because embedding did not succeed: semantic matching misses it until its vector is filled in, while keyword, link and recency recall still reach it. Once the embedding service answers, the user fills it in from Test status in the Mnemon Native embedding settings, which runs through the storage root and embedding settings DSH uses; a terminal mnemon command may reach neither.'
 
-/** The memories a write saved without a vector: Mnemon Native says so with `embedded: false` (#388). */
 function withoutVector(receipts: readonly CapturedToolReceipt[]): Array<{ memoryBodyId?: string; id?: string }> {
   return receipts.filter(receipt => isTool(receipt.name, 'mnemon_remember')).flatMap(receipt => {
     const value = optionalObject(receipt.value)
@@ -182,17 +163,8 @@ function withoutVector(receipts: readonly CapturedToolReceipt[]): Array<{ memory
   })
 }
 
-/** A Memory Space write tool: each switches on the space it goes to. */
 const SPACE_WRITE_TOOLS: ReadonlySet<string> = new Set<MemoryToolName>(['mnemon_remember', 'mnemon_link'])
 
-/**
- * Holds a delegated write to the Memory Space its caller named, and keeps a writer
- * from switching a space back on: a write or a link switches on the space it goes to,
- * so a space that was inactive when the run started takes one only when the caller
- * named it (#387). A space the writer creates is not in `inactive` and takes its first
- * write. Saving a memory never merges spaces: a merge switches spaces on and off, and
- * is a request of its own.
- */
 export function spaceWriteGuard(target: string | undefined, inactive: ReadonlySet<string>): (execution: ToolExecution) => string | undefined {
   return execution => {
     if (isTool(execution.name, 'mnemon_memory_body_merge')) {
@@ -218,12 +190,6 @@ export function spaceWriteGuard(target: string | undefined, inactive: ReadonlySe
   }
 }
 
-/**
- * Why a write cannot go to the Memory Space its caller named, before a writer runs (#387):
- * the space is unknown, its Provider is off or takes no writes, or it is switched off and
- * the caller did not ask to switch it on. A model names a space by its description, the
- * judgement that misplaced memories before; switching a space back on is its own request.
- */
 function targetProblem(spaces: MemorySpaceCatalog['items'], target: string, activate: boolean): string | undefined {
   const body = spaces.find(candidate => candidate.id === target)
   if (body === undefined) {
@@ -238,7 +204,6 @@ function targetProblem(spaces: MemorySpaceCatalog['items'], target: string, acti
   return undefined
 }
 
-/** Whether a write receipt put the memory in its space, or handed it to a Provider that confirms later. */
 function writeLanded(value: Record<string, unknown>): boolean {
   if (mutationResultCommitted(value)) return true
   const state = [value.action, value.status, value.state].find((entry): entry is string => typeof entry === 'string')?.trim().toLocaleLowerCase()
@@ -249,7 +214,6 @@ export function isSubagent(agent: HostAgent | undefined): boolean {
   return agent?.session.header?.origin === 'subagent'
 }
 
-/** Delegates memory judgment and execution to a fresh, tool-scoped DSH child. */
 export class MnemonSubagentCoordinator {
   private readonly counters: SubagentCounters = { recalls: 0, writes: 0, answers: 0, reviews: 0, placements: 0, migrations: 0, compactions: 0, documentArchives: 0, metadataMaintenances: 0, reconciliations: 0, skills: 0, failures: 0 }
   private runtimeQueue: Promise<unknown> = Promise.resolve()
@@ -259,7 +223,6 @@ export class MnemonSubagentCoordinator {
   private disposeResultTool: (() => unknown) | undefined
   private disposeResumeGuard: (() => unknown) | undefined
   private disposeTaskNotices: (() => unknown) | undefined
-  /** Delegated children whose run has ended, newest last, at most FINISHED_CHILDREN. */
   private readonly finishedChildren = new Set<string>()
   private readonly standaloneReviewIds = new Set<string>()
   private isolatedReviewRunner: IsolatedReviewRunner | undefined
@@ -274,9 +237,9 @@ export class MnemonSubagentCoordinator {
     private readonly subagents: HostSubagentsService,
     private readonly runtimeSource: AgentRuntimeSource,
     private readonly resultRuntime?: HostResultToolRuntime,
-    private readonly taskAgentModelResolver?: () => { provider: string; model: string } | undefined,
-    private readonly runtimeMaintenanceMaxTokensResolver?: () => number,
-    private readonly runtimeMaintenanceTaskRunner?: RuntimeMaintenanceTaskRunner,
+    private readonly taskModelResolver?: () => { provider: string; model: string } | undefined,
+    private readonly maintenanceMaxTokens?: () => number,
+    private readonly maintenanceRunner?: RuntimeMaintenanceTaskRunner,
   ) {
     if (resultRuntime === undefined) return
     const registration = resultRuntime.tools.register({
@@ -300,9 +263,6 @@ export class MnemonSubagentCoordinator {
     })
     if (typeof registration !== 'function') throw new Error('dsh-mnemon subagent result tool registration did not return a disposer')
     this.disposeResultTool = registration as () => unknown
-    // A direct user continuation belongs to its own conversation. DSH's cold
-    // resume defaults to parent delivery; replaying that settlement to the old
-    // caller can make it undo the new user's changes to satisfy its old request.
     const notices = resultRuntime.on('agent/pre-step', (async (step: { agent: HostAgent; step: number; messages: HostUserMessage[] }, next: () => Promise<HostPreStepDecision>) => {
       const ignored = new Set(step.messages.filter(message => {
         const source = message.source as { kind: string; senderSessionId?: string }
@@ -310,8 +270,6 @@ export class MnemonSubagentCoordinator {
           && (isTaskRecord(source.senderSessionId) || this.finishedChildren.has(source.senderSessionId))
       }).map(message => message.id))
       if (ignored.size === 0) return next()
-      // Empty first-step entry consumes this notice without a model call or a
-      // blocked/error turn. Preserve concurrent human/other task messages.
       if (step.step === 1 && ignored.size === step.messages.length) return { kind: 'enter', messages: [] }
       const decision = await next()
       return decision.kind === 'reject' ? decision : { ...decision, messages: decision.messages.filter(message => !ignored.has(message.id)) }
@@ -366,12 +324,9 @@ export class MnemonSubagentCoordinator {
     if (depths.some(depth => !Number.isSafeInteger(depth) || depth < 0 || Object.is(depth, -0) || depth === Number.MAX_SAFE_INTEGER)) {
       throw new Error('Cannot determine a safe delegation depth for this continued task')
     }
-    // Host maxDepth is an absolute per-start cap. A fresh human request may
-    // start one worker below its saved depth; that worker retains the normal cap.
     return Math.max(...depths) + 1
   }
 
-  /** User continuation is a fresh scoped turn, never revival of a delegated run. */
   continueTask(agent: HostAgent): void {
     if (this.continuations.has(agent) || this.disposed || !contextIsActive(agent.ctx)) return
     if (typeof agent.ctx.effect !== 'function' || this.resultRuntime?.agents?.get === undefined) {
@@ -393,7 +348,6 @@ export class MnemonSubagentCoordinator {
     this.continuations.set(agent, dispose)
   }
 
-  /** Spawn may use an independent tool scope, so transfer the turn guard explicitly. */
   inheritTaskContinuation(parent: HostAgent, child: HostAgent): void {
     const owner = this.continuationOwners.get(parent)
     if (owner === undefined || this.continuations.has(child) || !contextIsActive(parent.ctx) || !contextIsActive(child.ctx)) return
@@ -412,11 +366,6 @@ export class MnemonSubagentCoordinator {
     this.continuations.set(child, dispose)
   }
 
-  /**
-   * DSH 0.2.1 can resume a finished child from its saved state when another Agent sends it a
-   * message: with its persona and tools, but without the guard its run held. Only a fresh
-   * human turn may acquire new authority; automatic continuations remain denied (#387).
-   */
   private finished(id: string): void {
     this.finishedChildren.delete(id)
     this.finishedChildren.add(id)
@@ -441,7 +390,6 @@ export class MnemonSubagentCoordinator {
     return this.sourceFor(parent, 'documents').read<DocumentSearchResult>('search', { query, includeArchived, ...(limit === undefined ? {} : { limit }) })
   }
 
-  /** Both model aliases and generic Routes execute the selected Strategy, not Host-local quotas. */
   async documentQuery(parent: HostAgent, input: unknown, signal: AbortSignal): Promise<unknown> {
     const evidence = await this.readRoute(parent, 'documents', 'search', input, signal, true)
     return evidence.output ?? evidence
@@ -461,8 +409,6 @@ export class MnemonSubagentCoordinator {
     try {
       const turn = execution.context
       const evidence = await execution.graph.source(typeId, turn.scope).forTurn(turn).route(routeId, input, execution.signal)
-      // A read the Strategy did not run, past its turn budget or from an insight the turn never
-      // admitted, is no recall (#389).
       if (typeId === 'memory-spaces' && ['recall', 'related'].includes(routeId) && optionalObject(evidence.output)?.notRun !== true) {
         const observed = this.observedReads.get(turn) ?? new Set<string>()
         if (!observed.has(evidence.id)) { this.recordRecall(); observed.add(evidence.id) }
@@ -473,7 +419,6 @@ export class MnemonSubagentCoordinator {
     finally { execution.release() }
   }
 
-  /** Bind a model read to the Source state pinned by its own executing turn. */
   scopeRecallRequest(agent: HostAgent, request: SearchRequest, requirePinnedView = false): SearchRequest {
     const authority = this.recallAuthority(agent, requirePinnedView)
     return this.scopeRecallWithAuthority(request, authority)
@@ -583,10 +528,6 @@ export class MnemonSubagentCoordinator {
     }
   }
 
-  /**
-   * `activateTarget` lets a write the user sent to a switched-off space switch it back on.
-   * A model's mnemon_remember call never does: it switches the space on first (#387).
-   */
   remember(parent: HostAgent, request: RememberRequest, signal: AbortSignal, options: { activateTarget?: boolean } = {}): Promise<DelegatedWriteResult> {
     return this.write(parent, 'remember', request, signal, options)
   }
@@ -600,10 +541,6 @@ export class MnemonSubagentCoordinator {
       const offers = authority.context.view.actionOffers.filter(offer => offer.sourceActionId === 'mutate'
         && instances.some(source => source.sourceInstanceKey === offer.sourceInstanceKey))
       if (offers.length === 0) throw new Error('Source Action is not offered by the current View: runtime/mutate')
-      // The tool runs the offer of the instance the View binds it to, the Starter instance's when a
-      // profile mounts another runtime Source beside it (#397), and otherwise the only runtime
-      // Source the View lets it write to, as a Scoped composition can make it. The others keep
-      // their exact offers, which the View lists for mnemon_view_action.
       const bound = namedToolInstance(instances, 'runtime')
       const offer = offers.find(item => item.sourceInstanceKey === bound?.sourceInstanceKey) ?? (offers.length === 1 ? offers[0] : undefined)
       if (offer === undefined) {
@@ -626,8 +563,6 @@ export class MnemonSubagentCoordinator {
         commit: () => runtime.mutate('mutate', { ...request, preserveImportance: true }, signal),
         memorySpaces: async () => {
           if (!graph.config.writeEnabled || !this.runtimeSource.config.writeEnabled) throw new Error('dsh-mnemon is configured read-only')
-          // Memory Spaces switched off, taking no automatic writes or not installed
-          // leave the archive to the Runtime Source, as in a turn's View (#336).
           if (!allowsParticipation(graph.config, 'memory-spaces', 'write', 'automatic')
             || !lease.generation.sourceInstances().some(source => source.sourceTypeId === 'memory-spaces')) return undefined
           const source = graph.source('memory-spaces', scope).forGeneration(lease.generation)
@@ -646,7 +581,6 @@ export class MnemonSubagentCoordinator {
     return operation
   }
 
-  /** Named tools and generic Actions share one default-product write workflow. */
   action(parent: HostAgent, offerId: string, input: MemoryJsonValue, signal: AbortSignal): Promise<MemoryMutationReceipt> {
     return this.viewAction(parent, this.turnAuthority(parent, true)!, offerId, input, signal)
   }
@@ -685,7 +619,6 @@ export class MnemonSubagentCoordinator {
     } finally { lease.release() }
   }
 
-  /** Browser maintenance carries an explicit scope and revision, never a borrowed conversation. */
   async manageSource(graph: MnemonRuntimeGraph, request: MemorySourceManagementRequest): Promise<MemorySourceManagementResult> {
     request = { ...request, scope: { ...request.scope }, input: JSON.parse(JSON.stringify(request.input)) as MemoryJsonValue }
     const signal = request.signal ?? new AbortController().signal
@@ -723,12 +656,6 @@ export class MnemonSubagentCoordinator {
     } finally { lease.release() }
   }
 
-  /**
-   * Memory reconciliation. One bounded model run reads the merged local memory and
-   * proposes operations; those become a pending review and nothing else. The
-   * proposal is never applied here, because the point of the feature is that a
-   * human reads it first.
-   */
   async reconcile(graph: MnemonRuntimeGraph, scope: MemoryOperationScope, signal: AbortSignal, options: MnemonReconcileOptions = {}): Promise<MnemonReconcileResult> {
     const machine = graph.packs.identity()
     const lease = graph.memoryComposition.acquire()
@@ -737,13 +664,9 @@ export class MnemonSubagentCoordinator {
     try {
       runtime = await graph.source('runtime', scope).forGeneration(lease.generation).read<RuntimeMemorySnapshot>('snapshot', null, signal)
       documents = await graph.source('documents', scope).forGeneration(lease.generation).read<DocumentSnapshot>('snapshot', null, signal)
-        // A reconciliation that cannot read Documents still has the runtime memory to plan against.
         .catch(() => emptyDocumentSnapshot(graph.directory, new Date().toISOString()))
     } finally { lease.release() }
     const others = foreignMachines(runtime.entries, machine)
-    // The branch's side is evidence, not an answer. When it cannot be read - no
-    // repository, no git, an unpublished branch, an unreadable payload - the plan is
-    // the local plan it has always been, and nothing fails because of it.
     const difference = await graph.sync.readRemoteForEvidence(signal)
     const guidance = options.guidance?.trim() ?? ''
     const opinions = pendingOpinions(graph.reviews.list())
@@ -780,7 +703,7 @@ export class MnemonSubagentCoordinator {
 
   private runtimeModel(scope: MemoryOperationScope, parent: HostAgent | undefined, signal: AbortSignal, operation: 'migration' | 'compaction' | 'reconcile', label: string, prompt: string, schema: Record<string, unknown>, persona: string): Promise<RuntimeModelResult> {
     const run = (agent: HostAgent) => this.delegate(agent, operation, label, prompt, [], schema, signal, 'spawn', persona)
-    if (this.runtimeMaintenanceTaskRunner !== undefined) return this.runtimeMaintenanceTaskRunner(scope, signal, run)
+    if (this.maintenanceRunner !== undefined) return this.maintenanceRunner(scope, signal, run)
     if (parent !== undefined) return run(parent)
     throw new Error('Runtime capacity maintenance requires a configured model task runner')
   }
@@ -797,7 +720,6 @@ export class MnemonSubagentCoordinator {
     return operation
   }
 
-  /** What the Document workflow in document-archive.ts takes from this coordinator. */
   private documentWorkflow(): DocumentWorkflowHost {
     return {
       runtimeSource: this.runtimeSource, counters: this.counters, turnAuthority: this.turnAuthority.bind(this),
@@ -805,10 +727,6 @@ export class MnemonSubagentCoordinator {
     }
   }
 
-  /**
-   * One tool-less structured run for skill evolution: a review, a draft, a
-   * backtest step or a case derivation. The child sees only the prompt.
-   */
   async skillTask(parent: HostAgent, label: string, prompt: string, schema: Record<string, unknown>, persona: string, signal: AbortSignal, route?: ModelRoute, maxTokens?: number): Promise<{ provider: string; runId: string; structured: unknown }> {
     const { provider, runId, result } = await this.delegate(parent, 'skill', label, prompt, [], schema, signal, 'spawn', persona, undefined, undefined, route, undefined, maxTokens)
     return { provider, runId, structured: result.structured }
@@ -828,12 +746,7 @@ export class MnemonSubagentCoordinator {
   }
 
   async write(parent: HostAgent, operation: string, request: unknown, signal: AbortSignal, options: { activateTarget?: boolean } = {}): Promise<DelegatedWriteResult> {
-    // Issue #148: autonomous distillation (remember / supervised-writeback)
-    // decides content on its own, so its tool filter excludes destructive
-    // deletion. Operations whose request names an exact target from the user
-    // (/mnemon forget, link, body management) keep the full write toolset.
     const autonomous = operation === 'remember' || operation === 'supervised-writeback'
-    // The writer chooses the space only when the caller did not (#387).
     const named = autonomous ? optionalObject(request)?.memoryBodyId : undefined
     const target = typeof named === 'string' && named.trim() !== '' ? named.trim() : undefined
     let inactive: ReadonlySet<string> | undefined
@@ -866,8 +779,6 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
     if (!autonomous) {
       return { delegated: true, runId, provider, summary: typeof value.summary === 'string' ? value.summary : '', action: claimed, memoryBodyIds: strings(value.memoryBodyIds), documentIds: strings(value.documentIds) }
     }
-    // Where the memory went is what the Source receipts say, not what the writer reports,
-    // including a write inside a Code Mode program that failed afterwards (#387).
     const spaceOf = (receipt: CapturedToolReceipt): string | undefined => {
       const entry = optionalObject(receipt.value)
       return typeof entry?.memoryBodyId === 'string' ? entry.memoryBodyId : undefined
@@ -876,14 +787,12 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
       .flatMap(receipt => spaceOf(receipt) ?? []))]
     const activated = [...new Set(writes.filter(receipt => mutationResultCommitted(receipt.value)).flatMap(receipt => spaceOf(receipt) ?? [])
       .filter(id => inactive!.has(id)))]
-    // Read from the same write receipts, so a vector-less write inside a failed Code Mode program counts too (#388).
     const unembedded = withoutVector(writes)
     return {
       delegated: true,
       runId,
       provider,
       summary: typeof value.summary === 'string' ? value.summary : '',
-      // A writer that reports a write no receipt shows has written nothing.
       action: landed.length === 0 && mutationResultCommitted({ action: claimed }) ? 'unknown' : claimed,
       memoryBodyIds: landed,
       ...(activated.length === 0 ? {} : { activatedMemoryBodyIds: activated }),
@@ -892,7 +801,6 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
     }
   }
 
-  /** The Memory Spaces this write can see; a write that cannot read them writes nothing (#387). */
   private async spaceDirectory(parent: HostAgent, signal: AbortSignal): Promise<MemorySpaceCatalog['items']> {
     try {
       return (await this.sourceFor(parent, 'memory-spaces').read<MemorySpaceCatalog>('body-directory', null, signal)).items
@@ -901,12 +809,10 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
     }
   }
 
-  /** Cheap scheduler admission: no model task when every review write target is unavailable. */
   canReview(parent: HostAgent): boolean {
     return this.reviewTools(parent).some(tool => tool !== 'mnemon_document_search')
   }
 
-  /** Automatic review admission; explicit user-requested reviews are unchanged. */
   checkReviewAccess(parent: HostAgent, signal: AbortSignal): Promise<boolean> {
     return this.reviewAdmission.check(parent, signal)
   }
@@ -958,7 +864,6 @@ ${naturalRequest(request, target === undefined ? REQUEST_LABELS : TARGETED_WRITE
       const prompt = preferred === 'fork' ? 'Review the inherited completed checkpoint now.' : reviewCheckpoint(parent.session, config.maxContextChars)
       const base = reviewPersona(tools.includes('mnemon_runtime_memory'))
       const persona = preferred === 'fork' ? base : base.replaceAll('inherited', 'supplied bounded')
-      // With silent mode off, automatic reviews use the same visible delegation as manual reviews.
       const standalone = config.silent && preferred === 'spawn' && admission !== undefined && this.isolatedReviewRunner !== undefined
       const { provider, runId, result } = standalone
         ? await this.runStandaloneReview(parent, prompt, tools, WRITE_SCHEMA, execution.signal, persona, { terminalTools: writers }, admission)
@@ -1218,27 +1123,20 @@ This is the only completion channel for this run. Do not finish with a plain-tex
       if (this.disposed) throw new Error('dsh-mnemon subagent coordinator is disposed')
       capture = this.openResultCapture(operation, outputSchema, signal, recovery, persona)
       const perOpMaxTokens = operation === 'migration' || operation === 'compaction' || operation === 'reconcile'
-        ? this.runtimeMaintenanceMaxTokensResolver?.() ?? 8_192
+        ? this.maintenanceMaxTokens?.() ?? 8_192
         : operation === 'document-archive' ? 8_192
         : operation === 'metadata-maintenance' ? 4_096
         : operation === 'review' ? this.runtimeSource.config.idleReview.maxTokens
         : operation === 'skill' ? skillMaxTokens ?? 16_384
         : undefined
-      // A route the caller picked is the model the user asked this run to use,
-      // so it wins over the resolver rather than being added to it.
-      const fixed = route ?? this.taskAgentModelResolver?.()
+      const fixed = route ?? this.taskModelResolver?.()
       const baseAgentOptions = perOpMaxTokens === undefined ? undefined : { maxTokens: perOpMaxTokens }
       const resolvedAgentOptions = fixed === undefined ? baseAgentOptions : { ...(baseAgentOptions ?? {}), provider: fixed.provider, model: fixed.model }
       const host = this.resultRuntime
-      // Every tool continuation ends with a user turn, which strict chat templates require (#327).
       const start = () => startWithContinuationTurns(host, parent, () => {
-        // Automatic admission is revocable across workflow preparation and guard
-        // setup; manual workflows do not carry this lifecycle-only callback.
         if (operation === 'review') { signal.throwIfAborted(); admission?.() }
         return startSubagent(this.subagents, host.agents, provider, {
           label,
-          // DSH permits 32 characters; the random suffix keeps concurrent and
-          // repeated operations distinct without putting memory text in names.
           name: `mnemon-${operation}`.slice(0, 15).replace(/-$/u, '') + '-' + randomUUID().replaceAll('-', '').slice(0, 16),
           prompt: [{ type: 'text', text: `${delegatedTaskLine(operation)}\n${prompt}` }],
           parent,
@@ -1251,7 +1149,6 @@ This is the only completion channel for this run. Do not finish with a plain-tex
       })
       run = operation === 'review'
         ? await startGuardedReview(this.resultRuntime, parent, [...tools, resultToolName], start, child => { capture!.setRunId(child.id) }, reviewLayerPolicy())
-        // A DSH without Agent ownership or scoped tool guards runs the child as before.
         : guard !== undefined ? await startGuardedChild(this.resultRuntime, parent, start, guard, { purpose: operation, optional: true })
         : await start()
       const activeRun = run
@@ -1268,7 +1165,6 @@ This is the only completion channel for this run. Do not finish with a plain-tex
       }
       throw failure
     } finally {
-      // Revoke before asynchronous child disposal, including rejected startup.
       capture?.revoke()
       let cleanupFailure: unknown
       if (run !== undefined) {
@@ -1302,9 +1198,6 @@ This is the only completion channel for this run. Do not finish with a plain-tex
   }
 
   private provider(preferred: 'spawn' | 'fork', explicitNames: readonly string[] = []): string {
-    // Master removed enumeration. Resolve preloaded/reconfigured plugin names each
-    // time; events cover later registrations, explicit names cover opaque plugins.
-    // All are candidates only: live registration and isolation still decide admission.
     const names = this.subagents.list?.() ?? [...new Set([
       ...this.providerNames, ...configuredProviderNames(this.resultRuntime), ...explicitNames,
     ])].filter(name => this.subagents.getProvider(name) !== undefined)
@@ -1342,7 +1235,6 @@ This is the only completion channel for this run. Do not finish with a plain-tex
     return undefined
   }
 
-
   private recordRecall(): void {
     this.counters.recalls += 1
     this.counters.lastOperation = 'recall'
@@ -1355,7 +1247,6 @@ This is the only completion channel for this run. Do not finish with a plain-tex
     return graph.source(typeId, agentScope(parent, graph.config))
   }
 
-  /** View narrowing also governs implicit maintenance; operator management is separate. */
   private async writableSourceFor(parent: HostAgent, typeId: string, actionId: string): Promise<SourceSession> {
     const authority = this.turnAuthority(parent, false)
     if (authority === undefined) return this.sourceFor(parent, typeId)

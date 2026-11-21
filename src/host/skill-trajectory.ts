@@ -4,7 +4,6 @@ import type { HostSession, HostSessionEvent } from './dsh.ts'
 import { scoreReviewActivity } from './review-activity.ts'
 import type { ReviewActivityScore, TurnSkillUse } from './protocol.ts'
 
-/** Each step keeps at most this much text; a window keeps at most this many steps. */
 export const TRAJECTORY_STEP_CHARACTERS = 600
 export const TRAJECTORY_INPUT_CHARACTERS = 300
 export const TRAJECTORY_MAX_STEPS = 160
@@ -18,7 +17,6 @@ const SECRET_PATTERNS: ReadonlyArray<[RegExp, string]> = [
   [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/gu, '[private key]'],
 ]
 
-/** Remove what looks like a credential before a step is stored or shown to a model. */
 export function redact(text: string): string {
   return SECRET_PATTERNS.reduce((value, [pattern, replacement]) => value.replace(pattern, replacement), text)
 }
@@ -43,14 +41,12 @@ function blocksText(content: unknown): string {
   }).filter(Boolean).join('\n')
 }
 
-/** The `name` a `skill` tool call asked for, from its JSON arguments. */
 function skillArgument(raw: unknown): string | undefined {
   const parsed = typeof raw === 'string' ? (() => { try { return JSON.parse(raw) as unknown } catch { return undefined } })() : raw
   const name = record(parsed).name
   return typeof name === 'string' && name.trim() !== '' ? name.trim() : undefined
 }
 
-/** A short, readable rendering of tool arguments: key=value pairs, long values cut. */
 function argumentsText(raw: unknown): string {
   const parsed = typeof raw === 'string' ? (() => { try { return JSON.parse(raw) as unknown } catch { return raw } })() : raw
   if (typeof parsed === 'string') return clip(parsed, TRAJECTORY_INPUT_CHARACTERS)
@@ -66,15 +62,9 @@ export interface CapturedTurn {
   toolFailures: number
   toolNames: string[]
   skills: string[]
-  /** Whether the turn ended normally; an aborted turn is still evidence of a correction. */
   reason?: string
 }
 
-/**
- * Read one finished turn from the durable log: the user's own messages, skill
- * loads, tool calls with their result or error, and the assistant's text, in
- * log order. Nothing here calls a model.
- */
 export function captureTurn(events: Iterable<HostSessionEvent>, turn: number): CapturedTurn | undefined {
   let started = false
   let end: HostSessionEvent | undefined
@@ -152,10 +142,6 @@ export function captureTurn(events: Iterable<HostSessionEvent>, turn: number): C
   return { turn, steps, userCharacters, toolCalls, toolFailures, toolNames: [...toolNames], skills: [...skills], ...(typeof reason === 'string' ? { reason } : {}) }
 }
 
-/**
- * The skills each turn used, read once over the whole log: the user's `/name`
- * and the model's successful `skill` calls, each name once per turn.
- */
 function skillUseAccumulator() {
   const turns = new Map<number, TurnSkillUse[]>()
   const calls = new Map<string, { turn: number; name: string }>()
@@ -212,7 +198,6 @@ export class TurnSkillUseProjection {
   }
 }
 
-/** The session's newest title, when DSH has one. */
 export function sessionTitle(events: readonly HostSessionEvent[]): string | undefined {
   for (let index = events.length - 1; index >= 0; index--) {
     const event = events[index]!
@@ -221,10 +206,6 @@ export function sessionTitle(events: readonly HostSessionEvent[]): string | unde
   return undefined
 }
 
-/**
- * One session's open review window: the turns captured since the last skill
- * review and the post-turn score they add up to.
- */
 export class TrajectoryWindow {
   private turns: CapturedTurn[] = []
   private readonly toolNames = new Set<string>()
@@ -241,12 +222,10 @@ export class TrajectoryWindow {
     return this.turns.length
   }
 
-  /** The newest turn in the window, which a review of it is placed under. */
   get lastTurn(): number | undefined {
     return this.turns.length === 0 ? undefined : Math.max(...this.turns.map(turn => turn.turn))
   }
 
-  /** The captured turns, oldest first. */
   captured(): readonly CapturedTurn[] {
     return this.turns
   }
@@ -260,7 +239,6 @@ export class TrajectoryWindow {
     })
   }
 
-  /** Numbered steps, newest kept when the window is longer than the bound. */
   steps(): TrajectoryStep[] {
     const all = this.turns.flatMap(turn => turn.steps)
     return all.slice(-TRAJECTORY_MAX_STEPS).map((step, offset) => ({ ...step, index: offset + 1 }))

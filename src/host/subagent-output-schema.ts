@@ -1,11 +1,8 @@
-/** The JSON Schema subset DSH structured-output tools compile, and the check of a captured result against a schema in it. */
-
 const DSH_OUTPUT_SCHEMA_KEYS = new Set([
   'type', 'oneOf', 'properties', 'required', 'additionalProperties', 'items', 'enum', 'const', 'minLength',
   'title', 'description', 'default', 'examples', 'deprecated', 'readOnly', 'writeOnly', '$comment',
 ])
 
-/** Rejects schema keywords that DSH structured-output tools cannot compile. */
 export function assertDshOutputSchema(schema: unknown, path = 'schema'): void {
   if (typeof schema !== 'object' || schema === null || Array.isArray(schema)) throw new Error(`${path} must be an object`)
   const value = schema as Record<string, unknown>
@@ -26,7 +23,6 @@ function jsonEqual(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right)
 }
 
-/** Validate captured result-tool arguments independently of the host runtime. */
 export function assertDshOutputValue(schema: unknown, candidate: unknown, path = 'result'): void {
   const value = schema as Record<string, unknown>
   if (Array.isArray(value.oneOf)) {

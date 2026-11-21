@@ -9,7 +9,6 @@ interface MemoryCoreContext {
   effect(factory: () => () => Promise<void>, label?: string): unknown
 }
 
-/** Only the owning Core/Host receives the engine; plugins receive its service. */
 export function provideMemoryRuntime(context: MemoryCoreContext): MemoryRuntime {
   const runtime = new MemoryRuntime()
   context.provide('mnemonMemory', runtime.service)
@@ -17,7 +16,6 @@ export function provideMemoryRuntime(context: MemoryCoreContext): MemoryRuntime 
   return runtime
 }
 
-/** The single Cordis-owned registry of Source and Strategy definitions. */
 export class MemoryRuntime {
   readonly service: MnemonMemoryService = Object.freeze<MnemonMemoryService>({
     installContributions: (contribution, options) => {
@@ -36,7 +34,6 @@ export class MemoryRuntime {
   private contributionsPending = false
   private readonly reconciliations = new Map<MemoryGenerationHost, MemoryContributionSnapshot>()
 
-  /** Host assembly transaction: existing leases stay served until all Fibers settle. */
   async batch<T>(operation: () => Promise<T>): Promise<T> {
     if (this.closed) throw new Error('Memory Runtime is disposed')
     if (this.batchDepth++ === 0) this.batchSnapshot = this.contributions.snapshot()
@@ -81,7 +78,6 @@ export class MemoryRuntime {
     return this.contributions.subscribe(listener)
   }
 
-  /** Global Host consumers see the baseline until the assembly transaction settles. */
   committedContributionSnapshot(): MemoryContributionSnapshot {
     return this.batchSnapshot ?? this.contributions.snapshot()
   }
@@ -99,18 +95,14 @@ export class MemoryRuntime {
       try {
         listener(snapshot)
       } catch {
-        // Isolate subscriber failures so remaining listeners still observe the committed snapshot.
       }
     }
   }
 
-  /** Attach one Host runtime graph to the current definition set. */
   attachGeneration(options: CompileMemoryGenerationOptions = {}): MemoryGenerationAttachment {
     if (this.closed) throw new Error('Memory Runtime is disposed')
     const host = new MemoryGenerationHost(options)
     host.reconcile(this.batchSnapshot ?? this.contributions.snapshot())
-    // A workspace first opened during a settings transaction also starts from
-    // the committed baseline, then joins the final reconciliation.
     if (this.batchSnapshot !== undefined) this.reconciliations.set(host, this.contributions.snapshot())
     let attached = true
     let unsubscribe: () => void = () => {}
@@ -136,8 +128,6 @@ export class MemoryRuntime {
         if (disposal !== undefined) return disposal
         release()
         disposal = host.dispose().finally(() => { this.generationAttachments.delete(attachment) })
-        // Retired graphs may release in a synchronous Host callback. Observe
-        // rejection now and report it at Core shutdown, including detached graphs.
         void disposal.catch(error => { this.disposalFailures.push(error) })
         return disposal
       },
@@ -146,7 +136,6 @@ export class MemoryRuntime {
     return attachment
   }
 
-  /** Core-Fiber shutdown also closes attachments left by a host adapter. */
   dispose(): Promise<void> {
     if (this.disposal !== undefined) return this.disposal
     this.closed = true
@@ -161,8 +150,6 @@ export class MemoryRuntime {
 
 export interface MemoryGenerationAttachment {
   readonly host: MemoryGenerationHost
-  /** Stop following definition changes while preserving leased generations. */
   release(): void
-  /** Final-dispose every generation after the owning runtime graph is unused. */
   dispose(): Promise<void>
 }

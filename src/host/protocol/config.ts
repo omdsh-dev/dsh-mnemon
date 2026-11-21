@@ -54,7 +54,6 @@ export const DOCUMENTS_DEFAULT_LIMIT_BYTES = 10 * 1024 * 1024
 export const DOCUMENTS_MAX_LIMIT_BYTES = 100 * 1024 * 1024
 
 export interface DocumentsConfig {
-  /** Maximum total UTF-8 bytes of active Project Documents. */
   limitBytes?: number
 }
 
@@ -63,19 +62,12 @@ export interface ResolvedDocumentsConfig {
 }
 
 export interface RuntimeMemoryConfig {
-  /** Rank individual working memories and project Document titles before a main turn. */
   bm25Recall?: boolean
-  /** Push bounded Memory Space and Project Document index summaries before a main turn. */
   indexPush?: boolean
-  /** Omit unpinned low-priority entries from eager prompts; offer scoped search instead. */
   deferLowPriority?: boolean
-  /** Automatically project Runtime memory into newly created child Agents; off by default. */
   inheritToSubagents?: boolean
-  /** Maximum UTF-8 bytes projected into MEMORY.md. */
   memoryLimitBytes?: number
-  /** Maximum UTF-8 bytes projected into USER.md. */
   userLimitBytes?: number
-  /** Completion-token budget for Runtime migration and compaction workers. */
   maintenanceMaxTokens?: number
 }
 
@@ -109,16 +101,11 @@ export const DEFAULT_IDLE_REVIEW = {
 
 export interface ResolvedIdleReviewConfig {
   enabled: boolean
-  /** Hide automatic spawn reviews from the reviewed conversation. */
   silent: boolean
-  /** Whether review may change USER.md and MEMORY.md; it can create Documents either way. */
   runtimeMemory: boolean
-  /** Preserve attempt quota and cooling time for the same persisted parent session. */
   persistWatermark: boolean
   provider: 'spawn' | 'fork'
-  /** Applies only before a child starts; a failed run is never replayed. */
   fallback: 'spawn' | 'skip'
-  /** Explicit opt-in for compatible Team policies; tool isolation is mandatory. */
   agentTeams: 'pause' | 'scoped'
   minIntervalMs: number
   maxPerSession: number
@@ -128,11 +115,8 @@ export interface ResolvedIdleReviewConfig {
 
 export interface Config {
   storageScope?: StorageScopeKind
-  /** Whether USER.md follows the selected storage root or stays in the global root. */
   runtimeUserScope?: 'storage' | 'global'
-  /** Whether Project Documents follow the selected storage root or share the global root. */
   documentsScope?: 'storage' | 'global'
-  /** Whether Memory Spaces and provider connections follow the selected storage root or share the global root. */
   memorySpacesScope?: 'storage' | 'global'
   excludedWorkspaces?: string[]
   cliPath?: string
@@ -144,22 +128,16 @@ export interface Config {
   defaultRecallLimit?: number
   documents?: DocumentsConfig
   runtimeMemory?: RuntimeMemoryConfig
-  /** Optional DSH-owned overrides injected into every Mnemon CLI process. */
   embedding?: MnemonEmbeddingConfig
   memoryTopology?: MemoryTopologyConfig
-  /** Profile-owned plugin choices. */
   memoryView?: MemoryViewPreferences
-  /** Successful import of this profile's removed settings namespaces. */
   legacySettingsImported?: boolean
   recallQuality?: RecallQualityConfig
   routingGuidance?: boolean
-  /** Entry placement only. Legacy `buildin` input is migrated to `builtin`. */
   displayMode?: MnemonDisplayMode | 'buildin'
   tabEnabled?: boolean
   writeEnabled?: boolean
-  /** Require DSH approval before model-facing memory tools mutate data. */
   confirmWrites?: boolean
-  /** Remote management grant for paired pages; loopback pages keep full access. */
   remoteAccess?: 'read-only' | 'trusted-host'
   lifecycleEnabled?: boolean
   recallMode?: 'guided' | 'off'
@@ -167,24 +145,14 @@ export interface Config {
   idleReviewMs?: number
   idleReview?: Partial<ResolvedIdleReviewConfig>
   conversationInteraction?: {
-    /** @deprecated Switches nothing. Stored profiles may still hold it; the resolved config leaves it out. */
     toolviews?: boolean
     turnBar?: boolean
     saveAction?: boolean
   }
-  /** 技能管理: skill evolution and where the page shows. */
   skills?: SkillsConfig
-  /** Provider policy used when an Agent must create a new Memory Space while distilling memory. */
   persistenceStrategy?: MemoryPersistenceStrategy
-  /** Model route used by clean, session-independent maintenance Agents. */
   taskAgentModel?: TaskAgentModelConfig
-  /** Additional provider names for Hosts without enumeration and opaque provider plugins. */
   subagentProviderNames?: string[]
-  /**
-   * Whether this profile runs Git repository sync at all. It lives here rather than
-   * in the data directory because the settings page has to draw the block without
-   * asking the Host anything: a disabled block must not run a single Git command.
-   */
   syncEnabled?: boolean
 }
 
@@ -192,12 +160,6 @@ export interface TaskAgentModelConfig {
   mode?: 'inherit' | 'fixed'
   provider?: string
   model?: string
-  /**
-   * With `inherit`, run on the model the conversation that asked for the work
-   * last used, while that conversation is open. Off by default; a switch
-   * rather than a third mode, so a release that does not know it keeps
-   * reading `inherit` as before.
-   */
   followConversation?: boolean
 }
 
@@ -205,12 +167,9 @@ export interface ResolvedTaskAgentModelConfig {
   mode: 'inherit' | 'fixed'
   provider?: string
   model?: string
-  /** Present, and true, only on an inherited route that follows its conversation. */
   followConversation?: true
 }
 
-// The model directory lives in the browser-safe contract module so a plugin's
-// client can name it; re-exported here so one declaration serves both sides.
 export type {
   TaskAgentModelCatalog, TaskAgentModelCatalogFailure, TaskAgentModelCatalogGroup, TaskAgentModelCatalogModel,
 } from '../../core/contracts/task-agent-model.ts'
@@ -241,7 +200,6 @@ export interface ResolvedConfig {
   tabEnabled: boolean
   writeEnabled: boolean
   confirmWrites: boolean
-  /** Remote management grant for paired pages; loopback pages keep full access. */
   remoteAccess: 'read-only' | 'trusted-host'
   lifecycleEnabled: boolean
   recallMode: 'guided' | 'off'
@@ -264,54 +222,31 @@ export interface ResolvedInteractionConfig {
   saveAction: boolean
 }
 
-/** 技能管理's settings, as stored; every key is optional and falls back to its default. */
 export type SkillsConfig = Partial<ResolvedSkillsConfig>
 
 export interface ResolvedSkillsConfig {
-  /** Optional creation preferences; unset preserves legacy targetScope behavior. */
   skillRoots?: SkillCreationConfig
-  /** Review finished conversations in the background and suggest new or better skills. */
   evolution: boolean
-  /** Allow reviews to suggest new skills. Existing suggestions remain actionable. */
   allowCreate: boolean
-  /** Allow reviews to suggest changes to existing skills. */
   allowUpdate: boolean
-  /** Opt in to editing the original targets of linked existing skills. */
   allowLinkedUpdates: boolean
-  /** Destination for new skill proposals; user preserves the pre-setting behavior. */
   targetScope: 'storage' | 'user' | 'project'
-  /** Backtest a draft against the current version as soon as it is written. */
   autoBacktest: boolean
-  /** Opt-in automatic drafting and evaluated adoption of new idle-review suggestions. */
   autoAdopt: boolean
-  /** Candidates admitted each calendar day, shared by the Skills storage root. */
   autoAdoptDailyLimit: number
-  /** IANA time zone, or local for the Host process time zone. */
   autoAdoptTimeZone: string
-  /** Output budget for a complete skill draft, including model reasoning. */
   draftMaxTokens: number
-  /** One fresh attempt after truncation, only when larger than draftMaxTokens. */
   draftRetryMaxTokens: number
-  /** The one-line skills bar under a finished turn. */
   hints: boolean
-  /** 技能管理 as a sidebar entry of its own instead of a Memory System page. */
   sidebar: boolean
-  /** The post-turn score a conversation's window needs before it is reviewed. */
   reviewThreshold: number
-  /** How long a conversation sits idle before its review runs. */
   idleSeconds: number
-  /** The least time between two reviews of one conversation. */
   cooldownSeconds: number
-  /** Suggestions below this confidence are dropped. */
   minConfidence: number
-  /** A pending suggestion expires after this many days. */
   expiryDays: number
-  /** At most this many pending suggestions from one conversation. */
   maxPendingPerSession: number
   casesPerRun: number
-  /** Custom DSH home directory used to discover user skills; defaults to ~/.dsh. */
   dshHome?: string
-  /** Custom shared Agents home directory used to discover user skills; defaults to ~/.agents. */
   agentsHome?: string
 }
 
@@ -338,7 +273,6 @@ export const DEFAULT_SKILLS_CONFIG: Readonly<ResolvedSkillsConfig> = Object.free
   casesPerRun: 8,
 })
 
-/** Shared validation without exposing Host environment values to the browser. */
 export function validSkillsTimeZone(value: string): boolean {
   if (value === 'local') return true
   if (!value || value.length > 100) return false

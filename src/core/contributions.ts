@@ -1,7 +1,6 @@
 import type { MemoryPackageProvenance, MemoryPluginDescriptor, MemorySourceDefinition, MemoryStrategyDefinition, MemoryStrategyExtensionDefinition } from './contracts/index.ts'
 import type { InstallMemoryOptions, MemoryInstallContribution } from '../sdk/service.ts'
 
-/** Core-owned installation records; never part of the plugin author contract. */
 export interface InstalledMemorySource {
   kind: 'source'
   instanceKey: string
@@ -39,7 +38,6 @@ export interface MemoryContributionSnapshot {
   plugins?: InstalledMemoryPlugin[]
 }
 
-/** Normalize public definitions before the registry validates and captures them. */
 export function prepareMemoryContributions(contribution: MemoryInstallContribution, options: InstallMemoryOptions & { instanceId: string }): Pick<MemoryContributionSnapshot, 'sources' | 'strategies' | 'strategyExtensions' | 'plugins'> {
   const sources = [...(contribution.sources ?? [])]
   const strategies = [...(contribution.strategies ?? [])]
