@@ -9,11 +9,8 @@ import { useDocumentVisible } from './document-visibility.ts'
 import { MnemonChangeSignal } from './change-signal.ts'
 import css from './SkillTurnTail.module.css'
 
-/** The Skills page every link here opens; its seed says what to show. */
 export const SKILLS_PAGE = 'skills/library'
-/** How often a conversation is read again while one of its reviews waits or runs. */
 const POLL_MS = 3_000
-/** After a turn ends, the bar looks a few more times for the review it may have earned. */
 const SETTLE_CHECKS = 2
 const NO_CHANGES = new MnemonChangeSignal()
 
@@ -22,9 +19,7 @@ interface Entry {
   loading?: Promise<void>
   cancelScheduled?: () => void
   nextReadAt?: number
-  /** Re-reads left to catch a review scheduled just after the turn ended. */
   settle: number
-  /** Closing event cursor read successfully, including turns with no skill activity. */
   checkedCursor: number
   requestedCursor: number
   revision: number
@@ -34,7 +29,6 @@ interface Entry {
 
 const MAX_SKILL_ACTIVITY_SESSIONS = 32
 
-/** One snapshot per conversation, shared by every bar under its turns, bounded by 32-session LRU. */
 const entries = new WeakMap<ClientConnectionHandle, Map<string, Entry>>()
 
 function entryOf(connection: ClientConnectionHandle, sessionId: string): Entry {
@@ -86,7 +80,6 @@ function invalidate(entry: Entry): void {
   cancelScheduled(entry)
 }
 
-/** Skills writes may add or remove suggestions without changing the conversation's event cursor. */
 export function invalidateSkillActivity(connection: ClientConnectionHandle): void {
   for (const [sessionId, entry] of entries.get(connection) ?? []) {
     invalidate(entry)
@@ -94,7 +87,6 @@ export function invalidateSkillActivity(connection: ClientConnectionHandle): voi
   }
 }
 
-/** History renders before an optional skills scan; all its tails share this job. */
 function schedule(connection: ClientConnectionHandle, sessionId: string, entry: Entry, delay = 0, idle = false): void {
   if (entry.loading !== undefined || entry.cancelScheduled !== undefined || entry.listeners.size === 0) return
   const run = (): void => { delete entry.cancelScheduled; load(connection, sessionId, entry) }
@@ -116,24 +108,20 @@ function load(connection: ClientConnectionHandle, sessionId: string, entry: Entr
     .then(snapshot => {
       if (revision !== entry.revision) return
       entry.snapshot = snapshot
-      // The Host also returns unavailable when history cannot currently be read.
       entry.checkedCursor = snapshot.available ? cursor : -1
       succeeded = true
     }, () => undefined)
     .finally(() => {
       delete entry.loading
       for (const listener of [...entry.listeners]) listener()
-      // A closing event that arrived during the read still needs its own snapshot.
       if (revision !== entry.revision || succeeded && entry.requestedCursor > cursor) entry.nextReadAt = Date.now()
       else if (waiting(entry.snapshot)) entry.nextReadAt = Date.now() + POLL_MS
       else if (entry.settle > 0) { entry.settle -= 1; entry.nextReadAt = Date.now() + POLL_MS }
       else delete entry.nextReadAt
-      // Keep the due time when a conversation leaves, without a background timer.
       if (entry.nextReadAt !== undefined) schedule(connection, sessionId, entry, Math.max(0, entry.nextReadAt - Date.now()))
     })
 }
 
-/** The conversation's skills activity, read again when a newer turn's bar appears. */
 function useSkillActivity(connection: ClientConnectionHandle, sessionId: string | undefined, cursor: number | undefined, revision: number): SkillActivitySnapshot | undefined {
   const visible = useDocumentVisible()
   const entry = sessionId === undefined ? undefined : entryOf(connection, sessionId)
@@ -165,10 +153,8 @@ function useSkillActivity(connection: ClientConnectionHandle, sessionId: string 
 }
 
 interface SkillTurnTailProps {
-  /** Engine-owned closing Turn boundary (TurnLocation on the wire). */
   turn: unknown
   seq: number
-  /** Injected by the slot host: the session this tail belongs to. */
   sessionId?: string
   connection: ClientConnectionHandle
   componentChanges?: MnemonChangeSignal
@@ -185,11 +171,6 @@ function isClosedTurn(turn: unknown): boolean {
   return (turn as { status?: unknown } | null)?.status === 'closed'
 }
 
-/**
- * One line under a finished turn about skills: the ones it used, each opening
- * on the Skills page, and the review that followed it — waiting or running,
- * then the suggestions it left. Hidden when the turn has nothing to say.
- */
 export const SkillTurnTail = memo(function SkillTurnTail({ turn, seq, sessionId, connection, componentChanges = NO_CHANGES, localeRuntime, t }: SkillTurnTailProps): JSX.Element | null {
   const subscribeLocale = useCallback((listener: () => void) => localeRuntime.subscribe(listener), [localeRuntime])
   const getLocale = useCallback(() => localeRuntime.getSnapshot(), [localeRuntime])

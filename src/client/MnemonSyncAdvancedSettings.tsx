@@ -16,12 +16,6 @@ import css from './MnemonSettingsCard.module.css'
 import { DEFAULT_AUTHOR, authorModeOf, branchValid, directoryValid, emailValid, machineNameValid, type AuthorMode } from './sync-view.ts'
 import { FeedbackLine, type Feedback } from './sync-feedback.tsx'
 
-/**
- * What this computer is called, where on the branch the memory goes and whose name
- * its commits carry. Each field shows the value in use; the computer's name is the
- * host name or a typed one. The default author follows this computer's Git
- * identity with a placeholder fallback; a custom author overrides it.
- */
 export function AdvancedSettings({ client, status, disabled, t, onSaved }: { client: MnemonClient; status: MnemonSyncStatus; disabled: boolean; t: MnemonTranslate; onSaved: () => Promise<void> }): JSX.Element {
   const [open, setOpen] = useState(false)
   const config = status.config
@@ -31,7 +25,6 @@ export function AdvancedSettings({ client, status, disabled, t, onSaved }: { cli
   const [mode, setMode] = useState<AuthorMode>(savedMode)
   const [name, setName] = useState(savedMode === 'custom' ? config.authorName : '')
   const [email, setEmail] = useState(savedMode === 'custom' ? config.authorEmail : '')
-  // This computer's name: its host name, which it then follows, or one typed here.
   const savedLabel = status.machine?.label ?? ''
   const savedSource: MnemonMachineLabelSource = status.machineLabel?.source ?? 'hostname'
   const hostname = status.machineLabel?.hostname ?? savedLabel
@@ -42,7 +35,6 @@ export function AdvancedSettings({ client, status, disabled, t, onSaved }: { cli
   const radio = useId()
   const nameRadio = useId()
 
-  // The saved values seed the form again whenever the Host reports new ones.
   useEffect(() => {
     setBranch(config.branch); setSubdir(config.subdir)
     const next = authorModeOf(config.authorName, config.authorEmail)
@@ -58,8 +50,6 @@ export function AdvancedSettings({ client, status, disabled, t, onSaved }: { cli
     : mode === 'machine' ? { authorName: '', authorEmail: '' } : { authorName: name.trim(), authorEmail: email.trim() }
   const branchOk = branchValid(branch)
   const subdirOk = directoryValid(subdir)
-  // A saved author kept as it is never blocks another change, even one an older version
-  // stored with a single field; a typed custom author needs both.
   const authorChanged = author.authorName !== config.authorName || author.authorEmail !== config.authorEmail
   const customOk = mode !== 'custom' || !authorChanged || (name.trim() !== '' && emailValid(email))
   const normalizedSubdir = subdir.trim().replaceAll('\\', '/').split('/').filter(part => part !== '').join('/') + '/'
@@ -68,7 +58,6 @@ export function AdvancedSettings({ client, status, disabled, t, onSaved }: { cli
   const renamed = nameSource !== savedSource || (nameSource === 'custom' && machineName.trim() !== savedLabel)
   const changed = moved || renamed || author.authorName !== config.authorName || author.authorEmail !== config.authorEmail
   const ready = changed && branchOk && subdirOk && customOk && nameOk
-  // The name a version will carry once this form is saved, as history will show it.
   const shownName = nameSource === 'hostname' ? hostname : machineName.trim()
 
   const save = async (): Promise<void> => {

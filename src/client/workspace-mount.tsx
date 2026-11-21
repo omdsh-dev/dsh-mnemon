@@ -23,7 +23,6 @@ const SSH_ACTIVE_ATTR = 'data-dsh-ssh-active'
 const ACTIVATE_EVENT = 'dsh-panel-activate'
 const SIDEBAR_CONTEXT_SELECTOR = '[data-dsh-taskboard-entry], [data-dsh-ssh-entry], [class*="sessionRow"], [class*="projectRow"], [class*="searchResultRow"], [class*="searchResultWorkspace"], [class*="newSession"]'
 
-/** Conversation column that the Sidebar workspace overlay covers. */
 function resolveWorkspaceColumn(): HTMLElement | undefined {
   return document.querySelector<HTMLElement>('[data-pane="conversation"]')
     ?? document.querySelector<HTMLElement>('.dshDesktopConversationSurface')
@@ -49,29 +48,22 @@ interface MnemonWorkspaceHostProps {
   localeRuntime: MnemonClientContext['locale']
   sourcePageDirectory: MemorySourcePageDirectory
   navigation?: MnemonWorkspaceNavigation
-  /** Opens the dsh-mnemon page under DSH Plugins while that page offers navigation. */
   configuration?: MnemonActionSeat
-  /** Moves when a component is switched through DSH's plugin manager, or memory changes on the configuration page. */
   componentChanges?: MnemonChangeSignal
   t: MnemonTranslate
   sessionId?: string | undefined
   cwd?: string
   active?: boolean
-  /** The page fills DSH's main column, so its header is the window's top edge. */
   titleBar?: boolean
   renderSlot?: PropsRenderSlots<typeof MNEMON_SOURCE_PAGE_SLOT | typeof MNEMON_COMPONENT_STATUS_SLOT>['renderSlot']
-  /** One Source's pages alone, as 技能管理's own sidebar entry shows them. */
   focus?: { sourceTypeId: string; title: string }
-  /** 技能管理's settings, for its page. */
   skillsScope?: ClientSettingsScope<SkillsConfig>
-  /** Whether 技能管理 has an entry of its own, so the Memory System leaves its page out. */
   skillsPanel?: { subscribe(listener: () => void): () => void; getSnapshot(): boolean }
 }
 
 const NO_SKILLS_PANEL = { subscribe: () => () => {}, getSnapshot: () => false }
 const SKILLS_APART = ['skills'] as const
 
-/** The Source types the Memory System leaves to an entry of their own. */
 function useHiddenSourceTypes(panel: MnemonWorkspaceHostProps['skillsPanel']): readonly string[] | undefined {
   const seat = panel ?? NO_SKILLS_PANEL
   const subscribe = useCallback((listener: () => void) => seat.subscribe(listener), [seat])
@@ -86,7 +78,6 @@ interface MnemonBuiltinWorkspaceHostProps extends Pick<MnemonWorkspaceHostProps,
   composer?: MemoryComposer
 }
 
-/** Builtin follows its DSH slot session, never the Sidebar's workspace picker. */
 export function MnemonBuiltinWorkspaceHost(props: MnemonBuiltinWorkspaceHostProps): JSX.Element {
   useEffect(() => props.composer?.mount(props.sessionId), [props.composer, props.sessionId])
   const subscribeLocale = useCallback((listener: () => void) => props.localeRuntime.subscribe(listener), [props.localeRuntime])
@@ -110,7 +101,6 @@ export function MnemonBuiltinWorkspaceHost(props: MnemonBuiltinWorkspaceHostProp
   />
 }
 
-/** Shared workspace body; its DSH registration owns Source child-render authority. */
 export function MnemonWorkspaceHost(props: MnemonWorkspaceHostProps): JSX.Element {
   const subscribeLocale = useCallback((listener: () => void) => props.localeRuntime.subscribe(listener), [props.localeRuntime])
   const getLocale = useCallback(() => props.localeRuntime.getSnapshot(), [props.localeRuntime])
@@ -174,7 +164,6 @@ export function MnemonWorkspaceHost(props: MnemonWorkspaceHostProps): JSX.Elemen
   />
 }
 
-/** Sidebar presentation in DSH's additive shell.overlay, also without a session. */
 export function MnemonSidebarWorkspaceHost(props: MnemonWorkspaceHostProps & { controller: MnemonWorkspaceController; betterSidebarSeat?: MnemonBetterSidebarSeat; nativeSidebarSeat?: MnemonNativeSidebarSeat }): JSX.Element {
   const state = useSyncExternalStore(props.controller.subscribe, props.controller.getSnapshot, props.controller.getSnapshot)
   const subscribeBetterSidebar = useCallback((listener: () => void) => props.betterSidebarSeat?.subscribe(listener) ?? (() => {}), [props.betterSidebarSeat])
@@ -259,7 +248,6 @@ export function MnemonSidebarWorkspaceHost(props: MnemonWorkspaceHostProps & { c
     t={props.t}
     {...(props.renderSlot === undefined ? {} : { renderSlot: props.renderSlot })}
   />, betterSidebar.target)
-  // Hide the existing DSH subtree so panel navigation retains Source page state.
   return <>
     {betterSidebarView}
     {nativeSidebar?.target !== undefined && nativeSidebar.available && createPortal(<section data-dsh-mnemon-view className={css.nativeWorkspace} hidden={!state.open} aria-label={props.t('tab.label')}>
@@ -271,13 +259,11 @@ export function MnemonSidebarWorkspaceHost(props: MnemonWorkspaceHostProps & { c
   </>
 }
 
-/** Coordinate released peer panels; their DOM flags also cover lost events. */
 export function coordinateSidebarPanels(controller: MnemonWorkspaceController, close: () => void = () => controller.close()): () => void {
   let announcing = false
   const applyActive = (): void => {
     const html = document.documentElement
     if (!controller.getSnapshot().open) { html.removeAttribute(ACTIVE_ATTR); return }
-    // Released Taskboard and SSH only close for each other's event names.
     announcing = true
     try {
       document.dispatchEvent(new CustomEvent(ACTIVATE_EVENT, { detail: 'ssh' }))

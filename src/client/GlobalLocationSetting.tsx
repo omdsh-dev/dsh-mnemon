@@ -17,7 +17,6 @@ interface GlobalLocationSettingProps {
   onInteract?: (() => void) | undefined
 }
 
-/** The default or custom location control: the storage directory, Native and workspace-aware providers. */
 export function GlobalLocationSetting(props: GlobalLocationSettingProps): JSX.Element {
   return <div className={`${css.globalLocationSetting}${props.className === undefined ? '' : ` ${props.className}`}`}>
     <div className={css.nativeLocation}>

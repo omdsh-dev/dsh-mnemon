@@ -45,37 +45,22 @@ interface MnemonWorkbenchProps {
   sessionId?: string
   workspaceId?: string
   workspaceSelection?: MnemonWorkspaceSelection
-  /** Placement changes scope controls, not Source pages or their visual skin. */
   surface?: MnemonDisplayMode
-  /** Retain page state while hidden, pause automatic refreshes, and refresh when reopened. */
   active?: boolean
-  /**
-   * The header is the top edge of the window, as in DSH's main column. DSH Desktop then
-   * moves the window by it, like its own page headers, while its controls stay clickable.
-   */
   titleBar?: boolean
   headerActions?: ReactNode
   t?: MnemonTranslate
   locale?: string
   onClose?: () => void
-  /** Opens the dsh-mnemon page under DSH Plugins, where the configuration lives, while that page offers navigation. */
   configuration?: MnemonActionSeat
-  /** Moves when a component is switched through DSH's plugin manager, or memory changes on the configuration page. */
   componentChanges?: MnemonChangeSignal
   sourcePageDirectory?: MemorySourcePageDirectory
   renderSlot?: PropsRenderSlots<typeof MNEMON_SOURCE_PAGE_SLOT | typeof MNEMON_COMPONENT_STATUS_SLOT>['renderSlot']
-  /**
-   * Show one Source's pages alone, as its own sidebar entry does: the header
-   * carries its title, refresh and settings, with no tabs and no Status.
-   */
   focus?: { sourceTypeId: string; title: string }
-  /** Source types whose pages live in an entry of their own, such as 技能管理's. */
   hiddenSourceTypes?: readonly string[]
-  /** 技能管理's settings, so its page can show and switch evolution. */
   skillsScope?: ClientSettingsScope<SkillsConfig>
 }
 
-/** 技能管理's Source type. */
 const SKILLS_SOURCE_TYPE = 'skills'
 const NO_SKILLS_SNAPSHOT: ClientSettingsSnapshot<SkillsConfig> = { status: 'unavailable', writable: false, mode: 'host' }
 const NO_SKILLS_SCOPE: Pick<ClientSettingsScope<SkillsConfig>, 'subscribe' | 'getSnapshot'> = { subscribe: () => () => {}, getSnapshot: () => NO_SKILLS_SNAPSHOT }
@@ -98,11 +83,6 @@ const EMPTY_SOURCE_PAGE_DIRECTORY: MemorySourcePageDirectory = {
   subscribe: () => () => {},
 }
 
-/**
- * How memory is composed now, beside the connection in the header: the main
- * Strategy composing it, and on hover each layer's state. Selecting it opens
- * the configuration where that composition is changed.
- */
 function CompositionStatus(props: { tone: StateDotState; label: string; strategy?: string | undefined; layers: ReadonlyArray<{ id: string; label: string; state: 'on' | 'off' | 'stopped' | 'memory-off' }>; onOpen: (() => void) | undefined }): JSX.Element {
   const t = useT()
   const summaryId = useId()
@@ -116,7 +96,6 @@ function CompositionStatus(props: { tone: StateDotState; label: string; strategy
     {props.strategy !== undefined && <span className={css.compositionStrategy}>{props.strategy}</span>}
   </button>
   if (props.layers.length === 0) return anchor
-  // A popover under the status, aligned to its right edge, shown on hover and on keyboard focus.
   return <span className={css.compositionStatusWrap}>
     {anchor}
     <span id={summaryId} className={css.compositionSummary} role="tooltip">
@@ -132,7 +111,6 @@ function CompositionStatus(props: { tone: StateDotState; label: string; strategy
   </span>
 }
 
-/** Only low-frequency guidance folds; errors, composition diagnostics and restart reminders stay visible. */
 function OrdinaryNotices(props: { remoteReadOnly: boolean; reviewPaused: LifecycleAgentSnapshot['idleReviewBlocked'] }): JSX.Element | null {
   const t = useT()
   const [expanded, setExpanded] = useState(false)
@@ -173,7 +151,6 @@ function SourceDisabledPage(props: { title: string; onOpenConfiguration: (() => 
   </div>
 }
 
-/** A layer that is on but whose Source is not running: its component did not start, or no memory is composed at all. */
 function SourceStoppedPage(props: { title: string; memoryOff: boolean; onOpenConfiguration: (() => void) | undefined }): JSX.Element {
   const t = useT()
   return <div className={css.page}>
@@ -248,7 +225,6 @@ function WorkspaceNavigation(props: { page: Page; onSelect(page: Page): void; so
   const button = (item: SourceNavigationEntry, index: number) => {
     const active = isActive(item)
     const disabled = item.sourceTypeId !== undefined && props.disabledTypes.has(item.sourceTypeId)
-    // A switched-off layer says so first; a stopped Source matters only while the layer is on.
     const badge = disabled ? t('layers.disabledBadge') : item.stopped === true ? t(props.memoryOff ? 'layers.memoryOffBadge' : 'layers.stoppedBadge') : undefined
     return <button key={item.id} ref={el => { tabRefs.current[index] = el }} type="button" role="tab" tabIndex={index === tabStopIndex ? 0 : -1} aria-selected={active} data-active={active ? '' : undefined} aria-label={badge === undefined ? undefined : item.label + ' · ' + badge} data-layer-disabled={badge === undefined ? undefined : ''} onKeyDown={event => onTabKeyDown(index, event)} onClick={() => props.onSelect(item.page)}><span>{item.label}</span>{badge !== undefined && <em className={css.layerDisabledBadge}>{badge}</em>}</button>
   }
@@ -257,10 +233,6 @@ function WorkspaceNavigation(props: { page: Page; onSelect(page: Page): void; so
   </div>
 }
 
-/**
- * An installed update waits for DSH to restart: the Host keeps the code it loaded, while DSH has
- * already swapped in this page. Every Memory System page says so until the restart.
- */
 function RestartReminder({ pending }: { pending: VersionRestartStatus }): JSX.Element {
   const t = useT()
   return pending.installed !== undefined
@@ -268,12 +240,10 @@ function RestartReminder({ pending }: { pending: VersionRestartStatus }): JSX.El
     : <Callout tone="warning" title={t('versions.pendingPackagesTitle', { names: (pending.packages ?? []).join(t('config.listSeparator')) })}>{t('versions.pendingPackagesDetail')}</Callout>
 }
 
-/** Resolve the configured scope before the first status round-trip to keep the Sidebar header stable. */
 function configuredStorageScope(config: Config | undefined): StorageScopeKind {
   return config?.storageScope ?? (config?.dataDir?.trim() ? 'custom' : 'global')
 }
 
-/** The Source whose data a storage area holds. */
 const AREA_SOURCES: Readonly<Partial<Record<StorageAreaInventory['kind'], string>>> = { runtime: 'runtime', documents: 'documents', 'memory-bodies': 'memory-spaces' }
 
 function storageAreaLabel(t: MnemonTranslate, kind: StorageAreaInventory['kind']): string {
@@ -283,8 +253,6 @@ function storageAreaLabel(t: MnemonTranslate, kind: StorageAreaInventory['kind']
 export function MnemonWorkbench(props: MnemonWorkbenchProps): JSX.Element {
   const visible = useDocumentVisible()
   const active = props.active !== false && visible
-  // A retained panel follows conversation context only while visible. Keeping the
-  // last visible props also keeps Source drafts mounted during hidden A/B/A switches.
   const visibleProps = useRef(props)
   if (active) visibleProps.current = props
   const t = props.t ?? ((props.locale ?? 'zh').toLowerCase().startsWith('zh') ? translateZh : translateEn)
@@ -313,7 +281,6 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const subscribeSkills = useCallback((listener: () => void) => skillsSeat.subscribe(listener), [skillsSeat])
   const getSkillsSnapshot = useCallback(() => skillsSeat.getSnapshot(), [skillsSeat])
   const skillsSnapshot = useSyncExternalStore(subscribeSkills, getSkillsSnapshot, getSkillsSnapshot)
-  // The Source types this view shows: the focused one alone, or all but those with an entry of their own.
   const focusType = focus?.sourceTypeId
   const hiddenKey = hiddenSourceTypes?.join('\u0000') ?? ''
   const shows = useCallback((sourceTypeId: string): boolean => focusType !== undefined ? sourceTypeId === focusType : !hiddenKey.split('\u0000').includes(sourceTypeId), [focusType, hiddenKey])
@@ -323,9 +290,6 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const connectionContext = useRef({ connection, revision: 0 })
   if (connectionContext.current.connection !== connection) connectionContext.current = { connection, revision: connectionContext.current.revision + 1 }
   const clientContextKey = `${connectionContext.current.revision}\u0000${sessionId ?? ''}\u0000${workspaceId ?? ''}`
-  // Pages remount only when they would show other data: another storage scope,
-  // directory, or workspace. Switching chat sessions within the same workspace
-  // or global/custom storage keeps active pages and drafts mounted in place.
   const storageContext = settingsSnapshot.revision === undefined ? 'loading'
     : JSON.stringify([
       settingsSnapshot.value?.storageScope ?? null,
@@ -341,7 +305,6 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const showWorkspaceToast = workspaceToast.show
   const canvasRef = useRef<HTMLElement | null>(null)
 
-  /** Pages share one plugin-owned scroll container; never mutate DSH ancestor scrollports. */
   const resetViewportScroll = useCallback(() => {
     const canvas = canvasRef.current
     if (canvas !== null) canvas.scrollTop = 0
@@ -349,7 +312,6 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const revealElement = useCallback((element: HTMLElement, topInset?: number) => {
     const canvas = canvasRef.current
     if (canvas === null || !canvas.contains(element)) return
-    // A locked page header covers the canvas top; a Source that pins its own header measures it.
     const header = topInset === undefined && canvas.hasAttribute('data-lock-page-header') ? canvas.querySelector<HTMLElement>(`.${css.pageHeader}`) : null
     const inset = topInset ?? (header === null ? 0 : header.getBoundingClientRect().height + 12)
     canvas.scrollTop = Math.max(0, canvas.scrollTop + element.getBoundingClientRect().top - canvas.getBoundingClientRect().top - inset)
@@ -364,23 +326,18 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const { sourceCatalogState, sourceCatalog, sourceInstances, sourceManagementClients, visibleSourcePages, managedSourceTypes: allManagedSourceTypes } = useSourceCatalog(client, taskClient, catalogRevision, viewContextKey, sourcePageEntries, active, sourceChanged, surfaceScopeKey)
   const managedSourceTypes = useMemo(() => allManagedSourceTypes.filter(([sourceTypeId]) => shows(sourceTypeId)), [allManagedSourceTypes, shows])
   const [selectedSourceInstances, setSelectedSourceInstances] = useState<Record<string, string>>({})
-  // Configured layers whose Source is not running keep a diagnostic tab unless
-  // the user explicitly switched the layer or its component off.
   const stoppedLayers = status?.memorySystem?.configuration.layers
   const stoppedTypes = useMemo(() => {
     if (sourceCatalog === null || stoppedLayers === undefined) return new Set<string>()
     const running = new Set(sourceInstances.map(source => source.sourceTypeId))
     return new Set(Object.keys(stoppedLayers).filter(id => !running.has(id) && shows(id)))
   }, [sourceCatalog, sourceInstances, stoppedLayers, shows])
-  // The installed components name themselves: every name here comes from a
-  // component's own declaration, the way the configuration shows it.
   const [dashboard, setDashboard] = useState<MemoryViewDashboard | null>(null)
   const dashboardClientRef = useRef(client)
   dashboardClientRef.current = client
   useEffect(() => {
     if (!active) return
     let current = true
-    // Names are a courtesy: an unreadable dashboard leaves the pages' own labels.
     dashboardClientRef.current.viewDashboard().then(value => { if (current) setDashboard(Array.isArray(value?.entries) ? value : null) }, () => { if (current) setDashboard(null) })
     return () => { current = false }
   }, [active, surfaceScopeKey, dashboardRevision, componentRevision])
@@ -392,12 +349,9 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
     const component = dashboard?.entries.find(entry => entry.roles.includes('strategy') && entry.typeId === typeId)
     return component === undefined ? typeId : componentCopy(component, locale).label
   }
-  // A Source type stays reachable while any of its components is enabled.
   const switchedOff = useMemo(() => {
     const entries = dashboard?.entries ?? []
     const enabled = new Set(entries.filter(entry => entry.enabled).map(layerOf))
-    // An independently installed Source can replace a switched-off shipped
-    // component without having a plugin-manager entry of its own.
     const managedPackages = new Set(entries.map(entry => entry.packageName))
     for (const source of dashboard?.sources ?? []) {
       if (!managedPackages.has(source.packageName)) enabled.add(source.sourceTypeId)
@@ -405,12 +359,10 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
     return new Set(entries.filter(entry => !entry.enabled).map(layerOf)
       .filter((id): id is string => id !== undefined && !enabled.has(id)))
   }, [dashboard])
-  // Saved settings take effect immediately, before status finishes reloading.
   const savedLayers = settingsSnapshot.value?.memoryTopology?.layers
   const configuredLayers = status?.memorySystem?.configuration.layers
   const disabledTypes = useMemo(() => new Set([...new Set([...Object.keys(configuredLayers ?? {}), ...Object.keys(savedLayers ?? {}), ...switchedOff])]
     .filter(id => (savedLayers?.[id]?.enabled ?? configuredLayers?.[id]?.enabled) === false || switchedOff.has(id))), [configuredLayers, savedLayers, switchedOff])
-  // A focused view opens its Source's first page and stays there; anchors for other pages are another view's.
   const focusPage = focusType === undefined || disabledTypes.has(focusType) ? undefined : sourcePageEntries.find(entry => entry.navigation?.primary ?? true)
   const home: Page = focusPage === undefined ? 'status' : `source:${focusPage.id}`
   const accepts = useCallback((target: string): boolean => target === 'status' ? focusType === undefined : shows(target.split('/')[0]!), [focusType, shows])
@@ -422,7 +374,6 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   const wantsFullStatusRef = useRef(wantsFullStatus)
   wantsFullStatusRef.current = wantsFullStatus
   const reloadStatus = useCallback(() => loadStatus(() => wantsFullStatusRef.current), [loadStatus])
-  // Runs after the catalog and component-name reads, so the three requests keep their order.
   useEffect(() => { if (active) void reloadStatus() }, [active, reloadStatus])
   useEffect(() => { if (active && wantsFullStatus) ensureFullStatus() }, [active, ensureFullStatus, wantsFullStatus])
 
@@ -468,27 +419,16 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
       await settingsScope.mutate([{ op: 'set', path: ['persistenceStrategy'], value: { ...strategy, providerConnections: merged } }])
     },
   }), [assertCurrentView, rawPersistenceStrategy, settingsScope, settingsSnapshot.writable])
-  // Local Source writes refresh lightweight status summary and catalog revisions without
-  // re-fetching static component names or forcing open Source pages to double-reload via refreshKey.
   const mutate = useCallback(() => { if (!isCurrentView()) return; setCatalogRevision(value => value + 1); void reloadStatus() }, [isCurrentView, reloadStatus])
   const refreshAll = useCallback(() => { if (!isCurrentView()) return; setCatalogRevision(value => value + 1); setDashboardRevision(value => value + 1); void reloadStatus() }, [isCurrentView, reloadStatus])
-  // The header's refresh also asks the open Source page to reload its data.
   const [refreshKey, setRefreshKey] = useState(0)
   const refreshPage = useCallback(() => { setRefreshKey(value => value + 1); refreshAll() }, [refreshAll])
-  // The configuration lives on another page: re-read when the Sidebar
-  // reopens the workspace and when a component is switched elsewhere. The
-  // active-gated effects above refresh on reopening. A component switch or a
-  // Provider saved under Plugins also reloads the open page, so Memory Spaces lists the Providers a new space can use, and so
-  // does a sync, a merge, an import or an applied plan there, so the page
-  // shows the memory it brought in.
   const seenComponents = useRef(componentRevision)
   useEffect(() => {
     if (!active || componentRevision === seenComponents.current) return
     seenComponents.current = componentRevision
     refreshPage()
   }, [active, componentRevision, refreshPage])
-  // A save that keeps the storage re-reads in place; one that changes it
-  // moves the context key, which reloads everything by itself.
   const seenSettings = useRef({ revision: settingsSnapshot.revision, context: viewContextKey })
   useEffect(() => {
     if (!active) return
@@ -498,7 +438,6 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
   }, [active, settingsSnapshot.revision, viewContextKey, refreshAll])
   const activationEnabled = status?.writeEnabled === true
   const writeEnabled = activationEnabled && settingsSnapshot.status === 'ready' && settingsSnapshot.writable
-  // A remote page without the management grant says why it cannot write.
   const remoteReadOnly = activationEnabled && settingsSnapshot.status === 'ready' && !settingsSnapshot.writable && isRemoteConnection(connection)
   const workspaceContext = status?.workspaceContext
   const storageMode = workspaceContext?.mode ?? status?.storage?.activeKind ?? configuredStorageScope(settingsSnapshot.value)
@@ -557,9 +496,6 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
     : !stoppedTypes.has(sourceTypeId) ? 'on' : memoryOff ? 'memory-off' : 'stopped'
   const layerIds = Object.keys(status?.memorySystem?.configuration.layers ?? {})
   const headerLayers = layerIds.map(id => ({ id, label: sourceName(id), state: layerState(id) }))
-  // Every Source component has a card, in the order the configuration lists its layer; a
-  // component that is off and registered nothing still has one. Without the components,
-  // the configured layers stand in.
   const navPageBySourceType = new Map<string, Page>()
   for (const entry of sourceNavigationEntries) {
     if (entry.primary && entry.sourceTypeId !== undefined && !navPageBySourceType.has(entry.sourceTypeId)) {
@@ -614,7 +550,6 @@ function MnemonWorkspace({ connection, settingsScope, sessionId, workspaceId, wo
     onMutate={mutate}
   />
 
-  // A focused view's gear opens its own component's settings rather than the whole configuration.
   const focusPackage = focusType === undefined ? undefined : sourceInstances.find(source => source.sourceTypeId === focusType)?.packageName
   const openSettings = openConfiguration === undefined ? undefined
     : focusPackage === undefined ? (focusType === undefined ? openConfiguration : undefined)

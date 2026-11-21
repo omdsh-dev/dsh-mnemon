@@ -1,11 +1,3 @@
-/**
- * Shared external-store primitives for client state, coalesced change signals,
- * and singleton browser-tab visibility tracking.
- *
- * Kept free of Cordis and external store package types so modules reachable
- * from the public `dsh-mnemon/client` surface never leak private dependencies.
- */
-
 export class ExternalStore<T> {
   protected snapshot: T
   private readonly listeners = new Set<() => void>()
@@ -36,10 +28,6 @@ export class ExternalStore<T> {
   }
 }
 
-/**
- * Coalesces a burst of change notifications into a single revision increment
- * after `settleMs`.
- */
 export class ChangeSignal extends ExternalStore<number> {
   private pending: ReturnType<typeof setTimeout> | undefined
 
@@ -86,5 +74,4 @@ class DocumentVisibilityStore {
   }
 }
 
-/** Singleton visibility store sharing a single global `visibilitychange` listener across all mounted readers. */
 export const documentVisibilityStore = new DocumentVisibilityStore()

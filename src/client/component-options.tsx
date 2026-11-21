@@ -10,16 +10,10 @@ import { PanelActions } from './settings-panel.tsx'
 type Field = MemoryPluginEntryView['fields'][number]
 type Config = Record<string, MemoryJsonValue>
 
-/** The Host's limits on a list option, from the configuration contract. */
 const LIST_ITEMS = 32
 const LIST_ITEM_LENGTH = 500
 const TEXT_LENGTH = 4000
 
-/**
- * One option as the panel stages it: the text or the chosen Sources, and
- * whether applying keeps it as the component's own value. An option left at
- * its default shows that default and is not written.
- */
 interface Staged {
   text: string
   sources: string[]
@@ -40,7 +34,6 @@ function initial(entry: MemoryPluginEntryView): Record<string, Staged> {
   return Object.fromEntries(entry.fields.map(field => [field.key, staged(field, entry.config[field.key], Object.hasOwn(entry.config, field.key))]))
 }
 
-/** The value an option writes, or why the Host would refuse it. */
 function parse(field: Field, value: Staged, t: MnemonTranslate): { value: MemoryJsonValue } | { error: string } {
   if (field.input === 'number') {
     const number = Number(value.text.trim())
@@ -62,24 +55,15 @@ function parse(field: Field, value: Staged, t: MnemonTranslate): { value: Memory
 
 export interface ComponentOptionsProps {
   entry: MemoryPluginEntryView
-  /** The component's name as the page shows it. */
   name: string
-  /** The running Source instances a Source list chooses from, named by their components. */
   dashboard: Pick<MemoryViewDashboard, 'sources' | 'entries'>
   language: string
   t: MnemonTranslate
   disabled: boolean
-  /** While the options cross the wire. */
   pending: boolean
   onApply: (config: Config) => Promise<boolean>
 }
 
-/**
- * A component's options, drawn from the fields it declares, so an installed
- * Strategy or enhancement brings its own settings. Typed values wait for
- * Apply, which appears once something changed; an option left at its default
- * is not written, and one set here can be put back to its default.
- */
 export function ComponentOptions(props: ComponentOptionsProps): JSX.Element {
   const { entry, t } = props
   const id = useId()
@@ -90,7 +74,6 @@ export function ComponentOptions(props: ComponentOptionsProps): JSX.Element {
   const results = entry.fields.map(field => ({ field, result: parse(field, draft[field.key]!, t) }))
   const invalid = results.some(({ field, result }) => draft[field.key]!.own && 'error' in result)
   const config: Config = Object.fromEntries(results.flatMap(({ field, result }) => draft[field.key]!.own && 'value' in result ? [[field.key, result.value]] : []))
-  // Any edit shows Apply, a refused value included, so the page can say what to fix.
   const edited = JSON.stringify(draft) !== JSON.stringify(initial(entry))
   const edit = (field: Field, next: Partial<Staged>): void => {
     setConfirmEmptySources(false)
@@ -101,7 +84,6 @@ export function ComponentOptions(props: ComponentOptionsProps): JSX.Element {
     setDraft(current => ({ ...current, [field.key]: staged(field, undefined, false) }))
   }
   const locked = props.disabled || props.pending
-  // A Source is named by the component that registered it, as everywhere else.
   const sourceName = (sourceTypeId: string, fallback: string): string => {
     const component = props.dashboard.entries.find(candidate => candidate.roles.includes('source') && candidate.typeId === sourceTypeId)
     return component === undefined ? fallback : componentCopy(component, props.language).label
@@ -132,7 +114,6 @@ export function ComponentOptions(props: ComponentOptionsProps): JSX.Element {
         {describedBy !== undefined && <small id={describedBy} className={css.optionHint} data-error={error === undefined ? undefined : ''}>{hint}</small>}
       </div>
     })}
-    {/* A refused save keeps the edits; the page's notice says why. */}
     <PanelActions dirty={edited} saving={props.pending} invalid={invalid ? t('options.fix') : null} failed={null} applied={false}
       disabled={props.disabled} t={t} onDiscard={() => { setConfirmEmptySources(false); setDraft(initial(entry)) }} onApply={() => {
         if (entry.typeId === 'scoped' && Array.isArray(config.sourceKeys) && config.sourceKeys.length === 0) {
@@ -157,13 +138,10 @@ export function ComponentOptions(props: ComponentOptionsProps): JSX.Element {
   </div>
 }
 
-/** Sources a Strategy may use, in the order chosen; ones no longer running stay listed so they can be removed. */
 function SourceChoice(props: { field: Field; value: Staged; defaultAll?: boolean; sources: MemoryViewDashboard['sources']; name: (sourceTypeId: string, fallback: string) => string; labelledBy: string; disabled: boolean; t: MnemonTranslate; onChange: (sources: string[]) => void }): JSX.Element {
   const { field, value, t } = props
   const eligible = props.sources.filter(source => field.sourceRoles === undefined || field.sourceRoles.length === 0 || field.sourceRoles.includes(source.role))
   const defaultRoles = ['working-context', 'narrative', 'durable-evidence']
-  // Unset is inherited policy, not an explicit empty selection. Keep `own` false
-  // until an edit so saving another option does not freeze these defaults.
   const selected = !value.own && props.defaultAll ? eligible.filter(source => defaultRoles.includes(source.role))
     .sort((a, b) => defaultRoles.indexOf(a.role) - defaultRoles.indexOf(b.role) || a.sourceInstanceKey.localeCompare(b.sourceInstanceKey))
     .map(source => source.sourceInstanceKey) : value.sources

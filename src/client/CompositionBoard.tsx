@@ -11,31 +11,20 @@ import css from './MnemonSettingsCard.module.css'
 import { SettingSelect } from './settings-controls.tsx'
 import { switchedEntries, type MnemonViewState, type MnemonViewStore } from './view-store.ts'
 
-/**
- * The groups the composition is drawn in, by the role a component declares.
- * A role missing here still gets a group of its own, titled by its id, so a
- * new kind of component appears without a change to this page.
- */
 const ROLE_GROUPS: ReadonlyArray<{ role: string; title: MnemonKey }> = [
   { role: 'source', title: 'board.sources' },
   { role: 'strategy-extension', title: 'board.enhancements' },
 ]
-/** More components than this, and the board offers a search. */
-const SEARCH_FROM = 8
+const MIN_SEARCH_COMPONENTS = 8
 
 type View = { store: MnemonViewStore; state: MnemonViewState }
 type Name = (entry: MemoryPluginEntryView) => string
 
-/** The settings components contribute to their own pages. */
 export interface ComponentSettingsRenderer {
   has(packageName: string): boolean
   render(entry: MemoryPluginEntryView, writable: boolean, section?: string): ReactNode
 }
 
-/**
- * The component pages open, newest last. A page opened from another page can
- * go back to it; one opened from the configuration starts a new trail.
- */
 export interface PageTrail {
   trail: readonly string[]
   section?: string | undefined
@@ -64,19 +53,16 @@ export function usePageTrail(): PageTrail {
   }), [state.trail, state.section, open, back, close])
 }
 
-/** A component's name, which opens its page; underlined on hover. */
 export function PageLink(props: { label: string; onOpen: () => void }): JSX.Element {
   return <button type="button" className={css.pageLink} aria-haspopup="dialog" onClick={props.onOpen}><span>{props.label}</span></button>
 }
 
-/** The gear that opens a component's page where its settings are: the page's visible way in. */
 export function SettingsGear(props: { label: string; onOpen: () => void }): JSX.Element {
   return <button type="button" className={css.boardIconButton} aria-haspopup="dialog" aria-label={props.label} title={props.label} onClick={props.onOpen}>
     <IconSettingsOutlineRegular size={16} />
   </button>
 }
 
-/** Components named as chips, each opening its page; the dot-less chip is one switched off. */
 export function ComponentChips(props: { label?: string | undefined; chips: readonly { key: string; name: string; on: boolean; title: string; open: (() => void) | undefined }[] }): JSX.Element | null {
   if (props.chips.length === 0) return null
   return <span className={css.boardLinks}>
@@ -89,36 +75,24 @@ export function ComponentChips(props: { label?: string | undefined; chips: reado
   </span>
 }
 
-/** The saved layer switch, for a layer an earlier configuration turned off. */
 export interface LayerSettings {
   set(layerId: string, enabled: boolean): Promise<void>
 }
 
-/** The View request for a plan: every switch it moves, each keeping its options. */
 function requestOf(plan: SwitchPlan): Record<string, MemoryPluginPreference> | undefined {
   return plan.changes === undefined ? undefined : Object.fromEntries(plan.changes.map(({ entry, enabled }) => [entry.entryId, { enabled, config: structuredClone(entry.config) }]))
 }
 
-/**
- * One main Strategy composes memory. Choosing one switches it on and every
- * other main Strategy off, with whatever that brings or takes along.
- */
 export function chooseMain(store: MnemonViewStore, dashboard: MemoryViewDashboard, entry: MemoryPluginEntryView): Promise<boolean> {
   const entries = requestOf(mainPlan(dashboard, entry))
   return entries === undefined ? Promise.resolve(false) : store.apply('strategy:' + entry.entryId, entry.typeId!, entries)
 }
 
-/** Switch one component, with whatever it brings or takes along. */
 export function switchComponent(store: MnemonViewStore, dashboard: MemoryViewDashboard, entry: MemoryPluginEntryView, enabled: boolean): Promise<boolean> {
   const plan = switchPlan(dashboard, entry, enabled)
   return plan.changes === undefined ? Promise.resolve(false) : store.setEnabled('component:' + entry.entryId, plan.changes)
 }
 
-/**
- * Turn a memory layer on or off with its Source component, which DSH's
- * component list shows as the same switch. A layer an earlier configuration
- * turned off comes back on through that saved switch as well.
- */
 export async function switchLayer(view: View, system: MemoryCompositionStatus | null, layers: LayerSettings, layerId: string, on: boolean): Promise<void> {
   const dashboard = view.state.dashboard
   const component = dashboard === null ? undefined : sourceOf(dashboard, layerId)
@@ -131,17 +105,14 @@ export async function switchLayer(view: View, system: MemoryCompositionStatus | 
   if (component.enabled !== on) await switchComponent(view.store, dashboard!, component, on)
 }
 
-/** A component a row names at a glance: one it needs, or one that depends on it. */
 interface Relation {
   key: string
   name: string
   on: boolean
-  /** Which way the relation goes, for the tooltip. */
   title: string
   open: () => void
 }
 
-/** One row of the board: a component, or a saved memory layer whose component cannot be read. */
 interface BoardItem {
   key: string
   entry: MemoryPluginEntryView | undefined
@@ -155,12 +126,6 @@ interface BoardItem {
   onSwitch: (on: boolean) => void
 }
 
-/**
- * A component as a preference row: its name and what it does; the components
- * it relates to, each opening its own page; its state as DSH shows it; a gear
- * where it has settings of its own; and its switch. The gear and the name
- * both open the component's page.
- */
 function BoardRow(props: { item: BoardItem; configurable: boolean; t: MnemonTranslate; onOpen: (() => void) | undefined }): JSX.Element {
   const { item, t } = props
   return <div className={css.boardRow} {...{ [TARGET]: item.target }}>
@@ -199,31 +164,17 @@ interface Problem {
 
 export interface CompositionBoardProps {
   view: View
-  /** Whether a composition serves, and the saved memory layers. */
   system: MemoryCompositionStatus | null
   layers: LayerSettings
-  /** While the saved memory layers are still being read. */
   systemPending?: boolean
-  /** The settings components contribute to their pages. */
   componentSettings?: ComponentSettingsRenderer
-  /** The pages open, when the configuration opens them from elsewhere too. */
   pages?: PageTrail
-  /** Show only this component's page, by its package name, as DSH's row page does; related pages open over it. */
   page?: string | undefined
   readOnly: boolean
   language: string
   t: MnemonTranslate
 }
 
-/**
- * The memory composition, drawn from the components installed: the main
- * Strategy as a choice of one, then a group of switches for each role the
- * other components declare. Shipped components and installed extensions are
- * named, related and configured the same way, from their own declarations.
- * Every switch applies at once and brings or takes along what depends on it;
- * a component's page says what that would be and holds its options. The
- * board speaks up only when memory is not composed as chosen.
- */
 export function CompositionBoard(props: CompositionBoardProps): JSX.Element | null {
   const { view, system, t, language } = props
   const instance = useId()
@@ -233,8 +184,6 @@ export function CompositionBoard(props: CompositionBoardProps): JSX.Element | nu
   const [othersOpen, setOthersOpen] = useState(false)
   const [query, setQuery] = useState('')
   const dashboard = view.state.dashboard
-  // Without the View the components cannot be read, but the saved memory
-  // layers can still be switched.
   const componentsUnavailable = dashboard === null && view.state.status === 'unavailable'
   const pageMode = props.page !== undefined
   if (componentsUnavailable && (pageMode || system === null)) return pageMode ? <p className={css.boardEmpty} role="status">{t('board.componentsUnavailable')}</p> : null
@@ -244,8 +193,6 @@ export function CompositionBoard(props: CompositionBoardProps): JSX.Element | nu
   const changing = new Map(working === null ? [] : switchedEntries(working.before, working.after).map(entry => [entry.entryId, entry.enabled]))
   const busy = working !== null || layerPending !== null || props.readOnly
   const locked = busy || dashboard?.writable !== true
-  // The Host validates each write against the selected main Strategy, so
-  // components wait while it is not running; the problem line offers the fix.
   const selectedRunning = model !== undefined && model.selected !== undefined && model.selected === model.composing
   const pendingText = (on: boolean): string => t(on ? 'board.turningOn' : 'board.turningOff')
   const placeholders = (count: number): JSX.Element => <div className={css.boardGroup} aria-hidden="true">
@@ -281,10 +228,6 @@ export function CompositionBoard(props: CompositionBoardProps): JSX.Element | nu
     if (entry.roles.includes('source') && switchPlan(dashboard!, entry, false).blocked === 'last-source') return { tone: 'done', text: t('board.lastSource') }
     return { tone: 'done', text: t('board.running') }
   }
-  /**
-   * The components a row names: each one it needs that only a single installed
-   * component provides, and each running one that depends on it alone.
-   */
   const relationsFor = (entry: MemoryPluginEntryView): Relation[] => {
     const relations = relationsOf(dashboard!, entry)
     const needs = relations.needs.flatMap(need => need.providers.length === 1 ? [need.providers[0]!] : [])
@@ -292,7 +235,6 @@ export function CompositionBoard(props: CompositionBoardProps): JSX.Element | nu
     const neededBy = relations.neededBy.map(other => ({ key: 'by:' + other.entryId, name: name(other), on: true, title: t('board.relationNeededBy', { component: name(other) }), open: () => pages.open(other.entryId, 'configuration') }))
     return [...needs, ...neededBy]
   }
-  /** A component's own row: its switch brings or takes along what depends on it. */
   const componentItem = (entry: MemoryPluginEntryView, target: string): BoardItem => {
     const plan = switchPlan(dashboard!, entry, !entry.enabled)
     const missing = !entry.enabled && unmetRequirements(dashboard!, entry).some(unmet => unmet.providers.length === 0)
@@ -304,8 +246,6 @@ export function CompositionBoard(props: CompositionBoardProps): JSX.Element | nu
     }
   }
 
-  // Every memory layer and every Source component, including one switched off
-  // that has registered nothing yet; each layer's switch is its component's.
   const layerIds = Object.keys(system?.configuration.layers ?? {})
   const sources = dashboard?.entries.filter(entry => entry.roles.includes('source')) ?? []
   const sourceKeys = [...new Set([...layerIds, ...sources.map(entry => layerOf(entry) ?? 'component:' + entry.entryId)])]
@@ -321,7 +261,6 @@ export function CompositionBoard(props: CompositionBoardProps): JSX.Element | nu
     }
     if (component !== undefined) {
       const item = componentItem(component, 'layer:' + layerId)
-      // A layer an earlier configuration turned off reads as off; its switch turns both back on.
       return {
         ...item, onSwitch: run,
         checked: pending ?? (saved && item.checked),
@@ -329,7 +268,6 @@ export function CompositionBoard(props: CompositionBoardProps): JSX.Element | nu
         disabled: busy || (item.disabled && component.writable && saved),
       }
     }
-    // A saved layer whose component cannot be read switches through its setting alone.
     const running = system?.sources.some(source => source.sourceTypeId === layerId) === true
     const label = system?.sources.find(source => source.sourceTypeId === layerId)?.management.label ?? layerId
     return {
@@ -339,7 +277,6 @@ export function CompositionBoard(props: CompositionBoardProps): JSX.Element | nu
     }
   })
 
-  // The other roles: enhancements, and any role a future component declares.
   const others = dashboard?.entries.filter(entry => !entry.roles.includes('strategy') && !entry.roles.includes('source')) ?? []
   const roles = [...new Set(others.map(entry => entry.roles.find(role => role !== 'strategy' && role !== 'source')!))]
     .sort((left, right) => rank(left) - rank(right) || left.localeCompare(right))
@@ -347,7 +284,6 @@ export function CompositionBoard(props: CompositionBoardProps): JSX.Element | nu
   const needle = query.trim().toLowerCase()
   const matches = (item: BoardItem): boolean => needle === '' || [item.label, item.hint, item.entry?.packageName ?? ''].some(text => text.toLowerCase().includes(needle))
   const openRow = (entry: MemoryPluginEntryView | undefined): (() => void) | undefined => entry === undefined ? undefined : () => pages.open(entry.entryId, 'configuration')
-  // A gear marks a component with settings of its own: declared options, or settings it contributed.
   const configurable = (entry: MemoryPluginEntryView | undefined): boolean => entry !== undefined && (entry.fields.length > 0 || props.componentSettings?.has(entry.packageName) === true)
   const rows = (items: readonly BoardItem[]): JSX.Element[] => items.filter(matches).map(item => <BoardRow key={item.key} item={item} configurable={configurable(item.entry)} t={t} onOpen={openRow(item.entry)} />)
   const count = (items: readonly BoardItem[]): string => t('board.enabledCount', { on: items.filter(item => item.checked).length, total: items.length })
@@ -356,8 +292,6 @@ export function CompositionBoard(props: CompositionBoardProps): JSX.Element | nu
   const groups = roles.map(role => {
     const items = otherItems.filter(item => item.entry!.roles.includes(role))
     const title = ROLE_GROUPS.find(group => group.role === role)?.title
-    // Enhancements the composing main Strategy takes come first; ones for other
-    // main Strategies wait in a closed group, unless one is switched on.
     const fits = (entry: MemoryPluginEntryView): boolean => role !== 'strategy-extension' || entry.enabled || changing.has(entry.entryId) || enhancementApplies(entry, model?.composing ?? model?.selected)
     const shown = items.filter(item => fits(item.entry!))
     const later = items.filter(item => !fits(item.entry!))
@@ -386,7 +320,6 @@ export function CompositionBoard(props: CompositionBoardProps): JSX.Element | nu
     if (entry === model?.composing) return { tone: 'done', text: t('board.composing') }
     return entry.enabled ? { tone: 'warning', text: t('board.notRunning') } : { tone: 'idle', text: t('board.off') }
   }
-  /** A component's page: its state and control, as its row has them, and what it declares and contributed. */
   const pageOf = (entry: MemoryPluginEntryView, board: MemoryViewDashboard, section?: string): Omit<ComponentDetailsProps, 'onClose' | 'onOpen' | 'back'> => {
     const isMain = entry.roles.includes('strategy')
     const item = isMain ? undefined : [...sourceItems, ...otherItems].find(candidate => candidate.entry === entry)
@@ -409,7 +342,6 @@ export function CompositionBoard(props: CompositionBoardProps): JSX.Element | nu
     onOpen={other => pages.open(other.entryId, 'page')}
     onClose={pages.close} />
 
-  // DSH's row page shows the component's own page in place; a related name opens over it.
   if (pageMode) {
     const own = dashboard?.entries.find(entry => entry.packageName === props.page)
     return <section className={css.componentRowPage} aria-busy={working !== null}>
@@ -426,7 +358,7 @@ export function CompositionBoard(props: CompositionBoardProps): JSX.Element | nu
         {...(action.primary === true ? { primary: true } : {})} onClick={action.run} />) })} />}</Reveal>
     {model !== undefined && <MainStrategyRow {...props} model={model} dashboard={dashboard!} locked={locked} name={name}
       pending={working?.key.startsWith('strategy:') === true} onOpen={model.selected === undefined ? undefined : () => pages.open(model.selected!.entryId, 'configuration')} />}
-    {total > SEARCH_FROM && <label className={css.boardSearch}>
+    {total > MIN_SEARCH_COMPONENTS && <label className={css.boardSearch}>
       <IconSearchOutlineRegular size={14} />
       <input type="search" value={query} placeholder={t('board.search')} aria-label={t('board.search')} onChange={event => setQuery(event.target.value)} />
     </label>}
@@ -446,11 +378,6 @@ function rank(role: string): number {
   return index < 0 ? ROLE_GROUPS.length : index
 }
 
-/**
- * The main Strategy as a choice of one, the same way however many are
- * installed: a selector naming each with its description. Its gear opens the
- * selected Strategy's page, with its options and settings.
- */
 function MainStrategyRow(props: CompositionBoardProps & { model: MemoryComponentModel; dashboard: MemoryViewDashboard; locked: boolean; pending: boolean; name: Name; onOpen: (() => void) | undefined }): JSX.Element | null {
   const { model, dashboard, t } = props
   const id = useId()
@@ -479,7 +406,6 @@ function MainStrategyRow(props: CompositionBoardProps & { model: MemoryComponent
   </div>
 }
 
-/** Whether memory is composed as chosen; when it is not, what is wrong and the one switch that fixes it. */
 function problemOf(props: CompositionBoardProps, model: MemoryComponentModel, dashboard: MemoryViewDashboard, name: Name): Problem | undefined {
   const { view, system, t } = props
   const { selected, composing, idle, contenders } = model
@@ -505,7 +431,6 @@ function problemOf(props: CompositionBoardProps, model: MemoryComponentModel, da
     }
   }
   if (system !== null && !system.serving) {
-    // A main Strategy runs, yet nothing is composed: most often no Source runs.
     const missing = dashboard.entries.find(entry => entry.roles.includes('source') && !entry.enabled && entry.writable)
     const noSource = system.evaluation.diagnostics.some(diagnostic => diagnostic.code === 'missing-source')
     return {

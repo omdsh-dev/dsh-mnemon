@@ -12,9 +12,7 @@ import { NATIVE_PROVIDER_ID } from './memory-spaces-client.ts'
 import css from './MnemonSaveAction.module.css'
 
 interface MnemonSaveActionProps {
-  /** Stable identity of the finalized assistant message this action addresses. */
   messageId: string
-  /** Injected by the slot host: the session this message belongs to. */
   sessionId?: string
   connection: ClientConnectionHandle
   settingsScope: ClientSettingsScope<Config>
@@ -22,28 +20,21 @@ interface MnemonSaveActionProps {
   t: (key: MnemonKey, params?: Record<string, unknown>) => string
 }
 
-/** Where a candidate goes: a task Agent decides, or the user names the place. */
 type SaveDestination = 'agent' | 'runtime:memory' | 'runtime:user' | `space:${string}`
 
-/** A summary the dialog writes itself, rendered in the language of the moment. */
 interface SaveNote {
   key: MnemonKey
   params?: Record<string, unknown>
-  /** A place named by a key, translated with the rest. */
   place?: MnemonKey
 }
 
-/** What the task Agent, or the chosen place, did with the text it was given. */
 interface SaveOutcome {
-  /** The candidate and place the outcome answers; sending them again waits for an edit or another place. */
   content: string
   destination: SaveDestination
   action?: string
   summary?: string
   note?: SaveNote
-  /** A memory was saved without a vector (#388). */
   unembedded?: boolean
-  /** Whether DSH managed the embedding settings when the write answered, which words a missing vector. */
   embeddingManaged?: boolean
   error?: string
 }
@@ -52,8 +43,7 @@ type RuntimePlace = 'runtime:memory' | 'runtime:user'
 type RuntimeUsage = Partial<Record<'memory' | 'user', { used: number; limit: number }>>
 
 const PREVIEW_LIMIT = 8000
-/** One working-memory entry as Runtime Memory stores it: one line of at most 8 KiB, without the § delimiter. */
-const RUNTIME_ENTRY_BYTES = 8 * 1024
+const MAX_RUNTIME_ENTRY_BYTES = 8 * 1024
 const RUNTIME_PLACES: Readonly<Record<RuntimePlace, MnemonKey>> = { 'runtime:memory': 'saveAction.to.memory', 'runtime:user': 'saveAction.to.user' }
 
 type Translate = (key: MnemonKey, params?: Record<string, unknown>) => string
@@ -62,24 +52,26 @@ function isRuntimePlace(destination: SaveDestination): destination is RuntimePla
   return destination === 'runtime:memory' || destination === 'runtime:user'
 }
 
-/**
- * The places a candidate can go. A layer takes it while it is on, its Source
- * runs and its writes are not switched off. What the status does not say
- * counts as available, so a partial status never hides the task Agent.
- */
+function layerAcceptsWrites(system: StatusView['memorySystem'] | undefined, sourceTypeId: string): boolean {
+  const layer = system?.configuration.layers[sourceTypeId]
+  return layer?.enabled !== false
+    && layer?.participation?.write !== 'off'
+    && (system?.sources === undefined || system.sources.some(source => source.sourceTypeId === sourceTypeId))
+}
+
+function spaceAcceptsWrites(body: NonNullable<StatusView['memoryBodies']>[number], commandFound: boolean | undefined): boolean {
+  const isNative = (body.provider.typeId ?? body.provider.id) === NATIVE_PROVIDER_ID
+  return body.active !== false
+    && body.providerEnabled !== false
+    && body.provider.capabilities.remember
+    && (!isNative || commandFound !== false)
+}
+
 function saveDestinations(status: Partial<StatusView> | undefined, taskAgent: boolean | undefined, t: Translate): Array<FieldOption<SaveDestination>> {
   const system = status?.memorySystem
-  const takes = (sourceTypeId: string): boolean => {
-    const layer = system?.configuration.layers[sourceTypeId]
-    return layer?.enabled !== false && layer?.participation?.write !== 'off'
-      && (system?.sources === undefined || system.sources.some(source => source.sourceTypeId === sourceTypeId))
-  }
-  const runtimeOn = takes('runtime')
-  const spacesOn = takes('memory-spaces')
-  // Active spaces, as the Agent sees them. A Mnemon Native space takes writes only while its CLI is found.
-  const spaces = spacesOn ? (status?.memoryBodies ?? []).filter(body => body.active !== false && body.providerEnabled !== false && body.provider.capabilities.remember
-    && ((body.provider.typeId ?? body.provider.id) !== NATIVE_PROVIDER_ID || status?.commandFound !== false)) : []
-  // The task Agent writes to Memory Spaces only: it needs one, or a ready Provider to create one with.
+  const runtimeOn = layerAcceptsWrites(system, 'runtime')
+  const spacesOn = layerAcceptsWrites(system, 'memory-spaces')
+  const spaces = spacesOn ? (status?.memoryBodies ?? []).filter(body => spaceAcceptsWrites(body, status?.commandFound)) : []
   const providerReady = spaces.length > 0 || status?.commandFound !== false || (status?.providerServices ?? []).some(provider => provider.enabled && provider.configured)
   return [
     { value: 'agent', label: t('saveAction.to.agent'), detail: t('saveAction.to.agentDetail'), disabled: taskAgent === false || !spacesOn || !providerReady },
@@ -88,41 +80,30 @@ function saveDestinations(status: Partial<StatusView> | undefined, taskAgent: bo
   ]
 }
 
-/**
- * Whether DSH managed the Mnemon Native embedding settings when a write
- * answered, as the settings say. While they are not read it says nothing, and
- * the receipt keeps the caution.
- */
 function embeddingManagement(snapshot: ClientSettingsSnapshot<Config>): Pick<SaveOutcome, 'embeddingManaged'> {
   return snapshot.value === undefined ? {} : { embeddingManaged: snapshot.value.embedding?.enabled === true }
 }
 
-/** The default instance of a Source type, as the workbench picks it, else the first. */
 function placeSource<Source extends { sourceInstanceKey: string; sourceTypeId: string }>(catalog: { sources: readonly Source[] }, sourceTypeId: string): Source | undefined {
   const sources = catalog.sources.filter(source => source.sourceTypeId === sourceTypeId)
   return sources.find(source => isDefaultSourceInstance(source.sourceInstanceKey, sourceTypeId)) ?? sources[0]
 }
 
-/** Write the text to the place the user chose, through that Source's own operation, with a fresh revision. */
 async function saveDirectly(client: MnemonClient, destination: Exclude<SaveDestination, 'agent'>, place: string, content: string, t: Translate): Promise<{ action: string; note: SaveNote; unembedded?: boolean }> {
   const source = placeSource(await client.sourceManagementCatalog(), isRuntimePlace(destination) ? 'runtime' : 'memory-spaces')
   if (source === undefined) throw new Error(t('saveAction.unavailable'))
   if (isRuntimePlace(destination)) {
     const input = { action: 'add', target: destination === 'runtime:user' ? 'user' : 'memory', content }
-    // The Runtime Memory page's own path: Host assistance checks the layer's
-    // writes and makes room when the file is full.
     const written = source.assistance?.includes('mutate') === true
       ? await client.assistSource(source.sourceInstanceKey, 'mutate', input, source.revision, true)
       : await client.mutateSourceManagement(source.sourceInstanceKey, 'mutate', input, source.revision, true)
     const result = written.value as { message?: string; entryCount?: number; maintenance?: unknown }
-    // Runtime Memory keeps one copy of an entry and says so.
     if (result.message?.startsWith('Entry already exists') === true) return { action: 'skipped', note: { key: 'saveAction.saved.duplicate' } }
     return { action: 'added', note: { key: result.maintenance === undefined ? 'saveAction.saved.runtime' : 'saveAction.saved.runtimeMaintained', params: { count: result.entryCount }, place: RUNTIME_PLACES[destination] } }
   }
   const result = (await client.mutateSourceManagement(source.sourceInstanceKey, 'remember',
     { content, memoryBodyId: destination.slice('space:'.length), source: 'user' }, source.revision, true)).value as { action?: unknown; embedded?: unknown }
   const answered = typeof result.action === 'string' ? result.action : 'stored'
-  // A Provider that queues its writes confirms them later.
   const action = answered === 'queued' ? 'accepted' : answered
   const outcome = writeOutcome(action)
   const key: MnemonKey = outcome === 'skipped' ? 'saveAction.saved.duplicate'
@@ -131,12 +112,6 @@ async function saveDirectly(client: MnemonClient, destination: Exclude<SaveDesti
   return { action, note: { key, params: { space: place, action: answered } }, ...(result.embedded === false ? { unembedded: true } : {}) }
 }
 
-/**
- * What a working-memory place says about this text before it is saved, and
- * whether it can take it at all, by the Runtime Source's own rules: one line of
- * at most 8 KiB and never more than its file, without the § delimiter. A full
- * file keeps its entries within 70% of its limit, less the new one.
- */
 function runtimePlaceNote(destination: SaveDestination, content: string, usage: RuntimeUsage | undefined, taskAgent: boolean | undefined, agentOpen: boolean, t: Translate): { text: string; blocked: boolean } | undefined {
   if (!isRuntimePlace(destination) || content === '') return undefined
   const user = destination === 'runtime:user'
@@ -145,10 +120,9 @@ function runtimePlaceNote(destination: SaveDestination, content: string, usage: 
   if (entry.includes('§')) return { text: t('saveAction.place.delimiter', { target }), blocked: true }
   const bytes = new TextEncoder().encode(entry).length
   const room = usage?.[user ? 'user' : 'memory']
-  const cap = Math.min(RUNTIME_ENTRY_BYTES, room?.limit ?? RUNTIME_ENTRY_BYTES)
+  const cap = Math.min(MAX_RUNTIME_ENTRY_BYTES, room?.limit ?? MAX_RUNTIME_ENTRY_BYTES)
   const orAgent = agentOpen ? t('saveAction.place.orAgent') : ''
   if (bytes > cap) {
-    // Rounded sizes that read the same name both in bytes.
     const exact = humanBytes(bytes) === humanBytes(cap)
     return { text: t('saveAction.place.tooLong', { target, size: exact ? `${bytes} B` : humanBytes(bytes), limit: exact ? `${cap} B` : humanBytes(cap) }) + orAgent, blocked: true }
   }
@@ -158,7 +132,6 @@ function runtimePlaceNote(destination: SaveDestination, content: string, usage: 
   const used = humanBytes(room.used)
   const limit = humanBytes(room.limit)
   if (user) {
-    // A full profile is condensed by a task Agent, and keeps no archive.
     if (taskAgent === false) return { text: t('saveAction.place.userFull'), blocked: true }
     if (keep === 0) return { text: t('saveAction.place.userTooLong', { size: humanBytes(bytes), max: humanBytes(Math.max(0, kept)) }) + orAgent, blocked: true }
     return { text: t('saveAction.place.userCondense', { used, limit, keep: humanBytes(keep) }), blocked: false }
@@ -202,8 +175,6 @@ function MnemonSaveDialog({ open, onOpenChange, messageId, sessionId, connection
     requestVersionRef.current += 1
   }
   openRef.current = open
-  // The text and place a running save writes, and a direct save's result the
-  // dialog was closed for: neither is lost when the dialog closes and opens again.
   const inFlightRef = useRef<{ content: string; destination: SaveDestination } | undefined>(undefined)
   const unseenRef = useRef<SaveOutcome | undefined>(undefined)
 
@@ -232,7 +203,6 @@ function MnemonSaveDialog({ open, onOpenChange, messageId, sessionId, connection
     setSubmitting(inFlightRef.current !== undefined)
     const unseen = unseenRef.current
     unseenRef.current = undefined
-    // The dialog opens again on the text and place it was writing, or wrote.
     const restored = unseen ?? inFlightRef.current
     if (restored !== undefined) setChosen(restored.destination)
     if (unseen !== undefined) setOutcome(unseen)
@@ -266,16 +236,13 @@ function MnemonSaveDialog({ open, onOpenChange, messageId, sessionId, connection
   const content = candidate?.trim() ?? ''
   const options = open ? saveDestinations(status, taskAgent, t) : EMPTY_DESTINATIONS
   const usable = options.filter(option => option.disabled !== true)
-  // The user's choice, else the first place open: the task Agent while it can write, then working memory.
   const destination: SaveDestination = chosen ?? usable[0]?.value ?? 'agent'
   const selected = options.find(option => option.value === destination)
   const runtimeTarget = isRuntimePlace(destination) ? destination : undefined
 
-  // A working-memory place says up front when the text cannot fit, or will make room first.
   useEffect(() => {
     if (!open || runtimeTarget === undefined || usage !== undefined || status === undefined) return
     const runtime = status.memorySystem === undefined ? undefined : placeSource(status.memorySystem, 'runtime')
-    // With nothing to read, the save goes ahead without a note.
     if (runtime === undefined) { setUsage({}); return }
     let alive = true
     new MnemonClient(connection, sessionId).readSourceManagement(runtime.sourceInstanceKey, 'snapshot')
@@ -285,10 +252,7 @@ function MnemonSaveDialog({ open, onOpenChange, messageId, sessionId, connection
   const agentOpen = options.some(option => option.value === 'agent' && option.disabled !== true)
   const placeNote = open ? runtimePlaceNote(destination, content, usage, taskAgent, agentOpen, t) : undefined
 
-  // A result answers one text in one place: sending the same text there again
-  // waits for an edit. A failure can be sent again as it is.
   const answered = outcome !== null && outcome.error === undefined && outcome.content === content && outcome.destination === destination
-  // A working-memory place waits for its usage, so its note comes before the save.
   const placeReady = runtimeTarget === undefined || usage !== undefined
   const canSubmit = content !== '' && !submitting && writeEnabled === true && selected !== undefined && selected.disabled !== true
     && placeReady && placeNote?.blocked !== true && !answered
@@ -309,9 +273,6 @@ function MnemonSaveDialog({ open, onOpenChange, messageId, sessionId, connection
         (reason: unknown) => ({ content, destination: target, error: message(reason) }))
       .then((result: SaveOutcome) => {
         inFlightRef.current = undefined
-        // The task Agent's request is keyed by its reply and can be sent again
-        // safely. A direct write has no such guard, so a dialog opened again
-        // meanwhile, or later, still gets its receipt.
         if (openRef.current && (target !== 'agent' || requestVersionRef.current === requestVersion)) setOutcome(result)
         else if (!openRef.current && target !== 'agent') unseenRef.current = result
         if (openRef.current) setSubmitting(false)
@@ -322,7 +283,6 @@ function MnemonSaveDialog({ open, onOpenChange, messageId, sessionId, connection
   const viewMemory = (): void => {
     const runtime = outcome !== null && isRuntimePlace(outcome.destination)
     closePanel()
-    // Runtime Memory opens on the entry it now holds, stored as one line.
     dispatchMnemonAnchor({ page: runtime ? 'runtime/entries' : 'memory-spaces/content',
       ...(runtime ? { seed: outcome.content.replace(/\s+/gu, ' ') } : {}),
       ...(sessionId === undefined ? {} : { sessionId }) })
@@ -382,11 +342,6 @@ function MnemonSaveDialog({ open, onOpenChange, messageId, sessionId, connection
   )
 }
 
-/**
- * Save-to-memory action on finalized assistant messages. Closed buttons render
- * lightweight without subscribing to settingsScope or computing destinations
- * until the user opens the dialog for a turn.
- */
 export const MnemonSaveAction = memo(function MnemonSaveAction({ messageId, sessionId, connection, settingsScope, localeRuntime, t }: MnemonSaveActionProps): JSX.Element {
   const subscribeLocale = useCallback((listener: () => void) => localeRuntime.subscribe(listener), [localeRuntime])
   const getLocale = useCallback(() => localeRuntime.getSnapshot(), [localeRuntime])

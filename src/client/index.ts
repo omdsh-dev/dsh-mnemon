@@ -53,7 +53,6 @@ export * from './extension-sdk.ts'
 
 export const inject = ['slots', 'sessions', 'workspaces', 'uiSession', 'connection', 'locale', 'layout']
 
-/** Interaction surfaces: slot name, settings toggle, and the registrations it owns. */
 type MnemonNamespace = 'mnemon'
 type InteractionSlot = 'conversation.chat.turnTail' | 'conversation.chat.assistant-actions'
 type InteractionRegister = (ctx: MnemonClientContext, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string, settings: MnemonSettingsScope<Config>) => () => void
@@ -105,18 +104,10 @@ const INTERACTION_UNITS: Record<'turnBar' | 'saveAction', InteractionUnit> = {
 
 type InteractionUnitKey = keyof typeof INTERACTION_UNITS
 
-/** Ready snapshots default each interaction on; loading has no value and mounts nothing. */
 function enabledOf(value: unknown, key: 'turnBar' | 'saveAction'): boolean {
   return isRecord(value) && value[key] !== false
 }
 
-/**
- * What one surface offers or tells another: the configuration page under
- * Plugins, the workspace in its placement, and changes the workspace cannot
- * see by itself: components switched through DSH's plugin manager, and memory
- * a sync, a merge, an import or an applied plan on the configuration page wrote.
- */
-/** Direct conversation-view activator registered when the host exposes programmatic view selection. */
 class MnemonConversationViewSeat extends HeldSeat<(sessionId: string) => boolean> {
   provide(activate: (sessionId: string) => boolean): () => void {
     return this.hold(activate)
@@ -129,27 +120,19 @@ interface MnemonSeats {
   conversationView: MnemonConversationViewSeat
   components: MnemonChangeSignal
   componentList: MnemonComponentListSeat
-  /** 技能管理's settings, and whether it has a sidebar entry of its own. */
   skills: { scope: MnemonSettingsScope<SkillsConfig>; panel: SkillsPanelSeat }
 }
 
-/** Whether an anchor opens 技能管理 in its own entry rather than in the Memory System. */
 function skillsApart(event: Event, seats: MnemonSeats): boolean {
   const page = (event as CustomEvent<MnemonAnchor>).detail?.page
   return page !== undefined && isSkillsPage(page) && seats.skills.panel.getSnapshot()
 }
 
-/** The DSH describe revision of one Host entry, as `ctx.configForms` reports it. */
 interface HostSettingsRevision {
   getSnapshot(): { revision: number | undefined }
   subscribe(listener: () => void): () => void
 }
 
-/**
- * Re-read Mnemon settings when DSH reports a newer revision of the `mnemon`
- * entry, such as a profile edit or another page's save. Pages without a Host
- * settings mirror (remote pages) never report one and keep their own reads.
- */
 function followHostSettings(form: HostSettingsRevision, scopes: ReadonlyArray<MnemonSettingsScope<Config> | MnemonSettingsScope<InteractionConfig> | MnemonSettingsScope<SkillsConfig>>): () => void {
   let seen = form.getSnapshot().revision
   return form.subscribe(() => {
@@ -235,7 +218,6 @@ function mountSidebarMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
   }
 }
 
-/** DSH supplies the owning session; Source pages retain the same render contract. */
 function mountBuiltinMemoryView(ctx: MnemonClientContext, settings: MnemonSettingsScope<Config>, namespace: MnemonNamespace, translate: (key: MnemonKey, params?: Record<string, unknown>) => string, seats: MnemonSeats): () => void {
   const composer = installMemoryComposer(ctx, translate)
   const sourcePageDirectory = createMemorySourcePageDirectory(ctx)
@@ -275,8 +257,6 @@ function mountBuiltinMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
     if (conversations.length === 0) return 'absent'
     const tabs = [...conversations[0]!.querySelectorAll<HTMLElement>('[role="tab"]')]
       .filter(candidate => candidate.textContent?.trim() === label && eligible(candidate))
-    // Split panes can expose identically labelled tabs without a public
-    // session marker. Keep the anchor pending instead of choosing a pane.
     if (tabs.length > 1) return 'ambiguous'
     if (tabs.length === 0) return 'absent'
     tabs[0]!.click()
@@ -295,8 +275,6 @@ function mountBuiltinMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
     activateMemoryTab(mainSessionId)
   }
   window.addEventListener(MNEMON_ANCHOR_EVENT, openView)
-  // Prefer direct conversation-view activation; keep a bounded 4-frame fallback
-  // only for legacy hosts whose conversation outlet commits after `selectPanel(null)`.
   let frame: number | undefined
   const openFromPanel = (): void => {
     ctx.layout.selectPanel(null)
@@ -316,8 +294,6 @@ function mountBuiltinMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
     }
     frame = requestAnimationFrame(attempt)
   }
-  // Builtin lives in a conversation's tabs, which exist once the current
-  // conversation is a listed session rather than an unsent draft.
   const current = ctx.uiSession.adapter.current
   const sessions = ctx.sessions.list
   let withdrawWorkspace: (() => void) | undefined
@@ -340,7 +316,6 @@ function mountBuiltinMemoryView(ctx: MnemonClientContext, settings: MnemonSettin
   }
 }
 
-/** Mount the memory workspace plus the optional in-conversation interaction surfaces. */
 export function apply(rawContext: unknown): void {
   const ctx = rawContext as MnemonClientContext
   const settings = new MnemonSettingsScope<Config>(ctx.connection, MNEMON_SETTINGS_NAMESPACE)
@@ -356,7 +331,6 @@ export function apply(rawContext: unknown): void {
   ctx.inject(['remoteAccess'], inner => {
     inner.effect(() => bindConnectionRemoteAccess(ctx.connection, (inner as unknown as { remoteAccess?: RemoteAccessCapability }).remoteAccess), 'dsh-mnemon: remote access capability')
   })
-  // Optional on older Hosts; the registry owns cleanup and history rebuilds.
   ctx.inject(['uiConversation'], inner => {
     inner.uiConversation.events?.register(retiredMemorySnapshot)
     const views = (inner.uiConversation as unknown as {
@@ -368,14 +342,9 @@ export function apply(rawContext: unknown): void {
       inner.effect(() => seats.conversationView.provide((sessionId: string) => selectFn(sessionId, 'mnemon') !== false), 'dsh-mnemon: conversation view activation')
     }
   })
-  // The Plugins page provides its navigation while it lives; the memory
-  // workspace links to its configuration only then.
   ctx.inject(['pluginNavigation'], inner => {
     inner.effect(() => seats.configuration.provide(() => { inner.pluginNavigation.openBundle(MNEMON_PACKAGE_NAME) }), 'dsh-mnemon: configuration entry')
   })
-  // DSH's plugin manager announces every component switch it applies, from its
-  // Plugins page or Mnemon's own controls; a reconnect may have missed some.
-  // This is the same signal DSH's Plugins page follows.
   ctx.inject(['remote'], inner => {
     inner.effect(() => {
       const remote = inner.remote as unknown as { $on(event: 'plugin-manager/changed', listener: () => void): () => void }
@@ -383,8 +352,6 @@ export function apply(rawContext: unknown): void {
       return () => { for (const dispose of disposers) dispose() }
     }, 'dsh-mnemon: component changes')
   })
-  // DSH mirrors the Host settings document on loopback pages; follow its
-  // revision of the `mnemon` entry so edits made elsewhere show up live.
   ctx.inject(['configForms'], inner => {
     inner.effect(() => followHostSettings(inner.configForms.get(MNEMON_SETTINGS_NAMESPACE), [settings, interactionSettings, skillsSettings]), 'dsh-mnemon: DSH settings revisions')
   })
@@ -416,17 +383,8 @@ export function apply(rawContext: unknown): void {
       activeMemoryWorkspace = undefined
     }
   }, 'dsh-mnemon: memory workspace entry')
-  // DSH swaps this client in once a Starter update replaces its files, which
-  // closed the Memory System the update ran from; reopen it, and Status
-  // reopens the version dialog.
   ctx.effect(() => reopenAfterStarterUpdate(seats.workspace), 'dsh-mnemon: reopen after a Starter update')
-  // DSH edits a plugin's configuration on its own page under Plugins;
-  // Settings keeps only the read-only plugin inventory. The whole Mnemon
-  // configuration is the dsh-mnemon bundle's page, between its description
-  // and its components.
-  // Components contribute their own settings to their pages there, keyed by package name.
   const componentSettingsDirectory = createComponentSettingsDirectory(ctx)
-  // A shipped component whose settings dsh-mnemon used to draw reads its configuration and Host operations through these.
   const componentHost = createComponentHosts({ scope: settings, connection: ctx.connection, componentChanges: seats.components })
   const configurationServices = () => ({
     componentSettingsDirectory,
@@ -443,11 +401,6 @@ export function apply(rawContext: unknown): void {
     componentList: seats.componentList,
     t: translate,
   })
-  // A child slot has one declaring entry, the configuration below. A page that
-  // is not that entry's own render renders what a component registered there
-  // as it was registered: DSH's row page for a component, and a shell that
-  // draws the configuration outside DSH's slot renderer, which then passes no
-  // renderSlot (#340).
   const renderContributed = (packageName: string, owner: MemoryComponentSettingsProps) => renderComponentRegion(ctx, MNEMON_COMPONENT_SETTINGS_SLOT, packageName, owner)
   ctx.slots.inject('plugins.bundle.config', () => ctx.slots.register({
     name: 'plugins.bundle.config',
@@ -458,8 +411,6 @@ export function apply(rawContext: unknown): void {
     },
     inject: () => ({ ...configurationServices(), renderContributed }),
   }, MnemonSettingsHost))
-  // Each component row in DSH's list below opens a page of its own: the
-  // component's page, with the settings it contributed, as the board opens it.
   for (const { rowId, packageName } of STARTER_COMPONENT_ROWS) {
     ctx.slots.inject('plugins.row.config', () => ctx.slots.register({
       name: 'plugins.row.config',
@@ -468,7 +419,6 @@ export function apply(rawContext: unknown): void {
       inject: () => ({ ...configurationServices(), component: packageName, renderContributed }),
     }, MnemonComponentRowHost))
   }
-  // The shipped components' own settings and Status cards arrive the way an installed component's do.
   ctx.effect(() => installShippedComponentSettings(ctx, { scope: settings, skillsScope: skillsSettings, connection: ctx.connection, directoryPicker: directoryPicker(ctx), t: translate }), 'dsh-mnemon: shipped component settings')
   ctx.effect(() => installShippedComponentStatus(ctx), 'dsh-mnemon: shipped component status')
   ctx.slots.inject('plugins.detail.actions', () => ctx.slots.register({
@@ -478,9 +428,6 @@ export function apply(rawContext: unknown): void {
     inject: () => ({ workspace: seats.workspace, componentList: seats.componentList, t: translate }),
   }, MnemonPluginActions))
 
-  // In-conversation interaction surfaces default on and are bound live: each
-  // settings change registers or disposes the slot contributions without a
-  // reload. Until the snapshot loads, nothing registers (conservative default).
   const active = new Map<InteractionUnitKey, () => void>()
   const reconcile = (): void => {
     const value = interactionSettings.getSnapshot().value
@@ -505,8 +452,6 @@ export function apply(rawContext: unknown): void {
     }
   }, 'dsh-mnemon: interaction surfaces')
 
-  // 技能管理's own surfaces follow its settings live, as the interaction surfaces do:
-  // the turn's skills line (on unless switched off) and its own sidebar entry (off unless switched on).
   let skillTail: (() => void) | undefined
   let skillsPanel: (() => void) | undefined
   const sourcePageDirectory = createMemorySourcePageDirectory(ctx)

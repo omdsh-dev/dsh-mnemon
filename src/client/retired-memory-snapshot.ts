@@ -1,7 +1,6 @@
 import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { isRecord } from './is-record.ts'
 
-/** Keep empty snapshot retirement markers in the audit log, but out of Chat. */
 export const retiredMemorySnapshot: ConversationNodeDefinition<null> = {
   kind: 'dsh-mnemon/retired-memory-snapshot',
   target: 'chat',
@@ -15,8 +14,6 @@ export const retiredMemorySnapshot: ConversationNodeDefinition<null> = {
     const owned = source.kind === 'dsh-mnemon' || source.kind === 'plugin:dsh-mnemon'
       || (source.kind === 'plugin' && source.plugin === 'dsh-mnemon')
     if (!owned) return null
-    // Exclusive only within Chat: suppress its generic developer-message card,
-    // while trace/inspection targets and the Host's model projection stay intact.
     return { id: message.id, role: 'start', exclusive: true }
   },
   start: () => null,

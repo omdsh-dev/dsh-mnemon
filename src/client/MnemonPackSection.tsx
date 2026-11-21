@@ -8,13 +8,8 @@ import css from './MnemonSettingsCard.module.css'
 import { runtimeArchiveNotice } from './sync-view.ts'
 import { SettingRow } from './settings-controls.tsx'
 
-/**
- * The data directory the running Host reads and writes now, and its default
- * one. A Host that does not report the default leaves it out.
- */
 export type PackTarget = Omit<MnemonPackTarget, 'defaultRoot'> & { defaultRoot?: string }
 
-/** Where memory lives now, read again whenever `refreshKey` moves. */
 export function usePackTarget(
   connection: ClientConnectionHandle | undefined,
   sessionId: string | undefined,
@@ -41,9 +36,7 @@ interface MnemonPackSectionProps {
   connection?: ClientConnectionHandle
   sessionId?: string
   workspaceId?: string
-  /** The directory a backup exports and an import merges into. */
   target: PackTarget | null
-  /** An import ran and may have merged a backup into memory. */
   onImported?: () => void
   t: MnemonTranslate
 }
@@ -54,9 +47,7 @@ interface PendingZip {
 }
 
 const ZIP_ACCEPT = '.zip,application/zip'
-/** 24 KiB (8192 * 3) aligns on 3-byte base64 blocks and stays well below Function.prototype.apply stack limits. */
 const BASE64_ENCODE_CHUNK_BYTES = 24_576
-/** 32 KiB (divisible by 4) decodes 24 KiB per chunk without allocating a full-archive binary string. */
 const BASE64_DECODE_CHUNK_CHARS = 32_768
 
 export function base64FromBytes(bytes: Uint8Array): string {
@@ -116,7 +107,6 @@ function download(result: MnemonPackExport): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
-/** Backup and migration of the data directory as one ZIP; the directory itself shows beside the storage choice. */
 export function MnemonPackSection({ client: sharedClient, connection, sessionId, workspaceId, target, onImported, t }: MnemonPackSectionProps): JSX.Element {
   const client = useMemo(
     () => sharedClient ?? (connection === undefined ? null : new MnemonClient(connection, sessionId, workspaceId)),
@@ -169,8 +159,6 @@ export function MnemonPackSection({ client: sharedClient, connection, sessionId,
       setFailed(message(reason))
     } finally {
       setBusy(null)
-      // An import that reports a failure can have merged already: the Host reads Memory
-      // Spaces again after the write, and that read can fail on its own.
       onImported?.()
     }
   }

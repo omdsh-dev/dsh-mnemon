@@ -1,15 +1,12 @@
 import type { MemoryCompositionStatus } from '../host/protocol.ts'
 import type { MnemonTranslate } from './locales.ts'
 
-/** What the workspace says about how memory is composed, when that needs the user's attention. */
 export interface CompositionNotice {
-  /** `error`: no composition serves, so conversations run without memory. */
   tone: 'error' | 'warn'
   title: string
   detail: string
 }
 
-/** The Host's first diagnostic, in the user's words where it is one the Host is known to give. */
 function reason(system: MemoryCompositionStatus, t: MnemonTranslate): string {
   for (const diagnostic of system.evaluation.diagnostics) {
     if (diagnostic.code === 'missing-strategy') return t('status.reasonNoStrategy')
@@ -30,7 +27,6 @@ export function compositionNotice(system: MemoryCompositionStatus | undefined, t
   const cause = reason(system, t)
   const detail = (...sentences: string[]): string => sentences.filter(sentence => sentence !== '').join(t('config.sentenceGap'))
   if (!system.serving) return { tone: 'error', title: t('status.memoryOff'), detail: detail(cause, t('status.memoryOffDetail')) }
-  // A rejected change leaves the previous composition serving.
   if (system.evaluation.state !== 'ready') return { tone: 'warn', title: t('status.compositionStale'), detail: detail(cause, t('status.compositionStaleDetail')) }
   if (system.evaluation.diagnostics.some(diagnostic => diagnostic.code === 'strategy-fallback')) {
     return { tone: 'warn', title: t('status.strategyFallback'), detail: t('status.strategyFallbackDetail') }

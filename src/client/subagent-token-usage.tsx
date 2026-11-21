@@ -1,4 +1,3 @@
-/** Mnemon token-usage projection for DSH's fork-backed subagent token metric. */
 import { createElement, type ComponentType, type ReactElement } from 'react'
 import type { SnapshotSelectorHook } from '@deepseek-ai/dsh-client-store'
 import type { StoredEntry } from '@deepseek-ai/dsh-client-ui-slots'
@@ -35,11 +34,6 @@ function isTokenUsage(value: unknown): value is MnemonTokenUsageProjection {
     })
 }
 
-/**
- * Present the child-local projection under the generic key expected by the
- * released official catalog component. All other consumers continue seeing
- * DSH's complete-log `tokenUsage` value.
- */
 export function scopeSubagentTokenUsage(state: MnemonSessionListState): MnemonSessionListState {
   const cached = scopedSnapshots.get(state)
   if (cached !== undefined) return cached
@@ -63,7 +57,6 @@ export function scopeSubagentTokenUsage(state: MnemonSessionListState): MnemonSe
   return scoped
 }
 
-/** Wrap the framework hook while preserving its selector/equality contract. */
 export function createScopedUseSessions(
   useSessions: SnapshotSelectorHook<MnemonSessionListState>,
 ): SnapshotSelectorHook<MnemonSessionListState> {
@@ -82,7 +75,6 @@ function lineageShadow(official: LineageComponent): LineageComponent {
   }
 }
 
-/** SlotRegistry face used to re-register the official entry's type-erased locale and inject. */
 interface ErasedSlots {
   entries(key: string): readonly StoredEntry[]
   subscribe(key: string, listener: () => void): () => void
@@ -96,11 +88,6 @@ function officialLineage(entries: readonly StoredEntry[]): StoredEntry | undefin
     && typeof entry.inject === 'function')
 }
 
-/**
- * Shadow the released official single-slot entry at a lower priority. The
- * component and action factory are captured from the public slot ledger, so
- * Mnemon keeps the official UI, styles, locale, and navigation behavior.
- */
 export function mountSubagentTokenUsageOverride(ctx: MnemonClientContext): () => void {
   const slots = ctx.slots as unknown as ErasedSlots
   let official: StoredEntry | undefined

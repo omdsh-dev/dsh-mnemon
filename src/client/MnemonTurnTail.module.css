@@ -1,5 +1,3 @@
-/* Turn-tail memory activity bar under the DSH turn actions row, as a DSH disclosure row. */
-
 .root {
   min-width: 0;
   margin: 2px 0;
@@ -66,7 +64,6 @@
   transform: rotate(180deg);
 }
 
-/* One row per tool: what it did, then what it read or wrote. */
 .details {
   display: grid;
   min-width: 0;
@@ -84,7 +81,6 @@
   gap: 8px;
 }
 
-/* A neutral DSH Tag naming what the tool did; the tool itself shows on hover. */
 .toolChip {
   display: inline-flex;
   flex: none;
@@ -126,7 +122,6 @@
   gap: 2px;
 }
 
-/* A memory the tool read or wrote; it opens the page that shows it. */
 .item {
   display: flex;
   min-width: 0;
@@ -178,7 +173,6 @@
   line-height: 19px;
 }
 
-/* On a phone, each tool's items sit below it and keep the full width. */
 @container (max-width: 420px) {
   .toolRow {
     flex-direction: column;

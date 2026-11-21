@@ -54,7 +54,6 @@ function placeEntry(root: HTMLElement, entry: HTMLButtonElement): boolean {
   return true
 }
 
-/** Mount a self-healing official-style entry under the New Session row. */
 export function mountMnemonSidebarEntry(
   controller: MnemonWorkspaceController,
   t: MnemonTranslate,
@@ -126,7 +125,6 @@ export function mountMnemonSidebarEntry(
     placed = placeEntry(root, entry)
   }
 
-  // Like DSH's own panel row, the open workspace is also the current page.
   const syncActive = (): void => {
     if (controller.getSnapshot().open) {
       entry.dataset.active = 'true'

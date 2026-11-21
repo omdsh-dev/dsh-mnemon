@@ -24,11 +24,9 @@ import type { MnemonDirectoryPicker } from './picker.ts'
 import { AdvancedSection, SelectRow, SettingRow, ToggleRow, type SettingOption } from './settings-controls.tsx'
 import { PanelActions, useLive, useScope, useStaged, WriteFailure } from './settings-panel.tsx'
 
-/** The package 技能管理 ships as; its page under Plugins carries these settings. */
 export const SKILLS_PACKAGE = 'dsh-mnemon-source-skills'
 const SKILLS_MANAGEMENT_INSTANCE = 'skills/default'
 const AUTO_MODEL = 'auto'
-// UI choices stay local: the Core browser artifact must load without a Skills Node entry.
 const CREATION_ROOTS: readonly SkillRootKind[] = ['project-dsh', 'project-agents', 'user-dsh', 'user-agents']
 
 type SkillsModelSelection = {
@@ -109,7 +107,6 @@ function normalizeMarketRegistries(payload: MarketPayload | null | undefined, la
   })
 }
 
-/** 技能管理's settings as stored, every missing key at its default. */
 export function resolvedSkills(value: SkillsConfig | undefined): ResolvedSkillsConfig {
   return { ...DEFAULT_SKILLS_CONFIG, ...value }
 }
@@ -117,7 +114,6 @@ export function resolvedSkills(value: SkillsConfig | undefined): ResolvedSkillsC
 type Parameter = 'reviewThreshold' | 'idleSeconds' | 'cooldownSeconds' | 'minConfidence' | 'expiryDays' | 'maxPendingPerSession' | 'casesPerRun'
 type DirectoryKey = 'dshHome' | 'agentsHome'
 
-/** The review parameters, with the ranges the Host accepts. */
 const PARAMETERS: ReadonlyArray<{ key: Parameter; min: number; max: number; integer: boolean; unit?: string }> = [
   { key: 'reviewThreshold', min: 1, max: 50, integer: true },
   { key: 'idleSeconds', min: 0, max: 3_600, integer: true, unit: 's' },
@@ -144,7 +140,6 @@ const DIRECTORY_FIELDS: ReadonlyArray<{ key: DirectoryKey; placeholder: string }
   { key: 'agentsHome', placeholder: '~/.agents' },
 ]
 
-/** The value a parameter stores, or undefined when the Host would refuse it. */
 function parameterValue(field: { min: number; max: number; integer: boolean }, text: string): number | undefined {
   if (text.trim() === '') return undefined
   const value = Number(text)
@@ -280,11 +275,6 @@ function createSkillsManagement(client: MnemonClient): SkillsManagementHandle {
   }
 }
 
-/**
- * 技能管理's settings on its page under Plugins. Switches and default model
- * selections apply at once; directories, destination and folded review
- * parameters wait for their own Apply.
- */
 export function SkillsSettings(props: {
   scope: ClientSettingsScope<SkillsConfig>
   page: MemoryComponentSettingsProps
@@ -348,7 +338,6 @@ export function SkillsSettings(props: {
   const invalid = PARAMETERS.find(field => parameterValue(field, parameters.draft[field.key]) === undefined)
   const invalidDraft = DRAFT_PARAMETERS.find(field => parameterValue(field, draftBudgets.draft[field.key]) === undefined)
 
-  // Directory chooser for DSH home and Shared Agents home.
   const canPickDirectory = directoryPicker?.available() === true
   const [pickingKey, setPickingKey] = useState<DirectoryKey | null>(null)
   const [pickerFailed, setPickerFailed] = useState(false)
@@ -369,7 +358,6 @@ export function SkillsSettings(props: {
     }
   }
 
-  // Live Skills Source management: default models and market registries.
   const client = useMemo(
     () => connection === undefined ? undefined : new MnemonClient(connection, page.sessionId, page.workspace?.id),
     [connection, page.sessionId, page.workspace?.id],

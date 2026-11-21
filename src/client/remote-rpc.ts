@@ -64,7 +64,6 @@ export interface RemoteAccessCapability {
 
 const connectionRemoteAccess = new WeakMap<ClientConnectionHandle, RemoteAccessCapability>()
 
-/** Bind DSH 0.2.1+ `ctx.remoteAccess` capability state to a connection handle for local vs remote routing. */
 export function bindConnectionRemoteAccess(
   connection: ClientConnectionHandle,
   capability: RemoteAccessCapability | undefined,
@@ -107,19 +106,11 @@ function resolveRemoteOwnerState(capability: RemoteAccessCapability | undefined)
   return undefined
 }
 
-/**
- * A window the application serves itself, such as DSH Desktop's
- * `dsh-app://app/`, runs beside its Host rather than across a network.
- */
 function isApplicationPage(page: Location | undefined): boolean {
   const protocol = page?.protocol
   return typeof protocol === 'string' && protocol !== '' && protocol !== 'http:' && protocol !== 'https:'
 }
 
-/**
- * Consult official DSH `0.2.1+` `remoteAccess` capability state when available,
- * falling back to legacy application-page / loopback transport inspection on `0.2.0-rc.2`.
- */
 export function isRemoteConnection(connection: ClientConnectionHandle): boolean {
   const page = globalThis.location
   const capability = connectionRemoteAccess.get(connection)
@@ -140,7 +131,6 @@ export function isRemoteConnection(connection: ClientConnectionHandle): boolean 
   return remotePage || !connection.isLoopback
 }
 
-/** Route only paired remote pages through API Gateway; local clients retain legacy channels. */
 export async function callMnemonRpc<Channel extends MnemonRpcChannel>(
   connection: ClientConnectionHandle,
   channel: Channel,

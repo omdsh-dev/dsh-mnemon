@@ -1,5 +1,3 @@
-/* Shared page controls: DSH input, DSH selector and the write receipt. */
-
 .search {
   min-width: 0;
 }
@@ -26,7 +24,6 @@
   white-space: nowrap;
 }
 
-/* The DSH settings selector: platform fill, chevron, Menu below. */
 .selector {
   appearance: none;
   display: inline-flex;
@@ -59,7 +56,6 @@
 }
 .selector:disabled { cursor: default; opacity: .4; }
 
-/* In a form a choice fills its cell; beside a label it keeps its own width. */
 .menuRoot { display: block; min-width: 0; }
 .field:not([data-inline]) .selector { width: 100%; }
 .field[data-inline] { display: inline-flex; align-items: center; gap: 8px; }
@@ -67,18 +63,15 @@
 .field[data-inline] > .fieldLabel { color: var(--dsw-alias-label-tertiary); font-weight: 400; white-space: nowrap; }
 .field[data-size='sm'] .selector { height: 28px; gap: 8px; padding: 0 10px; border-radius: var(--dsw-radius-sm); font-size: 12px; line-height: 18px; }
 
-/* The menu never grows past the room the selector measured; it scrolls instead. */
 .menu { min-width: 200px; max-height: var(--dsh-select-menu-max, calc(100vh - 220px)) !important; }
 .option { display: grid; min-width: 0; gap: 1px; white-space: normal; }
 .option > small { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
 
-/* A selector that repeats its detail needs room for a second line. */
 .field .selector[data-trigger-detail] { height: auto; min-height: 28px; padding: 3px 10px; white-space: normal; }
 .field .selector[data-trigger-detail] > span { display: grid; min-width: 0; gap: 1px; text-align: left; white-space: normal; }
 .field .selector[data-trigger-detail] > span > span { overflow: hidden; text-overflow: ellipsis; }
 .field .selector[data-trigger-detail] > span > small { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
 
-/* One receipt row: outcome tag, the task Agent's summary, and where to see it. */
 .receipt {
   display: flex;
   min-width: 0;
@@ -101,7 +94,6 @@
 }
 .receipt > :first-child { flex: none; margin-top: 1px; }
 .receiptAction { flex: none; margin-left: auto; }
-/* A fact about the write the summary may leave out, under the row: a quiet note, or a caution when something failed. */
 .receipt > .receiptNote {
   flex-basis: 100%;
   color: var(--dsw-alias-label-tertiary);

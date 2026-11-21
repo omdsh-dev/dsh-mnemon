@@ -67,13 +67,11 @@ export function ProgressiveFooter(props: { visible: number; total: number; pageS
   return <div className={props.compact === true ? css.compactListProgress : css.listProgress}><span>{t('common.showing', { visible: props.visible, total: props.total })}</span>{remaining > 0 && <button type="button" className={css.secondaryButton} onClick={props.onMore}>{t('common.showMore', { count: Math.min(props.pageSize, remaining) })}</button>}</div>
 }
 
-/** DSH-style action dialog shared by Sidebar add/write flows. */
 export function SidebarModal(props: Omit<MnemonDialogProps, 'closeLabel'>): JSX.Element {
   const t = useT()
   return <MnemonDialog {...props} closeLabel={t('common.close')} />
 }
 
-/** The search glyph is drawn with DSH's search icon, as every search field shows it. */
 const SEARCH_GLYPH = '⌕'
 
 export function EmptyState(props: { glyph: string; title: string; children: string }): JSX.Element {
@@ -85,7 +83,5 @@ export function EmptyState(props: { glyph: string; title: string; children: stri
   )
 }
 
-// The default product combines Source assets through public package paths.
-// Existing page-kit consumers keep the same class map; Core does not load UI.
 export const memoryPageStyles: Readonly<Record<string, string>> = { ...css, ...runtimeCss, ...documentsCss, ...spacesCss }
 export const memorySidebarStyles: Readonly<Record<string, string>> = { ...sidebarCss, ...runtimeSidebarCss, ...documentsSidebarCss, ...spacesSidebarCss }

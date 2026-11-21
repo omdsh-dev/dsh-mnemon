@@ -1,9 +1,3 @@
-/*
- * Fixed skin composed with the shared view styles (see view-styles.ts). The
- * shared styles carry the DSH component look; this layer keeps the header,
- * sticky page header and dialog sheet behavior, and the compact item actions
- * Sources reach through memorySidebarStyles.
- */
 .shell.shell {
   background: var(--mn-surface);
   font-family: var(--dsw-font-family);
@@ -52,14 +46,11 @@
   background: var(--mn-surface);
 }
 .shell .memoryWorkspace > [class*='pageHeader'] { margin-bottom: 12px; }
-/* A page under Source sub-tabs titles its section rather than the page: the DSH group heading scale. */
 .shell .memoryWorkspace ~ [class*='page'] > [class*='pageHeader'] { margin-bottom: 12px; }
 .shell .memoryWorkspace ~ [class*='page'] > [class*='pageHeader'] h2 { font-size: 14px; line-height: 22px; }
 .shell .memoryWorkspace ~ [class*='page'] > [class*='pageHeader'] p { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
-/* Keep secondary controls in flow beneath the one pinned Source header. */
 .shell [class*='relatedPane'], .shell [class*='entityRail'] { position: static; }
 
-/* Secondary tabs, as the DSH settings tabs: monochrome underline. */
 .shell .memoryNavigation {
   display: flex;
   min-width: 0;
@@ -117,10 +108,8 @@
   margin-bottom: 6px;
   padding-bottom: 10px;
 }
-/* The substring match above also reaches the header's own meta column. */
 .shell .canvas[data-lock-page-header] [class*='pageHeader'] [class*='pageHeaderMeta'] { position: static; margin: 0; padding: 0; border: 0; background: none; }
 
-/* Compact actions inside cards and rows: the DSH Button at its sm size. */
 .shell .itemActionButton {
   min-height: 28px;
   padding: 0 10px;

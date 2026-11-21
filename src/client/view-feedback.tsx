@@ -6,14 +6,6 @@ import { locate, useToast } from './feedback.tsx'
 import type { MnemonTranslate } from './locales.ts'
 import type { MnemonViewState, MnemonViewStore } from './view-store.ts'
 
-/**
- * Say what each component change did, where the user is looking, and point at
- * the rows it touched: this page's own writes with Undo, changes made
- * elsewhere (DSH's component list, another window) with Show, refused writes
- * with Retry.
- * @param root the page, searched for the rows a change touched.
- * @returns the toast to render.
- */
 export function useViewFeedback(view: { store: MnemonViewStore; state: MnemonViewState }, root: RefObject<HTMLElement | null>, t: MnemonTranslate, language: string): ReactNode {
   const toast = useToast()
   const show = toast.show
@@ -24,13 +16,10 @@ export function useViewFeedback(view: { store: MnemonViewStore; state: MnemonVie
     const change = state.change
     if (change === null || change.seq === seenChange.current) return
     seenChange.current = change.seq
-    // A plain switch shows its result in its own row; say only what goes beyond it.
     if (!announces(change)) return
     const summary = describeChange(change.before, change.after, change.origin, name, t, primaryOf(change))
     if (summary === undefined) return
-    // The rows it touched; the composition itself only when asked to show it.
     locate(root.current, summary.targets.filter(target => target !== 'overview'))
-    // An undo puts back what the user just saw, so it only needs confirming.
     if (change.key?.startsWith('revert:') === true) {
       show({ text: t('feedback.undone'), tone: 'success' })
       return

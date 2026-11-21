@@ -22,7 +22,6 @@ import type { RepositoryEditorProps } from './sync-repository-editor.ts'
 import { GitHubConnect } from './MnemonSyncGitHubConnect.tsx'
 import { AdvancedSettings } from './MnemonSyncAdvancedSettings.tsx'
 
-/** Exponential backoff while waiting for the Host to observe the newly saved sync switch. */
 const STATUS_SETTLE_INITIAL_MS = 250
 const STATUS_SETTLE_MAX_MS = 1_000
 const STATUS_SETTLE_ATTEMPTS = 8
@@ -32,32 +31,13 @@ interface MnemonSyncSectionProps {
   connection?: ClientConnectionHandle
   sessionId?: string
   workspaceId?: string
-  /** Whether the Host accepts writes at all; a read-only Host only reports status. */
   disabled: boolean
-  /**
-   * Whether this installation syncs at all. Off is the default, and off is
-   * silent: the section asks the Host nothing and runs no Git.
-   */
   enabled: boolean
-  /** Saves the switch's choice; the storage section above owns the stored value. */
   onEnabled: (enabled: boolean) => void
-  /** A sync or a merge ran, and may have brought memory in from the repository. */
   onMerged?: () => void
   t: MnemonTranslate
 }
 
-/**
- * Git repository sync, in the order a person sets it up: connect a repository,
- * sync, choose how often it syncs on its own, look back at what it kept, and
- * only then the advanced choices of branch, directory and commit author.
- *
- * The switch is the whole gate: switched off, this is one row that asks the Host
- * nothing — no status, no repository, no Git.
- *
- * A sync merges the repository's memory into this computer and then publishes
- * the result, so it is the one primary action. "Check remote" reads what a sync
- * would change and writes nothing until a button in it is pressed.
- */
 export function MnemonSyncSection({ client: sharedClient, connection, sessionId, workspaceId, disabled, enabled, onEnabled, onMerged, t }: MnemonSyncSectionProps): JSX.Element {
   const client = useMemo(
     () => sharedClient ?? (connection === undefined ? null : new MnemonClient(connection, sessionId, workspaceId)),
@@ -75,7 +55,6 @@ export function MnemonSyncSection({ client: sharedClient, connection, sessionId,
   const [autoFeedback, setAutoFeedback] = useState<Feedback | null>(null)
   const [dialog, setDialog] = useState<'compare' | 'history' | 'disconnect' | null>(null)
   const [disconnectFailed, setDisconnectFailed] = useState<string | null>(null)
-  // The way the editor opens: the state line can ask for the GitHub sign-in directly.
   const [editMode, setEditMode] = useState<'github' | 'address' | undefined>(undefined)
 
   const readStatus = useCallback(async (): Promise<void> => {
@@ -97,20 +76,14 @@ export function MnemonSyncSection({ client: sharedClient, connection, sessionId,
     try {
       setGithub(await client.githubStatus())
     } catch {
-      // A Host without the sign-in channel offers the address form alone.
       setGithub(null)
     }
   }, [client])
 
   useEffect(() => {
     if (client === null) { setLoaded(true); return }
-    // Switched off there is nothing to report: reading the channel here would run
-    // Git for a reader who never asked for a repository.
     if (!enabled) return
     let active = true
-    // The switch saves the profile first, and until the Host's runtime has the new value
-    // the channel still answers as switched off, with nothing checked. Read again for a
-    // moment instead of showing that answer as the state of Git and the remote.
     setLoaded(false)
     void (async () => {
       let next = await client.syncStatus()
@@ -136,13 +109,8 @@ export function MnemonSyncSection({ client: sharedClient, connection, sessionId,
   const connected = status !== null && status.enabled !== false && repoUrl !== undefined
   const editable = !disabled && client !== null
   const gitReady = status?.git.available === true
-  // The credential the Host offers the repository, which a refusal is then said to be about.
   const credential: MnemonSyncCredentialSource = status?.config.credentialSource ?? 'none'
 
-  /**
-   * The one primary action: merge the repository here, then publish the result.
-   * Answers why it did not finish, or null when it did, for a caller that shows it elsewhere.
-   */
   const sync = async (): Promise<string | null> => {
     if (client === null || busy !== null || repoUrl === undefined) return null
     setBusy('sync'); setSyncFeedback(null)
@@ -156,10 +124,7 @@ export function MnemonSyncSection({ client: sharedClient, connection, sessionId,
       failure = t('config.syncFailed', { error: failureText(t, reasonOf(reason), message(reason), repoUrl, credential) })
       setSyncFeedback({ tone: 'error', text: failure })
     } finally { setBusy(null) }
-    // The branch is folded in before anything is published, so even a sync that did not
-    // finish can have changed memory here.
     onMerged?.()
-    // The state line follows on its own; the buttons do not wait for it.
     void readStatus()
     return failure
   }
@@ -170,7 +135,6 @@ export function MnemonSyncSection({ client: sharedClient, connection, sessionId,
     try {
       const next = await client.configureSync({ autoBackupMinutes: minutes })
       setStatus(current => current === null ? current : { ...current, config: next })
-      // The selector already shows the interval, and the hint when the next run is due.
       void readStatus()
     } catch (reason) {
       setAutoFeedback({ tone: 'error', text: message(reason) })
@@ -181,28 +145,20 @@ export function MnemonSyncSection({ client: sharedClient, connection, sessionId,
     if (client === null || busy !== null) return
     setBusy('disconnect'); setRepositoryFeedback(null); setSyncFeedback(null); setDisconnectFailed(null)
     try {
-      // The token belonged to that repository, and the timer synced to it, so both go with it.
       await client.configureSync({ repoUrl: null, token: null, autoBackupMinutes: 0 })
       setDialog(null); setEditing(false)
       setRepositoryFeedback({ tone: 'success', text: t('config.syncDisconnected') })
       void readStatus()
     } catch (reason) {
-      // The dialog is still open over the row, so the failure is said inside it.
       setDisconnectFailed(message(reason))
     } finally { setBusy(null) }
   }
 
-  /**
-   * A connection was saved: the editor closes and the repository is read again.
-   * The state line under the repository is the answer, so nothing claims it is
-   * connected before the Host has said whether it answers.
-   */
   const connectedTo = async (): Promise<void> => {
     setEditing(false); setSyncFeedback(null); setRepositoryFeedback(null)
     await readStatus()
   }
 
-  /** The state line's own way out: credentials are changed in the editor that set them. */
   const fixCredentials = (): void => {
     setRepositoryFeedback(null)
     setEditMode(repoUrl !== undefined && onGitHub(repoUrl) && github?.available === true ? 'github' : 'address')
@@ -272,7 +228,6 @@ export function MnemonSyncSection({ client: sharedClient, connection, sessionId,
   </div>
 }
 
-/** What one finished sync did, said as one line. */
 function syncResult(t: MnemonTranslate, result: MnemonSyncPushResult, repoUrl: string, credential: MnemonSyncCredentialSource): Feedback {
   const added = result.merged?.runtime?.added ?? 0
   const commit = result.commit.slice(0, 8)
@@ -282,7 +237,6 @@ function syncResult(t: MnemonTranslate, result: MnemonSyncPushResult, repoUrl: s
   return { tone: 'error', text: t('config.syncPushFailed', { reason: failureText(t, result.failure, result.reason ?? '', repoUrl, credential) }) + archive }
 }
 
-/** Where the repository is, whether it answers, and how it is authenticated. */
 function RepositoryState({ status, checking, t, onRecheck, onFix }: { status: MnemonSyncStatus; checking: boolean; t: MnemonTranslate; onRecheck: () => void; onFix?: (() => void) | undefined }): JSX.Element {
   const url = status.config.repoUrl ?? ''
   const remote = status.remote
@@ -294,7 +248,6 @@ function RepositoryState({ status, checking, t, onRecheck, onFix }: { status: Mn
       : !remote.reachable
         ? { dot: 'error' as const, text: issueText(t, remote.issue, url, remote.error, status.config.credentialSource) }
         : {
-          // Reading an HTTPS repository can succeed without credentials while pushing to it cannot.
           dot: credential === undefined && transportOf(url) === 'https' ? 'warning' as const : 'done' as const,
           text: [
             remote.branchExists ? t('config.syncStateConnected') : t('config.syncStateNewBranch', { branch: status.config.branch }),
@@ -306,7 +259,6 @@ function RepositoryState({ status, checking, t, onRecheck, onFix }: { status: Mn
     <span className={css.syncStateLine} data-tone={state.dot}>
       <StateDot state={state.dot} />
       <span>{state.text}</span>
-      {/* GitHub also answers "not found" for a repository the credentials cannot reach. */}
       {!checking && onFix !== undefined && (remote.issue === 'auth' || remote.issue === 'not-found') && transportOf(url) === 'https' && status.git.available
         && <button type="button" className={css.syncInlineAction} onClick={onFix}>{t('config.syncFixCredentials')}</button>}
       {!checking && <button type="button" className={css.syncInlineAction} onClick={onRecheck}>{t('config.syncRecheck')}</button>}
@@ -314,13 +266,11 @@ function RepositoryState({ status, checking, t, onRecheck, onFix }: { status: Mn
   </span>
 }
 
-/** Connect a repository: through a GitHub sign-in, or by its address. */
 function RepositoryEditor(props: RepositoryEditorProps): JSX.Element {
   const { status, github, t } = props
   const githubOffered = github?.available === true
   const saved = status.config.repoUrl
   const [mode, setMode] = useState<'github' | 'address'>(() => props.initialMode ?? (githubOffered && (saved === undefined || onGitHub(saved)) ? 'github' : 'address'))
-  // A sign-in channel that answers after the editor opened still becomes the default way in.
   const chosen = useRef(props.initialMode !== undefined)
   useEffect(() => {
     if (!chosen.current && githubOffered && saved === undefined) setMode('github')
@@ -340,7 +290,6 @@ function RepositoryEditor(props: RepositoryEditorProps): JSX.Element {
   </div>
 }
 
-/** Whether two HTTPS addresses name the same host, the one a saved token was saved for. */
 function sameHost(left: string, right: string): boolean {
   try {
     return new URL(left.trim()).host.toLowerCase() === new URL(right.trim()).host.toLowerCase()
@@ -349,7 +298,6 @@ function sameHost(left: string, right: string): boolean {
   }
 }
 
-/** The address form: a repository URL, and a token where the address is HTTPS. */
 function AddressConnect({ client, status, disabled, cancellable, t, onRefresh, onCancel, onConnected }: RepositoryEditorProps): JSX.Element {
   const saved = status.config.repoUrl ?? ''
   const [url, setUrl] = useState(saved)
@@ -360,7 +308,6 @@ function AddressConnect({ client, status, disabled, cancellable, t, onRefresh, o
   const problem = repositoryProblem(url)
   const https = transportOf(url) === 'https'
   const environment = status.config.credentialSource === 'environment'
-  // A saved token belongs to the host it was saved for; another host starts without one.
   const storedToken = status.config.credentialSource === 'token' && sameHost(url, saved)
   const changed = url.trim() !== saved || token.trim() !== ''
   const ready = url.trim() !== '' && problem === undefined && changed
@@ -398,8 +345,6 @@ function AddressConnect({ client, status, disabled, cancellable, t, onRefresh, o
           onChange={event => setUrl(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void connect() }} />
       </label>
       {https && <div className={css.syncFieldBox}>
-        {/* The caption labels the input alone; Remove sits beside it, outside the label, so a
-            click meant to focus the field never removes the saved token. */}
         <span className={css.syncFieldLabel}>
           <label htmlFor={tokenId}>{t('config.syncToken')}</label>
           {storedToken && <button type="button" className={css.syncInlineAction} disabled={disabled || busy !== null} onClick={() => void removeToken()}>{t('config.syncTokenRemove')}</button>}

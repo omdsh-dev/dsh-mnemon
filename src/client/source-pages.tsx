@@ -3,7 +3,6 @@ import type { MemorySourcePageProps } from './source-contracts.ts'
 export type { MemorySourcePageProps } from './source-contracts.ts'
 
 export const MNEMON_SOURCE_PAGE_SLOT = 'mnemon.source.page' as const
-/** Conventional operations used by Mnemon's descriptor-driven Source page. */
 export const MNEMON_SOURCE_CONFIGURATION_READ = 'configuration' as const
 export const MNEMON_SOURCE_CONFIGURATION_MUTATE = 'configuration' as const
 
@@ -12,7 +11,6 @@ const PAGE_ID = /^[a-z][a-z0-9-]{0,127}$/u
 
 export type MemorySourcePageComponent = (props: MemorySourcePageProps) => ReactNode
 
-/** The existing DSH Slot capability narrowed to this one child Slot. */
 export interface MemorySourceUIContext {
   locale: { bind(namespace: 'mnemon'): import('./locales.ts').MnemonTranslate }
   slots: {
@@ -37,7 +35,6 @@ interface MemorySourcePageDirectoryContext {
 }
 
 export interface MemorySourcePageNavigation {
-  /** Let the Host retain a compact page header while scrolling in a sidebar. */
   stickyHeader?: boolean
   group?: 'storage' | 'tools' | 'sources'
   primary?: boolean
@@ -77,10 +74,6 @@ export function memorySourcePageEntryId(sourceTypeId: string, pageId: string): s
   return `${sourceTypeId}/${pageId}`
 }
 
-/**
- * Thin Client-Fiber adapter over the DSH child Slot. It creates no service or
- * registry: `slots.inject/register` own declaration waiting and disposal.
- */
 export function installMemorySourceUI(
   ctx: MemorySourceUIContext,
   contribution: MemorySourceUIContribution,
@@ -94,8 +87,6 @@ export function installMemorySourceUI(
     return { page, entryId, order: page.order ?? 1_000 + index }
   })
 
-  // One declaration wait owns the whole contribution. Once the parent exists,
-  // registrations commit transactionally and are released in reverse order.
   return ctx.slots.inject(MNEMON_SOURCE_PAGE_SLOT, () => {
     const disposers: Array<() => void> = []
     try {
@@ -117,7 +108,6 @@ export function installMemorySourceUI(
   })
 }
 
-/** Stable uSES directory over the Slot ledger; no parallel page registry. */
 export function createMemorySourcePageDirectory(ctx: MemorySourcePageDirectoryContext): MemorySourcePageDirectory {
   let version = -1
   let localeSnapshot: unknown
@@ -137,8 +127,6 @@ export function createMemorySourcePageDirectory(ctx: MemorySourcePageDirectoryCo
       try {
         label = typeof entry.options.label === 'function' ? entry.options.label() : entry.options.label
       } catch {
-        // Presentation metadata must fail locally; a broken label cannot take
-        // down the canonical workspace or any Host/Headless memory behavior.
       }
       const component = entry.component as { mnemonNavigation?: MemorySourcePageNavigation } | undefined
       const metadata = component?.mnemonNavigation

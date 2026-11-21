@@ -1,15 +1,6 @@
 import type { MnemonActionSeat } from './action-seat.ts'
 import { isRecord } from './is-record.ts'
 
-/**
- * DSH's Web client swaps a plugin's browser code as soon as its files change
- * (`dsh-client-hmr` polls each package's client entry). An in-place Starter
- * update therefore replaces this client moments after the new package lands,
- * which closes the Memory System and its version dialog, often before the
- * update reports back. The dialog records the update it starts in this tab's
- * session storage; the client DSH swaps in reopens the Memory System, and
- * Status reopens the dialog to show how the update ended.
- */
 export interface StarterUpdateRecord {
   at: number
   from?: string
@@ -17,7 +8,6 @@ export interface StarterUpdateRecord {
 }
 
 const STORAGE_KEY = 'dsh-mnemon.starter-update'
-/** An older record belongs to an earlier visit, not to an update this page just ran. */
 const FRESH_MS = 10 * 60_000
 
 function sessionStore(): Storage | undefined {
@@ -33,7 +23,6 @@ export function recordStarterUpdate(update: { from?: string | undefined; to?: st
   try {
     sessionStore()?.setItem(STORAGE_KEY, JSON.stringify(record))
   } catch {
-    // Without storage the update still runs; only reopening after DSH's swap is lost.
   }
 }
 
@@ -41,7 +30,6 @@ export function clearStarterUpdate(): void {
   try {
     sessionStore()?.removeItem(STORAGE_KEY)
   } catch {
-    // Nothing was stored.
   }
 }
 
@@ -70,7 +58,6 @@ export function pendingStarterUpdate(now = Date.now()): StarterUpdateRecord | un
   }
 }
 
-/** Open the Memory System once it can open, when this page just started a Starter update. */
 export function reopenAfterStarterUpdate(workspace: MnemonActionSeat): () => void {
   if (pendingStarterUpdate() === undefined) return () => {}
   let unsubscribe: (() => void) | undefined

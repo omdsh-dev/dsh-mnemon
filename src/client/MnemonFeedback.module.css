@@ -1,9 +1,3 @@
-/* Feedback shared by the configuration page and the memory workspace: notes
-   that slide rather than jump, a tint on what a change touched, callouts with
-   their resolving actions, and chips naming a component's state. */
-
-/* Opening grows from zero height; closing shrinks back. The starting style
-   animates the first frame after mount, the data state animates the exit. */
 .reveal {
   display: grid;
   grid-template-rows: 1fr;
@@ -16,7 +10,6 @@
 }
 .revealBody { min-width: 0; min-height: 0; overflow: hidden; }
 
-/* A brief tint on the rows and chips a change touched. */
 [data-mnemon-flash] { animation: mnemon-flash 1300ms ease-out; }
 @keyframes mnemon-flash {
   0%, 25% { background-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 12%, transparent); }
@@ -44,7 +37,6 @@
 .calloutActions { display: flex; flex: none; flex-wrap: wrap; gap: 6px; margin-left: auto; }
 .actionButton { white-space: nowrap; }
 
-/* A component named with its state: DSH's state dot, then its name. */
 .chip {
   display: inline-flex;
   max-width: 100%;

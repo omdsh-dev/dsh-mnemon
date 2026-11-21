@@ -9,17 +9,14 @@ import { Button, PathLabel } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './MnemonView.module.css'
 import { useT, humanBytes, PageHeader } from './page-kit.tsx'
 
-/** Which way a memory layer is not serving now, or that it is. */
 export type LayerState = 'on' | 'off' | 'stopped' | 'memory-off'
 
-/** A Source component's card on the Status page. */
 export interface ComponentCard {
   key: string
   packageName: string
   label: string
   enabled: boolean
   state: LayerState
-  /** Opens this Source's workspace tab when clicked. */
   onSelect?: (() => void) | undefined
 }
 
@@ -29,25 +26,19 @@ export function StatusPage(props: {
   loading: boolean
   writeEnabled: boolean
   attention: boolean
-  /** One card per Source component, in the order the configuration lists its layers. */
   components: readonly ComponentCard[]
-  /** What a running component's card says: what it contributed, or that it runs. */
   renderCard: (card: ComponentCard) => ReactNode
-  /** A storage area's name, from the component that keeps its data there. */
   areaName: (kind: StorageAreaInventory['kind']) => string
   onRefresh: () => void
-  /** Where Providers that are off can be turned on. */
   onOpenConfiguration?: (() => void) | undefined
 }): JSX.Element {
   const t = useT()
-  // DSH swapped this client in during a Starter update started here: show how it ended.
   const [resumedUpdate, setResumedUpdate] = useState(() => pendingStarterUpdate())
   const [versionsOpen, setVersionsOpen] = useState(false)
   const status = props.status
   const answered = status !== null || !props.loading
   useEffect(() => {
     if (resumedUpdate === undefined || !answered) return
-    // A DSH that already restarted onto the update has nothing left to report.
     if (status !== null && status.restartPending === undefined && resumedUpdate.to !== undefined && status.dshMnemonVersion === resumedUpdate.to) {
       clearStarterUpdate()
       setResumedUpdate(undefined)
@@ -59,7 +50,6 @@ export function StatusPage(props: {
   const storage = status?.storage
   const selectedScopeKind = storage?.activeKind ?? 'global'
   const selectedScope = storage?.scopes.find(scope => scope.kind === selectedScopeKind)
-  // A component that is off, or whose Source is not running, has no reading to wait for.
   const idle = (state: LayerState): { title: string; detail: string } | undefined => state === 'on' ? undefined
     : state === 'off' ? { title: t('layers.disabledBadge'), detail: t('status.layerOffDetail') }
       : state === 'memory-off' ? { title: t('layers.memoryOffBadge'), detail: t('status.layerMemoryOffDetail') }
@@ -91,12 +81,10 @@ export function StatusPage(props: {
   )
 }
 
-/** Mnemon Native is one Provider among peers: it has a health card once its CLI is installed or a space uses it. */
 function nativeInUse(status: StatusView): boolean {
   return status.commandFound || (status.memoryBodies ?? []).some(body => body.provider.origin === 'native')
 }
 
-/** Mnemon Native as the first row of the Provider list; its health comes from the CLI and its own spaces. */
 function NativeProviderRow({ status }: { status: StatusView }): JSX.Element {
   const t = useT()
   const bodies = (status.memoryBodies ?? []).filter(body => body.provider.origin === 'native')
@@ -122,7 +110,6 @@ function NativeProviderRow({ status }: { status: StatusView }): JSX.Element {
   </article>
 }
 
-/** The Providers that run, one row each; the ones that are off share one line saying where to turn them on. */
 function ProviderHealth({ status, services, onOpenConfiguration }: { status: StatusView; services: MemoryProviderRuntimeStatus[]; onOpenConfiguration?: (() => void) | undefined }): JSX.Element {
   const t = useT()
   const native = status.memoryBodies !== undefined && nativeInUse(status)

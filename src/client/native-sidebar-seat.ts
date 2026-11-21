@@ -5,7 +5,6 @@ interface MnemonNativeSidebarPlacement {
   target?: HTMLElement
 }
 
-/** Keep the shell-owned Source tree alive across native main-panel navigation. */
 export class MnemonNativeSidebarSeat extends ExternalStore<MnemonNativeSidebarPlacement> {
   constructor() {
     super({ available: false })

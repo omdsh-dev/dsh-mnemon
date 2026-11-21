@@ -7,13 +7,11 @@ import { failureText, reasonOf } from './sync-view.ts'
 import type { RepositoryEditorProps } from './sync-repository-editor.ts'
 import { RepositoryPicker } from './MnemonSyncRepositoryPicker.tsx'
 
-/** Sign in with the GitHub device flow, then pick or create the repository. */
 export function GitHubConnect(props: RepositoryEditorProps & { github: MnemonSyncGitHubStatus }): JSX.Element {
   const { client, github, disabled, cancellable, t, onGitHub, onReadGitHub, onCancel, onConnected } = props
   const [busy, setBusy] = useState<'start' | 'cancel' | 'signout' | 'choose' | 'create' | null>(null)
   const [failed, setFailed] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-  // The device flow is polled on the cadence GitHub asked for; a counter re-runs the effect.
   const [pollTick, setPollTick] = useState(0)
   const [pollMs, setPollMs] = useState(5_000)
   const flow = github.flow
@@ -52,22 +50,14 @@ export function GitHubConnect(props: RepositoryEditorProps & { github: MnemonSyn
     } finally { setBusy(null) }
   }
 
-  /** A grant GitHub stopped honouring is replaced: sign out, then start a new sign-in. */
   const signInAgain = async (): Promise<void> => {
     await signOut()
     await start()
   }
 
-  /**
-   * One click copies the code and opens the page it is typed into. The copy starts
-   * first, while this page still has focus, and the page opens within the same click,
-   * so neither the clipboard nor a popup blocker refuses it.
-   */
   const copyAndOpen = async (): Promise<void> => {
     if (flow === undefined) return
     const copying = writeClipboard(flow.userCode).catch(() => false)
-    // `noopener` would make `open` answer null even when the page did open, so the
-    // opener is cut afterwards and null keeps meaning that the browser blocked it.
     const opened = window.open(flow.verificationUri, '_blank')
     if (opened !== null) opened.opener = null
     setCopied(await copying)
@@ -94,7 +84,6 @@ export function GitHubConnect(props: RepositoryEditorProps & { github: MnemonSyn
           else if (answer.status === 'denied') setFailed(t('config.syncGitHubDenied'))
           else if (answer.status === 'error') setFailed(t('config.syncGitHubFailed', { error: answer.message ?? '' }))
         } catch (reason) {
-          // One failed call is not the end of the sign-in: say so and ask again on the same cadence.
           if (active) { setFailed(message(reason)); setPollTick(current => current + 1) }
         }
       })()
@@ -102,7 +91,6 @@ export function GitHubConnect(props: RepositoryEditorProps & { github: MnemonSyn
     return () => { active = false; clearTimeout(timer) }
   }, [client, flow?.userCode, signedIn, pollMs, pollTick, onReadGitHub, t])
 
-  /** Choosing a repository connects it; the GitHub grant then authenticates, so no token is kept. */
   const choose = async (repository: MnemonSyncGitHubRepository): Promise<void> => {
     setBusy('choose'); setFailed(null)
     try {

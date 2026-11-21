@@ -18,7 +18,6 @@ function readSavedCollapsed(): boolean {
 
 const PANE_CONTAINER_SELECTOR = '#root, .dsh_frame, [data-dsh-frame], .dsh_centerCol, .dsh_rightbarCol, [data-pane="conversation"], [data-conversation-scroll]'
 
-/** Register only while a Memory view owns the session; selectors read owner props only. */
 export class MemoryComposer extends ExternalStore<MemoryComposerState> {
   private readonly views = new Map<string, number>()
   private readonly entries = new Map<string, () => void>()
@@ -75,7 +74,7 @@ export class MemoryComposer extends ExternalStore<MemoryComposerState> {
   setCollapsed(collapsed: boolean, persist = true): void {
     if (this.snapshot.collapsed === collapsed) return
     this.snapshot = { ...this.snapshot, collapsed }
-    if (persist) { try { localStorage.setItem(MEMORY_COMPOSER_PREFERENCE, collapsed ? 'collapsed' : 'expanded') } catch { /* The in-memory preference still works. */ } }
+    if (persist) { try { localStorage.setItem(MEMORY_COMPOSER_PREFERENCE, collapsed ? 'collapsed' : 'expanded') } catch { } }
     this.sync()
     this.notify()
   }
@@ -98,14 +97,12 @@ function CollapsedComposer({ composer, t }: { composer: MemoryComposer; t: Mnemo
   return <div className={css.composerNotice}><span>{t('composer.collapsed')}</span><MemoryComposerToggle composer={composer} t={t} /></div>
 }
 
-/** DSH's overlay chain retains the resident editor, attachments and draft DOM. */
 export function installMemoryComposer(ctx: MnemonClientContext, t: MnemonTranslate): { composer: MemoryComposer; dispose(): void } {
   const composer = new MemoryComposer()
   const stop = ctx.slots.inject('conversation.composer', () => {
     if (ctx.slots.spec?.('conversation.composer')?.kind !== 'chain') return () => {}
     composer.connect(sessionId => ctx.slots.register({
       name: 'conversation.composer',
-      // All business-owned takeovers get their turn before this cosmetic one.
       priority: Number.MAX_SAFE_INTEGER,
       select: owner => owner.sessionId === sessionId && owner.pendingInteraction === undefined ? true : null,
       locale: 'mnemon',
@@ -113,8 +110,6 @@ export function installMemoryComposer(ctx: MnemonClientContext, t: MnemonTransla
     }, CollapsedComposer))
     return () => composer.connect(undefined)
   })
-  // Composer owners expose a session, not a pane. Observe only structural layout
-  // containers with `subtree: false` (never chat message subtrees) and coalesce microtasks.
   let paneScheduled = false
   let paneDisposed = false
   let stopSlotSubscription: (() => void) | undefined
@@ -169,7 +164,6 @@ export function installMemoryComposer(ctx: MnemonClientContext, t: MnemonTransla
   const skill = (event: Event) => composer.revealSkill(event)
   const preference = (event: StorageEvent) => { if (event.key === MEMORY_COMPOSER_PREFERENCE) composer.setCollapsed(event.newValue !== 'expanded', false) }
   if (typeof window !== 'undefined') {
-    // The Skills Source's existing browser bridge also fills the retained editor.
     window.addEventListener('dsh-mnemon:skill-use', skill)
     window.addEventListener('storage', preference)
   }
@@ -184,7 +178,6 @@ export function installMemoryComposer(ctx: MnemonClientContext, t: MnemonTransla
   } }
 }
 
-/** Reserve the actual owning composer height, including multiline drafts and approvals. */
 export function useMemoryComposerInset(root: RefObject<HTMLElement>, enabled: boolean): void {
   useEffect(() => {
     const shell = root.current
