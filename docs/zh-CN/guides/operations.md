@@ -387,9 +387,9 @@ dsh-mnemon-repair-session --input /backup/session.jsonl.zstd --output /backup/re
 
 ID 检查使用原 stream 完整的 `sourceEventSeqs`，包括 packed 逻辑成员。result provenance 必须精确指向对应 call；字段缺省时，仅允许没有其他 attempt 的唯一单调用 step。显式错误引用不能使用此回退。通过序号或消息 ID 关联的额外引用会跨 step 检查；普通 compaction 序号引用与无关插件仍可原样保留。`recoveredToolIdentityChains` 统计恢复的链，`recoveredToolIdentityFields` 统计逻辑身份字段，`toolIdentityRecoveryRefusals` 用有数量上限的位置样例解释无法证明的形状。
 
-工具只接受 v0、合法 UTF-8 JSON 记录和完整的普通 Zstandard 帧；原始输入、解压输入和展开输出均限制为 128 MiB。格式损坏、不完整帧、修改或身份判断路径中的歧义重复键、无法安全表示的 delta 序号或时间会在发布输出前被拒绝。仅改写匹配的 summary/version/name/identity 成员和需要展开的 packed 行，其他解压字节均保留。诊断统计每类已知 blocker 的全部次数，并最多列出十个行号/事件/字段路径样例，不输出消息正文。`migrationValidated: false` 明确表示扫描器不会修复其他损坏，也不保证任意会话都能迁移；最终仍以安装的官方 DSH 加载器和 stream 回放为准。参见 [issue #251 契约审计与验证](../../pr-assets/issue-251-legacy-repair/README.zh-CN.md)。
+工具只接受 v0、合法 UTF-8 JSON 记录和完整的普通 Zstandard 帧；原始输入、解压输入和展开输出均限制为 128 MiB。格式损坏、不完整帧、修改或身份判断路径中的歧义重复键、无法安全表示的 delta 序号或时间会在发布输出前被拒绝。仅改写匹配的 summary/version/name/identity 成员和需要展开的 packed 行，其他解压字节均保留。诊断统计每类已知 blocker 的全部次数，并最多列出十个行号/事件/字段路径样例，不输出消息正文。`migrationValidated: false` 明确表示扫描器不会修复其他损坏，也不保证任意会话都能迁移；最终仍以安装的官方 DSH 加载器和 stream 回放为准。
 
-DSH 以写权限打开旧会话时，会迁移为不可变的 v3 generation。Mnemon Runtime、档案与记忆空间维持原有格式。回滚 DSH 时，在独立旧版本 Profile 中恢复升级前会话备份；不要让旧 DSH 打开 v3 generation。参见[验证与截图](../../pr-assets/issue-223-dsh-015/README.zh-CN.md)。
+DSH 以写权限打开旧会话时，会迁移为不可变的 v3 generation。Mnemon Runtime、档案与记忆空间维持原有格式。回滚 DSH 时，在独立旧版本 Profile 中恢复升级前会话备份；不要让旧 DSH 打开 v3 generation。
 
 ## 已知限制
 

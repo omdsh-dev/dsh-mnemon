@@ -4,6 +4,8 @@
 
 Thank you for contributing to dsh-mnemon. This document defines the Issue, Pull Request, verification, and maintenance rules. See the [Development and Verification Guide](./docs/en/development/README.md) for implementation details and test scenarios.
 
+All repository conventions live in standard open-source documentation (`CONTRIBUTING.md`, `ISSUE_TRIAGE.md`, `.github/` templates, and `docs/`) and are enforced by automated CI checks rather than separate tool-specific instruction files (such as `AGENT.md`). Human contributors and coding tools follow the same single source of truth.
+
 ## Pull Request scope
 
 The repository accepts these external Pull Requests:
@@ -56,12 +58,14 @@ Code, comments, documentation, commit messages, and PR titles must not contain e
 1. **Use the latest main**: rebase onto or merge the latest `main`, resolve conflicts, and rerun verification before submitting.
 2. **Run complete verification**: run `pnpm run verify` by default. If a check cannot run, document the reason, alternative evidence, and remaining risk in the PR.
 3. **Add targeted regression coverage**: bugs need a test that fails before the fix and passes afterward. UI behavior must cover both authorized and rejected paths.
-4. **Provide real evidence**: attach a local screenshot or short video for user-visible changes. For Host, CLI, or Headless changes, attach redacted logs or command results.
-5. **Keep both languages synchronized**: long-lived documents under `docs/en/` and `docs/zh-CN/` must have matching names and responsibilities. Keep `README.md` and `README.zh-CN.md` synchronized.
-6. **Explain security and data effects**: changes to persistence formats, paths, RPC authority, Provider credentials, or import/export must explain compatibility, migration or rejection, rollback, and data retention.
-7. **Keep boundaries stable**: `src/host/protocol.ts` is the browser-safe source of Client and Host wire DTOs. Do not import executable Host modules into browser code.
-8. **Disclose AI coding**: complete the PR template with the model and coding tool used. Contributors remain responsible for the final code, verification, and security.
-9. **Do not commit generated output**: ensure the worktree contains no `lib/` output or temporary Provider-lab data.
+4. **Provide real evidence without bloating Git**: attach before/after screenshots or short recordings directly to the GitHub Pull Request description via GitHub user attachments. For automated or CLI-driven uploads, host review binaries on a dedicated orphan branch or external asset repository referenced by commit SHA, and attach release acceptance bundles to GitHub Releases or CI artifacts. Never commit PR or Issue review binaries to `main`. For Host, CLI, or Headless changes, include redacted logs or command results.
+5. **Keep both languages synchronized**: long-lived documents under `docs/en/` and `docs/zh-CN/` must have matching names and responsibilities. Keep `README.md`, `README.zh-CN.md`, `CHANGELOG.md`, and `CHANGELOG.zh-CN.md` synchronized. Product media belongs under semantic folders in `docs/assets/` with zero unreferenced files.
+6. **Write concise, self-documenting code**: prefer clear module structure, crisp naming, small pure helpers, and executable regression tests over narrative comments. Avoid both overly verbose identifiers and cryptic placeholder names (such as `x1`, `tmp`, or `bar`), remove dead code and unused bindings (`tsc --noUnusedLocals --noUnusedParameters`), and keep only machine directives (such as shebangs, `@ts-expect-error`, `@vitest-environment`, and `@deprecated`).
+7. **Validate once at the trust boundary**: enforce input, path, permission, and integrity checks once at external boundaries (CLI/RPC entrypoints, disk reads, external HTTP/Provider responses, and release workflow entrypoints), then trust established types and invariants internally. Do not stack redundant hashing, repeated re-validation, or extra subprocess checks inside internal helpers for contrived call paths that bypass upstream gates.
+8. **Explain security and data effects**: changes to persistence formats, paths, RPC authority, Provider credentials, or import/export must explain compatibility, migration or rejection, rollback, and data retention.
+9. **Keep boundaries stable**: `src/host/protocol.ts` is the browser-safe source of Client and Host wire DTOs. Do not import executable Host modules into browser code.
+10. **Disclose AI coding**: complete the PR template with the model and coding tool used. Contributors remain responsible for the final code, verification, and security.
+11. **Do not commit generated output**: ensure the worktree contains no `lib/` output or temporary Provider-lab data.
 
 ## Documentation and persistence constraints
 
@@ -82,7 +86,8 @@ Code, comments, documentation, commit messages, and PR titles must not contain e
 
 ## Pull Request rules
 
-- Keep the bilingual [PR template](.github/pull_request_template.md) intact and complete its summary, context, affected areas, type, latest-code confirmation, AI disclosure, compatibility and data safety, local validation, and user-visible evidence;
+- Keep each PR focused on one cohesive concern with clean file boundaries, and add a `.changeset/*.md` entry whenever published package inputs change (`node scripts/check-release-intent.mjs`);
+- keep the bilingual [PR template](.github/pull_request_template.md) intact and complete its summary, context, affected areas, type, latest-code confirmation, AI disclosure, compatibility and data safety, local validation, and user-visible evidence;
 - CI and PR policy checks must pass. Correct the description or implementation when a check fails; do not remove template sections;
 - PRs superseded by a more complete solution, based on an obsolete design, or unable to upgrade safely will be closed with an explanation;
 - reviews use the current `main`, public contracts, and released behavior as the source of truth, not only the PR description.

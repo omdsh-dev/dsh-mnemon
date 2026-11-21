@@ -7,8 +7,8 @@ Starter 固定经过测试的官方插件组合。下表记录验证范围，不
 | 组件 | 基线 | 已验证的范围 |
 |---|---|---|
 | DSH 0.2.2 CI 宿主 | `0.2.2-rc.1`、`0.2.2-rc.2`、`0.2.2-rc.5` | 已安装宿主测试使用 Node 24.22.2，DSH 0.2.2 要求 Node >=24.9.0。 |
-| DSH 0.2.2 发布验收 | `0.2.2-rc.3`、`0.2.2-rc.4` | v0.5.48 在两版验证了 Web 安装、升级和数据保留，并在 rc.4 上运行了已安装宿主回归测试。[发布验收](../../pr-assets/release-v0.5.48/README.zh-CN.md) |
-| 单独检查的 DSH 源码快照 | `fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159` | 使用未经修改的源码构建，在 Node 24 上单独验证完整测试与真实模型 WebUI 任务。只代表这一 master commit，不代表所有源码构建或 alpha。见[新版 Host 验收](../../pr-assets/dsh-master-agents/README.zh-CN.md)。 |
+| DSH 0.2.2 发布验收 | `0.2.2-rc.3`、`0.2.2-rc.4` | v0.5.48 在两版验证了 Web 安装、升级和数据保留，并在 rc.4 上运行了已安装宿主回归测试。 |
+| 单独检查的 DSH 源码快照 | `fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159` | 使用未经修改的源码构建，在 Node 24 上单独验证完整测试与真实模型 WebUI 任务。只代表这一 master commit，不代表所有源码构建或 alpha。 |
 | DSH 开发基线 | `0.2.1-rc.5` | 保持锁定的开发依赖，并在 Node 22.19 的已安装宿主 CI 中验证。 |
 | DSH 早期受支持宿主 | `0.2.0-rc.2`, `0.2.1-rc.3` | CI 在这些已安装包上运行全部根测试。版本差异见 [DSH 0.2.0 与 0.2.1](#dsh-020-与-021)；支持范围仍包含 0.2.1-rc.1 和 rc.2。 |
 | Node.js | `22.19`、`24` | 分别用于源码 CI 与打包制品 CI；开发要求 `^22.19.0 \|\| >=24.11.0` |
@@ -16,15 +16,15 @@ Starter 固定经过测试的官方插件组合。下表记录验证范围，不
 | Mnemon Native CLI | `0.2.9`；嵌入模型检测要求 `0.2.13+` | 用真实 CLI 和临时数据执行可选测试，CLI 单独安装。旧版的其他命令仍可使用，但“测试状态”会提示升级，因为旧版可用性字段只证明 Provider 可达 |
 | 三方 Provider | 适配契约与夹具 | 不代表真实云账号一致性或上游服务可用性已验证 |
 
-使用 DSH 0.2.2 时，请选择上表列出的官方 RC。项目不再针对 alpha 版本进行兼容适配或 CI 验证；alpha 用户请升级到已发布的 RC。清单中的宽版本范围用于安装准入，不代表承诺支持 alpha。[先前的隔离 alpha Host 证据](../../pr-assets/issue-554-alpha-host/README.zh-CN.md)仅作为历史记录保留。
+使用 DSH 0.2.2 时，请选择上表列出的官方 RC。项目不再针对 alpha 版本进行兼容适配或 CI 验证；alpha 用户请升级到已发布的 RC。清单中的宽版本范围用于安装准入，不代表承诺支持 alpha。
 
 DSH 0.2.1-rc.3 及当前 RC 验证目标会联网获取官方 API Key 的模型目录。任务 Agent 模型选择列表为该 Provider 保留最多六秒，覆盖 DSH 默认的五秒请求预算；其他 Provider 仍为三秒。此调整仅影响目录加载，不改变模型选择、推理超时或已保存配置。
 
 清单允许安装 `>=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-rc.1 <0.3.0-0`：DSH 0.2.0 从 0.2.0-rc.2 起，DSH 0.2.1 及之后的 0.2 版本从 0.2.1-rc.1 起，正式版也在其中。DSH 0.2.1 从 Starter 的 `engines.dsh` 读取这个范围；DSH 0.2.0 从 Starter 的 DSH peer（可选的 `dsh-app-boot` 与 `dsh-typert-protocol`）读取，两者写的是同一个范围。DSH 在安装插件前，以及每次启动 profile 时，都会用自身版本检查这个范围，预发布版本也参与比较；不包含当前 DSH 的版本会被拒绝安装或停用。`tests/dsh-host-compatibility.spec.ts` 对全部 19 个包的清单执行 DSH 自己的检查，既覆盖受支持的版本，也覆盖已不再支持的版本。五个 Strategy 包使用新的扩展 SDK，要求 `dsh-mnemon ^0.5.17`；Documents Source 要求 `^0.5.40`，以使用执行内创建记录；Memory Spaces 与 Runtime 要求 `^0.5.19`，Skills 要求 `^0.5.37`；Provider 则依赖记忆空间 Source。
 
-官方 DSH 0.2.2-rc.1 将工具执行拆为独立的 native/PTC executor 插件，并将 `tools.execute()` 改为批量 API。Mnemon 根据已发布的 `setExecutor()` 能力提交一次关联调用，只接受调用 ID 匹配的最终结果。Host 仍负责 guard、执行前后策略及 PTC 调度。自动准入还依赖 [#541](https://github.com/omdsh-dev/dsh-mnemon/issues/541) 的轮内审计修复；[#542](https://github.com/omdsh-dev/dsh-mnemon/issues/542) 的 View 缺失问题独立修复。本次兼容适配使用已发布 npm 包和隔离的合成 profile，不修改 DSH 源码、存储格式或支持版本范围。验证范围与上游来源见[当前 DSH 证据](../../pr-assets/current-dsh-compat/README.zh-CN.md)。
+官方 DSH 0.2.2-rc.1 将工具执行拆为独立的 native/PTC executor 插件，并将 `tools.execute()` 改为批量 API。Mnemon 根据已发布的 `setExecutor()` 能力提交一次关联调用，只接受调用 ID 匹配的最终结果。Host 仍负责 guard、执行前后策略及 PTC 调度。自动准入还依赖 [#541](https://github.com/omdsh-dev/dsh-mnemon/issues/541) 的轮内审计修复；[#542](https://github.com/omdsh-dev/dsh-mnemon/issues/542) 的 View 缺失问题独立修复。本次兼容适配使用已发布 npm 包和隔离的合成 profile，不修改 DSH 源码、存储格式或支持版本范围。
 
-Source 工具激活使用受支持的 0.2.0/0.2.1 Host 已发布的 `tools.register()` disposer 与作用域 `tools.get()` 契约。DSH 应用 `restrict()` 前，子 Agent 允许列表会剔除未注册的可选工具。首次通过 Loader 启动时，命名工具族在 `Loader.await()` 就绪后按原有目录顺序发布；后续恢复会追加工具族，不重新注册仍在运行的工具。DSH 默认独立排序请求中的工具 schema。Source 配置事务保留原有工具目录，直到发布最终提交状态。[合成 Host 证据](../../pr-assets/issue-522-source-tool-lifecycle/README.md)记录本地 schema 更新、Documents/Runtime 保留写入与 spawn/fork 审查覆盖；PR 当前 head 仍需远程兼容性 CI。存储格式、Provider 契约和既有 View 授权检查保持不变。
+Source 工具激活使用受支持的 0.2.0/0.2.1 Host 已发布的 `tools.register()` disposer 与作用域 `tools.get()` 契约。DSH 应用 `restrict()` 前，子 Agent 允许列表会剔除未注册的可选工具。首次通过 Loader 启动时，命名工具族在 `Loader.await()` 就绪后按原有目录顺序发布；后续恢复会追加工具族，不重新注册仍在运行的工具。DSH 默认独立排序请求中的工具 schema。Source 配置事务保留原有工具目录，直到发布最终提交状态。存储格式、Provider 契约和既有 View 授权检查保持不变。
 
 <a id="首次安装时的宿主行为"></a>
 
@@ -52,7 +52,7 @@ Git 同步保留原有设置与载荷格式。保存的默认提交者组合现�
 
 RC2 使用此前已为 master 快照适配的 activation 所有权契约：Subagent 的 `rootOf()` 与扁平 activation 请求替代 registry 所有权方法。现有 Mnemon 适配器保留独立任务、受守卫约束的 spawn/fork 与用户主动续接。独立任务会话可能通过 ACP 或宿主 UI 被发现，这是此前已说明的任务可见性取舍，并非关闭记忆能力。RC2 测试使用实际发布宿主验证这些路径。
 
-RC2 会在 Chat 中展示 developer 上下文注入。Mnemon 通过公开的会话登记接口，仅接管自己产生的空 `memory-snapshot-retired` developer 消息，避免内部退役标记变成空卡片。普通记忆快照、召回、指令、非空消息与其他来源仍按宿主规则显示。审计事件与模型投影保持不变，包括用于复用 KV Cache 的快照优先追加策略。历史会话使用同一显示过滤器，不改写已保存事件；旧宿主按能力可选加载，客户端插件卸载时一并撤销。见 [RC2 验收证据](../../pr-assets/dsh-022-rc2/README.zh-CN.md)。
+RC2 会在 Chat 中展示 developer 上下文注入。Mnemon 通过公开的会话登记接口，仅接管自己产生的空 `memory-snapshot-retired` developer 消息，避免内部退役标记变成空卡片。普通记忆快照、召回、指令、非空消息与其他来源仍按宿主规则显示。审计事件与模型投影保持不变，包括用于复用 KV Cache 的快照优先追加策略。历史会话使用同一显示过滤器，不改写已保存事件；旧宿主按能力可选加载，客户端插件卸载时一并撤销。
 
 ### 已发布的 DSH 0.2.2 RC1 与 issue #554
 
@@ -62,11 +62,11 @@ master commit `fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159` 改为由 Subagent 管�
 
 标准 Provider 的 `providerName` 从公开的、已解析的插件配置中发现，覆盖先于 Mnemon 加载以及重载后的 Provider。第三方子 Agent Provider 如果把注册名隐藏在代码中，可在 Mnemon 插件配置中填写可选的 `subagentProviderNames: [my-local-provider]`。这些名称只作为候选，仍需通过实时注册状态、隔离与能力检查；`spawn` 优先级及显式选择 `fork` 审查的语义保留。此项控制子 Agent 执行，与 Memory Space Provider 选择无关。
 
-这一固定 master 快照的[测试、真实 DeepSeek 截图与限制](../../pr-assets/dsh-master-agents/README.zh-CN.md)单独记录，不改变官方 RC 支持边界，也不恢复 alpha 支持。对上游显式后台任务 API 的诉求见 [dsh-external/issues#681](https://github.com/dsh-external/issues/issues/681)。
+这一固定 master 快照不改变官方 RC 支持边界，也不恢复 alpha 支持。对上游显式后台任务 API 的诉求见 [dsh-external/issues#681](https://github.com/dsh-external/issues/issues/681)。
 
 既有任务入口保持可用：独立 Skills 任务、证据回答与保存到记忆、Runtime 维护、Document 创建与归档、Provider 放置及记忆空间元数据整理。真实宿主回归覆盖独立任务成功执行、Document 原文与归档索引保留、按 Host 区分的 ACP 任务可见性、spawn/fork 工具守卫、取消清理，以及组合失败时在首次模型请求前拒绝。既有存储数据和已保存配置保持兼容，支持版本范围不变，没有为兼容 RC 关闭功能。
 
-已安装 RC 和打包 Starter 使用宿主自己的依赖。测试从同一安装解析 Loader，并观察其实际持久化方法。历史会话检查保留合法旧 descriptor，同时尊重宿主公开的校验器。包身份、命令、验收结果与边界见 [RC1 兼容验证记录](../../pr-assets/dsh-022-rc1/README.zh-CN.md)。
+已安装 RC 和打包 Starter 使用宿主自己的依赖。测试从同一安装解析 Loader，并观察其实际持久化方法。历史会话检查保留合法旧 descriptor，同时尊重宿主公开的校验器。
 
 ## 升级默认安装
 
@@ -87,7 +87,7 @@ v0.5 保留默认 v0.4 的存储、配置与侧栏工作流。可选的会话标
 
 ### 独立插件
 
-独立插件作者使用声明的 peer 范围与公开出口；旧的私有控制器导入不属于受支持的升级表面。自定义组合需要独立于 Starter 验证，参见[插件开发](../development/extensions.md)与[v0.5.0 发布边界](../releases/v0.5.0.md)。
+独立插件作者使用声明的 peer 范围与公开出口；旧的私有控制器导入不属于受支持的升级表面。自定义组合需要独立于 Starter 验证，参见[插件开发](../development/extensions.md)与 [v0.5.0 发布页](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.0)。
 
 <a id="dsh-02"></a>
 
@@ -129,13 +129,13 @@ Mnemon 同时在自己的传输注入作用域内注册 Web RPC，已运行的�
 
 代价在 DSH 的配置 schema 导出：`dsh web --dump-config-schema` 只识别原生 `cordis:group` 与 `cordis:include`，会把 `mnemon-bundle` 报告为无法识别的树载体，并略去其中各组件的 schema，与 DSH 自带的 agent preset 相同。运行时配置、插件页与 profile patch 不受影响。
 
-官方 WebUI 首次安装后，可以在同一宿主进程中点击“立即启用”；已安装但停用的 bundle 也可直接启动。更新或卸载 Node 已加载过的包时，仍须遵循 DSH 的正常重启要求，这一机制不替换已加载模块。例如原地更新后不重启就启用组件，会提示新版本才有的入口未导出（`ERR_PACKAGE_PATH_NOT_EXPORTED`）：从 0.5.17 或更早的版本更新时是 `./starter`，从 0.5.18 或 0.5.19 更新时是 `./bundle`。加载器不会为运行中的条目更换模块，因此从 0.5.18 或 0.5.19 更新时，也可能是运行中的旧组件组一直等待已移除的 `mnemonStarterReady`（`mnemon-bundle (dsh-mnemon/bundle): pending …`）。重启后两者都会恢复，见[升级验收记录](../../pr-assets/starter-group-upgrade/README.zh-CN.md)。参见[安装与启用验收记录](../../pr-assets/desktop-live-activation/README.zh-CN.md)与[组件组验收记录](../../pr-assets/starter-group-readiness/README.zh-CN.md)。
+官方 WebUI 首次安装后，可以在同一宿主进程中点击“立即启用”；已安装但停用的 bundle 也可直接启动。更新或卸载 Node 已加载过的包时，仍须遵循 DSH 的正常重启要求，这一机制不替换已加载模块。例如原地更新后不重启就启用组件，会提示新版本才有的入口未导出（`ERR_PACKAGE_PATH_NOT_EXPORTED`）：从 0.5.17 或更早的版本更新时是 `./starter`，从 0.5.18 或 0.5.19 更新时是 `./bundle`。加载器不会为运行中的条目更换模块，因此从 0.5.18 或 0.5.19 更新时，也可能是运行中的旧组件组一直等待已移除的 `mnemonStarterReady`（`mnemon-bundle (dsh-mnemon/bundle): pending …`）。重启后两者都会恢复。
 
 <a id="dsh-017-bundle-组件列表"></a>
 
 ## DSH 0.2.0 上的 bundle 组件列表
 
-与 0.1.7 一样，DSH 0.2.0 的“插件 → 可组合记忆”详情页会把 `mnemon-bundle` 内部容器列为“已关闭”的组件（0.5.20 起显示为 `dsh-mnemon/bundle`，此前为 `cordis:group`）。9 个实际组件全部运行时，列表显示“共 10 个 · 9 运行中 · 1 已停用”。点击容器开关会返回 `unknown-plugin`，中文界面提示“组件启用失败：找不到该插件”。参见[原始截图](../../pr-assets/sidebar-native-20260926/before-bundle-toggle-error.jpg)与[上游问题 #649](https://github.com/dsh-external/issues/issues/649)。DSH 0.2.1 不再列出这个容器。
+与 0.1.7 一样，DSH 0.2.0 的“插件 → 可组合记忆”详情页会把 `mnemon-bundle` 内部容器列为“已关闭”的组件（0.5.20 起显示为 `dsh-mnemon/bundle`，此前为 `cordis:group`）。9 个实际组件全部运行时，列表显示“共 10 个 · 9 运行中 · 1 已停用”。点击容器开关会返回 `unknown-plugin`，中文界面提示“组件启用失败：找不到该插件”（[上游问题 #649](https://github.com/dsh-external/issues/issues/649)）。DSH 0.2.1 不再列出这个容器。
 
 这是宿主的展示与管理清单不一致：bundle 声明列表包含原生 group，但可管理插件清单明确排除了 group。该行的“已关闭”不代表 Mnemon 核心或其子插件已停用，也不能据此判断记忆读写是否正常。
 
@@ -159,7 +159,7 @@ Mnemon 消息使用 Session V3、V4 均接受的生产者专属来源 `dsh-mnemo
 
 若 Mnemon 启动时原 `settings.yaml` 仍存在，由 DSH 执行导入；完成后再重启一次该 profile，恢复 Mnemon 专属偏好。DSH 未公开导入完成信号，因此 Mnemon 等待新宿主进程，避免并发写入。只读或归属不明确的根条目不会被修改；相关旧设置节损坏时，不做部分导入，也不标记完成。请保留备份，参考启动诊断后再修复；不会猜测自定义根 ID 或其他 profile 的 hash。
 
-回滚到这样的旧宿主时，保留 profile patch 和旧设置备份，并重新安装支持该宿主的 dsh-mnemon 版本（见[更早的 DSH](#更早的-dsh)）。此后修改的设置不会自动反向导出到旧设置文件，需要恢复对应备份或在旧宿主重新设置；Runtime、档案、记忆空间与 Provider 数据不受影响。参见 [DSH 0.1.7 设置验证](../../pr-assets/issue-267-settings-migration/README.zh-CN.md)。
+回滚到这样的旧宿主时，保留 profile patch 和旧设置备份，并重新安装支持该宿主的 dsh-mnemon 版本（见[更早的 DSH](#更早的-dsh)）。此后修改的设置不会自动反向导出到旧设置文件，需要恢复对应备份或在旧宿主重新设置；Runtime、档案、记忆空间与 Provider 数据不受影响。
 
 <a id="ptc-idle-review-history-recovery"></a>
 
@@ -176,7 +176,7 @@ dsh-mnemon-repair-session --input /backup/session.v4.jsonl.zstd --output /recove
 
 第一条命令仅预览。生成副本时只识别已完成 step 或回合之后、位于 step 外成对出现、保留原始 UUID 关联且结果参数为空的 `mnemon_subagent_result` 探测，并将完整审计数据保留为可忽略的 Mnemon 恢复记录。所有事件位置、时间戳、对话消息和无关原始行均保留，不截断历史，也不修改记忆存储。支持普通 JSONL 和带校验和的 Zstandard；从不覆盖输入或已有输出。继承/子会话、孤立探测、写工具调用、非空结果、歧义字段及被其他事件引用的探测记录都会被拒绝。
 
-`migrationValidated: false` 表示 CLI 不为会话的其余部分提供有效性保证。请先用同一 DSH 版本在隔离会话存储中加载恢复副本，验证后在 DSH 停止时替换这一代文件，并离线保留原件。若 DSH 仍拒绝读取或 CLI 提示形状不受支持，保留原件请求诊断，不要删除记录。[合成复现与验证记录](../../pr-assets/issue-541-idle-probe-history/README.zh-CN.md)覆盖正式读取器、消息保持和恢复拒绝场景。
+`migrationValidated: false` 表示 CLI 不为会话的其余部分提供有效性保证。请先用同一 DSH 版本在隔离会话存储中加载恢复副本，验证后在 DSH 停止时替换这一代文件，并离线保留原件。若 DSH 仍拒绝读取或 CLI 提示形状不受支持，保留原件请求诊断，不要删除记录。
 
 ## 旧版 DSH 宿主
 
@@ -192,22 +192,22 @@ DSH 0.1.7 桌面版不为 `dsh-app://app/` 页面声明传输方式。dsh-mnemon
 
 Desktop 可能删除插件 generation 内的私有 `@deepseek-ai/*` 包，改用宿主自己的框架版本。Mnemon 使用宿主公开的 Volatile API 构建动态设置 schema，DSH `0.1.7-rc.2` 通过 Cosmokit `1.8.5` 提供这些 API。宿主若携带不含这些 API 的旧版 Cosmokit（例如 `1.8.3`），即属于不受支持的宿主，请在该环境继续使用 dsh-mnemon `v0.5.16`。
 
-受影响的 `0.5.13` 安装中，Desktop 的回退分支会将缺少 `createVolatile` 导出的真实错误隐藏为 `Cannot find package 'dsh-mnemon'`。平铺 `mnemon-bundle` 不能修复该导入失败。Starter 保留 group、根停用总开关、独立 Source/Strategy 选择、私有 Provider 子项和已有设置命名空间。在所属 profile 更新 Mnemon 后重启即可；本修复不需要迁移记忆或配置。参见[原版 Desktop 复现与验收记录](../../pr-assets/issue-274-profile-generation/README.zh-CN.md)。
+受影响的 `0.5.13` 安装中，Desktop 的回退分支会将缺少 `createVolatile` 导出的真实错误隐藏为 `Cannot find package 'dsh-mnemon'`。平铺 `mnemon-bundle` 不能修复该导入失败。Starter 保留 group、根停用总开关、独立 Source/Strategy 选择、私有 Provider 子项和已有设置命名空间。在所属 profile 更新 Mnemon 后重启即可；本修复不需要迁移记忆或配置。
 
 ## 验证与证据
 
 ### 受支持的宿主
 
-根测试在锁定的 0.2.1-rc.2 上运行，CI 还会在从 npm 安装的 DSH 0.2.0-rc.2 上运行（`pnpm run test:installed-dsh`，见[开发指南](../development/README.md#环境与命令)）；真实宿主测试组合的是它所运行的那个 DSH。在两个版本上，启用与不启用可选策略的 Headless、Starter 的激活契约以及 Git 同步检查都通过；只有 `--check-declared-rows` 在 0.2.0-rc.2 上因分组行列表失败。[DSH 0.2.1-rc.2 记录](../../pr-assets/dsh-021-rc2/README.zh-CN.md)包含 0.2.1-rc.2 上的检查，[DSH 0.2.1-rc.1 记录](../../pr-assets/dsh-021-rc1/README.zh-CN.md)包含 0.2.1-rc.1 与 0.2.0-rc.2 上的 WebUI 检查。更早的记录：[0.2.0-rc.2 发布验收](../../pr-assets/release-v0.5.22/README.zh-CN.md)、[activation（#356）](../../pr-assets/issue-356-subagent-activation/README.zh-CN.md)、[0.2.1-alpha.2](../../pr-assets/dsh-021-alpha2/README.zh-CN.md)与 [0.2.1-alpha.3](../../pr-assets/dsh-021-alpha3/README.zh-CN.md)。
+根测试在锁定的 0.2.1-rc.5 基线上运行，CI 还会在从 npm 安装的正式 DSH 版本上运行（`pnpm run test:installed-dsh`，见[开发指南](../development/README.md#环境与命令)）；真实宿主测试组合的是它所运行的那个 DSH。在受支持版本上，启用与不启用可选策略的 Headless、Starter 的激活契约以及 Git 同步检查都通过；只有 `--check-declared-rows` 在 0.2.0-rc.2 上因分组行列表失败。
 
-另见[升级证据](../../pr-assets/main-rebase-20260904/README.md)与[当前开发检查](../development/README.md)。机制测试通过不是 LLM 质量评测通过；特定 OS 与真实 CLI 检查在没有对应环境时可能跳过。
+当前验证命令见[开发与验证](../development/README.md)。机制测试通过不是 LLM 质量评测通过；特定 OS 与真实 CLI 检查在没有对应环境时可能跳过。
 
 ### 产品素材
 
-[v0.5.32 浅色图集](../../assets/webui-v0.5.32/README.md)在 DSH 0.2.1-rc.2 上截取，覆盖双语桌面页面、DSH 的插件页与可组合记忆的页面，以及 390 × 844 下的对话、记忆空间与记忆组合面板；该宽度下较长的名称会截断，英文界面中当前的记忆系统标签可能位于屏幕之外。它没有复测所有 Host 设置页、DSH 0.2.0 或真实手机，因此不宣称完整支持手机；历史 v0.5.2 在 390px 下的布局问题保留[原版本证据](../../pr-assets/documentation-refresh/README.md)。
+[WebUI 图集](../../assets/webui-v0.5.32/README.md)覆盖双语桌面页面、DSH 的插件页与可组合记忆的页面，以及 390 × 844 下的窄屏布局（较长名称会截断，英文界面中当前的记忆系统标签可能位于屏幕之外）。它没有复测所有 Host 设置页、DSH 0.2.0 或真实手机，因此不宣称完整支持手机。
 
 <a id="其他记录"></a>
 
 ### 旧版宿主
 
-[DSH 0.1.5 验证](../../pr-assets/issue-223-dsh-015/README.zh-CN.md)、[RC/alpha 验证与前后对比截图](../../pr-assets/issue-261-dsh-slots/README.zh-CN.md)、[宿主兼容证据](../../pr-assets/dsh-rc1-compat/README.md)与 [DSH 0.2.0-rc.1 安装图集](../../assets/install-v0.5.19/README.md)记录了这些宿主。已在独立环境验证的 bundle 组件列表[上游候选补丁](../../pr-assets/sidebar-native-20260926/upstream-fix.patch)会过滤容器展示并保留实际子插件；它从未包含在正式发布的 DSH 0.1.7 中。
+较早 DSH 宿主上的历史版本记录见[安装图集](../../assets/install-v0.5.19/README.md)与 [CHANGELOG.zh-CN.md](../../../CHANGELOG.zh-CN.md)。

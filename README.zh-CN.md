@@ -63,7 +63,7 @@
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/ui-guide.md#在插件页中"><img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/webui-v0.5.32/zh-CN/plugins.gif" alt="DSH 的插件页，再进入可组合记忆的页面：记忆组合、主策略菜单、分层策略与记忆空间的组件页，以及存储与界面" width="880" /></a>
 </p>
 
-更多画面与每一步的说明见[界面指南](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/ui-guide.md)，全部截图、录屏与采集环境见 [v0.5.32 图集](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/webui-v0.5.32/README.md)。
+更多画面与每一步的说明见[界面指南](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/zh-CN/guides/ui-guide.md)，全部截图与录屏见 [WebUI 图集](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/webui-v0.5.32/README.md)。
 
 ## 三类记忆
 

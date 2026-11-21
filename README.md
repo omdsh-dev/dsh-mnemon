@@ -62,7 +62,7 @@ These recordings come from a real WebUI with the live DeepSeek model answering, 
   <a href="https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/ui-guide.md#on-the-plugins-page"><img src="https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/webui-v0.5.32/en/plugins.gif" alt="DSH's Plugins page, then dsh-mnemon's page: memory composition, the main strategy menu, the Layered strategy's and Memory Spaces' pages, then storage and interface" width="880" /></a>
 </p>
 
-Every step is explained in the [UI guide](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/ui-guide.md); all screens, recordings and the capture environment are in the [v0.5.32 gallery](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/webui-v0.5.32/README.md).
+Every step is explained in the [UI guide](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/en/guides/ui-guide.md); all screens and recordings are listed in the [WebUI media gallery](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/assets/webui-v0.5.32/README.md).
 
 ## Three kinds of memory
 

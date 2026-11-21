@@ -81,4 +81,4 @@ pnpm exec vitest run tests/client.spec.tsx -t 'accepts scoped skin variables'
 pnpm verify:docs
 ```
 
-定向回归覆盖两个入口和其他插件的样式隔离；实际绘制、样式加载顺序和可读性仍需真实浏览器验证。已有复现步骤及前后对照见 [Issue #273 验收记录](../../pr-assets/issue-273-skin-hooks/README.zh-CN.md)。
+定向回归覆盖两个入口和其他插件的样式隔离；实际绘制、样式加载顺序和可读性仍需真实浏览器验证。

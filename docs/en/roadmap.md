@@ -23,7 +23,7 @@ See [Architecture](./development/architecture.md), [Development](./development/R
 
 ## Next: gaps from the October 2026 review
 
-A review of the code after v0.5.31 found these concrete gaps. Each one changes what users, plugin authors or the model see, so each gets a pull request of its own. [The plan](../plans/review-gaps-2026-10.md) records what happens today and the proposed change for each, in the same order. Done so far: a default install's save receipt no longer reads as a failure; while DSH does not manage the embedding settings, a save without a vector ends with a neutral note ([record](../pr-assets/neutral-vector-note/README.md)).
+A review of the code after v0.5.31 found these concrete gaps. Each one changes what users, plugin authors or the model see, so each gets a pull request of its own. Done so far: a default install's save receipt no longer reads as a failure; while DSH does not manage the embedding settings, a save without a vector ends with a neutral note.
 
 - **Backups and Git sync keep a Native space's placement decision.** An import that includes Memory Spaces, and the sync that uses one, keeps six fields of each Memory Space entry, so a Native space loses its recorded automatic placement decision.
 - **One atomic write and one lock rule for every store.** Eleven hand-written writes differ in what they leave behind after a failure and in how they name their temporary files, and only one of the four lock implementations checks that it still owns a lock before removing it.
