@@ -30,6 +30,7 @@ export interface MemorySpaceNativeRunner {
 
 export interface MemoryProviderAdapterFactoryContext {
   memorySpaces?: MemorySpaceAuthority
+  /** @deprecated Use memorySpaces when present; retained for existing Provider factories. */
   memoryBodies: MemorySpaceAuthority
   config: { timeoutMs: number; defaultRecallLimit?: number }
   nativeRunner?: MemorySpaceNativeRunner
@@ -86,4 +87,5 @@ export interface MemoryProviderAdapter {
   dispose?(): void | Promise<void>
 }
 
+/** @deprecated Use ProviderSpaceStatus. */
 export type ProviderBodyStatus = ProviderSpaceStatus

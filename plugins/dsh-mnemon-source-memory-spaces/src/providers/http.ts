@@ -73,6 +73,7 @@ export abstract class HttpMemoryProvider {
   protected readonly requestFetch: typeof fetch
   protected readonly requestTimeoutMs: number
 
+  /** @deprecated Use memorySpaces. */
   protected readonly memoryBodies: MemorySpaceAuthority
 
   constructor(protected readonly memorySpaces: MemorySpaceAuthority, options: HttpProviderOptions = {}) {

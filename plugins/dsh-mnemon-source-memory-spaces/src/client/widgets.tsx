@@ -197,4 +197,5 @@ export function InsightCard(props: {
   )
 }
 
+/** @deprecated Use nativeSpaceProvider. */
 export const nativeBodyProvider = nativeSpaceProvider

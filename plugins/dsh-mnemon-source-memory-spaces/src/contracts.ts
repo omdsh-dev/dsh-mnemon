@@ -674,15 +674,26 @@ export function summarizeMemoryProviderRegistry(value: unknown): MemoryProviderR
   }
 }
 
+/** @deprecated Use CreateMemorySpaceRequest. The wire shape is unchanged. */
 export type CreateMemoryBodyRequest = CreateMemorySpaceRequest
+/** @deprecated Use UpdateMemorySpaceRequest. The wire shape is unchanged. */
 export type UpdateMemoryBodyRequest = UpdateMemorySpaceRequest
+/** @deprecated Use MemorySpace. The wire shape is unchanged. */
 export type MemoryBody = MemorySpace
+/** @deprecated Use MemorySpaceCatalog. The wire shape is unchanged. */
 export type MemoryBodyCatalog = MemorySpaceCatalog
 export type MemoryBodyDirectory = MemorySpaceCatalog
+/** @deprecated Use MemorySpaceMetadataMaintenanceResult. The wire shape is unchanged. */
 export type MemoryBodyMetadataMaintenanceResult = MemorySpaceMetadataMaintenanceResult
+/** @deprecated Use MemorySpaceMetadataSample. The wire shape is unchanged. */
 export type MemoryBodyMetadataSample = MemorySpaceMetadataSample
+/** @deprecated Use MemorySpaceMetadataUpdate. The wire shape is unchanged. */
 export type MemoryBodyMetadataUpdate = MemorySpaceMetadataUpdate
+/** @deprecated Use MemorySpaceProvider. The wire shape is unchanged. */
 export type MemoryBodyProvider = MemorySpaceProvider
+/** @deprecated Use MemorySpaceStats. The wire shape is unchanged. */
 export type MemoryBodyStats = MemorySpaceStats
+/** @deprecated Use MemorySpaceView. The wire shape is unchanged. */
 export type MemoryBodyView = MemorySpaceView
+/** @deprecated Use OpenVikingSpaceConnection. The wire shape is unchanged. */
 export type OpenVikingBodyConnection = OpenVikingSpaceConnection

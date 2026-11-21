@@ -4,6 +4,7 @@ import { COMPOSABLE_MEMORY_API_VERSION, type MemoryAvailableSource, type MemoryJ
 export type ThreeTierExtensionValues = MemoryViewExtensionValues
 export type ThreeTierExtensionSlot = MemoryViewExtensionSlot
 
+/** @deprecated The Host runs the workflows a Strategy declares in its manifest's `workflows`. */
 export function threeTierActionWorkflow(strategyTypeId: string, sourceTypeId: string, actionId: string): 'runtime-capacity' | undefined {
   return strategyTypeId === 'default-three-tier' && sourceTypeId === 'runtime' && actionId === 'mutate'
     ? 'runtime-capacity' : undefined
