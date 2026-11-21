@@ -256,6 +256,8 @@ export const Config: z<SharedConfig> = z.object({
   // resolve to the custom scope instead of being silently reset to global.
   storageScope: z.union(['global', 'workspace', 'custom', 'workspaces'] as const),
   runtimeUserScope: z.union(['storage', 'global'] as const).default('storage'),
+  documentsScope: z.union(['storage', 'global'] as const).default('storage'),
+  memorySpacesScope: z.union(['storage', 'global'] as const).default('storage'),
   excludedWorkspaces: z.array(z.string()).default([]),
   cliPath: z.string(),
   dataDir: z.string(),

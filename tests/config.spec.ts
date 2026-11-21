@@ -95,6 +95,8 @@ describe('Mnemon config and resolution', () => {
     expect(resolveConfig({})).toMatchObject({
       storageScope: 'global',
       runtimeUserScope: 'storage',
+      documentsScope: 'storage',
+      memorySpacesScope: 'storage',
       timeoutMs: 10_000,
       defaultRecallLimit: 10,
       runtimeMemory: {
@@ -348,6 +350,20 @@ describe('Mnemon config and resolution', () => {
     expect(resolveConfig({ storageScope: 'workspace' })).toMatchObject({ storageScope: 'workspace', runtimeUserScope: 'storage' })
     expect(resolveConfig({ storageScope: 'workspace', runtimeUserScope: 'global' })).toMatchObject({ storageScope: 'workspace', runtimeUserScope: 'global' })
     expect(() => resolveConfig({ runtimeUserScope: 'workspace' as never })).toThrow('USER.md scope')
+  })
+
+  it('defaults documentsScope and memorySpacesScope to storage and validates split-root global overrides (issue 374)', () => {
+    expect(resolveConfig({ storageScope: 'workspaces' })).toMatchObject({
+      storageScope: 'workspaces', documentsScope: 'storage', memorySpacesScope: 'storage',
+    })
+    expect(resolveConfig({ storageScope: 'workspaces', documentsScope: 'global', memorySpacesScope: 'global' })).toMatchObject({
+      storageScope: 'workspaces', documentsScope: 'global', memorySpacesScope: 'global',
+    })
+    expect(Config({ documentsScope: 'global', memorySpacesScope: 'global' })).toMatchObject({
+      documentsScope: 'global', memorySpacesScope: 'global',
+    })
+    expect(() => resolveConfig({ documentsScope: 'workspace' as never })).toThrow('Documents scope')
+    expect(() => resolveConfig({ memorySpacesScope: 'workspace' as never })).toThrow('Memory Spaces scope')
   })
 
   it('migrates the selected root from the former named-Pack settings', () => {

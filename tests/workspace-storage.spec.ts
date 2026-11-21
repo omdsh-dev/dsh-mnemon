@@ -177,6 +177,41 @@ describe('Mnemon storage-domain inventory and centralized roots', () => {
       expect(catalog.scopes.filter(scope => scope.active)).toEqual([expect.objectContaining({ kind: 'custom', root })])
       expect(catalog.scopes.find(scope => scope.kind === 'workspace')?.root).toBe(join(workspace, '.mnemon'))
     })
+
+    it('inspects global Documents and Memory Spaces on the active workspace scope without double-counting bytes (issue 374)', () => {
+      const globalRoot = temporaryDirectory()
+      const workspace = temporaryDirectory()
+      try {
+        vi.stubEnv('MNEMON_DATA_DIR', globalRoot)
+        const config = {
+          storageScope: 'workspaces' as const,
+          documentsScope: 'global' as const,
+          memorySpacesScope: 'global' as const,
+        }
+        const storage = createStorageRoot(config, workspace)
+        const activeRoot = storage.effectiveDataDir()
+        mkdirSync(join(activeRoot, 'runtime'), { recursive: true })
+        writeFileSync(join(activeRoot, 'runtime', 'memories.json'), JSON.stringify({ version: 1, entries: [{ target: 'memory' }] }))
+        writeFileSync(join(activeRoot, 'runtime', 'USER.md'), '')
+        writeFileSync(join(activeRoot, 'runtime', 'MEMORY.md'), 'workspace note\n')
+        mkdirSync(join(globalRoot, 'documents', 'active'), { recursive: true })
+        writeFileSync(join(globalRoot, 'documents', 'index.json'), JSON.stringify({ version: 1, documents: [{ status: 'active' }] }))
+        mkdirSync(join(globalRoot, 'data', 'space-global'), { recursive: true })
+        writeFileSync(join(globalRoot, 'data', 'space-global', 'mnemon.db'), 'db-payload')
+        writeFileSync(join(globalRoot, 'data', '.dsh-memory-bodies.json'), JSON.stringify({ version: 1, bodies: [{ id: 'space-global', active: true }] }))
+
+        const catalog = new StorageScopeInspector(storage, config).catalog(workspace)
+        const active = catalog.scopes.find(scope => scope.active)!
+        const runtime = active.areas.find(area => area.kind === 'runtime')!
+        const documents = active.areas.find(area => area.kind === 'documents')!
+        const spaces = active.areas.find(area => area.kind === 'memory-bodies')!
+        expect(documents).toMatchObject({ status: 'ready', itemCount: 1, path: join(globalRoot, 'documents'), details: { activeDocuments: 1, sharedGlobal: true } })
+        expect(spaces).toMatchObject({ status: 'ready', itemCount: 1, path: join(globalRoot, 'data'), details: { activeBodies: 1, sharedGlobal: true } })
+        expect(active.totalBytes).toBe(runtime.bytes)
+      } finally {
+        vi.unstubAllEnvs()
+      }
+    })
   })
 
   describe('centralized storage roots', () => {
