@@ -670,15 +670,26 @@ class MnemonAgentLifecycle {
     const policy = this.reviewPolicy()
     this.idleReviewTimer = setTimeout(() => {
       this.idleReviewTimer = undefined
-      if (epoch !== this.reviewEpoch || policy !== this.reviewPolicy() || !this.idleReviewAllowed() || this.reviewRunning) return
-      if (this.lastReviewAttemptAt !== undefined && Date.now() < this.lastReviewAttemptAt + this.config.idleReview.minIntervalMs) {
-        this.scheduleIdleReview(turn)
-        return
+      try {
+        if (epoch !== this.reviewEpoch || policy !== this.reviewPolicy() || !this.idleReviewAllowed() || this.reviewRunning) return
+        if (this.lastReviewAttemptAt !== undefined && Date.now() < this.lastReviewAttemptAt + this.config.idleReview.minIntervalMs) {
+          this.scheduleIdleReview(turn)
+          return
+        }
+        if (this.agent.status !== 'idle') return
+        const completed = findSessionEvent(this.agent.session, event => event.type === 'turn/end' && eventTurn(event) === turn) !== undefined
+        if (!completed || !this.reviewActivity().eligible || !this.reviewAdmitted(turn)) return
+        void this.runIdleReview().catch(error => {
+          if (this.disposed || isInactiveContextError(error)) return
+          try { if (!contextIsActive(this.agent.ctx)) return } catch { return }
+          this.fail(error)
+        })
+      } catch (error) {
+        // Never allow an idle timer error to escape as an uncaught host exception (#702).
+        if (this.disposed || isInactiveContextError(error)) return
+        try { if (!contextIsActive(this.agent.ctx)) return } catch { return }
+        this.fail(error)
       }
-      if (this.agent.status !== 'idle') return
-      const completed = findSessionEvent(this.agent.session, event => event.type === 'turn/end' && eventTurn(event) === turn) !== undefined
-      if (!completed || !this.reviewActivity().eligible || !this.reviewAdmitted(turn)) return
-      void this.runIdleReview()
     }, Math.min(2_147_483_647, Math.max(this.config.idleReviewMs, (this.lastReviewAttemptAt ?? -Infinity) + this.config.idleReview.minIntervalMs - Date.now())))
   }
 
