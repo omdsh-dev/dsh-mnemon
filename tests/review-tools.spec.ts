@@ -86,6 +86,16 @@ describe('review tool guards', () => {
       if (service) expect(get).toHaveBeenCalledWith('spawn_teammate', parent)
     })
 
+    it('fails closed as agent-team when agentTeams.isEnabled throws UNAUTHORIZED (issue 702)', () => {
+      const unauthorized = Object.assign(new Error('subagent tree access requires the exact live caller'), { code: 'UNAUTHORIZED' })
+      const team = { isEnabled: vi.fn(() => { throw unauthorized }) }
+      const parent = { ctx: { get: (name: string) => name === 'agentTeams' ? team : undefined, tools: { get: () => undefined } } } as unknown as HostAgent
+      expect(idleReviewBlockReason(parent)).toBe('agent-team')
+      expect(idleReviewBlockReason(parent, 'pause')).toBe('agent-team')
+      expect(idleReviewBlockReason(parent, 'scoped')).toBeUndefined()
+      expect(team.isEnabled).toHaveBeenCalledTimes(2)
+    })
+
     it('separates nested same-parent reviews and leaves other parents alone', async () => {
       const f = fixture()
       const outer = f.child('outer'), inner = f.child('inner'), unrelated = f.child('unrelated')
