@@ -210,6 +210,7 @@ export const DocumentsSchema: z<DocumentsConfig> = z.object({
 
 export const RuntimeMemorySchema: z<RuntimeMemoryConfig> = z.object({
   bm25Recall: z.boolean().default(false),
+  indexPush: z.boolean().default(false),
   deferLowPriority: z.boolean().default(false),
   inheritToSubagents: z.boolean().default(false),
   memoryLimitBytes: z.number().step(1).min(MIN_RUNTIME_MEMORY_LIMIT_BYTES).max(MAX_RUNTIME_MEMORY_LIMIT_BYTES).default(DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES),
@@ -276,6 +277,7 @@ export const Config: z<SharedConfig> = z.object({
   }),
   runtimeMemory: RuntimeMemorySchema.default({
     bm25Recall: false,
+    indexPush: false,
     deferLowPriority: false,
     inheritToSubagents: false,
     memoryLimitBytes: DEFAULT_RUNTIME_MEMORY_LIMIT_BYTES,

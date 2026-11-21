@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import type {
   MemoryCapability,
   MemoryEvidence,
@@ -555,7 +555,24 @@ export function createMemorySpacesSource(providerSnapshot: MemorySpaceProviderSn
             id: `${context.sourceInstanceKey}/grant/${revision}`,
             sourceInstanceKey: context.sourceInstanceKey,
             schema: 'dsh-mnemon.memory-spaces/v1',
-            value: { memoryBodyIds: active.map(body => body.id), knownMemoryBodyIds: all.map(body => body.id) },
+            value: {
+              memoryBodyIds: active.map(body => body.id),
+              knownMemoryBodyIds: all.map(body => body.id),
+              ...(request.includeProjection && resolved.bm25IndexPush ? { bm25: {
+                scope: createHash('sha256').update(JSON.stringify([resolved.dataDir ?? ''])).digest('hex'),
+                text: truncate('Memory Spaces can be searched through scoped recall.', request.maxCharacters),
+                spaces: [...active]
+                  .sort((left, right) => left.id.localeCompare(right.id))
+                  .map(body => {
+                    const description = truncate(body.description.trim(), 240)
+                    return {
+                      id: body.id,
+                      name: truncate(body.name.trim(), 160),
+                      ...(description === '' ? {} : { description }),
+                    }
+                  }),
+              } } : {}),
+            },
             revision,
             consistency: 'namespace-pinned-live-read',
           },

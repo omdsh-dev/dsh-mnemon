@@ -1038,6 +1038,20 @@ describe('MnemonSettingsCard', () => {
     expect(checked(toggle)).toBe(true)
   })
 
+  it('defaults experimental index push off and saves only its setting (issue 701)', async () => {
+    const mutate = vi.fn(async () => {})
+    const scope = liveSettingsScope<Config>(readySnapshot({ runtimeMemory: { bm25Recall: true } }), mutate)
+    const view = render(runtime(scope))
+    const toggle = screen.getByRole('switch', { name: '推送记忆空间与档案索引（实验）' })
+    expect(checked(toggle)).toBe(false)
+    fireEvent.click(toggle)
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith([{ op: 'set', path: ['runtimeMemory', 'indexPush'], value: true }]))
+    expect(checked(toggle)).toBe(true)
+    view.unmount()
+    render(runtime(scope, {}, translateEn))
+    expect(checked(screen.getByRole('switch', { name: 'Push Memory Space and Document indexes (experimental)' }))).toBe(true)
+  })
+
   it('keeps both Runtime recall preferences when their saves overlap', async () => {
     const recallSave = deferred<void>()
     const deferredSave = deferred<void>()

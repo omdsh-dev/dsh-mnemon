@@ -161,10 +161,13 @@ export function createDocumentsMemorySource(config: Config = {}): MemorySourceDe
           schema: 'dsh-mnemon.documents/v1',
           value: { workspaceRoot: root, documentIds: active.map(document => document.id),
             archivedDocumentIds: current.documents.filter(document => document.status === 'archived' && document.healthy).map(document => document.id).sort(),
-            ...(request.includeProjection && effective.bm25Recall ? { bm25: {
-              scope: createHash('sha256').update(JSON.stringify([effective.dataDir, root])).digest('hex'),
+            ...(request.includeProjection && (effective.bm25Recall || effective.bm25IndexPush) ? { bm25: {
+              scope: createHash('sha256').update(JSON.stringify([effective.dataDir, root, effective.bm25IndexPush])).digest('hex'),
               text: truncate('Project Documents can be searched by title or topic.', request.maxCharacters),
-              titles: active.map(document => ({ id: document.id, title: document.title })),
+              titles: active.map(document => {
+                const summary = effective.bm25IndexPush ? truncate((document.description || document.excerpt).trim(), 240) : ''
+                return { id: document.id, title: document.title, ...(summary === '' ? {} : { summary }) }
+              }),
             } } : {}),
           },
           revision: current.revision,

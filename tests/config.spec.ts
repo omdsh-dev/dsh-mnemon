@@ -195,6 +195,7 @@ describe('Mnemon config and resolution', () => {
       },
     }).runtimeMemory).toEqual({
       bm25Recall: false,
+      indexPush: false,
       deferLowPriority: false,
       inheritToSubagents: false,
       memoryLimitBytes: 20_480,
@@ -212,6 +213,14 @@ describe('Mnemon config and resolution', () => {
     expect(Config({ runtimeMemory: { bm25Recall: true } }).runtimeMemory?.bm25Recall).toBe(true)
     expect(resolveConfig({ runtimeMemory: { bm25Recall: true } }).runtimeMemory.bm25Recall).toBe(true)
     expect(() => resolveConfig({ runtimeMemory: { bm25Recall: 'on' } } as never)).toThrow('bm25Recall')
+  })
+
+  it('requires an explicit boolean to enable experimental index push (issue 701)', () => {
+    expect(resolveConfig({}).runtimeMemory.indexPush).toBe(false)
+    expect(resolveConfig({ runtimeMemory: { indexPush: false } }).runtimeMemory.indexPush).toBe(false)
+    expect(Config({ runtimeMemory: { indexPush: true } }).runtimeMemory?.indexPush).toBe(true)
+    expect(resolveConfig({ runtimeMemory: { indexPush: true } }).runtimeMemory.indexPush).toBe(true)
+    expect(() => resolveConfig({ runtimeMemory: { indexPush: 'on' } } as never)).toThrow('indexPush')
   })
 
   it('defaults child Runtime inheritance off and accepts only explicit booleans', () => {
