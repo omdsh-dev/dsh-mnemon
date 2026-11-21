@@ -73,9 +73,23 @@ describe('documentation checks', () => {
     expect(fixture({ 'README.md': '[web](https://example.invalid/x#y) [mail](mailto:a@example.invalid)' }).failures).toEqual([])
   })
   it('checks current repository URLs used in npm READMEs without rewriting historical links', () => {
-    const report = fixture({ 'README.md': '[ok](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/a.md#one) [missing](https://github.com/omdsh-dev/dsh-mnemon/tree/main/absent) [history](https://github.com/omdsh-dev/dsh-mnemon/blob/v0.4.0/old.md)', 'docs/a.md': '# One' })
-    expect(report.localLinks).toBe(2)
+    const report = fixture({ 'README.md': '[ok](https://github.com/omdsh-dev/dsh-mnemon/blob/main/docs/a.md#one) ![raw](https://raw.githubusercontent.com/omdsh-dev/dsh-mnemon/main/docs/assets/a.png) [missing](https://github.com/omdsh-dev/dsh-mnemon/tree/main/absent) [history](https://github.com/omdsh-dev/dsh-mnemon/blob/v0.4.0/old.md)', 'docs/a.md': '# One', 'docs/assets/a.png': 'fixture' })
+    expect(report.localLinks).toBe(3)
     expect(report.failures).toEqual(['README.md:1: missing https://github.com/omdsh-dev/dsh-mnemon/tree/main/absent'])
+  })
+  it('rejects retired documentation directories and unreferenced media assets', () => {
+    const report = fixture({
+      'README.md': '![used](./docs/assets/used.png)',
+      'docs/assets/used.png': 'ok',
+      'docs/assets/orphan.png': 'unused',
+      'docs/pr-assets/old/shot.png': 'retired',
+      'docs/plans/scratch.md': '# Scratch',
+    })
+    expect(report.failures).toEqual(expect.arrayContaining([
+      expect.stringContaining('docs/assets/orphan.png: unreferenced media asset'),
+      expect.stringContaining('docs/pr-assets/old/shot.png: retired directory'),
+      expect.stringContaining('docs/plans/scratch.md: retired directory'),
+    ]))
   })
   it.each([['README.md', 'en'], ['README.zh-CN.md', 'zh-CN']])('retains the centered %s header, seven badges and localized diagram', (file, language) => {
     const readme = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')

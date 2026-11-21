@@ -56,8 +56,8 @@ fix(client): honor trusted remote management grant
 1. **基于最新 main**：提交前 rebase 或合并最新 `main`，解决冲突并重新验证。
 2. **完整验证**：默认运行 `pnpm run verify`；若无法运行某一项，在 PR 中写明原因、替代验证和剩余风险。
 3. **定向回归**：为缺陷补充失败前和通过后的回归测试；UI 行为同时验证授权和拒绝路径。
-4. **真实证据**：用户可见变更附本地截图或短视频；Host、CLI、Headless 变更附脱敏日志或操作结果。
-5. **双语同步**：长期文档在 `docs/en/` 和 `docs/zh-CN/` 保持同名、同职责；根 README 同步维护 `README.md` 和 `README.zh-CN.md`。
+4. **真实证据**：用户可见变更的截图或短视频直接上传附在 GitHub PR 描述中，不向仓库提交 PR 二进制附件目录；Host、CLI、Headless 变更附脱敏日志或操作结果。
+5. **双语同步**：长期文档在 `docs/en/` 和 `docs/zh-CN/` 保持同名、同职责；同步维护 `README.md`、`README.zh-CN.md`、`CHANGELOG.md` 与 `CHANGELOG.zh-CN.md`。产品文档素材统一按语义目录存放在 `docs/assets/` 且不得保留无引用文件。
 6. **安全与数据**：持久化格式、路径、RPC authority、Provider 凭据或导入导出变更必须说明兼容、迁移或拒绝、回滚和数据保留行为。
 7. **边界稳定**：`src/host/protocol.ts` 是可在浏览器使用的 Client 与 Host wire DTO 来源；不得在浏览器半区引入可执行的 Host 模块。
 8. **AI 披露**：按 PR 模板如实填写使用的模型和编码工具；贡献者仍对最终代码、验证和安全负责。

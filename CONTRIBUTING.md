@@ -56,8 +56,8 @@ Code, comments, documentation, commit messages, and PR titles must not contain e
 1. **Use the latest main**: rebase onto or merge the latest `main`, resolve conflicts, and rerun verification before submitting.
 2. **Run complete verification**: run `pnpm run verify` by default. If a check cannot run, document the reason, alternative evidence, and remaining risk in the PR.
 3. **Add targeted regression coverage**: bugs need a test that fails before the fix and passes afterward. UI behavior must cover both authorized and rejected paths.
-4. **Provide real evidence**: attach a local screenshot or short video for user-visible changes. For Host, CLI, or Headless changes, attach redacted logs or command results.
-5. **Keep both languages synchronized**: long-lived documents under `docs/en/` and `docs/zh-CN/` must have matching names and responsibilities. Keep `README.md` and `README.zh-CN.md` synchronized.
+4. **Provide real evidence**: attach screenshots or short recordings directly to the GitHub Pull Request description (using GitHub attachments) rather than committing PR binaries into Git. For Host, CLI, or Headless changes, include redacted logs or command results.
+5. **Keep both languages synchronized**: long-lived documents under `docs/en/` and `docs/zh-CN/` must have matching names and responsibilities. Keep `README.md`, `README.zh-CN.md`, `CHANGELOG.md`, and `CHANGELOG.zh-CN.md` synchronized. Product media belongs under semantic folders in `docs/assets/` with zero unreferenced files.
 6. **Explain security and data effects**: changes to persistence formats, paths, RPC authority, Provider credentials, or import/export must explain compatibility, migration or rejection, rollback, and data retention.
 7. **Keep boundaries stable**: `src/host/protocol.ts` is the browser-safe source of Client and Host wire DTOs. Do not import executable Host modules into browser code.
 8. **Disclose AI coding**: complete the PR template with the model and coding tool used. Contributors remain responsible for the final code, verification, and security.

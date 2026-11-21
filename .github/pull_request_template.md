@@ -95,6 +95,7 @@ pnpm run verify
 
 <!--
 面向用户的功能或行为变更必填。 / Required for user-facing feature or behavior changes.
+直接将截图或短视频上传附在 GitHub PR 描述中，不要向 Git 仓库提交 PR 验收图片目录。 / Upload screenshots or short videos directly in the GitHub PR description instead of committing PR binary asset directories to Git.
 附截图或短视频，展示 / Attach screenshots or a short video showing:
 - 使用的是本 PR 或最新代码 / the PR or latest code is running
 - 功能已启用或配置 / the feature is enabled or configured

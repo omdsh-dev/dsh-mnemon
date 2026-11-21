@@ -20,9 +20,9 @@
 除了版本号，发布 PR 还要写下这次发布的说明，更新写着最新版本号的页面，并添加验收记录：
 
 - `.github/release-notes/vX.Y.Z.md`：GitHub Release 正文，中英文写在同一个文件里，链接固定到该版本的 tag。发布 workflow 从冻结的 revision 读取它，缺少时直接停止。
-- `docs/en/releases/vX.Y.Z.md` 与 `docs/zh-CN/releases/vX.Y.Z.md`：发布说明，各自在发布历史索引中加一行，并在中英文[文档中心](../README.md)的“最新变化”中写上这次发布。
+- `CHANGELOG.md` 与 `CHANGELOG.zh-CN.md`，并在中英文[文档中心](../README.md)的“最新变化”中更新摘要。
 - `docs/en/guides/installation.md` 与 `docs/zh-CN/guides/installation.md` 中**常见问题**里发布当天的示例，改为新版本（`dsh-mnemon@X.Y.Z`）。
-- `docs/pr-assets/release-vX.Y.Z/`：验收记录。`README.md` 与 `README.zh-CN.md` 写明日期与宿主；在每个受支持 DSH 版本的全新宿主上，通过**添加插件**安装候选包，并从上一个版本更新；列出通过的检查，附上各步骤的截图，以及记录包摘要与结果的 `validation.json`；再在[验收证据索引](../../pr-assets/README.md)的最上方加一行。
+- 将发布验收截图、包摘要与宿主验收结果直接附在发布 PR 描述或 GitHub Release 中，不再向 Git 仓库提交二进制验收附件目录。
 
 发布 PR 还会把实测的包大小与 `scripts/verify-package-contents.mjs` 中的上限比较，接近上限约 10% 以内时提高上限。
 

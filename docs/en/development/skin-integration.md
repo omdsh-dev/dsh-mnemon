@@ -81,4 +81,4 @@ pnpm exec vitest run tests/client.spec.tsx -t 'accepts scoped skin variables'
 pnpm verify:docs
 ```
 
-The targeted regression covers both placements and style isolation from peer plugins. Actual painting, stylesheet order and readability still need real browser verification. Existing reproduction steps and before/after evidence are in the [Issue #273 acceptance record](../../pr-assets/issue-273-skin-hooks/README.md).
+The targeted regression covers both placements and style isolation from peer plugins. Actual painting, stylesheet order and readability still need real browser verification.

@@ -1,4 +1,0 @@
-# Test-only bundle: one row for the Settings-section fixture.
-- insert:
-    - id: mnemon-settings-embed-fixture
-      name: mnemon-settings-embed-fixture

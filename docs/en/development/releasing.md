@@ -20,9 +20,9 @@ Add a release intent with `pnpm changeset` to every pull request that changes a 
 Besides the version bump, the release pull request writes the release's notes, updates the pages that name the newest version, and adds its acceptance record:
 
 - `.github/release-notes/vX.Y.Z.md`, the GitHub Release body, with both languages in one file and links pinned to the release tag. The publication workflow reads it from the frozen revision and stops if it is missing.
-- `docs/en/releases/vX.Y.Z.md` and `docs/zh-CN/releases/vX.Y.Z.md`, the release notes, each with a line in its releases index, and the release in **What is new** on the English and Chinese [Documentation](../README.md) pages.
+- `CHANGELOG.md` and `CHANGELOG.zh-CN.md`, plus the recent-changes bullets on the English and Chinese [Documentation](../README.md) pages.
 - The release-day example under **Common problems** in `docs/en/guides/installation.md` and `docs/zh-CN/guides/installation.md`, which names the new version (`dsh-mnemon@X.Y.Z`).
-- `docs/pr-assets/release-vX.Y.Z/`, the acceptance record: `README.md` and `README.zh-CN.md` with the date and the hosts, the candidate packages installed through **Add plugin** on a fresh host of each supported DSH release and updated from the previous release, the checks that passed, screenshots of the steps, and a `validation.json` with the package digests and results, plus a row at the top of the [evidence index](../../pr-assets/README.md).
+- Attach release acceptance screenshots, digests, and host verification summaries directly to the release PR description or GitHub Release rather than committing binary evidence trees into Git.
 
 The release pull request also compares the measured package size with the ceiling in `scripts/verify-package-contents.mjs` and raises it once the package comes within about 10% of it.
 

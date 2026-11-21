@@ -6,7 +6,7 @@ Memory Spaces hold dsh-mnemon's long-term memory, and their backend is a Provide
 
 Only Mnemon Native needs the Mnemon CLI. When the CLI is missing, another ready Provider can serve Memory Spaces, and a saved Provider choice is still honored.
 
-![Memory Spaces' page under Plugins with Mnemon Native and the third-party Providers](../../assets/webui-v0.5.32/en/plugin-spaces.jpg)
+![Memory Spaces' page under Plugins with Mnemon Native and the third-party Providers](../../assets/webui/en/plugin-spaces.jpg)
 
 Each adapter is an independently published `dsh-mnemon-provider-*` package, installed as a child of the Memory Spaces Source. The Starter includes all nine packages, but external services remain disabled until configured. No external backend server or CLI is bundled. See the [official package list](../../../README.md#official-plugins) and [Provider author contract](../development/extensions.md).
 
