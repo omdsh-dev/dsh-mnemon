@@ -1202,6 +1202,49 @@ describe('Mnemon DSH lifecycle integration', () => {
     } finally { value.stop() }
   })
 
+  it('catches UNAUTHORIZED from agentTeams.isEnabled inside the idle review timer and snapshot (issue 702)', async () => {
+    vi.useFakeTimers()
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
+    let throwUnauthorized = false
+    const unauthorized = Object.assign(new Error('subagent tree access requires the exact live caller'), { code: 'UNAUTHORIZED' })
+    const get = value.agent.ctx.get!
+    value.agent.ctx.get = name => name === 'agentTeams'
+      ? { isEnabled: () => { if (throwUnauthorized) throw unauthorized; return false } }
+      : get(name)
+    value.agent.ctx.tools = { get: () => undefined }
+    try {
+      await completeDurableTurns(value)
+      expect(value.lifecycle.snapshot('session-1').current?.idleReviewPending).toBe(true)
+      throwUnauthorized = true
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(value.coordinator.review).not.toHaveBeenCalled()
+      expect(value.lifecycle.snapshot('session-1').current).toMatchObject({
+        idleReviewBlocked: 'agent-team',
+        idleReviewPending: false,
+        idleReviewAttempts: 0,
+      })
+    } finally { value.stop() }
+  })
+
+  it('absorbs unexpected synchronous errors in the idle review timer without crashing the host (issue 702)', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const value = fixture(resolveConfig({ idleReviewMs: 5_000 }))
+    try {
+      await completeDurableTurns(value)
+      expect(value.lifecycle.snapshot('session-1').current?.idleReviewPending).toBe(true)
+      vi.spyOn(value.coordinator, 'canReview').mockImplementation(() => { throw new Error('synthetic timer check failure') })
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(value.coordinator.review).not.toHaveBeenCalled()
+      expect(value.lifecycle.snapshot('session-1').current).toMatchObject({
+        lastPhase: 'error',
+        lastError: 'synthetic timer check failure',
+        idleReviewPending: false,
+      })
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('synthetic timer check failure'))
+    } finally { warn.mockRestore(); value.stop() }
+  })
+
   it('disables only idle review and cancels an already scheduled review when toggled off', async () => {
     vi.useFakeTimers()
     const config = resolveConfig({ idleReviewMs: 5_000 })
