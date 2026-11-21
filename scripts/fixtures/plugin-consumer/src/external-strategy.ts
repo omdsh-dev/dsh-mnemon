@@ -14,7 +14,6 @@ export const memoryPlugin = defineMemoryPlugin({
 })
 export interface Config { sourceKeys: string[]; mode: 'eager' | 'routed' }
 
-/** A Strategy knows Source facts and instance identities, never their implementations. */
 export function apply(ctx: Context, config: Config): void {
   const selected = new Set(config.sourceKeys)
   const mode = config.mode

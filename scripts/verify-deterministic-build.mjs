@@ -1,4 +1,3 @@
-// Build the root package twice and compare the SHA-256 of every file under lib/.
 import { createHash } from 'node:crypto'
 import { readdir, readFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'

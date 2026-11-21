@@ -1,16 +1,4 @@
 #!/usr/bin/env node
-// Real end-to-end verification for the Mnemon Git sync channel.
-//
-// It launches two independent DSH Web instances over disposable DSH_HOME and
-// storage roots, drives /dsh-mnemon-sync, /dsh-mnemon-settings, /dsh-mnemon-review
-// and /dsh-mnemon-pack over real loopback HTTP with the same envelopes the browser
-// sends, and publishes to a real bare repository. The only stand-in is the model
-// endpoint, which never answers a memory request.
-// The payload carries memory content only: the profile and the keys that
-// describe one machine stay on the machine that wrote them.
-//
-// Run after 'pnpm run build && pnpm --workspace-concurrency=4 -r build'.
-// Set MNEMON_SYNC_E2E_KEEP=1 to keep the fixture for inspection.
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -21,7 +9,6 @@ import { fileURLToPath } from 'node:url'
 import { STARTER_SELF_REGISTERING_PACKAGES } from '../src/host/starter-components.ts'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-// Set MNEMON_E2E_DSH to another DSH installation's lib/bin.js to check that release.
 const dshBin = process.env.MNEMON_E2E_DSH ? resolve(process.env.MNEMON_E2E_DSH) : join(root, 'node_modules/@deepseek-ai/dsh/lib/bin.js')
 const keep = process.env.MNEMON_SYNC_E2E_KEEP === '1'
 const MARKER = 'Sync e2e: the maintainer keeps acceptance notes in the project wiki.'
@@ -53,12 +40,6 @@ function run(command, args, options = {}) {
   })
 }
 
-/**
- * Git takes the repository location from the environment, so a launcher that
- * exports `GIT_DIR` for its own PATH bookkeeping (the harness shims do) hijacks
- * every command below. The harness runs under exactly such a shell, so its own
- * Git processes are given a copy of the environment with those variables removed.
- */
 function gitEnvironment(environment = process.env) {
   const sanitized = {}
   for (const [name, value] of Object.entries(environment)) {
@@ -74,7 +55,6 @@ async function git(args, cwd) {
   return result.stdout.trim()
 }
 
-/** One POST with the browser's envelope and cookie; no Origin, so the fence passes. */
 function post(port, path, body, cookie) {
   const payload = Buffer.from(JSON.stringify(body), 'utf8')
   return new Promise((resolvePost, reject) => {
@@ -115,13 +95,6 @@ function expectFailure(result, pattern, label) {
   return result.error.message
 }
 
-/**
- * The one stand-in. Every delegated run but reconciliation gets a plain-text
- * answer, so no memory is ever written by the model. A reconciliation is asked
- * through the completion protocol, and the Host only accepts a structured
- * result, so the stub answers that one protocol exactly as a model would: the
- * review, the decision and the applied operations below stay real.
- */
 function modelStub() {
   let calls = 0
   const server = createServer(async (request, response) => {
@@ -146,7 +119,6 @@ function modelStub() {
   return server
 }
 
-/** Answer the completion protocol only for a reconciliation schema; nothing else is scripted. */
 function reconcileReply(instructions) {
   const schema = JSON.parse(instructions[3])
   const actions = schema?.properties?.action?.enum
@@ -181,7 +153,6 @@ async function install(home, workspace, env) {
   if (result.code !== 0) throw new Error('DSH installation failed (' + String(result.code) + '): ' + (result.stderr || result.stdout).slice(-2000))
 }
 
-/** Launch one real Web instance and exchange the launch token for a cookie. */
 async function launch(label, home, dataDir, workspace, env) {
   const child = spawn(process.execPath, [dshBin, 'web', '--no-open', '--host', '127.0.0.1', '--port', '0'], {
     cwd: workspace, env: { ...env, DSH_HOME: home, MNEMON_DATA_DIR: dataDir }, stdio: ['ignore', 'pipe', 'pipe'],
@@ -211,7 +182,6 @@ async function launch(label, home, dataDir, workspace, env) {
   return { label, child, port: Number(new URL(url).port), cookie, home, dataDir, stdout: () => stdout, stderr: () => stderr }
 }
 
-/** Ask one instance to stop and remember whether it needed the hard kill. */
 async function stop(instance) {
   if (instance === undefined || instance.stopped !== undefined) return
   const exited = new Promise(resolveExit => instance.child.once('exit', resolveExit))
@@ -250,9 +220,6 @@ try {
   await install(homes.a, workspaces.a, { ...env, DSH_HOME: homes.a })
   await install(homes.b, workspaces.b, { ...env, DSH_HOME: homes.b })
 
-  // A blank author falls back to the identity Git already has. These variables
-  // stand in for the machine's own user.name/user.email, so the run can assert
-  // the fallback without reading or writing the runner's Git configuration.
   const localIdentity = {
     GIT_AUTHOR_NAME: 'Mnemon Local', GIT_AUTHOR_EMAIL: 'local@localhost',
     GIT_COMMITTER_NAME: 'Mnemon Local', GIT_COMMITTER_EMAIL: 'local@localhost',
@@ -260,8 +227,6 @@ try {
 
   console.log('\n1. One instance publishes the whole pack to a real repository')
   a = await launch('instance A', homes.a, data.a, workspaces.a, { ...env, ...localIdentity })
-  // The switch is off by default, so the acceptance run turns it on the way the
-  // settings page does and reads what a switched-off installation would answer.
   const off = expectOk(await sync(a, 'status'), 'status')
   check('a fresh installation has the switch off, so no Git runs and nothing is probed',
     off.enabled === false && off.configured === false && off.git.available === false
@@ -346,8 +311,6 @@ try {
 
   console.log('\n2. A second instance previews and imports the same branch')
   b = await launch('instance B', homes.b, data.b, workspaces.b, env)
-  // The second machine is fresh too, so the run turns its own switch on and reads
-  // the channel the way a reader would; its profile stays its own from here on.
   const offB = expectOk(await sync(b, 'status'), 'status')
   check('the second machine also starts with the switch off',
     offB.enabled === false && offB.git.available === false && offB.machine === undefined, JSON.stringify(offB.enabled))
@@ -359,8 +322,6 @@ try {
   check('preview reports the published commit and its manifest',
     preview.commit === pushed.commit && preview.branch === 'mnemon-sync' && preview.subdir === 'mnemon/'
     && preview.manifest.scope === 'full' && preview.pushedAt === manifest.sync.pushedAt, JSON.stringify({ commit: preview.commit, pushedAt: preview.pushedAt }))
-  // An empty root still has byte-identical empty documents and body indexes, so
-  // only the component that really carries the entry has to report a change.
   const runtimeDelta = preview.components.find(entry => entry.component === 'runtime')
   check('preview reports the working memory as changed against an empty root',
     preview.components.length === 3 && runtimeDelta?.changed === true
@@ -385,8 +346,6 @@ try {
     settingsA.mode === 'host' && settingsA.writable === true && typeof settingsA.revision === 'number'
     && settingsA.value.defaultRecallLimit === 10 && settingsA.value.syncEnabled === true,
     JSON.stringify({ revision: settingsA.revision, limit: settingsA.value.defaultRecallLimit, syncEnabled: settingsA.value.syncEnabled }))
-  // A profile write reaches the running Host: the runtime swaps its graph on the
-  // committed value, so the switch is what turns Git on rather than a restart.
   check('the switch itself travelled to the running Host and not just to the profile file',
     settingsA.value.syncEnabled === true, JSON.stringify(settingsA.value.syncEnabled))
   const refusedField = await call(a, '/dsh-mnemon-settings', 'mutate', { ops: [{ op: 'set', path: ['remoteAccess'], value: 'trusted-host' }] })
@@ -399,8 +358,6 @@ try {
   check('the edit is committed and answered from the committed profile',
     edited.value.defaultRecallLimit === 7 && edited.value.cliPath === join(data.a, 'bin', 'mnemon')
     && edited.revision > settingsA.revision, JSON.stringify({ revision: edited.revision, limit: edited.value.defaultRecallLimit }))
-  // The payload carries memory content only, so a settings edit changes no
-  // file: the branch stays exactly where the last push left it.
   const settingsPush = expectOk(await sync(a, 'push', { message: 'Carry the settings edit', confirmed: true }), 'push')
   check('a settings edit changes no payload, so the branch stays where the push left it',
     settingsPush.committed === false && settingsPush.pushed === false && settingsPush.commit === pushed.commit
@@ -452,7 +409,6 @@ try {
   check('the token never reaches the mirror',
     (await readFile(join(data.a, 'state', 'sync', 'git', '.git', 'config'), 'utf8')).includes(TOKEN) === false)
 
-
   console.log('\n6. A reconciliation is proposed, reviewed with opinions, and only then applied')
   const idleReview = expectOk(await call(a, '/dsh-mnemon-review', 'view', {}), 'review view')
   check('an installation that never reconciled has an empty ledger',
@@ -465,8 +421,6 @@ try {
   check('an unknown review endpoint is a bad request', unknownReview.error.code === 'bad-request', JSON.stringify(unknownReview.error))
   const phantomApply = await call(a, '/dsh-mnemon-review', 'apply', { id: 'missing-entry' })
   expectFailure(phantomApply, /unknown review entry: missing-entry/u, 'applying an entry that does not exist')
-  // No workspace is named: the review channel must run on its own, the way the
-  // settings page does when a session has no workbench directory yet.
   const reconciled = expectOk(await call(a, '/dsh-mnemon-review', 'reconcile', {}), 'review reconcile')
   check('a reconciliation stages one pending review and writes nothing',
     reconciled.action === 'planned' && reconciled.operations === 1
@@ -493,8 +447,6 @@ try {
     JSON.stringify({ applied: applied.applied, failures: applied.failures, appliedOperations: applied.entry.appliedOperations }))
   const written = await readFile(join(data.a, 'runtime', 'MEMORY.md'), 'utf8')
   check('the applied operation reached the working memory', written.includes(RECONCILE_MARKER))
-  // The ledger records the positions that ran, so the plan is never replayed against text
-  // the first run replaced.
   const replayed = await call(a, '/dsh-mnemon-review', 'apply', { id: reconciled.entry.id })
   expectFailure(replayed, /every operation in this review has already run/u, 'applying a plan with nothing left')
   check('a plan whose operations all ran is refused rather than replayed',
@@ -510,8 +462,6 @@ try {
     typeof signIn.available === 'boolean' && typeof signIn.signedIn === 'boolean' && typeof signIn.writable === 'boolean'
     && signIn.flow === undefined, JSON.stringify(signIn))
   if (signIn.available === true) {
-    // No browser step runs here, so the account stays signed out; the picker
-    // must refuse by name instead of reaching GitHub with no token.
     check('the store is mounted and the account is still signed out', signIn.signedIn === false, JSON.stringify(signIn))
     const anonymous = await sync(a, 'github-repositories')
     expectFailure(anonymous, /sign in to GitHub before choosing a repository/u, 'listing repositories while signed out')
@@ -534,13 +484,9 @@ try {
   failures.push('harness')
   console.error(error)
 } finally {
-  // Stop the instances before the fixture goes away, even after a failure, so
-  // nothing holds a lock on a directory that is about to be removed.
   for (const instance of [a, b]) {
     if (instance !== undefined) await stop(instance).catch(() => undefined)
   }
-  // The model stand-in is the only handle this process still owns; without
-  // closing it the loop would stay alive after the report is printed.
   if (model !== undefined) {
     model.closeAllConnections()
     await new Promise(resolveClose => model.close(resolveClose))

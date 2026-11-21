@@ -9,7 +9,6 @@ export const archiveScopePending = 'Issue 250 pending checkpoint. '.repeat(9).tr
 const text = message => typeof message?.content === 'string' ? message.content : (message?.content ?? []).map(block => block.text ?? '').join('\n')
 const parseResult = message => { try { return JSON.parse(text(message)) } catch { return { error: text(message) } } }
 
-/** Script model decisions only; the pinned View, tool dispatch and Native writes remain real. */
 export function runtimeWriteScopeModel(report) {
   const childRequests = new Map()
   return request => {

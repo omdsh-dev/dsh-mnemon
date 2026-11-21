@@ -3,12 +3,10 @@ import {
 } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 import type { MemoryBody, MemorySpace, MemorySpaceAuthority, ProviderBodyStatus, ProviderSpaceStatus } from 'dsh-mnemon-source-memory-spaces/provider-sdk'
 
-/** Compile both published spellings in a consumer outside the workspace. */
 export function canonicalMemorySpace(value: MemoryBody, status: ProviderBodyStatus): { space: MemorySpace; status: ProviderSpaceStatus } {
   return { space: value, status }
 }
 
-/** Existing Providers may override the legacy protected field as a parameter property. */
 export class LegacyHttpProvider extends HttpMemoryProvider {
   readonly id = 'legacy-http-fixture'
   constructor(protected override readonly memoryBodies: MemorySpaceAuthority) { super(memoryBodies) }
@@ -16,7 +14,6 @@ export class LegacyHttpProvider extends HttpMemoryProvider {
   sharesAuthority(): boolean { return this.memoryBodies === this.memorySpaces }
 }
 
-/** Not a Core plugin: each Source-private child owns its own test data plane. */
 export default defineMemorySpaceProvider<undefined>({
   id: 'external-fixture',
   apply(ctx, host) {

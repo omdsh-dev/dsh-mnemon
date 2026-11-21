@@ -1,5 +1,3 @@
-// Import every public Node entry and check that no declaration it reaches exposes a private type, and that
-// dsh-mnemon/client's declarations stay on the browser side.
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, relative, resolve } from 'node:path'
@@ -19,8 +17,6 @@ const privateNames = new Set([
 ])
 const publicTypes = new Set()
 
-// Follow declaration dependencies too: an innocent return type must not expose
-// a private constructor or installed record through a relative import.
 function verifyDeclarations(filename) {
   if (publicTypes.has(filename)) return
   publicTypes.add(filename)
@@ -40,10 +36,6 @@ function verifyDeclarations(filename) {
   }
 }
 
-// The client's declarations stay on the browser side: browser-safe modules of
-// this package and the packages a plugin's client already has. Through the
-// Host protocol they would reach the SDK's cordis Context augmentation, which
-// splits Context in the standalone typecheck of a plugin that imports the client.
 const CLIENT_DECLARATION_PACKAGES = new Set(['react', '@deepseek-ai/dsh-client-ui-primitives'])
 function verifyClientDeclarations(filename, seen = new Set()) {
   if (seen.has(filename)) return seen

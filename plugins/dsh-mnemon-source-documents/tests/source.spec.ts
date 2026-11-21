@@ -28,7 +28,7 @@ describe('standalone documents Source', () => {
       const { document } = added.value as unknown as plugin.DocumentMutationResult
       await expect(runner.executeManagement({ ...base, mode: 'mutate', operation: 'mutate', confirmed: true, expectedRevision: initial.revision,
         input: { action: 'update', id: document.id, content: 'stale' } })).rejects.toThrow('revision conflict')
-      const updated = await runner.executeManagement({ ...base, mode: 'mutate', operation: 'mutate', confirmed: true, expectedRevision: added.revision,
+      await runner.executeManagement({ ...base, mode: 'mutate', operation: 'mutate', confirmed: true, expectedRevision: added.revision,
         input: { action: 'update', id: document.id, content: 'beta sentinel' } })
       const loaded = await runner.executeManagement({ ...base, mode: 'read', operation: 'document', input: { id: document.id } })
       expect(loaded.value).toMatchObject({ content: 'beta sentinel' })
@@ -41,7 +41,7 @@ describe('standalone documents Source', () => {
       const archived = await runner.executeManagement({ ...base, mode: 'mutate', operation: 'archive', confirmed: true, expectedRevision: search.revision, input: { id: document.id } })
       expect(archived.value).toMatchObject({ action: 'archived', document: { status: 'archived', memoryBodyIds: [] } })
       const archivedTurn = await runner.beginTurn({ scope: base.scope })
-      const archivedEvidence = await archivedTurn.executeRoute(archivedTurn.view.routes[0]!.id, { query: 'beta', includeArchived: true })
+      await archivedTurn.executeRoute(archivedTurn.view.routes[0]!.id, { query: 'beta', includeArchived: true })
       const otherWorkspace = await runner.executeManagement({ ...base, scope: { ...base.scope, workspaceId: directory }, mode: 'read', operation: 'snapshot', input: null })
       // A configured dataDir is one explicit authority, even if a caller's cwd changes.
       expect(otherWorkspace.value).toMatchObject({ total: 1, workspaceRoot: directory })
@@ -72,7 +72,7 @@ describe('standalone documents Source', () => {
       const route = next.view.routes.find(value => value.sourceInstanceKey === 'source:work')!
       const evidence = await next.executeRoute(route.id, { query: 'sentinel' })
       expect(evidence.items).toHaveLength(1)
-      const suggestions = await next.executeRoute(route.id, { query: 'unmatched-secret' })
+      await next.executeRoute(route.id, { query: 'unmatched-secret' })
       const personal = next.view.routes.find(value => value.sourceInstanceKey === 'source:personal')!
       expect((await next.executeRoute(personal.id, { query: 'sentinel' })).items).toHaveLength(0)
       next.release()

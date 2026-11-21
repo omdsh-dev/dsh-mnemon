@@ -15,8 +15,6 @@ describe('bundled external Source without its Host (#507)', () => {
   it('imports with no Mnemon package and waits for its required service', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'mnemon-absent-host-'))
     try {
-      // Copy the emitted entry and any chunks, but no node_modules. A fresh
-      // process cannot rescue a static SDK import from this test's module cache.
       await cp(new URL('../lib/', import.meta.url), directory, { recursive: true })
       const entry = pathToFileURL(join(directory, 'external-source.js')).href
       const cordis = pathToFileURL(createRequire(import.meta.url).resolve('@deepseek-ai/cordis')).href

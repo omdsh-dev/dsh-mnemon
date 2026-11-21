@@ -412,7 +412,6 @@ export function runtimeArchiveFixture() {
 }
 
 export function observedSubagents(
-  resultTools: ReturnType<typeof toolRegistry>,
   publish: (child: HostAgent) => void,
   stopReason = 'completed',
   structured?: object,

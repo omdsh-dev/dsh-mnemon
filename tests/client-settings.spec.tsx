@@ -16,7 +16,7 @@ import { supportsMemoryComponentSettingsSection } from '../src/client/extension-
 import { createComponentHosts, type ComponentHosts } from '../src/client/component-host.ts'
 import { requestComponentPage, takeComponentPage, takeComponentPageRequest } from '../src/client/component-page-request.ts'
 import { DOCUMENTS_PACKAGE, DocumentsSettings, MEMORY_SPACES_PACKAGE, RUNTIME_PACKAGE, RuntimeSettings, THREE_TIER_PACKAGE, ThreeTierSettings } from '../src/client/component-settings.tsx'
-import { MNEMON_SOURCE_PAGE_SLOT, type MemorySourcePageProps } from '../src/client/source-pages.tsx'
+import type { MemorySourcePageProps } from '../src/client/source-pages.tsx'
 import { translateEn, translateZh, type MnemonTranslate } from '../src/client/locales.ts'
 import type { ClientConnectionHandle, ClientSettingsScope } from "../src/host/dsh.ts"
 import type { Config } from "../src/host/config.ts"

@@ -15,10 +15,7 @@ export const memoryPlugin = {
 } satisfies Omit<MemoryPluginDescriptor, 'apiVersion'>
 export interface Config { path: string }
 
-/** A deliberately small external Source: the file, protocol and snapshots are its own. */
 export async function apply(ctx: Context, config: Config): Promise<void> {
-  // A bundle entry is still imported when Mnemon is uninstalled. Cordis calls
-  // apply only once mnemonMemory is present, so its SDK is loaded here too.
   const { COMPOSABLE_MEMORY_API_VERSION } = await import('dsh-mnemon/contracts')
   const {
     defineMemoryPlugin, defineMemorySource, installMemory, memoryConfigurationDigest, createMemoryMutationReceipt,

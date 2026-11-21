@@ -2,7 +2,6 @@ import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 
-/** Source builds keep transitive packages in workspace siblings, unlike a flattened npm install. */
 export function dshHostPackages(hostAnchor: string) {
   const host = dirname(realpathSync(hostAnchor))
   const source = resolve(host, '../..')
@@ -23,7 +22,6 @@ export function dshHostPackages(hostAnchor: string) {
   }
 }
 
-/** Do not let pnpm's NODE_PATH silently substitute this repo's older DSH for a source package. */
 export function createDshHostRequire(hostAnchor: string): NodeJS.Require {
   const host = createRequire(hostAnchor)
   const packages = dshHostPackages(hostAnchor)

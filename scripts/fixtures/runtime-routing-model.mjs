@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict'
 
-/** Return chunk-local indexes to exercise Host validation; storage and tools stay real. */
 export function runtimeRoutingModel(report) {
   return request => {
     const messages = request.messages ?? []

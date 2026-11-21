@@ -13,7 +13,6 @@ export const memoryPlugin = defineMemoryPlugin({
   requires: ['strategy.default-three-tier'],
 })
 
-/** Compiled outside the repository against the owning Strategy's packed SDK. */
 export const memoryStrategyConfiguration = defineMemoryStrategyConfiguration({
   kind: 'strategy-extension', typeId: 'external-budget', fields: [],
   label: { en: 'External budget', 'zh-CN': '外部预算' },

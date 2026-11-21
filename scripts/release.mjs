@@ -1,4 +1,3 @@
-// The release plan and its publication steps: --check (read-only), --pack, --publish-plugins, --verify-plugins, --publish-starter, --verify-release.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
@@ -52,7 +51,6 @@ function buildPluginLayers(plugins, packagesByName) {
   return layers
 }
 
-/** Official distribution only. External plugin repositories own their releases. */
 export function createReleasePlan(packages, { tag, prerelease, baseVersions } = {}) {
   const starter = packages.find(item => item.manifest.name === starterName)
   assert(starter, 'Release must include the default Starter')
@@ -227,7 +225,6 @@ export function assertVersionedPublicationChanges(plan, paths, options) {
 }
 
 async function npm(args, cwd) {
-  // Release publication runs on Linux. No shell expansion or implicit scripts.
   const { stdout } = await execute('npm', args, { cwd, timeout: 300_000, maxBuffer: 16 * 1024 * 1024 })
   return stdout
 }

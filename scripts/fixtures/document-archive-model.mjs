@@ -12,7 +12,6 @@ function results(request) {
   })
 }
 
-/** Script only model decisions; DSH tools, Native writes and Documents remain real. */
 export function documentArchiveModel(report) {
   const stages = new Map()
   const respond = request => {

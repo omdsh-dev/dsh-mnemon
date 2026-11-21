@@ -3,8 +3,6 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 
-// Link only this package's public self-references to its emitted declarations.
-// Independent plugins keep their public package imports and separate artifacts.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const output = join(root, 'lib', 'types')
 const config = JSON.parse(readFileSync(join(root, 'tsconfig.json'), 'utf8'))
@@ -46,9 +44,6 @@ function link(directory) {
 
 link(output)
 
-// tsc emits declarations for the complete development workspace, including
-// independently published plugin entries that the aggregate does not expose.
-// Ship the transitive type graph of public entries, not these unrelated roots.
 const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 const retained = new Set()
 function retain(filename) {

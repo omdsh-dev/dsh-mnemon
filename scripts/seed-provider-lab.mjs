@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// Seed one Provider Lab Memory Space per Provider through the public plugin composition; see provider-lab/README.md.
 
 import { existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -143,7 +142,6 @@ if (selectedProviders.some(provider => provider.id === 'mem0')) {
   try { await ensureMem0Config() } catch (error) { console.warn(`WARN  Mem0 config: ${error instanceof Error ? error.message : String(error)}`) }
 }
 
-// The lab is a consumer of public plugin artifacts, not private controllers.
 const runner = new MemoryCompositionRunner()
 const report = []
 try {
@@ -158,7 +156,6 @@ try {
   for (const provider of selectedProviders) {
     let body
     try {
-      // Mnemon Native has no service settings: its CLI is its connection.
       let memorySettings = {}
       if (provider.id !== 'mnemon-native') {
         const descriptor = (await read('provider-services')).providers.find(item => item.id === provider.id)

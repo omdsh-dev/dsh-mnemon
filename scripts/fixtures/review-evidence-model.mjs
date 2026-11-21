@@ -3,7 +3,6 @@ import assert from 'node:assert/strict'
 export const overviewTool = 'mcp__aoci__aoci_overview'
 export const overviewChunks = Array.from({ length: 5 }, (_, chunk) => `COMPLETE_OVERVIEW_CHUNK_${chunk + 1}\n` + Array.from({ length: 67 }, (_, index) => `Synthetic module ${chunk * 67 + index + 1}: complete inherited index evidence.`).join('\n'))
 
-/** Independently composed, per-Agent capability; no AOCI server is contacted. */
 export const scopedOverviewPlugin = `
 export const name = 'review-evidence-fixture'
 export const inject = ['agents', 'tools']
@@ -22,15 +21,12 @@ export function apply(ctx) {
 }
 `
 
-/** Fixed attempts before and after the fix; only DSH decides whether they execute. */
 export function reviewEvidenceModel(report) {
   let parentCalls = 0
   const reviews = new Map()
   return request => {
     const names = (request.tools ?? []).map(tool => tool.function?.name)
     if (!names.length) return 'Inherited overview review'
-    // A stable result tool can also be advertised to parents. Only the scoped
-    // completion protocol identifies a delegated request, in either protocol.
     const system = (request.messages ?? []).filter(message => message.role === 'system').map(message =>
       typeof message.content === 'string' ? message.content : (message.content ?? []).map(block => block.text ?? '').join('\n')).join('\n')
     const terminal = system.match(/Completion protocol: call `([^`]+)`/u)?.[1]

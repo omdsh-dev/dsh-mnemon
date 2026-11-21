@@ -10,7 +10,6 @@ export const legacyReplayExpected = {
 
 const text = message => typeof message?.content === 'string' ? message.content : (message?.content ?? []).map(block => block.text ?? '').join('\n')
 
-/** Validate the actual continuation wire request; the Session loader and adapter remain real. */
 export function legacySessionReplayModel(report, expected = legacyReplayExpected) {
   return request => {
     const messages = request.messages ?? []

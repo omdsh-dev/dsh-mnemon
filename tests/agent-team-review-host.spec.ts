@@ -31,7 +31,7 @@ it('runs guarded Team review against the published DSH cohort (issue 275)', asyn
   const forbiddenTeamTool = currentTeam ? 'team_task_create' : 'spawn_teammate'
   const teamToolsPackage = teamPackage.replace('agent-team', 'tool-agent-team')
   const load = async (name: string) => import(pathToFileURL(require.resolve(`@deepseek-ai/${name}`)).href)
-  const [cordis, agent, loop, llm, session, persistence, projection, query, subagent, fork, spawn, prompt, tools, team, teamTools, ptc] = await Promise.all([
+  const [cordis, agent, loop, llm, session, persistence, projection, query, subagent, fork, spawn, prompt, , team, teamTools, ptc] = await Promise.all([
     'cordis', 'dsh-agent', 'dsh-agent-loop', 'dsh-llm', 'dsh-session', 'dsh-session-persistence-jsonl',
     'dsh-session-projection', 'dsh-session-query-sqlite', 'dsh-subagent', 'dsh-subagent-fork-in-process',
     'dsh-subagent-spawn-in-process', 'dsh-system-prompt', 'dsh-tools', teamPackage,

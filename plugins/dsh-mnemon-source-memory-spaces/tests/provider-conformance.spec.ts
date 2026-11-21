@@ -26,12 +26,11 @@ import { createMemorySpaceProviderPlugin } from '../src/providers/plugin.ts'
 import { providerEntries, descriptors } from './providers.ts'
 
 import { NORMALIZED_RELEVANCE_SCORE, type MemoryProviderAdapter } from '../src/providers/adapter.ts'
-import type { MemoryProviderAdapterRegistry } from '../src/providers/registry.ts'
 import type { ProcessRunner } from '../src/providers/process.ts'
 import { createRunner } from '../src/runner.ts'
 import { MemorySpacesService } from '../src/service.ts'
 import { MemoryProviderCatalog } from '../src/providers/catalog.ts'
-import type { MemorySpace, MemoryProviderCapabilities, SearchRequest } from "../src/contracts.ts"
+import type { MemoryProviderCapabilities } from "../src/contracts.ts"
 
 const CAPABILITIES: MemoryProviderCapabilities = {
   search: true,
@@ -251,8 +250,6 @@ describe('Memory Spaces Provider child-module conformance', () => {
     const mounted = await mountedSnapshot(fixtureEntry({ endpoint: 'https://vector.example', apiKey: 'module-secret' }))
     const dataDir = mkdtempSync(join(tmpdir(), 'dsh-mnemon-provider-management-'))
     temporaryDirectories.push(dataDir)
-    const config = resolveMemorySpacesConfig({ dataDir, cliPath: '/fake/mnemon' })
-    const runner = createRunner(config, vi.fn<ProcessRunner>(async () => ({ stdout: '{}', stderr: '', exitCode: 0 })))
     const runtime = createMemorySpacesSource(mounted.snapshot).create({
       sourceInstanceKey: 'source:memory-spaces-management',
       provenance: { packageName: 'dsh-mnemon-source-memory-spaces', entryId: 'memory-spaces-management' },

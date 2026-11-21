@@ -1377,14 +1377,14 @@ describe('model pickers', () => {
     const suggestions = (await management.read('suggestions', null)).value as Array<{ id: string; skillName: string }>
     const alphaSuggestion = suggestions.find(item => item.skillName === 'review-alpha')!
     const betaSuggestion = suggestions.find(item => item.skillName === 'review-beta')!
-    const alphaDraft = await mutate('draft-record', {
+    await mutate('draft-record', {
       suggestionId: alphaSuggestion.id,
       skillName: 'review-alpha',
       content: changedAlpha,
       notes: 'Alpha draft.',
       changes: [],
       guidance: [],
-    }) as { id: string }
+    })
     const betaDraft = await mutate('draft-record', {
       suggestionId: betaSuggestion.id,
       skillName: 'review-beta',

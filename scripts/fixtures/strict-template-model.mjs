@@ -12,10 +12,6 @@ const parse = text => { try { return JSON.parse(text) } catch { return undefined
 const tokens = message => Math.ceil(JSON.stringify(message).length / 4)
 const userQuery = message => message.role === 'user' && typeof message.content === 'string' && message.content.trim() !== ''
 
-/**
- * What Ollama 0.33 renders: the system prompt and the longest suffix of the
- * other messages that fits num_ctx, always including the last message.
- */
 export function ollamaWindow(messages, numCtx) {
   const system = messages.filter(message => message.role === 'system')
   const history = messages.filter(message => message.role !== 'system')
@@ -26,14 +22,6 @@ export function ollamaWindow(messages, numCtx) {
   return { history, start, kept: history.slice(start) }
 }
 
-/**
- * Issue #327: Ollama 0.33 serving a model whose chat template requires a user
- * query answers 500 "no user query found in messages" when no user text turn
- * survives its truncation. The window is sized when the idle review sends its
- * third request, to hold that request from the delegated prompt on, so the next
- * tool round pushes the prompt out, as reported. Only model choices and the
- * server's window are scripted; DSH, the review and its tools are real.
- */
 export function strictTemplateModel(report) {
   let numCtx = Number.POSITIVE_INFINITY
   const stages = new Map()

@@ -1,7 +1,3 @@
-// Deterministic protocol fixture for issue 233, not a live OpenViking backend.
-// It models a cosmetic extraction update that never stores the submitted text, and the
-// request validation of OpenViking 0.5.1.1: the content API refuses any field it does not
-// declare (issue 353), and tags are set by their own endpoint.
 import { realpathSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { pathToFileURL } from 'node:url'
@@ -9,7 +5,6 @@ import { pathToFileURL } from 'node:url'
 export const WRITE_FIELDS = ['uri', 'content', 'mode', 'wait', 'telemetry', 'processing_mode']
 export const TAG_FIELDS = ['uri', 'tags', 'mode', 'recursive', 'telemetry']
 
-/** OpenViking 0.4.16's answer to a body with undeclared fields, or undefined when it has none. */
 export function extraForbidden(body, fields) {
   const extra = Object.keys(body).filter(name => !fields.includes(name))
   if (extra.length === 0) return undefined
@@ -60,7 +55,6 @@ export function openVikingProtocolFixture() {
       const file = files.get(key(canonical(body.uri)))
       error = extraForbidden(body, TAG_FIELDS)
       if (error !== undefined) status = 400
-      // Only replacing is modelled: Mnemon sends nothing else.
       else if (!Array.isArray(body.tags) || body.mode !== 'replace') status = 400
       else if (file === undefined) status = 404
       else {
@@ -89,7 +83,6 @@ export function openVikingProtocolFixture() {
   return { server, files, requests, state }
 }
 
-// Node runs a script it reaches through a link, such as /tmp on macOS, from its real path.
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const fixture = openVikingProtocolFixture()
   fixture.server.listen(Number(process.env.MNEMON_OPENVIKING_FIXTURE_PORT || 19335), '127.0.0.1', () => {

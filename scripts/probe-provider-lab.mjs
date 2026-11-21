@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-// Report whether each Provider Lab service answers on loopback; exits 1 when one is down.
 
 const requests = [
   ['OpenViking', 'http://127.0.0.1:1933/health', { headers: { Authorization: `Bearer ${process.env.OPENVIKING_ROOT_API_KEY ?? 'dsh-provider-lab-local-only'}`, 'X-OpenViking-Account': 'dsh-lab', 'X-OpenViking-User': 'demo-user' } }],

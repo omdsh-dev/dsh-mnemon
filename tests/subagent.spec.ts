@@ -4,10 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HostAgent, HostSubagentStartRequest, HostSubagentsService, ToolExecution } from '../src/host/dsh.ts'
-import type { RememberRequest, SearchRequest, Insight, MemoryPlacementCandidate, PreparedMemoryPlacement } from 'dsh-mnemon-source-memory-spaces/contracts'
-import type { DocumentMutationResult, DocumentView, DocumentMutation } from 'dsh-mnemon-source-documents/contracts'
-import type { MemoryEvidence, MemoryJsonValue } from 'dsh-mnemon/contracts'
-import type { MnemonAgentRuntimeSource, MnemonRuntimeGraph } from '../src/host/runtime.ts'
+import type { Insight, MemoryPlacementCandidate, PreparedMemoryPlacement } from 'dsh-mnemon-source-memory-spaces/contracts'
+import type { DocumentMutationResult, DocumentView } from 'dsh-mnemon-source-documents/contracts'
+import type { MnemonRuntimeGraph } from '../src/host/runtime.ts'
 import { agentScope } from '../src/host/runtime.ts'
 import { AgentMemoryTurn } from '../src/host/agent-memory-turn.ts'
 import { MemoryExecutions } from '../src/host/memory-executions.ts'
@@ -19,14 +18,13 @@ import { assertDshOutputSchema, DELEGATED_OPERATIONS, DELEGATED_TASK_LINE, deleg
 import { CONTINUATION_TEXT } from '../src/host/continuation-turn.ts'
 import { assertDshOutputValue } from '../src/host/subagent-output-schema.ts'
 import { WRITE_SCHEMA } from '../src/host/subagent-prompts.ts'
-import { resolveConfig } from '../src/host/config.ts'
 import { sessionLog } from './fixtures/session-log.ts'
 import {
   activations, addSecondWritableBody, capabilities, capacityError, cleanupSubagentFixtures,
   composableChild, createCoordinator, delegatedResultSchema, documentArchiveFixture, DSH_021_CAPABILITIES,
   emitSuccessfulToolResult, maintenancePlan, managedSession, observedSubagents, parent, pinnedTurn,
   releases, resultArguments, runtimeSource, service, subagents, temporaryDirectories, toolRegistry,
-  type HostActivationSpec, type RuntimeOperations, type SpaceData,
+  type RuntimeOperations,
 } from './fixtures/subagent-coordinator.ts'
 
 afterEach(cleanupSubagentFixtures)
@@ -1108,7 +1106,7 @@ describe('Mnemon memory subagent coordinator', () => {
 
   it('recovers a committed write receipt without retrying the mutation', async () => {
     const resultTools = toolRegistry()
-    const host = observedSubagents(resultTools, child => {
+    const host = observedSubagents(child => {
       emitSuccessfulToolResult(resultTools, child, 'mnemon_remember', { content: 'Use SQLite.', memoryBodyId: 'project' }, {
         action: 'added',
         message: 'Stored durable project memory.',
@@ -1130,7 +1128,7 @@ describe('Mnemon memory subagent coordinator', () => {
 
   it.each([false, true])('says whether a write saved its memory without a vector (embedded: %s, #388)', async embedded => {
     const resultTools = toolRegistry()
-    const host = observedSubagents(resultTools, child => {
+    const host = observedSubagents(child => {
       emitSuccessfulToolResult(resultTools, child, 'mnemon_remember', { content: 'Grafana runs on port 3300.', memoryBodyId: 'project' }, {
         action: 'added', id: 'memory-1', embedded, message: 'Stored durable project memory.', memoryBodyId: 'project', memoryBodyName: 'Project',
       })
@@ -1151,7 +1149,7 @@ describe('Mnemon memory subagent coordinator', () => {
 
   it('lists only the memories a run saved without a vector, and none for a skipped duplicate (#388)', async () => {
     const resultTools = toolRegistry()
-    const host = observedSubagents(resultTools, child => {
+    const host = observedSubagents(child => {
       emitSuccessfulToolResult(resultTools, child, 'mnemon_remember', { content: 'Grafana runs on port 3300.', memoryBodyId: 'project' }, {
         action: 'added', id: 'memory-1', embedded: true, memoryBodyId: 'project',
       })
@@ -1171,7 +1169,7 @@ describe('Mnemon memory subagent coordinator', () => {
 
   it.each(['accepted', 'candidate', 'partial', 'unknown', 'failed'])('does not recover %s completion as stored', async completion => {
     const resultTools = toolRegistry()
-    const host = observedSubagents(resultTools, child => {
+    const host = observedSubagents(child => {
       emitSuccessfulToolResult(resultTools, child, 'mnemon_remember', { content: 'Pending fact.', memoryBodyId: 'project' }, {
         action: 'stored', memoryBodyId: 'project', memoryReceipt: { status: 'succeeded', completion },
       })
@@ -1183,7 +1181,7 @@ describe('Mnemon memory subagent coordinator', () => {
 
   it('does not promote an observed accepted receipt using the child summary', async () => {
     const resultTools = toolRegistry()
-    const host = observedSubagents(resultTools, child => {
+    const host = observedSubagents(child => {
       emitSuccessfulToolResult(resultTools, child, 'mnemon_remember', { content: 'Pending fact.', memoryBodyId: 'project' }, {
         action: 'queued', memoryBodyId: 'project', memoryReceipt: { status: 'accepted', completion: 'accepted' },
       })
@@ -1194,7 +1192,7 @@ describe('Mnemon memory subagent coordinator', () => {
 
   it('commits a nested Code Mode receipt only after the enclosing run_code succeeds', async () => {
     const resultTools = toolRegistry()
-    const host = observedSubagents(resultTools, child => {
+    const host = observedSubagents(child => {
       const outerToken = Symbol('run-code')
       emitSuccessfulToolResult(resultTools, child, 'mnemon_remember', { content: 'Use SQLite.' }, {
         action: 'added', memoryBodyId: 'project', memoryBodyName: 'Project',
@@ -1212,7 +1210,7 @@ describe('Mnemon memory subagent coordinator', () => {
 
   it('discards a nested receipt when the enclosing Code Mode call fails', async () => {
     const resultTools = toolRegistry()
-    const host = observedSubagents(resultTools, child => {
+    const host = observedSubagents(child => {
       const outerToken = Symbol('run-code')
       emitSuccessfulToolResult(resultTools, child, 'mnemon_remember', { content: 'Use SQLite.' }, {
         action: 'added', memoryBodyId: 'project', memoryBodyName: 'Project',
@@ -1228,7 +1226,7 @@ describe('Mnemon memory subagent coordinator', () => {
 
   it('names the space a write inside a failed Code Mode program went to, not the one the writer claims (#387)', async () => {
     const resultTools = toolRegistry()
-    const host = observedSubagents(resultTools, child => {
+    const host = observedSubagents(child => {
       const outerToken = Symbol('run-code')
       emitSuccessfulToolResult(resultTools, child, 'mnemon_remember', { content: 'Use SQLite.', memoryBodyId: 'project' }, {
         action: 'added', id: 'memory-1', memoryBodyId: 'project', memoryBodyName: 'Project',
@@ -1247,7 +1245,7 @@ describe('Mnemon memory subagent coordinator', () => {
     ['skipped', 'skipped'],
   ])('lands nowhere when no receipt shows a write, and reports a claimed %s as %s (#387)', async (claimed, reported) => {
     const resultTools = toolRegistry()
-    const host = observedSubagents(resultTools, () => {}, 'completed', { action: claimed, summary: 'Saved in Trials.', memoryBodyIds: ['trials'] })
+    const host = observedSubagents(() => {}, 'completed', { action: claimed, summary: 'Saved in Trials.', memoryBodyIds: ['trials'] })
     const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(), resultTools.value)
     const result = await coordinator.remember(parent(), { content: 'Use SQLite.' }, new AbortController().signal)
     expect(result).toMatchObject({ action: reported, memoryBodyIds: [] })
@@ -1313,7 +1311,7 @@ describe('Mnemon memory subagent coordinator', () => {
 
   it('does not recover partial or failed child runs from unrelated successful tools', async () => {
     const resultTools = toolRegistry()
-    const partial = observedSubagents(resultTools, child => {
+    const partial = observedSubagents(child => {
       emitSuccessfulToolResult(resultTools, child, 'mnemon_memory_body_create', { name: 'Project', description: 'Project decisions.' }, {
         id: 'project', name: 'Project', description: 'Project decisions.',
       })
@@ -1322,7 +1320,7 @@ describe('Mnemon memory subagent coordinator', () => {
     await expect(partialCoordinator.remember(parent(), { content: 'Use SQLite.' }, new AbortController().signal)).rejects.toThrow('completed without recording its result')
 
     const failedTools = toolRegistry()
-    const failed = observedSubagents(failedTools, child => {
+    const failed = observedSubagents(child => {
       emitSuccessfulToolResult(failedTools, child, 'mnemon_remember', { content: 'Use SQLite.' }, {
         action: 'added', memoryBodyId: 'project', memoryBodyName: 'Project',
       })
@@ -1340,7 +1338,7 @@ describe('Mnemon memory subagent coordinator', () => {
 
   it('delegates writes with mutation tools and returns a compact receipt', async () => {
     const resultTools = toolRegistry()
-    const host = observedSubagents(resultTools, child => {
+    const host = observedSubagents(child => {
       emitSuccessfulToolResult(resultTools, child, 'mnemon_remember', { content: 'Durable choice', memoryBodyId: 'project' }, { action: 'added', memoryBodyId: 'project' })
     }, 'completed', { summary: 'Stored in project.', action: 'stored', memoryBodyIds: ['project'] })
     const coordinator = new MnemonSubagentCoordinator(host.value, runtimeSource(), resultTools.value)

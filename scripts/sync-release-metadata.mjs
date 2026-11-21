@@ -1,4 +1,3 @@
-// After changeset version: synchronize the Starter's exact plugin pins, the external consumer's pins and generated Provider versions.
 import assert from 'node:assert/strict'
 import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Config, resolveConfig } from '../src/host/config.ts'
-import type { HostConnectionHandle, HostCredentialsService, HostSettingsService, SettingsOperation } from "../src/host/dsh.ts"
-import { createSettingsHandler, migrateLegacyDisplayMode, registerSettingsRpc } from "../src/host/settings.ts"
-import { MNEMON_SETTINGS_CHANNEL, type SettingsOperation as ProtocolSettingsOperation } from "../src/host/protocol.ts"
+import type { HostCredentialsService, HostSettingsService, SettingsOperation } from "../src/host/dsh.ts"
+import { createSettingsHandler, migrateLegacyDisplayMode } from "../src/host/settings.ts"
+import type { SettingsOperation as ProtocolSettingsOperation } from "../src/host/protocol.ts"
 
 describe('Mnemon settings bridge', () => {
   it('exposes and mutates only the Mnemon namespace through a revision fence', async () => {

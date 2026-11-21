@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 import { delegatedCompletion } from './delegated-completion.mjs'
 
-/** Only model choices/failure are scripted; writes, receipts, timers and UI are real. */
 export function idleReviewModel(report) {
   const stages = new Map()
   return request => {
@@ -24,7 +23,6 @@ export function idleReviewModel(report) {
     assert(created?.document?.id, 'review must have a real document creation receipt')
     if (stage === 2) {
       report({ event: 'document-committed', documentId: created.document.id })
-      // The Document claims this pass for project knowledge (#319); a profile entry stays independent.
       return { name: 'mnemon_runtime_memory', args: { action: 'add', target: 'user', content: 'The fixture user reviews disposable SQLite checkpoints.', importance: 'low' } }
     }
     const runtime = receipts.find(value => value.success === true && value.target === 'user' && typeof value.added === 'string'

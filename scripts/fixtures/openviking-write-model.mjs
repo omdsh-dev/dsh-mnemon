@@ -8,7 +8,6 @@ function messageText(message) {
     : (message?.content ?? []).map(item => item.text ?? '').join('\n')
 }
 
-/** Only model decisions are scripted. Host tools and the selected backend are real. */
 export function openVikingWriteModel(report) {
   const stages = new Map()
   const selectBody = catalog => {
@@ -35,7 +34,6 @@ export function openVikingWriteModel(report) {
       const body = selectBody(receipts.findLast(value => Array.isArray(value.items)))
       if (stage === 1) return { name: 'mnemon_remember', args: { memoryBodyId: body.id, content: openVikingCanary, category: 'decision', importance: 4 } }
       const written = receipts.findLast(value => ['stored', 'skipped', 'failed'].includes(value.action))
-      // A Provider that throws leaves its error as the tool result, not a receipt: the write failed, and says why.
       const error = written === undefined ? (request.messages ?? []).filter(message => message.role === 'tool').map(messageText).at(-1) : undefined
       assert(written ?? error, 'Delegated writer requires an actual Provider answer')
       report({ event: 'provider-receipt', receipt: written ?? { action: 'failed', error } })

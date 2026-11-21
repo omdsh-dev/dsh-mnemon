@@ -1,4 +1,3 @@
-// Check that every package whose published inputs changed has a changeset, or that a release pull request consumed them all.
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
 import { createRequire } from 'node:module'
@@ -34,11 +33,6 @@ export function assertReleaseIntentCoverage(changedPackages, releases) {
   return covered
 }
 
-/**
- * A package absent at the base revision is introduced by this change. It needs
- * a release intent like any changed package, but it first publishes with the
- * next release pull request, so it does not make this change a release.
- */
 export function introducedPackageBaseVersions(packages, baseVersions) {
   const versions = new Map(baseVersions)
   for (const item of packages) if (!versions.has(item.manifest.name)) versions.set(item.manifest.name, item.manifest.version)

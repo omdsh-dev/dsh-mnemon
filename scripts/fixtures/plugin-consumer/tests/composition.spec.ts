@@ -24,7 +24,6 @@ describe('external consumer of packed artifacts', () => {
     const turns: MemoryTestTurn[] = []
     try {
       await runner.mount(threeTier, { instanceId: 'default' })
-      // Extensions may be enabled before the Sources they will compose.
       await runner.mount(scoped, { instanceId: 'scoped' })
       const removeLight = await runner.mount(light, { instanceId: 'light', config: { maxProjectionCharacters: 200 } })
       await runner.mount(capture, { instanceId: 'capture' })
@@ -161,7 +160,6 @@ describe('external consumer of packed artifacts', () => {
       expect(exact.items[0]?.text).toBe('first snapshot')
       expect((await management.read('read')).value).toEqual({ content: 'second snapshot' })
 
-      // A competing candidate cannot silently replace the serving Strategy.
       const removeCandidate = await runner.mount(focus, { instanceId: 'candidate', config: { sourceKeys: ['source:personal'], mode: 'routed' } })
       expect(runner.inspect().evaluation.state).toBe('rejected')
       expect(runner.inspect().servingGenerationId).toBe(pinned.view.runtimeGeneration)

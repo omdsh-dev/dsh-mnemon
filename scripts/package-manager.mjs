@@ -1,11 +1,3 @@
-// Resolve how to run a package.json script through the package manager that
-// started the current process.
-//
-// `npm_execpath` is a JavaScript entry for package managers installed through
-// npm (`node_modules/pnpm/bin/pnpm.cjs`), and a native executable for standalone
-// installs (`~/.local/share/pnpm/pnpm`, or `pnpm.exe` on Windows). Node cannot
-// load a native executable as a module, so only a JavaScript entry runs through
-// `process.execPath`; everything else is spawned directly.
 import { extname } from 'node:path'
 
 const JAVASCRIPT_ENTRIES = new Set(['.js', '.cjs', '.mjs'])
