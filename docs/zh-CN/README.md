@@ -41,6 +41,7 @@ dsh-mnemon 为 DeepSeek Harness 提供三类记忆：每一轮都会用到的**�
 
 ## 最新变化
 
+- [v0.5.52](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.52) · 整理内部代码和文档，并把 npm README 链接固定到发布提交。
 - [v0.5.51](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.51)：支持项目档案与记忆空间独立全局共享、可选 BM25 索引召回及空闲审查稳定性修复。
 - [v0.5.50](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.50)：重新整理设置层级，优化窄窗口布局和记忆空间图谱，并减少技能页的重复读取。
 - [v0.5.49](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.49)：按需记忆召回、DSH 0.2.2-rc.5 静默托管空闲审查及水位线重试恢复。

@@ -6,6 +6,7 @@
 
 ## v0.5
 
+- [v0.5.52 · 维护整理与稳定的 README 链接](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.52)
 - [v0.5.51 · 共享存储与可选索引召回](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.51)
 - [v0.5.50 · 更清晰的设置与记忆工作台](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.50)
 - [v0.5.49 · 按需记忆与更可靠的空闲审查](https://github.com/omdsh-dev/dsh-mnemon/releases/tag/v0.5.49)
