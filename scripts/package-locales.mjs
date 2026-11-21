@@ -1,4 +1,3 @@
-// Read and validate a package's locale/*.json metadata for the package checks.
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -6,7 +5,6 @@ import { resolve } from 'node:path'
 
 export const localeExport = './locale/*.json'
 
-/** Expand DSH metadata resources without treating JSON as executable Node entries. */
 export function readPackageLocales(directory, manifest) {
   if (!Object.hasOwn(manifest.exports ?? {}, localeExport)) return []
   assert.equal(manifest.exports[localeExport], localeExport, 'Locale exports must resolve inside ./locale/')

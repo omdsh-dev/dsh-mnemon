@@ -1,5 +1,3 @@
-// Serve candidate tarballs beside real npm metadata for disposable official-DSH
-// Add plugin and Check versions acceptance. This never publishes to a registry.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
@@ -69,8 +67,6 @@ const registry = createServer(async (request, response) => {
 })
 await new Promise(done => registry.listen(0, '127.0.0.1', done))
 registryUrl = `http://127.0.0.1:${registry.address().port}`
-// Version checks fetch npm directly instead of using pnpm's configured registry.
-// Restrict this test-only redirect to the selected candidate package names.
 const preload = join(state, 'registry-preload.mjs')
 await writeFile(preload, `const originalFetch = globalThis.fetch;\nconst names = new Set(${JSON.stringify([...packages.keys()])});\nglobalThis.fetch = (input, init) => {\n  const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url);\n  if (url.hostname === 'registry.npmjs.org' && names.has(decodeURIComponent(url.pathname).split('/')[1])) {\n    const target = ${JSON.stringify(registryUrl)} + url.pathname + url.search;\n    input = input instanceof Request ? new Request(target, input) : target;\n  }\n  return originalFetch(input, init);\n};\n`)
 const env = { ...process.env, HOME: isolatedHome, DSH_HOME: dshHome, DSH_TELEMETRY_DISABLED: '1',
@@ -84,7 +80,6 @@ if (values.previous) {
   const initialEnv = { ...env, NODE_OPTIONS: '', npm_config_registry: 'https://registry.npmjs.org', NPM_CONFIG_REGISTRY: 'https://registry.npmjs.org' }
   await save('previous-install.log', await run(process.execPath, [dshBin, 'plugin', '--profile', 'web', 'add', values.previous, '--registry', 'https://registry.npmjs.org'], initialEnv))
 }
-// macOS resolves Documents independently of HOME; isolate the first-use workspace too.
 const profile = join(dshHome, 'profiles', 'web'), patch = join(profile, 'cordis.patch.yml')
 await mkdir(profile, { recursive: true })
 const existingPatch = await readFile(patch, 'utf8').catch(error => { if (error.code === 'ENOENT') return ''; throw error })

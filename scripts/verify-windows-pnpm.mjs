@@ -6,9 +6,6 @@ import { join } from 'node:path'
 import { findMnemonCommand, resolveMnemonInvocation } from '../plugins/dsh-mnemon-source-memory-spaces/src/native-cli.ts'
 import { resolveByteRoverInvocation } from '../plugins/dsh-mnemon-provider-byterover/src/cli.ts'
 
-// Install synthetic packages with the actual pnpm used by CI. This exercises
-// generated Windows shims and virtual-store links without a vendor account,
-// network service, paid model, user profile, or globally installed package.
 assert.equal(process.platform, 'win32', 'Run this acceptance check on Windows')
 assert.ok(process.env.npm_execpath, 'Run with pnpm run verify:windows-pnpm')
 const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'mnemon pnpm acceptance ')))
@@ -17,7 +14,6 @@ try {
   const packs = join(scratch, 'tarballs')
   const cwd = join(scratch, 'knowledge with spaces')
   for (const directory of [bin, packs, cwd]) mkdirSync(directory, { recursive: true })
-  // A single PATH spelling is necessary on Windows.
   const inherited = Object.fromEntries(Object.entries(process.env).filter(([key]) => key.toUpperCase() !== 'PATH'))
   const path = Object.entries(process.env).find(([key]) => key.toUpperCase() === 'PATH')?.[1] ?? ''
   const installEnv = { ...inherited, PNPM_HOME: bin, PATH: `${bin};${path}` }
@@ -40,7 +36,6 @@ try {
     '--store-dir', join(scratch, 'store'), '--offline', '--ignore-scripts',
     ...readdirSync(packs).filter(name => name.endsWith('.tgz')).map(name => join(packs, name))])
 
-  // Reproduce a Desktop environment without the new global bin in its PATH.
   const env = { ...inherited, PNPM_HOME: bin, PATH: '' }
   const args = ['literal & | > < ^ %PATH% !bang! $value `command` "quoted"\nsecond line']
   const mnemon = findMnemonCommand({}, { env })

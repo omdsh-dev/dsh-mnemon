@@ -3,16 +3,8 @@ import { delegatedCompletion } from './delegated-completion.mjs'
 const text = message => typeof message?.content === 'string' ? message.content : (message?.content ?? []).map(block => block.text ?? '').join('\n')
 const rank = { low: 0, normal: 1, critical: 2 }
 
-/** What the compaction child merges the committed USER.md entries into. */
 export const PROFILE_COMPACTED = '回答简洁，用简体中文。'
 
-/**
- * Script only the model's decisions for a full USER.md (issue #356). The
- * conversation saves each `记住：` fact through the real `mnemon_runtime_memory`
- * tool; once USER.md is full, the Host starts its compaction child, which
- * merges every committed entry into one. The tool, the child, its result tool
- * and the Runtime writes are real, on whichever DSH serves the WebUI.
- */
 export function profileCompactionModel(report) {
   return request => {
     const messages = request.messages ?? []
@@ -31,7 +23,6 @@ export function profileCompactionModel(report) {
         compactedEntries: [{ content: PROFILE_COMPACTED, importance, sourceIndexes: entries.map(entry => entry.index) }],
       }) }
     }
-    // Only the conversation Agent holds the memory tool; DSH's own helper requests, such as titles, get plain text.
     if (!(request.tools ?? []).some(tool => tool.function?.name === 'mnemon_runtime_memory')) return '记住偏好'
     const last = messages.at(-1)
     if (last?.role === 'tool') {

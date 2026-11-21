@@ -1,4 +1,3 @@
-// Deterministic user-key protocol fixture for issue 271, not a cloud account.
 import { createServer } from 'node:http'
 import { extraForbidden, TAG_FIELDS, WRITE_FIELDS } from './openviking-protocol.mjs'
 
@@ -22,7 +21,6 @@ export function openVikingUserKeyFixture(identities) {
       response.writeHead(status, { 'content-type': 'application/json' })
       response.end(JSON.stringify(status === 200 ? { status: 'ok', result } : { status: 'error', error: typeof result === 'string' ? { message: result } : result }))
     }
-    // Credentials and request headers are deliberately omitted from evidence.
     requests.push({ method: request.method, path, account: identity?.account, user: identity?.user, identityHeaders, uri })
     if (path === '/__fixture') return send(200, { fixture: 'deterministic-openviking-user-key', requests, files: [...files.values()] })
     if (path.startsWith('/api/v1/admin/')) return send(403, 'API is currently unavailable due to access restrictions')

@@ -1,10 +1,4 @@
 #!/usr/bin/env node
-// Real DSH WebUI with disposable state and a loopback-only model stub.
-// Run after pnpm build && pnpm --workspace-concurrency=4 -r build; stop with Ctrl-C to remove the fixture.
-// Set MNEMON_E2E_PORT to keep one WebUI address across SIGUSR2 restarts.
-// --live-model answers with the real DeepSeek API instead: it reads DEEPSEEK_API_KEY
-// (and DEEPSEEK_BASE_URL when set) from the caller's environment and never stores them.
-// Set MNEMON_E2E_DSH to another DSH installation's lib/bin.js to serve the WebUI on that release.
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -40,11 +34,9 @@ import { seedSkillsScroll } from './fixtures/skills-scroll.mjs'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const flags = new Set(process.argv.slice(2))
 let betterSidebarRoot
-// Test-only plugins linked into the profile beside dsh-mnemon, for example a shell fixture.
 const extraPlugins = []
 let electronExecutable
 let trustedHost
-// Documentation media: a seeded fictional project and a model that reads it through the real tools.
 let docsDemo
 for (const flag of flags) {
   if (flag === '--strategy-extensions') continue
@@ -101,7 +93,6 @@ for (const flag of flags) {
     betterSidebarRoot = resolve(value)
     continue
   }
-  // A remote page: DSH's browser-trust fence accepts this extra authority.
   if (flag.startsWith('--trusted-host=')) {
     trustedHost = flag.slice('--trusted-host='.length)
     if (!/^[a-z0-9.-]+(?::\d+)?$/iu.test(trustedHost)) throw new Error('--trusted-host requires a host or host:port authority')
@@ -109,10 +100,8 @@ for (const flag of flags) {
   }
   throw new Error('Unknown option: ' + flag)
 }
-// The Layered strategy composes one Source per role, so a second runtime track needs the General one.
 if (flags.has('--second-runtime') && !flags.has('--general-strategy')) throw new Error('--second-runtime requires --general-strategy')
 const extensionNames = STARTER_ENHANCEMENT_PACKAGES
-// Strategy packages that also register themselves as bundles; the Starter row owns them.
 const selfRegistering = new Set(STARTER_SELF_REGISTERING_PACKAGES)
 const extensionsEnabled = flags.has('--strategy-extensions')
 const liveModel = flags.has('--live-model')
@@ -124,10 +113,7 @@ const fixture = await mkdtemp(join(tmpdir(), 'mnemon-web-e2e-'))
 const dshHome = join(fixture, 'dsh-home')
 const dataDir = join(fixture, 'data')
 const workspace = join(fixture, 'workspace')
-// DSH and the Skills Source read user skills from ~/.agents unless told otherwise; keep it inside the fixture.
 const agentsHome = join(fixture, 'agents-home')
-// DSH creates its first-use workspace under the system Documents folder, which on
-// macOS it asks the OS for, whatever HOME is; keep that inside the fixture too.
 const documents = join(fixture, 'documents')
 await Promise.all([dshHome, dataDir, workspace, documents, agentsHome].map(path => mkdir(path)))
 let modelRequests = 0
@@ -149,8 +135,6 @@ const archiveProvider = runtimeArchive ? createServer(async (request, response) 
   response.end(JSON.stringify(value))
 }) : undefined
 if (archiveProvider) await new Promise(resolveListen => archiveProvider.listen(0, '127.0.0.1', resolveListen))
-// Issue #339: an embedding service slower than the Mnemon CLI's default 10 s timeout, with one
-// `Archive copies:` line per embedding request, as the #339 record counts them.
 const embeddingDelayMs = Number(process.env.MNEMON_E2E_EMBEDDING_DELAY_MS ?? 12_000)
 const slowEmbedder = flags.has('--archive-copies') ? fakeEmbeddingServer({ model: 'fixture-embed', delayMs: embeddingDelayMs,
   report: ({ event, request, delayMs }) => console.log('Archive copies: ' + JSON.stringify({ event, request, delayMs })) }) : undefined
@@ -177,11 +161,6 @@ const scriptedModel = liveModel ? undefined : flags.has('--runtime-routing') ? r
   : flags.has('--recall-budget') ? recallBudgetModel(event => console.log('Recall budget: ' + JSON.stringify(event)))
   : docsDemo !== undefined ? docsDemoModel(docsDemo, event => console.log('Docs demo: ' + JSON.stringify(event))) : reviewModel ?? protectionModel
 const reviewFailure = flags.has('--review-failure')
-/**
- * DSH's DeepSeek adapter speaks the Messages protocol. Scripted fixtures read
- * one neutral request: system text as a system message, tool results as tool
- * messages, tool calls on assistant messages and tools as functions.
- */
 function fixtureRequest(wire) {
   const blocks = content => typeof content === 'string' ? [{ type: 'text', text: content }] : content ?? []
   const text = content => blocks(content).filter(block => block.type === 'text').map(block => block.text).join('\n')
@@ -222,7 +201,6 @@ const model = createServer(async (request, response) => {
   }
   if (typeof reply === 'object' && reply.error !== undefined) {
     response.writeHead(reply.status ?? 400, { 'content-type': 'application/json' })
-    // A server failure answers as Ollama's Messages endpoint does.
     response.end(JSON.stringify(reply.status === undefined ? { error: { message: reply.error } } : { type: 'error', error: { type: 'api_error', message: reply.error } }))
     return
   }
@@ -246,7 +224,6 @@ const env = {
   DSH_HOME: dshHome,
   DSH_AGENTS_HOME: agentsHome,
   DSH_TELEMETRY_DISABLED: '1',
-  // A live run keeps the caller's key and endpoint; otherwise the loopback stub answers.
   ...(liveModel ? {} : { DEEPSEEK_API_KEY: 'isolated-test-key', DEEPSEEK_BASE_URL: `http://127.0.0.1:${model.address().port}` }),
   MNEMON_DATA_DIR: dataDir,
   ...(credentialEmbedder === undefined ? {} : { MNEMON_TEST_EMBEDDING_KEY: 'fixture-embedding-key' }),
@@ -305,8 +282,6 @@ process.on('SIGUSR2', () => { void restart() })
 
 try {
   const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
-  // Root owns the disabled enhancement Entries. Adding their self-registering
-  // bundles as separate Profile layers would intentionally duplicate ids.
   const plugins = Object.keys(manifest.dependencies).filter(name => name.startsWith('dsh-mnemon-') && !selfRegistering.has(name))
   const installer = spawn(process.execPath, [dshBin, 'plugin', '--profile', 'web', 'add',
     `link:${root}`, ...plugins.map(name => `link:${join(root, 'plugins', name)}`),
@@ -317,16 +292,10 @@ try {
     installer.once('error', reject)
     installer.once('exit', code => code === 0 ? resolveInstall() : reject(new Error('DSH installation failed: ' + code)))
   })
-  // Leave the entire real WebUI/plugin stack enabled. Only unrelated native
-  // PTY/search tools are disabled so a test cannot launch workspace commands.
   const disabled = ['subprocess', 'open-in-app', 'bash-sandbox', 'pwsh-sandbox', 'tool-bash', 'tool-pwsh', 'permission', 'tool-fs-search', 'directory-picker']
-  // A test-owned preset uses all Host memory tools without the shipped
-  // presets' shell requirements. Never modify a shipped DSH preset. The docs
-  // demo names it after its fictional project.
   const assistant = docsDemo === undefined
     ? { name: 'Mnemon E2E', description: 'Isolated memory UI test (no Shell).', persona: 'You are testing the Mnemon memory UI.' }
     : docsDemoAssistant(docsDemo)
-  // The docs demo's assistant reads files and loads skills, as DSH's standard preset does.
   const docsDemoTools = ['tool-fs', 'skill-filesystem', 'tool-skill'].map(id => `          - id: ${id}\n            name: '@deepseek-ai/dsh-${id}'\n`).join('')
   const pickerKind = flags.has('--native-directory-picker') ? 'native' : 'browse'
   const browsePicker = `- id: agent-preset-registry
@@ -359,21 +328,17 @@ ${docsDemo === undefined ? '' : docsDemoTools}    - id: e2e-directory-picker
     + (runtimeArchive ? '- id: mnemon\n  config:\n    persistenceStrategy:\n      mode: manual\n    runtimeMemory:\n      memoryLimitBytes: 300\n' : '')
     + (flags.has('--idle-review') || flags.has('--review-layers') || flags.has('--strict-template') ? '- id: mnemon\n  config:\n    idleReviewMs: 5000\n    idleReview:\n      minIntervalMs: 5000\n      maxPerSession: 1\n' : '')
     + (flags.has('--runtime-routing') ? '- id: mnemon\n  config:\n    runtimeMemory:\n      memoryLimitBytes: 1600\n' : '')
-    // An explicit cliPath is authoritative, so a missing file hides any installed Mnemon CLI.
     + (flags.has('--without-mnemon-cli') ? '- id: mnemon\n  config:\n    cliPath: ' + JSON.stringify(join(fixture, 'no-mnemon-cli', 'mnemon')) + '\n' : '')
     + (flags.has('--remote-management') ? '- id: mnemon\n  config:\n    remoteAccess: trusted-host\n' : '')
-    // Two short USER.md entries fill it, so the third write needs the compaction child.
     + (flags.has('--profile-compaction') ? '- id: mnemon\n  config:\n    runtimeMemory:\n      userLimitBytes: 100\n    idleReview:\n      enabled: false\n' : '')
     + (slowEmbedder === undefined ? '' : `- id: mnemon\n  config:\n    runtimeMemory:\n      memoryLimitBytes: ${archiveCopiesLimitBytes}\n    embedding:\n      enabled: true\n      endpoint: http://127.0.0.1:${slowEmbedder.address().port}/v1\n      model: fixture-embed\n      protocol: openai\n`)
     + (credentialEmbedder === undefined ? '' : `- id: mnemon\n  config:\n    embedding:\n      enabled: true\n      endpoint: http://127.0.0.1:${credentialEmbedder.address().port}/v1\n      model: fixture-embed\n      protocol: openai\n      apiKey: fixture-embedding-key\n`)
     + (flags.has('--general-strategy') ? '- id: mnemon-strategy-general\n  disabled: false\n- id: mnemon-strategy-default-three-tier\n  disabled: true\n- id: mnemon\n  config:\n    memoryView:\n      strategyTypeId: general\n' : '')
-    // A second runtime track beside the Starter's, with its own directory, as a profile can mount one (#397).
     + (flags.has('--second-runtime') ? '- insert:\n    - id: mnemon-source-runtime-global\n      name: dsh-mnemon-source-runtime\n      config:\n        dataDir: '
       + JSON.stringify(join(fixture, 'global-runtime')) + '\n        userDataDir: ' + JSON.stringify(join(fixture, 'global-runtime')) + '\n' : '')
     + (flags.has('--runtime-write-scope') ? '- id: mnemon\n  config:\n    persistenceStrategy:\n      mode: manual\n      providerId: mnemon-native\n    runtimeMemory:\n      memoryLimitBytes: 512\n' : '')
     + (reviewModel === undefined ? '' : '- insert:\n    - id: review-evidence-fixture\n      name: ' + JSON.stringify(reviewFixture) + '\n')
     + (extensionsEnabled ? extensionNames.map(name => `- id: ${name.slice(4)}\n  disabled: false\n`).join('') : '')
-    // The docs demo shows Skills with self-evolution on, as a user who turned it on sees it.
     + (docsDemo === undefined ? '' : '- id: mnemon\n  config:\n    skills:\n      evolution: true\n'))
   await writeFile(join(workspace, 'README.md'), '# Mnemon isolated browser test\n\nNo production memory or credentials are used.\n')
   if (slowEmbedder !== undefined) {
@@ -381,19 +346,16 @@ ${docsDemo === undefined ? '' : docsDemoTools}    - id: e2e-directory-picker
     console.log(`Archive copies seeded: working memory is full and Memory Space ${memoryBodyId} holds an exact copy of each entry; embeddings answer after ${embeddingDelayMs} ms.`)
     console.log('Add this working-memory entry on the Runtime Memory page: ' + archiveCopiesPending)
   }
-  // The docs demo's spaces, one of them switched off, for a memory saved into a named space (#387).
   if (flags.has('--remember-target') && docsDemo === undefined) {
     await seedDocsDemo({ dataDir, workspace, language: 'zh-CN' })
     console.log('Remember target seeded; send remember-target-check.')
   }
   if (docsDemo !== undefined) {
-    // DSH opens conversations in its first-use workspace, a fixed folder under Documents; the project's skills go there.
     const defaultWorkspace = join(documents, 'deepseek-harness', 'default-workspace')
     await mkdir(defaultWorkspace, { recursive: true })
     await seedDocsDemo({ dataDir, workspace, language: docsDemo, skills: { workspace: defaultWorkspace, dshHome, agentsHome, catalogDir: join(fixture, 'team-skills') } })
     console.log('Docs demo seeded (' + docsDemo + ')' + (liveModel ? '.' : '; ask about checkout, then ask to remember a new target, or ask for the 2.4 release notes and then correct them.'))
   }
-  // The docs demo's memory, read by a model that asks three different Recall questions in one turn (#389).
   if (flags.has('--recall-budget') && docsDemo === undefined) {
     await seedDocsDemo({ dataDir, workspace, language: 'zh-CN' })
     console.log('Recall budget seeded; send recall-budget-check.')

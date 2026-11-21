@@ -1,4 +1,3 @@
-// Synthetic skill files for the list/detail scrolling regression (#553).
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 

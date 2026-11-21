@@ -1,4 +1,3 @@
-// Exercise shipped Web presets with local synthetic model choices and disposable data.
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
@@ -40,8 +39,6 @@ try {
     child.on('error', error => { clearTimeout(timer); reject(error) })
     child.on('exit', code => { clearTimeout(timer); code === 0 ? resolveInstall() : reject(new Error(`Disposable profile install failed: ${log}`)) })
   })
-  // The native folder chooser is irrelevant to the protocol smoke. Automatic
-  // review has separate real native/PTC turn-integrity tests in the root suite.
   await writeFile(join(home, 'profiles/web/cordis.patch.yml'), '- id: directory-picker\n  disabled: true\n- id: mnemon\n  config:\n    idleReview:\n      enabled: false\n')
   const { createLaunchEnvironmentSnapshot } = await load('@deepseek-ai/dsh-launch-environment')
   const { runProfile } = await import(pathToFileURL(join(dsh, 'lib/profile-boot.js')).href)
@@ -105,5 +102,4 @@ try {
   await ctx?.fiber.dispose()
   await rm(temporary, { recursive: true, force: true })
 }
-// Exit only after successful assertions and cleanup; failed checks retain a nonzero status.
 process.exit(0)

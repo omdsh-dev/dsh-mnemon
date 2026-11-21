@@ -5,14 +5,6 @@ const parse = message => { try { return JSON.parse(text(message)) } catch { retu
 
 export const rememberTargetContent = '调研结论：TimescaleDB 的写入吞吐不足以替代 ClickHouse，埋点事件继续写入 ClickHouse。'
 
-/**
- * A memory saved into a named Memory Space (#387), over the docs demo's spaces. After
- * `remember-target-check` the root Agent lists the spaces and names Lumen 项目 for a
- * research conclusion. The writer first tries 调研归档, which describes the memory better
- * but is switched off, then the space it was given. After `remember-archive-check` the root
- * Agent names 调研归档 itself, which the Host refuses before any writer runs. Only the model
- * decisions are scripted; the tools, their guard and the Mnemon Native writes are real.
- */
 export function rememberTargetModel(report) {
   return request => {
     const messages = request.messages ?? []
@@ -20,7 +12,6 @@ export function rememberTargetModel(report) {
     if (terminal === undefined) {
       const userIndex = messages.findLastIndex(message => message.role === 'user' && /remember-(?:target|archive)-check/u.test(text(message)))
       if (userIndex < 0) return 'Send remember-target-check.'
-      // DSH titles the session with a separate request that carries no memory protocol.
       if (text(messages[userIndex]).startsWith('Generate the session title')) return 'Remember target check'
       const space = text(messages[userIndex]).includes('remember-archive-check') ? '调研归档' : 'Lumen 项目'
       const results = messages.slice(userIndex + 1).filter(message => message.role === 'tool').map(parse)

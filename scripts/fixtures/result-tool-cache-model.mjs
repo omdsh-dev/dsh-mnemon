@@ -3,7 +3,6 @@ import { delegatedCompletion } from './delegated-completion.mjs'
 
 const text = message => typeof message?.content === 'string' ? message.content : (message?.content ?? []).map(block => block.text ?? '').join('\n')
 
-/** Deterministic model only: DSH still runs real delegated calls and tool filtering. */
 export function resultToolCacheModel(report) {
   let childCount = 0
   return request => {

@@ -3,18 +3,10 @@ import { delegatedCompletion } from './delegated-completion.mjs'
 const text = message => typeof message?.content === 'string' ? message.content : (message?.content ?? []).map(block => block.text ?? '').join('\n')
 const parse = message => { try { return JSON.parse(text(message)) } catch { return { error: text(message) } } }
 
-/** A field of a delegated request, as the Host writes it: `- Label: value`. */
 function field(prompt, label) {
   return prompt.match(new RegExp(`^- ${label}: (.+)$`, 'mu'))?.[1]?.trim()
 }
 
-/**
- * Script only the delegated workers' decisions for `/mnemon remember` and
- * `/mnemon forget <ID>` (issue #337). The commands, the workers' Host tools,
- * their Views and the Mnemon Native writes are real: the remember worker
- * writes the content it was given, and the forget worker forgets the exact
- * id it was given, in a View of its own that never recalled it.
- */
 export function exactIdModel(report) {
   const steps = new Map()
   return request => {

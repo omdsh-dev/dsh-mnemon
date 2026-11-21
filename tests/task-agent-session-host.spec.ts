@@ -875,7 +875,7 @@ describe('agent ownership host', () => {
         if (JSON.stringify(options.messages).includes('Perform a synthetic review.')) {
           expect(JSON.stringify(options.messages.filter(message => message.role === 'system'))).toContain('Synthetic isolated reviewer.')
         }
-        if (typeof hold === 'function' ? hold(options) : hold) await new Promise<void>((resolve, reject) => {
+        if (typeof hold === 'function' ? hold(options) : hold) await new Promise<void>((_resolve, reject) => {
           options.signal?.addEventListener('abort', () => reject(options.signal?.reason), { once: true })
           if (options.signal?.aborted) reject(options.signal.reason)
         })

@@ -1,4 +1,3 @@
-// Ten synthetic suggestions for the list/detail scrolling regression (#512).
 import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
 import * as skillsPlugin from 'dsh-mnemon-source-skills'
 import * as strategyPlugin from 'dsh-mnemon-strategy-general'

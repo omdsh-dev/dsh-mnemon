@@ -1,4 +1,3 @@
-// Dry-run pack the root package and check its files, client bundle, README images and size ceiling.
 import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -46,16 +45,6 @@ const relativeReadmeImages = readmeFiles.flatMap((path) => {
     .map(source => `${path}: ${source}`)
 })
 
-// The Starter ships Core/Host, the client bundle and the shared page kit.
-// Component implementations ship in their own packages: the Host build never
-// bundles dependencies, and tests/plugin-repository-boundary.spec.ts limits
-// the client bundle to presentation assets and types from component packages,
-// besides the Memory Spaces settings fallback and Provider marks it takes
-// through one module.
-// This ceiling only catches an accident, such as a dependency bundled into
-// lib/client.js. Pull requests leave it alone; a release raises it once the
-// measured package comes within about 10% of it. The release branch measured
-// 2,233,414 bytes at v0.5.39 (about 89% of the previous 2.5 MB ceiling).
 const maximumUnpackedBytes = 3_000_000
 
 if (missing.length > 0 || unexpected.length > 0 || hostLeaks.length > 0 || relativeReadmeImages.length > 0 || pack.unpackedSize > maximumUnpackedBytes) {

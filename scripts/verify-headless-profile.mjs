@@ -1,4 +1,3 @@
-// Install the Starter into an isolated Headless profile of real DSH and verify its tools, settings and disabled state.
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { existsSync } from 'node:fs'
@@ -9,7 +8,6 @@ import { fileURLToPath } from 'node:url'
 import { STARTER_ENHANCEMENT_PACKAGES } from '../src/host/starter-components.ts'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-// Set MNEMON_E2E_DSH to another DSH installation's lib/bin.js to verify Headless on that release.
 const dshBin = process.env.MNEMON_E2E_DSH ? resolve(process.env.MNEMON_E2E_DSH) : join(root, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
 const marker = 'HEADLESS_MNEMON_READY'
 const upgradeMemoryMarker = 'Synthetic upgrade fixture: project checkpoints stay in SQLite.'
@@ -75,7 +73,6 @@ const server = createServer(async (request, response) => {
       'cache-control': 'no-cache',
       connection: 'keep-alive',
     })
-    // DSH's DeepSeek adapter speaks the Messages streaming protocol.
     const model = requests.at(-1).model
     const event = value => response.write(`event: ${value.type}\ndata: ${JSON.stringify(value)}\n\n`)
     event({ type: 'message_start', message: { id: `msg-${requests.length}`, type: 'message', role: 'assistant', model, content: [], usage: { input_tokens: 10, output_tokens: 0 } } })
@@ -138,11 +135,7 @@ try {
     requests.length = 0
   }
 
-  // link: skips dependency installation. Explicitly link the same plugin set
-  // that a normal install resolves from the Starter's semver dependencies.
   const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
-  // Root owns the disabled enhancement Entries. Adding their self-registering
-  // bundles as separate Profile layers would intentionally duplicate ids.
   const plugins = Object.keys(manifest.dependencies).filter(name => name.startsWith('dsh-mnemon-') && !extensionNameSet.has(name))
   const packages = options.has('--package')
     ? [options.get('--package')]
@@ -152,9 +145,6 @@ try {
   ], { env, timeoutMs: 120_000 })
   assertSuccess('installing dsh-mnemon into the Headless profile', install)
 
-  // The verification exercises Mnemon composition, not DSH's native PTY
-  // transport. Disable the unrelated shell stack so the check remains
-  // hermetic on CI Node/platform combinations without a node-pty prebuild.
   const profilePatchPath = join(dshHome, 'profiles', 'headless', 'cordis.patch.yml')
   const profileOverrides = `
 - id: subprocess
@@ -183,9 +173,6 @@ try {
   await writeFile(profilePatchPath, profileOverrides)
 
   if (extensionsEnabled) {
-    // Active capture records through Memory Spaces' remember Action, which a View
-    // offers only while a Provider can take writes. Without a Mnemon CLI, as on CI,
-    // connect the bundled local Holographic Provider so the contribution has a target.
     await mkdir(join(storageRoot, 'state'), { recursive: true })
     await writeFile(join(storageRoot, 'state', 'memory-providers.json'), `${JSON.stringify({
       version: 4, services: { holographic: { dataPath: join(storageRoot, 'holographic-facts.json') } }, enabled: { holographic: true }, bodies: [],
@@ -205,8 +192,6 @@ try {
   const required = ['mnemon_status', 'mnemon_recall', 'mnemon_document_search', 'mnemon_document_create', 'mnemon_runtime_memory', 'mnemon_remember', 'mnemon_view_route', 'mnemon_view_action']
   const missing = required.filter(name => !toolNames.has(name))
   if (missing.length > 0) throw new Error(`Headless model request is missing Mnemon tools: ${missing.join(', ')}`)
-  // SystemPrompt sorts wire schemas lexicographically by default; registry
-  // insertion order is checked separately by the Host-first bootstrap tests.
   const mnemonWireOrder = [
     'mnemon_document_create', 'mnemon_document_manage', 'mnemon_document_search', 'mnemon_forget', 'mnemon_link',
     'mnemon_memory_bodies', 'mnemon_memory_body_create', 'mnemon_memory_body_merge', 'mnemon_memory_body_update',
@@ -225,12 +210,10 @@ try {
   if (upgradeMemory !== undefined && await readFile(join(storageRoot, 'runtime', 'memories.json'), 'utf8') !== upgradeMemory) throw new Error('Package upgrade changed existing Runtime Memory bytes')
   if (upgradeMemory !== undefined && !JSON.stringify(toolRequest).includes(upgradeMemoryMarker)) throw new Error('Upgraded Headless did not read the retained synthetic Runtime entry')
 
-  // DSH imports the legacy settings file into the profile and keeps it unchanged as a backup.
   if (existsSync(settingsPath) || await readFile(`${settingsPath}.imported`, 'utf8') !== legacySettings) throw new Error('DSH did not retain the legacy settings file as its import backup')
   const imported = await readFile(profilePatchPath, 'utf8')
   if (!imported.includes('displayMode: builtin') || imported.includes('displayMode: buildin')) throw new Error('Headless did not persist the canonical builtin displayMode')
   if (!imported.includes('timeoutMs: 25000')) throw new Error('Placement migration changed unrelated configuration')
-  // The next start recovers Mnemon's retained preferences once; later starts change nothing.
   let recovered
   for (const label of ['recovering retained Mnemon settings', 'restarting Headless with recovered Mnemon settings']) {
     const restarted = await run(['--profile', 'headless', 'Verify that normalized Mnemon settings survive a restart.'], { cwd: workspaceRoot, env })

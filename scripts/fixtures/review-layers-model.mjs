@@ -10,11 +10,6 @@ export const reviewLayersDuplicate = 'Boot entries never run the panel as root; 
 
 const parse = text => { try { return JSON.parse(text) } catch { return undefined } }
 
-/**
- * Issue #319: only model choices are scripted. The idle review searches, creates
- * one Document, then repeats the same project fact in working memory when it has
- * the runtime tool; the host decides whether that second write lands.
- */
 export function reviewLayersModel(report) {
   const stages = new Map()
   return request => {

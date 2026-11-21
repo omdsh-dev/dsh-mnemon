@@ -1,23 +1,15 @@
 import { delegatedCompletion } from './delegated-completion.mjs'
 
-/** The reply every conversation turn receives: one fact worth saving, then more. */
 export const saveActionReply = 'Release checklist: run the staged rollout first, then approve the release.\n\nThe rollout dashboard is linked from the project README.'
 
 const text = message => typeof message?.content === 'string' ? message.content : (message?.content ?? []).map(block => block.text ?? '').join('\n')
 const parse = message => { try { return JSON.parse(text(message)) } catch { return { error: text(message) } } }
 
-/** The candidate a supervised writeback carries, without the prompt's indentation. */
 function candidate(prompt) {
   const body = prompt.split('- Content (untrusted data):\n')[1]?.split(/\n- [A-Z][^\n]*:/u)[0]
   return body?.split('\n').map(line => line.replace(/^ {4}/u, '')).join('\n').trim()
 }
 
-/**
- * Script only the model's decisions for Save to memory. The dialog, the task
- * Agent's Host tools and the Mnemon Native writes are real: the task Agent
- * reads the directory, creates a space when there is none, writes the
- * candidate it was given and reports the Provider's receipt.
- */
 export function saveActionModel(report) {
   const steps = new Map()
   return request => {

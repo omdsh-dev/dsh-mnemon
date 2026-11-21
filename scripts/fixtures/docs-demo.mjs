@@ -1,7 +1,3 @@
-// Documentation demo: a fictional project's memory and skills, seeded through
-// the public Source contracts, and a scripted model that reads and corrects it
-// with the real View tools. It holds no personal memory and needs the Mnemon
-// CLI for the native Memory Spaces. The skills half is in docs-demo-skills.mjs.
 import { realpathSync } from 'node:fs'
 import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
 import * as runtimePlugin from 'dsh-mnemon-source-runtime'
@@ -147,19 +143,12 @@ const CONTENT = {
 
 export const DOCS_DEMO_LANGUAGES = Object.keys(CONTENT)
 
-/** The conversation preset the demo shows in place of the test preset. */
 export function docsDemoAssistant(language) {
   const content = CONTENT[language]
   if (content === undefined) throw new Error('Unknown docs demo language: ' + language)
   return content.assistant
 }
 
-/**
- * Seed the demo into a disposable data root before the Host starts, through
- * the Sources' own management operations. With `skills`, the Skills Source
- * gets the project's skills too: in `skills.workspace`, where DSH runs the
- * conversation, and in the fixture's DSH and agents homes.
- */
 export async function seedDocsDemo({ dataDir, workspace, language, skills }) {
   const content = CONTENT[language]
   if (content === undefined) throw new Error('Unknown docs demo language: ' + language)
@@ -173,7 +162,6 @@ export async function seedDocsDemo({ dataDir, workspace, language, skills }) {
       providers: [{ use: 'dsh-mnemon-provider-mnemon-native', instanceId: 'mnemon-native' }],
     } })
     if (skills !== undefined) await runner.mount(skillsPlugin, { instanceId: 'skills', config: { dataDir, dshHome: skills.dshHome, agentsHome: skills.agentsHome } })
-    // The Host names a workspace by its resolved path, as DSH reports it.
     const scope = { storage: 'global', workspaceId: realpathSync(workspace) }
     const runtime = await runner.managementClient('source:runtime', scope)
     for (const entry of content.user) await runtime.mutate('mutate', { action: 'add', target: 'user', content: entry, importance: 'normal' }, { confirmed: true })
@@ -208,7 +196,6 @@ export async function seedDocsDemo({ dataDir, workspace, language, skills }) {
 const text = message => typeof message?.content === 'string' ? message.content : (message?.content ?? []).map(block => block.text ?? '').join('\n')
 const parse = message => { try { return JSON.parse(text(message)) } catch { return undefined } }
 
-/** Every string a tool result holds under the given keys, in order. */
 function fields(value, keys, found = []) {
   if (Array.isArray(value)) for (const item of value) fields(item, keys, found)
   else if (value !== null && typeof value === 'object') {
@@ -220,11 +207,6 @@ function fields(value, keys, found = []) {
   return found
 }
 
-/**
- * Script only the model's decisions. The Documents search, the Memory Spaces
- * recall and the working-memory correction run through the Host's real View
- * tools, and the answer is assembled from what they return.
- */
 export function docsDemoModel(language, report) {
   const content = CONTENT[language]
   if (content === undefined) throw new Error('Unknown docs demo language: ' + language)
@@ -232,7 +214,6 @@ export function docsDemoModel(language, report) {
   return request => {
     const skillReply = skills(request)
     if (skillReply !== undefined) return skillReply
-    // The Layered strategy's idle review of a scripted turn finds nothing new to keep.
     const system = (request.messages ?? []).filter(message => message.role === 'system').map(text).join('\n')
     if (system.includes('Deep Recall is unavailable after the parent TurnView closes')) {
       const completion = delegatedCompletion(request)
@@ -243,7 +224,6 @@ export function docsDemoModel(language, report) {
     const userIndex = messages.findLastIndex(message => message.role === 'user')
     if (userIndex < 0) return content.idle
     const human = text(messages[userIndex]).split('\n')[0]
-    // DSH titles a session with a separate request that carries no memory protocol.
     if (human.startsWith('Generate the session title')) return content.title
     const results = messages.slice(userIndex + 1).filter(message => message.role === 'tool').map(parse)
     if (content.correction.test(human)) {
@@ -252,7 +232,6 @@ export function docsDemoModel(language, report) {
       return content.saved
     }
     if (!content.question.test(human)) return content.idle
-    // Documents first, then one Recall query and the one refinement the Host allows.
     if (results.length === 0) return { name: 'mnemon_document_search', args: { query: content.documentQuery, limit: 3 } }
     if (results.length <= content.recallQueries.length) return { name: 'mnemon_recall', args: { query: content.recallQueries[results.length - 1], limit: 6 } }
     const prompt = messages.map(text).join('\n')

@@ -1,4 +1,3 @@
-// Verify every packed package outside the workspace: each plugin as its own repository, an external consumer and the Starter in real DSH.
 import { createServer } from 'node:http'
 import { createReadStream } from 'node:fs'
 import assert from 'node:assert/strict'
@@ -16,8 +15,6 @@ const configuredConcurrency = process.env.MNEMON_PLUGIN_VERIFY_CONCURRENCY ?? '4
 assert.match(configuredConcurrency, /^[1-9]\d*$/, 'MNEMON_PLUGIN_VERIFY_CONCURRENCY must be a positive integer')
 const concurrency = Math.min(Number(configuredConcurrency), names.length)
 const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
-// Keep the historical upgrade coverage on the pinned Host. A newer Host can
-// select an earlier Mnemon release that already supports its removed APIs.
 const upgradeBase = '0.5.29'
 const selectedUpgradeBase = process.env.MNEMON_PLUGIN_UPGRADE_BASE ?? upgradeBase
 assert.match(selectedUpgradeBase, /^\d+\.\d+\.\d+$/, 'MNEMON_PLUGIN_UPGRADE_BASE must be a pinned release version')
@@ -38,9 +35,6 @@ function publishedDocument(name) {
   }
   return publishedDocuments.get(name)
 }
-// The local registry answers as npm will once this build is published: earlier
-// releases stay resolvable (the Headless upgrade re-resolves its installed base
-// here), and each packed artifact replaces its own version and takes its dist-tag.
 const registry = createServer(async (request, response) => {
   const path = decodeURIComponent(new URL(request.url, 'http://localhost').pathname).slice(1)
   if (path.startsWith('tarballs/')) {
@@ -71,7 +65,6 @@ async function run(command, arguments_, cwd, label, timeoutMs = 180_000) {
   const output = await new Promise((fulfill, reject) => {
     const child = spawn(command, arguments_, {
       cwd, stdio: ['ignore', 'pipe', 'pipe'],
-      // NODE_PATH must never rescue an undeclared dependency from the workspace.
       env: { ...process.env, NODE_PATH: '', CI: '1', INIT_CWD: cwd },
     })
     let stdout = ''
@@ -92,7 +85,6 @@ async function run(command, arguments_, cwd, label, timeoutMs = 180_000) {
 
 async function parallel(values, concurrency, action) {
   const pending = [...values]
-  // Wait for every in-flight check before cleaning or reporting the directory.
   const results = await Promise.allSettled(Array.from({ length: concurrency }, async () => {
     while (pending.length > 0) await action(pending.shift())
   }))
@@ -111,15 +103,11 @@ async function pack(directory, expectedName) {
   for (const file of artifact.files) assert(!/^(?:src|tests|node_modules)\//u.test(file.path), `${expectedName} shipped development sources: ${file.path}`)
   return {
     path: join(temporary, 'tarballs', artifact.filename),
-    // Unreleased artifacts can share a version with npm. Supplying integrity
-    // prevents pnpm from reusing different bytes from its package store.
     manifest: { ...ownManifest, dist: { integrity: artifact.integrity } },
   }
 }
 
 async function install(directory, input) {
-  // Serve the exact artifacts with their original semver manifests. This
-  // exercises peer resolution and Starter dependencies without file overrides.
   await run('npm', ['install', '--registry', registryUrl, '--ignore-scripts', '--no-audit', '--no-fund', '--package-lock=false', '--workspaces=false'], directory, `${input.name}: install tarballs`)
   const code = `
     const fs = require('node:fs'); const path = require('node:path');
@@ -148,14 +136,8 @@ async function verifyIndependent(name) {
   }
   const ownManifest = JSON.parse(await readFile(join(directory, 'package.json'), 'utf8'))
   await install(directory, ownManifest)
-  // npm runs the package's own commands; no workspace runner, shared config,
-  // prebuilt lib/, repository aliases, or sibling source packages are present.
   for (const command of ['typecheck', 'test', 'build']) {
-    // The outer pool already runs several packages together. Give each Vitest
-    // process one worker so it cannot multiply that pool by the CPU count.
     const commandArgs = command === 'test' ? ['--', '--maxWorkers=1'] : []
-    // The full UI suite exceeds three minutes on CI even when every case passes.
-    // Keep per-case Vitest limits intact and bound the complete test command to five minutes.
     await run('npm', ['run', command, ...commandArgs], directory, `${name}: standalone ${command}`, command === 'test' ? 300_000 : 180_000)
   }
   const installed = await realpath(directory)
@@ -190,8 +172,6 @@ try {
   ]
   const packed = new Map()
   await parallel(packages, concurrency, async input => packed.set(input.name, await pack(input.directory, input.name)))
-  // Parallel packing completes out of order. Populate the public registry maps
-  // in package-name order so leak checks and the consumer fixture stay stable.
   for (const input of packages) {
     const result = packed.get(input.name)
     assert(result, `Missing packed artifact for ${input.name}`)
@@ -215,9 +195,6 @@ try {
       '--package', 'file:' + artifacts.get(manifest.name), '--registry', registryUrl, '--strategy-extensions', 'true',
     ], root, 'real DSH: activate three optional packed Strategy plugins together') },
   ].sort((left, right) => right.priority - left.priority || left.label.localeCompare(right.label))
-  // Longest checks enter the bounded worker pool first. This keeps all npm
-  // installs, real DSH checks and the external consumer concurrent without
-  // oversubscribing the runner with an unbounded Promise.all.
   await parallel(checks, concurrency, check => check.action())
   console.log(`Verified ${names.length} independent plugin repositories and ${artifacts.size} packed artifacts with ${concurrency} workers, public SDK-only composition and Client tests.`)
   succeeded = true

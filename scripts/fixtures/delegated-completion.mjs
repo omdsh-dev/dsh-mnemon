@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict'
 
-/** Read fixture completion instructions; the stable tool is also visible on parent requests. */
 export function delegatedCompletion(request) {
   const system = (request.messages ?? []).filter(message => message.role === 'system').map(message =>
     typeof message.content === 'string' ? message.content : (message.content ?? []).map(block => block.text ?? '').join('\n')).join('\n')

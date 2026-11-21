@@ -1,16 +1,7 @@
-// Documentation demo, Skills: the fictional Lumen project's skills and the
-// evolution data around them, seeded through the Skills Source's own
-// management operations, and a scripted model for the skill work. A
-// conversation loads a skill and the user corrects its output; the Host then
-// reviews it, drafts the skill and backtests both versions as task Agents.
-// The scripted executor follows whatever skill it is given and the judge
-// grades only the answer, so a better skill scores higher for the reason a
-// real backtest would. It holds no personal data and needs no network.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { delegatedCompletion } from './delegated-completion.mjs'
 
-/** Changesets as Lumen writes them: English, the PR number at the end. */
 const CHANGESETS = {
   '2.3.0': [
     { file: 'api-errors', pkg: '@lumen/api', bump: 'minor', pr: 188, en: 'Return { code, message, details } for every API error', zh: '所有 API 错误统一返回 { code, message, details }' },
@@ -31,10 +22,8 @@ const CHANGESETS = {
 const BY_PR = new Map(Object.values(CHANGESETS).flat().map(entry => [entry.pr, entry]))
 
 const changesetFile = entry => `---\n"${entry.pkg}": ${entry.bump}\n---\n\n${entry.en} (#${entry.pr}).\n`
-/** The changesets of one release as a case's context: each file's path, then its content. */
 const changesetContext = release => CHANGESETS[release].map(entry => `.changeset/${entry.file}.md\n${changesetFile(entry)}`).join('\n')
 
-/** A YAML scalar that stays a plain string: quoted when it holds `: ` or ` #`, or starts with an indicator. */
 const yamlText = text => /: | #|^[-?:,[\]{}#&*!|>'"%@`]/u.test(text) ? JSON.stringify(text) : text
 const skill = (name, description, body, extra = '') => `---\nname: ${name}\ndescription: ${yamlText(description)}\n${extra}---\n\n${body.trim()}\n`
 
@@ -533,7 +522,6 @@ const day = 86_400_000
 const iso = time => new Date(time).toISOString()
 const value = result => result.value
 
-/** Write the release's changesets into the workspace, as the conversation reads them. */
 function writeChangesets(workspace) {
   const directory = join(workspace, '.changeset')
   mkdirSync(directory, { recursive: true })
@@ -541,7 +529,6 @@ function writeChangesets(workspace) {
   for (const entry of CHANGESETS['2.4.0']) writeFileSync(join(directory, `${entry.file}.md`), changesetFile(entry))
 }
 
-/** A team catalog beside the workspace, its skills in folders next to it. */
 function writeCatalog(directory, content, language) {
   for (const entry of content.catalog.skills) {
     mkdirSync(join(directory, 'skills', entry.name), { recursive: true })
@@ -563,10 +550,8 @@ function writeCatalog(directory, content, language) {
   return path
 }
 
-/** A case as a review proposes it: the task and its input in one prompt. */
 const proposed = entry => ({ title: entry.title, prompt: entry.context === undefined ? entry.prompt : `${entry.prompt}\n\n${entry.context}`, checks: entry.checks })
 
-/** One finished case result, graded as the Host grades it: a must check weighs twice. */
 function caseResult(entry, run) {
   const checks = entry.checks.map((check, index) => ({ checkId: check.id, pass: run.checks[index], note: run.notes[index] }))
   const weight = check => check.must ? 2 : 1
@@ -578,12 +563,6 @@ function caseResult(entry, run) {
   }
 }
 
-/**
- * Seed the Lumen project's skills through the Skills Source: skills in all
- * four roots (one shadowed), their versions, three earlier reviews with their
- * evidence (one suggestion waiting, one adopted, one dismissed), test cases,
- * backtests of the current versions, and a team catalog in the market.
- */
 export async function seedDocsDemoSkills({ runner, scope, workspace, catalogDir, language }) {
   const content = CONTENT[language]
   if (content === undefined) throw new Error('Unknown docs demo language: ' + language)
@@ -594,7 +573,6 @@ export async function seedDocsDemoSkills({ runner, scope, workspace, catalogDir,
   const field = (text, key) => { const raw = text.match(new RegExp(`^${key}: (.+)$`, 'mu'))[1]; return raw.startsWith('"') ? JSON.parse(raw) : raw }
   const create = (root, text) => mutate('skill-create', { root, name: field(text, 'name'), description: field(text, 'description'), content: text })
 
-  // The personal copy came first; the project's own now shadows it.
   await create('user-dsh', content.skills.releaseNotesPersonal)
   const release = await create('project-dsh', content.skills.releaseNotesFirst)
   await mutate('skill-save', { key: release.key, content: content.skills.releaseNotes, expectedHash: release.hash })
@@ -604,7 +582,6 @@ export async function seedDocsDemoSkills({ runner, scope, workspace, catalogDir,
   const sql = await create('user-agents', content.skills.sqlExplain)
   await mutate('skill-invocation', { key: sql.key, modelInvocable: false, userInvocable: true, expectedHash: sql.hash })
 
-  // Hand-written cases for release-notes; the conversation's review adds one more.
   for (const key of ['grouping', 'bilingual']) await mutate('case-save', { skillName: 'release-notes', ...content.cases[key] })
 
   const now = Date.now()
@@ -629,19 +606,15 @@ export async function seedDocsDemoSkills({ runner, scope, workspace, catalogDir,
     })
   }
 
-  // Three days ago: incident-review learned its timeline, and the draft was adopted.
   const incident = await record('incident', now - 3 * day)
   const draft = await mutate('draft-record', { suggestionId: incident.suggestionIds[0], skillName: 'incident-review', content: content.skills.incidentReviewAdopted, ...content.reviews.incident.draft, guidance: [] })
   await mutate('draft-adopt', { id: draft.id })
   await mutate('case-save', { skillName: 'incident-review', ...content.cases.causes })
-  // Two days ago: a suggestion for checkout-perf-check, dismissed.
   const checkout = await record('checkout', now - 2 * day)
   await mutate('suggestion-dismiss', { id: checkout.suggestionIds[0] })
-  // Yesterday: a backfill that is worth a skill of its own, still waiting, its evidence pinned.
   const backfill = await record('backfill', now - day)
   if (backfill.trajectoryId !== undefined) await mutate('trajectory-pin', { id: backfill.trajectoryId, pinned: true })
 
-  // Backtests of the versions DSH loads now.
   const backtest = async (skillName, runs) => {
     const cases = await read('cases', { skill: skillName })
     const { target } = await read('target-content', { skillName, target: { kind: 'current' } })
@@ -655,21 +628,17 @@ export async function seedDocsDemoSkills({ runner, scope, workspace, catalogDir,
   await mutate('registry-add', { location: writeCatalog(catalogDir, content, language) })
 }
 
-// ---- the scripted model ------------------------------------------------------
-
 const messageText = message => typeof message?.content === 'string' ? message.content : (message?.content ?? []).map(block => block.text ?? '').join('\n')
 
 function systemText(request) {
   return (request.messages ?? []).filter(message => message.role === 'system').map(messageText).join('\n')
 }
 
-/** The changesets a backtest case carries in its context, in file order. */
 function parseChangesets(text) {
   return [...text.matchAll(/\.changeset\/([\w-]+)\.md\n---\n"(@lumen\/[\w-]+)": (major|minor|patch)\n---\n\n(.+?) \(#(\d+)\)\./gu)]
     .map(match => ({ file: match[1], pkg: match[2], bump: match[3], en: match[4], pr: Number(match[5]), zh: BY_PR.get(Number(match[5]))?.zh ?? match[4] }))
 }
 
-/** What a release-notes skill asks for, read from its text the way a model would follow it. */
 function releaseRules(skillText) {
   return {
     group: /按包分组|Group the entries by package/iu.test(skillText),
@@ -681,7 +650,6 @@ function releaseRules(skillText) {
 
 const bullet = (text, pr, field) => field === 'en' ? `- ${text} (#${pr}).` : `- ${text}（#${pr}）。`
 
-/** Release notes written the way the given rules say. */
 function releaseNotes(changesets, rules) {
   const entries = rules.skipInternal ? changesets.filter(entry => !entry.en.startsWith('internal:')) : changesets
   const section = (heading, field) => {
@@ -704,7 +672,6 @@ function releaseNotes(changesets, rules) {
   return `${section('English', 'en')}\n\n${section('中文', 'zh')}${upgrade}`
 }
 
-/** The judge's reading of one check against an answer; the check's own words pick the test. */
 function judgeCheck(check, answer) {
   const bullets = answer.split('\n').filter(line => line.startsWith('- '))
   const chinese = answer.split('## 中文')[1] ?? ''
@@ -721,11 +688,6 @@ function judgeCheck(check, answer) {
   return undefined
 }
 
-/**
- * The skill work, scripted: the release-notes conversation, the review that
- * follows it, the draft, and the backtest's executor and judge. Anything else
- * returns undefined, so the rest of the docs demo answers it.
- */
 export function skillsDemoModel(language, report) {
   const content = CONTENT[language]
   if (content === undefined) throw new Error('Unknown docs demo language: ' + language)
@@ -796,9 +758,7 @@ export function skillsDemoModel(language, report) {
       return complete({ checks: graded, summary: content.judge.summary(graded.filter(check => check.pass).length, graded.length) })
     }
 
-    // Any other task Agent (a memory review, Save to memory) is the rest of the demo's to answer.
     if (/Completion protocol: call `/u.test(system)) return undefined
-    // The conversation: the first turn loads the skill and reads the changesets; the second is the user's correction.
     const lastReply = messages.findLastIndex(message => message.role === 'assistant' && (message.tool_calls ?? []).length === 0 && messageText(message).trim() !== '')
     const asked = messages.slice(lastReply + 1).filter(message => message.role === 'user').map(messageText).join('\n')
     if (asked.startsWith('Generate the session title') || /^Generate the session title/mu.test(asked)) return content.releaseRequest.test(asked) ? content.title : undefined

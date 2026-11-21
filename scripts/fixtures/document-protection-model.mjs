@@ -14,14 +14,12 @@ function toolResults(request) {
   })
 }
 
-/** Only the model is scripted; DSH runs the real tools, review and persistence. */
 export function documentProtectionModel(report) {
   let originalId
   let rootCreated = false
   const reviews = new Map()
   const respond = request => {
     const names = (request.tools ?? []).map(tool => tool.function?.name)
-    // Session-title generation may run concurrently with the first tool call.
     if (names.length === 0) return '文档保护回归'
     const completion = delegatedCompletion(request)
     const terminal = completion?.name
@@ -36,7 +34,6 @@ export function documentProtectionModel(report) {
       reviews.set(completion.key, stage + 1)
       if (stage === 0) {
         report({ event: 'review-allowlist', allowed: names.filter(name => name !== terminal), forbiddenExcluded: true })
-        // Deliberately hallucinate a forbidden tool to exercise DSH's dispatcher.
         return { name: 'mnemon_document_manage', args: { action: 'update', id: originalId, content: 'UNAUTHORIZED_CONDENSED_REPLACEMENT' } }
       }
       if (stage === 1) {

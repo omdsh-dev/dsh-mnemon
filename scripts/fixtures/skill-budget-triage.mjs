@@ -1,4 +1,3 @@
-// Synthetic reuse groups and a real Source quota rejection, without model calls.
 import { MemoryCompositionRunner } from 'dsh-mnemon/testing'
 import * as skillsPlugin from 'dsh-mnemon-source-skills'
 import * as strategyPlugin from 'dsh-mnemon-strategy-general'

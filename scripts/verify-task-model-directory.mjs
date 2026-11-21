@@ -1,4 +1,3 @@
-// Real published DSH model-directory lookup with a delayed, synthetic fetch and no external network.
 import { createRequire } from 'node:module'
 import { realpathSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'

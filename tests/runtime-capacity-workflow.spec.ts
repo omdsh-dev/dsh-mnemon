@@ -27,7 +27,7 @@ import { SourceSession } from '../src/host/source-session.ts'
 import { sourceFixture } from './fixtures/sources.ts'
 import { sessionLog } from './fixtures/session-log.ts'
 import {
-  addSecondWritableBody, capabilities, capacityError, cleanupSubagentFixtures, createCoordinator,
+  addSecondWritableBody, capacityError, cleanupSubagentFixtures, createCoordinator,
   delegatedResultSchema, maintenancePlan, managedSession, parent, releases, runtimeArchiveFixture,
   runtimeSource, service, subagents, temporaryDirectories, toolRegistry, type RuntimeOperations,
 } from './fixtures/subagent-coordinator.ts'

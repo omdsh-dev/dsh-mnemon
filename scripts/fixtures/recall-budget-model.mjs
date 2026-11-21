@@ -1,18 +1,13 @@
-// Recall past the turn budget (#389): three different Recall queries in one turn
-// against the seeded docs demo. The reply says what the third call returned, as a
-// model that reads results without the hint would take it.
 const text = message => typeof message?.content === 'string' ? message.content : (message?.content ?? []).map(block => block.text ?? '').join('\n')
 const parse = message => { try { return JSON.parse(text(message)) } catch { return { error: text(message) } } }
 
 export const RECALL_BUDGET_QUERIES = ['结账页 性能', 'ClickHouse 写入', '站会 时间']
 
-/** Script only the model's decisions; the three Recall calls run through the Host's real tool and View. */
 export function recallBudgetModel(report) {
   return request => {
     const messages = request.messages ?? []
     const userIndex = messages.findLastIndex(message => message.role === 'user' && text(message).includes('recall-budget-check'))
     if (userIndex < 0) return 'Send recall-budget-check to run three different Recall queries in one turn.'
-    // DSH titles the session with a separate request that carries no memory protocol.
     if (text(messages[userIndex]).startsWith('Generate the session title')) return 'Recall budget check'
     const results = messages.slice(userIndex + 1).filter(message => message.role === 'tool').map(parse)
     if (results.length < RECALL_BUDGET_QUERIES.length) return { name: 'mnemon_recall', args: { query: RECALL_BUDGET_QUERIES[results.length], limit: 6 } }
